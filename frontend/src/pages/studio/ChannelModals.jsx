@@ -112,8 +112,9 @@ export function ChannelModal({ open, channel, chatbot, onClose }) {
 /* ─── Zalo OA ─────────────────────────────────────────────────────── */
 
 function ZaloForm({ chatbot }) {
-  const [oaId, setOaId] = useState('');
-  const [secret, setSecret] = useState('');
+  const [appId, setAppId] = useState('');
+  const [appSecret, setAppSecret] = useState('');
+  const [displayName, setDisplayName] = useState('');
   const [webhook, setWebhook] = useState('');
   const [oaInfo, setOaInfo] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -124,27 +125,35 @@ function ZaloForm({ chatbot }) {
     const fetchOa = async () => {
       try {
         const res = await chatbotApi.getZaloOaConfig(chatbot.id);
-        if (res?.data?.data) {
-          const d = res.data.data;
-          setOaId(d.oa_id || '');
-          setSecret(d.secret_key || '');
+        const d = res?.data?.data ?? res?.data;
+        if (d) {
+          setAppId(d.external_channel_id || d.zalo_app_id || '');
+          setDisplayName(d.display_name || '');
+          if (d.webhook_url) setWebhook(d.webhook_url);
           setOaInfo(d);
         }
       } catch (e) {
-        // ignore
+        console.error('[ZaloForm] fetch failed:', e);
+        toast.error(e?.response?.data?.message || 'Không thể tải cấu hình Zalo OA.');
       } finally {
         setLoading(false);
       }
     };
     fetchOa();
-    setWebhook(`${window.location.origin}/webhooks/zalo/oa?chatbot_id=${chatbot.id}`);
   }, [chatbot.id]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await chatbotApi.saveZaloOaConfig(chatbot.id, { oa_id: oaId, secret_key: secret });
-      toast.success('Đã lưu cấu hình Zalo OA.');
+      const res = await chatbotApi.saveZaloOaConfig(chatbot.id, {
+        zalo_app_id: appId.trim(),
+        zalo_app_secret: appSecret.trim(),
+        display_name: displayName.trim() || undefined,
+      });
+      const saved = res?.data || res;
+      if (saved?.webhook_url) setWebhook(saved.webhook_url);
+      setOaInfo(saved);
+      toast.success(res?.message || 'Đã lưu cấu hình Zalo OA.');
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Lưu thất bại.');
     } finally {
@@ -177,23 +186,34 @@ function ZaloForm({ chatbot }) {
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">OA ID</label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">App ID (Zalo App ID)</label>
         <input
           type="text"
-          value={oaId}
-          onChange={(e) => setOaId(e.target.value)}
+          value={appId}
+          onChange={(e) => setAppId(e.target.value)}
           placeholder="VD: 1234567890"
           className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Secret Key</label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">App Secret (Secret Key)</label>
         <input
           type="password"
-          value={secret}
-          onChange={(e) => setSecret(e.target.value)}
+          value={appSecret}
+          onChange={(e) => setAppSecret(e.target.value)}
           placeholder="••••••••"
+          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Tên hiển thị (tuỳ chọn)</label>
+        <input
+          type="text"
+          value={displayName}
+          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="VD: Zalo OA Chăm sóc khách hàng"
           className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
         />
       </div>
@@ -203,27 +223,30 @@ function ZaloForm({ chatbot }) {
         <div className="flex gap-2">
           <input
             type="text"
-            value={webhook}
+            value={webhook || 'Nối xong sẽ hiện'}
             readOnly
             className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
           />
           <button
             type="button"
+            disabled={!webhook}
             onClick={() => {
+              if (!webhook) return;
               navigator.clipboard.writeText(webhook);
               toast.success('Đã copy webhook.');
             }}
-            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg"
+            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 border border-slate-200 rounded-lg"
+            title="Copy Webhook URL"
           >
             <HiOutlineClipboardCopy className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {oaInfo?.verified ? (
+      {oaInfo?.is_active || oaInfo?.display_name ? (
         <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg">
           <HiOutlineCheckCircle className="w-4 h-4" />
-          OA đã xác thực
+          {oaInfo?.display_name ? `Đã kết nối: ${oaInfo.display_name}` : 'OA đã kết nối'}
         </div>
       ) : null}
 
@@ -231,7 +254,7 @@ function ZaloForm({ chatbot }) {
         <button
           type="button"
           onClick={handleSave}
-          disabled={saving || !oaId || !secret}
+          disabled={saving || !appId || !appSecret}
           className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
         >
           {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
@@ -254,8 +277,10 @@ function ZaloForm({ chatbot }) {
 function FacebookForm({ chatbot }) {
   const [pageId, setPageId] = useState('');
   const [pageToken, setPageToken] = useState('');
+  const [pageName, setPageName] = useState('');
   const [verifyToken, setVerifyToken] = useState('');
   const [webhook, setWebhook] = useState('');
+  const [pageInfo, setPageInfo] = useState(null);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -264,31 +289,39 @@ function FacebookForm({ chatbot }) {
     const fetchPage = async () => {
       try {
         const res = await chatbotApi.getFacebookPageConfig(chatbot.id);
-        if (res?.data?.data) {
-          const d = res.data.data;
-          setPageId(d.page_id || '');
-          setPageToken(d.page_access_token || '');
-          setVerifyToken(d.verify_token || '');
+        const d = res?.data?.data ?? res?.data;
+        if (d) {
+          setPageId(d.external_channel_id || d.page_id || '');
+          setPageName(d.display_name || '');
+          if (d.webhook_url) setWebhook(d.webhook_url);
+          if (d.verify_token || d.credentials?.verify_token) {
+            setVerifyToken(d.verify_token || d.credentials?.verify_token);
+          }
+          setPageInfo(d);
         }
       } catch (e) {
-        // ignore
+        console.error('[FacebookForm] fetch failed:', e);
+        toast.error(e?.response?.data?.message || 'Không thể tải cấu hình Facebook Page.');
       } finally {
         setLoading(false);
       }
     };
     fetchPage();
-    setWebhook(`${window.location.origin}/webhooks/facebook/page?chatbot_id=${chatbot.id}`);
   }, [chatbot.id]);
 
   const handleSave = async () => {
     setSaving(true);
     try {
-      await chatbotApi.saveFacebookPageConfig(chatbot.id, {
-        page_id: pageId,
-        page_access_token: pageToken,
-        verify_token: verifyToken,
+      const res = await chatbotApi.saveFacebookPageConfig(chatbot.id, {
+        page_id: pageId.trim(),
+        page_access_token: pageToken.trim(),
+        page_name: pageName.trim() || undefined,
       });
-      toast.success('Đã lưu cấu hình Facebook Page.');
+      const saved = res?.data || res;
+      if (saved?.webhook_url) setWebhook(saved.webhook_url);
+      if (saved?.verify_token) setVerifyToken(saved.verify_token);
+      setPageInfo(saved);
+      toast.success(res?.message || 'Đã lưu cấu hình Facebook Page.');
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Lưu thất bại.');
     } finally {
@@ -330,14 +363,42 @@ function FacebookForm({ chatbot }) {
       </div>
 
       <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Verify Token</label>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Tên Page (tuỳ chọn)</label>
         <input
           type="text"
-          value={verifyToken}
-          onChange={(e) => setVerifyToken(e.target.value)}
-          placeholder="Chuỗi bí mật tự đặt"
+          value={pageName}
+          onChange={(e) => setPageName(e.target.value)}
+          placeholder="VD: UKNOW Official Fanpage"
           className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
         />
+      </div>
+
+      <div>
+        <label className="block text-xs font-medium text-slate-700 mb-1">Verify Token</label>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={verifyToken || (webhook ? '•••••••• (Đã bảo mật)' : 'Nối xong sẽ hiện')}
+            readOnly
+            className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
+          />
+          <button
+            type="button"
+            disabled={!verifyToken}
+            onClick={() => {
+              if (!verifyToken) return;
+              navigator.clipboard.writeText(verifyToken);
+              toast.success('Đã copy verify token.');
+            }}
+            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 border border-slate-200 rounded-lg"
+            title="Copy Verify Token"
+          >
+            <HiOutlineClipboardCopy className="w-4 h-4" />
+          </button>
+        </div>
+        <p className="text-[11px] text-slate-400 mt-1">
+          Chuỗi bảo mật do hệ thống sinh để dán vào trường Verify Token khi cấu hình Webhook trên Meta App Dashboard.
+        </p>
       </div>
 
       <div>
@@ -345,22 +406,32 @@ function FacebookForm({ chatbot }) {
         <div className="flex gap-2">
           <input
             type="text"
-            value={webhook}
+            value={webhook || 'Nối xong sẽ hiện'}
             readOnly
             className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
           />
           <button
             type="button"
+            disabled={!webhook}
             onClick={() => {
+              if (!webhook) return;
               navigator.clipboard.writeText(webhook);
               toast.success('Đã copy webhook.');
             }}
-            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg"
+            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 border border-slate-200 rounded-lg"
+            title="Copy Webhook URL"
           >
             <HiOutlineClipboardCopy className="w-4 h-4" />
           </button>
         </div>
       </div>
+
+      {pageInfo?.is_active || pageInfo?.display_name ? (
+        <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg">
+          <HiOutlineCheckCircle className="w-4 h-4" />
+          {pageInfo?.display_name ? `Đã kết nối: ${pageInfo.display_name}` : 'Fanpage đã kết nối'}
+        </div>
+      ) : null}
 
       <button
         type="button"

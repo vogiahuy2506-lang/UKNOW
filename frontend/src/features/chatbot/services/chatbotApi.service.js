@@ -159,6 +159,48 @@ const chatbotApiService = {
     );
   },
 
+  // ── Chatbot Studio Channels (Facebook & Zalo OA) ───────────────────────────
+
+  async getFacebookPageConfig(chatbotId) {
+    const response = await api.get(`/ai/chatbot/custom-chatbots/${chatbotId}/channels`);
+    const channels = response?.data?.data || response?.data || [];
+    const channel = Array.isArray(channels)
+      ? channels.find((c) => c.channel_type === 'facebook' && c.is_active !== false)
+      : null;
+    return {
+      ...(response?.data || {}),
+      data: channel || null,
+    };
+  },
+
+  async saveFacebookPageConfig(chatbotId, data) {
+    const response = await api.post(
+      `/ai/chatbot/custom-chatbots/${chatbotId}/channels/facebook`,
+      data
+    );
+    return response.data;
+  },
+
+  async getZaloOaConfig(chatbotId) {
+    const response = await api.get(`/ai/chatbot/custom-chatbots/${chatbotId}/channels`);
+    const channels = response?.data?.data || response?.data || [];
+    const channel = Array.isArray(channels)
+      ? channels.find((c) => c.channel_type === 'zalo_oa' && c.is_active !== false)
+      : null;
+    return {
+      ...(response?.data || {}),
+      data: channel || null,
+    };
+  },
+
+  async saveZaloOaConfig(chatbotId, data) {
+    const response = await api.post(
+      `/ai/chatbot/custom-chatbots/${chatbotId}/channels/zalo-oa`,
+      data
+    );
+    return response.data;
+  },
+
   // ── WhatsApp per-chatbot enable (DeployTab modal) ──────────────────────────
 
   // List all WhatsApp accounts owned by the user, optionally scoped to one chatbot.
