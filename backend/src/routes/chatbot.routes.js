@@ -173,6 +173,7 @@ router.get('/custom-chatbots/:chatbotId/documents', requirePermission('chatbots_
 
 // Chatbot Channel Connections
 router.get('/custom-chatbots/:chatbotId/channels', requirePermission('chatbot_channels_manage'), chatbotController.getChatbotChannels.bind(chatbotController));
+router.get('/custom-chatbots/:chatbotId/facebook-pages', requirePermission('chatbot_channels_manage'), chatbotController.getFacebookPagesForChatbot.bind(chatbotController));
 router.post('/custom-chatbots/:chatbotId/channels/zalo-oa', requirePermission('chatbot_channels_manage'), chatbotController.connectChatbotZaloOA.bind(chatbotController));
 router.post('/custom-chatbots/:chatbotId/channels/facebook', requirePermission('chatbot_channels_manage'), chatbotController.connectChatbotFacebook.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId/channels/:channelType', requirePermission('chatbot_channels_manage'), chatbotController.disconnectChatbotChannel.bind(chatbotController));

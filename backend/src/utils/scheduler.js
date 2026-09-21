@@ -1270,4 +1270,43 @@ export const initScheduler = () => {
   }, { timezone: HANOI_TIME_ZONE });
 
   console.log('[Scheduler] Đã khởi tạo Affiliate month closing: 03:00 ngày 2 hàng tháng');
+
+  // ── Facebook Page Access Token Auto-Refresh — 03:00 hàng ngày ─────────────
+  // Meta tokens expire ~60 days. Refresh daily to ensure tokens stay valid.
+  // Runs at 03:00 to avoid peak hours.
+  const facebookTokenRefreshEnabled = String(process.env.FACEBOOK_TOKEN_REFRESH_ENABLED ?? 'true').toLowerCase() !== 'false';
+  if (facebookTokenRefreshEnabled) {
+    const refreshFacebookTokens = async () => {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      try {
+        await cronJobRunRepository.recordRun('facebook_token_refresh', async () => {
+          const { refreshExpiringTokens } = await import('../services/chatbot/facebookTokenRefresh.service.js');
+          const result = await refreshExpiringTokens({ expiryWarningDays: 7 });
+          if (result.refreshed > 0 || result.failed > 0) {
+            console.log(
+              `[Scheduler][Facebook] Token refresh: total=${result.total} ` +
+              `refreshed=${result.refreshed} failed=${result.failed} skipped=${result.skipped}`
+            );
+          }
+          return {
+            total: result.total,
+            refreshed: result.refreshed,
+            failed: result.failed,
+            synced: result.refreshed,
+          };
+        });
+      } catch (error) {
+        console.error('[Scheduler] Lỗi refresh Facebook tokens:', error.message);
+      }
+    };
+
+    // Run at 03:00 every day (after midnight backup jobs)
+    cron.schedule('0 3 * * *', async () => {
+      await refreshFacebookTokens();
+    }, { timezone: HANOI_TIME_ZONE });
+
+    console.log('[Scheduler] Đã khởi tạo Facebook token refresh: 03:00 hàng ngày');
+  } else {
+    console.log('[Scheduler] Facebook token refresh TẮT (FACEBOOK_TOKEN_REFRESH_ENABLED=false)');
+  }
 };

@@ -151,7 +151,7 @@ export default function HeroChatWidget() {
     if (!hasPayKeyword) return null;
 
     // 1tr = 1.000.000 ; 500k = 500.000
-    const vnUnitMatch = t.match(/(\d+(?:[.,]\d+)?)\s*(tr|triệu|k|ngàn|nghin|n))/i);
+    const vnUnitMatch = t.match(/(\d+(?:[.,]\d+)?)\s*(tr|triệu|k|ngàn|nghin|n)/i);
     if (vnUnitMatch) {
       const num = parseFloat(vnUnitMatch[1].replace(',', '.'));
       const unit = vnUnitMatch[2].toLowerCase();

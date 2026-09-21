@@ -5,6 +5,7 @@ import {
   HiOutlineClipboardCopy,
   HiOutlineRefresh,
   HiOutlineUserCircle,
+  HiOutlineExternalLink,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -274,54 +275,135 @@ function ZaloForm({ chatbot }) {
 
 /* ─── Facebook Messenger ─────────────────────────────────────────── */
 
+/**
+ * Facebook Messenger connection form.
+ *
+ * Flow:
+ *   Step 1 — Kết nối Fanpage  (OAuth hoặc nhập tay Page ID + Token)
+ *   Step 2 — Cấu hình Webhook  (copy URL + Verify Token vào Meta App Dashboard)
+ *   Step 3 — Trạng thái       (chỉ hiện khi đã kết nối thành công)
+ *
+ * OAuth: backend đã subscribe page tự động sau khi user ủy quyền thành công.
+ */
 function FacebookForm({ chatbot }) {
-  const [pageId, setPageId] = useState('');
-  const [pageToken, setPageToken] = useState('');
-  const [pageName, setPageName] = useState('');
-  const [verifyToken, setVerifyToken] = useState('');
-  const [webhook, setWebhook] = useState('');
-  const [pageInfo, setPageInfo] = useState(null);
-
-  const [loading, setLoading] = useState(true);
+  // ── State ─────────────────────────────────────────────────────
+  const [step, setStep] = useState(1);         // 1 | 2 | 3
+  const [mode, setMode] = useState('oauth');    // 'oauth' | 'manual'
+  const [pages, setPages] = useState([]);
+  const [selectedConnId, setSelectedConnId] = useState(null);
+  const [loadingPages, setLoadingPages] = useState(true);
+  const [initOAuthLoading, setInitOAuthLoading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    const fetchPage = async () => {
-      try {
-        const res = await chatbotApi.getFacebookPageConfig(chatbot.id);
-        const d = res?.data?.data ?? res?.data;
-        if (d) {
-          setPageId(d.external_channel_id || d.page_id || '');
-          setPageName(d.display_name || '');
-          if (d.webhook_url) setWebhook(d.webhook_url);
-          if (d.verify_token || d.credentials?.verify_token) {
-            setVerifyToken(d.verify_token || d.credentials?.verify_token);
-          }
-          setPageInfo(d);
+  // Step 2: webhook config shown after save
+  const [config, setConfig] = useState(null);    // { webhook_url, verify_token, display_name }
+
+  // Manual mode inputs
+  const [manualPageId, setManualPageId] = useState('');
+  const [manualToken, setManualToken] = useState('');
+  const [manualName, setManualName] = useState('');
+
+  // ── Load existing connections + current chatbot config ───────────
+  const loadConnections = useCallback(async () => {
+    setLoadingPages(true);
+    try {
+      const [pagesRes, cfgRes] = await Promise.allSettled([
+        chatbotApi.getFacebookPagesForChatbot(chatbot.id),
+        chatbotApi.getFacebookPageConfig(chatbot.id),
+      ]);
+
+      // Pages list from ChannelSettings
+      const list = pagesRes.status === 'fulfilled' ? (pagesRes.value?.data?.data || []) : [];
+      setPages(list);
+
+      // Existing chatbot config (if any)
+      // Backend returns { success, data: [channels] } → axios wraps as response.data
+      if (cfgRes.status === 'fulfilled' && cfgRes.value?.data?.data) {
+        const allChannels = cfgRes.value.data.data;
+        const cfg = Array.isArray(allChannels)
+          ? allChannels.find((c) => c.channel_type === 'facebook' && c.is_active !== false)
+          : null;
+        if (cfg && cfg.webhook_url) {
+          setConfig({
+            webhook_url: cfg.webhook_url,
+            verify_token: cfg.verify_token || cfg.credentials?.verify_token || '',
+            display_name: cfg.display_name || cfg.fb_page_name || '',
+          });
+          setStep(3);
         }
-      } catch (e) {
-        console.error('[FacebookForm] fetch failed:', e);
-        toast.error(e?.response?.data?.message || 'Không thể tải cấu hình Facebook Page.');
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchPage();
+
+      // Auto-select the currently active page
+      if (list.length > 0) {
+        const active = list.find((p) => p.is_active_on_this_chatbot);
+        if (active) setSelectedConnId(active.id);
+      }
+    } catch (e) {
+      console.error('[FacebookForm] load failed:', e);
+      toast.error(e?.response?.data?.message || 'Không thể tải cấu hình Facebook.');
+    } finally {
+      setLoadingPages(false);
+    }
   }, [chatbot.id]);
 
-  const handleSave = async () => {
+  useEffect(() => { loadConnections(); }, [loadConnections]);
+
+  // ── OAuth init ────────────────────────────────────────────────
+  const handleInitOAuth = async () => {
+    setInitOAuthLoading(true);
+    try {
+      const res = await chatbotApi.initFacebookOAuthStudio(chatbot.id);
+      const authUrl = res?.data?.auth_url;
+      if (!authUrl) throw new Error('Không nhận được link OAuth từ server.');
+
+      const popup = window.open(
+        authUrl,
+        'facebook_oauth',
+        'width=600,height=700,scrollbars=yes'
+      );
+      if (!popup) {
+        toast.error('Trình duyệt chặn popup. Vui lòng cho phép popup cho trang này.');
+        return;
+      }
+
+      // Poll popup: when it closes, reload connections + move to step 2 if a page was saved.
+      const poll = setInterval(() => {
+        if (popup.closed) {
+          clearInterval(poll);
+          loadConnections().then(() => {
+            // If page was saved (page list updated), go to step 2
+            if (pages.length > 0 || selectedConnId) setStep(2);
+          });
+        }
+      }, 1000);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || err.message || 'Khởi tạo OAuth thất bại.');
+    } finally {
+      setInitOAuthLoading(false);
+    }
+  };
+
+  // ── Save picker selection ──────────────────────────────────────
+  const handleSavePicker = async () => {
+    if (!selectedConnId) {
+      toast.error('Vui lòng chọn một Fanpage.');
+      return;
+    }
     setSaving(true);
     try {
       const res = await chatbotApi.saveFacebookPageConfig(chatbot.id, {
-        page_id: pageId.trim(),
-        page_access_token: pageToken.trim(),
-        page_name: pageName.trim() || undefined,
+        channel_connection_id: selectedConnId,
       });
-      const saved = res?.data || res;
-      if (saved?.webhook_url) setWebhook(saved.webhook_url);
-      if (saved?.verify_token) setVerifyToken(saved.verify_token);
-      setPageInfo(saved);
-      toast.success(res?.message || 'Đã lưu cấu hình Facebook Page.');
+      const saved = res?.data?.data || res;
+      if (saved) {
+        setConfig({
+          webhook_url: saved.webhook_url || '',
+          verify_token: saved.verify_token || '',
+          display_name: saved.display_name || '',
+        });
+      }
+      toast.success(res?.message || 'Đã kết nối Fanpage với chatbot.');
+      setStep(2);
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Lưu thất bại.');
     } finally {
@@ -329,119 +411,362 @@ function FacebookForm({ chatbot }) {
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-8 text-slate-400 text-xs">
-        <HiOutlineRefresh className="w-4 h-4 animate-spin mr-2" />
-        Đang tải...
-      </div>
-    );
-  }
+  // ── Save manual inputs ─────────────────────────────────────────
+  const handleSaveManual = async () => {
+    if (!manualPageId.trim() || !manualToken.trim()) {
+      toast.error('Page ID và Page Access Token là bắt buộc.');
+      return;
+    }
+    setSaving(true);
+    try {
+      const res = await chatbotApi.saveFacebookPageConfig(chatbot.id, {
+        page_id: manualPageId.trim(),
+        page_access_token: manualToken.trim(),
+        page_name: manualName.trim() || undefined,
+      });
+      const saved = res?.data?.data || res;
+      if (saved) {
+        setConfig({
+          webhook_url: saved.webhook_url || '',
+          verify_token: saved.verify_token || '',
+          display_name: saved.display_name || manualName.trim(),
+        });
+      }
+      toast.success(res?.message || 'Đã kết nối Fanpage với chatbot.');
+      setStep(2);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || 'Lưu thất bại.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ── Copy to clipboard helper ──────────────────────────────────
+  const copyToClipboard = (text, label) => {
+    navigator.clipboard.writeText(text).then(() => toast.success(`Đã copy ${label}.`));
+  };
+
+  // ── Render ────────────────────────────────────────────────────
+  const hasPages = pages.length > 0;
+  const selectedPage = pages.find((p) => p.id === selectedConnId);
 
   return (
-    <div className="space-y-4">
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Page ID</label>
-        <input
-          type="text"
-          value={pageId}
-          onChange={(e) => setPageId(e.target.value)}
-          placeholder="VD: 1234567890"
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-      </div>
+    <div className="space-y-5">
 
+      {/* Step 1: Kết nối Fanpage */}
       <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Page Access Token</label>
-        <input
-          type="password"
-          value={pageToken}
-          onChange={(e) => setPageToken(e.target.value)}
-          placeholder="EAAxxxxxxx..."
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-      </div>
+        <div className="flex items-center gap-2 mb-3">
+          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">1</span>
+          <span className="text-sm font-semibold text-slate-800">Kết nối Fanpage</span>
+        </div>
 
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Tên Page (tuỳ chọn)</label>
-        <input
-          type="text"
-          value={pageName}
-          onChange={(e) => setPageName(e.target.value)}
-          placeholder="VD: UKNOW Official Fanpage"
-          className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
-        />
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Verify Token</label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={verifyToken || (webhook ? '•••••••• (chỉ hiện ngay sau khi nối)' : 'Nối xong sẽ hiện')}
-            readOnly
-            className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
-          />
+        {/* OAuth vs Manual toggle */}
+        <div className="flex rounded-lg border border-slate-200 overflow-hidden text-xs mb-3">
           <button
             type="button"
-            disabled={!verifyToken}
-            onClick={() => {
-              if (!verifyToken) return;
-              navigator.clipboard.writeText(verifyToken);
-              toast.success('Đã copy verify token.');
-            }}
-            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 border border-slate-200 rounded-lg"
-            title="Copy Verify Token"
+            onClick={() => setMode('oauth')}
+            className={`flex-1 px-3 py-2 font-medium transition-colors ${
+              mode === 'oauth' ? 'bg-indigo-50 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-50'
+            }`}
           >
-            <HiOutlineClipboardCopy className="w-4 h-4" />
+            🔗 Kết nối qua Facebook
           </button>
-        </div>
-        <p className="text-[11px] text-slate-400 mt-1">
-          Chuỗi bảo mật do hệ thống sinh để dán vào trường Verify Token khi cấu hình Webhook trên Meta App Dashboard.
-          {' '}<strong>Copy ngay</strong> — API đọc kênh không trả lại chuỗi này, đóng modal rồi thì phải nối lại để lấy chuỗi mới.
-        </p>
-      </div>
-
-      <div>
-        <label className="block text-xs font-medium text-slate-700 mb-1">Webhook URL</label>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={webhook || 'Nối xong sẽ hiện'}
-            readOnly
-            className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-slate-50 font-mono text-slate-600"
-          />
           <button
             type="button"
-            disabled={!webhook}
-            onClick={() => {
-              if (!webhook) return;
-              navigator.clipboard.writeText(webhook);
-              toast.success('Đã copy webhook.');
-            }}
-            className="px-3 py-2 text-xs font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50 border border-slate-200 rounded-lg"
-            title="Copy Webhook URL"
+            onClick={() => setMode('manual')}
+            className={`flex-1 px-3 py-2 font-medium transition-colors ${
+              mode === 'manual' ? 'bg-indigo-50 text-indigo-700' : 'bg-white text-slate-500 hover:bg-slate-50'
+            }`}
           >
-            <HiOutlineClipboardCopy className="w-4 h-4" />
+            ✏️ Nhập tay
           </button>
         </div>
+
+        {mode === 'oauth' ? (
+          <div className="space-y-3">
+            {loadingPages ? (
+              /* Skeleton while loading pages */
+              <div className="space-y-2">
+                {[1, 2].map((i) => (
+                  <div key={i} className="h-14 rounded-lg bg-slate-100 animate-pulse" />
+                ))}
+              </div>
+            ) : hasPages ? (
+              /* Picker: show linked pages from ChannelSettings */
+              <div className="space-y-2">
+                {pages.map((p) => {
+                  const isActive = p.is_active_on_this_chatbot;
+                  const isSelected = selectedConnId === p.id;
+                  return (
+                    <label
+                      key={p.id}
+                      className={`flex items-center gap-3 px-3 py-2.5 rounded-lg border cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-indigo-400 bg-indigo-50 ring-1 ring-indigo-300'
+                          : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50'
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="fb-page"
+                        value={p.id}
+                        checked={isSelected}
+                        onChange={() => setSelectedConnId(p.id)}
+                        className="w-4 h-4 text-indigo-600 focus:ring-indigo-500 shrink-0"
+                      />
+                      <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-bold text-sm shrink-0">
+                        f
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-900 truncate">
+                          {p.fb_page_name || p.display_name || 'Facebook Page'}
+                        </p>
+                        <p className="text-[11px] text-slate-400 font-mono truncate">
+                          ID: {p.fb_page_id}
+                        </p>
+                      </div>
+                      {isActive && (
+                        <span className="shrink-0 inline-flex items-center gap-1 text-[11px] text-green-700 bg-green-50 px-2 py-0.5 rounded-full border border-green-200">
+                          <HiOutlineCheckCircle className="w-3 h-3" />
+                          Đang dùng
+                        </span>
+                      )}
+                    </label>
+                  );
+                })}
+              </div>
+            ) : (
+              /* No pages linked yet — guide to ChannelSettings */
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-4 text-center">
+                <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-2">
+                  <span className="text-lg font-bold text-slate-400">f</span>
+                </div>
+                <p className="text-sm font-medium text-slate-600 mb-1">Chưa có Fanpage nào được liên kết</p>
+                <p className="text-xs text-slate-400 mb-3">
+                  Bấm nút bên dưới để ủy quyền với Meta.
+                </p>
+              </div>
+            )}
+
+            {/* Primary OAuth button */}
+            <button
+              type="button"
+              onClick={handleInitOAuth}
+              disabled={initOAuthLoading}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {initOAuthLoading ? (
+                <>
+                  <HiOutlineRefresh className="w-4 h-4 animate-spin" />
+                  Đang mở...
+                </>
+              ) : (
+                <>
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current">
+                    <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+                  </svg>
+                  Kết nối tài khoản Facebook
+                </>
+              )}
+            </button>
+
+            {/* Reload pages list */}
+            <button
+              type="button"
+              onClick={loadConnections}
+              className="w-full flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 transition-colors py-1"
+            >
+              <HiOutlineRefresh className="w-3 h-3" />
+              Tải lại danh sách Fanpage
+            </button>
+
+            {/* Save picker selection */}
+            {hasPages && (
+              <button
+                type="button"
+                onClick={handleSavePicker}
+                disabled={saving || !selectedConnId}
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg transition-colors"
+              >
+                {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+              </button>
+            )}
+          </div>
+        ) : (
+          /* Manual mode */
+          <div className="space-y-3">
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Page ID</label>
+              <input
+                type="text"
+                value={manualPageId}
+                onChange={(e) => setManualPageId(e.target.value)}
+                placeholder="VD: 1234567890"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Page Access Token</label>
+              <input
+                type="password"
+                value={manualToken}
+                onChange={(e) => setManualToken(e.target.value)}
+                placeholder="EAAxxxxxxx..."
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Tên Page (tuỳ chọn)</label>
+              <input
+                type="text"
+                value={manualName}
+                onChange={(e) => setManualName(e.target.value)}
+                placeholder="VD: UKNOW Official Fanpage"
+                className="w-full px-3 py-2 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-300"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveManual}
+              disabled={saving || !manualPageId.trim() || !manualToken.trim()}
+              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-300 text-white text-sm font-medium rounded-lg transition-colors"
+            >
+              {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
+            </button>
+          </div>
+        )}
       </div>
 
-      {pageInfo?.is_active || pageInfo?.display_name ? (
-        <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 px-3 py-2 rounded-lg">
-          <HiOutlineCheckCircle className="w-4 h-4" />
-          {pageInfo?.display_name ? `Đã kết nối: ${pageInfo.display_name}` : 'Fanpage đã kết nối'}
-        </div>
-      ) : null}
+      {/* Step 2: Cấu hình Webhook — chỉ hiện khi đã save */}
+      {step >= 2 && config?.webhook_url && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">2</span>
+            <span className="text-sm font-semibold text-slate-800">Cấu hình Webhook trên Meta</span>
+          </div>
 
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={saving || !pageId || !pageToken}
-        className="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
-      >
-        {saving ? 'Đang lưu...' : 'Lưu cấu hình'}
-      </button>
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4 space-y-4">
+            <p className="text-xs text-slate-600 leading-relaxed">
+              Copy <strong>Webhook URL</strong> và <strong>Verify Token</strong> bên dưới,
+              sau đó paste vào <strong>Meta App Dashboard → Messenger → Webhook</strong> và bấm
+              <strong> Verify and Save</strong>.
+            </p>
+
+            {/* Webhook URL */}
+            <div>
+              <label className="block text-xs font-medium text-slate-700 mb-1">Webhook URL</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={config.webhook_url}
+                  readOnly
+                  className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono text-slate-700 truncate"
+                />
+                <button
+                  type="button"
+                  onClick={() => copyToClipboard(config.webhook_url, 'Webhook URL')}
+                  className="px-3 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors shrink-0"
+                  title="Copy"
+                >
+                  <HiOutlineClipboardCopy className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Verify Token */}
+            {config.verify_token && (
+              <div>
+                <label className="block text-xs font-medium text-slate-700 mb-1">Verify Token</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={config.verify_token}
+                    readOnly
+                    className="flex-1 px-3 py-2 text-xs border border-slate-200 rounded-lg bg-white font-mono text-slate-700 truncate"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => copyToClipboard(config.verify_token, 'Verify Token')}
+                    className="px-3 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors shrink-0"
+                    title="Copy"
+                  >
+                    <HiOutlineClipboardCopy className="w-4 h-4" />
+                  </button>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Tick thêm fields: <code className="bg-slate-100 px-1 rounded">messages</code>,{' '}
+                  <code className="bg-slate-100 px-1 rounded">messaging_postbacks</code>
+                </p>
+              </div>
+            )}
+
+            {/* External link to Meta */}
+            <a
+              href="https://developers.facebook.com/apps"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1.5 text-xs text-indigo-600 hover:text-indigo-700 font-medium"
+            >
+              <svg viewBox="0 0 24 24" className="w-3.5 h-3.5 fill-current">
+                <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
+              </svg>
+              Mở Meta App Dashboard
+              <HiOutlineExternalLink className="w-3 h-3" />
+            </a>
+          </div>
+        </div>
+      )}
+
+      {/* Step 3: Trạng thái — chỉ hiện khi đã save */}
+      {step >= 3 && config?.webhook_url && (
+        <div>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-600 text-white text-[10px] font-bold">3</span>
+            <span className="text-sm font-semibold text-slate-800">Trạng thái</span>
+          </div>
+
+          <div className="rounded-xl border border-green-100 bg-green-50/60 p-4 flex items-center gap-3">
+            <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center shrink-0">
+              <HiOutlineCheckCircle className="w-5 h-5" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-green-800">
+                {config.display_name || 'Fanpage'} đã kết nối thành công
+              </p>
+              <p className="text-xs text-green-600 mt-0.5">
+                Tin nhắn Messenger sẽ được chatbot tự động trả lời.
+              </p>
+            </div>
+          </div>
+
+          {/* Re-configure link */}
+          <button
+            type="button"
+            onClick={() => {
+              setStep(1);
+              setConfig(null);
+              loadConnections();
+            }}
+            className="w-full mt-2 flex items-center justify-center gap-1.5 text-xs text-slate-400 hover:text-slate-600 py-1"
+          >
+            <HiOutlineRefresh className="w-3 h-3" />
+            Thay đổi Fanpage kết nối
+          </button>
+        </div>
+      )}
+
+      {/* Help card */}
+      {step === 1 && (
+        <div className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+          <p className="text-xs font-medium text-slate-600 mb-1">📌 Hướng dẫn nhanh</p>
+          <ol className="text-[11px] text-slate-500 space-y-0.5 list-decimal list-inside">
+            <li>Bấm <strong>"Kết nối tài khoản Facebook"</strong> để ủy quyền với Meta.</li>
+            <li>Chọn Fanpage muốn kết nối và bấm <strong>Lưu cấu hình</strong>.</li>
+            <li>Copy <strong>Webhook URL</strong> + <strong>Verify Token</strong> vào Meta App Dashboard.</li>
+            <li>Bấm <strong>Verify and Save</strong> trên Meta để hoàn tất.</li>
+          </ol>
+        </div>
+      )}
     </div>
   );
 }

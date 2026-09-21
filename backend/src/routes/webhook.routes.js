@@ -76,13 +76,14 @@ router.post('/woocommerce/order', webhookController.handleOrder.bind(webhookCont
 
 // ── OAuth Routes (public - no auth) ──────────────────────────────
 
-// Facebook OAuth callback (public)
-router.get('/oauth/facebook/init', oauthController.initFacebookOAuth.bind(oauthController));
+// Facebook OAuth (init requires auth so we can embed user_id in the OAuth state;
+// callback is public because the user is on facebook.com, not on our domain).
+router.get('/oauth/facebook/init', authMiddleware, oauthController.initFacebookOAuth.bind(oauthController));
 router.get('/oauth/callback/facebook', oauthController.handleFacebookCallback.bind(oauthController));
 router.post('/oauth/facebook/complete', authMiddleware, oauthController.completeFacebookConnection.bind(oauthController));
 
-// Zalo OA OAuth callback (public)
-router.get('/oauth/zalo-oa/init', oauthController.initZaloOAuth.bind(oauthController));
+// Zalo OA OAuth (same pattern).
+router.get('/oauth/zalo-oa/init', authMiddleware, oauthController.initZaloOAuth.bind(oauthController));
 router.get('/oauth/callback/zalo-oa', oauthController.handleZaloCallback.bind(oauthController));
 
 // WhatsApp Embedded Signup callback (public). state-signed HMAC carries userId.

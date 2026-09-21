@@ -251,6 +251,15 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'facebook_token_refresh',
+    label: 'Làm mới token Facebook',
+    schedule: 'Hàng ngày lúc 03:00',
+    description: 'Làm mới Page Access Token của Facebook trước khi hết hạn (~60 ngày). Token còn hiệu lực ~60 ngày — refresh trước 7 ngày để tránh gián đoạn chatbot.',
+    impact: 'Token hết hạn → chatbot Facebook Messenger không nhận hoặc gửi được tin nhắn.',
+    tracked: true,
+    optional: true,
+  },
+  {
     code: 'chatbot_digest_monthly',
     label: 'Tổng hợp hội thoại chatbot theo tháng',
     schedule: '08:00 ngày 1 hàng tháng',

@@ -1674,7 +1674,7 @@ CREATE TABLE IF NOT EXISTS chatbot_digest_log (
 );
 CREATE INDEX IF NOT EXISTS idx_chatbot_digest_log_user ON chatbot_digest_log(id_user);
 
--- ─── Channel connections (migration 031, 042) ──────────────────────────
+-- ─── Channel connections (migration 031, 042, 231) ───────────────────
 CREATE TABLE IF NOT EXISTS channel_connections (
   id                  BIGSERIAL PRIMARY KEY,
   id_user             BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -1686,13 +1686,20 @@ CREATE TABLE IF NOT EXISTS channel_connections (
   settings            JSONB DEFAULT '{}',
   webhook_token       VARCHAR(64) UNIQUE,
   external_channel_id VARCHAR(128),
+  fb_user_id          TEXT,
+  fb_page_id          TEXT,
+  fb_page_name        TEXT,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW(),
-  CONSTRAINT uq_channel_user_channel UNIQUE (id_user, channel)
+  -- Migration 231: widen UNIQUE to support multiple Facebook Pages per user.
+  -- Rows for non-Facebook channels have NULL fb_page_id → no conflict.
+  CONSTRAINT uq_channel_user_channel_fb_page UNIQUE (id_user, channel, fb_page_id)
 );
 CREATE INDEX IF NOT EXISTS idx_channel_conn_user ON channel_connections(id_user);
 CREATE INDEX IF NOT EXISTS idx_channel_conn_channel ON channel_connections(channel);
 CREATE INDEX IF NOT EXISTS idx_channel_connections_webhook_token ON channel_connections(webhook_token) WHERE webhook_token IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_channel_conn_fb_user ON channel_connections(fb_user_id) WHERE fb_user_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_channel_conn_fb_page ON channel_connections(fb_page_id) WHERE fb_page_id IS NOT NULL;
 
 -- ─── Channel conversations & messages (migration 031, 032, 095) ────────
 CREATE TABLE IF NOT EXISTS channel_conversations (

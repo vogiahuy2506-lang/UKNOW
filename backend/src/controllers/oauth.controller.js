@@ -3,6 +3,8 @@ import whatsappOAuthService, {
   stashPendingOAuth,
   verifyState,
 } from '../services/chatbot/whatsappOAuth.service.js';
+import channelConnectionsRepository from '../repositories/ai/channelConnections.repository.js';
+import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 const FB_OAUTH_BASE = 'https://www.facebook.com/v18.0/dialog/oauth';
@@ -19,19 +21,35 @@ class OAuthController {
     try {
       const { user_id } = req.user; // From auth middleware
       const { chatbot_id, redirect_to } = req.query;
+
+      // Hai luồng:
+      //   - studio flow (cũ): chatbot_id bắt buộc, lưu page cho 1 chatbot cụ thể
+      //   - settings flow (mới): lưu pages vào channel_connections per-user,
+      //     chọn page sau ở DeployTab. Cho phép thiếu chatbot_id.
+      const normalizedRedirect = redirect_to === 'settings' ? 'settings' : 'studio';
+      if (normalizedRedirect === 'studio' && !chatbot_id) {
+        return res.status(400).json({
+          success: false,
+          message: 'Thiếu chatbot_id cho luồng studio.',
+        });
+      }
       
       // Generate state token for CSRF protection
       const state = crypto.randomBytes(32).toString('hex');
       
       // Store state in session or temporary storage
       // For simplicity, we'll encode user_id in state (in production, use Redis/session)
-      const stateData = Buffer.from(JSON.stringify({ user_id, chatbot_id, redirect_to, timestamp: Date.now() })).toString('base64');
+      const stateData = Buffer.from(JSON.stringify({ user_id, chatbot_id, redirect_to: normalizedRedirect, timestamp: Date.now() })).toString('base64');
       const hashedState = crypto.createHmac('sha256', process.env.OAUTH_STATE_SECRET || 'default-secret')
         .update(stateData)
         .digest('hex');
       
       const appId = process.env.FACEBOOK_APP_ID;
-      const redirectUri = `${process.env.OAUTH_CALLBACK_URL}/facebook`;
+      // OAUTH_CALLBACK_URL is the base for /whatsapp and /zalo-oa callbacks.
+      // Facebook uses its own callback path (see webhook.routes.js), so use
+      // BACKEND_PUBLIC_URL to avoid double-prefixing /oauth/callback.
+      const backendBase = (process.env.BACKEND_PUBLIC_URL || '').replace(/\/+$/, '');
+      const redirectUri = `${backendBase}/api/webhooks/oauth/callback/facebook`;
       
       if (!appId) {
         return res.status(500).json({ 
@@ -41,7 +59,10 @@ class OAuthController {
       }
 
       // Build Facebook OAuth URL
-      const scopes = 'pages_manage_metadata,pages_read_engagement,pages_messaging,pages_messaging_subscriptions';
+      // Note: pages_read_engagement & pages_messaging_subscriptions require Facebook App Review.
+      // Keep them here but note they won't work until your app passes Facebook App Review.
+      // For MVP testing, remove them from the scope string below.
+      const scopes = 'pages_manage_metadata,pages_messaging';
       const facebookAuthUrl = `${FB_OAUTH_BASE}?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(stateData)}&scope=${scopes}`;
 
       return res.json({
@@ -82,12 +103,17 @@ class OAuthController {
         return res.redirect(`${frontendUrl}/app/chatbot-studio?error=invalid_state`);
       }
 
-      const { chatbot_id, redirect_to } = stateData;
+      const { chatbot_id, user_id, redirect_to } = stateData;
 
-      // Khóa chặt: bắt buộc phải có chatbot_id (Studio là đường duy nhất)
-      if (!chatbot_id || redirect_to !== 'studio') {
+      // Hỗ trợ 2 luồng:
+      //   redirect_to === 'studio'   — flow cũ, kết nối Fanpage cho 1 chatbot cụ thể
+      //   redirect_to === 'settings' — flow mới, lưu pages vào channel_connections (per-user),
+      //                                sau đó chọn page trong DeployTab
+      const isStudioFlow = redirect_to === 'studio' && chatbot_id;
+      const isSettingsFlow = redirect_to === 'settings' && user_id;
+      if (!isStudioFlow && !isSettingsFlow) {
         return res.redirect(
-          `${frontendUrl}/app/chatbot-studio?error=missing_chatbot&message=${encodeURIComponent('Hãy kết nối Facebook từ trang Chatbot của bạn')}`
+          `${frontendUrl}/app/chatbot-studio?error=missing_chatbot&message=${encodeURIComponent('Hãy kết nối Facebook từ trang Chatbot hoặc Cài đặt kênh')}`
         );
       }
 
@@ -103,7 +129,7 @@ class OAuthController {
 
       if (tokenData.error) {
         console.error('[OAuth] Token exchange error:', tokenData.error);
-        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=token_exchange_failed`);
+        return res.redirect(buildErrorRedirect(frontendUrl, { chatbot_id, redirect_to }, 'token_exchange_failed'));
       }
 
       const shortLivedToken = tokenData.access_token;
@@ -115,7 +141,7 @@ class OAuthController {
 
       if (longLivedData.error) {
         console.error('[OAuth] Long-lived token exchange error:', longLivedData.error);
-        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=long_token_failed`);
+        return res.redirect(buildErrorRedirect(frontendUrl, { chatbot_id, redirect_to }, 'long_token_failed'));
       }
 
       const pageAccessToken = longLivedData.access_token;
@@ -127,7 +153,7 @@ class OAuthController {
 
       if (pagesData.error) {
         console.error('[OAuth] Get pages error:', pagesData.error);
-        return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=get_pages_failed`);
+        return res.redirect(buildErrorRedirect(frontendUrl, { chatbot_id, redirect_to }, 'get_pages_failed'));
       }
 
       if (!pagesData.data || pagesData.data.length === 0) {
@@ -135,7 +161,7 @@ class OAuthController {
           `${FB_GRAPH_BASE}/me?access_token=${pageAccessToken}`
         );
         const meData = await meResponse.json();
-        
+
         if (meData.id) {
           pagesData.data = [{
             id: meData.id,
@@ -145,12 +171,55 @@ class OAuthController {
         }
       }
 
+      // Settings flow: lưu pages vào channel_connections (per-user) rồi redirect về ChannelSettings.
+      // Studio flow: redirect về Studio để user chọn page (giữ nguyên behavior cũ).
+      if (isSettingsFlow && pagesData.data && pagesData.data.length > 0) {
+        // Resolve FB user id (for fb_user_id column, optional but useful).
+        let fbUserId = null;
+        try {
+          const meResp = await fetch(`${FB_GRAPH_BASE}/me?access_token=${encodeURIComponent(pageAccessToken)}`);
+          const meData = await meResp.json();
+          fbUserId = meData.id || null;
+        } catch {
+          // Non-fatal — fb_user_id is informational only.
+        }
+
+        for (const page of pagesData.data) {
+          try {
+            await channelConnectionsRepository.upsertFacebookConnection(user_id, {
+              pageId: page.id,
+              pageName: page.name,
+              pageAccessToken: page.access_token,
+              fbUserId,
+            });
+
+            // Subscribe the page to receive webhook events — required for messages to arrive.
+            // Non-fatal: logging is enough, the user can re-connect if subscription fails.
+            await facebookAdapter.subscribePage(page.id, page.access_token);
+          } catch (saveErr) {
+            console.error('[OAuth] Failed to upsert FB page', page.id, saveErr.message);
+          }
+        }
+
+        const pageCount = pagesData.data.length;
+        return res.redirect(
+          `${frontendUrl}/app/settings/channels#facebook?oauth=success&page_count=${pageCount}`
+        );
+      }
+
       if (pagesData.data && pagesData.data.length > 0) {
+        // Subscribe all pages to receive webhook events.
+        for (const page of pagesData.data) {
+          await facebookAdapter.subscribePage(page.id, page.access_token).catch(
+            (err) => console.warn(`[OAuth] subscribePage failed for page ${page.id}:`, err.message)
+          );
+        }
+
         const pagesJson = encodeURIComponent(JSON.stringify(pagesData.data));
         return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&facebook_pages=${pagesJson}&token=${encodeURIComponent(pageAccessToken)}`);
       }
 
-      return res.redirect(`${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=no_pages`);
+      return res.redirect(buildErrorRedirect(frontendUrl, { chatbot_id, redirect_to }, 'no_pages'));
     } catch (err) {
       console.error('[OAuth] Facebook callback error:', err);
       return res.redirect(`${frontendUrl}/app/chatbot-studio?error=callback_error`);
@@ -399,5 +468,21 @@ class OAuthController {
 // pendingOAuthStore lives in whatsappOAuth.service.js and is shared between
 // handleWhatsAppCallback (write) and whatsappSettings.controller.completeOAuth
 // (read). See stashPendingOAuth / consumePendingOAuth in that module.
+
+/**
+ * Build the right error redirect target based on the OAuth flow.
+ * - settings flow → ChannelSettings tab Facebook
+ * - studio flow → /studio/chatbot/:id?tab=deploy&deployTab=facebook
+ */
+function buildErrorRedirect(frontendUrl, { chatbot_id, redirect_to }, code) {
+  const encoded = encodeURIComponent(code);
+  if (redirect_to === 'settings') {
+    return `${frontendUrl}/app/settings/channels#facebook?oauth=error&reason=${encoded}`;
+  }
+  if (chatbot_id) {
+    return `${frontendUrl}/studio/chatbot/${chatbot_id}?tab=deploy&deployTab=facebook&channel_oauth=facebook&chatbot_id=${chatbot_id}&error=${encoded}`;
+  }
+  return `${frontendUrl}/app/chatbot-studio?error=${encoded}`;
+}
 
 export default new OAuthController();

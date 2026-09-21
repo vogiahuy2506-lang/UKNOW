@@ -212,11 +212,24 @@ class ChatbotChannelRepository {
   }
 
   async getChannelPageAccessToken(channelId) {
-    const { rows } = await db.query(
-      `SELECT credentials->>'page_access_token' as page_access_token FROM channel_connections WHERE id = $1`,
+    // First try channel_connections (per-user) — populated when the user
+    // connects a page in ChannelSettings. Fall back to chatbot_channel_connections
+    // (per-chatbot) for legacy rows where the token lives only there.
+    const user = await db.query(
+      `SELECT credentials->>'page_access_token' as page_access_token
+       FROM channel_connections
+       WHERE id = $1 AND channel = 'facebook' AND is_active = true`,
       [channelId]
     );
-    return rows[0]?.page_access_token ?? null;
+    if (user.rows[0]?.page_access_token) return user.rows[0].page_access_token;
+
+    const chatbot = await db.query(
+      `SELECT credentials->>'page_access_token' as page_access_token
+       FROM chatbot_channel_connections
+       WHERE id = $1 AND channel_type = 'facebook' AND is_active = true`,
+      [channelId]
+    );
+    return chatbot.rows[0]?.page_access_token ?? null;
   }
 
   // ── WhatsApp-specific helpers (migration 194) ────────────────────────
