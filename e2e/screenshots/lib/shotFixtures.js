@@ -479,3 +479,45 @@ export async function ensureLinkedEmployeeDemo() {
     );
   });
 }
+
+/**
+ * Chatbot mẫu có khung giờ hai ca (sáng + chiều, thứ 2–7) và trần lượt trả lời theo giờ + theo ngày,
+ * để hai khối "Khung giờ hoạt động" và "Giới hạn lượt chatbot trả lời" chụp ra có nội dung.
+ * @returns {Promise<{id: number, name: string}>} chatbot đã chỉnh (chatbot đầu tiên của chủ tài khoản)
+ */
+export async function ensureChatbotHoursDemo() {
+  return withDb(async (db) => {
+    const people = await loadPeople(db);
+    const { rows } = await db.query(
+      'SELECT id, name FROM custom_chatbots WHERE id_user = $1 ORDER BY id LIMIT 1',
+      [people[OWNER_USERNAME]],
+    );
+    if (!rows[0]) throw new Error('Chưa có chatbot mẫu. Nạp lại DB với E2E_SEED_CHATBOT=1 (hoặc E2E_SEED_ALL=1).');
+    // Chỉnh MỌI chatbot của chủ tài khoản: trang Tạo AI Chatbot tự chọn chatbot theo thứ tự riêng của
+    // nó (không phải id nhỏ nhất), chỉnh một con thì dễ chụp trúng con chưa chỉnh.
+    await db.query(
+      `UPDATE custom_chatbots
+          SET active_hours = $2::jsonb, reply_limit_config = $3::jsonb, updated_at = NOW()
+        WHERE id_user = $1`,
+      [
+        people[OWNER_USERNAME],
+        JSON.stringify({
+          days: [1, 2, 3, 4, 5, 6],
+          slots: [{ start: '08:00', end: '12:00' }, { start: '13:30', end: '17:30' }],
+          start: '08:00',
+          end: '12:00',
+          outsideAction: 'message',
+          outsideMessage: 'Shop đang ngoài giờ làm việc (8h–12h, 13h30–17h30, thứ 2 đến thứ 7). Bạn cứ để lại câu hỏi và số điện thoại, shop sẽ gọi lại ngay đầu giờ sáng.',
+        }),
+        JSON.stringify({
+          version: 1,
+          windows: {
+            hour: { limit: 60, action: 'notify', message: 'Trợ lý đang bận, bạn để lại câu hỏi giúp shop nhé.' },
+            day: { limit: 500, action: 'silent', message: '' },
+          },
+        }),
+      ],
+    );
+    return rows[0];
+  });
+}

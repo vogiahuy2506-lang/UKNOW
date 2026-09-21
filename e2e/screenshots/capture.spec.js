@@ -27,6 +27,7 @@ const SHEETS = [
   // lib/shotFixtures.js nên chỉ chạy ở máy mình (localOnly).
   'bieu-mau', 'dat-lich-giu-cho', 'tai-khoan-dieu-khoan-sdt', 'goi-sap-het-han',
   'nhat-ky-hoat-dong', 'doi-tac', 'marketplace', 'lien-he-khach-de-lai', 'dung-luong-luu-tru',
+  'chatbot-khung-gio', 'tro-ly-ai-landing', 'chatbot-telegram-whatsapp', 'dong-y-nhan-tin',
 ];
 
 for (const slugToCapture of SHEETS) {
