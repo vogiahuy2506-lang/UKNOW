@@ -1241,9 +1241,9 @@ Trang mặc định chạy trên tên miền phụ của hệ thống. Muốn d�
     primary_route: '/app/settings/employees',
     sort_order: 110,
     title: 'Nhân viên & phân quyền',
-    summary: 'Thêm người cùng làm, cấp đúng quyền cần thiết, và hiểu vì sao có màn hình nhân viên không vào được.',
+    summary: 'Thêm người vào team theo hai bước: thêm rồi cấp quyền. Kèm cách nhân viên chuyển sang không gian công ty và cách xử lý khi nhân viên không thấy chiến dịch của công ty.',
     body_md: `# Nhân viên & phân quyền
-Thêm người trong team vào cùng làm, mỗi người chỉ thấy phần việc của mình.
+Thêm người trong team vào cùng làm trong không gian của bạn, mỗi người chỉ thấy phần việc bạn cho phép. Việc này có **hai bước**: thêm người, rồi **cấp quyền**. Bỏ bước hai thì nhân viên đăng nhập được nhưng không thấy gì cả.
 
 ## Tìm trang này trên màn hình
 Ở **thanh menu bên trái**, kéo xuống cuối, mở nhóm **Cài đặt** rồi chọn mục **Nhân viên** — nó nằm ngay dưới **Hồ sơ doanh nghiệp**.
@@ -1254,53 +1254,106 @@ Cả nhóm **Cài đặt** chỉ **chủ tài khoản** mới thấy.
 
 [ẢNH: trang Nhân viên, danh sách người đã thêm kèm cột quyền đã cấp]
 
-## Thêm người
-Bấm nút thêm nhân viên rồi nhập email của họ. Người đó đăng nhập bằng tài khoản riêng, nhưng làm việc trong không gian của bạn — dùng chung khách hàng, chiến dịch, kênh gửi.
+## Bước 1 — Thêm người
+Bấm **Thêm nhân viên**. Hộp thoại có hai tab, chọn theo việc người đó **đã có tài khoản Founder AI hay chưa**:
+
+| Tab | Dùng khi | Bạn nhập gì |
+|---|---|---|
+| **Tạo tài khoản mới** | Email của họ **chưa** đăng ký Founder AI | Tên đăng nhập, email, họ tên |
+| **Link tài khoản có sẵn** | Họ **đã** có tài khoản Founder AI | Đúng email họ dùng để đăng ký |
+
+[ẢNH: hộp thoại Thêm nhân viên, khoanh đỏ hai tab "Tạo tài khoản mới" và "Link tài khoản có sẵn"]
+
+Với **Tạo tài khoản mới**, hệ thống gửi thư mời tới email đó. Nhân viên bấm link trong thư để tự đặt mật khẩu; link có hiệu lực **48 giờ**. Trong lúc chờ, cột trạng thái ghi **Chờ kích hoạt**. Thư thất lạc hoặc quá hạn thì xoá người đó khỏi team rồi thêm lại để hệ thống gửi thư mới.
 
 [ẢNH: hộp thoại thêm nhân viên, khoanh đỏ ô nhập email]
 
+Người được thêm bằng **Link tài khoản có sẵn** vẫn giữ nguyên tài khoản và dữ liệu riêng của họ. Một người có thể là nhân viên của nhiều doanh nghiệp cùng lúc.
+
+### Thêm không được — ba lỗi hay gặp
+- **Email này đã được sử dụng bởi một tài khoản khác**: người đó đã có tài khoản rồi. Chuyển sang tab **Link tài khoản có sẵn** và nhập lại email.
+- **Không tìm thấy tài khoản với email này** (ở tab Link): họ chưa đăng ký, hoặc đăng ký bằng email khác. Hỏi lại đúng email, hoặc dùng tab **Tạo tài khoản mới**.
+- Báo **Lỗi server** khi tạo tài khoản mới: thường do **tên đăng nhập đã có người dùng**. Tên đăng nhập dùng chung cho toàn hệ thống, chỉ gồm chữ cái và số, không dấu, không khoảng trắng. Đổi tên khác, ví dụ thêm tên công ty phía sau.
+
 Số nhân viên tối đa phụ thuộc gói đang dùng. Hết suất thì mua thêm: mở nhóm **Gói & Thanh toán** → **Mua thêm hạn mức**.
 
-## Chín nhóm quyền
+## Bước 2 — Cấp quyền (bắt buộc)
+**Nhân viên mới thêm chưa có quyền nào.** Nhãn **Đang hoạt động** ở cột trạng thái chỉ có nghĩa là tài khoản không bị khoá, không có nghĩa là họ đã xem được dữ liệu của bạn.
 
-| Nhóm quyền | Cho phép làm gì |
-|---|---|
-| Quản lý kênh gửi | Kết nối, sửa tài khoản email và Zalo |
-| Mẫu tin nhắn | Tạo và sửa mẫu email, mẫu Zalo |
-| Quản lý sản phẩm | Quản lý danh mục sản phẩm |
-| Landing pages | Tạo và sửa landing page |
-| Chiến dịch — xem | Chỉ xem, không sửa |
-| Chiến dịch — tạo | Tạo và sửa chiến dịch |
-| Chiến dịch — chạy | Bấm chạy, tạm dừng chiến dịch |
-| Khách hàng | Xem và sửa danh sách khách |
-| Leads landing page | Xem thông tin khách để lại từ landing page |
+Cách cấp: trong danh sách, **bấm vào dòng của nhân viên**, mở tab **Phân quyền**, tick các quyền cần, rồi bấm **Lưu quyền hạn**.
 
-Ba quyền chiến dịch tách riêng có chủ đích: bạn cấp được quyền *tạo* cho người soạn nội dung mà không cho họ *bấm chạy* — tránh gửi nhầm hàng nghìn tin.
+Muốn nhân viên **thấy các chiến dịch của công ty**, tick **Chiến dịch — xem**. Tick **Chiến dịch — tạo** hoặc **Chiến dịch — chạy** thì quyền xem tự bật kèm.
 
 [ẢNH: bảng cấp quyền của một nhân viên, khoanh đỏ ba dòng quyền chiến dịch tách riêng]
 
+Ba quyền chiến dịch tách riêng có chủ đích: bạn cấp được quyền *tạo* cho người soạn nội dung mà không cho họ *bấm chạy* — tránh gửi nhầm hàng nghìn tin.
+
+| Quyền | Cho phép làm gì |
+|---|---|
+| Chiến dịch — xem | Xem danh sách, sơ đồ và kết quả các chiến dịch của công ty |
+| Chiến dịch — tạo | Tạo, sửa, nhân bản chiến dịch; dùng Gửi nhanh |
+| Chiến dịch — chạy | Bấm chạy, tạm dừng chiến dịch |
+| Quản lý kênh gửi | Kết nối, sửa tài khoản email và Zalo |
+| Mẫu tin nhắn | Tạo và sửa mẫu email, mẫu Zalo |
+| Khách hàng | Xem và sửa danh sách khách |
+| Leads landing page | Xem thông tin khách để lại từ landing page |
+| Landing pages | Tạo và sửa landing page |
+| Biểu mẫu thu thập | Tạo biểu mẫu, xem bài nộp |
+| Báo cáo & Thống kê | Mở trang Tổng quan |
+| Sử dụng Trợ lý AI | Trò chuyện với trợ lý AI, dùng credits AI của công ty |
+| Quản lý sản phẩm | Quản lý danh mục sản phẩm |
+
+Tab **Giới hạn** ngay bên cạnh cho đặt trần số email, tin Zalo và credits AI mỗi ngày, mỗi tháng cho từng người. Để trống là không giới hạn.
+
+Cuối trang có ô **Duyệt chiến dịch lớn**: chiến dịch của nhân viên có từ số người nhận bạn đặt trở lên sẽ phải chờ bạn duyệt trước khi gửi.
+
+## Nhân viên đăng nhập thì vào đâu
+Có hai trường hợp, và đây là chỗ hay bị tưởng là lỗi:
+
+- **Nhân viên được mời bằng email mới** (chưa có gói riêng): đăng nhập là vào thẳng không gian của công ty bạn.
+- **Nhân viên đã có tài khoản Founder AI riêng**: đăng nhập vẫn vào **tài khoản cá nhân của họ**, nên chỉ thấy dữ liệu của riêng họ. Muốn sang không gian công ty, họ bấm vào **ảnh đại diện ở góc trên bên phải**, tìm mục **Ngữ cảnh hoạt động** rồi chọn **tên của chủ tài khoản**. Muốn quay về thì chọn **Cá nhân**.
+
+[ẢNH: menu ảnh đại diện góc trên bên phải của nhân viên, khoanh đỏ mục Ngữ cảnh hoạt động và tên chủ tài khoản]
+
+Cách nhận biết đang ở đâu: dòng chữ nhỏ dưới tên ở góc phải ghi **Nhân viên** là đang ở không gian công ty, ghi **Chủ tài khoản** là đang ở tài khoản cá nhân.
+
+Nhân viên **đang đăng nhập sẵn** lúc bạn thêm họ hoặc đổi quyền thì cần **tải lại trang** mới thấy thay đổi.
+
+## Nhân viên báo không thấy chiến dịch của công ty — kiểm theo thứ tự
+1. **Đã cấp quyền chưa?** Bấm vào nhân viên, mở tab **Phân quyền**: phải có tick ở **Chiến dịch — xem** và đã bấm **Lưu quyền hạn**. Gần như mọi trường hợp đều nằm ở bước này.
+2. **Nhân viên đang ở đúng không gian chưa?** Người có tài khoản riêng phải tự chuyển sang không gian công ty như mục trên.
+3. **Đã tải lại trang chưa?** Quyền mới chỉ có hiệu lực sau khi nhân viên tải lại trang hoặc đăng nhập lại.
+4. **Nhân viên có bị khoá không?** Cột trạng thái ghi **Đã khóa** thì bấm vào nhân viên rồi bấm **Mở khóa**.
+5. **Gói của chủ tài khoản còn hạn không?** Gói hết hạn thì nhân viên cũng bị chặn theo.
+
+Nhân viên chưa có quyền nào sẽ thấy menu gần như trống và gặp màn **Không có quyền truy cập** khi bấm vào các mục. Đó là dấu hiệu của bước 1, không phải tài khoản bị lỗi.
+
+[ẢNH: menu bên trái của nhân viên sau khi được cấp quyền Chiến dịch — xem, đã hiện mục Quản lý chiến dịch]
+
 ## Vì sao nhân viên không vào được vài màn hình
-Một số phần **chỉ dành cho chủ tài khoản**, không cấp quyền được cho ai — kể cả bạn muốn cấp cũng không có ô nào để tick:
+Một số phần **chỉ dành cho chủ tài khoản**, không cấp quyền được cho ai:
 
 | Phần | Nằm ở đâu trong menu |
 |---|---|
 | Hồ sơ doanh nghiệp | **Cài đặt → Hồ sơ doanh nghiệp** |
-| Tạo AI Chatbot | **AI Chatbot → Tạo AI Chatbot** |
-| Lịch sử trò chuyện | **AI Chatbot → Lịch sử trò chuyện** |
-| Thư viện media | **AI Chatbot → Thư viện media** |
-| Gói, thanh toán, mua thêm | **Gói & Thanh toán** (cả nhóm) |
 | Chính trang Nhân viên này | **Cài đặt → Nhân viên** |
+| Nhật ký hoạt động | **Cài đặt → Nhật ký hoạt động** |
+| Gói, thanh toán, mua thêm | **Gói & Thanh toán** (cả nhóm) |
+| Chương trình đối tác | Mục **Chương trình đối tác** |
 
 Đây là thiết kế, không phải lỗi phân quyền. Những phần đó đụng tới tiền hoặc tới toàn bộ không gian làm việc.
 
+Nhóm **AI Chatbot** (Tạo AI Chatbot, Lịch sử trò chuyện, Thư viện media) hiện cũng chưa hiện trong menu của nhân viên, kể cả khi bạn đã tick các quyền về chatbot, hộp thư và thư viện media.
+
 ## Gỡ một người khỏi team
-Tài khoản của họ vẫn còn, chỉ là không còn truy cập được dữ liệu của bạn nữa.
+Bấm vào nhân viên rồi bấm **Xóa khỏi team**. Tài khoản của họ vẫn còn, chỉ là không còn truy cập được dữ liệu của bạn nữa. Riêng người còn đang **Chờ kích hoạt** thì tài khoản bị xoá hẳn, email đó dùng lại được.
 
 ## Liên quan
 - [Gói dịch vụ & thanh toán](plan-and-billing)
 - [Kết nối kênh gửi](channels)
-- [Tạo chiến dịch](campaign-create)`,
-    body_html: `<h2>Nhân viên &amp; phân quyền</h2><p>Thêm người trong team vào cùng làm, mỗi người chỉ thấy phần việc của mình.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, kéo xuống cuối, mở nhóm <strong>Cài đặt</strong> rồi chọn mục <strong>Nhân viên</strong> — nó nằm ngay dưới <strong>Hồ sơ doanh nghiệp</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm Cài đặt, khoanh đỏ mục &quot;Nhân viên&quot;]</p><p>Cả nhóm <strong>Cài đặt</strong> chỉ <strong>chủ tài khoản</strong> mới thấy.</p><p>[ẢNH: trang Nhân viên, danh sách người đã thêm kèm cột quyền đã cấp]</p><h3>Thêm người</h3><p>Bấm nút thêm nhân viên rồi nhập email của họ. Người đó đăng nhập bằng tài khoản riêng, nhưng làm việc trong không gian của bạn — dùng chung khách hàng, chiến dịch, kênh gửi.</p><p>[ẢNH: hộp thoại thêm nhân viên, khoanh đỏ ô nhập email]</p><p>Số nhân viên tối đa phụ thuộc gói đang dùng. Hết suất thì mua thêm: mở nhóm <strong>Gói &amp; Thanh toán</strong> → <strong>Mua thêm hạn mức</strong>.</p><h3>Chín nhóm quyền</h3><table><thead><tr><th>Nhóm quyền</th><th>Cho phép làm gì</th></tr></thead><tbody><tr><td>Quản lý kênh gửi</td><td>Kết nối, sửa tài khoản email và Zalo</td></tr><tr><td>Mẫu tin nhắn</td><td>Tạo và sửa mẫu email, mẫu Zalo</td></tr><tr><td>Quản lý sản phẩm</td><td>Quản lý danh mục sản phẩm</td></tr><tr><td>Landing pages</td><td>Tạo và sửa landing page</td></tr><tr><td>Chiến dịch — xem</td><td>Chỉ xem, không sửa</td></tr><tr><td>Chiến dịch — tạo</td><td>Tạo và sửa chiến dịch</td></tr><tr><td>Chiến dịch — chạy</td><td>Bấm chạy, tạm dừng chiến dịch</td></tr><tr><td>Khách hàng</td><td>Xem và sửa danh sách khách</td></tr><tr><td>Leads landing page</td><td>Xem thông tin khách để lại từ landing page</td></tr></tbody></table><p>Ba quyền chiến dịch tách riêng có chủ đích: bạn cấp được quyền <em>tạo</em> cho người soạn nội dung mà không cho họ <em>bấm chạy</em> — tránh gửi nhầm hàng nghìn tin.</p><p>[ẢNH: bảng cấp quyền của một nhân viên, khoanh đỏ ba dòng quyền chiến dịch tách riêng]</p><h3>Vì sao nhân viên không vào được vài màn hình</h3><p>Một số phần <strong>chỉ dành cho chủ tài khoản</strong>, không cấp quyền được cho ai — kể cả bạn muốn cấp cũng không có ô nào để tick:</p><table><thead><tr><th>Phần</th><th>Nằm ở đâu trong menu</th></tr></thead><tbody><tr><td>Hồ sơ doanh nghiệp</td><td><strong>Cài đặt → Hồ sơ doanh nghiệp</strong></td></tr><tr><td>Tạo AI Chatbot</td><td><strong>AI Chatbot → Tạo AI Chatbot</strong></td></tr><tr><td>Lịch sử trò chuyện</td><td><strong>AI Chatbot → Lịch sử trò chuyện</strong></td></tr><tr><td>Thư viện media</td><td><strong>AI Chatbot → Thư viện media</strong></td></tr><tr><td>Gói, thanh toán, mua thêm</td><td><strong>Gói &amp; Thanh toán</strong> (cả nhóm)</td></tr><tr><td>Chính trang Nhân viên này</td><td><strong>Cài đặt → Nhân viên</strong></td></tr></tbody></table><p>Đây là thiết kế, không phải lỗi phân quyền. Những phần đó đụng tới tiền hoặc tới toàn bộ không gian làm việc.</p><h3>Gỡ một người khỏi team</h3><p>Tài khoản của họ vẫn còn, chỉ là không còn truy cập được dữ liệu của bạn nữa.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="/huong-dan/channels">Kết nối kênh gửi</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li></ul>`,
+- [Tạo chiến dịch](campaign-create)
+- [Nhật ký hoạt động](nhat-ky-hoat-dong)`,
+    body_html: `<h2>Nhân viên &amp; phân quyền</h2><p>Thêm người trong team vào cùng làm trong không gian của bạn, mỗi người chỉ thấy phần việc bạn cho phép. Việc này có <strong>hai bước</strong>: thêm người, rồi <strong>cấp quyền</strong>. Bỏ bước hai thì nhân viên đăng nhập được nhưng không thấy gì cả.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, kéo xuống cuối, mở nhóm <strong>Cài đặt</strong> rồi chọn mục <strong>Nhân viên</strong> — nó nằm ngay dưới <strong>Hồ sơ doanh nghiệp</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm Cài đặt, khoanh đỏ mục &quot;Nhân viên&quot;]</p><p>Cả nhóm <strong>Cài đặt</strong> chỉ <strong>chủ tài khoản</strong> mới thấy.</p><p>[ẢNH: trang Nhân viên, danh sách người đã thêm kèm cột quyền đã cấp]</p><h3>Bước 1 — Thêm người</h3><p>Bấm <strong>Thêm nhân viên</strong>. Hộp thoại có hai tab, chọn theo việc người đó <strong>đã có tài khoản Founder AI hay chưa</strong>:</p><table><thead><tr><th>Tab</th><th>Dùng khi</th><th>Bạn nhập gì</th></tr></thead><tbody><tr><td><strong>Tạo tài khoản mới</strong></td><td>Email của họ <strong>chưa</strong> đăng ký Founder AI</td><td>Tên đăng nhập, email, họ tên</td></tr><tr><td><strong>Link tài khoản có sẵn</strong></td><td>Họ <strong>đã</strong> có tài khoản Founder AI</td><td>Đúng email họ dùng để đăng ký</td></tr></tbody></table><p>[ẢNH: hộp thoại Thêm nhân viên, khoanh đỏ hai tab &quot;Tạo tài khoản mới&quot; và &quot;Link tài khoản có sẵn&quot;]</p><p>Với <strong>Tạo tài khoản mới</strong>, hệ thống gửi thư mời tới email đó. Nhân viên bấm link trong thư để tự đặt mật khẩu; link có hiệu lực <strong>48 giờ</strong>. Trong lúc chờ, cột trạng thái ghi <strong>Chờ kích hoạt</strong>. Thư thất lạc hoặc quá hạn thì xoá người đó khỏi team rồi thêm lại để hệ thống gửi thư mới.</p><p>[ẢNH: hộp thoại thêm nhân viên, khoanh đỏ ô nhập email]</p><p>Người được thêm bằng <strong>Link tài khoản có sẵn</strong> vẫn giữ nguyên tài khoản và dữ liệu riêng của họ. Một người có thể là nhân viên của nhiều doanh nghiệp cùng lúc.</p><h4>Thêm không được — ba lỗi hay gặp</h4><ul><li><strong>Email này đã được sử dụng bởi một tài khoản khác</strong>: người đó đã có tài khoản rồi. Chuyển sang tab <strong>Link tài khoản có sẵn</strong> và nhập lại email.</li><li><strong>Không tìm thấy tài khoản với email này</strong> (ở tab Link): họ chưa đăng ký, hoặc đăng ký bằng email khác. Hỏi lại đúng email, hoặc dùng tab <strong>Tạo tài khoản mới</strong>.</li><li>Báo <strong>Lỗi server</strong> khi tạo tài khoản mới: thường do <strong>tên đăng nhập đã có người dùng</strong>. Tên đăng nhập dùng chung cho toàn hệ thống, chỉ gồm chữ cái và số, không dấu, không khoảng trắng. Đổi tên khác, ví dụ thêm tên công ty phía sau.</li></ul><p>Số nhân viên tối đa phụ thuộc gói đang dùng. Hết suất thì mua thêm: mở nhóm <strong>Gói &amp; Thanh toán</strong> → <strong>Mua thêm hạn mức</strong>.</p><h3>Bước 2 — Cấp quyền (bắt buộc)</h3><p><strong>Nhân viên mới thêm chưa có quyền nào.</strong> Nhãn <strong>Đang hoạt động</strong> ở cột trạng thái chỉ có nghĩa là tài khoản không bị khoá, không có nghĩa là họ đã xem được dữ liệu của bạn.</p><p>Cách cấp: trong danh sách, <strong>bấm vào dòng của nhân viên</strong>, mở tab <strong>Phân quyền</strong>, tick các quyền cần, rồi bấm <strong>Lưu quyền hạn</strong>.</p><p>Muốn nhân viên <strong>thấy các chiến dịch của công ty</strong>, tick <strong>Chiến dịch — xem</strong>. Tick <strong>Chiến dịch — tạo</strong> hoặc <strong>Chiến dịch — chạy</strong> thì quyền xem tự bật kèm.</p><p>[ẢNH: bảng cấp quyền của một nhân viên, khoanh đỏ ba dòng quyền chiến dịch tách riêng]</p><p>Ba quyền chiến dịch tách riêng có chủ đích: bạn cấp được quyền <em>tạo</em> cho người soạn nội dung mà không cho họ <em>bấm chạy</em> — tránh gửi nhầm hàng nghìn tin.</p><table><thead><tr><th>Quyền</th><th>Cho phép làm gì</th></tr></thead><tbody><tr><td>Chiến dịch — xem</td><td>Xem danh sách, sơ đồ và kết quả các chiến dịch của công ty</td></tr><tr><td>Chiến dịch — tạo</td><td>Tạo, sửa, nhân bản chiến dịch; dùng Gửi nhanh</td></tr><tr><td>Chiến dịch — chạy</td><td>Bấm chạy, tạm dừng chiến dịch</td></tr><tr><td>Quản lý kênh gửi</td><td>Kết nối, sửa tài khoản email và Zalo</td></tr><tr><td>Mẫu tin nhắn</td><td>Tạo và sửa mẫu email, mẫu Zalo</td></tr><tr><td>Khách hàng</td><td>Xem và sửa danh sách khách</td></tr><tr><td>Leads landing page</td><td>Xem thông tin khách để lại từ landing page</td></tr><tr><td>Landing pages</td><td>Tạo và sửa landing page</td></tr><tr><td>Biểu mẫu thu thập</td><td>Tạo biểu mẫu, xem bài nộp</td></tr><tr><td>Báo cáo &amp; Thống kê</td><td>Mở trang Tổng quan</td></tr><tr><td>Sử dụng Trợ lý AI</td><td>Trò chuyện với trợ lý AI, dùng credits AI của công ty</td></tr><tr><td>Quản lý sản phẩm</td><td>Quản lý danh mục sản phẩm</td></tr></tbody></table><p>Tab <strong>Giới hạn</strong> ngay bên cạnh cho đặt trần số email, tin Zalo và credits AI mỗi ngày, mỗi tháng cho từng người. Để trống là không giới hạn.</p><p>Cuối trang có ô <strong>Duyệt chiến dịch lớn</strong>: chiến dịch của nhân viên có từ số người nhận bạn đặt trở lên sẽ phải chờ bạn duyệt trước khi gửi.</p><h3>Nhân viên đăng nhập thì vào đâu</h3><p>Có hai trường hợp, và đây là chỗ hay bị tưởng là lỗi:</p><ul><li><strong>Nhân viên được mời bằng email mới</strong> (chưa có gói riêng): đăng nhập là vào thẳng không gian của công ty bạn.</li><li><strong>Nhân viên đã có tài khoản Founder AI riêng</strong>: đăng nhập vẫn vào <strong>tài khoản cá nhân của họ</strong>, nên chỉ thấy dữ liệu của riêng họ. Muốn sang không gian công ty, họ bấm vào <strong>ảnh đại diện ở góc trên bên phải</strong>, tìm mục <strong>Ngữ cảnh hoạt động</strong> rồi chọn <strong>tên của chủ tài khoản</strong>. Muốn quay về thì chọn <strong>Cá nhân</strong>.</li></ul><p>[ẢNH: menu ảnh đại diện góc trên bên phải của nhân viên, khoanh đỏ mục Ngữ cảnh hoạt động và tên chủ tài khoản]</p><p>Cách nhận biết đang ở đâu: dòng chữ nhỏ dưới tên ở góc phải ghi <strong>Nhân viên</strong> là đang ở không gian công ty, ghi <strong>Chủ tài khoản</strong> là đang ở tài khoản cá nhân.</p><p>Nhân viên <strong>đang đăng nhập sẵn</strong> lúc bạn thêm họ hoặc đổi quyền thì cần <strong>tải lại trang</strong> mới thấy thay đổi.</p><h3>Nhân viên báo không thấy chiến dịch của công ty — kiểm theo thứ tự</h3><ol><li><strong>Đã cấp quyền chưa?</strong> Bấm vào nhân viên, mở tab <strong>Phân quyền</strong>: phải có tick ở <strong>Chiến dịch — xem</strong> và đã bấm <strong>Lưu quyền hạn</strong>. Gần như mọi trường hợp đều nằm ở bước này.</li><li><strong>Nhân viên đang ở đúng không gian chưa?</strong> Người có tài khoản riêng phải tự chuyển sang không gian công ty như mục trên.</li><li><strong>Đã tải lại trang chưa?</strong> Quyền mới chỉ có hiệu lực sau khi nhân viên tải lại trang hoặc đăng nhập lại.</li><li><strong>Nhân viên có bị khoá không?</strong> Cột trạng thái ghi <strong>Đã khóa</strong> thì bấm vào nhân viên rồi bấm <strong>Mở khóa</strong>.</li><li><strong>Gói của chủ tài khoản còn hạn không?</strong> Gói hết hạn thì nhân viên cũng bị chặn theo.</li></ol><p>Nhân viên chưa có quyền nào sẽ thấy menu gần như trống và gặp màn <strong>Không có quyền truy cập</strong> khi bấm vào các mục. Đó là dấu hiệu của bước 1, không phải tài khoản bị lỗi.</p><p>[ẢNH: menu bên trái của nhân viên sau khi được cấp quyền Chiến dịch — xem, đã hiện mục Quản lý chiến dịch]</p><h3>Vì sao nhân viên không vào được vài màn hình</h3><p>Một số phần <strong>chỉ dành cho chủ tài khoản</strong>, không cấp quyền được cho ai:</p><table><thead><tr><th>Phần</th><th>Nằm ở đâu trong menu</th></tr></thead><tbody><tr><td>Hồ sơ doanh nghiệp</td><td><strong>Cài đặt → Hồ sơ doanh nghiệp</strong></td></tr><tr><td>Chính trang Nhân viên này</td><td><strong>Cài đặt → Nhân viên</strong></td></tr><tr><td>Nhật ký hoạt động</td><td><strong>Cài đặt → Nhật ký hoạt động</strong></td></tr><tr><td>Gói, thanh toán, mua thêm</td><td><strong>Gói &amp; Thanh toán</strong> (cả nhóm)</td></tr><tr><td>Chương trình đối tác</td><td>Mục <strong>Chương trình đối tác</strong></td></tr></tbody></table><p>Đây là thiết kế, không phải lỗi phân quyền. Những phần đó đụng tới tiền hoặc tới toàn bộ không gian làm việc.</p><p>Nhóm <strong>AI Chatbot</strong> (Tạo AI Chatbot, Lịch sử trò chuyện, Thư viện media) hiện cũng chưa hiện trong menu của nhân viên, kể cả khi bạn đã tick các quyền về chatbot, hộp thư và thư viện media.</p><h3>Gỡ một người khỏi team</h3><p>Bấm vào nhân viên rồi bấm <strong>Xóa khỏi team</strong>. Tài khoản của họ vẫn còn, chỉ là không còn truy cập được dữ liệu của bạn nữa. Riêng người còn đang <strong>Chờ kích hoạt</strong> thì tài khoản bị xoá hẳn, email đó dùng lại được.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="/huong-dan/channels">Kết nối kênh gửi</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/nhat-ky-hoat-dong">Nhật ký hoạt động</a></li></ul>`,
   },
   {
     slug: 'plan-and-billing',
