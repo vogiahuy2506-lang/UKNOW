@@ -343,9 +343,8 @@ export async function previewEmailHtml(req, res) {
     } = req.body;
 
     // Tạo "notification giả" giống row từ DB. Service không cần id, chỉ các field
-    // để render. Sau rewrite 19/09: html_content là BODY EMAIL TUYỆT ĐỐI —
-    // renderer chỉ sanitize + gói tối thiểu trong <html><body>. Không có layout
-    // wrapper cố định.
+    // để render. Sau rewrite 21/09: dùng buildBaseTemplate — cùng khuôn header/footer
+    // orange gradient với FE preview (WYSIWYG).
     const notification = {
       type,
       priority,
@@ -428,6 +427,8 @@ export async function createAndSend(req, res) {
       title_en,
       message,
       message_en,
+      html_content,
+      html_content_en,
       metadata,
       priority = 'normal',
       target_roles,
@@ -470,6 +471,8 @@ export async function createAndSend(req, res) {
       title_en: title_en?.trim(),
       message: message.trim(),
       message_en: message_en?.trim(),
+      html_content: html_content?.trim() || null,
+      html_content_en: html_content_en?.trim() || null,
       metadata,
       priority,
       target_roles,
