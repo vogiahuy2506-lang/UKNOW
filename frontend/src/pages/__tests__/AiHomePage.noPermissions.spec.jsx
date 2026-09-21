@@ -63,8 +63,10 @@ describe('AiHomePage — thẻ "chưa được cấp quyền nào"', () => {
     expect(screen.getByTestId('workspace-no-permissions')).toBeInTheDocument();
   });
 
-  it('nhân viên đã có quyền → khung chat, không có thẻ', () => {
-    seed(employeeContext({ campaigns_view: true }));
+  // Bản trước ghim "có bất kỳ quyền nào → khung chat". Đo bằng trình duyệt thì khung chat đó trả 403
+  // khi thiếu `ai_assistant_use` — xem nhóm test "thiếu quyền Sử dụng Trợ lý AI" ở cuối file.
+  it('nhân viên đã có quyền dùng Trợ lý AI → khung chat, không có thẻ', () => {
+    seed(employeeContext({ campaigns_view: true, ai_assistant_use: true }));
     renderPage();
     expect(screen.getByTestId('ai-chat')).toBeInTheDocument();
     expect(screen.queryByTestId('workspace-no-permissions')).not.toBeInTheDocument();
@@ -128,5 +130,58 @@ describe('nút "kiểm tra lại"', () => {
     expect(await screen.findByRole('button', { name: 'Đang kiểm tra...' })).toBeDisabled();
     finish(meResponse([]));
     await waitFor(() => expect(screen.getByRole('button', { name: 'Tôi đã được cấp quyền — kiểm tra lại' })).toBeEnabled());
+  });
+});
+
+// Bản vá review: nút chọn nhanh "Chỉ xem" cố ý KHÔNG kèm quyền dùng Trợ lý AI, mà đổi sang không gian
+// công ty xong là được đưa về trang này. Đo bằng trình duyệt 21/09: khung chat hiện ra, gửi tin → 403.
+describe('AiHomePage — có quyền khác nhưng thiếu quyền "Sử dụng Trợ lý AI"', () => {
+  it('nhân viên chỉ có quyền xem chiến dịch → thẻ chỉ sang menu trái, KHÔNG có khung chat', () => {
+    seed(employeeContext({ campaigns_view: true, reports_view: true, ai_assistant_use: false }));
+    renderPage();
+
+    const card = screen.getByTestId('workspace-no-ai-assistant');
+    expect(card).toHaveTextContent('Trợ lý AI chưa được bật cho bạn');
+    expect(card).toHaveTextContent('Bạn đang làm việc trong không gian của Công ty A.');
+    expect(card).toHaveTextContent('tick "Sử dụng Trợ lý AI"');
+    expect(screen.getByRole('button', { name: 'Tôi đã được cấp quyền — kiểm tra lại' })).toBeInTheDocument();
+    expect(screen.queryByTestId('ai-chat')).not.toBeInTheDocument();
+    // Không lẫn với thẻ 0 quyền — hai ca hướng dẫn hai việc khác nhau.
+    expect(screen.queryByTestId('workspace-no-permissions')).not.toBeInTheDocument();
+  });
+
+  it('thiếu hẳn khoá ai_assistant_use (quyền lưu trước khi có khoá này) → cũng là thẻ, không phải khung chat', () => {
+    seed(employeeContext({ campaigns_view: true }));
+    renderPage();
+
+    expect(screen.getByTestId('workspace-no-ai-assistant')).toBeInTheDocument();
+    expect(screen.queryByTestId('ai-chat')).not.toBeInTheDocument();
+  });
+
+  it('nhân viên CÓ quyền dùng Trợ lý AI → khung chat, không thẻ nào', () => {
+    seed(employeeContext({ campaigns_view: true, ai_assistant_use: true }));
+    renderPage();
+
+    expect(screen.getByTestId('ai-chat')).toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-no-ai-assistant')).not.toBeInTheDocument();
+  });
+
+  it('chủ tài khoản (ngữ cảnh self) không bao giờ thấy thẻ này', () => {
+    seed({ type: 'self' }, []);
+    renderPage();
+
+    expect(screen.getByTestId('ai-chat')).toBeInTheDocument();
+    expect(screen.queryByTestId('workspace-no-ai-assistant')).not.toBeInTheDocument();
+  });
+
+  it('chủ vừa tick quyền → bấm "kiểm tra lại" là khung chat hiện ra, không cần F5', async () => {
+    seed(employeeContext({ campaigns_view: true }), [membership({ campaigns_view: true })]);
+    api.get.mockResolvedValueOnce(meResponse({ campaigns_view: true, ai_assistant_use: true }));
+    renderPage();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Tôi đã được cấp quyền — kiểm tra lại' }));
+
+    await waitFor(() => expect(screen.getByTestId('ai-chat')).toBeInTheDocument());
+    expect(screen.queryByTestId('workspace-no-ai-assistant')).not.toBeInTheDocument();
   });
 });

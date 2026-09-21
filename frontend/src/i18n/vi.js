@@ -7634,19 +7634,19 @@ export default {
 
   // Change Password Modal
   changePassword: {
-    title: 'Change Password',
-    currentPassword: 'Current Password',
-    newPassword: 'New Password',
-    confirmNewPassword: 'Confirm New Password',
-    cancel: 'Cancel',
-    submit: 'Change Password',
-    saving: 'Saving...',
+    title: 'Đổi mật khẩu',
+    currentPassword: 'Mật khẩu hiện tại',
+    newPassword: 'Mật khẩu mới',
+    confirmNewPassword: 'Nhập lại mật khẩu mới',
+    cancel: 'Hủy',
+    submit: 'Đổi mật khẩu',
+    saving: 'Đang lưu...',
     validationRequired: 'Vui lòng điền đầy đủ thông tin.',
     validationMinLength: 'Mật khẩu mới phải từ 8 ký tự trở lên (gồm cả chữ và số).',
     validationMismatch: 'Mật khẩu xác nhận không khớp.',
-    success: 'Password changed successfully!',
-    failed: 'Password change failed.',
-    errorOccurred: 'An error occurred. Please try again.',
+    success: 'Đổi mật khẩu thành công!',
+    failed: 'Đổi mật khẩu thất bại.',
+    errorOccurred: 'Có lỗi xảy ra. Vui lòng thử lại.',
   },
 
   referralPromptModal: {
@@ -7797,6 +7797,11 @@ export default {
     resultUnchanged: 'Chưa thấy quyền mới. Hãy chắc chắn chủ tài khoản đã bấm "Lưu quyền hạn", rồi thử lại.',
     resultFailed: 'Không kiểm tra được lúc này. Hãy kiểm tra kết nối mạng rồi thử lại.',
     fallbackOwner: 'công ty',
+  },
+  workspaceNoAiAssistant: {
+    title: 'Trợ lý AI chưa được bật cho bạn',
+    intro: 'Bạn đang làm việc trong không gian của {ownerName}. Các mục bạn được dùng nằm ở menu bên trái.',
+    steps: 'Muốn dùng Trợ lý AI, nhờ chủ tài khoản mở Cài đặt → Nhân viên, bấm vào tên bạn, chọn tab Phân quyền, tick "Sử dụng Trợ lý AI" rồi lưu. Sau đó bấm nút bên dưới.',
   },
 
   // Renewal Screen

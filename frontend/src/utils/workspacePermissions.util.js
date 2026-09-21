@@ -21,3 +21,11 @@ export const isEmployeeWorkspace = (activeContext) => activeContext?.type === 'e
  */
 export const isEmployeeWithoutPermissions = (activeContext) =>
   isEmployeeWorkspace(activeContext) && countGrantedPermissions(activeContext.permissions) === 0;
+
+/**
+ * Nhân viên CÓ quyền khác nhưng chưa có quyền "Sử dụng Trợ lý AI" (`ai_assistant_use`). Trang chủ
+ * `/app` là khung chat trợ lý, mà mọi lời gọi `/ai/chat` của họ trả 403 — và sau khi đổi sang không
+ * gian công ty thì `/app` chính là nơi họ được đưa tới. Ca 0 quyền do `isEmployeeWithoutPermissions` lo.
+ */
+export const isEmployeeWithoutAiAssistant = (activeContext) =>
+  isEmployeeWorkspace(activeContext) && activeContext.permissions?.ai_assistant_use !== true;

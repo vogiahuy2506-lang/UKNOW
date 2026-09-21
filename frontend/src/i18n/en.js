@@ -7872,6 +7872,11 @@ Feel free to ask me anything!`,
     resultFailed: 'Could not check right now. Check your connection and try again.',
     fallbackOwner: 'the company',
   },
+  workspaceNoAiAssistant: {
+    title: 'The AI Assistant is not enabled for you',
+    intro: "You are working in {ownerName}'s workspace. The sections you can use are in the left menu.",
+    steps: 'To use the AI Assistant, ask the account owner to open Settings → Employees, click your name, choose the Permissions tab, tick "Use AI Assistant" and save. Then click the button below.',
+  },
 
   // Renewal Screen
   renewal: {
