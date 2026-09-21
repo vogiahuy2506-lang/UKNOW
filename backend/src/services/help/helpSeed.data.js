@@ -1057,10 +1057,11 @@ Gần như luôn là do phần Kiến thức, không phải do model. Kiểm the
 3. Hướng dẫn cách trả lời có mâu thuẫn với tài liệu không?
 
 ## Liên quan
+- [Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ](chatbot-khung-gio)
 - [Hộp thư hợp nhất](inbox)
 - [Hồ sơ doanh nghiệp](ai-profile)
 - [Gói dịch vụ & thanh toán](plan-and-billing)`,
-    body_html: `<h2>Chatbot AI trả lời khách tự động</h2><p>Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng những gì bạn bán — không phải một trợ lý chung chung.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>AI Chatbot</strong> cho nó mở ra, rồi chọn mục <strong>Tạo AI Chatbot</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục &quot;Tạo AI Chatbot&quot;]</p><p>Chỉ <strong>chủ tài khoản</strong> dùng được trang này. Tài khoản nhân viên bấm vào sẽ bị chặn.</p><p>[ẢNH: trang Tạo AI Chatbot, cột trái là danh sách chatbot, phần chính bên phải là các tab]</p><h3>Ba tab cần đi qua</h3><p>Sau khi chọn hoặc tạo một chatbot, phần chính của màn hình có ba tab xếp ngang. Đi lần lượt từ trái sang phải.</p><p>[ẢNH: hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng]</p><h4>1. Cấu hình</h4><p>Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website.</p><p>Phần hướng dẫn cách trả lời quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ <em>&quot;Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại.&quot;</em></p><p>[ẢNH: tab Cấu hình, khoanh đỏ ô nhập hướng dẫn cách trả lời]</p><h4>2. Kiến thức</h4><p>Nơi quyết định bot trả lời đúng hay sai. Bạn tải tài liệu lên hoặc dán thẳng văn bản: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.</p><p>Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung.</p><blockquote><p>Nạp tài liệu <strong>không</strong> tốn credit AI. Chỉ mỗi lượt bot trả lời khách mới tính.</p></blockquote><p>[ẢNH: tab Kiến thức, khoanh đỏ nút tải tài liệu lên]</p><p>[ẢNH: tab Kiến thức sau khi đã có vài tài liệu, khoanh đỏ cột trạng thái xử lý của từng tài liệu]</p><h4>3. Triển khai</h4><p>Chọn nơi đặt bot:</p><ul><li><strong>Website</strong> — chèn đoạn mã vào trang của bạn, hoặc dùng liên kết công khai nếu chưa có website</li><li><strong>Zalo Official Account</strong> — cần App ID và App Secret từ Zalo Developer</li><li><strong>Facebook Messenger</strong> — liên kết Fanpage</li><li><strong>Zalo cá nhân</strong> — bot trả lời ngay trong tài khoản Zalo bạn đã kết nối</li></ul><p>[ẢNH: tab Triển khai, khoanh đỏ bốn lựa chọn kênh]</p><p>Với Zalo OA và Facebook, màn hình có sẵn hướng dẫn từng bước kèm ô sao chép Webhook URL và Verify Token.</p><p>[ẢNH: phần hướng dẫn Zalo OA, khoanh đỏ hai ô sao chép Webhook URL và Verify Token]</p><h3>Bot trả lời rồi thì xem ở đâu</h3><p>Mọi hội thoại đổ về một chỗ: <strong>menu bên trái</strong> → nhóm <strong>AI Chatbot</strong> → mục <strong>Lịch sử trò chuyện</strong>, ngay dưới mục bạn vừa dùng. Cả bốn kênh gộp chung ở đó. Xem <a href="/huong-dan/inbox">Hộp thư hợp nhất</a>.</p><p>[ẢNH: menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục &quot;Lịch sử trò chuyện&quot;]</p><h3>Khi bot trả lời sai</h3><p>Gần như luôn là do phần Kiến thức, không phải do model. Kiểm theo thứ tự:</p><ol><li>Câu hỏi đó đã có trong tài liệu chưa?</li><li>Tài liệu đã xử lý xong chưa, hay còn đang nạp?</li><li>Hướng dẫn cách trả lời có mâu thuẫn với tài liệu không?</li></ol><h3>Liên quan</h3><ul><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li></ul>`,
+    body_html: `<h2>Chatbot AI trả lời khách tự động</h2><p>Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng những gì bạn bán — không phải một trợ lý chung chung.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>AI Chatbot</strong> cho nó mở ra, rồi chọn mục <strong>Tạo AI Chatbot</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục &quot;Tạo AI Chatbot&quot;]</p><p>Chỉ <strong>chủ tài khoản</strong> dùng được trang này. Tài khoản nhân viên bấm vào sẽ bị chặn.</p><p>[ẢNH: trang Tạo AI Chatbot, cột trái là danh sách chatbot, phần chính bên phải là các tab]</p><h3>Ba tab cần đi qua</h3><p>Sau khi chọn hoặc tạo một chatbot, phần chính của màn hình có ba tab xếp ngang. Đi lần lượt từ trái sang phải.</p><p>[ẢNH: hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng]</p><h4>1. Cấu hình</h4><p>Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website.</p><p>Phần hướng dẫn cách trả lời quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ <em>&quot;Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại.&quot;</em></p><p>[ẢNH: tab Cấu hình, khoanh đỏ ô nhập hướng dẫn cách trả lời]</p><h4>2. Kiến thức</h4><p>Nơi quyết định bot trả lời đúng hay sai. Bạn tải tài liệu lên hoặc dán thẳng văn bản: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.</p><p>Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung.</p><blockquote><p>Nạp tài liệu <strong>không</strong> tốn credit AI. Chỉ mỗi lượt bot trả lời khách mới tính.</p></blockquote><p>[ẢNH: tab Kiến thức, khoanh đỏ nút tải tài liệu lên]</p><p>[ẢNH: tab Kiến thức sau khi đã có vài tài liệu, khoanh đỏ cột trạng thái xử lý của từng tài liệu]</p><h4>3. Triển khai</h4><p>Chọn nơi đặt bot:</p><ul><li><strong>Website</strong> — chèn đoạn mã vào trang của bạn, hoặc dùng liên kết công khai nếu chưa có website</li><li><strong>Zalo Official Account</strong> — cần App ID và App Secret từ Zalo Developer</li><li><strong>Facebook Messenger</strong> — liên kết Fanpage</li><li><strong>Zalo cá nhân</strong> — bot trả lời ngay trong tài khoản Zalo bạn đã kết nối</li></ul><p>[ẢNH: tab Triển khai, khoanh đỏ bốn lựa chọn kênh]</p><p>Với Zalo OA và Facebook, màn hình có sẵn hướng dẫn từng bước kèm ô sao chép Webhook URL và Verify Token.</p><p>[ẢNH: phần hướng dẫn Zalo OA, khoanh đỏ hai ô sao chép Webhook URL và Verify Token]</p><h3>Bot trả lời rồi thì xem ở đâu</h3><p>Mọi hội thoại đổ về một chỗ: <strong>menu bên trái</strong> → nhóm <strong>AI Chatbot</strong> → mục <strong>Lịch sử trò chuyện</strong>, ngay dưới mục bạn vừa dùng. Cả bốn kênh gộp chung ở đó. Xem <a href="/huong-dan/inbox">Hộp thư hợp nhất</a>.</p><p>[ẢNH: menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục &quot;Lịch sử trò chuyện&quot;]</p><h3>Khi bot trả lời sai</h3><p>Gần như luôn là do phần Kiến thức, không phải do model. Kiểm theo thứ tự:</p><ol><li>Câu hỏi đó đã có trong tài liệu chưa?</li><li>Tài liệu đã xử lý xong chưa, hay còn đang nạp?</li><li>Hướng dẫn cách trả lời có mâu thuẫn với tài liệu không?</li></ol><h3>Liên quan</h3><ul><li><a href="/huong-dan/chatbot-khung-gio">Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</a></li><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li></ul>`,
   },
   {
     slug: 'inbox',
@@ -1128,7 +1129,7 @@ Tin bạn gõ thẳng trong ứng dụng Zalo cũng hiện ở đây và cũng l
 Trang giới thiệu kèm form đăng ký, dùng để chạy quảng cáo hoặc gắn vào chiến dịch. Không cần biết code.
 
 ## Tìm trang này trên màn hình
-Ở **thanh menu bên trái**, bấm vào nhóm **Landing page** cho nó mở ra. Bên trong có hai mục — chọn mục thứ hai, **Tạo Landing page**.
+Ở **thanh menu bên trái**, bấm vào nhóm **Landing page** cho nó mở ra. Bên trong có ba mục — chọn mục **Tạo Landing page**.
 
 [ẢNH: menu bên trái đang mở nhóm Landing page, khoanh đỏ mục "Tạo Landing page"]
 
@@ -1176,10 +1177,12 @@ Trang mặc định chạy trên tên miền phụ của hệ thống. Muốn d�
 [ẢNH: phần cài đặt tên miền riêng, thấy ô nhập tên miền và bảng hướng dẫn trỏ DNS]
 
 ## Liên quan
+- [Dựng landing page bằng Trợ lý AI](tro-ly-ai-landing)
+- [Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website](bieu-mau)
 - [Hồ sơ doanh nghiệp](ai-profile)
 - [Tạo chiến dịch](campaign-create)
 - [Khách hàng](khach-hang)`,
-    body_html: `<h2>Landing page thu khách hàng</h2><p>Trang giới thiệu kèm form đăng ký, dùng để chạy quảng cáo hoặc gắn vào chiến dịch. Không cần biết code.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>Landing page</strong> cho nó mở ra. Bên trong có hai mục — chọn mục thứ hai, <strong>Tạo Landing page</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm Landing page, khoanh đỏ mục &quot;Tạo Landing page&quot;]</p><p>Lưu ý kẻo nhầm: nhóm ngoài và mục con <strong>không cùng tên</strong>. Nhóm tên <em>Landing page</em>, mục cần bấm tên <em>Tạo Landing page</em>. Bấm vào tên nhóm chỉ mở nhóm ra chứ chưa vào trang nào.</p><p>[ẢNH: trang danh sách landing page, thấy các trang đã tạo kèm trạng thái đã xuất bản]</p><h3>Ba cách tạo trang</h3><p>Bấm nút tạo trang mới, màn hình cho bạn chọn một trong ba cách:</p><table><thead><tr><th>Cách</th><th>Hợp khi</th></tr></thead><tbody><tr><td><strong>Tạo với AI</strong></td><td>Chưa có gì trong tay, muốn có bản nháp trong một phút</td></tr><tr><td><strong>Chọn mẫu có sẵn</strong></td><td>Muốn bố cục chuẩn rồi tự sửa chữ</td></tr><tr><td><strong>Trình sửa trực quan</strong></td><td>Muốn kéo thả từng khối, không đụng vào mã</td></tr></tbody></table><p>[ẢNH: màn hình chọn cách tạo trang, khoanh đỏ ba lựa chọn]</p><h3>Sửa một chi tiết mà không mất cả trang</h3><p>Đây là chỗ hay nhầm nhất. Trong cửa sổ AI có <strong>ba tab</strong>:</p><ul><li><strong>Sửa trang hiện tại</strong> — chỉ đổi đúng phần bạn mô tả, giữ nguyên phần còn lại</li><li><strong>Chọn mẫu có sẵn</strong> và <strong>Tạo mới theo mô tả</strong> — <strong>tạo lại toàn bộ trang</strong>, giao diện cũ mất</li></ul><p>Khi trang đã có nội dung, hệ thống tự mở sẵn tab <strong>Sửa trang hiện tại</strong>. Chỉ muốn đổi màu nút hay thêm một mục thì dùng đúng tab đó, đừng bấm sang hai tab kia.</p><p>[ẢNH: cửa sổ AI, khoanh đỏ hàng ba tab, chỉ rõ tab &quot;Sửa trang hiện tại&quot; đang được chọn]</p><blockquote><p>Lỡ ghi đè rồi vẫn cứu được: bấm nút <strong>Hoàn tác</strong> trên thanh công cụ để lấy lại giao diện trước đó.</p></blockquote><p>[ẢNH: thanh công cụ của trình sửa, khoanh đỏ nút &quot;Hoàn tác&quot;]</p><h3>Form thu thông tin khách</h3><p>Mỗi trang có sẵn một vị trí đặt form đăng ký. Khách điền xong, thông tin chảy về mục <strong>Khách hàng từ Landing page</strong> — vẫn ở nhóm <strong>Landing page</strong> trong menu bên trái, là mục đầu tiên của nhóm.</p><p>[ẢNH: menu bên trái, nhóm Landing page đang mở, khoanh đỏ mục &quot;Khách hàng từ Landing page&quot;]</p><p>Đừng xoá khối form khi sửa trang — mất nó là trang không thu được ai nữa.</p><p>[ẢNH: khối form đăng ký trên trang, khoanh đỏ để người đọc nhận ra khối nào không được xoá]</p><h3>Tên miền riêng</h3><p>Trang mặc định chạy trên tên miền phụ của hệ thống. Muốn dùng tên miền của bạn thì mở phần cài đặt tên miền ngay trong trang đang sửa, khai tên miền, rồi trỏ DNS theo hướng dẫn hiện trên màn hình. Chứng chỉ bảo mật được cấp tự động sau khi DNS trỏ đúng.</p><p>[ẢNH: phần cài đặt tên miền riêng, thấy ô nhập tên miền và bảng hướng dẫn trỏ DNS]</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/khach-hang">Khách hàng</a></li></ul>`,
+    body_html: `<h2>Landing page thu khách hàng</h2><p>Trang giới thiệu kèm form đăng ký, dùng để chạy quảng cáo hoặc gắn vào chiến dịch. Không cần biết code.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>Landing page</strong> cho nó mở ra. Bên trong có ba mục — chọn mục <strong>Tạo Landing page</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm Landing page, khoanh đỏ mục &quot;Tạo Landing page&quot;]</p><p>Lưu ý kẻo nhầm: nhóm ngoài và mục con <strong>không cùng tên</strong>. Nhóm tên <em>Landing page</em>, mục cần bấm tên <em>Tạo Landing page</em>. Bấm vào tên nhóm chỉ mở nhóm ra chứ chưa vào trang nào.</p><p>[ẢNH: trang danh sách landing page, thấy các trang đã tạo kèm trạng thái đã xuất bản]</p><h3>Ba cách tạo trang</h3><p>Bấm nút tạo trang mới, màn hình cho bạn chọn một trong ba cách:</p><table><thead><tr><th>Cách</th><th>Hợp khi</th></tr></thead><tbody><tr><td><strong>Tạo với AI</strong></td><td>Chưa có gì trong tay, muốn có bản nháp trong một phút</td></tr><tr><td><strong>Chọn mẫu có sẵn</strong></td><td>Muốn bố cục chuẩn rồi tự sửa chữ</td></tr><tr><td><strong>Trình sửa trực quan</strong></td><td>Muốn kéo thả từng khối, không đụng vào mã</td></tr></tbody></table><p>[ẢNH: màn hình chọn cách tạo trang, khoanh đỏ ba lựa chọn]</p><h3>Sửa một chi tiết mà không mất cả trang</h3><p>Đây là chỗ hay nhầm nhất. Trong cửa sổ AI có <strong>ba tab</strong>:</p><ul><li><strong>Sửa trang hiện tại</strong> — chỉ đổi đúng phần bạn mô tả, giữ nguyên phần còn lại</li><li><strong>Chọn mẫu có sẵn</strong> và <strong>Tạo mới theo mô tả</strong> — <strong>tạo lại toàn bộ trang</strong>, giao diện cũ mất</li></ul><p>Khi trang đã có nội dung, hệ thống tự mở sẵn tab <strong>Sửa trang hiện tại</strong>. Chỉ muốn đổi màu nút hay thêm một mục thì dùng đúng tab đó, đừng bấm sang hai tab kia.</p><p>[ẢNH: cửa sổ AI, khoanh đỏ hàng ba tab, chỉ rõ tab &quot;Sửa trang hiện tại&quot; đang được chọn]</p><blockquote><p>Lỡ ghi đè rồi vẫn cứu được: bấm nút <strong>Hoàn tác</strong> trên thanh công cụ để lấy lại giao diện trước đó.</p></blockquote><p>[ẢNH: thanh công cụ của trình sửa, khoanh đỏ nút &quot;Hoàn tác&quot;]</p><h3>Form thu thông tin khách</h3><p>Mỗi trang có sẵn một vị trí đặt form đăng ký. Khách điền xong, thông tin chảy về mục <strong>Khách hàng từ Landing page</strong> — vẫn ở nhóm <strong>Landing page</strong> trong menu bên trái, là mục đầu tiên của nhóm.</p><p>[ẢNH: menu bên trái, nhóm Landing page đang mở, khoanh đỏ mục &quot;Khách hàng từ Landing page&quot;]</p><p>Đừng xoá khối form khi sửa trang — mất nó là trang không thu được ai nữa.</p><p>[ẢNH: khối form đăng ký trên trang, khoanh đỏ để người đọc nhận ra khối nào không được xoá]</p><h3>Tên miền riêng</h3><p>Trang mặc định chạy trên tên miền phụ của hệ thống. Muốn dùng tên miền của bạn thì mở phần cài đặt tên miền ngay trong trang đang sửa, khai tên miền, rồi trỏ DNS theo hướng dẫn hiện trên màn hình. Chứng chỉ bảo mật được cấp tự động sau khi DNS trỏ đúng.</p><p>[ẢNH: phần cài đặt tên miền riêng, thấy ô nhập tên miền và bảng hướng dẫn trỏ DNS]</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/tro-ly-ai-landing">Dựng landing page bằng Trợ lý AI</a></li><li><a href="/huong-dan/bieu-mau">Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/khach-hang">Khách hàng</a></li></ul>`,
   },
   {
     slug: 'nhan-vien',
@@ -1518,6 +1521,387 @@ Muốn phần không mất khi sang kỳ mới thì mua thêm ở **menu bên tr
 - [Câu hỏi thường gặp về thanh toán & hoá đơn](faq-billing)
 `,
     body_html: `<h2>Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn</h2><p>Bạn đổi gói bất cứ lúc nào, không cần chờ hết hạn. Nhưng nâng gói và hạ gói chạy theo hai cách khác nhau — đọc phần dưới trước khi bấm để không mất tiền oan.</p><h3>Mở bảng giá ở đâu</h3><p>Cả nâng gói lẫn hạ gói đều bắt đầu từ cùng một chỗ: bấm nút <strong>Nâng cấp</strong> trên <strong>thanh ngang trên cùng</strong>, phía bên phải màn hình.</p><p>[ẢNH: thanh ngang trên cùng, khoanh đỏ nút &quot;Nâng cấp&quot;]</p><p>Tên nút là <em>Nâng cấp</em>, nhưng bạn <strong>hạ gói cũng đi qua đây</strong> — cứ bấm vào rồi chọn gói thấp hơn.</p><p>[ẢNH: bảng giá với các gói xếp ngang, gói đang dùng được đánh dấu riêng]</p><h3>Nâng lên gói cao hơn — dùng được ngay</h3><p>Chọn gói cao hơn, thanh toán xong là dùng được ngay lập tức.</p><p><strong>Điều quan trọng nhất cần biết:</strong> thời hạn gói mới <strong>tính lại từ ngày bạn nâng cấp</strong>. Phần ngày chưa dùng hết của gói cũ <strong>không được cộng dồn</strong>.</p><p>Ví dụ: bạn còn 25 ngày gói Cơ bản, nâng lên gói Chuyên nghiệp hôm nay → bạn có 30 ngày Chuyên nghiệp tính từ hôm nay, 25 ngày Cơ bản kia không được cộng thêm.</p><p>Vì vậy nếu không gấp, nâng gói vào <strong>gần cuối chu kỳ</strong> sẽ lợi hơn. Trước khi bấm xác nhận, hệ thống hiện một cảnh báo ghi rõ <strong>số ngày bạn sắp mất</strong> — đọc kỹ dòng đó rồi hãy quyết định.</p><p>[ẢNH: hộp cảnh báo trước khi xác nhận nâng gói, khoanh đỏ dòng ghi số ngày sắp mất]</p><h3>Hạ xuống gói thấp hơn — dùng hết chu kỳ đã trả</h3><p>Bạn <strong>không bị cắt quyền lợi giữa chừng</strong>. Gói hiện tại chạy hết chu kỳ đã thanh toán, tới ngày hết hạn hệ thống <strong>tự chuyển sang gói mới</strong>.</p><p>Cách làm: chọn gói thấp hơn và <strong>thanh toán ngay hôm nay</strong>. Hệ thống ghi nhận lệnh rồi tự kích hoạt đúng ngày — bạn không phải nhớ, không phải vào lại lần nữa.</p><p>Trong thời gian chờ, bạn vẫn dùng đầy đủ quyền lợi của gói cũ. Mở lại <strong>bảng giá</strong> (nút <strong>Nâng cấp</strong> ở thanh ngang trên cùng) sẽ thấy một dải báo đang có lệnh hẹn đổi gói và ngày nó có hiệu lực.</p><p>[ẢNH: đầu trang bảng giá, dải báo lệnh hẹn đổi gói kèm ngày hiệu lực]</p><h3>Đổi kỳ hạn tháng ↔ năm</h3><table><thead><tr><th>Bạn đang dùng</th><th>Muốn đổi sang</th><th>Được không</th></tr></thead><tbody><tr><td>Gói tháng</td><td>Cùng gói đó theo năm</td><td>Được — tính là nâng cấp, 365 ngày từ hôm nay</td></tr><tr><td>Gói tháng</td><td>Gói khác theo năm</td><td>Được — tính là nâng cấp</td></tr><tr><td>Gói năm</td><td>Gói khác theo năm</td><td>Được</td></tr><tr><td>Gói năm</td><td>Bất kỳ gói nào theo tháng</td><td>Chỉ được khi gói năm <strong>còn dưới 30 ngày</strong> hoặc đã hết hạn</td></tr></tbody></table><p>Đang dùng gói năm mà còn nhiều thời gian thì chưa chuyển về gói tháng được — chờ tới khi còn dưới 30 ngày.</p><h3>Gói tự chọn</h3><p>Gói tự chọn được so cao/thấp với gói cố định <strong>bằng giá tiền, và phải cùng kỳ hạn</strong> — gói tự chọn theo tháng so với gói cố định theo tháng.</p><p>Giá cao hơn thì tính là nâng cấp (dùng ngay), giá thấp hơn thì tính là hạ gói (chờ hết chu kỳ).</p><h3>Lệnh hẹn đổi gói — những điều cần biết</h3><p>Khi bạn đã thanh toán để hạ gói từ kỳ sau, đó là một <strong>lệnh hẹn</strong>. Quy tắc:</p><ul><li><strong>Mỗi lúc chỉ có một lệnh hẹn.</strong></li><li><strong>Không huỷ được và không hoàn tiền.</strong> Hãy cân nhắc kỹ trước khi thanh toán.</li><li><strong>Giá đã khoá.</strong> Bảng giá có tăng trong thời gian chờ cũng không thu thêm của bạn.</li><li><strong>Đổi lên gói cao hơn thì được</strong> — bạn chỉ trả thêm phần chênh lệch, không phải trả lại từ đầu. Đổi xuống gói rẻ hơn thì không được.</li><li><strong>Vẫn nâng gói đang dùng bình thường.</strong> Có lệnh hẹn không ngăn bạn nâng cấp ngay hôm nay nếu cần.</li><li><strong>Hoá đơn xuất ngay hôm bạn thanh toán</strong>, không đợi tới ngày gói kích hoạt. Nếu sau đó bạn trả thêm chênh lệch để nâng lệnh hẹn thì lần trả thêm đó có <strong>hoá đơn riêng</strong> — bạn sẽ có hai hoá đơn cho cùng một gói, đây là điều bình thường và đúng quy định.</li></ul><h3>Sau khi hạ gói mà đang dùng quá hạn mức mới</h3><p>Ví dụ bạn có 10 landing page nhưng gói mới chỉ cho 3.</p><p><strong>Hệ thống không xoá gì của bạn.</strong> Cách xử lý:</p><ol><li>Từ ngày gói mới có hiệu lực, bạn có <strong>7 ngày ân hạn</strong> — mọi thứ vẫn chạy bình thường, phần vượt hạn mức được <strong>tô đỏ</strong> ngay trong danh sách để bạn nhìn là biết.<p>[ẢNH: danh sách landing page trong thời gian ân hạn, khoanh đỏ những dòng đang bị tô đỏ vì vượt hạn mức]</p></li><li>Hết 7 ngày, phần tô đỏ bị <strong>khoá</strong> — không truy cập và không sử dụng được, nhưng <strong>dữ liệu vẫn còn nguyên</strong>.<p>[ẢNH: một mục đã bị khoá sau khi hết ân hạn, thấy biểu tượng khoá]</p></li><li>Bạn xoá bớt cho tới khi số lượng về đúng hạn mức → mọi thứ <strong>mở khoá lại</strong>.</li></ol><p>Bạn được xoá cái nào tuỳ ý, không bắt buộc xoá đúng cái đang bị tô đỏ.</p><p>Áp dụng cho landing page, chiến dịch, mẫu tin, tài khoản Zalo/Email, chatbot, nhân viên và dung lượng lưu trữ. Riêng hai loại dưới đây ảnh hưởng ra bên ngoài, nên xử lý sớm:</p><ul><li><strong>Nhân viên bị khoá</strong> sẽ không vào được khu làm việc của công ty.</li><li><strong>Chatbot bị khoá</strong> ngưng hoạt động — khách nhắn vào sẽ không có ai trả lời.</li></ul><p>Không áp dụng cho tin Zalo, email và lượt AI — ba loại này tự làm mới mỗi chu kỳ.</p><h3>Hạn mức làm mới khi nào</h3><p>Hạn mức làm mới theo <strong>chu kỳ 30 ngày tính từ ngày bạn đăng ký</strong>, không theo ngày đầu tháng. Mua ngày 20 thì hạn mức làm mới vào khoảng ngày 20 hằng tháng.</p><p>Mua gói năm cũng vậy: bạn nhận hạn mức <strong>theo từng tháng</strong>, không phải nhận trọn cả năm một lần. Gói 500 tin/tháng mua theo năm nghĩa là mỗi chu kỳ 500 tin, <strong>không phải 6.000 tin dùng tự do</strong>. Dùng không hết thì mất, không cộng dồn sang chu kỳ sau.</p><p>Muốn phần không mất khi sang kỳ mới thì mua thêm ở <strong>menu bên trái</strong> → nhóm <strong>Gói &amp; Thanh toán</strong> → <strong>Mua thêm hạn mức</strong>. Phần mua thêm nằm ở ví riêng và không hết hạn.</p><p>[ẢNH: menu bên trái đang mở nhóm Gói &amp; Thanh toán, khoanh đỏ mục &quot;Mua thêm hạn mức&quot;]</p><h3>Câu hỏi thường gặp</h3><p><strong>Nâng gói có mất dữ liệu không?</strong> Không. Toàn bộ chiến dịch, khách hàng, landing page, chatbot đều giữ nguyên.</p><p><strong>Tôi nâng gói giữa chừng, số ngày cũ có được trả lại không?</strong> Không. Thời hạn tính lại từ ngày nâng cấp.</p><p><strong>Hạ gói rồi tôi có bị cắt quyền lợi ngay không?</strong> Không. Bạn dùng hết chu kỳ đã thanh toán, sau đó mới chuyển.</p><p><strong>Tôi đã đặt hạ gói, giờ muốn đổi ý?</strong> Không huỷ được và không hoàn tiền. Nhưng bạn đổi lên gói cao hơn được bằng cách trả thêm phần chênh lệch.</p><p><strong>Đang dùng gói năm, tôi muốn về gói tháng?</strong> Chờ tới khi gói năm còn dưới 30 ngày.</p><p><strong>Hết 7 ngày ân hạn, hệ thống có xoá landing page của tôi không?</strong> Không xoá. Chỉ khoá lại, dữ liệu còn nguyên, xoá bớt là mở khoá.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="/huong-dan/faq-billing">Câu hỏi thường gặp về thanh toán &amp; hoá đơn</a></li></ul>`,
+  },
+  {
+    slug: 'chatbot-khung-gio',
+    feature_key: 'chatbot',
+    primary_route: '/app/chatbot-studio',
+    sort_order: 85,
+    title: 'Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ',
+    summary: 'Cho chatbot chỉ trả lời trong giờ bạn chọn, đặt trần số lượt trả lời để giữ credit, và nhờ AI viết hộ phần hướng dẫn cách trả lời.',
+    body_md: `# Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ
+Ba cài đặt giúp bạn kiểm soát chatbot: **khi nào** nó trả lời, trả lời **tối đa bao nhiêu lượt**, và nhờ AI **viết hộ** phần hướng dẫn cách trả lời. Cả ba nằm trong phần **Cấu hình** của từng chatbot.
+
+## Tìm trang này trên màn hình
+Ở **thanh menu bên trái**, bấm vào nhóm **AI Chatbot** cho nó mở ra, chọn mục **Tạo AI Chatbot**, rồi chọn chatbot cần chỉnh và mở phần **Cấu hình**.
+
+[ẢNH: trang Tạo AI Chatbot, đã chọn một chatbot, khoanh đỏ chỗ mở phần Cấu hình]
+
+Chỉ **chủ tài khoản** chỉnh được các mục này.
+
+## Khung giờ hoạt động
+Mặc định chatbot **Luôn trả lời (24/7)**. Muốn bot nghỉ ngoài giờ làm việc, chọn **Chỉ trả lời trong khung giờ** rồi khai:
+
+- **Ngày áp dụng trong tuần** — có sẵn ba lựa chọn nhanh: *Thứ 2 – Thứ 6*, *Thứ 2 – Thứ 7*, *Cả tuần*.
+- **Các khung giờ hoạt động trong ngày** — tối đa 5 khung giờ, không được chồng lên nhau. Bấm **Thêm khung giờ** để thêm ca.
+
+Giờ tính theo **giờ Việt Nam**. Khung giờ được phép **qua nửa đêm**, ví dụ 18:00 – 05:00; khi đó ô giờ hiện nhãn *Qua đêm (+1)*.
+
+[ẢNH: khối Khung giờ hoạt động đang chọn "Chỉ trả lời trong khung giờ", có hai khung giờ sáng và chiều]
+
+### Khách nhắn ngoài giờ thì sao
+Chọn một trong hai cách:
+
+| Lựa chọn | Điều xảy ra |
+|---|---|
+| **Im lặng** | Bot không trả lời gì. Tin của khách vẫn nằm trong **Lịch sử trò chuyện** để bạn trả lời tay. |
+| **Gửi một câu** | Bot gửi đúng câu bạn soạn sẵn (tối đa 500 ký tự), ví dụ *"Shop nghỉ rồi ạ, 8 giờ sáng mai em trả lời anh/chị ngay."* |
+
+Câu ngoài giờ chỉ gửi **tối đa 1 lần cho mỗi khách** trong một đợt ngoài giờ, khách nhắn liên tục cũng không bị lặp lại.
+
+> Ngoài khung giờ, hệ thống **không gọi AI và không trừ credit**. Khung giờ áp dụng cho mọi kênh của chatbot đó: website, Zalo, Facebook.
+
+## Giới hạn lượt chatbot trả lời
+Dùng khi bạn sợ một đợt tin nhắn rác đốt hết credit. Đặt trần theo **Mỗi phút**, **Mỗi giờ**, **Mỗi ngày**, **Mỗi tháng** — bật cái nào tuỳ bạn. Trần tính riêng cho chatbot này, gộp mọi khách và mọi kênh.
+
+Khi chạm trần, chọn **Im lặng** hoặc **Thông báo** (gửi khách một câu bạn soạn sẵn). Bấm **Lưu giới hạn** để áp dụng.
+
+[ẢNH: khối Giới hạn lượt chatbot trả lời, đang bật trần Mỗi giờ và Mỗi ngày]
+
+## AI viết hộ phần hướng dẫn
+Phần hướng dẫn cách trả lời quyết định giọng của bot, nhưng nhiều người không biết viết gì. Ngay tại ô hướng dẫn có nút **AI viết hộ**:
+
+1. Bấm **AI viết hộ**, gõ một câu mô tả ngắn. Ví dụ: *"Trợ lý tư vấn khoá học tiếng Anh, xưng em, thân thiện."*
+2. Bấm **Viết**. AI soạn một bản đầy đủ, có dùng thông tin trong **Hồ sơ doanh nghiệp** của bạn.
+3. Bản nháp hiện ở khung **Xem trước** — lúc này **chưa** ghi vào ô hướng dẫn.
+4. Ưng thì bấm **Dùng cái này**. Chưa ưng thì **Viết lại**, hoặc **Bỏ**.
+
+[ẢNH: ô hướng dẫn cách trả lời với nút "AI viết hộ", bên dưới là khung Xem trước bản AI vừa viết]
+
+Mỗi lần **Viết** hoặc **Viết lại** dùng **1 lượt AI**. Nếu ô hướng dẫn đang có nội dung, hệ thống hỏi lại trước khi thay.
+
+## Liên quan
+- [Chatbot AI trả lời khách tự động](chatbot)
+- [Hộp thư hợp nhất](inbox)
+- [Hồ sơ doanh nghiệp](ai-profile)`,
+    body_html: `<h2>Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</h2><p>Ba cài đặt giúp bạn kiểm soát chatbot: <strong>khi nào</strong> nó trả lời, trả lời <strong>tối đa bao nhiêu lượt</strong>, và nhờ AI <strong>viết hộ</strong> phần hướng dẫn cách trả lời. Cả ba nằm trong phần <strong>Cấu hình</strong> của từng chatbot.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>AI Chatbot</strong> cho nó mở ra, chọn mục <strong>Tạo AI Chatbot</strong>, rồi chọn chatbot cần chỉnh và mở phần <strong>Cấu hình</strong>.</p><p>[ẢNH: trang Tạo AI Chatbot, đã chọn một chatbot, khoanh đỏ chỗ mở phần Cấu hình]</p><p>Chỉ <strong>chủ tài khoản</strong> chỉnh được các mục này.</p><h3>Khung giờ hoạt động</h3><p>Mặc định chatbot <strong>Luôn trả lời (24/7)</strong>. Muốn bot nghỉ ngoài giờ làm việc, chọn <strong>Chỉ trả lời trong khung giờ</strong> rồi khai:</p><ul><li><strong>Ngày áp dụng trong tuần</strong> — có sẵn ba lựa chọn nhanh: <em>Thứ 2 – Thứ 6</em>, <em>Thứ 2 – Thứ 7</em>, <em>Cả tuần</em>.</li><li><strong>Các khung giờ hoạt động trong ngày</strong> — tối đa 5 khung giờ, không được chồng lên nhau. Bấm <strong>Thêm khung giờ</strong> để thêm ca.</li></ul><p>Giờ tính theo <strong>giờ Việt Nam</strong>. Khung giờ được phép <strong>qua nửa đêm</strong>, ví dụ 18:00 – 05:00; khi đó ô giờ hiện nhãn <em>Qua đêm (+1)</em>.</p><p>[ẢNH: khối Khung giờ hoạt động đang chọn &quot;Chỉ trả lời trong khung giờ&quot;, có hai khung giờ sáng và chiều]</p><h4>Khách nhắn ngoài giờ thì sao</h4><p>Chọn một trong hai cách:</p><table><thead><tr><th>Lựa chọn</th><th>Điều xảy ra</th></tr></thead><tbody><tr><td><strong>Im lặng</strong></td><td>Bot không trả lời gì. Tin của khách vẫn nằm trong <strong>Lịch sử trò chuyện</strong> để bạn trả lời tay.</td></tr><tr><td><strong>Gửi một câu</strong></td><td>Bot gửi đúng câu bạn soạn sẵn (tối đa 500 ký tự), ví dụ <em>&quot;Shop nghỉ rồi ạ, 8 giờ sáng mai em trả lời anh/chị ngay.&quot;</em></td></tr></tbody></table><p>Câu ngoài giờ chỉ gửi <strong>tối đa 1 lần cho mỗi khách</strong> trong một đợt ngoài giờ, khách nhắn liên tục cũng không bị lặp lại.</p><blockquote><p>Ngoài khung giờ, hệ thống <strong>không gọi AI và không trừ credit</strong>. Khung giờ áp dụng cho mọi kênh của chatbot đó: website, Zalo, Facebook.</p></blockquote><h3>Giới hạn lượt chatbot trả lời</h3><p>Dùng khi bạn sợ một đợt tin nhắn rác đốt hết credit. Đặt trần theo <strong>Mỗi phút</strong>, <strong>Mỗi giờ</strong>, <strong>Mỗi ngày</strong>, <strong>Mỗi tháng</strong> — bật cái nào tuỳ bạn. Trần tính riêng cho chatbot này, gộp mọi khách và mọi kênh.</p><p>Khi chạm trần, chọn <strong>Im lặng</strong> hoặc <strong>Thông báo</strong> (gửi khách một câu bạn soạn sẵn). Bấm <strong>Lưu giới hạn</strong> để áp dụng.</p><p>[ẢNH: khối Giới hạn lượt chatbot trả lời, đang bật trần Mỗi giờ và Mỗi ngày]</p><h3>AI viết hộ phần hướng dẫn</h3><p>Phần hướng dẫn cách trả lời quyết định giọng của bot, nhưng nhiều người không biết viết gì. Ngay tại ô hướng dẫn có nút <strong>AI viết hộ</strong>:</p><ol><li>Bấm <strong>AI viết hộ</strong>, gõ một câu mô tả ngắn. Ví dụ: <em>&quot;Trợ lý tư vấn khoá học tiếng Anh, xưng em, thân thiện.&quot;</em></li><li>Bấm <strong>Viết</strong>. AI soạn một bản đầy đủ, có dùng thông tin trong <strong>Hồ sơ doanh nghiệp</strong> của bạn.</li><li>Bản nháp hiện ở khung <strong>Xem trước</strong> — lúc này <strong>chưa</strong> ghi vào ô hướng dẫn.</li><li>Ưng thì bấm <strong>Dùng cái này</strong>. Chưa ưng thì <strong>Viết lại</strong>, hoặc <strong>Bỏ</strong>.</li></ol><p>[ẢNH: ô hướng dẫn cách trả lời với nút &quot;AI viết hộ&quot;, bên dưới là khung Xem trước bản AI vừa viết]</p><p>Mỗi lần <strong>Viết</strong> hoặc <strong>Viết lại</strong> dùng <strong>1 lượt AI</strong>. Nếu ô hướng dẫn đang có nội dung, hệ thống hỏi lại trước khi thay.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/chatbot">Chatbot AI trả lời khách tự động</a></li><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li></ul>`,
+  },
+  {
+    slug: 'tro-ly-ai-landing',
+    feature_key: 'landing-page',
+    primary_route: '/app',
+    sort_order: 102,
+    title: 'Dựng landing page bằng Trợ lý AI',
+    summary: 'Gõ yêu cầu, đính kèm tài liệu hoặc ảnh, Trợ lý AI dựng trang ngay trong khung chat. Hệ thống tự kiểm tra hiển thị, có nút Hoàn tác, lưu và xuất bản không cần rời chat.',
+    body_md: `# Dựng landing page bằng Trợ lý AI
+Bạn mô tả trang mình cần bằng lời thường, Trợ lý AI dựng trang ngay trong khung chat. Không cần biết code, không cần mở trình sửa.
+
+## Tìm Trợ lý AI trên màn hình
+Ở **thanh menu bên trái**, mục trên cùng là **Trợ lý AI**. Bấm vào là ra khung chat.
+
+[ẢNH: menu bên trái, khoanh đỏ mục "Trợ lý AI" ở trên cùng]
+
+## Yêu cầu dựng trang
+Gõ vào ô chat điều bạn muốn, càng cụ thể càng tốt. Ví dụ: *"Tạo landing page giới thiệu khoá học chăm sóc da cho người mới, có bảng giá ba gói và phần đăng ký."*
+
+Trợ lý có thể hỏi lại vài câu ngắn (trang dành cho ai, mục tiêu là gì). Trả lời xong, trang hiện ra dưới dạng **một thẻ xem trước** ngay trong chat. Bạn cũng có thể gõ "trang web" hay "website", trợ lý hiểu là landing page.
+
+[ẢNH: khung chat với thẻ landing page vừa dựng xong, thấy phần xem trước của trang]
+
+Mỗi lần dựng trang dùng **1 lượt AI**.
+
+## Đính kèm tài liệu và ảnh
+Bấm nút đính kèm tệp cạnh ô chat để gửi kèm. Trợ lý đọc nội dung tệp rồi dựng trang bám theo đó, không bịa thêm.
+
+| Loại tệp | Trợ lý dùng để làm gì |
+|---|---|
+| PDF, Word, PowerPoint | Đọc nội dung rồi viết trang đúng theo tài liệu |
+| PDF scan (bản chụp, không bôi đen được chữ) | Vẫn đọc được. Mỗi tệp tối đa 10 MB |
+| Ảnh PNG, JPG, WebP | Chèn vào trang. Mỗi ảnh tối đa 10 MB |
+
+> Khi bạn **sửa** một trang đã có và gửi kèm ảnh chụp màn hình để chỉ chỗ lỗi, trợ lý hiểu đó là ảnh minh hoạ và **không** chèn vào trang. Muốn chèn thì nói rõ: *"chèn ảnh này vào đầu trang"*.
+
+[ẢNH: ô chat đang có một tệp PDF đính kèm, khoanh đỏ nút đính kèm tệp]
+
+## Đã có sẵn trang HTML
+Dán nguyên mã HTML của trang vào ô chat rồi gửi. Trợ lý nhận ra đây là một trang hoàn chỉnh và đưa nó thành thẻ xem trước, **không tốn lượt AI**. Từ đó bạn nhờ AI sửa tiếp như với trang do AI dựng.
+
+## Hệ thống tự kiểm tra hiển thị
+Sau mỗi lần dựng hoặc sửa, thẻ hiện dòng **Đang kiểm tra hiển thị…**. Hệ thống tự mở thử trang ở khổ máy tính và khổ điện thoại để tìm chỗ chữ bị che, bị cắt hoặc tràn ra ngoài.
+
+- Không có lỗi: thẻ hiện **Đã kiểm tra hiển thị ✓**.
+- Có lỗi: hệ thống **tự sửa**, tối đa hai lượt, **không tính lượt AI** của bạn, rồi báo đã chỉnh gì.
+- Vẫn còn lỗi sau hai lượt: thẻ nói còn mấy chỗ và ở phần nào, kèm nút **Trình bày lại phần này · dùng 1 lượt AI**.
+
+Bạn không cần chụp màn hình hay biết kỹ thuật. Thấy chỗ nào chưa ổn, cứ gõ như nói chuyện: *"chữ ở phần lịch trình bị đè lên nhau, sửa giúp tôi"*.
+
+Với trang bạn tự dán HTML, hệ thống chỉ kiểm tra và báo, không tự sửa miễn phí.
+
+[ẢNH: thẻ landing page với dòng trạng thái "Đã kiểm tra hiển thị ✓" ở dưới phần xem trước]
+
+## Sửa trang và Hoàn tác
+Bấm **Sửa trang này với AI** trên thẻ, gõ điều muốn đổi rồi bấm **Áp dụng sửa**. Ví dụ: *"đổi nền sang màu tím, thêm lời kêu gọi đăng ký ở cuối trang"*. Mỗi lần sửa dùng **1 lượt AI**.
+
+Không ưng kết quả? Bấm **Hoàn tác** trên thẻ để quay lại bản ngay trước đó.
+
+[ẢNH: thẻ landing page, khoanh đỏ nút "Sửa trang này với AI" và nút "Hoàn tác"]
+
+Trên thẻ còn có nút đổi giữa khổ **Desktop** và **Mobile**, nút **Xem toàn màn hình**, và tab **Mã nguồn** nếu bạn cần chép mã.
+
+## Lưu và xuất bản ngay trong chat
+Bấm **Lưu & xuất bản** trên thẻ. Điền **Tiêu đề**, đặt **Slug** (phần đuôi của đường link, viết liền không dấu, ví dụ *khoa-hoc-marketing*), tích **Xuất bản ngay** nếu muốn trang chạy luôn, rồi bấm **Lưu trang**.
+
+Lưu xong, thẻ có thêm **Xem trang** (mở trang thật), **Mở trang soạn** (sang trình sửa đầy đủ) và **Ẩn trang**. Sửa tiếp bằng AI rồi bấm **Cập nhật trang đã lưu** để đưa bản mới lên.
+
+[ẢNH: hộp Lưu & xuất bản với ô Tiêu đề, ô Slug và ô tích Xuất bản ngay]
+
+Trang đã lưu nằm chung chỗ với các trang khác: **menu bên trái** → nhóm **Landing page** → mục **Tạo Landing page**. Tài khoản nhân viên cần được cấp quyền landing page mới lưu được.
+
+## Liên quan
+- [Landing page thu khách hàng](landing-page)
+- [Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website](bieu-mau)
+- [Hồ sơ doanh nghiệp](ai-profile)`,
+    body_html: `<h2>Dựng landing page bằng Trợ lý AI</h2><p>Bạn mô tả trang mình cần bằng lời thường, Trợ lý AI dựng trang ngay trong khung chat. Không cần biết code, không cần mở trình sửa.</p><h3>Tìm Trợ lý AI trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, mục trên cùng là <strong>Trợ lý AI</strong>. Bấm vào là ra khung chat.</p><p>[ẢNH: menu bên trái, khoanh đỏ mục &quot;Trợ lý AI&quot; ở trên cùng]</p><h3>Yêu cầu dựng trang</h3><p>Gõ vào ô chat điều bạn muốn, càng cụ thể càng tốt. Ví dụ: <em>&quot;Tạo landing page giới thiệu khoá học chăm sóc da cho người mới, có bảng giá ba gói và phần đăng ký.&quot;</em></p><p>Trợ lý có thể hỏi lại vài câu ngắn (trang dành cho ai, mục tiêu là gì). Trả lời xong, trang hiện ra dưới dạng <strong>một thẻ xem trước</strong> ngay trong chat. Bạn cũng có thể gõ &quot;trang web&quot; hay &quot;website&quot;, trợ lý hiểu là landing page.</p><p>[ẢNH: khung chat với thẻ landing page vừa dựng xong, thấy phần xem trước của trang]</p><p>Mỗi lần dựng trang dùng <strong>1 lượt AI</strong>.</p><h3>Đính kèm tài liệu và ảnh</h3><p>Bấm nút đính kèm tệp cạnh ô chat để gửi kèm. Trợ lý đọc nội dung tệp rồi dựng trang bám theo đó, không bịa thêm.</p><table><thead><tr><th>Loại tệp</th><th>Trợ lý dùng để làm gì</th></tr></thead><tbody><tr><td>PDF, Word, PowerPoint</td><td>Đọc nội dung rồi viết trang đúng theo tài liệu</td></tr><tr><td>PDF scan (bản chụp, không bôi đen được chữ)</td><td>Vẫn đọc được. Mỗi tệp tối đa 10 MB</td></tr><tr><td>Ảnh PNG, JPG, WebP</td><td>Chèn vào trang. Mỗi ảnh tối đa 10 MB</td></tr></tbody></table><blockquote><p>Khi bạn <strong>sửa</strong> một trang đã có và gửi kèm ảnh chụp màn hình để chỉ chỗ lỗi, trợ lý hiểu đó là ảnh minh hoạ và <strong>không</strong> chèn vào trang. Muốn chèn thì nói rõ: <em>&quot;chèn ảnh này vào đầu trang&quot;</em>.</p></blockquote><p>[ẢNH: ô chat đang có một tệp PDF đính kèm, khoanh đỏ nút đính kèm tệp]</p><h3>Đã có sẵn trang HTML</h3><p>Dán nguyên mã HTML của trang vào ô chat rồi gửi. Trợ lý nhận ra đây là một trang hoàn chỉnh và đưa nó thành thẻ xem trước, <strong>không tốn lượt AI</strong>. Từ đó bạn nhờ AI sửa tiếp như với trang do AI dựng.</p><h3>Hệ thống tự kiểm tra hiển thị</h3><p>Sau mỗi lần dựng hoặc sửa, thẻ hiện dòng <strong>Đang kiểm tra hiển thị…</strong>. Hệ thống tự mở thử trang ở khổ máy tính và khổ điện thoại để tìm chỗ chữ bị che, bị cắt hoặc tràn ra ngoài.</p><ul><li>Không có lỗi: thẻ hiện <strong>Đã kiểm tra hiển thị ✓</strong>.</li><li>Có lỗi: hệ thống <strong>tự sửa</strong>, tối đa hai lượt, <strong>không tính lượt AI</strong> của bạn, rồi báo đã chỉnh gì.</li><li>Vẫn còn lỗi sau hai lượt: thẻ nói còn mấy chỗ và ở phần nào, kèm nút <strong>Trình bày lại phần này · dùng 1 lượt AI</strong>.</li></ul><p>Bạn không cần chụp màn hình hay biết kỹ thuật. Thấy chỗ nào chưa ổn, cứ gõ như nói chuyện: <em>&quot;chữ ở phần lịch trình bị đè lên nhau, sửa giúp tôi&quot;</em>.</p><p>Với trang bạn tự dán HTML, hệ thống chỉ kiểm tra và báo, không tự sửa miễn phí.</p><p>[ẢNH: thẻ landing page với dòng trạng thái &quot;Đã kiểm tra hiển thị ✓&quot; ở dưới phần xem trước]</p><h3>Sửa trang và Hoàn tác</h3><p>Bấm <strong>Sửa trang này với AI</strong> trên thẻ, gõ điều muốn đổi rồi bấm <strong>Áp dụng sửa</strong>. Ví dụ: <em>&quot;đổi nền sang màu tím, thêm lời kêu gọi đăng ký ở cuối trang&quot;</em>. Mỗi lần sửa dùng <strong>1 lượt AI</strong>.</p><p>Không ưng kết quả? Bấm <strong>Hoàn tác</strong> trên thẻ để quay lại bản ngay trước đó.</p><p>[ẢNH: thẻ landing page, khoanh đỏ nút &quot;Sửa trang này với AI&quot; và nút &quot;Hoàn tác&quot;]</p><p>Trên thẻ còn có nút đổi giữa khổ <strong>Desktop</strong> và <strong>Mobile</strong>, nút <strong>Xem toàn màn hình</strong>, và tab <strong>Mã nguồn</strong> nếu bạn cần chép mã.</p><h3>Lưu và xuất bản ngay trong chat</h3><p>Bấm <strong>Lưu &amp; xuất bản</strong> trên thẻ. Điền <strong>Tiêu đề</strong>, đặt <strong>Slug</strong> (phần đuôi của đường link, viết liền không dấu, ví dụ <em>khoa-hoc-marketing</em>), tích <strong>Xuất bản ngay</strong> nếu muốn trang chạy luôn, rồi bấm <strong>Lưu trang</strong>.</p><p>Lưu xong, thẻ có thêm <strong>Xem trang</strong> (mở trang thật), <strong>Mở trang soạn</strong> (sang trình sửa đầy đủ) và <strong>Ẩn trang</strong>. Sửa tiếp bằng AI rồi bấm <strong>Cập nhật trang đã lưu</strong> để đưa bản mới lên.</p><p>[ẢNH: hộp Lưu &amp; xuất bản với ô Tiêu đề, ô Slug và ô tích Xuất bản ngay]</p><p>Trang đã lưu nằm chung chỗ với các trang khác: <strong>menu bên trái</strong> → nhóm <strong>Landing page</strong> → mục <strong>Tạo Landing page</strong>. Tài khoản nhân viên cần được cấp quyền landing page mới lưu được.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/landing-page">Landing page thu khách hàng</a></li><li><a href="/huong-dan/bieu-mau">Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li></ul>`,
+  },
+  {
+    slug: 'bieu-mau',
+    feature_key: 'landing-page',
+    primary_route: '/app/forms',
+    sort_order: 104,
+    title: 'Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website',
+    summary: 'Tạo biểu mẫu thu thông tin khách giống Google Form: tự chọn màu, font, banner; chia sẻ bằng link, mã QR hoặc nhúng vào website; xem bài nộp và dùng lại trong chiến dịch.',
+    body_md: `# Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website
+Biểu mẫu là một trang hỏi thông tin khách — đăng ký tư vấn, đăng ký sự kiện, đặt lịch hẹn. Cách dùng giống Google Form: bạn tự chọn câu hỏi, tự chỉnh giao diện, rồi gửi link hoặc nhúng vào website của mình.
+
+## Tìm trang này trên màn hình
+Ở **thanh menu bên trái**, bấm vào nhóm **Landing page** cho nó mở ra, rồi chọn mục **Biểu mẫu**.
+
+[ẢNH: menu bên trái đang mở nhóm Landing page, khoanh đỏ mục "Biểu mẫu"]
+
+Tài khoản nhân viên chỉ thấy mục này khi được chủ tài khoản cấp quyền biểu mẫu.
+
+## Tạo biểu mẫu
+Bấm **Tạo biểu mẫu mới**, điền **Tiêu đề biểu mẫu** và **Mô tả biểu mẫu**, rồi bấm **Thêm trường** cho từng câu hỏi. Mỗi biểu mẫu tối đa 30 trường.
+
+| Kiểu dữ liệu | Dùng khi |
+|---|---|
+| Văn bản ngắn, Văn bản dài | Họ tên, ghi chú, câu hỏi mở |
+| Email, Số điện thoại, Số, Ngày | Hệ thống tự kiểm tra khách điền đúng dạng |
+| Hộp chọn, Nút chọn một, Hộp kiểm nhiều lựa chọn | Khách chọn trong danh sách bạn soạn sẵn, ví dụ chọn dịch vụ |
+
+[ẢNH: trang soạn biểu mẫu, khoanh đỏ nút "Thêm trường" và một trường đang chọn kiểu dữ liệu]
+
+### Đừng bỏ qua ô "Vai trò định danh"
+Với ba trường họ tên, email, số điện thoại, hãy chọn đúng **Vai trò định danh** tương ứng. Nhờ đó hệ thống biết ô nào là email để gửi thư xác nhận, ô nào là số điện thoại để đưa vào chiến dịch. Không đặt vai trò thì biểu mẫu vẫn chạy, nhưng khách không nhận được thư và bài nộp không dùng lại được.
+
+## Cài đặt biểu mẫu
+- **Gửi email thông báo cho chủ form khi có bài nộp mới** — có khách điền là bạn biết ngay.
+- **Gửi email xác nhận cho người điền sau khi nộp** — cần có trường Email.
+- **Bật ô đồng ý nhận thông tin tiếp thị** — hiện một ô để khách tích đồng ý nhận tin. **Nên bật** nếu bạn định gửi chiến dịch cho những người này.
+- **Chữ trên nút gửi**, **Thông báo sau khi nộp thành công**, và **Đường dẫn chuyển hướng sau khi nộp** nếu muốn đưa khách sang trang khác.
+
+## Chỉnh giao diện
+Kéo xuống mục **Giao diện**. Chọn một **Mẫu dựng sẵn** (Cổ điển, Thanh lịch, Tươi mới, Ấm áp, Nổi bật) hoặc tự đổi **Màu chủ đạo**, **Màu nền**, **Font chữ**, **Bố cục**, rồi tải **Ảnh banner** và **Ảnh logo**. Khung **Xem trước** ở dưới đổi theo ngay.
+
+[ẢNH: mục Giao diện với hàng mẫu dựng sẵn, ô màu, ô font và khung Xem trước]
+
+Xong thì bấm **Lưu biểu mẫu**. Biểu mẫu mới ở dạng **Bản nháp**; bấm nút hình con mắt ở trang danh sách để **Xuất bản** thì khách mới mở được.
+
+## Chia sẻ và nhúng vào website
+Ở trang danh sách, bấm nút **Chia sẻ & QR** trên dòng của biểu mẫu. Hộp hiện ra có bốn thứ:
+
+| Thứ trong hộp | Dùng khi |
+|---|---|
+| **Đường dẫn trực tiếp** | Gửi link qua Zalo, email, gắn vào bài đăng |
+| **Mã QR** kèm nút **Tải ảnh QR về máy** | In ra dán ở quầy, khách quét bằng camera là mở được biểu mẫu |
+| **Mã nhúng landing** | Dán vào landing page hoặc website; biểu mẫu tự co giãn chiều cao |
+| **Nhúng bằng iframe** | Dành cho nền tảng không cho chèn mã script |
+
+[ẢNH: hộp Chia sẻ & QR, khoanh đỏ bốn phần: mã nhúng, mã QR, đường dẫn trực tiếp, mã iframe]
+
+> Mã QR trong hộp này là mã của **đường link biểu mẫu**, không phải mã chuyển khoản. Đừng lấy app ngân hàng quét nó.
+
+## Xem bài nộp
+Ở trang danh sách, bấm vào số **bài nộp** của biểu mẫu. Mỗi dòng là một lượt khách điền: thời gian nộp, người nộp, câu trả lời, và cột **Đồng ý tiếp thị** (Có, Không, hoặc *Đã rút* nếu khách đã rút lại sự đồng ý).
+
+[ẢNH: trang Bài nộp biểu mẫu với vài dòng bài nộp, khoanh đỏ cột "Đồng ý tiếp thị"]
+
+## Gửi chiến dịch cho người đã điền
+Trong sơ đồ chiến dịch, chọn nguồn người nhận **Dữ liệu Biểu mẫu** rồi chọn biểu mẫu. Nguồn này **chỉ lấy những người đã tích ô đồng ý nhận tin**. Người không tích, hoặc đã rút đồng ý, sẽ không nhận chiến dịch.
+
+## Câu hỏi hay gặp
+**Khách báo "Quá nhiều lần gửi form"?** Cùng một người gửi liên tục sẽ bị chặn tạm 15 phút để chống rác. Chờ rồi gửi lại.
+
+**Biểu mẫu hiện "tạm ngừng"?** Gói của bạn đã hết hạn. Gia hạn gói là biểu mẫu nhận bài trở lại, dữ liệu cũ còn nguyên.
+
+**Xoá biểu mẫu có mất bài nộp không?** Có. Xoá là mất vĩnh viễn cả biểu mẫu lẫn toàn bộ bài nộp, không khôi phục được.
+
+## Liên quan
+- [Đặt lịch hẹn và thu tiền giữ chỗ bằng mã QR](dat-lich-giu-cho)
+- [Landing page thu khách hàng](landing-page)
+- [Tạo chiến dịch](campaign-create)`,
+    body_html: `<h2>Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website</h2><p>Biểu mẫu là một trang hỏi thông tin khách — đăng ký tư vấn, đăng ký sự kiện, đặt lịch hẹn. Cách dùng giống Google Form: bạn tự chọn câu hỏi, tự chỉnh giao diện, rồi gửi link hoặc nhúng vào website của mình.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>Landing page</strong> cho nó mở ra, rồi chọn mục <strong>Biểu mẫu</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm Landing page, khoanh đỏ mục &quot;Biểu mẫu&quot;]</p><p>Tài khoản nhân viên chỉ thấy mục này khi được chủ tài khoản cấp quyền biểu mẫu.</p><h3>Tạo biểu mẫu</h3><p>Bấm <strong>Tạo biểu mẫu mới</strong>, điền <strong>Tiêu đề biểu mẫu</strong> và <strong>Mô tả biểu mẫu</strong>, rồi bấm <strong>Thêm trường</strong> cho từng câu hỏi. Mỗi biểu mẫu tối đa 30 trường.</p><table><thead><tr><th>Kiểu dữ liệu</th><th>Dùng khi</th></tr></thead><tbody><tr><td>Văn bản ngắn, Văn bản dài</td><td>Họ tên, ghi chú, câu hỏi mở</td></tr><tr><td>Email, Số điện thoại, Số, Ngày</td><td>Hệ thống tự kiểm tra khách điền đúng dạng</td></tr><tr><td>Hộp chọn, Nút chọn một, Hộp kiểm nhiều lựa chọn</td><td>Khách chọn trong danh sách bạn soạn sẵn, ví dụ chọn dịch vụ</td></tr></tbody></table><p>[ẢNH: trang soạn biểu mẫu, khoanh đỏ nút &quot;Thêm trường&quot; và một trường đang chọn kiểu dữ liệu]</p><h4>Đừng bỏ qua ô &quot;Vai trò định danh&quot;</h4><p>Với ba trường họ tên, email, số điện thoại, hãy chọn đúng <strong>Vai trò định danh</strong> tương ứng. Nhờ đó hệ thống biết ô nào là email để gửi thư xác nhận, ô nào là số điện thoại để đưa vào chiến dịch. Không đặt vai trò thì biểu mẫu vẫn chạy, nhưng khách không nhận được thư và bài nộp không dùng lại được.</p><h3>Cài đặt biểu mẫu</h3><ul><li><strong>Gửi email thông báo cho chủ form khi có bài nộp mới</strong> — có khách điền là bạn biết ngay.</li><li><strong>Gửi email xác nhận cho người điền sau khi nộp</strong> — cần có trường Email.</li><li><strong>Bật ô đồng ý nhận thông tin tiếp thị</strong> — hiện một ô để khách tích đồng ý nhận tin. <strong>Nên bật</strong> nếu bạn định gửi chiến dịch cho những người này.</li><li><strong>Chữ trên nút gửi</strong>, <strong>Thông báo sau khi nộp thành công</strong>, và <strong>Đường dẫn chuyển hướng sau khi nộp</strong> nếu muốn đưa khách sang trang khác.</li></ul><h3>Chỉnh giao diện</h3><p>Kéo xuống mục <strong>Giao diện</strong>. Chọn một <strong>Mẫu dựng sẵn</strong> (Cổ điển, Thanh lịch, Tươi mới, Ấm áp, Nổi bật) hoặc tự đổi <strong>Màu chủ đạo</strong>, <strong>Màu nền</strong>, <strong>Font chữ</strong>, <strong>Bố cục</strong>, rồi tải <strong>Ảnh banner</strong> và <strong>Ảnh logo</strong>. Khung <strong>Xem trước</strong> ở dưới đổi theo ngay.</p><p>[ẢNH: mục Giao diện với hàng mẫu dựng sẵn, ô màu, ô font và khung Xem trước]</p><p>Xong thì bấm <strong>Lưu biểu mẫu</strong>. Biểu mẫu mới ở dạng <strong>Bản nháp</strong>; bấm nút hình con mắt ở trang danh sách để <strong>Xuất bản</strong> thì khách mới mở được.</p><h3>Chia sẻ và nhúng vào website</h3><p>Ở trang danh sách, bấm nút <strong>Chia sẻ &amp; QR</strong> trên dòng của biểu mẫu. Hộp hiện ra có bốn thứ:</p><table><thead><tr><th>Thứ trong hộp</th><th>Dùng khi</th></tr></thead><tbody><tr><td><strong>Đường dẫn trực tiếp</strong></td><td>Gửi link qua Zalo, email, gắn vào bài đăng</td></tr><tr><td><strong>Mã QR</strong> kèm nút <strong>Tải ảnh QR về máy</strong></td><td>In ra dán ở quầy, khách quét bằng camera là mở được biểu mẫu</td></tr><tr><td><strong>Mã nhúng landing</strong></td><td>Dán vào landing page hoặc website; biểu mẫu tự co giãn chiều cao</td></tr><tr><td><strong>Nhúng bằng iframe</strong></td><td>Dành cho nền tảng không cho chèn mã script</td></tr></tbody></table><p>[ẢNH: hộp Chia sẻ &amp; QR, khoanh đỏ bốn phần: mã nhúng, mã QR, đường dẫn trực tiếp, mã iframe]</p><blockquote><p>Mã QR trong hộp này là mã của <strong>đường link biểu mẫu</strong>, không phải mã chuyển khoản. Đừng lấy app ngân hàng quét nó.</p></blockquote><h3>Xem bài nộp</h3><p>Ở trang danh sách, bấm vào số <strong>bài nộp</strong> của biểu mẫu. Mỗi dòng là một lượt khách điền: thời gian nộp, người nộp, câu trả lời, và cột <strong>Đồng ý tiếp thị</strong> (Có, Không, hoặc <em>Đã rút</em> nếu khách đã rút lại sự đồng ý).</p><p>[ẢNH: trang Bài nộp biểu mẫu với vài dòng bài nộp, khoanh đỏ cột &quot;Đồng ý tiếp thị&quot;]</p><h3>Gửi chiến dịch cho người đã điền</h3><p>Trong sơ đồ chiến dịch, chọn nguồn người nhận <strong>Dữ liệu Biểu mẫu</strong> rồi chọn biểu mẫu. Nguồn này <strong>chỉ lấy những người đã tích ô đồng ý nhận tin</strong>. Người không tích, hoặc đã rút đồng ý, sẽ không nhận chiến dịch.</p><h3>Câu hỏi hay gặp</h3><p><strong>Khách báo &quot;Quá nhiều lần gửi form&quot;?</strong> Cùng một người gửi liên tục sẽ bị chặn tạm 15 phút để chống rác. Chờ rồi gửi lại.</p><p><strong>Biểu mẫu hiện &quot;tạm ngừng&quot;?</strong> Gói của bạn đã hết hạn. Gia hạn gói là biểu mẫu nhận bài trở lại, dữ liệu cũ còn nguyên.</p><p><strong>Xoá biểu mẫu có mất bài nộp không?</strong> Có. Xoá là mất vĩnh viễn cả biểu mẫu lẫn toàn bộ bài nộp, không khôi phục được.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/dat-lich-giu-cho">Đặt lịch hẹn và thu tiền giữ chỗ bằng mã QR</a></li><li><a href="/huong-dan/landing-page">Landing page thu khách hàng</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li></ul>`,
+  },
+  {
+    slug: 'dat-lich-giu-cho',
+    feature_key: 'landing-page',
+    primary_route: '/app/forms',
+    sort_order: 106,
+    title: 'Đặt lịch hẹn và thu tiền giữ chỗ bằng mã QR',
+    summary: 'Cho khách tự chọn ngày giờ hẹn ngay trên biểu mẫu, rồi chuyển khoản giữ chỗ qua mã QR ngân hàng hoặc ví MoMo. Tiền vào thẳng tài khoản của bạn.',
+    body_md: `# Đặt lịch hẹn và thu tiền giữ chỗ bằng mã QR
+Hai công tắc trong trang soạn biểu mẫu biến một biểu mẫu thường thành trang đặt lịch: khách chọn giờ, bấm gửi, rồi thấy mã QR để chuyển khoản giữ chỗ. Hai công tắc độc lập, bật một hay cả hai đều được.
+
+## Tìm trang này trên màn hình
+Ở **thanh menu bên trái**, mở nhóm **Landing page**, chọn mục **Biểu mẫu**, rồi bấm nút sửa (hình cây bút) trên biểu mẫu cần chỉnh. Kéo xuống dưới phần câu hỏi sẽ thấy hai mục **Đặt lịch hẹn** và **Thanh toán giữ chỗ**.
+
+[ẢNH: trang soạn biểu mẫu kéo xuống giữa trang, khoanh đỏ hai mục "Đặt lịch hẹn" và "Thanh toán giữ chỗ"]
+
+## Bật đặt lịch hẹn
+Tích **Bật đặt lịch hẹn** rồi khai:
+
+- **Khung giờ theo tuần** — giờ nhận khách của từng ngày. Bấm **Thêm khung giờ** để thêm. Khai xong Thứ 2 thì bấm **Áp khung giờ Thứ 2 cho tất cả các ngày** cho nhanh.
+- **Sức chứa mỗi khung giờ** — điền 2 nghĩa là mỗi giờ nhận tối đa 2 khách, đủ thì giờ đó tự đóng. Để trống là không giới hạn.
+- **Số ngày cho đặt trước** — khách được đặt xa nhất bao nhiêu ngày.
+- **Báo trước tối thiểu (phút)** — điền 60 thì khách không đặt được giờ hẹn còn dưới 1 tiếng nữa.
+- **Ngày nghỉ** — những ngày không nhận lịch.
+
+Giờ tính theo **giờ Việt Nam**.
+
+[ẢNH: mục Đặt lịch hẹn đã bật, thấy khung giờ từng ngày và ba ô sức chứa, số ngày đặt trước, báo trước tối thiểu]
+
+Muốn khách nhận **thư xác nhận** và **thư nhắc trước giờ hẹn 24 tiếng**, biểu mẫu phải có trường Email (đặt đúng vai trò Email) và bật **Gửi email xác nhận** ở phần Cài đặt. Thiếu một trong hai, mục Đặt lịch hẹn sẽ hiện dòng nhắc màu xanh.
+
+> Tắt đặt lịch rồi lưu sẽ **xoá toàn bộ khung giờ, sức chứa và ngày nghỉ** đã khai. Hệ thống bắt bạn tích xác nhận trước khi lưu.
+
+## Bật thanh toán giữ chỗ
+Tích **Bật thanh toán**, chọn phương thức, điền **Số tiền cần chuyển** (từ 1.000đ) và **Giữ chỗ trong (phút)** — từ 10 đến 120 phút.
+
+| Phương thức | Bạn khai gì | Khách thấy gì |
+|---|---|---|
+| **Chuyển khoản ngân hàng** | Ngân hàng, Số tài khoản, Tên chủ tài khoản | **Mã QR chuyển khoản** kèm đủ thông tin để sao chép |
+| **Ví MoMo** | Số điện thoại ví, Tên chủ ví | Số ví, tên, số tiền, nội dung để khách tự chuyển. Không có mã QR |
+
+[ẢNH: mục Thanh toán giữ chỗ đang chọn Chuyển khoản ngân hàng, đã điền ngân hàng, số tài khoản, tên chủ tài khoản, số tiền]
+
+Ba điều cần biết:
+
+- **Tiền vào thẳng tài khoản của bạn.** Founder AI không giữ tiền và không tự biết tiền đã về.
+- **Chỉ chủ tài khoản** sửa được thông tin nhận tiền. Nhân viên chỉ xem.
+- Mã QR được tạo từ đúng số tài khoản bạn khai, theo chuẩn VietQR mà các app ngân hàng đều quét được.
+
+## Khách đặt lịch thấy gì
+Khách mở biểu mẫu, thấy ngay dòng báo số tiền cần chuyển, điền thông tin, chọn ngày giờ còn chỗ rồi bấm gửi. Màn tiếp theo hiện:
+
+- Đồng hồ **Giữ chỗ trong** đếm ngược.
+- **Mã QR chuyển khoản** (nếu bạn chọn ngân hàng).
+- Ngân hàng, số tài khoản, chủ tài khoản, số tiền và **Nội dung chuyển khoản**, mỗi dòng có nút **Sao chép**.
+
+[ẢNH: màn giữ chỗ trên điện thoại của khách: đồng hồ đếm ngược, mã QR chuyển khoản và các dòng thông tin có nút Sao chép]
+
+**Nội dung chuyển khoản** là một mã riêng cho từng lượt đặt. Khách phải ghi đúng mã này thì bạn mới biết tiền nào của ai.
+
+> Khách đặt lịch bằng điện thoại thì không tự quét được màn hình của chính mình. Khi đó khách bấm **Sao chép** từng dòng rồi dán vào app ngân hàng.
+
+## Bạn xác nhận đã nhận tiền
+Mở trang bài nộp của biểu mẫu. Lượt đặt mới nằm ở trạng thái **Chờ thanh toán**, kèm mã nội dung và số tiền. Mở app ngân hàng, thấy tiền về đúng mã đó thì bấm **Đã nhận tiền**. Lúc này lịch hẹn mới được chốt.
+
+[ẢNH: trang Bài nộp, một dòng đang "Chờ thanh toán", khoanh đỏ cột "Mã & số tiền" và nút "Đã nhận tiền"]
+
+| Trạng thái | Nghĩa là |
+|---|---|
+| **Chờ thanh toán** | Khách đã đặt, đang giữ chỗ, bạn chưa bấm xác nhận |
+| **Đã xác nhận** | Lịch hẹn đã chốt. Biểu mẫu có thu tiền thì vào trạng thái này sau khi bạn bấm Đã nhận tiền; biểu mẫu chỉ đặt lịch, không thu tiền thì vào thẳng trạng thái này |
+| **Hết hạn giữ chỗ** | Quá thời gian giữ chỗ mà chưa xác nhận. Chỗ được mở lại cho người khác |
+| **Đã huỷ** | Bạn bấm Huỷ lượt này |
+| **Đã đặt** | Bài nộp của biểu mẫu thường, không bật đặt lịch lẫn thanh toán |
+
+Dùng ô **Lọc theo ngày hẹn** và nút **Hôm nay** để xem lịch từng ngày.
+
+## Câu hỏi hay gặp
+**Khách chuyển tiền muộn, quá giờ giữ chỗ?** Bạn vẫn bấm **Đã nhận tiền** được, miễn giờ đó còn chỗ. Nếu người khác đã lấy mất, hệ thống báo *Khung giờ này đã hết chỗ* — bạn liên hệ khách để đổi giờ.
+
+**App ngân hàng báo mã QR không hợp lệ?** Gần như chắc chắn là quét nhầm mã trong hộp **Chia sẻ & QR**. Mã đó chỉ chứa đường link biểu mẫu. Mã chuyển khoản chỉ hiện ra **sau khi** khách bấm gửi biểu mẫu.
+
+**Quét bằng camera thường chỉ ra một dãy số dài?** Đúng rồi, mã chuyển khoản phải quét bằng **app ngân hàng**, không phải camera.
+
+**Không thấy ngân hàng của tôi trong danh sách?** Danh sách hiện có 39 ngân hàng. Ngân hàng của bạn chưa có thì tạm dùng phương thức **Ví MoMo**, hoặc một tài khoản ngân hàng khác.
+
+## Liên quan
+- [Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website](bieu-mau)
+- [Landing page thu khách hàng](landing-page)
+- [Nhân viên & phân quyền](nhan-vien)`,
+    body_html: `<h2>Đặt lịch hẹn và thu tiền giữ chỗ bằng mã QR</h2><p>Hai công tắc trong trang soạn biểu mẫu biến một biểu mẫu thường thành trang đặt lịch: khách chọn giờ, bấm gửi, rồi thấy mã QR để chuyển khoản giữ chỗ. Hai công tắc độc lập, bật một hay cả hai đều được.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Landing page</strong>, chọn mục <strong>Biểu mẫu</strong>, rồi bấm nút sửa (hình cây bút) trên biểu mẫu cần chỉnh. Kéo xuống dưới phần câu hỏi sẽ thấy hai mục <strong>Đặt lịch hẹn</strong> và <strong>Thanh toán giữ chỗ</strong>.</p><p>[ẢNH: trang soạn biểu mẫu kéo xuống giữa trang, khoanh đỏ hai mục &quot;Đặt lịch hẹn&quot; và &quot;Thanh toán giữ chỗ&quot;]</p><h3>Bật đặt lịch hẹn</h3><p>Tích <strong>Bật đặt lịch hẹn</strong> rồi khai:</p><ul><li><strong>Khung giờ theo tuần</strong> — giờ nhận khách của từng ngày. Bấm <strong>Thêm khung giờ</strong> để thêm. Khai xong Thứ 2 thì bấm <strong>Áp khung giờ Thứ 2 cho tất cả các ngày</strong> cho nhanh.</li><li><strong>Sức chứa mỗi khung giờ</strong> — điền 2 nghĩa là mỗi giờ nhận tối đa 2 khách, đủ thì giờ đó tự đóng. Để trống là không giới hạn.</li><li><strong>Số ngày cho đặt trước</strong> — khách được đặt xa nhất bao nhiêu ngày.</li><li><strong>Báo trước tối thiểu (phút)</strong> — điền 60 thì khách không đặt được giờ hẹn còn dưới 1 tiếng nữa.</li><li><strong>Ngày nghỉ</strong> — những ngày không nhận lịch.</li></ul><p>Giờ tính theo <strong>giờ Việt Nam</strong>.</p><p>[ẢNH: mục Đặt lịch hẹn đã bật, thấy khung giờ từng ngày và ba ô sức chứa, số ngày đặt trước, báo trước tối thiểu]</p><p>Muốn khách nhận <strong>thư xác nhận</strong> và <strong>thư nhắc trước giờ hẹn 24 tiếng</strong>, biểu mẫu phải có trường Email (đặt đúng vai trò Email) và bật <strong>Gửi email xác nhận</strong> ở phần Cài đặt. Thiếu một trong hai, mục Đặt lịch hẹn sẽ hiện dòng nhắc màu xanh.</p><blockquote><p>Tắt đặt lịch rồi lưu sẽ <strong>xoá toàn bộ khung giờ, sức chứa và ngày nghỉ</strong> đã khai. Hệ thống bắt bạn tích xác nhận trước khi lưu.</p></blockquote><h3>Bật thanh toán giữ chỗ</h3><p>Tích <strong>Bật thanh toán</strong>, chọn phương thức, điền <strong>Số tiền cần chuyển</strong> (từ 1.000đ) và <strong>Giữ chỗ trong (phút)</strong> — từ 10 đến 120 phút.</p><table><thead><tr><th>Phương thức</th><th>Bạn khai gì</th><th>Khách thấy gì</th></tr></thead><tbody><tr><td><strong>Chuyển khoản ngân hàng</strong></td><td>Ngân hàng, Số tài khoản, Tên chủ tài khoản</td><td><strong>Mã QR chuyển khoản</strong> kèm đủ thông tin để sao chép</td></tr><tr><td><strong>Ví MoMo</strong></td><td>Số điện thoại ví, Tên chủ ví</td><td>Số ví, tên, số tiền, nội dung để khách tự chuyển. Không có mã QR</td></tr></tbody></table><p>[ẢNH: mục Thanh toán giữ chỗ đang chọn Chuyển khoản ngân hàng, đã điền ngân hàng, số tài khoản, tên chủ tài khoản, số tiền]</p><p>Ba điều cần biết:</p><ul><li><strong>Tiền vào thẳng tài khoản của bạn.</strong> Founder AI không giữ tiền và không tự biết tiền đã về.</li><li><strong>Chỉ chủ tài khoản</strong> sửa được thông tin nhận tiền. Nhân viên chỉ xem.</li><li>Mã QR được tạo từ đúng số tài khoản bạn khai, theo chuẩn VietQR mà các app ngân hàng đều quét được.</li></ul><h3>Khách đặt lịch thấy gì</h3><p>Khách mở biểu mẫu, thấy ngay dòng báo số tiền cần chuyển, điền thông tin, chọn ngày giờ còn chỗ rồi bấm gửi. Màn tiếp theo hiện:</p><ul><li>Đồng hồ <strong>Giữ chỗ trong</strong> đếm ngược.</li><li><strong>Mã QR chuyển khoản</strong> (nếu bạn chọn ngân hàng).</li><li>Ngân hàng, số tài khoản, chủ tài khoản, số tiền và <strong>Nội dung chuyển khoản</strong>, mỗi dòng có nút <strong>Sao chép</strong>.</li></ul><p>[ẢNH: màn giữ chỗ trên điện thoại của khách: đồng hồ đếm ngược, mã QR chuyển khoản và các dòng thông tin có nút Sao chép]</p><p><strong>Nội dung chuyển khoản</strong> là một mã riêng cho từng lượt đặt. Khách phải ghi đúng mã này thì bạn mới biết tiền nào của ai.</p><blockquote><p>Khách đặt lịch bằng điện thoại thì không tự quét được màn hình của chính mình. Khi đó khách bấm <strong>Sao chép</strong> từng dòng rồi dán vào app ngân hàng.</p></blockquote><h3>Bạn xác nhận đã nhận tiền</h3><p>Mở trang bài nộp của biểu mẫu. Lượt đặt mới nằm ở trạng thái <strong>Chờ thanh toán</strong>, kèm mã nội dung và số tiền. Mở app ngân hàng, thấy tiền về đúng mã đó thì bấm <strong>Đã nhận tiền</strong>. Lúc này lịch hẹn mới được chốt.</p><p>[ẢNH: trang Bài nộp, một dòng đang &quot;Chờ thanh toán&quot;, khoanh đỏ cột &quot;Mã &amp; số tiền&quot; và nút &quot;Đã nhận tiền&quot;]</p><table><thead><tr><th>Trạng thái</th><th>Nghĩa là</th></tr></thead><tbody><tr><td><strong>Chờ thanh toán</strong></td><td>Khách đã đặt, đang giữ chỗ, bạn chưa bấm xác nhận</td></tr><tr><td><strong>Đã xác nhận</strong></td><td>Lịch hẹn đã chốt. Biểu mẫu có thu tiền thì vào trạng thái này sau khi bạn bấm Đã nhận tiền; biểu mẫu chỉ đặt lịch, không thu tiền thì vào thẳng trạng thái này</td></tr><tr><td><strong>Hết hạn giữ chỗ</strong></td><td>Quá thời gian giữ chỗ mà chưa xác nhận. Chỗ được mở lại cho người khác</td></tr><tr><td><strong>Đã huỷ</strong></td><td>Bạn bấm Huỷ lượt này</td></tr><tr><td><strong>Đã đặt</strong></td><td>Bài nộp của biểu mẫu thường, không bật đặt lịch lẫn thanh toán</td></tr></tbody></table><p>Dùng ô <strong>Lọc theo ngày hẹn</strong> và nút <strong>Hôm nay</strong> để xem lịch từng ngày.</p><h3>Câu hỏi hay gặp</h3><p><strong>Khách chuyển tiền muộn, quá giờ giữ chỗ?</strong> Bạn vẫn bấm <strong>Đã nhận tiền</strong> được, miễn giờ đó còn chỗ. Nếu người khác đã lấy mất, hệ thống báo <em>Khung giờ này đã hết chỗ</em> — bạn liên hệ khách để đổi giờ.</p><p><strong>App ngân hàng báo mã QR không hợp lệ?</strong> Gần như chắc chắn là quét nhầm mã trong hộp <strong>Chia sẻ &amp; QR</strong>. Mã đó chỉ chứa đường link biểu mẫu. Mã chuyển khoản chỉ hiện ra <strong>sau khi</strong> khách bấm gửi biểu mẫu.</p><p><strong>Quét bằng camera thường chỉ ra một dãy số dài?</strong> Đúng rồi, mã chuyển khoản phải quét bằng <strong>app ngân hàng</strong>, không phải camera.</p><p><strong>Không thấy ngân hàng của tôi trong danh sách?</strong> Danh sách hiện có 39 ngân hàng. Ngân hàng của bạn chưa có thì tạm dùng phương thức <strong>Ví MoMo</strong>, hoặc một tài khoản ngân hàng khác.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/bieu-mau">Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website</a></li><li><a href="/huong-dan/landing-page">Landing page thu khách hàng</a></li><li><a href="/huong-dan/nhan-vien">Nhân viên &amp; phân quyền</a></li></ul>`,
+  },
+  {
+    slug: 'doi-tac',
+    feature_key: 'plan-and-billing',
+    primary_route: '/app/affiliate',
+    sort_order: 135,
+    title: 'Chương trình đối tác: giới thiệu bạn bè, nhận hoa hồng',
+    summary: 'Chia sẻ mã hoặc link giới thiệu, nhận hoa hồng từ 10% đến 30% doanh thu mỗi tháng của những người bạn giới thiệu. Rút về tài khoản ngân hàng từ 1.000.000đ.',
+    body_md: `# Chương trình đối tác: giới thiệu bạn bè, nhận hoa hồng
+Bạn giới thiệu người khác dùng Founder AI. Khi họ mua gói, bạn nhận hoa hồng tính trên số tiền họ trả, từ **10% đến 30%** tuỳ doanh thu trong tháng.
+
+## Tìm trang này trên màn hình
+Ở **thanh menu bên trái**, bấm mục **Chương trình đối tác**. Mục này nằm riêng, không thuộc nhóm nào, và chỉ **chủ tài khoản** mới thấy.
+
+[ẢNH: menu bên trái, khoanh đỏ mục "Chương trình đối tác"]
+
+## Lấy mã và link giới thiệu
+Trong khối **Thông tin giới thiệu** có **Mã giới thiệu** và **Link giới thiệu** của riêng bạn, mỗi cái có nút sao chép.
+
+[ẢNH: khối Thông tin giới thiệu, khoanh đỏ mã giới thiệu, link giới thiệu và hai nút sao chép]
+
+Người được giới thiệu gắn với bạn bằng một trong hai cách:
+
+1. Đăng ký tài khoản qua **link giới thiệu** của bạn.
+2. Tự nhập **mã giới thiệu** ở ô *Mã giới thiệu (không bắt buộc)* khi đăng ký, hoặc ở hộp hỏi mã hiện ra ngay sau khi tạo tài khoản.
+
+> Hộp hỏi mã chỉ hiện **trong 24 giờ đầu** sau khi tạo tài khoản. Bấm bỏ qua rồi thì không nhập lại được. Hãy dặn bạn bè nhập mã ngay lúc đăng ký.
+
+## Năm bậc hoa hồng
+Bậc tính theo **tổng doanh thu hợp lệ trong tháng** từ tất cả người bạn giới thiệu:
+
+| Bậc | Doanh thu trong tháng | Tỉ lệ hoa hồng |
+|---|---|---|
+| 1 | Dưới 10.000.000đ | 10% |
+| 2 | 10.000.000 – 20.000.000đ | 15% |
+| 3 | 20.000.000 – 50.000.000đ | 20% |
+| 4 | 50.000.000 – 100.000.000đ | 25% |
+| 5 | Từ 100.000.000đ | 30% |
+
+Hai điều hay hiểu nhầm:
+
+- Lên bậc giữa tháng thì tỉ lệ mới áp cho **toàn bộ** doanh thu tháng đó, không phải chỉ phần vượt.
+- Doanh thu tính bậc **về 0 mỗi đầu tháng**. Còn **Số dư ví khả dụng** thì cộng dồn mãi tới khi bạn rút.
+
+[ẢNH: thẻ hoa hồng tháng với thang 5 bậc, thấy bậc hiện tại, doanh thu tháng này và hoa hồng ước tính]
+
+## Khi nào tiền vào ví
+Trong tháng, trang chỉ hiện **Hoa hồng ước tính**. Hoa hồng được **chốt sổ đầu tháng sau**, lúc đó mới cộng vào **Số dư ví khả dụng**. Xem lại từng tháng ở bảng **Lịch sử hoa hồng theo tháng**.
+
+## Đơn hàng đang chờ đủ điều kiện
+Đơn của người mua **chưa cập nhật số điện thoại tài khoản** thì chưa được tính doanh thu hợp lệ. Trang liệt kê các đơn này ở mục **Đơn hàng đang chờ đủ điều kiện**. Bạn nhắc họ bổ sung số điện thoại trước ngày chốt sổ là đơn được tính.
+
+## Rút tiền
+Bấm **Yêu cầu rút tiền** khi số dư từ **1.000.000đ** trở lên. Điền:
+
+- **Số tiền muốn rút**, hoặc bấm **Rút tất cả**.
+- **Thông tin cá nhân & Giấy tờ**: họ tên, số CCCD, ngày cấp, nơi cấp.
+- **Tài khoản ngân hàng thụ hưởng**: tên chủ tài khoản phải trùng với họ tên trên giấy tờ.
+
+[ẢNH: hộp Yêu cầu rút tiền hoa hồng, thấy phần chi tiết khấu trừ và thực nhận]
+
+Đối tác cá nhân bị **khấu trừ 10% thuế thu nhập cá nhân** theo quy định; hộp rút tiền ghi rõ số tiền **Thực nhận** trước khi bạn gửi. Kế toán xử lý trong **7 ngày làm việc**. Mỗi lúc chỉ có một yêu cầu rút đang chờ. Theo dõi ở bảng **Lịch sử rút hoa hồng**.
+
+Kênh đối tác **Doanh nghiệp / Tổ chức** (xuất hoá đơn GTGT) chưa mở, sẽ có ở đợt sau.
+
+## Liên quan
+- [Gói dịch vụ & thanh toán](plan-and-billing)
+- [Câu hỏi thường gặp về thanh toán & hoá đơn](faq-billing)
+- [Bắt đầu với Founder AI — 4 bước](getting-started)`,
+    body_html: `<h2>Chương trình đối tác: giới thiệu bạn bè, nhận hoa hồng</h2><p>Bạn giới thiệu người khác dùng Founder AI. Khi họ mua gói, bạn nhận hoa hồng tính trên số tiền họ trả, từ <strong>10% đến 30%</strong> tuỳ doanh thu trong tháng.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm mục <strong>Chương trình đối tác</strong>. Mục này nằm riêng, không thuộc nhóm nào, và chỉ <strong>chủ tài khoản</strong> mới thấy.</p><p>[ẢNH: menu bên trái, khoanh đỏ mục &quot;Chương trình đối tác&quot;]</p><h3>Lấy mã và link giới thiệu</h3><p>Trong khối <strong>Thông tin giới thiệu</strong> có <strong>Mã giới thiệu</strong> và <strong>Link giới thiệu</strong> của riêng bạn, mỗi cái có nút sao chép.</p><p>[ẢNH: khối Thông tin giới thiệu, khoanh đỏ mã giới thiệu, link giới thiệu và hai nút sao chép]</p><p>Người được giới thiệu gắn với bạn bằng một trong hai cách:</p><ol><li>Đăng ký tài khoản qua <strong>link giới thiệu</strong> của bạn.</li><li>Tự nhập <strong>mã giới thiệu</strong> ở ô <em>Mã giới thiệu (không bắt buộc)</em> khi đăng ký, hoặc ở hộp hỏi mã hiện ra ngay sau khi tạo tài khoản.</li></ol><blockquote><p>Hộp hỏi mã chỉ hiện <strong>trong 24 giờ đầu</strong> sau khi tạo tài khoản. Bấm bỏ qua rồi thì không nhập lại được. Hãy dặn bạn bè nhập mã ngay lúc đăng ký.</p></blockquote><h3>Năm bậc hoa hồng</h3><p>Bậc tính theo <strong>tổng doanh thu hợp lệ trong tháng</strong> từ tất cả người bạn giới thiệu:</p><table><thead><tr><th>Bậc</th><th>Doanh thu trong tháng</th><th>Tỉ lệ hoa hồng</th></tr></thead><tbody><tr><td>1</td><td>Dưới 10.000.000đ</td><td>10%</td></tr><tr><td>2</td><td>10.000.000 – 20.000.000đ</td><td>15%</td></tr><tr><td>3</td><td>20.000.000 – 50.000.000đ</td><td>20%</td></tr><tr><td>4</td><td>50.000.000 – 100.000.000đ</td><td>25%</td></tr><tr><td>5</td><td>Từ 100.000.000đ</td><td>30%</td></tr></tbody></table><p>Hai điều hay hiểu nhầm:</p><ul><li>Lên bậc giữa tháng thì tỉ lệ mới áp cho <strong>toàn bộ</strong> doanh thu tháng đó, không phải chỉ phần vượt.</li><li>Doanh thu tính bậc <strong>về 0 mỗi đầu tháng</strong>. Còn <strong>Số dư ví khả dụng</strong> thì cộng dồn mãi tới khi bạn rút.</li></ul><p>[ẢNH: thẻ hoa hồng tháng với thang 5 bậc, thấy bậc hiện tại, doanh thu tháng này và hoa hồng ước tính]</p><h3>Khi nào tiền vào ví</h3><p>Trong tháng, trang chỉ hiện <strong>Hoa hồng ước tính</strong>. Hoa hồng được <strong>chốt sổ đầu tháng sau</strong>, lúc đó mới cộng vào <strong>Số dư ví khả dụng</strong>. Xem lại từng tháng ở bảng <strong>Lịch sử hoa hồng theo tháng</strong>.</p><h3>Đơn hàng đang chờ đủ điều kiện</h3><p>Đơn của người mua <strong>chưa cập nhật số điện thoại tài khoản</strong> thì chưa được tính doanh thu hợp lệ. Trang liệt kê các đơn này ở mục <strong>Đơn hàng đang chờ đủ điều kiện</strong>. Bạn nhắc họ bổ sung số điện thoại trước ngày chốt sổ là đơn được tính.</p><h3>Rút tiền</h3><p>Bấm <strong>Yêu cầu rút tiền</strong> khi số dư từ <strong>1.000.000đ</strong> trở lên. Điền:</p><ul><li><strong>Số tiền muốn rút</strong>, hoặc bấm <strong>Rút tất cả</strong>.</li><li><strong>Thông tin cá nhân &amp; Giấy tờ</strong>: họ tên, số CCCD, ngày cấp, nơi cấp.</li><li><strong>Tài khoản ngân hàng thụ hưởng</strong>: tên chủ tài khoản phải trùng với họ tên trên giấy tờ.</li></ul><p>[ẢNH: hộp Yêu cầu rút tiền hoa hồng, thấy phần chi tiết khấu trừ và thực nhận]</p><p>Đối tác cá nhân bị <strong>khấu trừ 10% thuế thu nhập cá nhân</strong> theo quy định; hộp rút tiền ghi rõ số tiền <strong>Thực nhận</strong> trước khi bạn gửi. Kế toán xử lý trong <strong>7 ngày làm việc</strong>. Mỗi lúc chỉ có một yêu cầu rút đang chờ. Theo dõi ở bảng <strong>Lịch sử rút hoa hồng</strong>.</p><p>Kênh đối tác <strong>Doanh nghiệp / Tổ chức</strong> (xuất hoá đơn GTGT) chưa mở, sẽ có ở đợt sau.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="/huong-dan/faq-billing">Câu hỏi thường gặp về thanh toán &amp; hoá đơn</a></li><li><a href="/huong-dan/getting-started">Bắt đầu với Founder AI — 4 bước</a></li></ul>`,
   },
 ];
 

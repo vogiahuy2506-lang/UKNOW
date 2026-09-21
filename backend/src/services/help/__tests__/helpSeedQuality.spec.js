@@ -29,7 +29,7 @@ const REAL_MENU = {
     'Hiệu quả chiến dịch',
     'Khách hàng từ chiến dịch',
   ],
-  'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page'],
+  'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
   'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
   'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Nhật ký hoạt động'],
 };
