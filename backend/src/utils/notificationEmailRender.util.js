@@ -1,31 +1,18 @@
 /**
  * Render HTML email cho notification — SERVER-SIDE AUTHORITATIVE.
  *
- * TRIẾT LÝ (sau rewrite 19/09/2026):
- *  - `html_content` là NỘI DUNG EMAIL TUYỆT ĐỐI — không bọc thêm greeting, title box,
- *    message box, user chip, footer cố định. Admin soạn gì trong phần "Soạn mẫu HTML"
- *    (textarea Rich Text / code editor) thì người nhận sẽ nhận đúng y.
- *  - Nếu `html_content` rỗng → dùng `message` (plain text), wrap tối thiểu trong
- *    <body> để hiển thị được trong email client.
- *  - Preview trong FE iframe dùng cùng hàm này → "soạn xong = gửi đi = nhận được"
- *    (WYSIWYG email).
- *
- * LÝ DO VIẾT LẠI:
- *  - Trước đây renderer bọc `html_content` trong 1 lớp layout cố định gồm:
- *    header gradient, greeting, title box, message box, user chip, footer.
- *    → Admin soạn template ở "Soạn mẫu" nhưng email gửi đi khác hẳn preview.
- *    → User phản ánh "mail bị gói gọn trong phần nội dung".
- *  - Rewrite: `html_content` là BODY EMAIL. Chỉ thêm DOCTYPE + <html> wrapper
- *    tối thiểu để email client render được. Không có lớp layout nào bọc ngoài.
+ * TRIẾT LÝ (rewrite 21/09/2026):
+ *  - Email thực gửi và preview iframe dùng CÙNG 1 renderer duy nhất (hàm này).
+ *  - Output = buildBaseTemplate(bodyHtml) — gồm header orange gradient + logo +
+ *    footer công ty. Body do admin soạn được inject vào giữa.
+ *  - Đồng bộ 100% với FE preview (renderFreeformPreview trong
+ *    notificationTemplates.util.js) — cùng khuôn header/footer.
  *
  * PIPELINE:
- *  1. Nếu có `html_content`:
- *       (a) replaceVariables(html_content, user)  — thay {{user_name}} etc.
- *       (b) sanitizeEmailHtml()                   — strip <style>, <script>, on*=, style=
- *       (c) gói trong <html><body> tối thiểu
- *  2. Nếu không có `html_content`:
- *       (a) escapeHtml(message)                    — plain text an toàn
- *       (b) gói trong <html><body> tối thiểu
+ *  1. html_content? → dùng trực tiếp (body tuyệt đối)
+ *  2. message chứa HTML tag? → dùng message như body (BACKWARD COMPAT)
+ *  3. Ngược lại → plain text → escape + wrap trong <p>
+ *  → Sau đó replace {{var}} → sanitize → inject vào buildBaseTemplate.
  *
  * VARIABLE REPLACEMENT:
  *  - {{user_name}}     → user.full_name || user.username || 'bạn'
@@ -39,12 +26,12 @@
  * EMAIL CLIENT COMPATIBILITY (Gmail/Outlook):
  *  - Inline CSS only — mọi <style> block bị strip.
  *  - Fonts: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif
- *  - Max-width 680px, responsive via viewport meta.
- *  - Inline max-width on wrapping table/div để không vỡ trên mobile.
  *
- * ĐỒNG BỘ: hàm này là DUY NHẤT — không còn file util FE riêng render email.
- * FE iframe preview gọi BE /preview-email-html endpoint → nhận HTML từ hàm này.
+ * ĐỒNG BỘ: FE iframe preview gọi BE /preview-email-html endpoint → nhận HTML
+ * từ hàm này. Soạn xong = gửi đi = nhận được (WYSIWYG email).
  */
+
+import { buildBaseTemplate } from './systemEmail.util.js';
 
 const MAIL_FROM_NAME  = process.env.MAIL_FROM_NAME  || 'Founder AI Platform';
 const SUPPORT_EMAIL   = process.env.SUPPORT_EMAIL   || 'info@digiso.vn';
@@ -384,22 +371,24 @@ export function renderNotificationEmailHtml({ notification, user = null, locale 
   }
 
   // ----------------------------------------------------------------
-  // Build full document — MINIMAL wrapper, không layout, không footer.
+  // Build full document — dùng buildBaseTemplate để đồng bộ 100% với FE preview.
+  // buildBaseTemplate có: background xám ngoài, card trắng bo tròn, header orange
+  // gradient, logo, body content, footer công ty. Hoàn toàn khớp với FE preview.
   // ----------------------------------------------------------------
-  const lang = locale === 'en' ? 'en' : 'vi';
 
-  // System font stack + reset margin/body để admin soạn HTML hoàn toàn tự do.
-  return `<!DOCTYPE html>
-<html lang="${lang}">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>${escapeHtml(MAIL_FROM_NAME)}</title>
-</head>
-<body style="margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
-${bodyHtml}
-</body>
-</html>`;
+  // Derive subtitle từ notification.type (để email không quá chung chung).
+  const TYPE_SUBTITLE = {
+    announcement: 'Thông báo từ Founder AI',
+    promotion:   'Ưu đãi hấp dẫn dành cho bạn',
+    reminder:    'Nhắc nhở quan trọng',
+    maintenance: 'Thông báo bảo trì hệ thống',
+    warning:     'Cảnh báo hệ thống',
+    security:    'Thông báo bảo mật',
+  };
+  const subtitle = TYPE_SUBTITLE[n.type] || 'Thông báo từ Founder AI';
+  const footerNote = n.title ? `Nội dung: ${n.title}` : null;
+
+  return buildBaseTemplate({ subtitle, content: bodyHtml, footerNote: footerNote || undefined });
 }
 
 export default renderNotificationEmailHtml;

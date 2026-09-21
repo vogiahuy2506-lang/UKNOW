@@ -64,39 +64,53 @@ describe('renderNotificationEmailHtml', () => {
   // Document structure
   // ---------------------------------------------------------------------------
 
-  it('trả về DOCTYPE + html + body hợp lệ', () => {
+  it('trả về DOCTYPE + html + body (buildBaseTemplate structure)', () => {
     const html = renderNotificationEmailHtml({ notification: { message: 'Hi' } });
     expect(html).toMatch(/^<!DOCTYPE html>/i);
     expect(html).toContain('<html');
     expect(html).toContain('</html>');
     expect(html).toContain('<body');
     expect(html).toContain('</body>');
+    // buildBaseTemplate: max-width 560px card, gradient header
+    expect(html).toMatch(/max-width:560px/);
   });
 
-  it('KHÔNG bọc layout wrapper, KHÔNG footer cố định, KHÔNG background table', () => {
-    // Triết lý mới nhất: html_content là body tuyệt đối, không có wrapper.
-    // Lưu ý: <title> của renderer chứa "Founder AI" — không check chuỗi này.
+  it('CÓ layout wrapper với header gradient orange + footer công ty (đồng bộ FE preview)', () => {
+    // Triết lý mới (21/09): email dùng buildBaseTemplate — cùng khuôn header/footer
+    // với FE preview (renderFreeformPreview). Đây là fix root cause: preview đẹp
+    // nhưng email gửi chỉ có body không có header → "không giống preview".
     const html = renderNotificationEmailHtml({ notification: { message: 'Hello' } });
-    expect(html).not.toContain('info@digiso.vn');
-    expect(html).not.toContain('linear-gradient');
-    expect(html).not.toContain('border-radius');
-    expect(html).not.toContain('<td align="center"');
-    expect(html).not.toContain('box-shadow');
-    // Không có SUPPORT_EMAIL / FRONTEND_URL footer
-    expect(html).not.toContain('founderai.vn');
+    // Header: gradient orange + logo
+    expect(html).toContain('linear-gradient(135deg,#f97316');
+    expect(html).toContain('founderai.biz');
+    expect(html).toContain('Founder AI');
+    // Card wrapper: border-radius + box-shadow
+    expect(html).toContain('border-radius');
+    expect(html).toContain('box-shadow');
+    // Table wrapper: align center + max-width
+    expect(html).toContain('<td align="center"');
+    // Footer công ty: digiso
+    expect(html).toContain('Digiso');
+    expect(html).toContain('info@digiso.vn');
   });
 
-  it('body chỉ có bodyHtml nằm giữa <body>...</body> — không có thẻ wrapper khác ngoài head/title', () => {
+  it('body content được inject vào trong card, sau header gradient', () => {
+    // buildBaseTemplate: bodyHtml nằm trong <td> body của card (sau header gradient).
+    // Nội dung admin soạn phải nằm TRONG card chính, KHÔNG nằm ngoài wrapper.
     const html = renderNotificationEmailHtml({ notification: { message: 'Xin chào bạn' } });
-    // Body content là message (escaped trong <p>)
-    expect(html).toMatch(/<body[^>]*>[\s\S]*<p[^>]*>Xin chào bạn<\/p>[\s\S]*<\/body>/);
+    // Content nằm giữa header gradient và footer (trong card body)
+    expect(html).toMatch(/linear-gradient[\s\S]*Xin chào bạn[\s\S]*Digiso/);
+    // Content nằm sau gradient, trước footer
+    expect(html).toMatch(/f97316[\s\S]*Xin chào bạn[\s\S]*Digiso/);
   });
 
   // ---------------------------------------------------------------------------
   // Đường html_content (admin soạn HTML)
   // ---------------------------------------------------------------------------
 
-  it('html_content đi thẳng vào body — không có wrapper gì ngoài <html><body>', () => {
+  it('html_content được inject vào trong card (cùng khuôn header/footer)', () => {
+    // buildBaseTemplate: bodyHtml được bọc trong card có header gradient + footer.
+    // Body do admin soạn nằm trong card, sau header, trước footer.
     const html = renderNotificationEmailHtml({
       notification: {
         title: 'ignored-title',
@@ -104,8 +118,12 @@ describe('renderNotificationEmailHtml', () => {
         html_content: '<p>Hello World</p>'
       }
     });
+    // html_content nằm trong card
     expect(html).toContain('<p>Hello World</p>');
-    expect(html).not.toContain('ignored-title');
+    // Layout header/footer bao quanh
+    expect(html).toContain('linear-gradient(135deg,#f97316');
+    expect(html).toContain('Digiso');
+    // message không hiện (chỉ dùng html_content)
     expect(html).not.toContain('ignored-message');
   });
 
