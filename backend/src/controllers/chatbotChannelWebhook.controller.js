@@ -306,6 +306,7 @@ class ChatbotChannelWebhookController {
   async handleFacebook(req, res) {
     const { token } = req.params;
 
+    // Meta expects a 200 response within 5s. Acknowledge immediately.
     res.send('ok');
 
     try {
@@ -341,119 +342,185 @@ class ChatbotChannelWebhookController {
           source: 'facebook',
         });
 
-        // Log visitor message
-        await chatbotChannelRepository.addMessage(conv.id, {
+        // Log visitor message (msg.message now includes attachment text)
+        const savedMessage = await chatbotChannelRepository.addMessage(conv.id, {
           role: 'visitor',
           content: msg.message,
           message_type: 'text',
           external_id: msg.messageId,
         });
 
-        const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
-        if (await resourceIsLocked('chatbots', chatbotId)) {
-          console.log(`[Facebook] Chatbot ${chatbotId} locked — message saved, no reply`);
+        if (savedMessage?.isDuplicate) {
           continue;
         }
 
-        // Kiểm AI tạm dừng TRƯỚC khung giờ và rate limit, cùng thứ tự Zalo OA / WhatsApp: bản trước
-        // kiểm sau cùng → hội thoại chủ shop đang tự trả lời vẫn nhận câu ngoài giờ và vẫn ăn bộ đếm.
-        if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
-          console.log(`[Facebook] AI paused for conversation ${conv.id} — skipping reply`);
-          continue;
-        }
+        await chatbotChannelRepository.updateLastActivity(channel.id);
 
-        // Active hours check (trước checkBeforeAi)
-        const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
-        const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
-          activeHours: chatbot.active_hours,
-          channel: 'facebook',
-          chatbotId,
-          senderKey: msg.senderId,
-        });
-        if (!activeCheck.allowed) {
-          if (activeCheck.shouldNotify) {
-            const sent = await facebookAdapter.sendReply({
-              externalId: msg.senderId,
-              message: activeCheck.staticReply,
-              channelId: channel.id,
+        // Use debounce to batch rapid messages from the same visitor.
+        inboundReplyDebounceService.enqueue({
+          key: `facebook:${channel.id}:${conv.id}`,
+          message: {
+            eventId: msg.messageId || null,
+            persistedMessageId: savedMessage?.id || null,
+            receivedAt: msg.timestamp,
+            content: msg.message,
+          },
+          flushCallback: async (batch) => {
+            await this._processFacebookBatch({
+              channel,
+              chatbotId,
+              conv,
+              senderId: msg.senderId,
+              batch,
             });
-            if (sent?.success !== false) {
-              await chatbotChannelRepository.addMessage(conv.id, {
-                role: 'bot',
-                content: activeCheck.staticReply,
-                message_type: 'text',
-              });
-              await chatbotActiveHoursService.markNotified({
-                channel: 'facebook',
-                chatbotId,
-                senderKey: msg.senderId,
-                activeHours: chatbot.active_hours,
-              });
-            }
-          }
-          console.log(`[Facebook] Chatbot ${chatbotId} outside active hours — message saved, no AI reply`);
-          continue;
-        }
-
-        const rate = await chatbotRateLimitService.checkBeforeAi({
-          channel: 'facebook',
-          ownerUserId: chatbot.id_user,
-          chatbotId,
-          senderKey: msg.senderId,
+          },
         });
-        if (!rate.allowed) {
-          if (rate.shouldNotify) {
-            const sent = await facebookAdapter.sendReply({
-              externalId: msg.senderId,
-              message: rate.staticReply,
-              channelId: channel.id,
-            });
-            if (sent?.success !== false) {
-              await chatbotChannelRepository.addMessage(conv.id, {
-                role: 'bot',
-                content: rate.staticReply,
-                message_type: 'text',
-              });
-              await chatbotRateLimitService.markRateLimitNotified({
-                channel: 'facebook',
-                ownerUserId: chatbot.id_user,
-                chatbotId,
-                senderKey: msg.senderId,
-                reason: rate.reason,
-              });
-            }
-          }
-          continue;
-        }
-
-        // Route to chatbot AI
-        const result = await chatRouterService.routeChatbotMessage({
-          chatbotId,
-          message: msg.message,
-          conversationId: conv.id,
-        });
-
-        if (result.content) {
-          // Send reply
-          await facebookAdapter.sendReply({
-            externalId: msg.senderId,
-            message: result.content,
-            channelId: channel.id,
-          });
-
-          // Log bot response
-          await chatbotChannelRepository.addMessage(conv.id, {
-            role: 'bot',
-            content: result.content,
-            message_type: 'text',
-          });
-        }
       }
-
-      // Update last activity
-      await chatbotChannelRepository.updateLastActivity(channel.id);
     } catch (err) {
       console.error('[Facebook Webhook] Handle error:', err.message);
+    }
+  }
+
+  /**
+   * @private
+   * Flushes a batch of inbound messages for one Facebook conversation.
+   * Mirrors _processWhatsAppBatch — same gating: channel+chatbot active,
+   * resource lock, AI pause, active hours, rate limit, then route + reply.
+   */
+  async _processFacebookBatch({ channel, chatbotId, conv, senderId, batch }) {
+    const prompt = formatBatchedContent(batch.messages);
+    if (!prompt) return;
+
+    try {
+      // 1. Channel + chatbot still active and still paired correctly.
+      const activeChannel = await chatbotChannelRepository.findActiveChannelById(channel.id);
+      if (!activeChannel || Number(activeChannel.id_chatbot) !== Number(chatbotId)) {
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
+        return;
+      }
+
+      const chatbot = await chatbotRepository.findChatbotById(chatbotId);
+      if (!chatbot || !chatbot.is_active) {
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
+        return;
+      }
+
+      // 2. Resource lock (topup gating).
+      const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+      if (await resourceIsLocked('chatbots', chatbotId)) {
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=locked`);
+        return;
+      }
+
+      // 3. Handoff pause.
+      if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused`);
+        return;
+      }
+
+      // 3.5. Active hours check.
+      const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
+      const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: chatbot.active_hours,
+        channel: 'facebook',
+        chatbotId,
+        senderKey: senderId,
+      });
+      if (!activeCheck.allowed) {
+        if (activeCheck.shouldNotify) {
+          const sent = await facebookAdapter.sendReply({
+            externalId: senderId,
+            message: activeCheck.staticReply,
+            channelId: channel.id,
+          });
+          if (sent?.success !== false) {
+            await chatbotChannelRepository.addMessage(conv.id, {
+              role: 'bot',
+              content: activeCheck.staticReply,
+              message_type: 'text',
+            });
+            await chatbotActiveHoursService.markNotified({
+              channel: 'facebook',
+              chatbotId,
+              senderKey: senderId,
+              activeHours: chatbot.active_hours,
+            });
+          }
+        }
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=outside_hours`);
+        return;
+      }
+
+      // 4. Rate limit — single check per batch.
+      const rate = await chatbotRateLimitService.checkBeforeAi({
+        channel: 'facebook',
+        ownerUserId: chatbot.id_user,
+        chatbotId,
+        senderKey: senderId,
+      });
+      if (!rate.allowed) {
+        if (rate.shouldNotify) {
+          const sent = await facebookAdapter.sendReply({
+            externalId: senderId,
+            message: rate.staticReply,
+            channelId: channel.id,
+          });
+          if (sent?.success !== false) {
+            await chatbotChannelRepository.addMessage(conv.id, {
+              role: 'bot',
+              content: rate.staticReply,
+              message_type: 'text',
+            });
+            await chatbotRateLimitService.markRateLimitNotified({
+              channel: 'facebook',
+              ownerUserId: chatbot.id_user,
+              chatbotId,
+              senderKey: senderId,
+              reason: rate.reason,
+            });
+          }
+        }
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=rate_limited`);
+        return;
+      }
+
+      // 5. Build prompt from history (exclude this batch's already-persisted visitor rows).
+      const historyThroughMessageId = await chatbotChannelRepository.getLatestMessageId(conv.id);
+      const result = await chatRouterService.routeChatbotMessage({
+        chatbotId,
+        message: prompt,
+        conversationId: conv.id,
+        throughMessageId: historyThroughMessageId,
+        excludeMessageIds: batch.messages
+          .map((item) => item.persistedMessageId)
+          .filter((id) => id != null),
+      });
+
+      if (!result?.content) {
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+        return;
+      }
+
+      const sent = await facebookAdapter.sendReply({
+        externalId: senderId,
+        message: result.content,
+        channelId: channel.id,
+      });
+
+      if (sent?.success === false) {
+        console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+        return;
+      }
+
+      await chatbotChannelRepository.addMessage(conv.id, {
+        role: 'bot',
+        content: result.content,
+        message_type: 'text',
+      });
+
+      console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=sent`);
+    } catch (err) {
+      console.error(`[ChatbotDebounce] Error processing Facebook batch for conv ${conv.id}:`, err.stack || err.message);
     }
   }
 

@@ -3,6 +3,7 @@ import knowledgeBaseService from '../services/chatbot/knowledgeBase.service.js';
 import subAssistantService from '../services/chatbot/subAssistant.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatbotChannelRepository from '../repositories/ai/chatbotChannel.repository.js';
+import channelConnectionsRepository from '../repositories/ai/channelConnections.repository.js';
 import chatbotZaloAccountRepository from '../repositories/chatbot/chatbotZaloAccount.repository.js';
 import chatbotWhatsAppAccountRepository from '../repositories/chatbot/chatbotWhatsAppAccount.repository.js';
 import chatbotWhatsAppBaileysRepository from '../repositories/chatbot/chatbotWhatsAppBaileys.repository.js';
@@ -938,6 +939,50 @@ class ChatbotController {
         },
       });
     } catch (err) {
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * GET /api/chatbot/custom-chatbots/:chatbotId/facebook-pages
+   * List Facebook Pages that the current user has connected (per-user
+   * channel_connections), with a flag for which one is currently active
+   * on this chatbot. Credentials (page_access_token) are stripped.
+   *
+   * DeployTab uses this to show a "chọn Fanpage đã liên kết" picker
+   * instead of asking the user to paste page_id + token by hand.
+   */
+  async getFacebookPagesForChatbot(req, res) {
+    try {
+      const { chatbotId } = req.params;
+      const id = parseInt(chatbotId, 10);
+      if (isNaN(id)) {
+        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
+      }
+
+      const ownerId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(id, ownerId);
+      if (!chatbot) {
+        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+      }
+
+      const pages = await channelConnectionsRepository.listFacebookConnections(ownerId);
+      const activeChannels = await chatbotChannelRepository.findByChatbotId(id);
+      const activeFb = activeChannels.find((c) => c.channel_type === 'facebook');
+
+      const data = pages.map((p) => {
+        // Strip sensitive credentials before sending to the client.
+        const { credentials, ...rest } = p;
+        return {
+          ...rest,
+          has_credentials: Boolean(credentials && Object.keys(credentials).length > 0),
+          is_active_on_this_chatbot: activeFb?.external_channel_id === p.fb_page_id,
+        };
+      });
+
+      return res.json({ success: true, data });
+    } catch (err) {
+      console.error('[ChatbotChannel] getFacebookPagesForChatbot error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }
@@ -2348,7 +2393,13 @@ class ChatbotController {
 
   /**
    * Connect Facebook to chatbot
-   * POST /ai/chatbot/custom-chatbots/:chatbotId/channels/facebook
+   * POST /api/chatbot/custom-chatbots/:chatbotId/channels/facebook
+   *
+   * Two input shapes supported:
+   *  1. Legacy/manual — caller supplies { page_id, page_access_token, page_name? }.
+   *  2. From ChannelSettings tab — caller supplies { channel_connection_id }.
+   *     Server fetches the page token from channel_connections (per-user) and
+   *     reuses it for this chatbot.
    */
   async connectChatbotFacebook(req, res) {
     try {
@@ -2359,12 +2410,31 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
       }
 
-      const chatbot = await chatbotRepository.findChatbotById(id, resolveWorkspaceOwnerId(req.user));
+      const ownerId = resolveWorkspaceOwnerId(req.user);
+      const chatbot = await chatbotRepository.findChatbotById(id, ownerId);
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
-      const { page_access_token, page_id, page_name } = req.body;
+      const body = req.body || {};
+      let { page_access_token, page_id, page_name, channel_connection_id } = body;
+
+      // If a channel_connection_id is supplied, prefer it over the legacy
+      // manual inputs — the token lives in the per-user channel_connections row.
+      if (channel_connection_id) {
+        const connId = parseInt(channel_connection_id, 10);
+        if (isNaN(connId)) {
+          return res.status(400).json({ success: false, message: 'channel_connection_id không hợp lệ.' });
+        }
+        const conn = await channelConnectionsRepository.getFacebookConnectionById(connId, ownerId);
+        if (!conn) {
+          return res.status(404).json({ success: false, message: 'Không tìm thấy kết nối Facebook. Hãy liên kết Fanpage trong Cài đặt → Kênh trước.' });
+        }
+        page_id = conn.fb_page_id || conn.external_channel_id;
+        page_access_token = conn.credentials?.page_access_token;
+        page_name = conn.fb_page_name || conn.display_name;
+      }
+
       if (!page_access_token || !page_id) {
         return res.status(400).json({ success: false, message: 'Page Access Token và Page ID là bắt buộc' });
       }
@@ -2387,6 +2457,12 @@ class ChatbotController {
         webhook_url: `${process.env.BACKEND_PUBLIC_URL}/api/webhooks/chatbot/facebook/${webhookToken}`,
       });
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_CONNECTED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, channel.id, { chatbotId: id, channelType: 'facebook' });
+
+      // Subscribe the page to receive webhook events — required for messages to arrive.
+      // Non-fatal: logged but does not block the connection flow.
+      facebookAdapter.subscribePage(page_id, page_access_token).catch(
+        (err) => console.warn(`[ChatbotChannel] subscribePage failed for page ${page_id}:`, err.message)
+      );
 
       return res.json({
         success: true,

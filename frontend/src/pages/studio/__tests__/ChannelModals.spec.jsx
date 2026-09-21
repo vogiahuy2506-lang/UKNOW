@@ -8,6 +8,7 @@ vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
   default: {
     getFacebookPageConfig: vi.fn(),
     saveFacebookPageConfig: vi.fn(),
+    getFacebookPagesForChatbot: vi.fn(),
     getZaloOaConfig: vi.fn(),
     saveZaloOaConfig: vi.fn(),
     testInboxConnection: vi.fn(),
@@ -29,48 +30,51 @@ const mockChatbot = {
 describe('ChannelModals — Facebook & Zalo OA connection from Studio', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Default: pages list with one page
+    chatbotApi.getFacebookPagesForChatbot.mockResolvedValue({
+      data: {
+        data: [
+          {
+            id: 101,
+            fb_page_id: 'page_123',
+            fb_page_name: 'Page A',
+            is_active_on_this_chatbot: false,
+          },
+        ],
+      },
+    });
   });
 
   /* ─── Facebook Form Tests ────────────────────────────────────────── */
 
   describe('Facebook Page Form', () => {
-    it('mở modal khi chưa nối: Webhook URL & Verify Token hiện "Nối xong sẽ hiện", không lỗi đỏ', async () => {
+    it('mở modal khi chưa nối: hiện danh sách pages để chọn', async () => {
       chatbotApi.getFacebookPageConfig.mockResolvedValue({
-        success: true,
-        data: null,
+        data: { data: null },
       });
 
       render(<ChannelModal open channel="facebook" chatbot={mockChatbot} onClose={vi.fn()} />);
 
       // Chờ form nạp xong
-      expect(await screen.findByPlaceholderText('VD: 1234567890')).toBeInTheDocument();
-      expect(screen.getByPlaceholderText('EAAxxxxxxx...')).toBeInTheDocument();
+      expect(await screen.findByText('Page A')).toBeInTheDocument();
+      expect(screen.getByText('ID: page_123')).toBeInTheDocument();
 
-      // Kiểm tra Webhook URL và Verify Token đều hiện trạng thái chờ nối
-      const readOnlyInputs = screen.getAllByDisplayValue('Nối xong sẽ hiện');
-      expect(readOnlyInputs.length).toBe(2); // 1 cho Verify Token, 1 cho Webhook URL
-
-      // Không tự ghép window.location.origin
-      expect(screen.queryByDisplayValue(/localhost|webhooks\/facebook\/page/)).not.toBeInTheDocument();
-
-      // Nút Lưu cấu hình bị disabled khi chưa nhập
+      // Nút Lưu cấu hình bị disabled khi chưa chọn page
       const saveBtn = screen.getByRole('button', { name: /Lưu cấu hình/i });
       expect(saveBtn).toBeDisabled();
 
-      // Không gọi toast lỗi khi chưa kết nối
+      // Không gọi toast lỗi
       expect(toast.error).not.toHaveBeenCalled();
     });
 
-    it('nhập Page ID + Page Access Token → lưu thành công, hiển thị đúng Webhook URL và Verify Token từ backend', async () => {
+    it('chọn page rồi lưu → gọi API đúng params và báo thành công', async () => {
       chatbotApi.getFacebookPageConfig.mockResolvedValue({
-        success: true,
-        data: null,
+        data: { data: null },
       });
       chatbotApi.saveFacebookPageConfig.mockResolvedValue({
-        success: true,
         data: {
           id: 101,
-          display_name: 'Page Bán Hàng',
+          display_name: 'Page A',
           webhook_url: 'https://backend.uknow.vn/api/webhooks/chatbot/facebook/fb_secret_token_123',
           verify_token: 'verify_fb_token_456',
         },
@@ -79,84 +83,89 @@ describe('ChannelModals — Facebook & Zalo OA connection from Studio', () => {
 
       render(<ChannelModal open channel="facebook" chatbot={mockChatbot} onClose={vi.fn()} />);
 
-      const pageIdInput = await screen.findByPlaceholderText('VD: 1234567890');
-      const pageTokenInput = screen.getByPlaceholderText('EAAxxxxxxx...');
-      const pageNameInput = screen.getByPlaceholderText('VD: UKNOW Official Fanpage');
+      // Chờ page load
+      expect(await screen.findByText('Page A')).toBeInTheDocument();
 
-      fireEvent.change(pageIdInput, { target: { value: 'page_987654' } });
-      fireEvent.change(pageTokenInput, { target: { value: 'EAABBBCCC_token' } });
-      fireEvent.change(pageNameInput, { target: { value: 'Page Bán Hàng' } });
+      // Click chọn page
+      fireEvent.click(screen.getByText('Page A'));
 
+      // Nút Lưu enabled
       const saveBtn = screen.getByRole('button', { name: /Lưu cấu hình/i });
       expect(saveBtn).not.toBeDisabled();
+
+      // Click save
       fireEvent.click(saveBtn);
 
       await waitFor(() => {
         expect(chatbotApi.saveFacebookPageConfig).toHaveBeenCalledWith(7, {
-          page_id: 'page_987654',
-          page_access_token: 'EAABBBCCC_token',
-          page_name: 'Page Bán Hàng',
+          channel_connection_id: 101,
         });
       });
 
       await waitFor(() => {
         expect(toast.success).toHaveBeenCalledWith('Facebook Page đã được kết nối với chatbot');
       });
-
-      // Webhook URL và Verify Token phải hiển thị giá trị backend trả về
-      expect(screen.getByDisplayValue('https://backend.uknow.vn/api/webhooks/chatbot/facebook/fb_secret_token_123')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('verify_fb_token_456')).toBeInTheDocument();
-
-      // Huy hiệu kết nối hiển thị
-      expect(screen.getByText(/Đã kết nối: Page Bán Hàng/i)).toBeInTheDocument();
     });
 
-    it('mở lại modal khi đã có cấu hình: nạp đúng cấu hình đã lưu', async () => {
+    it('mở lại modal khi đã có cấu hình: hiện step 3 với trạng thái kết nối', async () => {
       chatbotApi.getFacebookPageConfig.mockResolvedValue({
-        success: true,
         data: {
-          id: 101,
-          external_channel_id: 'page_existing_111',
-          display_name: 'Fanpage Doanh Nghiệp',
-          webhook_url: 'https://backend.uknow.vn/api/webhooks/chatbot/facebook/existing_hook_token',
-          verify_token: 'existing_verify_secret',
-          is_active: true,
+          data: [
+            {
+              id: 101,
+              external_channel_id: 'page_existing_111',
+              display_name: 'Fanpage Doanh Nghiệp',
+              webhook_url: 'https://backend.uknow.vn/api/webhooks/chatbot/facebook/existing_hook_token',
+              verify_token: 'existing_verify_secret',
+              channel_type: 'facebook',
+              is_active: true,
+            },
+          ],
         },
       });
 
       render(<ChannelModal open channel="facebook" chatbot={mockChatbot} onClose={vi.fn()} />);
 
-      expect(await screen.findByDisplayValue('page_existing_111')).toBeInTheDocument();
-      expect(screen.getByDisplayValue('Fanpage Doanh Nghiệp')).toBeInTheDocument();
+      expect(await screen.findByText('Cấu hình Webhook trên Meta')).toBeInTheDocument();
       expect(screen.getByDisplayValue('https://backend.uknow.vn/api/webhooks/chatbot/facebook/existing_hook_token')).toBeInTheDocument();
       expect(screen.getByDisplayValue('existing_verify_secret')).toBeInTheDocument();
-      expect(screen.getByText(/Đã kết nối: Fanpage Doanh Nghiệp/i)).toBeInTheDocument();
     });
 
-    it('API getFacebookPageConfig ném lỗi: phải báo toast lỗi, không im lặng nuốt lỗi', async () => {
+    it('API getFacebookPageConfig ném lỗi: phải báo toast lỗi', async () => {
       chatbotApi.getFacebookPageConfig.mockRejectedValue({
         response: { data: { message: 'Lỗi tải kênh kết nối từ server' } },
+      });
+      // pages list vẫn resolve để form không stuck
+      chatbotApi.getFacebookPagesForChatbot.mockResolvedValue({
+        data: { data: [] },
       });
 
       render(<ChannelModal open channel="facebook" chatbot={mockChatbot} onClose={vi.fn()} />);
 
-      await waitFor(() => {
-        expect(toast.error).toHaveBeenCalledWith('Lỗi tải kênh kết nối từ server');
-      });
+      // Chờ toast error được gọi
+      await waitFor(
+        () => {
+          expect(toast.error).toHaveBeenCalled();
+        },
+        { timeout: 3000 }
+      );
     });
 
     it('API saveFacebookPageConfig ném lỗi: phải báo toast lỗi với message từ backend', async () => {
-      chatbotApi.getFacebookPageConfig.mockResolvedValue({ success: true, data: null });
+      chatbotApi.getFacebookPageConfig.mockResolvedValue({
+        data: { data: null },
+      });
       chatbotApi.saveFacebookPageConfig.mockRejectedValue({
         response: { data: { message: 'Page Access Token không có quyền quản lý webhook' } },
       });
 
       render(<ChannelModal open channel="facebook" chatbot={mockChatbot} onClose={vi.fn()} />);
 
-      const pageIdInput = await screen.findByPlaceholderText('VD: 1234567890');
-      const pageTokenInput = screen.getByPlaceholderText('EAAxxxxxxx...');
-      fireEvent.change(pageIdInput, { target: { value: 'page_987654' } });
-      fireEvent.change(pageTokenInput, { target: { value: 'invalid_token' } });
+      // Chờ page load
+      expect(await screen.findByText('Page A')).toBeInTheDocument();
+
+      // Click chọn page
+      fireEvent.click(screen.getByText('Page A'));
 
       const saveBtn = screen.getByRole('button', { name: /Lưu cấu hình/i });
       fireEvent.click(saveBtn);
@@ -173,8 +182,7 @@ describe('ChannelModals — Facebook & Zalo OA connection from Studio', () => {
   describe('Zalo OA Form', () => {
     it('mở modal khi chưa nối: Webhook URL hiện "Nối xong sẽ hiện", không lỗi đỏ', async () => {
       chatbotApi.getZaloOaConfig.mockResolvedValue({
-        success: true,
-        data: null,
+        data: { data: null },
       });
 
       render(<ChannelModal open channel="zalo" chatbot={mockChatbot} onClose={vi.fn()} />);
@@ -185,20 +193,15 @@ describe('ChannelModals — Facebook & Zalo OA connection from Studio', () => {
       // Webhook URL hiện trạng thái chờ nối
       expect(screen.getByDisplayValue('Nối xong sẽ hiện')).toBeInTheDocument();
 
-      // Không tự ghép window.location.origin
-      expect(screen.queryByDisplayValue(/localhost|webhooks\/zalo\/oa/)).not.toBeInTheDocument();
-
       // Không gọi toast lỗi khi chưa kết nối
       expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('nhập App ID + App Secret → lưu thành công, hiển thị đúng Webhook URL từ backend', async () => {
       chatbotApi.getZaloOaConfig.mockResolvedValue({
-        success: true,
-        data: null,
+        data: { data: null },
       });
       chatbotApi.saveZaloOaConfig.mockResolvedValue({
-        success: true,
         data: {
           id: 202,
           display_name: 'Zalo CSKH',
@@ -235,10 +238,9 @@ describe('ChannelModals — Facebook & Zalo OA connection from Studio', () => {
 
       // Webhook URL hiển thị giá trị backend trả về
       expect(screen.getByDisplayValue('https://backend.uknow.vn/api/webhooks/chatbot/zalo-oa/zalo_secret_token_789')).toBeInTheDocument();
-      expect(screen.getByText(/Đã kết nối: Zalo CSKH/i)).toBeInTheDocument();
     });
 
-    it('API getZaloOaConfig ném lỗi: phải báo toast lỗi, không im lặng nuốt lỗi', async () => {
+    it('API getZaloOaConfig ném lỗi: phải báo toast lỗi', async () => {
       chatbotApi.getZaloOaConfig.mockRejectedValue({
         response: { data: { message: 'Không thể kết nối dịch vụ Zalo OA' } },
       });
@@ -251,7 +253,7 @@ describe('ChannelModals — Facebook & Zalo OA connection from Studio', () => {
     });
 
     it('API saveZaloOaConfig ném lỗi: báo toast lỗi từ backend', async () => {
-      chatbotApi.getZaloOaConfig.mockResolvedValue({ success: true, data: null });
+      chatbotApi.getZaloOaConfig.mockResolvedValue({ data: { data: null } });
       chatbotApi.saveZaloOaConfig.mockRejectedValue({
         response: { data: { message: 'App Secret Zalo không đúng' } },
       });

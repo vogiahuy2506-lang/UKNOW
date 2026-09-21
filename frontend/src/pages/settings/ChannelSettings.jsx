@@ -3,9 +3,11 @@ import EmailSettings from './EmailSettings';
 import ZaloSettings from './ZaloSettings';
 import WhatsAppSettings from './WhatsAppSettings';
 import TelegramSettings from './TelegramSettings';
+import FacebookSettings from './FacebookSettings';
 
 const TABS = [
   { key: 'email', label: 'Email' },
+  { key: 'facebook', label: 'Facebook' },
   { key: 'zalo', label: 'Zalo' },
   { key: 'whatsapp', label: 'WhatsApp' },
   { key: 'telegram', label: 'Telegram' },
@@ -60,6 +62,7 @@ const ChannelSettings = () => {
       </div>
 
       {active === 'email' && <EmailSettings />}
+      {active === 'facebook' && <FacebookSettings />}
       {active === 'zalo' && <ZaloSettings />}
       {active === 'whatsapp' && <WhatsAppSettings />}
       {active === 'telegram' && <TelegramSettings />}

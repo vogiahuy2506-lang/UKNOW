@@ -98,13 +98,32 @@ const chatbotApiService = {
     });
   },
 
-  async initFacebookOAuth(payload) {
-    const response = await api.post('/webhooks/oauth/facebook/init', payload);
+  /**
+   * Initiate Facebook OAuth for ChannelSettings (per-user pages).
+   * GET /api/webhooks/oauth/facebook/init?redirect_to=settings
+   */
+  async initFacebookOAuth() {
+    const response = await api.get('/webhooks/oauth/facebook/init', {
+      params: { redirect_to: 'settings' },
+    });
     return response.data;
   },
 
-  async initZaloOAuth(payload) {
-    const response = await api.post('/webhooks/oauth/zalo-oa/init', payload);
+  /**
+   * Initiate Facebook OAuth for Studio (links pages to a specific chatbot).
+   * GET /api/webhooks/oauth/facebook/init?redirect_to=studio&chatbot_id=...
+   */
+  async initFacebookOAuthStudio(chatbotId) {
+    const response = await api.get('/webhooks/oauth/facebook/init', {
+      params: { redirect_to: 'studio', chatbot_id: chatbotId },
+    });
+    return response.data;
+  },
+
+  async initZaloOAuth(chatbotId) {
+    const response = await api.get('/webhooks/oauth/zalo-oa/init', {
+      params: chatbotId ? { chatbot_id: chatbotId, redirect_to: 'studio' } : { redirect_to: 'studio' },
+    });
     return response.data;
   },
 
@@ -178,6 +197,17 @@ const chatbotApiService = {
       `/ai/chatbot/custom-chatbots/${chatbotId}/channels/facebook`,
       data
     );
+    return response.data;
+  },
+
+  /**
+   * List Facebook Pages that the current user has connected
+   * (in ChannelSettings → tab Facebook), with a flag for which one is
+   * currently active on this chatbot.
+   * Used by DeployTab's Facebook picker.
+   */
+  async getFacebookPagesForChatbot(chatbotId) {
+    const response = await api.get(`/ai/chatbot/custom-chatbots/${chatbotId}/facebook-pages`);
     return response.data;
   },
 
