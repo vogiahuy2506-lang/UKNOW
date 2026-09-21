@@ -223,12 +223,24 @@ hơn thì khai báo cục bộ tại nơi cần.
 
 Khoá là `method:url:params`, **không có body**. Lượt thứ hai cùng khoá sẽ `abort()` lượt thứ nhất.
 
-Hệ quả đã xảy ra thật: `Promise.all` nhiều POST cùng URL thì chỉ lượt cuối tới server. Upload
-(`FormData`) đã được miễn trừ, JSON thì chưa.
+Hệ quả đã xảy ra thật: `Promise.all` nhiều POST cùng URL thì chỉ lượt cuối tới server.
 
-Trước khi bắt người dùng đo lại phía server, soát xem có hai nơi trên cùng trang gọi cùng một URL
-không. Và **đừng biến lỗi request thành mảng rỗng** — nó in ra màn hình thành "chưa có dữ liệu",
-một câu nói sai sự thật mà không ai debug được.
+Ba nhóm được **miễn** khử trùng: upload (`FormData`), và — từ 21/09/2026 — mọi request người gọi tự
+truyền `config.signal`. Trước đó interceptor ghi đè `config.signal` bằng controller của nó, nên
+signal người gọi bị vứt và request bị lượt trùng huỷ ngầm; đó chính là lý do danh sách tài khoản
+Zalo trong node chiến dịch hiện rỗng.
+
+⚠️ **Mặt trái của việc miễn trừ đó**: request truyền `signal` giờ **không còn ai huỷ hộ lượt cũ**.
+Với GET thì chỉ tốn thêm một lượt đọc, nhưng với request **ghi dữ liệu** thì hai lượt cùng chạy là
+hai lần side effect. Đã suýt xảy ra với `POST /ai/chatbot/telegram-accounts/init`: nút "Tạo QR mới"
+không khoá theo `connecting`, mà init mất 20–40s ở cold path.
+
+**Truyền `signal` cho một request có side effect thì phải tự huỷ lượt trước** — giữ controller trong
+ref và `ref.current?.abort()` trước khi tạo cái mới. Đừng trông vào bộ khử trùng.
+
+Và **đừng biến lỗi request thành mảng rỗng** — nó in ra màn hình thành "chưa có dữ liệu", một câu
+nói sai sự thật mà không ai debug được. Lỗi do huỷ (`ERR_CANCELED` / `CanceledError` / `AbortError`)
+thì ngược lại: không phải lỗi, đừng hiện gì cả.
 
 ### Route chết đánh lừa phép kiểm
 
