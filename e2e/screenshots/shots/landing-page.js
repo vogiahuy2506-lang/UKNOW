@@ -19,7 +19,7 @@
  */
 import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
-  enclosingSection, tallViewportShot,
+  enclosingSection, tallViewportShot, highlightCell, paddedShot,
 } from '../lib/shotHelpers.js';
 
 const LANDING_PATH = '/app/settings/landing-pages';
@@ -45,7 +45,9 @@ async function openEditor(page, { pageTitle }) {
     );
   }
   await row.locator('button[title="Sửa"]').first().click();
-  await page.getByRole('button', { name: 'Tạo bằng AI' })
+  // Trình soạn landing-canvas (từ 07–14/09/2026) không còn nút "Tạo bằng AI"; nút "Lưu" là mốc chắc
+  // chắn nhất cho biết thanh công cụ đã dựng xong.
+  await page.getByRole('button', { name: 'Lưu', exact: true })
     .first().waitFor({ state: 'visible', timeout: 20_000 });
   await page.waitForTimeout(1500);
 }
@@ -97,99 +99,6 @@ export default {
         // của phần tử con thấp nhất" luôn chạm đáy <main> và không cắt được gì —
         // ảnh ra hai phần ba là nền trắng dưới bảng.
         return contentShot(page, page.locator('main').first(), { maxHeight: 360 });
-      },
-    },
-    {
-      name: 'ba-cach-tao-trang',
-      caption: 'màn hình chọn cách tạo trang, khoanh đỏ ba lựa chọn',
-      localOnly: true,
-      async take(page) {
-        await openEditor(page, { pageTitle: 'Khoá học Marketing' });
-        await hideVolatileChrome(page);
-
-        // Ba cách tạo trang = ba nút này. Khoanh từng nút chứ không khoanh cả
-        // hàng: hàng còn có "Lưu template" và "Lịch sử", không phải cách tạo.
-        for (const name of ['Visual Block Editor', 'Template', 'Tạo bằng AI']) {
-          const button = page.getByRole('button', { name, exact: true }).first();
-          if (!(await button.isVisible().catch(() => false))) {
-            throw new Error(`Không thấy nút "${name}" trên thanh công cụ trình sửa`);
-          }
-          await highlight(button);
-        }
-        await page.waitForTimeout(200);
-        return contentShot(page, page.locator('main').first(), { maxHeight: TOOLBAR_HEIGHT });
-      },
-    },
-    {
-      name: 'cua-so-ai-ba-tab',
-      caption: 'cửa sổ AI, khoanh đỏ hàng ba tab, chỉ rõ tab "Sửa trang hiện tại" đang được chọn',
-      localOnly: true,
-      async take(page) {
-        await openEditor(page, { pageTitle: 'Khoá học Marketing' });
-        await page.getByRole('button', { name: 'Tạo bằng AI', exact: true }).first().click();
-        await page.waitForTimeout(2000);
-
-        // Tab "Sửa trang hiện tại" CHỈ hiện khi trang đã có nội dung HTML — với
-        // trang rỗng, cửa sổ AI chỉ có 2 tab và ảnh chụp ra sai với bài viết.
-        const editTab = page.getByRole('button', { name: 'Sửa trang hiện tại' }).first();
-        if (!(await editTab.isVisible({ timeout: 15_000 }).catch(() => false))) {
-          throw new Error(
-            'Cửa sổ AI chỉ có 2 tab — trang đang mở chưa có nội dung HTML.\n'
-            + 'Nạp lại DB để trang mẫu có HTML thật:\n'
-            + '  E2E_SEED_DEMO=1 E2E_SEED_LANDING=1 node scripts/seed-test-db.js',
-          );
-        }
-        await hideVolatileChrome(page);
-        const tabs = page.locator('div').filter({ has: editTab }).filter({
-          has: page.getByRole('button', { name: 'Tạo mới theo mô tả' }),
-        }).last();
-        await highlight(tabs);
-        await highlight(editTab);
-        await page.waitForTimeout(200);
-
-        // Hộp thoại vẽ qua createPortal: lớp phủ `div.fixed.inset-0`, tấm trắng
-        // là con trực tiếp của nó. Lọc theo `hasText` rồi `.last()` sẽ trúng
-        // chính thẻ chứa chữ (cái <h3> tiêu đề) — ảnh ra một vệt 482x96.
-        const overlay = page.locator('div.fixed.inset-0')
-          .filter({ has: page.getByText('Tạo landing page với AI') }).last();
-        return contentShot(page, overlay.locator('> div').first());
-      },
-    },
-    {
-      name: 'nut-hoan-tac',
-      caption: 'thanh công cụ của trình sửa, khoanh đỏ nút "Hoàn tác"',
-      localOnly: true,
-      async take(page) {
-        await openEditor(page, { pageTitle: 'Khoá học Marketing' });
-
-        // "Hoàn tác" chỉ xuất hiện SAU KHI mẫu hoặc AI ghi đè giao diện — nó gắn
-        // với `htmlBeforeOverwrite`, không phải nút thường trực. Dựng trạng thái
-        // đó bằng cách áp một mẫu; KHÔNG bấm "Lưu" nên DB không đổi.
-        await page.getByRole('button', { name: 'Template', exact: true }).first().click();
-        const gallery = page.getByText('Thư viện Template').first();
-        if (!(await gallery.isVisible({ timeout: 15_000 }).catch(() => false))) {
-          throw new Error('Không mở được thư viện template');
-        }
-        const firstTemplate = page.getByText('Trang bán khoá học', { exact: false }).first();
-        if (!(await firstTemplate.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error(
-            'Thư viện template rỗng. Nạp lại DB:\n'
-            + '  E2E_SEED_DEMO=1 E2E_SEED_LANDING=1 node scripts/seed-test-db.js',
-          );
-        }
-        await firstTemplate.click();
-        await page.waitForTimeout(800);
-        await page.getByRole('button', { name: /Sử dụng template/ }).click();
-        await page.waitForTimeout(2000);
-
-        const undo = page.getByRole('button', { name: 'Hoàn tác', exact: true }).first();
-        if (!(await undo.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error('Đã áp mẫu nhưng nút "Hoàn tác" vẫn không hiện trên thanh công cụ');
-        }
-        await hideVolatileChrome(page);
-        await highlight(undo);
-        await page.waitForTimeout(200);
-        return contentShot(page, page.locator('main').first(), { maxHeight: TOOLBAR_HEIGHT });
       },
     },
     {
@@ -259,6 +168,61 @@ export default {
         const card = await enclosingSection(page, page.getByText('Custom Domain', { exact: true }).first());
         await page.waitForTimeout(200);
         return contentShot(page, card);
+      },
+    },
+    // ── Trình soạn landing-canvas (thay màn cũ từ 07–14/09/2026). Ba ô dưới đây là của bài viết bản 21/09;
+    //    các shot phía trên nhắm vào nút của màn cũ nên sẽ báo lỗi bộ chọn — ảnh của chúng đã chèn từ trước.
+    {
+      name: 'ba-lua-chon-trinh-soan-trong',
+      caption: 'trình soạn trang còn trống, khoanh đỏ ba lựa chọn Dán HTML có sẵn / Nhờ AI tạo / Chọn mẫu',
+      async take(page) {
+        await page.goto('/app/settings/landing-pages/new');
+        const first = page.getByRole('button', { name: 'Dán HTML có sẵn', exact: true }).first();
+        await first.waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
+        for (const name of ['Dán HTML có sẵn', 'Nhờ AI tạo', 'Chọn mẫu']) {
+          await highlight(page.getByRole('button', { name, exact: true }).first());
+        }
+        await page.waitForTimeout(200);
+        return contentShot(page, page.locator('main').first(), { maxHeight: 640 });
+      },
+    },
+    {
+      name: 'thanh-cong-cu-trinh-soan',
+      caption: 'thanh công cụ của trình soạn, khoanh đỏ các nút Nhập HTML, Template, Trình chỉnh sửa khối, Lịch sử, Cài đặt, Lưu',
+      localOnly: true,
+      async take(page) {
+        // Mở một trang ĐÃ LƯU: nút "Lịch sử" chỉ có khi trang đã có phiên bản.
+        await page.goto(LANDING_PATH);
+        const row = page.locator('tbody tr').filter({ hasText: 'Khoá học Marketing' }).first();
+        await row.waitFor({ state: 'visible', timeout: 30_000 });
+        await row.locator('button[title="Sửa"]').first().click();
+        const save = page.getByRole('button', { name: 'Lưu', exact: true }).first();
+        await save.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(1500);
+        await settle(page);
+        await hideVolatileChrome(page);
+
+        const marks = [
+          page.locator('main button[title="Nhập HTML"]').first(),
+          page.locator('main button[title="Template"]').first(),
+          page.locator('main button[title="Trình chỉnh sửa khối"]').first(),
+          page.locator('main button[title="Lịch sử"], main button[title*="Lịch sử"]').first(),
+          page.locator('main').getByRole('button', { name: 'Cài đặt', exact: true }).first(),
+          save,
+        ];
+        const missing = [];
+        for (const [i, mark] of marks.entries()) {
+          // Viền vẽ VÀO TRONG nút: thanh công cụ cắt phần tràn nên outline thường bị xén trên dưới.
+          if (await mark.isVisible().catch(() => false)) await highlightCell(mark);
+          else missing.push(['Nhập HTML', 'Template', 'Trình chỉnh sửa khối', 'Lịch sử', 'Cài đặt', 'Lưu'][i]);
+        }
+        if (missing.length) throw new Error(`Thanh công cụ thiếu nút: ${missing.join(', ')}`);
+        await page.waitForTimeout(200);
+        // Chỉ chụp đúng hàng thanh công cụ (khối gần nhất chứa cả nút đầu lẫn nút Lưu).
+        const bar = save.locator('xpath=ancestor::div[.//button[@title="Quay lại danh sách"]][1]');
+        return paddedShot(page, bar, { pad: 8 });
       },
     },
   ],
