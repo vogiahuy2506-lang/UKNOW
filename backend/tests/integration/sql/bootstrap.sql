@@ -3504,3 +3504,25 @@ CREATE INDEX IF NOT EXISTS idx_notification_templates_type_active
 CREATE INDEX IF NOT EXISTS idx_notification_templates_due
   ON notification_templates(schedule_type, scheduled_at)
   WHERE schedule_type IN ('scheduled','recurring') AND is_active = TRUE;
+
+-- --- Migration 230: system_payment_accounts (cấu hình TK nhận thanh toán) ---
+CREATE TABLE IF NOT EXISTS system_payment_accounts (
+  id SERIAL PRIMARY KEY,
+  is_active BOOLEAN NOT NULL DEFAULT true,
+  account_name TEXT NOT NULL,
+  account_number TEXT NOT NULL,
+  bank_bin TEXT NOT NULL,
+  bank_name TEXT NOT NULL,
+  is_default BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_bank_bin_format CHECK (bank_bin ~ '^[0-9]{6}$'),
+  CONSTRAINT chk_account_number_format CHECK (account_number ~ '^[0-9]{6,19}$')
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_system_payment_accounts_default
+  ON system_payment_accounts (is_default)
+  WHERE is_default = true;
+
+CREATE INDEX IF NOT EXISTS idx_system_payment_accounts_active
+  ON system_payment_accounts (is_active, is_default DESC);
