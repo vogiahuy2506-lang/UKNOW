@@ -4153,6 +4153,9 @@ export default {
     missingLandingSourceOrInstruction: 'Missing landing page source or edit instructions.',
     landingUpdateSuccess: 'Landing page updated successfully!',
     landingEditReferenceImages: '({count} attached image(s) used as reference, not inserted into page)',
+    layoutAutoFixed: 'Layout adjusted: {summary}',
+    layoutAutoFixedPlain: 'I adjusted the page layout so text is no longer covered or cut off.',
+    editedSummary: 'Updated: {summary}',
     // Quick actions
     quickActions: 'Quick actions',
     createCampaign: 'Create Campaign',
@@ -6748,6 +6751,18 @@ export default {
     editing: 'Editing...',
     cancelEdit: 'Cancel',
     updateSuccess: 'Landing page updated successfully!',
+    // Layout self-check loop (landing self-check plan, PR-3) — plain language, NO class/pixel/CSS.
+    layoutChecking: 'Checking the layout…',
+    layoutOk: 'Layout checked ✓',
+    layoutStillCovered: '{count} spot(s) still have text covered in the "{section}" section.',
+    layoutStillCoveredPlain: '{count} spot(s) still have text covered.',
+    layoutStillClipped: '{count} spot(s) still have text cut off.',
+    layoutStillOffscreen: '{count} spot(s) still have text running off the screen.',
+    relayoutSection: 'Rework this section · uses 1 AI turn',
+    relayoutInstruction: 'Rebuild only the "{section}" section with a simple grid layout so text is not covered or cut off, keeping all text and the rest of the page as is.',
+    relayoutInstructionPlain: 'Rebuild the section with the display problem using a simple grid layout so text is not covered or cut off, keeping all text and the rest of the page as is.',
+    undo: 'Undo',
+    undone: 'Restored the previous version',
     save: {
       button: 'Save & publish',
       title: 'Title',

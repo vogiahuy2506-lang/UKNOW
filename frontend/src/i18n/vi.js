@@ -4164,6 +4164,9 @@ export default {
     missingLandingSourceOrInstruction: 'Thiếu mã nguồn trang hoặc yêu cầu chỉnh sửa.',
     landingUpdateSuccess: 'Đã cập nhật landing page theo yêu cầu!',
     landingEditReferenceImages: '({count} ảnh đính kèm được dùng làm tài liệu tham khảo, không chèn vào trang)',
+    layoutAutoFixed: 'Đã chỉnh hiển thị: {summary}',
+    layoutAutoFixedPlain: 'Mình đã chỉnh lại phần hiển thị của trang để chữ không bị che hay cắt.',
+    editedSummary: 'Đã sửa: {summary}',
     // Quick actions
     quickActions: 'Thao tác nhanh',
     createCampaign: 'Tạo Campaign',
@@ -6752,6 +6755,18 @@ export default {
     editing: 'Đang sửa...',
     cancelEdit: 'Hủy',
     updateSuccess: 'Đã cập nhật landing page theo yêu cầu!',
+    // Vòng tự kiểm hiển thị (plan landing tự kiểm, PR-3) — câu tiếng người, KHÔNG class/pixel/CSS.
+    layoutChecking: 'Đang kiểm tra hiển thị…',
+    layoutOk: 'Đã kiểm tra hiển thị ✓',
+    layoutStillCovered: 'Còn {count} chỗ chữ bị che ở phần "{section}".',
+    layoutStillCoveredPlain: 'Còn {count} chỗ chữ bị che.',
+    layoutStillClipped: 'Còn {count} chỗ chữ bị cắt.',
+    layoutStillOffscreen: 'Còn {count} chỗ chữ tràn ra ngoài màn hình.',
+    relayoutSection: 'Trình bày lại phần này · dùng 1 lượt AI',
+    relayoutInstruction: 'Dựng lại riêng phần "{section}" bằng bố cục lưới đơn giản để chữ không bị che hay cắt, giữ nguyên toàn bộ chữ và các phần khác.',
+    relayoutInstructionPlain: 'Dựng lại phần đang bị lỗi hiển thị bằng bố cục lưới đơn giản để chữ không bị che hay cắt, giữ nguyên toàn bộ chữ và các phần khác.',
+    undo: 'Hoàn tác',
+    undone: 'Đã quay lại bản trước',
     save: {
       button: 'Lưu & xuất bản',
       title: 'Tiêu đề',

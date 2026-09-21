@@ -8,6 +8,12 @@ import api from '../../../services/api';
 vi.mock('../../../services/aiApi');
 vi.mock('../../../services/api');
 vi.mock('../../../hooks/useIsMobile', () => ({ default: () => false }));
+// Sửa landing có tệp đính kèm → AiChatbot đo hiển thị TRƯỚC khi gửi (plan landing tự kiểm, PR-3).
+// jsdom không có layout nên iframe đo không bao giờ trả lời (phải đợi hết trần thời gian) — mock bộ đo.
+vi.mock('../utils/layoutAudit.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  runLayoutAudit: vi.fn().mockResolvedValue({ findings: [], timedOut: false, errors: [] }),
+}));
 vi.mock('../../../i18n', () => ({
   useI18n: (namespace = null) => {
     const t = (key) => (namespace ? `${namespace}.${key}` : key);

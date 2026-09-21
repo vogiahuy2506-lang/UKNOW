@@ -152,6 +152,20 @@ const aiApi = {
     return response.data;
   },
 
+  /**
+   * Hoàn tác lượt sửa AI gần nhất của thẻ landing: SERVER tự hoán html ↔ previousHtml, title ↔
+   * previousTitle — client không đưa html nào lên. Trả { title, html, canRevert }. 409
+   * NOTHING_TO_REVERT khi chưa có bản trước (plan landing tự kiểm, mục 10.4/12.1).
+   * @param {number} sessionId
+   * @param {number|null} [messageId] null → tin landing_page mới nhất của phiên
+   */
+  revertLandingMessage: async (sessionId, messageId = null) => {
+    const payload = { data: { revert: true } };
+    if (messageId) payload.messageId = messageId;
+    const response = await api.patch(`/ai/sessions/${sessionId}/landing-message`, payload);
+    return response.data;
+  },
+
   getSessions: async () => {
     const response = await api.get('/ai/sessions');
     return response.data;
@@ -220,9 +234,13 @@ const aiApi = {
 
   /**
    * Chỉnh sửa landing page HTML bằng AI (Tailwind + giữ nguyên cấu trúc/số liệu).
-   * @param {{ instruction: string, currentHtml: string, locale?: string, sessionId?: string|null, messageId?: string|null, files?: Array }} params
+   *
+   * `autoLayoutFix: true` + `layoutFindings` = lượt SỬA TỰ ĐỘNG do bộ đo hiển thị (không trừ credit):
+   * server bỏ qua `instruction`, tự viết lệnh từ findings, và BẮT BUỘC có `sessionId`. Hai trường
+   * này chỉ được gửi khi có — lượt sửa thường không mang chúng.
+   * @param {{ instruction?: string, currentHtml: string, locale?: string, sessionId?: string|null, messageId?: string|null, files?: Array, autoLayoutFix?: boolean, layoutFindings?: Array }} params
    */
-  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi', sessionId = null, messageId = null, files = [] }) => {
+  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi', sessionId = null, messageId = null, files = [], autoLayoutFix = false, layoutFindings = null }) => {
     const formattedFiles = formatLandingFiles(files);
     const payload = {
       instruction,
@@ -231,6 +249,7 @@ const aiApi = {
       sessionId,
       messageId,
       ...(formattedFiles ? { files: formattedFiles } : {}),
+      ...(autoLayoutFix === true ? { autoLayoutFix: true, layoutFindings: Array.isArray(layoutFindings) ? layoutFindings : [] } : {}),
     };
     const response = await api.post('/ai/edit-landing-html', payload, {
       timeout: 120000

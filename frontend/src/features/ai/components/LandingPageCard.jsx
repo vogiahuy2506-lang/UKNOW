@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import {
@@ -6,11 +6,13 @@ import {
   HiOutlineDeviceMobile, HiOutlineDesktopComputer, HiOutlineCode,
   HiOutlineEye, HiOutlineDownload, HiOutlineClipboard, HiOutlineX,
   HiOutlineCheck, HiOutlineGlobeAlt, HiOutlineRefresh,
+  HiOutlineReply, HiOutlineExclamation,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { getPublicUrlFromSlug } from '../../landing-canvas/utils/buildCanvasSrcDoc.js';
 import { slugifyLandingTitle } from '../utils/landingPaste.js';
-import { buildFullLandingHtml } from '../utils/layoutAudit.js';
+import { buildFullLandingHtml, describeFindingsForUser } from '../utils/layoutAudit.js';
+import { pickSectionTitle } from '../utils/landingLayoutFlow.js';
 import { injectFormSlotPreviewHint } from '../../landing-pages/utils/injectLandingEnhancements.js';
 
 /**
@@ -23,6 +25,7 @@ const LandingPageCard = ({
   onSaveAndPublish,
   onGenerateNew,
   onEditWithAi,
+  onRevert,
   isEditing = false,
   messageIndex,
 }) => {
@@ -49,6 +52,25 @@ const LandingPageCard = ({
 
   const isSaved = Boolean(page.landingPageId);
   const publicUrl = isSaved && page.slug ? getPublicUrlFromSlug(page.slug) : '';
+
+  // Vòng tự kiểm hiển thị (plan landing tự kiểm, PR-3). `layoutStatus` do AiChatbot ghi vào data thẻ:
+  // checking | clean | fixed | still_broken | unknown. `unknown` (chưa kiểm được) và chưa có trạng
+  // thái thì KHÔNG hiện gì. Người dùng chỉ thấy câu tiếng người — số đo nằm ở kênh máy ↔ AI.
+  const layoutStatus = page.layoutStatus || null;
+  const layoutFindings = Array.isArray(page.layoutFindings) ? page.layoutFindings : [];
+  const stillBroken = layoutStatus === 'still_broken' && layoutFindings.length > 0;
+  const okStatus = layoutStatus === 'clean' || layoutStatus === 'fixed';
+  const [okStripHidden, setOkStripHidden] = useState(false);
+  const [isReverting, setIsReverting] = useState(false);
+  useEffect(() => {
+    setOkStripHidden(false);
+    if (!okStatus) return undefined;
+    const timer = setTimeout(() => setOkStripHidden(true), 4000);
+    return () => clearTimeout(timer);
+  }, [okStatus, page.html]);
+  // Server báo canRevert sau mỗi lượt sửa; thẻ tải lại từ phiên không có cờ đó nhưng mang previousHtml.
+  const canRevert = page.canRevert === true
+    || (page.canRevert !== false && typeof page.previousHtml === 'string' && page.previousHtml.trim() !== '');
 
   const fullHtml = buildFullLandingHtml(page);
 
@@ -111,6 +133,30 @@ const LandingPageCard = ({
       }
     } finally {
       setIsSubmittingLocal(false);
+    }
+  };
+
+  // "Trình bày lại phần này": đường sửa THƯỜNG (người dùng chủ động, có trừ 1 credit — nói rõ trên
+  // nút). Lệnh viết bằng lời thường vì nó hiện lại trong tin xác nhận; luật bố cục an toàn do server dặn AI.
+  const handleRelayout = async () => {
+    if (!onEditWithAi || isEditing || isSubmittingLocal) return;
+    const section = pickSectionTitle(layoutFindings);
+    const instruction = section ? t('relayoutInstruction', { section }) : t('relayoutInstructionPlain');
+    setIsSubmittingLocal(true);
+    try {
+      await onEditWithAi(page, instruction, messageIndex, { messageId, skipLayoutAudit: true });
+    } finally {
+      setIsSubmittingLocal(false);
+    }
+  };
+
+  const handleRevert = async () => {
+    if (!onRevert || isReverting || isEditing || isSubmittingLocal) return;
+    setIsReverting(true);
+    try {
+      await onRevert(page, messageIndex, { messageId });
+    } finally {
+      setIsReverting(false);
     }
   };
 
@@ -490,6 +536,51 @@ const LandingPageCard = ({
                 </button>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Trạng thái kiểm tra hiển thị + Hoàn tác — dải nhỏ phía trên hàng nút */}
+        {(layoutStatus === 'checking' || (okStatus && !okStripHidden) || stillBroken || canRevert) && (
+          <div className="mt-3 space-y-2" data-testid="landing-layout-strip">
+            {layoutStatus === 'checking' && (
+              <div role="status" className="flex items-center gap-2 text-[11px] text-slate-500">
+                <span className="w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+                {t('layoutChecking')}
+              </div>
+            )}
+            {okStatus && !okStripHidden && (
+              <div role="status" className="text-[11px] font-semibold text-emerald-700">
+                {t('layoutOk')}
+              </div>
+            )}
+            {stillBroken && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
+                <p className="flex items-start gap-1.5 text-xs text-amber-900">
+                  <HiOutlineExclamation className="w-4 h-4 flex-shrink-0 text-amber-600" />
+                  <span>{describeFindingsForUser(layoutFindings, t)}</span>
+                </p>
+                <button
+                  type="button"
+                  onClick={handleRelayout}
+                  disabled={isBusy}
+                  className="w-full py-2 bg-white border border-amber-300 text-amber-800 text-[11px] font-bold rounded-lg hover:bg-amber-100 transition disabled:opacity-50 flex items-center justify-center gap-1.5"
+                >
+                  <HiOutlineRefresh className="w-3.5 h-3.5" />
+                  {t('relayoutSection')}
+                </button>
+              </div>
+            )}
+            {canRevert && (
+              <button
+                type="button"
+                onClick={handleRevert}
+                disabled={isBusy || isReverting}
+                className="flex items-center gap-1 text-[11px] font-semibold text-slate-500 hover:text-slate-800 transition disabled:opacity-50"
+              >
+                <HiOutlineReply className="w-3.5 h-3.5" />
+                {t('undo')}
+              </button>
+            )}
           </div>
         )}
 

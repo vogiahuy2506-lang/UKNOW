@@ -53,6 +53,16 @@ import {
   isRecentLandingPageContext,
 } from './utils/landingEditContext.js';
 import { extractQuickSendDraftAttachments } from './utils/quickSendHandoff.js';
+import { useLandingLayoutAutoFix } from './hooks/useLandingLayoutAutoFix.js';
+import { buildFullLandingHtml, runLayoutAudit } from './utils/layoutAudit.js';
+import {
+  looksLikeLayoutComplaint,
+  appendFindingsToInstruction,
+  applyLayoutResultToMessages,
+  setLayoutStatusOnMessages,
+  patchLandingMessageData,
+  layoutCardKey,
+} from './utils/landingLayoutFlow.js';
 import {
   normalizeChannel,
   parseWizardMarker,
@@ -404,6 +414,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const tabsDragRef = useRef({ dragging: false, startX: 0, scrollLeft: 0, moved: false });
   const currentSessionIdRef = useRef(null);
   const sessionMessagesCache = useRef(new Map()); // sessionId → messages[] (for background generation)
+  const { runAutoFix } = useLandingLayoutAutoFix();
+  const layoutRunSeqRef = useRef(0);
+  const layoutRunByCardRef = useRef(new Map()); // layoutCardKey → token của lượt kiểm MỚI NHẤT (lượt cũ bị thay thế thì bỏ kết quả)
   const campaignConfirmationRequestRef = useRef(0);
   const directRecipientsRef = useRef(null);
   const sessionWizardStateCache = useRef(new Map()); // sessionId → wizard_state từ server (restore khi tab-switch)
@@ -501,6 +514,59 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setMessages(updater); // new session (no ID yet): use normal update
       }
     };
+  };
+
+  // Ghi vào tin của một phiên cho lượt chạy NỀN — vòng tự kiểm hiển thị chạy SAU khi handler sinh/sửa
+  // đã trả về nên không dùng được snapshot của makeUpdater (đã cũ). Phiên đang mở: setMessages dạng
+  // hàm (luôn thấy state mới nhất) và giữ cache khớp; phiên khác: sửa bản cache nếu có (không có thì
+  // thôi — mở lại phiên sẽ đọc từ server, nơi lượt tự sửa đã lưu html mới).
+  const updateSessionMessages = (sessionId, updater) => {
+    if (!sessionId || currentSessionIdRef.current === sessionId) {
+      setMessages((prev) => {
+        const next = updater(prev);
+        if (sessionId && next !== prev) sessionMessagesCache.current.set(sessionId, next);
+        return next;
+      });
+      return;
+    }
+    const cached = sessionMessagesCache.current.get(sessionId);
+    if (cached) sessionMessagesCache.current.set(sessionId, updater(cached));
+  };
+
+  // Vòng tự kiểm → tự sửa hiển thị (plan landing tự kiểm, PR-3). KHÔNG await ở chỗ gọi: thẻ hiện
+  // ngay với dải "Đang kiểm tra hiển thị…", kết quả ghi vào thẻ khi xong. Chưa kiểm được → im lặng.
+  const cancelLandingLayoutRun = (sessionId, messageId) => {
+    layoutRunByCardRef.current.set(layoutCardKey(sessionId, messageId), ++layoutRunSeqRef.current);
+  };
+
+  const runLandingLayoutCheck = ({ sessionId, messageId = null, page }) => {
+    const baseHtml = page?.html;
+    if (typeof baseHtml !== 'string' || !baseHtml.trim()) return Promise.resolve();
+
+    const cardKey = layoutCardKey(sessionId, messageId);
+    const token = ++layoutRunSeqRef.current;
+    layoutRunByCardRef.current.set(cardKey, token);
+    const isCurrent = () => layoutRunByCardRef.current.get(cardKey) === token;
+    const finish = (result) => {
+      const ackContent = result.changeSummary
+        ? t('aiChatbot.layoutAutoFixed', { summary: result.changeSummary })
+        : t('aiChatbot.layoutAutoFixedPlain');
+      updateSessionMessages(sessionId, (prev) => applyLayoutResultToMessages(prev, {
+        messageId, baseHtml, result, ackContent,
+      }));
+    };
+
+    updateSessionMessages(sessionId, (prev) => setLayoutStatusOnMessages(prev, {
+      messageId, html: baseHtml, status: 'checking',
+    }));
+    return runAutoFix({ page, sessionId, messageId, locale, isCancelled: () => !isCurrent() })
+      .then((result) => {
+        if (isCurrent()) finish(result);
+      })
+      .catch(() => {
+        // Không bao giờ để thẻ kẹt ở "Đang kiểm tra…"
+        if (isCurrent()) finish({ status: 'unknown', page, findings: [] });
+      });
   };
 
   // Every confirm_create path flows through this one read-only preview request.
@@ -670,7 +736,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           if (m.type === 'template_draft' && data) {
             data = enrichTemplateDraftFromDb(data, serverWizardState?.plan?.savedTemplates);
           }
-          return { role: m.role, content: m.content, type: m.type, data };
+          // Giữ `id` tin: thẻ landing cần nó làm messageId (sửa đúng thẻ, server đếm trần lượt tự
+          // sửa theo tin). getSessionMessages đã trả id nhưng mapper này từng vứt đi.
+          return { role: m.role, content: m.content, type: m.type, data, ...(m.id != null ? { id: m.id } : {}) };
         }
         // Ẩn cả marker [wizard] LẪN prompt máy sinh. Cờ `silentUser` lúc gửi chỉ nằm
         // trong state trình duyệt, không được lưu xuống DB — nên dựng lại phải tự nhận
@@ -2810,15 +2878,23 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       );
       if (response.success) {
         refreshAiCredits();
-        const { title, html, css, leadFormDraft, leadFormConfig } = response.data;
+        const { title, html, css, leadFormDraft, leadFormConfig, messageId: newMessageId = null } = response.data;
         update(prev => [...prev, {
           role: 'assistant',
           content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
           type: 'landing_page',
-          data: { title, html, css, ...(leadFormDraft ? { leadFormDraft, leadFormConfig } : {}) },
+          // id tin đã lưu ở server (data.messageId): vòng tự sửa cần nó để server đếm trần lượt theo tin.
+          ...(newMessageId ? { id: newMessageId } : {}),
+          data: {
+            title, html, css,
+            ...(leadFormDraft ? { leadFormDraft, leadFormConfig } : {}),
+            layoutStatus: 'checking',
+          },
         }]);
         setPendingLandingPrompt(null);
         setPendingLandingData(null);
+        // Không await: thẻ hiện ngay, đo + tự sửa chạy nền rồi ghi kết quả vào thẻ.
+        runLandingLayoutCheck({ sessionId: mySessionId, messageId: newMessageId, page: { title, html, css } });
       }
     } catch (err) {
       update(prev => [...prev, {
@@ -3046,7 +3122,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   const handleEditLandingPageWithAi = async (pageData, instruction, messageIndex = null, options = {}) => {
-    const { historyBase = null, messageId = null, files = [], sessionId: sessionIdOverride = null } = options;
+    const {
+      historyBase = null, messageId = null, files = [], sessionId: sessionIdOverride = null,
+      // Lệnh "Trình bày lại" do máy tạo — đã tự nhắm đúng phần lỗi, không đo/nối findings lần nữa.
+      skipLayoutAudit = false,
+    } = options;
     const rawHtml = pageData?.html;
     const trimmedInstr = String(instruction || '').trim();
     if (!rawHtml || !trimmedInstr) {
@@ -3071,9 +3151,35 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setEditingLandingPageIndex(targetIndex);
     setIsTyping(true);
 
+    // Người dùng chủ động sửa → lượt tự kiểm đang chạy nền cho thẻ này bị thay thế (kết quả của nó bị
+    // bỏ, không gọi thêm request; api.js cũng huỷ request trùng URL nên không để hai lượt sửa đè nhau)
+    // và dải "Đang kiểm tra…" tắt đi — nếu lượt sửa này lỗi thì thẻ không kẹt ở trạng thái đó.
+    cancelLandingLayoutRun(mySessionId, targetMessageId);
+    updateSessionMessages(mySessionId, (prev) => setLayoutStatusOnMessages(prev, {
+      messageId: targetMessageId, html: rawHtml, status: 'unknown',
+    }));
+
     try {
+      // Người dùng than lỗi hiển thị ("bị đè", "mất chữ"…) hoặc gửi kèm ảnh chụp → ĐO trước, nối kết
+      // quả đo vào instruction gửi lên để AI biết đúng chỗ (sự cố 20/09: AI không đo được nên đoán rồi
+      // tự báo "đã sửa"). Tin hiển thị/xác nhận vẫn là câu người dùng gõ. Chưa đo được / không có lỗi
+      // → gửi như cũ. Còn lộ: server lưu instruction này làm tin người dùng nên tải lại phiên sẽ
+      // thấy phần đo — cần backend nhận findings ở đường sửa thường mới bịt được.
+      let instructionForAi = trimmedInstr;
+      if (!skipLayoutAudit && (looksLikeLayoutComplaint(trimmedInstr) || (Array.isArray(files) && files.length > 0))) {
+        try {
+          // Bước này CHẶN lượt sửa nên hạ trần còn 4 giây (mặc định 6): kẹt mạng thì gửi như cũ.
+          const audit = await runLayoutAudit(buildFullLandingHtml(pageData), { timeoutMs: 4000 });
+          if (!audit.timedOut && audit.errors.length === 0 && audit.findings.length > 0) {
+            instructionForAi = appendFindingsToInstruction(trimmedInstr, audit.findings);
+          }
+        } catch {
+          // gửi như cũ
+        }
+      }
+
       const response = await aiApi.editLandingHtml({
-        instruction: trimmedInstr,
+        instruction: instructionForAi,
         currentHtml: rawHtml,
         locale,
         sessionId: mySessionId,
@@ -3083,11 +3189,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       if (response?.success && response?.data) {
         refreshAiCredits();
-        const { title, html } = response.data;
+        const { title, html, changeSummary } = response.data;
         const updatedPage = {
           ...pageData,
           title: title || pageData.title,
           html,
+          // Server báo có bản trước để Hoàn tác; và trang mới sắp được đo lại (dải "Đang kiểm tra…").
+          ...(response.data.canRevert != null ? { canRevert: Boolean(response.data.canRevert) } : {}),
+          layoutStatus: 'checking',
+          layoutFindings: [],
         };
 
         // Lọc theo mã máy `kind` do backend gắn (ai.controller editLandingHtml), không so chuỗi tiếng Việt.
@@ -3095,9 +3205,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           ? response.data.skippedAttachments.filter((item) => item?.kind === 'reference_image').length
           : 0;
 
-        let confirmMsg = locale === 'en'
-          ? `I have updated the landing page "${title || pageData.title}" according to your request: "${trimmedInstr}". Check the preview above!`
-          : `Mình đã cập nhật landing page "${title || pageData.title}" theo yêu cầu: "${trimmedInstr}". Bạn xem lại giao diện bên trên nhé!`;
+        // AI trả câu tiếng người (changeSummary) thì dùng nó; không có thì giữ câu cũ.
+        const editedSummary = String(changeSummary || '').trim();
+        let confirmMsg = editedSummary
+          ? t('aiChatbot.editedSummary', { summary: editedSummary })
+          : (locale === 'en'
+            ? `I have updated the landing page "${title || pageData.title}" according to your request: "${trimmedInstr}". Check the preview above!`
+            : `Mình đã cập nhật landing page "${title || pageData.title}" theo yêu cầu: "${trimmedInstr}". Bạn xem lại giao diện bên trên nhé!`);
 
         if (refSkippedCount > 0) {
           confirmMsg += ` ${t('aiChatbot.landingEditReferenceImages', { count: refSkippedCount })}`;
@@ -3124,6 +3238,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         });
 
         toast.success(t('aiChatbot.landingUpdateSuccess'));
+        // Trang mới → đo lại + tự sửa nếu lỗi (server đã đặt lại bộ đếm sau lượt sửa trả phí). Không await.
+        runLandingLayoutCheck({ sessionId: mySessionId, messageId: targetMessageId, page: updatedPage });
         return true;
       } else {
         throw new Error(response?.message || 'Không nhận được kết quả chỉnh sửa từ AI');
@@ -3132,6 +3248,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       console.error('Error editing landing page with AI:', err);
       const errMsg = getAiRequestErrorMessage(err);
       toast.error(errMsg, { duration: 5000 });
+      // Lượt sửa lỗi thì trả lại câu "còn lỗi hiển thị + nút Trình bày lại" đã bị tắt lúc bắt đầu sửa,
+      // để người dùng thử lại được (chỉ trạng thái đã ĐO THẬT; 'checking' thì không khôi phục — sẽ kẹt).
+      if (pageData?.layoutStatus === 'still_broken') {
+        updateSessionMessages(mySessionId, (prev) => patchLandingMessageData(prev, {
+          messageId: targetMessageId, index: targetIndex, html: rawHtml,
+        }, { layoutStatus: 'still_broken', layoutFindings: pageData.layoutFindings || [] }));
+      }
       update((prev) => [...prev, {
         role: 'assistant',
         content: `⚠️ Có lỗi khi chỉnh sửa landing page: ${errMsg}`,
@@ -3142,6 +3265,45 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       setIsTyping(false);
       setEditingLandingPageIndex(null);
       if (mySessionId) clearTabPending(mySessionId);
+    }
+  };
+
+  // Nút "Hoàn tác" trên thẻ landing: SERVER hoán html ↔ previousHtml (client không đưa html nào lên).
+  // 409 NOTHING_TO_REVERT → ẩn nút, im lặng. Lỗi khác (mạng…) mới báo vì đây là việc người dùng bấm.
+  const handleRevertLandingPage = async (pageData, messageIndex = null, options = {}) => {
+    const sessionId = currentSessionIdRef.current ?? currentSessionId;
+    if (!sessionId) return false;
+    const targetIndex = messageIndex != null ? messageIndex : getLastLandingPageMessageIndex(messages);
+    const targetMessageId = options.messageId
+      || (targetIndex != null && targetIndex >= 0 ? messages[targetIndex]?.id : null)
+      || null;
+    const locate = { messageId: targetMessageId, index: targetIndex, html: pageData?.html };
+    // Bản trước sắp thay bản này: lượt tự kiểm đang chạy (nếu có) không được ghi đè lên sau đó.
+    cancelLandingLayoutRun(sessionId, targetMessageId);
+    try {
+      const res = await aiApi.revertLandingMessage(sessionId, targetMessageId);
+      if (!res?.success || typeof res.data?.html !== 'string') {
+        throw new Error(res?.message || 'Không hoàn tác được');
+      }
+      updateSessionMessages(sessionId, (prev) => patchLandingMessageData(prev, locate, {
+        title: res.data.title || pageData?.title,
+        html: res.data.html,
+        // Ẩn nút sau khi quay về bản trước (không có "làm lại"), và KHÔNG đo/tự sửa lại: người dùng vừa
+        // chủ ý bỏ bản đã sửa, tự sửa lần nữa là làm ngược ý họ.
+        canRevert: false,
+        previousHtml: '',
+        layoutStatus: null,
+        layoutFindings: [],
+      }));
+      toast.success(t('landingPageCard.undone'));
+      return true;
+    } catch (err) {
+      if (err?.response?.status === 409) {
+        updateSessionMessages(sessionId, (prev) => patchLandingMessageData(prev, locate, { canRevert: false, previousHtml: '' }));
+        return false;
+      }
+      toast.error(getAiRequestErrorMessage(err), { duration: 5000 });
+      return false;
     }
   };
 
@@ -3925,6 +4087,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onSaveAndPublish={handleSaveAndPublishLandingPage}
                   onGenerateNew={handleGenerateNewLandingPage}
                   onEditWithAi={handleEditLandingPageWithAi}
+                  onRevert={handleRevertLandingPage}
                   isEditing={editingLandingPageIndex === idx}
                 />
               )}
