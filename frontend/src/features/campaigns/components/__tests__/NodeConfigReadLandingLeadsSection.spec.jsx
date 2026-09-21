@@ -72,7 +72,8 @@ describe('NodeConfigReadLandingLeadsSection (PR-2)', () => {
 
     await waitFor(() => {
       expect(campaignBuilderApiService.previewLandingLeads).toHaveBeenCalled();
-      expect(screen.getByText(/3 lead bị bỏ qua vì chưa đồng ý/)).toBeInTheDocument();
+      // Chuỗi đổi ở 871b85eb: node chỉ loại người ĐÃ TỪ CHỐI, nhóm "chưa hỏi" vẫn gửi.
+      expect(screen.getByText(/3 lead bị bỏ qua vì đã từ chối nhận tin/)).toBeInTheDocument();
     });
   });
 
