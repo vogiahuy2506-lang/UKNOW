@@ -44,6 +44,15 @@ Seed bài hướng dẫn là **upsert theo slug**
 ([`helpSeed.service.js`](../backend/src/services/help/helpSeed.service.js)) — bài đã có
 thì ghi đè, không nhân đôi, và ảnh/video gắn tay vào bài vẫn còn.
 
+> **Seed GHI ĐÈ `body_html` của bài đã có** — ảnh chèn thẳng vào thân bài (script
+> `insertHelpScreenshots.js`) sẽ bị thay lại bằng chú thích `[ẢNH: …]` và không khôi phục
+> được (sự cố 22/08/2026; đo 21/09/2026 production có ~130 ảnh ở 20 bài tiếng Việt). Trên
+> production **đừng bấm seed để thêm bài mới**:
+>
+> - Thêm bài mới: `node backend/scripts/addMissingHelpArticles.js` — chỉ tạo slug còn thiếu,
+>   không đụng bài đã có; bài tạo xong được server tự tính vector.
+> - Sửa chữ trong bài đang chạy: `backend/scripts/patchHelpArticleText.js`.
+
 > **Nạp lại bài luôn phải kèm tính lại vector.** Không thế thì trang hướng dẫn hiện
 > nội dung mới còn trợ lý vẫn trả lời theo nội dung cũ — lỗi im lặng, rất khó nhận ra.
 

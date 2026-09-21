@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { I18nProvider } from '../../i18n';
 
@@ -8,6 +9,7 @@ import { I18nProvider } from '../../i18n';
 const listTelegramAccountsMock = vi.fn();
 const getPersonalAccountsHealthMock = vi.fn();
 const getTelegramAccountStatusMock = vi.fn();
+const initTelegramLoginMock = vi.fn();
 
 vi.mock('../../features/chatbot/services/chatbotApi.service', () => ({
   default: {
@@ -15,7 +17,7 @@ vi.mock('../../features/chatbot/services/chatbotApi.service', () => ({
     getPersonalAccountsHealth: (...args) => getPersonalAccountsHealthMock(...args),
     getTelegramAccountStatus: (...args) => getTelegramAccountStatusMock(...args),
     // Stubs for handlers we don't exercise here.
-    initTelegramLogin: vi.fn(),
+    initTelegramLogin: (...args) => initTelegramLoginMock(...args),
     checkTelegramLoginStatus: vi.fn(),
     cancelTelegramLogin: vi.fn(),
     deleteTelegramAccount: vi.fn(),
@@ -48,6 +50,7 @@ describe('TelegramSettings — defensive rendering', () => {
     listTelegramAccountsMock.mockReset();
     getPersonalAccountsHealthMock.mockReset();
     getTelegramAccountStatusMock.mockReset();
+    initTelegramLoginMock.mockReset();
     warnSpy.mockClear();
     errorSpy.mockClear();
   });
@@ -107,5 +110,35 @@ describe('TelegramSettings — defensive rendering', () => {
     await waitFor(() => {
       expect(screen.queryByText(/1 đang hoạt động/i)).toBeTruthy();
     });
+  });
+
+  // Hồi quy PR-3 (21/09/2026): api.js thôi khử trùng request có `signal` của người gọi, nên lượt
+  // init trước KHÔNG còn bị huỷ hộ nữa. Nút "Tạo QR mới" trong modal không khoá theo `connecting`,
+  // mà init mất 20–40s ở cold path → bấm lại là mở thêm một phiên Telegram ở server trong khi UI
+  // chỉ giữ sessionId về sau cùng. handleStartQrLogin phải tự huỷ lượt cũ.
+  it('bấm "Tạo QR mới" khi lượt init trước còn đang bay thì huỷ lượt cũ, không để hai phiên cùng mở', async () => {
+    listTelegramAccountsMock.mockResolvedValue({ data: { data: [] } });
+    getPersonalAccountsHealthMock.mockResolvedValue({
+      data: { data: { channels: { telegram: null }, allHealthy: false, canStartLogin: true } },
+    });
+
+    const signals = [];
+    initTelegramLoginMock.mockImplementation(({ signal }) => {
+      signals.push(signal);
+      return new Promise(() => {}); // treo mãi — mô phỏng cold path 20–40s
+    });
+
+    await renderTelegramSettings();
+
+    const user = userEvent.setup();
+    await user.click(await screen.findByRole('button', { name: /quét qr/i }));
+    await waitFor(() => expect(signals).toHaveLength(1));
+    expect(signals[0].aborted).toBe(false);
+
+    await user.click(await screen.findByRole('button', { name: /tạo qr mới/i }));
+    await waitFor(() => expect(signals).toHaveLength(2));
+
+    expect(signals[0].aborted).toBe(true);   // lượt cũ đã bị huỷ
+    expect(signals[1].aborted).toBe(false);  // lượt mới còn sống
   });
 });

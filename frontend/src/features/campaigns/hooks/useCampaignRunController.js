@@ -672,7 +672,8 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
       closeScheduleModal();
       fetchSchedules();
     } catch (error) {
-      toast.error(t('campaigns.createScheduleFailed'));
+      // Ưu tiên câu của server (vd 409 CAMPAIGN_NOT_ACTIVE nói đúng việc phải làm) — trước đây bị nuốt.
+      toast.error(error?.response?.data?.message || t('campaigns.createScheduleFailed'), { duration: 6000 });
     }
   };
 
@@ -748,7 +749,7 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
         });
       }
     } catch (error) {
-      toast.error(t('campaigns.updateScheduleFailed'));
+      toast.error(error?.response?.data?.message || t('campaigns.updateScheduleFailed'), { duration: 6000 });
     }
   };
 

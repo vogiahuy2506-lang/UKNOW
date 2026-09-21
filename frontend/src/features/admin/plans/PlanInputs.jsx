@@ -556,7 +556,7 @@ export const DurationInput = ({ value, onChange }) => {
       </div>
       {totalDays !== null && unit !== 'day' && (
         <span className="inline-flex rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-500">
-          {t('planInputs.durationEqualsNDays').replace('{n}', totalDays)}
+          {t('planInputs.durationEqualsNDays', { n: totalDays })}
         </span>
       )}
     </div>

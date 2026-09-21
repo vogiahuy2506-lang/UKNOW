@@ -468,6 +468,12 @@ export default function TelegramSettings() {
     setQrStatus('connecting');
     setConnecting(true);
     setQrModalOpen(true);
+    // Huỷ lượt init trước nếu nó còn đang bay. Nút "Tạo QR mới" trong modal KHÔNG khoá theo
+    // `connecting` (hai nút ngoài thì có, qua `canOpenQr`), mà init có thể mất 20–40s ở cold path —
+    // thừa thời gian để bấm lại. Trước PR-3, bộ khử trùng của api.js âm thầm huỷ hộ lượt cũ; từ khi
+    // api.js tôn trọng signal của người gọi thì không còn ai huỷ, nên mỗi lần bấm lại mở thêm một
+    // phiên Telegram ở server trong khi UI chỉ giữ `sessionId` về sau cùng.
+    connectAbortRef.current?.abort();
     const controller = new AbortController();
     connectAbortRef.current = controller;
     try {

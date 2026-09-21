@@ -54,9 +54,22 @@ export async function findOwnerPlanLimit(ownerId) {
 
 export async function findUserByEmail(email) {
   const result = await db.query(
-    `SELECT id, username, email, full_name AS "fullName", role, active_plan_id AS "activePlanId"
+    `SELECT id, username, email, full_name AS "fullName", role, status, active_plan_id AS "activePlanId"
      FROM users WHERE LOWER(email) = LOWER($1)`,
     [email]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * `users.username` là unique TOÀN HỆ THỐNG (không theo workspace) và phân biệt hoa/thường ở
+ * mức ràng buộc, nên so LOWER để "Abc" và "abc" cũng bị coi là trùng — người dùng đăng nhập
+ * không thể phân biệt hai tên đó.
+ */
+export async function findUserByUsername(username) {
+  const result = await db.query(
+    `SELECT id FROM users WHERE LOWER(username) = LOWER($1) LIMIT 1`,
+    [username]
   );
   return result.rows[0] || null;
 }
@@ -116,7 +129,7 @@ export async function linkExistingUserAsEmployee(ownerId, userId) {
     `INSERT INTO user_members (owner_id, employee_id)
      VALUES ($1, $2)
      ON CONFLICT (owner_id, employee_id) DO UPDATE SET status = 'active', updated_at = CURRENT_TIMESTAMP
-     RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt",
+     RETURNING employee_id AS "id", permissions, status AS "memberStatus", created_at AS "joinedAt",
                daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
                daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
     [ownerId, userId]

@@ -749,6 +749,10 @@ CREATE TABLE campaign_schedules (
 CREATE INDEX idx_campaign_schedules_campaign ON campaign_schedules(id_campaign);
 CREATE INDEX idx_campaign_schedules_workspace_owner ON campaign_schedules(workspace_owner_id);
 CREATE INDEX idx_campaign_schedules_created_by ON campaign_schedules(created_by) WHERE created_by IS NOT NULL;
+-- Migration 231: mỗi (chiến dịch, kiểu lịch, cron) chỉ một lịch ĐANG BẬT (lịch tắt trùng vẫn được).
+CREATE UNIQUE INDEX uq_campaign_schedules_enabled_dup
+  ON campaign_schedules (id_campaign, schedule_type, cron_expression)
+  WHERE enabled;
 
 -- ─── Zalo module (settings + templates) ────────────────────────────────
 -- Schema tối thiểu để CRUD zalo_settings (chỉ cột mà controller truy vấn)

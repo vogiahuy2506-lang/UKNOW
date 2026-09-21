@@ -1,6 +1,7 @@
 import { HiOutlineSearch, HiOutlineEye, HiOutlineTrash } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
+import { getScheduleCampaignNotActiveWarning } from '../utils/campaignRunSchedule.helpers';
 
 /**
  * Bảng hiển thị danh sách lịch chạy đã thiết lập của chiến dịch.
@@ -105,9 +106,9 @@ const CampaignSchedulesTable = ({
                     </td>
                     <td className="px-6 py-4">
                       <div className="text-sm text-gray-900">{schedule.campaignName}</div>
-                      {schedule.campaignStatus && schedule.campaignStatus !== 'active' && (
+                      {getScheduleCampaignNotActiveWarning(schedule, t) && (
                         <div className="text-xs text-amber-600 font-medium mt-0.5">
-                          {t('campaignRun.scheduleCampaignNotActiveWarning')}
+                          {getScheduleCampaignNotActiveWarning(schedule, t)}
                         </div>
                       )}
                     </td>

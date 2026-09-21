@@ -351,6 +351,81 @@ describe('POST /api/employees', () => {
       .send({ username: 'invalid name!', email: 'ok@test.local' });
     expect(res.status).toBe(400);
   });
+
+  // ---- PR-1 "thêm nhân viên phải có lối ra" (PLAN_NHAN_VIEN_KHONG_THAY_CHIEN_DICH mục 3) ----
+
+  it('email đã có tài khoản → 400 + EMAIL_ALREADY_REGISTERED, câu chỉ sang tab Link, không tạo user mới', async () => {
+    const { token } = await setupOwnerWithPlan();
+    await createUser({ username: 'taken', email: 'taken@test.local', role: 'user' });
+    const before = await db.query(`SELECT COUNT(*)::int AS n FROM users`);
+
+    const res = await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'newone', email: 'TAKEN@test.local' }); // khác hoa/thường vẫn là cùng email
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('EMAIL_ALREADY_REGISTERED');
+    expect(res.body.message).toContain('Link tài khoản có sẵn');
+    const after = await db.query(`SELECT COUNT(*)::int AS n FROM users`);
+    expect(after.rows[0].n).toBe(before.rows[0].n);
+  });
+
+  it('username đã có người dùng (khác hoa/thường) → 400 USERNAME_TAKEN, KHÔNG 500, không tạo user mới', async () => {
+    const { token } = await setupOwnerWithPlan();
+    await createUser({ username: 'CongTyABC', email: 'abc@test.local', role: 'user' });
+
+    const res = await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'congtyabc', email: 'fresh@test.local' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('USERNAME_TAKEN');
+    expect(res.body.message).toContain('tên công ty');
+    const created = await db.query(`SELECT 1 FROM users WHERE email = $1`, ['fresh@test.local']);
+    expect(created.rows).toHaveLength(0);
+  });
+
+  it('nhiều request đua nhau cùng username → đúng 1 thành công, còn lại 400 USERNAME_TAKEN, không có 500', async () => {
+    const { token } = await setupOwnerWithPlan({ maxEmployees: 10 });
+
+    const responses = await Promise.all(
+      [1, 2, 3, 4, 5].map((i) =>
+        request(app)
+          .post('/api/employees')
+          .set('Authorization', `Bearer ${token}`)
+          .send({ username: 'racer', email: `racer${i}@test.local` })
+      )
+    );
+
+    const statuses = responses.map((r) => r.status).sort();
+    expect(statuses.filter((s) => s === 500)).toHaveLength(0);
+    expect(statuses.filter((s) => s === 201)).toHaveLength(1);
+    for (const r of responses.filter((x) => x.status !== 201)) {
+      expect(r.status).toBe(400);
+      expect(r.body.code).toBe('USERNAME_TAKEN');
+    }
+    const rows = await db.query(`SELECT 1 FROM users WHERE username = 'racer'`);
+    expect(rows.rows).toHaveLength(1);
+  });
+
+  it('tên ràng buộc unique thật của DB khớp với ánh xạ 23505 của service (users_username_key / users_email_key)', async () => {
+    await createUser({ username: 'probe', email: 'probe@test.local', role: 'user' });
+    const violate = (username, email) =>
+      db.query(
+        `INSERT INTO users (username, email, password_hash, status, role) VALUES ($1, $2, 'x', 'active', 'user')`,
+        [username, email]
+      );
+
+    const byUsername = await violate('probe', 'other1@test.local').catch((e) => e);
+    expect(byUsername.code).toBe('23505');
+    expect(byUsername.constraint).toBe('users_username_key');
+
+    const byEmail = await violate('other2', 'probe@test.local').catch((e) => e);
+    expect(byEmail.code).toBe('23505');
+    expect(byEmail.constraint).toBe('users_email_key');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -385,6 +460,47 @@ describe('POST /api/employees/link', () => {
       .set('Authorization', `Bearer ${token}`)
       .send({ email: 'ghost@test.local' });
     expect(res.status).toBe(404);
+  });
+
+  it('link thành công → response có data.id = id nhân viên, audit EMPLOYEE_ADDED có entity_id đúng', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const target = await createUser({ username: 'auditlink', email: 'auditlink@test.local', role: 'user' });
+
+    const res = await request(app)
+      .post('/api/employees/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'auditlink@test.local' });
+
+    expect(res.status).toBe(201);
+    // BIGINT → pg trả chuỗi; frontend PHẢI so bằng String() khi tìm nhân viên theo data.id.
+    expect(String(res.body.data.id)).toBe(String(target.id));
+
+    const audit = await db.query(
+      `SELECT entity_id FROM audit_logs WHERE action = 'EMPLOYEE_ADDED' AND entity_type = 'employee'`
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(String(audit.rows[0].entity_id)).toBe(String(target.id));
+    // id trả về mở đúng nhân viên trong danh sách của owner
+    const detail = await request(app)
+      .get(`/api/employees/${res.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.email).toBe('auditlink@test.local');
+    expect(owner.id).not.toBe(target.id);
+  });
+
+  it("tài khoản đã xoá (status = 'deleted') → 404 như không tồn tại, không tạo membership", async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const gone = await createUser({ username: 'gone', email: 'gone@test.local', role: 'user', status: 'deleted' });
+
+    const res = await request(app)
+      .post('/api/employees/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'gone@test.local' });
+
+    expect(res.status).toBe(404);
+    const m = await db.query(`SELECT 1 FROM user_members WHERE owner_id = $1 AND employee_id = $2`, [owner.id, gone.id]);
+    expect(m.rows).toHaveLength(0);
   });
 
   it('owner tự link chính mình → 400', async () => {
@@ -503,6 +619,40 @@ describe('PATCH /api/employees/:id/permissions', () => {
     expect(res.body.data.permissions).toHaveProperty('courses', true);
     expect(res.body.data.permissions).toHaveProperty('campaigns_run', true);
     expect(res.body.data.permissions).not.toHaveProperty('random_unknown_key');
+  });
+
+  it('mảng rỗng [] (chưa tick gì) → 200, lưu đủ mọi khoá = false, KHÔNG 400', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'emptyperm', role: 'user' });
+    await addMembership(owner.id, emp.id, { permissions: { campaigns_view: true } });
+
+    const res = await request(app)
+      .patch(`/api/employees/${emp.id}/permissions`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ permissions: [] });
+
+    expect(res.status).toBe(200);
+    const stored = await db.query(
+      `SELECT permissions FROM user_members WHERE owner_id = $1 AND employee_id = $2`,
+      [owner.id, emp.id]
+    );
+    const perms = stored.rows[0].permissions;
+    expect(Array.isArray(perms)).toBe(false);
+    expect(Object.keys(perms).length).toBeGreaterThan(0);
+    expect(Object.values(perms).every((v) => v === false)).toBe(true);
+  });
+
+  it('mảng CÓ phần tử → vẫn 400 (chỉ mảng rỗng được nhận)', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'arrayperm', role: 'user' });
+    await addMembership(owner.id, emp.id);
+
+    const res = await request(app)
+      .patch(`/api/employees/${emp.id}/permissions`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ permissions: ['campaigns_view'] });
+
+    expect(res.status).toBe(400);
   });
 
   it('permissions không phải object → 400 (validator)', async () => {

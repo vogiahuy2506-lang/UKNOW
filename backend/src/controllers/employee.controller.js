@@ -115,7 +115,7 @@ export async function linkEmployee(req, res) {
     const ownerId = req.user.id;
     const { email } = req.body;
     const member = await employeeService.linkUserAsEmployee(ownerId, email);
-    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, member.employee_id, { email, method: 'link' });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, member.id, { email, method: 'link' });
     return res.status(201).json({ success: true, message: 'Liên kết nhân viên thành công', data: member });
   } catch (err) {
     return handleServiceError(res, err);
@@ -185,7 +185,8 @@ export async function updateLimits(req, res) {
 export async function updatePermissions(req, res) {
   try {
     const ownerId = req.user.id;
-    const { permissions } = req.body;
+    // Client bấm lưu khi chưa tick gì có thể gửi `[]` thay vì `{}` — cùng nghĩa "bỏ hết quyền".
+    const permissions = Array.isArray(req.body.permissions) ? {} : req.body.permissions;
     const updated = await employeeService.setEmployeePermissions(ownerId, Number(req.params.id), permissions);
     await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_PERMISSIONS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { permissions });
     return res.json({ success: true, message: 'Cập nhật quyền hạn thành công', data: updated });

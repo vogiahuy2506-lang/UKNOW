@@ -82,7 +82,8 @@ class CampaignScheduleRepository {
       `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.cron_expression,
               cs.enabled, cs.run_count, cs.last_run_at::timestamptz AS last_run_at,
               COALESCE(cs.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id,
-              cs.created_by
+              cs.created_by,
+              c.status AS campaign_status
        FROM campaign_schedules cs
        JOIN campaigns c ON cs.id_campaign = c.id
        WHERE cs.id = $1
@@ -97,7 +98,7 @@ class CampaignScheduleRepository {
 
   async findCampaignForSchedule({ campaignId, userId, workspaceOwnerId = userId, isAdmin }) {
     const result = await db.query(
-      `SELECT id, COALESCE(workspace_owner_id, id_user) AS workspace_owner_id
+      `SELECT id, status, COALESCE(workspace_owner_id, id_user) AS workspace_owner_id
        FROM campaigns
        WHERE id = $1
          AND (
@@ -105,6 +106,25 @@ class CampaignScheduleRepository {
            OR COALESCE(workspace_owner_id, id_user) = $3
          )`,
       [campaignId, isAdmin, workspaceOwnerId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Lịch ĐANG BẬT cùng chiến dịch + kiểu + cron (khớp uq_campaign_schedules_enabled_dup, migration
+   * 231). `excludeId` bỏ qua chính lịch đang sửa. Trả null nếu không trùng.
+   */
+  async findEnabledDuplicate({ campaignId, scheduleType, cronExpression, excludeId = null }) {
+    const result = await db.query(
+      `SELECT id
+       FROM campaign_schedules
+       WHERE id_campaign = $1
+         AND schedule_type = $2
+         AND cron_expression = $3
+         AND enabled = TRUE
+         AND ($4::bigint IS NULL OR id <> $4::bigint)
+       LIMIT 1`,
+      [campaignId, scheduleType, cronExpression, excludeId]
     );
     return result.rows[0] || null;
   }

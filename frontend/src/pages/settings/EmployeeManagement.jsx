@@ -16,6 +16,15 @@ import {
 } from 'react-icons/hi';
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
+import {
+  EMAIL_ALREADY_REGISTERED_CODE,
+  USERNAME_TAKEN_CODE,
+  buildPermissionPreset,
+  countGrantedPermissions,
+  findEmployeeAfterAdd,
+  getEmployeeErrorInfo,
+  toPermissionState,
+} from './employeeManagement.helpers';
 
 const PERMISSION_FIELDS = (t) => [
   { keys: ['email_settings', 'zalo_settings'], label: t('employee.permissions.channelManagement') },
@@ -42,7 +51,9 @@ const PERMISSION_FIELDS = (t) => [
   { keys: ['integrations_manage'], label: t('employee.permissions.integrationsManage') },
 ];
 
-const MODAL_OVERLAY = 'fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';
+const ALL_PERMISSION_KEYS = PERMISSION_FIELDS((key) => key).flatMap((field) => field.keys);
+
+const MODAL_OVERLAY ='fixed inset-0 z-[9999] flex items-center justify-center p-4 md:p-6';
 const MODAL_SM = 'relative z-10 w-full max-w-md  max-h-[85vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
 const MODAL_MD = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl overflow-hidden flex flex-col';
 const MODAL_CREATE = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
@@ -128,6 +139,8 @@ const EmployeeManagement = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [createTab, setCreateTab]             = useState('new');
   const [isCreating, setIsCreating]           = useState(false);
+  // Gợi ý (không phải lỗi đỏ) ở tab Link, vd email vừa nhập đã có tài khoản.
+  const [createHint, setCreateHint]           = useState('');
 
   // Modal chi tiết nhân viên (3 tab: Thông tin / Phân quyền / Giới hạn gửi)
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -135,6 +148,7 @@ const EmployeeManagement = () => {
   const [isSavingInfo, setIsSavingInfo]         = useState(false);
   const [permState, setPermState]               = useState({});
   const [isSavingPerm, setIsSavingPerm]         = useState(false);
+  const [permSaved, setPermSaved]               = useState(false);
   const [limitsState, setLimitsState]           = useState({
     dailyEmailLimit: null, monthlyEmailLimit: null,
     dailyZaloLimit:  null, monthlyZaloLimit:  null,
@@ -158,6 +172,8 @@ const EmployeeManagement = () => {
   const [statusUpdatingId, setStatusUpdatingId]   = useState(null);
   const [resetConfirmEmp, setResetConfirmEmp]     = useState(null);
   const [isResetting, setIsResetting]             = useState(false);
+  // Mật khẩu tạm backend trả sau khi reset — chỉ giữ trong bộ nhớ, hiện đúng một lần.
+  const [tempPasswordInfo, setTempPasswordInfo]   = useState(null);
   const [deleteConfirmEmp, setDeleteConfirmEmp]   = useState(null);
   const [isDeleting, setIsDeleting]               = useState(false);
   const [resendingInviteId, setResendingInviteId] = useState(null);
@@ -179,24 +195,32 @@ const EmployeeManagement = () => {
   const createLinkForm = useForm({ defaultValues: { email: '' } });
   const editForm       = useForm({ defaultValues: { fullName: '', email: '' } });
 
-  // Mở modal tạo khi điều hướng từ sidebar
-  useEffect(() => {
-    if (!location.state?.openCreateEmployeeModal) return;
+  const openCreateModal = () => {
     setCreateTab('new');
+    setCreateHint('');
     createNewForm.reset();
     createLinkForm.reset();
     setShowCreateModal(true);
+  };
+
+  // Mở modal tạo khi điều hướng từ sidebar
+  useEffect(() => {
+    if (!location.state?.openCreateEmployeeModal) return;
+    openCreateModal();
     navigate(location.pathname, { replace: true, state: {} });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ phản ứng theo location.state
   }, [location.state]);
 
   // ── Fetch ──────────────────────────────────────────────────────────────────
+  // Trả về danh sách vừa tải (null nếu lỗi) để chỗ gọi mở đúng nhân viên vừa thêm.
   const fetchEmployees = async (showRefresh = false) => {
     if (showRefresh) setIsRefreshing(true);
     else setIsLoading(true);
+    let loaded = null;
     try {
       const res = await userManagementApiService.getEmployees();
       const list = res.data?.data || [];
+      loaded = list;
       setEmployees(list);
       // Cập nhật lại selectedEmployee nếu modal đang mở
       if (selectedEmployee) {
@@ -209,6 +233,7 @@ const EmployeeManagement = () => {
       setIsLoading(false);
       setIsRefreshing(false);
     }
+    return loaded;
   };
 
   const fetchTeamOverview = async () => {
@@ -278,8 +303,10 @@ const EmployeeManagement = () => {
   const openEmployeeModal = (emp, tab = 'info') => {
     setSelectedEmployee(emp);
     setActiveTab(tab);
+    setPermSaved(false);
     editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
-    setPermState(emp.permissions || {});
+    // Nhân viên mới có permissions = [] (mảng rỗng) — nạp thành {} để không gửi lại `[]` khi lưu.
+    setPermState(toPermissionState(emp.permissions));
     setLimitsState({
       dailyEmailLimit:     emp.dailyEmailLimit     ?? null,
       monthlyEmailLimit:   emp.monthlyEmailLimit   ?? null,
@@ -311,8 +338,12 @@ const EmployeeManagement = () => {
   const handleSavePermissions = async () => {
     try {
       setIsSavingPerm(true);
-      await userManagementApiService.updateEmployeePermissions(selectedEmployee.id, permState);
+      const res = await userManagementApiService.updateEmployeePermissions(selectedEmployee.id, permState);
       toast.success(t('employee.updatePermSuccess'));
+      // Backend kéo thêm quyền phụ thuộc (vd tạo chiến dịch → xem chiến dịch): phản chiếu lại để ô tick khớp DB.
+      const saved = res?.data?.data?.permissions;
+      if (saved && typeof saved === 'object' && !Array.isArray(saved)) setPermState(saved);
+      setPermSaved(true);
       fetchEmployees(true);
     } catch (err) {
       toast.error(err?.response?.data?.message || t('employee.updatePermFailed'));
@@ -336,38 +367,72 @@ const EmployeeManagement = () => {
   };
 
   // ── Thêm nhân viên mới ────────────────────────────────────────────────────
+  // Thêm xong là nhân viên mới có 0 quyền (mặc định cố ý) — mở thẳng tab Phân quyền để chủ cấp luôn,
+  // không để họ tưởng "Đang hoạt động" là xong.
+  const openAddedEmployeeForPermissions = (list, { id, email }) => {
+    const added = findEmployeeAfterAdd(list, { id, email });
+    if (added) openEmployeeModal(added, 'permissions');
+  };
+
   const onSubmitCreateNew = async (values) => {
+    const email = values.email.trim();
     try {
       setIsCreating(true);
-      await userManagementApiService.createEmployee({
+      const res = await userManagementApiService.createEmployee({
         username: values.username.trim(),
-        email:    values.email.trim(),
+        email,
         fullName: values.fullName?.trim() || null,
       });
-      toast.success(t('employee.inviteSent'));
+      const created = res.data?.data;
+      // Tài khoản đã tạo nhưng thư mời hỏng: backend đã viết sẵn câu nói thật — đừng đè bằng toast "đã gửi".
+      if (created?.invitationSent === false) {
+        toast.error(res.data?.message || t('employee.inviteFailed'), { duration: 8000 });
+      } else {
+        toast.success(t('employee.inviteSent'));
+      }
       setShowCreateModal(false);
       createNewForm.reset();
-      fetchEmployees(true);
+      const list = await fetchEmployees(true);
+      openAddedEmployeeForPermissions(list, { id: created?.id, email });
     } catch (err) {
-      toast.error(err?.response?.data?.message || t('employee.createFailed'));
+      const { code, message } = getEmployeeErrorInfo(err);
+      if (code === EMAIL_ALREADY_REGISTERED_CODE) {
+        // Người này đã có tài khoản → lối ra là tab Link: chuyển sang đó, điền sẵn email, gợi ý (không toast đỏ).
+        createLinkForm.setValue('email', email);
+        setCreateHint(message || t('employee.emailAlreadyRegisteredHint'));
+        setCreateTab('link');
+      } else if (code === USERNAME_TAKEN_CODE) {
+        createNewForm.setError('username', { type: 'server', message: message || t('employee.usernameTaken') });
+      } else {
+        toast.error(message || t('employee.createFailed'));
+      }
     } finally {
       setIsCreating(false);
     }
   };
 
   const onSubmitCreateLink = async (values) => {
+    const email = values.email.trim();
     try {
       setIsCreating(true);
-      await userManagementApiService.linkEmployee(values.email.trim());
+      setCreateHint('');
+      const res = await userManagementApiService.linkEmployee(email);
       toast.success(t('employee.linkSuccess'));
       setShowCreateModal(false);
       createLinkForm.reset();
-      fetchEmployees(true);
+      const list = await fetchEmployees(true);
+      openAddedEmployeeForPermissions(list, { id: res.data?.data?.id, email });
     } catch (err) {
       toast.error(err?.response?.data?.message || t('employee.linkFailed'));
     } finally {
       setIsCreating(false);
     }
+  };
+
+  // Chọn nhanh bộ quyền: chỉ tick ô, KHÔNG lưu — chủ xem lại rồi bấm "Lưu quyền hạn".
+  const handleApplyPreset = (preset) => {
+    setPermState(buildPermissionPreset(preset, ALL_PERMISSION_KEYS));
+    setPermSaved(false);
   };
 
   // ── Khóa / Mở khóa ────────────────────────────────────────────────────────
@@ -389,13 +454,30 @@ const EmployeeManagement = () => {
   const handleConfirmReset = async () => {
     try {
       setIsResetting(true);
-      await userManagementApiService.resetEmployeePassword(resetConfirmEmp.id);
-      toast.success(t('employee.resetSuccess'));
+      const target = resetConfirmEmp;
+      const res = await userManagementApiService.resetEmployeePassword(target.id);
+      // Mật khẩu tạm do backend sinh ngẫu nhiên và chỉ trả một lần — phải hiện ra cho chủ đọc lại cho
+      // nhân viên. Bản cũ vứt response và ghi cứng một mật khẩu mặc định, trong khi thực tế mật khẩu đã khác.
+      const tempPassword = res?.data?.data?.tempPassword;
       setResetConfirmEmp(null);
+      if (tempPassword) {
+        setTempPasswordInfo({ username: target.username, password: tempPassword });
+      } else {
+        toast.success(t('employee.resetSuccess'));
+      }
     } catch (err) {
       toast.error(err?.response?.data?.message || t('employee.resetFailed'));
     } finally {
       setIsResetting(false);
+    }
+  };
+
+  const handleCopyTempPassword = async () => {
+    try {
+      await navigator.clipboard.writeText(tempPasswordInfo.password);
+      toast.success(t('employee.copied'));
+    } catch {
+      toast.error(t('employee.copyFailed'));
     }
   };
 
@@ -450,7 +532,7 @@ const EmployeeManagement = () => {
           <button
             type="button"
             className="btn btn-primary"
-            onClick={() => { setCreateTab('new'); createNewForm.reset(); createLinkForm.reset(); setShowCreateModal(true); }}
+            onClick={openCreateModal}
           >
             <HiOutlinePlus className="w-5 h-5 mr-2" />
             {t('employee.addEmployee')}
@@ -473,6 +555,7 @@ const EmployeeManagement = () => {
                   <th>{t('employee.fullName')}</th>
                   <th>{t('employee.email')}</th>
                   <th>{t('employee.status')}</th>
+                  <th>{t('employee.permissionsColumn')}</th>
                   <th>{t('employee.emailLimit')}</th>
                   <th>{t('employee.zaloLimit')}</th>
                   <th>{t('employee.dateAdded')}</th>
@@ -481,6 +564,7 @@ const EmployeeManagement = () => {
               <tbody>
                 {employees.map((emp) => {
                   const isActive = emp.memberStatus === 'active';
+                  const grantedCount = countGrantedPermissions(emp.permissions);
                   return (
                     <tr
                       key={emp.id}
@@ -497,6 +581,20 @@ const EmployeeManagement = () => {
                           <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
                             {isActive ? t('employee.statusActive') : t('employee.statusLocked')}
                           </span>
+                        )}
+                      </td>
+                      <td className="whitespace-nowrap">
+                        {grantedCount === 0 ? (
+                          // Nhân viên mới có 0 quyền: nhãn "Đang hoạt động" một mình dễ làm chủ tưởng đã xong.
+                          <button
+                            type="button"
+                            className="badge badge-warning cursor-pointer"
+                            onClick={(e) => { e.stopPropagation(); openEmployeeModal(emp, 'permissions'); }}
+                          >
+                            {t('employee.noPermissionsBadge')}
+                          </button>
+                        ) : (
+                          <span className="text-sm text-gray-600">{t('employee.permissionsCount', { count: grantedCount })}</span>
                         )}
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
@@ -705,7 +803,9 @@ const EmployeeManagement = () => {
                 <div className="border-t border-gray-100 pt-5 space-y-3">
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t('employee.accountManagement')}</p>
                   <div className="flex flex-wrap gap-2">
-                    {selectedEmployee.memberStatus !== 'pending_activation' && (
+                    {/* Trạng thái chờ kích hoạt nằm ở users.status (`status`), KHÔNG phải user_members.status
+                        (`memberStatus`: active/inactive) — so nhầm khiến nút "Gửi lại lời mời" không bao giờ hiện. */}
+                    {selectedEmployee.status !== 'pending_activation' && (
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(selectedEmployee)}
@@ -724,7 +824,7 @@ const EmployeeManagement = () => {
                           : selectedEmployee.memberStatus === 'active' ? t('employee.lockAccount') : t('employee.unlockAccount')}
                       </button>
                     )}
-                    {selectedEmployee.memberStatus === 'pending_activation' ? (
+                    {selectedEmployee.status === 'pending_activation' ? (
                       <button
                         type="button"
                         onClick={() => handleResendInvite(selectedEmployee)}
@@ -760,6 +860,24 @@ const EmployeeManagement = () => {
             {/* ── Tab Phân quyền ── */}
             {activeTab === 'permissions' && (
               <div className="space-y-4">
+                {countGrantedPermissions(selectedEmployee.permissions) === 0 && (
+                  <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {t('employee.noPermissionsBanner', { name: selectedEmployee.fullName || selectedEmployee.username })}
+                  </div>
+                )}
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-medium text-gray-600">{t('employee.presetsLabel')}</span>
+                  {[
+                    { key: 'viewOnly', label: t('employee.presetViewOnly') },
+                    { key: 'marketing', label: t('employee.presetMarketing') },
+                    { key: 'all', label: t('employee.presetAll') },
+                    { key: 'none', label: t('employee.presetNone') },
+                  ].map(({ key, label }) => (
+                    <button key={key} type="button" className="btn btn-secondary text-sm" onClick={() => handleApplyPreset(key)}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {PERMISSION_FIELDS(t).map(({ keys, label }) => {
                     const isChecked = keys.some((k) => permState[k] === true);
@@ -780,6 +898,11 @@ const EmployeeManagement = () => {
                     );
                   })}
                 </div>
+                {permSaved && (
+                  <p role="status" className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800">
+                    {t('employee.permReloadNote')}
+                  </p>
+                )}
                 <div className="flex justify-end pt-2">
                   <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
                     {isSavingPerm ? t('employee.saving') : t('employee.savePerm')}
@@ -891,7 +1014,7 @@ const EmployeeManagement = () => {
               <button
                 key={key}
                 type="button"
-                onClick={() => setCreateTab(key)}
+                onClick={() => { setCreateTab(key); setCreateHint(''); }}
                 className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
                   createTab === key ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
                 }`}
@@ -918,8 +1041,9 @@ const EmployeeManagement = () => {
                     })}
                   />
                   {createNewForm.formState.errors.username && (
-                    <p className="text-red-500 text-sm mt-1">{createNewForm.formState.errors.username.message}</p>
+                    <p role="alert" className="text-red-500 text-sm mt-1">{createNewForm.formState.errors.username.message}</p>
                   )}
+                  <p className="text-xs text-gray-400 mt-1">{t('employee.usernameHint')}</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
@@ -949,6 +1073,11 @@ const EmployeeManagement = () => {
               <p className="text-sm text-gray-500">
               {t('employee.linkAccountTip')}
               </p>
+              {createHint && (
+                <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                  {createHint}
+                </div>
+              )}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
                 <input
@@ -980,7 +1109,7 @@ const EmployeeManagement = () => {
         <div>
           <h2 className="text-xl font-semibold text-gray-900">{t('employee.confirmResetTitle')}</h2>
           <p className="text-sm text-gray-500 mt-2">{t('employee.confirmResetMessage')} <strong>{resetConfirmEmp.username}</strong>?</p>
-          <p className="text-sm text-gray-500 mt-1">{t('employee.newPassword')}: <strong>{t('employee.defaultPassword')}</strong></p>
+          <p className="text-sm text-gray-500 mt-1">{t('employee.resetTempPasswordNote')}</p>
           <div className="flex justify-end gap-2 mt-6">
             <button type="button" className="btn btn-secondary" onClick={() => setResetConfirmEmp(null)} disabled={isResetting}>{t('common.cancel')}</button>
             <button type="button" className="btn btn-primary" onClick={handleConfirmReset} disabled={isResetting}>
@@ -989,6 +1118,29 @@ const EmployeeManagement = () => {
           </div>
         </div>,
         () => { if (!isResetting) setResetConfirmEmp(null); },
+        MODAL_SM
+      )}
+
+      {/* ── Modal hiện mật khẩu tạm sau khi reset — chỉ hiện một lần ─────────── */}
+      {tempPasswordInfo && renderModal(
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">{t('employee.resetResultTitle', { username: tempPasswordInfo.username })}</h2>
+          <p className="text-sm text-gray-500 mt-2">{t('employee.resetResultOnce')}</p>
+          <div className="mt-4 flex items-center gap-2">
+            <code
+              data-testid="temp-password"
+              className="flex-1 select-all rounded-lg bg-gray-100 px-4 py-3 text-lg font-mono tracking-wider text-gray-900"
+            >
+              {tempPasswordInfo.password}
+            </code>
+            <button type="button" className="btn btn-secondary" onClick={handleCopyTempPassword}>{t('employee.copy')}</button>
+          </div>
+          <div className="flex justify-end mt-6">
+            <button type="button" className="btn btn-primary" onClick={() => setTempPasswordInfo(null)}>{t('common.close')}</button>
+          </div>
+        </div>,
+        // Bấm ra ngoài KHÔNG đóng: mật khẩu chỉ hiện một lần, lỡ tay là mất (phải reset lại).
+        () => {},
         MODAL_SM
       )}
 

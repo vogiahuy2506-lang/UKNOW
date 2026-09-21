@@ -9,6 +9,7 @@ import { startKeepAliveScheduler as startWhatsAppKeepAliveScheduler } from '../s
 import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
+import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
 // Luật thời gian của lịch chạy (khoá ngày Hà Nội, cron runtime, N ngày) dời sang util để
 // controller tính "lần chạy tiếp" bằng ĐÚNG luật nổ ở đây — xem campaignScheduleCron.util.js.
 import {
@@ -65,7 +66,52 @@ const stopAllCampaignScheduleTasks = () => {
 /** @internal test helper */
 export const _triggerCampaignScheduleForTests = (schedule) => triggerCampaignSchedule(schedule);
 
+/**
+ * Lịch nổ mà hỏng trước khi tạo được lượt chạy (vd chiến dịch còn `draft` → createCampaignRunRecord
+ * ném 400) không được chết im lặng: ghi một lượt chạy `failed` để người dùng THẤY ở popup lịch.
+ * Lịch `once` hỏng thì tắt luôn — cron của `once` mã hoá ngày+tháng, để enabled thì nó tự bắn lại đúng
+ * ngày đó năm sau (cùng lý do với nhánh "bỏ qua vì campaign đang chạy"). Không chạy bù, không tăng
+ * run_count. Mọi lỗi ghi vết bị nuốt: đừng để nó che mất lỗi gốc.
+ */
+const recordFailedScheduleTrigger = async (schedule, runName, error) => {
+  const campaignId = schedule?.id_campaign;
+  if (!campaignId || !schedule?.id) return;
+  const workspaceOwnerId = Number.parseInt(schedule?.workspace_owner_id ?? schedule?.id_user, 10);
+  try {
+    await campaignRunRepository.insertFailedScheduledRun({
+      campaignId,
+      workspaceOwnerId: Number.isFinite(workspaceOwnerId) ? workspaceOwnerId : null,
+      scheduleId: schedule.id,
+      runName,
+      errorMessage: error?.message,
+    });
+  } catch (recordErr) {
+    console.error(
+      `[Scheduler] Không ghi được lượt chạy hỏng của schedule #${schedule.id}:`,
+      recordErr.message
+    );
+  }
+  if (String(schedule?.schedule_type || '').toLowerCase() === 'once') {
+    try {
+      await db.query(
+        `UPDATE campaign_schedules
+         SET enabled = false, updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1`,
+        [schedule.id]
+      );
+    } catch (disableErr) {
+      console.error(
+        `[Scheduler] Không thể vô hiệu hoá schedule #${schedule.id}:`,
+        disableErr.message
+      );
+    }
+  }
+};
+
 const triggerCampaignSchedule = async (schedule) => {
+  // Hoist: catch cần biết đã tạo được lượt chạy thật chưa (đã có thì KHÔNG ghi thêm dòng `failed`).
+  let runName = null;
+  let runRecord = null;
   try {
     // Hai nhánh dưới đây trước kia return im lặng — khi lịch không chạy, log không để lại
     // dấu vết nào và không thể phân biệt "cron không bắn" với "cron bắn rồi bị bỏ qua".
@@ -140,11 +186,11 @@ const triggerCampaignSchedule = async (schedule) => {
     }
 
     // Luôn gắn nhãn thời điểm theo Asia/Ho_Chi_Minh (không phụ thuộc TZ của process/ máy chủ).
-    const runName = `${schedule.schedule_name || 'Lich chay'} - ${new Date().toLocaleString('vi-VN', {
+    runName = `${schedule.schedule_name || 'Lich chay'} - ${new Date().toLocaleString('vi-VN', {
       timeZone: HANOI_TIME_ZONE,
       hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
     })}`;
-    const runRecord = await campaignController.createCampaignRunRecord({
+    runRecord = await campaignController.createCampaignRunRecord({
       campaignId: schedule.id_campaign,
       workspaceOwnerId,
       actorUserId: Number.isFinite(actorUserId) ? actorUserId : workspaceOwnerId,
@@ -183,6 +229,9 @@ const triggerCampaignSchedule = async (schedule) => {
       return;
     }
     console.error(`[Scheduler] Không thể trigger schedule #${schedule?.id}:`, error.message);
+    if (!runRecord) {
+      await recordFailedScheduleTrigger(schedule, runName, error);
+    }
   }
 };
 

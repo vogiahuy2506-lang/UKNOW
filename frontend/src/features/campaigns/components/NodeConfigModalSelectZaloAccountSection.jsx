@@ -9,12 +9,24 @@
  * @param {Object} props.formData
  * @param {Function} props.setFormData
  * @param {Array<{id: string, displayName: string, status: string, isActive: boolean, isDefault: boolean}>} props.zaloAccounts
+ * @param {'idle'|'loading'|'loaded'|'error'} [props.zaloAccountsStatus='loaded'] chỉ 'loaded' (API thành công)
+ *   mới được nói "Chưa có tài khoản Zalo khả dụng"; 'error' hiện hộp đỏ nêu nguyên nhân + nút Thử lại.
+ * @param {string} [props.zaloAccountsError] nguyên nhân khi status='error'
+ * @param {Function} [props.onRetryZaloAccounts]
  * @returns {JSX.Element}
  */
 import { useI18n } from '../../../i18n';
 
-export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zaloAccounts = [] }) => {
+export const NodeConfigSelectZaloAccountSection = ({
+  formData,
+  setFormData,
+  zaloAccounts = [],
+  zaloAccountsStatus = 'loaded',
+  zaloAccountsError = '',
+  onRetryZaloAccounts,
+}) => {
   const { t } = useI18n();
+  const isEmptyAfterSuccess = zaloAccountsStatus === 'loaded' && zaloAccounts.length === 0;
   const sortedAccounts = [...zaloAccounts].sort((a, b) => {
     if (a.isDefault && !b.isDefault) return -1;
     if (!a.isDefault && b.isDefault) return 1;
@@ -127,7 +139,7 @@ export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zalo
                 );
               })}
             </div>
-            {sortedAccounts.length === 0 && (
+            {isEmptyAfterSuccess && (
               <p className="text-xs text-amber-700">{t('zaloAccount.noAccounts')}</p>
             )}
             <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded">
@@ -156,7 +168,27 @@ export const NodeConfigSelectZaloAccountSection = ({ formData, setFormData, zalo
         )}
       </div>
 
-      {sortedAccounts.length === 0 && (
+      {zaloAccountsStatus === 'loading' && (
+        <p role="status" className="text-sm text-gray-500">{t('zaloAccount.loadingAccounts')}</p>
+      )}
+
+      {zaloAccountsStatus === 'error' && (
+        <div role="alert" className="bg-red-50 border border-red-200 p-3 rounded-lg text-sm text-red-700 space-y-2">
+          <p className="font-medium">{t('zaloAccount.loadFailed')}</p>
+          {zaloAccountsError && <p className="text-xs break-words">{zaloAccountsError}</p>}
+          {onRetryZaloAccounts && (
+            <button
+              type="button"
+              onClick={onRetryZaloAccounts}
+              className="px-3 py-1.5 text-xs font-semibold bg-white border border-red-300 text-red-700 rounded-lg hover:bg-red-100"
+            >
+              {t('zaloAccount.retry')}
+            </button>
+          )}
+        </div>
+      )}
+
+      {isEmptyAfterSuccess && (
         <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">
           {t('zaloAccount.noAccountsAvailable')}
         </div>

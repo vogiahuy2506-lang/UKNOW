@@ -29,7 +29,7 @@ const REAL_MENU = {
     'Hiệu quả chiến dịch',
     'Khách hàng từ chiến dịch',
   ],
-  'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page'],
+  'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
   'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
   'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Nhật ký hoạt động'],
 };
@@ -99,6 +99,12 @@ describe('chất lượng bài trợ giúp seed', () => {
       // không còn là trang riêng — đã gộp vào "Quản lý chiến dịch".
       'Kích hoạt chiến dịch',
       'trang Chạy chiến dịch',
+      // Màn tạo/sửa landing cũ (ba cách tạo trang + cửa sổ AI ba tab) đã bị thay bằng trình soạn
+      // landing-canvas từ 07–14/09/2026; ba nhãn này không còn trong frontend/src/i18n/vi.js.
+      // Bài `landing-page` vẫn chỉ đường theo chúng tới 21/09.
+      'Sửa trang hiện tại',
+      'Tạo mới theo mô tả',
+      'Trình sửa trực quan',
     ];
     const offenders = [];
     for (const article of HELP_SEED_ARTICLES) {

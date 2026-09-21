@@ -269,6 +269,27 @@ export const getScheduleTypeLabel = (type, t) => {
 };
 
 /**
+ * Cảnh báo "lịch này sẽ không gửi" khi chiến dịch của lịch chưa `active`.
+ *
+ * Lịch tới giờ mà chiến dịch còn Nháp/Tạm dừng thì createCampaignRunRecord ném 400 (lịch KHÔNG được
+ * tự kích hoạt chiến dịch) — 21/09/2026 lịch 07:30 của chiến dịch 395 chết im lặng vì đúng chuyện này.
+ * Dùng chung cho bảng Lịch chạy và popup "Lịch chạy đã thiết lập" để hai nơi nói cùng một câu và
+ * gọi đúng tên trạng thái (trước đây câu cứng "đang tạm dừng" bắn cả cho chiến dịch Nháp).
+ *
+ * @param {{ campaignStatus?: string }} schedule
+ * @param {(key: string, params?: object) => string} t
+ * @returns {string} '' khi chiến dịch đang `active` (hoặc chưa biết trạng thái)
+ */
+export const getScheduleCampaignNotActiveWarning = (schedule, t) => {
+  const status = String(schedule?.campaignStatus ?? '').trim();
+  if (!status || status === 'active') return '';
+  const label = status === 'draft' || status === 'paused'
+    ? t(`campaignRun.scheduleCampaignStatus.${status}`)
+    : status;
+  return t('campaignRun.scheduleCampaignNotActiveWarning', { status: label });
+};
+
+/**
  * Check if a one-time schedule has already run.
  *
  * @param {object} schedule schedule item

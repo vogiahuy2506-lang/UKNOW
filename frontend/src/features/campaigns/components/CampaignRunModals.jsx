@@ -12,6 +12,7 @@ import {
 import {
   filterSchedulesByCampaignId,
   formatScheduleRunClockFromCron,
+  getScheduleCampaignNotActiveWarning,
   getSchedulePatternSummaryVi,
   getScheduleRunTimingFieldLabelVi,
   resolveScheduleUiTimingDate,
@@ -543,6 +544,9 @@ const CampaignRunModals = ({
                                run.status === 'failed' ? t('campaignRunModals.failed') :
                                run.status}
                             </span>
+                            {run.status === 'failed' && run.errorMessage && (
+                              <p className="mt-1 text-xs text-red-600 max-w-[16rem] break-words">{run.errorMessage}</p>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-sm text-gray-900">
                             {run.totalRecipients || 0}
@@ -633,6 +637,7 @@ const CampaignRunModals = ({
                     const pattern = getSchedulePatternSummaryVi(sch, getWeeklyDayFromCron, getWeeklyDayLabel, t);
                     const runTimesRaw = Number(sch?.runCount);
                     const runTimes = Number.isFinite(runTimesRaw) && runTimesRaw >= 0 ? runTimesRaw : 0;
+                    const notActiveWarning = getScheduleCampaignNotActiveWarning(sch, t);
                     return (
                       <li
                         key={sch.id}
@@ -652,6 +657,9 @@ const CampaignRunModals = ({
                           <span className="font-medium">{getScheduleRunTimingFieldLabelVi(sch, t)}:</span>{' '}
                           {getScheduleNextRunUiLabel(sch, t)}
                         </p>
+                        {notActiveWarning && (
+                          <p className="text-xs text-amber-600 font-medium">{notActiveWarning}</p>
+                        )}
                         {canEditSchedules && (
                           <div
                             className="flex items-center gap-2 pt-1"

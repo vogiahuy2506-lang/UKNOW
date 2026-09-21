@@ -43,11 +43,18 @@ const FRONTEND_URL    = process.env.FRONTEND_URL    || 'https://founderai.vn';
 
 /**
  * Thay {{var}} bằng giá trị user.
+ *
+ * `{{message}}` nằm trong `extras` chứ không suy ra từ `user`: bốn mẫu thông báo sẵn có
+ * (announcement / warning / reminder / security) đặt `{{message}}` trong thân HTML để chứa lời
+ * nhắn admin tự viết, nhưng KHÔNG chỗ nào thay nó — email gửi đi mang nguyên văn chữ
+ * "{{message}}". Escape trước khi chèn vì `notification.message` là văn bản thuần của admin.
+ *
  * @param {string} content
  * @param {Object|null} user
+ * @param {{ message?: string }} [extras] giá trị không lấy từ user
  * @returns {string}
  */
-export function replaceVariablesForUser(content, user) {
+export function replaceVariablesForUser(content, user, extras = {}) {
   if (!content) return '';
   const u = user || {};
   return String(content)
@@ -57,7 +64,8 @@ export function replaceVariablesForUser(content, user) {
     .replace(/\{\{product_name\}\}/g,  MAIL_FROM_NAME)
     .replace(/\{\{current_date\}\}/g,  new Date().toLocaleDateString('vi-VN'))
     .replace(/\{\{dashboard_url\}\}/g, FRONTEND_URL)
-    .replace(/\{\{support_email\}\}/g, SUPPORT_EMAIL);
+    .replace(/\{\{support_email\}\}/g, SUPPORT_EMAIL)
+    .replace(/\{\{message\}\}/g,       escapeHtml(extras.message || ''));
 }
 
 // -------------------------------------------------------------------
@@ -356,7 +364,9 @@ export function renderNotificationEmailHtml({ notification, user = null, locale 
   if (htmlSource !== null) {
     // Pipeline HTML: replace {{var}} → sanitize (giữ style, <style>; strip
     // thẻ nguy hiểm + on*=). Xem chi tiết trong sanitizeEmailHtml JSDoc.
-    const raw = replaceVariablesForUser(htmlSource, u);
+    // `{{message}}` chỉ có nghĩa ở nhánh HTML: nhánh plain text BÊN DƯỚI lấy chính `n.message`
+    // làm nội dung, thay nó vào chính nó là vòng tròn.
+    const raw = replaceVariablesForUser(htmlSource, u, { message: n.message });
     bodyHtml = sanitizeEmailHtml(raw);
   } else {
     // Plain text: escape + wrap <p>.

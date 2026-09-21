@@ -8,6 +8,7 @@ import {
   countActiveEmployees,
   findOwnerPlanLimit,
   findUserByEmail,
+  findUserByUsername,
   findOwnerInfo,
   createEmployeeWithLink,
   linkExistingUserAsEmployee,
@@ -84,17 +85,65 @@ export async function getEmployee(ownerId, employeeId) {
   return employee;
 }
 
+// Hai lỗi "add không được" hay gặp nhất — mã lỗi để frontend chỉ đúng lối ra (tab Link / ô tên
+// đăng nhập) thay vì một toast đỏ. Câu chữ nói luôn việc cần làm tiếp.
+export const EMAIL_ALREADY_REGISTERED_CODE = 'EMAIL_ALREADY_REGISTERED';
+export const USERNAME_TAKEN_CODE = 'USERNAME_TAKEN';
+
+const EMAIL_ALREADY_REGISTERED_MESSAGE =
+  'Email này đã có tài khoản Founder AI. Hãy dùng tab "Link tài khoản có sẵn" để thêm người này vào team.';
+const USERNAME_TAKEN_MESSAGE =
+  'Tên đăng nhập này đã có người dùng. Hãy chọn tên khác (ví dụ thêm tên công ty phía sau).';
+
+const emailAlreadyRegisteredError = () => ({
+  status: 400,
+  message: EMAIL_ALREADY_REGISTERED_MESSAGE,
+  code: EMAIL_ALREADY_REGISTERED_CODE,
+});
+
+const usernameTakenError = () => ({
+  status: 400,
+  message: USERNAME_TAKEN_MESSAGE,
+  code: USERNAME_TAKEN_CODE,
+});
+
+/**
+ * Hai request tạo nhân viên cùng lúc vượt qua bước kiểm tra trước INSERT → DB chặn bằng
+ * unique và ném 23505. Ánh xạ về đúng hai mã ở trên để người dùng không thấy "Lỗi server".
+ * Nhận diện theo tên constraint HOẶC cột trong `detail` ("Key (username)=(x) already exists"),
+ * vì tên constraint trên production chưa được đối chiếu.
+ */
+function mapEmployeeUniqueViolation(err) {
+  if (err?.code !== '23505') return null;
+  const constraint = String(err.constraint || '');
+  const detail = String(err.detail || '');
+  if (constraint === 'users_username_key' || /\(username\)/i.test(detail)) return usernameTakenError();
+  if (constraint === 'users_email_key' || /\(email\)/i.test(detail)) return emailAlreadyRegisteredError();
+  return null;
+}
+
 export async function createEmployee(ownerId, { username, email, fullName }) {
   await assertCanAddEmployee(ownerId);
 
   const existingUser = await findUserByEmail(email);
   if (existingUser) {
-    throw { status: 400, message: 'Email này đã được sử dụng bởi một tài khoản khác' };
+    throw emailAlreadyRegisteredError();
+  }
+
+  // `users.username` unique toàn hệ thống: không kiểm trước thì INSERT ném 23505 → 500.
+  const existingUsername = await findUserByUsername(username);
+  if (existingUsername) {
+    throw usernameTakenError();
   }
 
   // Tạo password hash ngẫu nhiên — tài khoản chưa thể đăng nhập cho đến khi kích hoạt
   const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
-  const employee = await createEmployeeWithLink({ ownerId, username, email, passwordHash, fullName });
+  let employee;
+  try {
+    employee = await createEmployeeWithLink({ ownerId, username, email, passwordHash, fullName });
+  } catch (err) {
+    throw mapEmployeeUniqueViolation(err) || err;
+  }
 
   const owner = await findOwnerInfo(ownerId);
   // Không throw khi gửi thư hỏng — tài khoản đã tạo rồi, huỷ nửa chừng còn tệ hơn.
@@ -130,7 +179,8 @@ export async function linkUserAsEmployee(ownerId, email) {
   await assertCanAddEmployee(ownerId);
 
   const user = await findUserByEmail(email?.trim().toLowerCase());
-  if (!user) {
+  // Tài khoản đã xoá (status = 'deleted') coi như không tồn tại — không link được, không lộ là "đã từng có".
+  if (!user || user.status === 'deleted') {
     throw { status: 404, message: 'Không tìm thấy tài khoản với email này' };
   }
   if (user.id === ownerId) {

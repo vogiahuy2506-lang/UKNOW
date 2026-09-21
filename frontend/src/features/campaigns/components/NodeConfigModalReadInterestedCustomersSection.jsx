@@ -624,7 +624,7 @@ export const NodeConfigReadInterestedCustomersSection = ({
               </button>
               {testPreviewItems.length > 0 && (
                 <span className="text-sm text-gray-500">
-                  {testPreviewItems.length} {t('nodeConfig.records', { defaultValue: 'bản ghi' })} · {t('nodeConfig.selected', { defaultValue: 'đã chọn' })}{' '}
+                  {t('nodeConfig.records', { count: testPreviewItems.length })} · {t('nodeConfig.selected')}{' '}
                   {interestedSelectionMode === 'fixed' ? (
                     <strong className="text-primary-700">{selectedTestIds.length}</strong>
                   ) : interestedSelectionMode === 'all_exclude' ? (

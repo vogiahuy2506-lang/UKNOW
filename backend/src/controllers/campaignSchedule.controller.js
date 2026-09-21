@@ -6,12 +6,55 @@ import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.uti
 // đọc, cùng luật nổ với scheduler.
 import { computeScheduleNextRunAt } from '../utils/campaignScheduleCron.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import {
+  CAMPAIGN_NOT_ACTIVE_CODE,
+  buildCampaignNotActiveMessage,
+  isCampaignActiveForSchedule,
+} from '../utils/campaignScheduleActivation.util.js';
 
 function normalizeOptionalBoolean(value) {
   if (value === undefined) return undefined;
   if (value === true || value === 'true' || value === 1 || value === '1') return true;
   if (value === false || value === 'false' || value === 0 || value === '0') return false;
   return value;
+}
+
+export const SCHEDULE_DUPLICATE_CODE = 'SCHEDULE_DUPLICATE';
+const SCHEDULE_DUPLICATE_MESSAGE =
+  'Chiến dịch đã có lịch chạy y hệt (cùng kiểu, cùng giờ) đang bật — không cần đặt thêm. Hãy sửa lịch đó nếu muốn đổi.';
+// Tên index bán phần ở migration 231 — hai request cùng lúc lọt qua bước kiểm trùng thì DB chặn nốt.
+const SCHEDULE_DUPLICATE_INDEX = 'uq_campaign_schedules_enabled_dup';
+
+function isScheduleDuplicateViolation(error) {
+  return error?.code === '23505' && String(error?.constraint || '').includes(SCHEDULE_DUPLICATE_INDEX);
+}
+
+function respondScheduleDuplicate(res) {
+  return res.status(409).json({
+    success: false,
+    code: SCHEDULE_DUPLICATE_CODE,
+    message: SCHEDULE_DUPLICATE_MESSAGE,
+  });
+}
+
+/**
+ * Ghi nhật ký thao tác lịch — lỗi ghi nhật ký KHÔNG được làm hỏng thao tác chính (cùng khuôn
+ * campaign.controller: try/catch riêng, chỉ cảnh báo). entity_id = id_campaign để tra theo chiến dịch.
+ */
+async function auditScheduleAction(req, action, campaignId, details) {
+  try {
+    await logWorkspace(
+      getWorkspaceAuditContext(req),
+      action,
+      AUDIT_ENTITY_TYPES.CAMPAIGN,
+      campaignId,
+      details
+    );
+  } catch (auditErr) {
+    console.warn(`[CampaignSchedule] ${action} audit failed:`, auditErr?.message);
+  }
 }
 
 function employeeCanRunCampaign(req) {
@@ -160,6 +203,27 @@ class CampaignScheduleController {
         });
       }
 
+      // Lịch bật cho chiến dịch chưa `active` sẽ nổ rồi chết im lặng (createCampaignRunRecord ném 400,
+      // lịch không được tự kích hoạt chiến dịch). Chặn ngay lúc đặt; lịch TẮT vẫn cho soạn sẵn.
+      if (isEnabling && !isCampaignActiveForSchedule(campaign.status)) {
+        return res.status(409).json({
+          success: false,
+          code: CAMPAIGN_NOT_ACTIVE_CODE,
+          campaignStatus: campaign.status ?? null,
+          message: buildCampaignNotActiveMessage(campaign.status),
+        });
+      }
+
+      // Lịch bật y hệt lịch đang bật (vụ #177/#178 cách nhau đúng một phút) → nổ cùng lúc, gửi hai lần.
+      if (isEnabling) {
+        const duplicate = await campaignScheduleRepository.findEnabledDuplicate({
+          campaignId,
+          scheduleType,
+          cronExpression,
+        });
+        if (duplicate) return respondScheduleDuplicate(res);
+      }
+
       const row = await campaignScheduleRepository.create({
         campaignId,
         scheduleName,
@@ -184,12 +248,20 @@ class CampaignScheduleController {
         updatedAt: row.updated_at,
       };
 
+      await auditScheduleAction(req, AUDIT_ACTIONS.CAMPAIGN_SCHEDULE_CREATED, row.id_campaign, {
+        scheduleId: row.id,
+        scheduleType: row.schedule_type,
+        cronExpression: row.cron_expression,
+        enabled: row.enabled,
+      });
+
       return res.status(201).json({
         success: true,
         message: 'Tạo lịch chạy thành công',
         data: schedule,
       });
     } catch (error) {
+      if (isScheduleDuplicateViolation(error)) return respondScheduleDuplicate(res);
       return serverError(res, 'CampaignScheduleController.create', error);
     } finally {
       requestCampaignScheduleRefresh();
@@ -240,6 +312,18 @@ class CampaignScheduleController {
         });
       }
 
+      // Chỉ chặn lúc BẬT một lịch đang tắt — lịch đã bật từ trước mà sửa tên/giờ thì không bị chặn
+      // (đã hỏng từ trước, giao diện có cảnh báo riêng; chặn ở đây làm người dùng không sửa được gì).
+      if (enabled === true && scheduleData.enabled !== true
+        && !isCampaignActiveForSchedule(scheduleData.campaign_status)) {
+        return res.status(409).json({
+          success: false,
+          code: CAMPAIGN_NOT_ACTIVE_CODE,
+          campaignStatus: scheduleData.campaign_status ?? null,
+          message: buildCampaignNotActiveMessage(scheduleData.campaign_status),
+        });
+      }
+
       if (enabled === true) {
         const hasRunningRun = await campaignScheduleRepository.hasRunningCampaignRun(scheduleData.id_campaign);
         if (hasRunningRun) {
@@ -260,6 +344,18 @@ class CampaignScheduleController {
             message: onceTimingError,
           });
         }
+      }
+
+      // Sau khi sửa lịch sẽ ĐANG BẬT: bật lại một lịch tắt, hoặc đổi kiểu/giờ của lịch bật, mà trùng
+      // lịch bật khác của cùng chiến dịch → chặn bằng câu tiếng người thay vì để DB ném 23505.
+      if (willBeEnabled && (enabled === true || changesExecution)) {
+        const duplicate = await campaignScheduleRepository.findEnabledDuplicate({
+          campaignId: scheduleData.id_campaign,
+          scheduleType: scheduleType !== undefined ? scheduleType : scheduleData.schedule_type,
+          cronExpression: cronExpression !== undefined ? cronExpression : scheduleData.cron_expression,
+          excludeId: scheduleData.id,
+        });
+        if (duplicate) return respondScheduleDuplicate(res);
       }
 
       const row = await campaignScheduleRepository.update({
@@ -286,12 +382,33 @@ class CampaignScheduleController {
         updatedAt: row.updated_at,
       };
 
+      // Bật/tắt là thao tác quyết định chiến dịch có gửi hay không → action riêng; sửa tên/kiểu/giờ → UPDATED.
+      const enabledChanged = enabled !== undefined && row.enabled !== scheduleData.enabled;
+      if (enabledChanged) {
+        await auditScheduleAction(req, AUDIT_ACTIONS.CAMPAIGN_SCHEDULE_TOGGLED, scheduleData.id_campaign, {
+          scheduleId: scheduleData.id,
+          enabled: row.enabled,
+          previousEnabled: scheduleData.enabled === true,
+        });
+      }
+      const changedFields = ['scheduleName', 'scheduleType', 'cronExpression'].filter(
+        (key) => req.body[key] !== undefined
+      );
+      if (changedFields.length > 0) {
+        await auditScheduleAction(req, AUDIT_ACTIONS.CAMPAIGN_SCHEDULE_UPDATED, scheduleData.id_campaign, {
+          scheduleId: scheduleData.id,
+          changedFields,
+          enabled: row.enabled,
+        });
+      }
+
       return res.json({
         success: true,
         message: 'Cập nhật lịch chạy thành công',
         data: schedule,
       });
     } catch (error) {
+      if (isScheduleDuplicateViolation(error)) return respondScheduleDuplicate(res);
       return serverError(res, 'CampaignScheduleController.update', error);
     } finally {
       requestCampaignScheduleRefresh();
@@ -322,6 +439,13 @@ class CampaignScheduleController {
         id,
         workspaceOwnerId: context.workspaceOwnerId,
         isAdmin: context.isSuperAdmin,
+      });
+
+      await auditScheduleAction(req, AUDIT_ACTIONS.CAMPAIGN_SCHEDULE_DELETED, schedule.id_campaign, {
+        scheduleId: schedule.id,
+        scheduleType: schedule.schedule_type,
+        cronExpression: schedule.cron_expression,
+        enabled: schedule.enabled === true,
       });
 
       return res.json({

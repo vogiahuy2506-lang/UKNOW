@@ -8,9 +8,10 @@ import viTranslations from '../../../../i18n/vi';
 const getNestedTranslation = (obj, path) =>
   path.split('.').reduce((acc, part) => acc?.[part], obj);
 
-const mockT = (key) => {
+const mockT = (key, params = {}) => {
   const val = getNestedTranslation(viTranslations, key);
-  return typeof val === 'string' ? val : key;
+  if (typeof val !== 'string') return key;
+  return val.replace(/\{(\w+)\}/g, (_, name) => (params[name] ?? `{${name}}`));
 };
 
 vi.mock('../../../../i18n', () => ({
@@ -297,7 +298,7 @@ describe('CampaignSchedulesTable — Bảng lịch chạy đã thiết lập (b�
 
     renderComponent(schedules);
 
-    expect(screen.getByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).toBeInTheDocument();
+    expect(screen.getByText('Chiến dịch đang ở trạng thái Tạm dừng — lịch này sẽ không gửi')).toBeInTheDocument();
   });
 
   it('chiến dịch của lịch đang draft → cũng hiện nhãn cảnh báo (không chỉ riêng paused)', () => {
@@ -315,7 +316,9 @@ describe('CampaignSchedulesTable — Bảng lịch chạy đã thiết lập (b�
 
     renderComponent(schedules);
 
-    expect(screen.getByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).toBeInTheDocument();
+    // Lệnh giao 21/09/2026: trước đây câu cứng "đang tạm dừng" bắn cả cho chiến dịch Nháp — nói sai.
+    expect(screen.getByText('Chiến dịch đang ở trạng thái Nháp — lịch này sẽ không gửi')).toBeInTheDocument();
+    expect(screen.queryByText(/tạm dừng/i)).not.toBeInTheDocument();
   });
 
   it('chiến dịch của lịch đang active → KHÔNG hiện nhãn cảnh báo', () => {
@@ -333,7 +336,7 @@ describe('CampaignSchedulesTable — Bảng lịch chạy đã thiết lập (b�
 
     renderComponent(schedules);
 
-    expect(screen.queryByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).not.toBeInTheDocument();
+    expect(screen.queryByText(/lịch này sẽ không gửi/)).not.toBeInTheDocument();
   });
 
   it('thiếu campaignStatus (dữ liệu cũ chưa có trường này) → KHÔNG hiện cảnh báo sai', () => {
@@ -350,6 +353,6 @@ describe('CampaignSchedulesTable — Bảng lịch chạy đã thiết lập (b�
 
     renderComponent(schedules);
 
-    expect(screen.queryByText('Chiến dịch đang tạm dừng — lịch này sẽ không gửi')).not.toBeInTheDocument();
+    expect(screen.queryByText(/lịch này sẽ không gửi/)).not.toBeInTheDocument();
   });
 });

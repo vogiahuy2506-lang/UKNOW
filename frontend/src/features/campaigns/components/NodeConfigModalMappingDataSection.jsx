@@ -199,7 +199,7 @@ export const NodeConfigMappingDataSection = ({
           <strong>{t('campaignNodeConfig.mappingData.example')}</strong>
         </p>
         <ul className="text-xs text-amber-600 mt-1 space-y-1 list-disc list-inside">
-          <li><code className="bg-amber-100 px-1 rounded">ten_khach</code> → {t('campaignNodeConfig.mappingData.exampleMapping', { var: 'ten_khach', column: 'Tên khách hàng' })}</li>
+          <li><code className="bg-amber-100 px-1 rounded">ten_khach</code> → {t('campaignNodeConfig.mappingData.exampleMapping', { column: 'Tên khách hàng' })}</li>
           <li><code className="bg-amber-100 px-1 rounded">ho_ten_day_du</code> → {t('campaignNodeConfig.mappingData.exampleFunction')}</li>
           <li><code className="bg-amber-100 px-1 rounded">ngay_gui</code> → {t('campaignNodeConfig.mappingData.exampleNow')}</li>
         </ul>

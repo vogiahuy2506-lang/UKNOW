@@ -1100,7 +1100,7 @@ const DashboardOrdersListTable = ({
                       {/* Product */}
                       <td className="px-4 py-3 border-b border-gray-100">
                         <div className="font-medium text-gray-900 text-sm leading-snug">
-                          {item.productName || `${t('ordersTable.order')} #${item.orderId}`}
+                          {item.productName || t('ordersTable.order', { id: item.orderId })}
                         </div>
                         <div className="text-[10px] text-gray-400 mt-0.5">ID: {item.orderId}</div>
                       </td>

@@ -111,9 +111,16 @@ sự gấp** — đường đi thường ngày vẫn chạy đủ test.
 
 ## Tài liệu
 
-- [`CLAUDE.md`](./CLAUDE.md) — kiến trúc + dev commands
+- [`docs/quyet-dinh-san-pham.md`](./docs/quyet-dinh-san-pham.md) — sổ quyết định: cái gì đã chốt,
+  vì sao, và **cái gì đã bị bác bỏ**. Đọc trước khi đề xuất đảo một quyết định cũ.
+- [`docs/bay-ky-thuat.md`](./docs/bay-ky-thuat.md) — bẫy kỹ thuật đã cắn người thật, kèm dấu hiệu
+  nhận ra. Đọc trước khi tin một phép đo.
+- [`docs/lich-su-tinh-nang-2026-09.md`](./docs/lich-su-tinh-nang-2026-09.md) — nhật ký tính năng
+  theo tháng, kèm commit
 - [`backend/tests/integration/README.md`](./backend/tests/integration/README.md) — guide integration test
 - [`backend/ARCHITECTURE_REFACTOR_MAP.md`](./backend/ARCHITECTURE_REFACTOR_MAP.md) — refactor map
+- `CLAUDE.md` — kiến trúc + dev commands. **Không nằm trong repo** (local, gitignored); hỏi đội để
+  lấy bản mới nhất.
 
 ## Landing Page CMS — luồng lead (v2.0)
 

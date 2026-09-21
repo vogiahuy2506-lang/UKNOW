@@ -85,6 +85,12 @@ export default {
     common: {
       loadError: 'Không thể tải danh sách',
       updateError: 'Không thể cập nhật',
+      // Hai khoá dưới đây bị dùng ở MarketplaceContent/MyFavorites mà chưa hề khai báo ở ĐÂY.
+      // Chúng giải được ở GỐC từ điển nên test cũ cho qua, nhưng hai trang đó dùng
+      // useI18n('marketplace') nên lúc chạy luôn thêm tiền tố và không bao giờ tra gốc — nút hiện
+      // chữ "common.view".
+      view: 'Xem',
+      noDescription: 'Chưa có mô tả',
     },
     browse: {
       headerTitle: 'Marketplace',
@@ -1434,7 +1440,27 @@ export default {
     linkFailed: 'Không thể liên kết tài khoản',
     updateStatusSuccess: 'Cập nhật trạng thái thành công',
     updateStatusFailed: 'Không thể cập nhật trạng thái',
-    resetSuccess: 'Reset thành công. Mật khẩu mặc định: digiso@2026',
+    resetSuccess: 'Đã đặt lại mật khẩu cho nhân viên',
+    inviteFailed: 'Đã tạo tài khoản nhưng gửi email mời thất bại. Hãy bấm "Gửi lại lời mời" sau khi kiểm tra email.',
+    emailAlreadyRegisteredHint: 'Email này đã có tài khoản Founder AI. Hãy dùng tab "Link tài khoản có sẵn" để thêm người này vào team.',
+    usernameTaken: 'Tên đăng nhập này đã có người dùng. Hãy chọn tên khác (ví dụ thêm tên công ty phía sau).',
+    usernameHint: 'Chỉ chữ cái và số, không dấu, không khoảng trắng. Tên này dùng chung toàn hệ thống nên hãy thêm tên công ty cho khỏi trùng.',
+    permissionsColumn: 'Quyền',
+    noPermissionsBadge: 'Chưa cấp quyền',
+    permissionsCount: '{count} quyền',
+    noPermissionsBanner: '{name} chưa có quyền nào nên chưa thấy gì trong không gian của bạn. Tick quyền bên dưới rồi bấm Lưu quyền hạn.',
+    presetsLabel: 'Chọn nhanh:',
+    presetViewOnly: 'Chỉ xem',
+    presetMarketing: 'Làm marketing',
+    presetAll: 'Tất cả',
+    presetNone: 'Bỏ hết',
+    permReloadNote: 'Đã lưu. Nhân viên cần tải lại trang (F5) để nhận quyền mới.',
+    resetTempPasswordNote: 'Hệ thống sẽ tạo một mật khẩu tạm. Nhân viên phải đổi ngay ở lần đăng nhập đầu.',
+    resetResultTitle: 'Mật khẩu tạm của {username}',
+    resetResultOnce: 'Mật khẩu này chỉ hiện một lần. Hãy sao chép và gửi cho nhân viên ngay — đóng hộp này là không xem lại được.',
+    copy: 'Sao chép',
+    copied: 'Đã sao chép',
+    copyFailed: 'Không sao chép được — hãy bôi đen mật khẩu rồi copy thủ công',
     resetFailed: 'Không thể reset mật khẩu',
     resendInviteSuccess: 'Đã gửi lại lời mời đến email nhân viên',
     resendInviteFailed: 'Không thể gửi lại lời mời',
@@ -1503,7 +1529,6 @@ export default {
     confirmResetTitle: 'Xác nhận reset mật khẩu',
     confirmResetMessage: 'Reset mật khẩu cho',
     newPassword: 'Mật khẩu sau khi reset',
-    defaultPassword: 'digiso@2026',
     confirmDeleteTitle: 'Xác nhận xóa nhân viên',
     confirmDeleteMessage: 'Xóa khỏi team',
     deleteWarning: 'Tài khoản của họ vẫn còn nhưng sẽ không còn là nhân viên của bạn.',
@@ -2875,6 +2900,10 @@ export default {
       CAMPAIGN_UPDATED: 'Cập nhật chiến dịch',
       CAMPAIGN_DELETED: 'Xóa chiến dịch',
       CAMPAIGN_RUN_STARTED: 'Bắt đầu chạy chiến dịch',
+      CAMPAIGN_SCHEDULE_CREATED: 'Tạo lịch chạy chiến dịch',
+      CAMPAIGN_SCHEDULE_UPDATED: 'Sửa lịch chạy chiến dịch',
+      CAMPAIGN_SCHEDULE_TOGGLED: 'Bật/tắt lịch chạy chiến dịch',
+      CAMPAIGN_SCHEDULE_DELETED: 'Xóa lịch chạy chiến dịch',
       CAMPAIGN_PAUSED: 'Tạm dừng chiến dịch',
       EMAIL_TEMPLATE_CREATED: 'Tạo mẫu email',
       EMAIL_TEMPLATE_UPDATED: 'Cập nhật mẫu email',
@@ -5015,9 +5044,12 @@ export default {
       formulaPlaceholder: 'VD: CONCAT(col_A, " ", col_B) hoặc DATE_FORMAT(NOW(), "%d/%m/%Y")',
       fixedValuePlaceholder: 'Nhập giá trị cố định...',
       example: 'Ví dụ:',
-      exampleMapping: '{var} → Cột "{column}" hoặc cột A',
-      exampleFunction: '{var} → Hàm: CONCAT(col_B, " ", col_C)',
-      exampleNow: '{var} → Hàm: DATE_FORMAT(NOW(), "%d/%m/%Y")',
+      // Bỏ tiền tố '{var} → ': JSX đã render <code>tên_biến</code> rồi mũi tên ở NGOÀI, nên
+      // để trong chuỗi là lặp hai lần — và hai dòng dưới không truyền `var` nên nó in ra
+      // nguyên văn "{var} →".
+      exampleMapping: 'Cột "{column}" hoặc cột A',
+      exampleFunction: 'Hàm: CONCAT(col_B, " ", col_C)',
+      exampleNow: 'Hàm: DATE_FORMAT(NOW(), "%d/%m/%Y")',
     },
 
     // Save customer section
@@ -5436,7 +5468,12 @@ export default {
     close: 'Đóng',
     activeCampaigns: 'Chiến dịch đang hoạt động',
     scheduledCampaigns: 'Lịch chạy đã thiết lập',
-    scheduleCampaignNotActiveWarning: 'Chiến dịch đang tạm dừng — lịch này sẽ không gửi',
+    // Trước đây cứng "đang tạm dừng" nên bắn sai cho cả chiến dịch Nháp (lệnh giao 21/09/2026).
+    scheduleCampaignNotActiveWarning: 'Chiến dịch đang ở trạng thái {status} — lịch này sẽ không gửi',
+    scheduleCampaignStatus: {
+      draft: 'Nháp',
+      paused: 'Tạm dừng',
+    },
     pausedCampaigns: 'Chiến dịch đang tạm dừng',
     noActiveCampaigns: 'Không có chiến dịch đang hoạt động',
     noPausedCampaigns: 'Không có chiến dịch tạm dừng',
@@ -5446,7 +5483,10 @@ export default {
     viewSchedules: 'Xem lịch đã thiết lập',
     schedule: 'Lên lịch',
     running: 'Đang chạy',
-    continuousRunning: 'Chạy liên tục{interval, select, undefined {} other { ({interval} phút/lần)}}',
+    // Tách hai khoá thay vì một chuỗi ICU: bộ dịch ở i18n/index.jsx chỉ thay `{tên}` bằng regex,
+    // KHÔNG hiểu select/plural — chuỗi ICU lọt nguyên văn ra màn hình (ảnh sếp gửi 21/09).
+    continuousRunning: 'Chạy liên tục',
+    continuousRunningEvery: 'Chạy liên tục ({interval} phút/lần)',
     quotaPausedUntil: 'Hết lượt gửi — tự chạy lại {until}',
     smtpPausedUntil: 'Máy chủ email tạm chặn — tự gửi tiếp {until}',
     zaloPausedUntil: 'Zalo tạm nghỉ theo hạn mức — tự gửi tiếp {until}',
@@ -5810,6 +5850,9 @@ export default {
     default: '(Mặc định)',
     noAccounts: 'Chưa có tài khoản Zalo. Vui lòng thêm ở Cài đặt Zalo.',
     noAccountsAvailable: 'Chưa có tài khoản Zalo khả dụng. Vui lòng vào trang Cài đặt Zalo để đăng nhập tài khoản.',
+    loadingAccounts: 'Đang tải danh sách tài khoản Zalo…',
+    loadFailed: 'Không tải được danh sách tài khoản Zalo.',
+    retry: 'Thử lại',
     poolModeNote: 'Khi bật pool: node «Lấy danh sách bạn bè Zalo» sẽ bị gỡ khỏi sơ đồ khi bạn bấm Lưu (không dùng làm nguồn gửi). Trên palette, node này cũng bị ẩn; preview và chạy thật sẽ không thực hiện bước lấy danh sách bạn bè.',
     selectAccount: 'Chọn tài khoản',
     zaloAccountRequired: 'Tài khoản Zalo gửi',

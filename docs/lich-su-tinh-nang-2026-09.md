@@ -494,7 +494,172 @@ hỏng 0**, khác 10/08 (12 index hỏng trả thiếu dòng im lặng). Kiểm 
 nói "sạch" cả khi đang hỏng. Đóng sổ hai lượt chạy vô ích của tài khoản nội bộ: 0 thành công trên
 25.165 lượt, mỗi ngày vào lại làm khoá tra số của chính tài khoản đó.
 
-## Việc còn treo (tính tới 19/09/2026)
+## Nhắc hạn gói: popup trước khi hết, thư T-7/T-3/T-0, lịch do super admin đặt (13/09)
+
+Trước đó hệ thống không nhắc gì: gói hết hạn là khách mất quyền dùng mà không được báo trước lần nào.
+Nay có ba lớp — popup trong app khi còn ≤3 ngày, thư nhắc theo mốc, và trang cho super admin tự đổi
+mốc thay vì phải sửa code.
+
+| Việc | Commit |
+|---|---|
+| Thư T-0 khi hết hạn + tách `subscriptionExpiry.service`, đếm `reminder_count` chống gửi lặp | `3785b4bd` |
+| Nối mẫu thư `plan_expiring` / `plan_expired` vào đường gửi thật | `4d2410aa` |
+| Trang admin sửa được cả 3 mẫu thư qua bộ chọn mẫu | `67b5ccd0` |
+| Super admin tự đặt mốc nhắc (đọc từ DB, mặc định `[7, 3]`) | `294b4713` |
+| Tab riêng trong trang mẫu thư để sửa lịch nhắc | `f08b795d` |
+
+Vòng lặp nhắc hạn tách khỏi thân cron để một tài khoản lỗi không chặn phần còn lại của lượt quét.
+
+## SĐT tài khoản: chặn số nhập bừa, rồi mở cho số bàn và số nước ngoài (15/09)
+
+Nhật Minh nghiệm thu modal SĐT rồi thử nhập bừa: `1111111111` và cả `abc1234567890` **được nhận**,
+vào DB và Google Sheet thành viên. Vá vòng một siết về đúng di động Việt Nam 10 số; vòng hai mở lại
+cho số bàn `02x` và số nước ngoài (bắt buộc có `+` và mã quốc gia), nhưng OTP chỉ đòi với di động VN
+vì chỉ nhóm đó nhận được tin nhắn.
+
+| Việc | Commit |
+|---|---|
+| Chặn SĐT nhập bừa — chỉ di động VN 10 số (03/05/07/08/09) | `c887973b` `add447d9` |
+| Nhận số bàn VN + số nước ngoài có mã quốc gia; OTP chỉ với di động VN | `2e901856` |
+
+Nguồn luật duy nhất: `backend/src/utils/accountPhone.util.js`. Đừng siết `vietnamesePhone.util.js` —
+file đó dùng chung cho nhập khách hàng, chiến dịch và hạn mức.
+
+## Cổng sau đăng nhập: "Không đồng ý và đăng xuất", modal hiện ở mọi trang (15/09)
+
+Hai modal cổng (đồng ý NĐ 330 và SĐT) chỉ được gắn trong `MainLayout`, mà đăng ký bằng Google lại đưa
+người dùng về trang chủ `/` — nên với đường Google, **không modal nào bao giờ hiện**. Nhật Minh gửi
+ảnh chứng minh, plan buổi sáng (thêm ô SĐT vào hộp đồng ý Google) bị bỏ, đổi sang gắn cổng ở mọi
+trang sau đăng nhập.
+
+| Việc | Commit |
+|---|---|
+| Modal đồng ý có nút "Không đồng ý và đăng xuất" | `f290fed6` |
+| Cổng đồng ý + SĐT hiện ở mọi trang sau đăng nhập (đồng ý trước, SĐT sau), bỏ hộp đồng ý Google ở trang Đăng ký | `f6b62d19` |
+
+Thêm modal cổng là thêm một cách làm E2E đỏ — dấu hiệu duy nhất là `modal-overlay intercepts pointer
+events`. Đã xảy ra 5 lần; chỗ vá là `e2e/scripts/seed-test-db.js`.
+
+## Chatbot: khung giờ được phép trả lời, nhãn nút mở chat trên web (15–20/09)
+
+Sếp: *"Bổ sung khung giờ active chatbot trên Zalo/Facebook (ví dụ 18h00–5h là thời gian chatbot được
+phép trả lời)"*. Làm đa ca, đa ngày, vắt qua nửa đêm — ca vắt nửa đêm tính theo **ngày bắt đầu ca**,
+giờ Việt Nam cố định +7. Sáu kênh đều có chốt. Tin khách gửi ngoài giờ **vẫn vào hộp thư**, chỉ là bot
+không trả lời, và câu "ngoài giờ" gửi một lần cho mỗi đợt thật, không phải mỗi ngày lịch.
+
+| Việc | Commit |
+|---|---|
+| Khung giờ hoạt động (migration 224 `custom_chatbots.active_hours`) | `d97546bc` |
+| Đa ca / đa ngày trên Zalo và Facebook | `30a70360` |
+| Câu ngoài giờ gửi 1 lần theo đợt thật, dùng kho khoá của rate limit | `ccf5dbbf` |
+| Bổ sung chốt Telegram cá nhân + fixture schema | `53aae215` |
+| Facebook kiểm "AI tạm dừng" trước khung giờ và rate limit | `6d48acf5` |
+| Modal cấu hình báo lỗi thật khi lưu thất bại, hết báo "Đã lưu" giả | `7fd4f14a` |
+| Nhãn nút mở chat trên widget web (`launcher_label`, mặc định tắt) | `c1f8c47f` |
+
+Nhãn nút mở chat: tính năng chạy đúng, nhưng 52/55 chatbot trên production để trống ô đó — gồm cả 6
+chatbot của sếp. Đây là chuyện cấu hình, không phải lỗi code.
+
+## Zalo OA và Facebook nối được từ Chatbot Studio (21/09)
+
+Nghiệm thu khung giờ mới lộ ra: Studio có nút "Kết nối" cho Zalo OA và Facebook nhưng 4 hàm API phía
+frontend **không tồn tại**, nên bấm vào không xảy ra gì. Trước đó hai kênh này chỉ nối được qua hệ
+thống webhook theo tài khoản — hệ thống cũ, không có khung giờ và không gắn với chatbot nào.
+
+| Việc | Commit |
+|---|---|
+| Cho phép kết nối Zalo OA và Facebook Messenger từ Chatbot Studio | `ed534829` |
+| Ô Verify Token nói rõ chỉ hiện một lần ngay sau khi nối, nhắc copy ngay | `f1c9201f` |
+
+Facebook vẫn chưa chạy thật: production thiếu cả 4 biến môi trường của Meta app, và chưa có Meta app
+nào được tạo. Việc nối Facebook bằng một nút đã có lệnh giao nhưng **sếp yêu cầu dừng** (21/09).
+
+## Sơ đồ chiến dịch: 4 nút hành động, bỏ nút "Kích hoạt" (16/09)
+
+Trình dựng chiến dịch nhận thêm **Chạy ngay / Lên lịch / Chia sẻ / Nhân bản**, và nút "Kích hoạt"
+riêng bị bỏ — bấm "Chạy ngay" trên chiến dịch nháp thì tự kích hoạt luôn.
+
+| Việc | Commit |
+|---|---|
+| Nút Chia sẻ + Nhân bản trên thanh công cụ sơ đồ | `9a18679e` |
+| Tự kích hoạt khi bấm Chạy ngay, bỏ nút Kích hoạt riêng | `09102f08` |
+
+Việc tự kích hoạt **cố ý không áp cho lượt chạy từ lịch**, để lịch không tự bật lại chiến dịch người
+ta vừa Tạm dừng. Hệ quả chưa lường: lịch hẹn cho chiến dịch còn nháp thì nổ xong hỏng im lặng — xem
+mục "Việc còn treo".
+
+## Gửi nhanh: nhận UID/danh bạ, tự tải tệp đính kèm (04/09, 16/09)
+
+| Việc | Commit |
+|---|---|
+| Trang Gửi nhanh nhận người nhận Zalo bằng UID/danh bạ (thêm nhóm, kết bạn) | `402f67f2` `271bffb8` |
+| Tự tải tệp đính kèm khi soạn nội dung mới, chặn key storage của workspace khác | `c8cbd190` |
+
+## Trợ lý AI dựng landing: thêm định dạng tệp, đọc PDF scan, ảnh tham khảo, "trang web" = landing (15–20/09)
+
+Bốn đợt vá liên tiếp trong cùng khu vực, mỗi đợt từ một sự cố sếp gặp thật.
+
+| Việc | Commit |
+|---|---|
+| Nhận thêm GIF/HEIC/DOC/XLS; một tệp lỗi không làm hỏng cả lượt | `911109eb` |
+| Đọc được PDF scan dạng ảnh qua `inlineData` (ngân sách tính theo **request**, không theo tệp) | `b18aa4b5` `5ec7803c` |
+| Ảnh đính kèm là ảnh **tham khảo** trừ khi được yêu cầu chèn; URL ảnh bịa thì tự sinh lại một lần rồi gỡ; "trang web"/"website" nhận là landing page | `bd6f338b` `5453aa05` |
+| Tự khai báo trường form landing lúc lưu, bỏ bước khai báo tay | `36947bb4` |
+
+`pdf-parse` đọc sai khi nhận Node `Buffer` — báo "bad XRef entry" ở 2 lượt đầu mỗi tiến trình. Luôn
+đưa vào `Uint8Array` view, và đừng đi tìm `byteOffset`.
+
+## Việc nhỏ đã xong (10–21/09)
+
+| Việc | Commit |
+|---|---|
+| Node Read Sheet tự nhận tên tab đầu tiên (AI tạo + Builder); tên tự nhận không còn thì đọc tab đầu | `0031190b` |
+| Trang Đối tác thiết kế lại theo khuôn chung (PageHeader, Notice, StatusChip), bỏ `dark:` ở 3 màn hình | `871a8cd5` `c0371c57` |
+| "AI viết hộ" chỉ dẫn hệ thống cho chatbot — backend + nút và xem trước trong Hướng dẫn AI | `8344efed` `8995f018` |
+| CI job `migration-dry-run`: thi hành migration mới trên DB nháp **trước** khi deploy chạy nó trên production | `effc91aa` |
+| Nội dung chuyển khoản PayOS bỏ dấu và cắt theo từ, không xén giữa chữ; kèm trang đối soát cho kế toán | `8ce30c19` |
+| 3 câu chữ ở node "Đọc lead landing" nói sai về đồng ý nhận tin (nói "chỉ gửi người đã đồng ý", thực tế là "bỏ qua người đã từ chối") | `871b85eb` `4d06d304` |
+
+## Lịch chạy chiến dịch thôi chết im lặng — và hai chỗ cùng bệnh (21/09)
+
+Sếp đặt lịch gửi Zalo nhóm cho chiến dịch 395 lúc **07:30 ngày 21/09**. Tới giờ không có gì xảy ra:
+không tin nhắn, không lượt chạy, không một dòng báo lỗi. Popup lịch vẫn xanh mướt "Đang bật · Đã
+chạy 0 lần".
+
+Truy ra bằng ba con số trong DB, không cần log: mọi lượt chạy của chiến dịch đều `run_type=manual`
+với `id_schedule` rỗng; `campaign_schedules.updated_at` là 11:33 — **sau** giờ hẹn, nên lịch còn bật
+lúc cron nổ; `audit_logs` không có thao tác nào giữa 20/09 09:43 và 21/09 11:32, nên chiến dịch vẫn
+là `draft` lúc 07:30.
+
+Cơ chế: lịch nổ đúng giờ → `createCampaignRunRecord` ném 400 *"Chỉ có thể chạy chiến dịch đang hoạt
+động"* (lượt chạy từ lịch **cố ý** không được tự kích hoạt chiến dịch, để nút Tạm dừng còn nghĩa) →
+scheduler bắt lỗi rồi `console.error`. Mà container được tạo mới lúc 11:09 hôm đó, nên tới lúc đi
+hỏi thì **dấu vết cuối cùng cũng đã bị xoá**.
+
+Đào tiếp thì thấy đây không phải một lỗi mà là một **hình dạng lỗi** — hệ thống làm đúng logic rồi
+nuốt mất kết quả. Hai chỗ nữa cùng bệnh, vá luôn trong đợt này.
+
+| Việc | Commit |
+|---|---|
+| PR-1: chặn 409 khi đặt lịch **bật** cho chiến dịch chưa `active` (câu nói đúng việc phải làm); lịch nổ hỏng thì ghi một dòng `campaign_runs` `failed` có `id_schedule` + `error_message`; popup lịch hiện cảnh báo, sửa chữ cứng "đang tạm dừng" vốn sai cho chiến dịch Nháp | `e0326953` |
+| PR-2: chặn lịch trùng hai lớp — controller trả 409, migration 231 thêm unique index bán phần `(id_campaign, schedule_type, cron_expression) WHERE enabled`; 4 action nhật ký mới cho thao tác lịch (trước đó bật/tắt/xoá lịch **không ghi audit dòng nào**) | `c0e75db9` |
+| PR-3: danh sách tài khoản Zalo trong node chiến dịch thôi biến mọi lỗi HTTP thành "chưa có tài khoản" — hộp đỏ nêu lý do + nút Thử lại; `api.js` tôn trọng `signal` của người gọi thay vì ghi đè rồi vứt | `2cc74646` |
+| Review: huỷ lượt init QR Telegram cũ trước khi mở lượt mới | `a3a9205c` |
+
+Ba điểm đáng nhớ:
+
+- **Không tăng `run_count` khi ghi lượt chạy hỏng.** `isReadonlyOnceSchedule` khoá nút gạt khi
+  `run_count > 0`; tăng lên là người dùng mất quyền bật/tắt một lịch **chưa từng gửi được gì**.
+- **Migration 231 tự phòng thân**: còn nhóm lịch bật trùng thì chỉ `RAISE WARNING` và bỏ qua, không
+  làm đỏ cả lượt deploy. Đổi lại phải **kiểm `pg_indexes` sau deploy** — cảnh báo nằm trong log
+  deploy, thứ bị xoá. Đo trên production 21/09: 0 nhóm trùng, index đã tạo lúc 14:51.
+- **PR-3 gỡ mất một lưới an toàn mà một chỗ đang dựa vào.** Trong 7 nơi truyền `{ signal }`, sáu là
+  GET (mất khử trùng chỉ tốn thêm một lượt đọc), chỗ thứ bảy là `POST .../telegram-accounts/init` —
+  có side effect. Nút "Tạo QR mới" trong modal không khoá theo `connecting`, mà init mất 20–40s ở
+  cold path: trước đây bộ khử trùng huỷ hộ lượt cũ, sau PR-3 thì không còn ai huỷ, mỗi lần bấm lại
+  mở thêm một phiên Telegram ở server.
+
+## Việc còn treo (tính tới 21/09/2026)
 
 - **Biểu mẫu + đặt lịch + thanh toán**: code đã lên production đủ yêu cầu gốc, kể cả MoMo hiện thông
   tin ví không QR (`c5ef85b1`, 19/09). **Chưa nghiệm thu thật** mục nào: production chỉ có 1 form thử
@@ -582,3 +747,21 @@ nói "sạch" cả khi đang hỏng. Đóng sổ hai lượt chạy vô ích c�
   lead đã tích đồng ý.
 - **`zalo_disconnected` nổ mỗi giờ nhiều ngày** vì nhìn cửa sổ 7 ngày rồi báo mỗi giờ — cùng bệnh với
   cảnh báo tỉ lệ hỏng đã sửa 13/09, chưa có plan.
+- ~~**Lịch chạy chiến dịch chết im lặng khi chiến dịch còn nháp**~~ — **đã sửa 21/09**, cả 3 PR lên
+  production (`e0326953`, `c0e75db9`, `2cc74646`) kèm một bản vá review (`a3a9205c`). Chi tiết ở mục
+  ngay trên.
+- **Lượt chạy hỏng 100% vẫn báo `completed`**: run #434 của chiến dịch 395 có đúng một lượt gửi và nó
+  `failed` (`ZALO_SEND_NOT_DELIVERED`, tài khoản Zalo chưa được cấp quyền gửi trong nhóm), nhưng bảng
+  tổng quan hiện "hoàn tất". Chưa có plan.
+- ~~**Danh sách tài khoản Zalo trong node chiến dịch hiện rỗng dù có 3 tài khoản**~~ — **đã sửa
+  21/09** (`2cc74646`). Nguyên nhân đúng như nghi: `api.js` ghi đè `signal` của người gọi rồi khử
+  trùng, nên lượt đang bay bị lượt cùng URL huỷ ngầm; `NodeConfigModal` biến lỗi đó thành mảng rỗng.
+- **Khai tử webhook kênh theo tài khoản — phần còn lại chưa commit**, thay đổi còn trong cây làm việc
+  (`chatbot.controller.js`, `oauth.controller.js`, `webhook.routes.js`).
+  Xem `_internal/LENH_GIAO_TIEP_KHAI_TU_WEBHOOK_KENH_2026-09-20.md`.
+- **Landing AI tự kiểm hiển thị và tự sửa**: cả 3 PR đã lên production 21/09 (`ef7c1774`, `86d4a1b2`,
+  `a93626b3`) nhưng **chưa nghiệm thu** N1–N5 và N7 bằng người thật (kịch bản mục 13 của plan).
+- **Xác thực SĐT bằng OTP**: code đã đủ và đã lên production (migration 204, `otpProvider.service.js`
+  có cả provider ESMS thật và bản giả lập), nhưng tiêu chí nghiệm thu của plan là **một OTP thật nhận
+  trên điện thoại** — chưa có bằng chứng việc đó đã xảy ra, và chưa rõ production đã điền
+  `ESMS_API_KEY`/`ESMS_SECRET_KEY`/`ESMS_BRANDNAME` hay còn chạy bản giả lập.

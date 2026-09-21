@@ -64,11 +64,13 @@ async function insertCampaign({ ownerId, status = 'active', campaignName = 'C' }
   return rows[0];
 }
 
-async function insertSchedule({ campaignId, scheduleName = 'S' }) {
+// cronExpression: migration 231 chặn 2 lịch BẬT y hệt (cùng chiến dịch + kiểu + cron) — test cần nhiều
+// lịch cho một chiến dịch thì phải đổi giờ (hoặc tắt lịch).
+async function insertSchedule({ campaignId, scheduleName = 'S', cronExpression = '0 9 * * *' }) {
   const { rows } = await db.query(
     `INSERT INTO campaign_schedules (id_campaign, schedule_name, schedule_type, cron_expression)
-     VALUES ($1, $2, 'daily', '0 9 * * *') RETURNING *`,
-    [campaignId, scheduleName]
+     VALUES ($1, $2, 'daily', $3) RETURNING *`,
+    [campaignId, scheduleName, cronExpression]
   );
   return rows[0];
 }
@@ -167,7 +169,7 @@ describe('GET /api/campaign-runs', () => {
     const o = await createUser({ role: 'user', username: 'u' });
     const c = await insertCampaign({ ownerId: o.id });
     const s1 = await insertSchedule({ campaignId: c.id });
-    const s2 = await insertSchedule({ campaignId: c.id });
+    const s2 = await insertSchedule({ campaignId: c.id, cronExpression: '30 9 * * *' });
     await insertRun({ campaignId: c.id, scheduleId: s1.id, runName: 'r1' });
     await insertRun({ campaignId: c.id, scheduleId: s2.id, runName: 'r2' });
     await insertRun({ campaignId: c.id, runName: 'manual' }); // no schedule

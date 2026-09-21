@@ -85,6 +85,11 @@ export default {
     common: {
       loadError: 'Failed to load listings',
       updateError: 'Failed to update',
+      // Used by MarketplaceContent/MyFavorites but never declared: t() returns the key itself, so
+      // the button rendered the literal text "common.view", and because that string is truthy the
+      // `|| 'Xem'` fallback at the call site never ran.
+      view: 'View',
+      noDescription: 'No description yet',
     },
     browse: {
       headerTitle: 'Marketplace',
@@ -1433,7 +1438,27 @@ export default {
     linkFailed: 'Failed to link account',
     updateStatusSuccess: 'Status updated successfully',
     updateStatusFailed: 'Failed to update status',
-    resetSuccess: 'Reset successful. Default password: digiso@2026',
+    resetSuccess: 'Password has been reset for the employee',
+    inviteFailed: 'The account was created but the invitation email failed to send. Click "Send invite again" after checking the email settings.',
+    emailAlreadyRegisteredHint: 'This email already has a Founder AI account. Use the "Link existing account" tab to add this person to your team.',
+    usernameTaken: 'This username is already taken. Choose another one (for example, add your company name at the end).',
+    usernameHint: 'Letters and numbers only, no accents, no spaces. This name is shared across the whole system, so add your company name to avoid clashes.',
+    permissionsColumn: 'Permissions',
+    noPermissionsBadge: 'No permissions yet',
+    permissionsCount: '{count} permissions',
+    noPermissionsBanner: '{name} has no permissions yet, so they cannot see anything in your workspace. Tick the permissions below, then click Save permissions.',
+    presetsLabel: 'Quick pick:',
+    presetViewOnly: 'View only',
+    presetMarketing: 'Marketing',
+    presetAll: 'Everything',
+    presetNone: 'Clear all',
+    permReloadNote: 'Saved. The employee needs to reload the page (F5) to receive the new permissions.',
+    resetTempPasswordNote: 'The system will generate a temporary password. The employee must change it at their first sign-in.',
+    resetResultTitle: 'Temporary password for {username}',
+    resetResultOnce: 'This password is shown only once. Copy it and send it to the employee now — once you close this box you cannot view it again.',
+    copy: 'Copy',
+    copied: 'Copied',
+    copyFailed: 'Could not copy — select the password and copy it manually',
     resetFailed: 'Failed to reset password',
     resendInviteSuccess: 'Invitation resent to employee email',
     resendInviteFailed: 'Failed to resend invitation',
@@ -1502,7 +1527,6 @@ export default {
     confirmResetTitle: 'Confirm Password Reset',
     confirmResetMessage: 'Reset password for',
     newPassword: 'Password after reset',
-    defaultPassword: 'digiso@2026',
     confirmDeleteTitle: 'Confirm Delete Employee',
     confirmDeleteMessage: 'Remove from team',
     deleteWarning: 'Their account will still exist but they will no longer be your employee.',
@@ -2868,6 +2892,10 @@ export default {
       CAMPAIGN_UPDATED: 'Campaign Updated',
       CAMPAIGN_DELETED: 'Campaign Deleted',
       CAMPAIGN_RUN_STARTED: 'Campaign Run Started',
+      CAMPAIGN_SCHEDULE_CREATED: 'Campaign Schedule Created',
+      CAMPAIGN_SCHEDULE_UPDATED: 'Campaign Schedule Updated',
+      CAMPAIGN_SCHEDULE_TOGGLED: 'Campaign Schedule Enabled/Disabled',
+      CAMPAIGN_SCHEDULE_DELETED: 'Campaign Schedule Deleted',
       CAMPAIGN_PAUSED: 'Campaign Paused',
       EMAIL_TEMPLATE_CREATED: 'Email Template Created',
       EMAIL_TEMPLATE_UPDATED: 'Email Template Updated',
@@ -5009,9 +5037,12 @@ export default {
       formulaPlaceholder: 'E.g.: CONCAT(col_A, " ", col_B) or DATE_FORMAT(NOW(), "%d/%m/%Y")',
       fixedValuePlaceholder: 'Enter fixed value...',
       example: 'Example:',
-      exampleMapping: '{var} → Column "{column}" or column A',
-      exampleFunction: '{var} → Function: CONCAT(col_B, " ", col_C)',
-      exampleNow: '{var} → Function: DATE_FORMAT(NOW(), "%d/%m/%Y")',
+      // Dropped the '{var} → ' prefix: the JSX already renders <code>var_name</code> and the arrow
+      // OUTSIDE the string, so keeping it here duplicated both — and the last two calls pass no
+      // `var`, which leaked the literal "{var} →".
+      exampleMapping: 'Column "{column}" or column A',
+      exampleFunction: 'Function: CONCAT(col_B, " ", col_C)',
+      exampleNow: 'Function: DATE_FORMAT(NOW(), "%d/%m/%Y")',
     },
 
     // Save customer section
@@ -5430,7 +5461,12 @@ export default {
     close: 'Close',
     activeCampaigns: 'Active Campaigns',
     scheduledCampaigns: 'Scheduled Campaigns',
-    scheduleCampaignNotActiveWarning: 'Campaign is paused — this schedule will not send',
+    // Was hard-coded "paused", which also fired for Draft campaigns (assignment 21/09/2026).
+    scheduleCampaignNotActiveWarning: 'Campaign status is {status} — this schedule will not send',
+    scheduleCampaignStatus: {
+      draft: 'Draft',
+      paused: 'Paused',
+    },
     pausedCampaigns: 'Paused Campaigns',
     noActiveCampaigns: 'No active campaigns',
     noPausedCampaigns: 'No paused campaigns',
@@ -5440,7 +5476,11 @@ export default {
     viewSchedules: 'View configured schedules',
     schedule: 'Schedule',
     running: 'Running',
-    continuousRunning: 'Running continuously{interval, select, undefined {} other { ({interval} min/interval)}}',
+    // Two keys instead of one ICU `{interval, select, ...}` string: the translator in
+    // i18n/index.jsx only substitutes `{name}` via regex and does NOT understand select/plural,
+    // so the raw ICU pattern leaked straight to the screen.
+    continuousRunning: 'Running continuously',
+    continuousRunningEvery: 'Running continuously ({interval} min/interval)',
     quotaPausedUntil: 'Out of send quota — resumes {until}',
     smtpPausedUntil: 'Mail server throttled — resumes {until}',
     zaloPausedUntil: 'Zalo rate limit — resumes {until}',
@@ -5804,6 +5844,9 @@ export default {
     default: '(Default)',
     noAccounts: 'No Zalo accounts. Please add in Zalo Settings.',
     noAccountsAvailable: 'No Zalo accounts available. Please go to Zalo Settings page to log in.',
+    loadingAccounts: 'Loading Zalo accounts…',
+    loadFailed: 'Could not load the list of Zalo accounts.',
+    retry: 'Retry',
     poolModeNote: 'When pool is enabled: "Get Zalo Friends List" node will be removed from the diagram when you click Save (not used as sending source). On the palette, this node is also hidden; preview and actual runs will skip the friends list step.',
     selectAccount: 'Select account',
     zaloAccountRequired: 'Zalo sending account',
