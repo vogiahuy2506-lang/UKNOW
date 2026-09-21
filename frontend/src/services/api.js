@@ -18,6 +18,9 @@ export const setAuthStore = (store) => {
 
 // Request deduplication - prevent duplicate concurrent requests
 const pendingRequests = new Map();
+// Signal do CHÍNH interceptor này tạo (request có khử trùng). Request người gọi tự truyền `signal` thì
+// không nằm trong đây → không khử trùng, và khi nó xong cũng không được xoá sổ của request khác.
+const dedupeOwnedSignals = new WeakSet();
 
 const getRequestKey = (config) => {
   return `${config.method || 'GET'}:${config.url}:${JSON.stringify(config.params || {})}`;
@@ -130,6 +133,11 @@ api.interceptors.request.use(
   (config) => {
     if (isUploadRequest(config)) {
       if (config.timeout === DEFAULT_TIMEOUT_MS) config.timeout = UPLOAD_TIMEOUT_MS;
+    } else if (config.signal && !dedupeOwnedSignals.has(config.signal)) {
+      // (Signal do CHÍNH interceptor tạo — config được thử lại sau 401 — không tính: vẫn khử trùng như thường.)
+      // Người gọi tự quản việc huỷ (vd modal huỷ khi đóng). Trước đây dòng `config.signal = controller.signal`
+      // bên dưới GHI ĐÈ signal này nên nó bị vứt, và request bị lượt trùng cùng URL huỷ ngầm — danh sách
+      // tài khoản Zalo trong node builder rỗng vì đúng chuyện đó. Tôn trọng signal, không khử trùng.
     } else {
       // Request deduplication - cancel duplicate in-flight requests
       const key = getRequestKey(config);
@@ -141,6 +149,7 @@ api.interceptors.request.use(
 
       const controller = new AbortController();
       config.signal = controller.signal;
+      dedupeOwnedSignals.add(controller.signal);
       pendingRequests.set(key, controller);
     }
 
@@ -172,14 +181,14 @@ const getLimitReachedLabel = () => {
 api.interceptors.response.use(
   (response) => {
     // Clean up pending request on success (upload không đăng ký nên không xoá nhầm lượt khác cùng khoá)
-    if (!isUploadRequest(response.config)) {
+    if (dedupeOwnedSignals.has(response.config?.signal)) {
       cleanupRequest(getRequestKey(response.config));
     }
     return response;
   },
   async (error) => {
     // Clean up pending request on error
-    if (error.config && !isUploadRequest(error.config)) {
+    if (error.config && dedupeOwnedSignals.has(error.config.signal)) {
       cleanupRequest(getRequestKey(error.config));
     }
 

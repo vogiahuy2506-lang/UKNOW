@@ -8,6 +8,8 @@ import { buildSchemaFromRows } from '../utils/campaignBuilderRuntime';
 import {
   createNodeConfigFormData,
   fetchZaloAccountOptions,
+  isRequestCanceled,
+  describeRequestFailure,
   fetchInterestedCourseOptions,
   fetchTemplateDetail,
   handleNodeConfigSaveClick,
@@ -99,6 +101,12 @@ const NodeConfigModal = ({
   const [productsPreviewItems, setProductsPreviewItems] = useState([]);
   const [isLoadingProductsPreview, setIsLoadingProductsPreview] = useState(false);
   const [zaloAccounts, setZaloAccounts] = useState([]);
+  // idle (chưa/không rõ: bị huỷ) | loading | loaded (API trả thành công, kể cả mảng rỗng) | error.
+  // Trước đây một `catch { setZaloAccounts([]) }` biến MỌI lỗi thành "Chưa có tài khoản Zalo khả dụng"
+  // — nói sai sự thật (production có 3 tài khoản) và chỉ người dùng đi tìm thứ đang nằm sẵn ở đó.
+  const [zaloAccountsStatus, setZaloAccountsStatus] = useState('idle');
+  const [zaloAccountsError, setZaloAccountsError] = useState('');
+  const [zaloAccountsReloadKey, setZaloAccountsReloadKey] = useState(0);
   const [zaloFriendTemplate, setZaloFriendTemplate] = useState(null);
 
   const handleCheckSheetConnection = async () => {
@@ -320,24 +328,43 @@ const NodeConfigModal = ({
   useEffect(() => {
     if (!isOpen || !node || nodeType !== 'select_zalo_account') {
       setZaloAccounts([]);
-      return;
+      setZaloAccountsStatus('idle');
+      setZaloAccountsError('');
+      return undefined;
     }
 
     let cancelled = false;
+    const controller = new AbortController();
     const loadZaloAccounts = async () => {
+      setZaloAccountsStatus('loading');
+      setZaloAccountsError('');
       try {
-        const items = await fetchZaloAccountOptions();
-        if (!cancelled) setZaloAccounts(items);
-      } catch {
-        if (!cancelled) setZaloAccounts([]);
+        const items = await fetchZaloAccountOptions({ signal: controller.signal });
+        if (cancelled) return;
+        setZaloAccounts(items);
+        setZaloAccountsStatus('loaded');
+      } catch (error) {
+        if (cancelled) return;
+        // Huỷ request KHÔNG phải lỗi: không báo lỗi, cũng không kết luận "chưa có tài khoản".
+        if (isRequestCanceled(error)) {
+          setZaloAccountsStatus('idle');
+          return;
+        }
+        setZaloAccounts([]);
+        setZaloAccountsError(describeRequestFailure(error));
+        setZaloAccountsStatus('error');
       }
     };
 
     loadZaloAccounts();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [isOpen, nodeType, node]);
+    // `node?.id` chứ không phải `node`: object node đổi identity mỗi lần cha render, hiệu ứng bắn lại
+    // rồi tự huỷ chính request đang bay của mình.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, nodeType, node?.id, zaloAccountsReloadKey]);
 
   useEffect(() => {
     if (!isOpen || !node || nodeType !== 'send_zalo_friend_request') {
@@ -581,6 +608,9 @@ const NodeConfigModal = ({
             formData={formData}
             setFormData={setFormData}
             zaloAccounts={zaloAccounts}
+            zaloAccountsStatus={zaloAccountsStatus}
+            zaloAccountsError={zaloAccountsError}
+            onRetryZaloAccounts={() => setZaloAccountsReloadKey((key) => key + 1)}
           />
         );
       case 'get_all_friends':

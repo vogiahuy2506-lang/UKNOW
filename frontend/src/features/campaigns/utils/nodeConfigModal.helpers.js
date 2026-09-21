@@ -118,12 +118,38 @@ export const fetchInterestedCustomerCoursesLocal = async ({ config = {} } = {}) 
 };
 
 /**
+ * Lỗi do CHÍNH request bị huỷ (AbortController của người gọi, hay khử trùng của api.js) — không phải lỗi
+ * của server/mạng nên UI không được báo lỗi hay kết luận gì từ nó.
+ *
+ * @param {unknown} error
+ * @returns {boolean}
+ */
+export const isRequestCanceled = (error) => (
+  error?.code === 'ERR_CANCELED'
+  || error?.name === 'CanceledError'
+  || error?.name === 'AbortError'
+);
+
+/**
+ * Câu nêu NGUYÊN NHÂN khi tải danh sách tài khoản Zalo hỏng: ưu tiên thông điệp của server, rồi tới
+ * thông điệp lỗi của axios (timeout, Network Error…).
+ *
+ * @param {any} error
+ * @returns {string} '' nếu không có gì để nêu
+ */
+export const describeRequestFailure = (error) => (
+  String(error?.response?.data?.message || error?.message || '').trim()
+);
+
+/**
  * Load Zalo account options used by campaign nodes.
  *
+ * @param {{ signal?: AbortSignal }} [options] signal của người gọi (huỷ khi đóng modal) — api.js tôn
+ *   trọng nó và không khử trùng request này, nên node runner gọi cùng URL không huỷ lượt này nữa.
  * @returns {Promise<Array<{id: string, displayName: string, status: string, isActive: boolean, isDefault: boolean}>>}
  */
-export const fetchZaloAccountOptions = async () => {
-  const response = await campaignBuilderApiService.getZaloAccounts();
+export const fetchZaloAccountOptions = async ({ signal } = {}) => {
+  const response = await campaignBuilderApiService.getZaloAccounts(signal ? { signal } : {});
   const items = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
 
   const isLikelyZaloId = (v) => {
