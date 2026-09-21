@@ -4,6 +4,8 @@
 -- Pattern mirrors WhatsApp: channel_connections = per-user (pages),
 -- chatbot_channel_connections = per-chatbot (AI enable per page).
 
+-- allow-destructive-ddl: Thay đổi UNIQUE constraint từ single-page sang multi-page (id_user, channel, fb_page_id). Step 1 drop constraint cũ, step 3 tạo constraint mới.
+
 -- Step 1: Drop the old single-page-per-user UNIQUE constraint
 -- Old: (id_user, channel) — one row per user per channel.
 ALTER TABLE channel_connections
