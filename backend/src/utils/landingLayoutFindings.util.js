@@ -140,7 +140,8 @@ export function buildAutoLayoutFixInstruction(findings) {
 // Câu báo cho NGƯỜI DÙNG không được lộ chuyện kỹ thuật (sếp chốt 20/09: không class/pixel/selector).
 // Prompt đã cấm; đây là lưới cuối — model lỡ nhắc thì bỏ cả câu chứ không sửa hộ, phía gọi có lời
 // dự phòng khi không có changeSummary.
-const TECHNICAL_LEAK = /\d\s*(?:px|rem|em)\b|\b(?:class|css|tailwind|html|div|span|selector|absolute)\b|\b[a-z]+-\d+\b/i;
+// `em` chỉ tính khi dính liền số (1.5em): "cho 5 em học sinh" là tiếng Việt bình thường, không phải CSS.
+const TECHNICAL_LEAK = /\d\s*(?:px|rem)\b|\d(?:\.\d+)?em\b|\b(?:class|css|tailwind|html|div|span|selector|absolute)\b|\b[a-z]+-\d+\b/i;
 
 /**
  * `changeSummary` model trả về → chuỗi an toàn để hiện cho người dùng, hoặc '' nếu không dùng được:

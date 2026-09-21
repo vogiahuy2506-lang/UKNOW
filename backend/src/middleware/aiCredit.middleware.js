@@ -12,6 +12,9 @@ function buildCreditErrorPayload(error) {
   };
 }
 
+/** Feature DUY NHẤT có lượt miễn credit (sửa hiển thị tự động của landing) — xem chú thích bên dưới. */
+export const AUTO_LAYOUT_FIX_CREDIT_FREE_FEATURE = 'ai_edit_landing_html';
+
 /**
  * Pre-flight only: verify credit available before handler (no charge).
  * Handler must call chargeAiCredit(req) after successful AI output.
@@ -21,13 +24,19 @@ function buildCreditErrorPayload(error) {
  * Chống lợi dụng nằm ở handler: trần 2 lượt/tin đếm ở server, lệnh sửa do server dựng, tin phải
  * thuộc phiên của chính user. Token model vẫn ghi qua aiUsageMeter.
  *
+ * CHỈ feature sửa landing mới được miễn. Middleware này dùng chung cho 11 route tính credit
+ * (chat, sinh chiến dịch, sinh landing, tóm tắt hộp thư, dashboard…): bản đầu (review 21/09) miễn cho
+ * MỌI feature hễ body có `autoLayoutFix: true`, và chargeAiCredit cũng bỏ trừ theo cùng cờ → ai gửi
+ * thêm một trường vào `/ai/chat` là dùng AI miễn phí không giới hạn. Các handler khác không biết gì
+ * về cờ này nên không có trần nào đỡ — khoá phải nằm ở đây.
+ *
  * @param {string} feature
  */
 export function assertAiCreditAvailable(feature) {
   return async (req, res, next) => {
     try {
       req.aiCreditFeature = feature;
-      if (req.body?.autoLayoutFix === true) {
+      if (feature === AUTO_LAYOUT_FIX_CREDIT_FREE_FEATURE && req.body?.autoLayoutFix === true) {
         req.aiCreditSkipped = true;
         return next();
       }

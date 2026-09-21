@@ -62,6 +62,36 @@ describe('assertAiCreditAvailable — lượt sửa tự động (plan landing t
     expect(nextAuto).toHaveBeenCalledTimes(1);
   });
 
+  // Review 21/09 — lỗ chạm tiền: middleware dùng chung cho 11 route tính credit. Bản đầu miễn cho
+  // MỌI feature hễ body có autoLayoutFix:true, và chargeAiCredit bỏ trừ theo cùng cờ → gửi thêm một
+  // trường vào /ai/chat là dùng AI miễn phí không giới hạn. Chỉ feature sửa landing mới được miễn.
+  it.each([
+    'ai_assistant_chat', 'ai_assistant_chat_v2', 'ai_generate_campaign', 'ai_generate_campaign_v2',
+    'ai_generate_landing_html', 'ai_generate_system_instruction', 'ai_custom_chat',
+    'landing_template_generate', 'dashboard_insights', 'inbox_ai_summary',
+  ])('feature KHÁC (%s) + autoLayoutFix:true → VẪN kiểm credit và VẪN bị trừ', async (feature) => {
+    const req = makeReq({ autoLayoutFix: true });
+    const next = jest.fn();
+    await assertAiCreditAvailable(feature)(req, makeRes(), next);
+    expect(assertAvailable).toHaveBeenCalledTimes(1);
+    expect(req.aiCreditSkipped).toBeUndefined();
+    expect(next).toHaveBeenCalledTimes(1);
+
+    consume.mockResolvedValue(undefined);
+    await chargeAiCredit(req);
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(consume).toHaveBeenCalledWith(7, expect.objectContaining({ feature }));
+  });
+
+  it('feature KHÁC + autoLayoutFix:true + khách HẾT credit → bị chặn 402 như thường', async () => {
+    assertAvailable.mockRejectedValue(Object.assign(new Error('Đã hết lượt AI trong kỳ'), { code: 'RESOURCE_LIMIT_EXCEEDED', status: 402 }));
+    const res = makeRes();
+    const next = jest.fn();
+    await assertAiCreditAvailable('ai_assistant_chat')(makeReq({ autoLayoutFix: true }), res, next);
+    expect(res.status).toHaveBeenCalledWith(402);
+    expect(next).not.toHaveBeenCalled();
+  });
+
   it.each([['"true"', 'true'], ['1', 1], ['"1"', '1'], ['{}', {}], ['false', false]])(
     'chỉ boolean true mới được miễn (autoLayoutFix = %s vẫn kiểm credit)',
     async (_label, value) => {

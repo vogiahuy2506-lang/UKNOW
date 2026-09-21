@@ -227,6 +227,19 @@ describe('normalizeChangeSummary', () => {
     expect(normalizeChangeSummary(leaky)).toBe('');
   });
 
+  // Review 21/09: regex cũ có `\d\s*em` nên "5 em" (tiếng Việt bình thường) bị coi là đơn vị CSS.
+  it.each([
+    'Đã thêm ảnh lớp học cho 5 em học sinh ở phần Giới thiệu',
+    'Đã đổi lời chào thành "Chào các em" ở đầu trang',
+  ])('chữ "em" tiếng Việt KHÔNG bị coi là lộ kỹ thuật: %s', (ok) => {
+    expect(normalizeChangeSummary(ok)).toBe(ok);
+  });
+
+  it('đơn vị em dính liền số vẫn bị chặn', () => {
+    expect(normalizeChangeSummary('Đã tăng khoảng cách lên 1.5em')).toBe('');
+    expect(normalizeChangeSummary('Đã tăng khoảng cách lên 2em')).toBe('');
+  });
+
   it('trần lượt tự sửa là 2', () => {
     expect(AUTO_LAYOUT_FIX_MAX_ROUNDS).toBe(2);
   });

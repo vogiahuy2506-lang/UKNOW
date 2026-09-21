@@ -1549,6 +1549,9 @@ class AiController {
           data: {
             title: data.title,
             html: data.html || '',
+            // Sinh trang đã trừ credit → cấp ngân sách 2 lượt tự sửa hiển thị miễn phí cho tin này
+            // (editLandingHtml coi tin KHÔNG có bộ đếm là hết lượt — xem chú thích ở đó).
+            autoLayoutFixCount: 0,
             ...(leadFormDraft ? { leadFormDraft, leadFormConfig: data.leadFormConfig } : {}),
           },
         };
@@ -1704,7 +1707,13 @@ class AiController {
             message: 'Không tìm thấy tin landing_page để sửa',
           });
         }
-        autoFixUsed = Number(landingMessage.data?.autoLayoutFixCount) || 0;
+        // Lượt tự sửa miễn phí là NGÂN SÁCH do một hành động ĐÃ TRẢ CREDIT cấp: sinh trang và sửa
+        // thường ghi `autoLayoutFixCount: 0`. Tin KHÔNG có bộ đếm = chưa từng được cấp → coi như hết
+        // lượt. Review 21/09: bản đầu coi "thiếu" là 0, mà `/ai/landing-from-html` (dán HTML, không
+        // tính credit) tạo tin landing_page mới không giới hạn → mỗi lần dán được 2 lượt AI miễn phí,
+        // lặp vô hạn. Tin sinh trước bản này cũng thiếu bộ đếm: chờ lượt sửa trả phí đầu tiên.
+        const storedCount = landingMessage.data?.autoLayoutFixCount;
+        autoFixUsed = Number.isInteger(storedCount) && storedCount >= 0 ? storedCount : AUTO_LAYOUT_FIX_MAX_ROUNDS;
         const lockKey = `${req.user.id}:${landingMessage.id}`;
         if (autoFixUsed >= AUTO_LAYOUT_FIX_MAX_ROUNDS || autoLayoutFixInFlight.has(lockKey)) {
           return res.status(429).json({

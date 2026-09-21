@@ -646,7 +646,9 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
     findLandingByIdInScope.mockReset();
     ingestLandingAttachments.mockResolvedValue({ assets: [], documents: [], skipped: [] });
     editHtml.mockResolvedValue({ title: 'Trang mới', html: '<div>Đã sửa</div>', changeSummary: 'Đã nới cột ngày ở phần Dòng thời gian' });
-    getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'Trang cũ', html: '<div>Trang hiện tại</div>' } });
+    // autoLayoutFixCount: 0 = tin do một hành động ĐÃ TRẢ CREDIT tạo (sinh trang / sửa thường) nên
+    // còn ngân sách tự sửa. Tin KHÔNG có bộ đếm (dán HTML, tin cũ) bị coi là hết lượt — ca riêng bên dưới.
+    getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'Trang cũ', html: '<div>Trang hiện tại</div>', autoLayoutFixCount: 0 } });
     updateLandingPageMessage.mockResolvedValue(true);
     saveMessages.mockResolvedValue(true);
     saveAssistantMessage.mockResolvedValue(true);
@@ -701,6 +703,25 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, code: 'AUTO_LAYOUT_FIX_LIMIT' }));
       expect(editHtml).not.toHaveBeenCalled();
       expect(chargeAiCredit).not.toHaveBeenCalled();
+      expect(updateLandingPageMessage).not.toHaveBeenCalled();
+    });
+
+    // Review 21/09 — lỗ chạm tiền thứ hai: /ai/landing-from-html (dán HTML) KHÔNG tính credit và tạo
+    // tin landing_page mới không giới hạn. Bản đầu coi "thiếu bộ đếm" là 0 → mỗi lần dán được 2 lượt
+    // AI miễn phí, lặp vô hạn. Ngân sách tự sửa chỉ do hành động đã trả credit cấp (ghi bộ đếm = 0).
+    it.each([
+      ['tin dán HTML (source: pasted, không có bộ đếm)', { title: 'Dán', html: '<div>x</div>', source: 'pasted' }],
+      ['tin cũ sinh trước bản này (không có bộ đếm)', { title: 'Cũ', html: '<div>x</div>' }],
+      ['bộ đếm là chuỗi', { autoLayoutFixCount: '0' }],
+      ['bộ đếm âm', { autoLayoutFixCount: -1 }],
+      ['bộ đếm null', { autoLayoutFixCount: null }],
+    ])('%s → 429, KHÔNG gọi AI, không ghi gì', async (_label, data) => {
+      getLandingPageMessage.mockResolvedValue({ id: 900, data });
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq(), res);
+      expect(res.status).toHaveBeenCalledWith(429);
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTO_LAYOUT_FIX_LIMIT' }));
+      expect(editHtml).not.toHaveBeenCalled();
       expect(updateLandingPageMessage).not.toHaveBeenCalled();
     });
 
@@ -775,7 +796,8 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
 
     it('lưu hỏng thì KHÔNG báo canRevert; không có title cũ thì không ghi previousTitle', async () => {
       updateLandingPageMessage.mockResolvedValue(false);
-      getLandingPageMessage.mockResolvedValue({ id: 900, data: {} });
+      // Không có title cũ, nhưng vẫn còn ngân sách tự sửa (tin thiếu bộ đếm bị chặn 429 — ca riêng ở trên).
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { autoLayoutFixCount: 0 } });
       const res = makeRes();
       await aiController.editLandingHtml(autoReq(), res);
       const { data } = res.json.mock.calls[0][0];
@@ -983,6 +1005,9 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(saveMessagesReturningIds).toHaveBeenCalledTimes(1);
       expect(saveMessagesReturningIds.mock.calls[0][4]).toBeUndefined();
       expect(saveMessagesReturningIds.mock.calls[0][3]).toMatchObject({ type: 'landing_page', data: { title: 'Trang khoá học' } });
+      // Review 21/09: sinh trang (đã trừ credit) phải CẤP ngân sách tự sửa bằng bộ đếm = 0; tin thiếu
+      // bộ đếm bị editLandingHtml coi là hết lượt (chặn đường dán HTML lấy lượt miễn phí vô hạn).
+      expect(saveMessagesReturningIds.mock.calls[0][3].data.autoLayoutFixCount).toBe(0);
       expect(saveMessages).not.toHaveBeenCalled(); // không đổi saveMessages / không lưu hai lần
       expect(res.json).toHaveBeenCalledWith({ success: true, data: expect.objectContaining({ messageId: 4242 }) });
       expect(chargeAiCredit).toHaveBeenCalledTimes(1); // sinh trang vẫn trừ credit
