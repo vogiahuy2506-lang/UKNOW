@@ -98,6 +98,17 @@ test.describe('fixture thật', () => {
     console.log('[sach] scrollHeight@1280 =', height);
     expect(height).toBeGreaterThan(2400);
   });
+
+  // Review 21/09: trước đây quét bị cắt vì quá hạn vẫn gửi findings: [] không kèm lỗi → phía gọi
+  // đọc thành "trang sạch" và hiện ✓ cho một trang CHƯA kiểm — đúng thất bại plan cấm ("báo ✓ mà
+  // vẫn đè"). Trang đang có 6 lỗi thật mà hạn quét 1ms thì kết quả phải mang lỗi scan_incomplete.
+  test('quá hạn quét: trang có lỗi thật KHÔNG được báo là sạch — errors chứa scan_incomplete', async ({ page }) => {
+    const result = await audit(page, readFixture('timeline-de-chu.html'), { widths: [1280], deadlineMs: 1 });
+    console.log('[qua-han-quet]', JSON.stringify({ n: result.findings.length, timedOut: result.timedOut, errors: result.errors }));
+    expect(result.errors).toContain('scan_incomplete');
+    expect(result.findings.length).toBeLessThan(6);
+    expect(result.leftoverIframes).toBe(0);
+  });
 });
 
 // HTML nhỏ, CSS inline (không cần Tailwind CDN): phủ các nhánh kind mà 2 fixture không chạm tới.

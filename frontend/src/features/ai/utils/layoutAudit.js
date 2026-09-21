@@ -72,7 +72,8 @@ export const LAYOUT_AUDIT_SCRIPT = String.raw`(function () {
   var LOAD_WAIT_MS = 2500;
   var TAILWIND_WAIT_MS = 1500;
   var FONT_WAIT_MS = 1200;
-  var DEADLINE_MS = 5200;
+  // Hạn quét; buildLayoutAuditSrcDoc({ deadlineMs }) ghi đè được (dùng cho test quá hạn).
+  var DEADLINE_MS = Number(window.__FOUNDERAI_AUDIT_DEADLINE_MS__) > 0 ? Number(window.__FOUNDERAI_AUDIT_DEADLINE_MS__) : 5200;
   var STARTED = Date.now();
   var SKIP_TAGS = { SCRIPT: 1, STYLE: 1, NOSCRIPT: 1, TEMPLATE: 1, TEXTAREA: 1, OPTION: 1, OPTGROUP: 1, HEAD: 1, TITLE: 1, IFRAME: 1 };
   var SOLID_MEDIA = { IMG: 1, VIDEO: 1, CANVAS: 1 };
@@ -353,8 +354,13 @@ export const LAYOUT_AUDIT_SCRIPT = String.raw`(function () {
     return null;
   }
 
+  // Trả { findings, truncated }. truncated = quét bị cắt vì QUÁ HẠN (mạng chậm ăn hết thời gian chờ
+  // Tailwind/font, hoặc trang quá lớn): phần chưa quét KHÔNG được coi là sạch — main() báo
+  // 'scan_incomplete' để phía gọi không bao giờ hiện "đã kiểm tra ✓" cho một trang chưa kiểm xong.
+  // Dừng vì đủ MAX_FINDINGS thì không tính: đã có lỗi để sửa, vòng đo sau sẽ quét tiếp.
   function scan() {
     var findings = [];
+    var truncated = false;
     var seen = new Map();
     var deadline = STARTED + DEADLINE_MS;
     var walker = document.createTreeWalker(document.body, NodeFilter.SHOW_ELEMENT);
@@ -376,7 +382,8 @@ export const LAYOUT_AUDIT_SCRIPT = String.raw`(function () {
       });
     }
     while ((A = walker.nextNode())) {
-      if (findings.length >= MAX_FINDINGS || Date.now() > deadline) break;
+      if (findings.length >= MAX_FINDINGS) break;
+      if (Date.now() > deadline) { truncated = true; break; }
       if (SKIP_TAGS[A.tagName]) continue;
       var nodes = ownTextNodes(A);
       if (!nodes.length) continue;
@@ -394,7 +401,7 @@ export const LAYOUT_AUDIT_SCRIPT = String.raw`(function () {
       if (cov) add('text_covered', A, cov);
     }
     scrollInstant(0);
-    return findings;
+    return { findings: findings, truncated: truncated };
   }
 
   async function main() {
@@ -405,7 +412,8 @@ export const LAYOUT_AUDIT_SCRIPT = String.raw`(function () {
       await waitFonts();
       await nextFrame();
       await nextFrame();
-      send(scan());
+      var result = scan();
+      send(result.findings, result.truncated ? 'scan_incomplete' : null);
     } catch (e) {
       send([], 'audit_error: ' + (e && e.message ? e.message : e));
     }
@@ -435,9 +443,10 @@ function safeJson(value) {
  * Nối script đo vào TRƯỚC thẻ </body> cuối cùng (không có thì nối cuối chuỗi). Nonce được đặt ở
  * `window.__FOUNDERAI_AUDIT_NONCE__` ngay trước script.
  */
-export function buildLayoutAuditSrcDoc(fullHtml, { nonce } = {}) {
+export function buildLayoutAuditSrcDoc(fullHtml, { nonce, deadlineMs } = {}) {
   const html = String(fullHtml ?? '');
-  const tag = `<script>window.__FOUNDERAI_AUDIT_NONCE__=${safeJson(nonce ?? '')};${LAYOUT_AUDIT_SCRIPT}</script>`;
+  const deadline = Number.isFinite(deadlineMs) && deadlineMs > 0 ? `window.__FOUNDERAI_AUDIT_DEADLINE_MS__=${Number(deadlineMs)};` : '';
+  const tag = `<script>window.__FOUNDERAI_AUDIT_NONCE__=${safeJson(nonce ?? '')};${deadline}${LAYOUT_AUDIT_SCRIPT}</script>`;
   const at = html.toLowerCase().lastIndexOf('</body>');
   if (at === -1) return html + tag;
   return html.slice(0, at) + tag + html.slice(at);
@@ -454,11 +463,16 @@ const MAX_FINDINGS = 12;
  *
  * Trả `{ findings, timedOut, errors }`. KHÔNG bao giờ throw và không bao giờ chặn người dùng quá
  * `timeoutMs`: quá hạn thì bề rộng chưa xong bị bỏ và `timedOut: true` (findings của bề rộng đã xong
- * vẫn giữ). `errors` là mã lỗi từ script đo (vd `tailwind_not_loaded`) để ghi telemetry — lỗi đo
- * không im lặng nhưng cũng không được biến thành finding.
+ * vẫn giữ). `errors` là mã lỗi từ script đo (vd `tailwind_not_loaded`, `scan_incomplete` khi quét bị
+ * cắt vì quá hạn) để ghi telemetry — lỗi đo không im lặng nhưng cũng không được biến thành finding.
  * Findings gộp theo thứ tự `widths` (1280 trước 390), khử trùng theo kind+selector+text, tối đa 12.
+ *
+ * HỢP ĐỒNG CHO PHÍA GỌI (PR-3): chỉ được coi trang là "đã kiểm, sạch" khi
+ * `findings.length === 0 && !timedOut && errors.length === 0`. Có `timedOut` hoặc `errors` nghĩa là
+ * CHƯA KIỂM ĐƯỢC — im lặng bỏ qua (không ✓, không báo lỗi với người dùng), tuyệt đối không hiện ✓.
+ * `deadlineMs` chỉ để test nhánh quá hạn quét.
  */
-export function runLayoutAudit(fullHtml, { widths = [1280, 390], timeoutMs = 6000 } = {}) {
+export function runLayoutAudit(fullHtml, { widths = [1280, 390], timeoutMs = 6000, deadlineMs } = {}) {
   if (typeof document === 'undefined' || !document.body) {
     return Promise.resolve({ findings: [], timedOut: false, errors: ['no_document'] });
   }
@@ -499,6 +513,9 @@ export function runLayoutAudit(fullHtml, { widths = [1280, 390], timeoutMs = 600
       if (!data || data.type !== LAYOUT_AUDIT_MESSAGE_TYPE) return;
       const entry = pending.get(data.nonce);
       if (!entry) return;
+      // Chỉ nhận từ đúng iframe đã tạo: trang được đo (HTML do AI sinh) đọc được nonce trong chính
+      // nó, nhưng cửa sổ/khung KHÁC thì không được mạo danh. Message tổng hợp (test) không có source.
+      if (event.source && event.source !== entry.iframe.contentWindow) return;
       pending.delete(data.nonce);
       entry.iframe.remove();
       results.set(entry.width, Array.isArray(data.findings) ? data.findings : []);
@@ -519,7 +536,7 @@ export function runLayoutAudit(fullHtml, { widths = [1280, 390], timeoutMs = 600
       iframe.style.cssText =
         `position:fixed;left:-10000px;top:0;width:${width}px;height:${AUDIT_FRAME_HEIGHT}px;` +
         'border:0;visibility:hidden;pointer-events:none';
-      iframe.srcdoc = buildLayoutAuditSrcDoc(fullHtml, { nonce });
+      iframe.srcdoc = buildLayoutAuditSrcDoc(fullHtml, { nonce, deadlineMs });
       pending.set(nonce, { width, iframe });
       document.body.appendChild(iframe);
     });

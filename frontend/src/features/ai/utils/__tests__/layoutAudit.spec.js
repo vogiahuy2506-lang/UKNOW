@@ -129,6 +129,20 @@ describe('buildLayoutAuditSrcDoc', () => {
     expect(out).toContain('\\u003c/script>');
   });
 
+  it('(review) deadlineMs: chỉ chèn khi là số dương hữu hạn, đứng TRƯỚC script đo', () => {
+    const withDeadline = buildLayoutAuditSrcDoc(html, { nonce: 'n', deadlineMs: 1 });
+    expect(withDeadline).toContain('window.__FOUNDERAI_AUDIT_DEADLINE_MS__=1;');
+    expect(withDeadline.indexOf('__FOUNDERAI_AUDIT_DEADLINE_MS__=1;')).toBeLessThan(withDeadline.indexOf(LAYOUT_AUDIT_SCRIPT));
+    for (const bad of [undefined, 0, -5, NaN, Infinity, '1;alert(1)']) {
+      expect(buildLayoutAuditSrcDoc(html, { nonce: 'n', deadlineMs: bad })).not.toContain('__FOUNDERAI_AUDIT_DEADLINE_MS__=');
+    }
+  });
+
+  it('(review) script đo báo scan_incomplete khi quét bị cắt vì quá hạn, không gửi [] trần', () => {
+    expect(LAYOUT_AUDIT_SCRIPT).toContain("'scan_incomplete'");
+    expect(LAYOUT_AUDIT_SCRIPT).toMatch(/Date\.now\(\) > deadline\) \{ truncated = true; break; \}/);
+  });
+
   it('script đo hợp lệ cú pháp và không tự chứa thẻ đóng script', () => {
     expect(() => new Function(LAYOUT_AUDIT_SCRIPT)).not.toThrow();
     expect(LAYOUT_AUDIT_SCRIPT.toLowerCase()).not.toContain('</script');
@@ -229,6 +243,26 @@ describe('runLayoutAudit (iframe thật của jsdom + phát message giả)', () 
     reply(created[0], [finding({ text: 'thật' })]);
     const { findings } = await promise;
     expect(findings.map((f) => f.text)).toEqual(['thật']);
+  });
+
+  it('(review) message đúng nonce nhưng TỪ CỬA SỔ KHÁC bị bỏ qua; message từ đúng iframe mới được nhận', async () => {
+    spyIframes();
+    const promise = runLayoutAudit('<html><body>x</body></html>', { widths: [1280] });
+    const data = (text) => ({ type: LAYOUT_AUDIT_MESSAGE_TYPE, nonce: nonceOf(created[0]), width: 1280, findings: [finding({ text })] });
+    // Mạo danh: source là chính cửa sổ cha, không phải contentWindow của iframe đo.
+    window.dispatchEvent(new MessageEvent('message', { data: data('MẠO DANH'), source: window }));
+    expect(document.body.contains(created[0])).toBe(true);
+    window.dispatchEvent(new MessageEvent('message', { data: data('thật'), source: created[0].contentWindow }));
+    const { findings } = await promise;
+    expect(findings.map((f) => f.text)).toEqual(['thật']);
+  });
+
+  it('(review) scan_incomplete đi tới errors — phía gọi KHÔNG được coi findings rỗng là "sạch"', async () => {
+    spyIframes();
+    const promise = runLayoutAudit('<html><body>x</body></html>', { widths: [1280] });
+    reply(created[0], [], { error: 'scan_incomplete' });
+    const result = await promise;
+    expect(result).toMatchObject({ findings: [], timedOut: false, errors: ['scan_incomplete'] });
   });
 
   it('quá hạn: timedOut=true, giữ findings của bề rộng đã xong, gỡ iframe, message trễ vô hại', async () => {
