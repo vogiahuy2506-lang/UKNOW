@@ -129,9 +129,16 @@ Trang chia làm ba bước, có thanh đánh số ở đầu trang cho biết b�
 
 # Ba bước
 ## Bước 1 — Người nhận
-Chọn **kênh gửi** (Email hoặc Zalo), chọn **tài khoản gửi** trong số tài khoản đã nối, rồi nhập danh sách người nhận.
+Chọn **kênh gửi** (Email, Zalo hoặc Zalo nhóm), chọn **tài khoản gửi** trong số tài khoản đã nối, rồi nhập danh sách người nhận.
 
 Nhập **mỗi dòng một địa chỉ**, hoặc ngăn cách bằng dấu phẩy. Với Email là địa chỉ email, với Zalo là số điện thoại.
+
+Riêng kênh **Zalo** có thêm ô **Loại người nhận**:
+
+- **Số điện thoại** — dán số như trên. Hệ thống phải tra từng số ra tài khoản Zalo, mà mỗi ngày Zalo chỉ cho tra một lượng nhất định.
+- **UID / Bạn bè trong danh bạ** — bấm **Thêm từ danh bạ** để chọn bạn bè của tài khoản Zalo đang gửi, hoặc dán UID Zalo, mỗi dòng một cái. Cách này **không tốn lượt tra số**. UID không có trong danh bạ thì bạn phải tự tích xác nhận trước khi gửi.
+
+Với kênh **Zalo nhóm**, chọn tài khoản Zalo trước, rồi tích các nhóm muốn gửi trong danh sách nhóm của tài khoản đó.
 
 [ẢNH: bước Người nhận, đã chọn kênh Zalo và dán danh sách số điện thoại]
 
@@ -182,7 +189,7 @@ Nếu bạn gửi Zalo vào lúc gần khuya, hệ thống báo trước rằng 
 - [Thư viện nội dung: mẫu tin và biến](mau-tin-nhan)
 - [Tạo chiến dịch](campaign-create)
 - [Vì sao Zalo gửi chậm hoặc đang dừng](zalo-gui-cham)`,
-    body_html: `<p>Gửi một lượt tin cho danh sách nhỏ mà không phải dựng chiến dịch. Ba bước, xong trong vài phút.</p><p>Đây cũng là <strong>cách tốt nhất để kiểm tra kênh gửi vừa nối</strong> — gửi thử cho chính mình trước khi chạy chiến dịch thật.</p><h2>Khi nào dùng Gửi nhanh, khi nào dựng chiến dịch</h2><table><thead><tr><th></th><th>Gửi nhanh</th><th>Chiến dịch</th></tr></thead><tbody><tr><td>Danh sách</td><td>Nhỏ, bạn tự dán vào</td><td>Lớn, lấy từ Sheet hoặc landing page</td></tr><tr><td>Số bước gửi</td><td>Một lượt duy nhất</td><td>Nhiều bước, có chờ và rẽ nhánh</td></tr><tr><td>Hẹn giờ</td><td>Không, gửi ngay</td><td>Có, chạy theo lịch hoặc lặp lại</td></tr><tr><td>Dựng mất</td><td>Vài phút</td><td>Lâu hơn</td></tr></tbody></table><p>Cần gửi lặp lại hoặc gửi cho danh sách trong Google Sheet thì dùng <a href="/huong-dan/campaign-create">Tạo chiến dịch</a>.</p><h2>Tìm trang này trên màn hình</h2><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>Chiến dịch</strong> cho nó mở ra, rồi chọn mục <strong>Gửi nhanh</strong> — nó nằm đầu tiên trong nhóm.</p><p>[ẢNH: menu bên trái đang mở nhóm Chiến dịch, khoanh đỏ mục &quot;Gửi nhanh&quot; ở đầu danh sách]</p><p>Trang chia làm ba bước, có thanh đánh số ở đầu trang cho biết bạn đang ở bước nào.</p><p>[ẢNH: đầu trang Gửi nhanh, khoanh đỏ thanh 3 bước]</p><h2>Ba bước</h2><h3>Bước 1 — Người nhận</h3><p>Chọn <strong>kênh gửi</strong> (Email hoặc Zalo), chọn <strong>tài khoản gửi</strong> trong số tài khoản đã nối, rồi nhập danh sách người nhận.</p><p>Nhập <strong>mỗi dòng một địa chỉ</strong>, hoặc ngăn cách bằng dấu phẩy. Với Email là địa chỉ email, với Zalo là số điện thoại.</p><p>[ẢNH: bước Người nhận, đã chọn kênh Zalo và dán danh sách số điện thoại]</p><p>Điền xong, nút sang bước sau ở góc dưới bên phải mới sáng lên.</p><p>[ẢNH: góc dưới bên phải, khoanh đỏ nút chuyển sang bước tiếp theo]</p><h3>Bước 2 — Nội dung</h3><p>Chọn một trong hai cách: <strong>Chọn mẫu có sẵn</strong> trong thư viện, hoặc <strong>Soạn nội dung mới</strong> ngay tại đây — không cần tạo mẫu trước.</p><p>Chưa có mẫu nào thì vẫn gửi được, cứ chuyển sang <strong>Soạn nội dung mới</strong>.</p><p>Lưu ý: mẫu Email và mẫu Zalo tách riêng, chọn kênh nào chỉ thấy mẫu của kênh đó. Nội dung soạn mới chỉ dùng cho lượt gửi này, không tự lưu vào thư viện.</p><p>[ẢNH: bước Nội dung, hai lựa chọn &quot;Chọn mẫu có sẵn&quot; và &quot;Soạn nội dung mới&quot; ở đầu, danh sách mẫu Zalo đang hiện bên dưới]</p><h3>Bước 3 — Xem lại</h3><p>Kiểm tra lần cuối rồi bấm <strong>Gửi ngay</strong>.</p><p>Ở bước này có <strong>Thời gian hoàn tất ước tính</strong> — đọc kỹ con số đó, giải thích ngay bên dưới.</p><p>[ẢNH: bước Xem lại, khoanh đỏ phần Thời gian hoàn tất ước tính và nút &quot;Gửi ngay&quot;]</p><h2>Thời gian hoàn tất ước tính — đọc trước khi bấm gửi</h2><p>Đây là phần hữu ích nhất của Gửi nhanh, nhưng hay bị bỏ qua.</p><p>Với Email, con số thường là vài giây tới vài phút. Với <strong>Zalo thì có thể là nhiều giờ</strong> — vì mỗi tin cách nhau 80–150 giây để tài khoản không bị khoá.</p><p>Ví dụ gửi Zalo cho 50 người: khoảng 1,5 đến 2 tiếng.</p><p>Thấy con số lớn thì đó là <strong>ước tính đúng</strong>, không phải lỗi. Bấm gửi rồi cứ đóng trang, hệ thống vẫn chạy tiếp ở nền.</p><h2>Giờ yên lặng</h2><p>Nếu bạn gửi Zalo vào lúc gần khuya, hệ thống báo trước rằng nó <strong>tự tạm dừng trong khung 23:00 – 06:00</strong> rồi gửi tiếp vào sáng hôm sau.</p><p>Đây là quy định để bảo vệ tài khoản Zalo của bạn, không tắt được. Cần gửi gấp trong đêm thì dùng Email.</p><h2>Lỗi thường gặp</h2><ul><li><strong>Không chọn được tài khoản gửi</strong> → Chưa nối kênh nào. Xem <a href="/huong-dan/channels">Kết nối kênh gửi</a>.</li><li><strong>Nút sang bước sau bị mờ</strong> → Danh sách người nhận đang trống, hoặc chưa chọn tài khoản gửi.</li><li><strong>Không có mẫu nào để chọn</strong> → Chưa tạo mẫu cho kênh đang chọn (mẫu Email không dùng cho Zalo và ngược lại). Không cần tạo mẫu trước — chuyển sang <strong>Soạn nội dung mới</strong> ở bước 2 để gõ nội dung ngay.</li><li><strong>Gửi xong báo một phần thất bại</strong> → Bình thường khi danh sách có địa chỉ sai hoặc số chưa dùng Zalo. Phần còn lại vẫn gửi thành công, danh sách lỗi hiện ngay sau khi gửi.</li><li><strong>Toàn bộ đều thất bại</strong> → Thường do tài khoản gửi mất kết nối. Kiểm tra lại tại trang Quản lý kênh gửi.</li><li><strong>Gửi Zalo mãi chưa xong</strong> → Xem lại thời gian ước tính ở bước 3, và <a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a>.</li></ul><h2>Liên quan</h2><ul><li><a href="/huong-dan/channels">Kết nối kênh gửi</a></li><li><a href="/huong-dan/mau-tin-nhan">Thư viện nội dung: mẫu tin và biến</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a></li></ul>`,
+    body_html: `<p>Gửi một lượt tin cho danh sách nhỏ mà không phải dựng chiến dịch. Ba bước, xong trong vài phút.</p><p>Đây cũng là <strong>cách tốt nhất để kiểm tra kênh gửi vừa nối</strong> — gửi thử cho chính mình trước khi chạy chiến dịch thật.</p><h2>Khi nào dùng Gửi nhanh, khi nào dựng chiến dịch</h2><table><thead><tr><th></th><th>Gửi nhanh</th><th>Chiến dịch</th></tr></thead><tbody><tr><td>Danh sách</td><td>Nhỏ, bạn tự dán vào</td><td>Lớn, lấy từ Sheet hoặc landing page</td></tr><tr><td>Số bước gửi</td><td>Một lượt duy nhất</td><td>Nhiều bước, có chờ và rẽ nhánh</td></tr><tr><td>Hẹn giờ</td><td>Không, gửi ngay</td><td>Có, chạy theo lịch hoặc lặp lại</td></tr><tr><td>Dựng mất</td><td>Vài phút</td><td>Lâu hơn</td></tr></tbody></table><p>Cần gửi lặp lại hoặc gửi cho danh sách trong Google Sheet thì dùng <a href="/huong-dan/campaign-create">Tạo chiến dịch</a>.</p><h2>Tìm trang này trên màn hình</h2><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>Chiến dịch</strong> cho nó mở ra, rồi chọn mục <strong>Gửi nhanh</strong> — nó nằm đầu tiên trong nhóm.</p><p>[ẢNH: menu bên trái đang mở nhóm Chiến dịch, khoanh đỏ mục &quot;Gửi nhanh&quot; ở đầu danh sách]</p><p>Trang chia làm ba bước, có thanh đánh số ở đầu trang cho biết bạn đang ở bước nào.</p><p>[ẢNH: đầu trang Gửi nhanh, khoanh đỏ thanh 3 bước]</p><h2>Ba bước</h2><h3>Bước 1 — Người nhận</h3><p>Chọn <strong>kênh gửi</strong> (Email, Zalo hoặc Zalo nhóm), chọn <strong>tài khoản gửi</strong> trong số tài khoản đã nối, rồi nhập danh sách người nhận.</p><p>Nhập <strong>mỗi dòng một địa chỉ</strong>, hoặc ngăn cách bằng dấu phẩy. Với Email là địa chỉ email, với Zalo là số điện thoại.</p><p>Riêng kênh <strong>Zalo</strong> có thêm ô <strong>Loại người nhận</strong>:</p><ul><li><strong>Số điện thoại</strong> — dán số như trên. Hệ thống phải tra từng số ra tài khoản Zalo, mà mỗi ngày Zalo chỉ cho tra một lượng nhất định.</li><li><strong>UID / Bạn bè trong danh bạ</strong> — bấm <strong>Thêm từ danh bạ</strong> để chọn bạn bè của tài khoản Zalo đang gửi, hoặc dán UID Zalo, mỗi dòng một cái. Cách này <strong>không tốn lượt tra số</strong>. UID không có trong danh bạ thì bạn phải tự tích xác nhận trước khi gửi.</li></ul><p>Với kênh <strong>Zalo nhóm</strong>, chọn tài khoản Zalo trước, rồi tích các nhóm muốn gửi trong danh sách nhóm của tài khoản đó.</p><p>[ẢNH: bước Người nhận, đã chọn kênh Zalo và dán danh sách số điện thoại]</p><p>Điền xong, nút sang bước sau ở góc dưới bên phải mới sáng lên.</p><p>[ẢNH: góc dưới bên phải, khoanh đỏ nút chuyển sang bước tiếp theo]</p><h3>Bước 2 — Nội dung</h3><p>Chọn một trong hai cách: <strong>Chọn mẫu có sẵn</strong> trong thư viện, hoặc <strong>Soạn nội dung mới</strong> ngay tại đây — không cần tạo mẫu trước.</p><p>Chưa có mẫu nào thì vẫn gửi được, cứ chuyển sang <strong>Soạn nội dung mới</strong>.</p><p>Lưu ý: mẫu Email và mẫu Zalo tách riêng, chọn kênh nào chỉ thấy mẫu của kênh đó. Nội dung soạn mới chỉ dùng cho lượt gửi này, không tự lưu vào thư viện.</p><p>[ẢNH: bước Nội dung, hai lựa chọn &quot;Chọn mẫu có sẵn&quot; và &quot;Soạn nội dung mới&quot; ở đầu, danh sách mẫu Zalo đang hiện bên dưới]</p><h3>Bước 3 — Xem lại</h3><p>Kiểm tra lần cuối rồi bấm <strong>Gửi ngay</strong>.</p><p>Ở bước này có <strong>Thời gian hoàn tất ước tính</strong> — đọc kỹ con số đó, giải thích ngay bên dưới.</p><p>[ẢNH: bước Xem lại, khoanh đỏ phần Thời gian hoàn tất ước tính và nút &quot;Gửi ngay&quot;]</p><h2>Thời gian hoàn tất ước tính — đọc trước khi bấm gửi</h2><p>Đây là phần hữu ích nhất của Gửi nhanh, nhưng hay bị bỏ qua.</p><p>Với Email, con số thường là vài giây tới vài phút. Với <strong>Zalo thì có thể là nhiều giờ</strong> — vì mỗi tin cách nhau 80–150 giây để tài khoản không bị khoá.</p><p>Ví dụ gửi Zalo cho 50 người: khoảng 1,5 đến 2 tiếng.</p><p>Thấy con số lớn thì đó là <strong>ước tính đúng</strong>, không phải lỗi. Bấm gửi rồi cứ đóng trang, hệ thống vẫn chạy tiếp ở nền.</p><h2>Giờ yên lặng</h2><p>Nếu bạn gửi Zalo vào lúc gần khuya, hệ thống báo trước rằng nó <strong>tự tạm dừng trong khung 23:00 – 06:00</strong> rồi gửi tiếp vào sáng hôm sau.</p><p>Đây là quy định để bảo vệ tài khoản Zalo của bạn, không tắt được. Cần gửi gấp trong đêm thì dùng Email.</p><h2>Lỗi thường gặp</h2><ul><li><strong>Không chọn được tài khoản gửi</strong> → Chưa nối kênh nào. Xem <a href="/huong-dan/channels">Kết nối kênh gửi</a>.</li><li><strong>Nút sang bước sau bị mờ</strong> → Danh sách người nhận đang trống, hoặc chưa chọn tài khoản gửi.</li><li><strong>Không có mẫu nào để chọn</strong> → Chưa tạo mẫu cho kênh đang chọn (mẫu Email không dùng cho Zalo và ngược lại). Không cần tạo mẫu trước — chuyển sang <strong>Soạn nội dung mới</strong> ở bước 2 để gõ nội dung ngay.</li><li><strong>Gửi xong báo một phần thất bại</strong> → Bình thường khi danh sách có địa chỉ sai hoặc số chưa dùng Zalo. Phần còn lại vẫn gửi thành công, danh sách lỗi hiện ngay sau khi gửi.</li><li><strong>Toàn bộ đều thất bại</strong> → Thường do tài khoản gửi mất kết nối. Kiểm tra lại tại trang Quản lý kênh gửi.</li><li><strong>Gửi Zalo mãi chưa xong</strong> → Xem lại thời gian ước tính ở bước 3, và <a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a>.</li></ul><h2>Liên quan</h2><ul><li><a href="/huong-dan/channels">Kết nối kênh gửi</a></li><li><a href="/huong-dan/mau-tin-nhan">Thư viện nội dung: mẫu tin và biến</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a></li></ul>`,
   },
   {
     slug: 'campaign-create',
@@ -450,6 +457,23 @@ Vài nguyên nhân hay gặp và cách hiểu:
 - **Tài khoản Zalo mất kết nối** → Quét lại QR. Xem [Thêm tài khoản Zalo](zalo-account).
 - **Số điện thoại chưa dùng Zalo** → Không gửi được cho người đó, phần còn lại vẫn chạy bình thường.
 
+# Xem ai bị lỗi và vì sao
+Trong bảng **Tất cả chiến dịch đã chạy**, dòng nào có tin lỗi đều có nút **Xem chi tiết lỗi**. Bấm vào, một bảng mở ra ngay dưới dòng đó với bốn cột: **Người nhận**, **Lý do**, **Số lần** và **Lần cuối**.
+
+| Lý do | Nghĩa là |
+|---|---|
+| Chặn tin người lạ | Người nhận tắt nhận tin từ người lạ trên Zalo |
+| Người nhận chặn tài khoản | Họ đã chặn tài khoản Zalo đang gửi |
+| Không tìm thấy tài khoản | Số đó chưa dùng Zalo |
+| Giới hạn tần suất | Zalo đang hạn chế tài khoản gửi, hệ thống tự thử lại sau |
+| Thư bị trả lại | Địa chỉ email không nhận được thư |
+| Vi phạm chính sách | Nội dung bị nền tảng từ chối |
+| Sai định dạng, Tham số không hợp lệ, Lỗi không xác định | Lỗi kỹ thuật. Lặp lại nhiều thì chụp màn hình gửi hỗ trợ |
+
+[ẢNH: một dòng chiến dịch đã bấm "Xem chi tiết lỗi", thấy bảng Người nhận / Lý do / Số lần / Lần cuối]
+
+Phía trên bảng có một dòng tóm tắt, kiểu *120 hàng nguồn → 110 có số → 95 lượt gửi*, kèm lý do các dòng bị bỏ qua: không có số, đã gửi ở lượt trước, chưa tới ngày, đã hoàn thành. Dòng này trả lời câu hỏi "danh sách 120 người sao chỉ gửi 95".
+
 # Lỗi thường gặp
 - **Trang trống, báo chưa có dữ liệu** → Chọn khoảng thời gian rộng hơn, hoặc bạn chưa chạy chiến dịch nào trong khoảng đó.
 - **Số Tiếp cận thấp hơn Tin đã gửi** → Bình thường, vì một người có thể nhận nhiều tin trong cùng chiến dịch.
@@ -460,7 +484,7 @@ Vài nguyên nhân hay gặp và cách hiểu:
 - [Vì sao Zalo gửi chậm hoặc đang dừng](zalo-gui-cham)
 - [Tạo chiến dịch](campaign-create)
 - [Kết nối kênh gửi](channels)`,
-    body_html: `<p>Sau khi bấm chạy, đây là chỗ xem mọi thứ có đang diễn ra đúng không.</p><h2>Tìm trang này trên màn hình</h2><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Chiến dịch</strong>, rồi chọn mục <strong>Hiệu quả chiến dịch</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm Chiến dịch, khoanh đỏ mục &quot;Hiệu quả chiến dịch&quot;]</p><p>Lưu ý nhỏ kẻo tưởng vào nhầm: mục trong menu tên <em>Hiệu quả chiến dịch</em> nhưng tiêu đề in ở đầu trang lại ghi <em>Giám sát gửi tin</em>. Cùng một trang.</p><p>Trang tự làm mới sau mỗi 15 giây nếu bạn bật tuỳ chọn đó, nên có thể mở và để đấy theo dõi.</p><p>[ẢNH: đầu trang, khoanh đỏ công tắc tự làm mới và ô chọn khoảng thời gian]</p><p>[ẢNH: hàng ô số liệu ở đầu trang Giám sát gửi tin]</p><h2>Bốn con số ở đầu trang</h2><table><thead><tr><th>Số</th><th>Nghĩa là</th></tr></thead><tbody><tr><td><strong>Tin đã gửi</strong></td><td>Số tin hệ thống đã gửi đi thành công</td></tr><tr><td><strong>Tin lỗi</strong></td><td>Số tin thất bại, kèm lý do bên dưới</td></tr><tr><td><strong>Lượt nhấp liên kết</strong></td><td>Số lần người nhận bấm vào link trong tin</td></tr><tr><td><strong>Chiến dịch đang chạy</strong></td><td>Số lượt chạy còn hoạt động lúc này</td></tr></tbody></table><p>Bên dưới còn hai chỉ số dễ nhầm nhau:</p><ul><li><strong>Tiếp cận</strong> — bao nhiêu <strong>người</strong> đã nhận được, trên tổng số người trong danh sách.</li><li><strong>Tỷ lệ thành công trên lượt thử</strong> — bao nhiêu <strong>lượt gửi</strong> thành công trên tổng số lần hệ thống thử gửi.</li></ul><p>Hai số này khác nhau vì một người có thể được thử gửi nhiều lần. Muốn biết <em>&quot;đã tới tay bao nhiêu khách&quot;</em> thì đọc <strong>Tiếp cận</strong>.</p><h2>Xem từng chiến dịch</h2><p>Mục <strong>Chiến dịch gần đây</strong> liệt kê các lượt chạy trong khoảng thời gian bạn chọn, mới nhất trước. Mỗi dòng có:</p><ul><li><strong>Trạng thái</strong> — đang chạy, hoàn thành, hay lỗi</li><li><strong>Thành công / tổng</strong> — tiến độ</li><li><strong>Tốc độ</strong> — số tin mỗi giờ</li><li><strong>Tỷ lệ lỗi</strong></li><li><strong>Thời lượng</strong> — đã chạy bao lâu</li></ul><p>Với chiến dịch Zalo, <strong>tốc độ khoảng 30 tin mỗi giờ là bình thường</strong>, không phải chậm bất thường. Xem <a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a>.</p><p>[ẢNH: mục Chiến dịch gần đây, một dòng chiến dịch Zalo đang chạy, khoanh đỏ cột Trạng thái và cột Tốc độ]</p><h2>Hiệu quả theo kênh và tốc độ theo giờ</h2><p>Kéo tiếp xuống dưới sẽ thấy mục <strong>Hiệu quả theo kênh</strong> — tách riêng Email và Zalo, kèm số gửi thành công, số lỗi và số click của từng kênh. Đây là chỗ so sánh xem kênh nào đang hiệu quả hơn với khách của bạn.</p><p>[ẢNH: mục Hiệu quả theo kênh, hai cột Email và Zalo đặt cạnh nhau]</p><p>Ngay dưới đó là biểu đồ <strong>Tốc độ gửi theo giờ</strong>, cho thấy nhịp gửi. Với Zalo, bạn sẽ thấy rõ khoảng trống từ 23:00 đến 06:00 — đó là giờ nghỉ theo thiết kế, không phải sự cố.</p><p>[ẢNH: biểu đồ Tốc độ gửi theo giờ, khoanh đỏ khoảng trống từ 23:00 đến 06:00]</p><h2>Tình trạng tài khoản và cảnh báo</h2><p>Kéo xuống nữa tới mục <strong>Tình trạng tài khoản &amp; hàng đợi</strong> — chỗ cảnh báo khi có dấu hiệu bất thường.</p><p>Cảnh báo đáng chú ý nhất: <strong>Zalo không xác nhận phát tin</strong>. Nghĩa là hệ thống gửi đi nhưng Zalo không báo lại là đã phát — thường liên quan tới giới hạn hoặc cơ chế chống spam của Zalo.</p><p>Gặp cảnh báo này thì nên giãn nhịp gửi và kiểm tra lại tài khoản Zalo, đừng cố đẩy nhanh — nguy cơ bị khoá tài khoản là thật.</p><p>[ẢNH: mục Tình trạng tài khoản &amp; hàng đợi đang hiện cảnh báo &quot;Zalo không xác nhận phát tin&quot;]</p><h2>Lỗi gần đây</h2><p>Ở cuối trang là mục <strong>Lỗi gần đây</strong>, liệt kê các tin thất bại kèm nguyên nhân. Đây là chỗ đầu tiên nên xem khi thấy tỷ lệ lỗi cao.</p><p>[ẢNH: mục Lỗi gần đây, vài dòng lỗi kèm cột nguyên nhân]</p><p>Vài nguyên nhân hay gặp và cách hiểu:</p><ul><li><strong>Lỗi xác thực email</strong> → Sai thông tin SMTP. Xem <a href="/huong-dan/email-account">Thêm tài khoản Email</a>.</li><li><strong>Địa chỉ email không tồn tại</strong> → Hệ thống ghi nhận và không gửi lại địa chỉ đó nữa.</li><li><strong>Tài khoản Zalo mất kết nối</strong> → Quét lại QR. Xem <a href="/huong-dan/zalo-account">Thêm tài khoản Zalo</a>.</li><li><strong>Số điện thoại chưa dùng Zalo</strong> → Không gửi được cho người đó, phần còn lại vẫn chạy bình thường.</li></ul><h2>Lỗi thường gặp</h2><ul><li><strong>Trang trống, báo chưa có dữ liệu</strong> → Chọn khoảng thời gian rộng hơn, hoặc bạn chưa chạy chiến dịch nào trong khoảng đó.</li><li><strong>Số Tiếp cận thấp hơn Tin đã gửi</strong> → Bình thường, vì một người có thể nhận nhiều tin trong cùng chiến dịch.</li><li><strong>Tỷ lệ lỗi cao đột ngột</strong> → Xem ngay mục Lỗi gần đây. Thường là kênh gửi mất kết nối chứ không phải danh sách sai.</li><li><strong>Chiến dịch hiện đang chạy mà tốc độ bằng 0</strong> → Đang trong giờ nghỉ của Zalo, hoặc đang chờ tới lượt gửi tiếp theo.</li></ul><h2>Liên quan</h2><ul><li><a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/channels">Kết nối kênh gửi</a></li></ul>`,
+    body_html: `<p>Sau khi bấm chạy, đây là chỗ xem mọi thứ có đang diễn ra đúng không.</p><h2>Tìm trang này trên màn hình</h2><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Chiến dịch</strong>, rồi chọn mục <strong>Hiệu quả chiến dịch</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm Chiến dịch, khoanh đỏ mục &quot;Hiệu quả chiến dịch&quot;]</p><p>Lưu ý nhỏ kẻo tưởng vào nhầm: mục trong menu tên <em>Hiệu quả chiến dịch</em> nhưng tiêu đề in ở đầu trang lại ghi <em>Giám sát gửi tin</em>. Cùng một trang.</p><p>Trang tự làm mới sau mỗi 15 giây nếu bạn bật tuỳ chọn đó, nên có thể mở và để đấy theo dõi.</p><p>[ẢNH: đầu trang, khoanh đỏ công tắc tự làm mới và ô chọn khoảng thời gian]</p><p>[ẢNH: hàng ô số liệu ở đầu trang Giám sát gửi tin]</p><h2>Bốn con số ở đầu trang</h2><table><thead><tr><th>Số</th><th>Nghĩa là</th></tr></thead><tbody><tr><td><strong>Tin đã gửi</strong></td><td>Số tin hệ thống đã gửi đi thành công</td></tr><tr><td><strong>Tin lỗi</strong></td><td>Số tin thất bại, kèm lý do bên dưới</td></tr><tr><td><strong>Lượt nhấp liên kết</strong></td><td>Số lần người nhận bấm vào link trong tin</td></tr><tr><td><strong>Chiến dịch đang chạy</strong></td><td>Số lượt chạy còn hoạt động lúc này</td></tr></tbody></table><p>Bên dưới còn hai chỉ số dễ nhầm nhau:</p><ul><li><strong>Tiếp cận</strong> — bao nhiêu <strong>người</strong> đã nhận được, trên tổng số người trong danh sách.</li><li><strong>Tỷ lệ thành công trên lượt thử</strong> — bao nhiêu <strong>lượt gửi</strong> thành công trên tổng số lần hệ thống thử gửi.</li></ul><p>Hai số này khác nhau vì một người có thể được thử gửi nhiều lần. Muốn biết <em>&quot;đã tới tay bao nhiêu khách&quot;</em> thì đọc <strong>Tiếp cận</strong>.</p><h2>Xem từng chiến dịch</h2><p>Mục <strong>Chiến dịch gần đây</strong> liệt kê các lượt chạy trong khoảng thời gian bạn chọn, mới nhất trước. Mỗi dòng có:</p><ul><li><strong>Trạng thái</strong> — đang chạy, hoàn thành, hay lỗi</li><li><strong>Thành công / tổng</strong> — tiến độ</li><li><strong>Tốc độ</strong> — số tin mỗi giờ</li><li><strong>Tỷ lệ lỗi</strong></li><li><strong>Thời lượng</strong> — đã chạy bao lâu</li></ul><p>Với chiến dịch Zalo, <strong>tốc độ khoảng 30 tin mỗi giờ là bình thường</strong>, không phải chậm bất thường. Xem <a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a>.</p><p>[ẢNH: mục Chiến dịch gần đây, một dòng chiến dịch Zalo đang chạy, khoanh đỏ cột Trạng thái và cột Tốc độ]</p><h2>Hiệu quả theo kênh và tốc độ theo giờ</h2><p>Kéo tiếp xuống dưới sẽ thấy mục <strong>Hiệu quả theo kênh</strong> — tách riêng Email và Zalo, kèm số gửi thành công, số lỗi và số click của từng kênh. Đây là chỗ so sánh xem kênh nào đang hiệu quả hơn với khách của bạn.</p><p>[ẢNH: mục Hiệu quả theo kênh, hai cột Email và Zalo đặt cạnh nhau]</p><p>Ngay dưới đó là biểu đồ <strong>Tốc độ gửi theo giờ</strong>, cho thấy nhịp gửi. Với Zalo, bạn sẽ thấy rõ khoảng trống từ 23:00 đến 06:00 — đó là giờ nghỉ theo thiết kế, không phải sự cố.</p><p>[ẢNH: biểu đồ Tốc độ gửi theo giờ, khoanh đỏ khoảng trống từ 23:00 đến 06:00]</p><h2>Tình trạng tài khoản và cảnh báo</h2><p>Kéo xuống nữa tới mục <strong>Tình trạng tài khoản &amp; hàng đợi</strong> — chỗ cảnh báo khi có dấu hiệu bất thường.</p><p>Cảnh báo đáng chú ý nhất: <strong>Zalo không xác nhận phát tin</strong>. Nghĩa là hệ thống gửi đi nhưng Zalo không báo lại là đã phát — thường liên quan tới giới hạn hoặc cơ chế chống spam của Zalo.</p><p>Gặp cảnh báo này thì nên giãn nhịp gửi và kiểm tra lại tài khoản Zalo, đừng cố đẩy nhanh — nguy cơ bị khoá tài khoản là thật.</p><p>[ẢNH: mục Tình trạng tài khoản &amp; hàng đợi đang hiện cảnh báo &quot;Zalo không xác nhận phát tin&quot;]</p><h2>Lỗi gần đây</h2><p>Ở cuối trang là mục <strong>Lỗi gần đây</strong>, liệt kê các tin thất bại kèm nguyên nhân. Đây là chỗ đầu tiên nên xem khi thấy tỷ lệ lỗi cao.</p><p>[ẢNH: mục Lỗi gần đây, vài dòng lỗi kèm cột nguyên nhân]</p><p>Vài nguyên nhân hay gặp và cách hiểu:</p><ul><li><strong>Lỗi xác thực email</strong> → Sai thông tin SMTP. Xem <a href="/huong-dan/email-account">Thêm tài khoản Email</a>.</li><li><strong>Địa chỉ email không tồn tại</strong> → Hệ thống ghi nhận và không gửi lại địa chỉ đó nữa.</li><li><strong>Tài khoản Zalo mất kết nối</strong> → Quét lại QR. Xem <a href="/huong-dan/zalo-account">Thêm tài khoản Zalo</a>.</li><li><strong>Số điện thoại chưa dùng Zalo</strong> → Không gửi được cho người đó, phần còn lại vẫn chạy bình thường.</li></ul><h2>Xem ai bị lỗi và vì sao</h2><p>Trong bảng <strong>Tất cả chiến dịch đã chạy</strong>, dòng nào có tin lỗi đều có nút <strong>Xem chi tiết lỗi</strong>. Bấm vào, một bảng mở ra ngay dưới dòng đó với bốn cột: <strong>Người nhận</strong>, <strong>Lý do</strong>, <strong>Số lần</strong> và <strong>Lần cuối</strong>.</p><table><thead><tr><th>Lý do</th><th>Nghĩa là</th></tr></thead><tbody><tr><td>Chặn tin người lạ</td><td>Người nhận tắt nhận tin từ người lạ trên Zalo</td></tr><tr><td>Người nhận chặn tài khoản</td><td>Họ đã chặn tài khoản Zalo đang gửi</td></tr><tr><td>Không tìm thấy tài khoản</td><td>Số đó chưa dùng Zalo</td></tr><tr><td>Giới hạn tần suất</td><td>Zalo đang hạn chế tài khoản gửi, hệ thống tự thử lại sau</td></tr><tr><td>Thư bị trả lại</td><td>Địa chỉ email không nhận được thư</td></tr><tr><td>Vi phạm chính sách</td><td>Nội dung bị nền tảng từ chối</td></tr><tr><td>Sai định dạng, Tham số không hợp lệ, Lỗi không xác định</td><td>Lỗi kỹ thuật. Lặp lại nhiều thì chụp màn hình gửi hỗ trợ</td></tr></tbody></table><p>[ẢNH: một dòng chiến dịch đã bấm &quot;Xem chi tiết lỗi&quot;, thấy bảng Người nhận / Lý do / Số lần / Lần cuối]</p><p>Phía trên bảng có một dòng tóm tắt, kiểu <em>120 hàng nguồn → 110 có số → 95 lượt gửi</em>, kèm lý do các dòng bị bỏ qua: không có số, đã gửi ở lượt trước, chưa tới ngày, đã hoàn thành. Dòng này trả lời câu hỏi &quot;danh sách 120 người sao chỉ gửi 95&quot;.</p><h2>Lỗi thường gặp</h2><ul><li><strong>Trang trống, báo chưa có dữ liệu</strong> → Chọn khoảng thời gian rộng hơn, hoặc bạn chưa chạy chiến dịch nào trong khoảng đó.</li><li><strong>Số Tiếp cận thấp hơn Tin đã gửi</strong> → Bình thường, vì một người có thể nhận nhiều tin trong cùng chiến dịch.</li><li><strong>Tỷ lệ lỗi cao đột ngột</strong> → Xem ngay mục Lỗi gần đây. Thường là kênh gửi mất kết nối chứ không phải danh sách sai.</li><li><strong>Chiến dịch hiện đang chạy mà tốc độ bằng 0</strong> → Đang trong giờ nghỉ của Zalo, hoặc đang chờ tới lượt gửi tiếp theo.</li></ul><h2>Liên quan</h2><ul><li><a href="/huong-dan/zalo-gui-cham">Vì sao Zalo gửi chậm hoặc đang dừng</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/channels">Kết nối kênh gửi</a></li></ul>`,
   },
   {
     slug: 'getting-started',
@@ -1020,7 +1044,7 @@ Sau khi chọn hoặc tạo một chatbot, phần chính của màn hình có ba
 [ẢNH: hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng]
 
 ### 1. Cấu hình
-Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website.
+Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website. Trong phần cài đặt khung chat còn có ô **Nhãn nút mở chat**: một dòng chữ ngắn hiện cạnh nút tròn, ví dụ *Chat với chúng tôi*. Để trống thì chỉ hiện nút tròn.
 
 Phần hướng dẫn cách trả lời quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ *"Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại."*
 
@@ -1047,6 +1071,8 @@ Chọn nơi đặt bot:
 - **Telegram** — liên kết tài khoản Telegram cá nhân bằng cách quét QR, rồi bật chatbot cho từng tài khoản
 - **WhatsApp** — gán chatbot trả lời cho từng tài khoản WhatsApp đã kết nối
 
+Cách nối hai kênh này xem [Kết nối Telegram và WhatsApp cho chatbot](chatbot-telegram-whatsapp).
+
 [ẢNH: tab Triển khai, khoanh đỏ các ô chọn kênh]
 
 Với Zalo OA và Facebook, màn hình có sẵn hướng dẫn từng bước kèm ô sao chép Webhook URL và Verify Token. **Verify Token chỉ hiện một lần** lúc tạo — sao chép ngay, đóng lại là không xem lại được.
@@ -1071,7 +1097,7 @@ Gần như luôn là do phần Kiến thức, không phải do model. Kiểm the
 - [Hộp thư hợp nhất](inbox)
 - [Hồ sơ doanh nghiệp](ai-profile)
 - [Gói dịch vụ & thanh toán](plan-and-billing)`,
-    body_html: `<h2>Chatbot AI trả lời khách tự động</h2><p>Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng những gì bạn bán — không phải một trợ lý chung chung.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>AI Chatbot</strong> cho nó mở ra, rồi chọn mục <strong>Tạo AI Chatbot</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục &quot;Tạo AI Chatbot&quot;]</p><p>Chỉ <strong>chủ tài khoản</strong> dùng được trang này. Tài khoản nhân viên bấm vào sẽ bị chặn.</p><p>[ẢNH: trang Tạo AI Chatbot, cột trái là danh sách chatbot, phần chính bên phải là các tab]</p><h3>Ba tab cần đi qua</h3><p>Sau khi chọn hoặc tạo một chatbot, phần chính của màn hình có ba tab xếp ngang. Đi lần lượt từ trái sang phải.</p><p>[ẢNH: hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng]</p><h4>1. Cấu hình</h4><p>Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website.</p><p>Phần hướng dẫn cách trả lời quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ <em>&quot;Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại.&quot;</em></p><p>[ẢNH: tab Cấu hình, khoanh đỏ ô nhập hướng dẫn cách trả lời]</p><h4>2. Kiến thức</h4><p>Nơi quyết định bot trả lời đúng hay sai. Bạn tải tài liệu lên hoặc dán thẳng văn bản: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.</p><p>Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung.</p><blockquote><p>Nạp tài liệu <strong>không</strong> tốn credit AI. Chỉ mỗi lượt bot trả lời khách mới tính.</p></blockquote><p>[ẢNH: tab Kiến thức, khoanh đỏ nút tải tài liệu lên]</p><p>[ẢNH: tab Kiến thức sau khi đã có vài tài liệu, khoanh đỏ cột trạng thái xử lý của từng tài liệu]</p><h4>3. Triển khai</h4><p>Chọn nơi đặt bot:</p><ul><li><strong>Website</strong> — chèn đoạn mã vào trang của bạn, hoặc dùng liên kết công khai nếu chưa có website</li><li><strong>Zalo Official Account</strong> — cần App ID và App Secret từ Zalo Developer</li><li><strong>Facebook Messenger</strong> — liên kết Fanpage</li><li><strong>Zalo cá nhân</strong> — bot trả lời ngay trong tài khoản Zalo bạn đã kết nối</li><li><strong>Telegram</strong> — liên kết tài khoản Telegram cá nhân bằng cách quét QR, rồi bật chatbot cho từng tài khoản</li><li><strong>WhatsApp</strong> — gán chatbot trả lời cho từng tài khoản WhatsApp đã kết nối</li></ul><p>[ẢNH: tab Triển khai, khoanh đỏ các ô chọn kênh]</p><p>Với Zalo OA và Facebook, màn hình có sẵn hướng dẫn từng bước kèm ô sao chép Webhook URL và Verify Token. <strong>Verify Token chỉ hiện một lần</strong> lúc tạo — sao chép ngay, đóng lại là không xem lại được.</p><p>[ẢNH: phần hướng dẫn Zalo OA, khoanh đỏ hai ô sao chép Webhook URL và Verify Token]</p><h3>Bot trả lời rồi thì xem ở đâu</h3><p>Mọi hội thoại đổ về một chỗ: <strong>menu bên trái</strong> → nhóm <strong>AI Chatbot</strong> → mục <strong>Lịch sử trò chuyện</strong>, ngay dưới mục bạn vừa dùng. Mọi kênh gộp chung ở đó. Xem <a href="/huong-dan/inbox">Hộp thư hợp nhất</a>.</p><p>[ẢNH: menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục &quot;Lịch sử trò chuyện&quot;]</p><h3>Khi bot trả lời sai</h3><p>Gần như luôn là do phần Kiến thức, không phải do model. Kiểm theo thứ tự:</p><ol><li>Câu hỏi đó đã có trong tài liệu chưa?</li><li>Tài liệu đã xử lý xong chưa, hay còn đang nạp?</li><li>Hướng dẫn cách trả lời có mâu thuẫn với tài liệu không?</li></ol><h3>Liên quan</h3><ul><li><a href="/huong-dan/chatbot-khung-gio">Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</a></li><li><a href="/huong-dan/lien-he-khach-de-lai">Liên hệ khách để lại trong chat và thư tổng hợp</a></li><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li></ul>`,
+    body_html: `<h2>Chatbot AI trả lời khách tự động</h2><p>Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng những gì bạn bán — không phải một trợ lý chung chung.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>AI Chatbot</strong> cho nó mở ra, rồi chọn mục <strong>Tạo AI Chatbot</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục &quot;Tạo AI Chatbot&quot;]</p><p>Chỉ <strong>chủ tài khoản</strong> dùng được trang này. Tài khoản nhân viên bấm vào sẽ bị chặn.</p><p>[ẢNH: trang Tạo AI Chatbot, cột trái là danh sách chatbot, phần chính bên phải là các tab]</p><h3>Ba tab cần đi qua</h3><p>Sau khi chọn hoặc tạo một chatbot, phần chính của màn hình có ba tab xếp ngang. Đi lần lượt từ trái sang phải.</p><p>[ẢNH: hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng]</p><h4>1. Cấu hình</h4><p>Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website. Trong phần cài đặt khung chat còn có ô <strong>Nhãn nút mở chat</strong>: một dòng chữ ngắn hiện cạnh nút tròn, ví dụ <em>Chat với chúng tôi</em>. Để trống thì chỉ hiện nút tròn.</p><p>Phần hướng dẫn cách trả lời quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ <em>&quot;Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại.&quot;</em></p><p>[ẢNH: tab Cấu hình, khoanh đỏ ô nhập hướng dẫn cách trả lời]</p><h4>2. Kiến thức</h4><p>Nơi quyết định bot trả lời đúng hay sai. Bạn tải tài liệu lên hoặc dán thẳng văn bản: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.</p><p>Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung.</p><blockquote><p>Nạp tài liệu <strong>không</strong> tốn credit AI. Chỉ mỗi lượt bot trả lời khách mới tính.</p></blockquote><p>[ẢNH: tab Kiến thức, khoanh đỏ nút tải tài liệu lên]</p><p>[ẢNH: tab Kiến thức sau khi đã có vài tài liệu, khoanh đỏ cột trạng thái xử lý của từng tài liệu]</p><h4>3. Triển khai</h4><p>Chọn nơi đặt bot:</p><ul><li><strong>Website</strong> — chèn đoạn mã vào trang của bạn, hoặc dùng liên kết công khai nếu chưa có website</li><li><strong>Zalo Official Account</strong> — cần App ID và App Secret từ Zalo Developer</li><li><strong>Facebook Messenger</strong> — liên kết Fanpage</li><li><strong>Zalo cá nhân</strong> — bot trả lời ngay trong tài khoản Zalo bạn đã kết nối</li><li><strong>Telegram</strong> — liên kết tài khoản Telegram cá nhân bằng cách quét QR, rồi bật chatbot cho từng tài khoản</li><li><strong>WhatsApp</strong> — gán chatbot trả lời cho từng tài khoản WhatsApp đã kết nối</li></ul><p>Cách nối hai kênh này xem <a href="/huong-dan/chatbot-telegram-whatsapp">Kết nối Telegram và WhatsApp cho chatbot</a>.</p><p>[ẢNH: tab Triển khai, khoanh đỏ các ô chọn kênh]</p><p>Với Zalo OA và Facebook, màn hình có sẵn hướng dẫn từng bước kèm ô sao chép Webhook URL và Verify Token. <strong>Verify Token chỉ hiện một lần</strong> lúc tạo — sao chép ngay, đóng lại là không xem lại được.</p><p>[ẢNH: phần hướng dẫn Zalo OA, khoanh đỏ hai ô sao chép Webhook URL và Verify Token]</p><h3>Bot trả lời rồi thì xem ở đâu</h3><p>Mọi hội thoại đổ về một chỗ: <strong>menu bên trái</strong> → nhóm <strong>AI Chatbot</strong> → mục <strong>Lịch sử trò chuyện</strong>, ngay dưới mục bạn vừa dùng. Mọi kênh gộp chung ở đó. Xem <a href="/huong-dan/inbox">Hộp thư hợp nhất</a>.</p><p>[ẢNH: menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục &quot;Lịch sử trò chuyện&quot;]</p><h3>Khi bot trả lời sai</h3><p>Gần như luôn là do phần Kiến thức, không phải do model. Kiểm theo thứ tự:</p><ol><li>Câu hỏi đó đã có trong tài liệu chưa?</li><li>Tài liệu đã xử lý xong chưa, hay còn đang nạp?</li><li>Hướng dẫn cách trả lời có mâu thuẫn với tài liệu không?</li></ol><h3>Liên quan</h3><ul><li><a href="/huong-dan/chatbot-khung-gio">Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</a></li><li><a href="/huong-dan/lien-he-khach-de-lai">Liên hệ khách để lại trong chat và thư tổng hợp</a></li><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li></ul>`,
   },
   {
     slug: 'inbox',
@@ -2077,6 +2103,235 @@ Bấm **Nâng cấp ngay** để sang trang chọn gói, hoặc **Để sau** đ
 - [Gói dùng thử: có gì và hết hạn thì sao](dung-thu)
 - [Câu hỏi thường gặp về thanh toán & hoá đơn](faq-billing)`,
     body_html: `<h2>Gói sắp hết hạn: hệ thống nhắc thế nào, hết hạn thì sao</h2><p>Bạn không bị cắt dịch vụ đột ngột. Trước ngày hết hạn, hệ thống nhắc qua <strong>email</strong> và qua <strong>hộp thoại</strong> khi bạn đăng nhập.</p><h3>Thư nhắc</h3><p>Thư gửi về email của chủ tài khoản trước ngày hết hạn — mặc định là trước <strong>7 ngày</strong> và trước <strong>3 ngày</strong> — và thêm một thư vào <strong>đúng ngày hết hạn</strong>.</p><h3>Hộp thoại khi đăng nhập</h3><p>Khi gói còn <strong>từ 3 ngày trở xuống</strong>, mỗi lần đăng nhập bạn thấy một hộp thoại giữa màn hình. Có ba dạng:</p><table><thead><tr><th>Nhãn trên hộp thoại</th><th>Nghĩa là</th></tr></thead><tbody><tr><td><strong>Sắp hết hạn</strong></td><td>Gói còn vài ngày. Chiến dịch đang chạy sẽ dừng khi hết hạn</td></tr><tr><td><strong>Đang ân hạn</strong></td><td>Gói đã hết hạn nhưng bạn còn vài ngày ân hạn, hộp thoại ghi rõ còn mấy ngày</td></tr><tr><td><strong>Đã hết hạn</strong></td><td>Hết cả ân hạn. Chiến dịch đã tạm dừng</td></tr></tbody></table><p>[ẢNH: hộp thoại Gói của bạn sắp hết hạn, khoanh đỏ số ngày còn lại và nút Nâng cấp ngay]</p><p>Bấm <strong>Nâng cấp ngay</strong> để sang trang chọn gói, hoặc <strong>Để sau</strong> để đóng. Đóng rồi thì trong lần đăng nhập đó hộp thoại không hiện lại, menu và dữ liệu vẫn dùng bình thường. Lần đăng nhập sau nó nhắc lại.</p><p>[ẢNH: sau khi bấm Để sau, menu bên trái và trang đang mở vẫn dùng được bình thường]</p><h3>Hết hạn thì cái gì dừng</h3><ul><li><strong>Gửi tin và AI tạm dừng</strong>: chiến dịch Email, Zalo không gửi nữa, các tính năng AI ngừng chạy cho tới khi gia hạn.</li><li><strong>Biểu mẫu công khai tạm ngừng</strong> nhận bài nộp; khách mở link sẽ thấy thông báo tạm ngừng.</li><li><strong>Mua thêm hạn mức</strong> cũng bị khoá cho tới khi gia hạn.</li></ul><p><strong>Dữ liệu không mất.</strong> Khách hàng, chiến dịch, landing page, biểu mẫu và bài nộp đều còn nguyên. Gia hạn xong là mọi thứ chạy lại, không phải dựng lại gì.</p><p>[ẢNH: trang Tổng quan gói khi gói đã hết hạn, khoanh đỏ dòng báo gửi tin và AI tạm dừng]</p><h3>Gia hạn ở đâu</h3><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Gói &amp; Thanh toán</strong>, chọn <strong>Tổng quan gói</strong>, rồi bấm nâng cấp hoặc gia hạn. Chi tiết cách tính ngày khi đổi gói xem <a href="/huong-dan/doi-goi">Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn</a>.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="/huong-dan/dung-thu">Gói dùng thử: có gì và hết hạn thì sao</a></li><li><a href="/huong-dan/faq-billing">Câu hỏi thường gặp về thanh toán &amp; hoá đơn</a></li></ul>`,
+  },
+  {
+    slug: 'chatbot-telegram-whatsapp',
+    feature_key: 'chatbot',
+    primary_route: '/app/settings/channels',
+    sort_order: 87,
+    title: 'Kết nối Telegram và WhatsApp cho chatbot',
+    summary: 'Cho chatbot trả lời khách ngay trong tài khoản Telegram cá nhân và WhatsApp của bạn. Chỉ cần quét mã QR, không phải tạo Telegram Bot hay đăng ký với Meta.',
+    body_md: `# Kết nối Telegram và WhatsApp cho chatbot
+Chatbot trả lời được ngay trong tài khoản **Telegram cá nhân** và **WhatsApp** của bạn. Không cần tạo Telegram Bot, không cần đăng ký gì với Meta: chỉ quét mã QR, giống lúc bạn đăng nhập Telegram hay WhatsApp trên máy tính.
+
+Làm hai việc theo thứ tự: **nối tài khoản**, rồi **chọn chatbot trả lời** cho tài khoản đó.
+
+## Bước 1 — Nối tài khoản
+Ở **thanh menu bên trái**, mở nhóm **Chiến dịch**, chọn mục **Quản lý kênh gửi**. Đầu trang có bốn tab: Email, Zalo, **WhatsApp** và **Telegram**.
+
+[ẢNH: trang Quản lý kênh gửi, khoanh đỏ hai tab WhatsApp và Telegram]
+
+### Telegram
+1. Mở tab **Telegram**, bấm **Quét QR**.
+2. Trên điện thoại, mở Telegram, vào Cài đặt, chọn Thiết bị, chọn Liên kết thiết bị bằng QR rồi hướng camera vào mã.
+3. Nhấn xác nhận đăng nhập trên điện thoại. Tài khoản tự hiện trong danh sách **Tài khoản đã liên kết** với trạng thái **Đã kết nối**.
+
+Mã QR có hạn, trên màn hình có đồng hồ đếm. Hết hạn thì bấm **Tạo QR mới**.
+
+[ẢNH: hộp Quét mã QR để kết nối Telegram, bên cạnh là ba bước hướng dẫn]
+
+### WhatsApp
+1. Mở tab **WhatsApp**, bấm **Quét QR**.
+2. Trên điện thoại, mở WhatsApp, vào Cài đặt, chọn Thiết bị đã liên kết, chọn Liên kết thiết bị rồi hướng camera vào mã.
+3. Số WhatsApp hiện trong danh sách với trạng thái **Đã kết nối**. Bạn đặt được **Tên hiển thị** cho dễ phân biệt khi nối nhiều số.
+
+Dùng được với WhatsApp cá nhân. Phiên được lưu trên máy chủ nên không phải quét lại mỗi lần hệ thống cập nhật. Đóng cửa sổ khi chưa quét thì phiên tự huỷ, không để lại gì.
+
+## Bước 2 — Chọn chatbot trả lời
+Ở **thanh menu bên trái**, mở nhóm **AI Chatbot**, chọn **Tạo AI Chatbot**, chọn chatbot, mở tab **Triển khai** rồi bấm ô **Telegram** hoặc **WhatsApp**. Hộp hiện ra liệt kê các tài khoản đã nối; bật công tắc ở tài khoản nào thì chatbot này trả lời tin nhắn gửi tới tài khoản đó.
+
+[ẢNH: tab Triển khai, đã bấm ô Telegram, khoanh đỏ công tắc bật chatbot cho một tài khoản]
+
+Nối nhiều tài khoản được, mỗi tài khoản bật tắt riêng.
+
+## Những điều cần biết
+- **Khung giờ hoạt động** và **Giới hạn lượt chatbot trả lời** áp dụng cho hai kênh này y như các kênh khác. Nên đặt trần lượt trả lời, vì đây là tài khoản cá nhân của bạn: trả lời quá dày có thể bị nền tảng hạn chế.
+- Hội thoại WhatsApp đổ về **Lịch sử trò chuyện**, có nút lọc riêng cho WhatsApp.
+- Thấy tài khoản chuyển sang **Ngắt kết nối** thì quét lại QR là xong.
+- Telegram: **Đăng xuất** chỉ ngắt kết nối; **Xóa** thì mất luôn các cuộc trò chuyện liên quan. WhatsApp: nút **Ngắt kết nối & xóa phiên**.
+- Hai kênh này chỉ để **chatbot trả lời khách**. Gửi chiến dịch hàng loạt vẫn chỉ có Email và Zalo.
+
+## Liên quan
+- [Chatbot AI trả lời khách tự động](chatbot)
+- [Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ](chatbot-khung-gio)
+- [Kết nối kênh gửi (Email & Zalo)](channels)`,
+    body_html: `<h2>Kết nối Telegram và WhatsApp cho chatbot</h2><p>Chatbot trả lời được ngay trong tài khoản <strong>Telegram cá nhân</strong> và <strong>WhatsApp</strong> của bạn. Không cần tạo Telegram Bot, không cần đăng ký gì với Meta: chỉ quét mã QR, giống lúc bạn đăng nhập Telegram hay WhatsApp trên máy tính.</p><p>Làm hai việc theo thứ tự: <strong>nối tài khoản</strong>, rồi <strong>chọn chatbot trả lời</strong> cho tài khoản đó.</p><h3>Bước 1 — Nối tài khoản</h3><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Chiến dịch</strong>, chọn mục <strong>Quản lý kênh gửi</strong>. Đầu trang có bốn tab: Email, Zalo, <strong>WhatsApp</strong> và <strong>Telegram</strong>.</p><p>[ẢNH: trang Quản lý kênh gửi, khoanh đỏ hai tab WhatsApp và Telegram]</p><h4>Telegram</h4><ol><li>Mở tab <strong>Telegram</strong>, bấm <strong>Quét QR</strong>.</li><li>Trên điện thoại, mở Telegram, vào Cài đặt, chọn Thiết bị, chọn Liên kết thiết bị bằng QR rồi hướng camera vào mã.</li><li>Nhấn xác nhận đăng nhập trên điện thoại. Tài khoản tự hiện trong danh sách <strong>Tài khoản đã liên kết</strong> với trạng thái <strong>Đã kết nối</strong>.</li></ol><p>Mã QR có hạn, trên màn hình có đồng hồ đếm. Hết hạn thì bấm <strong>Tạo QR mới</strong>.</p><p>[ẢNH: hộp Quét mã QR để kết nối Telegram, bên cạnh là ba bước hướng dẫn]</p><h4>WhatsApp</h4><ol><li>Mở tab <strong>WhatsApp</strong>, bấm <strong>Quét QR</strong>.</li><li>Trên điện thoại, mở WhatsApp, vào Cài đặt, chọn Thiết bị đã liên kết, chọn Liên kết thiết bị rồi hướng camera vào mã.</li><li>Số WhatsApp hiện trong danh sách với trạng thái <strong>Đã kết nối</strong>. Bạn đặt được <strong>Tên hiển thị</strong> cho dễ phân biệt khi nối nhiều số.</li></ol><p>Dùng được với WhatsApp cá nhân. Phiên được lưu trên máy chủ nên không phải quét lại mỗi lần hệ thống cập nhật. Đóng cửa sổ khi chưa quét thì phiên tự huỷ, không để lại gì.</p><h3>Bước 2 — Chọn chatbot trả lời</h3><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>AI Chatbot</strong>, chọn <strong>Tạo AI Chatbot</strong>, chọn chatbot, mở tab <strong>Triển khai</strong> rồi bấm ô <strong>Telegram</strong> hoặc <strong>WhatsApp</strong>. Hộp hiện ra liệt kê các tài khoản đã nối; bật công tắc ở tài khoản nào thì chatbot này trả lời tin nhắn gửi tới tài khoản đó.</p><p>[ẢNH: tab Triển khai, đã bấm ô Telegram, khoanh đỏ công tắc bật chatbot cho một tài khoản]</p><p>Nối nhiều tài khoản được, mỗi tài khoản bật tắt riêng.</p><h3>Những điều cần biết</h3><ul><li><strong>Khung giờ hoạt động</strong> và <strong>Giới hạn lượt chatbot trả lời</strong> áp dụng cho hai kênh này y như các kênh khác. Nên đặt trần lượt trả lời, vì đây là tài khoản cá nhân của bạn: trả lời quá dày có thể bị nền tảng hạn chế.</li><li>Hội thoại WhatsApp đổ về <strong>Lịch sử trò chuyện</strong>, có nút lọc riêng cho WhatsApp.</li><li>Thấy tài khoản chuyển sang <strong>Ngắt kết nối</strong> thì quét lại QR là xong.</li><li>Telegram: <strong>Đăng xuất</strong> chỉ ngắt kết nối; <strong>Xóa</strong> thì mất luôn các cuộc trò chuyện liên quan. WhatsApp: nút <strong>Ngắt kết nối &amp; xóa phiên</strong>.</li><li>Hai kênh này chỉ để <strong>chatbot trả lời khách</strong>. Gửi chiến dịch hàng loạt vẫn chỉ có Email và Zalo.</li></ul><h3>Liên quan</h3><ul><li><a href="/huong-dan/chatbot">Chatbot AI trả lời khách tự động</a></li><li><a href="/huong-dan/chatbot-khung-gio">Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</a></li><li><a href="/huong-dan/channels">Kết nối kênh gửi (Email &amp; Zalo)</a></li></ul>`,
+  },
+  {
+    slug: 'dong-y-nhan-tin',
+    feature_key: 'khach-hang',
+    primary_route: '/app/customers',
+    sort_order: 75,
+    title: 'Đồng ý nhận tin: hệ thống tự bỏ qua ai khi gửi chiến dịch',
+    summary: 'Người đã từ chối hoặc rút lại đồng ý nhận tin sẽ tự động bị bỏ qua khi bạn gửi chiến dịch, cả Email lẫn Zalo. Bài này nói rõ ai bị bỏ qua, ai vẫn nhận, và khách rút đồng ý bằng cách nào.',
+    body_md: `# Đồng ý nhận tin: hệ thống tự bỏ qua ai khi gửi chiến dịch
+Luật bảo vệ dữ liệu cá nhân yêu cầu tôn trọng lựa chọn của người nhận. Hệ thống làm việc đó thay bạn: ai đã nói **không** thì chiến dịch tự bỏ qua, bạn không phải lọc tay.
+
+## Ba nhóm người
+| Nhóm | Ví dụ | Chiến dịch có gửi không |
+|---|---|---|
+| **Đã đồng ý** | Khách tích ô đồng ý nhận tin trên form | Có |
+| **Chưa từng được hỏi** | Khách đăng ký từ trang cũ chưa có ô đồng ý, danh sách bạn tự nhập | Có |
+| **Đã từ chối hoặc đã rút đồng ý** | Khách bỏ trống ô đồng ý khi form có hỏi, hoặc bấm link huỷ nhận tin | **Không** |
+
+## Hệ thống chặn ở đâu
+- **Lúc lấy danh sách.** Nguồn người nhận lấy từ landing page tự bỏ qua người đã từ chối hoặc đã rút đồng ý. Trong bước cấu hình nguồn có dòng báo cụ thể bao nhiêu người bị bỏ qua.
+- **Lúc gửi.** Ngay trước khi gửi từng tin, hệ thống kiểm lại một lần nữa, cho cả **Email** lẫn **Zalo cá nhân** và **kết bạn Zalo**. Người vừa rút đồng ý sau khi chiến dịch bắt đầu cũng không nhận tin nữa.
+
+Tin gửi vào **nhóm Zalo** không áp dụng quy tắc này, vì nhóm không có người nhận riêng lẻ để đối chiếu.
+
+[ẢNH: bước cấu hình nguồn người nhận từ landing page, khoanh đỏ dòng báo số người bị bỏ qua vì đã từ chối nhận tin]
+
+## Nguồn từ biểu mẫu thì chặt hơn
+Nguồn **Dữ liệu Biểu mẫu** chỉ lấy những người **đã tích ô đồng ý**. Biểu mẫu chưa bật ô đồng ý thì nguồn này không lấy được ai, và màn hình báo rõ điều đó. Cách bật xem [Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website](bieu-mau).
+
+## Khách rút đồng ý bằng cách nào
+- **Email chiến dịch** có sẵn dòng *hủy đăng ký tại đây* ở cuối thư. Khách bấm là xong, bạn không phải làm gì.
+- **Người đã điền biểu mẫu** tự rút được sự đồng ý; trong trang bài nộp, cột **Đồng ý tiếp thị** đổi thành *Đã rút* kèm ngày.
+
+[ẢNH: trang Bài nộp biểu mẫu, khoanh đỏ một dòng có cột Đồng ý tiếp thị ghi "Đã rút"]
+
+## Xem nguồn đồng ý của từng khách
+Trong danh sách khách hàng có cột **Nguồn đồng ý**, cho biết khách đến từ landing page, từ biểu mẫu hay do bạn nhập vào.
+
+[ẢNH: danh sách khách hàng, khoanh đỏ cột "Nguồn đồng ý"]
+
+## Câu hỏi hay gặp
+**Danh sách 200 người mà chỉ gửi 188?** Xem dòng báo ở bước cấu hình nguồn: số chênh thường là người đã từ chối nhận tin. Trang **Hiệu quả chiến dịch** cũng có dòng tóm tắt bao nhiêu người bị bỏ qua và vì sao.
+
+**Tôi muốn gửi cho cả người đã từ chối?** Không được, và không có công tắc nào để tắt việc này.
+
+## Liên quan
+- [Khách hàng: dữ liệu đến từ đâu và xem ở đâu](khach-hang)
+- [Theo dõi chiến dịch đang chạy](campaign-theo-doi)
+- [Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website](bieu-mau)`,
+    body_html: `<h2>Đồng ý nhận tin: hệ thống tự bỏ qua ai khi gửi chiến dịch</h2><p>Luật bảo vệ dữ liệu cá nhân yêu cầu tôn trọng lựa chọn của người nhận. Hệ thống làm việc đó thay bạn: ai đã nói <strong>không</strong> thì chiến dịch tự bỏ qua, bạn không phải lọc tay.</p><h3>Ba nhóm người</h3><table><thead><tr><th>Nhóm</th><th>Ví dụ</th><th>Chiến dịch có gửi không</th></tr></thead><tbody><tr><td><strong>Đã đồng ý</strong></td><td>Khách tích ô đồng ý nhận tin trên form</td><td>Có</td></tr><tr><td><strong>Chưa từng được hỏi</strong></td><td>Khách đăng ký từ trang cũ chưa có ô đồng ý, danh sách bạn tự nhập</td><td>Có</td></tr><tr><td><strong>Đã từ chối hoặc đã rút đồng ý</strong></td><td>Khách bỏ trống ô đồng ý khi form có hỏi, hoặc bấm link huỷ nhận tin</td><td><strong>Không</strong></td></tr></tbody></table><h3>Hệ thống chặn ở đâu</h3><ul><li><strong>Lúc lấy danh sách.</strong> Nguồn người nhận lấy từ landing page tự bỏ qua người đã từ chối hoặc đã rút đồng ý. Trong bước cấu hình nguồn có dòng báo cụ thể bao nhiêu người bị bỏ qua.</li><li><strong>Lúc gửi.</strong> Ngay trước khi gửi từng tin, hệ thống kiểm lại một lần nữa, cho cả <strong>Email</strong> lẫn <strong>Zalo cá nhân</strong> và <strong>kết bạn Zalo</strong>. Người vừa rút đồng ý sau khi chiến dịch bắt đầu cũng không nhận tin nữa.</li></ul><p>Tin gửi vào <strong>nhóm Zalo</strong> không áp dụng quy tắc này, vì nhóm không có người nhận riêng lẻ để đối chiếu.</p><p>[ẢNH: bước cấu hình nguồn người nhận từ landing page, khoanh đỏ dòng báo số người bị bỏ qua vì đã từ chối nhận tin]</p><h3>Nguồn từ biểu mẫu thì chặt hơn</h3><p>Nguồn <strong>Dữ liệu Biểu mẫu</strong> chỉ lấy những người <strong>đã tích ô đồng ý</strong>. Biểu mẫu chưa bật ô đồng ý thì nguồn này không lấy được ai, và màn hình báo rõ điều đó. Cách bật xem <a href="/huong-dan/bieu-mau">Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website</a>.</p><h3>Khách rút đồng ý bằng cách nào</h3><ul><li><strong>Email chiến dịch</strong> có sẵn dòng <em>hủy đăng ký tại đây</em> ở cuối thư. Khách bấm là xong, bạn không phải làm gì.</li><li><strong>Người đã điền biểu mẫu</strong> tự rút được sự đồng ý; trong trang bài nộp, cột <strong>Đồng ý tiếp thị</strong> đổi thành <em>Đã rút</em> kèm ngày.</li></ul><p>[ẢNH: trang Bài nộp biểu mẫu, khoanh đỏ một dòng có cột Đồng ý tiếp thị ghi &quot;Đã rút&quot;]</p><h3>Xem nguồn đồng ý của từng khách</h3><p>Trong danh sách khách hàng có cột <strong>Nguồn đồng ý</strong>, cho biết khách đến từ landing page, từ biểu mẫu hay do bạn nhập vào.</p><p>[ẢNH: danh sách khách hàng, khoanh đỏ cột &quot;Nguồn đồng ý&quot;]</p><h3>Câu hỏi hay gặp</h3><p><strong>Danh sách 200 người mà chỉ gửi 188?</strong> Xem dòng báo ở bước cấu hình nguồn: số chênh thường là người đã từ chối nhận tin. Trang <strong>Hiệu quả chiến dịch</strong> cũng có dòng tóm tắt bao nhiêu người bị bỏ qua và vì sao.</p><p><strong>Tôi muốn gửi cho cả người đã từ chối?</strong> Không được, và không có công tắc nào để tắt việc này.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/khach-hang">Khách hàng: dữ liệu đến từ đâu và xem ở đâu</a></li><li><a href="/huong-dan/campaign-theo-doi">Theo dõi chiến dịch đang chạy</a></li><li><a href="/huong-dan/bieu-mau">Biểu mẫu: thu thông tin, chia sẻ và nhúng vào website</a></li></ul>`,
+  },
+  {
+    slug: 'marketplace',
+    feature_key: 'khac',
+    primary_route: '/app/marketplace',
+    sort_order: 140,
+    title: 'Marketplace: mua, bán và chia sẻ template',
+    summary: 'Chợ template của Founder AI: lấy chiến dịch và chatbot dựng sẵn của người khác về dùng ngay, hoặc đăng template của bạn để bán lấy credits.',
+    body_md: `# Marketplace: mua, bán và chia sẻ template
+Marketplace là chợ template. Bạn lấy **chiến dịch** hoặc **chatbot** người khác đã dựng sẵn về dùng ngay, hoặc đăng cái của mình lên để người khác mua. Thanh toán bằng **credits**, không dùng tiền mặt.
+
+## Tìm trang này trên màn hình
+Bấm nút **Marketplace** trên **thanh ngang trên cùng**, cạnh nút Nâng cấp. Mục này không nằm trong menu bên trái.
+
+[ẢNH: thanh ngang trên cùng, khoanh đỏ nút "Marketplace"]
+
+Trang có bốn tab:
+
+| Tab | Có gì |
+|---|---|
+| **Khám phá** | Tất cả template đang bán, lọc theo danh mục và tìm theo tên |
+| **Của tôi** | Template bạn đã đăng |
+| **Đã mua** | Template bạn đã mua, dùng được ngay |
+| **Yêu thích** | Template bạn lưu lại để xem sau |
+
+[ẢNH: trang Marketplace, khoanh đỏ hàng bốn tab Khám phá / Của tôi / Đã mua / Yêu thích]
+
+## Mua một template
+Mở template để xem mô tả và đánh giá, rồi bấm mua. Template ghi **Miễn phí** thì lấy về không mất gì; template có giá thì hệ thống trừ đúng số credits ghi trên đó.
+
+Mua xong, hệ thống **sao chép** chiến dịch hoặc chatbot đó vào tài khoản của bạn. Bạn sửa thoải mái, không ảnh hưởng bản gốc của người bán.
+
+- Mỗi template chỉ cần mua **một lần**.
+- Không mua được template của chính mình.
+- Mua rồi thì bạn viết được đánh giá cho template đó.
+
+## Đăng template để bán
+Bấm **Đăng template**, chọn chiến dịch hoặc chatbot muốn đăng, viết mô tả, đặt giá bằng credits (hoặc để miễn phí), rồi xuất bản. Muốn ngừng bán thì tạm dừng template trong tab **Của tôi**.
+
+[ẢNH: màn hình Đăng template, khoanh đỏ ô chọn chiến dịch hoặc chatbot và ô đặt giá]
+
+Mỗi lượt bán, bạn nhận **90%** số credits; 10% còn lại là phí nền tảng. Số credits kiếm được ghi vào **số dư người bán** của bạn, tách riêng với credits AI của gói.
+
+> Trước khi đăng, xoá thông tin riêng khỏi template: số điện thoại, link Google Sheet khách hàng, nội dung nội bộ. Người mua nhận một bản sao y nguyên.
+
+## Liên quan
+- [Tạo chiến dịch](campaign-create)
+- [Chatbot AI trả lời khách tự động](chatbot)
+- [Gói dịch vụ & thanh toán](plan-and-billing)`,
+    body_html: `<h2>Marketplace: mua, bán và chia sẻ template</h2><p>Marketplace là chợ template. Bạn lấy <strong>chiến dịch</strong> hoặc <strong>chatbot</strong> người khác đã dựng sẵn về dùng ngay, hoặc đăng cái của mình lên để người khác mua. Thanh toán bằng <strong>credits</strong>, không dùng tiền mặt.</p><h3>Tìm trang này trên màn hình</h3><p>Bấm nút <strong>Marketplace</strong> trên <strong>thanh ngang trên cùng</strong>, cạnh nút Nâng cấp. Mục này không nằm trong menu bên trái.</p><p>[ẢNH: thanh ngang trên cùng, khoanh đỏ nút &quot;Marketplace&quot;]</p><p>Trang có bốn tab:</p><table><thead><tr><th>Tab</th><th>Có gì</th></tr></thead><tbody><tr><td><strong>Khám phá</strong></td><td>Tất cả template đang bán, lọc theo danh mục và tìm theo tên</td></tr><tr><td><strong>Của tôi</strong></td><td>Template bạn đã đăng</td></tr><tr><td><strong>Đã mua</strong></td><td>Template bạn đã mua, dùng được ngay</td></tr><tr><td><strong>Yêu thích</strong></td><td>Template bạn lưu lại để xem sau</td></tr></tbody></table><p>[ẢNH: trang Marketplace, khoanh đỏ hàng bốn tab Khám phá / Của tôi / Đã mua / Yêu thích]</p><h3>Mua một template</h3><p>Mở template để xem mô tả và đánh giá, rồi bấm mua. Template ghi <strong>Miễn phí</strong> thì lấy về không mất gì; template có giá thì hệ thống trừ đúng số credits ghi trên đó.</p><p>Mua xong, hệ thống <strong>sao chép</strong> chiến dịch hoặc chatbot đó vào tài khoản của bạn. Bạn sửa thoải mái, không ảnh hưởng bản gốc của người bán.</p><ul><li>Mỗi template chỉ cần mua <strong>một lần</strong>.</li><li>Không mua được template của chính mình.</li><li>Mua rồi thì bạn viết được đánh giá cho template đó.</li></ul><h3>Đăng template để bán</h3><p>Bấm <strong>Đăng template</strong>, chọn chiến dịch hoặc chatbot muốn đăng, viết mô tả, đặt giá bằng credits (hoặc để miễn phí), rồi xuất bản. Muốn ngừng bán thì tạm dừng template trong tab <strong>Của tôi</strong>.</p><p>[ẢNH: màn hình Đăng template, khoanh đỏ ô chọn chiến dịch hoặc chatbot và ô đặt giá]</p><p>Mỗi lượt bán, bạn nhận <strong>90%</strong> số credits; 10% còn lại là phí nền tảng. Số credits kiếm được ghi vào <strong>số dư người bán</strong> của bạn, tách riêng với credits AI của gói.</p><blockquote><p>Trước khi đăng, xoá thông tin riêng khỏi template: số điện thoại, link Google Sheet khách hàng, nội dung nội bộ. Người mua nhận một bản sao y nguyên.</p></blockquote><h3>Liên quan</h3><ul><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li><li><a href="/huong-dan/chatbot">Chatbot AI trả lời khách tự động</a></li><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li></ul>`,
+  },
+  {
+    slug: 'dung-luong-luu-tru',
+    feature_key: 'plan-and-billing',
+    primary_route: '/app/billing',
+    sort_order: 126,
+    title: 'Dung lượng lưu trữ: xem ở đâu, đầy thì làm gì',
+    summary: 'Ảnh, tài liệu và tệp đính kèm bạn tải lên đều tính vào dung lượng của gói. Xem mức đã dùng ở Tổng quan gói, đầy thì xoá bớt tệp hoặc mua thêm.',
+    body_md: `# Dung lượng lưu trữ: xem ở đâu, đầy thì làm gì
+Mọi tệp bạn tải lên — ảnh trong landing page, tệp đính kèm chiến dịch, tài liệu nạp cho chatbot, banner biểu mẫu — đều tính vào **dung lượng lưu trữ** của tài khoản. Mỗi gói có một mức dung lượng riêng.
+
+## Xem đã dùng bao nhiêu
+Ở **thanh menu bên trái**, mở nhóm **Gói & Thanh toán**, chọn **Tổng quan gói**. Khối **Dung lượng lưu trữ** ghi *Đã dùng … / …* kèm phần trăm, và dòng **Còn trống**.
+
+[ẢNH: trang Tổng quan gói, khoanh đỏ khối Dung lượng lưu trữ với thanh phần trăm đã dùng]
+
+Khi sắp đầy, hệ thống hiện dòng cảnh báo ngay đầu trang. Tài khoản nhân viên cũng thấy cảnh báo, kèm lời nhắc báo chủ tài khoản.
+
+## Hai giới hạn cần nhớ
+- **Mỗi tệp tối đa 100 MB.** Tệp lớn hơn bị từ chối ngay khi chọn.
+- **Tổng dung lượng theo gói.** Tệp bạn chọn nặng hơn phần còn trống thì hệ thống báo rõ còn bao nhiêu và tệp nặng bao nhiêu.
+
+[ẢNH: thông báo lỗi khi tải tệp vượt dung lượng còn trống, thấy số còn lại và kích thước tệp]
+
+## Đầy rồi thì làm gì
+1. **Xoá bớt tệp cũ.** Vào nhóm **AI Chatbot**, mục **Thư viện media**, xoá các ảnh và tệp không còn dùng.
+2. **Mua thêm dung lượng.** Vào nhóm **Gói & Thanh toán**, mục **Mua thêm hạn mức**, chọn thêm dung lượng theo GB.
+3. **Nâng gói** nếu bạn cũng cần thêm các hạn mức khác.
+
+[ẢNH: trang Mua thêm hạn mức, khoanh đỏ dòng mua thêm dung lượng lưu trữ theo GB]
+
+Hết dung lượng **không làm mất** tệp đã có; bạn chỉ không tải thêm tệp mới được cho tới khi dọn bớt hoặc mua thêm.
+
+## Liên quan
+- [Gói dịch vụ & thanh toán](plan-and-billing)
+- [Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn](doi-goi)
+- [Hộp thư hợp nhất](inbox)`,
+    body_html: `<h2>Dung lượng lưu trữ: xem ở đâu, đầy thì làm gì</h2><p>Mọi tệp bạn tải lên — ảnh trong landing page, tệp đính kèm chiến dịch, tài liệu nạp cho chatbot, banner biểu mẫu — đều tính vào <strong>dung lượng lưu trữ</strong> của tài khoản. Mỗi gói có một mức dung lượng riêng.</p><h3>Xem đã dùng bao nhiêu</h3><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Gói &amp; Thanh toán</strong>, chọn <strong>Tổng quan gói</strong>. Khối <strong>Dung lượng lưu trữ</strong> ghi <em>Đã dùng … / …</em> kèm phần trăm, và dòng <strong>Còn trống</strong>.</p><p>[ẢNH: trang Tổng quan gói, khoanh đỏ khối Dung lượng lưu trữ với thanh phần trăm đã dùng]</p><p>Khi sắp đầy, hệ thống hiện dòng cảnh báo ngay đầu trang. Tài khoản nhân viên cũng thấy cảnh báo, kèm lời nhắc báo chủ tài khoản.</p><h3>Hai giới hạn cần nhớ</h3><ul><li><strong>Mỗi tệp tối đa 100 MB.</strong> Tệp lớn hơn bị từ chối ngay khi chọn.</li><li><strong>Tổng dung lượng theo gói.</strong> Tệp bạn chọn nặng hơn phần còn trống thì hệ thống báo rõ còn bao nhiêu và tệp nặng bao nhiêu.</li></ul><p>[ẢNH: thông báo lỗi khi tải tệp vượt dung lượng còn trống, thấy số còn lại và kích thước tệp]</p><h3>Đầy rồi thì làm gì</h3><ol><li><strong>Xoá bớt tệp cũ.</strong> Vào nhóm <strong>AI Chatbot</strong>, mục <strong>Thư viện media</strong>, xoá các ảnh và tệp không còn dùng.</li><li><strong>Mua thêm dung lượng.</strong> Vào nhóm <strong>Gói &amp; Thanh toán</strong>, mục <strong>Mua thêm hạn mức</strong>, chọn thêm dung lượng theo GB.</li><li><strong>Nâng gói</strong> nếu bạn cũng cần thêm các hạn mức khác.</li></ol><p>[ẢNH: trang Mua thêm hạn mức, khoanh đỏ dòng mua thêm dung lượng lưu trữ theo GB]</p><p>Hết dung lượng <strong>không làm mất</strong> tệp đã có; bạn chỉ không tải thêm tệp mới được cho tới khi dọn bớt hoặc mua thêm.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li><li><a href="/huong-dan/doi-goi">Đổi gói — nâng cấp, hạ gói, đổi kỳ hạn</a></li><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li></ul>`,
+  },
+  {
+    slug: 'nhat-ky-hoat-dong',
+    feature_key: 'nhan-vien',
+    primary_route: '/app/settings/audit-logs',
+    sort_order: 115,
+    title: 'Nhật ký hoạt động: ai đã làm gì, lúc nào',
+    summary: 'Sổ ghi lại các thao tác quan trọng trong tài khoản: thêm bớt nhân viên, đổi quyền, tạo và sửa chiến dịch. Dùng khi cần biết ai đã thay đổi gì.',
+    body_md: `# Nhật ký hoạt động: ai đã làm gì, lúc nào
+Khi tài khoản có nhiều nhân viên cùng làm, sớm muộn bạn sẽ cần trả lời câu "ai đã sửa cái này". Nhật ký hoạt động ghi lại các thao tác quan trọng để bạn tra.
+
+## Tìm trang này trên màn hình
+Ở **thanh menu bên trái**, mở nhóm **Cài đặt**, chọn mục **Nhật ký hoạt động**. Chỉ **chủ tài khoản** thấy mục này.
+
+[ẢNH: menu bên trái đang mở nhóm Cài đặt, khoanh đỏ mục "Nhật ký hoạt động"]
+
+## Đọc bảng nhật ký
+Mỗi dòng là một thao tác, gồm năm cột: **Thời gian**, **Người thực hiện**, **Hành động**, **Đối tượng** và **Chi tiết**.
+
+[ẢNH: bảng Nhật ký hoạt động với vài dòng, khoanh đỏ cột Người thực hiện và cột Hành động]
+
+Những việc được ghi lại gồm:
+
+- **Nhân viên**: thêm, xoá, đổi quyền hạn, đổi giới hạn gửi, đổi trạng thái tài khoản, đặt lại mật khẩu.
+- **Chiến dịch**: tạo, cập nhật, xoá, bắt đầu chạy, tạm dừng.
+- **Mẫu email và mẫu Zalo**: tạo, cập nhật, xoá.
+
+## Lọc cho nhanh
+Phía trên bảng có ô **Tìm theo chi tiết**, hai ô lọc **Tất cả hành động** và **Tất cả đối tượng**, cùng khoảng ngày **Từ ngày** — **Đến ngày**. Bấm **Xóa lọc** để xem lại tất cả.
+
+[ẢNH: hàng bộ lọc phía trên bảng, khoanh đỏ ô lọc hành động và hai ô chọn ngày]
+
+Nhật ký chỉ để xem, không sửa và không xoá được từng dòng.
+
+## Liên quan
+- [Nhân viên & phân quyền](nhan-vien)
+- [Tạo chiến dịch](campaign-create)`,
+    body_html: `<h2>Nhật ký hoạt động: ai đã làm gì, lúc nào</h2><p>Khi tài khoản có nhiều nhân viên cùng làm, sớm muộn bạn sẽ cần trả lời câu &quot;ai đã sửa cái này&quot;. Nhật ký hoạt động ghi lại các thao tác quan trọng để bạn tra.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Cài đặt</strong>, chọn mục <strong>Nhật ký hoạt động</strong>. Chỉ <strong>chủ tài khoản</strong> thấy mục này.</p><p>[ẢNH: menu bên trái đang mở nhóm Cài đặt, khoanh đỏ mục &quot;Nhật ký hoạt động&quot;]</p><h3>Đọc bảng nhật ký</h3><p>Mỗi dòng là một thao tác, gồm năm cột: <strong>Thời gian</strong>, <strong>Người thực hiện</strong>, <strong>Hành động</strong>, <strong>Đối tượng</strong> và <strong>Chi tiết</strong>.</p><p>[ẢNH: bảng Nhật ký hoạt động với vài dòng, khoanh đỏ cột Người thực hiện và cột Hành động]</p><p>Những việc được ghi lại gồm:</p><ul><li><strong>Nhân viên</strong>: thêm, xoá, đổi quyền hạn, đổi giới hạn gửi, đổi trạng thái tài khoản, đặt lại mật khẩu.</li><li><strong>Chiến dịch</strong>: tạo, cập nhật, xoá, bắt đầu chạy, tạm dừng.</li><li><strong>Mẫu email và mẫu Zalo</strong>: tạo, cập nhật, xoá.</li></ul><h3>Lọc cho nhanh</h3><p>Phía trên bảng có ô <strong>Tìm theo chi tiết</strong>, hai ô lọc <strong>Tất cả hành động</strong> và <strong>Tất cả đối tượng</strong>, cùng khoảng ngày <strong>Từ ngày</strong> — <strong>Đến ngày</strong>. Bấm <strong>Xóa lọc</strong> để xem lại tất cả.</p><p>[ẢNH: hàng bộ lọc phía trên bảng, khoanh đỏ ô lọc hành động và hai ô chọn ngày]</p><p>Nhật ký chỉ để xem, không sửa và không xoá được từng dòng.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/nhan-vien">Nhân viên &amp; phân quyền</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li></ul>`,
   },
 ];
 

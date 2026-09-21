@@ -28,6 +28,9 @@ describe('assistantCapabilities', () => {
     ['do you support A/B testing', 'vi', 'unsupported', 'ab_testing'],
     ['trợ lý hẹn giờ gửi được không', 'vi', 'guide', 'schedule'],
     ['bạn có thể tạo chiến dịch SMS không', 'vi', 'unsupported', 'unsupported_channel'],
+    ['có gửi chiến dịch qua Telegram được không', 'vi', 'unsupported', 'unsupported_channel'],
+    ['Do you support WhatsApp campaigns?', 'en', 'unsupported', 'unsupported_channel'],
+    ['hệ thống có gửi tin hàng loạt qua Messenger không', 'vi', 'unsupported', 'unsupported_channel'],
     ['Can you create and schedule a Zalo campaign?', 'en', 'guide', 'schedule'],
   ])('classifies %s', (question, locale, kind, id) => {
     expect(classifyCapabilityProbe(question, locale)).toMatchObject({ kind, id });
@@ -41,5 +44,23 @@ describe('assistantCapabilities', () => {
     'làm website bán hàng',
   ])('leaves how-to and command text for the existing router: %s', (question) => {
     expect(classifyCapabilityProbe(question, 'vi')).toBeNull();
+  });
+
+  // Chatbot nối được WhatsApp, Telegram, Facebook Messenger (tab Triển khai) — các câu này KHÔNG được
+  // rơi vào câu cố định "chưa hỗ trợ"; trả null để bộ định tuyến + bài hướng dẫn trả lời.
+  it.each([
+    'chatbot có kết nối Telegram được không',
+    'bot có trả lời trên WhatsApp được không',
+    'hệ thống có hỗ trợ Telegram không',
+    'Can you connect the chatbot to Facebook Messenger?',
+  ])('does not call a chatbot channel unsupported: %s', (question) => {
+    expect(classifyCapabilityProbe(question, 'vi')).toBeNull();
+  });
+
+  // Câu có cả "gửi tin" lẫn "chatbot": vẫn bị bộ khớp `campaign` (core) bắt vì chữ "gửi tin" — hành vi
+  // có từ trước, ngoài phạm vi sửa này. Điều phải giữ: KHÔNG được kết luận là kênh không hỗ trợ.
+  it('chatbot + "gửi tin" qua Telegram: không bị coi là kênh không hỗ trợ', () => {
+    const probe = classifyCapabilityProbe('chatbot có gửi tin trả lời qua Telegram được không', 'vi');
+    expect(probe?.kind).not.toBe('unsupported');
   });
 });

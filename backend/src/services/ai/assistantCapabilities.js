@@ -5,6 +5,10 @@ function normalizeLocale(locale) {
   return SUPPORTED_LOCALES.has(lang) ? lang : 'vi';
 }
 
+const CHATBOT_CAPABLE_CHANNEL_RE = /whatsapp|telegram|(?:facebook\s+)?messenger/i;
+const SEND_CONTEXT_RE = /gửi|gui|chiến dịch|chien dich|campaign|\bsend\b|broadcast|hàng loạt|hang loat/i;
+const CHATBOT_CONTEXT_RE = /chatbot|chat\s*bot|\bbot\b|trả lời|tra loi|\breply\b|\banswer\b/i;
+
 const CAPABILITY_DEFINITIONS = {
   core: [
     {
@@ -77,11 +81,17 @@ const CAPABILITY_DEFINITIONS = {
   unsupported: [
     {
       id: 'unsupported_channel',
+      // Mục này nói về kênh GỬI CHIẾN DỊCH (chỉ có Email và Zalo). WhatsApp, Telegram, Messenger thì
+      // chatbot VẪN nối được (tab Triển khai của Tạo AI Chatbot) — trước 21/09/2026 regex khớp trần
+      // tên kênh, nên hỏi "chatbot có nối Telegram được không" bị trả câu cố định "chưa hỗ trợ". Ba
+      // kênh đó giờ chỉ tính là không hỗ trợ khi câu hỏi nói về GỬI/chiến dịch và KHÔNG nói về
+      // chatbot; còn lại để bộ định tuyến + bài hướng dẫn trả lời. SMS và push thì không có ở đâu cả.
       label: {
-        vi: 'SMS, WhatsApp, Telegram, Messenger hoặc Push notification',
-        en: 'SMS, WhatsApp, Telegram, Messenger, or push notifications',
+        vi: 'gửi chiến dịch qua SMS, WhatsApp, Telegram, Messenger hoặc Push notification',
+        en: 'sending campaigns via SMS, WhatsApp, Telegram, Messenger, or push notifications',
       },
-      matches: (text) => /\bsms\b|whatsapp|telegram|(?:facebook\s+)?messenger|push notification/i.test(text),
+      matches: (text) => /\bsms\b|push notification/i.test(text)
+        || (CHATBOT_CAPABLE_CHANNEL_RE.test(text) && SEND_CONTEXT_RE.test(text) && !CHATBOT_CONTEXT_RE.test(text)),
     },
     {
       id: 'ab_testing',
