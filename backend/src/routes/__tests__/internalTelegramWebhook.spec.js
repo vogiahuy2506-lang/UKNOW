@@ -223,6 +223,18 @@ beforeEach(async () => {
         getAccountByTelegramUserId: jest.fn(async (tid) =>
           tid === fakeAccount.telegram_user_id ? fakeAccount : null
         ),
+        // Bug 22/09 — route đã chuyển từ raw query sang dùng repo này
+        // để JOIN `custom_chatbots.system_instruction` làm fallback
+        // chain giống Zalo Personal. Test pass `fakeAccountSettings` qua
+        // đây (test muốn override `chatbot_system_instruction` thì gán
+        // `_scenarioAccountSettings.chatbot_system_instruction`).
+        getSettingsForAccount: jest.fn(async (accountId, chatbotId) => {
+          if (!mocks._scenarioAccountSettings) return null;
+          if (Number(chatbotId) !== Number(mocks._scenarioAccountSettings.id_chatbot)) {
+            return null;
+          }
+          return mocks._scenarioAccountSettings;
+        }),
       },
     })
   );
@@ -442,6 +454,90 @@ describe('Bug #4 — is_enabled=false phải ghi system row, không drop im lặ
     expect(settings.ai_model).toBe(fakeChatbotSettingsFull.ai_model);
     // is_enabled fallback về chatbotSettings.is_enabled = true.
     expect(settings.is_enabled).toBe(true);
+  });
+});
+
+/**
+ * Bug 22/09 — full Zalo parity cho `system_instruction` fallback chain.
+ *
+ * Zalo cá nhân đã có sẵn chain (zaloInbox.service.js ~dòng 807-811):
+ *   1. `accountSettings.chatbot_system_instruction` (snap từ
+ *      `custom_chatbots.system_instruction` lúc user bật chatbot cho
+ *      account).
+ *   2. `chatbotSettings.system_instruction` (từ `chatbot_settings.channel`).
+ *
+ * Telegram trước đây thiếu hoàn toàn → user nhập `system_instruction`
+ * trong Studio (custom_chatbots) mà AI không thấy.
+ *
+ * Ở test này ta ép `chatbot_settings.channel='telegram_personal'` trả về
+ * row TRỐNG system_instruction (giả lập "user chưa lưu Studio channel
+ * cụ thể"). Sau đó assert pipeline tự fallback sang
+ * `accountSettings.chatbot_system_instruction`.
+ */
+describe('Bug 22/09 — Telegram fallback chain cho system_instruction (Zalo parity)', () => {
+  // Override default mock để trả row TRỐNG system_instruction (giống
+  // user mới lưu Studio chưa tick channel='telegram_personal').
+  let originalGetSettings;
+  beforeEach(() => {
+    // Capture original mock do beforeEach-aftermath đã reset module.
+    // Re-mock chatbotRepoMock trong cùng test là không cần — chỉ cần
+    // một local override đủ cho test này.
+  });
+
+  it('chatbot_settings TRỐNG → fallback sang accountSettings.chatbot_system_instruction', async () => {
+    // 1. Setup: chatbot_settings.channel='telegram_personal' TRỐNG
+    //    system_instruction (user chưa tick channel này trong Studio).
+    const emptyChatbotSettings = {
+      ...fakeChatbotSettingsFull,
+      system_instruction: null,
+      welcome_message: null,
+    };
+    // Patch mock ngay trước POST.
+    const { default: chatbotRepo } = await import(
+      resolveUrl('repositories/ai/chatbot.repository.js')
+    );
+    originalGetSettings = chatbotRepo.getSettings;
+    chatbotRepo.getSettings = jest.fn(async () => emptyChatbotSettings);
+
+    // 2. Setup: telegram_chatbot_settings có snap system_instruction
+    //    từ custom_chatbots (giả lập user đã bật chatbot cho account).
+    mocks._scenarioAccountSettings = {
+      ...fakeAccountSettings,
+      chatbot_system_instruction:
+        'Bạn là trợ lý Tia Chớp Consult — chuyên tư vấn dịch thuật & visa.',
+    };
+
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+
+    const call = mocks.chatRouterCall();
+    expect(call).not.toBeNull();
+    // 3. AI phải nhận được system_instruction từ fallback chain.
+    expect(call.chatbotSettings.system_instruction).toBe(
+      'Bạn là trợ lý Tia Chớp Consult — chuyên tư vấn dịch thuật & visa.'
+    );
+    // 4. _source phải mark là 'telegram_chatbot_settings_fallback' để debug.
+    expect(call.chatbotSettings._source?.system_instruction).toBe(
+      'telegram_chatbot_settings_fallback'
+    );
+  });
+
+  it('chatbot_settings CÓ system_instruction → KHÔNG override bằng fallback', async () => {
+    // chatbot_settings.system_instruction là nguồn ưu tiên hơn — giữ nguyên.
+    mocks._scenarioAccountSettings = {
+      ...fakeAccountSettings,
+      chatbot_system_instruction: 'FROM_CUSTOM_CHATBOTS — phải bị bỏ qua',
+    };
+    // fakeChatbotSettingsFull vẫn có system_instruction='Bạn là trợ lý bán hàng chuyên nghiệp'.
+
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+
+    const call = mocks.chatRouterCall();
+    expect(call).not.toBeNull();
+    expect(call.chatbotSettings.system_instruction).toBe(
+      fakeChatbotSettingsFull.system_instruction
+    );
   });
 });
 

@@ -174,6 +174,18 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
       }
 
       // Đồng bộ cài đặt AI sang các kênh: lỗi ở đây không chặn việc lưu chatbot (giữ như cũ).
+      //
+      // Bug 22/09: trước đây `ALL_CHANNELS` KHÔNG có `telegram_personal`,
+      // nên khi user lưu chatbot qua Studio thì bảng `chatbot_settings`
+      // không có row `channel='telegram_personal'` → backend
+      // `internal.routes.js` đọc `getSettings(userId, 'telegram_personal')`
+      // trả về `null` → `mergedSettings.system_instruction` = null → AI
+      // không tuân theo system_instruction đã cấu hình.
+      //
+      // Hành vi giống Zalo: cứ mỗi lần user bấm Lưu ở Studio thì upsert
+      // row cho mọi channel liên quan.
+      // Lưu ý: WhatsApp Baileys dùng bảng riêng
+      // (`chatbot_whatsapp_baileys_settings`) — KHÔNG add vào đây.
       const aiSettings = {
         system_instruction: form.system_instruction,
         ai_model: form.ai_model,
@@ -183,7 +195,16 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
         welcome_message: form.welcome_message,
         is_enabled: form.is_active,
       };
-      const ALL_CHANNELS = ['zalo_personal', 'zalo_oa', 'facebook', 'web', 'script', 'iframe', 'public_link'];
+      const ALL_CHANNELS = [
+        'zalo_personal',
+        'zalo_oa',
+        'facebook',
+        'web',
+        'script',
+        'iframe',
+        'public_link',
+        'telegram_personal',
+      ];
       try {
         await Promise.all(ALL_CHANNELS.map((channel) =>
           chatbotApi.updateChatbotSettings(channel, aiSettings)

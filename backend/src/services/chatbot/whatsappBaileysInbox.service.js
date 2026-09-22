@@ -133,14 +133,28 @@ function shouldSkip(msg) {
 /**
  * Lookup chatbot đang bật AI cho session này. Một Baileys session có thể
  * được bật cho nhiều chatbot — trả về danh sách.
+ *
+ * Bug 22/09 (Zalo parity): SELECT thêm `cb.system_instruction` từ
+ * `custom_chatbots` và COALESCE fallback chain giống Zalo:
+ *   1. `s.system_instruction`  — user cấu hình riêng cho WhatsApp session
+ *   2. `cb.system_instruction` — từ chatbot gốc (Studio)
+ *
+ * Trước fix: chỉ lấy `s.system_instruction` → nếu row trống (user chưa
+ * lưu WhatsApp-specific) → AI không thấy instruction nào.
  */
 async function findEnabledChatbots(sessionKey) {
   const { rows } = await db.query(
-    `SELECT s.id_chatbot, s.welcome_message, s.ai_model, s.temperature,
-            s.max_tokens, s.response_style, s.system_instruction,
+    `SELECT s.id_chatbot,
+            -- Bug 22/09: COALESCE fallback chain giống Zalo.
+            COALESCE(
+              NULLIF(BTRIM(s.system_instruction), ''),
+              NULLIF(BTRIM(cb.system_instruction), '')
+            ) AS system_instruction,
+            s.welcome_message, s.ai_model, s.temperature,
+            s.max_tokens, s.response_style,
             s.id_sub_assistant, sa.name AS sub_assistant_name,
             cb.id_user, cb.name AS chatbot_name,
-             cb.active_hours
+            cb.active_hours
      FROM chatbot_whatsapp_baileys_settings s
      JOIN custom_chatbots cb ON cb.id = s.id_chatbot
      LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant

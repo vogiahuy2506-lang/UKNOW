@@ -277,22 +277,57 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   );
   let accountSettings = null;
   if (idChatbot) {
-    const { rows } = await db.query(
-      `SELECT * FROM telegram_chatbot_settings
-       WHERE id_telegram_account = $1 AND id_chatbot = $2`,
-      [account.id, idChatbot]
+    // Đổi raw query → dùng repo `getSettingsForAccount` (đã JOIN
+    // `custom_chatbots.*` để expose `chatbot_system_instruction` +
+    // các field AI default của chatbot). Tương đương
+    // `chatbotZaloAccount.repository.getSettings` — fix bug 22/09
+    // "AI Telegram không tuân theo system_instruction".
+    accountSettings = await chatbotTelegramRepository.getSettingsForAccount(
+      account.id,
+      idChatbot
     );
-    accountSettings = rows[0] || null;
   }
 
   // ── NEW: merge full settings ──────────────────────────────────────
   // Trước đây chỉ pass `accountSettings` (3 cột) hoặc fallback
   // `chatbotSettings`. Test file `internalTelegramWebhook.spec.js`
   // pin expect() cho từng field để bug này không regression.
-  const mergedSettings = mergeAccountAndChatbotSettings(
+  let mergedSettings = mergeAccountAndChatbotSettings(
     accountSettings,
     chatbotSettings
   );
+
+  // ── NEW (Bug 22/09 — Zalo parity): fallback chain cho
+  // ── system_instruction. Zalo cá nhân đã có sẵn chain này ở
+  // ── zaloInbox.service.js (dòng ~807-811). Telegram thiếu nên AI
+  // ── không thấy system_instruction của chatbot user tạo.
+  //
+  // Thứ tự ưu tiên (giống Zalo, KHÔNG lẫn lộn):
+  //   1. `accountSettings.chatbot_system_instruction`  ← snap từ
+  //      `custom_chatbots.system_instruction` lúc user bật chatbot
+  //      cho account (DeployTab UI).
+  //   2. `chatbotSettings.system_instruction`           ← từ
+  //      `chatbot_settings.channel='telegram_personal'` (Studio Lưu).
+  //
+  // Fallback A→B: chỉ fill khi B trống. Như vậy:
+  //   - User cấu hình ở Studio Lưu (chatbot_settings) → ưu tiên.
+  //   - User chỉ cấu hình ở Studio chatbot mà chưa lưu channel-specific
+  //     → fallback sang chatbot_system_instruction (snap khi bật).
+  if (!mergedSettings.system_instruction && accountSettings?.chatbot_system_instruction) {
+    mergedSettings = {
+      ...mergedSettings,
+      system_instruction: accountSettings.chatbot_system_instruction,
+      _source: {
+        ...(mergedSettings._source || {}),
+        system_instruction: 'telegram_chatbot_settings_fallback',
+      },
+    };
+    console.log('[Telegram] backfilled system_instruction from chatbot_system_instruction', {
+      accountId: account.id,
+      idChatbot,
+      length: accountSettings.chatbot_system_instruction.length,
+    });
+  }
 
   // Nếu account đã tắt chatbot cho kênh này (is_enabled=false hoặc
   // dm/group disabled tuỳ loại), ghi một system row để operator thấy
@@ -377,6 +412,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   if (idChatbot) {
     chatbotRecord = await chatbotRepository.findChatbotById(idChatbot);
   }
+
   const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
   const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
     activeHours: chatbotRecord?.active_hours,

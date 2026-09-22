@@ -498,20 +498,62 @@ class ChatbotTelegramRepository {
     // AI không rep — đúng triệu chứng production 14/09/2026.
     const dm = Boolean(enabled);
     const grp = Boolean(enabled);
+    // ── NEW (Bug 22/09 — Zalo parity): snap `custom_chatbots.system_instruction`
+    // ── vào `telegram_chatbot_settings.chatbot_system_instruction` khi
+    // bật chatbot. Đây là nguồn fallback chính cho AI pipeline khi
+    // `chatbot_settings.channel='telegram_personal'.system_instruction` rỗng.
+    // Chỉ fill khi row hiện tại trống — KHÔNG ghi đè giá trị đã có
+    // (giữ nguyên giá trị user đã edit thủ công).
     const { rows } = await db.query(
       `INSERT INTO telegram_chatbot_settings
          (id_telegram_account, id_chatbot, is_enabled,
-          is_enabled_dm, is_enabled_group)
-       VALUES ($1, $2, $3, $4, $5)
+          is_enabled_dm, is_enabled_group, chatbot_system_instruction)
+       VALUES ($1, $2, $3, $4, $5,
+               (SELECT NULLIF(BTRIM(cb.system_instruction), '')
+                  FROM custom_chatbots cb
+                 WHERE cb.id = $2 AND cb.is_active = true))
        ON CONFLICT (id_telegram_account, id_chatbot) DO UPDATE SET
          is_enabled      = EXCLUDED.is_enabled,
          is_enabled_dm   = EXCLUDED.is_enabled_dm,
          is_enabled_group = EXCLUDED.is_enabled_group,
+         chatbot_system_instruction = COALESCE(
+           NULLIF(BTRIM(telegram_chatbot_settings.chatbot_system_instruction), ''),
+           NULLIF(BTRIM(EXCLUDED.chatbot_system_instruction), '')
+         ),
          updated_at = NOW()
        RETURNING *`,
       [telegramAccountId, chatbotId, enabled, dm, grp]
     );
     return rows[0];
+  }
+
+  /**
+   * Read settings row for a (telegram_account, chatbot) tuple with
+   * `custom_chatbots.system_instruction` JOINed in as
+   * `chatbot_system_instruction` — mirrors `chatbotZaloAccount.repository.js`
+   * so the AI pipeline can fallback the same way Zalo Personal does.
+   *
+   * Returns `null` if no row exists yet for this (account, chatbot).
+   */
+  async getSettingsForAccount(telegramAccountId, chatbotId) {
+    if (!telegramAccountId || !chatbotId) return null;
+    const { rows } = await db.query(
+      `SELECT tcs.*,
+              cb.name              AS chatbot_name,
+              cb.system_instruction AS chatbot_system_instruction,
+              cb.ai_model          AS chatbot_ai_model,
+              cb.temperature       AS chatbot_temperature,
+              cb.max_tokens        AS chatbot_max_tokens,
+              cb.response_style    AS chatbot_response_style,
+              cb.welcome_message   AS chatbot_welcome_message
+         FROM telegram_chatbot_settings tcs
+         JOIN custom_chatbots cb ON cb.id = tcs.id_chatbot
+        WHERE tcs.id_telegram_account = $1
+          AND tcs.id_chatbot = $2
+        LIMIT 1`,
+      [telegramAccountId, chatbotId]
+    );
+    return rows[0] || null;
   }
 
   /**
