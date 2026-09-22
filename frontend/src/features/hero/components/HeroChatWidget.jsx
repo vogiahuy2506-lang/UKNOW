@@ -139,15 +139,45 @@ export default function HeroChatWidget() {
   // ------------------------------------------------------------------------
 
   /**
-   * Detect "thanh toán X đồng" / "pay X VND" trong user message.
-   * Trả { amount } nếu match, null nếu không.
+   * Parse số tiền từ text.
+   * Trả số VND (integer) nếu parse được, null nếu không.
+   */
+  function parseAmountFromText(text) {
+    const t = String(text || '').toLowerCase();
+
+    // 1tr = 1.000.000 ; 500k = 500.000
+    const vnUnitMatch = t.match(/(\d+(?:[.,]\d+)?)\s*(tr|triệu|k|ngàn|nghin|n)/i);
+    if (vnUnitMatch) {
+      const num = parseFloat(vnUnitMatch[1].replace(',', '.'));
+      const unit = vnUnitMatch[2].toLowerCase();
+      const mult =
+        unit === 'tr' || unit === 'triệu' ? 1_000_000 :
+        unit === 'k' || unit === 'ngàn' || unit === 'nghin' || unit === 'n' ? 1_000 : 1;
+      return Math.round(num * mult);
+    }
+
+    // 1.000.000 / 1,000,000 / 1000000 — lấy số lớn nhất (≥ 10.000)
+    const numericMatches = [...t.matchAll(/(\d{1,3}(?:[.,]\d{3})+|\d{4,})/g)];
+    let maxAmount = 0;
+    for (const m of numericMatches) {
+      const cleaned = m[1].replace(/[.,]/g, '');
+      const amount = parseInt(cleaned, 10);
+      if (Number.isFinite(amount) && amount >= 10_000 && amount > maxAmount) {
+        maxAmount = amount;
+      }
+    }
+    return maxAmount > 0 ? maxAmount : null;
+  }
+
+  /**
+   * Detect "thanh toán X đồng" / "pay X VND" / "cho STK" trong user message.
+   * Trả { amount } nếu match có amount, { amount: null } nếu match keyword nhưng chưa có amount.
    * Pattern: từ khoá thanh toán + số tiền (1.000, 1000000, 1tr, 500k).
    */
   function detectPaymentIntent(text) {
     const t = String(text || '').toLowerCase();
-    const hasPayKeyword =
-      /\b(thanh toán|pay|chuyển khoản|ck|qr|vietqr)\b/.test(t) ||
-      /thanh toán|chuyển tiền/.test(t);
+    const paymentKeywords = /\b(thanh toán|pay|chuyển khoản|ck|qr|vietqr|stk|số tk|số tài khoản|tài khoản ngân hàng|tài khoản|ngân hàng)\b/;
+    const hasPayKeyword = paymentKeywords.test(t);
     if (!hasPayKeyword) return null;
 
     // 1tr = 1.000.000 ; 500k = 500.000
@@ -172,7 +202,8 @@ export default function HeroChatWidget() {
       }
     }
 
-    return null;
+    // Có keyword nhưng chưa có số tiền → hỏi amount
+    return { amount: null };
   }
 
   /**
@@ -212,15 +243,20 @@ export default function HeroChatWidget() {
    */
   async function runPaymentFlow(amount) {
     setIsLoading(true);
+    const messageContent = amount && amount > 0
+      ? `${paymentAskAmountText} ${Number(amount).toLocaleString('vi-VN')} đ. Đang tạo mã QR...`
+      : 'Bạn muốn thanh toán bao nhiêu tiền? (ví dụ: 100.000 đồng)';
     setMessages(prev => [
       ...prev,
-      {
-        role: 'assistant',
-        content: `${paymentAskAmountText} ${Number(amount).toLocaleString('vi-VN')} đ. ${paymentAskAccountText}`,
-      },
+      { role: 'assistant', content: messageContent },
     ]);
     setPaymentFlow({ amount, step: 'ask_account', error: null });
     setIsLoading(false);
+
+    // Nếu đã có amount → tự động trigger generate QR (không cần chờ user nhập lại)
+    if (amount && amount > 0) {
+      setTimeout(() => executePaymentGeneration(amount, null), 500);
+    }
   }
 
   const handleSubmit = async (e) => {
@@ -234,18 +270,33 @@ export default function HeroChatWidget() {
 
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
 
-    // PAYMENT-FLOW: nếu user đang trong flow ask_account → trigger generate QR
-    // (không cần user nhập STK — system account đã configured ở BE).
+    // PAYMENT-FLOW: nếu user đang trong flow ask_account → parse amount hoặc trigger generate QR
     if (paymentFlow?.step === 'ask_account') {
       setIsLoading(false);
-      await executePaymentGeneration(paymentFlow.amount, userMessage);
+      // Thử parse số tiền từ message
+      const parsedAmount = parseAmountFromText(userMessage);
+      if (parsedAmount && parsedAmount > 0) {
+        await executePaymentGeneration(parsedAmount, userMessage);
+      } else {
+        // Không parse được → hỏi lại
+        setMessages(prev => [
+          ...prev,
+          { role: 'assistant', content: 'Mình chưa hiểu số tiền. Bạn nhập số tiền cần thanh toán nhé, ví dụ: 100.000 đồng' },
+        ]);
+        setPaymentFlow({ ...paymentFlow, step: 'ask_account' });
+      }
       return;
     }
 
-    // PAYMENT-FLOW: detect "thanh toán X đồng" → mở flow
+    // PAYMENT-FLOW: detect "thanh toán X đồng" / "cho STK" → mở flow
     const intent = detectPaymentIntent(userMessage);
-    if (intent && intent.amount > 0) {
-      await runPaymentFlow(intent.amount);
+    if (intent) {
+      if (intent.amount && intent.amount > 0) {
+        await runPaymentFlow(intent.amount);
+      } else {
+        // Có keyword nhưng chưa có số tiền → hỏi user nhập số tiền
+        await runPaymentFlow(null);
+      }
       return;
     }
 
