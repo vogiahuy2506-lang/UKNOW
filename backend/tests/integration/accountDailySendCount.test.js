@@ -157,17 +157,25 @@ describe('countZaloSentTodayByAccount', () => {
 });
 
 /**
- * Bản đầu của khối này chỉ chèn ĐÚNG MỘT dòng rồi đòi kế hoạch truy vấn nhắc tên index mới.
- * Trên bảng gần rỗng và chưa ANALYZE, mọi index đều xấp xỉ nhau (cost ~8.17) nên Postgres chọn
- * cái nào cũng "hợp lý" — máy tôi chọn index mới, runner CI chọn `idx_zalo_messages_account_created`
- * (index cũ `(account_id, created_at)`), và test đỏ ở shard 3/8 ngày 22/09. Tức phép kiểm cũ
- * KHÔNG chứng minh điều nó nói: nó đọc được một lựa chọn may rủi.
+ * KHÔNG assert Postgres chọn index nào ở đây — đã thử hai lần và sai cả hai.
  *
- * Bản này nạp đủ dữ liệu + `ANALYZE` để lựa chọn trở thành tất yếu chứ không phải hoà nhau:
- * phần lớn dòng của tài khoản đích là preview hoặc ngoài ngày, nên index bán phần (loại preview,
- * khoá theo `sent_at`) nhỏ hơn hẳn index cũ và thắng bằng cost thật.
+ * Lần 1: chèn đúng một dòng rồi đòi kế hoạch nhắc tên index mới. Bảng gần rỗng, chưa ANALYZE, mọi
+ * index cost ~8.17 nên planner chọn tuỳ ý: máy tôi ra index mới, CI ra `idx_zalo_messages_account_created`.
+ * Lần 2: nạp 8.400 dòng + ANALYZE cho "chắc ăn". CI vẫn đỏ, và lần này chọn **Seq Scan**
+ * (`cost=0.00..319.00 rows=12`) — vì 8.400 dòng vẫn là bảng bé, quét tuần tự rẻ hơn đi index.
+ *
+ * Bài học: lựa chọn của planner phụ thuộc kích thước bảng, thống kê, phiên bản Postgres và tham số
+ * chi phí của từng máy. DB test dựng lại từ số không mỗi lượt nên không bao giờ giống production —
+ * mọi phép kiểm kiểu này chỉ đọc được một lựa chọn may rủi, và "xanh" của nó không có nghĩa gì.
+ *
+ * Phép kiểm index đúng chỗ là **trên production**, nơi bảng có ~290.000 dòng email và ~65.000 dòng
+ * Zalo thật. Xem mục nghiệm thu của lệnh giao: chạy EXPLAIN một truy vấn đếm sau khi deploy, phải
+ * thấy `idx_email_messages_setting_sent` / `idx_zalo_messages_account_sent`.
+ *
+ * Còn lại ở đây là thứ DB test khẳng định được chắc chắn: hai hàm đếm ra đúng số trên khối dữ liệu
+ * lớn có lẫn preview và lẫn ngày khác.
  */
-describe('EXPLAIN dùng index mới (idx_email_messages_setting_sent / idx_zalo_messages_account_sent)', () => {
+describe('hai hàm đếm trên khối dữ liệu lớn (lẫn preview, lẫn ngày khác)', () => {
   const HOT_EMAIL_SETTING = 701;
   const HOT_ZALO_ACCOUNT = 702;
 
@@ -196,33 +204,25 @@ describe('EXPLAIN dùng index mới (idx_email_messages_setting_sent / idx_zalo_
     await db.query('ANALYZE zalo_messages');
   });
 
-  it('email: kế hoạch truy vấn dùng index mới, không quét tuần tự', async () => {
-    const { rows } = await db.query(
-      `EXPLAIN SELECT COUNT(*)::int FROM email_messages
-       WHERE id_email_setting = $1 AND status IN ('sent','delivered','bounced')
-         AND NOT is_preview AND sent_at >= $2 AND sent_at < $3`,
-      [HOT_EMAIL_SETTING, DAY_START, DAY_END]
-    );
-    const plan = rows.map((r) => r['QUERY PLAN']).join('\n');
-    expect(plan).toContain('idx_email_messages_setting_sent');
-    expect(plan).not.toContain('Seq Scan');
-  });
-
-  it('zalo: kế hoạch truy vấn dùng index mới, KHÔNG rơi về index cũ (account_id, created_at)', async () => {
-    const { rows } = await db.query(
-      `EXPLAIN SELECT COUNT(*)::int FROM zalo_messages
-       WHERE account_id = $1 AND tracking_metadata->>'status' = 'sent'
-         AND NOT is_preview AND sent_at >= $2 AND sent_at < $3`,
-      [HOT_ZALO_ACCOUNT, DAY_START, DAY_END]
-    );
-    const plan = rows.map((r) => r['QUERY PLAN']).join('\n');
-    expect(plan).toContain('idx_zalo_messages_account_sent');
-    expect(plan).not.toContain('idx_zalo_messages_account_created');
-    expect(plan).not.toContain('Seq Scan');
-  });
-
-  it('hai hàm đếm vẫn ra đúng số trên khối dữ liệu này (400 dòng, không lẫn preview/ngày khác)', async () => {
+  it('đếm đúng 400 giữa 8.400 dòng — không lẫn 4.000 preview, không lẫn 4.000 dòng ngày khác', async () => {
     await expect(countEmailSentTodayByAccount(db, HOT_EMAIL_SETTING, DAY_START, DAY_END)).resolves.toBe(400);
     await expect(countZaloSentTodayByAccount(db, HOT_ZALO_ACCOUNT, DAY_START, DAY_END)).resolves.toBe(400);
+  });
+
+  it('index mới TỒN TẠI và đúng định nghĩa (điều kiện lọc + cột khoá) — không phụ thuộc planner', async () => {
+    const { rows } = await db.query(
+      `SELECT indexname, indexdef FROM pg_indexes
+       WHERE indexname IN ('idx_email_messages_setting_sent', 'idx_zalo_messages_account_sent')
+       ORDER BY indexname`
+    );
+    expect(rows.map((r) => r.indexname)).toEqual([
+      'idx_email_messages_setting_sent',
+      'idx_zalo_messages_account_sent',
+    ]);
+    const [email, zalo] = rows;
+    expect(email.indexdef).toContain('(id_email_setting, sent_at)');
+    expect(email.indexdef).toContain('NOT is_preview');
+    expect(zalo.indexdef).toContain('(account_id, sent_at)');
+    expect(zalo.indexdef).toContain('NOT is_preview');
   });
 });

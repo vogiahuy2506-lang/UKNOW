@@ -146,12 +146,6 @@ jest.unstable_mockModule('../../../utils/campaignQuotaPauseNotify.util.js', () =
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');
 
-// Cùng lý do với campaignRunZaloAccountDailyLimit.spec.js: CI 22/09 đỏ đúng test ĐẦU TIÊN của file
-// (hai test sau xanh) vì lần `executeCampaign()` đầu trong một worker phải nạp + JIT cả cây phụ
-// thuộc của campaignRun.service.js. Cục bộ test đó chạy 30 ms — chính nó cũng là test chậm nhất
-// file, đúng dấu hiệu khởi động nguội.
-jest.setTimeout(30_000);
-
 describe('CampaignRun Zalo kết bạn (zalo_friend_request) — giới hạn gửi/ngày theo tài khoản (Việc 4)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -163,6 +157,13 @@ describe('CampaignRun Zalo kết bạn (zalo_friend_request) — giới hạn g�
     mockAccount = { id: 99, userId: 10, displayName: 'Tài khoản kết bạn' };
     campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
     campaignRunService.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.clear();
+    // Chính sách theo GIỜ không thuộc phạm vi spec này (đã có spec riêng) và là chỗ DUY NHẤT trong
+    // đường gửi còn hẹn giờ thật — `enforceOutboundPolicyBeforeSend` chờ qua `yieldOrSleep` /
+    // `sleepWithRunCheck`, mà `jest.useFakeTimers()` ở trên thì không bao giờ cho hẹn giờ thật nổ.
+    // Đó là lý do CI 22/09 treo đúng những ca mà giới hạn/ngày CHO PHÉP gửi (chạy tiếp vào đây),
+    // còn các ca bị hoãn thì xanh (ném RUN_YIELD_SLOT trước khi tới). Chặn ở đây để spec chỉ đo
+    // đúng thứ nó nói: giới hạn/ngày theo tài khoản.
+    campaignRunService.zaloRateLimiter.enforceOutboundPolicyBeforeSend = jest.fn().mockResolvedValue(undefined);
   });
 
   afterEach(() => {

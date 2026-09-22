@@ -134,15 +134,6 @@ jest.unstable_mockModule('../../../utils/campaignQuotaPauseNotify.util.js', () =
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');
 
-// Mặc định 5s của Jest quá chặt cho spec này. CI ngày 22/09 (`Test Backend` của 39777b2e) đỏ đúng
-// HAI test ĐẦU TIÊN của file, hai test sau xanh — dấu hiệu của chi phí khởi động nguội chứ không
-// phải lỗi logic: `executeCampaign()` kéo theo `campaignRun.service.js` (~7.000 dòng) cùng cả cây
-// phụ thuộc, lần gọi đầu trong một worker phải nạp + JIT toàn bộ. Máy tôi chạy hết 8–30 ms nên
-// không bao giờ thấy; runner CI chia 8 worker trên ít lõi thì vượt 5s.
-// Không nới cho qua chuyện: các ca chặn/hoãn vẫn xanh ở cả hai nơi, và nới timeout không làm test
-// nào bớt nghiêm ngặt — nó chỉ thôi tính thời gian nạp module vào ngân sách của test đầu tiên.
-jest.setTimeout(30_000);
-
 describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản (Việc 4)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -156,6 +147,13 @@ describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản 
     campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = 6;
     campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_YIELD_SLOT_MIN_WAIT_MS = 60_000;
     campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
+    // Chính sách theo GIỜ không thuộc phạm vi spec này (đã có spec riêng) và là chỗ DUY NHẤT trong
+    // đường gửi còn hẹn giờ thật — `enforceOutboundPolicyBeforeSend` chờ qua `yieldOrSleep` /
+    // `sleepWithRunCheck`, mà `jest.useFakeTimers()` ở trên thì không bao giờ cho hẹn giờ thật nổ.
+    // Đó là lý do CI 22/09 treo đúng những ca mà giới hạn/ngày CHO PHÉP gửi (chạy tiếp vào đây),
+    // còn các ca bị hoãn thì xanh (ném RUN_YIELD_SLOT trước khi tới). Chặn ở đây để spec chỉ đo
+    // đúng thứ nó nói: giới hạn/ngày theo tài khoản.
+    campaignRunService.zaloRateLimiter.enforceOutboundPolicyBeforeSend = jest.fn().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
