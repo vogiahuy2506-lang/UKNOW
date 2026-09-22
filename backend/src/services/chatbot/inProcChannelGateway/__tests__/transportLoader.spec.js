@@ -78,8 +78,10 @@ describe('loadTransportClass', () => {
     // `file://` URL để Node ESM `import()` chấp nhận trên Windows.
     // Trên mọi OS, importer phải nhận URL dạng file:// chứ không phải
     // raw absolute path.
+    // Trên Linux: `/path/to/fake.mjs` → `file:///path/to/fake.mjs`
+    // Trên Windows: `C:\path\to\fake.mjs` → `file:///C:/path/to/fake.mjs`
     expect(importer).toHaveBeenCalledWith(
-      expect.stringMatching(/^file:\/\/\/.+\/path\/to\/fake\.mjs$/)
+      expect.stringMatching(/^file:\/\/.+\/path\/to\/fake\.mjs$/)
     );
   });
 
