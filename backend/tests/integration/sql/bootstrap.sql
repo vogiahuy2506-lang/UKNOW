@@ -3413,6 +3413,7 @@ CREATE TABLE telegram_chatbot_settings (
     is_enabled BOOLEAN DEFAULT false,
     is_enabled_dm BOOLEAN DEFAULT true,
     is_enabled_group BOOLEAN DEFAULT false,
+    chatbot_system_instruction TEXT,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     UNIQUE(id_telegram_account, id_chatbot)
