@@ -532,7 +532,7 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     senderName,
   } = firstMeta;
 
-  log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} history_size=${history.length} throughMessageId=${throughMessageId}`);
+  log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason}`);
 
   try {
     // Resolve chatbot settings (có thể thay đổi giữa các batch)
@@ -555,6 +555,10 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       throughMessageId,
       excludeMessageIds: visitorMessageIds,
     });
+
+    // Hai số này chỉ có sau khi dựng xong history — log ở đầu hàm là ReferenceError,
+    // ném ngay trước try nên mọi lượt gom tin WhatsApp chết im lặng.
+    log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} history_size=${history.length} throughMessageId=${throughMessageId}`);
 
     // Gọi AI với prompt từ batched messages
     const subAssistant = cb.id_sub_assistant
