@@ -21,6 +21,8 @@ import ragEngineService from './ragEngine.service.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import chatRouterService from './chatRouter.service.js';
 import { detectOffTopicReply, buildOffTopicFallback } from '../../utils/aiOffTopicReply.util.js';
+import inboundReplyDebounceService from './inboundReplyDebounce.service.js';
+import { formatBatchedContent } from '../../utils/chatbotReplyBatch.util.js';
 
 const log = (...args) => console.log('[WhatsApp/Baileys/Inbox]', ...args);
 
@@ -324,7 +326,31 @@ async function buildReplyForChatbot({ ownerUserId, cb, history, messageText }) {
 }
 
 /**
- * Xử lý 1 inbound message từ Baileys.
+ * Resolve chatbot settings cho WhatsApp (cần gọi mỗi batch vì AI settings có thể thay đổi).
+ */
+async function resolveChatbotSettingsForBatch({ ownerUserId, sessionKey, chatbotId }) {
+  const { rows } = await db.query(
+    `SELECT s.id_chatbot,
+            COALESCE(
+              NULLIF(BTRIM(s.system_instruction), ''),
+              NULLIF(BTRIM(cb.system_instruction), '')
+            ) AS system_instruction,
+            s.welcome_message, s.ai_model, s.temperature,
+            s.max_tokens, s.response_style,
+            s.id_sub_assistant, sa.name AS sub_assistant_name,
+            cb.id_user, cb.name AS chatbot_name,
+            cb.active_hours
+     FROM chatbot_whatsapp_baileys_settings s
+     JOIN custom_chatbots cb ON cb.id = s.id_chatbot
+     LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant
+     WHERE s.session_key = $1 AND s.id_chatbot = $2 AND s.is_enabled = true AND cb.is_active = true`,
+    [sessionKey, chatbotId]
+  );
+  return rows[0] || null;
+}
+
+/**
+ * Xử lý 1 inbound message từ Baileys — persist và enqueue vào debounce bucket.
  */
 async function processIncomingMessage({ sessionKey, msg }) {
   log(`[incoming] session=${sessionKey} raw=${JSON.stringify({ key: msg?.key, hasMsg: !!msg?.message }).slice(0, 200)}`);
@@ -367,9 +393,8 @@ async function processIncomingMessage({ sessionKey, msg }) {
     const channelConn = await getOrCreateBaileysChannelConnection(sessionKey);
     const idChannelConnection = channelConn.id;
 
-    // Với mỗi chatbot bật AI, đảm bảo có conversation và xử lý.
+    // Với mỗi chatbot bật AI, đảm bảo có conversation và enqueue message.
     for (const cb of enabledChatbots) {
-      // Handoff: skip nếu AI đã pause cho conversation này.
       const conversation = await getOrCreateConversation({
         sessionKey,
         ownerUserId,
@@ -378,6 +403,7 @@ async function processIncomingMessage({ sessionKey, msg }) {
         idChatbot: cb.id_chatbot,
         idChannelConnection,
       });
+
       // Pause check trực tiếp trên channel_conversations.ai_paused.
       const { rows: pauseRows } = await db.query(
         `SELECT ai_paused FROM channel_conversations WHERE id = $1`,
@@ -389,7 +415,7 @@ async function processIncomingMessage({ sessionKey, msg }) {
       }
 
       // Persist visitor message (idempotent nhờ messageId nếu có).
-      await persistMessage({
+      const persistResult = await persistMessage({
         conversationId: conversation.id,
         channelId: idChannelConnection,
         userId: ownerUserId,
@@ -399,7 +425,7 @@ async function processIncomingMessage({ sessionKey, msg }) {
         externalMessageId: messageId,
       });
 
-      // Active hours check (trước khi gọi AI, tin khách đã được lưu)
+      // Active hours check
       const { default: chatbotActiveHoursService } = await import('./chatbotActiveHours.service.js');
       const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: cb.active_hours,
@@ -434,71 +460,155 @@ async function processIncomingMessage({ sessionKey, msg }) {
         continue;
       }
 
-      // Lấy lịch sử + gọi AI (qua chatRouterService chung).
-      try {
-        const history = await getHistory(conversation.id);
-        const reply = await buildReplyForChatbot({
-          ownerUserId,
-          cb,
-          history,
-          messageText,
-        });
-        let cleanReply = stripMarkdown(reply);
-
-        // Safety net: phát hiện AI trả lời off-topic (vd nhắc lại template
-        // "Đang chờ ghi chú thanh toán..." cho câu chào hỏi thông thường).
-        // Bug production (14/09/2026): khách "hello em là ai" / "rảnh ko" /
-        // "em làm dc gì" → bot trả lời template payment note không liên
-        // quan. Nguyên nhân: system_instruction hoặc KB trong DB ép AI
-        // dùng template cứng, hoặc RAG context không match. Fix:
-        // detect và thay bằng fallback friendly để khách vẫn nhận được
-        // phản hồi tự nhiên.
-        const offTopicCheck = detectOffTopicReply({
-          customerMessage: messageText,
-          aiReply: cleanReply,
-        });
-        if (offTopicCheck.isOffTopic) {
-          log(
-            `[off-topic] chatbot=${cb.id_chatbot} session=${sessionKey} ` +
-            `customer="${messageText.slice(0, 60)}" → "${cleanReply.slice(0, 80)}..." ` +
-            `reason=${offTopicCheck.reason}`
-          );
-          cleanReply = buildOffTopicFallback({
-            assistantName: cb.sub_assistant_name || cb.chatbot_name || null,
-            customerMessage: messageText,
-          });
-        }
-
-        // Persist bot reply.
-        await persistMessage({
-          conversationId: conversation.id,
-          channelId: idChannelConnection,
-          userId: ownerUserId,
-          role: 'bot',
-          content: cleanReply,
-        });
-
-        // Gửi qua Baileys (adapter đã có Baileys path).
-        await whatsappAdapter.sendReply({
-          channelId: sessionKey,
-          externalId,
-          message: cleanReply,
-        });
-        log(`session=${sessionKey} chatbot=${cb.id_chatbot} conversation=${conversation.id} → replied (${cleanReply.length} chars)`);
-      } catch (err) {
-        log(`AI/reply error (chatbot=${cb.id_chatbot}):`, err.message);
-        try {
-          await whatsappAdapter.sendReply({
-            channelKey: sessionKey,
-            channelId: sessionKey,
+      // Enqueue vào debounce bucket để gom tin nhắn
+      const debounceKey = `whatsapp_baileys:${sessionKey}:${conversation.id}`;
+      inboundReplyDebounceService.enqueue({
+        key: debounceKey,
+        message: {
+          eventId: messageId || null,
+          persistedMessageId: persistResult?.id || null,
+          receivedAt: Date.now(),
+          content: messageText,
+          metadata: {
+            ownerUserId,
+            sessionKey,
+            chatbotId: cb.id_chatbot,
+            conversationId: conversation.id,
+            idChannelConnection,
             externalId,
-            message: VISITOR_CHAT_ERROR_MESSAGE,
+            senderName,
+          },
+        },
+        flushCallback: async (batch) => {
+          await _processWhatsAppBaileysBatch({
+            batch,
           });
-        } catch (_) { /* noop */ }
-      }
+        },
+      });
     }
   } catch (err) {
     log('processIncomingMessage error:', err.stack || err.message);
+  }
+}
+
+/**
+ * Xử lý batch đã gom — gọi AI một lần cho tất cả tin nhắn.
+ */
+async function _processWhatsAppBaileysBatch({ batch }) {
+  if (!batch.messages.length) return;
+
+  const prompt = formatBatchedContent(batch.messages);
+  if (!prompt) return;
+
+  // Lấy metadata từ tin nhắn đầu tiên (tất cả cùng conversation)
+  const firstMeta = batch.messages[0]?.metadata || {};
+  const {
+    ownerUserId,
+    sessionKey,
+    chatbotId,
+    conversationId,
+    idChannelConnection,
+    externalId,
+    senderName,
+  } = firstMeta;
+
+  log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason}`);
+
+  try {
+    // Resolve chatbot settings (có thể thay đổi giữa các batch)
+    const cb = await resolveChatbotSettingsForBatch({ ownerUserId, sessionKey, chatbotId });
+    if (!cb) {
+      log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} chatbot=${chatbotId} result=disabled`);
+      return;
+    }
+
+    // Lấy lịch sử hội thoại (exclude batch messages để tránh AI thấy tin nhắn trùng)
+    const history = await getHistory(conversationId);
+    // Filter out messages that were just batched to avoid duplicate context
+    const excludeIds = batch.messages
+      .map((m) => m.persistedMessageId)
+      .filter((id) => id != null);
+    const filteredHistory = excludeIds.length > 0
+      ? history.filter((h) => !excludeIds.includes(h.id))
+      : history;
+
+    // Gọi AI với prompt từ batched messages
+    const subAssistant = cb.id_sub_assistant
+      ? await subAssistantService.getById(cb.id_sub_assistant, ownerUserId)
+      : null;
+    const profileContext = await businessProfileService
+      .getFormattedProfileForPrompt(ownerUserId)
+      .catch(() => '');
+    const ragContext = await ragEngineService
+      .buildContext(ownerUserId, prompt, { customChatbotId: cb.id_chatbot })
+      .catch(() => '');
+    const isFirstMessage = filteredHistory.length === 0;
+
+    const systemPrompt = chatRouterService.buildSystemPrompt({
+      subAssistant,
+      settings: {
+        welcome_message: cb.welcome_message,
+        response_style: cb.response_style,
+        system_instruction: cb.system_instruction,
+        sub_assistant_name: cb.sub_assistant_name,
+      },
+      chatbot: { name: cb.chatbot_name },
+      ragContext,
+      profileContext,
+      isFirstMessage,
+    });
+
+    const { text: reply } = await chatRouterService._callAI({
+      userId: ownerUserId,
+      systemPrompt,
+      history: filteredHistory,
+      message: prompt,
+      model: cb.ai_model || 'gemini-2.5-flash',
+      temperature: parseFloat(cb.temperature || 0.7),
+      maxTokens: cb.max_tokens || 2048,
+    });
+
+    let cleanReply = stripMarkdown(reply || '');
+
+    // Safety net: detect off-topic
+    const offTopicCheck = detectOffTopicReply({
+      customerMessage: prompt,
+      aiReply: cleanReply,
+    });
+    if (offTopicCheck.isOffTopic) {
+      log(`[off-topic] whatsapp_baileys chatbot=${chatbotId} session=${sessionKey} reason=${offTopicCheck.reason}`);
+      cleanReply = buildOffTopicFallback({
+        assistantName: cb.sub_assistant_name || cb.chatbot_name || null,
+        customerMessage: prompt,
+      });
+    }
+
+    // Persist bot reply
+    await persistMessage({
+      conversationId,
+      channelId: idChannelConnection,
+      userId: ownerUserId,
+      role: 'bot',
+      content: cleanReply,
+    });
+
+    // Gửi qua WhatsApp
+    await whatsappAdapter.sendReply({
+      channelId: sessionKey,
+      externalId,
+      message: cleanReply,
+    });
+
+    log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} result=sent`);
+  } catch (err) {
+    log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=failed error=${err.message}`);
+    try {
+      await whatsappAdapter.sendReply({
+        channelId: sessionKey,
+        externalId,
+        message: VISITOR_CHAT_ERROR_MESSAGE,
+      });
+    } catch (_) { /* noop */ }
   }
 }
 
