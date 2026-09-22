@@ -583,6 +583,41 @@ describe('PATCH /api/admin/members/:id/detach-email — Mức 1 (P1-6)', () => {
     // Không đụng đơn hàng/dữ liệu khác — chỉ verify không lỗi khi chưa có gì để giữ
   });
 
+  it('xoá mềm gỡ mọi user_members của tài khoản — cả chiều nhân viên lẫn chiều chủ', async () => {
+    // Tài khoản đã xoá không đăng nhập được, nhưng dòng membership để lại thì: chiều nhân viên chiếm suất
+    // của chủ shop (production 21/09/2026, user 7 chiếm 1/3 suất của tài khoản 1); chiều chủ thì nhân viên cũ
+    // vẫn đổi sang không gian của tài khoản đã xoá và đọc dữ liệu trong đó.
+    const admin = await createUser({ role: 'admin', username: 'sa' });
+    const target = await createUser({ role: 'user', username: 'leaver', email: 'leaver@test.local' });
+    const boss = await createUser({ role: 'user', username: 'boss' });
+    const staff = await createUser({ role: 'user', username: 'staff' });
+    const bystanderOwner = await createUser({ role: 'user', username: 'other_boss' });
+    const bystanderStaff = await createUser({ role: 'user', username: 'other_staff' });
+    await db.query(
+      `INSERT INTO user_members (owner_id, employee_id, status) VALUES ($1, $2, 'active'), ($2, $3, 'active'), ($4, $5, 'active')`,
+      [boss.id, target.id, staff.id, bystanderOwner.id, bystanderStaff.id]
+    );
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .patch(`/api/admin/members/${target.id}/detach-email`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ confirmEmail: 'leaver@test.local' });
+    expect(res.status).toBe(200);
+
+    const gone = await db.query(
+      'SELECT COUNT(*)::int AS n FROM user_members WHERE employee_id = $1 OR owner_id = $1',
+      [target.id]
+    );
+    expect(gone.rows[0].n).toBe(0);
+    // Membership của người khác không bị vạ lây.
+    const kept = await db.query(
+      'SELECT COUNT(*)::int AS n FROM user_members WHERE owner_id = $1 AND employee_id = $2',
+      [bystanderOwner.id, bystanderStaff.id]
+    );
+    expect(kept.rows[0].n).toBe(1);
+  });
+
   it('confirmEmail không khớp → 400, không đổi gì', async () => {
     const admin = await createUser({ role: 'admin', username: 'sa' });
     const target = await createUser({ role: 'user', username: 'target', email: 'real@test.local' });

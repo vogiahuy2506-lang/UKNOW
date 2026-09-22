@@ -310,6 +310,30 @@ describe('POST /api/employees', () => {
     expect(res.body.code).toBe('EMPLOYEE_LIMIT_REACHED');
   });
 
+  it('nhân viên có tài khoản đã xoá mềm KHÔNG chiếm suất và KHÔNG hiện trong danh sách', async () => {
+    // Production 21/09/2026: membership 33 → user 7 (status = 'deleted') vẫn bị đếm là 1/3 suất của tài
+    // khoản 1, và hiện trong danh sách nhân viên dưới tên "…_freed_7" không thao tác được gì.
+    const { owner, token } = await setupOwnerWithPlan({ maxEmployees: 2 });
+    const alive = await createUser({ username: 'alive', role: 'user' });
+    const ghost = await createUser({ username: 'ghost', role: 'user' });
+    await addMembership(owner.id, alive.id, { status: 'active' });
+    await addMembership(owner.id, ghost.id, { status: 'active' });
+    await db.query(`UPDATE users SET status = 'deleted', deleted_at = NOW() WHERE id = $1`, [ghost.id]);
+
+    const list = await request(app)
+      .get('/api/employees')
+      .set('Authorization', `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body.data.map((e) => e.username)).toEqual(['alive']);
+
+    // 2 suất: 1 người sống + 1 "ma" → vẫn còn 1 suất cho người mới.
+    const res = await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'newcomer', email: 'newcomer@test.local' });
+    expect(res.status).toBe(201);
+  });
+
   it('plan max_employees = -1 → unlimited', async () => {
     const plan = await createPlan({ maxEmployees: -1 });
     const owner = await createUser({ username: 'unl', role: 'user' });

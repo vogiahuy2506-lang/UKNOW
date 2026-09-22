@@ -202,6 +202,15 @@ export async function detachMemberEmail(id, { originalEmail = null, releaseTrial
       return null;
     }
 
+    // Tài khoản đã xoá không đăng nhập được nữa (resolveUserContext chỉ nhận active/pending_activation),
+    // nhưng dòng user_members của họ vẫn nằm lại: là NHÂN VIÊN thì chiếm một suất trong hạn mức nhân viên
+    // của chủ shop (production 21/09/2026: user 7 đã xoá vẫn chiếm 1/3 suất của tài khoản 1); là CHỦ thì
+    // nhân viên cũ vẫn đổi được sang không gian của tài khoản đã xoá và đọc dữ liệu trong đó. Gỡ cả hai chiều.
+    const membershipRes = await client.query(
+      'DELETE FROM user_members WHERE employee_id = $1 OR owner_id = $1',
+      [id]
+    );
+
     let anonymizedTrialOrdersCount = 0;
     if (releaseTrialHistory) {
       const orderUpdateRes = await client.query(
@@ -223,6 +232,7 @@ export async function detachMemberEmail(id, { originalEmail = null, releaseTrial
       ...updatedUser,
       releaseTrialHistory: Boolean(releaseTrialHistory),
       anonymizedTrialOrdersCount,
+      removedMembershipsCount: membershipRes.rowCount || 0,
     };
   } catch (err) {
     await client.query('ROLLBACK');

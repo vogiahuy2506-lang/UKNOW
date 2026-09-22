@@ -11,10 +11,13 @@ const EMPLOYEE_SELECT = `
 
 export async function findEmployeesByOwner(ownerId) {
   const result = await db.query(
+    // Tài khoản đã xoá mềm (status = 'deleted') không hiện trong danh sách: dòng user_members của họ
+    // giờ được gỡ ngay lúc xoá (adminMembers.repository.detachMemberEmail), điều kiện này đỡ cho dòng
+    // cũ còn sót — chủ shop thấy một người "…_freed_7" không thao tác được gì là chuyện đã có thật.
     `SELECT ${EMPLOYEE_SELECT}
      FROM user_members um
      JOIN users u ON um.employee_id = u.id
-     WHERE um.owner_id = $1
+     WHERE um.owner_id = $1 AND u.status <> 'deleted'
      ORDER BY um.created_at DESC`,
     [ownerId]
   );
@@ -34,8 +37,12 @@ export async function findEmployeeByIdAndOwner(employeeId, ownerId) {
 
 export async function countActiveEmployees(ownerId) {
   const result = await db.query(
-    `SELECT COUNT(*) AS count FROM user_members
-     WHERE owner_id = $1 AND status = 'active'`,
+    // Không đếm nhân viên có tài khoản đã xoá mềm: họ không đăng nhập được nên không dùng suất, mà đếm
+    // vào thì chủ shop bị báo "hết suất" oan (production 21/09/2026: user 7 đã xoá chiếm 1/3 suất của tài khoản 1).
+    `SELECT COUNT(*) AS count
+       FROM user_members um
+       JOIN users u ON u.id = um.employee_id
+      WHERE um.owner_id = $1 AND um.status = 'active' AND u.status <> 'deleted'`,
     [ownerId]
   );
   return parseInt(result.rows[0].count, 10);
