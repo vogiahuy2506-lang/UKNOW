@@ -54,6 +54,28 @@ async function pickEnabledChatbotForTelegram(userId, telegramAccountId, seed = 0
 }
 
 /**
+ * Trả về true nếu `id_chatbot` hiện tại của conversation vẫn còn
+ * enabled cho account (chưa bị user gỡ qua DeployTab, custom_chatbots
+ * vẫn active). Bug #1 dùng để quyết định có re-pick hay không.
+ */
+async function isChatbotStillEnabledForAccount(telegramAccountId, idChatbot) {
+  if (!idChatbot) return false;
+  const { rows } = await db.query(
+    `SELECT 1
+       FROM telegram_chatbot_settings tcs
+       JOIN custom_chatbots cb
+         ON cb.id = tcs.id_chatbot AND cb.is_active = true
+      WHERE tcs.id_telegram_account = $1
+        AND tcs.id_chatbot = $2
+        AND tcs.is_enabled = true
+        AND (tcs.is_enabled_dm = true OR tcs.is_enabled_group = true)
+      LIMIT 1`,
+    [telegramAccountId, idChatbot]
+  );
+  return rows.length > 0;
+}
+
+/**
  * Find or create a `telegram_personal_conversations` row for a given
  * (account, peer). The unique constraint is on (account, external_id, status)
  * so closing a conversation and starting again yields a fresh row.
@@ -166,6 +188,21 @@ async function isTelegramAiPaused(conversationId) {
  * Encapsulates the policy checks (settings enabled? DM/group honour?
  * paused?) and the AI call + reply. Pulled out of the inline handler
  * so the route reads as "validate then enqueue".
+ *
+ * ── Settings merge (Bug sếp gặp 22/09) ─────────────────────────────────
+ * Trước đây merged settings chỉ chứa 3 cột từ `telegram_chatbot_settings`
+ * (is_enabled / is_enabled_dm / is_enabled_group) → AI không thấy
+ * `system_instruction`, `welcome_message`, `ai_model`, `temperature`,
+ * `max_tokens`, `response_style`, `id_sub_assistant` do user cấu hình
+ * trong Studio → câu trả lời "không tuân theo cấu hình".
+ *
+ * Sau fix: lấy THÊM `chatbot_settings.channel='telegram_personal'`
+ * (full row đã LEFT JOIN `sub_assistants`) rồi merge:
+ *   - Các field AI/system/welcome/style lấy từ `chatbotSettings` (config
+ *     chính của chatbot — có thể share giữa nhiều channels).
+ *   - 3 cột enable lấy từ `accountSettings` (override per-account).
+ *   - Nếu cả 2 cùng truthy thì `accountSettings.is_enabled_dm/group`
+ *     đè lên `chatbotSettings.is_enabled` (giữ semantic cũ).
  */
 async function processTelegramPersonalBatch({ account, parsed, batch }) {
   const peer = parsed.chatId || parsed.senderId;
@@ -175,7 +212,62 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     parsed.senderName
   );
 
-  const idChatbot = conversation.id_chatbot;
+  // ── NEW (Bug #1): re-evaluate chatbot theo cấu hình hiện tại ─────
+  // Trước đây lấy thẳng `conversation.id_chatbot` (đã bị khoá cứng
+  // từ lúc tạo hội thoại). Nếu user đổi chatbot qua DeployTab thì
+  // hội thoại đang mở vẫn dùng chatbot cũ → "đổi cấu hình nhưng
+  // câu trả lời không đổi".
+  //
+  // Semantics:
+  //   - Sticky: nếu chatbot hiện tại (conversation.id_chatbot) vẫn
+  //     enabled cho account này → giữ nguyên.
+  //   - Switch: nếu nó bị xoá/vô hiệu/đổi id_chatbot ở DeployTab
+  //     → pick lại từ danh sách enabled (round-robin), UPDATE
+  //     conversation row để các message sau dùng luôn id mới.
+  //
+  // Lưu ý: KHÔNG mutate `conversation.id_chatbot` in-memory — chỉ
+  // update DB và dùng local `idChatbot` cho phần dưới để tránh
+  // side-effect nếu caller giữ reference tới conversation row.
+  let idChatbot = conversation.id_chatbot;
+  const currentStillValid = await isChatbotStillEnabledForAccount(
+    account.id,
+    idChatbot
+  );
+  if (!currentStillValid) {
+    const rePicked = await pickEnabledChatbotForTelegram(
+      account.id_user,
+      account.id,
+      conversation.id // seed = conversation id để deterministic
+    );
+    if (rePicked && rePicked !== idChatbot) {
+      try {
+        await db.query(
+          `UPDATE telegram_personal_conversations
+             SET id_chatbot = $2,
+                 updated_at = NOW()
+           WHERE id = $1`,
+          [conversation.id, rePicked]
+        );
+        console.log('[Telegram] re-picked chatbot for conversation', {
+          conversationId: conversation.id,
+          oldIdChatbot: idChatbot,
+          newIdChatbot: rePicked,
+        });
+        idChatbot = rePicked;
+      } catch (err) {
+        console.warn('[Telegram] failed to persist re-picked chatbot:', err.message);
+      }
+    } else if (rePicked) {
+      idChatbot = rePicked;
+    } else {
+      // Không còn chatbot nào enabled → giữ idChatbot cũ (sẽ bị
+      // skip ở is_enabled check dưới, có system log rõ ràng).
+      console.log('[Telegram] no enabled chatbot to re-pick', {
+        conversationId: conversation.id,
+        oldIdChatbot: idChatbot,
+      });
+    }
+  }
 
   // Resolve AI settings: prefer the per-(account, chatbot) row, fall
   // back to the channel-level settings so legacy setups still work.
@@ -193,18 +285,54 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     accountSettings = rows[0] || null;
   }
 
-  if (!accountSettings?.is_enabled) {
-    console.log(
-      '[Telegram] batch skip: accountSettings.is_enabled=false',
-      { accountId: account.id, idChatbot, hasAccountSettings: !!accountSettings }
+  // ── NEW: merge full settings ──────────────────────────────────────
+  // Trước đây chỉ pass `accountSettings` (3 cột) hoặc fallback
+  // `chatbotSettings`. Test file `internalTelegramWebhook.spec.js`
+  // pin expect() cho từng field để bug này không regression.
+  const mergedSettings = mergeAccountAndChatbotSettings(
+    accountSettings,
+    chatbotSettings
+  );
+
+  // Nếu account đã tắt chatbot cho kênh này (is_enabled=false hoặc
+  // dm/group disabled tuỳ loại), ghi một system row để operator thấy
+  // khi đọc log + DB, RỒI return. Không được swallow im lặng.
+  if (!mergedSettings.is_enabled) {
+    const reason = !accountSettings
+      ? 'no_per_account_settings'
+      : !accountSettings.is_enabled
+      ? 'account_disabled'
+      : 'merged_disabled';
+    await logTelegramMessage(
+      conversation,
+      'system',
+      `[Telegram] skip — ${reason}`,
+      { reason, accountId: account.id, idChatbot }
     );
+    console.log('[Telegram] batch skip: chatbot disabled', {
+      accountId: account.id,
+      idChatbot,
+      reason,
+    });
     return;
   }
-  if (parsed.isGroup && !accountSettings.is_enabled_group) {
+  if (parsed.isGroup && !mergedSettings.is_enabled_group) {
+    await logTelegramMessage(
+      conversation,
+      'system',
+      '[Telegram] skip — group messages disabled for this account',
+      { accountId: account.id, idChatbot }
+    );
     console.log('[Telegram] batch skip: group disabled', { accountId: account.id });
     return;
   }
-  if (!parsed.isGroup && !accountSettings.is_enabled_dm) {
+  if (!parsed.isGroup && !mergedSettings.is_enabled_dm) {
+    await logTelegramMessage(
+      conversation,
+      'system',
+      '[Telegram] skip — DM messages disabled for this account',
+      { accountId: account.id, idChatbot }
+    );
     console.log('[Telegram] batch skip: dm disabled', { accountId: account.id });
     return;
   }
@@ -292,7 +420,11 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     chatbotId: idChatbot,
     message: batchedContent,
     conversationId: conversation?.id,
-    chatbotSettings: accountSettings || chatbotSettings || {},
+    // TRƯỚC: `accountSettings || chatbotSettings || {}` (3-cột row mất
+    //        toàn bộ system_instruction, ai_model, response_style… →
+    //        "không tuân theo cấu hình"). SAU: mergedSettings = union
+    //        của 2 row với override đúng field.
+    chatbotSettings: mergedSettings,
     visitorInfo: {
       source: 'telegram_personal',
       telegram_account_id: account.id,
@@ -312,7 +444,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   if (replyText) {
     await logTelegramMessage(conversation, 'bot', replyText, {
       model:
-        accountSettings?.ai_model || chatbotSettings?.ai_model || 'gemini-2.5-flash',
+        mergedSettings.ai_model || 'gemini-2.5-flash',
     });
     console.log(`[Telegram] bot message logged, now sendReply → peer=${peer}`);
     try {
@@ -327,6 +459,47 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
       console.warn('[Telegram] sendReply failed:', sendErr.message);
     }
   }
+}
+
+/**
+ * Merge account-level enable flags với channel-level AI config.
+ * Đảm bảo:
+ *   - 3 cột `is_enabled*` ưu tiên `accountSettings` (override per-account).
+ *   - Tất cả field AI/system/welcome lấy từ `chatbotSettings`.
+ *   - Nếu `accountSettings` null, fallback `chatbotSettings` (mặc định enabled).
+ *   - Nếu `chatbotSettings` null, chỉ dùng `accountSettings` (CHỈ có 3 cột —
+ *     vẫn tốt hơn nothing, sẽ dùng default Gemini từ chatRouter).
+ *
+ * Test pin: `expect(merged.system_instruction).toBe(...)` v.v.
+ */
+function mergeAccountAndChatbotSettings(accountSettings, chatbotSettings) {
+  const base = chatbotSettings || {};
+  const acc = accountSettings || {};
+  return {
+    // AI / system config — luôn từ chatbotSettings
+    id_sub_assistant: base.id_sub_assistant ?? acc.id_sub_assistant ?? null,
+    sub_assistant_name: base.sub_assistant_name ?? null,
+    system_instruction: base.system_instruction ?? null,
+    welcome_message: base.welcome_message ?? base.greeting_msg ?? null,
+    greeting_msg: base.greeting_msg ?? null,
+    ai_model: base.ai_model ?? null,
+    temperature: base.temperature ?? null,
+    max_tokens: base.max_tokens ?? null,
+    response_style: base.response_style ?? null,
+
+    // Enable flags — chatbotSettings cho default, accountSettings override
+    // (giữ semantic cũ: nếu accountSettings.is_enabled=false → tắt,
+    //  ngược lại lấy giá trị chatbotSettings).
+    is_enabled: acc.is_enabled ?? base.is_enabled ?? true,
+    is_enabled_dm: acc.is_enabled_dm ?? base.is_enabled_dm ?? true,
+    is_enabled_group: acc.is_enabled_group ?? base.is_enabled_group ?? true,
+
+    // Metadata để debug
+    _source: {
+      account: acc ? 'telegram_chatbot_settings' : null,
+      chatbot: base ? 'chatbot_settings' : null,
+    },
+  };
 }
 
 /**
@@ -363,11 +536,19 @@ router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
     // Zalo / WhatsApp webhooks do: it batches fast bursts into a
     // single AI call, tracks seen event ids across retries, and
     // calls `flushCallback` when the bucket drains.
+    //
+    // `parsed.messageId` comes from `telegramAdapter.parseWebhookEvent`
+    // which reads `body.message_id` — we surface it explicitly so the
+    // debounce service can collapse provider retries (mtcute reconnects,
+    // forwarder HTTP timeouts) into a single AI call. Without this, the
+    // dedupe Set in `InboundReplyDebounceService` saw `null` eventId on
+    // every inbound and could not dedupe — every retry produced a fresh
+    // batch.
     const debounceKey = `telegram_personal:${account.id}:${parsed.chatId || parsed.senderId}`;
     inboundReplyDebounceService.enqueue({
       key: debounceKey,
       message: {
-        eventId: req.body?.message_id ?? null,
+        eventId: parsed.messageId ?? null,
         content: parsed.message,
         metadata: {
           senderId: parsed.senderId,

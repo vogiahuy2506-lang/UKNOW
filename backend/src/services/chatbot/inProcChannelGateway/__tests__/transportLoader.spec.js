@@ -74,7 +74,13 @@ describe('loadTransportClass', () => {
       importer,
     });
     expect(cls).toBe(FakeTransport);
-    expect(importer).toHaveBeenCalledWith('/path/to/fake.mjs');
+    // POSIX absolute path được `normaliseTransportPath` convert thành
+    // `file://` URL để Node ESM `import()` chấp nhận trên Windows.
+    // Trên mọi OS, importer phải nhận URL dạng file:// chứ không phải
+    // raw absolute path.
+    expect(importer).toHaveBeenCalledWith(
+      expect.stringMatching(/^file:\/\/\/.+\/path\/to\/fake\.mjs$/)
+    );
   });
 
   it('falls back to a named `Transport` export if `default` is missing', async () => {

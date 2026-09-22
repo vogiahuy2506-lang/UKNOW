@@ -1,5 +1,17 @@
 import { jest } from '@jest/globals';
 
+// Defensive setup: reset module cache + clear any Telegram env vars
+// leaked from previous test files in this Jest worker. Without this,
+// a test like `internalHealth.spec.js` which sets
+// `TELEGRAM_GATEWAY_SECRET` in beforeEach can leak the in-memory
+// singleton (channels.telegram.state.secret) and break the
+// "unconfigured" assertion below. Reproduces the same "fresh module"
+// behaviour as the original CI env where each test file got its own
+// worker.
+jest.resetModules();
+delete process.env.TELEGRAM_GATEWAY_SECRET;
+delete process.env.TELEGRAM_GATEWAY_TRANSPORT;
+
 /**
  * Ghim: import telegramGateway.client.js KHÔNG được gọi axios.create.
  *

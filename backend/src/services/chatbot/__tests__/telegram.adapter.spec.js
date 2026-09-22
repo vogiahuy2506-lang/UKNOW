@@ -4,7 +4,7 @@
  * state.
  */
 
-import { describe, expect, it } from '@jest/globals';
+import { describe, expect, it, afterAll } from '@jest/globals';
 
 const { configureChannel } = await import(
   '../inProcChannelGateway/index.js'
@@ -14,6 +14,13 @@ const TEST_SECRET = 'test-telegram-secret';
 configureChannel('telegram', { secret: TEST_SECRET });
 
 const telegramAdapter = (await import('../channelAdapters/telegram.adapter.js')).default;
+
+// Reset singleton secret khi tất cả test xong — tránh leak vào test
+// khác trong cùng Jest worker (đặc biệt `telegramGatewayLazyClient.spec.js`
+// yêu cầu `isConfigured()===false`).
+afterAll(() => {
+  configureChannel('telegram', { secret: '' });
+});
 
 describe('telegram.adapter', () => {
   describe('verifyWebhookSecret', () => {
@@ -73,6 +80,8 @@ describe('telegram.adapter', () => {
         isGroup: false,
         isPrivate: true,
         telegramUserId: 123456789,
+        // Bug #3 fix: surface messageId for InboundReplyDebounceService dedupe.
+        messageId: 100,
       });
     });
 

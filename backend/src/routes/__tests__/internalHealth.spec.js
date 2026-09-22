@@ -43,8 +43,21 @@ beforeEach(async () => {
   router = (await import('../internal.routes.js')).default;
 });
 
-afterEach(() => {
+afterEach(async () => {
   jest.restoreAllMocks();
+  // Reset singleton state của inProcChannelGateway để tránh leak
+  // secret vào các test khác cùng worker. `telegramGatewayLazyClient.spec.js`
+  // assert `isConfigured()===false` — không thể pass nếu singleton
+  // còn giữ secret từ test trước.
+  try {
+    const { configureChannel } = await import(
+      path.resolve(__dirname, '..', '..', 'services', 'chatbot', 'inProcChannelGateway', 'index.js')
+        .replace(/\\/g, '/')
+    );
+    configureChannel('telegram', { secret: '' });
+  } catch {
+    // Module chưa load — bỏ qua.
+  }
   delete process.env.TELEGRAM_GATEWAY_SECRET;
   delete process.env.TELEGRAM_GATEWAY_TRANSPORT;
 });

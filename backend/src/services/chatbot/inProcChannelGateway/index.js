@@ -221,6 +221,13 @@ function makeTelegramFacade(state) {
       if (secret !== undefined) state.secret = secret || '';
       if (callbackUrl !== undefined) state.nodeJsCallbackUrl = callbackUrl;
     },
+    resetSharedSecret() {
+      // Test-only: clear in-memory secret so `isConfigured()` returns
+      // false. Used by afterEach in integration/unit test files that
+      // mock the environment and need to restore the module to its
+      // "unconfigured" state for the next test.
+      state.secret = '';
+    },
     getSecret: () => state.secret,
     getNodeJsCallbackUrl: () => state.nodeJsCallbackUrl,
 

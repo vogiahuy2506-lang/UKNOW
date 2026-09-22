@@ -67,6 +67,18 @@ class TelegramPersonalAdapter {
       isGroup: Boolean(body.is_group),
       isPrivate: body.is_private !== false ? !body.is_group : Boolean(body.is_private),
       telegramUserId: body.telegram_user_id != null ? Number(body.telegram_user_id) : null,
+      // Surfaced for InboundReplyDebounceService dedupe. The webhook
+      // (`internal.routes.js`) uses this as the `eventId` so a provider
+      // retry of the same Telegram message_id collapses to a single AI
+      // call instead of double-replying. Was previously dropped on the
+      // floor (`eventId: req.body?.message_id ?? null` was the only
+      // place it was read, and parseWebhookEvent didn't expose it).
+      messageId:
+        body.message_id != null
+          ? Number(body.message_id)
+          : body.event_id != null
+          ? Number(body.event_id)
+          : null,
     };
   }
 
