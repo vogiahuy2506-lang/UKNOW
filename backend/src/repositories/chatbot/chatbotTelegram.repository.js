@@ -508,7 +508,7 @@ class ChatbotTelegramRepository {
       `INSERT INTO telegram_chatbot_settings
          (id_telegram_account, id_chatbot, is_enabled,
           is_enabled_dm, is_enabled_group, chatbot_system_instruction)
-       VALUES ($1, $2, $3, $4, $5,
+       VALUES ($1::int, $2::int, $3::bool, $4::bool, $5::bool,
                (SELECT NULLIF(BTRIM(cb.system_instruction), '')
                   FROM custom_chatbots cb
                  WHERE cb.id = $2::bigint AND cb.is_active = true))
