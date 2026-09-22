@@ -102,8 +102,14 @@ const pickDefaultContext = (user) => {
   if (!user || user.role === 'admin') return { type: 'self' };
   const memberships = user.memberships || [];
   const hasPlan = !!user.active_plan_id;
-  if (!hasPlan && memberships.length > 0) {
-    return buildEmployeeContext(memberships[0]);
+  // Bỏ qua membership bị khoá (`isLocked`: chủ vượt hạn mức nhân viên của gói). Vào không gian đó thì MỌI
+  // request — kể cả /auth/me — trả 403 EMPLOYEE_LOCKED, initialize() coi đó là phiên hỏng và đăng xuất;
+  // đăng nhập lại thì lại rơi vào đúng membership ấy → vòng lặp không thoát được. Còn với
+  // reconcileActiveContext: workspaceLost → chọn lại mặc định → lại chính membership khoá → mỗi lần làm mới
+  // là một lần đổi không gian + xoá cache.
+  const usable = memberships.find((membership) => !membership?.isLocked);
+  if (!hasPlan && usable) {
+    return buildEmployeeContext(usable);
   }
   return { type: 'self' };
 };

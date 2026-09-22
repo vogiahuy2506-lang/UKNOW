@@ -7812,7 +7812,7 @@ Feel free to ask me anything!`,
 
   referralPromptModal: {
     title: 'Enter referral code',
-    description: 'If you were referred to UKNOW Campaign by a friend or partner, please enter their referral code.',
+    description: 'If you were referred to Founder AI by a friend or partner, please enter their referral code.',
     warningNote: 'Note: You can only enter a referral code during this onboarding step. Once skipped, you will not be able to enter it later.',
     label: 'Referral code',
     placeholder: 'e.g. UKN123456',

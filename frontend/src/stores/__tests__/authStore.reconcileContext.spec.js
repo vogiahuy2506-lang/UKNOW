@@ -106,6 +106,26 @@ describe('reconcileActiveContext (hàm thuần)', () => {
     expect(result.context).toMatchObject({ type: 'employee', ownerId: 20 });
   });
 
+  it('không có gói riêng + công ty DUY NHẤT bị khoá → về self, KHÔNG rơi lại vào công ty đang khoá', () => {
+    // Trước: pickDefaultContext lấy memberships[0] bất kể isLocked → mỗi lần làm mới là một lần "mất công ty"
+    // rồi chọn lại đúng công ty đó (đổi không gian + xoá cache lặp), và mọi request trong đó trả 403.
+    const result = reconcileActiveContext(
+      user([membership({ isLocked: true })], { active_plan_id: null }),
+      employeeCtx(),
+    );
+    expect(result.kind).toBe('workspaceLost');
+    expect(result.context).toEqual({ type: 'self' });
+  });
+
+  it('không có gói riêng + công ty A khoá, công ty B còn dùng được → sang B, bỏ qua A', () => {
+    const result = reconcileActiveContext(
+      user([membership({ isLocked: true }), membership({ ownerId: 20, ownerName: 'Công ty B' })], { active_plan_id: null }),
+      employeeCtx(),
+    );
+    expect(result.kind).toBe('workspaceLost');
+    expect(result.context).toMatchObject({ type: 'employee', ownerId: 20 });
+  });
+
   it('so ownerId theo chuỗi (10 vs "10")', () => {
     const result = reconcileActiveContext(user([membership({ ownerId: '10' })]), employeeCtx({ ownerId: 10 }));
     expect(result.kind).toBe('unchanged');

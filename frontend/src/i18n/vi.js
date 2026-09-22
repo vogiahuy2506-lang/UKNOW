@@ -7737,7 +7737,7 @@ export default {
 
   referralPromptModal: {
     title: 'Nhập mã giới thiệu',
-    description: 'Nếu bạn được bạn bè hoặc đối tác giới thiệu đến UKNOW Campaign, vui lòng nhập mã giới thiệu của họ.',
+    description: 'Nếu bạn được bạn bè hoặc đối tác giới thiệu đến Founder AI, vui lòng nhập mã giới thiệu của họ.',
     warningNote: 'Lưu ý: Bạn chỉ có thể nhập mã giới thiệu tại bước khởi tạo này. Sau khi bỏ qua, hệ thống sẽ không cho phép nhập lại.',
     label: 'Mã giới thiệu',
     placeholder: 'Ví dụ: UKN123456',
