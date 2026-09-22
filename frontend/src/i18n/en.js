@@ -2962,6 +2962,8 @@ export default {
       WIZARD_STATE_NOOP: 'AI Wizard: Button Had No Effect',
       EMAIL_ACCOUNT_CONNECTED: 'Email Account Connected',
       ZALO_ACCOUNT_CONNECTED: 'Zalo Account Connected',
+      EMAIL_ACCOUNT_SEND_LIMIT_UPDATED: 'Email Daily Send Limit Changed',
+      ZALO_ACCOUNT_SEND_LIMIT_UPDATED: 'Zalo Daily Send Limit Changed',
       EINVOICE_RETRIED: 'E-invoice Reissued',
       EINVOICE_EMAIL_RESENT: 'E-invoice Email Resent',
       FORM_PAYMENT_CONFIG_UPDATED: 'Form Payment Settings Updated',

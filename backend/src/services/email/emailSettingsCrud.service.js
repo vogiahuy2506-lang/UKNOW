@@ -28,6 +28,7 @@ class EmailSettingsCrudService {
       brandDomain: item.brand_domain || null,
       domainVerificationStatus: item.domain_verification_status || null,
       domainVerifiedAt: item.domain_verified_at || null,
+      userDailySendLimit: item.user_daily_send_limit ?? null,
       creatorName: item.creator_name || null,
       createdBy: item.creator_name ? { name: item.creator_name } : null,
       createdAt: item.created_at,
@@ -56,6 +57,7 @@ class EmailSettingsCrudService {
       domainVerificationStatus: item.domain_verification_status || null,
       domainDnsRecords: item.domain_dns_records || null,
       domainVerifiedAt: item.domain_verified_at || null,
+      userDailySendLimit: item.user_daily_send_limit ?? null,
       createdAt: item.created_at,
       updatedAt: item.updated_at,
       emailMode: item.email_mode || 'platform',
@@ -78,6 +80,7 @@ class EmailSettingsCrudService {
       status: item.status,
       brandDomain: item.brand_domain || null,
       domainVerificationStatus: item.domain_verification_status || null,
+      userDailySendLimit: item.user_daily_send_limit ?? null,
     };
   }
 
@@ -288,6 +291,10 @@ class EmailSettingsCrudService {
       status: payload.status,
       brandDomain,
       isVerified: useSmtp ? true : true, // platform and smtp both verified
+      // 'userDailySendLimit' in payload phân biệt "không gửi field này" (giữ nguyên) với "gửi
+      // field, giá trị null" (xoá về không giới hạn) — validator cho phép cả hai.
+      userDailySendLimit: payload.userDailySendLimit,
+      hasUserDailySendLimit: 'userDailySendLimit' in payload,
     }, { roleCode });
     return this.mapMutationResult(item);
   }

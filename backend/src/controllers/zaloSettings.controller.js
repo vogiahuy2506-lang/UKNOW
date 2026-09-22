@@ -198,6 +198,7 @@ class ZaloSettingsController {
       phoneLookupCooldownUntil: item.phone_lookup_cooldown_until
         ? new Date(item.phone_lookup_cooldown_until).toISOString()
         : null,
+      userDailySendLimit: item.user_daily_send_limit ?? null,
     };
   }
 
@@ -1785,6 +1786,63 @@ class ZaloSettingsController {
       return res.status(500).json({ success: false, message: 'Không thể cập nhật tài khoản mặc định' });
     } finally {
       client.release();
+    }
+  }
+
+  /**
+   * PATCH /api/zalo/accounts/:id/send-limit
+   * Đặt/xoá giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt cho tài khoản Zalo
+   * (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 6). Body: { userDailySendLimit: number|null }.
+   * Để nguyên sau requireActivePlan — gói hết hạn thì chiến dịch dừng hẳn, sửa giới hạn không
+   * đổi được gì (đã quyết định ở mục 8.5 của plan).
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async updateSendLimit(req, res) {
+    try {
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const isAdmin = isAdminRole(req.user?.role);
+      const accountId = Number.parseInt(req.params.id, 10);
+      const rawValue = req.body?.userDailySendLimit;
+      const newValue = rawValue === null || rawValue === undefined ? null : Number.parseInt(rawValue, 10);
+
+      const previousValue = await zaloSettingRepository
+        .findUserDailySendLimitById(accountId, isAdmin, userId)
+        .catch(() => null);
+
+      const updated = await zaloSettingRepository.updateSendLimit(accountId, isAdmin, userId, newValue);
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Zalo' });
+      }
+
+      await auditService.log({
+        userId: actorUserId,
+        ownerId: userId,
+        category: 'workspace',
+        action: AUDIT_ACTIONS.ZALO_ACCOUNT_SEND_LIMIT_UPDATED,
+        entityType: AUDIT_ENTITY_TYPES.ZALO_SETTING,
+        entityId: updated.id,
+        details: {
+          previousValue,
+          newValue,
+          exceededRecommended: typeof newValue === 'number' && newValue > 100,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get?.('user-agent') || null,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Đã cập nhật giới hạn gửi/ngày',
+        data: this.mapRow(updated),
+      });
+    } catch (error) {
+      if (error?.code === '42P01') {
+        return this.buildMissingTableResponse(res);
+      }
+      console.error('Update zalo send-limit error:', error);
+      return res.status(500).json({ success: false, message: 'Không thể cập nhật giới hạn gửi/ngày' });
     }
   }
 

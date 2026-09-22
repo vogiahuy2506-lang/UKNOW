@@ -47,6 +47,21 @@ router.patch(
   zaloSettingsController.setDefaultAccount.bind(zaloSettingsController)
 );
 
+// Giới hạn gửi/ngày do người dùng tự đặt (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 6) —
+// cần quyền zalo_settings. Trần kỹ thuật chống tràn INTEGER, không phải lời khuyên.
+router.patch(
+  '/accounts/:id/send-limit',
+  requirePermission('zalo_settings'),
+  [
+    param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ'),
+    body('userDailySendLimit').optional({ nullable: true })
+      .isInt({ min: 1, max: 100000 })
+      .withMessage('Giới hạn gửi/ngày phải từ 1 đến 100000'),
+  ],
+  handleValidationErrors,
+  zaloSettingsController.updateSendLimit.bind(zaloSettingsController)
+);
+
 // Restore session — cần quyền zalo_settings
 router.post(
   '/accounts/:id/restore-session',

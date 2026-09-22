@@ -251,6 +251,7 @@ class ZaloSettingRepository {
               zs.last_restore_attempt_at::timestamptz AS last_restore_attempt_at,
               zs.restore_fail_count,
               zs.phone_lookup_cooldown_until::timestamptz AS phone_lookup_cooldown_until,
+              zs.user_daily_send_limit,
               COALESCE(u.full_name, u.username) AS creator_name,
               EXISTS (
                 SELECT 1 FROM topup_locked_resources tlr
@@ -264,6 +265,51 @@ class ZaloSettingRepository {
       isAdmin ? [] : [userId]
     );
     return rows.map((r) => ({ ...r, is_locked: Boolean(r.is_locked) }));
+  }
+
+  /**
+   * Điểm tra rẻ giá trị hiện tại của user_daily_send_limit — dùng để ghi "giá trị cũ" vào audit
+   * trước khi updateSendLimit() ghi đè (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 6/7).
+   *
+   * @param {number} accountId
+   * @param {boolean} isAdmin
+   * @param {number} userId
+   * @returns {Promise<number|null>}
+   */
+  async findUserDailySendLimitById(accountId, isAdmin, userId) {
+    const { rows } = await db.query(
+      `SELECT user_daily_send_limit FROM zalo_settings
+       WHERE id = $1
+         ${isAdmin ? '' : 'AND id_user = $2'}`,
+      isAdmin ? [accountId] : [accountId, userId]
+    );
+    return rows[0]?.user_daily_send_limit ?? null;
+  }
+
+  /**
+   * Đặt/xoá giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt cho một tài khoản Zalo
+   * (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 6). `value = null` xoá về không giới hạn — đây
+   * là UPDATE riêng chỉ một cột, không dùng khuôn COALESCE nên không có bẫy "không xoá được NULL".
+   *
+   * @param {number} accountId
+   * @param {boolean} isAdmin
+   * @param {number} userId
+   * @param {number|null} value
+   * @returns {Promise<object|null>}
+   */
+  async updateSendLimit(accountId, isAdmin, userId, value) {
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET user_daily_send_limit = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE id = $2
+         ${isAdmin ? '' : 'AND id_user = $3'}
+       RETURNING id, id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method,
+                 status, is_active, is_default, notes, updated_at, last_connected_at,
+                 last_restore_attempt_at, restore_fail_count, phone_lookup_cooldown_until,
+                 user_daily_send_limit`,
+      isAdmin ? [value, accountId] : [value, accountId, userId]
+    );
+    return rows[0] || null;
   }
 
   async deleteAccount(accountId, isAdmin, userId) {

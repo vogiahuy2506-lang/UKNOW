@@ -10,6 +10,7 @@ class EmailSettingsRepository {
       SELECT es.id, es.name, es.email, es.reply_to, es.smtp_host, es.smtp_port, es.use_tls, es.daily_limit, es.hourly_limit,
              es.daily_sent_count, es.total_sent_count, es.is_verified, es.status, es.created_at, es.updated_at,
              es.brand_domain, es.domain_verification_status, es.domain_verified_at, es.email_mode, es.platform_prefix,
+             es.user_daily_send_limit,
              COALESCE(u.full_name, u.username) AS creator_name
       FROM email_settings es
       LEFT JOIN users u ON es.id_user = u.id
@@ -128,8 +129,17 @@ class EmailSettingsRepository {
   }
 
   async update(userId, id, payload, { roleCode } = {}) {
-    const { name, email, replyTo, emailMode, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, status, platformPrefix } =
-      payload;
+    const {
+      name, email, replyTo, emailMode, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls,
+      dailyLimit, hourlyLimit, status, platformPrefix,
+      // Giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 6).
+      // KHÔNG dùng COALESCE như các cột trên — COALESCE không bao giờ ghi được NULL, tức người
+      // dùng không xoá được giới hạn đã đặt (bẫy 8 của plan). `hasUserDailySendLimit` phân biệt
+      // "payload không có field này" (giữ nguyên cột) với "payload có field, giá trị null" (xoá
+      // về không giới hạn) — hai ca khác nhau mà COALESCE không phân biệt được.
+      userDailySendLimit,
+      hasUserDailySendLimit = false,
+    } = payload;
     const encryptedSmtpPassword = smtpPassword === undefined ? undefined : encryptSmtpSecret(smtpPassword);
     const isAdmin = isAdminRole(roleCode);
     const brandDomain = email ? String(email).split('@')[1]?.toLowerCase() : undefined;
@@ -149,9 +159,10 @@ class EmailSettingsRepository {
         status = COALESCE($12, status),
         brand_domain = COALESCE($13, brand_domain),
         platform_prefix = COALESCE($14, platform_prefix),
+        user_daily_send_limit = CASE WHEN $15::boolean THEN $16::integer ELSE user_daily_send_limit END,
         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $15
-         ${isAdmin ? '' : 'AND id_user = $16'}
+       WHERE id = $17
+         ${isAdmin ? '' : 'AND id_user = $18'}
        RETURNING *`,
       isAdmin
         ? [
@@ -169,6 +180,8 @@ class EmailSettingsRepository {
             status,
             brandDomain,
             platformPrefix,
+            hasUserDailySendLimit,
+            userDailySendLimit ?? null,
             id,
           ]
         : [
@@ -186,6 +199,8 @@ class EmailSettingsRepository {
             status,
             brandDomain,
             platformPrefix,
+            hasUserDailySendLimit,
+            userDailySendLimit ?? null,
             id,
             userId,
           ]

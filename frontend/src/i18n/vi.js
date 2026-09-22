@@ -2972,6 +2972,8 @@ export default {
       WIZARD_STATE_NOOP: 'AI wizard: nút không có tác dụng',
       EMAIL_ACCOUNT_CONNECTED: 'Kết nối tài khoản email',
       ZALO_ACCOUNT_CONNECTED: 'Kết nối tài khoản Zalo',
+      EMAIL_ACCOUNT_SEND_LIMIT_UPDATED: 'Đổi giới hạn gửi/ngày (email)',
+      ZALO_ACCOUNT_SEND_LIMIT_UPDATED: 'Đổi giới hạn gửi/ngày (Zalo)',
       EINVOICE_RETRIED: 'Xuất lại hoá đơn điện tử',
       EINVOICE_EMAIL_RESENT: 'Gửi lại email hoá đơn',
       FORM_PAYMENT_CONFIG_UPDATED: 'Cập nhật thanh toán của biểu mẫu',

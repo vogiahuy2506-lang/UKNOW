@@ -465,13 +465,44 @@ ${linkItems}
 
   async update(req, res) {
     try {
-      const { workspaceOwnerId } = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
+      // Chỉ khi payload thật sự đụng tới giới hạn/ngày (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22
+      // Việc 7) mới đọc giá trị cũ để ghi audit — tránh một query thừa cho mọi lượt sửa khác
+      // (đổi tên, SMTP host…) không liên quan.
+      const hasSendLimitChange = 'userDailySendLimit' in req.body;
+      const previous = hasSendLimitChange
+        ? await emailSettingsCrudService.getById({
+            userId: workspaceOwnerId,
+            roleCode: req.user?.role,
+            id: req.params.id,
+          }).catch(() => null)
+        : null;
+
       const data = await emailSettingsCrudService.update({
         userId: workspaceOwnerId,
         roleCode: req.user?.role,
         id: req.params.id,
         payload: req.body,
       });
+
+      if (hasSendLimitChange) {
+        const newValue = data?.userDailySendLimit ?? null;
+        await auditService.log({
+          userId: actorUserId,
+          ownerId: workspaceOwnerId,
+          category: 'workspace',
+          action: AUDIT_ACTIONS.EMAIL_ACCOUNT_SEND_LIMIT_UPDATED,
+          entityType: AUDIT_ENTITY_TYPES.EMAIL_SETTING,
+          entityId: data?.id ?? null,
+          details: {
+            previousValue: previous?.userDailySendLimit ?? null,
+            newValue,
+            exceededRecommended: typeof newValue === 'number' && newValue > 100,
+          },
+          ipAddress: req.ip,
+          userAgent: req.get?.('user-agent') || null,
+        });
+      }
 
       return res.json({
         success: true,

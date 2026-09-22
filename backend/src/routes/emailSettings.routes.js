@@ -44,7 +44,12 @@ router.put('/:id',
   [
     body('name').optional().trim().notEmpty().withMessage('Tên không được để trống'),
     body('replyTo').optional().isEmail().withMessage('Reply-To email không hợp lệ'),
-    body('smtpPort').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ')
+    body('smtpPort').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
+    // Giới hạn gửi/ngày do người dùng tự đặt (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 6).
+    // Trần kỹ thuật chống tràn INTEGER (Postgres INTEGER tối đa ~2.1 tỷ), không phải lời khuyên.
+    body('userDailySendLimit').optional({ nullable: true })
+      .isInt({ min: 1, max: 100000 })
+      .withMessage('Giới hạn gửi/ngày phải từ 1 đến 100000')
   ],
   handleValidationErrors,
   emailSettingsController.update.bind(emailSettingsController)
