@@ -134,6 +134,23 @@ jest.unstable_mockModule('../../../utils/campaignQuotaPauseNotify.util.js', () =
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');
 
+/**
+ * `executeCampaign()` chờ bằng `setTimeout` THẬT ở nhiều chỗ rải rác, không chỉ trong rate limiter
+ * — ví dụ giãn cách 250–1250 ms giữa các bước gửi nhóm (campaignRun.service.js:1548, hằng số
+ * ZALO_GROUP_TEMPLATE_DELAY_MIN_MS/MAX_MS). Với `jest.useFakeTimers()` thì hẹn giờ thật không bao
+ * giờ nổ, nên test treo tới hết timeout — CI 22/09 đỏ ba lượt liên tiếp vì chuyện này, và hai lần
+ * đầu tôi chẩn đoán sai (tưởng chậm, rồi tưởng chỉ có một chỗ chờ trong rate limiter).
+ *
+ * Đẩy thẳng đồng hồ giả song song với lượt chạy thì MỌI khoảng chờ trong đường gửi nổ ngay, không
+ * phải đi tìm và chặn từng chỗ một — cách này không phụ thuộc vào việc tôi đã tìm đủ hay chưa.
+ */
+async function runCampaignWithTimers() {
+  const running = campaignRunService.executeCampaign(100, 200, 10);
+  await jest.advanceTimersByTimeAsync(10 * 60 * 1000);
+  return running;
+}
+
+
 describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản (Việc 4)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -163,7 +180,7 @@ describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản 
   });
 
   it('chưa đặt giới hạn (userDailySendLimit undefined) → checkAccountDailyLimit gọi với limit=null, gửi bình thường', async () => {
-    await campaignRunService.executeCampaign(100, 200, 10);
+    await runCampaignWithTimers();
 
     expect(mockCheckAccountDailyLimit).toHaveBeenCalledWith({ channel: 'zalo', accountId: 99, limit: null });
     expect(mockSendGroupMessageQueued).toHaveBeenCalledTimes(1);
@@ -173,7 +190,7 @@ describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản 
   it('account model có userDailySendLimit → truyền đúng giá trị đó cho checkAccountDailyLimit', async () => {
     mockAccount = { id: 99, userId: 10, displayName: 'Account có giới hạn ngày', userDailySendLimit: 50 };
 
-    await campaignRunService.executeCampaign(100, 200, 10);
+    await runCampaignWithTimers();
 
     expect(mockCheckAccountDailyLimit).toHaveBeenCalledWith({ channel: 'zalo', accountId: 99, limit: 50 });
   });
@@ -183,7 +200,7 @@ describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản 
     const resetAt = new Date('2026-09-23T17:00:00.000Z'); // 00:00 VN hôm sau
     mockCheckAccountDailyLimit.mockResolvedValue({ allowed: false, limit: 50, currentCount: 50, resetAt });
 
-    await campaignRunService.executeCampaign(100, 200, 10);
+    await runCampaignWithTimers();
 
     expect(mockSendGroupMessageQueued).not.toHaveBeenCalled();
     expect(mockInsertCampaignZaloMessage).not.toHaveBeenCalled();
@@ -202,7 +219,7 @@ describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản 
       allowed: false, limit: 50, currentCount: 50, resetAt: new Date('2026-09-23T17:00:00.000Z'),
     });
 
-    await campaignRunService.executeCampaign(100, 200, 10);
+    await runCampaignWithTimers();
 
     expect(mockNotifyCampaignQuotaPaused).toHaveBeenCalledWith(
       expect.objectContaining({ reason: 'plan_quota_account_daily' })
@@ -217,7 +234,7 @@ describe('CampaignRun Zalo group — giới hạn gửi/ngày theo tài khoản 
     mockAccount = { id: 99, userId: 10, displayName: 'Account có giới hạn ngày', userDailySendLimit: 50 };
     mockCheckSendQuota.mockResolvedValue({ allowed: false, resetAt: null, limitType: 'expired', message: 'Gói dịch vụ đã hết hạn.' });
 
-    await campaignRunService.executeCampaign(100, 200, 10);
+    await runCampaignWithTimers();
 
     expect(mockCheckAccountDailyLimit).not.toHaveBeenCalled();
     expect(mockSendGroupMessageQueued).not.toHaveBeenCalled();
