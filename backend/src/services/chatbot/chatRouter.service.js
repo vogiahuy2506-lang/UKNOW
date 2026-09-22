@@ -168,6 +168,7 @@ class ChatRouterService {
 
     // Skip if chatbot is disabled
     if (!chatbotSettings?.is_enabled) {
+      console.warn(`[ChatRouter] SKIP — chatbot disabled (channel=${channel}, userId=${userId}, chatbotId=${chatbotId ?? 'null'}, conversationId=${conversationId})`);
       return { type: 'disabled', content: null };
     }
 
@@ -235,7 +236,9 @@ class ChatRouterService {
       shouldChargeCredit = true;
     } catch (error) {
       if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) {
-        console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}):`, error.message);
+        console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}, chatbotId=${chatbotId ?? 'null'}, conversationId=${conversationId}):`, error.message);
+      } else {
+        console.warn(`[ChatRouter] AI limit reached (channel=${channel}, userId=${userId}): ${error.message}`);
       }
       aiResponse = { text: VISITOR_CHAT_ERROR_MESSAGE };
     }

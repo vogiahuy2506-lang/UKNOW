@@ -288,6 +288,16 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     );
   }
 
+  console.log('[Telegram] resolved settings', {
+    accountId: account.id,
+    idChatbot,
+    hasChatbotSettings: !!chatbotSettings,
+    hasAccountSettings: !!accountSettings,
+    accountSettings_is_enabled_dm: accountSettings?.is_enabled_dm,
+    accountSettings_is_enabled_group: accountSettings?.is_enabled_group,
+    chatbotSettings_is_enabled_dm: chatbotSettings?.is_enabled_dm,
+  });
+
   // ── NEW: merge full settings ──────────────────────────────────────
   // Trước đây chỉ pass `accountSettings` (3 cột) hoặc fallback
   // `chatbotSettings`. Test file `internalTelegramWebhook.spec.js`
@@ -368,7 +378,14 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
       '[Telegram] skip — DM messages disabled for this account',
       { accountId: account.id, idChatbot }
     );
-    console.log('[Telegram] batch skip: dm disabled', { accountId: account.id });
+    console.log('[Telegram] batch skip: dm disabled', {
+      accountId: account.id,
+      idChatbot,
+      is_enabled_dm: mergedSettings.is_enabled_dm,
+      accountSettings_is_enabled_dm: accountSettings?.is_enabled_dm,
+      chatbotSettings_is_enabled_dm: chatbotSettings?.is_enabled_dm,
+      conversationId: conversation?.id,
+    });
     return;
   }
   if (await isTelegramAiPaused(conversation?.id)) {
@@ -470,6 +487,17 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
       chat_id: parsed.chatId,
       is_group: parsed.isGroup,
     },
+  });
+
+  console.log('[Telegram] routeMessageWithSettings result', {
+    accountId: account.id,
+    idChatbot,
+    conversationId: conversation?.id,
+    resultType: result?.type,
+    hasContent: !!result?.content,
+    contentLen: result?.content?.length,
+    merged_is_enabled: mergedSettings?.is_enabled,
+    merged_is_enabled_dm: mergedSettings?.is_enabled_dm,
   });
 
   const replyText = result?.content;
@@ -581,7 +609,7 @@ router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
     // every inbound and could not dedupe — every retry produced a fresh
     // batch.
     const debounceKey = `telegram_personal:${account.id}:${parsed.chatId || parsed.senderId}`;
-    inboundReplyDebounceService.enqueue({
+    const enqueueResult = inboundReplyDebounceService.enqueue({
       key: debounceKey,
       message: {
         eventId: parsed.messageId ?? null,
@@ -594,13 +622,20 @@ router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
         },
       },
       flushCallback: async (batch) => {
-        await processTelegramPersonalBatch({
-          account,
-          parsed,
-          batch,
-        });
+        console.log(`[Telegram] debounce flush: key=${debounceKey} batchSize=${batch.messages.length} reason=${batch.reason} waitMs=${batch.waitMs}`);
+        try {
+          await processTelegramPersonalBatch({
+            account,
+            parsed,
+            batch,
+          });
+        } catch (batchErr) {
+          console.error(`[Telegram] processTelegramPersonalBatch THREW for key=${debounceKey}:`, batchErr.stack || batchErr.message);
+          throw batchErr;
+        }
       },
     });
+    console.log(`[Telegram] enqueued: key=${debounceKey} messageId=${parsed.messageId ?? 'null'} enqueued=${enqueueResult.enqueued} duplicate=${!!enqueueResult.duplicate} nextBatch=${!!enqueueResult.nextBatch}`);
 
     return res.status(204).end();
   } catch (err) {

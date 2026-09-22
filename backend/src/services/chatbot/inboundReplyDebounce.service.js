@@ -175,7 +175,7 @@ class InboundReplyDebounceService {
         await bucket.flushCallback(batch);
       }
     } catch (err) {
-      console.error(`[InboundReplyDebounce] Error executing batch for ${key}:`, err.stack || err.message);
+      console.error(`[InboundReplyDebounce] Error executing batch for ${key} reason=${reason} msgs=${messages.length} waitMs=${waitMs}:`, err.stack || err.message);
     } finally {
       bucket.isExecuting = false;
 
