@@ -79,9 +79,12 @@ describe('loadTransportClass', () => {
     // Trên mọi OS, importer phải nhận URL dạng file:// chứ không phải
     // raw absolute path.
     // Trên Linux: `/path/to/fake.mjs` → `file:///path/to/fake.mjs`
+    //   → phần giữa `file://` và `/path/` là RỖNG.
     // Trên Windows: `C:\path\to\fake.mjs` → `file:///C:/path/to/fake.mjs`
+    //   → phần giữa là `C:`.
+    // Dùng `.*` (không phải `.+`) để chấp nhận cả hai trường hợp.
     expect(importer).toHaveBeenCalledWith(
-      expect.stringMatching(/^file:\/\/.+\/path\/to\/fake\.mjs$/)
+      expect.stringMatching(/^file:\/\/.*\/path\/to\/fake\.mjs$/)
     );
   });
 
