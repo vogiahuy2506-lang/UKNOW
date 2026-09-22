@@ -2,37 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { HiOutlineRefresh, HiOutlineSearch } from 'react-icons/hi';
 import auditLogsApiService from '../../features/settings/services/auditLogsApi.service';
 import { useI18n } from '../../i18n';
-
-const ACTION_FALLBACKS = {
-  EMPLOYEE_ADDED: 'Thêm nhân viên',
-  EMPLOYEE_REMOVED: 'Xóa nhân viên',
-  EMPLOYEE_LIMITS_UPDATED: 'Cập nhật giới hạn gửi',
-  EMPLOYEE_PERMISSIONS_UPDATED: 'Cập nhật quyền hạn',
-  EMPLOYEE_STATUS_UPDATED: 'Thay đổi trạng thái nhân viên',
-  EMPLOYEE_PASSWORD_RESET: 'Reset mật khẩu nhân viên',
-  CAMPAIGN_CREATED: 'Tạo chiến dịch',
-  CAMPAIGN_UPDATED: 'Cập nhật chiến dịch',
-  CAMPAIGN_DELETED: 'Xóa chiến dịch',
-  CAMPAIGN_RUN_STARTED: 'Bắt đầu chạy chiến dịch',
-  CAMPAIGN_SCHEDULE_CREATED: 'Tạo lịch chạy chiến dịch',
-  CAMPAIGN_SCHEDULE_UPDATED: 'Sửa lịch chạy chiến dịch',
-  CAMPAIGN_SCHEDULE_TOGGLED: 'Bật/tắt lịch chạy chiến dịch',
-  CAMPAIGN_SCHEDULE_DELETED: 'Xóa lịch chạy chiến dịch',
-  CAMPAIGN_PAUSED: 'Tạm dừng chiến dịch',
-  EMAIL_TEMPLATE_CREATED: 'Tạo mẫu email',
-  EMAIL_TEMPLATE_UPDATED: 'Cập nhật mẫu email',
-  EMAIL_TEMPLATE_DELETED: 'Xóa mẫu email',
-  ZALO_TEMPLATE_CREATED: 'Tạo mẫu Zalo',
-  ZALO_TEMPLATE_UPDATED: 'Cập nhật mẫu Zalo',
-  ZALO_TEMPLATE_DELETED: 'Xóa mẫu Zalo',
-};
-
-const ENTITY_FALLBACKS = {
-  employee: 'Nhân viên',
-  campaign: 'Chiến dịch',
-  email_template: 'Mẫu email',
-  zalo_template: 'Mẫu Zalo',
-};
+import { WORKSPACE_AUDIT_ACTIONS, WORKSPACE_AUDIT_ENTITIES, auditLabel } from './auditLogLabels';
 
 function fmtDate(d, locale) {
   if (!d) return '—';
@@ -47,7 +17,7 @@ function ActionBadge({ action, t }) {
     : isCreate
     ? 'bg-green-100 text-green-700'
     : 'bg-blue-100 text-blue-700';
-  const label = (t && t(`auditLogs.actions.${action}`)) || ACTION_FALLBACKS[action] || action;
+  const label = auditLabel(t, 'actions', action);
   return (
     <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${color}`}>
       {label}
@@ -113,9 +83,9 @@ export default function AuditLogsPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">{t('common.all') || 'Tất cả'}</option>
-              {Object.keys(ACTION_FALLBACKS).map((val) => (
+              {WORKSPACE_AUDIT_ACTIONS.map((val) => (
                 <option key={val} value={val}>
-                  {(t && t(`auditLogs.actions.${val}`)) || ACTION_FALLBACKS[val]}
+                  {auditLabel(t, 'actions', val)}
                 </option>
               ))}
             </select>
@@ -128,9 +98,9 @@ export default function AuditLogsPage() {
               className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
             >
               <option value="">{t('common.all') || 'Tất cả'}</option>
-              {Object.keys(ENTITY_FALLBACKS).map((val) => (
+              {WORKSPACE_AUDIT_ENTITIES.map((val) => (
                 <option key={val} value={val}>
-                  {(t && t(`auditLogs.entities.${val}`)) || ENTITY_FALLBACKS[val]}
+                  {auditLabel(t, 'entities', val)}
                 </option>
               ))}
             </select>
@@ -182,7 +152,7 @@ export default function AuditLogsPage() {
                   </td>
                   <td className="py-3 pr-4"><ActionBadge action={log.action} t={t} /></td>
                   <td className="py-3 pr-4 text-gray-600">
-                    {(t && t(`auditLogs.entities.${log.entity_type}`)) || ENTITY_FALLBACKS[log.entity_type] || log.entity_type || '—'}
+                    {auditLabel(t, 'entities', log.entity_type)}
                     {log.entity_id ? <span className="text-gray-400 ml-1">#{log.entity_id}</span> : null}
                   </td>
                   <td className="py-3 text-gray-500 text-xs max-w-xs truncate">
