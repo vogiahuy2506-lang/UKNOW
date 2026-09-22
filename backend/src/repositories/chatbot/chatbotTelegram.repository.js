@@ -511,7 +511,7 @@ class ChatbotTelegramRepository {
        VALUES ($1, $2, $3, $4, $5,
                (SELECT NULLIF(BTRIM(cb.system_instruction), '')
                   FROM custom_chatbots cb
-                 WHERE cb.id = $2 AND cb.is_active = true))
+                 WHERE cb.id = $2::bigint AND cb.is_active = true))
        ON CONFLICT (id_telegram_account, id_chatbot) DO UPDATE SET
          is_enabled      = EXCLUDED.is_enabled,
          is_enabled_dm   = EXCLUDED.is_enabled_dm,
