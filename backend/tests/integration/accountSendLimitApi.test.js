@@ -247,6 +247,25 @@ describe('PATCH /api/zalo/accounts/:id/send-limit', () => {
     expect(rows[0].user_daily_send_limit).toBe(40);
   });
 
+  // Soát 22/09: trước bản vá, body rỗng đi lọt qua `.optional({ nullable: true })`, controller quy
+  // `undefined` → `null` và XOÁ TRẮNG giới hạn đang có, vẫn trả 200 "Đã cập nhật giới hạn gửi/ngày".
+  // Đường email cùng tính năng làm ngược lại (vắng field = giữ nguyên, ca ở đầu file này), nên một
+  // client gửi payload dựng có điều kiện sẽ vô tình gỡ phanh của nick mà không ai thấy gì.
+  it('body RỖNG → 400, giới hạn đang có KHÔNG bị xoá (muốn xoá phải gửi null tường minh)', async () => {
+    const owner = await createUser({ role: 'user', username: 'zalo_owner_empty_body' });
+    const token = await loginAs(owner);
+    const account = await createZaloAccount({ ownerId: owner.id, userDailySendLimit: 60 });
+
+    const res = await request(app)
+      .patch(`/api/zalo/accounts/${account.id}/send-limit`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+
+    expect(res.status).toBe(400);
+    const { rows } = await db.query('SELECT user_daily_send_limit FROM zalo_settings WHERE id = $1', [account.id]);
+    expect(rows[0].user_daily_send_limit).toBe(60);
+  });
+
   it('id không tồn tại → 404', async () => {
     const owner = await createUser({ role: 'user', username: 'zalo_owner_404' });
     const token = await loginAs(owner);

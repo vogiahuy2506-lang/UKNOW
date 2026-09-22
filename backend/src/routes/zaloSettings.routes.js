@@ -54,6 +54,14 @@ router.patch(
   requirePermission('zalo_settings'),
   [
     param('id').isInt({ min: 1 }).withMessage('ID tài khoản không hợp lệ'),
+    // `exists()` là bắt buộc, không phải thừa: controller đọc `req.body?.userDailySendLimit` rồi
+    // quy `undefined` về `null`, nên body RỖNG sẽ XOÁ TRẮNG giới hạn đang có và vẫn trả 200 báo
+    // thành công. Đo được 22/09 trong lượt soát: đặt 60 → PATCH `{}` → cột về NULL, người dùng
+    // không hề biết nick của mình vừa mất phanh. Đường email (`PUT /api/email-settings/:id`) làm
+    // ngược lại — vắng field = giữ nguyên (`hasUserDailySendLimit`) — nên hai endpoint của cùng
+    // một tính năng phải thống nhất: muốn xoá thì gửi `null` tường minh.
+    body('userDailySendLimit').exists()
+      .withMessage('Thiếu userDailySendLimit — gửi null nếu muốn bỏ giới hạn'),
     body('userDailySendLimit').optional({ nullable: true })
       .isInt({ min: 1, max: 100000 })
       .withMessage('Giới hạn gửi/ngày phải từ 1 đến 100000'),
