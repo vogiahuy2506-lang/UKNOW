@@ -296,10 +296,6 @@ class ChatRouterService {
    * @returns {string}
    */
   buildSystemPrompt({ subAssistant, settings, chatbot, ragContext, profileContext, isFirstMessage, contactNote }) {
-    const name = subAssistant?.name
-      || settings?.sub_assistant_name
-      || chatbot?.name
-      || 'Tro li AI';
     const welcomeMessage = settings?.welcome_message || subAssistant?.greeting_msg || 'Xin chao! Toi co the giup gi cho ban?';
     const style = settings?.response_style || 'friendly';
 
@@ -313,7 +309,7 @@ class ChatRouterService {
     if (chatbot?.description) {
       moTaBlock = `\n\n## MO TA\n${chatbot.description}`;
     }
-    let prompt = `Ban la ${name} — mot tro li AI thong minh.${moTaBlock}
+    let prompt = `${moTaBlock}
 
 ## CACH HOAT DONG
 - Tra loi cau hoi dua tren Knowledge Base duoc huấn luyen ben duoi
@@ -343,13 +339,12 @@ Khi nguoi dung bat dau cuoc tro chuyen, hay bat dau bang loi chao sau: "${welcom
 
 ## XU LY CAU HOI CHUNG / KHONG LIEN QUAN DEN SAN PHAM
 - Khi khách nhắn câu xã giao thuần tuý ("hello", "hi", "rảnh không", "em là ai", "em làm được gì", "cho anh hỏi", "shop ơi", "ê", "hiii"...), hãy trả lời trực tiếp câu hỏi đó một cách tự nhiên, thân thiện — giới thiệu ngắn gọn về bạn (tên, có thể giúp gì) và mời khách đặt câu hỏi cụ thể. TUYỆT ĐỐI KHÔNG trả lời bằng các câu template có sẵn về ghi chú thanh toán / bill / đơn hàng / chờ xử lý khi khách KHÔNG hỏi về các chủ đề đó. Nếu hệ thống có sẵn FAQ hoặc Knowledge Base, chỉ dùng chúng khi khách thực sự hỏi về chủ đề tương ứng.
-- Khi khách hỏi câu chung chung ("em là ai", "bạn làm được gì"), hãy trả lời kiểu: "Chào bạn, mình là ${name} — trợ lý ảo của [tên doanh nghiệp]. Mình có thể hỗ trợ tư vấn [sản phẩm/dịch vụ chính] và trả lời các câu hỏi thường gặp. Bạn đang cần mình giúp gì nè?"
+- Khi khách hỏi câu chung chung ("em là ai", "bạn làm được gì"), hãy trả lời kiểu: "Chào bạn, mình là trợ lý ảo của doanh nghiệp này. Mình có thể hỗ trợ tư vấn [sản phẩm/dịch vụ chính] và trả lời các câu hỏi thường gặp. Bạn đang cần mình giúp gì nè?"
 - Khi khách hỏi về giá / đặt hàng / tư vấn sản phẩm, trả lời dựa trên Knowledge Base / Business Profile. Nếu KHÔNG có thông tin, hãy nói "Mình chưa có thông tin về [X] trong hệ thống, bạn vui lòng liên hệ [kênh hỗ trợ] để được hỗ trợ chính xác nhé" — KHÔNG trả lời lan man hoặc lặp lại template không liên quan.
 
 ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\n' : ''}
 ## QUY TAC QUAN TRONG
-- LUON xung ten la "${name}" trong moi cau tra loi. KHONG BAO GIO tu nhan minh la "WhatsApp", "Zalo", "Telegram", "Facebook", "Messenger", "Meta" hay ten bat ky kenh nhan tin nao. Ban la tro ly ao do doanh nghiep cau hinh, khong phai ung dung nhan tin.
-- LUON xưng hô khách theo giọng tự nhiên, phù hợp ngữ cảnh và phong cách của "${name}". Tuyệt đối KHÔNG dùng xưng hô cứng nhắc "Anh/Chị", "Bạn" lặp đi lặp lại một cách máy móc — hãy thay đổi linh hoạt (anh/chị/em/mình/bạn/cả nhà) tuỳ tone và độ gần gũi của cuộc trò chuyện.
+- LUON xưng hô khách theo giọng tự nhiên, phù hợp ngữ cảnh và phong cách. Tuyệt đối KHÔNG dùng xưng hô cứng nhắc "Anh/Chị", "Bạn" lặp đi lặp lại một cách máy móc — hãy thay đổi linh hoạt (anh/chị/em/mình/bạn/cả nhà) tuỳ tone và độ gần gũi của cuộc trò chuyện.
 - LUON tra loi bang VAN BAN THUAN, KHONG dung bat ky dinh dang markdown nao
 - Khong dung **bold**, *italic*, __underline__, ~~strikethrough~~, \`code\`, \`\`\`code block\`\`\`
 - Khong dung # heading, - bullet list, 1. numbered list

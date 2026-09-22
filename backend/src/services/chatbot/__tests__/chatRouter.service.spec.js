@@ -269,13 +269,8 @@ describe('chatRouter._callAI thinking config', () => {
 });
 
 describe('ChatRouterService.buildSystemPrompt — natural pronouns + no internal note leak', () => {
-  it('passes sub_assistant_name through to the prompt so AI uses the configured name', () => {
-    // Bug trước: WhatsApp Baileys inbox chỉ pass {welcome_message, response_style,
-    // system_instruction} cho buildSystemPrompt — thiếu sub_assistant_name.
-    // Khi id_sub_assistant set trong DB nhưng subAssistant=null (vd row
-    // bị xoá) thì prompt rơi về chatbot.name generic → AI xưng "Anh/Chị"
-    // cứng nhắc thay vì tên đặt trong sub-assistant. Fix: pass
-    // settings.sub_assistant_name từ JOIN `sa.name`.
+  it('does NOT force AI to introduce itself by name (user preference)', () => {
+    // User requested: bỏ tự xưng tên, không bắt buộc giới thiệu tên.
     const prompt = chatRouterService.buildSystemPrompt({
       subAssistant: null,
       settings: {
@@ -284,10 +279,10 @@ describe('ChatRouterService.buildSystemPrompt — natural pronouns + no internal
       },
       chatbot: { name: 'Tro ly AI' },
     });
-    // "Trợ lý Hà" được chèn vào rule "LUON xung ten la ..."
-    expect(prompt).toContain('LUON xung ten la "Trợ lý Hà"');
-    // Anti xưng hô cứng: prompt phải có rule cho AI linh hoạt thay vì
-    // "Anh/Chị" mặc định.
+    // KHÔNG còn rule bắt buộc xưng tên
+    expect(prompt).not.toContain('LUON xung ten la');
+    expect(prompt).not.toContain('Trợ lý Hà');
+    // Vẫn có rule xưng hô tự nhiên (không cứng nhắc Anh/Chị)
     expect(prompt).toMatch(/KHONG.*xưng hô.*Anh\/Chị|xưng hô.*linh hoạt/);
   });
 
