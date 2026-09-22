@@ -185,7 +185,15 @@ beforeEach(async () => {
     if (/ai_paused/i.test(s)) {
       return { rows: [{ ai_paused: mocks._scenarioAiPaused }] };
     }
-    // 6. Update / insert messages — accept
+    // 6. Insert messages — return id (for throughMessageId tracking)
+    if (/INSERT INTO telegram_personal_messages/i.test(s)) {
+      return { rows: [{ id: 999 }] };
+    }
+    // 7. Select latest message id (for throughMessageId)
+    if (/SELECT id FROM telegram_personal_messages/i.test(s)) {
+      return { rows: [{ id: 998 }] };
+    }
+    // 8. Update / insert other — accept
     return { rows: [{ ok: 1 }] };
   });
 

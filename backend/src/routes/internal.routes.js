@@ -121,10 +121,11 @@ async function getOrCreateTelegramConversation(account, chatId, displayName) {
  */
 async function logTelegramMessage(conversation, role, content, metadata = {}) {
   try {
-    await db.query(
+    const result = await db.query(
       `INSERT INTO telegram_personal_messages
          (id_conversation, id_user, external_message_id, role, content, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id`,
       [
         conversation.id,
         conversation.id_user,
@@ -134,14 +135,17 @@ async function logTelegramMessage(conversation, role, content, metadata = {}) {
         JSON.stringify(metadata || {}),
       ]
     );
+    const insertedId = result.rows[0]?.id;
     await db.query(
       `UPDATE telegram_personal_conversations
        SET last_message_at = NOW(), updated_at = NOW()
        WHERE id = $1`,
       [conversation.id]
     );
+    return insertedId;
   } catch (err) {
     console.warn('[Telegram] logTelegramMessage failed:', err.message);
+    return null;
   }
 }
 
@@ -406,23 +410,49 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
         .join('\n')
     : parsed.message;
 
-  console.log(
-    '[Telegram] batch dispatching to AI',
-    { accountId: account.id, idChatbot, length: batchedContent?.length }
-  );
-
   // Log visitor messages first so the UI shows them even if the AI
-  // call fails. Best-effort: failures are logged by the helper.
-  for (const item of Array.isArray(batch) && batch.length ? batch : [{ content: parsed.message }]) {
+  // call fails. Track IDs so we can exclude them from history.
+  const batchItems = Array.isArray(batch) && batch.length ? batch : [{ content: parsed.message }];
+  const visitorMessageIds = [];
+  for (const item of batchItems) {
     if (!item?.content) continue;
-    await logTelegramMessage(conversation, 'visitor', item.content, {
+    const insertedId = await logTelegramMessage(conversation, 'visitor', item.content, {
       external_message_id: item.eventId ?? null,
       sender_id: parsed.senderId,
       sender_name: parsed.senderName,
       chat_id: parsed.chatId,
       is_group: parsed.isGroup,
     });
+    if (insertedId) visitorMessageIds.push(insertedId);
   }
+
+  // Get latest message ID in this conversation (for throughMessageId).
+  // This ensures AI only sees history BEFORE this batch, not including
+  // the visitor messages we just logged.
+  let throughMessageId = null;
+  try {
+    const latestResult = await db.query(
+      `SELECT id FROM telegram_personal_messages
+       WHERE id_conversation = $1
+       ORDER BY id DESC
+       LIMIT 1`,
+      [conversation.id]
+    );
+    // If we haven't logged any visitor messages yet, throughMessageId = latest ID (old history only)
+    // If we have logged visitor messages, throughMessageId = the MIN of visitor IDs (history up to before batch)
+    if (visitorMessageIds.length > 0) {
+      throughMessageId = Math.min(...visitorMessageIds);
+    } else {
+      throughMessageId = latestResult.rows[0]?.id ?? null;
+    }
+  } catch (err) {
+    console.warn('[Telegram] failed to get throughMessageId:', err.message);
+  }
+
+  console.log(
+    '[Telegram] batch dispatching to AI',
+    { accountId: account.id, idChatbot, length: batchedContent?.length, throughMessageId, visitorMessageIds: visitorMessageIds.length }
+  );
 
   // Active hours check (trước khi gọi AI, sau khi đã lưu tin visitor)
   let chatbotRecord = null;
@@ -473,6 +503,11 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     chatbotId: idChatbot,
     message: batchedContent,
     conversationId: conversation?.id,
+    // Chỉ lấy lịch sử TRƯỚC batch hiện tại, không lấy 20 tin gần nhất.
+    // throughMessageId đảm bảo chỉ thấy tin trước khi visitor nhắn batch này.
+    // excludeMessageIds loại trừ visitor messages trong batch để AI không thấy lặp.
+    throughMessageId,
+    excludeMessageIds: visitorMessageIds,
     // TRƯỚC: `accountSettings || chatbotSettings || {}` (3-cột row mất
     //        toàn bộ system_instruction, ai_model, response_style… →
     //        "không tuân theo cấu hình"). SAU: mergedSettings = union
@@ -498,6 +533,9 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     contentLen: result?.content?.length,
     merged_is_enabled: mergedSettings?.is_enabled,
     merged_is_enabled_dm: mergedSettings?.is_enabled_dm,
+    throughMessageId,
+    visitorMessageIds: visitorMessageIds.length,
+    batchSize: batchItems.length,
   });
 
   const replyText = result?.content;

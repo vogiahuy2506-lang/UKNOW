@@ -426,14 +426,35 @@ class ChatbotRepository {
     return conv;
   }
 
-  async getChannelMessages(conversationId, { limit = 50 } = {}) {
-    const { rows } = await db.query(
-      `SELECT * FROM channel_messages
-       WHERE id_conversation = $1
-       ORDER BY created_at ASC
-       LIMIT $2`,
-      [conversationId, limit]
-    );
+  async getChannelMessages(conversationId, { limit = 50, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [], sessionResetAt = null } = {}) {
+    let query = `SELECT * FROM channel_messages
+       WHERE id_conversation = $1`;
+    const params = [conversationId];
+
+    if (sessionResetAt) {
+      params.push(sessionResetAt);
+      query += ` AND created_at >= $${params.length}`;
+    }
+    if (beforeMessageId) {
+      params.push(beforeMessageId);
+      query += ` AND id < $${params.length}`;
+    }
+    if (throughMessageId) {
+      params.push(throughMessageId);
+      query += ` AND id <= $${params.length}`;
+    }
+    const excludedIds = Array.isArray(excludeMessageIds)
+      ? excludeMessageIds.map(Number).filter(Number.isInteger)
+      : [];
+    if (excludedIds.length > 0) {
+      params.push(excludedIds);
+      query += ` AND id NOT IN ($${params.length})`;
+    }
+
+    params.push(limit);
+    query += ` ORDER BY created_at ASC LIMIT $${params.length}`;
+
+    const { rows } = await db.query(query, params);
     return rows;
   }
 

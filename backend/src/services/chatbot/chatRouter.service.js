@@ -470,7 +470,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         return this._getZaloPersonalHistory(conversationId, limit, options);
       }
       if (channel === 'telegram_personal') {
-        return this._getTelegramPersonalHistory(conversationId, limit);
+        return this._getTelegramPersonalHistory(conversationId, limit, options);
       }
       return chatbotRepository.getChannelMessages(conversationId, { limit });
     } catch {
@@ -478,21 +478,47 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     }
   }
 
-  async _getTelegramPersonalHistory(conversationId, limit = 20) {
+  async _getTelegramPersonalHistory(conversationId, limit = 20, options = {}) {
+    const normalizedOptions = typeof options === 'number' ? { beforeMessageId: options } : (options || {});
+    const { beforeMessageId = null, throughMessageId = null, excludeMessageIds = [], sessionResetAt = null } = normalizedOptions;
+
     try {
       const db = (await import('../../config/database.js')).default;
-      const { rows } = await db.query(
-        `SELECT role, content, created_at
+      let query = `SELECT id, role, content, created_at
          FROM telegram_personal_messages
-         WHERE id_conversation = $1
-         ORDER BY created_at DESC
-         LIMIT $2`,
-        [conversationId, limit]
-      );
+         WHERE id_conversation = $1`;
+      const params = [conversationId];
+
+      if (sessionResetAt) {
+        params.push(sessionResetAt);
+        query += ` AND created_at >= $${params.length}`;
+      }
+      if (beforeMessageId) {
+        params.push(beforeMessageId);
+        query += ` AND id < $${params.length}`;
+      }
+      if (throughMessageId) {
+        params.push(throughMessageId);
+        query += ` AND id <= $${params.length}`;
+      }
+      const excludedIds = Array.isArray(excludeMessageIds)
+        ? excludeMessageIds.map(Number).filter(Number.isInteger)
+        : [];
+      if (excludedIds.length > 0) {
+        params.push(excludedIds);
+        query += ` AND id NOT IN ($${params.length})`;
+      }
+
+      params.push(limit);
+      query += ` ORDER BY created_at ASC LIMIT $${params.length}`;
+
+      const { rows } = await db.query(query, params);
       // Map role: visitor → user, bot/agent → model (matches Gemini mapping).
-      return rows.reverse().map((row) => ({
+      return rows.map((row) => ({
         role: row.role,
         content: row.content || '',
+        id: row.id,
+        createdAt: row.created_at,
       }));
     } catch (err) {
       console.warn('[ChatRouter] _getTelegramPersonalHistory failed:', err.message);

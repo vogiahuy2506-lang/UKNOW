@@ -258,16 +258,36 @@ async function persistMessage({ conversationId, channelId, userId, role, content
 }
 
 /**
- * Lấy lịch sử hội thoại (giới hạn MAX_HISTORY_MESSAGES).
+ * Lấy lịch sử hội thoại.
+ * @param {number} conversationId
+ * @param {object} options
+ * @param {number} [options.throughMessageId] - chỉ lấy tin có id <= this
+ * @param {number[]} [options.excludeMessageIds] - loại trừ các message IDs này
+ * @param {number} [options.limit=20]
  */
-async function getHistory(conversationId) {
-  const { rows } = await db.query(
-    `SELECT role, content FROM channel_messages
-     WHERE id_conversation = $1
-     ORDER BY id DESC LIMIT $2`,
-    [conversationId, MAX_HISTORY_MESSAGES]
-  );
-  return rows.reverse();
+async function getHistory(conversationId, options = {}) {
+  const { throughMessageId = null, excludeMessageIds = [], limit = MAX_HISTORY_MESSAGES } = options;
+  let query = `SELECT id, role, content FROM channel_messages
+     WHERE id_conversation = $1`;
+  const params = [conversationId];
+
+  if (throughMessageId) {
+    params.push(throughMessageId);
+    query += ` AND id <= $${params.length}`;
+  }
+  const excluded = Array.isArray(excludeMessageIds)
+    ? excludeMessageIds.map(Number).filter(Number.isInteger)
+    : [];
+  if (excluded.length > 0) {
+    params.push(excluded);
+    query += ` AND id NOT IN ($${params.length})`;
+  }
+
+  params.push(limit);
+  query += ` ORDER BY id ASC LIMIT $${params.length}`;
+
+  const { rows } = await db.query(query, params);
+  return rows;
 }
 
 /**
@@ -512,7 +532,7 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     senderName,
   } = firstMeta;
 
-  log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason}`);
+  log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} history_size=${history.length} throughMessageId=${throughMessageId}`);
 
   try {
     // Resolve chatbot settings (có thể thay đổi giữa các batch)
@@ -522,15 +542,19 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       return;
     }
 
-    // Lấy lịch sử hội thoại (exclude batch messages để tránh AI thấy tin nhắn trùng)
-    const history = await getHistory(conversationId);
-    // Filter out messages that were just batched to avoid duplicate context
-    const excludeIds = batch.messages
+    // Lấy lịch sử hội thoại (chỉ tin TRƯỚC batch này, không lấy 20 tin gần nhất).
+    // throughMessageId đảm bảo AI chỉ thấy tin trước khi visitor nhắn batch này.
+    // excludeMessageIds loại trừ visitor messages trong batch để tránh thấy lặp.
+    const visitorMessageIds = batch.messages
       .map((m) => m.persistedMessageId)
       .filter((id) => id != null);
-    const filteredHistory = excludeIds.length > 0
-      ? history.filter((h) => !excludeIds.includes(h.id))
-      : history;
+    const throughMessageId = visitorMessageIds.length > 0
+      ? Math.min(...visitorMessageIds)
+      : null;
+    const history = await getHistory(conversationId, {
+      throughMessageId,
+      excludeMessageIds: visitorMessageIds,
+    });
 
     // Gọi AI với prompt từ batched messages
     const subAssistant = cb.id_sub_assistant
@@ -542,7 +566,7 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     const ragContext = await ragEngineService
       .buildContext(ownerUserId, prompt, { customChatbotId: cb.id_chatbot })
       .catch(() => '');
-    const isFirstMessage = filteredHistory.length === 0;
+    const isFirstMessage = history.length === 0;
 
     const systemPrompt = chatRouterService.buildSystemPrompt({
       subAssistant,
@@ -561,7 +585,7 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     const { text: reply } = await chatRouterService._callAI({
       userId: ownerUserId,
       systemPrompt,
-      history: filteredHistory,
+      history,
       message: prompt,
       model: cb.ai_model || 'gemini-2.5-flash',
       temperature: parseFloat(cb.temperature || 0.7),
