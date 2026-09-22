@@ -31,9 +31,13 @@ export default function VietQrMessage({
   useEffect(() => {
     let mounted = true;
     QRCode.toDataURL(vietqrString, {
-      width: 220,
-      margin: 1,
-      errorCorrectionLevel: 'M',
+      width: 400,
+      margin: 2,
+      errorCorrectionLevel: 'H',
+      color: {
+        dark: '#000000',
+        light: '#FFFFFF',
+      },
     })
       .then((url) => {
         if (mounted) setQrUrl(url);
@@ -109,12 +113,13 @@ export default function VietQrMessage({
           <img
             src={qrUrl}
             alt="VietQR"
-            width={220}
-            height={220}
+            width={280}
+            height={280}
             className="rounded-lg border border-slate-200"
+            style={{ width: '280px', height: '280px' }}
           />
         ) : (
-          <div className="flex h-[220px] w-[220px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
+          <div className="flex h-[280px] w-[280px] items-center justify-center rounded-lg border border-slate-200 bg-slate-50">
             <HiOutlineQrcode className="h-12 w-12 animate-pulse text-slate-300" />
           </div>
         )}
