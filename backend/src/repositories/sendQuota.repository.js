@@ -790,6 +790,59 @@ export async function countZaloSentTodayWithLedger(queryable, billingUserId, day
 }
 
 /**
+ * Đếm Email đã gửi hôm nay (giờ VN) TỪ MỘT TÀI KHOẢN GỬI cụ thể (`email_settings.id`) — dùng cho
+ * giới hạn/ngày do người dùng tự đặt theo tài khoản (PLAN_GIOI_HAN_GUI_THEO_NGAY, khác trục với
+ * `countEmailSentTodayWithLedger` ở trên vốn đếm theo billing user cho hạn mức GÓI).
+ * Đếm thẳng từ `email_messages`, không dùng `daily_sent_count` (reset bằng cron riêng, không có
+ * ledger đối chiếu — xem bẫy 2 của plan). `NOT is_preview` để loại preview chạy thử trong trình dựng.
+ * `status IN ('sent','delivered','bounced')` là bắt buộc, không phải trang trí: `sent_at` được ghi
+ * NGAY LÚC GỬI THỬ (kể cả khi thất bại — `sentAt: failedAt`/`bouncedAt` ở campaignEmailSender.service.js
+ * rồi mới UPDATE status='failed' sau), nên thiếu điều kiện này sẽ đếm cả tin lỗi vào giới hạn ngày.
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {number|string} emailSettingId
+ * @param {Date} dayStart
+ * @param {Date} dayEnd
+ * @returns {Promise<number>}
+ */
+export async function countEmailSentTodayByAccount(queryable, emailSettingId, dayStart, dayEnd) {
+  const { rows } = await queryable.query(
+    `SELECT COUNT(*)::int AS total
+     FROM email_messages
+     WHERE id_email_setting = $1
+       AND status IN ('sent', 'delivered', 'bounced')
+       AND NOT is_preview
+       AND sent_at >= $2 AND sent_at < $3`,
+    [emailSettingId, dayStart, dayEnd]
+  );
+  return Number(rows[0]?.total || 0);
+}
+
+/**
+ * Đếm Zalo đã gửi hôm nay (giờ VN) TỪ MỘT TÀI KHOẢN GỬI cụ thể (`zalo_settings.id`, cột
+ * `zalo_messages.account_id`) — dùng cho giới hạn/ngày do người dùng tự đặt theo tài khoản.
+ * Cùng khuôn với `countEmailSentTodayByAccount`. `tracking_metadata->>'status' = 'sent'` là bắt buộc
+ * cùng lý do: dòng được INSERT với `sent_at = CURRENT_TIMESTAMP` ngay lúc xếp hàng (trước khi biết
+ * kết quả), tracking_metadata mới là nơi phản ánh true kết quả gửi (khớp `countZaloSentTodayWithLedger`).
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {number|string} zaloSettingId
+ * @param {Date} dayStart
+ * @param {Date} dayEnd
+ * @returns {Promise<number>}
+ */
+export async function countZaloSentTodayByAccount(queryable, zaloSettingId, dayStart, dayEnd) {
+  const { rows } = await queryable.query(
+    `SELECT COUNT(*)::int AS total
+     FROM zalo_messages
+     WHERE account_id = $1
+       AND tracking_metadata->>'status' = 'sent'
+       AND NOT is_preview
+       AND sent_at >= $2 AND sent_at < $3`,
+    [zaloSettingId, dayStart, dayEnd]
+  );
+  return Number(rows[0]?.total || 0);
+}
+
+/**
  * Đếm tổng Email trong kỳ (kết hợp legacy rows + ledger active reservations).
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} billingUserId

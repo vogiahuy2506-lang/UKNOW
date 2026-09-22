@@ -3584,3 +3584,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_system_payment_accounts_default
 
 CREATE INDEX IF NOT EXISTS idx_system_payment_accounts_active
   ON system_payment_accounts (is_active, is_default DESC);
+
+-- --- Migration 236: user_daily_send_limit (giới hạn gửi/ngày do người dùng tự đặt, theo tài khoản gửi) ---
+ALTER TABLE email_settings
+  ADD COLUMN IF NOT EXISTS user_daily_send_limit INTEGER NULL;
+ALTER TABLE zalo_settings
+  ADD COLUMN IF NOT EXISTS user_daily_send_limit INTEGER NULL;
+
+CREATE INDEX IF NOT EXISTS idx_email_messages_setting_sent
+  ON email_messages (id_email_setting, sent_at)
+  WHERE id_email_setting IS NOT NULL AND NOT is_preview;
+CREATE INDEX IF NOT EXISTS idx_zalo_messages_account_sent
+  ON zalo_messages (account_id, sent_at)
+  WHERE account_id IS NOT NULL AND NOT is_preview;
