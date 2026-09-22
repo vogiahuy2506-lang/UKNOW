@@ -4,8 +4,8 @@
  * Mới có ảnh bài nộp "Đã rút" (dùng chung biểu mẫu mẫu của bài `bieu-mau`). Hai ảnh còn lại cần dữ liệu lead
  * có người từ chối nhận tin + cột "Nguồn đồng ý" ở danh sách khách — chưa dựng fixture.
  */
-import { highlightCell, hideVolatileChrome, settle } from '../lib/shotHelpers.js';
-import { ensureDemoForm, ensureDemoSubmissions } from '../lib/shotFixtures.js';
+import { highlight, highlightCell, hideVolatileChrome, settle, contentShot, paddedShot } from '../lib/shotHelpers.js';
+import { ensureDemoForm, ensureDemoSubmissions, ensureConsentSourceDemo, ensureLandingLeadsNodeDemo } from '../lib/shotFixtures.js';
 
 export default {
   slug: 'dong-y-nhan-tin',
@@ -54,6 +54,47 @@ export default {
           await page.setViewportSize(viewport);
           throw error;
         }
+      },
+    },
+    {
+      name: 'cot-nguon-dong-y',
+      caption: 'danh sách khách hàng, khoanh đỏ cột "Nguồn đồng ý"',
+      localOnly: true,
+      async take(page) {
+        // Seed dựng khách nhưng để trống consent_source → gán luân phiên 4 nguồn cho khách của tài khoản thử.
+        const { campaignId } = await ensureConsentSourceDemo();
+        await page.goto(`/app/customers/${campaignId}`);
+        const header = page.locator('main table thead th').filter({ hasText: /Nguồn đồng ý/ }).first();
+        await header.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.locator('main table tbody tr').first().waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
+        await highlightCell(header);
+        await page.waitForTimeout(200);
+        return contentShot(page, page.locator('main table').first(), { maxHeight: 520 });
+      },
+    },
+    {
+      name: 'node-landing-bo-qua-nguoi-tu-choi',
+      caption: 'bước cấu hình nguồn người nhận từ landing page, khoanh đỏ dòng báo số người bị bỏ qua vì đã từ chối nhận tin',
+      localOnly: true,
+      async take(page) {
+        const { campaignId, nodeName } = await ensureLandingLeadsNodeDemo();
+        await page.goto(`/app/campaigns/${campaignId}/builder`);
+        // Node trên sơ đồ React Flow: bấm đúp (hai cú bấm trong 300 ms) mới mở khung cấu hình.
+        const node = page.locator('.react-flow__node').filter({ hasText: nodeName }).first();
+        await node.waitFor({ state: 'visible', timeout: 45_000 });
+        await settle(page);
+        await node.dblclick();
+        const warning = page.getByText(/bị bỏ qua vì đã từ chối nhận tin/).first();
+        await warning.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(600);
+        await hideVolatileChrome(page);
+        await highlight(warning.locator('xpath=ancestor::p[1]'));
+        await page.waitForTimeout(200);
+        // Khung cấu hình của node: khối gần nhất ôm cả dòng cảnh báo lẫn tiêu đề khung.
+        const panel = warning.locator('xpath=ancestor::div[contains(@class,"rounded")][.//h2 or .//h3][1]');
+        return paddedShot(page, (await panel.count()) ? panel : warning.locator('xpath=ancestor::div[3]'), { pad: 12 });
       },
     },
   ],

@@ -8,8 +8,9 @@
  * "Giám sát gửi tin". Bài viết dùng đúng cả hai tên ở đúng chỗ.
  */
 import {
-  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, enclosingSection,
+  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, enclosingSection, paddedShot,
 } from '../lib/shotHelpers.js';
+import { ensureFailedRunDemo } from '../lib/shotFixtures.js';
 
 const MONITOR_PATH = '/app/delivery-monitor';
 
@@ -139,6 +140,51 @@ export default {
           );
         }
         return shot;
+      },
+    },
+    {
+      name: 'xem-chi-tiet-loi',
+      caption: 'một dòng chiến dịch đã bấm "Xem chi tiết lỗi", thấy bảng Người nhận / Lý do / Số lần / Lần cuối',
+      localOnly: true,
+      async take(page) {
+        // Seed để mọi lượt chạy 0 lỗi → nút "Xem chi tiết lỗi" không bao giờ hiện. Nêm 3 người nhận Zalo
+        // gửi hỏng vào lượt chạy mới nhất (lib/shotFixtures.ensureFailedRunDemo).
+        const { campaignName } = await ensureFailedRunDemo();
+        // Bảng chiến dịch rộng hơn khung 1440px (cột Tỷ lệ lỗi bị cắt) → nới khung, chụp xong trả lại.
+        const viewport = page.viewportSize();
+        // Khung cao để cả dòng chiến dịch lẫn bảng lỗi mở ra bên dưới cùng nằm trong khung nhìn — trang
+        // cuộn bên trong <main>, toạ độ chụp là toạ độ khung nhìn, phần ngoài khung ra ảnh trắng.
+        await page.setViewportSize({ width: 1800, height: 1300 });
+        await page.goto(MONITOR_PATH);
+        // Bám vào dòng theo TÊN chiến dịch: bấm xong, title nút đổi thành "Ẩn chi tiết lỗi" nên mọi bộ chọn
+        // dựa vào title "Xem chi tiết lỗi" (kể cả lọc dòng theo nút) đều trượt sang dòng kế tiếp.
+        const row = page.locator('main tbody tr').filter({ hasText: campaignName }).first();
+        await row.waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        const button = row.locator('button[title*="chi tiết lỗi"]').first();
+        await button.click();
+        // Bảng lỗi là <tr> ngay sau dòng chiến dịch vừa bấm.
+        const detail = row.locator('xpath=following-sibling::tr[1]');
+        await detail.getByText('Người nhận', { exact: true }).waitFor({ state: 'visible', timeout: 30_000 });
+        await page.waitForTimeout(800);
+        await hideVolatileChrome(page);
+        await highlight(button);
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+
+        const a = await row.boundingBox();
+        const b = await detail.boundingBox();
+        const pad = 10;
+        const clip = { x: a.x - pad, y: a.y - pad, width: a.width + pad * 2, height: (b.y + b.height) - a.y + pad * 2 };
+        return {
+          screenshot: async (options = {}) => {
+            try {
+              return await page.screenshot({ ...options, clip });
+            } finally {
+              await page.setViewportSize(viewport);
+            }
+          },
+        };
       },
     },
   ],

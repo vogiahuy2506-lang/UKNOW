@@ -521,3 +521,128 @@ export async function ensureChatbotHoursDemo() {
     return rows[0];
   });
 }
+
+/**
+ * Một lượt chạy chiến dịch có 3 người nhận Zalo gửi hỏng, để trang Hiệu quả chiến dịch có nút "Xem chi tiết
+ * lỗi" và bảng Người nhận / Lý do / Số lần / Lần cuối. Lấy lượt chạy mới nhất của chủ tài khoản do seed dựng.
+ * @returns {Promise<{runId: number, campaignName: string}>}
+ */
+export async function ensureFailedRunDemo() {
+  return withDb(async (db) => {
+    const people = await loadPeople(db);
+    const owner = people[OWNER_USERNAME];
+    const { rows } = await db.query(
+      `SELECT cr.id, c.id AS campaign_id, c.campaign_name
+         FROM campaign_runs cr JOIN campaigns c ON c.id = cr.id_campaign
+        WHERE c.id_user = $1
+        ORDER BY cr.started_at DESC NULLS LAST, cr.id DESC
+        LIMIT 1`,
+      [owner],
+    );
+    if (!rows[0]) throw new Error('Chưa có lượt chạy chiến dịch mẫu. Nạp lại DB với E2E_SEED_CAMPAIGNS=1 (hoặc E2E_SEED_ALL=1).');
+    const run = rows[0];
+    const existing = await db.query(
+      `SELECT COUNT(*)::int AS n FROM zalo_messages WHERE id_run = $1 AND status = 'failed'`, [run.id],
+    );
+    if (existing.rows[0].n >= 3) return { runId: run.id, campaignName: run.campaign_name };
+
+    // Câu lỗi khớp đúng mẫu mà inferZaloUnreachableReason() nhận ra, để cột "Lý do" ra ba nhãn khác nhau
+    // (chặn tin người lạ / người nhận chặn tài khoản / không tìm thấy tài khoản).
+    const failures = [
+      ['0901234501', 'Người này chặn không nhận tin nhắn từ người lạ', 2, '3 hours'],
+      ['0912345678', 'Người này không thể nhận tin nhắn từ bạn', 1, '2 hours'],
+      ['0987654321', 'Số điện thoại chưa đăng ký Zalo', 3, '1 hour'],
+    ];
+    for (const [phone, error, count, ago] of failures) {
+      for (let i = 0; i < count; i += 1) {
+        await db.query(
+          `INSERT INTO zalo_messages (id_campaign, id_run, recipient_type, recipient_value, channel, message_text,
+                                      status, tracking_metadata, sent_at, created_at, updated_at)
+           VALUES ($1, $2, 'phone', $3, 'zalo_personal', 'Nhắc lịch hội thảo tháng 9', 'failed', $4::jsonb,
+                   NOW() - ($5)::interval - ($6 || ' minutes')::interval, NOW() - ($5)::interval, NOW())`,
+          [run.campaign_id, run.id, phone, JSON.stringify({ error }), ago, String(i * 7)],
+        );
+      }
+    }
+    await db.query(
+      `UPDATE campaign_runs SET failed_sends = COALESCE(failed_sends, 0) + 6 WHERE id = $1`, [run.id],
+    );
+    return { runId: run.id, campaignName: run.campaign_name };
+  });
+}
+
+/**
+ * Nguồn đồng ý của khách hàng: trang "Khách hàng từ chiến dịch" có cột "Nguồn đồng ý" (Thủ công / Import file /
+ * Lead Landing / Zalo). Seed dựng khách nhưng không điền cột này → gán luân phiên cho khách của chủ tài khoản.
+ * @returns {Promise<{campaignId: number}>} chiến dịch có nhiều khách nhất
+ */
+export async function ensureConsentSourceDemo() {
+  return withDb(async (db) => {
+    const people = await loadPeople(db);
+    const owner = people[OWNER_USERNAME];
+    await db.query(
+      `UPDATE customers SET consent_source = (ARRAY['manual', 'import', 'landing_lead', 'zalo'])[1 + (id % 4)]
+        WHERE id_user = $1 AND consent_source IS NULL`,
+      [owner],
+    );
+    const { rows } = await db.query(
+      `SELECT cc.id_campaign, COUNT(*)::int AS n
+         FROM campaign_customers cc JOIN campaigns c ON c.id = cc.id_campaign
+        WHERE c.id_user = $1
+        GROUP BY cc.id_campaign ORDER BY n DESC LIMIT 1`,
+      [owner],
+    );
+    if (!rows[0]) throw new Error('Chưa có khách gắn với chiến dịch. Nạp lại DB với E2E_SEED_ALL=1.');
+    return { campaignId: rows[0].id_campaign };
+  });
+}
+
+/**
+ * Node "Khách hàng từ Landing page" trong sơ đồ của một chiến dịch mẫu + vài lead, trong đó có người ĐÃ TỪ
+ * CHỐI nhận tin — để khung cấu hình node hiện dòng "Có N lead bị bỏ qua vì đã từ chối nhận tin".
+ * @returns {Promise<{campaignId: number, nodeName: string}>}
+ */
+export async function ensureLandingLeadsNodeDemo() {
+  const NODE_NAME = 'Khách hàng từ Landing page';
+  return withDb(async (db) => {
+    const people = await loadPeople(db);
+    const owner = people[OWNER_USERNAME];
+    const campaign = (await db.query(
+      `SELECT id FROM campaigns WHERE COALESCE(workspace_owner_id, id_user) = $1 ORDER BY id LIMIT 1`, [owner],
+    )).rows[0];
+    if (!campaign) throw new Error('Chưa có chiến dịch mẫu. Nạp lại DB với E2E_SEED_CAMPAIGNS=1 (hoặc E2E_SEED_ALL=1).');
+
+    const leadCount = (await db.query(
+      `SELECT COUNT(*)::int AS n FROM leads WHERE COALESCE(workspace_owner_id, id_user) = $1`, [owner],
+    )).rows[0].n;
+    if (leadCount < 5) {
+      const leads = [
+        ['Nguyễn', 'Văn An', 'an.nguyen@example.com', '0901234501', true],
+        ['Phạm', 'Thu Trang', 'trang.pham@example.com', '0901234502', false],
+        ['Lê', 'Hoàng Long', 'long.le@example.com', '0901234503', true],
+        ['Đỗ', 'Minh Châu', 'chau.do@example.com', '0901234504', false],
+        ['Trần', 'Thị Mai', 'mai.tran@example.com', '0912345678', true],
+      ];
+      for (const [last, first, email, phone, consent] of leads) {
+        await db.query(
+          `INSERT INTO leads (id_user, workspace_owner_id, last_name, first_name, email, phone, marketing_consent,
+                              landing_page_slug, created_at)
+           VALUES ($1, $1, $2, $3, $4, $5, $6, 'khoa-hoc-marketing-tu-dong-hoa', NOW() - INTERVAL '2 days')`,
+          [owner, last, first, email, phone, consent],
+        );
+      }
+    }
+
+    const existing = await db.query(
+      `SELECT id FROM campaign_nodes WHERE id_campaign = $1 AND node_type = 'read_landing_leads' LIMIT 1`, [campaign.id],
+    );
+    if (!existing.rows[0]) {
+      await db.query(
+        `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, position_x, position_y, config, execution_order)
+         VALUES ($1, 'read_landing_leads', 'read_landing_leads', $2, 120, 360, '{}'::jsonb, 99)`,
+        [campaign.id, NODE_NAME],
+      );
+    }
+    return { campaignId: campaign.id, nodeName: NODE_NAME };
+  });
+}
