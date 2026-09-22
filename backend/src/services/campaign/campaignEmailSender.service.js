@@ -27,6 +27,7 @@ import {
   markSendQuotaUncertain,
 } from '../quota/sendQuotaReservation.service.js';
 import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
+import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
 
 class CampaignEmailSenderService {
   constructor() {
@@ -804,6 +805,45 @@ class CampaignEmailSenderService {
         status: 'success',
         messageId: snapshot.messageId || null,
         isReplay: true,
+      };
+    }
+
+    // Giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt cho tài khoản gửi này — khác hạn mức GÓI vừa giữ chỗ
+    // ở reserveSendQuota() trên (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 3).
+    //
+    // Kiểm SAU khi giữ chỗ quota gói thành công, KHÔNG PHẢI trước (lệch với vị trí lệnh giao ghi:
+    // "sau khi settings được nạp, trước reserveSendQuota()"). Lý do: quota GÓI hết hạn hẳn trả
+    // `resetAt: null` (phải DỪNG HẲN run, xem campaignRun.service.js isPlanQuotaExceeded branch),
+    // còn giới hạn tài khoản LUÔN có `resetAt` hợp lệ (một mốc trong tương lai). Đặt kiểm tài khoản
+    // TRƯỚC reserveSendQuota() nghĩa là khi cả hai điều kiện cùng đúng, lượt gửi luôn bị chặn bởi
+    // giới hạn tài khoản trước — never chạm tới reserveSendQuota() để phát hiện gói đã hết hạn —
+    // dừng hẳn bị hoãn tới tận lúc giới hạn tài khoản tự reset (tối đa ~24h), đúng thứ lệnh giao
+    // dặn tránh ("hai cơ chế dùng chung một đường thoát, lẫn nhau là khách hết gói mà tưởng chỉ chờ
+    // tới 00:00"). Phát hiện lúc viết ca kiểm bắt buộc của chính Việc 3, không có trong plan gốc.
+    const accountDailyCheck = await checkAccountDailyLimit({
+      channel: 'email',
+      accountId: settings.id,
+      limit: settings.user_daily_send_limit ?? null,
+    });
+    if (!accountDailyCheck.allowed) {
+      if (reservationActive) {
+        // Đã giữ chỗ quota gói nhưng không dùng tới — trả lại, không markSendQuotaSending().
+        await releaseSendQuota({
+          reservationId: reservation.id,
+          failureCode: 'ACCOUNT_DAILY_LIMIT_EXCEEDED',
+          reason: 'account_daily_send_limit_exceeded',
+        }).catch((e) => {
+          console.warn('[CampaignEmailSender] releaseSendQuota (account daily limit) error:', e.message);
+        });
+      }
+      return {
+        to: customer?.email || '',
+        status: 'failed',
+        errorType: 'plan_send_limit_exceeded',
+        error: `Tài khoản ${settings.email} đã đạt giới hạn ${accountDailyCheck.limit} tin/ngày bạn tự đặt. Sẽ gửi tiếp sau 00:00.`,
+        period: null,
+        resetAt: accountDailyCheck.resetAt.toISOString(),
+        limitType: 'account_daily',
       };
     }
 

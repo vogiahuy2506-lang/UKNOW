@@ -1630,6 +1630,7 @@ class CampaignZaloSenderService {
     const perHour = Number.parseInt(perHourRaw, 10);
     const delayMin = Number.parseInt(delayMinRaw, 10);
     const delayMax = Number.parseInt(delayMaxRaw, 10);
+    const dailyLimit = Number.parseInt(account.user_daily_send_limit, 10);
     return {
       id: String(account.id),
       userId: Number.isFinite(Number(account.id_user)) ? Number(account.id_user) : null,
@@ -1648,6 +1649,15 @@ class CampaignZaloSenderService {
       /** Delay tối đa (ms) giữa 2 tin cá nhân trên TK; undefined nếu không cấu hình. */
       ...(Number.isFinite(delayMax) && delayMax >= 0
         ? { zaloPersonalOutboundDelayMaxMs: delayMax }
+        : {}),
+      /**
+       * Giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt cho tài khoản (mọi kênh, không riêng cá nhân);
+       * undefined nếu NULL/0 trong DB. Đường gửi thật (enforceZaloOutboundPolicyBeforeSend trong
+       * campaignRun.service.js) đọc field này thẳng từ zaloAccountPolicyHint — không tra thêm DB
+       * mỗi tin. Cả 3 kênh (personal/friend_request/group) đều truyền hint chứa field này.
+       */
+      ...(Number.isFinite(dailyLimit) && dailyLimit > 0
+        ? { userDailySendLimit: dailyLimit }
         : {}),
     };
   }

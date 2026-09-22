@@ -39,6 +39,7 @@ jest.unstable_mockModule('../systemEmail.util.js', () => ({
 
 const {
   isPlanQuotaReason,
+  isAccountDailyQuotaReason,
   channelLabelFromQuotaReason,
   notifyCampaignQuotaPaused,
   notifyCampaignQuotaStopped,
@@ -78,6 +79,25 @@ describe('campaignQuotaPauseNotify.util', () => {
       expect(channelLabelFromQuotaReason('plan_quota_email_daily')).toBe('email');
       expect(channelLabelFromQuotaReason('plan_quota_zalo_monthly')).toBe('Zalo');
       expect(channelLabelFromQuotaReason('plan_quota')).toBe('gửi');
+    });
+
+    // PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 3/4 — giới hạn tự đặt cho TÀI KHOẢN GỬI, khác hạn
+    // mức GÓI. reason PHẢI mang tiền tố `plan_quota_` (isPlanQuotaReason) để không bị
+    // notifyCampaignQuotaPaused() bỏ qua âm thầm — isAccountDailyQuotaReason chỉ QUYẾT ĐỊNH CÂU CHỮ,
+    // không quyết định có gửi mail hay không.
+    it('isAccountDailyQuotaReason nhận diện đúng reason chứa "account_daily"', () => {
+      expect(isAccountDailyQuotaReason('plan_quota_account_daily')).toBe(true);
+      expect(isAccountDailyQuotaReason('plan_quota_daily')).toBe(false);
+      expect(isAccountDailyQuotaReason('plan_quota_monthly')).toBe(false);
+      expect(isAccountDailyQuotaReason('quiet_hours')).toBe(false);
+      expect(isAccountDailyQuotaReason(null)).toBe(false);
+      expect(isAccountDailyQuotaReason(undefined)).toBe(false);
+    });
+
+    it('reason "account_daily" KHÔNG tiền tố plan_quota_ vẫn bị isPlanQuotaReason coi là không phải plan quota — lưới bảo vệ khỏi bug đã gặp lúc code', () => {
+      // Đây chính là chuỗi lệnh giao gốc ghi cho persistQuotaDeferYieldSlot({reason: 'account_daily'}).
+      // Nếu dùng nguyên văn, notifyCampaignQuotaPaused() sẽ bỏ qua, khách không nhận được mail nào.
+      expect(isPlanQuotaReason('account_daily')).toBe(false);
     });
 
     it('QUOTA_DEFER_CLEAR_KEYS gồm cờ notify', () => {
@@ -147,6 +167,36 @@ describe('campaignQuotaPauseNotify.util', () => {
       expect(result).toEqual({ skipped: true, reason: 'not_plan_quota' });
       expect(mockSendSystemEmail).not.toHaveBeenCalled();
       expect(mockGetRunMetadata).not.toHaveBeenCalled();
+    });
+
+    it('reason plan_quota_account_daily → buildCampaignPausedEmail nhận isAccountLimit:true + settingsUrl (Cài đặt kênh, không phải topup)', async () => {
+      const resetAt = new Date('2026-09-23T17:00:00.000Z');
+      const result = await notifyCampaignQuotaPaused({
+        runId: 10,
+        campaignId: 5,
+        reason: 'plan_quota_account_daily',
+        resetAt,
+      });
+
+      expect(result).toEqual({ sent: true });
+      expect(mockBuildPaused).toHaveBeenCalledWith(
+        expect.objectContaining({
+          isAccountLimit: true,
+          settingsUrl: expect.stringContaining('/app/settings/channels'),
+          resetAt,
+        })
+      );
+    });
+
+    it('reason plan_quota_daily (hạn mức GÓI) → isAccountLimit:false', async () => {
+      await notifyCampaignQuotaPaused({
+        runId: 10,
+        campaignId: 5,
+        reason: 'plan_quota_daily',
+        resetAt: new Date(),
+      });
+
+      expect(mockBuildPaused).toHaveBeenCalledWith(expect.objectContaining({ isAccountLimit: false }));
     });
 
     it('thiếu owner email → skip sau khi claim cờ', async () => {

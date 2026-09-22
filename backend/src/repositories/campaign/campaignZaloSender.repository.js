@@ -156,7 +156,8 @@ class CampaignZaloSenderRepository {
       `SELECT id, id_user, display_name, status, is_active, is_default, cookie_text,
               zalo_personal_outbound_per_hour_limit,
               zalo_personal_outbound_delay_min_ms,
-              zalo_personal_outbound_delay_max_ms
+              zalo_personal_outbound_delay_max_ms,
+              user_daily_send_limit
        FROM zalo_settings
        WHERE id = $1
          ${isAdmin ? '' : 'AND id_user = $2'}

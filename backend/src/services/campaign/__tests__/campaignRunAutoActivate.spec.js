@@ -65,8 +65,41 @@ jest.unstable_mockModule('../../../repositories/customer/customerMutation.reposi
 jest.unstable_mockModule('../../../repositories/customer/customerZaloTracking.repository.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../../repositories/zalo/zaloTemplate.repository.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../../repositories/zalo/zaloSetting.repository.js', () => ({ default: {} }));
-jest.unstable_mockModule('../../../repositories/sendQuota.repository.js', () => ({ findStaleCampaignRunReservations: jest.fn() }));
-jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({ checkSendQuota: jest.fn() }));
+// PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22: campaignRun.service.js giờ import checkAccountDailyLimit
+// (accountDailyLimit.service.js), file đó dùng lại getVnDayBoundaries() của
+// sendQuotaReservation.service.js — module ấy import RẤT NHIỀU export khác từ sendQuota.repository.js
+// (không liên quan tới test này) nên phải khai đủ, nếu không ESM báo "does not provide an export
+// named …" ngay lúc liên kết. Test này không thật sự gọi tới nhánh giới hạn/ngày theo tài khoản.
+jest.unstable_mockModule('../../../repositories/sendQuota.repository.js', () => ({
+  findStaleCampaignRunReservations: jest.fn(),
+  countEmailSentTodayByAccount: jest.fn(),
+  countZaloSentTodayByAccount: jest.fn(),
+  acquireWorkspaceQuotaLock: jest.fn(),
+  createReservation: jest.fn(),
+  findReservationByKey: jest.fn(),
+  findReservationById: jest.fn(),
+  transitionReservationState: jest.fn(),
+  validateReservationKey: jest.fn(),
+  validateProviderReference: jest.fn(),
+  validateFailureCode: jest.fn(),
+  countEmailSentTodayWithLedger: jest.fn(),
+  countZaloSentTodayWithLedger: jest.fn(),
+  countEmailSentInCycleWithLedger: jest.fn(),
+  countZaloSentInCycleWithLedger: jest.fn(),
+  countCombinedSentInCycleWithLedger: jest.fn(),
+  countEmployeeSentTodayWithLedger: jest.fn(),
+  countEmployeeSentInCycleWithLedger: jest.fn(),
+  getWorkspacePlanLimits: jest.fn(),
+  getEmployeeSendLimits: jest.fn(),
+  getWalletAvailableBalance: jest.fn(),
+}));
+// sendQuotaReservation.service.js cũng cần 3 export dưới đây từ userSendLimit.util.js để liên kết.
+jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
+  checkSendQuota: jest.fn(),
+  nextVnMidnight: jest.fn(() => new Date('2026-01-01T17:00:00.000Z')),
+  nextVnMonthStart: jest.fn(() => new Date('2026-02-01T17:00:00.000Z')),
+  _clearQuotaCache: jest.fn(),
+}));
 jest.unstable_mockModule('../../payment/topupWallet.service.js', () => ({ maybeDebitWalletForSend: jest.fn() }));
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');

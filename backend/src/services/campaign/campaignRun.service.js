@@ -50,6 +50,7 @@ import {
   neutralizeUnresolvedTemplateVariables,
 } from '../../utils/templateVariableAutoMap.util.js';
 import { findStaleCampaignRunReservations } from '../../repositories/sendQuota.repository.js';
+import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
 import { shouldReplaceRecipientProgressCache } from './recipientProgressCache.util.js';
 import { buildContinuousDataNodeItemKey } from '../../utils/campaignContinuousDedupKey.util.js';
 
@@ -1478,13 +1479,38 @@ class CampaignRunService {
        */
       const computeNextAllowedZaloSendAtByQuietHours = (nowMs) =>
         this.zaloRateLimiter.computeNextAllowedSendAtByQuietHours(nowMs);
-      const enforceZaloOutboundPolicyBeforeSend = ({
+      const enforceZaloOutboundPolicyBeforeSend = async ({
         accountId,
         channel,
         zaloAccountPolicyHint = null,
         requiresPhoneLookup = true,
-      }) =>
-        this.zaloRateLimiter.enforceOutboundPolicyBeforeSend({
+      }) => {
+        // Giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt cho TÀI KHOẢN — khác policy theo GIỜ dưới đây
+        // (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 4). Đọc từ CHÍNH account model đã nạp sẵn
+        // (zaloAccountPolicyHint.userDailySendLimit, map từ zalo_settings.user_daily_send_limit ở
+        // mapCampaignZaloAccount()) — không tra thêm DB mỗi tin, không unconditional query mới
+        // trong hot path (11 unit spec không mock repository/DB mới đã đỏ khi thử cách đó).
+        // zalo_friend_request/zalo_group trước PR này KHÔNG truyền hint — đã bổ sung ở 2 lời gọi
+        // enforceZaloOutboundPolicyBeforeSend bên dưới; an toàn vì resolveOutboundPolicy() chỉ đọc
+        // field giờ/tài khoản của hint khi channel === 'zalo_personal' (zaloRateLimiter.js), nên 2
+        // kênh kia không bị ảnh hưởng bởi việc giờ có thêm hint.
+        const dailyLimit = zaloAccountPolicyHint?.userDailySendLimit ?? null;
+        const dailyCheck = await checkAccountDailyLimit({ channel: 'zalo', accountId, limit: dailyLimit });
+        if (!dailyCheck.allowed) {
+          const waitMs = Math.max(0, dailyCheck.resetAt.getTime() - Date.now());
+          // reason PHẢI giữ tiền tố `plan_quota_` — notifyCampaignQuotaPaused() bỏ qua âm thầm
+          // (không gửi mail) mọi reason không bắt đầu bằng `plan_quota` (isPlanQuotaReason()).
+          // Dùng đúng chuỗi 'account_daily' như lệnh giao ghi sẽ làm khách không nhận được thông
+          // báo tạm dừng nào cả — phát hiện lúc đọc campaignQuotaPauseNotify.util.js, không có
+          // trong plan gốc.
+          await this.persistQuotaDeferYieldSlot({
+            runId,
+            campaignId,
+            waitMs,
+            reason: 'plan_quota_account_daily',
+          });
+        }
+        return this.zaloRateLimiter.enforceOutboundPolicyBeforeSend({
           accountId,
           channel,
           zaloAccountPolicyHint,
@@ -1494,6 +1520,7 @@ class CampaignRunService {
           ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
           runId,
         });
+      };
       /**
        * Ghi nhận một lần gửi thành công để tính quota theo giờ.
        *
@@ -6814,6 +6841,9 @@ class CampaignRunService {
               await enforceZaloOutboundPolicyBeforeSend({
                 accountId: workingAccount.id,
                 channel: 'zalo_friend_request',
+                // Chỉ dùng cho giới hạn/ngày tự đặt (Việc 4) — vô hại với policy giờ vì
+                // resolveOutboundPolicy() chỉ đọc field giờ của hint khi channel === 'zalo_personal'.
+                zaloAccountPolicyHint: workingAccount,
               });
               // PR-3: tạo placeholder SAU khi qua cổng nhịp gửi (khớp khuôn nhánh cá nhân/nhóm)
               // nhưng vẫn TRƯỚC lệnh gửi thật — PR-Q4b cần placeholder tồn tại trước để gắn
@@ -7426,7 +7456,12 @@ class CampaignRunService {
                 throw new Error(`Không tìm thấy nhóm ${groupId} trong tài khoản Zalo hiện tại`);
               }
               await assertSendQuotaOrYield('zalo');
-              await enforceZaloOutboundPolicyBeforeSend({ accountId: account.id, channel: 'zalo_group' });
+              await enforceZaloOutboundPolicyBeforeSend({
+                accountId: account.id,
+                channel: 'zalo_group',
+                // Chỉ dùng cho giới hạn/ngày tự đặt (Việc 4) — vô hại với policy giờ, lý do như trên.
+                zaloAccountPolicyHint: account,
+              });
               zaloMessageId = await createZaloMessageTrackingRecord({
                 nodeId: node.id,
                 channel: 'zalo_group',

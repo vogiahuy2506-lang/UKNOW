@@ -538,17 +538,32 @@ function formatResetAtVi(resetAt) {
  * @param {{ fullName?: string|null, campaignName: string, channelLabel: string, resetAt: Date|string, topupUrl: string }} input
  * @returns {{ subject: string, html: string }}
  */
-export function buildCampaignPausedEmail({ fullName, campaignName, channelLabel, resetAt, topupUrl }) {
+export function buildCampaignPausedEmail({
+  fullName, campaignName, channelLabel, resetAt, topupUrl,
+  isAccountLimit = false, settingsUrl = null,
+}) {
   const resetStr = formatResetAtVi(resetAt);
   const channel = channelLabel || 'gửi';
   const name = campaignName || 'Chiến dịch';
+
+  // Giới hạn tự đặt cho TÀI KHOẢN GỬI (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22) khác hẳn hạn mức
+  // GÓI: câu chữ và nút hành động phải đúng cái khách cần làm, nếu không họ đi mua thêm gói một
+  // cách vô ích cho một giới hạn chính họ đã đặt.
+  const introText = isAccountLimit
+    ? `Chiến dịch <strong>«${name}»</strong> đang tạm dừng vì một tài khoản gửi dùng trong chiến dịch này đã đạt giới hạn <strong>${channel}/ngày mà bạn tự đặt</strong> — không phải hạn mức của gói.`
+    : `Chiến dịch <strong>«${name}»</strong> đang tạm dừng vì hết lượt <strong>${channel}</strong> của gói hiện tại.`;
+  const ctaBoxText = isAccountLimit
+    ? 'Đây là giới hạn bạn tự đặt cho tài khoản gửi — mua thêm hạn mức gói sẽ KHÔNG giúp gửi tiếp ngay. Muốn gửi nhiều hơn, hãy vào Cài đặt kênh và nâng giới hạn/ngày cho tài khoản này.'
+    : 'Muốn chạy tiếp ngay thay vì chờ reset hạn mức? Mua thêm lượt gửi để chiến dịch tiếp tục.';
+  const ctaUrl = isAccountLimit && settingsUrl ? settingsUrl : topupUrl;
+  const ctaLabel = isAccountLimit ? 'Mở Cài đặt kênh →' : 'Mua thêm hạn mức →';
 
   const content = `
     <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
       Xin chào <strong style="color:#f97316">${fullName || 'bạn'}</strong>,
     </p>
     <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
-      Chiến dịch <strong>«${name}»</strong> đang tạm dừng vì hết lượt <strong>${channel}</strong> của gói hiện tại.
+      ${introText}
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border:2px solid #fed7aa;border-radius:12px;margin-bottom:24px">
@@ -568,7 +583,7 @@ export function buildCampaignPausedEmail({ fullName, campaignName, channelLabel,
       <tr>
         <td style="padding:14px 16px">
           <p style="margin:0;font-size:13px;color:#991b1b;line-height:1.6">
-            Muốn chạy tiếp ngay thay vì chờ reset hạn mức? Mua thêm lượt gửi để chiến dịch tiếp tục.
+            ${ctaBoxText}
           </p>
         </td>
       </tr>
@@ -577,10 +592,10 @@ export function buildCampaignPausedEmail({ fullName, campaignName, channelLabel,
     <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
       <tr>
         <td style="text-align:center">
-          <a href="${topupUrl}"
+          <a href="${ctaUrl}"
              style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
                     padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
-            Mua thêm hạn mức →
+            ${ctaLabel}
           </a>
         </td>
       </tr>

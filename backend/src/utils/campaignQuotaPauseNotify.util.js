@@ -26,6 +26,20 @@ export function isPlanQuotaReason(reason) {
 }
 
 /**
+ * `reason` do hoãn vì giới hạn/ngày NGƯỜI DÙNG TỰ ĐẶT cho tài khoản gửi (`plan_quota_account_daily`
+ * — vẫn mang tiền tố `plan_quota` để đi qua cổng `isPlanQuotaReason` và không bị `notifyCampaignQuotaPaused`
+ * bỏ qua âm thầm), khác với hạn mức GÓI (`plan_quota_daily`/`_monthly`/`_period`...).
+ * PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 3/4: mail tạm dừng phải nói đúng cái gì bị chạm, nếu
+ * không khách sẽ đi mua thêm gói một cách vô ích cho một giới hạn họ tự đặt.
+ *
+ * @param {unknown} reason
+ * @returns {boolean}
+ */
+export function isAccountDailyQuotaReason(reason) {
+  return String(reason || '').includes('account_daily');
+}
+
+/**
  * Map reason `plan_quota_*` → nhãn kênh cho email.
  *
  * @param {unknown} reason
@@ -97,12 +111,17 @@ export async function notifyCampaignQuotaPaused({ runId, campaignId, reason, res
     return { skipped: true, reason: 'no_owner_email' };
   }
 
+  const isAccountLimit = isAccountDailyQuotaReason(reason);
   const { subject, html } = buildCampaignPausedEmail({
     fullName: owner.fullName,
     campaignName: owner.campaignName,
     channelLabel: channelLabelFromQuotaReason(reason),
     resetAt,
     topupUrl: frontendAppUrl('/app/topup'),
+    // Giới hạn tự đặt cho tài khoản gửi: mua thêm hạn mức GÓI không giúp gửi tiếp — trỏ sang
+    // đúng chỗ sửa (Cài đặt kênh → tài khoản gửi), không phải trang mua thêm.
+    isAccountLimit,
+    settingsUrl: frontendAppUrl('/app/settings/channels'),
   });
 
   await sendSystemEmail({ to: owner.email, subject, html });
