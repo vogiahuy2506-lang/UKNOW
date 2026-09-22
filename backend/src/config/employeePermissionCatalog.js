@@ -27,7 +27,7 @@ export const PERMISSION_CATALOG = {
     descriptionKey: 'permissions.description.campaigns_view',
     dependencies: [],
     riskLevel: 'low',
-    defaultForNewEmployee: false,
+    defaultForNewEmployee: true,
   },
   campaigns_create: {
     key: 'campaigns_create',
@@ -198,7 +198,7 @@ export const PERMISSION_CATALOG = {
     descriptionKey: 'permissions.description.reports_view',
     dependencies: [],
     riskLevel: 'low',
-    defaultForNewEmployee: false,
+    defaultForNewEmployee: true,
   },
   ai_assistant_use: {
     key: 'ai_assistant_use',
@@ -239,6 +239,33 @@ export const PERMISSION_CATALOG = {
 };
 
 export const VALID_PERMISSION_KEYS = Object.freeze(Object.keys(PERMISSION_CATALOG));
+
+/**
+ * Quyền bật sẵn cho nhân viên VỪA được thêm vào team.
+ *
+ * Cờ `defaultForNewEmployee` có từ 20/08/2026 nhưng chưa nơi nào đọc: hai đường tạo
+ * membership đều không truyền `permissions`, nên hàng mới nhận mặc định của cột
+ * (`'[]'::jsonb` trên production) → nhân viên vào không gian công ty thấy trang trắng.
+ * Đó chính là phản ánh "add nhân viên xong không xem được chiến dịch của công ty".
+ * Bản DB đầu tiên (migration 001) từng mặc định `campaigns_view: true`; chỗ này đưa
+ * quyết định đó về lại code, nơi đọc được và test được.
+ *
+ * Chỉ hai quyền CHỈ-ĐỌC: xem chiến dịch + mở Tổng quan. Đi đôi với nhau vì migration 167
+ * đã chốt `reports_view <- campaigns_view` (không có nó thì Tổng quan hỏng giữa chừng).
+ * Mọi quyền chạm dữ liệu khách, kênh gửi hay tiền vẫn phải chủ tự tick.
+ */
+export const DEFAULT_NEW_EMPLOYEE_PERMISSION_KEYS = Object.freeze(
+  VALID_PERMISSION_KEYS.filter((key) => PERMISSION_CATALOG[key].defaultForNewEmployee === true)
+);
+
+/**
+ * @returns {Record<string, boolean>} đủ 22 khoá, chỉ các khoá mặc định là true.
+ */
+export function buildDefaultNewEmployeePermissions() {
+  return normalizePermissions(
+    Object.fromEntries(DEFAULT_NEW_EMPLOYEE_PERMISSION_KEYS.map((key) => [key, true]))
+  );
+}
 
 /**
  * Sanitize and normalize permission object:

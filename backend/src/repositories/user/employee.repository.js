@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { generateReferralCode } from '../../utils/affiliateReferral.util.js';
+import { buildDefaultNewEmployeePermissions } from '../../config/employeePermissionCatalog.js';
 
 const EMPLOYEE_SELECT = `
   u.id, u.username, u.email, u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
@@ -111,13 +112,16 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
     );
     const newUser = userResult.rows[0];
 
+    // Truyền quyền mặc định tường minh: mặc định của cột lệch nhau giữa các môi trường
+    // (migration 001 `{campaigns_view:true,…}`, schema.sql `'{}'`, production `'[]'`) nên
+    // để DB tự điền là để kết quả phụ thuộc máy chạy.
     const memberResult = await client.query(
-      `INSERT INTO user_members (owner_id, employee_id)
-       VALUES ($1, $2)
+      `INSERT INTO user_members (owner_id, employee_id, permissions)
+       VALUES ($1, $2, $3::jsonb)
        RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt",
                  daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
                  daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
-      [ownerId, newUser.id]
+      [ownerId, newUser.id, JSON.stringify(buildDefaultNewEmployeePermissions())]
     );
 
     await client.query('COMMIT');
@@ -131,15 +135,18 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
 }
 
 export async function linkExistingUserAsEmployee(ownerId, userId) {
-  // Không cần transaction hay UPDATE role — chỉ tạo quan hệ user_members
+  // Không cần transaction hay UPDATE role — chỉ tạo quan hệ user_members.
+  // Quyền mặc định chỉ áp cho hàng MỚI: nhánh ON CONFLICT là người từng ở trong team
+  // (gỡ khỏi team là DELETE hàng, nên tới đây chỉ còn ca membership đang bị khoá) —
+  // link lại không được ghi đè bộ quyền chủ đã chỉnh.
   const result = await db.query(
-    `INSERT INTO user_members (owner_id, employee_id)
-     VALUES ($1, $2)
+    `INSERT INTO user_members (owner_id, employee_id, permissions)
+     VALUES ($1, $2, $3::jsonb)
      ON CONFLICT (owner_id, employee_id) DO UPDATE SET status = 'active', updated_at = CURRENT_TIMESTAMP
      RETURNING employee_id AS "id", permissions, status AS "memberStatus", created_at AS "joinedAt",
                daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
                daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
-    [ownerId, userId]
+    [ownerId, userId, JSON.stringify(buildDefaultNewEmployeePermissions())]
   );
   return result.rows[0];
 }

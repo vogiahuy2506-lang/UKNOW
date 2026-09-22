@@ -364,8 +364,9 @@ const EmployeeManagement = () => {
   };
 
   // ── Thêm nhân viên mới ────────────────────────────────────────────────────
-  // Thêm xong là nhân viên mới có 0 quyền (mặc định cố ý) — mở thẳng tab Phân quyền để chủ cấp luôn,
-  // không để họ tưởng "Đang hoạt động" là xong.
+  // Nhân viên mới chỉ có sẵn hai quyền chỉ-xem (campaigns_view + reports_view, xem
+  // `employeePermissionCatalog.js`) — mở thẳng tab Phân quyền để chủ cấp nốt phần việc
+  // thật của người đó, không để họ tưởng "Đang hoạt động" là xong.
   const openAddedEmployeeForPermissions = (list, { id, email }) => {
     const added = findEmployeeAfterAdd(list, { id, email });
     if (added) openEmployeeModal(added, 'permissions');

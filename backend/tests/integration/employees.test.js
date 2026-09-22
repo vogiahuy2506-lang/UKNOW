@@ -1088,3 +1088,108 @@ describe('Contribution tenant isolation (Phần D)', () => {
     expect(ownerId).toBeNull();
   });
 });
+
+/**
+ * Quyền mặc định cho nhân viên MỚI (22/09/2026).
+ *
+ * Trước đây hai đường thêm nhân viên đều không truyền `permissions` nên hàng nhận mặc định
+ * của cột — `'[]'::jsonb` trên production — và nhân viên vào không gian công ty thấy trang
+ * trắng. Cờ `defaultForNewEmployee` trong catalog có từ 20/08 nhưng chưa nơi nào đọc.
+ */
+describe('Nhân viên mới có sẵn quyền xem', () => {
+  const permissionsOf = async (ownerId, employeeId) => {
+    const res = await db.query(
+      `SELECT permissions FROM user_members WHERE owner_id = $1 AND employee_id = $2`,
+      [ownerId, employeeId]
+    );
+    return res.rows[0]?.permissions;
+  };
+
+  it('tạo tài khoản mới → có campaigns_view + reports_view, KHÔNG có quyền ghi/chạm dữ liệu khách', async () => {
+    const { owner, token } = await setupOwnerWithPlan({ maxEmployees: 5 });
+
+    const res = await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'defperm01', email: 'defperm@test.local', fullName: 'Mặc Định' });
+    expect(res.status).toBe(201);
+
+    const u = await db.query(`SELECT id FROM users WHERE email = $1`, ['defperm@test.local']);
+    const permissions = await permissionsOf(owner.id, u.rows[0].id);
+
+    expect(permissions.campaigns_view).toBe(true);
+    expect(permissions.reports_view).toBe(true);
+    // Bộ mặc định phải là CHỈ-ĐỌC: mấy quyền dưới đây đụng người nhận thật, dữ liệu khách,
+    // kênh gửi và tiền — chủ phải tự tick.
+    for (const key of [
+      'campaigns_create', 'campaigns_run', 'customers', 'leads', 'email_settings',
+      'zalo_settings', 'ai_assistant_use', 'marketplace_purchase', 'inbox_reply',
+    ]) {
+      expect(permissions[key]).toBe(false);
+    }
+  });
+
+  it('link tài khoản có sẵn → cũng nhận đúng bộ quyền mặc định đó', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const target = await createUser({ username: 'linkdef', email: 'linkdef@test.local', role: 'user' });
+
+    const res = await request(app)
+      .post('/api/employees/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'linkdef@test.local' });
+    expect(res.status).toBe(201);
+
+    const permissions = await permissionsOf(owner.id, target.id);
+    expect(permissions.campaigns_view).toBe(true);
+    expect(permissions.reports_view).toBe(true);
+    expect(permissions.campaigns_run).toBe(false);
+  });
+
+  // Phép kiểm đi hết đường thật — đúng câu khách phản ánh: "add nhân viên xong
+  // không xem được chiến dịch của công ty".
+  it('nhân viên vừa được thêm gọi /api/campaigns thấy NGAY chiến dịch của công ty, chủ không phải cấp thêm gì', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const target = await createUser({ username: 'seecamp', email: 'seecamp@test.local', role: 'user' });
+    await db.query(
+      `INSERT INTO campaigns (id_user, campaign_name, campaign_type, status)
+       VALUES ($1, 'Chiến dịch của công ty', 'email', 'draft')`,
+      [owner.id]
+    );
+
+    await request(app)
+      .post('/api/employees/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'seecamp@test.local' })
+      .expect(201);
+
+    const empToken = await loginAs(target);
+    const list = await request(app)
+      .get('/api/campaigns')
+      .set('Authorization', `Bearer ${empToken}`)
+      .set('X-Owner-Context', String(owner.id));
+
+    expect(list.status).toBe(200);
+    const names = (list.body.data?.items || []).map((c) => c.campaignName);
+    expect(names).toContain('Chiến dịch của công ty');
+  });
+
+  it('link lại người đã ở trong team KHÔNG ghi đè bộ quyền chủ đã chỉnh', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'relink', email: 'relink@test.local', role: 'user' });
+    // Chủ đã cố ý thu hồi hết quyền (bấm "Bỏ hết" rồi Lưu → object đủ khoá, toàn false).
+    await addMembership(owner.id, emp.id, {
+      status: 'inactive',
+      permissions: { campaigns_view: false, reports_view: false },
+    });
+
+    await request(app)
+      .post('/api/employees/link')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: 'relink@test.local' })
+      .expect(201);
+
+    const permissions = await permissionsOf(owner.id, emp.id);
+    expect(permissions.campaigns_view).toBe(false);
+    expect(permissions.reports_view).toBe(false);
+  });
+});
