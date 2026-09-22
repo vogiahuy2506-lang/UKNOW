@@ -146,6 +146,12 @@ jest.unstable_mockModule('../../../utils/campaignQuotaPauseNotify.util.js', () =
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');
 
+// Cùng lý do với campaignRunZaloAccountDailyLimit.spec.js: CI 22/09 đỏ đúng test ĐẦU TIÊN của file
+// (hai test sau xanh) vì lần `executeCampaign()` đầu trong một worker phải nạp + JIT cả cây phụ
+// thuộc của campaignRun.service.js. Cục bộ test đó chạy 30 ms — chính nó cũng là test chậm nhất
+// file, đúng dấu hiệu khởi động nguội.
+jest.setTimeout(30_000);
+
 describe('CampaignRun Zalo kết bạn (zalo_friend_request) — giới hạn gửi/ngày theo tài khoản (Việc 4)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
