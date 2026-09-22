@@ -5043,7 +5043,7 @@ export default {
       bcc: 'BCC',
       sendMode: 'Hình thức gửi',
       emailList: 'Danh sách email gửi',
-      sendLimit: 'Giới hạn sửa',
+      sendLimit: 'Giới hạn chạy thử',
       nodeName: 'Tên node',
       nodeNamePlaceholder: 'Gửi Email',
       fromEmail: 'Email gửi (SMTP đã cấu hình)',
@@ -5103,10 +5103,10 @@ export default {
       selectColumnData: '-- Chọn cột --',
       templateMappingNote: 'Lưu ý: Mapping biến template để thay thế dữ liệu động trong email.',
       subjectLabel: 'Tiêu đề email',
-      maxSendLimit: 'Giới hạn số tin gửi',
-      maxMessagesPerRun: 'Số tin nhắn tối đa trong một lần chạy',
-      maxSendNote: 'Giới hạn số lượng email tối đa sẽ gửi trong một lần chạy chiến dịch để tránh spam hoặc quá tải.',
-      unlimitedByDefault: 'Mặc định sẽ gửi không giới hạn số lượng. Bật để thiết lập giới hạn.',
+      maxSendLimit: 'Giới hạn số tin khi chạy thử',
+      maxMessagesPerRun: 'Số tin tối đa mỗi lần bấm chạy thử',
+      maxSendNote: 'Đây là giới hạn cho nút chạy thử trong trình dựng — chiến dịch chạy thật KHÔNG đọc trường này. Giới hạn gửi thật của chiến dịch đặt ở Cài đặt kênh → tài khoản gửi.',
+      unlimitedByDefault: 'Không bật thì nút chạy thử vẫn tự giới hạn tối đa 20 tin để tránh bắn nhầm cho cả danh sách. Bật để tự đặt số khác.',
     },
 
     // Mapping data section

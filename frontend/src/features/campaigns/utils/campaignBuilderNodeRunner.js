@@ -1304,8 +1304,17 @@ export const createCampaignNodeRunner = (deps) => {
 
     if (nodeType === 'send_email') {
       const rows = Array.isArray(ctx.sheetRows) ? ctx.sheetRows : [];
+      // Trần cứng cho nút "chạy thử" (KHÔNG áp cho chiến dịch thật — engine thật không đọc
+      // maxSendCount/maxSendEnabled, đây chỉ là đường Builder gọi trực tiếp để xem thử) khi người
+      // dùng KHÔNG bật giới hạn riêng. Trước đây `maxSendEnabled=false` nghĩa là gửi cho TOÀN BỘ
+      // danh sách không giới hạn — đây từng là phanh duy nhất của nút chạy thử; gỡ trắng ô nhập là
+      // bấm thử một node bắn preview cho cả 1.000 người (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22
+      // Việc 8). Không đụng config.maxSendEnabled/maxSendCount đã lưu trên node — chỉ đổi cách hiểu.
+      const TEST_RUN_DEFAULT_MAX_SEND = 20;
       const maxSendEnabled = !!config.maxSendEnabled;
-      const maxSend = Math.max(1, parseInt(config.maxSendCount || 100, 10));
+      const maxSend = maxSendEnabled
+        ? Math.max(1, parseInt(config.maxSendCount || 100, 10))
+        : TEST_RUN_DEFAULT_MAX_SEND;
       const recipientMode = 'multiple';
       const sendAllAtOnce = config.sendMode !== 'schedule';
       const rawSteps = Array.isArray(config.emailSteps) ? config.emailSteps : [];
@@ -1358,7 +1367,9 @@ export const createCampaignNodeRunner = (deps) => {
           .filter(Boolean);
       }
 
-      const limitedRecipients = maxSendEnabled ? recipients.slice(0, maxSend) : recipients;
+      // LUÔN cắt — maxSend đã có giá trị hợp lệ ở cả hai nhánh (do người dùng đặt, hoặc trần mặc
+      // định của nút chạy thử) nên không còn nhánh "gửi hết, không giới hạn" nào nữa.
+      const limitedRecipients = recipients.slice(0, maxSend);
       const uniqueRecipients = Array.from(new Set(
         limitedRecipients.map((item) => String(item || '').trim().toLowerCase()).filter(Boolean)
       ));
@@ -1659,7 +1670,9 @@ export const createCampaignNodeRunner = (deps) => {
                 skipped: skippedCount,
                 bounced: bouncedCount,
                 totalAttempts,
-                limitedTo: maxSendEnabled ? maxSend : null,
+                // maxSend luôn được áp (trần mặc định khi người dùng không tự đặt) — báo đúng
+                // giá trị thật, không còn null giả vờ "không giới hạn".
+                limitedTo: maxSend,
               },
             },
           },
@@ -1780,7 +1793,7 @@ export const createCampaignNodeRunner = (deps) => {
           bccField: config.bccSource === 'node' ? config.bccField : null,
           usedMappingTemplateId: ctx.mapping?.templateId || null,
           maxSendEnabled,
-          maxSendCount: maxSendEnabled ? maxSend : null,
+          maxSendCount: maxSend,
         },
         output: {
           items: sendResults,
@@ -1789,7 +1802,7 @@ export const createCampaignNodeRunner = (deps) => {
             attempted: sendResults.length,
             sent: sendResults.filter((r) => r.status === 'success').length,
             totalAttempts: limitedRecipients.length * steps.length,
-            limitedTo: maxSendEnabled ? maxSend : null,
+            limitedTo: maxSend,
           },
         },
       };

@@ -5034,7 +5034,7 @@ export default {
       bcc: 'BCC',
       sendMode: 'Send Mode',
       emailList: 'Email List',
-      sendLimit: 'Send Limit',
+      sendLimit: 'Test-Run Limit',
       nodeName: 'Node name',
       nodeNamePlaceholder: 'Send Email',
       fromEmail: 'From Email (Configured SMTP)',
@@ -5094,10 +5094,10 @@ export default {
       selectColumnData: '-- Select column --',
       templateMappingNote: 'Note: Map template variables to replace dynamic data in emails.',
       subjectLabel: 'Email Subject',
-      maxSendLimit: 'Send Limit',
-      maxMessagesPerRun: 'Max messages per run',
-      maxSendNote: 'Limit the maximum number of emails to send in one campaign run to avoid spam or overload.',
-      unlimitedByDefault: 'Unlimited by default. Enable to set a limit.',
+      maxSendLimit: 'Test-Run Send Limit',
+      maxMessagesPerRun: 'Max messages per test run',
+      maxSendNote: 'This limit only applies to the test-run button in the builder — a real campaign run does NOT read this field. The real send limit is set in Channel Settings → sender account.',
+      unlimitedByDefault: 'When off, the test-run button still caps at 20 messages to avoid accidentally blasting the whole list. Enable to set a different number.',
     },
 
     // Mapping data section
