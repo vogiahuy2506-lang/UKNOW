@@ -25,6 +25,9 @@ describe('buildCampaignPausedEmail — hạn mức GÓI (mặc định, isAccoun
     expect(html).not.toContain('bạn tự đặt');
     expect(html).not.toContain('Cài đặt kênh');
     expect(subject).toContain('Chiến dịch tháng 9');
+    // Nhánh gói KHÔNG được đổi câu chữ khi thêm nhánh tự-đặt — giữ nguyên từng chữ.
+    expect(subject).toBe('[Founder AI] Chiến dịch «Chiến dịch tháng 9» tạm dừng vì hết lượt Zalo');
+    expect(html).toContain('Chiến dịch tạm dừng — hết hạn mức gửi');
   });
 });
 
@@ -63,5 +66,22 @@ describe('buildCampaignPausedEmail — giới hạn NGƯỜI DÙNG TỰ ĐẶT (
     const { html, subject } = buildCampaignPausedEmail({ ...BASE, isAccountLimit: true, settingsUrl });
     expect(html).toContain('Chiến dịch tháng 9');
     expect(subject).toContain('Chiến dịch tháng 9');
+  });
+
+  /**
+   * Bản đầu của PR-2 chỉ sửa THÂN thư. Tiêu đề và phụ đề vẫn cứng "hết lượt …" / "hết hạn mức
+   * gửi", nên hai bản thư render ra `subject` GIỐNG HỆT NHAU — phát hiện 23/09 khi dựng ảnh minh
+   * hoạ. Tiêu đề là thứ khách đọc trước tiên trong hộp thư, nên đây không phải chi tiết nhỏ: nó
+   * vẫn đẩy khách đi mua thêm gói cho một giới hạn chính họ đặt.
+   */
+  it('TIÊU ĐỀ và phụ đề cũng phải nói đúng, không chỉ thân thư', () => {
+    const plan = buildCampaignPausedEmail(BASE);
+    const own = buildCampaignPausedEmail({ ...BASE, isAccountLimit: true, settingsUrl });
+
+    expect(own.subject).not.toBe(plan.subject);
+    expect(own.subject).not.toContain('hết lượt');
+    expect(own.subject).toContain('bạn tự đặt');
+    expect(own.html).toContain('Chiến dịch tạm dừng — chạm giới hạn bạn tự đặt');
+    expect(own.html).not.toContain('hết hạn mức gửi');
   });
 });

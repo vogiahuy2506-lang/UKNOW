@@ -607,10 +607,20 @@ export function buildCampaignPausedEmail({
     </p>
   `;
 
+  // Tiêu đề + phụ đề phải đi theo `isAccountLimit` như phần thân. Bản đầu của PR-2 chỉ sửa thân
+  // thư, còn hai chỗ này vẫn cứng "hết lượt ... / hết hạn mức gửi" — mà tiêu đề mới là thứ khách
+  // đọc TRƯỚC TIÊN trong hộp thư. Phát hiện 23/09 lúc dựng ảnh minh hoạ cho báo cáo: hai bản thư
+  // render ra `subject` giống hệt nhau từng ký tự, đúng câu "tạm dừng vì hết lượt Zalo" mà cả PR
+  // này sinh ra để thôi nói. Khách vẫn sẽ đi mua thêm gói một cách vô ích, chỉ khác là sau khi mở
+  // thư ra mới biết.
   return {
-    subject: `[${SENDER_NAME}] Chiến dịch «${name}» tạm dừng vì hết lượt ${channel}`,
+    subject: isAccountLimit
+      ? `[${SENDER_NAME}] Chiến dịch «${name}» tạm dừng vì chạm giới hạn ${channel}/ngày bạn tự đặt`
+      : `[${SENDER_NAME}] Chiến dịch «${name}» tạm dừng vì hết lượt ${channel}`,
     html: buildBaseTemplate({
-      subtitle: 'Chiến dịch tạm dừng — hết hạn mức gửi',
+      subtitle: isAccountLimit
+        ? 'Chiến dịch tạm dừng — chạm giới hạn bạn tự đặt'
+        : 'Chiến dịch tạm dừng — hết hạn mức gửi',
       content,
       footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
     }),
