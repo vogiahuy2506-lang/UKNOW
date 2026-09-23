@@ -140,9 +140,15 @@ class EmailSettingsSmtpService {
       ? parseInt(payload.customerId, 10)
       : null;
 
+    let resolvedWorkspaceOwnerId = payload.workspaceOwnerId ?? payload.workspace_owner_id ?? null;
     if (campaignIdNum) {
-      const ownership = await emailSettingsRepository.getOwnedCampaign(client, campaignIdNum, payload.userId);
-      if (!ownership) campaignIdNum = null;
+      const lookupUser = resolvedWorkspaceOwnerId || payload.userId;
+      const ownership = await emailSettingsRepository.getOwnedCampaign(client, campaignIdNum, lookupUser);
+      if (!ownership) {
+        campaignIdNum = null;
+      } else if (!resolvedWorkspaceOwnerId && ownership.workspace_owner_id) {
+        resolvedWorkspaceOwnerId = ownership.workspace_owner_id;
+      }
     }
 
     if (!resolvedCustomerId && payload.to) {
@@ -151,6 +157,7 @@ class EmailSettingsSmtpService {
     }
 
     const emailMessageId = await emailSettingsRepository.insertEmailMessage(client, {
+      workspaceOwnerId: resolvedWorkspaceOwnerId,
       campaignId: campaignIdNum,
       runId: runIdNum,
       customerId: resolvedCustomerId,
@@ -715,6 +722,7 @@ class EmailSettingsSmtpService {
                   let loggedMessageId = null;
                   if (shouldSaveMessageLog) {
                     loggedMessageId = await emailSettingsRepository.insertEmailMessage(txClient, {
+                      workspaceOwnerId,
                       campaignId: campaignId || null,
                       runId: normalizedRunId,
                       customerId: customerId || null,
@@ -817,6 +825,7 @@ class EmailSettingsSmtpService {
             if (shouldSaveMessageLog) {
               loggedMessageId = await this.logEmailSentWithClient(txClient, {
                 userId: workspaceOwnerId,
+                workspaceOwnerId,
                 campaignId,
                 customerId,
                 emailTemplateId,
@@ -862,6 +871,7 @@ class EmailSettingsSmtpService {
         try {
           await this.logEmailSent({
             userId: workspaceOwnerId,
+            workspaceOwnerId,
             campaignId,
             customerId,
             emailTemplateId,

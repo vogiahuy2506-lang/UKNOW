@@ -2712,6 +2712,7 @@ class CampaignRunService {
             status: 'queued',
             ...(trackingMetadata && typeof trackingMetadata === 'object' ? trackingMetadata : {}),
           },
+          workspaceOwnerId: campaign?.workspace_owner_id || campaign?.id_user || null,
         });
         return insertResultId || null;
       };

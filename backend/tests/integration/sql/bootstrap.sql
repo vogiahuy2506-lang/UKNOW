@@ -1049,7 +1049,7 @@ CREATE INDEX idx_email_messages_brand_domain
 -- ─── Zalo messages — outbound (group/person) ───────────────────────────
 CREATE TABLE zalo_messages (
   id                  BIGSERIAL PRIMARY KEY,
-  id_campaign         BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
+  id_campaign         BIGINT       CONSTRAINT zalo_messages_campaign_fkey REFERENCES campaigns(id) ON DELETE SET NULL,
   id_run              BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
   id_customer         BIGINT       REFERENCES customers(id) ON DELETE SET NULL,
   id_node             BIGINT,
@@ -3597,3 +3597,11 @@ CREATE INDEX IF NOT EXISTS idx_email_messages_setting_sent
 CREATE INDEX IF NOT EXISTS idx_zalo_messages_account_sent
   ON zalo_messages (account_id, sent_at)
   WHERE account_id IS NOT NULL AND NOT is_preview;
+
+-- --- Migration 239: workspace_owner_id for email_messages and zalo_messages ---
+ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS workspace_owner_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE zalo_messages  ADD COLUMN IF NOT EXISTS workspace_owner_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_email_messages_owner_sent ON email_messages(workspace_owner_id, sent_at);
+CREATE INDEX IF NOT EXISTS idx_zalo_messages_owner_sent  ON zalo_messages(workspace_owner_id, sent_at);
+

@@ -299,7 +299,7 @@ class EmailSettingsRepository {
   }
 
   async getOwnedCampaign(client, campaignId, userId) {
-    const result = await client.query('SELECT id FROM campaigns WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 LIMIT 1', [
+    const result = await client.query('SELECT id, COALESCE(workspace_owner_id, id_user) AS workspace_owner_id FROM campaigns WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 LIMIT 1', [
       campaignId,
       userId,
     ]);
@@ -312,14 +312,19 @@ class EmailSettingsRepository {
       : (payload.reservationId != null ? Number.parseInt(payload.reservationId, 10) : null);
     const quotaReservationId = Number.isFinite(rawReservationId) ? rawReservationId : null;
 
+    const rawOwnerId = payload.workspaceOwnerId != null
+      ? Number.parseInt(payload.workspaceOwnerId, 10)
+      : (payload.workspace_owner_id != null ? Number.parseInt(payload.workspace_owner_id, 10) : null);
+    const workspaceOwnerId = Number.isFinite(rawOwnerId) ? rawOwnerId : null;
+
     const status = payload.status || 'sent';
     const result = await client.query(
       `INSERT INTO email_messages
         (id_campaign, id_run, id_customer, id_email_template, id_email_setting, message_id,
          tracking_token, recipient_email, recipient_name, sender_email, sender_name, subject,
          body_html, body_text, status, sent_at, id_node, email_step,
-         from_address, reply_to, brand_domain, is_preview, quota_reservation_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+         from_address, reply_to, brand_domain, is_preview, quota_reservation_id, workspace_owner_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
        RETURNING id`,
       [
         payload.campaignId,
@@ -345,6 +350,7 @@ class EmailSettingsRepository {
         payload.brandDomain || null,
         Boolean(payload.isPreview),
         quotaReservationId,
+        workspaceOwnerId,
       ]
     );
     return result.rows[0]?.id || null;

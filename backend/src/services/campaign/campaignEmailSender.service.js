@@ -969,6 +969,7 @@ class CampaignEmailSenderService {
           const failedTrackingToken = uuidv4();
           await emailSettingsController.logEmailSent({
             userId: campaign.id_user,
+            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
             campaignId: campaign.id,
             customerId,
             emailTemplateId: null,
@@ -1011,6 +1012,7 @@ class CampaignEmailSenderService {
           const failedTrackingToken = uuidv4();
           await emailSettingsController.logEmailSent({
             userId: campaign.id_user,
+            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
             campaignId: campaign.id,
             customerId,
             emailTemplateId: null,
@@ -1077,6 +1079,7 @@ class CampaignEmailSenderService {
             persistSource: async (client) => {
               await emailSettingsSmtpService.logEmailSentWithClient(client, {
                 userId: campaign.id_user,
+                workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
                 campaignId: campaign.id,
                 customerId,
                 emailTemplateId: null,
@@ -1113,6 +1116,7 @@ class CampaignEmailSenderService {
         try {
           await emailSettingsController.logEmailSent({
             userId: campaign.id_user,
+            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
             campaignId: campaign.id,
             customerId,
             emailTemplateId: null,
@@ -1183,6 +1187,7 @@ class CampaignEmailSenderService {
           persistSource: shouldSaveMessageLog
             ? (client) => emailSettingsSmtpService.logEmailSentWithClient(client, {
                 userId: campaign.id_user,
+                workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
                 campaignId: campaign.id,
                 customerId,
                 emailTemplateId: templateId,
@@ -1212,6 +1217,7 @@ class CampaignEmailSenderService {
       try {
         await emailSettingsController.logEmailSent({
           userId: campaign.id_user,
+          workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
           campaignId: campaign.id,
           customerId,
           emailTemplateId: templateId,

@@ -2549,6 +2549,7 @@ class ZaloSettingsController {
                     },
                     isPreview: true,
                     quotaReservationId: reservation.id,
+                    workspaceOwnerId: userId,
                   }, txClient);
                   return { sourceKey: `zalo_preview:${insertedId}` };
                 },
@@ -2584,6 +2585,7 @@ class ZaloSettingsController {
                   response: sent.response || null,
                 },
                 isPreview: true,
+                workspaceOwnerId: userId,
               });
             } catch (logErr) {
               console.error('[ZaloPreview] Log personal message error:', logErr);
