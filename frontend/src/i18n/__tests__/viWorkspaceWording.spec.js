@@ -43,14 +43,11 @@ const THA_TEAM = [
 ];
 
 /**
- * Cả khối `aboutPage` (57 khoá) trong vi.js GIỐNG HỆT bản tiếng Anh — chưa dịch dòng nào. Nhưng nó
- * là KHOÁ CHẾT: không component nào, không route nào, không `useI18n('aboutPage')` nào gọi tới
- * (đo 23/09/2026: 0 nơi tham chiếu ngoài chính hai file từ điển). Không ai đọc nên không phải lỗi
- * hiển thị, và dịch 57 câu quảng cáo cho một trang không tồn tại là công vô ích.
- * Việc đúng là XOÁ cả khối ở vi.js lẫn en.js — để sếp quyết, nên tạm tha ở đây.
- * Khi xoá xong thì bỏ luôn ngoại lệ này; danh sách chỉ được phép ngắn đi.
+ * (Từng có thêm một ngoại lệ cho khối `aboutPage`: 57 khoá ở vi.js giống hệt bản tiếng Anh, và
+ * 126 khoá ở en.js. Đo 23/09/2026 ra KHOÁ CHẾT — không component, không route, không
+ * `useI18n('aboutPage')`, 0 nơi tham chiếu ngoài chính hai file từ điển. Đã xoá cả hai khối thay vì
+ * dịch, nên ngoại lệ đó không còn lý do tồn tại. Đừng thêm lại.)
  */
-const THA_NHANH_KHOA_CHET = (duong) => duong.startsWith('aboutPage.');
 
 describe('từ điển tiếng Việt', () => {
   it('không câu nào còn chữ "workspace"', () => {
@@ -63,9 +60,7 @@ describe('từ điển tiếng Việt', () => {
 
   it('không câu nào còn chữ "team" (trừ tên gói)', () => {
     const dinh = thuThapChuoi(vi)
-      .filter(({ duong, chuoi }) => /\bteam\b/i.test(chuoi)
-        && !THA_TEAM.includes(duong)
-        && !THA_NHANH_KHOA_CHET(duong))
+      .filter(({ duong, chuoi }) => /\bteam\b/i.test(chuoi) && !THA_TEAM.includes(duong))
       .map(({ duong, chuoi }) => `${duong}: ${chuoi}`);
 
     expect(dinh).toEqual([]);
