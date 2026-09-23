@@ -91,7 +91,7 @@ describe('validateUpload', () => {
         detail: { totalBytes: 30 * MB, remainingBytes: 10 * MB },
       };
       const msg = getUploadValidationErrorMessage(validation, null, 'vi');
-      expect(msg).toContain('Workspace chỉ còn 10 MB');
+      expect(msg).toContain('Dung lượng lưu trữ chỉ còn 10 MB');
       expect(msg).toContain('30 MB');
     });
 

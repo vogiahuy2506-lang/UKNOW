@@ -808,7 +808,7 @@ describe('FormEditorPage component', () => {
 
       await waitFor(() =>
         expect(toast.error).toHaveBeenCalledWith(
-          'Workspace đã dùng hết dung lượng lưu trữ. Hãy xoá bớt tệp cũ hoặc nâng gói.'
+          'Đã dùng hết dung lượng lưu trữ. Hãy xoá bớt tệp cũ hoặc nâng gói.'
         )
       );
       // Banner cũ vẫn còn nguyên — lỗi upload logo không đụng tới banner

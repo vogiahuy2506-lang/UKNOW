@@ -85,7 +85,7 @@ export function getUploadValidationErrorMessage(validation, t, locale = 'vi') {
     }
     return locale === 'en'
       ? `Workspace only has ${remaining} remaining. Selected files total ${total}. Please remove old files or upgrade your plan.`
-      : `Workspace chỉ còn ${remaining}. Tệp bạn chọn nặng ${total}. Hãy xoá bớt tệp cũ hoặc nâng gói.`;
+      : `Dung lượng lưu trữ chỉ còn ${remaining}. Tệp bạn chọn nặng ${total}. Hãy xoá bớt tệp cũ hoặc nâng gói.`;
   }
 
   return locale === 'en' ? 'File upload validation failed.' : 'Tệp tải lên không hợp lệ.';

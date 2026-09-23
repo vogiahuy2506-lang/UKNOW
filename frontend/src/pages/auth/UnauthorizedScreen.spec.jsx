@@ -20,7 +20,7 @@ const { default: UnauthorizedScreen } = await import('./UnauthorizedScreen');
 
 const EMPLOYEE = { type: 'employee', ownerId: 10, ownerName: 'Công ty A', permissions: {} };
 const RECHECK = 'Tôi đã được cấp quyền — kiểm tra lại';
-const GENERIC = 'Tài khoản hoặc vai trò workspace hiện tại của bạn chưa có quyền mở trang này.';
+const GENERIC = 'Tài khoản hoặc vai trò hiện tại của bạn chưa có quyền mở trang này.';
 
 const renderScreen = (props) => render(<MemoryRouter><UnauthorizedScreen {...props} /></MemoryRouter>);
 
