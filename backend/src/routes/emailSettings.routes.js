@@ -32,7 +32,12 @@ router.post('/',
     body('smtpHost').optional().trim(),
     body('smtpPort').optional({ nullable: true, checkFalsy: true }).isInt({ min: 1, max: 65535 }).withMessage('SMTP port không hợp lệ'),
     body('smtpUsername').optional().trim(),
-    body('smtpPassword').optional().trim()
+    body('smtpPassword').optional().trim(),
+    // Cùng trần kỹ thuật với PUT — form hiện ô này cả khi thêm mới, nên POST cũng phải chặn
+    // số vô lý thay vì để nó chạy thẳng xuống cột INTEGER.
+    body('userDailySendLimit').optional({ nullable: true })
+      .isInt({ min: 1, max: 100000 })
+      .withMessage('Giới hạn gửi/ngày phải từ 1 đến 100000')
   ],
   handleValidationErrors,
   emailSettingsController.create.bind(emailSettingsController)

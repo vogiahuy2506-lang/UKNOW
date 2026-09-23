@@ -112,7 +112,7 @@ class EmailSettingsRepository {
 
   async create(userId, payload, client = null) {
     const queryable = client || db;
-    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, emailMode, platformPrefix } =
+    const { name, email, replyTo, smtpHost, smtpPort, smtpUsername, smtpPassword, useTls, dailyLimit, hourlyLimit, emailMode, platformPrefix, userDailySendLimit } =
       payload;
     const encryptedSmtpPassword = encryptSmtpSecret(smtpPassword);
     const brandDomain = String(email || '').split('@')[1]?.toLowerCase() || null;
@@ -120,10 +120,13 @@ class EmailSettingsRepository {
     const resolvedReplyTo = replyTo || email;
     const result = await queryable.query(
       `INSERT INTO email_settings
-        (id_user, name, email, reply_to, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status, brand_domain, email_mode, platform_prefix)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', $12, $13, $14)
+        (id_user, name, email, reply_to, smtp_host, smtp_port, smtp_username, smtp_password, use_tls, daily_limit, hourly_limit, is_verified, status, brand_domain, email_mode, platform_prefix, user_daily_send_limit)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, true, 'active', $12, $13, $14, $15)
        RETURNING *`,
-      [userId, name, email, resolvedReplyTo, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, brandDomain, emailMode || 'platform', platformPrefix || 'no-reply']
+      // `user_daily_send_limit` phải có trong INSERT này, không chỉ trong update(): form Cài đặt
+      // kênh hiện ô "Giới hạn gửi/ngày" cả khi THÊM tài khoản mới, nên thiếu cột ở đây thì khách
+      // nhập số, bấm Lưu, được báo thành công — mà giá trị rơi mất im lặng (soát 23/09).
+      [userId, name, email, resolvedReplyTo, smtpHost, smtpPort, smtpUsername, encryptedSmtpPassword, useTls, dailyLimit, hourlyLimit, brandDomain, emailMode || 'platform', platformPrefix || 'no-reply', userDailySendLimit ?? null]
     );
     return result.rows[0];
   }

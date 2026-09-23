@@ -14,6 +14,13 @@ import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser } from './helpers/db.js';
 
+// POST /api/email-settings mã hoá mật khẩu SMTP nên đòi SMTP_SECRET_KEY; không đặt thì route trả
+// 500 chứ không phải lỗi của giới hạn gửi/ngày. Cùng khuôn với email.test.js:53.
+const originalSmtpSecretKey = process.env.SMTP_SECRET_KEY;
+process.env.SMTP_SECRET_KEY = process.env.SMTP_SECRET_KEY
+  || process.env.JWT_SECRET
+  || 'integration-test-smtp-secret-key';
+
 let app;
 
 beforeAll(() => {
@@ -63,6 +70,76 @@ const auditRow = async (action, entityId) => {
   );
   return rows[0] || null;
 };
+
+/**
+ * Soát 23/09 (PR-4): form Cài đặt kênh hiện ô "Giới hạn gửi/ngày" cả khi THÊM tài khoản mới, nhưng
+ * `create()` của repository không có cột `user_daily_send_limit` trong INSERT — khách nhập số, bấm
+ * Lưu, được báo thành công, mà giá trị rơi mất im lặng. Cùng họ với hai lỗi đã bắt trước đó (PATCH
+ * body rỗng xoá trắng, và COALESCE không xoá được NULL): đều là "báo lưu xong mà không lưu".
+ */
+describe('POST /api/email-settings — userDailySendLimit lúc TẠO MỚI', () => {
+  const createBody = (overrides = {}) => ({
+    name: 'Tài khoản mới',
+    email: `new${Date.now()}@example.com`,
+    smtpHost: 'smtp.example.com',
+    smtpPort: 587,
+    smtpUsername: 'user',
+    smtpPassword: 'secret',
+    useTls: true,
+    // 'smtp' để né nhánh 'platform' (đòi DEFAULT_FROM_DOMAIN — biến môi trường không đặt trong test,
+    // không liên quan tới giới hạn gửi/ngày). Cùng lý do với createEmailAccount() ở đầu file.
+    emailMode: 'smtp',
+    ...overrides,
+  });
+
+  it('tạo mới KÈM giới hạn → lưu đúng vào DB ngay từ lần tạo', async () => {
+    const owner = await createUser({ role: 'user', username: 'email_create_with_limit' });
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .post('/api/email-settings')
+      .set('Authorization', `Bearer ${token}`)
+      .send(createBody({ userDailySendLimit: 80 }));
+
+    expect(res.status).toBe(201);
+    const { rows } = await db.query(
+      'SELECT user_daily_send_limit FROM email_settings WHERE id = $1',
+      [res.body.data.id]
+    );
+    expect(rows[0].user_daily_send_limit).toBe(80);
+  });
+
+  it('tạo mới KHÔNG kèm giới hạn → NULL, không vỡ', async () => {
+    const owner = await createUser({ role: 'user', username: 'email_create_no_limit' });
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .post('/api/email-settings')
+      .set('Authorization', `Bearer ${token}`)
+      .send(createBody());
+
+    expect(res.status).toBe(201);
+    const { rows } = await db.query(
+      'SELECT user_daily_send_limit FROM email_settings WHERE id = $1',
+      [res.body.data.id]
+    );
+    expect(rows[0].user_daily_send_limit).toBeNull();
+  });
+
+  it('tạo mới với số vô lý (0) → 400, không tạo tài khoản', async () => {
+    const owner = await createUser({ role: 'user', username: 'email_create_bad_limit' });
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .post('/api/email-settings')
+      .set('Authorization', `Bearer ${token}`)
+      .send(createBody({ userDailySendLimit: 0 }));
+
+    expect(res.status).toBe(400);
+    const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM email_settings WHERE id_user = $1', [owner.id]);
+    expect(rows[0].n).toBe(0);
+  });
+});
 
 describe('PUT /api/email-settings/:id — userDailySendLimit', () => {
   it('không gửi field này → cột giữ nguyên (không bị vô tình xoá bởi COALESCE null)', async () => {

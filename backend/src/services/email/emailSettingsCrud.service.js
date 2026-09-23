@@ -218,6 +218,9 @@ class EmailSettingsCrudService {
         emailMode,
         brandDomain,
         isVerified: useSmtp ? true : true,
+        // Form Cài đặt kênh hiện ô giới hạn cả khi thêm mới — không truyền xuống thì số khách vừa
+        // nhập rơi mất im lặng ngay ở lần tạo đầu tiên (soát 23/09).
+        userDailySendLimit: payload.userDailySendLimit ?? null,
       }, client);
       await client.query('COMMIT');
       return this.mapMutationResult(item);
