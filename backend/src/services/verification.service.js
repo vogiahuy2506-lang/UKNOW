@@ -152,7 +152,7 @@ function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48 }
       Xin chào,
     </p>
     <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
-      <strong style="color:#f97316">${ownerName}</strong> đã mời bạn tham gia team trên <strong>${PRODUCT_NAME}</strong>.
+      <strong style="color:#f97316">${ownerName}</strong> đã mời bạn tham gia nhóm trên <strong>${PRODUCT_NAME}</strong>.
       Nhấn nút bên dưới để kích hoạt tài khoản và đặt mật khẩu của bạn.
     </p>
 
@@ -195,7 +195,7 @@ function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48 }
   `;
 
   return buildBaseTemplate({
-    title: 'Lời mời tham gia team',
+    title: 'Lời mời tham gia nhóm',
     subtitle: 'Team Invitation',
     content,
     footerNote: 'Email này được gửi tự động từ hệ thống.',
@@ -411,7 +411,7 @@ class VerificationService {
 
   async sendInvitationEmail(email, token, ownerName) {
     const activationUrl = `${FRONTEND_URL}/activate?token=${token}`;
-    const subject = `[${PRODUCT_NAME}] Bạn được mời tham gia team`;
+    const subject = `[${PRODUCT_NAME}] Bạn được mời tham gia nhóm`;
     const html = buildInvitationEmailHtml({ ownerName, activationUrl });
     return sendSystemEmail({ to: email, subject, html });
   }

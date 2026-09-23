@@ -202,7 +202,7 @@ describe('cột Quyền trong bảng', () => {
 describe('lỗi khi tạo tài khoản mới', () => {
   it('EMAIL_ALREADY_REGISTERED → sang tab Link, email điền sẵn, hiện gợi ý (không toast đỏ)', async () => {
     setEmployees([]);
-    const message = 'Email này đã có tài khoản Founder AI. Hãy dùng tab "Link tài khoản có sẵn" để thêm người này vào team.';
+    const message = 'Email này đã có tài khoản Founder AI. Hãy dùng tab "Link tài khoản có sẵn" để thêm người này vào nhóm.';
     api.createEmployee.mockRejectedValue(httpError({ success: false, code: 'EMAIL_ALREADY_REGISTERED', message }));
     const user = await renderPage();
 

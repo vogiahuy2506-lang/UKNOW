@@ -51,31 +51,51 @@ const liet_ke_file = (thuMuc, ra = []) => {
   return ra;
 };
 
-const tim_cau_lan_tieng_anh = () => {
+/**
+ * Bắt chuỗi trên CẢ FILE, không theo từng dòng.
+ *
+ * Bản đầu của phép quét này soi từng dòng một, nên chỉ thấy chuỗi mở và đóng trong cùng một dòng.
+ * Nó bỏ lọt 2 chỗ trong thân bài hướng dẫn `helpSeed.data.js` — thân bài là template literal trải
+ * dài hàng chục dòng, dấu nháy ngược mở ở dòng này và đóng ở dòng khác. Nghĩa là phép quét báo
+ * "sạch" trong khi bài viết khách đọc vẫn còn nguyên chữ cũ: đúng loại điểm mù làm test xanh mà
+ * việc chưa xong.
+ */
+const CAC_CHUOI = /`(?:\\[\s\S]|[^`\\])*`|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g;
+
+const tim_cau_lan_tieng_anh = (tu) => {
   const dinh = [];
   for (const duong of liet_ke_file(THU_MUC_SRC)) {
     const tuongDoi = path.relative(THU_MUC_SRC, duong).split(path.sep).join('/');
     if (NGOAI_LE.includes(tuongDoi)) continue;
 
-    fs.readFileSync(duong, 'utf8').split(/\r?\n/).forEach((dong, i) => {
-      if (!/workspace/i.test(dong)) return;
-      if (/^\s*(\/\/|\*|\/\*)/.test(dong)) return;
-      if (/console\.(log|warn|error|info|debug)/.test(dong)) return;
+    const noiDung = fs.readFileSync(duong, 'utf8');
+    for (const khop of noiDung.matchAll(CAC_CHUOI)) {
+      const chuoi = khop[0].slice(1, -1);
+      if (!tu.test(chuoi) || !CO_DAU_TIENG_VIET.test(chuoi)) continue;
 
-      for (const khop of dong.matchAll(/(['"`])((?:(?!\1).)*)\1/g)) {
-        const chuoi = khop[2];
-        if (/workspace/i.test(chuoi) && CO_DAU_TIENG_VIET.test(chuoi)) {
-          dinh.push(`${tuongDoi}:${i + 1}  ${chuoi}`);
-        }
-      }
-    });
+      const dongBatDau = noiDung.slice(0, khop.index).split('\n').length;
+      const dongGoc = noiDung.split('\n')[dongBatDau - 1] ?? '';
+      if (/^\s*(\/\/|\*|\/\*)/.test(dongGoc)) continue;
+      if (/console\.(log|warn|error|info|debug)/.test(dongGoc)) continue;
+
+      dinh.push(`${tuongDoi}:${dongBatDau}  ${chuoi.slice(0, 120)}`);
+    }
   }
   return dinh;
 };
 
 describe('câu tiếng Việt trả cho người dùng', () => {
+  // `(?<![\w.])…(?!\w)` loại định danh trong mã: `workspace_owner_id`, `cr.workspace_owner_id`,
+  // `getWorkspaceContext`. Cần thiết vì phép quét đọc cả template literal nhiều dòng, mà truy vấn
+  // SQL dài thường vừa có tên cột đó vừa có chú thích tiếng Việt — bắt cả cụm là báo động nhầm.
   it('không câu nào còn chữ "workspace"', () => {
-    expect(tim_cau_lan_tieng_anh()).toEqual([]);
+    expect(tim_cau_lan_tieng_anh(/(?<![\w.])workspace(?!\w)/i)).toEqual([]);
+  });
+
+  // "team" bị gạt cùng đợt, cùng lý do. Ở backend không có tên gói nào lọt vào chuỗi tiếng Việt nên
+  // không cần danh sách tha — khác frontend, nơi "Gói Team" là tên sản phẩm phải giữ.
+  it('không câu nào còn chữ "team"', () => {
+    expect(tim_cau_lan_tieng_anh(/\bteam\b/i)).toEqual([]);
   });
 
   it('phép quét thật sự đọc được mã nguồn (tự kiểm: quét ra ít nhất vài trăm file .js)', () => {

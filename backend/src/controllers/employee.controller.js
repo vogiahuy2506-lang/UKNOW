@@ -221,7 +221,7 @@ export async function deleteEmployee(req, res) {
     const ownerId = req.user.id;
     await employeeService.deleteEmployee(ownerId, Number(req.params.id));
     await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_REMOVED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), {});
-    return res.json({ success: true, message: 'Đã xóa nhân viên khỏi team' });
+    return res.json({ success: true, message: 'Đã xóa nhân viên khỏi nhóm' });
   } catch (err) {
     return handleServiceError(res, err);
   }
@@ -254,7 +254,7 @@ export async function teamOverview(req, res) {
   try {
     // owner_id from token only — never from query/body
     if (req.user.activeContext?.type === 'employee') {
-      return res.status(403).json({ success: false, message: 'Chỉ chủ tài khoản xem được tổng quan team' });
+      return res.status(403).json({ success: false, message: 'Chỉ chủ tài khoản xem được tổng quan nhóm' });
     }
     const ownerId = req.user.id;
     const data = await employeeService.getTeamOverview(ownerId);
@@ -274,7 +274,7 @@ export async function teamContribution(req, res) {
     if (req.user.activeContext?.type === 'employee') {
       return res.status(403).json({
         success: false,
-        message: 'Chỉ chủ tài khoản xem được đóng góp team',
+        message: 'Chỉ chủ tài khoản xem được đóng góp nhóm',
       });
     }
     // Ignore client-supplied ownerId (query/body) — intentional security boundary.

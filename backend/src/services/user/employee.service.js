@@ -91,7 +91,7 @@ export const EMAIL_ALREADY_REGISTERED_CODE = 'EMAIL_ALREADY_REGISTERED';
 export const USERNAME_TAKEN_CODE = 'USERNAME_TAKEN';
 
 const EMAIL_ALREADY_REGISTERED_MESSAGE =
-  'Email này đã có tài khoản Founder AI. Hãy dùng tab "Link tài khoản có sẵn" để thêm người này vào team.';
+  'Email này đã có tài khoản Founder AI. Hãy dùng tab "Link tài khoản có sẵn" để thêm người này vào nhóm.';
 const USERNAME_TAKEN_MESSAGE =
   'Tên đăng nhập này đã có người dùng. Hãy chọn tên khác (ví dụ thêm tên công ty phía sau).';
 
