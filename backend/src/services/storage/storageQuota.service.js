@@ -7,7 +7,7 @@ export const BYTES_PER_GB = 1073741824;
 
 export class StorageQuotaExceededError extends Error {
   constructor(usage) {
-    super('Workspace đã dùng hết dung lượng lưu trữ');
+    super('Đã dùng hết dung lượng lưu trữ');
     this.name = 'StorageQuotaExceededError';
     this.code = 'STORAGE_QUOTA_EXCEEDED';
     this.status = 409;
@@ -30,7 +30,7 @@ export function resolveWorkspaceOwnerId(user) {
     : user?.id;
   const parsed = Number(ownerId);
   if (!Number.isSafeInteger(parsed) || parsed <= 0) {
-    throw new Error('Không xác định được workspace owner');
+    throw new Error('Không xác định được chủ tài khoản');
   }
   return parsed;
 }

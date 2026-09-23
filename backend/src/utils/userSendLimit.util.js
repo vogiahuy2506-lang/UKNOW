@@ -532,7 +532,7 @@ export async function checkSendQuota({
           limit: 0,
           currentCount: 0,
           resetAt: null,
-          message: 'Tài khoản nhân viên đang tạm khóa hoặc không còn trong workspace.',
+          message: 'Tài khoản nhân viên đang tạm khóa hoặc không còn trong không gian làm việc.',
           billingUserId,
         });
       }
@@ -547,7 +547,7 @@ export async function checkSendQuota({
             limit: 0,
             currentCount: 0,
             resetAt: null,
-            message: `Hạn mức gửi ${channelLabel} trong ngày của bạn là 0. Vui lòng liên hệ chủ workspace.`,
+            message: `Hạn mức gửi ${channelLabel} trong ngày của bạn là 0. Vui lòng liên hệ chủ tài khoản.`,
             billingUserId,
           });
         }
@@ -573,7 +573,7 @@ export async function checkSendQuota({
             limit: 0,
             currentCount: 0,
             resetAt: null,
-            message: `Hạn mức gửi ${channelLabel} trong tháng của bạn là 0. Vui lòng liên hệ chủ workspace.`,
+            message: `Hạn mức gửi ${channelLabel} trong tháng của bạn là 0. Vui lòng liên hệ chủ tài khoản.`,
             billingUserId,
           });
         }
@@ -593,7 +593,7 @@ export async function checkSendQuota({
             limit: empMonthlyLimit,
             currentCount: empMonthlyCount,
             resetAt: cycleEnd instanceof Date ? cycleEnd : (cycleEnd ? new Date(cycleEnd) : nextVnMonthStart()),
-            message: `Đã đạt giới hạn gửi ${channelLabel} trong tháng của nhân viên (${empMonthlyCount}/${empMonthlyLimit} ${unitLabel}). Vui lòng liên hệ chủ workspace.`,
+            message: `Đã đạt giới hạn gửi ${channelLabel} trong tháng của nhân viên (${empMonthlyCount}/${empMonthlyLimit} ${unitLabel}). Vui lòng liên hệ chủ tài khoản.`,
             billingUserId,
           });
         }

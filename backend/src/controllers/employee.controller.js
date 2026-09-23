@@ -254,7 +254,7 @@ export async function teamOverview(req, res) {
   try {
     // owner_id from token only — never from query/body
     if (req.user.activeContext?.type === 'employee') {
-      return res.status(403).json({ success: false, message: 'Chỉ chủ workspace xem được tổng quan team' });
+      return res.status(403).json({ success: false, message: 'Chỉ chủ tài khoản xem được tổng quan team' });
     }
     const ownerId = req.user.id;
     const data = await employeeService.getTeamOverview(ownerId);
@@ -274,7 +274,7 @@ export async function teamContribution(req, res) {
     if (req.user.activeContext?.type === 'employee') {
       return res.status(403).json({
         success: false,
-        message: 'Chỉ chủ workspace xem được đóng góp team',
+        message: 'Chỉ chủ tài khoản xem được đóng góp team',
       });
     }
     // Ignore client-supplied ownerId (query/body) — intentional security boundary.

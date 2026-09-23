@@ -61,7 +61,7 @@ class AiCreditMeterService {
       const member = memberRows[0];
       if (member) {
         if (member.status !== 'active') {
-          const error = new Error('Tài khoản nhân viên đang tạm khóa hoặc không còn trong workspace.');
+          const error = new Error('Tài khoản nhân viên đang tạm khóa hoặc không còn trong không gian làm việc.');
           error.status = 403;
           error.code = 'EMPLOYEE_INACTIVE';
           throw error;
@@ -224,7 +224,7 @@ class AiCreditMeterService {
 
   _employeeLimitExhausted({ used = 0, limit = 0, limitType = 'daily' } = {}) {
     const periodLabel = limitType === 'daily' ? 'ngày' : 'kỳ';
-    const error = new Error(`Bạn đã dùng hết hạn mức AI trong ${periodLabel} (${used}/${limit}) do chủ workspace thiết lập.`);
+    const error = new Error(`Bạn đã dùng hết hạn mức AI trong ${periodLabel} (${used}/${limit}) do chủ tài khoản thiết lập.`);
     error.status = 403;
     error.code = 'EMPLOYEE_AI_LIMIT_EXCEEDED';
     error.resource = AI_CREDIT_RESOURCE;

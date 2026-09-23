@@ -92,7 +92,7 @@ export async function resolveLandingBrief({ landingBrief, user }) {
 
   const ownerUserId = resolveOwnerUserId(user);
   if (!Number.isFinite(ownerUserId) || ownerUserId <= 0) {
-    throw briefError(400, 'LANDING_BRIEF_INVALID', 'Không xác định được chủ workspace');
+    throw briefError(400, 'LANDING_BRIEF_INVALID', 'Không xác định được chủ tài khoản');
   }
 
   const pageGoal = asOptionalEnum(landingBrief.pageGoal, PAGE_GOALS, 'pageGoal');

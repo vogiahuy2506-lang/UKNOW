@@ -39,7 +39,7 @@ class ChatbotTelegramRepository {
       [telegramAccountId, userId]
     );
     if (!rows[0]) {
-      const err = new Error('Không tìm thấy tài khoản Telegram trong workspace');
+      const err = new Error('Không tìm thấy tài khoản Telegram trong không gian làm việc');
       err.status = 404;
       throw err;
     }

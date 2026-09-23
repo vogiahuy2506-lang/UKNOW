@@ -25,7 +25,7 @@ class ChatbotStudioConversationService {
       sessionId,
     });
     if (!conversation) {
-      const error = new Error('Không tìm thấy chatbot trong workspace');
+      const error = new Error('Không tìm thấy chatbot trong không gian làm việc');
       error.status = 404;
       throw error;
     }

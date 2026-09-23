@@ -93,7 +93,7 @@ export async function validateCampaignPreflight({
   if (zaloAccountIds.size > 0) {
     const parsedWorkspaceOwnerId = parseInt(workspaceOwnerId, 10);
     if (!Number.isFinite(parsedWorkspaceOwnerId) || parsedWorkspaceOwnerId <= 0) {
-      const error = new Error('Không xác định được workspace sở hữu chiến dịch để kiểm tra tài khoản Zalo.');
+      const error = new Error('Không xác định được chủ tài khoản sở hữu chiến dịch để kiểm tra tài khoản Zalo.');
       error.code = 'WORKSPACE_CONTEXT_REQUIRED';
       error.statusCode = 500;
       throw error;

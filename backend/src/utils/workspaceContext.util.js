@@ -39,7 +39,7 @@ export function getWorkspaceContext(authUser) {
     : actorUserId;
 
   if (!workspaceOwnerId) {
-    throw createContextError('Ngữ cảnh workspace không hợp lệ', 403, 'INVALID_CONTEXT');
+    throw createContextError('Ngữ cảnh làm việc không hợp lệ', 403, 'INVALID_CONTEXT');
   }
 
   return {

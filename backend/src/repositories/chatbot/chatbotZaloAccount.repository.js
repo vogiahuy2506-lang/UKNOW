@@ -17,7 +17,7 @@ class ChatbotZaloAccountRepository {
       [zaloSettingId, userId, data.id_chatbot || null, data.id_sub_assistant || null]
     );
     if (!rows[0]) {
-      const error = new Error('Không tìm thấy tài khoản Zalo hoặc cấu hình chatbot trong workspace');
+      const error = new Error('Không tìm thấy tài khoản Zalo hoặc cấu hình chatbot trong không gian làm việc');
       error.status = 404;
       throw error;
     }

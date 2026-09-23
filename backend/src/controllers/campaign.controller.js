@@ -680,7 +680,7 @@ class CampaignController {
             }
             return res.json({
               success: true,
-              message: `Chiến dịch có ${totalCustomers} người nhận, vượt ngưỡng yêu cầu phê duyệt (${threshold}). Vui lòng chờ chủ workspace duyệt.`,
+              message: `Chiến dịch có ${totalCustomers} người nhận, vượt ngưỡng yêu cầu phê duyệt (${threshold}). Vui lòng chờ chủ tài khoản duyệt.`,
               data: {
                 campaignId,
                 status: 'pending_owner_approval',

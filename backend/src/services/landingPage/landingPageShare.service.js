@@ -24,7 +24,7 @@ class LandingPageShareService {
       shareType,
     });
     if (!share) {
-      const error = new Error('Không tìm thấy landing page trong workspace');
+      const error = new Error('Không tìm thấy landing page trong không gian làm việc');
       error.status = 404;
       throw error;
     }
@@ -85,7 +85,7 @@ class LandingPageShareService {
   async getLandingPageShares(landingPageId, ownerId) {
     const owned = await landingPageShareRepository.isLandingPageOwnedByWorkspace(landingPageId, ownerId);
     if (!owned) {
-      const error = new Error('Không tìm thấy landing page trong workspace');
+      const error = new Error('Không tìm thấy landing page trong không gian làm việc');
       error.status = 404;
       throw error;
     }

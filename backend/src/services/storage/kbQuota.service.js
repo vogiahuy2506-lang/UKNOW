@@ -15,8 +15,8 @@ export class KbQuotaExceededError extends Error {
   constructor(resource, usage) {
     const isDocuments = resource === 'kb_documents';
     super(isDocuments
-      ? 'Workspace đã đạt giới hạn số tài liệu kiến thức'
-      : 'Workspace đã đạt giới hạn nội dung kiến thức');
+      ? 'Đã đạt giới hạn số tài liệu kiến thức'
+      : 'Đã đạt giới hạn nội dung kiến thức');
     this.name = 'KbQuotaExceededError';
     this.code = isDocuments ? 'KB_DOCUMENT_LIMIT_EXCEEDED' : 'KB_CHAR_LIMIT_EXCEEDED';
     this.resource = resource;

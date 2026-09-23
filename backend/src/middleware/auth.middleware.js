@@ -123,7 +123,7 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
 
     const member = memberResult.rows[0];
     if (member.isLocked) {
-      const err = new Error('Tài khoản nhân viên trong workspace này đang bị tạm khoá do vượt quá hạn mức gói của chủ tài khoản.');
+      const err = new Error('Tài khoản nhân viên trong không gian làm việc này đang bị tạm khoá do vượt quá hạn mức gói của chủ tài khoản.');
       err.status = 403;
       err.body = {
         success: false,

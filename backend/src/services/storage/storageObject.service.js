@@ -70,7 +70,7 @@ export async function registerWrittenStorageObject({
   const bytes = Number(sizeBytes);
   if (!Number.isSafeInteger(bytes) || bytes < 0) throw new Error('sizeBytes không hợp lệ');
   if (poolType === STORAGE_POOL_TYPES.WORKSPACE && !ownerUserId) {
-    throw new Error('Workspace storage object cần owner');
+    throw new Error('Đối tượng lưu trữ thiếu chủ sở hữu');
   }
 
   let rejected = null;
@@ -233,7 +233,7 @@ export async function promoteTempStorageObjects({
           poolType === STORAGE_POOL_TYPES.WORKSPACE
           && Number(existing.owner_user_id) !== Number(ownerUserId)
         ) {
-          throw new Error('Workspace owner của temp không khớp');
+          throw new Error('Chủ sở hữu của tệp tạm không khớp');
         }
         existingRows.push(existing);
       }

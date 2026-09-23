@@ -30,7 +30,7 @@ class CampaignShareService {
       canRun,
     });
     if (!share) {
-      const error = new Error('Không tìm thấy chiến dịch trong workspace');
+      const error = new Error('Không tìm thấy chiến dịch trong không gian làm việc');
       error.status = 404;
       throw error;
     }
@@ -127,7 +127,7 @@ class CampaignShareService {
   async getCampaignShares(campaignId, ownerId) {
     const owned = await campaignShareRepository.isCampaignOwnedByWorkspace(campaignId, ownerId);
     if (!owned) {
-      const error = new Error('Không tìm thấy chiến dịch trong workspace');
+      const error = new Error('Không tìm thấy chiến dịch trong không gian làm việc');
       error.status = 404;
       throw error;
     }

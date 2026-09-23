@@ -313,7 +313,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
     const empLimits = await getEmployeeSendLimits(client, billingUserId, effectiveActorUserId);
     if (empLimits) {
       if (empLimits.status !== 'active') {
-        const err = new Error('Tài khoản nhân viên đang tạm khóa hoặc không còn trong workspace.');
+        const err = new Error('Tài khoản nhân viên đang tạm khóa hoặc không còn trong không gian làm việc.');
         err.status = 403;
         err.code = 'RESOURCE_LIMIT_EXCEEDED';
         err.limitType = 'employee_inactive';
@@ -327,7 +327,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
       const empDailyLimit = toInt(isEmail ? empLimits.daily_email_limit : empLimits.daily_zalo_limit);
       if (empDailyLimit !== null) {
         if (empDailyLimit === 0) {
-          const err = new Error(`Hạn mức gửi ${channelLabel} trong ngày của bạn là 0. Vui lòng liên hệ chủ workspace.`);
+          const err = new Error(`Hạn mức gửi ${channelLabel} trong ngày của bạn là 0. Vui lòng liên hệ chủ tài khoản.`);
           err.status = 403;
           err.code = 'RESOURCE_LIMIT_EXCEEDED';
           err.limitType = 'employee';
@@ -364,7 +364,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
       const empMonthlyLimit = toInt(isEmail ? empLimits.monthly_email_limit : empLimits.monthly_zalo_limit);
       if (empMonthlyLimit !== null) {
         if (empMonthlyLimit === 0) {
-          const err = new Error(`Hạn mức gửi ${channelLabel} trong tháng của bạn là 0. Vui lòng liên hệ chủ workspace.`);
+          const err = new Error(`Hạn mức gửi ${channelLabel} trong tháng của bạn là 0. Vui lòng liên hệ chủ tài khoản.`);
           err.status = 403;
           err.code = 'RESOURCE_LIMIT_EXCEEDED';
           err.limitType = 'employee';
@@ -387,7 +387,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
           if (empMonthlyCount + quantity > empMonthlyLimit) {
             const resetDate = cycleEnd instanceof Date ? cycleEnd : (cycleEnd ? new Date(cycleEnd) : nextVnMonthStart());
             const err = new Error(
-              `Đã đạt giới hạn gửi ${channelLabel} trong tháng của nhân viên (${empMonthlyCount}/${empMonthlyLimit} ${unitLabel}). Vui lòng liên hệ chủ workspace.`
+              `Đã đạt giới hạn gửi ${channelLabel} trong tháng của nhân viên (${empMonthlyCount}/${empMonthlyLimit} ${unitLabel}). Vui lòng liên hệ chủ tài khoản.`
             );
             err.status = 403;
             err.code = 'RESOURCE_LIMIT_EXCEEDED';

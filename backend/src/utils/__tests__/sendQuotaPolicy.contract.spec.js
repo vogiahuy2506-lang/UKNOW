@@ -122,7 +122,7 @@ describe('sendQuotaPolicy Contract Specification (PR-Q0)', () => {
       expect(result.allowed).toBe(false);
       expect(result.limitType).toBe('employee_inactive');
       expect(result.limit).toBe(0);
-      expect(result.message).toMatch(/tạm khóa|không còn trong workspace/i);
+      expect(result.message).toMatch(/tạm khóa|không còn trong không gian làm việc/i);
     });
 
     it('denies employee when daily limit is 0 (disabled)', async () => {

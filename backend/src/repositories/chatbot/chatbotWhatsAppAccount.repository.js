@@ -28,7 +28,7 @@ class ChatbotWhatsAppAccountRepository {
       [channelConnectionId, userId, idChatbot ?? null]
     );
     if (!rows[0]) {
-      const error = new Error('Không tìm thấy tài khoản WhatsApp hoặc cấu hình chatbot trong workspace');
+      const error = new Error('Không tìm thấy tài khoản WhatsApp hoặc cấu hình chatbot trong không gian làm việc');
       error.status = 404;
       throw error;
     }

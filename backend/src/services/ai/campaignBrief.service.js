@@ -369,7 +369,7 @@ export async function resolveCampaignBrief({
     throw briefError(400, 'CAMPAIGN_BRIEF_INVALID', 'CampaignBrief chưa đủ');
   }
   if (!Number.isFinite(Number(ownerUserId)) || Number(ownerUserId) <= 0) {
-    throw briefError(400, 'CAMPAIGN_BRIEF_INVALID', 'Không xác định được chủ workspace');
+    throw briefError(400, 'CAMPAIGN_BRIEF_INVALID', 'Không xác định được chủ tài khoản');
   }
 
   const ownerId = Number(ownerUserId);
