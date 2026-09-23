@@ -1250,7 +1250,7 @@ export default {
     campaignList: 'Danh sách chiến dịch',
     actions: 'Hành động',
     activate: 'Kích hoạt',
-    resumeSchedule: 'Tiếp tục lịch chạy',
+    resumeSchedule: 'Tiếp tục chiến dịch',
     duplicate: 'Nhân bản',
     edit: 'Sửa',
     builder: 'Trình thiết kế',

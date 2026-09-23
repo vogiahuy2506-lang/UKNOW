@@ -123,7 +123,6 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
   const [selectedCampaignForLogs, setSelectedCampaignForLogs] = useState(null);
   const [selectedExecutionLogId, setSelectedExecutionLogId] = useState(null);
   const [flowOrderByNodeId, setFlowOrderByNodeId] = useState(new Map());
-  const [activatingCampaignIds, setActivatingCampaignIds] = useState(new Set());
   const [stoppingRunIds, setStoppingRunIds] = useState(new Set());
 
   const selectedResumeRunId = Number.parseInt(runResumeFromId, 10);
@@ -782,35 +781,6 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
     }
   };
 
-  /**
-   * Activate a paused campaign and refresh tab data.
-   *
-   * @param {number|string} campaignId campaign identifier
-   * @returns {Promise<void>}
-   */
-  const handleActivateCampaign = async (campaignId) => {
-    if (!campaignId) return;
-    if (isCampaignRunningById(campaignId)) {
-      toast.error(t('campaigns.runningBlockActivate'));
-      return;
-    }
-
-    setActivatingCampaignIds((prev) => new Set(prev).add(campaignId));
-    try {
-      await campaignRunApiService.publishCampaign(campaignId);
-      toast.success(t('campaigns.campaignActivated'));
-      onCampaignActivated?.(campaignId);
-      await onCampaignsChanged?.();
-    } catch (error) {
-      toast.error(t('campaigns.activateCampaignFailed'));
-    } finally {
-      setActivatingCampaignIds((prev) => {
-        const next = new Set(prev);
-        next.delete(campaignId);
-        return next;
-      });
-    }
-  };
 
   const openStopRunConfirmModal = (run) => {
     const runId = Number.parseInt(run?.id, 10);
@@ -915,7 +885,6 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
     selectedExecutionLogId,
     setSelectedExecutionLogId,
     flowOrderByNodeId,
-    activatingCampaignIds,
 
     // Helpers
     getCampaignKey,
@@ -951,7 +920,6 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
     handleSaveSchedule,
     handleDeleteSchedule,
     handleToggleSchedule,
-    handleActivateCampaign,
     openStopRunConfirmModal,
     closeStopRunConfirmModal,
     handleConfirmStopRun,

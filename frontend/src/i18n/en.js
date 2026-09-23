@@ -1248,7 +1248,7 @@ export default {
     campaignList: 'Campaign List',
     actions: 'Actions',
     activate: 'Activate',
-    resumeSchedule: 'Resume schedule',
+    resumeSchedule: 'Resume campaign',
     duplicate: 'Duplicate',
     edit: 'Edit',
     builder: 'Builder',

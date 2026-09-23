@@ -12,7 +12,7 @@ import viTranslations from '../../../i18n/vi';
  *
  * Nháp: bỏ hẳn nút "Kích hoạt" — chiến dịch nháp giờ tự kích hoạt khi bấm "Chạy ngay" TRONG
  * TRÌNH DỰNG (backend PR-3 Việc 1), không còn đường tắt kích hoạt riêng từ trang danh sách.
- * Tạm dừng: GIỮ nút, chỉ đổi nhãn thành "Tiếp tục lịch chạy" — hành vi y hệt cũ (publishCampaign,
+ * Tạm dừng: GIỮ nút, chỉ đổi nhãn thành "Tiếp tục chiến dịch" — hành vi y hệt cũ (publishCampaign,
  * không gửi tin nào), vì "Tạm dừng" là phanh của lịch tự gửi, không được bỏ hết đường bật lại.
  */
 const getNestedTranslation = (obj, path) => path.split('.').reduce((acc, part) => acc?.[part], obj);
@@ -66,7 +66,7 @@ vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
 
-describe('Campaigns — bỏ nút Kích hoạt (nháp), giữ Tiếp tục lịch chạy (tạm dừng) — PR-3', () => {
+describe('Campaigns — bỏ nút Kích hoạt (nháp), giữ Tiếp tục chiến dịch (tạm dừng) — PR-3', () => {
   const draftCampaign = {
     id: 501,
     campaignName: 'Chiến dịch Nháp Chưa Chạy',
@@ -143,20 +143,20 @@ describe('Campaigns — bỏ nút Kích hoạt (nháp), giữ Tiếp tục lịc
     expect(screen.queryByRole('button', { name: /Kích hoạt/i })).not.toBeInTheDocument();
   });
 
-  it('chiến dịch tạm dừng: menu có nút "Tiếp tục lịch chạy", bấm vào KHÔNG gửi tin nào (chỉ gọi publishCampaign)', async () => {
+  it('chiến dịch tạm dừng: menu có nút "Tiếp tục chiến dịch", bấm vào KHÔNG gửi tin nào (chỉ gọi publishCampaign)', async () => {
     campaignApiService.publishCampaign.mockResolvedValue({ data: { success: true } });
     renderComponent();
     await waitFor(() => expect(screen.getByText('Chiến dịch Tạm Dừng')).toBeInTheDocument());
 
     openRowMenu('Chiến dịch Tạm Dừng');
 
-    const resumeBtn = await screen.findByRole('button', { name: 'Tiếp tục lịch chạy' });
+    const resumeBtn = await screen.findByRole('button', { name: 'Tiếp tục chiến dịch' });
     expect(screen.queryByRole('button', { name: 'Kích hoạt' })).not.toBeInTheDocument();
 
     fireEvent.click(resumeBtn);
 
     await waitFor(() => expect(campaignApiService.publishCampaign).toHaveBeenCalledWith(502));
-    // Bấm "Tiếp tục lịch chạy" không được gửi tin nào ngay — không có đường gọi API chạy/gửi nào.
+    // Bấm "Tiếp tục chiến dịch" không được gửi tin nào ngay — không có đường gọi API chạy/gửi nào.
     expect(campaignRunApiService.runCampaign).not.toHaveBeenCalled();
   });
 });
