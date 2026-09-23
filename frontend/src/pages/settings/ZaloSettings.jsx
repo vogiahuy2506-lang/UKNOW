@@ -536,7 +536,7 @@ const ZaloSettings = () => {
                             step={1}
                             value={getSendLimitDraft(account)}
                             onChange={(e) => setSendLimitDrafts((prev) => ({ ...prev, [account.id]: e.target.value }))}
-                            className="input py-1 text-sm"
+                            className="input py-1 text-sm w-44"
                             placeholder={t('zaloSettings.dailySendLimitPlaceholder')}
                           />
                         </div>

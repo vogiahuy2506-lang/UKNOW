@@ -2375,7 +2375,7 @@ export default {
     dailySendLimit: 'Giới hạn gửi/ngày',
     dailySendLimitPlaceholder: 'Để trống = không giới hạn',
     dailySendLimitInvalid: 'Nhập số nguyên từ 1 đến 100.000',
-    dailySendLimitHighWarning: 'Trên 100 khá cao — kiểm tra lại nếu không cố ý',
+    dailySendLimitHighWarning: 'Trên 100 tin/ngày dễ bị Zalo khoá tài khoản — cân nhắc trước khi đặt',
     dailySendLimitSaveSuccess: 'Đã lưu giới hạn gửi/ngày',
     dailySendLimitSaveFailed: 'Không thể lưu giới hạn gửi/ngày',
     deleteSuccess: 'Đã xóa tài khoản',
@@ -3873,7 +3873,7 @@ export default {
     dailySendLimitPlaceholder: 'Để trống = không giới hạn',
     dailySendLimitEmptyHint: 'Để trống nghĩa là không giới hạn.',
     dailySendLimitInvalid: 'Nhập số nguyên từ 1 đến 100.000',
-    dailySendLimitHighWarning: 'Giới hạn trên 100 khá cao — kiểm tra lại nếu không cố ý.',
+    dailySendLimitHighWarning: 'Trên 100 email/ngày dễ bị nhà cung cấp khoá tài khoản gửi — cân nhắc trước khi đặt.',
 
   },
 

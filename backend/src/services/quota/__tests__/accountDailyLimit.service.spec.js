@@ -62,6 +62,19 @@ describe('checkAccountDailyLimit — limit == null (không giới hạn)', () =>
     expect(result).toEqual({ allowed: true });
     expect(mockCountEmail).not.toHaveBeenCalled();
   });
+
+  /**
+   * `limit == null` dùng `==` nên bắt cả `null` lẫn `undefined` — nhưng KHÔNG được bắt số 0.
+   * Đổi thành `=== null` hay `!limit` là biến 0 thành "không giới hạn", tức gửi vô hạn từ một tài
+   * khoản mà ô ghi 0 — sai tối đa. Ca này khoá hành vi đó lại.
+   */
+  it('limit = 0 KHÔNG phải "không giới hạn" — phải đếm rồi CHẶN', async () => {
+    mockCountEmail.mockResolvedValue(0);
+    const result = await checkAccountDailyLimit({ channel: 'email', accountId: 5, limit: 0 });
+    expect(mockCountEmail).toHaveBeenCalled();
+    expect(result.allowed).toBe(false);
+    expect(result.limit).toBe(0);
+  });
 });
 
 describe('checkAccountDailyLimit — email có giới hạn', () => {

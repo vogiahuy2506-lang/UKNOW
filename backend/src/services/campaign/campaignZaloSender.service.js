@@ -1652,11 +1652,21 @@ class CampaignZaloSenderService {
         : {}),
       /**
        * Giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt cho tài khoản (mọi kênh, không riêng cá nhân);
-       * undefined nếu NULL/0 trong DB. Đường gửi thật (enforceZaloOutboundPolicyBeforeSend trong
+       * undefined nếu NULL trong DB. Đường gửi thật (enforceZaloOutboundPolicyBeforeSend trong
        * campaignRun.service.js) đọc field này thẳng từ zaloAccountPolicyHint — không tra thêm DB
        * mỗi tin. Cả 3 kênh (personal/friend_request/group) đều truyền hint chứa field này.
+       *
+       * `>= 0` chứ không phải `> 0`: số 0 phải CHẶN như đường email (`settings.user_daily_send_limit ?? null`
+       * → `checkAccountDailyLimit` đếm rồi chặn), không được hiểu thành "không giới hạn". Bản đầu dùng
+       * `> 0` nên cùng một con số 0 cho hai kết quả ngược nhau giữa email và Zalo — email chặn sạch,
+       * Zalo gửi vô hạn. Hướng an toàn là CHẶN: nếu ô ghi 0 mà hệ thống gửi vô hạn thì sai tối đa,
+       * còn chặn thì khách nhận thư tạm dừng và sửa lại được.
+       *
+       * Không có dòng nào trên production mang giá trị 0 (cả ba đường lưu — PUT/POST email và PATCH
+       * Zalo — đều chặn `isInt({min:1})`, form cũng chặn), nên đổi chỗ này không đụng dữ liệu đang
+       * chạy. Nếu sau này muốn "0 = tạm ngưng nick", chỉ cần nới validator xuống `min: 0`.
        */
-      ...(Number.isFinite(dailyLimit) && dailyLimit > 0
+      ...(Number.isFinite(dailyLimit) && dailyLimit >= 0
         ? { userDailySendLimit: dailyLimit }
         : {}),
     };

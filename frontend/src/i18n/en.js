@@ -2373,7 +2373,7 @@ export default {
     dailySendLimit: 'Daily send limit',
     dailySendLimitPlaceholder: 'Leave blank = unlimited',
     dailySendLimitInvalid: 'Enter a whole number from 1 to 100,000',
-    dailySendLimitHighWarning: 'Above 100 is fairly high — double-check if intentional',
+    dailySendLimitHighWarning: 'Above 100 messages/day risks a Zalo account ban — consider carefully',
     dailySendLimitSaveSuccess: 'Daily send limit saved',
     dailySendLimitSaveFailed: 'Could not save daily send limit',
     deleteSuccess: 'Account deleted',
@@ -3863,7 +3863,7 @@ export default {
     dailySendLimitPlaceholder: 'Leave blank = unlimited',
     dailySendLimitEmptyHint: 'Leave blank for no limit.',
     dailySendLimitInvalid: 'Enter a whole number from 1 to 100,000',
-    dailySendLimitHighWarning: 'A limit above 100 is fairly high — double-check if this is intentional.',
+    dailySendLimitHighWarning: 'Above 100 emails/day risks your provider suspending the sending account — consider carefully.',
 
   },
 

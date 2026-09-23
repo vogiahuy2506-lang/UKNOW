@@ -33,8 +33,23 @@ describe('mapCampaignZaloAccount — userDailySendLimit', () => {
     expect(model.userDailySendLimit).toBeUndefined();
   });
 
-  it('user_daily_send_limit = 0 → coi như KHÔNG hợp lệ (giống quy tắc của 3 field zalo_personal_outbound_*), field vắng mặt', () => {
+  /**
+   * Bản đầu bỏ qua số 0 (`dailyLimit > 0`), coi nó như "chưa đặt" → Zalo gửi KHÔNG GIỚI HẠN. Cùng
+   * con số đó ở đường email lại CHẶN SẠCH (`settings.user_daily_send_limit ?? null` đi thẳng vào
+   * checkAccountDailyLimit, `0 == null` là false nên nó đếm rồi chặn). Một giá trị, hai kết quả
+   * ngược nhau — cái bẫy ngủ cho ai đọc chỗ này rồi chép quy ước sang giai đoạn 2 (giới hạn cấp
+   * chiến dịch dùng lại đúng cột này).
+   *
+   * Chọn hướng CHẶN vì nếu ô ghi 0 mà hệ thống gửi vô hạn thì sai tối đa — ngược hẳn con số; còn
+   * chặn thì khách nhận thư tạm dừng, mở Cài đặt kênh sửa lại được.
+   */
+  it('user_daily_send_limit = 0 → CHẶN (có mặt, = 0), giống đường email — không được hiểu thành "không giới hạn"', () => {
     const model = campaignZaloSenderService.mapCampaignZaloAccount({ ...BASE_ROW, user_daily_send_limit: 0 });
+    expect(model.userDailySendLimit).toBe(0);
+  });
+
+  it('user_daily_send_limit âm (dữ liệu rác) → vẫn coi như chưa đặt, field vắng mặt', () => {
+    const model = campaignZaloSenderService.mapCampaignZaloAccount({ ...BASE_ROW, user_daily_send_limit: -5 });
     expect(model.userDailySendLimit).toBeUndefined();
   });
 
