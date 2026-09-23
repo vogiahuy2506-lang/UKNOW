@@ -16,6 +16,17 @@ import {
 import { generateIdempotencyKey } from '../../../utils/idempotency.util.js';
 
 /**
+ * Trần chạy thử cho 3 nút Zalo (cá nhân/kết bạn/nhóm) — PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối
+ * 2026-09-23, PR-6 Việc 4. Thấp hơn nhiều so với email (`TEST_RUN_DEFAULT_MAX_SEND` = 20, xem trong
+ * nhánh send_email) vì mỗi tin Zalo thật cách nhau 80-150 giây trên production
+ * (CLAUDE.md — ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS/_MAX_MS đang override), không phải 50-250 mili
+ * giây như email: 3 tin × ~115 giây ≈ 4 phút vẫn còn là "chạy thử"; không có trần thì bấm thử với
+ * sheet 1.000 số là bắn liên tục hàng giờ từ nick thật — đúng hành vi dễ khoá nick mà tính năng
+ * giãn cách này sinh ra để tránh.
+ */
+const TEST_RUN_MAX_SEND_ZALO = 3;
+
+/**
  * Chuẩn hóa trường cấu hình lọc lead: có thể là mảng hoặc chuỗi JSON (bản lưu cũ) trước khi gọi API preview.
  *
  * @param {unknown} raw
@@ -334,6 +345,41 @@ export const createCampaignNodeRunner = (deps) => {
     assertNotAborted(signal);
   };
   /**
+   * Chờ có đếm ngược, bắn `onProgress` mỗi giây — dùng cho khoảng chờ giữa 2 lần gửi Zalo (có thể
+   * dài tới 150 giây thật trên production) để nhật ký chạy thử không giống bị treo
+   * (PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối 2026-09-23, PR-6 Việc 3).
+   *
+   * Chia `totalMs` thành từng bước tối đa 1 giây, MỖI bước vẫn đi qua `sleepWithAbort` — không tự
+   * viết `setTimeout` riêng, nên huỷ giữa lúc đang đếm ngược vẫn dừng ngay ở bước hiện tại thay vì
+   * phải chờ hết (sleepWithAbort đã ném AbortError, vòng lặp dừng theo tự nhiên, không cần bắt riêng).
+   *
+   * @param {number} totalMs tổng thời gian cần chờ
+   * @param {AbortSignal|undefined} signal tín hiệu huỷ
+   * @param {object} [progress]
+   * @param {Function} [progress.onProgress] callback báo tiến độ, bỏ qua nếu không có
+   * @param {number} [progress.current] thứ tự tin sắp gửi (để hiện "(2/3)")
+   * @param {number} [progress.total] tổng số tin của đợt hiện tại
+   * @returns {Promise<void>}
+   */
+  const COUNTDOWN_TICK_MS = 1000;
+  const sleepWithCountdownTicks = async (totalMs, signal, progress = {}) => {
+    const { onProgress: onTick, current, total } = progress || {};
+    let remainingMs = Math.max(0, Number.parseInt(totalMs, 10) || 0);
+    while (remainingMs > 0) {
+      const seconds = Math.ceil(remainingMs / 1000);
+      if (onTick) {
+        const suffix = (current != null && total != null) ? ` (${current}/${total})` : '';
+        onTick({
+          status: 'info',
+          message: `Đang chờ ${seconds} giây trước tin kế tiếp${suffix} — giãn cách chống spam`,
+        });
+      }
+      const stepMs = Math.min(COUNTDOWN_TICK_MS, remainingMs);
+      await sleepWithAbort(stepMs, signal);
+      remainingMs -= stepMs;
+    }
+  };
+  /**
    * Wait random delay before making next preview API request.
    *
    * @param {string} label short context label for debugging
@@ -342,7 +388,10 @@ export const createCampaignNodeRunner = (deps) => {
    */
   const waitRandomPreviewApiDelay = async (label = 'preview_api', signal, options = {}) => {
     const { channel = 'email' } = options;
-    const { minMs, maxMs } = getDelayRangeByChannel(channel);
+    // getDelayRangeByChannel là async — thiếu await từng biến {minMs,maxMs} thành undefined/undefined
+    // (destructure từ Promise), delayMs ra NaN, sleepWithAbort(NaN) coi như <=0 nên trả về tức thời
+    // (PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối 2026-09-23, PR-6 Việc 2).
+    const { minMs, maxMs } = await getDelayRangeByChannel(channel);
     const delayMs = getRandomDelayMsByRange(minMs, maxMs);
     console.info(`[CampaignBuilder][PreviewDelay] ${label}: ${delayMs}ms`);
     await sleepWithAbort(delayMs, signal);
@@ -362,11 +411,18 @@ export const createCampaignNodeRunner = (deps) => {
    * @param {string} channel kênh delay cần áp dụng
    * @returns {Promise<number>}
    */
-  const waitRandomTemplateStepDelay = async (label = 'template_step', signal, channel = 'email') => {
-    const { minMs, maxMs } = getDelayRangeByChannel(channel);
+  const waitRandomTemplateStepDelay = async (label = 'template_step', signal, channel = 'email', progress = null) => {
+    // Cùng lỗi thiếu await như waitRandomPreviewApiDelay — xem chú thích ở đó.
+    const { minMs, maxMs } = await getDelayRangeByChannel(channel);
     const delayMs = getRandomDelayMsByRange(minMs, maxMs);
     console.info(`[CampaignBuilder][TemplateStepDelay] ${label}: ${delayMs}ms`);
-    await sleepWithAbort(delayMs, signal);
+    // `progress` chỉ được truyền ở 4 chỗ gọi Zalo (giãn cách thật 80-150s) — email vẫn ngủ im lặng
+    // như cũ (50-250ms, không ai thấy), không đổi hành vi (PR-6 nghiệm thu).
+    if (progress?.onProgress) {
+      await sleepWithCountdownTicks(delayMs, signal, progress);
+    } else {
+      await sleepWithAbort(delayMs, signal);
+    }
     return delayMs;
   };
   const resolveDisplayName = (...candidates) => {
@@ -1820,7 +1876,14 @@ export const createCampaignNodeRunner = (deps) => {
         sourceField: config.zaloRecipientField || (recipientType === 'uid' ? 'uid' : 'phone'),
       });
       const recipients = recipientEntries.map((entry) => String(entry?.value || '').trim()).filter(Boolean);
-      const uniqueRecipients = Array.from(new Set(recipients.map((item) => String(item || '').trim()).filter(Boolean)));
+      const uniqueRecipientsBeforeCap = Array.from(new Set(recipients.map((item) => String(item || '').trim()).filter(Boolean)));
+      const uniqueRecipients = uniqueRecipientsBeforeCap.slice(0, TEST_RUN_MAX_SEND_ZALO);
+      if (onProgress && uniqueRecipientsBeforeCap.length > TEST_RUN_MAX_SEND_ZALO) {
+        onProgress({
+          status: 'info',
+          message: `Chạy thử giới hạn tối đa ${TEST_RUN_MAX_SEND_ZALO} người (danh sách có ${uniqueRecipientsBeforeCap.length} người) — mỗi tin Zalo thật cách nhau tới 150 giây, tránh bắn liên tục làm khoá nick.`,
+        });
+      }
       const zaloProgressMap = getNodeRecipientProgressMap(ctx, node.id, 'zalo_personal');
       const templateSteps = Array.isArray(config.zaloPersonalTemplateSteps) ? config.zaloPersonalTemplateSteps : [];
       const sendMode = String(config.zaloPersonalSendMode || 'all').trim();
@@ -1994,9 +2057,14 @@ export const createCampaignNodeRunner = (deps) => {
           );
           if (recipientsForStep.length <= 0) return;
           if (zaloPreviewPoolParallel > 1) {
+            const totalBatches = Math.ceil(recipientsForStep.length / zaloPreviewPoolParallel);
             for (let offset = 0; offset < recipientsForStep.length; offset += zaloPreviewPoolParallel) {
               if (offset > 0) {
-                await waitRandomTemplateStepDelay(`zalo_personal_single_batch_${offset}`, signal, 'zalo');
+                await waitRandomTemplateStepDelay(`zalo_personal_single_batch_${offset}`, signal, 'zalo', {
+                  onProgress,
+                  current: Math.floor(offset / zaloPreviewPoolParallel) + 1,
+                  total: totalBatches,
+                });
               }
               const batch = recipientsForStep.slice(offset, offset + zaloPreviewPoolParallel);
 
@@ -2009,7 +2077,11 @@ export const createCampaignNodeRunner = (deps) => {
           for (let index = 0; index < recipientsForStep.length; index += 1) {
             if (index > 0) {
 
-              await waitRandomTemplateStepDelay(`zalo_personal_step_${stepIndex + 1}`, signal, 'zalo');
+              await waitRandomTemplateStepDelay(`zalo_personal_step_${stepIndex + 1}`, signal, 'zalo', {
+                onProgress,
+                current: index + 1,
+                total: recipientsForStep.length,
+              });
             }
 
             await runStepForRecipient(step, stepIndex, recipientsForStep[index], { skipApiDelay: true });
@@ -2060,15 +2132,21 @@ export const createCampaignNodeRunner = (deps) => {
               sent: results.filter((item) => item.status === 'success').length,
               failed: results.filter((item) => item.status === 'failed').length,
               totalItems: totalAttempts,
+              // Trần chạy thử luôn được áp — báo đúng giá trị thật, cùng quy ước với node email
+              // (output.meta.limitedTo của TEST_RUN_DEFAULT_MAX_SEND).
+              limitedTo: TEST_RUN_MAX_SEND_ZALO,
+              totalAvailable: uniqueRecipientsBeforeCap.length,
             },
           },
         };
       }
 
       const message = String(config.zaloMessage || '').trim();
-      await waitRandomPreviewApiDelay('zalo_personal_bulk_single_message', signal, {
-        channel: 'zalo',
-      });
+      // Đã BỎ giãn cách trước tin ĐẦU TIÊN ở đây (PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối 2026-09-23,
+      // PR-6 Việc 1): trước bản này có một `waitRandomPreviewApiDelay` vô điều kiện ngay tại đây,
+      // chạy đúng MỘT LẦN cho toàn nhánh (không phải "giữa 2 lần gửi") — không có tin nào trước nó
+      // để mà giãn cách, nên bấm thử dù chỉ 1 người vẫn phải ngồi im tới 150 giây trước khi thấy
+      // gì. Giãn cách thật giữa các batch/người nhận (khi có) nằm ở vòng lặp bên dưới.
       const pendingRecipients = uniqueRecipients.filter(
         (recipient) => getRecipientNextStepIndex(zaloProgressMap, recipient) < 1
       );
@@ -2221,6 +2299,8 @@ export const createCampaignNodeRunner = (deps) => {
             sent: results.filter((item) => item.status === 'success').length,
             failed: results.filter((item) => item.status === 'failed').length,
             totalItems: pendingRecipients.length,
+            limitedTo: TEST_RUN_MAX_SEND_ZALO,
+            totalAvailable: uniqueRecipientsBeforeCap.length,
           },
         },
       };
@@ -2228,12 +2308,20 @@ export const createCampaignNodeRunner = (deps) => {
 
     if (nodeType === 'send_zalo_friend_request') {
       const selectedAccount = ensureSelectedZaloAccount(ctx);
-      const recipientEntries = collectRecipientEntriesFromSource(ctx, {
+      const recipientEntriesBeforeCap = collectRecipientEntriesFromSource(ctx, {
         sourceMode: config.zaloFriendSource || 'manual',
         manualValue: config.zaloFriendPhones || '',
         sourceNodeId: config.zaloFriendNodeId || '',
         sourceField: config.zaloFriendField || '',
       });
+      // Trần chạy thử (PR-6 Việc 4) — xem chú thích TEST_RUN_MAX_SEND_ZALO đầu file.
+      const recipientEntries = recipientEntriesBeforeCap.slice(0, TEST_RUN_MAX_SEND_ZALO);
+      if (onProgress && recipientEntriesBeforeCap.length > TEST_RUN_MAX_SEND_ZALO) {
+        onProgress({
+          status: 'info',
+          message: `Chạy thử giới hạn tối đa ${TEST_RUN_MAX_SEND_ZALO} người (danh sách có ${recipientEntriesBeforeCap.length} người) — mỗi lời mời kết bạn cách nhau tới 150 giây, tránh bắn liên tục làm khoá nick.`,
+        });
+      }
       const recipientPhones = recipientEntries.map((entry) => entry.phone);
       const contentMode = String(config.zaloFriendContentMode || 'manual').trim();
       let templateBody = String(config.zaloFriendTemplateBody || '').trim();
@@ -2289,7 +2377,11 @@ export const createCampaignNodeRunner = (deps) => {
         const entry = recipientEntries[index];
         const renderedMessage = renderFriendTemplateMessage(entry);
         if (index > 0) {
-          await waitRandomTemplateStepDelay(`zalo_friend_request_${index + 1}`, signal, 'zalo');
+          await waitRandomTemplateStepDelay(`zalo_friend_request_${index + 1}`, signal, 'zalo', {
+            onProgress,
+            current: index + 1,
+            total: recipientEntries.length,
+          });
         }
 
         const response = await apiService.sendPreviewZaloFriendRequest({
@@ -2350,6 +2442,8 @@ export const createCampaignNodeRunner = (deps) => {
             sent: results.filter((item) => item.status === 'success').length,
             failed: results.filter((item) => item.status === 'failed').length,
             totalItems: recipientPhones.length,
+            limitedTo: TEST_RUN_MAX_SEND_ZALO,
+            totalAvailable: recipientEntriesBeforeCap.length,
           },
         },
       };
@@ -2357,12 +2451,20 @@ export const createCampaignNodeRunner = (deps) => {
 
     if (nodeType === 'send_zalo_group') {
       const selectedAccount = ensureSelectedZaloAccount(ctx);
-      const groupEntries = collectRecipientEntriesFromSource(ctx, {
+      const groupEntriesBeforeCap = collectRecipientEntriesFromSource(ctx, {
         sourceMode: config.zaloGroupSource || 'manual',
         manualValue: config.zaloGroupIds || '',
         sourceNodeId: config.zaloGroupNodeId || '',
         sourceField: config.zaloGroupField || '',
       });
+      // Trần chạy thử (PR-6 Việc 4) — xem chú thích TEST_RUN_MAX_SEND_ZALO đầu file.
+      const groupEntries = groupEntriesBeforeCap.slice(0, TEST_RUN_MAX_SEND_ZALO);
+      if (onProgress && groupEntriesBeforeCap.length > TEST_RUN_MAX_SEND_ZALO) {
+        onProgress({
+          status: 'info',
+          message: `Chạy thử giới hạn tối đa ${TEST_RUN_MAX_SEND_ZALO} nhóm (danh sách có ${groupEntriesBeforeCap.length} nhóm) — mỗi tin Zalo thật cách nhau tới 150 giây, tránh bắn liên tục làm khoá nick.`,
+        });
+      }
       const groupIds = groupEntries.map((entry) => String(entry?.value || '').trim()).filter(Boolean);
       const templateSteps = Array.isArray(config.zaloGroupTemplateSteps) ? config.zaloGroupTemplateSteps : [];
       const sendMode = String(config.zaloGroupSendMode || 'all').trim();
@@ -2419,7 +2521,11 @@ export const createCampaignNodeRunner = (deps) => {
             if (!groupId) continue;
             if (index > 0) {
 
-              await waitRandomTemplateStepDelay(`zalo_group_step_${stepIndex + 1}`, signal, 'zalo_group_template');
+              await waitRandomTemplateStepDelay(`zalo_group_step_${stepIndex + 1}`, signal, 'zalo_group_template', {
+                onProgress,
+                current: index + 1,
+                total: groupEntries.length,
+              });
             }
             const renderedMessage = renderZaloTemplateMessage({
               templateText: step.message,
@@ -2534,15 +2640,15 @@ export const createCampaignNodeRunner = (deps) => {
               sent: results.filter((item) => item.status === 'success').length,
               failed: results.filter((item) => item.status === 'failed').length,
               totalItems: totalAttempts,
+              limitedTo: TEST_RUN_MAX_SEND_ZALO,
+              totalAvailable: groupEntriesBeforeCap.length,
             },
           },
         };
       }
 
       const message = String(config.zaloGroupMessage || '').trim();
-      await waitRandomPreviewApiDelay('zalo_group_bulk_single_message', signal, {
-        channel: 'zalo',
-      });
+      // Cùng lý do bỏ giãn cách trước tin đầu tiên như send_zalo_personal ở trên (PR-6 Việc 1).
       const response = await apiService.sendPreviewZaloGroup({
         accountId: selectedAccount.id,
         groupIds,
@@ -2605,6 +2711,8 @@ export const createCampaignNodeRunner = (deps) => {
             sent: results.filter((item) => item.status === 'success').length,
             failed: results.filter((item) => item.status === 'failed').length,
             totalItems: groupIds.length,
+            limitedTo: TEST_RUN_MAX_SEND_ZALO,
+            totalAvailable: groupEntriesBeforeCap.length,
           },
         },
       };

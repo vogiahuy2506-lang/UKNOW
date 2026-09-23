@@ -22,6 +22,15 @@ const buildRunner = ({ sendPreviewEmail }) => createCampaignNodeRunner({
   apiService: {
     getEmailTemplateById: vi.fn().mockResolvedValue({ data: { data: TEMPLATE } }),
     sendPreviewEmail,
+    // PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối 2026-09-23, PR-6 Việc 2: getDelayRangeByChannel() thiếu
+    // await đã được vá — trước đây thiếu mock này khiến resolveDelayConfig() rơi vào catch (fallback
+    // 1000ms) MÀ delay vẫn ra NaN→0ms do bug thiếu await nên test luôn chạy tức thời "trùng hợp
+    // đúng". Vá xong bug thì delay THẬT sự chờ 1000ms fallback mỗi bước, làm 30 người/29 bước vượt
+    // timeout 5s của test. Mock minMs/maxMs = 0 để test vẫn chạy tức thời, đúng ý ban đầu của PR-5
+    // (kiểm số lượng gửi, không kiểm giãn cách).
+    getDelayConfig: vi.fn().mockResolvedValue({
+      data: { success: true, data: { email: { minMs: 0, maxMs: 0 } } },
+    }),
   },
   buildSchemaFromRows,
   applyMappingsForRow: () => ({}),
