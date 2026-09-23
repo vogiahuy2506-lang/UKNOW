@@ -265,3 +265,37 @@ describe('PATCH /api/campaign-schedules/:id kèm activateCampaign — bẫy "hai
     expect(campaignRows[0].status).toBe('draft');
   });
 });
+
+/**
+ * Bổ sung lúc review (Claude, người viết plan — 23/09/2026).
+ *
+ * 8 test ở trên KHÔNG ca nào đi qua nhánh ROLLBACK: ca "0 node" ném lỗi TRƯỚC khi có lần ghi nào,
+ * nên đổi `ROLLBACK` thành `COMMIT` trong `activateCampaignAndWriteScheduleTx` vẫn xanh cả 8 —
+ * đã đo. Tức điều kiện số 3 của plan (kích hoạt và tạo lịch cùng thành công hoặc cùng không) chưa
+ * có gì canh. Ca dưới đây ép đúng thứ tự nguy hiểm: kích hoạt XONG rồi ghi lịch mới hỏng.
+ *
+ * Cách ép mà không phải mock: `campaign_schedules.schedule_name` là VARCHAR(255) còn validator
+ * không chặn độ dài (`.trim().notEmpty()` thôi) → tên 300 ký tự qua được cổng, ném 22001 ngay tại
+ * INSERT. Nếu rollback hỏng, chiến dịch sẽ nằm lại `active` mà không có lịch nào chờ — đúng
+ * "mầm gửi nhầm" mục 3.3 của plan cảnh báo.
+ */
+describe('Nguyên tử THẬT — ghi lịch hỏng SAU khi đã kích hoạt', () => {
+  it('INSERT lịch ném lỗi → chiến dịch phải quay lại draft, published_at vẫn NULL, không có lịch nào', async () => {
+    const user = await createUser({ email: 'act-rollback@test.com', username: 'act_rollback' });
+    const token = await loginAs(user);
+    const campaign = await insertCampaign({ ownerId: user.id, status: 'draft' });
+
+    const res = await request(app)
+      .post('/api/campaign-schedules')
+      .set('Authorization', `Bearer ${token}`)
+      .send(schedulePayload(campaign.id, { activateCampaign: true, scheduleName: 'x'.repeat(300) }));
+
+    expect(res.status).toBeGreaterThanOrEqual(400);
+
+    const { rows } = await db.query('SELECT status, published_at FROM campaigns WHERE id = $1', [campaign.id]);
+    expect(rows[0].status).toBe('draft');
+    expect(rows[0].published_at).toBeNull();
+    expect(await countSchedules(campaign.id)).toBe(0);
+    expect(await countRuns(campaign.id)).toBe(0);
+  });
+});
