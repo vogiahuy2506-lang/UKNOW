@@ -23,7 +23,7 @@ describe('campaignScheduleActivation.util', () => {
 
   it('câu thông báo nói đúng trạng thái và đúng việc phải làm (nguyên văn lệnh giao 23/09 — không còn xui bấm «Chạy ngay»)', () => {
     expect(buildCampaignNotActiveMessage('draft')).toBe(
-      'Chiến dịch đang ở trạng thái Nháp nên lịch sẽ không chạy. Tick "Kích hoạt chiến dịch khi tạo lịch" để hệ thống bật chiến dịch mà không gửi tin nào ngay.',
+      'Chiến dịch đang ở trạng thái Nháp nên lịch sẽ không chạy. Hãy chọn «Kích hoạt & tạo lịch» — hệ thống bật chiến dịch mà không gửi tin nào ngay.',
     );
     expect(buildCampaignNotActiveMessage('draft')).not.toContain('Chạy ngay');
     expect(buildCampaignNotActiveMessage('paused')).toContain('trạng thái Tạm dừng');

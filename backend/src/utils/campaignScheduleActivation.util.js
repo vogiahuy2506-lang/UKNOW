@@ -28,6 +28,6 @@ export function isCampaignActiveForSchedule(status) {
 export function buildCampaignNotActiveMessage(status) {
   return (
     `Chiến dịch đang ở trạng thái ${describeCampaignStatusVi(status)} nên lịch sẽ không chạy. ` +
-    'Tick "Kích hoạt chiến dịch khi tạo lịch" để hệ thống bật chiến dịch mà không gửi tin nào ngay.'
+    'Hãy chọn «Kích hoạt & tạo lịch» — hệ thống bật chiến dịch mà không gửi tin nào ngay.'
   );
 }

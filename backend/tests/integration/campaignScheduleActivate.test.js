@@ -127,7 +127,7 @@ describe('POST /api/campaign-schedules kèm activateCampaign — kích hoạt + 
 
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('CAMPAIGN_NOT_ACTIVE');
-    expect(res.body.message).toContain('Kích hoạt chiến dịch khi tạo lịch');
+    expect(res.body.message).toContain('Kích hoạt & tạo lịch');
 
     const { rows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaign.id]);
     expect(rows[0].status).toBe('draft');

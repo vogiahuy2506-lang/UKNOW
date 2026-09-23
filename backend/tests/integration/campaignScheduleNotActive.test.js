@@ -66,7 +66,7 @@ describe('POST/PATCH /api/campaign-schedules — chiến dịch chưa active', (
     expect(res.status).toBe(409);
     expect(res.body.code).toBe('CAMPAIGN_NOT_ACTIVE');
     expect(res.body.message).toContain('Chiến dịch đang ở trạng thái Nháp nên lịch sẽ không chạy');
-    expect(res.body.message).toContain('Kích hoạt chiến dịch khi tạo lịch');
+    expect(res.body.message).toContain('Kích hoạt & tạo lịch');
     expect(res.body.message).not.toContain('Chạy ngay');
     const { rows } = await db.query('SELECT 1 FROM campaign_schedules WHERE id_campaign = $1', [campaign.id]);
     expect(rows).toHaveLength(0);
