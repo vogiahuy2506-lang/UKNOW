@@ -474,6 +474,17 @@ class CampaignController {
         });
       }
 
+      // Trước bản này publish() không ghi audit gì cả (soát lúc làm PLAN_DAT_LICH_CHIEN_DICH_NHAP
+      // 2026-09-23 — CAMPAIGN_PAUSED cũng vậy, khai báo nhưng chưa ai gọi). Lỗi ghi log không được
+      // làm hỏng việc kích hoạt đã thành công — cùng khuôn try/catch riêng như chỗ khác trong file.
+      try {
+        await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CAMPAIGN_ACTIVATED, AUDIT_ENTITY_TYPES.CAMPAIGN, campaign.id, {
+          viaSchedule: false,
+        });
+      } catch (auditErr) {
+        console.warn('[Campaign] publish audit failed:', auditErr?.message);
+      }
+
       res.json({
         success: true,
         message: 'Kích hoạt chiến dịch thành công',

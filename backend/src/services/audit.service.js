@@ -95,6 +95,10 @@ export const AUDIT_ACTIONS = {
   CAMPAIGN_DELETED: 'CAMPAIGN_DELETED',
   CAMPAIGN_RUN_STARTED: 'CAMPAIGN_RUN_STARTED',
   CAMPAIGN_PAUSED: 'CAMPAIGN_PAUSED',
+  // Kích hoạt chiến dịch draft/paused → active (đường POST /campaigns/:id/publish, và từ 23/09/2026
+  // cũng đường tạo/bật lịch kèm cờ activateCampaign — PLAN_DAT_LICH_CHIEN_DICH_NHAP). Trước bản này
+  // publish() KHÔNG ghi audit gì cả (CAMPAIGN_PAUSED cũng vậy — khai báo nhưng chưa ai gọi).
+  CAMPAIGN_ACTIVATED: 'CAMPAIGN_ACTIVATED',
   CAMPAIGN_APPROVAL_REQUESTED: 'CAMPAIGN_APPROVAL_REQUESTED',
   CAMPAIGN_APPROVAL_APPROVED: 'CAMPAIGN_APPROVAL_APPROVED',
   CAMPAIGN_APPROVAL_REJECTED: 'CAMPAIGN_APPROVAL_REJECTED',

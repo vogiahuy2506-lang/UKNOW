@@ -700,6 +700,46 @@ class CampaignCrudService {
   }
 
   /**
+   * Same rules as `publishCampaign` (draft/paused only, chặn campaign 0 node bằng
+   * CANNOT_ACTIVATE_EMPTY_CAMPAIGN), nhưng chạy trên transaction client — dùng khi kích hoạt phải
+   * nguyên tử với một thao tác khác (PLAN_DAT_LICH_CHIEN_DICH_NHAP 2026-09-23: kích hoạt + tạo/bật
+   * lịch chạy phải cùng thành công hoặc cùng không).
+   *
+   * @param {object} client pg transaction client (đã BEGIN)
+   * @param {object} input
+   * @returns {Promise<object|null>} null nếu campaign không tồn tại/không phải draft/paused
+   */
+  async publishCampaignTx(client, { authUser, userId, roleCode, workspaceOwnerId, campaignId }) {
+    const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+
+    const existing = await campaignCrudRepository.findCampaignByIdTx(client, {
+      campaignId,
+      isAdmin: context.isSuperAdmin,
+      userId: context.actorUserId,
+      workspaceOwnerId: context.workspaceOwnerId,
+    });
+
+    if (!existing || !['draft', 'paused'].includes(existing.status)) {
+      return null;
+    }
+
+    const nodes = await campaignCrudRepository.findNodesByCampaignIdTx(client, campaignId);
+    if (!nodes || nodes.length === 0) {
+      const error = new Error('Không thể kích hoạt chiến dịch khi chưa có node nào');
+      error.code = 'CANNOT_ACTIVATE_EMPTY_CAMPAIGN';
+      error.statusCode = 409;
+      throw error;
+    }
+
+    return campaignCrudRepository.publishCampaignTx(client, {
+      campaignId,
+      isAdmin: context.isSuperAdmin,
+      userId: context.actorUserId,
+      workspaceOwnerId: context.workspaceOwnerId,
+    });
+  }
+
+  /**
    * Pause one campaign if current status is active.
    *
    * @param {object} input

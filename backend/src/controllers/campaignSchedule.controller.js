@@ -1,6 +1,8 @@
 import { serverError } from '../helpers.js';
+import db from '../config/database.js';
 import { requestCampaignScheduleRefresh } from '../utils/scheduler.js';
 import campaignScheduleRepository from '../repositories/campaign/campaignSchedule.repository.js';
+import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.util.js';
 // Cột `next_run_at` không có chỗ ghi (production 12/09/2026: 29/29 lịch bật đều NULL) → tính lúc
 // đọc, cùng luật nổ với scheduler.
@@ -60,6 +62,68 @@ async function auditScheduleAction(req, action, campaignId, details) {
 function employeeCanRunCampaign(req) {
   const context = req.user?.activeContext;
   return context?.type !== 'employee' || context.permissions?.campaigns_run === true;
+}
+
+/**
+ * Kích hoạt chiến dịch (draft/paused → active, dùng lại `campaignCrudService.publishCampaign`)
+ * rồi ghi lịch chạy bằng `writeScheduleTx(client)`, TRONG CÙNG một transaction.
+ *
+ * PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23 mục 3.3: kích hoạt và tạo/bật lịch phải cùng thành công
+ * hoặc cùng không — chiến dịch active mà không có lịch nào chờ là mầm gửi nhầm.
+ *
+ * @param {import('express').Request} req
+ * @param {number} campaignId
+ * @param {(client: object) => Promise<object>} writeScheduleTx nhận client transaction, trả về row lịch
+ * @returns {Promise<{row: object, activatedCampaign: object}|{conflict: true}|{thrown: Error}>}
+ */
+async function activateCampaignAndWriteScheduleTx(req, campaignId, writeScheduleTx) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const activatedCampaign = await campaignCrudService.publishCampaignTx(client, {
+      authUser: req.user,
+      campaignId,
+    });
+    if (!activatedCampaign) {
+      // Trạng thái đổi giữa lúc kiểm ở đầu request và lúc vào transaction (đua request) — không
+      // còn draft/paused nữa, hoặc chiến dịch không thuộc quyền user. Coi như chưa active để báo lại.
+      await client.query('ROLLBACK');
+      return { conflict: true };
+    }
+    const row = await writeScheduleTx(client);
+    await client.query('COMMIT');
+    return { row, activatedCampaign };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    return { thrown: error };
+  } finally {
+    client.release();
+  }
+}
+
+/**
+ * Map một lỗi từ `activateCampaignAndWriteScheduleTx` thành response — dùng chung cho create/update.
+ * Trả về response đã gửi nếu xử lý được, hoặc `null` nếu lỗi lạ (gọi tiếp phải throw ra ngoài).
+ */
+function respondActivateFailure(res, result, campaignStatus) {
+  if (result.conflict) {
+    return res.status(409).json({
+      success: false,
+      code: CAMPAIGN_NOT_ACTIVE_CODE,
+      campaignStatus: campaignStatus ?? null,
+      message: buildCampaignNotActiveMessage(campaignStatus),
+    });
+  }
+  const error = result.thrown;
+  if (error?.code === 'CANNOT_ACTIVATE_EMPTY_CAMPAIGN') {
+    return res.status(error.statusCode || 409).json({
+      success: false,
+      code: error.code,
+      message: error.message,
+    });
+  }
+  if (isScheduleDuplicateViolation(error)) return respondScheduleDuplicate(res);
+  return null;
 }
 
 class CampaignScheduleController {
@@ -162,6 +226,7 @@ class CampaignScheduleController {
       const context = getWorkspaceContext(req.user);
       const { campaignId, scheduleName, scheduleType, cronExpression } = req.body;
       const enabled = normalizeOptionalBoolean(req.body.enabled);
+      const activateCampaign = normalizeOptionalBoolean(req.body.activateCampaign) === true;
 
       // Kiểm tra campaign có tồn tại và thuộc về user không
       const campaign = await campaignScheduleRepository.findCampaignForSchedule({
@@ -205,7 +270,11 @@ class CampaignScheduleController {
 
       // Lịch bật cho chiến dịch chưa `active` sẽ nổ rồi chết im lặng (createCampaignRunRecord ném 400,
       // lịch không được tự kích hoạt chiến dịch). Chặn ngay lúc đặt; lịch TẮT vẫn cho soạn sẵn.
-      if (isEnabling && !isCampaignActiveForSchedule(campaign.status)) {
+      // `activateCampaign: true` mở lối thoát: kích hoạt chiến dịch ngay trong lúc tạo lịch, KHÔNG
+      // gửi gì bây giờ (PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23) — thay vì buộc người dùng bấm
+      // "Chạy ngay" (gửi thật) chỉ để mở khoá đặt lịch.
+      const campaignNotActiveYet = isEnabling && !isCampaignActiveForSchedule(campaign.status);
+      if (campaignNotActiveYet && !activateCampaign) {
         return res.status(409).json({
           success: false,
           code: CAMPAIGN_NOT_ACTIVE_CODE,
@@ -213,6 +282,7 @@ class CampaignScheduleController {
           message: buildCampaignNotActiveMessage(campaign.status),
         });
       }
+      const needsActivation = campaignNotActiveYet && activateCampaign;
 
       // Lịch bật y hệt lịch đang bật (vụ #177/#178 cách nhau đúng một phút) → nổ cùng lúc, gửi hai lần.
       if (isEnabling) {
@@ -224,15 +294,35 @@ class CampaignScheduleController {
         if (duplicate) return respondScheduleDuplicate(res);
       }
 
-      const row = await campaignScheduleRepository.create({
-        campaignId,
-        scheduleName,
-        scheduleType,
-        cronExpression,
-        enabled,
-        workspaceOwnerId: campaign.workspace_owner_id,
-        createdBy: context.actorUserId,
-      });
+      let row;
+      if (needsActivation) {
+        const result = await activateCampaignAndWriteScheduleTx(req, campaignId, (client) =>
+          campaignScheduleRepository.createTx(client, {
+            campaignId,
+            scheduleName,
+            scheduleType,
+            cronExpression,
+            enabled,
+            workspaceOwnerId: campaign.workspace_owner_id,
+            createdBy: context.actorUserId,
+          })
+        );
+        const failureResponse = (result.conflict || result.thrown)
+          && respondActivateFailure(res, result, campaign.status);
+        if (failureResponse) return failureResponse;
+        if (result.thrown) throw result.thrown;
+        row = result.row;
+      } else {
+        row = await campaignScheduleRepository.create({
+          campaignId,
+          scheduleName,
+          scheduleType,
+          cronExpression,
+          enabled,
+          workspaceOwnerId: campaign.workspace_owner_id,
+          createdBy: context.actorUserId,
+        });
+      }
       const schedule = {
         id: row.id,
         campaignId: row.id_campaign,
@@ -246,6 +336,8 @@ class CampaignScheduleController {
         runCount: row.run_count,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        campaignActivated: needsActivation,
+        campaignStatus: needsActivation ? 'active' : campaign.status,
       };
 
       await auditScheduleAction(req, AUDIT_ACTIONS.CAMPAIGN_SCHEDULE_CREATED, row.id_campaign, {
@@ -254,10 +346,19 @@ class CampaignScheduleController {
         cronExpression: row.cron_expression,
         enabled: row.enabled,
       });
+      if (needsActivation) {
+        await auditScheduleAction(req, AUDIT_ACTIONS.CAMPAIGN_ACTIVATED, row.id_campaign, {
+          viaSchedule: true,
+          scheduleId: row.id,
+          previousStatus: campaign.status,
+        });
+      }
 
       return res.status(201).json({
         success: true,
-        message: 'Tạo lịch chạy thành công',
+        message: needsActivation
+          ? 'Đã kích hoạt chiến dịch và tạo lịch chạy thành công'
+          : 'Tạo lịch chạy thành công',
         data: schedule,
       });
     } catch (error) {
@@ -275,6 +376,7 @@ class CampaignScheduleController {
       const { id } = req.params;
       const { scheduleName, scheduleType, cronExpression } = req.body;
       const enabled = normalizeOptionalBoolean(req.body.enabled);
+      const activateCampaign = normalizeOptionalBoolean(req.body.activateCampaign) === true;
 
       // Kiểm tra schedule có tồn tại và thuộc về user không
       const scheduleData = await campaignScheduleRepository.findMutableById({
@@ -314,8 +416,10 @@ class CampaignScheduleController {
 
       // Chỉ chặn lúc BẬT một lịch đang tắt — lịch đã bật từ trước mà sửa tên/giờ thì không bị chặn
       // (đã hỏng từ trước, giao diện có cảnh báo riêng; chặn ở đây làm người dùng không sửa được gì).
-      if (enabled === true && scheduleData.enabled !== true
-        && !isCampaignActiveForSchedule(scheduleData.campaign_status)) {
+      // `activateCampaign: true` mở lối thoát giống lúc tạo lịch mới — xem PLAN_DAT_LICH_CHIEN_DICH_NHAP.
+      const willEnableFromOff = enabled === true && scheduleData.enabled !== true;
+      const campaignNotActiveYet = willEnableFromOff && !isCampaignActiveForSchedule(scheduleData.campaign_status);
+      if (campaignNotActiveYet && !activateCampaign) {
         return res.status(409).json({
           success: false,
           code: CAMPAIGN_NOT_ACTIVE_CODE,
@@ -323,6 +427,7 @@ class CampaignScheduleController {
           message: buildCampaignNotActiveMessage(scheduleData.campaign_status),
         });
       }
+      const needsActivation = campaignNotActiveYet && activateCampaign;
 
       if (enabled === true) {
         const hasRunningRun = await campaignScheduleRepository.hasRunningCampaignRun(scheduleData.id_campaign);
@@ -358,15 +463,35 @@ class CampaignScheduleController {
         if (duplicate) return respondScheduleDuplicate(res);
       }
 
-      const row = await campaignScheduleRepository.update({
-        id,
-        scheduleName,
-        scheduleType,
-        cronExpression,
-        enabled,
-        workspaceOwnerId: context.workspaceOwnerId,
-        isAdmin: context.isSuperAdmin,
-      });
+      let row;
+      if (needsActivation) {
+        const result = await activateCampaignAndWriteScheduleTx(req, scheduleData.id_campaign, (client) =>
+          campaignScheduleRepository.updateTx(client, {
+            id,
+            scheduleName,
+            scheduleType,
+            cronExpression,
+            enabled,
+            workspaceOwnerId: context.workspaceOwnerId,
+            isAdmin: context.isSuperAdmin,
+          })
+        );
+        const failureResponse = (result.conflict || result.thrown)
+          && respondActivateFailure(res, result, scheduleData.campaign_status);
+        if (failureResponse) return failureResponse;
+        if (result.thrown) throw result.thrown;
+        row = result.row;
+      } else {
+        row = await campaignScheduleRepository.update({
+          id,
+          scheduleName,
+          scheduleType,
+          cronExpression,
+          enabled,
+          workspaceOwnerId: context.workspaceOwnerId,
+          isAdmin: context.isSuperAdmin,
+        });
+      }
       const schedule = {
         id: row.id,
         campaignId: row.id_campaign,
@@ -380,6 +505,8 @@ class CampaignScheduleController {
         runCount: row.run_count,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
+        campaignActivated: needsActivation,
+        campaignStatus: needsActivation ? 'active' : scheduleData.campaign_status,
       };
 
       // Bật/tắt là thao tác quyết định chiến dịch có gửi hay không → action riêng; sửa tên/kiểu/giờ → UPDATED.
@@ -401,10 +528,19 @@ class CampaignScheduleController {
           enabled: row.enabled,
         });
       }
+      if (needsActivation) {
+        await auditScheduleAction(req, AUDIT_ACTIONS.CAMPAIGN_ACTIVATED, scheduleData.id_campaign, {
+          viaSchedule: true,
+          scheduleId: scheduleData.id,
+          previousStatus: scheduleData.campaign_status,
+        });
+      }
 
       return res.json({
         success: true,
-        message: 'Cập nhật lịch chạy thành công',
+        message: needsActivation
+          ? 'Đã kích hoạt chiến dịch và cập nhật lịch chạy thành công'
+          : 'Cập nhật lịch chạy thành công',
         data: schedule,
       });
     } catch (error) {

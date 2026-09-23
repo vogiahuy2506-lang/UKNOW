@@ -588,6 +588,32 @@ class CampaignCrudRepository {
   }
 
   /**
+   * Same as `publishCampaign`, but runs on a transaction client (PLAN_DAT_LICH_CHIEN_DICH_NHAP
+   * 2026-09-23) — dùng khi kích hoạt chiến dịch phải nguyên tử với việc tạo/bật lịch chạy.
+   *
+   * @param {object} client pg transaction client
+   * @param {object} params
+   * @returns {Promise<object|null>}
+   */
+  async publishCampaignTx(client, { campaignId, isAdmin, userId, workspaceOwnerId = userId }) {
+    const params = [campaignId];
+    let query = `UPDATE campaigns SET
+      status = 'active',
+      published_at = COALESCE(published_at, CURRENT_TIMESTAMP),
+      updated_at = CURRENT_TIMESTAMP
+     WHERE id = $1
+       AND status IN ('draft', 'paused')`;
+    if (!isAdmin) {
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(workspace_owner_id, id_user) = $${params.length}`;
+    }
+    query += ' RETURNING *';
+
+    const result = await client.query(query, params);
+    return result.rows[0] || null;
+  }
+
+  /**
    * Set campaign status to paused.
    *
    * @param {object} params

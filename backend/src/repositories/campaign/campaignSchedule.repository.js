@@ -177,6 +177,45 @@ class CampaignScheduleRepository {
     return result.rows[0];
   }
 
+  /**
+   * Same as `create`, nhưng chạy trên transaction client — dùng khi tạo lịch phải nguyên tử với
+   * việc kích hoạt chiến dịch (PLAN_DAT_LICH_CHIEN_DICH_NHAP 2026-09-23).
+   *
+   * @param {object} client pg transaction client (đã BEGIN)
+   */
+  async createTx(client, {
+    campaignId,
+    scheduleName,
+    scheduleType,
+    cronExpression,
+    enabled,
+    workspaceOwnerId,
+    createdBy,
+  }) {
+    const result = await client.query(
+      `INSERT INTO campaign_schedules
+       (id_campaign, schedule_name, schedule_type, cron_expression, enabled,
+        workspace_owner_id, created_by)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, id_campaign, schedule_name, schedule_type, cron_expression, enabled,
+         last_run_at::timestamptz AS last_run_at,
+         next_run_at::timestamptz AS next_run_at,
+         run_count,
+         created_at::timestamptz AS created_at,
+         updated_at::timestamptz AS updated_at`,
+      [
+        campaignId,
+        scheduleName,
+        scheduleType,
+        cronExpression,
+        enabled !== false,
+        workspaceOwnerId,
+        createdBy,
+      ]
+    );
+    return result.rows[0];
+  }
+
   async update({
     id,
     scheduleName,
@@ -187,6 +226,48 @@ class CampaignScheduleRepository {
     isAdmin,
   }) {
     const result = await db.query(
+      `UPDATE campaign_schedules SET
+       schedule_name = COALESCE($1, schedule_name),
+       schedule_type = COALESCE($2, schedule_type),
+       cron_expression = COALESCE($3, cron_expression),
+       enabled = COALESCE($4, enabled),
+       updated_at = CURRENT_TIMESTAMP
+       WHERE id = $5
+         AND (
+           $6::boolean = TRUE
+           OR COALESCE(workspace_owner_id, (
+             SELECT COALESCE(c.workspace_owner_id, c.id_user)
+             FROM campaigns c
+             WHERE c.id = campaign_schedules.id_campaign
+           )) = $7
+         )
+       RETURNING id, id_campaign, schedule_name, schedule_type, cron_expression, enabled,
+         last_run_at::timestamptz AS last_run_at,
+         next_run_at::timestamptz AS next_run_at,
+         run_count,
+         created_at::timestamptz AS created_at,
+         updated_at::timestamptz AS updated_at`,
+      [scheduleName, scheduleType, cronExpression, enabled, id, isAdmin, workspaceOwnerId]
+    );
+    return result.rows[0];
+  }
+
+  /**
+   * Same as `update`, nhưng chạy trên transaction client — dùng khi bật lịch phải nguyên tử với
+   * việc kích hoạt chiến dịch (PLAN_DAT_LICH_CHIEN_DICH_NHAP 2026-09-23).
+   *
+   * @param {object} client pg transaction client (đã BEGIN)
+   */
+  async updateTx(client, {
+    id,
+    scheduleName,
+    scheduleType,
+    cronExpression,
+    enabled,
+    workspaceOwnerId,
+    isAdmin,
+  }) {
+    const result = await client.query(
       `UPDATE campaign_schedules SET
        schedule_name = COALESCE($1, schedule_name),
        schedule_type = COALESCE($2, schedule_type),

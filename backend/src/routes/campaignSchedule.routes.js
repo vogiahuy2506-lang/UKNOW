@@ -30,6 +30,9 @@ router.post(
     body('scheduleType').isIn(['once', 'daily', 'weekly', 'monthly', 'custom']).withMessage('Loại lịch không hợp lệ'),
     body('cronExpression').trim().notEmpty().withMessage('Cron expression không được để trống'),
     body('enabled').optional().isBoolean().toBoolean().withMessage('Enabled phải là boolean'),
+    // PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23: xác nhận rõ ràng "kích hoạt chiến dịch draft/paused
+    // ngay trong lúc tạo lịch" — mặc định false, không nhận ngầm.
+    body('activateCampaign').optional().isBoolean().toBoolean().withMessage('activateCampaign phải là boolean'),
     handleValidationErrors,
   ],
   controller.create.bind(controller)
@@ -44,6 +47,7 @@ router.patch(
     body('scheduleType').optional().isIn(['once', 'daily', 'weekly', 'monthly', 'custom']).withMessage('Loại lịch không hợp lệ'),
     body('cronExpression').optional().trim().notEmpty().withMessage('Cron expression không được để trống'),
     body('enabled').optional().isBoolean().toBoolean().withMessage('Enabled phải là boolean'),
+    body('activateCampaign').optional().isBoolean().toBoolean().withMessage('activateCampaign phải là boolean'),
     handleValidationErrors,
   ],
   controller.update.bind(controller)

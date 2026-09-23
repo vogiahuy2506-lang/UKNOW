@@ -2923,6 +2923,7 @@ export default {
       CAMPAIGN_DELETED: 'Xóa chiến dịch',
       CAMPAIGN_RUN_STARTED: 'Bắt đầu chạy chiến dịch',
       CAMPAIGN_PAUSED: 'Tạm dừng chiến dịch',
+      CAMPAIGN_ACTIVATED: 'Kích hoạt chiến dịch',
       CAMPAIGN_APPROVAL_REQUESTED: 'Gửi chiến dịch chờ duyệt',
       CAMPAIGN_APPROVAL_APPROVED: 'Duyệt chiến dịch',
       CAMPAIGN_APPROVAL_REJECTED: 'Từ chối chiến dịch',

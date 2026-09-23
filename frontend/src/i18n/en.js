@@ -2913,6 +2913,7 @@ export default {
       CAMPAIGN_DELETED: 'Campaign Deleted',
       CAMPAIGN_RUN_STARTED: 'Campaign Run Started',
       CAMPAIGN_PAUSED: 'Campaign Paused',
+      CAMPAIGN_ACTIVATED: 'Campaign Activated',
       CAMPAIGN_APPROVAL_REQUESTED: 'Campaign Approval Requested',
       CAMPAIGN_APPROVAL_APPROVED: 'Campaign Approved',
       CAMPAIGN_APPROVAL_REJECTED: 'Campaign Rejected',
