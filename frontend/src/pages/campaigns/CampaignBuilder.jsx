@@ -967,7 +967,16 @@ const CampaignBuilder = () => {
   // BẢN CŨ trong im lặng, tin đã đi rồi mới biết. Nên `isDirty` là chặn cứng, hỏi "Lưu rồi chạy".
   // ------------------------------------------------------------------
   const [pendingServerAction, setPendingServerAction] = useState(null); // 'run' | 'schedule' | null
-  const runController = useCampaignRunController();
+  const runController = useCampaignRunController({
+    // Trang này chỉ giữ MỘT chiến dịch cục bộ (không có danh sách để refetch) — kích hoạt qua modal
+    // đặt lịch hoặc nút Kích hoạt phải cập nhật thẳng nhãn trạng thái tại chỗ, không bắt F5 mới thấy
+    // (PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23 mục 6.3).
+    onCampaignActivated: (campaignId) => {
+      if (String(campaignId) === String(id)) {
+        setCampaignStatus('active');
+      }
+    },
+  });
 
   const campaignForServerActions = useMemo(() => ({
     id,
@@ -1253,6 +1262,7 @@ const CampaignBuilder = () => {
         closeScheduleModal={runController.closeScheduleModal}
         scheduleForm={runController.scheduleForm}
         setScheduleForm={runController.setScheduleForm}
+        scheduleFormError={runController.scheduleFormError}
         handleSaveSchedule={handleSaveScheduleWithCooldownCheck}
         showScheduleDetailModal={runController.showScheduleDetailModal}
         selectedSchedule={runController.selectedSchedule}

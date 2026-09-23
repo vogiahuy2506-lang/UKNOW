@@ -252,4 +252,112 @@ describe('useCampaignRunController', () => {
       expect(toast.error).toHaveBeenCalledWith(NOT_ACTIVE_MESSAGE, expect.objectContaining({ duration: expect.any(Number) }));
     });
   });
+
+  // PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23, PR-2 Việc 6: tạo lịch BẬT cho chiến dịch draft/paused
+  // phải tự gắn cờ activateCampaign vào payload — người dùng chỉ bấm MỘT nút, không tự đánh dấu gì thêm.
+  describe('tạo lịch kèm activateCampaign (PR-2 Việc 6)', () => {
+    const openAndFillScheduleForm = async (result, campaign, formOverrides = {}) => {
+      await act(async () => {
+        result.current.openScheduleModal(campaign);
+      });
+      await act(async () => {
+        result.current.setScheduleForm((prev) => ({
+          ...prev, scheduleType: 'daily', scheduleTime: '09:00', enabled: true, ...formOverrides,
+        }));
+      });
+    };
+
+    it('chiến dịch draft + lịch BẬT → payload có activateCampaign:true, toast báo đã kích hoạt, refresh campaign', async () => {
+      campaignRunApiService.createCampaignSchedule.mockResolvedValueOnce({ data: { success: true } });
+      const onCampaignsChanged = vi.fn();
+      const onCampaignActivated = vi.fn();
+      const { result } = renderHook(() => useCampaignRunController({ onCampaignsChanged, onCampaignActivated }));
+      await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
+      await openAndFillScheduleForm(result, { id: 395, campaignName: 'CSKH', status: 'draft' });
+
+      await act(async () => {
+        await result.current.handleSaveSchedule();
+      });
+
+      expect(campaignRunApiService.createCampaignSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({ campaignId: 395, activateCampaign: true }),
+      );
+      expect(toast.success).toHaveBeenCalledWith('campaignRunModals.scheduleActivatedSuccess');
+      expect(onCampaignActivated).toHaveBeenCalledWith(395);
+      expect(onCampaignsChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('chiến dịch active → payload activateCampaign:false, KHÔNG gọi onCampaignsChanged/onCampaignActivated (giữ hành vi cũ)', async () => {
+      campaignRunApiService.createCampaignSchedule.mockResolvedValueOnce({ data: { success: true } });
+      const onCampaignsChanged = vi.fn();
+      const onCampaignActivated = vi.fn();
+      const { result } = renderHook(() => useCampaignRunController({ onCampaignsChanged, onCampaignActivated }));
+      await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
+      await openAndFillScheduleForm(result, { id: 1, campaignName: 'A', status: 'active' });
+
+      await act(async () => {
+        await result.current.handleSaveSchedule();
+      });
+
+      expect(campaignRunApiService.createCampaignSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({ activateCampaign: false }),
+      );
+      expect(toast.success).toHaveBeenCalledWith('campaigns.scheduleCreated');
+      expect(onCampaignActivated).not.toHaveBeenCalled();
+      expect(onCampaignsChanged).not.toHaveBeenCalled();
+    });
+
+    it('chiến dịch draft nhưng lịch soạn TẮT → payload activateCampaign:false (backend cho tạo luôn, không cần kích hoạt)', async () => {
+      campaignRunApiService.createCampaignSchedule.mockResolvedValueOnce({ data: { success: true } });
+      const { result } = renderHook(() => useCampaignRunController());
+      await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
+      await openAndFillScheduleForm(result, { id: 395, campaignName: 'CSKH', status: 'draft' }, { enabled: false });
+
+      await act(async () => {
+        await result.current.handleSaveSchedule();
+      });
+
+      expect(campaignRunApiService.createCampaignSchedule).toHaveBeenCalledWith(
+        expect.objectContaining({ activateCampaign: false }),
+      );
+    });
+
+    it('409 CANNOT_ACTIVATE_EMPTY_CAMPAIGN → scheduleFormError nhận đúng câu lỗi, KHÔNG đóng modal', async () => {
+      const emptyErr = Object.assign(new Error('Request failed with status code 409'), {
+        response: { status: 409, data: { success: false, code: 'CANNOT_ACTIVATE_EMPTY_CAMPAIGN', message: 'Không thể kích hoạt chiến dịch khi chưa có node nào' } },
+      });
+      campaignRunApiService.createCampaignSchedule.mockRejectedValueOnce(emptyErr);
+      const { result } = renderHook(() => useCampaignRunController());
+      await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
+      await openAndFillScheduleForm(result, { id: 395, campaignName: 'CSKH', status: 'draft' });
+
+      await act(async () => {
+        await result.current.handleSaveSchedule();
+      });
+
+      expect(result.current.scheduleFormError).toBe('Không thể kích hoạt chiến dịch khi chưa có node nào');
+      expect(result.current.showScheduleModal).toBe(true);
+      expect(result.current.selectedCampaign).not.toBeNull();
+    });
+
+    it('mở lại modal → scheduleFormError của lần trước được xoá', async () => {
+      const emptyErr = Object.assign(new Error('boom'), {
+        response: { status: 409, data: { message: 'lỗi cũ' } },
+      });
+      campaignRunApiService.createCampaignSchedule.mockRejectedValueOnce(emptyErr);
+      const { result } = renderHook(() => useCampaignRunController());
+      await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
+      await openAndFillScheduleForm(result, { id: 395, campaignName: 'CSKH', status: 'draft' });
+      await act(async () => {
+        await result.current.handleSaveSchedule();
+      });
+      expect(result.current.scheduleFormError).toBe('lỗi cũ');
+
+      await act(async () => {
+        result.current.openScheduleModal({ id: 395, campaignName: 'CSKH', status: 'draft' });
+      });
+
+      expect(result.current.scheduleFormError).toBeNull();
+    });
+  });
 });

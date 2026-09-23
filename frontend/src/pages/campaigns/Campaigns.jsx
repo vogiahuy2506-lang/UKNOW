@@ -1208,6 +1208,7 @@ const Campaigns = () => {
         closeScheduleModal={runController.closeScheduleModal}
         scheduleForm={runController.scheduleForm}
         setScheduleForm={runController.setScheduleForm}
+        scheduleFormError={runController.scheduleFormError}
         handleSaveSchedule={runController.handleSaveSchedule}
         showScheduleDetailModal={runController.showScheduleDetailModal}
         selectedSchedule={runController.selectedSchedule}

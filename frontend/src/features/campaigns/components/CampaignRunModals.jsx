@@ -10,12 +10,14 @@ import {
   getTodayDateInHanoiForInput,
 } from '../utils/campaignDateTime.helpers';
 import {
+  buildScheduleActivateCampaignNotice,
   filterSchedulesByCampaignId,
   formatScheduleRunClockFromCron,
   getScheduleCampaignNotActiveWarning,
   getSchedulePatternSummaryVi,
   getScheduleRunTimingFieldLabelVi,
   resolveScheduleUiTimingDate,
+  scheduleCreationWillActivateCampaign,
 } from '../utils/campaignRunSchedule.helpers';
 
 /**
@@ -71,6 +73,7 @@ const CampaignRunModals = ({
   closeScheduleModal,
   scheduleForm,
   setScheduleForm,
+  scheduleFormError = null,
   handleSaveSchedule,
   showScheduleDetailModal,
   selectedSchedule,
@@ -273,6 +276,16 @@ const CampaignRunModals = ({
           </div>
 
           <div className="p-6 space-y-4">
+            {scheduleCreationWillActivateCampaign(selectedCampaign?.status, scheduleForm.enabled) && (
+              <div className="rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3">
+                {buildScheduleActivateCampaignNotice(selectedCampaign?.status, t)}
+              </div>
+            )}
+            {scheduleFormError && (
+              <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+                {scheduleFormError}
+              </div>
+            )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 {t('campaignRunModals.scheduleName')}
@@ -434,7 +447,9 @@ const CampaignRunModals = ({
             </button>
             <button onClick={handleSaveSchedule} className="btn btn-primary">
               <HiOutlineCalendar className="w-4 h-4 mr-2" />
-              {t('campaignRunModals.createSchedule')}
+              {scheduleCreationWillActivateCampaign(selectedCampaign?.status, scheduleForm.enabled)
+                ? t('campaignRunModals.activateAndCreateSchedule')
+                : t('campaignRunModals.createSchedule')}
             </button>
           </div>
         </div>

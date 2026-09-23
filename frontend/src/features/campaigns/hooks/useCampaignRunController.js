@@ -19,6 +19,7 @@ import {
   isCompletedOnceSchedule,
   isReadonlyOnceSchedule,
   isStoppedOnceSchedule,
+  scheduleCreationWillActivateCampaign,
 } from '../utils/campaignRunSchedule.helpers';
 
 const WEEKLY_DAY_OPTIONS = (t) => [
@@ -68,15 +69,23 @@ const normalizeContinuousPollIntervalMinutes = (rawValue) => {
  *
  * @param {object} [options]
  * @param {() => (void|Promise<void>)} [options.onCampaignsChanged] Callback khi chiến dịch thay đổi trạng thái (run, stop, activate)
+ * @param {(campaignId: number|string) => void} [options.onCampaignActivated] Callback RIÊNG khi một
+ *   chiến dịch vừa được kích hoạt (draft/paused → active) — trang chỉ giữ MỘT chiến dịch cục bộ
+ *   (CampaignBuilder) cần biết chính xác việc này để cập nhật nhãn trạng thái tại chỗ, không phải
+ *   refetch cả danh sách như `onCampaignsChanged` (PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23 mục 6.3).
  * @returns {object} Các state và handlers phục vụ giao diện chạy chiến dịch
  */
-export default function useCampaignRunController({ onCampaignsChanged } = {}) {
+export default function useCampaignRunController({ onCampaignsChanged, onCampaignActivated } = {}) {
   const { t } = useI18n();
   const weeklyDayOptions = WEEKLY_DAY_OPTIONS(t);
 
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showScheduleDetailModal, setShowScheduleDetailModal] = useState(false);
   const [selectedCampaign, setSelectedCampaign] = useState(null);
+  // Lỗi tạo lịch hiện NGAY TRONG modal (vd 409 CANNOT_ACTIVATE_EMPTY_CAMPAIGN) thay vì chỉ trông
+  // vào toast dễ trôi mất — PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23 mục 6.4. Reset mỗi lần mở/đóng
+  // modal hoặc bấm nộp lại để không hiện lỗi cũ đè lên lần thử mới.
+  const [scheduleFormError, setScheduleFormError] = useState(null);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [scheduleRuns, setScheduleRuns] = useState([]);
   const [scheduleForm, setScheduleForm] = useState({
@@ -595,15 +604,18 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
       cronExpression: '',
       enabled: true,
     });
+    setScheduleFormError(null);
     setShowScheduleModal(true);
   };
 
   const closeScheduleModal = () => {
     setShowScheduleModal(false);
     setSelectedCampaign(null);
+    setScheduleFormError(null);
   };
 
   const handleSaveSchedule = async () => {
+    setScheduleFormError(null);
     if (selectedCampaign?.id && isCampaignRunningById(selectedCampaign.id)) {
       toast.error(t('campaigns.runningBlockSchedule'));
       return;
@@ -659,6 +671,11 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
       return;
     }
 
+    // Chiến dịch draft/paused + lịch sắp tạo đang BẬT → backend sẽ chặn 409 trừ khi kèm cờ này.
+    // Người dùng đặt lịch cho chiến dịch nháp = đã nói rõ ý định cho nó chạy, không bắt họ bấm
+    // "Chạy ngay" (gửi thật) chỉ để mở khoá đặt lịch — PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23.
+    const willActivateCampaign = scheduleCreationWillActivateCampaign(selectedCampaign?.status, scheduleForm.enabled);
+
     try {
       await campaignRunApiService.createCampaignSchedule({
         campaignId: selectedCampaign.id,
@@ -666,14 +683,26 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
         scheduleType: scheduleForm.scheduleType === 'after_delay' ? 'once' : scheduleForm.scheduleType,
         cronExpression,
         enabled: scheduleForm.enabled,
+        activateCampaign: willActivateCampaign,
       });
 
-      toast.success(t('campaigns.scheduleCreated'));
+      toast.success(willActivateCampaign ? t('campaignRunModals.scheduleActivatedSuccess') : t('campaigns.scheduleCreated'));
+      const activatedCampaignId = selectedCampaign.id;
       closeScheduleModal();
       fetchSchedules();
+      // Kích hoạt vừa xảy ra ở backend — refresh ngay để nhãn trạng thái trên đầu trang đổi từ
+      // Nháp sang Đang hoạt động, không bắt người dùng F5 mới thấy (plan mục 6.3).
+      if (willActivateCampaign) {
+        onCampaignActivated?.(activatedCampaignId);
+        await onCampaignsChanged?.();
+      }
     } catch (error) {
-      // Ưu tiên câu của server (vd 409 CAMPAIGN_NOT_ACTIVE nói đúng việc phải làm) — trước đây bị nuốt.
-      toast.error(error?.response?.data?.message || t('campaigns.createScheduleFailed'), { duration: 6000 });
+      // Ưu tiên câu của server (vd 409 CAMPAIGN_NOT_ACTIVE / CANNOT_ACTIVATE_EMPTY_CAMPAIGN nói đúng
+      // việc phải làm) — trước đây bị nuốt. Hiện cả toast lẫn NGAY TRONG modal (đừng đóng modal mất
+      // dữ liệu đã nhập — plan mục 6.4), vì toast có thể trôi mất trước khi người dùng đọc kịp.
+      const message = error?.response?.data?.message || t('campaigns.createScheduleFailed');
+      setScheduleFormError(message);
+      toast.error(message, { duration: 6000 });
     }
   };
 
@@ -770,6 +799,7 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
     try {
       await campaignRunApiService.publishCampaign(campaignId);
       toast.success(t('campaigns.campaignActivated'));
+      onCampaignActivated?.(campaignId);
       await onCampaignsChanged?.();
     } catch (error) {
       toast.error(t('campaigns.activateCampaignFailed'));
@@ -856,6 +886,7 @@ export default function useCampaignRunController({ onCampaignsChanged } = {}) {
     scheduleRuns,
     scheduleForm,
     setScheduleForm,
+    scheduleFormError,
     showScheduleModal,
     showScheduleDetailModal,
     selectedRunDetail,

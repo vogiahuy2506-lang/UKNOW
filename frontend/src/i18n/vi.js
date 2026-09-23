@@ -6972,6 +6972,11 @@ export default {
     runTime: 'Thời gian chạy',
     enableSchedule: 'Kích hoạt lịch chạy',
     createSchedule: 'Tạo lịch',
+    // PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23: tạo lịch BẬT cho chiến dịch draft/paused sẽ kích
+    // hoạt luôn chiến dịch (không gửi gì ngay) thay vì bắt bấm "Chạy ngay" — gửi thật ngay lập tức.
+    activateCampaignNotice: 'Chiến dịch đang ở trạng thái {status}. Tạo lịch sẽ kích hoạt chiến dịch — không gửi tin nào ngay bây giờ, tin chỉ gửi vào đúng giờ đã hẹn.',
+    activateAndCreateSchedule: 'Kích hoạt & tạo lịch',
+    scheduleActivatedSuccess: 'Đã kích hoạt chiến dịch và tạo lịch chạy thành công',
     scheduleDetails: 'Chi tiết lịch chạy',
     campaign: 'Chiến dịch',
     scheduleType2: 'Loại lịch',

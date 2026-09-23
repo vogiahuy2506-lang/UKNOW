@@ -290,6 +290,38 @@ export const getScheduleCampaignNotActiveWarning = (schedule, t) => {
 };
 
 /**
+ * Modal "Thiết lập lịch chạy": tạo lịch BẬT cho chiến dịch draft/paused sẽ bị backend chặn 409 trừ
+ * khi kèm cờ `activateCampaign` (PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23). Lịch soạn sẵn ở trạng
+ * thái TẮT thì luôn tạo được (đúng luật `isEnabling` phía backend) — không cần kích hoạt gì, nên
+ * không hiện dải thông báo và không gửi cờ. Khác với `getScheduleCampaignNotActiveWarning` (cảnh
+ * báo một lịch ĐÃ TẠO sẽ không gửi) — hàm này nói về việc SẮP xảy ra khi bấm nút.
+ *
+ * @param {string} campaignStatus trạng thái chiến dịch hiện tại
+ * @param {boolean} scheduleEnabled cờ "Kích hoạt lịch chạy" người dùng đang chọn trên form
+ * @returns {boolean}
+ */
+export const scheduleCreationWillActivateCampaign = (campaignStatus, scheduleEnabled) => {
+  const status = String(campaignStatus ?? '').trim();
+  if (!status || status === 'active') return false;
+  return scheduleEnabled !== false;
+};
+
+/**
+ * Câu thông báo trong modal "Thiết lập lịch chạy" khi tạo lịch sẽ kích hoạt luôn chiến dịch.
+ *
+ * @param {string} campaignStatus trạng thái chiến dịch hiện tại
+ * @param {(key: string, params?: object) => string} t
+ * @returns {string}
+ */
+export const buildScheduleActivateCampaignNotice = (campaignStatus, t) => {
+  const status = String(campaignStatus ?? '').trim();
+  const label = status === 'draft' || status === 'paused'
+    ? t(`campaignRun.scheduleCampaignStatus.${status}`)
+    : status;
+  return t('campaignRunModals.activateCampaignNotice', { status: label });
+};
+
+/**
  * Check if a one-time schedule has already run.
  *
  * @param {object} schedule schedule item
