@@ -74,6 +74,16 @@ describe('ProtectedRoute — không gian cá nhân khi chưa có gói', () => {
     moTrangApp();
 
     expect(screen.getByRole('button', { name: /Công ty A/ })).toBeInTheDocument();
+    expect(screen.getByText(/Vào không gian của công ty/)).toBeInTheDocument();
+  });
+
+  // Trang này nằm không nhiều tháng nên không ai soi chữ; từ hôm nay khách thật đọc nó. Bản tiếng Việt
+  // không được lẫn "workspace" — phần còn lại của sản phẩm gọi là "không gian của {công ty}".
+  it('bản tiếng Việt không còn chữ "workspace" nào', () => {
+    seed({ hasPlan: false, memberships: [membership] });
+    const { container } = moTrangApp();
+
+    expect(container.textContent).not.toMatch(/workspace/i);
   });
 
   it('người CÓ gói riêng → vào thẳng nội dung như cũ', () => {
