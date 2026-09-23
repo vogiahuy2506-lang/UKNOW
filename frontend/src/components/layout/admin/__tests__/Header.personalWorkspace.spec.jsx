@@ -2,12 +2,18 @@
  * Sự cố production 23/09/2026: một nhân viên KHÔNG có gói riêng bấm "Tài khoản của tôi" trong menu
  * ảnh đại diện và mất trắng màn hình.
  *
- * Chuỗi gây lỗi: nút gọi `switchContext(null)` rồi `navigate('/app')`; `ProtectedRoute` (App.jsx, có
- * từ 05/08) thấy ngữ cảnh `self` mà `user.active_plan_id` rỗng nên `<Navigate to="/" replace />`,
- * còn `navigate('/app')` chạy sau lại đá ngược về `/app`. Hai bên giẫm chân nhau, React dựng ra cây
- * rỗng — đo trên production: `#root` chỉ còn thẻ toast, 0 ký tự đọc được, KHÔNG có lỗi JS nào.
+ * Chuỗi gây lỗi: nút gọi `switchContext(null)` rồi `navigate('/app')`; `ProtectedRoute` thấy ngữ cảnh
+ * `self` mà `user.active_plan_id` rỗng nên trả `<Navigate to="/" replace />`, còn `navigate('/app')`
+ * chạy sau lại đá ngược về `/app`. Hai bên giẫm chân nhau, React dựng ra cây rỗng — đo trên production:
+ * `#root` chỉ còn thẻ toast, 0 ký tự đọc được, KHÔNG có lỗi JS nào.
  *
- * Bịt ở gốc reachability: không mời người ta đi vào chỗ không có gì.
+ * Bản vá ĐẦU TIÊN cùng ngày là giấu dòng menu đi. Bản vá THẬT, ngay sau đó, là chữa ở đích đến:
+ * `ProtectedRoute` render thẳng `NoPlanScreen` thay vì điều hướng, nên không còn cuộc đua nào để thua
+ * (ca ghim ở `components/routes/ProtectedRoute.spec.jsx`). Đích đến đã tử tế thì không có lý do gì
+ * giấu lối vào nữa — trang đó nói rõ "chưa có gói", mời xem bảng giá và liệt kê công ty để quay lại.
+ *
+ * Nên bài này ghim chiều NGƯỢC với bản vá đầu: dòng menu phải hiện với MỌI người. Ai giấu nó lại thì
+ * đỏ, kèm lời nhắc đọc chú thích ở ProtectedRoute.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen } from '@testing-library/react';
@@ -45,13 +51,12 @@ const openMenu = async () => {
 beforeEach(() => { vi.clearAllMocks(); });
 
 describe('Header — lối về "Tài khoản của tôi"', () => {
-  it('nhân viên KHÔNG có gói riêng → không mời về không gian cá nhân (chỗ đó chỉ có trang trắng)', async () => {
+  it('nhân viên KHÔNG có gói riêng → VẪN thấy lối về, vì đích đến giờ là trang "chưa có gói" tử tế', async () => {
     seed({ hasPlan: false });
     render(<MemoryRouter><Header /></MemoryRouter>);
     await openMenu();
 
-    expect(screen.queryByRole('button', { name: /Tài khoản của tôi/ })).not.toBeInTheDocument();
-    // Vẫn thấy công ty mình đang làm việc — menu không bị rỗng.
+    expect(screen.getByRole('button', { name: /Tài khoản của tôi/ })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Công ty A/ })).toBeInTheDocument();
   });
 

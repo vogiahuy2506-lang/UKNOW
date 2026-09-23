@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
 import { useEffect } from 'react';
@@ -105,6 +105,8 @@ import LandingPageCustomizer from './pages/superadmin/LandingPageCustomizer';
 import AuditLogsPage from './pages/settings/AuditLogsPage';
 import UserDeliveryMonitorPage from './pages/campaigns/UserDeliveryMonitorPage';
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
+import LoadingScreen from './components/LoadingScreen';
+import ProtectedRoute from './components/routes/ProtectedRoute';
 import PermissionRoute from './components/routes/PermissionRoute';
 import ActivatePage from './pages/auth/ActivatePage';
 import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
@@ -122,48 +124,6 @@ import SellerDashboard from './pages/marketplace/SellerDashboard';
 import AffiliatePage from './pages/affiliate/AffiliatePage';
 import AdminAffiliatePage from './pages/admin/AdminAffiliatePage';
 import { getPostAuthPath } from './utils/authRedirect';
-
-const LoadingScreen = () => {
-  const { t } = useI18n();
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="text-center">
-        <div className="spinner w-10 h-10 mx-auto mb-4"></div>
-        <p className="text-gray-500">{t('app.loading')}</p>
-      </div>
-    </div>
-  );
-};
-
-// Bảo vệ /app/* — yêu cầu đăng nhập + có gói
-const ProtectedRoute = ({ children }) => {
-  const { isAuthenticated, isLoading, user, activeContext } = useAuthStore();
-  const location = useLocation();
-
-  useEffect(() => {
-    if (isLoading) {
-      const timeout = setTimeout(() => {
-        useAuthStore.setState({ isLoading: false, isAuthenticated: false });
-      }, 15000);
-      return () => clearTimeout(timeout);
-    }
-  }, [isLoading]);
-
-  if (isLoading) return <LoadingScreen />;
-  if (!isAuthenticated) {
-    const redirect = encodeURIComponent(`${location.pathname}${location.search || ''}`);
-    return <Navigate to={`/login?redirect=${redirect}`} replace />;
-  }
-  if (user?.role === 'admin') return <Navigate to="/admin" replace />;
-
-  // Employee context: plan check dựa vào owner's plan (middleware đã xử lý server-side)
-  // Frontend chỉ cần kiểm tra self context
-  if (activeContext?.type === 'self' && !user?.active_plan_id) {
-    return <Navigate to="/" replace />;
-  }
-
-  return children;
-};
 
 // Chỉ self context (user_admin) được vào — employee context thấy màn hình unauthorized
 const OwnerRoute = ({ children }) => {
