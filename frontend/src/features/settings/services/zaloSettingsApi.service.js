@@ -14,6 +14,13 @@ const zaloSettingsApiService = {
     return api.patch(`/zalo/accounts/${accountId}/default`);
   },
 
+  // PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22/23, PR-4. Body PHẢI luôn có `userDailySendLimit` (kể cả
+  // khi bỏ giới hạn thì gửi `null` tường minh) — backend chặn 400 nếu thiếu field, vì thiếu từng bị
+  // hiểu nhầm thành "xoá trắng" (xem zaloSettings.routes.js). Đừng gọi hàm này với body rỗng.
+  updateSendLimit(accountId, userDailySendLimit) {
+    return api.patch(`/zalo/accounts/${accountId}/send-limit`, { userDailySendLimit });
+  },
+
   createLoginQr() {
     return api.post('/zalo/accounts/login-qr');
   },

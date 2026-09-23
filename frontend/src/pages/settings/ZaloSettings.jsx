@@ -57,6 +57,7 @@ function normalizeAccount(account = {}) {
       ? { name: String(account.createdBy.name) }
       : (account.creatorName ? { name: String(account.creatorName) } : null),
     updatedAt: account.updatedAt || account.lastSyncAt || null,
+    userDailySendLimit: account.userDailySendLimit ?? account.user_daily_send_limit ?? null,
   };
 }
 
@@ -68,6 +69,10 @@ const ZaloSettings = () => {
   const [isCreatingQr, setIsCreatingQr] = useState(false);
   const [restoringAccountIds, setRestoringAccountIds] = useState([]);
   const [retryingAccountIds, setRetryingAccountIds] = useState([]);
+  // Ô nhập giới hạn gửi/ngày sửa tại chỗ trên từng dòng tài khoản (PLAN_GIOI_HAN_GUI_THEO_NGAY
+  // 2026-09-22/23, PR-4). Nháp riêng theo accountId — chưa lưu thì không đụng vào `accounts` gốc.
+  const [sendLimitDrafts, setSendLimitDrafts] = useState({});
+  const [savingSendLimitIds, setSavingSendLimitIds] = useState([]);
   const [isBackendReady, setIsBackendReady] = useState(true);
   const [backendModeMessage, setBackendModeMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false);
@@ -185,6 +190,50 @@ const ZaloSettings = () => {
       toast.success(t('zaloSettings.setDefaultSuccess'));
     } catch (error) {
       toast.error(error.response?.data?.message || t('zaloSettings.setDefaultFailed'));
+    }
+  };
+
+  /** Giá trị đang hiện trên ô nhập — ưu tiên nháp chưa lưu, không thì giá trị đã lưu. */
+  const getSendLimitDraft = (account) => {
+    if (Object.prototype.hasOwnProperty.call(sendLimitDrafts, account.id)) {
+      return sendLimitDrafts[account.id];
+    }
+    return account.userDailySendLimit != null ? String(account.userDailySendLimit) : '';
+  };
+
+  const handleSaveSendLimit = async (account) => {
+    if (!isBackendReady) {
+      toast.error(t('zaloSettings.backendNotReady'));
+      return;
+    }
+
+    const raw = getSendLimitDraft(account).trim();
+    if (raw) {
+      const parsed = Number(raw);
+      // 0, số âm, số thập phân đều chặn ở đây — đừng để backend trả 400
+      // (validator isInt({min:1,max:100000}) của PATCH .../send-limit).
+      if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100000) {
+        toast.error(t('zaloSettings.dailySendLimitInvalid'));
+        return;
+      }
+    }
+
+    setSavingSendLimitIds((prev) => [...prev, account.id]);
+    try {
+      // Body PHẢI luôn có field này, ô trống = gửi null tường minh để bỏ giới hạn — KHÔNG được
+      // gửi body rỗng (backend trả 400, xem zaloSettingsApi.service.js).
+      await zaloSettingsApiService.updateSendLimit(account.id, raw ? Number(raw) : null);
+      await fetchAccounts();
+      setSendLimitDrafts((prev) => {
+        const next = { ...prev };
+        delete next[account.id];
+        return next;
+      });
+      toast.success(t('zaloSettings.dailySendLimitSaveSuccess'));
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('zaloSettings.dailySendLimitSaveFailed'));
+    } finally {
+      setSavingSendLimitIds((prev) => prev.filter((id) => id !== account.id));
     }
   };
 
@@ -474,6 +523,35 @@ const ZaloSettings = () => {
                       <p className="text-xs text-gray-500 mt-1">
                         {t('zaloSettings.lastSync')}: {account.updatedAt ? formatCampaignDateTime(account.updatedAt) : 'N/A'}
                       </p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <label htmlFor={`send-limit-${account.id}`} className="text-sm text-gray-600">
+                          {t('zaloSettings.dailySendLimit')}:
+                        </label>
+                        <div className="w-28">
+                          <input
+                            id={`send-limit-${account.id}`}
+                            type="number"
+                            min={1}
+                            max={100000}
+                            step={1}
+                            value={getSendLimitDraft(account)}
+                            onChange={(e) => setSendLimitDrafts((prev) => ({ ...prev, [account.id]: e.target.value }))}
+                            className="input py-1 text-sm"
+                            placeholder={t('zaloSettings.dailySendLimitPlaceholder')}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          className="btn btn-secondary text-xs"
+                          onClick={() => handleSaveSendLimit(account)}
+                          disabled={savingSendLimitIds.includes(account.id)}
+                        >
+                          {savingSendLimitIds.includes(account.id) ? t('common.saving') : t('common.save')}
+                        </button>
+                        {Number(getSendLimitDraft(account)) > 100 && (
+                          <span className="text-xs text-amber-600">{t('zaloSettings.dailySendLimitHighWarning')}</span>
+                        )}
+                      </div>
                     </div>
 
                     <div className="flex items-center gap-2">

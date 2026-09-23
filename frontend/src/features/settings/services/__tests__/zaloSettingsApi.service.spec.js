@@ -7,6 +7,7 @@ vi.mock('../../../../services/api', () => ({
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
+    patch: vi.fn(),
     delete: vi.fn(),
   },
 }));
@@ -161,5 +162,29 @@ describe('zaloSettingsApiService', () => {
         headers: expect.objectContaining({ 'Idempotency-Key': 'fixed-key-abc' }),
       })
     );
+  });
+
+  // PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối 2026-09-23, PR-4. Body PATCH .../send-limit PHẢI luôn có
+  // field `userDailySendLimit` (kể cả khi giá trị là null) — backend chặn 400 nếu thiếu hẳn field
+  // (từng bị hiểu nhầm "thiếu = xoá trắng", xem zaloSettings.routes.js). ZaloSettings.jsx mock hẳn
+  // module này nên không tự lộ ra lỗi build body sai — phải kiểm riêng ở tầng service.
+  describe('updateSendLimit', () => {
+    it('gửi PATCH /zalo/accounts/:id/send-limit với đúng body { userDailySendLimit }', async () => {
+      api.patch.mockResolvedValue({ data: { success: true } });
+
+      await zaloSettingsApiService.updateSendLimit('7', 80);
+
+      expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/send-limit', { userDailySendLimit: 80 });
+    });
+
+    it('bỏ giới hạn: giá trị null vẫn phải nằm TRONG body (không phải object rỗng)', async () => {
+      api.patch.mockResolvedValue({ data: { success: true } });
+
+      await zaloSettingsApiService.updateSendLimit('7', null);
+
+      expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/send-limit', { userDailySendLimit: null });
+      const [, body] = api.patch.mock.calls[0];
+      expect(Object.prototype.hasOwnProperty.call(body, 'userDailySendLimit')).toBe(true);
+    });
   });
 });

@@ -21,6 +21,7 @@ import {
   HiOutlineInformationCircle,
   HiOutlineShieldCheck,
   HiOutlineGlobe,
+  HiOutlineChartBar,
 } from 'react-icons/hi';
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -375,6 +376,7 @@ function normalizeItem(raw) {
     smtpPort: item.smtpPort || item.smtp_port || '',
     smtpUsername: item.smtpUsername || item.smtp_username || '',
     smtpPassword: item.smtpPassword || item.smtp_password || '',
+    userDailySendLimit: item.userDailySendLimit ?? item.user_daily_send_limit ?? null,
   };
 }
 
@@ -401,6 +403,7 @@ const EmailSettings = () => {
     smtpPort: '',
     smtpUsername: '',
     smtpPassword: '',
+    userDailySendLimit: '',
   };
 
   const [formData, setFormData] = useState(emptyForm);
@@ -479,6 +482,11 @@ const EmailSettings = () => {
         smtpPort: normalized.smtpPort || '',
         smtpUsername: normalized.smtpUsername || '',
         smtpPassword: normalized.smtpPassword || '',
+        // BẪY (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-23, PR-4): payload gửi lên PUT luôn mang field
+        // này (`{...formData}`), và backend coi "có mặt trong body" = ghi đè. Thiếu dòng này thì
+        // form luôn nạp '' → mỗi lần khách sửa bất kỳ thứ gì khác, giới hạn họ đã đặt bị XOÁ SẠCH
+        // im lặng, vẫn báo "Lưu thành công".
+        userDailySendLimit: normalized.userDailySendLimit != null ? String(normalized.userDailySendLimit) : '',
       });
       setFormErrors({});
     } catch (error) {
@@ -502,6 +510,16 @@ const EmailSettings = () => {
       if (!String(formData.smtpPassword || '').trim()) errors.smtpPassword = t('emailSettings.smtpPasswordRequired');
     }
 
+    const rawLimit = String(formData.userDailySendLimit ?? '').trim();
+    if (rawLimit) {
+      const parsedLimit = Number(rawLimit);
+      // 0, số âm, số thập phân, chữ đều chặn ở đây — đừng để backend trả 400 (validator
+      // isInt({min:1,max:100000}) của PUT /api/email-settings/:id).
+      if (!Number.isInteger(parsedLimit) || parsedLimit < 1 || parsedLimit > 100000) {
+        errors.userDailySendLimit = t('emailSettings.dailySendLimitInvalid');
+      }
+    }
+
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -514,8 +532,12 @@ const EmailSettings = () => {
     }
     setIsSaving(true);
     try {
+      const rawLimit = String(formData.userDailySendLimit ?? '').trim();
       const payload = {
         ...formData,
+        // '' phải thành null tường minh — validator PUT là isInt({min:1,max:100000}), '' sẽ trượt
+        // 400. null tường minh = xoá trắng ô = bỏ giới hạn (CASE WHEN $hasField phía backend).
+        userDailySendLimit: rawLimit ? Number(rawLimit) : null,
       };
 
       if (selectedEmailId && !isAddingNew) {
@@ -838,6 +860,36 @@ const EmailSettings = () => {
             </div>
           </SectionCard>
         )}
+
+        {/* Section: Gioi han gui/ngay (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22/23, PR-4) */}
+        <SectionCard
+          icon={HiOutlineChartBar}
+          title={t('emailSettings.dailySendLimit')}
+          subtitle={t('emailSettings.dailySendLimitSubtitle')}
+          accent="amber"
+        >
+          <div className="space-y-1.5 md:w-1/2">
+            <input
+              type="number"
+              min={1}
+              max={100000}
+              step={1}
+              value={formData.userDailySendLimit}
+              onChange={(event) => setFormData((prev) => ({ ...prev, userDailySendLimit: event.target.value }))}
+              className={`w-full border rounded-lg px-3 py-2 text-sm outline-none transition focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 ${
+                formErrors.userDailySendLimit ? 'border-red-400 bg-red-50/40' : 'border-slate-200'
+              }`}
+              placeholder={t('emailSettings.dailySendLimitPlaceholder')}
+            />
+            {formErrors.userDailySendLimit && (
+              <p className="text-xs text-red-600">{formErrors.userDailySendLimit}</p>
+            )}
+            {!formErrors.userDailySendLimit && Number(formData.userDailySendLimit) > 100 && (
+              <p className="text-xs text-amber-600">{t('emailSettings.dailySendLimitHighWarning')}</p>
+            )}
+            <p className="text-xs text-slate-500">{t('emailSettings.dailySendLimitEmptyHint')}</p>
+          </div>
+        </SectionCard>
 
         {/* Section 3: Huong dan SMTP (chi khi mode SMTP) */}
         {isSmtpMode && (
