@@ -37,8 +37,19 @@ describe('scheduleCreationWillActivateCampaign', () => {
     expect(scheduleCreationWillActivateCampaign(status, true)).toBe(false);
   });
 
-  it('trạng thái lạ khác active (vd pending_owner_approval) + enabled true → vẫn true (đúng luật isEnabling phía backend)', () => {
-    expect(scheduleCreationWillActivateCampaign('pending_owner_approval', true)).toBe(true);
+  // Sửa lúc review 23/09: bản trước ghim "khác active → true" với lý do "đúng luật isEnabling phía
+  // backend". Luật isEnabling nói về việc BẬT LỊCH, không phải về việc kích hoạt chiến dịch —
+  // publishCampaignTx chỉ nhận draft/paused và trả null cho mọi trạng thái khác, nên giao diện hứa
+  // "sẽ kích hoạt" cho pending_owner_approval là hứa thứ backend sẽ từ chối bằng 409.
+  it.each([['pending_owner_approval'], ['completed'], ['stopped']])(
+    'trạng thái backend KHÔNG kích hoạt được (%s) → false, không hứa suông',
+    (status) => {
+      expect(scheduleCreationWillActivateCampaign(status, true)).toBe(false);
+    },
+  );
+
+  it.each([['draft'], ['paused']])('%s + enabled true → true', (status) => {
+    expect(scheduleCreationWillActivateCampaign(status, true)).toBe(true);
   });
 });
 

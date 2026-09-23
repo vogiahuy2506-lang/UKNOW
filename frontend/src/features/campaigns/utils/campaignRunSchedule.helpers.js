@@ -300,9 +300,14 @@ export const getScheduleCampaignNotActiveWarning = (schedule, t) => {
  * @param {boolean} scheduleEnabled cờ "Kích hoạt lịch chạy" người dùng đang chọn trên form
  * @returns {boolean}
  */
+// Backend chỉ kích hoạt được `draft` và `paused` (publishCampaignTx trả null cho mọi trạng thái
+// khác). Liệt kê đúng hai trạng thái đó thay vì "khác active": chiến dịch `pending_owner_approval`
+// từng được hứa "sẽ kích hoạt" rồi ăn 409 — giao diện không được hứa rộng hơn backend làm được.
+export const ACTIVATABLE_CAMPAIGN_STATUSES = Object.freeze(['draft', 'paused']);
+
 export const scheduleCreationWillActivateCampaign = (campaignStatus, scheduleEnabled) => {
   const status = String(campaignStatus ?? '').trim();
-  if (!status || status === 'active') return false;
+  if (!ACTIVATABLE_CAMPAIGN_STATUSES.includes(status)) return false;
   return scheduleEnabled !== false;
 };
 
