@@ -230,7 +230,11 @@ describe('PUT /api/email-settings/:id — userDailySendLimit', () => {
     expect(negative.status).toBe(400);
   });
 
-  it('đổi giới hạn → ghi audit EMAIL_ACCOUNT_SEND_LIMIT_UPDATED với giá trị cũ/mới + exceededRecommended', async () => {
+  // Ngưỡng cảnh báo email = 2.000 (daily_email_limit của gói trả tiền cao nhất), đổi từ 100 ở
+  // 681a6376. Hai ca dưới ghim cả hai phía ngưỡng: một con số khách trả tiền đạt được trong gói
+  // (KHÔNG cảnh báo) và một con số chỉ Enterprise/Custom mới chạm (CÓ cảnh báo). Chỉ ghim một phía
+  // thì hạ ngưỡng về 100 vẫn xanh — đúng chỗ ca cũ để lọt.
+  it('đổi giới hạn dưới ngưỡng → audit EMAIL_ACCOUNT_SEND_LIMIT_UPDATED, exceededRecommended = false', async () => {
     const owner = await createUser({ role: 'user', username: 'email_owner_audit' });
     const token = await loginAs(owner);
     const account = await createEmailAccount({ ownerId: owner.id, userDailySendLimit: 30 });
@@ -242,7 +246,22 @@ describe('PUT /api/email-settings/:id — userDailySendLimit', () => {
 
     const row = await auditRow('EMAIL_ACCOUNT_SEND_LIMIT_UPDATED', account.id);
     expect(row).not.toBeNull();
-    expect(row.details).toMatchObject({ previousValue: 30, newValue: 500, exceededRecommended: true });
+    expect(row.details).toMatchObject({ previousValue: 30, newValue: 500, exceededRecommended: false });
+  });
+
+  it('đổi giới hạn trên ngưỡng → audit ghi exceededRecommended = true', async () => {
+    const owner = await createUser({ role: 'user', username: 'email_owner_audit_high' });
+    const token = await loginAs(owner);
+    const account = await createEmailAccount({ ownerId: owner.id, userDailySendLimit: 30 });
+
+    await request(app)
+      .put(`/api/email-settings/${account.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userDailySendLimit: 2500 });
+
+    const row = await auditRow('EMAIL_ACCOUNT_SEND_LIMIT_UPDATED', account.id);
+    expect(row).not.toBeNull();
+    expect(row.details).toMatchObject({ previousValue: 30, newValue: 2500, exceededRecommended: true });
   });
 
   it('sửa field khác (không đụng userDailySendLimit) → KHÔNG ghi audit send-limit', async () => {
