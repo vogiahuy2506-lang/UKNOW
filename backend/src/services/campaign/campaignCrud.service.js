@@ -415,10 +415,14 @@ class CampaignCrudService {
           const executionOrder = orderMap.get(nodeKey) || idx + 1;
           const newNodeId = await campaignCrudRepository.insertNodeTx(client, {
             campaignId,
-            nodeType: node.nodeType,
-            nodeSubtype: node.nodeSubtype,
-            nodeName: node.nodeName,
-            nodeDescription: node.nodeDescription,
+            // Cùng khuôn mặc định với `createCampaign`: `campaign_nodes.node_subtype` là NOT NULL,
+            // nên client bỏ trống trường này thì INSERT ném 23502 và người dùng nhận 500 "Lỗi server".
+            // Đường TẠO đã chặn bằng `?? ''` từ đầu, đường CẬP NHẬT thì quên — đo thật trên production
+            // 23/09/2026: PUT /campaigns/:id không kèm nodeSubtype → 500.
+            nodeType: node.nodeType ?? node.node_type ?? 'unknown',
+            nodeSubtype: node.nodeSubtype ?? node.node_subtype ?? '',
+            nodeName: node.nodeName ?? node.node_name ?? 'Node',
+            nodeDescription: node.nodeDescription ?? node.node_description ?? '',
             positionX: node.positionX || 0,
             positionY: node.positionY || 0,
             config: JSON.stringify(node.config || {}),

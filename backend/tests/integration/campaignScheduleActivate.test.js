@@ -344,3 +344,37 @@ describe('Validator chặn độ dài — lỗi của người dùng phải là 
     expect(rows[0].status).toBe('draft');
   });
 });
+
+/**
+ * Lỗi 500 lộ ra khi nghiệm thu trên PRODUCTION 23/09/2026: `PUT /api/campaigns/:id` kèm node mà
+ * không có `nodeSubtype` → `null value in column "node_subtype" violates not-null constraint` →
+ * người dùng nhận "Lỗi server".
+ *
+ * Gốc: `createCampaign` đặt mặc định `?? ''` cho nodeType/Subtype/Name/Description, còn
+ * `updateCampaign` truyền thẳng. Giao diện thật luôn gửi đủ trường nên không ai thấy.
+ */
+describe('PUT /api/campaigns/:id — node thiếu trường không được thành 500', () => {
+  it('lưu node chỉ có nodeType + vị trí → 200, node vào DB với node_subtype rỗng (không phải NULL)', async () => {
+    const user = await createUser({ email: 'node-default@test.com', username: 'node_default' });
+    const token = await loginAs(user);
+    const campaign = await insertCampaign({ ownerId: user.id, status: 'draft', withNode: false });
+
+    const res = await request(app)
+      .put(`/api/campaigns/${campaign.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        campaignName: 'Chiến dịch thử',
+        campaignType: 'email',
+        nodes: [{ tempId: 'n1', nodeType: 'send_email', positionX: 10, positionY: 20, config: {} }],
+        connections: [],
+      });
+
+    expect(res.status).toBe(200);
+    const { rows } = await db.query(
+      'SELECT node_type, node_subtype, node_name FROM campaign_nodes WHERE id_campaign = $1', [campaign.id]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].node_subtype).toBe('');
+    expect(rows[0].node_type).toBe('send_email');
+    expect(rows[0].node_name).toBe('Node');
+  });
+});
