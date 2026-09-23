@@ -2373,7 +2373,7 @@ export default {
     setDefaultSuccess: 'Đã chọn tài khoản gửi mặc định',
     setDefaultFailed: 'Không thể đổi tài khoản mặc định',
     dailySendLimit: 'Giới hạn gửi/ngày',
-    dailySendLimitPlaceholder: 'Để trống = không giới hạn',
+    dailySendLimitPlaceholder: 'Không giới hạn',
     dailySendLimitInvalid: 'Nhập số nguyên từ 1 đến 100.000',
     dailySendLimitHighWarning: 'Trên 100 tin/ngày dễ bị Zalo khoá tài khoản — cân nhắc trước khi đặt',
     dailySendLimitSaveSuccess: 'Đã lưu giới hạn gửi/ngày',

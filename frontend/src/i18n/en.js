@@ -2371,7 +2371,7 @@ export default {
     setDefaultSuccess: 'Default messaging account selected',
     setDefaultFailed: 'Cannot change default account',
     dailySendLimit: 'Daily send limit',
-    dailySendLimitPlaceholder: 'Leave blank = unlimited',
+    dailySendLimitPlaceholder: 'Unlimited',
     dailySendLimitInvalid: 'Enter a whole number from 1 to 100,000',
     dailySendLimitHighWarning: 'Above 100 messages/day risks a Zalo account ban — consider carefully',
     dailySendLimitSaveSuccess: 'Daily send limit saved',

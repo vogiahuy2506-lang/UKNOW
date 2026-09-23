@@ -527,7 +527,11 @@ const ZaloSettings = () => {
                         <label htmlFor={`send-limit-${account.id}`} className="text-sm text-gray-600">
                           {t('zaloSettings.dailySendLimit')}:
                         </label>
-                        <div className="w-28">
+                        {/* Bề rộng phải đặt Ở ĐÂY, không phải trên <input>: lớp `.input` dùng
+                            `@apply w-full` và nằm ngoài `@layer` nên nó thắng mọi utility w-* đặt
+                            trực tiếp trên ô. w-28 (112px) làm placeholder "Để trống = không giới hạn"
+                            bị cắt còn "Để trống = kh". */}
+                        <div className="w-44">
                           <input
                             id={`send-limit-${account.id}`}
                             type="number"
@@ -536,7 +540,7 @@ const ZaloSettings = () => {
                             step={1}
                             value={getSendLimitDraft(account)}
                             onChange={(e) => setSendLimitDrafts((prev) => ({ ...prev, [account.id]: e.target.value }))}
-                            className="input py-1 text-sm w-44"
+                            className="input py-1 text-sm"
                             placeholder={t('zaloSettings.dailySendLimitPlaceholder')}
                           />
                         </div>
