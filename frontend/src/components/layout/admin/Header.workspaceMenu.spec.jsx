@@ -47,6 +47,10 @@ beforeEach(() => {
     role: 'user',
     fullName: 'Nhân Viên Một',
     email: 'nv@example.com',
+    // Có gói riêng: bắt buộc để fixture này nói thật. Người KHÔNG có gói mà đang ở ngữ cảnh `self`
+    // là trạng thái không tồn tại được — `ProtectedRoute` đá họ khỏi /app ngay. Từ 23/09/2026 menu
+    // cũng không mời họ về không gian cá nhân nữa (xem Header.personalWorkspace.spec.jsx).
+    active_plan_id: 3,
     memberships: [{ ownerId: 10, ownerName: 'Công ty A' }],
   };
   store.activeContext = { type: 'self' };

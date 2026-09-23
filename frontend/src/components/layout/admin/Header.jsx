@@ -32,6 +32,9 @@ const AVATAR_STYLES = {
 const Header = ({ onToggleSidebar }) => {
   const { t, locale, changeLocale } = useI18n();
   const { user, logout, activeContext, switchContext, refreshCurrentUser } = useAuthStore();
+  // Không gian cá nhân chỉ dùng được khi chính người này có gói — nếu không, mọi đường dẫn tới nó
+  // đều kết thúc ở màn hình trắng (xem chú thích ở nút bên dưới).
+  const canUsePersonalWorkspace = Boolean(user?.active_plan_id);
   const navigate = useNavigate();
   const { showMarketplace } = useMarketplaceModal();
 
@@ -221,6 +224,13 @@ const Header = ({ onToggleSidebar }) => {
                 <p className="px-3 py-1.5 text-[10px] font-bold text-gray-400 uppercase tracking-wider">
                   {t('header.activeContext')}
                 </p>
+                {/* Chỉ hiện lối về không gian cá nhân khi người này THỰC SỰ có một cái để về.
+                    Người không có gói riêng mà bấm vào đây thì `ProtectedRoute` (App.jsx, từ 05/08)
+                    đá về "/" trong khi `navigate('/app')` ngay dưới đá ngược lại — hai bên giẫm chân
+                    nhau và để lại TRANG TRẮNG, không một dòng lỗi nào. Sự cố thật trên production
+                    23/09/2026: một nhân viên không có gói riêng bấm "Tài khoản của tôi" và mất luôn
+                    màn hình, phải xoá phiên mới vào lại được. */}
+                {canUsePersonalWorkspace && (
                 <button
                   onClick={async () => { setProfileOpen(false); await switchContext(null); navigate('/app'); }}
                   className={`w-full flex items-center justify-between px-3 py-2 text-[13px] rounded-xl transition-colors ${
@@ -235,6 +245,7 @@ const Header = ({ onToggleSidebar }) => {
                   </div>
                   {activeContext.type === 'self' && <HiOutlineCheck className="w-4 h-4" />}
                 </button>
+                )}
                 {user?.memberships?.map((m) => (
                   <button
                     key={m.ownerId}
