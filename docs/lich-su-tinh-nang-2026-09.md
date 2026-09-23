@@ -659,6 +659,68 @@ Ba điểm đáng nhớ:
   cold path: trước đây bộ khử trùng huỷ hộ lượt cũ, sau PR-3 thì không còn ai huỷ, mỗi lần bấm lại
   mở thêm một phiên Telegram ở server.
 
+## Nhân viên & phân quyền: thêm người xong là dùng được ngay (21–23/09)
+
+Khách phản ánh "thêm nhân viên vào tài khoản doanh nghiệp thì add không được, hoặc nhân viên không
+xem được chiến dịch của công ty". Phần máy chủ lọc dữ liệu theo công ty **vẫn đúng** — có test
+integration với `X-Owner-Context` từ trước. Hỏng nằm ở đường đi của người dùng.
+
+Số liệu đóng đinh chẩn đoán: trong **60 ngày** không có lấy một dòng `EMPLOYEE_PERMISSIONS_UPDATED`.
+Không phải một người dùng sai — **chưa khách nào từng cấp quyền cho nhân viên lần nào**, vì không ai
+biết là phải cấp.
+
+| Việc | Commit |
+|---|---|
+| Thêm nhân viên xong tự mở màn Phân quyền kèm nút chọn nhanh; cột "Quyền" trong danh sách; trùng tên đăng nhập báo đúng thay vì 500 "Lỗi server" | `8c60a210`, `17df3d33` |
+| Nhân viên có gói riêng: dải mời "Vào không gian của …" ở đầu trang, menu avatar đổi nhãn thành "Không gian làm việc"; nhận quyền mới không cần F5 | `9b70ec84` |
+| Review: thẻ "Trợ lý AI chưa được bật cho bạn" thay cho khung chat trả 403 khi thiếu quyền; dòng tên công ty không bị cắt | `fed7ec57`, `b9572056` |
+| Tài khoản đã xoá mềm thôi chiếm suất nhân viên; không chọn công ty đang bị khoá làm không gian mặc định | `6995365c`, `97ed2c2e` |
+| **Nhân viên mới có sẵn hai quyền chỉ-đọc** (xem chiến dịch + Tổng quan) + migration 237 cấp bù cho quan hệ chưa từng phân quyền | `318620ba` |
+| Trang Nhật ký hoạt động: 65/86 loại hành động trước đó hiện ra như mã kỹ thuật thô | `ce751cd4` |
+
+Ba điểm đáng nhớ:
+
+- **Một cờ cấu hình chết còn đánh lừa hơn code chết.** `employeePermissionCatalog.js` có trường
+  `defaultForNewEmployee` cho cả 22 quyền, tất cả `false` — đọc qua tưởng "cố ý không cấp quyền mặc
+  định", và đã báo cáo đúng như vậy. Thật ra **không dòng nào đọc trường đó** kể từ khi nó ra đời:
+  hai đường tạo membership không truyền `permissions`, nên thứ quyết định hành vi là mặc định của
+  cột DB. Route chết ít ra không trả lời câu hỏi nào; cờ chết **trả lời sai một câu hỏi về chính sách**.
+- **Ba môi trường, ba mặc định khác nhau** cho cùng một cột: migration 001 ghi `campaigns_view: true`,
+  `schema.sql` và bootstrap test ghi `'{}'`, production chạy `'[]'`. Muốn biết dữ liệu mới nhận gì thì
+  phải đọc `information_schema.columns.column_default` **trên production**, đừng suy từ migration đầu.
+- **Phân biệt "chưa từng cấu hình" với "đã cố ý thu hồi" bằng hình dạng dữ liệu, không đoán.** Chưa
+  từng phân quyền là `[]` hoặc `{}`; bấm "Bỏ hết" rồi Lưu ra object đủ 22 khoá toàn `false`. Migration
+  237 chỉ đụng nhóm đầu — đo sau deploy: 5 quan hệ kẹt về 0, quyết định thu hồi của chủ không bị đụng.
+
+## Đặt lịch cho chiến dịch Nháp không còn phải bấm "Chạy ngay" (23/09)
+
+Đặt lịch gửi cho chiến dịch đang **Nháp** bị chặn, kèm câu hướng dẫn: *"Bấm «Chạy ngay» một lần để
+kích hoạt chiến dịch, rồi đặt lịch lại."* Mà "Chạy ngay" **gửi tin thật ngay lập tức** — đúng thứ
+người hẹn 08:00 sáng mai đang tránh. Với chiến dịch Zalo nhóm, bấm nhầm là tin đã đi, không thu lại được.
+
+Gốc sâu hơn: hệ thống **đã có** đường kích hoạt không gửi gì (`POST /campaigns/:id/publish`), frontend
+**đã có** hàm gọi nó và nhãn tiếng Việt — nhưng **không component nào gọi hàm đó**, nên nút không tồn
+tại, và câu báo lỗi đành chỉ sang nút gửi thật.
+
+| Việc | Commit |
+|---|---|
+| `POST/PATCH /campaign-schedules` nhận `activateCampaign`: kích hoạt chiến dịch `draft`/`paused` và tạo/bật lịch **trong cùng một transaction**; thêm action nhật ký `CAMPAIGN_ACTIVATED` (đường publish trước đó **chưa từng ghi audit dòng nào**) | `c9a2e9fb` |
+| Modal đặt lịch: dải nhắc "sẽ kích hoạt chiến dịch — không gửi tin nào ngay bây giờ", nút đổi thành "Kích hoạt & tạo lịch"; lỗi hiện trong modal thay vì đóng mất dữ liệu đã nhập; xoá hàm kích hoạt không ai gọi; nhãn menu "Tiếp tục lịch chạy" → "Tiếp tục chiến dịch" | `d020bacc` |
+
+Giữ nguyên có chủ đích: **lượt chạy từ lịch vẫn không được tự kích hoạt chiến dịch**. Việc kích hoạt
+xảy ra lúc người dùng bấm tạo lịch, không phải lúc lịch nổ — nếu không, chiến dịch vừa bấm "Tạm dừng"
+mà tới giờ lịch tự bật lại thì nút Tạm dừng mất nghĩa.
+
+Hai điểm đáng nhớ:
+
+- **Tính nguyên tử được cài đúng nhưng không test nào canh.** Ca test tự nhận "chứng minh nguyên tử"
+  (chiến dịch 0 node) ném lỗi **trước khi** có lần ghi nào, nên không đi qua nhánh rollback. Đo bằng
+  cách mô phỏng bản không nguyên tử: 8 test cũ vẫn xanh. Ca bổ sung ép lịch ghi hỏng **sau khi** đã
+  kích hoạt thì bắt được ngay.
+- **Đột biến `ROLLBACK` → `COMMIT` là phép thử rỗng.** Postgres coi `COMMIT` trên transaction đã lỗi
+  đúng như `ROLLBACK`, nên cả hai đều không ghi gì — test xanh, dễ đọc nhầm thành "code sai mà không
+  ai bắt". Muốn đo tính nguyên tử phải **chốt sổ sớm**: chèn `COMMIT` + `BEGIN` vào giữa hai việc.
+
 ## Việc còn treo (tính tới 21/09/2026)
 
 - **Biểu mẫu + đặt lịch + thanh toán**: code đã lên production đủ yêu cầu gốc, kể cả MoMo hiện thông
