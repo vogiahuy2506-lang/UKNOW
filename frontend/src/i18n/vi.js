@@ -3873,7 +3873,7 @@ export default {
     dailySendLimitPlaceholder: 'Để trống = không giới hạn',
     dailySendLimitEmptyHint: 'Để trống nghĩa là không giới hạn.',
     dailySendLimitInvalid: 'Nhập số nguyên từ 1 đến 100.000',
-    dailySendLimitHighWarning: 'Trên 100 email/ngày dễ bị nhà cung cấp khoá tài khoản gửi — cân nhắc trước khi đặt.',
+    dailySendLimitHighWarning: 'Trên 100 email/ngày dễ bị đánh dấu spam, thư sau đó khó vào hộp thư chính — cân nhắc trước khi đặt.',
 
   },
 

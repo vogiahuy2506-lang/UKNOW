@@ -3863,7 +3863,7 @@ export default {
     dailySendLimitPlaceholder: 'Leave blank = unlimited',
     dailySendLimitEmptyHint: 'Leave blank for no limit.',
     dailySendLimitInvalid: 'Enter a whole number from 1 to 100,000',
-    dailySendLimitHighWarning: 'Above 100 emails/day risks your provider suspending the sending account — consider carefully.',
+    dailySendLimitHighWarning: 'Above 100 emails/day raises the risk of spam flagging, which hurts inbox placement later — consider carefully.',
 
   },
 
