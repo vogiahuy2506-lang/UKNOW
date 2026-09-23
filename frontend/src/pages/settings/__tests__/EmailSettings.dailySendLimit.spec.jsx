@@ -114,6 +114,28 @@ describe('EmailSettings — ô Giới hạn gửi/ngày (PR-4)', () => {
     expect(payload.userDailySendLimit).toBe(150);
   });
 
+  /**
+   * Ngưỡng cảnh báo của EMAIL là 2.000 — bằng `daily_email_limit` của gói trả tiền cao nhất (Pro),
+   * đo từ bảng `plans` trên production 23/09: trial 30 · starter 170 · basic 700 · pro 2.000.
+   * KHÁC ngưỡng 100 của Zalo: bên đó 100 là số an toàn chống khoá nick, không liên quan gói.
+   * Bản đầu áp chung 100 cho cả hai nên cảnh báo email nổ với gần như mọi khách thật — mà cảnh báo
+   * nổ suốt thì người ta thôi đọc.
+   */
+  it('nhập 1.500 (dưới mức gói Pro) → KHÔNG hiện cảnh báo', async () => {
+    await selectAccount();
+    fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '1500' } });
+    await waitFor(() => expect(screen.getByDisplayValue('1500')).toBeInTheDocument());
+    expect(screen.queryByText('emailSettings.dailySendLimitHighWarning')).not.toBeInTheDocument();
+  });
+
+  it('nhập 2.500 (trên mọi gói trả tiền) → HIỆN cảnh báo, vẫn không chặn', async () => {
+    await selectAccount();
+    fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '2500' } });
+    // `t` trong spec này trả về CHÍNH khoá (mock ở đầu file), nên tìm theo khoá chứ không
+    // theo câu tiếng Việt — câu chữ đổi được, ngưỡng thì không.
+    await waitFor(() => expect(screen.getByText('emailSettings.dailySendLimitHighWarning')).toBeInTheDocument());
+  });
+
   // 'abc' không nằm trong danh sách: ô là <input type="number"> nên trình duyệt (và jsdom) đã chặn
   // ký tự chữ ngay từ lúc gõ, không bao giờ tới được state — chặn "ở tầng trình duyệt" còn chắc hơn
   // chặn bằng JS. Ba giá trị dưới đây là số hợp lệ về mặt cú pháp nhưng sai nghiệp vụ (0, âm, thập

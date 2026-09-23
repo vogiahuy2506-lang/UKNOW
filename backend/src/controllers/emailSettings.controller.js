@@ -497,7 +497,8 @@ ${linkItems}
           details: {
             previousValue: previous?.userDailySendLimit ?? null,
             newValue,
-            exceededRecommended: typeof newValue === 'number' && newValue > 100,
+            // 2.000 = daily_email_limit cua goi cao nhat (Pro); xem chu thich o EmailSettings.jsx.
+            exceededRecommended: typeof newValue === 'number' && newValue > 2000,
           },
           ipAddress: req.ip,
           userAgent: req.get?.('user-agent') || null,

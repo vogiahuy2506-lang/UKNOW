@@ -884,7 +884,10 @@ const EmailSettings = () => {
             {formErrors.userDailySendLimit && (
               <p className="text-xs text-red-600">{formErrors.userDailySendLimit}</p>
             )}
-            {!formErrors.userDailySendLimit && Number(formData.userDailySendLimit) > 100 && (
+            {/* Nguong 2.000 = daily_email_limit cua goi tra tien cao nhat (Pro). Duoi muc do la
+                con so co the dat duoc tren mot goi nao do; tren do chi Enterprise/Custom (khong gioi
+                han) moi cham toi. Khac Zalo — ben do 100 la so an toan chong khoa nick, doc lap voi goi. */}
+            {!formErrors.userDailySendLimit && Number(formData.userDailySendLimit) > 2000 && (
               <p className="text-xs text-amber-600">{t('emailSettings.dailySendLimitHighWarning')}</p>
             )}
             <p className="text-xs text-slate-500">{t('emailSettings.dailySendLimitEmptyHint')}</p>
