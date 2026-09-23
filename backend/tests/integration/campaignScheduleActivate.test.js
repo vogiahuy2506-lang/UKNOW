@@ -269,26 +269,45 @@ describe('PATCH /api/campaign-schedules/:id kèm activateCampaign — bẫy "hai
 /**
  * Bổ sung lúc review (Claude, người viết plan — 23/09/2026).
  *
- * 8 test ở trên KHÔNG ca nào đi qua nhánh ROLLBACK: ca "0 node" ném lỗi TRƯỚC khi có lần ghi nào,
- * nên đổi `ROLLBACK` thành `COMMIT` trong `activateCampaignAndWriteScheduleTx` vẫn xanh cả 8 —
- * đã đo. Tức điều kiện số 3 của plan (kích hoạt và tạo lịch cùng thành công hoặc cùng không) chưa
- * có gì canh. Ca dưới đây ép đúng thứ tự nguy hiểm: kích hoạt XONG rồi ghi lịch mới hỏng.
+ * 8 test ở trên KHÔNG ca nào đi qua nhánh ROLLBACK: ca "chiến dịch 0 node" ném lỗi TRƯỚC khi có lần
+ * ghi nào. Đo bằng đột biến "chốt sổ phần kích hoạt trước rồi mới ghi lịch" (mô phỏng bản KHÔNG
+ * nguyên tử): cả 8 vẫn xanh. Tức điều kiện số 3 của plan (kích hoạt và tạo lịch cùng thành công hoặc
+ * cùng không) chưa có gì canh.
  *
- * Cách ép mà không phải mock: `campaign_schedules.schedule_name` là VARCHAR(255) còn validator
- * không chặn độ dài (`.trim().notEmpty()` thôi) → tên 300 ký tự qua được cổng, ném 22001 ngay tại
- * INSERT. Nếu rollback hỏng, chiến dịch sẽ nằm lại `active` mà không có lịch nào chờ — đúng
- * "mầm gửi nhầm" mục 3.3 của plan cảnh báo.
+ * Ca dưới đây ép đúng thứ tự nguy hiểm — kích hoạt XONG rồi ghi lịch mới hỏng — bằng một trigger tạm
+ * trên chính bảng `campaign_schedules`. Chọn trigger thay vì mock: nó chặn ở tầng DB nên đi qua đúng
+ * đường mà lỗi thật sẽ đi (vd vi phạm unique index lịch trùng khi hai request đua nhau), và không
+ * phụ thuộc vào bất kỳ lỗ hổng validator nào — bản trước dùng tên lịch 300 ký tự, và đã chết ngay khi
+ * thêm chặn độ dài 255 ở route.
+ *
+ * Nếu rollback hỏng, chiến dịch sẽ nằm lại `active` mà không có lịch nào chờ — đúng "mầm gửi nhầm"
+ * mục 3.3 của plan cảnh báo.
  */
 describe('Nguyên tử THẬT — ghi lịch hỏng SAU khi đã kích hoạt', () => {
+  const FAIL_TRIGGER = 'trg_test_fail_schedule_insert';
+
+  async function withFailingScheduleInsert(fn) {
+    await db.query(`CREATE OR REPLACE FUNCTION test_fail_schedule_insert() RETURNS trigger AS $$
+      BEGIN RAISE EXCEPTION 'ép lỗi ghi lịch để kiểm rollback'; END; $$ LANGUAGE plpgsql`);
+    await db.query(`CREATE TRIGGER ${FAIL_TRIGGER} BEFORE INSERT ON campaign_schedules
+      FOR EACH ROW EXECUTE FUNCTION test_fail_schedule_insert()`);
+    try {
+      return await fn();
+    } finally {
+      await db.query(`DROP TRIGGER IF EXISTS ${FAIL_TRIGGER} ON campaign_schedules`);
+      await db.query('DROP FUNCTION IF EXISTS test_fail_schedule_insert()');
+    }
+  }
+
   it('INSERT lịch ném lỗi → chiến dịch phải quay lại draft, published_at vẫn NULL, không có lịch nào', async () => {
     const user = await createUser({ email: 'act-rollback@test.com', username: 'act_rollback' });
     const token = await loginAs(user);
     const campaign = await insertCampaign({ ownerId: user.id, status: 'draft' });
 
-    const res = await request(app)
+    const res = await withFailingScheduleInsert(() => request(app)
       .post('/api/campaign-schedules')
       .set('Authorization', `Bearer ${token}`)
-      .send(schedulePayload(campaign.id, { activateCampaign: true, scheduleName: 'x'.repeat(300) }));
+      .send(schedulePayload(campaign.id, { activateCampaign: true })));
 
     expect(res.status).toBeGreaterThanOrEqual(400);
 
@@ -297,5 +316,31 @@ describe('Nguyên tử THẬT — ghi lịch hỏng SAU khi đã kích hoạt', 
     expect(rows[0].published_at).toBeNull();
     expect(await countSchedules(campaign.id)).toBe(0);
     expect(await countRuns(campaign.id)).toBe(0);
+  });
+});
+
+/**
+ * Nợ kỹ thuật lộ ra lúc review 23/09: `schedule_name` và `cron_expression` là VARCHAR(255) mà
+ * validator chỉ `.trim().notEmpty()`, nên chuỗi quá dài lọt cổng rồi ném 22001 ở INSERT → người dùng
+ * nhận 500 "Lỗi server" thay vì một câu nói rõ phải sửa gì.
+ */
+describe('Validator chặn độ dài — lỗi của người dùng phải là 400, không phải 500', () => {
+  it.each([
+    ['scheduleName', { scheduleName: 'x'.repeat(256) }],
+    ['cronExpression', { cronExpression: '0 8 * * *'.padEnd(256, ' ') + '*' }],
+  ])('%s dài quá 255 → 400, không tạo lịch, không đụng trạng thái chiến dịch', async (_field, extra) => {
+    const user = await createUser({ email: `len-${_field}@test.com`, username: `len_${_field}`.toLowerCase() });
+    const token = await loginAs(user);
+    const campaign = await insertCampaign({ ownerId: user.id, status: 'draft' });
+
+    const res = await request(app)
+      .post('/api/campaign-schedules')
+      .set('Authorization', `Bearer ${token}`)
+      .send(schedulePayload(campaign.id, { ...extra, activateCampaign: true }));
+
+    expect(res.status).toBe(400);
+    expect(await countSchedules(campaign.id)).toBe(0);
+    const { rows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaign.id]);
+    expect(rows[0].status).toBe('draft');
   });
 });

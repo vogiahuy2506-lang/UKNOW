@@ -26,9 +26,11 @@ router.post(
   requirePermission('campaigns_create'),
   [
     body('campaignId').isInt({ min: 1 }).withMessage('Campaign ID phải là số nguyên dương'),
-    body('scheduleName').trim().notEmpty().withMessage('Tên lịch không được để trống'),
+    body('scheduleName').trim().notEmpty().withMessage('Tên lịch không được để trống')
+      .isLength({ max: 255 }).withMessage('Tên lịch tối đa 255 ký tự'),
     body('scheduleType').isIn(['once', 'daily', 'weekly', 'monthly', 'custom']).withMessage('Loại lịch không hợp lệ'),
-    body('cronExpression').trim().notEmpty().withMessage('Cron expression không được để trống'),
+    body('cronExpression').trim().notEmpty().withMessage('Cron expression không được để trống')
+      .isLength({ max: 255 }).withMessage('Cron expression tối đa 255 ký tự'),
     body('enabled').optional().isBoolean().toBoolean().withMessage('Enabled phải là boolean'),
     // PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23: xác nhận rõ ràng "kích hoạt chiến dịch draft/paused
     // ngay trong lúc tạo lịch" — mặc định false, không nhận ngầm.
@@ -43,9 +45,11 @@ router.patch(
   '/:id',
   requirePermission('campaigns_create'),
   [
-    body('scheduleName').optional().trim().notEmpty().withMessage('Tên lịch không được để trống'),
+    body('scheduleName').optional().trim().notEmpty().withMessage('Tên lịch không được để trống')
+      .isLength({ max: 255 }).withMessage('Tên lịch tối đa 255 ký tự'),
     body('scheduleType').optional().isIn(['once', 'daily', 'weekly', 'monthly', 'custom']).withMessage('Loại lịch không hợp lệ'),
-    body('cronExpression').optional().trim().notEmpty().withMessage('Cron expression không được để trống'),
+    body('cronExpression').optional().trim().notEmpty().withMessage('Cron expression không được để trống')
+      .isLength({ max: 255 }).withMessage('Cron expression tối đa 255 ký tự'),
     body('enabled').optional().isBoolean().toBoolean().withMessage('Enabled phải là boolean'),
     body('activateCampaign').optional().isBoolean().toBoolean().withMessage('activateCampaign phải là boolean'),
     handleValidationErrors,
