@@ -1,80 +1,108 @@
 import { describe, expect, it } from '@jest/globals';
-import ZaloRateLimiter from '../zaloRateLimiter.js';
+import ZaloRateLimiter, { ZALO_PERSONAL_DELAY_HARD_FLOOR_MS } from '../zaloRateLimiter.js';
 
 /**
- * Ghi đè khoảng cách gửi theo từng tài khoản Zalo chỉ được phép làm CHẬM hơn
- * mức cấu hình chung, không bao giờ nhanh hơn.
- *
- * Trước đây nhánh này nhận thẳng giá trị từ DB (`dMin >= 0`), nên đặt 0 là bỏ qua
- * toàn bộ mặc định an toàn — đủ để đưa tài khoản Zalo của khách vào diện chống spam.
+ * 3 mức tốc độ gửi Zalo cá nhân, sàn cứng 30 giây (ZALO_PERSONAL_DELAY_HARD_FLOOR_MS).
+ * Production đang đặt env chung: 80.000–150.000ms (~80–150 giây).
  */
-const FLOOR_MIN = 20_000;
-const FLOOR_MAX = 50_000;
+const PROD_FLOOR_MIN = 80_000;
+const PROD_FLOOR_MAX = 150_000;
 
-const makeLimiter = () => new ZaloRateLimiter({
-  ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT: FLOOR_MIN,
-  ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT: FLOOR_MAX,
+const makeProdLimiter = () => new ZaloRateLimiter({
+  ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT: PROD_FLOOR_MIN,
+  ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT: PROD_FLOOR_MAX,
 });
 
-const policyFor = (hint) =>
-  makeLimiter().resolveOutboundPolicy('zalo_personal', hint);
+const prodPolicyFor = (hint) =>
+  makeProdLimiter().resolveOutboundPolicy('zalo_personal', hint);
 
-describe('resolveOutboundPolicy — sàn khoảng cách gửi Zalo cá nhân', () => {
-  it('không có ghi đè → dùng đúng mức cấu hình chung', () => {
-    const policy = policyFor(null);
-    expect(policy.minDelayMs).toBe(FLOOR_MIN);
-    expect(policy.maxDelayMs).toBe(FLOOR_MAX);
+describe('resolveOutboundPolicy — 3 mức tốc độ gửi Zalo cá nhân và sàn cứng 30s', () => {
+  it('hằng số sàn cứng là 30.000ms', () => {
+    expect(ZALO_PERSONAL_DELAY_HARD_FLOOR_MS).toBe(30_000);
   });
 
-  it('ghi đè 0 giây KHÔNG hạ được xuống dưới sàn', () => {
-    const policy = policyFor({
-      zaloPersonalOutboundDelayMinMs: 0,
-      zaloPersonalOutboundDelayMaxMs: 0,
-    });
-    expect(policy.minDelayMs).toBe(FLOOR_MIN);
-    expect(policy.maxDelayMs).toBe(FLOOR_MAX);
-  });
+  describe('môi trường Production (env 80/150 giây)', () => {
+    it('NULL (không có hint hoặc ghi đè null) → dùng đúng mức cấu hình env 80/150', () => {
+      const policyNullHint = prodPolicyFor(null);
+      expect(policyNullHint.minDelayMs).toBe(PROD_FLOOR_MIN);
+      expect(policyNullHint.maxDelayMs).toBe(PROD_FLOOR_MAX);
 
-  it('ghi đè nhanh hơn sàn bị kéo về sàn', () => {
-    const policy = policyFor({
-      zaloPersonalOutboundDelayMinMs: 5_000,
-      zaloPersonalOutboundDelayMaxMs: 8_000,
-    });
-    expect(policy.minDelayMs).toBe(FLOOR_MIN);
-    expect(policy.maxDelayMs).toBe(FLOOR_MAX);
-  });
-
-  it('ghi đè CHẬM hơn sàn được tôn trọng', () => {
-    const policy = policyFor({
-      zaloPersonalOutboundDelayMinMs: 90_000,
-      zaloPersonalOutboundDelayMaxMs: 120_000,
-    });
-    expect(policy.minDelayMs).toBe(90_000);
-    expect(policy.maxDelayMs).toBe(120_000);
-  });
-
-  it('max không bao giờ nhỏ hơn min sau khi kẹp sàn', () => {
-    const policy = policyFor({
-      zaloPersonalOutboundDelayMinMs: 200_000,
-      zaloPersonalOutboundDelayMaxMs: 1_000,
-    });
-    expect(policy.minDelayMs).toBe(200_000);
-    expect(policy.maxDelayMs).toBeGreaterThanOrEqual(policy.minDelayMs);
-  });
-
-  it('giá trị rác (âm, không phải số) bị bỏ qua, giữ nguyên sàn', () => {
-    for (const bad of [-1, 'abc', null, undefined, NaN]) {
-      const policy = policyFor({
-        zaloPersonalOutboundDelayMinMs: bad,
-        zaloPersonalOutboundDelayMaxMs: bad,
+      const policyNullFields = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: null,
+        zaloPersonalOutboundDelayMaxMs: null,
       });
-      expect(policy.minDelayMs).toBe(FLOOR_MIN);
-      expect(policy.maxDelayMs).toBe(FLOOR_MAX);
-    }
-  });
+      expect(policyNullFields.minDelayMs).toBe(PROD_FLOOR_MIN);
+      expect(policyNullFields.maxDelayMs).toBe(PROD_FLOOR_MAX);
+    });
 
-  it('giới hạn tin/giờ theo tài khoản vẫn ghi đè được như cũ', () => {
-    const policy = policyFor({ zaloPersonalOutboundPerHourLimit: 40 });
-    expect(policy.limitPerWindow).toBe(40);
+    it('very_fast (30.000–60.000ms) → đúng 30/60 (không bị kẹp lên 80 hay 150)', () => {
+      const policy = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: 30_000,
+        zaloPersonalOutboundDelayMaxMs: 60_000,
+      });
+      expect(policy.minDelayMs).toBe(30_000);
+      expect(policy.maxDelayMs).toBe(60_000);
+    });
+
+    it('fast (50.000–100.000ms) → đúng 50/100', () => {
+      const policy = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: 50_000,
+        zaloPersonalOutboundDelayMaxMs: 100_000,
+      });
+      expect(policy.minDelayMs).toBe(50_000);
+      expect(policy.maxDelayMs).toBe(100_000);
+    });
+
+    it('giá trị nhỏ 5.000ms → kẹp về sàn cứng 30.000ms', () => {
+      const policy = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: 5_000,
+        zaloPersonalOutboundDelayMaxMs: 10_000,
+      });
+      expect(policy.minDelayMs).toBe(30_000);
+      expect(policy.maxDelayMs).toBe(30_000);
+    });
+
+    it('ghi đè 0 giây KHÔNG hạ được xuống dưới sàn cứng 30.000ms', () => {
+      const policy = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: 0,
+        zaloPersonalOutboundDelayMaxMs: 0,
+      });
+      expect(policy.minDelayMs).toBe(30_000);
+      expect(policy.maxDelayMs).toBe(30_000);
+    });
+
+    it('dmax < dmin → max = min sau khi kẹp sàn', () => {
+      const policy = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: 40_000,
+        zaloPersonalOutboundDelayMaxMs: 35_000,
+      });
+      expect(policy.minDelayMs).toBe(40_000);
+      expect(policy.maxDelayMs).toBe(40_000);
+    });
+
+    it('ghi đè CHẬM hơn env (vd: 200.000–300.000ms) được tôn trọng', () => {
+      const policy = prodPolicyFor({
+        zaloPersonalOutboundDelayMinMs: 200_000,
+        zaloPersonalOutboundDelayMaxMs: 300_000,
+      });
+      expect(policy.minDelayMs).toBe(200_000);
+      expect(policy.maxDelayMs).toBe(300_000);
+    });
+
+    it('giá trị rác (âm, không phải số) bị bỏ qua, giữ nguyên mức cấu hình env', () => {
+      for (const bad of [-1, 'abc', undefined, NaN]) {
+        const policy = prodPolicyFor({
+          zaloPersonalOutboundDelayMinMs: bad,
+          zaloPersonalOutboundDelayMaxMs: bad,
+        });
+        expect(policy.minDelayMs).toBe(PROD_FLOOR_MIN);
+        expect(policy.maxDelayMs).toBe(PROD_FLOOR_MAX);
+      }
+    });
+
+    it('giới hạn tin/giờ theo tài khoản vẫn ghi đè được như cũ', () => {
+      const policy = prodPolicyFor({ zaloPersonalOutboundPerHourLimit: 40 });
+      expect(policy.limitPerWindow).toBe(40);
+    });
   });
 });

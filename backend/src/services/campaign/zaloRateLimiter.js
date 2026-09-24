@@ -11,6 +11,8 @@ import { isZaloPhoneLookupRateLimitError } from '../../utils/zaloSendErrorClassi
  */
 const PHONE_LOOKUP_CHANNELS = new Set(['zalo_personal', 'zalo_friend_request']);
 
+export const ZALO_PERSONAL_DELAY_HARD_FLOOR_MS = 30_000;
+
 /**
  * ZaloRateLimiter — Manages per-account Zalo outbound rate limiting state and policy.
  *
@@ -244,13 +246,15 @@ class ZaloRateLimiter {
       if (Number.isFinite(accLim) && accLim > 0) {
         policy = { ...policy, limitPerWindow: accLim };
       }
-      // Ghi đè theo tài khoản chỉ được phép làm CHẬM hơn, không bao giờ nhanh hơn
-      // mức cấu hình chung. Trước đây `dMin >= 0` cho phép đặt thẳng 0 giây —
-      // tức bỏ qua mức an toàn đang cấu hình và tự đưa tài khoản Zalo của khách
-      // vào diện chống spam. Sàn = giá trị env đang chạy.
-      //
-      // Production đang đặt 80.000–150.000ms (~80–150 giây, ~30 tin/giờ), KHÔNG
-      // phải 20–50 giây như mặc định trong code. Xem bảng tham số ở CLAUDE.md.
+      // Ghi đè theo tài khoản — 3 mức người dùng chọn (PATCH /zalo/accounts/:id/send-speed) hoặc giá
+      // trị đặt tay bằng SQL — ĐƯỢC PHÉP nhanh hơn mức chung (từ 24/09; trước đó chỉ được chậm hơn),
+      // nhưng không bao giờ dưới sàn cứng ZALO_PERSONAL_DELAY_HARD_FLOOR_MS (30 giây). Sàn có vì hai
+      // lẽ: đã từng có người đặt thẳng 0 giây, tự đưa nick của khách vào diện chống spam; và mọi nick
+      // của mọi khách đều gửi từ CÙNG một IP máy chủ.
+      // Sàn CHỈ áp cho giá trị ghi đè: không có ghi đè thì dùng nguyên mức env (production 80–150s,
+      // dev 20–50s), không kẹp lên 30s.
+      // max kẹp theo min SAU khi kẹp, KHÔNG theo max của env — kẹp theo env max thì mức 30–60s thành
+      // 30–150s, vẫn "nhanh hơn" nên rất khó phát hiện.
       const floorMin = policy.minDelayMs;
       const floorMax = policy.maxDelayMs;
       const dMin = Number.parseInt(accountHint.zaloPersonalOutboundDelayMinMs, 10);
@@ -258,10 +262,10 @@ class ZaloRateLimiter {
       let nextMin = floorMin;
       let nextMax = floorMax;
       if (Number.isFinite(dMin) && dMin >= 0) {
-        nextMin = Math.max(floorMin, dMin);
+        nextMin = Math.max(ZALO_PERSONAL_DELAY_HARD_FLOOR_MS, dMin);
       }
       if (Number.isFinite(dMax) && dMax >= 0) {
-        nextMax = Math.max(floorMax, dMax);
+        nextMax = Math.max(nextMin, dMax);
       }
       nextMax = Math.max(nextMin, nextMax);
       policy = { ...policy, minDelayMs: nextMin, maxDelayMs: nextMax };

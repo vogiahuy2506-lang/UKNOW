@@ -252,6 +252,8 @@ class ZaloSettingRepository {
               zs.restore_fail_count,
               zs.phone_lookup_cooldown_until::timestamptz AS phone_lookup_cooldown_until,
               zs.user_daily_send_limit,
+              zs.zalo_personal_outbound_delay_min_ms,
+              zs.zalo_personal_outbound_delay_max_ms,
               COALESCE(u.full_name, u.username) AS creator_name,
               EXISTS (
                 SELECT 1 FROM topup_locked_resources tlr
@@ -287,6 +289,29 @@ class ZaloSettingRepository {
   }
 
   /**
+   * Tra cứu mức delay hiện tại của tài khoản — dùng để ghi "giá trị cũ" vào audit trước khi ghi đè.
+   *
+   * @param {number} accountId
+   * @param {boolean} isAdmin
+   * @param {number} userId
+   * @returns {Promise<{delayMinMs: number|null, delayMaxMs: number|null}|null>}
+   */
+  async findUserSendSpeedById(accountId, isAdmin, userId) {
+    const { rows } = await db.query(
+      `SELECT zalo_personal_outbound_delay_min_ms, zalo_personal_outbound_delay_max_ms
+       FROM zalo_settings
+       WHERE id = $1
+         ${isAdmin ? '' : 'AND id_user = $2'}`,
+      isAdmin ? [accountId] : [accountId, userId]
+    );
+    if (!rows[0]) return null;
+    return {
+      delayMinMs: rows[0].zalo_personal_outbound_delay_min_ms ?? null,
+      delayMaxMs: rows[0].zalo_personal_outbound_delay_max_ms ?? null,
+    };
+  }
+
+  /**
    * Đặt/xoá giới hạn gửi/ngày do NGƯỜI DÙNG tự đặt cho một tài khoản Zalo
    * (PLAN_GIOI_HAN_GUI_THEO_NGAY_2026-09-22 Việc 6). `value = null` xoá về không giới hạn — đây
    * là UPDATE riêng chỉ một cột, không dùng khuôn COALESCE nên không có bẫy "không xoá được NULL".
@@ -306,8 +331,39 @@ class ZaloSettingRepository {
        RETURNING id, id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method,
                  status, is_active, is_default, notes, updated_at, last_connected_at,
                  last_restore_attempt_at, restore_fail_count, phone_lookup_cooldown_until,
-                 user_daily_send_limit`,
+                 user_daily_send_limit,
+                 zalo_personal_outbound_delay_min_ms,
+                 zalo_personal_outbound_delay_max_ms`,
       isAdmin ? [value, accountId] : [value, accountId, userId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
+   * Cập nhật khoảng cách gửi min/max cho một tài khoản Zalo cá nhân.
+   *
+   * @param {number} accountId
+   * @param {boolean} isAdmin
+   * @param {number} userId
+   * @param {number|null} delayMinMs
+   * @param {number|null} delayMaxMs
+   * @returns {Promise<object|null>}
+   */
+  async updateSendSpeed(accountId, isAdmin, userId, delayMinMs, delayMaxMs) {
+    const { rows } = await db.query(
+      `UPDATE zalo_settings
+       SET zalo_personal_outbound_delay_min_ms = $1,
+           zalo_personal_outbound_delay_max_ms = $2,
+           updated_at = CURRENT_TIMESTAMP
+       WHERE id = $3
+         ${isAdmin ? '' : 'AND id_user = $4'}
+       RETURNING id, id_user, display_name, zalo_user_id, zalo_name, zalo_phone, login_method,
+                 status, is_active, is_default, notes, updated_at, last_connected_at,
+                 last_restore_attempt_at, restore_fail_count, phone_lookup_cooldown_until,
+                 user_daily_send_limit,
+                 zalo_personal_outbound_delay_min_ms,
+                 zalo_personal_outbound_delay_max_ms`,
+      isAdmin ? [delayMinMs, delayMaxMs, accountId] : [delayMinMs, delayMaxMs, accountId, userId]
     );
     return rows[0] || null;
   }

@@ -32,6 +32,7 @@ import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import zaloMessageRepository from '../repositories/campaign/zaloMessage.repository.js';
+import { resolveSendSpeedFromRow, ZALO_SEND_SPEED_PRESETS } from '../utils/zaloSendSpeed.util.js';
 import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
 import { toZcaCookieShape } from '../utils/zaloSessionRestore.util.js';
 import {
@@ -199,6 +200,12 @@ class ZaloSettingsController {
         ? new Date(item.phone_lookup_cooldown_until).toISOString()
         : null,
       userDailySendLimit: item.user_daily_send_limit ?? null,
+      sendSpeed: resolveSendSpeedFromRow(
+        item.zalo_personal_outbound_delay_min_ms,
+        item.zalo_personal_outbound_delay_max_ms
+      ),
+      zaloPersonalOutboundDelayMinMs: item.zalo_personal_outbound_delay_min_ms ?? null,
+      zaloPersonalOutboundDelayMaxMs: item.zalo_personal_outbound_delay_max_ms ?? null,
     };
   }
 
@@ -1843,6 +1850,76 @@ class ZaloSettingsController {
       }
       console.error('Update zalo send-limit error:', error);
       return res.status(500).json({ success: false, message: 'Không thể cập nhật giới hạn gửi/ngày' });
+    }
+  }
+
+  /**
+   * PATCH /api/zalo/accounts/:id/send-speed
+   * Cập nhật mức tốc độ gửi Zalo cá nhân (safe, fast, very_fast).
+   *
+   * @param {import('express').Request} req
+   * @param {import('express').Response} res
+   */
+  async updateSendSpeed(req, res) {
+    try {
+      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const isAdmin = isAdminRole(req.user?.role);
+      const accountId = Number.parseInt(req.params.id, 10);
+      const { sendSpeed } = req.body || {};
+
+      const preset = ZALO_SEND_SPEED_PRESETS[sendSpeed];
+      if (!preset) {
+        return res.status(400).json({
+          success: false,
+          message: 'Mức tốc độ gửi không hợp lệ (safe, fast, very_fast)',
+        });
+      }
+
+      const previousDelay = await zaloSettingRepository
+        .findUserSendSpeedById(accountId, isAdmin, userId)
+        .catch(() => null);
+
+      const previousSpeed = previousDelay
+        ? resolveSendSpeedFromRow(previousDelay.delayMinMs, previousDelay.delayMaxMs)
+        : null;
+
+      const updated = await zaloSettingRepository.updateSendSpeed(
+        accountId,
+        isAdmin,
+        userId,
+        preset.delayMinMs,
+        preset.delayMaxMs
+      );
+      if (!updated) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Zalo' });
+      }
+
+      await auditService.log({
+        userId: actorUserId,
+        ownerId: userId,
+        category: 'workspace',
+        action: AUDIT_ACTIONS.ZALO_ACCOUNT_SEND_SPEED_UPDATED,
+        entityType: AUDIT_ENTITY_TYPES.ZALO_SETTING,
+        entityId: updated.id,
+        details: {
+          previous: previousSpeed,
+          next: sendSpeed,
+        },
+        ipAddress: req.ip,
+        userAgent: req.get?.('user-agent') || null,
+      });
+
+      return res.json({
+        success: true,
+        message: 'Đã cập nhật tốc độ gửi Zalo',
+        data: this.mapRow(updated),
+      });
+    } catch (error) {
+      if (error?.code === '42P01') {
+        return this.buildMissingTableResponse(res);
+      }
+      console.error('Update zalo send-speed error:', error);
+      return res.status(500).json({ success: false, message: 'Không thể cập nhật tốc độ gửi Zalo' });
     }
   }
 
