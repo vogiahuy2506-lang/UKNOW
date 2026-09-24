@@ -698,8 +698,7 @@ export async function countEmailSentTodayWithLedger(queryable, billingUserId, da
       COALESCE((
         SELECT COUNT(*)
         FROM email_messages em
-        JOIN campaigns c ON c.id = em.id_campaign
-        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+        WHERE em.workspace_owner_id = $1
           AND em.quota_reservation_id IS NULL
           AND em.status IN ('sent', 'delivered', 'bounced')
           AND NOT em.is_preview
@@ -744,8 +743,7 @@ export async function countZaloSentTodayWithLedger(queryable, billingUserId, day
       COALESCE((
         SELECT COUNT(*)
         FROM zalo_messages zm
-        JOIN campaigns c ON c.id = zm.id_campaign
-        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+        WHERE zm.workspace_owner_id = $1
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
@@ -856,8 +854,7 @@ export async function countEmailSentInCycleWithLedger(queryable, billingUserId, 
       COALESCE((
         SELECT COUNT(*)
         FROM email_messages em
-        JOIN campaigns c ON c.id = em.id_campaign
-        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+        WHERE em.workspace_owner_id = $1
           AND em.quota_reservation_id IS NULL
           AND em.status IN ('sent', 'delivered', 'bounced')
           AND NOT em.is_preview
@@ -902,8 +899,7 @@ export async function countZaloSentInCycleWithLedger(queryable, billingUserId, c
       COALESCE((
         SELECT COUNT(*)
         FROM zalo_messages zm
-        JOIN campaigns c ON c.id = zm.id_campaign
-        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+        WHERE zm.workspace_owner_id = $1
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
@@ -975,7 +971,7 @@ export async function countEmployeeSentTodayWithLedger(
           SELECT COUNT(*)
           FROM email_messages em
           JOIN campaigns c ON c.id = em.id_campaign
-          WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+          WHERE em.workspace_owner_id = $1
             AND c.created_by = $2
             AND em.quota_reservation_id IS NULL
             AND em.status IN ('sent', 'delivered', 'bounced')
@@ -1016,7 +1012,7 @@ export async function countEmployeeSentTodayWithLedger(
         SELECT COUNT(*)
         FROM zalo_messages zm
         JOIN campaigns c ON c.id = zm.id_campaign
-        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+        WHERE zm.workspace_owner_id = $1
           AND c.created_by = $2
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
@@ -1085,7 +1081,7 @@ export async function countEmployeeSentInCycleWithLedger(
           SELECT COUNT(*)
           FROM email_messages em
           JOIN campaigns c ON c.id = em.id_campaign
-          WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+          WHERE em.workspace_owner_id = $1
             AND c.created_by = $2
             AND em.quota_reservation_id IS NULL
             AND em.status IN ('sent', 'delivered', 'bounced')
@@ -1126,7 +1122,7 @@ export async function countEmployeeSentInCycleWithLedger(
         SELECT COUNT(*)
         FROM zalo_messages zm
         JOIN campaigns c ON c.id = zm.id_campaign
-        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+        WHERE zm.workspace_owner_id = $1
           AND c.created_by = $2
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'

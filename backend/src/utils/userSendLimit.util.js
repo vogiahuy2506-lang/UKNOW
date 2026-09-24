@@ -138,7 +138,7 @@ async function countEmployeeEmailSentToday(ownerId, employeeId) {
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
           INNER JOIN campaigns c ON c.id = em.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE em.workspace_owner_id = $1
             AND c.created_by = $2
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
@@ -164,7 +164,7 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
         `SELECT (
            (SELECT COUNT(*) FROM email_messages em
             INNER JOIN campaigns c ON c.id = em.id_campaign
-            WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            WHERE em.workspace_owner_id = $1
               AND c.created_by = $2
               AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
@@ -185,7 +185,7 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
           INNER JOIN campaigns c ON c.id = em.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE em.workspace_owner_id = $1
             AND c.created_by = $2
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
@@ -208,7 +208,7 @@ async function countEmployeeZaloSentToday(ownerId, employeeId) {
       `SELECT (
          (SELECT COUNT(*) FROM zalo_messages zm
           JOIN campaigns c ON c.id = zm.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE zm.workspace_owner_id = $1
             AND c.created_by = $2
             AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
@@ -239,7 +239,7 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
         `SELECT (
            (SELECT COUNT(*) FROM zalo_messages zm
             JOIN campaigns c ON c.id = zm.id_campaign
-            WHERE ${CAMPAIGN_OWNER_PREDICATE}
+            WHERE zm.workspace_owner_id = $1
               AND c.created_by = $2
               AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
@@ -265,7 +265,7 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
       `SELECT (
          (SELECT COUNT(*) FROM zalo_messages zm
           JOIN campaigns c ON c.id = zm.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE zm.workspace_owner_id = $1
             AND c.created_by = $2
             AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
@@ -292,8 +292,7 @@ async function countEmailSentToday(billingUserId) {
     const { rows } = await db.query(
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
-          INNER JOIN campaigns c ON c.id = em.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE em.workspace_owner_id = $1
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
             AND em.sent_at >= CURRENT_DATE)
@@ -314,8 +313,7 @@ export async function countEmailSentInCycleUncached(billingUserId, cycleStart, c
   const { rows } = await queryable.query(
     `SELECT (
        (SELECT COUNT(*) FROM email_messages em
-        INNER JOIN campaigns c ON c.id = em.id_campaign
-        WHERE ${CAMPAIGN_OWNER_PREDICATE}
+        WHERE em.workspace_owner_id = $1
           AND em.status IN ('sent', 'delivered', 'bounced')
           AND NOT em.is_preview
           AND em.sent_at >= $2 AND em.sent_at < $3)
@@ -355,8 +353,7 @@ async function countZaloSentToday(billingUserId) {
     const { rows } = await db.query(
       `SELECT (
          (SELECT COUNT(*) FROM zalo_messages zm
-          JOIN campaigns c ON c.id = zm.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE zm.workspace_owner_id = $1
             AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
             AND zm.sent_at >= CURRENT_DATE)
@@ -382,8 +379,7 @@ export async function countZaloSentInCycleUncached(billingUserId, cycleStart, cy
   const { rows } = await queryable.query(
     `SELECT (
        (SELECT COUNT(*) FROM zalo_messages zm
-        JOIN campaigns c ON c.id = zm.id_campaign
-        WHERE ${CAMPAIGN_OWNER_PREDICATE}
+        WHERE zm.workspace_owner_id = $1
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
           AND zm.sent_at >= $2 AND zm.sent_at < $3)
@@ -431,14 +427,12 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
     const { rows } = await db.query(
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
-          JOIN campaigns c ON c.id = em.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE em.workspace_owner_id = $1
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
             AND em.sent_at >= $2 AND em.sent_at < $3)
        + (SELECT COUNT(*) FROM zalo_messages zm
-          JOIN campaigns c ON c.id = zm.id_campaign
-          WHERE ${CAMPAIGN_OWNER_PREDICATE}
+          WHERE zm.workspace_owner_id = $1
             AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
             AND zm.sent_at >= $2 AND zm.sent_at < $3)
@@ -848,3 +842,13 @@ export async function checkUserZaloSendLimit({ userId, roleCode, ownerContextId 
     limitType: quota.limitType,
   };
 }
+
+export {
+  countEmailSentToday,
+  countZaloSentToday,
+  countEmployeeEmailSentToday,
+  countEmployeeZaloSentToday,
+  countEmployeeEmailSentThisMonth,
+  countEmployeeZaloSentThisMonth,
+};
+
