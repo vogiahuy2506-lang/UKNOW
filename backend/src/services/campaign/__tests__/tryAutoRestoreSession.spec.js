@@ -39,6 +39,8 @@ const { default: campaignZaloSenderRepository } = await import(
   '../../../repositories/campaign/campaignZaloSender.repository.js'
 );
 const { default: campaignZaloSenderService } = await import('../campaignZaloSender.service.js');
+// Khoá THẬT, không mock: ca "module khác đang giữ khoá" phải đi đúng đường runExclusive của sản xuất.
+const { default: zaloRestoreLock } = await import('../../../utils/zaloRestoreLock.util.js');
 
 describe('tryAutoRestoreSession — không được ghi connected khi đăng nhập Zalo hỏng', () => {
   const markAccountConnectedSpy = jest.fn();
@@ -113,5 +115,28 @@ describe('tryAutoRestoreSession — không được ghi connected khi đăng nh�
     expect(summary).toEqual({ total: 2, restored: 0, failed: 2 });
     expect(markAccountConnectedSpy).not.toHaveBeenCalled();
     expect(recordRestoreFailureSpy.mock.calls.map(([accountId]) => accountId)).toEqual([52, 77]);
+  });
+
+  /**
+   * runExclusive trả về OBJECT `{ skipped: true }` khi module khác đang giữ khoá — object thì
+   * truthy. Bản cũ chặn bằng `isLocked(id) && !restoredApi`, mà `!{…}` luôn false, nên tài khoản
+   * bị bỏ qua lọt xuống nhánh `restored++`: log cron báo "đã khôi phục" cho tài khoản nó không hề
+   * đụng vào. Không làm sai hành vi gửi, nhưng làm sai đúng con số dùng để theo dõi phiên Zalo.
+   */
+  it('tài khoản đang bị module khác giữ khoá → bỏ qua: KHÔNG tính restored, KHÔNG tính failed', async () => {
+    findConnectedAccountsNeedingRestoreSpy.mockResolvedValue({
+      rows: [{ id: '52', id_user: '63', display_name: 'A', cookie_text: 'c52' }],
+    });
+    const held = zaloRestoreLock.acquire(52, 'moduleKhac');
+    expect(held.acquired).toBe(true);
+    try {
+      const summary = await campaignZaloSenderService.restoreDisconnectedZaloAccounts();
+
+      expect(summary).toEqual({ total: 1, restored: 0, failed: 0 });
+      expect(restoreZaloSessionFromCookieMock).not.toHaveBeenCalled();
+      expect(recordRestoreFailureSpy).not.toHaveBeenCalled();
+    } finally {
+      zaloRestoreLock.release(52, 'moduleKhac');
+    }
   });
 });

@@ -182,8 +182,10 @@ class CampaignZaloSenderService {
           }
         );
 
-        if (zaloRestoreLock.isLocked(accountId) && !restoredApi) {
-          // Skipped vì module khác đang giữ lock — không tính failed.
+        if (restoredApi?.skipped) {
+          // Module khác đang giữ khoá — bỏ qua: không tính failed, cũng KHÔNG tính restored.
+          // runExclusive trả về OBJECT { skipped: true } (truthy), nên kiểm `!restoredApi` như bản
+          // cũ không bao giờ đúng và tài khoản bị bỏ qua lọt xuống nhánh restored++ bên dưới.
           continue;
         }
 

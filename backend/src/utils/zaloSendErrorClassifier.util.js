@@ -19,7 +19,9 @@ import {
 } from './zaloDispatchDelivery.util.js';
 
 const CATEGORY_LABELS = {
-  PHONE_LOOKUP_RATE_LIMIT: 'Tra số quá nhiều — Zalo tạm khóa tra cứu (~3h)',
+  // Zalo tính hạn mức tra số THEO NGÀY ("thử lại vào 00:00"); từ 11/09 (95a3a6f5) hệ thống cũng
+  // khoá tới 00:00 giờ VN kế tiếp. Chữ "~3h" cũ là mốc env dự phòng, không phải giờ người dùng chờ thật.
+  PHONE_LOOKUP_RATE_LIMIT: 'Tra số quá nhiều — Zalo tạm khóa tra cứu tới 00:00 (giờ VN)',
   RECIPIENT_NOT_FOUND: 'Số chưa dùng Zalo hoặc sai số',
   TIMEOUT: 'Mạng/Zalo phản hồi chậm',
   ACCOUNT_DISCONNECTED: 'Tài khoản Zalo mất kết nối / hết phiên',
@@ -174,7 +176,7 @@ export function classifyZaloSendError(error, { stage } = {}) {
       label: CATEGORY_LABELS.PHONE_LOOKUP_RATE_LIMIT,
       hint: stage === 'lookup'
         ? 'Lỗi xảy ra khi tra số điện thoại sang UID Zalo.'
-        : 'Tài khoản có thể đang trong cooldown tra số ~3 giờ.',
+        : 'Tài khoản có thể đang bị khoá tra số tới 00:00 (giờ VN).',
     };
   } else if (isZaloTimeoutError(error)) {
     res = {

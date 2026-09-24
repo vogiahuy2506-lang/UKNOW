@@ -58,7 +58,7 @@ const WAIT_REASON_LABELS = {
   phone_lookup_cooldown: 'Tạm khoá tra số',
 };
 const ERROR_CATEGORY_LABELS = {
-  PHONE_LOOKUP_RATE_LIMIT: 'Tra số quá nhiều — Zalo tạm khoá tra cứu (~3 giờ)',
+  PHONE_LOOKUP_RATE_LIMIT: 'Tra số quá nhiều — Zalo tạm khoá tra cứu tới 00:00 (giờ VN)',
   RECIPIENT_NOT_FOUND: 'Số chưa dùng Zalo hoặc sai số',
   TIMEOUT: 'Mạng/Zalo phản hồi chậm',
   ACCOUNT_DISCONNECTED: 'Tài khoản Zalo mất kết nối / hết phiên',
