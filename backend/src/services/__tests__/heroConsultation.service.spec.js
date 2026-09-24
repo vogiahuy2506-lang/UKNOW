@@ -1,5 +1,13 @@
 import { describe, expect, it, beforeEach, jest } from '@jest/globals';
-import heroConsultationService from '../heroConsultation.service.js';
+
+// Spec này vốn KHÔNG chạm CSDL (_resetForTests bật _skipDb). Từ 32b51f73, callGemini hỏi model hệ thống
+// qua resolveAllowedModel → đọc CSDL, đi vòng qua _skipDb. Máy dev có sẵn Postgres nên kết nối bị từ chối
+// ngay ("sai mật khẩu"), nhánh dự phòng chạy tức thì → xanh; CI không có Postgres nên chờ kết nối rồi thử
+// lại 6 lần → quá giờ, đỏ 4 ca (Deploy Backend 36027884363). Giả lập policy để spec không phụ thuộc CSDL.
+jest.unstable_mockModule('../ai/aiModelPolicy.service.js', () => ({
+  resolveAllowedModel: jest.fn().mockResolvedValue('gemini-3.5-flash'),
+}));
+const { default: heroConsultationService } = await import('../heroConsultation.service.js');
 
 describe('heroConsultation.service quota & daily cap', () => {
   beforeEach(() => {
