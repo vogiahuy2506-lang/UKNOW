@@ -6,6 +6,7 @@
   "description": "End-to-end tests cho UKNOW Campaign (Playwright + Chromium).",
   "scripts": {
     "test": "playwright test",
+    "test:acceptance": "playwright test -c playwright.acceptance.config.js",
     "test:layout-audit": "playwright test -c playwright.layout-audit.config.js",
     "test:headed": "playwright test --headed",
     "test:ui": "playwright test --ui",

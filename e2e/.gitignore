@@ -5,3 +5,4 @@ playwright-report/
 test-results/
 .auth/
 *.log
+acceptance-results/
