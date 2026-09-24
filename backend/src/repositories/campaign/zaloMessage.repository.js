@@ -74,20 +74,23 @@ class ZaloMessageRepository {
     isPreview = false,
     quotaReservationId = null,
     workspaceOwnerId = null,
+    actorUserId = null,
   }, queryable = db) {
     const runner = queryable || db;
     const rawResId = quotaReservationId != null ? Number.parseInt(quotaReservationId, 10) : null;
     const safeQuotaReservationId = Number.isFinite(rawResId) ? rawResId : null;
     const rawOwnerId = workspaceOwnerId != null ? Number.parseInt(workspaceOwnerId, 10) : null;
     const safeWorkspaceOwnerId = Number.isFinite(rawOwnerId) ? rawOwnerId : null;
+    const rawActorId = actorUserId != null ? Number.parseInt(actorUserId, 10) : null;
+    const safeActorUserId = Number.isFinite(rawActorId) ? rawActorId : null;
 
     const result = await runner.query(
       `INSERT INTO zalo_messages
          (id_campaign, id_run, id_customer, id_node, channel, recipient_type, recipient_value, uid, group_id,
-          account_id, account_name, message_text, tracking_token, tracking_base_url, tracking_metadata, is_preview, quota_reservation_id, workspace_owner_id, sent_at, created_at, updated_at)
+          account_id, account_name, message_text, tracking_token, tracking_base_url, tracking_metadata, is_preview, quota_reservation_id, workspace_owner_id, actor_user_id, sent_at, created_at, updated_at)
        VALUES
          ($1, $2, $3, $4, $5, $6, $7, $8, $9,
-          $10, $11, $12, $13, $14, $15::jsonb, $16, $17, $18, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          $10, $11, $12, $13, $14, $15::jsonb, $16, $17, $18, $19, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
        RETURNING id`,
       [
         campaignId,
@@ -108,6 +111,7 @@ class ZaloMessageRepository {
         Boolean(isPreview),
         safeQuotaReservationId,
         safeWorkspaceOwnerId,
+        safeActorUserId,
       ]
     );
     return result.rows[0]?.id ?? null;

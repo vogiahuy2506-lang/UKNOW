@@ -3605,3 +3605,11 @@ ALTER TABLE zalo_messages  ADD COLUMN IF NOT EXISTS workspace_owner_id BIGINT RE
 CREATE INDEX IF NOT EXISTS idx_email_messages_owner_sent ON email_messages(workspace_owner_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_zalo_messages_owner_sent  ON zalo_messages(workspace_owner_id, sent_at);
 
+-- --- Migration 241: actor_user_id for email_messages and zalo_messages ---
+ALTER TABLE email_messages ADD COLUMN IF NOT EXISTS actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE zalo_messages  ADD COLUMN IF NOT EXISTS actor_user_id BIGINT REFERENCES users(id) ON DELETE SET NULL;
+
+CREATE INDEX IF NOT EXISTS idx_email_messages_owner_actor_sent ON email_messages(workspace_owner_id, actor_user_id, sent_at);
+CREATE INDEX IF NOT EXISTS idx_zalo_messages_owner_actor_sent  ON zalo_messages(workspace_owner_id, actor_user_id, sent_at);
+
+

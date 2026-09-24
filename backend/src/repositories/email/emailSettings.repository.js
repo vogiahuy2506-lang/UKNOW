@@ -299,7 +299,7 @@ class EmailSettingsRepository {
   }
 
   async getOwnedCampaign(client, campaignId, userId) {
-    const result = await client.query('SELECT id, COALESCE(workspace_owner_id, id_user) AS workspace_owner_id FROM campaigns WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 LIMIT 1', [
+    const result = await client.query('SELECT id, COALESCE(workspace_owner_id, id_user) AS workspace_owner_id, created_by, id_user FROM campaigns WHERE id = $1 AND COALESCE(workspace_owner_id, id_user) = $2 LIMIT 1', [
       campaignId,
       userId,
     ]);
@@ -317,14 +317,19 @@ class EmailSettingsRepository {
       : (payload.workspace_owner_id != null ? Number.parseInt(payload.workspace_owner_id, 10) : null);
     const workspaceOwnerId = Number.isFinite(rawOwnerId) ? rawOwnerId : null;
 
+    const rawActorId = payload.actorUserId != null
+      ? Number.parseInt(payload.actorUserId, 10)
+      : (payload.actor_user_id != null ? Number.parseInt(payload.actor_user_id, 10) : null);
+    const actorUserId = Number.isFinite(rawActorId) ? rawActorId : null;
+
     const status = payload.status || 'sent';
     const result = await client.query(
       `INSERT INTO email_messages
         (id_campaign, id_run, id_customer, id_email_template, id_email_setting, message_id,
          tracking_token, recipient_email, recipient_name, sender_email, sender_name, subject,
          body_html, body_text, status, sent_at, id_node, email_step,
-         from_address, reply_to, brand_domain, is_preview, quota_reservation_id, workspace_owner_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
+         from_address, reply_to, brand_domain, is_preview, quota_reservation_id, workspace_owner_id, actor_user_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
        RETURNING id`,
       [
         payload.campaignId,
@@ -351,6 +356,7 @@ class EmailSettingsRepository {
         Boolean(payload.isPreview),
         quotaReservationId,
         workspaceOwnerId,
+        actorUserId,
       ]
     );
     return result.rows[0]?.id || null;

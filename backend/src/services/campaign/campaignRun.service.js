@@ -2713,6 +2713,7 @@ class CampaignRunService {
             ...(trackingMetadata && typeof trackingMetadata === 'object' ? trackingMetadata : {}),
           },
           workspaceOwnerId: campaign?.workspace_owner_id || campaign?.id_user || null,
+          actorUserId: campaign?.created_by || campaign?.id_user || null,
         });
         return insertResultId || null;
       };

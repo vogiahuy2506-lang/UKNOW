@@ -945,8 +945,10 @@ export async function countZaloSentInCycleWithLedger(queryable, billingUserId, c
 
 /**
  * Đếm tổng tin gửi của riêng nhân viên trong ngày VN.
- * Dùng campaigns.created_by cho legacy campaign, zalo_personal_messages.id_user cho inbox,
- * và actor_user_id cho usage_logs và reservations.
+ * Dùng `actor_user_id` NGAY TRÊN dòng tin (email_messages/zalo_messages) cho chiến dịch,
+ * zalo_personal_messages.id_user cho inbox, và actor_user_id cho usage_logs và reservations.
+ * KHÔNG JOIN campaigns để lấy created_by: xoá chiến dịch làm id_campaign thành NULL, dòng rơi
+ * khỏi phép nối và trần nhân viên bị hoàn lại (migration 241/242 thêm cột để chặn đúng việc đó).
  *
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} ownerId
@@ -970,9 +972,8 @@ export async function countEmployeeSentTodayWithLedger(
         COALESCE((
           SELECT COUNT(*)
           FROM email_messages em
-          JOIN campaigns c ON c.id = em.id_campaign
           WHERE em.workspace_owner_id = $1
-            AND c.created_by = $2
+            AND em.actor_user_id = $2
             AND em.quota_reservation_id IS NULL
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
@@ -1011,9 +1012,8 @@ export async function countEmployeeSentTodayWithLedger(
       COALESCE((
         SELECT COUNT(*)
         FROM zalo_messages zm
-        JOIN campaigns c ON c.id = zm.id_campaign
         WHERE zm.workspace_owner_id = $1
-          AND c.created_by = $2
+          AND zm.actor_user_id = $2
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
@@ -1080,9 +1080,8 @@ export async function countEmployeeSentInCycleWithLedger(
         COALESCE((
           SELECT COUNT(*)
           FROM email_messages em
-          JOIN campaigns c ON c.id = em.id_campaign
           WHERE em.workspace_owner_id = $1
-            AND c.created_by = $2
+            AND em.actor_user_id = $2
             AND em.quota_reservation_id IS NULL
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
@@ -1121,9 +1120,8 @@ export async function countEmployeeSentInCycleWithLedger(
       COALESCE((
         SELECT COUNT(*)
         FROM zalo_messages zm
-        JOIN campaigns c ON c.id = zm.id_campaign
         WHERE zm.workspace_owner_id = $1
-          AND c.created_by = $2
+          AND zm.actor_user_id = $2
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview

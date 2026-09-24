@@ -265,6 +265,7 @@ class CampaignQuickSendService {
                 isPreview: false,
                 quotaReservationId: reservation.id,
                 workspaceOwnerId,
+                actorUserId,
               }, txClient);
             },
           },

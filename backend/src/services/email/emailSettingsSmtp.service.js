@@ -141,14 +141,23 @@ class EmailSettingsSmtpService {
       : null;
 
     let resolvedWorkspaceOwnerId = payload.workspaceOwnerId ?? payload.workspace_owner_id ?? null;
+    let resolvedActorUserId = payload.actorUserId ?? payload.actor_user_id ?? null;
     if (campaignIdNum) {
       const lookupUser = resolvedWorkspaceOwnerId || payload.userId;
       const ownership = await emailSettingsRepository.getOwnedCampaign(client, campaignIdNum, lookupUser);
       if (!ownership) {
         campaignIdNum = null;
-      } else if (!resolvedWorkspaceOwnerId && ownership.workspace_owner_id) {
-        resolvedWorkspaceOwnerId = ownership.workspace_owner_id;
+      } else {
+        if (!resolvedWorkspaceOwnerId && ownership.workspace_owner_id) {
+          resolvedWorkspaceOwnerId = ownership.workspace_owner_id;
+        }
+        if (ownership.created_by || ownership.id_user) {
+          resolvedActorUserId = ownership.created_by || ownership.id_user;
+        }
       }
+    }
+    if (!resolvedActorUserId) {
+      resolvedActorUserId = payload.actorUserId ?? payload.actor_user_id ?? payload.userId ?? null;
     }
 
     if (!resolvedCustomerId && payload.to) {
@@ -158,6 +167,7 @@ class EmailSettingsSmtpService {
 
     const emailMessageId = await emailSettingsRepository.insertEmailMessage(client, {
       workspaceOwnerId: resolvedWorkspaceOwnerId,
+      actorUserId: resolvedActorUserId,
       campaignId: campaignIdNum,
       runId: runIdNum,
       customerId: resolvedCustomerId,
@@ -723,6 +733,7 @@ class EmailSettingsSmtpService {
                   if (shouldSaveMessageLog) {
                     loggedMessageId = await emailSettingsRepository.insertEmailMessage(txClient, {
                       workspaceOwnerId,
+                      actorUserId: userId,
                       campaignId: campaignId || null,
                       runId: normalizedRunId,
                       customerId: customerId || null,
@@ -826,6 +837,7 @@ class EmailSettingsSmtpService {
               loggedMessageId = await this.logEmailSentWithClient(txClient, {
                 userId: workspaceOwnerId,
                 workspaceOwnerId,
+                actorUserId: userId,
                 campaignId,
                 customerId,
                 emailTemplateId,
@@ -872,6 +884,7 @@ class EmailSettingsSmtpService {
           await this.logEmailSent({
             userId: workspaceOwnerId,
             workspaceOwnerId,
+            actorUserId: userId,
             campaignId,
             customerId,
             emailTemplateId,

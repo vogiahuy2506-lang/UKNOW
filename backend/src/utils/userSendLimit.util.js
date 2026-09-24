@@ -137,9 +137,8 @@ async function countEmployeeEmailSentToday(ownerId, employeeId) {
     const { rows } = await db.query(
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
-          INNER JOIN campaigns c ON c.id = em.id_campaign
           WHERE em.workspace_owner_id = $1
-            AND c.created_by = $2
+            AND em.actor_user_id = $2
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
             AND em.sent_at >= CURRENT_DATE)
@@ -163,9 +162,8 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
       const { rows } = await queryable.query(
         `SELECT (
            (SELECT COUNT(*) FROM email_messages em
-            INNER JOIN campaigns c ON c.id = em.id_campaign
             WHERE em.workspace_owner_id = $1
-              AND c.created_by = $2
+              AND em.actor_user_id = $2
               AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
               AND em.sent_at >= $3 AND em.sent_at < $4)
@@ -184,9 +182,8 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
     const { rows } = await queryable.query(
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
-          INNER JOIN campaigns c ON c.id = em.id_campaign
           WHERE em.workspace_owner_id = $1
-            AND c.created_by = $2
+            AND em.actor_user_id = $2
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
             AND em.sent_at >= DATE_TRUNC('month', NOW()))
@@ -207,9 +204,8 @@ async function countEmployeeZaloSentToday(ownerId, employeeId) {
     const { rows } = await db.query(
       `SELECT (
          (SELECT COUNT(*) FROM zalo_messages zm
-          JOIN campaigns c ON c.id = zm.id_campaign
           WHERE zm.workspace_owner_id = $1
-            AND c.created_by = $2
+            AND zm.actor_user_id = $2
             AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
             AND zm.sent_at >= CURRENT_DATE)
@@ -238,9 +234,8 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
       const { rows } = await queryable.query(
         `SELECT (
            (SELECT COUNT(*) FROM zalo_messages zm
-            JOIN campaigns c ON c.id = zm.id_campaign
             WHERE zm.workspace_owner_id = $1
-              AND c.created_by = $2
+              AND zm.actor_user_id = $2
               AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
               AND zm.sent_at >= $3 AND zm.sent_at < $4)
@@ -264,9 +259,8 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
     const { rows } = await queryable.query(
       `SELECT (
          (SELECT COUNT(*) FROM zalo_messages zm
-          JOIN campaigns c ON c.id = zm.id_campaign
           WHERE zm.workspace_owner_id = $1
-            AND c.created_by = $2
+            AND zm.actor_user_id = $2
             AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
             AND zm.sent_at >= DATE_TRUNC('month', NOW()))

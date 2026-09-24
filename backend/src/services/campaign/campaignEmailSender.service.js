@@ -970,6 +970,7 @@ class CampaignEmailSenderService {
           await emailSettingsController.logEmailSent({
             userId: campaign.id_user,
             workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+            actorUserId: campaign.created_by || campaign.id_user,
             campaignId: campaign.id,
             customerId,
             emailTemplateId: null,
@@ -1013,6 +1014,7 @@ class CampaignEmailSenderService {
           await emailSettingsController.logEmailSent({
             userId: campaign.id_user,
             workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+            actorUserId: campaign.created_by || campaign.id_user,
             campaignId: campaign.id,
             customerId,
             emailTemplateId: null,
@@ -1080,6 +1082,7 @@ class CampaignEmailSenderService {
               await emailSettingsSmtpService.logEmailSentWithClient(client, {
                 userId: campaign.id_user,
                 workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+                actorUserId: campaign.created_by || campaign.id_user,
                 campaignId: campaign.id,
                 customerId,
                 emailTemplateId: null,
@@ -1117,6 +1120,7 @@ class CampaignEmailSenderService {
           await emailSettingsController.logEmailSent({
             userId: campaign.id_user,
             workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+            actorUserId: campaign.created_by || campaign.id_user,
             campaignId: campaign.id,
             customerId,
             emailTemplateId: null,
@@ -1188,6 +1192,7 @@ class CampaignEmailSenderService {
             ? (client) => emailSettingsSmtpService.logEmailSentWithClient(client, {
                 userId: campaign.id_user,
                 workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+                actorUserId: campaign.created_by || campaign.id_user,
                 campaignId: campaign.id,
                 customerId,
                 emailTemplateId: templateId,
@@ -1218,6 +1223,7 @@ class CampaignEmailSenderService {
         await emailSettingsController.logEmailSent({
           userId: campaign.id_user,
           workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+          actorUserId: campaign.created_by || campaign.id_user,
           campaignId: campaign.id,
           customerId,
           emailTemplateId: templateId,
