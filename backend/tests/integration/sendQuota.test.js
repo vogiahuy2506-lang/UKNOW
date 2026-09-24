@@ -73,9 +73,12 @@ describe('send quota — messages_per_period', () => {
     const campaignId = campaigns[0].id;
 
     await db.query(
-      `INSERT INTO email_messages (id_campaign, recipient_email, status, sent_at)
-       VALUES ($1, 'a@test.local', 'sent', NOW())`,
-      [campaignId]
+      // `workspace_owner_id` là BẮT BUỘC từ 384cb10f: phép đếm hạn mức lọc theo cột này thay vì
+      // JOIN campaigns, nên dòng thiếu chủ sở hữu không được đếm và hạn mức không bao giờ chạm trần.
+      // Đường gửi thật luôn điền cột này; fixture phải theo, nếu không test xanh giả/đỏ giả.
+      `INSERT INTO email_messages (id_campaign, workspace_owner_id, recipient_email, status, sent_at)
+       VALUES ($1, $2, 'a@test.local', 'sent', NOW())`,
+      [campaignId, user.id]
     );
 
     const quota = await checkSendQuota({ userId: user.id, channel: 'zalo' });
@@ -95,9 +98,10 @@ describe('send quota — messages_per_period', () => {
       [user.id]
     );
     await db.query(
-      `INSERT INTO email_messages (id_campaign, recipient_email, status, sent_at)
-       VALUES ($1, 'a@test.local', 'sent', NOW())`,
-      [campaigns[0].id]
+      // Xem chú thích ở ca trên: thiếu `workspace_owner_id` là hạn mức không bao giờ chạm trần.
+      `INSERT INTO email_messages (id_campaign, workspace_owner_id, recipient_email, status, sent_at)
+       VALUES ($1, $2, 'a@test.local', 'sent', NOW())`,
+      [campaigns[0].id, user.id]
     );
 
     const { rows: accounts } = await db.query(
