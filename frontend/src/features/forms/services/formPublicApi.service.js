@@ -56,3 +56,17 @@ export async function fetchPublicSubmissionStatus(publicKey, accessToken) {
   );
   return res.data?.data;
 }
+
+/**
+ * Báo đã chuyển khoản cho một bài nộp pending_payment (PR-2).
+ *
+ * @param {string} publicKey
+ * @param {string} accessToken
+ * @returns {Promise<object>}
+ */
+export async function reportSubmissionPaid(publicKey, accessToken) {
+  const res = await publicClient.post(
+    `/public/forms/${encodeURIComponent(publicKey)}/submissions/${encodeURIComponent(accessToken)}/report-paid`
+  );
+  return res.data?.data;
+}

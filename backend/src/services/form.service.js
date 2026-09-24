@@ -1268,6 +1268,91 @@ class FormService {
       holdExpiresAt: submission.holdExpiresAt,
       holdExpired,
       payment,
+      payerReportedPaidAt: submission.payerReportedPaidAt || null,
+    };
+  }
+
+  /**
+   * Khách báo đã chuyển khoản cho lượt đặt pending_payment (PR-2).
+   * Gia hạn giữ chỗ (nếu còn hạn) tối đa 24h, không vượt quá appointment_at.
+   * Gửi email thông báo cho chủ form (bất kể settings.notifyOwner).
+   * Idempotent: bấm lại trả 200 trạng thái hiện tại, không đổi hạn giữ chỗ, không gửi thư lần hai.
+   *
+   * @param {string} publicKey
+   * @param {string} accessToken
+   * @returns {Promise<object>}
+   */
+  async reportPaymentSent(publicKey, accessToken) {
+    const key = String(publicKey || '').trim();
+    const token = String(accessToken || '').trim();
+    if (!key || !token) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    const form = await formRepository.findFormByPublicKey(key);
+    if (!form || !form.isPublished || form.adminDisabledAt) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    // 1. Thử cập nhật nguyên tử nếu lượt đang pending_payment và chưa từng báo (payer_reported_paid_at IS NULL)
+    const updated = await formRepository.updatePayerReportedPaid(token, form.id);
+
+    if (updated) {
+      // Bấm lần đầu thành công -> gửi thư báo chủ form (bất kể settings.notifyOwner)
+      if (form.ownerEmail) {
+        const subject = `[${SENDER_NAME}] Khách báo đã chuyển khoản - Mã ${updated.paymentCode || ''}`;
+        const appointmentText = updated.appointmentAt
+          ? formatAppointmentVn(updated.appointmentAt)
+          : 'Không có lịch hẹn';
+        const amountText = updated.paymentAmount
+          ? `${Number(updated.paymentAmount).toLocaleString('vi-VN')}đ`
+          : '0đ';
+        const reportedAtText = new Date().toLocaleString('vi-VN');
+        const submissionsUrl = `${FRONTEND_URL}/app/forms/${form.id}/submissions`;
+
+        const html = `
+          <h2>Khách hàng báo đã chuyển khoản</h2>
+          <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
+          <p>Mã thanh toán: <strong>${escapeHtml(updated.paymentCode || '')}</strong></p>
+          <p>Số tiền: <strong>${escapeHtml(amountText)}</strong></p>
+          <p>Người đặt: ${escapeHtml(updated.respondentName || 'Chưa cung cấp')}</p>
+          <p>Số điện thoại: ${escapeHtml(updated.respondentPhone || 'Chưa cung cấp')}</p>
+          <p>Giờ hẹn: <strong>${escapeHtml(appointmentText)}</strong></p>
+          <p>Thời gian báo: ${escapeHtml(reportedAtText)}</p>
+          <p><a href="${submissionsUrl}" style="display:inline-block;padding:10px 16px;background:#059669;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">Xem danh sách bài nộp để xác nhận</a></p>
+        `;
+
+        void sendSystemEmail({
+          to: form.ownerEmail,
+          subject,
+          html,
+        }).catch((emailErr) => {
+          logError(`[FormService] Gửi thư báo khách chuyển khoản thất bại cho form ${form.id}: ${emailErr.message}`);
+        });
+      }
+
+      return {
+        status: updated.status,
+        holdExpiresAt: updated.holdExpiresAt,
+        payerReportedPaidAt: updated.payerReportedPaidAt,
+      };
+    }
+
+    // 2. Không có dòng trả về -> đọc lại bài nộp để phân biệt "đã báo rồi" (200) với "không còn chờ tiền" (409) hoặc "không tìm thấy" (404)
+    const existing = await formRepository.findSubmissionByAccessTokenAndForm(token, form.id);
+    if (!existing) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    if (existing.status !== 'pending_payment') {
+      throw createHttpError('Bài nộp không ở trạng thái chờ thanh toán', 409, 'SUBMISSION_NOT_PENDING');
+    }
+
+    // Đã ở trạng thái pending_payment và payer_reported_paid_at không null (nghĩa là đã báo rồi) -> idempotent 200
+    return {
+      status: existing.status,
+      holdExpiresAt: existing.holdExpiresAt,
+      payerReportedPaidAt: existing.payerReportedPaidAt,
     };
   }
 

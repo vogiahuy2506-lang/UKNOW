@@ -3501,6 +3501,7 @@ CREATE TABLE IF NOT EXISTS form_submissions (
   payment_amount       BIGINT,
   payment_snapshot     JSONB,
   hold_expires_at      TIMESTAMPTZ,
+  payer_reported_paid_at TIMESTAMPTZ,
   paid_confirmed_at    TIMESTAMPTZ,
   paid_confirmed_by    BIGINT REFERENCES users(id) ON DELETE SET NULL,
   submitter_ip_hash    VARCHAR(64),

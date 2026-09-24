@@ -4,7 +4,7 @@ import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
 import { HiOutlineClipboardCopy, HiOutlineCheck, HiOutlineExclamationCircle, HiOutlineDownload } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
-import { fetchPublicSubmissionStatus } from '../services/formPublicApi.service';
+import { fetchPublicSubmissionStatus, reportSubmissionPaid } from '../services/formPublicApi.service';
 import { formatAppointmentAtVn } from '../utils/bookingFormat.util';
 import { formatVnd, formatCountdown } from '../../../utils/vietqrParser';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
@@ -56,6 +56,38 @@ function CopyableRow({ label, value, displayValue, hint }) {
   );
 }
 
+function formatTimeOnly(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  const formatter = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+  return formatter.format(d);
+}
+
+function formatHoldExpiresTime(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  const formatter = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(d).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+  return `${parts.hour}:${parts.minute} ngày ${parts.day}/${parts.month}`;
+}
+
 export default function FormSubmissionStatusPage() {
   const { t, locale } = useI18n();
   const { publicKey, accessToken } = useParams();
@@ -67,6 +99,8 @@ export default function FormSubmissionStatusPage() {
   const [httpStatus, setHttpStatus] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [countdownSeconds, setCountdownSeconds] = useState(null);
+  const [isReportingPaid, setIsReportingPaid] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   // Chặn refetch-do-đếm-ngược-về-0 bắn liên tiếp nhiều lần trong cùng một giây làm tròn.
   const hasFiredZeroRefetch = useRef(false);
   // Đọc statusData "mới nhất" trong catch của load() mà không phải thêm statusData vào deps
@@ -153,6 +187,25 @@ export default function FormSubmissionStatusPage() {
       cancelled = true;
     };
   }, [statusData?.payment?.qrString, statusData?.payment?.method]);
+
+  const handleConfirmPaid = async () => {
+    setIsReportingPaid(true);
+    try {
+      const res = await reportSubmissionPaid(publicKey, accessToken);
+      setStatusData((prev) => ({
+        ...prev,
+        holdExpiresAt: res?.holdExpiresAt || prev?.holdExpiresAt,
+        payerReportedPaidAt: res?.payerReportedPaidAt || new Date().toISOString(),
+      }));
+      setShowConfirmModal(false);
+      toast.success(t('publicForm.payment.confirmPaidBtn'));
+    } catch (err) {
+      toast.error(err.response?.data?.message || t('publicForm.payment.copyError'));
+      setShowConfirmModal(false);
+    } finally {
+      setIsReportingPaid(false);
+    }
+  };
 
   // PR-5 — depsKey theo trạng thái hiển thị hiện tại (loading/404/từng nhánh status) để chiều
   // cao gửi cho form-embed.js luôn khớp nội dung thật khi trạng thái đổi.
@@ -339,6 +392,36 @@ export default function FormSubmissionStatusPage() {
                 </div>
               </>
             )}
+
+            {/* PR-2: Nút xác nhận chuyển khoản hoặc thông báo đã ghi nhận */}
+            {statusData?.payerReportedPaidAt ? (
+              <div
+                data-testid="block-payer-reported-success"
+                className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-xl text-xs sm:text-sm text-emerald-800 flex items-start gap-2.5"
+              >
+                <div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex-shrink-0 flex items-center justify-center font-bold text-xs mt-0.5">
+                  ✓
+                </div>
+                <div className="leading-relaxed">
+                  {t('publicForm.payment.reportedSuccessMsg', {
+                    reportedTime: formatTimeOnly(statusData.payerReportedPaidAt),
+                    recipientName: (payment?.method === 'momo' ? payment?.momoName : payment?.accountName) || t('publicForm.payment.accountNameLabel'),
+                    holdTime: formatHoldExpiresTime(statusData.holdExpiresAt),
+                  })}
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(true)}
+                disabled={isReportingPaid}
+                data-testid="btn-confirm-paid"
+                className="w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2 bg-[color:var(--form-primary,#059669)] text-[color:var(--form-primary-text,#ffffff)] hover:brightness-95 disabled:opacity-50"
+              >
+                <HiOutlineCheck className="w-5 h-5" />
+                <span>{t('publicForm.payment.confirmPaidBtn')}</span>
+              </button>
+            )}
           </div>
         )}
 
@@ -405,6 +488,42 @@ export default function FormSubmissionStatusPage() {
           </p>
         </div>
       </div>
+
+      {/* Modal xác nhận đã chuyển khoản (PR-2) */}
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl border border-gray-100 p-6 text-center">
+            <div className="w-12 h-12 mx-auto mb-3 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+              <HiOutlineCheck className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-semibold text-gray-900 mb-2">
+              {t('publicForm.payment.confirmPaidModalTitle')}
+            </h3>
+            <p className="text-xs sm:text-sm text-gray-600 mb-6 leading-relaxed">
+              {t('publicForm.payment.confirmPaidModalQuestion')}
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                disabled={isReportingPaid}
+                className="flex-1 py-2.5 px-4 rounded-xl border border-gray-200 text-gray-700 hover:bg-gray-50 text-xs sm:text-sm font-medium transition-colors"
+              >
+                {t('publicForm.payment.confirmPaidModalCancel')}
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmPaid}
+                disabled={isReportingPaid}
+                data-testid="btn-confirm-paid-submit"
+                className="flex-1 py-2.5 px-4 rounded-xl bg-[color:var(--form-primary,#059669)] text-[color:var(--form-primary-text,#ffffff)] hover:brightness-95 text-xs sm:text-sm font-medium transition-colors shadow-sm disabled:opacity-50"
+              >
+                {isReportingPaid ? '...' : t('publicForm.payment.confirmPaidModalConfirm')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

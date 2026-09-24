@@ -788,9 +788,55 @@ class FormRepository {
          payment_amount AS "paymentAmount",
          payment_snapshot AS "paymentSnapshot",
          payment_code AS "paymentCode",
-         hold_expires_at AS "holdExpiresAt"
+         hold_expires_at AS "holdExpiresAt",
+         payer_reported_paid_at AS "payerReportedPaidAt"
        FROM form_submissions
        WHERE access_token = $1 AND form_id = $2`,
+      [accessToken, formId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Cập nhật báo đã chuyển khoản nguyên tử cho một bài nộp pending_payment (PR-2).
+   * Gia hạn hold_expires_at tối đa 24h nếu còn hạn, không vượt quá appointment_at.
+   * Idempotent qua kiểm tra payer_reported_paid_at IS NULL.
+   *
+   * @param {string} accessToken
+   * @param {number} formId
+   * @returns {Promise<object|null>}
+   */
+  async updatePayerReportedPaid(accessToken, formId) {
+    const result = await db.query(
+      `UPDATE form_submissions
+       SET
+         payer_reported_paid_at = NOW(),
+         hold_expires_at = CASE
+           WHEN hold_expires_at > NOW() THEN
+             GREATEST(
+               hold_expires_at,
+               LEAST(NOW() + INTERVAL '24 hours', COALESCE(appointment_at, NOW() + INTERVAL '24 hours'))
+             )
+           ELSE hold_expires_at
+         END,
+         updated_at = NOW()
+       WHERE access_token = $1
+         AND form_id = $2
+         AND status = 'pending_payment'
+         AND payer_reported_paid_at IS NULL
+       RETURNING
+         id,
+         form_id AS "formId",
+         workspace_owner_id AS "workspaceOwnerId",
+         respondent_name AS "respondentName",
+         respondent_email AS "respondentEmail",
+         respondent_phone AS "respondentPhone",
+         payment_code AS "paymentCode",
+         payment_amount AS "paymentAmount",
+         appointment_at AS "appointmentAt",
+         hold_expires_at AS "holdExpiresAt",
+         payer_reported_paid_at AS "payerReportedPaidAt",
+         status`,
       [accessToken, formId]
     );
     return result.rows[0] || null;
@@ -986,6 +1032,7 @@ class FormRepository {
          s.payment_amount AS "paymentAmount",
          s.payment_snapshot AS "paymentSnapshot",
          s.hold_expires_at AS "holdExpiresAt",
+         s.payer_reported_paid_at AS "payerReportedPaidAt",
          s.paid_confirmed_at AS "paidConfirmedAt",
          s.paid_confirmed_by AS "paidConfirmedBy",
          s.landing_page_slug AS "landingPageSlug",

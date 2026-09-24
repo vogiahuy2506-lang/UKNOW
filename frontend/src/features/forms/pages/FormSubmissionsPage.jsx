@@ -40,6 +40,25 @@ function getDisplayStatus(sub) {
   return sub.status || 'submitted';
 }
 
+function formatReportedPaidAt(isoString) {
+  if (!isoString) return '';
+  const d = new Date(isoString);
+  if (Number.isNaN(d.getTime())) return '';
+  const formatter = new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+    day: '2-digit',
+    month: '2-digit',
+    hour12: false,
+  });
+  const parts = formatter.formatToParts(d).reduce((acc, p) => {
+    acc[p.type] = p.value;
+    return acc;
+  }, {});
+  return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}`;
+}
+
 export default function FormSubmissionsPage() {
   const { t, locale } = useI18n();
   const navigate = useNavigate();
@@ -370,8 +389,20 @@ export default function FormSubmissionsPage() {
                         /* Mã nội dung chuyển khoản + số tiền — để chủ đối chiếu sao kê */
                         <td className="py-4 px-4 sm:px-6 text-xs whitespace-nowrap">
                           {sub.paymentCode ? (
-                            <div className="space-y-0.5">
-                              <div className="font-mono font-semibold text-gray-800">{sub.paymentCode}</div>
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span className="font-mono font-semibold text-gray-800">{sub.paymentCode}</span>
+                                {sub.status === 'pending_payment' && sub.payerReportedPaidAt && (
+                                  <span
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-300"
+                                    data-testid="badge-payer-reported"
+                                  >
+                                    {t('forms.submissionsPage.payerReportedPaidBadge', {
+                                      time: formatReportedPaidAt(sub.payerReportedPaidAt),
+                                    })}
+                                  </span>
+                                )}
+                              </div>
                               <div className="text-gray-500">{formatVnd(sub.paymentAmount)}</div>
                             </div>
                           ) : (

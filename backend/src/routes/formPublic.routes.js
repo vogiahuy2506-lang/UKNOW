@@ -1,6 +1,6 @@
 import express from 'express';
 import formPublicController from '../controllers/formPublic.controller.js';
-import { publicFormSubmissionLimiter, formUnsubscribeLimiter } from '../middleware/rateLimiter.middleware.js';
+import { publicFormSubmissionLimiter, formUnsubscribeLimiter, formReportPaidLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -11,6 +11,11 @@ router.get('/unsubscribe/:token', formUnsubscribeLimiter, formPublicController.u
 router.get('/:publicKey', formPublicController.getPublic.bind(formPublicController));
 router.get('/:publicKey/slots', formPublicController.getSlots.bind(formPublicController));
 router.get('/:publicKey/submissions/:accessToken', formPublicController.getSubmissionStatus.bind(formPublicController));
+router.post(
+  '/:publicKey/submissions/:accessToken/report-paid',
+  formReportPaidLimiter,
+  formPublicController.reportPaymentSent.bind(formPublicController)
+);
 router.post(
   '/:publicKey/submissions',
   publicFormSubmissionLimiter,

@@ -9319,6 +9319,7 @@ export default {
       confirmPaymentSlotTaken: 'Khung giờ này đã hết chỗ, không thể xác nhận. Danh sách đã được tải lại.',
       confirmPaymentNotPending: 'Bài nộp này không còn ở trạng thái chờ thanh toán. Danh sách đã được tải lại.',
       confirmPaymentError: 'Không thể xác nhận thanh toán',
+      payerReportedPaidBadge: 'Khách báo đã chuyển · {time}',
     },
     shareModal: {
       copyError: 'Không thể sao chép liên kết',
@@ -9411,6 +9412,12 @@ export default {
       disclaimer: 'Bạn chuyển khoản trực tiếp cho chủ biểu mẫu. Founder AI không giữ tiền và không bảo đảm giao dịch.',
       disclaimerNamed: 'Bạn chuyển khoản trực tiếp cho {name}. Founder AI không giữ tiền và không bảo đảm giao dịch.',
       reportLink: 'Báo cáo vấn đề',
+      confirmPaidBtn: 'Tôi xác nhận đã chuyển khoản',
+      confirmPaidModalTitle: 'Xác nhận chuyển khoản',
+      confirmPaidModalQuestion: 'Bạn đã chuyển đúng số tiền và ghi đúng mã nội dung chuyển khoản?',
+      confirmPaidModalCancel: 'Quay lại',
+      confirmPaidModalConfirm: 'Đã chuyển đúng',
+      reportedSuccessMsg: 'Đã ghi nhận lúc {reportedTime}. {recipientName} sẽ kiểm tra và xác nhận. Chỗ của bạn được giữ tới {holdTime}.',
     },
   },
 };

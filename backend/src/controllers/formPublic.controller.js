@@ -92,6 +92,30 @@ class FormPublicController {
   }
 
   /**
+   * POST /api/public/forms/:publicKey/submissions/:accessToken/report-paid
+   * Người đặt bấm "Tôi xác nhận đã chuyển khoản" (PR-2).
+   */
+  async reportPaymentSent(req, res) {
+    try {
+      const { publicKey, accessToken } = req.params;
+      const result = await formService.reportPaymentSent(publicKey, accessToken);
+      return res.json({
+        success: true,
+        message: 'Đã ghi nhận thông báo chuyển khoản',
+        data: result,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.reportPaymentSent]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể ghi nhận thông báo chuyển khoản',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
    * GET /api/public/forms/unsubscribe/:token — rút lại đồng ý nhận tiếp thị công khai cho người
    * nộp Biểu mẫu (PR-7b, mô phỏng `lead.controller.js` `unsubscribe`). Trả HTML song ngữ, không
    * auth. Route này khai TRƯỚC `/:publicKey` (`formPublic.routes.js`) — "unsubscribe" không được

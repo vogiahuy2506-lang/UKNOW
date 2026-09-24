@@ -310,6 +310,21 @@ export const formUnsubscribeLimiter = rateLimit({
   },
 });
 
+// Public form report payment sent — chống spam nút báo chuyển khoản (không auth) — PR-2
+export const formReportPaidLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `form-report-paid:${clientIpKey(req)}`,
+  message: {
+    success: false,
+    message: 'Quá nhiều yêu cầu xác nhận chuyển khoản. Vui lòng thử lại sau ít phút.',
+    code: 'FORM_REPORT_PAID_RATE_LIMIT_EXCEEDED',
+  },
+});
+
 // Public landing analytics view — giới hạn nhẹ hơn lead nhưng vẫn chống flood
 export const publicLandingAnalyticsLimiter = rateLimit({
   skip: skipInTest,
