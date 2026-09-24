@@ -10,7 +10,10 @@
  * Cả hai form đều được giữ lại (skipAutoDelete), không xoá ở afterAll.
  */
 import { test, expect } from '@playwright/test';
+import fs from 'node:fs';
+import path from 'node:path';
 import {
+  getRunDir,
   captureScreenshot,
   recordReport,
   registerCleanup,
@@ -38,6 +41,17 @@ test.describe('Kịch bản C — Form đặt lịch trên iPhone (WebKit)', () 
       throw new Error('Biến ACCEPTANCE_RESPONDENT_EMAIL là bắt buộc theo lệnh giao để kiểm tra gửi và nhắc lịch thật.');
     }
     authRequest = await createAuthenticatedContext(playwright, baseURL);
+
+    // Một test đỏ làm Playwright dựng worker mới và chạy LẠI beforeAll cho các test sau — production
+    // 25/09 vì thế tạo 4 form thay vì 2. Ghi form đã tạo vào thư mục lượt chạy, lần sau dùng lại.
+    const formsCachePath = path.join(getRunDir(), 'forms.json');
+    if (fs.existsSync(formsCachePath)) {
+      ({ form1Id, form1Key, form2Id, form2Key } = JSON.parse(fs.readFileSync(formsCachePath, 'utf8')));
+      console.log(`[Kịch bản C] Dùng lại form đã tạo trong lượt này: Form 1=${form1Id}, Form 2=${form2Id ?? '—'}`);
+      registerCleanup({ type: 'form', id: form1Id, skipAutoDelete: true, note: 'Form 1 (lịch C2) — giữ lại để kiểm thư nhắc hôm sau.' });
+      if (form2Id) registerCleanup({ type: 'form', id: form2Id, skipAutoDelete: true, note: 'Form 2 (QR C3) — giữ lại để quét QR thật.' });
+      return;
+    }
 
     // ── Tạo Form 1: Đặt lịch KHÔNG thu tiền (cho C1 và C2) ──────────────────
     console.log('[Kịch bản C] Chuẩn bị Form 1 (đặt lịch, không thu tiền cho C1/C2)...');
@@ -160,6 +174,8 @@ test.describe('Kịch bản C — Form đặt lịch trên iPhone (WebKit)', () 
     } else {
       console.log('[Kịch bản C] Chưa cung cấp biến ngân hàng thật (ACCEPTANCE_BANK_BIN, ACCEPTANCE_BANK_ACCOUNT, ACCEPTANCE_BANK_NAME), Form 2 sẽ bỏ qua.');
     }
+
+    fs.writeFileSync(formsCachePath, JSON.stringify({ form1Id, form1Key, form2Id, form2Key }, null, 2));
   });
 
   test.afterAll(async ({ baseURL }) => {
@@ -341,6 +357,11 @@ test.describe('Kịch bản C — Form đặt lịch trên iPhone (WebKit)', () 
       // Trên giao diện hiển thị dạng dd/mm (ví dụ "Thứ Bảy, 26/09/2026")
       const [y, m, d] = chosenSlot.date.split('-');
       const dateLabelShort = `${d}/${m}`;
+      // Chờ bộ chọn giờ tải xong (có ít nhất một nút giờ) RỒI mới xét ngày. Production 25/09: danh sách
+      // giờ về chậm hơn 1,5 giây, kịch bản tưởng ngày không có ở tuần này, bấm "Tuần sau" và lạc tuần.
+      const anySlotButton = page.locator('div.rounded-xl.border.border-gray-200 button[type="button"]')
+        .filter({ hasText: /^\s*\d{2}:\d{2}/ }).first();
+      await anySlotButton.waitFor({ state: 'visible', timeout: 20_000 });
       let dateCard = page.locator('div.rounded-xl.border.border-gray-200').filter({ hasText: dateLabelShort });
       if (!(await dateCard.isVisible({ timeout: 1500 }).catch(() => false))) {
         const nextWeekBtn = page.getByRole('button', { name: /Tuần sau/i });

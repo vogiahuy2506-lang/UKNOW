@@ -13,7 +13,7 @@
  * - expandMenu: 'Mở rộng sidebar' (:4925)    [sửa từ 'Mở rộng menu' theo A11]
  */
 import { test, expect } from '@playwright/test';
-import { captureScreenshot, recordReport } from './acceptance-helper.js';
+import { captureScreenshot, recordReport, dismissPhoneReminder } from './acceptance-helper.js';
 
 const I18N_LABELS = {
   operationAll: 'Tất cả', // frontend/src/i18n/vi.js:1264
@@ -58,6 +58,10 @@ async function extractVisibleCampaignRows(page) {
 }
 
 test.describe('Kịch bản A — Trang chiến dịch gộp', () => {
+  test.beforeEach(async ({ page }) => {
+    await dismissPhoneReminder(page);
+  });
+
   test('A1: Mở /app/campaign-run phải chuyển hướng sang /app/campaigns?tab=schedules', async ({ page }) => {
     console.log('[Kịch bản A] Bước A1: Kiểm tra chuyển hướng từ /app/campaign-run...');
     await page.goto('/app/campaign-run');
@@ -179,8 +183,15 @@ test.describe('Kịch bản A — Trang chiến dịch gộp', () => {
 
   test('A3: Nhãn vận hành trên các dòng hiển thị đúng thứ tự ưu tiên (cho_doi_chieu)', async ({ page }) => {
     console.log('[Kịch bản A] Bước A3: Kiểm tra nhãn vận hành trên các dòng...');
+    // Chờ đúng response danh sách rồi dòng đầu tiên hiện — production 25/09 đọc bảng quá sớm, ra 0
+    // dòng trong khi "Tất cả" có 94 chiến dịch.
+    const listResponse = page.waitForResponse(
+      (res) => /\/api\/campaigns(\?|$)/.test(res.url()) && res.request().method() === 'GET' && res.status() === 200,
+      { timeout: 20_000 }
+    ).catch(() => null);
     await page.goto('/app/campaigns?state=all');
-    await page.waitForLoadState('domcontentloaded');
+    await listResponse;
+    await page.locator('tbody tr').first().waitFor({ state: 'visible', timeout: 15_000 }).catch(() => {});
 
     const visibleRows = await extractVisibleCampaignRows(page);
     console.log(`[Kịch bản A] Đã trích xuất ${visibleRows.length} dòng chiến dịch ở trang 1`);
@@ -203,11 +214,16 @@ test.describe('Kịch bản A — Trang chiến dịch gộp', () => {
     await page.goto('/app');
     await page.waitForLoadState('domcontentloaded');
 
-    // Đảm bảo sidebar ở trạng thái mở rộng trước
-    const expandBtn = page.locator(`button[title="${I18N_LABELS.expandSidebar}"]`);
-    if (await expandBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-      await expandBtn.click();
-      await page.waitForTimeout(500);
+    // Đảm bảo sidebar ở trạng thái mở rộng trước. Mặc định là thu gọn chỉ còn biểu tượng
+    // (MainLayout.jsx:36 `founder_ai_sidebar_open` = false), và isVisible() KHÔNG chờ — production
+    // 25/09 kiểm lúc sidebar chưa vẽ, bỏ qua bước mở rộng, rồi không tìm thấy nhóm có chữ.
+    const sidebarToggle = page
+      .locator(`button[title="${I18N_LABELS.expandSidebar}"], button[title="${I18N_LABELS.collapseSidebar}"]`)
+      .first();
+    await sidebarToggle.waitFor({ state: 'visible', timeout: 15_000 });
+    if ((await sidebarToggle.getAttribute('title')) === I18N_LABELS.expandSidebar) {
+      await sidebarToggle.click();
+      await expect(page.locator(`button[title="${I18N_LABELS.collapseSidebar}"]`).first()).toBeVisible({ timeout: 5000 });
     }
 
     // Tìm nút nhóm Chiến dịch

@@ -46,6 +46,20 @@ export function getStoredAccessToken() {
 }
 
 /**
+ * Tài khoản chưa có SĐT: hộp thoại "Bổ sung số điện thoại" (vi.js phoneRequired.title/.later,
+ * PhoneRequiredModal.jsx) bật lên ở MỖI lần tải trang và chặn mọi cú bấm. Đăng ký một handler để
+ * Playwright tự bấm "Để sau" trước bất kỳ thao tác nào khi hộp thoại đó hiện — không nhập gì.
+ * (Chạy production 25/09: bản cũ tìm nút theo /Đóng|Close|X|×/i nên bấm nhầm "Xác nhận" — chữ X.)
+ * @param {import('@playwright/test').Page} page
+ */
+export async function dismissPhoneReminder(page) {
+  const modal = page.locator('.modal-overlay').filter({ hasText: 'Bổ sung số điện thoại' });
+  await page.addLocatorHandler(modal, async (overlay) => {
+    await overlay.getByRole('button', { name: 'Để sau', exact: true }).click();
+  });
+}
+
+/**
  * Tạo một request context của Playwright có gắn header Authorization: Bearer <token>
  * @param {import('@playwright/test').Playwright} playwright
  * @param {string} baseURL

@@ -16,6 +16,7 @@ import {
   captureScreenshot,
   recordReport,
   createAuthenticatedContext,
+  dismissPhoneReminder,
 } from './acceptance-helper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -100,6 +101,7 @@ test.describe('Kịch bản B — Landing tự kiểm hiển thị', () => {
       timezoneId: 'Asia/Ho_Chi_Minh',
     });
     sharedPage = await context.newPage();
+    await dismissPhoneReminder(sharedPage);
   });
 
   test.afterAll(async () => {

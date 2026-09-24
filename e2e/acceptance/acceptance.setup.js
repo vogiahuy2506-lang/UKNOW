@@ -2,7 +2,7 @@ import { test as setup, expect } from '@playwright/test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import fs from 'node:fs';
-import { captureScreenshot, recordReport } from './acceptance-helper.js';
+import { captureScreenshot, recordReport, dismissPhoneReminder } from './acceptance-helper.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const AUTH_FILE = path.join(__dirname, '..', '.auth', 'acceptance.json');
@@ -69,22 +69,15 @@ setup('authenticate for acceptance', async ({ page }) => {
   if (!landedPath.startsWith('/app')) {
     await failLogin(`Đăng nhập xong bị đưa về "${landedPath}", không vào /app — tài khoản chưa có gói còn hạn?`);
   }
+  // Hộp thoại "Bổ sung số điện thoại" (tài khoản chưa có SĐT) — bấm đúng "Để sau". KHÔNG tìm nút
+  // theo /Đóng|Close|X|×/i như auth.setup.js: chữ "X" khớp nút "Xác nhận" (production 25/09).
+  await dismissPhoneReminder(page);
   await expect(page.locator('aside').first()).toBeVisible({ timeout: 15_000 });
-
-  // Đóng modal nếu có (AccountProfileModal hoặc bất kỳ modal nào block UI) theo đúng auth.setup.js
-  const closeModal = async () => {
-    const overlay = page.locator('.modal-overlay').first();
-    if (await overlay.isVisible({ timeout: 1000 }).catch(() => false)) {
-      const closeBtn = overlay.locator('button').filter({ hasText: /Đóng|Close|X|×/i }).first();
-      if (await closeBtn.isVisible({ timeout: 1000 }).catch(() => false)) {
-        await closeBtn.click();
-        await page.waitForTimeout(400);
-      }
-      await page.keyboard.press('Escape');
-      await page.waitForTimeout(400);
-    }
-  };
-  await closeModal();
+  const phoneModal = page.locator('.modal-overlay').filter({ hasText: 'Bổ sung số điện thoại' });
+  if (await phoneModal.isVisible({ timeout: 3000 }).catch(() => false)) {
+    await phoneModal.getByRole('button', { name: 'Để sau', exact: true }).click();
+    await expect(phoneModal).toBeHidden({ timeout: 5000 });
+  }
 
   await captureScreenshot(page, 'setup_logged_in.png', 'Đăng nhập thành công vào app');
   await page.context().storageState({ path: AUTH_FILE });
