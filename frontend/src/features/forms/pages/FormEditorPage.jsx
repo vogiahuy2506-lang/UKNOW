@@ -8,6 +8,10 @@ import {
   HiOutlineArrowUp,
   HiOutlineArrowDown,
   HiOutlineCheck,
+  HiOutlineEye,
+  HiOutlineEyeOff,
+  HiOutlineShare,
+  HiOutlineInbox,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { useAuthStore } from '../../../stores/authStore';
@@ -16,9 +20,11 @@ import {
   fetchFormById,
   createForm,
   updateForm,
+  publishForm,
   uploadFormTempFile,
   uploadFormAsset,
 } from '../services/formAdminApi.service';
+import ShareModal from '../components/ShareModal';
 import FormRenderer from '../components/FormRenderer';
 import useStorageQuota from '../../storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../storage/validateUpload';
@@ -140,6 +146,10 @@ export default function FormEditorPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [isPublished, setIsPublished] = useState(false);
+  const [publicKey, setPublicKey] = useState('');
+  const [submissionCount, setSubmissionCount] = useState(null);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [isTogglingPublish, setIsTogglingPublish] = useState(false);
   const [fields, setFields] = useState([]);
   const [settings, setSettings] = useState(() => ({
     ...DEFAULT_SETTINGS,
@@ -185,6 +195,8 @@ export default function FormEditorPage() {
         setTitle(data.title || '');
         setDescription(data.description || '');
         setIsPublished(Boolean(data.isPublished));
+        setPublicKey(data.publicKey || '');
+        setSubmissionCount(data.submissionCount ?? null);
         setFields(
           Array.isArray(data.fields)
             ? data.fields.map((f) => ({
@@ -653,13 +665,13 @@ export default function FormEditorPage() {
     return errs;
   };
 
-  const handleSave = async () => {
+  const handleSave = async ({ andPublish = false } = {}) => {
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
       const firstError = Object.values(validationErrors)[0];
       toast.error(firstError);
-      return;
+      return false;
     }
     setErrors({});
     setIsSaving(true);
@@ -772,18 +784,57 @@ export default function FormEditorPage() {
 
       if (isEditMode) {
         await updateForm(id, payload);
+        if (andPublish) {
+          await publishForm(id, true);
+          setIsPublished(true);
+        }
         toast.success(t('forms.saveSuccess'));
         setInitialBookingHadConfig(Boolean(payloadBooking));
         setConfirmDisableBooking(false);
+        return id;
       } else {
         const created = await createForm(payload);
+        if (andPublish) {
+          await publishForm(created.id, true);
+        }
         toast.success(t('forms.saveSuccess'));
         navigate(`/app/forms/${created.id}/edit`, { replace: true });
+        return created.id;
       }
     } catch (err) {
       toast.error(err.response?.data?.message || t('forms.editorPage.saveError'));
+      return false;
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleTogglePublish = async () => {
+    if (!isEditMode) {
+      await handleSave({ andPublish: true });
+      return;
+    }
+
+    if (isPublished) {
+      setIsTogglingPublish(true);
+      try {
+        await publishForm(id, false);
+        setIsPublished(false);
+        toast.success(t('forms.editorPage.unpublishSuccess'));
+      } catch (err) {
+        toast.error(err.response?.data?.message || t('forms.editorPage.togglePublishError'));
+      } finally {
+        setIsTogglingPublish(false);
+      }
+      return;
+    }
+
+    // Nếu form đang ẩn: LƯU TRƯỚC rồi mới publish
+    setIsTogglingPublish(true);
+    try {
+      await handleSave({ andPublish: true });
+    } finally {
+      setIsTogglingPublish(false);
     }
   };
 
@@ -830,8 +881,8 @@ export default function FormEditorPage() {
 
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto overflow-x-hidden box-border">
-      {/* Header bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6 pb-4 border-b border-gray-100">
+      {/* Thanh thao tác dính (PR-1) */}
+      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 px-4 sm:px-6 lg:px-8 py-4 mb-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/app/forms')}
@@ -863,15 +914,70 @@ export default function FormEditorPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3 self-end sm:self-auto">
+        {/* Cụm thao tác: Lưu -> Công khai / Ẩn -> Chia sẻ -> Bài nộp (N) */}
+        <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
+          {/* Nút 1: Lưu */}
           <button
             type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="inline-flex items-center gap-2 px-5 py-2.5 bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white text-sm font-medium rounded-xl shadow-sm transition-all disabled:opacity-50"
+            onClick={() => handleSave()}
+            disabled={isSaving || isTogglingPublish}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white text-sm font-medium rounded-xl shadow-sm transition-all disabled:opacity-50"
           >
-            <HiOutlineCheck className="w-5 h-5" />
-            {isSaving ? t('forms.editorPage.saving') : t('forms.editorPage.saveForm')}
+            <HiOutlineCheck className="w-4 h-4" />
+            <span>{isSaving ? t('forms.editorPage.saving') : t('forms.editorPage.saveForm')}</span>
+          </button>
+
+          {/* Nút 2: Công khai / Ẩn */}
+          <button
+            type="button"
+            onClick={handleTogglePublish}
+            disabled={isSaving || isTogglingPublish}
+            title={!isEditMode ? t('forms.editorPage.saveAndPublishTooltip') : undefined}
+            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl border transition-all disabled:opacity-50 ${
+              isPublished
+                ? 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
+                : 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100'
+            }`}
+          >
+            {isPublished ? (
+              <>
+                <HiOutlineEyeOff className="w-4 h-4 text-gray-500" />
+                <span>{t('forms.unpublish')}</span>
+              </>
+            ) : (
+              <>
+                <HiOutlineEye className="w-4 h-4 text-green-600" />
+                <span>{t('forms.publish')}</span>
+              </>
+            )}
+          </button>
+
+          {/* Nút 3: Chia sẻ */}
+          <button
+            type="button"
+            onClick={() => setIsShareModalOpen(true)}
+            disabled={!isEditMode}
+            title={!isEditMode ? t('forms.editorPage.saveFirstTooltip') : undefined}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <HiOutlineShare className="w-4 h-4 text-gray-500" />
+            <span>{t('forms.share')}</span>
+          </button>
+
+          {/* Nút 4: Bài nộp (N) */}
+          <button
+            type="button"
+            onClick={() => navigate(`/app/forms/${id}/submissions`)}
+            disabled={!isEditMode}
+            title={!isEditMode ? t('forms.editorPage.saveFirstTooltip') : undefined}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            <HiOutlineInbox className="w-4 h-4 text-gray-500" />
+            <span>
+              {submissionCount !== null && submissionCount !== undefined
+                ? `${t('forms.editorPage.submissions')} (${submissionCount})`
+                : t('forms.editorPage.submissions')}
+            </span>
           </button>
         </div>
       </div>
@@ -1938,6 +2044,21 @@ export default function FormEditorPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal chia sẻ (PR-1) */}
+      {isEditMode && (
+        <ShareModal
+          form={{
+            id,
+            publicKey,
+            title,
+            isPublished,
+          }}
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          onPublish={handleTogglePublish}
+        />
+      )}
     </div>
   );
 }

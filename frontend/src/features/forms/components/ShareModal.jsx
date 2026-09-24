@@ -4,7 +4,7 @@ import toast from 'react-hot-toast';
 import { HiOutlineX, HiOutlineClipboardCopy, HiOutlineDownload, HiOutlineCode } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
-export default function ShareModal({ form, isOpen, onClose }) {
+export default function ShareModal({ form, isOpen, onClose, onPublish }) {
   const { t } = useI18n();
   const [qrDataUrl, setQrDataUrl] = useState('');
 
@@ -91,6 +91,21 @@ export default function ShareModal({ form, isOpen, onClose }) {
         <p className="text-sm text-gray-500 mb-5 break-words">
           {form.title}
         </p>
+
+        {!form.isPublished && (
+          <div className="mb-5 p-3.5 bg-amber-50 border border-amber-200 rounded-xl flex items-center justify-between gap-3 text-xs text-amber-800">
+            <span>{t('forms.shareModal.hiddenWarning')}</span>
+            {onPublish && (
+              <button
+                type="button"
+                onClick={onPublish}
+                className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-lg font-medium whitespace-nowrap transition-colors shadow-sm"
+              >
+                {t('forms.publish')}
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Mã nhúng landing (PR-5) — cách chính để đưa form vào landing page */}
         <div className="mb-5 p-4 bg-gray-900 rounded-xl">

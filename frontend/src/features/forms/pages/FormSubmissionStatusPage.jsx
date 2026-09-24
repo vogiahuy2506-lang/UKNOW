@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
-import { HiOutlineClipboardCopy, HiOutlineCheck, HiOutlineExclamationCircle } from 'react-icons/hi';
+import { HiOutlineClipboardCopy, HiOutlineCheck, HiOutlineExclamationCircle, HiOutlineDownload } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { fetchPublicSubmissionStatus } from '../services/formPublicApi.service';
 import { formatAppointmentAtVn } from '../utils/bookingFormat.util';
@@ -142,7 +142,7 @@ export default function FormSubmissionStatusPage() {
       return;
     }
     let cancelled = false;
-    QRCode.toDataURL(statusData.payment.qrString, { width: 240, margin: 2 })
+    QRCode.toDataURL(statusData.payment.qrString, { width: 320, margin: 4 })
       .then((url) => {
         if (!cancelled) setQrDataUrl(url);
       })
@@ -273,15 +273,39 @@ export default function FormSubmissionStatusPage() {
               </>
             ) : (
               <>
+                <p
+                  className="font-semibold text-sm sm:text-base text-center mb-3"
+                  style={{ color: 'var(--form-primary, #059669)' }}
+                >
+                  {t('publicForm.payment.scanInstruction')}
+                </p>
+
                 {qrDataUrl ? (
                   <img
                     src={qrDataUrl}
                     alt={t('publicForm.payment.qrAlt')}
-                    className="w-48 h-48 mx-auto rounded-xl border border-gray-200 bg-white"
+                    className="w-60 h-60 mx-auto rounded-xl border border-gray-200 bg-white"
                   />
                 ) : (
-                  <div className="w-48 h-48 mx-auto flex items-center justify-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                  <div className="w-60 h-60 mx-auto flex items-center justify-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
                     {t('publicForm.payment.qrGenerating')}
+                  </div>
+                )}
+
+                {qrDataUrl && (
+                  <div className="text-center my-3">
+                    <a
+                      href={qrDataUrl}
+                      download={`qr-${payment.code || 'payment'}.png`}
+                      data-testid="btn-save-qr"
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors"
+                    >
+                      <HiOutlineDownload className="w-4 h-4 text-gray-500" />
+                      {t('publicForm.payment.saveQrBtn')}
+                    </a>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {t('publicForm.payment.saveQrHint')}
+                    </p>
                   </div>
                 )}
 
