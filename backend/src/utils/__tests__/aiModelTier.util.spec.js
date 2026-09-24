@@ -1,31 +1,19 @@
 import { describe, it, expect } from '@jest/globals';
-import {
-  clampModelToMax,
-  listModelsUpToTier,
-  getModelTierIndex,
-} from '../aiModelTier.util.js';
+import * as tier from '../aiModelTier.util.js';
 
+/**
+ * File này từng chỉ ghim bộ hàm xếp hạng model theo gói (clampModelToMax, listModelsUpToTier…), và
+ * dùng chính hai model Google đã khai tử (1.5-flash, 2.0-flash) làm dữ liệu mẫu. Bộ hàm đó đã bị gỡ
+ * 24/09/2026 vì không còn nơi nào gọi — xem chú thích cuối aiModelTier.util.js.
+ */
 describe('aiModelTier.util', () => {
-  it('clampModelToMax hạ model cao hơn gói', () => {
-    expect(clampModelToMax('gemini-2.5-pro', 'gemini-2.0-flash')).toBe('gemini-2.0-flash');
+  it('normalizeModelId: bỏ khoảng trắng, về chữ thường, rỗng khi thiếu', () => {
+    expect(tier.normalizeModelId('  Gemini-3.5-Flash ')).toBe('gemini-3.5-flash');
+    expect(tier.normalizeModelId(null)).toBe('');
+    expect(tier.normalizeModelId(undefined)).toBe('');
   });
 
-  it('clampModelToMax giữ model trong tier', () => {
-    expect(clampModelToMax('gemini-2.0-flash', 'gemini-2.5-flash')).toBe('gemini-2.0-flash');
-  });
-
-  it('listModelsUpToTier trả đủ model ≤ max', () => {
-    const models = listModelsUpToTier('gemini-2.0-flash');
-    expect(models).toEqual([
-      'gemini-2.0-flash-lite',
-      'gemini-1.5-flash',
-      'gemini-2.0-flash',
-    ]);
-    expect(models).not.toContain('gemini-2.5-flash');
-  });
-
-  it('model lạ được coi tier cao → clamp', () => {
-    expect(getModelTierIndex('unknown-model-x')).toBeGreaterThan(getModelTierIndex('gemini-2.5-flash'));
-    expect(clampModelToMax('unknown-model-x', 'gemini-2.0-flash')).toBe('gemini-2.0-flash');
+  it('chỉ còn đúng 2 thứ được xuất — bộ hàm xếp hạng theo gói không quay lại', () => {
+    expect(Object.keys(tier).sort()).toEqual(['DEFAULT_AI_MODEL', 'normalizeModelId']);
   });
 });

@@ -12,11 +12,18 @@ export const DEFAULT_AVG_OUTPUT_TOKENS = 500;
 
 // gemini-2.5-pro uses the base tier (prompt ≤200k); >200k is higher ($2.50/$15)
 // and rare here because average prompts are ~10k tokens.
+//
+// 24/09/2026: gỡ 'gemini-2.0-flash' — Google ngừng liệt kê từ 10/08, và usage_logs trên production
+// không có dòng nào dùng nó (đo: 3.5-flash 2.558, 2.5-pro 257, 2.5-flash 105, embedding-001 3.227).
+// Giá của model đã khai tử CHỈ được gỡ khi không còn dòng lịch sử nào, không thì báo cáo chi phí quá
+// khứ bị tính lại bằng _default.
+//
+// THIẾU GIÁ, đang rơi về _default: gemini-3.5-flash (model hệ thống) và gemini-embedding-001. Điền
+// bằng biến AI_PRICING_JSON trên máy chủ sau khi tra trang giá Google — đừng đoán số vào đây.
 export const DEFAULT_PRICING = Object.freeze({
   'gemini-2.5-pro': { input: 1.25, output: 10.0 },
   'gemini-2.5-flash': { input: 0.3, output: 2.5 },
   'gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
-  'gemini-2.0-flash': { input: 0.1, output: 0.4 },
   _default: { input: 0.3, output: 2.5 },
 });
 

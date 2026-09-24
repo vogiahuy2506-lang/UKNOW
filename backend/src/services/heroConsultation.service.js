@@ -13,6 +13,8 @@
 import IORedis from 'ioredis';
 import db from '../config/database.js';
 import { vnDayKey } from '../utils/vnTimeFormat.util.js';
+import { resolveAllowedModel } from './ai/aiModelPolicy.service.js';
+import { DEFAULT_AI_MODEL } from '../utils/aiModelTier.util.js';
 
 const MAX_FREE_CHATS = 5;
 const VISITOR_QUOTA_TTL_SEC = 24 * 60 * 60; // 24 hours
@@ -183,7 +185,17 @@ function formatCoursesForContext(courses) {
 
 async function callGemini(prompt) {
   const apiKey = process.env.GEMINI_API_KEY;
-  const model = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+  // Model do super admin chọn, như mọi tính năng AI khác. Bản cũ đọc thẳng GEMINI_MODEL trong .env
+  // (không có thì 'gemini-2.5-flash') nên chat tư vấn trang chủ là đường duy nhất phía khách KHÔNG
+  // theo lựa chọn của admin — đổi model ở trang quản trị không tác động tới nó.
+  //
+  // Khung chat này cố ý sống sót khi CSDL lỗi (getFounderAIData dùng lại dữ liệu cũ). Đọc model
+  // cũng phải vậy: bộ đệm danh mục nguội mà CSDL lỗi thì resolveAllowedModel NÉM lỗi, nên rơi về
+  // model dự phòng thay vì làm hỏng khung chat bán hàng trên trang công khai.
+  const model = await resolveAllowedModel(null).catch((err) => {
+    console.warn(`[HeroConsultation] Không đọc được model hệ thống, dùng ${DEFAULT_AI_MODEL}: ${err?.message}`);
+    return DEFAULT_AI_MODEL;
+  });
 
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY not configured');

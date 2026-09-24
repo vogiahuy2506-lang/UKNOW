@@ -1,12 +1,11 @@
-/** Thứ hạng model Gemini (thấp → cao). */
-export const AI_MODEL_TIERS = [
-  'gemini-2.0-flash-lite',
-  'gemini-1.5-flash',
-  'gemini-2.0-flash',
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
-];
-
+/**
+ * Model dự phòng cuối cùng — chỉ dùng khi KHÔNG đọc được model hệ thống (danh mục ai_models rỗng
+ * hoặc CSDL lỗi). Đường bình thường luôn là model super admin chọn (aiModelPolicy.resolveAllowedModel).
+ *
+ * Đây vẫn là một tên viết cứng và sẽ lỗi thời như mọi tên viết cứng khác. Còn sống tới 24/09/2026
+ * (danh mục đồng bộ đêm vẫn thấy Google liệt kê). Model dự phòng do admin chọn — xem
+ * _internal/PLAN_MODEL_DU_PHONG_2026-09-24.md — là thứ thay được nó.
+ */
 export const DEFAULT_AI_MODEL = 'gemini-2.5-flash';
 
 /**
@@ -17,79 +16,8 @@ export function normalizeModelId(model) {
   return String(model || '').trim().toLowerCase();
 }
 
-/**
- * @param {string|null|undefined} model
- * @returns {number}
- */
-export function getModelTierIndex(model) {
-  return tierIndex(model, AI_MODEL_TIERS);
-}
-
-/**
- * @param {string|null|undefined} model
- * @param {string[]} tiers
- * @returns {number}
- */
-export function tierIndex(model, tiers = AI_MODEL_TIERS) {
-  const normalized = normalizeModelId(model);
-  const normalizedTiers = (Array.isArray(tiers) && tiers.length ? tiers : AI_MODEL_TIERS)
-    .map(normalizeModelId)
-    .filter(Boolean);
-  if (!normalized) return 0;
-  const index = normalizedTiers.indexOf(normalized);
-  if (index >= 0) {
-    return index;
-  }
-  // Model lạ: coi như cao nhất để clamp xuống theo gói (an toàn).
-  return normalizedTiers.length;
-}
-
-/**
- * @param {string|null|undefined} requestedModel
- * @param {string|null|undefined} maxAllowedModel
- * @returns {string}
- */
-export function clampModelToMax(requestedModel, maxAllowedModel) {
-  return clampToTiers(requestedModel, maxAllowedModel, AI_MODEL_TIERS);
-}
-
-/**
- * @param {string|null|undefined} requestedModel
- * @param {string|null|undefined} maxAllowedModel
- * @param {string[]} tiers
- * @returns {string}
- */
-export function clampToTiers(requestedModel, maxAllowedModel, tiers = AI_MODEL_TIERS) {
-  const normalizedTiers = (Array.isArray(tiers) && tiers.length ? tiers : AI_MODEL_TIERS)
-    .map(normalizeModelId)
-    .filter(Boolean);
-  const maxModel = normalizeModelId(maxAllowedModel) || DEFAULT_AI_MODEL;
-  const requested = normalizeModelId(requestedModel) || maxModel;
-  const reqIdx = tierIndex(requested, normalizedTiers);
-  const maxIdx = tierIndex(maxModel, normalizedTiers);
-  if (reqIdx <= maxIdx) {
-    return normalizedTiers.includes(requested) ? requested : maxModel;
-  }
-  return maxModel;
-}
-
-/**
- * @param {string|null|undefined} maxModel
- * @returns {string[]}
- */
-export function listModelsUpToTier(maxModel) {
-  return listUpToTier(maxModel, AI_MODEL_TIERS);
-}
-
-/**
- * @param {string|null|undefined} maxModel
- * @param {string[]} tiers
- * @returns {string[]}
- */
-export function listUpToTier(maxModel, tiers = AI_MODEL_TIERS) {
-  const normalizedTiers = (Array.isArray(tiers) && tiers.length ? tiers : AI_MODEL_TIERS)
-    .map(normalizeModelId)
-    .filter(Boolean);
-  const maxIdx = tierIndex(maxModel, normalizedTiers);
-  return normalizedTiers.filter((_, index) => index <= maxIdx);
-}
+// Từng có ở đây: AI_MODEL_TIERS (bảng thứ hạng 2.0-flash-lite → 1.5-flash → 2.0-flash → 2.5-flash →
+// 2.5-pro) cùng 6 hàm xếp hạng/hạ model theo gói. Chúng thuộc chính sách "model theo gói" đã bị thay
+// ngày 12/07/2026 bằng "1 model hệ thống do super admin chọn", và tới 24/09 không còn nơi nào gọi.
+// Bảng đó chứa hai model Google đã khai tử: 1.5-flash và 2.0-flash (ngừng liệt kê từ 10/08).
+// Đừng khôi phục — muốn bán model theo gói thì viết lại trên danh mục ai_models, không trên tên cứng.

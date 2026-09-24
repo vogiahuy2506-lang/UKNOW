@@ -31,7 +31,10 @@ describe('aiPricing.util', () => {
     expect(costPerAnswerVnd(pricing, 'gemini-2.5-pro', opts)).toBe(420);
     expect(costPerAnswerVnd(pricing, 'gemini-2.5-flash', opts)).toBe(102);
     expect(costPerAnswerVnd(pricing, 'gemini-2.5-flash-lite', opts)).toBe(29);
-    expect(costPerAnswerVnd(pricing, 'gemini-2.0-flash', opts)).toBe(29);
+  });
+
+  test('gemini-2.0-flash đã gỡ khỏi bảng giá (Google khai tử 10/08, 0 dòng usage_logs dùng nó)', () => {
+    expect(hasConfiguredPrice(parsePricing(), 'gemini-2.0-flash')).toBe(false);
   });
 
   test('hasConfiguredPrice is false for unknown models (not fooled by _default)', () => {

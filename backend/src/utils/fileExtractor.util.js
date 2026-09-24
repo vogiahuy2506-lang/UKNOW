@@ -75,6 +75,7 @@ async function extractTextFromPdf(buffer) {
   // Fallback to Gemini for scanned PDFs or exported presentations (like PowerPoint)
   try {
     const { generateGeminiContent } = await import('./geminiClient.util.js');
+    const { resolveAllowedModel } = await import('../services/ai/aiModelPolicy.service.js');
     const base64Data = buffer.toString('base64');
     const parts = [
       {
@@ -88,9 +89,13 @@ async function extractTextFromPdf(buffer) {
       }
     ];
 
+    // Model do super admin chọn, KHÔNG ghim tên. Bản cũ ghim cứng 'gemini-2.5-flash' từ 24/08 (không
+    // ghi lý do) nên đường này không nghe theo lựa chọn của admin, và sẽ gãy riêng một mình khi Google
+    // khai tử 2.5-flash như đã làm với 2.0-flash hôm 10/08. Đã thử thật trên production 24/09:
+    // model hệ thống (gemini-3.5-flash) đọc đúng PDF gửi kèm kiểu inlineData này.
     const result = await generateGeminiContent({
       parts,
-      model: 'gemini-2.5-flash',
+      model: await resolveAllowedModel(null),
       temperature: 0.1
     });
 
@@ -151,6 +156,7 @@ async function extractTextFromExcel(buffer) {
 async function extractTextFromImage(buffer, ext) {
   try {
     const { generateGeminiContent } = await import('./geminiClient.util.js');
+    const { resolveAllowedModel } = await import('../services/ai/aiModelPolicy.service.js');
     let mimeType = 'image/jpeg';
     if (ext === 'png') mimeType = 'image/png';
     else if (ext === 'webp') mimeType = 'image/webp';
@@ -168,9 +174,11 @@ async function extractTextFromImage(buffer, ext) {
       }
     ];
 
+    // Cùng lý do với extractTextFromPdf: theo model admin chọn, không ghim tên. Thử thật 24/09:
+    // model hệ thống nhận ảnh gửi kèm kiểu inlineData.
     const result = await generateGeminiContent({
       parts,
-      model: 'gemini-2.5-flash',
+      model: await resolveAllowedModel(null),
       temperature: 0.1
     });
 
