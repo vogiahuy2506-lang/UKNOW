@@ -44,6 +44,9 @@ async function measure(page) {
  * @param {number|string|null} [opts.messageId]         id tin landing_page; null → server lấy tin mới nhất
  * @param {string} [opts.locale]
  * @param {() => boolean} [opts.isCancelled]            true → dừng, không gọi thêm request nào
+ * @param {boolean} [opts.allowAutoFix=true]             false → CHỈ ĐO: có lỗi thì báo still_broken, không
+ *   gọi lượt sửa tự động. Dùng cho trang dán HTML — server không cấp lượt tự sửa miễn phí cho tin dán
+ *   (luôn 429), nên gọi chỉ tốn một request vô ích; lỗi đã đo vẫn hiện kèm nút sửa trả phí.
  * @returns {Promise<{ status: 'clean'|'fixed'|'still_broken'|'unknown', page: object, changed: boolean,
  *   findings: Array, changeSummary: string, canRevert: boolean|null, cancelled?: boolean }>}
  */
@@ -53,6 +56,7 @@ export async function autoFixLandingLayout({
   messageId = null,
   locale = 'vi',
   isCancelled = () => false,
+  allowAutoFix = true,
 }) {
   let current = page;
   let changed = false;
@@ -75,7 +79,8 @@ export async function autoFixLandingLayout({
 
     let findings = measured.findings;
     // Không có phiên thì server không đếm được trần → không thể tự sửa; lỗi đã ĐO THẬT vẫn báo.
-    if (!sessionId) return result('still_broken', findings);
+    // Chế độ chỉ đo (trang dán HTML) cũng dừng ở đây.
+    if (!sessionId || !allowAutoFix) return result('still_broken', findings);
 
     for (let round = 1; round <= MAX_AUTO_FIX_ROUNDS; round += 1) {
       if (isCancelled()) return { ...result('unknown'), cancelled: true };

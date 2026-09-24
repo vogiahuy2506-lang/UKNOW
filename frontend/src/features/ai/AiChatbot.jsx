@@ -544,7 +544,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     layoutRunByCardRef.current.set(layoutCardKey(sessionId, messageId), ++layoutRunSeqRef.current);
   };
 
-  const runLandingLayoutCheck = ({ sessionId, messageId = null, page }) => {
+  const runLandingLayoutCheck = ({ sessionId, messageId = null, page, allowAutoFix = true }) => {
     const baseHtml = page?.html;
     if (typeof baseHtml !== 'string' || !baseHtml.trim()) return Promise.resolve();
 
@@ -567,7 +567,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     const isCancelled = () => !isCurrent() || manualLandingEditsInFlightRef.current > 0;
     const run = () => {
       if (!isCurrent()) return undefined; // bị lượt mới hơn thay thế trong lúc xếp hàng
-      return runAutoFix({ page, sessionId, messageId, locale, isCancelled })
+      return runAutoFix({ page, sessionId, messageId, locale, isCancelled, allowAutoFix })
         .then((result) => {
           if (isCurrent()) finish(result);
         })
@@ -1873,6 +1873,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         mySessionId = returnedSessionId;
         markTabPending(mySessionId);
         setCurrentSessionId(returnedSessionId);
+        // Đồng bộ ref NGAY (effect đồng bộ currentSessionIdRef chỉ chạy sau render): vòng kiểm gọi ở cuối hàm
+        // này ghi vào phiên qua updateSessionMessages, hàm đó so với ref — ref còn null thì dải
+        // "Đang kiểm tra hiển thị…" rơi vào nhánh "phiên khác" và mất.
+        currentSessionIdRef.current = returnedSessionId;
         setSessions((prev) => [{
           id: returnedSessionId,
           title: sessionTitle || message.data?.title || 'Landing',
@@ -1904,6 +1908,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           historyBase: withPasteMessages,
           sessionId: mySessionId,
         });
+        // handleEditLandingPageWithAi tự chạy vòng kiểm hiển thị cho trang đã sửa — không đo thêm bản dán.
+      } else {
+        // Trang dán cũng phải được kiểm hiển thị (plan landing tự kiểm §13 N7 — nghiệm thu production
+        // 25/09 bắt được đường này bị bỏ sót). CHỈ ĐO: tin dán không có lượt tự sửa miễn phí (server
+        // trả 429 — chống dán liên tục lấy lượt AI miễn phí), nên có lỗi thì thẻ hiện câu tiếng người
+        // + nút "Trình bày lại phần này · dùng 1 lượt AI". Không await: thẻ hiện ngay.
+        runLandingLayoutCheck({ sessionId: mySessionId, page: message.data, allowAutoFix: false });
       }
     } catch (error) {
       update((prev) => [...prev, {

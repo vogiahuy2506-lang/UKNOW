@@ -38,6 +38,22 @@ vi.mock('../../settings/services/zaloSettingsApi.service', () => ({
 vi.mock('../../../services/help.service', () => ({
   getHelpArticle: vi.fn().mockResolvedValue(null),
 }));
+// jsdom không có layout — mock bộ đo để kết quả kiểm hiển thị xác định được.
+vi.mock('../utils/layoutAudit.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  runLayoutAudit: vi.fn(),
+}));
+import { runLayoutAudit } from '../utils/layoutAudit.js';
+
+const CLEAN_AUDIT = { findings: [], timedOut: false, errors: [] };
+const BROKEN_AUDIT = {
+  findings: [{
+    kind: 'text_covered', width: 1280, text: '03/02/2026', selector: 'span.block:nth-of-type(1)',
+    coveredBy: { text: '1', selector: 'div.absolute:nth-of-type(1)' }, overlapPx: 12, sectionTitle: 'Dòng thời gian',
+  }],
+  timedOut: false,
+  errors: [],
+};
 
 const PASTED_HTML = '<!doctype html><html><head><title>Trang khách dán</title></head><body><h1>Chào</h1><p>Nội dung</p></body></html>';
 
@@ -49,6 +65,71 @@ describe('AiChatbot — dán HTML có sẵn vào ô chat (PR-2, Việc 2.1)', ()
     aiApi.getBusinessProfile = vi.fn().mockResolvedValue({ data: null });
     aiApi.getSessions.mockResolvedValue({ data: [] });
     api.get.mockResolvedValue({ data: {} });
+    runLayoutAudit.mockReset();
+    runLayoutAudit.mockResolvedValue(CLEAN_AUDIT);
+  });
+
+  const pasteResponse = (sessionId) => ({
+    success: true,
+    data: {
+      sessionId,
+      sessionTitle: 'Trang khách dán',
+      message: {
+        content: 'Đã nhận trang HTML "Trang khách dán".',
+        type: 'landing_page',
+        data: { title: 'Trang khách dán', html: PASTED_HTML, source: 'pasted' },
+      },
+    },
+  });
+
+  const pasteIntoChat = async (text) => {
+    render(
+      <MemoryRouter>
+        <AiChatbot isOpen={true} />
+      </MemoryRouter>
+    );
+    const textarea = await screen.findByPlaceholderText('aiChatbot.inputPlaceholder');
+    fireEvent.change(textarea, { target: { value: text } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+  };
+
+  // Nghiệm thu production 25/09 (plan landing tự kiểm §13 N7): đường dán không chạy kiểm hiển thị,
+  // thẻ dán trang lỗi không hiện gì. Kiểm cả hai nhánh + chốt "chỉ đo, không tự sửa".
+  it('dán trang CÓ lỗi hiển thị → đo trang dán, thẻ hiện nút "Trình bày lại", KHÔNG gọi lượt tự sửa', async () => {
+    aiApi.landingFromHtml.mockResolvedValue(pasteResponse(601));
+    runLayoutAudit.mockResolvedValue(BROKEN_AUDIT);
+
+    await pasteIntoChat(PASTED_HTML);
+
+    expect(await screen.findByText('landingPageCard.relayoutSection')).toBeInTheDocument();
+    expect(runLayoutAudit).toHaveBeenCalledTimes(1);
+    expect(runLayoutAudit.mock.calls[0][0]).toContain('<h1>Chào</h1>');
+    // Tin dán không có lượt tự sửa miễn phí — không được bắn edit tự động (server sẽ trả 429).
+    expect(aiApi.editLandingHtml).not.toHaveBeenCalled();
+  });
+
+  it('dán vào PHIÊN MỚI → thẻ hiện "Đang kiểm tra hiển thị…" ngay trong lúc đo (id phiên đồng bộ kịp)', async () => {
+    aiApi.landingFromHtml.mockResolvedValue(pasteResponse(603));
+    let finishAudit;
+    runLayoutAudit.mockImplementation(() => new Promise((resolve) => { finishAudit = resolve; }));
+
+    await pasteIntoChat(PASTED_HTML);
+
+    expect(await screen.findByText('landingPageCard.layoutChecking')).toBeInTheDocument();
+    await waitFor(() => expect(finishAudit).toBeTypeOf('function'));
+    finishAudit(CLEAN_AUDIT);
+    expect(await screen.findByText('landingPageCard.layoutOk')).toBeInTheDocument();
+  });
+
+  it('dán trang sạch → thẻ hiện ✓ "Đã kiểm tra hiển thị", không có nút "Trình bày lại"', async () => {
+    aiApi.landingFromHtml.mockResolvedValue(pasteResponse(602));
+    runLayoutAudit.mockResolvedValue(CLEAN_AUDIT);
+
+    await pasteIntoChat(PASTED_HTML);
+
+    expect(await screen.findByText('landingPageCard.layoutOk')).toBeInTheDocument();
+    expect(screen.queryByText('landingPageCard.relayoutSection')).not.toBeInTheDocument();
+    expect(aiApi.editLandingHtml).not.toHaveBeenCalled();
   });
 
   it('gõ nguyên trang HTML → gọi landingFromHtml, KHÔNG gọi chat, thẻ landing hiện ra', async () => {

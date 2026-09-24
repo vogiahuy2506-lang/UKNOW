@@ -212,6 +212,22 @@ describe('autoFixLandingLayout', () => {
     expect(aiApi.editLandingHtml).not.toHaveBeenCalled();
   });
 
+  it('allowAutoFix=false (trang dán HTML) → CHỈ ĐO: có lỗi thì still_broken kèm findings, KHÔNG gọi edit', async () => {
+    runLayoutAudit.mockResolvedValueOnce(BROKEN(3));
+    const result = await run({ allowAutoFix: false });
+    expect(result).toMatchObject({ status: 'still_broken', changed: false });
+    expect(result.findings).toHaveLength(3);
+    expect(aiApi.editLandingHtml).not.toHaveBeenCalled();
+    expect(runLayoutAudit).toHaveBeenCalledTimes(1);
+  });
+
+  it('allowAutoFix=false mà trang sạch → clean (vẫn hiện ✓ cho trang dán)', async () => {
+    runLayoutAudit.mockResolvedValueOnce(CLEAN);
+    const result = await run({ allowAutoFix: false });
+    expect(result).toMatchObject({ status: 'clean' });
+    expect(aiApi.editLandingHtml).not.toHaveBeenCalled();
+  });
+
   it('messageId null vẫn tự sửa được (server lấy tin landing mới nhất)', async () => {
     runLayoutAudit.mockResolvedValueOnce(BROKEN(1)).mockResolvedValueOnce(CLEAN);
     aiApi.editLandingHtml.mockResolvedValueOnce(editOk('<div>v1</div>'));
