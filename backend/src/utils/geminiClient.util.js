@@ -12,6 +12,52 @@ export function isThinkingBudgetRejection(err) {
 }
 
 /**
+ * Mã HTTP Google trả khi QUÁ TẢI hoặc trục trặc tạm thời — gọi lại sau vài giây thường qua.
+ * 400/401/403/404 thì không: gọi lại y hệt chỉ nhận y hệt lỗi đó.
+ *
+ * Sự cố 24/09/2026: khách bấm sinh landing, Google trả 503 "This model is currently experiencing
+ * high demand … usually temporary" sau 1,4 giây. Lớp này không thử lại lần nào, và câu lỗi chứa
+ * nguyên thân JSON của Google nên khách thấy nguyên cục `{ "error": { "code": 503, … } }` bằng
+ * tiếng Anh. Trong khi `customChat.service.js` (chatbot trả lời khách cuối) đã có thử lại 5xx từ
+ * trước — repo có sẵn lời giải, chỉ là lớp dùng chung này không có.
+ */
+export const GEMINI_TRANSIENT_STATUSES = Object.freeze([429, 500, 502, 503, 504]);
+
+export const AI_PROVIDER_BUSY_CODE = 'AI_PROVIDER_BUSY';
+export const AI_PROVIDER_BUSY_MESSAGE =
+  'Máy chủ AI đang quá tải tạm thời. Bạn vui lòng thử lại sau ít phút.';
+
+/** Nghỉ trước lần thử lại thứ 1 và thứ 2 — tức tối đa 3 lượt gọi. */
+const DEFAULT_RETRY_DELAYS_MS = Object.freeze([1500, 4000]);
+
+/**
+ * Chỉ thử lại khi lỗi đến NHANH. Cloudflare cắt request /api sau 100 giây, còn một lượt sinh
+ * landing thành công có thể mất tới 1–2 phút. Quá tải thường bị từ chối ngay (đo: 1,4 giây) nên
+ * thử lại gần như miễn phí; còn một lượt đã chạy 60 giây rồi mới hỏng thì thử lại chỉ đổi lỗi này
+ * lấy lỗi hết giờ của Cloudflare. Hết ngân sách thì trả lỗi ngay.
+ */
+const DEFAULT_RETRY_BUDGET_MS = 20000;
+
+export function isTransientGeminiError(err) {
+  return GEMINI_TRANSIENT_STATUSES.includes(err?.geminiStatus);
+}
+
+const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+/**
+ * Hết lượt thử mà vẫn quá tải: đổi câu lỗi sang tiếng Việt cho khách, giữ câu gốc của Google ở
+ * `providerMessage` để log máy chủ vẫn đọc được. Sửa tại chỗ (không tạo Error mới) để giữ stack.
+ */
+function toProviderBusyError(err, attempts) {
+  err.providerMessage = err.message;
+  err.message = AI_PROVIDER_BUSY_MESSAGE;
+  err.code = AI_PROVIDER_BUSY_CODE;
+  err.status = 503;
+  err.attempts = attempts;
+  return err;
+}
+
+/**
  * Join candidate text parts, skipping thought/reasoning parts.
  * @param {Array<{text?: string, thought?: boolean}>|undefined} parts
  * @returns {string}
@@ -49,6 +95,8 @@ function shouldAttachThinkingBudget(thinkingBudget) {
  * @param {string} [input.model]
  * @param {object} [input.systemInstruction]
  * @param {number|null} [input.thinkingBudget=0] — 0 tắt thinking; null/âm = để model tự quyết
+ * @param {number[]} [input.retryDelaysMs] — nghỉ trước mỗi lần thử lại khi Google quá tải
+ * @param {number} [input.retryBudgetMs] — quá mốc này (tính từ lượt đầu) thì thôi thử lại
  * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object }>}
  */
 export async function generateGeminiContent({
@@ -61,6 +109,8 @@ export async function generateGeminiContent({
   model,
   systemInstruction,
   thinkingBudget = 0,
+  retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
+  retryBudgetMs = DEFAULT_RETRY_BUDGET_MS,
 } = {}) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
@@ -108,8 +158,12 @@ export async function generateGeminiContent({
 
       if (!response.ok) {
         const bodyText = await response.text().catch(() => '');
+        // Câu gốc GIỮ NGUYÊN: isThinkingBudgetRejection() (ở đây và ở 3 service help/*) soi đúng
+        // câu này để nhận lỗi 400 "budget 0 is invalid". Chỉ lỗi quá tải mới được đổi câu, và chỉ
+        // sau khi hết lượt thử — xem toProviderBusyError().
         const err = new Error(`Gemini API lỗi (${response.status}): ${bodyText || response.statusText}`);
         err.status = 503;
+        err.geminiStatus = response.status;
         throw err;
       }
 
@@ -129,17 +183,48 @@ export async function generateGeminiContent({
   };
 
   const attachThinking = shouldAttachThinkingBudget(thinkingBudget);
-  try {
-    return await runOnce({ useThinkingBudget: attachThinking, tokenCap: maxOutputTokens });
-  } catch (error) {
-    if (!attachThinking || !isThinkingBudgetRejection(error)) {
-      throw error;
+  // Nhớ qua các lượt thử lại: model đã từ chối thinkingBudget một lần thì lượt sau khỏi gửi nữa,
+  // không thì mỗi lượt thử lại tốn thêm một lượt 400 vô ích.
+  let thinkingRejected = false;
+
+  const callWithThinkingFallback = async () => {
+    const useThinkingBudget = attachThinking && !thinkingRejected;
+    try {
+      return await runOnce({
+        useThinkingBudget,
+        tokenCap: thinkingRejected ? Math.max(maxOutputTokens, 3072) : maxOutputTokens,
+      });
+    } catch (error) {
+      if (!useThinkingBudget || !isThinkingBudgetRejection(error)) {
+        throw error;
+      }
+      // Model chỉ-thinking từ chối budget 0 — bỏ thinkingConfig, nới cap.
+      thinkingRejected = true;
+      return runOnce({
+        useThinkingBudget: false,
+        tokenCap: Math.max(maxOutputTokens, 3072),
+      });
     }
-    // Model chỉ-thinking từ chối budget 0 — bỏ thinkingConfig, nới cap.
-    return runOnce({
-      useThinkingBudget: false,
-      tokenCap: Math.max(maxOutputTokens, 3072),
-    });
+  };
+
+  const startedAt = Date.now();
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return await callWithThinkingFallback();
+    } catch (error) {
+      if (!isTransientGeminiError(error)) throw error;
+
+      const delayMs = retryDelaysMs[attempt];
+      const withinBudget = Date.now() - startedAt < retryBudgetMs;
+      if (delayMs === undefined || !withinBudget) {
+        throw toProviderBusyError(error, attempt + 1);
+      }
+      // Log để đo được tần suất về sau — trước sự cố 24/09 lỗi này không để lại dấu vết bền nào.
+      console.warn(
+        `[Gemini] ${modelName} trả ${error.geminiStatus} ở lượt ${attempt + 1}, thử lại sau ${delayMs}ms`,
+      );
+      await sleep(delayMs);
+    }
   }
 }
 
