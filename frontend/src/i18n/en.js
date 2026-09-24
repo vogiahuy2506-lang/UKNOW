@@ -2971,6 +2971,7 @@ export default {
       ZALO_ACCOUNT_CONNECTED: 'Zalo Account Connected',
       EMAIL_ACCOUNT_SEND_LIMIT_UPDATED: 'Email Daily Send Limit Changed',
       ZALO_ACCOUNT_SEND_LIMIT_UPDATED: 'Zalo Daily Send Limit Changed',
+      ZALO_ACCOUNT_SEND_SPEED_UPDATED: 'Zalo Send Speed Changed',
       EINVOICE_RETRIED: 'E-invoice Reissued',
       EINVOICE_EMAIL_RESENT: 'E-invoice Email Resent',
       FORM_PAYMENT_CONFIG_UPDATED: 'Form Payment Settings Updated',
