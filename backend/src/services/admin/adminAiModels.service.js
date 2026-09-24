@@ -1,6 +1,7 @@
 import {
   getCatalog,
   invalidateCatalogCache,
+  setFallbackModel,
   setSystemModel,
   syncModelsFromGoogle,
   updateCatalogModel,
@@ -86,4 +87,8 @@ export async function syncModels() {
 
 export async function chooseSystemModel(modelId) {
   return setSystemModel(modelId);
+}
+
+export async function chooseFallbackModel(modelId) {
+  return setFallbackModel(modelId);
 }

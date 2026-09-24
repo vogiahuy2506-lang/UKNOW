@@ -3,6 +3,7 @@ import {
   listAiModels,
   markGoogleModelsMissing,
   setOnlyEnabledModel,
+  setOnlyFallbackModel,
   updateAiModel,
   upsertGoogleModel,
 } from '../../repositories/ai/aiModelCatalog.repository.js';
@@ -37,6 +38,7 @@ function fallbackCatalog() {
       version: null,
       thinking: false,
       isEnabled: true,
+      isFallback: false,
       supportsGenerateContent: true,
       source: 'env',
     },
@@ -140,6 +142,47 @@ export async function setSystemModel(modelId) {
   await setOnlyEnabledModel(id);
   invalidateCatalogCache();
   return { systemModel: id };
+}
+
+/**
+ * Chọn MODEL DỰ PHÒNG: bật đúng 1 model dự phòng hoặc tắt toàn bộ nếu null.
+ * Không được chọn model đang là model hệ thống.
+ */
+export async function setFallbackModel(modelIdOrNull) {
+  if (modelIdOrNull === null || modelIdOrNull === undefined || String(modelIdOrNull).trim() === '') {
+    await setOnlyFallbackModel(null);
+    invalidateCatalogCache();
+    return { fallbackModel: null };
+  }
+
+  const id = normalizeModelId(modelIdOrNull);
+  if (!id) {
+    const err = new Error('Model ID không hợp lệ');
+    err.status = 400;
+    throw err;
+  }
+
+  const catalog = await getCatalog({ enabledOnly: false });
+  const target = catalog.find((row) => normalizeModelId(row.modelId) === id);
+  if (!target) {
+    const err = new Error('Không tìm thấy model AI trong catalog');
+    err.status = 404;
+    throw err;
+  }
+  if (!target.supportsGenerateContent) {
+    const err = new Error('Model này không hỗ trợ generateContent, không dùng làm model dự phòng được');
+    err.status = 400;
+    throw err;
+  }
+  if (target.isEnabled) {
+    const err = new Error('Không thể chọn model hệ thống làm model dự phòng');
+    err.status = 400;
+    throw err;
+  }
+
+  await setOnlyFallbackModel(id);
+  invalidateCatalogCache();
+  return { fallbackModel: id };
 }
 
 export async function syncModelsFromGoogle() {

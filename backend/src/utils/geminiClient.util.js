@@ -93,11 +93,12 @@ function shouldAttachThinkingBudget(thinkingBudget) {
  * @param {number} [input.maxOutputTokens=16384]
  * @param {number} [input.temperature=0.35]
  * @param {string} [input.model]
+ * @param {string|null} [input.fallbackModel]
  * @param {object} [input.systemInstruction]
  * @param {number|null} [input.thinkingBudget=0] — 0 tắt thinking; null/âm = để model tự quyết
  * @param {number[]} [input.retryDelaysMs] — nghỉ trước mỗi lần thử lại khi Google quá tải
  * @param {number} [input.retryBudgetMs] — quá mốc này (tính từ lượt đầu) thì thôi thử lại
- * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object }>}
+ * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object, modelUsed: string }>}
  */
 export async function generateGeminiContent({
   parts,
@@ -107,6 +108,7 @@ export async function generateGeminiContent({
   maxOutputTokens = 16384,
   temperature = 0.35,
   model,
+  fallbackModel = null,
   systemInstruction,
   thinkingBudget = 0,
   retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
@@ -120,9 +122,8 @@ export async function generateGeminiContent({
   }
 
   const modelName = String(model || process.env.GEMINI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
-  const runOnce = async ({ useThinkingBudget, tokenCap }) => {
+  const runOnce = async ({ targetModel, useThinkingBudget, tokenCap }) => {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
@@ -149,6 +150,7 @@ export async function generateGeminiContent({
         body.systemInstruction = systemInstruction;
       }
 
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -176,6 +178,7 @@ export async function generateGeminiContent({
         finishReason: candidate?.finishReason,
         blockReason: data.promptFeedback?.blockReason,
         usage: extractGeminiUsage(data),
+        modelUsed: targetModel,
       };
     } finally {
       clearTimeout(timer);
@@ -187,10 +190,11 @@ export async function generateGeminiContent({
   // không thì mỗi lượt thử lại tốn thêm một lượt 400 vô ích.
   let thinkingRejected = false;
 
-  const callWithThinkingFallback = async () => {
+  const callWithThinkingFallback = async (targetModel) => {
     const useThinkingBudget = attachThinking && !thinkingRejected;
     try {
       return await runOnce({
+        targetModel,
         useThinkingBudget,
         tokenCap: thinkingRejected ? Math.max(maxOutputTokens, 3072) : maxOutputTokens,
       });
@@ -201,6 +205,7 @@ export async function generateGeminiContent({
       // Model chỉ-thinking từ chối budget 0 — bỏ thinkingConfig, nới cap.
       thinkingRejected = true;
       return runOnce({
+        targetModel,
         useThinkingBudget: false,
         tokenCap: Math.max(maxOutputTokens, 3072),
       });
@@ -210,13 +215,30 @@ export async function generateGeminiContent({
   const startedAt = Date.now();
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return await callWithThinkingFallback();
+      return await callWithThinkingFallback(modelName);
     } catch (error) {
       if (!isTransientGeminiError(error)) throw error;
 
       const delayMs = retryDelaysMs[attempt];
       const withinBudget = Date.now() - startedAt < retryBudgetMs;
       if (delayMs === undefined || !withinBudget) {
+        const cleanFallback = String(fallbackModel || '').trim();
+        const canTryFallback =
+          Boolean(cleanFallback) &&
+          cleanFallback !== modelName &&
+          Date.now() - startedAt < retryBudgetMs;
+
+        if (canTryFallback) {
+          console.warn(
+            `[Gemini] ${modelName} quá tải sau ${attempt + 1} lượt, chuyển sang model dự phòng ${cleanFallback}`,
+          );
+          try {
+            return await callWithThinkingFallback(cleanFallback);
+          } catch (fallbackError) {
+            throw toProviderBusyError(fallbackError, attempt + 2);
+          }
+        }
+
         throw toProviderBusyError(error, attempt + 1);
       }
       // Log để đo được tần suất về sau — trước sự cố 24/09 lỗi này không để lại dấu vết bền nào.
@@ -237,6 +259,8 @@ export async function generateGeminiContent({
  * @param {boolean} [input.jsonMode=false]
  * @param {number} [input.maxOutputTokens=8192]
  * @param {number} [input.temperature=0.35]
+ * @param {string} [input.model]
+ * @param {string|null} [input.fallbackModel]
  * @param {number|null} [input.thinkingBudget=0]
  */
 export async function generateGeminiText({
@@ -246,6 +270,7 @@ export async function generateGeminiText({
   maxOutputTokens = 8192,
   temperature = 0.35,
   model,
+  fallbackModel = null,
   thinkingBudget = 0,
 } = {}) {
   return generateGeminiContent({
@@ -255,6 +280,7 @@ export async function generateGeminiText({
     maxOutputTokens,
     temperature,
     model,
+    fallbackModel,
     thinkingBudget,
   });
 }

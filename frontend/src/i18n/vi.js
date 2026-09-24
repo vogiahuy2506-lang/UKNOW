@@ -2997,6 +2997,8 @@ export default {
       FORM_PAYMENT_CONFIG_UPDATED: 'Cập nhật thanh toán của biểu mẫu',
       FORM_DISABLED: 'Quản trị tạm ngừng biểu mẫu',
       FORM_ENABLED: 'Quản trị mở lại biểu mẫu',
+      AI_SYSTEM_MODEL_UPDATED: 'Đổi model AI hệ thống',
+      AI_FALLBACK_MODEL_UPDATED: 'Đổi model AI dự phòng',
     },
     entities: {
       user: 'Người dùng',
@@ -3022,6 +3024,7 @@ export default {
       ai_session: 'Phiên chat AI',
       einvoice: 'Hoá đơn điện tử',
       form: 'Biểu mẫu',
+      ai_model: 'Model AI',
     },
   },
 

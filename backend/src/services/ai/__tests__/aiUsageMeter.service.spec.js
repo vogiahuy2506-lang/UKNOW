@@ -13,8 +13,11 @@ jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
   generateGeminiContent,
 }));
 
+const getFallbackModel = jest.fn(async () => null);
+
 jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
   resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.5-flash'),
+  getFallbackModel,
 }));
 
 const { resolveAllowedModel } = await import('../aiModelPolicy.service.js');
@@ -74,6 +77,34 @@ describe('aiUsageMeter.service', () => {
     expect(trackUsage).toHaveBeenCalledWith(3, 'ai_token', 2, expect.objectContaining({
       feature: 'landing_page',
       actorUserId: 9,
+    }));
+  });
+
+  it('generateWithBudget records actual modelUsed when fallback model is used', async () => {
+    resolveAllowedModel.mockResolvedValue('gemini-chinh');
+    getFallbackModel.mockResolvedValue('gemini-du-phong');
+
+    generateGeminiContent.mockResolvedValue({
+      text: 'kết quả từ dự phòng',
+      usage: { promptTokens: 10, outputTokens: 20, totalTokens: 30 },
+      modelUsed: 'gemini-du-phong',
+    });
+
+    await aiUsageMeter.generateWithBudget(5, {
+      parts: [{ text: 'generate' }],
+      feature: 'landing_builder',
+    });
+
+    expect(generateGeminiContent).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'gemini-chinh',
+      fallbackModel: 'gemini-du-phong',
+    }));
+
+    // Bắt buộc ghi usage bằng model thật sự đã trả lời (gemini-du-phong), không phải model hệ thống (gemini-chinh)
+    expect(trackUsage).toHaveBeenCalledWith(5, 'ai_token', 30, expect.objectContaining({
+      feature: 'landing_builder',
+      model: 'gemini-du-phong',
+      totalTokens: 30,
     }));
   });
 

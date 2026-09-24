@@ -1,6 +1,6 @@
 import usageTrackingService from '../payment/usageTracking.service.js';
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
-import { resolveAllowedModel } from './aiModelPolicy.service.js';
+import * as policyService from './aiModelPolicy.service.js';
 import { normalizeModelId } from '../../utils/aiModelTier.util.js';
 
 export const AI_TOKEN_RESOURCE = 'ai_token';
@@ -12,7 +12,7 @@ class AiUsageMeterService {
     if (!userId) {
       return normalizeModelId(model) || normalizeModelId(process.env.GEMINI_MODEL) || 'gemini-2.5-flash';
     }
-    return resolveAllowedModel(userId, model);
+    return policyService.resolveAllowedModel(userId, model);
   }
 
   /**
@@ -75,10 +75,14 @@ class AiUsageMeterService {
       requestedMaxOutputTokens: maxOutputTokens,
     });
     const resolvedModel = reserved.model;
+    const fallbackModel = typeof policyService.getFallbackModel === 'function'
+      ? await policyService.getFallbackModel()
+      : null;
 
     const result = await generateGeminiContent({
       parts,
       model: resolvedModel,
+      fallbackModel,
       systemInstruction,
       maxOutputTokens: reserved.maxOutputTokens,
       ...options,
@@ -86,7 +90,7 @@ class AiUsageMeterService {
     await this.record(userId, result.usage, {
       ...(metadata && typeof metadata === 'object' ? metadata : {}),
       feature,
-      model: resolvedModel,
+      model: result.modelUsed || resolvedModel,
     });
     return result;
   }

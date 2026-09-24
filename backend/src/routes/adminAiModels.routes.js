@@ -22,6 +22,17 @@ router.put(
   ctrl.setSystemModel
 );
 
+// Chọn model dự phòng duy nhất (hoặc null để bỏ chọn)
+router.put(
+  '/fallback-model',
+  [
+    body('modelId').optional({ nullable: true }).isString(),
+    body('model_id').optional({ nullable: true }).isString(),
+  ],
+  handleValidationErrors,
+  ctrl.setFallbackModel
+);
+
 router.patch(
   '/:id',
   [

@@ -9,6 +9,7 @@ const MODEL_COLS = `
   version,
   thinking,
   is_enabled AS "isEnabled",
+  is_fallback AS "isFallback",
   supports_generate_content AS "supportsGenerateContent",
   source,
   last_seen_at AS "lastSeenAt",
@@ -85,28 +86,68 @@ export async function markGoogleModelsMissing({ seenModelIds = [], seenAt = new 
 }
 
 // Xoá hẳn các model theo id (dùng để dọn rác preview/deprecated).
-// Guard: KHÔNG bao giờ xoá model đang bật (model hệ thống hiện dùng).
+// Guard: KHÔNG bao giờ xoá model đang bật (model hệ thống) hoặc model dự phòng.
 export async function deleteModelsByIds(modelIds = []) {
   if (!Array.isArray(modelIds) || modelIds.length === 0) return 0;
   const { rowCount } = await db.query(
     `DELETE FROM ai_models
      WHERE model_id = ANY($1::text[])
-       AND is_enabled = FALSE`,
+       AND is_enabled = FALSE
+       AND is_fallback = FALSE`,
     [modelIds]
   );
   return rowCount || 0;
 }
 
-// Chọn model hệ thống: bật đúng 1 model, tắt tất cả model còn lại (1 query, atomic)
+// Chọn model hệ thống: bật đúng 1 model, tắt tất cả model còn lại (1 query, atomic).
+// Đồng thời hạ is_fallback = FALSE nếu model vừa chọn đang là model dự phòng.
 export async function setOnlyEnabledModel(modelId) {
   const { rows } = await db.query(
     `UPDATE ai_models
-     SET is_enabled = (model_id = $1), updated_at = NOW()
+     SET is_enabled = (model_id = $1),
+         is_fallback = CASE WHEN model_id = $1 THEN FALSE ELSE is_fallback END,
+         updated_at = NOW()
      WHERE is_enabled IS DISTINCT FROM (model_id = $1)
+        OR (model_id = $1 AND is_fallback = TRUE)
      RETURNING ${MODEL_COLS}`,
     [modelId]
   );
   return rows;
+}
+
+// Chọn model dự phòng: bật đúng 1 model (hoặc tắt hết nếu modelIdOrNull là null).
+// Chạy transaction 2 bước (hạ fallback cũ -> bật fallback mới) để bảo đảm không bao giờ
+// vi phạm unique partial index `ai_models_one_fallback` khi chuyển giữa 2 model khác nhau.
+export async function setOnlyFallbackModel(modelIdOrNull) {
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `UPDATE ai_models
+       SET is_fallback = FALSE, updated_at = NOW()
+       WHERE is_fallback = TRUE`
+    );
+
+    let rows = [];
+    if (modelIdOrNull) {
+      const res = await client.query(
+        `UPDATE ai_models
+         SET is_fallback = TRUE, updated_at = NOW()
+         WHERE model_id = $1
+         RETURNING ${MODEL_COLS}`,
+        [modelIdOrNull]
+      );
+      rows = res.rows;
+    }
+
+    await client.query('COMMIT');
+    return rows;
+  } catch (err) {
+    await client.query('ROLLBACK');
+    throw err;
+  } finally {
+    client.release();
+  }
 }
 
 export async function updateAiModel(modelId, patch = {}) {

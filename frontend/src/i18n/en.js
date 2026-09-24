@@ -2987,6 +2987,8 @@ export default {
       FORM_PAYMENT_CONFIG_UPDATED: 'Form Payment Settings Updated',
       FORM_DISABLED: 'Form Disabled By Admin',
       FORM_ENABLED: 'Form Re-enabled By Admin',
+      AI_SYSTEM_MODEL_UPDATED: 'Update system AI model',
+      AI_FALLBACK_MODEL_UPDATED: 'Update fallback AI model',
     },
     entities: {
       user: 'User',
@@ -3012,6 +3014,7 @@ export default {
       ai_session: 'AI Chat Session',
       einvoice: 'E-invoice',
       form: 'Form',
+      ai_model: 'AI model',
     },
   },
 

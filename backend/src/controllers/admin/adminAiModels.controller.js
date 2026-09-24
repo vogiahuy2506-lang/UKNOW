@@ -1,4 +1,6 @@
 import * as adminAiModelsService from '../../services/admin/adminAiModels.service.js';
+import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../../services/audit.service.js';
+import { getSystemAuditContext } from '../../utils/auditContext.util.js';
 
 function handleError(res, err) {
   if (err.status) return res.status(err.status).json({ success: false, message: err.message });
@@ -33,8 +35,51 @@ export async function update(req, res) {
 
 export async function setSystemModel(req, res) {
   try {
-    const result = await adminAiModelsService.chooseSystemModel(req.body?.modelId ?? req.body?.model_id);
+    const catalogBefore = await adminAiModelsService.listModels();
+    const previousSystemModel = catalogBefore?.models?.find((m) => m.isEnabled)?.modelId || null;
+
+    const targetModelId = req.body?.modelId ?? req.body?.model_id;
+    const result = await adminAiModelsService.chooseSystemModel(targetModelId);
+
+    await logSystem(
+      getSystemAuditContext(req),
+      AUDIT_ACTIONS.AI_SYSTEM_MODEL_UPDATED,
+      AUDIT_ENTITY_TYPES.AI_MODEL,
+      null,
+      {
+        modelId: result.systemModel,
+        previousModel: previousSystemModel,
+        newModel: result.systemModel,
+      }
+    );
+
     return res.json({ success: true, data: result, message: 'Đã đặt model hệ thống' });
+  } catch (err) {
+    return handleError(res, err);
+  }
+}
+
+export async function setFallbackModel(req, res) {
+  try {
+    const catalogBefore = await adminAiModelsService.listModels();
+    const previousFallbackModel = catalogBefore?.models?.find((m) => m.isFallback)?.modelId || null;
+
+    const rawModelId = req.body?.modelId !== undefined ? req.body?.modelId : req.body?.model_id;
+    const result = await adminAiModelsService.chooseFallbackModel(rawModelId);
+
+    await logSystem(
+      getSystemAuditContext(req),
+      AUDIT_ACTIONS.AI_FALLBACK_MODEL_UPDATED,
+      AUDIT_ENTITY_TYPES.AI_MODEL,
+      null,
+      {
+        modelId: result.fallbackModel,
+        previousModel: previousFallbackModel,
+        newModel: result.fallbackModel,
+      }
+    );
+
+    return res.json({ success: true, data: result, message: 'Đã đặt model dự phòng' });
   } catch (err) {
     return handleError(res, err);
   }

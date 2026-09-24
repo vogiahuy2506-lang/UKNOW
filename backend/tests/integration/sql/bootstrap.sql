@@ -234,6 +234,7 @@ CREATE TABLE ai_models (
   version                   VARCHAR(40),
   thinking                  BOOLEAN,
   is_enabled                BOOLEAN      NOT NULL DEFAULT TRUE,
+  is_fallback               BOOLEAN      NOT NULL DEFAULT FALSE,
   supports_generate_content BOOLEAN      NOT NULL DEFAULT TRUE,
   source                    VARCHAR(20)  NOT NULL DEFAULT 'google'
     CHECK (source IN ('google', 'manual')),
@@ -244,6 +245,8 @@ CREATE TABLE ai_models (
 
 CREATE INDEX idx_ai_models_enabled_output
   ON ai_models(is_enabled, supports_generate_content, output_token_limit);
+CREATE UNIQUE INDEX ai_models_one_fallback
+  ON ai_models ((is_fallback)) WHERE is_fallback;
 
 -- Integration-test fixture (not production seed).
 INSERT INTO ai_models

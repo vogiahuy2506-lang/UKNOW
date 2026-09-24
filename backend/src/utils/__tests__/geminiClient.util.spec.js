@@ -244,5 +244,102 @@ describe('geminiClient.util', () => {
       const lanBa = JSON.parse(global.fetch.mock.calls[2][1].body);
       expect(lanBa.generationConfig.thinkingConfig).toBeUndefined();
     });
+
+    describe('fallbackModel behavior (PR-1 bảng 4.1)', () => {
+      it('Model chính 503 ×3, dự phòng 200 → trả kết quả dự phòng, fetch 4 lần, modelUsed = dự phòng', async () => {
+        global.fetch
+          .mockResolvedValueOnce(loi(503))
+          .mockResolvedValueOnce(loi(503))
+          .mockResolvedValueOnce(loi(503))
+          .mockResolvedValueOnce(duoc('dự phòng đã cứu'));
+
+        const kq = await generateGeminiContent({
+          parts: [{ text: 'hi' }],
+          model: 'gemini-chinh',
+          fallbackModel: 'gemini-du-phong',
+          ...NHANH,
+        });
+
+        expect(kq.text).toBe('dự phòng đã cứu');
+        expect(kq.modelUsed).toBe('gemini-du-phong');
+        expect(global.fetch).toHaveBeenCalledTimes(4);
+        expect(global.fetch.mock.calls[0][0]).toContain('models/gemini-chinh:generateContent');
+        expect(global.fetch.mock.calls[1][0]).toContain('models/gemini-chinh:generateContent');
+        expect(global.fetch.mock.calls[2][0]).toContain('models/gemini-chinh:generateContent');
+        expect(global.fetch.mock.calls[3][0]).toContain('models/gemini-du-phong:generateContent');
+      });
+
+      it('Model chính 503 ×3, chưa chọn dự phòng → AI_PROVIDER_BUSY, fetch 3 lần', async () => {
+        global.fetch.mockResolvedValue(loi(503));
+
+        const err = await generateGeminiContent({
+          parts: [{ text: 'hi' }],
+          model: 'gemini-chinh',
+          fallbackModel: null,
+          ...NHANH,
+        }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+        expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+      });
+
+      it('Model chính 503 ×3, dự phòng cũng 503 → AI_PROVIDER_BUSY, fetch 4 lần (dự phòng không thử lại)', async () => {
+        global.fetch.mockResolvedValue(loi(503));
+
+        const err = await generateGeminiContent({
+          parts: [{ text: 'hi' }],
+          model: 'gemini-chinh',
+          fallbackModel: 'gemini-du-phong',
+          ...NHANH,
+        }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(4);
+        expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+      });
+
+      it('Model chính 400 → KHÔNG chuyển dự phòng, fetch 1 lần, câu gốc giữ nguyên', async () => {
+        global.fetch.mockResolvedValue(loi(400, 'Invalid argument'));
+
+        const err = await generateGeminiContent({
+          parts: [{ text: 'hi' }],
+          model: 'gemini-chinh',
+          fallbackModel: 'gemini-du-phong',
+          ...NHANH,
+        }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(err.geminiStatus).toBe(400);
+        expect(err.message).toContain('Invalid argument');
+      });
+
+      it('Model chính 503 nhưng đã quá ngân sách (retryBudgetMs: 0) → Không chuyển dự phòng, fetch 1 lần', async () => {
+        global.fetch.mockResolvedValue(loi(503));
+
+        const err = await generateGeminiContent({
+          parts: [{ text: 'hi' }],
+          model: 'gemini-chinh',
+          fallbackModel: 'gemini-du-phong',
+          retryDelaysMs: [0, 0],
+          retryBudgetMs: 0,
+        }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+        expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+      });
+
+      it('fallbackModel trùng model chính → Không gọi lại lần thứ 4', async () => {
+        global.fetch.mockResolvedValue(loi(503));
+
+        const err = await generateGeminiContent({
+          parts: [{ text: 'hi' }],
+          model: 'gemini-chinh',
+          fallbackModel: 'gemini-chinh',
+          ...NHANH,
+        }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+        expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+      });
+    });
   });
 });

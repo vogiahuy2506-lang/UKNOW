@@ -9,6 +9,21 @@ import { getCatalog } from './aiModelCatalog.service.js';
  * Nếu catalog lỡ bật nhiều model, lấy model có capability cao nhất.
  */
 
+const WARN_INTERVAL_MS = 10 * 60 * 1000;
+let lastWarnAt = 0;
+
+export function _resetWarnThrottleForTest() {
+  lastWarnAt = 0;
+}
+
+function warnFallbackDegradation(reason, model) {
+  const now = Date.now();
+  if (now - lastWarnAt >= WARN_INTERVAL_MS) {
+    lastWarnAt = now;
+    console.warn(`[AiModelPolicy] Cảnh báo chính sách model: ${reason} -> sử dụng ${model}`);
+  }
+}
+
 function sortByCapability(rows = []) {
   return [...rows].sort((a, b) => {
     const diff = capabilityScore(a) - capabilityScore(b);
@@ -17,19 +32,52 @@ function sortByCapability(rows = []) {
   });
 }
 
-async function getSystemModelRow() {
-  const enabledCatalog = await getCatalog({ enabledOnly: true });
-  const sorted = sortByCapability(enabledCatalog);
-  return sorted[sorted.length - 1] || null;
-}
-
 /**
- * Model hệ thống hiện tại.
+ * Model hệ thống hiện tại theo thứ tự:
+ * 1. Model được bật & còn hỗ trợ generateContent.
+ * 2. Model dự phòng (nếu có và còn hỗ trợ generateContent).
+ * 3. process.env.GEMINI_MODEL hoặc DEFAULT_AI_MODEL.
  * @returns {Promise<string>}
  */
 export async function getSystemModel() {
-  const row = await getSystemModelRow();
-  return row?.modelId || DEFAULT_AI_MODEL;
+  const catalog = await getCatalog({ enabledOnly: false });
+  const enabledSupported = sortByCapability(catalog.filter((r) => r.isEnabled && r.supportsGenerateContent));
+  if (enabledSupported.length > 0) {
+    return enabledSupported[enabledSupported.length - 1].modelId;
+  }
+
+  const fallback = catalog.find((r) => r.isFallback && r.supportsGenerateContent);
+  if (fallback) {
+    warnFallbackDegradation('Model hệ thống không khả dụng, sử dụng model dự phòng', fallback.modelId);
+    return fallback.modelId;
+  }
+
+  const envFallback = normalizeModelId(process.env.GEMINI_MODEL) || DEFAULT_AI_MODEL;
+  warnFallbackDegradation('Không có model hệ thống hoặc dự phòng khả dụng trong catalog, sử dụng model mặc định', envFallback);
+  return envFallback;
+}
+
+/**
+ * Lấy model dự phòng (nếu có, còn supportsGenerateContent, và khác model hệ thống hiện tại).
+ * @returns {Promise<string|null>}
+ */
+export async function getFallbackModel() {
+  const catalog = await getCatalog({ enabledOnly: false });
+  const fallback = catalog.find((r) => r.isFallback && r.supportsGenerateContent);
+  if (!fallback) return null;
+
+  const currentSystemModel = await getSystemModel();
+  if (fallback.modelId === currentSystemModel) {
+    return null;
+  }
+
+  return fallback.modelId;
+}
+
+async function getSystemModelRow() {
+  const systemModel = await getSystemModel();
+  const catalog = await getCatalog({ enabledOnly: false });
+  return catalog.find((r) => r.modelId === systemModel) || null;
 }
 
 /**

@@ -5,6 +5,7 @@ const mockRepo = {
   listAiModels: jest.fn(),
   markGoogleModelsMissing: jest.fn(),
   setOnlyEnabledModel: jest.fn(),
+  setOnlyFallbackModel: jest.fn(),
   updateAiModel: jest.fn(),
   upsertGoogleModel: jest.fn(),
 };
@@ -137,6 +138,49 @@ describe('aiModelCatalog.service', () => {
     it('rejects empty model id with 400', async () => {
       await expect(catalogService.setSystemModel(''))
         .rejects.toThrow(expect.objectContaining({ status: 400 }));
+    });
+  });
+
+  describe('setFallbackModel', () => {
+    const catalogRows = [
+      { modelId: 'gemini-2.5-flash', displayName: 'Flash', isEnabled: true, isFallback: false, supportsGenerateContent: true },
+      { modelId: 'gemini-2.5-pro', displayName: 'Pro', isEnabled: false, isFallback: false, supportsGenerateContent: true },
+      { modelId: 'gemini-embedding', displayName: 'Embed', isEnabled: false, isFallback: false, supportsGenerateContent: false },
+    ];
+
+    beforeEach(() => {
+      mockRepo.listAiModels.mockResolvedValue(catalogRows);
+      mockRepo.setOnlyFallbackModel.mockResolvedValue([]);
+    });
+
+    it('sets the chosen fallback model', async () => {
+      const result = await catalogService.setFallbackModel('gemini-2.5-pro');
+      expect(result).toEqual({ fallbackModel: 'gemini-2.5-pro' });
+      expect(mockRepo.setOnlyFallbackModel).toHaveBeenCalledWith('gemini-2.5-pro');
+    });
+
+    it('clears fallback model when passing null or empty', async () => {
+      const result = await catalogService.setFallbackModel(null);
+      expect(result).toEqual({ fallbackModel: null });
+      expect(mockRepo.setOnlyFallbackModel).toHaveBeenCalledWith(null);
+    });
+
+    it('rejects choosing system model as fallback with 400', async () => {
+      await expect(catalogService.setFallbackModel('gemini-2.5-flash'))
+        .rejects.toThrow(expect.objectContaining({ status: 400 }));
+      expect(mockRepo.setOnlyFallbackModel).not.toHaveBeenCalled();
+    });
+
+    it('rejects unknown models with 404', async () => {
+      await expect(catalogService.setFallbackModel('gemini-unknown'))
+        .rejects.toThrow(expect.objectContaining({ status: 404 }));
+      expect(mockRepo.setOnlyFallbackModel).not.toHaveBeenCalled();
+    });
+
+    it('rejects models without generateContent support with 400', async () => {
+      await expect(catalogService.setFallbackModel('gemini-embedding'))
+        .rejects.toThrow(expect.objectContaining({ status: 400 }));
+      expect(mockRepo.setOnlyFallbackModel).not.toHaveBeenCalled();
     });
   });
 });

@@ -39,6 +39,7 @@ const enabledCatalog = fullCatalog.filter((row) => row.isEnabled);
 describe('aiModelPolicy.service — single system model', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    policy._resetWarnThrottleForTest?.();
     mockCatalogService.getCatalog.mockImplementation(async ({ enabledOnly } = {}) => (enabledOnly ? enabledCatalog : fullCatalog));
   });
 
@@ -75,5 +76,104 @@ describe('aiModelPolicy.service — single system model', () => {
   it('falls back to the default model when the enabled catalog is empty', async () => {
     mockCatalogService.getCatalog.mockResolvedValue([]);
     await expect(policy.getSystemModel()).resolves.toBe('gemini-2.5-flash');
+  });
+
+  describe('fallback model behavior', () => {
+    it('returns fallback model when system model is unsupported and fallback is available', async () => {
+      const catalog = [
+        {
+          modelId: 'gemini-2.5-pro',
+          displayName: 'Pro',
+          isEnabled: true,
+          supportsGenerateContent: false, // Google khai tử
+        },
+        {
+          modelId: 'gemini-2.5-flash',
+          displayName: 'Flash',
+          isEnabled: false,
+          isFallback: true,
+          supportsGenerateContent: true,
+        },
+      ];
+      mockCatalogService.getCatalog.mockResolvedValue(catalog);
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      await expect(policy.getSystemModel()).resolves.toBe('gemini-2.5-flash');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('returns default model and logs warning when neither system nor fallback is supported', async () => {
+      const catalog = [
+        {
+          modelId: 'gemini-2.5-pro',
+          displayName: 'Pro',
+          isEnabled: true,
+          supportsGenerateContent: false,
+        },
+        {
+          modelId: 'gemini-2.5-flash',
+          displayName: 'Flash',
+          isEnabled: false,
+          isFallback: true,
+          supportsGenerateContent: false,
+        },
+      ];
+      mockCatalogService.getCatalog.mockResolvedValue(catalog);
+
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      await expect(policy.getSystemModel()).resolves.toBe('gemini-2.5-flash');
+      expect(warnSpy).toHaveBeenCalled();
+      warnSpy.mockRestore();
+    });
+
+    it('getFallbackModel returns fallback model when available, supported, and different from system model', async () => {
+      const catalog = [
+        {
+          modelId: 'gemini-2.5-pro',
+          displayName: 'Pro',
+          isEnabled: true,
+          supportsGenerateContent: true,
+        },
+        {
+          modelId: 'gemini-2.5-flash',
+          displayName: 'Flash',
+          isEnabled: false,
+          isFallback: true,
+          supportsGenerateContent: true,
+        },
+      ];
+      mockCatalogService.getCatalog.mockResolvedValue(catalog);
+
+      await expect(policy.getFallbackModel()).resolves.toBe('gemini-2.5-flash');
+    });
+
+    it('getFallbackModel returns null if fallback model is identical to system model', async () => {
+      // Khi system model bị khai tử, getSystemModel() tự rơi xuống fallback model.
+      // Khi đó getFallbackModel() phải trả null để không tự gọi lại chính nó.
+      const catalog = [
+        {
+          modelId: 'gemini-2.5-pro',
+          displayName: 'Pro',
+          isEnabled: true,
+          supportsGenerateContent: false,
+        },
+        {
+          modelId: 'gemini-2.5-flash',
+          displayName: 'Flash',
+          isEnabled: false,
+          isFallback: true,
+          supportsGenerateContent: true,
+        },
+      ];
+      mockCatalogService.getCatalog.mockResolvedValue(catalog);
+
+      await expect(policy.getFallbackModel()).resolves.toBeNull();
+    });
+
+    it('getFallbackModel returns null when no fallback is configured or supported', async () => {
+      mockCatalogService.getCatalog.mockResolvedValue(fullCatalog);
+      await expect(policy.getFallbackModel()).resolves.toBeNull();
+    });
   });
 });

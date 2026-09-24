@@ -13,13 +13,15 @@ class AuditService {
     userAgent = null,
   }) {
     try {
+      const parsedId = entityId !== null && entityId !== undefined && entityId !== '' ? Number(entityId) : null;
+      const safeEntityId = Number.isInteger(parsedId) ? parsedId : null;
       await auditRepository.createLog({
         userId,
         ownerId,
         category,
         action,
         entityType,
-        entityId,
+        entityId: safeEntityId,
         details,
         ipAddress,
         userAgent,
@@ -180,6 +182,10 @@ export const AUDIT_ACTIONS = {
   // System — forms (PR-3a, super admin)
   FORM_DISABLED: 'FORM_DISABLED',
   FORM_ENABLED: 'FORM_ENABLED',
+
+  // System — AI models
+  AI_SYSTEM_MODEL_UPDATED: 'AI_SYSTEM_MODEL_UPDATED',
+  AI_FALLBACK_MODEL_UPDATED: 'AI_FALLBACK_MODEL_UPDATED',
 };
 
 export const AUDIT_ENTITY_TYPES = {
@@ -206,6 +212,7 @@ export const AUDIT_ENTITY_TYPES = {
   AI_SESSION: 'ai_session',
   EINVOICE: 'einvoice',
   FORM: 'form',
+  AI_MODEL: 'ai_model',
 };
 
 /**
