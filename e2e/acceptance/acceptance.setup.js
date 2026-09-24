@@ -31,6 +31,10 @@ setup('authenticate for acceptance', async ({ page }) => {
   const passwordInput = page.locator('input[autocomplete="current-password"]');
   await page.locator('input[autocomplete="username"]').fill(USERNAME);
   await passwordInput.fill(PASSWORD);
+  // Bắt câu trả lời của máy chủ: toast lỗi chỉ sống vài giây, hết 25 giây chờ là đã tắt.
+  const loginResponsePromise = page
+    .waitForResponse((r) => r.url().includes('/api/auth/login') && r.request().method() === 'POST', { timeout: 25_000 })
+    .catch(() => null);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
 
   // Playwright chụp cây trang (kèm GIÁ TRỊ ô nhập) vào test-results/…/error-context.md khi test đỏ —
@@ -47,8 +51,13 @@ setup('authenticate for acceptance', async ({ page }) => {
     .then(() => true)
     .catch(() => false);
   if (!leftLogin) {
-    const toastText = await page.locator('[role="status"]').first().innerText({ timeout: 1000 }).catch(() => '');
-    await failLogin(`Đăng nhập không thành công, trang vẫn ở /login${toastText ? ` — báo: "${toastText}"` : ''}. Kiểm tra tên đăng nhập/mật khẩu bằng trình duyệt thường.`);
+    const loginResponse = await loginResponsePromise;
+    let serverSaid = 'không thấy request đăng nhập nào';
+    if (loginResponse) {
+      const body = await loginResponse.json().catch(() => null);
+      serverSaid = `HTTP ${loginResponse.status()}${body?.message ? `: "${body.message}"` : ''}`;
+    }
+    await failLogin(`Đăng nhập không thành công, trang vẫn ở /login — máy chủ trả ${serverSaid}.`);
   }
 
   // Tài khoản quản trị được đưa về /admin, tài khoản chưa có gói về / (utils/authRedirect.js:1-8) —
