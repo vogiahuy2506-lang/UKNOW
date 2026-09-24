@@ -28,11 +28,38 @@ setup('authenticate for acceptance', async ({ page }) => {
   await page.waitForLoadState('domcontentloaded');
 
   await expect(page.getByRole('heading', { name: 'Đăng nhập', exact: true })).toBeVisible({ timeout: 15_000 });
+  const passwordInput = page.locator('input[autocomplete="current-password"]');
   await page.locator('input[autocomplete="username"]').fill(USERNAME);
-  await page.locator('input[autocomplete="current-password"]').fill(PASSWORD);
+  await passwordInput.fill(PASSWORD);
   await page.getByRole('button', { name: 'Đăng nhập', exact: true }).click();
 
-  await page.waitForURL(/\/app(\/|$)/, { timeout: 25_000 });
+  // Playwright chụp cây trang (kèm GIÁ TRỊ ô nhập) vào test-results/…/error-context.md khi test đỏ —
+  // 25/09 file đó lưu nguyên mật khẩu production. Hỏng thì xoá ô mật khẩu TRƯỚC khi ném lỗi, và nói
+  // rõ lý do thay cho một dòng "Timeout" câm.
+  const failLogin = async (lyDo) => {
+    await passwordInput.fill('').catch(() => {});
+    recordReport({ kichBan: 'HE_THONG', buoc: 'login_setup', ketQua: 'khong_dat', lyDo });
+    throw new Error(lyDo);
+  };
+
+  const leftLogin = await page
+    .waitForURL((url) => !url.pathname.startsWith('/login'), { timeout: 25_000 })
+    .then(() => true)
+    .catch(() => false);
+  if (!leftLogin) {
+    const toastText = await page.locator('[role="status"]').first().innerText({ timeout: 1000 }).catch(() => '');
+    await failLogin(`Đăng nhập không thành công, trang vẫn ở /login${toastText ? ` — báo: "${toastText}"` : ''}. Kiểm tra tên đăng nhập/mật khẩu bằng trình duyệt thường.`);
+  }
+
+  // Tài khoản quản trị được đưa về /admin, tài khoản chưa có gói về / (utils/authRedirect.js:1-8) —
+  // kịch bản cần góc nhìn của KHÁCH (chủ workspace có gói).
+  const landedPath = new URL(page.url()).pathname;
+  if (landedPath.startsWith('/admin')) {
+    await failLogin(`Tài khoản "${USERNAME}" là tài khoản quản trị (vào /admin). Dùng tài khoản khách là chủ workspace có gói, ví dụ tài khoản 39.`);
+  }
+  if (!landedPath.startsWith('/app')) {
+    await failLogin(`Đăng nhập xong bị đưa về "${landedPath}", không vào /app — tài khoản chưa có gói còn hạn?`);
+  }
   await expect(page.locator('aside').first()).toBeVisible({ timeout: 15_000 });
 
   // Đóng modal nếu có (AccountProfileModal hoặc bất kỳ modal nào block UI) theo đúng auth.setup.js
