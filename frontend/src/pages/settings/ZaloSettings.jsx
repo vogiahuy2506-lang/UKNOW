@@ -58,6 +58,7 @@ function normalizeAccount(account = {}) {
       : (account.creatorName ? { name: String(account.creatorName) } : null),
     updatedAt: account.updatedAt || account.lastSyncAt || null,
     userDailySendLimit: account.userDailySendLimit ?? account.user_daily_send_limit ?? null,
+    sendSpeed: account.sendSpeed || 'safe',
   };
 }
 
@@ -73,6 +74,8 @@ const ZaloSettings = () => {
   // 2026-09-22/23, PR-4). Nháp riêng theo accountId — chưa lưu thì không đụng vào `accounts` gốc.
   const [sendLimitDrafts, setSendLimitDrafts] = useState({});
   const [savingSendLimitIds, setSavingSendLimitIds] = useState([]);
+  const [sendSpeedDrafts, setSendSpeedDrafts] = useState({});
+  const [savingSendSpeedIds, setSavingSendSpeedIds] = useState([]);
   const [isBackendReady, setIsBackendReady] = useState(true);
   const [backendModeMessage, setBackendModeMessage] = useState('');
   const [showHelp, setShowHelp] = useState(false);
@@ -234,6 +237,42 @@ const ZaloSettings = () => {
       toast.error(error.response?.data?.message || t('zaloSettings.dailySendLimitSaveFailed'));
     } finally {
       setSavingSendLimitIds((prev) => prev.filter((id) => id !== account.id));
+    }
+  };
+
+  /** Tốc độ gửi đang chọn (ưu tiên nháp chưa lưu, fallback về account.sendSpeed hoặc 'safe'). */
+  const getSendSpeedDraft = (account) => {
+    if (Object.prototype.hasOwnProperty.call(sendSpeedDrafts, account.id)) {
+      return sendSpeedDrafts[account.id];
+    }
+    return account.sendSpeed || 'safe';
+  };
+
+  const handleSaveSendSpeed = async (account) => {
+    if (!isBackendReady) {
+      toast.error(t('zaloSettings.backendNotReady'));
+      return;
+    }
+
+    const speed = getSendSpeedDraft(account);
+    if (!['safe', 'fast', 'very_fast'].includes(speed)) {
+      return;
+    }
+
+    setSavingSendSpeedIds((prev) => [...prev, account.id]);
+    try {
+      await zaloSettingsApiService.updateSendSpeed(account.id, speed);
+      await fetchAccounts();
+      setSendSpeedDrafts((prev) => {
+        const next = { ...prev };
+        delete next[account.id];
+        return next;
+      });
+      toast.success(t('zaloSettings.sendSpeedSaveSuccess'));
+    } catch (error) {
+      toast.error(error.response?.data?.message || t('zaloSettings.sendSpeedSaveFailed'));
+    } finally {
+      setSavingSendSpeedIds((prev) => prev.filter((id) => id !== account.id));
     }
   };
 
@@ -555,6 +594,65 @@ const ZaloSettings = () => {
                         {Number(getSendLimitDraft(account)) > 100 && (
                           <span className="text-xs text-amber-600">{t('zaloSettings.dailySendLimitHighWarning')}</span>
                         )}
+                      </div>
+                      <div className="mt-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <label htmlFor={`send-speed-${account.id}`} className="text-sm text-gray-600">
+                            {t('zaloSettings.sendSpeed')}:
+                          </label>
+                          <div className="w-64">
+                            <select
+                              id={`send-speed-${account.id}`}
+                              value={getSendSpeedDraft(account)}
+                              onChange={(e) => setSendSpeedDrafts((prev) => ({ ...prev, [account.id]: e.target.value }))}
+                              className="input py-1 text-sm"
+                            >
+                              {account.sendSpeed === 'custom' && !Object.prototype.hasOwnProperty.call(sendSpeedDrafts, account.id) && (
+                                <option value="custom" disabled>
+                                  {t('zaloSettings.sendSpeedCustom')}
+                                </option>
+                              )}
+                              <option value="safe">
+                                {t('zaloSettings.sendSpeedSafe')}
+                              </option>
+                              <option value="fast">
+                                {t('zaloSettings.sendSpeedFast')}
+                              </option>
+                              <option value="very_fast">
+                                {t('zaloSettings.sendSpeedVeryFast')}
+                              </option>
+                            </select>
+                          </div>
+                          <button
+                            type="button"
+                            className="btn btn-secondary text-xs"
+                            onClick={() => handleSaveSendSpeed(account)}
+                            disabled={
+                              savingSendSpeedIds.includes(account.id)
+                              || getSendSpeedDraft(account) === 'custom'
+                            }
+                          >
+                            {savingSendSpeedIds.includes(account.id) ? t('common.saving') : t('common.save')}
+                          </button>
+                          {getSendSpeedDraft(account) === 'fast' && (
+                            <span className="text-xs text-amber-600">
+                              {t('zaloSettings.sendSpeedFastWarning')}
+                            </span>
+                          )}
+                          {getSendSpeedDraft(account) === 'very_fast' && (
+                            <span className="text-xs text-red-600 font-medium">
+                              {t('zaloSettings.sendSpeedVeryFastWarning')}
+                            </span>
+                          )}
+                        </div>
+                        {account.sendSpeed === 'custom' && (
+                          <p className="text-xs text-gray-500 mt-1 italic">
+                            {t('zaloSettings.sendSpeedCustom')}
+                          </p>
+                        )}
+                        <p className="text-xs text-gray-400 mt-0.5">
+                          {t('zaloSettings.sendSpeedAppliedNextRunHint')}
+                        </p>
                       </div>
                     </div>
 

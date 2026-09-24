@@ -187,4 +187,14 @@ describe('zaloSettingsApiService', () => {
       expect(Object.prototype.hasOwnProperty.call(body, 'userDailySendLimit')).toBe(true);
     });
   });
+
+  describe('updateSendSpeed', () => {
+    it('gửi PATCH /zalo/accounts/:id/send-speed với đúng body { sendSpeed }', async () => {
+      api.patch.mockResolvedValue({ data: { success: true } });
+
+      await zaloSettingsApiService.updateSendSpeed('7', 'very_fast');
+
+      expect(api.patch).toHaveBeenCalledWith('/zalo/accounts/7/send-speed', { sendSpeed: 'very_fast' });
+    });
+  });
 });

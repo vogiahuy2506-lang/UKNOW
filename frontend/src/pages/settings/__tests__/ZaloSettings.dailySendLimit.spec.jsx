@@ -68,7 +68,7 @@ describe('ZaloSettings — ô Giới hạn gửi/ngày tại chỗ trên từng 
     zaloSettingsApiService.updateSendLimit.mockResolvedValueOnce({ data: { success: true } });
     await renderAndWait();
 
-    fireEvent.click(screen.getByText('common.save'));
+    fireEvent.click(screen.getAllByText('common.save')[0]);
 
     await waitFor(() => expect(zaloSettingsApiService.updateSendLimit).toHaveBeenCalledWith('7', 60));
   });
@@ -78,7 +78,7 @@ describe('ZaloSettings — ô Giới hạn gửi/ngày tại chỗ trên từng 
     await renderAndWait();
 
     fireEvent.change(screen.getByDisplayValue('60'), { target: { value: '80' } });
-    fireEvent.click(screen.getByText('common.save'));
+    fireEvent.click(screen.getAllByText('common.save')[0]);
 
     await waitFor(() => expect(zaloSettingsApiService.updateSendLimit).toHaveBeenCalledWith('7', 80));
   });
@@ -88,7 +88,7 @@ describe('ZaloSettings — ô Giới hạn gửi/ngày tại chỗ trên từng 
     await renderAndWait();
 
     fireEvent.change(screen.getByDisplayValue('60'), { target: { value: '' } });
-    fireEvent.click(screen.getByText('common.save'));
+    fireEvent.click(screen.getAllByText('common.save')[0]);
 
     await waitFor(() => expect(zaloSettingsApiService.updateSendLimit).toHaveBeenCalledWith('7', null));
   });
@@ -97,7 +97,7 @@ describe('ZaloSettings — ô Giới hạn gửi/ngày tại chỗ trên từng 
     await renderAndWait();
 
     fireEvent.change(screen.getByDisplayValue('60'), { target: { value: badValue } });
-    fireEvent.click(screen.getByText('common.save'));
+    fireEvent.click(screen.getAllByText('common.save')[0]);
 
     expect(zaloSettingsApiService.updateSendLimit).not.toHaveBeenCalled();
   });
@@ -109,7 +109,7 @@ describe('ZaloSettings — ô Giới hạn gửi/ngày tại chỗ trên từng 
     fireEvent.change(screen.getByDisplayValue('60'), { target: { value: '150' } });
     expect(screen.getByText('zaloSettings.dailySendLimitHighWarning')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByText('common.save'));
+    fireEvent.click(screen.getAllByText('common.save')[0]);
     await waitFor(() => expect(zaloSettingsApiService.updateSendLimit).toHaveBeenCalledWith('7', 150));
   });
 

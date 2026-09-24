@@ -21,6 +21,10 @@ const zaloSettingsApiService = {
     return api.patch(`/zalo/accounts/${accountId}/send-limit`, { userDailySendLimit });
   },
 
+  updateSendSpeed(accountId, sendSpeed) {
+    return api.patch(`/zalo/accounts/${accountId}/send-speed`, { sendSpeed });
+  },
+
   createLoginQr() {
     return api.post('/zalo/accounts/login-qr');
   },
