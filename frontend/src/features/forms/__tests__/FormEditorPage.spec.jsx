@@ -79,6 +79,7 @@ describe('FormEditorPage component', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    localStorage.clear();
     mockAuthState = { user: null, activeContext: { type: 'self' } };
   });
 

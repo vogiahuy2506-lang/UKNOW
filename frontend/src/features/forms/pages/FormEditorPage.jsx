@@ -29,6 +29,7 @@ import {
 } from '../services/formAdminApi.service';
 import ShareModal from '../components/ShareModal';
 import FormRenderer from '../components/FormRenderer';
+import BankSearchSelect from '../components/BankSearchSelect';
 import useStorageQuota from '../../storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
@@ -117,6 +118,36 @@ const DEFAULT_PAYMENT = {
   holdMinutes: DEFAULT_HOLD_MINUTES,
 };
 
+const STORAGE_PAYMENT_PRESET_KEY = 'uknow_form_payment_preset';
+
+function getSavedPaymentPreset(userId) {
+  try {
+    const key = userId ? `${STORAGE_PAYMENT_PRESET_KEY}_${userId}` : STORAGE_PAYMENT_PRESET_KEY;
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function savePaymentPreset(userId, paymentData) {
+  try {
+    const key = userId ? `${STORAGE_PAYMENT_PRESET_KEY}_${userId}` : STORAGE_PAYMENT_PRESET_KEY;
+    const dataToSave = {
+      bankBin: paymentData.bankBin || '',
+      accountNumber: paymentData.accountNumber || '',
+      accountName: paymentData.accountName || '',
+      momoPhone: paymentData.momoPhone || '',
+      momoName: paymentData.momoName || '',
+      momoQrMode: paymentData.momoQrMode || 'phone',
+      momoQrAccount: paymentData.momoQrAccount || '',
+    };
+    localStorage.setItem(key, JSON.stringify(dataToSave));
+  } catch (e) {
+    console.error('Failed to save payment preset', e);
+  }
+}
+
 // Hợp đồng giao diện (theme) — chép từ backend/src/utils/formDefinition.util.js
 // normalizeFormTheme (PR-4a/4b). '' ở mọi trường nghĩa là "chưa đặt" -> khoá đó vắng mặt trong
 // payload khi lưu, FormRenderer/trang công khai tự rơi về giao diện mặc định hiện tại. Riêng
@@ -169,6 +200,43 @@ export default function FormEditorPage() {
   const [initialBookingHadConfig, setInitialBookingHadConfig] = useState(false);
   const [confirmDisableBooking, setConfirmDisableBooking] = useState(false);
   const [payment, setPayment] = useState(DEFAULT_PAYMENT);
+  const savedPreset = useMemo(() => getSavedPaymentPreset(user?.id), [user?.id]);
+  const hasSavedPreset = Boolean(
+    savedPreset && (savedPreset.accountNumber || savedPreset.momoPhone)
+  );
+
+  const handleApplySavedPreset = () => {
+    if (!savedPreset) return;
+    setPayment((prev) => ({
+      ...prev,
+      bankBin: savedPreset.bankBin || prev.bankBin,
+      accountNumber: savedPreset.accountNumber || prev.accountNumber,
+      accountName: savedPreset.accountName || prev.accountName,
+      momoPhone: savedPreset.momoPhone || prev.momoPhone,
+      momoName: savedPreset.momoName || prev.momoName,
+      momoQrMode: savedPreset.momoQrMode || prev.momoQrMode,
+      momoQrAccount: savedPreset.momoQrAccount || prev.momoQrAccount,
+    }));
+    toast.success('Đã áp dụng thông tin tài khoản đã lưu');
+  };
+
+  useEffect(() => {
+    if (!isEditMode && savedPreset) {
+      setPayment((prev) => {
+        if (prev.accountNumber || prev.momoPhone) return prev;
+        return {
+          ...prev,
+          bankBin: savedPreset.bankBin || prev.bankBin,
+          accountNumber: savedPreset.accountNumber || prev.accountNumber,
+          accountName: savedPreset.accountName || prev.accountName,
+          momoPhone: savedPreset.momoPhone || prev.momoPhone,
+          momoName: savedPreset.momoName || prev.momoName,
+          momoQrMode: savedPreset.momoQrMode || prev.momoQrMode,
+          momoQrAccount: savedPreset.momoQrAccount || prev.momoQrAccount,
+        };
+      });
+    }
+  }, [isEditMode, savedPreset]);
   const [theme, setTheme] = useState(DEFAULT_THEME);
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
@@ -937,6 +1005,9 @@ export default function FormEditorPage() {
           await publishForm(id, true);
           setIsPublished(true);
         }
+        if (payment.enabled) {
+          savePaymentPreset(user?.id, payment);
+        }
         toast.success(t('forms.saveSuccess'));
         setInitialBookingHadConfig(Boolean(payloadBooking));
         setConfirmDisableBooking(false);
@@ -945,6 +1016,9 @@ export default function FormEditorPage() {
         const created = await createForm(payload);
         if (andPublish) {
           await publishForm(created.id, true);
+        }
+        if (payment.enabled) {
+          savePaymentPreset(user?.id, payment);
         }
         toast.success(t('forms.saveSuccess'));
         navigate(`/app/forms/${created.id}/edit`, { replace: true });
@@ -1731,9 +1805,25 @@ export default function FormEditorPage() {
           {payment.enabled && (
             <div className="space-y-5">
               {!isEmployee && (
-                <p className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs">
-                  {t('forms.editorPage.payment.ownerWarning')}
-                </p>
+                <div className="space-y-3">
+                  <p className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 text-xs">
+                    {t('forms.editorPage.payment.ownerWarning')}
+                  </p>
+                  {hasSavedPreset && (
+                    <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs">
+                      <span className="text-slate-600">
+                        Có thông tin tài khoản bạn đã lưu từ trước.
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleApplySavedPreset}
+                        className="font-medium text-primary-600 hover:text-primary-700 underline"
+                      >
+                        Áp dụng tài khoản đã lưu
+                      </button>
+                    </div>
+                  )}
+                </div>
               )}
 
               <div>
@@ -1853,23 +1943,13 @@ export default function FormEditorPage() {
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         {t('forms.editorPage.payment.bankLabel')}
                       </label>
-                      <select
+                      <BankSearchSelect
                         disabled={isEmployee}
                         value={payment.bankBin}
-                        onChange={(e) => setPayment((prev) => ({ ...prev, bankBin: e.target.value }))}
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                          errors.paymentBank
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                        }`}
-                      >
-                        <option value="">{t('forms.editorPage.payment.bankPlaceholder')}</option>
-                        {Object.entries(PAYOS_BANK_BIN_MAP).map(([bin, info]) => (
-                          <option key={bin} value={bin}>
-                            {info.name} ({info.short})
-                          </option>
-                        ))}
-                      </select>
+                        onChange={(bin) => setPayment((prev) => ({ ...prev, bankBin: bin }))}
+                        hasError={Boolean(errors.paymentBank)}
+                        placeholder={t('forms.editorPage.payment.bankPlaceholder')}
+                      />
                       {errors.paymentBank && (
                         <p className="text-xs text-red-600 mt-1">{errors.paymentBank}</p>
                       )}
