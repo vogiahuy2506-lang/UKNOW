@@ -83,6 +83,65 @@ export function detectReceiptImageMagic(buffer) {
 }
 
 /**
+ * Dựng mảng options thanh toán và chuỗi QR cho phương thức chính từ snapshot (V6).
+ *
+ * @param {object} paymentSnapshot
+ * @param {number} paymentAmount
+ * @param {string} paymentCode
+ * @returns {{ options: Array<object>, primaryQrString: string|null }}
+ */
+export function buildPaymentOptionsAndPrimaryQr(paymentSnapshot, paymentAmount, paymentCode) {
+  if (!paymentSnapshot) return { options: [], primaryQrString: null };
+  const snapMethods = paymentSnapshot.methods || (paymentSnapshot.method ? [paymentSnapshot.method] : ['bank']);
+  const primaryMethod = paymentSnapshot.method || snapMethods[0];
+
+  let primaryQrString = null;
+  const options = [];
+
+  for (const m of snapMethods) {
+    if (m === 'bank' && paymentSnapshot.bankBin && paymentSnapshot.accountNumber) {
+      const bankQr = buildVietQrString({
+        bin: paymentSnapshot.bankBin,
+        accountNumber: paymentSnapshot.accountNumber,
+        amount: paymentAmount,
+        memo: paymentCode,
+      });
+      options.push({
+        method: 'bank',
+        bankBin: paymentSnapshot.bankBin,
+        bankName: paymentSnapshot.bankName || paymentSnapshot.bankBin,
+        accountNumber: paymentSnapshot.accountNumber,
+        accountName: paymentSnapshot.accountName,
+        qrString: bankQr,
+      });
+      if (primaryMethod === 'bank') {
+        primaryQrString = bankQr;
+      }
+    } else if (m === 'momo') {
+      const momoQr = (paymentSnapshot.momoQrBin && paymentSnapshot.momoQrAccount)
+        ? buildVietQrString({
+            bin: paymentSnapshot.momoQrBin,
+            accountNumber: paymentSnapshot.momoQrAccount,
+            amount: paymentAmount,
+            memo: paymentCode,
+          })
+        : null;
+      options.push({
+        method: 'momo',
+        momoPhone: paymentSnapshot.momoPhone,
+        momoName: paymentSnapshot.momoName,
+        qrString: momoQr,
+      });
+      if (primaryMethod === 'momo') {
+        primaryQrString = momoQr;
+      }
+    }
+  }
+
+  return { options, primaryQrString };
+}
+
+/**
  * Công tắc tính năng biên lai chuyển khoản (PR-5 V5).
  * Mặc định TẮT trừ khi FORM_PAYMENT_RECEIPT_ENABLED='true'.
  *
@@ -764,7 +823,12 @@ class FormService {
       // PR-3a mục "Public GET form thêm payment" — KHÔNG trả bankBin/accountNumber/accountName
       // trước khi nộp bài (chỉ biết số tiền + có thu tiền hay không, để hiện UI form đúng).
       payment: form.paymentConfig?.enabled
-        ? { enabled: true, amount: form.paymentConfig.amount, method: form.paymentConfig.method }
+        ? {
+            enabled: true,
+            amount: form.paymentConfig.amount,
+            method: form.paymentConfig.method || (form.paymentConfig.methods ? form.paymentConfig.methods[0] : 'bank'),
+            methods: form.paymentConfig.methods || (form.paymentConfig.method ? [form.paymentConfig.method] : ['bank']),
+          }
         : null,
     };
   }
@@ -925,13 +989,28 @@ class FormService {
       submitterIpHash = hashSubmitterIp(ipKey);
       status = 'pending_payment';
       holdExpiresAt = new Date(Date.now() + paymentConfig.holdMinutes * 60 * 1000);
-      if (paymentConfig.method === 'momo') {
-        paymentSnapshot = {
-          method: 'momo',
-          momoPhone: paymentConfig.momoPhone,
-          momoName: paymentConfig.momoName,
-          amount: paymentConfig.amount,
-        };
+
+      const methods = paymentConfig.methods || (paymentConfig.method ? [paymentConfig.method] : ['bank']);
+      const primaryMethod = paymentConfig.method || methods[0];
+
+      paymentSnapshot = {
+        methods,
+        method: primaryMethod,
+        amount: paymentConfig.amount,
+      };
+
+      if (methods.includes('bank')) {
+        const bankInfo = VIETQR_BANKS[paymentConfig.bankBin] || null;
+        paymentSnapshot.bankBin = paymentConfig.bankBin;
+        paymentSnapshot.bankName = bankInfo?.name || paymentConfig.bankBin;
+        paymentSnapshot.accountNumber = paymentConfig.accountNumber;
+        paymentSnapshot.accountName = paymentConfig.accountName;
+      }
+
+      if (methods.includes('momo')) {
+        paymentSnapshot.momoPhone = paymentConfig.momoPhone;
+        paymentSnapshot.momoName = paymentConfig.momoName;
+        paymentSnapshot.momoQrMode = paymentConfig.momoQrMode;
         if (paymentConfig.momoQrBin && paymentConfig.momoQrAccount) {
           paymentSnapshot.momoQrBin = paymentConfig.momoQrBin;
           paymentSnapshot.momoQrAccount = paymentConfig.momoQrAccount;
@@ -939,16 +1018,6 @@ class FormService {
             paymentSnapshot.momoQrRefLabel = paymentConfig.momoQrRefLabel;
           }
         }
-      } else {
-        const bankInfo = VIETQR_BANKS[paymentConfig.bankBin] || null;
-        paymentSnapshot = {
-          method: 'bank',
-          bankBin: paymentConfig.bankBin,
-          bankName: bankInfo?.name || paymentConfig.bankBin,
-          accountNumber: paymentConfig.accountNumber,
-          accountName: paymentConfig.accountName,
-          amount: paymentConfig.amount,
-        };
       }
 
       if (!bookingEnabled) {
@@ -1025,24 +1094,16 @@ class FormService {
       submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, db, paymentEnabled, false);
     }
 
-    const isMomo = paymentSnapshot?.method === 'momo';
     let qrString = null;
-    if (paymentEnabled) {
-      if (isMomo && paymentSnapshot?.momoQrBin && paymentSnapshot?.momoQrAccount) {
-        qrString = buildVietQrString({
-          bin: paymentSnapshot.momoQrBin,
-          accountNumber: paymentSnapshot.momoQrAccount,
-          amount: paymentSnapshot.amount,
-          memo: submission.paymentCode,
-        });
-      } else if (!isMomo && paymentSnapshot?.bankBin && paymentSnapshot?.accountNumber) {
-        qrString = buildVietQrString({
-          bin: paymentSnapshot.bankBin,
-          accountNumber: paymentSnapshot.accountNumber,
-          amount: paymentSnapshot.amount,
-          memo: submission.paymentCode,
-        });
-      }
+    let paymentOptions = [];
+    if (paymentEnabled && paymentSnapshot) {
+      const res = buildPaymentOptionsAndPrimaryQr(
+        paymentSnapshot,
+        paymentConfig.amount,
+        submission.paymentCode
+      );
+      paymentOptions = res.options;
+      qrString = res.primaryQrString;
     }
 
     // Thư báo cho chủ form nếu settings.notifyOwner được bật (fire-and-forget, không để người điền chờ)
@@ -1094,6 +1155,37 @@ class FormService {
     if (paymentEnabled && validated.respondentEmail && form.settings?.sendConfirmation) {
       const statusUrl = `${FRONTEND_URL}/f/${encodeURIComponent(key)}/s/${encodeURIComponent(accessToken)}`;
       const holdMinutesText = escapeHtml(String(paymentConfig.holdMinutes));
+      const methodsList = paymentSnapshot.methods || [paymentSnapshot.method];
+      const hasBothMethods = methodsList.includes('bank') && methodsList.includes('momo');
+
+      let methodsDetailHtml = '';
+      if (hasBothMethods) {
+        methodsDetailHtml = `
+          <div style="margin: 12px 0; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <p style="margin: 0 0 6px 0; font-weight: bold; color: #1e293b;">Cách 1: Chuyển khoản ngân hàng</p>
+            <p style="margin: 2px 0;">Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
+            <p style="margin: 2px 0;">Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
+            <p style="margin: 2px 0;">Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
+          </div>
+          <div style="margin: 12px 0; padding: 12px; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px;">
+            <p style="margin: 0 0 6px 0; font-weight: bold; color: #831843;">Cách 2: Chuyển ví MoMo</p>
+            <p style="margin: 2px 0;">Ví MoMo: <strong>${escapeHtml(paymentSnapshot.momoPhone)}</strong></p>
+            <p style="margin: 2px 0;">Tên: <strong>${escapeHtml(paymentSnapshot.momoName)}</strong></p>
+          </div>
+        `;
+      } else if (paymentSnapshot.method === 'momo') {
+        methodsDetailHtml = `
+          <p>Ví MoMo: <strong>${escapeHtml(paymentSnapshot.momoPhone)}</strong></p>
+          <p>Tên: <strong>${escapeHtml(paymentSnapshot.momoName)}</strong></p>
+        `;
+      } else {
+        methodsDetailHtml = `
+          <p>Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
+          <p>Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
+          <p>Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
+        `;
+      }
+
       await this.sendFormRespondentEmail({
         formId: form.id,
         formTitle: form.title,
@@ -1104,16 +1196,7 @@ class FormService {
           <h2>Vui lòng chuyển khoản để giữ chỗ</h2>
           <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
           ${appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>` : ''}
-          ${paymentSnapshot.method === 'momo'
-            ? `
-          <p>Ví MoMo: <strong>${escapeHtml(paymentSnapshot.momoPhone)}</strong></p>
-          <p>Tên: <strong>${escapeHtml(paymentSnapshot.momoName)}</strong></p>
-            `
-            : `
-          <p>Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
-          <p>Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
-          <p>Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
-            `}
+          ${methodsDetailHtml}
           <p>Số tiền: <strong>${escapeHtml(paymentConfig.amount.toLocaleString('vi-VN'))}đ</strong></p>
           <p>Nội dung chuyển khoản (bắt buộc ghi đúng): <strong>${escapeHtml(submission.paymentCode)}</strong></p>
           <p>Hạn giữ chỗ: <strong>${holdMinutesText} phút</strong> kể từ lúc đặt.</p>
@@ -1128,27 +1211,30 @@ class FormService {
       accessToken: submission.accessToken,
       isBotTrap: false,
       payment: paymentEnabled
-        ? (paymentSnapshot.method === 'momo'
-            ? {
-                method: 'momo',
-                amount: paymentConfig.amount,
-                code: submission.paymentCode,
-                momoPhone: paymentSnapshot.momoPhone,
-                momoName: paymentSnapshot.momoName,
-                qrString,
-                holdExpiresAt: submission.holdExpiresAt,
-              }
-            : {
-                method: 'bank',
-                amount: paymentConfig.amount,
-                code: submission.paymentCode,
-                bankBin: paymentSnapshot.bankBin,
-                bankName: paymentSnapshot.bankName,
-                accountNumber: paymentSnapshot.accountNumber,
-                accountName: paymentSnapshot.accountName,
-                qrString,
-                holdExpiresAt: submission.holdExpiresAt,
-              })
+        ? {
+            ...(paymentSnapshot.method === 'momo'
+              ? {
+                  method: 'momo',
+                  amount: paymentConfig.amount,
+                  code: submission.paymentCode,
+                  momoPhone: paymentSnapshot.momoPhone,
+                  momoName: paymentSnapshot.momoName,
+                  qrString,
+                  holdExpiresAt: submission.holdExpiresAt,
+                }
+              : {
+                  method: 'bank',
+                  amount: paymentConfig.amount,
+                  code: submission.paymentCode,
+                  bankBin: paymentSnapshot.bankBin,
+                  bankName: paymentSnapshot.bankName,
+                  accountNumber: paymentSnapshot.accountNumber,
+                  accountName: paymentSnapshot.accountName,
+                  qrString,
+                  holdExpiresAt: submission.holdExpiresAt,
+                }),
+            options: paymentOptions,
+          }
         : null,
     };
   }
@@ -1292,25 +1378,23 @@ class FormService {
     let payment = null;
     if (submission.status === 'pending_payment' && !holdExpired && submission.paymentSnapshot) {
       const snap = submission.paymentSnapshot;
-      const method = snap.method || 'bank';
-      if (method === 'momo') {
-        const momoQrString = (snap.momoQrBin && snap.momoQrAccount)
-          ? buildVietQrString({
-              bin: snap.momoQrBin,
-              accountNumber: snap.momoQrAccount,
-              amount: submission.paymentAmount,
-              memo: submission.paymentCode,
-            })
-          : null;
+      const { options: paymentOptions, primaryQrString: qrString } = buildPaymentOptionsAndPrimaryQr(
+        snap,
+        submission.paymentAmount,
+        submission.paymentCode
+      );
+      const primaryMethod = snap.method || (snap.methods ? snap.methods[0] : 'bank');
 
+      if (primaryMethod === 'momo') {
         payment = {
           method: 'momo',
           amount: submission.paymentAmount,
           code: submission.paymentCode,
           momoPhone: snap.momoPhone,
           momoName: snap.momoName,
-          qrString: momoQrString,
+          qrString,
           holdExpiresAt: submission.holdExpiresAt,
+          options: paymentOptions,
         };
       } else {
         payment = {
@@ -1321,13 +1405,9 @@ class FormService {
           bankName: snap.bankName,
           accountNumber: snap.accountNumber,
           accountName: snap.accountName,
-          qrString: buildVietQrString({
-            bin: snap.bankBin,
-            accountNumber: snap.accountNumber,
-            amount: submission.paymentAmount,
-            memo: submission.paymentCode,
-          }),
+          qrString,
           holdExpiresAt: submission.holdExpiresAt,
+          options: paymentOptions,
         };
       }
     }

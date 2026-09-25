@@ -479,10 +479,29 @@ export function normalizePaymentConfig(raw) {
   }
   if (!raw.enabled) return null;
 
-  const method = String(raw.method || 'bank').trim().toLowerCase();
-  if (method !== 'bank' && method !== 'momo') {
-    throw createValidationError('Phương thức thanh toán này chưa được hỗ trợ (chỉ nhận chuyển khoản ngân hàng hoặc MoMo)', 'PAYMENT_METHOD_UNSUPPORTED');
+  // V6: Hỗ trợ cả 2 phương thức (ngân hàng và MoMo). methods là mảng con không rỗng của ['bank', 'momo']
+  let methods = [];
+  if (Array.isArray(raw.methods)) {
+    for (const m of raw.methods) {
+      const s = String(m || '').trim().toLowerCase();
+      if ((s === 'bank' || s === 'momo') && !methods.includes(s)) {
+        methods.push(s);
+      }
+    }
+  } else if (raw.method !== undefined && raw.method !== null) {
+    const s = String(raw.method).trim().toLowerCase();
+    if (s === 'bank' || s === 'momo') {
+      methods.push(s);
+    } else {
+      throw createValidationError('Phương thức thanh toán này chưa được hỗ trợ (chỉ nhận chuyển khoản ngân hàng hoặc MoMo)', 'PAYMENT_METHOD_UNSUPPORTED');
+    }
   }
+
+  if (methods.length === 0) {
+    throw createValidationError('Vui lòng chọn ít nhất một phương thức thanh toán (chuyển khoản ngân hàng hoặc ví MoMo)', 'INVALID_PAYMENT_CONFIG');
+  }
+
+  const primaryMethod = methods[0];
 
   const amount = Number(raw.amount);
   if (!Number.isInteger(amount) || amount < MIN_PAYMENT_AMOUNT || amount > MAX_PAYMENT_AMOUNT) {
@@ -502,7 +521,30 @@ export function normalizePaymentConfig(raw) {
   let momoQrAccount = null;
   let momoQrRefLabel = null;
 
-  if (method === 'momo') {
+  if (methods.includes('bank')) {
+    bankBin = String(raw.bankBin || '').trim();
+    if (!VIETQR_BANKS[bankBin]) {
+      throw createValidationError('Ngân hàng (bankBin) không hợp lệ', 'INVALID_PAYMENT_CONFIG');
+    }
+
+    accountNumber = String(raw.accountNumber || '').trim();
+    if (!ACCOUNT_NUMBER_RE.test(accountNumber)) {
+      throw createValidationError(
+        `Số tài khoản phải gồm ${MIN_ACCOUNT_NUMBER_LENGTH}-${MAX_ACCOUNT_NUMBER_LENGTH} chữ số`,
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
+
+    accountName = normalizeAccountName(raw.accountName);
+    if (!ACCOUNT_NAME_RE.test(accountName)) {
+      throw createValidationError(
+        'Tên chủ tài khoản không hợp lệ (chỉ chữ in hoa không dấu, số, khoảng trắng, 2-50 ký tự)',
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
+  }
+
+  if (methods.includes('momo')) {
     momoPhone = String(raw.momoPhone || '').trim();
     if (!MOMO_PHONE_RE.test(momoPhone)) {
       throw createValidationError(
@@ -588,27 +630,6 @@ export function normalizePaymentConfig(raw) {
       momoQrAccount = null;
       momoQrRefLabel = null;
     }
-  } else {
-    bankBin = String(raw.bankBin || '').trim();
-    if (!VIETQR_BANKS[bankBin]) {
-      throw createValidationError('Ngân hàng (bankBin) không hợp lệ', 'INVALID_PAYMENT_CONFIG');
-    }
-
-    accountNumber = String(raw.accountNumber || '').trim();
-    if (!ACCOUNT_NUMBER_RE.test(accountNumber)) {
-      throw createValidationError(
-        `Số tài khoản phải gồm ${MIN_ACCOUNT_NUMBER_LENGTH}-${MAX_ACCOUNT_NUMBER_LENGTH} chữ số`,
-        'INVALID_PAYMENT_CONFIG'
-      );
-    }
-
-    accountName = normalizeAccountName(raw.accountName);
-    if (!ACCOUNT_NAME_RE.test(accountName)) {
-      throw createValidationError(
-        'Tên chủ tài khoản không hợp lệ (chỉ chữ in hoa không dấu, số, khoảng trắng, 2-50 ký tự)',
-        'INVALID_PAYMENT_CONFIG'
-      );
-    }
   }
 
   let holdMinutes = DEFAULT_HOLD_MINUTES;
@@ -623,16 +644,24 @@ export function normalizePaymentConfig(raw) {
     holdMinutes = n;
   }
 
-  if (method === 'momo') {
-    const config = {
-      enabled: true,
-      method: 'momo',
-      amount,
-      momoPhone,
-      momoName,
-      holdMinutes,
-      momoQrMode,
-    };
+  const config = {
+    enabled: true,
+    methods,
+    method: primaryMethod,
+    amount,
+    holdMinutes,
+  };
+
+  if (methods.includes('bank')) {
+    config.bankBin = bankBin;
+    config.accountNumber = accountNumber;
+    config.accountName = accountName;
+  }
+
+  if (methods.includes('momo')) {
+    config.momoPhone = momoPhone;
+    config.momoName = momoName;
+    config.momoQrMode = momoQrMode;
     if (momoQrBin && momoQrAccount) {
       config.momoQrBin = momoQrBin;
       config.momoQrAccount = momoQrAccount;
@@ -640,18 +669,9 @@ export function normalizePaymentConfig(raw) {
         config.momoQrRefLabel = momoQrRefLabel;
       }
     }
-    return config;
   }
 
-  return {
-    enabled: true,
-    method: 'bank',
-    amount,
-    bankBin,
-    accountNumber,
-    accountName,
-    holdMinutes,
-  };
+  return config;
 }
 
 // ─── Theme (PR-4a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md "Bổ sung 15/09 khi soạn lệnh
