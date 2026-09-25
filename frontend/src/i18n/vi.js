@@ -9253,6 +9253,7 @@ export default {
         employeeReadOnlyNotice: 'Chỉ chủ tài khoản đổi được thông tin nhận tiền.',
         ownerWarning: 'Tiền chuyển thẳng vào tài khoản của bạn; bạn tự kiểm app ngân hàng rồi bấm "Đã nhận tiền".',
         methodLabel: 'Phương thức thanh toán',
+        methodsRequired: 'Vui lòng chọn ít nhất một phương thức thanh toán',
         methodBank: 'Chuyển khoản ngân hàng',
         methodMomo: 'Ví MoMo',
         momoPhoneLabel: 'Số điện thoại ví MoMo',
@@ -9509,6 +9510,8 @@ export default {
       receiptFormatError: 'Không thể xử lý ảnh này. Nếu bạn dùng HEIC (iPhone), vui lòng chụp màn hình (PNG/JPG) rồi tải lên.',
       receiptUploadError: 'Lỗi khi tải ảnh biên lai',
       receiptDesktopQrPrompt: 'Đang xem trên máy tính? Mở trang này trên điện thoại để tải ảnh',
+      tabBank: 'Chuyển khoản ngân hàng',
+      tabMomo: 'Ví MoMo',
     },
   },
 };

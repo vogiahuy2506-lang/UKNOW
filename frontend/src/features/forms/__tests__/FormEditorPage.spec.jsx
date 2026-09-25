@@ -411,6 +411,7 @@ describe('FormEditorPage component', () => {
 
       expect(payload.paymentConfig).toEqual({
         enabled: true,
+        methods: ['bank'],
         method: 'bank',
         amount: 150000,
         bankBin: '970436',
@@ -576,8 +577,11 @@ describe('FormEditorPage component', () => {
       const enableCheckbox = screen.getByRole('checkbox', { name: /Bật thanh toán/i });
       fireEvent.click(enableCheckbox);
 
-      const momoRadio = screen.getByRole('radio', { name: /Ví MoMo/i });
-      fireEvent.click(momoRadio);
+      const bankCheckbox = screen.getByRole('checkbox', { name: /Chuyển khoản ngân hàng/i });
+      fireEvent.click(bankCheckbox);
+
+      const momoCheckbox = screen.getByRole('checkbox', { name: /Ví MoMo/i });
+      fireEvent.click(momoCheckbox);
 
       fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), {
         target: { value: '200000' },
@@ -598,6 +602,7 @@ describe('FormEditorPage component', () => {
 
       expect(payload.paymentConfig).toEqual({
         enabled: true,
+        methods: ['momo'],
         method: 'momo',
         amount: 200000,
         momoPhone: '0912345678',
@@ -628,7 +633,8 @@ describe('FormEditorPage component', () => {
         target: { value: 'Form MoMo không QR' },
       });
       fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
-      fireEvent.click(screen.getByRole('radio', { name: /Ví MoMo/i }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Chuyển khoản ngân hàng/i }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Ví MoMo/i }));
       fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), { target: { value: '200000' } });
       fireEvent.change(screen.getByPlaceholderText('Vd: 0912345678'), { target: { value: '0912345678' } });
       fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), { target: { value: 'Nguyen Van MoMo' } });
@@ -664,7 +670,8 @@ describe('FormEditorPage component', () => {
       });
 
       fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
-      fireEvent.click(screen.getByRole('radio', { name: /Ví MoMo/i }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Chuyển khoản ngân hàng/i }));
+      fireEvent.click(screen.getByRole('checkbox', { name: /Ví MoMo/i }));
       fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), {
         target: { value: '200000' },
       });
@@ -675,6 +682,85 @@ describe('FormEditorPage component', () => {
         screen.getByText('Số điện thoại MoMo phải gồm 10 chữ số (bắt đầu bằng 03, 05, 07, 08, 09)')
       ).toBeInTheDocument();
       expect(screen.getByText('Vui lòng nhập tên chủ ví MoMo')).toBeInTheDocument();
+    });
+
+    it('V6: chủ tài khoản chọn CẢ HAI phương thức (Bank VÀ MoMo): payload lưu đủ cả 2 nhóm trường, methods: ["bank", "momo"]', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-dual-payment' });
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form nhận cả 2 kênh' },
+      });
+      fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
+      // Điền thông tin Bank trước khi bật MoMo (để không trùng placeholder)
+      fillPaymentFields(container);
+
+      // Bank đã được tick sẵn, tick thêm MoMo
+      fireEvent.click(screen.getByRole('checkbox', { name: /Ví MoMo/i }));
+
+      // Điền thêm thông tin MoMo
+      fireEvent.change(screen.getByPlaceholderText('Vd: 0912345678'), {
+        target: { value: '0988888888' },
+      });
+      const nameInputs = screen.getAllByPlaceholderText(/NGUYEN VAN A/i);
+      fireEvent.change(nameInputs[1], {
+        target: { value: 'NGUYEN VAN MOMO' },
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+
+      expect(payload.paymentConfig).toEqual({
+        enabled: true,
+        methods: ['bank', 'momo'],
+        method: 'bank',
+        amount: 150000,
+        bankBin: '970436',
+        accountNumber: '0123456789',
+        accountName: 'Nguyen Van A',
+        momoPhone: '0988888888',
+        momoName: 'NGUYEN VAN MOMO',
+        holdMinutes: 30,
+        momoQrMode: 'phone',
+        momoQrBin: '971025',
+        momoQrAccount: '0988888888',
+      });
+    });
+
+    it('V6: bỏ chọn cả hai phương thức thanh toán: báo lỗi và chặn lưu', async () => {
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form không chọn kênh nào' },
+      });
+      fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
+      // Bỏ tick Bank
+      fireEvent.click(screen.getByRole('checkbox', { name: /Chuyển khoản ngân hàng/i }));
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      expect(formAdminApi.createForm).not.toHaveBeenCalled();
+      expect(
+        screen.getByText('Vui lòng chọn ít nhất một phương thức thanh toán')
+      ).toBeInTheDocument();
     });
   });
 

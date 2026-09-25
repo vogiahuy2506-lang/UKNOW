@@ -89,6 +89,7 @@ export default function FormSubmissionStatusPage() {
   const [httpStatus, setHttpStatus] = useState(null);
   const [qrDataUrl, setQrDataUrl] = useState('');
   const [countdownSeconds, setCountdownSeconds] = useState(null);
+  const [activeMethodTab, setActiveMethodTab] = useState(null);
   const [isReportingPaid, setIsReportingPaid] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
@@ -175,13 +176,19 @@ export default function FormSubmissionStatusPage() {
     return () => clearInterval(interval);
   }, [isPendingActive, statusData?.holdExpiresAt, load]);
 
+  const paymentData = statusData?.payment;
+  const hasOptions = Array.isArray(paymentData?.options) && paymentData.options.length >= 2;
+  const selectedMethod = activeMethodTab || paymentData?.options?.[0]?.method || paymentData?.method || 'bank';
+  const activeOption = (paymentData?.options || []).find((o) => o.method === selectedMethod) || paymentData;
+  const currentQrString = activeOption?.qrString || paymentData?.qrString;
+
   useEffect(() => {
-    if (!statusData?.payment?.qrString) {
+    if (!currentQrString) {
       setQrDataUrl('');
       return;
     }
     let cancelled = false;
-    QRCode.toDataURL(statusData.payment.qrString, { width: 320, margin: 4 })
+    QRCode.toDataURL(currentQrString, { width: 320, margin: 4 })
       .then((url) => {
         if (!cancelled) setQrDataUrl(url);
       })
@@ -191,7 +198,7 @@ export default function FormSubmissionStatusPage() {
     return () => {
       cancelled = true;
     };
-  }, [statusData?.payment?.qrString]);
+  }, [currentQrString]);
 
   const handleReceiptFileChange = async (e) => {
     const file = e.target.files?.[0];
@@ -365,9 +372,35 @@ export default function FormSubmissionStatusPage() {
               )}
             </div>
 
-            {payment.method === 'momo' ? (
+            {hasOptions && (
+              <div className="flex rounded-xl bg-gray-100 p-1 mb-3" data-testid="tabs-payment-methods">
+                {payment.options.map((opt) => {
+                  const isSelected = selectedMethod === opt.method;
+                  const label = opt.method === 'bank'
+                    ? (t('publicForm.payment.tabBank') || 'Ngân hàng')
+                    : (t('publicForm.payment.tabMomo') || 'Ví MoMo');
+                  return (
+                    <button
+                      key={opt.method}
+                      type="button"
+                      data-testid={`tab-payment-${opt.method}`}
+                      onClick={() => setActiveMethodTab(opt.method)}
+                      className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-semibold transition-all ${
+                        isSelected
+                          ? 'bg-white text-gray-900 shadow-sm'
+                          : 'text-gray-500 hover:text-gray-700'
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
+            {selectedMethod === 'momo' ? (
               <>
-                {payment.qrString ? (
+                {(activeOption?.qrString || payment.qrString) ? (
                   <>
                     <p
                       className="font-semibold text-sm sm:text-base text-center mb-1"
@@ -376,9 +409,9 @@ export default function FormSubmissionStatusPage() {
                       {t('publicForm.payment.momoScanInstruction')}
                     </p>
 
-                    {payment.momoName && (
+                    {(activeOption?.momoName || payment.momoName) && (
                       <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 text-center mb-3 font-medium">
-                        {t('publicForm.payment.momoVerifyRecipient', { name: payment.momoName })}
+                        {t('publicForm.payment.momoVerifyRecipient', { name: activeOption?.momoName || payment.momoName })}
                       </p>
                     )}
 
@@ -424,13 +457,13 @@ export default function FormSubmissionStatusPage() {
                 <div className="space-y-2">
                   <CopyableRow
                     label={t('publicForm.payment.momoPhoneLabel')}
-                    value={payment.momoPhone}
-                    displayValue={payment.momoPhone}
+                    value={activeOption?.momoPhone || payment.momoPhone}
+                    displayValue={activeOption?.momoPhone || payment.momoPhone}
                   />
                   <CopyableRow
                     label={t('publicForm.payment.momoNameLabel')}
-                    value={payment.momoName}
-                    displayValue={payment.momoName}
+                    value={activeOption?.momoName || payment.momoName}
+                    displayValue={activeOption?.momoName || payment.momoName}
                   />
                   <CopyableRow
                     label={t('publicForm.payment.amountLabel')}
@@ -486,18 +519,18 @@ export default function FormSubmissionStatusPage() {
                 <div className="space-y-2">
                   <CopyableRow
                     label={t('publicForm.payment.bankLabel')}
-                    value={payment.bankName}
-                    displayValue={payment.bankName}
+                    value={activeOption?.bankName || payment.bankName}
+                    displayValue={activeOption?.bankName || payment.bankName}
                   />
                   <CopyableRow
                     label={t('publicForm.payment.accountNumberLabel')}
-                    value={payment.accountNumber}
-                    displayValue={payment.accountNumber}
+                    value={activeOption?.accountNumber || payment.accountNumber}
+                    displayValue={activeOption?.accountNumber || payment.accountNumber}
                   />
                   <CopyableRow
                     label={t('publicForm.payment.accountNameLabel')}
-                    value={payment.accountName}
-                    displayValue={payment.accountName}
+                    value={activeOption?.accountName || payment.accountName}
+                    displayValue={activeOption?.accountName || payment.accountName}
                   />
                   <CopyableRow
                     label={t('publicForm.payment.amountLabel')}
@@ -639,7 +672,9 @@ export default function FormSubmissionStatusPage() {
                 <div className="leading-relaxed">
                   {t('publicForm.payment.reportedSuccessMsg', {
                     reportedTime: formatTimeOnly(statusData.payerReportedPaidAt),
-                    recipientName: (payment?.method === 'momo' ? payment?.momoName : payment?.accountName) || t('publicForm.payment.accountNameLabel'),
+                    recipientName: (selectedMethod === 'momo'
+                      ? (activeOption?.momoName || payment?.momoName)
+                      : (activeOption?.accountName || payment?.accountName)) || t('publicForm.payment.accountNameLabel'),
                     holdTime: formatAppointmentAtVn(statusData.holdExpiresAt, locale),
                   })}
                 </div>
@@ -711,9 +746,9 @@ export default function FormSubmissionStatusPage() {
 
         <div className="mt-5 pt-4 border-t border-gray-100 space-y-2">
           <p className="text-[11px] text-gray-400 leading-relaxed text-center">
-            {(payment?.method === 'momo' ? payment?.momoName : payment?.accountName)
+            {(selectedMethod === 'momo' ? (activeOption?.momoName || payment?.momoName) : (activeOption?.accountName || payment?.accountName))
               ? t('publicForm.payment.disclaimerNamed', {
-                  name: payment?.method === 'momo' ? payment?.momoName : payment?.accountName,
+                  name: selectedMethod === 'momo' ? (activeOption?.momoName || payment?.momoName) : (activeOption?.accountName || payment?.accountName),
                 })
               : t('publicForm.payment.disclaimer')}
           </p>
