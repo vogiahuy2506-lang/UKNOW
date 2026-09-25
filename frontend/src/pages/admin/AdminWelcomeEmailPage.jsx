@@ -14,7 +14,7 @@ import AdminSubscriptionReminderScheduleSection from './AdminSubscriptionReminde
 // PR-2b (13/09/2026, PLAN_CANH_BAO_SAP_HET_HAN_GOI mục 4.2) — trang này giờ sửa được cả 3 mẫu thư
 // hạn gói (không chỉ welcome), qua bộ chọn mẫu bên dưới. Tên file/route/component giữ nguyên
 // (welcome-email) — đổi tên không phải yêu cầu của PR này.
-const TEMPLATE_KEYS = ['welcome', 'plan_expiring', 'plan_expired'];
+const TEMPLATE_KEYS = ['welcome', 'plan_expiring', 'plan_expired', 'employee_invitation'];
 
 const VARIABLE_LABEL_KEYS = {
   user_name: 'userName',
@@ -29,6 +29,9 @@ const VARIABLE_LABEL_KEYS = {
   days_left: 'daysLeft',
   grace_days: 'graceDays',
   upgrade_url: 'upgradeUrl',
+  owner_name: 'ownerName',
+  activation_url: 'activationUrl',
+  expiry_hours: 'expiryHours',
 };
 
 // PLAN_CAU_HINH_LICH_NHAC_HAN_2026-09-13.md, mục 5 (PR-2) — chép đúng ba luật từ
@@ -125,6 +128,7 @@ export default function AdminWelcomeEmailPage() {
     welcome: t('adminWelcomeEmail.templateKeys.welcome'),
     plan_expiring: t('adminWelcomeEmail.templateKeys.plan_expiring'),
     plan_expired: t('adminWelcomeEmail.templateKeys.plan_expired'),
+    employee_invitation: t('adminWelcomeEmail.templateKeys.employee_invitation'),
   };
   const templateMeta = {
     welcome: {
@@ -147,6 +151,12 @@ export default function AdminWelcomeEmailPage() {
       subtitle: t('adminWelcomeEmail.templateMeta.plan_expired.subtitle'),
       behaviorNote: t('adminWelcomeEmail.templateMeta.plan_expired.behaviorNote'),
       previewFrameTitle: t('adminWelcomeEmail.templateMeta.plan_expired.previewFrameTitle'),
+    },
+    employee_invitation: {
+      title: t('adminWelcomeEmail.templateMeta.employee_invitation.title'),
+      subtitle: t('adminWelcomeEmail.templateMeta.employee_invitation.subtitle'),
+      behaviorNote: t('adminWelcomeEmail.templateMeta.employee_invitation.behaviorNote'),
+      previewFrameTitle: t('adminWelcomeEmail.templateMeta.employee_invitation.previewFrameTitle'),
     },
   }[templateKey];
 

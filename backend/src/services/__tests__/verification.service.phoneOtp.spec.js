@@ -33,6 +33,10 @@ jest.unstable_mockModule('../../repositories/verification.repository.js', () => 
 }));
 jest.unstable_mockModule('../../utils/systemEmail.util.js', () => ({
   sendSystemEmail: jest.fn().mockResolvedValue(true),
+  buildEmployeeInvitationEmail: jest.fn(() => ({ subject: 'test', html: '<p>test</p>' })),
+}));
+jest.unstable_mockModule('../email/welcomeEmailTemplate.service.js', () => ({
+  loadCustomSystemEmailTemplate: jest.fn().mockResolvedValue(null),
 }));
 jest.unstable_mockModule('../sms/otpProvider.service.js', () => ({
   sendOtp: mockSendOtp,

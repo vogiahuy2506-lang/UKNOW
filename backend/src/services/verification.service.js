@@ -1,6 +1,7 @@
 import crypto from 'crypto';
 import verificationRepository from '../repositories/verification.repository.js';
-import { sendSystemEmail } from '../utils/systemEmail.util.js';
+import { sendSystemEmail, buildEmployeeInvitationEmail } from '../utils/systemEmail.util.js';
+import { loadCustomSystemEmailTemplate } from './email/welcomeEmailTemplate.service.js';
 import { sendOtp } from './sms/otpProvider.service.js';
 import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
 
@@ -429,8 +430,14 @@ class VerificationService {
 
   async sendInvitationEmail(email, token, ownerName) {
     const activationUrl = `${FRONTEND_URL}/register?email=${encodeURIComponent(email)}&invite=${token}`;
-    const subject = `[${PRODUCT_NAME}] Bạn được mời tham gia nhóm`;
-    const html = buildInvitationEmailHtml({ ownerName, activationUrl, email });
+    const customTemplate = await loadCustomSystemEmailTemplate('employee_invitation');
+    const { subject, html } = buildEmployeeInvitationEmail({
+      ownerName,
+      email,
+      activationUrl,
+      expiryHours: 48,
+      template: customTemplate,
+    });
     return sendSystemEmail({ to: email, subject, html });
   }
 

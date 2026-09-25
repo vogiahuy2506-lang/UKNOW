@@ -850,6 +850,109 @@ export function buildWelcomeEmail({ fullName, email, planName = null, loginUrl, 
   };
 }
 
+export function getDefaultEmployeeInvitationTemplate() {
+  return {
+    subject: `[{{sender_name}}] Bạn được mời tham gia nhóm làm việc`,
+    bodyHtml: `
+    <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào,
+    </p>
+    <p style="margin:0 0 20px;font-size:15px;color:#6b7280;line-height:1.6">
+      <strong style="color:#f97316">{{owner_name}}</strong> đã mời bạn tham gia nhóm làm việc trên <strong>{{sender_name}}</strong>.
+    </p>
+
+    <!-- CTA Button -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="{{activation_url}}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Kích hoạt tài khoản →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Quick Guide Box -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:20px">
+      <tr>
+        <td style="padding:14px 16px;text-align:left">
+          <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1e293b">
+            📌 Hướng dẫn tham gia:
+          </p>
+          <ul style="margin:0;padding-left:18px;font-size:13px;color:#475569;line-height:1.6">
+            <li style="margin-bottom:4px">
+              Bạn có thể <strong>tạo mật khẩu qua nút bấm trên</strong>, hoặc <strong>đăng nhập trực tiếp bằng Google</strong> (với email <strong>{{user_email}}</strong>) để vào làm việc ngay.
+            </li>
+            <li>
+              Sau khi vào hệ thống, vui lòng <strong>đồng ý với các điều khoản</strong> và <strong>cập nhật đầy đủ thông tin</strong> tài khoản của bạn để hoàn tất hồ sơ.
+            </li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Expiry -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-radius:8px;margin-bottom:20px">
+      <tr>
+        <td style="padding:10px 16px;text-align:center">
+          <p style="margin:0;font-size:12px;color:#92400e">
+            ⏱️ Link kích hoạt có hiệu lực trong <strong>{{expiry_hours}} giờ</strong>.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Fallback link -->
+    <p style="margin:0 0 6px;font-size:12px;color:#6b7280">
+      Nếu nút trên không mở được, bạn có thể copy link này vào trình duyệt:
+    </p>
+    <p style="margin:0;font-size:11px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:8px 10px;border-radius:6px;border:1px solid #e5e7eb">
+      {{activation_url}}
+    </p>
+
+    <!-- Security Note -->
+    <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;line-height:1.5">
+      Nếu bạn không nhận ra yêu cầu này, vui lòng bỏ qua email.
+    </p>
+    `,
+  };
+}
+
+export function buildEmployeeInvitationEmail({
+  ownerName,
+  email,
+  activationUrl,
+  expiryHours = 48,
+  template = null,
+}) {
+  const defaultTemplate = getDefaultEmployeeInvitationTemplate();
+  const selectedTemplate = {
+    subject: template?.subject || defaultTemplate.subject,
+    bodyHtml: template?.bodyHtml || defaultTemplate.bodyHtml,
+  };
+  const commonValues = {
+    owner_name: ownerName || 'Admin',
+    user_email: email || '',
+    activation_url: activationUrl || FRONTEND_URL,
+    expiry_hours: String(expiryHours || 48),
+    sender_name: SENDER_NAME,
+    support_email: 'info@digiso.vn',
+  };
+  const subject = replaceSystemEmailVariables(selectedTemplate.subject, commonValues).trim();
+  const content = replaceSystemEmailVariables(selectedTemplate.bodyHtml, commonValues, { html: true });
+
+  return {
+    subject,
+    html: buildBaseTemplate({
+      subtitle: 'Team Invitation',
+      content,
+      footerNote: 'Email này được gửi tự động từ hệ thống.',
+    }),
+  };
+}
+
 // ─── Payment Success Email ────────────────────────────────────────────────────
 
 export function buildPaymentSuccessEmail({

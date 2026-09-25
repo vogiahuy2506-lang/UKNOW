@@ -3,9 +3,11 @@ import {
   buildWelcomeEmail,
   buildRenewalReminderEmail,
   buildPlanExpiredEmail,
+  buildEmployeeInvitationEmail,
   getDefaultWelcomeEmailTemplate,
   getDefaultPlanExpiringEmailTemplate,
   getDefaultPlanExpiredEmailTemplate,
+  getDefaultEmployeeInvitationTemplate,
   sendSystemEmail,
 } from '../../utils/systemEmail.util.js';
 import {
@@ -36,6 +38,10 @@ const PLAN_EXPIRED_EMAIL_VARIABLES = Object.freeze([
   'user_name', 'plan_name', 'expires_at', 'days_left', 'grace_days',
   'upgrade_url', 'sender_name', 'support_email',
 ]);
+const EMPLOYEE_INVITATION_VARIABLES = Object.freeze([
+  'owner_name', 'user_email', 'activation_url', 'expiry_hours',
+  'sender_name', 'support_email',
+]);
 
 /**
  * Nguồn sự thật duy nhất cho khoá mẫu thư hợp lệ + danh sách biến mỗi khoá.
@@ -47,6 +53,7 @@ export const SYSTEM_EMAIL_TEMPLATE_VARIABLES = Object.freeze({
   welcome: WELCOME_EMAIL_VARIABLES,
   plan_expiring: PLAN_EXPIRING_EMAIL_VARIABLES,
   plan_expired: PLAN_EXPIRED_EMAIL_VARIABLES,
+  employee_invitation: EMPLOYEE_INVITATION_VARIABLES,
 });
 
 export const SYSTEM_EMAIL_TEMPLATE_KEYS = Object.freeze(Object.keys(SYSTEM_EMAIL_TEMPLATE_VARIABLES));
@@ -55,6 +62,7 @@ const DEFAULT_TEMPLATE_GETTERS = Object.freeze({
   welcome: getDefaultWelcomeEmailTemplate,
   plan_expiring: getDefaultPlanExpiringEmailTemplate,
   plan_expired: getDefaultPlanExpiredEmailTemplate,
+  employee_invitation: getDefaultEmployeeInvitationTemplate,
 });
 
 const MAX_SUBJECT_LENGTH = 200;
@@ -186,12 +194,19 @@ const PREVIEW_SAMPLE_DATA = Object.freeze({
     expiresAt: new Date(Date.now() - 86400000).toISOString(),
     renewalUrl: 'https://founderai.biz/app/billing',
   }),
+  employee_invitation: () => ({
+    ownerName: 'Admin Nhóm',
+    email: 'nhanvien.moi@example.com',
+    activationUrl: 'https://founderai.biz/register?email=nhanvien.moi%40example.com&invite=sample_invitation_token',
+    expiryHours: 48,
+  }),
 });
 
 const PREVIEW_BUILDERS = Object.freeze({
   welcome: (template, sample) => buildWelcomeEmail({ ...sample, template }),
   plan_expiring: (template, sample) => buildRenewalReminderEmail({ ...sample, template }),
   plan_expired: (template, sample) => buildPlanExpiredEmail({ ...sample, template }),
+  employee_invitation: (template, sample) => buildEmployeeInvitationEmail({ ...sample, template }),
 });
 
 export function previewSystemEmailTemplate(templateKey, input) {

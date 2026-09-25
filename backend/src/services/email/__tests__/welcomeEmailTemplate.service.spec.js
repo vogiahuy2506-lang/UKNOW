@@ -6,6 +6,7 @@ const mockDelete = jest.fn();
 const mockBuildWelcomeEmail = jest.fn();
 const mockBuildRenewalReminderEmail = jest.fn();
 const mockBuildPlanExpiredEmail = jest.fn();
+const mockBuildEmployeeInvitationEmail = jest.fn();
 const mockSendSystemEmail = jest.fn();
 
 // PR-2b (13/09/2026, PLAN_CANH_BAO_SAP_HET_HAN_GOI mục 4.2) — repository đã tổng quát hoá,
@@ -30,9 +31,14 @@ jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
     subject: 'Mặc định đã hết hạn',
     bodyHtml: '<p>Gói {{plan_name}} đã hết hạn</p>',
   })),
+  getDefaultEmployeeInvitationTemplate: jest.fn(() => ({
+    subject: 'Mặc định lời mời tham gia',
+    bodyHtml: '<p>Lời mời từ {{owner_name}}</p>',
+  })),
   buildWelcomeEmail: mockBuildWelcomeEmail,
   buildRenewalReminderEmail: mockBuildRenewalReminderEmail,
   buildPlanExpiredEmail: mockBuildPlanExpiredEmail,
+  buildEmployeeInvitationEmail: mockBuildEmployeeInvitationEmail,
   sendSystemEmail: mockSendSystemEmail,
 }));
 
@@ -166,10 +172,11 @@ describe('welcomeEmailTemplate.service — tổng quát hoá đa khoá (PR-2b vi
     jest.clearAllMocks();
     mockBuildRenewalReminderEmail.mockReturnValue({ subject: 'Renewal rendered', html: '<p>Renewal</p>' });
     mockBuildPlanExpiredEmail.mockReturnValue({ subject: 'Expired rendered', html: '<p>Expired</p>' });
+    mockBuildEmployeeInvitationEmail.mockReturnValue({ subject: 'Invitation rendered', html: '<p>Invitation</p>' });
   });
 
-  it('SYSTEM_EMAIL_TEMPLATE_KEYS đúng 3 khoá — welcome, plan_expiring, plan_expired', () => {
-    expect(SYSTEM_EMAIL_TEMPLATE_KEYS).toEqual(['welcome', 'plan_expiring', 'plan_expired']);
+  it('SYSTEM_EMAIL_TEMPLATE_KEYS đúng 4 khoá — welcome, plan_expiring, plan_expired, employee_invitation', () => {
+    expect(SYSTEM_EMAIL_TEMPLATE_KEYS).toEqual(['welcome', 'plan_expiring', 'plan_expired', 'employee_invitation']);
   });
 
   it('getSystemEmailTemplate("plan_expiring") trả mẫu mặc định riêng khi chưa tùy chỉnh', async () => {
@@ -259,6 +266,47 @@ describe('welcomeEmailTemplate.service — tổng quát hoá đa khoá (PR-2b vi
       planName: 'Chuyên nghiệp',
       template: { subject: 'Đã hết hạn', bodyHtml: '<p>{{plan_name}}</p>' },
     }));
+  });
+
+  it('previewSystemEmailTemplate("employee_invitation") gọi buildEmployeeInvitationEmail với dữ liệu mẫu', () => {
+    const result = previewSystemEmailTemplate('employee_invitation', {
+      subject: 'Mời tham gia {{owner_name}}',
+      bodyHtml: '<p>Kích hoạt tại {{activation_url}} trong {{expiry_hours}} giờ</p>',
+    });
+    expect(result).toEqual({ subject: 'Invitation rendered', html: '<p>Invitation</p>' });
+    expect(mockBuildEmployeeInvitationEmail).toHaveBeenCalledWith(expect.objectContaining({
+      template: {
+        subject: 'Mời tham gia {{owner_name}}',
+        bodyHtml: '<p>Kích hoạt tại {{activation_url}} trong {{expiry_hours}} giờ</p>',
+      },
+      ownerName: 'Admin Nhóm',
+      email: 'nhanvien.moi@example.com',
+      expiryHours: 48,
+    }));
+  });
+
+  it('getSystemEmailTemplate("employee_invitation") trả mẫu mặc định riêng khi chưa tùy chỉnh', async () => {
+    mockFind.mockResolvedValue(null);
+    await expect(getSystemEmailTemplate('employee_invitation')).resolves.toEqual({
+      subject: 'Mặc định lời mời tham gia',
+      bodyHtml: '<p>Lời mời từ {{owner_name}}</p>',
+      isCustomized: false,
+      updatedBy: null,
+      updatedAt: null,
+    });
+    expect(mockFind).toHaveBeenCalledWith('employee_invitation');
+  });
+
+  it('normalizeSystemEmailTemplate("employee_invitation") chấp nhận biến hợp lệ và từ chối biến không thuộc whitelist', () => {
+    expect(() => normalizeSystemEmailTemplate('employee_invitation', {
+      subject: '[{{sender_name}}] Lời mời từ {{owner_name}}',
+      bodyHtml: '<p>Email {{user_email}}, link {{activation_url}}, hết hạn {{expiry_hours}} giờ, hỗ trợ {{support_email}}</p>',
+    })).not.toThrow();
+
+    expect(() => normalizeSystemEmailTemplate('employee_invitation', {
+      subject: 'Lời mời',
+      bodyHtml: '<p>{{days_left}}</p>',
+    })).toThrow('Biến không được hỗ trợ: days_left');
   });
 
   // Đây là hàm scheduler.js/subscriptionExpiry.service.js sẽ gọi trước khi gửi thư thật —

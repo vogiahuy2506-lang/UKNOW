@@ -8779,6 +8779,7 @@ export default {
       welcome: 'Email chào mừng',
       plan_expiring: 'Email nhắc sắp hết hạn gói',
       plan_expired: 'Email báo đã hết hạn gói',
+      employee_invitation: 'Email mời nhân viên tham gia',
     },
     templateMeta: {
       welcome: {
@@ -8799,6 +8800,12 @@ export default {
         behaviorNote: 'Gửi tự động lúc 08:00 vào ngày gói hết hạn. Các email đã gửi trước đây không thay đổi.',
         previewFrameTitle: 'Bản xem trước email báo hết hạn gói',
       },
+      employee_invitation: {
+        title: 'Email mời nhân viên tham gia',
+        subtitle: 'Chỉnh nội dung email tự động gửi khi chủ doanh nghiệp mời nhân viên mới vào nhóm.',
+        behaviorNote: 'Áp dụng khi chủ tài khoản thêm email nhân viên mới. Người nhận bấm nút hoặc liên kết để đăng ký/kích hoạt tài khoản hoặc đăng nhập Google.',
+        previewFrameTitle: 'Bản xem trước email mời nhân viên',
+      },
     },
     variableLabels: {
       userName: 'Tên thành viên',
@@ -8813,6 +8820,9 @@ export default {
       daysLeft: 'Số ngày còn lại',
       graceDays: 'Số ngày ân hạn',
       upgradeUrl: 'Đường dẫn gia hạn/nâng cấp gói',
+      ownerName: 'Tên người mời (chủ tài khoản)',
+      activationUrl: 'Đường dẫn kích hoạt / đăng ký',
+      expiryHours: 'Số giờ hiệu lực của liên kết',
     },
   },
 
