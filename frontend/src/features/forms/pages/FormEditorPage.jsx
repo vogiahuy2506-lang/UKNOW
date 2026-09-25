@@ -99,7 +99,6 @@ const MAX_PAYMENT_AMOUNT = 100000000;
 const MIN_HOLD_MINUTES = 10;
 const MAX_HOLD_MINUTES = 120;
 const DEFAULT_HOLD_MINUTES = 30;
-const ENABLE_MOMO_PHONE_QR_MODE = false;
 const DEFAULT_PAYMENT = {
   enabled: false,
   method: 'bank',
@@ -109,7 +108,8 @@ const DEFAULT_PAYMENT = {
   accountName: '',
   momoPhone: '',
   momoName: '',
-  momoQrMode: 'account',
+  // Việc 4.0 đạt 25/09 (VCB quét QR dựng từ SĐT, chuyển thật thành công) → form MoMo mới mặc định dùng SĐT.
+  momoQrMode: 'phone',
   momoQrBin: '',
   momoQrAccount: '',
   momoQrRefLabel: '',
@@ -1835,19 +1835,22 @@ export default function FormEditorPage() {
                         {t('forms.editorPage.payment.momoQrModeLabel')}
                       </label>
                       <div className="space-y-1.5">
-                        {ENABLE_MOMO_PHONE_QR_MODE && (
-                          <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                            <input
-                              type="radio"
-                              name="momoQrMode"
-                              value="phone"
-                              disabled={isEmployee}
-                              checked={payment.momoQrMode === 'phone'}
-                              onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'phone' }))}
-                              className="text-primary-600 focus:ring-primary-500"
-                            />
-                            <span>{t('forms.editorPage.payment.momoQrModePhone')}</span>
-                          </label>
+                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="momoQrMode"
+                            value="phone"
+                            disabled={isEmployee}
+                            checked={payment.momoQrMode === 'phone'}
+                            onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'phone' }))}
+                            className="text-primary-600 focus:ring-primary-500"
+                          />
+                          <span>{t('forms.editorPage.payment.momoQrModePhone')}</span>
+                        </label>
+                        {payment.momoQrMode === 'phone' && (
+                          <p className="ml-6 text-[11px] text-gray-400">
+                            {t('forms.editorPage.payment.momoQrPhoneHint')}
+                          </p>
                         )}
 
                         <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">

@@ -9253,6 +9253,7 @@ export default {
         momoQrError: 'Lỗi xử lý ảnh QR',
         momoQrModeLabel: 'Cách tạo mã QR MoMo',
         momoQrModePhone: 'Dùng số điện thoại MoMo — tôi đã bật "STK là số điện thoại" trong app MoMo',
+        momoQrPhoneHint: 'Chưa bật? App MoMo → Nhận tiền → bấm mũi tên cạnh Số tài khoản → chọn đặt STK là số điện thoại. Quét QR xem thử bên dưới để kiểm.',
         momoQrModeAccount: 'Nhập số tài khoản MoMo',
         momoQrModeNone: 'Không dùng QR (khách chuyển tay)',
         momoQrAccountLabel: 'Số tài khoản MoMo',

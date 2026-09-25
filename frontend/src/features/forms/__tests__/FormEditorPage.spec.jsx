@@ -588,12 +588,8 @@ describe('FormEditorPage component', () => {
       fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), {
         target: { value: 'Nguyen Van MoMo' },
       });
-      // PR-4 (lệnh giao 25/09): form MoMo MỚI mặc định "Nhập số tài khoản MoMo" — thiếu STK là chặn lưu,
-      // nên ca này (viết từ PR-3c, lúc MoMo chỉ cần SĐT + tên) phải điền STK. Chủ form không có STK chọn
-      // "Không dùng QR" — xem ca ngay dưới.
-      fireEvent.change(screen.getByPlaceholderText('Vd: PSP2604014200000493'), {
-        target: { value: 'psp2604014200000493' },
-      });
+      // PR-4 + Việc 4.0 đạt (25/09): form MoMo MỚI mặc định "Dùng số điện thoại MoMo" — chỉ cần SĐT + tên
+      // như PR-3c, và QR dựng từ chính SĐT (BIN 971025). Mode "Nhập STK" xem ca ngay dưới.
 
       fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
 
@@ -607,15 +603,15 @@ describe('FormEditorPage component', () => {
         momoPhone: '0912345678',
         momoName: 'Nguyen Van MoMo',
         holdMinutes: 30,
-        momoQrMode: 'account',
+        momoQrMode: 'phone',
         momoQrBin: '971025',
-        momoQrAccount: 'PSP2604014200000493',
+        momoQrAccount: '0912345678',
       });
       expect(payload.paymentConfig.bankBin).toBeUndefined();
       expect(payload.paymentConfig.accountNumber).toBeUndefined();
     });
 
-    it('PR-4: form MoMo mới chưa có STK — bị chặn ở mode mặc định, chọn "Không dùng QR" thì lưu được, payload không có khoá QR', async () => {
+    it('PR-4: chọn "Nhập số tài khoản" mà bỏ trống STK thì bị chặn; chọn "Không dùng QR" thì lưu được, payload không có khoá QR', async () => {
       formAdminApi.createForm.mockResolvedValue({ id: 'new-form-momo-2' });
 
       render(
@@ -636,6 +632,7 @@ describe('FormEditorPage component', () => {
       fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), { target: { value: '200000' } });
       fireEvent.change(screen.getByPlaceholderText('Vd: 0912345678'), { target: { value: '0912345678' } });
       fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), { target: { value: 'Nguyen Van MoMo' } });
+      fireEvent.click(screen.getByRole('radio', { name: /Nhập số tài khoản MoMo/i }));
 
       fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
       expect(await screen.findAllByText('Vui lòng nhập số tài khoản MoMo')).not.toHaveLength(0);

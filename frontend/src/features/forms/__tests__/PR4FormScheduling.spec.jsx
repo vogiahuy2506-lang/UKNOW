@@ -130,6 +130,47 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
       );
     });
 
+    // Việc 4.0 đạt 25/09 (VCB quét QR dựng từ SĐT, chuyển thật thành công) → mở mode "Dùng số điện thoại".
+    // QR xem thử của mode này phải dựng từ CHÍNH SĐT — chuỗi dưới do backend buildVietQrString sinh.
+    it('2b. Mode phone: hiện lựa chọn + hướng dẫn bật trong MoMo, QR xem thử dựng đúng từ SĐT', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue({
+        id: 103,
+        title: 'Form MoMo SĐT',
+        publicKey: 'pub_momo_phone',
+        isPublished: true,
+        fields: [{ id: 'f1', label: 'Họ tên', type: 'short_text', required: true, role: 'name' }],
+        paymentConfig: {
+          enabled: true,
+          method: 'momo',
+          amount: 2000,
+          momoPhone: '0388180856',
+          momoName: 'TRUONG HO NHAT MINH',
+          momoQrMode: 'phone',
+          momoQrBin: '971025',
+          momoQrAccount: '0388180856',
+          holdMinutes: 30,
+        },
+      });
+
+      renderWithProviders(
+        <Routes>
+          <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+        </Routes>,
+        { route: '/app/forms/103/edit' }
+      );
+
+      await waitFor(() => expect(screen.getByLabelText(/Dùng số điện thoại MoMo/i)).toBeChecked());
+      expect(screen.getByText(/Nhận tiền → bấm mũi tên cạnh Số tài khoản/i)).toBeInTheDocument();
+      expect(screen.queryByPlaceholderText('Vd: PSP2604014200000493')).not.toBeInTheDocument();
+
+      await waitFor(() =>
+        expect(QRCode.toDataURL).toHaveBeenCalledWith(
+          '00020101021238540010A00000072701240006971025011003881808560208QRIBFTTA5303704540420005802VN62110807KIEMTRA63043726',
+          expect.any(Object)
+        )
+      );
+    });
+
     it('3. Chốt 3: Ô STK chuẩn hoá ký tự (bỏ ký tự lạ, tự động viết hoa)', async () => {
       formAdminApi.fetchFormById.mockResolvedValue({
         id: 103,
