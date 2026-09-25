@@ -1542,7 +1542,18 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       const response = await aiApi.chat(newHistory, userMsg.files, currentSessionId, locale, intent);
       if (response.success) {
         refreshAiCredits();
-        const { type, content, data, missing_fields, sessionId: returnedSessionId, sessionTitle } = response.data;
+        const {
+          type,
+          content,
+          data,
+          missing_fields,
+          sessionId: returnedSessionId,
+          sessionTitle,
+          messageId = null,
+        } = response.data;
+        if (returnedSessionId) {
+          currentSessionIdRef.current = returnedSessionId;
+        }
         if (returnedSessionId && !currentSessionId) {
           mySessionId = returnedSessionId;
           markTabPending(mySessionId);
@@ -1709,6 +1720,32 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           await prepareAndShowCampaignConfirmation(data, { sessionId: mySessionId, update, content });
           return;
         }
+
+        if (type === 'landing_page' && typeof data?.html === 'string' && data.html.trim()) {
+          const mySessionId = currentSessionIdRef.current || currentSessionId;
+          const assistantMsg = {
+            id: messageId ? String(messageId) : `${Date.now()}-ai-landing`,
+            role: 'assistant',
+            content: content || 'Tôi đã tạo mẫu landing page cho bạn:',
+            type: 'landing_page',
+            data: {
+              ...data,
+              ...(messageId ? { messageId } : {}),
+            },
+            layoutStatus: 'checking',
+            layoutFindings: [],
+            createdAt: new Date().toISOString(),
+          };
+          update(prev => [...prev, assistantMsg]);
+          runLandingLayoutCheck({
+            sessionId: mySessionId,
+            messageId,
+            page: data,
+            allowAutoFix: true,
+          });
+          return;
+        }
+
         update(prev => [...prev, {
           role: 'assistant', content, type, data,
           missing_fields: missing_fields || [],

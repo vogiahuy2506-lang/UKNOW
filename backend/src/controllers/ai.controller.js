@@ -396,6 +396,7 @@ class AiController {
       // Persist session + messages + wizard state (bỏ qua lỗi DB để không block chat)
       let finalSessionId = sessionId || null;
       let sessionTitle = null;
+      let savedAssistantMessageId = null;
       try {
         const lastUserMsg = history[history.length - 1];
         const userContent = lastUserMsg?.content ?? '';
@@ -446,13 +447,37 @@ class AiController {
           }
         }
 
-        await aiSessionRepo.saveMessages(
-          finalSessionId,
-          req.user.id,
-          userContent,
-          publicResponse,
-          safeFiles
-        );
+        const isLandingWithHtml =
+          publicResponse.type === 'landing_page' &&
+          typeof publicResponse.data?.html === 'string' &&
+          publicResponse.data.html.trim().length > 0;
+
+        if (isLandingWithHtml) {
+          // Sinh trang qua lượt chat đã trừ credit (dòng 516-518) → cấp ngân sách 2 lượt tự sửa hiển thị miễn phí
+          // cho tin này (editLandingHtml coi tin KHÔNG có bộ đếm là hết lượt — xem chú thích ở đó).
+          publicResponse.data = {
+            ...publicResponse.data,
+            autoLayoutFixCount: 0,
+          };
+          const saved = await aiSessionRepo.saveMessagesReturningIds(
+            finalSessionId,
+            req.user.id,
+            userContent,
+            publicResponse,
+            safeFiles
+          );
+          if (saved?.assistantMessageId) {
+            savedAssistantMessageId = saved.assistantMessageId;
+          }
+        } else {
+          await aiSessionRepo.saveMessages(
+            finalSessionId,
+            req.user.id,
+            userContent,
+            publicResponse,
+            safeFiles
+          );
+        }
 
         if (safeFiles.length > 0) {
           await chatAttachmentService.promoteChatAttachments(safeFiles).catch((promoteErr) => {
@@ -519,7 +544,12 @@ class AiController {
 
       return res.json({
         success: true,
-        data: { ...publicResponse, sessionId: finalSessionId, sessionTitle },
+        data: {
+          ...publicResponse,
+          ...(savedAssistantMessageId ? { messageId: savedAssistantMessageId } : {}),
+          sessionId: finalSessionId,
+          sessionTitle,
+        },
       });
     } catch (error) {
       console.error('AI chat error:', error);

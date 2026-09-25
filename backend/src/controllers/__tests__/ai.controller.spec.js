@@ -1065,4 +1065,85 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
     });
   });
+
+  describe('chat sinh landing page trả messageId và cấp ngân sách tự sửa (lệnh giao 25/09)', () => {
+    const chatReq = (body = {}) => ({
+      user: { id: 1, role: 'user' },
+      body: {
+        history: [{ role: 'user', content: 'Tạo landing page bán khoá học' }],
+        locale: 'vi',
+        sessionId: 55,
+        ...body,
+      },
+    });
+
+    beforeEach(() => {
+      saveMessagesReturningIds.mockReset();
+      saveMessages.mockReset();
+      tryHandleHelpChat.mockReset();
+      tryHandleHelpChat.mockResolvedValue(null);
+    });
+
+    it('1. Lượt chat sinh landing page cấp sẵn ngân sách tự sửa autoLayoutFixCount = 0', async () => {
+      processSmartChat.mockResolvedValue({
+        type: 'landing_page',
+        content: 'Đây là landing page của bạn',
+        data: { title: 'Trang khoá học', html: '<div>Trang mẫu</div>' },
+      });
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 201, assistantMessageId: 202 });
+
+      const res = makeRes();
+      await aiController.chat(chatReq(), res);
+
+      expect(saveMessagesReturningIds).toHaveBeenCalledTimes(1);
+      expect(saveMessages).not.toHaveBeenCalled();
+      const [, , , assistantMsg] = saveMessagesReturningIds.mock.calls[0];
+      expect(assistantMsg).toMatchObject({
+        type: 'landing_page',
+        data: {
+          title: 'Trang khoá học',
+          autoLayoutFixCount: 0,
+        },
+      });
+    });
+
+    it('2. Response của lượt chat sinh landing page trả kèm messageId', async () => {
+      processSmartChat.mockResolvedValue({
+        type: 'landing_page',
+        content: 'Đây là landing page của bạn',
+        data: { title: 'Trang khoá học', html: '<div>Trang mẫu</div>' },
+      });
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 101, assistantMessageId: 102 });
+
+      const res = makeRes();
+      await aiController.chat(chatReq(), res);
+
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          type: 'landing_page',
+          messageId: 102,
+          sessionId: 55,
+        }),
+      });
+    });
+
+    it('3. Lượt chat KHÔNG PHẢI landing page gọi saveMessages như cũ và không có autoLayoutFixCount', async () => {
+      processSmartChat.mockResolvedValue({
+        type: 'text',
+        content: 'Xin chào, tôi có thể giúp gì?',
+        data: null,
+      });
+
+      const res = makeRes();
+      await aiController.chat(chatReq(), res);
+
+      expect(saveMessages).toHaveBeenCalledTimes(1);
+      expect(saveMessagesReturningIds).not.toHaveBeenCalled();
+      const [, , , assistantMsg] = saveMessages.mock.calls[0];
+      expect(assistantMsg?.data?.autoLayoutFixCount).toBeUndefined();
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+    });
+  });
 });
+
