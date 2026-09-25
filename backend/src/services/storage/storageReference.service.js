@@ -283,6 +283,19 @@ export async function buildStorageReferenceIndex(queryable = db) {
     });
   }
 
+  const formReceiptRows = await queryOptional(queryable,
+    `SELECT id, workspace_owner_id, payment_receipt_key FROM form_submissions WHERE payment_receipt_key IS NOT NULL`
+  );
+  for (const row of formReceiptRows) {
+    addReference(index, [row.payment_receipt_key], {
+      poolType: 'workspace',
+      ownerUserId: Number(row.workspace_owner_id),
+      category: 'form_receipt',
+      referenceType: 'form_payment_receipt',
+      referenceId: row.id,
+    });
+  }
+
   return index;
 }
 
@@ -374,6 +387,14 @@ const REFERENCE_CONFIGS = {
     sql: `SELECT id, template_name AS name FROM email_templates WHERE id = $1 LIMIT 1`,
     label: 'Mẫu Email',
     url: '/templates',
+  },
+  form_payment_receipt: {
+    sql: `SELECT fs.id, COALESCE(f.title, 'Biểu mẫu') AS name
+            FROM form_submissions fs
+            JOIN forms f ON f.id = fs.form_id
+           WHERE fs.id = $1 LIMIT 1`,
+    label: 'Biên lai chuyển khoản',
+    url: '/app/forms',
   },
   help_article: {
     sql: `SELECT id, title AS name FROM help_articles WHERE id = $1 LIMIT 1`,

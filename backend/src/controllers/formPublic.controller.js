@@ -116,6 +116,32 @@ class FormPublicController {
   }
 
   /**
+   * POST /api/public/forms/:publicKey/submissions/:accessToken/receipt
+   * Khách tải ảnh biên lai chuyển khoản (PR-5).
+   */
+  async uploadReceipt(req, res) {
+    try {
+      const { publicKey, accessToken } = req.params;
+      const result = await formService.uploadPaymentReceipt(publicKey, accessToken, req.file);
+      return res.json({
+        success: true,
+        message: result.receiptStored
+          ? 'Đã tải ảnh chuyển khoản thành công'
+          : 'Bên nhận đã hết dung lượng lưu ảnh — bạn vẫn có thể xác nhận',
+        data: result,
+      });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormPublicController.uploadReceipt]', error);
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể tải ảnh chuyển khoản',
+        code: error.code || 'INTERNAL_ERROR',
+      });
+    }
+  }
+
+  /**
    * GET /api/public/forms/unsubscribe/:token — rút lại đồng ý nhận tiếp thị công khai cho người
    * nộp Biểu mẫu (PR-7b, mô phỏng `lead.controller.js` `unsubscribe`). Trả HTML song ngữ, không
    * auth. Route này khai TRƯỚC `/:publicKey` (`formPublic.routes.js`) — "unsubscribe" không được

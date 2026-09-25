@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { I18nProvider } from '../../../i18n';
@@ -424,6 +424,91 @@ describe('FormSubmissionStatusPage component', () => {
       const wrapper = container.firstChild;
       expect(wrapper.style.backgroundColor).toBe('');
       expect(screen.queryByAltText('')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Hỗ trợ 2 tab phương thức thanh toán (PR-5 V6)', () => {
+    const dualPaymentStatus = {
+      status: 'pending_payment',
+      formTitle: 'Form đặt lịch đa kênh',
+      appointmentAt: null,
+      holdExpired: false,
+      holdExpiresAt: new Date(Date.now() + 125000).toISOString(),
+      payment: {
+        code: 'DUAL123',
+        amount: 200000,
+        methods: ['bank', 'momo'],
+        method: 'bank',
+        bankBin: '970422',
+        bankName: 'MBBank (MB)',
+        accountNumber: '0987654321',
+        accountName: 'NGUYEN VAN BANK',
+        qrString: '00020101021238570010A000000727012700069704220113009876543210208QRIBFTTA53037045802VN63041111',
+        options: [
+          {
+            method: 'bank',
+            bankBin: '970422',
+            bankName: 'MBBank (MB)',
+            accountNumber: '0987654321',
+            accountName: 'NGUYEN VAN BANK',
+            qrString: '00020101021238570010A000000727012700069704220113009876543210208QRIBFTTA53037045802VN63041111',
+          },
+          {
+            method: 'momo',
+            momoPhone: '0988888888',
+            momoName: 'NGUYEN VAN MOMO',
+            momoQrMode: 'phone',
+            momoQrAccount: '0988888888',
+            qrString: '00020101021238570010A0000007270127000697102501130009888888880208QRIBFTTA53037045802VN63042222',
+          },
+        ],
+      },
+    };
+
+    it('hiển thị 2 tab khi payment.options có từ 2 phương thức trở lên', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue(dualPaymentStatus);
+      renderStatusPage();
+
+      await waitFor(() => expect(screen.getByTestId('tabs-payment-methods')).toBeInTheDocument());
+      expect(screen.getByTestId('tab-payment-bank')).toBeInTheDocument();
+      expect(screen.getByTestId('tab-payment-momo')).toBeInTheDocument();
+
+      // Mặc định tab Bank đang active: hiển thị thông tin ngân hàng
+      expect(screen.getByText('MBBank (MB)')).toBeInTheDocument();
+      expect(screen.getByText('0987654321')).toBeInTheDocument();
+      expect(screen.getByText('NGUYEN VAN BANK')).toBeInTheDocument();
+      expect(QRCode.toDataURL).toHaveBeenCalledWith(
+        dualPaymentStatus.payment.options[0].qrString,
+        expect.any(Object)
+      );
+    });
+
+    it('bấm chuyển sang tab MoMo: cập nhật thông tin và tạo lại mã QR MoMo', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue(dualPaymentStatus);
+      renderStatusPage();
+
+      await waitFor(() => expect(screen.getByTestId('tabs-payment-methods')).toBeInTheDocument());
+
+      // Click tab MoMo
+      fireEvent.click(screen.getByTestId('tab-payment-momo'));
+
+      // Hiển thị thông tin MoMo
+      expect(screen.getByText('0988888888')).toBeInTheDocument();
+      expect(screen.getAllByText('NGUYEN VAN MOMO').length).toBeGreaterThan(0);
+      await waitFor(() => {
+        expect(QRCode.toDataURL).toHaveBeenCalledWith(
+          dualPaymentStatus.payment.options[1].qrString,
+          expect.any(Object)
+        );
+      });
+    });
+
+    it('khi form chỉ có 1 phương thức: KHÔNG hiển thị tabs', async () => {
+      fetchPublicSubmissionStatus.mockResolvedValue(pendingPayment);
+      renderStatusPage();
+
+      await waitFor(() => expect(screen.getByText('Form thu tiền giữ chỗ')).toBeInTheDocument());
+      expect(screen.queryByTestId('tabs-payment-methods')).not.toBeInTheDocument();
     });
   });
 });

@@ -324,6 +324,7 @@ describe('normalizePaymentConfig', () => {
     const config = normalizePaymentConfig(validRaw);
     expect(config).toEqual({
       enabled: true,
+      methods: ['bank'],
       method: 'bank',
       amount: 150000,
       bankBin: '970422',
@@ -388,6 +389,7 @@ describe('normalizePaymentConfig', () => {
     const config = normalizePaymentConfig(raw);
     expect(config).toEqual({
       enabled: true,
+      methods: ['momo'],
       method: 'momo',
       amount: 2000,
       momoPhone: '0912345678',
@@ -396,6 +398,36 @@ describe('normalizePaymentConfig', () => {
       momoQrMode: 'account',
       momoQrBin: '971025',
       momoQrAccount: 'PSP2604014200000493',
+    });
+  });
+
+  it('V6: cấu hình cả 2 kênh (Bank VÀ MoMo) -> chuẩn hoá đúng cả 2 nhóm trường, methods: ["bank", "momo"]', () => {
+    const raw = {
+      enabled: true,
+      methods: ['bank', 'momo'],
+      amount: 50000,
+      bankBin: '970422',
+      accountNumber: '0123456789',
+      accountName: '  nguyen   van bank  ',
+      momoPhone: '0988888888',
+      momoName: '  nguyen   van momo  ',
+      momoQrMode: 'phone',
+    };
+    const config = normalizePaymentConfig(raw);
+    expect(config).toEqual({
+      enabled: true,
+      methods: ['bank', 'momo'],
+      method: 'bank',
+      amount: 50000,
+      bankBin: '970422',
+      accountNumber: '0123456789',
+      accountName: 'NGUYEN VAN BANK',
+      momoPhone: '0988888888',
+      momoName: 'NGUYEN VAN MOMO',
+      momoQrMode: 'phone',
+      momoQrBin: '971025',
+      momoQrAccount: '0988888888',
+      holdMinutes: 30,
     });
   });
 

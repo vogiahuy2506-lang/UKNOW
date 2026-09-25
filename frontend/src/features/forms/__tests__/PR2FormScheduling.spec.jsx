@@ -45,6 +45,7 @@ describe('PR-2: Nút Tôi xác nhận đã chuyển khoản (Frontend)', () => {
       holdExpiresAt: new Date(Date.now() + 600000).toISOString(),
       holdExpired: false,
       payerReportedPaidAt: null,
+      hasReceipt: true,
       payment: {
         method: 'bank',
         bankBin: '970422',

@@ -101,6 +101,7 @@ const MAX_HOLD_MINUTES = 120;
 const DEFAULT_HOLD_MINUTES = 30;
 const DEFAULT_PAYMENT = {
   enabled: false,
+  methods: ['bank'],
   method: 'bank',
   amount: '', // chuỗi CHỈ CHỮ SỐ (không dấu chấm) — format hiển thị ở input riêng
   bankBin: '',
@@ -181,11 +182,8 @@ export default function FormEditorPage() {
 
   useEffect(() => {
     let active = true;
-    if (
-      payment.enabled &&
-      payment.method === 'momo' &&
-      payment.momoQrMode !== 'none'
-    ) {
+    const hasMomo = payment.enabled && (payment.methods || []).includes('momo') && payment.momoQrMode !== 'none';
+    if (hasMomo) {
       const acc = payment.momoQrMode === 'phone'
         ? (payment.momoPhone || '').trim()
         : (payment.momoQrAccount || '').replace(/\s+/g, '').toUpperCase();
@@ -228,7 +226,7 @@ export default function FormEditorPage() {
     };
   }, [
     payment.enabled,
-    payment.method,
+    payment.methods,
     payment.momoQrMode,
     payment.momoQrAccount,
     payment.momoPhone,
@@ -309,9 +307,13 @@ export default function FormEditorPage() {
 
         if (data.paymentConfig) {
           const loadedMode = data.paymentConfig.momoQrMode || (data.paymentConfig.momoQrAccount ? 'account' : 'none');
+          const loadedMethods = Array.isArray(data.paymentConfig.methods) && data.paymentConfig.methods.length > 0
+            ? data.paymentConfig.methods
+            : (data.paymentConfig.method ? [data.paymentConfig.method] : ['bank']);
           setPayment({
             enabled: true,
-            method: data.paymentConfig.method || 'bank',
+            methods: loadedMethods,
+            method: data.paymentConfig.method || loadedMethods[0] || 'bank',
             amount: data.paymentConfig.amount != null ? String(data.paymentConfig.amount) : '',
             bankBin: data.paymentConfig.bankBin || '',
             accountNumber: data.paymentConfig.accountNumber || '',
@@ -750,11 +752,29 @@ export default function FormEditorPage() {
     // Validate thanh toán giữ chỗ (hợp đồng normalizePaymentConfig, hằng số ở đầu file) — nhân
     // viên không gửi paymentConfig nên không cần validate phía họ (khối chỉ đọc, disabled).
     if (!isEmployee && payment.enabled) {
+      const activeMethods = payment.methods || (payment.method ? [payment.method] : []);
+      if (activeMethods.length === 0) {
+        errs.paymentMethods = t('forms.editorPage.payment.methodsRequired') || 'Vui lòng chọn ít nhất một phương thức thanh toán';
+      }
+
       const amountNum = Number(payment.amount);
       if (!Number.isInteger(amountNum) || amountNum < MIN_PAYMENT_AMOUNT || amountNum > MAX_PAYMENT_AMOUNT) {
         errs.paymentAmount = t('forms.editorPage.payment.amountInvalid');
       }
-      if (payment.method === 'momo') {
+
+      if (activeMethods.includes('bank')) {
+        if (!payment.bankBin || !PAYOS_BANK_BIN_MAP[payment.bankBin]) {
+          errs.paymentBank = t('forms.editorPage.payment.bankRequired');
+        }
+        if (!/^\d{6,19}$/.test(payment.accountNumber || '')) {
+          errs.paymentAccountNumber = t('forms.editorPage.payment.accountNumberInvalid');
+        }
+        if (!payment.accountName || !payment.accountName.trim()) {
+          errs.paymentAccountName = t('forms.editorPage.payment.accountNameRequired');
+        }
+      }
+
+      if (activeMethods.includes('momo')) {
         if (!/^0[35789]\d{8}$/.test((payment.momoPhone || '').trim())) {
           errs.paymentMomoPhone = t('forms.editorPage.payment.momoPhoneInvalid');
         }
@@ -769,17 +789,8 @@ export default function FormEditorPage() {
             errs.paymentMomoQrAccount = t('forms.editorPage.payment.momoQrAccountInvalid');
           }
         }
-      } else {
-        if (!payment.bankBin || !PAYOS_BANK_BIN_MAP[payment.bankBin]) {
-          errs.paymentBank = t('forms.editorPage.payment.bankRequired');
-        }
-        if (!/^\d{6,19}$/.test(payment.accountNumber || '')) {
-          errs.paymentAccountNumber = t('forms.editorPage.payment.accountNumberInvalid');
-        }
-        if (!payment.accountName || !payment.accountName.trim()) {
-          errs.paymentAccountName = t('forms.editorPage.payment.accountNameRequired');
-        }
       }
+
       const holdNum = Number(payment.holdMinutes);
       if (!Number.isInteger(holdNum) || holdNum < MIN_HOLD_MINUTES || holdNum > MAX_HOLD_MINUTES) {
         errs.paymentHoldMinutes = t('forms.editorPage.payment.holdMinutesInvalid');
@@ -884,37 +895,39 @@ export default function FormEditorPage() {
       if (!isEmployee) {
         if (!payment.enabled) {
           payload.paymentConfig = null;
-        } else if (payment.method === 'momo') {
-          const mode = payment.momoQrMode || 'none';
-          payload.paymentConfig = {
-            enabled: true,
-            method: 'momo',
-            amount: Number(payment.amount),
-            momoPhone: (payment.momoPhone || '').trim(),
-            momoName: (payment.momoName || '').trim(),
-            holdMinutes: Number(payment.holdMinutes),
-            momoQrMode: mode,
-          };
-          if (mode === 'account') {
-            payload.paymentConfig.momoQrBin = '971025';
-            payload.paymentConfig.momoQrAccount = (payment.momoQrAccount || '').replace(/\s+/g, '').toUpperCase();
-            if (payment.momoQrRefLabel) {
-              payload.paymentConfig.momoQrRefLabel = payment.momoQrRefLabel.trim();
-            }
-          } else if (mode === 'phone') {
-            payload.paymentConfig.momoQrBin = '971025';
-            payload.paymentConfig.momoQrAccount = (payment.momoPhone || '').trim();
-          }
         } else {
+          const activeMethods = Array.isArray(payment.methods) && payment.methods.length > 0
+            ? payment.methods
+            : (payment.method ? [payment.method] : ['bank']);
+          const primaryMethod = activeMethods[0] || 'bank';
           payload.paymentConfig = {
             enabled: true,
-            method: 'bank',
+            methods: activeMethods,
+            method: primaryMethod,
             amount: Number(payment.amount),
-            bankBin: payment.bankBin,
-            accountNumber: (payment.accountNumber || '').trim(),
-            accountName: (payment.accountName || '').trim(),
             holdMinutes: Number(payment.holdMinutes),
           };
+          if (activeMethods.includes('bank')) {
+            payload.paymentConfig.bankBin = payment.bankBin;
+            payload.paymentConfig.accountNumber = (payment.accountNumber || '').trim();
+            payload.paymentConfig.accountName = (payment.accountName || '').trim();
+          }
+          if (activeMethods.includes('momo')) {
+            const mode = payment.momoQrMode || 'none';
+            payload.paymentConfig.momoPhone = (payment.momoPhone || '').trim();
+            payload.paymentConfig.momoName = (payment.momoName || '').trim();
+            payload.paymentConfig.momoQrMode = mode;
+            if (mode === 'account') {
+              payload.paymentConfig.momoQrBin = '971025';
+              payload.paymentConfig.momoQrAccount = (payment.momoQrAccount || '').replace(/\s+/g, '').toUpperCase();
+              if (payment.momoQrRefLabel) {
+                payload.paymentConfig.momoQrRefLabel = payment.momoQrRefLabel.trim();
+              }
+            } else if (mode === 'phone') {
+              payload.paymentConfig.momoQrBin = '971025';
+              payload.paymentConfig.momoQrAccount = (payment.momoPhone || '').trim();
+            }
+          }
         }
       }
 
@@ -1730,29 +1743,56 @@ export default function FormEditorPage() {
                 <div className="flex items-center gap-6">
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                     <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="bank"
+                      type="checkbox"
+                      name="paymentMethodBank"
                       disabled={isEmployee}
-                      checked={payment.method !== 'momo'}
-                      onChange={() => setPayment((prev) => ({ ...prev, method: 'bank' }))}
-                      className="text-primary-600 focus:ring-primary-500"
+                      checked={(payment.methods || []).includes('bank')}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setPayment((prev) => {
+                          const currentMethods = prev.methods || (prev.method ? [prev.method] : ['bank']);
+                          const nextMethods = checked
+                            ? Array.from(new Set([...currentMethods, 'bank']))
+                            : currentMethods.filter((m) => m !== 'bank');
+                          return {
+                            ...prev,
+                            methods: nextMethods,
+                            method: nextMethods[0] || 'bank',
+                          };
+                        });
+                      }}
+                      className="rounded text-primary-600 focus:ring-primary-500"
                     />
                     {t('forms.editorPage.payment.methodBank')}
                   </label>
                   <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
                     <input
-                      type="radio"
-                      name="paymentMethod"
-                      value="momo"
+                      type="checkbox"
+                      name="paymentMethodMomo"
                       disabled={isEmployee}
-                      checked={payment.method === 'momo'}
-                      onChange={() => setPayment((prev) => ({ ...prev, method: 'momo' }))}
-                      className="text-primary-600 focus:ring-primary-500"
+                      checked={(payment.methods || []).includes('momo')}
+                      onChange={(e) => {
+                        const checked = e.target.checked;
+                        setPayment((prev) => {
+                          const currentMethods = prev.methods || (prev.method ? [prev.method] : ['bank']);
+                          const nextMethods = checked
+                            ? Array.from(new Set([...currentMethods, 'momo']))
+                            : currentMethods.filter((m) => m !== 'momo');
+                          return {
+                            ...prev,
+                            methods: nextMethods,
+                            method: nextMethods[0] || 'momo',
+                          };
+                        });
+                      }}
+                      className="rounded text-primary-600 focus:ring-primary-500"
                     />
                     {t('forms.editorPage.payment.methodMomo')}
                   </label>
                 </div>
+                {errors.paymentMethods && (
+                  <p className="text-xs text-red-600 mt-1">{errors.paymentMethods}</p>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1780,181 +1820,35 @@ export default function FormEditorPage() {
                   )}
                 </div>
 
-                {payment.method === 'momo' ? (
-                  <>
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        {t('forms.editorPage.payment.momoPhoneLabel')}
-                      </label>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        disabled={isEmployee}
-                        value={payment.momoPhone}
-                        onChange={(e) =>
-                          setPayment((prev) => ({ ...prev, momoPhone: e.target.value.replace(/\D/g, '') }))
-                        }
-                        placeholder="Vd: 0912345678"
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                          errors.paymentMomoPhone
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                        }`}
-                      />
-                      {errors.paymentMomoPhone && (
-                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoPhone}</p>
-                      )}
-                    </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    {t('forms.editorPage.payment.holdMinutesLabel')}
+                  </label>
+                  <input
+                    type="number"
+                    min={MIN_HOLD_MINUTES}
+                    max={MAX_HOLD_MINUTES}
+                    disabled={isEmployee}
+                    value={payment.holdMinutes}
+                    onChange={(e) => setPayment((prev) => ({ ...prev, holdMinutes: e.target.value }))}
+                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                      errors.paymentHoldMinutes
+                        ? 'border-red-300 focus:ring-red-200'
+                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                    }`}
+                  />
+                  {errors.paymentHoldMinutes && (
+                    <p className="text-xs text-red-600 mt-1">{errors.paymentHoldMinutes}</p>
+                  )}
+                </div>
+              </div>
 
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        {t('forms.editorPage.payment.momoNameLabel')}
-                      </label>
-                      <input
-                        type="text"
-                        disabled={isEmployee}
-                        value={payment.momoName}
-                        onChange={(e) => setPayment((prev) => ({ ...prev, momoName: e.target.value }))}
-                        placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                          errors.paymentMomoName
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                        }`}
-                      />
-                      <p className="text-[11px] text-gray-400 mt-1">
-                        {t('forms.editorPage.payment.accountNameHint')}
-                      </p>
-                      {errors.paymentMomoName && (
-                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoName}</p>
-                      )}
-                    </div>
-
-                    <div className="space-y-2">
-                      <label className="block text-xs font-medium text-gray-700">
-                        {t('forms.editorPage.payment.momoQrModeLabel')}
-                      </label>
-                      <div className="space-y-1.5">
-                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="momoQrMode"
-                            value="phone"
-                            disabled={isEmployee}
-                            checked={payment.momoQrMode === 'phone'}
-                            onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'phone' }))}
-                            className="text-primary-600 focus:ring-primary-500"
-                          />
-                          <span>{t('forms.editorPage.payment.momoQrModePhone')}</span>
-                        </label>
-                        {payment.momoQrMode === 'phone' && (
-                          <p className="ml-6 text-[11px] text-gray-400">
-                            {t('forms.editorPage.payment.momoQrPhoneHint')}
-                          </p>
-                        )}
-
-                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="momoQrMode"
-                            value="account"
-                            disabled={isEmployee}
-                            checked={payment.momoQrMode === 'account'}
-                            onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'account' }))}
-                            className="text-primary-600 focus:ring-primary-500"
-                          />
-                          <span>{t('forms.editorPage.payment.momoQrModeAccount')}</span>
-                        </label>
-
-                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="momoQrMode"
-                            value="none"
-                            disabled={isEmployee}
-                            checked={payment.momoQrMode === 'none'}
-                            onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'none' }))}
-                            className="text-primary-600 focus:ring-primary-500"
-                          />
-                          <span>{t('forms.editorPage.payment.momoQrModeNone')}</span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {payment.momoQrMode === 'account' && (
-                      <div className="space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
-                        <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">
-                            {t('forms.editorPage.payment.momoQrAccountLabel')}
-                          </label>
-                          <input
-                            type="text"
-                            disabled={isEmployee}
-                            value={payment.momoQrAccount || ''}
-                            onChange={(e) => {
-                              const cleanVal = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
-                              setPayment((prev) => ({ ...prev, momoQrAccount: cleanVal }));
-                            }}
-                            placeholder="Vd: PSP2604014200000493"
-                            className={`w-full px-3 py-2 bg-white rounded-xl border text-sm font-mono focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                              errors.paymentMomoQrAccount
-                                ? 'border-red-300 focus:ring-red-200'
-                                : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                            }`}
-                          />
-                          <p className="text-[11px] text-gray-500 mt-1">
-                            {t('forms.editorPage.payment.momoQrAccountHint')}
-                          </p>
-                          {errors.paymentMomoQrAccount && (
-                            <p className="text-xs text-red-600 mt-1">{errors.paymentMomoQrAccount}</p>
-                          )}
-                        </div>
-
-                        <div>
-                          <input
-                            ref={momoQrFileInputRef}
-                            type="file"
-                            accept="image/*"
-                            className="hidden"
-                            disabled={isEmployee || isDecodingMomoQr}
-                            onChange={handleUploadMomoQr}
-                          />
-                          <button
-                            type="button"
-                            disabled={isEmployee || isDecodingMomoQr}
-                            onClick={() => momoQrFileInputRef.current?.click()}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors disabled:opacity-50"
-                          >
-                            <HiOutlineQrcode className="w-4 h-4 text-gray-500" />
-                            {isDecodingMomoQr
-                              ? t('forms.editorPage.payment.momoQrDecoding')
-                              : t('forms.editorPage.payment.momoQrAutoFillBtn')}
-                          </button>
-                        </div>
-                      </div>
-                    )}
-
-                    {momoPreviewQrDataUrl && (
-                      <div className="p-3 bg-white rounded-xl border border-gray-200 text-center space-y-2">
-                        <p className="text-xs font-semibold text-gray-700">
-                          {t('forms.editorPage.payment.momoPreviewQrTitle')}
-                        </p>
-                        <img
-                          src={momoPreviewQrDataUrl}
-                          alt="QR MoMo Preview"
-                          data-testid="momo-preview-qr"
-                          className="w-36 h-36 mx-auto rounded-lg border border-gray-100 bg-white"
-                        />
-                        <p className="text-[11px] text-gray-600 leading-relaxed">
-                          {t('forms.editorPage.payment.momoPreviewQrInstruction', {
-                            name: (payment.momoName || '').trim().toUpperCase(),
-                          })}
-                        </p>
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <>
+              {(payment.methods || []).includes('bank') && (
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
+                  <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    {t('forms.editorPage.payment.methodBank')}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         {t('forms.editorPage.payment.bankLabel')}
@@ -2004,7 +1898,7 @@ export default function FormEditorPage() {
                       )}
                     </div>
 
-                    <div>
+                    <div className="sm:col-span-2">
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         {t('forms.editorPage.payment.accountNameLabel')}
                       </label>
@@ -2027,31 +1921,189 @@ export default function FormEditorPage() {
                         <p className="text-xs text-red-600 mt-1">{errors.paymentAccountName}</p>
                       )}
                     </div>
-                  </>
-                )}
+                  </div>
+                </div>
+              )}
 
-                <div>
-                  <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {t('forms.editorPage.payment.holdMinutesLabel')}
-                  </label>
-                  <input
-                    type="number"
-                    min={MIN_HOLD_MINUTES}
-                    max={MAX_HOLD_MINUTES}
-                    disabled={isEmployee}
-                    value={payment.holdMinutes}
-                    onChange={(e) => setPayment((prev) => ({ ...prev, holdMinutes: e.target.value }))}
-                    className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
-                      errors.paymentHoldMinutes
-                        ? 'border-red-300 focus:ring-red-200'
-                        : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
-                    }`}
-                  />
-                  {errors.paymentHoldMinutes && (
-                    <p className="text-xs text-red-600 mt-1">{errors.paymentHoldMinutes}</p>
+              {(payment.methods || []).includes('momo') && (
+                <div className="p-4 bg-gray-50 rounded-xl border border-gray-200 space-y-4">
+                  <h4 className="text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                    {t('forms.editorPage.payment.methodMomo')}
+                  </h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('forms.editorPage.payment.momoPhoneLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        disabled={isEmployee}
+                        value={payment.momoPhone}
+                        onChange={(e) =>
+                          setPayment((prev) => ({ ...prev, momoPhone: e.target.value.replace(/\D/g, '') }))
+                        }
+                        placeholder="Vd: 0912345678"
+                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          errors.paymentMomoPhone
+                            ? 'border-red-300 focus:ring-red-200'
+                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        }`}
+                      />
+                      {errors.paymentMomoPhone && (
+                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoPhone}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {t('forms.editorPage.payment.momoNameLabel')}
+                      </label>
+                      <input
+                        type="text"
+                        disabled={isEmployee}
+                        value={payment.momoName}
+                        onChange={(e) => setPayment((prev) => ({ ...prev, momoName: e.target.value }))}
+                        placeholder={t('forms.editorPage.payment.accountNamePlaceholder')}
+                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                          errors.paymentMomoName
+                            ? 'border-red-300 focus:ring-red-200'
+                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                        }`}
+                      />
+                      <p className="text-[11px] text-gray-400 mt-1">
+                        {t('forms.editorPage.payment.accountNameHint')}
+                      </p>
+                      {errors.paymentMomoName && (
+                        <p className="text-xs text-red-600 mt-1">{errors.paymentMomoName}</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-medium text-gray-700">
+                      {t('forms.editorPage.payment.momoQrModeLabel')}
+                    </label>
+                    <div className="space-y-1.5">
+                      <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="momoQrMode"
+                          value="phone"
+                          disabled={isEmployee}
+                          checked={payment.momoQrMode === 'phone'}
+                          onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'phone' }))}
+                          className="text-primary-600 focus:ring-primary-500"
+                        />
+                        <span>{t('forms.editorPage.payment.momoQrModePhone')}</span>
+                      </label>
+                      {payment.momoQrMode === 'phone' && (
+                        <p className="ml-6 text-[11px] text-gray-400">
+                          {t('forms.editorPage.payment.momoQrPhoneHint')}
+                        </p>
+                      )}
+
+                      <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="momoQrMode"
+                          value="account"
+                          disabled={isEmployee}
+                          checked={payment.momoQrMode === 'account'}
+                          onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'account' }))}
+                          className="text-primary-600 focus:ring-primary-500"
+                        />
+                        <span>{t('forms.editorPage.payment.momoQrModeAccount')}</span>
+                      </label>
+
+                      <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="momoQrMode"
+                          value="none"
+                          disabled={isEmployee}
+                          checked={payment.momoQrMode === 'none'}
+                          onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'none' }))}
+                          className="text-primary-600 focus:ring-primary-500"
+                        />
+                        <span>{t('forms.editorPage.payment.momoQrModeNone')}</span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {payment.momoQrMode === 'account' && (
+                    <div className="space-y-3 p-3 bg-white rounded-xl border border-gray-200">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          {t('forms.editorPage.payment.momoQrAccountLabel')}
+                        </label>
+                        <input
+                          type="text"
+                          disabled={isEmployee}
+                          value={payment.momoQrAccount || ''}
+                          onChange={(e) => {
+                            const cleanVal = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                            setPayment((prev) => ({ ...prev, momoQrAccount: cleanVal }));
+                          }}
+                          placeholder="Vd: PSP2604014200000493"
+                          className={`w-full px-3 py-2 bg-white rounded-xl border text-sm font-mono focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                            errors.paymentMomoQrAccount
+                              ? 'border-red-300 focus:ring-red-200'
+                              : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                          }`}
+                        />
+                        <p className="text-[11px] text-gray-500 mt-1">
+                          {t('forms.editorPage.payment.momoQrAccountHint')}
+                        </p>
+                        {errors.paymentMomoQrAccount && (
+                          <p className="text-xs text-red-600 mt-1">{errors.paymentMomoQrAccount}</p>
+                        )}
+                      </div>
+
+                      <div>
+                        <input
+                          ref={momoQrFileInputRef}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          disabled={isEmployee || isDecodingMomoQr}
+                          onChange={handleUploadMomoQr}
+                        />
+                        <button
+                          type="button"
+                          disabled={isEmployee || isDecodingMomoQr}
+                          onClick={() => momoQrFileInputRef.current?.click()}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors disabled:opacity-50"
+                        >
+                          <HiOutlineQrcode className="w-4 h-4 text-gray-500" />
+                          {isDecodingMomoQr
+                            ? t('forms.editorPage.payment.momoQrDecoding')
+                            : t('forms.editorPage.payment.momoQrAutoFillBtn')}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {momoPreviewQrDataUrl && (
+                    <div className="p-3 bg-white rounded-xl border border-gray-200 text-center space-y-2">
+                      <p className="text-xs font-semibold text-gray-700">
+                        {t('forms.editorPage.payment.momoPreviewQrTitle')}
+                      </p>
+                      <img
+                        src={momoPreviewQrDataUrl}
+                        alt="QR MoMo Preview"
+                        data-testid="momo-preview-qr"
+                        className="w-36 h-36 mx-auto rounded-lg border border-gray-100 bg-white"
+                      />
+                      <p className="text-[11px] text-gray-600 leading-relaxed">
+                        {t('forms.editorPage.payment.momoPreviewQrInstruction', {
+                          name: (payment.momoName || '').trim().toUpperCase(),
+                        })}
+                      </p>
+                    </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
           )}
         </div>

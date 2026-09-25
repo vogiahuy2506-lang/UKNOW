@@ -148,6 +148,7 @@ describe('PR-3a — paymentConfig: chỉ chủ workspace, chốt method, audit l
     expect(res.status).toBe(200);
     expect(res.body.data.paymentConfig).toEqual({
       enabled: true,
+      methods: ['bank'],
       method: 'bank',
       amount: 150000,
       bankBin: '970422',
@@ -194,6 +195,7 @@ describe('PR-3a — paymentConfig: chỉ chủ workspace, chốt method, audit l
     expect(res.status).toBe(200);
     expect(res.body.data.paymentConfig).toEqual({
       enabled: true,
+      methods: ['momo'],
       method: 'momo',
       amount: 150000,
       momoPhone: '0912345678',
@@ -275,6 +277,7 @@ describe('PR-3a — nộp bài form thu tiền', () => {
     // ngoài Number.MAX_SAFE_INTEGER), khác payment.amount (số JS thật) đọc từ response JSON ở trên.
     expect(Number(row.payment_amount)).toBe(150000);
     expect(row.payment_snapshot).toEqual({
+      methods: ['bank'],
       method: 'bank',
       bankBin: '970422',
       bankName: 'MB Bank',
@@ -327,7 +330,7 @@ describe('PR-3a — nộp bài form thu tiền', () => {
 
     const res = await request(app).get(`/api/public/forms/${form.publicKey}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.payment).toEqual({ enabled: true, amount: 150000, method: 'bank' });
+    expect(res.body.data.payment).toEqual({ enabled: true, amount: 150000, method: 'bank', methods: ['bank'] });
     const raw = JSON.stringify(res.body.data);
     expect(raw).not.toContain('0123456789');
     expect(raw).not.toContain('NGUYEN VAN A');
@@ -363,9 +366,11 @@ describe('PR-3a — nộp bài form thu tiền', () => {
     expect(row.status).toBe('pending_payment');
     expect(row.payment_code).toBe(payment.code);
     expect(row.payment_snapshot).toEqual({
+      methods: ['momo'],
       method: 'momo',
       momoPhone: '0912345678',
       momoName: 'NGUYEN VAN MOMO',
+      momoQrMode: 'none',
       amount: 150000,
     });
   });

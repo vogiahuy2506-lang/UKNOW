@@ -30,7 +30,10 @@ import { escapeHtml } from '../utils/htmlEscape.util.js';
 import { mapFormSubmissionToCampaignItem } from '../utils/formCampaignItem.util.js';
 import { clampLandingLeadsLimit } from '../utils/landingLeadsLimit.util.js';
 import { findStorageObjectByKey, activateFormAssetStorageObjects } from '../repositories/storage.repository.js';
-import { markDeletedAfterUnlink } from './storage/storageObject.service.js';
+import { markDeletedAfterUnlink, registerWrittenStorageObject } from './storage/storageObject.service.js';
+import { STORAGE_POOL_TYPES } from '../utils/storageCapacity.util.js';
+import { getStorageBackend } from './storage/storageBackend.js';
+import { StorageQuotaExceededError } from './storage/storageQuota.service.js';
 import { buildFormAssetUrl } from './formAsset.service.js';
 import landingPageRepository from '../repositories/landingPage.repository.js';
 import { canonicalLandingPageSlug } from '../utils/landingPageSlugCanonical.util.js';
@@ -43,6 +46,110 @@ const DEFAULT_SLOTS_DAYS_PARAM = 7;
 const MAX_PENDING_HOLDS_PER_IP_PER_FORM = 3;
 // payment_code trùng unique index uq_form_submissions_payment_code -> sinh lại, tối đa 5 lần.
 const MAX_PAYMENT_CODE_RETRIES = 5;
+const MAX_RECEIPT_BYTES = 2 * 1024 * 1024; // 2 MB (PR-5)
+
+/**
+ * Kiểm tra magic bytes của ảnh biên lai chuyển khoản (chỉ nhận JPEG, PNG, WebP).
+ * Không tin MIME type hay phần mở rộng client gửi lên (PR-5).
+ *
+ * @param {Buffer} buffer
+ * @returns {{ mime: string, ext: string } | null}
+ */
+export function detectReceiptImageMagic(buffer) {
+  if (!buffer || !Buffer.isBuffer(buffer) || buffer.length < 4) {
+    return null;
+  }
+  // JPEG: FF D8 FF
+  if (buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return { mime: 'image/jpeg', ext: '.jpg' };
+  }
+  // PNG: 89 50 4E 47 0D 0A 1A 0A
+  if (
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 && buffer[1] === 0x50 && buffer[2] === 0x4e && buffer[3] === 0x47 &&
+    buffer[4] === 0x0d && buffer[5] === 0x0a && buffer[6] === 0x1a && buffer[7] === 0x0a
+  ) {
+    return { mime: 'image/png', ext: '.png' };
+  }
+  // WebP: RIFF (0..3) ... WEBP (8..11)
+  if (
+    buffer.length >= 12 &&
+    buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46 &&
+    buffer[8] === 0x57 && buffer[9] === 0x45 && buffer[10] === 0x42 && buffer[11] === 0x50
+  ) {
+    return { mime: 'image/webp', ext: '.webp' };
+  }
+  return null;
+}
+
+/**
+ * Dựng mảng options thanh toán và chuỗi QR cho phương thức chính từ snapshot (V6).
+ *
+ * @param {object} paymentSnapshot
+ * @param {number} paymentAmount
+ * @param {string} paymentCode
+ * @returns {{ options: Array<object>, primaryQrString: string|null }}
+ */
+export function buildPaymentOptionsAndPrimaryQr(paymentSnapshot, paymentAmount, paymentCode) {
+  if (!paymentSnapshot) return { options: [], primaryQrString: null };
+  const snapMethods = paymentSnapshot.methods || (paymentSnapshot.method ? [paymentSnapshot.method] : ['bank']);
+  const primaryMethod = paymentSnapshot.method || snapMethods[0];
+
+  let primaryQrString = null;
+  const options = [];
+
+  for (const m of snapMethods) {
+    if (m === 'bank' && paymentSnapshot.bankBin && paymentSnapshot.accountNumber) {
+      const bankQr = buildVietQrString({
+        bin: paymentSnapshot.bankBin,
+        accountNumber: paymentSnapshot.accountNumber,
+        amount: paymentAmount,
+        memo: paymentCode,
+      });
+      options.push({
+        method: 'bank',
+        bankBin: paymentSnapshot.bankBin,
+        bankName: paymentSnapshot.bankName || paymentSnapshot.bankBin,
+        accountNumber: paymentSnapshot.accountNumber,
+        accountName: paymentSnapshot.accountName,
+        qrString: bankQr,
+      });
+      if (primaryMethod === 'bank') {
+        primaryQrString = bankQr;
+      }
+    } else if (m === 'momo') {
+      const momoQr = (paymentSnapshot.momoQrBin && paymentSnapshot.momoQrAccount)
+        ? buildVietQrString({
+            bin: paymentSnapshot.momoQrBin,
+            accountNumber: paymentSnapshot.momoQrAccount,
+            amount: paymentAmount,
+            memo: paymentCode,
+          })
+        : null;
+      options.push({
+        method: 'momo',
+        momoPhone: paymentSnapshot.momoPhone,
+        momoName: paymentSnapshot.momoName,
+        qrString: momoQr,
+      });
+      if (primaryMethod === 'momo') {
+        primaryQrString = momoQr;
+      }
+    }
+  }
+
+  return { options, primaryQrString };
+}
+
+/**
+ * Công tắc tính năng biên lai chuyển khoản (PR-5 V5).
+ * Mặc định TẮT trừ khi FORM_PAYMENT_RECEIPT_ENABLED='true'.
+ *
+ * @returns {boolean}
+ */
+export function isPaymentReceiptEnabled() {
+  return process.env.FORM_PAYMENT_RECEIPT_ENABLED === 'true';
+}
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5174').replace(/\/+$/, '');
 
 function createHttpError(message, statusCode = 400, code = 'BAD_REQUEST') {
@@ -716,7 +823,12 @@ class FormService {
       // PR-3a mục "Public GET form thêm payment" — KHÔNG trả bankBin/accountNumber/accountName
       // trước khi nộp bài (chỉ biết số tiền + có thu tiền hay không, để hiện UI form đúng).
       payment: form.paymentConfig?.enabled
-        ? { enabled: true, amount: form.paymentConfig.amount, method: form.paymentConfig.method }
+        ? {
+            enabled: true,
+            amount: form.paymentConfig.amount,
+            method: form.paymentConfig.method || (form.paymentConfig.methods ? form.paymentConfig.methods[0] : 'bank'),
+            methods: form.paymentConfig.methods || (form.paymentConfig.method ? [form.paymentConfig.method] : ['bank']),
+          }
         : null,
     };
   }
@@ -877,13 +989,28 @@ class FormService {
       submitterIpHash = hashSubmitterIp(ipKey);
       status = 'pending_payment';
       holdExpiresAt = new Date(Date.now() + paymentConfig.holdMinutes * 60 * 1000);
-      if (paymentConfig.method === 'momo') {
-        paymentSnapshot = {
-          method: 'momo',
-          momoPhone: paymentConfig.momoPhone,
-          momoName: paymentConfig.momoName,
-          amount: paymentConfig.amount,
-        };
+
+      const methods = paymentConfig.methods || (paymentConfig.method ? [paymentConfig.method] : ['bank']);
+      const primaryMethod = paymentConfig.method || methods[0];
+
+      paymentSnapshot = {
+        methods,
+        method: primaryMethod,
+        amount: paymentConfig.amount,
+      };
+
+      if (methods.includes('bank')) {
+        const bankInfo = VIETQR_BANKS[paymentConfig.bankBin] || null;
+        paymentSnapshot.bankBin = paymentConfig.bankBin;
+        paymentSnapshot.bankName = bankInfo?.name || paymentConfig.bankBin;
+        paymentSnapshot.accountNumber = paymentConfig.accountNumber;
+        paymentSnapshot.accountName = paymentConfig.accountName;
+      }
+
+      if (methods.includes('momo')) {
+        paymentSnapshot.momoPhone = paymentConfig.momoPhone;
+        paymentSnapshot.momoName = paymentConfig.momoName;
+        paymentSnapshot.momoQrMode = paymentConfig.momoQrMode;
         if (paymentConfig.momoQrBin && paymentConfig.momoQrAccount) {
           paymentSnapshot.momoQrBin = paymentConfig.momoQrBin;
           paymentSnapshot.momoQrAccount = paymentConfig.momoQrAccount;
@@ -891,16 +1018,6 @@ class FormService {
             paymentSnapshot.momoQrRefLabel = paymentConfig.momoQrRefLabel;
           }
         }
-      } else {
-        const bankInfo = VIETQR_BANKS[paymentConfig.bankBin] || null;
-        paymentSnapshot = {
-          method: 'bank',
-          bankBin: paymentConfig.bankBin,
-          bankName: bankInfo?.name || paymentConfig.bankBin,
-          accountNumber: paymentConfig.accountNumber,
-          accountName: paymentConfig.accountName,
-          amount: paymentConfig.amount,
-        };
       }
 
       if (!bookingEnabled) {
@@ -977,24 +1094,16 @@ class FormService {
       submission = await insertSubmissionWithPaymentCodeRetry(baseSubmissionParams, db, paymentEnabled, false);
     }
 
-    const isMomo = paymentSnapshot?.method === 'momo';
     let qrString = null;
-    if (paymentEnabled) {
-      if (isMomo && paymentSnapshot?.momoQrBin && paymentSnapshot?.momoQrAccount) {
-        qrString = buildVietQrString({
-          bin: paymentSnapshot.momoQrBin,
-          accountNumber: paymentSnapshot.momoQrAccount,
-          amount: paymentSnapshot.amount,
-          memo: submission.paymentCode,
-        });
-      } else if (!isMomo && paymentSnapshot?.bankBin && paymentSnapshot?.accountNumber) {
-        qrString = buildVietQrString({
-          bin: paymentSnapshot.bankBin,
-          accountNumber: paymentSnapshot.accountNumber,
-          amount: paymentSnapshot.amount,
-          memo: submission.paymentCode,
-        });
-      }
+    let paymentOptions = [];
+    if (paymentEnabled && paymentSnapshot) {
+      const res = buildPaymentOptionsAndPrimaryQr(
+        paymentSnapshot,
+        paymentConfig.amount,
+        submission.paymentCode
+      );
+      paymentOptions = res.options;
+      qrString = res.primaryQrString;
     }
 
     // Thư báo cho chủ form nếu settings.notifyOwner được bật (fire-and-forget, không để người điền chờ)
@@ -1046,6 +1155,37 @@ class FormService {
     if (paymentEnabled && validated.respondentEmail && form.settings?.sendConfirmation) {
       const statusUrl = `${FRONTEND_URL}/f/${encodeURIComponent(key)}/s/${encodeURIComponent(accessToken)}`;
       const holdMinutesText = escapeHtml(String(paymentConfig.holdMinutes));
+      const methodsList = paymentSnapshot.methods || [paymentSnapshot.method];
+      const hasBothMethods = methodsList.includes('bank') && methodsList.includes('momo');
+
+      let methodsDetailHtml = '';
+      if (hasBothMethods) {
+        methodsDetailHtml = `
+          <div style="margin: 12px 0; padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px;">
+            <p style="margin: 0 0 6px 0; font-weight: bold; color: #1e293b;">Cách 1: Chuyển khoản ngân hàng</p>
+            <p style="margin: 2px 0;">Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
+            <p style="margin: 2px 0;">Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
+            <p style="margin: 2px 0;">Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
+          </div>
+          <div style="margin: 12px 0; padding: 12px; background: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px;">
+            <p style="margin: 0 0 6px 0; font-weight: bold; color: #831843;">Cách 2: Chuyển ví MoMo</p>
+            <p style="margin: 2px 0;">Ví MoMo: <strong>${escapeHtml(paymentSnapshot.momoPhone)}</strong></p>
+            <p style="margin: 2px 0;">Tên: <strong>${escapeHtml(paymentSnapshot.momoName)}</strong></p>
+          </div>
+        `;
+      } else if (paymentSnapshot.method === 'momo') {
+        methodsDetailHtml = `
+          <p>Ví MoMo: <strong>${escapeHtml(paymentSnapshot.momoPhone)}</strong></p>
+          <p>Tên: <strong>${escapeHtml(paymentSnapshot.momoName)}</strong></p>
+        `;
+      } else {
+        methodsDetailHtml = `
+          <p>Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
+          <p>Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
+          <p>Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
+        `;
+      }
+
       await this.sendFormRespondentEmail({
         formId: form.id,
         formTitle: form.title,
@@ -1056,16 +1196,7 @@ class FormService {
           <h2>Vui lòng chuyển khoản để giữ chỗ</h2>
           <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
           ${appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>` : ''}
-          ${paymentSnapshot.method === 'momo'
-            ? `
-          <p>Ví MoMo: <strong>${escapeHtml(paymentSnapshot.momoPhone)}</strong></p>
-          <p>Tên: <strong>${escapeHtml(paymentSnapshot.momoName)}</strong></p>
-            `
-            : `
-          <p>Ngân hàng: <strong>${escapeHtml(paymentSnapshot.bankName)}</strong></p>
-          <p>Số tài khoản: <strong>${escapeHtml(paymentSnapshot.accountNumber)}</strong></p>
-          <p>Chủ tài khoản: <strong>${escapeHtml(paymentSnapshot.accountName)}</strong></p>
-            `}
+          ${methodsDetailHtml}
           <p>Số tiền: <strong>${escapeHtml(paymentConfig.amount.toLocaleString('vi-VN'))}đ</strong></p>
           <p>Nội dung chuyển khoản (bắt buộc ghi đúng): <strong>${escapeHtml(submission.paymentCode)}</strong></p>
           <p>Hạn giữ chỗ: <strong>${holdMinutesText} phút</strong> kể từ lúc đặt.</p>
@@ -1080,27 +1211,30 @@ class FormService {
       accessToken: submission.accessToken,
       isBotTrap: false,
       payment: paymentEnabled
-        ? (paymentSnapshot.method === 'momo'
-            ? {
-                method: 'momo',
-                amount: paymentConfig.amount,
-                code: submission.paymentCode,
-                momoPhone: paymentSnapshot.momoPhone,
-                momoName: paymentSnapshot.momoName,
-                qrString,
-                holdExpiresAt: submission.holdExpiresAt,
-              }
-            : {
-                method: 'bank',
-                amount: paymentConfig.amount,
-                code: submission.paymentCode,
-                bankBin: paymentSnapshot.bankBin,
-                bankName: paymentSnapshot.bankName,
-                accountNumber: paymentSnapshot.accountNumber,
-                accountName: paymentSnapshot.accountName,
-                qrString,
-                holdExpiresAt: submission.holdExpiresAt,
-              })
+        ? {
+            ...(paymentSnapshot.method === 'momo'
+              ? {
+                  method: 'momo',
+                  amount: paymentConfig.amount,
+                  code: submission.paymentCode,
+                  momoPhone: paymentSnapshot.momoPhone,
+                  momoName: paymentSnapshot.momoName,
+                  qrString,
+                  holdExpiresAt: submission.holdExpiresAt,
+                }
+              : {
+                  method: 'bank',
+                  amount: paymentConfig.amount,
+                  code: submission.paymentCode,
+                  bankBin: paymentSnapshot.bankBin,
+                  bankName: paymentSnapshot.bankName,
+                  accountNumber: paymentSnapshot.accountNumber,
+                  accountName: paymentSnapshot.accountName,
+                  qrString,
+                  holdExpiresAt: submission.holdExpiresAt,
+                }),
+            options: paymentOptions,
+          }
         : null,
     };
   }
@@ -1244,25 +1378,23 @@ class FormService {
     let payment = null;
     if (submission.status === 'pending_payment' && !holdExpired && submission.paymentSnapshot) {
       const snap = submission.paymentSnapshot;
-      const method = snap.method || 'bank';
-      if (method === 'momo') {
-        const momoQrString = (snap.momoQrBin && snap.momoQrAccount)
-          ? buildVietQrString({
-              bin: snap.momoQrBin,
-              accountNumber: snap.momoQrAccount,
-              amount: submission.paymentAmount,
-              memo: submission.paymentCode,
-            })
-          : null;
+      const { options: paymentOptions, primaryQrString: qrString } = buildPaymentOptionsAndPrimaryQr(
+        snap,
+        submission.paymentAmount,
+        submission.paymentCode
+      );
+      const primaryMethod = snap.method || (snap.methods ? snap.methods[0] : 'bank');
 
+      if (primaryMethod === 'momo') {
         payment = {
           method: 'momo',
           amount: submission.paymentAmount,
           code: submission.paymentCode,
           momoPhone: snap.momoPhone,
           momoName: snap.momoName,
-          qrString: momoQrString,
+          qrString,
           holdExpiresAt: submission.holdExpiresAt,
+          options: paymentOptions,
         };
       } else {
         payment = {
@@ -1273,13 +1405,9 @@ class FormService {
           bankName: snap.bankName,
           accountNumber: snap.accountNumber,
           accountName: snap.accountName,
-          qrString: buildVietQrString({
-            bin: snap.bankBin,
-            accountNumber: snap.accountNumber,
-            amount: submission.paymentAmount,
-            memo: submission.paymentCode,
-          }),
+          qrString,
           holdExpiresAt: submission.holdExpiresAt,
+          options: paymentOptions,
         };
       }
     }
@@ -1295,11 +1423,121 @@ class FormService {
       holdExpired,
       payment,
       payerReportedPaidAt: submission.payerReportedPaidAt || null,
+      receiptRequired: isPaymentReceiptEnabled(),
+      hasReceipt: Boolean(submission.paymentReceiptKey),
+      receiptWaived: Boolean(submission.paymentReceiptWaivedReason),
     };
   }
 
   /**
-   * Khách báo đã chuyển khoản cho lượt đặt pending_payment (PR-2).
+   * Tải ảnh biên lai chuyển khoản cho bài nộp pending_payment (PR-5).
+   * Chốt: form tồn tại + isPublished + không adminDisabledAt; token khớp;
+   * lượt pending_payment và payer_reported_paid_at IS NULL;
+   * magic bytes JPEG/PNG/WebP, tối đa 2 MB; tối đa 5 lần upload.
+   * Xử lý quota chủ form hết dung lượng -> ghi nhận waived_reason 'owner_storage_full'.
+   *
+   * @param {string} publicKey
+   * @param {string} accessToken
+   * @param {object} file Express.Multer.File
+   * @returns {Promise<{ receiptStored: boolean, reason?: string }>}
+   */
+  async uploadPaymentReceipt(publicKey, accessToken, file) {
+    if (!isPaymentReceiptEnabled()) {
+      throw createHttpError('Tính năng tải ảnh biên lai hiện đang tắt', 404, 'FEATURE_DISABLED');
+    }
+
+    const key = String(publicKey || '').trim();
+    const token = String(accessToken || '').trim();
+    if (!key || !token) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    const form = await formRepository.findFormByPublicKey(key);
+    if (!form || !form.isPublished || form.adminDisabledAt) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    const submission = await formRepository.findSubmissionByAccessTokenAndForm(token, form.id);
+    if (!submission) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    if (submission.status !== 'pending_payment') {
+      throw createHttpError('Bài nộp không ở trạng thái chờ thanh toán', 409, 'SUBMISSION_NOT_PENDING');
+    }
+
+    if (submission.payerReportedPaidAt) {
+      throw createHttpError('Bài nộp đã được xác nhận chuyển khoản, không thể tải thêm ảnh', 409, 'PAYMENT_ALREADY_REPORTED');
+    }
+
+    if (Number(submission.paymentReceiptUploadCount || 0) >= 5) {
+      throw createHttpError('Bạn đã vượt quá số lần tải ảnh cho phép (tối đa 5 lần)', 409, 'RECEIPT_UPLOAD_LIMIT_EXCEEDED');
+    }
+
+    if (!file || !file.buffer || !Buffer.isBuffer(file.buffer) || file.buffer.length === 0) {
+      throw createHttpError('Vui lòng chọn ảnh chuyển khoản', 400, 'RECEIPT_FILE_REQUIRED');
+    }
+
+    if (file.buffer.length > MAX_RECEIPT_BYTES) {
+      throw createHttpError('Ảnh vượt dung lượng tối đa 2 MB', 400, 'FILE_TOO_LARGE');
+    }
+
+    const detected = detectReceiptImageMagic(file.buffer);
+    if (!detected) {
+      throw createHttpError('Chỉ nhận ảnh JPEG, PNG hoặc WebP', 400, 'INVALID_IMAGE_TYPE');
+    }
+
+    const storageKey = `uploads/${form.workspaceOwnerId}/forms/receipts/${submission.id}_${Date.now()}_${crypto.randomUUID().slice(0, 8)}${detected.ext}`;
+
+    await getStorageBackend().put(storageKey, file.buffer, { contentType: detected.mime });
+
+    try {
+      await registerWrittenStorageObject({
+        poolType: STORAGE_POOL_TYPES.WORKSPACE,
+        ownerUserId: form.workspaceOwnerId,
+        actorUserId: form.workspaceOwnerId,
+        storageKey,
+        category: 'form_receipt',
+        state: 'active',
+        sizeBytes: file.buffer.length,
+        referenceType: 'form_payment_receipt',
+        referenceId: submission.id,
+      });
+    } catch (err) {
+      // Dọn file vừa ghi vào kho
+      await getStorageBackend().delete(storageKey).catch(() => {});
+
+      if (err instanceof StorageQuotaExceededError) {
+        // Chủ form hết dung lượng -> miễn gửi ảnh cho khách
+        await formRepository.updateSubmissionPaymentReceipt(submission.id, {
+          paymentReceiptKey: null,
+          paymentReceiptWaivedReason: 'owner_storage_full',
+        });
+        return { receiptStored: false, reason: 'OWNER_STORAGE_FULL' };
+      }
+      throw err;
+    }
+
+    // V3: Cập nhật DB sang khoá mới TRƯỚC, dọn ảnh cũ SAU
+    const oldStorageKey = submission.paymentReceiptKey;
+
+    await formRepository.updateSubmissionPaymentReceipt(submission.id, {
+      paymentReceiptKey: storageKey,
+      paymentReceiptWaivedReason: null,
+    });
+
+    // Nếu trước đó đã có ảnh cũ -> dọn ảnh cũ khỏi storage VÀ đánh dấu xoá trong storage_objects
+    if (oldStorageKey && oldStorageKey !== storageKey) {
+      await getStorageBackend().delete(oldStorageKey).catch(() => {});
+      await markDeletedAfterUnlink({ storageKey: oldStorageKey }).catch(() => {});
+    }
+
+    return { receiptStored: true };
+  }
+
+  /**
+   * Khách báo đã chuyển khoản cho lượt đặt pending_payment (PR-2, PR-5).
+   * Điều kiện server (PR-5): bắt buộc đã tải ảnh (paymentReceiptKey) hoặc được miễn (paymentReceiptWaivedReason) nếu tính năng bật.
    * Gia hạn giữ chỗ (nếu còn hạn) tối đa 24h, không vượt quá appointment_at.
    * Gửi email thông báo cho chủ form (bất kể settings.notifyOwner).
    * Idempotent: bấm lại trả 200 trạng thái hiện tại, không đổi hạn giữ chỗ, không gửi thư lần hai.
@@ -1320,8 +1558,10 @@ class FormService {
       throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
     }
 
-    // 1. Thử cập nhật nguyên tử nếu lượt đang pending_payment và chưa từng báo (payer_reported_paid_at IS NULL)
-    const updated = await formRepository.updatePayerReportedPaid(token, form.id);
+    const requireReceipt = isPaymentReceiptEnabled();
+
+    // 1. Thử cập nhật nguyên tử nếu lượt đang pending_payment, chưa từng báo, và ĐÃ CÓ BIÊN LAI (nếu bật tính năng)
+    const updated = await formRepository.updatePayerReportedPaid(token, form.id, requireReceipt);
 
     if (updated) {
       // Bấm lần đầu thành công -> gửi thư báo chủ form (bất kể settings.notifyOwner)
@@ -1336,6 +1576,17 @@ class FormService {
         const reportedAtText = new Date().toLocaleString('vi-VN');
         const submissionsUrl = `${FRONTEND_URL}/app/forms/${form.id}/submissions`;
 
+        const receiptNoteHtml = updated.paymentReceiptKey
+          ? `<p style="margin-top:12px;padding:10px 14px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;color:#1e40af;">
+               <strong>Khách đã gửi ảnh chuyển khoản — xem ở trang Bài nộp.</strong><br/>
+               <small style="color:#4b5563;">Ảnh chỉ để tham khảo, hãy kiểm tra app ngân hàng trước khi bấm Đã nhận tiền.</small>
+             </p>`
+          : updated.paymentReceiptWaivedReason
+            ? `<p style="margin-top:12px;padding:10px 14px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;color:#92400e;">
+                 <em>Bên nhận đã hết dung lượng lưu trữ — khách được miễn gửi ảnh chuyển khoản. Vui lòng kiểm tra app ngân hàng trước khi bấm Đã nhận tiền.</em>
+               </p>`
+            : '';
+
         const html = `
           <h2>Khách hàng báo đã chuyển khoản</h2>
           <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
@@ -1345,6 +1596,7 @@ class FormService {
           <p>Số điện thoại: ${escapeHtml(updated.respondentPhone || 'Chưa cung cấp')}</p>
           <p>Giờ hẹn: <strong>${escapeHtml(appointmentText)}</strong></p>
           <p>Thời gian báo: ${escapeHtml(reportedAtText)}</p>
+          ${receiptNoteHtml}
           <p><a href="${submissionsUrl}" style="display:inline-block;padding:10px 16px;background:#059669;color:#fff;text-decoration:none;border-radius:8px;font-weight:bold;">Xem danh sách bài nộp để xác nhận</a></p>
         `;
 
@@ -1364,7 +1616,8 @@ class FormService {
       };
     }
 
-    // 2. Không có dòng trả về -> đọc lại bài nộp để phân biệt "đã báo rồi" (200) với "không còn chờ tiền" (409) hoặc "không tìm thấy" (404)
+    // 2. Không có dòng trả về -> đọc lại bài nộp để phân biệt nguyên nhân:
+    // "chưa gửi ảnh" (409 RECEIPT_REQUIRED), "đã báo rồi" (200), "không còn chờ tiền" (409) hoặc "không tìm thấy" (404)
     const existing = await formRepository.findSubmissionByAccessTokenAndForm(token, form.id);
     if (!existing) {
       throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
@@ -1374,12 +1627,45 @@ class FormService {
       throw createHttpError('Bài nộp không ở trạng thái chờ thanh toán', 409, 'SUBMISSION_NOT_PENDING');
     }
 
+    // Kiểm tra chốt receipt: chỉ khi tính năng ĐANG BẬT
+    if (requireReceipt) {
+      if (!existing.payerReportedPaidAt && !existing.paymentReceiptKey && !existing.paymentReceiptWaivedReason) {
+        throw createHttpError('Vui lòng tải ảnh chuyển khoản trước khi xác nhận', 409, 'RECEIPT_REQUIRED');
+      }
+    }
+
     // Đã ở trạng thái pending_payment và payer_reported_paid_at không null (nghĩa là đã báo rồi) -> idempotent 200
     return {
       status: existing.status,
       holdExpiresAt: existing.holdExpiresAt,
       payerReportedPaidAt: existing.payerReportedPaidAt,
     };
+  }
+
+  /**
+   * Lấy khoá tệp ảnh biên lai chuyển khoản (chỉ chủ workspace quản lý form) — PR-5.
+   *
+   * @param {number} formId
+   * @param {number} submissionId
+   * @param {number} workspaceOwnerId
+   * @returns {Promise<{ storageKey: string }>}
+   */
+  async getSubmissionReceipt(formId, submissionId, workspaceOwnerId) {
+    const form = await formRepository.findFormByIdAndOwner(formId, workspaceOwnerId);
+    if (!form) {
+      throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
+    }
+
+    const submission = await formRepository.findSubmissionReceiptForOwner(submissionId, formId);
+    if (!submission) {
+      throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
+    }
+
+    if (!submission.paymentReceiptKey) {
+      throw createHttpError('Bài nộp chưa có ảnh chuyển khoản', 404, 'RECEIPT_NOT_FOUND');
+    }
+
+    return { storageKey: submission.paymentReceiptKey };
   }
 
   /**

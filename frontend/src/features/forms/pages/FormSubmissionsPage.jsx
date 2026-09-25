@@ -10,6 +10,7 @@ import {
   HiOutlineMail,
   HiOutlinePhone,
   HiOutlineX,
+  HiOutlinePhotograph,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import {
@@ -17,6 +18,7 @@ import {
   fetchFormSubmissions,
   cancelSubmission,
   confirmPayment,
+  fetchSubmissionReceiptBlob,
 } from '../services/formAdminApi.service';
 import { formatAppointmentAtVn, vnToday } from '../utils/bookingFormat.util';
 import { formatVnd } from '../../../utils/vietqrParser';
@@ -79,6 +81,46 @@ export default function FormSubmissionsPage() {
   const [cancellingId, setCancellingId] = useState(null);
   const [confirmPaymentTargetId, setConfirmPaymentTargetId] = useState(null);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState(null);
+  const [viewingReceiptSub, setViewingReceiptSub] = useState(null);
+  const [receiptBlobUrl, setReceiptBlobUrl] = useState(null);
+  const [isLoadingReceipt, setIsLoadingReceipt] = useState(false);
+  const [receiptError, setReceiptError] = useState('');
+
+  useEffect(() => {
+    return () => {
+      if (receiptBlobUrl) {
+        URL.revokeObjectURL(receiptBlobUrl);
+      }
+    };
+  }, [receiptBlobUrl]);
+
+  const handleOpenReceipt = async (sub) => {
+    setViewingReceiptSub(sub);
+    setReceiptError('');
+    setIsLoadingReceipt(true);
+    if (receiptBlobUrl) {
+      URL.revokeObjectURL(receiptBlobUrl);
+      setReceiptBlobUrl(null);
+    }
+    try {
+      const blob = await fetchSubmissionReceiptBlob(id, sub.id);
+      const url = URL.createObjectURL(blob);
+      setReceiptBlobUrl(url);
+    } catch {
+      setReceiptError(t('forms.submissionsPage.receiptLoadError'));
+    } finally {
+      setIsLoadingReceipt(false);
+    }
+  };
+
+  const handleCloseReceipt = () => {
+    setViewingReceiptSub(null);
+    if (receiptBlobUrl) {
+      URL.revokeObjectURL(receiptBlobUrl);
+      setReceiptBlobUrl(null);
+    }
+    setReceiptError('');
+  };
 
   // API chủ form (GET /api/forms/:id) trả khoá `bookingConfig` (form.repository.js
   // findFormByIdAndOwner), KHÔNG PHẢI `booking` — khoá đó chỉ có ở API công khai
@@ -389,7 +431,7 @@ export default function FormSubmissionsPage() {
                         /* Mã nội dung chuyển khoản + số tiền — để chủ đối chiếu sao kê */
                         <td className="py-4 px-4 sm:px-6 text-xs whitespace-nowrap">
                           {sub.paymentCode ? (
-                            <div className="space-y-1">
+                            <div className="space-y-1.5">
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span className="font-mono font-semibold text-gray-800">{sub.paymentCode}</span>
                                 {sub.status === 'pending_payment' && sub.payerReportedPaidAt && (
@@ -404,6 +446,31 @@ export default function FormSubmissionsPage() {
                                 )}
                               </div>
                               <div className="text-gray-500">{formatVnd(sub.paymentAmount)}</div>
+
+                              {/* PR-5: Nút xem ảnh chuyển khoản hoặc huy hiệu miễn gửi ảnh */}
+                              {sub.paymentReceiptKey && (
+                                <div>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenReceipt(sub)}
+                                    data-testid={`btn-view-receipt-${sub.id}`}
+                                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:text-primary-700 bg-primary-50 hover:bg-primary-100 border border-primary-200 px-2 py-0.5 rounded transition-colors"
+                                  >
+                                    <HiOutlinePhotograph className="w-3.5 h-3.5" />
+                                    <span>{t('forms.submissionsPage.viewReceiptBtn')}</span>
+                                  </button>
+                                </div>
+                              )}
+                              {sub.paymentReceiptWaivedReason && (
+                                <div>
+                                  <span
+                                    className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-50 text-amber-700 border border-amber-200"
+                                    data-testid={`badge-receipt-waived-${sub.id}`}
+                                  >
+                                    {t('forms.submissionsPage.receiptWaivedBadge')}
+                                  </span>
+                                </div>
+                              )}
                             </div>
                           ) : (
                             '—'
@@ -638,6 +705,68 @@ export default function FormSubmissionsPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Modal xem ảnh biên lai chuyển khoản (PR-5) */}
+      {viewingReceiptSub && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-lg bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                  <HiOutlinePhotograph className="w-5 h-5 text-gray-600" />
+                  <span>{t('forms.submissionsPage.receiptModalTitle')}</span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  {viewingReceiptSub.paymentCode} · {formatVnd(viewingReceiptSub.paymentAmount)} · {viewingReceiptSub.respondentName || '—'}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleCloseReceipt}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition-colors"
+                data-testid="btn-close-receipt-modal"
+              >
+                <HiOutlineX className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 flex-1 overflow-auto flex items-center justify-center bg-gray-50/50 min-h-[250px]">
+              {isLoadingReceipt ? (
+                <div className="text-center py-10 text-gray-500">
+                  <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-2" />
+                  <p className="text-xs">{t('forms.submissionsPage.receiptLoading')}</p>
+                </div>
+              ) : receiptError ? (
+                <div className="text-center py-10 text-red-600 text-sm">
+                  <p>{receiptError}</p>
+                </div>
+              ) : receiptBlobUrl ? (
+                <img
+                  src={receiptBlobUrl}
+                  alt="Receipt"
+                  className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-sm border border-gray-200"
+                  data-testid="img-receipt-modal"
+                />
+              ) : null}
+            </div>
+
+            <div className="p-3 border-t border-gray-100 bg-gray-50 flex items-center justify-between text-xs text-gray-500">
+              <span>
+                {viewingReceiptSub.paymentReceiptUploadedAt
+                  ? new Date(viewingReceiptSub.paymentReceiptUploadedAt).toLocaleString('vi-VN')
+                  : ''}
+              </span>
+              <button
+                type="button"
+                onClick={handleCloseReceipt}
+                className="px-3 py-1.5 rounded-lg bg-white border border-gray-300 hover:bg-gray-50 font-medium text-gray-700 shadow-sm transition-colors"
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
