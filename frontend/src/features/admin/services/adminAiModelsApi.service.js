@@ -13,6 +13,9 @@ const adminAiModelsApiService = {
   setSystemModel(modelId) {
     return api.put('/admin/ai-models/system-model', { modelId });
   },
+  setFallbackModel(modelId) {
+    return api.put('/admin/ai-models/fallback-model', { modelId });
+  },
 };
 
 export default adminAiModelsApiService;

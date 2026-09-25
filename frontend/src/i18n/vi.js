@@ -8239,6 +8239,15 @@ export default {
     systemModelActive: 'Đang dùng',
     systemModelPick: 'Chọn',
     systemModelSet: 'Đã đặt model hệ thống — áp dụng ngay cho toàn bộ tính năng AI',
+    fallbackTitle: 'Model dự phòng',
+    fallbackHint: 'Dùng khi model hệ thống quá tải hoặc bị Google ngừng cung cấp. Chỉ thử một lượt, không đổi model hệ thống.',
+    fallbackNone: 'Không dùng',
+    fallbackSet: 'Đã đặt {model} làm model dự phòng',
+    fallbackCleared: 'Đã bỏ model dự phòng',
+    fallbackBadge: 'Dự phòng',
+    systemModelRetiredBanner: 'Google đã ngừng cung cấp model hệ thống ({model}) — hệ thống đang tạm chạy bằng {active}.',
+    activeDefaultModel: 'model mặc định của hệ thống',
+    fallbackRetiredBanner: 'Model dự phòng ({model}) đã bị Google ngừng cung cấp — hãy chọn model dự phòng khác.',
   },
 
   userDeliveryMonitor: {

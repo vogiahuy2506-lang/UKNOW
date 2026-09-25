@@ -24,6 +24,7 @@ export default function AdminAiModelsPage() {
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [savingId, setSavingId] = useState(null);
+  const [savingFallback, setSavingFallback] = useState(false);
   const [showAll, setShowAll] = useState(true);
 
   const load = useCallback(async () => {
@@ -55,11 +56,37 @@ export default function AdminAiModelsPage() {
   }, [load]);
 
   const visibleModels = useMemo(() => {
-    if (!showAll) return models.filter((model) => model.isEnabled);
+    if (!showAll) return models.filter((model) => model.isEnabled || model.isFallback);
     return models.filter(
-      (model) => model.isEnabled || (model.thinking && model.supportsGenerateContent)
+      (model) => model.isEnabled || model.isFallback || (model.thinking && model.supportsGenerateContent)
     );
   }, [models, showAll]);
+
+  const currentFallbackModel = useMemo(
+    () => models.find((m) => m.isFallback),
+    [models]
+  );
+  const currentFallbackId = currentFallbackModel ? toModelId(currentFallbackModel) : '';
+
+  const fallbackCandidateModels = useMemo(
+    () => models.filter((m) => m.supportsGenerateContent && !m.isEnabled),
+    [models]
+  );
+
+  const retiredSystemModel = useMemo(
+    () => models.find((m) => m.isEnabled && !m.supportsGenerateContent),
+    [models]
+  );
+
+  const activeFallbackModel = useMemo(
+    () => models.find((m) => m.isFallback && m.supportsGenerateContent),
+    [models]
+  );
+
+  const retiredFallbackModel = useMemo(
+    () => models.find((m) => m.isFallback && !m.supportsGenerateContent),
+    [models]
+  );
 
   const systemModelUnpriced = useMemo(
     () => models.find((m) => m.isEnabled && m.pricing && m.pricing.configured === false),
@@ -105,12 +132,46 @@ export default function AdminAiModelsPage() {
     setSavingId(modelId);
     try {
       await adminAiModelsApiService.setSystemModel(modelId);
-      setModels((prev) => prev.map((item) => ({ ...item, isEnabled: toModelId(item) === modelId })));
-      toast.success(t('adminAiModels.systemModelSet') || `Đã đặt ${modelId} làm model hệ thống`);
+      setModels((prev) =>
+        prev.map((item) => {
+          const isSys = toModelId(item) === modelId;
+          return {
+            ...item,
+            isEnabled: isSys,
+            isFallback: isSys ? false : item.isFallback,
+          };
+        })
+      );
+      toast.success(t('adminAiModels.systemModelSet'));
     } catch (err) {
       toast.error(err?.response?.data?.message || t('adminAiModels.saveFailed'));
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const handleFallbackChange = async (nextModelId) => {
+    const previousModels = models;
+    const targetId = nextModelId || null;
+    setSavingFallback(true);
+    setModels((prev) =>
+      prev.map((item) => ({
+        ...item,
+        isFallback: targetId ? toModelId(item) === targetId : false,
+      }))
+    );
+    try {
+      await adminAiModelsApiService.setFallbackModel(targetId);
+      if (targetId) {
+        toast.success(t('adminAiModels.fallbackSet', { model: targetId }));
+      } else {
+        toast.success(t('adminAiModels.fallbackCleared'));
+      }
+    } catch (err) {
+      setModels(previousModels);
+      toast.error(err?.response?.data?.message || t('adminAiModels.saveFailed'));
+    } finally {
+      setSavingFallback(false);
     }
   };
 
@@ -144,6 +205,57 @@ export default function AdminAiModelsPage() {
         </div>
       )}
 
+      {retiredSystemModel && (
+        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+          <p>
+            {t('adminAiModels.systemModelRetiredBanner', {
+              model: toModelId(retiredSystemModel),
+              active: activeFallbackModel
+                ? toModelId(activeFallbackModel)
+                : t('adminAiModels.activeDefaultModel'),
+            })}
+          </p>
+        </div>
+      )}
+
+      {retiredFallbackModel && (
+        <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">
+          <HiOutlineExclamation className="mt-0.5 h-5 w-5 shrink-0 text-rose-600" />
+          <p>
+            {t('adminAiModels.fallbackRetiredBanner', {
+              model: toModelId(retiredFallbackModel),
+            })}
+          </p>
+        </div>
+      )}
+
+      <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <label htmlFor="fallback-model-select" className="block text-sm font-semibold text-slate-800">
+          {t('adminAiModels.fallbackTitle')}
+        </label>
+        <div className="mt-2 max-w-md">
+          <select
+            id="fallback-model-select"
+            className="input h-10 w-full"
+            value={currentFallbackId}
+            disabled={savingFallback || loading}
+            onChange={(e) => handleFallbackChange(e.target.value || null)}
+          >
+            <option value="">{t('adminAiModels.fallbackNone')}</option>
+            {fallbackCandidateModels.map((m) => {
+              const id = toModelId(m);
+              return (
+                <option key={id} value={id}>
+                  {m.displayName ? `${m.displayName} (${id})` : id}
+                </option>
+              );
+            })}
+          </select>
+          <p className="mt-1.5 text-xs text-slate-500">{t('adminAiModels.fallbackHint')}</p>
+        </div>
+      </div>
+
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-2">
@@ -170,7 +282,7 @@ export default function AdminAiModelsPage() {
                   <th className="px-5 py-3">{t('adminAiModels.model')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.displayName')}</th>
                   <th className="px-5 py-3">{t('adminAiModels.pricePerAnswer')}</th>
-                  <th className="px-5 py-3">{t('adminAiModels.systemModelColumn') || 'Model hệ thống'}</th>
+                  <th className="px-5 py-3">{t('adminAiModels.systemModelColumn')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -188,7 +300,14 @@ export default function AdminAiModelsPage() {
                   return (
                     <tr key={modelId} className="align-top">
                       <td className="px-5 py-4">
-                        <p className="font-mono font-semibold text-slate-800">{modelId}</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <p className="font-mono font-semibold text-slate-800">{modelId}</p>
+                          {model.isFallback && (
+                            <span className="inline-flex rounded-full bg-amber-50 border border-amber-200 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                              {t('adminAiModels.fallbackBadge')}
+                            </span>
+                          )}
+                        </div>
                         {model.thinking && (
                           <span className="mt-1 inline-flex rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
                             {t('adminAiModels.thinking')}
