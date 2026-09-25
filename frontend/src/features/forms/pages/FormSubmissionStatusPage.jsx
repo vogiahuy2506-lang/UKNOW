@@ -171,7 +171,7 @@ export default function FormSubmissionStatusPage() {
   }, [isPendingActive, statusData?.holdExpiresAt, load]);
 
   useEffect(() => {
-    if (!statusData?.payment?.qrString || statusData?.payment?.method === 'momo') {
+    if (!statusData?.payment?.qrString) {
       setQrDataUrl('');
       return;
     }
@@ -186,7 +186,7 @@ export default function FormSubmissionStatusPage() {
     return () => {
       cancelled = true;
     };
-  }, [statusData?.payment?.qrString, statusData?.payment?.method]);
+  }, [statusData?.payment?.qrString]);
 
   const handleConfirmPaid = async () => {
     setIsReportingPaid(true);
@@ -296,9 +296,53 @@ export default function FormSubmissionStatusPage() {
 
             {payment.method === 'momo' ? (
               <>
-                <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
-                  {t('publicForm.payment.momoHint')}
-                </p>
+                {payment.qrString ? (
+                  <>
+                    <p
+                      className="font-semibold text-sm sm:text-base text-center mb-3"
+                      style={{ color: 'var(--form-primary, #059669)' }}
+                    >
+                      {t('publicForm.payment.momoScanInstruction')}
+                    </p>
+
+                    {qrDataUrl ? (
+                      <img
+                        src={qrDataUrl}
+                        alt={t('publicForm.payment.qrAlt')}
+                        className="w-60 h-60 mx-auto rounded-xl border border-gray-200 bg-white"
+                      />
+                    ) : (
+                      <div className="w-60 h-60 mx-auto flex items-center justify-center text-xs text-gray-400 border border-dashed border-gray-200 rounded-xl">
+                        {t('publicForm.payment.qrGenerating')}
+                      </div>
+                    )}
+
+                    {qrDataUrl && (
+                      <div className="text-center my-3">
+                        <a
+                          href={qrDataUrl}
+                          download={`qr-${payment.code || 'payment'}.png`}
+                          data-testid="btn-save-qr"
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors"
+                        >
+                          <HiOutlineDownload className="w-4 h-4 text-gray-500" />
+                          {t('publicForm.payment.saveQrBtn')}
+                        </a>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {t('publicForm.payment.saveQrHint')}
+                        </p>
+                      </div>
+                    )}
+
+                    <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-center mb-2">
+                      {t('publicForm.payment.momoManualHintWithQr')}
+                    </p>
+                  </>
+                ) : (
+                  <p className="text-xs text-gray-500 bg-gray-50 p-3 rounded-xl border border-gray-100 text-center">
+                    {t('publicForm.payment.momoHint')}
+                  </p>
+                )}
 
                 <div className="space-y-2">
                   <CopyableRow

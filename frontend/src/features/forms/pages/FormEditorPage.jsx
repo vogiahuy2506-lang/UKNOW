@@ -12,7 +12,10 @@ import {
   HiOutlineEyeOff,
   HiOutlineShare,
   HiOutlineInbox,
+  HiOutlineCheckCircle,
+  HiOutlineQrcode,
 } from 'react-icons/hi';
+import { decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
 import { useI18n } from '../../../i18n';
 import { useAuthStore } from '../../../stores/authStore';
 import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
@@ -105,6 +108,9 @@ const DEFAULT_PAYMENT = {
   accountName: '',
   momoPhone: '',
   momoName: '',
+  momoQrBin: '',
+  momoQrAccount: '',
+  momoQrRefLabel: '',
   holdMinutes: DEFAULT_HOLD_MINUTES,
 };
 
@@ -167,6 +173,8 @@ export default function FormEditorPage() {
   const { usage: storageQuota } = useStorageQuota();
   const bannerInputRef = useRef(null);
   const logoInputRef = useRef(null);
+  const [isDecodingMomoQr, setIsDecodingMomoQr] = useState(false);
+  const momoQrFileInputRef = useRef(null);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -249,6 +257,9 @@ export default function FormEditorPage() {
             accountName: data.paymentConfig.accountName || '',
             momoPhone: data.paymentConfig.momoPhone || '',
             momoName: data.paymentConfig.momoName || '',
+            momoQrBin: data.paymentConfig.momoQrBin || '',
+            momoQrAccount: data.paymentConfig.momoQrAccount || '',
+            momoQrRefLabel: data.paymentConfig.momoQrRefLabel || '',
             holdMinutes: data.paymentConfig.holdMinutes ?? DEFAULT_HOLD_MINUTES,
           });
         } else {
@@ -528,6 +539,44 @@ export default function FormEditorPage() {
     }
   };
 
+  const handleUploadMomoQr = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsDecodingMomoQr(true);
+    try {
+      const decoded = await decodeQrFromImageFile(file);
+      if (!decoded.success) {
+        toast.error(t('forms.editorPage.payment.momoQrNotFound'));
+        return;
+      }
+      const qrRes = parseAndValidateMoMoQr(decoded.raw);
+      if (!qrRes.valid) {
+        if (qrRes.error === 'INVALID_CHECKSUM') {
+          toast.error(t('forms.editorPage.payment.momoQrChecksumError'));
+        } else if (qrRes.error === 'INVALID_GUID') {
+          toast.error(t('forms.editorPage.payment.momoQrGuidError'));
+        } else {
+          toast.error(t('forms.editorPage.payment.momoQrInvalid'));
+        }
+        return;
+      }
+      setPayment((prev) => ({
+        ...prev,
+        momoQrBin: qrRes.momoQrBin,
+        momoQrAccount: qrRes.momoQrAccount,
+        momoQrRefLabel: qrRes.momoQrRefLabel || '',
+      }));
+      toast.success(t('forms.editorPage.payment.momoQrSuccess'));
+    } catch (err) {
+      toast.error(err.message || t('forms.editorPage.payment.momoQrError'));
+    } finally {
+      setIsDecodingMomoQr(false);
+      if (momoQrFileInputRef.current) {
+        momoQrFileInputRef.current.value = '';
+      }
+    }
+  };
+
   // Validate form trước khi lưu
   const validateForm = () => {
     const errs = {};
@@ -769,6 +818,13 @@ export default function FormEditorPage() {
             momoName: (payment.momoName || '').trim(),
             holdMinutes: Number(payment.holdMinutes),
           };
+          if (payment.momoQrBin && payment.momoQrAccount) {
+            payload.paymentConfig.momoQrBin = payment.momoQrBin.trim();
+            payload.paymentConfig.momoQrAccount = payment.momoQrAccount.trim();
+            if (payment.momoQrRefLabel) {
+              payload.paymentConfig.momoQrRefLabel = payment.momoQrRefLabel.trim();
+            }
+          }
         } else {
           payload.paymentConfig = {
             enabled: true,
@@ -1691,6 +1747,62 @@ export default function FormEditorPage() {
                       </p>
                       {errors.paymentMomoName && (
                         <p className="text-xs text-red-600 mt-1">{errors.paymentMomoName}</p>
+                      )}
+                    </div>
+
+                    <div>
+                      <input
+                        ref={momoQrFileInputRef}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={isEmployee || isDecodingMomoQr}
+                        onChange={handleUploadMomoQr}
+                      />
+                      {payment.momoQrAccount ? (
+                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <HiOutlineCheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                            <span className="text-xs font-medium text-emerald-800 truncate">
+                              {t('forms.editorPage.payment.momoQrLoaded', {
+                                account: payment.momoQrAccount.length > 4 ? `****${payment.momoQrAccount.slice(-4)}` : payment.momoQrAccount,
+                              })}
+                            </span>
+                          </div>
+                          {!isEmployee && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPayment((prev) => ({
+                                  ...prev,
+                                  momoQrBin: '',
+                                  momoQrAccount: '',
+                                  momoQrRefLabel: '',
+                                }))
+                              }
+                              className="text-xs text-red-600 hover:text-red-700 underline font-medium ml-2 shrink-0"
+                            >
+                              {t('forms.editorPage.payment.momoQrRemoveBtn')}
+                            </button>
+                          )}
+                        </div>
+                      ) : (
+                        <div>
+                          <button
+                            type="button"
+                            disabled={isEmployee || isDecodingMomoQr}
+                            onClick={() => momoQrFileInputRef.current?.click()}
+                            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-primary-300 bg-primary-50/50 hover:bg-primary-50 text-xs font-medium text-primary-700 transition-colors disabled:opacity-50"
+                          >
+                            <HiOutlineQrcode className="w-4 h-4 text-primary-600" />
+                            {isDecodingMomoQr
+                              ? t('forms.editorPage.payment.momoQrDecoding')
+                              : t('forms.editorPage.payment.uploadMomoQrBtn')}
+                          </button>
+                          <p className="text-[11px] text-gray-400 mt-1">
+                            {t('forms.editorPage.payment.momoQrHint')}
+                          </p>
+                        </div>
                       )}
                     </div>
                   </>

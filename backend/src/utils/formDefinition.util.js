@@ -419,6 +419,9 @@ export const DEFAULT_HOLD_MINUTES = 30;
 const ACCOUNT_NAME_RE = /^[A-Z0-9 ]{2,50}$/;
 const ACCOUNT_NUMBER_RE = /^\d{6,19}$/;
 const MOMO_PHONE_RE = /^0[35789]\d{8}$/;
+const MOMO_QR_BIN_RE = /^\d{6}$/;
+const MOMO_QR_ACCOUNT_RE = /^[A-Z0-9]{6,19}$/;
+const MOMO_QR_REF_LABEL_RE = /^[A-Z0-9]{1,25}$/;
 
 /**
  * Chuẩn hoá tên chủ tài khoản: bỏ dấu tiếng Việt (kể cả Đ/đ — không decompose qua NFD), viết
@@ -493,6 +496,9 @@ export function normalizePaymentConfig(raw) {
   let accountName;
   let momoPhone;
   let momoName;
+  let momoQrBin = null;
+  let momoQrAccount = null;
+  let momoQrRefLabel = null;
 
   if (method === 'momo') {
     momoPhone = String(raw.momoPhone || '').trim();
@@ -509,6 +515,43 @@ export function normalizePaymentConfig(raw) {
         'Tên chủ ví MoMo không hợp lệ (chỉ chữ in hoa không dấu, số, khoảng trắng, 2-50 ký tự)',
         'INVALID_PAYMENT_CONFIG'
       );
+    }
+
+    const rawBin = raw.momoQrBin !== undefined && raw.momoQrBin !== null ? String(raw.momoQrBin).trim() : null;
+    const rawAccount = raw.momoQrAccount !== undefined && raw.momoQrAccount !== null ? String(raw.momoQrAccount).trim() : null;
+
+    if (rawBin || rawAccount) {
+      if (!rawBin || !rawAccount) {
+        throw createValidationError(
+          'Cần cung cấp đủ cả mã BIN và số tài khoản QR MoMo',
+          'INVALID_PAYMENT_CONFIG'
+        );
+      }
+      if (!MOMO_QR_BIN_RE.test(rawBin)) {
+        throw createValidationError(
+          'Mã BIN của QR MoMo không hợp lệ (phải gồm 6 chữ số)',
+          'INVALID_PAYMENT_CONFIG'
+        );
+      }
+      if (!MOMO_QR_ACCOUNT_RE.test(rawAccount)) {
+        throw createValidationError(
+          'Số tài khoản QR MoMo không hợp lệ (6-19 ký tự gồm chữ in hoa và số)',
+          'INVALID_PAYMENT_CONFIG'
+        );
+      }
+      momoQrBin = rawBin;
+      momoQrAccount = rawAccount;
+
+      if (raw.momoQrRefLabel !== undefined && raw.momoQrRefLabel !== null && String(raw.momoQrRefLabel).trim() !== '') {
+        const refLabel = String(raw.momoQrRefLabel).trim();
+        if (!MOMO_QR_REF_LABEL_RE.test(refLabel)) {
+          throw createValidationError(
+            'Nhãn tham chiếu QR MoMo không hợp lệ (1-25 ký tự chữ in hoa và số)',
+            'INVALID_PAYMENT_CONFIG'
+          );
+        }
+        momoQrRefLabel = refLabel;
+      }
     }
   } else {
     bankBin = String(raw.bankBin || '').trim();
@@ -546,7 +589,7 @@ export function normalizePaymentConfig(raw) {
   }
 
   if (method === 'momo') {
-    return {
+    const config = {
       enabled: true,
       method: 'momo',
       amount,
@@ -554,6 +597,14 @@ export function normalizePaymentConfig(raw) {
       momoName,
       holdMinutes,
     };
+    if (momoQrBin && momoQrAccount) {
+      config.momoQrBin = momoQrBin;
+      config.momoQrAccount = momoQrAccount;
+      if (momoQrRefLabel) {
+        config.momoQrRefLabel = momoQrRefLabel;
+      }
+    }
+    return config;
   }
 
   return {

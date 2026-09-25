@@ -58,13 +58,13 @@ function readTLV(str, offset) {
 function parseVietQRTemplate(raw) {
   // raw = "0010A00000072701LL<...>0208QRIBFTTA"
   let offset = 0;
-  const result = { bin: null, accountNumber: null, serviceCode: null };
+  const result = { guid: null, bin: null, accountNumber: null, serviceCode: null };
 
   while (offset < raw.length) {
     const sub = readTLV(raw, offset);
     if (!sub) break;
     if (sub.tag === '00') {
-      // GUID Napas — chỉ kiểm, không lưu
+      result.guid = sub.value;
     } else if (sub.tag === '01') {
       // Bank info container: chứa 00 (BIN) + 01 (account) + 02 (service)
       let subOffset = 0;
@@ -92,15 +92,17 @@ function parseVietQRTemplate(raw) {
 
 /** Parse additional data template nằm trong tag 62. */
 function parseAdditionalData(raw) {
-  // raw = "01LL<BILL>08LL<PURPOSE>"
+  // raw = "01LL<BILL>05LL<REF_LABEL>08LL<PURPOSE>"
   let offset = 0;
-  const result = { description: null };
+  const result = { description: null, refLabel: null };
 
   while (offset < raw.length) {
     const sub = readTLV(raw, offset);
     if (!sub) break;
     if (sub.tag === '08') {
       result.description = sub.value;
+    } else if (sub.tag === '05') {
+      result.refLabel = sub.value;
     }
     offset = sub.next;
   }
@@ -111,6 +113,7 @@ function parseAdditionalData(raw) {
 export function parseVietQR(raw) {
   if (typeof raw !== 'string' || raw.length < 20) {
     return {
+      guid: null,
       bin: null,
       accountNumber: null,
       serviceCode: null,
@@ -118,6 +121,7 @@ export function parseVietQR(raw) {
       currency: null,
       merchantName: null,
       description: null,
+      refLabel: null,
       valid: false,
       error: 'EMPTY_OR_INVALID',
     };
@@ -126,6 +130,7 @@ export function parseVietQR(raw) {
   try {
     let offset = 0;
     const out = {
+      guid: null,
       bin: null,
       accountNumber: null,
       serviceCode: null,
@@ -133,6 +138,7 @@ export function parseVietQR(raw) {
       currency: null,
       merchantName: null,
       description: null,
+      refLabel: null,
       valid: true,
       error: null,
     };
@@ -153,6 +159,7 @@ export function parseVietQR(raw) {
       } else if (tlv.tag === '62') {
         const extra = parseAdditionalData(tlv.value);
         if (extra.description) out.description = extra.description;
+        if (extra.refLabel) out.refLabel = extra.refLabel;
       } else if (tlv.tag === '26') {
         // Một số QR có thêm Merchant Account Information template.
         // PayOS không dùng, bỏ qua nhưng vẫn đọc sub để tránh lệch offset.
@@ -169,6 +176,7 @@ export function parseVietQR(raw) {
     return out;
   } catch (e) {
     return {
+      guid: null,
       bin: null,
       accountNumber: null,
       serviceCode: null,
@@ -176,10 +184,158 @@ export function parseVietQR(raw) {
       currency: null,
       merchantName: null,
       description: null,
+      refLabel: null,
       valid: false,
       error: e?.message || 'PARSE_ERROR',
     };
   }
+}
+
+/**
+ * CRC-16/CCITT-FALSE (poly 0x1021, init 0xFFFF, không reflect input/output).
+ * Vector kiểm chuẩn: "123456789" -> "29B1".
+ *
+ * @param {string} str
+ * @returns {string} 4 ký tự hex viết HOA
+ */
+export function crc16CcittFalse(str) {
+  const encoder = new TextEncoder();
+  const buf = encoder.encode(String(str));
+  let crc = 0xffff;
+  for (let i = 0; i < buf.length; i += 1) {
+    crc ^= buf[i] << 8;
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xffff : (crc << 1) & 0xffff;
+    }
+  }
+  return crc.toString(16).toUpperCase().padStart(4, '0');
+}
+
+/**
+ * Kiểm tra checksum CRC-16 của chuỗi VietQR chuẩn (kết thúc bằng tag 6304 + 4 ký tự CRC).
+ *
+ * @param {string} raw
+ * @returns {boolean}
+ */
+export function verifyVietQrChecksum(raw) {
+  if (typeof raw !== 'string' || raw.length < 8) return false;
+  const idx = raw.lastIndexOf('6304');
+  if (idx === -1 || idx !== raw.length - 8) return false;
+  const payloadToHash = raw.slice(0, idx + 4);
+  const expectedCrc = raw.slice(idx + 4).toUpperCase();
+  const actualCrc = crc16CcittFalse(payloadToHash);
+  return actualCrc === expectedCrc;
+}
+
+const MOMO_QR_ACCOUNT_RE = /^[A-Z0-9]{6,19}$/;
+const MOMO_QR_REF_LABEL_RE = /^[A-Z0-9]{1,25}$/;
+
+/**
+ * Phân tích và xác thực chuỗi QR MoMo (theo chuẩn VietQR QuickPay Napas tag 38).
+ * BẮT BUỘC:
+ * 1. Khớp CRC-16/CCITT-FALSE của phần trước 6304 với 4 ký tự cuối.
+ * 2. GUID tag 38 là Napas ('A000000727').
+ * 3. BIN 6 số và số tài khoản ví (^[A-Z0-9]{6,19}$).
+ *
+ * @param {string} raw
+ * @returns {{ valid: boolean, momoQrBin?: string, momoQrAccount?: string, momoQrRefLabel?: string|null, error?: string }}
+ */
+export function parseAndValidateMoMoQr(raw) {
+  if (typeof raw !== 'string' || raw.length < 20) {
+    return { valid: false, error: 'INVALID_QR_LENGTH' };
+  }
+
+  // 1. Kiểm tra checksum CRC-16
+  if (!verifyVietQrChecksum(raw)) {
+    return { valid: false, error: 'INVALID_CHECKSUM' };
+  }
+
+  // 2. Parse TLV
+  const parsed = parseVietQR(raw);
+  if (!parsed.valid) {
+    return { valid: false, error: parsed.error || 'INVALID_VIETQR' };
+  }
+
+  // 3. Kiểm tra GUID Napas
+  if (parsed.guid !== 'A000000727') {
+    return { valid: false, error: 'INVALID_GUID' };
+  }
+
+  // 4. Kiểm tra BIN (6 số)
+  if (!parsed.bin || !/^\d{6}$/.test(parsed.bin)) {
+    return { valid: false, error: 'INVALID_BIN' };
+  }
+
+  // 5. Kiểm tra Số tài khoản (chữ in hoa và số, 6-19 ký tự)
+  if (!parsed.accountNumber || !MOMO_QR_ACCOUNT_RE.test(parsed.accountNumber)) {
+    return { valid: false, error: 'INVALID_ACCOUNT' };
+  }
+
+  let momoQrRefLabel = null;
+  if (parsed.refLabel && MOMO_QR_REF_LABEL_RE.test(parsed.refLabel)) {
+    momoQrRefLabel = parsed.refLabel;
+  }
+
+  return {
+    valid: true,
+    momoQrBin: parsed.bin,
+    momoQrAccount: parsed.accountNumber,
+    momoQrRefLabel,
+    error: null,
+  };
+}
+
+/**
+ * Nạp lười thư viện jsQR và giải mã ảnh QR từ một File/Blob ảnh.
+ *
+ * @param {File|Blob} file
+ * @returns {Promise<{ success: boolean, raw?: string, error?: string }>}
+ */
+export async function decodeQrFromImageFile(file) {
+  if (!file) return { success: false, error: 'NO_FILE' };
+
+  let jsQR;
+  try {
+    const mod = await import('jsqr');
+    jsQR = mod.default || mod;
+  } catch (err) {
+    return { success: false, error: 'JSQR_LOAD_FAILED' };
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          const width = img.naturalWidth || img.width;
+          const height = img.naturalHeight || img.height;
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve({ success: false, error: 'CANVAS_CONTEXT_FAILED' });
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          const imageData = ctx.getImageData(0, 0, width, height);
+          const code = jsQR(imageData.data, imageData.width, imageData.height);
+          if (!code || !code.data) {
+            resolve({ success: false, error: 'NO_QR_IN_IMAGE' });
+            return;
+          }
+          resolve({ success: true, raw: code.data });
+        } catch (canvasErr) {
+          resolve({ success: false, error: canvasErr.message || 'DECODE_ERROR' });
+        }
+      };
+      img.onerror = () => resolve({ success: false, error: 'IMAGE_LOAD_FAILED' });
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve({ success: false, error: 'FILE_READ_FAILED' });
+    reader.readAsDataURL(file);
+  });
 }
 
 /** Format VND locale: 1.234.567 đ */
