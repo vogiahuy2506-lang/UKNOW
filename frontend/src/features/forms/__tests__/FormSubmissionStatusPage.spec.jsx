@@ -68,7 +68,11 @@ const pendingMomoPayment = {
     amount: 150000,
     momoPhone: '0912345678',
     momoName: 'NGUYEN VAN MOMO',
-    qrString: '00020101021238570010A00000072701270006970436011300123456789020208QRIBFTTA53037045802VN6304ABCD',
+    // Từ lệnh giao 25/09 PR-3, QR hiện theo `qrString` chứ không theo `method` nữa: backend chỉ trả
+    // qrString cho MoMo khi chủ form đã tải "QR Đa Năng" (form.service.js getSubmissionStatus). Form
+    // MoMo chưa có QR thì backend trả null — bản cũ của fixture này gán qrString ngân hàng, là dữ liệu
+    // backend không bao giờ trả. Ca MoMo CÓ QR nằm ở PR3FormScheduling.spec.jsx.
+    qrString: null,
   },
 };
 

@@ -180,5 +180,73 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
       expect(screen.getByText('Tải ảnh QR Đa Năng MoMo (không bắt buộc)')).toBeInTheDocument();
       expect(screen.queryByText(/Đã đọc mã QR ✓/i)).not.toBeInTheDocument();
     });
+
+    // Nghiệm thu 25/09 (Claude): đột biến "Lưu không gửi khoá QR" lọt qua cả 22 ca cũ — PUT ghi đè
+    // cả khối paymentConfig, nên thiếu khoá = sửa tiêu đề rồi Lưu là QR MoMo của chủ form mất lặng lẽ.
+    const MOMO_QR_FORM = {
+      id: 10,
+      title: 'Form MoMo Có QR',
+      publicKey: 'pub_momo_qr',
+      isPublished: true,
+      fields: [{ label: 'Tên', type: 'short_text', required: true, role: 'name' }],
+      paymentConfig: {
+        enabled: true,
+        method: 'momo',
+        amount: 20000,
+        momoPhone: '0901234567',
+        momoName: 'CHU VI MOMO',
+        momoQrBin: '971025',
+        momoQrAccount: 'PSP2604014212340493',
+        momoQrRefLabel: 'MOMOW2W6128717X',
+        holdMinutes: 30,
+      },
+    };
+
+    const renderEditor = () =>
+      renderWithProviders(
+        <Routes>
+          <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+        </Routes>,
+        { route: '/app/forms/10/edit' }
+      );
+
+    it('4. Mở form có QR, chỉ sửa tiêu đề rồi Lưu: payload vẫn mang đủ 3 khoá QR MoMo', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(MOMO_QR_FORM);
+      formAdminApi.updateForm.mockResolvedValue({ ...MOMO_QR_FORM });
+
+      renderEditor();
+      await waitFor(() => expect(screen.getByText(/Đã đọc mã QR ✓/i)).toBeInTheDocument());
+
+      fireEvent.change(screen.getByDisplayValue('Form MoMo Có QR'), { target: { value: 'Tiêu đề mới' } });
+      fireEvent.click(screen.getByText('Lưu biểu mẫu'));
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const payload = formAdminApi.updateForm.mock.calls[0][1];
+      expect(payload.title).toBe('Tiêu đề mới');
+      expect(payload.paymentConfig).toMatchObject({
+        method: 'momo',
+        momoQrBin: '971025',
+        momoQrAccount: 'PSP2604014212340493',
+        momoQrRefLabel: 'MOMOW2W6128717X',
+      });
+    });
+
+    it('5. Bấm Gỡ rồi Lưu: payload KHÔNG còn khoá QR (gỡ được lưu thật, không chỉ ẩn trên màn hình)', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(MOMO_QR_FORM);
+      formAdminApi.updateForm.mockResolvedValue({ ...MOMO_QR_FORM });
+
+      renderEditor();
+      await waitFor(() => expect(screen.getByText(/Đã đọc mã QR ✓/i)).toBeInTheDocument());
+
+      fireEvent.click(screen.getByText('Gỡ'));
+      fireEvent.click(screen.getByText('Lưu biểu mẫu'));
+
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const { paymentConfig } = formAdminApi.updateForm.mock.calls[0][1];
+      expect(paymentConfig.method).toBe('momo');
+      expect(paymentConfig).not.toHaveProperty('momoQrBin');
+      expect(paymentConfig).not.toHaveProperty('momoQrAccount');
+      expect(paymentConfig).not.toHaveProperty('momoQrRefLabel');
+    });
   });
 });

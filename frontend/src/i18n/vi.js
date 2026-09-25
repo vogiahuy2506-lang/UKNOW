@@ -9424,6 +9424,8 @@ export default {
       disclaimerNamed: 'Bạn chuyển khoản trực tiếp cho {name}. Founder AI không giữ tiền và không bảo đảm giao dịch.',
       reportLink: 'Báo cáo vấn đề',
       confirmPaidBtn: 'Tôi xác nhận đã chuyển khoản',
+      reportedToast: 'Đã ghi nhận, cảm ơn bạn!',
+      reportPaidError: 'Chưa gửi được xác nhận, vui lòng thử lại.',
       confirmPaidModalTitle: 'Xác nhận chuyển khoản',
       confirmPaidModalQuestion: 'Bạn đã chuyển đúng số tiền và ghi đúng mã nội dung chuyển khoản?',
       confirmPaidModalCancel: 'Quay lại',

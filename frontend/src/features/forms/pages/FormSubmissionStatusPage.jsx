@@ -69,25 +69,6 @@ function formatTimeOnly(isoString) {
   return formatter.format(d);
 }
 
-function formatHoldExpiresTime(isoString) {
-  if (!isoString) return '';
-  const d = new Date(isoString);
-  if (Number.isNaN(d.getTime())) return '';
-  const formatter = new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour: '2-digit',
-    minute: '2-digit',
-    day: '2-digit',
-    month: '2-digit',
-    hour12: false,
-  });
-  const parts = formatter.formatToParts(d).reduce((acc, p) => {
-    acc[p.type] = p.value;
-    return acc;
-  }, {});
-  return `${parts.hour}:${parts.minute} ngày ${parts.day}/${parts.month}`;
-}
-
 export default function FormSubmissionStatusPage() {
   const { t, locale } = useI18n();
   const { publicKey, accessToken } = useParams();
@@ -198,9 +179,9 @@ export default function FormSubmissionStatusPage() {
         payerReportedPaidAt: res?.payerReportedPaidAt || new Date().toISOString(),
       }));
       setShowConfirmModal(false);
-      toast.success(t('publicForm.payment.confirmPaidBtn'));
+      toast.success(t('publicForm.payment.reportedToast'));
     } catch (err) {
-      toast.error(err.response?.data?.message || t('publicForm.payment.copyError'));
+      toast.error(err.response?.data?.message || t('publicForm.payment.reportPaidError'));
       setShowConfirmModal(false);
     } finally {
       setIsReportingPaid(false);
@@ -450,7 +431,7 @@ export default function FormSubmissionStatusPage() {
                   {t('publicForm.payment.reportedSuccessMsg', {
                     reportedTime: formatTimeOnly(statusData.payerReportedPaidAt),
                     recipientName: (payment?.method === 'momo' ? payment?.momoName : payment?.accountName) || t('publicForm.payment.accountNameLabel'),
-                    holdTime: formatHoldExpiresTime(statusData.holdExpiresAt),
+                    holdTime: formatAppointmentAtVn(statusData.holdExpiresAt, locale),
                   })}
                 </div>
               </div>
