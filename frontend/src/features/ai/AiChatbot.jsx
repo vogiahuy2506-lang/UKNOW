@@ -1551,13 +1551,15 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           sessionTitle,
           messageId = null,
         } = response.data;
-        if (returnedSessionId) {
-          currentSessionIdRef.current = returnedSessionId;
-        }
         if (returnedSessionId && !currentSessionId) {
           mySessionId = returnedSessionId;
           markTabPending(mySessionId);
           setCurrentSessionId(returnedSessionId);
+          // Đồng bộ ref NGAY (effect chỉ chạy sau render) như đường dán HTML, để lượt ghi nền gọi ngay
+          // trong hàm này (vòng kiểm landing ở dưới) thấy đúng phiên. CHỈ ở nhánh phiên mới: phiên đã có
+          // mà người dùng mở phiên khác trong lúc chờ thì ref phải giữ phiên ĐANG MỞ — gán ở đây cho mọi
+          // phiên làm trả lời của phiên này hiện sang phiên kia (test 9, 10).
+          currentSessionIdRef.current = returnedSessionId;
           setSessions(prev => [{ id: returnedSessionId, title: sessionTitle || trimmedInput.slice(0, 60), updated_at: new Date().toISOString(), created_at: new Date().toISOString() }, ...prev]);
         } else if (returnedSessionId) {
           setSessions(prev => prev.map(s => s.id === returnedSessionId ? { ...s, updated_at: new Date().toISOString() } : s));
@@ -1721,28 +1723,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
+        // Lượt chat tự tạo trang (AI thấy đủ thông tin, không qua bảng hỏi): cùng vòng kiểm + tự sửa
+        // như đường sinh trang chuẩn. Server đã cấp ngân sách tự sửa cho tin này và trả id của nó.
         if (type === 'landing_page' && typeof data?.html === 'string' && data.html.trim()) {
-          const mySessionId = currentSessionIdRef.current || currentSessionId;
-          const assistantMsg = {
-            id: messageId ? String(messageId) : `${Date.now()}-ai-landing`,
-            role: 'assistant',
-            content: content || 'Tôi đã tạo mẫu landing page cho bạn:',
-            type: 'landing_page',
-            data: {
-              ...data,
-              ...(messageId ? { messageId } : {}),
-            },
-            layoutStatus: 'checking',
-            layoutFindings: [],
-            createdAt: new Date().toISOString(),
-          };
-          update(prev => [...prev, assistantMsg]);
-          runLandingLayoutCheck({
-            sessionId: mySessionId,
-            messageId,
-            page: data,
-            allowAutoFix: true,
-          });
+          update(prev => [...prev, {
+            role: 'assistant', content, type,
+            ...(messageId ? { id: messageId } : {}),
+            data: { ...data, layoutStatus: 'checking' },
+          }]);
+          // Không await: thẻ hiện ngay, đo + tự sửa chạy nền rồi ghi kết quả vào thẻ.
+          runLandingLayoutCheck({ sessionId: mySessionId, messageId, page: data });
           return;
         }
 

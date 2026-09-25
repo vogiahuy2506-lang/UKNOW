@@ -1144,6 +1144,39 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(assistantMsg?.data?.autoLayoutFixCount).toBeUndefined();
       expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
     });
+
+    it('4. landing_page KHÔNG có html (sinh hỏng) → không cấp ngân sách, lưu như cũ', async () => {
+      processSmartChat.mockResolvedValue({
+        type: 'landing_page',
+        content: 'Chưa tạo được trang',
+        data: { title: 'Trang khoá học', html: '   ' },
+      });
+
+      const res = makeRes();
+      await aiController.chat(chatReq(), res);
+
+      expect(saveMessagesReturningIds).not.toHaveBeenCalled();
+      expect(saveMessages).toHaveBeenCalledTimes(1);
+      expect(saveMessages.mock.calls[0][3].data).not.toHaveProperty('autoLayoutFixCount');
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+    });
+
+    it('5. landing kèm tệp đính kèm → saveMessagesReturningIds vẫn nhận danh sách tệp (chip tệp còn sau F5)', async () => {
+      processSmartChat.mockResolvedValue({
+        type: 'landing_page',
+        content: 'Đây là landing page của bạn',
+        data: { title: 'Infographic ngày lễ', html: '<div>Trang</div>' },
+      });
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 301, assistantMessageId: 302 });
+
+      const res = makeRes();
+      await aiController.chat(chatReq({
+        files: [{ tempId: '3f2504e0-4f89-41d3-9a0c-0305e82c3301', originalName: 'HD45.pdf', contentType: 'application/pdf' }],
+      }), res);
+
+      const files = saveMessagesReturningIds.mock.calls[0][4];
+      expect(files).toEqual([expect.objectContaining({ originalName: 'HD45.pdf' })]);
+    });
   });
 });
 
