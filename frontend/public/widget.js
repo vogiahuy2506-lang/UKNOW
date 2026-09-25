@@ -44,14 +44,46 @@
   // Nhãn kêu gọi mở chat cạnh bong bóng — rỗng = tắt (chỉ hiện nút tròn như hôm nay).
   let LAUNCHER_LABEL = config.launcherLabel || '';
 
+  // Bộ nhớ an toàn. Landing page của Founder AI hiển thị trong iframe sandbox KHÔNG có
+  // allow-same-origin (LpRendererPage.jsx, LpRendererByHost.jsx — cố ý, để HTML khách tự viết
+  // không đọc được phiên đăng nhập của founderai.biz). Ở đó chỉ cần ĐỌC window.localStorage là
+  // trình duyệt ném SecurityError — trước đây widget chết ngay tại dòng này: không nút, không nhãn.
+  // Dùng localStorage khi được; không thì giữ tạm trong bộ nhớ trang (tải lại trang thì mất lịch sử).
+  const memoryStore = {};
+  const storage = {
+    get: function (key) {
+      try {
+        return window.localStorage.getItem(key);
+      } catch (err) {
+        return Object.prototype.hasOwnProperty.call(memoryStore, key) ? memoryStore[key] : null;
+      }
+    },
+    set: function (key, value) {
+      try {
+        window.localStorage.setItem(key, value);
+      } catch (err) {
+        memoryStore[key] = String(value);
+      }
+    },
+  };
+  // Dữ liệu cũ hỏng (JSON sai) cũng không được làm chết widget.
+  function readStoredList(key) {
+    try {
+      const parsed = JSON.parse(storage.get(key) || '[]');
+      return Array.isArray(parsed) ? parsed : [];
+    } catch (err) {
+      return [];
+    }
+  }
+
   let isOpen = false;
-  let messages = JSON.parse(localStorage.getItem('uknow_msgs_' + WIDGET_KEY) || '[]');
-  let chatHistory = JSON.parse(localStorage.getItem('uknow_history_' + WIDGET_KEY) || '[]');
+  let messages = readStoredList('uknow_msgs_' + WIDGET_KEY);
+  let chatHistory = readStoredList('uknow_history_' + WIDGET_KEY);
   let pendingAttachments = [];
-  let sessionId = localStorage.getItem('uknow_session_' + WIDGET_KEY);
+  let sessionId = storage.get('uknow_session_' + WIDGET_KEY);
   if (!sessionId) {
     sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
-    localStorage.setItem('uknow_session_' + WIDGET_KEY, sessionId);
+    storage.set('uknow_session_' + WIDGET_KEY, sessionId);
   }
   let configLoaded = false;
 
@@ -452,7 +484,7 @@
 
     if (save) {
       messages.push({ role, content });
-      localStorage.setItem('uknow_msgs_' + WIDGET_KEY, JSON.stringify(messages.slice(-50)));
+      storage.set('uknow_msgs_' + WIDGET_KEY, JSON.stringify(messages.slice(-50)));
     }
   }
 
@@ -510,7 +542,7 @@
         if (data.data.content) {
           addMessage('assistant', data.data.content);
           chatHistory.push({ role: 'assistant', content: data.data.content });
-          localStorage.setItem('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
+          storage.set('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
         }
       } else {
         // Show error from server or default message

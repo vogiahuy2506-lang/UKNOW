@@ -89,6 +89,65 @@ describe('widget.js — nhãn nút mở chat (launcher label)', () => {
     expect(document.getElementById('uknow-launcher-label')).toBeNull();
   });
 
+  describe('trong iframe sandbox không có allow-same-origin (landing page của Founder AI)', () => {
+    // Landing công khai hiển thị trong iframe sandbox (LpRendererPage.jsx) — ở đó chỉ ĐỌC
+    // window.localStorage đã ném SecurityError. Đo thật 25/09: widget chết ngay dòng đầu, landing
+    // tạo bằng Founder AI nhúng chatbot không hiện gì cả. Mô phỏng đúng cách trình duyệt chặn.
+    const throwSandboxed = () => {
+      throw new DOMException(
+        "Failed to read the 'localStorage' property from 'Window': The document is sandboxed and lacks the 'allow-same-origin' flag.",
+        'SecurityError'
+      );
+    };
+    let originalDescriptor;
+    beforeEach(() => {
+      originalDescriptor = Object.getOwnPropertyDescriptor(window, 'localStorage');
+      Object.defineProperty(window, 'localStorage', { configurable: true, get: throwSandboxed });
+    });
+    afterEach(() => {
+      // Trả lại ĐÚNG mô tả gốc — `delete` sẽ xoá luôn localStorage thật của jsdom cho các test sau.
+      Object.defineProperty(window, 'localStorage', originalDescriptor);
+    });
+
+    it('vẫn dựng nút chat + nhãn', async () => {
+      await mountWidget({ launcherLabel: 'Chat với chúng tôi' });
+
+      expect(document.getElementById('uknow-bubble')).toBeTruthy();
+      expect(document.getElementById('uknow-launcher-label').textContent).toBe('Chat với chúng tôi');
+    });
+
+    it('gửi tin vẫn chạy (lưu lịch sử rơi về bộ nhớ trang, không ném lỗi)', async () => {
+      await mountWidget({ launcherLabel: 'Chat ngay' });
+      document.getElementById('uknow-bubble').click();
+
+      const input = document.querySelector('#uknow-window input');
+      input.value = 'Xin chào shop';
+      input.dispatchEvent(new KeyboardEvent('keypress', { key: 'Enter' }));
+
+      await vi.waitFor(() => {
+        expect(document.getElementById('uknow-messages').textContent).toContain('Xin chào shop');
+      });
+      // Lượt gửi thật sự đi tới máy chủ (fetch thứ 2 sau lượt lấy cấu hình), kèm phiên đã sinh.
+      await vi.waitFor(() => {
+        const chatCall = fetch.mock.calls.find(([url]) => String(url).endsWith('/chat'));
+        expect(chatCall).toBeTruthy();
+        expect(JSON.parse(chatCall[1].body).sessionId).toMatch(/^sess_/);
+      });
+    });
+  });
+
+  it('dữ liệu cũ trong localStorage bị hỏng (JSON sai) → widget vẫn dựng', async () => {
+    const token = 'test_corrupt';
+    localStorage.setItem(`uknow_msgs_${token}`, '{không phải json');
+    window.customChatbotConfig = { token, baseUrl: '' };
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ json: async () => ({ success: true, data: { launcherLabel: 'Hỏi ngay' } }) }));
+    eval(WIDGET_SOURCE);
+
+    await vi.waitFor(() => {
+      expect(document.getElementById('uknow-launcher-label')?.textContent).toBe('Hỏi ngay');
+    });
+  });
+
   it('bấm bong bóng → nhãn ẩn; bấm lại → nhãn hiện lại', async () => {
     await mountWidget({ launcherLabel: 'Chat ngay' });
 
