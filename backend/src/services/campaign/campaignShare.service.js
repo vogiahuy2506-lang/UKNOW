@@ -1,49 +1,146 @@
+import db from '../../config/database.js';
 import campaignShareRepository from '../../repositories/campaign/campaignShare.repository.js';
+import { sendSystemEmail } from '../../utils/systemEmail.util.js';
+import { buildCampaignSharedEmail } from '../../utils/systemEmailShare.util.js';
 
 class CampaignShareService {
   /**
-   * Share a campaign with another user by email
+   * Share a campaign với một email — hỗ trợ cả email đã có user (active)
+   * và email ngoài hệ thống (pending).
+   *
+   * @returns {Promise<{
+   *   success: true,
+   *   share: object,
+   *   recipient: { id: number, name: string, email: string } | null,
+   *   isExistingUser: boolean,
+   *   notificationSent: boolean,
+   * }>}
    */
   async shareCampaign({ campaignId, workspaceOwnerId, recipientEmail, shareType = 'view', canRun = false }) {
-    // Find recipient by email
-    const recipient = await campaignShareRepository.findUserByEmail(recipientEmail);
-    if (!recipient) {
-      const error = new Error('Không tìm thấy người dùng với email này');
-      error.status = 404;
-      throw error;
+    const normalizedEmail = String(recipientEmail || '').trim().toLowerCase();
+
+    const client = await db.getClient();
+    let result;
+    try {
+      await client.query('BEGIN');
+      result = await campaignShareRepository.findOrCreatePendingByEmail(client, {
+        campaignId,
+        workspaceOwnerId,
+        recipientEmail: normalizedEmail,
+        shareType,
+        canRun,
+      });
+      await client.query('COMMIT');
+    } catch (err) {
+      await client.query('ROLLBACK');
+      throw err;
+    } finally {
+      client.release();
     }
 
-    // Cannot share with yourself
-    if (Number(recipient.id) === Number(workspaceOwnerId)) {
-      const error = new Error('Bạn không thể chia sẻ chiến dịch với chính mình');
-      error.status = 400;
-      throw error;
-    }
-
-    // Create share record
-    const share = await campaignShareRepository.create({
-      idCampaign: campaignId,
-      workspaceOwnerId,
-      idRecipient: recipient.id,
-      recipientEmail,
-      shareType,
-      canRun,
-    });
-    if (!share) {
+    if (!result) {
       const error = new Error('Không tìm thấy chiến dịch trong không gian làm việc');
       error.status = 404;
       throw error;
     }
 
+    // Tự share với chính mình là vô nghĩa.
+    if (result.recipient && Number(result.recipient.id) === Number(workspaceOwnerId)) {
+      const error = new Error('Bạn không thể chia sẻ chiến dịch với chính mình');
+      error.status = 400;
+      throw error;
+    }
+
+    // Fire-and-forget notification. Mail fail không làm fail share API — share đã ghi DB.
+    let notificationSent = false;
+    try {
+      const sender = await this._resolveSenderName(workspaceOwnerId);
+      await this._sendShareNotification({
+        isExistingUser: result.isExistingUser,
+        campaignId,
+        recipientEmail: normalizedEmail,
+        recipient: result.recipient,
+        shareType,
+        canRun,
+        senderName: sender,
+      });
+      notificationSent = true;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[CampaignShareService] Failed to send share notification to ${normalizedEmail}:`,
+        err?.message || err
+      );
+    }
+
     return {
       success: true,
-      share,
-      recipient: {
-        id: recipient.id,
-        name: recipient.full_name || recipient.username,
-        email: recipient.email,
-      },
+      share: result.share,
+      recipient: result.recipient
+        ? {
+            id: result.recipient.id,
+            name: result.recipient.full_name || result.recipient.username,
+            email: result.recipient.email,
+          }
+        : null,
+      isExistingUser: result.isExistingUser,
+      notificationSent,
     };
+  }
+
+  async _resolveSenderName(workspaceOwnerId) {
+    try {
+      const { rows } = await db.query(
+        `SELECT COALESCE(full_name, username) AS name FROM users WHERE id = $1 LIMIT 1`,
+        [workspaceOwnerId]
+      );
+      return rows[0]?.name || null;
+    } catch {
+      return null;
+    }
+  }
+
+  async _sendShareNotification({
+    isExistingUser,
+    campaignId,
+    recipientEmail,
+    recipient,
+    shareType,
+    canRun,
+    senderName,
+  }) {
+    const meta = await this._resolveCampaignMeta(campaignId, recipient?.id || senderName);
+    const safeMeta =
+      meta ||
+      (await this._resolveCampaignMeta(
+        campaignId,
+        // fallback: meta sẽ fail nếu không có quyền, dùng query khác qua owner
+        undefined
+      ));
+    const campaignName = safeMeta?.campaign_name || 'Chiến dịch';
+
+    const { subject, html } = buildCampaignSharedEmail({
+      senderName: senderName || 'Một người dùng Founder AI',
+      campaignName,
+      campaignUrl: null,
+      shareType,
+      canRun,
+      recipientName: recipient?.name || null,
+      isExistingUser,
+    });
+
+    await sendSystemEmail({ to: recipientEmail, subject, html });
+  }
+
+  async _resolveCampaignMeta(campaignId, fallbackUserId) {
+    const { rows } = await db.query(
+      `SELECT c.campaign_name
+         FROM campaigns c
+        WHERE c.id = $1
+        LIMIT 1`,
+      [campaignId]
+    );
+    return rows[0] || null;
   }
 
   /**
@@ -142,6 +239,7 @@ class CampaignShareService {
       },
       shareType: share.share_type,
       canRun: share.can_run,
+      status: share.status,
       createdAt: share.created_at,
       updatedAt: share.updated_at,
     }));
