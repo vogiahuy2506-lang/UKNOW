@@ -23,6 +23,7 @@ vi.mock('../../../features/users/services/userManagementApi.service', () => ({
     getEmployees: vi.fn(),
     getTeamOverview: vi.fn(),
     getCampaignApprovalThreshold: vi.fn(),
+    inviteEmployee: vi.fn(),
     createEmployee: vi.fn(),
     linkEmployee: vi.fn(),
     updateEmployeeInfo: vi.fn(),
@@ -82,10 +83,10 @@ const renderPage = async () => {
 
 const field = (name) => document.body.querySelector(`input[name="${name}"]`);
 
-/** Mở hộp thoại thêm nhân viên rồi chuyển sang tab `tabLabel`. */
+/** Mở hộp thoại thêm nhân viên. */
 const openAddModal = async (user) => {
   await user.click(await screen.findByRole('button', { name: 'Thêm nhân viên' }));
-  await screen.findAllByRole('button', { name: 'Tạo tài khoản mới' });
+  await screen.findByRole('heading', { name: 'Thêm nhân viên' });
 };
 
 // Trang có nhiều setState sau await; user-event lo phần act(), còn cảnh báo "not wrapped in act" chỉ là
@@ -107,64 +108,91 @@ beforeEach(() => {
   api.getCampaignApprovalThreshold.mockResolvedValue({ data: { data: { threshold: null } } });
 });
 
-// ── (a) thêm/link xong → tự mở tab Phân quyền ────────────────────────────────
+// ── (a) thêm nhân viên xong → tự mở tab Phân quyền ───────────────────────────
 describe('thêm nhân viên xong → tự mở tab Phân quyền', () => {
-  it('link tài khoản có sẵn: mở đúng nhân viên ở tab Phân quyền, có dải vàng "chưa có quyền nào"', async () => {
-    setEmployees([], [makeEmployee()]);
-    api.linkEmployee.mockReturnValue(ok({ id: '12' })); // id là CHUỖI (BIGINT)
+  it('id trả về là CHUỖI (cột BIGINT) và method: linked → mở đúng nhân viên ở tab Phân quyền, toast linkSuccess', async () => {
+    setEmployees([], [makeEmployee({ id: '12' })]);
+    api.inviteEmployee.mockReturnValue(ok({ id: '12', method: 'linked' })); // id là CHUỖI (BIGINT)
     const user = await renderPage();
 
     await openAddModal(user);
-    await user.click(screen.getByRole('button', { name: 'Link tài khoản có sẵn' }));
     await user.type(field('email'), 'nv01@example.com');
-    const submit = screen.getAllByRole('button', { name: 'Link tài khoản có sẵn' }).pop();
+    const submit = screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop();
     await user.click(submit);
 
     expect(await screen.findByText(/Nhân Viên Một chưa có quyền nào/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Nhân Viên Một' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lưu quyền hạn' })).toBeInTheDocument();
-    expect(api.linkEmployee).toHaveBeenCalledWith('nv01@example.com');
+    expect(toast.success).toHaveBeenCalledWith('Liên kết tài khoản nhân viên thành công');
   });
 
-  it('backend cũ chưa trả data.id → tìm theo email (không phân biệt hoa/thường)', async () => {
+  it('backend cũ chưa trả data.id → tìm theo email (không phân biệt hoa/thường), vẫn mở màn Phân quyền', async () => {
     setEmployees([], [makeEmployee({ email: 'nv01@example.com' })]);
-    api.linkEmployee.mockReturnValue(ok({ permissions: [] })); // không có id
+    api.inviteEmployee.mockReturnValue(ok({ permissions: [], method: 'linked' })); // không có id
     const user = await renderPage();
 
     await openAddModal(user);
-    await user.click(screen.getByRole('button', { name: 'Link tài khoản có sẵn' }));
     await user.type(field('email'), 'NV01@Example.com');
-    await user.click(screen.getAllByRole('button', { name: 'Link tài khoản có sẵn' }).pop());
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
 
     expect(await screen.findByText(/Nhân Viên Một chưa có quyền nào/)).toBeInTheDocument();
   });
 
-  it('tạo tài khoản mới cũng mở tab Phân quyền', async () => {
+  it('method: invited và invitationSent !== false → mở tab Phân quyền, toast inviteSent', async () => {
     setEmployees([], [makeEmployee({ status: 'pending_activation' })]);
-    api.createEmployee.mockReturnValue(ok({ id: '12', invitationSent: true }, { message: 'Đã gửi lời mời đến email nhân viên' }));
+    api.inviteEmployee.mockReturnValue(ok({ id: '12', method: 'invited', invitationSent: true }));
     const user = await renderPage();
 
     await openAddModal(user);
-    await user.type(field('username'), 'nv01');
     await user.type(field('email'), 'nv01@example.com');
-    await user.click(screen.getAllByRole('button', { name: 'Tạo tài khoản mới' }).pop());
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
 
     expect(await screen.findByText(/Nhân Viên Một chưa có quyền nào/)).toBeInTheDocument();
     expect(toast.success).toHaveBeenCalledWith('Đã gửi lời mời kích hoạt đến email nhân viên');
   });
 
-  it('thư mời gửi hỏng (invitationSent=false) → toast lỗi mang câu của backend, KHÔNG toast "đã gửi"', async () => {
+  it('thư mời gửi hỏng (invitationSent=false) → toast lỗi mang câu của backend (duration 8000), KHÔNG toast "đã gửi"', async () => {
     setEmployees([], [makeEmployee({ status: 'pending_activation' })]);
-    api.createEmployee.mockReturnValue(ok({ id: '12', invitationSent: false }, { message: 'Đã tạo tài khoản NHƯNG gửi email mời thất bại.' }));
+    api.inviteEmployee.mockReturnValue(ok({ id: '12', method: 'invited', invitationSent: false }, { message: 'Đã tạo tài khoản NHƯNG gửi email mời thất bại.' }));
     const user = await renderPage();
 
     await openAddModal(user);
-    await user.type(field('username'), 'nv01');
     await user.type(field('email'), 'nv01@example.com');
-    await user.click(screen.getAllByRole('button', { name: 'Tạo tài khoản mới' }).pop());
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Đã tạo tài khoản NHƯNG gửi email mời thất bại.', expect.anything()));
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Đã tạo tài khoản NHƯNG gửi email mời thất bại.', { duration: 8000 }));
     expect(toast.success).not.toHaveBeenCalledWith('Đã gửi lời mời kích hoạt đến email nhân viên');
+  });
+
+  it('gửi đúng { email, fullName }: fullName bỏ trống → gửi fullName: null, KHÔNG gửi chuỗi rỗng', async () => {
+    setEmployees([], [makeEmployee()]);
+    api.inviteEmployee.mockReturnValue(ok({ id: '12', method: 'invited' }));
+    const user = await renderPage();
+
+    await openAddModal(user);
+    await user.type(field('email'), 'nv01@example.com');
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
+
+    await waitFor(() => expect(api.inviteEmployee).toHaveBeenCalledWith({
+      email: 'nv01@example.com',
+      fullName: null,
+    }));
+  });
+
+  it('gửi đúng { email, fullName }: có nhập họ tên → fullName được trim và gửi', async () => {
+    setEmployees([], [makeEmployee()]);
+    api.inviteEmployee.mockReturnValue(ok({ id: '12', method: 'invited' }));
+    const user = await renderPage();
+
+    await openAddModal(user);
+    await user.type(field('email'), 'nv01@example.com');
+    await user.type(field('fullName'), '  Nhân Viên Một  ');
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
+
+    await waitFor(() => expect(api.inviteEmployee).toHaveBeenCalledWith({
+      email: 'nv01@example.com',
+      fullName: 'Nhân Viên Một',
+    }));
   });
 });
 
@@ -198,61 +226,39 @@ describe('cột Quyền trong bảng', () => {
   });
 });
 
-// ── (c) lỗi email/tên đăng nhập trùng ────────────────────────────────────────
-describe('lỗi khi tạo tài khoản mới', () => {
-  it('EMAIL_ALREADY_REGISTERED → sang tab Link, email điền sẵn, hiện gợi ý (không toast đỏ)', async () => {
+// ── (c) hộp thoại thêm nhân viên chỉ cần email ────────────────────────────────
+describe('hộp thoại thêm nhân viên (chỉ cần email)', () => {
+  it('hiện dòng gợi ý ngay dưới ô email và nhãn Không bắt buộc ở ô họ tên', async () => {
     setEmployees([]);
-    const message = 'Email này đã có tài khoản Founder AI. Hãy dùng tab "Link tài khoản có sẵn" để thêm người này vào nhóm.';
-    api.createEmployee.mockRejectedValue(httpError({ success: false, code: 'EMAIL_ALREADY_REGISTERED', message }));
     const user = await renderPage();
-
     await openAddModal(user);
-    await user.type(field('username'), 'nv01');
-    await user.type(field('email'), 'da.co@example.com');
-    await user.click(screen.getAllByRole('button', { name: 'Tạo tài khoản mới' }).pop());
 
-    expect(await screen.findByText(message)).toBeInTheDocument();
-    expect(field('email')).toHaveValue('da.co@example.com');
-    expect(field('username')).toBeNull(); // form tạo mới đã ẩn → đang ở tab Link
-    expect(toast.error).not.toHaveBeenCalled();
+    expect(screen.getByText('Người đã có tài khoản sẽ được thêm ngay; người chưa có sẽ nhận email hướng dẫn đăng ký.')).toBeInTheDocument();
+    expect(screen.getByText('(Không bắt buộc)')).toBeInTheDocument();
+    expect(field('username')).toBeNull(); // Không còn ô username
   });
 
-  it('USERNAME_TAKEN → lỗi đỏ ngay dưới ô tên đăng nhập, không toast, vẫn ở tab tạo mới', async () => {
+  it('bỏ trống email → hiện lỗi validation "Vui lòng nhập email", không gọi API', async () => {
     setEmployees([]);
-    const message = 'Tên đăng nhập này đã có người dùng. Hãy chọn tên khác (ví dụ thêm tên công ty phía sau).';
-    api.createEmployee.mockRejectedValue(httpError({ success: false, code: 'USERNAME_TAKEN', message }));
     const user = await renderPage();
-
     await openAddModal(user);
-    await user.type(field('username'), 'nv01');
-    await user.type(field('email'), 'moi@example.com');
-    await user.click(screen.getAllByRole('button', { name: 'Tạo tài khoản mới' }).pop());
 
-    const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent(message);
-    expect(field('username')).not.toBeNull();
-    expect(toast.error).not.toHaveBeenCalled();
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
+
+    expect(await screen.findByText('Vui lòng nhập email')).toBeInTheDocument();
+    expect(api.inviteEmployee).not.toHaveBeenCalled();
   });
 
-  it('backend cũ (lỗi không có code) → giữ toast cũ với câu của server', async () => {
+  it('lỗi khác khi gọi API → toast câu lỗi từ server hoặc createFailed', async () => {
     setEmployees([]);
-    api.createEmployee.mockRejectedValue(httpError({ success: false, message: 'Email này đã được sử dụng bởi một tài khoản khác' }));
+    api.inviteEmployee.mockRejectedValue(httpError({ success: false, message: 'Số lượng nhân viên đã đạt giới hạn gói' }));
     const user = await renderPage();
 
     await openAddModal(user);
-    await user.type(field('username'), 'nv01');
-    await user.type(field('email'), 'x@example.com');
-    await user.click(screen.getAllByRole('button', { name: 'Tạo tài khoản mới' }).pop());
+    await user.type(field('email'), 'nv01@example.com');
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
 
-    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Email này đã được sử dụng bởi một tài khoản khác'));
-  });
-
-  it('tab Tạo tài khoản mới có dòng nhắc quy tắc tên đăng nhập', async () => {
-    setEmployees([]);
-    const user = await renderPage();
-    await openAddModal(user);
-    expect(screen.getByText(/Chỉ chữ cái và số, không dấu, không khoảng trắng/)).toBeInTheDocument();
-    expect(screen.getByText(/thêm tên công ty/)).toBeInTheDocument();
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Số lượng nhân viên đã đạt giới hạn gói'));
   });
 });
 

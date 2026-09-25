@@ -13,6 +13,11 @@ export const userManagementApiService = {
     return api.post('/employees', payload);
   },
 
+  /** Mời nhân viên chỉ cần email (tự link nếu đã có, tự tạo + gửi thư nếu chưa). */
+  inviteEmployee({ email, fullName }) {
+    return api.post('/employees/invite', { email, fullName });
+  },
+
   /** Link tài khoản user_admin có sẵn (chưa có plan) thành employee theo email. */
   linkEmployee(email) {
     return api.post('/employees/link', { email });

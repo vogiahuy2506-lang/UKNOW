@@ -1548,6 +1548,8 @@ export default {
     removeFromTeam: 'Remove from team',
     createNewAccountTip: 'Use when the email does not exist in the system. The system will send an account activation invitation to the employee.',
     linkAccountTip: 'Use when the email already exists in the system. Users may belong to multiple businesses — adding them to your team will not affect their existing relationships.',
+    inviteEmailHint: 'Users with an existing account will be added immediately; new users will receive an email with registration instructions.',
+    optional: 'Optional',
     addEmployeeTitle: 'Add Employee',
     close: 'Close',
     confirmResetTitle: 'Confirm Password Reset',

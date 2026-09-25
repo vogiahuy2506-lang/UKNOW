@@ -1550,6 +1550,8 @@ export default {
     removeFromTeam: 'Xóa khỏi nhóm',
     createNewAccountTip: 'Dùng khi email chưa có trong hệ thống. Hệ thống sẽ gửi email mời kích hoạt tài khoản đến nhân viên.',
     linkAccountTip: 'Dùng khi email đã có trong hệ thống. Người dùng có thể đang thuộc nhiều doanh nghiệp khác nhau — thêm họ vào nhóm của bạn sẽ không ảnh hưởng đến các mối quan hệ hiện tại.',
+    inviteEmailHint: 'Người đã có tài khoản sẽ được thêm ngay; người chưa có sẽ nhận email hướng dẫn đăng ký.',
+    optional: 'Không bắt buộc',
     addEmployeeTitle: 'Thêm nhân viên',
     close: 'Đóng',
     confirmResetTitle: 'Xác nhận reset mật khẩu',

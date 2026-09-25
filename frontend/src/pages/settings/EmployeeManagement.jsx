@@ -17,12 +17,9 @@ import {
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
 import {
-  EMAIL_ALREADY_REGISTERED_CODE,
-  USERNAME_TAKEN_CODE,
   buildPermissionPreset,
   countGrantedPermissions,
   findEmployeeAfterAdd,
-  getEmployeeErrorInfo,
   toPermissionState,
 } from './employeeManagement.helpers';
 
@@ -135,12 +132,9 @@ const EmployeeManagement = () => {
   const [isRefreshing, setIsRefreshing] = useState(false);
 
 
-  // Modal thêm nhân viên (2 tab: tạo mới / link)
+  // Modal thêm nhân viên (chỉ cần email)
   const [showCreateModal, setShowCreateModal] = useState(false);
-  const [createTab, setCreateTab]             = useState('new');
   const [isCreating, setIsCreating]           = useState(false);
-  // Gợi ý (không phải lỗi đỏ) ở tab Link, vd email vừa nhập đã có tài khoản.
-  const [createHint, setCreateHint]           = useState('');
 
   // Modal chi tiết nhân viên (3 tab: Thông tin / Phân quyền / Giới hạn gửi)
   const [selectedEmployee, setSelectedEmployee] = useState(null);
@@ -190,15 +184,11 @@ const EmployeeManagement = () => {
       document.body
     );
 
-  const createNewForm  = useForm({ defaultValues: { username: '', email: '', fullName: '' } });
-  const createLinkForm = useForm({ defaultValues: { email: '' } });
+  const inviteForm     = useForm({ defaultValues: { email: '', fullName: '' } });
   const editForm       = useForm({ defaultValues: { fullName: '', email: '' } });
 
   const openCreateModal = () => {
-    setCreateTab('new');
-    setCreateHint('');
-    createNewForm.reset();
-    createLinkForm.reset();
+    inviteForm.reset();
     setShowCreateModal(true);
   };
 
@@ -372,56 +362,26 @@ const EmployeeManagement = () => {
     if (added) openEmployeeModal(added, 'permissions');
   };
 
-  const onSubmitCreateNew = async (values) => {
-    const email = values.email.trim();
+  const onSubmitInvite = async (values) => {
+    const email = values.email?.trim();
+    const fullName = values.fullName?.trim() || null;
     try {
       setIsCreating(true);
-      const res = await userManagementApiService.createEmployee({
-        username: values.username.trim(),
-        email,
-        fullName: values.fullName?.trim() || null,
-      });
-      const created = res.data?.data;
-      // Tài khoản đã tạo nhưng thư mời hỏng: backend đã viết sẵn câu nói thật — đừng đè bằng toast "đã gửi".
-      if (created?.invitationSent === false) {
+      const res = await userManagementApiService.inviteEmployee({ email, fullName });
+      const data = res.data?.data;
+      if (data?.method === 'linked') {
+        toast.success(t('employee.linkSuccess'));
+      } else if (data?.invitationSent === false) {
         toast.error(res.data?.message || t('employee.inviteFailed'), { duration: 8000 });
       } else {
         toast.success(t('employee.inviteSent'));
       }
       setShowCreateModal(false);
-      createNewForm.reset();
+      inviteForm.reset();
       const list = await fetchEmployees(true);
-      openAddedEmployeeForPermissions(list, { id: created?.id, email });
+      openAddedEmployeeForPermissions(list, { id: data?.id, email });
     } catch (err) {
-      const { code, message } = getEmployeeErrorInfo(err);
-      if (code === EMAIL_ALREADY_REGISTERED_CODE) {
-        // Người này đã có tài khoản → lối ra là tab Link: chuyển sang đó, điền sẵn email, gợi ý (không toast đỏ).
-        createLinkForm.setValue('email', email);
-        setCreateHint(message || t('employee.emailAlreadyRegisteredHint'));
-        setCreateTab('link');
-      } else if (code === USERNAME_TAKEN_CODE) {
-        createNewForm.setError('username', { type: 'server', message: message || t('employee.usernameTaken') });
-      } else {
-        toast.error(message || t('employee.createFailed'));
-      }
-    } finally {
-      setIsCreating(false);
-    }
-  };
-
-  const onSubmitCreateLink = async (values) => {
-    const email = values.email.trim();
-    try {
-      setIsCreating(true);
-      setCreateHint('');
-      const res = await userManagementApiService.linkEmployee(email);
-      toast.success(t('employee.linkSuccess'));
-      setShowCreateModal(false);
-      createLinkForm.reset();
-      const list = await fetchEmployees(true);
-      openAddedEmployeeForPermissions(list, { id: res.data?.data?.id, email });
-    } catch (err) {
-      toast.error(err?.response?.data?.message || t('employee.linkFailed'));
+      toast.error(err?.response?.data?.message || t('employee.createFailed'));
     } finally {
       setIsCreating(false);
     }
@@ -994,102 +954,40 @@ const EmployeeManagement = () => {
         () => setSelectedEmployee(null)
       )}
 
-      {/* ── Modal thêm nhân viên (2 tab) ──────────────────────────────────────── */}
+      {/* ── Modal thêm nhân viên (chỉ cần email) ─────────────────────────────── */}
       {showCreateModal && renderModal(
         <div>
           <div className="flex items-start justify-between gap-4 mb-5">
             <h2 className="text-xl font-semibold text-gray-900">{t('employee.addEmployeeTitle')}</h2>
             <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('employee.close')}</button>
           </div>
-          <div className="flex border-b border-gray-200 mb-5">
-            {[{ key: 'new', label: t('employee.createAccount') }, { key: 'link', label: t('employee.linkExistingAccount') }].map(({ key, label }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => { setCreateTab(key); setCreateHint(''); }}
-                className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                  createTab === key ? 'border-primary-500 text-primary-600' : 'border-transparent text-gray-500 hover:text-gray-700'
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          {createTab === 'new' ? (
-            <form onSubmit={createNewForm.handleSubmit(onSubmitCreateNew)} className="space-y-4">
-              <p className="text-sm text-gray-500">
-              {t('employee.createNewAccountTip')}
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.username')} *</label>
-                  <input
-                    type="text"
-                    className="input w-full"
-                    {...createNewForm.register('username', {
-                      required: t('employee.usernameRequired'),
-                      minLength: { value: 3, message: t('employee.usernameMinLength') },
-                      pattern: { value: /^[A-Za-z0-9]+$/, message: t('employee.usernamePattern') },
-                    })}
-                  />
-                  {createNewForm.formState.errors.username && (
-                    <p role="alert" className="text-red-500 text-sm mt-1">{createNewForm.formState.errors.username.message}</p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">{t('employee.usernameHint')}</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
-                  <input
-                    type="email"
-                    className="input w-full"
-                      {...createNewForm.register('email', { required: t('employee.emailRequired') })}
-                  />
-                  {createNewForm.formState.errors.email && (
-                    <p className="text-red-500 text-sm mt-1">{createNewForm.formState.errors.email.message}</p>
-                  )}
-                </div>
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.fullName')}</label>
-                  <input type="text" className="input w-full" {...createNewForm.register('fullName')} />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('common.cancel')}</button>
-                <button type="submit" className="btn btn-primary" disabled={isCreating}>
-                  {isCreating ? t('employee.creating') : t('employee.createAccount')}
-                </button>
-              </div>
-            </form>
-          ) : (
-            <form onSubmit={createLinkForm.handleSubmit(onSubmitCreateLink)} className="space-y-4">
-              <p className="text-sm text-gray-500">
-              {t('employee.linkAccountTip')}
-              </p>
-              {createHint && (
-                <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                  {createHint}
-                </div>
+          <form onSubmit={inviteForm.handleSubmit(onSubmitInvite)} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
+              <input
+                type="email"
+                className="input w-full"
+                placeholder={t('employee.emailPlaceholder')}
+                {...inviteForm.register('email', { required: t('employee.emailRequired') })}
+              />
+              {inviteForm.formState.errors.email && (
+                <p className="text-red-500 text-sm mt-1">{inviteForm.formState.errors.email.message}</p>
               )}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
-                <input
-                  type="email"
-                  className="input w-full"
-                  placeholder={t('employee.emailPlaceholder')}
-                  {...createLinkForm.register('email', { required: t('employee.emailRequired') })}
-                />
-                {createLinkForm.formState.errors.email && (
-                  <p className="text-red-500 text-sm mt-1">{createLinkForm.formState.errors.email.message}</p>
-                )}
-              </div>
-              <div className="flex justify-end gap-2 pt-2">
-                <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('common.cancel')}</button>
-                <button type="submit" className="btn btn-primary" disabled={isCreating}>
-                  {isCreating ? t('employee.linking') : t('employee.linkExistingAccount')}
-                </button>
-              </div>
-            </form>
-          )}
+              <p className="text-xs text-gray-500 mt-1">{t('employee.inviteEmailHint')}</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                {t('employee.fullName')} <span className="text-xs text-gray-400 font-normal">({t('employee.optional')})</span>
+              </label>
+              <input type="text" className="input w-full" {...inviteForm.register('fullName')} />
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowCreateModal(false)}>{t('common.cancel')}</button>
+              <button type="submit" className="btn btn-primary" disabled={isCreating}>
+                {isCreating ? t('employee.creating') : t('employee.addEmployee')}
+              </button>
+            </div>
+          </form>
         </div>,
         () => { if (!isCreating) setShowCreateModal(false); },
         MODAL_CREATE,
