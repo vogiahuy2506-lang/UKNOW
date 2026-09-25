@@ -14,7 +14,7 @@
  * Email gửi qua `sendSystemEmail` sẽ no-op khi không có SENDGRID_API_KEY (test env)
  * nên không cần mock SMTP.
  */
-import { describe, it, expect, beforeAll, beforeEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
 
 // Mời nhân viên có gửi mail. Không mock thì nodemailer mở socket thật →
 // 'Unexpected socket close' → endpoint trả 500. Mock phải đăng ký TRƯỚC khi
@@ -1191,5 +1191,114 @@ describe('Nhân viên mới có sẵn quyền xem', () => {
     const permissions = await permissionsOf(owner.id, emp.id);
     expect(permissions.campaigns_view).toBe(false);
     expect(permissions.reports_view).toBe(false);
+  });
+
+  describe('POST /api/employees/invite (PR-A: mời nhân viên chỉ cần email)', () => {
+    let originalTestSendEmail;
+    beforeAll(() => {
+      originalTestSendEmail = process.env.TEST_SEND_EMAIL;
+      process.env.TEST_SEND_EMAIL = '1';
+    });
+    afterAll(() => {
+      if (originalTestSendEmail === undefined) delete process.env.TEST_SEND_EMAIL;
+      else process.env.TEST_SEND_EMAIL = originalTestSendEmail;
+    });
+
+    beforeEach(() => {
+      mockSendMail.mockClear();
+    });
+
+    it('email của tài khoản đang hoạt động → method: linked, không tạo user mới, không gửi thư', async () => {
+      const { owner, token } = await setupOwnerWithPlan();
+      const existing = await createUser({ username: 'existing_emp', email: 'existing_emp@test.local', role: 'user' });
+
+      const res = await request(app)
+        .post('/api/employees/invite')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'existing_emp@test.local' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.message).toBe('Liên kết nhân viên thành công');
+      expect(res.body.data.method).toBe('linked');
+      expect(res.body.data.id).toBe(existing.id);
+
+      // Không gửi thư
+      expect(mockSendMail).not.toHaveBeenCalled();
+
+      // Membership trong DB được tạo
+      const memRows = await db.query('SELECT * FROM user_members WHERE owner_id = $1 AND employee_id = $2', [owner.id, existing.id]);
+      expect(memRows.rows.length).toBe(1);
+      expect(memRows.rows[0].status).toBe('active');
+    });
+
+    it('email chưa có tài khoản → method: invited, tạo user pending_activation, sinh username, gửi thư', async () => {
+      const { token } = await setupOwnerWithPlan();
+
+      const res = await request(app)
+        .post('/api/employees/invite')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'brand_new_emp@test.local', fullName: 'Nhân Viên Mới' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.success).toBe(true);
+      expect(res.body.data.method).toBe('invited');
+      expect(res.body.data.invitationSent).toBe(true);
+
+      // Kiểm tra user được tạo trong DB với status pending_activation
+      const userRows = await db.query('SELECT * FROM users WHERE email = $1', ['brand_new_emp@test.local']);
+      expect(userRows.rows.length).toBe(1);
+      expect(userRows.rows[0].status).toBe('pending_activation');
+      expect(userRows.rows[0].username).toBe('brandnewemp');
+      expect(userRows.rows[0].full_name).toBe('Nhân Viên Mới');
+
+      // Thư mời đã được gửi
+      expect(mockSendMail).toHaveBeenCalled();
+    });
+
+    it('email viết HOA của tài khoản có sẵn → nhận ra là cùng người và linked', async () => {
+      const { owner, token } = await setupOwnerWithPlan();
+      const existing = await createUser({ username: 'case_emp', email: 'case_emp@test.local', role: 'user' });
+
+      const res = await request(app)
+        .post('/api/employees/invite')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'CASE_EMP@TEST.LOCAL' });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.method).toBe('linked');
+      expect(res.body.data.id).toBe(existing.id);
+    });
+
+    it('email của chính chủ → 400 Không thể tự thêm mình làm nhân viên', async () => {
+      const { owner, token } = await setupOwnerWithPlan();
+
+      const res = await request(app)
+        .post('/api/employees/invite')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: owner.email });
+
+      expect(res.status).toBe(400);
+      expect(res.body.message).toBe('Không thể tự thêm mình làm nhân viên');
+    });
+
+    it('vượt số nhân viên của gói → 403 EMPLOYEE_LIMIT_REACHED', async () => {
+      const { token } = await setupOwnerWithPlan({ maxEmployees: 1 });
+      // Thêm nhân viên thứ 1
+      await request(app)
+        .post('/api/employees/invite')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'emp_one@test.local' })
+        .expect(201);
+
+      // Mời nhân viên thứ 2 → bị chặn
+      const res = await request(app)
+        .post('/api/employees/invite')
+        .set('Authorization', `Bearer ${token}`)
+        .send({ email: 'emp_two@test.local' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('EMPLOYEE_LIMIT_REACHED');
+    });
   });
 });

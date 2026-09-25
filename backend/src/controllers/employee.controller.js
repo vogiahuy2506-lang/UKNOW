@@ -91,6 +91,43 @@ export async function createEmployee(req, res) {
 }
 
 /**
+ * POST /api/employees/invite
+ * Mời nhân viên chỉ bằng email (tự link nếu đã có tài khoản, tự tạo + gửi thư nếu chưa).
+ * Body: { email, fullName }
+ */
+export async function inviteEmployee(req, res) {
+  try {
+    const ownerId = req.user.id;
+    const { email, fullName } = req.body;
+    const result = await employeeService.inviteEmployeeByEmail(ownerId, { email, fullName });
+    await logWorkspace(
+      getWorkspaceAuditContext(req),
+      AUDIT_ACTIONS.EMPLOYEE_ADDED,
+      AUDIT_ENTITY_TYPES.EMPLOYEE,
+      result.id,
+      {
+        email,
+        fullName: fullName || null,
+        method: result.method,
+        ...(result.method === 'invited' ? { invitationSent: result.invitationSent } : {}),
+      }
+    );
+    const message = result.method === 'linked'
+      ? 'Liên kết nhân viên thành công'
+      : (result.invitationSent
+        ? 'Đã gửi lời mời đến email nhân viên'
+        : 'Đã tạo tài khoản NHƯNG gửi email mời thất bại. Nhân viên chưa vào được — hãy bấm "Gửi lại lời mời" sau khi kiểm tra cấu hình email.');
+    return res.status(201).json({
+      success: true,
+      message,
+      data: result,
+    });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
  * POST /api/employees/:id/resend-invite
  * Gửi lại email mời kích hoạt cho nhân viên chưa kích hoạt.
  */

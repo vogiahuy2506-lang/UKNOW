@@ -71,6 +71,25 @@ router.post(
   employeeController.createEmployee
 );
 
+// POST /api/employees/invite — mời nhân viên chỉ bằng email (tự link nếu đã có, tự tạo + gửi thư nếu chưa)
+router.post(
+  '/invite',
+  requireActivePlan,
+  [
+    body('email')
+      .trim()
+      .isEmail()
+      .withMessage('Email không hợp lệ'),
+    body('fullName')
+      .optional({ checkFalsy: true })
+      .trim()
+      .isLength({ max: 255 })
+      .withMessage('Họ tên không quá 255 ký tự'),
+  ],
+  handleValidationErrors,
+  employeeController.inviteEmployee
+);
+
 // POST /api/employees/:id/resend-invite — gửi lại email mời kích hoạt
 router.post(
   '/:id/resend-invite',

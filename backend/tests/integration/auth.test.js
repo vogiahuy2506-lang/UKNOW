@@ -398,6 +398,81 @@ describe('POST /api/auth/google-login', () => {
     expect(res.status).toBe(401);
     expect(res.body.message).toMatch(/chưa được xác thực/i);
   });
+
+  it('Google đăng nhập với email của tài khoản pending_activation → 200, thành active, có memberships', async () => {
+    const owner = await createUser({ username: 'owner_for_google', email: 'owner_google@test.local' });
+    const pendingEmail = 'invited_pending@test.local';
+    const pendingUser = await createUser({
+      username: 'invited_user',
+      email: pendingEmail,
+      status: 'pending_activation',
+      isVerified: false,
+    });
+    // Gắn vào membership của owner
+    await db.query(
+      `INSERT INTO user_members (owner_id, employee_id, permissions)
+       VALUES ($1, $2, '["campaigns_view"]'::jsonb)`,
+      [owner.id, pendingUser.id]
+    );
+    // Tạo token mời kích hoạt trong verification_codes
+    await createVerificationCode({ email: pendingEmail, code: 'invite_token_123', type: 'employee_invitation' });
+
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email: pendingEmail,
+        email_verified: true,
+        name: 'Invited Google Name',
+        picture: 'https://example.com/pic.jpg',
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'google_token_for_pending' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.success).toBe(true);
+    expect(res.body.data.user.email).toBe(pendingEmail);
+    expect(res.body.data.user.memberships.length).toBe(1);
+    expect(res.body.data.user.memberships[0].ownerId).toBe(owner.id);
+
+    // Kiểm tra DB: users.status = 'active', is_verified = true
+    const userRow = await db.query('SELECT status, is_verified, verified_at FROM users WHERE id = $1', [pendingUser.id]);
+    expect(userRow.rows[0].status).toBe('active');
+    expect(userRow.rows[0].is_verified).toBe(true);
+    expect(userRow.rows[0].verified_at).not.toBeNull();
+
+    // Kiểm tra token kích hoạt bị mark as used
+    const tokenRow = await db.query('SELECT is_used FROM verification_codes WHERE code = $1', ['invite_token_123']);
+    expect(tokenRow.rows[0].is_used).toBe(true);
+  });
+
+  it('Google đăng nhập tài khoản inactive → vẫn 403', async () => {
+    const inactiveEmail = 'inactive_google@test.local';
+    await createUser({
+      username: 'inactive_user',
+      email: inactiveEmail,
+      status: 'inactive',
+    });
+
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email: inactiveEmail,
+        email_verified: true,
+        name: 'Inactive User',
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'google_token_inactive' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.success).toBe(false);
+    expect(res.body.message).toMatch(/Tài khoản đã bị vô hiệu hóa/i);
+  });
 });
 
 describe('POST /api/auth/login', () => {

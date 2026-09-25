@@ -30,6 +30,7 @@ jest.unstable_mockModule('../../controllers/employee.controller.js', () => ({
   teamOverview: noop,
   getEmployee: noop,
   createEmployee: noop,
+  inviteEmployee: noop,
   resendInvite: noop,
   linkEmployee: noop,
   updateInfo: noop,
