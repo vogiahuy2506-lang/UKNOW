@@ -151,13 +151,12 @@ function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48, 
     <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
       Xin chào,
     </p>
-    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
-      <strong style="color:#f97316">${ownerName}</strong> đã mời bạn tham gia nhóm trên <strong>${PRODUCT_NAME}</strong>.
-      Nhấn nút bên dưới để kích hoạt tài khoản và đặt mật khẩu của bạn.
+    <p style="margin:0 0 20px;font-size:15px;color:#6b7280;line-height:1.6">
+      <strong style="color:#f97316">${ownerName}</strong> đã mời bạn tham gia nhóm làm việc trên <strong>${PRODUCT_NAME}</strong>.
     </p>
 
     <!-- CTA Button -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:24px">
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
       <tr>
         <td style="text-align:center">
           <a href="${activationUrl}"
@@ -169,31 +168,47 @@ function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48, 
       </tr>
     </table>
 
-    <!-- Expiry -->
-    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-radius:8px;margin-bottom:24px">
+    <!-- Quick Guide Box -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:20px">
       <tr>
-        <td style="padding:12px 16px;text-align:center">
-          <p style="margin:0;font-size:13px;color:#92400e">
+        <td style="padding:14px 16px;text-align:left">
+          <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#1e293b">
+            📌 Hướng dẫn tham gia:
+          </p>
+          <ul style="margin:0;padding-left:18px;font-size:13px;color:#475569;line-height:1.6">
+            <li style="margin-bottom:4px">
+              Bạn có thể <strong>tạo mật khẩu qua nút bấm trên</strong>, hoặc <strong>đăng nhập trực tiếp bằng Google</strong> (với email ${email ? `<strong>${email}</strong>` : 'được mời'}) để vào làm việc ngay.
+            </li>
+            <li>
+              Sau khi vào hệ thống, vui lòng <strong>đồng ý với các điều khoản</strong> và <strong>cập nhật đầy đủ thông tin</strong> tài khoản của bạn để hoàn tất hồ sơ.
+            </li>
+          </ul>
+        </td>
+      </tr>
+    </table>
+
+    <!-- Expiry -->
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-radius:8px;margin-bottom:20px">
+      <tr>
+        <td style="padding:10px 16px;text-align:center">
+          <p style="margin:0;font-size:12px;color:#92400e">
             ⏱️ Link kích hoạt có hiệu lực trong <strong>${expiryHours} giờ</strong>.
           </p>
         </td>
       </tr>
     </table>
 
-    <!-- Fallback -->
-    <p style="margin:0 0 12px;font-size:14px;color:#4b5563;line-height:1.6">
-      Hoặc đăng nhập bằng Google với chính email ${email ? `<strong>${email}</strong>` : 'được mời'} để vào làm việc ngay mà không cần đặt mật khẩu.
+    <!-- Fallback link -->
+    <p style="margin:0 0 6px;font-size:12px;color:#6b7280">
+      Nếu nút trên không mở được, bạn có thể copy link này vào trình duyệt:
     </p>
-    <p style="margin:0 0 8px;font-size:13px;color:#6b7280">
-      Hoặc copy link bên dưới và dán vào trình duyệt:
-    </p>
-    <p style="margin:0;font-size:12px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:10px 12px;border-radius:6px;border:1px solid #e5e7eb">
+    <p style="margin:0;font-size:11px;color:#9ca3af;word-break:break-all;background:#f9fafb;padding:8px 10px;border-radius:6px;border:1px solid #e5e7eb">
       ${activationUrl}
     </p>
 
     <!-- Security Note -->
-    <p style="margin:24px 0 0;font-size:13px;color:#9ca3af;line-height:1.6">
-      Nếu bạn không nhận ra yêu cầu này, vui lòng bỏ qua email. Tài khoản của bạn sẽ không bị thay đổi.
+    <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;line-height:1.5">
+      Nếu bạn không nhận ra yêu cầu này, vui lòng bỏ qua email.
     </p>
   `;
 
