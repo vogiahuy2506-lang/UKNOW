@@ -46,6 +46,24 @@ jest.unstable_mockModule('../../services/user/signupTrialTx.service.js', () => (
   grantSignupTrialInTx: jest.fn().mockResolvedValue(null),
 }));
 
+jest.unstable_mockModule('../../repositories/landingPageShare.repository.js', () => ({
+  default: {
+    claimPendingByUserId: jest.fn().mockResolvedValue([]),
+  },
+}));
+
+jest.unstable_mockModule('../../repositories/campaign/campaignShare.repository.js', () => ({
+  default: {
+    claimPendingByUserId: jest.fn().mockResolvedValue([]),
+  },
+}));
+
+jest.unstable_mockModule('../../repositories/ai/chatbotShare.repository.js', () => ({
+  default: {
+    claimPendingByUserId: jest.fn().mockResolvedValue([]),
+  },
+}));
+
 const authController = (await import('../auth.controller.js')).default;
 
 describe('auth.controller welcome email invariant', () => {
