@@ -24,6 +24,7 @@ router.put('/:id', formController.update.bind(formController));
 router.delete('/:id', formController.delete.bind(formController));
 router.put('/:id/publish', formController.publish.bind(formController));
 router.get('/:id/submissions', formController.submissions.bind(formController));
+router.get('/:id/submissions/:submissionId/receipt', formController.getSubmissionReceipt.bind(formController));
 router.post('/:id/submissions/:submissionId/cancel', formController.cancelSubmission.bind(formController));
 router.post('/:id/submissions/:submissionId/confirm-payment', formController.confirmPayment.bind(formController));
 router.get('/:id/campaign-preview', formController.campaignPreview.bind(formController));

@@ -4,6 +4,7 @@ import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/aud
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { ingestFormAsset } from '../services/formAsset.service.js';
 import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
+import { getStorageBackend } from '../services/storage/storageBackend.js';
 
 /**
  * PR-3a "Bổ sung 15/09": chỉ CHỦ workspace (không phải nhân viên) được đổi paymentConfig —
@@ -388,6 +389,47 @@ class FormController {
         message: error.message || 'Không thể xác nhận thanh toán',
         code: error.code || 'INTERNAL_ERROR',
       });
+    }
+  }
+
+  /**
+   * GET /api/forms/:id/submissions/:submissionId/receipt
+   * Xem ảnh biên lai chuyển khoản (chỉ chủ workspace có quyền) — PR-5.
+   * Stream từ kho, Cache-Control: private, no-store.
+   */
+  async getSubmissionReceipt(req, res) {
+    try {
+      const workspaceContext = getWorkspaceContext(req.user);
+      const id = Number.parseInt(req.params.id, 10);
+      const submissionId = Number.parseInt(req.params.submissionId, 10);
+      if (!Number.isFinite(id) || !Number.isFinite(submissionId)) {
+        return res.status(400).json({
+          success: false,
+          message: 'ID không hợp lệ',
+          code: 'INVALID_ID',
+        });
+      }
+
+      const receipt = await formService.getSubmissionReceipt(id, submissionId, workspaceContext.workspaceOwnerId);
+      res.setHeader('Cache-Control', 'private, no-store');
+      const ok = await getStorageBackend().stream(receipt.storageKey, res, { preview: true });
+      if (!ok && !res.headersSent) {
+        return res.status(404).json({
+          success: false,
+          message: 'Tệp ảnh không tồn tại trong kho lưu trữ',
+          code: 'RECEIPT_FILE_NOT_FOUND',
+        });
+      }
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[FormController.getSubmissionReceipt]', error);
+      if (!res.headersSent) {
+        return res.status(status).json({
+          success: false,
+          message: error.message || 'Không thể xem ảnh chuyển khoản',
+          code: error.code || 'INTERNAL_ERROR',
+        });
+      }
     }
   }
 

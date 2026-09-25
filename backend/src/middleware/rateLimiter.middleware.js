@@ -325,6 +325,21 @@ export const formReportPaidLimiter = rateLimit({
   },
 });
 
+// Public form upload payment receipt limiter — chống flood tải ảnh biên lai (không auth) — PR-5
+export const formReceiptUploadLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `form-receipt-upload:${clientIpKey(req)}`,
+  message: {
+    success: false,
+    message: 'Quá nhiều yêu cầu tải ảnh biên lai. Vui lòng thử lại sau ít phút.',
+    code: 'FORM_RECEIPT_UPLOAD_RATE_LIMIT_EXCEEDED',
+  },
+});
+
 // Public landing analytics view — giới hạn nhẹ hơn lead nhưng vẫn chống flood
 export const publicLandingAnalyticsLimiter = rateLimit({
   skip: skipInTest,

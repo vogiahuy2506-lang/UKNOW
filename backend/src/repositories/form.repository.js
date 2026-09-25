@@ -783,13 +783,18 @@ class FormRepository {
       `SELECT
          id,
          form_id AS "formId",
+         workspace_owner_id AS "workspaceOwnerId",
          status,
          appointment_at AS "appointmentAt",
          payment_amount AS "paymentAmount",
          payment_snapshot AS "paymentSnapshot",
          payment_code AS "paymentCode",
          hold_expires_at AS "holdExpiresAt",
-         payer_reported_paid_at AS "payerReportedPaidAt"
+         payer_reported_paid_at AS "payerReportedPaidAt",
+         payment_receipt_key AS "paymentReceiptKey",
+         payment_receipt_uploaded_at AS "paymentReceiptUploadedAt",
+         payment_receipt_waived_reason AS "paymentReceiptWaivedReason",
+         payment_receipt_upload_count AS "paymentReceiptUploadCount"
        FROM form_submissions
        WHERE access_token = $1 AND form_id = $2`,
       [accessToken, formId]
@@ -798,7 +803,8 @@ class FormRepository {
   }
 
   /**
-   * Cập nhật báo đã chuyển khoản nguyên tử cho một bài nộp pending_payment (PR-2).
+   * Cập nhật báo đã chuyển khoản nguyên tử cho một bài nộp pending_payment (PR-2, PR-5).
+   * Yêu cầu: đã có ảnh biên lai (payment_receipt_key) hoặc được miễn do chủ hết dung lượng (payment_receipt_waived_reason).
    * Gia hạn hold_expires_at tối đa 24h nếu còn hạn, không vượt quá appointment_at.
    * Idempotent qua kiểm tra payer_reported_paid_at IS NULL.
    *
@@ -824,6 +830,7 @@ class FormRepository {
          AND form_id = $2
          AND status = 'pending_payment'
          AND payer_reported_paid_at IS NULL
+         AND (payment_receipt_key IS NOT NULL OR payment_receipt_waived_reason IS NOT NULL)
        RETURNING
          id,
          form_id AS "formId",
@@ -836,8 +843,68 @@ class FormRepository {
          appointment_at AS "appointmentAt",
          hold_expires_at AS "holdExpiresAt",
          payer_reported_paid_at AS "payerReportedPaidAt",
+         payment_receipt_key AS "paymentReceiptKey",
+         payment_receipt_waived_reason AS "paymentReceiptWaivedReason",
          status`,
       [accessToken, formId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Cập nhật biên lai chuyển khoản (hoặc miễn do chủ hết hạn mức) cho bài nộp (PR-5).
+   * Tăng payment_receipt_upload_count thêm 1.
+   *
+   * @param {number} submissionId
+   * @param {{ paymentReceiptKey?: string|null, paymentReceiptWaivedReason?: string|null }} data
+   * @returns {Promise<object|null>}
+   */
+  async updateSubmissionPaymentReceipt(submissionId, { paymentReceiptKey = null, paymentReceiptWaivedReason = null } = {}) {
+    const result = await db.query(
+      `UPDATE form_submissions
+       SET
+         payment_receipt_key = $2,
+         payment_receipt_waived_reason = $3,
+         payment_receipt_uploaded_at = NOW(),
+         payment_receipt_upload_count = payment_receipt_upload_count + 1,
+         updated_at = NOW()
+       WHERE id = $1
+       RETURNING
+         id,
+         form_id AS "formId",
+         workspace_owner_id AS "workspaceOwnerId",
+         status,
+         payment_receipt_key AS "paymentReceiptKey",
+         payment_receipt_uploaded_at AS "paymentReceiptUploadedAt",
+         payment_receipt_waived_reason AS "paymentReceiptWaivedReason",
+         payment_receipt_upload_count AS "paymentReceiptUploadCount"`,
+      [submissionId, paymentReceiptKey, paymentReceiptWaivedReason]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Tìm bài nộp theo id và formId (cho màn quản trị form).
+   *
+   * @param {number} submissionId
+   * @param {number} formId
+   * @returns {Promise<object|null>}
+   */
+  async findSubmissionByIdAndForm(submissionId, formId) {
+    const result = await db.query(
+      `SELECT
+         id,
+         form_id AS "formId",
+         workspace_owner_id AS "workspaceOwnerId",
+         status,
+         payment_code AS "paymentCode",
+         payment_amount AS "paymentAmount",
+         payment_receipt_key AS "paymentReceiptKey",
+         payment_receipt_uploaded_at AS "paymentReceiptUploadedAt",
+         payment_receipt_waived_reason AS "paymentReceiptWaivedReason"
+       FROM form_submissions
+       WHERE id = $1 AND form_id = $2`,
+      [submissionId, formId]
     );
     return result.rows[0] || null;
   }
@@ -1033,6 +1100,9 @@ class FormRepository {
          s.payment_snapshot AS "paymentSnapshot",
          s.hold_expires_at AS "holdExpiresAt",
          s.payer_reported_paid_at AS "payerReportedPaidAt",
+         s.payment_receipt_key AS "paymentReceiptKey",
+         s.payment_receipt_uploaded_at AS "paymentReceiptUploadedAt",
+         s.payment_receipt_waived_reason AS "paymentReceiptWaivedReason",
          s.paid_confirmed_at AS "paidConfirmedAt",
          s.paid_confirmed_by AS "paidConfirmedBy",
          s.landing_page_slug AS "landingPageSlug",

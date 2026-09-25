@@ -2,9 +2,18 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useSearchParams, Link } from 'react-router-dom';
 import QRCode from 'qrcode';
 import toast from 'react-hot-toast';
-import { HiOutlineClipboardCopy, HiOutlineCheck, HiOutlineExclamationCircle, HiOutlineDownload } from 'react-icons/hi';
+import {
+  HiOutlineClipboardCopy,
+  HiOutlineCheck,
+  HiOutlineExclamationCircle,
+  HiOutlineDownload,
+  HiOutlinePhotograph,
+  HiOutlineDeviceMobile,
+  HiOutlineX,
+} from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
-import { fetchPublicSubmissionStatus, reportSubmissionPaid } from '../services/formPublicApi.service';
+import { fetchPublicSubmissionStatus, reportSubmissionPaid, uploadSubmissionReceipt } from '../services/formPublicApi.service';
+import { compressReceiptImage } from '../../../utils/receiptCompressor';
 import { formatAppointmentAtVn } from '../utils/bookingFormat.util';
 import { formatVnd, formatCountdown } from '../../../utils/vietqrParser';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
@@ -82,6 +91,12 @@ export default function FormSubmissionStatusPage() {
   const [countdownSeconds, setCountdownSeconds] = useState(null);
   const [isReportingPaid, setIsReportingPaid] = useState(false);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isUploadingReceipt, setIsUploadingReceipt] = useState(false);
+  const [receiptPreviewUrl, setReceiptPreviewUrl] = useState('');
+  const [, setReceiptUploadError] = useState(null);
+  const [showDesktopQrModal, setShowDesktopQrModal] = useState(false);
+  const [pageQrDataUrl, setPageQrDataUrl] = useState('');
+  const receiptFileInputRef = useRef(null);
   // Chặn refetch-do-đếm-ngược-về-0 bắn liên tiếp nhiều lần trong cùng một giây làm tròn.
   const hasFiredZeroRefetch = useRef(false);
   // Đọc statusData "mới nhất" trong catch của load() mà không phải thêm statusData vào deps
@@ -90,6 +105,24 @@ export default function FormSubmissionStatusPage() {
   useEffect(() => {
     statusDataRef.current = statusData;
   }, [statusData]);
+
+  // PR-5: Tạo mã QR URL hiện tại để khách trên desktop quét mở bằng điện thoại
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location?.href) {
+      QRCode.toDataURL(window.location.href, { width: 240, margin: 2 })
+        .then((url) => setPageQrDataUrl(url))
+        .catch(() => {});
+    }
+  }, []);
+
+  // PR-5: Dọn dẹp object URL xem trước khi unmount
+  useEffect(() => {
+    return () => {
+      if (receiptPreviewUrl) {
+        URL.revokeObjectURL(receiptPreviewUrl);
+      }
+    };
+  }, [receiptPreviewUrl]);
 
   const load = useCallback(async () => {
     try {
@@ -168,6 +201,58 @@ export default function FormSubmissionStatusPage() {
       cancelled = true;
     };
   }, [statusData?.payment?.qrString]);
+
+  const handleReceiptFileChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsUploadingReceipt(true);
+    setReceiptUploadError(null);
+    try {
+      const compressed = await compressReceiptImage(file);
+      const res = await uploadSubmissionReceipt(publicKey, accessToken, compressed);
+      if (res?.receiptStored) {
+        setStatusData((prev) => ({
+          ...prev,
+          hasReceipt: true,
+          receiptWaived: false,
+        }));
+        if (receiptPreviewUrl) {
+          URL.revokeObjectURL(receiptPreviewUrl);
+        }
+        setReceiptPreviewUrl(URL.createObjectURL(compressed));
+        toast.success(t('publicForm.payment.receiptUploadedSuccess'));
+      } else if (res?.reason === 'OWNER_STORAGE_FULL' || res?.receiptWaived) {
+        setStatusData((prev) => ({
+          ...prev,
+          hasReceipt: false,
+          receiptWaived: true,
+        }));
+        if (receiptPreviewUrl) {
+          URL.revokeObjectURL(receiptPreviewUrl);
+        }
+        setReceiptPreviewUrl(URL.createObjectURL(compressed));
+        toast.success(t('publicForm.payment.receiptWaivedMsg'));
+      }
+    } catch (err) {
+      if (err?.code === 'HEIC_OR_UNSUPPORTED') {
+        toast.error(t('publicForm.payment.receiptFormatError'));
+        setReceiptUploadError(t('publicForm.payment.receiptFormatError'));
+      } else {
+        const msg = err.response?.data?.message || t('publicForm.payment.receiptUploadError');
+        toast.error(msg);
+        setReceiptUploadError(msg);
+      }
+    } finally {
+      setIsUploadingReceipt(false);
+      if (receiptFileInputRef.current) {
+        receiptFileInputRef.current.value = '';
+      }
+    }
+  };
+
+  const hasReceipt = Boolean(statusData?.hasReceipt || receiptPreviewUrl);
+  const isReceiptWaived = Boolean(statusData?.receiptWaived);
+  const canConfirmPaid = hasReceipt || isReceiptWaived;
 
   const handleConfirmPaid = async () => {
     setIsReportingPaid(true);
@@ -424,7 +509,120 @@ export default function FormSubmissionStatusPage() {
               </>
             )}
 
-            {/* PR-2: Nút xác nhận chuyển khoản hoặc thông báo đã ghi nhận */}
+            {/* PR-5: Khối tải ảnh chuyển khoản */}
+            <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-3" data-testid="block-receipt-upload">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                  <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
+                  {t('publicForm.payment.receiptSectionTitle')}
+                </span>
+                {statusData?.payerReportedPaidAt ? (
+                  <span className="text-[11px] text-gray-400 font-medium">
+                    {hasReceipt ? t('publicForm.payment.receiptUploadedSuccess') : ''}
+                  </span>
+                ) : (
+                  <input
+                    ref={receiptFileInputRef}
+                    type="file"
+                    accept="image/*"
+                    onChange={handleReceiptFileChange}
+                    className="hidden"
+                    data-testid="input-receipt-file"
+                  />
+                )}
+              </div>
+
+              {receiptPreviewUrl ? (
+                <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-gray-200">
+                  <img
+                    src={receiptPreviewUrl}
+                    alt="Receipt preview"
+                    className="w-16 h-16 object-cover rounded-md border border-gray-100 flex-shrink-0"
+                    data-testid="img-receipt-preview"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-emerald-700 flex items-center gap-1">
+                      <HiOutlineCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                      <span>{t('publicForm.payment.receiptUploadedSuccess')}</span>
+                    </p>
+                    {!statusData?.payerReportedPaidAt && (
+                      <button
+                        type="button"
+                        onClick={() => receiptFileInputRef.current?.click()}
+                        disabled={isUploadingReceipt}
+                        className="mt-1 text-xs text-primary-600 hover:text-primary-700 font-medium underline"
+                        data-testid="btn-change-receipt"
+                      >
+                        {isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptChangeBtn')}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ) : statusData?.hasReceipt ? (
+                <div className="flex items-center justify-between gap-2 bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-200 text-xs text-emerald-800">
+                  <span className="flex items-center gap-1.5 font-medium">
+                    <HiOutlineCheck className="w-4 h-4 text-emerald-600" />
+                    {t('publicForm.payment.receiptUploadedSuccess')}
+                  </span>
+                  {!statusData?.payerReportedPaidAt && (
+                    <button
+                      type="button"
+                      onClick={() => receiptFileInputRef.current?.click()}
+                      disabled={isUploadingReceipt}
+                      className="text-xs text-primary-600 hover:text-primary-700 font-medium underline"
+                      data-testid="btn-change-receipt"
+                    >
+                      {isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptChangeBtn')}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-center py-2">
+                  <p className="text-xs text-gray-500 mb-2.5">
+                    {t('publicForm.payment.receiptUploadPrompt')}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => receiptFileInputRef.current?.click()}
+                    disabled={isUploadingReceipt || Boolean(statusData?.payerReportedPaidAt)}
+                    data-testid="btn-upload-receipt"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-gray-300 hover:bg-gray-50 text-xs font-semibold text-gray-700 shadow-sm transition-colors disabled:opacity-50"
+                  >
+                    <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
+                    <span>{isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptUploadBtn')}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* Thông báo nếu bên nhận hết hạn mức lưu ảnh */}
+              {statusData?.receiptWaived && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center" data-testid="msg-receipt-waived">
+                  {t('publicForm.payment.receiptWaivedMsg')}
+                </p>
+              )}
+
+              {/* Hướng dẫn mở trên điện thoại nếu đang xem trên desktop */}
+              {!statusData?.payerReportedPaidAt && (
+                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <HiOutlineDeviceMobile className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <span className="truncate">{t('publicForm.payment.receiptDesktopQrPrompt')}</span>
+                  </div>
+                  {pageQrDataUrl && (
+                    <button
+                      type="button"
+                      onClick={() => setShowDesktopQrModal(true)}
+                      data-testid="btn-open-desktop-qr"
+                      className="shrink-0 text-primary-600 hover:text-primary-700 font-medium px-2 py-0.5 rounded bg-white border border-gray-200 hover:bg-gray-50 text-[10px]"
+                    >
+                      QR
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* PR-2 & PR-5: Nút xác nhận chuyển khoản hoặc thông báo đã ghi nhận */}
             {statusData?.payerReportedPaidAt ? (
               <div
                 data-testid="block-payer-reported-success"
@@ -442,16 +640,23 @@ export default function FormSubmissionStatusPage() {
                 </div>
               </div>
             ) : (
-              <button
-                type="button"
-                onClick={() => setShowConfirmModal(true)}
-                disabled={isReportingPaid}
-                data-testid="btn-confirm-paid"
-                className="w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2 bg-[color:var(--form-primary,#059669)] text-[color:var(--form-primary-text,#ffffff)] hover:brightness-95 disabled:opacity-50"
-              >
-                <HiOutlineCheck className="w-5 h-5" />
-                <span>{t('publicForm.payment.confirmPaidBtn')}</span>
-              </button>
+              <div>
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmModal(true)}
+                  disabled={isReportingPaid || !canConfirmPaid}
+                  data-testid="btn-confirm-paid"
+                  className="w-full py-3 px-4 rounded-xl font-semibold text-sm transition-all shadow-sm flex items-center justify-center gap-2 bg-[color:var(--form-primary,#059669)] text-[color:var(--form-primary-text,#ffffff)] hover:brightness-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <HiOutlineCheck className="w-5 h-5" />
+                  <span>{t('publicForm.payment.confirmPaidBtn')}</span>
+                </button>
+                {!canConfirmPaid && (
+                  <p className="text-xs text-amber-600 mt-1.5 text-center font-medium" data-testid="msg-receipt-required">
+                    {t('publicForm.payment.receiptRequiredHint')}
+                  </p>
+                )}
+              </div>
             )}
           </div>
         )}
@@ -552,6 +757,45 @@ export default function FormSubmissionStatusPage() {
                 {isReportingPaid ? '...' : t('publicForm.payment.confirmPaidModalConfirm')}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal QR mở trang trên điện thoại (PR-5) */}
+      {showDesktopQrModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fadeIn">
+          <div className="w-full max-w-xs bg-white rounded-2xl shadow-xl border border-gray-100 p-5 text-center">
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                <HiOutlineDeviceMobile className="w-4 h-4 text-gray-500" />
+                QR
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowDesktopQrModal(false)}
+                className="text-gray-400 hover:text-gray-600 p-1 rounded-lg"
+              >
+                <HiOutlineX className="w-5 h-5" />
+              </button>
+            </div>
+            {pageQrDataUrl ? (
+              <img
+                src={pageQrDataUrl}
+                alt="Page QR code"
+                className="w-48 h-48 mx-auto rounded-xl border border-gray-200 bg-white mb-3"
+                data-testid="img-desktop-qr"
+              />
+            ) : null}
+            <p className="text-xs text-gray-500 leading-relaxed mb-4">
+              {t('publicForm.payment.receiptDesktopQrPrompt')}
+            </p>
+            <button
+              type="button"
+              onClick={() => setShowDesktopQrModal(false)}
+              className="w-full py-2 px-3 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-medium transition-colors"
+            >
+              Đóng
+            </button>
           </div>
         </div>
       )}

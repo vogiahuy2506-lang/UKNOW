@@ -87,3 +87,19 @@ export async function uploadFormAsset({ tempId, originalName, contentType, size 
   const res = await api.post('/forms/assets', { tempId, originalName, contentType, size });
   return res.data?.data;
 }
+
+/**
+ * PR-5 — Chủ form (hoặc nhân viên có quyền forms) xem ảnh biên lai chuyển khoản.
+ * Trả về Blob để trình duyệt tạo ObjectURL an toàn, không lộ URL trực tiếp.
+ *
+ * @param {number|string} formId
+ * @param {number|string} submissionId
+ * @returns {Promise<Blob>}
+ */
+export async function fetchSubmissionReceiptBlob(formId, submissionId) {
+  const res = await api.get(`/forms/${formId}/submissions/${submissionId}/receipt`, {
+    responseType: 'blob',
+  });
+  return res.data;
+}
+

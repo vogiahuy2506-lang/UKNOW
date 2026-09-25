@@ -104,9 +104,16 @@ async function createPublishedFormWithPaymentAndBooking(token, overrides = {}) {
   return publishRes.body.data;
 }
 
+async function attachMockReceipt(accessToken) {
+  await db.query(
+    `UPDATE form_submissions SET payment_receipt_key = $1, payment_receipt_uploaded_at = NOW() WHERE access_token = $2`,
+    ['uploads/test/receipt.jpg', accessToken]
+  );
+}
+
 describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/report-paid', () => {
   it('1. Lượt còn hạn 10\', giờ hẹn cách 3 ngày -> báo đã chuyển: 200, gia hạn hold_expires_at ≈ NOW()+24h', async () => {
-    const owner = await createUser({ username: 'owner_rp_1', email: 'owner1@test.com' });
+    const owner = await createUser({ username: 'owner_rp_1 past' });
     const token = await loginAs(owner);
     const form = await createPublishedFormWithPaymentAndBooking(token);
 
@@ -124,6 +131,9 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
     // Lấy hold ban đầu (15 phút sau lúc nộp)
     const initialStatus = await request(app).get(`/api/public/forms/${form.publicKey}/submissions/${accessToken}`);
     const initialHold = new Date(initialStatus.body.data.holdExpiresAt).getTime();
+
+    // PR-5: Phải có ảnh biên lai
+    await attachMockReceipt(accessToken);
 
     // Khách báo đã chuyển
     const reportRes = await request(app)
@@ -165,6 +175,8 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
       [appointmentAt.toISOString(), accessToken]
     );
 
+    await attachMockReceipt(accessToken);
+
     const reportRes = await request(app)
       .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
     expect(reportRes.status).toBe(200);
@@ -192,6 +204,8 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
     expect(submitRes.status).toBe(201);
     const { accessToken } = submitRes.body.data;
 
+    await attachMockReceipt(accessToken);
+
     const reportRes = await request(app)
       .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
     expect(reportRes.status).toBe(200);
@@ -218,6 +232,8 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
       });
     expect(submitRes.status).toBe(201);
     const { accessToken } = submitRes.body.data;
+
+    await attachMockReceipt(accessToken);
 
     // Lần 1
     const res1 = await request(app)
@@ -258,6 +274,8 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
       `UPDATE form_submissions SET hold_expires_at = $1 WHERE access_token = $2`,
       [pastHold, accessToken]
     );
+
+    await attachMockReceipt(accessToken);
 
     const reportRes = await request(app)
       .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
@@ -364,6 +382,8 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
     expect(submitA.status).toBe(201);
     const tokenA = submitA.body.data.accessToken;
 
+    await attachMockReceipt(tokenA);
+
     // A báo đã chuyển khoản -> được gia hạn giữ chỗ
     const reportA = await request(app)
       .post(`/api/public/forms/${form.publicKey}/submissions/${tokenA}/report-paid`);
@@ -406,6 +426,8 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
     expect(submitRes.status).toBe(201);
     const { accessToken } = submitRes.body.data;
     mockSendMail.mockClear();
+
+    await attachMockReceipt(accessToken);
 
     // Bấm lần 1
     const res1 = await request(app)
@@ -452,6 +474,8 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
       [appointmentAt.toISOString(), initialHold.toISOString(), accessToken]
     );
 
+    await attachMockReceipt(accessToken);
+
     const reportRes = await request(app)
       .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
     expect(reportRes.status).toBe(200);
@@ -459,5 +483,28 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
     const reportedHold = new Date(reportRes.body.data.holdExpiresAt).getTime();
     // Không bao giờ rút ngắn: reportedHold phải >= initialHold (12 phút), KHÔNG bị tụt xuống 5 phút!
     expect(reportedHold).toBeGreaterThanOrEqual(initialHold.getTime() - 1000);
+  });
+
+  it('11. Chốt PR-5: Chưa gửi ảnh biên lai và chưa được miễn -> 409 RECEIPT_REQUIRED', async () => {
+    const owner = await createUser({ username: 'owner_rp_11' });
+    const token = await loginAs(owner);
+    const form = await createPublishedFormWithPaymentAndBooking(token);
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({
+        answers: { name: 'Khách Mười Một', email: 'khach11@test.com' },
+        appointmentDate: futureDate(2),
+        appointmentTime: '10:00',
+      });
+    expect(submitRes.status).toBe(201);
+    const { accessToken } = submitRes.body.data;
+
+    // Chưa tải ảnh -> báo chuyển khoản phải bị chặn 409
+    const reportRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
+    expect(reportRes.status).toBe(409);
+    expect(reportRes.body.code).toBe('RECEIPT_REQUIRED');
+    expect(reportRes.body.message).toContain('ảnh chuyển khoản');
   });
 });

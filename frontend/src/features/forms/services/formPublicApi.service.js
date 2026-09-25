@@ -70,3 +70,26 @@ export async function reportSubmissionPaid(publicKey, accessToken) {
   );
   return res.data?.data;
 }
+
+/**
+ * Tải ảnh biên lai chuyển khoản (PR-5).
+ *
+ * @param {string} publicKey
+ * @param {string} accessToken
+ * @param {File|Blob} file
+ * @returns {Promise<{ receiptStored: boolean, reason?: string }>}
+ */
+export async function uploadSubmissionReceipt(publicKey, accessToken, file) {
+  const formData = new FormData();
+  formData.append('file', file);
+  const res = await publicClient.post(
+    `/public/forms/${encodeURIComponent(publicKey)}/submissions/${encodeURIComponent(accessToken)}/receipt`,
+    formData,
+    {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    }
+  );
+  return res.data?.data;
+}
