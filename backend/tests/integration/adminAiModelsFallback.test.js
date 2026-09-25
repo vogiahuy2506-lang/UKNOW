@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
@@ -8,9 +8,28 @@ import { invalidateCatalogCache } from '../../src/services/ai/aiModelCatalog.ser
 let app;
 let adminUser;
 let adminToken;
+let originalAiModels = [];
 
 beforeAll(async () => {
   app = createApp();
+  const existing = await db.query('SELECT * FROM ai_models');
+  originalAiModels = existing.rows;
+});
+
+afterAll(async () => {
+  await db.query('DELETE FROM ai_models');
+  if (originalAiModels.length > 0) {
+    for (const row of originalAiModels) {
+      const columns = Object.keys(row);
+      const values = Object.values(row);
+      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
+      await db.query(
+        `INSERT INTO ai_models (${columns.map((c) => `"${c}"`).join(', ')}) VALUES (${placeholders})`,
+        values
+      );
+    }
+  }
+  invalidateCatalogCache();
 });
 
 beforeEach(async () => {

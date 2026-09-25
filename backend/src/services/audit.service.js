@@ -13,15 +13,13 @@ class AuditService {
     userAgent = null,
   }) {
     try {
-      const parsedId = entityId !== null && entityId !== undefined && entityId !== '' ? Number(entityId) : null;
-      const safeEntityId = Number.isInteger(parsedId) ? parsedId : null;
       await auditRepository.createLog({
         userId,
         ownerId,
         category,
         action,
         entityType,
-        entityId: safeEntityId,
+        entityId: entityId ?? null,
         details,
         ipAddress,
         userAgent,

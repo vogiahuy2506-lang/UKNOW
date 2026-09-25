@@ -235,7 +235,12 @@ export async function generateGeminiContent({
           try {
             return await callWithThinkingFallback(cleanFallback);
           } catch (fallbackError) {
-            throw toProviderBusyError(fallbackError, attempt + 2);
+            if (isTransientGeminiError(fallbackError)) {
+              throw toProviderBusyError(fallbackError, attempt + 2);
+            }
+            const primaryBusyError = toProviderBusyError(error, attempt + 1);
+            primaryBusyError.fallbackError = fallbackError;
+            throw primaryBusyError;
           }
         }
 

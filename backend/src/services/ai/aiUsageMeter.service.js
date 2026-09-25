@@ -75,6 +75,7 @@ class AiUsageMeterService {
       requestedMaxOutputTokens: maxOutputTokens,
     });
     const resolvedModel = reserved.model;
+    // Kiểm tra typeof vì 15 unit test spec mock policyService mà không khai báo hàm getFallbackModel
     const fallbackModel = typeof policyService.getFallbackModel === 'function'
       ? await policyService.getFallbackModel()
       : null;
