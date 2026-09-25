@@ -898,16 +898,18 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       // KHÔNG tự động load phiên gần nhất: mỗi lần mở panel đều bắt đầu ở
       // phiên chat mới (welcome message). Người dùng có thể click tab session
       // cũ trong sidebar để quay lại context trước.
+      // State khởi tạo đã là phiên mới nên KHÔNG gọi startNewChat() khi danh sách về: người dùng gõ
+      // ngay lúc mở (hay bấm gợi ý) thì danh sách về SAU lượt chat, startNewChat() xoá trắng hội thoại.
+      // Cùng lý do, GỘP với danh sách hiện có — phiên lượt chat vừa tạo có thể chưa nằm trong kết quả.
       if (!hasInitializedRef.current) {
         hasInitializedRef.current = true;
         aiApi.getSessions()
           .then(res => {
-            setSessions(res.data || []);
-            startNewChat();
+            const fromServer = res.data || [];
+            const serverIds = new Set(fromServer.map((s) => String(s.id)));
+            setSessions((prev) => [...prev.filter((s) => !serverIds.has(String(s.id))), ...fromServer]);
           })
-          .catch(() => {
-            startNewChat();
-          });
+          .catch(() => {});
       }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
