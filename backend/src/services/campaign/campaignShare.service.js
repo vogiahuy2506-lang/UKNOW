@@ -63,6 +63,7 @@ class CampaignShareService {
         shareType,
         canRun,
         senderName: sender,
+        workspaceOwnerId,
       });
       notificationSent = true;
     } catch (err) {
@@ -108,15 +109,11 @@ class CampaignShareService {
     shareType,
     canRun,
     senderName,
+    workspaceOwnerId,
   }) {
-    const meta = await this._resolveCampaignMeta(campaignId, recipient?.id || senderName);
-    const safeMeta =
-      meta ||
-      (await this._resolveCampaignMeta(
-        campaignId,
-        // fallback: meta sẽ fail nếu không có quyền, dùng query khác qua owner
-        undefined
-      ));
+    // Meta của campaign phải resolve theo OWNER (sender) — không theo
+    // recipient, vì recipient có thể null (pending) hoặc không sở hữu campaign.
+    const safeMeta = await this._resolveCampaignMeta(campaignId, workspaceOwnerId);
     const campaignName = safeMeta?.campaign_name || 'Chiến dịch';
 
     const { subject, html } = buildCampaignSharedEmail({

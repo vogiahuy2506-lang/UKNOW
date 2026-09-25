@@ -67,6 +67,7 @@ class LandingPageShareService {
         recipient: result.recipient,
         shareType,
         senderName: sender || senderName,
+        workspaceOwnerId,
       });
       notificationSent = true;
     } catch (err) {
@@ -125,17 +126,14 @@ class LandingPageShareService {
     recipient,
     shareType,
     senderName,
+    workspaceOwnerId,
   }) {
-    const meta = await this._resolveLandingPageMeta(landingPageId, recipient?.id);
-    // Lấy meta qua workspace owner thay vì recipient (recipient có thể null khi pending).
-    const safeMeta =
-      meta ||
-      (await this._resolveLandingPageMeta(
-        landingPageId,
-        // recipient có thể null — fallback: meta sẽ fail nếu không có quyền, dùng query khác qua owner
-        // Trong trường hợp này ta chấp nhận null và bỏ qua.
-        undefined
-      ));
+    // Meta của landing page phải resolve theo OWNER (sender) — không theo
+    // recipient, vì recipient có thể null (pending) hoặc không sở hữu page.
+    const safeMeta = await this._resolveLandingPageMeta(
+      landingPageId,
+      workspaceOwnerId
+    );
     const landingPageTitle = safeMeta?.title || 'Landing page';
     const landingPageUrl = safeMeta?.custom_domain_hostname
       ? `https://${safeMeta.custom_domain_hostname}`
