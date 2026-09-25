@@ -24,7 +24,7 @@ class CampaignShareService {
     try {
       await client.query('BEGIN');
       result = await campaignShareRepository.findOrCreatePendingByEmail(client, {
-        campaignId,
+        idCampaign: campaignId,
         workspaceOwnerId,
         recipientEmail: normalizedEmail,
         shareType,

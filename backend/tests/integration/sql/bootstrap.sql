@@ -2732,6 +2732,106 @@ CREATE TRIGGER trg_campaign_shares_updated_at
   FOR EACH ROW
   EXECUTE FUNCTION update_campaign_shares_timestamp();
 
+-- ─── Campaign shares mirror migration 246: pending claim ────────────────
+-- Cho phép id_recipient NULL để share với email ngoài hệ thống + cột status.
+ALTER TABLE campaign_shares
+  ALTER COLUMN id_recipient DROP NOT NULL;
+ALTER TABLE campaign_shares
+  ADD COLUMN IF NOT EXISTS status VARCHAR(16) NOT NULL DEFAULT 'active'
+  CHECK (status IN ('pending', 'active', 'revoked'));
+UPDATE campaign_shares
+  SET status = 'active'
+  WHERE id_recipient IS NOT NULL AND status IS DISTINCT FROM 'active';
+CREATE INDEX IF NOT EXISTS idx_campaign_shares_pending_email
+  ON campaign_shares (lower(recipient_email))
+  WHERE id_recipient IS NULL AND status = 'pending';
+
+-- ─── Landing page shares (mirrors 227) ──────────────────────────────────
+CREATE TABLE IF NOT EXISTS landing_page_shares (
+  id              BIGSERIAL PRIMARY KEY,
+  id_landing_page BIGINT       NOT NULL REFERENCES landing_pages(id) ON DELETE CASCADE,
+  id_owner        BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- migration 245: id_recipient NULL cho phép share với email ngoài hệ thống (pending).
+  id_recipient    BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  recipient_email VARCHAR(255) NOT NULL,
+  share_type      VARCHAR(20)  NOT NULL DEFAULT 'view'
+    CHECK (share_type IN ('view', 'edit')),
+  status          VARCHAR(16)  NOT NULL DEFAULT 'active'
+    CHECK (status IN ('pending', 'active', 'revoked')),
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  UNIQUE(id_landing_page, id_recipient)
+);
+
+CREATE INDEX IF NOT EXISTS idx_landing_page_shares_landing ON landing_page_shares(id_landing_page);
+CREATE INDEX IF NOT EXISTS idx_landing_page_shares_recipient ON landing_page_shares(id_recipient);
+CREATE INDEX IF NOT EXISTS idx_landing_page_shares_owner ON landing_page_shares(id_owner);
+-- migration 245: partial index cho auto-claim email pending (case-insensitive).
+CREATE INDEX IF NOT EXISTS idx_landing_page_shares_pending_email
+  ON landing_page_shares (lower(recipient_email))
+  WHERE id_recipient IS NULL AND status = 'pending';
+
+ALTER TABLE landing_pages ADD COLUMN IF NOT EXISTS share_count INTEGER DEFAULT 0;
+
+CREATE OR REPLACE FUNCTION update_landing_page_share_count()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    UPDATE landing_pages SET share_count = COALESCE(share_count, 0) + 1 WHERE id = NEW.id_landing_page;
+  ELSIF TG_OP = 'DELETE' THEN
+    UPDATE landing_pages SET share_count = GREATEST(COALESCE(share_count, 0) - 1, 0) WHERE id = OLD.id_landing_page;
+  END IF;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_update_landing_page_share_count ON landing_page_shares;
+CREATE TRIGGER trg_update_landing_page_share_count
+  AFTER INSERT OR DELETE ON landing_page_shares
+  FOR EACH ROW
+  EXECUTE FUNCTION update_landing_page_share_count();
+
+CREATE OR REPLACE FUNCTION update_landing_page_shares_timestamp()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS trg_landing_page_shares_updated_at ON landing_page_shares;
+CREATE TRIGGER trg_landing_page_shares_updated_at
+  BEFORE UPDATE ON landing_page_shares
+  FOR EACH ROW
+  EXECUTE FUNCTION update_landing_page_shares_timestamp();
+
+-- ─── Chatbot shares (mirrors 247) ───────────────────────────────────────
+CREATE TABLE IF NOT EXISTS chatbot_shares (
+  id              BIGSERIAL PRIMARY KEY,
+  id_chatbot      BIGINT       NOT NULL REFERENCES custom_chatbots(id) ON DELETE CASCADE,
+  id_owner        BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  id_recipient    BIGINT       REFERENCES users(id) ON DELETE CASCADE,
+  recipient_email VARCHAR(255) NOT NULL,
+  status          VARCHAR(16)  NOT NULL DEFAULT 'active'
+    CHECK (status IN ('pending', 'active', 'revoked')),
+  created_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  updated_at      TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_chatbot_shares_chatbot
+  ON chatbot_shares(id_chatbot);
+CREATE INDEX IF NOT EXISTS idx_chatbot_shares_recipient
+  ON chatbot_shares(id_recipient);
+CREATE INDEX IF NOT EXISTS idx_chatbot_shares_owner
+  ON chatbot_shares(id_owner);
+CREATE INDEX IF NOT EXISTS idx_chatbot_shares_pending_email
+  ON chatbot_shares (lower(recipient_email))
+  WHERE id_recipient IS NULL AND status = 'pending';
+-- De-dup: cùng (chatbot, recipient) chỉ giữ 1 share active.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_chatbot_shares_chatbot_recipient
+  ON chatbot_shares(id_chatbot, id_recipient)
+  WHERE id_recipient IS NOT NULL;
+
 -- ─── Email settings ensure columns (mirrors 133) ──────────────────────────
 -- Bảng email_settings đã có ở phần trên với platform_prefix/email_mode NOT NULL;
 -- mirror migration 133 để chắc chắn.

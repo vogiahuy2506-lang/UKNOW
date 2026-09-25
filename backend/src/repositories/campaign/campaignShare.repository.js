@@ -188,11 +188,12 @@ class CampaignShareRepository {
     const run = async (q) => (await client.query(q.text, q.values)).rows;
 
     // 1) Verify campaign thuộc workspace.
+    // Ép kiểu ::bigint để tránh lỗi "could not determine data type" của pg khi cột nullable.
     const ownerRows = await run({
       text: `SELECT id
              FROM campaigns
-             WHERE id = $1
-               AND COALESCE(workspace_owner_id, id_user) = $2
+             WHERE id = $1::bigint
+               AND COALESCE(workspace_owner_id, id_user) = $2::bigint
              LIMIT 1`,
       values: [idCampaign, workspaceOwnerId],
     });
@@ -212,7 +213,7 @@ class CampaignShareRepository {
       // Branch 1: user đã có tài khoản → share ACTIVE.
       const shareRows = await run({
         text: `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run, status)
-               VALUES ($1, $2, $3, $4, $5, $6, 'active')
+               VALUES ($1::bigint, $2::bigint, $3::bigint, $4, $5, $6, 'active')
                ON CONFLICT (id_campaign, id_recipient)
                DO UPDATE SET id_owner = EXCLUDED.id_owner,
                              recipient_email = EXCLUDED.recipient_email,
@@ -234,9 +235,10 @@ class CampaignShareRepository {
     }
 
     // Branch 2: email ngoài hệ thống. De-dup theo (campaign, lower(email)) với id_recipient NULL.
+    // Ép kiểu ::bigint để tránh lỗi "could not determine data type" của pg khi cột nullable.
     const existingPendingRows = await run({
       text: `SELECT id FROM campaign_shares
-             WHERE id_campaign = $1
+             WHERE id_campaign = $1::bigint
                AND id_recipient IS NULL
                AND status = 'pending'
                AND LOWER(recipient_email) = $2
@@ -246,12 +248,13 @@ class CampaignShareRepository {
 
     if (existingPendingRows.length > 0) {
       // Cập nhật bản ghi pending hiện có (share_type, can_run, updated_at).
+      // Bỏ $2 (idCampaign) — pg không cần nó khi chỉ update qua id.
       const updated = await run({
         text: `UPDATE campaign_shares
-               SET share_type = $3, can_run = $4, updated_at = NOW()
+               SET share_type = $2, can_run = $3, updated_at = NOW()
                WHERE id = $1
                RETURNING *`,
-        values: [existingPendingRows[0].id, idCampaign, shareType, canRun],
+        values: [existingPendingRows[0].id, shareType, canRun],
       });
       return { share: updated[0], isExistingUser: false, recipient: null };
     }
@@ -259,9 +262,9 @@ class CampaignShareRepository {
     // Tạo mới pending.
     const inserted = await run({
       text: `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run, status)
-             VALUES ($1, $2, NULL, $3, $4, $5, 'pending')
+             VALUES ($1::bigint, $2::bigint, NULL, $3, $4, $5, 'pending')
              RETURNING *`,
-      values: [idCampaign, workspaceOwnerId, normalizedEmail, shareType, canRun],
+      values: [Number(idCampaign), Number(workspaceOwnerId), normalizedEmail, shareType, canRun],
     });
     return { share: inserted[0], isExistingUser: false, recipient: null };
   }
@@ -277,7 +280,7 @@ class CampaignShareRepository {
     if (!userId || !normalizedEmail) return [];
     const { rows } = await client.query(
       `UPDATE campaign_shares
-         SET id_recipient = $1,
+         SET id_recipient = $1::bigint,
              status = 'active',
              updated_at = NOW()
        WHERE id_recipient IS NULL

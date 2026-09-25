@@ -30,7 +30,7 @@ class LandingPageShareService {
     try {
       await client.query('BEGIN');
       result = await landingPageShareRepository.findOrCreatePendingByEmail(client, {
-        landingPageId,
+        idLandingPage: landingPageId,
         workspaceOwnerId,
         recipientEmail: normalizedEmail,
         shareType,

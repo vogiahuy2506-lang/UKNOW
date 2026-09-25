@@ -119,11 +119,12 @@ class LandingPageShareRepository {
     const run = async (q) => (await client.query(q.text, q.values)).rows;
 
     // 1) Verify landing page thuộc workspace.
+    // Ép kiểu ::bigint cho tham số để tránh "could not determine data type" khi cột nullable.
     const ownerRows = await run({
       text: `SELECT lp.id
              FROM landing_pages lp
-             WHERE lp.id = $1
-               AND COALESCE(lp.workspace_owner_id, lp.id_user) = $2
+             WHERE lp.id = $1::bigint
+               AND COALESCE(lp.workspace_owner_id, lp.id_user) = $2::bigint
              LIMIT 1`,
       values: [idLandingPage, workspaceOwnerId],
     });
@@ -143,7 +144,7 @@ class LandingPageShareRepository {
       // Branch 1: user đã có tài khoản → share ACTIVE.
       const shareRows = await run({
         text: `INSERT INTO landing_page_shares (id_landing_page, id_owner, id_recipient, recipient_email, share_type, status)
-               VALUES ($1, $2, $3, $4, $5, 'active')
+               VALUES ($1::bigint, $2::bigint, $3::bigint, $4, $5, 'active')
                ON CONFLICT (id_landing_page, id_recipient)
                DO UPDATE SET id_owner = EXCLUDED.id_owner,
                              recipient_email = EXCLUDED.recipient_email,
@@ -157,9 +158,10 @@ class LandingPageShareRepository {
     }
 
     // Branch 2: email ngoài hệ thống. De-dup theo (landing_page, lower(email)) với id_recipient NULL.
+    // Ép kiểu ::bigint để tránh lỗi "could not determine data type" của pg khi cột nullable.
     const existingPendingRows = await run({
       text: `SELECT id FROM landing_page_shares
-             WHERE id_landing_page = $1
+             WHERE id_landing_page = $1::bigint
                AND id_recipient IS NULL
                AND status = 'pending'
                AND LOWER(recipient_email) = $2
@@ -169,12 +171,13 @@ class LandingPageShareRepository {
 
     if (existingPendingRows.length > 0) {
       // Cập nhật bản ghi pending hiện có (share_type, updated_at).
+      // Chỉ dùng $1 (id) và $2 (share_type) để pg-node không complain về $3 unused.
       const updated = await run({
         text: `UPDATE landing_page_shares
-               SET share_type = $3, updated_at = NOW()
+               SET share_type = $2, updated_at = NOW()
                WHERE id = $1
                RETURNING *`,
-        values: [existingPendingRows[0].id, idLandingPage, shareType],
+        values: [existingPendingRows[0].id, shareType],
       });
       return { share: updated[0], isExistingUser: false, recipient: null };
     }
@@ -182,9 +185,9 @@ class LandingPageShareRepository {
     // Tạo mới pending.
     const inserted = await run({
       text: `INSERT INTO landing_page_shares (id_landing_page, id_owner, id_recipient, recipient_email, share_type, status)
-             VALUES ($1, $2, NULL, $3, $4, 'pending')
+             VALUES ($1::bigint, $2::bigint, NULL, $3, $4, 'pending')
              RETURNING *`,
-      values: [idLandingPage, workspaceOwnerId, normalizedEmail, shareType],
+      values: [Number(idLandingPage), Number(workspaceOwnerId), normalizedEmail, shareType],
     });
     return { share: inserted[0], isExistingUser: false, recipient: null };
   }
