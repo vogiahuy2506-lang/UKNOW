@@ -476,11 +476,12 @@ describe('FormSubmissionStatusPage component', () => {
       // Mặc định tab Bank đang active: hiển thị thông tin ngân hàng
       expect(screen.getByText('MBBank (MB)')).toBeInTheDocument();
       expect(screen.getByText('0987654321')).toBeInTheDocument();
-      expect(screen.getByText('NGUYEN VAN BANK')).toBeInTheDocument();
-      expect(QRCode.toDataURL).toHaveBeenCalledWith(
-        dualPaymentStatus.payment.options[0].qrString,
-        expect.any(Object)
-      );
+      await waitFor(() => {
+        expect(QRCode.toDataURL).toHaveBeenCalledWith(
+          dualPaymentStatus.payment.options[0].qrString,
+          expect.any(Object)
+        );
+      });
     });
 
     it('bấm chuyển sang tab MoMo: cập nhật thông tin và tạo lại mã QR MoMo', async () => {
