@@ -95,7 +95,7 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Model dự phòng')).toBeInTheDocument();
+      expect(screen.getByText('model-a')).toBeInTheDocument();
     });
 
     const select = screen.getByLabelText('Model dự phòng');
@@ -122,7 +122,7 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Model dự phòng')).toBeInTheDocument();
+      expect(screen.getByText('model-a')).toBeInTheDocument();
     });
 
     const select = screen.getByLabelText('Model dự phòng');
@@ -151,7 +151,7 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Model dự phòng')).toBeInTheDocument();
+      expect(screen.getByText('model-a')).toBeInTheDocument();
     });
 
     const select = screen.getByLabelText('Model dự phòng');
@@ -180,7 +180,7 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     renderPage();
 
     await waitFor(() => {
-      expect(screen.getByLabelText('Model dự phòng')).toBeInTheDocument();
+      expect(screen.getByText('model-a')).toBeInTheDocument();
     });
 
     const select = screen.getByLabelText('Model dự phòng');
