@@ -300,6 +300,7 @@ export default {
     sending: 'Đang gửi...',
     backButton: 'Quay lại',
     registerSuccess: 'Đăng ký thành công!',
+    registrationFailed: 'Đăng ký thất bại',
     verificationFailed: 'Xác minh thất bại',
     resendSuccess: 'Đã gửi lại mã xác minh',
     resendFailed: 'Không thể gửi lại mã',

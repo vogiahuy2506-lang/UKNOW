@@ -300,6 +300,7 @@ export default {
     sending: 'Sending...',
     backButton: 'Back',
     registerSuccess: 'Registration successful!',
+    registrationFailed: 'Registration failed',
     verificationFailed: 'Verification failed',
     resendSuccess: 'Verification code resent',
     resendFailed: 'Failed to resend code',
