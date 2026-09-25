@@ -27,6 +27,7 @@ import {
   VALID_PERMISSION_KEYS,
   normalizePermissions,
 } from '../../config/employeePermissionCatalog.js';
+import { generateUsernameFromEmail } from '../../utils/usernameFromEmail.util.js';
 
 export { VALID_PERMISSION_KEYS };
 
@@ -188,6 +189,57 @@ export async function linkUserAsEmployee(ownerId, email) {
   }
 
   return linkExistingUserAsEmployee(ownerId, user.id);
+}
+
+/**
+ * Mời nhân viên chỉ bằng email (tự link nếu đã có tài khoản, tự tạo + gửi thư nếu chưa).
+ * Body: { email, fullName? }
+ */
+export async function inviteEmployeeByEmail(ownerId, { email, fullName }) {
+  const normalizedEmail = (email || '').trim().toLowerCase();
+  await assertCanAddEmployee(ownerId);
+
+  const existingUser = await findUserByEmail(normalizedEmail);
+  if (existingUser && existingUser.status !== 'deleted') {
+    if (existingUser.id === ownerId) {
+      throw { status: 400, message: 'Không thể tự thêm mình làm nhân viên' };
+    }
+    const member = await linkExistingUserAsEmployee(ownerId, existingUser.id);
+    return { ...member, method: 'linked' };
+  }
+
+  // Chưa có tài khoản (hoặc tài khoản cũ đã deleted) -> tạo mới với username tự sinh
+  const username = await generateUsernameFromEmail(normalizedEmail, async (candidate) => {
+    const found = await findUserByUsername(candidate);
+    return Boolean(found);
+  });
+
+  const passwordHash = await bcrypt.hash(crypto.randomBytes(32).toString('hex'), 10);
+  let employee;
+  try {
+    employee = await createEmployeeWithLink({
+      ownerId,
+      username,
+      email: normalizedEmail,
+      passwordHash,
+      fullName: fullName || null,
+    });
+  } catch (err) {
+    throw mapEmployeeUniqueViolation(err) || err;
+  }
+
+  const owner = await findOwnerInfo(ownerId);
+  let invitationSent = true;
+  let invitationError = null;
+  try {
+    await verificationService.sendEmployeeInvitation(normalizedEmail, owner?.full_name || owner?.username || 'Team');
+  } catch (emailErr) {
+    invitationSent = false;
+    invitationError = emailErr?.message || 'Không gửi được email mời';
+    console.error('Failed to send invitation email:', emailErr);
+  }
+
+  return { ...employee, method: 'invited', invitationSent, invitationError };
 }
 
 export async function setEmployeeInfo(ownerId, employeeId, { fullName, email }) {

@@ -146,7 +146,7 @@ function buildVerifyEmailHtml({ code, expiryMinutes = 10 }) {
 
 // ─── Employee Invitation Email ───────────────────────────────────────────────
 
-function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48 }) {
+function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48, email }) {
   const content = `
     <p style="margin:0 0 8px;font-size:16px;color:#374151;line-height:1.6">
       Xin chào,
@@ -181,6 +181,9 @@ function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48 }
     </table>
 
     <!-- Fallback -->
+    <p style="margin:0 0 12px;font-size:14px;color:#4b5563;line-height:1.6">
+      Hoặc đăng nhập bằng Google với chính email ${email ? `<strong>${email}</strong>` : 'được mời'} để vào làm việc ngay mà không cần đặt mật khẩu.
+    </p>
     <p style="margin:0 0 8px;font-size:13px;color:#6b7280">
       Hoặc copy link bên dưới và dán vào trình duyệt:
     </p>
@@ -412,7 +415,7 @@ class VerificationService {
   async sendInvitationEmail(email, token, ownerName) {
     const activationUrl = `${FRONTEND_URL}/activate?token=${token}`;
     const subject = `[${PRODUCT_NAME}] Bạn được mời tham gia nhóm`;
-    const html = buildInvitationEmailHtml({ ownerName, activationUrl });
+    const html = buildInvitationEmailHtml({ ownerName, activationUrl, email });
     return sendSystemEmail({ to: email, subject, html });
   }
 

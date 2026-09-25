@@ -25,6 +25,7 @@ import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateReferral.util.js';
 import userConsentRepository, { recordConsents, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
+import { generateUsernameFromEmail } from '../utils/usernameFromEmail.util.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -493,18 +494,10 @@ class AuthController {
         inNewUserTx = true;
 
         // Tạo username từ email
-        let baseUsername = email.split('@')[0].replace(/[^a-zA-Z0-9]/g, '');
-        if (baseUsername.length < 3) baseUsername += 'user';
-        
-        // Đảm bảo username là unique
-        let username = baseUsername;
-        let suffix = 1;
-        while (true) {
-          const checkUser = await client.query('SELECT id FROM users WHERE username = $1', [username]);
-          if (checkUser.rows.length === 0) break;
-          username = `${baseUsername}${suffix}`;
-          suffix++;
-        }
+        const username = await generateUsernameFromEmail(email, async (candidate) => {
+          const checkUser = await client.query('SELECT id FROM users WHERE username = $1', [candidate]);
+          return checkUser.rows.length > 0;
+        });
 
         // Random password for Google users
         const randomPassword = crypto.randomBytes(16).toString('hex');
@@ -615,7 +608,26 @@ class AuthController {
         user = result.rows[0];
 
         // Nếu status không active
-        if (user.status !== 'active') {
+        if (user.status === 'pending_activation') {
+          // A4: Nhân viên được mời nhưng chọn đăng nhập bằng Google thay vì bấm link kích hoạt
+          // Google đã xác thực email -> kích hoạt tài khoản
+          await client.query(
+            `UPDATE users
+             SET status = 'active', is_verified = true, verified_at = COALESCE(verified_at, NOW()), updated_at = NOW()
+             WHERE id = $1`,
+            [user.id]
+          );
+          user.status = 'active';
+          user.is_verified = true;
+
+          // Vô hiệu hóa token mời kích hoạt còn treo trong verification_codes (nếu có)
+          await client.query(
+            `UPDATE verification_codes
+             SET is_used = TRUE
+             WHERE LOWER(email) = LOWER($1) AND type = 'employee_invitation' AND is_used = FALSE`,
+            [email]
+          );
+        } else if (user.status !== 'active') {
           return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
         }
         // TEMPORARILY DISABLED: login lockout check (Google OAuth)
