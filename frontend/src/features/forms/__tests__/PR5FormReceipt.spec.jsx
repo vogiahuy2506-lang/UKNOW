@@ -57,6 +57,7 @@ describe('PR-5: Ảnh chuyển khoản bắt buộc trước khi xác nhận (Fr
       holdExpiresAt: new Date(Date.now() + 600000).toISOString(),
       holdExpired: false,
       payerReportedPaidAt: null,
+      receiptRequired: true,
       hasReceipt: false,
       receiptWaived: false,
       payment: {
@@ -220,6 +221,34 @@ describe('PR-5: Ảnh chuyển khoản bắt buộc trước khi xác nhận (Fr
       await waitFor(() => {
         expect(screen.getByTestId('img-desktop-qr')).toBeInTheDocument();
       });
+    });
+
+    it('khi receiptRequired = false (công tắc tắt): ẩn khối tải ảnh và nút xác nhận bấm được ngay (PR-2)', async () => {
+      formPublicApi.fetchPublicSubmissionStatus.mockResolvedValueOnce({
+        ...basePendingStatus,
+        receiptRequired: false,
+      });
+
+      render(
+        <I18nProvider>
+          <MemoryRouter initialEntries={['/f/test-pr5/submissions/token_pr5/status']}>
+            <Routes>
+              <Route path="/f/:publicKey/submissions/:accessToken/status" element={<FormSubmissionStatusPage />} />
+            </Routes>
+          </MemoryRouter>
+        </I18nProvider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('btn-confirm-paid')).toBeInTheDocument();
+      });
+
+      // Ẩn khối tải ảnh
+      expect(screen.queryByTestId('block-receipt-upload')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('msg-receipt-required')).not.toBeInTheDocument();
+
+      // Nút xác nhận mở sẵn
+      expect(screen.getByTestId('btn-confirm-paid')).not.toBeDisabled();
     });
   });
 

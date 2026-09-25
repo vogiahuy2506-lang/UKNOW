@@ -106,15 +106,6 @@ export default function FormSubmissionStatusPage() {
     statusDataRef.current = statusData;
   }, [statusData]);
 
-  // PR-5: Tạo mã QR URL hiện tại để khách trên desktop quét mở bằng điện thoại
-  useEffect(() => {
-    if (typeof window !== 'undefined' && window.location?.href) {
-      QRCode.toDataURL(window.location.href, { width: 240, margin: 2 })
-        .then((url) => setPageQrDataUrl(url))
-        .catch(() => {});
-    }
-  }, []);
-
   // PR-5: Dọn dẹp object URL xem trước khi unmount
   useEffect(() => {
     return () => {
@@ -250,9 +241,23 @@ export default function FormSubmissionStatusPage() {
     }
   };
 
+  const receiptRequired = Boolean(statusData?.receiptRequired);
   const hasReceipt = Boolean(statusData?.hasReceipt || receiptPreviewUrl);
   const isReceiptWaived = Boolean(statusData?.receiptWaived);
-  const canConfirmPaid = hasReceipt || isReceiptWaived;
+  const canConfirmPaid = !receiptRequired || hasReceipt || isReceiptWaived;
+
+  // PR-5 V4: Dựng lười mã QR URL hiện tại khi người dùng bấm mở hộp QR
+  const handleOpenDesktopQr = async () => {
+    setShowDesktopQrModal(true);
+    if (!pageQrDataUrl && typeof window !== 'undefined' && window.location?.href) {
+      try {
+        const url = await QRCode.toDataURL(window.location.href, { width: 240, margin: 2 });
+        setPageQrDataUrl(url);
+      } catch {
+        setPageQrDataUrl('');
+      }
+    }
+  };
 
   const handleConfirmPaid = async () => {
     setIsReportingPaid(true);
@@ -509,118 +514,118 @@ export default function FormSubmissionStatusPage() {
               </>
             )}
 
-            {/* PR-5: Khối tải ảnh chuyển khoản */}
-            <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-3" data-testid="block-receipt-upload">
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
-                  <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
-                  {t('publicForm.payment.receiptSectionTitle')}
-                </span>
-                {statusData?.payerReportedPaidAt ? (
-                  <span className="text-[11px] text-gray-400 font-medium">
-                    {hasReceipt ? t('publicForm.payment.receiptUploadedSuccess') : ''}
+            {/* PR-5: Khối tải ảnh chuyển khoản — chỉ hiển thị khi tính năng được bật từ server (V5) */}
+            {receiptRequired && (
+              <div className="p-3.5 bg-gray-50 border border-gray-200 rounded-xl space-y-3" data-testid="block-receipt-upload">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1.5">
+                    <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
+                    {t('publicForm.payment.receiptSectionTitle')}
                   </span>
-                ) : (
-                  <input
-                    ref={receiptFileInputRef}
-                    type="file"
-                    accept="image/*"
-                    onChange={handleReceiptFileChange}
-                    className="hidden"
-                    data-testid="input-receipt-file"
-                  />
-                )}
-              </div>
+                  {statusData?.payerReportedPaidAt ? (
+                    <span className="text-[11px] text-gray-400 font-medium">
+                      {hasReceipt ? t('publicForm.payment.receiptUploadedSuccess') : ''}
+                    </span>
+                  ) : (
+                    <input
+                      ref={receiptFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleReceiptFileChange}
+                      className="hidden"
+                      data-testid="input-receipt-file"
+                    />
+                  )}
+                </div>
 
-              {receiptPreviewUrl ? (
-                <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-gray-200">
-                  <img
-                    src={receiptPreviewUrl}
-                    alt="Receipt preview"
-                    className="w-16 h-16 object-cover rounded-md border border-gray-100 flex-shrink-0"
-                    data-testid="img-receipt-preview"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-emerald-700 flex items-center gap-1">
-                      <HiOutlineCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
-                      <span>{t('publicForm.payment.receiptUploadedSuccess')}</span>
-                    </p>
+                {receiptPreviewUrl ? (
+                  <div className="flex items-center gap-3 bg-white p-2.5 rounded-lg border border-gray-200">
+                    <img
+                      src={receiptPreviewUrl}
+                      alt="Receipt preview"
+                      className="w-16 h-16 object-cover rounded-md border border-gray-100 flex-shrink-0"
+                      data-testid="img-receipt-preview"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-medium text-emerald-700 flex items-center gap-1">
+                        <HiOutlineCheck className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                        <span>{t('publicForm.payment.receiptUploadedSuccess')}</span>
+                      </p>
+                      {!statusData?.payerReportedPaidAt && (
+                        <button
+                          type="button"
+                          onClick={() => receiptFileInputRef.current?.click()}
+                          disabled={isUploadingReceipt}
+                          className="mt-1 text-xs text-primary-600 hover:text-primary-700 font-medium underline"
+                          data-testid="btn-change-receipt"
+                        >
+                          {isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptChangeBtn')}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ) : statusData?.hasReceipt ? (
+                  <div className="flex items-center justify-between gap-2 bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-200 text-xs text-emerald-800">
+                    <span className="flex items-center gap-1.5 font-medium">
+                      <HiOutlineCheck className="w-4 h-4 text-emerald-600" />
+                      {t('publicForm.payment.receiptUploadedSuccess')}
+                    </span>
                     {!statusData?.payerReportedPaidAt && (
                       <button
                         type="button"
                         onClick={() => receiptFileInputRef.current?.click()}
                         disabled={isUploadingReceipt}
-                        className="mt-1 text-xs text-primary-600 hover:text-primary-700 font-medium underline"
+                        className="text-xs text-primary-600 hover:text-primary-700 font-medium underline"
                         data-testid="btn-change-receipt"
                       >
                         {isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptChangeBtn')}
                       </button>
                     )}
                   </div>
-                </div>
-              ) : statusData?.hasReceipt ? (
-                <div className="flex items-center justify-between gap-2 bg-emerald-50/60 p-2.5 rounded-lg border border-emerald-200 text-xs text-emerald-800">
-                  <span className="flex items-center gap-1.5 font-medium">
-                    <HiOutlineCheck className="w-4 h-4 text-emerald-600" />
-                    {t('publicForm.payment.receiptUploadedSuccess')}
-                  </span>
-                  {!statusData?.payerReportedPaidAt && (
+                ) : (
+                  <div className="text-center py-2">
+                    <p className="text-xs text-gray-500 mb-2.5">
+                      {t('publicForm.payment.receiptUploadPrompt')}
+                    </p>
                     <button
                       type="button"
                       onClick={() => receiptFileInputRef.current?.click()}
-                      disabled={isUploadingReceipt}
-                      className="text-xs text-primary-600 hover:text-primary-700 font-medium underline"
-                      data-testid="btn-change-receipt"
+                      disabled={isUploadingReceipt || Boolean(statusData?.payerReportedPaidAt)}
+                      data-testid="btn-upload-receipt"
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-gray-300 hover:bg-gray-50 text-xs font-semibold text-gray-700 shadow-sm transition-colors disabled:opacity-50"
                     >
-                      {isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptChangeBtn')}
+                      <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
+                      <span>{isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptUploadBtn')}</span>
                     </button>
-                  )}
-                </div>
-              ) : (
-                <div className="text-center py-2">
-                  <p className="text-xs text-gray-500 mb-2.5">
-                    {t('publicForm.payment.receiptUploadPrompt')}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => receiptFileInputRef.current?.click()}
-                    disabled={isUploadingReceipt || Boolean(statusData?.payerReportedPaidAt)}
-                    data-testid="btn-upload-receipt"
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-white border border-gray-300 hover:bg-gray-50 text-xs font-semibold text-gray-700 shadow-sm transition-colors disabled:opacity-50"
-                  >
-                    <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
-                    <span>{isUploadingReceipt ? t('publicForm.payment.receiptUploading') : t('publicForm.payment.receiptUploadBtn')}</span>
-                  </button>
-                </div>
-              )}
-
-              {/* Thông báo nếu bên nhận hết hạn mức lưu ảnh */}
-              {statusData?.receiptWaived && (
-                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center" data-testid="msg-receipt-waived">
-                  {t('publicForm.payment.receiptWaivedMsg')}
-                </p>
-              )}
-
-              {/* Hướng dẫn mở trên điện thoại nếu đang xem trên desktop */}
-              {!statusData?.payerReportedPaidAt && (
-                <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between gap-2 text-[11px] text-gray-500">
-                  <div className="flex items-center gap-1.5 min-w-0">
-                    <HiOutlineDeviceMobile className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                    <span className="truncate">{t('publicForm.payment.receiptDesktopQrPrompt')}</span>
                   </div>
-                  {pageQrDataUrl && (
+                )}
+
+                {/* Thông báo nếu bên nhận hết hạn mức lưu ảnh */}
+                {statusData?.receiptWaived && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5 text-center" data-testid="msg-receipt-waived">
+                    {t('publicForm.payment.receiptWaivedMsg')}
+                  </p>
+                )}
+
+                {/* Hướng dẫn mở trên điện thoại nếu đang xem trên desktop (V4: lười tạo QR khi click) */}
+                {!statusData?.payerReportedPaidAt && (
+                  <div className="pt-2 border-t border-gray-200/60 flex items-center justify-between gap-2 text-[11px] text-gray-500">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <HiOutlineDeviceMobile className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                      <span className="truncate">{t('publicForm.payment.receiptDesktopQrPrompt')}</span>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => setShowDesktopQrModal(true)}
+                      onClick={handleOpenDesktopQr}
                       data-testid="btn-open-desktop-qr"
                       className="shrink-0 text-primary-600 hover:text-primary-700 font-medium px-2 py-0.5 rounded bg-white border border-gray-200 hover:bg-gray-50 text-[10px]"
                     >
                       QR
                     </button>
-                  )}
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* PR-2 & PR-5: Nút xác nhận chuyển khoản hoặc thông báo đã ghi nhận */}
             {statusData?.payerReportedPaidAt ? (
@@ -651,7 +656,7 @@ export default function FormSubmissionStatusPage() {
                   <HiOutlineCheck className="w-5 h-5" />
                   <span>{t('publicForm.payment.confirmPaidBtn')}</span>
                 </button>
-                {!canConfirmPaid && (
+                {receiptRequired && !canConfirmPaid && (
                   <p className="text-xs text-amber-600 mt-1.5 text-center font-medium" data-testid="msg-receipt-required">
                     {t('publicForm.payment.receiptRequiredHint')}
                   </p>

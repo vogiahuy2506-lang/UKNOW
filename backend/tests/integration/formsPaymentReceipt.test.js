@@ -98,7 +98,52 @@ async function createPublishedPaymentForm(token) {
   return form;
 }
 
-describe('PR-5 — Ảnh chuyển khoản BẮT BUỘC trước khi xác nhận đã chuyển', () => {
+describe('PR-5 — Công tắc FORM_PAYMENT_RECEIPT_ENABLED mặc định TẮT', () => {
+  beforeEach(() => {
+    delete process.env.FORM_PAYMENT_RECEIPT_ENABLED;
+  });
+
+  it('Khi tắt: POST .../receipt trả 404 FEATURE_DISABLED, GET status trả receiptRequired=false, report-paid không đòi ảnh (PR-2)', async () => {
+    const owner = await createUser({ username: 'owner_p5_off' });
+    const token = await loginAs(owner);
+    const form = await createPublishedPaymentForm(token);
+
+    const submitRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions`)
+      .send({ answers: { name: 'Khách Khi Tắt' } });
+    expect(submitRes.status).toBe(201);
+    const { accessToken } = submitRes.body.data;
+
+    // 1. Tải ảnh bị từ chối 404 FEATURE_DISABLED
+    const uploadRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/receipt`)
+      .attach('file', JPEG_HEADER, { filename: 'bien-lai.jpg', contentType: 'image/jpeg' });
+    expect(uploadRes.status).toBe(404);
+    expect(uploadRes.body.code).toBe('FEATURE_DISABLED');
+
+    // 2. GET status trả receiptRequired: false
+    const statusRes = await request(app)
+      .get(`/api/public/forms/${form.publicKey}/submissions/${accessToken}`);
+    expect(statusRes.status).toBe(200);
+    expect(statusRes.body.data.receiptRequired).toBe(false);
+
+    // 3. Khách báo đã chuyển thành công dù CHƯA có ảnh (hành vi PR-2)
+    const reportRes = await request(app)
+      .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
+    expect(reportRes.status).toBe(200);
+    expect(reportRes.body.data.payerReportedPaidAt).toBeTruthy();
+  });
+});
+
+describe('PR-5 — Ảnh chuyển khoản BẮT BUỘC khi công tắc BẬT', () => {
+  beforeEach(() => {
+    process.env.FORM_PAYMENT_RECEIPT_ENABLED = 'true';
+  });
+
+  afterEach(() => {
+    delete process.env.FORM_PAYMENT_RECEIPT_ENABLED;
+  });
+
   it('1. Chưa tải ảnh: gọi thẳng report-paid -> 409 RECEIPT_REQUIRED', async () => {
     const owner = await createUser({ username: 'owner_p5_1' });
     const token = await loginAs(owner);
@@ -135,10 +180,11 @@ describe('PR-5 — Ảnh chuyển khoản BẮT BUỘC trước khi xác nhận 
     expect(uploadRes.status).toBe(200);
     expect(uploadRes.body.data.receiptStored).toBe(true);
 
-    // GET status kiểm tra hasReceipt
+    // GET status kiểm tra hasReceipt và receiptRequired
     const statusRes = await request(app)
       .get(`/api/public/forms/${form.publicKey}/submissions/${accessToken}`);
     expect(statusRes.status).toBe(200);
+    expect(statusRes.body.data.receiptRequired).toBe(true);
     expect(statusRes.body.data.hasReceipt).toBe(true);
     expect(statusRes.body.data.receiptWaived).toBe(false);
     expect(statusRes.body.data.paymentReceiptKey).toBeUndefined(); // Không lộ storage key
@@ -251,6 +297,14 @@ describe('PR-5 — Ảnh chuyển khoản BẮT BUỘC trước khi xác nhận 
 
     // File cũ (key1) phải bị xoá khỏi storage backend
     expect(await getStorageBackend().exists(key1)).toBe(false);
+
+    // V3: Dòng sổ storage_objects của file cũ phải bị đánh dấu deleted và có deleted_at
+    const obj1 = await db.query(
+      `SELECT state, deleted_at FROM storage_objects WHERE storage_key = $1`,
+      [key1]
+    );
+    expect(obj1.rows[0].state).toBe('deleted');
+    expect(obj1.rows[0].deleted_at).toBeTruthy();
   });
 
   it('7. Chủ form hết dung lượng: bắt StorageQuotaExceededError, không lưu ảnh, waived_reason="owner_storage_full", nút mở và report-paid 200', async () => {

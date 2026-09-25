@@ -610,7 +610,13 @@ class FormRepository {
          form_id AS "formId",
          workspace_owner_id AS "workspaceOwnerId",
          status,
-         appointment_at AS "appointmentAt"
+         appointment_at AS "appointmentAt",
+         payment_code AS "paymentCode",
+         payment_amount AS "paymentAmount",
+         payment_receipt_key AS "paymentReceiptKey",
+         payment_receipt_uploaded_at AS "paymentReceiptUploadedAt",
+         payment_receipt_waived_reason AS "paymentReceiptWaivedReason",
+         payment_receipt_upload_count AS "paymentReceiptUploadCount"
        FROM form_submissions
        WHERE id = $1 AND form_id = $2 AND workspace_owner_id = $3`,
       [submissionId, formId, workspaceOwnerId]
@@ -812,7 +818,10 @@ class FormRepository {
    * @param {number} formId
    * @returns {Promise<object|null>}
    */
-  async updatePayerReportedPaid(accessToken, formId) {
+  async updatePayerReportedPaid(accessToken, formId, requireReceipt = false) {
+    const receiptCondition = requireReceipt
+      ? 'AND (payment_receipt_key IS NOT NULL OR payment_receipt_waived_reason IS NOT NULL)'
+      : '';
     const result = await db.query(
       `UPDATE form_submissions
        SET
@@ -830,7 +839,7 @@ class FormRepository {
          AND form_id = $2
          AND status = 'pending_payment'
          AND payer_reported_paid_at IS NULL
-         AND (payment_receipt_key IS NOT NULL OR payment_receipt_waived_reason IS NOT NULL)
+         ${receiptCondition}
        RETURNING
          id,
          form_id AS "formId",
@@ -884,13 +893,13 @@ class FormRepository {
   }
 
   /**
-   * Tìm bài nộp theo id và formId (cho màn quản trị form).
+   * Tìm bài nộp để lấy thông tin ảnh biên lai (cho màn quản trị form).
    *
    * @param {number} submissionId
    * @param {number} formId
    * @returns {Promise<object|null>}
    */
-  async findSubmissionByIdAndForm(submissionId, formId) {
+  async findSubmissionReceiptForOwner(submissionId, formId) {
     const result = await db.query(
       `SELECT
          id,

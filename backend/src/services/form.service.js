@@ -81,6 +81,16 @@ export function detectReceiptImageMagic(buffer) {
   }
   return null;
 }
+
+/**
+ * Công tắc tính năng biên lai chuyển khoản (PR-5 V5).
+ * Mặc định TẮT trừ khi FORM_PAYMENT_RECEIPT_ENABLED='true'.
+ *
+ * @returns {boolean}
+ */
+export function isPaymentReceiptEnabled() {
+  return process.env.FORM_PAYMENT_RECEIPT_ENABLED === 'true';
+}
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5174').replace(/\/+$/, '');
 
 function createHttpError(message, statusCode = 400, code = 'BAD_REQUEST') {
@@ -1333,6 +1343,7 @@ class FormService {
       holdExpired,
       payment,
       payerReportedPaidAt: submission.payerReportedPaidAt || null,
+      receiptRequired: isPaymentReceiptEnabled(),
       hasReceipt: Boolean(submission.paymentReceiptKey),
       receiptWaived: Boolean(submission.paymentReceiptWaivedReason),
     };
@@ -1351,6 +1362,10 @@ class FormService {
    * @returns {Promise<{ receiptStored: boolean, reason?: string }>}
    */
   async uploadPaymentReceipt(publicKey, accessToken, file) {
+    if (!isPaymentReceiptEnabled()) {
+      throw createHttpError('Tính năng tải ảnh biên lai hiện đang tắt', 404, 'FEATURE_DISABLED');
+    }
+
     const key = String(publicKey || '').trim();
     const token = String(accessToken || '').trim();
     if (!key || !token) {
@@ -1423,22 +1438,26 @@ class FormService {
       throw err;
     }
 
-    // Nếu trước đó đã có ảnh cũ -> dọn ảnh cũ khỏi storage
-    if (submission.paymentReceiptKey && submission.paymentReceiptKey !== storageKey) {
-      await getStorageBackend().delete(submission.paymentReceiptKey).catch(() => {});
-    }
+    // V3: Cập nhật DB sang khoá mới TRƯỚC, dọn ảnh cũ SAU
+    const oldStorageKey = submission.paymentReceiptKey;
 
     await formRepository.updateSubmissionPaymentReceipt(submission.id, {
       paymentReceiptKey: storageKey,
       paymentReceiptWaivedReason: null,
     });
 
+    // Nếu trước đó đã có ảnh cũ -> dọn ảnh cũ khỏi storage VÀ đánh dấu xoá trong storage_objects
+    if (oldStorageKey && oldStorageKey !== storageKey) {
+      await getStorageBackend().delete(oldStorageKey).catch(() => {});
+      await markDeletedAfterUnlink({ storageKey: oldStorageKey }).catch(() => {});
+    }
+
     return { receiptStored: true };
   }
 
   /**
    * Khách báo đã chuyển khoản cho lượt đặt pending_payment (PR-2, PR-5).
-   * Điều kiện server (PR-5): bắt buộc đã tải ảnh (paymentReceiptKey) hoặc được miễn (paymentReceiptWaivedReason).
+   * Điều kiện server (PR-5): bắt buộc đã tải ảnh (paymentReceiptKey) hoặc được miễn (paymentReceiptWaivedReason) nếu tính năng bật.
    * Gia hạn giữ chỗ (nếu còn hạn) tối đa 24h, không vượt quá appointment_at.
    * Gửi email thông báo cho chủ form (bất kể settings.notifyOwner).
    * Idempotent: bấm lại trả 200 trạng thái hiện tại, không đổi hạn giữ chỗ, không gửi thư lần hai.
@@ -1459,8 +1478,10 @@ class FormService {
       throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
     }
 
-    // 1. Thử cập nhật nguyên tử nếu lượt đang pending_payment, chưa từng báo, và ĐÃ CÓ BIÊN LAI (hoặc được miễn)
-    const updated = await formRepository.updatePayerReportedPaid(token, form.id);
+    const requireReceipt = isPaymentReceiptEnabled();
+
+    // 1. Thử cập nhật nguyên tử nếu lượt đang pending_payment, chưa từng báo, và ĐÃ CÓ BIÊN LAI (nếu bật tính năng)
+    const updated = await formRepository.updatePayerReportedPaid(token, form.id, requireReceipt);
 
     if (updated) {
       // Bấm lần đầu thành công -> gửi thư báo chủ form (bất kể settings.notifyOwner)
@@ -1526,9 +1547,11 @@ class FormService {
       throw createHttpError('Bài nộp không ở trạng thái chờ thanh toán', 409, 'SUBMISSION_NOT_PENDING');
     }
 
-    // Kiểm tra chốt receipt: nếu chưa báo đã chuyển mà chưa có biên lai (và chưa miễn) -> ném 409 RECEIPT_REQUIRED
-    if (!existing.payerReportedPaidAt && !existing.paymentReceiptKey && !existing.paymentReceiptWaivedReason) {
-      throw createHttpError('Vui lòng tải ảnh chuyển khoản trước khi xác nhận', 409, 'RECEIPT_REQUIRED');
+    // Kiểm tra chốt receipt: chỉ khi tính năng ĐANG BẬT
+    if (requireReceipt) {
+      if (!existing.payerReportedPaidAt && !existing.paymentReceiptKey && !existing.paymentReceiptWaivedReason) {
+        throw createHttpError('Vui lòng tải ảnh chuyển khoản trước khi xác nhận', 409, 'RECEIPT_REQUIRED');
+      }
     }
 
     // Đã ở trạng thái pending_payment và payer_reported_paid_at không null (nghĩa là đã báo rồi) -> idempotent 200
@@ -1553,7 +1576,7 @@ class FormService {
       throw createHttpError('Không tìm thấy biểu mẫu', 404, 'FORM_NOT_FOUND');
     }
 
-    const submission = await formRepository.findSubmissionByIdAndForm(submissionId, formId);
+    const submission = await formRepository.findSubmissionReceiptForOwner(submissionId, formId);
     if (!submission) {
       throw createHttpError('Không tìm thấy bài nộp', 404, 'SUBMISSION_NOT_FOUND');
     }

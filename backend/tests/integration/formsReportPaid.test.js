@@ -500,11 +500,16 @@ describe('PR-2 — POST /api/public/forms/:publicKey/submissions/:accessToken/re
     expect(submitRes.status).toBe(201);
     const { accessToken } = submitRes.body.data;
 
-    // Chưa tải ảnh -> báo chuyển khoản phải bị chặn 409
-    const reportRes = await request(app)
-      .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
-    expect(reportRes.status).toBe(409);
-    expect(reportRes.body.code).toBe('RECEIPT_REQUIRED');
-    expect(reportRes.body.message).toContain('ảnh chuyển khoản');
+    process.env.FORM_PAYMENT_RECEIPT_ENABLED = 'true';
+    try {
+      // Chưa tải ảnh -> báo chuyển khoản phải bị chặn 409
+      const reportRes = await request(app)
+        .post(`/api/public/forms/${form.publicKey}/submissions/${accessToken}/report-paid`);
+      expect(reportRes.status).toBe(409);
+      expect(reportRes.body.code).toBe('RECEIPT_REQUIRED');
+      expect(reportRes.body.message).toContain('ảnh chuyển khoản');
+    } finally {
+      delete process.env.FORM_PAYMENT_RECEIPT_ENABLED;
+    }
   });
 });
