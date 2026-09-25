@@ -7850,17 +7850,23 @@ export default {
   // Activate Page
   activate: {
     title: 'Kích hoạt tài khoản',
+    badge: 'Tài khoản thành viên',
+    subtitle: 'Tạo mật khẩu cho tài khoản nhân viên của bạn để kích hoạt và bắt đầu làm việc.',
     activating: 'Đang kích hoạt tài khoản...',
-    activateButton: 'Kích hoạt',
+    activateButton: 'Kích hoạt tài khoản',
     successTitle: 'Tài khoản đã được kích hoạt!',
-    successMessage: 'Đăng nhập với tài khoản',
+    successMessage: 'Mật khẩu của bạn đã được thiết lập thành công. Bây giờ bạn có thể đăng nhập vào hệ thống.',
     successDefaultPassword: 'và mật khẩu mặc định:',
     loginNow: 'Đăng nhập ngay',
     failedTitle: 'Kích hoạt thất bại',
     contactManager: 'Vui lòng liên hệ quản lý để gửi lại lời mời.',
     backToLogin: 'Quay về đăng nhập',
-    invalidLink: 'Link kích hoạt không hợp lệ.',
+    invalidLink: 'Link kích hoạt không hợp lệ hoặc thiếu mã xác thực.',
     expiredOrInvalid: 'Link kích hoạt không hợp lệ hoặc đã hết hạn.',
+    googleSectionTitle: 'Đăng nhập nhanh với Google',
+    googleSectionDesc: 'Nếu email nhận lời mời là tài khoản Google, bạn có thể kích hoạt và đăng nhập ngay.',
+    orCreatePassword: 'Hoặc tự đặt mật khẩu riêng',
+    infoNote: 'Sau khi kích hoạt, bạn có thể đăng nhập bằng mật khẩu này hoặc dùng tài khoản Google trùng email bất cứ lúc nào.',
   },
 
   // Unauthorized Screen

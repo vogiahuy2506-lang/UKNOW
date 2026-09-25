@@ -332,7 +332,7 @@ function AppContent() {
           </Route>
 
           {/* Kích hoạt tài khoản nhân viên qua link email */}
-          <Route path="/activate" element={<ActivatePage />} />
+          <Route path="/activate" element={<AuthLayout><ActivatePage /></AuthLayout>} />
 
           {/* Quên mật khẩu */}
           <Route path="/forgot-password" element={
