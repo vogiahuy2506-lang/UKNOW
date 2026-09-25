@@ -70,15 +70,40 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
     const failed = results.length - succeeded;
 
     if (succeeded > 0) {
-      const firstOk = results.find((r) => r.status === 'fulfilled');
-      const recipient =
-        firstOk?.value?.data?.recipient?.name || `${succeeded} người`;
-      const msg =
-        failed > 0
-          ? `Đã chia sẻ cho ${succeeded}/${results.length} người`
-          : t('chatbot.cloneSuccess', { name: recipient }) ||
-            `Đã chia sẻ chatbot cho ${recipient}`;
-      toast.success(msg);
+      // Phân nhánh thông báo theo isExistingUser từ server (PR-3):
+      //  - existing: clone ngay + gửi mail "đã chia sẻ"
+      //  - pending: email ngoài hệ thống → gửi mail mời đăng ký, share lưu DB chờ claim
+      // Cấu trúc response: axios { data: { success, data: { isExistingUser, recipient, ... } } }
+      const fulfilledResults = results
+        .filter((r) => r.status === 'fulfilled')
+        .map((r) => r.value?.data?.data);
+      const existingCount = fulfilledResults.filter(
+        (d) => d?.isExistingUser === true
+      ).length;
+      const pendingCount = fulfilledResults.filter(
+        (d) => d?.isExistingUser === false
+      ).length;
+
+      if (failed > 0) {
+        const msg = t('chatbot.sharePartialSuccess', {
+          succeeded,
+          total: results.length,
+          existing: existingCount,
+          pending: pendingCount,
+        }) || `Đã chia sẻ cho ${succeeded}/${results.length} người (${existingCount} đã có tài khoản, ${pendingCount} chờ đăng ký)`;
+        toast.success(msg);
+      } else if (pendingCount > 0 && existingCount === 0) {
+        toast.success(t('chatbot.shareToastAllPending') || 'Đã lưu lời mời. Hệ thống sẽ gửi email mời người nhận đăng ký — chatbot sẽ được nhân bản vào tài khoản họ ngay sau khi đăng ký');
+      } else if (existingCount > 0 && pendingCount === 0) {
+        const firstOk = results.find((r) => r.status === 'fulfilled');
+        const clonedName = firstOk?.value?.data?.data?.clonedChatbot?.name;
+        const msg = clonedName
+          ? t('chatbot.shareToastCloned', { name: clonedName }) || `Đã nhân bản chatbot "${clonedName}" vào tài khoản người nhận`
+          : (t('chatbot.shareToastAllExisting') || 'Đã nhân bản và gửi email thông báo');
+        toast.success(msg);
+      } else {
+        toast.success(t('chatbot.shareSuccess') || 'Chia sẻ thành công');
+      }
       setSuccess(true);
       setTimeout(() => {
         onSuccess?.();
@@ -176,7 +201,7 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
             />
             {!error && (
               <p className="mt-1.5 text-xs text-gray-500">
-                Người nhận phải có tài khoản trong hệ thống. Có thể thêm nhiều người.
+                Có thể nhập email của người đã có tài khoản (clone ngay) hoặc email ngoài hệ thống (sẽ gửi lời mời đăng ký, chatbot tự nhân bản sau khi họ đăng ký). Có thể thêm nhiều người.
               </p>
             )}
           </div>

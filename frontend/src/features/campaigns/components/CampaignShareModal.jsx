@@ -56,11 +56,37 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
     const succeeded = results.filter((r) => r.status === 'fulfilled').length;
     const failed = results.length - succeeded;
     if (succeeded > 0) {
-      toast.success(
-        failed > 0
-          ? `Đã chia sẻ cho ${succeeded}/${results.length} người`
-          : t('campaigns.shareSuccess') || 'Chia sẻ thành công',
-      );
+      // Phân nhánh thông báo theo isExistingUser từ server (PR-2):
+      //  - existing: đã gửi mail cho tài khoản user.
+      //  - pending: email chưa có tài khoản → server lưu share + gửi mail mời đăng ký.
+      // Cấu trúc response: axios { data: { success, data: { isExistingUser, ... } } }
+      const fulfilledResults = results
+        .filter((r) => r.status === 'fulfilled')
+        .map((r) => r.value?.data?.data);
+      const existingCount = fulfilledResults.filter(
+        (d) => d?.isExistingUser === true
+      ).length;
+      const pendingCount = fulfilledResults.filter(
+        (d) => d?.isExistingUser === false
+      ).length;
+
+      if (failed > 0) {
+        toast.success(
+          t('campaigns.sharePartialSuccess', {
+            succeeded,
+            total: results.length,
+            existing: existingCount,
+            pending: pendingCount,
+          }) || `Đã chia sẻ cho ${succeeded}/${results.length} người (${existingCount} đã có tài khoản, ${pendingCount} chờ đăng ký)`
+        );
+      } else if (pendingCount > 0 && existingCount === 0) {
+        toast.success(t('campaigns.shareToastAllPending') || 'Đã lưu quyền chia sẻ. Hệ thống sẽ gửi email mời người nhận đăng ký để nhận chiến dịch');
+      } else if (existingCount > 0 && pendingCount === 0) {
+        toast.success(t('campaigns.shareToastAllExisting') || 'Đã chia sẻ và gửi email thông báo');
+      } else {
+        // Hỗn hợp
+        toast.success(t('campaigns.shareSuccess') || 'Chia sẻ thành công');
+      }
     }
     if (failed > 0) {
       const firstFail = results.find((r) => r.status === 'rejected');

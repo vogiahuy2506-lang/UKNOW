@@ -21,6 +21,7 @@ import {
 } from '../../features/landing-pages/services/landingPagesAdminApi.service.js';
 import marketplaceService from '../../services/marketplace.service';
 import LandingPageShareModal from '../../components/marketplace/LandingPageShareModal';
+import LandingPageMarketplaceModal from '../../components/marketplace/LandingPageMarketplaceModal';
 
 const BASE_DOMAIN = 'founderai.biz';
 const TABS = [
@@ -59,6 +60,9 @@ export default function LandingPagesAdminPage() {
 
   // Share modal state
   const [sharingLandingPage, setSharingLandingPage] = useState(null);
+
+  // Marketplace publish modal state
+  const [publishingLandingPage, setPublishingLandingPage] = useState(null);
 
   // Nếu AiChatbot điều hướng sang đây với aiDraft → chuyển tiếp sang canvas new route.
   useEffect(() => {
@@ -298,6 +302,14 @@ export default function LandingPagesAdminPage() {
                       onClick={() => setSharingLandingPage(r)}
                     >
                       <HiOutlineShare className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      className="p-2 rounded-lg text-orange-600 hover:bg-orange-50 transition-colors"
+                      title={t('landingPagesAdmin.publishToMarketplace')}
+                      onClick={() => setPublishingLandingPage(r)}
+                    >
+                      <HiOutlineShoppingCart className="w-4 h-4" />
                     </button>
                     <button
                       type="button"
@@ -542,6 +554,14 @@ export default function LandingPagesAdminPage() {
         open={Boolean(sharingLandingPage)}
         onClose={() => setSharingLandingPage(null)}
         onChanged={reloadMine}
+      />
+      <LandingPageMarketplaceModal
+        landingPage={publishingLandingPage}
+        open={Boolean(publishingLandingPage)}
+        onClose={() => setPublishingLandingPage(null)}
+        onSuccess={() => {
+          toast.success(t('landingPagesAdmin.publishSuccess'));
+        }}
       />
     </div>
   );

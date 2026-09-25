@@ -26,6 +26,9 @@ import { generateReferralCode, normalizeReferralCode } from '../utils/affiliateR
 import userConsentRepository, { recordConsents, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
 import { generateUsernameFromEmail } from '../utils/usernameFromEmail.util.js';
+import landingPageShareRepository from '../repositories/landingPageShare.repository.js';
+import campaignShareRepository from '../repositories/campaign/campaignShare.repository.js';
+import chatbotShareRepository from '../repositories/ai/chatbotShare.repository.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -176,6 +179,26 @@ class AuthController {
       );
 
       const user = result.rows[0];
+
+      // Auto-claim tất cả share pending cho email này (PR-1/2/3).
+      // Chạy trong cùng transaction với đăng ký để chống race: user mới không thể
+      // "lỡ" share vì commit trước khi claim.
+      // Lỗi ở 1 trong 3 không rollback đăng ký — share là best-effort, lỗi chỉ log.
+      try {
+        await landingPageShareRepository.claimPendingByUserId(client, { userId: user.id, email: user.email });
+      } catch (claimErr) {
+        console.error('[AutoClaim] landing_page_shares claim error (không rollback đăng ký):', claimErr?.message || claimErr);
+      }
+      try {
+        await campaignShareRepository.claimPendingByUserId(client, { userId: user.id, email: user.email });
+      } catch (claimErr) {
+        console.error('[AutoClaim] campaign_shares claim error (không rollback đăng ký):', claimErr?.message || claimErr);
+      }
+      try {
+        await chatbotShareRepository.claimPendingByUserId(client, { userId: user.id, email: user.email });
+      } catch (claimErr) {
+        console.error('[AutoClaim] chatbot_shares claim error (không rollback đăng ký):', claimErr?.message || claimErr);
+      }
 
       // Lưu bằng chứng đồng ý vào user_consents trong transaction (PR-N2)
       const ipAddress = req.ip || req.socket?.remoteAddress;

@@ -168,6 +168,131 @@ class CampaignShareRepository {
   }
 
   /**
+   * Tạo hoặc cập nhật share:
+   *   - Nếu recipientEmail khớp user có sẵn → share với id_recipient=user.id, status='active'.
+   *   - Nếu recipientEmail CHƯA có user → share pending (id_recipient=NULL, status='pending').
+   *     Đã có pending cùng campaign+email → UPDATE thay vì INSERT (de-dup).
+   * 3 bước đi qua 1 transaction (client do caller quản lý) chống race.
+   *
+   * @returns {Promise<{ share: object, isExistingUser: boolean, recipient: object|null } | null>}
+   *   Trả null nếu campaign không thuộc workspace_owner.
+   */
+  async findOrCreatePendingByEmail(
+    client,
+    { idCampaign, workspaceOwnerId, recipientEmail, shareType = 'view', canRun = false }
+  ) {
+    const normalizedEmail = String(recipientEmail || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('recipientEmail is required');
+    }
+    const run = async (q) => (await client.query(q.text, q.values)).rows;
+
+    // 1) Verify campaign thuộc workspace.
+    // Ép kiểu ::bigint để tránh lỗi "could not determine data type" của pg khi cột nullable.
+    const ownerRows = await run({
+      text: `SELECT id
+             FROM campaigns
+             WHERE id = $1::bigint
+               AND COALESCE(workspace_owner_id, id_user) = $2::bigint
+             LIMIT 1`,
+      values: [idCampaign, workspaceOwnerId],
+    });
+    if (ownerRows.length === 0) return null;
+
+    // 2) Tìm user theo email (LOWER để dedup chữ hoa/thường).
+    const userRows = await run({
+      text: `SELECT id, full_name, username, email
+             FROM users
+             WHERE LOWER(email) = $1
+             LIMIT 1`,
+      values: [normalizedEmail],
+    });
+    const existingUser = userRows[0] || null;
+
+    if (existingUser) {
+      // Branch 1: user đã có tài khoản → share ACTIVE.
+      const shareRows = await run({
+        text: `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run, status)
+               VALUES ($1::bigint, $2::bigint, $3::bigint, $4, $5, $6, 'active')
+               ON CONFLICT (id_campaign, id_recipient)
+               DO UPDATE SET id_owner = EXCLUDED.id_owner,
+                             recipient_email = EXCLUDED.recipient_email,
+                             share_type = EXCLUDED.share_type,
+                             can_run = EXCLUDED.can_run,
+                             status = 'active',
+                             updated_at = NOW()
+               RETURNING *`,
+        values: [
+          idCampaign,
+          workspaceOwnerId,
+          existingUser.id,
+          normalizedEmail,
+          shareType,
+          canRun,
+        ],
+      });
+      return { share: shareRows[0], isExistingUser: true, recipient: existingUser };
+    }
+
+    // Branch 2: email ngoài hệ thống. De-dup theo (campaign, lower(email)) với id_recipient NULL.
+    // Ép kiểu ::bigint để tránh lỗi "could not determine data type" của pg khi cột nullable.
+    const existingPendingRows = await run({
+      text: `SELECT id FROM campaign_shares
+             WHERE id_campaign = $1::bigint
+               AND id_recipient IS NULL
+               AND status = 'pending'
+               AND LOWER(recipient_email) = $2
+             LIMIT 1`,
+      values: [idCampaign, normalizedEmail],
+    });
+
+    if (existingPendingRows.length > 0) {
+      // Cập nhật bản ghi pending hiện có (share_type, can_run, updated_at).
+      // Bỏ $2 (idCampaign) — pg không cần nó khi chỉ update qua id.
+      const updated = await run({
+        text: `UPDATE campaign_shares
+               SET share_type = $2, can_run = $3, updated_at = NOW()
+               WHERE id = $1
+               RETURNING *`,
+        values: [existingPendingRows[0].id, shareType, canRun],
+      });
+      return { share: updated[0], isExistingUser: false, recipient: null };
+    }
+
+    // Tạo mới pending.
+    const inserted = await run({
+      text: `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run, status)
+             VALUES ($1::bigint, $2::bigint, NULL, $3, $4, $5, 'pending')
+             RETURNING *`,
+      values: [Number(idCampaign), Number(workspaceOwnerId), normalizedEmail, shareType, canRun],
+    });
+    return { share: inserted[0], isExistingUser: false, recipient: null };
+  }
+
+  /**
+   * Auto-claim tất cả share pending cho email của user vừa đăng ký.
+   * Được gọi trong transaction của auth.controller ngay sau khi insert user.
+   *
+   * @returns {Promise<Array<{ id: number, id_campaign: number, share_type: string }>>}
+   */
+  async claimPendingByUserId(client, { userId, email }) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!userId || !normalizedEmail) return [];
+    const { rows } = await client.query(
+      `UPDATE campaign_shares
+         SET id_recipient = $1::bigint,
+             status = 'active',
+             updated_at = NOW()
+       WHERE id_recipient IS NULL
+         AND status = 'pending'
+         AND LOWER(recipient_email) = $2
+       RETURNING id, id_campaign, share_type`,
+      [userId, normalizedEmail]
+    );
+    return rows;
+  }
+
+  /**
    * Find user by email
    */
   async findUserByEmail(email) {
