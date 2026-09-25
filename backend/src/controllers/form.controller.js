@@ -106,6 +106,7 @@ class FormController {
             bankBin: form.paymentConfig?.bankBin || null,
             accountNumberLast4: form.paymentConfig?.accountNumber ? form.paymentConfig.accountNumber.slice(-4) : null,
             momoPhoneLast4: form.paymentConfig?.momoPhone ? form.paymentConfig.momoPhone.slice(-4) : null,
+            momoQrAccountLast4: form.paymentConfig?.momoQrAccount ? form.paymentConfig.momoQrAccount.slice(-4) : null,
             enabled: Boolean(form.paymentConfig),
           }
         );
@@ -153,6 +154,7 @@ class FormController {
             bankBin: form.paymentConfig?.bankBin || null,
             accountNumberLast4: form.paymentConfig?.accountNumber ? form.paymentConfig.accountNumber.slice(-4) : null,
             momoPhoneLast4: form.paymentConfig?.momoPhone ? form.paymentConfig.momoPhone.slice(-4) : null,
+            momoQrAccountLast4: form.paymentConfig?.momoQrAccount ? form.paymentConfig.momoQrAccount.slice(-4) : null,
             enabled: Boolean(form.paymentConfig),
           }
         );

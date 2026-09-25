@@ -227,6 +227,42 @@ export function verifyVietQrChecksum(raw) {
   return actualCrc === expectedCrc;
 }
 
+const NAPAS_GUID = 'A000000727';
+const SERVICE_CODE = 'QRIBFTTA';
+const CURRENCY_VND = '704';
+const COUNTRY_VN = 'VN';
+
+/** Gói một TLV: tag (2 ký tự) + length (2 ký tự thập phân) + value. */
+function tlv(tag, value) {
+  const v = String(value);
+  const len = String(v.length).padStart(2, '0');
+  return `${tag}${len}${v}`;
+}
+
+/**
+ * Sinh chuỗi VietQR EMVCo đầy đủ (kèm CRC) từ BIN/STK/số tiền/nội dung.
+ * Thuần túy logic chuẩn VietQR QuickPay Napas — trùng khớp từng ký tự với backend vietQr.util.js.
+ *
+ * @param {{ bin: string, accountNumber: string, amount: number, memo: string }} params
+ * @returns {string}
+ */
+export function buildVietQrString({ bin, accountNumber, amount, memo }) {
+  const beneficiary = tlv('01', tlv('00', String(bin)) + tlv('01', String(accountNumber)));
+  const vietQrTemplate = tlv('38', tlv('00', NAPAS_GUID) + beneficiary + tlv('02', SERVICE_CODE));
+
+  const body = [
+    tlv('00', '01'),
+    tlv('01', '12'),
+    vietQrTemplate,
+    tlv('53', CURRENCY_VND),
+    tlv('54', String(Math.round(Number(amount)))),
+    tlv('58', COUNTRY_VN),
+    tlv('62', tlv('08', String(memo))),
+  ].join('') + '6304';
+
+  return body + crc16CcittFalse(body);
+}
+
 const MOMO_QR_ACCOUNT_RE = /^[A-Z0-9]{6,19}$/;
 const MOMO_QR_REF_LABEL_RE = /^[A-Z0-9]{1,25}$/;
 

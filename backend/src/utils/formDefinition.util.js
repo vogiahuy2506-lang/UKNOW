@@ -422,6 +422,7 @@ const MOMO_PHONE_RE = /^0[35789]\d{8}$/;
 const MOMO_QR_BIN_RE = /^\d{6}$/;
 const MOMO_QR_ACCOUNT_RE = /^[A-Z0-9]{6,19}$/;
 const MOMO_QR_REF_LABEL_RE = /^[A-Z0-9]{1,25}$/;
+export const MOMO_VIETQR_BIN = '971025';
 
 /**
  * Chuẩn hoá tên chủ tài khoản: bỏ dấu tiếng Việt (kể cả Đ/đ — không decompose qua NFD), viết
@@ -496,6 +497,7 @@ export function normalizePaymentConfig(raw) {
   let accountName;
   let momoPhone;
   let momoName;
+  let momoQrMode = null;
   let momoQrBin = null;
   let momoQrAccount = null;
   let momoQrRefLabel = null;
@@ -517,30 +519,56 @@ export function normalizePaymentConfig(raw) {
       );
     }
 
-    const rawBin = raw.momoQrBin !== undefined && raw.momoQrBin !== null ? String(raw.momoQrBin).trim() : null;
-    const rawAccount = raw.momoQrAccount !== undefined && raw.momoQrAccount !== null ? String(raw.momoQrAccount).trim() : null;
+    momoQrMode = raw.momoQrMode !== undefined && raw.momoQrMode !== null
+      ? String(raw.momoQrMode).trim().toLowerCase()
+      : null;
 
-    if (rawBin || rawAccount) {
-      if (!rawBin || !rawAccount) {
+    if (!momoQrMode) {
+      const rawBin = raw.momoQrBin !== undefined && raw.momoQrBin !== null ? String(raw.momoQrBin).trim() : null;
+      const rawAccount = raw.momoQrAccount !== undefined && raw.momoQrAccount !== null ? String(raw.momoQrAccount).trim() : null;
+
+      if (rawBin || rawAccount) {
+        if (!rawBin || !rawAccount) {
+          throw createValidationError(
+            'Cần cung cấp đủ cả mã BIN và số tài khoản QR MoMo',
+            'INVALID_PAYMENT_CONFIG'
+          );
+        }
+        if (!MOMO_QR_BIN_RE.test(rawBin)) {
+          throw createValidationError(
+            'Mã BIN của QR MoMo không hợp lệ (phải gồm 6 chữ số)',
+            'INVALID_PAYMENT_CONFIG'
+          );
+        }
+        momoQrMode = 'account';
+      } else {
+        momoQrMode = 'none';
+      }
+    }
+
+    if (momoQrMode !== 'none' && momoQrMode !== 'phone' && momoQrMode !== 'account') {
+      throw createValidationError(
+        'Cách tạo mã QR MoMo không hợp lệ (chỉ nhận none, phone hoặc account)',
+        'INVALID_PAYMENT_CONFIG'
+      );
+    }
+
+    if (momoQrMode === 'account') {
+      if (raw.momoQrAccount === undefined || raw.momoQrAccount === null || String(raw.momoQrAccount).trim() === '') {
         throw createValidationError(
-          'Cần cung cấp đủ cả mã BIN và số tài khoản QR MoMo',
+          'Số tài khoản QR MoMo không được để trống khi chọn nhập số tài khoản',
           'INVALID_PAYMENT_CONFIG'
         );
       }
-      if (!MOMO_QR_BIN_RE.test(rawBin)) {
-        throw createValidationError(
-          'Mã BIN của QR MoMo không hợp lệ (phải gồm 6 chữ số)',
-          'INVALID_PAYMENT_CONFIG'
-        );
-      }
-      if (!MOMO_QR_ACCOUNT_RE.test(rawAccount)) {
+      const cleanAccount = String(raw.momoQrAccount).replace(/\s+/g, '').toUpperCase();
+      if (!MOMO_QR_ACCOUNT_RE.test(cleanAccount)) {
         throw createValidationError(
           'Số tài khoản QR MoMo không hợp lệ (6-19 ký tự gồm chữ in hoa và số)',
           'INVALID_PAYMENT_CONFIG'
         );
       }
-      momoQrBin = rawBin;
-      momoQrAccount = rawAccount;
+      momoQrBin = MOMO_VIETQR_BIN;
+      momoQrAccount = cleanAccount;
 
       if (raw.momoQrRefLabel !== undefined && raw.momoQrRefLabel !== null && String(raw.momoQrRefLabel).trim() !== '') {
         const refLabel = String(raw.momoQrRefLabel).trim();
@@ -552,6 +580,13 @@ export function normalizePaymentConfig(raw) {
         }
         momoQrRefLabel = refLabel;
       }
+    } else if (momoQrMode === 'phone') {
+      momoQrBin = MOMO_VIETQR_BIN;
+      momoQrAccount = momoPhone;
+    } else {
+      momoQrBin = null;
+      momoQrAccount = null;
+      momoQrRefLabel = null;
     }
   } else {
     bankBin = String(raw.bankBin || '').trim();
@@ -596,6 +631,7 @@ export function normalizePaymentConfig(raw) {
       momoPhone,
       momoName,
       holdMinutes,
+      momoQrMode,
     };
     if (momoQrBin && momoQrAccount) {
       config.momoQrBin = momoQrBin;

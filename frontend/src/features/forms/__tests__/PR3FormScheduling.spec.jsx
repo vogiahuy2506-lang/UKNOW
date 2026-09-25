@@ -138,8 +138,8 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
     });
   });
 
-  describe('FormEditorPage cấu hình MoMo QR', () => {
-    it('3. Khi form có sẵn momoQrAccount: hiển thị badge "Đã đọc mã QR ✓" và bấm "Gỡ" thì xoá cấu hình', async () => {
+  describe('FormEditorPage cấu hình MoMo QR (PR-4)', () => {
+    it('3. Khi form có sẵn momoQrAccount: tự động chọn mode "Nhập số tài khoản MoMo" và hiển thị đúng STK', async () => {
       formAdminApi.fetchFormById.mockResolvedValue({
         id: 10,
         title: 'Form MoMo Có QR',
@@ -167,18 +167,13 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText(/Đã đọc mã QR ✓ — TK \*\*\*\*0493/i)).toBeInTheDocument();
+        const accountRadio = screen.getByLabelText(/Nhập số tài khoản MoMo/i);
+        expect(accountRadio).toBeInTheDocument();
+        expect(accountRadio).toBeChecked();
       });
 
-      const removeBtn = screen.getByText('Gỡ');
-      expect(removeBtn).toBeInTheDocument();
-
-      // Bấm nút Gỡ
-      fireEvent.click(removeBtn);
-
-      // Sau khi gỡ: hiển thị lại nút "Tải ảnh QR Đa Năng MoMo"
-      expect(screen.getByText('Tải ảnh QR Đa Năng MoMo (không bắt buộc)')).toBeInTheDocument();
-      expect(screen.queryByText(/Đã đọc mã QR ✓/i)).not.toBeInTheDocument();
+      const accountInput = screen.getByDisplayValue('PSP2604014212340493');
+      expect(accountInput).toBeInTheDocument();
     });
 
     // Nghiệm thu 25/09 (Claude): đột biến "Lưu không gửi khoá QR" lọt qua cả 22 ca cũ — PUT ghi đè
@@ -210,12 +205,12 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
         { route: '/app/forms/10/edit' }
       );
 
-    it('4. Mở form có QR, chỉ sửa tiêu đề rồi Lưu: payload vẫn mang đủ 3 khoá QR MoMo', async () => {
+    it('4. Mở form có QR, chỉ sửa tiêu đề rồi Lưu: payload vẫn mang đủ 3 khoá QR MoMo và momoQrMode account', async () => {
       formAdminApi.fetchFormById.mockResolvedValue(MOMO_QR_FORM);
       formAdminApi.updateForm.mockResolvedValue({ ...MOMO_QR_FORM });
 
       renderEditor();
-      await waitFor(() => expect(screen.getByText(/Đã đọc mã QR ✓/i)).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByDisplayValue('PSP2604014212340493')).toBeInTheDocument());
 
       fireEvent.change(screen.getByDisplayValue('Form MoMo Có QR'), { target: { value: 'Tiêu đề mới' } });
       fireEvent.click(screen.getByText('Lưu biểu mẫu'));
@@ -225,25 +220,28 @@ describe('PR-3: QR MoMo từ ảnh QR Đa Năng (Frontend)', () => {
       expect(payload.title).toBe('Tiêu đề mới');
       expect(payload.paymentConfig).toMatchObject({
         method: 'momo',
+        momoQrMode: 'account',
         momoQrBin: '971025',
         momoQrAccount: 'PSP2604014212340493',
         momoQrRefLabel: 'MOMOW2W6128717X',
       });
     });
 
-    it('5. Bấm Gỡ rồi Lưu: payload KHÔNG còn khoá QR (gỡ được lưu thật, không chỉ ẩn trên màn hình)', async () => {
+    it('5. Chọn "Không dùng QR" rồi Lưu: payload mang momoQrMode none và KHÔNG còn khoá QR', async () => {
       formAdminApi.fetchFormById.mockResolvedValue(MOMO_QR_FORM);
       formAdminApi.updateForm.mockResolvedValue({ ...MOMO_QR_FORM });
 
       renderEditor();
-      await waitFor(() => expect(screen.getByText(/Đã đọc mã QR ✓/i)).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByDisplayValue('PSP2604014212340493')).toBeInTheDocument());
 
-      fireEvent.click(screen.getByText('Gỡ'));
+      const noneRadio = screen.getByLabelText(/Không dùng QR/i);
+      fireEvent.click(noneRadio);
       fireEvent.click(screen.getByText('Lưu biểu mẫu'));
 
       await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
       const { paymentConfig } = formAdminApi.updateForm.mock.calls[0][1];
       expect(paymentConfig.method).toBe('momo');
+      expect(paymentConfig.momoQrMode).toBe('none');
       expect(paymentConfig).not.toHaveProperty('momoQrBin');
       expect(paymentConfig).not.toHaveProperty('momoQrAccount');
       expect(paymentConfig).not.toHaveProperty('momoQrRefLabel');

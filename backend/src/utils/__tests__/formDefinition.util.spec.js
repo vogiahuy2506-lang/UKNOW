@@ -374,6 +374,103 @@ describe('normalizePaymentConfig', () => {
     expect(() => normalizePaymentConfig({ ...validRaw, holdMinutes: 5 })).toThrow(/holdMinutes/);
     expect(() => normalizePaymentConfig({ ...validRaw, holdMinutes: 121 })).toThrow(/holdMinutes/);
   });
+
+  it('MoMo mode account: chuẩn hoá bỏ khoảng trắng và in hoa momoQrAccount, tự gán BIN 971025', () => {
+    const raw = {
+      enabled: true,
+      method: 'momo',
+      amount: 2000,
+      momoPhone: '0912345678',
+      momoName: 'nguyen van a',
+      momoQrMode: 'account',
+      momoQrAccount: '  psp2604 0142  00000493  ',
+    };
+    const config = normalizePaymentConfig(raw);
+    expect(config).toEqual({
+      enabled: true,
+      method: 'momo',
+      amount: 2000,
+      momoPhone: '0912345678',
+      momoName: 'NGUYEN VAN A',
+      holdMinutes: 30,
+      momoQrMode: 'account',
+      momoQrBin: '971025',
+      momoQrAccount: 'PSP2604014200000493',
+    });
+  });
+
+  it('MoMo mode account: client gửi BIN khác (970436) -> server vẫn dùng 971025', () => {
+    const raw = {
+      enabled: true,
+      method: 'momo',
+      amount: 2000,
+      momoPhone: '0912345678',
+      momoName: 'nguyen van a',
+      momoQrMode: 'account',
+      momoQrBin: '970436',
+      momoQrAccount: 'PSP2604014200000493',
+    };
+    const config = normalizePaymentConfig(raw);
+    expect(config.momoQrBin).toBe('971025');
+  });
+
+  it('MoMo mode none: không trả về momoQrBin và momoQrAccount', () => {
+    const raw = {
+      enabled: true,
+      method: 'momo',
+      amount: 2000,
+      momoPhone: '0912345678',
+      momoName: 'nguyen van a',
+      momoQrMode: 'none',
+      momoQrAccount: 'PSP2604014200000493',
+    };
+    const config = normalizePaymentConfig(raw);
+    expect(config.momoQrMode).toBe('none');
+    expect(config).not.toHaveProperty('momoQrBin');
+    expect(config).not.toHaveProperty('momoQrAccount');
+  });
+
+  it('MoMo cũ không có momoQrMode nhưng có momoQrAccount -> tự suy ra mode account', () => {
+    const raw = {
+      enabled: true,
+      method: 'momo',
+      amount: 2000,
+      momoPhone: '0912345678',
+      momoName: 'nguyen van a',
+      momoQrBin: '971025',
+      momoQrAccount: 'PSP2604014200000493',
+    };
+    const config = normalizePaymentConfig(raw);
+    expect(config.momoQrMode).toBe('account');
+    expect(config.momoQrBin).toBe('971025');
+    expect(config.momoQrAccount).toBe('PSP2604014200000493');
+  });
+
+  it('MoMo mode account: STK rỗng hoặc chứa ký tự đặc biệt -> lỗi 400', () => {
+    expect(() =>
+      normalizePaymentConfig({
+        enabled: true,
+        method: 'momo',
+        amount: 2000,
+        momoPhone: '0912345678',
+        momoName: 'nguyen van a',
+        momoQrMode: 'account',
+        momoQrAccount: '',
+      })
+    ).toThrow(/Số tài khoản/);
+
+    expect(() =>
+      normalizePaymentConfig({
+        enabled: true,
+        method: 'momo',
+        amount: 2000,
+        momoPhone: '0912345678',
+        momoName: 'nguyen van a',
+        momoQrMode: 'account',
+        momoQrAccount: 'PSP26@#$!',
+      })
+    ).toThrow(/Số tài khoản/);
+  });
 });
 
 describe('normalizeFormTheme (PR-4a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md)', () => {

@@ -280,11 +280,17 @@ export default function FormSubmissionStatusPage() {
                 {payment.qrString ? (
                   <>
                     <p
-                      className="font-semibold text-sm sm:text-base text-center mb-3"
+                      className="font-semibold text-sm sm:text-base text-center mb-1"
                       style={{ color: 'var(--form-primary, #059669)' }}
                     >
                       {t('publicForm.payment.momoScanInstruction')}
                     </p>
+
+                    {payment.momoName && (
+                      <p className="text-xs text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200 text-center mb-3 font-medium">
+                        {t('publicForm.payment.momoVerifyRecipient', { name: payment.momoName })}
+                      </p>
+                    )}
 
                     {qrDataUrl ? (
                       <img

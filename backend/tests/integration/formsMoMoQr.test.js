@@ -276,4 +276,183 @@ describe('PR-3 — QR MoMo từ ảnh QR Đa Năng (Backend)', () => {
     expect(statusRes.body.data.payment.qrString).toBeNull();
     expect(statusRes.body.data.payment.momoPhone).toBe('0988888888');
   });
+
+  describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Backend)', () => {
+    it('6. Mode account với STK có khoảng trắng và chữ thường "psp2604 0142 00000493" -> Lưu thành PSP2604014200000493, BIN 971025 và nộp form có QR', async () => {
+      const owner = await createUser({ username: 'owner_momo_pr4_1' });
+      const token = await loginAs(owner);
+
+      const createRes = await request(app)
+        .post('/api/forms')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Form MoMo PR-4 Account Mode',
+          fields: [{ key: 'email', label: 'Email', type: 'email', required: false }],
+          paymentConfig: {
+            enabled: true,
+            method: 'momo',
+            amount: 2000,
+            momoPhone: '0912345678',
+            momoName: 'NGUYEN VAN A',
+            momoQrMode: 'account',
+            momoQrAccount: 'psp2604 0142 00000493',
+            holdMinutes: 30,
+          },
+        });
+
+      expect(createRes.status).toBe(201);
+      expect(createRes.body.data.paymentConfig).toMatchObject({
+        enabled: true,
+        method: 'momo',
+        momoQrMode: 'account',
+        momoQrBin: '971025',
+        momoQrAccount: 'PSP2604014200000493',
+      });
+
+      const form = createRes.body.data;
+      await request(app)
+        .put(`/api/forms/${form.id}/publish`)
+        .set('Authorization', `Bearer ${token}`)
+        .send({ isPublished: true });
+
+      const submitRes = await request(app)
+        .post(`/api/public/forms/${form.publicKey}/submissions`)
+        .send({ answers: {} });
+
+      expect(submitRes.status).toBe(201);
+      const { payment } = submitRes.body.data;
+      expect(payment.qrString).toBeTruthy();
+      expect(payment.qrString).toContain('971025');
+      expect(payment.qrString).toContain('PSP2604014200000493');
+    });
+
+    it('7. Mode account: STK rỗng hoặc có ký tự lạ -> 400 INVALID_PAYMENT_CONFIG', async () => {
+      const owner = await createUser({ username: 'owner_momo_pr4_2' });
+      const token = await loginAs(owner);
+
+      // STK rỗng
+      const res1 = await request(app)
+        .post('/api/forms')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Form MoMo STK Rỗng',
+          fields: [{ key: 'email', label: 'Email', type: 'email' }],
+          paymentConfig: {
+            enabled: true,
+            method: 'momo',
+            amount: 2000,
+            momoPhone: '0912345678',
+            momoName: 'NGUYEN VAN A',
+            momoQrMode: 'account',
+            momoQrAccount: '   ',
+          },
+        });
+      expect(res1.status).toBe(400);
+      expect(res1.body.code).toBe('INVALID_PAYMENT_CONFIG');
+
+      // STK có ký tự lạ (@#$) hoặc quá ngắn/dài
+      const res2 = await request(app)
+        .post('/api/forms')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Form MoMo STK Lạ',
+          fields: [{ key: 'email', label: 'Email', type: 'email' }],
+          paymentConfig: {
+            enabled: true,
+            method: 'momo',
+            amount: 2000,
+            momoPhone: '0912345678',
+            momoName: 'NGUYEN VAN A',
+            momoQrMode: 'account',
+            momoQrAccount: 'PSP26@#$!',
+          },
+        });
+      expect(res2.status).toBe(400);
+      expect(res2.body.code).toBe('INVALID_PAYMENT_CONFIG');
+    });
+
+    it('8. Mode none: Không QR, lưu momoQrMode none và không có momoQrBin/momoQrAccount', async () => {
+      const owner = await createUser({ username: 'owner_momo_pr4_3' });
+      const token = await loginAs(owner);
+
+      const res = await request(app)
+        .post('/api/forms')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Form MoMo Mode None',
+          fields: [{ key: 'email', label: 'Email', type: 'email' }],
+          paymentConfig: {
+            enabled: true,
+            method: 'momo',
+            amount: 2000,
+            momoPhone: '0912345678',
+            momoName: 'NGUYEN VAN A',
+            momoQrMode: 'none',
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.paymentConfig).toMatchObject({
+        enabled: true,
+        method: 'momo',
+        momoQrMode: 'none',
+      });
+      expect(res.body.data.paymentConfig).not.toHaveProperty('momoQrBin');
+      expect(res.body.data.paymentConfig).not.toHaveProperty('momoQrAccount');
+    });
+
+    it('9. Client gửi momoQrBin khác (970436) -> Server bỏ qua, vẫn lưu 971025', async () => {
+      const owner = await createUser({ username: 'owner_momo_pr4_4' });
+      const token = await loginAs(owner);
+
+      const res = await request(app)
+        .post('/api/forms')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Form MoMo Client Bin Override',
+          fields: [{ key: 'email', label: 'Email', type: 'email' }],
+          paymentConfig: {
+            enabled: true,
+            method: 'momo',
+            amount: 2000,
+            momoPhone: '0912345678',
+            momoName: 'NGUYEN VAN A',
+            momoQrMode: 'account',
+            momoQrBin: '970436', // Client cố gửi BIN VCB
+            momoQrAccount: 'PSP2604014200000493',
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.paymentConfig.momoQrBin).toBe('971025');
+      expect(res.body.data.paymentConfig.momoQrAccount).toBe('PSP2604014200000493');
+    });
+
+    it('10. Form PR-3 cũ không có momoQrMode nhưng có momoQrBin+momoQrAccount -> server tự coi là mode account', async () => {
+      const owner = await createUser({ username: 'owner_momo_pr4_5' });
+      const token = await loginAs(owner);
+
+      const res = await request(app)
+        .post('/api/forms')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          title: 'Form MoMo PR-3 Legacy',
+          fields: [{ key: 'email', label: 'Email', type: 'email' }],
+          paymentConfig: {
+            enabled: true,
+            method: 'momo',
+            amount: 2000,
+            momoPhone: '0912345678',
+            momoName: 'NGUYEN VAN A',
+            momoQrBin: '971025',
+            momoQrAccount: 'PSP2604014200000493',
+          },
+        });
+
+      expect(res.status).toBe(201);
+      expect(res.body.data.paymentConfig.momoQrMode).toBe('account');
+      expect(res.body.data.paymentConfig.momoQrBin).toBe('971025');
+      expect(res.body.data.paymentConfig.momoQrAccount).toBe('PSP2604014200000493');
+    });
+  });
 });

@@ -12,10 +12,10 @@ import {
   HiOutlineEyeOff,
   HiOutlineShare,
   HiOutlineInbox,
-  HiOutlineCheckCircle,
   HiOutlineQrcode,
 } from 'react-icons/hi';
-import { decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
+import QRCode from 'qrcode';
+import { buildVietQrString, decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
 import { useI18n } from '../../../i18n';
 import { useAuthStore } from '../../../stores/authStore';
 import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
@@ -99,6 +99,7 @@ const MAX_PAYMENT_AMOUNT = 100000000;
 const MIN_HOLD_MINUTES = 10;
 const MAX_HOLD_MINUTES = 120;
 const DEFAULT_HOLD_MINUTES = 30;
+const ENABLE_MOMO_PHONE_QR_MODE = false;
 const DEFAULT_PAYMENT = {
   enabled: false,
   method: 'bank',
@@ -108,6 +109,7 @@ const DEFAULT_PAYMENT = {
   accountName: '',
   momoPhone: '',
   momoName: '',
+  momoQrMode: 'account',
   momoQrBin: '',
   momoQrAccount: '',
   momoQrRefLabel: '',
@@ -175,6 +177,64 @@ export default function FormEditorPage() {
   const logoInputRef = useRef(null);
   const [isDecodingMomoQr, setIsDecodingMomoQr] = useState(false);
   const momoQrFileInputRef = useRef(null);
+  const [momoPreviewQrDataUrl, setMomoPreviewQrDataUrl] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    if (
+      payment.enabled &&
+      payment.method === 'momo' &&
+      payment.momoQrMode !== 'none'
+    ) {
+      const acc = payment.momoQrMode === 'phone'
+        ? (payment.momoPhone || '').trim()
+        : (payment.momoQrAccount || '').replace(/\s+/g, '').toUpperCase();
+      const amt = Number(payment.amount);
+      const isAccValid = payment.momoQrMode === 'phone'
+        ? /^0[35789]\d{8}$/.test(acc)
+        : /^[A-Z0-9]{6,19}$/.test(acc);
+      const isAmtValid = Number.isInteger(amt) && amt >= MIN_PAYMENT_AMOUNT && amt <= MAX_PAYMENT_AMOUNT;
+      const isNameValid = Boolean((payment.momoName || '').trim());
+
+      if (isAccValid && isAmtValid && isNameValid) {
+        try {
+          const qrStr = buildVietQrString({
+            bin: '971025',
+            accountNumber: acc,
+            amount: amt,
+            memo: 'KIEMTRA',
+          });
+          QRCode.toDataURL(qrStr, { width: 160, margin: 2 })
+            .then((url) => {
+              if (active) setMomoPreviewQrDataUrl(url);
+            })
+            .catch(() => {
+              if (active) setMomoPreviewQrDataUrl(null);
+            });
+          return () => {
+            active = false;
+          };
+        } catch {
+          setMomoPreviewQrDataUrl(null);
+        }
+      } else {
+        setMomoPreviewQrDataUrl(null);
+      }
+    } else {
+      setMomoPreviewQrDataUrl(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [
+    payment.enabled,
+    payment.method,
+    payment.momoQrMode,
+    payment.momoQrAccount,
+    payment.momoPhone,
+    payment.amount,
+    payment.momoName,
+  ]);
 
   useEffect(() => {
     if (!isEditMode) {
@@ -248,6 +308,7 @@ export default function FormEditorPage() {
         setConfirmDisableBooking(false);
 
         if (data.paymentConfig) {
+          const loadedMode = data.paymentConfig.momoQrMode || (data.paymentConfig.momoQrAccount ? 'account' : 'none');
           setPayment({
             enabled: true,
             method: data.paymentConfig.method || 'bank',
@@ -257,6 +318,7 @@ export default function FormEditorPage() {
             accountName: data.paymentConfig.accountName || '',
             momoPhone: data.paymentConfig.momoPhone || '',
             momoName: data.paymentConfig.momoName || '',
+            momoQrMode: loadedMode,
             momoQrBin: data.paymentConfig.momoQrBin || '',
             momoQrAccount: data.paymentConfig.momoQrAccount || '',
             momoQrRefLabel: data.paymentConfig.momoQrRefLabel || '',
@@ -560,13 +622,18 @@ export default function FormEditorPage() {
         }
         return;
       }
+      if (qrRes.momoQrBin !== '971025') {
+        toast.error(t('forms.editorPage.payment.momoQrNotMomoError'));
+        return;
+      }
       setPayment((prev) => ({
         ...prev,
-        momoQrBin: qrRes.momoQrBin,
+        momoQrMode: 'account',
+        momoQrBin: '971025',
         momoQrAccount: qrRes.momoQrAccount,
         momoQrRefLabel: qrRes.momoQrRefLabel || '',
       }));
-      toast.success(t('forms.editorPage.payment.momoQrSuccess'));
+      toast.success(t('forms.editorPage.payment.momoQrAutoFilled'));
     } catch (err) {
       toast.error(err.message || t('forms.editorPage.payment.momoQrError'));
     } finally {
@@ -694,6 +761,14 @@ export default function FormEditorPage() {
         if (!payment.momoName || !payment.momoName.trim()) {
           errs.paymentMomoName = t('forms.editorPage.payment.momoNameRequired');
         }
+        if (payment.momoQrMode === 'account') {
+          const cleanAcc = (payment.momoQrAccount || '').replace(/\s+/g, '').toUpperCase();
+          if (!cleanAcc) {
+            errs.paymentMomoQrAccount = t('forms.editorPage.payment.momoQrAccountRequired');
+          } else if (!/^[A-Z0-9]{6,19}$/.test(cleanAcc)) {
+            errs.paymentMomoQrAccount = t('forms.editorPage.payment.momoQrAccountInvalid');
+          }
+        }
       } else {
         if (!payment.bankBin || !PAYOS_BANK_BIN_MAP[payment.bankBin]) {
           errs.paymentBank = t('forms.editorPage.payment.bankRequired');
@@ -810,6 +885,7 @@ export default function FormEditorPage() {
         if (!payment.enabled) {
           payload.paymentConfig = null;
         } else if (payment.method === 'momo') {
+          const mode = payment.momoQrMode || 'none';
           payload.paymentConfig = {
             enabled: true,
             method: 'momo',
@@ -817,13 +893,17 @@ export default function FormEditorPage() {
             momoPhone: (payment.momoPhone || '').trim(),
             momoName: (payment.momoName || '').trim(),
             holdMinutes: Number(payment.holdMinutes),
+            momoQrMode: mode,
           };
-          if (payment.momoQrBin && payment.momoQrAccount) {
-            payload.paymentConfig.momoQrBin = payment.momoQrBin.trim();
-            payload.paymentConfig.momoQrAccount = payment.momoQrAccount.trim();
+          if (mode === 'account') {
+            payload.paymentConfig.momoQrBin = '971025';
+            payload.paymentConfig.momoQrAccount = (payment.momoQrAccount || '').replace(/\s+/g, '').toUpperCase();
             if (payment.momoQrRefLabel) {
               payload.paymentConfig.momoQrRefLabel = payment.momoQrRefLabel.trim();
             }
+          } else if (mode === 'phone') {
+            payload.paymentConfig.momoQrBin = '971025';
+            payload.paymentConfig.momoQrAccount = (payment.momoPhone || '').trim();
           }
         } else {
           payload.paymentConfig = {
@@ -1750,61 +1830,125 @@ export default function FormEditorPage() {
                       )}
                     </div>
 
-                    <div>
-                      <input
-                        ref={momoQrFileInputRef}
-                        type="file"
-                        accept="image/*"
-                        className="hidden"
-                        disabled={isEmployee || isDecodingMomoQr}
-                        onChange={handleUploadMomoQr}
-                      />
-                      {payment.momoQrAccount ? (
-                        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center justify-between">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <HiOutlineCheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-                            <span className="text-xs font-medium text-emerald-800 truncate">
-                              {t('forms.editorPage.payment.momoQrLoaded', {
-                                account: payment.momoQrAccount.length > 4 ? `****${payment.momoQrAccount.slice(-4)}` : payment.momoQrAccount,
-                              })}
-                            </span>
-                          </div>
-                          {!isEmployee && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setPayment((prev) => ({
-                                  ...prev,
-                                  momoQrBin: '',
-                                  momoQrAccount: '',
-                                  momoQrRefLabel: '',
-                                }))
-                              }
-                              className="text-xs text-red-600 hover:text-red-700 underline font-medium ml-2 shrink-0"
-                            >
-                              {t('forms.editorPage.payment.momoQrRemoveBtn')}
-                            </button>
+                    <div className="space-y-2">
+                      <label className="block text-xs font-medium text-gray-700">
+                        {t('forms.editorPage.payment.momoQrModeLabel')}
+                      </label>
+                      <div className="space-y-1.5">
+                        {ENABLE_MOMO_PHONE_QR_MODE && (
+                          <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                            <input
+                              type="radio"
+                              name="momoQrMode"
+                              value="phone"
+                              disabled={isEmployee}
+                              checked={payment.momoQrMode === 'phone'}
+                              onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'phone' }))}
+                              className="text-primary-600 focus:ring-primary-500"
+                            />
+                            <span>{t('forms.editorPage.payment.momoQrModePhone')}</span>
+                          </label>
+                        )}
+
+                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="momoQrMode"
+                            value="account"
+                            disabled={isEmployee}
+                            checked={payment.momoQrMode === 'account'}
+                            onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'account' }))}
+                            className="text-primary-600 focus:ring-primary-500"
+                          />
+                          <span>{t('forms.editorPage.payment.momoQrModeAccount')}</span>
+                        </label>
+
+                        <label className="flex items-center gap-2 text-xs text-gray-700 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="momoQrMode"
+                            value="none"
+                            disabled={isEmployee}
+                            checked={payment.momoQrMode === 'none'}
+                            onChange={() => setPayment((prev) => ({ ...prev, momoQrMode: 'none' }))}
+                            className="text-primary-600 focus:ring-primary-500"
+                          />
+                          <span>{t('forms.editorPage.payment.momoQrModeNone')}</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {payment.momoQrMode === 'account' && (
+                      <div className="space-y-3 p-3 bg-gray-50 rounded-xl border border-gray-200">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">
+                            {t('forms.editorPage.payment.momoQrAccountLabel')}
+                          </label>
+                          <input
+                            type="text"
+                            disabled={isEmployee}
+                            value={payment.momoQrAccount || ''}
+                            onChange={(e) => {
+                              const cleanVal = e.target.value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                              setPayment((prev) => ({ ...prev, momoQrAccount: cleanVal }));
+                            }}
+                            placeholder="Vd: PSP2604014200000493"
+                            className={`w-full px-3 py-2 bg-white rounded-xl border text-sm font-mono focus:outline-none focus:ring-2 disabled:bg-gray-50 disabled:text-gray-500 ${
+                              errors.paymentMomoQrAccount
+                                ? 'border-red-300 focus:ring-red-200'
+                                : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                            }`}
+                          />
+                          <p className="text-[11px] text-gray-500 mt-1">
+                            {t('forms.editorPage.payment.momoQrAccountHint')}
+                          </p>
+                          {errors.paymentMomoQrAccount && (
+                            <p className="text-xs text-red-600 mt-1">{errors.paymentMomoQrAccount}</p>
                           )}
                         </div>
-                      ) : (
+
                         <div>
+                          <input
+                            ref={momoQrFileInputRef}
+                            type="file"
+                            accept="image/*"
+                            className="hidden"
+                            disabled={isEmployee || isDecodingMomoQr}
+                            onChange={handleUploadMomoQr}
+                          />
                           <button
                             type="button"
                             disabled={isEmployee || isDecodingMomoQr}
                             onClick={() => momoQrFileInputRef.current?.click()}
-                            className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-dashed border-primary-300 bg-primary-50/50 hover:bg-primary-50 text-xs font-medium text-primary-700 transition-colors disabled:opacity-50"
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-gray-700 shadow-sm transition-colors disabled:opacity-50"
                           >
-                            <HiOutlineQrcode className="w-4 h-4 text-primary-600" />
+                            <HiOutlineQrcode className="w-4 h-4 text-gray-500" />
                             {isDecodingMomoQr
                               ? t('forms.editorPage.payment.momoQrDecoding')
-                              : t('forms.editorPage.payment.uploadMomoQrBtn')}
+                              : t('forms.editorPage.payment.momoQrAutoFillBtn')}
                           </button>
-                          <p className="text-[11px] text-gray-400 mt-1">
-                            {t('forms.editorPage.payment.momoQrHint')}
-                          </p>
                         </div>
-                      )}
-                    </div>
+                      </div>
+                    )}
+
+                    {momoPreviewQrDataUrl && (
+                      <div className="p-3 bg-white rounded-xl border border-gray-200 text-center space-y-2">
+                        <p className="text-xs font-semibold text-gray-700">
+                          {t('forms.editorPage.payment.momoPreviewQrTitle')}
+                        </p>
+                        <img
+                          src={momoPreviewQrDataUrl}
+                          alt="QR MoMo Preview"
+                          data-testid="momo-preview-qr"
+                          className="w-36 h-36 mx-auto rounded-lg border border-gray-100 bg-white"
+                        />
+                        <p className="text-[11px] text-gray-600 leading-relaxed">
+                          {t('forms.editorPage.payment.momoPreviewQrInstruction', {
+                            name: (payment.momoName || '').trim().toUpperCase(),
+                          })}
+                        </p>
+                      </div>
+                    )}
                   </>
                 ) : (
                   <>
