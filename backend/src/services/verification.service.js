@@ -162,7 +162,7 @@ function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48, 
           <a href="${activationUrl}"
              style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
                     padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
-            Kích hoạt tài khoản →
+            Đăng ký tài khoản →
           </a>
         </td>
       </tr>
@@ -177,10 +177,10 @@ function buildInvitationEmailHtml({ ownerName, activationUrl, expiryHours = 48, 
           </p>
           <ul style="margin:0;padding-left:18px;font-size:13px;color:#475569;line-height:1.6">
             <li style="margin-bottom:4px">
-              Bạn có thể <strong>tạo mật khẩu qua nút bấm trên</strong>, hoặc <strong>đăng nhập trực tiếp bằng Google</strong> (với email ${email ? `<strong>${email}</strong>` : 'được mời'}) để vào làm việc ngay.
+              Bạn có thể <strong>nhấn nút trên để hoàn tất đăng ký tài khoản</strong>, hoặc <strong>đăng ký / đăng nhập trực tiếp bằng Google</strong> (với email ${email ? `<strong>${email}</strong>` : 'được mời'}) để vào làm việc ngay.
             </li>
             <li>
-              Sau khi vào hệ thống, vui lòng <strong>đồng ý với các điều khoản</strong> và <strong>cập nhật đầy đủ thông tin</strong> tài khoản của bạn để hoàn tất hồ sơ.
+              Vui lòng <strong>đồng ý với các điều khoản</strong> và <strong>điền đầy đủ thông tin</strong> tài khoản khi đăng ký.
             </li>
           </ul>
         </td>
@@ -428,7 +428,7 @@ class VerificationService {
   }
 
   async sendInvitationEmail(email, token, ownerName) {
-    const activationUrl = `${FRONTEND_URL}/activate?token=${token}`;
+    const activationUrl = `${FRONTEND_URL}/register?email=${encodeURIComponent(email)}&invite=${token}`;
     const subject = `[${PRODUCT_NAME}] Bạn được mời tham gia nhóm`;
     const html = buildInvitationEmailHtml({ ownerName, activationUrl, email });
     return sendSystemEmail({ to: email, subject, html });

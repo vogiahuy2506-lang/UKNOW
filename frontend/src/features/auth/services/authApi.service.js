@@ -59,6 +59,10 @@ export function activateAccount(payload) {
   return api.post('/auth/activate', payload);
 }
 
+export function getInvitationInfo(token) {
+  return api.get(`/auth/invitation-info?token=${encodeURIComponent(token)}`);
+}
+
 export function requestPasswordReset(payload) {
   return api.post('/auth/forgot-password', payload);
 }

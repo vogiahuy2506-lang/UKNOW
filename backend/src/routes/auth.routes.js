@@ -44,6 +44,10 @@ router.post('/register',
       .trim()
       .isLength({ max: 32 })
       .withMessage('Mã giới thiệu không được quá 32 ký tự'),
+    body('inviteToken')
+      .optional({ checkFalsy: true })
+      .trim()
+      .isString(),
     body('consents')
       .custom((value) => {
         if (!value || typeof value !== 'object') {
@@ -138,6 +142,9 @@ router.post('/activate',
   handleValidationErrors,
   authController.activateAccount.bind(authController)
 );
+
+// Lấy thông tin lời mời nhân viên bằng token
+router.get('/invitation-info', authController.getInvitationInfo.bind(authController));
 
 // Đổi mật khẩu khi bị yêu cầu (must_change_password = TRUE)
 router.post('/change-password',

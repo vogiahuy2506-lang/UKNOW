@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
-import { sendVerificationCode } from '../../features/auth/services/authApi.service';
+import { sendVerificationCode, getInvitationInfo } from '../../features/auth/services/authApi.service';
 import { trackEvent } from '../../utils/analytics';
 import {
   HiOutlineLockClosed,
@@ -264,7 +264,12 @@ const Register = () => {
   const [termsChecked, setTermsChecked]               = useState(false);
   const [privacyChecked, setPrivacyChecked]           = useState(false);
   const [dpaChecked, setDpaChecked]                   = useState(false);
-  const { googleLogin, phoneOtpEnabled, fetchPhoneOtpEnabled } = useAuthStore();
+  const [searchParams]                                = useSearchParams();
+  const inviteToken                                   = searchParams.get('invite') || searchParams.get('token') || '';
+  const emailFromUrl                                  = searchParams.get('email') || '';
+  const isInvite                                      = Boolean(inviteToken);
+  const [invitationInfo, setInvitationInfo]           = useState(null);
+  const { register: registerUser, googleLogin, phoneOtpEnabled, fetchPhoneOtpEnabled } = useAuthStore();
   const navigate                                      = useNavigate();
 
   // PR-2 (xác thực SĐT) — lưới an toàn thứ hai ngoài lần gọi lúc app khởi động
@@ -308,19 +313,80 @@ const Register = () => {
   };
 
   const initialReferralCode = captureReferralFromUrl() || getStoredReferralCode() || '';
-  const { register, handleSubmit, watch, formState: { errors } } = useForm({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm({
     resolver: (values, context, options) =>
       zodResolver(registerSchema(t, { phoneOtpEnabled: phoneOtpEnabledRef.current }))(values, context, options),
     defaultValues: {
+      email: emailFromUrl,
       referralCode: initialReferralCode,
     },
   });
+
+  // Tự động điền email nếu đến từ link mời
+  useEffect(() => {
+    if (inviteToken) {
+      if (emailFromUrl) {
+        setValue('email', emailFromUrl);
+      } else {
+        getInvitationInfo(inviteToken)
+          .then((res) => {
+            if (res.data?.success && res.data?.data?.email) {
+              setValue('email', res.data.data.email);
+              setInvitationInfo(res.data.data);
+            }
+          })
+          .catch((err) => {
+            console.error('Fetch invite info error:', err);
+          });
+      }
+    }
+  }, [inviteToken, emailFromUrl, setValue]);
 
   const onSubmit = async (data) => {
     if (!termsChecked || !privacyChecked || !dpaChecked) {
       toast.error(t('register.acceptAllTerms') || t('auth.acceptTerms'));
       return;
     }
+
+    // Nếu là nhân viên được mời: token mời đã chứng thực quyền sở hữu email
+    // -> Bỏ qua OTP, đăng ký và kích hoạt tài khoản trực tiếp
+    if (isInvite) {
+      setIsSendingCode(true);
+      try {
+        const cleanRef = (data.referralCode || '').trim();
+        const payload = {
+          username: data.username,
+          email:    data.email,
+          password: data.password,
+          fullName: data.fullName?.trim() || undefined,
+          phone:    data.phone?.trim()    || undefined,
+          referralCode: cleanRef || undefined,
+          inviteToken,
+          consents: {
+            terms: termsChecked,
+            privacy: privacyChecked,
+            dpa: dpaChecked,
+          },
+        };
+        const result = await registerUser(payload);
+        clearStoredReferralCode();
+        trackEvent('sign_up', { method: 'employee_invite' });
+        toast.success(t('auth.registerSuccess') || 'Đăng ký và kích hoạt tài khoản thành công!');
+        const trialDays = result?.data?.trial?.durationDays;
+        if (trialDays) {
+          toast.success(t('register.trialGranted', { days: trialDays }));
+        }
+        navigate(getPostAuthPath(result?.data?.user));
+      } catch (err) {
+        const resData = err?.response?.data;
+        const msg = resData?.message || t('auth.registrationFailed') || 'Đăng ký thất bại';
+        toast.error(msg);
+      } finally {
+        setIsSendingCode(false);
+      }
+      return;
+    }
+
     setIsSendingCode(true);
     try {
       await sendVerificationCode({
@@ -371,14 +437,33 @@ const Register = () => {
         <p className="text-slate-500 mt-2 text-sm leading-relaxed">{t('register.registerSubtitle')}</p>
       </div>
 
-      {/* Progress indicator */}
-      <div className="flex items-center gap-2 mb-8">
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold">1</div>
-        <div className="flex-1 h-0.5 bg-slate-200 rounded">
-          <div className="h-full bg-orange-500 rounded" style={{ width: '0%' }} />
+      {/* Banner thông báo thành viên được mời */}
+      {isInvite && (
+        <div className="mb-6 p-4 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 flex items-start gap-3 shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0 mt-0.5">
+            <HiOutlineShieldCheck className="w-5 h-5 text-orange-600" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-orange-950">
+              Hoàn tất đăng ký thành viên được mời
+            </h3>
+            <p className="text-xs text-orange-800/90 mt-1 leading-relaxed">
+              Bạn được mời tham gia nhóm làm việc{invitationInfo?.ownerName ? ` bởi ${invitationInfo.ownerName}` : ''}. Vui lòng hoàn tất thông tin tài khoản bên dưới để bắt đầu làm việc.
+            </p>
+          </div>
         </div>
-        <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-bold">2</div>
-      </div>
+      )}
+
+      {/* Progress indicator */}
+      {!isInvite && (
+        <div className="flex items-center gap-2 mb-8">
+          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-orange-500 text-white text-xs font-bold">1</div>
+          <div className="flex-1 h-0.5 bg-slate-200 rounded">
+            <div className="h-full bg-orange-500 rounded" style={{ width: '0%' }} />
+          </div>
+          <div className="flex items-center justify-center w-6 h-6 rounded-full bg-slate-200 text-slate-500 text-xs font-bold">2</div>
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
         {/* Username & Email */}
@@ -419,10 +504,13 @@ const Register = () => {
               <input 
                 type="email" 
                 {...register('email')}
-                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm bg-white ${
-                  errors.email 
-                    ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
-                    : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10'
+                readOnly={Boolean(isInvite && (emailFromUrl || invitationInfo?.email))}
+                className={`w-full pl-12 pr-4 py-3.5 border rounded-xl outline-none transition-all duration-200 text-sm ${
+                  isInvite && (emailFromUrl || invitationInfo?.email)
+                    ? 'bg-slate-100 text-slate-600 border-slate-200 cursor-not-allowed'
+                    : 'bg-white ' + (errors.email 
+                        ? 'border-red-400 focus:border-red-500 focus:ring-4 focus:ring-red-500/10' 
+                        : 'border-slate-200 hover:border-slate-300 focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 focus:shadow-lg focus:shadow-orange-500/10')
                 }`}
                 placeholder={t('register.emailPlaceholder')}
                 autoCapitalize="none"
@@ -636,9 +724,11 @@ const Register = () => {
           {isSendingCode ? (
             <span className="flex items-center justify-center gap-2">
               <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              {t('register.sendingCode')}
+              {isInvite ? 'Đang kích hoạt...' : t('register.sendingCode')}
             </span>
-          ) : t('register.registerButton')}
+          ) : (
+            isInvite ? 'Hoàn tất đăng ký & Kích hoạt' : t('register.registerButton')
+          )}
         </button>
       </form>
 

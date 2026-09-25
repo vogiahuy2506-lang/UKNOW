@@ -238,6 +238,20 @@ const ActivatePage = () => {
         </p>
       </div>
 
+      {/* Gợi ý đăng ký đầy đủ thông tin */}
+      <div className="mb-6 p-3.5 rounded-xl bg-gradient-to-r from-orange-50 to-amber-50 border border-orange-200/80 flex items-center justify-between gap-3 text-xs text-orange-950">
+        <div>
+          <p className="font-semibold">Bạn muốn cập nhật đầy đủ thông tin cá nhân?</p>
+          <p className="text-orange-800/80 mt-0.5">Điền họ tên, tên đăng nhập, số điện thoại ngay từ đầu.</p>
+        </div>
+        <Link
+          to={`/register?invite=${token}`}
+          className="shrink-0 px-3 py-1.5 bg-orange-500 hover:bg-orange-600 text-white font-medium rounded-lg transition-colors shadow-sm"
+        >
+          Trang đăng ký →
+        </Link>
+      </div>
+
       {/* Tùy chọn 1: Đăng nhập nhanh bằng Google (nếu dùng email Google) */}
       <div className="mb-6">
         <div className="p-3.5 rounded-xl bg-orange-50/60 border border-orange-100 mb-3">

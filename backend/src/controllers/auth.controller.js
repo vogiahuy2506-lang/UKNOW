@@ -69,29 +69,48 @@ class AuthController {
 
     try {
       await client.query('BEGIN');
-      const { username, email, password, fullName, phone, emailVerificationCode, consents } = req.body;
+      const { username, email, password, fullName, phone, emailVerificationCode, consents, inviteToken } = req.body;
 
       // Nghị định 330/2026/NĐ-CP (PR-N2): Bắt buộc đồng ý đủ 3 văn bản pháp lý
       validateRegistrationConsents(consents);
 
-      // Xác minh OTP email trước khi tạo tài khoản
-      // Mọi kiểm tra dưới đây throw (thay vì return trực tiếp) để luôn đi qua catch
-      // bên dưới — sau BEGIN, return thẳng sẽ bỏ qua COMMIT/ROLLBACK, để lại transaction
-      // dang dở trên connection lúc release() về pool, làm hỏng connection cho lượt sau.
-      if (!emailVerificationCode) {
-        throw { status: 400, message: 'Vui lòng xác minh email trước khi đăng ký' };
-      }
-      const verification = await verificationService.verifyCode(email, emailVerificationCode);
-      if (!verification) {
-        throw { status: 400, message: 'Mã xác minh email không đúng hoặc đã hết hạn' };
+      let invitation = null;
+      let verification = null;
+      let existingPendingUser = null;
+
+      if (inviteToken) {
+        invitation = await verificationService.findInvitationByToken(inviteToken);
+        if (!invitation) {
+          throw { status: 400, message: 'Link mời kích hoạt không hợp lệ hoặc đã hết hạn' };
+        }
+        if (invitation.email.toLowerCase() !== email.toLowerCase()) {
+          throw { status: 400, message: 'Email đăng ký không khớp với email được mời' };
+        }
+      } else {
+        // Xác minh OTP email trước khi tạo tài khoản
+        // Mọi kiểm tra dưới đây throw (thay vì return trực tiếp) để luôn đi qua catch
+        // bên dưới — sau BEGIN, return thẳng sẽ bỏ qua COMMIT/ROLLBACK, để lại transaction
+        // dang dở trên connection lúc release() về pool, làm hỏng connection cho lượt sau.
+        if (!emailVerificationCode) {
+          throw { status: 400, message: 'Vui lòng xác minh email trước khi đăng ký' };
+        }
+        verification = await verificationService.verifyCode(email, emailVerificationCode);
+        if (!verification) {
+          throw { status: 400, message: 'Mã xác minh email không đúng hoặc đã hết hạn' };
+        }
       }
 
       const existingEmail = await client.query(
-        'SELECT id FROM users WHERE LOWER(email) = LOWER($1)',
+        'SELECT id, status, referral_code, full_name, phone FROM users WHERE LOWER(email) = LOWER($1)',
         [email]
       );
       if (existingEmail.rows.length > 0) {
-        throw { status: 400, message: 'Email đã được sử dụng' };
+        const found = existingEmail.rows[0];
+        if (invitation && found.status === 'pending_activation') {
+          existingPendingUser = found;
+        } else {
+          throw { status: 400, message: 'Email đã được sử dụng' };
+        }
       }
 
       const existingUsername = await client.query(
@@ -99,7 +118,9 @@ class AuthController {
         [username]
       );
       if (existingUsername.rows.length > 0) {
-        throw { status: 400, message: 'Tên đăng nhập đã được sử dụng' };
+        if (!existingPendingUser || existingUsername.rows[0].id !== existingPendingUser.id) {
+          throw { status: 400, message: 'Tên đăng nhập đã được sử dụng' };
+        }
       }
 
       // SĐT bắt buộc — một số chỉ được gắn với 1 tài khoản (idx_users_phone_unique, migration 179).
@@ -119,11 +140,13 @@ class AuthController {
           [normalizedPhone]
         );
         if (existingPhone.rows.length > 0) {
-          throw {
-            status: 409,
-            code: 'PHONE_TAKEN',
-            message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
-          };
+          if (!existingPendingUser || existingPhone.rows[0].id !== existingPendingUser.id) {
+            throw {
+              status: 409,
+              code: 'PHONE_TAKEN',
+              message: 'Số điện thoại này đã được dùng cho một tài khoản khác. Vui lòng dùng số khác.',
+            };
+          }
         }
       }
 
@@ -150,35 +173,75 @@ class AuthController {
         // Nếu mã không tồn tại / sai: bỏ qua trong im lặng, vẫn cho đăng ký (theo đúng plan)
       }
 
-      // Sinh mã giới thiệu duy nhất cho user mới
-      let myReferralCode = generateReferralCode();
-      for (let attempt = 0; attempt < 5; attempt++) {
-        const existingCode = await client.query('SELECT 1 FROM users WHERE referral_code = $1', [myReferralCode]);
-        if (existingCode.rows.length === 0) break;
-        myReferralCode = generateReferralCode();
+      let user;
+      if (existingPendingUser) {
+        let myReferralCode = existingPendingUser.referral_code;
+        if (!myReferralCode) {
+          myReferralCode = generateReferralCode();
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const existingCode = await client.query('SELECT 1 FROM users WHERE referral_code = $1', [myReferralCode]);
+            if (existingCode.rows.length === 0) break;
+            myReferralCode = generateReferralCode();
+          }
+        }
+
+        const updateResult = await client.query(
+          `UPDATE users
+           SET username = $1,
+               password_hash = $2,
+               full_name = $3,
+               phone = $4,
+               status = 'active',
+               is_verified = true,
+               verified_at = COALESCE(verified_at, CURRENT_TIMESTAMP),
+               referral_code = COALESCE(referral_code, $5),
+               referred_by_user_id = COALESCE(referred_by_user_id, $6),
+               referred_at = CASE WHEN referred_by_user_id IS NULL AND $6 IS NOT NULL THEN CURRENT_TIMESTAMP ELSE referred_at END,
+               updated_at = CURRENT_TIMESTAMP
+           WHERE id = $7
+           RETURNING id, username, email, full_name, avatar_url, status, role, phone, referral_code`,
+          [
+            username,
+            passwordHash,
+            fullName || existingPendingUser.full_name || null,
+            normalizedPhone,
+            myReferralCode,
+            referredByUserId,
+            existingPendingUser.id,
+          ]
+        );
+        user = updateResult.rows[0];
+      } else {
+        // Sinh mã giới thiệu duy nhất cho user mới
+        let myReferralCode = generateReferralCode();
+        for (let attempt = 0; attempt < 5; attempt++) {
+          const existingCode = await client.query('SELECT 1 FROM users WHERE referral_code = $1', [myReferralCode]);
+          if (existingCode.rows.length === 0) break;
+          myReferralCode = generateReferralCode();
+        }
+
+        const result = await client.query(
+          `INSERT INTO users (
+             username, email, password_hash, full_name, phone, status, is_verified, verified_at,
+             role, auth_provider, referral_code, referred_by_user_id, referred_at,
+             created_at, updated_at
+           )
+           VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', 'local', $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+           RETURNING id, username, email, full_name, avatar_url, status, role, phone, referral_code`,
+          [
+            username,
+            email,
+            passwordHash,
+            fullName || null,
+            normalizedPhone,
+            myReferralCode,
+            referredByUserId,
+            referredByUserId ? new Date() : null,
+          ]
+        );
+
+        user = result.rows[0];
       }
-
-      const result = await client.query(
-        `INSERT INTO users (
-           username, email, password_hash, full_name, phone, status, is_verified, verified_at,
-           role, auth_provider, referral_code, referred_by_user_id, referred_at,
-           created_at, updated_at
-         )
-         VALUES ($1, $2, $3, $4, $5, 'active', true, CURRENT_TIMESTAMP, 'user', 'local', $6, $7, $8, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-         RETURNING id, username, email, full_name, avatar_url, status, role, phone, referral_code`,
-        [
-          username,
-          email,
-          passwordHash,
-          fullName || null,
-          normalizedPhone,
-          myReferralCode,
-          referredByUserId,
-          referredByUserId ? new Date() : null,
-        ]
-      );
-
-      const user = result.rows[0];
 
       // Auto-claim tất cả share pending cho email này (PR-1/2/3).
       // Chạy trong cùng transaction với đăng ký để chống race: user mới không thể
@@ -221,8 +284,12 @@ class AuthController {
         dpa: { granted: Boolean(consents.dpa), document_version: LEGAL_DOCUMENTS.dpa.version },
       };
 
-      // Đánh dấu mã xác minh đã dùng
-      await verificationService.markCodeAsUsed(verification.id);
+      // Đánh dấu mã xác minh hoặc token mời đã dùng
+      if (invitation) {
+        await verificationService.markCodeAsUsed(invitation.id);
+      } else if (verification) {
+        await verificationService.markCodeAsUsed(verification.id);
+      }
 
       // Auto-grant trial trong cùng transaction. Lỗi cấu hình trial được cô lập
       // ở savepoint; lỗi hạ tầng hoặc không khôi phục được savepoint sẽ throw để
@@ -266,11 +333,14 @@ class AuthController {
         createdAt: new Date(),
       }).catch((err) => console.warn('[MemberSheet] Failed to push:', err.message));
 
+      const responseUser = await this.formatUser(user);
+      responseUser.memberships = await findMembershipsByEmployeeId(user.id);
+
       return res.status(201).json({
         success: true,
         message: 'Đăng ký thành công',
         data: {
-          user: await this.formatUser(user),
+          user: responseUser,
           accessToken,
           trial,
         },
@@ -957,6 +1027,59 @@ class AuthController {
       });
     } catch (error) {
       console.error('Activate account error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * Lấy thông tin lời mời (email, ownerName...) bằng token.
+   * GET /auth/invitation-info?token=...
+   */
+  async getInvitationInfo(req, res) {
+    try {
+      const { token } = req.query;
+      if (!token) {
+        return res.status(400).json({ success: false, message: 'Thiếu token lời mời' });
+      }
+
+      const invitation = await verificationService.findInvitationByToken(token);
+      if (!invitation) {
+        return res.status(400).json({ success: false, message: 'Link mời không hợp lệ hoặc đã hết hạn' });
+      }
+
+      let ownerName = null;
+      try {
+        const client = await db.getClient();
+        try {
+          const ownerRes = await client.query(
+            `SELECT u.full_name, u.username
+             FROM user_members um
+             JOIN users u ON u.id = um.owner_id
+             JOIN users emp ON emp.id = um.employee_id
+             WHERE LOWER(emp.email) = LOWER($1) AND um.status = 'active'
+             ORDER BY um.created_at DESC
+             LIMIT 1`,
+            [invitation.email]
+          );
+          if (ownerRes.rows.length > 0) {
+            ownerName = ownerRes.rows[0].full_name || ownerRes.rows[0].username;
+          }
+        } finally {
+          client.release();
+        }
+      } catch (e) {
+        console.warn('Could not fetch owner info for invitation:', e.message);
+      }
+
+      return res.json({
+        success: true,
+        data: {
+          email: invitation.email,
+          ownerName,
+        },
+      });
+    } catch (error) {
+      console.error('getInvitationInfo error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
