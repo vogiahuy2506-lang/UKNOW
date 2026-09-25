@@ -99,6 +99,120 @@ class LandingPageShareRepository {
   }
 
   /**
+   * Tạo hoặc cập nhật share:
+   *   - Nếu recipientEmail khớp user có sẵn → share với id_recipient=user.id, status='active'.
+   *   - Nếu recipientEmail CHƯA có user → share pending (id_recipient=NULL, status='pending').
+   *     Đã có pending cùng landing_page+email → UPDATE thay vì INSERT (de-dup).
+   * 3 bước đi qua 1 transaction (client do caller quản lý) chống race.
+   *
+   * @returns {Promise<{ share: object, isExistingUser: boolean, recipient: object|null } | null>}
+   *   Trả null nếu landing_page không thuộc workspace_owner.
+   */
+  async findOrCreatePendingByEmail(
+    client,
+    { idLandingPage, workspaceOwnerId, recipientEmail, shareType = 'view' }
+  ) {
+    const normalizedEmail = String(recipientEmail || '').trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new Error('recipientEmail is required');
+    }
+    const run = async (q) => (await client.query(q.text, q.values)).rows;
+
+    // 1) Verify landing page thuộc workspace.
+    const ownerRows = await run({
+      text: `SELECT lp.id
+             FROM landing_pages lp
+             WHERE lp.id = $1
+               AND COALESCE(lp.workspace_owner_id, lp.id_user) = $2
+             LIMIT 1`,
+      values: [idLandingPage, workspaceOwnerId],
+    });
+    if (ownerRows.length === 0) return null;
+
+    // 2) Tìm user theo email (LOWER để dedup chữ hoa/thường).
+    const userRows = await run({
+      text: `SELECT id, full_name, username, email
+             FROM users
+             WHERE LOWER(email) = $1
+             LIMIT 1`,
+      values: [normalizedEmail],
+    });
+    const existingUser = userRows[0] || null;
+
+    if (existingUser) {
+      // Branch 1: user đã có tài khoản → share ACTIVE.
+      const shareRows = await run({
+        text: `INSERT INTO landing_page_shares (id_landing_page, id_owner, id_recipient, recipient_email, share_type, status)
+               VALUES ($1, $2, $3, $4, $5, 'active')
+               ON CONFLICT (id_landing_page, id_recipient)
+               DO UPDATE SET id_owner = EXCLUDED.id_owner,
+                             recipient_email = EXCLUDED.recipient_email,
+                             share_type = EXCLUDED.share_type,
+                             status = 'active',
+                             updated_at = NOW()
+               RETURNING *`,
+        values: [idLandingPage, workspaceOwnerId, existingUser.id, normalizedEmail, shareType],
+      });
+      return { share: shareRows[0], isExistingUser: true, recipient: existingUser };
+    }
+
+    // Branch 2: email ngoài hệ thống. De-dup theo (landing_page, lower(email)) với id_recipient NULL.
+    const existingPendingRows = await run({
+      text: `SELECT id FROM landing_page_shares
+             WHERE id_landing_page = $1
+               AND id_recipient IS NULL
+               AND status = 'pending'
+               AND LOWER(recipient_email) = $2
+             LIMIT 1`,
+      values: [idLandingPage, normalizedEmail],
+    });
+
+    if (existingPendingRows.length > 0) {
+      // Cập nhật bản ghi pending hiện có (share_type, updated_at).
+      const updated = await run({
+        text: `UPDATE landing_page_shares
+               SET share_type = $3, updated_at = NOW()
+               WHERE id = $1
+               RETURNING *`,
+        values: [existingPendingRows[0].id, idLandingPage, shareType],
+      });
+      return { share: updated[0], isExistingUser: false, recipient: null };
+    }
+
+    // Tạo mới pending.
+    const inserted = await run({
+      text: `INSERT INTO landing_page_shares (id_landing_page, id_owner, id_recipient, recipient_email, share_type, status)
+             VALUES ($1, $2, NULL, $3, $4, 'pending')
+             RETURNING *`,
+      values: [idLandingPage, workspaceOwnerId, normalizedEmail, shareType],
+    });
+    return { share: inserted[0], isExistingUser: false, recipient: null };
+  }
+
+  /**
+   * Auto-claim tất cả share pending cho email của user vừa đăng ký.
+   * Được gọi trong transaction của auth.controller ngay sau khi insert user.
+   *
+   * @returns {Promise<Array<{ id: number, id_landing_page: number, share_type: string }>>}
+   */
+  async claimPendingByUserId(client, { userId, email }) {
+    const normalizedEmail = String(email || '').trim().toLowerCase();
+    if (!userId || !normalizedEmail) return [];
+    const { rows } = await client.query(
+      `UPDATE landing_page_shares
+         SET id_recipient = $1,
+             status = 'active',
+             updated_at = NOW()
+       WHERE id_recipient IS NULL
+         AND status = 'pending'
+         AND LOWER(recipient_email) = $2
+       RETURNING id, id_landing_page, share_type`,
+      [userId, normalizedEmail]
+    );
+    return rows;
+  }
+
+  /**
    * Find user by email
    */
   async findUserByEmail(email) {
