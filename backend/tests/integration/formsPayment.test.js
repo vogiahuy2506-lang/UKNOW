@@ -199,6 +199,9 @@ describe('PR-3a — paymentConfig: chỉ chủ workspace, chốt method, audit l
       momoPhone: '0912345678',
       momoName: 'NGUYEN VAN MOMO',
       holdMinutes: 30,
+      // PR-4 (lệnh giao 25/09): normalizePaymentConfig luôn ghi rõ cách tạo QR MoMo; payload không có
+      // khoá QR nào (như client trước PR-3) → 'none', không suy ra QR.
+      momoQrMode: 'none',
     });
 
     const auditRows = await db.query(

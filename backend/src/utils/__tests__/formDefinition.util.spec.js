@@ -414,6 +414,25 @@ describe('normalizePaymentConfig', () => {
     expect(config.momoQrBin).toBe('971025');
   });
 
+  // Nghiệm thu 25/09 (Claude): mode phone đang ẩn ở giao diện (chờ Việc 4.0) nhưng API VẪN nhận — đột
+  // biến "phone không suy STK từ SĐT" lọt cả 66 ca cũ. STK lấy từ momoPhone ĐÃ chuẩn hoá, không lấy
+  // momoQrAccount client gửi kèm (client cũ/giả có thể gửi cả hai).
+  it('MoMo mode phone: suy momoQrAccount = momoPhone, BIN 971025, bỏ qua STK client gửi kèm', () => {
+    const config = normalizePaymentConfig({
+      enabled: true,
+      method: 'momo',
+      amount: 2000,
+      momoPhone: ' 0388180856 ',
+      momoName: 'truong ho nhat minh',
+      momoQrMode: 'phone',
+      momoQrAccount: 'PSP2604014200000493',
+      momoQrBin: '970436',
+    });
+    expect(config.momoQrMode).toBe('phone');
+    expect(config.momoQrBin).toBe('971025');
+    expect(config.momoQrAccount).toBe('0388180856');
+  });
+
   it('MoMo mode none: không trả về momoQrBin và momoQrAccount', () => {
     const raw = {
       enabled: true,

@@ -119,6 +119,15 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
         expect(screen.getByTestId('momo-preview-qr')).toBeInTheDocument();
         expect(screen.getByText(/Quét bằng app ngân hàng: thấy đúng tên NGUYEN VAN A là QR đúng\. KHÔNG cần chuyển\./i)).toBeInTheDocument();
       });
+
+      // Nghiệm thu 25/09 (Claude): QR xem thử là chốt an toàn — chủ form quét để kiểm STK vừa gõ. Đột
+      // biến "mode account mà QR xem thử dựng từ SĐT" lọt qua cả bộ test cũ vì ca này chỉ kiểm QR CÓ
+      // hiện. Chuỗi dưới do backend `buildVietQrString` (vietQr.util.js) sinh ra cho đúng dữ liệu này —
+      // khoá luôn việc frontend dựng trùng từng ký tự với backend.
+      expect(QRCode.toDataURL).toHaveBeenCalledWith(
+        '00020101021238630010A000000727013300069710250119PSP26040142000004930208QRIBFTTA5303704540420005802VN62110807KIEMTRA6304F0DD',
+        expect.any(Object)
+      );
     });
 
     it('3. Chốt 3: Ô STK chuẩn hoá ký tự (bỏ ký tự lạ, tự động viết hoa)', async () => {

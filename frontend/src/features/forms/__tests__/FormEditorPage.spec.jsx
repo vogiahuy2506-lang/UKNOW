@@ -588,6 +588,12 @@ describe('FormEditorPage component', () => {
       fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), {
         target: { value: 'Nguyen Van MoMo' },
       });
+      // PR-4 (lệnh giao 25/09): form MoMo MỚI mặc định "Nhập số tài khoản MoMo" — thiếu STK là chặn lưu,
+      // nên ca này (viết từ PR-3c, lúc MoMo chỉ cần SĐT + tên) phải điền STK. Chủ form không có STK chọn
+      // "Không dùng QR" — xem ca ngay dưới.
+      fireEvent.change(screen.getByPlaceholderText('Vd: PSP2604014200000493'), {
+        target: { value: 'psp2604014200000493' },
+      });
 
       fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
 
@@ -601,9 +607,48 @@ describe('FormEditorPage component', () => {
         momoPhone: '0912345678',
         momoName: 'Nguyen Van MoMo',
         holdMinutes: 30,
+        momoQrMode: 'account',
+        momoQrBin: '971025',
+        momoQrAccount: 'PSP2604014200000493',
       });
       expect(payload.paymentConfig.bankBin).toBeUndefined();
       expect(payload.paymentConfig.accountNumber).toBeUndefined();
+    });
+
+    it('PR-4: form MoMo mới chưa có STK — bị chặn ở mode mặc định, chọn "Không dùng QR" thì lưu được, payload không có khoá QR', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-momo-2' });
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form MoMo không QR' },
+      });
+      fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
+      fireEvent.click(screen.getByRole('radio', { name: /Ví MoMo/i }));
+      fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), { target: { value: '200000' } });
+      fireEvent.change(screen.getByPlaceholderText('Vd: 0912345678'), { target: { value: '0912345678' } });
+      fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), { target: { value: 'Nguyen Van MoMo' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+      expect(await screen.findAllByText('Vui lòng nhập số tài khoản MoMo')).not.toHaveLength(0);
+      expect(formAdminApi.createForm).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('radio', { name: /Không dùng QR/i }));
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+      expect(payload.paymentConfig.momoQrMode).toBe('none');
+      expect(payload.paymentConfig).not.toHaveProperty('momoQrBin');
+      expect(payload.paymentConfig).not.toHaveProperty('momoQrAccount');
     });
 
     it('chọn MoMo bỏ trống số điện thoại hoặc tên: báo lỗi chặn lưu', async () => {
