@@ -457,7 +457,14 @@ class CampaignScheduleController {
       const needsActivation = campaignNotActiveYet && activateCampaign;
 
       if (willEnableFromOff) {
-        const preflightFailure = await respondPreflightFailure(res, scheduleData.id_campaign, context.workspaceOwnerId);
+        // Chủ của LỊCH, không phải người đang đăng nhập: super admin bật lại lịch của khách thì
+        // context.workspaceOwnerId là id admin → preflight tra zalo_settings theo admin, không thấy
+        // tài khoản nào và báo nhầm "mất kết nối". Nhánh create dùng campaign.workspace_owner_id.
+        const preflightFailure = await respondPreflightFailure(
+          res,
+          scheduleData.id_campaign,
+          scheduleData.workspace_owner_id ?? context.workspaceOwnerId
+        );
         if (preflightFailure) return preflightFailure;
       }
 

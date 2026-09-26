@@ -137,6 +137,15 @@ describe('CampaignScheduleController.update — preflight khi bật lại lịch
     expect(mockRepository.update).toHaveBeenCalledTimes(1);
   });
 
+  it('super admin bật lại lịch của KHÁCH → preflight theo chủ lịch, không theo id admin', async () => {
+    mockRepository.findMutableById.mockResolvedValue(mutableSchedule({ workspace_owner_id: 42 }));
+    const res = makeRes();
+    const adminReq = { user: { id: 1, role: 'admin', activeContext: { type: 'self' } }, params: { id: '177' }, body: { enabled: true } };
+    await new CampaignScheduleController().update(adminReq, res);
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 42 });
+    expect(mockRepository.update).toHaveBeenCalledTimes(1);
+  });
+
   it('TẮT lịch đang bật → KHÔNG gọi preflight', async () => {
     mockRepository.findMutableById.mockResolvedValue(mutableSchedule({ enabled: true }));
     const res = makeRes();

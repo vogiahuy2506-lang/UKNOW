@@ -241,6 +241,33 @@ describe('validateCampaignPreflight service (PR-A3)', () => {
       });
     });
 
+    // Luồng thật trên prod (74 node gửi nhóm không có id riêng): get_all_groups tự chọn tài khoản,
+    // node gửi nhóm dùng selectedZaloAccount do get_all_groups gán (R:4625). Ca trên có id 99 ở CẢ
+    // node gửi nhóm nên không phân biệt được get_all_groups có góp id hay không.
+    it('get_all_groups tự chọn tài khoản CONNECTED + send_zalo_group không id riêng → qua, kiểm đúng id của get_all_groups', async () => {
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            node_type: 'action',
+            node_subtype: 'get_all_groups',
+            config: { zaloAccountId: 99 },
+          }, {
+            id: 2,
+            node_type: 'action',
+            node_subtype: 'send_zalo_group',
+            config: {},
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ id: 99, is_active: true, status: 'connected' }],
+        });
+
+      const result = await validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 1 });
+      expect(result.valid).toBe(true);
+      expect(mockQuery.mock.calls[1][1][0]).toEqual([99]);
+    });
+
     it('get_all_friends trỏ zaloFriendAccountNodeId tới node khác → KHÔNG kiểm zaloAccountId riêng (dù id đó trỏ tài khoản disconnected)', async () => {
       mockQuery
         .mockResolvedValueOnce({
