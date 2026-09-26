@@ -1,6 +1,47 @@
 import { HiOutlineCheck, HiOutlineRefresh, HiOutlinePaperClip } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
+/* ───────── Thinking Dots Animation (Gemini-style) ───────── */
+
+function ThinkingDots() {
+  return (
+    <div className="flex items-center gap-1.5 py-1">
+      <div className="flex items-center gap-1">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            className="w-2 h-2 rounded-full bg-gradient-to-r from-orange-500 to-red-500"
+            style={{
+              animation: `thinkingBounce 1.4s ease-in-out infinite`,
+              animationDelay: `${i * 0.16}s`,
+            }}
+          />
+        ))}
+      </div>
+      <span className="text-[13px] text-gray-500 animate-pulse ml-1">Thinking...</span>
+      {/* Sparkle accents */}
+      <div className="flex items-center gap-0.5 ml-2">
+        <SparkleDot delay={0} />
+        <SparkleDot delay={0.4} />
+        <SparkleDot delay={0.8} />
+      </div>
+    </div>
+  );
+}
+
+function SparkleDot({ delay }) {
+  return (
+    <span
+      className="w-1 h-1 rounded-full bg-amber-400"
+      style={{
+        animation: `sparklePulse 2s ease-in-out infinite`,
+        animationDelay: `${delay}s`,
+        opacity: 0.6,
+      }}
+    />
+  );
+}
+
 /**
  * Single chat message bubble.
  * role 'user': bubble orange-50 bên phải, hiển thị content và các chip tệp đính kèm (nếu có).
@@ -48,9 +89,16 @@ export default function ChatMessage({ msg, onUndo }) {
         </svg>
       </div>
       <div className="flex-1 min-w-0">
-        <div className="bg-gray-50 rounded-2xl px-4 py-2.5 text-[15px] text-gray-900 break-words leading-relaxed">
-          {content || (status === 'streaming' ? tc('typing') : '')}
-        </div>
+        {/* Streaming state: show thinking animation */}
+        {status === 'streaming' ? (
+          <div className="bg-gray-50 rounded-2xl px-4 py-3">
+            <ThinkingDots />
+          </div>
+        ) : (
+          <div className="bg-gray-50 rounded-2xl px-4 py-2.5 text-[15px] text-gray-900 break-words leading-relaxed">
+            {content}
+          </div>
+        )}
 
         {status === 'applied' && previousHtml != null ? (
           <div className="flex items-center gap-2 mt-2.5">

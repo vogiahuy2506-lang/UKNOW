@@ -436,3 +436,24 @@ input[type='number'] {
   0%, 100% { transform: scale(1); opacity: 0.5; }
   50% { transform: scale(1.15); opacity: 0.8; }
 }
+
+/* ── Gemini-style Thinking Dots Animation ── */
+@keyframes thinkingBounce {
+  0%, 60%, 100% { transform: translateY(0); }
+  30% { transform: translateY(-5px); }
+}
+
+@keyframes sparklePulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1.2); }
+}
+
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  10% { transform: rotate(14deg); }
+  20% { transform: rotate(-8deg); }
+  30% { transform: rotate(14deg); }
+  40% { transform: rotate(-4deg); }
+  50% { transform: rotate(10deg); }
+  60% { transform: rotate(0deg); }
+}
