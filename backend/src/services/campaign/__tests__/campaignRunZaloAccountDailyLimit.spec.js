@@ -130,6 +130,7 @@ jest.unstable_mockModule('../../../utils/campaignQuotaPauseNotify.util.js', () =
   QUOTA_DEFER_CLEAR_KEYS: ['quotaDeferredUntil', 'quotaDeferredReason', 'quotaDeferredAt', 'quotaPauseNotifiedAt'],
   notifyCampaignQuotaPaused: mockNotifyCampaignQuotaPaused,
   notifyCampaignQuotaStopped: jest.fn().mockResolvedValue({ sent: true }),
+  notifyCampaignRunFailed: jest.fn().mockResolvedValue({ sent: true }),
 }));
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');

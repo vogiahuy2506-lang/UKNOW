@@ -3,6 +3,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 const mockQuery = jest.fn();
 const mockGetRunMetadata = jest.fn();
 const mockPatchRunMetadata = jest.fn();
+const mockClaimRunFailureNotification = jest.fn();
 const mockFindCampaignById = jest.fn();
 const mockSendSystemEmail = jest.fn();
 const mockBuildPaused = jest.fn(({ campaignName }) => ({
@@ -13,6 +14,10 @@ const mockBuildStopped = jest.fn(({ campaignName }) => ({
   subject: `stopped:${campaignName}`,
   html: '<p>stopped</p>',
 }));
+const mockBuildRunFailed = jest.fn(({ campaignName, reason }) => ({
+  subject: `run-failed:${campaignName}`,
+  html: `<p>${reason}</p>`,
+}));
 
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockQuery },
@@ -22,6 +27,7 @@ jest.unstable_mockModule('../../repositories/campaign/campaignRun.repository.js'
   default: {
     getRunMetadata: mockGetRunMetadata,
     patchRunMetadata: mockPatchRunMetadata,
+    claimRunFailureNotification: mockClaimRunFailureNotification,
   },
 }));
 
@@ -35,6 +41,7 @@ jest.unstable_mockModule('../systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
   buildCampaignPausedEmail: mockBuildPaused,
   buildCampaignStoppedQuotaEmail: mockBuildStopped,
+  buildCampaignRunFailedEmail: mockBuildRunFailed,
 }));
 
 const {
@@ -43,6 +50,7 @@ const {
   channelLabelFromQuotaReason,
   notifyCampaignQuotaPaused,
   notifyCampaignQuotaStopped,
+  notifyCampaignRunFailed,
   QUOTA_DEFER_CLEAR_KEYS,
 } = await import('../campaignQuotaPauseNotify.util.js');
 
@@ -51,12 +59,15 @@ describe('campaignQuotaPauseNotify.util', () => {
     mockQuery.mockReset();
     mockGetRunMetadata.mockReset();
     mockPatchRunMetadata.mockReset();
+    mockClaimRunFailureNotification.mockReset();
     mockFindCampaignById.mockReset();
     mockSendSystemEmail.mockReset();
     mockBuildPaused.mockClear();
     mockBuildStopped.mockClear();
+    mockBuildRunFailed.mockClear();
     mockGetRunMetadata.mockResolvedValue({});
     mockPatchRunMetadata.mockResolvedValue(undefined);
+    mockClaimRunFailureNotification.mockResolvedValue(true);
     mockFindCampaignById.mockResolvedValue({
       id_user: 42,
       campaign_name: 'Promo X',
@@ -231,6 +242,66 @@ describe('campaignQuotaPauseNotify.util', () => {
           billingUrl: expect.stringContaining('/app/billing'),
         })
       );
+    });
+  });
+
+  // PR-3 — chống gửi trùng phải qua UPDATE giành cờ nguyên tử (claimRunFailureNotification), không
+  // đọc-rồi-ghi như notifyCampaignQuotaPaused ở trên.
+  describe('notifyCampaignRunFailed', () => {
+    it('claim trả false (đã báo trước đó) → không gửi mail', async () => {
+      mockClaimRunFailureNotification.mockResolvedValue(false);
+
+      const result = await notifyCampaignRunFailed({
+        runId: 200,
+        campaignId: 5,
+        reason: 'Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng',
+        source: 'catch_all',
+      });
+
+      expect(result).toEqual({ skipped: true, reason: 'already_notified' });
+      expect(mockClaimRunFailureNotification).toHaveBeenCalledWith(200);
+      expect(mockFindCampaignById).not.toHaveBeenCalled();
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('claim trả true → sendSystemEmail đúng 1 lần với câu đã Việt hoá (qua labelCampaignRunFailure)', async () => {
+      mockClaimRunFailureNotification.mockResolvedValue(true);
+
+      const result = await notifyCampaignRunFailed({
+        runId: 200,
+        campaignId: 5,
+        reason: 'Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng',
+        source: 'catch_all',
+      });
+
+      expect(result).toEqual({ sent: true });
+      expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+      expect(mockSendSystemEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'owner@example.com', subject: 'run-failed:Promo X' })
+      );
+      expect(mockBuildRunFailed).toHaveBeenCalledWith(
+        expect.objectContaining({
+          campaignName: 'Promo X',
+          reason: 'Tài khoản Zalo dùng để gửi chưa sẵn sàng (có thể đang mất kết nối).',
+          actionHint: expect.stringContaining('Cài đặt Zalo'),
+          appUrl: expect.stringContaining('/app/campaigns'),
+        })
+      );
+    });
+
+    it('claim trả true nhưng thiếu owner email → skip, không gửi mail', async () => {
+      mockClaimRunFailureNotification.mockResolvedValue(true);
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const result = await notifyCampaignRunFailed({
+        runId: 200,
+        campaignId: 5,
+        reason: 'Lỗi lạ chưa từng thấy',
+        source: 'catch_all',
+      });
+
+      expect(result).toEqual({ skipped: true, reason: 'no_owner_email' });
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
     });
   });
 });

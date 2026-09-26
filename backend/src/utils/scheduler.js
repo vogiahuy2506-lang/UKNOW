@@ -10,6 +10,7 @@ import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
+import { notifyCampaignRunFailed } from './campaignQuotaPauseNotify.util.js';
 // Luật thời gian của lịch chạy (khoá ngày Hà Nội, cron runtime, N ngày) dời sang util để
 // controller tính "lần chạy tiếp" bằng ĐÚNG luật nổ ở đây — xem campaignScheduleCron.util.js.
 import {
@@ -78,13 +79,28 @@ const recordFailedScheduleTrigger = async (schedule, runName, error) => {
   if (!campaignId || !schedule?.id) return;
   const workspaceOwnerId = Number.parseInt(schedule?.workspace_owner_id ?? schedule?.id_user, 10);
   try {
-    await campaignRunRepository.insertFailedScheduledRun({
+    const failedRun = await campaignRunRepository.insertFailedScheduledRun({
       campaignId,
       workspaceOwnerId: Number.isFinite(workspaceOwnerId) ? workspaceOwnerId : null,
       scheduleId: schedule.id,
       runName,
       errorMessage: error?.message,
     });
+    // PR-3 — chủ chiến dịch trước đây không biết lịch nổ hỏng (chỉ console.error, log
+    // container bị xoá mỗi lần deploy). Fire-and-forget, không chặn scheduler.
+    if (failedRun?.id) {
+      notifyCampaignRunFailed({
+        runId: failedRun.id,
+        campaignId,
+        reason: error?.message,
+        source: 'schedule',
+      }).catch((notifyErr) => {
+        console.error(
+          `[Scheduler] Không báo được chủ chiến dịch cho schedule #${schedule.id}:`,
+          notifyErr.message
+        );
+      });
+    }
   } catch (recordErr) {
     console.error(
       `[Scheduler] Không ghi được lượt chạy hỏng của schedule #${schedule.id}:`,

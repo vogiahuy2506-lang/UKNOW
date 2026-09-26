@@ -42,6 +42,7 @@ import {
   QUOTA_DEFER_CLEAR_KEYS,
   notifyCampaignQuotaPaused,
   notifyCampaignQuotaStopped,
+  notifyCampaignRunFailed,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
 import {
@@ -324,6 +325,27 @@ class CampaignRunService {
     notifyCampaignQuotaStopped(input).catch((err) => {
       console.warn(
         `[CampaignQuotaNotify] stopped email failed campaign=${input?.campaignId}:`,
+        err?.message || err
+      );
+    });
+  }
+
+  /**
+   * PR-3 — đóng sổ một lượt chạy hỏng (failRun) rồi báo chủ chiến dịch (fire-and-forget, không
+   * chặn worker). KHÔNG dùng cho lỗi hết hạn mức gói — nhánh đó đã có
+   * _notifyQuotaStoppedFireAndForget riêng (R:350, R:1438, R:3847), đừng đổi.
+   *
+   * @param {number} runId
+   * @param {number} campaignId
+   * @param {string} message
+   * @param {string} source nguồn gây fail (vd 'smtp_config', 'network_init', 'catch_all', 'zalo_pool_unavailable')
+   * @returns {Promise<void>}
+   */
+  async _failRunAndNotify(runId, campaignId, message, source) {
+    await campaignRunRepository.failRun(runId, message);
+    notifyCampaignRunFailed({ runId, campaignId, reason: message, source }).catch((err) => {
+      console.warn(
+        `[CampaignRunFailedNotify] email failed run=${runId} campaign=${campaignId}:`,
         err?.message || err
       );
     });
@@ -3814,7 +3836,7 @@ class CampaignRunService {
                       message,
                     }),
                   });
-                  await campaignRunRepository.failRun(runId, message);
+                  await this._failRunAndNotify(runId, campaignId, message, 'smtp_config');
                   const err = new Error(message);
                   err.code = 'RUN_STOPPED';
                   throw err;
@@ -8592,8 +8614,12 @@ class CampaignRunService {
       }
     } catch (error) {
       if (error?.code === 'CAMPAIGN_PAUSED_BY_ZALO_POOL_UNAVAILABLE') {
-        await campaignRunRepository.completeRunWithError(runId, String(error?.message || 'Chiến dịch đã tạm dừng do toàn bộ tài khoản Zalo không sẵn sàng'));
-        console.warn(`[Campaign ${campaignId}] ${String(error?.message || '').trim()}`);
+        // PR-3 — trước đây ghi 'completed' (completeRunWithError): lượt chạy CHƯA XONG bị đánh
+        // dấu như đã xong, chủ chiến dịch không biết pool Zalo đã rớt hết. Phải đánh 'failed' +
+        // báo, giống mọi nhánh dừng-vì-lỗi khác.
+        const poolMessage = String(error?.message || 'Chiến dịch đã tạm dừng do toàn bộ tài khoản Zalo không sẵn sàng');
+        await this._failRunAndNotify(runId, campaignId, poolMessage, 'zalo_pool_unavailable');
+        console.warn(`[Campaign ${campaignId}] ${poolMessage}`);
         return;
       }
       if (error?.code === 'RUN_STOPPED') {
@@ -8621,14 +8647,16 @@ class CampaignRunService {
           `[Campaign ${campaignId}] Run ${runId} gặp lỗi mạng khi chưa giải ra người nhận (totalRecipients=0), `
           + `đánh failed: ${String(error?.message || 'network timeout')}`
         );
-        await campaignRunRepository.failRun(
+        await this._failRunAndNotify(
           runId,
-          `Lỗi kết nối mạng trong lúc khởi tạo danh sách người nhận: ${String(error?.message || 'network timeout')}`
+          campaignId,
+          `Lỗi kết nối mạng trong lúc khởi tạo danh sách người nhận: ${String(error?.message || 'network timeout')}`,
+          'network_init'
         );
         return;
       }
       console.error(`[Campaign ${campaignId}] Lỗi thực thi:`, error);
-      await campaignRunRepository.failRun(runId, error.message);
+      await this._failRunAndNotify(runId, campaignId, error.message, 'catch_all');
     } finally {
       // Giải phóng worker slot nếu run kết thúc đột ngột trong lúc đang xử lý.
       // _releaseContinuousWorker là idempotent – an toàn khi chưa giữ slot.

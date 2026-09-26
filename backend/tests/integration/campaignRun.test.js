@@ -26,6 +26,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser } from './helpers/db.js';
+import campaignRunRepository from '../../src/repositories/campaign/campaignRun.repository.js';
 
 let app;
 
@@ -411,5 +412,43 @@ describe('POST /api/campaign-runs/:id/stop', () => {
       .post(`/api/campaign-runs/${r.id}/stop`)
       .set('Authorization', `Bearer ${t}`);
     expect(res.status).toBe(200);
+  });
+});
+
+// ===========================================================================
+// PR-3 — claimRunFailureNotification (chống gửi trùng email báo lỗi run)
+// ===========================================================================
+
+describe('campaignRunRepository.claimRunFailureNotification', () => {
+  it('gọi lần 1 → true (giành được cờ), gọi lần 2 → false, KỂ CẢ khi run đã failed', async () => {
+    const owner = await createUser({ role: 'user', username: 'claim-owner' });
+    const campaign = await insertCampaign({ ownerId: owner.id });
+    const run = await insertRun({ campaignId: campaign.id, status: 'running' });
+
+    const first = await campaignRunRepository.claimRunFailureNotification(run.id);
+    expect(first).toBe(true);
+
+    // patchRunMetadata() (dùng cho quota) chỉ UPDATE khi status='running' — cờ báo lỗi PHẢI
+    // không bị ảnh hưởng bởi việc run đã chuyển sang 'failed' sau đó (đúng lỗi PR-3 bản trước mắc).
+    await campaignRunRepository.failRun(run.id, 'Lỗi kiểm thử');
+    const afterFail = await db.query('SELECT status FROM campaign_runs WHERE id = $1', [run.id]);
+    expect(afterFail.rows[0].status).toBe('failed');
+
+    const second = await campaignRunRepository.claimRunFailureNotification(run.id);
+    expect(second).toBe(false);
+
+    const meta = await db.query('SELECT run_metadata FROM campaign_runs WHERE id = $1', [run.id]);
+    expect(meta.rows[0].run_metadata.failureNotifiedAt).toBeTruthy();
+  });
+
+  it('2 run khác nhau claim độc lập — claim run A không ảnh hưởng run B', async () => {
+    const owner = await createUser({ role: 'user', username: 'claim-owner-2' });
+    const campaign = await insertCampaign({ ownerId: owner.id });
+    const runA = await insertRun({ campaignId: campaign.id, status: 'running' });
+    const runB = await insertRun({ campaignId: campaign.id, status: 'running' });
+
+    expect(await campaignRunRepository.claimRunFailureNotification(runA.id)).toBe(true);
+    expect(await campaignRunRepository.claimRunFailureNotification(runB.id)).toBe(true);
+    expect(await campaignRunRepository.claimRunFailureNotification(runA.id)).toBe(false);
   });
 });

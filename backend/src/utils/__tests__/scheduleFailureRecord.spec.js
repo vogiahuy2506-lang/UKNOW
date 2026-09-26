@@ -18,6 +18,16 @@ jest.unstable_mockModule('../../config/database.js', () => ({
 jest.unstable_mockModule('../../controllers/campaign.controller.js', () => ({
   default: { createCampaignRunRecord: createCampaignRunRecordMock, executeCampaign: executeCampaignMock },
 }));
+// PR-3 — recordFailedScheduleTrigger() giờ còn gọi notifyCampaignRunFailed() (loadOwnerContact bên
+// trong nó chạy thêm SELECT campaigns THẬT, đi qua queryMock chung ở trên). Mock hẳn module này để
+// giữ nguyên phạm vi test gốc: chỉ soi SQL scheduler tự phát ra, không lẫn SQL của luồng báo lỗi.
+// campaignRunService (nạp thật qua scheduler.js) cũng import cùng module này nên phải trả đủ 4 export.
+jest.unstable_mockModule('../campaignQuotaPauseNotify.util.js', () => ({
+  QUOTA_DEFER_CLEAR_KEYS: ['quotaDeferredUntil', 'quotaDeferredReason', 'quotaDeferredAt', 'quotaPauseNotifiedAt'],
+  notifyCampaignQuotaPaused: jest.fn().mockResolvedValue({ sent: true }),
+  notifyCampaignQuotaStopped: jest.fn().mockResolvedValue({ sent: true }),
+  notifyCampaignRunFailed: jest.fn().mockResolvedValue({ sent: true }),
+}));
 
 const { _triggerCampaignScheduleForTests: trigger } = await import('../scheduler.js');
 
