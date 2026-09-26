@@ -397,14 +397,20 @@ class CampaignRunRepository {
   }
 
   /**
-   * Fetch run_metadata, successful_sends, failed_sends for execution bootstrap.
+   * Fetch run_metadata, successful_sends, failed_sends, total_recipients, skipped_sends for
+   * execution bootstrap.
+   *
+   * PR-2 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — trước đây SELECT thiếu total_recipients và
+   * skipped_sends, khiến hai bộ đếm này về 0 mỗi lượt gọi lại (resume) trong khi
+   * successful_sends/failed_sends vẫn cộng dồn đúng — làm total tụt xuống dưới ok+failed đã có,
+   * hiển thị tiến độ sai (vd "đã gửi 40/12").
    *
    * @param {number} runId
-   * @returns {Promise<{run_metadata: object, successful_sends: number, failed_sends: number}|null>}
+   * @returns {Promise<{run_metadata: object, successful_sends: number, failed_sends: number, total_recipients: number, skipped_sends: number}|null>}
    */
   async getRunForExecution(runId) {
     const result = await db.query(
-      `SELECT run_metadata, successful_sends, failed_sends
+      `SELECT run_metadata, successful_sends, failed_sends, total_recipients, skipped_sends
        FROM campaign_runs
        WHERE id = $1
        LIMIT 1`,

@@ -141,6 +141,15 @@ class CampaignRunService {
       const rawDelay = Number.parseInt(process.env.ZALO_ONESHOT_RETRY_DELAY_MS, 10);
       this.ZALO_ONESHOT_RETRY_DELAY_MS = Number.isFinite(rawDelay) && rawDelay >= 0 ? rawDelay : 6 * 60 * 60 * 1000;
     }
+    // PR-2 (đợt rà soát 26/09), Việc 3 — continuous email trước đây KHÔNG có trần: lỗi ném ra từ
+    // sendEmailWithLogging() (SMTP/network lỗi không phân loại được thành bounce/config/quota) bị
+    // thử lại MỖI chu kỳ continuous vô hạn, cộng failedSends mỗi lần (bằng chứng run 377:
+    // failedSends=7.907 trong khi email_messages chỉ có 18 dòng failed thật). Cùng khuôn
+    // CONTINUOUS_ZALO_MAX_SEND_FAILURES: 0 = không giới hạn.
+    {
+      const rawMax = Number.parseInt(process.env.CONTINUOUS_EMAIL_MAX_SEND_FAILURES, 10);
+      this.CONTINUOUS_EMAIL_MAX_SEND_FAILURES = Number.isFinite(rawMax) && rawMax >= 0 ? rawMax : 5;
+    }
 
     // --- Zalo rate-limit state & policy (shared env builder with diagnostic runner) ---
     this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
@@ -1184,6 +1193,17 @@ class CampaignRunService {
     const recordedScheduleDriftStepKeys = new Set();
     let nodeOutputs = {};
     let lastOutputItems = [];
+    // PR-2 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — Bất biến bộ đếm lượt chạy:
+    // - total_recipients = số NGƯỜI-BƯỚC (một cặp khách/nhóm/số × một bước gửi) run này đã đưa
+    //   vào, mỗi người-bước tính ĐÚNG MỘT LẦN trong CẢ ĐỜI run (kể cả qua nhiều lượt gọi
+    //   executeCampaign do resume) — không cộng lại mỗi lượt gọi, không cộng lại mỗi chu kỳ
+    //   continuous đến hạn cho cùng một người-bước đang chờ thử lại.
+    // - successful/failed/skipped = KẾT CỤC CUỐI của người-bước (đã hết đường thử lại), không
+    //   phải mỗi LẦN THỬ. Một người-bước còn hẹn thử lại (nextDueAt trong tương lai, hoặc còn
+    //   dưới trần retry) KHÔNG được tính vào bất kỳ nhóm nào trong ba nhóm này.
+    // - Bất biến: ok + failed + skipped ≤ total, luôn đúng tại mọi thời điểm đọc.
+    // - total KHÔNG đổi qua các lượt chạy tiếp (resume) trừ khi nguồn dữ liệu có người/nhóm/số MỚI
+    //   chưa từng xuất hiện ở bất kỳ lượt nào trước đó.
     let totalRecipients = 0;
     let successfulSends = 0;
     let failedSends = 0;
@@ -1647,6 +1667,8 @@ class CampaignRunService {
         retryCount: 0,
         /** Số lần gửi Zalo thất bại liên tiếp (continuous), lưu trong meta ledger. */
         zaloSendFailureCount: 0,
+        /** PR-2 — số lần gửi email thất bại liên tiếp (continuous), cùng khuôn zaloSendFailureCount. */
+        emailSendFailureCount: 0,
         // Chỉ có khi state đến từ PostgreSQL. Dùng để chặn callback cũ ghi lùi cache.
         updatedAt: null,
       });
@@ -1695,6 +1717,7 @@ class CampaignRunService {
                   nextDueAt: resumeMeta?.nextDueAt || null,
                   retryCount: Math.max(0, Number.parseInt(resumeMeta?.retryCount, 10) || 0),
                   zaloSendFailureCount: Math.max(0, Number.parseInt(resumeMeta?.zaloSendFailureCount, 10) || 0),
+                  emailSendFailureCount: Math.max(0, Number.parseInt(resumeMeta?.emailSendFailureCount, 10) || 0),
                   updatedAt: resumeRow.updated_at || null,
                   updatedAtEpochUs: resumeRow.updated_at_epoch_us ?? null,
                 };
@@ -1713,6 +1736,7 @@ class CampaignRunService {
             nextDueAt: meta?.nextDueAt || null,
             retryCount: Math.max(0, Number.parseInt(meta?.retryCount, 10) || 0),
             zaloSendFailureCount: Math.max(0, Number.parseInt(meta?.zaloSendFailureCount, 10) || 0),
+            emailSendFailureCount: Math.max(0, Number.parseInt(meta?.emailSendFailureCount, 10) || 0),
             updatedAt: progressRow.updated_at || null,
             updatedAtEpochUs: progressRow.updated_at_epoch_us ?? null,
           };
@@ -1767,6 +1791,9 @@ class CampaignRunService {
         zaloSendFailureCount = null,
         zaloAbandonReason = null,
         removeZaloFailureFromMeta = false,
+        emailSendFailureCount = null,
+        emailAbandonReason = null,
+        removeEmailFailureFromMeta = false,
         lastFailureReason = null,
         lastFailureAt = null,
       }) => {
@@ -1787,6 +1814,12 @@ class CampaignRunService {
         } else if (Number.isFinite(Number.parseInt(zaloSendFailureCount, 10))) {
           resolvedZaloFail = Math.max(0, Number.parseInt(zaloSendFailureCount, 10) || 0);
         }
+        let resolvedEmailFail = prevMem.emailSendFailureCount || 0;
+        if (removeEmailFailureFromMeta) {
+          resolvedEmailFail = 0;
+        } else if (Number.isFinite(Number.parseInt(emailSendFailureCount, 10))) {
+          resolvedEmailFail = Math.max(0, Number.parseInt(emailSendFailureCount, 10) || 0);
+        }
         const memRow = {
           lastCompletedStep: safeCompletedStep,
           isFullyCompleted,
@@ -1795,6 +1828,7 @@ class CampaignRunService {
           nextDueAt,
           retryCount: resolvedRetryCount,
           zaloSendFailureCount: resolvedZaloFail,
+          emailSendFailureCount: resolvedEmailFail,
           updatedAt: null,
         };
         const cacheRecipientProgress = (progress) => {
@@ -1830,6 +1864,12 @@ class CampaignRunService {
             ...(zaloAbandonReason && String(zaloAbandonReason).trim()
               ? { zaloAbandonReason: String(zaloAbandonReason).trim() }
               : {}),
+            ...(Number.isFinite(Number.parseInt(emailSendFailureCount, 10))
+              ? { emailSendFailureCount: Math.max(0, Number.parseInt(emailSendFailureCount, 10) || 0) }
+              : {}),
+            ...(emailAbandonReason && String(emailAbandonReason).trim()
+              ? { emailAbandonReason: String(emailAbandonReason).trim() }
+              : {}),
             ...(lastFailureReason && String(lastFailureReason).trim()
               ? {
                 lastFailureReason: String(lastFailureReason).trim(),
@@ -1848,6 +1888,7 @@ class CampaignRunService {
             metaPayload,
             removeRetryCountFromMeta,
             removeZaloFailureFromMeta,
+            removeEmailFailureFromMeta,
           });
 
           // PostgreSQL là arbiter cho out-of-order writes. Chỉ cập nhật cache sau
@@ -1863,6 +1904,7 @@ class CampaignRunService {
               nextDueAt: persistedMeta.nextDueAt || null,
               retryCount: Math.max(0, Number.parseInt(persistedMeta.retryCount, 10) || 0),
               zaloSendFailureCount: Math.max(0, Number.parseInt(persistedMeta.zaloSendFailureCount, 10) || 0),
+              emailSendFailureCount: Math.max(0, Number.parseInt(persistedMeta.emailSendFailureCount, 10) || 0),
               updatedAt: persistedRow.updated_at || null,
               updatedAtEpochUs: persistedRow.updated_at_epoch_us ?? null,
             }
@@ -2204,9 +2246,12 @@ class CampaignRunService {
         campaign?.flow_json
       );
       const runRow = await campaignRunRepository.getRunForExecution(runId);
+      // PR-2 — trước đây getRunForExecution() không SELECT total_recipients/skipped_sends nên cả
+      // hai luôn về 0 mỗi lượt gọi lại (resume) dù DB đã có giá trị cộng dồn từ lượt trước.
       totalRecipients = Number(runRow?.total_recipients || 0);
       successfulSends = Number(runRow?.successful_sends || 0);
       failedSends = Number(runRow?.failed_sends || 0);
+      skippedSends = Number(runRow?.skipped_sends || 0);
       const runSource = String(runRow?.run_metadata?.source || 'campaign_run').trim() || 'campaign_run';
       const rawAdjacentDelay = Number.parseInt(runRow?.run_metadata?.adjacentZaloNodeDelayMs, 10);
       const adjacentZaloNodeDelayMs = Number.isFinite(rawAdjacentDelay) && rawAdjacentDelay > 0
@@ -3633,6 +3678,9 @@ class CampaignRunService {
             stepMeta = null,
             progress = null,
             applyRandomDelay = true,
+            // PR-2 — cần để gọi upsertRecipientProgress({completedStep: totalSteps, ...}) khi trần
+            // thất bại continuous bị chạm (đánh dấu hoàn thành, không phải hardcode 1).
+            totalSteps = 1,
           }) => {
             const recipientEmailForLog = String(customer?.email || '').trim() || null;
             if (applyRandomDelay) {
@@ -3675,6 +3723,9 @@ class CampaignRunService {
 
               // Xử lý các trường hợp bỏ qua (unsubscribed / hard bounced)
               if (sendResult.status === 'skipped') {
+                // PR-2, Việc 4 — trước đây skip (unsubscribed/hard bounce/từ chối đồng ý) không được
+                // tính vào bộ đếm nào cả, làm total/ok/failed/skipped không khớp số người thực đã xử lý.
+                skippedSends += 1;
                 const skipMessage = CAMPAIGN_EMAIL_SKIP_LABELS[sendResult.reason] || 'Bỏ qua';
                 const skippedPayload = {
                   ...sendResult,
@@ -3915,7 +3966,64 @@ class CampaignRunService {
             } catch (error) {
               if (error?.code === 'RUN_YIELD_SLOT') throw error;
               if (error?.code === 'RUN_STOPPED') throw error;
-              failedSends += 1;
+              // PR-2, Việc 3 — trước đây continuous KHÔNG có trần: lỗi ném ra (SMTP/network không
+              // phân loại được thành bounce/config/quota) tính failedSends MỖI CHU KỲ dù còn thử lại
+              // vô hạn (bằng chứng production: hàng nghìn dòng failed lặp lại cho cùng một người).
+              // Theo khuôn zalo_personal (~5733-5846, CONTINUOUS_ZALO_MAX_SEND_FAILURES): dưới trần
+              // CONTINUOUS_EMAIL_MAX_SEND_FAILURES chỉ ghi bộ đếm vào ledger, KHÔNG cộng failedSends
+              // — chu kỳ continuous sau sẽ thử lại người này (nextDueAt giữ nguyên → due ngay).
+              // Tới trần mới cộng +1 và đánh dấu hoàn thành (completedStep = totalSteps) để dừng thử.
+              // One-shot GIỮ NGUYÊN (đếm ngay như trước) — one-shot không có continuous-resume để
+              // "để chu kỳ sau thử lại".
+              let shouldCountAsEmailFailure = true;
+              if (isContinuousMode && this.CONTINUOUS_EMAIL_MAX_SEND_FAILURES > 0) {
+                const emailRecipientKey = String(customer?.email || '').trim().toLowerCase();
+                const prevEmailFail = Math.max(0, Number.parseInt(progress?.emailSendFailureCount, 10) || 0);
+                const { nextFailureCount: nextEmailFail, abandon: shouldAbandonEmail } = (
+                  resolveZaloContinuousSendFailureProgress({
+                    prevFailureCount: prevEmailFail,
+                    maxFailures: this.CONTINUOUS_EMAIL_MAX_SEND_FAILURES,
+                  })
+                );
+                const emailFailTotalSteps = Math.max(1, Number.parseInt(totalSteps, 10) || 1);
+                const failureAt = toHoChiMinhIso();
+                shouldCountAsEmailFailure = shouldAbandonEmail;
+                if (shouldAbandonEmail) {
+                  // eslint-disable-next-line no-await-in-loop
+                  await upsertRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'email',
+                    recipientKey: emailRecipientKey,
+                    completedStep: emailFailTotalSteps,
+                    totalSteps: emailFailTotalSteps,
+                    firstSentAt: progress?.firstSentAt || failureAt,
+                    lastCompletedAt: failureAt,
+                    nextDueAt: null,
+                    emailSendFailureCount: nextEmailFail,
+                    emailAbandonReason: 'max_send_failures',
+                    lastFailureReason: 'send_error',
+                    lastFailureAt: failureAt,
+                  });
+                } else {
+                  // eslint-disable-next-line no-await-in-loop
+                  await upsertRecipientProgress({
+                    nodeId: node.id,
+                    channel: 'email',
+                    recipientKey: emailRecipientKey,
+                    completedStep: progress?.lastCompletedStep || 0,
+                    totalSteps: emailFailTotalSteps,
+                    firstSentAt: progress?.firstSentAt || null,
+                    lastCompletedAt: progress?.lastCompletedAt || null,
+                    nextDueAt: progress?.nextDueAt || null,
+                    emailSendFailureCount: nextEmailFail,
+                    lastFailureReason: 'send_error',
+                    lastFailureAt: failureAt,
+                  });
+                }
+              }
+              if (shouldCountAsEmailFailure) {
+                failedSends += 1;
+              }
               const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const failedPayload = {
                 to: customer.email,
@@ -4017,7 +4125,12 @@ class CampaignRunService {
                       emailSteps: [step],
                     },
                   };
-                  totalRecipients += 1;
+                  // PR-2 — chỉ cộng vào total khi lần đầu tiên thấy khách này ở node này (chưa có
+                  // dòng ledger nào, updatedAt===null); cộng đủ số bước MỘT LẦN, không cộng lại
+                  // mỗi chu kỳ continuous đến hạn cho cùng một khách đang ở bước đã biết.
+                  if (progress.updatedAt === null) {
+                    totalRecipients += loopEmailSteps.length;
+                  }
                   const sendOutcome = await sendEmailWithLogging({
                     customer,
                     runtimeNode,
@@ -4029,6 +4142,7 @@ class CampaignRunService {
                     progress,
                     // Continuous mode ưu tiên throughput, delay ngẫu nhiên được điều khiển bằng env.
                     applyRandomDelay: shouldApplyRandomDelayInContinuous(),
+                    totalSteps: loopEmailSteps.length,
                   });
                   if (sendOutcome?.success) {
                     const completedAtIso = toHoChiMinhIso();
@@ -4106,7 +4220,6 @@ class CampaignRunService {
           }
 
           if (emailSteps.length > 0) {
-            totalRecipients += dedupedRecipients.length * emailSteps.length;
             const stoppedRecipientKeys = new Set();
             /**
              * Gửi 1 step email cho toàn bộ người nhận, bảo đảm đúng thứ tự theo step.
@@ -4130,6 +4243,13 @@ class CampaignRunService {
                   channel: 'email',
                   recipientKey: customerKey,
                 });
+                // PR-2 — cộng total đúng MỘT LẦN cho toàn bộ số bước của khách này, ngay lúc lần
+                // đầu tiên thấy khách (chưa có dòng ledger nào). Trước đây cộng blanket
+                // dedupedRecipients.length × emailSteps.length TRƯỚC vòng lặp step nên mỗi lượt
+                // executeCampaign gọi lại (resume) cộng lại từ đầu cho MỌI khách kể cả đã xong.
+                if (progress.updatedAt === null) {
+                  totalRecipients += emailSteps.length;
+                }
                 if (!shouldProcessRecipientStep({
                   progress,
                   stepIndex,
@@ -4169,6 +4289,7 @@ class CampaignRunService {
                   },
                   progress,
                   applyRandomDelay: true,
+                  totalSteps: emailSteps.length,
                 });
                 if (sendOutcome?.stopRemainingStepsForRecipient) {
                   stoppedRecipientKeys.add(customerKey);
@@ -4227,7 +4348,6 @@ class CampaignRunService {
               await runEmailTemplateStep(emailSteps[stepIndex], stepIndex);
             }
           } else {
-            totalRecipients += dedupedRecipients.length;
             for (const customer of dedupedRecipients) {
               const customerKey = String(customer?.email || '').trim().toLowerCase();
               if (!customerKey) continue;
@@ -4237,6 +4357,10 @@ class CampaignRunService {
                 channel: 'email',
                 recipientKey: customerKey,
               });
+              // PR-2 — xem chú thích ở nhánh multi-step phía trên.
+              if (progress.updatedAt === null) {
+                totalRecipients += 1;
+              }
               if (!shouldProcessRecipientStep({
                 progress,
                 stepIndex: 0,
@@ -5856,7 +5980,16 @@ class CampaignRunService {
                 }
               }
 
-              failedSends += 1;
+              // PR-2 (đợt rà soát 26/09), Việc 3 — chỉ cộng failed ở đây khi KHÔNG còn lượt thử lại
+              // nào được ghi (hasRecordedFailureToLedger vẫn false nghĩa là trần đếm lỗi đang tắt,
+              // maxFailures<=0, nên đây là lần thử DUY NHẤT — kết cục cuối thật sự). Nếu đã ghi lại
+              // lỗi để retry (hasRecordedFailureToLedger=true) thì người-bước này còn hẹn thử lại,
+              // KHÔNG được tính failed ở đây — trước đây cộng vô điều kiện nên mỗi lần thử lại
+              // (chưa đạt trần ở Việc "abandon" phía trên) đều cộng thêm, làm failedSends phình lên
+              // nhiều hơn số người thật sự bị bỏ cuộc.
+              if (!hasRecordedFailureToLedger) {
+                failedSends += 1;
+              }
               const sentAt = toHoChiMinhIso();
 
               if (!hasRecordedFailureToLedger) {
@@ -6046,7 +6179,11 @@ class CampaignRunService {
                       skippedAlreadySentCount += 1;
                       return;
                     }
-                    totalRecipients += 1;
+                    // PR-2 — cộng đủ số bước MỘT LẦN khi lần đầu thấy người nhận, không cộng lại
+                    // mỗi chu kỳ continuous đến hạn cho cùng người nhận đang ở bước đã biết.
+                    if (progress.updatedAt === null) {
+                      totalRecipients += stepsWithMessage.length;
+                    }
                     const sendOutcome = await sendSingleRecipient({
                       recipient: normalizedRecipient,
                       message: renderedMessage,
@@ -6110,7 +6247,10 @@ class CampaignRunService {
                     skippedAlreadySentCount += 1;
                     return;
                   }
-                  totalRecipients += 1;
+                  // PR-2 — xem chú thích ở nhánh multi-step phía trên.
+                  if (progress.updatedAt === null) {
+                    totalRecipients += 1;
+                  }
                   const sendOutcome = await sendSingleRecipient({
                     recipient: normalizedRecipient,
                     message,
@@ -6168,8 +6308,6 @@ class CampaignRunService {
                 attachments: stepAttachments,
               });
             }
-            totalRecipients += dedupedRecipients.length * stepsWithMessage.length;
-
             /**
              * Một người nhận × một template step (non-continuous).
              * Pool đa TK: nhiều recipient chạy song song; mỗi TK vẫn bị giới hạn bởi `enforceZaloOutboundPolicyBeforeSend` riêng.
@@ -6187,6 +6325,12 @@ class CampaignRunService {
                 channel: 'zalo_personal',
                 recipientKey: normalizedRecipient,
               });
+              // PR-2 — cộng total đúng MỘT LẦN cho toàn bộ số bước của người nhận này, ngay lúc
+              // lần đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step
+              // nên mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI người nhận.
+              if (progress.updatedAt === null) {
+                totalRecipients += stepsWithMessage.length;
+              }
               if (!shouldProcessRecipientStep({
                 progress,
                 stepIndex,
@@ -6357,7 +6501,6 @@ class CampaignRunService {
             if (!message) {
               throw new Error('Thiếu nội dung tin nhắn Zalo');
             }
-            totalRecipients += dedupedRecipients.length;
             /**
              * Gửi một tin đơn (không multi-step) cho một recipient; tái dùng cho pool song song.
              *
@@ -6372,6 +6515,10 @@ class CampaignRunService {
                 channel: 'zalo_personal',
                 recipientKey: normalizedRecipient,
               });
+              // PR-2 — xem chú thích ở nhánh multi-step phía trên.
+              if (progress.updatedAt === null) {
+                totalRecipients += 1;
+              }
               if (!shouldProcessRecipientStep({
                 progress,
                 stepIndex: 0,
@@ -6677,7 +6824,11 @@ class CampaignRunService {
                 sendMode: 'all',
               });
               if (dedupedFriend) continue;
-              totalRecipients += 1;
+              // PR-2 — cộng đúng MỘT LẦN khi lần đầu thấy số này (chưa có dòng ledger), không cộng
+              // lại mỗi chu kỳ continuous đến hạn cho cùng số đang chờ.
+              if (progress.updatedAt === null) {
+                totalRecipients += 1;
+              }
             }
             let message = String(config.zaloFriendRequestMessage || '').trim();
             if (contentMode === 'template') {
@@ -6716,6 +6867,13 @@ class CampaignRunService {
             if (!message) {
               throw new Error(`Thiếu lời nhắn mời kết bạn cho số ${phone}`);
             }
+            // PR-2 (đợt rà soát 26/09) — CỐ Ý KHÔNG gate bằng "chưa có dòng ledger" như các nhánh
+            // khác trong file này: kết bạn one-shot không đọc/ghi recipientLedger ở đường này (chỉ
+            // nhánh continuous ở trên mới có `progress`/`getRecipientProgress`) — đây là lỗ hổng
+            // ĐÃ BIẾT (PLAN_VA_LOI_LUONG_TIEN_2026-09-26 PR-7 "Chống gửi đôi": "kết bạn one-shot
+            // không đọc ledger... → run 374: 22.856 lượt trên ~8.000 số"), chờ PR-7 thêm ledger
+            // trước. Gate ở đây bây giờ sẽ luôn đọc updatedAt===null (vì chưa từng ghi) nên không
+            // có tác dụng thật — chỉ tạo ảo giác đã dedupe. Giữ nguyên hành vi cũ tại điểm này.
             if (!isContinuousMode) {
               totalRecipients += 1;
             }
@@ -7260,7 +7418,10 @@ class CampaignRunService {
                       lastFailureReason: retryFailureReason,
                       lastFailureAt: toHoChiMinhIso(),
                     });
-                    failedSends += 1;
+                    // PR-2 (đợt rà soát 26/09), Việc 3 — nhánh này (chưa đạt ngưỡng abandon) LUÔN
+                    // còn lượt thử lại (nextDueAt vừa ghi ở trên), không phải kết cục cuối — trước
+                    // đây cộng vô điều kiện nên mỗi vòng thử lại (tới khi đạt trần ở nhánh abandon
+                    // phía trên) đều cộng thêm, làm failedSends phình lên nhiều lần cho CÙNG một số.
                     const progressMessage = `Đã xử lý ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                     const failedPayload = {
                       channel: 'zalo_friend_request',
@@ -7981,7 +8142,11 @@ class CampaignRunService {
                       sendMode,
                     });
                     if (dedupedZaloGroup) return;
-                    totalRecipients += 1;
+                    // PR-2 — cộng đủ số bước MỘT LẦN khi lần đầu thấy nhóm này, không cộng lại mỗi
+                    // chu kỳ continuous đến hạn cho cùng nhóm đang ở bước đã biết.
+                    if (progress.updatedAt === null) {
+                      totalRecipients += stepsWithMessage.length;
+                    }
                     const sendOutcome = await sendSingleGroup({
                       groupId: normalizedGroupId,
                       message: renderedMessage,
@@ -8040,7 +8205,10 @@ class CampaignRunService {
                     sendMode: 'all',
                   });
                   if (dedupedZaloGroupSingle) return;
-                  totalRecipients += 1;
+                  // PR-2 — xem chú thích ở nhánh multi-step phía trên.
+                  if (progress.updatedAt === null) {
+                    totalRecipients += 1;
+                  }
                   const sendOutcome = await sendSingleGroup({
                     groupId: normalizedGroupId,
                     message,
@@ -8097,8 +8265,6 @@ class CampaignRunService {
                 attachments: stepAttachments,
               });
             }
-            totalRecipients += dedupedGroupIds.length * stepsWithMessage.length;
-
             /**
              * Gửi 1 template step cho toàn bộ nhóm, mỗi nhóm cách nhau 5-10 giây.
              *
@@ -8122,6 +8288,12 @@ class CampaignRunService {
                   channel: 'zalo_group',
                   recipientKey: normalizedGroupId,
                 });
+                // PR-2 — cộng total đúng MỘT LẦN cho toàn bộ số bước của nhóm này, ngay lúc lần
+                // đầu thấy (chưa có dòng ledger). Trước đây cộng blanket TRƯỚC vòng lặp step nên
+                // mỗi lượt gọi lại (resume) cộng lại từ đầu cho MỌI nhóm.
+                if (progress.updatedAt === null) {
+                  totalRecipients += stepsWithMessage.length;
+                }
                 if (!shouldProcessRecipientStep({
                   progress,
                   stepIndex,
@@ -8219,7 +8391,6 @@ class CampaignRunService {
             if (!message) {
               throw new Error('Thiếu nội dung tin nhắn nhóm');
             }
-            totalRecipients += dedupedGroupIds.length;
             for (const groupId of dedupedGroupIds) {
               const normalizedGroupId = String(groupId || '').trim();
               if (!normalizedGroupId) continue;
@@ -8229,6 +8400,10 @@ class CampaignRunService {
                 channel: 'zalo_group',
                 recipientKey: normalizedGroupId,
               });
+              // PR-2 — xem chú thích ở nhánh multi-step phía trên.
+              if (progress.updatedAt === null) {
+                totalRecipients += 1;
+              }
               if (!shouldProcessRecipientStep({
                 progress,
                 stepIndex: 0,
@@ -8397,7 +8572,7 @@ class CampaignRunService {
         nonContinuousDeferPatch
       );
 
-      await campaignCrudRepository.updateCampaignLastRunStats(campaignId, successfulSends);
+      await campaignCrudRepository.updateCampaignLastRunStats(campaignId);
 
       if (hasPendingRecipientDue && !isContinuousMode) {
         const ledgerRetryHint = pendingRecipientWithRetryMetaInLedger !== null

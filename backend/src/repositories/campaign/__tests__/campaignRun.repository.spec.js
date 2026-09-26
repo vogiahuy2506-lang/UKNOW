@@ -64,3 +64,22 @@ describe('CampaignRunRepository finalizeRun', () => {
     ]);
   });
 });
+
+describe('CampaignRunRepository getRunForExecution', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  // PR-2 — thiếu total_recipients/skipped_sends trong SELECT này khiến cả hai bộ đếm về 0 mỗi
+  // lượt gọi lại (resume) dù DB đã có giá trị cộng dồn từ lượt trước (Việc 1 của PR-2).
+  it('SELECT phải kèm total_recipients và skipped_sends để service nạp đúng khi resume', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 200 }] });
+
+    await campaignRunRepository.getRunForExecution(200);
+
+    expect(mockQuery).toHaveBeenCalledTimes(1);
+    const [sql] = mockQuery.mock.calls[0];
+    expect(sql).toContain('total_recipients');
+    expect(sql).toContain('skipped_sends');
+  });
+});
