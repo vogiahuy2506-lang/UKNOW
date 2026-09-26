@@ -31,6 +31,7 @@ jest.unstable_mockModule('../../middleware/rateLimiter.middleware.js', () => ({
   marketplacePurchaseLimiter: (req, res, next) => next(),
   webhookLimiter: (req, res, next) => next(),
   publicLeadLimiter: (req, res, next) => next(),
+  paymentStatusLimiter: (req, res, next) => next(),
 }));
 
 // Mock AI credit check

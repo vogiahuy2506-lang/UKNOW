@@ -56,7 +56,6 @@ const CheckoutPage = () => {
     const { t } = useI18n();
     const location = useLocation();
     const navigate = useNavigate();
-    const pollingRef = useRef(null);
 
     const plan = location.state?.plan;
     const isCustomPlan = Boolean(location.state?.isCustomPlan);
@@ -407,27 +406,68 @@ const CheckoutPage = () => {
         }
     };
 
+    // PR-7 (PLAN_VA_LOI_LUONG_TIEN_2026-09-26) — setInterval cố định 3 giây trước đây không thể
+    // giãn nhịp khi bị 429, và catch nuốt MỌI lỗi im lặng (kể cả 429) nên trang kẹt mãi ở QR dù
+    // webhook đã kích hoạt gói xong. Đổi sang setTimeout tự lên lịch lại để có thể tăng nhịp chờ
+    // sau 429, và dừng hẳn khi QR đã hết hạn (không còn gì để hỏi nữa).
     useEffect(() => {
         if (!orderCode) return;
 
-        pollingRef.current = setInterval(async () => {
+        let cancelled = false;
+        let timeoutId = null;
+        let currentIntervalMs = 3000;
+        const MAX_INTERVAL_MS = 30000;
+        let hasWarnedRateLimited = false;
+
+        const scheduleNext = () => {
+            if (cancelled) return;
+            timeoutId = setTimeout(poll, currentIntervalMs);
+        };
+
+        const poll = async () => {
+            if (cancelled) return;
+            // Hết hạn QR thì dừng hỏi hẳn — không còn giao dịch nào để kiểm tra trạng thái.
+            if (expiredAt !== null && Date.now() >= expiredAt * 1000) {
+                return;
+            }
             try {
                 const data = await checkoutApiService.getPaymentStatus(orderCode);
+                currentIntervalMs = 3000; // request qua được thì về lại nhịp bình thường
                 if (data.status === 'success') {
-                    clearInterval(pollingRef.current);
+                    cancelled = true;
                     navigate('/payment-success', { state: { orderCode, fromCheckout: true } });
+                    return;
                 } else if (data.status === 'cancelled') {
-                    clearInterval(pollingRef.current);
+                    cancelled = true;
                     toast.error(t('checkout.transactionCancelled'));
+                    return;
                 }
-            } catch {
-                // Bỏ qua lỗi mạng tạm thời
+            } catch (err) {
+                if (err?.response?.status === 429) {
+                    currentIntervalMs = Math.min(currentIntervalMs * 2, MAX_INTERVAL_MS);
+                    if (!hasWarnedRateLimited) {
+                        hasWarnedRateLimited = true;
+                        toast(t('checkout.statusCheckDelayed'));
+                    }
+                    console.warn('[CheckoutPage] Kiểm tra trạng thái bị giới hạn tốc độ (429) — giãn nhịp hỏi:', currentIntervalMs);
+                }
+                // Lỗi mạng tạm thời khác: không nuốt im lặng, chỉ log để dò khi cần — vẫn hỏi
+                // tiếp đúng nhịp hiện tại, không dừng hẳn phiên chờ vì một lần lỗi thoáng qua.
+                else {
+                    console.warn('[CheckoutPage] Lỗi kiểm tra trạng thái thanh toán (sẽ thử lại):', err?.message || err);
+                }
             }
-        }, 3000);
+            scheduleNext();
+        };
 
-        return () => clearInterval(pollingRef.current);
+        scheduleNext();
+
+        return () => {
+            cancelled = true;
+            if (timeoutId) clearTimeout(timeoutId);
+        };
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [orderCode]);
+    }, [orderCode, expiredAt]);
 
     if (!isCustomPlan && !plan) return null;
 

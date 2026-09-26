@@ -1,5 +1,6 @@
 import rateLimit, { ipKeyGenerator } from 'express-rate-limit';
 import { renderLeadUnsubscribeHtml } from '../utils/leadUnsubscribeHtml.util.js';
+import { getPayosPendingWindowMinutes } from '../repositories/voucher.repository.js';
 
 const isTest = process.env.NODE_ENV === 'test';
 const skipInTest = () => isTest;
@@ -224,6 +225,39 @@ export const sseLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   keyGenerator: (req) => rateLimitKeyForRequest(req, 'sse:'),
+});
+
+// Trạng thái thanh toán PayOS — public, không auth (CheckoutPage hỏi mỗi 3 giây, PayOS
+// returnUrl cũng gọi được không token). PR-7 (PLAN_VA_LOI_LUONG_TIEN_2026-09-26) — trước đây dùng
+// chung publicLeadLimiter (25 lần/15 phút/IP), để QR mở 90 giây đã hỏi tới ~30 lần và bắt đầu
+// dính 429 (sandbox u1-buy-starter.mjs 90: 39 lượt hỏi, 14 lượt 429), CheckoutPage lại nuốt lỗi
+// im lặng nên trang kẹt mãi ở QR dù webhook đã kích hoạt gói. Vẫn PHẢI có trần (endpoint công
+// khai) — chỉ tách bucket riêng và nới đủ rộng, không bỏ hẳn limiter.
+//
+// Phép tính: nhịp hỏi cố định 3 giây/lần (CheckoutPage.jsx, setInterval 3000ms) × thời hạn một mã
+// QR PayOS (getPayosPendingWindowMinutes(), mặc định 15 phút = 900 giây, đổi được qua
+// PAYOS_PENDING_WINDOW_MINUTES — dùng CHÍNH hằng số này cho cả windowMs lẫn max để hai giá trị
+// luôn cùng tỉ lệ nếu ai đổi biến môi trường đó sau này).
+//   max = ceil(thời_hạn_QR_giây / nhịp_hỏi_giây) = ceil(900 / 3) = 300
+// Đủ cho MỘT phiên hỏi liên tục từ lúc mở QR tới lúc QR hết hạn, cho một địa chỉ IP.
+export const PAYMENT_STATUS_POLL_INTERVAL_SECONDS = 3;
+export const PAYMENT_STATUS_WINDOW_MS = getPayosPendingWindowMinutes() * 60 * 1000;
+export const PAYMENT_STATUS_MAX = Math.ceil(
+  (PAYMENT_STATUS_WINDOW_MS / 1000) / PAYMENT_STATUS_POLL_INTERVAL_SECONDS
+);
+
+export const paymentStatusLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: PAYMENT_STATUS_WINDOW_MS,
+  max: PAYMENT_STATUS_MAX,
+  message: {
+    success: false,
+    message: 'Quá nhiều lần kiểm tra trạng thái thanh toán. Vui lòng thử lại sau ít phút.',
+    code: 'PAYMENT_STATUS_RATE_LIMIT_EXCEEDED',
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => `payment-status:${clientIpKey(req)}`,
 });
 
 // Public lead capture — chống flood/spam form (không auth)

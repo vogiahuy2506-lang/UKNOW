@@ -3160,6 +3160,7 @@ export default {
     userEmailNotFound: 'User email not found. Please log in again.',
     createOrderFailed: 'Failed to create order. Please try again.',
     transactionCancelled: 'Transaction has been cancelled',
+    statusCheckDelayed: 'Status checks are slowing down after too many requests — it will keep retrying automatically.',
     changePlan: 'Change service plan',
     registrationDetails: 'Registration Details',
     membershipPlan: 'Membership Plan',
