@@ -136,6 +136,36 @@ describe('PR-5 Việc 5.1 — retryFailedEinvoices không tự khoá chính nó 
     expect(second.scanned).toBe(0);
   });
 
+  it('nhiều hoá đơn kẹt → MỘT lượt cron gỡ hết, mỗi hoá đơn gọi Mắt Bão đúng 1 lần', async () => {
+    // Review PR-5: đột biến "chỉ xử lý phần tử đầu danh sách" từng lọt vì các ca khác chỉ có 1 hàng.
+    const user = await createUser({ username: 'einvoice-retry-many' });
+    const orderA = await insertPaidOrder({ user, orderCode: 9100011 });
+    const orderB = await insertPaidOrder({ user, orderCode: 9100012 });
+    await insertEinvoice(orderA, { status: 'failed', error_code: 'timeout' });
+    await insertEinvoice(orderB, { status: 'failed', error_code: 'timeout' });
+
+    mockCreateInvoices
+      .mockResolvedValueOnce({
+        status: 200,
+        body: { errorCode: '200', maSoHdon: 'MSO-M1', soHdon: '11', pdfUrl: 'https://x/11.pdf' },
+      })
+      .mockResolvedValueOnce({
+        status: 200,
+        body: { errorCode: '200', maSoHdon: 'MSO-M2', soHdon: '12', pdfUrl: 'https://x/12.pdf' },
+      });
+
+    const run = await runCronForReal({ limit: 20 });
+    expect(run.scanned).toBe(2);
+    expect(run.issued).toBe(2);
+    expect(mockCreateInvoices).toHaveBeenCalledTimes(2);
+
+    const { rows } = await db.query(
+      'SELECT status FROM einvoices WHERE order_id = ANY($1::int[]) ORDER BY order_id',
+      [[orderA.id, orderB.id]],
+    );
+    expect(rows.map((r) => r.status)).toEqual(['issued', 'issued']);
+  });
+
   it('processing quá hạn lease (row từng bị "claim rồi bỏ rơi" — đúng dạng bug gốc) vẫn được nhặt lại và gọi Mắt Bão đúng 1 lần', async () => {
     const user = await createUser({ username: 'einvoice-retry-2' });
     const order = await insertPaidOrder({ user, orderCode: 9100002 });
