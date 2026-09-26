@@ -342,16 +342,25 @@ export async function claimEinvoiceByIdForIssue(einvoiceId, queryable = db) {
 }
 
 /**
- * Atomically claim one dispatchable job → processing.
+ * PR-5 Việc 5.1 — liệt kê id đủ điều kiện retry KHÔNG đổi trạng thái (không UPDATE, không
+ * FOR UPDATE). Trước đây retryFailedEinvoices() dùng claimNextEinvoiceJob() ở đây rồi
+ * dispatchPreparedEinvoice() lại tự claim lần hai bằng claimEinvoiceByIdForIssue() — lần
+ * hai luôn thấy row vừa bị lần đầu đặt processing_started_at=NOW() nên "not_claimable",
+ * không bao giờ gọi Mắt Bão, nhưng lần đầu đã làm mới processing_started_at nên hàng không
+ * bao giờ bị tính stale/timeout ở lượt cron kế — kẹt vĩnh viễn, tự làm mới chính nó.
+ * Sửa bằng cách tách "biết id nào đủ điều kiện" (đọc thuần, hàm này) ra khỏi "claim" (vẫn
+ * là claimEinvoiceByIdForIssue() bên trong dispatchPreparedEinvoice(), atomic đúng MỘT lần).
+ * Không khoá hàng ở đây: hai lượt cron trùng nhau có thể cùng liệt kê cùng id, nhưng chỉ
+ * một trong hai thắng được ở bước claim (FOR UPDATE SKIP LOCKED) — chống double-create vẫn
+ * nguyên vẹn, chỉ chuyển điểm khoá về đúng chỗ (claim), không phải chỗ liệt kê.
  */
-export async function claimNextEinvoiceJob({ limit = 1 } = {}, queryable = db) {
+export async function listClaimableEinvoiceJobIds({ limit = 1 } = {}, queryable = db) {
   const leaseMinutes = LEASE_MINUTES();
   const codes = [...RETRYABLE_MATBAO_ERROR_CODES];
   const { rows } = await queryable.query(
-    `WITH candidate AS (
-       SELECT e.id
+    `SELECT e.id, e.status, e.error_code
        FROM einvoices e
-       WHERE (
+      WHERE (
          (e.status = 'pending' AND (e.next_attempt_at IS NULL OR e.next_attempt_at <= NOW()))
          OR (
            e.status = 'failed'
@@ -363,19 +372,9 @@ export async function claimNextEinvoiceJob({ limit = 1 } = {}, queryable = db) {
            AND e.processing_started_at IS NOT NULL
            AND e.processing_started_at < NOW() - ($3 || ' minutes')::interval
          )
-       )
-       ORDER BY COALESCE(e.next_attempt_at, e.updated_at) ASC
-       FOR UPDATE SKIP LOCKED
-       LIMIT $1
-     )
-     UPDATE einvoices e
-        SET status = 'processing',
-            processing_started_at = NOW(),
-            attempt_count = attempt_count + 1,
-            updated_at = NOW()
-       FROM candidate
-      WHERE e.id = candidate.id
-      RETURNING e.*`,
+      )
+      ORDER BY COALESCE(e.next_attempt_at, e.updated_at) ASC
+      LIMIT $1`,
     [Math.max(1, limit), codes, String(leaseMinutes)],
   );
   return rows;
@@ -563,7 +562,7 @@ export async function listMissingEinvoiceIntents({
   return rows;
 }
 
-/** @deprecated Prefer claimNextEinvoiceJob — kept for older tests. */
+/** @deprecated Prefer listClaimableEinvoiceJobIds + dispatchPreparedEinvoice — kept for older tests. */
 export async function listRetryableFailedEinvoices({ limit = 20 } = {}, queryable = db) {
   const codes = [...RETRYABLE_MATBAO_ERROR_CODES];
   const { rows } = await queryable.query(
@@ -579,7 +578,7 @@ export async function listRetryableFailedEinvoices({ limit = 20 } = {}, queryabl
   return rows;
 }
 
-/** @deprecated Prefer claimNextEinvoiceJob */
+/** @deprecated Prefer listClaimableEinvoiceJobIds + dispatchPreparedEinvoice */
 export async function resetEinvoiceForRetry(id, queryable = db) {
   const { rows } = await queryable.query(
     `UPDATE einvoices SET

@@ -8,7 +8,7 @@ import {
   markEinvoiceIssued,
   markEinvoiceFailed,
   claimEinvoiceByIdForIssue,
-  claimNextEinvoiceJob,
+  listClaimableEinvoiceJobIds,
   claimEinvoiceByIdForEmail,
   claimNextEinvoiceEmailJob,
   markEinvoiceEmailSent,
@@ -498,7 +498,15 @@ export async function sendInvoicePdfForEinvoice(einvoiceId) {
 }
 
 /**
- * Cron: claim + dispatch pending/failed/lease-expired jobs.
+ * Cron: liệt kê rồi dispatch pending/failed/lease-expired jobs.
+ *
+ * PR-5 Việc 5.1 — trước đây hàm này tự claim (claimNextEinvoiceJob, đặt processing_started_at=
+ * NOW()) RỒI dispatchPreparedEinvoice() bên dưới lại tự claim LẦN HAI (claimEinvoiceByIdForIssue).
+ * Lần hai luôn thấy row vừa mới được lần đầu đặt "processing" nên trả not_claimable — không bao
+ * giờ gọi Mắt Bão — nhưng lần đầu đã làm mới processing_started_at nên hàng không bao giờ bị tính
+ * stale ở lượt cron kế: kẹt vĩnh viễn, tự làm mới chính nó mỗi lượt chạy. Sửa bằng cách CHỈ liệt kê
+ * id đủ điều kiện ở đây (đọc thuần, không đổi trạng thái), để dispatchPreparedEinvoice() claim
+ * đúng MỘT lần bên trong nó — nơi duy nhất còn giữ FOR UPDATE SKIP LOCKED.
  */
 export async function retryFailedEinvoices({ limit = 20 } = {}) {
   if (process.env.NODE_ENV === 'test') {
@@ -508,16 +516,16 @@ export async function retryFailedEinvoices({ limit = 20 } = {}) {
     return { scanned: 0, retried: 0, issued: 0, skipped: 0, disabled: true };
   }
 
-  const claimed = await claimNextEinvoiceJob({ limit });
+  const candidates = await listClaimableEinvoiceJobIds({ limit });
   const summary = {
-    scanned: claimed.length,
-    retried: claimed.length,
+    scanned: candidates.length,
+    retried: candidates.length,
     issued: 0,
     skipped: 0,
     errors: 0,
   };
 
-  for (const row of claimed) {
+  for (const row of candidates) {
     if (row.error_code && !RETRYABLE_MATBAO_ERROR_CODES.has(String(row.error_code))
       && row.status === 'failed') {
       summary.skipped += 1;

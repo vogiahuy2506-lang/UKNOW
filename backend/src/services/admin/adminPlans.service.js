@@ -20,6 +20,7 @@ import { findUserById } from '../../repositories/user/user.repository.js';
 import { expireUserPlan } from '../../repositories/subscription/subscription.repository.js';
 import { scheduledPlanChangeRepository } from '../../repositories/payment/scheduledPlanChange.repository.js';
 import { reconcileResourceLocks } from '../payment/topupLock.service.js';
+import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
 import db from '../../config/database.js';
 import payosClient from '../../utils/payos.util.js';
 
@@ -354,7 +355,20 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
 
     orderCode = Date.now();
     const amount = Math.round(Number(plan.price));
-    await createOrder({ orderCode, planId: plan.id, amount, userEmail: user.email, userId: user.id });
+    // PR-5 Việc 5.2 — đơn tạo qua đường admin trước đây KHÔNG kèm invoiceInfo nên cổng ý định
+    // (hasInvoiceIntent, matbaoInvoice.service.js) coi là "không có ý định" và không bao giờ
+    // xuất hoá đơn, kể cả khi đơn đã trả tiền thật. Dùng lại đúng cổng ý định checkout thường
+    // (resolveOrderAmountWithInvoice, invoiceVat.util.js) với buyerType:'consumer' — tự động ra
+    // wantInvoice:true + deliverEmail:false + taxType:'KCT', giống hệt đơn "khách không lấy hoá
+    // đơn" ở checkout. amount không đổi (KCT: gross === net), chỉ thêm invoiceInfo vào đơn.
+    const { invoiceInfo } = resolveOrderAmountWithInvoice(
+      { buyerType: 'consumer' },
+      amount,
+      { accountEmail: user.email },
+    );
+    await createOrder({
+      orderCode, planId: plan.id, amount, userEmail: user.email, userId: user.id, invoiceInfo,
+    });
   } catch (err) {
     if (plan?.id) {
       try { await deletePlan(plan.id); } catch { /* best-effort cleanup */ }
