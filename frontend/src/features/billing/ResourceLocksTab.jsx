@@ -123,7 +123,10 @@ const ResourceLocksTab = ({ t }) => {
       {keys.map((resourceKey) => {
         const block = overview[resourceKey];
         if (!block?.items?.length) return null;
-        const ceiling = Number(block.effectiveCeiling) || 0;
+        // effectiveCeiling: null = tài nguyên KHÔNG giới hạn (backend ép rõ, xem topupLock.service.js
+        // getLockOverview). Trước đây Number(null)||0 = 0 khoá nhầm ô chọn cho gói enterprise/custom.
+        const isUnlimited = block.effectiveCeiling === null || block.effectiveCeiling === undefined;
+        const ceiling = isUnlimited ? Infinity : (Number(block.effectiveCeiling) || 0);
         const keep = new Set(draftKeep[resourceKey] || []);
         return (
           <section key={resourceKey} className="rounded-xl border border-slate-200 bg-white p-4">
@@ -132,11 +135,13 @@ const ResourceLocksTab = ({ t }) => {
                 {t(RESOURCE_LABEL_KEYS[resourceKey] || resourceKey)}
               </h3>
               <p className="text-xs text-slate-500">
-                {t('resourceLocks.ceiling', {
-                  keep: keep.size,
-                  max: ceiling,
-                  grants: block.activeGrants || 0,
-                })}
+                {isUnlimited
+                  ? t('resourceLocks.ceilingUnlimited', { keep: keep.size })
+                  : t('resourceLocks.ceiling', {
+                    keep: keep.size,
+                    max: ceiling,
+                    grants: block.activeGrants || 0,
+                  })}
               </p>
             </div>
             <ul className="space-y-2">

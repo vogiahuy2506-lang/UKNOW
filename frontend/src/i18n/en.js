@@ -5515,6 +5515,8 @@ export default {
     chatbots: 'Chatbots',
     employees: 'Employees',
     ceiling: 'Keeping {keep}/{max} (includes {grants} active add-on slots)',
+    ceilingUnlimited: 'Keeping {keep} (unlimited)',
+    unlimited: 'Unlimited',
     locked: 'Locked',
     aboutToLock: 'About to be locked',
     graceTitle: 'Plan downgrade grace period (7 days)',

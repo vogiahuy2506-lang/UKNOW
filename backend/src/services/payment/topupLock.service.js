@@ -215,10 +215,14 @@ export async function getLockOverview(userId, queryable = db) {
       PLAN_CEILING[resourceKey](userId, queryable),
       sumActiveTopupGrants(userId, resourceKey, queryable),
     ]);
+    // "Nợ nhỏ" 26/09 — Infinity (tài nguyên không giới hạn) qua JSON.stringify() ngầm định thành
+    // null, nhưng đây là hệ quả PHỤ của một quirk serialize, không phải hợp đồng rõ ràng: đọc trực
+    // tiếp object này TRƯỚC khi qua res.json() (vd trong test) vẫn thấy Infinity, không phải null.
+    // Ép null tường minh ở đây để FE (ResourceLocksTab.jsx) và mọi test đều thấy CÙNG MỘT giá trị.
     overview[resourceKey] = {
       items,
-      effectiveCeiling,
-      planCeiling: Math.max(0, planCeiling),
+      effectiveCeiling: Number.isFinite(effectiveCeiling) ? effectiveCeiling : null,
+      planCeiling: Number.isFinite(planCeiling) ? Math.max(0, planCeiling) : null,
       activeGrants: Math.max(0, Number(grants) || 0),
     };
   }

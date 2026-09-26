@@ -93,6 +93,57 @@ describe('normalizeCeiling — PR-3, Việc 3.2 (hợp đồng NULL/-1 = không 
   });
 });
 
+// "Nợ nhỏ" 26/09 — Infinity qua JSON.stringify() ngầm định thành null, tab "Tài nguyên bị khoá" đọc
+// Number(null)||0 = 0 → khoá nhầm ô chọn cho tài nguyên KHÔNG giới hạn (4 chủ enterprise + 1 custom
+// có max_chatbots NULL trên production). getLockOverview() phải tự ép null tường minh, không dựa
+// vào quirk serialize của JSON.
+describe('getLockOverview — trả null tường minh cho tài nguyên không giới hạn (không phải Infinity)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSumActive.mockResolvedValue(0);
+  });
+
+  it('cột NULL (không giới hạn) -> effectiveCeiling/planCeiling = null, KHÔNG phải Infinity', async () => {
+    mockGetPlan.mockResolvedValue({ max_chatbots: null, max_employees: null });
+    mockQueryable.query.mockImplementation(async (sql) => {
+      const s = String(sql);
+      if (s.includes('overage_grace_until')) return { rows: [{ overage_grace_until: null }] };
+      if (s.includes('max_zalo_accounts')) return { rows: [{ max_zalo_accounts: null }] };
+      if (s.includes('max_email_accounts')) return { rows: [{ max_email_accounts: null }] };
+      if (s.includes('max_landing_pages')) return { rows: [{ max_landing_pages: null }] };
+      return { rows: [] };
+    });
+
+    const overview = await getLockOverview(99, mockQueryable);
+
+    for (const key of ['zalo_accounts', 'email_accounts', 'landing_pages', 'chatbots', 'employees']) {
+      expect(overview[key].effectiveCeiling).toBeNull();
+      expect(overview[key].planCeiling).toBeNull();
+      // Object.is phân biệt được: nếu code lỡ trả Infinity thì .toBeNull() đã đỏ ở trên, nhưng
+      // kiểm thêm typeof để chặn trường hợp JSON.stringify từng làm im lặng một giá trị sai kiểu.
+      expect(overview[key].effectiveCeiling).not.toBe(Infinity);
+    }
+  });
+
+  it('cột có số bình thường -> effectiveCeiling/planCeiling vẫn là số, không bị ép về null', async () => {
+    mockGetPlan.mockResolvedValue({ max_chatbots: 3, max_employees: 2 });
+    mockQueryable.query.mockImplementation(async (sql) => {
+      const s = String(sql);
+      if (s.includes('overage_grace_until')) return { rows: [{ overage_grace_until: null }] };
+      if (s.includes('max_zalo_accounts')) return { rows: [{ max_zalo_accounts: 1 }] };
+      if (s.includes('max_email_accounts')) return { rows: [{ max_email_accounts: 1 }] };
+      if (s.includes('max_landing_pages')) return { rows: [{ max_landing_pages: 1 }] };
+      return { rows: [] };
+    });
+
+    const overview = await getLockOverview(99, mockQueryable);
+
+    expect(overview.chatbots.effectiveCeiling).toBe(3);
+    expect(overview.chatbots.planCeiling).toBe(3);
+    expect(overview.employees.effectiveCeiling).toBe(2);
+  });
+});
+
 describe('reconcileResourceLocks', () => {
   beforeEach(() => {
     jest.clearAllMocks();
