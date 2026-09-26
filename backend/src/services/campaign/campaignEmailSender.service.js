@@ -1,6 +1,7 @@
 import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
+import campaignRunRepository from '../../repositories/campaign/campaignRun.repository.js';
 import emailSettingsController from '../../controllers/emailSettings.controller.js';
 import emailSettingsSmtpService from '../email/emailSettingsSmtp.service.js';
 import campaignFlowService from './campaignFlow.service.js';
@@ -28,6 +29,21 @@ import {
 } from '../quota/sendQuotaReservation.service.js';
 import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
 import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
+
+// PR-1 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26), Việc 2 — lỗi ghi log email_messages trước đây
+// chỉ console.error, vô hình với chủ chiến dịch/vận hành. Ghi vào run_metadata để lộ ra trang
+// giám sát. patchRunMetadata chỉ UPDATE khi run còn 'running' (đúng lúc các catch này được gọi,
+// giữa lúc đang gửi) — không chặn luồng gửi nếu patch lỗi.
+async function recordMessageLogFailure(runId, err) {
+  try {
+    await campaignRunRepository.patchRunMetadata(runId, {
+      lastMessageLogError: String(err?.message || err || '').slice(0, 200),
+      lastMessageLogErrorAt: new Date().toISOString(),
+    });
+  } catch (patchErr) {
+    console.error(`[CampaignEmailSender] Không ghi được lastMessageLogError cho run=${runId}:`, patchErr.message);
+  }
+}
 
 class CampaignEmailSenderService {
   constructor() {
@@ -992,6 +1008,7 @@ class CampaignEmailSenderService {
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
           console.error('[sendEmailToCustomer] Lỗi ghi log SMTP config error:', logErr.message);
+          await recordMessageLogFailure(runId, logErr);
         }
 
         return {
@@ -1036,6 +1053,7 @@ class CampaignEmailSenderService {
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
           console.error('[sendEmailToCustomer] Lỗi ghi log SMTP delivery error:', logErr.message);
+          await recordMessageLogFailure(runId, logErr);
         }
 
         return {
@@ -1149,6 +1167,7 @@ class CampaignEmailSenderService {
           );
         } catch (logErr) {
           console.error('[sendEmailToCustomer] Lỗi ghi log bounce:', logErr.message);
+          await recordMessageLogFailure(runId, logErr);
         }
       }
 
@@ -1172,7 +1191,11 @@ class CampaignEmailSenderService {
     });
 
     const sentAt = new Date();
-    const shouldSaveMessageLog = config.saveMessageLog !== false;
+    // PR-1 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — lịch sử gửi PHẢI luôn được ghi (hạn mức
+    // gói/ngày đếm theo email_messages, tracking mở/nhấp cần dòng theo tracking_token, trang
+    // Hiệu quả đọc từ đây). Toggle "Lưu lịch sử" giờ chỉ quyết định có LƯU NỘI DUNG THƯ hay
+    // không — không còn quyết định có ghi dòng hay không. Đổi tên từ shouldSaveMessageLog.
+    const shouldStoreBody = config.saveMessageLog !== false;
     if (reservationActive) {
       // Reservation đã "sending" — provider vừa xác nhận nhận email (accepted). Luôn consume để
       // đóng lease dù có ghi log DB hay không (đã dùng quota thật, không được để trống quota).
@@ -1188,37 +1211,35 @@ class CampaignEmailSenderService {
             provider: 'smtp',
             sentAt: sentAt.toISOString(),
           },
-          persistSource: shouldSaveMessageLog
-            ? (client) => emailSettingsSmtpService.logEmailSentWithClient(client, {
-                userId: campaign.id_user,
-                workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
-                actorUserId: campaign.created_by || campaign.id_user,
-                campaignId: campaign.id,
-                customerId,
-                emailTemplateId: templateId,
-                fromEmailId: settings.id,
-                to: customer.email,
-                subject,
-                trackedHtmlContent,
-                plainTextContent: textBody,
-                trackingToken,
-                info,
-                sentAt,
-                setting: settings,
-                runId,
-                nodeId: logNodeIdForDb,
-                emailStep: logEmailStepForDb,
-                fromAddress,
-                brandDomain,
-                quotaReservationId: reservation.id,
-              })
-            : null,
+          persistSource: (client) => emailSettingsSmtpService.logEmailSentWithClient(client, {
+            userId: campaign.id_user,
+            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+            actorUserId: campaign.created_by || campaign.id_user,
+            campaignId: campaign.id,
+            customerId,
+            emailTemplateId: templateId,
+            fromEmailId: settings.id,
+            to: customer.email,
+            subject,
+            trackedHtmlContent: shouldStoreBody ? trackedHtmlContent : null,
+            plainTextContent: shouldStoreBody ? textBody : null,
+            trackingToken,
+            info,
+            sentAt,
+            setting: settings,
+            runId,
+            nodeId: logNodeIdForDb,
+            emailStep: logEmailStepForDb,
+            fromAddress,
+            brandDomain,
+            quotaReservationId: reservation.id,
+          }),
         });
       } catch (consumeErr) {
         console.warn('[CampaignEmailSender] consumeSendQuota failed after successful provider send:', consumeErr.message);
         await markUncertainReservation('CONSUME_DB_FAILED', consumeErr.message);
       }
-    } else if (shouldSaveMessageLog) {
+    } else {
       try {
         await emailSettingsController.logEmailSent({
           userId: campaign.id_user,
@@ -1230,8 +1251,8 @@ class CampaignEmailSenderService {
           fromEmailId: settings.id,
           to: customer.email,
           subject,
-          trackedHtmlContent,
-          plainTextContent: textBody,
+          trackedHtmlContent: shouldStoreBody ? trackedHtmlContent : null,
+          plainTextContent: shouldStoreBody ? textBody : null,
           trackingToken,
           info,
           sentAt,
@@ -1245,6 +1266,7 @@ class CampaignEmailSenderService {
         });
       } catch (logError) {
         console.error('[sendEmailToCustomer] Lỗi lưu log:', logError.message);
+        await recordMessageLogFailure(runId, logError);
       }
     }
 

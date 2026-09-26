@@ -5101,7 +5101,7 @@ export default {
       fromEmail: 'From Email (Configured SMTP)',
       selectFromEmail: '-- Select sender email --',
       noActiveSmtp: 'No active SMTP found. Go to Email Settings to add and enable "active" status.',
-      saveMessageHistory: 'Save sent message history for each customer',
+      saveMessageHistory: 'Keep email body in send history (history is always recorded)',
       recipientEmailLabel: 'Recipient Email',
       manualInput: 'Manual Input',
       fromPreviousNode: 'From Previous Node',

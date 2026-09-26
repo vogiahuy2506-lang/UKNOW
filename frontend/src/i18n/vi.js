@@ -5110,7 +5110,7 @@ export default {
       fromEmail: 'Email gửi (SMTP đã cấu hình)',
       selectFromEmail: '-- Chọn email gửi --',
       noActiveSmtp: 'Chưa có SMTP đang hoạt động. Vào Cài đặt Email để thêm và bật trạng thái "active".',
-      saveMessageHistory: 'Lưu lại lịch sử tin nhắn đã gửi cho từng khách hàng',
+      saveMessageHistory: 'Lưu nội dung thư trong lịch sử gửi (lịch sử gửi luôn được ghi)',
       recipientEmailLabel: 'Email người nhận',
       manualInput: 'Nhập thủ công',
       fromPreviousNode: 'Lấy từ node trước',
