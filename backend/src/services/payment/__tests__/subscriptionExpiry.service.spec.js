@@ -13,9 +13,15 @@ const mockBuildPlanExpiredEmail = jest.fn();
 const mockBuildRenewalReminderEmail = jest.fn();
 const mockLoadCustomSystemEmailTemplate = jest.fn();
 const mockGetReminderSettings = jest.fn();
+// PR-3, Việc 3.1 — reconcileResourceLocks phải được gọi NGAY sau expireUserPlan, không đợi cron
+// reconcileAllDueUsers ở lượt sau (lượt đó sẽ không còn thấy user này vì active_plan_id đã NULL).
+const mockReconcileResourceLocks = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/subscription/subscription.repository.js', () => mockSubscriptionRepo);
 jest.unstable_mockModule('../../../config/database.js', () => ({ default: {} }));
+jest.unstable_mockModule('../topupLock.service.js', () => ({
+  reconcileResourceLocks: mockReconcileResourceLocks,
+}));
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
   sendSystemEmail: mockSendSystemEmail,
   buildPlanExpiredEmail: mockBuildPlanExpiredEmail,
@@ -44,6 +50,7 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
     mockSubscriptionRepo.expireUserPlan.mockResolvedValue();
     mockSubscriptionRepo.incrementReminderCount.mockResolvedValue();
     mockSubscriptionRepo.markReminderSent.mockResolvedValue();
+    mockReconcileResourceLocks.mockResolvedValue({ locked: [], unlocked: [] });
     mockSendSystemEmail.mockResolvedValue();
     mockLoadCustomSystemEmailTemplate.mockResolvedValue(null);
     mockGetReminderSettings.mockResolvedValue({ daysBefore: [7, 3], updatedBy: null, updatedAt: null });
@@ -295,6 +302,60 @@ describe('subscriptionExpiry.service — Xử lý gói hết hạn và thư T-0 
         expect.objectContaining({ template: customTemplate })
       );
       expect(mockBuildPlanExpiredEmail).toHaveBeenCalledTimes(2);
+    });
+
+    describe('PR-3, Việc 3.1 — khoá tài nguyên NGAY sau khi thu hồi gói (đừng đợi cron reconcile sau)', () => {
+      it('gọi reconcileResourceLocks đúng userId + queryable, SAU expireUserPlan, cho MỖI user hết hạn', async () => {
+        const callOrder = [];
+        mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([
+          { id: 301, email: null, full_name: 'A', plan_name: 'Basic', subscription_expires_at: '2026-09-01', subscription_reminder_count: 3 },
+          { id: 302, email: null, full_name: 'B', plan_name: 'Pro', subscription_expires_at: '2026-09-02', subscription_reminder_count: 3 },
+        ]);
+        mockSubscriptionRepo.expireUserPlan.mockImplementation(async (id) => {
+          callOrder.push(`expireUserPlan:${id}`);
+        });
+        mockReconcileResourceLocks.mockImplementation(async (id) => {
+          callOrder.push(`reconcile:${id}`);
+          return { locked: [], unlocked: [] };
+        });
+        const queryable = { query: jest.fn() };
+
+        await processExpiredSubscriptions({ queryable });
+
+        expect(callOrder).toEqual([
+          'expireUserPlan:301',
+          'reconcile:301',
+          'expireUserPlan:302',
+          'reconcile:302',
+        ]);
+        expect(mockReconcileResourceLocks).toHaveBeenCalledWith(301, queryable);
+        expect(mockReconcileResourceLocks).toHaveBeenCalledWith(302, queryable);
+      });
+
+      it('expireUserPlan thất bại thì KHÔNG gọi reconcile cho user đó (không có gì mới để khoá)', async () => {
+        mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([
+          { id: 401, email: null, full_name: 'A', plan_name: 'Basic', subscription_expires_at: '2026-09-01', subscription_reminder_count: 3 },
+        ]);
+        mockSubscriptionRepo.expireUserPlan.mockRejectedValue(new Error('DB lỗi tạm thời'));
+
+        const result = await processExpiredSubscriptions();
+
+        expect(result.expiredCount).toBe(0);
+        expect(mockReconcileResourceLocks).not.toHaveBeenCalled();
+      });
+
+      it('reconcile thất bại KHÔNG làm mất expiredCount đã tính (gói vẫn được coi là đã thu hồi)', async () => {
+        mockSubscriptionRepo.findExpiredUsers.mockResolvedValue([
+          { id: 501, email: null, full_name: 'A', plan_name: 'Basic', subscription_expires_at: '2026-09-01', subscription_reminder_count: 3 },
+        ]);
+        mockReconcileResourceLocks.mockRejectedValue(new Error('lock service lỗi'));
+
+        await expect(processExpiredSubscriptions()).resolves.toEqual({
+          expiredCount: 1,
+          emailsSent: 0,
+          totalFound: 1,
+        });
+      });
     });
   });
 

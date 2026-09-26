@@ -207,6 +207,90 @@ describe('aiCreditMeter.service', () => {
     });
   });
 
+  describe('PR-3, Việc 3.4 — chủ hết gói vẫn dùng AI không giới hạn qua chatbot công khai', () => {
+    it('vai 1 — chủ KHÔNG có gói hiệu lực (cron đã gỡ, active_plan_id=NULL) → assertAvailable NÉM LỖI, không skip', async () => {
+      // Đúng hình dạng getSubscriptionStatus trả về khi effective_plan_id rỗng (utils/subscriptionStatus.util.js).
+      mockGetSubscriptionStatus.mockResolvedValueOnce({
+        hasPlan: false,
+        expiresAt: null,
+        graceDays: 0,
+        graceUntil: null,
+        isExpired: false,
+        isInGracePeriod: false,
+      });
+
+      await expect(aiCreditMeter.assertAvailable(5)).rejects.toMatchObject({
+        status: 402,
+        code: 'RESOURCE_LIMIT_EXCEEDED',
+        resource: AI_CREDIT_RESOURCE,
+        subscriptionExpired: true,
+        upgradeRequired: true,
+      });
+      // Chặn TRƯỚC khi kịp đọc hạn mức gói — không được lọt tới nhánh "baseLimit<=0 = không giới hạn".
+      expect(mockGetUserPlanLimits).not.toHaveBeenCalled();
+    });
+
+    it('vai 2 — chủ CÒN gói hiệu lực (mặc định mock hasPlan:true, isExpired:false) → chạy bình thường, không ném lỗi', async () => {
+      await expect(aiCreditMeter.assertAvailable(5)).resolves.toMatchObject({ skip: false });
+    });
+
+    it('vai 2b — chủ đang trong ÂN HẠN (hạ gói chủ động, chưa qua grace_period_days) → vẫn chạy, KHÔNG chặn', async () => {
+      mockGetSubscriptionStatus.mockResolvedValueOnce({
+        hasPlan: true,
+        expiresAt: new Date('2026-09-20'),
+        graceDays: 7,
+        graceUntil: new Date('2026-09-27'),
+        isExpired: false,
+        isInGracePeriod: true,
+      });
+
+      await expect(aiCreditMeter.assertAvailable(5)).resolves.toMatchObject({ skip: false });
+    });
+
+    it('vai 3 — nhân viên của chủ CÒN gói (ownerContextId) → chạy bình thường', async () => {
+      mockDbQuery
+        .mockResolvedValueOnce({ rows: [{ role: 'employee' }] }) // getUserRole
+        .mockResolvedValueOnce({ rows: [] }); // user_members: không tìm thấy -> bỏ qua trần nhân viên
+      mockGetSubscriptionStatus.mockResolvedValueOnce({ hasPlan: true, isExpired: false });
+
+      await expect(
+        aiCreditMeter.assertAvailable(2, { ownerContextId: 5 })
+      ).resolves.toMatchObject({ skip: false });
+      expect(mockGetSubscriptionStatus).toHaveBeenCalledWith(2, { ownerContextId: 5 });
+    });
+
+    it('nhân viên của chủ ĐÃ hết gói (quy về chủ qua ownerContextId) → cũng bị chặn, không phải chỉ chủ gọi trực tiếp mới bị', async () => {
+      mockDbQuery
+        .mockResolvedValueOnce({ rows: [{ role: 'employee' }] })
+        .mockResolvedValueOnce({ rows: [] });
+      mockGetSubscriptionStatus.mockResolvedValueOnce({ hasPlan: false, isExpired: false });
+
+      await expect(
+        aiCreditMeter.assertAvailable(2, { ownerContextId: 5 })
+      ).rejects.toMatchObject({ subscriptionExpired: true });
+    });
+
+    it('vẫn ném lỗi hết gói dù bản ghi cũ có isExpired:true kèm hasPlan:true (tương thích ngược, không phá hành vi đã đúng)', async () => {
+      mockGetSubscriptionStatus.mockResolvedValueOnce({ hasPlan: true, isExpired: true });
+
+      await expect(aiCreditMeter.assertAvailable(5)).rejects.toMatchObject({
+        subscriptionExpired: true,
+      });
+    });
+
+    it('admin vẫn skip dù chủ hết gói (chốt role đứng TRƯỚC chốt hết gói)', async () => {
+      // KHÔNG set mockGetSubscriptionStatus riêng cho ca này — đường admin thoát ngay sau khi đọc
+      // role, không bao giờ gọi tới getSubscriptionStatus. Một mockResolvedValueOnce() ở đây sẽ
+      // không được tiêu thụ và RÒ sang ca kế tiếp (bài học tự bắt được lúc chạy thật: nó làm đỏ
+      // nhầm ca deductCredits ngay sau).
+      mockDbQuery.mockResolvedValueOnce({ rows: [{ role: 'admin' }] });
+
+      const ctx = await aiCreditMeter.resolveCreditContext(1);
+      expect(ctx).toEqual({ skip: true });
+      expect(mockGetSubscriptionStatus).not.toHaveBeenCalled();
+    });
+  });
+
   describe('deductCredits', () => {
     it('khi gói đã dùng hết: trừ toàn bộ vào ví, không vượt trần gói, không ghi usage log gói', async () => {
       mockGetUserPlanLimits.mockResolvedValue({ ai_credits_per_period: 200 });

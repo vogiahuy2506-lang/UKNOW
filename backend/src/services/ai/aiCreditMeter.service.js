@@ -42,7 +42,15 @@ class AiCreditMeterService {
       : {};
 
     const subscription = await getSubscriptionStatus(userId, billingOptions);
-    if (subscription.hasPlan && subscription.isExpired) {
+    // PR-3, Việc 3.4 — trước đây chỉ chặn "còn gói nhưng đã hết hạn" (subscription.hasPlan &&
+    // isExpired). Khi cron `processExpiredSubscriptions` đã chạy xong (active_plan_id = NULL),
+    // getSubscriptionStatus trả thẳng {hasPlan:false, isExpired:false} (JOIN plans rỗng) — chốt cũ
+    // không bắt được, hạn mức gói đọc ra 0 rồi bị nhánh "baseLimit<=0 = không giới hạn" (bên dưới)
+    // hiểu ngược thành skip:true. Route công khai (widget chatbot) gọi thẳng assertAvailable, KHÔNG
+    // qua middleware phân quyền NO_ACTIVE_PLAN của app — nên chủ đã bị gỡ gói vẫn gọi Gemini bằng
+    // tiền công ty vô hạn qua chatbot công khai. `isInGracePeriod` (hạ gói chủ động) KHÔNG bị chặn
+    // ở đây vì lúc đó hasPlan vẫn true và isExpired vẫn false — giữ đúng ân hạn 7 ngày hiện có.
+    if (subscription.isExpired || !subscription.hasPlan) {
       throw this._subscriptionExpired();
     }
 

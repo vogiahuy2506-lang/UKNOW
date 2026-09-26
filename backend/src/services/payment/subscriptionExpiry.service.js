@@ -13,6 +13,7 @@ import {
 } from '../../utils/systemEmail.util.js';
 import { loadCustomSystemEmailTemplate } from '../email/welcomeEmailTemplate.service.js';
 import { getReminderSettings } from './subscriptionReminderSettings.service.js';
+import { reconcileResourceLocks } from './topupLock.service.js';
 
 /**
  * Xử lý các gói thuê bao đã hết hạn:
@@ -20,6 +21,7 @@ import { getReminderSettings } from './subscriptionReminderSettings.service.js';
  * 2. Gửi email thông báo hết hạn T-0 (nếu reminder_count < 3 và có email) TRƯỚC KHI thu hồi gói.
  * 3. Tăng reminder_count sau khi gửi email thành công.
  * 4. Thu hồi gói (expireUserPlan).
+ * 5. Khoá NGAY tài nguyên vượt trần (PR-3, Việc 3.1) — xem chú thích tại nơi gọi.
  *
  * @param {{ renewalUrl?: string, queryable?: object }} [options]
  * @returns {Promise<{ expiredCount: number, emailsSent: number, totalFound: number }>}
@@ -75,6 +77,21 @@ export async function processExpiredSubscriptions({ renewalUrl, queryable = db }
       await expireUserPlan(user.id, queryable);
       expiredCount++;
       console.log(`[Subscription] Đã thu hồi gói của ${user.email || `user#${user.id}`} (${user.plan_name})`);
+
+      // PR-3, Việc 3.1 — khoá tài nguyên vượt trần NGAY tại đây, không đợi cron reconcile
+      // (`topupLock.service.js` reconcileAllDueUsers) chạy sau. Lý do bắt buộc gọi ở ĐÂY, SAU
+      // expireUserPlan (không phải trước): reconcileResourceLocks đọc trần hiệu dụng từ chính các
+      // cột users.max_* mà expireUserPlan vừa đặt về 0 — gọi trước khi gỡ gói sẽ đọc trần của gói
+      // ĐANG TRẢ TIỀN (chưa bị 0 hoá) nên không khoá được gì. Và không thể chờ reconcileAllDueUsers
+      // ở lượt cron kế tiếp: findExpiredUsers (được nó gọi lại) JOIN u.active_plan_id = p.id nên
+      // user vừa bị NULL hoá active_plan_id ở dòng trên biến mất khỏi danh sách "hết hạn" ngay lập
+      // tức — đây chính là gốc lỗi 3.1 (khách hết hạn nhưng landing/chatbot không bao giờ bị khoá).
+      try {
+        await reconcileResourceLocks(user.id, queryable);
+      } catch (lockErr) {
+        // Lỗi khoá không được xoá mất việc đã thu hồi gói (expiredCount đã tính ở trên).
+        console.error(`[Subscription] Khoá tài nguyên thất bại cho user #${user.id} sau khi hết hạn:`, lockErr.message);
+      }
     } catch (expireErr) {
       console.error(`[Subscription] Thu hồi gói thất bại cho user #${user.id}:`, expireErr.message);
     }

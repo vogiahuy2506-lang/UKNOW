@@ -27,38 +27,65 @@ export {
 
 export { LOCKABLE_RESOURCE_KEYS };
 
+/**
+ * Chuẩn hoá một giá trị trần đọc thẳng từ cột DB (`plans.max_*` hoặc `users.max_*` đã copy từ
+ * plan) thành số tài nguyên tối đa. PR-3, Việc 3.2 — trước đây mọi nơi dùng `Number(x) || 0`, nên
+ * `NULL` (gói Enterprise: max_zalo_accounts/max_email_accounts/max_chatbots không giới hạn) và
+ * `-1` (gói Tùy chọn: max_employees = -1 nghĩa là không giới hạn, xem prod-plans.json) đều rơi về
+ * `0` — bị hiểu thành "cấm hoàn toàn" thay vì "không giới hạn", nên bất kỳ khách nào của các gói
+ * này có ít nhất 1 tài nguyên đang dùng sẽ bị khoá nhầm ngay lần reconcile kế tiếp.
+ *
+ * CHỈ gọi hàm này với giá trị lấy từ một HÀNG ĐÃ XÁC NHẬN TỒN TẠI (gói hoặc user có thật) — "không
+ * có gói nào cả" (hết hạn) phải được xử lý RIÊNG thành 0 tại nơi gọi, KHÔNG được đưa `undefined`
+ * vào đây rồi để nó thành Infinity (sẽ mở khoá nhầm cho khách đã hết hạn thật).
+ *
+ * @param {number|null|undefined} raw
+ * @returns {number} số nguyên ≥ 0, hoặc `Infinity` nếu cột đó nghĩa là không giới hạn
+ */
+export function normalizeCeiling(raw) {
+  if (raw === null) return Infinity; // cột NULL trong DB = "không giới hạn" theo quy ước gói
+  const n = Number(raw);
+  if (!Number.isFinite(n)) return 0; // giá trị hỏng/không đọc được -> khoá an toàn, không mở nhầm
+  if (n === -1) return Infinity; // quy ước riêng của max_employees (gói Tùy chọn)
+  return Math.max(0, n);
+}
+
 const PLAN_CEILING = Object.freeze({
   zalo_accounts: async (userId, queryable) => {
     const { rows } = await queryable.query(
       `SELECT max_zalo_accounts FROM users WHERE id = $1 LIMIT 1`,
       [userId]
     );
-    return Number(rows[0]?.max_zalo_accounts) || 0;
+    return normalizeCeiling(rows[0]?.max_zalo_accounts);
   },
   email_accounts: async (userId, queryable) => {
     const { rows } = await queryable.query(
       `SELECT max_email_accounts FROM users WHERE id = $1 LIMIT 1`,
       [userId]
     );
-    return Number(rows[0]?.max_email_accounts) || 0;
+    return normalizeCeiling(rows[0]?.max_email_accounts);
   },
   landing_pages: async (userId, queryable) => {
     const { rows } = await queryable.query(
       `SELECT max_landing_pages FROM users WHERE id = $1 LIMIT 1`,
       [userId]
     );
-    return Number(rows[0]?.max_landing_pages) || 0;
+    return normalizeCeiling(rows[0]?.max_landing_pages);
   },
   chatbots: async (userId, queryable) => {
     const plan = await getPlanByUserId(userId, queryable);
-    return Number(plan?.max_chatbots) || 0;
+    if (!plan) return 0; // không có gói hiệu lực (đã hết hạn) -> khoá hết, không phải không giới hạn
+    return normalizeCeiling(plan.max_chatbots);
   },
   employees: async (userId, queryable) => {
-    const { rows } = await queryable.query(
-      `SELECT max_employees FROM users WHERE id = $1 LIMIT 1`,
-      [userId]
-    );
-    return Number(rows[0]?.max_employees) || 0;
+    // PR-3, Việc 3.2 — ĐỔI nguồn đọc: users.max_employees không bao giờ được ghi (không route nào
+    // set cột này khi activateUserPlan/assignPlanToUser), luôn NULL nên trần nhân viên trước đây
+    // luôn ra 0 → mọi chủ có ≥1 nhân viên bị khoá nhầm ngay khi có BẤT KỲ lý do nào khác kéo họ vào
+    // reconcile (vd 1 slot landing mua thêm hết hạn). Nguồn đúng, nhất quán với nơi thật sự chặn
+    // tạo nhân viên (`employee.repository.js` đọc `plans.max_employees` qua join), là plan hiện có.
+    const plan = await getPlanByUserId(userId, queryable);
+    if (!plan) return 0;
+    return normalizeCeiling(plan.max_employees);
   },
 });
 

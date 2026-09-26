@@ -62,7 +62,36 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
   default: mockQueryable,
 }));
 
-const { reconcileResourceLocks, getLockOverview } = await import('../topupLock.service.js');
+const { reconcileResourceLocks, getLockOverview, normalizeCeiling } = await import('../topupLock.service.js');
+
+describe('normalizeCeiling — PR-3, Việc 3.2 (hợp đồng NULL/-1 = không giới hạn)', () => {
+  it('null (cột DB thật sự NULL, vd gói Enterprise/Tùy chọn) -> Infinity', () => {
+    expect(normalizeCeiling(null)).toBe(Infinity);
+  });
+
+  it('-1 (quy ước riêng của max_employees gói Tùy chọn) -> Infinity', () => {
+    expect(normalizeCeiling(-1)).toBe(Infinity);
+  });
+
+  it('undefined (KHÔNG có gói / không đọc được cột — KHÁC null) -> 0, KHÔNG được lẫn với null', () => {
+    // Đây chính là ranh giới hiểm nhất: raw === null (strict) mới đúng. Nếu ai đó "gọn hoá" thành
+    // raw == null (loose), undefined sẽ lẫn vào null và biến chủ ĐÃ HẾT GÓI (plan=null ->
+    // plan?.max_chatbots=undefined) thành "không giới hạn" — xem đột biến M3 trong mut_pr3.py.
+    expect(normalizeCeiling(undefined)).toBe(0);
+  });
+
+  it('0 -> 0 (cấm hoàn toàn, KHÔNG phải không giới hạn — vd vừa expireUserPlan)', () => {
+    expect(normalizeCeiling(0)).toBe(0);
+  });
+
+  it('số dương bình thường -> giữ nguyên', () => {
+    expect(normalizeCeiling(5)).toBe(5);
+  });
+
+  it('chuỗi số hỏng/NaN -> 0 (khoá an toàn, không mở nhầm)', () => {
+    expect(normalizeCeiling('abc')).toBe(0);
+  });
+});
 
 describe('reconcileResourceLocks', () => {
   beforeEach(() => {
@@ -132,13 +161,16 @@ describe('reconcileResourceLocks', () => {
     expect(result.isGraceActive).toBe(true);
   });
 
-  it('locks employees when exceeding employee ceiling', async () => {
+  it('locks employees when exceeding employee ceiling (trần đọc từ plans.max_employees, KHÔNG phải users.max_employees)', async () => {
+    // PR-3, Việc 3.2 — bẫy chính: users.max_employees không bao giờ được ghi (luôn NULL trên thật),
+    // để giá trị này khác hẳn giá trị plan (1) để chứng minh code KHÔNG còn đọc từ bảng users nữa.
+    mockGetPlan.mockResolvedValue({ max_chatbots: 3, max_employees: 1 });
     mockQueryable.query.mockImplementation(async (sql) => {
       if (String(sql).includes('overage_grace_until')) {
         return { rows: [{ overage_grace_until: null }] };
       }
       if (String(sql).includes('max_employees')) {
-        return { rows: [{ max_employees: 1 }] };
+        return { rows: [{ max_employees: null }] }; // giá trị thật trên production — phải bị BỎ QUA
       }
       return { rows: [] };
     });
@@ -158,6 +190,79 @@ describe('reconcileResourceLocks', () => {
       { resourceKey: 'employees', resourceId: 101 },
       { resourceKey: 'employees', resourceId: 102 },
     ]);
+  });
+
+  it('PR-3, Việc 3.2 — gói Tùy chọn (max_employees=-1) KHÔNG bị khoá nhầm nhân viên dù dùng rất nhiều', async () => {
+    mockGetPlan.mockResolvedValue({ max_chatbots: null, max_employees: -1 });
+    mockCountInUse.mockImplementation(async (_uid, key) => (key === 'employees' ? 50 : 0));
+    mockCountValid.mockResolvedValue(0);
+    mockListUnlocked.mockImplementation(async (_uid, key) => (
+      key === 'employees' ? Array.from({ length: 50 }, (_, i) => i + 1) : []
+    ));
+
+    const result = await reconcileResourceLocks(42, mockQueryable);
+
+    expect(mockInsertLock).not.toHaveBeenCalled();
+    expect(result.locked).toEqual([]);
+  });
+
+  it('PR-3, Việc 3.2 — gói Enterprise (max_zalo_accounts=NULL) KHÔNG bị khoá nhầm tài khoản Zalo', async () => {
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('overage_grace_until')) {
+        return { rows: [{ overage_grace_until: null }] };
+      }
+      if (String(sql).includes('max_zalo_accounts')) {
+        return { rows: [{ max_zalo_accounts: null }] }; // users.max_zalo_accounts copy từ plan NULL
+      }
+      return { rows: [] };
+    });
+    mockCountInUse.mockImplementation(async (_uid, key) => (key === 'zalo_accounts' ? 20 : 0));
+    mockCountValid.mockResolvedValue(0);
+    mockListUnlocked.mockImplementation(async (_uid, key) => (
+      key === 'zalo_accounts' ? Array.from({ length: 20 }, (_, i) => i + 1) : []
+    ));
+
+    const result = await reconcileResourceLocks(42, mockQueryable);
+
+    expect(mockInsertLock).not.toHaveBeenCalled();
+    expect(result.locked).toEqual([]);
+  });
+
+  it('PR-3, Việc 3.2 — chủ KHÔNG có gói hiệu lực (đã hết hạn) vẫn khoá đúng chatbot/nhân viên về 0, KHÔNG hiểu nhầm thành không giới hạn', async () => {
+    // plan=null mô phỏng getPlanByUserId sau khi active_plan_id đã bị NULL hoá — đây là ca dễ vá SAI
+    // NHẤT của Việc 3.2: nếu lỡ gọi normalizeCeiling(plan?.max_chatbots) mà không có nhánh `!plan`
+    // riêng, plan?.max_chatbots = undefined sẽ bị hiểu thành "cột NULL = không giới hạn".
+    mockGetPlan.mockResolvedValue(null);
+    mockCountInUse.mockImplementation(async (_uid, key) => (
+      key === 'chatbots' || key === 'employees' ? 2 : 0
+    ));
+    mockCountValid.mockResolvedValue(0);
+    mockListUnlocked.mockImplementation(async (_uid, key) => (
+      key === 'chatbots' || key === 'employees' ? [1, 2] : []
+    ));
+
+    const result = await reconcileResourceLocks(42, mockQueryable);
+
+    expect(mockInsertLock).toHaveBeenCalledWith(42, 'chatbots', 1, mockQueryable);
+    expect(mockInsertLock).toHaveBeenCalledWith(42, 'employees', 1, mockQueryable);
+    expect(result.locked).toEqual(
+      expect.arrayContaining([
+        { resourceKey: 'chatbots', resourceId: 1 },
+        { resourceKey: 'employees', resourceId: 1 },
+      ])
+    );
+  });
+
+  it('PR-3, Việc 3.3 — khách xoá bớt nhân viên về dưới trần đã sửa đúng thì lần reconcile sau MỞ khoá', async () => {
+    mockGetPlan.mockResolvedValue({ max_chatbots: 3, max_employees: 2 });
+    mockCountInUse.mockImplementation(async (_uid, key) => (key === 'employees' ? 2 : 0));
+    mockCountValid.mockImplementation(async (_uid, key) => (key === 'employees' ? 1 : 0));
+    mockListLocked.mockImplementation(async (_uid, key) => (key === 'employees' ? [103] : []));
+
+    const result = await reconcileResourceLocks(42, mockQueryable);
+
+    expect(mockDeleteLock).toHaveBeenCalledWith('employees', 103, mockQueryable);
+    expect(result.unlocked).toEqual([{ resourceKey: 'employees', resourceId: 103 }]);
   });
 
   it('unlocks most-recently-locked when under ceiling after grant', async () => {
