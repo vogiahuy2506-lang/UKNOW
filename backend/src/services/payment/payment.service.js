@@ -51,6 +51,13 @@ const isTrialOrFreePlan = (plan) => {
     return plan.code === trialCode || Number(plan.price) === 0;
 };
 
+// Thẻ "Gói Tùy chọn"/"Liên hệ" trên bảng giá là gói giữ chỗ: giá 0 và mọi hạn mức NULL — NULL nghĩa là KHÔNG
+// giới hạn ở mọi chốt chặn. Frontend coi hai mã này là gói liên hệ (planTranslation.util.js `isContactPlan`) nên
+// không bao giờ kích hoạt chúng; backend phải chặn cùng luật. 26/09/2026 tái hiện: một lệnh
+// POST /payments/activate-free {planCode:'custom'} cho gói không giới hạn miễn phí 30 ngày, kỳ 'yearly' là 365 ngày.
+const PLACEHOLDER_PLAN_CODES = new Set(['custom', 'contact']);
+const isPlaceholderPlan = (plan) => PLACEHOLDER_PLAN_CODES.has(String(plan?.code || '').trim().toLowerCase());
+
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail, queryable = db }) => {
     // Rule: Mọi gói dùng thử / miễn phí chỉ được đăng ký 1 lần / tài khoản.
     if (!isTrialOrFreePlan(plan)) return;
@@ -159,6 +166,11 @@ export const createPaymentLink = async ({
 
         plan = await findPlanByCode(planCode, client);
         if (!plan) throw new Error('Gói không tồn tại');
+        // Gói không bán theo năm (price_yearly trống) mà khách gửi 'yearly': trước đây bị tính GIÁ THÁNG nhưng
+        // activateUserPlan cộng 12 tháng. Chặn ở đây thay vì lặng lẽ đổi kỳ — khách phải thấy đúng thứ mình trả.
+        if (billingPeriod === 'yearly' && !(Number(plan.price_yearly) > 0)) {
+            throw { status: 400, message: 'Gói này không có kỳ thanh toán theo năm' };
+        }
         await assertTrialNotRegisteredTwice({
             plan,
             userId,
@@ -459,6 +471,12 @@ export const activateFreePlan = async ({ planCode, userId, userEmail, billingPer
 
         const plan = await findPlanByCode(planCode, client);
         if (!plan) throw new Error('Gói không tồn tại');
+        if (isPlaceholderPlan(plan)) {
+            throw { status: 400, message: 'Gói này không kích hoạt miễn phí được' };
+        }
+        // Gói miễn phí không có kỳ năm: luôn tính theo thời hạn của gói. Để 'yearly' đi tiếp thì
+        // activateUserPlan cộng 12 tháng — dùng thử 1 năm (bật công tắc "Hàng năm" rồi bấm thẻ dùng thử).
+        billingPeriod = 'monthly';
         await assertTrialNotRegisteredTwice({ plan, userId, userEmail: effectiveUserEmail, queryable: client });
         await validatePlanChange({
             targetPlan: plan,

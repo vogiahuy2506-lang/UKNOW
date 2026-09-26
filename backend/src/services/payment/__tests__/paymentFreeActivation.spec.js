@@ -178,6 +178,41 @@ describe('activateFreePlan', () => {
     expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
     expect(mockClient.release).toHaveBeenCalledTimes(1);
   });
+
+  // Gói giữ chỗ "Tùy chọn"/"Liên hệ": giá 0, mọi hạn mức NULL = không giới hạn. 26/09/2026 tái hiện trên sandbox
+  // với đúng dữ liệu production (id 18): một lệnh activate-free cho gói không giới hạn 30 ngày, kỳ năm 365 ngày.
+  it.each([
+    ['custom', 'monthly'],
+    ['custom', 'yearly'],
+    ['CUSTOM', 'monthly'],
+    ['contact', 'monthly'],
+  ])('refuses the %s placeholder plan (%s) without creating an order', async (code, billingPeriod) => {
+    mockFindPlanByCode.mockResolvedValueOnce({ id: 18, code, price: 0, price_yearly: null, max_campaigns: null });
+
+    await expect(activateFreePlan({
+      planCode: code,
+      userId: 10,
+      userEmail: 'trial@example.com',
+      billingPeriod,
+    })).rejects.toMatchObject({ status: 400 });
+
+    expect(mockCreateOrder).not.toHaveBeenCalled();
+    expect(mockActivateUserPlan).not.toHaveBeenCalled();
+    expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+    expect(mockClient.query).not.toHaveBeenCalledWith('COMMIT');
+  });
+
+  it('activates a free plan for its own duration even when the yearly toggle was on', async () => {
+    await activateFreePlan({
+      planCode: 'trial',
+      userId: 10,
+      userEmail: 'trial@example.com',
+      billingPeriod: 'yearly',
+    });
+
+    expect(mockCreateOrder).toHaveBeenCalledWith(expect.objectContaining({ billingPeriod: 'monthly' }), mockClient);
+    expect(mockActivateUserPlan).toHaveBeenCalledWith(10, 7, 'monthly', mockClient);
+  });
 });
 
 describe('createPaymentLink checkout serialization', () => {
@@ -241,6 +276,37 @@ describe('createPaymentLink checkout serialization', () => {
     expect(mockBestEffortCancelPayosLinks.mock.invocationCallOrder[0]).toBeGreaterThan(
       mockClient.query.mock.invocationCallOrder[commitOrder]
     );
+  });
+
+  it('refuses a yearly checkout for a plan that has no yearly price instead of charging the monthly price for 12 months', async () => {
+    mockFindPlanByCode.mockResolvedValueOnce({ id: 7, code: 'pro', price: 100000, price_yearly: null });
+
+    await expect(createPaymentLink({
+      planCode: 'pro',
+      userId: 10,
+      userEmail: 'paid@example.com',
+      billingPeriod: 'yearly',
+    })).rejects.toMatchObject({ status: 400 });
+
+    expect(mockCreatePayosPaymentLink).not.toHaveBeenCalled();
+    expect(mockCreateOrder).not.toHaveBeenCalled();
+    expect(mockClient.query).not.toHaveBeenCalledWith('COMMIT');
+  });
+
+  it('still sells a yearly plan at its yearly price', async () => {
+    mockResolveCheckoutDiscount.mockImplementationOnce(async ({ originalAmount }) => ({
+      voucher: null, discountAmount: 0, finalAmount: originalAmount, discount: null, snapshot: {},
+    }));
+
+    await createPaymentLink({
+      planCode: 'pro',
+      userId: 10,
+      userEmail: 'paid@example.com',
+      billingPeriod: 'yearly',
+    });
+
+    expect(mockResolveCheckoutDiscount).toHaveBeenCalledWith(expect.objectContaining({ originalAmount: 1000000 }));
+    expect(mockCreatePayosPaymentLink).toHaveBeenCalledWith(expect.objectContaining({ amount: 1000000 }));
   });
 
   it('keeps the older checkout intact when PayOS cannot create the replacement link', async () => {
