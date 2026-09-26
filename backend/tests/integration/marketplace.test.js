@@ -15,6 +15,7 @@ import bcrypt from 'bcryptjs';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import aiCreditMeter from '../../src/services/ai/aiCreditMeter.service.js';
+import { truncateAll } from './helpers/db.js';
 
 let app;
 let deductCreditsSpy;
@@ -28,25 +29,12 @@ beforeAll(() => {
     .mockResolvedValue({ success: true, deducted: 50, remaining: { plan: Infinity, wallet: 0 } });
 });
 
+// Dọn bằng helper chung (TRUNCATE mọi bảng, có thử lại khi tranh khoá). Bản tự viết trước đây chỉ xoá vài bảng
+// rồi DELETE users → vướng khoá ngoại user_consents khi file khác chạy trước trong cùng shard CI (26/09/2026 shard 8/8).
 beforeEach(async () => {
   await truncateAll();
   deductCreditsSpy.mockClear();
 });
-
-async function truncateAll() {
-  await db.query('DELETE FROM marketplace_favorites');
-  await db.query('DELETE FROM marketplace_reviews');
-  await db.query('DELETE FROM marketplace_purchases');
-  await db.query('DELETE FROM marketplace_listings');
-  await db.query('DELETE FROM usage_logs');
-  await db.query('DELETE FROM campaign_connections');
-  await db.query('DELETE FROM campaign_nodes');
-  await db.query('DELETE FROM campaigns');
-  await db.query('DELETE FROM topup_grants');
-  await db.query('DELETE FROM orders');
-  await db.query('DELETE FROM plans');
-  await db.query('DELETE FROM users');
-}
 
 async function createUser(username = 'testuser', password = 'Test123!') {
   const passwordHash = await bcrypt.hash(password, 10);
