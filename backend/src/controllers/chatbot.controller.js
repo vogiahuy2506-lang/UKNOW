@@ -31,6 +31,7 @@ import uploadController from './upload.controller.js';
 import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
+import { normalizeCeiling } from '../services/payment/topupLock.service.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import { normalizeChatbotReplyLimitConfig } from '../utils/chatbotReplyLimit.util.js';
 import { normalizeChatbotActiveHours } from '../utils/chatbotActiveHours.util.js';
@@ -1469,10 +1470,16 @@ class ChatbotController {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
       const plan = await getPlanByUserId(ownerUserId);
-      const planMax = Number(plan?.max_chatbots || 0);
+      // "Nợ nhỏ" 26/09 — trước đây `Number(plan?.max_chatbots || 0)` coi 0 là KHÔNG giới hạn (vì
+      // maxChatbots<=0 thì bỏ qua hẳn việc kiểm), ngược với mọi nơi khác (topupLock.service.js
+      // normalizeCeiling, userResourceLimit.util.js): NULL/-1 = không giới hạn, 0 = không được tạo.
+      // Gói Tùy chọn khách tự dựng chọn 0 chatbot (customPlanPricing.util.js mapQuantitiesToPlanColumns
+      // ghi 0) đang bị tạo chatbot KHÔNG giới hạn do lệch nghĩa này. Dùng lại normalizeCeiling cho
+      // đúng một hợp đồng duy nhất trong toàn repo.
+      const planCeiling = normalizeCeiling(plan?.max_chatbots);
       const topupSlots = await sumActiveTopupGrants(ownerUserId, 'chatbots');
-      const maxChatbots = planMax + Math.max(0, Number(topupSlots) || 0);
-      if (maxChatbots > 0) {
+      const maxChatbots = planCeiling + Math.max(0, Number(topupSlots) || 0);
+      if (Number.isFinite(maxChatbots)) {
         const currentChatbots = await chatbotRepository.countActiveChatbotsByUser(ownerUserId);
         if (currentChatbots >= maxChatbots) {
           return res.status(403).json({
