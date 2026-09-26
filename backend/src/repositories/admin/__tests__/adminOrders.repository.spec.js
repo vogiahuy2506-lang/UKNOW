@@ -4,7 +4,7 @@ const mockDb = { query: jest.fn() };
 
 jest.unstable_mockModule('../../../config/database.js', () => ({ default: mockDb }));
 
-const { findOrders } = await import('../adminOrders.repository.js');
+const { findOrders, setOrderCancelled } = await import('../adminOrders.repository.js');
 
 describe('adminOrders.repository.findOrders', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -37,5 +37,32 @@ describe('adminOrders.repository.findOrders', () => {
     expect(listQuery).toContain('redemption.voucher_code');
     expect(countQuery).toContain('LEFT JOIN LATERAL');
     expect(countQuery).toContain('redemption.voucher_code');
+  });
+});
+
+// PR-4 (đợt rà soát 26/09) — race webhook/admin: UPDATE phải atomic, chỉ đổi được hàng còn
+// 'pending', không được đè lên 'success' mà webhook vừa claim xong giữa lúc service kiểm và
+// lúc repository ghi.
+describe('adminOrders.repository.setOrderCancelled', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('chỉ UPDATE khi status hiện tại là pending và trả về hàng đã đổi', async () => {
+    mockDb.query.mockResolvedValueOnce({ rows: [{ id: 5, order_code: '999', status: 'cancelled' }] });
+
+    const res = await setOrderCancelled('999');
+
+    expect(res).toEqual({ id: 5, order_code: '999', status: 'cancelled' });
+    const [sql, params] = mockDb.query.mock.calls[0];
+    expect(sql).toContain("AND status = 'pending'");
+    expect(sql).toContain('RETURNING');
+    expect(params).toEqual(['999']);
+  });
+
+  it('trả về null khi đơn đã bị đổi khỏi pending (webhook race) — KHÔNG được đè', async () => {
+    mockDb.query.mockResolvedValueOnce({ rows: [] });
+
+    const res = await setOrderCancelled('999');
+
+    expect(res).toBeNull();
   });
 });

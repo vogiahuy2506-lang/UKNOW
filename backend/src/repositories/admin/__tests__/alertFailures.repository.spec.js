@@ -7,7 +7,7 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
   },
 }));
 
-const { metricCampaignRunFailures, metricCampaignRepeatedFailures, metricStalledRuns } = await import('../alert.repository.js');
+const { metricCampaignRunFailures, metricCampaignRepeatedFailures, metricStalledRuns, metricPaidAfterCancelledOrders } = await import('../alert.repository.js');
 
 describe('PR-4: Alert repository failure metrics SQL behavior', () => {
   beforeEach(() => {
@@ -81,5 +81,29 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
     expect(sql).toContain("cr.run_metadata->>'zaloOutboundDeferredUntil'");
     expect(sql).toContain('make_timestamptz');
     expect(sql).not.toContain("(cr.run_metadata->>'nonContinuousDeferredUntil')::timestamptz");
+  });
+
+  // PR-4 (đợt rà soát 26/09)
+  describe('metricPaidAfterCancelledOrders', () => {
+    it('lọc đúng status IN cancelled/failed + tag note + cận trên maxAgeHours', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ order_code: '999', amount: '199000', status: 'cancelled', updated_at: '2026-09-26T00:00:00.000Z' }],
+      });
+
+      const res = await metricPaidAfterCancelledOrders(168);
+      expect(res).toEqual([{ orderCode: '999', amount: 199000, status: 'cancelled', updatedAt: '2026-09-26T00:00:00.000Z' }]);
+
+      const [sql, params] = mockQuery.mock.calls[0];
+      expect(sql).toContain("status IN ('cancelled', 'failed')");
+      expect(sql).toContain("note LIKE '%PAID_AFTER_CANCELLED%'");
+      expect(sql).toContain("updated_at >= NOW() - ($1 || ' hours')::interval");
+      expect(params).toEqual(['168']);
+    });
+
+    it('dùng mặc định 168 giờ khi không truyền tham số', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      await metricPaidAfterCancelledOrders();
+      expect(mockQuery.mock.calls[0][1]).toEqual(['168']);
+    });
   });
 });

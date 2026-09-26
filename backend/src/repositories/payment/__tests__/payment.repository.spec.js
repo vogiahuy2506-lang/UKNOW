@@ -16,6 +16,7 @@ const {
   cancelRecentPendingPlanOrders,
   cancelRecentPendingTopupOrders,
   findRecentPendingPlanOrders,
+  flagPaidAfterCancelled,
 } = await import('../payment.repository.js');
 
 describe('payment.repository ownership and activation invariants', () => {
@@ -146,5 +147,30 @@ describe('payment.repository ownership and activation invariants', () => {
     const [sql, params] = queryable.query.mock.calls[0];
     expect(sql).toContain('($4::bigint IS NULL OR id < $4)');
     expect(params[3]).toBe(251);
+  });
+
+  // PR-4 (đợt rà soát 26/09)
+  describe('flagPaidAfterCancelled', () => {
+    it('chỉ tag đơn đang cancelled/failed, không đổi status', async () => {
+      const queryable = { query: jest.fn().mockResolvedValue({ rows: [{ id: 1, order_code: 999, amount: '199000', status: 'cancelled' }] }) };
+
+      const res = await flagPaidAfterCancelled(999, '[OPS] PAID_AFTER_CANCELLED ...', queryable);
+
+      expect(res).toEqual({ id: 1, order_code: 999, amount: '199000', status: 'cancelled' });
+      const [sql, params] = queryable.query.mock.calls[0];
+      expect(sql).toContain("status IN ('cancelled', 'failed')");
+      expect(sql).not.toContain("SET status");
+      expect(params).toEqual([999, '[OPS] PAID_AFTER_CANCELLED ...']);
+    });
+
+    it('idempotent — không tag lại nếu note đã có PAID_AFTER_CANCELLED (webhook gọi lại nhiều lần)', async () => {
+      const queryable = { query: jest.fn().mockResolvedValue({ rows: [] }) };
+
+      const res = await flagPaidAfterCancelled(999, 'note mới', queryable);
+
+      expect(res).toBeNull();
+      const [sql] = queryable.query.mock.calls[0];
+      expect(sql).toContain("NOT LIKE '%PAID_AFTER_CANCELLED%'");
+    });
   });
 });

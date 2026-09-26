@@ -62,11 +62,20 @@ export async function findOrderByCode(orderCode) {
   return rows[0] || null;
 }
 
+// PR-4 (đợt rà soát 26/09) — WHERE status='pending' bắt buộc: cancelOrder() (service) đã
+// kiểm order.status !== 'pending' trước khi gọi, nhưng đó là check-then-act không atomic —
+// webhook có thể claim đơn thành 'success' đúng giữa lúc kiểm và lúc UPDATE này chạy. Không
+// có điều kiện này thì UPDATE vô điều kiện sẽ ĐÈ 'success' xuống 'cancelled', xoá dấu vết
+// đơn đã kích hoạt thật trong khi tiền đã thu. Trả về hàng đã cập nhật (null nếu đã bị
+// webhook race chiếm mất) để service báo lỗi thay vì im lặng coi như đã huỷ.
 export async function setOrderCancelled(orderCode) {
-  await db.query(
-    `UPDATE orders SET status = 'cancelled', updated_at = NOW() WHERE order_code = $1`,
+  const { rows } = await db.query(
+    `UPDATE orders SET status = 'cancelled', updated_at = NOW()
+      WHERE order_code = $1 AND status = 'pending'
+      RETURNING id, order_code, status`,
     [orderCode]
   );
+  return rows[0] || null;
 }
 
 export async function getOrdersKpi() {

@@ -20,6 +20,8 @@ const mockFindOrderByCode = jest.fn();
 const mockClaimOrderSuccess = jest.fn();
 const mockVerifyPayosWebhook = jest.fn();
 const mockFulfillPaidOrder = jest.fn();
+const mockFlagPaidAfterCancelled = jest.fn();
+const mockMarkOrderFailedForReview = jest.fn();
 
 const mockClient = {
   query: jest.fn(),
@@ -40,7 +42,8 @@ jest.unstable_mockModule('../../../repositories/payment/payment.repository.js', 
   findOrderStatusByCode: jest.fn(),
   findOrderByCode: mockFindOrderByCode,
   claimOrderSuccess: mockClaimOrderSuccess,
-  markOrderFailedForReview: jest.fn(),
+  markOrderFailedForReview: mockMarkOrderFailedForReview,
+  flagPaidAfterCancelled: mockFlagPaidAfterCancelled,
   activateUserPlan: mockActivateUserPlan,
   hasSuccessfulOrderForPlanByUser: mockHasSuccessfulOrderForPlanByUser,
   deleteOrderByCode: jest.fn(),
@@ -375,5 +378,66 @@ describe('handleWebhook lock ordering', () => {
       mockClaimOrderSuccess.mock.invocationCallOrder[0]
     );
     expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+  });
+});
+
+// PR-4 (đợt rà soát 26/09) — webhook gặp đơn cancelled/failed mà PayOS báo đã trả tiền phải
+// ghi cảnh báo, KHÔNG được im lặng bỏ qua và TUYỆT ĐỐI không tự kích hoạt gói.
+describe('handleWebhook — PR-4 đơn cancelled/failed nhưng PayOS báo đã trả', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockClient.query.mockResolvedValue({ rows: [] });
+    mockDb.getClient.mockResolvedValue(mockClient);
+    mockVerifyPayosWebhook.mockResolvedValue({ code: '00', orderCode: 999, amount: 199000 });
+  });
+
+  it('ghi cảnh báo (flagPaidAfterCancelled) khi đơn đã cancelled nhưng webhook báo đã trả — không kích hoạt gói', async () => {
+    mockFindOrderByCode.mockResolvedValue({
+      id: 55, order_code: 999, status: 'cancelled', amount: 199000, user_id: 20, user_email: 'a@b.com',
+    });
+
+    const res = await handleWebhook({ signature: 'valid' });
+
+    expect(mockFlagPaidAfterCancelled).toHaveBeenCalledWith(
+      999,
+      expect.stringContaining('PAID_AFTER_CANCELLED'),
+      mockClient
+    );
+    expect(mockClaimOrderSuccess).not.toHaveBeenCalled();
+    expect(mockActivateUserPlan).not.toHaveBeenCalled();
+    expect(mockFulfillPaidOrder).not.toHaveBeenCalled();
+    expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+    expect(res).toEqual(expect.objectContaining({ code: '00', orderCode: 999 }));
+  });
+
+  it('cũng ghi cảnh báo khi đơn đã failed (không chỉ cancelled)', async () => {
+    mockFindOrderByCode.mockResolvedValue({
+      id: 56, order_code: 999, status: 'failed', amount: 199000, user_id: 20, user_email: 'a@b.com',
+    });
+
+    await handleWebhook({ signature: 'valid' });
+
+    expect(mockFlagPaidAfterCancelled).toHaveBeenCalledWith(999, expect.any(String), mockClient);
+  });
+
+  it('KHÔNG ghi cảnh báo PAID_AFTER_CANCELLED khi đơn đã success (trùng webhook bình thường)', async () => {
+    mockFindOrderByCode.mockResolvedValue({
+      id: 57, order_code: 999, status: 'success', amount: 199000, user_id: 20, user_email: 'a@b.com',
+    });
+
+    await handleWebhook({ signature: 'valid' });
+
+    expect(mockFlagPaidAfterCancelled).not.toHaveBeenCalled();
+    expect(mockClient.query).toHaveBeenCalledWith('COMMIT');
+  });
+
+  it('không đụng tới markOrderFailedForReview (đường AMOUNT_MISMATCH) cho ca cancelled/failed', async () => {
+    mockFindOrderByCode.mockResolvedValue({
+      id: 58, order_code: 999, status: 'cancelled', amount: 199000, user_id: 20, user_email: 'a@b.com',
+    });
+
+    await handleWebhook({ signature: 'valid' });
+
+    expect(mockMarkOrderFailedForReview).not.toHaveBeenCalled();
   });
 });

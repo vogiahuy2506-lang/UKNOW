@@ -2378,6 +2378,16 @@ VALUES (
   '{"hours": 48}'::jsonb
 );
 
+-- migration 251
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'order_paid_after_cancelled',
+  'Đơn cancelled/failed nhưng PayOS báo đã trả tiền',
+  'Webhook PayOS xác nhận đã thu tiền cho một đơn đã bị huỷ/thất bại trong hệ thống - cần người thật xử lý tay (kích hoạt bù hoặc hoàn tiền), KHÔNG tự động kích hoạt gói',
+  1, NULL, 'email', 'critical', 60,
+  '{"maxAgeHours": 168}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,

@@ -262,6 +262,22 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'order_paid_after_cancelled': {
+      const maxAgeHours = Number(config.maxAgeHours) || 168;
+      const list = await alertRepo.metricPaidAfterCancelledOrders(maxAgeHours);
+      if (list.length > 0) {
+        const codes = list.slice(0, 5).map((o) => `#${o.orderCode}`).join(', ');
+        return {
+          measuredValue: list.length,
+          message:
+            `${list.length} đơn cancelled/failed nhưng PayOS báo đã trả tiền — cần xử lý tay `
+            + `(kích hoạt bù hoặc hoàn tiền)`
+            + (codes ? ` (${codes})` : ''),
+          payload: { orders: list },
+        };
+      }
+      return null;
+    }
     case 'login_fail_flood': {
       const floods = await alertRepo.metricLoginFailFlood(windowMinutes, threshold || 20);
       if (floods.length) {

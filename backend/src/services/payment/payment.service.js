@@ -10,6 +10,7 @@ import {
     findOrderByCode,
     claimOrderSuccess,
     markOrderFailedForReview,
+    flagPaidAfterCancelled,
     activateUserPlan,
     hasSuccessfulOrderForPlanByUser,
     findRecentPendingPlanOrders,
@@ -386,8 +387,27 @@ export const handleWebhook = async (body) => {
             }
 
             if (['success', 'cancelled', 'failed'].includes(existing.status)) {
+                // PR-4 (đợt rà soát 26/09) — 'cancelled'/'failed' KHÔNG được coi ngang hàng với
+                // 'success' ở đây: đơn có thể đã bị huỷ (checkout mới thay thế, cron 72h dọn đơn
+                // treo...) trong khi link PayOS cũ best-effort chưa kịp huỷ, và khách vẫn quét
+                // được QR cũ rồi trả tiền thật. Webhook code==='00' tới đây nghĩa là PayOS xác
+                // nhận tiền đã vào — im lặng bỏ qua như trước đây là NUỐT TIỀN. Không tự kích
+                // hoạt gói (đơn cancelled có thể sắp được hoàn tiền, không phải kích hoạt bù) —
+                // chỉ đánh dấu để metricPaidAfterCancelledOrders/alert_rules
+                // (order_paid_after_cancelled) báo người thật xử lý tay.
+                if (['cancelled', 'failed'].includes(existing.status)) {
+                    const note =
+                        `[OPS] PAID_AFTER_CANCELLED order status=${existing.status} nhưng PayOS webhook `
+                        + `báo đã trả (expected=${existing.amount}, webhook_amount=${webhookData.amount ?? 'n/a'}) `
+                        + `at ${new Date().toISOString()}`;
+                    await flagPaidAfterCancelled(webhookData.orderCode, note, client);
+                    console.error(
+                        `[Webhook][OPS ALERT] Đơn ${webhookData.orderCode} đã ${existing.status} nhưng PayOS báo đã trả tiền — cần người xử lý tay (kích hoạt bù hoặc hoàn tiền). ${note}`
+                    );
+                } else {
+                    console.log(`[Webhook] Đơn ${webhookData.orderCode} đã ${existing.status} — bỏ qua`);
+                }
                 await client.query('COMMIT');
-                console.log(`[Webhook] Đơn ${webhookData.orderCode} đã ${existing.status} — bỏ qua`);
                 return webhookData;
             }
 

@@ -22,6 +22,12 @@ export async function cancelOrder(orderCode) {
     console.warn('[cancelOrder] PayOS cancel error (ignored):', err?.message);
   }
 
-  await setOrderCancelled(orderCode);
+  // PR-4 (đợt rà soát 26/09) — có thể vừa bị webhook claim thành 'success' giữa lúc kiểm
+  // ở trên và lúc UPDATE này chạy (check-then-act không atomic); setOrderCancelled giờ chỉ
+  // đổi được hàng còn 'pending' và trả về null nếu đã bị race mất. Đừng báo thành công giả.
+  const cancelled = await setOrderCancelled(orderCode);
+  if (!cancelled) {
+    throw { status: 409, message: 'Đơn hàng vừa được xử lý (có thể vừa thanh toán thành công) — không thể huỷ, vui lòng tải lại' };
+  }
   return { orderCode };
 }

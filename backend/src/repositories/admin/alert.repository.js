@@ -509,6 +509,35 @@ export async function metricLoginFailFlood(windowMinutes, threshold) {
   return rows;
 }
 
+/**
+ * Đơn cancelled/failed mà webhook PayOS SAU ĐÓ báo đã trả tiền — payment.service.js
+ * (handleWebhook) gắn tag PAID_AFTER_CANCELLED vào note khi việc này xảy ra (không tự đổi
+ * status, không tự kích hoạt gói).
+ *
+ * Cận trên maxAgeHours bắt buộc — cùng lý do đã ghi ở metricZaloDisconnected: đơn không có
+ * cột "đã xử lý tay" riêng cho ca hiếm này, chỉ dựa vào note/status; không có cận trên thì
+ * một đơn đã được admin xử lý tay (kích hoạt bù/hoàn tiền) nhưng chưa đổi status khỏi
+ * cancelled/failed sẽ làm quy tắc bắn mãi mãi mỗi lượt cooldown.
+ */
+export async function metricPaidAfterCancelledOrders(maxAgeHours = 168) {
+  const { rows } = await db.query(
+    `SELECT order_code, amount, status, updated_at
+       FROM orders
+      WHERE status IN ('cancelled', 'failed')
+        AND note LIKE '%PAID_AFTER_CANCELLED%'
+        AND updated_at >= NOW() - ($1 || ' hours')::interval
+      ORDER BY updated_at DESC
+      LIMIT 20`,
+    [String(maxAgeHours)]
+  );
+  return rows.map((r) => ({
+    orderCode: r.order_code,
+    amount: Number(r.amount),
+    status: r.status,
+    updatedAt: r.updated_at,
+  }));
+}
+
 export async function listAdminAlertEmails() {
   const envList = String(process.env.ADMIN_ALERT_EMAILS || process.env.ADMIN_ALERT_EMAIL || '')
     .split(',')

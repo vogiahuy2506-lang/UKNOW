@@ -416,6 +416,31 @@ export const cancelPendingOrderWithNote = async (orderCode, note, queryable = db
     return rows[0] || null;
 };
 
+/**
+ * PR-4 (đợt rà soát 26/09) — tag một đơn cancelled/failed mà webhook PayOS SAU ĐÓ báo đã
+ * trả tiền (checkout mới huỷ đơn cũ nhưng huỷ link PayOS là best-effort; khách vẫn quét
+ * được QR cũ). KHÔNG đổi status (giữ nguyên cancelled/failed — không tự coi là success vì
+ * có thể phải hoàn tiền thay vì kích hoạt bù) và KHÔNG kích hoạt gói — chỉ đánh dấu để
+ * metricPaidAfterCancelledOrders (alert.repository.js) nhặt được ở lượt cron cảnh báo kế
+ * tiếp. Guard note NOT LIKE để idempotent khi PayOS gọi lại webhook nhiều lần.
+ */
+export const flagPaidAfterCancelled = async (orderCode, note, queryable = db) => {
+    const { rows } = await queryable.query(
+        `UPDATE orders
+            SET note = CASE
+                  WHEN note IS NULL OR note = '' THEN $2
+                  ELSE note || E'\\n' || $2
+                END,
+                updated_at = NOW()
+          WHERE order_code = $1
+            AND status IN ('cancelled', 'failed')
+            AND COALESCE(note, '') NOT LIKE '%PAID_AFTER_CANCELLED%'
+          RETURNING id, order_code, amount, status`,
+        [orderCode, note]
+    );
+    return rows[0] || null;
+};
+
 export const findUserIdByEmail = async (email) => {
     const { rows } = await db.query(
         'SELECT id FROM users WHERE LOWER(email) = LOWER($1) LIMIT 1',

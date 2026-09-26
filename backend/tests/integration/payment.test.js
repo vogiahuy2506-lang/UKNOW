@@ -1015,11 +1015,34 @@ describe('POST /api/payments/webhook', () => {
     const res = await request(app).post('/api/payments/webhook').send({});
     expect(res.status).toBe(200);
 
-    const o = await db.query(`SELECT status FROM orders WHERE order_code = $1`, [orderCode]);
+    const o = await db.query(`SELECT status, note FROM orders WHERE order_code = $1`, [orderCode]);
     expect(o.rows[0].status).toBe('cancelled');
+    // PR-4 (đợt rà soát 26/09) — KHÔNG được im lặng: phải tag để cron cảnh báo nhặt được,
+    // dù không tự kích hoạt gói (2 assertion active_plan_id/status ở trên giữ nguyên như cũ).
+    expect(o.rows[0].note).toContain('PAID_AFTER_CANCELLED');
 
     const u = await db.query(`SELECT active_plan_id FROM users WHERE id = $1`, [user.id]);
     expect(u.rows[0].active_plan_id).toBeNull();
+  });
+
+  it('PR-4: webhook gọi lại lần 2 cho cùng đơn cancelled → không tag trùng note (idempotent)', async () => {
+    const user = await createUser({ username: 'cancelled-buyer2', withPlan: false });
+    const plan = await createPlan({ code: 'cancel-test-2' });
+    const orderCode = Date.now() + 4;
+    await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'failed')`,
+      [orderCode, plan.id, plan.price, user.email, user.id]
+    );
+
+    mockWebhooksVerify.mockResolvedValue({ code: '00', orderCode });
+    await request(app).post('/api/payments/webhook').send({});
+    await request(app).post('/api/payments/webhook').send({});
+
+    const o = await db.query(`SELECT status, note FROM orders WHERE order_code = $1`, [orderCode]);
+    expect(o.rows[0].status).toBe('failed');
+    const occurrences = (o.rows[0].note.match(/PAID_AFTER_CANCELLED/g) || []).length;
+    expect(occurrences).toBe(1);
   });
 
   it('kích hoạt/nâng gói ghi đè subscription_expires_at = NOW() + 30 ngày (không cộng dồn ngày cũ)', async () => {
