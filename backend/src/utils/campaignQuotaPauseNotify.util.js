@@ -5,7 +5,9 @@ import {
   sendSystemEmail,
   buildCampaignPausedEmail,
   buildCampaignStoppedQuotaEmail,
+  buildCampaignRunFailedEmail,
 } from './systemEmail.util.js';
+import { labelCampaignRunFailure } from './campaignRunFailureLabel.util.js';
 
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
 
@@ -156,6 +158,46 @@ export async function notifyCampaignQuotaStopped({ campaignId, reason }) {
   await sendSystemEmail({ to: owner.email, subject, html });
   console.log(
     `[CampaignQuotaNotify] stopped email sent campaign=${campaignId} to=${owner.email}`
+  );
+  return { sent: true };
+}
+
+/**
+ * Gửi email cho chủ chiến dịch khi một lượt chạy hỏng hoặc bị hệ thống tự dừng (lỗi cấu
+ * hình/kỹ thuật — KHÔNG dùng cho hết hạn mức gói, đã có notifyCampaignQuotaPaused/Stopped riêng).
+ * Chống gửi trùng bằng claimRunFailureNotification() — một câu UPDATE giành cờ nguyên tử, không
+ * đọc-rồi-ghi, và không lọc theo status nên vẫn giành được cờ dù run đã 'failed'.
+ *
+ * @param {{ runId: number, campaignId: number, reason: string, source?: string }} input
+ * @returns {Promise<{ sent?: boolean, skipped?: boolean, reason?: string }>}
+ */
+export async function notifyCampaignRunFailed({ runId, campaignId, reason, source }) {
+  const claimed = await campaignRunRepository.claimRunFailureNotification(runId);
+  if (!claimed) {
+    return { skipped: true, reason: 'already_notified' };
+  }
+
+  const owner = await loadOwnerContact(campaignId);
+  if (!owner?.email) {
+    console.warn(
+      `[CampaignRunFailedNotify] skip email — no owner email campaign=${campaignId} run=${runId}`
+    );
+    return { skipped: true, reason: 'no_owner_email' };
+  }
+
+  const { message: reasonLabel, actionHint } = labelCampaignRunFailure(reason);
+  const { subject, html } = buildCampaignRunFailedEmail({
+    fullName: owner.fullName,
+    campaignName: owner.campaignName,
+    reason: reasonLabel,
+    actionHint,
+    appUrl: frontendAppUrl('/app/campaigns'),
+  });
+
+  await sendSystemEmail({ to: owner.email, subject, html });
+  console.log(
+    `[CampaignRunFailedNotify] email sent campaign=${campaignId} run=${runId} `
+    + `source=${source || 'unknown'} to=${owner.email}`
   );
   return { sent: true };
 }

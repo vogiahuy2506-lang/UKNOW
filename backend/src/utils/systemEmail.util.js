@@ -688,6 +688,76 @@ export function buildCampaignStoppedQuotaEmail({ fullName, campaignName, reason,
   };
 }
 
+/**
+ * PR-3 — email khi một lượt chạy chiến dịch hỏng hoặc bị hệ thống tự dừng (lỗi cấu hình/kỹ
+ * thuật, không phải hết hạn mức gói — hết hạn mức đã có buildCampaignStoppedQuotaEmail riêng).
+ * `reason`/`actionHint` lấy từ labelCampaignRunFailure() — đã là câu tiếng Việt, hàm này không
+ * tự diễn giải thêm.
+ *
+ * @param {{ fullName?: string|null, campaignName: string, reason: string, actionHint: string, appUrl: string }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildCampaignRunFailedEmail({ fullName, campaignName, reason, actionHint, appUrl }) {
+  const name = campaignName || 'Chiến dịch';
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${fullName || 'bạn'}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Lượt chạy gần nhất của chiến dịch <strong>«${name}»</strong> đã dừng vì gặp lỗi.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;margin-bottom:20px">
+      <tr>
+        <td style="padding:16px 20px">
+          <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#991b1b;text-transform:uppercase;letter-spacing:.5px">
+            Lý do
+          </p>
+          <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;white-space:pre-wrap">${reason}</p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-left:4px solid #ea580c;border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.5px">
+            Cần làm gì
+          </p>
+          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6">${actionHint}</p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${appUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Xem chiến dịch →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Cần hỗ trợ? Liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Chiến dịch «${name}» gặp lỗi, lượt chạy đã dừng`,
+    html: buildBaseTemplate({
+      subtitle: 'Lượt chạy chiến dịch đã dừng vì lỗi',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
 // ─── Welcome Email ────────────────────────────────────────────────────────────
 
 function buildWelcomePlanSection(planName) {

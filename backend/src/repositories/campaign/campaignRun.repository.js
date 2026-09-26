@@ -90,6 +90,26 @@ class CampaignRunRepository {
     );
   }
 
+  /**
+   * PR-3 — giành cờ "đã báo chủ chiến dịch lượt chạy hỏng" bằng MỘT câu UPDATE nguyên tử (không
+   * đọc-rồi-ghi, tránh gửi trùng khi nhiều đường cùng gọi failRun/notify cho cùng runId). KHÔNG lọc
+   * theo status: patchRunMetadata() chỉ ghi khi status='running' nên đặt cờ SAU failRun (run đã
+   * 'failed') sẽ bị bỏ qua lặng lẽ — đây là lỗi PR-3 bản trước đã mắc.
+   *
+   * @param {number} runId
+   * @returns {Promise<boolean>} true nếu lần gọi này giành được cờ (chưa ai báo trước)
+   */
+  async claimRunFailureNotification(runId) {
+    const { rows } = await db.query(
+      `UPDATE campaign_runs
+       SET run_metadata = COALESCE(run_metadata, '{}'::jsonb) || jsonb_build_object('failureNotifiedAt', to_jsonb(NOW()::text))
+       WHERE id = $1 AND NOT (COALESCE(run_metadata, '{}'::jsonb) ? 'failureNotifiedAt')
+       RETURNING id`,
+      [runId]
+    );
+    return rows.length > 0;
+  }
+
 
   /**
    * Update run progress counters.
