@@ -47,13 +47,16 @@ describe('sendInternalWithdrawalNotification — Việc 6.2: escapeHtml cho mọ
     expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
   });
 
-  it('full_name chứa thẻ HTML cũng được escape trong TIÊU ĐỀ email', async () => {
-    const withdrawal = { ...baseWithdrawal, full_name: '</td><b>hack</b>' };
+  // "Nợ nhỏ" PR-4/PR-6 (26/09) — TIÊU ĐỀ email là văn bản thường, không phải HTML. escapeHtml ở
+  // đây từng làm tên có "&" hiện nguyên "&amp;" trong hộp thư kế toán. Đã bỏ escapeHtml cho
+  // subject, GIỮ NGUYÊN cho thân HTML (2 test trên/dưới không đổi).
+  it('full_name có "&" → TIÊU ĐỀ giữ nguyên văn bản thô, KHÔNG escape thành "&amp;"', async () => {
+    const withdrawal = { ...baseWithdrawal, full_name: 'Trần Văn A & Con' };
     await sendInternalWithdrawalNotification(withdrawal, 'partner@example.com');
 
     const { subject } = mockSendSystemEmail.mock.calls[0][0];
-    expect(subject).not.toContain('</td><b>hack</b>');
-    expect(subject).toContain('&lt;/td&gt;&lt;b&gt;hack&lt;/b&gt;');
+    expect(subject).toContain('Trần Văn A & Con');
+    expect(subject).not.toContain('&amp;');
   });
 
   it('bank_name / bank_account_number / bank_account_name đều được escape', async () => {

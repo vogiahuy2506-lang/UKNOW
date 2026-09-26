@@ -105,7 +105,10 @@ export async function sendInternalWithdrawalNotification(withdrawal, userEmail) 
 
   return sendSystemEmail({
     to: INTERNAL_NOTIFY_EMAIL,
-    subject: `[Founder AI] Yêu cầu rút hoa hồng #${withdrawal.id} — ${escapeHtml(withdrawal.full_name)}`,
+    // Tiêu đề email là văn bản thường, không phải HTML — escapeHtml ở đây từng làm tên có "&"
+    // hiện ra "&amp;" nguyên si trong hộp thư kế toán. escapeHtml vẫn giữ nguyên trong content
+    // (thân HTML) ở trên vì đó là nơi thật sự cần chống XSS.
+    subject: `[Founder AI] Yêu cầu rút hoa hồng #${withdrawal.id} — ${withdrawal.full_name}`,
     html,
   });
 }
