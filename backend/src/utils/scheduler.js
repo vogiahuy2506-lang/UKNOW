@@ -1298,18 +1298,35 @@ export const initScheduler = () => {
     if (process.env.NODE_ENV === 'test') return;
     try {
       const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      const { sweepAffiliateRevenue } = await import('../services/affiliate/affiliateRevenueSweep.service.js');
       const {
-        closeAffiliateMonth,
+        closeAffiliateMonthsCatchup,
         AFFILIATE_MONTH_CLOSING_JOB_CODE,
       } = await import('../services/affiliate/affiliateMonthClosing.service.js');
 
       await cronJobRunRepository.recordRun(AFFILIATE_MONTH_CLOSING_JOB_CODE, async () => {
-        const summary = await closeAffiliateMonth();
+        // Việc 6.3 — quét doanh thu ngay trước khi đóng sổ: sweep giờ chạy độc lập mỗi giờ, nhưng
+        // đơn thành công ngay SÁT thời điểm đóng sổ (03:00 ngày 2) có thể chưa được sweep giờ gần
+        // nhất nhặt tới. sweepAffiliateRevenue tự idempotent (ON CONFLICT DO NOTHING), gọi thêm
+        // lần nữa ở đây vô hại. Lỗi ở bước này không được chặn việc đóng sổ.
+        try {
+          await sweepAffiliateRevenue();
+        } catch (sweepErr) {
+          console.error('[Scheduler] Sweep doanh thu affiliate trước khi đóng sổ lỗi (vẫn tiếp tục đóng sổ):', sweepErr.message);
+        }
+
+        // PR-4 (đợt rà soát 26/09), Việc 6.1 — không chỉ đóng tháng liền trước: chạy lại cho vài
+        // tháng cũ để hoa hồng "treo" (khách bổ sung SĐT muộn) được cấp bù đúng bậc mới. Xem chú
+        // thích closeAffiliateMonthsCatchup.
+        const summary = await closeAffiliateMonthsCatchup();
         if (summary.insertedPeriods > 0 || summary.adjustedPeriods > 0 || summary.decreasedGrossPeriods > 0) {
           console.log(
-            `[Scheduler] Affiliate month closing (${summary.monthKey}): inserted=${summary.insertedPeriods}, `
+            `[Scheduler] Affiliate month closing (tháng ${summary.monthKeys.join(', ')}): inserted=${summary.insertedPeriods}, `
             + `adjusted=${summary.adjustedPeriods}, decreased=${summary.decreasedGrossPeriods}, commission=${summary.totalCommission}, delta=${summary.totalAdjustment}`
           );
+        }
+        if (summary.erroredReferrers > 0) {
+          console.error(`[Scheduler] Affiliate month closing: ${summary.erroredReferrers} referrer lỗi (xem log AffiliateClosing phía trên)`);
         }
         return summary;
       });

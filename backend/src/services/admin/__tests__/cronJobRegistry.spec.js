@@ -17,6 +17,8 @@ import {
   EINVOICE_SERIES_CHECK_JOB_CODE,
 } from '../../payment/matbaoInvoice.service.js';
 import { STORAGE_RECONCILE_JOB_CODE } from '../../storage/storageReconcile.service.js';
+import { AFFILIATE_REVENUE_SWEEP_JOB_CODE } from '../../affiliate/affiliateRevenueSweep.service.js';
+import { AFFILIATE_MONTH_CLOSING_JOB_CODE } from '../../affiliate/affiliateMonthClosing.service.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const SCHEDULER_PATH = path.resolve(__dirname, '../../../utils/scheduler.js');
@@ -51,6 +53,12 @@ function extractRecordedJobCodes(schedulerSource) {
   if (/recordRun\(\s*STORAGE_RECONCILE_JOB_CODE/.test(schedulerSource)) {
     codes.add(STORAGE_RECONCILE_JOB_CODE);
   }
+  if (/recordRun\(\s*AFFILIATE_REVENUE_SWEEP_JOB_CODE/.test(schedulerSource)) {
+    codes.add(AFFILIATE_REVENUE_SWEEP_JOB_CODE);
+  }
+  if (/recordRun\(\s*AFFILIATE_MONTH_CLOSING_JOB_CODE/.test(schedulerSource)) {
+    codes.add(AFFILIATE_MONTH_CLOSING_JOB_CODE);
+  }
   return codes;
 }
 
@@ -76,13 +84,16 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 31 cron cố định, không trùng mã', () => {
+  it('đúng 33 cron cố định, không trùng mã', () => {
     // 29 → 30: thêm notification_templates (PLAN_NOTIFICATION_CENTER_SAVE_AS_TEMPLATE,
     // PR-1 — Save As Template MVP, dispatch mark-only vì template chưa lưu targeting).
     // 30 → 31: thêm facebook_token_refresh (06209dca, 21/09/2026 — làm mới Page Access Token 03:00
     // hàng ngày). Thêm cron mà quên sửa số ở đây là đỏ cả bộ unit, chặn luôn deploy backend.
-    expect(CRON_JOBS).toHaveLength(31);
+    // 31 → 33: thêm affiliate_revenue_sweep + affiliate_month_closing (PR-4 đợt rà soát 26/09,
+    // PLAN_VA_LOI_LUONG_TIEN_2026-09-26 PR-6 Việc 6.3 — 2 job affiliate đã gọi recordRun từ trước
+    // nhưng chưa có trong CRON_JOBS nên không được cronJobRegistry giám sát/cảnh báo).
+    expect(CRON_JOBS).toHaveLength(33);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(31);
+    expect(new Set(codes).size).toBe(33);
   });
 });

@@ -114,6 +114,7 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
   let decreasedGrossPeriods = 0;
   let totalCommission = 0;
   let totalAdjustment = 0;
+  let erroredReferrers = 0;
 
   for (const candidate of candidateRows) {
     const referrerId = candidate.referrer_user_id;
@@ -221,8 +222,12 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
       processedReferrers += 1;
     } catch (err) {
       await client.query('ROLLBACK').catch(() => {});
+      // PR-4 (đợt rà soát 26/09), Việc 6.3 — một referrer lỗi (vd deadlock, dữ liệu hỏng riêng
+      // của người đó) KHÔNG được chặn việc đóng sổ của những referrer còn lại trong cùng tháng.
+      // Trước đây throw ở đây làm dừng nguyên vòng for, referrer nào đứng sau người lỗi trong
+      // candidateRows coi như bị bỏ quên tháng đó vĩnh viễn (đóng sổ không tự chạy lại).
       console.error(`[AffiliateClosing] Lỗi xử lý referrer ${referrerId} tháng ${monthKey}:`, err);
-      throw err;
+      erroredReferrers += 1;
     } finally {
       client.release();
     }
@@ -238,5 +243,83 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
     decreasedGrossPeriods,
     totalCommission,
     totalAdjustment,
+    erroredReferrers,
+  };
+}
+
+// PR-4 (đợt rà soát 26/09), Việc 6.1 — số tháng cũ chạy lại kèm tháng liền trước mỗi lượt cron.
+// Kịch bản có thật: khách mua lúc chưa có SĐT → hoa hồng "treo" tới khi họ tự bổ sung SĐT, có
+// thể muộn hơn nhiều so với tháng phát sinh doanh thu. closeAffiliateMonth ĐÃ tự đối soát đúng
+// (xem đoạn "Đối soát event về muộn" phía trên) khi được gọi lại cho đúng tháng cũ — thứ duy
+// nhất còn thiếu là DANH SÁCH THÁNG được gọi, cron trước đây chỉ gọi đúng 1 tháng liền trước.
+export const AFFILIATE_MONTH_CLOSING_CATCHUP_MONTHS = 6;
+
+/**
+ * Trừ `n` tháng khỏi một month_key 'YYYY-MM' bằng số học nguyên — không dùng Date/timezone để
+ * tránh mọi bẫy lệch giờ VN mà chính plan này đang vá ở chỗ khác.
+ * @param {string} monthKey
+ * @param {number} n
+ * @returns {string}
+ */
+export function subtractMonthsFromKey(monthKey, n) {
+  const [y, m] = monthKey.split('-').map(Number);
+  const total = y * 12 + (m - 1) - n;
+  const newYear = Math.floor(total / 12);
+  const newMonth = (total % 12) + 1;
+  return `${newYear}-${String(newMonth).padStart(2, '0')}`;
+}
+
+/**
+ * Đóng sổ tháng liền trước NHƯ CŨ, rồi chạy lại closeAffiliateMonth cho `catchupMonths` tháng
+ * TRƯỚC ĐÓ để hoa hồng treo được cấp bù đúng bậc mới ngay khi khách bổ sung SĐT muộn. Không phải
+ * cơ chế điều chỉnh mới — chỉ mở rộng danh sách tháng được gọi lại. Giữ nguyên chống cộng trùng
+ * và xử lý delta âm (không throw) đã có sẵn trong closeAffiliateMonth cho từng tháng.
+ *
+ * Một tháng lỗi (vd DB tạm gián đoạn) không được chặn các tháng khác trong cùng lượt.
+ *
+ * @param {object} [options={}]
+ * @param {number} [options.catchupMonths=AFFILIATE_MONTH_CLOSING_CATCHUP_MONTHS]
+ * @param {Date} [options.referenceDate] Truyền cho test; mặc định new Date()
+ * @param {boolean} [options.force] Chuyển thẳng cho closeAffiliateMonth (bỏ qua isAffiliateClosingEnabled)
+ * @returns {Promise<object>}
+ */
+export async function closeAffiliateMonthsCatchup(options = {}) {
+  const { catchupMonths = AFFILIATE_MONTH_CLOSING_CATCHUP_MONTHS, referenceDate, ...closeOptions } = options;
+
+  const previousMonthKey = resolvePreviousMonthKey(referenceDate);
+  const monthKeys = [previousMonthKey];
+  for (let i = 1; i <= catchupMonths; i += 1) {
+    monthKeys.push(subtractMonthsFromKey(previousMonthKey, i));
+  }
+
+  const results = [];
+  for (const monthKey of monthKeys) {
+    try {
+      const summary = await closeAffiliateMonth(monthKey, closeOptions);
+      results.push(summary);
+    } catch (err) {
+      console.error(`[AffiliateClosing] Lỗi đóng sổ tháng ${monthKey} (chạy lại tháng cũ):`, err);
+      results.push({ status: 'error', skipped: false, monthKey, error: err.message });
+    }
+  }
+
+  // Quy ước status success/noop giống các job quét-nhiều-mục khác trong repo (vd
+  // payosReconcile.service.js reconcileRecentPendingOrders): chỉ dựa trên có việc thật được làm
+  // hay không, KHÔNG đảo thành trạng thái thứ ba khi có lỗi — lỗi từng tháng vẫn nằm trong
+  // results[].status/error để xem trong cron_job_runs.result, không cần thêm giá trị status mới
+  // (cron_job_runs.status chỉ nên là success/noop/failure như quy ước sẵn có).
+  const anySuccess = results.some((r) => r.status === 'success');
+
+  return {
+    status: anySuccess ? 'success' : 'noop',
+    monthKey: previousMonthKey,
+    monthKeys,
+    results,
+    totalCommission: results.reduce((sum, r) => sum + (r.totalCommission || 0), 0),
+    totalAdjustment: results.reduce((sum, r) => sum + (r.totalAdjustment || 0), 0),
+    insertedPeriods: results.reduce((sum, r) => sum + (r.insertedPeriods || 0), 0),
+    adjustedPeriods: results.reduce((sum, r) => sum + (r.adjustedPeriods || 0), 0),
+    decreasedGrossPeriods: results.reduce((sum, r) => sum + (r.decreasedGrossPeriods || 0), 0),
+    erroredReferrers: results.reduce((sum, r) => sum + (r.erroredReferrers || 0), 0),
   };
 }

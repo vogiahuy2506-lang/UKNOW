@@ -2,6 +2,7 @@ import db from '../../config/database.js';
 import { TAX_CODE_REGEX, ID_NUMBER_REGEX } from '../../utils/invoiceVat.util.js';
 import { encryptAffiliatePii, decryptAffiliatePii } from '../../utils/affiliatePiiCrypto.util.js';
 import { buildBaseTemplate, sendSystemEmail } from '../../utils/systemEmail.util.js';
+import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import { resolveTier, AFFILIATE_TIERS } from '../../utils/affiliateTier.util.js';
 import auditService from '../audit.service.js';
 
@@ -47,7 +48,7 @@ export async function sendInternalWithdrawalNotification(withdrawal, userEmail) 
             </tr>
             <tr style="border-bottom:1px solid #e5e7eb">
               <td style="padding:8px 0;font-size:13px;color:#6b7280">Họ và tên đối tác</td>
-              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${withdrawal.full_name}</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${escapeHtml(withdrawal.full_name)}</td>
             </tr>
             <tr style="border-bottom:1px solid #e5e7eb">
               <td style="padding:8px 0;font-size:13px;color:#6b7280">Email tài khoản</td>
@@ -69,15 +70,15 @@ export async function sendInternalWithdrawalNotification(withdrawal, userEmail) 
             </tr>
             <tr style="border-bottom:1px solid #e5e7eb">
               <td style="padding:8px 0;font-size:13px;color:#6b7280">Ngân hàng</td>
-              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${withdrawal.bank_name}</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${escapeHtml(withdrawal.bank_name)}</td>
             </tr>
             <tr style="border-bottom:1px solid #e5e7eb">
               <td style="padding:8px 0;font-size:13px;color:#6b7280">Số tài khoản</td>
-              <td style="padding:8px 0;font-size:13px;font-weight:700;color:#374151;letter-spacing:0.5px">${withdrawal.bank_account_number}</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:700;color:#374151;letter-spacing:0.5px">${escapeHtml(withdrawal.bank_account_number)}</td>
             </tr>
             <tr style="border-bottom:1px solid #e5e7eb">
               <td style="padding:8px 0;font-size:13px;color:#6b7280">Tên chủ tài khoản</td>
-              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${withdrawal.bank_account_name}</td>
+              <td style="padding:8px 0;font-size:13px;font-weight:600;color:#374151">${escapeHtml(withdrawal.bank_account_name)}</td>
             </tr>
             <tr style="border-bottom:1px solid #e5e7eb">
               <td style="padding:8px 0;font-size:13px;color:#6b7280">Thời gian yêu cầu</td>
@@ -104,7 +105,7 @@ export async function sendInternalWithdrawalNotification(withdrawal, userEmail) 
 
   return sendSystemEmail({
     to: INTERNAL_NOTIFY_EMAIL,
-    subject: `[Founder AI] Yêu cầu rút hoa hồng #${withdrawal.id} — ${withdrawal.full_name}`,
+    subject: `[Founder AI] Yêu cầu rút hoa hồng #${withdrawal.id} — ${escapeHtml(withdrawal.full_name)}`,
     html,
   });
 }
@@ -474,8 +475,13 @@ export async function getUserWithdrawalPrefill(userId) {
     throw error;
   }
 
+  // PR-4 (đợt rà soát 26/09), Việc 6.5 — id_card_issued_date là cột DATE: node-postgres đổi nó
+  // thành Date 00:00 giờ VN, JSON.stringify in ra UTC (17:00 hôm trước) → form điền sẵn
+  // .slice(0,10) rồi gửi lại làm ngày lùi 1 ngày mỗi lần rút. Ép ::text ở SQL (không phụ thuộc
+  // múi giờ tiến trình) để giữ đúng 'YYYY-MM-DD' đã lưu.
   const lastWithdrawalResult = await db.query(
-    `SELECT bank_name, bank_account_number, bank_account_name, id_card_issued_date, id_card_issued_place
+    `SELECT bank_name, bank_account_number, bank_account_name,
+            id_card_issued_date::text AS id_card_issued_date, id_card_issued_place
      FROM affiliate_withdrawals
      WHERE user_id = $1
      ORDER BY id DESC LIMIT 1`,
@@ -506,7 +512,7 @@ export async function getUserWithdrawals(userId) {
   const result = await db.query(
     `SELECT id, partner_type, amount_gross, tax_amount, amount_net,
             full_name, tax_code, bank_name, bank_account_number, bank_account_name,
-            id_card_issued_date, id_card_issued_place,
+            id_card_issued_date::text AS id_card_issued_date, id_card_issued_place,
             status, requested_at, processed_at, note
      FROM affiliate_withdrawals
      WHERE user_id = $1
@@ -534,7 +540,7 @@ export async function adminListWithdrawals({ status, limit = 50, offset = 0 } = 
   const query = `
     SELECT w.id, w.user_id, w.partner_type, w.amount_gross, w.tax_amount, w.amount_net,
            w.full_name, w.tax_code, w.bank_name, w.bank_account_number, w.bank_account_name,
-           w.id_card_number_enc, w.id_card_issued_date, w.id_card_issued_place,
+           w.id_card_number_enc, w.id_card_issued_date::text AS id_card_issued_date, w.id_card_issued_place,
            w.company_name, w.company_address, w.invoice_reference,
            w.status, w.requested_at, w.processed_at, w.processed_by, w.note,
            u.email AS user_email, u.phone AS user_phone

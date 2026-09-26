@@ -465,6 +465,30 @@ describe('Affiliate PR-A4 — Yêu cầu rút + KYC + Email nội bộ', () => {
     expect(res.body.data.taxCode).toBe('8000111222');
   });
 
+  // PR-4 (đợt rà soát 26/09), Việc 6.5 — id_card_issued_date là cột DATE: node-postgres từng đổi
+  // nó thành Date 00:00 giờ VN rồi JSON.stringify ra UTC (lùi 1 ngày). Rút xong, prefill lại phải
+  // trả ĐÚNG chuỗi 'YYYY-MM-DD' đã lưu, không được lùi ngày.
+  it('l2. Prefill sau khi đã có 1 lệnh rút: id_card_issued_date KHÔNG bị lùi 1 ngày', async () => {
+    const user = await createUser({ email: 'user-l2@test.com', username: 'user_l2' });
+    await insertLedger(user.id, 5000000);
+    await requestWithdrawal(user.id, { ...VALID_PERSONAL_BODY, amount: 2000000, id_card_issued_date: '2021-05-10' });
+
+    const token = createAuthToken(user);
+    const res = await request(app)
+      .get('/api/affiliate/withdrawals/prefill')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.idCardIssuedDate).toBe('2021-05-10');
+
+    // Đối chiếu trực tiếp với DB — không suy luận, đo đúng giá trị đã lưu.
+    const dbRow = await db.query(
+      `SELECT id_card_issued_date::text AS d FROM affiliate_withdrawals WHERE user_id = $1`,
+      [user.id]
+    );
+    expect(dbRow.rows[0].d).toBe('2021-05-10');
+  });
+
   it('m. findPurgeBlockers phát hiện có affiliate_withdrawals và chặn xóa user', async () => {
     const user = await createUser({ email: 'user-m@test.com', username: 'user_m' });
     await insertLedger(user.id, 2000000);

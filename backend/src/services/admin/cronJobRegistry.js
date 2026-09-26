@@ -267,6 +267,22 @@ export const CRON_JOBS = [
     impact: 'Chủ shop không nhận được thư tổng kết tháng về hiệu quả hoạt động của trợ lý AI.',
     tracked: true,
   },
+  {
+    code: 'affiliate_revenue_sweep',
+    label: 'Quét doanh thu hoa hồng giới thiệu',
+    schedule: 'Mỗi giờ',
+    description: 'Ghi nhận các đơn thành công thành sự kiện doanh thu quy gán cho người giới thiệu.',
+    impact: 'Doanh thu phát sinh không được ghi nhận cho người giới thiệu, đóng sổ tháng sẽ thiếu.',
+    tracked: true,
+  },
+  {
+    code: 'affiliate_month_closing',
+    label: 'Đóng sổ hoa hồng giới thiệu',
+    schedule: '03:00 ngày 2 hàng tháng',
+    description: 'Tính hoa hồng theo bậc cho tháng liền trước và chạy lại vài tháng cũ để cấp bù hoa hồng treo (khách bổ sung SĐT muộn). Tắt mặc định trên production qua AFFILIATE_CLOSING_ENABLED.',
+    impact: 'Hoa hồng tháng đó không được tính vào ví đối tác; hoa hồng treo do khách bổ sung SĐT muộn không bao giờ được cấp bù.',
+    tracked: true,
+  },
 ];
 
 export function getCronJobByCode(code) {
