@@ -28,12 +28,20 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch giờ đi qua preflight, đòi
+// campaign phải có ít nhất 1 node gửi (mọi test ở đây đều bật lịch, không có ca nào cần campaign trống).
 async function insertCampaign(ownerId, status = 'active') {
   const { rows } = await db.query(
     `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, 'Nhắc lịch hội thảo 23/9', $2) RETURNING *`,
     [ownerId, status],
   );
-  return rows[0];
+  const campaign = rows[0];
+  await db.query(
+    `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+     VALUES ($1, 'action', 'send_email', 'Gửi email', '{}'::jsonb, 1)`,
+    [campaign.id],
+  );
+  return campaign;
 }
 
 const payload = (campaignId, extra = {}) => ({

@@ -33,6 +33,10 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch giờ đi qua preflight
+// (validateCampaignPreflight), đòi node PHẢI đúng node_subtype trong SEND_NODE_SUBTYPES.
+// 'send_zalo_group' cũ không có node_subtype nên chỉ thoả CANNOT_ACTIVATE_EMPTY_CAMPAIGN
+// (publishCampaignTx, chỉ đếm số node) chứ không thoả preflight — đổi sang send_email cho khớp cả hai.
 async function insertCampaign({ ownerId, status, campaignName = 'CSKH sau hội thảo', withNode = true }) {
   const { rows } = await db.query(
     `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, $2, $3) RETURNING *`,
@@ -41,8 +45,8 @@ async function insertCampaign({ ownerId, status, campaignName = 'CSKH sau hội 
   const campaign = rows[0];
   if (withNode) {
     await db.query(
-      `INSERT INTO campaign_nodes (id_campaign, node_type, node_name, position_x, position_y, config, execution_order)
-       VALUES ($1, 'send_zalo_group', 'Gửi nhóm', 0, 0, '{}'::jsonb, 0)`,
+      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, position_x, position_y, config, execution_order)
+       VALUES ($1, 'action', 'send_email', 'Gửi email', 0, 0, '{}'::jsonb, 0)`,
       [campaign.id],
     );
   }
@@ -150,7 +154,12 @@ describe('POST /api/campaign-schedules kèm activateCampaign — kích hoạt + 
     expect(await countSchedules(campaign.id)).toBe(1);
   });
 
-  it('chiến dịch 0 node + activateCampaign:true → 409 CANNOT_ACTIVATE_EMPTY_CAMPAIGN, trạng thái VẪN draft, KHÔNG có lịch nào được tạo (chứng minh nguyên tử)', async () => {
+  // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — "preflight vẫn chạy trước khi kích
+  // hoạt", kể cả nhánh activateCampaign:true. Chiến dịch 0 node giờ bị preflight (NO_SEND_NODE)
+  // chặn TRƯỚC khi chạm tới activateCampaignAndWriteScheduleTx, nên không bao giờ còn tới lượt
+  // CANNOT_ACTIVATE_EMPTY_CAMPAIGN (publishCampaignTx) nổ ra nữa — vẫn cùng một bất biến "nguyên
+  // tử" (không kích hoạt, không tạo lịch), chỉ đổi mã lỗi/thông điệp cho đúng nguyên nhân gốc hơn.
+  it('chiến dịch 0 node + activateCampaign:true → 400 NO_SEND_NODE (preflight chặn trước khi kích hoạt), trạng thái VẪN draft, KHÔNG có lịch nào được tạo (chứng minh nguyên tử)', async () => {
     const user = await createUser({ email: 'act-empty@test.com', username: 'act_empty' });
     const token = await loginAs(user);
     const campaign = await insertCampaign({ ownerId: user.id, status: 'draft', withNode: false });
@@ -160,8 +169,8 @@ describe('POST /api/campaign-schedules kèm activateCampaign — kích hoạt + 
       .set('Authorization', `Bearer ${token}`)
       .send(schedulePayload(campaign.id, { activateCampaign: true }));
 
-    expect(res.status).toBe(409);
-    expect(res.body.code).toBe('CANNOT_ACTIVATE_EMPTY_CAMPAIGN');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('NO_SEND_NODE');
 
     const { rows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaign.id]);
     expect(rows[0].status).toBe('draft');
@@ -246,7 +255,9 @@ describe('PATCH /api/campaign-schedules/:id kèm activateCampaign — bẫy "hai
     expect(rows[0].enabled).toBe(false);
   });
 
-  it('chiến dịch 0 node + PATCH activateCampaign:true → 409 CANNOT_ACTIVATE_EMPTY_CAMPAIGN, lịch vẫn tắt (nguyên tử)', async () => {
+  // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — cùng lý do ở POST phía trên: preflight
+  // (NO_SEND_NODE) chặn trước khi tới activateCampaignAndWriteScheduleTx.
+  it('chiến dịch 0 node + PATCH activateCampaign:true → 400 NO_SEND_NODE (preflight chặn trước khi kích hoạt), lịch vẫn tắt (nguyên tử)', async () => {
     const user = await createUser({ email: 'act-patch-empty@test.com', username: 'act_patch_empty' });
     const token = await loginAs(user);
     const campaign = await insertCampaign({ ownerId: user.id, status: 'draft', withNode: false });
@@ -257,8 +268,8 @@ describe('PATCH /api/campaign-schedules/:id kèm activateCampaign — bẫy "hai
       .set('Authorization', `Bearer ${token}`)
       .send({ enabled: true, activateCampaign: true });
 
-    expect(res.status).toBe(409);
-    expect(res.body.code).toBe('CANNOT_ACTIVATE_EMPTY_CAMPAIGN');
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('NO_SEND_NODE');
     const { rows: scheduleRows } = await db.query('SELECT enabled FROM campaign_schedules WHERE id = $1', [schedule.id]);
     expect(scheduleRows[0].enabled).toBe(false);
     const { rows: campaignRows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaign.id]);

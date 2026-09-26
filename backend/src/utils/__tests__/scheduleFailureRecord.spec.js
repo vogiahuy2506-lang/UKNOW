@@ -22,11 +22,23 @@ jest.unstable_mockModule('../../controllers/campaign.controller.js', () => ({
 // trong nó chạy thêm SELECT campaigns THẬT, đi qua queryMock chung ở trên). Mock hẳn module này để
 // giữ nguyên phạm vi test gốc: chỉ soi SQL scheduler tự phát ra, không lẫn SQL của luồng báo lỗi.
 // campaignRunService (nạp thật qua scheduler.js) cũng import cùng module này nên phải trả đủ 4 export.
+const notifyCampaignRunFailedMock = jest.fn().mockResolvedValue({ sent: true });
 jest.unstable_mockModule('../campaignQuotaPauseNotify.util.js', () => ({
   QUOTA_DEFER_CLEAR_KEYS: ['quotaDeferredUntil', 'quotaDeferredReason', 'quotaDeferredAt', 'quotaPauseNotifiedAt'],
   notifyCampaignQuotaPaused: jest.fn().mockResolvedValue({ sent: true }),
   notifyCampaignQuotaStopped: jest.fn().mockResolvedValue({ sent: true }),
-  notifyCampaignRunFailed: jest.fn().mockResolvedValue({ sent: true }),
+  notifyCampaignRunFailed: notifyCampaignRunFailedMock,
+}));
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — lịch tự tắt gọi thẳng logWorkspace (không
+// qua req). Mock để test tự tắt không đụng DB thật qua audit.repository.js, và để có thể assert
+// đúng action/entity/details đã gửi.
+const logWorkspaceMock = jest.fn().mockResolvedValue({});
+jest.unstable_mockModule('../../services/audit.service.js', () => ({
+  default: { log: jest.fn().mockResolvedValue({}) },
+  logWorkspace: logWorkspaceMock,
+  logSystem: jest.fn().mockResolvedValue({}),
+  AUDIT_ACTIONS: new Proxy({}, { get: (_t, prop) => String(prop) }),
+  AUDIT_ENTITY_TYPES: new Proxy({}, { get: (_t, prop) => String(prop) }),
 }));
 
 const { _triggerCampaignScheduleForTests: trigger } = await import('../scheduler.js');
@@ -51,6 +63,8 @@ describe('triggerCampaignSchedule — lịch nổ mà hỏng phải để lại 
     queryMock.mockReset();
     createCampaignRunRecordMock.mockReset();
     executeCampaignMock.mockClear();
+    notifyCampaignRunFailedMock.mockClear();
+    logWorkspaceMock.mockClear();
     queryMock.mockResolvedValue({ rows: [] });
     errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
   });
@@ -131,6 +145,7 @@ describe('triggerCampaignSchedule — lịch nổ mà hỏng phải để lại 
     createCampaignRunRecordMock.mockResolvedValue({ id: 500 });
     queryMock
       .mockResolvedValueOnce(NOT_RUNNING)
+      .mockResolvedValueOnce({ rows: [] }) // Việc 1 (PR-4): SELECT lượt gần nhất đếm lỗi liên tiếp — 0 lượt, không tự tắt
       .mockRejectedValueOnce(new Error('deadlock detected')); // UPDATE run_count
     await trigger(schedule());
     expect(failedRunInserts()).toHaveLength(0);
@@ -147,6 +162,7 @@ describe('triggerCampaignSchedule — lịch nổ mà hỏng phải để lại 
   it('ghi vết lỗi cũng không làm vỡ luồng, và lịch once vẫn được tắt; lỗi gốc vẫn được log', async () => {
     queryMock
       .mockResolvedValueOnce(NOT_RUNNING)
+      .mockResolvedValueOnce({ rows: [] }) // Việc 1 (PR-4): SELECT lượt gần nhất đếm lỗi liên tiếp — 0 lượt, không tự tắt
       .mockRejectedValueOnce(new Error('insert failed')) // INSERT campaign_runs
       .mockResolvedValue({ rows: [] });
     createCampaignRunRecordMock.mockRejectedValue(httpError(400, NOT_ACTIVE));
@@ -162,5 +178,140 @@ describe('triggerCampaignSchedule — lịch nổ mà hỏng phải để lại 
   it('thiếu id_campaign → không có gì để ghi (đã có nhánh cảnh báo riêng)', async () => {
     await trigger({ id: 5, workspace_owner_id: 1 });
     expect(failedRunInserts()).toHaveLength(0);
+  });
+});
+
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — lịch tự tắt sau N lần lỗi liên tiếp.
+describe('triggerCampaignSchedule — Việc 1 (PR-4): lịch tự tắt sau N lần lỗi liên tiếp', () => {
+  let errorSpy;
+  beforeEach(() => {
+    queryMock.mockReset();
+    createCampaignRunRecordMock.mockReset();
+    executeCampaignMock.mockClear();
+    notifyCampaignRunFailedMock.mockClear();
+    logWorkspaceMock.mockClear();
+    delete process.env.CAMPAIGN_SCHEDULE_MAX_CONSECUTIVE_FAILURES;
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    errorSpy.mockRestore();
+    console.warn.mockRestore();
+  });
+
+  const failedRow = (message, metadata = {}) => ({ status: 'failed', error_message: message, run_metadata: metadata });
+  const disableUpdateCalls = () => queryMock.mock.calls.filter(
+    ([sql]) => /UPDATE campaign_schedules/i.test(sql) && /enabled\s*=\s*false/i.test(sql),
+  );
+
+  it('3 lượt gần nhất đều failed → tắt lịch, ghi audit, ghi dòng failed có scheduleAutoDisabled, báo chủ, KHÔNG tạo lượt chạy', async () => {
+    queryMock
+      .mockResolvedValueOnce(NOT_RUNNING)
+      .mockResolvedValueOnce({
+        rows: [
+          failedRow('lỗi 3 (mới nhất)'),
+          failedRow('lỗi 2'),
+          failedRow('lỗi 1 (cũ nhất)'),
+        ],
+      })
+      .mockResolvedValueOnce({ rows: [] }) // UPDATE campaign_schedules enabled=false
+      .mockResolvedValueOnce({ rows: [{ id: 900 }] }); // INSERT campaign_runs
+
+    await trigger(schedule());
+
+    expect(createCampaignRunRecordMock).not.toHaveBeenCalled();
+    expect(executeCampaignMock).not.toHaveBeenCalled();
+
+    expect(disableUpdateCalls()).toHaveLength(1);
+    expect(disableUpdateCalls()[0][1]).toEqual([177]);
+
+    expect(logWorkspaceMock).toHaveBeenCalledTimes(1);
+    const [context, action, entityType, entityId, details] = logWorkspaceMock.mock.calls[0];
+    expect(context).toEqual({ userId: null, ownerId: 39 });
+    expect(action).toBe('CAMPAIGN_SCHEDULE_TOGGLED');
+    expect(entityType).toBe('CAMPAIGN');
+    expect(entityId).toBe(395);
+    expect(details).toEqual({ scheduleId: 177, enabled: false, automatic: true, reason: 'lỗi 3 (mới nhất)' });
+
+    const inserts = failedRunInserts();
+    expect(inserts).toHaveLength(1);
+    const [sql, params] = inserts[0];
+    expect(sql).toMatch(/'failed'/);
+    expect(params[2]).toBe(177);
+    expect(params[4]).toBe('Lịch tự tắt sau 3 lần lỗi liên tiếp: lỗi 3 (mới nhất)');
+    expect(JSON.parse(params[5])).toMatchObject({ source: 'schedule', scheduleAutoDisabled: true });
+
+    expect(notifyCampaignRunFailedMock).toHaveBeenCalledWith({
+      runId: 900,
+      campaignId: 395,
+      reason: 'Lịch tự tắt sau 3 lần lỗi liên tiếp: lỗi 3 (mới nhất)',
+      source: 'schedule_auto_disabled',
+    });
+  });
+
+  it('2 failed + 1 completed → chưa đủ ngưỡng, vẫn tạo lượt chạy như thường', async () => {
+    queryMock
+      .mockResolvedValueOnce(NOT_RUNNING)
+      .mockResolvedValueOnce({
+        rows: [
+          failedRow('lỗi mới nhất'),
+          { status: 'completed', error_message: null, run_metadata: {} },
+          failedRow('lỗi cũ hơn nữa'),
+        ],
+      })
+      .mockResolvedValue({ rows: [] });
+    createCampaignRunRecordMock.mockResolvedValue({ id: 500 });
+
+    await trigger(schedule());
+
+    expect(disableUpdateCalls()).toHaveLength(0);
+    expect(logWorkspaceMock).not.toHaveBeenCalled();
+    expect(createCampaignRunRecordMock).toHaveBeenCalledTimes(1);
+    expect(executeCampaignMock).toHaveBeenCalledWith(395, 500, 39);
+  });
+
+  it('[mốc tự tắt, failed, failed] → dòng mốc RESET bộ đếm, vẫn tạo lượt chạy (chặn bug bản plan cũ: lịch bật lại xong nổ lần kế tiếp không được tắt ngay)', async () => {
+    queryMock
+      .mockResolvedValueOnce(NOT_RUNNING)
+      .mockResolvedValueOnce({
+        rows: [
+          failedRow('Lịch tự tắt sau 3 lần lỗi liên tiếp: lỗi cũ', { scheduleAutoDisabled: true }),
+          failedRow('lỗi B'),
+          failedRow('lỗi A'),
+        ],
+      })
+      .mockResolvedValue({ rows: [] });
+    createCampaignRunRecordMock.mockResolvedValue({ id: 501 });
+
+    await trigger(schedule());
+
+    expect(disableUpdateCalls()).toHaveLength(0);
+    expect(logWorkspaceMock).not.toHaveBeenCalled();
+    expect(createCampaignRunRecordMock).toHaveBeenCalledTimes(1);
+    expect(executeCampaignMock).toHaveBeenCalledWith(395, 501, 39);
+  });
+
+  it('SELECT lượt gần nhất dùng đúng id_schedule và LIMIT = ngưỡng (mặc định 3)', async () => {
+    queryMock.mockResolvedValueOnce(NOT_RUNNING).mockResolvedValue({ rows: [] });
+    createCampaignRunRecordMock.mockResolvedValue({ id: 1 });
+
+    await trigger(schedule());
+
+    const recentRunsCall = queryMock.mock.calls.find(([sql]) => /FROM campaign_runs\s+WHERE id_schedule/i.test(sql));
+    expect(recentRunsCall).toBeTruthy();
+    expect(recentRunsCall[1]).toEqual([177, 3]);
+  });
+
+  it('tôn trọng ngưỡng tuỳ chỉnh qua CAMPAIGN_SCHEDULE_MAX_CONSECUTIVE_FAILURES', async () => {
+    process.env.CAMPAIGN_SCHEDULE_MAX_CONSECUTIVE_FAILURES = '2';
+    queryMock
+      .mockResolvedValueOnce(NOT_RUNNING)
+      .mockResolvedValueOnce({ rows: [failedRow('lỗi 2'), failedRow('lỗi 1')] })
+      .mockResolvedValue({ rows: [] });
+
+    await trigger(schedule());
+
+    expect(disableUpdateCalls()).toHaveLength(1);
+    expect(createCampaignRunRecordMock).not.toHaveBeenCalled();
   });
 });

@@ -758,6 +758,7 @@ class CampaignRunRepository {
     scheduleId,
     runName = null,
     errorMessage,
+    extraMetadata = null,
   }) {
     const message = String(errorMessage || 'Lượt chạy theo lịch không khởi động được').slice(0, 1000);
     const result = await db.query(
@@ -773,7 +774,12 @@ class CampaignRunRepository {
         scheduleId,
         runName ? String(runName).slice(0, 255) : null,
         message,
-        JSON.stringify({ source: 'schedule', runName: runName || null, failedAtTrigger: true }),
+        JSON.stringify({
+          source: 'schedule',
+          runName: runName || null,
+          failedAtTrigger: true,
+          ...(extraMetadata && typeof extraMetadata === 'object' ? extraMetadata : {}),
+        }),
       ]
     );
     return result.rows[0] || null;

@@ -3,6 +3,7 @@ import db from '../config/database.js';
 import { requestCampaignScheduleRefresh } from '../utils/scheduler.js';
 import campaignScheduleRepository from '../repositories/campaign/campaignSchedule.repository.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
+import { validateCampaignPreflight } from '../services/campaign/campaignPreflight.service.js';
 import { assertOnceCronNotYearRolled } from '../utils/onceScheduleValidation.util.js';
 // Cột `next_run_at` không có chỗ ghi (production 12/09/2026: 29/29 lịch bật đều NULL) → tính lúc
 // đọc, cùng luật nổ với scheduler.
@@ -62,6 +63,27 @@ async function auditScheduleAction(req, action, campaignId, details) {
 function employeeCanRunCampaign(req) {
   const context = req.user?.activeContext;
   return context?.type !== 'employee' || context.permissions?.campaigns_run === true;
+}
+
+/**
+ * PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch (tạo lịch bật, hoặc bật lại
+ * lịch đang tắt) phải qua preflight, không chỉ lúc bấm "Chạy ngay". Trước đây lịch bật cho chiến
+ * dịch thiếu tài khoản Zalo/cấu hình vẫn đặt được, rồi nổ hỏng lần đầu tiên chạy thật. Chạy
+ * TRƯỚC cả khi cần kích hoạt chiến dịch draft (activateCampaign:true) — kích hoạt một chiến dịch
+ * rồi mới phát hiện thiếu tài khoản là muộn.
+ * @returns {Promise<object|null>} response lỗi đã gửi (đã res.status().json()...) hoặc null nếu qua
+ */
+async function respondPreflightFailure(res, campaignId, workspaceOwnerId) {
+  try {
+    await validateCampaignPreflight({ campaignId, workspaceOwnerId });
+    return null;
+  } catch (preflightError) {
+    return res.status(preflightError.statusCode || 400).json({
+      success: false,
+      code: preflightError.code,
+      message: preflightError.message,
+    });
+  }
 }
 
 /**
@@ -284,6 +306,11 @@ class CampaignScheduleController {
       }
       const needsActivation = campaignNotActiveYet && activateCampaign;
 
+      if (isEnabling) {
+        const preflightFailure = await respondPreflightFailure(res, campaignId, campaign.workspace_owner_id);
+        if (preflightFailure) return preflightFailure;
+      }
+
       // Lịch bật y hệt lịch đang bật (vụ #177/#178 cách nhau đúng một phút) → nổ cùng lúc, gửi hai lần.
       if (isEnabling) {
         const duplicate = await campaignScheduleRepository.findEnabledDuplicate({
@@ -428,6 +455,11 @@ class CampaignScheduleController {
         });
       }
       const needsActivation = campaignNotActiveYet && activateCampaign;
+
+      if (willEnableFromOff) {
+        const preflightFailure = await respondPreflightFailure(res, scheduleData.id_campaign, context.workspaceOwnerId);
+        if (preflightFailure) return preflightFailure;
+      }
 
       if (enabled === true) {
         const hasRunningRun = await campaignScheduleRepository.hasRunningCampaignRun(scheduleData.id_campaign);

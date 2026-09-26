@@ -31,6 +31,12 @@ jest.unstable_mockModule('../../services/audit.service.js', () => ({
 jest.unstable_mockModule('../../utils/onceScheduleValidation.util.js', () => ({
   assertOnceCronNotYearRolled: jest.fn(() => ({ ok: true })),
 }));
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch giờ đi qua preflight; mock để
+// test file này (chưa nói về preflight) không chạm DB thật qua campaignPreflight.service.js.
+const mockValidateCampaignPreflight = jest.fn().mockResolvedValue({ valid: true, nodes: [] });
+jest.unstable_mockModule('../../services/campaign/campaignPreflight.service.js', () => ({
+  validateCampaignPreflight: mockValidateCampaignPreflight,
+}));
 
 const { default: CampaignScheduleController } = await import('../campaignSchedule.controller.js');
 
@@ -59,6 +65,7 @@ describe('CampaignScheduleController.create — chiến dịch không hoạt đ�
     mockRepository.hasRunningCampaignRun.mockResolvedValue(false);
     mockRepository.findEnabledDuplicate.mockResolvedValue(null);
     mockRepository.create.mockResolvedValue(createdRow);
+    mockValidateCampaignPreflight.mockResolvedValue({ valid: true, nodes: [] });
   });
 
   it('draft + lịch bật (mặc định) → 409 CAMPAIGN_NOT_ACTIVE, câu nói đúng việc phải làm, KHÔNG tạo lịch', async () => {
@@ -132,6 +139,7 @@ describe('CampaignScheduleController.update — bật lại lịch đang tắt',
     mockRepository.hasRunningCampaignRun.mockResolvedValue(false);
     mockRepository.findEnabledDuplicate.mockResolvedValue(null);
     mockRepository.update.mockResolvedValue({ ...createdRow, enabled: true });
+    mockValidateCampaignPreflight.mockResolvedValue({ valid: true, nodes: [] });
   });
   const updateReq = (body, user = owner) => ({ user, params: { id: '177' }, body });
   const schedule = (over = {}) => ({

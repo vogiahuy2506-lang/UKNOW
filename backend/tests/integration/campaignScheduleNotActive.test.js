@@ -30,12 +30,23 @@ async function loginAs(user) {
   return res.body.data.accessToken;
 }
 
-async function insertCampaign({ ownerId, status, campaignName = 'Nhắc lịch hội thảo 23/9' }) {
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch giờ đi qua preflight, đòi
+// campaign phải có ít nhất 1 node gửi. `withNode: false` cho ca cố ý muốn campaign trống (test
+// "preflight hỏng (không có node gửi)" ở dưới).
+async function insertCampaign({ ownerId, status, campaignName = 'Nhắc lịch hội thảo 23/9', withNode = true }) {
   const { rows } = await db.query(
     `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, $2, $3) RETURNING *`,
     [ownerId, campaignName, status],
   );
-  return rows[0];
+  const campaign = rows[0];
+  if (withNode) {
+    await db.query(
+      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+       VALUES ($1, 'action', 'send_email', 'Gửi email', '{}'::jsonb, 1)`,
+      [campaign.id],
+    );
+  }
+  return campaign;
 }
 
 async function insertSchedule({ campaignId, ownerId, scheduleType = 'once', cron = '30 07 21 9 *', enabled = true }) {
@@ -153,7 +164,7 @@ describe('triggerCampaignSchedule THẬT — lịch nổ khi chiến dịch còn
 
   it('chiến dịch active nhưng preflight hỏng (không có node gửi) cũng để lại dấu vết thay vì im lặng', async () => {
     const user = await createUser({ email: 'sch-fire3@test.com', username: 'sch_fire3' });
-    const campaign = await insertCampaign({ ownerId: user.id, status: 'active' });
+    const campaign = await insertCampaign({ ownerId: user.id, status: 'active', withNode: false });
     const schedule = await insertSchedule({ campaignId: campaign.id, ownerId: user.id, scheduleType: 'daily', cron: '0 9 * * *' });
 
     await triggerSchedule(schedule);

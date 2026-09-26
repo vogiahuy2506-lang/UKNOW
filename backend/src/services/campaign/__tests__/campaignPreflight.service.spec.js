@@ -130,6 +130,143 @@ describe('validateCampaignPreflight service (PR-A3)', () => {
     });
   });
 
+  // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 2 — kiểm đúng id engine thật sự dùng
+  describe('select_zalo_account pool — Việc 2', () => {
+    // A = tài khoản 201, B = tài khoản 202 (id phải là số nguyên như production, khớp
+    // parseInt(rawId, 10) trong addZaloAccountId).
+    it('pool [A disconnected, B connected] → kiểm poolIds[0]=A → SENDER_DISCONNECTED', async () => {
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            node_type: 'action',
+            node_subtype: 'select_zalo_account',
+            config: { zaloPoolMultiAccountEnabled: true, zaloPoolAccountIds: [201, 202], zaloAccountId: 201 },
+          }, {
+            id: 2,
+            node_type: 'action',
+            node_subtype: 'send_zalo_personal',
+            config: {},
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { id: 201, is_active: true, status: 'disconnected' },
+            { id: 202, is_active: true, status: 'connected' },
+          ],
+        });
+
+      await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 1 })).rejects.toMatchObject({
+        code: 'SENDER_DISCONNECTED',
+        statusCode: 400,
+      });
+    });
+
+    it('pool [B connected, A disconnected] với zaloAccountId sót = A trên node → kiểm poolIds[0]=B → qua', async () => {
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            node_type: 'action',
+            node_subtype: 'select_zalo_account',
+            config: { zaloPoolMultiAccountEnabled: true, zaloPoolAccountIds: [202, 201], zaloAccountId: 201 },
+          }, {
+            id: 2,
+            node_type: 'action',
+            node_subtype: 'send_zalo_personal',
+            config: {},
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [
+            { id: 202, is_active: true, status: 'connected' },
+            { id: 201, is_active: true, status: 'disconnected' },
+          ],
+        });
+
+      const result = await validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 1 });
+      expect(result.valid).toBe(true);
+      // KHÔNG được kiểm A=201 (id còn sót trên node select_zalo_account) — chỉ poolIds[0]=B=202.
+      expect(mockQuery.mock.calls[1][1][0]).toEqual([202]);
+    });
+
+    it('send_zalo_personal có zaloAccountId riêng nhưng flow CÓ select_zalo_account → bỏ qua id riêng, chỉ kiểm id của select_zalo_account', async () => {
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            node_type: 'action',
+            node_subtype: 'select_zalo_account',
+            config: { zaloAccountId: 202 },
+          }, {
+            id: 2,
+            node_type: 'action',
+            node_subtype: 'send_zalo_personal',
+            config: { zaloAccountId: 201 }, // id riêng còn sót — engine sẽ dùng selectedZaloAccount (202), không phải 201
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ id: 202, is_active: true, status: 'connected' }],
+        });
+
+      const result = await validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 1 });
+      expect(result.valid).toBe(true);
+      expect(mockQuery.mock.calls[1][1][0]).toEqual([202]);
+    });
+  });
+
+  describe('get_all_groups / get_all_friends — Việc 2', () => {
+    it('get_all_groups tự chọn tài khoản disconnected (không có select_zalo_account trong flow) → SENDER_DISCONNECTED', async () => {
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            node_type: 'action',
+            node_subtype: 'get_all_groups',
+            config: { zaloAccountId: 99 },
+          }, {
+            id: 2,
+            node_type: 'action',
+            node_subtype: 'send_zalo_group',
+            config: { zaloAccountId: 99 },
+          }],
+        })
+        .mockResolvedValueOnce({
+          rows: [{ id: 99, is_active: true, status: 'disconnected' }],
+        });
+
+      await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 1 })).rejects.toMatchObject({
+        code: 'SENDER_DISCONNECTED',
+        statusCode: 400,
+      });
+    });
+
+    it('get_all_friends trỏ zaloFriendAccountNodeId tới node khác → KHÔNG kiểm zaloAccountId riêng (dù id đó trỏ tài khoản disconnected)', async () => {
+      mockQuery
+        .mockResolvedValueOnce({
+          rows: [{
+            id: 1,
+            node_type: 'action',
+            node_subtype: 'get_all_friends',
+            config: { zaloFriendAccountNodeId: '5', zaloAccountId: 999 }, // 999 không phải id engine sẽ dùng
+          }, {
+            id: 2,
+            node_type: 'action',
+            node_subtype: 'send_zalo_personal',
+            config: { zaloAccountId: 100 }, // id thật engine dùng, đang connected
+          }],
+        })
+        .mockResolvedValueOnce({
+          // Cố ý KHÔNG có id 999 — nếu code lỡ gom 999 thì accountMap.get(999) rỗng → throw SENDER_DISCONNECTED
+          rows: [{ id: 100, is_active: true, status: 'connected' }],
+        });
+
+      const result = await validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 1 });
+      expect(result.valid).toBe(true);
+      expect(mockQuery.mock.calls[1][1][0]).toEqual([100]);
+    });
+  });
+
   describe('Google Sheet Preflight Checks', () => {
     const makeSheetScenario = (sheetStatus, sheetExtra = {}) => {
       mockQuery.mockResolvedValueOnce({

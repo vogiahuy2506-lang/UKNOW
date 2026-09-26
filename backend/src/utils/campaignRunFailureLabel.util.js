@@ -7,6 +7,12 @@
 
 const NETWORK_ERROR_REGEX = /econn|etimedout|enotfound|fetch failed|network/i;
 
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — scheduler.js ghi message dạng
+// "Lịch tự tắt sau N lần lỗi liên tiếp: <error_message của lượt failed mới nhất>" khi tự tắt lịch.
+// Bắt tiền tố này TRƯỚC mọi nhánh khác, nếu không message rơi vào nhánh con của phần sau dấu ':'
+// (vd "chưa ở trạng thái hoạt động") và email không nói rõ lịch đã tự tắt.
+const AUTO_DISABLED_PREFIX_REGEX = /^lịch tự tắt sau (\d+) lần lỗi liên tiếp:\s*([\s\S]*)$/i;
+
 /**
  * @param {string} message message gốc (thường là error.message của lỗi làm run fail)
  * @returns {{ message: string, actionHint: string }}
@@ -19,6 +25,16 @@ export function labelCampaignRunFailure(message) {
     return {
       message: 'Lỗi hệ thống khi chạy chiến dịch (không rõ nguyên nhân).',
       actionHint: 'Thử chạy lại chiến dịch; nếu vẫn lỗi, liên hệ hỗ trợ kỹ thuật.',
+    };
+  }
+
+  const autoDisabledMatch = raw.match(AUTO_DISABLED_PREFIX_REGEX);
+  if (autoDisabledMatch) {
+    const [, count, innerRaw] = autoDisabledMatch;
+    const inner = labelCampaignRunFailure(innerRaw);
+    return {
+      message: `Lịch chạy đã tự tắt sau ${count} lần lỗi liên tiếp. Lỗi gần nhất: ${inner.message}`,
+      actionHint: 'Sửa lỗi trên rồi bật lại lịch trong trang chiến dịch.',
     };
   }
 

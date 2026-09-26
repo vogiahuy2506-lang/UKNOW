@@ -11,6 +11,7 @@ import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
 import { notifyCampaignRunFailed } from './campaignQuotaPauseNotify.util.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 // Luật thời gian của lịch chạy (khoá ngày Hà Nội, cron runtime, N ngày) dời sang util để
 // controller tính "lần chạy tiếp" bằng ĐÚNG luật nổ ở đây — xem campaignScheduleCron.util.js.
 import {
@@ -206,6 +207,88 @@ const triggerCampaignSchedule = async (schedule) => {
       timeZone: HANOI_TIME_ZONE,
       hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
     })}`;
+
+    // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — lịch tự tắt sau N lần lỗi liên tiếp.
+    // Đếm N lượt chạy gần nhất của CHÍNH schedule này (mới nhất trước). Dừng đếm khi gặp dòng
+    // KHÔNG phải 'failed', hoặc dòng có run_metadata.scheduleAutoDisabled (mốc reset) — dòng tự
+    // tắt tự nó cũng là một dòng 'failed', không tính nó vào lần đếm kế tiếp — nếu không, lịch bật
+    // lại xong nổ lần kế tiếp sẽ thấy đủ N failed (gồm cả dòng tự tắt) và tắt ngay, không chạy
+    // thật lần nào (bug bản plan cũ 26/09).
+    const maxConsecutiveFailures = Number(process.env.CAMPAIGN_SCHEDULE_MAX_CONSECUTIVE_FAILURES) || 3;
+    const recentRunsCheck = await db.query(
+      `SELECT status, error_message, run_metadata
+       FROM campaign_runs
+       WHERE id_schedule = $1
+       ORDER BY started_at DESC, id DESC
+       LIMIT $2`,
+      [schedule.id, maxConsecutiveFailures]
+    );
+    let consecutiveFailures = 0;
+    let lastFailedMessage = null;
+    for (const recentRun of recentRunsCheck.rows) {
+      if (recentRun.run_metadata?.scheduleAutoDisabled) break;
+      if (recentRun.status !== 'failed') break;
+      if (consecutiveFailures === 0) lastFailedMessage = recentRun.error_message;
+      consecutiveFailures += 1;
+    }
+    if (consecutiveFailures >= maxConsecutiveFailures) {
+      console.warn(
+        `[Scheduler] Schedule #${schedule.id} tự tắt sau ${consecutiveFailures} lần lỗi liên tiếp`
+      );
+      try {
+        await db.query(
+          `UPDATE campaign_schedules SET enabled = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+          [schedule.id]
+        );
+      } catch (disableErr) {
+        console.error(
+          `[Scheduler] Không thể tự tắt schedule #${schedule.id}:`,
+          disableErr.message
+        );
+      }
+      try {
+        await logWorkspace(
+          { userId: null, ownerId: workspaceOwnerId },
+          AUDIT_ACTIONS.CAMPAIGN_SCHEDULE_TOGGLED,
+          AUDIT_ENTITY_TYPES.CAMPAIGN,
+          schedule.id_campaign,
+          { scheduleId: schedule.id, enabled: false, automatic: true, reason: lastFailedMessage }
+        );
+      } catch (auditErr) {
+        console.warn(`[Scheduler] Ghi audit tự tắt schedule #${schedule.id} lỗi:`, auditErr.message);
+      }
+      const autoDisabledMessage = `Lịch tự tắt sau ${consecutiveFailures} lần lỗi liên tiếp: ${lastFailedMessage || 'Không rõ lỗi gần nhất'}`;
+      try {
+        const failedRun = await campaignRunRepository.insertFailedScheduledRun({
+          campaignId: schedule.id_campaign,
+          workspaceOwnerId,
+          scheduleId: schedule.id,
+          runName,
+          errorMessage: autoDisabledMessage,
+          extraMetadata: { scheduleAutoDisabled: true },
+        });
+        if (failedRun?.id) {
+          notifyCampaignRunFailed({
+            runId: failedRun.id,
+            campaignId: schedule.id_campaign,
+            reason: autoDisabledMessage,
+            source: 'schedule_auto_disabled',
+          }).catch((notifyErr) => {
+            console.error(
+              `[Scheduler] Không báo được chủ chiến dịch khi tự tắt schedule #${schedule.id}:`,
+              notifyErr.message
+            );
+          });
+        }
+      } catch (recordErr) {
+        console.error(
+          `[Scheduler] Không ghi được lượt chạy hỏng khi tự tắt schedule #${schedule.id}:`,
+          recordErr.message
+        );
+      }
+      return;
+    }
+
     runRecord = await campaignController.createCampaignRunRecord({
       campaignId: schedule.id_campaign,
       workspaceOwnerId,

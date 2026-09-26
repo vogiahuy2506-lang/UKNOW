@@ -2,6 +2,28 @@ import { describe, it, expect } from '@jest/globals';
 import { labelCampaignRunFailure } from '../campaignRunFailureLabel.util.js';
 
 describe('campaignRunFailureLabel.util — labelCampaignRunFailure', () => {
+  // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — nhánh "lịch tự tắt sau" phải đứng
+  // TRƯỚC mọi nhánh khác, nếu không message rơi vào nhánh con của phần sau dấu ':'.
+  it('Lịch tự tắt sau N lần lỗi liên tiếp: message chứa "tự tắt" và nhãn của lỗi gần nhất', () => {
+    const { message, actionHint } = labelCampaignRunFailure(
+      'Lịch tự tắt sau 3 lần lỗi liên tiếp: Chỉ có thể chạy chiến dịch đang hoạt động'
+    );
+    expect(message).toContain('tự tắt');
+    expect(message).toBe(
+      'Lịch chạy đã tự tắt sau 3 lần lỗi liên tiếp. Lỗi gần nhất: Chiến dịch chưa ở trạng thái hoạt động nên không thể chạy.'
+    );
+    expect(actionHint).toBe('Sửa lỗi trên rồi bật lại lịch trong trang chiến dịch.');
+  });
+
+  it('Lịch tự tắt với lỗi gần nhất là message lạ → vẫn bọc được, không rơi vào nhánh con sai', () => {
+    const { message } = labelCampaignRunFailure(
+      'Lịch tự tắt sau 5 lần lỗi liên tiếp: Một lỗi hoàn toàn mới chưa từng thấy XYZ'
+    );
+    expect(message).toBe(
+      'Lịch chạy đã tự tắt sau 5 lần lỗi liên tiếp. Lỗi gần nhất: Lỗi hệ thống khi chạy chiến dịch (Một lỗi hoàn toàn mới chưa từng thấy XYZ).'
+    );
+  });
+
   it('Chiến dịch không có node nào', () => {
     const { message, actionHint } = labelCampaignRunFailure('Chiến dịch không có node nào');
     expect(message).toBe('Chiến dịch chưa có bước gửi nào (luồng chưa cấu hình node nào).');

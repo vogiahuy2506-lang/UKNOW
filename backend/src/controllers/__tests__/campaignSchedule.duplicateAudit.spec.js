@@ -33,6 +33,12 @@ jest.unstable_mockModule('../../services/audit.service.js', () => ({
   },
   AUDIT_ENTITY_TYPES: { CAMPAIGN: 'campaign' },
 }));
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch giờ đi qua preflight; mock để
+// test file này (chưa nói về preflight) không chạm DB thật qua campaignPreflight.service.js.
+const mockValidateCampaignPreflight = jest.fn().mockResolvedValue({ valid: true, nodes: [] });
+jest.unstable_mockModule('../../services/campaign/campaignPreflight.service.js', () => ({
+  validateCampaignPreflight: mockValidateCampaignPreflight,
+}));
 
 const { default: CampaignScheduleController } = await import('../campaignSchedule.controller.js');
 
@@ -67,6 +73,7 @@ beforeEach(() => {
   mockRepository.update.mockResolvedValue(row({ enabled: true }));
   mockRepository.delete.mockResolvedValue(true);
   logWorkspace.mockResolvedValue(undefined);
+  mockValidateCampaignPreflight.mockResolvedValue({ valid: true, nodes: [] });
 });
 
 describe('create — chặn lịch trùng hệt (Việc 2.1)', () => {

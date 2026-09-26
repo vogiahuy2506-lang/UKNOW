@@ -56,12 +56,23 @@ async function addCampaignMembership(ownerId, employeeId) {
   );
 }
 
-async function insertCampaign({ ownerId, status = 'active', campaignName = 'C' }) {
+// PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch giờ đi qua preflight
+// (validateCampaignPreflight), đòi campaign phải có ít nhất 1 node gửi. `withNode: false` cho
+// các test cố ý muốn campaign chưa sẵn sàng (NO_SEND_NODE) hoặc test không bao giờ bật lịch.
+async function insertCampaign({ ownerId, status = 'active', campaignName = 'C', withNode = true }) {
   const { rows } = await db.query(
     `INSERT INTO campaigns (id_user, campaign_name, status) VALUES ($1, $2, $3) RETURNING *`,
     [ownerId, campaignName, status]
   );
-  return rows[0];
+  const campaign = rows[0];
+  if (withNode) {
+    await db.query(
+      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+       VALUES ($1, 'action', 'send_email', 'Gửi email', '{}'::jsonb, 1)`,
+      [campaign.id]
+    );
+  }
+  return campaign;
 }
 
 async function insertSchedule({
@@ -408,6 +419,66 @@ describe('POST /api/campaign-schedules', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0].enabled).toBe(true);
     expect(String(rows[0].id_campaign)).toBe(String(c.id));
+  });
+
+  // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — bật lịch phải qua preflight
+  it('tạo lịch bật cho chiến dịch có tài khoản Zalo disconnected → 400 SENDER_DISCONNECTED, KHÔNG tạo lịch', async () => {
+    const o = await createUser({ role: 'user', username: 'u_preflight' });
+    const c = await insertCampaign({ ownerId: o.id, withNode: false });
+    const { rows: zaloRows } = await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active, is_default)
+       VALUES ($1, 'Zalo test', 'disconnected', true, false) RETURNING id`,
+      [o.id]
+    );
+    await db.query(
+      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+       VALUES ($1, 'action', 'send_zalo_personal', 'Gửi Zalo', $2::jsonb, 1)`,
+      [c.id, JSON.stringify({ zaloAccountId: zaloRows[0].id })]
+    );
+    const t = await loginAs(o);
+
+    const res = await request(app)
+      .post('/api/campaign-schedules')
+      .set('Authorization', `Bearer ${t}`)
+      .send({
+        campaignId: c.id,
+        scheduleName: 'Nhắc gửi Zalo',
+        scheduleType: 'daily',
+        cronExpression: '0 9 * * *',
+      });
+    expect(res.status).toBe(400);
+    expect(res.body).toMatchObject({ success: false, code: 'SENDER_DISCONNECTED' });
+
+    const { rows } = await db.query('SELECT id FROM campaign_schedules WHERE id_campaign = $1', [c.id]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('tạo lịch TẮT cho chiến dịch có tài khoản Zalo disconnected → 201 (lịch tắt không qua preflight)', async () => {
+    const o = await createUser({ role: 'user', username: 'u_preflight_off' });
+    const c = await insertCampaign({ ownerId: o.id, withNode: false });
+    const { rows: zaloRows } = await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active, is_default)
+       VALUES ($1, 'Zalo test', 'disconnected', true, false) RETURNING id`,
+      [o.id]
+    );
+    await db.query(
+      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+       VALUES ($1, 'action', 'send_zalo_personal', 'Gửi Zalo', $2::jsonb, 1)`,
+      [c.id, JSON.stringify({ zaloAccountId: zaloRows[0].id })]
+    );
+    const t = await loginAs(o);
+
+    const res = await request(app)
+      .post('/api/campaign-schedules')
+      .set('Authorization', `Bearer ${t}`)
+      .send({
+        campaignId: c.id,
+        scheduleName: 'Nhắc gửi Zalo (soạn sẵn)',
+        scheduleType: 'daily',
+        cronExpression: '0 9 * * *',
+        enabled: false,
+      });
+    expect(res.status).toBe(201);
   });
 
   it('enabled=false được tôn trọng', async () => {
