@@ -269,7 +269,7 @@ const Register = () => {
   const emailFromUrl                                  = searchParams.get('email') || '';
   const isInvite                                      = Boolean(inviteToken);
   const [invitationInfo, setInvitationInfo]           = useState(null);
-  const { register: registerUser, googleLogin, phoneOtpEnabled, fetchPhoneOtpEnabled } = useAuthStore();
+  const { register: registerUser, googleLogin, phoneOtpEnabled, fetchPhoneOtpEnabled, switchContext } = useAuthStore();
   const navigate                                      = useNavigate();
 
   // PR-2 (xác thực SĐT) — lưới an toàn thứ hai ngoài lần gọi lúc app khởi động
@@ -376,7 +376,16 @@ const Register = () => {
         if (trialDays) {
           toast.success(t('register.trialGranted', { days: trialDays }));
         }
-        navigate(getPostAuthPath(result?.data?.user));
+
+        const memberships = useAuthStore.getState().user?.memberships || [];
+        const usableMembership = memberships.find((m) => !m?.isLocked);
+        if (usableMembership) {
+          await switchContext(usableMembership.ownerId);
+        }
+
+        const currentUser = useAuthStore.getState().user || result?.data?.user;
+        const currentContext = useAuthStore.getState().activeContext;
+        navigate(getPostAuthPath(currentUser, currentContext));
       } catch (err) {
         const resData = err?.response?.data;
         const msg = resData?.message || t('auth.registrationFailed') || 'Đăng ký thất bại';

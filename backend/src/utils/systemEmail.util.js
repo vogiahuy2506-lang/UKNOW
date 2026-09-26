@@ -868,7 +868,7 @@ export function getDefaultEmployeeInvitationTemplate() {
           <a href="{{activation_url}}"
              style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
                     padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
-            Kích hoạt tài khoản →
+            Đăng ký tài khoản →
           </a>
         </td>
       </tr>
@@ -883,10 +883,10 @@ export function getDefaultEmployeeInvitationTemplate() {
           </p>
           <ul style="margin:0;padding-left:18px;font-size:13px;color:#475569;line-height:1.6">
             <li style="margin-bottom:4px">
-              Bạn có thể <strong>tạo mật khẩu qua nút bấm trên</strong>, hoặc <strong>đăng nhập trực tiếp bằng Google</strong> (với email <strong>{{user_email}}</strong>) để vào làm việc ngay.
+              Bạn có thể <strong>nhấn nút trên để hoàn tất đăng ký tài khoản</strong>, hoặc <strong>đăng ký / đăng nhập trực tiếp bằng Google</strong> (với email <strong>{{user_email}}</strong>) để vào làm việc ngay.
             </li>
             <li>
-              Sau khi vào hệ thống, vui lòng <strong>đồng ý với các điều khoản</strong> và <strong>cập nhật đầy đủ thông tin</strong> tài khoản của bạn để hoàn tất hồ sơ.
+              Vui lòng <strong>đồng ý với các điều khoản</strong> và <strong>điền đầy đủ thông tin</strong> tài khoản khi đăng ký.
             </li>
           </ul>
         </td>
@@ -898,7 +898,7 @@ export function getDefaultEmployeeInvitationTemplate() {
       <tr>
         <td style="padding:10px 16px;text-align:center">
           <p style="margin:0;font-size:12px;color:#92400e">
-            ⏱️ Link kích hoạt có hiệu lực trong <strong>{{expiry_hours}} giờ</strong>.
+            ⏱️ Link đăng ký có hiệu lực trong <strong>{{expiry_hours}} giờ</strong>.
           </p>
         </td>
       </tr>
