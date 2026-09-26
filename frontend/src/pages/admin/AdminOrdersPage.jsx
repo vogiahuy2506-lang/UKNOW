@@ -19,6 +19,14 @@ const STATUS_LABEL = (t) => ({
   cancelled: { label: t('orders.cancelled'), cls: 'badge-gray' },
 });
 
+// "Nợ nhỏ" PR-4 (26/09) — payment.service.js gắn tag PAID_AFTER_CANCELLED vào note (text thô, không
+// phải cột riêng) khi PayOS báo đơn đã trả dù đơn đã cancelled/failed. Admin bấm nút xử lý sẽ nối
+// thêm PAID_AFTER_CANCELLED_HANDLED — badge/nút chỉ hiện khi có tag gốc và CHƯA có tag đã xử lý.
+const hasUnhandledPaidAfterCancelled = (order) => {
+  const note = order?.note || '';
+  return note.includes('PAID_AFTER_CANCELLED') && !note.includes('PAID_AFTER_CANCELLED_HANDLED');
+};
+
 const KpiCard = ({ label, value, sub }) => (
   <div className="card p-5">
     <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{label}</p>
@@ -88,6 +96,16 @@ const AdminOrdersPage = () => {
       fetchOrders(filters, page);
     } catch (err) {
       toast.error(err?.response?.data?.message || t('orders.cancelFailed'));
+    }
+  };
+
+  const handleMarkPaidAfterCancelledHandled = async (orderCode) => {
+    try {
+      await adminOrdersApiService.markPaidAfterCancelledHandled(orderCode);
+      toast.success(t('adminOrders.paidAfterCancelledHandledSuccess'));
+      fetchOrders(filters, page);
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminOrders.paidAfterCancelledHandledFailed'));
     }
   };
 
@@ -265,37 +283,53 @@ const AdminOrdersPage = () => {
                   </td>
                   <td className="px-4 py-3">
                     <StatusBadge status={o.status} />
+                    {hasUnhandledPaidAfterCancelled(o) && (
+                      <span className="mt-1 block w-fit rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium uppercase text-rose-700">
+                        {t('adminOrders.paidAfterCancelledBadge')}
+                      </span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    {o.status === 'pending' && (
-                      cancellingCode === o.orderCode ? (
-                        <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5">
+                      {o.status === 'pending' && (
+                        cancellingCode === o.orderCode ? (
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleCancel(o.orderCode)}
+                              className="text-xs px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                            >
+                              {t('adminOrders.confirm')}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCancellingCode(null)}
+                              className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
+                            >
+                              {t('adminOrders.cancel')}
+                            </button>
+                          </div>
+                        ) : (
                           <button
                             type="button"
-                            onClick={() => handleCancel(o.orderCode)}
-                            className="text-xs px-2 py-1 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+                            onClick={() => setCancellingCode(o.orderCode)}
+                            title={t('adminOrders.cancelOrderAndDisableQR')}
+                            className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                           >
-                            {t('adminOrders.confirm')}
+                            <HiOutlineBan className="w-4 h-4" />
                           </button>
-                          <button
-                            type="button"
-                            onClick={() => setCancellingCode(null)}
-                            className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded-lg hover:bg-gray-200 transition-colors"
-                          >
-                            {t('adminOrders.cancel')}
-                          </button>
-                        </div>
-                      ) : (
+                        )
+                      )}
+                      {hasUnhandledPaidAfterCancelled(o) && (
                         <button
                           type="button"
-                          onClick={() => setCancellingCode(o.orderCode)}
-                          title={t('adminOrders.cancelOrderAndDisableQR')}
-                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                          onClick={() => handleMarkPaidAfterCancelledHandled(o.orderCode)}
+                          className="text-xs px-2 py-1 bg-amber-500 text-white rounded-lg hover:bg-amber-600 transition-colors"
                         >
-                          <HiOutlineBan className="w-4 h-4" />
+                          {t('adminOrders.markPaidAfterCancelledHandled')}
                         </button>
-                      )
-                    )}
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))}

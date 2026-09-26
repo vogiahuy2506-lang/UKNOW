@@ -1946,6 +1946,10 @@ export default {
     previous: 'Trước',
     next: 'Tiếp',
     displaying: 'Hiển thị {from}–{to} trong {total} đơn hàng',
+    paidAfterCancelledBadge: 'PayOS báo đã trả dù đơn đã huỷ — cần xử lý tay',
+    markPaidAfterCancelledHandled: 'Đánh dấu đã xử lý',
+    paidAfterCancelledHandledSuccess: 'Đã đánh dấu đơn hàng là đã xử lý',
+    paidAfterCancelledHandledFailed: 'Không đánh dấu được đơn hàng',
   },
   adminForms: {
     title: 'Biểu mẫu thu tiền',
@@ -3029,8 +3033,10 @@ export default {
       FORM_ENABLED: 'Quản trị mở lại biểu mẫu',
       AI_SYSTEM_MODEL_UPDATED: 'Đổi model AI hệ thống',
       AI_FALLBACK_MODEL_UPDATED: 'Đổi model AI dự phòng',
+      ORDER_PAID_AFTER_CANCELLED_HANDLED: 'Đánh dấu đã xử lý đơn trả tiền sau khi huỷ',
     },
     entities: {
+      order: 'Đơn hàng',
       user: 'Người dùng',
       plan: 'Gói dịch vụ',
       voucher: 'Voucher',

@@ -514,10 +514,11 @@ export async function metricLoginFailFlood(windowMinutes, threshold) {
  * (handleWebhook) gắn tag PAID_AFTER_CANCELLED vào note khi việc này xảy ra (không tự đổi
  * status, không tự kích hoạt gói).
  *
- * Cận trên maxAgeHours bắt buộc — cùng lý do đã ghi ở metricZaloDisconnected: đơn không có
- * cột "đã xử lý tay" riêng cho ca hiếm này, chỉ dựa vào note/status; không có cận trên thì
- * một đơn đã được admin xử lý tay (kích hoạt bù/hoàn tiền) nhưng chưa đổi status khỏi
- * cancelled/failed sẽ làm quy tắc bắn mãi mãi mỗi lượt cooldown.
+ * Cận trên maxAgeHours vẫn giữ làm lưới an toàn thứ hai (đơn hỏng lâu không kích cảnh báo mãi
+ * nếu vì lý do gì đó chưa được đánh dấu). Lưới an toàn CHÍNH — "Nợ nhỏ" PR-4 đã vá 26/09 — là
+ * tag PAID_AFTER_CANCELLED_HANDLED: admin bấm "Đánh dấu đã xử lý" ở trang đơn hàng
+ * (adminOrders.controller.js markPaidAfterCancelledHandled) sau khi kích hoạt bù/hoàn tiền xong,
+ * KHÔNG cần đợi hết 168h hay đổi status.
  */
 export async function metricPaidAfterCancelledOrders(maxAgeHours = 168) {
   const { rows } = await db.query(
@@ -525,6 +526,7 @@ export async function metricPaidAfterCancelledOrders(maxAgeHours = 168) {
        FROM orders
       WHERE status IN ('cancelled', 'failed')
         AND note LIKE '%PAID_AFTER_CANCELLED%'
+        AND note NOT LIKE '%PAID_AFTER_CANCELLED_HANDLED%'
         AND updated_at >= NOW() - ($1 || ' hours')::interval
       ORDER BY updated_at DESC
       LIMIT 20`,

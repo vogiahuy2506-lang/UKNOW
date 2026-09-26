@@ -9,5 +9,6 @@ router.use(requireRole('admin'));
 
 router.get('/', ctrl.list);
 router.patch('/:orderCode/cancel', ctrl.cancel);
+router.patch('/:orderCode/paid-after-cancelled/handled', ctrl.markPaidAfterCancelledHandled);
 
 export default router;

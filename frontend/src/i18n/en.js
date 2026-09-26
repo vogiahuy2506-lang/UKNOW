@@ -1944,6 +1944,10 @@ export default {
     previous: 'Previous',
     next: 'Next',
     displaying: 'Showing {from}–{to} of {total} orders',
+    paidAfterCancelledBadge: 'PayOS reports paid despite cancelled order — needs manual review',
+    markPaidAfterCancelledHandled: 'Mark as handled',
+    paidAfterCancelledHandledSuccess: 'Order marked as handled',
+    paidAfterCancelledHandledFailed: 'Could not mark order as handled',
   },
   adminForms: {
     title: 'Payment forms',
@@ -3019,8 +3023,10 @@ export default {
       FORM_ENABLED: 'Form Re-enabled By Admin',
       AI_SYSTEM_MODEL_UPDATED: 'Update system AI model',
       AI_FALLBACK_MODEL_UPDATED: 'Update fallback AI model',
+      ORDER_PAID_AFTER_CANCELLED_HANDLED: 'Mark paid-after-cancelled order as handled',
     },
     entities: {
+      order: 'Order',
       user: 'User',
       plan: 'Plan',
       voucher: 'Voucher',

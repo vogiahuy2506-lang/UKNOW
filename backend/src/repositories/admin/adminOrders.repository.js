@@ -30,6 +30,7 @@ export async function findOrders({ status, search, dateFrom, dateTo, page = 1, l
   const [rowsRes, countRes] = await Promise.all([
     db.query(
       `SELECT o.id, o.order_code AS "orderCode", o.amount, o.status, o.created_at AS "createdAt", o.updated_at AS "updatedAt",
+              o.note,
               o.user_email AS "userEmail", o.user_id AS "userId",
               o.billing_period AS "billingPeriod", o.payment_method AS "paymentMethod",
               o.original_amount AS "originalAmount",
@@ -74,6 +75,28 @@ export async function setOrderCancelled(orderCode) {
       WHERE order_code = $1 AND status = 'pending'
       RETURNING id, order_code, status`,
     [orderCode]
+  );
+  return rows[0] || null;
+}
+
+// "Nợ nhỏ" PR-4 (26/09) — đơn có tag PAID_AFTER_CANCELLED (payment.repository.js
+// flagPaidAfterCancelled) trước đây không có cách đánh dấu admin đã xử lý tay (kích hoạt bù/hoàn
+// tiền), nên alert_rules order_paid_after_cancelled (metricPaidAfterCancelledOrders) bắn lại mỗi
+// giờ tới 7 ngày. Nối thêm tag PAID_AFTER_CANCELLED_HANDLED — KHÔNG đổi status, KHÔNG kích hoạt
+// gói. Chỉ áp cho đơn ĐÃ có tag gốc và CHƯA được đánh dấu xử lý (idempotent).
+export async function markPaidAfterCancelledHandled(orderCode, note) {
+  const { rows } = await db.query(
+    `UPDATE orders
+        SET note = CASE
+              WHEN note IS NULL OR note = '' THEN $2
+              ELSE note || E'\\n' || $2
+            END,
+            updated_at = NOW()
+      WHERE order_code = $1
+        AND note LIKE '%PAID_AFTER_CANCELLED%'
+        AND COALESCE(note, '') NOT LIKE '%PAID_AFTER_CANCELLED_HANDLED%'
+      RETURNING id, order_code, status, note`,
+    [orderCode, note]
   );
   return rows[0] || null;
 }

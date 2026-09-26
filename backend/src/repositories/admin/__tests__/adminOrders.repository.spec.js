@@ -4,7 +4,7 @@ const mockDb = { query: jest.fn() };
 
 jest.unstable_mockModule('../../../config/database.js', () => ({ default: mockDb }));
 
-const { findOrders, setOrderCancelled } = await import('../adminOrders.repository.js');
+const { findOrders, setOrderCancelled, markPaidAfterCancelledHandled } = await import('../adminOrders.repository.js');
 
 describe('adminOrders.repository.findOrders', () => {
   beforeEach(() => jest.clearAllMocks());
@@ -62,6 +62,35 @@ describe('adminOrders.repository.setOrderCancelled', () => {
     mockDb.query.mockResolvedValueOnce({ rows: [] });
 
     const res = await setOrderCancelled('999');
+
+    expect(res).toBeNull();
+  });
+});
+
+// "Nợ nhỏ" PR-4 (26/09) — đánh dấu đã xử lý tay cho đơn PAID_AFTER_CANCELLED, KHÔNG đổi status.
+describe('adminOrders.repository.markPaidAfterCancelledHandled', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('chỉ UPDATE khi note đã có tag gốc và chưa được đánh dấu xử lý — KHÔNG đổi status', async () => {
+    mockDb.query.mockResolvedValueOnce({
+      rows: [{ id: 5, order_code: '999', status: 'cancelled', note: 'PAID_AFTER_CANCELLED\nHANDLED note' }],
+    });
+
+    const res = await markPaidAfterCancelledHandled('999', 'HANDLED note');
+
+    expect(res.status).toBe('cancelled');
+    const [sql, params] = mockDb.query.mock.calls[0];
+    expect(sql).toContain("note LIKE '%PAID_AFTER_CANCELLED%'");
+    expect(sql).toContain("NOT LIKE '%PAID_AFTER_CANCELLED_HANDLED%'");
+    expect(sql).not.toContain('status =');
+    expect(sql).toContain('RETURNING');
+    expect(params).toEqual(['999', 'HANDLED note']);
+  });
+
+  it('trả về null khi đơn không có tag PAID_AFTER_CANCELLED hoặc đã được đánh dấu xử lý trước đó', async () => {
+    mockDb.query.mockResolvedValueOnce({ rows: [] });
+
+    const res = await markPaidAfterCancelledHandled('999', 'HANDLED note');
 
     expect(res).toBeNull();
   });

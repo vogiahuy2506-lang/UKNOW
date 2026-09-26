@@ -96,6 +96,9 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
       const [sql, params] = mockQuery.mock.calls[0];
       expect(sql).toContain("status IN ('cancelled', 'failed')");
       expect(sql).toContain("note LIKE '%PAID_AFTER_CANCELLED%'");
+      // "Nợ nhỏ" PR-4 (26/09) — đơn admin đã bấm "Đánh dấu đã xử lý" (tag
+      // PAID_AFTER_CANCELLED_HANDLED) phải bị loại khỏi cảnh báo, không đợi hết 168h.
+      expect(sql).toContain("note NOT LIKE '%PAID_AFTER_CANCELLED_HANDLED%'");
       expect(sql).toContain("updated_at >= NOW() - ($1 || ' hours')::interval");
       expect(params).toEqual(['168']);
     });

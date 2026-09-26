@@ -70,6 +70,12 @@ export const AUDIT_ACTIONS = {
   VOUCHER_UPDATED: 'VOUCHER_UPDATED',
   VOUCHER_DELETED: 'VOUCHER_DELETED',
 
+  // System — orders
+  // "Nợ nhỏ" PR-4 (26/09) — đơn cancelled/failed mà PayOS báo đã trả (tag PAID_AFTER_CANCELLED
+  // trong note) trước đây không có cách đánh dấu "đã xử lý tay", nên alert_rules
+  // order_paid_after_cancelled bắn lại mỗi giờ tới 7 ngày dù admin đã kích hoạt bù/hoàn tiền.
+  ORDER_PAID_AFTER_CANCELLED_HANDLED: 'ORDER_PAID_AFTER_CANCELLED_HANDLED',
+
   // System — users
   USER_REGISTERED: 'USER_REGISTERED',
   USER_PLAN_CHANGED: 'USER_PLAN_CHANGED',
@@ -211,6 +217,7 @@ export const AUDIT_ENTITY_TYPES = {
   EINVOICE: 'einvoice',
   FORM: 'form',
   AI_MODEL: 'ai_model',
+  ORDER: 'order',
 };
 
 /**
