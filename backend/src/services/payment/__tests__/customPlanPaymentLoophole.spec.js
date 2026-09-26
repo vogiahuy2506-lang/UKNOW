@@ -544,6 +544,39 @@ describe('PR-1 Custom Plan Payment Loophole, Renewal & Downgrade Check', () => {
     expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
   });
 
+  it('Việc 2.3 — chặn cả nâng lệnh hẹn (upgrade_pending) sang gói Tùy chọn CHƯA TỪNG trả tiền', async () => {
+    // Review PR-2: đột biến "chỉ chặn schedule" từng lọt vì chưa có ca upgrade_pending.
+    mockGetPlanByUserId.mockResolvedValue({ id: 7, price: 799000 });
+    mockFindCustomPlanOwnedByUser.mockResolvedValueOnce({
+      id: 99,
+      name: 'Gói tự chọn mồ côi của test@example.com',
+      price: 100000,
+      custom_config: { quantities: { emails: 1000 } },
+    });
+    mockFindPendingByUserId.mockResolvedValue({
+      id: 5,
+      status: 'pending',
+      amount_paid: 100000,
+      plan_price: 100000,
+      plan_price_yearly: null,
+      billing_period: 'monthly',
+      activate_after: new Date(Date.now() + 10 * 86400000),
+    });
+    mockHasSuccessfulOrderForPlanByUser.mockResolvedValueOnce(false);
+
+    await expect(
+      createCustomPaymentLink({
+        quantities: { emails: 3000 }, // 300.000 > gói đang hẹn 100.000 -> upgrade_pending
+        billingPeriod: 'monthly',
+        userId: 1,
+        userEmail: 'test@example.com',
+        reusePlanId: 99,
+      })
+    ).rejects.toMatchObject({ status: 403, code: 'CUSTOM_PLAN_NOT_PAID' });
+
+    expect(mockCreateOrder).not.toHaveBeenCalled();
+  });
+
   it('Việc 2.3 — KHÔNG chặn đường trả-thẳng (upgrade_now) dù gói Tùy chọn tái dùng chưa từng trả tiền', async () => {
     // upgrade_now (nâng gói ngay) luôn ghi đè cấu hình MỚI qua updateCustomPlanLimits trước khi
     // activateUserPlan, không phụ thuộc giá trị cũ trên hàng plans — nên không cần chặn theo lịch sử
