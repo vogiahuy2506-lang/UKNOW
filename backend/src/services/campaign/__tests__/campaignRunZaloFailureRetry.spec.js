@@ -11,7 +11,42 @@ const mockUpsertRecipientProgress = jest.fn().mockResolvedValue(null);
 const mockGetRecipientProgress = jest.fn().mockResolvedValue(null);
 const mockCountFailedByRecipientAndError = jest.fn().mockResolvedValue(0);
 const mockMarkPhoneUnreachableFromError = jest.fn().mockResolvedValue(null);
+const mockSendFriendRequestQueued = jest.fn();
+const mockGetAllGroupIdSet = jest.fn().mockResolvedValue(new Set());
+const mockSendGroupMessageQueued = jest.fn();
 let mockRunMetadata = { source: 'campaign_run' };
+// PR-2b — kịch bản nhóm Zalo cần mô phỏng resume (lượt 2 đọc total_recipients đã cộng dồn từ
+// lượt 1); các describe khác không đụng biến này nên mặc định 0 giữ nguyên hành vi cũ.
+let mockTotalRecipientsSeed = 0;
+
+const PERSONAL_NODE_LIST = [
+  {
+    id: 500,
+    node_type: 'data',
+    node_subtype: 'read_sheet',
+    execution_order: 1,
+    config: {},
+  },
+  {
+    id: 300,
+    node_type: 'action',
+    node_subtype: 'send_zalo_personal',
+    execution_order: 2,
+    config: {
+      zaloAccountId: 99,
+      zaloRecipientSource: 'node',
+      zaloRecipientNodeId: '500',
+      zaloRecipientType: 'phone',
+      zaloRecipientField: 'phone',
+      zaloPersonalTemplateSteps: [{ stepIndex: 1, templateId: 1 }],
+    },
+  },
+];
+
+// PR-2b — kịch bản kết bạn cần đổi node list sang send_zalo_friend_request; giữ mock có thể
+// đổi lại được (mockResolvedValue) thay vì factory tĩnh như cũ, để mỗi describe tự set rồi
+// trả lại PERSONAL_NODE_LIST ở afterEach, không rò sang describe chạy sau trong cùng file.
+const mockFindNodesByCampaignId = jest.fn().mockResolvedValue(PERSONAL_NODE_LIST);
 
 const mockGetRunStatus = jest.fn().mockResolvedValue('running');
 
@@ -21,7 +56,7 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.
     getRunForExecution: jest.fn().mockImplementation(() => Promise.resolve({
       id: 200,
       status: 'running',
-      total_recipients: 0,
+      total_recipients: mockTotalRecipientsSeed,
       successful_sends: 0,
       failed_sends: 0,
       run_metadata: mockRunMetadata,
@@ -47,29 +82,7 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignCrud.repository
       status: 'active',
       flow_json: {},
     }),
-    findNodesByCampaignId: jest.fn(() => Promise.resolve([
-      {
-        id: 500,
-        node_type: 'data',
-        node_subtype: 'read_sheet',
-        execution_order: 1,
-        config: {},
-      },
-      {
-        id: 300,
-        node_type: 'action',
-        node_subtype: 'send_zalo_personal',
-        execution_order: 2,
-        config: {
-          zaloAccountId: 99,
-          zaloRecipientSource: 'node',
-          zaloRecipientNodeId: '500',
-          zaloRecipientType: 'phone',
-          zaloRecipientField: 'phone',
-          zaloPersonalTemplateSteps: [{ stepIndex: 1, templateId: 1 }],
-        },
-      },
-    ])),
+    findNodesByCampaignId: mockFindNodesByCampaignId,
     findConnectionsByCampaignId: jest.fn().mockResolvedValue([]),
     updateNodeExecutionOrder: jest.fn().mockResolvedValue(null),
     updateCampaignLastRunStats: jest.fn().mockResolvedValue(null),
@@ -110,6 +123,9 @@ jest.unstable_mockModule('../campaignZaloSender.service.js', () => ({
     prepareZaloAttachmentSources: jest.fn().mockResolvedValue([]),
     buildTrackedMessageText: jest.fn(async ({ message }) => ({ message })),
     sendPersonalMessageQueued: mockSendPersonalMessageQueued,
+    sendFriendRequestQueued: mockSendFriendRequestQueued,
+    getAllGroupIdSet: mockGetAllGroupIdSet,
+    sendGroupMessageQueued: mockSendGroupMessageQueued,
     annotateZaloSendError: jest.fn((err) => err),
     extractZaloSendObservability: jest.fn((error) => ({
       stage: 'send',
@@ -467,6 +483,199 @@ describe('PR-2, Việc 3 — 1 người hỏng cả 3 lượt (one-shot): failed
       200,
       false,
       expect.objectContaining({ failedSends: 1, successfulSends: 0 }),
+      null
+    );
+  }, 15000);
+});
+
+describe('PR-2b — kết bạn one-shot: nhánh còn hẹn thử lại (chưa đạt ngưỡng abandon) KHÔNG được cộng failedSends', () => {
+  const FRIEND_REQUEST_NODE_LIST = [
+    {
+      id: 500,
+      node_type: 'data',
+      node_subtype: 'read_sheet',
+      execution_order: 1,
+      config: {},
+    },
+    {
+      id: 300,
+      node_type: 'action',
+      node_subtype: 'send_zalo_friend_request',
+      execution_order: 2,
+      config: {
+        zaloAccountId: 99,
+        zaloFriendSource: 'node',
+        zaloFriendNodeId: '500',
+        zaloFriendField: 'phone',
+        zaloFriendRequestMessage: 'Xin chào, kết bạn với mình nhé!',
+      },
+    },
+  ];
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-12T02:00:00.000Z'));
+    mockRunMetadata = { source: 'campaign_run' };
+    mockGetRunStatus.mockResolvedValue('running');
+    campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
+    campaignRunService.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.clear();
+    mockCountFailedByRecipientAndError.mockResolvedValue(0);
+    mockCheckSendQuota.mockResolvedValue({ allowed: true });
+    mockFindNodesByCampaignId.mockResolvedValue(FRIEND_REQUEST_NODE_LIST);
+    mockGetCustomersFromDataNode.mockResolvedValue({
+      items: [{ phone: '0388180857', name: 'Khách Kết Bạn' }],
+      dataLoadMeta: {},
+    });
+    mockSendFriendRequestQueued.mockRejectedValue(new Error('Lỗi gửi lời mời kết bạn'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    campaignRunService.activeRunIds.clear();
+    campaignRunService.continuousRunIds.clear();
+    // Trả node list về mặc định zalo_personal — tránh rò sang describe khác chạy sau trong file.
+    mockFindNodesByCampaignId.mockResolvedValue(PERSONAL_NODE_LIST);
+  });
+
+  it('1 số kết bạn hỏng, chưa tới trần 3 (0 lỗi trước đó): failedSends=0 — còn hẹn thử lại', async () => {
+    mockGetRecipientProgress.mockResolvedValue({
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { zaloSendFailureCount: 0 },
+    });
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockSendFriendRequestQueued).toHaveBeenCalled();
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ failedSends: 0 }),
+      null
+    );
+  }, 15000);
+
+  it('1 số kết bạn hỏng tới trần 3 (2 lỗi trước đó): failedSends=1', async () => {
+    mockGetRecipientProgress.mockResolvedValue({
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { zaloSendFailureCount: 2 },
+    });
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ failedSends: 1 }),
+      null
+    );
+  }, 15000);
+});
+
+describe('PR-2b — nhóm Zalo one-shot nhiều bước: total chỉ cộng lần đầu thấy nhóm, không phình khi resume', () => {
+  const GROUP_NODE_LIST = [
+    {
+      id: 300,
+      node_type: 'action',
+      node_subtype: 'send_zalo_group',
+      execution_order: 1,
+      config: {
+        zaloAccountId: 99,
+        zaloGroupSource: 'manual',
+        zaloGroupIds: 'group-a,group-b',
+        zaloGroupTemplateSteps: [
+          { stepIndex: 1, templateId: 1 },
+          { stepIndex: 2, templateId: 2 },
+        ],
+      },
+    },
+  ];
+
+  let ledger;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-12T02:00:00.000Z'));
+    mockRunMetadata = { source: 'campaign_run' };
+    mockTotalRecipientsSeed = 0;
+    mockGetRunStatus.mockResolvedValue('running');
+    campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
+    campaignRunService.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.clear();
+    mockCheckSendQuota.mockResolvedValue({ allowed: true });
+    mockFindNodesByCampaignId.mockResolvedValue(GROUP_NODE_LIST);
+    mockGetAllGroupIdSet.mockResolvedValue(new Set());
+    // quotaReservationId bắt buộc phải có: thiếu nó thì updateZaloMessageTrackingMeta() (status
+    // 'sent', không quotaReservationId) rơi vào nhánh legacy gọi resolveBillingUserId() → DB thật
+    // (không mock trong file này) → timeout thật 6 lần retry, tính nhầm thành gửi thất bại.
+    mockSendGroupMessageQueued.mockResolvedValue({
+      messageId: 'msg-group', response: { msgId: 'msg-group' }, quotaReservationId: 88,
+    });
+    // Ledger giả GIỮ trạng thái theo recipientKey (= groupId) — bắt buộc, vì
+    // runZaloGroupTemplateStep gọi getRecipientProgress lại cho MỖI bước; khuôn giống hệt
+    // campaignRunEmailCounterInvariantPr2.spec.js test (a).
+    ledger = new Map();
+    mockGetRecipientProgress.mockImplementation(({ recipientKey }) => (
+      Promise.resolve(ledger.get(recipientKey) || null)
+    ));
+    mockUpsertRecipientProgress.mockImplementation(async (input) => {
+      const prev = ledger.get(input.recipientKey);
+      if (prev?.is_fully_completed) return prev;
+      const row = {
+        last_completed_step: input.completedStep,
+        is_fully_completed: input.isFullyCompleted,
+        meta: { ...(prev?.meta || {}), ...input.metaPayload },
+        updated_at: new Date().toISOString(),
+        updated_at_epoch_us: String(Date.now() * 1000),
+      };
+      ledger.set(input.recipientKey, row);
+      return row;
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    campaignRunService.activeRunIds.clear();
+    campaignRunService.continuousRunIds.clear();
+    // Trả node list + seed về mặc định — tránh rò sang describe khác chạy sau trong file.
+    mockFindNodesByCampaignId.mockResolvedValue(PERSONAL_NODE_LIST);
+    mockTotalRecipientsSeed = 0;
+  });
+
+  it('lượt 1: 2 nhóm x 2 bước, tất cả gửi thành công → total=4 (không phải 8)', async () => {
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockSendGroupMessageQueued).toHaveBeenCalledTimes(4);
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ totalRecipients: 4, successfulSends: 4, failedSends: 0 }),
+      null
+    );
+  }, 15000);
+
+  it('lượt 2 (resume): DB đã có total=4, cả 2 nhóm đã fully-completed trong ledger → total vẫn 4, KHÔNG gửi lại', async () => {
+    const doneAt = new Date('2026-09-12T01:00:00.000Z');
+    ['group-a', 'group-b'].forEach((groupId) => {
+      ledger.set(groupId, {
+        last_completed_step: 2,
+        is_fully_completed: true,
+        meta: {},
+        updated_at: doneAt.toISOString(),
+        updated_at_epoch_us: String(doneAt.getTime() * 1000),
+      });
+    });
+    mockTotalRecipientsSeed = 4;
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockSendGroupMessageQueued).not.toHaveBeenCalled();
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ totalRecipients: 4 }),
       null
     );
   }, 15000);

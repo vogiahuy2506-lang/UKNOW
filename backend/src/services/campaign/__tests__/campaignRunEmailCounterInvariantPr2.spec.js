@@ -244,6 +244,49 @@ describe('PR-2 — bộ đếm run: total chỉ cộng lần đầu thấy ngư�
     });
   });
 
+  describe('(e) PR-2b — email bị bỏ qua (unsubscribed) phải cộng skippedSends', () => {
+    it('1 người unsubscribed trong 3 người x 2 bước → skipped=1, total=6 (đúng số bước đã đưa vào), ok=4', async () => {
+      const ledger = new Map();
+      mockGetRunForExecution.mockResolvedValue(buildRunRow({}));
+      mockFindNodesByCampaignId.mockResolvedValue([EMAIL_MULTISTEP_NODE]);
+      mockGetRecipientProgress.mockImplementation(({ recipientKey }) => (
+        Promise.resolve(ledger.get(recipientKey) || null)
+      ));
+      mockUpsertRecipientProgress.mockImplementation(async (input) => {
+        const prev = ledger.get(input.recipientKey);
+        if (prev?.is_fully_completed) return prev;
+        const row = {
+          last_completed_step: input.completedStep,
+          is_fully_completed: input.isFullyCompleted,
+          meta: { ...(prev?.meta || {}), ...input.metaPayload },
+          updated_at: new Date().toISOString(),
+          updated_at_epoch_us: String(Date.now() * 1000),
+        };
+        ledger.set(input.recipientKey, row);
+        return row;
+      });
+      mockSendEmailToCustomer.mockImplementation((runtimeNode, customer) => (
+        customer?.email === 'b@example.com'
+          ? Promise.resolve({ status: 'skipped', reason: 'unsubscribed' })
+          : Promise.resolve({ status: 'success' })
+      ));
+
+      await campaignRunService.executeCampaign(100, 200, 10);
+
+      // b@example.com bị skip ở bước 1 (stopRemainingStepsForRecipient) nên KHÔNG bao giờ thử
+      // bước 2 — tổng lượt gọi sendEmailToCustomer là 5 (a×2 + b×1 + c×2), không phải 6.
+      expect(mockSendEmailToCustomer).toHaveBeenCalledTimes(5);
+      expect(mockFinalizeRun).toHaveBeenCalledWith(
+        200,
+        false,
+        expect.objectContaining({
+          totalRecipients: 6, successfulSends: 4, failedSends: 0, skippedSends: 1,
+        }),
+        null
+      );
+    });
+  });
+
   describe('(d) run đã có total_recipients=10 sẵn trong DB, lượt gọi mới không có người mới → total vẫn 10', () => {
     it('người nhận duy nhất đã fully-completed từ trước → total giữ nguyên 10', async () => {
       mockGetRunForExecution.mockResolvedValue(buildRunRow({ totalRecipients: 10, successfulSends: 10 }));
