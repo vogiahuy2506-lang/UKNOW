@@ -338,6 +338,33 @@ export async function metricLatestCronRescued(jobCode = 'payos_order_reconcile')
 }
 
 /**
+ * Latest affiliate month-closing cron run's erroredReferrers count. Referrer-level errors
+ * (closeAffiliateMonthsCatchup) are only console.error'd — the overall run still reports
+ * status success/noop as long as ANY month closed successfully, so status alone can't
+ * surface this; must read result.erroredReferrers directly.
+ *
+ * CHỈ đọc run đã kết thúc (`finished_at IS NOT NULL`) — cùng lý do đã ghi ở
+ * metricLatestEinvoiceSeries: đọc phải dòng 'running' (result mặc định '{}') sẽ ra
+ * erroredReferrers=0 giả, che mất lỗi thật của lượt trước đó.
+ * @param {string} [jobCode]
+ * @returns {Promise<{ erroredReferrers: number, found: boolean, result: object|null }>}
+ */
+export async function metricLatestAffiliateClosingErrors(jobCode = 'affiliate_month_closing') {
+  const { rows } = await db.query(
+    `SELECT status, result
+     FROM cron_job_runs
+     WHERE job_code = $1
+       AND finished_at IS NOT NULL
+     ORDER BY started_at DESC
+     LIMIT 1`,
+    [jobCode]
+  );
+  if (!rows.length) return { erroredReferrers: 0, found: false, result: null };
+  const erroredReferrers = Number(rows[0].result?.erroredReferrers ?? 0);
+  return { erroredReferrers, found: true, result: rows[0].result || {} };
+}
+
+/**
  * Latest einvoice series check result (series remaining count & year mismatch).
  *
  * CHỈ đọc run đã kết thúc (`finished_at IS NOT NULL`). `recordRun` chèn dòng

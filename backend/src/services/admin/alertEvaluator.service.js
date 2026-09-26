@@ -156,6 +156,20 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'affiliate_closing_errored_referrers': {
+      const jobCode = config.jobCode || 'affiliate_month_closing';
+      const need = Number.isFinite(threshold) ? threshold : 1;
+      const m = await alertRepo.metricLatestAffiliateClosingErrors(jobCode);
+      if (!m.found) return null;
+      if (m.erroredReferrers >= need) {
+        return {
+          measuredValue: m.erroredReferrers,
+          message: `Đóng sổ hoa hồng affiliate: ${m.erroredReferrers} referrer lỗi ở lượt đóng sổ gần nhất — kiểm tra log AffiliateClosing`,
+          payload: m,
+        };
+      }
+      return null;
+    }
     case 'einvoice_series_low': {
       const jobCode = config.jobCode || 'einvoice_series_check';
       const m = await alertRepo.metricLatestEinvoiceSeries(jobCode);

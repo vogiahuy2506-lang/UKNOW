@@ -7,7 +7,7 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
   },
 }));
 
-const { metricCampaignRunFailures, metricCampaignRepeatedFailures, metricStalledRuns, metricPaidAfterCancelledOrders } = await import('../alert.repository.js');
+const { metricCampaignRunFailures, metricCampaignRepeatedFailures, metricStalledRuns, metricPaidAfterCancelledOrders, metricLatestAffiliateClosingErrors } = await import('../alert.repository.js');
 
 describe('PR-4: Alert repository failure metrics SQL behavior', () => {
   beforeEach(() => {
@@ -107,6 +107,43 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
       await metricPaidAfterCancelledOrders();
       expect(mockQuery.mock.calls[0][1]).toEqual(['168']);
+    });
+  });
+
+  // "Nợ nhỏ" PR-4 (26/09) — item 4: affiliate closing đóng sổ, referrer lỗi chỉ console.error
+  describe('metricLatestAffiliateClosingErrors', () => {
+    it('đọc erroredReferrers từ result của lượt chạy gần nhất đã kết thúc', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ status: 'success', result: { erroredReferrers: 2, monthKey: '2026-08' } }],
+      });
+
+      const res = await metricLatestAffiliateClosingErrors();
+      expect(res).toEqual({
+        erroredReferrers: 2,
+        found: true,
+        result: { erroredReferrers: 2, monthKey: '2026-08' },
+      });
+
+      const [sql, params] = mockQuery.mock.calls[0];
+      expect(sql).toContain("job_code = $1");
+      // Chỉ đọc run đã kết thúc — dòng 'running' (result mặc định '{}') sẽ che lỗi thật của
+      // lượt trước, giống bug đã vá ở metricLatestEinvoiceSeries.
+      expect(sql).toContain('finished_at IS NOT NULL');
+      expect(params).toEqual(['affiliate_month_closing']);
+    });
+
+    it('không có lượt chạy nào → found=false, erroredReferrers=0', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [] });
+      const res = await metricLatestAffiliateClosingErrors();
+      expect(res).toEqual({ erroredReferrers: 0, found: false, result: null });
+    });
+
+    it('result thiếu erroredReferrers (job cũ trước khi có field này) → mặc định 0, không throw', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{ status: 'noop', result: {} }],
+      });
+      const res = await metricLatestAffiliateClosingErrors();
+      expect(res).toEqual({ erroredReferrers: 0, found: true, result: {} });
     });
   });
 });

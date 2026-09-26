@@ -2388,6 +2388,15 @@ VALUES (
   '{"maxAgeHours": 168}'::jsonb
 );
 
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES (
+  'affiliate_closing_errored_referrers',
+  'Đóng sổ hoa hồng affiliate có referrer lỗi',
+  'Lượt đóng sổ hoa hồng affiliate gần nhất có referrer tính hoa hồng lỗi - cron vẫn báo success/noop nên không tự phát hiện được qua status, cần xem log AffiliateClosing và xử lý tay',
+  1, NULL, 'email', 'critical', 60,
+  '{"jobCode": "affiliate_month_closing"}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
