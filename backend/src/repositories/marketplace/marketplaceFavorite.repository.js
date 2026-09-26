@@ -53,8 +53,15 @@ class MarketplaceFavoriteRepository {
    * @returns {Promise<object[]>}
    */
   async findByUserId(userId, { limit = 20, offset = 0 } = {}) {
+    // KHÔNG lấy ml.snapshot_data: đó là nội dung trả phí (HTML landing, prompt + kho tri thức chatbot, cấu hình
+    // chiến dịch). Ai cũng thêm yêu thích được mọi món đã xuất bản, nên trả snapshot ở đây là cho xem miễn phí —
+    // cùng danh sách cột với browse/getFeatured (marketplaceListing.repository.js).
     const { rows } = await db.query(
-      `SELECT ml.*, COALESCE(u.full_name, u.username) as seller_name, mf.created_at as favorited_at
+      `SELECT ml.id, ml.id_user, ml.resource_type, ml.resource_id, ml.title, ml.description,
+              ml.category, ml.tags, ml.price_credits, ml.rating_avg, ml.rating_count,
+              ml.purchase_count, ml.view_count, ml.status, ml.visibility,
+              ml.published_at, ml.created_at, ml.updated_at,
+              COALESCE(u.full_name, u.username) as seller_name, mf.created_at as favorited_at
        FROM marketplace_favorites mf
        JOIN marketplace_listings ml ON mf.listing_id = ml.id
        LEFT JOIN users u ON ml.id_user = u.id

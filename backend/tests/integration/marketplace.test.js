@@ -469,4 +469,55 @@ describe('Marketplace API', () => {
       expect(res.body.success).toBe(true);
     });
   });
+
+  // PR-1 (plan vá luồng tiền 26/09): snapshot_data là nội dung trả phí — chỉ chủ món và người đã mua được nhận.
+  // Review bắt thêm đường danh sách yêu thích (SELECT ml.*) mà bản đầu của PR-1 bỏ sót.
+  describe('không trả nội dung trả phí cho người chưa mua', () => {
+    const PAID = { campaignName: 'Noi dung tra phi', campaignType: 'email', nodes: [{ id: 'n1', nodeType: 'email', config: { body: 'BI MAT' } }], connections: [] };
+    const hasPaidContent = (obj) => JSON.stringify(obj).includes('BI MAT') || JSON.stringify(obj).includes('snapshot_data');
+
+    it('chi tiết món: người chưa mua chỉ nhận bản xem trước, chủ món nhận đủ', async () => {
+      const seller = await createUser('seller');
+      const viewer = await createUser('viewer');
+      const listing = await insertListing({ userId: seller.id, status: 'published', snapshotData: PAID });
+
+      const asViewer = await request(app).get(`/api/marketplace/listings/${listing.id}`)
+        .set('Authorization', `Bearer ${await loginAs(viewer)}`);
+      expect(asViewer.status).toBe(200);
+      expect(hasPaidContent(asViewer.body)).toBe(false);
+
+      const asOwner = await request(app).get(`/api/marketplace/listings/${listing.id}`)
+        .set('Authorization', `Bearer ${await loginAs(seller)}`);
+      expect(asOwner.status).toBe(200);
+      expect(JSON.stringify(asOwner.body)).toContain('BI MAT');
+    });
+
+    it('bản nháp: người lạ không mở được', async () => {
+      const seller = await createUser('seller');
+      const viewer = await createUser('viewer');
+      const draft = await insertListing({ userId: seller.id, status: 'draft', snapshotData: PAID });
+
+      const res = await request(app).get(`/api/marketplace/listings/${draft.id}`)
+        .set('Authorization', `Bearer ${await loginAs(viewer)}`);
+      expect(hasPaidContent(res.body)).toBe(false);
+      expect(res.status).toBe(404);
+    });
+
+    it('trang duyệt và danh sách yêu thích không kèm nội dung trả phí', async () => {
+      const seller = await createUser('seller');
+      const viewer = await createUser('viewer');
+      const listing = await insertListing({ userId: seller.id, status: 'published', snapshotData: PAID });
+      const token = await loginAs(viewer);
+
+      const browse = await request(app).get('/api/marketplace/browse').set('Authorization', `Bearer ${token}`);
+      expect(browse.status).toBe(200);
+      expect(hasPaidContent(browse.body)).toBe(false);
+
+      await request(app).post(`/api/marketplace/favorites/${listing.id}`).set('Authorization', `Bearer ${token}`);
+      const favorites = await request(app).get('/api/marketplace/favorites').set('Authorization', `Bearer ${token}`);
+      expect(favorites.status).toBe(200);
+      expect(JSON.stringify(favorites.body)).toContain(String(listing.id));
+      expect(hasPaidContent(favorites.body)).toBe(false);
+    });
+  });
 });
