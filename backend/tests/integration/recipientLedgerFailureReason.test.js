@@ -247,11 +247,17 @@ describe('mapZaloErrorCategoryToLedgerReason — chuẩn hoá về cùng bộ m�
     expect(mapZaloErrorCategoryToLedgerReason('INVALID_PARAMETER')).toBe('invalid_parameter');
   });
 
-  it('category không nằm trong 4 mã trên (TIMEOUT, ACCOUNT_DISCONNECTED, ZALO_GROUP_UNREACHABLE, UNKNOWN...) → unknown', () => {
+  // PR-5 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 2 — ZALO_SILENT_DROP (Zalo báo "thành công"
+  // nhưng msgId=0, không xác nhận phát tin thật) trước đây rơi vào 'unknown' lẫn với lỗi chưa phân
+  // loại; giờ có mã riêng để UI/monitor phân biệt được.
+  it('ZALO_SILENT_DROP → not_delivered (không còn lẫn vào unknown)', () => {
+    expect(mapZaloErrorCategoryToLedgerReason('ZALO_SILENT_DROP')).toBe('not_delivered');
+  });
+
+  it('category không nằm trong 5 mã trên (TIMEOUT, ACCOUNT_DISCONNECTED, ZALO_GROUP_UNREACHABLE, UNKNOWN...) → unknown', () => {
     expect(mapZaloErrorCategoryToLedgerReason('TIMEOUT')).toBe('unknown');
     expect(mapZaloErrorCategoryToLedgerReason('ACCOUNT_DISCONNECTED')).toBe('unknown');
     expect(mapZaloErrorCategoryToLedgerReason('ZALO_GROUP_UNREACHABLE')).toBe('unknown');
-    expect(mapZaloErrorCategoryToLedgerReason('ZALO_SILENT_DROP')).toBe('unknown');
     expect(mapZaloErrorCategoryToLedgerReason('UNKNOWN')).toBe('unknown');
   });
 

@@ -680,3 +680,170 @@ describe('PR-2b — nhóm Zalo one-shot nhiều bước: total chỉ cộng lầ
     );
   }, 15000);
 });
+
+// PR-5 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — nhóm Zalo one-shot giờ thử lại theo
+// đúng khuôn zalo_personal (trước đây chỉ continuous mới thử lại; one-shot lỗi lần đầu là "failed"
+// ngay, không hẹn lại) + Việc 1 (R:7988 cũ) — failedSends không được cộng khi còn hẹn thử lại.
+describe('PR-5 Việc 1 — nhóm Zalo one-shot thử lại theo khuôn cá nhân (ca a-c)', () => {
+  const GROUP_ONESHOT_NODE_LIST = [
+    {
+      id: 300,
+      node_type: 'action',
+      node_subtype: 'send_zalo_group',
+      execution_order: 1,
+      config: {
+        zaloAccountId: 99,
+        zaloGroupSource: 'manual',
+        zaloGroupIds: 'group-a',
+        zaloGroupTemplateSteps: [{ stepIndex: 1, templateId: 1 }],
+      },
+    },
+  ];
+
+  let ledger;
+  const makeSilentDropError = () => Object.assign(
+    new Error('Zalo did not confirm delivery'),
+    { code: 'ZALO_SEND_NOT_DELIVERED' }
+  );
+  const makeLedgerUpsertImpl = () => async (input) => {
+    const prev = ledger.get(input.recipientKey);
+    if (prev?.is_fully_completed) return prev;
+    const row = {
+      last_completed_step: input.completedStep,
+      is_fully_completed: input.isFullyCompleted,
+      meta: { ...(prev?.meta || {}), ...input.metaPayload },
+      updated_at: new Date().toISOString(),
+      updated_at_epoch_us: String(Date.now() * 1000),
+    };
+    ledger.set(input.recipientKey, row);
+    return row;
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-12T02:00:00.000Z'));
+    mockRunMetadata = { source: 'campaign_run' };
+    mockTotalRecipientsSeed = 0;
+    mockGetRunStatus.mockResolvedValue('running');
+    campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
+    campaignRunService.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.clear();
+    mockCheckSendQuota.mockResolvedValue({ allowed: true });
+    mockFindNodesByCampaignId.mockResolvedValue(GROUP_ONESHOT_NODE_LIST);
+    mockGetAllGroupIdSet.mockResolvedValue(new Set());
+    mockSendGroupMessageQueued.mockRejectedValue(makeSilentDropError());
+    ledger = new Map();
+    mockGetRecipientProgress.mockImplementation(({ recipientKey }) => (
+      Promise.resolve(ledger.get(recipientKey) || null)
+    ));
+    mockUpsertRecipientProgress.mockImplementation(makeLedgerUpsertImpl());
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    campaignRunService.activeRunIds.clear();
+    campaignRunService.continuousRunIds.clear();
+    mockFindNodesByCampaignId.mockResolvedValue(PERSONAL_NODE_LIST);
+    mockTotalRecipientsSeed = 0;
+  });
+
+  it('a) lần 1 (ledger rỗng) → upsert zaloSendFailureCount:1, nextDueAt ≈ now+6h, failedSends=0 (còn hẹn thử lại)', async () => {
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockUpsertRecipientProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodeId: 300,
+        channel: 'zalo_group',
+        recipientKey: 'group-a',
+        isFullyCompleted: false,
+        completedStep: 0,
+        metaPayload: expect.objectContaining({
+          zaloSendFailureCount: 1,
+          nextDueAt: '2026-09-12T15:00:00.000+07:00', // 02:00:00Z (+07=09:00) + 6h = 15:00:00+07:00
+          lastFailureReason: 'not_delivered',
+        }),
+      })
+    );
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ failedSends: 0 }),
+      null
+    );
+  }, 15000);
+
+  it('b) ledger zaloSendFailureCount:2 → chạm trần 3 (one-shot): abandon, failedSends=1, ledger completedStep=totalSteps', async () => {
+    ledger.set('group-a', {
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { zaloSendFailureCount: 2 },
+    });
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockUpsertRecipientProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodeId: 300,
+        channel: 'zalo_group',
+        recipientKey: 'group-a',
+        completedStep: 1, // totalGroupSteps = 1 (một bước cấu hình)
+        isFullyCompleted: true,
+        metaPayload: expect.objectContaining({
+          zaloSendFailureCount: 3,
+          zaloAbandonReason: 'max_send_failures',
+        }),
+      })
+    );
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ failedSends: 1 }),
+      null
+    );
+  }, 15000);
+
+  it('c) continuous, ledger zaloSendFailureCount:1 (dưới trần 5) → failedSends=0 (chặn cộng vô điều kiện của bản cũ)', async () => {
+    mockRunMetadata = { continuousMode: true };
+    ledger.set('group-a', {
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { zaloSendFailureCount: 1 },
+    });
+    const baseUpsertImpl = makeLedgerUpsertImpl();
+    mockUpsertRecipientProgress.mockImplementation(async (input) => {
+      const row = await baseUpsertImpl(input);
+      // Continuous mode lặp tới khi run dừng — dừng ngay sau lượt đầu, khuôn Ca 4 (zalo_personal).
+      mockGetRunStatus.mockResolvedValue('stopping');
+      return row;
+    });
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    // Continuous bị dừng ngay sau lượt đầu (mockGetRunStatus → 'stopping') nên không đi tới
+    // finalizeRun như ca one-shot — khuôn Ca 4 (zalo_personal) ở trên: bằng chứng "không abandon,
+    // không cộng failedSends" là chính lệnh ghi ledger này — isFullyCompleted:false và KHÔNG có
+    // zaloAbandonReason chỉ xảy ra ở nhánh "chưa tới trần", nhánh đó luôn skip failedSends += 1.
+    expect(mockUpsertRecipientProgress).toHaveBeenCalledWith(
+      expect.objectContaining({
+        nodeId: 300,
+        channel: 'zalo_group',
+        recipientKey: 'group-a',
+        isFullyCompleted: false,
+        metaPayload: expect.objectContaining({ zaloSendFailureCount: 2 }),
+      })
+    );
+    expect(mockUpsertRecipientProgress).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        metaPayload: expect.objectContaining({ zaloAbandonReason: 'max_send_failures' }),
+      })
+    );
+  }, 15000);
+});
+
+// PR-5 Việc 2 — ZC: silent drop map sang mã ledger 'not_delivered' (không phải 'unknown')
+describe('PR-5 Việc 2 — zaloSendErrorClassifier: silent drop → not_delivered', () => {
+  it('d) mapZaloErrorCategoryToLedgerReason(\'ZALO_SILENT_DROP\') === \'not_delivered\'', async () => {
+    const { mapZaloErrorCategoryToLedgerReason } = await import('../../../utils/zaloSendErrorClassifier.util.js');
+    expect(mapZaloErrorCategoryToLedgerReason('ZALO_SILENT_DROP')).toBe('not_delivered');
+  });
+});

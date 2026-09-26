@@ -7880,7 +7880,17 @@ class CampaignRunService {
                 }
                 return { success: true, skippedGroupUnreachable: true };
               }
-              if (isContinuousMode && this.CONTINUOUS_ZALO_MAX_SEND_FAILURES > 0) {
+              // PR-5 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — khuôn y hệt zalo_personal
+              // (R:5823-5826 cùng file): trước đây chỉ continuous mới thử lại, nhóm one-shot lỗi
+              // là kết "failed" ngay lần đầu (không có nextDueAt) dù chưa chắc là lỗi vĩnh viễn.
+              const maxFailures = isContinuousMode
+                ? this.CONTINUOUS_ZALO_MAX_SEND_FAILURES
+                : this.ZALO_ONESHOT_MAX_SEND_FAILURES;
+              let hasRecordedFailureToLedger = false;
+              // Việc 3 — hiển thị errorLabel + giờ hẹn thử lại thay vì cleanMessage kỹ thuật
+              // (chỉ dùng khi nhánh "chưa tới trần" phía dưới thật sự ghi hẹn thử lại).
+              let retryDisplayMessage = null;
+              if (maxFailures > 0) {
                 // eslint-disable-next-line no-await-in-loop
                 const zp = await getRecipientProgress({
                   nodeId: node.id,
@@ -7890,12 +7900,13 @@ class CampaignRunService {
                 const prevFail = Math.max(0, Number.parseInt(zp.zaloSendFailureCount, 10) || 0);
                 const { nextFailureCount: nextFail, abandon } = resolveZaloContinuousSendFailureProgress({
                   prevFailureCount: prevFail,
-                  maxFailures: this.CONTINUOUS_ZALO_MAX_SEND_FAILURES,
+                  maxFailures,
                 });
                 if (abandon) {
                   failedSends += 1;
+                  const modeLabel = isContinuousMode ? 'continuous' : 'one-shot';
                   const abandonNote = (
-                    ` — đã dừng thử sau ${nextFail} lần gửi thất bại (continuous, max=${this.CONTINUOUS_ZALO_MAX_SEND_FAILURES}).`
+                    ` — đã dừng thử sau ${nextFail} lần gửi thất bại (${modeLabel}, max=${maxFailures}).`
                   );
                   const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
                   const sentAt = toHoChiMinhIso();
@@ -7963,13 +7974,17 @@ class CampaignRunService {
                   });
                   console.warn(
                     `[CampaignRun][ZaloGroup] run=${runId} groupId=${String(groupId || '').trim()} `
-                    + `chốt ledger sau ${nextFail} lần lỗi gửi (continuous).`
+                    + `chốt ledger sau ${nextFail} lần lỗi gửi (${modeLabel}).`
                   );
                   return { success: false, status: 'failed', error: errText };
                 }
                 // Chưa chốt (chưa đạt ngưỡng abandon) nhưng vẫn phải ghi lý do lần này —
-                // xem giải thích tương tự ở nhánh zalo_personal.
+                // xem giải thích tương tự ở nhánh zalo_personal. nextDueAt: one-shot hẹn lại theo
+                // ZALO_ONESHOT_RETRY_DELAY_MS (khuôn R:5919-5935); continuous giữ nguyên zp.nextDueAt.
                 const retryObservation = buildZaloGroupErrorObservation(error);
+                const retryNextDueAt = !isContinuousMode && this.ZALO_ONESHOT_RETRY_DELAY_MS > 0
+                  ? toHoChiMinhIso(Date.now() + this.ZALO_ONESHOT_RETRY_DELAY_MS)
+                  : zp.nextDueAt;
                 // eslint-disable-next-line no-await-in-loop
                 await upsertRecipientProgress({
                   nodeId: node.id,
@@ -7979,14 +7994,34 @@ class CampaignRunService {
                   totalSteps: totalGroupSteps,
                   firstSentAt: zp.firstSentAt,
                   lastCompletedAt: zp.lastCompletedAt,
-                  nextDueAt: zp.nextDueAt,
+                  nextDueAt: retryNextDueAt,
                   zaloSendFailureCount: nextFail,
                   lastFailureReason: mapZaloErrorCategoryToLedgerReason(retryObservation.errorCategory),
                   lastFailureAt: toHoChiMinhIso(),
                 });
+                hasRecordedFailureToLedger = true;
+                // PR-5 Việc 3 — errorLabel tiếng Việt thay vì cleanMessage kỹ thuật (vd
+                // "[ZALO_SEND_NOT_DELIVERED] Zalo did not confirm delivery op=…") cho log/payload
+                // hiển thị; tracking_metadata phía dưới vẫn giữ cleanMessage như cũ để đo.
+                const retryTimeLabel = new Intl.DateTimeFormat('vi-VN', {
+                  timeZone: 'Asia/Ho_Chi_Minh',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
+                }).format(new Date(retryNextDueAt || zp.nextDueAt || Date.now()));
+                retryDisplayMessage = `${retryObservation.errorLabel} — sẽ thử lại lúc ${retryTimeLabel} (lần ${nextFail}/${maxFailures})`;
               }
-              failedSends += 1;
+              // PR-5 Việc 1 (R:7988 cũ) — cộng failedSends vô điều kiện phá bất biến
+              // ok+failed+skipped ≤ total khi continuous chưa tới trần vẫn cộng mỗi lần thử lại.
+              // Khuôn R:6015: chỉ cộng khi KHÔNG còn hẹn thử lại nào vừa được ghi ở trên.
+              if (!hasRecordedFailureToLedger) {
+                failedSends += 1;
+              }
               const observation = buildZaloGroupErrorObservation(error);
+              // PR-5 Việc 3 — nhánh "chưa tới trần" (retryDisplayMessage đã tính ở trên) hiển thị
+              // errorLabel + giờ hẹn thử lại cho người xem log/payload; tracking_metadata (đo đạc)
+              // vẫn giữ nguyên cleanMessage như cũ, không đổi.
+              const displayError = retryDisplayMessage || (observation.cleanMessage || error.message);
               const progressMessage = `Đã gửi ${successfulSends + failedSends + skippedSends}/${totalRecipients}`;
               const sentAt = toHoChiMinhIso();
               const senderName = resolveZaloSenderName(account);
@@ -8002,7 +8037,7 @@ class CampaignRunService {
                 zaloMessageId,
                 message,
                 status: 'failed',
-                error: observation.cleanMessage || error.message,
+                error: displayError,
                 messageText: progressMessage,
                 sentAt,
                 templateId: stepMeta?.templateId || null,
@@ -8030,10 +8065,10 @@ class CampaignRunService {
                 status: 'failed',
                 progressCurrent: successfulSends + failedSends + skippedSends,
                 progressTotal: totalRecipients,
-                errorMessage: observation.cleanMessage || error.message,
+                errorMessage: displayError,
                 executionData: buildSendZaloGroupExecutionData(failedPayload),
               });
-              return { success: false, status: 'failed', error: observation.cleanMessage || error.message };
+              return { success: false, status: 'failed', error: displayError };
             } finally {
               // PR-3: điểm giải quyết DUY NHẤT cho mọi đường thoát sớm (throw/return) phía trên
               // mà không cập nhật tracking_metadata — chạy vô hại nếu message đã 'sent'/'failed'

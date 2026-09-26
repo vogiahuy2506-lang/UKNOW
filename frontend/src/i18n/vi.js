@@ -8338,6 +8338,7 @@ export default {
         unknown: 'Lỗi không xác định',
         bounced: 'Thư bị trả lại',
         failed: 'Gửi thất bại',
+        not_delivered: 'Zalo không xác nhận phát tin',
       },
     },
     speed: 'Tốc độ',

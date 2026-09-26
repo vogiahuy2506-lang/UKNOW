@@ -263,6 +263,11 @@ export function mapZaloErrorCategoryToLedgerReason(category) {
       return 'not_found';
     case 'INVALID_PARAMETER':
       return 'invalid_parameter';
+    // PR-5 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 2 — Zalo trả "thành công" nhưng msgId=0
+    // (không xác nhận phát tin thật). Trước đây rơi vào 'unknown', UI/monitor không phân biệt được
+    // với lỗi chưa phân loại.
+    case ZALO_SILENT_DROP_CATEGORY:
+      return 'not_delivered';
     default:
       return 'unknown';
   }
