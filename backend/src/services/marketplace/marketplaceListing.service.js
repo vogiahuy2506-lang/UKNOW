@@ -256,6 +256,76 @@ class MarketplaceListingService {
   }
 
   /**
+   * Build a safe, truncated preview of snapshot data for unpurchased users.
+   * Strips sensitive configurations, full prompts, knowledge base chunks, etc.
+   * @param {string} resourceType
+   * @param {object} snapshotData
+   * @returns {object|null}
+   */
+  _buildSafePreview(resourceType, snapshotData) {
+    if (!snapshotData || typeof snapshotData !== 'object') {
+      return null;
+    }
+
+    if (resourceType === 'landing_page') {
+      const html = typeof snapshotData.htmlContent === 'string'
+        ? snapshotData.htmlContent.substring(0, 500)
+        : '';
+      return {
+        title: snapshotData.title || '',
+        slug: snapshotData.slug || '',
+        htmlContent: html,
+        customConfig: snapshotData.customConfig || {},
+      };
+    }
+
+    if (resourceType === 'campaign') {
+      return {
+        campaignName: snapshotData.campaignName || '',
+        campaignType: snapshotData.campaignType || '',
+        nodes: Array.isArray(snapshotData.nodes)
+          ? snapshotData.nodes.map(n => ({
+              id: n.id,
+              nodeType: n.nodeType,
+              nodeSubtype: n.nodeSubtype,
+              nodeName: n.nodeName,
+              positionX: n.positionX,
+              positionY: n.positionY,
+            }))
+          : [],
+        connections: Array.isArray(snapshotData.connections)
+          ? snapshotData.connections
+          : [],
+      };
+    }
+
+    if (resourceType === 'chatbot') {
+      return {
+        chatbotName: snapshotData.chatbotName || '',
+        chatbotDescription: typeof snapshotData.chatbotDescription === 'string'
+          ? snapshotData.chatbotDescription.substring(0, 150)
+          : '',
+        systemInstruction: typeof snapshotData.systemInstruction === 'string'
+          ? snapshotData.systemInstruction.substring(0, 100)
+          : '',
+        greetingMsg: snapshotData.greetingMsg || '',
+        aiModel: snapshotData.aiModel || '',
+        themeColor: snapshotData.themeColor,
+        primaryColor: snapshotData.primaryColor,
+        backgroundColor: snapshotData.backgroundColor,
+        textColor: snapshotData.textColor,
+        suggestedQuestions: Array.isArray(snapshotData.suggestedQuestions)
+          ? snapshotData.suggestedQuestions.slice(0, 4)
+          : [],
+        includeKnowledgeBase: Boolean(snapshotData.includeKnowledgeBase),
+        chunks: [],
+      };
+    }
+
+    return null;
+  }
+
+  /**
    * Get listing by ID (increment view count unless viewer is the seller)
    * @param {number} id
    * @param {number} [viewerUserId] - Optional viewer; chính chủ không tính view
@@ -263,10 +333,34 @@ class MarketplaceListingService {
    */
   async getById(id, viewerUserId = null) {
     const listing = await marketplaceListingRepository.findById(id);
-    if (listing && Number(listing.id_user) !== Number(viewerUserId)) {
+    if (!listing) return null;
+
+    const isOwner = viewerUserId != null && Number(listing.id_user) === Number(viewerUserId);
+
+    // Bản nháp (status != 'published') chỉ chủ xem được
+    if (listing.status !== 'published' && !isOwner) {
+      return null;
+    }
+
+    if (!isOwner) {
       // Tăng view nếu người xem không phải chính chủ listing
       await marketplaceListingRepository.incrementViewCount(id);
     }
+
+    // Check if viewer has purchased
+    let hasPurchased = false;
+    if (viewerUserId && !isOwner) {
+      hasPurchased = await this.hasPurchased(viewerUserId, id);
+    }
+
+    // Với người CHƯA mua và KHÔNG phải chủ: không trả snapshot_data, chỉ trả bản preview an toàn
+    if (!isOwner && !hasPurchased) {
+      if (listing.snapshot_data) {
+        listing.preview_data = this._buildSafePreview(listing.resource_type, listing.snapshot_data);
+        delete listing.snapshot_data;
+      }
+    }
+
     return listing;
   }
 

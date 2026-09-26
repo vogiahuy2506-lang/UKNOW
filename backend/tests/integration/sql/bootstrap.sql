@@ -2485,7 +2485,8 @@ CREATE TABLE marketplace_seller_stats (
     pending_payout INTEGER DEFAULT 0,
     lifetime_paid_out INTEGER DEFAULT 0,
     created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
+    updated_at TIMESTAMPTZ DEFAULT NOW(),
+    CONSTRAINT chk_marketplace_seller_stats_available_balance_non_negative CHECK (available_balance >= 0)
 );
 
 CREATE INDEX idx_seller_stats_user ON marketplace_seller_stats(id_user);

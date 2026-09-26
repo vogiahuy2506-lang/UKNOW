@@ -1,7 +1,6 @@
 import marketplaceListingRepository from '../../repositories/marketplace/marketplaceListing.repository.js';
 import marketplacePurchaseRepository from '../../repositories/marketplace/marketplacePurchase.repository.js';
-import usageTrackingService from '../payment/usageTracking.service.js';
-import aiCreditMeter, { AI_CREDIT_RESOURCE } from '../ai/aiCreditMeter.service.js';
+import aiCreditMeter from '../ai/aiCreditMeter.service.js';
 import marketplaceWalletService from './marketplaceWallet.service.js';
 import db from '../../config/database.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
@@ -127,15 +126,8 @@ class MarketplacePurchaseService {
           externalClient: client,
         });
 
-        // Add credits to seller (90% after platform fee)
+        // Add earnings to seller wallet (90% after platform fee)
         const sellerAmount = Math.floor(listing.price_credits * 0.9);
-        await usageTrackingService.trackUsage(listing.id_user, AI_CREDIT_RESOURCE, sellerAmount, {
-          type: 'marketplace_sale',
-          listing_id: listingId,
-          buyer_id: buyerId,
-        }, client);
-
-        // Update seller wallet balance
         await marketplaceWalletService.creditSeller(client, listing.id_user, sellerAmount);
       }
 

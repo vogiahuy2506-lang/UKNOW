@@ -197,7 +197,10 @@ class MarketplaceListingRepository {
   }) {
     const offset = (page - 1) * limit;
     let query = `
-      SELECT ml.*,
+      SELECT ml.id, ml.id_user, ml.resource_type, ml.resource_id, ml.title, ml.description,
+             ml.category, ml.tags, ml.price_credits, ml.rating_avg, ml.rating_count,
+             ml.purchase_count, ml.view_count, ml.status, ml.visibility,
+             ml.published_at, ml.created_at, ml.updated_at,
              COALESCE(u.full_name, u.username) as seller_name
       FROM marketplace_listings ml
       LEFT JOIN users u ON ml.id_user = u.id
@@ -268,7 +271,11 @@ class MarketplaceListingRepository {
    */
   async getFeatured(limit = 10) {
     const { rows } = await db.query(
-      `SELECT ml.*, COALESCE(u.full_name, u.username) as seller_name
+      `SELECT ml.id, ml.id_user, ml.resource_type, ml.resource_id, ml.title, ml.description,
+              ml.category, ml.tags, ml.price_credits, ml.rating_avg, ml.rating_count,
+              ml.purchase_count, ml.view_count, ml.status, ml.visibility,
+              ml.published_at, ml.created_at, ml.updated_at,
+              COALESCE(u.full_name, u.username) as seller_name
        FROM marketplace_listings ml
        LEFT JOIN users u ON ml.id_user = u.id
        WHERE ml.status = 'published' AND ml.purchase_count > 0

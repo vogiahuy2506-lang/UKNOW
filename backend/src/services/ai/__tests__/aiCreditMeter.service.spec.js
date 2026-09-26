@@ -206,4 +206,74 @@ describe('aiCreditMeter.service', () => {
       });
     });
   });
+
+  describe('deductCredits', () => {
+    it('khi gói đã dùng hết: trừ toàn bộ vào ví, không vượt trần gói, không ghi usage log gói', async () => {
+      mockGetUserPlanLimits.mockResolvedValue({ ai_credits_per_period: 200 });
+      mockGetUsageInRange.mockResolvedValue(200); // 200/200 đã dùng hết
+      mockGetWalletBalance.mockResolvedValue({ granted: 300, used: 0, remaining: 300, rawRemaining: 300 });
+
+      const result = await aiCreditMeter.deductCredits(5, 150);
+
+      expect(result.success).toBe(true);
+      expect(result.deducted).toBe(150);
+      expect(result.breakdown).toEqual({ planDeducted: 0, walletDeducted: 150 });
+      expect(result.remaining.plan).toBe(0);
+      expect(result.remaining.wallet).toBe(150);
+      expect(mockTrackUsageRepo).not.toHaveBeenCalled();
+      expect(mockInsertTopupDebit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 5,
+          itemKey: 'ai_credits',
+          qty: 150,
+        }),
+        expect.anything()
+      );
+    });
+
+    it('khi gói còn một phần: trừ hết phần còn của gói rồi trừ phần thiếu vào ví', async () => {
+      mockGetUserPlanLimits.mockResolvedValue({ ai_credits_per_period: 200 });
+      mockGetUsageInRange.mockResolvedValue(150); // còn 50
+      mockGetWalletBalance.mockResolvedValue({ granted: 300, used: 0, remaining: 300, rawRemaining: 300 });
+
+      const result = await aiCreditMeter.deductCredits(5, 150);
+
+      expect(result.success).toBe(true);
+      expect(result.deducted).toBe(150);
+      expect(result.breakdown).toEqual({ planDeducted: 50, walletDeducted: 100 });
+      expect(result.remaining.plan).toBe(0);
+      expect(result.remaining.wallet).toBe(200);
+      expect(mockTrackUsageRepo).toHaveBeenCalledWith(
+        5,
+        'ai_credit',
+        50,
+        expect.anything(),
+        expect.anything()
+      );
+      expect(mockInsertTopupDebit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId: 5,
+          itemKey: 'ai_credits',
+          qty: 100,
+        }),
+        expect.anything()
+      );
+    });
+
+    it('throw INSUFFICIENT_CREDITS khi tổng gói + ví không đủ', async () => {
+      mockGetUserPlanLimits.mockResolvedValue({ ai_credits_per_period: 200 });
+      mockGetUsageInRange.mockResolvedValue(200);
+      mockGetWalletBalance.mockResolvedValue({ granted: 50, used: 0, remaining: 50, rawRemaining: 50 });
+
+      await expect(aiCreditMeter.deductCredits(5, 150)).rejects.toMatchObject({
+        status: 400,
+        code: 'INSUFFICIENT_CREDITS',
+        available: 50,
+        required: 150,
+      });
+      expect(mockTrackUsageRepo).not.toHaveBeenCalled();
+      expect(mockInsertTopupDebit).not.toHaveBeenCalled();
+    });
+  });
 });
+

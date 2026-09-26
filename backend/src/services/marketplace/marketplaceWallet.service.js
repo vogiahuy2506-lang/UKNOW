@@ -89,40 +89,72 @@ class MarketplaceWalletService {
    * @returns {Promise<object>}
    */
   async requestWithdrawal(userId, amount, paymentMethod = 'bank_transfer', paymentDetails = {}) {
-    // Check available balance
-    const balance = await this.getBalance(userId);
-    if (balance.availableBalance < amount) {
-      const error = new Error('Số dư khả dụng không đủ');
+    const parsedAmount = Math.floor(Number(amount));
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      const error = new Error('Số tiền rút không hợp lệ');
       error.status = 400;
       throw error;
     }
 
     // Minimum withdrawal
-    if (amount < 50000) { // 50k credits minimum
+    if (parsedAmount < 50000) { // 50k credits minimum
       const error = new Error('Số tiền rút tối thiểu là 50,000 credits');
       error.status = 400;
       throw error;
     }
 
-    // Create payout request
-    const { rows } = await db.query(
-      `INSERT INTO marketplace_payout_requests 
-       (id_user, amount, status, payment_method, payment_details)
-       VALUES ($1, $2, 'pending', $3, $4)
-       RETURNING *`,
-      [userId, amount, paymentMethod, JSON.stringify(paymentDetails)]
-    );
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
 
-    // Update available balance
-    await db.query(
-      `UPDATE marketplace_seller_stats 
-       SET available_balance = available_balance - $2,
-           pending_payout = pending_payout + $2
-       WHERE id_user = $1`,
-      [userId, amount]
-    );
+      // Lock row to prevent race conditions on available_balance
+      const { rows } = await client.query(
+        `SELECT available_balance, pending_payout
+         FROM marketplace_seller_stats
+         WHERE id_user = $1
+         FOR UPDATE`,
+        [userId]
+      );
 
-    return rows[0];
+      const availableBalance = Number(rows[0]?.available_balance || 0);
+      if (rows.length === 0 || availableBalance < parsedAmount) {
+        const error = new Error('Số dư khả dụng không đủ');
+        error.status = 400;
+        throw error;
+      }
+
+      // Create payout request
+      const { rows: inserted } = await client.query(
+        `INSERT INTO marketplace_payout_requests 
+         (id_user, amount, status, payment_method, payment_details)
+         VALUES ($1, $2, 'pending', $3, $4)
+         RETURNING *`,
+        [userId, parsedAmount, paymentMethod, JSON.stringify(paymentDetails)]
+      );
+
+      // Update available balance and pending payout with guard
+      const { rowCount } = await client.query(
+        `UPDATE marketplace_seller_stats 
+         SET available_balance = available_balance - $2,
+             pending_payout = pending_payout + $2
+         WHERE id_user = $1 AND available_balance >= $2`,
+        [userId, parsedAmount]
+      );
+
+      if (rowCount === 0) {
+        const error = new Error('Số dư khả dụng không đủ');
+        error.status = 400;
+        throw error;
+      }
+
+      await client.query('COMMIT');
+      return inserted[0];
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

@@ -46,14 +46,12 @@ const LandingPagePreview = ({ snapshot }) => {
       <div className="mb-4">
         <h3 className="text-sm font-semibold text-gray-700 mb-3">Nội dung HTML</h3>
         {htmlContent ? (
-          <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <div 
-              className="prose prose-sm max-w-none"
-              dangerouslySetInnerHTML={{ 
-                __html: htmlContent.length > 500 
-                  ? htmlContent.substring(0, 500) + '...' 
-                  : htmlContent 
-              }}
+          <div className="border border-gray-200 rounded-lg p-2 bg-gray-50">
+            <iframe
+              title="Preview Landing Page"
+              className="w-full h-80 border-0 rounded bg-white block"
+              sandbox=""
+              srcDoc={htmlContent}
             />
             {htmlContent.length > 500 && (
               <p className="text-xs text-gray-500 mt-2 text-center">

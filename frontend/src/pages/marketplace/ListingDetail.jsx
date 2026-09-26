@@ -994,18 +994,18 @@ const ListingDetail = ({ id: idProp, onClose, onAfterPurchase }) => {
             </section>
 
             {/* Campaign Preview */}
-            {listing.resource_type === 'campaign' && listing.snapshot_data && (
-              <CampaignPreview snapshot={listing.snapshot_data} />
+            {listing.resource_type === 'campaign' && (listing.snapshot_data || listing.preview_data) && (
+              <CampaignPreview snapshot={listing.snapshot_data || listing.preview_data} />
             )}
 
             {/* Chatbot Preview */}
-            {listing.resource_type === 'chatbot' && listing.snapshot_data && (
-              <ChatbotPreview snapshot={listing.snapshot_data} />
+            {listing.resource_type === 'chatbot' && (listing.snapshot_data || listing.preview_data) && (
+              <ChatbotPreview snapshot={listing.snapshot_data || listing.preview_data} />
             )}
 
             {/* Landing Page Preview */}
-            {listing.resource_type === 'landing_page' && listing.snapshot_data && (
-              <LandingPagePreview snapshot={listing.snapshot_data} />
+            {listing.resource_type === 'landing_page' && (listing.snapshot_data || listing.preview_data) && (
+              <LandingPagePreview snapshot={listing.snapshot_data || listing.preview_data} />
             )}
 
             {/* Tips */}

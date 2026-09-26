@@ -149,20 +149,26 @@ describe('marketplacePurchase.service.purchase', () => {
     expect(deductCall[2]?.externalClient).toBe(mockClient);
   });
 
-  it('truyền client xuống trackUsage khi seller nhận tiền', async () => {
+  it('cộng tiền vào marketplace_seller_stats và KHÔNG tiêu credit của seller', async () => {
     mockFindByIdTx.mockResolvedValue({
       id: 1, status: 'published', price_credits: 100, resource_type: 'campaign',
       id_user: 5, title: 'Paid Listing', snapshot_data: {},
     });
     mockFindByUserAndListingTx.mockResolvedValue(null);
     mockAiDeductCredits.mockResolvedValue({ success: true });
-    mockTrackUsage.mockResolvedValue({ success: true });
 
-    mockClient.query.mockImplementation((sql) => {
+    let sellerStatsQuery = null;
+    let sellerStatsParams = null;
+    mockClient.query.mockImplementation((sql, params) => {
       if (sql === 'BEGIN' || sql === 'COMMIT' || sql === 'ROLLBACK') {
         return Promise.resolve({ rows: [] });
       }
-      if (sql.includes('INSERT INTO campaigns')) {
+      if (typeof sql === 'string' && sql.includes('marketplace_seller_stats')) {
+        sellerStatsQuery = sql;
+        sellerStatsParams = params;
+        return Promise.resolve({ rows: [] });
+      }
+      if (typeof sql === 'string' && sql.includes('INSERT INTO campaigns')) {
         return Promise.resolve({ rows: [{ id: 100 }] });
       }
       return Promise.resolve({ rows: [] });
@@ -170,12 +176,12 @@ describe('marketplacePurchase.service.purchase', () => {
 
     await marketplacePurchaseService.purchase(1, 10);
 
-    expect(mockTrackUsage).toHaveBeenCalledTimes(1);
-    const trackCall = mockTrackUsage.mock.calls[0];
-    expect(trackCall[0]).toBe(5); // seller id
-    expect(trackCall[1]).toBe('ai_credit');
-    expect(trackCall[2]).toBe(90); // 90% of 100
-    expect(trackCall[4]).toBe(mockClient); // client
+    // KHÔNG tiêu credit người bán qua trackUsage
+    expect(mockTrackUsage).not.toHaveBeenCalled();
+
+    // CÓ cộng tiền vào marketplace_seller_stats cho seller 5 số tiền 90
+    expect(sellerStatsQuery).toBeTruthy();
+    expect(sellerStatsParams).toEqual([5, 90]);
   });
 
   it('ROLLBACK khi listing không published', async () => {

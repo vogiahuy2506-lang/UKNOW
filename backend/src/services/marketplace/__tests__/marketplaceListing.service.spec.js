@@ -37,20 +37,20 @@ describe('marketplaceListing.service getById', () => {
   });
 
   it('CÓ tăng view_count khi người khác (không phải seller) xem', async () => {
-    mockFindById.mockResolvedValue({ id: 1, id_user: 42, title: 'Other Listing' });
+    mockFindById.mockResolvedValue({ id: 1, id_user: 42, title: 'Other Listing', status: 'published' });
 
     const result = await marketplaceListingService.getById(1, 99);
 
-    expect(result).toEqual({ id: 1, id_user: 42, title: 'Other Listing' });
+    expect(result).toEqual({ id: 1, id_user: 42, title: 'Other Listing', status: 'published' });
     expect(mockIncrementViewCount).toHaveBeenCalledWith(1);
   });
 
   it('CÓ tăng view_count khi không truyền viewerUserId (khách vãng lai)', async () => {
-    mockFindById.mockResolvedValue({ id: 1, id_user: 42, title: 'Public Listing' });
+    mockFindById.mockResolvedValue({ id: 1, id_user: 42, title: 'Public Listing', status: 'published' });
 
     const result = await marketplaceListingService.getById(1);
 
-    expect(result).toEqual({ id: 1, id_user: 42, title: 'Public Listing' });
+    expect(result).toEqual({ id: 1, id_user: 42, title: 'Public Listing', status: 'published' });
     expect(mockIncrementViewCount).toHaveBeenCalledWith(1);
   });
 
@@ -72,6 +72,98 @@ describe('marketplaceListing.service getById', () => {
     expect(result).toEqual({ id: 1, id_user: '42', title: 'Edge' });
     // Không tăng view vì '42' == 42 (Number coercion)
     expect(mockIncrementViewCount).not.toHaveBeenCalled();
+  });
+
+  it('người chưa mua và không phải chủ: KHÔNG nhận snapshot_data, nhận preview_data rút gọn', async () => {
+    mockFindById.mockResolvedValue({
+      id: 1,
+      id_user: 42,
+      status: 'published',
+      resource_type: 'landing_page',
+      snapshot_data: {
+        title: 'Full Landing Page',
+        slug: 'full-slug',
+        htmlContent: '<html>' + 'A'.repeat(1000) + '</html>',
+        sensitiveInternalConfig: { token: 'secret' },
+      },
+    });
+    mockHasPurchased.mockResolvedValue(null);
+
+    const result = await marketplaceListingService.getById(1, 99);
+
+    expect(result).toBeTruthy();
+    expect(result.snapshot_data).toBeUndefined();
+    expect(result.preview_data).toBeDefined();
+    expect(result.preview_data.title).toBe('Full Landing Page');
+    expect(result.preview_data.htmlContent.length).toBeLessThanOrEqual(500);
+    expect(result.preview_data.sensitiveInternalConfig).toBeUndefined();
+  });
+
+  it('chính chủ listing: nhận đầy đủ snapshot_data gốc, không có preview_data', async () => {
+    const rawSnapshot = {
+      title: 'Full Landing Page',
+      htmlContent: '<html>' + 'A'.repeat(1000) + '</html>',
+    };
+    mockFindById.mockResolvedValue({
+      id: 1,
+      id_user: 42,
+      status: 'published',
+      resource_type: 'landing_page',
+      snapshot_data: rawSnapshot,
+    });
+
+    const result = await marketplaceListingService.getById(1, 42);
+
+    expect(result.snapshot_data).toEqual(rawSnapshot);
+    expect(result.preview_data).toBeUndefined();
+  });
+
+  it('người đã mua listing: nhận đầy đủ snapshot_data gốc', async () => {
+    const rawSnapshot = {
+      campaignName: 'Full Campaign',
+      nodes: [{ id: 1, nodeType: 'email', config: { emailBody: 'private' } }],
+    };
+    mockFindById.mockResolvedValue({
+      id: 1,
+      id_user: 42,
+      status: 'published',
+      resource_type: 'campaign',
+      snapshot_data: rawSnapshot,
+    });
+    mockHasPurchased.mockResolvedValue({ id: 10, id_user: 99 });
+
+    const result = await marketplaceListingService.getById(1, 99);
+
+    expect(result.snapshot_data).toEqual(rawSnapshot);
+    expect(result.preview_data).toBeUndefined();
+  });
+
+  it('bản nháp (draft): người lạ không xem được (trả về null)', async () => {
+    mockFindById.mockResolvedValue({
+      id: 1,
+      id_user: 42,
+      status: 'draft',
+      resource_type: 'campaign',
+      snapshot_data: {},
+    });
+
+    const result = await marketplaceListingService.getById(1, 99);
+    expect(result).toBeNull();
+    expect(mockIncrementViewCount).not.toHaveBeenCalled();
+  });
+
+  it('bản nháp (draft): chính chủ xem được bình thường', async () => {
+    mockFindById.mockResolvedValue({
+      id: 1,
+      id_user: 42,
+      status: 'draft',
+      resource_type: 'campaign',
+      snapshot_data: { campaignName: 'My Draft' },
+    });
+
+    const result = await marketplaceListingService.getById(1, 42);
+    expect(result).toBeTruthy();
+    expect(result.snapshot_data).toEqual({ campaignName: 'My Draft' });
   });
 });
 

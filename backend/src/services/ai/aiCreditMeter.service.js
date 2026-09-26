@@ -118,9 +118,10 @@ class AiCreditMeterService {
           limit: 0,
           used,
           billOnly: true,
+          hasPlan: false,
         };
       }
-      return { skip: true, billingUserId, cycle, limit: 0, used: 0 };
+      return { skip: true, billingUserId, cycle, limit: 0, used: 0, hasPlan: false };
     }
 
     const wallet = await getWalletBalance(billingUserId, 'ai_credits');
@@ -132,6 +133,7 @@ class AiCreditMeterService {
       limit: baseLimit,
       used,
       walletRemaining: wallet.remaining,
+      hasPlan: Boolean(cycle?.hasPlan),
     };
   }
 
@@ -291,7 +293,8 @@ class AiCreditMeterService {
 
       // Calculate current usage within cycle
       let currentUsed = 0;
-      if (resolvedCtx.hasPlan && cycle?.cycleStart) {
+      const hasPlan = Boolean(cycle?.hasPlan ?? resolvedCtx.hasPlan ?? (baseLimit > 0));
+      if (hasPlan && cycle?.cycleStart) {
         currentUsed = Number(await usageTrackingRepository.getUsageInRange(
           billingUserId,
           AI_CREDIT_RESOURCE,
@@ -314,16 +317,19 @@ class AiCreditMeterService {
       }
 
       // Then deduct from wallet if needed
+      let walletAvailable = 0;
       if (remaining > 0) {
         const wallet = await getWalletBalance(billingUserId, 'ai_credits');
-        const walletAvailable = Number(wallet?.remaining || 0);
+        walletAvailable = Number(wallet?.remaining || 0);
         walletDeducted = Math.min(remaining, walletAvailable);
         remaining -= walletDeducted;
+      } else {
+        walletAvailable = Number(resolvedCtx.walletRemaining || 0);
       }
 
       // If still remaining, not enough credits
       if (remaining > 0) {
-        const totalAvailable = planAvailable + Number(resolvedCtx.walletRemaining || 0);
+        const totalAvailable = planAvailable + walletAvailable;
         const error = new Error(
           `Không đủ credits. Bạn có ${totalAvailable} credits, cần ${amount} credits.`
         );
@@ -368,7 +374,7 @@ class AiCreditMeterService {
         breakdown: { planDeducted, walletDeducted },
         remaining: {
           plan: baseLimit - (currentUsed + planDeducted),
-          wallet: Number(resolvedCtx.walletRemaining || 0) - walletDeducted,
+          wallet: walletAvailable - walletDeducted,
         },
       };
     } catch (error) {
