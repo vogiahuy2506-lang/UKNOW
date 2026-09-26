@@ -90,11 +90,14 @@ describe('PR-1: Biểu mẫu đặt lịch sửa theo góp ý sếp 24/09', () =
         expect(screen.getByText('Hãy mở app ngân hàng và quét mã QR để chuyển khoản')).toBeInTheDocument();
       });
 
-      // Kiểm tra QRCode được gọi với margin 4 và width 320
-      expect(QRCode.toDataURL).toHaveBeenCalledWith(
-        expect.stringContaining('BKTEST01'),
-        expect.objectContaining({ width: 320, margin: 4 })
-      );
+      // Kiểm tra QRCode được gọi với margin 4 và width 320 — trong waitFor: QR tạo ở effect SAU khi
+      // câu hướng dẫn hiện, CI chậm có lúc chưa kịp gọi (26/09 đỏ "Number of calls: 0").
+      await waitFor(() => {
+        expect(QRCode.toDataURL).toHaveBeenCalledWith(
+          expect.stringContaining('BKTEST01'),
+          expect.objectContaining({ width: 320, margin: 4 })
+        );
+      });
 
       // Chờ ảnh QR hiển thị
       await waitFor(() => {
