@@ -450,9 +450,6 @@ const TopupPage = () => {
         <div className="flex items-center justify-between text-base font-bold text-slate-900">
           <div>
             <span className="block">{t('checkout.total')}</span>
-            <span className="text-[10px] text-slate-400 font-normal">
-              {t('checkout.vatIncluded')}
-            </span>
           </div>
           <span>
             {hasQuantityIssues

@@ -124,17 +124,17 @@ function PricingPolicy() {
               1. General Pricing Regulations
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết minh bạch trong việc công bố giá dịch vụ. Tất cả các mức giá được hiển thị trên nền tảng founderai.biz đã bao gồm thuế giá trị gia tăng (VAT) theo quy định của pháp luật Việt Nam, trừ khi có ghi chú riêng biệt.
+              DIGISO cam kết minh bạch trong việc công bố giá dịch vụ. Giá hiển thị trên nền tảng founderai.biz là số tiền cuối cùng khách hàng thanh toán, không cộng thêm thuế giá trị gia tăng (VAT), trừ khi có ghi chú riêng biệt.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to transparency in service pricing. All prices displayed on the founderai.biz platform include Value Added Tax (VAT) as required by Vietnamese law, unless otherwise stated.
+              DIGISO commits to transparency in service pricing. Prices displayed on the founderai.biz platform are the final amounts customers pay, with no Value Added Tax (VAT) added, unless otherwise stated.
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Giá đã bao gồm VAT:</strong> Các gói dịch vụ hiển thị giá đã bao gồm 10% VAT.
+                <strong>Giá cuối cùng:</strong> Giá các gói dịch vụ hiển thị là số tiền bạn thanh toán, không cộng thêm VAT.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Prices include VAT:</strong> Displayed service package prices include 10% VAT.
+                <strong>Final price:</strong> Displayed service package prices are the amounts you pay, with no VAT added.
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Đơn vị tiền tệ:</strong> Tất cả giá được niêm yết bằng Đồng Việt Nam (VND).

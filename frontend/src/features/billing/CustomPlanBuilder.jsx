@@ -473,9 +473,6 @@ export default function CustomPlanBuilder({
                       <span className="font-black text-slate-900 block">
                         {billingPeriod === 'yearly' ? t('customPlan.yearlyTotal') : t('customPlan.monthlyTotal')}
                       </span>
-                      <span className="text-[11px] text-slate-400 font-normal">
-                        {t('checkout.vatIncluded')}
-                      </span>
                     </div>
                     <span className="font-black text-orange-600 text-lg">
                       {fmtVnd(quote?.total || 0)}

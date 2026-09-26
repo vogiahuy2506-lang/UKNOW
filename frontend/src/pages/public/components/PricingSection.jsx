@@ -672,9 +672,6 @@ export default function PricingSection({ embedded = false, compact = false, glas
                               </div>
                             </div>
                           )}
-                          <div className={`text-[10px] ${style.unit} mt-1`}>
-                            {t('checkout.vatIncluded')}
-                          </div>
                         </div>
                       ) : (
                         <div className={`text-2xl font-black ${style.price}`}>
@@ -717,11 +714,6 @@ export default function PricingSection({ embedded = false, compact = false, glas
                       <div className="flex items-baseline gap-0.5">
                         <span className={`text-3xl font-black ${style.price}`}>{fmtVnd(plan.price)}</span>
                         <span className={`text-xs ml-1 ${style.unit}`}>{t('pricing.perMonth')}</span>
-                      </div>
-                    )}
-                    {!isCustom && Number(promotedPrice || rawPlanPrice || plan.price || 0) > 0 && (
-                      <div className={`text-[10px] ${style.unit} mt-1`}>
-                        {t('checkout.vatIncluded')}
                       </div>
                     )}
                   </div>
