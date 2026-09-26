@@ -80,7 +80,9 @@ describe('PR-2: Nút Tôi xác nhận đã chuyển khoản (Frontend)', () => {
     it('bấm nút -> hiện modal hỏi xác nhận -> xác nhận gọi reportSubmissionPaid -> chuyển sang khối đã ghi nhận', async () => {
       formPublicApi.fetchPublicSubmissionStatus.mockResolvedValueOnce(basePendingStatus);
       const reportedAt = '2026-09-25T10:15:00Z';
-      const extendedHold = '2026-09-26T10:15:00Z';
+      // Mốc tương đối: bản cũ ghi cứng '2026-09-26T10:15:00Z' nên test tự đỏ ngay khi qua giờ đó
+      // (trang coi giữ chỗ đã hết hạn và không hiện câu "… sẽ kiểm tra và xác nhận").
+      const extendedHold = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
       formPublicApi.reportSubmissionPaid.mockResolvedValueOnce({
         status: 'pending_payment',
         holdExpiresAt: extendedHold,
