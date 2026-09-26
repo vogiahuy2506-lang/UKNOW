@@ -441,6 +441,27 @@ describe('campaignRunRepository.claimRunFailureNotification', () => {
     expect(meta.rows[0].run_metadata.failureNotifiedAt).toBeTruthy();
   });
 
+  // Thứ tự THẬT ở production: _failRunAndNotify() gọi failRun() TRƯỚC rồi mới báo, còn scheduler
+  // chèn thẳng dòng 'failed' (insertFailedScheduledRun). Ca trên giành cờ lúc run còn 'running' nên
+  // không bắt được ai thêm lọc status vào câu UPDATE — thêm lọc đó là tính năng im lặng hoàn toàn.
+  it('run ĐÃ failed trước khi claim (thứ tự thật của _failRunAndNotify + scheduler) → lần 1 true, lần 2 false', async () => {
+    const owner = await createUser({ role: 'user', username: 'claim-owner-3' });
+    const campaign = await insertCampaign({ ownerId: owner.id });
+
+    const run = await insertRun({ campaignId: campaign.id, status: 'running' });
+    await campaignRunRepository.failRun(run.id, 'Lỗi kiểm thử');
+    expect(await campaignRunRepository.claimRunFailureNotification(run.id)).toBe(true);
+    expect(await campaignRunRepository.claimRunFailureNotification(run.id)).toBe(false);
+
+    const scheduledFailed = await campaignRunRepository.insertFailedScheduledRun({
+      campaignId: campaign.id,
+      scheduleId: null,
+      errorMessage: 'Chỉ có thể chạy chiến dịch đang hoạt động',
+    });
+    expect(await campaignRunRepository.claimRunFailureNotification(scheduledFailed.id)).toBe(true);
+    expect(await campaignRunRepository.claimRunFailureNotification(scheduledFailed.id)).toBe(false);
+  });
+
   it('2 run khác nhau claim độc lập — claim run A không ảnh hưởng run B', async () => {
     const owner = await createUser({ role: 'user', username: 'claim-owner-2' });
     const campaign = await insertCampaign({ ownerId: owner.id });

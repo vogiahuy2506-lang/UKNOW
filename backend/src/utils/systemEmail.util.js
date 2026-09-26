@@ -699,13 +699,16 @@ export function buildCampaignStoppedQuotaEmail({ fullName, campaignName, reason,
  */
 export function buildCampaignRunFailedEmail({ fullName, campaignName, reason, actionHint, appUrl }) {
   const name = campaignName || 'Chiến dịch';
+  // Tên chiến dịch do nhân viên đặt và `reason` có thể chứa nguyên message lỗi gốc (nhánh mặc
+  // định của labelCampaignRunFailure) — escape trước khi chèn vào HTML. Subject là text thuần.
+  const safeName = escapeSystemEmailHtml(name);
 
   const content = `
     <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
-      Xin chào <strong style="color:#f97316">${fullName || 'bạn'}</strong>,
+      Xin chào <strong style="color:#f97316">${escapeSystemEmailHtml(fullName || 'bạn')}</strong>,
     </p>
     <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
-      Lượt chạy gần nhất của chiến dịch <strong>«${name}»</strong> đã dừng vì gặp lỗi.
+      Lượt chạy gần nhất của chiến dịch <strong>«${safeName}»</strong> đã dừng vì gặp lỗi.
     </p>
 
     <table width="100%" cellpadding="0" cellspacing="0" style="background:#fef2f2;border:2px solid #fecaca;border-radius:12px;margin-bottom:20px">
@@ -714,7 +717,7 @@ export function buildCampaignRunFailedEmail({ fullName, campaignName, reason, ac
           <p style="margin:0 0 6px;font-size:12px;font-weight:600;color:#991b1b;text-transform:uppercase;letter-spacing:.5px">
             Lý do
           </p>
-          <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;white-space:pre-wrap">${reason}</p>
+          <p style="margin:0;font-size:14px;color:#7f1d1d;line-height:1.6;white-space:pre-wrap">${escapeSystemEmailHtml(reason)}</p>
         </td>
       </tr>
     </table>
@@ -725,7 +728,7 @@ export function buildCampaignRunFailedEmail({ fullName, campaignName, reason, ac
           <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.5px">
             Cần làm gì
           </p>
-          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6">${actionHint}</p>
+          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6">${escapeSystemEmailHtml(actionHint)}</p>
         </td>
       </tr>
     </table>
