@@ -32,6 +32,7 @@ import chatAttachmentService from '../services/chatbot/chatAttachment.service.js
 import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
 import { normalizeCeiling } from '../services/payment/topupLock.service.js';
+import { isSuperAdmin } from '../utils/roleScope.util.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import { normalizeChatbotReplyLimitConfig } from '../utils/chatbotReplyLimit.util.js';
 import { normalizeChatbotActiveHours } from '../utils/chatbotActiveHours.util.js';
@@ -1476,7 +1477,11 @@ class ChatbotController {
       // Gói Tùy chọn khách tự dựng chọn 0 chatbot (customPlanPricing.util.js mapQuantitiesToPlanColumns
       // ghi 0) đang bị tạo chatbot KHÔNG giới hạn do lệch nghĩa này. Dùng lại normalizeCeiling cho
       // đúng một hợp đồng duy nhất trong toàn repo.
-      const planCeiling = normalizeCeiling(plan?.max_chatbots);
+      // Không có gói (plan = null) → normalizeCeiling(undefined) = 0. Khách thường không tới được
+      // đây (chatbot.routes.js router.use(requireActivePlan)); chỉ super admin bỏ qua cổng đó, nên
+      // super admin cũng bỏ qua trần như mọi tài nguyên khác (userResourceLimit.util.js
+      // enforceResourceLimitTx) — nếu không, tài khoản admin không gói mất quyền tạo chatbot.
+      const planCeiling = isSuperAdmin(req.user?.role) ? Infinity : normalizeCeiling(plan?.max_chatbots);
       const topupSlots = await sumActiveTopupGrants(ownerUserId, 'chatbots');
       const maxChatbots = planCeiling + Math.max(0, Number(topupSlots) || 0);
       if (Number.isFinite(maxChatbots)) {

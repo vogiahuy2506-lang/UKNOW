@@ -346,22 +346,45 @@ export async function metricLatestCronRescued(jobCode = 'payos_order_reconcile')
  * CHỈ đọc run đã kết thúc (`finished_at IS NOT NULL`) — cùng lý do đã ghi ở
  * metricLatestEinvoiceSeries: đọc phải dòng 'running' (result mặc định '{}') sẽ ra
  * erroredReferrers=0 giả, che mất lỗi thật của lượt trước đó.
+ *
+ * Mỗi lượt lỗi chỉ báo MỘT lần: job chạy tháng một lần (03:00 ngày 2), nên nếu cứ đọc "lượt gần
+ * nhất" thì cooldown 60 phút sẽ gửi lại email mỗi giờ suốt cả tháng. Chỉ xét lượt kết thúc SAU lần
+ * bắn gần nhất của chính luật này (review 26/09).
+ *
+ * Ngoài referrer lỗi còn đếm tháng lỗi nguyên tháng (results[].status = 'error', catch-up nuốt
+ * lỗi rồi vẫn báo success/noop) và lượt hỏng hẳn (status = 'failure' do recordRun ghi khi ném lỗi).
  * @param {string} [jobCode]
- * @returns {Promise<{ erroredReferrers: number, found: boolean, result: object|null }>}
+ * @param {string} [ruleCode]
+ * @returns {Promise<{ erroredReferrers: number, erroredMonths: number, failedRun: boolean, found: boolean, result: object|null }>}
  */
-export async function metricLatestAffiliateClosingErrors(jobCode = 'affiliate_month_closing') {
+export async function metricLatestAffiliateClosingErrors(
+  jobCode = 'affiliate_month_closing',
+  ruleCode = 'affiliate_closing_errored_referrers'
+) {
   const { rows } = await db.query(
     `SELECT status, result
      FROM cron_job_runs
      WHERE job_code = $1
        AND finished_at IS NOT NULL
+       AND finished_at > COALESCE(
+         (SELECT MAX(e.fired_at)
+            FROM alert_events e
+            JOIN alert_rules r ON r.id = e.rule_id
+           WHERE r.code = $2),
+         '-infinity'::timestamptz
+       )
      ORDER BY started_at DESC
      LIMIT 1`,
-    [jobCode]
+    [jobCode, ruleCode]
   );
-  if (!rows.length) return { erroredReferrers: 0, found: false, result: null };
-  const erroredReferrers = Number(rows[0].result?.erroredReferrers ?? 0);
-  return { erroredReferrers, found: true, result: rows[0].result || {} };
+  if (!rows.length) return { erroredReferrers: 0, erroredMonths: 0, failedRun: false, found: false, result: null };
+  const result = rows[0].result || {};
+  const erroredReferrers = Number(result.erroredReferrers ?? 0) || 0;
+  const erroredMonths = Array.isArray(result.results)
+    ? result.results.filter((r) => r?.status === 'error').length
+    : 0;
+  const failedRun = rows[0].status === 'failure';
+  return { erroredReferrers, erroredMonths, failedRun, found: true, result };
 }
 
 /**

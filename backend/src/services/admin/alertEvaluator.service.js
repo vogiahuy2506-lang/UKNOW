@@ -159,12 +159,17 @@ async function evaluateRule(rule) {
     case 'affiliate_closing_errored_referrers': {
       const jobCode = config.jobCode || 'affiliate_month_closing';
       const need = Number.isFinite(threshold) ? threshold : 1;
-      const m = await alertRepo.metricLatestAffiliateClosingErrors(jobCode);
+      const m = await alertRepo.metricLatestAffiliateClosingErrors(jobCode, rule.code);
       if (!m.found) return null;
-      if (m.erroredReferrers >= need) {
+      const errors = m.erroredReferrers + (m.erroredMonths || 0) + (m.failedRun ? 1 : 0);
+      if (errors >= need) {
+        const parts = [];
+        if (m.failedRun) parts.push('lượt chạy hỏng hẳn');
+        if (m.erroredMonths) parts.push(`${m.erroredMonths} tháng lỗi`);
+        if (m.erroredReferrers) parts.push(`${m.erroredReferrers} referrer lỗi`);
         return {
-          measuredValue: m.erroredReferrers,
-          message: `Đóng sổ hoa hồng affiliate: ${m.erroredReferrers} referrer lỗi ở lượt đóng sổ gần nhất — kiểm tra log AffiliateClosing`,
+          measuredValue: errors,
+          message: `Đóng sổ hoa hồng affiliate: ${parts.join(', ')} ở lượt đóng sổ gần nhất — kiểm tra log AffiliateClosing`,
           payload: m,
         };
       }

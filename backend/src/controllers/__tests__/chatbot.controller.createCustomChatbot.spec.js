@@ -133,6 +133,29 @@ describe('chatbotController.createCustomChatbot — nghĩa số 0 của max_chat
     expect(resSecond.body.code).toBe('CHATBOT_LIMIT_EXCEEDED');
   });
 
+  it('không có gói (plan = null) → 403, KHÔNG còn được tạo không giới hạn như trước', async () => {
+    mockGetPlanByUserId.mockResolvedValue(null);
+
+    const res = mockRes();
+    await chatbotController.createCustomChatbot(buildReq({ name: 'Bot F' }), res);
+
+    expect(res.statusCode).toBe(403);
+    expect(mockCreateChatbot).not.toHaveBeenCalled();
+  });
+
+  it('super admin không có gói → vẫn tạo được (bỏ qua trần như mọi tài nguyên khác)', async () => {
+    mockGetPlanByUserId.mockResolvedValue(null);
+    mockCountActiveChatbotsByUser.mockResolvedValue(50);
+
+    const req = buildReq({ name: 'Bot G' });
+    req.user.role = 'admin';
+    const res = mockRes();
+    await chatbotController.createCustomChatbot(req, res);
+
+    expect(res.statusCode).toBe(201);
+    expect(mockCreateChatbot).toHaveBeenCalledTimes(1);
+  });
+
   it('max_chatbots = 3 (bình thường) → chạm trần thì 403, dưới trần thì tạo được', async () => {
     mockGetPlanByUserId.mockResolvedValue({ max_chatbots: 3 });
     mockCountActiveChatbotsByUser.mockResolvedValue(3);

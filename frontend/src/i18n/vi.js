@@ -5531,7 +5531,6 @@ export default {
     employees: 'Nhân viên',
     ceiling: 'Đang giữ {keep}/{max} (gồm {grants} slot mua thêm còn hạn)',
     ceilingUnlimited: 'Đang giữ {keep} (không giới hạn)',
-    unlimited: 'Không giới hạn',
     locked: 'Đã khoá',
     aboutToLock: 'Sắp bị khoá',
     graceTitle: 'Thời gian ân hạn hạ gói (7 ngày)',

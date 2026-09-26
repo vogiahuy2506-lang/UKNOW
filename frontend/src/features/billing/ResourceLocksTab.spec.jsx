@@ -18,7 +18,6 @@ const TEMPLATES = {
   'resourceLocks.chatbots': 'Chatbot',
   'resourceLocks.ceiling': 'Đang giữ {keep}/{max} (gồm {grants} slot mua thêm còn hạn)',
   'resourceLocks.ceilingUnlimited': 'Đang giữ {keep} (không giới hạn)',
-  'resourceLocks.unlimited': 'Không giới hạn',
   'resourceLocks.locked': 'Đã khoá',
   'resourceLocks.aboutToLock': 'Sắp bị khoá',
   'resourceLocks.save': 'Lưu lựa chọn',

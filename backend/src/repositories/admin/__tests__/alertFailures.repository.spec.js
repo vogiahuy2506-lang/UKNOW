@@ -120,6 +120,8 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
       const res = await metricLatestAffiliateClosingErrors();
       expect(res).toEqual({
         erroredReferrers: 2,
+        erroredMonths: 0,
+        failedRun: false,
         found: true,
         result: { erroredReferrers: 2, monthKey: '2026-08' },
       });
@@ -129,13 +131,16 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
       // Chỉ đọc run đã kết thúc — dòng 'running' (result mặc định '{}') sẽ che lỗi thật của
       // lượt trước, giống bug đã vá ở metricLatestEinvoiceSeries.
       expect(sql).toContain('finished_at IS NOT NULL');
-      expect(params).toEqual(['affiliate_month_closing']);
+      // Mỗi lượt lỗi chỉ báo một lần — job chạy tháng một lần, cooldown 60 phút sẽ gửi lại
+      // mỗi giờ suốt tháng nếu không loại lượt đã báo (review 26/09).
+      expect(sql).toMatch(/finished_at > COALESCE\(\s*\(SELECT MAX\(e\.fired_at\)/);
+      expect(params).toEqual(['affiliate_month_closing', 'affiliate_closing_errored_referrers']);
     });
 
-    it('không có lượt chạy nào → found=false, erroredReferrers=0', async () => {
+    it('không có lượt chạy nào (hoặc lượt mới nhất đã báo rồi) → found=false', async () => {
       mockQuery.mockResolvedValueOnce({ rows: [] });
       const res = await metricLatestAffiliateClosingErrors();
-      expect(res).toEqual({ erroredReferrers: 0, found: false, result: null });
+      expect(res).toEqual({ erroredReferrers: 0, erroredMonths: 0, failedRun: false, found: false, result: null });
     });
 
     it('result thiếu erroredReferrers (job cũ trước khi có field này) → mặc định 0, không throw', async () => {
@@ -143,7 +148,19 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
         rows: [{ status: 'noop', result: {} }],
       });
       const res = await metricLatestAffiliateClosingErrors();
-      expect(res).toEqual({ erroredReferrers: 0, found: true, result: {} });
+      expect(res).toEqual({ erroredReferrers: 0, erroredMonths: 0, failedRun: false, found: true, result: {} });
+    });
+
+    it('đếm tháng lỗi nguyên tháng trong results[] và lượt status failure', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [{
+          status: 'failure',
+          result: { results: [{ status: 'success' }, { status: 'error', monthKey: '2026-07' }, { status: 'error' }] },
+        }],
+      });
+      const res = await metricLatestAffiliateClosingErrors();
+      expect(res.erroredMonths).toBe(2);
+      expect(res.failedRun).toBe(true);
     });
   });
 });

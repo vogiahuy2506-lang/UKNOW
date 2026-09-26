@@ -131,6 +131,23 @@ describe('AdminOrdersPage — đơn PAID_AFTER_CANCELLED', () => {
     expect(screen.getByRole('button', { name: 'Đánh dấu đã xử lý' })).toBeInTheDocument();
   });
 
+  it('đơn đã có tag PAID_AFTER_CANCELLED_HANDLED → không còn badge, không còn nút', async () => {
+    const handled = structuredClone(response);
+    const order = handled.data.data.orders.find((o) => o.orderCode === 'PAID-CANCELLED-1');
+    order.note += '\n[OPS] PAID_AFTER_CANCELLED_HANDLED by admin@example.com at 2026-09-26T10:00:00.000Z';
+    mockGetOrders.mockResolvedValue(handled);
+
+    render(
+      <I18nProvider>
+        <AdminOrdersPage />
+      </I18nProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText('PAID-CANCELLED-1')).toBeInTheDocument());
+    expect(screen.queryByText('PayOS báo đã trả dù đơn đã huỷ — cần xử lý tay')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Đánh dấu đã xử lý' })).not.toBeInTheDocument();
+  });
+
   it('bấm "Đánh dấu đã xử lý" gọi API markPaidAfterCancelledHandled với đúng orderCode rồi tải lại danh sách', async () => {
     mockMarkPaidAfterCancelledHandled.mockResolvedValue({ data: { success: true } });
     const user = userEvent.setup();

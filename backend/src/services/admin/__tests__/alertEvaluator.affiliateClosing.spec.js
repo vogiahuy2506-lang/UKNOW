@@ -64,12 +64,36 @@ describe('alertEvaluator — quy tắc affiliate_closing_errored_referrers', () 
   it('dùng jobCode mặc định khi config bỏ trống', async () => {
     mockMetricLatestAffiliateClosingErrors.mockResolvedValueOnce({ erroredReferrers: 0, found: false, result: null });
     await evaluateRuleForTests({ code: 'affiliate_closing_errored_referrers', thresholdValue: 1, config: {} });
-    expect(mockMetricLatestAffiliateClosingErrors).toHaveBeenLastCalledWith('affiliate_month_closing');
+    expect(mockMetricLatestAffiliateClosingErrors).toHaveBeenLastCalledWith(
+      'affiliate_month_closing',
+      'affiliate_closing_errored_referrers'
+    );
   });
 
   it('tôn trọng threshold tuỳ chỉnh — chỉ bắn khi >= threshold', async () => {
     mockMetricLatestAffiliateClosingErrors.mockResolvedValueOnce({ erroredReferrers: 2, found: true, result: {} });
     const res = await evaluateRuleForTests({ code: 'affiliate_closing_errored_referrers', thresholdValue: 3, config: {} });
     expect(res).toBeNull();
+  });
+
+  // Review 26/09 — catch-up nuốt lỗi cả tháng (results[].status='error') mà vẫn báo success/noop,
+  // và recordRun ghi status='failure' khi cả job ném lỗi: cả hai trước đây không cảnh báo.
+  it('bắn khi một tháng lỗi nguyên tháng dù không có referrer lỗi', async () => {
+    mockMetricLatestAffiliateClosingErrors.mockResolvedValueOnce({
+      erroredReferrers: 0, erroredMonths: 1, failedRun: false, found: true, result: {},
+    });
+    const res = await evaluateRuleForTests(rule);
+    expect(res).not.toBeNull();
+    expect(res.measuredValue).toBe(1);
+    expect(res.message).toContain('1 tháng lỗi');
+  });
+
+  it('bắn khi lượt chạy hỏng hẳn (status failure)', async () => {
+    mockMetricLatestAffiliateClosingErrors.mockResolvedValueOnce({
+      erroredReferrers: 0, erroredMonths: 0, failedRun: true, found: true, result: {},
+    });
+    const res = await evaluateRuleForTests(rule);
+    expect(res).not.toBeNull();
+    expect(res.message).toContain('lượt chạy hỏng hẳn');
   });
 });
