@@ -34,6 +34,14 @@ const mockSystemEmail = {
   sendSystemEmail: jest.fn().mockResolvedValue(),
 };
 
+// PR-3 (đợt rà soát 26/09), Việc 2.1 — updateCustomPlanLimits được import ĐỘNG
+// (`await import(...)`) bên trong processDueScheduledPlanChanges; unstable_mockModule
+// vẫn chặn được vì cùng specifier, kể cả khi import xảy ra lúc runtime chứ không phải
+// lúc module load.
+const mockCustomPlanRepo = {
+  updateCustomPlanLimits: jest.fn().mockResolvedValue(),
+};
+
 jest.unstable_mockModule('../../../repositories/payment/scheduledPlanChange.repository.js', () => ({
   scheduledPlanChangeRepository: mockScheduledPlanChangeRepo,
   ScheduledPlanChangeRepository: jest.fn(() => mockScheduledPlanChangeRepo),
@@ -46,6 +54,7 @@ jest.unstable_mockModule('../../../repositories/user/user.repository.js', () => 
 jest.unstable_mockModule('../../../config/database.js', () => ({ default: mockDb }));
 jest.unstable_mockModule('../topupLock.service.js', () => mockTopupLockService);
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => mockSystemEmail);
+jest.unstable_mockModule('../../../repositories/payment/customPlan.repository.js', () => mockCustomPlanRepo);
 
 const {
   getPendingScheduledChange,
@@ -157,6 +166,76 @@ describe('scheduledPlanChange.service', () => {
       expect(mockScheduledPlanChangeRepo.supersedePendingById).toHaveBeenCalledWith(6, mockClient);
       expect(mockPaymentRepo.activateUserPlan).not.toHaveBeenCalled();
       expect(mockScheduledPlanChangeRepo.markActivated).not.toHaveBeenCalled();
+    });
+
+    // PR-3 (đợt rà soát 26/09), Việc 2.1
+    it('ghi cấu hình Tùy chọn mới vào plans TRƯỚC khi activateUserPlan khi lệnh hẹn có custom_plan_config', async () => {
+      mockScheduledPlanChangeRepo.findDueChanges.mockResolvedValue([
+        { id: 7, user_id: 300, plan_id: 99, billing_period: 'monthly' },
+      ]);
+      const customConfig = { name: 'Gói tự chọn', price: 200000, priceYearly: null, max_zalo_accounts: 2 };
+      mockScheduledPlanChangeRepo.claimDueChange.mockResolvedValue({
+        id: 7,
+        user_id: 300,
+        plan_id: 99,
+        billing_period: 'monthly',
+        custom_plan_config: customConfig,
+      });
+      mockScheduledPlanChangeRepo.markActivated.mockResolvedValue({ id: 7 });
+      mockPaymentRepo.activateUserPlan.mockResolvedValue();
+
+      const callOrder = [];
+      mockCustomPlanRepo.updateCustomPlanLimits.mockImplementationOnce(async () => { callOrder.push('updateCustomPlanLimits'); });
+      mockPaymentRepo.activateUserPlan.mockImplementationOnce(async () => { callOrder.push('activateUserPlan'); });
+
+      const res = await processDueScheduledPlanChanges();
+
+      expect(mockCustomPlanRepo.updateCustomPlanLimits).toHaveBeenCalledWith(99, customConfig, mockClient);
+      expect(callOrder).toEqual(['updateCustomPlanLimits', 'activateUserPlan']);
+      expect(res.processed).toBe(1);
+    });
+
+    it('parse custom_plan_config dạng chuỗi JSON (cột JSONB có thể trả về string tuỳ driver)', async () => {
+      mockScheduledPlanChangeRepo.findDueChanges.mockResolvedValue([
+        { id: 8, user_id: 300, plan_id: 99, billing_period: 'monthly' },
+      ]);
+      mockScheduledPlanChangeRepo.claimDueChange.mockResolvedValue({
+        id: 8,
+        user_id: 300,
+        plan_id: 99,
+        billing_period: 'monthly',
+        custom_plan_config: JSON.stringify({ name: 'Gói tự chọn', price: 150000 }),
+      });
+      mockScheduledPlanChangeRepo.markActivated.mockResolvedValue({ id: 8 });
+      mockPaymentRepo.activateUserPlan.mockResolvedValue();
+
+      await processDueScheduledPlanChanges();
+
+      expect(mockCustomPlanRepo.updateCustomPlanLimits).toHaveBeenCalledWith(
+        99,
+        { name: 'Gói tự chọn', price: 150000 },
+        mockClient
+      );
+    });
+
+    it('KHÔNG gọi updateCustomPlanLimits khi lệnh hẹn là gói cố định (không có custom_plan_config)', async () => {
+      mockScheduledPlanChangeRepo.findDueChanges.mockResolvedValue([
+        { id: 5, user_id: 200, plan_id: 3, billing_period: 'monthly' },
+      ]);
+      mockScheduledPlanChangeRepo.claimDueChange.mockResolvedValue({
+        id: 5,
+        user_id: 200,
+        plan_id: 3,
+        billing_period: 'monthly',
+        custom_plan_config: null,
+      });
+      mockScheduledPlanChangeRepo.markActivated.mockResolvedValue({ id: 5 });
+      mockPaymentRepo.activateUserPlan.mockResolvedValue();
+
+      await processDueScheduledPlanChanges();
+
+      expect(mockCustomPlanRepo.updateCustomPlanLimits).not.toHaveBeenCalled();
+      expect(mockPaymentRepo.activateUserPlan).toHaveBeenCalledWith(200, 3, 'monthly', mockClient);
     });
   });
 });

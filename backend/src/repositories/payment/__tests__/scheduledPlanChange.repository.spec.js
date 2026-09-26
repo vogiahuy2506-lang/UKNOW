@@ -78,6 +78,21 @@ describe('ScheduledPlanChangeRepository', () => {
       expect(sql).toContain('FOR UPDATE OF spc');
       expect(params).toEqual([1, 10]);
     });
+
+    // PR-3 (đợt rà soát 26/09), Việc 2.1 — phải LEFT JOIN orders (không phải JOIN thường) để lấy
+    // custom_plan_config: lệnh hẹn gói CỐ ĐỊNH không có order gắn custom config, vẫn phải claim được.
+    it('LEFT JOIN orders để lấy custom_plan_config, không dùng JOIN thường (sẽ loại bỏ lệnh hẹn gói cố định)', async () => {
+      mockDb.query.mockResolvedValueOnce({
+        rows: [{ id: 1, user_id: 10, status: 'pending', custom_plan_config: { price: 100000 } }],
+      });
+
+      const res = await repo.claimDueChange(1, 10);
+
+      const [sql] = mockDb.query.mock.calls[0];
+      expect(sql).toContain('LEFT JOIN orders o ON o.id = spc.order_id');
+      expect(sql).toContain('o.custom_plan_config');
+      expect(res.custom_plan_config).toEqual({ price: 100000 });
+    });
   });
 
   describe('supersedePendingById', () => {

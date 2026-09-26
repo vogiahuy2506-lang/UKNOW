@@ -146,6 +146,12 @@ export class ScheduledPlanChangeRepository {
    */
   async claimDueChange(id, userId, client = null) {
     const database = client || this.db;
+    // PR-3 (đợt rà soát 26/09), Việc 2.1 — LEFT JOIN orders để lấy custom_plan_config: đơn hạ/nâng
+    // gói Tùy chọn lưu cấu hình MỚI vào orders.custom_plan_config lúc dựng lệnh hẹn
+    // (payment.service.js), nhưng trước đây worker kích hoạt (scheduledPlanChange.service.js)
+    // không đọc nó, chỉ activateUserPlan(plan_id) — copy NGUYÊN hàng plans CŨ (gói Tùy chọn dùng
+    // chung một hàng plans cho mỗi workspace qua reusePlanId). LEFT JOIN (không phải JOIN) vì lệnh
+    // hẹn của gói CỐ ĐỊNH không có custom_plan_config — vẫn phải claim được bình thường.
     const query = `
       SELECT
         spc.id,
@@ -158,10 +164,13 @@ export class ScheduledPlanChangeRepository {
         u.email AS user_email,
         u.full_name AS user_full_name,
         p.name AS plan_name,
-        p.duration_days AS plan_duration_days
+        p.duration_days AS plan_duration_days,
+        o.custom_plan_config,
+        o.amount AS order_amount
       FROM scheduled_plan_changes spc
       JOIN users u ON u.id = spc.user_id
       JOIN plans p ON p.id = spc.plan_id
+      LEFT JOIN orders o ON o.id = spc.order_id
       WHERE spc.id = $1
         AND spc.user_id = $2
         AND spc.status = 'pending'

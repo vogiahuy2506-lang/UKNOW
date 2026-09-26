@@ -103,6 +103,24 @@ export async function processDueScheduledPlanChanges() {
         continue;
       }
 
+      // PR-3 (đợt rà soát 26/09), Việc 2.1 — ghi cấu hình MỚI (đã trả tiền cho lệnh hẹn này) vào
+      // plans TRƯỚC khi activateUserPlan copy hàng plans sang user. Không có bước này thì gói Tùy
+      // chọn hạ xuống nhỏ vẫn kích hoạt với hạn mức/giá CŨ (đã lớn hơn) mỗi kỳ, không bao giờ hạ
+      // được thật. Chỉ áp dụng cho lệnh hẹn của gói Tùy chọn — lệnh hẹn gói cố định không có
+      // custom_plan_config (LEFT JOIN ở claimDueChange trả null), bỏ qua đúng như trước đây.
+      let customConfig = claimed.custom_plan_config;
+      if (typeof customConfig === 'string') {
+        try {
+          customConfig = JSON.parse(customConfig);
+        } catch {
+          customConfig = null;
+        }
+      }
+      if (customConfig && typeof customConfig === 'object') {
+        const { updateCustomPlanLimits } = await import('../../repositories/payment/customPlan.repository.js');
+        await updateCustomPlanLimits(claimed.plan_id, customConfig, client);
+      }
+
       // 1. Activate plan for user
       await activateUserPlan(claimed.user_id, claimed.plan_id, claimed.billing_period || 'monthly', client);
 

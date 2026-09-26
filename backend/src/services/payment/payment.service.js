@@ -576,7 +576,9 @@ export const createCustomPaymentLink = async ({
     }
 
     const quote = await resolveCustomPlanQuote({ quantities, billingPeriod });
-    const originalAmount = Math.round(Number(quote.total));
+    // PR-3 (đợt rà soát 26/09), Việc 2.2 — `let` vì có thể bị ghi đè bằng planChange.amountToPay
+    // (đường "upgrade_pending") ngay sau khi planChange được tính bên trong transaction dưới đây.
+    let originalAmount = Math.round(Number(quote.total));
     if (originalAmount <= 0) {
         throw { status: 400, message: 'Giá gói tự chọn không hợp lệ' };
     }
@@ -685,6 +687,42 @@ export const createCustomPaymentLink = async ({
             }, client);
         }
 
+        const isScheduledChange = planChange?.action === 'schedule' || planChange?.action === 'upgrade_pending';
+
+        // PR-3 (đợt rà soát 26/09), Việc 2.2 — đường custom trước đây LUÔN tính nguyên giá quote
+        // mới (originalAmount ở trên, gán TRƯỚC khi planChange tồn tại), bỏ qua trường hợp khách đã
+        // có một lệnh hẹn đang chờ (vd hạ gói) rồi lại chọn cấu hình LỚN HƠN nữa: "upgrade_pending"
+        // chỉ nên thu PHẦN CHÊNH giữa giá mới và số đã trả cho lệnh hẹn cũ, không phải thu lại từ
+        // đầu — giống hệt cách đường gói cố định đã làm đúng (xem originalAmount ở nhánh
+        // createPaymentLink, so sánh planChange.action === 'upgrade_pending').
+        if (planChange.action === 'upgrade_pending' && planChange.amountToPay !== undefined) {
+            originalAmount = Number(planChange.amountToPay);
+        }
+
+        // PR-3 (đợt rà soát 26/09), Việc 2.3 — chặn dùng một gói Tùy chọn CHƯA TỪNG được thanh
+        // toán thành công (đơn nháp bị bỏ dở, hoặc mọi lần trả đều thất bại/huỷ) làm ĐÍCH của một
+        // lệnh hẹn đổi-theo-lịch mới. findCustomPlanOwnedByUser chỉ kiểm QUYỀN SỞ HỮU
+        // (custom_owner_user_id = userId), không kiểm đã từng trả tiền hay chưa — gói "mồ côi" này
+        // vẫn mang cấu hình/giá cũ từ lúc dựng (createPlan ở nhánh else phía trên), nên hẹn kích
+        // hoạt nó mà không có gì ràng buộc nó với một khoản thanh toán thật là rủi ro. Không chặn
+        // đường trả-thẳng (isScheduledChange=false): đường đó luôn ghi đè cấu hình MỚI qua
+        // updateCustomPlanLimits/webhook trước khi activateUserPlan, không phụ thuộc giá trị cũ.
+        if (reusePlanId && isScheduledChange) {
+            const paidBefore = await hasSuccessfulOrderForPlanByUser({
+                planId: plan.id,
+                userId,
+                userEmail: effectiveUserEmail,
+                queryable: client,
+            });
+            if (!paidBefore) {
+                throw {
+                    status: 403,
+                    code: 'CUSTOM_PLAN_NOT_PAID',
+                    message: 'Không thể lên lịch đổi sang gói tự chọn này vì gói chưa từng được thanh toán thành công',
+                };
+            }
+        }
+
         const customPlanConfig = {
             name: plan.name || buildCustomPlanName(effectiveUserEmail),
             price: quote.monthlyTotal,
@@ -693,8 +731,6 @@ export const createCustomPaymentLink = async ({
             ...planColumns,
             durationDays: 30,
         };
-
-        const isScheduledChange = planChange?.action === 'schedule' || planChange?.action === 'upgrade_pending';
         const replaceablePendingOrders = await findRecentPendingPlanOrders({
             userId,
             userEmail: effectiveUserEmail,
