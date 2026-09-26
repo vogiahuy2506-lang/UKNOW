@@ -4164,6 +4164,9 @@ class CampaignRunService {
                       lastCompletedAt: completedAtIso,
                       nextDueAt,
                       removeRetryCountFromMeta: true,
+                      // Gửi được rồi thì bộ đếm lỗi email về 0 (cùng khuôn removeZaloFailureFromMeta),
+                      // nếu không bước sau thừa hưởng số lỗi của bước trước và bị bỏ sớm.
+                      removeEmailFailureFromMeta: true,
                     });
                     registerNextContinuousWakeAt(nextDueAt ? Date.parse(nextDueAt) : null);
                   } else if (sendOutcome?.preservePendingStep) {

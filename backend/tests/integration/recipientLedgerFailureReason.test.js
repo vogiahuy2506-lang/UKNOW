@@ -262,3 +262,81 @@ describe('mapZaloErrorCategoryToLedgerReason — chuẩn hoá về cùng bộ m�
     expect(mapZaloErrorCategoryToLedgerReason('')).toBe('unknown');
   });
 });
+
+// PR-2 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26): email continuous có bộ đếm lỗi riêng
+// (emailSendFailureCount) + trần. Gửi được thì phải gỡ sạch như nhánh Zalo — nếu không bước sau
+// thừa hưởng số lỗi của bước trước, và người đã gửi thành công vẫn mang lý do lỗi cũ.
+describe('RecipientLedgerRepository — removeEmailFailureFromMeta (PR-2)', () => {
+  let user;
+  let campaignId;
+  let runId;
+
+  beforeEach(async () => {
+    await truncateAll();
+    user = await createUser();
+    const { rows: cRows } = await db.query(
+      `INSERT INTO campaigns (id_user, campaign_name, campaign_type, status)
+       VALUES ($1, 'Test Camp Email', 'email', 'active') RETURNING id`,
+      [user.id]
+    );
+    campaignId = cRows[0].id;
+    const { rows: rRows } = await db.query(
+      `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, status)
+       VALUES ($1, $2, 'running') RETURNING id`,
+      [campaignId, user.id]
+    );
+    runId = rRows[0].id;
+  });
+
+  async function readEmailMeta(nodeId, recipientKey) {
+    const { rows } = await db.query(
+      `SELECT meta FROM campaign_run_recipient_steps
+       WHERE id_run = $1 AND id_node = $2 AND channel = 'email' AND recipient_key = $3`,
+      [runId, nodeId, recipientKey]
+    );
+    return rows[0]?.meta;
+  }
+
+  it('gửi được sau 3 lần lỗi → gỡ emailSendFailureCount + lastFailureReason, giữ retry khác', async () => {
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'ne1', channel: 'email', recipientKey: 'a@example.com',
+      completedStep: 0, isFullyCompleted: false,
+      metaPayload: { emailSendFailureCount: 3, lastFailureReason: 'send_error', lastFailureAt: '2026-09-26T01:00:00Z' },
+    });
+    expect((await readEmailMeta('ne1', 'a@example.com')).emailSendFailureCount).toBe(3);
+
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'ne1', channel: 'email', recipientKey: 'a@example.com',
+      completedStep: 1, isFullyCompleted: false,
+      metaPayload: { lastCompletedAt: '2026-09-26T02:00:00Z', nextDueAt: '2026-09-27T02:00:00Z' },
+      removeRetryCountFromMeta: true,
+      removeEmailFailureFromMeta: true,
+    });
+
+    const meta = await readEmailMeta('ne1', 'a@example.com');
+    expect(meta.emailSendFailureCount).toBeUndefined();
+    expect(meta.lastFailureReason).toBeUndefined();
+    expect(meta.lastFailureAt).toBeUndefined();
+    expect(meta.lastCompletedAt).toBe('2026-09-26T02:00:00Z');
+    expect(meta.nextDueAt).toBe('2026-09-27T02:00:00Z');
+  });
+
+  it('cờ email KHÔNG gỡ bộ đếm Zalo và ngược lại (các cờ độc lập)', async () => {
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'ne2', channel: 'email', recipientKey: 'b@example.com',
+      completedStep: 0, isFullyCompleted: false,
+      metaPayload: { emailSendFailureCount: 2, zaloSendFailureCount: 4, retryCount: 1 },
+    });
+    await recipientLedgerRepository.upsertRecipientProgress({
+      runId, campaignId, nodeId: 'ne2', channel: 'email', recipientKey: 'b@example.com',
+      completedStep: 0, isFullyCompleted: false,
+      metaPayload: {},
+      removeEmailFailureFromMeta: true,
+    });
+
+    const meta = await readEmailMeta('ne2', 'b@example.com');
+    expect(meta.emailSendFailureCount).toBeUndefined();
+    expect(meta.zaloSendFailureCount).toBe(4);
+    expect(meta.retryCount).toBe(1);
+  });
+});

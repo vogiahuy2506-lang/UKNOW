@@ -34,7 +34,7 @@ class RecipientLedgerRepository {
    *
    * The complex CASE/array logic handles optional removal of `retryCount`,
    * `zaloSendFailureCount`/`zaloAbandonReason`/`lastFailureReason`/`lastFailureAt`,
-   * and `emailSendFailureCount`/`emailAbandonReason` from the meta JSONB. The
+   * and `emailSendFailureCount`/`emailAbandonReason`/`lastFailureReason`/`lastFailureAt` from the meta JSONB. The
    * three removal flags are independent (each contributes its own key set to
    * the `jsonb - text[]` subtraction), so callers can gate email vs. Zalo
    * failure-meta cleanup without affecting the other channel's keys.
@@ -74,7 +74,7 @@ class RecipientLedgerRepository {
          $8::jsonb - (
            (CASE WHEN COALESCE($9::boolean, FALSE) THEN ARRAY['retryCount'] ELSE ARRAY[]::text[] END)
            || (CASE WHEN COALESCE($10::boolean, FALSE) THEN ARRAY['zaloSendFailureCount','zaloAbandonReason','lastFailureReason','lastFailureAt'] ELSE ARRAY[]::text[] END)
-           || (CASE WHEN COALESCE($11::boolean, FALSE) THEN ARRAY['emailSendFailureCount','emailAbandonReason'] ELSE ARRAY[]::text[] END)
+           || (CASE WHEN COALESCE($11::boolean, FALSE) THEN ARRAY['emailSendFailureCount','emailAbandonReason','lastFailureReason','lastFailureAt'] ELSE ARRAY[]::text[] END)
          ),
          CURRENT_TIMESTAMP
        )
@@ -106,7 +106,7 @@ class RecipientLedgerRepository {
               (COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta) - (
                 (CASE WHEN COALESCE($9::boolean, FALSE) THEN ARRAY['retryCount'] ELSE ARRAY[]::text[] END)
                 || (CASE WHEN COALESCE($10::boolean, FALSE) THEN ARRAY['zaloSendFailureCount','zaloAbandonReason','lastFailureReason','lastFailureAt'] ELSE ARRAY[]::text[] END)
-                || (CASE WHEN COALESCE($11::boolean, FALSE) THEN ARRAY['emailSendFailureCount','emailAbandonReason'] ELSE ARRAY[]::text[] END)
+                || (CASE WHEN COALESCE($11::boolean, FALSE) THEN ARRAY['emailSendFailureCount','emailAbandonReason','lastFailureReason','lastFailureAt'] ELSE ARRAY[]::text[] END)
               )
           END,
           updated_at = CASE

@@ -338,5 +338,26 @@ describe('PR-2 — bộ đếm run: total chỉ cộng lần đầu thấy ngư�
       // trọn chu kỳ poll thật (nhiều triệu ms) mới quay lại kiểm tra trạng thái, vượt xa ngân sách
       // pump timer hợp lý của 1 unit test (đã tái hiện: treo, Exceeded timeout of 20000 ms).
     }, 20000);
+
+    // Review PR-2: bộ đếm lỗi email phải về 0 khi gửi thành công — cùng khuôn Zalo
+    // (removeZaloFailureFromMeta: true ở mọi nhánh thành công). Thiếu cờ này thì email continuous nhiều
+    // bước lỗi 4 lần ở bước 1 rồi thành công, sang bước 2 chỉ cần lỗi 1 lần là bị bỏ hẳn.
+    it('lỗi 2 chu kỳ rồi thành công ở chu kỳ 3 → lần ghi thành công xoá bộ đếm lỗi email', async () => {
+      for (let cycle = 1; cycle <= 2; cycle += 1) {
+        mockGetRunStatus.mockResolvedValue('running');
+        // eslint-disable-next-line no-await-in-loop
+        await runOneCycle();
+      }
+      expect(ledgerRow?.meta?.emailSendFailureCount).toBe(2);
+
+      mockSendEmailToCustomer.mockResolvedValue({ status: 'success' });
+      mockGetRunStatus.mockResolvedValue('running');
+      await runOneCycle();
+
+      const upsertCalls = mockUpsertRecipientProgress.mock.calls.map(([input]) => input);
+      const successWrite = upsertCalls[upsertCalls.length - 1];
+      expect(successWrite.completedStep).toBe(1);
+      expect(successWrite.removeEmailFailureFromMeta).toBe(true);
+    }, 20000);
   });
 });
