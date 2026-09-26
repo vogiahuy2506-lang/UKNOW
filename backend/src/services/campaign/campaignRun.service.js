@@ -8003,13 +8003,17 @@ class CampaignRunService {
                 // PR-5 Việc 3 — errorLabel tiếng Việt thay vì cleanMessage kỹ thuật (vd
                 // "[ZALO_SEND_NOT_DELIVERED] Zalo did not confirm delivery op=…") cho log/payload
                 // hiển thị; tracking_metadata phía dưới vẫn giữ cleanMessage như cũ để đo.
-                const retryTimeLabel = new Intl.DateTimeFormat('vi-VN', {
-                  timeZone: 'Asia/Ho_Chi_Minh',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
-                }).format(new Date(retryNextDueAt || zp.nextDueAt || Date.now()));
-                retryDisplayMessage = `${retryObservation.errorLabel} — sẽ thử lại lúc ${retryTimeLabel} (lần ${nextFail}/${maxFailures})`;
+                // Continuous không đặt mốc hẹn mới (giữ zp.nextDueAt — mốc đến hạn cũ, thường đã qua):
+                // in giờ ra sẽ là giờ trong quá khứ, nên nói "chu kỳ kế tiếp" thay vì một giờ sai.
+                const retryWhenLabel = !isContinuousMode && retryNextDueAt
+                  ? `lúc ${new Intl.DateTimeFormat('vi-VN', {
+                    timeZone: 'Asia/Ho_Chi_Minh',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hourCycle: 'h23', // h23 = 0–23; hour12:false render nửa đêm thành "24"
+                  }).format(new Date(retryNextDueAt))}`
+                  : 'ở chu kỳ gửi kế tiếp';
+                retryDisplayMessage = `${retryObservation.errorLabel} — sẽ thử lại ${retryWhenLabel} (lần ${nextFail}/${maxFailures})`;
               }
               // PR-5 Việc 1 (R:7988 cũ) — cộng failedSends vô điều kiện phá bất biến
               // ok+failed+skipped ≤ total khi continuous chưa tới trần vẫn cộng mỗi lần thử lại.

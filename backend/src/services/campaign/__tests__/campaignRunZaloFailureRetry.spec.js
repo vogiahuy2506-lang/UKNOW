@@ -4,6 +4,8 @@ const mockPatchRunMetadata = jest.fn().mockResolvedValue(null);
 const mockMergeRunMetadata = jest.fn().mockResolvedValue(null);
 const mockFailRun = jest.fn().mockResolvedValue(null);
 const mockFinalizeRun = jest.fn().mockResolvedValue(null);
+const mockUpdateRunProgress = jest.fn().mockResolvedValue(null);
+const mockLogExecutionNode = jest.fn().mockResolvedValue(null);
 const mockSendPersonalMessageQueued = jest.fn();
 const mockCheckSendQuota = jest.fn().mockResolvedValue({ allowed: true });
 const mockGetCustomersFromDataNode = jest.fn();
@@ -65,7 +67,7 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.
     patchRunMetadata: mockPatchRunMetadata,
     mergeRunMetadata: mockMergeRunMetadata,
     clearDeferMetadataKeys: jest.fn().mockResolvedValue(null),
-    updateRunProgress: jest.fn().mockResolvedValue(null),
+    updateRunProgress: mockUpdateRunProgress,
     finalizeRun: mockFinalizeRun,
     failRun: mockFailRun,
     completeRunWithError: jest.fn().mockResolvedValue(null),
@@ -189,7 +191,7 @@ jest.unstable_mockModule('../campaignEmailSender.service.js', () => ({
 
 jest.unstable_mockModule('../campaignExecutionLog.service.js', () => ({
   default: {
-    logExecutionNode: jest.fn().mockResolvedValue(null),
+    logExecutionNode: mockLogExecutionNode,
   },
 }));
 
@@ -770,6 +772,11 @@ describe('PR-5 Việc 1 — nhóm Zalo one-shot thử lại theo khuôn cá nhâ
       expect.objectContaining({ failedSends: 0 }),
       null
     );
+    // Việc 3 — log thực thi nói tiếng Việt + giờ hẹn thật, không lộ marker kỹ thuật tiếng Anh.
+    expect(mockLogExecutionNode).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'failed',
+      errorMessage: 'Zalo không xác nhận phát tin — sẽ thử lại lúc 15:00 (lần 1/3)',
+    }));
   }, 15000);
 
   it('b) ledger zaloSendFailureCount:2 → chạm trần 3 (one-shot): abandon, failedSends=1, ledger completedStep=totalSteps', async () => {
@@ -807,7 +814,9 @@ describe('PR-5 Việc 1 — nhóm Zalo one-shot thử lại theo khuôn cá nhâ
     ledger.set('group-a', {
       last_completed_step: 0,
       is_fully_completed: false,
-      meta: { zaloSendFailureCount: 1 },
+      // Mốc đến hạn cũ đã qua (giờ giả 09:00 VN) — continuous giữ nguyên mốc này, nên câu hiển thị
+      // KHÔNG được in "lúc 08:00" (giờ trong quá khứ).
+      meta: { zaloSendFailureCount: 1, nextDueAt: '2026-09-12T08:00:00.000+07:00' },
     });
     const baseUpsertImpl = makeLedgerUpsertImpl();
     mockUpsertRecipientProgress.mockImplementation(async (input) => {
@@ -837,6 +846,17 @@ describe('PR-5 Việc 1 — nhóm Zalo one-shot thử lại theo khuôn cá nhâ
         metaPayload: expect.objectContaining({ zaloAbandonReason: 'max_send_failures' }),
       })
     );
+    // Kiểm THẲNG bộ đếm: chỉ soi ledger thì đột biến "continuous vẫn cộng failedSends" vẫn xanh.
+    // Continuous không tới finalizeRun (bị dừng), nên đọc bộ đếm ở updateRunProgress.
+    expect(mockUpdateRunProgress).toHaveBeenCalled();
+    for (const [, counters] of mockUpdateRunProgress.mock.calls) {
+      expect(counters).toEqual(expect.objectContaining({ failedSends: 0 }));
+    }
+    // Continuous không đặt mốc hẹn mới → không in một giờ (sẽ là giờ đã qua).
+    expect(mockLogExecutionNode).toHaveBeenCalledWith(expect.objectContaining({
+      status: 'failed',
+      errorMessage: 'Zalo không xác nhận phát tin — sẽ thử lại ở chu kỳ gửi kế tiếp (lần 2/5)',
+    }));
   }, 15000);
 });
 
