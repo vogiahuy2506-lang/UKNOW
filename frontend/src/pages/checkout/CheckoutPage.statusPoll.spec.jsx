@@ -48,7 +48,7 @@ const acceptTerms = () => {
   }
 };
 
-const submitToQrStep = async ({ expiredAt } = {}) => {
+const submitToQrStep = async () => {
   render(<CheckoutPage />);
   acceptTerms();
   fireEvent.click(screen.getByRole('button', { name: /checkout.proceedToPayment/ }));
@@ -102,8 +102,37 @@ describe('CheckoutPage — hỏi trạng thái thanh toán (PR-7)', () => {
     warnSpy.mockRestore();
   });
 
+  it('hỏi được lại sau 429 thì về nhịp 3s — không kẹt ở nhịp chậm suốt phiên', async () => {
+    // Review PR-7: đột biến "bỏ dòng về lại 3000ms" từng lọt — khách trả xong phải chờ tới 30s.
+    const expiredAt = Math.floor(Date.now() / 1000) + 900;
+    m.create.mockResolvedValue({
+      data: { success: true, result: { orderCode: 503, qrCode: 'fake-qr', amount: 299000, expiredAt } },
+    });
+    const rateLimitedError = Object.assign(new Error('Too Many Requests'), { response: { status: 429 } });
+    m.getPaymentStatus
+      .mockRejectedValueOnce(rateLimitedError) // t=3s: 429 → nhịp 6s
+      .mockResolvedValueOnce({ status: 'pending' }) // t=9s: qua được → phải về nhịp 3s
+      .mockResolvedValueOnce({ status: 'success' }); // t=12s (không phải t=15s)
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    await submitToQrStep();
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(m.getPaymentStatus).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(m.getPaymentStatus).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(m.getPaymentStatus).toHaveBeenCalledTimes(3);
+    expect(m.navigate).toHaveBeenCalledWith('/payment-success', expect.objectContaining({ state: { orderCode: 503, fromCheckout: true } }));
+
+    warnSpy.mockRestore();
+  });
+
   it('QR hết hạn thì dừng hỏi hẳn, không tiếp tục gọi API nữa', async () => {
-    const expiredAt = Math.floor(Date.now() / 1000) + 4; // hết hạn sau 4 giây — mốc TƯƠNG ĐỐI
+    // Làm tròn LÊN: floor có thể làm mất gần 1s, cộng với vi.waitFor tự đẩy đồng hồ giả 50ms/lượt lúc
+    // dựng trang → đôi khi lượt hỏi đầu (giây 3) rơi SAU mốc hết hạn và test đỏ chập chờn (~1/10).
+    const expiredAt = Math.ceil(Date.now() / 1000) + 4; // hết hạn sau 4–5 giây — mốc TƯƠNG ĐỐI
     m.create.mockResolvedValue({
       data: { success: true, result: { orderCode: 502, qrCode: 'fake-qr', amount: 299000, expiredAt } },
     });

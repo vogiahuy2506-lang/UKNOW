@@ -3170,7 +3170,7 @@ export default {
     userEmailNotFound: 'Không tìm thấy email người dùng. Vui lòng đăng nhập lại.',
     createOrderFailed: 'Không thể tạo đơn hàng. Vui lòng thử lại.',
     transactionCancelled: 'Giao dịch đã bị hủy',
-    statusCheckDelayed: 'Đang kiểm tra chậm lại một chút do hỏi quá nhanh, hệ thống sẽ tự kiểm tra lại sau.',
+    statusCheckDelayed: 'Hệ thống đang kiểm tra thanh toán chậm hơn một chút. Trang sẽ tự chuyển khi nhận được tiền, bạn không cần tải lại.',
     changePlan: 'Thay đổi gói dịch vụ',
     registrationDetails: 'Chi tiết đăng ký',
     membershipPlan: 'Gói thành viên',
