@@ -393,3 +393,81 @@ describe('PR-B: CampaignRun — Trần thử lại cho chế độ một lần +
     );
   }, 15000);
 });
+
+describe('PR-2, Việc 3 — 1 người hỏng cả 3 lượt (one-shot): failedSends chỉ +1 ở lượt chạm trần, KHÔNG +1 mỗi lượt còn hẹn thử lại', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-12T02:00:00.000Z'));
+    mockRunMetadata = { source: 'campaign_run' }; // một lần mặc định
+    mockGetRunStatus.mockResolvedValue('running');
+    campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
+    campaignRunService.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.clear();
+    mockCountFailedByRecipientAndError.mockResolvedValue(0);
+    mockCheckSendQuota.mockResolvedValue({ allowed: true });
+    mockGetCustomersFromDataNode.mockResolvedValue({
+      items: [{ phone: '0388180856', name: 'Khách 3 Lượt' }],
+      dataLoadMeta: {},
+    });
+    mockSendPersonalMessageQueued.mockRejectedValue(new Error('Lỗi gửi lặp lại'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    campaignRunService.activeRunIds.clear();
+    campaignRunService.continuousRunIds.clear();
+  });
+
+  // Mỗi it() mô phỏng MỘT lượt chạy (resume) độc lập: zaloSendFailureCount đã có trong ledger là
+  // những gì lượt TRƯỚC đã ghi lại — đúng những gì executeCampaign đọc được khi được gọi lại.
+  it('lượt 1 (0 lỗi trước đó, dưới trần 3): failedSends=0 — còn hẹn thử lại, KHÔNG cộng', async () => {
+    mockGetRecipientProgress.mockResolvedValue({
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { zaloSendFailureCount: 0 },
+    });
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ failedSends: 0, successfulSends: 0 }),
+      null
+    );
+  }, 15000);
+
+  it('lượt 2 (1 lỗi trước đó, dưới trần 3): failedSends=0 — vẫn còn hẹn thử lại', async () => {
+    mockGetRecipientProgress.mockResolvedValue({
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { zaloSendFailureCount: 1 },
+    });
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ failedSends: 0, successfulSends: 0 }),
+      null
+    );
+  }, 15000);
+
+  it('lượt 3 (2 lỗi trước đó, chạm trần 3): failedSends=1 đúng một lần (không phải 3)', async () => {
+    mockGetRecipientProgress.mockResolvedValue({
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { zaloSendFailureCount: 2 },
+    });
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ failedSends: 1, successfulSends: 0 }),
+      null
+    );
+  }, 15000);
+});

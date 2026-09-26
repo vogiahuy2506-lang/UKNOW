@@ -32,9 +32,12 @@ class RecipientLedgerRepository {
   /**
    * Upsert (insert or update) a recipient step progress row.
    *
-   * The complex CASE logic handles optional removal of `retryCount` and
-   * `zaloSendFailureCount`/`zaloAbandonReason`/`lastFailureReason`/`lastFailureAt`
-   * from the meta JSONB.
+   * The complex CASE/array logic handles optional removal of `retryCount`,
+   * `zaloSendFailureCount`/`zaloAbandonReason`/`lastFailureReason`/`lastFailureAt`,
+   * and `emailSendFailureCount`/`emailAbandonReason` from the meta JSONB. The
+   * three removal flags are independent (each contributes its own key set to
+   * the `jsonb - text[]` subtraction), so callers can gate email vs. Zalo
+   * failure-meta cleanup without affecting the other channel's keys.
    *
    * @param {object} input
    * @param {number} input.runId
@@ -47,6 +50,7 @@ class RecipientLedgerRepository {
    * @param {object} input.metaPayload raw meta JSONB payload to merge
    * @param {boolean} input.removeRetryCountFromMeta
    * @param {boolean} input.removeZaloFailureFromMeta
+   * @param {boolean} input.removeEmailFailureFromMeta
    * @returns {Promise<void>}
    */
   async upsertRecipientProgress({
@@ -60,19 +64,18 @@ class RecipientLedgerRepository {
     metaPayload,
     removeRetryCountFromMeta,
     removeZaloFailureFromMeta,
+    removeEmailFailureFromMeta,
   }) {
     const { rows } = await db.query(
       `INSERT INTO campaign_run_recipient_steps
        (id_run, id_campaign, id_node, channel, recipient_key, last_completed_step, is_fully_completed, last_sent_at, meta, updated_at)
        VALUES (
          $1, $2, $3, $4, $5, $6, $7, CURRENT_TIMESTAMP,
-         CASE
-           WHEN COALESCE($9::boolean, FALSE) THEN
-             CASE WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt')
-             ELSE ($8::jsonb - 'retryCount') END
-           WHEN COALESCE($10::boolean, FALSE) THEN ($8::jsonb - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt')
-           ELSE $8::jsonb
-         END,
+         $8::jsonb - (
+           (CASE WHEN COALESCE($9::boolean, FALSE) THEN ARRAY['retryCount'] ELSE ARRAY[]::text[] END)
+           || (CASE WHEN COALESCE($10::boolean, FALSE) THEN ARRAY['zaloSendFailureCount','zaloAbandonReason','lastFailureReason','lastFailureAt'] ELSE ARRAY[]::text[] END)
+           || (CASE WHEN COALESCE($11::boolean, FALSE) THEN ARRAY['emailSendFailureCount','emailAbandonReason'] ELSE ARRAY[]::text[] END)
+         ),
          CURRENT_TIMESTAMP
        )
        ON CONFLICT (id_run, id_node, channel, recipient_key)
@@ -100,19 +103,11 @@ class RecipientLedgerRepository {
                  OR (EXCLUDED.last_completed_step < campaign_run_recipient_steps.last_completed_step) THEN
               campaign_run_recipient_steps.meta
             ELSE
-              CASE
-                WHEN COALESCE($9::boolean, FALSE) THEN
-                  CASE WHEN COALESCE($10::boolean, FALSE) THEN (
-                    COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                  ) - 'retryCount' - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt'
-                  ELSE (
-                    COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                  ) - 'retryCount' END
-                WHEN COALESCE($10::boolean, FALSE) THEN (
-                  COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-                ) - 'zaloSendFailureCount' - 'zaloAbandonReason' - 'lastFailureReason' - 'lastFailureAt'
-                ELSE COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta
-              END
+              (COALESCE(campaign_run_recipient_steps.meta, '{}'::jsonb) || EXCLUDED.meta) - (
+                (CASE WHEN COALESCE($9::boolean, FALSE) THEN ARRAY['retryCount'] ELSE ARRAY[]::text[] END)
+                || (CASE WHEN COALESCE($10::boolean, FALSE) THEN ARRAY['zaloSendFailureCount','zaloAbandonReason','lastFailureReason','lastFailureAt'] ELSE ARRAY[]::text[] END)
+                || (CASE WHEN COALESCE($11::boolean, FALSE) THEN ARRAY['emailSendFailureCount','emailAbandonReason'] ELSE ARRAY[]::text[] END)
+              )
           END,
           updated_at = CASE
             WHEN campaign_run_recipient_steps.is_fully_completed
@@ -133,6 +128,7 @@ class RecipientLedgerRepository {
         JSON.stringify(metaPayload),
         removeRetryCountFromMeta,
         removeZaloFailureFromMeta,
+        removeEmailFailureFromMeta,
       ]
     );
 

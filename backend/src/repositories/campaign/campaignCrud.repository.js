@@ -408,13 +408,17 @@ class CampaignCrudRepository {
     );
   }
 
-  async updateCampaignLastRunStats(campaignId, successfulSends) {
+  // PR-2 — total_sent += $1 phình theo số lần resume (mỗi lượt executeCampaign chạy lại cộng thêm
+  // successfulSends của lượt đó, kể cả khi lượt đó chỉ lặp lại người đã tính ở lượt trước). Tính lại
+  // từ SUM(successful_sends) của campaign_runs — nguồn xác thực (đã theo bất biến "kết cục cuối"
+  // ở campaignRun.service.js) — nên total_sent luôn khớp bất kể resume bao nhiêu lần.
+  async updateCampaignLastRunStats(campaignId) {
     await db.query(
       `UPDATE campaigns SET
          last_run_at = CURRENT_TIMESTAMP,
-         total_sent = total_sent + $1
-         WHERE id = $2`,
-      [successfulSends, campaignId]
+         total_sent = (SELECT COALESCE(SUM(successful_sends), 0) FROM campaign_runs WHERE id_campaign = $1)
+         WHERE id = $1`,
+      [campaignId]
     );
   }
 
