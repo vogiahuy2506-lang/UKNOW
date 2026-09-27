@@ -6,6 +6,7 @@ import campaignNodeDataService from './campaignNodeData.service.js';
 import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
+import campaignChannelRunner, { createDefaultChannelQuotaGate } from './campaignChannelRunner.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { buildZaloRateLimiterFromEnv } from './buildZaloRateLimiterFromEnv.js';
@@ -163,6 +164,12 @@ class CampaignRunService {
 
     // --- Zalo rate-limit state & policy (shared env builder with diagnostic runner) ---
     this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
+
+    // PR-3 (tách tầng kênh gửi) — quotaGate cho node kênh 'adapter'. Mặc định THROW
+    // CHANNEL_QUOTA_NOT_WIRED (PR-3 chưa kênh thật nào đăng ký nên nhánh này không chạm
+    // production); PR-4 sẽ thay bằng bản đấu nối quota thật. Property (không phải hằng số) để
+    // test override bằng bản no-op, cùng khuôn `this.zaloRateLimiter.XXX` ở các spec khác.
+    this.channelQuotaGate = createDefaultChannelQuotaGate();
 
     // RunId đã gửi email quota-pause trong process hiện tại (để clear cờ sau resume/gửi lại).
     this._quotaPauseNotifiedRunIds = new Set();
@@ -8611,6 +8618,57 @@ class CampaignRunService {
               },
             });
           }
+
+          await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
+          continue;
+        }
+
+        // PR-3 (tách tầng kênh gửi) — node kênh 'adapter' (Telegram/WhatsApp từ PR-6+, mock ở
+        // test) đi qua runner chung (campaignChannelRunner.service.js) thay vì viết riêng từng
+        // khối như 4 kênh legacy ở trên. Đặt TRƯỚC cầu dao PR-1 ngay dưới đây: cầu dao chỉ chặn
+        // subtype "có ý gửi" mà registry KHÔNG biết — subtype adapter ĐÃ được registry biết
+        // (getAdapterDescriptorBySubtype trả về descriptor khác null) nên phải xử lý ở đây trước,
+        // không được rơi xuống cầu dao rồi bị báo UNSUPPORTED_SEND_NODE oan.
+        const adapterDescriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype(nodeSubtype);
+        if (adapterDescriptor) {
+          const adapterResult = await campaignChannelRunner.runAdapterSendNode({
+            descriptor: adapterDescriptor,
+            runId,
+            campaignId,
+            userId,
+            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+            node,
+            config: node.config || {},
+            nodeOutputs,
+            lastOutputItems,
+            crossRunDedupeHours: this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS,
+            getRecipientProgress,
+            markRecipientStepCompleted,
+            ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
+            logExecutionNode: campaignExecutionLogService.logExecutionNode,
+            quotaGate: this.channelQuotaGate,
+          });
+
+          totalRecipients += adapterResult.total;
+          successfulSends += adapterResult.success;
+          failedSends += adapterResult.failed;
+          skippedSends += adapterResult.skipped;
+          nodeOutputs[String(node.id)] = adapterResult.outputItems;
+          lastOutputItems = adapterResult.outputItems;
+
+          await campaignExecutionLogService.logExecutionNode({
+            campaignId,
+            runId,
+            node,
+            status: 'success',
+            executionData: {
+              message: `Đã gửi ${adapterResult.success}/${adapterResult.total}, thất bại `
+                + `${adapterResult.failed}, bỏ qua ${adapterResult.skipped}`,
+              items: adapterResult.outputItems,
+              schema: [],
+              meta: { channel: adapterDescriptor.key },
+            },
+          });
 
           await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
           continue;

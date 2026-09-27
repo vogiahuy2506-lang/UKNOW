@@ -74,6 +74,27 @@ export async function validateCampaignPreflight({
     throw error;
   }
 
+  // 1c. PR-3 (tách tầng kênh gửi) — node kênh 'adapter' (Telegram/WhatsApp từ PR-6+, mock ở test)
+  // phải qua checkReadiness ở preflight, cùng tinh thần kiểm kết nối Zalo ở mục 2 dưới đây: phát
+  // hiện thiếu cấu hình/tài khoản mất kết nối TRƯỚC khi chạy, không để tới lúc engine gửi mới lộ.
+  for (const node of nodes) {
+    const subtype = String(node.node_subtype || '').trim();
+    const adapterDescriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype(subtype);
+    if (!adapterDescriptor) continue;
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await adapterDescriptor.adapter.checkReadiness({ userId: workspaceOwnerId, node });
+    } catch (readinessError) {
+      const error = new Error(
+        readinessError?.message
+          || `Kênh "${adapterDescriptor.key}" chưa sẵn sàng gửi (node ${node.id}).`
+      );
+      error.code = readinessError?.code || 'CHANNEL_NOT_READY';
+      error.statusCode = 400;
+      throw error;
+    }
+  }
+
   // 2. Xác định các tài khoản Zalo được dùng và kiểm tra kết nối (SENDER_DISCONNECTED)
   //
   // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 2 — trước đây kiểm `config.zaloAccountId ??

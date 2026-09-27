@@ -1,0 +1,367 @@
+/**
+ * PLAN_TACH_TANG_KENH_GUI_2026-09-27, PR-3 — Runner chung cho kênh adapter (one-shot) + mock adapter.
+ *
+ * a) 5 người × 2 bước → 10 dòng sent, ledger 5 dòng lastCompletedStep=2, counters
+ *    total=10 success=10 failed=0 skipped=0, run completed.
+ * b) chạy run MỚI cùng campaign trong cửa sổ dedupe → 0 lần sendOne, messages vẫn 10,
+ *    skipped tăng, invariant giữ.
+ * c) mock ném hard ở người 2 → người 2 failed, người 3-5 vẫn gửi;
+ *    mock ném rate_limit ở người 3 → run failed, đúng 2 người đã gửi.
+ * d) mock quietHours bao trùm giờ hiện tại → 0 lần gửi, run failed lý do quiet_hours.
+ * e) engine: node mock subtype không bị cầu dao PR-1 chặn; preflight gọi checkReadiness
+ *    (mock throw → 400 đúng code).
+ * f) quotaGate mặc định (không truyền no-op) → run failed CHANNEL_QUOTA_NOT_WIRED, 0 lần gửi.
+ */
+import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+
+process.env.BULLMQ_ENABLED = 'false';
+
+const db = (await import('../../src/config/database.js')).default;
+const { truncateAll, createUser } = await import('./helpers/db.js');
+const campaignRunService = (await import('../../src/services/campaign/campaignRun.service.js')).default;
+const { validateCampaignPreflight } = await import('../../src/services/campaign/campaignPreflight.service.js');
+const campaignChannelRegistry = (await import('../../src/services/campaign/campaignChannelRegistry.service.js')).default;
+const { createNoopChannelQuotaGate } = await import('../../src/services/campaign/campaignChannelRunner.service.js');
+
+const MOCK_SUBTYPE = 'send_mock_channel';
+const MOCK_KEY = 'mock_channel';
+
+let user;
+let fakeSendOne;
+let fakeCheckReadiness;
+let fakeResolveAccount;
+let fakeClassifyError;
+let originalQuotaGate;
+
+function buildMockDescriptor(overrides = {}) {
+  return {
+    key: MOCK_KEY,
+    sendNodeSubtype: MOCK_SUBTYPE,
+    engine: 'adapter',
+    continuousSupported: false,
+    continuousReplay: false,
+    quotaChannel: 'zalo',
+    policy: {
+      minDelayMs: 0,
+      maxDelayMs: 0,
+      perHourLimit: 0,
+      quietHours: null,
+      ...(overrides.policy || {}),
+    },
+    adapter: {
+      checkReadiness: fakeCheckReadiness,
+      resolveAccount: fakeResolveAccount,
+      resolveRecipients: async ({ rows }) => rows.map((row) => ({
+        recipientKey: String(row.recipientKey || '').trim(),
+        display: row.recipientKey,
+        vars: {},
+      })),
+      sendOne: fakeSendOne,
+      classifyError: fakeClassifyError,
+    },
+  };
+}
+
+function registerMockChannel(overrides = {}) {
+  campaignChannelRegistry.__registerChannelForTest(buildMockDescriptor(overrides));
+}
+
+beforeEach(async () => {
+  await truncateAll();
+  user = await createUser({
+    email: `pr3_owner_${Date.now()}_${Math.random().toString(36).slice(2, 6)}@example.com`,
+  });
+
+  let msgIdSeq = 1;
+  fakeSendOne = jest.fn().mockImplementation(async () => ({ messageId: `mock_msg_${msgIdSeq++}` }));
+  fakeCheckReadiness = jest.fn().mockResolvedValue();
+  fakeResolveAccount = jest.fn().mockResolvedValue({ accountKey: 'mock_account_1', display: 'Mock Account' });
+  fakeClassifyError = jest.fn().mockImplementation((err) => err?.category || 'hard');
+
+  campaignChannelRegistry.__resetTestChannels();
+  registerMockChannel();
+
+  originalQuotaGate = campaignRunService.channelQuotaGate;
+  campaignRunService.channelQuotaGate = createNoopChannelQuotaGate();
+});
+
+afterEach(() => {
+  campaignChannelRegistry.__resetTestChannels();
+  campaignRunService.channelQuotaGate = originalQuotaGate;
+  campaignRunService.activeRunIds.clear();
+  campaignRunService.continuousRunIds.clear();
+});
+
+async function insertCampaign({ campaignName = 'PR-3 test' } = {}) {
+  const { rows } = await db.query(
+    `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name, campaign_type, status)
+     VALUES ($1, $1, $2, 'email', 'active') RETURNING id, workspace_owner_id, id_user`,
+    [user.id, campaignName]
+  );
+  return rows[0];
+}
+
+async function insertNode({ campaignId, config = {} }) {
+  const { rows } = await db.query(
+    `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+     VALUES ($1, 'action', $2, $2, $3::jsonb, 1) RETURNING *`,
+    [campaignId, MOCK_SUBTYPE, JSON.stringify(config)]
+  );
+  return rows[0];
+}
+
+async function insertRun({ campaignId }) {
+  const { rows } = await db.query(
+    `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status, run_metadata)
+     VALUES ($1, $2, 'manual', 'running', '{}'::jsonb) RETURNING *`,
+    [campaignId, user.id]
+  );
+  return rows[0];
+}
+
+const FIVE_RECIPIENTS = ['peer1', 'peer2', 'peer3', 'peer4', 'peer5'];
+const TWO_STEPS_CONFIG = {
+  recipientSource: 'manual',
+  recipientKeys: FIVE_RECIPIENTS,
+  steps: [{ message: 'Bước 1' }, { message: 'Bước 2' }],
+};
+
+async function runCampaignToCompletion(campaignId, runId) {
+  await campaignRunService.executeCampaign(campaignId, runId, user.id);
+}
+
+describe('PR-3 — Runner chung kênh adapter (mock)', () => {
+  it('(a) 5 người x 2 bước -> 10 sent, ledger 5 dòng lastCompletedStep=2, counters đúng, run completed', async () => {
+    const campaign = await insertCampaign();
+    const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+    const run = await insertRun({ campaignId: campaign.id });
+
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    expect(fakeSendOne).toHaveBeenCalledTimes(10);
+
+    const { rows: msgRows } = await db.query(
+      `SELECT status FROM campaign_channel_messages WHERE id_run = $1 AND id_node = $2`,
+      [run.id, node.id]
+    );
+    expect(msgRows).toHaveLength(10);
+    expect(msgRows.every((r) => r.status === 'sent')).toBe(true);
+
+    const { rows: ledgerRows } = await db.query(
+      `SELECT recipient_key, last_completed_step FROM campaign_run_recipient_steps
+       WHERE id_run = $1 AND id_node = $2 ORDER BY recipient_key ASC`,
+      [run.id, String(node.id)]
+    );
+    expect(ledgerRows).toHaveLength(5);
+    expect(ledgerRows.every((r) => r.last_completed_step === 2)).toBe(true);
+
+    const { rows: runRows } = await db.query(
+      `SELECT status, total_recipients, successful_sends, failed_sends, skipped_sends
+       FROM campaign_runs WHERE id = $1`,
+      [run.id]
+    );
+    expect(runRows[0].status).toBe('completed');
+    expect(runRows[0].total_recipients).toBe(10);
+    expect(runRows[0].successful_sends).toBe(10);
+    expect(runRows[0].failed_sends).toBe(0);
+    expect(runRows[0].skipped_sends).toBe(0);
+  });
+
+  it('(b) run MỚI cùng campaign trong cửa sổ dedupe -> 0 lần sendOne mới, messages vẫn 10, skipped tăng, invariant giữ', async () => {
+    const campaign = await insertCampaign();
+    const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+    const run1 = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run1.id);
+    expect(fakeSendOne).toHaveBeenCalledTimes(10);
+
+    fakeSendOne.mockClear();
+    const run2 = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run2.id);
+
+    expect(fakeSendOne).toHaveBeenCalledTimes(0);
+
+    const { rows: msgRows } = await db.query(
+      `SELECT COUNT(*)::int AS n FROM campaign_channel_messages WHERE id_node = $1`,
+      [node.id]
+    );
+    expect(msgRows[0].n).toBe(10);
+
+    const { rows: runRows } = await db.query(
+      `SELECT status, total_recipients, successful_sends, failed_sends, skipped_sends
+       FROM campaign_runs WHERE id = $1`,
+      [run2.id]
+    );
+    expect(runRows[0].status).toBe('completed');
+    expect(runRows[0].skipped_sends).toBeGreaterThan(0);
+    const { total_recipients: total, successful_sends: ok, failed_sends: bad, skipped_sends: sk } = runRows[0];
+    expect(ok + bad + sk).toBeLessThanOrEqual(total);
+  });
+
+  it('(b2) resume CÙNG run_id — total KHÔNG cộng lại cho người đã có ledger (khuôn R:4381)', async () => {
+    const campaign = await insertCampaign();
+    const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+    const run = await insertRun({ campaignId: campaign.id });
+
+    // Giả lập run này ĐÃ xử lý xong peer1/peer2 ở lượt gọi TRƯỚC (vd server restart giữa chừng) —
+    // ledger đã có dòng thật, updated_at khác NULL — TRƯỚC KHI executeCampaign chạy lần này.
+    await db.query(
+      `INSERT INTO campaign_run_recipient_steps
+         (id_run, id_campaign, id_node, channel, recipient_key, last_completed_step, is_fully_completed, updated_at)
+       VALUES
+         ($1, $2, $3, $4, 'peer1', 2, true, now()),
+         ($1, $2, $3, $4, 'peer2', 2, true, now())`,
+      [run.id, campaign.id, String(node.id), MOCK_KEY]
+    );
+
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    // peer1/peer2 đã có ledger (updatedAt khác NULL) nên KHÔNG cộng total cho họ, và vòng while
+    // không chạy vì lastCompletedStep=2=steps.length — chỉ peer3/4/5 "lần đầu thấy" cộng 2 bước.
+    expect(fakeSendOne).toHaveBeenCalledTimes(6);
+    const { rows: runRows } = await db.query(
+      'SELECT total_recipients, successful_sends FROM campaign_runs WHERE id = $1',
+      [run.id]
+    );
+    expect(runRows[0].total_recipients).toBe(6);
+    expect(runRows[0].successful_sends).toBe(6);
+  });
+
+  it('(c1) mock ném hard ở người 2 -> người 2 failed, người 3-5 vẫn gửi', async () => {
+    fakeSendOne.mockImplementation(async ({ recipientKey }) => {
+      if (recipientKey === 'peer2') {
+        const err = new Error('peer2 hard fail');
+        err.category = 'hard';
+        throw err;
+      }
+      return { messageId: `mock_msg_${recipientKey}` };
+    });
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+    const run = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    const { rows: runRows } = await db.query('SELECT status FROM campaign_runs WHERE id = $1', [run.id]);
+    expect(runRows[0].status).toBe('completed');
+
+    const { rows: sentRows } = await db.query(
+      `SELECT DISTINCT recipient_key FROM campaign_channel_messages
+       WHERE id_run = $1 AND id_node = $2 AND status = 'sent' ORDER BY recipient_key ASC`,
+      [run.id, node.id]
+    );
+    expect(sentRows.map((r) => r.recipient_key)).toEqual(['peer1', 'peer3', 'peer4', 'peer5']);
+
+    const { rows: failedRows } = await db.query(
+      `SELECT recipient_key FROM campaign_channel_messages
+       WHERE id_run = $1 AND id_node = $2 AND status = 'failed'`,
+      [run.id, node.id]
+    );
+    expect(failedRows.map((r) => r.recipient_key)).toEqual(['peer2']);
+  });
+
+  it('(c2) mock ném rate_limit ở người 3 -> run failed, đúng 2 người đã gửi', async () => {
+    fakeSendOne.mockImplementation(async ({ recipientKey, stepIndex }) => {
+      if (recipientKey === 'peer3') {
+        const err = new Error('peer3 rate limited');
+        err.category = 'rate_limit';
+        throw err;
+      }
+      return { messageId: `mock_msg_${recipientKey}_${stepIndex}` };
+    });
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+    const run = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    const { rows: runRows } = await db.query(
+      'SELECT status, error_message FROM campaign_runs WHERE id = $1',
+      [run.id]
+    );
+    expect(runRows[0].status).toBe('failed');
+
+    const { rows: sentRows } = await db.query(
+      `SELECT DISTINCT recipient_key FROM campaign_channel_messages
+       WHERE id_run = $1 AND id_node = $2 AND status = 'sent'`,
+      [run.id, node.id]
+    );
+    expect(sentRows.map((r) => r.recipient_key).sort()).toEqual(['peer1', 'peer2']);
+  });
+
+  it('(d) mock quietHours bao trùm giờ hiện tại -> 0 lần gửi, run failed lý do quiet_hours', async () => {
+    campaignChannelRegistry.__resetTestChannels();
+    const nowVnHour = new Date(Date.now() + 7 * 60 * 60 * 1000).getUTCHours();
+    // Khung 24 giờ trọn vẹn quanh giờ hiện tại (vắt nửa đêm) — chắc chắn bao trùm bất kể giờ chạy test thật.
+    const startHour = nowVnHour;
+    const endHour = nowVnHour; // startHour === endHour bị coi "không có khung" ở isWithinQuietHours,
+    // nên lùi endHour 1 giờ để tạo khung vắt nửa đêm 23 giờ bao trùm gần như toàn bộ ngày, chắc chắn
+    // chứa giờ hiện tại (start = nowHour, end = nowHour - 1 (mod 24) => quiet = hour>=start || hour<end,
+    // tại hour=nowHour: nowHour>=nowHour true => luôn true).
+    registerMockChannel({ policy: { quietHours: { startHour, endHour: (endHour + 23) % 24 } } });
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+    const run = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    expect(fakeSendOne).toHaveBeenCalledTimes(0);
+
+    const { rows: runRows } = await db.query(
+      'SELECT status, error_message FROM campaign_runs WHERE id = $1',
+      [run.id]
+    );
+    expect(runRows[0].status).toBe('failed');
+    expect(String(runRows[0].error_message || '')).toMatch(/yên lặng|quiet/i);
+
+    const { rows: msgRows } = await db.query(
+      `SELECT COUNT(*)::int AS n FROM campaign_channel_messages WHERE id_node = $1`,
+      [node.id]
+    );
+    expect(msgRows[0].n).toBe(0);
+  });
+
+  it('(e) preflight gọi checkReadiness — mock throw thì 400 đúng code; node mock không bị cầu dao PR-1 chặn', async () => {
+    const campaign = await insertCampaign();
+    await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+
+    // Chưa throw — preflight phải cho qua bình thường (subtype adapter, KHÔNG bị cầu dao
+    // UNSUPPORTED_SEND_NODE chặn dù registry biết nó qua nhánh 'adapter' chứ không phải 'legacy').
+    await expect(
+      validateCampaignPreflight({ campaignId: campaign.id, workspaceOwnerId: user.id })
+    ).resolves.toMatchObject({ valid: true });
+
+    fakeCheckReadiness.mockImplementation(async () => {
+      const err = new Error('Tài khoản mock chưa cấu hình');
+      err.code = 'MOCK_NOT_CONFIGURED';
+      throw err;
+    });
+
+    await expect(
+      validateCampaignPreflight({ campaignId: campaign.id, workspaceOwnerId: user.id })
+    ).rejects.toMatchObject({ code: 'MOCK_NOT_CONFIGURED', statusCode: 400 });
+  });
+
+  it('(f) quotaGate mặc định (không truyền no-op) -> run failed CHANNEL_QUOTA_NOT_WIRED, 0 lần gửi', async () => {
+    campaignRunService.channelQuotaGate = originalQuotaGate; // trả về bản mặc định (throw) của engine thật
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
+    const run = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    expect(fakeSendOne).toHaveBeenCalledTimes(0);
+
+    const { rows: runRows } = await db.query(
+      'SELECT status, error_message FROM campaign_runs WHERE id = $1',
+      [run.id]
+    );
+    expect(runRows[0].status).toBe('failed');
+    expect(String(runRows[0].error_message || '')).toMatch(/quota|CHANNEL_QUOTA_NOT_WIRED/i);
+
+    const { rows: msgRows } = await db.query(
+      `SELECT COUNT(*)::int AS n FROM campaign_channel_messages WHERE id_node = $1`,
+      [node.id]
+    );
+    expect(msgRows[0].n).toBe(0);
+  });
+});
