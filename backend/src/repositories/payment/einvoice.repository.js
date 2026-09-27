@@ -18,7 +18,11 @@ export const RETRYABLE_MATBAO_ERROR_CODES = new Set([
  */
 export function stuckEinvoiceKindSql(staleHoursPlaceholder) {
   const codes = [...RETRYABLE_MATBAO_ERROR_CODES].map((c) => `'${c}'`).join(',');
+  // PLAN_HOAN_TIEN_DON_HANG (27/09) — hoá đơn của đơn đã hoàn tiền bị CHỦ Ý dừng (failed /
+  // ORDER_REFUNDED, adminOrderRefund.repository.js). Không loại ở đây thì mã lỗi ngoài danh sách
+  // retry xếp nó vào 'dead' → cảnh báo hoá đơn kẹt bắn mãi cho một việc đã xong.
   return `CASE
+  WHEN e.error_code = 'ORDER_REFUNDED' THEN NULL
   WHEN e.status = 'cqt_rejected' THEN 'dead'
   WHEN e.status = 'failed'
     AND (e.error_code IS NULL OR NOT (e.error_code = ANY(ARRAY[${codes}]::text[]))) THEN 'dead'
