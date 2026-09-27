@@ -255,20 +255,17 @@ describe('PR-1 — Registry kênh + cầu dao node gửi lạ', () => {
       expect(fakeSendMessage).toHaveBeenCalledTimes(2);
 
       const { rows: msgRows } = await db.query(
-        `SELECT tracking_metadata AS meta
+        `SELECT tracking_metadata->>'status' AS status, tracking_metadata->>'stepIndex' AS step
          FROM zalo_messages WHERE id_run = $1 AND id_node = $2 ORDER BY id ASC`,
         [run.id, node.id]
       );
-      expect(msgRows).toHaveLength(2);
-      // KHÔNG kiểm tracking_metadata->>'status' — cột này bị bug KHÔNG LIÊN QUAN PR-1 ghi đè
-      // thành 'failed' sau khi gửi thành công (logZaloSentJourneyEvent truyền customerId:null
-      // cho kênh nhóm nhưng customer_journey.id_customer NOT NULL, xem báo cáo). Dùng bằng chứng
-      // KHÔNG bị bug đó đụng tới: msgId do Zalo API xác nhận, ghi trước khi lỗi xảy ra và được
-      // giữ lại qua merge JSONB (mergeZaloMessageTrackingMetadata).
-      const confirmedMsgIds = msgRows
-        .map((r) => r.meta?.response?.message?.msgId)
-        .filter((id) => id != null && String(id).trim() !== '');
-      expect(confirmedMsgIds).toHaveLength(2);
+      // Review 27/09: bootstrap customer_journey.id_customer đã cho NULL như production, nên tin nhóm
+      // không còn bị ghi đè 'failed' sau khi gửi. Ghim ĐÚNG ý ca này: chu kỳ đầu gửi bước 1, chu kỳ
+      // replay gửi bước 2 — không phải bước 1 bị gửi lại lần hai.
+      expect(msgRows).toEqual([
+        { status: 'sent', step: '1' },
+        { status: 'sent', step: '2' },
+      ]);
     } finally {
       campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = originalQuietStart;
       campaignRunService.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = originalQuietEnd;

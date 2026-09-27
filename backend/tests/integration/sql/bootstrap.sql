@@ -1144,7 +1144,10 @@ CREATE INDEX idx_customer_purchases_order    ON customer_purchases(order_id);
 -- ─── Customer journey — event log (open/click/purchase/etc.) ───────────
 CREATE TABLE customer_journey (
   id                BIGSERIAL PRIMARY KEY,
-  id_customer       BIGINT       NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
+  -- Khớp production (information_schema 27/09/2026: id_customer is_nullable=YES; 703 dòng NULL/30 ngày —
+  -- gửi Zalo nhóm ghi journey không gắn khách, campaignRun.service.js logZaloSentJourneyEvent). NOT NULL
+  -- cũ làm mọi tin nhóm gửi xong bị ghi đè status failed trong test (không có trên prod).
+  id_customer       BIGINT       REFERENCES customers(id) ON DELETE CASCADE,
   id_campaign       BIGINT       REFERENCES campaigns(id) ON DELETE SET NULL,
   id_run            BIGINT       REFERENCES campaign_runs(id) ON DELETE SET NULL,
   id_node           BIGINT,
