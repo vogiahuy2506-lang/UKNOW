@@ -103,12 +103,12 @@ function PricingPolicy() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>10 tháng 09 năm 2026</strong>
+                Cập nhật: <strong>13 tháng 10 năm 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>September 10, 2026</strong>
+                Last updated: <strong>October 13, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -252,10 +252,10 @@ function PricingPolicy() {
               </li>
             </ul>
             <p className={`text-slate-700 ${lc(language, 'vi')}`}>
-              Khi chuyển đổi gói dịch vụ, phí chênh lệch sẽ được tính toán và yêu cầu thanh toán bổ sung hoặc hoàn trả tùy theo trường hợp.
+              Nâng lên gói cao hơn: gói mới có hiệu lực ngay, thời hạn tính lại từ ngày nâng cấp; thời gian còn lại của gói cũ không được quy đổi hay hoàn tiền. Chuyển xuống gói thấp hơn: bạn thanh toán trước cho gói mới, gói hiện tại được dùng hết chu kỳ và gói mới tự kích hoạt khi chu kỳ kết thúc; lệnh hẹn này không huỷ được và không hoàn tiền.
             </p>
             <p className={`text-slate-700 ${lc(language, 'en')}`}>
-              When switching service packages, the difference in fees will be calculated and require additional payment or refund depending on the case.
+              Upgrading to a higher-tier plan: the new plan takes effect immediately and its term restarts from the upgrade date; the remaining time on the old plan cannot be converted or refunded. Downgrading to a lower-tier plan: you prepay for the new plan, the current plan continues until the end of its cycle, and the new plan activates automatically when that cycle ends; this scheduled change cannot be cancelled and is not refundable.
             </p>
           </section>
 
@@ -361,10 +361,10 @@ function PricingPolicy() {
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 10/09/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 13/10/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from September 10, 2026.
+            This policy was last updated and effective from October 13, 2026.
           </p>
         </footer>
       </div>
