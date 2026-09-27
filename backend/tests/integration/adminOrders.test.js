@@ -418,3 +418,42 @@ describe('GET /:orderCode/refund-preview + POST /:orderCode/refund', () => {
     expect(again.body.code).toBe('ALREADY_REFUNDED');
   });
 });
+
+// PLAN_HOAN_TIEN_DON_HANG PR-3 — dữ liệu cho giao diện sau khi hoàn.
+describe('PR-3: lịch sử đơn của khách + danh sách hoá đơn admin thấy đơn đã hoàn', () => {
+  it('GET /api/users/my-orders vẫn trả đơn đã hoàn với status refunded; /api/admin/einvoices có orderStatus', async () => {
+    const admin = await createUser({ role: 'admin', username: 'pr3-admin' });
+    const user = await createUser({ username: 'pr3-buyer', withPlan: false });
+    const plan = await createPlan({ code: 'pr3-plan', price: 299000 });
+    const order = await createOrder({ planId: plan.id, userId: user.id, userEmail: user.email, amount: 299000 });
+    const cancelled = await createOrder({
+      planId: plan.id, userId: user.id, userEmail: user.email, amount: 299000, status: 'cancelled',
+    });
+    await db.query(`UPDATE orders SET paid_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [order.id]);
+    await db.query(`UPDATE users SET active_plan_id = $1 WHERE id = $2`, [plan.id, user.id]);
+    await db.query(
+      `INSERT INTO einvoices (order_id, ma_tra_cuu, mtchieu, status, so_hdon) VALUES ($1, 'PR3MTC', 'MT', 'issued', '0000777')`,
+      [order.id]
+    );
+    const adminToken = await loginAs(admin);
+    const refundRes = await request(app)
+      .post(`/api/admin/orders/${order.order_code}/refund`)
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({ reason: 'PR-3' });
+    expect(refundRes.status).toBe(200);
+
+    const userToken = await loginAs(user);
+    const mine = await request(app).get('/api/users/my-orders').set('Authorization', `Bearer ${userToken}`);
+    expect(mine.status).toBe(200);
+    const codes = mine.body.data.map((o) => [String(o.orderCode), o.status]);
+    expect(codes).toContainEqual([String(order.order_code), 'refunded']);
+    expect(codes.map(([c]) => c)).not.toContain(String(cancelled.order_code));
+
+    const inv = await request(app)
+      .get('/api/admin/einvoices?status=')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(inv.status).toBe(200);
+    const row = inv.body.data.einvoices.find((e) => String(e.orderCode) === String(order.order_code));
+    expect(row).toMatchObject({ status: 'issued', orderStatus: 'refunded' });
+  });
+});

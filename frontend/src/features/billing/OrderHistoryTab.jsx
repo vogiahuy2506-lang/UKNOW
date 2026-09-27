@@ -5,6 +5,7 @@ import {
   HiOutlineCheckCircle,
   HiOutlineBan,
   HiOutlineClock,
+  HiOutlineReceiptRefund,
 } from 'react-icons/hi';
 import { getMyOrders } from '../auth/services/authApi.service';
 
@@ -12,6 +13,8 @@ const STATUS_MAP = (t) => ({
   success:   { label: t('accountProfileModal.success'), cls: 'text-green-600 bg-green-50 border-green-200', icon: HiOutlineCheckCircle },
   pending:   { label: t('accountProfileModal.pending'), cls: 'text-amber-600 bg-amber-50 border-amber-200', icon: HiOutlineClock },
   cancelled: { label: t('accountProfileModal.cancelled'), cls: 'text-gray-400 bg-gray-50 border-gray-200', icon: HiOutlineBan },
+  // PLAN_HOAN_TIEN_DON_HANG PR-3 — khoá orders.refunded có sẵn ở vi.js/en.js.
+  refunded: { label: t('orders.refunded'), cls: 'text-rose-600 bg-rose-50 border-rose-200', icon: HiOutlineReceiptRefund },
 });
 
 const TOPUP_ITEM_LABEL_KEYS = {
@@ -37,7 +40,7 @@ function formatTopupItemsSummary(items, t) {
     .join(' · ');
 }
 
-function renderInvoiceStatus(invoice, orderCode, t) {
+function renderInvoiceStatus(invoice, orderCode, t, orderStatus) {
   if (!invoice || !invoice.status) {
     return (
       <span className="text-xs text-gray-400">
@@ -85,6 +88,16 @@ function renderInvoiceStatus(invoice, orderCode, t) {
           {t('invoiceVat.history.view')}
         </Link>
       </div>
+    );
+  }
+
+  // Đơn đã hoàn: hoá đơn chưa xuất bị CHỦ Ý dừng (failed / ORDER_REFUNDED) — "Xuất lỗi — hệ thống
+  // đang thử lại" là sai với khách, hệ thống sẽ không thử lại.
+  if (status === 'failed' && orderStatus === 'refunded') {
+    return (
+      <span className="text-xs text-gray-500">
+        {t('invoiceVat.history.refundedNoInvoice')}
+      </span>
     );
   }
 
@@ -194,7 +207,7 @@ export default function OrderHistoryTab({ isUserAdmin, t }) {
                 {t('invoiceVat.history.invoiceLabel')}:
               </span>
               <div>
-                {renderInvoiceStatus(order.invoice, order.orderCode, t)}
+                {renderInvoiceStatus(order.invoice, order.orderCode, t, order.status)}
               </div>
             </div>
 

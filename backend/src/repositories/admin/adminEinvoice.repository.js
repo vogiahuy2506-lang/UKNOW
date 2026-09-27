@@ -57,6 +57,7 @@ export async function findEinvoices({
          e.updated_at AS "updatedAt",
          o.order_code AS "orderCode",
          o.amount,
+         o.status AS "orderStatus",
          o.user_email AS "userEmail",
          u.full_name AS "userFullName"
        FROM einvoices e

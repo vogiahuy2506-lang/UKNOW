@@ -61,6 +61,8 @@ const getReasonMessage = (reason, t) => {
       return t('adminEinvoices.reasonNoRecipient');
     case 'pdf_fetch':
       return t('adminEinvoices.reasonPdfFetch');
+    case 'order_refunded':
+      return t('adminEinvoices.reasonOrderRefunded');
     default:
       return reason ? String(reason) : '';
   }
@@ -299,7 +301,10 @@ const AdminEinvoicesPage = () => {
                 </tr>
               ) : (
                 einvoices.map((e) => {
-                  const canRetry = ['failed', 'cqt_rejected'].includes(e.status);
+                  // PLAN_HOAN_TIEN_DON_HANG PR-3 — đơn đã hoàn: không cho "Thử lại" (server cũng trả
+                  // order_refunded); hoá đơn đã xuất thì nhắc kế toán lập hoá đơn điều chỉnh trên Mắt Bão.
+                  const isOrderRefunded = e.orderStatus === 'refunded';
+                  const canRetry = !isOrderRefunded && ['failed', 'cqt_rejected'].includes(e.status);
                   const canResend = ['issued', 'cqt_ok'].includes(e.status);
                   const isActing = actionLoadingId === e.id;
 
@@ -315,6 +320,13 @@ const AdminEinvoicesPage = () => {
                       </td>
                       <td className="px-4 py-3">
                         <InvoiceStatusBadge status={e.status} />
+                        {isOrderRefunded && (
+                          <span className="mt-1 block w-fit rounded bg-rose-50 px-1.5 py-0.5 text-[10px] font-medium text-rose-700">
+                            {['issued', 'cqt_ok'].includes(e.status)
+                              ? t('adminEinvoices.orderRefundedNeedsAdjustment')
+                              : t('adminEinvoices.orderRefundedNotIssued')}
+                          </span>
+                        )}
                       </td>
                       <td className="px-4 py-3 text-xs text-gray-700 whitespace-nowrap">
                         {e.soHdon ? `${e.khhdon || ''} / ${e.soHdon}` : '—'}

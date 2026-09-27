@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import { HiOutlineRefresh, HiOutlineSearch, HiOutlineBan } from 'react-icons/hi';
 import adminOrdersApiService from '../../features/admin/services/adminOrdersApi.service';
+import RefundOrderModal from '../../features/admin/components/RefundOrderModal';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -17,6 +18,7 @@ const STATUS_LABEL = (t) => ({
   success: { label: t('orders.success'), cls: 'badge-green' },
   pending: { label: t('orders.pending'), cls: 'badge-yellow' },
   cancelled: { label: t('orders.cancelled'), cls: 'badge-gray' },
+  refunded: { label: t('orders.refunded'), cls: 'badge-red' },
 });
 
 // "Nợ nhỏ" PR-4 (26/09) — payment.service.js gắn tag PAID_AFTER_CANCELLED vào note (text thô, không
@@ -25,6 +27,16 @@ const STATUS_LABEL = (t) => ({
 const hasUnhandledPaidAfterCancelled = (order) => {
   const note = order?.note || '';
   return note.includes('PAID_AFTER_CANCELLED') && !note.includes('PAID_AFTER_CANCELLED_HANDLED');
+};
+
+// PLAN_HOAN_TIEN_DON_HANG PR-3 — chỉ để quyết định có HIỆN nút; điều kiện thật (và lý do từ chối)
+// do server kiểm trên dòng đã khoá, modal hiện lý do nếu preview báo không đủ điều kiện.
+const canOfferRefund = (order) => {
+  if (order.isTopup) return false;
+  if (order.status === 'success') {
+    return Number(order.amount) > 0 && !['free', 'voucher'].includes(order.paymentMethod);
+  }
+  return ['cancelled', 'failed'].includes(order.status) && (order.note || '').includes('PAID_AFTER_CANCELLED');
 };
 
 const KpiCard = ({ label, value, sub }) => (
@@ -54,6 +66,7 @@ const AdminOrdersPage = () => {
   const [filters, setFilters] = useState({ status: '', search: '', dateFrom: '', dateTo: '' });
   const [draft, setDraft] = useState({ status: '', search: '', dateFrom: '', dateTo: '' });
   const [cancellingCode, setCancellingCode] = useState(null); // orderCode đang confirm huỷ
+  const [refundingCode, setRefundingCode] = useState(null); // orderCode đang mở modal hoàn tiền
 
   const fetchOrders = useCallback(async (f, p) => {
     setIsLoading(true);
@@ -178,6 +191,7 @@ const AdminOrdersPage = () => {
             <option value="success">{t('adminOrders.success')}</option>
             <option value="pending">{t('adminOrders.pending')}</option>
             <option value="cancelled">{t('adminOrders.cancelled')}</option>
+            <option value="refunded">{t('adminOrders.refunded')}</option>
           </select>
         </div>
 
@@ -329,6 +343,15 @@ const AdminOrdersPage = () => {
                           {t('adminOrders.markPaidAfterCancelledHandled')}
                         </button>
                       )}
+                      {canOfferRefund(o) && (
+                        <button
+                          type="button"
+                          onClick={() => setRefundingCode(String(o.orderCode))}
+                          className="text-xs px-2 py-1 border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                        >
+                          {t('adminOrders.refundButton')}
+                        </button>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -378,6 +401,14 @@ const AdminOrdersPage = () => {
           </div>
         )}
       </div>
+
+      {refundingCode && (
+        <RefundOrderModal
+          orderCode={refundingCode}
+          onClose={() => setRefundingCode(null)}
+          onRefunded={() => { setRefundingCode(null); fetchOrders(filters, page); }}
+        />
+      )}
     </div>
   );
 };

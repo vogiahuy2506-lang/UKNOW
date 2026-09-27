@@ -516,7 +516,9 @@ export async function findSuccessfulOrdersForUser({ userId, userEmail }) {
      LEFT JOIN einvoices e ON e.order_id = o.id
      WHERE (o.user_id = $1
         OR (o.user_id IS NULL AND LOWER(o.user_email) = LOWER($2)))
-       AND o.status = 'success'
+       -- PLAN_HOAN_TIEN_DON_HANG PR-3: khách vẫn thấy đơn đã hoàn trong lịch sử (nhãn "Đã hoàn tiền").
+       -- Hàm này CHỈ phục vụ hiển thị (user.controller.js getMyOrders), không dùng cho quyền lợi gói.
+       AND o.status IN ('success', 'refunded')
      ORDER BY o.created_at DESC
      LIMIT 20`,
     [userId, userEmail]
