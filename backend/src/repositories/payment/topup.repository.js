@@ -17,6 +17,26 @@ export async function findAllTopupPricing(queryable = db) {
 }
 
 /**
+ * Một dòng giá topup theo item_key, KỂ CẢ khi đang tắt bán (is_active=FALSE) — dùng để quyết định
+ * có gợi ý "mua thêm slot" hay không (chỗ cần is_active=TRUE mới gợi ý, không phải chỗ liệt kê
+ * catalog cho khách chọn mua, đã có findAllTopupPricing ở trên).
+ *
+ * @param {string} itemKey
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @returns {Promise<{itemKey: string, unitPrice: number, isActive: boolean, minQty: number, stepQty: number, maxQty: number|null}|null>}
+ */
+export async function findTopupPricingByKey(itemKey, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT item_key AS "itemKey", unit_price AS "unitPrice", is_active AS "isActive",
+            min_qty AS "minQty", step_qty AS "stepQty", max_qty AS "maxQty"
+     FROM topup_pricing
+     WHERE item_key = $1`,
+    [itemKey]
+  );
+  return rows[0] || null;
+}
+
+/**
  * Sum active structural grants (cycle_end > NOW()) or wallet grants for consumables.
  *
  * @param {number|string} userId

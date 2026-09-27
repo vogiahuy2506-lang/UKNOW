@@ -57,11 +57,16 @@ export function findEmployeeAfterAdd(list, { id = null, email = '' } = {}) {
   return employees.find((e) => String(e.email || '').trim().toLowerCase() === wanted) || null;
 }
 
-/** `{ code, message }` từ lỗi axios của backend; thiếu thì rỗng (backend cũ không có `code`). */
+/**
+ * `{ code, message, canBuySlot }` từ lỗi axios của backend; thiếu thì rỗng/false (backend cũ không
+ * có `code`/`canBuySlot`). `canBuySlot` chỉ backend gửi kèm lỗi EMPLOYEE_LIMIT_REACHED khi mặt hàng
+ * 'employees' đang thật sự được bán (topup_pricing.is_active) — xem employee.service.js.
+ */
 export function getEmployeeErrorInfo(err) {
   const data = err?.response?.data;
   return {
     code: typeof data?.code === 'string' ? data.code : '',
     message: typeof data?.message === 'string' ? data.message : '',
+    canBuySlot: Boolean(data?.canBuySlot),
   };
 }

@@ -14,8 +14,14 @@ import path from 'node:path';
 vi.mock('../../../i18n', async () => (await import('../../../test/realI18n.js')).realI18nModule());
 
 vi.mock('react-hot-toast', () => {
-  const toast = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() });
+  const toast = Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn(), custom: vi.fn(), dismiss: vi.fn() });
   return { default: toast };
+});
+
+let navigateSpy;
+vi.mock('react-router-dom', async () => {
+  const actual = await vi.importActual('react-router-dom');
+  return { ...actual, useNavigate: () => navigateSpy };
 });
 
 vi.mock('../../../features/users/services/userManagementApi.service', () => ({
@@ -104,6 +110,7 @@ afterAll(() => {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  navigateSpy = vi.fn();
   api.getTeamOverview.mockResolvedValue({ data: { data: [] } });
   api.getCampaignApprovalThreshold.mockResolvedValue({ data: { data: { threshold: null } } });
 });
@@ -443,5 +450,45 @@ describe('tab Phân quyền: chọn nhanh và lưu', () => {
   it('nhân viên đã có quyền → không hiện dải vàng "chưa có quyền nào"', async () => {
     await setup(makeEmployee({ permissions: { campaigns_view: true } }));
     expect(screen.queryByText(/chưa có quyền nào/)).not.toBeInTheDocument();
+  });
+});
+
+// ── (f) lỗi vượt trần khi thêm nhân viên có gợi ý mua slot ────────────────────
+describe('lỗi vượt trần khi thêm nhân viên — gợi ý mua slot', () => {
+  it('canBuySlot=false (backend cũ hoặc không bán) → toast.error như cũ, KHÔNG gọi toast.custom', async () => {
+    setEmployees([]);
+    api.inviteEmployee.mockRejectedValue(httpError({ success: false, message: 'Số lượng nhân viên đã đạt giới hạn gói', code: 'EMPLOYEE_LIMIT_REACHED', canBuySlot: false }, 403));
+    const user = await renderPage();
+
+    await openAddModal(user);
+    await user.type(field('email'), 'nv01@example.com');
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Số lượng nhân viên đã đạt giới hạn gói'));
+    expect(toast.custom).not.toHaveBeenCalled();
+  });
+
+  it('canBuySlot=true → toast.custom với câu của backend + nút "Mua thêm slot", bấm nút đóng modal và điều hướng /app/topup', async () => {
+    setEmployees([]);
+    const message = 'Bạn đã dùng hết 3 chỗ nhân viên. Mua thêm slot nhân viên (50.000đ/tháng) hoặc nâng cấp gói để thêm người.';
+    api.inviteEmployee.mockRejectedValue(httpError({ success: false, message, code: 'EMPLOYEE_LIMIT_REACHED', canBuySlot: true }, 403));
+    const user = await renderPage();
+
+    await openAddModal(user);
+    await user.type(field('email'), 'nv01@example.com');
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
+
+    await waitFor(() => expect(toast.custom).toHaveBeenCalled());
+    expect(toast.error).not.toHaveBeenCalled();
+
+    // toast.custom nhận một render-prop — dựng thử với tst giả để kiểm nội dung + hành vi nút.
+    const renderFn = toast.custom.mock.calls[0][0];
+    render(renderFn({ visible: true, id: 'employee-limit-buy-slot' }));
+    expect(screen.getByText(message)).toBeInTheDocument();
+    const ctaBtns = screen.getAllByRole('button', { name: /Mua thêm slot/ });
+    await user.click(ctaBtns[ctaBtns.length - 1]);
+    expect(toast.dismiss).toHaveBeenCalledWith('employee-limit-buy-slot');
+    expect(navigateSpy).toHaveBeenCalledWith('/app/topup');
+    expect(screen.queryByRole('heading', { name: 'Thêm nhân viên' })).not.toBeInTheDocument();
   });
 });

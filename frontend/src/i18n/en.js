@@ -1527,6 +1527,7 @@ export default {
     permissionsTab: 'Permissions',
     limitsTab: 'Send Limits',
     description: 'Click on an employee to edit information, permissions, and send limits.',
+    buySlotCta: 'Buy more slots',
     refresh: 'Refresh',
     addEmployee: 'Add Employee',
     noEmployees: 'No employee accounts yet.',

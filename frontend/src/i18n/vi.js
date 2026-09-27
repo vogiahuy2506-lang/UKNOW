@@ -1529,6 +1529,7 @@ export default {
     permissionsTab: 'Phân quyền',
     limitsTab: 'Giới hạn',
     description: 'Click vào nhân viên để chỉnh thông tin, quyền hạn và giới hạn gửi.',
+    buySlotCta: 'Mua thêm slot',
     refresh: 'Làm mới',
     addEmployee: 'Thêm nhân viên',
     noEmployees: 'Chưa có tài khoản nhân viên nào.',

@@ -27,9 +27,11 @@ jest.unstable_mockModule('../../../repositories/user/employee.repository.js', ()
 jest.unstable_mockModule('../../verification.service.js', () => ({
   default: { sendEmployeeInvitation: mockSendInvitation },
 }));
-jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
-  sumActiveTopupGrants: jest.fn().mockResolvedValue(0),
-}));
+const topupRepo = {
+  sumActiveTopupGrants: jest.fn(),
+  findTopupPricingByKey: jest.fn(),
+};
+jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => topupRepo);
 jest.unstable_mockModule('bcryptjs', () => ({
   default: { hash: jest.fn().mockResolvedValue('hashed_pw') },
 }));
@@ -53,6 +55,8 @@ describe('inviteEmployeeByEmail (PR-A: mời nhân viên chỉ cần email)', ()
     repo.findOwnerPlanLimit.mockResolvedValue(-1); // Không giới hạn nhân viên
     repo.countActiveEmployees.mockResolvedValue(0);
     repo.findOwnerInfo.mockResolvedValue({ id: OWNER_ID, full_name: 'Chủ Shop', username: 'chushop' });
+    topupRepo.sumActiveTopupGrants.mockResolvedValue(0);
+    topupRepo.findTopupPricingByKey.mockResolvedValue(null); // mặc định: KHÔNG bán slot nhân viên
   });
 
   it('email của tài khoản đang hoạt động → linked, không tạo user mới, không gửi thư', async () => {
@@ -168,7 +172,7 @@ describe('inviteEmployeeByEmail (PR-A: mời nhân viên chỉ cần email)', ()
     expect(repo.createEmployeeWithLink).not.toHaveBeenCalled();
   });
 
-  it('vượt số nhân viên của gói → ném lỗi chặn từ assertCanAddEmployee', async () => {
+  it('vượt số nhân viên của gói, KHÔNG bán slot → câu cũ, canBuySlot=false', async () => {
     repo.findOwnerPlanLimit.mockResolvedValue(3);
     repo.countActiveEmployees.mockResolvedValue(3);
 
@@ -176,8 +180,38 @@ describe('inviteEmployeeByEmail (PR-A: mời nhân viên chỉ cần email)', ()
 
     expect(err.status).toBe(403);
     expect(err.code).toBe('EMPLOYEE_LIMIT_REACHED');
+    expect(err.canBuySlot).toBe(false);
+    expect(err.message).toBe('Gói của bạn chỉ cho phép tối đa 3 nhân viên. Vui lòng nâng cấp gói để thêm nhân viên.');
     expect(repo.createEmployeeWithLink).not.toHaveBeenCalled();
     expect(repo.linkExistingUserAsEmployee).not.toHaveBeenCalled();
+  });
+
+  it('vượt số nhân viên của gói, ĐANG bán slot → câu mời mua, canBuySlot=true, giá đọc từ topup_pricing', async () => {
+    repo.findOwnerPlanLimit.mockResolvedValue(3);
+    repo.countActiveEmployees.mockResolvedValue(3);
+    topupRepo.findTopupPricingByKey.mockResolvedValue({ itemKey: 'employees', unitPrice: 50000, isActive: true });
+
+    const err = await catchError(inviteEmployeeByEmail(OWNER_ID, { email: 'more@example.com' }));
+
+    expect(err.status).toBe(403);
+    expect(err.code).toBe('EMPLOYEE_LIMIT_REACHED');
+    expect(err.canBuySlot).toBe(true);
+    expect(err.message).toBe('Bạn đã dùng hết 3 chỗ nhân viên. Mua thêm slot nhân viên (50.000đ/tháng) hoặc nâng cấp gói để thêm người.');
+    expect(repo.createEmployeeWithLink).not.toHaveBeenCalled();
+  });
+
+  it('còn suất nhưng đã cộng thêm topup slot → effectiveMax tính đúng gói + slot, không chặn nhầm', async () => {
+    repo.findOwnerPlanLimit.mockResolvedValue(2);
+    repo.countActiveEmployees.mockResolvedValue(2);
+    topupRepo.sumActiveTopupGrants.mockResolvedValue(1); // 1 slot mua thêm còn hạn → effectiveMax=3
+    repo.findUserByEmail.mockResolvedValue(null);
+    repo.findUserByUsername.mockResolvedValue(null);
+    repo.createEmployeeWithLink.mockResolvedValue({ id: 55, username: 'e', email: 'ok@example.com' });
+
+    const result = await inviteEmployeeByEmail(OWNER_ID, { email: 'ok@example.com' });
+
+    expect(result.method).toBe('invited');
+    expect(repo.createEmployeeWithLink).toHaveBeenCalled();
   });
 
   it('đua 23505 khi tạo mới → mapEmployeeUniqueViolation trả 400', async () => {

@@ -48,6 +48,9 @@ beforeAll(() => {
 
 beforeEach(async () => {
   await truncateAll();
+  // truncateAll() không đụng topup_pricing (bảng cấu hình, không phải dữ liệu người dùng) — một
+  // test bật is_active=TRUE để kiểm canBuySlot sẽ làm lây sang test chạy sau nếu không trả lại.
+  await db.query(`UPDATE topup_pricing SET unit_price = 50000, is_active = FALSE WHERE item_key = 'employees'`);
 });
 
 /**
@@ -294,7 +297,7 @@ describe('POST /api/employees', () => {
     expect(vc.rows).toHaveLength(1);
   });
 
-  it('đạt quota max_employees → 403 EMPLOYEE_LIMIT_REACHED', async () => {
+  it('đạt quota max_employees, KHÔNG bán slot (mặc định) → 403 EMPLOYEE_LIMIT_REACHED, canBuySlot=false, câu cũ', async () => {
     const { owner, token } = await setupOwnerWithPlan({ maxEmployees: 2 });
     const e1 = await createUser({ username: 'e1', role: 'user' });
     const e2 = await createUser({ username: 'e2', role: 'user' });
@@ -308,6 +311,27 @@ describe('POST /api/employees', () => {
 
     expect(res.status).toBe(403);
     expect(res.body.code).toBe('EMPLOYEE_LIMIT_REACHED');
+    expect(res.body.canBuySlot).toBe(false);
+    expect(res.body.message).toBe('Gói của bạn chỉ cho phép tối đa 2 nhân viên. Vui lòng nâng cấp gói để thêm nhân viên.');
+  });
+
+  it('đạt quota max_employees, ĐANG bán slot → 403 kèm canBuySlot=true và giá đọc từ topup_pricing (không ghi cứng)', async () => {
+    const { owner, token } = await setupOwnerWithPlan({ maxEmployees: 2 });
+    const e1 = await createUser({ username: 'e1b', role: 'user' });
+    const e2 = await createUser({ username: 'e2b', role: 'user' });
+    await addMembership(owner.id, e1.id, { status: 'active' });
+    await addMembership(owner.id, e2.id, { status: 'active' });
+    await db.query(`UPDATE topup_pricing SET unit_price = 75000, is_active = TRUE WHERE item_key = 'employees'`);
+
+    const res = await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'overflow2', email: 'overflow2@test.local' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('EMPLOYEE_LIMIT_REACHED');
+    expect(res.body.canBuySlot).toBe(true);
+    expect(res.body.message).toBe('Bạn đã dùng hết 2 chỗ nhân viên. Mua thêm slot nhân viên (75.000đ/tháng) hoặc nâng cấp gói để thêm người.');
   });
 
   it('nhân viên có tài khoản đã xoá mềm KHÔNG chiếm suất và KHÔNG hiện trong danh sách', async () => {

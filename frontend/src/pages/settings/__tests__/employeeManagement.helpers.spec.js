@@ -101,11 +101,15 @@ describe('findEmployeeAfterAdd', () => {
 describe('getEmployeeErrorInfo', () => {
   it('đọc code + message từ lỗi axios', () => {
     const err = { response: { data: { code: 'USERNAME_TAKEN', message: 'trùng' } } };
-    expect(getEmployeeErrorInfo(err)).toEqual({ code: 'USERNAME_TAKEN', message: 'trùng' });
+    expect(getEmployeeErrorInfo(err)).toEqual({ code: 'USERNAME_TAKEN', message: 'trùng', canBuySlot: false });
   });
   it('backend cũ không có code → code rỗng; lỗi mạng không có response → cả hai rỗng', () => {
-    expect(getEmployeeErrorInfo({ response: { data: { message: 'x' } } })).toEqual({ code: '', message: 'x' });
-    expect(getEmployeeErrorInfo(new Error('Network Error'))).toEqual({ code: '', message: '' });
-    expect(getEmployeeErrorInfo(undefined)).toEqual({ code: '', message: '' });
+    expect(getEmployeeErrorInfo({ response: { data: { message: 'x' } } })).toEqual({ code: '', message: 'x', canBuySlot: false });
+    expect(getEmployeeErrorInfo(new Error('Network Error'))).toEqual({ code: '', message: '', canBuySlot: false });
+    expect(getEmployeeErrorInfo(undefined)).toEqual({ code: '', message: '', canBuySlot: false });
+  });
+  it('EMPLOYEE_LIMIT_REACHED kèm canBuySlot=true → đọc đúng, không mặc định false', () => {
+    const err = { response: { data: { code: 'EMPLOYEE_LIMIT_REACHED', message: 'Mua thêm slot...', canBuySlot: true } } };
+    expect(getEmployeeErrorInfo(err)).toEqual({ code: 'EMPLOYEE_LIMIT_REACHED', message: 'Mua thêm slot...', canBuySlot: true });
   });
 });

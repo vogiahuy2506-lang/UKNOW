@@ -22,7 +22,7 @@ import {
   updateCampaignApprovalThreshold as updateCampaignApprovalThresholdInDb,
 } from '../../repositories/user/employee.repository.js';
 import verificationService from '../verification.service.js';
-import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
+import { sumActiveTopupGrants, findTopupPricingByKey } from '../../repositories/payment/topup.repository.js';
 import {
   VALID_PERMISSION_KEYS,
   normalizePermissions,
@@ -31,24 +31,47 @@ import { generateUsernameFromEmail } from '../../utils/usernameFromEmail.util.js
 
 export { VALID_PERMISSION_KEYS };
 
-async function assertCanAddEmployee(ownerId) {
+/**
+ * Công thức DUY NHẤT tính hạn mức nhân viên hiệu dụng — dùng chung cho cả cổng chặn thêm nhân viên
+ * (assertCanAddEmployee) LẪN khối "meta" trả về trong GET /employees, để tránh viết hai công thức
+ * lệch nhau (một chỗ đọc plans.max_employees, chỗ kia lỡ đọc users.max_employees chẳng hạn).
+ *
+ * @param {number} ownerId
+ * @returns {Promise<{hasActivePlan: boolean, maxEmployees: number|null, topupSlots: number, effectiveMax: number, current: number}>}
+ *   effectiveMax = -1 nghĩa là KHÔNG giới hạn (gói Tùy chọn, max_employees=-1).
+ */
+export async function computeEmployeeLimitInfo(ownerId) {
   const maxEmployees = await findOwnerPlanLimit(ownerId);
+  const current = await countActiveEmployees(ownerId);
 
   if (maxEmployees === null) {
+    return { hasActivePlan: false, maxEmployees: null, topupSlots: 0, effectiveMax: 0, current };
+  }
+  if (maxEmployees === -1) {
+    return { hasActivePlan: true, maxEmployees: -1, topupSlots: 0, effectiveMax: -1, current };
+  }
+
+  const topupSlots = await sumActiveTopupGrants(ownerId, 'employees');
+  const effectiveMax = maxEmployees + Math.max(0, Number(topupSlots) || 0);
+  return { hasActivePlan: true, maxEmployees, topupSlots, effectiveMax, current };
+}
+
+async function assertCanAddEmployee(ownerId) {
+  const info = await computeEmployeeLimitInfo(ownerId);
+
+  if (!info.hasActivePlan) {
     throw { status: 403, message: 'Bạn cần đăng ký gói dịch vụ để thêm nhân viên', code: 'NO_ACTIVE_PLAN' };
   }
 
-  if (maxEmployees !== -1) {
-    const topupSlots = await sumActiveTopupGrants(ownerId, 'employees');
-    const effectiveMax = maxEmployees + Math.max(0, Number(topupSlots) || 0);
-    const current = await countActiveEmployees(ownerId);
-    if (current >= effectiveMax) {
-      throw {
-        status: 403,
-        message: `Gói của bạn chỉ cho phép tối đa ${effectiveMax} nhân viên. Vui lòng nâng cấp gói để thêm nhân viên.`,
-        code: 'EMPLOYEE_LIMIT_REACHED',
-      };
-    }
+  if (info.maxEmployees !== -1 && info.current >= info.effectiveMax) {
+    // Chỉ gợi ý "mua thêm slot" khi mặt hàng đang thật sự được bán (topup_pricing.is_active) —
+    // giá đọc từ DB, không ghi cứng, để tắt/đổi giá bán không cần sửa câu chữ ở đây.
+    const pricing = await findTopupPricingByKey('employees');
+    const canBuySlot = Boolean(pricing?.isActive);
+    const message = canBuySlot
+      ? `Bạn đã dùng hết ${info.effectiveMax} chỗ nhân viên. Mua thêm slot nhân viên (${Number(pricing.unitPrice).toLocaleString('vi-VN')}đ/tháng) hoặc nâng cấp gói để thêm người.`
+      : `Gói của bạn chỉ cho phép tối đa ${info.effectiveMax} nhân viên. Vui lòng nâng cấp gói để thêm nhân viên.`;
+    throw { status: 403, message, code: 'EMPLOYEE_LIMIT_REACHED', canBuySlot };
   }
 }
 

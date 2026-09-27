@@ -61,6 +61,7 @@ jest.unstable_mockModule('../../repositories/payment/topup.repository.js', () =>
   sumActiveTopupGrants,
   getWalletBalance,
   findAllTopupPricing: jest.fn(),
+  findTopupPricingByKey: jest.fn().mockResolvedValue(null),
   insertTopupGrants: jest.fn(),
   findGrantsByOrderId: jest.fn(),
 }));

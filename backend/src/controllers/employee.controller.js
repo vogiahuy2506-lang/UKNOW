@@ -17,7 +17,14 @@ function resolveOwnerId(req) {
 
 function handleServiceError(res, err) {
   if (err.status) {
-    return res.status(err.status).json({ success: false, message: err.message, code: err.code });
+    return res.status(err.status).json({
+      success: false,
+      message: err.message,
+      code: err.code,
+      // canBuySlot chỉ có ở lỗi EMPLOYEE_LIMIT_REACHED (assertCanAddEmployee) — undefined ở lỗi
+      // khác thì JSON.stringify tự bỏ field, không lộ ra ngoài.
+      canBuySlot: err.canBuySlot,
+    });
   }
   console.error('Employee controller error:', err);
   return res.status(500).json({ success: false, message: 'Lỗi server' });

@@ -20,6 +20,7 @@ import {
   buildPermissionPreset,
   countGrantedPermissions,
   findEmployeeAfterAdd,
+  getEmployeeErrorInfo,
   toPermissionState,
 } from './employeeManagement.helpers';
 
@@ -381,7 +382,27 @@ const EmployeeManagement = () => {
       const list = await fetchEmployees(true);
       openAddedEmployeeForPermissions(list, { id: data?.id, email });
     } catch (err) {
-      toast.error(err?.response?.data?.message || t('employee.createFailed'));
+      const { message, canBuySlot } = getEmployeeErrorInfo(err);
+      if (canBuySlot) {
+        // Vượt trần NHƯNG đang bán slot — cho lối ra ngay, không chỉ báo lỗi trơn.
+        toast.custom(
+          (tst) => (
+            <div className="flex flex-col gap-1.5 rounded-lg bg-white px-4 py-3 shadow-lg" style={{ opacity: tst.visible ? 1 : 0 }}>
+              <p className="text-sm text-gray-800 m-0">{message}</p>
+              <button
+                type="button"
+                onClick={() => { toast.dismiss(tst.id); setShowCreateModal(false); navigate('/app/topup'); }}
+                className="self-start text-xs font-semibold text-primary-600 hover:text-primary-700"
+              >
+                {t('employee.buySlotCta')} →
+              </button>
+            </div>
+          ),
+          { id: 'employee-limit-buy-slot', duration: 8000 }
+        );
+      } else {
+        toast.error(message || t('employee.createFailed'));
+      }
     } finally {
       setIsCreating(false);
     }
