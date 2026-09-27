@@ -3813,7 +3813,12 @@ class CampaignRunService {
                 const isRateLimitedRetryScheduled = sendResult.errorType === 'smtp_rate_limited_retry_scheduled';
                 const isPlanQuotaExceeded = sendResult.errorType === 'plan_send_limit_exceeded';
                 const isSmtpConfigError = sendResult.errorType === 'smtp_config';
-                if (!isRateLimitedRetryScheduled && !isPlanQuotaExceeded && !isSmtpConfigError) {
+                // PR-6 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 3 — còn hẹn thử lại SMTP lỗi
+                // tạm thời TRƯỚC DATA (chưa hết EMAIL_TRANSIENT_MAX_ATTEMPTS) thì KHÔNG được tính
+                // failed, giống hệt isRateLimitedRetryScheduled. errorType 'smtp_transient' (ĐÃ hết
+                // lượt) vẫn đi qua nhánh failed chung phía dưới bình thường (đếm đúng một lần).
+                const isTransientRetryScheduled = sendResult.errorType === 'smtp_transient_retry_scheduled';
+                if (!isRateLimitedRetryScheduled && !isPlanQuotaExceeded && !isSmtpConfigError && !isTransientRetryScheduled) {
                   failedSends += 1;
                 }
                 if (isSmtpConfigError) {
@@ -3898,6 +3903,38 @@ class CampaignRunService {
                       reason: `plan_quota_${sendResult.limitType || sendResult.period || 'limit'}`,
                     });
                   }
+                }
+                if (isTransientRetryScheduled) {
+                  markRunHasPendingEmailRetry();
+                  const transientMessage = sendResult.error || 'Máy chủ email tạm thời không nhận kết nối.';
+                  await campaignExecutionLogService.logExecutionNode({
+                    campaignId,
+                    runId,
+                    node,
+                    customerId: customer.id || null,
+                    recipientEmail: recipientEmailForLog,
+                    status: 'warning',
+                    progressCurrent: successfulSends + failedSends + skippedSends,
+                    progressTotal: totalRecipients,
+                    errorMessage: transientMessage,
+                    executionData: buildSendEmailExecutionData({
+                      ...sendResult,
+                      message: transientMessage,
+                    }),
+                  });
+                  // KHÔNG gọi markCampaignPausedByEmailRateLimit / đặt pauseCampaignForRateLimit —
+                  // lỗi tạm thời TRƯỚC DATA của MỘT lần gửi không phải "provider đang giới hạn cả
+                  // tài khoản", không cần đóng băng toàn campaign 12h như nhánh rate-limit.
+                  return {
+                    success: false,
+                    stopRemainingStepsForRecipient: true,
+                    preservePendingStep: true,
+                    retryScheduledAt: sendResult.retryScheduledAt,
+                    retryAttemptCount: Math.max(
+                      0,
+                      Number.parseInt(sendResult?.retryAttemptCount, 10) || 0
+                    ),
+                  };
                 }
                 if (isRateLimitedRetryScheduled) {
                   const pauseUntilMs = markCampaignPausedByEmailRateLimit();

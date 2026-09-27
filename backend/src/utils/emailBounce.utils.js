@@ -131,6 +131,12 @@ export function isSmtpAuthConfigError(error) {
   const code = Number(error?.responseCode ?? error?.smtpCode ?? NaN);
   const msg = String(error?.message || error?.response || '').toLowerCase();
 
+  // PR-6 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — 454 là "Temporary authentication
+  // failure" (tạm thời), KHÔNG phải lỗi cấu hình. nodemailer bọc message thành
+  // "Invalid login: 454 4.7.0 …" nên authPatterns bên dưới ('invalid login') sẽ khớp nhầm nếu
+  // không loại trừ SỚM ở đây — trước đây dừng cả run + gửi email "Lỗi xác thực" cho chủ oan.
+  if (Number.isFinite(code) && code === 454) return false;
+
   if (Number.isFinite(code) && code === 535) return true;
   if (hasSenderSideConfigPatterns(msg)) return true;
 
@@ -146,6 +152,56 @@ export function isSmtpAuthConfigError(error) {
   ];
 
   return authPatterns.some((pattern) => msg.includes(pattern));
+}
+
+// PR-6 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — lệnh SMTP chắc chắn xảy ra TRƯỚC DATA.
+// Có mã phản hồi 4xx ở một trong các lệnh này thì chắc chắn email chưa được gửi.
+const PRE_DATA_SMTP_COMMANDS = new Set(['CONN', 'EHLO', 'HELO', 'LHLO', 'STARTTLS', 'MAIL FROM', 'RCPT TO']);
+
+/**
+ * Nhận diện lỗi SMTP chắc chắn xảy ra TRƯỚC lệnh DATA (kết nối/EHLO/STARTTLS/AUTH/MAIL FROM/
+ * RCPT TO) — nghĩa là email CHẮC CHẮN CHƯA được gửi, an toàn để thử lại thay vì bounce/fail cứng.
+ *
+ * Đo production 60 ngày (~137 lỗi loại này): chủ yếu "Invalid greeting…too many connections",
+ * "Greeting never received", "Connection timeout", TLS handshake failure, 454 auth tạm thời,
+ * "Reached maximum number of messages sent per connection" — trước đây xử lý như lỗi vĩnh viễn
+ * (mất địa chỉ) hoặc lỗi cấu hình (dừng cả run).
+ *
+ * CỐ Ý KHÔNG bắt econnreset/connection closed/socket hang up/"Timeout" trần: đã kiểm
+ * node_modules/nodemailer/lib/smtp-connection/index.js (8.0.1) — MỌI lỗi socket (kể cả đứt kết
+ * nối giữa DATA, dòng ~966/968/991) đều bị gắn `command: 'CONN'`, nên không thể phân biệt tĩnh
+ * "chưa gửi" với "gửi rồi mất phản hồi" chỉ từ command/message của nhóm này. Nhóm mơ hồ này giữ
+ * nguyên đường `smtp_delivery` + uncertain như hiện tại (không đổi ở đây).
+ *
+ * `error.code === 'ETLS'` AN TOÀN để coi là trước-DATA dù dùng chung message "Connection closed
+ * unexpectedly" với nhóm mơ hồ: nodemailer chỉ gắn ETLS cho lỗi này khi `this.upgrading` (đang
+ * bắt tay STARTTLS, luôn xảy ra trước AUTH/MAIL FROM/DATA) — dòng ~964; đứt giữa DATA luôn được
+ * gắn `ECONNECTION` (dòng ~966/968), không phải ETLS.
+ *
+ * @param {Error} error - Lỗi trả về từ nodemailer sendMail
+ * @returns {boolean}
+ */
+export function isSmtpPreSendTransientError(error) {
+  const code = Number(error?.responseCode ?? error?.smtpCode ?? NaN);
+  const msg = String(error?.message || error?.response || '').toLowerCase();
+  const command = String(error?.command || '').toUpperCase().trim();
+
+  if (msg.includes('invalid greeting') || msg.includes('greeting never received')) return true;
+  // "Connection timeout" (SMTPC:405) là timeout LÚC KẾT NỐI — khác "Timeout" trần (SMTPC:991,
+  // socket idle, có thể xảy ra giữa DATA) nên KHÔNG được coi là trước-DATA.
+  if (msg.includes('connection timeout')) return true;
+  if (error?.code === 'ETLS' || error?.code === 'ECONNREFUSED') return true;
+  if (/ssl routines.*handshake failure/i.test(msg)) return true;
+
+  if (
+    Number.isFinite(code)
+    && [421, 450, 451, 452, 454].includes(code)
+    && (PRE_DATA_SMTP_COMMANDS.has(command) || command.startsWith('AUTH'))
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
 /**

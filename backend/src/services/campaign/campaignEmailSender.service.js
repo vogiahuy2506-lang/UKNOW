@@ -9,6 +9,7 @@ import {
   classifyBounceType,
   isRecipientAddressNotFoundError,
   isSmtpAuthConfigError,
+  isSmtpPreSendTransientError,
   isSmtpProviderRateLimitError,
 } from '../../utils/emailBounce.utils.js';
 import { decryptSmtpSecret } from '../../utils/smtpSecretCrypto.js';
@@ -176,6 +177,22 @@ class CampaignEmailSenderService {
       delayMs: Math.max(this.SMTP_LIMIT_RETRY_DELAY_MIN_MS, configuredDelayMs),
       // Trần số lần thử lại khi SMTP/SMTP provider báo rate-limit (override bằng SMTP_LIMIT_MAX_RETRIES).
       maxRetries: this.parsePositiveIntEnv('SMTP_LIMIT_MAX_RETRIES', 60),
+    };
+  }
+
+  /**
+   * PR-6 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 2 — cấu hình retry khi SMTP lỗi tạm thời
+   * TRƯỚC DATA (isSmtpPreSendTransientError): "too many connections", timeout kết nối, TLS
+   * handshake, 454 auth tạm thời… Bộ đếm lần thử DÙNG CHUNG `retryMeta.smtpLimitRetryCount` với
+   * nhánh rate-limit phía trên (engine chỉ có một khoá đếm lỗi SMTP trong ledger, không tách
+   * riêng theo loại lỗi) — vì vậy 2 loại lỗi xen kẽ nhau vẫn cộng dồn về cùng một trần.
+   *
+   * @returns {{delayMs: number, maxAttempts: number}}
+   */
+  resolveEmailTransientRetryConfig() {
+    return {
+      delayMs: this.parsePositiveIntEnv('EMAIL_TRANSIENT_RETRY_DELAY_MS', 15 * 60 * 1000),
+      maxAttempts: this.parsePositiveIntEnv('EMAIL_TRANSIENT_MAX_ATTEMPTS', 5),
     };
   }
 
@@ -900,7 +917,10 @@ class CampaignEmailSenderService {
       info = rawResult.info;
     } catch (smtpError) {
       const providerRateLimitError = isSmtpProviderRateLimitError(smtpError);
-      const smtpConfigError = !providerRateLimitError && isSmtpAuthConfigError(smtpError);
+      // PR-6 Việc 2 — kiểm rate-limit TRƯỚC (không đổi thứ tự): isSmtpProviderRateLimitError
+      // vẫn thắng nếu khớp cả hai.
+      const smtpTransientError = !providerRateLimitError && isSmtpPreSendTransientError(smtpError);
+      const smtpConfigError = !providerRateLimitError && !smtpTransientError && isSmtpAuthConfigError(smtpError);
       const bounceType = classifyBounceType(smtpError);
       const shouldMarkAsRecipientBounce = isRecipientAddressNotFoundError(smtpError);
       const bounceReason = String(smtpError?.message || '').slice(0, 500);
@@ -909,6 +929,11 @@ class CampaignEmailSenderService {
         console.warn(
           `[CampaignRun][Email] smtp_rate_limited run=${runId} to=${customer.email} `
           + `code=${smtpError?.responseCode ?? 'n/a'} reason=${shortBounceReason}`
+        );
+      } else if (smtpTransientError) {
+        console.warn(
+          `[CampaignRun][Email] smtp_presend_transient run=${runId} to=${customer.email} `
+          + `code=${smtpError?.responseCode ?? 'n/a'} command=${smtpError?.command ?? 'n/a'} reason=${shortBounceReason}`
         );
       } else if (smtpConfigError) {
         console.warn(
@@ -969,6 +994,79 @@ class CampaignEmailSenderService {
           providerResponse: bounceReason,
           providerResponseCode: smtpError?.responseCode ?? null,
           settingId: settings?.id ?? null,
+        };
+      }
+
+      // PR-6 Việc 2 — SMTP lỗi tạm thời TRƯỚC DATA (isSmtpPreSendTransientError): chắc chắn
+      // CHƯA gửi → release reservation (khác nhóm mơ hồ ở dưới, vẫn markUncertain), đổi
+      // transporter cache, thử lại theo ledger nextDueAt (không tạo job BullMQ riêng — cùng lý do
+      // đã ghi ở nhánh rate-limit phía trên).
+      if (smtpTransientError) {
+        this.invalidateTransporter(settings.id);
+        const transientConfig = this.resolveEmailTransientRetryConfig();
+        const transientDelayLabel = this.formatRetryDelayLabel(transientConfig.delayMs);
+        const currentTransientRetryCount = Number.parseInt(retryMeta?.smtpLimitRetryCount, 10) || 0;
+        const nextTransientRetryCount = currentTransientRetryCount + 1;
+        const canRetryTransient = nextTransientRetryCount <= transientConfig.maxAttempts;
+
+        // Chắc chắn chưa gửi — release ngay cả khi còn lượt retry: lần retry theo lịch sẽ tự
+        // re-reserve đúng key (reservationKey không đổi theo attempt count), giống nhánh rate-limit.
+        await releaseReservation('SMTP_PRESEND_TRANSIENT', shortBounceReason);
+
+        if (canRetryTransient) {
+          const transientRetryScheduleAt = new Date(Date.now() + transientConfig.delayMs);
+          return {
+            to: customer.email,
+            status: 'failed',
+            errorType: 'smtp_transient_retry_scheduled',
+            error: `Máy chủ email tạm thời không nhận kết nối; sẽ thử lại sau ${transientDelayLabel} (lần ${nextTransientRetryCount}/${transientConfig.maxAttempts}).`,
+            retryScheduledAt: transientRetryScheduleAt.toISOString(),
+            retryAttemptCount: nextTransientRetryCount,
+            providerResponse: bounceReason,
+            providerResponseCode: smtpError?.responseCode ?? null,
+            settingId: settings?.id ?? null,
+          };
+        }
+
+        // Hết lượt thử: đi đường ghi log như smtp_delivery (ESEND ~1024-1068), nhưng release
+        // (đã release ở trên rồi, KHÔNG markUncertainReservation) và errorType riêng để phân
+        // biệt trong báo cáo/monitor với nhóm mơ hồ thật sự.
+        const transientFailedAt = new Date();
+        try {
+          const transientFailedTrackingToken = uuidv4();
+          await emailSettingsController.logEmailSent({
+            userId: campaign.id_user,
+            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+            actorUserId: campaign.created_by || campaign.id_user,
+            campaignId: campaign.id,
+            customerId,
+            emailTemplateId: null,
+            fromEmailId: settings.id,
+            to: customer.email,
+            subject,
+            trackedHtmlContent: null,
+            plainTextContent: textBody,
+            trackingToken: transientFailedTrackingToken,
+            info: { messageId: null },
+            sentAt: transientFailedAt,
+            setting: settings,
+            runId,
+            nodeId: logNodeIdForDb,
+            emailStep: logEmailStepForDb,
+            fromAddress,
+            brandDomain,
+          });
+          await campaignEmailSenderRepository.markEmailMessageFailed(transientFailedTrackingToken, bounceReason);
+        } catch (logErr) {
+          console.error('[sendEmailToCustomer] Lỗi ghi log SMTP transient error:', logErr.message);
+          await recordMessageLogFailure(runId, logErr);
+        }
+
+        return {
+          to: customer.email,
+          status: 'failed',
+          errorType: 'smtp_transient',
+          error: bounceReason,
         };
       }
 
