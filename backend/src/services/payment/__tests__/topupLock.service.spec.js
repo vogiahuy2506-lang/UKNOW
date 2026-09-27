@@ -12,9 +12,11 @@ const mockDeleteLock = jest.fn();
 const mockFindExpiringStructuralGrants = jest.fn();
 const mockIncrementGrantReminderCount = jest.fn();
 const mockSendSystemEmail = jest.fn();
+const mockFindExpiringUnrenewedGrants = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants: mockSumActive,
+  findExpiringUnrenewedGrants: mockFindExpiringUnrenewedGrants,
 }));
 
 jest.unstable_mockModule('../../../repositories/payment/plan.repository.js', () => ({
@@ -402,6 +404,11 @@ describe('sendStructuralGrantReminders — nhắc hết hạn, riêng storage_gb
     jest.clearAllMocks();
     mockIncrementGrantReminderCount.mockResolvedValue(undefined);
     mockSendSystemEmail.mockResolvedValue({ messageId: 'x' });
+    // Mặc định "luật gia hạn không xác định được" (như lỗi truy vấn) cho MỌI test trong describe
+    // này chưa tự cấu hình riêng — giữ đúng hành vi CŨ (luôn gửi) cho các ca đã có từ trước, không
+    // cần sửa lại chúng khi thêm luật bỏ-qua-đã-gia-hạn. Các ca mới bên dưới tự ghi đè bằng
+    // mockResolvedValueOnce/mockRejectedValueOnce theo từng ca.
+    mockFindExpiringUnrenewedGrants.mockRejectedValue(new Error('not configured in this test'));
   });
 
   it('nhánh storage_gb: tiêu đề/thân riêng, KHÔNG có link "Chọn tài nguyên giữ lại", giống nhau cả 2 lượt', async () => {
@@ -467,5 +474,77 @@ describe('sendStructuralGrantReminders — nhắc hết hạn, riêng storage_gb
     expect(result).toEqual({ week: 2, three: 0 });
     expect(mockIncrementGrantReminderCount).toHaveBeenCalledTimes(1);
     expect(mockIncrementGrantReminderCount).toHaveBeenCalledWith(5);
+  });
+});
+
+describe('sendStructuralGrantReminders — bỏ qua item đã gia hạn đủ (dùng lại findExpiringUnrenewedGrants)', () => {
+  const cycleEnd = new Date(Date.now() + 5 * 86400000).toISOString();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIncrementGrantReminderCount.mockResolvedValue(undefined);
+    mockSendSystemEmail.mockResolvedValue({ messageId: 'x' });
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('itemKey KHÔNG có trong kết quả findExpiringUnrenewedGrants (đã gia hạn đủ) → không gửi, không tăng reminder_count', async () => {
+    const grant = { id: 10, user_id: 100, item_key: 'chatbots', qty: 1, cycle_end: cycleEnd, email: 'renewed@x.com', full_name: 'Renewed' };
+    mockFindExpiringStructuralGrants.mockResolvedValueOnce([grant]).mockResolvedValueOnce([]);
+    // chatbots không nằm trong kết quả -> đã được gia hạn đủ.
+    mockFindExpiringUnrenewedGrants.mockResolvedValueOnce([{ itemKey: 'email_accounts', qty: 1, cycleEnd }]);
+
+    const result = await sendStructuralGrantReminders();
+
+    expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    expect(mockIncrementGrantReminderCount).not.toHaveBeenCalled();
+    expect(mockFindExpiringUnrenewedGrants).toHaveBeenCalledWith(100);
+    expect(result).toEqual({ week: 1, three: 0 });
+    expect(console.log).toHaveBeenCalledWith(expect.stringContaining('grant=10'));
+  });
+
+  it('itemKey CÓ trong kết quả findExpiringUnrenewedGrants (chưa gia hạn) → gửi như bình thường', async () => {
+    const grant = { id: 11, user_id: 101, item_key: 'email_accounts', qty: 1, cycle_end: cycleEnd, email: 'notyet@x.com', full_name: 'Chua gia han' };
+    mockFindExpiringStructuralGrants.mockResolvedValueOnce([grant]).mockResolvedValueOnce([]);
+    mockFindExpiringUnrenewedGrants.mockResolvedValueOnce([{ itemKey: 'email_accounts', qty: 1, cycleEnd }]);
+
+    await sendStructuralGrantReminders();
+
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendSystemEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'notyet@x.com' }));
+    expect(mockIncrementGrantReminderCount).toHaveBeenCalledWith(11);
+  });
+
+  it('truy vấn luật gia hạn ném lỗi cho một khách → vẫn gửi như cũ, không chặn khách khác', async () => {
+    const grantErr = { id: 12, user_id: 102, item_key: 'landing_pages', qty: 1, cycle_end: cycleEnd, email: 'err@x.com', full_name: 'Loi truy van' };
+    const grantOther = { id: 13, user_id: 103, item_key: 'zalo_accounts', qty: 1, cycle_end: cycleEnd, email: 'ok2@x.com', full_name: 'Khach khac' };
+    mockFindExpiringStructuralGrants.mockResolvedValueOnce([grantErr, grantOther]).mockResolvedValueOnce([]);
+    mockFindExpiringUnrenewedGrants.mockImplementation(async (userId) => {
+      if (userId === 102) throw new Error('DB timeout');
+      return [{ itemKey: 'zalo_accounts', qty: 1, cycleEnd }];
+    });
+
+    await sendStructuralGrantReminders();
+
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
+    expect(mockIncrementGrantReminderCount).toHaveBeenCalledWith(12);
+    expect(mockIncrementGrantReminderCount).toHaveBeenCalledWith(13);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('user=102'), expect.any(String));
+  });
+
+  it('2 grant CÙNG một khách (kể cả khác lượt 7 ngày/3 ngày) → findExpiringUnrenewedGrants chỉ bị gọi 1 lần', async () => {
+    const grantWeek = { id: 14, user_id: 104, item_key: 'email_accounts', qty: 1, cycle_end: cycleEnd, email: 'same@x.com', full_name: 'Cung khach' };
+    const grantThree = { id: 15, user_id: 104, item_key: 'zalo_accounts', qty: 1, cycle_end: cycleEnd, email: 'same@x.com', full_name: 'Cung khach' };
+    mockFindExpiringStructuralGrants.mockResolvedValueOnce([grantWeek]).mockResolvedValueOnce([grantThree]);
+    mockFindExpiringUnrenewedGrants.mockResolvedValueOnce([
+      { itemKey: 'email_accounts', qty: 1, cycleEnd },
+      { itemKey: 'zalo_accounts', qty: 1, cycleEnd },
+    ]);
+
+    await sendStructuralGrantReminders();
+
+    expect(mockFindExpiringUnrenewedGrants).toHaveBeenCalledTimes(1);
+    expect(mockFindExpiringUnrenewedGrants).toHaveBeenCalledWith(104);
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
   });
 });

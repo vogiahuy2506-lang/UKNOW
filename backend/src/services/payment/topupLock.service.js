@@ -1,6 +1,6 @@
 import db from '../../config/database.js';
 import { getPlanByUserId } from '../../repositories/payment/plan.repository.js';
-import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
+import { sumActiveTopupGrants, findExpiringUnrenewedGrants } from '../../repositories/payment/topup.repository.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import {
   LOCKABLE_RESOURCE_KEYS,
@@ -349,9 +349,34 @@ export async function sendStructuralGrantReminders() {
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
   const locksUrl = `${frontendUrl}/app/billing?tab=locks`;
 
+  // Bỏ qua nhắc cho item_key đã được gia hạn đủ (banner trong app đã có luật này —
+  // findExpiringUnrenewedGrants, dùng lại nguyên luật đó cho email, không viết luật thứ hai).
+  // Cache theo user_id trong MỘT LƯỢT CHẠY: một khách nhiều grant chỉ truy vấn một lần. Lỗi truy
+  // vấn cũng được cache là `null` ("không xác định được") để một khách lỗi không bị hỏi lại nhiều
+  // lần trong cùng lượt — `null` nghĩa là gửi như cũ (thà nhắc thừa còn hơn bỏ sót).
+  const unrenewedItemKeysByUser = new Map();
+  async function getUnrenewedItemKeys(userId) {
+    if (unrenewedItemKeysByUser.has(userId)) return unrenewedItemKeysByUser.get(userId);
+    let itemKeys;
+    try {
+      const rows = await findExpiringUnrenewedGrants(userId);
+      itemKeys = new Set(rows.map((r) => r.itemKey));
+    } catch (err) {
+      console.error(`[TopupLock] findExpiringUnrenewedGrants failed user=${userId}:`, err.message);
+      itemKeys = null;
+    }
+    unrenewedItemKeysByUser.set(userId, itemKeys);
+    return itemKeys;
+  }
+
   // Reminder round 1: ~7 days left (reminder_count < 1), window (6,7]
   const week = await findExpiringStructuralGrants(6, 7, 1);
   for (const grant of week) {
+    const unrenewedItemKeys = await getUnrenewedItemKeys(grant.user_id);
+    if (unrenewedItemKeys && !unrenewedItemKeys.has(grant.item_key)) {
+      console.log(`[TopupLock] reminder 7d skip grant=${grant.id} user=${grant.user_id} item=${grant.item_key}: da gia han du, khong con can nhac`);
+      continue;
+    }
     const daysLeft = Math.ceil((new Date(grant.cycle_end) - Date.now()) / 86400000);
     const { subject, html } = buildStructuralReminderEmail(grant, daysLeft, frontendUrl, locksUrl, 'week');
     try {
@@ -365,6 +390,11 @@ export async function sendStructuralGrantReminders() {
   // Reminder round 2: ~3 days (reminder_count < 2), window (2,3]
   const three = await findExpiringStructuralGrants(2, 3, 2);
   for (const grant of three) {
+    const unrenewedItemKeys = await getUnrenewedItemKeys(grant.user_id);
+    if (unrenewedItemKeys && !unrenewedItemKeys.has(grant.item_key)) {
+      console.log(`[TopupLock] reminder 3d skip grant=${grant.id} user=${grant.user_id} item=${grant.item_key}: da gia han du, khong con can nhac`);
+      continue;
+    }
     const daysLeft = Math.ceil((new Date(grant.cycle_end) - Date.now()) / 86400000);
     const { subject, html } = buildStructuralReminderEmail(grant, daysLeft, frontendUrl, locksUrl, 'three');
     try {

@@ -30,6 +30,7 @@ jest.unstable_mockModule('../../verification.service.js', () => ({
 const topupRepo = {
   sumActiveTopupGrants: jest.fn(),
   findTopupPricingByKey: jest.fn(),
+  findExpiringUnrenewedGrants: jest.fn(),
 };
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => topupRepo);
 jest.unstable_mockModule('bcryptjs', () => ({

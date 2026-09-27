@@ -35,6 +35,7 @@ jest.unstable_mockModule('../../verification.service.js', () => ({
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants: jest.fn().mockResolvedValue(0),
   findTopupPricingByKey: jest.fn().mockResolvedValue(null),
+  findExpiringUnrenewedGrants: jest.fn(),
 }));
 jest.unstable_mockModule('bcryptjs', () => ({
   default: { hash: jest.fn().mockResolvedValue('hashed') },

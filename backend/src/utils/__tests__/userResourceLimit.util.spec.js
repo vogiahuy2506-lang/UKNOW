@@ -8,6 +8,7 @@ jest.unstable_mockModule('../../config/database.js', () => ({
 }));
 jest.unstable_mockModule('../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants,
+  findExpiringUnrenewedGrants: jest.fn(),
 }));
 
 const { checkUserResourceLimit, enforceResourceLimitTx } = await import('../userResourceLimit.util.js');

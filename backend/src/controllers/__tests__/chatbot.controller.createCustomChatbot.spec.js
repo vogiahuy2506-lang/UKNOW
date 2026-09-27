@@ -32,6 +32,7 @@ jest.unstable_mockModule(topupRepoPath, () => ({
   insertTopupDebit: jest.fn(),
   insertTopupGrants: jest.fn(),
   findGrantsByOrderId: jest.fn(),
+  findExpiringUnrenewedGrants: jest.fn(),
 }));
 jest.unstable_mockModule(chatbotRepoPath, () => ({
   default: {

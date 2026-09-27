@@ -11,6 +11,7 @@ jest.unstable_mockModule('../../../repositories/storage.repository.js', () => ({
 
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants: mockSumActiveTopupGrants,
+  findExpiringUnrenewedGrants: jest.fn(),
 }));
 
 const {

@@ -64,6 +64,7 @@ jest.unstable_mockModule('../../repositories/payment/topup.repository.js', () =>
   findTopupPricingByKey: jest.fn().mockResolvedValue(null),
   insertTopupGrants: jest.fn(),
   findGrantsByOrderId: jest.fn(),
+  findExpiringUnrenewedGrants: jest.fn(),
 }));
 
 const getOwnerUsedToday = jest.fn(async () => 0);

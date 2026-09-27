@@ -30,6 +30,7 @@ jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', ()
   getWalletBalance: mockGetWalletBalance,
   insertTopupDebit: mockInsertTopupDebit,
   sumActiveTopupGrants: jest.fn(),
+  findExpiringUnrenewedGrants: jest.fn(),
 }));
 
 jest.unstable_mockModule('../../../utils/subscriptionStatus.util.js', () => ({
