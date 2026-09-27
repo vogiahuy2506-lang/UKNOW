@@ -120,6 +120,55 @@ describe('POST /api/auth/register', () => {
     expect(res.body.message).toMatch(/không đúng|hết hạn/i);
   });
 
+  // Ba ca dưới đây trước 28/09/2026 chỉ được canh qua POST /api/verification/verify-code — endpoint đó
+  // đã bị xoá (code chết), nhưng cùng hàm verificationService.verifyCode vẫn chặn luồng ĐĂNG KÝ này.
+  async function registerWithCode(email, code, username, phone) {
+    return request(app).post('/api/auth/register').send({
+      username,
+      email,
+      password: 'Passw0rd!',
+      phone,
+      emailVerificationCode: code,
+      consents: { terms: true, privacy: true, dpa: true },
+    });
+  }
+
+  async function countUsersByEmail(email) {
+    const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM users WHERE email = $1', [email]);
+    return rows[0].n;
+  }
+
+  it('OTP đã dùng → 400, không tạo tài khoản', async () => {
+    const email = 'usedotp@test.local';
+    await createVerificationCode({ email, code: '123456' });
+    await db.query('UPDATE verification_codes SET is_used = TRUE WHERE email = $1', [email]);
+
+    const res = await registerWithCode(email, '123456', 'usedotp', '0916000003');
+
+    expect(res.status).toBe(400);
+    expect(await countUsersByEmail(email)).toBe(0);
+  });
+
+  it('OTP hết hạn → 400, không tạo tài khoản', async () => {
+    const email = 'expiredotp@test.local';
+    await createVerificationCode({ email, code: '123456', expiresAt: new Date(Date.now() - 60 * 1000) });
+
+    const res = await registerWithCode(email, '123456', 'expiredotp', '0916000004');
+
+    expect(res.status).toBe(400);
+    expect(await countUsersByEmail(email)).toBe(0);
+  });
+
+  it('OTP gửi cho email KHÁC → 400, không tạo tài khoản', async () => {
+    await createVerificationCode({ email: 'owner-of-code@test.local', code: '123456' });
+    const email = 'otherotp@test.local';
+
+    const res = await registerWithCode(email, '123456', 'otherotp', '0916000005');
+
+    expect(res.status).toBe(400);
+    expect(await countUsersByEmail(email)).toBe(0);
+  });
+
   it('email đã tồn tại → 400', async () => {
     const email = 'dup@test.local';
     await createUser({ email, username: 'dupuser' });
