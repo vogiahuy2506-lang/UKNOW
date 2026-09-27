@@ -79,27 +79,31 @@ export default {
   /**
    * Update status by ID
    */
+  // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 việc 2 — sent_at/delivered_at/opened_at/
+  // bounced_at của notification_email_logs không múi giờ (production 27/09), mọi giá trị ghi vào
+  // đây đều là JS Date UTC (new Date() ở notification.service.js:327 và các markAs* bên dưới).
+  // Ép ($n::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh') tại chỗ SET, giống insertEmailMessage.
   async updateStatus(id, status, metadata = {}) {
     if (!id) return null;
-    
+
     let query = 'UPDATE notification_email_logs SET status = $2';
     const params = [id, status];
     let paramIndex = 3;
 
     if (metadata.sent_at) {
-      query += `, sent_at = $${paramIndex++}`;
+      query += `, sent_at = ($${paramIndex++}::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`;
       params.push(metadata.sent_at);
     }
     if (metadata.delivered_at) {
-      query += `, delivered_at = $${paramIndex++}`;
+      query += `, delivered_at = ($${paramIndex++}::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`;
       params.push(metadata.delivered_at);
     }
     if (metadata.opened_at) {
-      query += `, opened_at = $${paramIndex++}`;
+      query += `, opened_at = ($${paramIndex++}::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`;
       params.push(metadata.opened_at);
     }
     if (metadata.bounced_at) {
-      query += `, bounced_at = $${paramIndex++}`;
+      query += `, bounced_at = ($${paramIndex++}::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`;
       params.push(metadata.bounced_at);
     }
     if (metadata.error_message) {
@@ -162,10 +166,20 @@ export default {
   /**
    * Find logs by notification ID with pagination
    */
+  // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 việc 3 — liệt kê cột tường minh thay `l.*`: 4 cột
+  // giờ không múi giờ (sent_at, delivered_at, opened_at, bounced_at — production 27/09) cần bọc AT
+  // TIME ZONE để trả đúng giờ VN. Không thêm alias trùng tên đè lên `l.*` (node-pg lấy cột XUẤT
+  // HIỆN SAU khi hai cột trùng tên, dễ nhầm là đã sửa trong khi cột `l.*` gốc âm thầm vẫn đứng sau).
   async findByNotificationId(notificationId, { page = 1, limit = 50, status = null }) {
     const offset = (page - 1) * limit;
     let query = `
-      SELECT l.*, u.full_name, u.username
+      SELECT l.id, l.notification_id, l.user_id, l.email, l.message_id, l.status,
+             (l.sent_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS sent_at,
+             (l.delivered_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS delivered_at,
+             (l.opened_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS opened_at,
+             (l.bounced_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS bounced_at,
+             l.error_message, l.retry_count, l.created_at,
+             u.full_name, u.username
       FROM notification_email_logs l
       LEFT JOIN users u ON l.user_id = u.id
       WHERE l.notification_id = $1

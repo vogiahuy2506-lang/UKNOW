@@ -2,6 +2,19 @@ import db from '../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL } from '../utils/billingCycle.util.js';
 import { getStaleSendingSeconds } from '../config/sendQuota.config.js';
 
+// PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 — LUẬT mọi mốc giờ đi vào SQL trong file này:
+// 1. Tham số giờ từ JS (Date) luôn ép `$n::timestamptz` NGAY LẦN XUẤT HIỆN ĐẦU TIÊN trong câu.
+//    Postgres chốt kiểu tham số theo lần xuất hiện đầu (đã kiểm bằng PREPARE trên production) —
+//    không ép ở đây thì các vế sau trong CÙNG câu nhận nhầm kiểu theo cột gặp đầu.
+// 2. So với cột KHÔNG múi giờ (`email_messages.sent_at`, `zalo_messages.sent_at` — production xác
+//    nhận 27/09: timestamp without time zone) → bọc PHÍA THAM SỐ tại ĐÚNG vị trí so sánh đó:
+//    `col >= ($n::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`. Bọc phía cột (áp hàm lên cột) làm
+//    mất index trên cột — ĐỪNG làm vậy. `AT TIME ZONE` phải viết lại ở MỌI vị trí so với một cột
+//    không múi giờ khác nhau, kể cả khi cùng tham số $n đã ép kiểu ở nơi khác trong câu.
+// 3. So với cột CÓ múi giờ (production xác nhận 27/09: `usage_logs.created_at`,
+//    `zalo_personal_messages.created_at`, mọi cột `*_at` của `send_quota_reservations` đều
+//    `timestamp with time zone`) → dùng thẳng `$n` sau khi đã ép ở luật 1, KHÔNG bọc gì thêm.
+
 /**
  * Valid state transitions for send_quota_reservations.
  * Terminal state: consumed.
@@ -702,7 +715,8 @@ export async function countEmailSentTodayWithLedger(queryable, billingUserId, da
           AND em.quota_reservation_id IS NULL
           AND em.status IN ('sent', 'delivered', 'bounced')
           AND NOT em.is_preview
-          AND em.sent_at >= $2 AND em.sent_at < $3
+          AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
       ), 0)
       +
       COALESCE((
@@ -747,7 +761,8 @@ export async function countZaloSentTodayWithLedger(queryable, billingUserId, day
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
-          AND zm.sent_at >= $2 AND zm.sent_at < $3
+          AND zm.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND zm.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
       ), 0)
       +
       COALESCE((
@@ -809,7 +824,8 @@ export async function countEmailSentTodayByAccount(queryable, emailSettingId, da
      WHERE id_email_setting = $1
        AND status IN ('sent', 'delivered', 'bounced')
        AND NOT is_preview
-       AND sent_at >= $2 AND sent_at < $3`,
+       AND sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       AND sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`,
     [emailSettingId, dayStart, dayEnd]
   );
   return Number(rows[0]?.total || 0);
@@ -834,7 +850,8 @@ export async function countZaloSentTodayByAccount(queryable, zaloSettingId, dayS
      WHERE account_id = $1
        AND tracking_metadata->>'status' = 'sent'
        AND NOT is_preview
-       AND sent_at >= $2 AND sent_at < $3`,
+       AND sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       AND sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`,
     [zaloSettingId, dayStart, dayEnd]
   );
   return Number(rows[0]?.total || 0);
@@ -858,7 +875,8 @@ export async function countEmailSentInCycleWithLedger(queryable, billingUserId, 
           AND em.quota_reservation_id IS NULL
           AND em.status IN ('sent', 'delivered', 'bounced')
           AND NOT em.is_preview
-          AND em.sent_at >= $2 AND em.sent_at < $3
+          AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
       ), 0)
       +
       COALESCE((
@@ -903,7 +921,8 @@ export async function countZaloSentInCycleWithLedger(queryable, billingUserId, c
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
-          AND zm.sent_at >= $2 AND zm.sent_at < $3
+          AND zm.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND zm.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
       ), 0)
       +
       COALESCE((
@@ -977,7 +996,8 @@ export async function countEmployeeSentTodayWithLedger(
             AND em.quota_reservation_id IS NULL
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
-            AND em.sent_at >= $3 AND em.sent_at < $4
+            AND em.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+            AND em.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
         ), 0)
         +
         COALESCE((
@@ -1017,7 +1037,8 @@ export async function countEmployeeSentTodayWithLedger(
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
-          AND zm.sent_at >= $3 AND zm.sent_at < $4
+          AND zm.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND zm.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
       ), 0)
       +
       COALESCE((
@@ -1085,7 +1106,8 @@ export async function countEmployeeSentInCycleWithLedger(
             AND em.quota_reservation_id IS NULL
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
-            AND em.sent_at >= $3 AND em.sent_at < $4
+            AND em.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+            AND em.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
         ), 0)
         +
         COALESCE((
@@ -1125,7 +1147,8 @@ export async function countEmployeeSentInCycleWithLedger(
           AND zm.quota_reservation_id IS NULL
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
-          AND zm.sent_at >= $3 AND zm.sent_at < $4
+          AND zm.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND zm.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
       ), 0)
       +
       COALESCE((
@@ -1373,7 +1396,7 @@ export async function findStaleCampaignRunReservations(queryable, {
   const { rows } = await queryable.query(
     `SELECT id, status, channel, source_type, failure_code,
             created_at, sending_at, uncertain_at, expires_at,
-            EXTRACT(EPOCH FROM ($2 - COALESCE(uncertain_at, sending_at, created_at)))::int AS age_seconds,
+            EXTRACT(EPOCH FROM ($2::timestamptz - COALESCE(uncertain_at, sending_at, created_at)))::int AS age_seconds,
             COUNT(*) OVER()::int AS total_count
      FROM send_quota_reservations
      WHERE source_type IN ('campaign_email', 'campaign_zalo')

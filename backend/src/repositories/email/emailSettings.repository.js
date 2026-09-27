@@ -306,6 +306,12 @@ class EmailSettingsRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 việc 2 — `$16` (sent_at) ép
+   * `($16::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')` ngay tại INSERT: cột
+   * `email_messages.sent_at` không múi giờ (production 27/09), payload.sentAt luôn là JS Date UTC.
+   * Không ép thì Postgres bỏ offset khi ghi, cột nhận giờ UTC thay vì giờ VN.
+   */
   async insertEmailMessage(client, payload) {
     const rawReservationId = payload.quotaReservationId != null
       ? Number.parseInt(payload.quotaReservationId, 10)
@@ -329,7 +335,9 @@ class EmailSettingsRepository {
          tracking_token, recipient_email, recipient_name, sender_email, sender_name, subject,
          body_html, body_text, status, sent_at, id_node, email_step,
          from_address, reply_to, brand_domain, is_preview, quota_reservation_id, workspace_owner_id, actor_user_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15,
+               ($16::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+               $17, $18, $19, $20, $21, $22, $23, $24, $25)
        RETURNING id`,
       [
         payload.campaignId,

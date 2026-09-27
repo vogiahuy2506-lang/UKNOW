@@ -13,6 +13,19 @@ import {
 } from '../services/payment/topupWallet.service.js';
 import usageTrackingRepository from '../repositories/payment/usageTracking.repository.js';
 
+// PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 — LUẬT mọi mốc giờ đi vào SQL trong file này:
+// 1. Tham số giờ từ JS (Date/ISO string) luôn ép `$n::timestamptz` NGAY LẦN XUẤT HIỆN ĐẦU TIÊN
+//    trong câu. Postgres chốt kiểu tham số theo lần xuất hiện đầu (đã kiểm bằng PREPARE trên
+//    production) — không ép ở đây thì các vế sau trong CÙNG câu nhận nhầm kiểu theo cột gặp đầu.
+// 2. So với cột KHÔNG múi giờ (`email_messages.sent_at`, `zalo_messages.sent_at` — production xác
+//    nhận 27/09: timestamp without time zone) → bọc PHÍA THAM SỐ tại ĐÚNG vị trí so sánh đó:
+//    `col >= ($n::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`. Bọc phía cột (áp hàm lên cột) làm
+//    mất index trên cột — ĐỪNG làm vậy. `AT TIME ZONE` phải viết lại ở MỌI vị trí so với một cột
+//    không múi giờ khác nhau, kể cả khi cùng tham số $n đã ép kiểu ở nơi khác trong câu.
+// 3. So với cột CÓ múi giờ (production xác nhận 27/09: `usage_logs.created_at`,
+//    `zalo_personal_messages.created_at` đều `timestamp with time zone`) → dùng thẳng `$n` sau khi
+//    đã ép ở luật 1, KHÔNG bọc gì thêm.
+
 // is_fup_enabled: FUP behavior intentionally deferred (cờ chưa có hành vi).
 
 const SUBSCRIPTION_EXPIRED_MSG =
@@ -166,7 +179,8 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
               AND em.actor_user_id = $2
               AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
-              AND em.sent_at >= $3 AND em.sent_at < $4)
+              AND em.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+              AND em.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
            + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
               WHERE ul.id_user = $1
                 AND (ul.metadata->>'actorUserId')::bigint = $2
@@ -238,7 +252,8 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
               AND zm.actor_user_id = $2
               AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
-              AND zm.sent_at >= $3 AND zm.sent_at < $4)
+              AND zm.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+              AND zm.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
            + (SELECT COUNT(*) FROM zalo_personal_messages zpm
               WHERE zpm.id_user = $2
                 AND zpm.role = 'agent'
@@ -310,7 +325,8 @@ export async function countEmailSentInCycleUncached(billingUserId, cycleStart, c
         WHERE em.workspace_owner_id = $1
           AND em.status IN ('sent', 'delivered', 'bounced')
           AND NOT em.is_preview
-          AND em.sent_at >= $2 AND em.sent_at < $3)
+          AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
        + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
           WHERE ul.id_user = $1
             AND ul.resource_type = 'email_direct_send'
@@ -376,7 +392,8 @@ export async function countZaloSentInCycleUncached(billingUserId, cycleStart, cy
         WHERE zm.workspace_owner_id = $1
           AND zm.tracking_metadata->>'status' = 'sent'
           AND NOT zm.is_preview
-          AND zm.sent_at >= $2 AND zm.sent_at < $3)
+          AND zm.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+          AND zm.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
      + (SELECT COUNT(*) FROM zalo_personal_messages zpm
         WHERE ${ZPM_OWNER_PREDICATE}
           AND zpm.role = 'agent'
@@ -424,12 +441,14 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
           WHERE em.workspace_owner_id = $1
             AND em.status IN ('sent', 'delivered', 'bounced')
             AND NOT em.is_preview
-            AND em.sent_at >= $2 AND em.sent_at < $3)
+            AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+            AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
        + (SELECT COUNT(*) FROM zalo_messages zm
           WHERE zm.workspace_owner_id = $1
             AND zm.tracking_metadata->>'status' = 'sent'
             AND NOT zm.is_preview
-            AND zm.sent_at >= $2 AND zm.sent_at < $3)
+            AND zm.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+            AND zm.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
        + (SELECT COUNT(*) FROM zalo_personal_messages zpm
           WHERE ${ZPM_OWNER_PREDICATE}
             AND zpm.role = 'agent'

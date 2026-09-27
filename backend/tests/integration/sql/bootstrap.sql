@@ -1031,16 +1031,16 @@ CREATE TABLE email_messages (
   status                  VARCHAR(30)  NOT NULL DEFAULT 'pending',
   open_count              INTEGER      NOT NULL DEFAULT 0,
   click_count             INTEGER      NOT NULL DEFAULT 0,
-  first_opened_at         TIMESTAMPTZ,
-  last_opened_at          TIMESTAMPTZ,
-  first_clicked_at        TIMESTAMPTZ,
-  sent_at                 TIMESTAMPTZ,
-  delivered_at            TIMESTAMPTZ,
+  first_opened_at         TIMESTAMP,
+  last_opened_at          TIMESTAMP,
+  first_clicked_at        TIMESTAMP,
+  sent_at                 TIMESTAMP,
+  delivered_at            TIMESTAMP,
   bounce_type             VARCHAR(10),
   bounce_code             VARCHAR(15),
   bounce_detected_via     VARCHAR(10),
   is_preview              BOOLEAN      NOT NULL DEFAULT FALSE,
-  created_at              TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  created_at              TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_email_messages_customer ON email_messages(id_customer);
 CREATE INDEX idx_email_messages_token    ON email_messages(tracking_token);
@@ -1064,17 +1064,17 @@ CREATE TABLE zalo_messages (
   account_name        VARCHAR(255),
   click_count         INTEGER      NOT NULL DEFAULT 0,
   status              VARCHAR(30)  NOT NULL DEFAULT 'pending',
-  sent_at             TIMESTAMPTZ,
-  first_clicked_at    TIMESTAMPTZ,
-  last_clicked_at     TIMESTAMPTZ,
+  sent_at             TIMESTAMP,
+  first_clicked_at    TIMESTAMP,
+  last_clicked_at     TIMESTAMP,
   message_text        TEXT,
   recipient_type      VARCHAR(30),
   recipient_value     VARCHAR(255),
   uid                 VARCHAR(255),
   tracking_base_url   VARCHAR(500),
   is_preview          BOOLEAN      NOT NULL DEFAULT FALSE,
-  created_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
-  updated_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW()
+  created_at          TIMESTAMP    NOT NULL DEFAULT NOW(),
+  updated_at          TIMESTAMP    NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_zalo_messages_customer ON zalo_messages(id_customer);
 CREATE INDEX idx_zalo_messages_token    ON zalo_messages(tracking_token);
@@ -3215,8 +3215,8 @@ ALTER TABLE email_messages
   ADD COLUMN IF NOT EXISTS id_execution BIGINT,
   ADD COLUMN IF NOT EXISTS id_sequence BIGINT,
   ADD COLUMN IF NOT EXISTS id_enrollment BIGINT,
-  ADD COLUMN IF NOT EXISTS queued_at TIMESTAMPTZ,
-  ADD COLUMN IF NOT EXISTS bounced_at TIMESTAMPTZ,
+  ADD COLUMN IF NOT EXISTS queued_at TIMESTAMP,
+  ADD COLUMN IF NOT EXISTS bounced_at TIMESTAMP,
   ADD COLUMN IF NOT EXISTS bounce_reason TEXT,
   ADD COLUMN IF NOT EXISTS error_message TEXT;
 

@@ -462,11 +462,14 @@ export async function getRunFailures({ userId, runId }) {
   );
 
   // 3. Lấy lỗi Email (chỉ cột có trong bootstrap.sql)
+  // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 việc 3 — em.sent_at/em.created_at đều không múi
+  // giờ (production 27/09), node-pg đọc thô như giờ tiến trình (UTC). Bọc AT TIME ZONE để trả
+  // đúng giờ VN dù nhánh COALESCE rơi vào cột nào.
   const emailRows = await safeQuery(
     `SELECT
        em.recipient_email AS recipient,
        COUNT(*)::int AS count,
-       MAX(COALESCE(em.sent_at, em.created_at)) AS last_at,
+       (MAX(COALESCE(em.sent_at, em.created_at)) AT TIME ZONE 'Asia/Ho_Chi_Minh') AS last_at,
        em.bounce_type,
        em.bounce_code,
        crrs.meta->>'lastFailureReason' AS ledger_reason,

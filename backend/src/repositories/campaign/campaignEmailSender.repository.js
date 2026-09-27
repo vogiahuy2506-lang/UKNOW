@@ -111,10 +111,12 @@ class CampaignEmailSenderRepository {
     const bounceDetectedVia = options?.bounceDetectedVia || 'smtp';
     const runner = queryable || db;
 
+    // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 việc 2 — cột bounced_at không múi giờ
+    // (production 27/09), bouncedAt luôn là JS Date UTC. Ép giống insertEmailMessage.
     await runner.query(
       `UPDATE email_messages
        SET status = 'bounced',
-           bounced_at = $1,
+           bounced_at = ($1::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
            bounce_reason = $2,
            bounce_type = COALESCE($4, bounce_type),
            bounce_code = COALESCE($5, bounce_code),

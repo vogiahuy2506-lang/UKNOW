@@ -198,7 +198,7 @@ class CustomerReadRepository {
               c.campaign_name,
               em.subject,
               em.status,
-              em.sent_at,
+              (em.sent_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS sent_at,
               em.first_opened_at,
               em.last_opened_at,
               em.open_count,
