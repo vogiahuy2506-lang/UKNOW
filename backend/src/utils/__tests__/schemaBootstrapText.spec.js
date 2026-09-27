@@ -48,11 +48,11 @@ describe('bootstrap.sql text parity (S-2)', () => {
     );
   });
 
-  it('orders status CHECK includes pending/success/cancelled/failed', () => {
+  it('orders status CHECK includes pending/success/cancelled/failed/refunded (migration 253)', () => {
     const statusCheck = ordersBody.match(/CHECK\s*\(\s*status\s+IN\s*\(([^)]*)\)\s*\)/i);
     expect(statusCheck).toBeTruthy();
     // Order-insensitive: reordering the values is not drift.
-    for (const value of ['pending', 'success', 'cancelled', 'failed']) {
+    for (const value of ['pending', 'success', 'cancelled', 'failed', 'refunded']) {
       expect(statusCheck[1]).toContain(`'${value}'`);
     }
   });

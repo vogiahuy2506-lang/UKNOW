@@ -87,7 +87,7 @@ export const CORE_SCHEMA_EXPECTED = Object.freeze({
   }),
 
   /** Allowed orders.status values after 092. Extra values = drift / legacy. */
-  ordersAllowedStatuses: Object.freeze(['pending', 'success', 'cancelled', 'failed']),
+  ordersAllowedStatuses: Object.freeze(['pending', 'success', 'cancelled', 'failed', 'refunded']),
 
   foreignKeys: Object.freeze([
     Object.freeze({

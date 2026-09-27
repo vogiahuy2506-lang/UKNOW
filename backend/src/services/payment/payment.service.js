@@ -386,7 +386,11 @@ export const handleWebhook = async (body) => {
                 return webhookData;
             }
 
-            if (['success', 'cancelled', 'failed'].includes(existing.status)) {
+            // PLAN_HOAN_TIEN_DON_HANG (27/09) — 'refunded' là trạng thái ĐÃ XONG: thiếu nó ở đây thì
+            // PayOS gửi lại webhook cho đơn đã hoàn sẽ lọt xuống claimOrderSuccess và KÍCH HOẠT
+            // LẠI gói cho khách đã được trả tiền. Chỉ log + COMMIT, không gắn PAID_AFTER_CANCELLED:
+            // khoản tiền đó chính là khoản kế toán đã hoàn, không phải tiền mới cần người xử lý.
+            if (['success', 'cancelled', 'failed', 'refunded'].includes(existing.status)) {
                 // PR-4 (đợt rà soát 26/09) — 'cancelled'/'failed' KHÔNG được coi ngang hàng với
                 // 'success' ở đây: đơn có thể đã bị huỷ (checkout mới thay thế, cron 72h dọn đơn
                 // treo...) trong khi link PayOS cũ best-effort chưa kịp huỷ, và khách vẫn quét

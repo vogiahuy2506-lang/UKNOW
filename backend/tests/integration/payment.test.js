@@ -35,7 +35,7 @@ const {
   truncateAll, createUser, createPlan, seedProductionPublicPlans, assignPlanToUser,
 } = await import('./helpers/db.js');
 const { findActiveBillingPeriod } = await import('../../src/repositories/user/user.repository.js');
-const { claimOrderSuccess } = await import('../../src/repositories/payment/payment.repository.js');
+const { claimOrderSuccess, markOrderFailedForReview } = await import('../../src/repositories/payment/payment.repository.js');
 const { fulfillPaidOrder } = await import('../../src/services/payment/payosOrderFulfillment.service.js');
 
 let app;
@@ -1043,6 +1043,68 @@ describe('POST /api/payments/webhook', () => {
     expect(o.rows[0].status).toBe('failed');
     const occurrences = (o.rows[0].note.match(/PAID_AFTER_CANCELLED/g) || []).length;
     expect(occurrences).toBe(1);
+  });
+
+  // PLAN_HOAN_TIEN_DON_HANG mục 1.2 (27/09) — đơn đã hoàn tiền là trạng thái ĐÃ XONG. PayOS gửi lại
+  // webhook "đã trả" cho đơn đó (retry, hoặc khách quét lại QR cũ) KHÔNG được kích hoạt lại gói,
+  // và không gắn PAID_AFTER_CANCELLED (khoản tiền đó chính là khoản kế toán đã hoàn).
+  it('hoàn tiền: webhook code=00 cho đơn refunded → vẫn refunded, không kích hoạt gói, không tag PAID_AFTER_CANCELLED', async () => {
+    const user = await createUser({ username: 'refunded-buyer', withPlan: false });
+    const plan = await createPlan({ code: 'refund-webhook' });
+    const orderCode = Date.now() + 5;
+    await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, paid_at, refunded_at)
+       VALUES ($1, $2, $3, $4, $5, 'refunded', NOW() - INTERVAL '2 days', NOW())`,
+      [orderCode, plan.id, plan.price, user.email, user.id]
+    );
+
+    mockWebhooksVerify.mockResolvedValue({ code: '00', orderCode, amount: Number(plan.price) });
+    const res = await request(app).post('/api/payments/webhook').send({});
+    expect(res.status).toBe(200);
+
+    const o = await db.query(`SELECT status, note FROM orders WHERE order_code = $1`, [orderCode]);
+    expect(o.rows[0].status).toBe('refunded');
+    expect(String(o.rows[0].note || '')).not.toContain('PAID_AFTER_CANCELLED');
+
+    const u = await db.query(`SELECT active_plan_id FROM users WHERE id = $1`, [user.id]);
+    expect(u.rows[0].active_plan_id).toBeNull();
+  });
+
+  it('hoàn tiền: webhook lệch số tiền cho đơn refunded → không bị ghi đè thành failed', async () => {
+    const user = await createUser({ username: 'refunded-mismatch', withPlan: false });
+    const plan = await createPlan({ code: 'refund-mismatch', price: 199000 });
+    const orderCode = Date.now() + 6;
+    await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+       VALUES ($1, $2, 199000, $3, $4, 'refunded')`,
+      [orderCode, plan.id, user.email, user.id]
+    );
+
+    mockWebhooksVerify.mockResolvedValue({ code: '00', orderCode, amount: 1 });
+    const res = await request(app).post('/api/payments/webhook').send({});
+    expect(res.status).toBe(200);
+
+    const o = await db.query(`SELECT status, note FROM orders WHERE order_code = $1`, [orderCode]);
+    expect(o.rows[0].status).toBe('refunded');
+    expect(String(o.rows[0].note || '')).not.toContain('AMOUNT_MISMATCH');
+  });
+
+  it('hoàn tiền: claimOrderSuccess và markOrderFailedForReview không đụng đơn refunded (lưới thứ hai ở repository)', async () => {
+    const user = await createUser({ username: 'refunded-repo', withPlan: false });
+    const plan = await createPlan({ code: 'refund-repo' });
+    const orderCode = Date.now() + 7;
+    await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status)
+       VALUES ($1, $2, $3, $4, $5, 'refunded')`,
+      [orderCode, plan.id, plan.price, user.email, user.id]
+    );
+
+    await expect(claimOrderSuccess(orderCode)).resolves.toBeNull();
+    await expect(markOrderFailedForReview(orderCode, '[OPS] test')).resolves.toBeNull();
+
+    const o = await db.query(`SELECT status, paid_at FROM orders WHERE order_code = $1`, [orderCode]);
+    expect(o.rows[0].status).toBe('refunded');
+    expect(o.rows[0].paid_at).toBeNull();
   });
 
   it('kích hoạt/nâng gói ghi đè subscription_expires_at = NOW() + 30 ngày (không cộng dồn ngày cũ)', async () => {

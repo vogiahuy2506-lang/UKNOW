@@ -262,6 +262,44 @@ describe('Custom plan self-serve', () => {
     expect(check.rows).toHaveLength(0);
   });
 
+  // PLAN_HOAN_TIEN_DON_HANG mục 1.2 (27/09) — FK orders_plan_id_fkey không có ON DELETE: gói
+  // còn BẤT KỲ đơn nào trỏ vào mà lọt vào DELETE thì cả lượt dọn nổ, không gói mồ côi nào khác
+  // được dọn. Ghim: gói có đơn (mọi trạng thái) được giữ, lượt dọn vẫn chạy và dọn gói không đơn.
+  it.each(['cancelled', 'failed', 'refunded', 'pending'])(
+    'cleanup giữ gói có đơn %s trỏ vào (không vướng FK) và vẫn dọn gói không có đơn nào',
+    async (orderStatus) => {
+      const user = await createUser({ username: `orphan-keep-${orderStatus}` });
+      const kept = await createPlan({
+        name: `Custom có đơn ${orderStatus}`, price: 199000, isCustom: true, isActive: true, code: null,
+      });
+      const orphan = await createPlan({
+        name: 'Custom không đơn', price: 199000, isCustom: true, isActive: true, code: null,
+      });
+      await db.query(
+        `UPDATE plans
+         SET custom_owner_user_id = $1,
+             created_at = NOW() - INTERVAL '2 hours'
+         WHERE id = ANY($2::int[])`,
+        [user.id, [kept.id, orphan.id]]
+      );
+      // Đơn cũ hơn cửa sổ 15 phút — với pending đây là ca mà điều kiện cũ (chỉ loại pending còn
+      // mới) để lọt vào DELETE.
+      await db.query(
+        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, created_at)
+         VALUES ($1, $2, 199000, $3, $4, $5, NOW() - INTERVAL '2 hours')`,
+        [Date.now() + 11, kept.id, user.email, user.id, orderStatus]
+      );
+
+      const deleted = await deleteOrphanCustomPlans(15);
+      const deletedIds = deleted.map((p) => Number(p.id));
+      expect(deletedIds).toContain(Number(orphan.id));
+      expect(deletedIds).not.toContain(Number(kept.id));
+
+      const check = await db.query(`SELECT id FROM plans WHERE id = $1`, [kept.id]);
+      expect(check.rows).toHaveLength(1);
+    }
+  );
+
   it('rejects admin patch when minQty < includedQty', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin-pricing' });
     const token = await loginAs(admin);

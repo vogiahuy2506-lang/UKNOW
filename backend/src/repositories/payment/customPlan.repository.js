@@ -157,6 +157,13 @@ export async function updateCustomPlanLimits(planId, {
 /**
  * Delete orphan self-serve custom plans that never completed payment
  * and are older than the PayOS pending window.
+ *
+ * PLAN_HOAN_TIEN_DON_HANG mục 1.2 (27/09) — "mồ côi" nghĩa là KHÔNG CÒN ĐƠN NÀO (mọi trạng
+ * thái) trỏ plan_id vào gói. FK orders_plan_id_fkey trên production không có ON DELETE, nên
+ * trước đây chỉ loại đơn 'success' + đơn 'pending' còn mới thì gói có đơn cancelled/failed/
+ * pending cũ/refunded vẫn lọt vào DELETE → vi phạm FK → CẢ lượt dọn hỏng (mọi gói mồ côi khác
+ * cũng không được dọn), lặp lại mỗi giờ. Gói còn đơn trỏ vào là lịch sử thanh toán — giữ lại.
+ * Pending còn mới (khách đang thanh toán) cũng thuộc "có đơn trỏ vào", nên điều kiện cũ thừa.
  */
 export async function deleteOrphanCustomPlans(olderThanMinutes = 15, queryable = db) {
   const minutes = Math.max(1, Number(olderThanMinutes) || 15);
@@ -166,17 +173,10 @@ export async function deleteOrphanCustomPlans(olderThanMinutes = 15, queryable =
        AND p.custom_owner_user_id IS NOT NULL
        AND p.created_at < NOW() - ($1::text || ' minutes')::interval
        AND NOT EXISTS (
-         SELECT 1 FROM orders o
-         WHERE o.plan_id = p.id AND o.status = 'success'
+         SELECT 1 FROM orders o WHERE o.plan_id = p.id
        )
        AND NOT EXISTS (
          SELECT 1 FROM users u WHERE u.active_plan_id = p.id
-       )
-       AND NOT EXISTS (
-         SELECT 1 FROM orders o
-         WHERE o.plan_id = p.id
-           AND o.status = 'pending'
-           AND o.created_at >= NOW() - ($1::text || ' minutes')::interval
        )
      RETURNING p.id, p.name, p.custom_owner_user_id`,
     [String(minutes)]

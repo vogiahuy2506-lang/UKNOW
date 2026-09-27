@@ -63,7 +63,9 @@ export const updateOrderStatus = async (orderCode, status) => {
 };
 
 /**
- * Atomically mark order success — only if not already success/cancelled/failed.
+ * Atomically mark order success — only if not already success/cancelled/failed/refunded.
+ * 'refunded' (PLAN_HOAN_TIEN_DON_HANG 27/09): đơn đã hoàn tiền không bao giờ được claim lại —
+ * lưới thứ hai sau danh sách trạng thái đã xong ở handleWebhook.
  * @param {number|string} orderCode
  * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
  * @returns {Promise<object|null>}
@@ -73,7 +75,7 @@ export const claimOrderSuccess = async (orderCode, queryable = db) => {
         `UPDATE orders
          SET status = 'success', paid_at = NOW(), updated_at = NOW()
          WHERE order_code = $1
-           AND status NOT IN ('success', 'cancelled', 'failed')
+           AND status NOT IN ('success', 'cancelled', 'failed', 'refunded')
          RETURNING id, user_id, plan_id, user_email, billing_period,
                    amount, voucher_id, voucher_code, discount_amount,
                    note, topup_config, invoice_info, custom_plan_config, order_code, payment_method,
@@ -212,7 +214,8 @@ export const findNewerSuccessfulPlanCheckout = async ({
 
 /**
  * Mark order failed for manual ops review (amount mismatch, etc.).
- * Does not activate plan. Idempotent for already-terminal rows.
+ * Does not activate plan. Idempotent for already-terminal rows ('refunded' included — không để
+ * webhook lệch số tiền ghi đè đơn đã hoàn thành 'failed').
  */
 export const markOrderFailedForReview = async (orderCode, note, queryable = db) => {
     const { rows } = await queryable.query(
@@ -224,7 +227,7 @@ export const markOrderFailedForReview = async (orderCode, note, queryable = db) 
                 END,
                 updated_at = NOW()
           WHERE order_code = $1
-            AND status NOT IN ('success', 'cancelled')
+            AND status NOT IN ('success', 'cancelled', 'refunded')
           RETURNING id, order_code, amount, status`,
         [orderCode, note]
     );

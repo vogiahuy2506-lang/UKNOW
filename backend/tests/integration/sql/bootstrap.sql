@@ -356,7 +356,7 @@ CREATE TABLE orders (
   user_email  VARCHAR(255),
   user_id     BIGINT       REFERENCES users(id),
   status      VARCHAR(50)  NOT NULL DEFAULT 'pending'
-    CHECK (status IN ('pending', 'success', 'cancelled', 'failed')),
+    CHECK (status IN ('pending', 'success', 'cancelled', 'failed', 'refunded')),
   payment_status VARCHAR(50),
   payment_method VARCHAR(50) NOT NULL DEFAULT 'payos'
     CHECK (payment_method IN ('payos', 'manual', 'free', 'voucher')),
@@ -3740,4 +3740,10 @@ ALTER TABLE zalo_messages  ADD COLUMN IF NOT EXISTS actor_user_id BIGINT REFEREN
 CREATE INDEX IF NOT EXISTS idx_email_messages_owner_actor_sent ON email_messages(workspace_owner_id, actor_user_id, sent_at);
 CREATE INDEX IF NOT EXISTS idx_zalo_messages_owner_actor_sent  ON zalo_messages(workspace_owner_id, actor_user_id, sent_at);
 
-
+-- --- Migration 253: orders 'refunded' + cột ghi nhận hoàn tiền + affiliate_revenue_events.reversed_at ---
+-- (CHECK orders_status_check đã thêm 'refunded' ngay tại CREATE TABLE orders ở trên.)
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_at   TIMESTAMPTZ;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_by   BIGINT REFERENCES users(id) ON DELETE SET NULL;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_reason TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_meta   JSONB;
+ALTER TABLE affiliate_revenue_events ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMPTZ;
