@@ -152,7 +152,7 @@ describe('web chat — widget + hội thoại không nhân bản', () => {
 });
 
 describe('web chat — khách nhận được tin chủ shop trả lời tay', () => {
-  it('getChatMessages trả tin của agent sau khi bàn giao', async () => {
+  it('tin agent trả lời tay sau khi bàn giao được lưu đúng hội thoại', async () => {
     const user = await createUser({ username: 'wc-handoff' });
     const bot = await createChatbot(user.id);
 
@@ -173,14 +173,14 @@ describe('web chat — khách nhận được tin chủ shop trả lời tay', (
       [convs[0].id, user.id, 'Chào bạn, mình là chủ shop.']
     );
 
-    // Trước bản vá endpoint này luôn trả mảng rỗng → chủ nói vào hư không
-    const res = await request(app)
-      .get(`/api/chatbot-public/custom-chatbot/id/${bot.id}/messages`)
-      .query({ sessionId: SESSION });
-
-    expect(res.status).toBe(200);
-    const contents = (res.body?.data?.messages || []).map((m) => m.content);
-    expect(contents).toContain('Chào bạn, mình là chủ shop.');
+    // GET .../messages (polling) đã bị xoá 27/09/2026 (code chết, không FE nào gọi) —
+    // đọc thẳng bảng để giữ nguyên độ chặt: đúng 1 tin agent, đúng nội dung.
+    const { rows: agentMessages } = await db.query(
+      `SELECT content FROM webchat_messages WHERE id_conversation = $1 AND role = 'agent' ORDER BY created_at ASC`,
+      [convs[0].id]
+    );
+    expect(agentMessages).toHaveLength(1);
+    expect(agentMessages[0].content).toBe('Chào bạn, mình là chủ shop.');
   });
 
   it('AI im lặng khi chủ đã tạm dừng', async () => {

@@ -22,12 +22,6 @@ const chatbotApiService = {
     });
   },
 
-  uploadChatbotLogo(formData) {
-    return api.post('/ai/custom-chat/logo', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' },
-    });
-  },
-
   sendCustomChat(payload) {
     return api.post('/ai/custom-chat', payload, { timeout: AI_CHAT_TIMEOUT_MS });
   },
@@ -83,9 +77,6 @@ const chatbotApiService = {
   },
   deleteChatbotStudioConversation(conversationId) {
     return api.delete(`/ai/chatbot-studio/conversations/${conversationId}`);
-  },
-  clearChatbotStudioConversation(conversationId) {
-    return api.delete(`/ai/chatbot-studio/conversations/${conversationId}/messages`);
   },
 
   getPublicChatbot(chatbotId) {
@@ -150,16 +141,6 @@ const chatbotApiService = {
   },
 
   // ── Zalo Personal Account Chatbot Settings ─────────────────────────────────
-
-  // Get chatbot settings for a specific Zalo account
-  getZaloAccountChatbotSettings(zaloSettingId) {
-    return api.get(`/ai/chatbot/zalo-account/${zaloSettingId}/chatbot`);
-  },
-
-  // Update chatbot settings for a Zalo account
-  updateZaloAccountChatbotSettings(zaloSettingId, data) {
-    return api.put(`/ai/chatbot/zalo-account/${zaloSettingId}/chatbot`, data);
-  },
 
   // List all Zalo accounts with chatbot settings, optionally scoped to one chatbot
   listZaloAccountsWithChatbotSettings(chatbotId) {
@@ -410,13 +391,6 @@ const chatbotApiService = {
     });
   },
 
-  // Sync groups only
-  syncZaloGroups(accountId) {
-    return api.get('/ai/chatbot/zalo-personal/sync/groups', {
-      params: accountId != null ? { accountId } : undefined,
-    });
-  },
-
   // Sync chat history for a specific conversation
   syncZaloChatHistory(externalId, isGroup, options = {}) {
     return api.post('/ai/chatbot/zalo-personal/sync/chat-history', {
@@ -426,21 +400,6 @@ const chatbotApiService = {
       beforeMsgId: options.beforeMsgId,
       accountId: options.accountId,
     });
-  },
-
-  // Sync all group histories
-  syncZaloAllGroupHistory(limit = 50, accountId = null) {
-    return api.post('/ai/chatbot/zalo-personal/sync/group-history', null, {
-      params: {
-        limit,
-        ...(accountId != null ? { accountId } : {}),
-      },
-    });
-  },
-
-  // Get chat history from DB for AI context
-  getZaloChatHistory(conversationId, limit = 50) {
-    return api.get(`/ai/chatbot/zalo-personal/history?conversationId=${conversationId}&limit=${limit}`);
   },
 
   // Get synced friends from DB

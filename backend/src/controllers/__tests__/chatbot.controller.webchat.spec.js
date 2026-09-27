@@ -164,53 +164,6 @@ describe('chatbot.controller webchat widget resolve', () => {
     );
   });
 
-  it('getChatMessages finds agent replies via resolveWidgetForChatbot', async () => {
-    resolveWidgetForChatbot.mockResolvedValue({ id: 100 });
-    findActiveWebChatConversationId.mockResolvedValue(55);
-    getAgentWebChatMessagesAfter.mockResolvedValue([
-      { id: 9, role: 'agent', content: 'từ chủ shop', created_at: '2026-08-04T00:00:00Z' },
-    ]);
-
-    const res = makeRes();
-    await chatbotController.getChatMessages(
-      { params: { chatbotId: '12' }, query: { sessionId: 'sess_1' } },
-      res
-    );
-
-    expect(resolveWidgetForChatbot).toHaveBeenCalledWith(chatbot, { create: false });
-    expect(findActiveWebChatConversationId).toHaveBeenCalledWith({
-      widgetConfigId: 100,
-      sessionId: 'sess_1',
-    });
-    expect(res.json).toHaveBeenCalledWith({
-      success: true,
-      data: {
-        messages: [
-          {
-            id: 9,
-            role: 'assistant',
-            content: 'từ chủ shop',
-            createdAt: '2026-08-04T00:00:00Z',
-          },
-        ],
-        sessionId: 'sess_1',
-      },
-    });
-  });
-
-  it('getChatMessages returns empty when widget missing (create:false)', async () => {
-    resolveWidgetForChatbot.mockResolvedValue(null);
-    const res = makeRes();
-    await chatbotController.getChatMessages(
-      { params: { chatbotId: '12' }, query: { sessionId: 'sess_1' } },
-      res
-    );
-    expect(findActiveWebChatConversationId).not.toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({
-      success: true,
-      data: { messages: [], sessionId: 'sess_1' },
-    });
-  });
 });
 
 // 14/09/2026: parseInt('5db50541') = 5 → link công khai /chat/<widget_key> mở nhầm chatbot số 5 của
@@ -246,18 +199,6 @@ describe('chatbot.controller public :chatbotId — widget_key bắt đầu bằn
 
     expect(findChatbotById).not.toHaveBeenCalled();
     expect(findChatbotByWidgetKey).toHaveBeenCalledWith('5db50541');
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  it('getChatMessages: "5db50541" không rơi vào chatbot số 5', async () => {
-    findChatbotByWidgetKey.mockResolvedValue(null);
-    const res = makeRes();
-    await chatbotController.getChatMessages(
-      { params: { chatbotId: '5db50541' }, query: { sessionId: 'sess_9' } },
-      res
-    );
-
-    expect(findChatbotById).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(404);
   });
 

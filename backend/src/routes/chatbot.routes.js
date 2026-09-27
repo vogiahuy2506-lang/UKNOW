@@ -169,7 +169,6 @@ router.post('/custom-chatbots', requirePermission('chatbots_manage'), chatbotCon
 router.get('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.getCustomChatbot.bind(chatbotController));
 router.put('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.updateCustomChatbot.bind(chatbotController));
 router.delete('/custom-chatbots/:chatbotId', requirePermission('chatbots_manage'), chatbotController.deleteCustomChatbot.bind(chatbotController));
-router.get('/custom-chatbots/:chatbotId/documents', requirePermission('chatbots_manage'), chatbotController.getCustomChatbotDocuments.bind(chatbotController));
 
 // Chatbot Channel Connections
 router.get('/custom-chatbots/:chatbotId/channels', requirePermission('chatbot_channels_manage'), chatbotController.getChatbotChannels.bind(chatbotController));
@@ -241,8 +240,6 @@ router.put('/inbox/contact-alerts/settings', requirePermission('inbox_manage'), 
 
 // ── Zalo Personal Account Chatbot Settings ─────────────────────────
 
-router.get('/zalo-account/:zaloSettingId/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.getZaloAccountChatbotSettings.bind(chatbotController));
-router.put('/zalo-account/:zaloSettingId/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.updateZaloAccountChatbotSettings.bind(chatbotController));
 router.post('/zalo-account/:zaloSettingId/chatbot/toggle', requirePermission('chatbot_channels_manage'), chatbotController.toggleZaloAccountChatbot.bind(chatbotController));
 router.get('/zalo-accounts/chatbot', requirePermission('chatbot_channels_manage'), chatbotController.listZaloAccountsWithChatbotSettings.bind(chatbotController));
 
@@ -285,13 +282,8 @@ router.get('/inbox/outbox/:id', requirePermission('inbox_view'), unifiedInboxCon
 
 router.get('/zalo-personal/sync', requirePermission('inbox_manage'), zaloPersonalSyncController.sync.bind(zaloPersonalSyncController));
 router.get('/zalo-personal/sync/contacts', requirePermission('inbox_manage'), zaloPersonalSyncController.syncContacts.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/sync/groups', requirePermission('inbox_manage'), zaloPersonalSyncController.syncGroups.bind(zaloPersonalSyncController));
 router.get('/zalo-personal/sync/status', requirePermission('inbox_view'), zaloPersonalSyncController.getSyncStatus.bind(zaloPersonalSyncController));
 router.post('/zalo-personal/sync/chat-history', requirePermission('inbox_manage'), zaloPersonalSyncController.syncChatHistory.bind(zaloPersonalSyncController));
-router.post('/zalo-personal/sync/group-history', requirePermission('inbox_manage'), zaloPersonalSyncController.syncAllGroupHistory.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/history', requirePermission('inbox_view'), zaloPersonalSyncController.getChatHistory.bind(zaloPersonalSyncController));
 router.get('/zalo-personal/friends', requirePermission('inbox_view'), zaloPersonalSyncController.getFriends.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/group-members', requirePermission('inbox_view'), zaloPersonalSyncController.getGroupMembers.bind(zaloPersonalSyncController));
-router.get('/zalo-personal/group-senders', requirePermission('inbox_view'), zaloPersonalSyncController.getGroupSenders.bind(zaloPersonalSyncController));
 
 export default router;

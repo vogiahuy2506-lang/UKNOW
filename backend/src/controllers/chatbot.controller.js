@@ -517,49 +517,6 @@ class ChatbotController {
   // ── Zalo Personal Account Chatbot Settings ─────────────────────────────────
 
   /**
-   * Get chatbot settings for a specific Zalo account
-   * GET /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
-   */
-  async getZaloAccountChatbotSettings(req, res) {
-    try {
-      const zaloSettingId = parseInt(req.params.zaloSettingId);
-      if (!zaloSettingId) {
-        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
-      }
-      const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      await chatbotZaloAccountRepository.assertOwnedConfiguration(ownerUserId, zaloSettingId);
-      const settings = await chatbotZaloAccountRepository.getSettings(ownerUserId, zaloSettingId);
-      return res.json({ success: true, data: settings });
-    } catch (err) {
-      return res.status(err.status || 500).json({ success: false, message: err.message });
-    }
-  }
-
-  /**
-   * Update chatbot settings for a specific Zalo account
-   * PUT /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot
-   * Saves all AI settings including system_instruction
-   */
-  async updateZaloAccountChatbotSettings(req, res) {
-    try {
-      const zaloSettingId = parseInt(req.params.zaloSettingId);
-      if (!zaloSettingId) {
-        return res.status(400).json({ success: false, message: 'Invalid Zalo account ID' });
-      }
-      // Save all AI settings including system_instruction
-      const settings = await chatbotZaloAccountRepository.upsertSettings(
-        resolveWorkspaceOwnerId(req.user),
-        zaloSettingId,
-        req.body
-      );
-      await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CHANNEL_UPDATED, AUDIT_ENTITY_TYPES.CHATBOT_CHANNEL, settings.id, { channelType: 'zalo_personal', zaloSettingId });
-      return res.json({ success: true, data: settings });
-    } catch (err) {
-      return res.status(err.status || 500).json({ success: false, message: err.message });
-    }
-  }
-
-  /**
    * Toggle chatbot for a specific Zalo account + chatbot combination.
    * POST /api/ai/chatbot/zalo-account/:zaloSettingId/chatbot/toggle
    *
@@ -1031,28 +988,6 @@ class ChatbotController {
     try {
       await chatbotRepository.deleteWidget(parseInt(req.params.id), resolveWorkspaceOwnerId(req.user));
       return res.json({ success: true, message: 'Widget deleted' });
-    } catch (err) {
-      return res.status(500).json({ success: false, message: err.message });
-    }
-  }
-
-  // Public widget config (no auth required)
-  async getWidgetConfig(req, res) {
-    try {
-      const widget = await chatbotRepository.findWidgetByKey(req.params.widgetKey);
-      if (!widget) return res.status(404).json({ success: false, message: 'Widget not found' });
-      return res.json({
-        success: true,
-        data: {
-          widgetKey: widget.widget_key,
-          displayName: widget.display_name,
-          themeColor: widget.theme_color,
-          position: widget.position,
-          welcomeMessage: widget.welcome_message || widget.greeting_msg,
-          subAssistantName: widget.sub_assistant_name,
-          avatarUrl: widget.avatar_url,
-        },
-      });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }
@@ -1694,35 +1629,6 @@ class ChatbotController {
       });
     } catch (err) {
       console.error('[CustomChatbot] deleteCustomChatbot error:', err);
-      return res.status(500).json({ success: false, message: err.message });
-    }
-  }
-
-  async getCustomChatbotDocuments(req, res) {
-    try {
-      const { chatbotId } = req.params;
-      const id = parseInt(chatbotId, 10);
-
-      if (Number.isNaN(id)) {
-        return res.status(400).json({ success: false, message: 'Invalid chatbot ID' });
-      }
-
-      // pg trả BIGINT dưới dạng chuỗi → phải so sánh qua Number, nếu không chủ
-      // sở hữu hợp lệ cũng bị 404 ("3" !== 3).
-      const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      const chatbot = await chatbotRepository.findChatbotById(id, ownerUserId);
-      if (!chatbot) {
-        return res.status(404).json({ success: false, message: 'Chatbot not found' });
-      }
-
-      const documents = await chatbotRepository.getCustomChatbotDocuments(id, ownerUserId);
-
-      return res.json({
-        success: true,
-        documents,
-      });
-    } catch (err) {
-      console.error('[CustomChatbot] Get documents error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }

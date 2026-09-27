@@ -151,12 +151,6 @@ class ChatbotStudioConversationRepository {
     return result.rows[0];
   }
 
-  async deleteMessagesByConversation(conversationId) {
-    await db.query(
-      `DELETE FROM chatbot_studio_messages WHERE id_conversation = $1`,
-      [conversationId]
-    );
-  }
 }
 
 export default new ChatbotStudioConversationRepository();

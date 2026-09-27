@@ -28,7 +28,6 @@ import {
   normalizeAssistantLocale,
   resolveAssistantLocaleContext,
 } from '../utils/assistantLocale.util.js';
-import { MAX_UPLOAD_FILE_BYTES, MAX_UPLOAD_FILE_MB } from '../utils/uploadLimits.util.js';
 import { resolveWorkspaceOwnerId, StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { getNodeSubtype } from '../utils/nodeSubtype.util.js';
@@ -1996,49 +1995,6 @@ class AiController {
   }
 
   /**
-   * Upload logo image for Custom AI Chatbot.
-   */
-  async customChatLogoUpload(req, res) {
-    try {
-      if (!req.file) {
-        return res.status(400).json({ success: false, message: 'Không có file ảnh' });
-      }
-      if (req.file.size > MAX_UPLOAD_FILE_BYTES) {
-        return res.status(400).json({
-          success: false,
-          message: `File ảnh vượt quá ${MAX_UPLOAD_FILE_MB}MB`,
-        });
-      }
-      const allowedFormats = ['image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/svg+xml'];
-      if (!allowedFormats.includes(req.file.mimetype)) {
-        return res.status(400).json({ success: false, message: 'Định dạng ảnh không được hỗ trợ' });
-      }
-
-      const cloudinary = (await import('../config/cloudinary.js')).default;
-      const result = await new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-          { folder: 'chatbot_logos', resource_type: 'image', allowed_formats: ['jpg', 'jpeg', 'png', 'webp', 'gif', 'svg'] },
-          (err, data) => (err ? reject(err) : resolve(data))
-        );
-        stream.end(req.file.buffer);
-      });
-
-      await logWorkspaceMutation(
-        req,
-        AUDIT_ACTIONS.MEDIA_UPLOADED,
-        AUDIT_ENTITY_TYPES.MEDIA_OBJECT,
-        null,
-        { source: 'chatbot_logo', size: req.file.size, mime: req.file.mimetype }
-      );
-
-      return res.json({ success: true, data: { url: result.secure_url } });
-    } catch (error) {
-      console.error('[CustomChatLogoUpload] Error:', error);
-      return res.status(500).json({ success: false, message: 'Upload logo thất bại' });
-    }
-  }
-
-  /**
    * Get documents for Custom AI Chatbot
    */
   async getCustomChatbotDocuments(req, res) {
@@ -2424,22 +2380,6 @@ class AiController {
       return res.json({ success: true, message: 'Đã xóa cuộc hội thoại' });
     } catch (error) {
       console.error('[ChatbotStudio] Delete conversation error:', error);
-      return res.status(404).json({ success: false, message: error.message });
-    }
-  }
-
-  /**
-   * Clear all messages in conversation
-   */
-  async clearChatbotStudioConversation(req, res) {
-    try {
-      await chatbotStudioConversationService.clearConversation({
-        userId: resolveWorkspaceOwnerId(req.user),
-        conversationId: req.params.id,
-      });
-      return res.json({ success: true, message: 'Đã xóa tin nhắn' });
-    } catch (error) {
-      console.error('[ChatbotStudio] Clear conversation error:', error);
       return res.status(404).json({ success: false, message: error.message });
     }
   }

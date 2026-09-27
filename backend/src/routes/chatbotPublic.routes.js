@@ -16,9 +16,6 @@ router.use(allowAllCorsMiddleware);
 
 // ── Public Web Widget API (no auth required) ─────────────────────
 
-// Get widget configuration
-router.get('/widget/:widgetKey/config', chatbotController.getWidgetConfig.bind(chatbotController));
-
 // NOTE: /widget/conversations* routes were removed (orphan + IDOR). Live widget uses
 // /custom-chatbot/:widgetKey/* with sessionId scoping. See PLAN_FIX_CHATBOT_INBOX Phase 1.
 
@@ -64,8 +61,5 @@ router.delete(
   publicChatLimiter,
   chatbotController.deletePublicChatAttachmentById.bind(chatbotController)
 );
-
-// Get messages for polling agent replies (requires sessionId)
-router.get('/custom-chatbot/id/:chatbotId/messages', chatbotController.getChatMessages.bind(chatbotController));
 
 export default router;

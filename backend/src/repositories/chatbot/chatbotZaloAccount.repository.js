@@ -137,52 +137,6 @@ class ChatbotZaloAccountRepository {
   }
 
   /**
-   * Upsert chatbot settings for a Zalo account
-   * @param {number} userId
-   * @param {number} zaloSettingId
-   * @param {object} data
-   * @returns {Promise<object>}
-   */
-  async upsertSettings(userId, zaloSettingId, data) {
-    await this.assertOwnedConfiguration(userId, zaloSettingId, data);
-    const { rows } = await db.query(
-      `INSERT INTO chatbot_zalo_account_settings
-         (id_user, id_zalo_setting, is_enabled, id_sub_assistant, welcome_message,
-          ai_model, temperature, max_tokens, response_style, system_instruction, settings,
-          id_chatbot)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
-       ON CONFLICT (id_user, id_zalo_setting, id_chatbot) DO UPDATE SET
-         is_enabled = EXCLUDED.is_enabled,
-         id_sub_assistant = EXCLUDED.id_sub_assistant,
-         welcome_message = EXCLUDED.welcome_message,
-         ai_model = EXCLUDED.ai_model,
-         temperature = EXCLUDED.temperature,
-         max_tokens = EXCLUDED.max_tokens,
-         response_style = EXCLUDED.response_style,
-         system_instruction = EXCLUDED.system_instruction,
-         settings = EXCLUDED.settings,
-         id_chatbot = EXCLUDED.id_chatbot,
-         updated_at = NOW()
-       RETURNING *`,
-      [
-        userId,
-        zaloSettingId,
-        data.is_enabled !== undefined ? data.is_enabled : false,
-        data.id_sub_assistant || null,
-        data.welcome_message || null,
-        data.ai_model || 'gemini-2.5-flash',
-        data.temperature || 0.7,
-        data.max_tokens || 2048,
-        data.response_style || 'friendly',
-        data.system_instruction || null,
-        JSON.stringify(data.settings || {}),
-        data.id_chatbot || null,
-      ]
-    );
-    return rows[0];
-  }
-
-  /**
    * Enable/disable chatbot for a Zalo account linked to a specific chatbot.
    * Each (user, zalo, chatbot) tuple is independent — toggling chatbot A does not
    * affect chatbot B sharing the same Zalo account.

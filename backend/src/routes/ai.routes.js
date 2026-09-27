@@ -100,13 +100,9 @@ router.get('/chatbot-studio/conversations/:id/messages', requirePermission('chat
 router.post('/chatbot-studio/conversations', requirePermission('chatbots_manage'), aiController.createChatbotStudioConversation.bind(aiController));
 router.post('/chatbot-studio/conversations/:id/messages', requirePermission('chatbots_manage'), aiController.addChatbotStudioMessage.bind(aiController));
 router.delete('/chatbot-studio/conversations/:id', requirePermission('chatbots_manage'), aiController.deleteChatbotStudioConversation.bind(aiController));
-router.delete('/chatbot-studio/conversations/:id/messages', requirePermission('chatbots_manage'), aiController.clearChatbotStudioConversation.bind(aiController));
 
 // Custom AI - Document upload (extract, chunk, embed)
 router.post('/custom-chat/upload', requirePermission('chatbots_manage'), upload.single('file'), aiController.customChatUpload.bind(aiController));
-
-// Custom AI - Logo image upload
-router.post('/custom-chat/logo', requirePermission('chatbots_manage'), upload.single('file'), aiController.customChatLogoUpload.bind(aiController));
 
 // Custom AI - Get documents
 router.get('/custom-chat/documents/:chatbotId', requirePermission('chatbots_manage'), aiController.getCustomChatbotDocuments.bind(aiController));

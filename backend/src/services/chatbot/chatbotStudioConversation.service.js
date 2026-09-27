@@ -128,18 +128,6 @@ class ChatbotStudioConversationService {
     return true;
   }
 
-  async clearConversation({ userId, conversationId }) {
-    const conversation = await chatbotStudioConversationRepository.getConversationById(userId, conversationId);
-    if (!conversation) {
-      throw new Error('Không tìm thấy cuộc hội thoại');
-    }
-    await chatbotStudioConversationRepository.deleteMessagesByConversation(conversationId);
-    await chatbotStudioConversationRepository.updateConversation(conversationId, {
-      title: 'Cuộc trò chuyện mới',
-      message_count: 0,
-    });
-    return true;
-  }
 }
 
 export default new ChatbotStudioConversationService();
