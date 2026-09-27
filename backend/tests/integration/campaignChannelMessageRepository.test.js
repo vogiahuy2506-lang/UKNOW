@@ -255,6 +255,29 @@ describe('PR-2 — campaign_channel_messages CRUD + dedupe + FK SET NULL', () =>
     expect(sameRunResult).toBeNull();
     void sameRunId;
 
+    // Review 27/09: run khác gửi THẤT BẠI cùng khoá — phải null. Lọt điều kiện status='sent' thì
+    // một lần hỏng ở lượt trước chặn vĩnh viễn lượt sau gửi lại (đột biến "bỏ status='sent'" từng sống sót).
+    await insertRawMessage({
+      campaignId,
+      runId: otherRunId,
+      nodeId,
+      channel: 'telegram',
+      recipientKey: 'peer_failed',
+      stepIndex: 1,
+      status: 'failed',
+      createdAtSql: "now() - interval '1 hour'",
+    });
+    const failedCrossRun = await campaignChannelMessageRepository.findExistingSentCrossRun({
+      ownRunId,
+      campaignId,
+      nodeId,
+      channel: 'telegram',
+      recipientKey: 'peer_failed',
+      stepIndex: 1,
+      windowHours: 24,
+    });
+    expect(failedCrossRun).toBeNull();
+
     // Dòng 25h trước, cửa sổ 24h — ngoài cửa sổ, phải null.
     await insertRawMessage({
       campaignId,
