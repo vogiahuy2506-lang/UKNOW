@@ -1,6 +1,7 @@
 import db from '../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL } from '../utils/billingCycle.util.js';
 import { getStaleSendingSeconds } from '../config/sendQuota.config.js';
+import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
 
 // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 — LUẬT mọi mốc giờ đi vào SQL trong file này:
 // 1. Tham số giờ từ JS (Date) luôn ép `$n::timestamptz` NGAY LẦN XUẤT HIỆN ĐẦU TIÊN trong câu.
@@ -752,6 +753,7 @@ export async function countEmailSentTodayWithLedger(queryable, billingUserId, da
  * @returns {Promise<number>}
  */
 export async function countZaloSentTodayWithLedger(queryable, billingUserId, dayStart, dayEnd) {
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -796,8 +798,20 @@ export async function countZaloSentTodayWithLedger(queryable, billingUserId, day
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND vn_day_start = $2 AND vn_day_end = $3
       ), 0)
+      +
+      COALESCE((
+        SELECT COUNT(*)
+        FROM campaign_channel_messages ccm
+        WHERE ccm.workspace_owner_id = $1
+          AND ccm.channel = ANY($4::text[])
+          AND ccm.status = 'sent'
+          AND NOT ccm.is_preview
+          AND ccm.quota_reservation_id IS NULL
+          AND ccm.sent_at >= $2::timestamptz
+          AND ccm.sent_at < $3::timestamptz
+      ), 0)
     )::int AS total`,
-    [billingUserId, dayStart, dayEnd]
+    [billingUserId, dayStart, dayEnd, adapterZaloKeys]
   );
   return Number(rows[0]?.total || 0);
 }
@@ -912,6 +926,7 @@ export async function countEmailSentInCycleWithLedger(queryable, billingUserId, 
  * @returns {Promise<number>}
  */
 export async function countZaloSentInCycleWithLedger(queryable, billingUserId, cycleStart, cycleEnd) {
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -956,8 +971,20 @@ export async function countZaloSentInCycleWithLedger(queryable, billingUserId, c
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND cycle_start = $2 AND cycle_end = $3
       ), 0)
+      +
+      COALESCE((
+        SELECT COUNT(*)
+        FROM campaign_channel_messages ccm
+        WHERE ccm.workspace_owner_id = $1
+          AND ccm.channel = ANY($4::text[])
+          AND ccm.status = 'sent'
+          AND NOT ccm.is_preview
+          AND ccm.quota_reservation_id IS NULL
+          AND ccm.sent_at >= $2::timestamptz
+          AND ccm.sent_at < $3::timestamptz
+      ), 0)
     )::int AS total`,
-    [billingUserId, cycleStart, cycleEnd]
+    [billingUserId, cycleStart, cycleEnd, adapterZaloKeys]
   );
   return Number(rows[0]?.total || 0);
 }
@@ -1027,6 +1054,7 @@ export async function countEmployeeSentTodayWithLedger(
   }
 
   // channel === 'zalo'
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -1071,8 +1099,21 @@ export async function countEmployeeSentTodayWithLedger(
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND vn_day_start = $3 AND vn_day_end = $4
       ), 0)
+      +
+      COALESCE((
+        SELECT COUNT(*)
+        FROM campaign_channel_messages ccm
+        WHERE ccm.workspace_owner_id = $1
+          AND ccm.actor_user_id = $2
+          AND ccm.channel = ANY($5::text[])
+          AND ccm.status = 'sent'
+          AND NOT ccm.is_preview
+          AND ccm.quota_reservation_id IS NULL
+          AND ccm.sent_at >= $3::timestamptz
+          AND ccm.sent_at < $4::timestamptz
+      ), 0)
     )::int AS total`,
-    [ownerId, employeeId, dayStart, dayEnd]
+    [ownerId, employeeId, dayStart, dayEnd, adapterZaloKeys]
   );
   return Number(rows[0]?.total || 0);
 }
@@ -1137,6 +1178,7 @@ export async function countEmployeeSentInCycleWithLedger(
   }
 
   // channel === 'zalo'
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -1181,8 +1223,21 @@ export async function countEmployeeSentInCycleWithLedger(
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND cycle_start = $3 AND cycle_end = $4
       ), 0)
+      +
+      COALESCE((
+        SELECT COUNT(*)
+        FROM campaign_channel_messages ccm
+        WHERE ccm.workspace_owner_id = $1
+          AND ccm.actor_user_id = $2
+          AND ccm.channel = ANY($5::text[])
+          AND ccm.status = 'sent'
+          AND NOT ccm.is_preview
+          AND ccm.quota_reservation_id IS NULL
+          AND ccm.sent_at >= $3::timestamptz
+          AND ccm.sent_at < $4::timestamptz
+      ), 0)
     )::int AS total`,
-    [ownerId, employeeId, cycleStart, cycleEnd]
+    [ownerId, employeeId, cycleStart, cycleEnd, adapterZaloKeys]
   );
   return Number(rows[0]?.total || 0);
 }

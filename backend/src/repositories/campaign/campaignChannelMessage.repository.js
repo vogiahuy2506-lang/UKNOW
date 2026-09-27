@@ -53,19 +53,25 @@ class CampaignChannelMessageRepository {
     isPreview = false,
     workspaceOwnerId = null,
     actorUserId = null,
+    quotaReservationId = null,
   }) {
     const safeStepIndex = Number.parseInt(stepIndex, 10);
     const rawOwnerId = workspaceOwnerId != null ? Number.parseInt(workspaceOwnerId, 10) : null;
     const safeWorkspaceOwnerId = Number.isFinite(rawOwnerId) ? rawOwnerId : null;
     const rawActorId = actorUserId != null ? Number.parseInt(actorUserId, 10) : null;
     const safeActorUserId = Number.isFinite(rawActorId) ? rawActorId : null;
+    // PR-4 — null khi mode quota 'off' hoặc không active (reserveSendQuota trả reservation.id=null
+    // trong trường hợp đó) — cùng khuôn zalo_messages.quota_reservation_id.
+    const rawReservationId = quotaReservationId != null ? Number.parseInt(quotaReservationId, 10) : null;
+    const safeQuotaReservationId = Number.isFinite(rawReservationId) ? rawReservationId : null;
 
     const result = await db.query(
       `INSERT INTO campaign_channel_messages
          (id_campaign, id_run, id_node, channel, account_key, recipient_key, recipient_display,
-          step_index, status, is_preview, workspace_owner_id, actor_user_id, created_at, updated_at)
+          step_index, status, is_preview, workspace_owner_id, actor_user_id, quota_reservation_id,
+          created_at, updated_at)
        VALUES
-         ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11, now(), now())
+         ($1, $2, $3, $4, $5, $6, $7, $8, 'queued', $9, $10, $11, $12, now(), now())
        RETURNING id`,
       [
         campaignId,
@@ -79,6 +85,7 @@ class CampaignChannelMessageRepository {
         Boolean(isPreview),
         safeWorkspaceOwnerId,
         safeActorUserId,
+        safeQuotaReservationId,
       ]
     );
     return result.rows[0]?.id ?? null;

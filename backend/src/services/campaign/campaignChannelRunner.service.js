@@ -8,6 +8,13 @@
 import campaignChannelMessageRepository from '../../repositories/campaign/campaignChannelMessage.repository.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
 import { ChannelSendError } from './campaignChannelRegistry.service.js';
+import {
+  reserveSendQuota,
+  markSendQuotaSending,
+  consumeSendQuota,
+  releaseSendQuota,
+} from '../quota/sendQuotaReservation.service.js';
+import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota/sendQuotaKey.service.js';
 
 const VN_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
@@ -136,28 +143,145 @@ function resolveRecipientRows({ config, nodeOutputs, lastOutputItems }) {
   return Array.isArray(lastOutputItems) ? lastOutputItems : [];
 }
 
-/** Bản mặc định engine truyền cho MỌI node adapter — PR-3 chưa kênh thật nào đăng ký nên nhánh
- * này không chạm production; PR-4 thay bằng quota thật (reserve/consume/release qua
- * send_quota_reservations). Throw ngay ở reserve() để không lặng lẽ bỏ qua quota. */
-export function createDefaultChannelQuotaGate() {
+/**
+ * PR-4 — quotaGate THẬT, engine truyền mặc định cho MỌI node adapter (thay bản throw
+ * CHANNEL_QUOTA_NOT_WIRED của PR-3). Khuôn ĐÚNG `reserveCampaignZaloQuota`
+ * (campaignZaloSender.service.js:1987-2050): `reserveSendQuota()` nhận `channel: quotaChannel`
+ * ('zalo') là cột limit/CHECK thật sự bị trừ (SỬA PR-4: không migration mới nới `chk_sqr_channel`,
+ * reservation của kênh adapter TRÔNG Y HỆT một reservation Zalo bình thường —
+ * evaluateReservationQuotaPolicy vì vậy KHÔNG cần sửa gì thêm).
+ *
+ * LỆCH LỆNH GIAO (phát hiện qua test tích hợp (g), đã báo lại) — lệnh giao viết
+ * `channel: descriptor.key` (kênh THẬT) cho `buildCampaignReservationKey`, nhưng
+ * `CANONICAL_CAMPAIGN` (sendQuota.repository.js) hard-code đoạn kênh của key phải khớp
+ * `(email|zalo)` — dùng kênh thật (vd 'telegram') làm validateReservationKey ném
+ * INVALID_RESERVATION_KEY ngay khi vào mode enforce/test_enforce. Đã đổi dùng `quotaChannel`
+ * cho CẢ HAI — an toàn vì `nodeId` đã tự phân biệt kênh (một node chỉ gắn với đúng 1 subtype).
+ *
+ * GHI CHÚ GIỚI HẠN (không có trong lệnh giao, tự phát hiện khi đọc code): `reserveCampaignZaloQuota`
+ * gốc còn một nhánh "replay" (reservation đã ở status 'consumed' do lần thử trước) — bỏ qua sendOne,
+ * trả thẳng response cũ. Gate này KHÔNG có nhánh đó: cửa sổ crash duy nhất nó bỏ sót là tiến trình
+ * chết ĐÚNG lúc giữa sendOne thành công và markSent/consumeSendQuota — hẹp, và v1 chấp nhận (không
+ * nằm trong phạm vi lệnh giao PR-4, cần báo lại nếu muốn vá thêm).
+ */
+export function createCampaignChannelQuotaGate() {
   return {
-    async reserve() {
-      const error = new Error(
-        'Quota kênh adapter chưa được đấu nối (PR-4 sẽ thay bằng quota thật) — không gửi.'
-      );
-      error.code = 'CHANNEL_QUOTA_NOT_WIRED';
-      throw error;
+    /**
+     * @param {object} input
+     * @param {string} input.realChannel descriptor.key — vd 'telegram' (chỉ dùng để ghi vào
+     *   requestPayload.channel cho dễ đọc log/fingerprint — KHÔNG dùng cho reservation KEY, xem
+     *   ghi chú "LỆCH LỆNH GIAO" phía trên).
+     * @param {string} input.quotaChannel descriptor.quotaChannel — 'email' | 'zalo' (dùng cho
+     *   CẢ reservation KEY lẫn reserveSendQuota's channel — cột limit/CHECK thật).
+     * @param {number} [input.quantity=1]
+     * @param {number} input.userId billingUserId (chủ workspace — campaign luôn tính quota chủ).
+     * @param {number} input.runId
+     * @param {number|string} input.nodeId
+     * @param {string} input.recipientKey
+     * @param {number} input.stepIndex 1-based.
+     * @param {string} [input.content] nội dung ĐÃ RENDER (không có bước rewrite tracking-link như
+     *   Zalo nên dùng thẳng, không cần "quotaContentKey gốc" như campaignZaloSender).
+     * @returns {Promise<{reservationId: number|null, active: boolean}>}
+     */
+    async reserve({
+      realChannel,
+      quotaChannel,
+      quantity = 1,
+      userId,
+      runId,
+      nodeId,
+      recipientKey,
+      stepIndex,
+      content,
+    }) {
+      if (!userId) return { reservationId: null, active: false };
+      // LỆCH LỆNH GIAO (phát hiện qua test (g), báo lại) — lệnh giao viết
+      // `channel: descriptor.key` (kênh THẬT, vd 'telegram') cho reservationKey, nhưng
+      // `CANONICAL_CAMPAIGN` (sendQuota.repository.js) hard-code đoạn kênh của key phải khớp
+      // `(email|zalo)` — bất kỳ kênh thật nào khác 'zalo' đều bị validateReservationKey chặn
+      // INVALID_RESERVATION_KEY ngay khi vào mode enforce/test_enforce. Dùng `quotaChannel`
+      // ('zalo') ở đây thay vì `realChannel` — an toàn vì `nodeId` đã tự phân biệt kênh (một
+      // node chỉ gắn với đúng 1 subtype/kênh, không có 2 kênh thật cùng dùng chung nodeId).
+      const reservationKey = buildCampaignReservationKey({
+        runId,
+        nodeId,
+        channel: quotaChannel,
+        recipient: recipientKey,
+        logicalStep: stepIndex,
+      });
+      const requestPayload = {
+        channel: realChannel,
+        recipient: recipientKey,
+        sourceType: 'campaign_zalo',
+        quantity,
+        content: content || '',
+      };
+      const requestFingerprint = computeRequestFingerprint(requestPayload);
+      const parsedNodeId = Number.parseInt(nodeId, 10);
+      let reservation;
+      try {
+        reservation = await reserveSendQuota({
+          userId,
+          channel: quotaChannel,
+          quantity,
+          reservationKey,
+          requestFingerprint,
+          requestPayload,
+          sourceType: 'campaign_zalo',
+          sourceRef: {
+            runId,
+            nodeId: Number.isFinite(parsedNodeId) ? parsedNodeId : null,
+            stepIndex,
+          },
+        });
+      } catch (quotaErr) {
+        // Chỉ quota-exceeded thật (403 RESOURCE_LIMIT_EXCEEDED) đổi nhãn PLAN_QUOTA — khuôn
+        // reserveCampaignZaloQuota. Lỗi khác (503/409/...) ném nguyên trạng.
+        if (quotaErr.code !== 'RESOURCE_LIMIT_EXCEEDED') {
+          throw quotaErr;
+        }
+        const err = new Error(
+          `[PLAN_QUOTA] ${quotaErr.message || 'Vượt giới hạn gửi của gói dịch vụ.'}`
+        );
+        err.code = 'PLAN_SEND_LIMIT_EXCEEDED';
+        err.resetAt = quotaErr.resetAt ?? null;
+        err.limitType = quotaErr.limitType ?? null;
+        throw err;
+      }
+      const active = reservation.mode === 'enforce' || reservation.mode === 'test_enforce';
+      if (active) {
+        await markSendQuotaSending({ reservationId: reservation.id });
+      }
+      return { reservationId: active ? reservation.id : null, active };
     },
-    async consume() {},
-    async release() {},
+
+    /**
+     * @param {number|null} reservationId
+     * @param {object} [input]
+     * @param {object} [input.responseSnapshot]
+     */
+    async consume(reservationId, { responseSnapshot = null } = {}) {
+      if (reservationId == null) return;
+      await consumeSendQuota({ reservationId, responseSnapshot });
+    },
+
+    /**
+     * @param {number|null} reservationId
+     * @param {object} [input]
+     * @param {string} [input.failureCode]
+     */
+    async release(reservationId, { failureCode = null } = {}) {
+      if (reservationId == null) return;
+      await releaseSendQuota({ reservationId, failureCode });
+    },
   };
 }
 
-/** Bản no-op cho test tích hợp PR-3 (mock descriptor) — không giữ/trừ quota thật nào. */
+/** Bản no-op cho test tích hợp PR-3/PR-4 (mock descriptor) — không giữ/trừ quota thật nào. */
 export function createNoopChannelQuotaGate() {
   return {
     async reserve() {
-      return null;
+      return { reservationId: null, active: false };
     },
     async consume() {},
     async release() {},
@@ -349,15 +473,21 @@ export async function runAdapterSendNode(ctx) {
           { campaignId, nodeId: node.id }
         );
 
-        // reserve() TRƯỚC insertQueued — lỗi ở đây (vd CHANNEL_QUOTA_NOT_WIRED khi engine chưa đấu
-        // nối quota thật, Việc 4) LUÔN dừng cả node ngay, KHÔNG đi qua classifyError: đây là lỗi hạ
-        // tầng, không phải lỗi gửi của riêng người nhận này.
+        // reserve() TRƯỚC insertQueued — lỗi ở đây (vd PLAN_SEND_LIMIT_EXCEEDED khi vượt hạn mức
+        // gói, Việc 1 PR-4) LUÔN dừng cả node ngay, KHÔNG đi qua classifyError: đây là lỗi hạ tầng/
+        // quota, không phải lỗi gửi của riêng người nhận này. v1 = dừng node → run failed (PR-5
+        // mới đổi thành defer, ghi rõ ở đây để không ai tưởng nhầm là đã có).
         // eslint-disable-next-line no-await-in-loop
-        const reservationId = await quotaGate.reserve({
-          channel: descriptor.quotaChannel,
+        const { reservationId, active: quotaActive } = await quotaGate.reserve({
+          realChannel: descriptor.key,
+          quotaChannel: descriptor.quotaChannel,
           quantity: 1,
           userId,
-          workspaceOwnerId,
+          runId,
+          nodeId: node.id,
+          recipientKey,
+          stepIndex: oneBasedStep,
+          content: text,
         });
 
         let messageId = null;
@@ -374,6 +504,7 @@ export async function runAdapterSendNode(ctx) {
             stepIndex: oneBasedStep,
             workspaceOwnerId,
             actorUserId: userId,
+            quotaReservationId: reservationId,
           });
           // eslint-disable-next-line no-await-in-loop
           const sendResult = await descriptor.adapter.sendOne({
@@ -386,9 +517,9 @@ export async function runAdapterSendNode(ctx) {
           await campaignChannelMessageRepository.markSent(messageId, {
             providerMessageId: sendResult?.messageId || null,
           });
-          if (reservationId) {
+          if (quotaActive) {
             // eslint-disable-next-line no-await-in-loop
-            await quotaGate.consume(reservationId);
+            await quotaGate.consume(reservationId, { responseSnapshot: sendResult || null });
           }
           hasSentAny = true;
           recordSendTimestamp(perHourKey, Date.now());
@@ -413,10 +544,10 @@ export async function runAdapterSendNode(ctx) {
           // eslint-disable-next-line no-await-in-loop
           progress = await getRecipientProgress({ nodeId: node.id, channel: descriptor.key, recipientKey });
         } catch (sendError) {
-          if (reservationId) {
+          if (quotaActive) {
             try {
               // eslint-disable-next-line no-await-in-loop
-              await quotaGate.release(reservationId);
+              await quotaGate.release(reservationId, { failureCode: 'CHANNEL_SEND_FAILED' });
             } catch (releaseError) {
               console.warn('[CampaignChannelRunner] quotaGate.release lỗi:', releaseError?.message);
             }
@@ -487,7 +618,7 @@ export async function runAdapterSendNode(ctx) {
 export default {
   runAdapterSendNode,
   isWithinQuietHours,
-  createDefaultChannelQuotaGate,
+  createCampaignChannelQuotaGate,
   createNoopChannelQuotaGate,
   __resetPerHourWindowForTest,
 };

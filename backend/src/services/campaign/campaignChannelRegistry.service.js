@@ -158,6 +158,20 @@ export function getAdapterDescriptorBySubtype(subtype) {
 }
 
 /**
+ * `key` của mọi kênh 'adapter' có `quotaChannel` khớp giá trị truyền vào — PR-4 dùng để cộng vế
+ * `campaign_channel_messages` vào các hàm đếm quota Zalo (userSendLimit.util.js/sendQuota.repository.js).
+ * Danh sách rỗng khi chưa kênh adapter nào đăng ký (production hiện tại) — vế SQL tương ứng = 0.
+ *
+ * @param {string} quotaChannel 'email' | 'zalo'
+ * @returns {string[]}
+ */
+export function getAdapterChannelKeysByQuotaChannel(quotaChannel) {
+  return getAllDescriptors()
+    .filter((d) => d.engine === 'adapter' && d.quotaChannel === quotaChannel)
+    .map((d) => d.key);
+}
+
+/**
  * Đăng ký một kênh 'adapter' CHỈ DÙNG CHO TEST (mock descriptor). Throw nếu gọi ngoài
  * `NODE_ENV=test` — PR-3 không đăng ký kênh thật nào ở production/dev.
  *
@@ -189,6 +203,7 @@ export default {
   getContinuousReplaySubtypes,
   getContinuousSupportedSubtypes,
   getAdapterDescriptorBySubtype,
+  getAdapterChannelKeysByQuotaChannel,
   __registerChannelForTest,
   __resetTestChannels,
 };

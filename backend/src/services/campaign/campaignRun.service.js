@@ -6,7 +6,7 @@ import campaignNodeDataService from './campaignNodeData.service.js';
 import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
-import campaignChannelRunner, { createDefaultChannelQuotaGate } from './campaignChannelRunner.service.js';
+import campaignChannelRunner, { createCampaignChannelQuotaGate } from './campaignChannelRunner.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { buildZaloRateLimiterFromEnv } from './buildZaloRateLimiterFromEnv.js';
@@ -165,11 +165,10 @@ class CampaignRunService {
     // --- Zalo rate-limit state & policy (shared env builder with diagnostic runner) ---
     this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
 
-    // PR-3 (tách tầng kênh gửi) — quotaGate cho node kênh 'adapter'. Mặc định THROW
-    // CHANNEL_QUOTA_NOT_WIRED (PR-3 chưa kênh thật nào đăng ký nên nhánh này không chạm
-    // production); PR-4 sẽ thay bằng bản đấu nối quota thật. Property (không phải hằng số) để
-    // test override bằng bản no-op, cùng khuôn `this.zaloRateLimiter.XXX` ở các spec khác.
-    this.channelQuotaGate = createDefaultChannelQuotaGate();
+    // PR-4 (tách tầng kênh gửi) — quotaGate THẬT cho node kênh 'adapter' (thay bản throw
+    // CHANNEL_QUOTA_NOT_WIRED của PR-3). Property (không phải hằng số) để test override bằng bản
+    // no-op, cùng khuôn `this.zaloRateLimiter.XXX` ở các spec khác.
+    this.channelQuotaGate = createCampaignChannelQuotaGate();
 
     // RunId đã gửi email quota-pause trong process hiện tại (để clear cờ sau resume/gửi lại).
     this._quotaPauseNotifiedRunIds = new Set();

@@ -12,6 +12,7 @@ import {
   WALLET_ITEM_BY_CHANNEL,
 } from '../services/payment/topupWallet.service.js';
 import usageTrackingRepository from '../repositories/payment/usageTracking.repository.js';
+import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
 
 // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 — LUẬT mọi mốc giờ đi vào SQL trong file này:
 // 1. Tham số giờ từ JS (Date/ISO string) luôn ép `$n::timestamptz` NGAY LẦN XUẤT HIỆN ĐẦU TIÊN
@@ -214,6 +215,9 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
 }
 
 async function countEmployeeZaloSentToday(ownerId, employeeId) {
+  // PR-4 (tách tầng kênh gửi) — vế campaign_channel_messages cho kênh adapter đếm vào limit Zalo
+  // (quotaChannel='zalo'). Danh sách rỗng khi chưa kênh nào đăng ký (production hiện tại) → vế = 0.
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   return cached(`emp:${ownerId}:${employeeId}:zalo_today`, async () => {
     const { rows } = await db.query(
       `SELECT (
@@ -233,14 +237,24 @@ async function countEmployeeZaloSentToday(ownerId, employeeId) {
               AND (ul.metadata->>'actorUserId')::bigint = $2
               AND ul.resource_type = 'zalo_direct_send'
               AND ul.created_at >= CURRENT_DATE)
+         + (SELECT COUNT(*) FROM campaign_channel_messages ccm
+            WHERE ccm.workspace_owner_id = $1
+              AND ccm.actor_user_id = $2
+              AND ccm.channel = ANY($3::text[])
+              AND ccm.status = 'sent'
+              AND NOT ccm.is_preview
+              AND ccm.quota_reservation_id IS NULL
+              AND ccm.sent_at >= (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')
+              AND ccm.sent_at < ((CURRENT_DATE + 1)::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh'))
        )::int AS total`,
-      [ownerId, employeeId]
+      [ownerId, employeeId, adapterZaloKeys]
     );
     return toCount(rows[0]?.total);
   });
 }
 
 async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = null, cycleEnd = null, queryable = db) {
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   if (cycleStart && cycleEnd) {
     const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
     const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
@@ -264,8 +278,17 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
                 AND (ul.metadata->>'actorUserId')::bigint = $2
                 AND ul.resource_type = 'zalo_direct_send'
                 AND ul.created_at >= $3 AND ul.created_at < $4)
+           + (SELECT COUNT(*) FROM campaign_channel_messages ccm
+              WHERE ccm.workspace_owner_id = $1
+                AND ccm.actor_user_id = $2
+                AND ccm.channel = ANY($5::text[])
+                AND ccm.status = 'sent'
+                AND NOT ccm.is_preview
+                AND ccm.quota_reservation_id IS NULL
+                AND ccm.sent_at >= $3::timestamptz
+                AND ccm.sent_at < $4::timestamptz)
          )::int AS total`,
-        [ownerId, employeeId, startIso, endIso]
+        [ownerId, employeeId, startIso, endIso, adapterZaloKeys]
       );
       return toCount(rows[0]?.total);
     });
@@ -289,8 +312,16 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
               AND (ul.metadata->>'actorUserId')::bigint = $2
               AND ul.resource_type = 'zalo_direct_send'
               AND ul.created_at >= DATE_TRUNC('month', NOW()))
+         + (SELECT COUNT(*) FROM campaign_channel_messages ccm
+            WHERE ccm.workspace_owner_id = $1
+              AND ccm.actor_user_id = $2
+              AND ccm.channel = ANY($3::text[])
+              AND ccm.status = 'sent'
+              AND NOT ccm.is_preview
+              AND ccm.quota_reservation_id IS NULL
+              AND ccm.sent_at >= DATE_TRUNC('month', NOW()))
        )::int AS total`,
-      [ownerId, employeeId]
+      [ownerId, employeeId, adapterZaloKeys]
     );
     return toCount(rows[0]?.total);
   });
@@ -359,6 +390,7 @@ export async function countEmailSentThisMonth(billingUserId, cycleStart = null, 
 export { countEmailSentThisMonth as countEmailsSentThisMonth };
 
 async function countZaloSentToday(billingUserId) {
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   return cached(`${billingUserId}:zalo_today`, async () => {
     const { rows } = await db.query(
       `SELECT (
@@ -376,8 +408,16 @@ async function countZaloSentToday(billingUserId) {
           WHERE ul.id_user = $1
             AND ul.resource_type = 'zalo_direct_send'
             AND ul.created_at >= CURRENT_DATE)
+       + (SELECT COUNT(*) FROM campaign_channel_messages ccm
+          WHERE ccm.workspace_owner_id = $1
+            AND ccm.channel = ANY($2::text[])
+            AND ccm.status = 'sent'
+            AND NOT ccm.is_preview
+            AND ccm.quota_reservation_id IS NULL
+            AND ccm.sent_at >= (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')
+            AND ccm.sent_at < ((CURRENT_DATE + 1)::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh'))
        )::int AS total`,
-      [billingUserId]
+      [billingUserId, adapterZaloKeys]
     );
     return toCount(rows[0]?.total);
   });
@@ -386,6 +426,7 @@ async function countZaloSentToday(billingUserId) {
 export async function countZaloSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable = db) {
   const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
   const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
        (SELECT COUNT(*) FROM zalo_messages zm
@@ -403,8 +444,16 @@ export async function countZaloSentInCycleUncached(billingUserId, cycleStart, cy
         WHERE ul.id_user = $1
           AND ul.resource_type = 'zalo_direct_send'
           AND ul.created_at >= $2 AND ul.created_at < $3)
+     + (SELECT COUNT(*) FROM campaign_channel_messages ccm
+        WHERE ccm.workspace_owner_id = $1
+          AND ccm.channel = ANY($4::text[])
+          AND ccm.status = 'sent'
+          AND NOT ccm.is_preview
+          AND ccm.quota_reservation_id IS NULL
+          AND ccm.sent_at >= $2::timestamptz
+          AND ccm.sent_at < $3::timestamptz)
      )::int AS total`,
-    [billingUserId, startIso, endIso]
+    [billingUserId, startIso, endIso, adapterZaloKeys]
   );
   return toCount(rows[0]?.total);
 }
@@ -434,6 +483,7 @@ export async function countZaloSentThisMonth(billingUserId, cycleStart = null, c
 export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleEnd) {
   const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
   const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   return cached(`${billingUserId}:combined:${startIso}:${endIso}`, async () => {
     const { rows } = await db.query(
       `SELECT (
@@ -458,8 +508,16 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
           WHERE ul.id_user = $1
             AND ul.resource_type IN ('email_direct_send', 'zalo_direct_send')
             AND ul.created_at >= $2 AND ul.created_at < $3)
+       + (SELECT COUNT(*) FROM campaign_channel_messages ccm
+          WHERE ccm.workspace_owner_id = $1
+            AND ccm.channel = ANY($4::text[])
+            AND ccm.status = 'sent'
+            AND NOT ccm.is_preview
+            AND ccm.quota_reservation_id IS NULL
+            AND ccm.sent_at >= $2::timestamptz
+            AND ccm.sent_at < $3::timestamptz)
        )::int AS total`,
-      [billingUserId, startIso, endIso]
+      [billingUserId, startIso, endIso, adapterZaloKeys]
     );
     return toCount(rows[0]?.total);
   });
@@ -520,6 +578,14 @@ export async function checkSendQuota({
     return okResult(null);
   }
 
+  // PR-4 (tách tầng kênh gửi) Việc 4 — trước đây bất kỳ channel khác 'email' đều âm thầm tính như
+  // Zalo (isEmail=false). Kênh adapter (Telegram/WhatsApp) LUÔN gọi quotaGate với
+  // channel=descriptor.quotaChannel ('email'|'zalo') đã dịch sẵn ở registry — hàm này KHÔNG cần tự
+  // dịch 'whatsapp'/'telegram'; nhận được giá trị khác thì chỉ có thể là lỗi gọi sai, khuôn
+  // accountDailyLimit.service.js:45.
+  if (channel !== 'email' && channel !== 'zalo') {
+    throw new Error(`checkSendQuota: kênh không hợp lệ '${channel}'`);
+  }
   const isEmail = channel === 'email';
   const requestedCount = Math.max(1, Number.parseInt(requiredCount, 10) || 1);
   const channelLabel = isEmail ? 'email' : 'Zalo';

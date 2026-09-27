@@ -350,28 +350,32 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     ).rejects.toMatchObject({ code: 'MOCK_NOT_CONFIGURED', statusCode: 400 });
   });
 
-  it('(f) quotaGate mặc định (không truyền no-op) -> run failed CHANNEL_QUOTA_NOT_WIRED, 0 lần gửi', async () => {
-    campaignRunService.channelQuotaGate = originalQuotaGate; // trả về bản mặc định (throw) của engine thật
+  it('(f) quotaGate mặc định (không truyền no-op) là gate THẬT của PR-4 — plan mặc định permissive thì gửi bình thường', async () => {
+    // PR-4 đổi engine.channelQuotaGate mặc định từ bản throw CHANNEL_QUOTA_NOT_WIRED (PR-3) sang
+    // gate thật (createCampaignChannelQuotaGate) — bài test này trước đây (PR-3) khẳng định "chưa
+    // đấu nối thì run failed", nay khẳng định ngược lại: đấu nối thật rồi, plan mặc định của
+    // createUser() rất rộng rãi (daily_zalo_limit=1000000) nên KHÔNG chặn, gửi bình thường. Kịch
+    // bản "quota chặn thật" đã có bộ test riêng ở campaignChannelAdapterQuotaPr4.test.js.
+    campaignRunService.channelQuotaGate = originalQuotaGate; // KHÔNG override — dùng đúng gate mặc định
 
     const campaign = await insertCampaign();
     const node = await insertNode({ campaignId: campaign.id, config: TWO_STEPS_CONFIG });
     const run = await insertRun({ campaignId: campaign.id });
     await runCampaignToCompletion(campaign.id, run.id);
 
-    expect(fakeSendOne).toHaveBeenCalledTimes(0);
+    expect(fakeSendOne).toHaveBeenCalledTimes(10);
 
     const { rows: runRows } = await db.query(
-      'SELECT status, error_message FROM campaign_runs WHERE id = $1',
+      'SELECT status FROM campaign_runs WHERE id = $1',
       [run.id]
     );
-    expect(runRows[0].status).toBe('failed');
-    expect(String(runRows[0].error_message || '')).toMatch(/quota|CHANNEL_QUOTA_NOT_WIRED/i);
+    expect(runRows[0].status).toBe('completed');
 
     const { rows: msgRows } = await db.query(
-      `SELECT COUNT(*)::int AS n FROM campaign_channel_messages WHERE id_node = $1`,
+      `SELECT COUNT(*)::int AS n FROM campaign_channel_messages WHERE id_node = $1 AND status = 'sent'`,
       [node.id]
     );
-    expect(msgRows[0].n).toBe(0);
+    expect(msgRows[0].n).toBe(10);
   });
 
   it('(g) mock rate_limit ở người 3 (5 người x 1 bước) -> run failed; total=3 success=2 failed=1 (F1)', async () => {
