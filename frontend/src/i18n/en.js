@@ -7927,6 +7927,19 @@ Feel free to ask me anything!`,
   },
 
   // Workspace invite banner + "no permissions yet" card (PLAN_NHAN_VIEN PR-3)
+  topupExpiringBanner: {
+    message: '{list} will expire on {date}',
+    renewCta: 'Renew',
+    dismiss: 'Dismiss',
+    item: {
+      zalo_accounts: '{qty} Zalo accounts',
+      email_accounts: '{qty} email accounts',
+      landing_pages: '{qty} landing pages',
+      chatbots: '{qty} chatbots',
+      employees: '{qty} employee slots',
+      storage_gb: '{qty} GB of storage',
+    },
+  },
   workspaceInvite: {
     singlePrefix: 'You are an employee of',
     enterSingle: "Go to {ownerName}'s workspace",

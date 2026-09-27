@@ -2,6 +2,8 @@ import api from './api';
 
 export const getTopupConfig = () => api.get('/topup/config');
 
+export const getExpiringTopupItems = () => api.get('/topup/expiring');
+
 export const quoteTopup = ({ quantities, months }) => (
   api.post('/topup/quote', { quantities, months })
 );

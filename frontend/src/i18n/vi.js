@@ -7939,6 +7939,19 @@ export default {
   },
 
   // Dải mời nhân viên chuyển sang không gian công ty + thẻ "chưa được cấp quyền nào" (PLAN_NHAN_VIEN PR-3)
+  topupExpiringBanner: {
+    message: '{list} sẽ hết hạn ngày {date}',
+    renewCta: 'Gia hạn',
+    dismiss: 'Đóng thông báo',
+    item: {
+      zalo_accounts: '{qty} tài khoản Zalo',
+      email_accounts: '{qty} tài khoản Email',
+      landing_pages: '{qty} landing page',
+      chatbots: '{qty} chatbot',
+      employees: '{qty} slot nhân viên',
+      storage_gb: '{qty} GB dung lượng lưu trữ',
+    },
+  },
   workspaceInvite: {
     singlePrefix: 'Bạn là nhân viên của',
     enterSingle: 'Vào không gian của {ownerName}',

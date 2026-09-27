@@ -9,6 +9,7 @@ import AiChatbot from '../features/ai/AiChatbot';
 import { useI18n } from '../i18n';
 import { useAuthStore } from '../stores/authStore';
 import CreditWarningBanner from '../components/layout/CreditWarningBanner';
+import TopupExpiringBanner from '../components/layout/TopupExpiringBanner';
 import WorkspaceInviteBanner from '../components/layout/WorkspaceInviteBanner';
 import { useRefreshUserOnFocus } from '../hooks/useRefreshUserOnFocus';
 import { usePostAuthGates } from '../features/auth/hooks/usePostAuthGates';
@@ -242,6 +243,7 @@ const MainLayout = ({ children = null }) => {
 
         <div className="flex-1 min-h-0 min-w-0 flex flex-col" style={{ paddingTop: HEADER_HEIGHT }}>
           {!isSpecialPage && <CreditWarningBanner />}
+          {!isSpecialPage && <TopupExpiringBanner />}
           {!isSpecialPage && <WorkspaceInviteBanner />}
           <main ref={mainContentRef} className={`flex-1 min-h-0 min-w-0 relative ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
             <div className="relative h-full flex flex-col min-h-0">
@@ -309,6 +311,7 @@ const MainLayout = ({ children = null }) => {
         }}
       >
         {!isBuilderPage && <CreditWarningBanner />}
+        {!isBuilderPage && <TopupExpiringBanner />}
         {!isBuilderPage && <WorkspaceInviteBanner />}
 
         <main
