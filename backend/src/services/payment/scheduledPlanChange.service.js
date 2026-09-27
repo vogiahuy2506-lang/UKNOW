@@ -7,7 +7,6 @@ import {
 import { lockUserForPlanActivation } from '../../repositories/user/user.repository.js';
 import { sendSystemEmail } from '../../utils/systemEmail.util.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
-import { formatVnDateTime } from '../../utils/vnTimeFormat.util.js';
 
 /**
  * Get active pending scheduled change for a user.

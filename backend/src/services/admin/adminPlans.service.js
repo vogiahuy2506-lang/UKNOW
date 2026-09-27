@@ -475,7 +475,7 @@ export async function assignPlan(planId, userEmail, {
 }
 
 /**
- * Gỡ gói của 1 user (super_admin override) — khác `unassignPlanFromUsers` (gỡ HÀNG LOẠT khi
+ * Gỡ gói của 1 user (super_admin override) — `removePlan` (ẩn gói custom) cũng đi đúng đường này cho từng user (trước PR-2 là `unassignPlanFromUsers` gỡ HÀNG LOẠT khi
  * ẩn/xoá 1 plan). Dùng lại `expireUserPlan` (đã đặt max_* = 0 đúng cách), rồi:
  *   - supersede mọi lệnh hẹn đổi gói đang pending — nếu không, cron 08:00 sẽ tự kích hoạt lại
  *     gói cho người vừa bị gỡ.
