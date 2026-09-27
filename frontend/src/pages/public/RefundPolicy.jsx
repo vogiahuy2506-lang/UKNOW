@@ -82,6 +82,16 @@ function RefundPolicy() {
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
               DIGISO only issues refunds when the fault lies with DIGISO, in the cases specified in Section 2.
             </p>
+            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+              Các trường hợp chấm dứt dịch vụ xem tại{' '}
+              <a href="/service-terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Điều kiện cung cấp dịch vụ</a>
+              , mục 4.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              See cases of service termination in the{' '}
+              <a href="/service-terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Terms of Service</a>
+              , Section 4.
+            </p>
           </section>
 
           <section className="mb-6 pp-section p-6">
@@ -90,12 +100,14 @@ function RefundPolicy() {
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>Hoàn tiền được áp dụng trong các trường hợp sau:</p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>Refunds apply in the following cases:</p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>Sự cố kỹ thuật nghiêm trọng kéo dài từ 7 ngày trở lên khiến không thể sử dụng dịch vụ.</li>
-              <li className={lc(language, 'en')}>Serious technical issues lasting 7 days or more preventing service use.</li>
-              <li className={lc(language, 'vi')}>DIGISO không cung cấp được dịch vụ đã cam kết trong hợp đồng.</li>
-              <li className={lc(language, 'en')}>DIGISO fails to provide services as committed in the contract.</li>
-              <li className={lc(language, 'vi')}>Lỗi thanh toán do hệ thống gây ra (thu phí hai lần, thu sai số tiền).</li>
-              <li className={lc(language, 'en')}>Payment errors caused by the system (double charge, incorrect amount).</li>
+              <li className={lc(language, 'vi')}>DIGISO không thể cung cấp dịch vụ do sự cố kỹ thuật hoặc hạ tầng từ phía DIGISO kéo dài từ 7 ngày trở lên, hoặc không cung cấp được dịch vụ đã cam kết.</li>
+              <li className={lc(language, 'en')}>DIGISO cannot provide the Service due to a technical or infrastructure issue on DIGISO's side lasting 7 days or more, or fails to provide the service as committed.</li>
+              <li className={lc(language, 'vi')}>Khách hàng thanh toán thừa, thanh toán trùng hoặc giao dịch bị lỗi.</li>
+              <li className={lc(language, 'en')}>The Customer overpays, pays twice, or the transaction fails due to an error.</li>
+              <li className={lc(language, 'vi')}>Dịch vụ không đúng nội dung đã xác nhận khi mua.</li>
+              <li className={lc(language, 'en')}>The service does not match what was confirmed at the time of purchase.</li>
+              <li className={lc(language, 'vi')}>DIGISO chấm dứt dịch vụ trước thời hạn vì lý do thuộc về DIGISO: hoàn phần phí tương ứng với phần dịch vụ chưa cung cấp.</li>
+              <li className={lc(language, 'en')}>DIGISO terminates the Service early for reasons attributable to DIGISO: DIGISO refunds the fee corresponding to the portion of the service not yet provided.</li>
             </ul>
           </section>
 
@@ -103,14 +115,14 @@ function RefundPolicy() {
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>3. Trường hợp không được hoàn tiền</h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>3. Non-Refundable Cases</h2>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>Đã sử dụng dịch vụ quá 50% thời hạn gói.</li>
-              <li className={lc(language, 'en')}>Service used for more than 50% of the package period.</li>
-              <li className={lc(language, 'vi')}>Vi phạm các điều khoản sử dụng dịch vụ.</li>
-              <li className={lc(language, 'en')}>Violation of service terms.</li>
-              <li className={lc(language, 'vi')}>Yêu cầu hoàn tiền sau 30 ngày kể từ thanh toán.</li>
-              <li className={lc(language, 'en')}>Refund request after 30 days from payment.</li>
-              <li className={lc(language, 'vi')}>Gói dùng thử miễn phí (trial) không được hoàn tiền.</li>
-              <li className={lc(language, 'en')}>Free trial packages are non-refundable.</li>
+              <li className={lc(language, 'vi')}>Khách hàng tự chấm dứt dịch vụ khi gói đã được kích hoạt (phần thời gian chưa sử dụng không được hoàn).</li>
+              <li className={lc(language, 'en')}>The Customer terminates the Service on their own after the package has been activated (the unused portion of time is not refunded).</li>
+              <li className={lc(language, 'vi')}>Dịch vụ bị chấm dứt do khách hàng vi phạm Điều khoản sử dụng hoặc pháp luật.</li>
+              <li className={lc(language, 'en')}>The Service is terminated because the Customer violated the Terms of Use or the law.</li>
+              <li className={lc(language, 'vi')}>Lượt AI (credit) đã sử dụng.</li>
+              <li className={lc(language, 'en')}>AI usage (credits) already consumed.</li>
+              <li className={lc(language, 'vi')}>Gói dùng thử miễn phí.</li>
+              <li className={lc(language, 'en')}>Free trial packages.</li>
             </ul>
           </section>
 
@@ -118,12 +130,12 @@ function RefundPolicy() {
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>4. Quy trình hoàn tiền</h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>4. Refund Process</h2>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>Gửi yêu cầu hoàn tiền qua email info@digiso.vn với thông tin tài khoản và lý do.</li>
-              <li className={lc(language, 'en')}>Send refund request via email to info@digiso.vn with account information and reason.</li>
-              <li className={lc(language, 'vi')}>DIGISO xem xét yêu cầu trong vòng 5 ngày làm việc.</li>
-              <li className={lc(language, 'en')}>DIGISO reviews the request within 5 business days.</li>
-              <li className={lc(language, 'vi')}>Hoàn tiền qua phương thức thanh toán ban đầu trong vòng 7-14 ngày làm việc.</li>
-              <li className={lc(language, 'en')}>Refund via original payment method within 7-14 business days.</li>
+              <li className={lc(language, 'vi')}>Gửi yêu cầu hoàn tiền kèm thông tin nhận tiền (số tài khoản, tên chủ tài khoản, tên ngân hàng) qua email info@digiso.vn hoặc Hotline/Zalo 0877 909 606.</li>
+              <li className={lc(language, 'en')}>Submit a refund request with your receiving information (account number, account holder name, bank name) via email to info@digiso.vn or Hotline/Zalo 0877 909 606.</li>
+              <li className={lc(language, 'vi')}>DIGISO xác nhận tiếp nhận trong tối đa 24 giờ và phản hồi kết quả xét duyệt trong tối đa 02 ngày làm việc.</li>
+              <li className={lc(language, 'en')}>DIGISO confirms receipt within 24 hours at most and responds with the review result within 02 business days at most.</li>
+              <li className={lc(language, 'vi')}>Tiền hoàn được chuyển về tài khoản ngân hàng của khách hàng trong 07–10 ngày làm việc kể từ khi yêu cầu được duyệt. Khoản thanh toán thừa hoặc trùng được hoàn trong 07–10 ngày làm việc kể từ khi xác minh.</li>
+              <li className={lc(language, 'en')}>The refund is transferred to the Customer's bank account within 07–10 business days of the request being approved. Overpayments or duplicate payments are refunded within 07–10 business days of verification.</li>
             </ul>
           </section>
 
