@@ -7,9 +7,8 @@
  *   - PUT  /api/users/change-password : đổi mật khẩu (bcrypt compare).
  *   - GET  /api/users/my-orders       : lịch sử đơn hàng `status='success'`.
  *
- * Các route legacy admin (`/api/users/employees/*`) sử dụng bảng `roles` cũ và
- * đã được thay thế bởi `/api/employees` module (đã có test riêng) nên KHÔNG
- * cover ở đây để tránh phải dựng schema roles cho test.
+ * Route legacy admin (`/api/users/employees/*`) đã bị xoá 27/09/2026 (code chết,
+ * thay bởi `/api/employees` module — đã có test riêng).
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import bcrypt from 'bcryptjs';

@@ -5,7 +5,6 @@ import {
   promoteMemberToSuperAdmin,
   demoteMemberFromSuperAdmin,
   countAdmins,
-  setMemberRole,
   detachMemberEmail as detachMemberEmailRow,
   findPurgeBlockers,
   purgeMember as purgeMemberRow,
@@ -21,14 +20,6 @@ export async function toggleMemberStatus(id) {
   if (!member) throw { status: 404, message: 'Không tìm thấy thành viên' };
   const newStatus = member.status === 'active' ? 'inactive' : 'active';
   return setMemberStatus(id, newStatus);
-}
-
-export async function updateMemberRole(id, role) {
-  const member = await findMemberById(id);
-  if (!member) throw { status: 404, message: 'Không tìm thấy thành viên' };
-  if (!['user', 'admin'].includes(role)) throw { status: 400, message: 'Role không hợp lệ' };
-  if (member.role === 'super_admin') throw { status: 400, message: 'Không thể thay đổi role của super_admin' };
-  return setMemberRole(id, role); // gọi repo
 }
 
 export async function promoteToSuperAdmin(id) {

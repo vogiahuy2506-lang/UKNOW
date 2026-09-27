@@ -7,7 +7,6 @@ import customChatService from '../services/ai/customChat.service.js';
 import chatbotStudioConversationService from '../services/chatbot/chatbotStudioConversation.service.js';
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
-import { getAllowedModelsForUser, savePreferredModelForUser } from '../services/ai/aiModelPolicy.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { tryHandleHelpChat, HELP_ROUTE_LABELS } from '../services/help/helpAssistant.service.js';
 import campaignController from './campaign.controller.js';
@@ -1448,32 +1447,6 @@ class AiController {
         success: false,
         message: error.message || 'Lỗi khi tạo và chạy chiến dịch AI',
       });
-    }
-  }
-
-  /**
-   * GET /ai/allowed-models — model Gemini user được chọn theo gói.
-   */
-  async getAllowedModels(req, res) {
-    try {
-      const data = await getAllowedModelsForUser(req.user.id);
-      return res.json({ success: true, data });
-    } catch (error) {
-      console.error('Get allowed AI models error:', error);
-      return res.status(error.status || 500).json({ success: false, message: error.message || 'Lỗi server' });
-    }
-  }
-
-  /**
-   * PUT /ai/preferred-model — lưu model AI Assistant user chọn.
-   */
-  async savePreferredModel(req, res) {
-    try {
-      const data = await savePreferredModelForUser(req.user.id, req.body?.model);
-      return res.json({ success: true, data, message: 'Đã lưu model AI mặc định' });
-    } catch (error) {
-      console.error('Save preferred AI model error:', error);
-      return res.status(error.status || 500).json({ success: false, message: error.message || 'Lỗi server' });
     }
   }
 

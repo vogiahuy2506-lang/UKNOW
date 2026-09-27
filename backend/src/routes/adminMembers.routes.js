@@ -18,15 +18,6 @@ router.patch('/:id/status',
   ctrl.toggleStatus
 );
 
-router.patch('/:id/role',
-  [
-    param('id').isInt({ min: 1 }),
-    body('role').isIn(['user', 'admin']),
-  ],
-  handleValidationErrors,
-  ctrl.updateRole
-);
-
 router.patch('/:id/promote',
   [param('id').isInt({ min: 1 })],
   handleValidationErrors,

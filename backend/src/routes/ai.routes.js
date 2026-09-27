@@ -55,8 +55,6 @@ router.post('/push-to-campaign/:id', aiLimiter, requirePermission('campaigns_cre
 router.post('/create-and-run-campaign', aiLimiter, requireAllPermissions(['campaigns_create', 'campaigns_run']), aiController.createAndRunCampaign.bind(aiController));
 
 // Business profile (RAG context)
-router.get('/allowed-models', aiController.getAllowedModels.bind(aiController));
-router.put('/preferred-model', aiController.savePreferredModel.bind(aiController));
 router.get('/business-profile', requireSelfContext, aiController.getBusinessProfile.bind(aiController));
 router.put('/business-profile', requireSelfContext, aiController.saveBusinessProfile.bind(aiController));
 

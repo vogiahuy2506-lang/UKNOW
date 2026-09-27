@@ -149,15 +149,6 @@ export async function countAdmins() {
   return rows[0]?.total ?? 0;
 }
 
-export async function setMemberRole(id, role) {
-  const { rows } = await db.query(
-    `UPDATE users SET role = $1, updated_at = NOW() WHERE id = $2 AND role IN ('user', 'admin')
-     RETURNING id, username, email, role`,
-    [role, id]
-  );
-  return rows[0] || null;
-}
-
 /**
  * Giải phóng email/username của user (Mức 1 — "gỡ email khỏi tài khoản"), giữ
  * nguyên mọi dữ liệu liên quan (đơn hàng, hoá đơn...). Sau thao tác này, email gốc

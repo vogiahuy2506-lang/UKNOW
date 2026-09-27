@@ -9,12 +9,6 @@
  *       * DNS check skip với common domain (gmail/...) hoặc NODE_ENV=test
  *       * gửi qua `sendSystemEmail` (mock nodemailer)
  *       * row mới trong verification_codes; rows cũ bị mark is_used=true
- *   - POST /verify-code:
- *       * mã đúng → 200, đánh dấu is_used=true
- *       * mã sai → 400
- *       * mã đã dùng → 400
- *       * mã hết hạn → 400
- *       * validator (email/code length)
  *
  * Vì DNS check ẩn (server thật resolveMx) tốn time + flaky, test lấy
  * `gmail.com` (common domain → bypass) và `test.com` (whitelist trong code).
@@ -236,103 +230,5 @@ describe('POST /api/verification/send-code', () => {
 
     expect(res.status).toBe(500);
     expect(res.body.success).toBe(false);
-  });
-});
-
-describe('POST /api/verification/verify-code', () => {
-  /**
-   * Helper: insert thẳng 1 mã verification để skip flow send.
-   */
-  async function insertCode({
-    email,
-    code = '123456',
-    type = 'email_verification',
-    isUsed = false,
-    expiresInMinutes = 10,
-  }) {
-    const { rows } = await db.query(
-      `INSERT INTO verification_codes (email, code, type, is_used, expires_at, created_at)
-       VALUES ($1, $2, $3, $4, NOW() + ($5 || ' minutes')::interval, NOW()) RETURNING id`,
-      [email, code, type, isUsed, expiresInMinutes]
-    );
-    return rows[0].id;
-  }
-
-  it('mã đúng + chưa hết hạn → 200, mã được mark is_used=true', async () => {
-    const email = 'ok@gmail.com';
-    const id = await insertCode({ email, code: '654321' });
-
-    const res = await request(app)
-      .post('/api/verification/verify-code')
-      .send({ email, code: '654321' });
-
-    expect(res.status).toBe(200);
-    expect(res.body.data).toEqual({ email, verified: true });
-
-    const { rows } = await db.query(
-      `SELECT is_used FROM verification_codes WHERE id = $1`,
-      [id]
-    );
-    expect(rows[0].is_used).toBe(true);
-  });
-
-  it('mã sai → 400', async () => {
-    const email = 'wrong@gmail.com';
-    await insertCode({ email, code: '111111' });
-
-    const res = await request(app)
-      .post('/api/verification/verify-code')
-      .send({ email, code: '999999' });
-
-    expect(res.status).toBe(400);
-    expect(res.body.message).toContain('không đúng');
-  });
-
-  it('mã đã dùng → 400', async () => {
-    const email = 'used@gmail.com';
-    await insertCode({ email, code: '222222', isUsed: true });
-
-    const res = await request(app)
-      .post('/api/verification/verify-code')
-      .send({ email, code: '222222' });
-
-    expect(res.status).toBe(400);
-  });
-
-  it('mã hết hạn → 400', async () => {
-    const email = 'expired@gmail.com';
-    // expires âm → đã hết hạn
-    await db.query(
-      `INSERT INTO verification_codes (email, code, type, is_used, expires_at)
-       VALUES ($1, $2, 'email_verification', FALSE, NOW() - INTERVAL '1 minute')`,
-      [email, '333333']
-    );
-
-    const res = await request(app)
-      .post('/api/verification/verify-code')
-      .send({ email, code: '333333' });
-
-    expect(res.status).toBe(400);
-  });
-
-  it('code thiếu hoặc sai độ dài → 400 (validator isLength 6/6)', async () => {
-    const r1 = await request(app)
-      .post('/api/verification/verify-code')
-      .send({ email: 'a@gmail.com', code: '123' });
-    const r2 = await request(app)
-      .post('/api/verification/verify-code')
-      .send({ email: 'a@gmail.com', code: '1234567' });
-    expect(r1.status).toBe(400);
-    expect(r2.status).toBe(400);
-  });
-
-  it('email khác account với email gửi code → 400 (verify chỉ match đúng email)', async () => {
-    await insertCode({ email: 'a@gmail.com', code: '777777' });
-
-    const res = await request(app)
-      .post('/api/verification/verify-code')
-      .send({ email: 'b@gmail.com', code: '777777' });
-
-    expect(res.status).toBe(400);
   });
 });

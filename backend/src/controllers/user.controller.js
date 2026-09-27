@@ -2,7 +2,6 @@ import bcrypt from 'bcryptjs';
 import db from '../config/database.js';
 import { normalizeReferralCode } from '../utils/affiliateReferral.util.js';
 import {
-  findLegacyEmployees,
   findPasswordHashByUserId,
   findProfileBase,
   findProfileBaseFallback,
@@ -20,10 +19,7 @@ import {
   findUserByEmailExceptId,
   findUserByPhoneExceptId,
   isCurrentlyAnyonesEmployee,
-  resetLegacyEmployeePassword,
   revokeAllRefreshTokensForUser,
-  updateLegacyEmployeeLimits,
-  updateLegacyEmployeeStatus,
   updatePasswordHash,
   updateProfile as updateProfileInDb,
   updatePhoneAndResetVerification,
@@ -33,7 +29,6 @@ import {
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
-import { generateTempPassword } from '../services/user/employee.service.js';
 import { sumActiveTopupGrants, getWalletBalance } from '../repositories/payment/topup.repository.js';
 import {
   buildAddonsPayload,
@@ -50,41 +45,6 @@ import { recordConsents, getUserConsentHistory, getUserLatestConsents, hasConsen
 import { getAppMenuLayout } from '../services/admin/adminMenu.service.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
-
-const EMPLOYEE_LIMIT_KEYS = {
-  maxCampaigns: 'max_campaigns',
-  maxZaloAccounts: 'max_zalo_accounts',
-  maxEmailAccounts: 'max_email_accounts',
-  maxEmailTemplates: 'max_email_templates',
-  maxZaloTemplates: 'max_zalo_templates',
-  maxLandingPages: 'max_landing_pages',
-};
-/**
- * Chuẩn hóa giá trị giới hạn từ request body.
- *
- * Luồng hoạt động:
- * 1. Nếu giá trị là null/undefined thì giữ nguyên ý nghĩa "không giới hạn".
- * 2. Nếu là chuỗi rỗng thì coi như null để thuận tiện cho form submit.
- * 3. Nếu có dữ liệu thì ép về số nguyên để lưu DB nhất quán.
- *
- * @param {unknown} rawValue giá trị thô từ request body
- * @returns {number|null|undefined} số nguyên, null hoặc undefined khi không truyền
- */
-const normalizeLimitValue = (rawValue) => {
-  if (rawValue === undefined) return undefined;
-  if (rawValue === null) return null;
-  if (typeof rawValue === 'string' && rawValue.trim() === '') return null;
-
-  return Number.parseInt(rawValue, 10);
-};
-
-/**
- * Kiểm tra lỗi PostgreSQL do thiếu cột giới hạn (chưa chạy migration).
- *
- * @param {unknown} error lỗi phát sinh từ truy vấn DB
- * @returns {boolean} true nếu lỗi do thiếu cột
- */
-const isMissingLimitColumnError = (error) => error?.code === '42703';
 
 /**
  * Phần mua thêm còn hiệu lực theo chu kỳ billing (không cộng vào hạn mức gói).
@@ -817,233 +777,6 @@ class UserController {
       res.status(500).json({
         success: false,
         message: 'Lỗi server'
-      });
-    }
-  }
-
-  /**
-   * Lấy danh sách nhân viên (chỉ dành cho admin).
-   *
-   * Luồng hoạt động:
-   * 1. Join users với roles để lấy tên vai trò rõ ràng.
-   * 2. Chỉ trả về tài khoản role employee để admin quản lý nhân viên.
-   * 3. Sắp xếp theo thời gian tạo mới nhất.
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async getEmployees(req, res) {
-    try {
-      let employees;
-      try {
-        employees = await findLegacyEmployees({ includeLimits: true });
-      } catch (queryError) {
-        if (!isMissingLimitColumnError(queryError)) throw queryError;
-
-        // Fallback tương thích ngược khi DB chưa chạy migration cột giới hạn.
-        employees = await findLegacyEmployees({ includeLimits: false });
-      }
-
-      return res.json({
-        success: true,
-        data: employees.map((row) => ({
-          id: row.id,
-          username: row.username,
-          email: row.email,
-          fullName: row.full_name,
-          phone: row.phone,
-          status: row.status,
-          roleCode: row.role_code,
-          roleName: row.role_name,
-          maxCampaigns: row.max_campaigns,
-          maxZaloAccounts: row.max_zalo_accounts,
-          maxEmailAccounts: row.max_email_accounts,
-          maxEmailTemplates: row.max_email_templates,
-          maxZaloTemplates: row.max_zalo_templates,
-          maxLandingPages: row.max_landing_pages,
-          createdAt: row.created_at,
-          lastLoginAt: row.last_login_at,
-        })),
-      });
-    } catch (error) {
-      console.error('Get employees error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
-    }
-  }
-
-  /**
-   * Cập nhật trạng thái tài khoản nhân viên (active/inactive).
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async updateEmployeeStatus(req, res) {
-    try {
-      const employeeId = Number.parseInt(req.params.id, 10);
-      const { status } = req.body;
-
-      if (!Number.isFinite(employeeId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'ID nhân viên không hợp lệ',
-        });
-      }
-
-      const employee = await updateLegacyEmployeeStatus(employeeId, status);
-
-      if (!employee) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy nhân viên',
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: 'Cập nhật trạng thái nhân viên thành công',
-        data: {
-          id: employee.id,
-          status: employee.status,
-        },
-      });
-    } catch (error) {
-      console.error('Update employee status error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
-    }
-  }
-
-  /**
-   * Reset mật khẩu tài khoản nhân viên về mật khẩu mặc định.
-   *
-   * Luồng hoạt động:
-   * 1. Xác thực id nhân viên hợp lệ.
-   * 2. Hash lại mật khẩu mặc định của hệ thống.
-   * 3. Chỉ cập nhật user có role employee để tránh ảnh hưởng tài khoản admin.
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async resetEmployeePassword(req, res) {
-    try {
-      const employeeId = Number.parseInt(req.params.id, 10);
-
-      if (!Number.isFinite(employeeId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'ID nhân viên không hợp lệ',
-        });
-      }
-
-      // Mật khẩu tạm ngẫu nhiên theo từng lần, không dùng hằng số dùng chung.
-      const tempPassword = generateTempPassword();
-      const passwordHash = await bcrypt.hash(tempPassword, 10);
-      const employee = await resetLegacyEmployeePassword(employeeId, passwordHash);
-
-      if (!employee) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy nhân viên',
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: 'Đã đặt lại mật khẩu. Gửi mật khẩu tạm này cho nhân viên — họ sẽ phải đổi ngay khi đăng nhập.',
-        data: {
-          id: employee.id,
-          tempPassword,
-        },
-      });
-    } catch (error) {
-      console.error('Reset employee password error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
-      });
-    }
-  }
-
-  /**
-   * Cập nhật bộ giới hạn tài nguyên cho tài khoản nhân viên.
-   *
-   * Luồng hoạt động:
-   * 1. Xác thực id nhân viên hợp lệ và xác định các trường cần cập nhật.
-   * 2. Chuẩn hóa giá trị limit (null = không giới hạn, số >= 0 = giới hạn cụ thể).
-   * 3. Chỉ cho phép cập nhật user có role employee để tránh sửa nhầm tài khoản admin.
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async updateEmployeeLimits(req, res) {
-    try {
-      const employeeId = Number.parseInt(req.params.id, 10);
-
-      if (!Number.isFinite(employeeId)) {
-        return res.status(400).json({
-          success: false,
-          message: 'ID nhân viên không hợp lệ',
-        });
-      }
-
-      const entries = Object.entries(EMPLOYEE_LIMIT_KEYS)
-        .map(([requestKey, dbColumn]) => ({
-          requestKey,
-          dbColumn,
-          value: normalizeLimitValue(req.body[requestKey]),
-        }))
-        .filter((item) => item.value !== undefined);
-
-      if (entries.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Vui lòng truyền ít nhất 1 trường giới hạn cần cập nhật',
-        });
-      }
-
-      let employee;
-      try {
-        employee = await updateLegacyEmployeeLimits(employeeId, entries);
-      } catch (queryError) {
-        if (isMissingLimitColumnError(queryError)) {
-          return res.status(400).json({
-            success: false,
-            message: 'Hệ thống chưa có cột giới hạn tài khoản. Vui lòng chạy migration mới nhất.',
-          });
-        }
-        throw queryError;
-      }
-
-      if (!employee) {
-        return res.status(404).json({
-          success: false,
-          message: 'Không tìm thấy nhân viên',
-        });
-      }
-
-      return res.json({
-        success: true,
-        message: 'Cập nhật giới hạn tài khoản nhân viên thành công',
-        data: {
-          id: employee.id,
-          maxCampaigns: employee.max_campaigns,
-          maxZaloAccounts: employee.max_zalo_accounts,
-          maxEmailAccounts: employee.max_email_accounts,
-          maxEmailTemplates: employee.max_email_templates,
-          maxZaloTemplates: employee.max_zalo_templates,
-          maxLandingPages: employee.max_landing_pages,
-        },
-      });
-    } catch (error) {
-      console.error('Update employee limits error:', error);
-      return res.status(500).json({
-        success: false,
-        message: 'Lỗi server',
       });
     }
   }

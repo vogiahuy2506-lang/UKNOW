@@ -111,39 +111,6 @@ class VerificationController {
   /**
    * Xác minh mã
    */
-  async verifyCode(req, res) {
-    try {
-      const { email, code } = req.body;
-
-      const verification = await verificationService.verifyCode(email, code);
-
-      if (!verification) {
-        return res.status(400).json({
-          success: false,
-          message: 'Mã xác minh không đúng hoặc đã hết hạn'
-        });
-      }
-
-      // Đánh dấu mã đã sử dụng
-      await verificationService.markCodeAsUsed(verification.id);
-
-      res.json({
-        success: true,
-        message: 'Xác minh thành công',
-        data: {
-          email,
-          verified: true
-        }
-      });
-    } catch (error) {
-      console.error('Verify code error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server'
-      });
-    }
-  }
-
   // ─── OTP theo SĐT (PR-1, xác thực SĐT) ──────────────────────────────────────
   // Cả hai route yêu cầu đăng nhập (authMiddleware gắn req.user ở route). Mọi nhánh dưới
   // đây nằm sau kiểm isPhoneOtpEnabled() — Bẫy #6: PHONE_OTP_PROVIDER rỗng phải là nguyên

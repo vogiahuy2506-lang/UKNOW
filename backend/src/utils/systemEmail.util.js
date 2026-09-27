@@ -169,8 +169,8 @@ export function buildBaseTemplate({ subtitle, content, footerNote }) {
  * Tách ra thành hàm riêng vì trước 13/09/2026 chỗ dựng URL này (scheduler.js) trỏ `/renewal` —
  * một đường dẫn **không có route**. `frontend/src/App.jsx:505` bắt mọi đường lạ bằng
  * `<Route path="*" element={<Navigate to="/" replace />} />`, nên khách bấm nút trong thư bị ném
- * về trang bán hàng công khai chứ không tới trang thanh toán. `RenewalScreen.jsx` có tồn tại
- * nhưng không ai import — code chết.
+ * về trang bán hàng công khai chứ không tới trang thanh toán. `RenewalScreen.jsx` đã xoá
+ * 27/09/2026 (code chết).
  *
  * Cạm bẫy khi kiểm: `curl https://founderai.biz/renewal` trả **200** và trông như đường dẫn sống.
  * Đây là SPA, server trả `index.html` cho mọi path; thứ quyết định là router phía client.

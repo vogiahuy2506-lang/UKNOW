@@ -178,23 +178,3 @@ export async function updateAiModel(modelId, patch = {}) {
   return rows[0] || null;
 }
 
-export async function getUserPreferredModel(userId) {
-  const { rows } = await db.query(
-    `SELECT preferred_ai_model AS "preferredModel"
-     FROM users
-     WHERE id = $1`,
-    [userId]
-  );
-  return rows[0]?.preferredModel || null;
-}
-
-export async function updateUserPreferredModel(userId, modelId) {
-  const { rows } = await db.query(
-    `UPDATE users
-     SET preferred_ai_model = $2
-     WHERE id = $1
-     RETURNING preferred_ai_model AS "preferredModel"`,
-    [userId, modelId]
-  );
-  return rows[0]?.preferredModel || null;
-}

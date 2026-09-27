@@ -81,16 +81,6 @@ export async function getCatalog({ enabledOnly = false } = {}) {
   return cloneRows(cache[cacheKey]);
 }
 
-export async function getEnabledModelIds() {
-  const rows = await getCatalog({ enabledOnly: true });
-  return rows.map((row) => row.modelId).filter(Boolean);
-}
-
-export async function getDefaultModel() {
-  const enabled = await getCatalog({ enabledOnly: true });
-  return enabled[enabled.length - 1]?.modelId || DEFAULT_AI_MODEL;
-}
-
 export async function updateCatalogModel(modelId, patch = {}) {
   const id = normalizeModelId(modelId);
   if (!id) {

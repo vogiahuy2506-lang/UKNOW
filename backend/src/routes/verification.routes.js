@@ -23,22 +23,6 @@ router.post('/send-code',
   verificationController.sendCode.bind(verificationController)
 );
 
-// Xác minh mã
-router.post('/verify-code',
-  [
-    body('email')
-      .trim()
-      .isEmail()
-      .withMessage('Email không hợp lệ'),
-    body('code')
-      .trim()
-      .isLength({ min: 6, max: 6 })
-      .withMessage('Mã xác minh phải 6 số'),
-  ],
-  handleValidationErrors,
-  verificationController.verifyCode.bind(verificationController)
-);
-
 // ─── OTP theo SĐT (PR-1, xác thực SĐT) — yêu cầu đăng nhập ──────────────────────────────
 // authLimiter (chung) + phoneOtpSendLimiter (riêng theo IP, chỉ trên send-code — SMS tốn
 // tiền thật) — Bẫy #2 trong plan.
