@@ -1375,6 +1375,8 @@ export default {
     createdBy: 'Người tạo',
     updatedAt: 'Cập nhật cuối',
     notRunning: 'Không chạy',
+    // PR-8a (UI nói thật) Việc 3 — dòng đỏ dưới tên chiến dịch khi lượt chạy gần nhất (7 ngày) lỗi.
+    lastRunFailed: 'Lượt chạy gần nhất lỗi: {label}',
     pendingOwnerApproval: 'Chờ duyệt',
     approve: 'Duyệt',
     reject: 'Từ chối',
@@ -5728,6 +5730,14 @@ export default {
     everyNDays: 'Mỗi {days} ngày (theo mốc bắt đầu)',
     atTime: 'lúc {time}',
     scheduleTime: 'Lịch chạy',
+    // PR-8a (UI nói thật) — trạng thái LƯỢT CHẠY (campaign_runs.status), khác statusStopped/
+    // statusCompleted ở trên (đó là trạng thái LỊCH). Đủ 4 giá trị CHECK constraint thật của cột.
+    runStatus: {
+      running: 'Đang chạy',
+      completed: 'Đã hoàn thành',
+      failed: 'Lỗi',
+      stopped: 'Đã dừng',
+    },
   },
 
   // Plans
@@ -8341,6 +8351,8 @@ export default {
     noData: 'Chưa có dữ liệu trong khoảng thời gian này.',
     campaign: 'Chiến dịch',
     status: 'Trạng thái',
+    // PR-8a (UI nói thật) Việc 4 — theo khuôn adminDeliveryMonitor.deferred.
+    deferred: 'Đang chờ',
     sentFailed: 'Thành công / tổng',
     plannedSends: '{count} lượt dự kiến',
     failures: {

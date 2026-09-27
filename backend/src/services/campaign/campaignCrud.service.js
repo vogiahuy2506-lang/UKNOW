@@ -5,6 +5,24 @@ import campaignCrudRepository from '../../repositories/campaign/campaignCrud.rep
 import campaignFlowService from './campaignFlow.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
+import { labelCampaignRunFailure } from '../../utils/campaignRunFailureLabel.util.js';
+
+/**
+ * PR-8a (UI nói thật) Việc 3 — DTO lượt failed mới nhất trong 7 ngày cho dòng đỏ ở FE. Nhãn Việt
+ * hoá lấy từ campaignRunFailureLabel.util.js (dùng lại, không chép bảng lỗi sang FE).
+ *
+ * @param {object} item hàng thô từ campaignCrudRepository/campaignShareRepository
+ * @returns {{id: number, errorMessage: string|null, label: string, at: string}|null}
+ */
+function mapLastFailedRun(item) {
+  if (!item.last_failed_run_id) return null;
+  return {
+    id: item.last_failed_run_id,
+    errorMessage: item.last_failed_run_error_message,
+    label: labelCampaignRunFailure(item.last_failed_run_error_message).message,
+    at: item.last_failed_run_completed_at,
+  };
+}
 
 function createNotFoundError(message = 'Không tìm thấy chiến dịch') {
   const err = new Error(message);
@@ -71,6 +89,8 @@ class CampaignCrudService {
         lastRunAt: item.last_run_at,
         runningCount: item.running_count,
         completedCount: item.completed_count,
+        failedCount: item.failed_count,
+        lastFailedRun: mapLastFailedRun(item),
         enabledScheduleCount: item.enabled_schedule_count ?? 0,
         createdBy: item.creator_name ? { name: item.creator_name } : null,
         origin: item.origin,

@@ -1372,6 +1372,8 @@ export default {
     createdBy: 'Created by',
     updatedAt: 'Last updated',
     notRunning: 'Not running',
+    // PR-8a (UI nói thật) Việc 3 — red line under campaign name when the most recent run (7 days) failed.
+    lastRunFailed: 'Last run failed: {label}',
     pendingOwnerApproval: 'Pending Approval',
     approve: 'Approve',
     reject: 'Reject',
@@ -5720,6 +5722,14 @@ export default {
     everyNDays: 'Every {days} days (from start)',
     atTime: 'at {time}',
     scheduleTime: 'Schedule time',
+    // PR-8a (UI nói thật) — RUN status (campaign_runs.status), different from statusStopped/
+    // statusCompleted above (those are SCHEDULE status). All 4 real CHECK constraint values.
+    runStatus: {
+      running: 'Running',
+      completed: 'Completed',
+      failed: 'Failed',
+      stopped: 'Stopped',
+    },
   },
 
   // Plans
@@ -8331,6 +8341,8 @@ Feel free to ask me anything!`,
     noData: 'No data in this time period.',
     campaign: 'Campaign',
     status: 'Status',
+    // PR-8a (UI nói thật) Việc 4 — mirrors adminDeliveryMonitor.deferred.
+    deferred: 'Deferred',
     sentFailed: 'Sent / Total',
     plannedSends: '{count} planned sends',
     failures: {

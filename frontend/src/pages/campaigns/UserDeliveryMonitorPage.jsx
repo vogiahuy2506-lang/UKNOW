@@ -19,6 +19,7 @@ import {
 } from 'recharts';
 import userDeliveryMonitorApiService from '../../features/campaign/services/userDeliveryMonitorApi.service';
 import { useI18n } from '../../i18n';
+import { getRunStatusLabel } from '../../features/campaigns/utils/campaignRunStatus.helpers';
 
 const fmt = (value) => Number(value || 0).toLocaleString('vi-VN');
 const fmtPct = (value) => `${Number(value || 0).toFixed(1)}%`;
@@ -230,7 +231,12 @@ const ChannelPanel = ({ channels, channelsRecent, windowDays, t }) => {
 const runRowClass = (run) => {
   if (run.failedSends > 0) return run.failureRate >= 10 ? 'bg-red-50' : 'bg-orange-50';
   if (run.hasRunError && String(run.status || '').toLowerCase() === 'failed') return 'bg-orange-50';
-  const stuck = run.totalRecipients > 0 && run.successfulSends === 0 && run.status === 'running';
+  // PR-8a (UI nói thật) Việc 4 — run đang chờ hợp lệ (SMTP pause 12h, quota, quiet hours Zalo...)
+  // không phải "kẹt": deferredUntil đã có sẵn ở DTO (deliveryMonitorTopRuns.query.js:98-99, 148),
+  // chỉ cần loại trừ ở đây, KHÔNG cần backend thêm trường mới.
+  const deferredUntilMs = run.deferredUntil ? Date.parse(run.deferredUntil) : NaN;
+  const isDeferred = Number.isFinite(deferredUntilMs) && deferredUntilMs > Date.now();
+  const stuck = !isDeferred && run.totalRecipients > 0 && run.successfulSends === 0 && run.status === 'running';
   if (stuck) return 'bg-red-50';
   if (run.successfulSends > 0) return 'bg-emerald-50/40';
   return '';
@@ -338,8 +344,15 @@ const TopRunsTable = ({ runs, t }) => {
                     </td>
                     <td className="px-5 py-3">
                       <span className={`badge text-xs ${runStatusBadgeClass(run.status)}`}>
-                        {run.status}
+                        {getRunStatusLabel(t, run.status)}
                       </span>
+                      {run.deferredUntil && (
+                        <div className="mt-1 space-y-0.5">
+                          <span className="badge badge-gray text-xs">{t('userDeliveryMonitor.deferred')}</span>
+                          <p className="text-xs text-gray-400">{fmtDateTime(run.deferredUntil)}</p>
+                          {run.deferredReason && <p className="text-[11px] text-gray-400">{run.deferredReason}</p>}
+                        </div>
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       <span className={`font-medium ${run.successfulSends > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt(run.successfulSends)}</span>

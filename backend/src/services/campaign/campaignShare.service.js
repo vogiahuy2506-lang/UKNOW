@@ -2,6 +2,24 @@ import db from '../../config/database.js';
 import campaignShareRepository from '../../repositories/campaign/campaignShare.repository.js';
 import { sendSystemEmail } from '../../utils/systemEmail.util.js';
 import { buildCampaignSharedEmail } from '../../utils/systemEmailShare.util.js';
+import { labelCampaignRunFailure } from '../../utils/campaignRunFailureLabel.util.js';
+
+/**
+ * PR-8a (UI nói thật) Việc 3 — xem chú thích ở campaignCrud.service.js (cùng khuôn LATERAL
+ * last_failed_run trong campaignShare.repository.js).
+ *
+ * @param {object} item hàng thô từ campaignShareRepository
+ * @returns {{id: number, errorMessage: string|null, label: string, at: string}|null}
+ */
+function mapLastFailedRun(item) {
+  if (!item.last_failed_run_id) return null;
+  return {
+    id: item.last_failed_run_id,
+    errorMessage: item.last_failed_run_error_message,
+    label: labelCampaignRunFailure(item.last_failed_run_error_message).message,
+    at: item.last_failed_run_completed_at,
+  };
+}
 
 class CampaignShareService {
   /**
@@ -169,6 +187,8 @@ class CampaignShareService {
         lastRunAt: item.last_run_at,
         runningCount: item.running_count,
         completedCount: item.completed_count,
+        failedCount: item.failed_count,
+        lastFailedRun: mapLastFailedRun(item),
         enabledScheduleCount: item.enabled_schedule_count ?? 0,
         shareType: item.share_type,
         canRun: item.can_run,

@@ -572,9 +572,12 @@ const Campaigns = () => {
                         : null;
                       const activePause = getActiveRunPause(runningRun?.runMetadata);
                       const hasSchedules = Number(campaign.enabledScheduleCount || 0) > 0;
+                      // PR-8a (UI nói thật) Việc 3 — chiến dịch chỉ có lượt failed (chưa từng
+                      // running/completed thành công) vẫn phải có nút Nhật ký để xem lỗi.
                       const hasRuns =
                         Number(campaign.runningCount || 0) > 0 ||
-                        Number(campaign.completedCount || 0) > 0;
+                        Number(campaign.completedCount || 0) > 0 ||
+                        Number(campaign.failedCount || 0) > 0;
                       const isShowingLogs = runController.isShowingLogsForCampaign(campaign.id);
                       const runId = Number.parseInt(runningRun?.id, 10);
                       const isStopping = Number.isFinite(runId) && runController.stoppingRunIds.has(runId);
@@ -598,6 +601,13 @@ const Campaigns = () => {
                                 </span>
                               )}
                             </Link>
+                            {Number(campaign.failedCount || 0) > 0 && campaign.lastFailedRun && (
+                              <p className="mt-1 text-xs text-red-600">
+                                {t('campaigns.lastRunFailed', {
+                                  label: campaign.lastFailedRun.label || campaign.lastFailedRun.errorMessage || '',
+                                })}
+                              </p>
+                            )}
                           </td>
                           <td>
                             <span

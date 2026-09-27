@@ -244,6 +244,59 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     expect(runButtons).toHaveLength(1);
   });
 
+  // PR-8a (UI nói thật) Việc 3 — chiến dịch CHỈ có lượt failed (chưa từng running/completed) vẫn
+  // phải có nút Nhật ký, và dòng đỏ "Lượt chạy gần nhất lỗi" phải hiện dưới tên chiến dịch.
+  it('chiến dịch chỉ có lượt failed (runningCount=0, completedCount=0) vẫn có nút Nhật ký + dòng đỏ', async () => {
+    useAuthStore.setState({
+      user: { id: 3, role: 'user', fullName: 'Nhân viên Vận hành' },
+      activeContext: {
+        type: 'employee',
+        permissions: { campaigns_view: true, campaigns_run: true },
+      },
+    });
+
+    campaignApiService.getCampaigns.mockResolvedValue({
+      data: {
+        data: {
+          items: [
+            {
+              id: 201,
+              campaignName: 'Chiến dịch Toàn Lỗi',
+              campaignType: 'email',
+              status: 'active',
+              runningCount: 0,
+              completedCount: 0,
+              failedCount: 2,
+              lastFailedRun: {
+                id: 999,
+                errorMessage: 'Invalid login: 535 Username and Password not accepted',
+                label: 'Lỗi xác thực tài khoản email dùng để gửi (SMTP).',
+                at: '2026-09-26T10:00:00Z',
+              },
+              enabledScheduleCount: 0,
+              createdAt: '2026-09-10T10:00:00Z',
+              updatedAt: '2026-09-11T10:00:00Z',
+              origin: 'self_created',
+              createdBy: { name: 'Admin' },
+            },
+          ],
+          pagination: { page: 1, total: 1, totalPages: 1 },
+        },
+      },
+    });
+
+    renderComponent(['/app/campaigns']);
+
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Toàn Lỗi')).toBeInTheDocument();
+    });
+
+    // Đột biến (a): bỏ failedCount khỏi hasRuns → nút này biến mất, ca này đỏ.
+    expect(screen.getByRole('button', { name: 'Nhật ký' })).toBeInTheDocument();
+    // Dòng đỏ dưới tên chiến dịch, dùng nhãn Việt hoá từ backend (không chép bảng lỗi sang FE).
+    expect(screen.getByText('Lượt chạy gần nhất lỗi: Lỗi xác thực tài khoản email dùng để gửi (SMTP).')).toBeInTheDocument();
+  });
+
   // Review Claude 12/09: ảnh nghiệm thu tab "Đang chạy" của PR-2b là trang trống — chưa ai nhìn thấy
   // dòng đang chạy được vẽ. Bản đầu truyền cả object vào getCampaignKey (hook nhận id) nên runningRun
   // luôn null: nút Dừng báo "không tìm thấy lượt chạy", badge liên tục không bao giờ hiện. Ca này

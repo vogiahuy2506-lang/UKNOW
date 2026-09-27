@@ -49,6 +49,10 @@ class CampaignShareRepository {
               u.id as owner_id, COALESCE(u.full_name, u.username) as owner_name, u.email as owner_email,
               COALESCE(run_stats.running_count, 0)::INTEGER AS running_count,
               COALESCE(run_stats.completed_count, 0)::INTEGER AS completed_count,
+              COALESCE(run_stats.failed_count, 0)::INTEGER AS failed_count,
+              last_failed_run.id AS last_failed_run_id,
+              last_failed_run.error_message AS last_failed_run_error_message,
+              last_failed_run.completed_at AS last_failed_run_completed_at,
               COALESCE(sched_stats.enabled_schedule_count, 0)::INTEGER AS enabled_schedule_count
        FROM campaign_shares cs
        JOIN campaigns c ON cs.id_campaign = c.id
@@ -56,10 +60,23 @@ class CampaignShareRepository {
        LEFT JOIN LATERAL (
          SELECT
            COUNT(*) FILTER (WHERE cr.status = 'running') AS running_count,
-           COUNT(*) FILTER (WHERE cr.status = 'completed') AS completed_count
+           COUNT(*) FILTER (WHERE cr.status = 'completed') AS completed_count,
+           -- PR-8a (UI nói thật) Việc 3 — chỉ tính lượt failed trong 7 ngày gần nhất.
+           COUNT(*) FILTER (WHERE cr.status = 'failed' AND cr.completed_at >= NOW() - INTERVAL '7 days') AS failed_count
          FROM campaign_runs cr
          WHERE cr.id_campaign = c.id
        ) run_stats ON TRUE
+       -- PR-8a (UI nói thật) Việc 3 — lượt failed mới nhất trong 7 ngày để hiện dòng đỏ ở FE.
+       -- completed_at ép ::text tránh bẫy lệch giờ/lùi ngày khi Postgres timestamp ra JSON.
+       LEFT JOIN LATERAL (
+         SELECT cr2.id, cr2.error_message, cr2.completed_at::text AS completed_at
+         FROM campaign_runs cr2
+         WHERE cr2.id_campaign = c.id
+           AND cr2.status = 'failed'
+           AND cr2.completed_at >= NOW() - INTERVAL '7 days'
+         ORDER BY cr2.completed_at DESC
+         LIMIT 1
+       ) last_failed_run ON TRUE
        LEFT JOIN LATERAL (
          SELECT COUNT(*) FILTER (WHERE csched.enabled)::INTEGER AS enabled_schedule_count
          FROM campaign_schedules csched WHERE csched.id_campaign = c.id

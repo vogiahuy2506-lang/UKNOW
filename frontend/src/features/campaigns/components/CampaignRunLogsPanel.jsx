@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { useI18n } from '../../../i18n';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
 import { getActiveRunPause, getRunPauseI18nKey } from '../utils/campaignQuotaPause.helpers';
+import { getRunStatusLabel } from '../utils/campaignRunStatus.helpers';
 
 const CampaignRunLogsPanel = ({
   selectedCampaignForLogs,
@@ -72,7 +73,7 @@ const CampaignRunLogsPanel = ({
               </div>
               <div className="p-3 rounded-lg bg-gray-50">
                 <p className="text-xs text-gray-500">Trạng thái</p>
-                <p className="text-sm font-semibold text-gray-900">{selectedRunDetail.status}</p>
+                <p className="text-sm font-semibold text-gray-900">{getRunStatusLabel(t, selectedRunDetail.status)}</p>
                 {isContinuousMode && (
                   <p className="text-xs text-emerald-600 mt-1">
                     Đang chạy liên tục{pollIntervalMinutes ? ` • ${pollIntervalMinutes} phút/lần` : ''}
@@ -137,7 +138,7 @@ const CampaignRunLogsPanel = ({
                       <td className="px-4 py-3 text-sm text-gray-700">
                         {formatCampaignDateTime(run.startedAt)}
                       </td>
-                      <td className="px-4 py-3 text-sm text-gray-700">{run.status}</td>
+                      <td className="px-4 py-3 text-sm text-gray-700">{getRunStatusLabel(t, run.status)}</td>
                     </tr>
                   ))}
                   {campaignRunHistory.length === 0 && (

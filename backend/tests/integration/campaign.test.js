@@ -126,10 +126,11 @@ async function insertNode({
   return rows[0];
 }
 
-async function insertRun({ campaignId, status = 'running', runType = 'manual' }) {
+async function insertRun({ campaignId, status = 'running', runType = 'manual', completedAt = null, errorMessage = null }) {
   const { rows } = await db.query(
-    `INSERT INTO campaign_runs (id_campaign, status, run_type) VALUES ($1, $2, $3) RETURNING *`,
-    [campaignId, status, runType]
+    `INSERT INTO campaign_runs (id_campaign, status, run_type, completed_at, error_message)
+     VALUES ($1, $2, $3, $4, $5) RETURNING *`,
+    [campaignId, status, runType, completedAt, errorMessage]
   );
   return rows[0];
 }
@@ -276,6 +277,54 @@ describe('GET /api/campaigns', () => {
     const item = res.body.data.items[0];
     expect(item.runningCount).toBe(1);
     expect(item.completedCount).toBe(2);
+  });
+
+  // PR-8a (UI nói thật) Việc 3 — failedCount (7 ngày) + lastFailedRun cho dòng đỏ ở FE.
+  it('failedCount (7 ngày) đếm đúng, lastFailedRun trả đúng nhãn Việt hoá của lượt mới nhất', async () => {
+    const o = await createUser({ role: 'user', username: 'o_failed' });
+    const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertRun({
+      campaignId: c.id,
+      status: 'failed',
+      completedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      errorMessage: 'Chiến dịch không có node nào',
+    });
+    const recentFailedRun = await insertRun({
+      campaignId: c.id,
+      status: 'failed',
+      completedAt: new Date(Date.now() - 1 * 24 * 3600 * 1000),
+      errorMessage: 'Invalid login: 535 Username and Password not accepted',
+    });
+    // Ngoài cửa sổ 7 ngày — không tính.
+    await insertRun({
+      campaignId: c.id,
+      status: 'failed',
+      completedAt: new Date(Date.now() - 10 * 24 * 3600 * 1000),
+      errorMessage: 'lỗi cũ quá 7 ngày, không tính',
+    });
+
+    const t = await loginAs(o);
+    const res = await request(app).get('/api/campaigns').set('Authorization', `Bearer ${t}`);
+
+    const item = res.body.data.items[0];
+    expect(item.failedCount).toBe(2);
+    expect(item.lastFailedRun).not.toBeNull();
+    expect(item.lastFailedRun.id).toBe(recentFailedRun.id);
+    expect(item.lastFailedRun.errorMessage).toContain('535');
+    expect(item.lastFailedRun.label).toBe('Lỗi xác thực tài khoản email dùng để gửi (SMTP).');
+  });
+
+  it('chiến dịch không có lượt failed nào trong 7 ngày → failedCount=0, lastFailedRun=null', async () => {
+    const o = await createUser({ role: 'user', username: 'o_no_failed' });
+    const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertRun({ campaignId: c.id, status: 'completed', completedAt: new Date() });
+
+    const t = await loginAs(o);
+    const res = await request(app).get('/api/campaigns').set('Authorization', `Bearer ${t}`);
+
+    const item = res.body.data.items[0];
+    expect(item.failedCount).toBe(0);
+    expect(item.lastFailedRun).toBeNull();
   });
 
   it('sort created_at DESC', async () => {
@@ -579,6 +628,37 @@ describe('Campaign sharing workspace ownership', () => {
     expect(res.body.data.items).toHaveLength(1);
     expect(res.body.data.items[0].campaignName).toBe('Summer Promo 2026');
     expect(res.body.data.pagination.total).toBe(1);
+  });
+
+  // PR-8a (UI nói thật) Việc 3 — campaignShare.repository.js cùng khuôn LATERAL last_failed_run
+  // với campaignCrud.repository.js (Nhật ký chiến dịch được chia sẻ cũng phải thấy lượt failed).
+  it('GET /api/campaigns/shared/with-me trả đúng failedCount + lastFailedRun', async () => {
+    const owner = await createUser({ role: 'user', username: 'share_owner_failed' });
+    const recipient = await createUser({ role: 'user', username: 'share_recipient_failed' });
+    const tokenRecipient = await loginAs(recipient);
+
+    const c = await insertCampaign({ ownerId: owner.id, campaignName: 'Shared Failing Campaign' });
+    await db.query(
+      `INSERT INTO campaign_shares (id_campaign, id_owner, id_recipient, recipient_email, share_type, can_run)
+       VALUES ($1, $2, $3, $4, 'view', false)`,
+      [c.id, owner.id, recipient.id, recipient.email]
+    );
+    const recentFailedRun = await insertRun({
+      campaignId: c.id,
+      status: 'failed',
+      completedAt: new Date(Date.now() - 1 * 24 * 3600 * 1000),
+      errorMessage: 'Invalid login: 535 Username and Password not accepted',
+    });
+
+    const res = await request(app)
+      .get('/api/campaigns/shared/with-me')
+      .set('Authorization', `Bearer ${tokenRecipient}`);
+
+    expect(res.status).toBe(200);
+    const item = res.body.data.items[0];
+    expect(item.failedCount).toBe(1);
+    expect(item.lastFailedRun.id).toBe(recentFailedRun.id);
+    expect(item.lastFailedRun.label).toBe('Lỗi xác thực tài khoản email dùng để gửi (SMTP).');
   });
 
   // Review Claude 12/09: truy vấn shared đặt alias `cs` cho campaign_shares, còn mệnh đề state
