@@ -5589,7 +5589,7 @@ export default {
     pay: 'Thanh toán',
     paying: 'Đang chuyển tới thanh toán…',
     shortfall: 'Đơn tối thiểu {min} — còn thiếu {shortfall}',
-    expiryNotice: 'Hết hạn cuối chu kỳ hiện tại, không cộng dồn sang kỳ sau.',
+    expiryNotice: 'Slot và dung lượng mua thêm có hiệu lực 30 ngày × số tháng đã chọn, tính từ lúc thanh toán. Lượt tin nhắn, email và credit AI mua thêm không hết hạn.',
     upgradePlanInstead: 'Hoặc nâng gói dịch vụ',
     subscriptionExpired: 'Gói đã hết hạn — vui lòng gia hạn trước khi mua thêm.',
     viewPricing: 'Xem bảng giá',

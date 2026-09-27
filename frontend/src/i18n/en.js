@@ -5580,7 +5580,7 @@ export default {
     pay: 'Pay now',
     paying: 'Redirecting to payment…',
     shortfall: 'Minimum order is {min} — {shortfall} short',
-    expiryNotice: 'Expires at the end of the current cycle and does not roll over.',
+    expiryNotice: 'Structural slots and storage are valid for 30 days × the number of months chosen, starting from payment. Purchased messages, emails, and AI credits never expire.',
     upgradePlanInstead: 'Or upgrade your plan',
     subscriptionExpired: 'Your plan has expired — renew before buying more quota.',
     viewPricing: 'View pricing',
