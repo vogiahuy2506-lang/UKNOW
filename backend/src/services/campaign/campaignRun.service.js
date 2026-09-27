@@ -5,6 +5,7 @@ import campaignFlowService from './campaignFlow.service.js';
 import campaignNodeDataService from './campaignNodeData.service.js';
 import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
+import campaignChannelRegistry from './campaignChannelRegistry.service.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { buildZaloRateLimiterFromEnv } from './buildZaloRateLimiterFromEnv.js';
@@ -3242,10 +3243,8 @@ class CampaignRunService {
             'manual_trigger',
             'schedule_trigger',
             'start',
-            'send_email',
-            'send_zalo_personal',
-            'send_zalo_friend_request',
-            'send_zalo_group',
+            // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng.
+            ...campaignChannelRegistry.getSendNodeSubtypes(),
           ]);
           if (skipSubtypes.has(upstreamSubtype)) continue;
           // eslint-disable-next-line no-await-in-loop
@@ -3254,10 +3253,8 @@ class CampaignRunService {
       };
 
       const CONTINUOUS_SUPPORTED_ACTION_SUBTYPES = new Set([
-        'send_email',
-        'send_zalo_personal',
-        'send_zalo_friend_request',
-        'send_zalo_group',
+        // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng.
+        ...campaignChannelRegistry.getContinuousSupportedSubtypes(),
         'save_customer',
       ]);
       const hasContinuousSupportedActionNode = orderedNodes.some((item) => {
@@ -3329,10 +3326,18 @@ class CampaignRunService {
           const nodeSubtype = String(node.node_subtype || '').toLowerCase();
           const nodeType = String(node.node_type || '').toLowerCase();
           const isReplayCycle = isContinuousMode && continuousCycleIndex > 0;
+          // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. SỬA CỐ Ý:
+          // trước đây danh sách này THIẾU send_zalo_group (bug ngủ — campaign nhóm continuous bị bỏ
+          // qua node gửi ở mọi chu kỳ replay; 0 chiến dịch nhóm chạy continuous trên prod 30 ngày, an
+          // toàn để sửa — xem mục 1 plan). registry đã có send_zalo_group trong continuousReplay.
+          const replayAllowedSubtypes = [
+            ...campaignChannelRegistry.getContinuousReplaySubtypes(),
+            'save_customer',
+          ];
           if (
             isReplayCycle
             && nodeType === 'action'
-            && !['send_email', 'send_zalo_personal', 'send_zalo_friend_request', 'save_customer'].includes(nodeSubtype)
+            && !replayAllowedSubtypes.includes(nodeSubtype)
           ) {
             previousNodeSubtype = nodeSubtype;
             continue;
@@ -8610,6 +8615,34 @@ class CampaignRunService {
           await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
           continue;
         }
+
+            // PR-1 (tách tầng kênh gửi) — cầu dao: subtype "có ý gửi" (biết trong registry hoặc bắt
+            // đầu bằng send_) mà không khớp bất kỳ nhánh nào ở trên (registry không biết) KHÔNG được
+            // rơi xuống log "success" mặc định — ghi log node failed rồi throw để catch bên dưới
+            // đánh dấu run failed. Node không-phải-gửi (wait_time, condition, subtype cụt…) vẫn dùng
+            // nhánh default cũ (log success, bỏ qua) — không đổi hành vi 7 node chết sẵn có.
+            if (
+              campaignChannelRegistry.isSendIntentSubtype(nodeSubtype)
+              && !campaignChannelRegistry.isKnownSendSubtype(nodeSubtype)
+            ) {
+              const unsupportedMessage = `Loại node gửi "${nodeSubtype}" chưa được hỗ trợ (node ${node.id})`;
+              await campaignExecutionLogService.logExecutionNode({
+                campaignId,
+                runId,
+                node,
+                status: 'failed',
+                errorMessage: unsupportedMessage,
+                executionData: {
+                  message: unsupportedMessage,
+                  items: [],
+                  schema: [],
+                  meta: { code: 'UNSUPPORTED_SEND_NODE', nodeSubtype },
+                },
+              });
+              const unsupportedError = new Error(unsupportedMessage);
+              unsupportedError.code = 'UNSUPPORTED_SEND_NODE';
+              throw unsupportedError;
+            }
 
             await campaignExecutionLogService.logExecutionNode({
               campaignId,

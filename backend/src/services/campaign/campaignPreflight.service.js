@@ -10,14 +10,12 @@ import db from '../../config/database.js';
 import { checkSheetForChannel } from '../ai/sheetRecipientCheck.service.js';
 import { MAX_SHEET_RECIPIENTS } from '../../utils/manualRecipients.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
+import campaignChannelRegistry from './campaignChannelRegistry.service.js';
 
-export const SEND_NODE_SUBTYPES = new Set([
-  'send_email',
-  'send_zalo',
-  'send_zalo_personal',
-  'send_zalo_group',
-  'send_zalo_friend_request',
-]);
+// PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. `send_zalo` (chuỗi
+// cũ) đã BỎ: 0 node trên production, engine không còn xử lý (xem fallback bên dưới ~dòng 177 và
+// mục 1 plan) — giữ trong tập này chỉ khiến preflight tưởng nhầm là node gửi hợp lệ.
+export const SEND_NODE_SUBTYPES = new Set(campaignChannelRegistry.getSendNodeSubtypes());
 
 /**
  * Validates campaign readiness before run execution.
@@ -57,6 +55,21 @@ export async function validateCampaignPreflight({
   if (!hasSendNode) {
     const error = new Error('Chiến dịch không có node gửi tin nhắn nào.');
     error.code = 'NO_SEND_NODE';
+    error.statusCode = 400;
+    throw error;
+  }
+
+  // 1b. PR-1 (tách tầng kênh gửi) — cầu dao: node "có ý gửi" (registry biết, hoặc bắt đầu bằng
+  // send_) mà registry KHÔNG biết cách xử lý → chặn ngay ở preflight thay vì để engine chạy xong
+  // và báo "thành công" trong khi không gửi được gì (bẫy chí mạng 1, mục 1 plan).
+  const unsupportedSendNode = nodes.find((node) => {
+    const subtype = String(node.node_subtype || '').trim();
+    return campaignChannelRegistry.isSendIntentSubtype(subtype) && !campaignChannelRegistry.isKnownSendSubtype(subtype);
+  });
+  if (unsupportedSendNode) {
+    const subtype = String(unsupportedSendNode.node_subtype || '').trim();
+    const error = new Error(`Loại node gửi "${subtype}" chưa được hỗ trợ (node ${unsupportedSendNode.id}).`);
+    error.code = 'UNSUPPORTED_SEND_NODE';
     error.statusCode = 400;
     throw error;
   }
