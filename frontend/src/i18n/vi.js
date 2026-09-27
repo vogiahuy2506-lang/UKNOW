@@ -5556,7 +5556,7 @@ export default {
   },
 
   resourceLocks: {
-    help: 'Khi slot mua thêm hết hạn hoặc hạ gói, hệ thống khoá bớt tài nguyên cũ nhất trước. Bạn có thể chọn giữ cái nào trong hạn mức còn hiệu lực (gói + mua thêm còn hạn). Tài nguyên bị khoá vẫn chiếm chỗ — muốn tạo mới thì xoá cái bị khoá trước.',
+    help: 'Khi slot mua thêm hết hạn hoặc hạ gói, hệ thống khoá bớt tài nguyên thêm vào gần nhất trước. Bạn có thể chọn giữ cái nào trong hạn mức còn hiệu lực (gói + mua thêm còn hạn). Tài nguyên bị khoá vẫn chiếm chỗ — muốn tạo mới thì xoá cái bị khoá trước.',
     loadFailed: 'Không tải được danh sách khoá',
     saveFailed: 'Không lưu được lựa chọn',
     empty: 'Chưa có tài nguyên nào trong các mục này.',

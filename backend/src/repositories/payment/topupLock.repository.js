@@ -114,8 +114,13 @@ export async function countValidLocks(userId, resourceKey, queryable = db) {
 }
 
 /**
- * List unlocked resource ids oldest-first (for locking).
+ * List unlocked resource ids NEWEST-added-first (for locking).
  * Chatbots: only is_active = true. Others: all active rows.
+ *
+ * Khoá tài nguyên THÊM VÀO GẦN NHẤT trước (không phải cũ nhất): khách mua slot để thêm một
+ * tài nguyên mới, slot hết hạn thì đúng ra phải mất lại đúng tài nguyên mới đó trước, không phải
+ * mất tài nguyên họ có sẵn từ đầu. Cùng lý do khi hạ gói — hạ từ Pro xuống Basic thì giữ lại
+ * những cái mới nhất, khoá bớt cái cũ.
  */
 export async function listUnlockedResourceIds(userId, resourceKey, queryable = db) {
   const table = RESOURCE_TABLE[resourceKey];
@@ -132,7 +137,7 @@ export async function listUnlockedResourceIds(userId, resourceKey, queryable = d
           SELECT 1 FROM topup_locked_resources tlr
           WHERE tlr.resource_key = 'chatbots' AND tlr.resource_id = r.id
         )
-      ORDER BY r.id ASC`;
+      ORDER BY r.id DESC`;
   } else if (resourceKey === 'employees') {
     sql = `
       SELECT r.id
@@ -143,7 +148,7 @@ export async function listUnlockedResourceIds(userId, resourceKey, queryable = d
           SELECT 1 FROM topup_locked_resources tlr
           WHERE tlr.resource_key = 'employees' AND tlr.resource_id = r.id
         )
-      ORDER BY r.id ASC`;
+      ORDER BY r.id DESC`;
   } else {
     sql = `
       SELECT r.id
@@ -153,7 +158,7 @@ export async function listUnlockedResourceIds(userId, resourceKey, queryable = d
           SELECT 1 FROM topup_locked_resources tlr
           WHERE tlr.resource_key = $2 AND tlr.resource_id = r.id
         )
-      ORDER BY r.id ASC`;
+      ORDER BY r.id DESC`;
   }
 
   const params = (resourceKey === 'chatbots' || resourceKey === 'employees') ? [userId] : [userId, resourceKey];

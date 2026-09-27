@@ -5547,7 +5547,7 @@ export default {
   },
 
   resourceLocks: {
-    help: 'When add-on slots expire or plan is downgraded, the oldest resources are locked first. Pick which ones to keep within your effective ceiling (plan + active add-ons). Locked resources still count toward create limits — delete a locked one before creating a replacement.',
+    help: 'When add-on slots expire or plan is downgraded, the most recently added resources are locked first. Pick which ones to keep within your effective ceiling (plan + active add-ons). Locked resources still count toward create limits — delete a locked one before creating a replacement.',
     loadFailed: 'Could not load lock list',
     saveFailed: 'Could not save selection',
     empty: 'No resources in these categories yet.',

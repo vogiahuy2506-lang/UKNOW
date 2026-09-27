@@ -22,6 +22,7 @@ const {
   createPlan,
 } = await import('./helpers/db.js');
 const { checkSendQuota, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
+const { reconcileResourceLocks } = await import('../../src/services/payment/topupLock.service.js');
 
 let app;
 
@@ -538,5 +539,44 @@ describe('Top-up mid-cycle', () => {
       .send({ quantities: { chatbots: 1 }, months: 12 });
     expect(quoted.status).toBe(400);
     expect(quoted.body.code).toBe('MONTHS_NOT_ALLOWED');
+  });
+
+  // Khoá tài nguyên THÊM VÀO GẦN NHẤT trước (không phải cũ nhất) — xem topupLock.repository.js
+  // listUnlockedResourceIds. Khách mua slot để thêm nhân viên C; slot hết hạn thì hệ thống phải
+  // mất lại đúng C (người "nhờ" slot mà có), không phải khoá A — người làm từ đầu.
+  it('reconcile khoá NHÂN VIÊN THÊM SAU CÙNG khi vượt trần, không phải người làm từ đầu', async () => {
+    const plan = await createPlan({ name: 'Plan trần 2 nhân viên', maxEmployees: 2 });
+    const owner = await createUser({ username: 'lockorder-owner', planId: plan.id });
+
+    const empA = await createUser({ username: 'lockorder-a', withPlan: false });
+    const empB = await createUser({ username: 'lockorder-b', withPlan: false });
+    const empC = await createUser({ username: 'lockorder-c', withPlan: false });
+
+    // Thêm theo đúng thứ tự A, B, C — id user_members tăng dần theo đúng thứ tự này.
+    const memberships = {};
+    for (const [label, emp] of [['A', empA], ['B', empB], ['C', empC]]) {
+      const { rows } = await db.query(
+        `INSERT INTO user_members (owner_id, employee_id, status, permissions, created_at)
+         VALUES ($1, $2, 'active', '{}'::jsonb, NOW()) RETURNING id`,
+        [owner.id, emp.id]
+      );
+      memberships[label] = Number(rows[0].id);
+    }
+    expect(memberships.A).toBeLessThan(memberships.B);
+    expect(memberships.B).toBeLessThan(memberships.C);
+
+    const result = await reconcileResourceLocks(owner.id, db);
+    const empLocks = result.locked.filter((l) => l.resourceKey === 'employees');
+    expect(empLocks).toHaveLength(1);
+    expect(empLocks[0].resourceId).toBe(memberships.C);
+
+    const { rows: lockedRows } = await db.query(
+      `SELECT resource_id FROM topup_locked_resources WHERE user_id = $1 AND resource_key = 'employees'`,
+      [owner.id]
+    );
+    expect(lockedRows.map((r) => Number(r.resource_id))).toEqual([memberships.C]);
+    // A và B KHÔNG bị khoá — chạy bình thường.
+    expect(lockedRows.map((r) => Number(r.resource_id))).not.toContain(memberships.A);
+    expect(lockedRows.map((r) => Number(r.resource_id))).not.toContain(memberships.B);
   });
 });

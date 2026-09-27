@@ -117,7 +117,7 @@ export async function resolveEffectiveCeiling(userId, resourceKey, queryable = d
 }
 
 /**
- * Bidirectional reconcile: lock excess oldest-first; unlock most-recently-locked first.
+ * Bidirectional reconcile: lock excess newest-added-first; unlock most-recently-locked first.
  * Must pass transaction `client` when called from webhook fulfillTopupOrder.
  *
  * @param {number|string} userId
