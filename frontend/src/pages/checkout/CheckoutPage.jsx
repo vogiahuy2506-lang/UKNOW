@@ -664,6 +664,10 @@ const CheckoutPage = () => {
                                         </div>
                                     )}
 
+                                    <div className="text-slate-500 text-[11px] pt-1 border-t border-slate-200/60">
+                                        {t('checkout.finalPriceNoVat')}
+                                    </div>
+
                                     <div className="flex justify-between items-baseline pt-2 border-t border-slate-200 font-bold text-slate-900">
                                         <span className="text-sm">{t('checkout.total')}</span>
                                         <span className="text-xl font-black text-orange-600">{fmtVnd(payableAmount)}</span>

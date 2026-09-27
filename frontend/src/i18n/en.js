@@ -3209,6 +3209,7 @@ export default {
     serviceFee: 'Service Fee',
     trialOffer: '14-day free trial',
     total: 'Total',
+    finalPriceNoVat: 'Final price, no VAT added',
     dataSecurity: 'DATA SECURITY',
     quickActivation: 'QUICK ACTIVATION',
     offerAndVoucher: 'Offers & discount codes',

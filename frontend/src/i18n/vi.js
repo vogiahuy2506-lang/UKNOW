@@ -3219,6 +3219,7 @@ export default {
     serviceFee: 'Phí dịch vụ',
     trialOffer: 'Ưu đãi dùng thử 14 ngày',
     total: 'Tổng cộng',
+    finalPriceNoVat: 'Giá cuối cùng, không cộng thêm VAT',
     dataSecurity: 'BẢO MẬT DỮ LIỆU',
     quickActivation: 'KÍCH HOẠT NHANH',
     offerAndVoucher: 'Ưu đãi & mã giảm giá',
