@@ -5,6 +5,7 @@ import {
   getConfig,
   quote,
   createPayment,
+  getExpiring,
   getLocks,
   putLocks,
 } from '../controllers/topup.controller.js';
@@ -12,6 +13,7 @@ import {
 const router = Router();
 
 router.get('/config', authMiddleware, requireSelfContext, getConfig);
+router.get('/expiring', authMiddleware, requireSelfContext, getExpiring);
 router.post('/quote', authMiddleware, requireSelfContext, quote);
 router.post('/create-payment', authMiddleware, requireSelfContext, createPayment);
 router.get('/locks', authMiddleware, requireSelfContext, getLocks);

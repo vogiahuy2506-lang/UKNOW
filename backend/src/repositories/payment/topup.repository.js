@@ -1,5 +1,5 @@
 import db from '../../config/database.js';
-import { TOPUP_CONSUMABLE_KEYS } from '../../utils/topupPricing.util.js';
+import { TOPUP_CONSUMABLE_KEYS, TOPUP_STRUCTURAL_KEYS } from '../../utils/topupPricing.util.js';
 
 const CONSUMABLE_KEY_SET = new Set(TOPUP_CONSUMABLE_KEYS);
 
@@ -203,6 +203,68 @@ export async function findGrantsByOrderId(orderId, queryable = db) {
      WHERE order_id = $1
      ORDER BY item_key`,
     [orderId]
+  );
+  return rows;
+}
+
+/**
+ * Món cấu trúc (TOPUP_STRUCTURAL_KEYS) sắp hết hạn trong 7 ngày tới mà khách CHƯA gia hạn.
+ *
+ * "Gia hạn" = mua thêm một grant MỚI (cùng item_key) chạy song song — grant cũ vẫn hết hạn đúng
+ * hạn của nó, không bị sửa. Vì vậy không thể chỉ nhìn "có grant nào hết hạn trong 7 ngày" mà phải
+ * trừ đi phần đã được một grant mua SAU đó (created_at mới hơn) "gánh" — grant mới đó hết hạn SAU
+ * mốc 7 ngày thì coi như khách đã lo xong, không cần nhắc nữa dù grant cũ vẫn nằm trong sổ.
+ *
+ * Với mỗi item_key còn cần nhắc:
+ *   qty = tổng qty grant hết hạn trong (NOW, NOW+7d]
+ *       − tổng qty grant hết hạn SAU NOW+7d và được tạo SAU grant sắp hết hạn sớm nhất (cùng key)
+ *   cycleEnd = mốc hết hạn sớm nhất trong nhóm (NOW, NOW+7d] của item_key đó.
+ * Chỉ trả các item_key có qty (sau khi trừ) > 0.
+ *
+ * @param {number|string} userId
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @returns {Promise<Array<{itemKey: string, qty: number, cycleEnd: Date}>>}
+ */
+export async function findExpiringUnrenewedGrants(userId, queryable = db) {
+  const { rows } = await queryable.query(
+    `WITH expiring AS (
+       SELECT item_key, qty, cycle_end, created_at
+       FROM topup_grants
+       WHERE user_id = $1
+         AND item_key = ANY($2::text[])
+         AND cycle_end IS NOT NULL
+         AND cycle_end > NOW()
+         AND cycle_end <= NOW() + INTERVAL '7 days'
+     ),
+     earliest AS (
+       SELECT DISTINCT ON (item_key) item_key, cycle_end AS earliest_cycle_end, created_at AS earliest_created_at
+       FROM expiring
+       ORDER BY item_key, cycle_end ASC
+     ),
+     expiring_sum AS (
+       SELECT item_key, SUM(qty)::int AS expiring_qty
+       FROM expiring
+       GROUP BY item_key
+     ),
+     renewed_sum AS (
+       SELECT tg.item_key, SUM(tg.qty)::int AS renewed_qty
+       FROM topup_grants tg
+       JOIN earliest e ON e.item_key = tg.item_key
+       WHERE tg.user_id = $1
+         AND tg.cycle_end IS NOT NULL
+         AND tg.cycle_end > NOW() + INTERVAL '7 days'
+         AND tg.created_at > e.earliest_created_at
+       GROUP BY tg.item_key
+     )
+     SELECT es.item_key AS "itemKey",
+            (es.expiring_qty - COALESCE(rs.renewed_qty, 0))::int AS qty,
+            e.earliest_cycle_end AS "cycleEnd"
+     FROM expiring_sum es
+     JOIN earliest e ON e.item_key = es.item_key
+     LEFT JOIN renewed_sum rs ON rs.item_key = es.item_key
+     WHERE (es.expiring_qty - COALESCE(rs.renewed_qty, 0)) > 0
+     ORDER BY e.earliest_cycle_end ASC`,
+    [userId, TOPUP_STRUCTURAL_KEYS]
   );
   return rows;
 }

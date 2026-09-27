@@ -19,6 +19,7 @@ import {
   sumActiveTopupGrants,
   sumWalletGrants,
   insertTopupGrants,
+  findExpiringUnrenewedGrants,
 } from '../../repositories/payment/topup.repository.js';
 import { findAllPricingRows } from '../../repositories/payment/customPlan.repository.js';
 import {
@@ -458,6 +459,25 @@ export async function fulfillTopupOrder(order, queryable = db) {
 
   _clearQuotaCache();
   return inserted;
+}
+
+/**
+ * Món cấu trúc sắp hết hạn trong 7 ngày mà khách chưa gia hạn — dùng cho banner nhắc trong app.
+ * Route owner-only (requireSelfContext chặn hẳn ngữ cảnh nhân viên trước khi vào tới đây), nên
+ * dùng thẳng userId, không qua resolveBillingUserId/ownerContextId như getTopupConfig.
+ *
+ * @param {number|string} userId
+ * @returns {Promise<{items: Array<{itemKey: string, qty: number, cycleEnd: Date}>}>}
+ */
+export async function getExpiringTopupItems(userId) {
+  const rows = await findExpiringUnrenewedGrants(userId);
+  return {
+    items: rows.map((r) => ({
+      itemKey: r.itemKey,
+      qty: Number(r.qty),
+      cycleEnd: r.cycleEnd,
+    })),
+  };
 }
 
 export { ownerContextFromReqUser, TOPUP_MIN_ORDER_AMOUNT };

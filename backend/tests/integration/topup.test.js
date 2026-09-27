@@ -659,4 +659,113 @@ describe('Top-up mid-cycle', () => {
     expect(itemKeys).toContain('storage_gb');
     expect(itemKeys).not.toContain('ai_credits');
   });
+
+  describe('GET /api/topup/expiring — nhắc trong app cho món cấu trúc sắp hết hạn', () => {
+    let grantSeq = 0;
+    async function insertGrant(userId, itemKey, qty, cycleEnd) {
+      grantSeq += 1;
+      const { rows: orderRows } = await db.query(
+        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, topup_config)
+         VALUES ($1, NULL, 1000, 'x@x.com', $2, 'success', 'payos', 'topup', '{}'::jsonb)
+         RETURNING id`,
+        [Date.now() * 1000 + grantSeq, userId]
+      );
+      await db.query(
+        `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end)
+         VALUES ($1, $2, $3, $4, $5)`,
+        [userId, itemKey, qty, orderRows[0].id, cycleEnd]
+      );
+    }
+    const daysFromNow = (n) => new Date(Date.now() + n * 86400000);
+
+    it('(a) 1 slot nhân viên hết hạn sau 3 ngày → có, qty=1', async () => {
+      const { user } = await createTopupReadyUser({ username: 'exp-a' });
+      await insertGrant(user.id, 'employees', 1, daysFromNow(3));
+      const token = await loginAs(user);
+
+      const res = await request(app).get('/api/topup/expiring').set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const item = res.body.result.items.find((i) => i.itemKey === 'employees');
+      expect(item).toBeDefined();
+      expect(item.qty).toBe(1);
+    });
+
+    it('(b) như (a) nhưng đã mua thêm 1 slot sau đó (hết hạn +30 ngày) → KHÔNG có (coi là đã gia hạn)', async () => {
+      const { user } = await createTopupReadyUser({ username: 'exp-b' });
+      await insertGrant(user.id, 'employees', 1, daysFromNow(3));
+      await insertGrant(user.id, 'employees', 1, daysFromNow(30)); // tạo sau, hết hạn sau mốc 7 ngày
+      const token = await loginAs(user);
+
+      const res = await request(app).get('/api/topup/expiring').set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.result.items.find((i) => i.itemKey === 'employees')).toBeUndefined();
+    });
+
+    it('(c) 5 GB storage_gb hết hạn sau 5 ngày → có, qty=5', async () => {
+      const { user } = await createTopupReadyUser({ username: 'exp-c' });
+      await insertGrant(user.id, 'storage_gb', 5, daysFromNow(5));
+      const token = await loginAs(user);
+
+      const res = await request(app).get('/api/topup/expiring').set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const item = res.body.result.items.find((i) => i.itemKey === 'storage_gb');
+      expect(item).toBeDefined();
+      expect(item.qty).toBe(5);
+    });
+
+    it('(d) grant hết hạn sau 10 ngày (ngoài cửa sổ 7 ngày) → không có', async () => {
+      const { user } = await createTopupReadyUser({ username: 'exp-d' });
+      await insertGrant(user.id, 'landing_pages', 1, daysFromNow(10));
+      const token = await loginAs(user);
+
+      const res = await request(app).get('/api/topup/expiring').set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.result.items).toEqual([]);
+    });
+
+    it('(e) ai_credits (tiêu hao, cycle_end NULL) → không bao giờ có mặt', async () => {
+      const { user } = await createTopupReadyUser({ username: 'exp-e' });
+      const { rows: orderRows } = await db.query(
+        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, topup_config)
+         VALUES ($1, NULL, 1000, 'x@x.com', $2, 'success', 'payos', 'topup', '{}'::jsonb)
+         RETURNING id`,
+        [Date.now() * 1000 + 999, user.id]
+      );
+      await db.query(
+        `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end)
+         VALUES ($1, 'ai_credits', 100, $2, NULL)`,
+        [user.id, orderRows[0].id]
+      );
+      const token = await loginAs(user);
+
+      const res = await request(app).get('/api/topup/expiring').set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      expect(res.body.result.items).toEqual([]);
+    });
+
+    it('employee context (dù truyền X-Owner-Context) → 403 OWNER_ONLY, không lộ dữ liệu chủ', async () => {
+      const { user: owner } = await createTopupReadyUser({ username: 'exp-owner' });
+      await insertGrant(owner.id, 'employees', 1, daysFromNow(3));
+      const employee = await createUser({ username: 'exp-emp', withPlan: false });
+      await db.query(
+        `INSERT INTO user_members (owner_id, employee_id, status, permissions, created_at)
+         VALUES ($1, $2, 'active', '{}'::jsonb, NOW())`,
+        [owner.id, employee.id]
+      );
+      const token = await loginAs(employee);
+
+      const res = await request(app)
+        .get('/api/topup/expiring')
+        .set('Authorization', `Bearer ${token}`)
+        .set('X-Owner-Context', String(owner.id));
+
+      expect(res.status).toBe(403);
+      expect(res.body.code).toBe('OWNER_ONLY');
+    });
+  });
 });

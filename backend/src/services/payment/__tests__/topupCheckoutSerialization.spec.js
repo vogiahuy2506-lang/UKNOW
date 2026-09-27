@@ -69,6 +69,7 @@ jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', ()
   sumActiveTopupGrants: jest.fn().mockResolvedValue(0),
   sumWalletGrants: jest.fn().mockResolvedValue(0),
   insertTopupGrants: jest.fn(),
+  findExpiringUnrenewedGrants: jest.fn().mockResolvedValue([]),
 }));
 
 jest.unstable_mockModule('../../../repositories/payment/customPlan.repository.js', () => ({

@@ -2,6 +2,7 @@ import {
   getTopupConfig,
   quoteTopup,
   createTopupPaymentLink,
+  getExpiringTopupItems,
   ownerContextFromReqUser,
 } from '../services/payment/topup.service.js';
 import {
@@ -86,6 +87,20 @@ export const createPayment = async (req, res) => {
       minOrderAmount: err.minOrderAmount,
       maxMonths: err.maxMonths,
       allowedMonths: err.allowedMonths,
+    });
+  }
+};
+
+export const getExpiring = async (req, res) => {
+  try {
+    const result = await getExpiringTopupItems(req.user.id);
+    res.json({ success: true, result });
+  } catch (err) {
+    console.error(err);
+    res.status(err.status || 500).json({
+      success: false,
+      message: err.message || 'Lỗi server',
+      code: err.code,
     });
   }
 };
