@@ -75,9 +75,15 @@ function csvLine(fields) {
   return `${fields.map(csvField).join(',')}\n`;
 }
 
-function assertBackupPreconditions(apply, backupFile) {
+function assertBackupPreconditions(apply, backupFile, batchSize) {
+  // Review 27/09: batchSize 0 làm vòng lặp lô không bao giờ tiến (lo = hi), NaN làm vòng lặp thoát
+  // ngay và báo "tổng đã sửa = 0" như thể xong — cả hai đều phải chặn trước khi đụng DB.
+  if (!Number.isInteger(batchSize) || batchSize <= 0) {
+    throw new Error(`--batch-size phải là số nguyên dương, nhận: ${batchSize}`);
+  }
   if (!apply) return;
-  if (!backupFile) {
+  // `--backup-file --apply` (quên đường dẫn) sẽ lấy nhầm cờ kế tiếp làm tên file.
+  if (!backupFile || backupFile.startsWith('--')) {
     throw new Error("--apply bắt buộc kèm --backup-file <path> (từ chối trước khi đụng DB).");
   }
   if (fs.existsSync(backupFile)) {
@@ -196,7 +202,7 @@ async function countNotificationExtraColumns(client, maxId, log) {
  * @param {(msg: string) => void} [opts.log=console.log]
  */
 export async function runBackfill({ apply = false, batchSize = 5000, backupFile, log = console.log } = {}) {
-  assertBackupPreconditions(apply, backupFile);
+  assertBackupPreconditions(apply, backupFile, batchSize);
 
   const client = await db.getClient();
   let backupFd = null;

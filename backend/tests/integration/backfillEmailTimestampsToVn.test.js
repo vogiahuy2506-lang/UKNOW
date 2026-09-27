@@ -210,6 +210,18 @@ describe('backfillEmailTimestampsToVn — apply', () => {
     expect(await readEmailRow(ids.a1)).toEqual(before);
   });
 
+  it('--batch-size không hợp lệ (0, NaN) hoặc --backup-file nuốt nhầm cờ → throw, dữ liệu không đổi', async () => {
+    const ids = await seedFixture();
+    const before = await readEmailRow(ids.a1);
+
+    await expect(runBackfill({ apply: false, batchSize: 0, log: () => {} })).rejects.toThrow(/--batch-size/);
+    await expect(runBackfill({ apply: true, batchSize: Number.NaN, backupFile: tmpBackupPath('nan'), log: () => {} }))
+      .rejects.toThrow(/--batch-size/);
+    await expect(runBackfill({ apply: true, backupFile: '--apply', log: () => {} })).rejects.toThrow(/--backup-file/);
+
+    expect(await readEmailRow(ids.a1)).toEqual(before);
+  });
+
   it('backupFile đã tồn tại → từ chối, không ghi đè, dữ liệu không đổi', async () => {
     const ids = await seedFixture();
     const backupFile = tmpBackupPath('apply-existing');
@@ -225,19 +237,16 @@ describe('backfillEmailTimestampsToVn — apply', () => {
   });
 });
 
-describe('backfillEmailTimestampsToVn — đột biến bỏ điều kiện lặp lại ở UPDATE (không viết ca đỏ)', () => {
-  it('KHÔNG có ca test nào phân biệt được việc bỏ AND (matchWhere) trong UPDATE — giải thích', () => {
-    // Cấu trúc thật của applyGroup(): trong CÙNG một transaction, SELECT ... FOR UPDATE trả về `ids`
-    // đúng lúc đó đang khớp matchWhere, rồi UPDATE chạy NGAY SAU đó (không có câu lệnh nào khác xen
-    // giữa, không có await nhường CPU cho việc khác kịp sửa các dòng này — FOR UPDATE còn giữ khoá
-    // dòng, chặn mọi phiên khác ghi đè). Vì vậy tại thời điểm UPDATE chạy, tập `ids` LUÔN chắc chắn
-    // vẫn khớp matchWhere như lúc SELECT — không tồn tại khoảng hở thời gian để giá trị đổi giữa hai
-    // câu lệnh. Bỏ `AND (matchWhere)` ở UPDATE (chỉ còn `WHERE id = ANY($1)`) vì vậy KHÔNG tạo ra
-    // khác biệt quan sát được ở bất kỳ test nào, kể cả chạy 2 lần: lần 2 SELECT lại tự trả `ids` rỗng
-    // (dòng đã sửa không còn khớp matchWhere), UPDATE (có hay không lặp điều kiện) đều không đụng gì.
-    // Điều kiện lặp lại này là lưới an toàn cho một lần sửa code SAU NÀY (vd tách SELECT và UPDATE ra
-    // hai bước riêng, hoặc thêm một await giữa hai câu lệnh) — không phải vá lỗi đang quan sát được
-    // trong kiến trúc hiện tại, nên không viết ca test giả vờ bắt được nó.
-    expect(true).toBe(true);
-  });
-});
+// Đột biến "bỏ AND (matchWhere) ở UPDATE, chỉ còn WHERE id = ANY($1)" KHÔNG có ca nào bắt được — cố ý
+// không viết ca giả vờ bắt (review 27/09 bỏ ca expect(true) cũ, giữ lời giải thích):
+// Cấu trúc thật của applyGroup(): trong CÙNG một transaction, SELECT ... FOR UPDATE trả về `ids`
+// đúng lúc đó đang khớp matchWhere, rồi UPDATE chạy NGAY SAU đó (không có câu lệnh nào khác xen
+// giữa, không có await nhường CPU cho việc khác kịp sửa các dòng này — FOR UPDATE còn giữ khoá
+// dòng, chặn mọi phiên khác ghi đè). Vì vậy tại thời điểm UPDATE chạy, tập `ids` LUÔN chắc chắn
+// vẫn khớp matchWhere như lúc SELECT — không tồn tại khoảng hở thời gian để giá trị đổi giữa hai
+// câu lệnh. Bỏ `AND (matchWhere)` ở UPDATE (chỉ còn `WHERE id = ANY($1)`) vì vậy KHÔNG tạo ra
+// khác biệt quan sát được ở bất kỳ test nào, kể cả chạy 2 lần: lần 2 SELECT lại tự trả `ids` rỗng
+// (dòng đã sửa không còn khớp matchWhere), UPDATE (có hay không lặp điều kiện) đều không đụng gì.
+// Điều kiện lặp lại này là lưới an toàn cho một lần sửa code SAU NÀY (vd tách SELECT và UPDATE ra
+// hai bước riêng, hoặc thêm một await giữa hai câu lệnh) — không phải vá lỗi đang quan sát được
+// trong kiến trúc hiện tại, nên không viết ca test giả vờ bắt được nó.
