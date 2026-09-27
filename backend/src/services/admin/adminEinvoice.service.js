@@ -26,6 +26,11 @@ export async function retryEinvoice(id) {
     throw { status: 404, message: 'Không tìm thấy hoá đơn' };
   }
 
+  // PLAN_HOAN_TIEN_DON_HANG mục 1.4 — đơn đã hoàn tiền: không reset, không gọi Mắt Bão.
+  if (existing.orderStatus === 'refunded') {
+    return { skipped: true, reason: 'order_refunded', status: existing.status };
+  }
+
   if (['issued', 'cqt_ok'].includes(existing.status)) {
     return { skipped: true, reason: 'already_issued', status: existing.status };
   }

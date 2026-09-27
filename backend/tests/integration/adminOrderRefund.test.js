@@ -13,6 +13,11 @@ const {
   metricPaidAfterCancelledOrders,
   metricStuckEinvoices,
 } = await import('../../src/repositories/admin/alert.repository.js');
+const {
+  listClaimableEinvoiceJobIds,
+  claimEinvoiceByIdForIssue,
+  listMissingEinvoiceIntents,
+} = await import('../../src/repositories/payment/einvoice.repository.js');
 
 beforeEach(async () => {
   await truncateAll();
@@ -265,5 +270,54 @@ describe('previewRefund — mục 1.3', () => {
 
   it('đơn không tồn tại → 404', async () => {
     await expect(previewRefund('999999999')).rejects.toMatchObject({ status: 404 });
+  });
+});
+
+describe('mục 1.4 — worker không xuất hoá đơn cho đơn đã hoàn', () => {
+  async function orderWithStaleProcessingInvoice(username, status) {
+    const user = await createUser({ username, withPlan: false });
+    const plan = await createPlan({ code: `plan-${username}`, price: 299000 });
+    const order = await createOrder({
+      planId: plan.id, userId: user.id, userEmail: user.email, amount: 299000, status,
+    });
+    const einvoiceId = await insertEinvoice(order.id, 'processing');
+    // Lease 15 phút đã hết → về lý thuyết cron được nhặt lại.
+    await db.query(
+      `UPDATE einvoices SET processing_started_at = NOW() - INTERVAL '2 hours' WHERE id = $1`,
+      [einvoiceId]
+    );
+    return { order, einvoiceId: Number(einvoiceId) };
+  }
+
+  it('dòng processing hết lease của đơn refunded: không được liệt kê, không claim được; đơn success thì có', async () => {
+    const refunded = await orderWithStaleProcessingInvoice('einv-refunded', 'refunded');
+    const control = await orderWithStaleProcessingInvoice('einv-success', 'success');
+
+    const listed = (await listClaimableEinvoiceJobIds({ limit: 50 })).map((r) => Number(r.id));
+    expect(listed).toContain(control.einvoiceId);
+    expect(listed).not.toContain(refunded.einvoiceId);
+
+    await expect(claimEinvoiceByIdForIssue(refunded.einvoiceId)).resolves.toBeNull();
+    await expect(claimEinvoiceByIdForIssue(control.einvoiceId)).resolves.toMatchObject({ status: 'processing' });
+  });
+
+  it('listMissingEinvoiceIntents chỉ lấy đơn success — đơn refunded muốn hoá đơn không bị tạo intent', async () => {
+    const user = await createUser({ username: 'einv-missing', withPlan: false });
+    const plan = await createPlan({ code: 'plan-einv-missing', price: 299000 });
+    const refunded = await createOrder({
+      planId: plan.id, userId: user.id, userEmail: user.email, amount: 299000, status: 'refunded',
+    });
+    const control = await createOrder({
+      planId: plan.id, userId: user.id, userEmail: user.email, amount: 299000, status: 'success',
+    });
+    await db.query(
+      `UPDATE orders SET invoice_info = '{"wantInvoice": true}'::jsonb WHERE id = ANY($1::int[])`,
+      [[refunded.id, control.id]]
+    );
+
+    const ids = (await listMissingEinvoiceIntents({ fromIso: new Date(Date.now() - 3600_000).toISOString(), limit: 50 }))
+      .map((r) => Number(r.id));
+    expect(ids).toContain(Number(control.id));
+    expect(ids).not.toContain(Number(refunded.id));
   });
 });

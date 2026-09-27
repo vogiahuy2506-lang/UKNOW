@@ -114,7 +114,7 @@ export async function resetEinvoiceEmailForAdminResend(id, queryable = db) {
 
 export async function findEinvoiceById(id, queryable = db) {
   const { rows } = await queryable.query(
-    `SELECT e.*, o.order_code AS "orderCode", o.user_email AS "userEmail"
+    `SELECT e.*, o.order_code AS "orderCode", o.user_email AS "userEmail", o.status AS "orderStatus"
      FROM einvoices e
      JOIN orders o ON o.id = e.order_id
      WHERE e.id = $1

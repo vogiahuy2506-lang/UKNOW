@@ -330,6 +330,9 @@ export async function claimEinvoiceByIdForIssue(einvoiceId, queryable = db) {
              AND e.processing_started_at < NOW() - ($3 || ' minutes')::interval
            )
          )
+         -- PLAN_HOAN_TIEN_DON_HANG mục 1.4 — chỉ xuất hoá đơn cho đơn còn 'success'. Đây là bước
+         -- claim thật (nguyên tử), lưới cho dòng đã được liệt kê ngay trước khi lệnh hoàn commit.
+         AND EXISTS (SELECT 1 FROM orders o WHERE o.id = e.order_id AND o.status = 'success')
        FOR UPDATE SKIP LOCKED
      )
      UPDATE einvoices e
@@ -377,6 +380,9 @@ export async function listClaimableEinvoiceJobIds({ limit = 1 } = {}, queryable 
            AND e.processing_started_at < NOW() - ($3 || ' minutes')::interval
          )
       )
+      -- PLAN_HOAN_TIEN_DON_HANG mục 1.4 — đơn đã hoàn (vd dòng 'processing' hết lease lúc bấm
+      -- hoàn) không được cron nhặt lại để xuất hoá đơn.
+      AND EXISTS (SELECT 1 FROM orders o WHERE o.id = e.order_id AND o.status = 'success')
       ORDER BY COALESCE(e.next_attempt_at, e.updated_at) ASC
       LIMIT $1`,
     [Math.max(1, limit), codes, String(leaseMinutes)],

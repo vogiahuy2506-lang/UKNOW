@@ -83,6 +83,14 @@ describe('adminEinvoice.service', () => {
       await expect(retryEinvoice(999)).rejects.toMatchObject({ status: 404 });
     });
 
+    it('PLAN_HOAN_TIEN mục 1.4: đơn đã hoàn tiền → skipped order_refunded, KHÔNG reset, KHÔNG dispatch', async () => {
+      mockFindEinvoiceById.mockResolvedValueOnce({ id: 6, status: 'failed', orderStatus: 'refunded' });
+      const res = await retryEinvoice(6);
+      expect(res).toEqual({ skipped: true, reason: 'order_refunded', status: 'failed' });
+      expect(mockResetEinvoiceForAdminRetry).not.toHaveBeenCalled();
+      expect(mockDispatchPreparedEinvoice).not.toHaveBeenCalled();
+    });
+
     it('từ chối retry nếu hoá đơn đã có số (issued)', async () => {
       mockFindEinvoiceById.mockResolvedValueOnce({ id: 1, status: 'issued' });
       const res = await retryEinvoice(1);
