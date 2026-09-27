@@ -43,7 +43,7 @@ function ServiceTerms() {
               Điều kiện <span className="text-orange-400">Cung cấp Dịch vụ</span>
             </h1>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}>
-              Terms of <span className="text-orange-400">Service</span>
+              Service <span className="text-orange-400">Terms</span>
             </h1>
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>Công ty TNHH Giải pháp số DIGISO</p>
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'en')}`}>DIGISO Digital Solutions Co., Ltd.</p>

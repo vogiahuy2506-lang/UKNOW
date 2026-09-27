@@ -89,7 +89,7 @@ function RefundPolicy() {
             </p>
             <p className={`text-slate-700 ${lc(language, 'en')}`}>
               See cases of service termination in the{' '}
-              <a href="/service-terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Terms of Service</a>
+              <a href="/service-terms" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Service Terms</a>
               , Section 4.
             </p>
           </section>
