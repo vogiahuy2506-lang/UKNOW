@@ -235,15 +235,6 @@ export async function postLandingCustomDomainVerify(landingPageId) {
  * @param {number} landingPageId
  * @returns {Promise<object>}
  */
-export async function postLandingCustomDomainProvisionSsl(landingPageId) {
-  const { data } = await api.post(`/admin/landing-pages/${landingPageId}/custom-domain/provision-ssl`);
-  return data;
-}
-
-/**
- * @param {number} landingPageId
- * @returns {Promise<object>}
- */
 export async function deleteLandingCustomDomain(landingPageId) {
   const { data } = await api.delete(`/admin/landing-pages/${landingPageId}/custom-domain`);
   return data;
@@ -297,19 +288,6 @@ export async function previewLandingPageVersion(landingPageId, versionId) {
   const { data } = await api.get(`/admin/landing-pages/${landingPageId}/versions/${versionId}/preview`);
   if (!data?.success) throw new Error(data?.message || 'Không tải được nội dung phiên bản');
   return data.data;
-}
-
-/**
- * Khôi phục landing page về một phiên bản.
- *
- * @param {number} landingPageId
- * @param {number} versionId
- * @returns {Promise<object>}
- */
-export async function restoreLandingPageVersion(landingPageId, versionId) {
-  const { data } = await api.post(`/admin/landing-pages/${landingPageId}/versions/${versionId}/restore`);
-  if (!data?.success) throw new Error(data?.message || 'Không khôi phục được phiên bản');
-  return data;
 }
 
 /**

@@ -146,68 +146,6 @@ class LandingPageOverrideRepository {
     return results;
   }
 
-  // Element positions - store in extra_data column
-  async findPositionsByPage(page) {
-    const result = await db.query(
-      `SELECT id, page, section, key, extra_data
-       FROM landing_page_overrides
-       WHERE page = $1 AND extra_data IS NOT NULL AND extra_data != '{}'::jsonb AND extra_data ? 'top'
-       ORDER BY key`,
-      [page]
-    );
-    return result.rows.map(r => ({
-      id: r.id,
-      page: r.page,
-      section: r.section,
-      elementKey: r.key,
-      ...r.extra_data,
-    }));
-  }
-
-  async savePositions(page, positions) {
-    for (const pos of positions) {
-      // Get existing extra_data
-      const existing = await db.query(
-        `SELECT extra_data FROM landing_page_overrides
-         WHERE page = $1 AND key = $2`,
-        [page, pos.element_key]
-      );
-      
-      const existingData = existing.rows[0]?.extra_data || {};
-      
-      // Merge position data into extra_data
-      const newData = {
-        ...existingData,
-        top: pos.top ?? existingData.top,
-        left: pos.left ?? existingData.left,
-        width: pos.width ?? existingData.width,
-        height: pos.height ?? existingData.height,
-        z_index: pos.z_index ?? existingData.z_index,
-        visible: pos.visible ?? existingData.visible,
-      };
-      
-      // Upsert with position data
-      await db.query(
-        `INSERT INTO landing_page_overrides (page, section, key, extra_data, is_active)
-         VALUES ($1, $2, $3, $4, true)
-         ON CONFLICT (page, section, key)
-         DO UPDATE SET extra_data = $4, updated_at = CURRENT_TIMESTAMP`,
-        [page, 'position', pos.element_key, JSON.stringify(newData)]
-      );
-    }
-    return true;
-  }
-
-  async deletePositionByKey(page, elementKey) {
-    const result = await db.query(
-      `UPDATE landing_page_overrides
-       SET extra_data = extra_data - 'top' - 'left' - 'width' - 'height' - 'z_index' - 'visible',
-           updated_at = CURRENT_TIMESTAMP
-       WHERE page = $1 AND key = $2 AND section = 'position'`,
-      [page, elementKey]
-    );
-    return (result.rowCount || 0) > 0;
-  }
 }
 
 export default new LandingPageOverrideRepository();

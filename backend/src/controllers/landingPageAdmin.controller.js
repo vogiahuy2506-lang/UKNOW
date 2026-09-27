@@ -214,31 +214,6 @@ class LandingPageAdminController {
   }
 
   /**
-   * POST /api/admin/landing-pages/:id/custom-domain/provision-ssl
-   */
-  async postCustomDomainProvisionSsl(req, res) {
-    try {
-      const id = parseInt(String(req.params.id), 10);
-      if (!Number.isFinite(id)) {
-        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
-      }
-      const data = await landingPageDomainService.provisionSslForDomain(id, req.user);
-      await logWorkspace(
-        getWorkspaceAuditContext(req),
-        AUDIT_ACTIONS.LANDING_DOMAIN_SSL_PROVISIONED,
-        AUDIT_ENTITY_TYPES.LANDING_PAGE_DOMAIN,
-        id,
-        { hostname: data.hostname, status: data.status }
-      );
-      return res.json({ success: true, data });
-    } catch (error) {
-      const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingPageAdminController.postCustomDomainProvisionSsl]', error);
-      return res.status(status).json({ success: false, message: error.message || 'Cấp SSL thất bại' });
-    }
-  }
-
-  /**
    * DELETE /api/admin/landing-pages/:id/custom-domain
    */
   async deleteCustomDomain(req, res) {
@@ -297,32 +272,6 @@ class LandingPageAdminController {
       const status = error.statusCode || 500;
       if (status >= 500) console.error('[LandingPageAdminController.previewVersion]', error);
       return res.status(status).json({ success: false, message: error.message || 'Không thể xem trước phiên bản' });
-    }
-  }
-
-  /**
-   * POST /api/admin/landing-pages/:id/versions/:versionId/restore
-   */
-  async restoreVersion(req, res) {
-    try {
-      const id = parseInt(String(req.params.id), 10);
-      const versionId = parseInt(String(req.params.versionId), 10);
-      if (!Number.isFinite(id) || !Number.isFinite(versionId)) {
-        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
-      }
-      const data = await landingPageAdminService.restoreVersion(id, versionId, req.user);
-      await logWorkspace(
-        getWorkspaceAuditContext(req),
-        AUDIT_ACTIONS.LANDING_VERSION_RESTORED,
-        AUDIT_ENTITY_TYPES.LANDING_PAGE_VERSION,
-        versionId,
-        { landingPageId: id }
-      );
-      return res.json({ success: true, data, message: 'Khôi phục phiên bản thành công' });
-    } catch (error) {
-      const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingPageAdminController.restoreVersion]', error);
-      return res.status(status).json({ success: false, message: error.message || 'Không thể khôi phục phiên bản' });
     }
   }
 

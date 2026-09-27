@@ -163,30 +163,6 @@ class LandingCustomizerService {
     return map;
   }
 
-  // Element positions
-  async getElementPositions(page) {
-    const validPages = ['hero', 'contact', 'pricing'];
-    if (!validPages.includes(page)) {
-      const err = new Error('Invalid page');
-      err.statusCode = 400;
-      throw err;
-    }
-    return landingPageOverrideRepository.findPositionsByPage(page);
-  }
-
-  async saveElementPositions(page, positions) {
-    if (!Array.isArray(positions)) {
-      const err = new Error('positions must be an array');
-      err.statusCode = 400;
-      throw err;
-    }
-    return landingPageOverrideRepository.savePositions(page, positions);
-  }
-
-  async deleteElementPosition(page, elementKey) {
-    return landingPageOverrideRepository.deletePositionByKey(page, elementKey);
-  }
-
   _validateCustomizerPage(page) {
     if (!LANDING_CUSTOMIZER_PAGES.includes(page)) {
       const err = new Error(`Invalid page. Must be one of: ${LANDING_CUSTOMIZER_PAGES.join(', ')}`);

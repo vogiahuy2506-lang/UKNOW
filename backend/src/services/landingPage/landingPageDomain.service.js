@@ -794,32 +794,6 @@ class LandingPageDomainService {
   }
 
   /**
-   * Trigger SSL certificate provisioning for a domain by landing page ID.
-   * @param {number} landingPageId
-   * @param {object} authUser
-   * @returns {Promise<object>}
-   */
-  async provisionSslForDomain(landingPageId, authUser) {
-    const row = await this.getForLanding(landingPageId, authUser);
-    if (!row) {
-      const err = new Error('Chưa cấu hình tên miền');
-      err.statusCode = 404;
-      throw err;
-    }
-
-    const hostname = String(row.hostname || '').trim().toLowerCase();
-    if (!hostname) {
-      const err = new Error('Domain không hợp lệ');
-      err.statusCode = 400;
-      throw err;
-    }
-
-    await this.provisionSsl(hostname);
-
-    return { hostname, status: row.status };
-  }
-
-  /**
    * Xóa custom domain.
    * DNS record được quản lý bởi khách hàng (không phải platform).
    *

@@ -84,57 +84,6 @@ class CustomDomainRepository {
   }
 
   /**
-   * Find by ID.
-   * @param {number} id
-   * @returns {Promise<object|null>}
-   */
-  async findById(id) {
-    const result = await db.query(
-      `SELECT
-         cd.*,
-         lp.slug AS landing_page_slug,
-         lp.title AS landing_page_title
-       FROM custom_domains cd
-       LEFT JOIN landing_pages lp ON cd.landing_page_id = lp.id
-       WHERE cd.id = $1
-       LIMIT 1`,
-      [id]
-    );
-    return result.rows[0] || null;
-  }
-
-  /**
-   * Find by ID with scope check.
-   * @param {number} id
-   * @param {object} scope
-   * @returns {Promise<object|null>}
-   */
-  async findByIdInScope(id, scope = {}) {
-    const { clause, params } = this.buildScopeCondition(scope);
-    const result = await db.query(
-      `SELECT
-         cd.id,
-         cd.domain,
-         cd.subdomain,
-         cd.status,
-         cd.verification_status,
-         cd.ssl_status,
-         cd.cname_target,
-         cd.is_primary,
-         cd.is_verified,
-         cd.is_active,
-         cd.landing_page_id,
-         cd.created_at,
-         cd.updated_at
-       FROM custom_domains cd
-       WHERE cd.id = $${params.length + 1} AND ${clause}
-       LIMIT 1`,
-      [...params, id]
-    );
-    return result.rows[0] || null;
-  }
-
-  /**
    * Create new domain registration.
    * @param {object} payload
    * @returns {Promise<object>}
@@ -170,67 +119,6 @@ class CustomDomainRepository {
   }
 
   /**
-   * Update domain by ID.
-   * @param {number} id
-   * @param {object} payload
-   * @returns {Promise<object|null>}
-   */
-  async updateById(id, payload) {
-    const updates = [];
-    const values = [];
-    let paramIndex = 1;
-
-    const fieldMappings = {
-      landingPageId: 'landing_page_id',
-      verificationStatus: 'verification_status',
-      sslStatus: 'ssl_status',
-      status: 'status',
-      isVerified: 'is_verified',
-      isActive: 'is_active',
-      isPrimary: 'is_primary',
-      sslCertArn: 'ssl_cert_arn',
-      sslExpiresAt: 'ssl_expires_at',
-      errorMessage: 'error_message',
-      dnsConfig: 'dns_config',
-      lastCheckedAt: 'last_checked_at',
-      verifiedAt: 'verified_at',
-    };
-
-    for (const [key, column] of Object.entries(fieldMappings)) {
-      if (payload[key] !== undefined) {
-        updates.push(`${column} = $${paramIndex}`);
-        values.push(key === 'landingPageId'
-          ? payload[key] || null
-          : key === 'dnsConfig'
-            ? JSON.stringify(payload[key])
-            : payload[key]);
-        paramIndex++;
-      }
-    }
-
-    if (updates.length === 0) return this.findById(id);
-
-    values.push(id);
-    const result = await db.query(
-      `UPDATE custom_domains SET ${updates.join(', ')}, updated_at = NOW()
-       WHERE id = $${paramIndex}
-       RETURNING *`,
-      values
-    );
-    return result.rows[0] || null;
-  }
-
-  /**
-   * Delete domain by ID.
-   * @param {number} id
-   * @returns {Promise<boolean>}
-   */
-  async deleteById(id) {
-    const result = await db.query('DELETE FROM custom_domains WHERE id = $1', [id]);
-    return Number(result.rowCount || 0) > 0;
-  }
-
-  /**
    * Check if domain already exists.
    * @param {string} domain
    * @param {number} excludeId - Exclude this ID from check
@@ -247,28 +135,6 @@ class CustomDomainRepository {
 
     const result = await db.query(query + ' LIMIT 1', params);
     return result.rows.length > 0;
-  }
-
-  /**
-   * Record verification attempt.
-   * @param {number} domainId
-   * @param {object} verification
-   * @returns {Promise<object>}
-   */
-  async recordVerification(domainId, verification) {
-    const result = await db.query(
-      `INSERT INTO custom_domain_verifications (domain_id, verification_type, verification_token, status, response_data)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING *`,
-      [
-        domainId,
-        verification.type,
-        verification.token,
-        verification.status,
-        JSON.stringify(verification.responseData || {}),
-      ]
-    );
-    return result.rows[0];
   }
 
   /**

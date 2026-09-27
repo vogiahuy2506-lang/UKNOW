@@ -37,36 +37,8 @@ const landingCustomizerApiService = {
     return api.get('/admin/landing-sections');
   },
 
-  getSectionsByPage(page) {
-    return api.get(`/admin/landing-sections/page/${page}`);
-  },
-
   getSection(page, section) {
     return api.get(`/admin/landing-sections/${page}/${section}`);
-  },
-
-  createSection(payload) {
-    return api.post('/admin/landing-sections', payload);
-  },
-
-  updateSection(id, payload) {
-    return api.put(`/admin/landing-sections/${id}`, payload);
-  },
-
-  upsertSection(page, section, payload) {
-    return api.put(`/admin/landing-sections/${page}/${section}`, payload);
-  },
-
-  deleteSection(id) {
-    return api.delete(`/admin/landing-sections/${id}`);
-  },
-
-  deleteSectionByPageAndSection(page, section) {
-    return api.delete(`/admin/landing-sections/${page}/${section}`);
-  },
-
-  getPageSource(page) {
-    return api.get(`/admin/landing-customizer/source/${page}`);
   },
 
   // Override content methods
@@ -88,19 +60,6 @@ const landingCustomizerApiService = {
 
   savePageSource(page, source) {
     return api.put(`/admin/landing-customizer/source/${page}`, { source });
-  },
-
-  // Element positions methods
-  getElementPositions(page) {
-    return api.get(`/admin/landing-customizer/${page}/positions`);
-  },
-
-  saveElementPositions(page, positions) {
-    return api.put(`/admin/landing-customizer/${page}/positions`, { positions });
-  },
-
-  deleteElementPosition(page, elementKey) {
-    return api.delete(`/admin/landing-customizer/${page}/positions/${elementKey}`);
   },
 
   getHtmlMode(page) {

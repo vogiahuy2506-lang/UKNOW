@@ -88,53 +88,6 @@ class LandingCustomizerController {
     }
   }
 
-  // Element positions
-  async getPositions(req, res) {
-    try {
-      const { page } = req.params;
-      const positions = await landingCustomizerService.getElementPositions(page);
-      return res.json({ success: true, data: { positions } });
-    } catch (error) {
-      const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingCustomizerController.getPositions]', error);
-      return res.status(status).json({
-        success: false,
-        message: error.message || 'Không thể tải positions',
-      });
-    }
-  }
-
-  async savePositions(req, res) {
-    try {
-      const { page } = req.params;
-      const { positions } = req.body || {};
-      await landingCustomizerService.saveElementPositions(page, positions || []);
-      return res.json({ success: true });
-    } catch (error) {
-      const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingCustomizerController.savePositions]', error);
-      return res.status(status).json({
-        success: false,
-        message: error.message || 'Không thể lưu positions',
-      });
-    }
-  }
-
-  async deletePosition(req, res) {
-    try {
-      const { page, elementKey } = req.params;
-      await landingCustomizerService.deleteElementPosition(page, elementKey);
-      return res.json({ success: true });
-    } catch (error) {
-      const status = error.statusCode || 500;
-      if (status >= 500) console.error('[LandingCustomizerController.deletePosition]', error);
-      return res.status(status).json({
-        success: false,
-        message: error.message || 'Không thể xóa position',
-      });
-    }
-  }
-
   async getHtmlMode(req, res) {
     try {
       const { page } = req.params;

@@ -35,17 +35,6 @@ class LandingPageSectionRepository {
     return result.rows.map((r) => this._mapRow(r));
   }
 
-  async findByPage(page) {
-    const result = await db.query(
-      `SELECT id, page, section, html_content, css_content, config, is_active, created_at, updated_at
-       FROM landing_page_sections
-       WHERE page = $1 AND is_active = true
-       ORDER BY section`,
-      [page]
-    );
-    return result.rows.map((r) => this._mapRow(r));
-  }
-
   async findByPageAndSection(page, section) {
     const result = await db.query(
       `SELECT id, page, section, html_content, css_content, config, is_active, created_at, updated_at
@@ -90,43 +79,6 @@ class LandingPageSectionRepository {
     return this._mapRow(result.rows[0]);
   }
 
-  async updateById(id, payload) {
-    const result = await db.query(
-      `UPDATE landing_page_sections SET
-         page = COALESCE($2, page),
-         section = COALESCE($3, section),
-         html_content = $4,
-         css_content = $5,
-         config = $6,
-         is_active = $7,
-         updated_at = CURRENT_TIMESTAMP
-       WHERE id = $1
-       RETURNING id, page, section, html_content, css_content, config, is_active, created_at, updated_at`,
-      [
-        id,
-        payload.page,
-        payload.section,
-        payload.htmlContent,
-        payload.cssContent,
-        payload.config ? JSON.stringify(payload.config) : null,
-        payload.isActive !== undefined ? payload.isActive : true,
-      ]
-    );
-    return this._mapRow(result.rows[0]);
-  }
-
-  async deleteById(id) {
-    const result = await db.query(`DELETE FROM landing_page_sections WHERE id = $1`, [id]);
-    return (result.rowCount || 0) > 0;
-  }
-
-  async deleteByPageAndSection(page, section) {
-    const result = await db.query(
-      `DELETE FROM landing_page_sections WHERE page = $1 AND section = $2`,
-      [page, section]
-    );
-    return (result.rowCount || 0) > 0;
-  }
 }
 
 export default new LandingPageSectionRepository();

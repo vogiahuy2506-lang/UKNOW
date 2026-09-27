@@ -18,10 +18,8 @@ router.get('/', landingPageAdminController.list.bind(landingPageAdminController)
 router.get('/:id/custom-domain', landingPageAdminController.getCustomDomain.bind(landingPageAdminController));
 router.put('/:id/custom-domain', landingPageAdminController.putCustomDomain.bind(landingPageAdminController));
 router.post('/:id/custom-domain/verify', landingPageAdminController.postCustomDomainVerify.bind(landingPageAdminController));
-router.post('/:id/custom-domain/provision-ssl', landingPageAdminController.postCustomDomainProvisionSsl.bind(landingPageAdminController));
 router.get('/:id/versions', landingPageAdminController.listVersions.bind(landingPageAdminController));
 router.get('/:id/versions/:versionId/preview', landingPageAdminController.previewVersion.bind(landingPageAdminController));
-router.post('/:id/versions/:versionId/restore', landingPageAdminController.restoreVersion.bind(landingPageAdminController));
 router.delete('/:id/versions/:versionId', landingPageAdminController.deleteVersion.bind(landingPageAdminController));
 router.get('/:id/sheets-sync', landingPageAdminController.getSheetsSync.bind(landingPageAdminController));
 router.put('/:id/sheets-sync', landingPageAdminController.putSheetsSync.bind(landingPageAdminController));

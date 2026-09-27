@@ -638,33 +638,6 @@ class LandingPageAdminService {
   }
 
   /**
-   * Khôi phục landing page về phiên bản chỉ định
-   */
-  async restoreVersion(id, versionId, authUser) {
-    const current = await landingPageRepository.findByIdInScope(id, getWorkspaceScope(authUser));
-    if (!current) {
-      const err = new Error('Không tìm thấy landing page');
-      err.statusCode = 404;
-      throw err;
-    }
-    const versionData = await landingPageVersionService.getVersionHtml(
-      versionId,
-      id,
-      current.workspaceOwnerId || current.idUser
-    );
-    return this.update(
-      id,
-      {
-        slug: current.slug,
-        title: current.title,
-        htmlContent: versionData.htmlContent,
-        versionSource: 'rollback',
-      },
-      authUser
-    );
-  }
-
-  /**
    * Xóa một phiên bản lịch sử
    */
   async deleteVersion(id, versionId, authUser) {
