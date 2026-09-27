@@ -739,6 +739,7 @@ export const initScheduler = () => {
             reconcileAllDueUsers,
             sendStructuralGrantReminders,
             sendLockNotices,
+            startGraceForUnlockedOverage,
           } = await import('../services/payment/topupLock.service.js');
           const lockResults = await reconcileAllDueUsers();
           for (const r of lockResults) {
@@ -752,6 +753,10 @@ export const initScheduler = () => {
           // Email báo khoá — huỷ độc lập với việc đếm/log phía trên, một user hỏng không chặn user khác
           // (xem topupLock.service.js: sendLockNotices).
           await sendLockNotices(lockResults);
+          // PR-2 (mục 7.1 Việc C) — quét SAU khi slot mua lẻ hết hạn (tập 2 của reconcileAllDueUsers)
+          // đã bị khoá xong, để người vừa hết hạn mua lẻ KHÔNG được ân hạn (đúng luật cũ).
+          const grace = await startGraceForUnlockedOverage();
+          console.log(`[TopupLock] grace started=${grace.graceStarted} emailed=${grace.emailed}`);
           const rem = await sendStructuralGrantReminders();
           reminderWeek = rem.week || 0;
           reminderThree = rem.three || 0;

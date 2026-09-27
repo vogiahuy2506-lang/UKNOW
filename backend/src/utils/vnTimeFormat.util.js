@@ -76,6 +76,28 @@ export function formatUtcAndVietnamForLog(input) {
 }
 
 /**
+ * "dd/MM/yyyy HH:mm" theo giờ VN — timeZone cố định, không phụ thuộc TZ tiến trình (production
+ * chạy UTC, xem project_email_sent_at_luu_gio_utc). Dùng cho mốc giờ hiển thị trong email (hạn ân
+ * hạn 7 ngày) — khác `formatUtcAndVietnamForLog` (có giây + phần UTC, dành cho log vận hành).
+ *
+ * @param {Date|string|number|null|undefined} input
+ * @returns {string}
+ */
+export function formatVnDateTime(input) {
+  const d = toDateOrNull(input);
+  if (!d) return '';
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: VIETNAM_TIMEZONE,
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(d);
+}
+
+/**
  * Lấy khoảng thời gian bắt đầu và kết thúc của một ngày lịch Việt Nam (UTC ISO).
  * Giờ VN luôn là UTC+7. Ngày YYYY-MM-DD bắt đầu từ `YYYY-MM-DDT00:00:00+07:00`
  * (tức (D-1)T17:00:00Z) đến `YYYY-MM-(D+1)T00:00:00+07:00`.

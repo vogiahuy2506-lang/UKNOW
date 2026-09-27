@@ -22,7 +22,11 @@ const {
   createPlan,
 } = await import('./helpers/db.js');
 const { checkSendQuota, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
-const { reconcileResourceLocks, reconcileAllDueUsers } = await import('../../src/services/payment/topupLock.service.js');
+const {
+  reconcileResourceLocks,
+  reconcileAllDueUsers,
+  startGraceForUnlockedOverage,
+} = await import('../../src/services/payment/topupLock.service.js');
 const { findExpiringStructuralGrants } = await import('../../src/repositories/payment/topupLock.repository.js');
 
 let app;
@@ -866,6 +870,124 @@ describe('Top-up mid-cycle', () => {
       const results = await reconcileAllDueUsers(db);
 
       expect(results.find((r) => r.userId === Number(user.id))).toBeUndefined();
+    });
+  });
+
+  describe('startGraceForUnlockedOverage — PR-2 mục 7.1 Việc A (mọi đường làm trần giảm mà không qua lệnh hẹn)', () => {
+    async function setZaloCeiling(userId, maxZaloAccounts) {
+      // Xem chú thích ở describe "reconcileAllDueUsers" phía trên: createTopupReadyUser không thật
+      // sự khống chế users.max_zalo_accounts (bị createUser ghi cứng 1000) — phải tự UPDATE.
+      await db.query(`UPDATE users SET max_zalo_accounts = $1 WHERE id = $2`, [maxZaloAccounts, userId]);
+    }
+
+    it('G1: có vượt hạn mức, chưa từng có ân hạn → cấp ân hạn ≈ NOW()+7 ngày, 0 khoá; gọi lại lần 2 → grace KHÔNG đổi', async () => {
+      const { user } = await createTopupReadyUser({
+        username: `an_han_g1_${Date.now()}`,
+        maxZaloAccounts: 1,
+        connectedZaloAccounts: 3,
+      });
+      await setZaloCeiling(user.id, 1);
+
+      const result = await startGraceForUnlockedOverage(db);
+
+      // beforeEach đã truncateAll — chỉ mình user này, nên đây là ĐÚNG 1, không phải chặn dưới.
+      expect(result.graceStarted).toBe(1);
+      expect(result.emailed).toBe(1);
+      const { rows } = await db.query(
+        `SELECT overage_grace_until FROM users WHERE id = $1`,
+        [user.id]
+      );
+      const graceUntil = new Date(rows[0].overage_grace_until);
+      const diffDays = (graceUntil.getTime() - Date.now()) / 86400000;
+      expect(diffDays).toBeGreaterThan(6.9);
+      expect(diffDays).toBeLessThan(7.1);
+      const { rows: lockedRows } = await db.query(
+        `SELECT COUNT(*)::int AS n FROM topup_locked_resources WHERE user_id = $1`,
+        [user.id]
+      );
+      expect(lockedRows[0].n).toBe(0); // Việc A chỉ cấp ân hạn, KHÔNG khoá ngay
+
+      const graceUntilFirst = rows[0].overage_grace_until;
+      await startGraceForUnlockedOverage(db); // gọi lại lần 2 — điều kiện IS NULL chặn, không còn là ứng viên
+      const { rows: rows2 } = await db.query(
+        `SELECT overage_grace_until FROM users WHERE id = $1`,
+        [user.id]
+      );
+      expect(rows2[0].overage_grace_until).toEqual(graceUntilFirst);
+    });
+
+    it('G2: grant Zalo hết hạn hôm qua (trần gói 1, đang có 2 Zalo) — reconcileAllDueUsers khoá TRƯỚC → startGraceForUnlockedOverage sau không còn gì để cấp ân hạn', async () => {
+      const { user } = await createTopupReadyUser({
+        username: `an_han_g2_${Date.now()}`,
+        maxZaloAccounts: 1,
+        connectedZaloAccounts: 2,
+      });
+      await setZaloCeiling(user.id, 1);
+      const { rows: zaloRows } = await db.query(
+        `SELECT id FROM zalo_settings WHERE id_user = $1 ORDER BY id ASC`,
+        [user.id]
+      );
+      expect(zaloRows).toHaveLength(2);
+      const [oldestId, newestId] = zaloRows.map((r) => Number(r.id));
+
+      // Grant +1 tài khoản Zalo, hết hạn HÔM QUA — trong cửa sổ 7 ngày của findUsersWithExpiredStructuralGrants.
+      const { rows: orderRows } = await db.query(
+        `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, topup_config)
+         VALUES ($1, NULL, 1000, 'x@x.com', $2, 'success', 'payos', 'topup', '{}'::jsonb)
+         RETURNING id`,
+        [Date.now() * 1000 + 7, user.id]
+      );
+      await db.query(
+        `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end, created_at)
+         VALUES ($1, 'zalo_accounts', 1, $2, NOW() - INTERVAL '1 day', NOW() - INTERVAL '31 days')`,
+        [user.id, orderRows[0].id]
+      );
+
+      const reconcileResults = await reconcileAllDueUsers(db);
+      const reconcileEntry = reconcileResults.find((r) => r.userId === Number(user.id));
+      expect(reconcileEntry).toBeDefined();
+      expect(reconcileEntry.locked).toEqual([{ resourceKey: 'zalo_accounts', resourceId: newestId }]);
+
+      const graceResult = await startGraceForUnlockedOverage(db);
+      const { rows: userRow } = await db.query(
+        `SELECT overage_grace_until FROM users WHERE id = $1`,
+        [user.id]
+      );
+      expect(userRow[0].overage_grace_until).toBeNull(); // mua lẻ hết hạn KHÔNG được ân hạn
+      // beforeEach đã truncateAll — chỉ mình user này, nên đây là ĐÚNG 0, không phải chặn dưới.
+      expect(graceResult.graceStarted).toBe(0);
+      expect(graceResult.emailed).toBe(0);
+
+      const { rows: notLocked } = await db.query(
+        `SELECT 1 FROM topup_locked_resources WHERE resource_key = 'zalo_accounts' AND resource_id = $1`,
+        [oldestId]
+      );
+      expect(notLocked).toHaveLength(0); // Zalo cũ hơn vẫn chạy bình thường, đúng bằng trần 1
+    });
+
+    it('G3: user đã có overage_grace_until (dù đã hết) + đang vượt → gọi THẲNG startGraceForUnlockedOverage (không reconcile trước) → giữ nguyên mốc cũ, không thư', async () => {
+      const { user } = await createTopupReadyUser({
+        username: `an_han_g3_${Date.now()}`,
+        maxZaloAccounts: 1,
+        connectedZaloAccounts: 2,
+      });
+      await setZaloCeiling(user.id, 1);
+      const { rows: graceRows } = await db.query(
+        `UPDATE users SET overage_grace_until = NOW() - INTERVAL '10 days' WHERE id = $1 RETURNING overage_grace_until`,
+        [user.id]
+      );
+      const oldGrace = graceRows[0].overage_grace_until;
+
+      const result = await startGraceForUnlockedOverage(db);
+
+      const { rows: userRow } = await db.query(
+        `SELECT overage_grace_until FROM users WHERE id = $1`,
+        [user.id]
+      );
+      expect(userRow[0].overage_grace_until).toEqual(oldGrace); // KHÔNG bị ghi đè
+      // beforeEach đã truncateAll — chỉ mình user này trong DB, nên đây là ĐÚNG 0, không phải chặn dưới.
+      expect(result.graceStarted).toBe(0);
+      expect(result.emailed).toBe(0);
     });
   });
 });

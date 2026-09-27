@@ -26,16 +26,39 @@ const mockDb = {
   query: jest.fn(),
 };
 
+const STRUCTURAL_ITEM_LABELS_VI = {
+  zalo_accounts: 'tài khoản Zalo',
+  email_accounts: 'tài khoản Email',
+  landing_pages: 'landing page',
+  chatbots: 'chatbot',
+  employees: 'nhân viên',
+};
+
+// PR-2 (mục 7.1 Việc B) — buildOverageGraceNotice chuyển từ đoạn HTML inline (mock cũ không cần)
+// sang hàm dùng chung trong topupLock.service.js; mock lại ĐÚNG logic thật (không chỉ trả chuỗi
+// rỗng/giả) để 4 ca "thư kích hoạt hạ gói" (đã có từ PR-1, kiểm nội dung HTML thật) vẫn đúng nghĩa.
 const mockTopupLockService = {
   reconcileResourceLocks: jest.fn().mockResolvedValue(),
   computeOverage: jest.fn().mockResolvedValue([]),
-  structuralItemLabelVi: jest.fn((key) => ({
-    zalo_accounts: 'tài khoản Zalo',
-    email_accounts: 'tài khoản Email',
-    landing_pages: 'landing page',
-    chatbots: 'chatbot',
-    employees: 'nhân viên',
-  }[key] || key)),
+  structuralItemLabelVi: jest.fn((key) => STRUCTURAL_ITEM_LABELS_VI[key] || key),
+  buildOverageGraceNotice: jest.fn(({ overages, graceUntil, frontendUrl }) => {
+    if (!overages || overages.length === 0) return '';
+    const detail = overages.map((o) => `${o.over} ${STRUCTURAL_ITEM_LABELS_VI[o.resourceKey] || o.resourceKey}`).join(', ');
+    const deadlineStr = new Intl.DateTimeFormat('vi-VN', {
+      timeZone: 'Asia/Ho_Chi_Minh',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      hourCycle: 'h23',
+    }).format(new Date(graceUntil));
+    return `<p>Hạn mức hiện tại cho phép ít tài nguyên hơn bạn đang dùng: vượt <strong>${detail}</strong>. `
+      + `Bạn có 7 ngày, tới <strong>${deadlineStr}</strong>, để chọn giữ lại cái nào `
+      + `(<a href="${frontendUrl}/app/billing?tab=locks">chọn tài nguyên giữ lại</a>) hoặc `
+      + `<a href="${frontendUrl}/app/topup">mua thêm</a>. Sau hạn này hệ thống tự khoá phần vượt, `
+      + `cái tạo gần nhất bị khoá trước.</p>`;
+  }),
 };
 
 const mockSystemEmail = {
@@ -296,7 +319,7 @@ describe('scheduledPlanChange.service', () => {
         await processDueScheduledPlanChanges();
 
         const [{ html }] = mockSystemEmail.sendSystemEmail.mock.calls[0];
-        expect(html).not.toContain('Gói mới cho phép ít tài nguyên hơn');
+        expect(html).not.toContain('Hạn mức hiện tại cho phép ít tài nguyên hơn');
         expect(html).not.toContain('/app/billing?tab=locks');
       });
 
@@ -322,7 +345,7 @@ describe('scheduledPlanChange.service', () => {
 
         expect(mockSystemEmail.sendSystemEmail).toHaveBeenCalledTimes(1);
         const [{ html }] = mockSystemEmail.sendSystemEmail.mock.calls[0];
-        expect(html).not.toContain('Gói mới cho phép ít tài nguyên hơn');
+        expect(html).not.toContain('Hạn mức hiện tại cho phép ít tài nguyên hơn');
         expect(console.error).toHaveBeenCalledWith(
           expect.stringContaining('computeOverage'),
           expect.any(String)

@@ -448,12 +448,21 @@ describe('DELETE /api/admin/plans/:id — smart delete', () => {
     expect(Number(userRow.rows[0].active_plan_id)).toBe(Number(plan.id)); // vẫn giữ
   });
 
-  it('plan custom có order → soft delete + GỠ active_plan_id của user', async () => {
+  it('plan custom có order → soft delete + GỠ active_plan_id của user, max_zalo_accounts=0, Zalo đang dùng bị KHOÁ (PR-2 Việc D)', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const plan = await createPlan({ code: 'cust', name: 'Custom', isCustom: true });
+    // createPlan không set max_zalo_accounts (mặc định NULL = không giới hạn) — ép về 1 để phép
+    // kiểm tất định: buyer có đúng 1 Zalo, bằng trần, KHÔNG bị khoá lúc còn gói; gỡ gói xong trần
+    // về 0 (expireUserPlan) thì 1 Zalo đó phải bị khoá.
+    await db.query('UPDATE plans SET max_zalo_accounts = 1 WHERE id = $1', [plan.id]);
     const buyer = await createUser({ role: 'user', username: 'buyer' });
     await assignPlanToUser(buyer.id, plan.id);
     await createOrder({ planId: plan.id, userId: buyer.id, userEmail: buyer.email });
+    const { rows: zaloRows } = await db.query(
+      `INSERT INTO zalo_settings (id_user, display_name, status, is_active) VALUES ($1, 'ZL', 'connected', TRUE) RETURNING id`,
+      [buyer.id]
+    );
+    const zaloId = Number(zaloRows[0].id);
 
     const token = await loginAs(admin);
     const res = await request(app)
@@ -465,8 +474,34 @@ describe('DELETE /api/admin/plans/:id — smart delete', () => {
     expect(res.body.data.unassignedUsers).toHaveLength(1);
     expect(res.body.data.unassignedUsers[0].email).toBe(buyer.email);
 
-    const userRow = await db.query('SELECT active_plan_id FROM users WHERE id = $1', [buyer.id]);
+    const userRow = await db.query(
+      'SELECT active_plan_id, max_zalo_accounts FROM users WHERE id = $1',
+      [buyer.id]
+    );
     expect(userRow.rows[0].active_plan_id).toBeNull();
+    expect(userRow.rows[0].max_zalo_accounts).toBe(0);
+
+    const lockRow = await db.query(
+      `SELECT 1 FROM topup_locked_resources WHERE resource_key = 'zalo_accounts' AND resource_id = $1`,
+      [zaloId]
+    );
+    expect(lockRow.rows).toHaveLength(1);
+  });
+
+  it('user KHÔNG có lệnh hẹn đổi gói pending vẫn gỡ được bình thường (supersedePendingByUserId không có gì để supersede)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin2' });
+    const plan = await createPlan({ code: 'cust2', name: 'Custom 2', isCustom: true });
+    const buyer = await createUser({ role: 'user', username: 'buyer2' });
+    await assignPlanToUser(buyer.id, plan.id);
+    await createOrder({ planId: plan.id, userId: buyer.id, userEmail: buyer.email });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .delete(`/api/admin/plans/${plan.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.unassignedUsers).toHaveLength(1);
   });
 
   it('plan không tồn tại → 404', async () => {

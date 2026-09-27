@@ -2,6 +2,7 @@ import db from '../../config/database.js';
 import { getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants, findExpiringUnrenewedGrants } from '../../repositories/payment/topup.repository.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
+import { formatVnDateTime } from '../../utils/vnTimeFormat.util.js';
 import {
   LOCKABLE_RESOURCE_KEYS,
   isResourceLocked as repoIsLocked,
@@ -18,6 +19,7 @@ import {
   findUsersWithExpiredStructuralGrants,
   findUsersWithLocks,
   findUsersWithEndedOverageGrace,
+  findUsersEligibleForOverageGrace,
   findExpiringStructuralGrants,
   incrementGrantReminderCount,
 } from '../../repositories/payment/topupLock.repository.js';
@@ -295,6 +297,87 @@ export async function sendLockNotices(results, queryable = db) {
   }
 
   return sentCount;
+}
+
+/**
+ * PR-2 (mục 7.1 Việc B) — đoạn HTML dùng CHUNG cho hai thư khi khách đang/sắp vượt hạn mức mà còn
+ * 7 ngày ân hạn: thư kích hoạt lệnh hẹn hạ gói (`scheduledPlanChange.service.js`, PR-1) và thư
+ * Việc A (`startGraceForUnlockedOverage`, mọi đường KHÁC làm trần giảm mà không qua lệnh hẹn — nâng
+ * gói Tuỳ chọn giảm một món, super admin gán gói thấp hơn, tạo gói riêng thấp hơn, sửa giảm hạn mức
+ * gói). Câu mở đổi "Gói mới cho phép" -> "Hạn mức hiện tại cho phép" để đúng nghĩa ở cả hai ngữ
+ * cảnh — nội dung còn lại giữ nguyên như PR-1.
+ *
+ * @param {{ overages: Array<{resourceKey: string, over: number}>, graceUntil: Date|string, frontendUrl: string }} params
+ * @returns {string} đoạn `<p>...</p>` HTML, rỗng nếu `overages` rỗng
+ */
+export function buildOverageGraceNotice({ overages, graceUntil, frontendUrl }) {
+  if (!overages || overages.length === 0) return '';
+  const detail = overages.map((o) => `${o.over} ${structuralItemLabelVi(o.resourceKey)}`).join(', ');
+  const deadlineStr = formatVnDateTime(graceUntil);
+  return `<p>Hạn mức hiện tại cho phép ít tài nguyên hơn bạn đang dùng: vượt <strong>${detail}</strong>. `
+    + `Bạn có 7 ngày, tới <strong>${deadlineStr}</strong>, để chọn giữ lại cái nào `
+    + `(<a href="${frontendUrl}/app/billing?tab=locks">chọn tài nguyên giữ lại</a>) hoặc `
+    + `<a href="${frontendUrl}/app/topup">mua thêm</a>. Sau hạn này hệ thống tự khoá phần vượt, `
+    + `cái tạo gần nhất bị khoá trước.</p>`;
+}
+
+/**
+ * PR-2 (mục 7.1 Việc A) — quét MỌI đường làm trần giảm mà không đi qua lệnh hẹn hạ gói (nên không
+ * tự có `overage_grace_until`), cấp 7 ngày ân hạn đúng như hạ gói theo lệnh hẹn, thay vì khoá ngay.
+ * PHẢI chạy SAU `reconcileAllDueUsers` + `sendLockNotices` trong cùng lượt cron (xem scheduler.js):
+ * lúc đó slot mua lẻ hết hạn (tập 2 của reconcileAllDueUsers) đã bị khoá xong nên `computeOverage`
+ * của người đó ra 0 — mua lẻ hết hạn KHÔNG được ân hạn, giữ đúng luật cũ.
+ *
+ * Điều kiện `overage_grace_until IS NULL` xuất hiện ở CẢ ứng viên
+ * (`findUsersEligibleForOverageGrace`) LẪN UPDATE bên dưới — chống hai lượt cron chạy chồng ghi đè
+ * lẫn nhau (UPDATE có điều kiện là chốt chặn cuối cùng, không chỉ dựa vào danh sách ứng viên đọc
+ * trước đó).
+ *
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @returns {Promise<{ graceStarted: number, emailed: number }>}
+ */
+export async function startGraceForUnlockedOverage(queryable = db) {
+  const { sendSystemEmail } = await import('../../utils/systemEmail.util.js');
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+  const candidates = await findUsersEligibleForOverageGrace(queryable);
+
+  let graceStarted = 0;
+  let emailed = 0;
+
+  for (const candidate of candidates) {
+    const userId = Number(candidate.id);
+    try {
+      const overages = await computeOverage(userId, queryable);
+      if (overages.length === 0) continue;
+
+      const { rows } = await queryable.query(
+        `UPDATE users SET overage_grace_until = NOW() + INTERVAL '7 days'
+           WHERE id = $1 AND overage_grace_until IS NULL
+         RETURNING overage_grace_until, email, full_name`,
+        [userId]
+      );
+      if (rows.length === 0) continue; // lượt cron khác đã đặt ân hạn trước — chống chạy chồng
+      graceStarted += 1;
+
+      const u = rows[0];
+      if (!u.email) continue;
+
+      const notice = buildOverageGraceNotice({ overages, graceUntil: u.overage_grace_until, frontendUrl });
+      const name = escapeHtml(u.full_name || 'bạn');
+      await sendSystemEmail({
+        to: u.email,
+        subject: '[Founder AI] Tài khoản đang dùng vượt hạn mức gói hiện tại',
+        html: `<p>Xin chào ${name},</p>
+<p>Hạn mức hiện tại của tài khoản (gói cộng phần mua thêm còn hạn) thấp hơn số bạn đang dùng.</p>
+${notice}`,
+      });
+      emailed += 1;
+    } catch (err) {
+      console.error(`[TopupLock] startGraceForUnlockedOverage failed for user ${candidate.id}:`, err.message);
+    }
+  }
+
+  return { graceStarted, emailed };
 }
 
 /**

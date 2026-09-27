@@ -16,6 +16,7 @@ const mockFindExpiringUnrenewedGrants = jest.fn();
 const mockFindUsersWithExpiredStructuralGrants = jest.fn();
 const mockFindUsersWithLocks = jest.fn();
 const mockFindUsersWithEndedOverageGrace = jest.fn();
+const mockFindUsersEligibleForOverageGrace = jest.fn();
 const mockFindExpiredUsers = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
@@ -43,6 +44,7 @@ jest.unstable_mockModule('../../../repositories/payment/topupLock.repository.js'
   findUsersWithExpiredStructuralGrants: mockFindUsersWithExpiredStructuralGrants,
   findUsersWithLocks: mockFindUsersWithLocks,
   findUsersWithEndedOverageGrace: mockFindUsersWithEndedOverageGrace,
+  findUsersEligibleForOverageGrace: mockFindUsersEligibleForOverageGrace,
   findExpiringStructuralGrants: mockFindExpiringStructuralGrants,
   incrementGrantReminderCount: mockIncrementGrantReminderCount,
 }));
@@ -89,6 +91,8 @@ const {
   buildLockNoticeEmail,
   sendLockNotices,
   computeOverage,
+  buildOverageGraceNotice,
+  startGraceForUnlockedOverage,
 } = await import('../topupLock.service.js');
 
 describe('normalizeCeiling — PR-3, Việc 3.2 (hợp đồng NULL/-1 = không giới hạn)', () => {
@@ -728,5 +732,97 @@ describe('computeOverage — cùng công thức với reconcile: vượt = (đan
     mockSumActive.mockImplementation(async (_userId, key) => (key === 'zalo_accounts' ? 2 : 0));
 
     expect(await computeOverage(7, mockQueryable)).toEqual([]);
+  });
+});
+
+describe('buildOverageGraceNotice — PR-2 mục 7.1 Việc B (dùng chung với thư hạ gói)', () => {
+  it('liệt kê đúng theo resourceKey, mốc giờ VN đúng định dạng, đủ 2 link', () => {
+    const html = buildOverageGraceNotice({
+      overages: [{ resourceKey: 'zalo_accounts', over: 2 }, { resourceKey: 'chatbots', over: 1 }],
+      graceUntil: new Date('2026-10-04T01:00:00Z'), // 08:00 giờ VN 04/10/2026
+      frontendUrl: 'https://app.example.com',
+    });
+
+    expect(html).toContain('Hạn mức hiện tại cho phép');
+    expect(html).toContain('vượt <strong>2 tài khoản Zalo, 1 chatbot</strong>');
+    expect(html).toContain('04/10/2026');
+    expect(html).toContain('08:00');
+    expect(html).toContain('https://app.example.com/app/billing?tab=locks');
+    expect(html).toContain('https://app.example.com/app/topup');
+  });
+
+  it('overages rỗng → chuỗi rỗng (không có đoạn cảnh báo)', () => {
+    expect(buildOverageGraceNotice({ overages: [], graceUntil: new Date(), frontendUrl: 'https://x.com' })).toBe('');
+  });
+});
+
+describe('startGraceForUnlockedOverage — PR-2 mục 7.1 Việc A (cấp ân hạn cho mọi đường làm trần giảm mà không qua lệnh hẹn)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSendSystemEmail.mockResolvedValue({ messageId: 'x' });
+    mockGetPlan.mockResolvedValue(null); // chatbots/employees: không có gói -> ceiling 0, không vượt qua nhánh này
+    mockSumActive.mockResolvedValue(0);
+    mockCountValid.mockResolvedValue(0);
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('UPDATE users SET overage_grace_until')) {
+        return {
+          rows: [{
+            overage_grace_until: new Date('2026-10-04T01:00:00Z'),
+            email: 'khach@example.com',
+            full_name: '<b>Khach</b>',
+          }],
+        };
+      }
+      if (String(sql).includes('overage_grace_until')) {
+        return { rows: [{ overage_grace_until: null }] };
+      }
+      if (String(sql).includes('max_zalo_accounts')) {
+        return { rows: [{ max_zalo_accounts: 1 }] };
+      }
+      return { rows: [] };
+    });
+  });
+
+  it('có vượt hạn mức → UPDATE overage_grace_until + gửi đúng 1 thư, escape full_name', async () => {
+    mockFindUsersEligibleForOverageGrace.mockResolvedValueOnce([{ id: 10 }]);
+    mockCountInUse.mockImplementation(async (_uid, key) => (key === 'zalo_accounts' ? 2 : 0));
+
+    const result = await startGraceForUnlockedOverage(mockQueryable);
+
+    expect(result).toEqual({ graceStarted: 1, emailed: 1 });
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+    const [{ to, subject, html }] = mockSendSystemEmail.mock.calls[0];
+    expect(to).toBe('khach@example.com');
+    expect(subject).toBe('[Founder AI] Tài khoản đang dùng vượt hạn mức gói hiện tại');
+    expect(html).toContain('&lt;b&gt;Khach&lt;/b&gt;');
+    expect(html).not.toContain('<b>Khach</b>');
+    expect(html).toContain('vượt <strong>1 tài khoản Zalo</strong>');
+  });
+
+  it('không vượt (computeOverage rỗng) → KHÔNG UPDATE overage_grace_until, không gửi thư', async () => {
+    mockFindUsersEligibleForOverageGrace.mockResolvedValueOnce([{ id: 11 }]);
+    mockCountInUse.mockResolvedValue(0);
+
+    const result = await startGraceForUnlockedOverage(mockQueryable);
+
+    expect(result).toEqual({ graceStarted: 0, emailed: 0 });
+    expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    const updateCalls = mockQueryable.query.mock.calls.filter(([sql]) => String(sql).includes('UPDATE users SET overage_grace_until'));
+    expect(updateCalls).toHaveLength(0);
+  });
+
+  it('user A lỗi (computeOverage ném lỗi) không chặn user B', async () => {
+    mockFindUsersEligibleForOverageGrace.mockResolvedValueOnce([{ id: 20 }, { id: 21 }]);
+    mockCountInUse.mockImplementation(async (userId, key) => {
+      if (userId === 20) throw new Error('DB timeout');
+      return key === 'zalo_accounts' ? 2 : 0;
+    });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
+    const result = await startGraceForUnlockedOverage(mockQueryable);
+
+    expect(result).toEqual({ graceStarted: 1, emailed: 1 });
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('user 20'), expect.any(String));
   });
 });

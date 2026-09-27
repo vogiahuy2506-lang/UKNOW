@@ -7,6 +7,7 @@ import {
 import { lockUserForPlanActivation } from '../../repositories/user/user.repository.js';
 import { sendSystemEmail } from '../../utils/systemEmail.util.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
+import { formatVnDateTime } from '../../utils/vnTimeFormat.util.js';
 
 /**
  * Get active pending scheduled change for a user.
@@ -14,21 +15,6 @@ import { escapeHtml } from '../../utils/htmlEscape.util.js';
 export async function getPendingScheduledChange(userId) {
   if (!userId) return null;
   return scheduledPlanChangeRepository.findPendingByUserId(userId);
-}
-
-/** "dd/MM/yyyy HH:mm" theo giờ VN — timeZone cố định, không phụ thuộc TZ tiến trình (production
- * chạy UTC, xem project_email_sent_at_luu_gio_utc). */
-function formatVnDateTime(date) {
-  if (!date) return '';
-  return new Intl.DateTimeFormat('vi-VN', {
-    timeZone: 'Asia/Ho_Chi_Minh',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(date));
 }
 
 /**
@@ -173,17 +159,14 @@ export async function processDueScheduledPlanChanges() {
         // KHÔNG được nuốt mất thư kích hoạt, chỉ log rồi gửi thư không có đoạn cảnh báo vượt.
         let overageHtml = '';
         try {
-          const { computeOverage, structuralItemLabelVi } = await import('./topupLock.service.js');
+          // PR-2 (mục 7.1 Việc B) — đoạn HTML dùng chung với thư Việc A (topupLock.service.js:
+          // startGraceForUnlockedOverage), câu đổi "Gói mới cho phép" -> "Hạn mức hiện tại cho
+          // phép" trong builder để đúng nghĩa ở cả hai ngữ cảnh (nội dung không đổi ở đây).
+          const { computeOverage, buildOverageGraceNotice } = await import('./topupLock.service.js');
           const overages = await computeOverage(claimed.user_id, db);
           if (overages.length > 0) {
-            const detail = overages.map((o) => `${o.over} ${structuralItemLabelVi(o.resourceKey)}`).join(', ');
-            const deadlineStr = formatVnDateTime(overageGraceUntil);
             const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-            overageHtml = `<p>Gói mới cho phép ít tài nguyên hơn bạn đang dùng: vượt <strong>${detail}</strong>. `
-              + `Bạn có 7 ngày, tới <strong>${deadlineStr}</strong>, để chọn giữ lại cái nào `
-              + `(<a href="${frontendUrl}/app/billing?tab=locks">chọn tài nguyên giữ lại</a>) hoặc `
-              + `<a href="${frontendUrl}/app/topup">mua thêm</a>. Sau hạn này hệ thống tự khoá phần vượt, `
-              + `cái tạo gần nhất bị khoá trước.</p>`;
+            overageHtml = buildOverageGraceNotice({ overages, graceUntil: overageGraceUntil, frontendUrl });
           }
         } catch (err) {
           console.error('[ScheduledPlanChange] computeOverage failed:', err.message);

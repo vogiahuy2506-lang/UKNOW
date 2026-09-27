@@ -187,14 +187,16 @@ export async function softDeletePlan(id) {
   return rows[0] || null;
 }
 
-/** Gỡ plan khỏi tất cả user đang active — dùng cho custom plan khi ẩn (vì plan này chỉ phục vụ user đó).
- *  Trả về danh sách email đã bị gỡ để admin biết. */
-export async function unassignPlanFromUsers(planId) {
-  const { rows } = await db.query(
-    `UPDATE users
-        SET active_plan_id = NULL, updated_at = NOW()
-      WHERE active_plan_id = $1
-      RETURNING email, full_name AS "fullName"`,
+/**
+ * PR-2 (mục 7.1 Việc D) — danh sách user đang dùng một plan (custom), CHỈ ĐỌC. Thay
+ * `unassignPlanFromUsers` (UPDATE hàng loạt, chỉ NULL `active_plan_id`, không 0 hoá `max_*`, không
+ * khoá tài nguyên vượt trần) — `removePlan` giờ đi từng user qua đúng đường của `removeUserPlan`
+ * (transaction riêng + `expireUserPlan` + `reconcileResourceLocks`) nên chỉ cần danh sách, không
+ * cần UPDATE ở đây.
+ */
+export async function findUsersByActivePlanId(planId, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT id, email, full_name AS "fullName" FROM users WHERE active_plan_id = $1`,
     [planId]
   );
   return rows;

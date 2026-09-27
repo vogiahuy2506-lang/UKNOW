@@ -322,6 +322,22 @@ export async function findUsersWithEndedOverageGrace(queryable = db) {
 }
 
 /**
+ * PR-2 (mục 7 plan) — ứng viên cho `startGraceForUnlockedOverage`: user có gói hiệu lực, CHƯA từng
+ * được cấp ân hạn (`overage_grace_until IS NULL`). Bắt MỌI đường làm trần giảm mà không khoá (nâng
+ * gói Tuỳ chọn giảm một món, super admin gán gói thấp hơn, tạo gói riêng thấp hơn, sửa giảm hạn
+ * mức gói) mà không cần biết cụ thể đường nào — `computeOverage` ở nơi gọi tự lọc ra ai thật sự
+ * đang vượt. Người đã có ân hạn (`overage_grace_until` khác NULL, kể cả đã hết) KHÔNG vào tập này —
+ * hết ân hạn cũ thuộc tập 4 của `reconcileAllDueUsers` (`findUsersWithEndedOverageGrace`), vượt mới
+ * sau đó bị khoá luôn, không được cấp ân hạn lần hai (chủ đích).
+ */
+export async function findUsersEligibleForOverageGrace(queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT id FROM users WHERE role = 'user' AND active_plan_id IS NOT NULL AND overage_grace_until IS NULL`
+  );
+  return rows;
+}
+
+/**
  * Structural grants expiring within [minDays, maxDays], with reminder_count < threshold.
  */
 export async function findExpiringStructuralGrants(minDays, maxDays, reminderThreshold, queryable = db) {

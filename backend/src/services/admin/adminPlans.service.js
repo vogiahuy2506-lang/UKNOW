@@ -8,7 +8,7 @@ import {
   deletePlan,
   countOrdersForPlan,
   softDeletePlan,
-  unassignPlanFromUsers,
+  findUsersByActivePlanId,
   findUserAdminByEmail,
   searchUserAdminsByEmail,
   assignPlanToUser,
@@ -219,7 +219,30 @@ export async function removePlan(id) {
   const result = await softDeletePlan(id);
 
   if (plan.is_custom) {
-    const unassigned = await unassignPlanFromUsers(id);
+    // PR-2 (mục 7.1 Việc D) — mỗi user đi đúng đường của removeUserPlan (transaction riêng, xem
+    // dưới): expireUserPlan (đặt max_* = 0 đúng cách) + supersede lệnh hẹn đổi gói đang pending
+    // (không thì cron 08:00 tự kích hoạt lại gói vừa gỡ) + reconcileResourceLocks (khoá tài nguyên
+    // vượt trần mới = 0). unassignPlanFromUsers cũ chỉ NULL active_plan_id, không làm 3 việc này —
+    // khách vẫn không vào app được (đúng), nhưng tài nguyên không bị khoá, chatbot vẫn "chạy" mà
+    // credit meter đòi gói. Một user lỗi không được làm hỏng việc ẩn gói cho user khác.
+    const usersToUnassign = await findUsersByActivePlanId(id);
+    const unassigned = [];
+    for (const u of usersToUnassign) {
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        await expireUserPlan(u.id, client);
+        await scheduledPlanChangeRepository.supersedePendingByUserId(u.id, client);
+        await reconcileResourceLocks(u.id, client);
+        await client.query('COMMIT');
+        unassigned.push({ email: u.email, fullName: u.fullName });
+      } catch (err) {
+        await client.query('ROLLBACK').catch(() => {});
+        console.error(`[AdminPlans] removePlan: gỡ gói user ${u.id} lỗi:`, err.message);
+      } finally {
+        client.release();
+      }
+    }
     const emails = unassigned.map((u) => u.email).join(', ');
     return {
       mode: 'soft',
