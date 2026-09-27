@@ -61,6 +61,7 @@ const TRUNCATE_ALL_SQL = `
       campaign_customers,
       zalo_messages,
       email_messages,
+      campaign_channel_messages,
       products,
       courses,
       customers,

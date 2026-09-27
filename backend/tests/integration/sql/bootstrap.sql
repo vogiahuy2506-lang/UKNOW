@@ -622,8 +622,9 @@ CREATE TABLE campaigns (
   created_by            BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   campaign_name         VARCHAR(255) NOT NULL,
   description           TEXT,
-  campaign_type         VARCHAR(30)  NOT NULL DEFAULT 'email'
-    CHECK (campaign_type IN ('email', 'zalo', 'zalo_group', 'mixed')),
+  -- PR-2 (PLAN_TACH_TANG_KENH_GUI_2026-09-27) gỡ CHECK — production KHÔNG có ràng buộc này
+  -- (đo pg_constraint 27/09), bootstrap khai CHECK là lệch prod. Giữ NOT NULL DEFAULT 'email'.
+  campaign_type         VARCHAR(30)  NOT NULL DEFAULT 'email',
   status                VARCHAR(50)  NOT NULL DEFAULT 'draft',
   id_data_source        BIGINT,
   flow_json             JSONB,
@@ -1081,6 +1082,42 @@ CREATE INDEX idx_zalo_messages_token    ON zalo_messages(tracking_token);
 CREATE INDEX idx_zalo_messages_account_created
   ON zalo_messages (account_id, created_at DESC)
   WHERE account_id IS NOT NULL;
+
+-- ─── Campaign channel messages (migration 255, PR-2 tách tầng kênh gửi) ─
+-- Log tin nhắn dùng chung cho kênh "adapter" (Telegram/WhatsApp từ PR-6+) — KHÔNG tái dùng
+-- zalo_messages/email_messages cho kênh mới (mọi phép đếm quota Zalo không lọc channel).
+CREATE TABLE campaign_channel_messages (
+  id                    BIGSERIAL     PRIMARY KEY,
+  id_campaign           BIGINT        REFERENCES campaigns(id) ON DELETE SET NULL,
+  id_run                BIGINT        REFERENCES campaign_runs(id) ON DELETE SET NULL,
+  id_node               BIGINT        REFERENCES campaign_nodes(id) ON DELETE SET NULL,
+  channel               VARCHAR(30)   NOT NULL,
+  account_key           TEXT,
+  recipient_key         TEXT          NOT NULL,
+  recipient_display     TEXT,
+  step_index            INT           NOT NULL DEFAULT 1,
+  status                VARCHAR(20)   NOT NULL DEFAULT 'queued'
+    CHECK (status IN ('queued', 'sent', 'failed')),
+  error_category        VARCHAR(40),
+  error_message         TEXT,
+  provider_message_id   TEXT,
+  is_preview            BOOLEAN       NOT NULL DEFAULT FALSE,
+  quota_reservation_id  BIGINT,
+  workspace_owner_id    BIGINT        REFERENCES users(id) ON DELETE SET NULL,
+  actor_user_id         BIGINT        REFERENCES users(id) ON DELETE SET NULL,
+  sent_at               TIMESTAMPTZ,
+  created_at            TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ   NOT NULL DEFAULT now()
+);
+CREATE INDEX idx_campaign_channel_messages_run_channel
+  ON campaign_channel_messages (id_run, channel);
+CREATE INDEX idx_campaign_channel_messages_node_dedupe
+  ON campaign_channel_messages (id_node, channel, recipient_key, step_index, created_at)
+  WHERE status = 'sent';
+CREATE INDEX idx_campaign_channel_messages_workspace_owner
+  ON campaign_channel_messages (workspace_owner_id, channel, sent_at);
+CREATE INDEX idx_campaign_channel_messages_account
+  ON campaign_channel_messages (account_key, channel, sent_at);
 
 -- ─── Campaign-customer pivot ───────────────────────────────────────────
 -- Theo dõi tham gia + counters tương tác per (campaign, customer).
