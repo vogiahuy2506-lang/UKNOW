@@ -9,6 +9,15 @@ export const LOCKABLE_RESOURCE_KEYS = Object.freeze([
   'employees',
 ]);
 
+/**
+ * Item keys eligible for expiry reminders (findExpiringStructuralGrants) — LOCKABLE_RESOURCE_KEYS
+ * cộng 'storage_gb'. Dung lượng lưu trữ cũng là structural (có cycle_end, xem
+ * TOPUP_STRUCTURAL_KEYS trong topupPricing.util.js) nhưng KHÔNG khoá qua topup_locked_resources
+ * (không phải danh sách rời rạc để chọn giữ/khoá từng cái) — nên nằm ngoài LOCKABLE_RESOURCE_KEYS,
+ * dù vẫn cần nhắc trước khi hết hạn như các món khác.
+ */
+export const REMINDER_ITEM_KEYS = Object.freeze([...LOCKABLE_RESOURCE_KEYS, 'storage_gb']);
+
 const RESOURCE_TABLE = Object.freeze({
   zalo_accounts: 'zalo_settings',
   email_accounts: 'email_settings',
@@ -312,7 +321,7 @@ export async function findExpiringStructuralGrants(minDays, maxDays, reminderThr
        AND tg.cycle_end > NOW() + ($3 || ' days')::interval
        AND tg.reminder_count < $4
      ORDER BY tg.cycle_end ASC`,
-    [LOCKABLE_RESOURCE_KEYS, String(maxDays), String(minDays), reminderThreshold]
+    [REMINDER_ITEM_KEYS, String(maxDays), String(minDays), reminderThreshold]
   );
   return rows;
 }

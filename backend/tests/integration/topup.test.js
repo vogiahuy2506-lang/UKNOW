@@ -23,6 +23,7 @@ const {
 } = await import('./helpers/db.js');
 const { checkSendQuota, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
 const { reconcileResourceLocks } = await import('../../src/services/payment/topupLock.service.js');
+const { findExpiringStructuralGrants } = await import('../../src/repositories/payment/topupLock.repository.js');
 
 let app;
 
@@ -614,5 +615,48 @@ describe('Top-up mid-cycle', () => {
     const result = await reconcileResourceLocks(owner.id, db);
     const lpLocks = result.locked.filter((l) => l.resourceKey === 'landing_pages').map((l) => Number(l.resourceId));
     expect(lpLocks).toEqual([ids[2]]);
+  });
+
+  it('findExpiringStructuralGrants nhặt được storage_gb còn ~3 ngày, KHÔNG nhặt consumable (cycle_end NULL)', async () => {
+    const { user } = await createTopupReadyUser({ username: 'topup-storage-remind' });
+
+    const { rows: orderRows } = await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, topup_config)
+       VALUES ($1, NULL, 125000, $2, $3, 'success', 'payos', 'topup', $4::jsonb)
+       RETURNING id`,
+      [
+        Date.now() * 100 + 21,
+        user.email,
+        user.id,
+        JSON.stringify({ quantities: { storage_gb: 50 }, billingUserId: user.id }),
+      ]
+    );
+    await db.query(
+      `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end)
+       VALUES ($1, 'storage_gb', 50, $2, NOW() + INTERVAL '2.5 days')`,
+      [user.id, orderRows[0].id]
+    );
+
+    const { rows: creditOrderRows } = await db.query(
+      `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, topup_config)
+       VALUES ($1, NULL, 20000, $2, $3, 'success', 'payos', 'topup', $4::jsonb)
+       RETURNING id`,
+      [
+        Date.now() * 100 + 22,
+        user.email,
+        user.id,
+        JSON.stringify({ quantities: { ai_credits: 100 }, billingUserId: user.id }),
+      ]
+    );
+    await db.query(
+      `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end)
+       VALUES ($1, 'ai_credits', 100, $2, NULL)`,
+      [user.id, creditOrderRows[0].id]
+    );
+
+    const threeDayWindow = await findExpiringStructuralGrants(2, 3, 2, db);
+    const itemKeys = threeDayWindow.filter((g) => Number(g.user_id) === Number(user.id)).map((g) => g.item_key);
+    expect(itemKeys).toContain('storage_gb');
+    expect(itemKeys).not.toContain('ai_credits');
   });
 });

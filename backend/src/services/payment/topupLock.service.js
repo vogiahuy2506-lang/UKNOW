@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import { getPlanByUserId } from '../../repositories/payment/plan.repository.js';
 import { sumActiveTopupGrants } from '../../repositories/payment/topup.repository.js';
+import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import {
   LOCKABLE_RESOURCE_KEYS,
   isResourceLocked as repoIsLocked,
@@ -291,6 +292,56 @@ export async function setKeptResources(userId, resourceKey, keepIds, queryable =
 }
 
 /**
+ * Nội dung thư nhắc hết hạn cho một grant, theo lượt ('week' ~7 ngày / 'three' ~3 ngày).
+ * storage_gb dùng câu chữ riêng (không có link "Chọn tài nguyên giữ lại" — dung lượng không phải
+ * danh sách rời rạc để chọn giữ/khoá), giống nhau ở cả hai lượt. Các món khác giữ nguyên câu chữ
+ * cũ theo từng lượt. `full_name` được escape trước khi chèn vào HTML — cột này do người dùng tự
+ * đặt lúc đăng ký, chèn thẳng vào email trước đây là lỗ hổng HTML injection.
+ */
+function buildStructuralReminderEmail(grant, daysLeft, frontendUrl, locksUrl, round) {
+  const fullName = escapeHtml(grant.full_name || 'bạn');
+  const cycleEndStr = new Date(grant.cycle_end).toLocaleString('vi-VN');
+
+  if (grant.item_key === 'storage_gb') {
+    return {
+      subject: `[Founder AI] Dung lượng mua thêm sắp hết hạn (${daysLeft} ngày)`,
+      html: `
+        <p>Xin chào ${fullName},</p>
+        <p>${grant.qty} GB dung lượng lưu trữ mua thêm sẽ hết hạn vào <strong>${cycleEndStr}</strong>.
+           Sau khi hết hạn, dung lượng trở về mức của gói; tệp đã lưu vẫn giữ nguyên, nhưng nếu bạn
+           đang dùng vượt mức gói thì sẽ không tải thêm tệp mới được cho tới khi xoá bớt hoặc mua
+           thêm.</p>
+        <p>Gia hạn tại: <a href="${frontendUrl}/app/topup">${frontendUrl}/app/topup</a></p>
+      `,
+    };
+  }
+
+  const itemLabel = structuralItemLabelVi(grant.item_key);
+  if (round === 'week') {
+    return {
+      subject: `[Founder AI] Slot mua thêm sắp hết hạn (${daysLeft} ngày)`,
+      html: `
+        <p>Xin chào ${fullName},</p>
+        <p>${grant.qty} × <strong>${itemLabel}</strong> mua thêm sẽ hết hạn
+           vào <strong>${cycleEndStr}</strong>.</p>
+        <p>Gia hạn tại: <a href="${frontendUrl}/app/topup">${frontendUrl}/app/topup</a></p>
+        <p>Chọn tài nguyên giữ lại: <a href="${locksUrl}">${locksUrl}</a></p>
+      `,
+    };
+  }
+  return {
+    subject: `[Founder AI] Còn ${daysLeft} ngày — slot mua thêm sắp bị khoá`,
+    html: `
+      <p>Xin chào ${fullName},</p>
+      <p>${grant.qty} × <strong>${itemLabel}</strong> sẽ hết hạn
+         <strong>${cycleEndStr}</strong>.</p>
+      <p><a href="${frontendUrl}/app/topup">Gia hạn ngay</a> ·
+         <a href="${locksUrl}">Chọn tài nguyên giữ lại</a></p>
+    `,
+  };
+}
+
+/**
  * B5: send expiry reminders for structural grants (7d / 3d).
  */
 export async function sendStructuralGrantReminders() {
@@ -302,15 +353,7 @@ export async function sendStructuralGrantReminders() {
   const week = await findExpiringStructuralGrants(6, 7, 1);
   for (const grant of week) {
     const daysLeft = Math.ceil((new Date(grant.cycle_end) - Date.now()) / 86400000);
-    const itemLabel = structuralItemLabelVi(grant.item_key);
-    const subject = `[Founder AI] Slot mua thêm sắp hết hạn (${daysLeft} ngày)`;
-    const html = `
-      <p>Xin chào ${grant.full_name || 'bạn'},</p>
-      <p>${grant.qty} × <strong>${itemLabel}</strong> mua thêm sẽ hết hạn
-         vào <strong>${new Date(grant.cycle_end).toLocaleString('vi-VN')}</strong>.</p>
-      <p>Gia hạn tại: <a href="${frontendUrl}/app/topup">${frontendUrl}/app/topup</a></p>
-      <p>Chọn tài nguyên giữ lại: <a href="${locksUrl}">${locksUrl}</a></p>
-    `;
+    const { subject, html } = buildStructuralReminderEmail(grant, daysLeft, frontendUrl, locksUrl, 'week');
     try {
       await sendSystemEmail({ to: grant.email, subject, html });
       await incrementGrantReminderCount(grant.id);
@@ -323,15 +366,7 @@ export async function sendStructuralGrantReminders() {
   const three = await findExpiringStructuralGrants(2, 3, 2);
   for (const grant of three) {
     const daysLeft = Math.ceil((new Date(grant.cycle_end) - Date.now()) / 86400000);
-    const itemLabel = structuralItemLabelVi(grant.item_key);
-    const subject = `[Founder AI] Còn ${daysLeft} ngày — slot mua thêm sắp bị khoá`;
-    const html = `
-      <p>Xin chào ${grant.full_name || 'bạn'},</p>
-      <p>${grant.qty} × <strong>${itemLabel}</strong> sẽ hết hạn
-         <strong>${new Date(grant.cycle_end).toLocaleString('vi-VN')}</strong>.</p>
-      <p><a href="${frontendUrl}/app/topup">Gia hạn ngay</a> ·
-         <a href="${locksUrl}">Chọn tài nguyên giữ lại</a></p>
-    `;
+    const { subject, html } = buildStructuralReminderEmail(grant, daysLeft, frontendUrl, locksUrl, 'three');
     try {
       await sendSystemEmail({ to: grant.email, subject, html });
       await incrementGrantReminderCount(grant.id);

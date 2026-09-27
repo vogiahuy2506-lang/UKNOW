@@ -9,6 +9,9 @@ const mockListUnlocked = jest.fn();
 const mockListLocked = jest.fn();
 const mockInsertLock = jest.fn();
 const mockDeleteLock = jest.fn();
+const mockFindExpiringStructuralGrants = jest.fn();
+const mockIncrementGrantReminderCount = jest.fn();
+const mockSendSystemEmail = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants: mockSumActive,
@@ -33,8 +36,12 @@ jest.unstable_mockModule('../../../repositories/payment/topupLock.repository.js'
   listResourcesWithLockStatus: jest.fn(),
   findUsersWithExpiredStructuralGrants: jest.fn(),
   findUsersWithLocks: jest.fn(),
-  findExpiringStructuralGrants: jest.fn(),
-  incrementGrantReminderCount: jest.fn(),
+  findExpiringStructuralGrants: mockFindExpiringStructuralGrants,
+  incrementGrantReminderCount: mockIncrementGrantReminderCount,
+}));
+
+jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
+  sendSystemEmail: mockSendSystemEmail,
 }));
 
 const mockQueryable = {
@@ -62,7 +69,7 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
   default: mockQueryable,
 }));
 
-const { reconcileResourceLocks, getLockOverview, normalizeCeiling } = await import('../topupLock.service.js');
+const { reconcileResourceLocks, getLockOverview, normalizeCeiling, sendStructuralGrantReminders } = await import('../topupLock.service.js');
 
 describe('normalizeCeiling — PR-3, Việc 3.2 (hợp đồng NULL/-1 = không giới hạn)', () => {
   it('null (cột DB thật sự NULL, vd gói Enterprise/Tùy chọn) -> Infinity', () => {
@@ -385,5 +392,80 @@ describe('reconcileResourceLocks', () => {
     expect(result.locked).toEqual([]);
     expect(mockDeleteLock).toHaveBeenCalledWith('landing_pages', 99, mockQueryable);
     expect(result.unlocked).toEqual([{ resourceKey: 'landing_pages', resourceId: 99 }]);
+  });
+});
+
+describe('sendStructuralGrantReminders — nhắc hết hạn, riêng storage_gb + escape full_name', () => {
+  const cycleEnd = new Date(Date.now() + 5 * 86400000).toISOString();
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockIncrementGrantReminderCount.mockResolvedValue(undefined);
+    mockSendSystemEmail.mockResolvedValue({ messageId: 'x' });
+  });
+
+  it('nhánh storage_gb: tiêu đề/thân riêng, KHÔNG có link "Chọn tài nguyên giữ lại", giống nhau cả 2 lượt', async () => {
+    const grant = { id: 1, item_key: 'storage_gb', qty: 50, cycle_end: cycleEnd, email: 'a@x.com', full_name: 'Chủ A' };
+    mockFindExpiringStructuralGrants.mockResolvedValueOnce([grant]).mockResolvedValueOnce([grant]);
+
+    await sendStructuralGrantReminders();
+
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
+    for (const call of mockSendSystemEmail.mock.calls) {
+      const [{ subject, html }] = call;
+      expect(subject).toMatch(/^\[Founder AI\] Dung lượng mua thêm sắp hết hạn \(\d+ ngày\)$/);
+      expect(html).toContain('50 GB dung lượng lưu trữ mua thêm sẽ hết hạn');
+      expect(html).toContain('trở về mức của gói');
+      expect(html).not.toContain('Chọn tài nguyên giữ lại');
+      expect(html).not.toContain('billing?tab=locks');
+    }
+  });
+
+  it('nhánh khác (chatbots): vẫn câu chữ cũ theo từng lượt, CÓ link "Chọn tài nguyên giữ lại"', async () => {
+    const grant = { id: 2, item_key: 'chatbots', qty: 1, cycle_end: cycleEnd, email: 'b@x.com', full_name: 'Chủ B' };
+    mockFindExpiringStructuralGrants.mockResolvedValueOnce([grant]).mockResolvedValueOnce([grant]);
+
+    await sendStructuralGrantReminders();
+
+    const [weekCall, threeCall] = mockSendSystemEmail.mock.calls;
+    expect(weekCall[0].subject).toMatch(/^\[Founder AI\] Slot mua thêm sắp hết hạn \(\d+ ngày\)$/);
+    expect(weekCall[0].html).toContain('1 × <strong>chatbot</strong> mua thêm sẽ hết hạn');
+    expect(weekCall[0].html).toContain('Chọn tài nguyên giữ lại');
+    expect(threeCall[0].subject).toMatch(/^\[Founder AI\] Còn \d+ ngày — slot mua thêm sắp bị khoá$/);
+    expect(threeCall[0].html).toContain('Chọn tài nguyên giữ lại');
+  });
+
+  it('full_name chứa "<b>" bị escape ở cả nhánh storage_gb lẫn nhánh khác — không lọt HTML injection', async () => {
+    const evilName = '<b>Chủ</b><script>alert(1)</script>';
+    const storageGrant = { id: 3, item_key: 'storage_gb', qty: 10, cycle_end: cycleEnd, email: 'c@x.com', full_name: evilName };
+    const chatbotGrant = { id: 4, item_key: 'chatbots', qty: 1, cycle_end: cycleEnd, email: 'd@x.com', full_name: evilName };
+    mockFindExpiringStructuralGrants
+      .mockResolvedValueOnce([storageGrant, chatbotGrant])
+      .mockResolvedValueOnce([]);
+
+    await sendStructuralGrantReminders();
+
+    for (const call of mockSendSystemEmail.mock.calls) {
+      const [{ html }] = call;
+      expect(html).not.toContain('<b>Chủ</b>');
+      expect(html).not.toContain('<script>');
+      expect(html).toContain('&lt;b&gt;Chủ&lt;/b&gt;&lt;script&gt;alert(1)&lt;/script&gt;');
+    }
+  });
+
+  it('gửi hỏng cho grant này KHÔNG chặn grant khác; chỉ tăng reminder_count cho grant gửi thành công', async () => {
+    const ok = { id: 5, item_key: 'storage_gb', qty: 5, cycle_end: cycleEnd, email: 'ok@x.com', full_name: 'OK' };
+    const fail = { id: 6, item_key: 'storage_gb', qty: 5, cycle_end: cycleEnd, email: 'fail@x.com', full_name: 'Fail' };
+    mockFindExpiringStructuralGrants.mockResolvedValueOnce([ok, fail]).mockResolvedValueOnce([]);
+    mockSendSystemEmail.mockImplementation(async ({ to }) => {
+      if (to === 'fail@x.com') throw new Error('SMTP down');
+      return { messageId: 'x' };
+    });
+
+    const result = await sendStructuralGrantReminders();
+
+    expect(result).toEqual({ week: 2, three: 0 });
+    expect(mockIncrementGrantReminderCount).toHaveBeenCalledTimes(1);
+    expect(mockIncrementGrantReminderCount).toHaveBeenCalledWith(5);
   });
 });
