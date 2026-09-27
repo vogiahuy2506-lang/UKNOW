@@ -337,3 +337,84 @@ describe('PATCH /api/admin/orders/:orderCode/cancel', () => {
     expect(mockPayosCancel).not.toHaveBeenCalled();
   });
 });
+
+// PLAN_HOAN_TIEN_DON_HANG mục 1.5 — endpoint ghi nhận hoàn tiền.
+describe('GET /:orderCode/refund-preview + POST /:orderCode/refund', () => {
+  async function paidOrder(username) {
+    const user = await createUser({ username, withPlan: false });
+    const plan = await createPlan({ code: `plan-${username}`, price: 299000 });
+    const order = await createOrder({
+      planId: plan.id, userId: user.id, userEmail: user.email, amount: 299000,
+    });
+    await db.query(`UPDATE orders SET paid_at = NOW() - INTERVAL '1 day' WHERE id = $1`, [order.id]);
+    await db.query(`UPDATE users SET active_plan_id = $1 WHERE id = $2`, [plan.id, user.id]);
+    return { user, plan, order };
+  }
+
+  it('user thường → 403, không đổi đơn', async () => {
+    const { user, order } = await paidOrder('refund-api-403');
+    const token = await loginAs(user);
+    const res = await request(app)
+      .post(`/api/admin/orders/${order.order_code}/refund`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'x' });
+    expect(res.status).toBe(403);
+    const o = await db.query(`SELECT status FROM orders WHERE id = $1`, [order.id]);
+    expect(o.rows[0].status).toBe('success');
+  });
+
+  it('thiếu lý do → 400 kèm code REASON_REQUIRED', async () => {
+    const admin = await createUser({ role: 'admin', username: 'refund-api-admin-400' });
+    const { order } = await paidOrder('refund-api-400');
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post(`/api/admin/orders/${order.order_code}/refund`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({});
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('REASON_REQUIRED');
+  });
+
+  it('preview → hoàn → KPI doanh thu giảm đúng số tiền đơn, gói bị thu, có audit ORDER_REFUNDED', async () => {
+    const admin = await createUser({ role: 'admin', username: 'refund-api-admin' });
+    const { user, order } = await paidOrder('refund-api-ok');
+    const token = await loginAs(admin);
+
+    const kpiBefore = await request(app).get('/api/admin/orders').set('Authorization', `Bearer ${token}`);
+    const revenueBefore = Number(kpiBefore.body.data.kpi.totalRevenue);
+
+    const preview = await request(app)
+      .get(`/api/admin/orders/${order.order_code}/refund-preview`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(preview.status).toBe(200);
+    expect(preview.body.data).toMatchObject({ eligible: true, plan: 'revoked', einvoice: 'none', amount: 299000 });
+
+    const res = await request(app)
+      .post(`/api/admin/orders/${order.order_code}/refund`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'Khách huỷ trong 7 ngày', transferRef: 'FT999' });
+    expect(res.status).toBe(200);
+    expect(res.body.data.meta).toMatchObject({ plan: 'revoked', transferRef: 'FT999' });
+
+    const kpiAfter = await request(app).get('/api/admin/orders').set('Authorization', `Bearer ${token}`);
+    expect(revenueBefore - Number(kpiAfter.body.data.kpi.totalRevenue)).toBe(299000);
+
+    const u = await db.query(`SELECT active_plan_id FROM users WHERE id = $1`, [user.id]);
+    expect(u.rows[0].active_plan_id).toBeNull();
+
+    const audit = await db.query(
+      `SELECT id_user, entity_id, details FROM audit_logs WHERE action = 'ORDER_REFUNDED'`
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(Number(audit.rows[0].id_user)).toBe(Number(admin.id));
+    expect(String(audit.rows[0].entity_id)).toBe(String(order.id));
+    expect(audit.rows[0].details).toMatchObject({ reason: 'Khách huỷ trong 7 ngày', plan: 'revoked' });
+
+    const again = await request(app)
+      .post(`/api/admin/orders/${order.order_code}/refund`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ reason: 'lần 2' });
+    expect(again.status).toBe(409);
+    expect(again.body.code).toBe('ALREADY_REFUNDED');
+  });
+});

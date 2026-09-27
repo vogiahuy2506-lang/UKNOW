@@ -3034,6 +3034,7 @@ export default {
       AI_SYSTEM_MODEL_UPDATED: 'Đổi model AI hệ thống',
       AI_FALLBACK_MODEL_UPDATED: 'Đổi model AI dự phòng',
       ORDER_PAID_AFTER_CANCELLED_HANDLED: 'Đánh dấu đã xử lý đơn trả tiền sau khi huỷ',
+      ORDER_REFUNDED: 'Ghi nhận hoàn tiền đơn hàng',
     },
     entities: {
       order: 'Đơn hàng',

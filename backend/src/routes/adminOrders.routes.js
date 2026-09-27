@@ -10,5 +10,8 @@ router.use(requireRole('admin'));
 router.get('/', ctrl.list);
 router.patch('/:orderCode/cancel', ctrl.cancel);
 router.patch('/:orderCode/paid-after-cancelled/handled', ctrl.markPaidAfterCancelledHandled);
+// PLAN_HOAN_TIEN_DON_HANG mục 1.5 — ghi nhận hoàn tiền (kế toán đã chuyển khoản tay).
+router.get('/:orderCode/refund-preview', ctrl.refundPreview);
+router.post('/:orderCode/refund', ctrl.refund);
 
 export default router;

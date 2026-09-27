@@ -1,9 +1,17 @@
 import * as adminOrdersService from '../../services/admin/adminOrders.service.js';
+import { previewRefund, refundOrder } from '../../services/admin/adminOrderRefund.service.js';
 import { logSystem, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../../services/audit.service.js';
 import { getSystemAuditContext } from '../../utils/auditContext.util.js';
 
 function handleError(res, err) {
-  if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+  if (err.status) {
+    return res.status(err.status).json({
+      success: false,
+      message: err.message,
+      ...(err.code ? { code: err.code } : {}),
+      ...(err.details ? { details: err.details } : {}),
+    });
+  }
   console.error('Admin orders error:', err);
   return res.status(500).json({ success: false, message: 'Lỗi server' });
 }
@@ -32,6 +40,39 @@ export async function markPaidAfterCancelledHandled(req, res) {
       { orderCode }
     );
     return res.json({ success: true, message: 'Đã đánh dấu đơn hàng là đã xử lý' });
+  } catch (err) { return handleError(res, err); }
+}
+
+/** GET /api/admin/orders/:orderCode/refund-preview — PLAN_HOAN_TIEN_DON_HANG mục 1.5 */
+export async function refundPreview(req, res) {
+  try {
+    const data = await previewRefund(req.params.orderCode);
+    return res.json({ success: true, data });
+  } catch (err) { return handleError(res, err); }
+}
+
+/**
+ * POST /api/admin/orders/:orderCode/refund — body { reason, transferRef?, acknowledgeShortfall? }.
+ * Chỉ GHI NHẬN: tiền trả khách do kế toán chuyển khoản tay trước đó.
+ */
+export async function refund(req, res) {
+  try {
+    const { reason, transferRef, acknowledgeShortfall } = req.body || {};
+    const result = await refundOrder({
+      orderCode: req.params.orderCode,
+      adminUserId: req.user?.id ?? null,
+      reason,
+      transferRef,
+      acknowledgeShortfall: acknowledgeShortfall === true,
+    });
+    await logSystem(
+      getSystemAuditContext(req),
+      AUDIT_ACTIONS.ORDER_REFUNDED,
+      AUDIT_ENTITY_TYPES.ORDER,
+      result.orderId,
+      { orderCode: result.orderCode, userId: result.userId, reason: String(reason).trim(), ...result.meta }
+    );
+    return res.json({ success: true, message: 'Đã ghi nhận hoàn tiền', data: result });
   } catch (err) { return handleError(res, err); }
 }
 

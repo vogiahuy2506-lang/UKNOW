@@ -3024,6 +3024,7 @@ export default {
       AI_SYSTEM_MODEL_UPDATED: 'Update system AI model',
       AI_FALLBACK_MODEL_UPDATED: 'Update fallback AI model',
       ORDER_PAID_AFTER_CANCELLED_HANDLED: 'Mark paid-after-cancelled order as handled',
+      ORDER_REFUNDED: 'Record order refund',
     },
     entities: {
       order: 'Order',

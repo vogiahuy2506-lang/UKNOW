@@ -75,6 +75,8 @@ export const AUDIT_ACTIONS = {
   // trong note) trước đây không có cách đánh dấu "đã xử lý tay", nên alert_rules
   // order_paid_after_cancelled bắn lại mỗi giờ tới 7 ngày dù admin đã kích hoạt bù/hoàn tiền.
   ORDER_PAID_AFTER_CANCELLED_HANDLED: 'ORDER_PAID_AFTER_CANCELLED_HANDLED',
+  // PLAN_HOAN_TIEN_DON_HANG (27/09) — admin ghi nhận đơn đã được kế toán hoàn tiền tay.
+  ORDER_REFUNDED: 'ORDER_REFUNDED',
 
   // System — users
   USER_REGISTERED: 'USER_REGISTERED',
