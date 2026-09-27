@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { resolveTier } from '../../utils/affiliateTier.util.js';
+import { activeRevenueEventSql, QUALIFIED_MONTH_GROSS_SQL } from '../../utils/affiliateRevenueSql.util.js';
 
 export const AFFILIATE_MONTH_CLOSING_JOB_CODE = 'affiliate_month_closing';
 
@@ -96,11 +97,13 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
     };
   }
 
-  // Tìm tất cả referrer có event doanh thu trong tháng đó hoặc đã có period trong tháng đó
+  // Tìm tất cả referrer có event doanh thu trong tháng đó hoặc đã có period trong tháng đó.
+  // PLAN_HOAN_TIEN mục 2.1 — event đã đảo (đơn hoàn tiền) không làm referrer thành ứng viên: đối tác
+  // chỉ có đơn đã hoàn và chưa có period thì KHÔNG sinh period 0đ.
   const { rows: candidateRows } = await db.query(
     `SELECT DISTINCT referrer_user_id
      FROM (
-       SELECT referrer_user_id FROM affiliate_revenue_events WHERE month_key = $1
+       SELECT referrer_user_id FROM affiliate_revenue_events WHERE month_key = $1 AND ${activeRevenueEventSql('')}
        UNION
        SELECT referrer_user_id FROM affiliate_periods WHERE month_key = $1
      ) candidates
@@ -123,14 +126,10 @@ export async function closeAffiliateMonth(monthKeyInput, options = {}) {
     try {
       await client.query('BEGIN');
 
-      // 1. Tính tổng gross revenue hiện tại: CHỈ tính buyer ĐÃ CÓ SĐT tại thời điểm này
+      // 1. Tính tổng gross revenue hiện tại: CHỈ tính buyer ĐÃ CÓ SĐT tại thời điểm này, bỏ event đã
+      // đảo do hoàn tiền (công thức dùng chung — affiliateRevenueSql.util.js).
       const { rows: grossRows } = await client.query(
-        `SELECT COALESCE(SUM(e.amount), 0)::numeric AS current_gross
-         FROM affiliate_revenue_events e
-         JOIN users b ON b.id = e.buyer_user_id
-           AND b.phone IS NOT NULL
-           AND TRIM(b.phone) <> ''
-         WHERE e.referrer_user_id = $1 AND e.month_key = $2`,
+        QUALIFIED_MONTH_GROSS_SQL,
         [referrerId, monthKey]
       );
       const currentGross = Math.max(0, Math.round(Number(grossRows[0]?.current_gross || 0)));

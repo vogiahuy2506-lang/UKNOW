@@ -4,6 +4,7 @@ import { encryptAffiliatePii, decryptAffiliatePii } from '../../utils/affiliateP
 import { buildBaseTemplate, sendSystemEmail } from '../../utils/systemEmail.util.js';
 import { escapeHtml } from '../../utils/htmlEscape.util.js';
 import { resolveTier, AFFILIATE_TIERS } from '../../utils/affiliateTier.util.js';
+import { activeRevenueEventSql, QUALIFIED_MONTH_GROSS_SQL } from '../../utils/affiliateRevenueSql.util.js';
 import auditService from '../audit.service.js';
 
 export const MIN_WITHDRAWAL_AMOUNT = 1_000_000;
@@ -770,13 +771,9 @@ export async function getAffiliateOverview(userId) {
 
   // 3. Doanh thu tháng hiện tại & resolveTier
   const currentMonthKey = resolveCurrentMonthKey();
+  // PLAN_HOAN_TIEN mục 2.1 — cùng công thức với đóng sổ (bỏ event đã đảo do hoàn tiền).
   const currentGrossResult = await db.query(
-    `SELECT COALESCE(SUM(e.amount), 0)::numeric AS current_gross
-     FROM affiliate_revenue_events e
-     JOIN users b ON b.id = e.buyer_user_id
-       AND b.phone IS NOT NULL
-       AND TRIM(b.phone) <> ''
-     WHERE e.referrer_user_id = $1 AND e.month_key = $2`,
+    QUALIFIED_MONTH_GROSS_SQL,
     [parsedUserId, currentMonthKey]
   );
   const currentMonthGross = Math.round(Number(currentGrossResult.rows[0]?.current_gross || 0));
@@ -800,6 +797,7 @@ export async function getAffiliateOverview(userId) {
      JOIN users b ON b.id = e.buyer_user_id
      WHERE e.referrer_user_id = $1
        AND (b.phone IS NULL OR TRIM(b.phone) = '')
+       AND ${activeRevenueEventSql('e')}
      ORDER BY e.created_at DESC`,
     [parsedUserId]
   );
@@ -923,6 +921,7 @@ export async function getAdminAffiliatePeriods({ monthKey, limit = 50, offset = 
                AND e.month_key = p.month_key
                AND o.payment_method = 'manual'
                AND b.phone IS NOT NULL AND TRIM(b.phone) <> ''
+               AND ${activeRevenueEventSql('e')}
            ) AS manual_revenue
     FROM affiliate_periods p
     LEFT JOIN users u ON u.id = p.referrer_user_id
