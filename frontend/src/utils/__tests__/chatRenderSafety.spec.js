@@ -27,7 +27,6 @@ const FRONTEND_ROOT = path.resolve(SRC, '..');
 const CHAT_RENDER_FILES = [
   'pages/public/PublicChatbotPage.jsx',
   'features/inbox/MessageThread.jsx',
-  'pages/studio/ChatMessageArea.jsx',
   'pages/studio/ChatbotStudioPage.jsx',
 ];
 

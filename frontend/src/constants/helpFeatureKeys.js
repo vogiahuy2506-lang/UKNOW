@@ -1,12 +1,10 @@
 /**
- * Danh mục feature_key của bài hướng dẫn — nguồn duy nhất cho cả 3 nơi dùng:
+ * Danh mục feature_key của bài hướng dẫn — nguồn duy nhất cho cả 2 nơi dùng:
  *  1. Dropdown chọn chủ đề ở màn quản trị bài viết
  *  2. Nhóm bài ở sidebar /huong-dan
- *  3. Icon "?" trên header (HelpHintLink) — key phải khớp thì mới ra bài
  *
  * Nhãn hiển thị nằm ở i18n `helpDocs.featureGroups.<key>` (vi.js / en.js).
- * Thêm key mới thì thêm ở CẢ hai chỗ, và thêm luật đường dẫn trong HelpHintLink
- * nếu muốn icon "?" trỏ tới bài đó.
+ * Thêm key mới thì thêm ở CẢ hai chỗ.
  */
 export const HELP_FEATURE_KEYS = Object.freeze({
   GETTING_STARTED: 'getting-started',
