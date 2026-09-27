@@ -77,10 +77,10 @@ function RefundPolicy() {
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>1. Nguyên tắc hoàn tiền</h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>1. Refund Principles</h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết hỗ trợ hoàn tiền trong các trường hợp quy định tại chính sách này, đảm bảo quyền lợi chính đáng của khách hàng.
+              DIGISO chỉ hoàn tiền khi lỗi thuộc về DIGISO, trong các trường hợp quy định tại mục 2.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to supporting refunds in cases specified in this policy, ensuring legitimate customer rights.
+              DIGISO only issues refunds when the fault lies with DIGISO, in the cases specified in Section 2.
             </p>
           </section>
 
@@ -96,8 +96,6 @@ function RefundPolicy() {
               <li className={lc(language, 'en')}>DIGISO fails to provide services as committed in the contract.</li>
               <li className={lc(language, 'vi')}>Lỗi thanh toán do hệ thống gây ra (thu phí hai lần, thu sai số tiền).</li>
               <li className={lc(language, 'en')}>Payment errors caused by the system (double charge, incorrect amount).</li>
-              <li className={lc(language, 'vi')}>Hủy đăng ký trong vòng 7 ngày đầu và chưa sử dụng dịch vụ.</li>
-              <li className={lc(language, 'en')}>Cancel registration within 7 days and have not used the service.</li>
             </ul>
           </section>
 
@@ -143,10 +141,10 @@ function RefundPolicy() {
           <p className={lc(language, 'vi')}>© 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.</p>
           <p className={lc(language, 'en')}>© 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.</p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 10/09/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 13/10/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from September 10, 2026.
+            This policy was last updated and effective from October 13, 2026.
           </p>
         </footer>
       </div>
