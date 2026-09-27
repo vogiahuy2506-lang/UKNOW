@@ -15,7 +15,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   terms: {
     purpose: 'terms',
     version: '2026-10-13',
-    hash: '0809afb8b791a90c6b4148dc0b26c7e63b950e717e40f82f629ae1f41d54d323',
+    hash: '66701ee2875f9f45c7a598ea07ff7f88e799e186bc7aa31120a64e496f834965',
     title: 'Điều khoản dịch vụ',
     path: '/terms',
     frontendRelativePath: 'src/pages/public/TermsOfService.jsx',

@@ -122,12 +122,12 @@ function TermsOfService() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>05 tháng 09 năm 2026</strong>
+                Cập nhật: <strong>13 tháng 10 năm 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: digiso.vn, founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>September 05, 2026</strong>
+                Last updated: <strong>October 13, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: digiso.vn, founderai.biz
               </span>

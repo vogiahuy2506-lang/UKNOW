@@ -68,8 +68,8 @@ function RefundPolicy() {
           <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
             <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15" aria-hidden />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
-              <span className={lc(language, 'vi')}>Cập nhật: <strong>10 tháng 09 năm 2026</strong> | Áp dụng cho: founderai.biz</span>
-              <span className={lc(language, 'en')}>Last updated: <strong>September 10, 2026</strong> | Applies to: founderai.biz</span>
+              <span className={lc(language, 'vi')}>Cập nhật: <strong>13 tháng 10 năm 2026</strong> | Áp dụng cho: founderai.biz</span>
+              <span className={lc(language, 'en')}>Last updated: <strong>October 13, 2026</strong> | Applies to: founderai.biz</span>
             </p>
           </div>
 
