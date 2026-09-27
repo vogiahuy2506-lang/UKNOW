@@ -630,6 +630,26 @@ describe('Campaign sharing workspace ownership', () => {
     expect(res.body.data.pagination.total).toBe(1);
   });
 
+  // Review PR-8a — dòng đỏ ghi "Lượt chạy gần nhất lỗi": chỉ đúng khi lượt ĐÃ KẾT THÚC gần nhất là failed.
+  it('lỗi hôm kia rồi hôm qua chạy tốt → lastFailedRun=null (lượt gần nhất không lỗi), failedCount vẫn 1', async () => {
+    const o = await createUser({ role: 'user', username: 'o_failed_then_ok' });
+    const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertRun({
+      campaignId: c.id,
+      status: 'failed',
+      completedAt: new Date(Date.now() - 2 * 24 * 3600 * 1000),
+      errorMessage: 'Chiến dịch không có node nào',
+    });
+    await insertRun({ campaignId: c.id, status: 'completed', completedAt: new Date(Date.now() - 1 * 24 * 3600 * 1000) });
+
+    const t = await loginAs(o);
+    const res = await request(app).get('/api/campaigns').set('Authorization', `Bearer ${t}`);
+
+    const item = res.body.data.items[0];
+    expect(item.failedCount).toBe(1);
+    expect(item.lastFailedRun).toBeNull();
+  });
+
   // PR-8a (UI nói thật) Việc 3 — campaignShare.repository.js cùng khuôn LATERAL last_failed_run
   // với campaignCrud.repository.js (Nhật ký chiến dịch được chia sẻ cũng phải thấy lượt failed).
   it('GET /api/campaigns/shared/with-me trả đúng failedCount + lastFailedRun', async () => {

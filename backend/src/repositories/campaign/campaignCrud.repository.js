@@ -94,16 +94,21 @@ class CampaignCrudRepository {
         FROM campaign_runs cr
         WHERE cr.id_campaign = c.id
       ) run_stats ON TRUE
-      -- PR-8a (UI nói thật) Việc 3 — lượt failed mới nhất trong 7 ngày để hiện dòng đỏ ở FE.
-      -- completed_at ép ::text tránh bẫy lệch giờ/lùi ngày khi Postgres timestamp ra JSON.
+      -- PR-8a (UI nói thật) Việc 3 — CHỈ khi lượt ĐÃ KẾT THÚC gần nhất là failed (trong 7 ngày).
+      -- Review: lấy "failed mới nhất" thì chiến dịch lỗi hôm trước, chạy tốt hôm sau vẫn hiện
+      -- "Lượt chạy gần nhất lỗi" — nói sai. completed_at ép ::text tránh bẫy lệch giờ khi ra JSON.
       LEFT JOIN LATERAL (
-        SELECT cr2.id, cr2.error_message, cr2.completed_at::text AS completed_at
-        FROM campaign_runs cr2
-        WHERE cr2.id_campaign = c.id
-          AND cr2.status = 'failed'
-          AND cr2.completed_at >= NOW() - INTERVAL '7 days'
-        ORDER BY cr2.completed_at DESC
-        LIMIT 1
+        SELECT lf.id, lf.error_message, lf.completed_at::text AS completed_at
+        FROM (
+          SELECT cr2.id, cr2.status, cr2.error_message, cr2.completed_at
+          FROM campaign_runs cr2
+          WHERE cr2.id_campaign = c.id
+            AND cr2.status IN ('completed', 'failed', 'stopped')
+          ORDER BY COALESCE(cr2.completed_at, cr2.started_at) DESC NULLS LAST, cr2.id DESC
+          LIMIT 1
+        ) lf
+        WHERE lf.status = 'failed'
+          AND lf.completed_at >= NOW() - INTERVAL '7 days'
       ) last_failed_run ON TRUE
       LEFT JOIN LATERAL (
         SELECT COUNT(*) FILTER (WHERE cs.enabled)::INTEGER AS enabled_schedule_count

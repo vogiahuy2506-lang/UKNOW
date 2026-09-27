@@ -87,6 +87,24 @@ export function labelCampaignRunFailure(message) {
     };
   }
 
+  // PR-8a review — hạn mức/gói dịch vụ (userSendLimit.util.js: "Gói đã hết hạn…", "Tài khoản chưa có gói…",
+  // "Vượt giới hạn gửi của gói…", "…không được hỗ trợ trong gói…"). Không phải lỗi hệ thống: hiện
+  // "Lỗi hệ thống" ở dòng đỏ danh sách chiến dịch là nói sai với khách.
+  if (/gói (đã hết hạn|dịch vụ)|chưa có gói|giới hạn gửi của gói|trong gói/.test(msg)) {
+    return {
+      message: 'Gói dịch vụ không còn cho phép gửi (hết hạn, chưa có gói hoặc đã dùng hết hạn mức).',
+      actionHint: 'Vào trang Gói & thanh toán để gia hạn hoặc nâng gói, rồi chạy lại chiến dịch.',
+    };
+  }
+
+  // Lượt bị đóng sổ vì bỏ rơi khi tiến trình khởi động lại (câu ghi tay không dấu trên production 09/2026).
+  if (msg.includes('bi bo roi') || msg.includes('bị bỏ rơi')) {
+    return {
+      message: 'Lượt chạy bị gián đoạn khi hệ thống khởi động lại và đã được đóng.',
+      actionHint: 'Chạy lại chiến dịch nếu còn người nhận chưa được gửi.',
+    };
+  }
+
   if (msg.includes('value too long')) {
     return {
       message: 'Một trường dữ liệu vượt quá độ dài cho phép khi lưu.',

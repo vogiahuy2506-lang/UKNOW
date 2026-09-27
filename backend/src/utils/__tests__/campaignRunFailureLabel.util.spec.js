@@ -72,6 +72,24 @@ describe('campaignRunFailureLabel.util — labelCampaignRunFailure', () => {
     expect(message).toBe('Lỗi kết nối mạng khi hệ thống đang xử lý chiến dịch.');
   });
 
+  it.each([
+    'Gói đã hết hạn (đã qua thời gian ân hạn). Vui lòng gia hạn để tiếp tục gửi.',
+    'Tài khoản chưa có gói dịch vụ. Vui lòng đăng ký gói để tiếp tục gửi.',
+    'Vượt giới hạn gửi của gói dịch vụ.',
+    'Tính năng gửi tin nhắn không được hỗ trợ trong gói dịch vụ hiện tại. Vui lòng liên hệ admin để nâng gói.',
+  ])('hạn mức/gói "%s" → KHÔNG phải "Lỗi hệ thống"', (raw) => {
+    const { message, actionHint } = labelCampaignRunFailure(raw);
+    expect(message).toBe('Gói dịch vụ không còn cho phép gửi (hết hạn, chưa có gói hoặc đã dùng hết hạn mức).');
+    expect(actionHint).toContain('Gói & thanh toán');
+  });
+
+  it('lượt bị đóng sổ vì bỏ rơi khi khởi động lại (câu không dấu trên production)', () => {
+    const { message } = labelCampaignRunFailure(
+      'Luot chay bi bo roi (tien trinh khoi dong lai), khong co hoat dong > 24 gio — dong so thu cong'
+    );
+    expect(message).toBe('Lượt chạy bị gián đoạn khi hệ thống khởi động lại và đã được đóng.');
+  });
+
   it('message lạ (không khớp mục nào) → câu mặc định có message gốc', () => {
     const { message, actionHint } = labelCampaignRunFailure('Một lỗi hoàn toàn mới chưa từng thấy XYZ');
     expect(message).toBe('Lỗi hệ thống khi chạy chiến dịch (Một lỗi hoàn toàn mới chưa từng thấy XYZ).');
