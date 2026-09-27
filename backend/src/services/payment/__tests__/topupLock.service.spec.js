@@ -13,6 +13,10 @@ const mockFindExpiringStructuralGrants = jest.fn();
 const mockIncrementGrantReminderCount = jest.fn();
 const mockSendSystemEmail = jest.fn();
 const mockFindExpiringUnrenewedGrants = jest.fn();
+const mockFindUsersWithExpiredStructuralGrants = jest.fn();
+const mockFindUsersWithLocks = jest.fn();
+const mockFindUsersWithEndedOverageGrace = jest.fn();
+const mockFindExpiredUsers = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants: mockSumActive,
@@ -36,10 +40,15 @@ jest.unstable_mockModule('../../../repositories/payment/topupLock.repository.js'
   deleteLock: mockDeleteLock,
   replaceLocksForUser: jest.fn(),
   listResourcesWithLockStatus: jest.fn(),
-  findUsersWithExpiredStructuralGrants: jest.fn(),
-  findUsersWithLocks: jest.fn(),
+  findUsersWithExpiredStructuralGrants: mockFindUsersWithExpiredStructuralGrants,
+  findUsersWithLocks: mockFindUsersWithLocks,
+  findUsersWithEndedOverageGrace: mockFindUsersWithEndedOverageGrace,
   findExpiringStructuralGrants: mockFindExpiringStructuralGrants,
   incrementGrantReminderCount: mockIncrementGrantReminderCount,
+}));
+
+jest.unstable_mockModule('../../../repositories/subscription/subscription.repository.js', () => ({
+  findExpiredUsers: mockFindExpiredUsers,
 }));
 
 jest.unstable_mockModule('../../../utils/systemEmail.util.js', () => ({
@@ -71,7 +80,15 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
   default: mockQueryable,
 }));
 
-const { reconcileResourceLocks, getLockOverview, normalizeCeiling, sendStructuralGrantReminders } = await import('../topupLock.service.js');
+const {
+  reconcileResourceLocks,
+  getLockOverview,
+  normalizeCeiling,
+  sendStructuralGrantReminders,
+  reconcileAllDueUsers,
+  buildLockNoticeEmail,
+  sendLockNotices,
+} = await import('../topupLock.service.js');
 
 describe('normalizeCeiling — PR-3, Việc 3.2 (hợp đồng NULL/-1 = không giới hạn)', () => {
   it('null (cột DB thật sự NULL, vd gói Enterprise/Tùy chọn) -> Infinity', () => {
@@ -546,5 +563,138 @@ describe('sendStructuralGrantReminders — bỏ qua item đã gia hạn đủ (d
     expect(mockFindExpiringUnrenewedGrants).toHaveBeenCalledTimes(1);
     expect(mockFindExpiringUnrenewedGrants).toHaveBeenCalledWith(104);
     expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('buildLockNoticeEmail — thư báo khoá do vượt hạn mức (Việc 2)', () => {
+  it('escape full_name chứa HTML; liệt kê đúng số lượng theo resourceKey; đủ 2 link', () => {
+    const { subject, html } = buildLockNoticeEmail({
+      fullName: '<b>Chủ</b>',
+      locked: [
+        { resourceKey: 'zalo_accounts', resourceId: 1 },
+        { resourceKey: 'zalo_accounts', resourceId: 2 },
+        { resourceKey: 'chatbots', resourceId: 3 },
+      ],
+      frontendUrl: 'https://app.example.com',
+    });
+
+    expect(subject).toBe('[Founder AI] Một số tài nguyên đã bị tạm khoá do vượt hạn mức');
+    expect(html).toContain('&lt;b&gt;Chủ&lt;/b&gt;');
+    expect(html).not.toContain('<b>Chủ</b>');
+    expect(html).toContain('2 tài khoản Zalo, 1 chatbot');
+    expect(html).toContain('https://app.example.com/app/billing?tab=locks');
+    expect(html).toContain('https://app.example.com/app/topup');
+  });
+
+  it('không có fullName → dùng "bạn"', () => {
+    const { html } = buildLockNoticeEmail({ fullName: null, locked: [{ resourceKey: 'chatbots', resourceId: 1 }], frontendUrl: 'https://x.com' });
+    expect(html).toContain('Xin chào bạn,');
+  });
+});
+
+describe('sendLockNotices — mỗi user một try/catch riêng (Việc 2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSendSystemEmail.mockResolvedValue({ messageId: 'x' });
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('bỏ qua entry không có locked (unlock-only); gửi đúng 1 thư cho entry có locked', async () => {
+    const queryable = {
+      query: jest.fn(async () => ({ rows: [{ email: 'a@x.com', full_name: 'A' }] })),
+    };
+    const results = [
+      { userId: 1, locked: [], unlocked: [{ resourceKey: 'chatbots', resourceId: 9 }] },
+      { userId: 2, locked: [{ resourceKey: 'chatbots', resourceId: 10 }], unlocked: [] },
+    ];
+
+    const sent = await sendLockNotices(results, queryable);
+
+    expect(sent).toBe(1);
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+    expect(mockSendSystemEmail).toHaveBeenCalledWith(expect.objectContaining({ to: 'a@x.com' }));
+  });
+
+  it('sendSystemEmail ném lỗi cho user A → vẫn gửi cho user B, trả về 1', async () => {
+    const queryable = {
+      query: jest.fn(async (sql, params) => {
+        const id = params[0];
+        if (id === 1) return { rows: [{ email: 'a@x.com', full_name: 'A' }] };
+        return { rows: [{ email: 'b@x.com', full_name: 'B' }] };
+      }),
+    };
+    mockSendSystemEmail.mockImplementation(async ({ to }) => {
+      if (to === 'a@x.com') throw new Error('SMTP down');
+      return { messageId: 'x' };
+    });
+    const results = [
+      { userId: 1, locked: [{ resourceKey: 'chatbots', resourceId: 1 }] },
+      { userId: 2, locked: [{ resourceKey: 'chatbots', resourceId: 2 }] },
+    ];
+
+    const sent = await sendLockNotices(results, queryable);
+
+    expect(sent).toBe(1);
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(2);
+    expect(console.error).toHaveBeenCalledWith(expect.stringContaining('user 1'), expect.any(String));
+  });
+
+  it('user không có email (đã xoá tài khoản?) → bỏ qua, không lỗi', async () => {
+    const queryable = { query: jest.fn(async () => ({ rows: [] })) };
+    const sent = await sendLockNotices([{ userId: 1, locked: [{ resourceKey: 'chatbots', resourceId: 1 }] }], queryable);
+    expect(sent).toBe(0);
+    expect(mockSendSystemEmail).not.toHaveBeenCalled();
+  });
+});
+
+describe('reconcileAllDueUsers — gom thêm tập "đã hết ân hạn hạ gói" (Việc 1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('overage_grace_until')) {
+        return { rows: [{ overage_grace_until: null }] };
+      }
+      if (String(sql).includes('max_zalo_accounts')) {
+        return { rows: [{ max_zalo_accounts: 1 }] };
+      }
+      return { rows: [] };
+    });
+  });
+
+  it('gọi findUsersWithEndedOverageGrace và reconcile đúng user đó (khoá phần vượt)', async () => {
+    mockFindExpiredUsers.mockResolvedValueOnce([]);
+    mockFindUsersWithExpiredStructuralGrants.mockResolvedValueOnce([]);
+    mockFindUsersWithLocks.mockResolvedValueOnce([]);
+    mockFindUsersWithEndedOverageGrace.mockResolvedValueOnce([{ id: 555 }]);
+    mockCountInUse.mockImplementation(async (_uid, key) => (key === 'zalo_accounts' ? 2 : 0));
+    mockCountValid.mockResolvedValue(0);
+    mockListUnlocked.mockImplementation(async (_uid, key) => (key === 'zalo_accounts' ? [10, 20] : []));
+
+    const results = await reconcileAllDueUsers(mockQueryable);
+
+    expect(mockFindUsersWithEndedOverageGrace).toHaveBeenCalledWith(mockQueryable);
+    expect(results).toHaveLength(1);
+    expect(results[0].userId).toBe(555);
+    expect(results[0].locked).toEqual([{ resourceKey: 'zalo_accounts', resourceId: 10 }]);
+  });
+
+  it('user hết ân hạn nhưng không vượt (đã tự xoá bớt) → không có trong kết quả', async () => {
+    mockFindExpiredUsers.mockResolvedValueOnce([]);
+    mockFindUsersWithExpiredStructuralGrants.mockResolvedValueOnce([]);
+    mockFindUsersWithLocks.mockResolvedValueOnce([]);
+    mockFindUsersWithEndedOverageGrace.mockResolvedValueOnce([{ id: 556 }]);
+    // running (inUse - lockedCount) = 0 = effective (1) không kích hoạt cả hai nhánh khoá/mở khoá —
+    // reset đủ mọi mock chạm tới trong vòng lặp resourceKey để không dính giá trị còn sót từ test
+    // khác trong cùng file (đã dính đúng bẫy này ở lần chạy đầu: mockListLocked rò rỉ từ test
+    // "unlocks most-recently-locked" làm ca này tưởng có unlock dù không cấu hình).
+    mockSumActive.mockResolvedValue(0);
+    mockCountInUse.mockResolvedValue(0);
+    mockCountValid.mockResolvedValue(0);
+    mockListUnlocked.mockResolvedValue([]);
+    mockListLocked.mockResolvedValue([]);
+
+    const results = await reconcileAllDueUsers(mockQueryable);
+
+    expect(results).toHaveLength(0);
   });
 });

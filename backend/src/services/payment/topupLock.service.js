@@ -17,6 +17,7 @@ import {
   listResourcesWithLockStatus,
   findUsersWithExpiredStructuralGrants,
   findUsersWithLocks,
+  findUsersWithEndedOverageGrace,
   findExpiringStructuralGrants,
   incrementGrantReminderCount,
 } from '../../repositories/payment/topupLock.repository.js';
@@ -167,20 +168,52 @@ export async function reconcileResourceLocks(userId, queryable = db, { unlockOnl
 }
 
 /**
- * Cron entry: user hết hạn gói + user có grant cấu trúc vừa hết hạn + user đang bị khoá.
+ * Tính phần vượt hạn mức hiện tại của user, CHỈ ĐỌC — không khoá/mở khoá gì (khác
+ * `reconcileResourceLocks`, dùng lại đúng công thức: `running = countResourcesInUse -
+ * countValidLocks`, `over = running - resolveEffectiveCeiling`). Dùng để báo trước cho khách lúc
+ * kích hoạt lệnh hẹn hạ gói — tại thời điểm đó KHÔNG được khoá ngay (ân hạn 7 ngày là chủ đích),
+ * nên không thể gọi `reconcileResourceLocks` rồi đọc `locked` ra.
  *
- * Tập thứ ba là lưới an toàn cho chiều mở khoá — xem `findUsersWithLocks`.
+ * @param {number|string} userId
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @returns {Promise<Array<{resourceKey: string, over: number}>>} chỉ các resourceKey có over > 0
+ */
+export async function computeOverage(userId, queryable = db) {
+  const overages = [];
+  for (const resourceKey of LOCKABLE_RESOURCE_KEYS) {
+    const effective = await resolveEffectiveCeiling(userId, resourceKey, queryable);
+    const inUse = await countResourcesInUse(userId, resourceKey, queryable);
+    const lockedCount = await countValidLocks(userId, resourceKey, queryable);
+    const running = inUse - lockedCount;
+    const over = running - effective;
+    if (over > 0) {
+      overages.push({ resourceKey, over });
+    }
+  }
+  return overages;
+}
+
+/**
+ * Cron entry: user hết hạn gói + user có grant cấu trúc vừa hết hạn + user đang bị khoá +
+ * user đã hết 7 ngày ân hạn hạ gói.
+ *
+ * Tập thứ ba là lưới an toàn cho chiều mở khoá — xem `findUsersWithLocks`. Tập thứ tư là lưới an
+ * toàn cho chiều KHOÁ khi hạ gói: `scheduledPlanChange.service.js` chỉ đặt ân hạn 7 ngày + mở khoá
+ * (không khoá ngay, đúng chủ đích), nên phải có tập này thì hết ân hạn mới thật sự bị khoá phần
+ * vượt — xem `findUsersWithEndedOverageGrace`.
  */
 export async function reconcileAllDueUsers(queryable = db) {
   const { findExpiredUsers } = await import('../../repositories/subscription/subscription.repository.js');
   const expiredPlan = await findExpiredUsers();
   const expiredGrants = await findUsersWithExpiredStructuralGrants(7, queryable);
   const locked = await findUsersWithLocks(queryable);
+  const endedGrace = await findUsersWithEndedOverageGrace(queryable);
 
   const userIds = new Set([
     ...expiredPlan.map((u) => Number(u.id)),
     ...expiredGrants.map((u) => Number(u.id)),
     ...locked.map((u) => Number(u.id)),
+    ...endedGrace.map((u) => Number(u.id)),
   ]);
 
   const results = [];
@@ -195,6 +228,73 @@ export async function reconcileAllDueUsers(queryable = db) {
     }
   }
   return results;
+}
+
+/**
+ * Nội dung thư báo lúc tài nguyên bị khoá — câu trung tính vì bảng `topup_locked_resources` không
+ * lưu lý do khoá (hết hạn slot mua thêm hay hết ân hạn hạ gói), và một user có thể thuộc nhiều tập
+ * cùng lúc. `full_name` escape trước khi chèn HTML (cột người dùng tự đặt lúc đăng ký).
+ *
+ * @param {{ fullName?: string|null, locked: Array<{resourceKey: string, resourceId: number}>, frontendUrl: string }} params
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildLockNoticeEmail({ fullName, locked, frontendUrl }) {
+  const name = escapeHtml(fullName || 'bạn');
+  const counts = (locked || []).reduce((acc, x) => {
+    acc[x.resourceKey] = (acc[x.resourceKey] || 0) + 1;
+    return acc;
+  }, {});
+  const detail = Object.entries(counts)
+    .map(([key, n]) => `${n} ${structuralItemLabelVi(key)}`)
+    .join(', ');
+  const locksUrl = `${frontendUrl}/app/billing?tab=locks`;
+  const topupUrl = `${frontendUrl}/app/topup`;
+
+  return {
+    subject: '[Founder AI] Một số tài nguyên đã bị tạm khoá do vượt hạn mức',
+    html: `
+      <p>Xin chào ${name},</p>
+      <p>Tài khoản của bạn đang dùng nhiều hơn hạn mức hiện có (gói hiện tại cộng phần mua thêm còn
+         hạn), nên hệ thống đã tạm khoá: <strong>${detail}</strong>. Dữ liệu vẫn được giữ nguyên.</p>
+      <p>Bạn có thể chọn giữ lại cái nào tại <a href="${locksUrl}">Tài nguyên bị khoá</a>, hoặc
+         <a href="${topupUrl}">mua thêm</a> để mở khoá ngay.</p>
+    `,
+  };
+}
+
+/**
+ * Gửi thư báo khoá cho mọi user trong `results` (kết quả của `reconcileAllDueUsers`) thật sự có
+ * tài nguyên vừa bị khoá. Mỗi user một try/catch riêng — một user lỗi (email hỏng, thiếu user)
+ * không chặn thư của user khác.
+ *
+ * @param {Array<{userId: number, locked: Array<{resourceKey: string, resourceId: number}>}>} results
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @returns {Promise<number>} số thư gửi thành công
+ */
+export async function sendLockNotices(results, queryable = db) {
+  const { sendSystemEmail } = await import('../../utils/systemEmail.util.js');
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+  let sentCount = 0;
+
+  for (const r of results) {
+    if (!r.locked?.length) continue;
+    try {
+      const { rows } = await queryable.query(
+        `SELECT email, full_name FROM users WHERE id = $1`,
+        [r.userId]
+      );
+      const u = rows[0];
+      if (!u?.email) continue;
+
+      const { subject, html } = buildLockNoticeEmail({ fullName: u.full_name, locked: r.locked, frontendUrl });
+      await sendSystemEmail({ to: u.email, subject, html });
+      sentCount += 1;
+    } catch (err) {
+      console.error(`[TopupLock] lock notify email failed for user ${r.userId}:`, err.message);
+    }
+  }
+
+  return sentCount;
 }
 
 /**

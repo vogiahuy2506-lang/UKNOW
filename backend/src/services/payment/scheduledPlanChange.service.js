@@ -6,6 +6,7 @@ import {
 } from '../../repositories/payment/payment.repository.js';
 import { lockUserForPlanActivation } from '../../repositories/user/user.repository.js';
 import { sendSystemEmail } from '../../utils/systemEmail.util.js';
+import { escapeHtml } from '../../utils/htmlEscape.util.js';
 
 /**
  * Get active pending scheduled change for a user.
@@ -18,6 +19,21 @@ export async function getPendingScheduledChange(userId) {
 /**
  * Cancel a pending scheduled plan change.
  */
+/** "dd/MM/yyyy HH:mm" theo giờ VN — timeZone cố định, không phụ thuộc TZ tiến trình (production
+ * chạy UTC, xem project_email_sent_at_luu_gio_utc). */
+function formatVnDateTime(date) {
+  if (!date) return '';
+  return new Intl.DateTimeFormat('vi-VN', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(date));
+}
+
 export async function cancelPendingScheduledChange(userId, changeId = null) {
   const client = await db.getClient();
   try {
@@ -125,10 +141,12 @@ export async function processDueScheduledPlanChanges() {
       await activateUserPlan(claimed.user_id, claimed.plan_id, claimed.billing_period || 'monthly', client);
 
       // Set 7-day grace period for resource locking on downgrade
-      await client.query(
-        `UPDATE users SET overage_grace_until = NOW() + INTERVAL '7 days' WHERE id = $1`,
+      const { rows: graceRows } = await client.query(
+        `UPDATE users SET overage_grace_until = NOW() + INTERVAL '7 days' WHERE id = $1
+         RETURNING overage_grace_until`,
         [claimed.user_id]
       );
+      const overageGraceUntil = graceRows[0]?.overage_grace_until || null;
 
       // 2. Mark scheduled change as activated
       const activated = await scheduledPlanChangeRepository.markActivated(claimed.id, client);
@@ -145,12 +163,38 @@ export async function processDueScheduledPlanChanges() {
 
       // 4. Send notification email
       if (claimed.user_email) {
+        const planName = escapeHtml(claimed.plan_name);
+        const fullName = escapeHtml(claimed.user_full_name || 'Quý khách');
+        const periodLabel = claimed.billing_period === 'yearly' ? 'Theo năm' : 'Theo tháng';
+
+        // Có vượt hạn mức sau khi hạ gói -> nhắc rõ hạn 7 ngày ân hạn (Việc 3). computeOverage chỉ
+        // đọc, dùng pool `db` (client transaction ở trên đã release ngay sau COMMIT) — LỖI ở đây
+        // KHÔNG được nuốt mất thư kích hoạt, chỉ log rồi gửi thư không có đoạn cảnh báo vượt.
+        let overageHtml = '';
+        try {
+          const { computeOverage, structuralItemLabelVi } = await import('./topupLock.service.js');
+          const overages = await computeOverage(claimed.user_id, db);
+          if (overages.length > 0) {
+            const detail = overages.map((o) => `${o.over} ${structuralItemLabelVi(o.resourceKey)}`).join(', ');
+            const deadlineStr = formatVnDateTime(overageGraceUntil);
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
+            overageHtml = `<p>Gói mới cho phép ít tài nguyên hơn bạn đang dùng: vượt <strong>${detail}</strong>. `
+              + `Bạn có 7 ngày, tới <strong>${deadlineStr}</strong>, để chọn giữ lại cái nào `
+              + `(<a href="${frontendUrl}/app/billing?tab=locks">chọn tài nguyên giữ lại</a>) hoặc `
+              + `<a href="${frontendUrl}/app/topup">mua thêm</a>. Sau hạn này hệ thống tự khoá phần vượt, `
+              + `cái tạo gần nhất bị khoá trước.</p>`;
+          }
+        } catch (err) {
+          console.error('[ScheduledPlanChange] computeOverage failed:', err.message);
+        }
+
         sendSystemEmail({
           to: claimed.user_email,
-          subject: `[UKNOW] Lệnh hẹn đổi sang gói ${claimed.plan_name} đã được kích hoạt`,
-          html: `<p>Xin chào <strong>${claimed.user_full_name || 'Quý khách'}</strong>,</p>
-<p>Lệnh hẹn đổi gói sang <strong>${claimed.plan_name}</strong> (${claimed.billing_period === 'yearly' ? 'Theo năm' : 'Theo tháng'}) của bạn đã đến hạn và được kích hoạt thành công.</p>
-<p>Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ của UKNOW!</p>`,
+          subject: `[Founder AI] Lệnh hẹn đổi sang gói ${planName} đã được kích hoạt`,
+          html: `<p>Xin chào <strong>${fullName}</strong>,</p>
+<p>Lệnh hẹn đổi gói sang <strong>${planName}</strong> (${periodLabel}) của bạn đã đến hạn và được kích hoạt thành công.</p>
+${overageHtml}
+<p>Cảm ơn bạn đã tin tưởng và sử dụng dịch vụ của Founder AI!</p>`,
         }).catch((err) => console.error('[ScheduledPlanChange] Failed to send email:', err.message));
       }
     } catch (err) {

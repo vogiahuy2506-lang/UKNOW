@@ -2,7 +2,7 @@ import cron from 'node-cron';
 import db from '../config/database.js';
 import coursesController from '../controllers/courses.controller.js';
 import campaignController from '../controllers/campaign.controller.js';
-import { sendSystemEmail, buildRenewalUrl } from './systemEmail.util.js';
+import { buildRenewalUrl } from './systemEmail.util.js';
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import { startKeepAliveScheduler } from '../services/zaloSessionKeepAlive.service.js';
 import { startKeepAliveScheduler as startWhatsAppKeepAliveScheduler } from '../services/chatbot/whatsappBaileysKeepAlive.service.js';
@@ -738,7 +738,7 @@ export const initScheduler = () => {
           const {
             reconcileAllDueUsers,
             sendStructuralGrantReminders,
-            structuralItemLabelVi,
+            sendLockNotices,
           } = await import('../services/payment/topupLock.service.js');
           const lockResults = await reconcileAllDueUsers();
           for (const r of lockResults) {
@@ -747,35 +747,11 @@ export const initScheduler = () => {
               console.log(
                 `[TopupLock] user=${r.userId} locked=${r.locked.length} unlocked=${r.unlocked?.length || 0}`
               );
-              // Email báo khoá (nếu có)
-              try {
-                const { rows } = await (await import('../config/database.js')).default.query(
-                  `SELECT email, full_name FROM users WHERE id = $1`,
-                  [r.userId]
-                );
-                const u = rows[0];
-                if (u?.email) {
-                  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5174';
-                  const counts = r.locked.reduce((acc, x) => {
-                    acc[x.resourceKey] = (acc[x.resourceKey] || 0) + 1;
-                    return acc;
-                  }, {});
-                  const detail = Object.entries(counts)
-                    .map(([key, n]) => `${n} ${structuralItemLabelVi(key)}`)
-                    .join(', ');
-                  await sendSystemEmail({
-                    to: u.email,
-                    subject: '[Founder AI] Một số tài nguyên mua thêm đã bị khoá',
-                    html: `<p>Xin chào ${u.full_name || 'bạn'},</p>
-                    <p>Các tài nguyên sau đã bị khoá vì slot mua thêm hết hạn: <strong>${detail}</strong>.</p>
-                    <p><a href="${frontendUrl}/app/billing?tab=locks">Chọn tài nguyên giữ lại / gia hạn</a></p>`,
-                  });
-                }
-              } catch (mailErr) {
-                console.error('[TopupLock] lock notify email failed:', mailErr.message);
-              }
             }
           }
+          // Email báo khoá — huỷ độc lập với việc đếm/log phía trên, một user hỏng không chặn user khác
+          // (xem topupLock.service.js: sendLockNotices).
+          await sendLockNotices(lockResults);
           const rem = await sendStructuralGrantReminders();
           reminderWeek = rem.week || 0;
           reminderThree = rem.three || 0;

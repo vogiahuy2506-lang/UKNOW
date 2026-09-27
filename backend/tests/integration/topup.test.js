@@ -22,7 +22,7 @@ const {
   createPlan,
 } = await import('./helpers/db.js');
 const { checkSendQuota, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
-const { reconcileResourceLocks } = await import('../../src/services/payment/topupLock.service.js');
+const { reconcileResourceLocks, reconcileAllDueUsers } = await import('../../src/services/payment/topupLock.service.js');
 const { findExpiringStructuralGrants } = await import('../../src/repositories/payment/topupLock.repository.js');
 
 let app;
@@ -781,6 +781,91 @@ describe('Top-up mid-cycle', () => {
 
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('OWNER_ONLY');
+    });
+  });
+
+  describe('reconcileAllDueUsers — khoá phần vượt khi hết 7 ngày ân hạn hạ gói (PLAN_KHOA_SAU_HA_GOI_VA_EMAIL_KHOA_2026-09-27, Việc 1)', () => {
+    // PLAN_CEILING.zalo_accounts (topupLock.service.js) đọc trần từ CỘT `users.max_zalo_accounts`,
+    // KHÔNG phải `plans.max_zalo_accounts`. `createTopupReadyUser` → `createUser` (helpers/db.js,
+    // nhánh wantsPlan) ghi CỨNG `users.max_zalo_accounts = 1000` bất kể tham số `maxZaloAccounts`
+    // truyền vào createTopupReadyUser (tham số đó chỉ đổi `plans.max_zalo_accounts`, dùng cho luồng
+    // khác) — nên phải tự UPDATE lại cột users sau khi tạo, đúng khuôn mẫu test "reconcile khoá
+    // LANDING PAGE" ở trên (dòng ~605: `UPDATE users SET max_landing_pages = 2`). Không sửa
+    // createTopupReadyUser/createUser ở đây vì nhiều test khác đang phụ thuộc hành vi hiện tại của
+    // chúng — phát hiện bằng thực nghiệm (I1 đỏ với `entry` undefined trước khi thêm dòng này).
+    async function setZaloCeiling(userId, maxZaloAccounts) {
+      await db.query(`UPDATE users SET max_zalo_accounts = $1 WHERE id = $2`, [maxZaloAccounts, userId]);
+    }
+
+    it('I1: overage_grace_until = NOW() - 1 phút → khoá đúng 2 id lớn nhất; gọi lần 2 → user không còn trong kết quả', async () => {
+      const { user } = await createTopupReadyUser({
+        username: `khoa_i1_${Date.now()}`,
+        maxZaloAccounts: 1,
+        connectedZaloAccounts: 3,
+      });
+      await setZaloCeiling(user.id, 1);
+      await db.query(
+        `UPDATE users SET overage_grace_until = NOW() - INTERVAL '1 minute' WHERE id = $1`,
+        [user.id]
+      );
+      const { rows: zaloRows } = await db.query(
+        `SELECT id FROM zalo_settings WHERE id_user = $1 ORDER BY id ASC`,
+        [user.id]
+      );
+      expect(zaloRows).toHaveLength(3);
+      const ids = zaloRows.map((r) => Number(r.id));
+      const [oldestId, midId, newestId] = ids;
+
+      const results = await reconcileAllDueUsers(db);
+
+      const entry = results.find((r) => r.userId === Number(user.id));
+      expect(entry).toBeDefined();
+      expect(entry.locked.map((l) => l.resourceId).sort((a, b) => a - b)).toEqual(
+        [midId, newestId].sort((a, b) => a - b)
+      );
+      expect(entry.locked.map((l) => l.resourceId)).not.toContain(oldestId);
+
+      const results2 = await reconcileAllDueUsers(db);
+      expect(results2.find((r) => r.userId === Number(user.id))).toBeUndefined();
+    });
+
+    it('I2: overage_grace_until = NOW() + 1 ngày (còn ân hạn) → 0 khoá', async () => {
+      const { user } = await createTopupReadyUser({
+        username: `khoa_i2_${Date.now()}`,
+        maxZaloAccounts: 1,
+        connectedZaloAccounts: 3,
+      });
+      await setZaloCeiling(user.id, 1);
+      await db.query(
+        `UPDATE users SET overage_grace_until = NOW() + INTERVAL '1 day' WHERE id = $1`,
+        [user.id]
+      );
+
+      const results = await reconcileAllDueUsers(db);
+
+      expect(results.find((r) => r.userId === Number(user.id))).toBeUndefined();
+      const { rows: lockedRows } = await db.query(
+        `SELECT COUNT(*)::int AS n FROM topup_locked_resources WHERE user_id = $1`,
+        [user.id]
+      );
+      expect(lockedRows[0].n).toBe(0);
+    });
+
+    it('I3: hết ân hạn nhưng chỉ đúng bằng trần (1 Zalo, max_zalo_accounts=1) → không có trong kết quả', async () => {
+      const { user } = await createTopupReadyUser({
+        username: `khoa_i3_${Date.now()}`,
+        maxZaloAccounts: 1,
+        connectedZaloAccounts: 1,
+      });
+      await setZaloCeiling(user.id, 1);
+      await db.query(
+        `UPDATE users SET overage_grace_until = NOW() - INTERVAL '1 minute' WHERE id = $1`,
+        [user.id]
+      );
+
+      const results = await reconcileAllDueUsers(db);
+
+      expect(results.find((r) => r.userId === Number(user.id))).toBeUndefined();
     });
   });
 });

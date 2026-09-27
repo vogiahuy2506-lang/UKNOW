@@ -306,6 +306,22 @@ export async function findUsersWithLocks(queryable = db) {
 }
 
 /**
+ * Users đã hết 7 ngày ân hạn hạ gói (`scheduledPlanChange.service.js` đặt
+ * `overage_grace_until = NOW() + INTERVAL '7 days'` lúc kích hoạt lệnh hẹn hạ gói).
+ *
+ * KHÔNG có cận dưới (khác `findUsersWithExpiredStructuralGrants`): khách hết ân hạn từ TRƯỚC khi
+ * tính năng này lên production vẫn phải được gom vào, không chỉ người hết ân hạn "gần đây". Tập
+ * này nhỏ (chỉ người từng có lệnh hẹn hạ gói) nên gom lại mỗi ngày không tốn kém, và
+ * `reconcileAllDueUsers` chỉ đẩy vào kết quả khi thật sự có thay đổi khoá/mở khoá.
+ */
+export async function findUsersWithEndedOverageGrace(queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT id FROM users WHERE overage_grace_until IS NOT NULL AND overage_grace_until <= NOW()`
+  );
+  return rows;
+}
+
+/**
  * Structural grants expiring within [minDays, maxDays], with reminder_count < threshold.
  */
 export async function findExpiringStructuralGrants(minDays, maxDays, reminderThreshold, queryable = db) {

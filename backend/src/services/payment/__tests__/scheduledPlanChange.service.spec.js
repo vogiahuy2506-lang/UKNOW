@@ -28,6 +28,14 @@ const mockDb = {
 
 const mockTopupLockService = {
   reconcileResourceLocks: jest.fn().mockResolvedValue(),
+  computeOverage: jest.fn().mockResolvedValue([]),
+  structuralItemLabelVi: jest.fn((key) => ({
+    zalo_accounts: 'tài khoản Zalo',
+    email_accounts: 'tài khoản Email',
+    landing_pages: 'landing page',
+    chatbots: 'chatbot',
+    employees: 'nhân viên',
+  }[key] || key)),
 };
 
 const mockSystemEmail = {
@@ -236,6 +244,89 @@ describe('scheduledPlanChange.service', () => {
 
       expect(mockCustomPlanRepo.updateCustomPlanLimits).not.toHaveBeenCalled();
       expect(mockPaymentRepo.activateUserPlan).toHaveBeenCalledWith(200, 3, 'monthly', mockClient);
+    });
+
+    describe('thư kích hoạt hạ gói — nêu hạn 7 ngày ân hạn khi có vượt (Việc 3)', () => {
+      beforeEach(() => {
+        mockScheduledPlanChangeRepo.findDueChanges.mockResolvedValue([
+          { id: 9, user_id: 400, plan_id: 5, billing_period: 'monthly' },
+        ]);
+        mockScheduledPlanChangeRepo.claimDueChange.mockResolvedValue({
+          id: 9,
+          user_id: 400,
+          plan_id: 5,
+          billing_period: 'monthly',
+          user_email: 'khach@example.com',
+          user_full_name: '<b>Khách</b>',
+          plan_name: '<i>Cơ bản</i>',
+        });
+        mockScheduledPlanChangeRepo.markActivated.mockResolvedValue({ id: 9 });
+        mockPaymentRepo.activateUserPlan.mockResolvedValue();
+      });
+
+      it('có vượt hạn mức → thư có mốc giờ ân hạn + 2 link (locks, topup)', async () => {
+        const graceUntil = new Date('2026-10-04T01:00:00Z'); // 08:00 giờ VN 04/10/2026
+        mockClient.query.mockImplementation(async (sql) => {
+          if (String(sql).includes('overage_grace_until')) {
+            return { rows: [{ overage_grace_until: graceUntil }] };
+          }
+          return { rows: [] };
+        });
+        mockTopupLockService.computeOverage.mockResolvedValueOnce([
+          { resourceKey: 'zalo_accounts', over: 2 },
+          { resourceKey: 'chatbots', over: 1 },
+        ]);
+
+        await processDueScheduledPlanChanges();
+
+        expect(mockTopupLockService.computeOverage).toHaveBeenCalledWith(400, mockDb);
+        const [{ html, subject }] = mockSystemEmail.sendSystemEmail.mock.calls[0];
+        expect(subject).toBe('[Founder AI] Lệnh hẹn đổi sang gói &lt;i&gt;Cơ bản&lt;/i&gt; đã được kích hoạt');
+        expect(html).toContain('vượt <strong>2 tài khoản Zalo, 1 chatbot</strong>');
+        expect(html).toContain('04/10/2026');
+        expect(html).toContain('08:00');
+        expect(html).toContain('/app/billing?tab=locks');
+        expect(html).toContain('/app/topup');
+      });
+
+      it('không vượt hạn mức → thư KHÔNG có đoạn cảnh báo/mốc ân hạn', async () => {
+        mockTopupLockService.computeOverage.mockResolvedValueOnce([]);
+
+        await processDueScheduledPlanChanges();
+
+        const [{ html }] = mockSystemEmail.sendSystemEmail.mock.calls[0];
+        expect(html).not.toContain('Gói mới cho phép ít tài nguyên hơn');
+        expect(html).not.toContain('/app/billing?tab=locks');
+      });
+
+      it('escape user_full_name và plan_name; tiêu đề đổi sang [Founder AI]', async () => {
+        mockTopupLockService.computeOverage.mockResolvedValueOnce([]);
+
+        await processDueScheduledPlanChanges();
+
+        const [{ html, subject }] = mockSystemEmail.sendSystemEmail.mock.calls[0];
+        expect(subject).not.toContain('[UKNOW]');
+        expect(subject).toContain('[Founder AI]');
+        expect(html).toContain('&lt;b&gt;Khách&lt;/b&gt;');
+        expect(html).not.toContain('<b>Khách</b>');
+        expect(html).toContain('&lt;i&gt;Cơ bản&lt;/i&gt;');
+        expect(html).not.toContain('<i>Cơ bản</i>');
+      });
+
+      it('computeOverage ném lỗi → vẫn gửi thư kích hoạt (không có đoạn vượt), không nuốt thư', async () => {
+        mockTopupLockService.computeOverage.mockRejectedValueOnce(new Error('DB timeout'));
+        jest.spyOn(console, 'error').mockImplementation(() => {});
+
+        await processDueScheduledPlanChanges();
+
+        expect(mockSystemEmail.sendSystemEmail).toHaveBeenCalledTimes(1);
+        const [{ html }] = mockSystemEmail.sendSystemEmail.mock.calls[0];
+        expect(html).not.toContain('Gói mới cho phép ít tài nguyên hơn');
+        expect(console.error).toHaveBeenCalledWith(
+          expect.stringContaining('computeOverage'),
+          expect.any(String)
+        );
+      });
     });
   });
 });
