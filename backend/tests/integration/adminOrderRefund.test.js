@@ -4,7 +4,7 @@
  * Mục 1.3: service refundOrder/previewRefund chạy trên DB thật — thu gói khi đơn là gói hiện hành,
  * không đụng gói khi đơn đã bị thay, chặn hoá đơn chưa xuất, các ca bị chặn không ghi gì.
  */
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 
 const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser, createPlan, createOrder } = await import('./helpers/db.js');
@@ -13,6 +13,8 @@ const {
   metricPaidAfterCancelledOrders,
   metricStuckEinvoices,
 } = await import('../../src/repositories/admin/alert.repository.js');
+const { closeAffiliateMonth } = await import('../../src/services/affiliate/affiliateMonthClosing.service.js');
+const { rejectWithdrawal } = await import('../../src/services/affiliate/affiliateWithdrawal.service.js');
 const {
   listClaimableEinvoiceJobIds,
   claimEinvoiceByIdForIssue,
@@ -319,5 +321,192 @@ describe('mục 1.4 — worker không xuất hoá đơn cho đơn đã hoàn', (
       .map((r) => Number(r.id));
     expect(ids).toContain(Number(control.id));
     expect(ids).not.toContain(Number(refunded.id));
+  });
+});
+
+// ─── Mục 2.2 — hoa hồng giới thiệu (số khớp bảng nghiệm thu A1–A5 của plan) ─────────────────────
+describe('mục 2.2 — hoàn tiền trừ hoa hồng giới thiệu', () => {
+  const MONTH = '2026-08';
+  let prevClosingFlag;
+  beforeEach(() => {
+    prevClosingFlag = process.env.AFFILIATE_CLOSING_ENABLED;
+    process.env.AFFILIATE_CLOSING_ENABLED = 'true';
+  });
+  afterEach(() => {
+    if (prevClosingFlag !== undefined) process.env.AFFILIATE_CLOSING_ENABLED = prevClosingFlag;
+    else delete process.env.AFFILIATE_CLOSING_ENABLED;
+  });
+
+  async function referredOrder(referrer, buyer, amount) {
+    const plan = await createPlan({ price: amount });
+    const order = await createOrder({ planId: plan.id, userId: buyer.id, userEmail: buyer.email, amount });
+    await db.query(`UPDATE orders SET paid_at = NOW() - INTERVAL '40 days' WHERE id = $1`, [order.id]);
+    await db.query(
+      `INSERT INTO affiliate_revenue_events (referrer_user_id, buyer_user_id, order_id, amount, month_key)
+       VALUES ($1, $2, $3, $4, $5)`,
+      [referrer.id, buyer.id, order.id, amount, MONTH]
+    );
+    return order;
+  }
+
+  /** A2: 12tr + 10tr = 22tr, đã đóng sổ (bậc 20% → 4.400.000), chưa rút. */
+  async function setupA2() {
+    const referrer = await createUser({ username: `aff-ref-${Date.now()}`, withPlan: false });
+    const b1 = await createUser({ username: `aff-b1-${Date.now()}`, withPlan: false });
+    const b2 = await createUser({ username: `aff-b2-${Date.now()}`, withPlan: false });
+    const o12 = await referredOrder(referrer, b1, 12_000_000);
+    const o10 = await referredOrder(referrer, b2, 10_000_000);
+    await closeAffiliateMonth(MONTH, { force: true });
+    return { referrer, o12, o10 };
+  }
+
+  const balanceOf = async (userId) => Number((await db.query(
+    `SELECT COALESCE(SUM(amount),0)::numeric AS s FROM affiliate_ledger WHERE user_id = $1`, [userId]
+  )).rows[0].s);
+  const periodOf = async (userId) => (await db.query(
+    `SELECT gross_revenue::numeric AS g, rate_percent AS r, commission_amount::numeric AS c
+       FROM affiliate_periods WHERE referrer_user_id = $1 AND month_key = $2`, [userId, MONTH]
+  )).rows[0];
+
+  async function pendingWithdrawal(referrerId, amount, status = 'pending') {
+    const { rows } = await db.query(
+      `INSERT INTO affiliate_withdrawals (user_id, amount_gross, tax_amount, amount_net, full_name, bank_name,
+         bank_account_number, bank_account_name, status)
+       VALUES ($1, $2, 0, $2, 'Doi Tac', 'VCB', '0001', 'DOI TAC', $3) RETURNING id`,
+      [referrerId, amount, status]
+    );
+    await db.query(
+      `INSERT INTO affiliate_ledger (user_id, entry_type, amount, ref_type, ref_id, note)
+       VALUES ($1, 'withdrawal', $2, 'withdrawal', $3, 'rút')`,
+      [referrerId, -amount, rows[0].id]
+    );
+    return rows[0].id;
+  }
+
+  it('A1: 1 đơn 299.000 chưa đóng sổ → hoàn → đóng sổ không sinh period, ví 0', async () => {
+    const referrer = await createUser({ username: 'aff-a1-ref', withPlan: false });
+    const buyer = await createUser({ username: 'aff-a1-buyer', withPlan: false });
+    const order = await referredOrder(referrer, buyer, 299_000);
+
+    const res = await refundOrder({ orderCode: order.order_code, adminUserId: null, reason: 'A1' });
+    expect(res.meta.affiliate).toMatchObject({ period: 'not_closed', need: 0, deducted: 0, shortfall: 0 });
+    const ev = await db.query(`SELECT reversed_at FROM affiliate_revenue_events WHERE order_id = $1`, [order.id]);
+    expect(ev.rows[0].reversed_at).not.toBeNull();
+
+    await closeAffiliateMonth(MONTH, { force: true });
+    expect(await periodOf(referrer.id)).toBeUndefined();
+    expect(await balanceOf(referrer.id)).toBe(0);
+  });
+
+  it('A2: hoàn đơn 10tr → gross 12tr, bậc 15%, hoa hồng 1.800.000; ledger −2.600.000; số dư 1.800.000', async () => {
+    const { referrer, o10 } = await setupA2();
+    expect(await balanceOf(referrer.id)).toBe(4_400_000);
+    const pv = await previewRefund(o10.order_code);
+    expect(pv.affiliate).toMatchObject({ need: 2_600_000, deducted: 2_600_000, shortfall: 0, newCommission: 1_800_000 });
+    expect(await balanceOf(referrer.id)).toBe(4_400_000); // preview không ghi
+
+    const res = await refundOrder({ orderCode: o10.order_code, adminUserId: null, reason: 'A2' });
+    expect(res.meta.affiliate).toMatchObject({
+      period: 'adjusted', prevGross: 22_000_000, newGross: 12_000_000, prevCommission: 4_400_000,
+      newCommission: 1_800_000, newRatePercent: 15, need: 2_600_000, deducted: 2_600_000, shortfall: 0,
+    });
+    const p = await periodOf(referrer.id);
+    expect([Number(p.g), Number(p.r), Number(p.c)]).toEqual([12_000_000, 15, 1_800_000]);
+    const adj = await db.query(
+      `SELECT amount::numeric AS a, ref_type, ref_id, note FROM affiliate_ledger WHERE user_id = $1 AND ref_type = 'order_refund'`,
+      [referrer.id]
+    );
+    expect(adj.rows).toHaveLength(1);
+    expect(Number(adj.rows[0].a)).toBe(-2_600_000);
+    expect(String(adj.rows[0].ref_id)).toBe(String(o10.id));
+    expect(adj.rows[0].note).toBe(`Hoàn tiền đơn #${o10.order_code} — điều chỉnh hoa hồng tháng ${MONTH}`);
+    expect(await balanceOf(referrer.id)).toBe(1_800_000);
+    const stored = await db.query(`SELECT refund_meta FROM orders WHERE id = $1`, [o10.id]);
+    expect(stored.rows[0].refund_meta.affiliate).toMatchObject({ deducted: 2_600_000, shortfall: 0 });
+  });
+
+  it('A3: yêu cầu rút 3tr đang chờ (số dư 1,4tr) → không xác nhận: 409, không ghi gì', async () => {
+    const { referrer, o10 } = await setupA2();
+    const wid = await pendingWithdrawal(referrer.id, 3_000_000);
+    expect(await balanceOf(referrer.id)).toBe(1_400_000);
+
+    await expect(
+      refundOrder({ orderCode: o10.order_code, adminUserId: null, reason: 'A3' })
+    ).rejects.toMatchObject({
+      status: 409,
+      code: 'AFFILIATE_SHORTFALL_PENDING_WITHDRAWAL',
+      message: expect.stringContaining(`yêu cầu rút #${wid}`),
+      details: { affiliate: { need: 2_600_000, deducted: 1_400_000, shortfall: 1_200_000 } },
+    });
+    const o = await db.query(`SELECT status FROM orders WHERE id = $1`, [o10.id]);
+    expect(o.rows[0].status).toBe('success');
+    const ev = await db.query(`SELECT reversed_at FROM affiliate_revenue_events WHERE order_id = $1`, [o10.id]);
+    expect(ev.rows[0].reversed_at).toBeNull();
+    const p = await periodOf(referrer.id);
+    expect([Number(p.g), Number(p.c)]).toEqual([22_000_000, 4_400_000]);
+    expect(await balanceOf(referrer.id)).toBe(1_400_000);
+  });
+
+  it('A3: có acknowledgeShortfall → trừ 1.400.000, thiếu 1.200.000, số dư 0', async () => {
+    const { referrer, o10 } = await setupA2();
+    await pendingWithdrawal(referrer.id, 3_000_000);
+    const res = await refundOrder({
+      orderCode: o10.order_code, adminUserId: null, reason: 'A3 ack', acknowledgeShortfall: true,
+    });
+    expect(res.meta.affiliate).toMatchObject({ need: 2_600_000, deducted: 1_400_000, shortfall: 1_200_000 });
+    expect(await balanceOf(referrer.id)).toBe(0);
+  });
+
+  it('A3: từ chối yêu cầu rút trước rồi hoàn → trừ đủ 2.600.000, số dư 1.800.000', async () => {
+    const { referrer, o10 } = await setupA2();
+    const admin = await createUser({ role: 'admin', username: 'aff-a3-admin' });
+    const wid = await pendingWithdrawal(referrer.id, 3_000_000);
+    await rejectWithdrawal(admin.id, wid, 'Hoàn tiền đơn khách — rút lại sau');
+    expect(await balanceOf(referrer.id)).toBe(4_400_000);
+
+    const res = await refundOrder({ orderCode: o10.order_code, adminUserId: admin.id, reason: 'A3 reject' });
+    expect(res.meta.affiliate).toMatchObject({ need: 2_600_000, deducted: 2_600_000, shortfall: 0 });
+    expect(await balanceOf(referrer.id)).toBe(1_800_000);
+  });
+
+  it('A4: đã rút hết và kế toán đã trả → trừ 0, thiếu 2.600.000 (công ty chịu), không 409', async () => {
+    const { referrer, o10 } = await setupA2();
+    await pendingWithdrawal(referrer.id, 4_400_000, 'paid');
+    expect(await balanceOf(referrer.id)).toBe(0);
+
+    const res = await refundOrder({ orderCode: o10.order_code, adminUserId: null, reason: 'A4' });
+    expect(res.meta.affiliate).toMatchObject({ need: 2_600_000, deducted: 0, shortfall: 2_600_000, pendingWithdrawal: null });
+    expect(await balanceOf(referrer.id)).toBe(0);
+    const adj = await db.query(`SELECT 1 FROM affiliate_ledger WHERE ref_type = 'order_refund'`);
+    expect(adj.rows).toHaveLength(0);
+  });
+
+  it('A5: sau A2 chạy lại đóng sổ tháng đó → không có dòng ledger mới, period giữ 12tr / 1,8tr', async () => {
+    const { referrer, o10 } = await setupA2();
+    await refundOrder({ orderCode: o10.order_code, adminUserId: null, reason: 'A5' });
+    const ledgerBefore = (await db.query(`SELECT COUNT(*)::int AS n FROM affiliate_ledger`)).rows[0].n;
+
+    const res = await closeAffiliateMonth(MONTH, { force: true });
+    expect(res).toMatchObject({ insertedPeriods: 0, adjustedPeriods: 0, decreasedGrossPeriods: 0 });
+    expect((await db.query(`SELECT COUNT(*)::int AS n FROM affiliate_ledger`)).rows[0].n).toBe(ledgerBefore);
+    const p = await periodOf(referrer.id);
+    expect([Number(p.g), Number(p.c)]).toEqual([12_000_000, 1_800_000]);
+    expect(await balanceOf(referrer.id)).toBe(1_800_000);
+  });
+
+  it('người mua chưa có SĐT lúc đóng sổ (event chưa được tính) → hoàn không hạ period, không trừ ví', async () => {
+    const referrer = await createUser({ username: 'aff-np-ref', withPlan: false });
+    const b1 = await createUser({ username: 'aff-np-b1', withPlan: false });
+    const noPhone = await createUser({ username: 'aff-np-b2', withPlan: false, phone: null });
+    await referredOrder(referrer, b1, 12_000_000);
+    const oNoPhone = await referredOrder(referrer, noPhone, 10_000_000);
+    await closeAffiliateMonth(MONTH, { force: true });
+    expect(await balanceOf(referrer.id)).toBe(1_800_000);
+
+    const res = await refundOrder({ orderCode: oNoPhone.order_code, adminUserId: null, reason: 'np' });
+    expect(res.meta.affiliate).toMatchObject({ period: 'unchanged', need: 0, deducted: 0 });
+    const p = await periodOf(referrer.id);
+    expect([Number(p.g), Number(p.c)]).toEqual([12_000_000, 1_800_000]);
+    expect(await balanceOf(referrer.id)).toBe(1_800_000);
   });
 });

@@ -6,6 +6,16 @@ import {
   findEinvoiceStatusForOrder,
   markOrderRefunded,
   cancelUnissuedEinvoiceForRefund,
+  updateRefundMeta,
+  findRevenueEventForOrder,
+  lockAffiliateWallet,
+  reverseRevenueEvent,
+  findAffiliatePeriod,
+  sumQualifiedMonthGrossExcludingOrder,
+  updateAffiliatePeriodAfterRefund,
+  getAffiliateWalletBalance,
+  insertRefundLedgerAdjustment,
+  findPendingAffiliateWithdrawal,
 } from '../../repositories/admin/adminOrderRefund.repository.js';
 import {
   findActiveUserByEmail,
@@ -14,6 +24,7 @@ import {
 import { expireUserPlan } from '../../repositories/subscription/subscription.repository.js';
 import { findCurrentPlanActivation } from '../../utils/billingCycle.util.js';
 import { reconcileResourceLocks } from '../payment/topupLock.service.js';
+import { resolveTier } from '../../utils/affiliateTier.util.js';
 
 // PLAN_HOAN_TIEN_DON_HANG_2026-09-27 mục 1.3 — admin GHI NHẬN một đơn đã được kế toán chuyển
 // khoản hoàn tay, và làm các việc đi kèm trong MỘT transaction: đơn → 'refunded', thu gói nếu đơn
@@ -126,6 +137,118 @@ async function evaluateConsequences({ order, kind, userId }, queryable) {
   };
 }
 
+const formatVnd = (n) => `${Math.round(Number(n) || 0).toLocaleString('vi-VN')}đ`;
+
+/**
+ * PLAN_HOAN_TIEN_DON_HANG mục 2.2 — hoa hồng giới thiệu của đơn đang hoàn.
+ *
+ * - Không có event (đơn không có người giới thiệu / chưa quét) → null.
+ * - Tháng chưa đóng sổ (chưa có period) → chỉ đảo event; đóng sổ sau sẽ tự tính thiếu nó.
+ * - Đã đóng sổ → tính lại gross theo ĐÚNG công thức đóng sổ, tier + hoa hồng mới của CẢ THÁNG
+ *   (hoàn một đơn có thể tụt bậc cả tháng — A2: 2,6tr chứ không phải 10tr × 20%). Cập nhật period tại
+ *   chỗ để lượt đóng sổ chạy lại thấy gross khớp và không làm gì. Trừ ví min(need, số dư); phần
+ *   thiếu (đã rút) công ty chịu.
+ *
+ * Lệch plan (có chủ đích): chỉ hạ period khi gross MỚI < gross đã chốt. Nếu gross mới ≥ gross đã
+ * chốt (event của đơn này chưa từng được tính vì người mua chưa có SĐT, hoặc có doanh thu về muộn
+ * chưa được đóng sổ cộng) thì không đụng period — ghi đè bằng số lớn hơn sẽ nuốt mất khoản cộng bù
+ * mà lượt đóng sổ kế tiếp lẽ ra trả cho đối tác.
+ *
+ * @param {{ write: boolean }} opts write=false cho preview: không khoá, không ghi.
+ */
+async function applyAffiliateImpact(order, { write }, queryable) {
+  const event = await findRevenueEventForOrder(order.id, queryable);
+  if (!event) return null;
+
+  const referrerUserId = Number(event.referrer_user_id);
+  const monthKey = String(event.month_key).trim();
+  const base = {
+    referrerUserId,
+    monthKey,
+    eventAmount: Math.round(Number(event.amount || 0)),
+    need: 0,
+    deducted: 0,
+    shortfall: 0,
+    pendingWithdrawal: null,
+  };
+
+  if (write) {
+    await lockAffiliateWallet(referrerUserId, queryable);
+    await reverseRevenueEvent(order.id, queryable);
+  }
+
+  const period = await findAffiliatePeriod({ referrerUserId, monthKey, forUpdate: write }, queryable);
+  if (!period) return { ...base, period: 'not_closed' };
+
+  const prevGross = Math.round(Number(period.gross_revenue || 0));
+  const prevCommission = Math.round(Number(period.commission_amount || 0));
+  const newGross = await sumQualifiedMonthGrossExcludingOrder(
+    { referrerUserId, monthKey, excludeOrderId: order.id },
+    queryable
+  );
+  if (newGross >= prevGross) {
+    return { ...base, period: 'unchanged', prevGross, newGross, prevCommission, newCommission: prevCommission };
+  }
+
+  const tier = resolveTier(newGross);
+  const newCommission = Math.round((newGross * tier.ratePercent) / 100);
+  const need = Math.max(0, prevCommission - newCommission);
+
+  if (write) {
+    await updateAffiliatePeriodAfterRefund({
+      periodId: period.id,
+      grossRevenue: newGross,
+      tierLevel: tier.level,
+      ratePercent: tier.ratePercent,
+      commissionAmount: newCommission,
+    }, queryable);
+  }
+
+  const balance = await getAffiliateWalletBalance(referrerUserId, queryable);
+  const deducted = Math.min(need, Math.max(0, balance));
+  const shortfall = need - deducted;
+
+  if (write && deducted > 0) {
+    await insertRefundLedgerAdjustment({
+      referrerUserId,
+      amount: -deducted,
+      orderId: order.id,
+      note: `Hoàn tiền đơn #${order.order_code} — điều chỉnh hoa hồng tháng ${monthKey}`,
+    }, queryable);
+  }
+
+  const pending = shortfall > 0 ? await findPendingAffiliateWithdrawal(referrerUserId, queryable) : null;
+
+  return {
+    ...base,
+    period: 'adjusted',
+    prevGross,
+    newGross,
+    prevCommission,
+    newCommission,
+    newTierLevel: tier.level,
+    newRatePercent: tier.ratePercent,
+    balanceBefore: balance,
+    need,
+    deducted,
+    shortfall,
+    pendingWithdrawal: pending
+      ? { id: Number(pending.id), amountGross: Math.round(Number(pending.amount_gross || 0)) }
+      : null,
+  };
+}
+
+function shortfallBlockedError(affiliate) {
+  const w = affiliate.pendingWithdrawal;
+  return httpError(
+    409,
+    'AFFILIATE_SHORTFALL_PENDING_WITHDRAWAL',
+    `Đối tác đang có yêu cầu rút #${w.id} chờ duyệt. Từ chối yêu cầu đó trước (tiền về ví) rồi hoàn lại để trừ đủ, `
+      + `hoặc xác nhận công ty chịu ${formatVnd(affiliate.shortfall)}.`,
+    { affiliate }
+  );
+}
+
 async function assertNoPendingPlanChange(kind, userId, queryable) {
   if (kind !== 'paid' || !userId) return;
   const pending = await findPendingScheduledPlanChange(userId, queryable);
@@ -157,7 +280,8 @@ export async function previewRefund(orderCode) {
     const userId = await resolveOrderUserId(order, db);
     await assertNoPendingPlanChange(kind, userId, db);
     const consequences = await evaluateConsequences({ order, kind, userId }, db);
-    return { ...summary, eligible: true, ...consequences, affiliate: null };
+    const affiliate = await applyAffiliateImpact(order, { write: false }, db);
+    return { ...summary, eligible: true, ...consequences, affiliate };
   } catch (err) {
     if (err && err.status && err.status < 500 && err.code !== 'NOT_FOUND') {
       return { ...summary, eligible: false, code: err.code, reason: err.message };
@@ -171,7 +295,7 @@ export async function previewRefund(orderCode) {
  * Thứ tự khoá giống webhook (payment.service.js handleWebhook): user → order.
  */
 export async function refundOrder({
-  orderCode, adminUserId, reason, transferRef = null,
+  orderCode, adminUserId, reason, transferRef = null, acknowledgeShortfall = false,
 }) {
   const trimmedReason = String(reason ?? '').trim();
   if (!trimmedReason) throw httpError(400, 'REASON_REQUIRED', 'Vui lòng nhập lý do hoàn tiền');
@@ -228,6 +352,15 @@ export async function refundOrder({
     if (consequences.einvoice === 'cancelled') {
       await cancelUnissuedEinvoiceForRefund(order.id, client);
     }
+
+    // Mục 2.2 — hoa hồng. Thiếu hụt mà đối tác còn yêu cầu rút đang chờ: KHÔNG tự từ chối yêu cầu
+    // (việc của kế toán, có gửi lý do cho đối tác) — chặn 409, ROLLBACK toàn bộ lệnh hoàn.
+    const affiliate = await applyAffiliateImpact(order, { write: true }, client);
+    if (affiliate && affiliate.shortfall > 0 && affiliate.pendingWithdrawal && acknowledgeShortfall !== true) {
+      throw shortfallBlockedError(affiliate);
+    }
+    meta.affiliate = affiliate;
+    await updateRefundMeta(order.id, meta, client);
 
     await client.query('COMMIT');
     result = {
