@@ -129,6 +129,7 @@ const LimitField = ({ label, value, onChange, max, t }) => {
 const EmployeeManagement = () => {
   const { t } = useI18n();
   const [employees, setEmployees]     = useState([]);
+  const [limitMeta, setLimitMeta]     = useState(null); // { used, max, topupSlots, lockedCount, canBuySlot }
   const [isLoading, setIsLoading]     = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -212,6 +213,7 @@ const EmployeeManagement = () => {
       const list = res.data?.data || [];
       loaded = list;
       setEmployees(list);
+      setLimitMeta(res.data?.meta || null);
       // Cập nhật lại selectedEmployee nếu modal đang mở
       if (selectedEmployee) {
         const updated = list.find((e) => e.id === selectedEmployee.id);
@@ -501,6 +503,30 @@ const EmployeeManagement = () => {
         <div>
           <h1 className="text-2xl font-bold text-gray-900">{t('employee.title')}</h1>
           <p className="text-gray-500 mt-1">{t('employee.description')}</p>
+          {limitMeta && (
+            <p className="text-sm text-gray-500 mt-1">
+              <span>
+                {limitMeta.max === null
+                  ? t('employee.slotUsageUnlimited', { used: limitMeta.used })
+                  : t('employee.slotUsage', { used: limitMeta.used, max: limitMeta.max })}
+              </span>
+              {limitMeta.lockedCount > 0 && (
+                <span className="text-amber-600"> {t('employee.slotLockedSuffix', { count: limitMeta.lockedCount })}</span>
+              )}
+              {limitMeta.canBuySlot && (
+                <>
+                  {' · '}
+                  <button
+                    type="button"
+                    onClick={() => navigate('/app/topup')}
+                    className="text-primary-600 hover:text-primary-700 font-medium"
+                  >
+                    {t('employee.buySlotCta')}
+                  </button>
+                </>
+              )}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           <button type="button" onClick={() => fetchEmployees(true)} className="btn btn-secondary" disabled={isRefreshing}>

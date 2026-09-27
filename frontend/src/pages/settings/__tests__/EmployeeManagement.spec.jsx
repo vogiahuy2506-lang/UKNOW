@@ -115,6 +115,12 @@ beforeEach(() => {
   api.getCampaignApprovalThreshold.mockResolvedValue({ data: { data: { threshold: null } } });
 });
 
+/** Như setEmployees, nhưng kèm khối `meta` (khối giới hạn nhân viên) ở lần tải cuối. */
+const setEmployeesWithMeta = (list, meta) => {
+  api.getEmployees.mockReset();
+  api.getEmployees.mockResolvedValue({ data: { success: true, data: list, meta } });
+};
+
 // ── (a) thêm nhân viên xong → tự mở tab Phân quyền ───────────────────────────
 describe('thêm nhân viên xong → tự mở tab Phân quyền', () => {
   it('id trả về là CHUỖI (cột BIGINT) và method: linked → mở đúng nhân viên ở tab Phân quyền, toast linkSuccess', async () => {
@@ -453,7 +459,50 @@ describe('tab Phân quyền: chọn nhanh và lưu', () => {
   });
 });
 
-// ── (f) lỗi vượt trần khi thêm nhân viên có gợi ý mua slot ────────────────────
+// ── (f) khối "giới hạn" trên đầu trang (PLAN 3 sửa nhỏ trước khi bán slot) ────
+describe('khối giới hạn nhân viên trên đầu trang', () => {
+  it('có gói giới hạn → "Đang dùng x/y nhân viên", KHÔNG có nút mua khi canBuySlot=false', async () => {
+    setEmployeesWithMeta([makeEmployee()], { used: 2, max: 3, topupSlots: 0, lockedCount: 0, canBuySlot: false });
+    await renderPage();
+
+    expect(await screen.findByText('Đang dùng 2/3 nhân viên')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mua thêm slot' })).not.toBeInTheDocument();
+  });
+
+  it('có người đang bị khoá → thêm hậu tố "(z đang bị khoá)"', async () => {
+    setEmployeesWithMeta([makeEmployee()], { used: 3, max: 3, topupSlots: 1, lockedCount: 1, canBuySlot: true });
+    await renderPage();
+
+    expect(await screen.findByText('Đang dùng 3/3 nhân viên')).toBeInTheDocument();
+    expect(screen.getByText('(1 đang bị khoá)')).toBeInTheDocument();
+  });
+
+  it('canBuySlot=true → hiện nút "Mua thêm slot" trên đầu trang, bấm vào điều hướng /app/topup', async () => {
+    setEmployeesWithMeta([makeEmployee()], { used: 3, max: 3, topupSlots: 0, lockedCount: 0, canBuySlot: true });
+    const user = await renderPage();
+
+    const headerBuyBtn = await screen.findByRole('button', { name: 'Mua thêm slot' });
+    await user.click(headerBuyBtn);
+    expect(navigateSpy).toHaveBeenCalledWith('/app/topup');
+  });
+
+  it('gói không giới hạn (max=null) → "Đang dùng x nhân viên (Không giới hạn)", không có nút mua dù canBuySlot backend gửi nhầm true', async () => {
+    setEmployeesWithMeta([makeEmployee()], { used: 5, max: null, topupSlots: 0, lockedCount: 0, canBuySlot: false });
+    await renderPage();
+
+    expect(await screen.findByText('Đang dùng 5 nhân viên (Không giới hạn)')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mua thêm slot' })).not.toBeInTheDocument();
+  });
+
+  it('backend chưa trả meta (bản cũ) → không hiện dòng giới hạn, trang vẫn chạy bình thường', async () => {
+    setEmployees([makeEmployee()]);
+    await renderPage();
+
+    expect(screen.queryByText(/Đang dùng/)).not.toBeInTheDocument();
+  });
+});
+
+// ── (g) lỗi vượt trần khi thêm nhân viên có gợi ý mua slot ────────────────────
 describe('lỗi vượt trần khi thêm nhân viên — gợi ý mua slot', () => {
   it('canBuySlot=false (backend cũ hoặc không bán) → toast.error như cũ, KHÔNG gọi toast.custom', async () => {
     setEmployees([]);

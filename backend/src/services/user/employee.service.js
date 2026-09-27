@@ -23,6 +23,7 @@ import {
 } from '../../repositories/user/employee.repository.js';
 import verificationService from '../verification.service.js';
 import { sumActiveTopupGrants, findTopupPricingByKey } from '../../repositories/payment/topup.repository.js';
+import { countValidLocks } from '../../repositories/payment/topupLock.repository.js';
 import {
   VALID_PERMISSION_KEYS,
   normalizePermissions,
@@ -73,6 +74,34 @@ async function assertCanAddEmployee(ownerId) {
       : `Gói của bạn chỉ cho phép tối đa ${info.effectiveMax} nhân viên. Vui lòng nâng cấp gói để thêm nhân viên.`;
     throw { status: 403, message, code: 'EMPLOYEE_LIMIT_REACHED', canBuySlot };
   }
+}
+
+/**
+ * Khối "giới hạn" hiển thị ở trang Nhân viên — cùng công thức với assertCanAddEmployee
+ * (computeEmployeeLimitInfo), cộng thêm lockedCount (đang bị khoá do slot hết hạn/hạ gói) và
+ * canBuySlot (mặt hàng 'employees' có đang bán không) để FE hiện đúng nút "Mua thêm slot".
+ *
+ * @param {number} ownerId
+ * @returns {Promise<{used: number, max: number|null, topupSlots: number, lockedCount: number, canBuySlot: boolean}>}
+ *   max = null nghĩa là KHÔNG giới hạn.
+ */
+export async function getEmployeeLimitMeta(ownerId) {
+  const info = await computeEmployeeLimitInfo(ownerId);
+  const [lockedCount, pricing] = await Promise.all([
+    countValidLocks(ownerId, 'employees'),
+    findTopupPricingByKey('employees'),
+  ]);
+  const max = !info.hasActivePlan ? 0 : (info.maxEmployees === -1 ? null : info.effectiveMax);
+  // Gói không giới hạn (max=null) hoặc chưa có gói hoạt động: mua thêm slot không có ý nghĩa,
+  // đừng gợi ý nút "Mua thêm slot" dù mặt hàng đang được bán cho các gói có trần.
+  const canBuySlot = info.hasActivePlan && info.maxEmployees !== -1 && Boolean(pricing?.isActive);
+  return {
+    used: info.current,
+    max,
+    topupSlots: info.topupSlots,
+    lockedCount,
+    canBuySlot,
+  };
 }
 
 // Bỏ ký tự dễ đọc nhầm khi chủ shop đọc mật khẩu cho nhân viên: 0/O, 1/l/I.

@@ -334,6 +334,56 @@ describe('POST /api/employees', () => {
     expect(res.body.message).toBe('Bạn đã dùng hết 2 chỗ nhân viên. Mua thêm slot nhân viên (75.000đ/tháng) hoặc nâng cấp gói để thêm người.');
   });
 
+  it('GET /employees trả thêm khối meta {used, max, topupSlots, lockedCount, canBuySlot}, KHÔNG đổi hình dạng data', async () => {
+    const { owner, token } = await setupOwnerWithPlan({ maxEmployees: 3 });
+    const e1 = await createUser({ username: 'm1', role: 'user' });
+    const e2 = await createUser({ username: 'm2', role: 'user' });
+    await addMembership(owner.id, e1.id, { status: 'active' });
+    await addMembership(owner.id, e2.id, { status: 'active' });
+    const { rows: [membership2] } = await db.query(
+      `SELECT id FROM user_members WHERE owner_id = $1 AND employee_id = $2`,
+      [owner.id, e2.id]
+    );
+    // Khoá thẳng 1 người qua bảng khoá (giả lập slot vừa hết hạn) để kiểm lockedCount.
+    await db.query(
+      `INSERT INTO topup_locked_resources (user_id, resource_key, resource_id) VALUES ($1, 'employees', $2)`,
+      [owner.id, membership2.id]
+    );
+
+    const res = await request(app)
+      .get('/api/employees')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(Array.isArray(res.body.data)).toBe(true);
+    expect(res.body.data).toHaveLength(2);
+    expect(res.body.meta).toEqual({
+      used: 2,
+      max: 3,
+      topupSlots: 0,
+      lockedCount: 1,
+      canBuySlot: false,
+    });
+  });
+
+  it('GET /employees: gói không giới hạn (max_employees=-1) → meta.max=null, canBuySlot LUÔN false dù đang bán', async () => {
+    await db.query(`UPDATE topup_pricing SET is_active = TRUE WHERE item_key = 'employees'`);
+    const plan = await createPlan({ maxEmployees: -1 });
+    const owner = await createUser({ username: 'owner-unlimited', role: 'user' });
+    await assignPlanToUser(owner.id, plan.id);
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .get('/api/employees')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.meta.max).toBeNull();
+    expect(res.body.meta.used).toBe(0);
+    // Mua thêm slot không có ý nghĩa khi đã không giới hạn — dù mặt hàng đang bán, đừng gợi ý mua.
+    expect(res.body.meta.canBuySlot).toBe(false);
+  });
+
   it('nhân viên có tài khoản đã xoá mềm KHÔNG chiếm suất và KHÔNG hiện trong danh sách', async () => {
     // Production 21/09/2026: membership 33 → user 7 (status = 'deleted') vẫn bị đếm là 1/3 suất của tài
     // khoản 1, và hiện trong danh sách nhân viên dưới tên "…_freed_7" không thao tác được gì.

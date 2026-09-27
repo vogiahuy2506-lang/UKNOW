@@ -48,8 +48,11 @@ export async function getEmployees(req, res) {
     if (!ownerId) {
       return res.status(400).json({ success: false, message: 'Thiếu ownerId' });
     }
-    const employees = await employeeService.listEmployees(ownerId);
-    return res.json({ success: true, data: employees });
+    const [employees, meta] = await Promise.all([
+      employeeService.listEmployees(ownerId),
+      employeeService.getEmployeeLimitMeta(ownerId),
+    ]);
+    return res.json({ success: true, data: employees, meta });
   } catch (err) {
     return handleServiceError(res, err);
   }
