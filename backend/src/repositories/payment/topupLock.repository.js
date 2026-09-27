@@ -119,8 +119,8 @@ export async function countValidLocks(userId, resourceKey, queryable = db) {
  *
  * Khoá tài nguyên THÊM VÀO GẦN NHẤT trước (không phải cũ nhất): khách mua slot để thêm một
  * tài nguyên mới, slot hết hạn thì đúng ra phải mất lại đúng tài nguyên mới đó trước, không phải
- * mất tài nguyên họ có sẵn từ đầu. Cùng lý do khi hạ gói — hạ từ Pro xuống Basic thì giữ lại
- * những cái mới nhất, khoá bớt cái cũ.
+ * mất tài nguyên họ có sẵn từ đầu. Hạ gói cũng vậy — hạ từ Pro xuống Basic thì giữ lại những cái
+ * có từ trước, khoá bớt những cái thêm vào sau cùng.
  */
 export async function listUnlockedResourceIds(userId, resourceKey, queryable = db) {
   const table = RESOURCE_TABLE[resourceKey];

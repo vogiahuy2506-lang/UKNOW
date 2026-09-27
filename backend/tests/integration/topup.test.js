@@ -579,4 +579,40 @@ describe('Top-up mid-cycle', () => {
     expect(lockedRows.map((r) => Number(r.resource_id))).not.toContain(memberships.A);
     expect(lockedRows.map((r) => Number(r.resource_id))).not.toContain(memberships.B);
   });
+
+  // Hai nhánh SQL còn lại của listUnlockedResourceIds (chatbot; landing page đại diện cho nhánh chung
+  // Zalo/email/landing) cũng phải khoá cái thêm vào sau cùng — test trên chỉ phủ nhánh nhân viên.
+  it('reconcile khoá CHATBOT tạo sau cùng khi vượt trần', async () => {
+    const plan = await createPlan({ name: 'Plan trần 2 chatbot', maxChatbots: 2 });
+    const owner = await createUser({ username: 'lockorder-bot-owner', planId: plan.id });
+    const ids = [];
+    for (const name of ['Bot A', 'Bot B', 'Bot C']) {
+      const { rows } = await db.query(
+        `INSERT INTO custom_chatbots (id_user, name, widget_key) VALUES ($1, $2, $3) RETURNING id`,
+        [owner.id, name, `lo_${Date.now()}_${ids.length}`]
+      );
+      ids.push(Number(rows[0].id));
+    }
+
+    const result = await reconcileResourceLocks(owner.id, db);
+    const botLocks = result.locked.filter((l) => l.resourceKey === 'chatbots').map((l) => Number(l.resourceId));
+    expect(botLocks).toEqual([ids[2]]);
+  });
+
+  it('reconcile khoá LANDING PAGE tạo sau cùng khi vượt trần (nhánh chung Zalo/email/landing)', async () => {
+    const owner = await createUser({ username: 'lockorder-lp-owner' });
+    await db.query(`UPDATE users SET max_landing_pages = 2 WHERE id = $1`, [owner.id]);
+    const ids = [];
+    for (const slug of ['lo-a', 'lo-b', 'lo-c']) {
+      const { rows } = await db.query(
+        `INSERT INTO landing_pages (id_user, slug, title, is_published) VALUES ($1, $2, $2, TRUE) RETURNING id`,
+        [owner.id, `${slug}-${Date.now()}`]
+      );
+      ids.push(Number(rows[0].id));
+    }
+
+    const result = await reconcileResourceLocks(owner.id, db);
+    const lpLocks = result.locked.filter((l) => l.resourceKey === 'landing_pages').map((l) => Number(l.resourceId));
+    expect(lpLocks).toEqual([ids[2]]);
+  });
 });
