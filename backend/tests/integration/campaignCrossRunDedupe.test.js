@@ -15,14 +15,16 @@ import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, jest 
  *    `created_at AT TIME ZONE 'Asia/Ho_Chi_Minh'` ép kiểu timestamptz tường minh, cả hai đều phải
  *    cho kết quả ĐÚNG bất kể process.env.TZ là gì.
  *
- * Về mutation (b) "mốc cửa sổ bằng JS Date như cũ": CSDL 5433 (bootstrap.sql) khai báo
- * email_messages/zalo_messages.created_at là TIMESTAMPTZ, còn production là TIMESTAMP không múi
- * giờ (xem project_email_sent_at_luu_gio_utc) — đã xác nhận bằng thực nghiệm (tz_probe): trên cột
- * TIMESTAMPTZ, so sánh bằng tham số JS Date vẫn ra ĐÚNG kết quả dù process.env.TZ là gì, vì node-pg
- * luôn gửi kèm offset chính xác cho kiểu có múi giờ — nghĩa là một test "gửi email thật, kiểm dữ
- * liệu 25 tuổi" KHÔNG thể phân biệt được 2 cách viết trên CSDL 5433 hiện tại (bug chỉ lộ trên cột
- * KHÔNG múi giờ như production). Mutation (b) vì vậy được bắt bằng test kiểm THẲNG câu SQL/tham số
- * (spy vào db.query) — xem describe "Mutation (b)" cuối file — thay vì chờ dữ liệu 25h sai lệch.
+ * [CHÚ THÍCH NÀY VIẾT TRƯỚC PR-T1 (27/09 chiều), NAY ĐÃ SAI MỘT PHẦN — giữ lại để thấy lý do gốc
+ * của Mutation (b), không xoá]: lúc viết, CSDL 5433 (bootstrap.sql) còn khai báo
+ * email_messages/zalo_messages.created_at là TIMESTAMPTZ (khác production, TIMESTAMP không múi
+ * giờ — xem project_email_sent_at_luu_gio_utc), nên trên cột TIMESTAMPTZ, so sánh bằng tham số JS
+ * Date vẫn ra ĐÚNG kết quả dù process.env.TZ là gì (node-pg luôn gửi kèm offset chính xác cho kiểu
+ * có múi giờ) — một test "gửi email thật, kiểm dữ liệu 25 tuổi" khi đó KHÔNG thể phân biệt được 2
+ * cách viết. Từ PR-T1 (commit 21c1c0b9, 27/09 chiều), bootstrap.sql đã đổi 2 cột này sang TIMESTAMP
+ * đúng như production, nên bug NAY CŨNG lộ trên CSDL test — nhưng Mutation (b) vẫn giữ nguyên bằng
+ * test kiểm THẲNG câu SQL/tham số (spy vào db.query, xem describe "Mutation (b)" cuối file) vì đó
+ * là cách bắt lỗi ở tầng code, không phụ thuộc timing/độ trễ của dữ liệu thật.
  */
 
 const mockSendMail = jest.fn().mockResolvedValue({
@@ -108,7 +110,7 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
     const { rows } = await db.query(
       `INSERT INTO email_messages (id_campaign, id_run, id_node, recipient_email, email_step, status, sent_at, created_at)
        VALUES ($1, $2, $3, $4, $5, 'sent', NOW() - ($6::text || ' hours')::interval, NOW() - ($6::text || ' hours')::interval)
-       RETURNING id, created_at`,
+       RETURNING id, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS created_at`,
       [campaignId, runId, nodeId, recipientEmail, emailStep, hoursAgo]
     );
     return rows[0];
@@ -122,7 +124,7 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
        ) VALUES (
          $1, $2, $3, $4, 'phone', $5, $6, $7::jsonb,
          NOW() - ($8::text || ' hours')::interval, NOW() - ($8::text || ' hours')::interval, NOW()
-       ) RETURNING id, created_at`,
+       ) RETURNING id, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS created_at`,
       [
         campaignId, runId, nodeId, channel, recipientValue,
         `tok_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,

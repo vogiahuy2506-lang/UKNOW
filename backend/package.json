@@ -27,10 +27,10 @@
     "lint:fix": "eslint src --fix",
     "test": "NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",
     "test:unit": "NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50%",
-    "test:integration": "NODE_ENV=test DB_POOL_MAX=20 node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000",
+    "test:integration": "TZ=UTC NODE_ENV=test DB_POOL_MAX=20 node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000",
     "test:all": "npm run test:unit && npm run test:integration",
     "test:coverage:unit": "NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50% --ci --coverage --coverageDirectory=coverage/unit --coverageReporters=json",
-    "test:coverage:integration": "NODE_ENV=test DB_POOL_MAX=20 node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000 --ci --coverage --coverageDirectory=coverage/integration --coverageReporters=json",
+    "test:coverage:integration": "TZ=UTC NODE_ENV=test DB_POOL_MAX=20 node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=integration --runInBand --forceExit --testTimeout=20000 --ci --coverage --coverageDirectory=coverage/integration --coverageReporters=json",
     "test:coverage": "npm run test:coverage:unit && npm run test:coverage:integration && node scripts/mergeCoverage.js"
   },
   "jest": {

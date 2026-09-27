@@ -649,7 +649,7 @@ describe('PR-Q2: Atomic Send Quota Decision Engine & Concurrency Integration', (
     const pastCycleDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000);
     await db.query(
       `INSERT INTO email_messages (id_campaign, recipient_email, status, sent_at)
-       VALUES ($1, 'past_cycle@test.vn', 'sent', $2)`,
+       VALUES ($1, 'past_cycle@test.vn', 'sent', ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))`,
       [campaignId, pastCycleDate]
     );
 
@@ -658,7 +658,7 @@ describe('PR-Q2: Atomic Send Quota Decision Engine & Concurrency Integration', (
     const yesterdaySentAt = new Date(vnDayStart.getTime() - 10 * 60 * 1000);
     await db.query(
       `INSERT INTO email_messages (id_campaign, recipient_email, status, sent_at)
-       VALUES ($1, 'past_day@test.vn', 'sent', $2)`,
+       VALUES ($1, 'past_day@test.vn', 'sent', ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))`,
       [campaignId, yesterdaySentAt]
     );
 

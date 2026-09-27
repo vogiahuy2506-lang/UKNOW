@@ -29,7 +29,7 @@ const AFTER_DAY = new Date('2026-09-23T00:00:01+07:00');
 async function insertEmailMessage({ settingId, status = 'sent', isPreview = false, sentAt = IN_DAY }) {
   const { rows } = await db.query(
     `INSERT INTO email_messages (id_email_setting, status, is_preview, sent_at)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
+     VALUES ($1, $2, $3, ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')) RETURNING id`,
     [settingId, status, isPreview, sentAt]
   );
   return rows[0].id;
@@ -38,7 +38,7 @@ async function insertEmailMessage({ settingId, status = 'sent', isPreview = fals
 async function insertZaloMessage({ accountId, trackingStatus = 'sent', isPreview = false, sentAt = IN_DAY }) {
   const { rows } = await db.query(
     `INSERT INTO zalo_messages (account_id, tracking_metadata, is_preview, sent_at)
-     VALUES ($1, $2::jsonb, $3, $4) RETURNING id`,
+     VALUES ($1, $2::jsonb, $3, ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')) RETURNING id`,
     [accountId, JSON.stringify({ status: trackingStatus }), isPreview, sentAt]
   );
   return rows[0].id;

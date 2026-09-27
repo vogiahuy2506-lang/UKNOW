@@ -7,9 +7,11 @@
  * d) countEmailSentToday (A, CURRENT_DATE) và countEmailSentTodayWithLedger (B) cùng đếm một thư
  *    gửi 06:00 VN hôm nay vào cùng một ngày.
  *
- * Chạy với process.env.TZ = 'UTC' (đặt ở beforeAll, trả lại ở afterAll) để mô phỏng đúng container
- * production — nếu code lỡ dựa vào timezone tiến trình thay vì tính bằng UTC-offset tường minh
- * (kiểu nextVnMidnight/getVnDayBoundaries), test này bắt được ngay.
+ * Cần chạy với process ở múi giờ UTC (mô phỏng container production) — nếu code lỡ dựa vào timezone
+ * tiến trình thay vì tính bằng UTC-offset tường minh (kiểu nextVnMidnight/getVnDayBoundaries), test
+ * này bắt được ngay. `npm run test:integration`/`test:coverage:integration` đã đặt `TZ=UTC` ở ĐẦU
+ * script (package.json) nên tự động đúng; `beforeAll` bên dưới chỉ là lưới an toàn cho ai gọi thẳng
+ * `jest` bỏ qua script npm — xem giải thích chi tiết ngay trước `beforeAll`.
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import db from '../../src/config/database.js';
@@ -52,12 +54,12 @@ function vnTodayAt(hour, minute = 0) {
 // ĐÃ KIỂM 27/09: `process.env.TZ = 'UTC'` gán TRONG beforeAll KHÔNG có tác dụng — V8 chốt
 // timezone hệ thống lúc tiến trình Node khởi động (đọc /etc/localtime một lần), gán lại biến môi
 // trường SAU đó không đổi được `Date.prototype.getHours()`/`Intl` nữa (đã đo bằng PROBE trên
-// chính máy này: gán trong beforeAll thì d.getHours() vẫn trả 8, Intl vẫn "Asia/Saigon"). Máy dev
-// Mac chạy +07 (đúng như mục 1 của plan mô tả) nên bài test này BẮT BUỘC phải chạy với biến môi
-// trường TZ=UTC đặt Ở SHELL, TRƯỚC khi node khởi động — ví dụ:
-//   TZ=UTC npm run test:integration -- tests/integration/emailSentAtVnTimezone.test.js
-// beforeAll dưới đây chỉ XÁC NHẬN điều đó đã được làm đúng, KHÔNG tự gán TZ (gán không tác dụng gì
-// và làm người đọc tưởng nhầm là đã mô phỏng được container UTC).
+// chính máy này: gán trong beforeAll thì d.getHours() vẫn trả 8, Intl vẫn "Asia/Saigon"). Chỉ có
+// cách đặt biến môi trường TZ=UTC Ở SHELL, TRƯỚC khi node khởi động, mới có tác dụng — từ 27/09
+// chiều, `npm run test:integration`/`test:coverage:integration` (package.json) đã tự đặt sẵn
+// `TZ=UTC` ở đầu script nên chạy bình thường qua npm là đủ. beforeAll dưới đây chỉ XÁC NHẬN điều đó
+// đúng — chỉ nổ khi ai gọi thẳng `node .../jest.js` bỏ qua script npm (khi đó không có TZ=UTC), để
+// báo lỗi rõ thay vì âm thầm chạy sai múi giờ và cho kết quả xanh giả trên máy dev +07.
 beforeAll(() => {
   const isReallyUtc = new Date().getTimezoneOffset() === 0
     && Intl.DateTimeFormat().resolvedOptions().timeZone === 'UTC';

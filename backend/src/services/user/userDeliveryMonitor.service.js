@@ -439,12 +439,15 @@ export async function getRunFailures({ userId, runId }) {
   const recipientAudit = runRows[0]?.run_metadata?.recipientAudit || null;
 
   // 2. Lấy lỗi Zalo
+  // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, SỬA 27/09 chiều — cùng loại C với em.sent_at/created_at
+  // (khối email ngay dưới), bị sót ở lượt PR-T1 đầu: zm.sent_at/zm.created_at đều không múi giờ
+  // (production 27/09), node-pg đọc thô như giờ tiến trình. Bọc AT TIME ZONE để trả đúng giờ VN.
   const zaloRows = await safeQuery(
     `SELECT
        zm.recipient_value AS recipient,
        zm.tracking_metadata->>'error' AS error,
        COUNT(*)::int AS count,
-       MAX(COALESCE(zm.sent_at, zm.created_at)) AS last_at,
+       (MAX(COALESCE(zm.sent_at, zm.created_at)) AT TIME ZONE 'Asia/Ho_Chi_Minh') AS last_at,
        crrs.meta->>'lastFailureReason' AS ledger_reason,
        crrs.last_completed_step AS ledger_step
      FROM zalo_messages zm
