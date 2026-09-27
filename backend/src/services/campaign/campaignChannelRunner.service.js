@@ -204,6 +204,8 @@ export async function runAdapterSendNode(ctx) {
     lastOutputItems = [],
     getRecipientProgress,
     markRecipientStepCompleted,
+    upsertRecipientProgress,
+    toHoChiMinhIso,
     ensureRunStillRunning,
     quotaGate,
     crossRunDedupeHours = 24,
@@ -223,211 +225,260 @@ export async function runAdapterSendNode(ctx) {
 
   let hasSentAny = false;
 
-  for (const recipient of recipients) {
-    await ensureRunStillRunning();
-    const recipientKey = String(recipient?.recipientKey || '').trim();
-    if (!recipientKey) continue;
-
-    const progress = await getRecipientProgress({
-      nodeId: node.id,
-      channel: descriptor.key,
-      recipientKey,
-    });
-    // Cộng total ĐÚNG MỘT LẦN — lần đầu thấy người này (chưa có dòng ledger cho run hiện tại),
-    // khuôn R:4381 (email) — không cộng lại mỗi lần executeCampaign gọi lại (resume/chu kỳ sau).
-    if (progress.updatedAt === null) {
-      total += steps.length;
-    }
-
-    let stepIndex = Math.max(0, Number.parseInt(progress.lastCompletedStep, 10) || 0);
-    let stopRecipient = false;
-
-    while (stepIndex < steps.length && !stopRecipient) {
+  // F1 (review vòng 1) — bọc TOÀN BỘ vòng lặp người nhận: lỗi bất kỳ ném ra từ đây (RUN_STOPPED/
+  // RUN_YIELD_SLOT từ ensureRunStillRunning, CHANNEL_QUOTA_NOT_WIRED từ quotaGate.reserve,
+  // quiet_hours/rate_limit/auth/not_configured) đều phải mang theo số đã tích luỹ — không thì
+  // engine cộng 0 dù đã gửi thật, vỡ bất biến ok+failed+skipped ≤ total ở lần resume sau.
+  try {
+    for (const recipient of recipients) {
       await ensureRunStillRunning();
-      const oneBasedStep = stepIndex + 1;
-      const step = steps[stepIndex];
+      const recipientKey = String(recipient?.recipientKey || '').trim();
+      if (!recipientKey) continue;
 
-      // Dedupe: same-run trước, rồi cross-run (repo PR-2) — thấy thì coi bước này đã xong, KHÔNG gửi.
       // eslint-disable-next-line no-await-in-loop
-      let existingSent = await campaignChannelMessageRepository.findExistingSentSameRun({
-        runId,
+      let progress = await getRecipientProgress({
         nodeId: node.id,
         channel: descriptor.key,
         recipientKey,
-        stepIndex: oneBasedStep,
       });
-      if (!existingSent) {
+      // F2 (review vòng 1) — lần đầu thấy người này: cộng total MỘT LẦN (khuôn R:4381 email) RỒI
+      // upsert ngay một dòng ledger (completedStep giữ nguyên, thường 0) — để mọi đường dừng SAU
+      // đây (quiet_hours/rate_limit/quota chưa đấu nối/RUN_STOPPED) không làm resume cộng total
+      // lần nữa: updatedAt của người này đã khác NULL kể từ dòng này trở đi.
+      if (progress.updatedAt === null) {
+        total += steps.length;
         // eslint-disable-next-line no-await-in-loop
-        existingSent = await campaignChannelMessageRepository.findExistingSentCrossRun({
-          ownRunId: runId,
-          campaignId,
+        await upsertRecipientProgress({
           nodeId: node.id,
           channel: descriptor.key,
           recipientKey,
-          stepIndex: oneBasedStep,
-          windowHours: crossRunDedupeHours,
-        });
-      }
-      if (existingSent) {
-        // eslint-disable-next-line no-await-in-loop
-        await markRecipientStepCompleted({
-          nodeId: node.id,
-          channel: descriptor.key,
-          recipientKey,
-          completedStep: oneBasedStep,
+          completedStep: progress.lastCompletedStep,
           totalSteps: steps.length,
-          progress,
         });
-        skipped += 1;
-        stepIndex += 1;
-        continue;
-      }
-
-      // Pacing 1: quiet hours — trong khung thì dừng CẢ NODE (không phải chỉ người này).
-      if (isWithinQuietHours(Date.now(), descriptor.policy?.quietHours)) {
-        const quietError = new ChannelSendError(
-          'quiet_hours',
-          `Kênh ${descriptor.key} đang trong khung giờ yên lặng, dừng node ${node.id}.`
-        );
-        quietError.code = 'CHANNEL_QUIET_HOURS';
-        throw quietError;
-      }
-
-      // Pacing 2: perHourLimit — chờ nếu ≤ 60s, dừng cả node nếu lâu hơn.
-      const waitMs = computePerHourWaitMs(perHourKey, descriptor.policy?.perHourLimit, Date.now());
-      if (waitMs > 0) {
-        if (waitMs <= PER_HOUR_MAX_WAIT_MS) {
-          // eslint-disable-next-line no-await-in-loop
-          await sleep(waitMs);
-        } else {
-          const rateLimitError = new ChannelSendError(
-            'rate_limit',
-            `Kênh ${descriptor.key} account=${account?.accountKey} đã chạm trần `
-            + `${descriptor.policy.perHourLimit} tin/giờ, chờ ${Math.ceil(waitMs / 1000)}s (> 60s) → dừng node.`
-          );
-          rateLimitError.code = 'CHANNEL_RATE_LIMIT';
-          throw rateLimitError;
-        }
-      }
-
-      // Delay ngẫu nhiên giữa 2 lần gửi — KHÔNG áp cho tin đầu tiên của cả node.
-      if (hasSentAny) {
-        const delayMs = randomDelayMs(descriptor.policy?.minDelayMs, descriptor.policy?.maxDelayMs);
-        if (delayMs > 0) {
-          // eslint-disable-next-line no-await-in-loop
-          await sleep(delayMs);
-        }
-      }
-
-      const text = neutralizeUnresolvedTemplateVariables(
-        renderTemplateText(step?.message, recipient.vars || {}),
-        { campaignId, nodeId: node.id }
-      );
-
-      // reserve() TRƯỚC insertQueued — lỗi ở đây (vd CHANNEL_QUOTA_NOT_WIRED khi engine chưa đấu
-      // nối quota thật, Việc 4) LUÔN dừng cả node ngay, KHÔNG đi qua classifyError: đây là lỗi hạ
-      // tầng, không phải lỗi gửi của riêng người nhận này.
-      // eslint-disable-next-line no-await-in-loop
-      const reservationId = await quotaGate.reserve({
-        channel: descriptor.quotaChannel,
-        quantity: 1,
-        userId,
-        workspaceOwnerId,
-      });
-
-      let messageId = null;
-      try {
         // eslint-disable-next-line no-await-in-loop
-        messageId = await campaignChannelMessageRepository.insertQueued({
-          campaignId,
+        progress = await getRecipientProgress({ nodeId: node.id, channel: descriptor.key, recipientKey });
+      }
+
+      let stepIndex = Math.max(0, Number.parseInt(progress.lastCompletedStep, 10) || 0);
+      let stopRecipient = false;
+
+      while (stepIndex < steps.length && !stopRecipient) {
+        await ensureRunStillRunning();
+        const oneBasedStep = stepIndex + 1;
+        const step = steps[stepIndex];
+
+        // Dedupe: same-run trước, rồi cross-run (repo PR-2) — thấy thì coi bước này đã xong, KHÔNG gửi.
+        // eslint-disable-next-line no-await-in-loop
+        let existingSent = await campaignChannelMessageRepository.findExistingSentSameRun({
           runId,
           nodeId: node.id,
           channel: descriptor.key,
-          accountKey: account?.accountKey,
           recipientKey,
-          recipientDisplay: recipient.display,
-          stepIndex: oneBasedStep,
-          workspaceOwnerId,
-          actorUserId: userId,
-        });
-        // eslint-disable-next-line no-await-in-loop
-        const sendResult = await descriptor.adapter.sendOne({
-          account,
-          recipientKey,
-          text,
           stepIndex: oneBasedStep,
         });
-        // eslint-disable-next-line no-await-in-loop
-        await campaignChannelMessageRepository.markSent(messageId, {
-          providerMessageId: sendResult?.messageId || null,
-        });
-        if (reservationId) {
+        if (!existingSent) {
           // eslint-disable-next-line no-await-in-loop
-          await quotaGate.consume(reservationId);
-        }
-        hasSentAny = true;
-        recordSendTimestamp(perHourKey, Date.now());
-        // eslint-disable-next-line no-await-in-loop
-        await markRecipientStepCompleted({
-          nodeId: node.id,
-          channel: descriptor.key,
-          recipientKey,
-          completedStep: oneBasedStep,
-          totalSteps: steps.length,
-          progress,
-        });
-        success += 1;
-        outputItems.push({
-          ...recipient,
-          status: 'sent',
-          stepIndex: oneBasedStep,
-          messageId: sendResult?.messageId || null,
-        });
-      } catch (sendError) {
-        if (reservationId) {
-          try {
-            // eslint-disable-next-line no-await-in-loop
-            await quotaGate.release(reservationId);
-          } catch (releaseError) {
-            console.warn('[CampaignChannelRunner] quotaGate.release lỗi:', releaseError?.message);
-          }
-        }
-        if (sendError?.code === 'RUN_STOPPED' || sendError?.code === 'RUN_YIELD_SLOT') throw sendError;
-
-        const category = sendError instanceof ChannelSendError
-          ? sendError.category
-          : descriptor.adapter.classifyError(sendError);
-        if (messageId) {
-          // eslint-disable-next-line no-await-in-loop
-          await campaignChannelMessageRepository.markFailed(messageId, {
-            errorCategory: category,
-            errorMessage: sendError?.message || String(sendError),
+          existingSent = await campaignChannelMessageRepository.findExistingSentCrossRun({
+            ownRunId: runId,
+            campaignId,
+            nodeId: node.id,
+            channel: descriptor.key,
+            recipientKey,
+            stepIndex: oneBasedStep,
+            windowHours: crossRunDedupeHours,
           });
         }
-        failed += 1;
-        outputItems.push({
-          ...recipient,
-          status: 'failed',
-          stepIndex: oneBasedStep,
-          errorCategory: category,
-        });
-
-        if (category === 'hard' || category === 'transient') {
-          // v1 KHÔNG retry — bỏ người này, đi tiếp người sau (không thử step tiếp theo của họ).
-          stopRecipient = true;
+        if (existingSent) {
+          // eslint-disable-next-line no-await-in-loop
+          await markRecipientStepCompleted({
+            nodeId: node.id,
+            channel: descriptor.key,
+            recipientKey,
+            completedStep: oneBasedStep,
+            totalSteps: steps.length,
+            progress,
+          });
+          skipped += 1;
+          stepIndex += 1;
+          // F3 (review vòng 1) — đọc lại progress SAU KHI ledger vừa cập nhật (cache được làm mới
+          // ngay trong upsertRecipientProgress, khuôn R:1929) — bước kế không được dùng object
+          // progress cũ (firstSentAt/lastCompletedStep đã lệch với DB).
+          // eslint-disable-next-line no-await-in-loop
+          progress = await getRecipientProgress({ nodeId: node.id, channel: descriptor.key, recipientKey });
           continue;
         }
 
-        // 'rate_limit' | 'auth' | 'not_configured' — dừng CẢ NODE.
-        const stopError = new Error(
-          sendError?.message || `Kênh ${descriptor.key} dừng node ${node.id} (${category}).`
-        );
-        stopError.code = `CHANNEL_${String(category).toUpperCase()}`;
-        throw stopError;
-      }
+        // Pacing 1: quiet hours — trong khung thì dừng CẢ NODE (không phải chỉ người này).
+        if (isWithinQuietHours(Date.now(), descriptor.policy?.quietHours)) {
+          const quietError = new ChannelSendError(
+            'quiet_hours',
+            `Kênh ${descriptor.key} đang trong khung giờ yên lặng, dừng node ${node.id}.`
+          );
+          quietError.code = 'CHANNEL_QUIET_HOURS';
+          throw quietError;
+        }
 
-      stepIndex += 1;
+        // Pacing 2: perHourLimit — chờ nếu ≤ 60s, dừng cả node nếu lâu hơn.
+        const waitMs = computePerHourWaitMs(perHourKey, descriptor.policy?.perHourLimit, Date.now());
+        if (waitMs > 0) {
+          if (waitMs <= PER_HOUR_MAX_WAIT_MS) {
+            // eslint-disable-next-line no-await-in-loop
+            await sleep(waitMs);
+          } else {
+            const rateLimitError = new ChannelSendError(
+              'rate_limit',
+              `Kênh ${descriptor.key} account=${account?.accountKey} đã chạm trần `
+              + `${descriptor.policy.perHourLimit} tin/giờ, chờ ${Math.ceil(waitMs / 1000)}s (> 60s) → dừng node.`
+            );
+            rateLimitError.code = 'CHANNEL_RATE_LIMIT';
+            throw rateLimitError;
+          }
+        }
+
+        // Delay ngẫu nhiên giữa 2 lần gửi — KHÔNG áp cho tin đầu tiên của cả node.
+        if (hasSentAny) {
+          const delayMs = randomDelayMs(descriptor.policy?.minDelayMs, descriptor.policy?.maxDelayMs);
+          if (delayMs > 0) {
+            // eslint-disable-next-line no-await-in-loop
+            await sleep(delayMs);
+          }
+        }
+
+        const text = neutralizeUnresolvedTemplateVariables(
+          renderTemplateText(step?.message, recipient.vars || {}),
+          { campaignId, nodeId: node.id }
+        );
+
+        // reserve() TRƯỚC insertQueued — lỗi ở đây (vd CHANNEL_QUOTA_NOT_WIRED khi engine chưa đấu
+        // nối quota thật, Việc 4) LUÔN dừng cả node ngay, KHÔNG đi qua classifyError: đây là lỗi hạ
+        // tầng, không phải lỗi gửi của riêng người nhận này.
+        // eslint-disable-next-line no-await-in-loop
+        const reservationId = await quotaGate.reserve({
+          channel: descriptor.quotaChannel,
+          quantity: 1,
+          userId,
+          workspaceOwnerId,
+        });
+
+        let messageId = null;
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          messageId = await campaignChannelMessageRepository.insertQueued({
+            campaignId,
+            runId,
+            nodeId: node.id,
+            channel: descriptor.key,
+            accountKey: account?.accountKey,
+            recipientKey,
+            recipientDisplay: recipient.display,
+            stepIndex: oneBasedStep,
+            workspaceOwnerId,
+            actorUserId: userId,
+          });
+          // eslint-disable-next-line no-await-in-loop
+          const sendResult = await descriptor.adapter.sendOne({
+            account,
+            recipientKey,
+            text,
+            stepIndex: oneBasedStep,
+          });
+          // eslint-disable-next-line no-await-in-loop
+          await campaignChannelMessageRepository.markSent(messageId, {
+            providerMessageId: sendResult?.messageId || null,
+          });
+          if (reservationId) {
+            // eslint-disable-next-line no-await-in-loop
+            await quotaGate.consume(reservationId);
+          }
+          hasSentAny = true;
+          recordSendTimestamp(perHourKey, Date.now());
+          // eslint-disable-next-line no-await-in-loop
+          await markRecipientStepCompleted({
+            nodeId: node.id,
+            channel: descriptor.key,
+            recipientKey,
+            completedStep: oneBasedStep,
+            totalSteps: steps.length,
+            progress,
+          });
+          success += 1;
+          outputItems.push({
+            ...recipient,
+            status: 'sent',
+            stepIndex: oneBasedStep,
+            messageId: sendResult?.messageId || null,
+          });
+          // F3 — đọc lại progress sau khi bước này hoàn tất (cache đã làm mới), để bước kế (nếu
+          // còn) nhận đúng firstSentAt thay vì object progress đọc từ TRƯỚC bước 1.
+          // eslint-disable-next-line no-await-in-loop
+          progress = await getRecipientProgress({ nodeId: node.id, channel: descriptor.key, recipientKey });
+        } catch (sendError) {
+          if (reservationId) {
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              await quotaGate.release(reservationId);
+            } catch (releaseError) {
+              console.warn('[CampaignChannelRunner] quotaGate.release lỗi:', releaseError?.message);
+            }
+          }
+          if (sendError?.code === 'RUN_STOPPED' || sendError?.code === 'RUN_YIELD_SLOT') throw sendError;
+
+          const category = sendError instanceof ChannelSendError
+            ? sendError.category
+            : descriptor.adapter.classifyError(sendError);
+          if (messageId) {
+            // eslint-disable-next-line no-await-in-loop
+            await campaignChannelMessageRepository.markFailed(messageId, {
+              errorCategory: category,
+              errorMessage: sendError?.message || String(sendError),
+            });
+          }
+          failed += 1;
+          outputItems.push({
+            ...recipient,
+            status: 'failed',
+            stepIndex: oneBasedStep,
+            errorCategory: category,
+          });
+
+          if (category === 'hard' || category === 'transient') {
+            // F2 — v1 KHÔNG retry: người này COI NHƯ XONG (bỏ cuộc), ghi ledger completedStep=
+            // totalSteps + lastFailureReason để resume KHÔNG gửi lại (khuôn email bỏ cuộc, R:4118-
+            // 4133) rồi đi tiếp người sau.
+            const nowIso = toHoChiMinhIso();
+            // eslint-disable-next-line no-await-in-loop
+            await upsertRecipientProgress({
+              nodeId: node.id,
+              channel: descriptor.key,
+              recipientKey,
+              completedStep: steps.length,
+              totalSteps: steps.length,
+              firstSentAt: progress?.firstSentAt || nowIso,
+              lastCompletedAt: nowIso,
+              nextDueAt: null,
+              lastFailureReason: category,
+              lastFailureAt: nowIso,
+            });
+            stopRecipient = true;
+            continue;
+          }
+
+          // 'rate_limit' | 'auth' | 'not_configured' — dừng CẢ NODE. KHÔNG upsert ledger thêm ở
+          // đây: dòng "lần đầu thấy" đã đủ chặn đếm total trùng khi resume, và bước dở dang này
+          // PHẢI được thử lại nguyên vẹn (không phải "bỏ cuộc" như hard/transient).
+          const stopError = new Error(
+            sendError?.message || `Kênh ${descriptor.key} dừng node ${node.id} (${category}).`
+          );
+          stopError.code = `CHANNEL_${String(category).toUpperCase()}`;
+          throw stopError;
+        }
+
+        stepIndex += 1;
+      }
     }
+  } catch (loopError) {
+    loopError.partialResult = { total, success, failed, skipped, outputItems };
+    throw loopError;
   }
 
   return { total, success, failed, skipped, outputItems };

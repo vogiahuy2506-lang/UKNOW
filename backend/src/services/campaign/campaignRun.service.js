@@ -8631,23 +8631,42 @@ class CampaignRunService {
         // không được rơi xuống cầu dao rồi bị báo UNSUPPORTED_SEND_NODE oan.
         const adapterDescriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype(nodeSubtype);
         if (adapterDescriptor) {
-          const adapterResult = await campaignChannelRunner.runAdapterSendNode({
-            descriptor: adapterDescriptor,
-            runId,
-            campaignId,
-            userId,
-            workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
-            node,
-            config: node.config || {},
-            nodeOutputs,
-            lastOutputItems,
-            crossRunDedupeHours: this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS,
-            getRecipientProgress,
-            markRecipientStepCompleted,
-            ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
-            logExecutionNode: campaignExecutionLogService.logExecutionNode,
-            quotaGate: this.channelQuotaGate,
-          });
+          let adapterResult;
+          try {
+            adapterResult = await campaignChannelRunner.runAdapterSendNode({
+              descriptor: adapterDescriptor,
+              runId,
+              campaignId,
+              userId,
+              workspaceOwnerId: campaign.workspace_owner_id || campaign.id_user,
+              node,
+              config: node.config || {},
+              nodeOutputs,
+              lastOutputItems,
+              crossRunDedupeHours: this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS,
+              getRecipientProgress,
+              markRecipientStepCompleted,
+              upsertRecipientProgress,
+              toHoChiMinhIso,
+              ensureRunStillRunning: () => this.ensureRunStillRunning(runId),
+              logExecutionNode: campaignExecutionLogService.logExecutionNode,
+              quotaGate: this.channelQuotaGate,
+            });
+          } catch (adapterError) {
+            // F1 (review vòng 1 PR-3) — runner ném lỗi (quiet_hours/rate_limit/auth/not_configured/
+            // CHANNEL_QUOTA_NOT_WIRED/RUN_STOPPED) vẫn phải cộng số đã tích luỹ trước khi dừng, kẻo
+            // run failed hiển thị 0 gửi dù đã gửi thật và vỡ bất biến ok+failed+skipped ≤ total ở
+            // lần resume sau. `partialResult` do runner tự gắn (giữ nguyên code/instanceof lỗi gốc).
+            if (adapterError?.partialResult) {
+              const pr = adapterError.partialResult;
+              totalRecipients += pr.total;
+              successfulSends += pr.success;
+              failedSends += pr.failed;
+              skippedSends += pr.skipped;
+              await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
+            }
+            throw adapterError;
+          }
 
           totalRecipients += adapterResult.total;
           successfulSends += adapterResult.success;

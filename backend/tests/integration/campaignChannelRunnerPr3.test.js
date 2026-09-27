@@ -11,6 +11,15 @@
  * e) engine: node mock subtype không bị cầu dao PR-1 chặn; preflight gọi checkReadiness
  *    (mock throw → 400 đúng code).
  * f) quotaGate mặc định (không truyền no-op) → run failed CHANNEL_QUOTA_NOT_WIRED, 0 lần gửi.
+ *
+ * Vòng 2 (review vòng 1, F1/F2/F3):
+ * g) rate_limit ở người 3 (5 người x 1 bước) → run failed; total=3 success=2 failed=1 (F1).
+ * h) hard ở người 2 (3 người x 2 bước), resume CÙNG run → lần 2 sendOne 0 lần cho người 2;
+ *    ledger người 2 is_fully_completed + lastFailureReason='hard'; total sau 2 lần = 6 (F2).
+ * i) quiet_hours bao trùm rồi tắt, resume CÙNG run → total không tăng thêm cho người đầu,
+ *    người đó ĐƯỢC gửi ở lần 2 (không bị đánh dấu bỏ cuộc) (F2 nhánh không-xong).
+ * j) 1 người x 2 bước: ledger meta.firstSentAt ≤ lastCompletedAt và khác nhau khi có delay
+ *    giữa 2 bước (F3).
  */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
@@ -364,4 +373,160 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     );
     expect(msgRows[0].n).toBe(0);
   });
+
+  it('(g) mock rate_limit ở người 3 (5 người x 1 bước) -> run failed; total=3 success=2 failed=1 (F1)', async () => {
+    fakeSendOne.mockImplementation(async ({ recipientKey }) => {
+      if (recipientKey === 'peer3') {
+        const err = new Error('peer3 rate limited');
+        err.category = 'rate_limit';
+        throw err;
+      }
+      return { messageId: `mock_msg_${recipientKey}` };
+    });
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({
+      campaignId: campaign.id,
+      config: { recipientSource: 'manual', recipientKeys: FIVE_RECIPIENTS, steps: [{ message: 'Bước 1' }] },
+    });
+    const run = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    const { rows: runRows } = await db.query(
+      `SELECT status, total_recipients, successful_sends, failed_sends, skipped_sends
+       FROM campaign_runs WHERE id = $1`,
+      [run.id]
+    );
+    expect(runRows[0].status).toBe('failed');
+    expect(runRows[0].total_recipients).toBe(3);
+    expect(runRows[0].successful_sends).toBe(2);
+    expect(runRows[0].failed_sends).toBe(1);
+    const { total_recipients: total, successful_sends: ok, failed_sends: bad, skipped_sends: sk } = runRows[0];
+    expect(ok + bad + sk).toBeLessThanOrEqual(total);
+    void node;
+  });
+
+  it('(h) hard ở người 2 (3 người x 2 bước), resume CÙNG run -> lần 2 sendOne 0 lần cho người 2; ledger bỏ cuộc; total sau 2 lần = 6 (F2)', async () => {
+    const THREE_RECIPIENTS = ['peer1', 'peer2', 'peer3'];
+    fakeSendOne.mockImplementation(async ({ recipientKey }) => {
+      if (recipientKey === 'peer2') {
+        const err = new Error('peer2 hard fail');
+        err.category = 'hard';
+        throw err;
+      }
+      return { messageId: `mock_msg_${recipientKey}` };
+    });
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({
+      campaignId: campaign.id,
+      config: { recipientSource: 'manual', recipientKeys: THREE_RECIPIENTS, steps: [{ message: 'B1' }, { message: 'B2' }] },
+    });
+    const run = await insertRun({ campaignId: campaign.id });
+
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    const { rows: afterRun1 } = await db.query(
+      'SELECT status, total_recipients FROM campaign_runs WHERE id = $1',
+      [run.id]
+    );
+    expect(afterRun1[0].status).toBe('completed');
+    expect(afterRun1[0].total_recipients).toBe(6);
+    expect(fakeSendOne).toHaveBeenCalledTimes(5); // peer1(2) + peer2(1, fail) + peer3(2)
+
+    fakeSendOne.mockClear();
+    await db.query(`UPDATE campaign_runs SET status = 'running' WHERE id = $1`, [run.id]);
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    const peer2Calls = fakeSendOne.mock.calls.filter(([arg]) => arg.recipientKey === 'peer2');
+    expect(peer2Calls).toHaveLength(0);
+
+    const { rows: ledgerRows } = await db.query(
+      `SELECT last_completed_step, is_fully_completed, meta FROM campaign_run_recipient_steps
+       WHERE id_run = $1 AND id_node = $2 AND recipient_key = 'peer2'`,
+      [run.id, String(node.id)]
+    );
+    expect(ledgerRows).toHaveLength(1);
+    expect(ledgerRows[0].is_fully_completed).toBe(true);
+    expect(ledgerRows[0].last_completed_step).toBe(2);
+    expect(ledgerRows[0].meta.lastFailureReason).toBe('hard');
+
+    const { rows: afterRun2 } = await db.query(
+      'SELECT total_recipients FROM campaign_runs WHERE id = $1',
+      [run.id]
+    );
+    expect(afterRun2[0].total_recipients).toBe(6);
+  });
+
+  it('(i) quiet_hours bao trùm rồi tắt, resume CÙNG run -> total không tăng thêm cho người đầu, người đó ĐƯỢC gửi ở lần 2 (F2 nhánh không-xong)', async () => {
+    const nowVnHour = new Date(Date.now() + 7 * 60 * 60 * 1000).getUTCHours();
+    campaignChannelRegistry.__resetTestChannels();
+    registerMockChannel({ policy: { quietHours: { startHour: nowVnHour, endHour: (nowVnHour + 23) % 24 } } });
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({
+      campaignId: campaign.id,
+      config: { recipientSource: 'manual', recipientKeys: FIVE_RECIPIENTS, steps: [{ message: 'Bước 1' }] },
+    });
+    const run = await insertRun({ campaignId: campaign.id });
+
+    await runCampaignToCompletion(campaign.id, run.id);
+    expect(fakeSendOne).toHaveBeenCalledTimes(0);
+
+    const { rows: afterRun1 } = await db.query(
+      'SELECT status, total_recipients FROM campaign_runs WHERE id = $1',
+      [run.id]
+    );
+    expect(afterRun1[0].status).toBe('failed');
+    expect(afterRun1[0].total_recipients).toBe(1); // chỉ peer1 (người đầu) kịp "thấy" trước khi dừng
+
+    // Tắt quiet hours rồi resume CÙNG run.
+    campaignChannelRegistry.__resetTestChannels();
+    registerMockChannel({ policy: { quietHours: null } });
+    fakeSendOne.mockClear();
+    await db.query(`UPDATE campaign_runs SET status = 'running' WHERE id = $1`, [run.id]);
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    const peer1Calls = fakeSendOne.mock.calls.filter(([arg]) => arg.recipientKey === 'peer1');
+    expect(peer1Calls.length).toBeGreaterThan(0); // người đầu ĐƯỢC gửi ở lần 2 — không bị đánh dấu bỏ cuộc
+
+    const { rows: afterRun2 } = await db.query(
+      `SELECT status, total_recipients, successful_sends FROM campaign_runs WHERE id = $1`,
+      [run.id]
+    );
+    expect(afterRun2[0].status).toBe('completed');
+    // total = 1 (peer1, từ lần 1, KHÔNG cộng lại) + 4 (peer2-5, lần đầu thấy ở lần 2) = 5.
+    expect(afterRun2[0].total_recipients).toBe(5);
+    expect(afterRun2[0].successful_sends).toBe(5);
+    void node;
+  });
+
+  it('(j) 1 người x 2 bước — ledger meta.firstSentAt ≤ lastCompletedAt và khác nhau khi có delay giữa 2 bước (F3)', async () => {
+    campaignChannelRegistry.__resetTestChannels();
+    registerMockChannel({ policy: { minDelayMs: 1100, maxDelayMs: 1100 } });
+
+    const campaign = await insertCampaign();
+    const node = await insertNode({
+      campaignId: campaign.id,
+      config: { recipientSource: 'manual', recipientKeys: ['peer1'], steps: [{ message: 'B1' }, { message: 'B2' }] },
+    });
+    const run = await insertRun({ campaignId: campaign.id });
+
+    await runCampaignToCompletion(campaign.id, run.id);
+    expect(fakeSendOne).toHaveBeenCalledTimes(2);
+
+    const { rows: ledgerRows } = await db.query(
+      `SELECT meta FROM campaign_run_recipient_steps
+       WHERE id_run = $1 AND id_node = $2 AND recipient_key = 'peer1'`,
+      [run.id, String(node.id)]
+    );
+    expect(ledgerRows).toHaveLength(1);
+    const { firstSentAt, lastCompletedAt } = ledgerRows[0].meta;
+    expect(firstSentAt).toBeTruthy();
+    expect(lastCompletedAt).toBeTruthy();
+    const firstMs = new Date(firstSentAt).getTime();
+    const lastMs = new Date(lastCompletedAt).getTime();
+    expect(firstMs).toBeLessThanOrEqual(lastMs);
+    expect(lastMs - firstMs).toBeGreaterThanOrEqual(900); // delay 1100ms giữa 2 bước, chừa dư sai số
+  }, 20000);
 });
