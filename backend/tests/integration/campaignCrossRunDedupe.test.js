@@ -1,14 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach, afterAll, jest } from '@jest/globals';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, jest } from '@jest/globals';
 
 /**
- * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — cửa sổ chống trùng liên-run.
+ * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26), SỬA 27/09 lần 3 — cửa sổ chống trùng liên-run.
  *
- * Hai nhóm test:
- * 1. Repository-level (email + zalo), CSDL thật, gọi thẳng query mới — kiểm chính xác biên cửa sổ
- *    24h + khoá id_node theo matchNode. Khuôn giống recipientLedger.outOfOrder.test.js.
- * 2. Full integration qua campaignRunService.executeCampaign() thật (chỉ mock nodemailer, khuôn
- *    campaignQuotaMatrix.test.js) — chứng minh quyết định matchNode ("chiến dịch có >1 node cùng
- *    kênh") ở TẦNG SERVICE hoạt động đúng, không chỉ ở tầng repository.
+ * Khoá LUÔN có id_node (không còn nhánh "chiến dịch có >1 node cùng kênh"): lưu flow đổi id_node
+ * là gửi nội dung MỚI cố ý (vụ 396); chỉ dừng lượt rồi tạo lượt mới ngay — CÙNG id_node — mới là
+ * trùng thật (vụ 376→377: 118 người).
+ *
+ * Ba nhóm test:
+ * 1. Repository-level (email + zalo), CSDL thật — biên cửa sổ 24h + khoá id_node.
+ * 2. Full integration qua campaignRunService.executeCampaign() thật (chỉ mock nodemailer).
+ * 3. Múi giờ: describe riêng chạy với process.env.TZ='UTC' (mô phỏng container production) — vì
+ *    mốc cửa sổ tính bằng LOCALTIMESTAMP trong SQL (không nhận JS Date), và giờ gửi cũ đọc bằng
+ *    `created_at AT TIME ZONE 'Asia/Ho_Chi_Minh'` ép kiểu timestamptz tường minh, cả hai đều phải
+ *    cho kết quả ĐÚNG bất kể process.env.TZ là gì.
+ *
+ * Về mutation (b) "mốc cửa sổ bằng JS Date như cũ": CSDL 5433 (bootstrap.sql) khai báo
+ * email_messages/zalo_messages.created_at là TIMESTAMPTZ, còn production là TIMESTAMP không múi
+ * giờ (xem project_email_sent_at_luu_gio_utc) — đã xác nhận bằng thực nghiệm (tz_probe): trên cột
+ * TIMESTAMPTZ, so sánh bằng tham số JS Date vẫn ra ĐÚNG kết quả dù process.env.TZ là gì, vì node-pg
+ * luôn gửi kèm offset chính xác cho kiểu có múi giờ — nghĩa là một test "gửi email thật, kiểm dữ
+ * liệu 25 tuổi" KHÔNG thể phân biệt được 2 cách viết trên CSDL 5433 hiện tại (bug chỉ lộ trên cột
+ * KHÔNG múi giờ như production). Mutation (b) vì vậy được bắt bằng test kiểm THẲNG câu SQL/tham số
+ * (spy vào db.query) — xem describe "Mutation (b)" cuối file — thay vì chờ dữ liệu 25h sai lệch.
  */
 
 const mockSendMail = jest.fn().mockResolvedValue({
@@ -94,10 +108,10 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
     const { rows } = await db.query(
       `INSERT INTO email_messages (id_campaign, id_run, id_node, recipient_email, email_step, status, sent_at, created_at)
        VALUES ($1, $2, $3, $4, $5, 'sent', NOW() - ($6::text || ' hours')::interval, NOW() - ($6::text || ' hours')::interval)
-       RETURNING id`,
+       RETURNING id, created_at`,
       [campaignId, runId, nodeId, recipientEmail, emailStep, hoursAgo]
     );
-    return rows[0].id;
+    return rows[0];
   }
 
   async function insertOldZaloMessage({ campaignId, runId, nodeId, channel, recipientValue, stepIndex = 1, hoursAgo }) {
@@ -108,7 +122,7 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
        ) VALUES (
          $1, $2, $3, $4, 'phone', $5, $6, $7::jsonb,
          NOW() - ($8::text || ' hours')::interval, NOW() - ($8::text || ' hours')::interval, NOW()
-       ) RETURNING id`,
+       ) RETURNING id, created_at`,
       [
         campaignId, runId, nodeId, channel, recipientValue,
         `tok_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -116,15 +130,15 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
         hoursAgo,
       ]
     );
-    return rows[0].id;
+    return rows[0];
   }
 
   // ═════════════════════════════════════════════════════════════════════════
-  // 1. Repository-level — query mới chạy thật trên CSDL 5433
+  // 1. Repository-level — query mới chạy thật trên CSDL 5433, khoá LUÔN có id_node
   // ═════════════════════════════════════════════════════════════════════════
 
   describe('emailSettingsRepository.findExistingSentCampaignEmailCrossRun', () => {
-    it('run A sent 2h trước, run B tra trong cửa sổ 24h, matchNode=false → tìm thấy', async () => {
+    it('run A sent 2h trước, CÙNG id_node → tìm thấy', async () => {
       const campaignId = await insertCampaign('email');
       const runA = await insertRun(campaignId);
       const runB = await insertRun(campaignId);
@@ -134,11 +148,10 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
       const found = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
         ownRunId: runB,
         campaignId,
+        nodeId: 111,
         recipientEmail,
         emailStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        nodeId: 999, // KHÔNG khớp id_node của dòng cũ — vẫn phải tìm thấy vì matchNode=false
-        matchNode: false,
+        windowHours: 24,
       });
 
       expect(found).not.toBeNull();
@@ -155,49 +168,37 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
       const found = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
         ownRunId: runB,
         campaignId,
+        nodeId: 111,
         recipientEmail,
         emailStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        nodeId: 111,
-        matchNode: false,
+        windowHours: 24,
       });
 
       expect(found).toBeNull();
     });
 
-    it('matchNode=true, id_node khớp → tìm thấy; id_node không khớp → không tìm thấy', async () => {
+    it('id_node KHÔNG khớp (lưu flow đổi id_node) → không tìm thấy dù trong 2h', async () => {
       const campaignId = await insertCampaign('email');
       const runA = await insertRun(campaignId);
       const runB = await insertRun(campaignId);
-      const recipientEmail = `pr7b_repo_matchnode_${Date.now()}@example.com`;
+      const recipientEmail = `pr7b_repo_nodemismatch_${Date.now()}@example.com`;
       await insertOldEmailMessage({ campaignId, runId: runA, nodeId: 222, recipientEmail, hoursAgo: 2 });
 
-      const foundMatching = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
+      const found = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
         ownRunId: runB,
         campaignId,
-        recipientEmail,
-        emailStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        nodeId: 222,
-        matchNode: true,
-      });
-      expect(foundMatching).not.toBeNull();
-
-      const foundMismatch = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
-        ownRunId: runB,
-        campaignId,
-        recipientEmail,
-        emailStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
         nodeId: 333,
-        matchNode: true,
+        recipientEmail,
+        emailStep: 1,
+        windowHours: 24,
       });
-      expect(foundMismatch).toBeNull();
+
+      expect(found).toBeNull();
     });
   });
 
   describe('zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun', () => {
-    it('run A sent 2h trước, run B tra trong cửa sổ 24h, matchNode=false → tìm thấy', async () => {
+    it('run A sent 2h trước, CÙNG id_node → tìm thấy', async () => {
       const campaignId = await insertCampaign('zalo');
       const runA = await insertRun(campaignId);
       const runB = await insertRun(campaignId);
@@ -209,12 +210,11 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
       const found = await zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun({
         ownRunId: runB,
         campaignId,
+        nodeId: 111,
         channel: 'zalo_personal',
         recipientKey: phone,
         zaloStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        nodeId: 999,
-        matchNode: false,
+        windowHours: 24,
       });
 
       expect(found).not.toBeNull();
@@ -233,18 +233,17 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
       const found = await zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun({
         ownRunId: runB,
         campaignId,
+        nodeId: 111,
         channel: 'zalo_personal',
         recipientKey: phone,
         zaloStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        nodeId: 111,
-        matchNode: false,
+        windowHours: 24,
       });
 
       expect(found).toBeNull();
     });
 
-    it('matchNode=true, id_node khớp → tìm thấy; id_node không khớp → không tìm thấy', async () => {
+    it('id_node KHÔNG khớp (lưu flow đổi id_node) → không tìm thấy dù trong 2h', async () => {
       const campaignId = await insertCampaign('zalo');
       const runA = await insertRun(campaignId);
       const runB = await insertRun(campaignId);
@@ -253,35 +252,22 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
         campaignId, runId: runA, nodeId: 222, channel: 'zalo_friend_request', recipientValue: phone, hoursAgo: 2,
       });
 
-      const foundMatching = await zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun({
+      const found = await zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun({
         ownRunId: runB,
         campaignId,
-        channel: 'zalo_friend_request',
-        recipientKey: phone,
-        zaloStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
-        nodeId: 222,
-        matchNode: true,
-      });
-      expect(foundMatching).not.toBeNull();
-
-      const foundMismatch = await zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun({
-        ownRunId: runB,
-        campaignId,
-        channel: 'zalo_friend_request',
-        recipientKey: phone,
-        zaloStep: 1,
-        sentSince: new Date(Date.now() - 24 * 60 * 60 * 1000),
         nodeId: 333,
-        matchNode: true,
+        channel: 'zalo_friend_request',
+        recipientKey: phone,
+        zaloStep: 1,
+        windowHours: 24,
       });
-      expect(foundMismatch).toBeNull();
+
+      expect(found).toBeNull();
     });
   });
 
   // ═════════════════════════════════════════════════════════════════════════
   // 2. Full integration qua campaignRunService.executeCampaign() thật (send_email)
-  //    — chứng minh quyết định matchNode ở TẦNG SERVICE (đếm node cùng kênh) đúng.
   // ═════════════════════════════════════════════════════════════════════════
 
   describe('send_email node qua executeCampaign() thật', () => {
@@ -315,18 +301,36 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
       return rows[0].id;
     }
 
-    it('run B trong 2h → bỏ qua (lưu flow đổi id_node giữa 2 lượt vẫn bỏ qua vì chiến dịch chỉ có 1 node/kênh)', async () => {
+    it('lưu flow giữa 2 lượt (id_node đổi) → GỬI (nội dung mới, cố ý — vụ 396)', async () => {
       const { campaignId, emailSettingId } = await setupEmailCampaign();
-      const recipientEmail = `pr7b_e2e_2h_${Date.now()}@example.com`;
+      const recipientEmail = `pr7b_e2e_flowsaved_${Date.now()}@example.com`;
       const nodeId = await insertEmailNode(campaignId, {
         recipientEmails: recipientEmail, executionOrder: 1, fromEmailId: emailSettingId,
       });
 
       const runA = await insertRun(campaignId);
-      // id_node CỐ Ý khác node hiện tại — mô phỏng lưu flow giữa run A và B đổi hết id_node.
+      // id_node CỐ Ý khác node hiện tại — mô phỏng lưu flow giữa run A và B (node cũ đã bị xoá,
+      // thay bằng node mới id khác dù cùng vị trí trong flow).
       await insertOldEmailMessage({
         campaignId, runId: runA, nodeId: nodeId + 987654, recipientEmail, hoursAgo: 2,
       });
+
+      const runB = await insertRun(campaignId);
+      await campaignRunService.executeCampaign(campaignId, runB, user.id);
+
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
+    }, 20000);
+
+    it('dừng lượt A rồi tạo lượt B cùng flow trong 2h (CÙNG id_node) → bỏ qua (mẫu trùng thật 376→377)', async () => {
+      const { campaignId, emailSettingId } = await setupEmailCampaign();
+      const recipientEmail = `pr7b_e2e_samenode_2h_${Date.now()}@example.com`;
+      const nodeId = await insertEmailNode(campaignId, {
+        recipientEmails: recipientEmail, executionOrder: 1, fromEmailId: emailSettingId,
+      });
+
+      const runA = await insertRun(campaignId);
+      // KHÔNG lưu flow giữa 2 lượt — id_node của dòng cũ CHÍNH LÀ node đang chạy ở run B.
+      await insertOldEmailMessage({ campaignId, runId: runA, nodeId, recipientEmail, hoursAgo: 2 });
 
       const runB = await insertRun(campaignId);
       await campaignRunService.executeCampaign(campaignId, runB, user.id);
@@ -336,7 +340,7 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
       expect(rows[0].c).toBe(0);
     }, 20000);
 
-    it('run B sau 25h → cửa sổ hết hạn, gửi lại bình thường', async () => {
+    it('run B sau 25h (cùng id_node) → cửa sổ hết hạn, gửi lại bình thường', async () => {
       const { campaignId, emailSettingId } = await setupEmailCampaign();
       const recipientEmail = `pr7b_e2e_25h_${Date.now()}@example.com`;
       const nodeId = await insertEmailNode(campaignId, {
@@ -351,44 +355,134 @@ describe('Integration — PR-7b cửa sổ chống trùng liên-run (CAMPAIGN_CR
 
       expect(mockSendMail).toHaveBeenCalledTimes(1);
     }, 20000);
+  });
 
-    it('chiến dịch có 2 node send_email, id_node KHỚP → vẫn bỏ qua', async () => {
-      const { campaignId, emailSettingId } = await setupEmailCampaign();
-      const recipientEmail = `pr7b_e2e_2node_match_${Date.now()}@example.com`;
-      const nodeId = await insertEmailNode(campaignId, {
-        recipientEmails: recipientEmail, executionOrder: 1, fromEmailId: emailSettingId,
-      });
-      // Node thứ 2 cùng kênh — không recipient, không chạy thật, chỉ để nâng số node send_email
-      // của chiến dịch lên 2 (kích hoạt nhánh "khoá thêm id_node" ở phía service).
-      await insertEmailNode(campaignId, { recipientEmails: '', executionOrder: 2, fromEmailId: emailSettingId });
+  // ═════════════════════════════════════════════════════════════════════════
+  // 3. Múi giờ — process.env.TZ='UTC' mô phỏng container production
+  // ═════════════════════════════════════════════════════════════════════════
 
+  describe('Múi giờ — process.env.TZ=UTC (mô phỏng container production)', () => {
+    let savedTz;
+
+    beforeAll(() => {
+      savedTz = process.env.TZ;
+      process.env.TZ = 'UTC';
+    });
+
+    afterAll(() => {
+      if (savedTz === undefined) {
+        delete process.env.TZ;
+      } else {
+        process.env.TZ = savedTz;
+      }
+    });
+
+    it('dòng 25h tuổi (TZ=UTC) → cửa sổ tính bằng LOCALTIMESTAMP vẫn đúng, GỬI lại', async () => {
+      const campaignId = await insertCampaign('email');
       const runA = await insertRun(campaignId);
-      await insertOldEmailMessage({ campaignId, runId: runA, nodeId, recipientEmail, hoursAgo: 2 });
-
       const runB = await insertRun(campaignId);
-      await campaignRunService.executeCampaign(campaignId, runB, user.id);
+      const recipientEmail = `pr7b_tzutc_25h_${Date.now()}@example.com`;
+      await insertOldEmailMessage({ campaignId, runId: runA, nodeId: 111, recipientEmail, hoursAgo: 25 });
 
-      expect(mockSendMail).not.toHaveBeenCalled();
-    }, 20000);
-
-    it('chiến dịch có 2 node send_email, id_node KHÔNG khớp → gửi lại (không lấy nhầm ledger của node khác)', async () => {
-      const { campaignId, emailSettingId } = await setupEmailCampaign();
-      const recipientEmail = `pr7b_e2e_2node_mismatch_${Date.now()}@example.com`;
-      const nodeId = await insertEmailNode(campaignId, {
-        recipientEmails: recipientEmail, executionOrder: 1, fromEmailId: emailSettingId,
+      const found = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
+        ownRunId: runB,
+        campaignId,
+        nodeId: 111,
+        recipientEmail,
+        emailStep: 1,
+        windowHours: 24,
       });
-      await insertEmailNode(campaignId, { recipientEmails: '', executionOrder: 2, fromEmailId: emailSettingId });
 
+      expect(found).toBeNull(); // ngoài cửa sổ → phải null → caller sẽ gửi lại
+    });
+
+    it('dòng 2h tuổi (TZ=UTC) → mốc bước sau khi đồng bộ liên-run KHÔNG lệch 7h', async () => {
+      const campaignId = await insertCampaign('email');
       const runA = await insertRun(campaignId);
-      // Dòng cũ do NODE KHÁC gửi (id_node không khớp node đang chạy thật).
-      await insertOldEmailMessage({
-        campaignId, runId: runA, nodeId: nodeId + 555555, recipientEmail, hoursAgo: 2,
+      const runB = await insertRun(campaignId);
+      const recipientEmail = `pr7b_tzutc_no7hdrift_${Date.now()}@example.com`;
+      const oldRow = await insertOldEmailMessage({
+        campaignId, runId: runA, nodeId: 111, recipientEmail, hoursAgo: 2,
+      });
+      const realCreatedAtMs = new Date(oldRow.created_at).getTime();
+
+      const found = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
+        ownRunId: runB,
+        campaignId,
+        nodeId: 111,
+        recipientEmail,
+        emailStep: 1,
+        windowHours: 24,
       });
 
-      const runB = await insertRun(campaignId);
-      await campaignRunService.executeCampaign(campaignId, runB, user.id);
+      expect(found).not.toBeNull();
+      // sent_at_tz phải là CÙNG một thời điểm thật với created_at đã ghi — sai bằng ::timestamptz
+      // (thay vì AT TIME ZONE trần) sẽ lệch đúng 7h dưới TZ=UTC (đã xác nhận bằng thực nghiệm).
+      const diffMs = Math.abs(new Date(found.sent_at_tz).getTime() - realCreatedAtMs);
+      expect(diffMs).toBeLessThan(1000);
+    });
+  });
 
-      expect(mockSendMail).toHaveBeenCalledTimes(1);
-    }, 20000);
+  // ═════════════════════════════════════════════════════════════════════════
+  // Mutation (a) — bỏ id_node khỏi khoá → ca "lưu flow giữa 2 lượt → GỬI" ở trên phải đỏ.
+  // (không cần test riêng — chính test "lưu flow giữa 2 lượt" ở nhóm 2 bắt được mutation này:
+  // bỏ id_node thì hàm sẽ TÌM THẤY dòng cũ id_node khác → không gửi → mockSendMail không được gọi.)
+  //
+  // Mutation (b) — mốc cửa sổ bằng JS Date như cũ. Trên CSDL 5433 (TIMESTAMPTZ), so sánh bằng JS
+  // Date vẫn ra ĐÚNG kết quả bất kể process.env.TZ (đã xác nhận bằng thực nghiệm: node-pg luôn gửi
+  // kèm offset chính xác cho tham số kiểu có múi giờ) — nên một test dữ liệu-thật không phân biệt
+  // được 2 cách viết trên máy này (bug chỉ lộ trên cột KHÔNG múi giờ như production). Bắt mutation
+  // này bằng cách kiểm THẲNG câu SQL thật sự chạy (spy db.query, không thay hành vi).
+  // ═════════════════════════════════════════════════════════════════════════
+
+  describe('Mutation (b) — mốc cửa sổ PHẢI tính trong SQL bằng LOCALTIMESTAMP, không nhận Date từ JS', () => {
+    it('findExistingSentCampaignEmailCrossRun: SQL dùng LOCALTIMESTAMP + make_interval, không bind object Date', async () => {
+      const campaignId = await insertCampaign('email');
+      const runB = await insertRun(campaignId);
+      const querySpy = jest.spyOn(db, 'query');
+
+      await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
+        ownRunId: runB,
+        campaignId,
+        nodeId: 1,
+        recipientEmail: 'probe@example.com',
+        emailStep: 1,
+        windowHours: 24,
+      });
+
+      const call = querySpy.mock.calls.find(([sql]) => sql.includes('FROM email_messages') && sql.includes('id_run <>'));
+      expect(call).toBeDefined();
+      const [sql, params] = call;
+      expect(sql).toMatch(/LOCALTIMESTAMP/);
+      expect(sql).toMatch(/make_interval/);
+      expect(params.some((p) => p instanceof Date)).toBe(false);
+
+      querySpy.mockRestore();
+    });
+
+    it('findExistingSentCampaignZaloMessageCrossRun: SQL dùng LOCALTIMESTAMP + make_interval, không bind object Date', async () => {
+      const campaignId = await insertCampaign('zalo');
+      const runB = await insertRun(campaignId);
+      const querySpy = jest.spyOn(db, 'query');
+
+      await zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun({
+        ownRunId: runB,
+        campaignId,
+        nodeId: 1,
+        channel: 'zalo_personal',
+        recipientKey: '0900000000',
+        zaloStep: 1,
+        windowHours: 24,
+      });
+
+      const call = querySpy.mock.calls.find(([sql]) => sql.includes('FROM zalo_messages') && sql.includes('id_run <>'));
+      expect(call).toBeDefined();
+      const [sql, params] = call;
+      expect(sql).toMatch(/LOCALTIMESTAMP/);
+      expect(sql).toMatch(/make_interval/);
+      expect(params.some((p) => p instanceof Date)).toBe(false);
+
+      querySpy.mockRestore();
+    });
   });
 });

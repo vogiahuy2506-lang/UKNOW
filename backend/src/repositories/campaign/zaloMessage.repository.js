@@ -56,73 +56,73 @@ class ZaloMessageRepository {
   }
 
   /**
-   * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — tra zalo_messages đã gửi ở RUN KHÁC cho cùng
-   * chiến dịch + kênh + người nhận + bước, trong cửa sổ CAMPAIGN_CROSS_RUN_DEDUPE_HOURS. Chống
-   * gửi trùng khi resume/chạy lượt mới (vụ chiến dịch 396: lưu flow đổi id_node giữa 2 lượt).
+   * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26), SỬA 27/09 lần 3 — tra zalo_messages đã gửi ở
+   * RUN KHÁC cho cùng `id_node` + kênh + người nhận + bước, trong cửa sổ
+   * CAMPAIGN_CROSS_RUN_DEDUPE_HOURS. Chống gửi trùng khi dừng lượt rồi tạo lượt mới ngay.
+   *
+   * Luồng hoạt động: xem chú thích ở `findExistingSentCampaignEmailCrossRun` (cùng khuôn) — khoá
+   * LUÔN có `id_node`, mốc cửa sổ tính trong SQL bằng LOCALTIMESTAMP, đọc giờ gửi bằng
+   * `created_at AT TIME ZONE 'Asia/Ho_Chi_Minh'` ép kiểu timestamptz tường minh (KHÔNG dùng
+   * `sent_at`). Khớp người nhận vẫn bằng OR 3 cột như bản cùng-run — không đưa được vào index vì
+   * OR không tận dụng b-tree một cột, nhưng lượng Zalo nhỏ nên chấp nhận Filter sau khi đã lọc
+   * theo id_node/channel/created_at.
    *
    * @param {object} input
    * @param {number} input.ownRunId run hiện tại (loại trừ khỏi kết quả)
    * @param {number} input.campaignId
+   * @param {number|string} input.nodeId node hiện tại — LUÔN LUÔN nằm trong khoá
    * @param {string} input.channel zalo_personal | zalo_group | zalo_friend_request
    * @param {string} input.recipientKey phone, uid, hoặc group_id
    * @param {number} input.zaloStep thứ tự bước 1-based trong node
-   * @param {Date} input.sentSince mốc bắt đầu cửa sổ (đã trừ giờ sẵn ở caller)
-   * @param {number|string} [input.nodeId] chỉ dùng khi matchNode=true
-   * @param {boolean} [input.matchNode] true khi chiến dịch có >1 node gửi cùng kênh
-   * @returns {Promise<{id: number, id_run: number, sent_at: Date|null, created_at: Date}|null>}
+   * @param {number} input.windowHours cửa sổ tính bằng giờ (CAMPAIGN_CROSS_RUN_DEDUPE_HOURS)
+   * @returns {Promise<{id: number, id_run: number, sent_at_tz: Date}|null>}
    */
   async findExistingSentCampaignZaloMessageCrossRun({
     ownRunId,
     campaignId,
+    nodeId,
     channel,
     recipientKey,
     zaloStep,
-    sentSince,
-    nodeId,
-    matchNode,
+    windowHours,
   }) {
     const safeOwnRun = Number.parseInt(ownRunId, 10);
     const safeCampaign = Number.parseInt(campaignId, 10);
+    const safeNode = Number.parseInt(nodeId, 10);
     const safeStep = Number.parseInt(zaloStep, 10);
+    const safeWindowHours = Number.parseInt(windowHours, 10);
     const safeChannel = String(channel || '').trim();
     const recipient = String(recipientKey || '').trim();
     if (
       !Number.isFinite(safeOwnRun)
       || !Number.isFinite(safeCampaign)
+      || !Number.isFinite(safeNode)
       || !Number.isFinite(safeStep)
+      || !Number.isFinite(safeWindowHours)
+      || safeWindowHours <= 0
       || !safeChannel
       || !recipient
-      || !(sentSince instanceof Date)
-      || Number.isNaN(sentSince.getTime())
     ) {
       return null;
     }
-    const params = [safeOwnRun, safeCampaign, safeChannel, recipient, safeStep, sentSince];
-    let nodeClause = '';
-    if (matchNode) {
-      const safeNode = Number.parseInt(nodeId, 10);
-      if (!Number.isFinite(safeNode)) return null;
-      params.push(safeNode);
-      nodeClause = 'AND id_node = $7';
-    }
     const result = await db.query(
-      `SELECT id, id_run, sent_at, created_at
+      `SELECT id, id_run, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamptz AS sent_at_tz
        FROM zalo_messages
        WHERE id_run <> $1
          AND id_campaign = $2
-         AND channel = $3
+         AND id_node = $3
+         AND channel = $4
          AND (tracking_metadata->>'status') = 'sent'
          AND (
-           LOWER(TRIM(COALESCE(recipient_value, ''))) = LOWER(TRIM($4))
-           OR LOWER(TRIM(COALESCE(uid, ''))) = LOWER(TRIM($4))
-           OR TRIM(COALESCE(group_id, '')) = TRIM($4)
+           LOWER(TRIM(COALESCE(recipient_value, ''))) = LOWER(TRIM($5))
+           OR LOWER(TRIM(COALESCE(uid, ''))) = LOWER(TRIM($5))
+           OR TRIM(COALESCE(group_id, '')) = TRIM($5)
          )
-         AND COALESCE(NULLIF(tracking_metadata->>'stepIndex', '')::int, 1) = $5
-         AND created_at >= $6
-         ${nodeClause}
+         AND COALESCE(NULLIF(tracking_metadata->>'stepIndex', '')::int, 1) = $6
+         AND created_at >= LOCALTIMESTAMP - make_interval(hours => $7::int)
        ORDER BY id DESC
        LIMIT 1`,
-      params
+      [safeOwnRun, safeCampaign, safeNode, safeChannel, recipient, safeStep, safeWindowHours]
     );
     return result.rows[0] || null;
   }

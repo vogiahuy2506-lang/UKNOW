@@ -2165,22 +2165,19 @@ class CampaignRunService {
           recipientEmail: emailKey,
           emailStep: step,
         });
-        // PR-7b — không thấy cùng-run thì tra RUN KHÁC trong cửa sổ CAMPAIGN_CROSS_RUN_DEDUPE_HOURS
-        // (0 = tắt). Khoá thêm id_node chỉ khi chiến dịch có >1 node gửi email (lưu flow đổi hết
-        // id_node nên mặc định KHÔNG khoá theo id_node).
+        // PR-7b (SỬA 27/09 lần 3) — không thấy cùng-run thì tra RUN KHÁC trong cửa sổ
+        // CAMPAIGN_CROSS_RUN_DEDUPE_HOURS (0 = tắt). Khoá LUÔN có id_node — lưu flow đổi id_node =
+        // "đổi ý" (nội dung mới, cố ý), không phải trùng; chỉ dừng lượt rồi tạo lượt mới ngay
+        // (cùng id_node) mới bị coi là trùng.
         let isCrossRun = false;
         if (!existing && this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS > 0) {
-          const matchNode = nodes.filter(
-            (n) => String(n.node_subtype || '').toLowerCase() === 'send_email'
-          ).length > 1;
           existing = await emailSettingsRepository.findExistingSentCampaignEmailCrossRun({
             ownRunId: runId,
             campaignId,
+            nodeId: nid,
             recipientEmail: emailKey,
             emailStep: step,
-            sentSince: new Date(Date.now() - this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS * 60 * 60 * 1000),
-            nodeId: nid,
-            matchNode,
+            windowHours: this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS,
           });
           isCrossRun = Boolean(existing);
         }
@@ -2194,13 +2191,12 @@ class CampaignRunService {
           progress,
           steps: Array.isArray(scheduleSteps) ? scheduleSteps : [],
           sendMode: String(sendMode || 'all').trim(),
-          completedAtOverride: isCrossRun ? (existing.sent_at || existing.created_at) : null,
+          completedAtOverride: isCrossRun ? existing.sent_at_tz : null,
         });
         if (isCrossRun) {
-          const oldSentAt = existing.sent_at || existing.created_at;
           console.info(
             `[CampaignRun][CrossRunDedupe] run=${runId} node=${nid} channel=email email=${emailKey} step=${step} `
-            + `run_cu=${existing.id_run} gio_gui=${oldSentAt instanceof Date ? oldSentAt.toISOString() : oldSentAt} `
+            + `run_cu=${existing.id_run} gio_gui=${existing.sent_at_tz.toISOString()} `
             + `id_email_message=${existing.id} — đồng bộ ledger liên-run, bỏ qua gửi lại`
           );
         } else {
@@ -2248,23 +2244,20 @@ class CampaignRunService {
           recipientKey: recipient,
           zaloStep: step,
         });
-        // PR-7b — không thấy cùng-run thì tra RUN KHÁC trong cửa sổ CAMPAIGN_CROSS_RUN_DEDUPE_HOURS
-        // (0 = tắt). Khoá thêm id_node chỉ khi chiến dịch có >1 node gửi cùng kênh (lưu flow đổi
-        // hết id_node nên mặc định KHÔNG khoá theo id_node).
+        // PR-7b (SỬA 27/09 lần 3) — không thấy cùng-run thì tra RUN KHÁC trong cửa sổ
+        // CAMPAIGN_CROSS_RUN_DEDUPE_HOURS (0 = tắt). Khoá LUÔN có id_node — lưu flow đổi id_node =
+        // "đổi ý" (nội dung mới, cố ý), không phải trùng; chỉ dừng lượt rồi tạo lượt mới ngay
+        // (cùng id_node) mới bị coi là trùng.
         let isCrossRun = false;
         if (!existing && this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS > 0) {
-          const matchNode = nodes.filter(
-            (n) => String(n.node_subtype || '').toLowerCase() === `send_${safeChannel}`
-          ).length > 1;
           existing = await zaloMessageRepository.findExistingSentCampaignZaloMessageCrossRun({
             ownRunId: runId,
             campaignId,
+            nodeId: nid,
             channel: safeChannel,
             recipientKey: recipient,
             zaloStep: step,
-            sentSince: new Date(Date.now() - this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS * 60 * 60 * 1000),
-            nodeId: nid,
-            matchNode,
+            windowHours: this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS,
           });
           isCrossRun = Boolean(existing);
         }
@@ -2278,14 +2271,13 @@ class CampaignRunService {
           progress,
           steps: Array.isArray(scheduleSteps) ? scheduleSteps : [],
           sendMode: String(sendMode || 'all').trim(),
-          completedAtOverride: isCrossRun ? (existing.sent_at || existing.created_at) : null,
+          completedAtOverride: isCrossRun ? existing.sent_at_tz : null,
         });
         if (isCrossRun) {
-          const oldSentAt = existing.sent_at || existing.created_at;
           console.info(
             `[CampaignRun][CrossRunDedupe] run=${runId} node=${nid} channel=${safeChannel} `
             + `recipient=${recipient} step=${step} run_cu=${existing.id_run} `
-            + `gio_gui=${oldSentAt instanceof Date ? oldSentAt.toISOString() : oldSentAt} `
+            + `gio_gui=${existing.sent_at_tz.toISOString()} `
             + `id_zalo_message=${existing.id} — đồng bộ ledger liên-run, bỏ qua gửi lại`
           );
         } else {

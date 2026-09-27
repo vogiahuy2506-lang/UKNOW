@@ -402,69 +402,71 @@ class EmailSettingsRepository {
   }
 
   /**
-   * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — tra email_messages đã gửi ở RUN KHÁC cho
-   * cùng chiến dịch + bước + người nhận, trong cửa sổ CAMPAIGN_CROSS_RUN_DEDUPE_HOURS. Chống gửi
-   * trùng khi resume/chạy lượt mới (vụ chiến dịch 396: lưu flow đổi id_node giữa 2 lượt).
+   * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26), SỬA 27/09 lần 3 — tra email_messages đã gửi
+   * ở RUN KHÁC cho cùng `id_node` + bước + người nhận, trong cửa sổ
+   * CAMPAIGN_CROSS_RUN_DEDUPE_HOURS. Chống gửi trùng khi dừng lượt rồi tạo lượt mới ngay (vụ thật
+   * 376→377: 118 người, cùng id_node — KHÁC vụ 396 vốn là gửi nội dung mới cố ý sau khi lưu flow
+   * đổi id_node, không phải bug).
    *
    * Luồng hoạt động:
-   * 1. Loại trừ run hiện tại (`id_run <> ownRunId`), khớp id_campaign + email_step + recipient_email.
-   * 2. Chỉ tính các dòng đã phát đi thực tế, không quá cũ hơn `sentSince`.
-   * 3. Khi chiến dịch có >1 node gửi email (matchNode=true) thì khoá thêm id_node.
+   * 1. Loại trừ run hiện tại (`id_run <> ownRunId`), khớp id_node (LUÔN LUÔN, không có ngoại lệ
+   *    theo số node cùng kênh — lưu flow đổi id_node = "đổi ý", được gửi lại) + email_step +
+   *    recipient_email.
+   * 2. Chỉ tính các dòng đã phát đi thực tế, trong `windowHours` giờ gần nhất — mốc cửa sổ tính
+   *    NGAY TRONG SQL bằng `LOCALTIMESTAMP - make_interval(...)`, KHÔNG nhận Date từ JS: container
+   *    production chạy UTC còn cột này không múi giờ, JS Date bị mất offset khi so sánh làm cửa sổ
+   *    24h thành 31h (xem project_email_sent_at_luu_gio_utc).
+   * 3. Trả về `sent_at_tz` = `created_at` quy đổi sang giờ VN dạng timestamptz (ép kiểu tường minh
+   *    để node-pg luôn đọc đúng bất kể cột nguồn là timestamp hay timestamptz) — dùng cho
+   *    completedAtOverride, KHÔNG dùng `sent_at` (email `sent_at` đang lưu giờ UTC, lệch 7h).
    *
    * @param {object} input
    * @param {number} input.ownRunId run hiện tại (loại trừ khỏi kết quả)
    * @param {number} input.campaignId
+   * @param {number|string} input.nodeId node hiện tại — LUÔN LUÔN nằm trong khoá
    * @param {string} input.recipientEmail
    * @param {number} input.emailStep thứ tự bước 1-based
-   * @param {Date} input.sentSince mốc bắt đầu cửa sổ (đã trừ giờ sẵn ở caller)
-   * @param {number|string} [input.nodeId] chỉ dùng khi matchNode=true
-   * @param {boolean} [input.matchNode] true khi chiến dịch có >1 node gửi email cùng kênh
-   * @returns {Promise<{id: number, id_run: number, sent_at: Date|null, created_at: Date}|null>}
+   * @param {number} input.windowHours cửa sổ tính bằng giờ (CAMPAIGN_CROSS_RUN_DEDUPE_HOURS)
+   * @returns {Promise<{id: number, id_run: number, sent_at_tz: Date}|null>}
    */
   async findExistingSentCampaignEmailCrossRun({
     ownRunId,
     campaignId,
+    nodeId,
     recipientEmail,
     emailStep,
-    sentSince,
-    nodeId,
-    matchNode,
+    windowHours,
   }) {
     const safeOwnRun = Number.parseInt(ownRunId, 10);
     const safeCampaign = Number.parseInt(campaignId, 10);
+    const safeNode = Number.parseInt(nodeId, 10);
     const safeStep = Number.parseInt(emailStep, 10);
+    const safeWindowHours = Number.parseInt(windowHours, 10);
     const email = String(recipientEmail || '').trim();
     if (
       !Number.isFinite(safeOwnRun)
       || !Number.isFinite(safeCampaign)
+      || !Number.isFinite(safeNode)
       || !Number.isFinite(safeStep)
+      || !Number.isFinite(safeWindowHours)
+      || safeWindowHours <= 0
       || !email
-      || !(sentSince instanceof Date)
-      || Number.isNaN(sentSince.getTime())
     ) {
       return null;
     }
-    const params = [safeOwnRun, safeCampaign, safeStep, email, sentSince];
-    let nodeClause = '';
-    if (matchNode) {
-      const safeNode = Number.parseInt(nodeId, 10);
-      if (!Number.isFinite(safeNode)) return null;
-      params.push(safeNode);
-      nodeClause = 'AND id_node = $6';
-    }
     const result = await db.query(
-      `SELECT id, id_run, sent_at, created_at
+      `SELECT id, id_run, (created_at AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamptz AS sent_at_tz
        FROM email_messages
        WHERE id_run <> $1
          AND id_campaign = $2
-         AND email_step = $3
-         AND LOWER(TRIM(recipient_email)) = LOWER(TRIM($4))
+         AND id_node = $3
+         AND email_step = $4
+         AND LOWER(TRIM(recipient_email)) = LOWER(TRIM($5))
          AND status IN ('sent', 'delivered', 'opened', 'clicked')
-         AND created_at >= $5
-         ${nodeClause}
+         AND created_at >= LOCALTIMESTAMP - make_interval(hours => $6::int)
        ORDER BY id DESC
        LIMIT 1`,
-      params
+      [safeOwnRun, safeCampaign, safeNode, safeStep, email, safeWindowHours]
     );
     return result.rows[0] || null;
   }
