@@ -64,6 +64,24 @@ export function getActiveRunPause(runMetadata) {
  * @param {string} [maybeReason]
  * @returns {string}
  */
+// Khung chặn SMTP rate-limit ở backend (campaignRun.service.js EMAIL_RATE_LIMIT_PAUSE_MS = 12h) + 1h dư.
+const SMTP_RATE_LIMIT_PAUSE_WINDOW_MS = 13 * 60 * 60 * 1000;
+
+/**
+ * Review PR-8b — `emailRateLimitAt` ghi MỘT lần mỗi lượt và KHÔNG bao giờ xoá. Chỉ "có" thì một lượt
+ * từng bị chặn 1 lần sẽ mãi hiện "Máy chủ email tạm chặn" kể cả khi sau đó chỉ chờ bước kế theo lịch
+ * (vài ngày). Chỉ coi là chặn SMTP khi mốc chờ nằm trong khung 12h tính từ lúc bị chặn.
+ *
+ * @param {string|null|undefined} emailRateLimitAt
+ * @param {number|null|undefined} untilMs
+ * @returns {boolean}
+ */
+function isSmtpRateLimitPause(emailRateLimitAt, untilMs) {
+  const limitedAtMs = Date.parse(String(emailRateLimitAt || ''));
+  if (!Number.isFinite(limitedAtMs) || !Number.isFinite(untilMs)) return false;
+  return untilMs > limitedAtMs && untilMs - limitedAtMs <= SMTP_RATE_LIMIT_PAUSE_WINDOW_MS;
+}
+
 export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
   const kind = typeof pauseOrKind === 'object' ? pauseOrKind?.kind : pauseOrKind;
   const reason = String(
@@ -93,7 +111,7 @@ export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
     // 'scheduled_step_*'). Dấu hiệu THẬT để phân biệt "đang chờ do SMTP rate-limit 12h" với "đang
     // chờ tới hạn gửi bước sau" thông thường là run_metadata.emailRateLimitAt (campaignRun.service.js
     // :4014) — kiểm TRƯỚC vì cùng dùng chung reason 'all_recipients_waiting_next_due'.
-    if (emailRateLimitAt) {
+    if (isSmtpRateLimitPause(emailRateLimitAt, typeof pauseOrKind === 'object' ? pauseOrKind?.untilMs : null)) {
       return 'campaignRun.smtpPausedUntil';
     }
     if (reason === 'all_recipients_waiting_next_due') {

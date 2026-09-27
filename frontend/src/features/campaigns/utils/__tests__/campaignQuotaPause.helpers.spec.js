@@ -216,8 +216,23 @@ describe('getRunPauseI18nKey', () => {
         kind: 'non_continuous',
         reason: 'all_recipients_waiting_next_due',
         emailRateLimitAt: '2026-09-27T01:00:00.000Z',
+        // Mốc chờ = đúng khung chặn 12h tính từ lúc bị chặn.
+        untilMs: Date.parse('2026-09-27T13:00:00.000Z'),
       })
     ).toBe('campaignRun.smtpPausedUntil');
+  });
+
+  // Review PR-8b — emailRateLimitAt ghi một lần/lượt và KHÔNG xoá: bị chặn 3 ngày trước, giờ chỉ chờ
+  // bước kế theo lịch → KHÔNG được báo "máy chủ email tạm chặn".
+  it('với non_continuous: emailRateLimitAt CŨ (mốc chờ cách xa hơn khung 12h) → waitingNextDueUntil, không phải SMTP', () => {
+    expect(
+      getRunPauseI18nKey({
+        kind: 'non_continuous',
+        reason: 'all_recipients_waiting_next_due',
+        emailRateLimitAt: '2026-09-24T01:00:00.000Z',
+        untilMs: Date.parse('2026-09-28T02:00:00.000Z'),
+      })
+    ).toBe('campaignRun.waitingNextDueUntil');
   });
 
   it('với non_continuous: KHÔNG có emailRateLimitAt → all_recipients_waiting_next_due vẫn ra waitingNextDueUntil (không phải SMTP)', () => {

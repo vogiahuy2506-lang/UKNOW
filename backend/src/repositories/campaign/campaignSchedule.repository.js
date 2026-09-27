@@ -28,7 +28,7 @@ class CampaignScheduleRepository {
          -- PR-8b (UI nói thật) Việc 2 — thêm error_message + cờ tự tắt của lượt gần nhất, để FE
          -- hiện badge "Lỗi lần gần nhất" / "Đã tự tắt sau N lần lỗi" cho mọi loại lịch.
          SELECT cr.status, cr.error_message,
-                COALESCE((cr.run_metadata->>'scheduleAutoDisabled')::boolean, false) AS schedule_auto_disabled
+                (COALESCE(cr.run_metadata->>'scheduleAutoDisabled', '') = 'true') AS schedule_auto_disabled
          FROM campaign_runs cr
          WHERE cr.id_schedule = cs.id
          ORDER BY cr.started_at DESC NULLS LAST, cr.id DESC
@@ -70,7 +70,7 @@ class CampaignScheduleRepository {
        LEFT JOIN LATERAL (
          -- PR-8b (UI nói thật) Việc 2 — xem chú thích ở findAll() (cùng khuôn).
          SELECT cr.status, cr.error_message,
-                COALESCE((cr.run_metadata->>'scheduleAutoDisabled')::boolean, false) AS schedule_auto_disabled
+                (COALESCE(cr.run_metadata->>'scheduleAutoDisabled', '') = 'true') AS schedule_auto_disabled
          FROM campaign_runs cr
          WHERE cr.id_schedule = cs.id
          ORDER BY cr.started_at DESC NULLS LAST, cr.id DESC
