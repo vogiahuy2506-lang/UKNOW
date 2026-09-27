@@ -5708,6 +5708,9 @@ export default {
     scheduleLockedOneTimeTooltip: 'One-time schedule has completed. Create a new schedule to run again',
     scheduleCannotEnableRunningTooltip: 'Cannot enable schedule while campaign is running',
     lastRun: 'Last run',
+    // PR-8b (UI nói thật) Việc 2 — red badge in the "Last run" column, for every schedule type.
+    lastRunFailedBadge: 'Last run failed',
+    scheduleAutoDisabledBadge: 'Auto-disabled after {count} failures',
     nextRun: 'Next run',
     times: 'runs',
     typeOnce: 'Once',

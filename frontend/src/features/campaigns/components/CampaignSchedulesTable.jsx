@@ -1,7 +1,10 @@
 import { HiOutlineSearch, HiOutlineEye, HiOutlineTrash } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { formatCampaignDateTime } from '../utils/campaignDateTime.helpers';
-import { getScheduleCampaignNotActiveWarning } from '../utils/campaignRunSchedule.helpers';
+import {
+  getScheduleCampaignNotActiveWarning,
+  getScheduleLastRunFailureBadgeLabel,
+} from '../utils/campaignRunSchedule.helpers';
 
 /**
  * Bảng hiển thị danh sách lịch chạy đã thiết lập của chiến dịch.
@@ -129,6 +132,13 @@ const CampaignSchedulesTable = ({
                           <div className="text-xs text-gray-500">
                             {schedule.runCount || 0} {t('campaignRun.times')}
                           </div>
+                          {getScheduleLastRunFailureBadgeLabel(schedule, t) && (
+                            <div className="mt-1" title={schedule.lastRunErrorLabel || undefined}>
+                              <span className="badge badge-error text-xs">
+                                {getScheduleLastRunFailureBadgeLabel(schedule, t)}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       ) : (
                         <span className="text-gray-400">—</span>

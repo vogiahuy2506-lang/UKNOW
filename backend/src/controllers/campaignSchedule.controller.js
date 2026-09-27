@@ -16,6 +16,19 @@ import {
   buildCampaignNotActiveMessage,
   isCampaignActiveForSchedule,
 } from '../utils/campaignScheduleActivation.util.js';
+import { labelCampaignRunFailure } from '../utils/campaignRunFailureLabel.util.js';
+
+/**
+ * PR-8b (UI nói thật) Việc 2 — nhãn Việt hoá lỗi lượt gần nhất của lịch, dùng lại
+ * campaignRunFailureLabel.util.js (đã có sẵn từ PR-3/PR-8a) — không chép bảng phân loại lỗi sang FE.
+ *
+ * @param {string|null} lastRunError error_message thô của lượt chạy gần nhất
+ * @returns {string|null}
+ */
+function labelScheduleLastRunError(lastRunError) {
+  if (!lastRunError) return null;
+  return labelCampaignRunFailure(lastRunError).message;
+}
 
 function normalizeOptionalBoolean(value) {
   if (value === undefined) return undefined;
@@ -181,6 +194,9 @@ class CampaignScheduleController {
         enabled: row.enabled,
         lastRunAt: row.last_run_at,
         lastRunStatus: row.last_run_status || null,
+        lastRunError: row.last_run_error || null,
+        lastRunErrorLabel: labelScheduleLastRunError(row.last_run_error),
+        lastRunAutoDisabled: Boolean(row.last_run_auto_disabled),
         nextRunAt: computeScheduleNextRunAt(row),
         runCount: row.run_count,
         createdAt: row.created_at,
@@ -227,6 +243,9 @@ class CampaignScheduleController {
         enabled: row.enabled,
         lastRunAt: row.last_run_at,
         lastRunStatus: row.last_run_status || null,
+        lastRunError: row.last_run_error || null,
+        lastRunErrorLabel: labelScheduleLastRunError(row.last_run_error),
+        lastRunAutoDisabled: Boolean(row.last_run_auto_disabled),
         nextRunAt: computeScheduleNextRunAt(row),
         runCount: row.run_count,
         createdAt: row.created_at,

@@ -45,6 +45,12 @@ export function getActiveRunPause(runMetadata) {
       ...(fam.kind === 'zalo'
         ? { accountName: runMetadata.zaloDeferredAccountName || null }
         : {}),
+      // PR-8b (UI nói thật) Việc 5 — dấu hiệu THẬT để nhận biết đang chờ do SMTP rate-limit (12h),
+      // khác với "đang chờ tới hạn gửi bước sau" thông thường (cùng dùng chung reason
+      // 'all_recipients_waiting_next_due'). Xem campaignRun.service.js:4014.
+      ...(fam.kind === 'non_continuous'
+        ? { emailRateLimitAt: runMetadata.emailRateLimitAt || null }
+        : {}),
     };
   }
 
@@ -63,6 +69,7 @@ export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
   const reason = String(
     (typeof pauseOrKind === 'object' ? pauseOrKind?.reason : maybeReason) || ''
   ).trim();
+  const emailRateLimitAt = typeof pauseOrKind === 'object' ? pauseOrKind?.emailRateLimitAt : null;
 
   if (kind === 'zalo') {
     if (
@@ -81,11 +88,16 @@ export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
     return 'campaignRun.zaloPausedUntil';
   }
   if (kind === 'non_continuous') {
+    // PR-8b (UI nói thật) Việc 5 — nhánh includes('smtp') CŨ chết thật: backend không bao giờ ghi
+    // reason chứa chuỗi "smtp" cho non_continuous (chỉ 'all_recipients_waiting_next_due' hoặc
+    // 'scheduled_step_*'). Dấu hiệu THẬT để phân biệt "đang chờ do SMTP rate-limit 12h" với "đang
+    // chờ tới hạn gửi bước sau" thông thường là run_metadata.emailRateLimitAt (campaignRun.service.js
+    // :4014) — kiểm TRƯỚC vì cùng dùng chung reason 'all_recipients_waiting_next_due'.
+    if (emailRateLimitAt) {
+      return 'campaignRun.smtpPausedUntil';
+    }
     if (reason === 'all_recipients_waiting_next_due') {
       return 'campaignRun.waitingNextDueUntil';
-    }
-    if (reason.toLowerCase().includes('smtp')) {
-      return 'campaignRun.smtpPausedUntil';
     }
     return 'campaignRun.genericPausedUntil';
   }

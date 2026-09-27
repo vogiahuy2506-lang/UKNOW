@@ -72,7 +72,20 @@ describe('getActiveRunPause', () => {
       untilMs: Date.parse('2026-09-02T14:51:40.000Z'),
       reason: 'all_recipients_waiting_next_due',
       kind: 'non_continuous',
+      // PR-8b Việc 5 — run 366 không có emailRateLimitAt (không phải SMTP rate-limit).
+      emailRateLimitAt: null,
     });
+  });
+
+  it('kind=non_continuous có emailRateLimitAt trong runMetadata → trả kèm trong pause object', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-02T10:00:00.000Z'));
+    const result = getActiveRunPause({
+      nonContinuousDeferredUntil: '2026-09-02T14:51:40.000Z',
+      nonContinuousDeferredReason: 'all_recipients_waiting_next_due',
+      emailRateLimitAt: '2026-09-02T09:00:00.000Z',
+    });
+    expect(result?.emailRateLimitAt).toBe('2026-09-02T09:00:00.000Z');
   });
 
   it('không hiện khi nonContinuousDeferredUntil đã qua giờ', () => {
@@ -194,10 +207,34 @@ describe('getRunPauseI18nKey', () => {
     ).toBe('campaignRun.waitingNextDueUntil');
   });
 
-  it('với non_continuous: các lý do SMTP giữ smtpPausedUntil', () => {
-    expect(getRunPauseI18nKey('non_continuous', 'smtp_rate_limited')).toBe('campaignRun.smtpPausedUntil');
-    expect(getRunPauseI18nKey('non_continuous', 'smtp_daily_quota')).toBe('campaignRun.smtpPausedUntil');
-    expect(getRunPauseI18nKey({ kind: 'non_continuous', reason: 'smtp_auth_error' })).toBe('campaignRun.smtpPausedUntil');
+  // PR-8b (UI nói thật) Việc 5 — nhánh cũ reason.includes('smtp') là chết thật: backend không bao
+  // giờ ghi reason chứa "smtp" cho non_continuous (chỉ 'all_recipients_waiting_next_due' hoặc
+  // 'scheduled_step_*'). Dấu hiệu THẬT là run_metadata.emailRateLimitAt (campaignRun.service.js:4014).
+  it('với non_continuous: có emailRateLimitAt (dù reason vẫn là all_recipients_waiting_next_due) → smtpPausedUntil', () => {
+    expect(
+      getRunPauseI18nKey({
+        kind: 'non_continuous',
+        reason: 'all_recipients_waiting_next_due',
+        emailRateLimitAt: '2026-09-27T01:00:00.000Z',
+      })
+    ).toBe('campaignRun.smtpPausedUntil');
+  });
+
+  it('với non_continuous: KHÔNG có emailRateLimitAt → all_recipients_waiting_next_due vẫn ra waitingNextDueUntil (không phải SMTP)', () => {
+    expect(
+      getRunPauseI18nKey({
+        kind: 'non_continuous',
+        reason: 'all_recipients_waiting_next_due',
+        emailRateLimitAt: null,
+      })
+    ).toBe('campaignRun.waitingNextDueUntil');
+  });
+
+  // Đột biến (b): bỏ điều kiện emailRateLimitAt → ca này đỏ (reason chuỗi trần không còn tự ra SMTP nữa).
+  it('với non_continuous: reason chứa chữ "smtp" nhưng KHÔNG có emailRateLimitAt → KHÔNG còn ra smtpPausedUntil (nhánh chết cũ đã bỏ)', () => {
+    expect(getRunPauseI18nKey('non_continuous', 'smtp_rate_limited')).toBe('campaignRun.genericPausedUntil');
+    expect(getRunPauseI18nKey('non_continuous', 'smtp_daily_quota')).toBe('campaignRun.genericPausedUntil');
+    expect(getRunPauseI18nKey({ kind: 'non_continuous', reason: 'smtp_auth_error' })).toBe('campaignRun.genericPausedUntil');
   });
 
   it('với non_continuous: reason rỗng hoặc không xác định trả về chuỗi trung tính genericPausedUntil', () => {

@@ -355,4 +355,84 @@ describe('CampaignSchedulesTable — Bảng lịch chạy đã thiết lập (b�
 
     expect(screen.queryByText(/lịch này sẽ không gửi/)).not.toBeInTheDocument();
   });
+
+  // PR-8b (UI nói thật) Việc 2 — badge đỏ ở cột "Lần chạy gần nhất", cho MỌI loại lịch (không chỉ once).
+  describe('badge lỗi lần gần nhất (lastRunStatus=failed)', () => {
+    it('lượt gần nhất failed (không tự tắt) → badge "Lỗi lần gần nhất" + tooltip nhãn Việt hoá', () => {
+      const schedules = [
+        {
+          id: 10,
+          scheduleName: 'Lịch tuần',
+          campaignName: 'Chiến dịch F',
+          campaignId: 110,
+          scheduleType: 'weekly',
+          enabled: true,
+          lastRunAt: '2026-09-20T09:00:00Z',
+          runCount: 4,
+          lastRunStatus: 'failed',
+          lastRunError: 'Invalid login: 535 Username and Password not accepted',
+          lastRunErrorLabel: 'Lỗi xác thực tài khoản email dùng để gửi (SMTP).',
+          lastRunAutoDisabled: false,
+        },
+      ];
+
+      renderComponent(schedules);
+
+      const badge = screen.getByText('Lỗi lần gần nhất');
+      expect(badge).toBeInTheDocument();
+      expect(badge.closest('[title]')).toHaveAttribute(
+        'title',
+        'Lỗi xác thực tài khoản email dùng để gửi (SMTP).'
+      );
+    });
+
+    it('lượt gần nhất failed VÀ lastRunAutoDisabled=true → badge "Đã tự tắt sau N lần lỗi" (trích số từ nhãn backend)', () => {
+      const schedules = [
+        {
+          id: 11,
+          scheduleName: 'Lịch hàng ngày',
+          campaignName: 'Chiến dịch G',
+          campaignId: 111,
+          scheduleType: 'daily',
+          enabled: false,
+          lastRunAt: '2026-09-20T09:00:00Z',
+          runCount: 3,
+          lastRunStatus: 'failed',
+          lastRunError: 'Lịch tự tắt sau 3 lần lỗi liên tiếp: Chiến dịch không có node nào',
+          lastRunErrorLabel: 'Lịch chạy đã tự tắt sau 3 lần lỗi liên tiếp. Lỗi gần nhất: Chiến dịch chưa có bước gửi nào (luồng chưa cấu hình node nào).',
+          lastRunAutoDisabled: true,
+        },
+      ];
+
+      renderComponent(schedules);
+
+      // Đột biến (a): bỏ lastRunAutoDisabled → rơi về badge "Lỗi lần gần nhất" chung, ca này đỏ.
+      expect(screen.getByText('Đã tự tắt sau 3 lần lỗi')).toBeInTheDocument();
+      expect(screen.queryByText('Lỗi lần gần nhất')).not.toBeInTheDocument();
+    });
+
+    it('lượt gần nhất completed (bình thường) → KHÔNG có badge lỗi nào', () => {
+      const schedules = [
+        {
+          id: 12,
+          scheduleName: 'Lịch bình thường',
+          campaignName: 'Chiến dịch H',
+          campaignId: 112,
+          scheduleType: 'once',
+          enabled: false,
+          lastRunAt: '2026-09-20T09:00:00Z',
+          runCount: 1,
+          lastRunStatus: 'completed',
+          lastRunError: null,
+          lastRunErrorLabel: null,
+          lastRunAutoDisabled: false,
+        },
+      ];
+
+      renderComponent(schedules);
+
+      expect(screen.queryByText('Lỗi lần gần nhất')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Đã tự tắt sau/)).not.toBeInTheDocument();
+    });
+  });
 });

@@ -92,10 +92,11 @@ async function insertSchedule({
   return rows[0];
 }
 
-async function insertRun({ campaignId, scheduleId = null, status = 'running' }) {
+async function insertRun({ campaignId, scheduleId = null, status = 'running', errorMessage = null, runMetadata = null }) {
   const { rows } = await db.query(
-    `INSERT INTO campaign_runs (id_campaign, id_schedule, status) VALUES ($1, $2, $3) RETURNING *`,
-    [campaignId, scheduleId, status]
+    `INSERT INTO campaign_runs (id_campaign, id_schedule, status, error_message, run_metadata)
+     VALUES ($1, $2, $3, $4, COALESCE($5::jsonb, '{}'::jsonb)) RETURNING *`,
+    [campaignId, scheduleId, status, errorMessage, runMetadata ? JSON.stringify(runMetadata) : null]
   );
   return rows[0];
 }
@@ -171,6 +172,61 @@ describe('GET /api/campaign-schedules', () => {
     const t = await loginAs(o);
     const res = await request(app).get('/api/campaign-schedules').set('Authorization', `Bearer ${t}`);
     expect(res.body.data[0].lastRunStatus).toBeNull();
+  });
+
+  // PR-8b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) UI noi that Viec 2 - lastRunError,
+  // lastRunErrorLabel, lastRunAutoDisabled tren DTO danh sach lich.
+  it('lastRunError + lastRunErrorLabel + lastRunAutoDisabled=false khi lot gan nhat failed nhung KHONG tu tat', async () => {
+    const o = await createUser({ role: 'user', username: 'u_sched_failed' });
+    const c = await insertCampaign({ ownerId: o.id, campaignName: 'Sched Failed' });
+    const s = await insertSchedule({ campaignId: c.id });
+    await insertRun({
+      campaignId: c.id,
+      scheduleId: s.id,
+      status: 'failed',
+      errorMessage: 'Invalid login: 535 Username and Password not accepted',
+    });
+
+    const t = await loginAs(o);
+    const res = await request(app).get('/api/campaign-schedules').set('Authorization', `Bearer ${t}`);
+    const item = res.body.data[0];
+    expect(item.lastRunStatus).toBe('failed');
+    expect(item.lastRunError).toContain('535');
+    expect(item.lastRunErrorLabel).toBe('Lỗi xác thực tài khoản email dùng để gửi (SMTP).');
+    expect(item.lastRunAutoDisabled).toBe(false);
+  });
+
+  it('lastRunAutoDisabled=true khi run_metadata.scheduleAutoDisabled=true, lastRunErrorLabel noi ro da tu tat', async () => {
+    const o = await createUser({ role: 'user', username: 'u_sched_autodisabled' });
+    const c = await insertCampaign({ ownerId: o.id, campaignName: 'Sched Auto Disabled' });
+    const s = await insertSchedule({ campaignId: c.id, enabled: false });
+    await insertRun({
+      campaignId: c.id,
+      scheduleId: s.id,
+      status: 'failed',
+      errorMessage: 'Lịch tự tắt sau 3 lần lỗi liên tiếp: Chiến dịch không có node nào',
+      runMetadata: { scheduleAutoDisabled: true },
+    });
+
+    const t = await loginAs(o);
+    const res = await request(app).get('/api/campaign-schedules').set('Authorization', `Bearer ${t}`);
+    const item = res.body.data[0];
+    expect(item.lastRunAutoDisabled).toBe(true);
+    expect(item.lastRunErrorLabel).toContain('tự tắt sau 3 lần lỗi liên tiếp');
+  });
+
+  it('lastRunError/lastRunErrorLabel/lastRunAutoDisabled null khi lot gan nhat completed (khong loi)', async () => {
+    const o = await createUser({ role: 'user', username: 'u_sched_ok' });
+    const c = await insertCampaign({ ownerId: o.id, campaignName: 'Sched OK' });
+    const s = await insertSchedule({ campaignId: c.id });
+    await insertRun({ campaignId: c.id, scheduleId: s.id, status: 'completed' });
+
+    const t = await loginAs(o);
+    const res = await request(app).get('/api/campaign-schedules').set('Authorization', `Bearer ${t}`);
+    const item = res.body.data[0];
+    expect(item.lastRunError).toBeNull();
+    expect(item.lastRunErrorLabel).toBeNull();
+    expect(item.lastRunAutoDisabled).toBe(false);
   });
 
   // Production 12/09/2026: 29 lịch đang bật, 0 lịch có next_run_at (cột không ai ghi) → cột

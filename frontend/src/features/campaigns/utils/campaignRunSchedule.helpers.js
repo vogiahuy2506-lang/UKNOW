@@ -415,6 +415,32 @@ export const getScheduleStatusClassName = (schedule) => {
   return schedule?.enabled ? 'badge-success' : 'badge-gray';
 };
 
+// PR-8b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) UI noi that Viec 2 - trich so lan loi tu
+// lastRunErrorLabel (cau da duoc backend Viet hoa qua campaignRunFailureLabel.util.js, dang
+// "Lich chay da tu tat sau N lan loi lien tiep...") de rut gon thanh badge - KHONG chep bang
+// phan loai loi sang FE, chi tach mot con so tu cau da dung san.
+const AUTO_DISABLED_COUNT_REGEX = /t\u1EF1 t\u1EAFt sau (\d+) l\u1EA7n l\u1ED7i/i;
+
+/**
+ * Nhan badge "loi lan gan nhat" cho bang lich - ap dung cho MOI loai lich (khong chi once).
+ * Lich tu tat (scheduleAutoDisabled) hien so lan loi lien tiep; nguoc lai hien nhan chung.
+ *
+ * @param {object} schedule item lich, can lastRunStatus/lastRunAutoDisabled/lastRunErrorLabel
+ * @param {Function} [t] ham dich tu useI18n()
+ * @returns {string|null} null neu luot gan nhat khong loi
+ */
+export const getScheduleLastRunFailureBadgeLabel = (schedule, t) => {
+  if (String(schedule?.lastRunStatus || '').toLowerCase() !== 'failed') return null;
+  if (schedule?.lastRunAutoDisabled) {
+    const match = String(schedule?.lastRunErrorLabel || '').match(AUTO_DISABLED_COUNT_REGEX);
+    const count = match ? match[1] : null;
+    if (count) {
+      return t ? t('campaignRun.scheduleAutoDisabledBadge', { count }) : `Da tu tat sau ${count} lan loi`;
+    }
+  }
+  return t ? t('campaignRun.lastRunFailedBadge') : 'Loi lan gan nhat';
+};
+
 /**
  * Lọc danh sách lịch chạy theo id chiến dịch (so khớp kiểu số).
  *

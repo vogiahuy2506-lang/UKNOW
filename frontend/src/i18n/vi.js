@@ -5716,6 +5716,9 @@ export default {
     scheduleLockedOneTimeTooltip: 'Lịch chạy một lần đã hoàn thành, tạo lịch mới nếu muốn chạy lại',
     scheduleCannotEnableRunningTooltip: 'Không thể bật lịch khi chiến dịch đang chạy',
     lastRun: 'Lần chạy gần nhất',
+    // PR-8b (UI nói thật) Việc 2 — badge đỏ ở cột "Lần chạy gần nhất", áp dụng mọi loại lịch.
+    lastRunFailedBadge: 'Lỗi lần gần nhất',
+    scheduleAutoDisabledBadge: 'Đã tự tắt sau {count} lần lỗi',
     nextRun: 'Lần chạy tiếp',
     times: 'lần',
     typeOnce: 'Chạy 1 lần',
