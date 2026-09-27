@@ -226,7 +226,11 @@ describe('PR-6 engine — SMTP lỗi tạm thời TRƯỚC DATA: retry qua ledge
   // ở CONTINUOUS mode (R:8618 `if (!isContinuousMode) break;` chạy TRƯỚC dòng log
   // pause_until_next_cycle R:8619 — nên với one-shot, gọi hàm này hay không đều vô hình, ca trên
   // không bắt được đột biến 3). Dựng riêng một chu kỳ continuous để bắt đúng dòng log đó.
-  it('continuous, transient error → KHÔNG log "pause_until_next_cycle" (markCampaignPausedByEmailRateLimit không được gọi)', async () => {
+  // Mốc đóng băng 12h (emailRateLimitPausedUntilMs) chỉ được đọc ở ĐẦU chu kỳ continuous KẾ TIẾP
+  // (R:3246-3253). Dừng run ngay sau chu kỳ 1 thì đột biến "gọi markCampaignPausedByEmailRateLimit ở
+  // nhánh transient" vẫn xanh — nên cho chạy sang chu kỳ 2: đúng thì chu kỳ 2 GỬI LẠI sau 15',
+  // sai thì chu kỳ 2 đóng băng (log email_sender_cooldown, không gửi).
+  it('continuous, transient error → chu kỳ kế tiếp gửi lại sau 15\', KHÔNG đóng băng 12h (email_sender_cooldown)', async () => {
     jest.useFakeTimers();
     jest.setSystemTime(new Date('2026-09-12T02:00:00.000Z'));
     const consoleLogSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -262,12 +266,17 @@ describe('PR-6 engine — SMTP lỗi tạm thời TRƯỚC DATA: retry qua ledge
           updated_at: new Date().toISOString(),
           updated_at_epoch_us: String(Date.now() * 1000),
         };
-        // Dừng continuous NGAY SAU khi chu kỳ đầu ghi xong ledger — kiểm status chỉ xảy ra ở ĐẦU
-        // chu kỳ kế tiếp (R:3243 while(true)), nên chu kỳ đầu vẫn chạy trọn tới R:8618-8625.
-        mockGetRunStatus.mockResolvedValue('stopping');
         return ledgerRow;
       });
-      mockSendEmailToCustomer.mockResolvedValue({
+      // Dừng run ngay khi đã gửi lại lần 2 (chu kỳ ngủ có jitter ±30% nên có thể thức trước mốc
+      // hẹn vài chục giây — chu kỳ đó chưa tới hạn, không gửi; chu kỳ sau mới gửi).
+      let sendCalls = 0;
+      mockSendEmailToCustomer.mockImplementation(async () => {
+        sendCalls += 1;
+        if (sendCalls >= 2) mockGetRunStatus.mockResolvedValue('stopping');
+        return transientResult();
+      });
+      const transientResult = () => ({
         status: 'failed',
         errorType: 'smtp_transient_retry_scheduled',
         error: 'Máy chủ email tạm thời không nhận kết nối; sẽ thử lại sau 15 phút (lần 1/5).',
@@ -278,18 +287,29 @@ describe('PR-6 engine — SMTP lỗi tạm thời TRƯỚC DATA: retry qua ledge
         settingId: 10,
       });
 
-      const runPromise = campaignRunService.executeCampaign(100, 200, 10);
-      for (let i = 0; i < 40; i += 1) {
+      let settled = false;
+      const runPromise = campaignRunService.executeCampaign(100, 200, 10).finally(() => { settled = true; });
+      // Tối đa ~2h giờ giả: đủ qua mốc hẹn 15' + jitter chu kỳ, dư xa dưới mốc đóng băng 12h.
+      for (let i = 0; i < 240 && !settled; i += 1) {
         // eslint-disable-next-line no-await-in-loop
-        await jest.advanceTimersByTimeAsync(5000);
+        await jest.advanceTimersByTimeAsync(30000);
+      }
+      if (!settled) {
+        // Bị đóng băng 12h (đột biến) → không bao giờ gửi lần 2: dừng tay để test kết thúc rồi đỏ ở expect.
+        mockGetRunStatus.mockResolvedValue('stopping');
+        for (let i = 0; i < 20 && !settled; i += 1) {
+          // eslint-disable-next-line no-await-in-loop
+          await jest.advanceTimersByTimeAsync(30000);
+        }
       }
       await runPromise;
 
-      expect(mockSendEmailToCustomer).toHaveBeenCalledTimes(1);
-      const pauseLogs = consoleLogSpy.mock.calls.filter(
-        ([msg]) => String(msg || '').includes('pause_until_next_cycle')
+      // Chu kỳ 2 đã gửi lại (lần 2) — bằng chứng không bị đóng băng.
+      expect(mockSendEmailToCustomer).toHaveBeenCalledTimes(2);
+      const cooldownLogs = consoleLogSpy.mock.calls.filter(
+        ([msg]) => String(msg || '').includes('email_sender_cooldown')
       );
-      expect(pauseLogs).toHaveLength(0);
+      expect(cooldownLogs).toHaveLength(0);
     } finally {
       consoleLogSpy.mockRestore();
       jest.useRealTimers();
