@@ -281,7 +281,8 @@ describe('scheduledPlanChange.service', () => {
 
         expect(mockTopupLockService.computeOverage).toHaveBeenCalledWith(400, mockDb);
         const [{ html, subject }] = mockSystemEmail.sendSystemEmail.mock.calls[0];
-        expect(subject).toBe('[Founder AI] Lệnh hẹn đổi sang gói &lt;i&gt;Cơ bản&lt;/i&gt; đã được kích hoạt');
+        // Tiêu đề là văn bản thường — tên gói thô, không escape (escape sẽ hiện nguyên "&lt;" trong hộp thư).
+        expect(subject).toBe('[Founder AI] Lệnh hẹn đổi sang gói <i>Cơ bản</i> đã được kích hoạt');
         expect(html).toContain('vượt <strong>2 tài khoản Zalo, 1 chatbot</strong>');
         expect(html).toContain('04/10/2026');
         expect(html).toContain('08:00');

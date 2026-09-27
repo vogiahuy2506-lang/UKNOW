@@ -88,6 +88,7 @@ const {
   reconcileAllDueUsers,
   buildLockNoticeEmail,
   sendLockNotices,
+  computeOverage,
 } = await import('../topupLock.service.js');
 
 describe('normalizeCeiling — PR-3, Việc 3.2 (hợp đồng NULL/-1 = không giới hạn)', () => {
@@ -696,5 +697,36 @@ describe('reconcileAllDueUsers — gom thêm tập "đã hết ân hạn hạ g�
     const results = await reconcileAllDueUsers(mockQueryable);
 
     expect(results).toHaveLength(0);
+  });
+});
+
+describe('computeOverage — cùng công thức với reconcile: vượt = (đang dùng − đang khoá) − trần', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockSumActive.mockResolvedValue(0);
+    // max_employees: null = không giới hạn; max_chatbots: 3 = đúng bằng số đang dùng
+    mockGetPlan.mockResolvedValue({ max_chatbots: 3, max_employees: null });
+    mockCountInUse.mockImplementation(async (_userId, key) => ({ zalo_accounts: 4, chatbots: 3, employees: 10 }[key] || 0));
+    mockCountValid.mockImplementation(async (_userId, key) => (key === 'zalo_accounts' ? 1 : 0));
+    mockQueryable.query.mockImplementation(async (sql) => {
+      if (String(sql).includes('max_zalo_accounts')) return { rows: [{ max_zalo_accounts: 1 }] };
+      if (String(sql).includes('max_email_accounts')) return { rows: [{ max_email_accounts: 1 }] };
+      if (String(sql).includes('max_landing_pages')) return { rows: [{ max_landing_pages: 1 }] };
+      return { rows: [] };
+    });
+  });
+
+  it('4 Zalo, 1 đã khoá, trần 1 → vượt 2 (trừ phần đã khoá); chatbot đúng trần và nhân viên không giới hạn → không vượt', async () => {
+    const result = await computeOverage(7, mockQueryable);
+
+    expect(result).toEqual([{ resourceKey: 'zalo_accounts', over: 2 }]);
+    expect(mockInsertLock).not.toHaveBeenCalled();
+    expect(mockDeleteLock).not.toHaveBeenCalled();
+  });
+
+  it('slot mua thêm còn hạn được cộng vào trần → hết vượt', async () => {
+    mockSumActive.mockImplementation(async (_userId, key) => (key === 'zalo_accounts' ? 2 : 0));
+
+    expect(await computeOverage(7, mockQueryable)).toEqual([]);
   });
 });

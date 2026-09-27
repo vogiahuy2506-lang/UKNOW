@@ -16,9 +16,6 @@ export async function getPendingScheduledChange(userId) {
   return scheduledPlanChangeRepository.findPendingByUserId(userId);
 }
 
-/**
- * Cancel a pending scheduled plan change.
- */
 /** "dd/MM/yyyy HH:mm" theo giờ VN — timeZone cố định, không phụ thuộc TZ tiến trình (production
  * chạy UTC, xem project_email_sent_at_luu_gio_utc). */
 function formatVnDateTime(date) {
@@ -34,6 +31,9 @@ function formatVnDateTime(date) {
   }).format(new Date(date));
 }
 
+/**
+ * Cancel a pending scheduled plan change.
+ */
 export async function cancelPendingScheduledChange(userId, changeId = null) {
   const client = await db.getClient();
   try {
@@ -163,6 +163,7 @@ export async function processDueScheduledPlanChanges() {
 
       // 4. Send notification email
       if (claimed.user_email) {
+        // Tiêu đề thư là văn bản thường (không phải HTML) — dùng tên gói thô; chỉ thân thư mới escape.
         const planName = escapeHtml(claimed.plan_name);
         const fullName = escapeHtml(claimed.user_full_name || 'Quý khách');
         const periodLabel = claimed.billing_period === 'yearly' ? 'Theo năm' : 'Theo tháng';
@@ -190,7 +191,7 @@ export async function processDueScheduledPlanChanges() {
 
         sendSystemEmail({
           to: claimed.user_email,
-          subject: `[Founder AI] Lệnh hẹn đổi sang gói ${planName} đã được kích hoạt`,
+          subject: `[Founder AI] Lệnh hẹn đổi sang gói ${claimed.plan_name} đã được kích hoạt`,
           html: `<p>Xin chào <strong>${fullName}</strong>,</p>
 <p>Lệnh hẹn đổi gói sang <strong>${planName}</strong> (${periodLabel}) của bạn đã đến hạn và được kích hoạt thành công.</p>
 ${overageHtml}
