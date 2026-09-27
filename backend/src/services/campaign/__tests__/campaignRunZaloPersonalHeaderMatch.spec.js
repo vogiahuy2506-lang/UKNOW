@@ -188,6 +188,7 @@ jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.reposit
 
 jest.unstable_mockModule('../../../repositories/campaign/zaloMessage.repository.js', () => ({
   default: {
+    findExistingSentCampaignZaloMessageCrossRun: jest.fn().mockResolvedValue(null),
     insertCampaignZaloMessage: jest.fn().mockResolvedValue(1),
     markAbandonedIfStillQueued: jest.fn().mockResolvedValue(undefined),
     mergeZaloMessageTrackingMetadata: jest.fn().mockResolvedValue(undefined),

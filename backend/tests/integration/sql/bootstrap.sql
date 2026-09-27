@@ -3747,3 +3747,12 @@ ALTER TABLE orders ADD COLUMN IF NOT EXISTS refunded_by   BIGINT REFERENCES user
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_reason TEXT;
 ALTER TABLE orders ADD COLUMN IF NOT EXISTS refund_meta   JSONB;
 ALTER TABLE affiliate_revenue_events ADD COLUMN IF NOT EXISTS reversed_at TIMESTAMPTZ;
+
+-- --- Migration 254: index cho cửa sổ chống trùng liên-run (PR-7b) ---
+CREATE INDEX IF NOT EXISTS idx_email_messages_campaign_step_created
+  ON email_messages (id_campaign, email_step, created_at)
+  WHERE status IN ('sent', 'delivered', 'opened', 'clicked');
+
+CREATE INDEX IF NOT EXISTS idx_zalo_messages_campaign_channel_created
+  ON zalo_messages (id_campaign, channel, created_at)
+  WHERE (tracking_metadata->>'status') = 'sent';

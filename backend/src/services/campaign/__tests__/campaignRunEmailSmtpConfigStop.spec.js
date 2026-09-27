@@ -109,11 +109,12 @@ jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.reposit
 }));
 
 jest.unstable_mockModule('../../../repositories/campaign/zaloMessage.repository.js', () => ({
-  default: { insertCampaignZaloMessage: jest.fn().mockResolvedValue(1) },
+  default: { findExistingSentCampaignZaloMessageCrossRun: jest.fn().mockResolvedValue(null), insertCampaignZaloMessage: jest.fn().mockResolvedValue(1) },
 }));
 
 jest.unstable_mockModule('../../../repositories/email/emailSettings.repository.js', () => ({
   default: {
+    findExistingSentCampaignEmailCrossRun: jest.fn().mockResolvedValue(null),
     findExistingSentCampaignEmail: mockFindExistingSentCampaignEmail,
   },
 }));

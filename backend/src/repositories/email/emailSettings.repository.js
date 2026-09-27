@@ -401,6 +401,74 @@ class EmailSettingsRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — tra email_messages đã gửi ở RUN KHÁC cho
+   * cùng chiến dịch + bước + người nhận, trong cửa sổ CAMPAIGN_CROSS_RUN_DEDUPE_HOURS. Chống gửi
+   * trùng khi resume/chạy lượt mới (vụ chiến dịch 396: lưu flow đổi id_node giữa 2 lượt).
+   *
+   * Luồng hoạt động:
+   * 1. Loại trừ run hiện tại (`id_run <> ownRunId`), khớp id_campaign + email_step + recipient_email.
+   * 2. Chỉ tính các dòng đã phát đi thực tế, không quá cũ hơn `sentSince`.
+   * 3. Khi chiến dịch có >1 node gửi email (matchNode=true) thì khoá thêm id_node.
+   *
+   * @param {object} input
+   * @param {number} input.ownRunId run hiện tại (loại trừ khỏi kết quả)
+   * @param {number} input.campaignId
+   * @param {string} input.recipientEmail
+   * @param {number} input.emailStep thứ tự bước 1-based
+   * @param {Date} input.sentSince mốc bắt đầu cửa sổ (đã trừ giờ sẵn ở caller)
+   * @param {number|string} [input.nodeId] chỉ dùng khi matchNode=true
+   * @param {boolean} [input.matchNode] true khi chiến dịch có >1 node gửi email cùng kênh
+   * @returns {Promise<{id: number, id_run: number, sent_at: Date|null, created_at: Date}|null>}
+   */
+  async findExistingSentCampaignEmailCrossRun({
+    ownRunId,
+    campaignId,
+    recipientEmail,
+    emailStep,
+    sentSince,
+    nodeId,
+    matchNode,
+  }) {
+    const safeOwnRun = Number.parseInt(ownRunId, 10);
+    const safeCampaign = Number.parseInt(campaignId, 10);
+    const safeStep = Number.parseInt(emailStep, 10);
+    const email = String(recipientEmail || '').trim();
+    if (
+      !Number.isFinite(safeOwnRun)
+      || !Number.isFinite(safeCampaign)
+      || !Number.isFinite(safeStep)
+      || !email
+      || !(sentSince instanceof Date)
+      || Number.isNaN(sentSince.getTime())
+    ) {
+      return null;
+    }
+    const params = [safeOwnRun, safeCampaign, safeStep, email, sentSince];
+    let nodeClause = '';
+    if (matchNode) {
+      const safeNode = Number.parseInt(nodeId, 10);
+      if (!Number.isFinite(safeNode)) return null;
+      params.push(safeNode);
+      nodeClause = 'AND id_node = $6';
+    }
+    const result = await db.query(
+      `SELECT id, id_run, sent_at, created_at
+       FROM email_messages
+       WHERE id_run <> $1
+         AND id_campaign = $2
+         AND email_step = $3
+         AND LOWER(TRIM(recipient_email)) = LOWER(TRIM($4))
+         AND status IN ('sent', 'delivered', 'opened', 'clicked')
+         AND created_at >= $5
+         ${nodeClause}
+       ORDER BY id DESC
+       LIMIT 1`,
+      params
+    );
+    return result.rows[0] || null;
+  }
+
   async updateCustomerLastEmailSent(client, sentAt, customerId, userId) {
     await client.query('UPDATE customers SET last_email_sent_at = $1 WHERE id = $2 AND COALESCE(workspace_owner_id, id_user) = $3', [
       sentAt,

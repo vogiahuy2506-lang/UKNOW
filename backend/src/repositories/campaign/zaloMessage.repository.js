@@ -55,6 +55,78 @@ class ZaloMessageRepository {
     return result.rows[0] || null;
   }
 
+  /**
+   * PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — tra zalo_messages đã gửi ở RUN KHÁC cho cùng
+   * chiến dịch + kênh + người nhận + bước, trong cửa sổ CAMPAIGN_CROSS_RUN_DEDUPE_HOURS. Chống
+   * gửi trùng khi resume/chạy lượt mới (vụ chiến dịch 396: lưu flow đổi id_node giữa 2 lượt).
+   *
+   * @param {object} input
+   * @param {number} input.ownRunId run hiện tại (loại trừ khỏi kết quả)
+   * @param {number} input.campaignId
+   * @param {string} input.channel zalo_personal | zalo_group | zalo_friend_request
+   * @param {string} input.recipientKey phone, uid, hoặc group_id
+   * @param {number} input.zaloStep thứ tự bước 1-based trong node
+   * @param {Date} input.sentSince mốc bắt đầu cửa sổ (đã trừ giờ sẵn ở caller)
+   * @param {number|string} [input.nodeId] chỉ dùng khi matchNode=true
+   * @param {boolean} [input.matchNode] true khi chiến dịch có >1 node gửi cùng kênh
+   * @returns {Promise<{id: number, id_run: number, sent_at: Date|null, created_at: Date}|null>}
+   */
+  async findExistingSentCampaignZaloMessageCrossRun({
+    ownRunId,
+    campaignId,
+    channel,
+    recipientKey,
+    zaloStep,
+    sentSince,
+    nodeId,
+    matchNode,
+  }) {
+    const safeOwnRun = Number.parseInt(ownRunId, 10);
+    const safeCampaign = Number.parseInt(campaignId, 10);
+    const safeStep = Number.parseInt(zaloStep, 10);
+    const safeChannel = String(channel || '').trim();
+    const recipient = String(recipientKey || '').trim();
+    if (
+      !Number.isFinite(safeOwnRun)
+      || !Number.isFinite(safeCampaign)
+      || !Number.isFinite(safeStep)
+      || !safeChannel
+      || !recipient
+      || !(sentSince instanceof Date)
+      || Number.isNaN(sentSince.getTime())
+    ) {
+      return null;
+    }
+    const params = [safeOwnRun, safeCampaign, safeChannel, recipient, safeStep, sentSince];
+    let nodeClause = '';
+    if (matchNode) {
+      const safeNode = Number.parseInt(nodeId, 10);
+      if (!Number.isFinite(safeNode)) return null;
+      params.push(safeNode);
+      nodeClause = 'AND id_node = $7';
+    }
+    const result = await db.query(
+      `SELECT id, id_run, sent_at, created_at
+       FROM zalo_messages
+       WHERE id_run <> $1
+         AND id_campaign = $2
+         AND channel = $3
+         AND (tracking_metadata->>'status') = 'sent'
+         AND (
+           LOWER(TRIM(COALESCE(recipient_value, ''))) = LOWER(TRIM($4))
+           OR LOWER(TRIM(COALESCE(uid, ''))) = LOWER(TRIM($4))
+           OR TRIM(COALESCE(group_id, '')) = TRIM($4)
+         )
+         AND COALESCE(NULLIF(tracking_metadata->>'stepIndex', '')::int, 1) = $5
+         AND created_at >= $6
+         ${nodeClause}
+       ORDER BY id DESC
+       LIMIT 1`,
+      params
+    );
+    return result.rows[0] || null;
+  }
+
   async insertCampaignZaloMessage({
     campaignId,
     runId,

@@ -141,6 +141,7 @@ jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.reposit
 
 jest.unstable_mockModule('../../../repositories/campaign/zaloMessage.repository.js', () => ({
   default: {
+    findExistingSentCampaignZaloMessageCrossRun: jest.fn().mockResolvedValue(null),
     insertCampaignZaloMessage: jest.fn().mockResolvedValue(1),
     // PR-7a — one-shot giờ cũng đọc ledger cho kết bạn, dùng cả đường dedupe
     // trySyncLedgerFromExistingZaloMessage (trước đây chỉ continuous chạm tới).

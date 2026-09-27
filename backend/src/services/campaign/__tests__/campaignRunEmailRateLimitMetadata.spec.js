@@ -111,6 +111,7 @@ jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.reposit
 
 jest.unstable_mockModule('../../../repositories/email/emailSettings.repository.js', () => ({
   default: {
+    findExistingSentCampaignEmailCrossRun: jest.fn().mockResolvedValue(null),
     findExistingSentCampaignEmail: jest.fn().mockResolvedValue(null),
   },
 }));
