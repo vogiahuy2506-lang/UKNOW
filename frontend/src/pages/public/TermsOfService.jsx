@@ -510,10 +510,14 @@ function TermsOfService() {
                 You are responsible for paying all fees fully and on time.
               </li>
               <li className={lc(language, 'vi')}>
-                DIGISO không hoàn lại phí đã thanh toán trừ trường hợp pháp luật có quy định khác.
+                DIGISO không hoàn lại phí đã thanh toán, trừ trường hợp lỗi thuộc về DIGISO theo{' '}
+                <a href="/refund-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Chính sách hoàn tiền</a>
+                {' '}hoặc pháp luật có quy định khác.
               </li>
               <li className={lc(language, 'en')}>
-                DIGISO will not refund paid fees unless otherwise required by law.
+                DIGISO does not refund paid fees, except where the fault lies with DIGISO as set out in the{' '}
+                <a href="/refund-policy" target="_blank" rel="noopener noreferrer" className="text-orange-600 hover:underline">Refund Policy</a>
+                , or where otherwise required by law.
               </li>
             </ul>
           </section>
@@ -1025,10 +1029,10 @@ function TermsOfService() {
             </a>
           </p>
           <p className={lc(language, 'vi')}>
-            Điều khoản này được cập nhật và có hiệu lực từ ngày 10/09/2026.
+            Điều khoản này được cập nhật và có hiệu lực từ ngày 13/10/2026.
           </p>
           <p className={lc(language, 'en')}>
-            These terms were last updated and effective from September 10, 2026.
+            These terms were last updated and effective from October 13, 2026.
           </p>
         </footer>
       </div>
