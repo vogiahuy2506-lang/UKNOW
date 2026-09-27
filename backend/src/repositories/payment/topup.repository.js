@@ -217,7 +217,8 @@ export async function findGrantsByOrderId(orderId, queryable = db) {
  *
  * Với mỗi item_key còn cần nhắc:
  *   qty = tổng qty grant hết hạn trong (NOW, NOW+7d]
- *       − tổng qty grant hết hạn SAU NOW+7d và được tạo SAU grant sắp hết hạn sớm nhất (cùng key)
+ *       − tổng qty grant hết hạn SAU NOW+7d, được tạo SAU grant sắp hết hạn sớm nhất (cùng key)
+ *         VÀ được tạo trong 7 ngày trước mốc hết hạn sớm nhất (mua sớm hơn = slot thêm độc lập)
  *   cycleEnd = mốc hết hạn sớm nhất trong nhóm (NOW, NOW+7d] của item_key đó.
  * Chỉ trả các item_key có qty (sau khi trừ) > 0.
  *
@@ -254,6 +255,10 @@ export async function findExpiringUnrenewedGrants(userId, queryable = db) {
          AND tg.cycle_end IS NOT NULL
          AND tg.cycle_end > NOW() + INTERVAL '7 days'
          AND tg.created_at > e.earliest_created_at
+         -- Chỉ tính là gia hạn khi mua TRONG 7 ngày trước khi grant cũ hết hạn (lúc khách đã được
+         -- nhắc). Grant mua sớm hơn là slot mua THÊM độc lập, không phải gia hạn — không được
+         -- dùng nó để tắt nhắc, kẻo khách mất slot cũ mà không được báo (review 27/09).
+         AND tg.created_at >= e.earliest_cycle_end - INTERVAL '7 days'
        GROUP BY tg.item_key
      )
      SELECT es.item_key AS "itemKey",

@@ -662,7 +662,7 @@ describe('Top-up mid-cycle', () => {
 
   describe('GET /api/topup/expiring — nhắc trong app cho món cấu trúc sắp hết hạn', () => {
     let grantSeq = 0;
-    async function insertGrant(userId, itemKey, qty, cycleEnd) {
+    async function insertGrant(userId, itemKey, qty, cycleEnd, createdAt = null) {
       grantSeq += 1;
       const { rows: orderRows } = await db.query(
         `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, payment_method, note, topup_config)
@@ -671,9 +671,9 @@ describe('Top-up mid-cycle', () => {
         [Date.now() * 1000 + grantSeq, userId]
       );
       await db.query(
-        `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [userId, itemKey, qty, orderRows[0].id, cycleEnd]
+        `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end, created_at)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6::timestamptz, NOW()))`,
+        [userId, itemKey, qty, orderRows[0].id, cycleEnd, createdAt]
       );
     }
     const daysFromNow = (n) => new Date(Date.now() + n * 86400000);
@@ -701,6 +701,21 @@ describe('Top-up mid-cycle', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.result.items.find((i) => i.itemKey === 'employees')).toBeUndefined();
+    });
+
+    // Review 27/09: slot mua THÊM độc lập từ lâu (không phải gia hạn) không được tắt nhắc cho slot cũ.
+    it('(f) slot thứ 2 mua từ 20 ngày trước (hết hạn +10 ngày) KHÔNG phải gia hạn → slot cũ vẫn được nhắc, qty=1', async () => {
+      const { user } = await createTopupReadyUser({ username: 'exp-f' });
+      await insertGrant(user.id, 'employees', 1, daysFromNow(3), daysFromNow(-27));
+      await insertGrant(user.id, 'employees', 1, daysFromNow(10), daysFromNow(-20));
+      const token = await loginAs(user);
+
+      const res = await request(app).get('/api/topup/expiring').set('Authorization', `Bearer ${token}`);
+
+      expect(res.status).toBe(200);
+      const item = res.body.result.items.find((i) => i.itemKey === 'employees');
+      expect(item).toBeDefined();
+      expect(item.qty).toBe(1);
     });
 
     it('(c) 5 GB storage_gb hết hạn sau 5 ngày → có, qty=5', async () => {
