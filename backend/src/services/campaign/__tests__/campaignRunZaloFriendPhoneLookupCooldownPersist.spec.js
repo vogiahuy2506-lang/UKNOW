@@ -132,6 +132,7 @@ jest.unstable_mockModule('../campaignExecutionLog.service.js', () => ({
 jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.repository.js', () => ({
   default: {
     getRecipientProgress: jest.fn().mockResolvedValue(null),
+    upsertRecipientProgress: jest.fn().mockResolvedValue(null),
     countPendingDue: jest.fn().mockResolvedValue({
       pending_count: 0,
       pending_without_future_due: 0,
@@ -145,6 +146,9 @@ jest.unstable_mockModule('../../../repositories/campaign/zaloMessage.repository.
   default: {
     insertCampaignZaloMessage: jest.fn().mockResolvedValue(1),
     markAbandonedIfStillQueued: mockMarkAbandonedIfStillQueued,
+    // PR-7a — one-shot giờ cũng đọc ledger cho kết bạn, dùng cả đường dedupe
+    // trySyncLedgerFromExistingZaloMessage (trước đây chỉ continuous chạm tới).
+    findExistingSentCampaignZaloMessage: jest.fn().mockResolvedValue(null),
   },
 }));
 

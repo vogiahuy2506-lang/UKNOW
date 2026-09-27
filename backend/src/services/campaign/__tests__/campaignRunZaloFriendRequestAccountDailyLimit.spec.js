@@ -127,6 +127,9 @@ jest.unstable_mockModule('../../../repositories/campaign/zaloMessage.repository.
     mergeZaloMessageTrackingMetadata: jest.fn().mockResolvedValue(null),
     withTransaction: jest.fn((callback) => callback({})),
     linkQuotaReservation: jest.fn().mockResolvedValue(null),
+    // PR-7a — one-shot giờ cũng đọc ledger cho kết bạn, dùng cả đường dedupe
+    // trySyncLedgerFromExistingZaloMessage (trước đây chỉ continuous chạm tới).
+    findExistingSentCampaignZaloMessage: jest.fn().mockResolvedValue(null),
   },
 }));
 jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({

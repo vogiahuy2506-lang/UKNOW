@@ -867,3 +867,143 @@ describe('PR-5 Việc 2 — zaloSendErrorClassifier: silent drop → not_deliver
     expect(mapZaloErrorCategoryToLedgerReason('ZALO_SILENT_DROP')).toBe('not_delivered');
   });
 });
+
+// PR-7a (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — kết bạn one-shot phải đọc/ghi recipientLedger
+// như continuous (trước đây chỉ continuous đọc → one-shot resume gửi lại từ đầu mỗi lượt: vụ run
+// 374 thật, 22.856 lời mời / ~8.000 số). Ledger giả GIỮ TRẠNG THÁI qua Map (khuôn giống hệt describe
+// "PR-2b — nhóm Zalo one-shot nhiều bước" ở trên) để mô phỏng đúng việc resume đọc lại DB thật.
+describe('PR-7a — kết bạn one-shot đọc/ghi recipientLedger (chống gửi đôi khi resume)', () => {
+  const FRIEND_REQUEST_LEDGER_NODE_LIST = [
+    {
+      id: 500,
+      node_type: 'data',
+      node_subtype: 'read_sheet',
+      execution_order: 1,
+      config: {},
+    },
+    {
+      id: 300,
+      node_type: 'action',
+      node_subtype: 'send_zalo_friend_request',
+      execution_order: 2,
+      config: {
+        zaloAccountId: 99,
+        zaloFriendSource: 'node',
+        zaloFriendNodeId: '500',
+        zaloFriendField: 'phone',
+        zaloFriendRequestMessage: 'Xin chào, kết bạn với mình nhé!',
+      },
+    },
+  ];
+  const PHONE_A = '0911111111';
+  const PHONE_B = '0922222222';
+  const PHONE_C = '0933333333';
+
+  let ledger;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-12T02:00:00.000Z'));
+    mockRunMetadata = { source: 'campaign_run' };
+    mockTotalRecipientsSeed = 0;
+    mockGetRunStatus.mockResolvedValue('running');
+    campaignRunService.zaloRateLimiter.zaloOutboundRateLimitState.clear();
+    campaignRunService.zaloRateLimiter.zaloPersonalPhoneLookupCooldownUntil.clear();
+    mockCheckSendQuota.mockResolvedValue({ allowed: true });
+    mockFindNodesByCampaignId.mockResolvedValue(FRIEND_REQUEST_LEDGER_NODE_LIST);
+    mockGetCustomersFromDataNode.mockResolvedValue({
+      items: [{ phone: PHONE_A }, { phone: PHONE_B }, { phone: PHONE_C }],
+      dataLoadMeta: {},
+    });
+    mockSendFriendRequestQueued.mockResolvedValue({ uid: null, response: null, quotaReservationId: 501 });
+    // Ledger giả GIỮ TRẠNG THÁI theo recipientKey (= phone) — bắt buộc để mô phỏng resume đọc lại
+    // DB thật giữa 2 lượt executeCampaign() riêng biệt trong cùng một it().
+    ledger = new Map();
+    mockGetRecipientProgress.mockImplementation(({ recipientKey }) => (
+      Promise.resolve(ledger.get(recipientKey) || null)
+    ));
+    mockUpsertRecipientProgress.mockImplementation(async (input) => {
+      const prev = ledger.get(input.recipientKey);
+      if (prev?.is_fully_completed) return prev;
+      const row = {
+        last_completed_step: input.completedStep,
+        is_fully_completed: input.completedStep >= 1,
+        meta: { ...(prev?.meta || {}), nextDueAt: input.nextDueAt ?? null },
+        updated_at: new Date().toISOString(),
+        updated_at_epoch_us: String(Date.now() * 1000),
+      };
+      ledger.set(input.recipientKey, row);
+      return row;
+    });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    campaignRunService.activeRunIds.clear();
+    campaignRunService.continuousRunIds.clear();
+    // Trả node list + seed về mặc định — tránh rò sang describe khác chạy sau trong file.
+    mockFindNodesByCampaignId.mockResolvedValue(PERSONAL_NODE_LIST);
+    mockTotalRecipientsSeed = 0;
+  });
+
+  it('one-shot 3 số, chạy 2 lượt liên tiếp (resume) → sendFriendRequestQueued đúng 3 lần, totalRecipients = 3', async () => {
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockSendFriendRequestQueued).toHaveBeenCalledTimes(3);
+    expect(mockFinalizeRun).toHaveBeenNthCalledWith(
+      1,
+      200,
+      false,
+      expect.objectContaining({ totalRecipients: 3, successfulSends: 3, failedSends: 0 }),
+      null
+    );
+
+    // Lượt 2 (resume) — ledger đã fully-completed cả 3 số từ lượt 1; DB thật đã lưu total=3.
+    mockTotalRecipientsSeed = 3;
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    // Vẫn đúng 3 lần TỔNG CỘNG qua cả 2 lượt — lượt 2 không gửi lại số nào.
+    expect(mockSendFriendRequestQueued).toHaveBeenCalledTimes(3);
+    expect(mockFinalizeRun).toHaveBeenNthCalledWith(
+      2,
+      200,
+      false,
+      expect.objectContaining({ totalRecipients: 3, successfulSends: 0, failedSends: 0 }),
+      null
+    );
+  }, 15000);
+
+  it('số có ledger nextDueAt tương lai (chưa tới hạn) → không gửi lại, 2 số còn lại vẫn gửi', async () => {
+    // PHONE_C mô phỏng đã có ở ledger từ một lượt trước: đã hẹn thử lại vào tương lai (chưa tới
+    // hạn), nên bị bỏ qua trong lượt này — không được gửi.
+    ledger.set(PHONE_C, {
+      last_completed_step: 0,
+      is_fully_completed: false,
+      meta: { nextDueAt: '2026-09-13T02:00:00.000Z' },
+      updated_at: '2026-09-11T02:00:00.000Z',
+      updated_at_epoch_us: String(Date.parse('2026-09-11T02:00:00.000Z') * 1000),
+    });
+    // PHONE_C đã được đếm vào totalRecipients ở lượt trước đó (updatedAt !== null).
+    mockTotalRecipientsSeed = 1;
+
+    await runCampaignPumpingTimers(383, 200, 10);
+
+    expect(mockSendFriendRequestQueued).toHaveBeenCalledTimes(2);
+    expect(mockSendFriendRequestQueued).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: PHONE_A })
+    );
+    expect(mockSendFriendRequestQueued).toHaveBeenCalledWith(
+      expect.objectContaining({ phone: PHONE_B })
+    );
+    expect(mockSendFriendRequestQueued).not.toHaveBeenCalledWith(
+      expect.objectContaining({ phone: PHONE_C })
+    );
+    expect(mockFinalizeRun).toHaveBeenCalledWith(
+      200,
+      false,
+      expect.objectContaining({ totalRecipients: 3, successfulSends: 2, failedSends: 0 }),
+      null
+    );
+  }, 15000);
+});

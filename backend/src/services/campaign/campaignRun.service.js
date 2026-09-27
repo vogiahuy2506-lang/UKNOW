@@ -6860,8 +6860,8 @@ class CampaignRunService {
             const phone = String(entry.value || '').trim();
             if (!phone) continue;
             let progress = null;
-            if (isContinuousMode) {
-              // Chế độ continuous: mỗi số chỉ được gửi lời mời thành công đúng 1 lần trong cùng run.
+            {
+              // PR-7a — áp cho cả one-shot và continuous: mỗi số chỉ được gửi lời mời thành công đúng 1 lần trong cùng run.
               // eslint-disable-next-line no-await-in-loop
               progress = await getRecipientProgress({
                 nodeId: node.id,
@@ -6929,16 +6929,6 @@ class CampaignRunService {
             if (!message) {
               throw new Error(`Thiếu lời nhắn mời kết bạn cho số ${phone}`);
             }
-            // PR-2 (đợt rà soát 26/09) — CỐ Ý KHÔNG gate bằng "chưa có dòng ledger" như các nhánh
-            // khác trong file này: kết bạn one-shot không đọc/ghi recipientLedger ở đường này (chỉ
-            // nhánh continuous ở trên mới có `progress`/`getRecipientProgress`) — đây là lỗ hổng
-            // ĐÃ BIẾT (PLAN_VA_LOI_LUONG_TIEN_2026-09-26 PR-7 "Chống gửi đôi": "kết bạn one-shot
-            // không đọc ledger... → run 374: 22.856 lượt trên ~8.000 số"), chờ PR-7 thêm ledger
-            // trước. Gate ở đây bây giờ sẽ luôn đọc updatedAt===null (vì chưa từng ghi) nên không
-            // có tác dụng thật — chỉ tạo ảo giác đã dedupe. Giữ nguyên hành vi cũ tại điểm này.
-            if (!isContinuousMode) {
-              totalRecipients += 1;
-            }
             let customerId = extractCustomerIdFromRow(entry?.row || null);
             if (!Number.isFinite(Number.parseInt(customerId, 10))) {
               // Tạo/đồng bộ customer theo phone để có dữ liệu hành trình giống luồng email.
@@ -6981,7 +6971,7 @@ class CampaignRunService {
                 progressTotal: totalRecipients,
                 executionData: buildSendZaloFriendExecutionData(skipPayload),
               });
-              if (isContinuousMode) {
+              {
                 const completedAtIso = toHoChiMinhIso();
                 // eslint-disable-next-line no-await-in-loop
                 await upsertRecipientProgress({
@@ -7033,7 +7023,7 @@ class CampaignRunService {
                 progressTotal: totalRecipients,
                 executionData: buildSendZaloFriendExecutionData(skipPayload),
               });
-              if (isContinuousMode) {
+              {
                 const completedAtIso = toHoChiMinhIso();
                 // eslint-disable-next-line no-await-in-loop
                 await upsertRecipientProgress({
@@ -7145,7 +7135,7 @@ class CampaignRunService {
                 progressTotal: totalRecipients,
                 executionData: buildSendZaloFriendExecutionData(resultPayload),
               });
-              if (isContinuousMode) {
+              {
                 const completedAtIso = toHoChiMinhIso();
                 // eslint-disable-next-line no-await-in-loop
                 await upsertRecipientProgress({
@@ -7220,7 +7210,7 @@ class CampaignRunService {
                   progressTotal: totalRecipients,
                   executionData: buildSendZaloFriendExecutionData(skipPayload),
                 });
-                if (isContinuousMode) {
+                {
                   const completedAtIso = toHoChiMinhIso();
                   // eslint-disable-next-line no-await-in-loop
                   await upsertRecipientProgress({
@@ -7285,7 +7275,7 @@ class CampaignRunService {
                     progressTotal: totalRecipients,
                     executionData: buildSendZaloFriendExecutionData(alreadyFriendPayload),
                   });
-                  if (isContinuousMode) {
+                  {
                     const completedAtIso = toHoChiMinhIso();
                     // eslint-disable-next-line no-await-in-loop
                     await upsertRecipientProgress({
@@ -7364,7 +7354,7 @@ class CampaignRunService {
                   progressTotal: totalRecipients,
                   executionData: buildSendZaloFriendExecutionData(senderBlockedPayload),
                 });
-                if (isContinuousMode) {
+                {
                   const completedAtIso = toHoChiMinhIso();
                   // eslint-disable-next-line no-await-in-loop
                   await upsertRecipientProgress({
