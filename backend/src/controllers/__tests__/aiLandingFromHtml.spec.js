@@ -33,7 +33,14 @@ jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
 }));
 jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => ({
   tryHandleHelpChat: jest.fn(async () => null),
+  answerWithDocs: jest.fn(),
   HELP_ROUTE_LABELS: {},
+}));
+jest.unstable_mockModule('../../services/help/helpCenter.service.js', () => ({
+  searchHelpChunks: jest.fn(async () => ({ chunks: [], topSimilarity: 0 })),
+}));
+jest.unstable_mockModule('../../repositories/help/helpArticle.repository.js', () => ({
+  insertUnanswered: jest.fn(async () => {}),
 }));
 jest.unstable_mockModule('../campaign.controller.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/campaign/campaignCrud.service.js', () => ({ default: {} }));

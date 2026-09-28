@@ -519,11 +519,11 @@ export async function searchPublishedChunksByKeyword(question, {
   return run('vi');
 }
 
-export async function insertUnanswered({ question, userId = null, topSimilarity = null }, queryable = db) {
+export async function insertUnanswered({ question, userId = null, topSimilarity = null, reason = null }, queryable = db) {
   const { rows } = await queryable.query(
-    `INSERT INTO help_unanswered (question, user_id, top_similarity)
-     VALUES ($1, $2, $3) RETURNING *`,
-    [question, userId, topSimilarity]
+    `INSERT INTO help_unanswered (question, user_id, top_similarity, reason)
+     VALUES ($1, $2, $3, $4) RETURNING *`,
+    [question, userId, topSimilarity, reason]
   );
   return rows[0];
 }

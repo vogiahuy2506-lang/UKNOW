@@ -8,6 +8,10 @@ const saveMessages = jest.fn();
 const getSessionWizardState = jest.fn();
 const updateWizardStateSections = jest.fn();
 const tryHandleHelpChat = jest.fn(async () => null);
+// PR-2 (PLAN_VA_TRO_LY_AI_2026-09-28) — lưới an toàn mục 2, đọc trực tiếp bởi ai.controller.js.
+const answerWithDocs = jest.fn();
+const searchHelpChunks = jest.fn();
+const insertUnanswered = jest.fn(async () => {});
 
 // createCampaignFromDraft: mock các service dùng bởi luồng tạo chiến dịch để test không đụng DB.
 const prepareScript = jest.fn();
@@ -88,12 +92,19 @@ jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
 }));
 jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => ({
   tryHandleHelpChat,
+  answerWithDocs,
   HELP_ROUTE_LABELS: {
     hỏi_đáp: 'hỏi_đáp',
     làm_giúp: 'làm_giúp',
     không_rõ: 'không_rõ',
     ngoài_phạm_vi: 'ngoài_phạm_vi',
   },
+}));
+jest.unstable_mockModule('../../services/help/helpCenter.service.js', () => ({
+  searchHelpChunks,
+}));
+jest.unstable_mockModule('../../repositories/help/helpArticle.repository.js', () => ({
+  insertUnanswered,
 }));
 jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({
   chargeAiCredit,
@@ -140,6 +151,11 @@ describe('ai.controller', () => {
     saveMessages.mockReset();
     tryHandleHelpChat.mockReset();
     tryHandleHelpChat.mockResolvedValue(null);
+    answerWithDocs.mockReset();
+    searchHelpChunks.mockReset();
+    searchHelpChunks.mockResolvedValue({ chunks: [], topSimilarity: 0 });
+    insertUnanswered.mockReset();
+    insertUnanswered.mockResolvedValue(undefined);
     createSession.mockResolvedValue({ id: 123, title: 'Wizard chat' });
     getSessionWizardState.mockReset();
     getSessionWizardState.mockResolvedValue(null);
@@ -360,6 +376,190 @@ describe('ai.controller', () => {
     expect(res.json).toHaveBeenCalledWith({
       success: true,
       data: expect.objectContaining({ content: 'Chọn tài khoản gửi' }),
+    });
+  });
+
+  // PR-2 mục 3 (PLAN_VA_TRO_LY_AI_2026-09-28) — khác ca trên: "thời tiết hôm nay" không có hình
+  // dạng câu hỏi nên vẫn đúng phải BỎ QUA. Câu dưới đây CÓ hình dạng câu hỏi ("thế nào") nên phải
+  // được thử hỏi help-router dù đang giữa wizard.
+  it('đang trả lời gate wizard NHƯNG gõ câu hỏi thật (không phải marker [wizard]) → vẫn hỏi help-router', async () => {
+    tryHandleHelpChat.mockResolvedValue({
+      type: 'text',
+      content: 'Zalo nhóm gửi 1 tin tới nhiều người trong nhóm; Zalo cá nhân gửi riêng từng người.',
+      data: { helpRoute: 'hỏi_đáp', sources: [] },
+    });
+
+    const req = {
+      body: {
+        history: [
+          { role: 'assistant', type: 'zalo_group_picker', content: 'Chọn nhóm Zalo để gửi' },
+          { role: 'user', content: 'zalo nhóm khác zalo cá nhân thế nào' },
+        ],
+        locale: 'vi',
+        sessionId: 88,
+      },
+      user: { id: 7, role: 'user' },
+    };
+    getSessionWizardState.mockResolvedValue({
+      wizard_state: {
+        version: 1,
+        gates: { channel: 'zalo_group' },
+        brief: { version: 1, contentLocale: 'vi' },
+        meta: { conversationLocale: 'vi' },
+      },
+    });
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
+    expect(processSmartChat).not.toHaveBeenCalled();
+    // Help trả lời được → persist đi qua nhánh "Help path: meta-only" — gate/brief KHÔNG đổi.
+    expect(updateWizardStateSections.mock.calls[0][2].gates).toBeUndefined();
+    expect(updateWizardStateSections.mock.calls[0][2].brief).toBeUndefined();
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ content: expect.stringContaining('Zalo nhóm gửi') }),
+    });
+  });
+
+  it('đang trả lời gate wizard, gõ câu hỏi nhưng router coi là làm_giúp/không_rõ → vẫn rơi xuống processSmartChat, wizard tiếp tục bình thường', async () => {
+    tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+    processSmartChat.mockResolvedValue({ type: 'zalo_group_picker', content: 'Chọn nhóm Zalo để gửi' });
+
+    const req = {
+      body: {
+        history: [
+          { role: 'assistant', type: 'zalo_group_picker', content: 'Chọn nhóm Zalo để gửi' },
+          { role: 'user', content: 'làm sao để chọn nhóm zalo này' },
+        ],
+        locale: 'vi',
+      },
+      user: { id: 7, role: 'user' },
+    };
+    const res = makeRes();
+
+    await aiController.chat(req, res);
+
+    expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
+    expect(processSmartChat).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith({
+      success: true,
+      data: expect.objectContaining({ content: 'Chọn nhóm Zalo để gửi' }),
+    });
+  });
+
+  // PR-2 mục 2 (PLAN_VA_TRO_LY_AI_2026-09-28) — lưới an toàn sau processSmartChat.
+  describe('lưới an toàn RAG sau não chiến dịch (PR-2 mục 2)', () => {
+    it('processSmartChat trả "text" cho câu hỏi thật (không wizard, không tệp), có đoạn khớp ≥0.5 → thay bằng answerWithDocs, KHÔNG ghi insertUnanswered', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue({
+        type: 'text',
+        content: 'Bạn vào Cài đặt để kết nối Zalo (kiến thức ngoài, không có tài liệu).',
+      });
+      searchHelpChunks.mockResolvedValue({
+        chunks: [{ slug: 'ket-noi-zalo', title: 'Kết nối Zalo', content_text: 'bước 1...' }],
+        topSimilarity: 0.8,
+      });
+      answerWithDocs.mockResolvedValue({
+        type: 'text',
+        content: 'Theo tài liệu: vào Cài đặt > Zalo > Kết nối.',
+        data: { helpRoute: 'hỏi_đáp', sources: [{ title: 'Kết nối Zalo', url: '/huong-dan/ket-noi-zalo' }] },
+      });
+
+      const req = {
+        body: {
+          history: [{ role: 'user', content: 'làm sao kết nối zalo' }],
+          locale: 'vi',
+        },
+        user: { id: 7, role: 'user' },
+      };
+      const res = makeRes();
+
+      await aiController.chat(req, res);
+
+      expect(searchHelpChunks).toHaveBeenCalledWith(
+        'làm sao kết nối zalo',
+        expect.objectContaining({ minSimilarity: 0.5 })
+      );
+      expect(answerWithDocs).toHaveBeenCalledWith('làm sao kết nối zalo', 7, expect.any(String));
+      expect(insertUnanswered).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({ content: expect.stringContaining('Theo tài liệu') }),
+      });
+    });
+
+    it('không có đoạn khớp → GIỮ câu của não chiến dịch, ghi insertUnanswered 1 lần, gắn groundedBy=\'none\'', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'không_rõ' });
+      processSmartChat.mockResolvedValue({
+        type: 'text',
+        content: 'Câu trả lời của não chiến dịch (kiến thức ngoài).',
+      });
+      searchHelpChunks.mockResolvedValue({ chunks: [], topSimilarity: 0 });
+
+      const req = {
+        body: {
+          history: [{ role: 'user', content: 'tại sao tài khoản zalo của tôi bị ngắt kết nối' }],
+          locale: 'vi',
+        },
+        user: { id: 7, role: 'user' },
+      };
+      const res = makeRes();
+
+      await aiController.chat(req, res);
+
+      expect(answerWithDocs).not.toHaveBeenCalled();
+      expect(insertUnanswered).toHaveBeenCalledTimes(1);
+      expect(insertUnanswered).toHaveBeenCalledWith(expect.objectContaining({
+        question: 'tại sao tài khoản zalo của tôi bị ngắt kết nối',
+        userId: 7,
+        reason: 'no_chunks',
+      }));
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          content: 'Câu trả lời của não chiến dịch (kiến thức ngoài).',
+          data: expect.objectContaining({ groundedBy: 'none' }),
+        }),
+      });
+    });
+
+    it('câu KHÔNG có hình dạng câu hỏi (vd tuyên bố hành động) → KHÔNG chạm lưới an toàn', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue({ type: 'text', content: 'Đã ghi nhận.' });
+
+      const req = {
+        body: {
+          history: [{ role: 'user', content: 'tôi log in zalo rồi, giờ tôi sẽ chọn nhóm để tạo chiến dịch' }],
+          locale: 'vi',
+        },
+        user: { id: 7, role: 'user' },
+      };
+      const res = makeRes();
+
+      await aiController.chat(req, res);
+
+      expect(searchHelpChunks).not.toHaveBeenCalled();
+      expect(insertUnanswered).not.toHaveBeenCalled();
+    });
+
+    it('publicResponse KHÔNG phải "text" (vd landing_page) → KHÔNG chạm lưới an toàn dù có hình dạng câu hỏi', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue({ type: 'landing_page', content: 'Xem trang vừa tạo', data: {} });
+
+      const req = {
+        body: {
+          history: [{ role: 'user', content: 'làm sao thêm nút gọi điện vào trang này' }],
+          locale: 'vi',
+        },
+        user: { id: 7, role: 'user' },
+      };
+      const res = makeRes();
+
+      await aiController.chat(req, res);
+
+      expect(searchHelpChunks).not.toHaveBeenCalled();
     });
   });
 

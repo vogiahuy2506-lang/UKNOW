@@ -88,6 +88,9 @@ const CONTENT_CREATION_GUARD_RE =
 const ACCOUNT_ISSUE_RE =
   /payment\s+failed|cannot\s+(?:log\s*in|sign\s*in)|can't\s+(?:log\s*in|sign\s*in)|forgot\s+(?:my\s+)?password|không\s+đăng\s*nhập|khong\s+dang\s*nhap|quên\s*mật\s*khẩu|quen\s*mat\s*khau|thanh\s*toán\s*thất\s*bại|thanh\s*toan\s*that\s*bai/i;
 
+/** PR-2 mục 5 — model tự nhận chưa có tài liệu dù đã thấy chunks (backlog kho bài). */
+const MODEL_SAID_NO_DOC_RE = /chưa có hướng dẫn|chưa có tài liệu|chưa tìm thấy/i;
+
 /**
  * Intent-aware sensitive help (M4). Account/billing/login/tax issues route to docs.
  * Content-creation commands with the same keywords do NOT.
@@ -220,8 +223,20 @@ Quy tắc:
 - làm_giúp: yêu cầu soạn/tạo/viết hộ chiến dịch, email, landing, nội dung marketing, tạo landing page, đọc/phân tích tệp đính kèm, chạy/sửa việc trong hệ thống
 - không_rõ: quá ngắn / thiếu ngữ cảnh (vd: "Zalo")
 - ngoài_phạm_vi: không liên quan sản phẩm Founder AI (thời tiết, tin tức thế giới, kiến thức chung không gắn nền tảng...)
-- Nếu phân vân giữa hỏi_đáp và làm_giúp → chọn làm_giúp
-- Nếu phân vân giữa hỏi_đáp và ngoài_phạm_vi mà câu hỏi có thể là FAQ sản phẩm → chọn hỏi_đáp`;
+- Câu bắt đầu hoặc chứa "làm sao", "cách", "vì sao", "tại sao", "ở đâu", "thế nào", "được không", "có … không" → hỏi_đáp, KỂ CẢ KHI câu có nhắc tới tạo/gửi/chạy (vd "làm sao tạo chiến dịch" vẫn là hỏi_đáp, không phải làm_giúp). Chỉ chọn làm_giúp khi người dùng ra LỆNH làm một việc cụ thể ngay bây giờ (tạo, soạn, viết, gửi, chạy, sửa giúp) — không phải hỏi về việc đó.
+- Nếu phân vân giữa hỏi_đáp và ngoài_phạm_vi mà câu hỏi có thể là FAQ sản phẩm → chọn hỏi_đáp
+- Một câu TUYÊN BỐ Ý ĐỊNH/hành động sắp làm (dùng "tôi sẽ", "tôi sẽ chọn", "giờ tôi") KHÔNG phải câu hỏi dù có nhắc "sẽ" nghe như tương lai — vẫn là làm_giúp.
+- Một khối văn bản dán nguyên vào (brief, mô tả sản phẩm/trang web nhiều dòng) là yêu cầu làm hộ, không phải câu hỏi — làm_giúp.
+
+Ví dụ (cả hai chiều):
+- "làm sao kết nối zalo" → hỏi_đáp
+- "tại sao tài khoản zalo của tôi bị ngắt kết nối" → hỏi_đáp
+- "zalo nhóm khác zalo cá nhân thế nào" → hỏi_đáp
+- "khách hỏi giá thì chatbot trả lời sao" → hỏi_đáp
+- "tạo giúp mình một chiến dịch gửi email cho khách hàng cũ" → làm_giúp
+- "soạn nội dung landing page cho khoá học tiếng Anh" → làm_giúp
+- "tôi log in zalo rồi, giờ tôi sẽ chọn nhóm để tạo chiến dịch" → làm_giúp (tuyên bố hành động, không phải câu hỏi)
+- Khối văn bản dán nguyên có dạng "Sản phẩm dịch vụ là gì? → … Thiết kế trang web để giới thiệu…" → làm_giúp (brief dán nguyên, không phải hỏi_đáp)`;
 
   const baseArgs = {
     userId,
@@ -279,6 +294,7 @@ async function answerWithDocs(question, userId, locale = 'vi', { allowSoftFallba
         question,
         userId,
         topSimilarity: topSimilarity || null,
+        reason: 'no_chunks',
       });
     }
     return {
@@ -298,6 +314,7 @@ async function answerWithDocs(question, userId, locale = 'vi', { allowSoftFallba
         question,
         userId,
         topSimilarity: topSimilarity || null,
+        reason: 'no_chunks',
       });
     }
 
@@ -388,6 +405,8 @@ ${assistantCapabilities}
 
 ${capabilityRulesForLocale(lang)}
 
+KHÔNG BAO GIỜ kết luận một tính năng KHÔNG có / CHƯA hỗ trợ trừ khi nó nằm trong danh sách KHÔNG HỖ TRỢ ở trên. Tài liệu không nói tới ≠ không có: khi đó nói "mình chưa tìm thấy hướng dẫn cho phần này" và mời hỏi lại cụ thể.
+
 === ĐOẠN TÀI LIỆU ===
 ${chunkBlock}`;
 
@@ -432,6 +451,19 @@ ${chunkBlock}`;
   }
 
   let content = text || copy.noDocReply;
+
+  // PR-2 mục 5 (PLAN_VA_TRO_LY_AI_2026-09-28) — backlog kho bài dù CÓ chunks: similarity thấp
+  // (đoạn khớp có thể lạc đề) hoặc chính model tự nhận "chưa có hướng dẫn" dù đã thấy đoạn tài
+  // liệu. help_unanswered từng trống suốt 60 ngày dù 14/42 lượt model nói câu này — hai nhánh
+  // !chunks.length ở trên không bắt được ca này (dự phòng ILIKE luôn vớt được vài đoạn).
+  if (allowSoftFallback) {
+    if (topSimilarity < 0.6) {
+      await helpRepo.insertUnanswered({ question, userId, topSimilarity, reason: 'low_similarity' });
+    } else if (MODEL_SAID_NO_DOC_RE.test(content)) {
+      await helpRepo.insertUnanswered({ question, userId, topSimilarity, reason: 'model_said_no_doc' });
+    }
+  }
+
   if (sources.length) {
     const linkLines = sources.map((s) => `- [${s.title}](${s.url})`).join('\n');
     if (!content.includes('/huong-dan/')) {
@@ -527,4 +559,4 @@ export async function tryHandleHelpChat({
   return answerWithDocs(question, userId, lang);
 }
 
-export { HELP_ROUTE_LABELS, extractLastUserText, routeQuestion, normalizeLocale, OVERVIEW_RE };
+export { HELP_ROUTE_LABELS, extractLastUserText, routeQuestion, normalizeLocale, OVERVIEW_RE, answerWithDocs };

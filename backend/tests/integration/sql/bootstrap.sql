@@ -2361,7 +2361,10 @@ CREATE TABLE help_unanswered (
   question        TEXT NOT NULL,
   user_id         BIGINT REFERENCES users(id) ON DELETE SET NULL,
   asked_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  top_similarity  REAL
+  top_similarity  REAL,
+  -- migration 259: vì sao dòng này được ghi vào backlog kho bài.
+  reason          VARCHAR(32)
+    CHECK (reason IS NULL OR reason IN ('low_similarity', 'model_said_no_doc', 'no_chunks'))
 );
 
 CREATE INDEX idx_help_unanswered_asked ON help_unanswered (asked_at DESC);

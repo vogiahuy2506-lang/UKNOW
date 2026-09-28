@@ -55,8 +55,15 @@ jest.unstable_mockModule('../../services/ai/aiModelPolicy.service.js', () => ({
   // resolveAllowedModel — thiếu export này thì cả file test đứng ngay ở link module.
   resolveAllowedModel: jest.fn(async () => 'gemini-2.5-flash'),
 }));
+jest.unstable_mockModule('../../services/help/helpCenter.service.js', () => ({
+  searchHelpChunks: jest.fn(async () => ({ chunks: [], topSimilarity: 0 })),
+}));
+jest.unstable_mockModule('../../repositories/help/helpArticle.repository.js', () => ({
+  insertUnanswered: jest.fn(async () => {}),
+}));
 jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => ({
   tryHandleHelpChat: jest.fn(async () => null),
+  answerWithDocs: jest.fn(),
   HELP_ROUTE_LABELS: {
     hỏi_đáp: 'hỏi_đáp',
     làm_giúp: 'làm_giúp',

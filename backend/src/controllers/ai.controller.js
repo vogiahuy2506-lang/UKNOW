@@ -8,12 +8,14 @@ import chatbotStudioConversationService from '../services/chatbot/chatbotStudioC
 import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
-import { tryHandleHelpChat, HELP_ROUTE_LABELS } from '../services/help/helpAssistant.service.js';
+import { tryHandleHelpChat, HELP_ROUTE_LABELS, answerWithDocs } from '../services/help/helpAssistant.service.js';
+import { searchHelpChunks } from '../services/help/helpCenter.service.js';
+import * as helpRepo from '../repositories/help/helpArticle.repository.js';
 import campaignController from './campaign.controller.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
 import campaignNodeRegistryService from '../services/campaign/campaignNodeRegistry.service.js';
 import * as aiSessionRepo from '../repositories/aiSession.repository.js';
-import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn } from '../services/ai/aiCampaignWizard.service.js';
+import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn, isWizardMarkerMessage } from '../services/ai/aiCampaignWizard.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import uploadController from './upload.controller.js';
 import recipientExtractorService from '../services/ai/recipientExtractor.service.js';
@@ -51,6 +53,11 @@ import {
 } from '../utils/geminiClient.util.js';
 
 const SUPPORTED_SYSTEM_INSTRUCTION_LANGUAGES = ['vi', 'en'];
+
+// PLAN_VA_TRO_LY_AI_2026-09-28 PR-2 — cùng regex "hình dạng câu hỏi" đo trên production
+// (RA_SOAT_TRO_LY_AI_LUONG_2026-09-28.md, SQL (3)). Dùng cho cả mục 2 (lưới an toàn sau não
+// chiến dịch) và mục 3 (câu hỏi thật giữa wizard vẫn được não trợ giúp trả lời).
+const QUESTION_SHAPE_RE = /làm sao|cách|vì sao|tại sao|ở đâu|thế nào|được không|có .* không|\?/i;
 
 // PLAN_TRO_LY_CHINH_LANDING_TRON_GOI_2026-09-13.md, Việc 1.2 — patchLandingMessage() chỉ nhận
 // đúng 3 khoá này trong data, bỏ qua mọi khoá khác client gửi lên.
@@ -351,7 +358,24 @@ class AiController {
       const inWizard = isWizardAnswerTurn(history);
       const isMachinePrompt = Boolean(sanitizedPlanSlotKey) || sanitizedIntent === 'content_plan_request';
       const resourceOwnerUserId = resolveOwnerUserId(req.user);
-      const helpResponse = (hasFiles || inWizard || isMachinePrompt)
+
+      // PR-2 mục 3 (PLAN_VA_TRO_LY_AI_2026-09-28) — giữa wizard, một câu hỏi THẬT (gõ tự do khi
+      // một gate card đang mở, KHÔNG phải marker [wizard] do bấm nút) vẫn được não trợ giúp thử
+      // trả lời. tryHandleHelpChat() trả {handled:false, route} cho làm_giúp/không_rõ — nhánh
+      // dưới tự rơi xuống processSmartChat như cũ nên gate không bị ép dừng bởi lỗi phân loại.
+      // Khi help TRẢ LỜI ĐƯỢC (isHelpHandled), persist đi qua nhánh "Help path: meta-only" nên
+      // gates/brief của wizard không đổi.
+      const lastHistoryEntry = history[history.length - 1];
+      const lastUserContentForRouting = lastHistoryEntry?.role === 'user'
+        ? String(lastHistoryEntry.content || '')
+        : '';
+      const isWizardMarkerTurn = Boolean(lastUserContentForRouting)
+        && isWizardMarkerMessage(lastUserContentForRouting);
+      const wizardTypedQuestion = inWizard
+        && !isWizardMarkerTurn
+        && QUESTION_SHAPE_RE.test(lastUserContentForRouting);
+      const skipHelpRouter = hasFiles || isMachinePrompt || (inWizard && !wizardTypedQuestion);
+      const helpResponse = skipHelpRouter
         ? null
         : await tryHandleHelpChat({
           history,
@@ -389,6 +413,47 @@ class AiController {
           routeSaysActionRequest,
         });
         ({ wizardShortCircuit, _wizard, ...publicResponse } = response || {});
+      }
+
+      // PR-2 mục 2 (PLAN_VA_TRO_LY_AI_2026-09-28) — lưới an toàn: processSmartChat (não chiến
+      // dịch) không có RAG trong prompt của nó; một câu hỏi thật lọt qua (router phân loại sai
+      // thành làm_giúp/không_rõ, hoặc đang giữa wizard) mà nó trả "text" dễ thành kiến thức bên
+      // ngoài (RA_SOAT_TRO_LY_AI_LUONG_2026-09-28 mục 2). Thử RAG SAU processSmartChat: có đoạn
+      // khớp ≥0.5 → thay bằng câu trả lời bám tài liệu; không có → giữ câu của não chiến dịch
+      // nhưng ghi backlog kho bài + đánh dấu groundedBy='none' để SQL đếm được.
+      if (
+        !isHelpHandled
+        && publicResponse?.type === 'text'
+        && !inWizard
+        && !hasFiles
+        && QUESTION_SHAPE_RE.test(lastUserContentForRouting)
+      ) {
+        try {
+          const { chunks } = await searchHelpChunks(lastUserContentForRouting, {
+            userId: req.user.id,
+            locale: localeContext.conversationLocale,
+            minSimilarity: 0.5,
+          });
+          if (chunks.length > 0) {
+            publicResponse = await answerWithDocs(
+              lastUserContentForRouting,
+              req.user.id,
+              localeContext.conversationLocale
+            );
+          } else {
+            await helpRepo.insertUnanswered({
+              question: lastUserContentForRouting,
+              userId: req.user.id,
+              reason: 'no_chunks',
+            });
+            publicResponse = {
+              ...publicResponse,
+              data: { ...(publicResponse.data || {}), groundedBy: 'none' },
+            };
+          }
+        } catch (safetyNetErr) {
+          console.warn('[AI] Lưới an toàn RAG (PR-2 mục 2) lỗi, giữ câu trả lời gốc:', safetyNetErr.message);
+        }
       }
 
       // Persist session + messages + wizard state (bỏ qua lỗi DB để không block chat)

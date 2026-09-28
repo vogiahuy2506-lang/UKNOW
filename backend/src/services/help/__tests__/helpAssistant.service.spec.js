@@ -98,3 +98,39 @@ describe('helpAssistant.service routeQuestion', () => {
     warnSpy.mockRestore();
   });
 });
+
+// PLAN_VA_TRO_LY_AI_2026-09-28 PR-2 mục 1 + mục 6 — không đo được "model chọn đúng nhãn" bằng
+// unit test (cần Gemini thật). Ghim câu chữ BẮT BUỘC phải còn trong prompt (bảng hằng số, ghim
+// từng dòng — đột biến xoá 1 dòng phải đỏ ĐÚNG dòng đó) thay cho việc đo hành vi model.
+describe('helpAssistant.service routeQuestion — ghim câu chữ prompt định tuyến (PR-2 mục 1 + 6)', () => {
+  const REQUIRED_LINES = [
+    'Câu bắt đầu hoặc chứa "làm sao", "cách", "vì sao", "tại sao", "ở đâu", "thế nào", "được không", "có … không" → hỏi_đáp, KỂ CẢ KHI câu có nhắc tới tạo/gửi/chạy',
+    'Chỉ chọn làm_giúp khi người dùng ra LỆNH làm một việc cụ thể ngay bây giờ',
+    'Một câu TUYÊN BỐ Ý ĐỊNH/hành động sắp làm',
+    'Một khối văn bản dán nguyên vào (brief, mô tả sản phẩm/trang web nhiều dòng) là yêu cầu làm hộ, không phải câu hỏi',
+    '"tôi log in zalo rồi, giờ tôi sẽ chọn nhóm để tạo chiến dịch" → làm_giúp',
+    'Sản phẩm dịch vụ là gì? → … Thiết kế trang web để giới thiệu…',
+  ];
+  const FORBIDDEN_LINES = [
+    'Nếu phân vân giữa hỏi_đáp và làm_giúp → chọn làm_giúp',
+  ];
+
+  beforeEach(() => {
+    mockGenerate.mockReset();
+    mockGenerate.mockResolvedValue({ text: 'hỏi_đáp', modelName: 'm', raw: {} });
+    mockRecord.mockReset();
+    mockRecord.mockResolvedValue(undefined);
+  });
+
+  it.each(REQUIRED_LINES)('prompt định tuyến CHỨA: %s', async (line) => {
+    await routeQuestion('câu bất kỳ', 1);
+    const systemPrompt = mockGenerate.mock.calls[0][0].systemPrompt;
+    expect(systemPrompt).toContain(line);
+  });
+
+  it.each(FORBIDDEN_LINES)('prompt định tuyến KHÔNG còn luật cũ: %s', async (line) => {
+    await routeQuestion('câu bất kỳ', 1);
+    const systemPrompt = mockGenerate.mock.calls[0][0].systemPrompt;
+    expect(systemPrompt).not.toContain(line);
+  });
+});
