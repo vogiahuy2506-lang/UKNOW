@@ -4,7 +4,7 @@ const SUPER_ADMIN_SCOPE = 'super_admin';
 
 export async function findLayout({ scope = SUPER_ADMIN_SCOPE, queryable = db } = {}) {
   const { rows } = await queryable.query(
-    `SELECT categories, updated_by, updated_at
+    `SELECT categories, links, updated_by, updated_at
      FROM admin_menu_layouts
      WHERE scope = $1
      LIMIT 1`,
@@ -13,16 +13,22 @@ export async function findLayout({ scope = SUPER_ADMIN_SCOPE, queryable = db } =
   return rows[0] || null;
 }
 
-export async function saveLayout({ categories, updatedBy, scope = SUPER_ADMIN_SCOPE, queryable = db } = {}) {
+/**
+ * `links = null` là sentinel "không đổi" — INSERT lần đầu (chưa có dòng) coi như rỗng, UPDATE
+ * COALESCE về giá trị `links` đang có sẵn trong DB thay vì ghi đè mất (xem updateAppMenuLayout
+ * ở service — dùng khi client cũ gửi PUT không kèm trường `links`).
+ */
+export async function saveLayout({ categories, links = null, updatedBy, scope = SUPER_ADMIN_SCOPE, queryable = db } = {}) {
   const { rows } = await queryable.query(
-    `INSERT INTO admin_menu_layouts (scope, categories, updated_by)
-     VALUES ($1, $2::jsonb, $3)
+    `INSERT INTO admin_menu_layouts (scope, categories, links, updated_by)
+     VALUES ($1, $2::jsonb, COALESCE($3::jsonb, '[]'::jsonb), $4)
      ON CONFLICT (scope) DO UPDATE SET
        categories = EXCLUDED.categories,
+       links = COALESCE($3::jsonb, admin_menu_layouts.links),
        updated_by = EXCLUDED.updated_by,
        updated_at = NOW()
-     RETURNING categories, updated_by, updated_at`,
-    [scope, JSON.stringify(categories), updatedBy]
+     RETURNING categories, links, updated_by, updated_at`,
+    [scope, JSON.stringify(categories), links !== null ? JSON.stringify(links) : null, updatedBy]
   );
   return rows[0];
 }

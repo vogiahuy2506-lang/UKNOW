@@ -8825,6 +8825,13 @@ export default {
     discardChangesConfirm: 'Bố cục đang sửa chưa lưu sẽ mất. Vẫn chuyển tab?',
     scopeSuperAdmin: 'Menu Quản trị (Super Admin)',
     scopeAppUser: 'Menu Ứng dụng (/app)',
+    linkSectionTitle: 'Thêm link ngoài (YouTube/link bất kỳ)',
+    linkNameViPlaceholder: 'Tên link (VD: Link hướng dẫn)',
+    linkNameEnPlaceholder: 'Tên tiếng Anh (không bắt buộc)',
+    linkUrlPlaceholder: 'https://youtube.com/...',
+    addLink: 'Thêm link',
+    linkUrlInvalid: 'Link phải bắt đầu bằng http:// hoặc https://',
+    removeLink: 'Xoá link',
   },
 
   adminWelcomeEmail: {

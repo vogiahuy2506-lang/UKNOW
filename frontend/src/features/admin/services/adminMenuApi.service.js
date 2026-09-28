@@ -12,8 +12,8 @@ const adminMenuApiService = {
   getAppLayout() {
     return api.get('/admin/menu-layout/app');
   },
-  updateAppLayout(categories) {
-    return api.put('/admin/menu-layout/app', { categories });
+  updateAppLayout(categories, links) {
+    return api.put('/admin/menu-layout/app', { categories, links });
   },
   getUserAppMenuLayout() {
     return api.get('/users/app-menu-layout');

@@ -3501,8 +3501,11 @@ CREATE TABLE IF NOT EXISTS admin_menu_layouts (
   updated_by  BIGINT      REFERENCES users(id) ON DELETE SET NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- Migration 258: link ngoài (YouTube/link bất kỳ) trong menu khách — chỉ scope app_user dùng.
+  links       JSONB       NOT NULL DEFAULT '[]'::jsonb,
   CONSTRAINT admin_menu_layouts_scope_check CHECK (scope IN ('super_admin', 'app_user')),
-  CONSTRAINT admin_menu_layouts_categories_array_check CHECK (jsonb_typeof(categories) = 'array')
+  CONSTRAINT admin_menu_layouts_categories_array_check CHECK (jsonb_typeof(categories) = 'array'),
+  CONSTRAINT admin_menu_layouts_links_array_check CHECK (jsonb_typeof(links) = 'array')
 );
 
 -- ─── Migration 203: editable welcome email ───────────────────────────

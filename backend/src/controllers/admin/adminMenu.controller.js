@@ -50,7 +50,7 @@ export async function getAppLayout(_req, res) {
 
 export async function updateAppLayout(req, res) {
   try {
-    const data = await updateAppMenuLayout(req.body?.categories, req.user.id);
+    const data = await updateAppMenuLayout(req.body?.categories, req.body?.links, req.user.id);
     return res.json({ success: true, data, message: 'Đã lưu bố cục menu ứng dụng' });
   } catch (error) {
     return handleError(res, error);

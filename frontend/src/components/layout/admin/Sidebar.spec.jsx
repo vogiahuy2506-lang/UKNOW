@@ -378,3 +378,139 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     expect(campaignLink).toHaveAttribute('aria-current', 'page');
   });
 });
+
+/**
+ * PLAN_CHUYEN_MUC_LINK_NGOAI_2026-09-28 — link ngoài (YouTube/link bất kỳ) trong menu khách.
+ * `links` là mảng RIÊNG trong response (không nằm trong `categories`) — xem
+ * adminMenu.service.js/getAppMenuLayout. Mỗi ca dưới đây đợi load xong (findBy*) trước khi kiểm
+ * vì `links`/`categories` chỉ có sau khi promise của getUserAppMenuLayout resolve.
+ */
+describe('Sidebar — link ngoài trong menu khách (chuyên mục link)', () => {
+  const renderAppSidebar = (initialEntry = '/app', props = {}) =>
+    render(
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <I18nProvider>
+          <Sidebar isOpen isMobile={false} onToggle={vi.fn()} {...props} />
+        </I18nProvider>
+      </MemoryRouter>
+    );
+
+  beforeEach(() => {
+    localStorage.clear();
+    authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
+    authState.activeContext = { type: 'self' };
+  });
+
+  it('link ngoài trong chuyên mục thường -> render <a target="_blank" rel="noopener noreferrer">, không phải NavLink (không aria-current)', async () => {
+    mockGetUserAppMenuLayout.mockResolvedValue({
+      data: {
+        data: {
+          categories: [
+            { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)', itemKeys: ['ai_assistant'] },
+            { id: 'guides', nameVi: 'Hướng dẫn', nameEn: 'Guides', itemKeys: ['link-huongdan'] },
+          ],
+          links: [
+            { key: 'link-huongdan', nameVi: 'Link hướng dẫn', nameEn: 'Guide link', url: 'https://youtu.be/abc', categoryId: 'guides' },
+          ],
+        },
+      },
+    });
+
+    renderAppSidebar();
+
+    const groupButton = await screen.findByRole('button', { name: 'Hướng dẫn' });
+    fireEvent.click(groupButton);
+
+    const link = screen.getByRole('link', { name: 'Link hướng dẫn' });
+    expect(link).toHaveAttribute('href', 'https://youtu.be/abc');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+    expect(link).not.toHaveAttribute('aria-current');
+  });
+
+  it('link ngoài trong chuyên mục "main" -> hiện ở cấp 1 (không tiêu đề nhóm), vẫn là <a target="_blank">', async () => {
+    mockGetUserAppMenuLayout.mockResolvedValue({
+      data: {
+        data: {
+          categories: [
+            { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)', itemKeys: ['ai_assistant', 'link-top'] },
+          ],
+          links: [
+            { key: 'link-top', nameVi: 'Link Top', nameEn: 'Top link', url: 'https://a.vn', categoryId: 'main' },
+          ],
+        },
+      },
+    });
+
+    renderAppSidebar();
+
+    const link = await screen.findByRole('link', { name: 'Link Top' });
+    expect(link).toHaveAttribute('href', 'https://a.vn');
+    expect(link).toHaveAttribute('target', '_blank');
+    expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  });
+
+  it('sidebar thu gọn (isOpen=false) — link ngoài ở cấp 1 vẫn render <a href> (không phải button navigate nội bộ)', async () => {
+    mockGetUserAppMenuLayout.mockResolvedValue({
+      data: {
+        data: {
+          categories: [
+            { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)', itemKeys: ['ai_assistant', 'link-top'] },
+          ],
+          links: [
+            { key: 'link-top', nameVi: 'Link Top', nameEn: 'Top link', url: 'https://a.vn', categoryId: 'main' },
+          ],
+        },
+      },
+    });
+
+    renderAppSidebar('/app', { isOpen: false });
+
+    const link = await screen.findByTitle('Link Top');
+    expect(link.tagName).toBe('A');
+    expect(link).toHaveAttribute('href', 'https://a.vn');
+    expect(link).toHaveAttribute('target', '_blank');
+  });
+
+  it('nhân viên không có quyền gì vẫn thấy link ngoài (link không gắn permission/ownerOnly)', async () => {
+    authState.user = { role: 'user', username: 'emp3', fullName: 'Nhân viên C' };
+    authState.activeContext = { type: 'employee', permissions: {} };
+
+    mockGetUserAppMenuLayout.mockResolvedValue({
+      data: {
+        data: {
+          categories: [
+            { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)', itemKeys: ['ai_assistant', 'link-top'] },
+          ],
+          links: [
+            { key: 'link-top', nameVi: 'Link Top', nameEn: 'Top link', url: 'https://a.vn', categoryId: 'main' },
+          ],
+        },
+      },
+    });
+
+    renderAppSidebar();
+
+    expect(await screen.findByRole('link', { name: 'Link Top' })).toBeInTheDocument();
+  });
+
+  it('link URL không an toàn (javascript:) -> KHÔNG render trong sidebar (lớp phòng thủ thứ hai ở FE)', async () => {
+    mockGetUserAppMenuLayout.mockResolvedValue({
+      data: {
+        data: {
+          categories: [
+            { id: 'main', nameVi: 'Mục chính (không tiêu đề)', nameEn: 'Main (untitled)', itemKeys: ['ai_assistant', 'link-bad'] },
+          ],
+          links: [
+            { key: 'link-bad', nameVi: 'Link Xấu', nameEn: 'Bad link', url: 'javascript:alert(1)', categoryId: 'main' },
+          ],
+        },
+      },
+    });
+
+    renderAppSidebar();
+
+    await screen.findByRole('button', { name: 'Trợ lý AI' });
+    expect(screen.queryByText('Link Xấu')).not.toBeInTheDocument();
+  });
+});

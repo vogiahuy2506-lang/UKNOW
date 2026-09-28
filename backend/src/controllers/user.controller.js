@@ -1048,6 +1048,7 @@ class UserController {
         success: true,
         data: {
           categories: data.categories || [],
+          links: data.links || [],
         },
       });
     } catch (error) {
@@ -1058,7 +1059,7 @@ class UserController {
       if (error?.code === '42P01') {
         return res.json({
           success: true,
-          data: { categories: [] },
+          data: { categories: [], links: [] },
         });
       }
       return res.status(500).json({

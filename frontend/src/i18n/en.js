@@ -8815,6 +8815,13 @@ Feel free to ask me anything!`,
     discardChangesConfirm: 'Unsaved layout changes will be lost. Switch tab anyway?',
     scopeSuperAdmin: 'Super Admin Menu',
     scopeAppUser: 'App Menu (/app)',
+    linkSectionTitle: 'Add an external link (YouTube/any link)',
+    linkNameViPlaceholder: 'Link name (e.g. Guide link)',
+    linkNameEnPlaceholder: 'English name (optional)',
+    linkUrlPlaceholder: 'https://youtube.com/...',
+    addLink: 'Add link',
+    linkUrlInvalid: 'The link must start with http:// or https://',
+    removeLink: 'Remove link',
   },
 
   adminWelcomeEmail: {

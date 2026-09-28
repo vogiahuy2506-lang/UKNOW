@@ -4,6 +4,8 @@ import {
   HiOutlineGlobeAlt,
   HiOutlineCurrencyDollar,
   HiOutlineCog,
+  HiOutlinePlay,
+  HiOutlineExternalLink,
 } from 'react-icons/hi';
 
 export const DEFAULT_SUPER_ADMIN_CATEGORIES = Object.freeze([
@@ -170,6 +172,56 @@ export function normalizeAppMenuCategories(categories, items) {
  * LÁ TRỰC TIẾP (spread vào kết quả) thay vì bọc thành một nhóm có tiêu đề — đúng hành vi hôm
  * nay của 3 mục cấp 1 không tiêu đề.
  */
+/**
+ * PLAN_CHUYEN_MUC_LINK_NGOAI_2026-09-28 — super admin chèn link ngoài (YouTube/link bất kỳ) vào
+ * menu khách. Chỉ `http:`/`https:` được coi là an toàn — BE (adminMenu.service.js) đã kiểm bằng
+ * `new URL().protocol` khi lưu, đây là lớp phòng thủ THỨ HAI ở FE (dữ liệu cũ/lỗi ghi tay vẫn có
+ * thể lọt vào DB). Dùng `new URL`, KHÔNG so chuỗi `startsWith('http')` — lý do y hệt BE.
+ */
+export function isSafeExternalUrl(url) {
+  if (typeof url !== 'string' || !url) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+function isYoutubeUrl(url) {
+  try {
+    const host = new URL(url).hostname.toLowerCase();
+    return host === 'youtube.com' || host.endsWith('.youtube.com') || host === 'youtu.be';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Chuyển `links` (từ API, xem adminMenu.service.js) thành các "mục lá" tương thích với
+ * `normalizeAppMenuCategories`/`groupAppMenuItems` — mỗi link có `key` (đã có tiền tố `link-` từ
+ * BE) nằm trong `itemKeys` của một chuyên mục như mọi tab khác, nên không cần sửa 2 hàm đó.
+ * `defaultCategory` = `categoryId` để luật "tab mồ côi tự về chuyên mục mặc định" (đã có sẵn) áp
+ * dụng đúng nếu itemKeys nào đó thiếu key này (không nên xảy ra vì BE đã ràng buộc chéo, nhưng
+ * dữ liệu cũ/đổi tay trực tiếp trong DB vẫn có thể tạo ra tình huống này).
+ *
+ * Link có URL không an toàn bị BỎ QUA hoàn toàn (không render) — lớp phòng thủ thứ hai, xem
+ * `isSafeExternalUrl`.
+ */
+export function buildAppLinkMenuItems(links, locale) {
+  if (!Array.isArray(links)) return [];
+  return links
+    .filter((link) => isSafeExternalUrl(link?.url))
+    .map((link) => ({
+      key: link.key,
+      name: locale === 'en' ? (link.nameEn || link.nameVi) : link.nameVi,
+      url: link.url,
+      external: true,
+      icon: isYoutubeUrl(link.url) ? HiOutlinePlay : HiOutlineExternalLink,
+      defaultCategory: link.categoryId,
+    }));
+}
+
 export function groupAppMenuItems(items, locale, categories, CategoryIcon) {
   const itemByKey = new Map(items.map((item) => [item.key, item]));
   const result = [];

@@ -172,7 +172,7 @@ describe('Admin menu layout API', () => {
     expect(response.status).toBe(200);
     expect(response.body).toEqual({
       success: true,
-      data: { categories: [] },
+      data: { categories: [], links: [] },
     });
   });
 

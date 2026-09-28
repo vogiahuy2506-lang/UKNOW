@@ -14,7 +14,7 @@ import {
   userMenuItems,
   AVATAR_STYLES,
 } from './navConfig';
-import { groupSuperAdminMenuItems, groupAppMenuItems } from './adminMenuLayout';
+import { groupSuperAdminMenuItems, groupAppMenuItems, buildAppLinkMenuItems } from './adminMenuLayout';
 import adminMenuApiService, {
   ADMIN_MENU_LAYOUT_UPDATED_EVENT,
 } from '../../../features/admin/services/adminMenuApi.service';
@@ -34,6 +34,7 @@ function SubmenuPanel({ item, onClose }) {
   const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
 
   const getActiveChild = (child) => {
+    if (child.external) return false;
     if (child.path === '/app/campaigns/new') {
       return isBuilderPage || location.pathname === '/app/campaigns/new';
     }
@@ -75,16 +76,32 @@ function SubmenuPanel({ item, onClose }) {
 
             if (child.action) {
               return (
-                <button key={child.path} type="button" onClick={() => handleAction(child)} className={baseClass}>
+                <button key={child.key || child.path} type="button" onClick={() => handleAction(child)} className={baseClass}>
                   {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
                   <span>{displayName}</span>
                 </button>
               );
             }
 
+            if (child.external) {
+              return (
+                <a
+                  key={child.key || child.path}
+                  href={child.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={onClose}
+                  className={baseClass}
+                >
+                  {child.icon && <child.icon className="w-4 h-4 text-gray-400 shrink-0" />}
+                  <span>{displayName}</span>
+                </a>
+              );
+            }
+
             return (
               <NavLink
-                key={child.path}
+                key={child.key || child.path}
                 to={child.path}
                 end={child.end}
                 onClick={onClose}
@@ -113,6 +130,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
   const { user, activeContext } = useAuthStore();
   const isSuperAdmin = user?.role === 'admin';
   const [adminMenuCategories, setAdminMenuCategories] = useState(null);
+  const [appMenuLinks, setAppMenuLinks] = useState([]);
   const menuItems = isSuperAdmin
     ? groupSuperAdminMenuItems(
       superAdminMenuItems(t),
@@ -120,7 +138,12 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       adminMenuCategories,
       HiOutlineCollection
     )
-    : groupAppMenuItems(userMenuItems(t), locale, adminMenuCategories, HiOutlineCollection);
+    : groupAppMenuItems(
+      [...userMenuItems(t), ...buildAppLinkMenuItems(appMenuLinks, locale)],
+      locale,
+      adminMenuCategories,
+      HiOutlineCollection
+    );
   const isEmployeeCtx = activeContext?.type === 'employee';
   const ctxPermissions = activeContext?.permissions || {};
 
@@ -136,12 +159,19 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     return true;
   };
 
-  const applyLayoutCategories = (rawCats) => {
+  const applyLayoutCategories = (rawCats, rawLinks) => {
     const cats = Array.isArray(rawCats) ? rawCats : [];
+    const linksList = Array.isArray(rawLinks) ? rawLinks : [];
     setAdminMenuCategories(cats);
+    setAppMenuLinks(linksList);
     const items = isSuperAdmin
       ? groupSuperAdminMenuItems(superAdminMenuItems(t), locale, cats, HiOutlineCollection)
-      : groupAppMenuItems(userMenuItems(t), locale, cats, HiOutlineCollection);
+      : groupAppMenuItems(
+        [...userMenuItems(t), ...buildAppLinkMenuItems(linksList, locale)],
+        locale,
+        cats,
+        HiOutlineCollection
+      );
     const visible = items
       .map((item) => {
         if (!item.children) return item;
@@ -168,7 +198,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     if (isSuperAdmin) {
       adminMenuApiService.getLayout()
         .then((response) => {
-          if (isMounted) applyLayoutCategoriesRef.current(response.data?.data?.categories || []);
+          if (isMounted) applyLayoutCategoriesRef.current(response.data?.data?.categories || [], []);
         })
         .catch((error) => {
           // Sidebar must remain usable while a new backend migration is rolling
@@ -182,7 +212,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
           // Review Claude 13/09: tính lại nhóm đang mở theo route hiện tại thay vì đóng hết —
           // super admin vừa lưu bố cục xong không bị mất dấu mình đang đứng ở nhóm nào (cùng
           // luật với PR-3: nhóm chứa trang đang mở luôn mở).
-          applyLayoutCategoriesRef.current(event.detail.categories);
+          applyLayoutCategoriesRef.current(event.detail.categories, []);
         }
       };
       window.addEventListener(ADMIN_MENU_LAYOUT_UPDATED_EVENT, handleLayoutUpdated);
@@ -196,7 +226,9 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
     // Giữ .catch() fallback về mặc định; không phát / lắng nghe sự kiện live update cho khách.
     adminMenuApiService.getUserAppMenuLayout()
       .then((response) => {
-        if (isMounted) applyLayoutCategoriesRef.current(response.data?.data?.categories || []);
+        if (isMounted) {
+          applyLayoutCategoriesRef.current(response.data?.data?.categories || [], response.data?.data?.links || []);
+        }
       })
       .catch((error) => {
         console.warn('[Sidebar] Falling back to default app menu:', error?.message);
@@ -269,7 +301,9 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
   const renderChildItems = (children) => {
     return children.map((child) => {
       const isBuilderPage = location.pathname.includes('/app/campaigns/') && location.pathname.includes('/builder');
-      const isActiveChild = child.path === '/app/campaigns/new'
+      const isActiveChild = child.external
+        ? false
+        : child.path === '/app/campaigns/new'
         ? isBuilderPage || location.pathname === '/app/campaigns/new'
         : (child.end ? location.pathname === child.path : location.pathname === child.path || location.pathname.startsWith(child.path + '/'));
       const displayName = child.path === '/app/campaigns/new' && isBuilderPage && location.pathname !== '/app/campaigns/new'
@@ -284,7 +318,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       if (child.action === 'openCreateCampaignModal') {
         return (
           <button
-            key={child.path}
+            key={child.key || child.path}
             type="button"
             data-menu-level="item"
             onClick={() => { navigate('/app/campaigns', { state: { openCreateCampaignModal: true } }); handleNavClose(); }}
@@ -298,7 +332,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
       if (child.action === 'openCreateEmployeeModal') {
         return (
           <button
-            key={child.path}
+            key={child.key || child.path}
             type="button"
             data-menu-level="item"
             onClick={() => { navigate('/app/settings/employees', { state: { openCreateEmployeeModal: true } }); handleNavClose(); }}
@@ -310,9 +344,26 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
         );
       }
 
+      if (child.external) {
+        return (
+          <a
+            key={child.key || child.path}
+            href={child.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            data-menu-level="item"
+            onClick={handleNavClose}
+            className={baseClassName}
+          >
+            {child.icon && <child.icon className="w-4 h-4 shrink-0 text-gray-400" />}
+            <span>{displayName}</span>
+          </a>
+        );
+      }
+
       return (
         <NavLink
-          key={child.path}
+          key={child.key || child.path}
           to={child.path}
           end={child.end}
           data-menu-level="item"
@@ -366,10 +417,29 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
               const itemKey = getMenuItemKey(item);
 
               if (!isOpen && !isMobile) {
-                const isItemActive = item.children
+                const isItemActive = item.external
+                  ? false
+                  : item.children
                   ? isParentActive(item)
                   : (item.end ? location.pathname === item.path : (location.pathname === item.path || location.pathname.startsWith(item.path + '/')));
                 const isFloatingOpen = floatingItem && getMenuItemKey(floatingItem) === itemKey;
+                const iconButtonClassName = `w-full flex items-center justify-center rounded-xl py-2.5 transition-all ${
+                  isFloatingOpen
+                    ? 'bg-orange-100 text-orange-600'
+                    : isItemActive
+                    ? 'bg-orange-50 text-orange-600'
+                    : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
+                }`;
+
+                if (item.external) {
+                  return (
+                    <div key={itemKey}>
+                      <a href={item.url} target="_blank" rel="noopener noreferrer" title={item.name} className={iconButtonClassName}>
+                        <item.icon className="w-5 h-5 flex-shrink-0" />
+                      </a>
+                    </div>
+                  );
+                }
 
                 return (
                   <div key={itemKey}>
@@ -377,13 +447,7 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                       type="button"
                       onClick={() => handleParentClick(item)}
                       title={item.name}
-                      className={`w-full flex items-center justify-center rounded-xl py-2.5 transition-all ${
-                        isFloatingOpen
-                          ? 'bg-orange-100 text-orange-600'
-                          : isItemActive
-                          ? 'bg-orange-50 text-orange-600'
-                          : 'text-gray-400 hover:bg-gray-50 hover:text-gray-900'
-                      }`}
+                      className={iconButtonClassName}
                     >
                       <item.icon className="w-5 h-5 flex-shrink-0" />
                     </button>
@@ -429,9 +493,29 @@ const Sidebar = ({ isOpen, isMobile, onClose, onToggle, topOffset = 0 }) => {
                 );
               }
 
-              const isLeafActive = item.end
+              const isLeafActive = item.external
+                ? false
+                : item.end
                 ? location.pathname === item.path
                 : (location.pathname === item.path || location.pathname.startsWith(item.path + '/'));
+
+              if (item.external) {
+                return (
+                  <div key={itemKey}>
+                    <a
+                      href={item.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={item.name}
+                      data-menu-level="item"
+                      className="w-full flex items-center rounded-xl py-2 px-3 text-[13px] transition-colors text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                    >
+                      <item.icon className="w-4 h-4 flex-shrink-0 mr-2.5 text-gray-400" />
+                      <span className="flex-1 text-left truncate">{item.name}</span>
+                    </a>
+                  </div>
+                );
+              }
 
               return (
                 <div key={itemKey}>
