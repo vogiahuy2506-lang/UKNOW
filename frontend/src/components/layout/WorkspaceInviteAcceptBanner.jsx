@@ -20,7 +20,8 @@ const WorkspaceInviteAcceptBanner = () => {
 
   if (activeContext?.type !== 'self' || !user?.id) return null;
 
-  const pending = (user.memberships || []).filter((membership) => !membership?.acceptedAt);
+  // Chỉ `null` (backend mới) là đang chờ; thiếu trường (backend cũ lúc FE deploy trước) = đã chấp nhận.
+  const pending = (user.memberships || []).filter((membership) => membership?.acceptedAt === null);
   if (pending.length === 0) return null;
 
   const nameOf = (membership) => membership.ownerName || membership.ownerUsername;

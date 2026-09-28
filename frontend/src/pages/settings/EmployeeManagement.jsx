@@ -585,7 +585,7 @@ const EmployeeManagement = () => {
                       <td>{emp.fullName || <span className="text-gray-400">—</span>}</td>
                       <td className="text-sm text-gray-600">{emp.email}</td>
                       <td>
-                        {!emp.acceptedAt ? (
+                        {emp.acceptedAt === null ? (
                           <span className="badge badge-warning">{t('employee.pendingAcceptance')}</span>
                         ) : emp.status === 'pending_activation' ? (
                           <span className="badge badge-warning">{t('employee.pendingActivation')}</span>
@@ -832,7 +832,7 @@ const EmployeeManagement = () => {
                     {/* Trạng thái chờ kích hoạt nằm ở users.status (`status`), KHÔNG phải user_members.status
                         (`memberStatus`: active/inactive) — so nhầm khiến nút "Gửi lại lời mời" không bao giờ hiện.
                         acceptedAt null: chưa chấp nhận lời mời thì khoá/mở khoá không có ý nghĩa (backend 400). */}
-                    {selectedEmployee.status !== 'pending_activation' && selectedEmployee.acceptedAt && (
+                    {selectedEmployee.status !== 'pending_activation' && selectedEmployee.acceptedAt !== null && (
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(selectedEmployee)}

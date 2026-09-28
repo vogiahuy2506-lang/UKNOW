@@ -110,7 +110,9 @@ const pickDefaultContext = (user) => {
   // Bỏ qua membership CHƯA CHẤP NHẬN (`acceptedAt` null — PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2): backend
   // (resolveUserContext) chặn context-switch cho tới khi người này tự bấm Chấp nhận, nên tự động vào đây
   // sẽ vỡ ngay ở request kế tiếp — chờ WorkspaceInviteAcceptBanner mời chấp nhận trước.
-  const usable = memberships.find((membership) => !membership?.isLocked && membership?.acceptedAt);
+  // `=== null` chứ không `!acceptedAt`: backend cũ (trước migration 257) không trả trường này → undefined phải
+  // coi là ĐÃ chấp nhận, nếu không lúc FE deploy trước BE mọi nhân viên mất không gian mặc định.
+  const usable = memberships.find((membership) => !membership?.isLocked && membership?.acceptedAt !== null);
   if (!hasPlan && usable) {
     return buildEmployeeContext(usable);
   }
@@ -150,7 +152,7 @@ export const reconcileActiveContext = (user, activeContext) => {
   );
   // membership mất/bị khoá/chưa (còn) chấp nhận — trường hợp cuối phòng thủ, bình thường không tới đây vì
   // pickDefaultContext đã lọc ngay từ đầu; chỉ có ý nghĩa nếu accepted_at bị revert trong lúc đang ở context đó.
-  if (!membership || membership.isLocked || !membership.acceptedAt) {
+  if (!membership || membership.isLocked || membership.acceptedAt === null) {
     return { kind: 'workspaceLost', context: pickDefaultContext(user) };
   }
 

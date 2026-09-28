@@ -108,6 +108,13 @@ describe('reconcileActiveContext (hàm thuần)', () => {
     expect(result.context).toEqual({ type: 'self' });
   });
 
+  it('backend cũ không trả acceptedAt (FE deploy trước BE) → vẫn coi là đã chấp nhận, KHÔNG mất không gian', () => {
+    const legacy = membership();
+    delete legacy.acceptedAt;
+    const result = reconcileActiveContext(user([legacy]), employeeCtx());
+    expect(result.kind).toBe('unchanged');
+  });
+
   it('mất công ty này nhưng không có gói riêng và còn công ty khác → sang công ty khác (theo pickDefaultContext)', () => {
     const result = reconcileActiveContext(
       user([membership({ ownerId: 20, ownerName: 'Công ty B' })], { active_plan_id: null }),

@@ -45,7 +45,7 @@ const WorkspaceInviteBanner = () => {
   // chấp nhận (`acceptedAt` null) cũng không mời vào ĐÂY — backend chặn context-switch cho tới khi chấp
   // nhận, WorkspaceInviteAcceptBanner lo phần mời chấp nhận riêng (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2).
   const owners = (user.memberships || []).filter(
-    (membership) => !membership.isLocked && membership.acceptedAt && !isDismissed(user.id, membership.ownerId)
+    (membership) => !membership.isLocked && membership.acceptedAt !== null && !isDismissed(user.id, membership.ownerId)
   );
   if (owners.length === 0) return null;
 
