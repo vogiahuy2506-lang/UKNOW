@@ -307,11 +307,14 @@ class ZaloPersonalRepository {
         return true;
       }
 
+      // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B (mục 6): xem chú thích đầy đủ ở unifiedInbox.repository.js
+      // isAiPaused — AND ai_paused_at = $2 (mốc vừa đọc) tránh xoá nhầm một lần tạm dừng MỚI (tay
+      // hoặc auto) vừa được ghi đúng trong cửa sổ mili-giây giữa lúc đọc và lúc UPDATE này chạy.
       await db.query(
         `UPDATE zalo_personal_conversations
          SET ai_paused = false, ai_paused_at = NULL
-         WHERE id = $1 AND ai_paused = true`,
-        [conversationId]
+         WHERE id = $1 AND ai_paused = true AND ai_paused_at = $2`,
+        [conversationId, row.ai_paused_at]
       );
       return false;
     } catch (err) {

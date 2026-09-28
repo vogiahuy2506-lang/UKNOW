@@ -69,6 +69,33 @@ describe('unifiedInbox.repository isAiPaused (lazy auto-resume)', () => {
     await expect(unifiedInboxRepository.isAiPaused(4, 'webchat')).resolves.toBe(false);
     expect(query).toHaveBeenCalledTimes(3);
     expect(String(query.mock.calls[2][0])).toMatch(/UPDATE[\s\S]*ai_paused = false/i);
+    // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B (mục 6): UPDATE phải kèm mốc ai_paused_at VỪA ĐỌC —
+    // tránh xoá nhầm một lần tạm dừng MỚI ghi đúng trong cửa sổ đua giữa lúc đọc và lúc UPDATE.
+    expect(String(query.mock.calls[2][0])).toMatch(/AND ai_paused_at = \$2/i);
+    expect(query.mock.calls[2][1]).toEqual([4, twentyMinAgo]);
+  });
+
+  it('không xoá nhầm một lần tạm dừng TAY vừa bấm cùng lúc (mốc DB đã đổi thành NULL sau khi đọc) — UPDATE dùng mốc CŨ nên WHERE không khớp', async () => {
+    // Kịch bản đua: lượt isAiPaused này ĐỌC được ai_paused_at = mốc CŨ (đủ lâu để tự bật lại),
+    // nhưng SAU đó (trước khi UPDATE chạy) chủ bấm tạm dừng TAY — DB thật đã đổi ai_paused_at
+    // thành NULL. Mock ở đây chỉ xác nhận UPDATE được gọi với mốc CŨ (đã đọc), không phải giá trị
+    // hiện tại trong DB — đó là điều kiện đủ để WHERE ai_paused_at = $2 không khớp dòng đã đổi.
+    const twentyMinAgo = new Date(Date.now() - 20 * 60 * 1000).toISOString();
+    query
+      .mockResolvedValueOnce({
+        rows: [{ ai_paused: true, ai_paused_at: twentyMinAgo, id_user: 4 }],
+      })
+      .mockResolvedValueOnce({
+        rows: [{ ai_handoff_auto_resume_minutes: 15 }],
+      })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await unifiedInboxRepository.isAiPaused(4, 'webchat');
+
+    const [updateSql, updateParams] = query.mock.calls[2];
+    expect(String(updateSql)).toMatch(/WHERE id = \$1 AND ai_paused = true AND ai_paused_at = \$2/i);
+    expect(updateParams[1]).toBe(twentyMinAgo);
+    expect(updateParams[1]).not.toBeNull();
   });
 
   it('stays paused when ai_paused_at is invalid', async () => {

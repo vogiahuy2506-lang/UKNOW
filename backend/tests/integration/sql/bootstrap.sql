@@ -3214,6 +3214,17 @@ ALTER TABLE chatbot_settings
 ALTER TABLE chatbot_zalo_account_settings
   ADD COLUMN IF NOT EXISTS id_chatbot BIGINT REFERENCES custom_chatbots(id) ON DELETE SET NULL;
 
+-- Migration 160 (drift phát hiện khi làm PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B mục 5): bootstrap.sql
+-- có cột id_chatbot (ALTER ngay trên) nhưng CHƯA BAO GIỜ mirror việc đổi UNIQUE constraint — CREATE
+-- TABLE gốc (uq_chatbot_zalo_account) vẫn chỉ (id_user, id_zalo_setting), nên setEnabled()'s
+-- ON CONFLICT (id_user, id_zalo_setting, id_chatbot) luôn ném lỗi "no unique or exclusion
+-- constraint" trên DB test thật — chỉ không lộ ra vì mọi test trước giờ mock db.query, chưa có
+-- integration test nào chạm write path này.
+ALTER TABLE chatbot_zalo_account_settings
+  DROP CONSTRAINT IF EXISTS uq_chatbot_zalo_account;
+ALTER TABLE chatbot_zalo_account_settings
+  ADD CONSTRAINT uq_chatbot_zalo_account_chatbot UNIQUE (id_user, id_zalo_setting, id_chatbot);
+
 ALTER TABLE diagnostic_messages
   ADD COLUMN IF NOT EXISTS dry_run BOOLEAN NOT NULL DEFAULT FALSE;
 

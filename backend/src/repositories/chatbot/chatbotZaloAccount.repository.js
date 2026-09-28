@@ -235,7 +235,7 @@ class ChatbotZaloAccountRepository {
       `SELECT czs.id_chatbot
          FROM chatbot_zalo_account_settings czs
          JOIN custom_chatbots cb
-           ON cb.id = czs.id_chatbot AND cb.is_active = true
+           ON cb.id = czs.id_chatbot AND cb.id_user = czs.id_user AND cb.is_active = true
         WHERE czs.id_user = $1
           AND czs.id_zalo_setting = $2
           AND czs.id_chatbot IS NOT NULL

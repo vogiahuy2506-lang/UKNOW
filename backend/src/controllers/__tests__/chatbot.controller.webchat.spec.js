@@ -463,3 +463,53 @@ describe('PR-1c — bot xác nhận khi khách để lại liên hệ & widget n
     expect(res.json.mock.calls[0][0].data.content).not.toContain('Đã ghi nhận');
   });
 });
+
+// PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B (mục 7): SSE 'inbox:new_message' cho tin web chat thiếu
+// trường `type` — FE (InboxOutboxPage.jsx:385) đọc `data.type || 'zalo_personal'`, nên hội thoại
+// web mới (chưa có trong danh sách) bị gán nhầm mặc định 'zalo_personal', mở nhầm sang bảng Zalo.
+describe('PR-B (mục 7) — SSE inbox:new_message cho web chat phải kèm type: "webchat"', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(chatbot);
+    findChatbotByWidgetKey.mockResolvedValue(chatbot);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'Dạ em chào anh chị ạ.' });
+    consume.mockResolvedValue(undefined);
+    broadcast.mockReturnValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    isAiPaused.mockResolvedValue(false);
+  });
+
+  it('chatWithCustomChatbotById: SSE inbox:new_message có type: "webchat"', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '12' }, body: { message: 'hi', sessionId: 'sess_1', history: [] } },
+      res
+    );
+
+    const newMessageCalls = broadcast.mock.calls.filter(([, event]) => event === 'inbox:new_message');
+    expect(newMessageCalls).toHaveLength(1);
+    expect(newMessageCalls[0][2]).toEqual(
+      expect.objectContaining({ type: 'webchat', conversationType: 'webchat' })
+    );
+  });
+
+  it('chatWithCustomChatbot (widget path): SSE inbox:new_message có type: "webchat"', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbot(
+      { params: { widgetKey: 'wk_abc' }, body: { message: 'xin chào', sessionId: 'sess_widget_1', history: [] } },
+      res
+    );
+
+    const newMessageCalls = broadcast.mock.calls.filter(([, event]) => event === 'inbox:new_message');
+    expect(newMessageCalls).toHaveLength(1);
+    expect(newMessageCalls[0][2]).toEqual(
+      expect.objectContaining({ type: 'webchat', conversationType: 'webchat' })
+    );
+  });
+});

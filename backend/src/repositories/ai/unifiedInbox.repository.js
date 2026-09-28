@@ -901,11 +901,15 @@ class UnifiedInboxRepository {
         return true;
       }
 
+      // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B (mục 6): thêm AND ai_paused_at = $2 (mốc VỪA ĐỌC ở
+      // trên) — nếu chủ vừa bấm tạm dừng TAY (ai_paused_at NULL) hoặc một tạm dừng MỚI khác đúng
+      // trong cửa sổ mili-giây giữa lúc đọc và lúc UPDATE này chạy, mốc hiện tại trong DB đã khác
+      // mốc mình đọc → WHERE không khớp, không xoá nhầm lần tạm dừng mới đó.
       await db.query(
         `UPDATE ${table}
          SET ai_paused = false, ai_paused_at = NULL
-         WHERE id = $1 AND ai_paused = true`,
-        [conversationId]
+         WHERE id = $1 AND ai_paused = true AND ai_paused_at = $2`,
+        [conversationId, row.ai_paused_at]
       );
       return false;
     } catch (err) {

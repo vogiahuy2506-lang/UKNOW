@@ -1774,6 +1774,10 @@ class ChatbotController {
         sseService.broadcast(String(chatbot.id_user), 'inbox:new_message', {
           conversationId: conversation.id,
           conversationType: 'webchat',
+          // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B (mục 7): FE (InboxOutboxPage.jsx) đọc `data.type`,
+          // không phải `conversationType` — thiếu field này thì hội thoại web mới (chưa có trong
+          // danh sách) bị FE gán nhầm mặc định 'zalo_personal', đọc nhầm sang bảng Zalo.
+          type: 'webchat',
           channel: 'web',
           message: userContent,
           senderName: 'Khách',
@@ -2025,6 +2029,9 @@ class ChatbotController {
     sseService.broadcast(String(chatbot.id_user), 'inbox:new_message', {
       conversationId: conversation.id,
       conversationType: 'webchat',
+      // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B (mục 7): xem chú thích ở chatWithCustomChatbot — FE đọc
+      // `data.type`, không phải `conversationType`.
+      type: 'webchat',
       channel: 'web',
       message: userContent,
       senderName: 'Khách',

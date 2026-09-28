@@ -244,4 +244,16 @@ describe('chatbotZaloAccount.repository.pickEnabledChatbotForZalo', () => {
     expect(String(sql)).toMatch(/czs\.is_enabled\s*=\s*true/i);
     expect(params).toEqual([1, 10]);
   });
+
+  // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-B (mục 5): RA_SOAT_BAT_TAT_AI phát hiện #5 — nếu một dòng
+  // chatbot_zalo_account_settings.id_chatbot trỏ sang chatbot của NGƯỜI KHÁC (dữ liệu lịch sử,
+  // hoặc ghi tay), JOIN thiếu điều kiện chủ khiến chatbot đó vẫn được chọn — hệ thống dặn (system
+  // instruction) của khách khác lộ ra trên Zalo của mình.
+  it('JOIN phải kiểm cb.id_user = czs.id_user (không chọn nhầm chatbot của người khác)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id_chatbot: 11 }] });
+    await repository.pickEnabledChatbotForZalo(1, 10, 0);
+
+    const [sql] = query.mock.calls[0];
+    expect(String(sql)).toMatch(/cb\.id_user\s*=\s*czs\.id_user/i);
+  });
 });
