@@ -91,12 +91,23 @@ async function writeFakeUpload({ relPath, content }) {
 
 async function insertTemplateFile({
   templateId = null,
+  idUser = null,
   storageKey,
   displayName = 'File hiển thị',
   originalName = 'file.txt',
   mimeType = 'text/plain',
   fileSize = 100,
 }) {
+  // PR-4 (28/09): tải theo id chỉ cho chủ mẫu email → tệp phải gắn một mẫu thuộc idUser. Trước đây
+  // idUser được truyền nhưng bị bỏ qua (template_id NULL), đúng hình dạng "tệp mồ côi" nay bị chặn 404.
+  if (templateId == null && idUser != null) {
+    const tpl = await db.query(
+      `INSERT INTO email_templates (id_user, template_name, subject, body_html)
+       VALUES ($1, 'Mẫu có đính kèm', 'Chào bạn', '<p>Nội dung</p>') RETURNING id`,
+      [idUser]
+    );
+    templateId = tpl.rows[0].id;
+  }
   const { rows } = await db.query(
     `INSERT INTO template_files (template_id, storage_key, original_name, display_name, mime_type, file_size)
      VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
@@ -360,7 +371,7 @@ describe('GET /api/attachments/presigned-by-key', () => {
     const user = await createUser({ username: 'pres-key-3' });
     const token = await loginAs(user);
     const res = await request(app)
-      .get('/api/attachments/presigned-by-key?key=uploads/foo/bar.txt&preview=true')
+      .get(`/api/attachments/presigned-by-key?key=uploads/${user.id}/bar.txt&preview=true`)
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
     expect(res.body.data.fileName).toBe('bar.txt');
