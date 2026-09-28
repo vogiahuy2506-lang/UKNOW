@@ -84,6 +84,19 @@ describe('tryHandleHelpChat route branches', () => {
     expect(mockGenerate).not.toHaveBeenCalled();
   });
 
+  // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 1 — câu LỆNH gửi qua kênh chưa hỗ trợ,
+  // trước bộ định tuyến LLM.
+  it('unsupported-send short-circuits câu LỆNH gửi qua kênh chưa hỗ trợ, trước router LLM', async () => {
+    const result = await tryHandleHelpChat({
+      history: historyWith('gửi nhanh tin telegram cho nhóm học viên'),
+      userId: 1,
+    });
+
+    expect(result.content).toMatch(/chưa hỗ trợ/i);
+    expect(result.data).toMatchObject({ capabilityProbe: true, unsupportedSend: true });
+    expect(mockGenerate).not.toHaveBeenCalled();
+  });
+
   it('plan-advisor short-circuits before sensitive docs/router', async () => {
     const result = await tryHandleHelpChat({
       history: historyWith('bảng giá có những tính năng gì'),

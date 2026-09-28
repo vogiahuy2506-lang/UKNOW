@@ -4436,6 +4436,7 @@ export default {
     subject: 'Tiêu đề',
     content: 'Nội dung',
     saveToLibrary: 'Lưu vào thư viện',
+    noPermissionSaveTemplate: 'Tài khoản nhân viên của bạn chưa được cấp quyền lưu mẫu tin. Nhờ chủ nhóm vào Cài đặt › Nhân viên bật quyền này nhé.',
     savedToLibrary: 'Đã lưu vào thư viện',
     saving: 'Đang lưu...',
     edit: 'Chỉnh sửa',
@@ -4621,6 +4622,7 @@ export default {
     enterEmailTemplateName: 'Nhập tên mẫu email...',
     // Confirm create / campaign buttons
     createCampaignBtn: 'Tạo chiến dịch',
+    noPermissionCreateCampaign: 'Tài khoản nhân viên của bạn chưa được cấp quyền tạo chiến dịch. Nhờ chủ nhóm vào Cài đặt › Nhân viên bật quyền này nhé.',
     stepsLabel: 'Các bước:',
     // Category names
     notificationCategory: '🔔 Thông báo',

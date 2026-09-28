@@ -216,7 +216,7 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
 };
 
 // Template preview card
-export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, autoSaveCategory = null, fromLibrary = false, externallySaved = false }) => {
+export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, autoSaveCategory = null, fromLibrary = false, externallySaved = false, canSave = true }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -308,36 +308,43 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
           <CategoryPicker onSelect={handleSave} onCancel={() => setShowCategoryPicker(false)} t={t} />
         ) : (
           <div className="flex flex-col gap-2 pt-1">
+            {!canSave && (
+              <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+                {t('aiChatbot.noPermissionSaveTemplate')}
+              </p>
+            )}
             <div className="flex gap-2">
-              <button
-                onClick={() => {
-                  if (isSaved) return;
-                  if (isLibraryTemplate) {
-                    handleSave();
-                    return;
-                  }
-                  if (autoSaveCategory) {
-                    handleSave(autoSaveCategory);
-                  } else {
-                    setShowCategoryPicker(true);
-                  }
-                }}
-                disabled={saving || isSaved}
-                className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
-                  isSaved
-                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
-                    : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
-                }`}
-              >
-                <HiOutlineCheck className="w-4 h-4" />
-                {isSaved
-                  ? (t('aiChatbot.savedToLibrary') || 'Đã lưu')
-                  : (saving
-                    ? (t('aiChatbot.saving') || 'Đang lưu...')
-                    : (isLibraryTemplate
-                      ? (t('aiChatbot.confirmUseTemplate') || 'Xác nhận dùng template này')
-                      : (t('aiChatbot.saveToLibrary') || 'Lưu vào thư viện')))}
-              </button>
+              {canSave && (
+                <button
+                  onClick={() => {
+                    if (isSaved) return;
+                    if (isLibraryTemplate) {
+                      handleSave();
+                      return;
+                    }
+                    if (autoSaveCategory) {
+                      handleSave(autoSaveCategory);
+                    } else {
+                      setShowCategoryPicker(true);
+                    }
+                  }}
+                  disabled={saving || isSaved}
+                  className={`flex-1 py-2.5 text-xs font-black rounded-xl flex items-center justify-center gap-1.5 transition-all disabled:cursor-default ${
+                    isSaved
+                      ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                      : 'bg-orange-500 text-white hover:bg-orange-600 disabled:opacity-60'
+                  }`}
+                >
+                  <HiOutlineCheck className="w-4 h-4" />
+                  {isSaved
+                    ? (t('aiChatbot.savedToLibrary') || 'Đã lưu')
+                    : (saving
+                      ? (t('aiChatbot.saving') || 'Đang lưu...')
+                      : (isLibraryTemplate
+                        ? (t('aiChatbot.confirmUseTemplate') || 'Xác nhận dùng template này')
+                        : (t('aiChatbot.saveToLibrary') || 'Lưu vào thư viện')))}
+                </button>
+              )}
               <button
                 onClick={() => onEdit?.(draft)}
                 className="flex-1 py-2.5 bg-slate-50 border border-slate-200 text-slate-700 text-xs font-black rounded-xl hover:bg-slate-100 flex items-center justify-center gap-1.5 transition-all"
@@ -2001,11 +2008,11 @@ const previewChannelLabel = (channel, locale) => {
 };
 
 // The server supplies this semantic view. Model-provided summary.steps is intentionally never rendered here.
-export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, t, locale = 'vi' }) => {
+export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, canCreateCampaign = true, canRunCampaign = true, t, locale = 'vi' }) => {
   const [expandedSteps, setExpandedSteps] = useState(new Set());
   const steps = confirmationView?.steps || [];
   const blockingIssues = confirmationView?.blockingIssues || [];
-  const canCreate = isActive && !isPreparing && !prepareError && confirmationView?.readyToCreate;
+  const canCreate = isActive && !isPreparing && !prepareError && confirmationView?.readyToCreate && canCreateCampaign;
   const toggleStep = (key) => setExpandedSteps((current) => {
     const next = new Set(current);
     if (next.has(key)) next.delete(key);
@@ -2035,6 +2042,7 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
     || ALLOWED_ZALO_PERSONAL_RECIPIENT_TYPES.has(singleStep?.recipients?.type || 'phone');
   const canQuickSend = Boolean(
     canCreate &&
+    canRunCampaign &&
     onQuickSend &&
     isAllowedChannel &&
     isAllowedRecipientType &&
@@ -2089,14 +2097,20 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
 
       <div className="p-4 bg-white/50 border-t border-emerald-100">
         {isActive && <div className="space-y-2">
-          <button 
-            onClick={onConfirm}
-            disabled={!canCreate}
-            className="w-full py-3 bg-emerald-500 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30"
-          >
-            <HiOutlineCheck className="w-5 h-5" />
-            {t('aiChatbot.createCampaignBtn')}
-          </button>
+          {canCreateCampaign ? (
+            <button
+              onClick={onConfirm}
+              disabled={!canCreate}
+              className="w-full py-3 bg-emerald-500 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-emerald-500/30"
+            >
+              <HiOutlineCheck className="w-5 h-5" />
+              {t('aiChatbot.createCampaignBtn')}
+            </button>
+          ) : (
+            <p className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5">
+              {t('aiChatbot.noPermissionCreateCampaign')}
+            </p>
+          )}
           {canQuickSend && (
             <button
               type="button"

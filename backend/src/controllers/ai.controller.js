@@ -411,6 +411,11 @@ class AiController {
           planSlotKey: sanitizedPlanSlotKey,
           helpRoute,
           routeSaysActionRequest,
+          // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — null = chủ/self (không chặn gì);
+          // object = nhân viên, thiếu quyền khi permissions[key] !== true (đúng ngữ nghĩa employeeHasPermission `:104-107`).
+          employeePermissions: req.user?.activeContext?.type === 'employee'
+            ? (req.user.activeContext.permissions || {})
+            : null,
         });
         ({ wizardShortCircuit, _wizard, ...publicResponse } = response || {});
       }
@@ -660,6 +665,12 @@ class AiController {
         locale: uiLocale,
         localeContext,
         model,
+        // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — FE không gọi chat-v2 (grep xác nhận
+        // `aiApi.chatV2` không có call site nào), nên chỉ truyền tham số cho đồng bộ chữ ký, không
+        // thêm cổng quyền trong processSmartChatV2 (xem báo cáo).
+        employeePermissions: req.user?.activeContext?.type === 'employee'
+          ? (req.user.activeContext.permissions || {})
+          : null,
       });
 
       await chargeAiCredit(req);

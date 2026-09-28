@@ -266,6 +266,51 @@ describe('ConfirmCreateCard - Quick Send Gate & Rendering', () => {
   });
 });
 
+// PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2d — nhân viên thiếu quyền: ẩn nút, hiện lời giải thích.
+describe('ConfirmCreateCard - Permission gating (canCreateCampaign / canRunCampaign)', () => {
+  it('canCreateCampaign={false} -> không có nút tạo, không có nút gửi nhanh, có dòng giải thích', () => {
+    const confirmationView = createMockConfirmationView({ mode: 'manual' });
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={vi.fn()}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        canCreateCampaign={false}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    expect(screen.queryByRole('button', { name: /tạo chiến dịch/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /gửi nhanh/i })).toBeNull();
+    expect(screen.getByText(viDict.aiChatbot.noPermissionCreateCampaign)).toBeInTheDocument();
+  });
+
+  it('canCreateCampaign đúng nhưng canRunCampaign={false} -> có nút tạo, không nút gửi nhanh', () => {
+    const confirmationView = createMockConfirmationView({ mode: 'manual' });
+
+    render(
+      <ConfirmCreateCard
+        confirmationView={confirmationView}
+        onConfirm={vi.fn()}
+        onQuickSend={vi.fn()}
+        onEdit={vi.fn()}
+        onCancel={vi.fn()}
+        canCreateCampaign
+        canRunCampaign={false}
+        t={makeI18n(viDict)}
+        locale="vi"
+      />
+    );
+
+    expect(screen.getByRole('button', { name: /tạo chiến dịch/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /gửi nhanh/i })).toBeNull();
+  });
+});
+
 describe('ConfirmCreateCard - Blocking Issues & Exact Error Messages', () => {
   const issueCodes = [
     {

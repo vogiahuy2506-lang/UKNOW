@@ -641,6 +641,43 @@ describe('ai.controller', () => {
     }));
   });
 
+  // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — processSmartChat/processSmartChatV2
+  // nhận employeePermissions = activeContext.permissions cho nhân viên; chủ → null.
+  it('nhân viên: processSmartChat/processSmartChatV2 nhận employeePermissions = activeContext.permissions; chủ → null', async () => {
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'ok' });
+    processSmartChatV2.mockResolvedValue({ type: 'text', content: 'ok v2' });
+
+    const employee = {
+      id: 9,
+      role: 'user',
+      activeContext: {
+        type: 'employee',
+        ownerId: 3,
+        permissions: { campaigns_create: true, landing_pages: false },
+      },
+    };
+    const history = [{ role: 'user', content: 'Xin chào' }];
+
+    await aiController.chat({ body: { history, locale: 'vi' }, user: employee }, makeRes());
+    expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({
+      employeePermissions: { campaigns_create: true, landing_pages: false },
+    }));
+
+    await aiController.chatV2({ body: { history, locale: 'vi' }, user: employee }, makeRes());
+    expect(processSmartChatV2).toHaveBeenCalledWith(expect.objectContaining({
+      employeePermissions: { campaigns_create: true, landing_pages: false },
+    }));
+
+    processSmartChat.mockClear();
+    processSmartChatV2.mockClear();
+    const owner = { id: 5, role: 'user', activeContext: { type: 'self' } };
+    await aiController.chat({ body: { history, locale: 'vi' }, user: owner }, makeRes());
+    expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({ employeePermissions: null }));
+
+    await aiController.chatV2({ body: { history, locale: 'vi' }, user: owner }, makeRes());
+    expect(processSmartChatV2).toHaveBeenCalledWith(expect.objectContaining({ employeePermissions: null }));
+  });
+
   it('plan-advice help response still meta-only persists locale without touching gates/brief', async () => {
     tryHandleHelpChat.mockResolvedValue({
       type: 'text',

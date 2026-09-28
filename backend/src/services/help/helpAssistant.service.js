@@ -9,6 +9,7 @@ import {
 import * as helpRepo from '../../repositories/help/helpArticle.repository.js';
 import {
   classifyCapabilityProbe,
+  classifyUnsupportedSendRequest,
   formatAssistantCapabilities,
 } from '../ai/assistantCapabilities.js';
 import { isPlanAdviceQuestion } from '../../utils/planAdviceIntent.util.js';
@@ -521,6 +522,14 @@ export async function tryHandleHelpChat({
   const probe = classifyCapabilityProbe(question, lang);
   if (probe) {
     return fixedCapabilityReply(probe, lang);
+  }
+
+  // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 1 — câu LỆNH gửi qua kênh chưa hỗ trợ
+  // ("gửi tin telegram cho khách") phải bị chặn ở đây, trước router LLM, giống probe ở trên.
+  const unsupportedSend = classifyUnsupportedSendRequest(question, lang);
+  if (unsupportedSend) {
+    const reply = fixedCapabilityReply(unsupportedSend, lang);
+    return { ...reply, data: { ...reply.data, unsupportedSend: true } };
   }
 
   const route = await routeQuestion(question, userId);

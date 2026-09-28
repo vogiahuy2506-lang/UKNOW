@@ -255,6 +255,23 @@ export function classifyCapabilityProbe(question = '', locale = 'vi') {
   return null;
 }
 
+/**
+ * PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) — câu LỆNH gửi qua kênh chưa hỗ trợ ("gửi tin
+ * telegram cho khách"), khác classifyCapabilityProbe: không đòi CAPABILITY_MARKER_RE (câu lệnh,
+ * không phải câu hỏi năng lực "có...không"). Dùng lại đúng logic khớp của unsupported_channel
+ * (`CAPABILITY_DEFINITIONS.unsupported`) — không chép lại regex.
+ */
+export function classifyUnsupportedSendRequest(question = '', locale = 'vi') {
+  const text = String(question || '').trim();
+  if (!text || HOW_TO_RE.test(text)) return null;
+
+  const capability = CAPABILITY_DEFINITIONS.unsupported.find((c) => c.id === 'unsupported_channel');
+  if (!capability || !capability.matches(text)) return null;
+
+  const lang = normalizeLocale(locale);
+  return { kind: 'unsupported', id: capability.id, label: capability.label[lang] };
+}
+
 export function formatAssistantCapabilities(locale = 'vi') {
   const lang = normalizeLocale(locale);
   const labels = lang === 'en'

@@ -623,6 +623,168 @@ describe('aiCampaign.service', () => {
     expect(systemPrompt).not.toContain('KÊNH KHÔNG ĐƯỢC HỖ TRỢ');
   });
 
+  // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2 — nhân viên thiếu quyền bị chặn ngay lượt
+  // đầu, không tốn credit (wizardShortCircuit:true), không gọi model.
+  describe('Việc 2 — nhân viên thiếu quyền', () => {
+    it('(a) nhân viên thiếu campaigns_create + "tạo chiến dịch..." → text, permissionDenied, wizardShortCircuit, KHÔNG gọi model', async () => {
+      const result = await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'tạo chiến dịch email giới thiệu khoá học cho khách cũ' }],
+        locale: 'vi',
+        employeePermissions: { campaigns_create: false },
+      });
+
+      expect(result.type).toBe('text');
+      expect(result.data).toMatchObject({ permissionDenied: 'campaigns_create' });
+      expect(result.wizardShortCircuit).toBe(true);
+      expect(axiosPost).not.toHaveBeenCalled();
+    });
+
+    // Phát hiện lúc phản biện: với sender/dataSource resources rỗng (mock mặc định của file này),
+    // "tạo chiến dịch email..." không chạm axiosPost dù permission đủ — cổng tất định CÓ TRƯỚC PR-3
+    // ("Deterministic gates before Gemini for any campaign-flow turn" :1009-1023) tự hỏi thêm
+    // thông tin (sender/dataSource) trước khi tới model, và TỰ nó cũng set wizardShortCircuit:true.
+    // Vì vậy ca (b) chỉ ghim đúng điều PR-3 chịu trách nhiệm: permission đủ thì KHÔNG còn
+    // data.permissionDenied — không ghim "axiosPost được gọi" (đó là hành vi gate khác, không phải
+    // của PR-3, và không tái hiện được trong bộ mock rỗng của file này).
+    it('(b) cùng câu, campaigns_create:true → KHÔNG còn bị chặn bởi cổng quyền (permissionDenied biến mất)', async () => {
+      const result = await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'tạo chiến dịch email giới thiệu khoá học cho khách cũ' }],
+        locale: 'vi',
+        employeePermissions: { campaigns_create: true },
+      });
+
+      expect(result.data?.permissionDenied).not.toBe('campaigns_create');
+    });
+
+    it('(c) chủ (employeePermissions không truyền) → đi model, prompt KHÔNG chứa === QUYỀN NHÂN VIÊN', async () => {
+      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+      axiosPost.mockResolvedValue({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] },
+            },
+          ],
+        },
+      });
+
+      await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+        locale: 'vi',
+      });
+
+      const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+      const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+      expect(systemPrompt).not.toContain('=== QUYỀN NHÂN VIÊN');
+    });
+
+    it('(d) nhân viên thiếu landing_pages + "tạo landing page..." → text, permissionDenied===landing_pages', async () => {
+      const result = await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'tạo landing page bán khoá học tiếng Anh' }],
+        locale: 'vi',
+        employeePermissions: { campaigns_create: true, landing_pages: false },
+      });
+
+      expect(result.type).toBe('text');
+      expect(result.data).toMatchObject({ permissionDenied: 'landing_pages' });
+      expect(result.wizardShortCircuit).toBe(true);
+      expect(axiosPost).not.toHaveBeenCalled();
+    });
+
+    // Phát hiện lúc phản biện: câu "soạn template email chào mừng học viên mới" trong lệnh giao
+    // KHÔNG khớp isPlanTemplateDraftRequest (isPlanTemplatePrompt chỉ khớp đúng chuỗi máy sinh
+    // "tạo chi tiết template cho ngày N" — dùng khi wizard đang ở giữa content_plan đã duyệt, xem
+    // aiCampaignWizard.service.js:183,1623). Dùng đúng câu máy sinh để ghim đúng hành vi thật.
+    it('(e) thiếu cả 2 quyền mẫu + prompt máy sinh "tạo chi tiết template cho ngày..." → text; chỉ thiếu zalo_templates → đi model', async () => {
+      const denied = await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 1, slot 1 (Email)' }],
+        locale: 'vi',
+        employeePermissions: { campaigns_create: true, email_templates: false, zalo_templates: false },
+      });
+      expect(denied.type).toBe('text');
+      expect(denied.data).toMatchObject({ permissionDenied: 'email_templates,zalo_templates' });
+      expect(denied.wizardShortCircuit).toBe(true);
+      expect(axiosPost).not.toHaveBeenCalled();
+
+      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+      axiosPost.mockResolvedValue({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] },
+            },
+          ],
+        },
+      });
+      await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 1, slot 1 (Email)' }],
+        locale: 'vi',
+        employeePermissions: { campaigns_create: true, email_templates: false, zalo_templates: true },
+      });
+      expect(axiosPost).toHaveBeenCalled();
+    });
+
+    it('(f) nhân viên đủ quyền + "chào bạn" → prompt chứa === QUYỀN NHÂN VIÊN và "đủ 5 quyền trên"; thiếu campaigns_run → liệt kê có campaigns_run', async () => {
+      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+      axiosPost.mockResolvedValue({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] },
+            },
+          ],
+        },
+      });
+
+      await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'chào bạn' }],
+        locale: 'vi',
+        employeePermissions: {
+          campaigns_create: true,
+          campaigns_run: true,
+          landing_pages: true,
+          email_templates: true,
+          zalo_templates: true,
+        },
+      });
+      let lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+      let systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+      expect(systemPrompt).toContain('=== QUYỀN NHÂN VIÊN');
+      expect(systemPrompt).toContain('đủ 5 quyền trên');
+
+      axiosPost.mockClear();
+      await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'chào bạn' }],
+        locale: 'vi',
+        employeePermissions: {
+          campaigns_create: true,
+          campaigns_run: false,
+          landing_pages: true,
+          email_templates: true,
+          zalo_templates: true,
+        },
+      });
+      lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+      systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+      expect(systemPrompt).toContain('=== QUYỀN NHÂN VIÊN');
+      expect(systemPrompt).toMatch(/KHÔNG có quyền:.*campaigns_run/);
+    });
+  });
+
   it('PR-5b-2b: prompt chat (V1) ghi rõ landing đã gắn Biểu mẫu (formId cạnh slug), landing khác vẫn ghi bình thường', async () => {
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });

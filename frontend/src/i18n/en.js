@@ -4422,6 +4422,7 @@ export default {
     subject: 'Subject',
     content: 'Content',
     saveToLibrary: 'Save to library',
+    noPermissionSaveTemplate: "Your employee account doesn't have permission to save templates yet. Ask your team owner to enable it in Settings › Employees.",
     savedToLibrary: 'Saved to library',
     saving: 'Saving...',
     edit: 'Edit',
@@ -4607,6 +4608,7 @@ export default {
     enterEmailTemplateName: 'Enter email template name...',
     // Confirm create / campaign buttons
     createCampaignBtn: 'Create campaign',
+    noPermissionCreateCampaign: "Your employee account doesn't have permission to create campaigns yet. Ask your team owner to enable it in Settings › Employees.",
     stepsLabel: 'Steps:',
     // Category names
     notificationCategory: '🔔 Notification',

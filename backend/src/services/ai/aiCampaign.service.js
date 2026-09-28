@@ -570,6 +570,9 @@ D. ZALO NHÓM:
     planSlotKey = null,
     helpRoute = null,
     routeSaysActionRequest = false,
+    // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — null = chủ/self (không chặn gì);
+    // object = nhân viên, thiếu quyền khi permissions[key] !== true.
+    employeePermissions = null,
   }) {
     let contextBlock = '';
     // Tenant resources (courses, templates, profile) belong to workspace owner;
@@ -662,6 +665,69 @@ QUY TẮC:
     // Cards / deterministic copy follow UI (locale arg); prose+artifact follow resolved context.
     const defaultContentLocale = resolvedLocaleContext.contentLocale;
     const conversationLocale = resolvedLocaleContext.conversationLocale;
+
+    // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2b — cổng tất định TRƯỚC khi gọi model: nhân
+    // viên thiếu quyền bị từ chối ngay lượt đầu (không tốn credit, không dắt qua nhiều lượt hỏi
+    // thêm rồi mới 403 ở nút tạo). Chủ/self (employeePermissions === null) không bao giờ bị chặn.
+    if (employeePermissions !== null) {
+      const missingPermission = (() => {
+        if (derivedState.isCampaignFlow && employeePermissions.campaigns_create !== true) {
+          return {
+            key: 'campaigns_create',
+            labelVi: 'Tạo chiến dịch',
+            labelEn: 'Create campaigns',
+            actionVi: 'dựng chiến dịch',
+            actionEn: 'build the campaign',
+          };
+        }
+        if (isLandingOrientedTurn(history) && employeePermissions.landing_pages !== true) {
+          return {
+            key: 'landing_pages',
+            labelVi: 'Landing page',
+            labelEn: 'Landing pages',
+            actionVi: 'tạo landing page',
+            actionEn: 'create the landing page',
+          };
+        }
+        if (
+          isPlanTemplateDraftRequest(lastUserText)
+          && employeePermissions.email_templates !== true
+          && employeePermissions.zalo_templates !== true
+        ) {
+          return {
+            key: 'email_templates,zalo_templates',
+            labelVi: 'Mẫu tin nhắn',
+            labelEn: 'Message templates',
+            actionVi: 'lưu mẫu tin',
+            actionEn: 'save the template',
+          };
+        }
+        return null;
+      })();
+
+      if (missingPermission) {
+        const empty = createEmptyWizardState();
+        const deniedBrief = createEmptyCampaignBrief(defaultContentLocale);
+        const content = uiLocale === 'en'
+          ? `Your employee account doesn't have the "${missingPermission.labelEn}" permission yet, so I can't ${missingPermission.actionEn} for you right now. Ask your team owner to enable it in Settings › Employees (guide: /huong-dan/nhan-vien). In the meantime, I can still answer questions and draft content for you to review.`
+          : `Tài khoản nhân viên của bạn chưa được cấp quyền "${missingPermission.labelVi}" nên mình chưa thể ${missingPermission.actionVi} giúp bạn. Bạn nhờ chủ nhóm vào Cài đặt › Nhân viên bật quyền này nhé (hướng dẫn: /huong-dan/nhan-vien). Trong lúc chờ, mình vẫn trả lời câu hỏi và soạn nội dung thử được.`;
+        return {
+          type: 'text',
+          content,
+          missing_fields: [],
+          data: { permissionDenied: missingPermission.key },
+          wizardShortCircuit: true,
+          _wizard: {
+            gates: empty.gates,
+            brief: deniedBrief,
+            gateAsked: null,
+            meta: computeWizardMeta(persistedState.meta, null),
+            planChanged: true,
+            planReset: true,
+          },
+        };
+      }
+    }
 
     const sourcePrompt = findOriginalCampaignPrompt(history);
     const extracted = extractCampaignBriefFromHistory(history);
@@ -1110,6 +1176,20 @@ Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_custom
       wizardContext = lines.join('\n') + '\n\n';
     }
 
+    // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2c — lưới mềm cho ca tất định 2b không bắt
+    // được (vd "chạy chiến dịch X" cần campaigns_run). Chủ/self (null) không chèn gì.
+    let employeePermissionsBlock = '';
+    if (employeePermissions !== null) {
+      const ALL_EMPLOYEE_PERMISSION_KEYS = ['campaigns_create', 'campaigns_run', 'landing_pages', 'email_templates', 'zalo_templates'];
+      const missingKeys = ALL_EMPLOYEE_PERMISSION_KEYS.filter((key) => employeePermissions[key] !== true);
+      const missingText = missingKeys.length > 0 ? missingKeys.join(', ') : 'đủ 5 quyền trên';
+      employeePermissionsBlock = `=== QUYỀN NHÂN VIÊN ===
+- Người dùng là NHÂN VIÊN của chủ nhóm. KHÔNG có quyền: ${missingText}
+- Khi họ muốn làm việc thuộc quyền thiếu → type: "text", nói thẳng chưa có quyền và hướng nhờ chủ nhóm cấp; KHÔNG dẫn qua các bước hỏi thêm.
+
+`;
+    }
+
     const langInstr = buildAssistantLanguageInstructions(resolvedLocaleContext);
     const systemPrompt = `Bạn là Founder AI Coworker - Trợ lý Marketing thông minh, chuyên hỗ trợ tạo template tin nhắn, chiến dịch marketing, landing page, và phân tích tài liệu/dữ liệu doanh nghiệp.
 
@@ -1130,7 +1210,7 @@ Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_custom
 - Chỉ tạo nội dung template/chiến dịch/landing page khi đã có đủ thông tin từ người dùng.
 - Với yêu cầu tạo chiến dịch, KHÔNG tự suy đoán nguồn khách hàng là Google Sheet chỉ vì user nhắc các cột như full_name, email, phone, tour_name, end_date. Nếu user chưa nói rõ "Google Sheet", "Excel", "file", "landing page", "khách hàng trong hệ thống/database" hoặc chưa chọn dataSource trong câu trả lời trước, BẮT BUỘC dùng type="ask_campaign_details" và hỏi câu "dataSource".
 
-${wizardContext}${resolvedBriefContext ? resolvedBriefContext + '\n\n' : ''}${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
+${wizardContext}${employeePermissionsBlock}${resolvedBriefContext ? resolvedBriefContext + '\n\n' : ''}${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}## PHÂN LOẠI Ý ĐỊNH (intent):
 
 ### 1. type: "text"
 Khi người dùng: chào hỏi, hỏi thông tin chung, thảo luận không liên quan đến tạo nội dung.
@@ -1945,6 +2025,10 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     locale = 'vi',
     localeContext = null,
     model = null,
+    // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — nhận cho đồng bộ chữ ký với
+    // processSmartChat; chat-v2 không có FE call site nào (đã grep) nên chưa thêm cổng quyền ở đây.
+    // eslint-disable-next-line no-unused-vars
+    employeePermissions = null,
   }) {
     let contextBlock = '';
     const ownerId = resourceOwnerUserId || userId;

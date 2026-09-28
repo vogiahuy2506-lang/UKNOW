@@ -346,6 +346,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   // Self context luôn được (mẫu PermissionRoute, App.jsx:172-180) — AiChatbot.jsx chưa có cổng
   // quyền chi tiết nào để soi theo (chỉ có isEmployeeCtx thô), nên lấy đúng mẫu từ đó.
   const canManageLandingPages = !isEmployeeCtx || activeContext?.permissions?.landing_pages === true;
+  // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2d — cùng công thức, cho nút tạo chiến dịch/mẫu tin.
+  const canCreateCampaigns = !isEmployeeCtx || activeContext?.permissions?.campaigns_create === true;
+  const canRunCampaigns = !isEmployeeCtx || activeContext?.permissions?.campaigns_run === true;
+  const canSaveEmailTemplates = !isEmployeeCtx || activeContext?.permissions?.email_templates === true;
+  const canSaveZaloTemplates = !isEmployeeCtx || activeContext?.permissions?.zalo_templates === true;
 
   const aiBillingBlock = useMemo(
     () => getAiBillingBlockState({
@@ -3988,6 +3993,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onEdit={() => setIsEditingDraft(true)}
                   onCancel={handleCancelCreate}
                   onRetry={() => prepareAndShowCampaignConfirmation(currentScript, { sessionId: currentSessionIdRef.current, appendMessage: false })}
+                  canCreateCampaign={canCreateCampaigns}
+                  canRunCampaign={canRunCampaigns}
                   t={t}
                   locale={locale}
                 />
@@ -4142,6 +4149,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   fromLibrary={Boolean(msg.data?._fromLibrary)}
                   externallySaved={Boolean(msg.data?._planSlotKey)
                     && (contentPlanWorkflow?.savedTemplates || []).some((item) => String(item.slotId) === String(msg.data._planSlotKey))}
+                  canSave={msg.data?.channel === 'email' ? canSaveEmailTemplates : canSaveZaloTemplates}
                   t={t}
                 />
               )}
