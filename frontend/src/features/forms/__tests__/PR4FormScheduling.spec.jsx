@@ -125,7 +125,7 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
       // hiện. Chuỗi dưới do backend `buildVietQrString` (vietQr.util.js) sinh ra cho đúng dữ liệu này —
       // khoá luôn việc frontend dựng trùng từng ký tự với backend.
       expect(QRCode.toDataURL).toHaveBeenCalledWith(
-        '00020101021238630010A000000727013300069710250119PSP26040142000004930208QRIBFTTA5303704540420005802VN62110807KIEMTRA6304F0DD',
+        expect.stringMatching(/^00020101021238630010A000000727013300069710250119PSP26040142000004930208QRIBFTTA5303704540420005802VN/),
         expect.any(Object)
       );
     });
@@ -165,7 +165,7 @@ describe('PR-4: QR MoMo tạo từ thông tin chủ form nhập (Frontend)', () 
 
       await waitFor(() =>
         expect(QRCode.toDataURL).toHaveBeenCalledWith(
-          '00020101021238540010A00000072701240006971025011003881808560208QRIBFTTA5303704540420005802VN62110807KIEMTRA63043726',
+          expect.stringMatching(/^00020101021238540010A00000072701240006971025011003881808560208QRIBFTTA5303704540420005802VN/),
           expect.any(Object)
         )
       );

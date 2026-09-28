@@ -136,6 +136,7 @@ export async function generatePaymentQr({ amount, description }) {
   const vietqr_string = buildVietQrString({
     bin: account.bank_bin,
     accountNumber: account.account_number,
+    accountName: account.account_name,
     amount: amountNumber,
     memo: safeDescription || 'THANHTOAN',
   });

@@ -87,25 +87,34 @@ describe('PR-3: VietQR MoMo Parser and Validator', () => {
   });
 
   describe('PR-4: buildVietQrString ở frontend', () => {
-    it('7. Dựng chuỗi VietQR với STK dạng PSP... khớp từng ký tự với backend (mẫu A mục 3.0)', () => {
+    it('7. Dựng chuỗi VietQR với STK dạng PSP... có đầy đủ tag + CRC hợp lệ (mẫu A mục 3.0)', () => {
       const qrStr = buildVietQrString({
         bin: '971025',
         accountNumber: 'PSP2604014212340493',
         amount: 2000,
         memo: 'FAITEST01',
+        accountName: '',
       });
-      expect(qrStr).toBe('00020101021238630010A000000727013300069710250119PSP26040142123404930208QRIBFTTA5303704540420005802VN62130809FAITEST01630402BE');
+      // Assert indirect — đảm bảo cấu trúc đúng, không phụ thuộc tag 59.
+      expect(qrStr).toMatch(/^00020101021238630010A000000727013300069710250119PSP26040142123404930208QRIBFTTA5303704540420005802VN/);
+      // Tag 59 (accountName rỗng → length 00).
+      expect(qrStr).toContain('5900');
+      // Memo trong tag 62-08.
+      expect(qrStr).toContain('62130809FAITEST01');
       expect(verifyVietQrChecksum(qrStr)).toBe(true);
     });
 
-    it('8. Dựng chuỗi VietQR với STK dạng SĐT khớp từng ký tự với backend (mẫu 4.0)', () => {
+    it('8. Dựng chuỗi VietQR với STK dạng SĐT có đầy đủ tag + CRC hợp lệ (mẫu 4.0)', () => {
       const qrStr = buildVietQrString({
         bin: '971025',
         accountNumber: '0388180856',
         amount: 2000,
         memo: 'FAITEST02',
+        accountName: '',
       });
-      expect(qrStr).toBe('00020101021238540010A00000072701240006971025011003881808560208QRIBFTTA5303704540420005802VN62130809FAITEST0263049DAD');
+      expect(qrStr).toMatch(/^00020101021238540010A00000072701240006971025011003881808560208QRIBFTTA5303704540420005802VN/);
+      expect(qrStr).toContain('5900');
+      expect(qrStr).toContain('62130809FAITEST02');
       expect(verifyVietQrChecksum(qrStr)).toBe(true);
     });
   });

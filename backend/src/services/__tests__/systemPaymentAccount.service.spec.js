@@ -117,7 +117,7 @@ describe('systemPaymentAccount.service (env fallback only)', () => {
     expect(out.description).toBeNull();
   });
 
-  it('khứ hồi: generatePaymentQr() === buildVietQrString(env account)', async () => {
+  it('khứ hồi: generatePaymentQr() === buildVietQrString(env account, accountName)', async () => {
     const out = await generatePaymentQr({
       amount: 250000,
       description: 'ORDER99',
@@ -125,6 +125,7 @@ describe('systemPaymentAccount.service (env fallback only)', () => {
     const direct = buildVietQrString({
       bin: '970436',
       accountNumber: '0123456789',
+      accountName: 'TEST USER',
       amount: 250000,
       memo: 'ORDER99',
     });

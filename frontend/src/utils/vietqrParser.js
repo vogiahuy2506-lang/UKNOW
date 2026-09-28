@@ -240,15 +240,17 @@ function tlv(tag, value) {
 }
 
 /**
- * Sinh chuỗi VietQR EMVCo đầy đủ (kèm CRC) từ BIN/STK/số tiền/nội dung.
+ * Sinh chuỗi VietQR EMVCo đầy đủ (kèm CRC) từ BIN/STK/tên tài khoản/số tiền/nội dung.
  * Thuần túy logic chuẩn VietQR QuickPay Napas — trùng khớp từng ký tự với backend vietQr.util.js.
  *
- * @param {{ bin: string, accountNumber: string, amount: number, memo: string }} params
+ * @param {{ bin: string, accountNumber: string, accountName?: string, amount: number, memo: string }} params
  * @returns {string}
  */
-export function buildVietQrString({ bin, accountNumber, amount, memo }) {
+export function buildVietQrString({ bin, accountNumber, accountName, amount, memo }) {
   const beneficiary = tlv('01', tlv('00', String(bin)) + tlv('01', String(accountNumber)));
   const vietQrTemplate = tlv('38', tlv('00', NAPAS_GUID) + beneficiary + tlv('02', SERVICE_CODE));
+  // Tag 59: tên tài khoản thụ hưởng. EMVCo giới hạn 25 ký tự.
+  const safeName = String(accountName || '').slice(0, 25);
 
   const body = [
     tlv('00', '01'),
@@ -257,6 +259,7 @@ export function buildVietQrString({ bin, accountNumber, amount, memo }) {
     tlv('53', CURRENCY_VND),
     tlv('54', String(Math.round(Number(amount)))),
     tlv('58', COUNTRY_VN),
+    tlv('59', safeName),
     tlv('62', tlv('08', String(memo))),
   ].join('') + '6304';
 

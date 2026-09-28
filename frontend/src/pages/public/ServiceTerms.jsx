@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PolicyHistory from './components/PolicyHistory.jsx';
 
 function getLangClass(activeLang, itemLang) {
   return activeLang === itemLang ? '' : 'hidden';
@@ -7,6 +8,23 @@ function getLangClass(activeLang, itemLang) {
 function ServiceTerms() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
+
+  const historyEntries = [
+    {
+      date: '2026-09-28',
+      note: {
+        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
+        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
+      },
+    },
+    {
+      date: '2026-10-13',
+      note: {
+        vi: 'Phiên bản trước — ngày hiệu lực 13/10/2026 (đã thay thế).',
+        en: 'Previous version — effective 13/10/2026 (now superseded).',
+      },
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
@@ -58,8 +76,8 @@ function ServiceTerms() {
           <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
             <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15" aria-hidden />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
-              <span className={lc(language, 'vi')}>Cập nhật: <strong>13 tháng 10 năm 2026</strong> | Áp dụng cho: founderai.biz</span>
-              <span className={lc(language, 'en')}>Last updated: <strong>October 13, 2026</strong> | Applies to: founderai.biz</span>
+              <span className={lc(language, 'vi')}>Cập nhật: <strong>28 tháng 9 năm 2026</strong> | Áp dụng cho: founderai.biz</span>
+              <span className={lc(language, 'en')}>Last updated: <strong>September 28, 2026</strong> | Applies to: founderai.biz</span>
             </p>
           </div>
 
@@ -119,6 +137,7 @@ function ServiceTerms() {
               <li>d) DIGISO chấm dứt dịch vụ do khách hàng vi phạm pháp luật, Điều khoản sử dụng hoặc có hành vi gây ảnh hưởng đến an toàn, bảo mật, hoạt động bình thường của nền tảng hoặc người dùng khác;</li>
               <li>đ) DIGISO chấm dứt hoặc tạm ngừng một phần hay toàn bộ dịch vụ do sự kiện bất khả kháng, yêu cầu của cơ quan nhà nước có thẩm quyền hoặc vì lý do kỹ thuật, an toàn, bảo mật cần thiết;</li>
               <li>e) DIGISO ngừng cung cấp dịch vụ theo quyết định kinh doanh, với thông báo trước ít nhất 30 ngày;</li>
+              <li>f) Khách hàng không thanh toán phí dịch vụ sau thời hạn quy định tại Điều khoản thanh toán;</li>
               <li>g) Các trường hợp khác theo thoả thuận giữa các bên hoặc theo quy định của pháp luật.</li>
             </ul>
             <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'en')}`}>
@@ -128,6 +147,7 @@ function ServiceTerms() {
               <li>d) DIGISO terminates the Service because the Customer violates the law, the Terms of Use, or engages in conduct that affects the safety, security, or normal operation of the platform or other users;</li>
               <li>đ) DIGISO terminates or suspends part or all of the Service due to a force majeure event, a request from a competent state authority, or for necessary technical, safety, or security reasons;</li>
               <li>e) DIGISO discontinues the Service based on a business decision, with at least 30 days' prior notice;</li>
+              <li>f) The Customer fails to pay service fees after the deadline specified in the Payment Terms;</li>
               <li>g) Other cases as agreed between the parties or as provided by law.</li>
             </ul>
 
@@ -186,12 +206,13 @@ function ServiceTerms() {
           <p className={lc(language, 'vi')}>© 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.</p>
           <p className={lc(language, 'en')}>© 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.</p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 13/10/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 28/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from October 13, 2026.
+            This policy was last updated and effective from September 28, 2026.
           </p>
         </footer>
+        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
       </div>
     </div>
   );

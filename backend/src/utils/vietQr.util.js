@@ -14,6 +14,7 @@
  *   53 03 704                             Currency = VND
  *   54 LL <AMOUNT>
  *   58 02 VN                              Country
+ *   59 LL <ACCOUNT_NAME>                  Tên tài khoản thụ hưởng (≤25 ký tự theo EMVCo)
  *   62 LL                                 Additional Data
  *     08 LL <MEMO>                         Nội dung chuyển khoản (payment_code)
  *   63 04 <CRC>                           CRC-16/CCITT-FALSE của toàn bộ chuỗi TRƯỚC nó (kể cả "6304")
@@ -57,14 +58,18 @@ function tlv(tag, value) {
 }
 
 /**
- * Sinh chuỗi VietQR EMVCo đầy đủ (kèm CRC) từ BIN/STK/số tiền/nội dung.
+ * Sinh chuỗi VietQR EMVCo đầy đủ (kèm CRC) từ BIN/STK/tên tài khoản/số tiền/nội dung.
  *
- * @param {{ bin: string, accountNumber: string, amount: number, memo: string }} params
+ * @param {{ bin: string, accountNumber: string, accountName?: string, amount: number, memo: string }} params
  * @returns {string}
  */
-export function buildVietQrString({ bin, accountNumber, amount, memo }) {
+export function buildVietQrString({ bin, accountNumber, accountName, amount, memo }) {
   const beneficiary = tlv('01', tlv('00', String(bin)) + tlv('01', String(accountNumber)));
   const vietQrTemplate = tlv('38', tlv('00', NAPAS_GUID) + beneficiary + tlv('02', SERVICE_CODE));
+  // Tag 59: tên tài khoản thụ hưởng (accountName). EMVCo giới hạn tối đa 25 ký tự.
+  // DIGISO dùng tên pháp nhân đã đăng ký với ngân hàng — nếu dài hơn sẽ bị cắt khi hiển thị
+  // trên app ngân hàng, nên ta cắt trước để tránh chuỗi TLV bị hỏng.
+  const safeName = String(accountName || '').slice(0, 25);
 
   const body = [
     tlv('00', '01'),
@@ -73,6 +78,7 @@ export function buildVietQrString({ bin, accountNumber, amount, memo }) {
     tlv('53', CURRENCY_VND),
     tlv('54', String(Math.round(Number(amount)))),
     tlv('58', COUNTRY_VN),
+    tlv('59', safeName),
     tlv('62', tlv('08', String(memo))),
   ].join('') + '6304';
 
