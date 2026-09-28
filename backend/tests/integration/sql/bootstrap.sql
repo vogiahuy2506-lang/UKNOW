@@ -124,6 +124,9 @@ CREATE TABLE user_members (
   -- AI credit limits (migration 166)
   daily_ai_credit_limit   INTEGER,
   period_ai_credit_limit  INTEGER,
+  -- migration 256: 'created' = chủ tạo tài khoản; 'linked' = liên kết tài khoản có sẵn
+  origin      VARCHAR(16) NOT NULL DEFAULT 'linked'
+    CONSTRAINT chk_user_members_origin CHECK (origin IN ('created', 'linked')),
   deleted_at  TIMESTAMPTZ,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

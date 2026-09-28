@@ -294,11 +294,30 @@ export async function inviteEmployeeByEmail(ownerId, { email, fullName }) {
   return { ...employee, method: 'invited', invitationSent, invitationError };
 }
 
+export const EMPLOYEE_ACCOUNT_NOT_OWNED_CODE = 'EMPLOYEE_ACCOUNT_NOT_OWNED';
+
+/**
+ * Chủ chỉ được can thiệp vào TÀI KHOẢN (mật khẩu, email đăng nhập, xoá dòng users) của nhân viên do chính
+ * mình tạo ra (user_members.origin = 'created'). Tài khoản có sẵn bị liên kết qua /employees/invite là tài
+ * khoản của người khác: reset được là chủ nhóm đăng nhập vào tài khoản người ta
+ * (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1). Quyền/hạn mức/khoá trong KHÔNG GIAN của chủ thì vẫn chỉnh được.
+ */
+function assertOwnerCreatedAccount(employee) {
+  if (employee.origin === 'created') return;
+  throw {
+    status: 403,
+    code: EMPLOYEE_ACCOUNT_NOT_OWNED_CODE,
+    message: 'Tài khoản này do người dùng tự đăng ký, không phải do bạn tạo — bạn chỉ chỉnh được quyền và hạn mức. '
+      + 'Mật khẩu và email đăng nhập họ tự đổi trong Hồ sơ, hoặc dùng "Quên mật khẩu".',
+  };
+}
+
 export async function setEmployeeInfo(ownerId, employeeId, { fullName, email }) {
   const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
   }
+  assertOwnerCreatedAccount(employee);
 
   // Kiểm tra email mới không trùng với user khác
   if (email && email !== employee.email) {
@@ -326,6 +345,12 @@ export async function setEmployeeStatus(ownerId, employeeId, status) {
   const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
+  }
+  // Mở khoá = chiếm lại một suất: phải qua đúng cổng trần như lúc thêm. Không có dòng này thì khoá A → thêm B
+  // → mở khoá A cho ra 2/1 (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 3). countActiveEmployees không đếm
+  // người đang inactive nên gọi thẳng assertCanAddEmployee là đúng số.
+  if (status === 'active' && employee.memberStatus !== 'active') {
+    await assertCanAddEmployee(ownerId);
   }
   return updateEmployeeStatus(employeeId, ownerId, status);
 }
@@ -377,6 +402,7 @@ export async function resetEmployeePassword(ownerId, employeeId) {
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
   }
+  assertOwnerCreatedAccount(employee);
 
   const tempPassword = generateTempPassword();
   const passwordHash = await bcrypt.hash(tempPassword, 10);

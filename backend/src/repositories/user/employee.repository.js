@@ -7,7 +7,8 @@ const EMPLOYEE_SELECT = `
   um.permissions, um.status AS "memberStatus", um.created_at AS "joinedAt",
   um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
   um.daily_zalo_limit AS "dailyZaloLimit",  um.monthly_zalo_limit AS "monthlyZaloLimit",
-  um.daily_ai_credit_limit AS "dailyAiCreditLimit", um.period_ai_credit_limit AS "periodAiCreditLimit"
+  um.daily_ai_credit_limit AS "dailyAiCreditLimit", um.period_ai_credit_limit AS "periodAiCreditLimit",
+  um.origin
 `;
 
 export async function findEmployeesByOwner(ownerId) {
@@ -115,10 +116,12 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
     // Truyền quyền mặc định tường minh: mặc định của cột lệch nhau giữa các môi trường
     // (migration 001 `{campaigns_view:true,…}`, schema.sql `'{}'`, production `'[]'`) nên
     // để DB tự điền là để kết quả phụ thuộc máy chạy.
+    // origin = 'created': tài khoản này do chủ tạo ra → chủ được đặt lại mật khẩu / sửa email / xoá khi chưa
+    // kích hoạt. Membership từ linkExistingUserAsEmployee là 'linked' và KHÔNG có ba quyền đó (migration 256).
     const memberResult = await client.query(
-      `INSERT INTO user_members (owner_id, employee_id, permissions)
-       VALUES ($1, $2, $3::jsonb)
-       RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt",
+      `INSERT INTO user_members (owner_id, employee_id, permissions, origin)
+       VALUES ($1, $2, $3::jsonb, 'created')
+       RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt", origin,
                  daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
                  daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
       [ownerId, newUser.id, JSON.stringify(buildDefaultNewEmployeePermissions())]
@@ -139,11 +142,13 @@ export async function linkExistingUserAsEmployee(ownerId, userId) {
   // Quyền mặc định chỉ áp cho hàng MỚI: nhánh ON CONFLICT là người từng ở trong team
   // (gỡ khỏi team là DELETE hàng, nên tới đây chỉ còn ca membership đang bị khoá) —
   // link lại không được ghi đè bộ quyền chủ đã chỉnh.
+  // origin = 'linked': tài khoản có sẵn, không phải của chủ → chủ không được đặt lại mật khẩu / sửa email.
+  // ON CONFLICT giữ nguyên origin cũ (người từng được chủ tạo rồi link lại vẫn là 'created').
   const result = await db.query(
-    `INSERT INTO user_members (owner_id, employee_id, permissions)
-     VALUES ($1, $2, $3::jsonb)
+    `INSERT INTO user_members (owner_id, employee_id, permissions, origin)
+     VALUES ($1, $2, $3::jsonb, 'linked')
      ON CONFLICT (owner_id, employee_id) DO UPDATE SET status = 'active', updated_at = CURRENT_TIMESTAMP
-     RETURNING employee_id AS "id", permissions, status AS "memberStatus", created_at AS "joinedAt",
+     RETURNING employee_id AS "id", permissions, status AS "memberStatus", created_at AS "joinedAt", origin,
                daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
                daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
     [ownerId, userId, JSON.stringify(buildDefaultNewEmployeePermissions())]
@@ -156,9 +161,10 @@ export async function updateEmployeeInfo(employeeId, ownerId, { fullName, email 
   try {
     await client.query('BEGIN');
 
-    // Kiểm tra employee thuộc owner
+    // Kiểm tra employee thuộc owner VÀ là tài khoản do chủ tạo (origin = 'created'). Tài khoản có sẵn bị
+    // liên kết thì đây là hồ sơ của người khác — service đã chặn 403 trước, dòng này là lớp đỡ thứ hai.
     const check = await client.query(
-      `SELECT 1 FROM user_members WHERE employee_id = $1 AND owner_id = $2`,
+      `SELECT 1 FROM user_members WHERE employee_id = $1 AND owner_id = $2 AND origin = 'created'`,
       [employeeId, ownerId]
     );
     if (!check.rows[0]) {
@@ -330,10 +336,11 @@ export async function removeEmployee(employeeId, ownerId) {
   try {
     await client.query('BEGIN');
 
-    await client.query(
-      `DELETE FROM user_members WHERE employee_id = $1 AND owner_id = $2`,
+    const memberRes = await client.query(
+      `DELETE FROM user_members WHERE employee_id = $1 AND owner_id = $2 RETURNING origin`,
       [employeeId, ownerId]
     );
+    const origin = memberRes.rows[0]?.origin;
 
     const userRes = await client.query(
       `SELECT status FROM users WHERE id = $1`,
@@ -341,8 +348,10 @@ export async function removeEmployee(employeeId, ownerId) {
     );
     const userStatus = userRes.rows[0]?.status;
 
-    if (userStatus === 'pending_activation') {
-      // Được mời nhưng chưa kích hoạt → xóa hẳn để email có thể dùng lại
+    if (userStatus === 'pending_activation' && origin === 'created') {
+      // Do chính chủ này mời và chưa kích hoạt → xóa hẳn để email có thể dùng lại.
+      // origin = 'linked' mà vẫn pending: tài khoản do CHỦ KHÁC mời (hoặc tự đăng ký chưa xong) rồi bị
+      // chủ này liên kết — xoá users ở đây là xoá tài khoản của người ta, chỉ gỡ membership.
       await client.query(`DELETE FROM users WHERE id = $1`, [employeeId]);
     }
     // Tài khoản đã active: giữ nguyên user_admin, không cần đổi role
@@ -360,10 +369,12 @@ export async function resetEmployeePassword(employeeId, ownerId, passwordHash) {
   const result = await db.query(
     // must_change_password = TRUE: mật khẩu tạm chỉ để đăng nhập một lần, middleware
     // requirePasswordChange sẽ chặn mọi thao tác cho tới khi nhân viên tự đổi.
+    // origin = 'created': chỉ tài khoản do chủ tạo. Tài khoản có sẵn bị liên kết mà reset được là chủ nhóm
+    // đăng nhập vào tài khoản người khác (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1).
     `UPDATE users SET password_hash = $1, must_change_password = TRUE,
                      updated_at = CURRENT_TIMESTAMP
      WHERE id = $2 AND EXISTS (
-       SELECT 1 FROM user_members WHERE employee_id = $2 AND owner_id = $3
+       SELECT 1 FROM user_members WHERE employee_id = $2 AND owner_id = $3 AND origin = 'created'
      )
      RETURNING id`,
     [passwordHash, employeeId, ownerId]

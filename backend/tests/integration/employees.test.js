@@ -79,13 +79,16 @@ async function addMembership(ownerId, employeeId, overrides = {}) {
     monthlyEmailLimit = null,
     dailyZaloLimit = null,
     monthlyZaloLimit = null,
+    // Mặc định 'created' = mô phỏng nhân viên do chủ tạo (đúng hình dạng các ca reset/info/delete bên dưới
+    // mô tả). Ca cần "tài khoản có sẵn bị liên kết" truyền origin: 'linked' tường minh.
+    origin = 'created',
   } = overrides;
   await db.query(
     `INSERT INTO user_members
        (owner_id, employee_id, permissions, status,
         daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
-        created_at, updated_at)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, NOW(), NOW())`,
+        origin, created_at, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
     [
       ownerId,
       employeeId,
@@ -95,6 +98,7 @@ async function addMembership(ownerId, employeeId, overrides = {}) {
       monthlyEmailLimit,
       dailyZaloLimit,
       monthlyZaloLimit,
+      origin,
     ]
   );
 }
@@ -1374,5 +1378,160 @@ describe('Nhân viên mới có sẵn quyền xem', () => {
       expect(res.status).toBe(403);
       expect(res.body.code).toBe('EMPLOYEE_LIMIT_REACHED');
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// user_members.origin — tài khoản do chủ TẠO ('created') vs tài khoản có sẵn bị LIÊN KẾT ('linked')
+// RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1, 3, 7. Trước bản vá, chủ nhóm mời email của một tài khoản
+// độc lập rồi "Đặt lại mật khẩu" → đăng nhập được vào tài khoản người đó (tái hiện bằng test, 28/09).
+// ---------------------------------------------------------------------------
+describe('user_members.origin — chủ chỉ can thiệp tài khoản do mình tạo', () => {
+  it('POST /employees (tạo mới) ghi origin = created; /employees/invite email đã có tài khoản ghi origin = linked', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const existing = await createUser({ username: 'doclap', email: 'doclap@test.local', role: 'user' });
+
+    await request(app)
+      .post('/api/employees')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ username: 'taomoi', email: 'taomoi@test.local' })
+      .expect(201);
+    const linked = await request(app)
+      .post('/api/employees/invite')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ email: existing.email });
+    expect(linked.status).toBe(201);
+    expect(linked.body.data.method).toBe('linked');
+
+    const { rows } = await db.query(
+      `SELECT u.email, um.origin FROM user_members um JOIN users u ON u.id = um.employee_id
+       WHERE um.owner_id = $1 ORDER BY u.email`,
+      [owner.id]
+    );
+    expect(rows).toEqual([
+      { email: 'doclap@test.local', origin: 'linked' },
+      { email: 'taomoi@test.local', origin: 'created' },
+    ]);
+    // Danh sách trả cho FE mang theo origin để ẩn nút reset/sửa với người 'linked'
+    const list = await request(app).get('/api/employees').set('Authorization', `Bearer ${token}`);
+    expect(list.body.data.map((e) => e.origin).sort()).toEqual(['created', 'linked']);
+  });
+
+  it('reset-password tài khoản linked → 403 EMPLOYEE_ACCOUNT_NOT_OWNED, hash không đổi, mật khẩu cũ vẫn đăng nhập được', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const victim = await createUser({ username: 'nannhan', email: 'nannhan@test.local', role: 'user' });
+    await addMembership(owner.id, victim.id, { origin: 'linked' });
+    const before = await db.query(`SELECT password_hash FROM users WHERE id = $1`, [victim.id]);
+
+    const res = await request(app)
+      .patch(`/api/employees/${victim.id}/reset-password`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('EMPLOYEE_ACCOUNT_NOT_OWNED');
+    expect(res.body.data?.tempPassword).toBeUndefined();
+    const after = await db.query(`SELECT password_hash, must_change_password FROM users WHERE id = $1`, [victim.id]);
+    expect(after.rows[0].password_hash).toBe(before.rows[0].password_hash);
+    expect(after.rows[0].must_change_password).not.toBe(true);
+    // Nạn nhân vẫn đăng nhập bình thường
+    await loginAs(victim);
+  });
+
+  it('lớp đỡ ở SQL: UPDATE reset bỏ qua dòng linked kể cả khi gọi thẳng repository', async () => {
+    const { owner } = await setupOwnerWithPlan();
+    const victim = await createUser({ username: 'nannhan2', role: 'user' });
+    await addMembership(owner.id, victim.id, { origin: 'linked' });
+    const { resetEmployeePassword } = await import('../../src/repositories/user/employee.repository.js');
+    const updated = await resetEmployeePassword(victim.id, owner.id, 'x');
+    expect(updated).toBeNull();
+  });
+
+  it('PATCH /employees/:id (đổi email) tài khoản linked → 403, email trong users không đổi', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const victim = await createUser({ username: 'nannhan3', email: 'nannhan3@test.local', role: 'user' });
+    await addMembership(owner.id, victim.id, { origin: 'linked' });
+
+    const res = await request(app)
+      .patch(`/api/employees/${victim.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'Ke Tan Cong', email: 'attacker@test.local' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('EMPLOYEE_ACCOUNT_NOT_OWNED');
+    const u = await db.query(`SELECT email, full_name FROM users WHERE id = $1`, [victim.id]);
+    expect(u.rows[0].email).toBe('nannhan3@test.local');
+    expect(u.rows[0].full_name).toBe(victim.full_name);
+  });
+
+  it('tài khoản linked vẫn chỉnh được quyền, hạn mức, khoá/mở khoá (đó là việc trong không gian của chủ)', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'linkedok', role: 'user' });
+    await addMembership(owner.id, emp.id, { origin: 'linked' });
+
+    await request(app).patch(`/api/employees/${emp.id}/permissions`).set('Authorization', `Bearer ${token}`)
+      .send({ permissions: { customers: true } }).expect(200);
+    await request(app).patch(`/api/employees/${emp.id}/limits`).set('Authorization', `Bearer ${token}`)
+      .send({ dailyEmailLimit: 10, monthlyEmailLimit: null, dailyZaloLimit: null, monthlyZaloLimit: null }).expect(200);
+    await request(app).patch(`/api/employees/${emp.id}/status`).set('Authorization', `Bearer ${token}`)
+      .send({ status: 'inactive' }).expect(200);
+  });
+
+  it('DELETE nhân viên linked đang pending_activation (chủ khác mời) → chỉ gỡ membership, KHÔNG xoá dòng users', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const otherOwner = await createUser({ username: 'chukhac', role: 'user' });
+    const pending = await createUser({ username: 'pendingkhac', role: 'user', status: 'pending_activation', isVerified: false });
+    await addMembership(otherOwner.id, pending.id, { origin: 'created' });
+    await addMembership(owner.id, pending.id, { origin: 'linked' });
+
+    const res = await request(app)
+      .delete(`/api/employees/${pending.id}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const u = await db.query(`SELECT status FROM users WHERE id = $1`, [pending.id]);
+    expect(u.rows).toHaveLength(1); // tài khoản của chủ khác còn nguyên
+    const mine = await db.query(`SELECT 1 FROM user_members WHERE owner_id = $1 AND employee_id = $2`, [owner.id, pending.id]);
+    expect(mine.rows).toHaveLength(0);
+    const theirs = await db.query(`SELECT 1 FROM user_members WHERE owner_id = $1 AND employee_id = $2`, [otherOwner.id, pending.id]);
+    expect(theirs.rows).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Mở khoá nhân viên phải qua cổng trần max_employees (mục 3)
+// ---------------------------------------------------------------------------
+describe('PATCH /api/employees/:id/status — mở khoá không được vượt trần', () => {
+  it('gói 1 nhân viên: khoá A, thêm B, mở khoá A → 403 EMPLOYEE_LIMIT_REACHED, A vẫn inactive', async () => {
+    const { owner, token } = await setupOwnerWithPlan({ maxEmployees: 1 });
+    const a = await createUser({ username: 'nvA', role: 'user' });
+    await addMembership(owner.id, a.id);
+
+    await request(app).patch(`/api/employees/${a.id}/status`).set('Authorization', `Bearer ${token}`)
+      .send({ status: 'inactive' }).expect(200);
+    await request(app).post('/api/employees/invite').set('Authorization', `Bearer ${token}`)
+      .send({ email: 'nvB@test.local' }).expect(201);
+
+    const res = await request(app)
+      .patch(`/api/employees/${a.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'active' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('EMPLOYEE_LIMIT_REACHED');
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS n FROM user_members WHERE owner_id = $1 AND status = 'active'`, [owner.id]
+    );
+    expect(rows[0].n).toBe(1);
+  });
+
+  it('còn suất thì mở khoá bình thường; khoá (inactive) không bao giờ bị cổng trần chặn', async () => {
+    const { owner, token } = await setupOwnerWithPlan({ maxEmployees: 2 });
+    const a = await createUser({ username: 'nvA2', role: 'user' });
+    await addMembership(owner.id, a.id, { status: 'inactive' });
+
+    await request(app).patch(`/api/employees/${a.id}/status`).set('Authorization', `Bearer ${token}`)
+      .send({ status: 'active' }).expect(200);
+    await request(app).patch(`/api/employees/${a.id}/status`).set('Authorization', `Bearer ${token}`)
+      .send({ status: 'inactive' }).expect(200);
   });
 });
