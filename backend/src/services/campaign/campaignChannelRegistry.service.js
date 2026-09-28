@@ -52,11 +52,15 @@ export class ChannelSendError extends Error {
   /**
    * @param {'hard'|'transient'|'rate_limit'|'auth'|'not_configured'} category
    * @param {string} message
+   * @param {object} [options]
+   * @param {number} [options.retryAfterMs] - chỉ cho 'rate_limit': nhà cung cấp bảo chờ bao lâu (vd
+   *   Telegram FLOOD_WAIT_X → X*1000). Runner dùng làm mốc defer; thiếu thì dùng mặc định 15 phút.
    */
-  constructor(category, message) {
+  constructor(category, message, { retryAfterMs = null } = {}) {
     super(message);
     this.name = 'ChannelSendError';
     this.category = category;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 

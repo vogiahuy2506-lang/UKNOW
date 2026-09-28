@@ -6,9 +6,8 @@
  * b) chạy run MỚI cùng campaign trong cửa sổ dedupe → 0 lần sendOne, messages vẫn 10,
  *    skipped tăng, invariant giữ.
  * c) mock ném hard ở người 2 → người 2 failed, người 3-5 vẫn gửi;
- *    mock ném rate_limit ở người 3 → run failed, đúng 2 người đã gửi (KHÔNG đổi ở PR-5 — đây là
- *    rate_limit REACTIVE do sendOne ném/classifyError phân loại, không đi qua computePerHourWaitMs
- *    nên không có error.waitMs → engine vẫn coi là lỗi cứng, ném tiếp như cũ).
+ *    mock ném rate_limit ở người 3 → run DEFER (review PR-5: rate_limit phát sinh khi gửi cũng defer,
+ *    mặc định 15 phút), đúng 2 người đã gửi.
  * d) mock quietHours bao trùm giờ hiện tại → 0 lần gửi, run DEFER (run vẫn 'running',
  *    channelDeferredReason='channel_quiet_hours') lý do quiet_hours — ĐỔI Ở PR-5, trước đó là
  *    run failed.
@@ -17,8 +16,9 @@
  * f) quotaGate mặc định (không truyền no-op) → run failed CHANNEL_QUOTA_NOT_WIRED, 0 lần gửi.
  *
  * Vòng 2 (review vòng 1, F1/F2/F3):
- * g) rate_limit ở người 3 (5 người x 1 bước) → run failed; total=3 success=2 failed=1 (F1) —
- *    KHÔNG đổi ở PR-5, cùng lý do như (c) (rate_limit REACTIVE, không có waitMs).
+ * g) rate_limit ở người 3 (5 người x 1 bước) → run defer; total=3 success=2 failed=0 (F1 + review PR-5:
+ *    lỗi dừng-để-thử-lại KHÔNG cộng failed); resume → 5/5 gửi, bất biến giữ.
+ * g2) rate_limit có retryAfterMs 30 phút (FLOOD_WAIT) → channelDeferredUntil ≈ now + 30 phút.
  * h) hard ở người 2 (3 người x 2 bước), resume CÙNG run → lần 2 sendOne 0 lần cho người 2;
  *    ledger người 2 is_fully_completed + lastFailureReason='hard'; total sau 2 lần = 6 (F2).
  * i) quiet_hours bao trùm rồi tắt, resume CÙNG run → total không tăng thêm cho người đầu,
@@ -274,7 +274,7 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     expect(failedRows.map((r) => r.recipient_key)).toEqual(['peer2']);
   });
 
-  it('(c2) mock ném rate_limit ở người 3 -> run failed, đúng 2 người đã gửi', async () => {
+  it('(c2) mock ném rate_limit ở người 3 -> run defer (mặc định 15 phút), đúng 2 người đã gửi', async () => {
     fakeSendOne.mockImplementation(async ({ recipientKey, stepIndex }) => {
       if (recipientKey === 'peer3') {
         const err = new Error('peer3 rate limited');
@@ -290,10 +290,15 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     await runCampaignToCompletion(campaign.id, run.id);
 
     const { rows: runRows } = await db.query(
-      'SELECT status, error_message FROM campaign_runs WHERE id = $1',
+      `SELECT status,
+              run_metadata->>'channelDeferredReason' AS reason,
+              EXTRACT(EPOCH FROM ((run_metadata->>'channelDeferredUntil')::timestamptz - now()))::int AS wait_s
+       FROM campaign_runs WHERE id = $1`,
       [run.id]
     );
-    expect(runRows[0].status).toBe('failed');
+    expect(runRows[0].status).toBe('running');
+    expect(runRows[0].reason).toBe('channel_rate_limit');
+    expect(Math.abs(runRows[0].wait_s - 15 * 60)).toBeLessThanOrEqual(60);
 
     const { rows: sentRows } = await db.query(
       `SELECT DISTINCT recipient_key FROM campaign_channel_messages
@@ -387,9 +392,10 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     expect(msgRows[0].n).toBe(10);
   });
 
-  it('(g) mock rate_limit ở người 3 (5 người x 1 bước) -> run failed; total=3 success=2 failed=1 (F1)', async () => {
+  it('(g) mock rate_limit ở người 3 (5 người x 1 bước) -> run defer; total=3 success=2 failed=0; resume -> 5/5 (F1 + review PR-5)', async () => {
+    let peer3Limited = true;
     fakeSendOne.mockImplementation(async ({ recipientKey }) => {
-      if (recipientKey === 'peer3') {
+      if (recipientKey === 'peer3' && peer3Limited) {
         const err = new Error('peer3 rate limited');
         err.category = 'rate_limit';
         throw err;
@@ -410,13 +416,63 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
        FROM campaign_runs WHERE id = $1`,
       [run.id]
     );
-    expect(runRows[0].status).toBe('failed');
+    expect(runRows[0].status).toBe('running');
     expect(runRows[0].total_recipients).toBe(3);
     expect(runRows[0].successful_sends).toBe(2);
-    expect(runRows[0].failed_sends).toBe(1);
+    // Review PR-5 — rate_limit là lỗi dừng-để-thử-lại: KHÔNG cộng failed (bản trước ghim 1 là sai —
+    // resume gửi lại đúng bước đó, cộng failed thì một bước bị đếm cả failed lẫn success).
+    expect(runRows[0].failed_sends).toBe(0);
     const { total_recipients: total, successful_sends: ok, failed_sends: bad, skipped_sends: sk } = runRows[0];
     expect(ok + bad + sk).toBeLessThanOrEqual(total);
+
+    // Resume CÙNG run sau khi hết chờ: peer3 gửi được, run xong, bất biến vẫn giữ.
+    peer3Limited = false;
+    await db.query(
+      `UPDATE campaign_runs
+         SET run_metadata = jsonb_set(run_metadata, '{channelDeferredUntil}', to_jsonb((NOW() - INTERVAL '1 minute')::text))
+       WHERE id = $1`,
+      [run.id]
+    );
+    await runCampaignToCompletion(campaign.id, run.id);
+    const { rows: after } = await db.query(
+      `SELECT status, total_recipients, successful_sends, failed_sends, skipped_sends
+       FROM campaign_runs WHERE id = $1`,
+      [run.id]
+    );
+    expect(after[0].status).toBe('completed');
+    expect(after[0].total_recipients).toBe(5);
+    expect(after[0].successful_sends).toBe(5);
+    expect(after[0].failed_sends).toBe(0);
+    expect(after[0].successful_sends + after[0].failed_sends + after[0].skipped_sends)
+      .toBeLessThanOrEqual(after[0].total_recipients);
     void node;
+  });
+
+  it('(g2) rate_limit có retryAfterMs 30 phút (FLOOD_WAIT) -> channelDeferredUntil ≈ now + 30 phút', async () => {
+    fakeSendOne.mockImplementation(async ({ recipientKey }) => {
+      if (recipientKey === 'peer2') {
+        const err = new Error('FLOOD_WAIT_1800');
+        err.category = 'rate_limit';
+        err.retryAfterMs = 30 * 60 * 1000;
+        throw err;
+      }
+      return { messageId: `mock_msg_${recipientKey}` };
+    });
+    const campaign = await insertCampaign();
+    await insertNode({
+      campaignId: campaign.id,
+      config: { recipientSource: 'manual', recipientKeys: FIVE_RECIPIENTS, steps: [{ message: 'Bước 1' }] },
+    });
+    const run = await insertRun({ campaignId: campaign.id });
+    await runCampaignToCompletion(campaign.id, run.id);
+    const { rows } = await db.query(
+      `SELECT status,
+              EXTRACT(EPOCH FROM ((run_metadata->>'channelDeferredUntil')::timestamptz - now()))::int AS wait_s
+       FROM campaign_runs WHERE id = $1`,
+      [run.id]
+    );
+    expect(rows[0].status).toBe('running');
+    expect(Math.abs(rows[0].wait_s - 30 * 60)).toBeLessThanOrEqual(60);
   });
 
   it('(h) hard ở người 2 (3 người x 2 bước), resume CÙNG run -> lần 2 sendOne 0 lần cho người 2; ledger bỏ cuộc; total sau 2 lần = 6 (F2)', async () => {

@@ -19,6 +19,17 @@ import { buildCampaignReservationKey, computeRequestFingerprint } from '../quota
 const VN_UTC_OFFSET_MS = 7 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const PER_HOUR_MAX_WAIT_MS = 60 * 1000;
+// Review PR-5 — rate_limit PHÁT SINH KHI GỬI (sendOne ném, vd Telegram FLOOD_WAIT) cũng phải defer như
+// rate_limit chủ động. Nhà cung cấp cho biết chờ bao lâu thì dùng (ChannelSendError.retryAfterMs), không thì
+// 15 phút; trần 24h để một con số lạ từ nhà cung cấp không treo run nhiều ngày.
+const REACTIVE_RATE_LIMIT_DEFAULT_WAIT_MS = 15 * 60 * 1000;
+const REACTIVE_RATE_LIMIT_MAX_WAIT_MS = 24 * HOUR_MS;
+
+function resolveReactiveRateLimitWaitMs(sendError) {
+  const hinted = Number.parseInt(sendError?.retryAfterMs, 10);
+  const waitMs = Number.isFinite(hinted) && hinted > 0 ? hinted : REACTIVE_RATE_LIMIT_DEFAULT_WAIT_MS;
+  return Math.min(waitMs, REACTIVE_RATE_LIMIT_MAX_WAIT_MS);
+}
 
 /**
  * Có đang trong khung giờ yên lặng (giờ Việt Nam, dịch UTC+7) không — hàm THUẦN để unit test
@@ -594,7 +605,6 @@ export async function runAdapterSendNode(ctx) {
               errorMessage: sendError?.message || String(sendError),
             });
           }
-          failed += 1;
           outputItems.push({
             ...recipient,
             status: 'failed',
@@ -603,6 +613,11 @@ export async function runAdapterSendNode(ctx) {
           });
 
           if (category === 'hard' || category === 'transient') {
+            // Review PR-5 — CHỈ lỗi bỏ cuộc mới cộng failed. Lỗi dừng-để-thử-lại (rate_limit/auth/
+            // not_configured) mà cũng cộng thì resume gửi lại đúng bước đó và thành công → một bước đếm
+            // cả failed lẫn success, vỡ ok+failed+skipped ≤ total (khuôn: lỗi còn thử lại không cộng
+            // failedSends — email continuous R:4100–4105).
+            failed += 1;
             // F2 — v1 KHÔNG retry: người này COI NHƯ XONG (bỏ cuộc), ghi ledger completedStep=
             // totalSteps + lastFailureReason để resume KHÔNG gửi lại (khuôn email bỏ cuộc, R:4118-
             // 4133) rồi đi tiếp người sau.
@@ -631,6 +646,9 @@ export async function runAdapterSendNode(ctx) {
             sendError?.message || `Kênh ${descriptor.key} dừng node ${node.id} (${category}).`
           );
           stopError.code = `CHANNEL_${String(category).toUpperCase()}`;
+          if (category === 'rate_limit') {
+            stopError.waitMs = resolveReactiveRateLimitWaitMs(sendError);
+          }
           throw stopError;
         }
 
