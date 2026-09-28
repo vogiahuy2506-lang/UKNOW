@@ -153,3 +153,25 @@ export async function dismissReferralPromptRemote() {
   const response = await api.post('/users/me/referral-prompt/dismiss');
   return response.data;
 }
+
+/**
+ * Chấp nhận lời mời vào nhóm của một chủ (membership đang `acceptedAt: null`).
+ *
+ * @param {number|string} ownerId
+ * @returns {Promise<{ success: boolean, data?: object }>}
+ */
+export async function acceptWorkspaceInvite(ownerId) {
+  const response = await api.post(`/users/me/memberships/${ownerId}/accept`);
+  return response.data;
+}
+
+/**
+ * Từ chối lời mời vào nhóm — xoá hẳn membership đang chờ.
+ *
+ * @param {number|string} ownerId
+ * @returns {Promise<{ success: boolean, data?: object }>}
+ */
+export async function declineWorkspaceInvite(ownerId) {
+  const response = await api.post(`/users/me/memberships/${ownerId}/decline`);
+  return response.data;
+}

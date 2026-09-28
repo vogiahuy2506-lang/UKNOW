@@ -58,7 +58,10 @@ beforeEach(() => {
 describe('MainLayout — dải mời chuyển không gian', () => {
   it('đang ở self + có membership → dải mời hiện trong khung app', () => {
     seed({
-      user: { id: 7, role: 'user', username: 'nv', memberships: [{ ownerId: 10, ownerName: 'Công ty A', isLocked: false }] },
+      user: {
+        id: 7, role: 'user', username: 'nv',
+        memberships: [{ ownerId: 10, ownerName: 'Công ty A', isLocked: false, acceptedAt: '2026-01-01T00:00:00Z' }],
+      },
     });
     renderLayout();
 
@@ -81,6 +84,33 @@ describe('MainLayout — dải mời chuyển không gian', () => {
     renderLayout();
 
     expect(screen.queryByTestId('workspace-invite-banner')).not.toBeInTheDocument();
+  });
+});
+
+describe('MainLayout — dải mời CHẤP NHẬN (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2)', () => {
+  it('membership acceptedAt null → dải chấp nhận hiện, dải "vào không gian" KHÔNG hiện', () => {
+    seed({
+      user: {
+        id: 7, role: 'user', username: 'nv',
+        memberships: [{ ownerId: 10, ownerName: 'Công ty A', isLocked: false, acceptedAt: null }],
+      },
+    });
+    renderLayout();
+
+    expect(screen.getByTestId('workspace-invite-accept-banner')).toHaveTextContent('Công ty A');
+    expect(screen.queryByTestId('workspace-invite-banner')).not.toBeInTheDocument();
+  });
+
+  it('membership đã acceptedAt → không có dải chấp nhận', () => {
+    seed({
+      user: {
+        id: 7, role: 'user', username: 'nv',
+        memberships: [{ ownerId: 10, ownerName: 'Công ty A', isLocked: false, acceptedAt: '2026-01-01T00:00:00Z' }],
+      },
+    });
+    renderLayout();
+
+    expect(screen.queryByTestId('workspace-invite-accept-banner')).not.toBeInTheDocument();
   });
 });
 

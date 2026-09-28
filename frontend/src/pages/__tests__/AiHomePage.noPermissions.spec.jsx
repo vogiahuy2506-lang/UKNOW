@@ -23,9 +23,12 @@ const employeeContext = (permissions) => ({
   type: 'employee', ownerId: 10, ownerName: 'Công ty A', ownerAvatarUrl: null, permissions,
   dailyEmailLimit: null, monthlyEmailLimit: null, dailyZaloLimit: null, monthlyZaloLimit: null,
 });
+// acceptedAt đã có (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2) — thiếu thì reconcileActiveContext coi là
+// "workspaceLost" và bật lại context self, làm mất đúng luồng "cùng công ty, quyền vừa đổi" mà test này canh.
 const membership = (permissions) => ({
   ownerId: 10, ownerName: 'Công ty A', ownerAvatarUrl: null, permissions,
   dailyEmailLimit: null, monthlyEmailLimit: null, dailyZaloLimit: null, monthlyZaloLimit: null, isLocked: false,
+  acceptedAt: '2026-01-01T00:00:00Z',
 });
 const meResponse = (permissions) => ({
   data: { data: { user: { id: 7, username: 'nv', role: 'user', active_plan_id: null, memberships: [membership(permissions)] } } },

@@ -30,7 +30,11 @@ const setState = ({ activeContext = { type: 'self' }, memberships }) => {
     switchContext,
   });
 };
-const owner = (id, name, extra = {}) => ({ ownerId: id, ownerName: name, permissions: {}, isLocked: false, ...extra });
+// acceptedAt mặc định đã chấp nhận (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2) — ca cần "chưa chấp nhận" truyền
+// { acceptedAt: null } tường minh.
+const owner = (id, name, extra = {}) => ({
+  ownerId: id, ownerName: name, permissions: {}, isLocked: false, acceptedAt: '2026-01-01T00:00:00Z', ...extra,
+});
 const renderBanner = () => render(<MemoryRouter><WorkspaceInviteBanner /></MemoryRouter>);
 const banner = () => screen.queryByTestId('workspace-invite-banner');
 
@@ -66,6 +70,12 @@ describe('điều kiện hiện dải', () => {
 
   it('membership bị khoá (isLocked) không vào được → không mời', () => {
     setState({ memberships: [owner(10, 'Công ty A', { isLocked: true })] });
+    renderBanner();
+    expect(banner()).not.toBeInTheDocument();
+  });
+
+  it('membership CHƯA chấp nhận (acceptedAt null) → không mời "Vào không gian" (chờ banner Chấp nhận riêng)', () => {
+    setState({ memberships: [owner(10, 'Công ty A', { acceptedAt: null })] });
     renderBanner();
     expect(banner()).not.toBeInTheDocument();
   });

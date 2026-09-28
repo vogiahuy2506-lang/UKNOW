@@ -107,7 +107,10 @@ const pickDefaultContext = (user) => {
   // đăng nhập lại thì lại rơi vào đúng membership ấy → vòng lặp không thoát được. Còn với
   // reconcileActiveContext: workspaceLost → chọn lại mặc định → lại chính membership khoá → mỗi lần làm mới
   // là một lần đổi không gian + xoá cache.
-  const usable = memberships.find((membership) => !membership?.isLocked);
+  // Bỏ qua membership CHƯA CHẤP NHẬN (`acceptedAt` null — PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2): backend
+  // (resolveUserContext) chặn context-switch cho tới khi người này tự bấm Chấp nhận, nên tự động vào đây
+  // sẽ vỡ ngay ở request kế tiếp — chờ WorkspaceInviteAcceptBanner mời chấp nhận trước.
+  const usable = memberships.find((membership) => !membership?.isLocked && membership?.acceptedAt);
   if (!hasPlan && usable) {
     return buildEmployeeContext(usable);
   }
@@ -145,7 +148,9 @@ export const reconcileActiveContext = (user, activeContext) => {
   const membership = (user?.memberships || []).find(
     (m) => String(m.ownerId) === String(activeContext.ownerId)
   );
-  if (!membership || membership.isLocked) {
+  // membership mất/bị khoá/chưa (còn) chấp nhận — trường hợp cuối phòng thủ, bình thường không tới đây vì
+  // pickDefaultContext đã lọc ngay từ đầu; chỉ có ý nghĩa nếu accepted_at bị revert trong lúc đang ở context đó.
+  if (!membership || membership.isLocked || !membership.acceptedAt) {
     return { kind: 'workspaceLost', context: pickDefaultContext(user) };
   }
 

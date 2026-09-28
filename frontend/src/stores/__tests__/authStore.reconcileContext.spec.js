@@ -15,6 +15,8 @@ vi.mock('../../services/api', () => ({
 const api = (await import('../../services/api')).default;
 const { useAuthStore, reconcileActiveContext } = await import('../authStore');
 
+// acceptedAt mặc định đã chấp nhận (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2) — ca cần "chưa chấp nhận"
+// truyền { acceptedAt: null } tường minh.
 const membership = (overrides = {}) => ({
   ownerId: 10,
   ownerName: 'Công ty A',
@@ -25,6 +27,7 @@ const membership = (overrides = {}) => ({
   dailyZaloLimit: null,
   monthlyZaloLimit: null,
   isLocked: false,
+  acceptedAt: '2026-01-01T00:00:00Z',
   ...overrides,
 });
 
@@ -95,6 +98,14 @@ describe('reconcileActiveContext (hàm thuần)', () => {
   it('membership bị khoá (isLocked) → workspaceLost', () => {
     const result = reconcileActiveContext(user([membership({ isLocked: true })]), employeeCtx());
     expect(result.kind).toBe('workspaceLost');
+  });
+
+  it('membership CHƯA chấp nhận (acceptedAt null) → workspaceLost, về self (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2)', () => {
+    // Trường hợp phòng thủ: accepted_at bị revert về NULL trong lúc đang ở context đó (backend chặn
+    // switch context cho tới khi chấp nhận nên pickDefaultContext không bao giờ tự chọn context này).
+    const result = reconcileActiveContext(user([membership({ acceptedAt: null })]), employeeCtx());
+    expect(result.kind).toBe('workspaceLost');
+    expect(result.context).toEqual({ type: 'self' });
   });
 
   it('mất công ty này nhưng không có gói riêng và còn công ty khác → sang công ty khác (theo pickDefaultContext)', () => {

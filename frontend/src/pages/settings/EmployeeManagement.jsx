@@ -372,8 +372,14 @@ const EmployeeManagement = () => {
       setIsCreating(true);
       const res = await userManagementApiService.inviteEmployee({ email, fullName });
       const data = res.data?.data;
-      if (data?.method === 'linked') {
-        toast.success(t('employee.linkSuccess'));
+      // invited_link: tài khoản có sẵn — chỉ CHỜ CHẤP NHẬN, không còn "liên kết thành công" ngay
+      // (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2 — liên kết im lặng trước đây là đúng lỗ bị vá).
+      if (data?.method === 'invited_link') {
+        if (data?.invitationSent === false) {
+          toast.error(res.data?.message || t('employee.linkNoticeFailed'), { duration: 8000 });
+        } else {
+          toast.success(t('employee.linkInviteSent'));
+        }
       } else if (data?.invitationSent === false) {
         toast.error(res.data?.message || t('employee.inviteFailed'), { duration: 8000 });
       } else {
@@ -579,7 +585,9 @@ const EmployeeManagement = () => {
                       <td>{emp.fullName || <span className="text-gray-400">—</span>}</td>
                       <td className="text-sm text-gray-600">{emp.email}</td>
                       <td>
-                        {emp.status === 'pending_activation' ? (
+                        {!emp.acceptedAt ? (
+                          <span className="badge badge-warning">{t('employee.pendingAcceptance')}</span>
+                        ) : emp.status === 'pending_activation' ? (
                           <span className="badge badge-warning">{t('employee.pendingActivation')}</span>
                         ) : (
                           <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
@@ -774,7 +782,13 @@ const EmployeeManagement = () => {
             {/* ── Tab Thông tin ── */}
             {activeTab === 'info' && (
               <div className="space-y-6">
-                {/* Form thông tin */}
+                {/* Form thông tin — tài khoản origin='linked' (người đó tự đăng ký, chủ chỉ liên kết) chỉ đọc:
+                    email đăng nhập là của họ, không phải chủ tạo ra (RA_SOAT_NHAN_VIEN_PHAN_QUYEN mục 1). */}
+                {selectedEmployee.origin === 'linked' && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                    {t('employee.linkedAccountInfoHint')}
+                  </p>
+                )}
                 <form onSubmit={editForm.handleSubmit(onSubmitInfo)} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.username')}</label>
@@ -783,24 +797,32 @@ const EmployeeManagement = () => {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.fullName')}</label>
-                    <input type="text" className="input w-full" {...editForm.register('fullName')} />
+                    <input
+                      type="text"
+                      className="input w-full"
+                      disabled={selectedEmployee.origin === 'linked'}
+                      {...editForm.register('fullName')}
+                    />
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">{t('employee.email')} *</label>
                     <input
                       type="email"
                       className="input w-full"
+                      disabled={selectedEmployee.origin === 'linked'}
                       {...editForm.register('email', { required: t('employee.emailRequired') })}
                     />
                     {editForm.formState.errors.email && (
                       <p className="text-red-500 text-sm mt-1">{editForm.formState.errors.email.message}</p>
                     )}
                   </div>
-                  <div className="flex justify-end">
-                    <button type="submit" className="btn btn-primary" disabled={isSavingInfo}>
-                      {isSavingInfo ? t('employee.saving') : t('employee.save')}
-                    </button>
-                  </div>
+                  {selectedEmployee.origin !== 'linked' && (
+                    <div className="flex justify-end">
+                      <button type="submit" className="btn btn-primary" disabled={isSavingInfo}>
+                        {isSavingInfo ? t('employee.saving') : t('employee.save')}
+                      </button>
+                    </div>
+                  )}
                 </form>
 
                 {/* Quản lý tài khoản */}
@@ -808,8 +830,9 @@ const EmployeeManagement = () => {
                   <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide">{t('employee.accountManagement')}</p>
                   <div className="flex flex-wrap gap-2">
                     {/* Trạng thái chờ kích hoạt nằm ở users.status (`status`), KHÔNG phải user_members.status
-                        (`memberStatus`: active/inactive) — so nhầm khiến nút "Gửi lại lời mời" không bao giờ hiện. */}
-                    {selectedEmployee.status !== 'pending_activation' && (
+                        (`memberStatus`: active/inactive) — so nhầm khiến nút "Gửi lại lời mời" không bao giờ hiện.
+                        acceptedAt null: chưa chấp nhận lời mời thì khoá/mở khoá không có ý nghĩa (backend 400). */}
+                    {selectedEmployee.status !== 'pending_activation' && selectedEmployee.acceptedAt && (
                       <button
                         type="button"
                         onClick={() => handleToggleStatus(selectedEmployee)}
@@ -838,7 +861,7 @@ const EmployeeManagement = () => {
                         <HiOutlineMail className="w-4 h-4 mr-2" />
                         {resendingInviteId === selectedEmployee.id ? t('employee.sendingInvite') : t('employee.sendInviteAgain')}
                       </button>
-                    ) : (
+                    ) : selectedEmployee.origin !== 'linked' ? (
                       <button
                         type="button"
                         onClick={() => setResetConfirmEmp(selectedEmployee)}
@@ -847,7 +870,7 @@ const EmployeeManagement = () => {
                         <HiOutlineKey className="w-4 h-4 mr-2" />
                         {t('employee.resetPassword')}
                       </button>
-                    )}
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setDeleteConfirmEmp(selectedEmployee)}

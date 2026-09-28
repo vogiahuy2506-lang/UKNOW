@@ -49,6 +49,9 @@ import toast from 'react-hot-toast';
 import api from '../../../features/users/services/userManagementApi.service';
 import EmployeeManagement from '../EmployeeManagement';
 
+// origin='created' + acceptedAt đã có (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2) là mặc định AN TOÀN — hầu hết
+// ca ở đây test tính năng khác, không phải luồng "tài khoản có sẵn bị liên kết". Ca cần mô phỏng linked/
+// chưa chấp nhận truyền overrides tường minh: { origin: 'linked', acceptedAt: null }.
 const makeEmployee = (overrides = {}) => ({
   id: '12',
   username: 'nv01',
@@ -62,6 +65,8 @@ const makeEmployee = (overrides = {}) => ({
   monthlyEmailLimit: null,
   dailyZaloLimit: null,
   monthlyZaloLimit: null,
+  origin: 'created',
+  acceptedAt: '2026-01-01T00:00:00.000Z',
   ...overrides,
 });
 
@@ -123,9 +128,9 @@ const setEmployeesWithMeta = (list, meta) => {
 
 // ── (a) thêm nhân viên xong → tự mở tab Phân quyền ───────────────────────────
 describe('thêm nhân viên xong → tự mở tab Phân quyền', () => {
-  it('id trả về là CHUỖI (cột BIGINT) và method: linked → mở đúng nhân viên ở tab Phân quyền, toast linkSuccess', async () => {
-    setEmployees([], [makeEmployee({ id: '12' })]);
-    api.inviteEmployee.mockReturnValue(ok({ id: '12', method: 'linked' })); // id là CHUỖI (BIGINT)
+  it('id trả về là CHUỖI (cột BIGINT) và method: invited_link (chờ chấp nhận) → mở đúng nhân viên ở tab Phân quyền, toast linkInviteSent', async () => {
+    setEmployees([], [makeEmployee({ id: '12', origin: 'linked', acceptedAt: null })]);
+    api.inviteEmployee.mockReturnValue(ok({ id: '12', method: 'invited_link', invitationSent: true })); // id là CHUỖI (BIGINT)
     const user = await renderPage();
 
     await openAddModal(user);
@@ -136,12 +141,28 @@ describe('thêm nhân viên xong → tự mở tab Phân quyền', () => {
     expect(await screen.findByText(/Nhân Viên Một chưa có quyền nào/)).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Nhân Viên Một' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lưu quyền hạn' })).toBeInTheDocument();
-    expect(toast.success).toHaveBeenCalledWith('Liên kết tài khoản nhân viên thành công');
+    expect(toast.success).toHaveBeenCalledWith('Đã gửi lời mời — người này cần chấp nhận trong ứng dụng');
+  });
+
+  it('method invited_link nhưng gửi thư báo hỏng (invitationSent=false) → toast lỗi, KHÔNG toast thành công', async () => {
+    setEmployees([], [makeEmployee({ id: '12', origin: 'linked', acceptedAt: null })]);
+    api.inviteEmployee.mockReturnValue(ok(
+      { id: '12', method: 'invited_link', invitationSent: false },
+      { message: 'Đã liên kết NHƯNG gửi email báo thất bại.' }
+    ));
+    const user = await renderPage();
+
+    await openAddModal(user);
+    await user.type(field('email'), 'nv01@example.com');
+    await user.click(screen.getAllByRole('button', { name: 'Thêm nhân viên' }).pop());
+
+    await waitFor(() => expect(toast.error).toHaveBeenCalledWith('Đã liên kết NHƯNG gửi email báo thất bại.', { duration: 8000 }));
+    expect(toast.success).not.toHaveBeenCalled();
   });
 
   it('backend cũ chưa trả data.id → tìm theo email (không phân biệt hoa/thường), vẫn mở màn Phân quyền', async () => {
-    setEmployees([], [makeEmployee({ email: 'nv01@example.com' })]);
-    api.inviteEmployee.mockReturnValue(ok({ permissions: [], method: 'linked' })); // không có id
+    setEmployees([], [makeEmployee({ email: 'nv01@example.com', origin: 'linked', acceptedAt: null })]);
+    api.inviteEmployee.mockReturnValue(ok({ permissions: [], method: 'invited_link' })); // không có id
     const user = await renderPage();
 
     await openAddModal(user);
@@ -246,7 +267,9 @@ describe('hộp thoại thêm nhân viên (chỉ cần email)', () => {
     const user = await renderPage();
     await openAddModal(user);
 
-    expect(screen.getByText('Người đã có tài khoản sẽ được thêm ngay; người chưa có sẽ nhận email hướng dẫn đăng ký.')).toBeInTheDocument();
+    // Câu đã đổi (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2): tài khoản có sẵn giờ CHỜ CHẤP NHẬN, không còn
+    // "được thêm ngay" — liên kết im lặng là đúng lỗ mà PR này vá.
+    expect(screen.getByText('Người đã có tài khoản sẽ nhận lời mời và cần chấp nhận; người chưa có sẽ nhận email hướng dẫn đăng ký.')).toBeInTheDocument();
     expect(screen.getByText('(Không bắt buộc)')).toBeInTheDocument();
     expect(field('username')).toBeNull(); // Không còn ô username
   });
@@ -382,6 +405,46 @@ describe('nhân viên chờ kích hoạt (P5)', () => {
     expect(await screen.findByRole('button', { name: 'Reset mật khẩu' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Khóa tài khoản' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Gửi lại lời mời' })).not.toBeInTheDocument();
+  });
+});
+
+// ── Tài khoản có sẵn bị liên kết — origin='linked' (PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-2) ──────────────
+describe('nhân viên origin=linked (tài khoản có sẵn bị liên kết)', () => {
+  it('acceptedAt null → badge "Chờ chấp nhận", KHÔNG thấy nút Khóa tài khoản', async () => {
+    setEmployees([makeEmployee({ origin: 'linked', acceptedAt: null })]);
+    await renderPage();
+
+    expect(await screen.findByText('Chờ chấp nhận')).toBeInTheDocument();
+    await screen.findByText('nv01');
+    expect(screen.queryByRole('button', { name: 'Khóa tài khoản' })).not.toBeInTheDocument();
+  });
+
+  it('origin=linked (đã chấp nhận) → form Thông tin vô hiệu hoá + dòng giải thích, KHÔNG có nút Reset mật khẩu/Lưu', async () => {
+    setEmployees([makeEmployee({ origin: 'linked' })]);
+    const user = await renderPage();
+    await user.click(await screen.findByText('nv01'));
+
+    expect(await screen.findByText('Tài khoản do người này tự đăng ký — bạn chỉ chỉnh được quyền và hạn mức.')).toBeInTheDocument();
+    expect(field('fullName')).toBeDisabled();
+    expect(field('email')).toBeDisabled();
+    // "Lưu thay đổi" cũng là câu của nút Duyệt chiến dịch lớn (luôn hiện trên trang) — khoanh vùng
+    // trong form Thông tin để không lẫn.
+    const infoForm = field('fullName').closest('form');
+    expect(within(infoForm).queryByRole('button', { name: 'Lưu thay đổi' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reset mật khẩu' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Khóa tài khoản' })).toBeInTheDocument();
+  });
+
+  it('origin=created (mặc định) → form Thông tin vẫn chỉnh được, có nút Lưu + Reset mật khẩu', async () => {
+    setEmployees([makeEmployee()]);
+    const user = await renderPage();
+    await user.click(await screen.findByText('nv01'));
+
+    expect(field('fullName')).not.toBeDisabled();
+    expect(field('email')).not.toBeDisabled();
+    const infoForm = field('fullName').closest('form');
+    expect(within(infoForm).getByRole('button', { name: 'Lưu thay đổi' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reset mật khẩu' })).toBeInTheDocument();
   });
 });
 
