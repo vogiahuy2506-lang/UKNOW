@@ -78,13 +78,17 @@ class AiCreditMeterService {
         const dailyLimit = member.daily_ai_credit_limit != null ? Number(member.daily_ai_credit_limit) : null;
         const periodLimit = member.period_ai_credit_limit != null ? Number(member.period_ai_credit_limit) : null;
 
+        // usage_logs ghi số lượng ở cột `delta` và người thao tác ở cột `actor_user_id` (migration 103, có
+        // index). Bản trước đọc SUM(quantity) — cột không tồn tại — nên nhân viên nào được đặt hạn mức là bị
+        // chặn AI 100% với lỗi Postgres thô; unit test mock trọn DB nên không bắt được
+        // (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 2; test thật ở tests/integration/employeeAiCreditLimit.test.js).
         if (dailyLimit !== null) {
           const { rows: dailyRows } = await db.query(
-            `SELECT COALESCE(SUM(quantity), 0)::int AS used
+            `SELECT COALESCE(SUM(delta), 0)::int AS used
              FROM usage_logs
              WHERE id_user = $1
                AND resource_type = $2
-               AND (metadata->>'actorUserId')::bigint = $3
+               AND actor_user_id = $3
                AND created_at >= CURRENT_DATE`,
             [billingUserId, AI_CREDIT_RESOURCE, userId]
           );
@@ -96,11 +100,11 @@ class AiCreditMeterService {
 
         if (periodLimit !== null && cycle?.cycleStart && cycle?.cycleEnd) {
           const { rows: periodRows } = await db.query(
-            `SELECT COALESCE(SUM(quantity), 0)::int AS used
+            `SELECT COALESCE(SUM(delta), 0)::int AS used
              FROM usage_logs
              WHERE id_user = $1
                AND resource_type = $2
-               AND (metadata->>'actorUserId')::bigint = $3
+               AND actor_user_id = $3
                AND created_at >= $4 AND created_at < $5`,
             [billingUserId, AI_CREDIT_RESOURCE, userId, cycle.cycleStart, cycle.cycleEnd]
           );
