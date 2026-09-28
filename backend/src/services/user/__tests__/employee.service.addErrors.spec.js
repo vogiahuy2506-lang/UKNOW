@@ -17,6 +17,8 @@ const repo = {
   findOwnerInfo: jest.fn(),
   createEmployeeWithLink: jest.fn(),
   linkExistingUserAsEmployee: jest.fn(),
+  acceptMembership: jest.fn(),
+  declineMembership: jest.fn(),
   updateEmployeeInfo: jest.fn(),
   updateEmployeePermissions: jest.fn(),
   updateEmployeeStatus: jest.fn(),
@@ -27,10 +29,11 @@ const repo = {
   updateCampaignApprovalThreshold: jest.fn(),
 };
 const mockSendInvitation = jest.fn();
+const mockSendLinkNotice = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/user/employee.repository.js', () => repo);
 jest.unstable_mockModule('../../verification.service.js', () => ({
-  default: { sendEmployeeInvitation: mockSendInvitation },
+  default: { sendEmployeeInvitation: mockSendInvitation, sendEmployeeLinkNotice: mockSendLinkNotice },
 }));
 jest.unstable_mockModule('../../../repositories/payment/topup.repository.js', () => ({
   sumActiveTopupGrants: jest.fn().mockResolvedValue(0),
@@ -168,15 +171,16 @@ describe('linkUserAsEmployee — tài khoản đã xoá', () => {
     expect(repo.linkExistingUserAsEmployee).not.toHaveBeenCalled();
   });
 
-  it('tài khoản đang hoạt động → link bình thường', async () => {
-    repo.findUserByEmail.mockResolvedValue({ id: 5, status: 'active' });
-    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 5 });
+  it('tài khoản đang hoạt động → link chờ chấp nhận (invited_link), báo qua thư cho người đó', async () => {
+    repo.findUserByEmail.mockResolvedValue({ id: 5, status: 'active', email: 'someone@example.com' });
+    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 5, acceptedAt: null });
 
     const result = await linkUserAsEmployee(OWNER_ID, ' Someone@Example.com ');
 
     expect(repo.findUserByEmail).toHaveBeenCalledWith('someone@example.com');
     expect(repo.linkExistingUserAsEmployee).toHaveBeenCalledWith(OWNER_ID, 5);
-    expect(result).toEqual({ id: 5 });
+    expect(mockSendLinkNotice).toHaveBeenCalledWith('someone@example.com', 'Chủ');
+    expect(result).toMatchObject({ id: 5, method: 'invited_link', invitationSent: true });
   });
 
   it('tài khoản chưa kích hoạt (pending_activation) vẫn link được — chỉ "deleted" bị chặn', async () => {

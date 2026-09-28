@@ -8,7 +8,7 @@ const EMPLOYEE_SELECT = `
   um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
   um.daily_zalo_limit AS "dailyZaloLimit",  um.monthly_zalo_limit AS "monthlyZaloLimit",
   um.daily_ai_credit_limit AS "dailyAiCreditLimit", um.period_ai_credit_limit AS "periodAiCreditLimit",
-  um.origin
+  um.origin, um.accepted_at AS "acceptedAt"
 `;
 
 export async function findEmployeesByOwner(ownerId) {
@@ -118,10 +118,12 @@ export async function createEmployeeWithLink({ ownerId, username, email, passwor
     // để DB tự điền là để kết quả phụ thuộc máy chạy.
     // origin = 'created': tài khoản này do chủ tạo ra → chủ được đặt lại mật khẩu / sửa email / xoá khi chưa
     // kích hoạt. Membership từ linkExistingUserAsEmployee là 'linked' và KHÔNG có ba quyền đó (migration 256).
+    // accepted_at = NOW(): chủ tạo tài khoản này từ đầu → coi là đồng ý ngầm ngay lúc tạo (migration 257).
     const memberResult = await client.query(
-      `INSERT INTO user_members (owner_id, employee_id, permissions, origin)
-       VALUES ($1, $2, $3::jsonb, 'created')
+      `INSERT INTO user_members (owner_id, employee_id, permissions, origin, accepted_at)
+       VALUES ($1, $2, $3::jsonb, 'created', NOW())
        RETURNING permissions, status AS "memberStatus", created_at AS "joinedAt", origin,
+                 accepted_at AS "acceptedAt",
                  daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
                  daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
       [ownerId, newUser.id, JSON.stringify(buildDefaultNewEmployeePermissions())]
@@ -143,17 +145,51 @@ export async function linkExistingUserAsEmployee(ownerId, userId) {
   // (gỡ khỏi team là DELETE hàng, nên tới đây chỉ còn ca membership đang bị khoá) —
   // link lại không được ghi đè bộ quyền chủ đã chỉnh.
   // origin = 'linked': tài khoản có sẵn, không phải của chủ → chủ không được đặt lại mật khẩu / sửa email.
-  // ON CONFLICT giữ nguyên origin cũ (người từng được chủ tạo rồi link lại vẫn là 'created').
+  // accepted_at = NULL: đây là chỗ DUY NHẤT trong code cố ý ghi đè default NOW() của cột (migration 257)
+  // — liên kết tài khoản có sẵn thì người đó chưa đồng ý gì, resolveUserContext chặn switch context tới
+  // khi họ tự bấm Chấp nhận (POST /users/me/memberships/:ownerId/accept).
+  // ON CONFLICT giữ nguyên origin/accepted_at cũ (người từng được chủ tạo/đã từng chấp nhận rồi bị gỡ
+  // rồi link lại không bị bắt đồng ý lại từ đầu).
   const result = await db.query(
-    `INSERT INTO user_members (owner_id, employee_id, permissions, origin)
-     VALUES ($1, $2, $3::jsonb, 'linked')
+    `INSERT INTO user_members (owner_id, employee_id, permissions, origin, accepted_at)
+     VALUES ($1, $2, $3::jsonb, 'linked', NULL)
      ON CONFLICT (owner_id, employee_id) DO UPDATE SET status = 'active', updated_at = CURRENT_TIMESTAMP
      RETURNING employee_id AS "id", permissions, status AS "memberStatus", created_at AS "joinedAt", origin,
+               accepted_at AS "acceptedAt",
                daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
                daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit"`,
     [ownerId, userId, JSON.stringify(buildDefaultNewEmployeePermissions())]
   );
   return result.rows[0];
+}
+
+/**
+ * Người bị liên kết tự bấm "Chấp nhận" lời mời — chỉ trúng dòng đang thật sự chờ
+ * (accepted_at IS NULL), để bấm hai lần hay bấm nhầm dòng đã chấp nhận đều là no-op an toàn.
+ */
+export async function acceptMembership(employeeId, ownerId) {
+  const result = await db.query(
+    `UPDATE user_members
+     SET accepted_at = NOW(), updated_at = CURRENT_TIMESTAMP
+     WHERE employee_id = $1 AND owner_id = $2 AND accepted_at IS NULL
+     RETURNING owner_id AS "ownerId", employee_id AS "employeeId", accepted_at AS "acceptedAt"`,
+    [employeeId, ownerId]
+  );
+  return result.rows[0] || null;
+}
+
+/**
+ * Người bị liên kết từ chối lời mời — xoá hẳn dòng, chỉ khi vẫn đang chờ (accepted_at IS NULL) để
+ * không lỡ xoá một membership đã chấp nhận từ trước (dòng đó phải qua "Xoá khỏi nhóm" của chủ).
+ */
+export async function declineMembership(employeeId, ownerId) {
+  const result = await db.query(
+    `DELETE FROM user_members
+     WHERE employee_id = $1 AND owner_id = $2 AND accepted_at IS NULL
+     RETURNING owner_id AS "ownerId", employee_id AS "employeeId"`,
+    [employeeId, ownerId]
+  );
+  return result.rows[0] || null;
 }
 
 export async function updateEmployeeInfo(employeeId, ownerId, { fullName, email }) {
@@ -309,9 +345,12 @@ export async function findTeamOverview(ownerId, { employeeId = null } = {}) {
 
      FROM user_members um
      JOIN users u ON u.id = um.employee_id
-     LEFT JOIN campaigns c ON c.id_user = um.employee_id
+     -- c.id_user = um.employee_id đếm cả chiến dịch trong KHÔNG GIAN RIÊNG của nhân viên linked (họ vẫn
+     -- là user_admin với không gian riêng của chính mình) — đổi sang workspace_owner_id + created_by để chỉ đếm
+     -- chiến dịch nhân viên này tạo TRONG không gian của chủ (RA_SOAT_NHAN_VIEN_PHAN_QUYEN mục 1).
+     LEFT JOIN campaigns c ON c.workspace_owner_id = um.owner_id AND c.created_by = um.employee_id
      LEFT JOIN campaign_runs cr ON cr.id_campaign = c.id
-     WHERE um.owner_id = $1${employeeFilter}
+     WHERE um.owner_id = $1 AND um.accepted_at IS NOT NULL${employeeFilter}
      GROUP BY u.id, u.username, u.full_name, u.avatar_url, u.status,
               um.status, um.daily_email_limit, um.monthly_email_limit,
               um.daily_zalo_limit, um.monthly_zalo_limit

@@ -301,6 +301,86 @@ describe('POST /api/auth/register', () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// PR-2 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 9) — người thật CHIẾM LẠI tài khoản
+// pending_activation mà một chủ nhóm khác đã lỡ "mời" bằng email của họ trước đó.
+// ---------------------------------------------------------------------------
+describe('POST /api/auth/register — chiếm lại tài khoản pending do chủ khác mời (mục 9)', () => {
+  it('B mời x@ (chưa có tài khoản); người thật đăng ký x@ bằng OTP → 201, đăng nhập được, B không reset được (403), B thấy chưa chấp nhận', async () => {
+    const plan = await createPlan({ maxEmployees: 5 });
+    const owner = await createUser({ username: 'ownermuc9', role: 'user' });
+    await db.query(
+      `UPDATE users SET active_plan_id = $1, subscription_expires_at = NOW() + INTERVAL '365 days',
+              max_employees = 1000 WHERE id = $2`,
+      [plan.id, owner.id]
+    );
+    const ownerLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ username: owner.username, password: owner.plainPassword });
+    const ownerToken = ownerLogin.body.data.accessToken;
+
+    const email = 'nguoithatmuc9@test.local';
+    const inviteRes = await request(app)
+      .post('/api/employees/invite')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email });
+    expect(inviteRes.status).toBe(201);
+    expect(inviteRes.body.data.method).toBe('invited');
+    const employeeId = inviteRes.body.data.id;
+
+    // Trước khi người thật đăng ký: origin='created' (B tạo hộ), chưa hề "chấp nhận" gì —
+    // accepted_at đã có sẵn (migration 257 DEFAULT NOW()), coi như hợp lệ cho tới lúc bị chiếm lại.
+    const beforeRow = await db.query('SELECT origin FROM user_members WHERE employee_id = $1', [employeeId]);
+    expect(beforeRow.rows[0].origin).toBe('created');
+
+    // Người thật sở hữu email này đăng ký bằng OTP — không dùng inviteToken.
+    await createVerificationCode({ email, code: '999999' });
+    const registerRes = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'nguoithatmuc9',
+        email,
+        password: 'Passw0rd!',
+        fullName: 'Nguoi That',
+        phone: '0911000099',
+        emailVerificationCode: '999999',
+        consents: { terms: true, privacy: true, dpa: true },
+      });
+    expect(registerRes.status).toBe(201);
+    expect(registerRes.body.data.user.email).toBe(email);
+
+    // Đăng nhập được ngay bằng mật khẩu vừa đặt.
+    const loginRes = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'nguoithatmuc9', password: 'Passw0rd!' });
+    expect(loginRes.status).toBe(200);
+    expect(loginRes.body.data.accessToken).toEqual(expect.any(String));
+
+    // origin chuyển sang 'linked', accepted_at về NULL — B không còn quyền tự động, phải chờ người
+    // này chấp nhận.
+    const afterRow = await db.query(
+      'SELECT origin, accepted_at FROM user_members WHERE employee_id = $1',
+      [employeeId]
+    );
+    expect(afterRow.rows[0].origin).toBe('linked');
+    expect(afterRow.rows[0].accepted_at).toBeNull();
+
+    // B thấy "chưa chấp nhận" trong danh sách nhân viên.
+    const listRes = await request(app)
+      .get('/api/employees')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    const row = listRes.body.data.find((e) => Number(e.id) === Number(employeeId));
+    expect(row.acceptedAt).toBeNull();
+
+    // B không reset được mật khẩu tài khoản này nữa (đã là 'linked', không còn 'created').
+    const resetRes = await request(app)
+      .patch(`/api/employees/${employeeId}/reset-password`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(resetRes.status).toBe(403);
+    expect(resetRes.body.code).toBe('EMPLOYEE_ACCOUNT_NOT_OWNED');
+  });
+});
+
 describe('POST /api/auth/google-login', () => {
   let fetchSpy;
 
@@ -495,6 +575,67 @@ describe('POST /api/auth/google-login', () => {
     // Kiểm tra token kích hoạt bị mark as used
     const tokenRow = await db.query('SELECT is_used FROM verification_codes WHERE code = $1', ['invite_token_123']);
     expect(tokenRow.rows[0].is_used).toBe(true);
+  });
+
+  // PR-2 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 9) — tương đương ca đăng ký OTP ở
+  // describe 'chiếm lại tài khoản pending' phía trên, nhưng người thật đăng nhập bằng Google
+  // thay vì kích hoạt qua OTP/link.
+  it('B mời x@ (chưa có tài khoản); người thật đăng nhập BẰNG GOOGLE với x@ → 200, active, B không reset được, B thấy chưa chấp nhận', async () => {
+    const plan = await createPlan({ maxEmployees: 5 });
+    const owner = await createUser({ username: 'ownergoogle9', role: 'user' });
+    await db.query(
+      `UPDATE users SET active_plan_id = $1, subscription_expires_at = NOW() + INTERVAL '365 days',
+              max_employees = 1000 WHERE id = $2`,
+      [plan.id, owner.id]
+    );
+    const ownerLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ username: owner.username, password: owner.plainPassword });
+    const ownerToken = ownerLogin.body.data.accessToken;
+
+    const email = 'nguoithatgoogle9@test.local';
+    const inviteRes = await request(app)
+      .post('/api/employees/invite')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email });
+    expect(inviteRes.status).toBe(201);
+    expect(inviteRes.body.data.method).toBe('invited');
+    const employeeId = inviteRes.body.data.id;
+
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        email,
+        email_verified: true,
+        name: 'Nguoi That Google',
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'google_token_mục9' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.user.email).toBe(email);
+
+    const afterRow = await db.query(
+      'SELECT origin, accepted_at FROM user_members WHERE employee_id = $1',
+      [employeeId]
+    );
+    expect(afterRow.rows[0].origin).toBe('linked');
+    expect(afterRow.rows[0].accepted_at).toBeNull();
+
+    const listRes = await request(app)
+      .get('/api/employees')
+      .set('Authorization', `Bearer ${ownerToken}`);
+    const row = listRes.body.data.find((e) => Number(e.id) === Number(employeeId));
+    expect(row.acceptedAt).toBeNull();
+
+    const resetRes = await request(app)
+      .patch(`/api/employees/${employeeId}/reset-password`)
+      .set('Authorization', `Bearer ${ownerToken}`);
+    expect(resetRes.status).toBe(403);
+    expect(resetRes.body.code).toBe('EMPLOYEE_ACCOUNT_NOT_OWNED');
   });
 
   it('Google đăng nhập tài khoản inactive → vẫn 403', async () => {

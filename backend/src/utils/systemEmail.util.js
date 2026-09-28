@@ -1026,6 +1026,52 @@ export function buildEmployeeInvitationEmail({
   };
 }
 
+/**
+ * Báo cho một tài khoản CÓ SẴN vừa bị chủ nhóm khác liên kết làm nhân viên (khác
+ * buildEmployeeInvitationEmail: không token kích hoạt, họ đã có tài khoản rồi). Không đi qua cơ chế
+ * mẫu tuỳ biến trong system_email_templates (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 PR-2 — email
+ * đơn giản, chưa cần admin tuỳ biến nội dung).
+ */
+export function buildEmployeeLinkNoticeEmail({ ownerName, email }) {
+  const safeOwnerName = escapeSystemEmailHtml(ownerName || 'Một tài khoản');
+  const appUrl = `${FRONTEND_URL}/app`;
+  const subject = `[${SENDER_NAME}] ${ownerName || 'Một tài khoản'} vừa thêm bạn vào nhóm`;
+  const content = `
+    <h2 style="margin:0 0 16px;font-size:20px;color:#111827">Bạn vừa được thêm vào một nhóm</h2>
+    <p style="margin:0 0 16px;font-size:14px;color:#374151;line-height:1.6">
+      <strong>${safeOwnerName}</strong> vừa thêm tài khoản <strong>${escapeSystemEmailHtml(email || '')}</strong>
+      của bạn làm nhân viên trong không gian làm việc của họ trên ${SENDER_NAME}.
+    </p>
+    <p style="margin:0 0 24px;font-size:14px;color:#374151;line-height:1.6">
+      Bạn cần đăng nhập và <strong>Chấp nhận</strong> lời mời này thì mới vào được không gian đó — chưa chấp
+      nhận thì chủ nhóm không xem/chỉnh sửa được gì trên tài khoản của bạn. Nếu không nhận ra người này, hãy
+      bấm <strong>Từ chối</strong>.
+    </p>
+    <table cellpadding="0" cellspacing="0" style="margin:0 auto">
+      <tr>
+        <td style="border-radius:8px;background:#2563eb">
+          <a href="${appUrl}" style="display:inline-block;padding:12px 32px;font-size:14px;font-weight:600;color:#ffffff;text-decoration:none">
+            Xem lời mời
+          </a>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:20px 0 0;font-size:12px;color:#9ca3af;line-height:1.5">
+      Nếu bạn không nhận ra yêu cầu này, có thể bỏ qua email — lời mời sẽ không tự có hiệu lực nếu bạn
+      không bấm Chấp nhận.
+    </p>
+  `;
+
+  return {
+    subject,
+    html: buildBaseTemplate({
+      subtitle: 'Team Invitation',
+      content,
+      footerNote: 'Email này được gửi tự động từ hệ thống.',
+    }),
+  };
+}
+
 // ─── Payment Success Email ────────────────────────────────────────────────────
 
 export function buildPaymentSuccessEmail({

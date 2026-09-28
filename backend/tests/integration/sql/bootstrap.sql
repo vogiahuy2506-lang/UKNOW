@@ -127,6 +127,10 @@ CREATE TABLE user_members (
   -- migration 256: 'created' = chủ tạo tài khoản; 'linked' = liên kết tài khoản có sẵn
   origin      VARCHAR(16) NOT NULL DEFAULT 'linked'
     CONSTRAINT chk_user_members_origin CHECK (origin IN ('created', 'linked')),
+  -- migration 257: NULL = đang chờ người bị liên kết bấm "Chấp nhận". DEFAULT NOW() (không phải
+  -- NULL) — an toàn cho mọi INSERT không tường minh set cột này, chỉ linkExistingUserAsEmployee
+  -- ghi đè NULL thật sự.
+  accepted_at TIMESTAMPTZ DEFAULT NOW(),
   deleted_at  TIMESTAMPTZ,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),

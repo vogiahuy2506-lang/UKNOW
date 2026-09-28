@@ -119,11 +119,15 @@ export async function inviteEmployee(req, res) {
         email,
         fullName: fullName || null,
         method: result.method,
-        ...(result.method === 'invited' ? { invitationSent: result.invitationSent } : {}),
+        invitationSent: result.invitationSent,
       }
     );
-    const message = result.method === 'linked'
-      ? 'Liên kết nhân viên thành công'
+    // invited_link: tài khoản có sẵn — chỉ gửi thư BÁO, người đó phải tự bấm Chấp nhận trong ứng dụng
+    // (accepted_at NULL cho tới lúc đó). invited: tài khoản mới tạo hẳn cho họ, gửi thư kích hoạt.
+    const message = result.method === 'invited_link'
+      ? (result.invitationSent
+        ? 'Đã gửi lời mời — người này cần chấp nhận trong ứng dụng'
+        : 'Đã liên kết NHƯNG gửi email báo thất bại. Người này chưa biết mình được thêm vào nhóm — hãy báo trực tiếp cho họ.')
       : (result.invitationSent
         ? 'Đã gửi lời mời đến email nhân viên'
         : 'Đã tạo tài khoản NHƯNG gửi email mời thất bại. Nhân viên chưa vào được — hãy bấm "Gửi lại lời mời" sau khi kiểm tra cấu hình email.');
@@ -162,8 +166,15 @@ export async function linkEmployee(req, res) {
     const ownerId = req.user.id;
     const { email } = req.body;
     const member = await employeeService.linkUserAsEmployee(ownerId, email);
-    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, member.id, { email, method: 'link' });
-    return res.status(201).json({ success: true, message: 'Liên kết nhân viên thành công', data: member });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_ADDED, AUDIT_ENTITY_TYPES.EMPLOYEE, member.id, {
+      email,
+      method: member.method,
+      invitationSent: member.invitationSent,
+    });
+    const message = member.invitationSent
+      ? 'Đã gửi lời mời — người này cần chấp nhận trong ứng dụng'
+      : 'Đã liên kết NHƯNG gửi email báo thất bại. Người này chưa biết mình được thêm vào nhóm — hãy báo trực tiếp cho họ.';
+    return res.status(201).json({ success: true, message, data: member });
   } catch (err) {
     return handleServiceError(res, err);
   }
@@ -178,8 +189,9 @@ export async function updateInfo(req, res) {
   try {
     const ownerId = req.user.id;
     const { fullName, email } = req.body;
-    const updated = await employeeService.setEmployeeInfo(ownerId, Number(req.params.id), { fullName, email });
-    return res.json({ success: true, message: 'Cập nhật thông tin thành công', data: updated });
+    const { before, after } = await employeeService.setEmployeeInfo(ownerId, Number(req.params.id), { fullName, email });
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_INFO_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, Number(req.params.id), { before, after });
+    return res.json({ success: true, message: 'Cập nhật thông tin thành công', data: after });
   } catch (err) {
     return handleServiceError(res, err);
   }

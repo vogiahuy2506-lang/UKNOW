@@ -82,13 +82,16 @@ async function addMembership(ownerId, employeeId, overrides = {}) {
     // Mặc định 'created' = mô phỏng nhân viên do chủ tạo (đúng hình dạng các ca reset/info/delete bên dưới
     // mô tả). Ca cần "tài khoản có sẵn bị liên kết" truyền origin: 'linked' tường minh.
     origin = 'created',
+    // Mặc định đã chấp nhận (migration 257 default NOW() cùng tinh thần) — ca cần mô phỏng "đang chờ
+    // chấp nhận" (accept/decline, setEmployeeStatus chặn) truyền acceptedAt: null tường minh.
+    acceptedAt = new Date(),
   } = overrides;
   await db.query(
     `INSERT INTO user_members
        (owner_id, employee_id, permissions, status,
         daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
-        origin, created_at, updated_at)
-     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, NOW(), NOW())`,
+        origin, accepted_at, created_at, updated_at)
+     VALUES ($1, $2, $3::jsonb, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())`,
     [
       ownerId,
       employeeId,
@@ -99,6 +102,7 @@ async function addMembership(ownerId, employeeId, overrides = {}) {
       dailyZaloLimit,
       monthlyZaloLimit,
       origin,
+      acceptedAt,
     ]
   );
 }
@@ -1224,8 +1228,9 @@ describe('Nhân viên mới có sẵn quyền xem', () => {
   });
 
   // Phép kiểm đi hết đường thật — đúng câu khách phản ánh: "add nhân viên xong
-  // không xem được chiến dịch của công ty".
-  it('nhân viên vừa được thêm gọi /api/campaigns thấy NGAY chiến dịch của công ty, chủ không phải cấp thêm gì', async () => {
+  // không xem được chiến dịch của công ty". PR-2 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28) thêm
+  // bước CHẤP NHẬN bắt buộc trước khi vào được không gian của chủ — link xong chưa đủ nữa.
+  it('nhân viên vừa được thêm CHẤP NHẬN lời mời thấy NGAY chiến dịch của công ty, chủ không phải cấp thêm gì', async () => {
     const { owner, token } = await setupOwnerWithPlan();
     const target = await createUser({ username: 'seecamp', email: 'seecamp@test.local', role: 'user' });
     await db.query(
@@ -1241,6 +1246,11 @@ describe('Nhân viên mới có sẵn quyền xem', () => {
       .expect(201);
 
     const empToken = await loginAs(target);
+    await request(app)
+      .post(`/api/users/me/memberships/${owner.id}/accept`)
+      .set('Authorization', `Bearer ${empToken}`)
+      .expect(200);
+
     const list = await request(app)
       .get('/api/campaigns')
       .set('Authorization', `Bearer ${empToken}`)
@@ -1286,7 +1296,7 @@ describe('Nhân viên mới có sẵn quyền xem', () => {
       mockSendMail.mockClear();
     });
 
-    it('email của tài khoản đang hoạt động → method: linked, không tạo user mới, không gửi thư', async () => {
+    it('email của tài khoản đang hoạt động → method: invited_link, không tạo user mới, gửi thư báo (chờ chấp nhận)', async () => {
       const { owner, token } = await setupOwnerWithPlan();
       const existing = await createUser({ username: 'existing_emp', email: 'existing_emp@test.local', role: 'user' });
 
@@ -1297,17 +1307,19 @@ describe('Nhân viên mới có sẵn quyền xem', () => {
 
       expect(res.status).toBe(201);
       expect(res.body.success).toBe(true);
-      expect(res.body.message).toBe('Liên kết nhân viên thành công');
-      expect(res.body.data.method).toBe('linked');
+      expect(res.body.message).toBe('Đã gửi lời mời — người này cần chấp nhận trong ứng dụng');
+      expect(res.body.data.method).toBe('invited_link');
       expect(res.body.data.id).toBe(existing.id);
 
-      // Không gửi thư
-      expect(mockSendMail).not.toHaveBeenCalled();
+      // Gửi đúng 1 thư BÁO (khác thư kích hoạt của method 'invited') — người này phải tự chấp nhận.
+      expect(mockSendMail).toHaveBeenCalledTimes(1);
 
-      // Membership trong DB được tạo
+      // Membership trong DB được tạo, origin=linked, CHỜ chấp nhận (accepted_at NULL)
       const memRows = await db.query('SELECT * FROM user_members WHERE owner_id = $1 AND employee_id = $2', [owner.id, existing.id]);
       expect(memRows.rows.length).toBe(1);
       expect(memRows.rows[0].status).toBe('active');
+      expect(memRows.rows[0].origin).toBe('linked');
+      expect(memRows.rows[0].accepted_at).toBeNull();
     });
 
     it('email chưa có tài khoản → method: invited, tạo user pending_activation, sinh username, gửi thư', async () => {
@@ -1344,7 +1356,7 @@ describe('Nhân viên mới có sẵn quyền xem', () => {
         .send({ email: 'CASE_EMP@TEST.LOCAL' });
 
       expect(res.status).toBe(201);
-      expect(res.body.data.method).toBe('linked');
+      expect(res.body.data.method).toBe('invited_link');
       expect(res.body.data.id).toBe(existing.id);
     });
 
@@ -1401,7 +1413,7 @@ describe('user_members.origin — chủ chỉ can thiệp tài khoản do mình 
       .set('Authorization', `Bearer ${token}`)
       .send({ email: existing.email });
     expect(linked.status).toBe(201);
-    expect(linked.body.data.method).toBe('linked');
+    expect(linked.body.data.method).toBe('invited_link');
 
     const { rows } = await db.query(
       `SELECT u.email, um.origin FROM user_members um JOIN users u ON u.id = um.employee_id
@@ -1533,5 +1545,247 @@ describe('PATCH /api/employees/:id/status — mở khoá không được vượt
       .send({ status: 'active' }).expect(200);
     await request(app).patch(`/api/employees/${a.id}/status`).set('Authorization', `Bearer ${token}`)
       .send({ status: 'inactive' }).expect(200);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR-2 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28) — liên kết tài khoản có sẵn phải được ĐỒNG Ý
+// (method invited_link + origin=linked/accepted_at NULL + thư báo đã kiểm ở describe
+// 'POST /api/employees/invite (PR-A...)' phía trên — không lặp lại ở đây.)
+// ---------------------------------------------------------------------------
+describe('resolveUserContext chặn context chưa chấp nhận (auth.middleware.js)', () => {
+  it('X-Owner-Context trước khi chấp nhận → 403 INVALID_CONTEXT', async () => {
+    const { owner } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'waiting', role: 'employee' });
+    await addMembership(owner.id, emp.id, { origin: 'linked', acceptedAt: null });
+    const empToken = await loginAs(emp);
+
+    const res = await request(app)
+      .get('/api/employees/contribution/me')
+      .set('Authorization', `Bearer ${empToken}`)
+      .set('X-Owner-Context', String(owner.id));
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('INVALID_CONTEXT');
+  });
+
+  it('sau khi chấp nhận → X-Owner-Context vào được bình thường', async () => {
+    const { owner } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'accepted1', role: 'employee' });
+    await addMembership(owner.id, emp.id, { origin: 'linked', acceptedAt: null });
+    const empToken = await loginAs(emp);
+
+    await request(app)
+      .post(`/api/users/me/memberships/${owner.id}/accept`)
+      .set('Authorization', `Bearer ${empToken}`)
+      .expect(200);
+
+    const res = await request(app)
+      .get('/api/employees/contribution/me')
+      .set('Authorization', `Bearer ${empToken}`)
+      .set('X-Owner-Context', String(owner.id));
+
+    expect(res.status).toBe(200);
+  });
+});
+
+describe('POST /api/users/me/memberships/:ownerId/accept', () => {
+  it('chấp nhận thành công → 200, accepted_at được set, audit EMPLOYEE_INVITE_ACCEPTED (owner_id = chủ)', async () => {
+    const { owner } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'acceptme', role: 'employee' });
+    await addMembership(owner.id, emp.id, { origin: 'linked', acceptedAt: null });
+    const empToken = await loginAs(emp);
+
+    const res = await request(app)
+      .post(`/api/users/me/memberships/${owner.id}/accept`)
+      .set('Authorization', `Bearer ${empToken}`);
+
+    expect(res.status).toBe(200);
+
+    const m = await db.query(
+      `SELECT accepted_at FROM user_members WHERE owner_id = $1 AND employee_id = $2`,
+      [owner.id, emp.id]
+    );
+    expect(m.rows[0].accepted_at).not.toBeNull();
+
+    const audit = await db.query(
+      `SELECT id_user, owner_id FROM audit_logs WHERE action = 'EMPLOYEE_INVITE_ACCEPTED'`
+    );
+    expect(audit.rows).toHaveLength(1);
+    expect(Number(audit.rows[0].id_user)).toBe(Number(emp.id));
+    expect(Number(audit.rows[0].owner_id)).toBe(Number(owner.id));
+  });
+
+  it('không có lời mời đang chờ (không tồn tại / đã chấp nhận rồi) → 404', async () => {
+    const { owner } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'noinvite', role: 'employee' });
+    const empToken = await loginAs(emp);
+
+    const res = await request(app)
+      .post(`/api/users/me/memberships/${owner.id}/accept`)
+      .set('Authorization', `Bearer ${empToken}`);
+
+    expect(res.status).toBe(404);
+  });
+
+  it('đang đứng trong không gian của MỘT chủ khác (employee context) → 403 OWNER_ONLY (requireSelfContext)', async () => {
+    const { owner: ownerA } = await setupOwnerWithPlan();
+    const plan = await createPlan({ maxEmployees: 5 });
+    const ownerB = await createUser({ username: 'ownerB2', role: 'user' });
+    await assignPlanToUser(ownerB.id, plan.id);
+    const emp = await createUser({ username: 'dualctx', role: 'employee' });
+    await addMembership(ownerA.id, emp.id); // đã chấp nhận — dùng để switch context
+    await addMembership(ownerB.id, emp.id, { origin: 'linked', acceptedAt: null }); // đang chờ
+    const empToken = await loginAs(emp);
+
+    const res = await request(app)
+      .post(`/api/users/me/memberships/${ownerB.id}/accept`)
+      .set('Authorization', `Bearer ${empToken}`)
+      .set('X-Owner-Context', String(ownerA.id));
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('OWNER_ONLY');
+  });
+});
+
+describe('POST /api/users/me/memberships/:ownerId/decline', () => {
+  it('từ chối → dòng bị xoá, chủ không còn thấy người này trong danh sách, audit EMPLOYEE_INVITE_DECLINED', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'declineme', role: 'employee' });
+    await addMembership(owner.id, emp.id, { origin: 'linked', acceptedAt: null });
+    const empToken = await loginAs(emp);
+
+    const res = await request(app)
+      .post(`/api/users/me/memberships/${owner.id}/decline`)
+      .set('Authorization', `Bearer ${empToken}`);
+
+    expect(res.status).toBe(200);
+
+    const m = await db.query(
+      `SELECT 1 FROM user_members WHERE owner_id = $1 AND employee_id = $2`,
+      [owner.id, emp.id]
+    );
+    expect(m.rows).toHaveLength(0);
+
+    const list = await request(app).get('/api/employees').set('Authorization', `Bearer ${token}`);
+    expect(list.body.data.find((e) => Number(e.id) === Number(emp.id))).toBeUndefined();
+
+    const audit = await db.query(`SELECT 1 FROM audit_logs WHERE action = 'EMPLOYEE_INVITE_DECLINED'`);
+    expect(audit.rows).toHaveLength(1);
+  });
+
+  it('đã chấp nhận rồi mới gọi từ chối → 404, KHÔNG xoá membership đã chấp nhận', async () => {
+    const { owner } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'toolate', role: 'employee' });
+    await addMembership(owner.id, emp.id); // mặc định đã chấp nhận
+    const empToken = await loginAs(emp);
+
+    const res = await request(app)
+      .post(`/api/users/me/memberships/${owner.id}/decline`)
+      .set('Authorization', `Bearer ${empToken}`);
+
+    expect(res.status).toBe(404);
+    const m = await db.query(
+      `SELECT 1 FROM user_members WHERE owner_id = $1 AND employee_id = $2`,
+      [owner.id, emp.id]
+    );
+    expect(m.rows).toHaveLength(1);
+  });
+});
+
+describe('PATCH /api/employees/:id/status — chưa chấp nhận thì chặn khoá/mở khoá', () => {
+  it('accepted_at NULL → 400 "chưa chấp nhận lời mời"', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'pendingacc', role: 'user' });
+    await addMembership(owner.id, emp.id, { origin: 'linked', acceptedAt: null });
+
+    const res = await request(app)
+      .patch(`/api/employees/${emp.id}/status`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ status: 'inactive' });
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toContain('chưa chấp nhận');
+  });
+});
+
+describe('findTeamOverview — đếm chiến dịch trong KHÔNG GIAN CỦA CHỦ, bỏ người chưa chấp nhận', () => {
+  it('nhân viên linked có chiến dịch trong KHÔNG GIAN RIÊNG của họ → KHÔNG được đếm vào team overview của chủ', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'ownspace', role: 'user' });
+    await addMembership(owner.id, emp.id, { origin: 'linked' }); // đã chấp nhận (mặc định)
+
+    // Chiến dịch trong KHÔNG GIAN RIÊNG của emp (workspace_owner_id = chính họ, không phải owner).
+    await db.query(
+      `INSERT INTO campaigns (id_user, workspace_owner_id, created_by, campaign_name, status)
+       VALUES ($1, $1, $1, 'Chien dich rieng', 'running')`,
+      [emp.id]
+    );
+
+    const res = await request(app)
+      .get('/api/employees/team-overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const row = res.body.data.find((r) => Number(r.id) === Number(emp.id));
+    expect(row.runningCampaigns).toBe(0);
+  });
+
+  it('nhân viên tạo chiến dịch TRONG không gian của chủ → được đếm', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'inspace', role: 'user' });
+    await addMembership(owner.id, emp.id);
+
+    await db.query(
+      `INSERT INTO campaigns (id_user, workspace_owner_id, created_by, campaign_name, status)
+       VALUES ($1, $1, $2, 'Chien dich cho chu', 'running')`,
+      [owner.id, emp.id]
+    );
+
+    const res = await request(app)
+      .get('/api/employees/team-overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const row = res.body.data.find((r) => Number(r.id) === Number(emp.id));
+    expect(row.runningCampaigns).toBe(1);
+  });
+
+  it('nhân viên chưa chấp nhận → không xuất hiện trong team overview của chủ', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({ username: 'notyet', role: 'user' });
+    await addMembership(owner.id, emp.id, { origin: 'linked', acceptedAt: null });
+
+    const res = await request(app)
+      .get('/api/employees/team-overview')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.find((r) => Number(r.id) === Number(emp.id))).toBeUndefined();
+  });
+});
+
+describe('PATCH /api/employees/:id — audit EMPLOYEE_INFO_UPDATED (mục 6)', () => {
+  it('sửa fullName/email → ghi audit_logs kèm before/after', async () => {
+    const { owner, token } = await setupOwnerWithPlan();
+    const emp = await createUser({
+      username: 'infoaudit', email: 'before@test.local', fullName: 'Before Name', role: 'user',
+    });
+    await addMembership(owner.id, emp.id); // origin='created' mặc định → được sửa info
+
+    const res = await request(app)
+      .patch(`/api/employees/${emp.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ fullName: 'After Name', email: 'after@test.local' });
+
+    expect(res.status).toBe(200);
+
+    const audit = await db.query(
+      `SELECT details FROM audit_logs WHERE action = 'EMPLOYEE_INFO_UPDATED' AND entity_type = 'employee'`
+    );
+    expect(audit.rows).toHaveLength(1);
+    const { details } = audit.rows[0];
+    expect(details.before.email).toBe('before@test.local');
+    expect(details.after.email).toBe('after@test.local');
   });
 });

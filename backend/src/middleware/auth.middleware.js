@@ -106,7 +106,8 @@ export async function resolveUserContext(userId, { ownerContextId = null } = {})
        FROM user_members um
        JOIN users u ON u.id = um.owner_id
        LEFT JOIN plans p ON p.id = u.active_plan_id
-       WHERE um.employee_id = $1 AND um.owner_id = $2 AND um.status = 'active'`,
+       WHERE um.employee_id = $1 AND um.owner_id = $2 AND um.status = 'active'
+         AND um.accepted_at IS NOT NULL`,
       [user.id, ownerContextId]
     );
 

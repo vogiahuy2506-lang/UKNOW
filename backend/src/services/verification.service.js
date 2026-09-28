@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import verificationRepository from '../repositories/verification.repository.js';
-import { sendSystemEmail, buildEmployeeInvitationEmail } from '../utils/systemEmail.util.js';
+import { sendSystemEmail, buildEmployeeInvitationEmail, buildEmployeeLinkNoticeEmail } from '../utils/systemEmail.util.js';
 import { loadCustomSystemEmailTemplate } from './email/welcomeEmailTemplate.service.js';
 import { sendOtp } from './sms/otpProvider.service.js';
 import { normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
@@ -446,6 +446,16 @@ class VerificationService {
     await this.saveVerificationCode(email, token, 'employee_invitation', 48 * 60);
     await this.sendInvitationEmail(email, token, ownerName);
     return token;
+  }
+
+  /**
+   * Báo cho một tài khoản CÓ SẴN vừa bị liên kết làm nhân viên — không token, không lưu
+   * verification_codes (khác sendEmployeeInvitation: người này đã có tài khoản, chỉ cần biết và tự
+   * chấp nhận trong ứng dụng, không phải kích hoạt qua link).
+   */
+  async sendEmployeeLinkNotice(email, ownerName) {
+    const { subject, html } = buildEmployeeLinkNoticeEmail({ ownerName, email });
+    return sendSystemEmail({ to: email, subject, html });
   }
 
   async findPasswordResetToken(token) {

@@ -106,7 +106,13 @@ class AuthController {
       );
       if (existingEmail.rows.length > 0) {
         const found = existingEmail.rows[0];
-        if (invitation && found.status === 'pending_activation') {
+        // Cả hai đường tới đây đều đã CHỨNG MINH chủ email trước dòng này: có inviteToken thì token
+        // khớp email (kiểm ở trên); không có thì verification (OTP) đã xác minh — throw ở trên nếu sai.
+        // pending_activation nghĩa là chưa ai thật sự kích hoạt tài khoản này — cho người chứng minh
+        // chủ email tiếp tục đăng ký để CHIẾM LẠI nó, thay vì mắc kẹt vì "Email đã được sử dụng"
+        // (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1 phần 9: một chủ nhóm khác đã lỡ "mời" email
+        // này trước khi người thật đăng ký).
+        if (found.status === 'pending_activation') {
           existingPendingUser = found;
         } else {
           throw { status: 400, message: 'Email đã được sử dụng' };
@@ -211,6 +217,17 @@ class AuthController {
           ]
         );
         user = updateResult.rows[0];
+
+        // Người thật vừa CHIẾM LẠI tài khoản pending mà một chủ nhóm khác đã lỡ "mời" trước (origin
+        // 'created' trên membership đó) — chủ mất quyền reset mật khẩu/đổi email (assertOwnerCreatedAccount
+        // chỉ cho origin='created'), quan hệ chuyển sang 'linked' và chờ CHÍNH người này chấp nhận
+        // (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1 phần 9).
+        await client.query(
+          `UPDATE user_members
+           SET origin = 'linked', accepted_at = NULL, updated_at = CURRENT_TIMESTAMP
+           WHERE employee_id = $1 AND origin = 'created'`,
+          [existingPendingUser.id]
+        );
       } else {
         // Sinh mã giới thiệu duy nhất cho user mới
         let myReferralCode = generateReferralCode();
@@ -719,6 +736,17 @@ class AuthController {
              SET is_used = TRUE
              WHERE LOWER(email) = LOWER($1) AND type = 'employee_invitation' AND is_used = FALSE`,
             [email]
+          );
+
+          // Người thật vừa CHIẾM LẠI tài khoản pending mà một chủ nhóm khác đã lỡ "mời" trước (origin
+          // 'created') — Google chỉ chứng minh họ sở hữu email, KHÔNG chứng minh đã nhận lời mời của
+          // chủ đó. Chủ mất quyền reset mật khẩu/đổi email, quan hệ chuyển 'linked' + chờ chính người
+          // này chấp nhận (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1 phần 9, cùng xử lý với register).
+          await client.query(
+            `UPDATE user_members
+             SET origin = 'linked', accepted_at = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE employee_id = $1 AND origin = 'created'`,
+            [user.id]
           );
         } else if (user.status !== 'active') {
           return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });

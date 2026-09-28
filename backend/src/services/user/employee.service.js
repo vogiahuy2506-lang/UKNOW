@@ -12,6 +12,8 @@ import {
   findOwnerInfo,
   createEmployeeWithLink,
   linkExistingUserAsEmployee,
+  acceptMembership as acceptMembershipInDb,
+  declineMembership as declineMembershipInDb,
   updateEmployeeInfo,
   updateEmployeePermissions,
   updateEmployeeStatus,
@@ -205,7 +207,7 @@ export async function createEmployee(ownerId, { username, email, fullName }) {
   let invitationSent = true;
   let invitationError = null;
   try {
-    await verificationService.sendEmployeeInvitation(email, owner?.full_name || owner?.username || 'Team');
+    await verificationService.sendEmployeeInvitation(email, owner?.fullName || owner?.username || 'Team');
   } catch (emailErr) {
     invitationSent = false;
     invitationError = emailErr?.message || 'Không gửi được email mời';
@@ -225,7 +227,23 @@ export async function resendInvitation(ownerId, employeeId) {
   }
 
   const owner = await findOwnerInfo(ownerId);
-  await verificationService.sendEmployeeInvitation(employee.email, owner?.full_name || owner?.username || 'Team');
+  await verificationService.sendEmployeeInvitation(employee.email, owner?.fullName || owner?.username || 'Team');
+}
+
+/**
+ * Liên kết tài khoản có sẵn ghi dòng `accepted_at = NULL` (linkExistingUserAsEmployee) — người đó
+ * chưa đồng ý gì, nên phải báo cho họ biết mình vừa bị thêm vào nhóm của ai. Không throw khi gửi
+ * thư hỏng — dòng user_members đã ghi rồi, huỷ nửa chừng còn tệ hơn (giống invitationSent ở trên).
+ */
+async function notifyLinkedEmployee(email, ownerId) {
+  const owner = await findOwnerInfo(ownerId);
+  try {
+    await verificationService.sendEmployeeLinkNotice(email, owner?.fullName || owner?.username || 'Team');
+    return { invitationSent: true, invitationError: null };
+  } catch (emailErr) {
+    console.error('Failed to send employee link notice email:', emailErr);
+    return { invitationSent: false, invitationError: emailErr?.message || 'Không gửi được email báo' };
+  }
 }
 
 export async function linkUserAsEmployee(ownerId, email) {
@@ -240,7 +258,9 @@ export async function linkUserAsEmployee(ownerId, email) {
     throw { status: 400, message: 'Không thể tự thêm mình làm nhân viên' };
   }
 
-  return linkExistingUserAsEmployee(ownerId, user.id);
+  const member = await linkExistingUserAsEmployee(ownerId, user.id);
+  const { invitationSent, invitationError } = await notifyLinkedEmployee(user.email, ownerId);
+  return { ...member, method: 'invited_link', invitationSent, invitationError };
 }
 
 /**
@@ -257,7 +277,8 @@ export async function inviteEmployeeByEmail(ownerId, { email, fullName }) {
       throw { status: 400, message: 'Không thể tự thêm mình làm nhân viên' };
     }
     const member = await linkExistingUserAsEmployee(ownerId, existingUser.id);
-    return { ...member, method: 'linked' };
+    const { invitationSent, invitationError } = await notifyLinkedEmployee(existingUser.email, ownerId);
+    return { ...member, method: 'invited_link', invitationSent, invitationError };
   }
 
   // Chưa có tài khoản (hoặc tài khoản cũ đã deleted) -> tạo mới với username tự sinh
@@ -284,7 +305,7 @@ export async function inviteEmployeeByEmail(ownerId, { email, fullName }) {
   let invitationSent = true;
   let invitationError = null;
   try {
-    await verificationService.sendEmployeeInvitation(normalizedEmail, owner?.full_name || owner?.username || 'Team');
+    await verificationService.sendEmployeeInvitation(normalizedEmail, owner?.fullName || owner?.username || 'Team');
   } catch (emailErr) {
     invitationSent = false;
     invitationError = emailErr?.message || 'Không gửi được email mời';
@@ -327,7 +348,9 @@ export async function setEmployeeInfo(ownerId, employeeId, { fullName, email }) 
     }
   }
 
-  return updateEmployeeInfo(employeeId, ownerId, { fullName, email: email || employee.email });
+  const before = { fullName: employee.fullName, email: employee.email };
+  const after = await updateEmployeeInfo(employeeId, ownerId, { fullName, email: email || employee.email });
+  return { before, after };
 }
 
 export async function setEmployeePermissions(ownerId, employeeId, permissions) {
@@ -345,6 +368,11 @@ export async function setEmployeeStatus(ownerId, employeeId, status) {
   const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
   if (!employee) {
     throw { status: 404, message: 'Không tìm thấy nhân viên' };
+  }
+  // Người chưa chấp nhận lời mời chưa thật sự vào nhóm — khoá/mở khoá một membership còn đang chờ
+  // không có ý nghĩa (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1 phần còn lại).
+  if (!employee.acceptedAt) {
+    throw { status: 400, message: 'Người này chưa chấp nhận lời mời' };
   }
   // Mở khoá = chiếm lại một suất: phải qua đúng cổng trần như lúc thêm. Không có dòng này thì khoá A → thêm B
   // → mở khoá A cho ra 2/1 (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 3). countActiveEmployees không đếm
@@ -417,6 +445,30 @@ export async function resetEmployeePassword(ownerId, employeeId) {
 
 export async function getTeamOverview(ownerId, options = {}) {
   return findTeamOverview(ownerId, options);
+}
+
+/**
+ * Người bị liên kết (origin='linked', accepted_at NULL) tự chấp nhận lời mời của một chủ cụ thể.
+ * `userId` luôn lấy từ token (self context, requireSelfContext) — không bao giờ nhận ownerId ngoài
+ * URL param.
+ */
+export async function acceptMembershipInvite(userId, ownerId) {
+  const result = await acceptMembershipInDb(Number(userId), Number(ownerId));
+  if (!result) {
+    throw { status: 404, message: 'Không tìm thấy lời mời đang chờ chấp nhận' };
+  }
+  return result;
+}
+
+/**
+ * Từ chối lời mời — xoá hẳn dòng user_members đang chờ.
+ */
+export async function declineMembershipInvite(userId, ownerId) {
+  const result = await declineMembershipInDb(Number(userId), Number(ownerId));
+  if (!result) {
+    throw { status: 404, message: 'Không tìm thấy lời mời đang chờ chấp nhận' };
+  }
+  return result;
 }
 
 /**

@@ -43,6 +43,9 @@ import { pushMemberToSheet } from '../utils/memberSheetSync.util.js';
 import { validateRegistrationConsents, LEGAL_DOCUMENTS } from '../config/legalDocuments.config.js';
 import { recordConsents, getUserConsentHistory, getUserLatestConsents, hasConsentedCurrent, isConsentVersionOutdated } from '../repositories/user/userConsent.repository.js';
 import { getAppMenuLayout } from '../services/admin/adminMenu.service.js';
+import { acceptMembershipInvite, declineMembershipInvite } from '../services/user/employee.service.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getRequestAuditContext } from '../utils/auditContext.util.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -529,6 +532,66 @@ class UserController {
     } catch (error) {
       console.error('Lỗi ghi nhận bỏ qua mã giới thiệu:', error);
       return res.status(500).json({ success: false, message: 'Không ghi nhận được thao tác bỏ qua' });
+    }
+  }
+
+  /**
+   * POST /api/users/me/memberships/:ownerId/accept
+   * Người bị chủ nhóm khác liên kết (origin='linked') tự chấp nhận lời mời. Self context bắt
+   * buộc (route gắn requireSelfContext) — không chấp nhận hộ trong khi đang đứng ở không gian
+   * của một chủ khác.
+   */
+  async acceptMembership(req, res) {
+    try {
+      const employeeId = req.user.id;
+      const ownerId = Number(req.params.ownerId);
+      if (!Number.isFinite(ownerId) || ownerId <= 0) {
+        return res.status(400).json({ success: false, message: 'ownerId không hợp lệ' });
+      }
+      const result = await acceptMembershipInvite(employeeId, ownerId);
+      await logWorkspace(
+        { userId: employeeId, ownerId, ...getRequestAuditContext(req) },
+        AUDIT_ACTIONS.EMPLOYEE_INVITE_ACCEPTED,
+        AUDIT_ENTITY_TYPES.EMPLOYEE,
+        ownerId,
+        {}
+      );
+      return res.json({ success: true, message: 'Đã chấp nhận lời mời', data: result });
+    } catch (error) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message });
+      }
+      console.error('acceptMembership error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * POST /api/users/me/memberships/:ownerId/decline
+   * Từ chối lời mời — xoá hẳn dòng user_members đang chờ.
+   */
+  async declineMembership(req, res) {
+    try {
+      const employeeId = req.user.id;
+      const ownerId = Number(req.params.ownerId);
+      if (!Number.isFinite(ownerId) || ownerId <= 0) {
+        return res.status(400).json({ success: false, message: 'ownerId không hợp lệ' });
+      }
+      const result = await declineMembershipInvite(employeeId, ownerId);
+      await logWorkspace(
+        { userId: employeeId, ownerId, ...getRequestAuditContext(req) },
+        AUDIT_ACTIONS.EMPLOYEE_INVITE_DECLINED,
+        AUDIT_ENTITY_TYPES.EMPLOYEE,
+        ownerId,
+        {}
+      );
+      return res.json({ success: true, message: 'Đã từ chối lời mời', data: result });
+    } catch (error) {
+      if (error?.status) {
+        return res.status(error.status).json({ success: false, message: error.message });
+      }
+      console.error('declineMembership error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
     }
   }
 

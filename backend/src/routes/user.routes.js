@@ -51,6 +51,23 @@ router.post(
   userController.dismissReferralPrompt.bind(userController)
 );
 
+/**
+ * POST /api/users/me/memberships/:ownerId/accept
+ * POST /api/users/me/memberships/:ownerId/decline
+ * Người bị liên kết (origin='linked', accepted_at NULL) tự chấp nhận/từ chối lời mời của một chủ.
+ * requireSelfContext: không chấp nhận/từ chối hộ trong khi đang đứng ở không gian của chủ khác.
+ */
+router.post(
+  '/me/memberships/:ownerId/accept',
+  requireSelfContext,
+  userController.acceptMembership.bind(userController)
+);
+router.post(
+  '/me/memberships/:ownerId/decline',
+  requireSelfContext,
+  userController.declineMembership.bind(userController)
+);
+
 // Hồ sơ xuất hoá đơn người dùng tự lưu
 router.get('/invoice-profile', userController.getInvoiceProfile.bind(userController));
 router.put('/invoice-profile', userController.updateInvoiceProfile.bind(userController));

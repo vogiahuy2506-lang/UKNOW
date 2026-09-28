@@ -524,6 +524,8 @@ export async function findMembershipsByEmployeeId(employeeId) {
             u.avatar_url AS "ownerAvatarUrl",
             um.permissions,
             um.status,
+            um.origin,
+            um.accepted_at AS "acceptedAt",
             um.daily_email_limit AS "dailyEmailLimit",
             um.monthly_email_limit AS "monthlyEmailLimit",
             um.daily_zalo_limit AS "dailyZaloLimit",

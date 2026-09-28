@@ -12,6 +12,8 @@ const repo = {
   findOwnerInfo: jest.fn(),
   createEmployeeWithLink: jest.fn(),
   linkExistingUserAsEmployee: jest.fn(),
+  acceptMembership: jest.fn(),
+  declineMembership: jest.fn(),
   updateEmployeeInfo: jest.fn(),
   updateEmployeePermissions: jest.fn(),
   updateEmployeeStatus: jest.fn(),
@@ -22,10 +24,11 @@ const repo = {
   updateCampaignApprovalThreshold: jest.fn(),
 };
 const mockSendInvitation = jest.fn();
+const mockSendLinkNotice = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/user/employee.repository.js', () => repo);
 jest.unstable_mockModule('../../verification.service.js', () => ({
-  default: { sendEmployeeInvitation: mockSendInvitation },
+  default: { sendEmployeeInvitation: mockSendInvitation, sendEmployeeLinkNotice: mockSendLinkNotice },
 }));
 const topupRepo = {
   sumActiveTopupGrants: jest.fn(),
@@ -55,52 +58,57 @@ describe('inviteEmployeeByEmail (PR-A: mời nhân viên chỉ cần email)', ()
     jest.resetAllMocks();
     repo.findOwnerPlanLimit.mockResolvedValue(-1); // Không giới hạn nhân viên
     repo.countActiveEmployees.mockResolvedValue(0);
-    repo.findOwnerInfo.mockResolvedValue({ id: OWNER_ID, full_name: 'Chủ Shop', username: 'chushop' });
+    // findOwnerInfo (repository) trả về "fullName" (camelCase, SELECT ... AS "fullName") — mock đúng
+    // hình dạng thật để bắt được lỗi từng có: đọc nhầm owner?.full_name (snake_case) luôn undefined.
+    repo.findOwnerInfo.mockResolvedValue({ id: OWNER_ID, fullName: 'Chủ Shop', username: 'chushop' });
     topupRepo.sumActiveTopupGrants.mockResolvedValue(0);
     topupRepo.findTopupPricingByKey.mockResolvedValue(null); // mặc định: KHÔNG bán slot nhân viên
   });
 
-  it('email của tài khoản đang hoạt động → linked, không tạo user mới, không gửi thư', async () => {
+  it('email của tài khoản đang hoạt động → invited_link (chờ chấp nhận), không tạo user mới, gửi thư BÁO chứ không phải thư mời', async () => {
     repo.findUserByEmail.mockResolvedValue({ id: 25, email: 'nhanvien@example.com', status: 'active' });
-    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 25, memberStatus: 'active', permissions: ['campaigns_view'] });
+    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 25, memberStatus: 'active', permissions: ['campaigns_view'], acceptedAt: null });
+    mockSendLinkNotice.mockResolvedValue(undefined);
 
     const result = await inviteEmployeeByEmail(OWNER_ID, { email: 'nhanvien@example.com' });
 
     expect(repo.linkExistingUserAsEmployee).toHaveBeenCalledWith(OWNER_ID, 25);
     expect(repo.createEmployeeWithLink).not.toHaveBeenCalled();
     expect(mockSendInvitation).not.toHaveBeenCalled();
+    expect(mockSendLinkNotice).toHaveBeenCalledWith('nhanvien@example.com', 'Chủ Shop');
     expect(result).toMatchObject({
       id: 25,
-      method: 'linked',
+      method: 'invited_link',
+      invitationSent: true,
     });
   });
 
-  it('email viết HOA của tài khoản có sẵn → nhận ra là cùng người và linked', async () => {
+  it('email viết HOA của tài khoản có sẵn → nhận ra là cùng người và invited_link', async () => {
     repo.findUserByEmail.mockImplementation((email) => {
       if (email === 'nhanvien@example.com') {
         return Promise.resolve({ id: 25, email: 'nhanvien@example.com', status: 'active' });
       }
       return Promise.resolve(null);
     });
-    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 25, memberStatus: 'active' });
+    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 25, memberStatus: 'active', acceptedAt: null });
 
     const result = await inviteEmployeeByEmail(OWNER_ID, { email: 'NhanVien@EXAMPLE.COM' });
 
     expect(repo.findUserByEmail).toHaveBeenCalledWith('nhanvien@example.com');
     expect(repo.linkExistingUserAsEmployee).toHaveBeenCalledWith(OWNER_ID, 25);
-    expect(result.method).toBe('linked');
+    expect(result.method).toBe('invited_link');
   });
 
-  it('email của tài khoản pending_activation của người khác → vẫn linked, không gửi thư', async () => {
+  it('email của tài khoản pending_activation của người khác → vẫn invited_link, không gửi thư mời (khác thư báo)', async () => {
     repo.findUserByEmail.mockResolvedValue({ id: 30, email: 'pending@example.com', status: 'pending_activation' });
-    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 30, memberStatus: 'active' });
+    repo.linkExistingUserAsEmployee.mockResolvedValue({ id: 30, memberStatus: 'active', acceptedAt: null });
 
     const result = await inviteEmployeeByEmail(OWNER_ID, { email: 'pending@example.com' });
 
     expect(repo.linkExistingUserAsEmployee).toHaveBeenCalledWith(OWNER_ID, 30);
     expect(repo.createEmployeeWithLink).not.toHaveBeenCalled();
     expect(mockSendInvitation).not.toHaveBeenCalled();
-    expect(result.method).toBe('linked');
+    expect(result.method).toBe('invited_link');
   });
 
   it('email chưa có → invited, tạo tài khoản pending_activation, tên tự sinh, gửi thư đúng 1 lần', async () => {

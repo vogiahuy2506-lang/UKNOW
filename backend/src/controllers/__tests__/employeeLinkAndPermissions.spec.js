@@ -37,7 +37,10 @@ beforeEach(() => {
 
 describe('linkEmployee', () => {
   it('audit EMPLOYEE_ADDED mang entity_id = id nhân viên, response trả data.id', async () => {
-    mockLinkUserAsEmployee.mockResolvedValue({ id: 42, permissions: {}, memberStatus: 'active' });
+    mockLinkUserAsEmployee.mockResolvedValue({
+      id: 42, permissions: {}, memberStatus: 'active', acceptedAt: null,
+      method: 'invited_link', invitationSent: true, invitationError: null,
+    });
     const req = { user: { id: 7 }, body: { email: 'nv@example.com' } };
     const res = makeRes();
 
@@ -48,7 +51,7 @@ describe('linkEmployee', () => {
     expect(action).toBe('EMPLOYEE_ADDED');
     expect(entityType).toBe('EMPLOYEE');
     expect(entityId).toBe(42);
-    expect(details).toEqual({ email: 'nv@example.com', method: 'link' });
+    expect(details).toEqual({ email: 'nv@example.com', method: 'invited_link', invitationSent: true });
     expect(res.status).toHaveBeenCalledWith(201);
     expect(res.json.mock.calls[0][0].data.id).toBe(42);
   });
