@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PolicyHistory from './components/PolicyHistory.jsx';
 
 function getLangClass(activeLang, itemLang) {
   return activeLang === itemLang ? '' : 'hidden';
@@ -7,6 +8,23 @@ function getLangClass(activeLang, itemLang) {
 function RefundPolicy() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
+
+  const historyEntries = [
+    {
+      date: '2026-09-28',
+      note: {
+        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
+        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
+      },
+    },
+    {
+      date: '2026-10-13',
+      note: {
+        vi: 'Phiên bản trước — ngày hiệu lực 13/10/2026 (đã thay thế).',
+        en: 'Previous version — effective 13/10/2026 (now superseded).',
+      },
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
@@ -68,8 +86,8 @@ function RefundPolicy() {
           <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
             <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15" aria-hidden />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
-              <span className={lc(language, 'vi')}>Cập nhật: <strong>13 tháng 10 năm 2026</strong> | Áp dụng cho: founderai.biz</span>
-              <span className={lc(language, 'en')}>Last updated: <strong>October 13, 2026</strong> | Applies to: founderai.biz</span>
+              <span className={lc(language, 'vi')}>Cập nhật: <strong>28 tháng 9 năm 2026</strong> | Áp dụng cho: founderai.biz</span>
+              <span className={lc(language, 'en')}>Last updated: <strong>September 28, 2026</strong> | Applies to: founderai.biz</span>
             </p>
           </div>
 
@@ -153,12 +171,13 @@ function RefundPolicy() {
           <p className={lc(language, 'vi')}>© 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.</p>
           <p className={lc(language, 'en')}>© 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.</p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 13/10/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 28/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from October 13, 2026.
+            This policy was last updated and effective from September 28, 2026.
           </p>
         </footer>
+        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
       </div>
     </div>
   );

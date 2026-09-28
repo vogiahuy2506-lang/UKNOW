@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import PolicyHistory from './components/PolicyHistory.jsx';
 
 /**
  * Returns CSS class based on language selection.
@@ -17,6 +18,23 @@ function getLangClass(activeLang, itemLang) {
 function PublicDPA() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
+
+  const historyEntries = [
+    {
+      date: '2026-09-28',
+      note: {
+        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
+        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
+      },
+    },
+    {
+      date: '2026-08-04',
+      note: {
+        vi: 'Phiên bản trước — ngày hiệu lực 04/08/2026 (đã thay thế).',
+        en: 'Previous version — effective 04/08/2026 (now superseded).',
+      },
+    },
+  ];
 
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
@@ -123,12 +141,12 @@ function PublicDPA() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>04 tháng 08 năm 2026</strong>
+                Cập nhật: <strong>28 tháng 9 năm 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: digiso.vn, founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>August 04, 2026</strong>
+                Last updated: <strong>September 28, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: digiso.vn, founderai.biz
               </span>
@@ -649,12 +667,13 @@ function PublicDPA() {
             </a>
           </p>
           <p className={lc(language, 'vi')}>
-            Thoả thuận này được cập nhật và có hiệu lực từ ngày 10/09/2026.
+            Thoả thuận này được cập nhật và có hiệu lực từ ngày 28/09/2026.
           </p>
           <p className={lc(language, 'en')}>
-            This agreement was last updated and effective from September 10, 2026.
+            This agreement was last updated and effective from September 28, 2026.
           </p>
         </footer>
+        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
       </div>
     </div>
   );
