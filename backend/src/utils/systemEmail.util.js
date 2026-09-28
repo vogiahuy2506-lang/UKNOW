@@ -761,6 +761,71 @@ export function buildCampaignRunFailedEmail({ fullName, campaignName, reason, ac
   };
 }
 
+/**
+ * Lịch hẹn của nhân viên vượt ngưỡng duyệt (`users.employee_campaign_approval_threshold`) — không
+ * ai đang xem màn hình để thấy phản hồi API như đường chạy ngay, nên phải email chủ
+ * (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28 PR-3). Lịch đã bị TẮT khi email này được gửi — chủ duyệt
+ * chỉ chạy 1 lần ngay lúc đó, muốn lịch định kỳ tiếp tục phải tự bật lại.
+ *
+ * @param {{ fullName?: string|null, campaignName: string, totalCustomers: number, threshold: number, appUrl: string }} input
+ * @returns {{ subject: string, html: string }}
+ */
+export function buildCampaignApprovalRequiredEmail({ fullName, campaignName, totalCustomers, threshold, appUrl }) {
+  const name = campaignName || 'Chiến dịch';
+  const safeName = escapeSystemEmailHtml(name);
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${escapeSystemEmailHtml(fullName || 'bạn')}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Lịch hẹn của chiến dịch <strong>«${safeName}»</strong> đến giờ chạy nhưng có
+      <strong>${totalCustomers}</strong> người nhận, vượt ngưỡng yêu cầu phê duyệt
+      (<strong>${threshold}</strong>) bạn đã đặt cho nhân viên.
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-left:4px solid #ea580c;border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.5px">
+            Cần làm gì
+          </p>
+          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6">
+            Chiến dịch đang chờ bạn duyệt. Duyệt sẽ chạy ngay <strong>một lần</strong> cho lượt này —
+            <strong>lịch hẹn định kỳ đã bị tắt</strong>, muốn tiếp tục lịch tự động thì bật lại sau khi duyệt.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${appUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Xem và duyệt chiến dịch →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Cần hỗ trợ? Liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Chiến dịch «${name}» đang chờ bạn duyệt`,
+    html: buildBaseTemplate({
+      subtitle: 'Lịch hẹn vượt ngưỡng, đang chờ duyệt',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
 // ─── Welcome Email ────────────────────────────────────────────────────────────
 
 function buildWelcomePlanSection(planName) {

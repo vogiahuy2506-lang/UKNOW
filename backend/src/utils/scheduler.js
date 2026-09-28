@@ -10,7 +10,8 @@ import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
-import { notifyCampaignRunFailed } from './campaignQuotaPauseNotify.util.js';
+import { notifyCampaignRunFailed, notifyCampaignApprovalRequired } from './campaignQuotaPauseNotify.util.js';
+import { evaluateApprovalThreshold, markPendingOwnerApproval } from '../services/campaign/campaignApproval.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 // Luật thời gian của lịch chạy (khoá ngày Hà Nội, cron runtime, N ngày) dời sang util để
 // controller tính "lần chạy tiếp" bằng ĐÚNG luật nổ ở đây — xem campaignScheduleCron.util.js.
@@ -291,6 +292,56 @@ const triggerCampaignSchedule = async (schedule) => {
         );
       }
       return;
+    }
+
+    // PR-3 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28) — ngưỡng duyệt chiến dịch trước đây chỉ kiểm ở
+    // đường chạy ngay (campaign.controller.js#run); lịch hẹn gọi thẳng createCampaignRunRecord nên
+    // nhân viên né được ngưỡng bằng cách hẹn lịch thay vì bấm chạy (RA_SOAT_NHAN_VIEN_PHAN_QUYEN mục
+    // 4). Chỉ kiểm khi actor KHÁC chủ không gian — lịch do chính chủ tạo thì không có ai để "duyệt".
+    if (Number.isFinite(actorUserId) && actorUserId !== workspaceOwnerId) {
+      const { threshold, totalCustomers, requiresApproval } = await evaluateApprovalThreshold({
+        ownerId: workspaceOwnerId,
+        campaignId: schedule.id_campaign,
+      });
+      if (requiresApproval) {
+        console.warn(
+          `[Scheduler] Schedule #${schedule.id} vượt ngưỡng duyệt (${totalCustomers}/${threshold}) ` +
+            `— chuyển pending_owner_approval, tắt lịch, không tạo run`
+        );
+        await markPendingOwnerApproval({
+          campaignId: schedule.id_campaign,
+          auditContext: { userId: actorUserId, ownerId: workspaceOwnerId },
+          threshold,
+          totalCustomers,
+          actorUserId,
+        });
+        // Tắt lịch trong try/catch riêng: lỗi ở đây không được rơi vào catch ngoài cùng của hàm
+        // này, nếu không recordFailedScheduleTrigger sẽ ghi thêm một dòng "failed" gây hiểu nhầm —
+        // chiến dịch đã chuyển pending_owner_approval thành công rồi, đây không phải một lượt hỏng.
+        try {
+          await db.query(
+            `UPDATE campaign_schedules SET enabled = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+            [schedule.id]
+          );
+        } catch (disableErr) {
+          console.error(
+            `[Scheduler] Không thể tắt schedule #${schedule.id} sau khi vượt ngưỡng duyệt:`,
+            disableErr.message
+          );
+        }
+        notifyCampaignApprovalRequired({
+          campaignId: schedule.id_campaign,
+          ownerId: workspaceOwnerId,
+          threshold,
+          totalCustomers,
+        }).catch((notifyErr) => {
+          console.error(
+            `[Scheduler] Không báo được chủ chiến dịch vượt ngưỡng duyệt cho schedule #${schedule.id}:`,
+            notifyErr.message
+          );
+        });
+        return;
+      }
     }
 
     runRecord = await campaignController.createCampaignRunRecord({

@@ -18,6 +18,10 @@ const mockBuildRunFailed = jest.fn(({ campaignName, reason }) => ({
   subject: `run-failed:${campaignName}`,
   html: `<p>${reason}</p>`,
 }));
+const mockBuildApprovalRequired = jest.fn(({ campaignName, totalCustomers, threshold }) => ({
+  subject: `approval-required:${campaignName}`,
+  html: `<p>${totalCustomers}/${threshold}</p>`,
+}));
 
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { query: mockQuery },
@@ -42,6 +46,8 @@ jest.unstable_mockModule('../systemEmail.util.js', () => ({
   buildCampaignPausedEmail: mockBuildPaused,
   buildCampaignStoppedQuotaEmail: mockBuildStopped,
   buildCampaignRunFailedEmail: mockBuildRunFailed,
+  // PR-3 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN) — notifyCampaignApprovalRequired dùng builder này.
+  buildCampaignApprovalRequiredEmail: mockBuildApprovalRequired,
 }));
 
 const {
@@ -51,6 +57,7 @@ const {
   notifyCampaignQuotaPaused,
   notifyCampaignQuotaStopped,
   notifyCampaignRunFailed,
+  notifyCampaignApprovalRequired,
   QUOTA_DEFER_CLEAR_KEYS,
 } = await import('../campaignQuotaPauseNotify.util.js');
 
@@ -65,6 +72,7 @@ describe('campaignQuotaPauseNotify.util', () => {
     mockBuildPaused.mockClear();
     mockBuildStopped.mockClear();
     mockBuildRunFailed.mockClear();
+    mockBuildApprovalRequired.mockClear();
     mockGetRunMetadata.mockResolvedValue({});
     mockPatchRunMetadata.mockResolvedValue(undefined);
     mockClaimRunFailureNotification.mockResolvedValue(true);
@@ -302,6 +310,66 @@ describe('campaignQuotaPauseNotify.util', () => {
 
       expect(result).toEqual({ skipped: true, reason: 'no_owner_email' });
       expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+  });
+
+  // PR-3 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28) — lịch hẹn vượt ngưỡng duyệt không tạo run
+  // (không có runId để claimRunFailureNotification), nên hàm này KHÔNG chống gửi trùng qua run —
+  // chỉ dựa vào việc scheduler tắt lịch (enabled=false) ngay sau đó để không bắn lại.
+  describe('notifyCampaignApprovalRequired', () => {
+    it('gửi mail cho đúng CHỦ theo ownerId truyền vào (không qua campaign.id_user)', async () => {
+      const result = await notifyCampaignApprovalRequired({
+        campaignId: 5,
+        ownerId: 99,
+        threshold: 1,
+        totalCustomers: 2,
+      });
+
+      expect(result).toEqual({ sent: true });
+      expect(mockClaimRunFailureNotification).not.toHaveBeenCalled();
+      expect(mockQuery).toHaveBeenCalledWith(expect.stringMatching(/SELECT email, full_name FROM users WHERE id = \$1/i), [99]);
+      expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+      expect(mockSendSystemEmail).toHaveBeenCalledWith(
+        expect.objectContaining({ to: 'owner@example.com', subject: 'approval-required:Promo X' })
+      );
+      expect(mockBuildApprovalRequired).toHaveBeenCalledWith(
+        expect.objectContaining({
+          fullName: 'Owner',
+          campaignName: 'Promo X',
+          totalCustomers: 2,
+          threshold: 1,
+          appUrl: expect.stringContaining('/app/campaigns'),
+        })
+      );
+    });
+
+    it('không có email chủ → skip, không gửi mail', async () => {
+      mockQuery.mockResolvedValue({ rows: [] });
+
+      const result = await notifyCampaignApprovalRequired({
+        campaignId: 5,
+        ownerId: 99,
+        threshold: 1,
+        totalCustomers: 2,
+      });
+
+      expect(result).toEqual({ skipped: true, reason: 'no_owner_email' });
+      expect(mockSendSystemEmail).not.toHaveBeenCalled();
+    });
+
+    it('campaign không tìm thấy tên → dùng "Chiến dịch #<id>" mặc định', async () => {
+      mockFindCampaignById.mockResolvedValue(null);
+
+      await notifyCampaignApprovalRequired({
+        campaignId: 7,
+        ownerId: 99,
+        threshold: 1,
+        totalCustomers: 2,
+      });
+
+      expect(mockBuildApprovalRequired).toHaveBeenCalledWith(
+        expect.objectContaining({ campaignName: 'Chiến dịch #7' })
+      );
     });
   });
 });

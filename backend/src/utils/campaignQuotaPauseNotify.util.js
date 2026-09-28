@@ -6,6 +6,7 @@ import {
   buildCampaignPausedEmail,
   buildCampaignStoppedQuotaEmail,
   buildCampaignRunFailedEmail,
+  buildCampaignApprovalRequiredEmail,
 } from './systemEmail.util.js';
 import { labelCampaignRunFailure } from './campaignRunFailureLabel.util.js';
 
@@ -198,6 +199,45 @@ export async function notifyCampaignRunFailed({ runId, campaignId, reason, sourc
   console.log(
     `[CampaignRunFailedNotify] email sent campaign=${campaignId} run=${runId} `
     + `source=${source || 'unknown'} to=${owner.email}`
+  );
+  return { sent: true };
+}
+
+/**
+ * Lịch hẹn của nhân viên vượt ngưỡng duyệt (campaignApproval.service.js#evaluateApprovalThreshold)
+ * — không ai đang xem màn hình để nhận phản hồi API như đường chạy ngay, nên phải email chủ
+ * (PLAN_VA_NHAN_VIEN_PHAN_QUYEN_2026-09-28 PR-3). Không dùng claimRunFailureNotification (đòi một
+ * dòng campaign_runs thật) vì nhánh này KHÔNG tạo run; không cần chống gửi trùng vì lịch bị tắt
+ * (enabled=false) ngay sau đó — cron không bắn lại schedule này cho tới khi chủ tự bật lại.
+ * Lấy contact theo `ownerId` truyền thẳng vào (KHÔNG qua campaign.id_user như loadOwnerContact — sai
+ * nếu chiến dịch do nhân viên tạo, id_user khi đó là nhân viên chứ không phải chủ).
+ *
+ * @param {{ campaignId: number, ownerId: number, threshold: number, totalCustomers: number }} input
+ * @returns {Promise<{ sent?: boolean, skipped?: boolean, reason?: string }>}
+ */
+export async function notifyCampaignApprovalRequired({ campaignId, ownerId, threshold, totalCustomers }) {
+  const campaign = await campaignCrudRepository.findCampaignById({ campaignId, isAdmin: true, userId: null });
+  const { rows } = await db.query(`SELECT email, full_name FROM users WHERE id = $1 LIMIT 1`, [ownerId]);
+  const owner = rows[0];
+  if (!owner?.email) {
+    console.warn(
+      `[CampaignApprovalNotify] skip email — no owner email campaign=${campaignId} owner=${ownerId}`
+    );
+    return { skipped: true, reason: 'no_owner_email' };
+  }
+
+  const { subject, html } = buildCampaignApprovalRequiredEmail({
+    fullName: owner.full_name,
+    campaignName: campaign?.campaign_name || `Chiến dịch #${campaignId}`,
+    totalCustomers,
+    threshold,
+    appUrl: frontendAppUrl('/app/campaigns'),
+  });
+
+  await sendSystemEmail({ to: owner.email, subject, html });
+  console.log(
+    `[CampaignApprovalNotify] email sent campaign=${campaignId} owner=${ownerId} `
+    + `threshold=${threshold} totalCustomers=${totalCustomers} to=${owner.email}`
   );
   return { sent: true };
 }

@@ -28,6 +28,8 @@ jest.unstable_mockModule('../campaignQuotaPauseNotify.util.js', () => ({
   notifyCampaignQuotaPaused: jest.fn().mockResolvedValue({ sent: true }),
   notifyCampaignQuotaStopped: jest.fn().mockResolvedValue({ sent: true }),
   notifyCampaignRunFailed: notifyCampaignRunFailedMock,
+  // PR-3 (PLAN_VA_NHAN_VIEN_PHAN_QUYEN) — scheduler.js giờ còn import notifyCampaignApprovalRequired.
+  notifyCampaignApprovalRequired: jest.fn().mockResolvedValue({ sent: true }),
 }));
 // PR-4 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 1 — lịch tự tắt gọi thẳng logWorkspace (không
 // qua req). Mock để test tự tắt không đụng DB thật qua audit.repository.js, và để có thể assert

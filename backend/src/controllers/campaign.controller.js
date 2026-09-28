@@ -11,6 +11,7 @@ import campaignNodeDataService from '../services/campaign/campaignNodeData.servi
 import campaignExecutionLogService from '../services/campaign/campaignExecutionLog.service.js';
 import campaignEmailSenderService from '../services/campaign/campaignEmailSender.service.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
+import { evaluateApprovalThreshold, markPendingOwnerApproval } from '../services/campaign/campaignApproval.service.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
@@ -632,62 +633,27 @@ class CampaignController {
 
       // Kiểm tra ngưỡng phê duyệt nếu là nhân viên chạy
       if (workspaceContext.contextType === 'employee') {
-        const { rows: ownerRows } = await db.query(
-          `SELECT employee_campaign_approval_threshold FROM users WHERE id = $1`,
-          [workspaceContext.workspaceOwnerId]
-        );
-        const threshold = ownerRows[0]?.employee_campaign_approval_threshold;
-        if (threshold != null && threshold > 0) {
-          const { rows: countRows } = await db.query(
-            `SELECT COUNT(*)::int AS count FROM campaign_customers WHERE id_campaign = $1`,
-            [campaignId]
-          );
-          let totalCustomers = Number(countRows[0]?.count) || 0;
-
-          if (totalCustomers === 0) {
-            const { rows: nodeRows } = await db.query(
-              `SELECT node_type, node_subtype, config FROM campaign_nodes WHERE id_campaign = $1`,
-              [campaignId]
-            );
-            for (const n of nodeRows) {
-              const cfg = typeof n.config === 'string' ? JSON.parse(n.config || '{}') : (n.config || {});
-              if (Array.isArray(cfg.customers)) {
-                totalCustomers += cfg.customers.length;
-              } else if (Array.isArray(cfg.selectedCustomerIds)) {
-                totalCustomers += cfg.selectedCustomerIds.length;
-              } else if (Array.isArray(cfg.phoneNumbers)) {
-                totalCustomers += cfg.phoneNumbers.length;
-              } else if (Array.isArray(cfg.recipients)) {
-                totalCustomers += cfg.recipients.length;
-              }
-            }
-          }
-          if (totalCustomers >= threshold) {
-            await db.query(
-              `UPDATE campaigns SET status = 'pending_owner_approval', updated_at = NOW() WHERE id = $1`,
-              [campaignId]
-            );
-            try {
-              await logWorkspace(
-                getWorkspaceAuditContext(req),
-                AUDIT_ACTIONS.CAMPAIGN_APPROVAL_REQUESTED,
-                AUDIT_ENTITY_TYPES.CAMPAIGN,
-                campaignId,
-                { threshold, totalCustomers, actorUserId: workspaceContext.actorUserId }
-              );
-            } catch (auditErr) {
-              console.warn('[Campaign] CAMPAIGN_APPROVAL_REQUESTED audit failed:', auditErr?.message);
-            }
-            return res.json({
-              success: true,
-              message: `Chiến dịch có ${totalCustomers} người nhận, vượt ngưỡng yêu cầu phê duyệt (${threshold}). Vui lòng chờ chủ tài khoản duyệt.`,
-              data: {
-                campaignId,
-                status: 'pending_owner_approval',
-                requiresApproval: true,
-              },
-            });
-          }
+        const { threshold, totalCustomers, requiresApproval } = await evaluateApprovalThreshold({
+          ownerId: workspaceContext.workspaceOwnerId,
+          campaignId,
+        });
+        if (requiresApproval) {
+          await markPendingOwnerApproval({
+            campaignId,
+            auditContext: getWorkspaceAuditContext(req),
+            threshold,
+            totalCustomers,
+            actorUserId: workspaceContext.actorUserId,
+          });
+          return res.json({
+            success: true,
+            message: `Chiến dịch có ${totalCustomers} người nhận, vượt ngưỡng yêu cầu phê duyệt (${threshold}). Vui lòng chờ chủ tài khoản duyệt.`,
+            data: {
+              campaignId,
+              status: 'pending_owner_approval',
+              requiresApproval: true,
+            },
+          });
         }
       }
 
