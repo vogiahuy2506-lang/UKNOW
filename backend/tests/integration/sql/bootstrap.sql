@@ -932,7 +932,9 @@ CREATE TABLE customers (
   email_subscribed        BOOLEAN      NOT NULL DEFAULT TRUE,
   email_unsubscribed_at   TIMESTAMPTZ,
   email_hard_bounced      BOOLEAN      NOT NULL DEFAULT FALSE,
-  last_email_sent_at      TIMESTAMPTZ,
+  -- PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27) — khớp production: TIMESTAMP không múi giờ
+  -- (đo 28/09: 74.697/74.699 dòng lệch 7h so MAX(email_messages.created_at) trước khi sửa Việc 1+backfill).
+  last_email_sent_at      TIMESTAMP,
   last_email_opened_at    TIMESTAMPTZ,
   last_zalo_sent_at       TIMESTAMPTZ,
   last_zalo_read_at       TIMESTAMPTZ,
@@ -1140,14 +1142,19 @@ CREATE TABLE campaign_customers (
   email_received_count        INTEGER      NOT NULL DEFAULT 0,
   email_opened_count          INTEGER      NOT NULL DEFAULT 0,
   email_clicked_count         INTEGER      NOT NULL DEFAULT 0,
-  joined_at                   TIMESTAMPTZ,
-  first_email_sent_at         TIMESTAMPTZ,
-  last_email_sent_at          TIMESTAMPTZ,
+  -- PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27) — 4 cột dưới đây khớp production: TIMESTAMP không
+  -- múi giờ (đo 28/09: 102.662/102.662 last_email_sent_at, 102.659/102.662 first_email_sent_at lệch
+  -- 7h; last_activity_at TRỘN — gửi ghi UTC qua ESR upsertCampaignCustomer, mở/nhấp ghi VN qua
+  -- customerEmailTracking.repository.js). first/last_email_opened_at + first/last_email_clicked_at
+  -- KHÔNG đổi — chỉ ghi qua đường mở/nhấp (VN), chưa từng lệch.
+  joined_at                   TIMESTAMP,
+  first_email_sent_at         TIMESTAMP,
+  last_email_sent_at          TIMESTAMP,
   first_email_opened_at       TIMESTAMPTZ,
   last_email_opened_at        TIMESTAMPTZ,
   first_email_clicked_at      TIMESTAMPTZ,
   last_email_clicked_at       TIMESTAMPTZ,
-  last_activity_at            TIMESTAMPTZ,
+  last_activity_at            TIMESTAMP,
   created_at                  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   updated_at                  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
   CONSTRAINT uq_campaign_customer UNIQUE (id_campaign, id_customer)
@@ -1208,7 +1215,9 @@ CREATE TABLE customer_journey (
   device_type       VARCHAR(50),
   country           VARCHAR(50),
   city              VARCHAR(100),
-  event_at          TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  -- PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27) — khớp production: TIMESTAMP không múi giờ (đo
+  -- 28/09: 3.771 dòng email_sent từ 07/09 lệch 7h so created_at). Giữ DEFAULT như prod.
+  event_at          TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   created_at        TIMESTAMPTZ  NOT NULL DEFAULT NOW()
 );
 CREATE INDEX idx_customer_journey_customer ON customer_journey(id_customer);

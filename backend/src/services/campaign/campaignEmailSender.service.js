@@ -1055,6 +1055,9 @@ class CampaignEmailSenderService {
             emailStep: logEmailStepForDb,
             fromAddress,
             brandDomain,
+            // PR-T3 Việc 2 — thư hỏng KHÔNG được coi là "đã gửi" (last_email_sent_at/journey/quota
+            // đếm gửi phải bỏ qua dòng này).
+            deliveryFailed: true,
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(transientFailedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -1102,6 +1105,8 @@ class CampaignEmailSenderService {
             emailStep: logEmailStepForDb,
             fromAddress,
             brandDomain,
+            // PR-T3 Việc 2 — thư hỏng KHÔNG được coi là "đã gửi".
+            deliveryFailed: true,
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -1147,6 +1152,8 @@ class CampaignEmailSenderService {
             emailStep: logEmailStepForDb,
             fromAddress,
             brandDomain,
+            // PR-T3 Việc 2 — thư hỏng KHÔNG được coi là "đã gửi".
+            deliveryFailed: true,
           });
           await campaignEmailSenderRepository.markEmailMessageFailed(failedTrackingToken, bounceReason);
         } catch (logErr) {
@@ -1217,6 +1224,9 @@ class CampaignEmailSenderService {
                 fromAddress,
                 brandDomain,
                 quotaReservationId: reservation.id,
+                // PR-T3 Việc 2 — bounce KHÔNG được coi là "đã gửi" (vẫn consume quota như cũ,
+                // chỉ khác chỗ không ghi last_email_sent_at/journey — xem policy Wave 2 ở trên).
+                deliveryFailed: true,
               });
               await campaignEmailSenderRepository.markEmailMessageBounced(
                 trackingToken,
@@ -1255,6 +1265,8 @@ class CampaignEmailSenderService {
             fromAddress,
             brandDomain,
             debitWallet: true,
+            // PR-T3 Việc 2 — bounce KHÔNG được coi là "đã gửi".
+            deliveryFailed: true,
           });
           // Cập nhật email_message vừa insert sang status bounced
           await campaignEmailSenderRepository.markEmailMessageBounced(

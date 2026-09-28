@@ -191,7 +191,15 @@ class EmailSettingsSmtpService {
       quotaReservationId: payload.quotaReservationId || payload.reservationId || null,
     });
 
-    if (resolvedCustomerId && !isPreview) {
+    // PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27) Việc 2 — thư hỏng (transient/config/delivery
+    // error/bounce, xem 5 chỗ gọi ở campaignEmailSender.service.js truyền cờ này) KHÔNG được coi
+    // là "đã gửi": email_messages vẫn phải có dòng (báo lỗi/monitor cần) và
+    // upsertCampaignParticipation vẫn chạy (khách vẫn "tham gia" chiến dịch dù thư hỏng), nhưng
+    // updateCustomerLastEmailSent/upsertCampaignCustomer/insertCustomerJourney/incrementCampaignSent
+    // phải BỎ — trước đây các hàm này chạy vô điều kiện nên "Đã gửi email" hiện ra dù thư thất bại.
+    const deliveryFailed = Boolean(payload.deliveryFailed);
+
+    if (resolvedCustomerId && !isPreview && !deliveryFailed) {
       await emailSettingsRepository.updateCustomerLastEmailSent(
         client,
         payload.sentAt,
@@ -201,27 +209,29 @@ class EmailSettingsSmtpService {
     }
 
     if (campaignIdNum && resolvedCustomerId && !isPreview) {
-      await emailSettingsRepository.upsertCampaignCustomer(client, campaignIdNum, resolvedCustomerId, payload.sentAt);
       await emailSettingsRepository.upsertCampaignParticipation(
         client,
         resolvedCustomerId,
         campaignIdNum,
         runIdNum
       );
-      await emailSettingsRepository.insertCustomerJourney(client, {
-        customerId: resolvedCustomerId,
-        campaignId: campaignIdNum,
-        runId: runIdNum,
-        emailMessageId,
-        eventData: JSON.stringify({
-          subject: payload.subject || null,
-          messageId: payload.info?.messageId || null,
-          trackingToken: payload.trackingToken,
-          description: `Đã gửi email "${payload.subject || 'Không có tiêu đề'}"`,
-        }),
-        sentAt: payload.sentAt,
-      });
-      await emailSettingsRepository.incrementCampaignSent(client, campaignIdNum);
+      if (!deliveryFailed) {
+        await emailSettingsRepository.upsertCampaignCustomer(client, campaignIdNum, resolvedCustomerId, payload.sentAt);
+        await emailSettingsRepository.insertCustomerJourney(client, {
+          customerId: resolvedCustomerId,
+          campaignId: campaignIdNum,
+          runId: runIdNum,
+          emailMessageId,
+          eventData: JSON.stringify({
+            subject: payload.subject || null,
+            messageId: payload.info?.messageId || null,
+            trackingToken: payload.trackingToken,
+            description: `Đã gửi email "${payload.subject || 'Không có tiêu đề'}"`,
+          }),
+          sentAt: payload.sentAt,
+        });
+        await emailSettingsRepository.incrementCampaignSent(client, campaignIdNum);
+      }
     }
 
     return emailMessageId;

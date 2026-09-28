@@ -170,7 +170,13 @@ class CustomerReadRepository {
     }
 
     const result = await db.query(
-      `SELECT cj.*,
+      // PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27) Việc 3 — liệt kê đúng cột customerHelper.service.js
+      // mapJourneyEvent() dùng thay vì `cj.*`: event_at là TIMESTAMP không múi giờ, đọc thô bị node-pg
+      // hiểu nhầm UTC nên lệch +7h. KHÔNG thêm alias đè lên `cj.*` (node-pg lấy cột trùng tên sau cùng
+      // một cách không rõ ràng — bài học T1), liệt kê tường minh an toàn hơn.
+      `SELECT cj.id, cj.event_type, cj.event_channel, cj.event_data,
+              cj.id_campaign, cj.id_run, cj.id_email_message, cj.id_zalo_message,
+              (cj.event_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS event_at,
               c.campaign_name
        FROM customer_journey cj
        LEFT JOIN campaigns c ON c.id = cj.id_campaign
@@ -199,14 +205,14 @@ class CustomerReadRepository {
               em.subject,
               em.status,
               (em.sent_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS sent_at,
-              em.first_opened_at,
-              em.last_opened_at,
+              (em.first_opened_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS first_opened_at,
+              (em.last_opened_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS last_opened_at,
               em.open_count,
-              em.first_clicked_at,
+              (em.first_clicked_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS first_clicked_at,
               em.click_count,
               em.body_html,
               em.body_text,
-              em.created_at
+              (em.created_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS created_at
        FROM email_messages em
        LEFT JOIN campaigns c ON c.id = em.id_campaign
        WHERE em.id_customer = $1
@@ -232,13 +238,13 @@ class CustomerReadRepository {
       `SELECT cc.id_campaign,
               c.campaign_name,
               c.status AS campaign_status,
-              cc.joined_at,
+              (cc.joined_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS joined_at,
               cc.email_received_count,
               cc.email_opened_count,
               cc.email_clicked_count,
               cc.has_opened,
               cc.has_clicked,
-              cc.last_activity_at
+              (cc.last_activity_at AT TIME ZONE 'Asia/Ho_Chi_Minh') AS last_activity_at
        FROM campaign_customers cc
        JOIN campaigns c ON c.id = cc.id_campaign
        WHERE cc.id_customer = $1

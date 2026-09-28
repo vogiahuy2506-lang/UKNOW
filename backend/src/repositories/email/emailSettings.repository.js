@@ -479,12 +479,16 @@ class EmailSettingsRepository {
     return result.rows[0] || null;
   }
 
+  // PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27) — sentAt nguồn là `new Date()` (giờ máy chủ,
+  // UTC); cột dưới đây KHÔNG có múi giờ trên production nên phải ép về giờ VN trước khi ghi,
+  // cùng cách T1 đã làm cho `insertEmailMessage` ở trên.
   async updateCustomerLastEmailSent(client, sentAt, customerId, userId) {
-    await client.query('UPDATE customers SET last_email_sent_at = $1 WHERE id = $2 AND COALESCE(workspace_owner_id, id_user) = $3', [
-      sentAt,
-      customerId,
-      userId,
-    ]);
+    await client.query(
+      `UPDATE customers
+       SET last_email_sent_at = ($1::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+       WHERE id = $2 AND COALESCE(workspace_owner_id, id_user) = $3`,
+      [sentAt, customerId, userId]
+    );
   }
 
   async upsertCampaignCustomer(client, campaignId, customerId, sentAt) {
@@ -494,7 +498,11 @@ class EmailSettingsRepository {
           email_received_count, first_email_sent_at, last_email_sent_at,
           last_activity_at, updated_at
         )
-       VALUES ($1, $2, CURRENT_TIMESTAMP, 1, $3, $3, $3, CURRENT_TIMESTAMP)
+       VALUES ($1, $2, CURRENT_TIMESTAMP, 1,
+               ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+               ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+               ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+               CURRENT_TIMESTAMP)
        ON CONFLICT (id_campaign, id_customer)
        DO UPDATE SET
          email_received_count = campaign_customers.email_received_count + 1,
@@ -520,7 +528,7 @@ class EmailSettingsRepository {
     await client.query(
       `INSERT INTO customer_journey
         (id_customer, id_campaign, id_run, event_type, event_channel, id_email_message, event_data, event_at)
-       VALUES ($1, $2, $3, 'email_sent', 'email', $4, $5::jsonb, $6)`,
+       VALUES ($1, $2, $3, 'email_sent', 'email', $4, $5::jsonb, ($6::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))`,
       [payload.customerId, payload.campaignId, payload.runId, payload.emailMessageId, payload.eventData, payload.sentAt]
     );
   }
