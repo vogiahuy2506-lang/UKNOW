@@ -51,6 +51,12 @@ export function assertAiCreditAvailable(feature) {
       });
       next();
     } catch (error) {
+      // Lỗi hạ tầng bất kỳ (DB timeout, kết nối...) không có status và không phải hết hạn
+      // mức — trước đây rơi vào nhánh 403 mặc định và trả nguyên error.message ra client.
+      if (!error.status && error.code !== 'RESOURCE_LIMIT_EXCEEDED') {
+        console.error('[aiCredit.middleware] assertAiCreditAvailable lỗi ngoài dự kiến:', error);
+        return res.status(500).json({ success: false, message: 'Lỗi kiểm tra hạn mức AI, vui lòng thử lại' });
+      }
       const status = error.status || (error.code === 'RESOURCE_LIMIT_EXCEEDED' ? 402 : 403);
       return res.status(status).json(buildCreditErrorPayload(error));
     }

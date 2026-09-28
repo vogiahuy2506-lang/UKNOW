@@ -20,11 +20,18 @@ class DownloadRepository {
     }
   }
 
+  /**
+   * Kèm chủ mẫu email (email_templates.id_user) để controller kiểm quyền —
+   * tệp thuộc mẫu của không gian nào chỉ chủ không gian đó (hoặc super admin) mới tải được.
+   * LEFT JOIN vì template_id có thể NULL (dữ liệu cũ/không liên kết mẫu nào).
+   */
   async findFileById(fileId) {
     const { rows } = await db.query(
-      `SELECT id, original_name, display_name, mime_type, storage_key, file_size
-       FROM template_files
-       WHERE id = $1`,
+      `SELECT tf.id, tf.original_name, tf.display_name, tf.mime_type, tf.storage_key, tf.file_size,
+              et.id_user AS template_owner_id
+       FROM template_files tf
+       LEFT JOIN email_templates et ON et.id = tf.template_id
+       WHERE tf.id = $1`,
       [fileId]
     );
     return rows[0] || null;

@@ -5,6 +5,8 @@ import { verifyFileToken } from '../utils/fileDownloadToken.js';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
 import { serverError } from '../helpers.js';
 import { getStorageBackend } from '../services/storage/storageBackend.js';
+import { isSuperAdmin } from '../utils/roleScope.util.js';
+import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 class DownloadController {
   /**
@@ -381,6 +383,16 @@ class DownloadController {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tệp' });
       }
 
+      // Tệp đính kèm mẫu email chỉ chủ không gian sở hữu mẫu (hoặc super admin) mới tải
+      // được — không lộ tệp có tồn tại nên trả 404 thay vì 403 khi khác chủ.
+      if (!isSuperAdmin(req.user?.role)) {
+        const ownerId = resolveWorkspaceOwnerId(req.user);
+        const templateOwnerId = file.template_owner_id != null ? Number(file.template_owner_id) : null;
+        if (templateOwnerId === null || templateOwnerId !== Number(ownerId)) {
+          return res.status(404).json({ success: false, message: 'Không tìm thấy tệp' });
+        }
+      }
+
       const fileName = file.original_name || file.display_name || file.storage_key.split('/').pop() || 'file';
       const isPreview = req.query.preview === 'true';
       const token = generateFileToken(file.storage_key, null, null, null);
@@ -424,6 +436,13 @@ class DownloadController {
       // Chỉ cho phép key thuộc prefix uploads/ để tránh truy cập tuỳ tiện
       if (!normalizedKey) {
         return res.status(403).json({ success: false, message: 'Key không hợp lệ' });
+      }
+      // Key phải thuộc không gian của người gọi (uploads/<chủ không gian>/...) — super admin bỏ qua.
+      if (!isSuperAdmin(req.user?.role)) {
+        const ownerId = resolveWorkspaceOwnerId(req.user);
+        if (!normalizedKey.startsWith(`uploads/${ownerId}/`)) {
+          return res.status(403).json({ success: false, message: 'Không có quyền truy cập tệp này' });
+        }
       }
       const isPreview = preview === 'true';
       const fileName = normalizedKey.split('/').pop() || 'file';

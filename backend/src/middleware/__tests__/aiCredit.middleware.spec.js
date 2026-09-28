@@ -62,6 +62,21 @@ describe('assertAiCreditAvailable — lượt sửa tự động (plan landing t
     expect(nextAuto).toHaveBeenCalledTimes(1);
   });
 
+  // Gộp PR-4 (28/09) — lỗi hạ tầng (DB timeout, mất kết nối...) không có status và không
+  // phải RESOURCE_LIMIT_EXCEEDED trước đây rơi vào nhánh 403 mặc định, trả nguyên
+  // error.message ra client (lộ chi tiết lỗi nội bộ, sai luôn cả ý nghĩa "không có quyền").
+  it('lỗi hạ tầng bất kỳ (không status, không RESOURCE_LIMIT_EXCEEDED) → 500 câu chung, không lộ error.message', async () => {
+    const dbErr = new Error('connection terminated unexpectedly at pg pool');
+    assertAvailable.mockRejectedValue(dbErr);
+    const res = makeRes();
+    const next = jest.fn();
+    await assertAiCreditAvailable('ai_assistant_chat')(makeReq({}), res, next);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(next).not.toHaveBeenCalled();
+    const payload = res.json.mock.calls[0][0];
+    expect(payload.message).not.toContain('connection terminated');
+  });
+
   // Review 21/09 — lỗ chạm tiền: middleware dùng chung cho 11 route tính credit. Bản đầu miễn cho
   // MỌI feature hễ body có autoLayoutFix:true, và chargeAiCredit bỏ trừ theo cùng cờ → gửi thêm một
   // trường vào /ai/chat là dùng AI miễn phí không giới hạn. Chỉ feature sửa landing mới được miễn.

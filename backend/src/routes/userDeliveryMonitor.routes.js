@@ -1,10 +1,12 @@
 import express from 'express';
 import authMiddleware from '../middleware/auth.middleware.js';
+import { requirePermission } from '../middleware/authorization.middleware.js';
 import * as ctrl from '../controllers/userDeliveryMonitor.controller.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
+router.use(requirePermission('reports_view'));
 
 router.get('/overview', ctrl.overview);
 router.get('/runs/:runId/failures', ctrl.runFailures);
