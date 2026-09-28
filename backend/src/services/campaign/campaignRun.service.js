@@ -4935,9 +4935,6 @@ class CampaignRunService {
           // PR-9 Việc 1 — thử từng id trong danh sách nhiều tài khoản theo thứ tự, không cứng
           // lấy phần tử đầu (tài khoản đầu chết trước đây làm chết cả node dù tài khoản khác
           // trong danh sách vẫn dùng được).
-          // PR-9 Việc 1 — thử từng id trong danh sách nhiều tài khoản theo thứ tự, không cứng
-          // lấy phần tử đầu (tài khoản đầu chết trước đây làm chết cả node dù tài khoản khác
-          // trong danh sách vẫn dùng được).
           const account = selectedZaloAccount
             || (multiEnabled
               ? (await this.pickFirstUsableZaloAccount({ ids: multiAccountIds, userId, roleCode })).account

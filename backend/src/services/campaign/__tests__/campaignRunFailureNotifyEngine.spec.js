@@ -287,6 +287,38 @@ describe('PR-3 — failRun/notifyCampaignRunFailed đúng chỗ (catch tổng + 
     expect(mockNotifyCampaignRunFailed).not.toHaveBeenCalled();
   });
 
+  // PR-9 Việc 1 (review 28/09) — send_zalo_friend_request nhiều tài khoản đi cùng helper; ca này
+  // thiếu nên đột biến "node kết bạn quay về friendMultiAccountIds[0]" từng sống sót.
+  it('kết bạn nhiều tài khoản [acc-1 chết, acc-2 sống] → thử cả hai id, KHÔNG failRun ở bước giải tài khoản đại diện', async () => {
+    mockFindNodesByCampaignId.mockResolvedValue([
+      {
+        id: 302,
+        node_type: 'action',
+        node_subtype: 'send_zalo_friend_request',
+        execution_order: 1,
+        config: {
+          zaloFriendMultiAccountEnabled: true,
+          zaloFriendAccountIds: ['acc-1', 'acc-2'],
+          zaloRecipientSource: 'manual',
+          zaloRecipientPhones: '',
+        },
+      },
+    ]);
+    mockGetCampaignZaloAccount.mockImplementation(async ({ accountId }) => {
+      if (accountId === 'acc-1') {
+        throw new Error('Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng');
+      }
+      return { id: accountId, userId: 10, displayName: 'Acc 2' };
+    });
+
+    await campaignRunService.executeCampaign(383, 200, 10);
+
+    expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-1' }));
+    expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-2' }));
+    expect(mockFailRun).not.toHaveBeenCalled();
+    expect(mockNotifyCampaignRunFailed).not.toHaveBeenCalled();
+  });
+
   // PR-9 Việc 1 — select_zalo_account: R:3630 trước đây đánh dấu __zaloAccountSelected=true cho
   // PHẦN TỬ ĐẦU (index === 0) của pool, bất kể đó có phải tài khoản THẬT SỰ được chọn hay không.
   // Sau fix, phải đánh dấu đúng tài khoản pickFirstUsableZaloAccount đã chọn (id === 202, không
