@@ -87,16 +87,33 @@ export function classifyTelegramSendError(err) {
 
 /** Policy đọc env MỖI LẦN gọi (không cache ở import) — số mặc định BẢO THỦ, CHƯA có dữ liệu ngưỡng
  * Telegram thật (khác Zalo, nơi đã đo ~14k lượt gửi thật). Sếp cần tinh chỉnh khi có số liệu. */
+// Review PR-6 — giờ 0 (nửa đêm) là giờ hợp lệ (vd khung 22→0): `|| mặc định` nuốt mất 0. Giờ đọc theo
+// khoảng 0..23; ngoài khoảng/không phải số → mặc định. Delay/trần giữ `|| mặc định` (0 là tắt nhịp — bảo thủ, bỏ qua).
+function parseHourEnv(raw, fallback) {
+  const value = Number.parseInt(raw, 10);
+  return Number.isInteger(value) && value >= 0 && value <= 23 ? value : fallback;
+}
+
 export function buildTelegramPolicyFromEnv() {
   return {
     minDelayMs: Number.parseInt(process.env.TELEGRAM_OUTBOUND_INTER_MESSAGE_MIN_MS, 10) || 5000,
     maxDelayMs: Number.parseInt(process.env.TELEGRAM_OUTBOUND_INTER_MESSAGE_MAX_MS, 10) || 10000,
     perHourLimit: Number.parseInt(process.env.TELEGRAM_OUTBOUND_PER_HOUR_LIMIT, 10) || 100,
     quietHours: {
-      startHour: Number.parseInt(process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START, 10) || 23,
-      endHour: Number.parseInt(process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END, 10) || 6,
+      startHour: parseHourEnv(process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START, 23),
+      endHour: parseHourEnv(process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END, 6),
     },
   };
+}
+
+// Review PR-6 — chatbotTelegram.repository.getAccountById BỎ lọc chủ khi userId rỗng (`if (userId)`). Ở đây
+// quyền dùng tài khoản gửi tin dựa hoàn toàn vào lọc đó → không có chủ thì từ chối, không tra.
+function assertOwnerPresent(ownerId, nodeId) {
+  if (ownerId == null || String(ownerId).trim() === '' || Number(ownerId) <= 0) {
+    const err = new Error(`Không xác định được chủ chiến dịch để kiểm tài khoản Telegram (node ${nodeId ?? '?'}).`);
+    err.code = 'TELEGRAM_ACCOUNT_NOT_READY';
+    throw err;
+  }
 }
 
 /**
@@ -116,6 +133,7 @@ async function checkReadiness({ userId, node }) {
     err.code = 'TELEGRAM_GATEWAY_NOT_CONFIGURED';
     throw err;
   }
+  assertOwnerPresent(userId, node?.id);
   const accountId = node?.config?.telegramAccountId;
   const account = accountId
     ? await chatbotTelegramRepository.getAccountById(accountId, { userId })
@@ -133,7 +151,8 @@ async function checkReadiness({ userId, node }) {
  * @param {{workspaceOwnerId: number, config: object}} input
  * @returns {Promise<{accountKey: string, accountId: number, telegramUserId: number, display: string}>}
  */
-async function resolveAccount({ workspaceOwnerId, config }) {
+async function resolveAccount({ workspaceOwnerId, config, node }) {
+  assertOwnerPresent(workspaceOwnerId, node?.id);
   const accountId = config?.telegramAccountId;
   const account = await chatbotTelegramRepository.getAccountById(accountId, {
     userId: workspaceOwnerId,

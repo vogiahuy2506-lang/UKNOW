@@ -25,7 +25,7 @@ jest.unstable_mockModule('../../../../repositories/chatbot/chatbotTelegram.repos
   },
 }));
 
-const { classifyTelegramSendError, telegramChannelAdapter } = await import('../telegram.campaignChannel.js');
+const { classifyTelegramSendError, telegramChannelAdapter, buildTelegramPolicyFromEnv } = await import('../telegram.campaignChannel.js');
 const { ChannelSendError } = await import('../../campaignChannelRegistry.service.js');
 
 /**
@@ -136,5 +136,41 @@ describe('telegram.campaignChannel.resolveRecipients — lọc chat id (nguồn 
     ];
     const recipients = await telegramChannelAdapter.resolveRecipients({ rows, config: {}, account: {} });
     expect(recipients.map((r) => r.recipientKey)).toEqual(['-1001234', '123456']);
+  });
+});
+
+describe('telegram.campaignChannel — review PR-6: chốt chủ + giờ 0', () => {
+  it('resolveAccount không có chủ (null/0) → throw TELEGRAM_ACCOUNT_NOT_READY, KHÔNG tra repo', async () => {
+    getAccountByIdMock.mockReset();
+    getAccountByIdMock.mockResolvedValue({ id: 7, id_user: 99, telegram_user_id: '555' });
+    for (const owner of [null, undefined, 0, '']) {
+      // eslint-disable-next-line no-await-in-loop
+      await expect(telegramChannelAdapter.resolveAccount({ workspaceOwnerId: owner, config: { telegramAccountId: 7 }, node: { id: 1 } }))
+        .rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_NOT_READY' });
+    }
+    expect(getAccountByIdMock).not.toHaveBeenCalled();
+  });
+
+  it('checkReadiness không có chủ → throw TELEGRAM_ACCOUNT_NOT_READY, KHÔNG tra repo', async () => {
+    getAccountByIdMock.mockReset();
+    getAccountByIdMock.mockResolvedValue({ id: 7, id_user: 99, is_active: true });
+    await expect(telegramChannelAdapter.checkReadiness({ userId: null, node: { id: 1, config: { telegramAccountId: 7 } } }))
+      .rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_NOT_READY' });
+    expect(getAccountByIdMock).not.toHaveBeenCalled();
+  });
+
+  it('TELEGRAM_OUTBOUND_QUIET_HOURS_END=0 → endHour 0 (nửa đêm hợp lệ); ngoài 0..23 → mặc định', () => {
+    const saved = { s: process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START, e: process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END };
+    try {
+      process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START = '22';
+      process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END = '0';
+      expect(buildTelegramPolicyFromEnv().quietHours).toEqual({ startHour: 22, endHour: 0 });
+      process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START = '24';
+      process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END = 'abc';
+      expect(buildTelegramPolicyFromEnv().quietHours).toEqual({ startHour: 23, endHour: 6 });
+    } finally {
+      if (saved.s === undefined) delete process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START; else process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START = saved.s;
+      if (saved.e === undefined) delete process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END; else process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END = saved.e;
+    }
   });
 });
