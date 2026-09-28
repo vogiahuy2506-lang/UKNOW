@@ -20,8 +20,8 @@ beforeEach(async () => {
 async function insertZaloMessage({ status = 'pending', metaStatus = null, channel = 'zalo_personal' }) {
   const trackingMetadata = metaStatus ? { status: metaStatus } : {};
   const { rows } = await db.query(
-    `INSERT INTO zalo_messages (channel, status, tracking_metadata)
-     VALUES ($1, $2, $3::jsonb)
+    `INSERT INTO zalo_messages (channel, status, tracking_metadata, tracking_token)
+     VALUES ($1, $2, $3::jsonb, 'zpv_test_' || gen_random_uuid())
      RETURNING id`,
     [channel, status, JSON.stringify(trackingMetadata)]
   );

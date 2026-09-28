@@ -48,8 +48,8 @@ async function insertZaloMessage({
 }) {
   const { rows } = await db.query(
     `INSERT INTO zalo_messages (
-       id_campaign, status, is_preview, created_at
-     ) VALUES ($1, $2, $3, ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
+       id_campaign, status, is_preview, created_at, tracking_token
+     ) VALUES ($1, $2, $3, ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'), 'zpv_test_' || gen_random_uuid())
      RETURNING id`,
     [campaignId, status, isPreview, createdAt]
   );

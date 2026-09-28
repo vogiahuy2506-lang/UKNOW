@@ -189,7 +189,7 @@ describe('Preview Messages Flag & Isolation (Plan 172)', () => {
       accountId: 1,
       accountName: 'Zalo Account Test',
       messageText: 'Test preview zalo message',
-      trackingToken: null,
+      trackingToken: `zpv_test_${Date.now()}`,
       trackingBaseUrl: null,
       trackingMetadata: {
         status: 'sent',

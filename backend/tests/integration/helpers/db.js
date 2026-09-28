@@ -501,11 +501,12 @@ export async function insertZaloMonitorMessages({
   for (let i = 0; i < count; i += 1) {
     const { rows } = await db.query(
       `INSERT INTO zalo_messages
-         (id_campaign, id_run, channel, status, account_id, account_name, tracking_metadata, created_at, updated_at)
+         (id_campaign, id_run, channel, status, account_id, account_name, tracking_metadata, created_at, updated_at, tracking_token)
        VALUES (
          $1, $2, 'zalo', $3, $4, $5, $6::jsonb,
          ($7::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
-         ($7::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
+         ($7::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'),
+         'zpv_test_' || gen_random_uuid()
        )
        RETURNING id`,
       [campaignId, runId, status, accountId, accountName, JSON.stringify(metadata), createdAt]

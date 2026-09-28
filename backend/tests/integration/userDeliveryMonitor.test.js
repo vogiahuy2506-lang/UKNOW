@@ -427,10 +427,10 @@ describe('GET /api/delivery-monitor/runs/:runId/failures', () => {
     await db.query(
       `INSERT INTO zalo_messages (
          id_campaign, id_run, recipient_value, status, channel,
-         tracking_metadata, created_at, sent_at, is_preview
+         tracking_metadata, created_at, sent_at, is_preview, tracking_token
        ) VALUES
-       ($1, $2, '0388180856', 'failed', 'zalo', '{"error":"Tham số không hợp lệ"}'::jsonb, NOW(), NOW(), false),
-       ($1, $2, '0388180856', 'failed', 'zalo', '{"error":"Tham số không hợp lệ"}'::jsonb, NOW(), NOW(), false)`,
+       ($1, $2, '0388180856', 'failed', 'zalo', '{"error":"Tham số không hợp lệ"}'::jsonb, NOW(), NOW(), false, 'zpv_test_' || gen_random_uuid()),
+       ($1, $2, '0388180856', 'failed', 'zalo', '{"error":"Tham số không hợp lệ"}'::jsonb, NOW(), NOW(), false, 'zpv_test_' || gen_random_uuid())`,
       [camp.id, runId]
     );
 

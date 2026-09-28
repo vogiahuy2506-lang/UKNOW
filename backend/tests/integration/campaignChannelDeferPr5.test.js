@@ -287,8 +287,8 @@ describe('PR-5 — Defer cho kênh adapter (thay vì run failed)', () => {
       [planRows[0].id, owner.id]
     );
     await db.query(
-      `INSERT INTO zalo_messages (workspace_owner_id, channel, tracking_metadata, is_preview, sent_at, created_at, updated_at)
-       VALUES ($1, 'zalo_personal', '{"status":"sent"}'::jsonb, false, now(), now(), now())`,
+      `INSERT INTO zalo_messages (workspace_owner_id, channel, tracking_metadata, is_preview, sent_at, created_at, updated_at, tracking_token)
+       VALUES ($1, 'zalo_personal', '{"status":"sent"}'::jsonb, false, now(), now(), now(), 'zpv_test_' || gen_random_uuid())`,
       [owner.id]
     );
 

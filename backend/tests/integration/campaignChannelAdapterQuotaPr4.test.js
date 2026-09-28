@@ -94,8 +94,8 @@ afterEach(async () => {
 
 async function insertZaloMessageSent({ workspaceOwnerId, actorUserId = null, sentAtSql = 'now()' }) {
   await db.query(
-    `INSERT INTO zalo_messages (workspace_owner_id, actor_user_id, channel, tracking_metadata, is_preview, sent_at, created_at, updated_at)
-     VALUES ($1, $2, 'zalo_personal', '{"status":"sent"}'::jsonb, false, ${sentAtSql}, now(), now())`,
+    `INSERT INTO zalo_messages (workspace_owner_id, actor_user_id, channel, tracking_metadata, is_preview, sent_at, created_at, updated_at, tracking_token)
+     VALUES ($1, $2, 'zalo_personal', '{"status":"sent"}'::jsonb, false, ${sentAtSql}, now(), now(), 'zpv_test_' || gen_random_uuid())`,
     [workspaceOwnerId, actorUserId]
   );
 }

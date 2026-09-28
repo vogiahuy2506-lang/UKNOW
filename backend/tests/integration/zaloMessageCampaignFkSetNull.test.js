@@ -43,8 +43,8 @@ describe('Việc 1 — zalo_messages FK ON DELETE SET NULL khi xoá chiến dị
 
     // 2. Chèn 1 dòng zalo_messages gắn với id_campaign
     const msgRes = await db.query(
-      `INSERT INTO zalo_messages (id_campaign, channel, status, recipient_type, recipient_value, sent_at, created_at, updated_at)
-       VALUES ($1, 'zalo_personal', 'sent', 'phone', '0912345678', NOW(), NOW(), NOW())
+      `INSERT INTO zalo_messages (id_campaign, channel, status, recipient_type, recipient_value, sent_at, created_at, updated_at, tracking_token)
+       VALUES ($1, 'zalo_personal', 'sent', 'phone', '0912345678', NOW(), NOW(), NOW(), 'zpv_test_' || gen_random_uuid())
        RETURNING id, id_campaign`,
       [campaignId]
     );
@@ -73,8 +73,8 @@ describe('Việc 1 — zalo_messages FK ON DELETE SET NULL khi xoá chiến dị
 
     // 2. Chèn 1 dòng zalo_messages
     const msgRes = await db.query(
-      `INSERT INTO zalo_messages (id_campaign, channel, status, recipient_type, recipient_value, sent_at, created_at, updated_at)
-       VALUES ($1, 'zalo_personal', 'sent', 'phone', '0987654321', NOW(), NOW(), NOW())
+      `INSERT INTO zalo_messages (id_campaign, channel, status, recipient_type, recipient_value, sent_at, created_at, updated_at, tracking_token)
+       VALUES ($1, 'zalo_personal', 'sent', 'phone', '0987654321', NOW(), NOW(), NOW(), 'zpv_test_' || gen_random_uuid())
        RETURNING id`,
       [campaignId]
     );

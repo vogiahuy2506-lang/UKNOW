@@ -37,8 +37,8 @@ async function insertEmailMessage({ settingId, status = 'sent', isPreview = fals
 
 async function insertZaloMessage({ accountId, trackingStatus = 'sent', isPreview = false, sentAt = IN_DAY }) {
   const { rows } = await db.query(
-    `INSERT INTO zalo_messages (account_id, tracking_metadata, is_preview, sent_at)
-     VALUES ($1, $2::jsonb, $3, ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')) RETURNING id`,
+    `INSERT INTO zalo_messages (account_id, tracking_metadata, is_preview, sent_at, tracking_token)
+     VALUES ($1, $2::jsonb, $3, ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'), 'zpv_test_' || gen_random_uuid()) RETURNING id`,
     [accountId, JSON.stringify({ status: trackingStatus }), isPreview, sentAt]
   );
   return rows[0].id;
@@ -192,12 +192,12 @@ describe('hai hàm đếm trên khối dữ liệu lớn (lẫn preview, lẫn n
       [HOT_EMAIL_SETTING, IN_DAY, BEFORE_DAY]
     );
     await db.query(
-      `INSERT INTO zalo_messages (account_id, tracking_metadata, is_preview, sent_at)
-       SELECT $1::bigint, '{"status":"sent"}'::jsonb, false, $2::timestamptz FROM generate_series(1, 400)
+      `INSERT INTO zalo_messages (account_id, tracking_metadata, is_preview, sent_at, tracking_token)
+       SELECT $1::bigint, '{"status":"sent"}'::jsonb, false, $2::timestamptz, 'zpv_test_' || gen_random_uuid() FROM generate_series(1, 400)
        UNION ALL
-       SELECT $1::bigint, '{"status":"sent"}'::jsonb, true, $2::timestamptz FROM generate_series(1, 4000)
+       SELECT $1::bigint, '{"status":"sent"}'::jsonb, true, $2::timestamptz, 'zpv_test_' || gen_random_uuid() FROM generate_series(1, 4000)
        UNION ALL
-       SELECT $1::bigint, '{"status":"sent"}'::jsonb, false, $3::timestamptz FROM generate_series(1, 4000)`,
+       SELECT $1::bigint, '{"status":"sent"}'::jsonb, false, $3::timestamptz, 'zpv_test_' || gen_random_uuid() FROM generate_series(1, 4000)`,
       [HOT_ZALO_ACCOUNT, IN_DAY, BEFORE_DAY]
     );
     await db.query('ANALYZE email_messages');

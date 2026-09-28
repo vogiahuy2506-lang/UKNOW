@@ -183,6 +183,80 @@ function throwIfZaloItemFailed(res) {
   throw err;
 }
 
+/**
+ * PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28 PR-1 Việc 1 — mức giãn cách production dùng khi
+ * KHÔNG tải được /campaigns/delay-config. Cố tình cao (80–150s, không phải mức mặc định code
+ * 20–50s) — nếu tải lỗi mà rơi về mức thấp/0 thì coi như không có giãn cách gì, đúng lỗ hổng
+ * plan này đang vá. Đừng đổi các con số này khi không có yêu cầu đổi chính sách ở
+ * campaign.controller.js#getDelayConfig.
+ */
+const QUICK_SEND_ZALO_DELAY_FALLBACK_MS = { minMs: 80000, maxMs: 150000 };
+const QUICK_SEND_DELAY_COUNTDOWN_TICK_MS = 1000;
+
+function buildQuickSendAbortError() {
+  const error = new Error('Quick send cancelled');
+  error.name = 'AbortError';
+  return error;
+}
+
+/**
+ * Chờ `ms` mili-giây, huỷ ngay nếu `signal` bị abort giữa chừng (rời trang / unmount).
+ *
+ * @param {number} ms
+ * @param {AbortSignal|undefined} signal
+ * @returns {Promise<void>}
+ */
+function quickSendSleepWithAbort(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const waitMs = Math.max(0, Number.parseInt(ms, 10) || 0);
+    if (signal?.aborted) {
+      reject(buildQuickSendAbortError());
+      return;
+    }
+    if (waitMs <= 0) {
+      resolve();
+      return;
+    }
+    const timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, waitMs);
+    const onAbort = () => {
+      clearTimeout(timeoutId);
+      signal?.removeEventListener('abort', onAbort);
+      reject(buildQuickSendAbortError());
+    };
+    signal?.addEventListener('abort', onAbort, { once: true });
+  });
+}
+
+/**
+ * Chờ có đếm ngược mỗi giây (giống campaignBuilderNodeRunner.js sleepWithCountdownTicks — không
+ * import lại được vì hàm đó là closure riêng của createCampaignNodeRunner, viết bản tương đương
+ * ở đây) để trang "Đang gửi" không trông như treo trong lúc chờ 80–150 giây thật.
+ *
+ * @param {number} totalMs
+ * @param {AbortSignal|undefined} signal
+ * @param {(seconds: number) => void} [onTick]
+ * @returns {Promise<void>}
+ */
+async function quickSendSleepWithCountdown(totalMs, signal, onTick) {
+  let remainingMs = Math.max(0, Number.parseInt(totalMs, 10) || 0);
+  while (remainingMs > 0) {
+    const seconds = Math.ceil(remainingMs / 1000);
+    onTick?.(seconds);
+    const stepMs = Math.min(QUICK_SEND_DELAY_COUNTDOWN_TICK_MS, remainingMs);
+    await quickSendSleepWithAbort(stepMs, signal);
+    remainingMs -= stepMs;
+  }
+}
+
+function getQuickSendRandomDelayMs(minMs, maxMs) {
+  const safeMin = Math.max(0, Number.parseInt(minMs, 10) || 0);
+  const safeMax = Math.max(safeMin, Number.parseInt(maxMs, 10) || safeMin);
+  return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
+}
+
 const QuickSend = () => {
   const { t } = useI18n();
   const location = useLocation();
@@ -263,6 +337,10 @@ const QuickSend = () => {
   // Send state
   const [isSending, setIsSending] = useState(false);
   const [sendResult, setSendResult] = useState(null);
+  // Việc 1 — thông báo đếm ngược khi runSendLoop đang chờ giãn cách giữa 2 tin Zalo.
+  const [sendProgressMessage, setSendProgressMessage] = useState('');
+  // Việc 1 — huỷ vòng chờ giãn cách khi rời trang giữa chừng (unmount).
+  const sendAbortControllerRef = useRef(null);
   // Retry state — `failedRecipients` lets the user resend only to recipients
   // that previously failed (e.g. transient SMTP / Zalo session errors).
   const [failedRecipients, setFailedRecipients] = useState([]);
@@ -288,6 +366,24 @@ const QuickSend = () => {
   // đáng tin cho việc này vì cập nhật bị React batch, không tức thời như ref.
   const sendPreparationRef = useRef(false);
   const retryPreparationRef = useRef(false);
+
+  // Việc 2 — cảnh báo đóng tab trong lúc đang gửi (đợt Zalo giờ có giãn cách thật, có thể dài
+  // tới hàng chục phút). Gắn khi isSending bật, gỡ ngay khi tắt.
+  useEffect(() => {
+    if (!isSending) return undefined;
+    const handleBeforeUnload = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isSending]);
+
+  // Việc 1 — rời trang giữa chừng (unmount) thì huỷ vòng chờ giãn cách đang chạy trong runSendLoop.
+  useEffect(() => () => {
+    sendAbortControllerRef.current?.abort();
+  }, []);
 
   // Nạp bản nháp từ Trợ lý AI (quickSendDraft) nếu có
   useEffect(() => {
@@ -857,6 +953,50 @@ const QuickSend = () => {
     sendActionKeyRef.current = await resolveActionIdempotencyKey(sendActionKeyRef.current, idempotencyPayload);
     const baseKey = sendActionKeyRef.current.key;
 
+    // Việc 1 — giãn cách thật giữa các tin Zalo (trình duyệt tự lặp, mỗi request 1 người —
+    // KHÔNG có backend nào chờ giúp, xem bối cảnh PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28).
+    // AbortController mới cho MỖI đợt để "rời trang giữa chừng" (unmount effect ở trên) huỷ
+    // đúng đợt đang chạy, không huỷ nhầm đợt trước đã xong.
+    const sendAbortController = new AbortController();
+    sendAbortControllerRef.current = sendAbortController;
+    // Chỉ gọi getDelayConfig MỘT LẦN cho cả đợt (không phải mỗi tin) — cache trong closure của
+    // lần gọi runSendLoop này, không phải state/ref sống ngoài đợt.
+    let zaloDelayConfig = null;
+    let zaloDelayConfigFetched = false;
+    const resolveZaloDelayRange = async (channel) => {
+      if (!zaloDelayConfigFetched) {
+        zaloDelayConfigFetched = true;
+        try {
+          const resp = await campaignBuilderApiService.getDelayConfig({ signal: sendAbortController.signal });
+          if (resp.data?.success && resp.data?.data) {
+            zaloDelayConfig = resp.data.data;
+          }
+        } catch (err) {
+          console.warn(
+            '[QuickSend] Không tải được cấu hình giãn cách, dùng mức mặc định production 80–150s',
+            err
+          );
+        }
+      }
+      const range = channel === CHANNEL_TYPES.ZALO_GROUP
+        ? zaloDelayConfig?.zalo_group
+        : zaloDelayConfig?.zalo_personal;
+      return {
+        minMs: Number.isFinite(range?.minMs) ? range.minMs : QUICK_SEND_ZALO_DELAY_FALLBACK_MS.minMs,
+        maxMs: Number.isFinite(range?.maxMs) ? range.maxMs : QUICK_SEND_ZALO_DELAY_FALLBACK_MS.maxMs,
+      };
+    };
+    const waitBeforeNextZaloSend = async (channel, idx, total) => {
+      if (idx === 0) return;
+      const { minMs, maxMs } = await resolveZaloDelayRange(channel);
+      const waitMs = getQuickSendRandomDelayMs(minMs, maxMs);
+      await quickSendSleepWithCountdown(waitMs, sendAbortController.signal, (seconds) => {
+        setSendProgressMessage(
+          `Đang chờ ${seconds} giây trước tin kế tiếp (${idx + 1}/${total}) — giãn cách chống spam`
+        );
+      });
+    };
+
     if (isEmail) {
       const { html, text } = resolveEmailBody();
       const subject = activeContent.subject || activeTemplate?.subject || 'Không có tiêu đề';
@@ -891,6 +1031,7 @@ const QuickSend = () => {
     } else if (selectedChannel === CHANNEL_TYPES.ZALO_GROUP) {
       const message = resolveZaloBody();
       for (const [idx, recipient] of recipients.entries()) {
+        await waitBeforeNextZaloSend(CHANNEL_TYPES.ZALO_GROUP, idx, recipients.length);
         try {
           // recipient.phone == groupId (xem finalRecipients() — dùng chung shape {email,phone,name}).
           const res = await zaloSettingsApiService.sendGroupMessage({
@@ -917,6 +1058,7 @@ const QuickSend = () => {
     } else {
       const message = resolveZaloBody();
       for (const [idx, recipient] of recipients.entries()) {
+        await waitBeforeNextZaloSend(CHANNEL_TYPES.ZALO, idx, recipients.length);
         try {
           const res = await zaloSettingsApiService.sendMessage({
             accountId: selectedZaloAccount.id,
@@ -945,6 +1087,7 @@ const QuickSend = () => {
     // dung) tính khoá mới, không bị coi nhầm là trùng với đợt vừa xong (cùng pattern
     // testSendActionKeyRef đã dùng ở handleTestSend).
     sendActionKeyRef.current = { key: null, signature: null };
+    setSendProgressMessage('');
     return { isEmail, successCount, failCount, failureSamples, failed };
   }, [
     selectedChannel,
@@ -1050,6 +1193,7 @@ const QuickSend = () => {
     } finally {
       sendPreparationRef.current = false;
       setIsSending(false);
+      setSendProgressMessage('');
     }
   };
 
@@ -1096,6 +1240,7 @@ const QuickSend = () => {
     } finally {
       retryPreparationRef.current = false;
       setIsRetrying(false);
+      setSendProgressMessage('');
     }
   };
 
@@ -1895,6 +2040,12 @@ const QuickSend = () => {
                 </div>
               </div>
 
+              {/* Việc 2 — nhắc giữ tab mở vì đợt gửi Zalo giờ có giãn cách thật ở trình duyệt */}
+              <p className="text-xs text-gray-400 mb-4 flex items-center gap-1.5">
+                <HiOutlineClock className="w-3.5 h-3.5 shrink-0" />
+                {t('quickSend.keepPageOpenNotice')}
+              </p>
+
               {/* Quiet hours notice if applicable */}
               {estimate?.quietHours?.enabled && (
                 <div className="mb-6 p-3.5 rounded-lg bg-indigo-50 border border-indigo-200 flex items-start gap-2.5 text-xs text-indigo-900 animate-fadeIn">
@@ -2047,6 +2198,9 @@ const QuickSend = () => {
             <div className="h-16 w-16 rounded-full border-4 border-orange-500 border-t-transparent animate-spin mx-auto mb-6" />
             <h2 className="text-xl font-semibold text-gray-900 mb-2">{t('quickSend.sending')}</h2>
             <p className="text-gray-500">{t('quickSend.sendingDesc')}</p>
+            {sendProgressMessage && (
+              <p className="text-sm text-orange-600 mt-3">{sendProgressMessage}</p>
+            )}
           </div>
         )}
 

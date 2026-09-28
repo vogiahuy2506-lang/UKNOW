@@ -8775,6 +8775,7 @@ export default {
     estimateHours: '~{value} giờ',
     estimateDays: '~{value} ngày',
     quietHoursNotice: 'Hệ thống tự động tạm dừng gửi trong khung giờ yên lặng {start} – {end} sáng hàng ngày để tuân thủ chính sách Zalo và bảo vệ tài khoản.',
+    keepPageOpenNotice: 'Giữ trang này mở trong lúc gửi',
     testSendTitle: 'Gửi thử nghiệm',
     testSendDesc: 'Gửi 1 tin mẫu tới số điện thoại / email của bạn để kiểm tra trước khi gửi hàng loạt.',
     testRecipientEmailPlaceholder: 'Nhập email nhận thử (vd: your@email.com)',

@@ -230,6 +230,7 @@ describe('Việc 2 — Cột workspace_owner_id trên email_messages và zalo_me
         recipientType: 'phone',
         recipientValue: '0988888888',
         messageText: 'Test Preview',
+        trackingToken: `zpv_test_${Date.now()}_2`,
         trackingMetadata: { status: 'sent', source: 'preview' },
         isPreview: true,
         workspaceOwnerId: ownerUser.id,
@@ -355,14 +356,14 @@ describe('Việc 2 — Cột workspace_owner_id trên email_messages và zalo_me
 
       // 4. Chèn zalo_messages cũ (workspace_owner_id IS NULL)
       const { rows: zm1 } = await db.query(
-        `INSERT INTO zalo_messages (id_campaign, channel, status, sent_at, workspace_owner_id)
-         VALUES ($1, 'zalo_personal', 'sent', NOW(), NULL)
+        `INSERT INTO zalo_messages (id_campaign, channel, status, sent_at, workspace_owner_id, tracking_token)
+         VALUES ($1, 'zalo_personal', 'sent', NOW(), NULL, 'zpv_test_' || gen_random_uuid())
          RETURNING id`,
         [campBId]
       );
       const { rows: zm2 } = await db.query(
-        `INSERT INTO zalo_messages (id_campaign, channel, status, sent_at, workspace_owner_id)
-         VALUES (NULL, 'zalo_personal', 'sent', NOW(), NULL)
+        `INSERT INTO zalo_messages (id_campaign, channel, status, sent_at, workspace_owner_id, tracking_token)
+         VALUES (NULL, 'zalo_personal', 'sent', NOW(), NULL, 'zpv_test_' || gen_random_uuid())
          RETURNING id`
       );
 

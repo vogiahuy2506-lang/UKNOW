@@ -2598,6 +2598,11 @@ class ZaloSettingsController {
             attachmentsCount: preparedAttachments.length,
           });
         } else {
+          // PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28 PR-1 Việc 3 — production: tracking_token
+          // NOT NULL + UNIQUE (bootstrap.sql giống thật). Trước đây truyền null làm INSERT lỗi
+          // và bị nuốt ở nhánh shadow (:2670 hiện tại), nên gửi nhanh Zalo cá nhân KHÔNG BAO GIỜ
+          // được ghi vào zalo_messages dù usage_logs có ghi nhận.
+          const trackingToken = `zpv_${crypto.randomUUID()}`;
           if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
             try {
               await consumeSendQuota({
@@ -2617,7 +2622,7 @@ class ZaloSettingsController {
                     accountId: account.id,
                     accountName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
                     messageText: message,
-                    trackingToken: null,
+                    trackingToken,
                     trackingBaseUrl: null,
                     trackingMetadata: {
                       status: 'sent',
@@ -2655,7 +2660,7 @@ class ZaloSettingsController {
                 accountId: account.id,
                 accountName: String(account.displayName || account.zaloName || account.name || '').trim() || null,
                 messageText: message,
-                trackingToken: null,
+                trackingToken,
                 trackingBaseUrl: null,
                 trackingMetadata: {
                   status: 'sent',

@@ -1071,7 +1071,7 @@ CREATE TABLE zalo_messages (
   id_node             BIGINT,
   channel             VARCHAR(50),
   group_id            VARCHAR(100),
-  tracking_token      VARCHAR(255) UNIQUE,
+  tracking_token      VARCHAR(255) UNIQUE NOT NULL,
   tracking_metadata   JSONB,
   account_id          BIGINT,
   account_name        VARCHAR(255),
