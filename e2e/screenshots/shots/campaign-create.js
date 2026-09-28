@@ -22,8 +22,6 @@ import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
 } from '../lib/shotHelpers.js';
 
-const RUN_PATH = '/app/campaigns';
-
 /**
  * Mở trình dựng của chiến dịch nháp đã có luồng mẫu.
  *
@@ -62,17 +60,6 @@ async function openNodeConfig(page, nodeName) {
 export default {
   slug: 'campaign-create',
   shots: [
-    {
-      name: 'menu-chay-chien-dich',
-      caption: 'menu bên trái, nhóm Chiến dịch đang mở, khoanh đỏ mục "Chạy chiến dịch"',
-      async take(page, { baseURL }) {
-        return sidebarShot(page, {
-          groupName: 'Chiến dịch',
-          itemName: 'Chạy chiến dịch',
-          baseURL,
-        });
-      },
-    },
     {
       name: 'keo-khoi-khoi-chay',
       caption: 'kéo khối Khởi chạy từ bảng bên trái thả vào khu vực dựng',
@@ -165,66 +152,22 @@ export default {
       },
     },
     {
-      name: 'trang-chay-chien-dich',
-      caption: 'trang Chạy chiến dịch, khoanh đỏ dòng của một chiến dịch đang hoạt động',
+      name: 'chay-ngay-len-lich-trinh-dung',
+      // 28/09/2026 — trang "Chạy chiến dịch" đã gộp vào Quản lý chiến dịch (13/09) và nút "Kích hoạt"
+      // bỏ từ PR-3 16/09: chạy thẳng từ thanh công cụ trình dựng. CHỈ khoanh, KHÔNG bấm — "Chạy ngay" gửi thật.
+      caption: 'thanh công cụ trình dựng, khoanh đỏ hai nút "Chạy ngay" và "Lên lịch"',
+      localOnly: true,
       async take(page) {
-        await page.goto(RUN_PATH);
-        await page.getByRole('heading', { name: 'Chạy chiến dịch' })
-          .first().waitFor({ state: 'visible', timeout: 30_000 });
-
-        const row = page.locator('main tbody tr').first();
-        if (!(await row.isVisible({ timeout: 15_000 }).catch(() => false))) {
-          throw new Error(
-            'Không chiến dịch nào đang hoạt động. Nạp lại DB:\n'
-            + '  E2E_SEED_DEMO=1 E2E_SEED_CAMPAIGNS=1 node scripts/seed-test-db.js',
-          );
-        }
-        await settle(page);
-        await hideVolatileChrome(page);
-
-        // Không dùng highlight() ở đây: outline vẽ trên <tr> bị bảng nuốt mất,
-        // ảnh chỉ còn một nét đỏ ở mép trên trông như lỗi hiển thị. Vẽ viền
-        // trong từng ô rồi ghép lại thành một dải liền.
-        await row.evaluate((tr, color) => {
-          const cells = [...tr.children];
-          cells.forEach((cell, i) => {
-            const sides = [
-              `inset 0 3px 0 0 ${color}`,
-              `inset 0 -3px 0 0 ${color}`,
-              i === 0 ? `inset 3px 0 0 0 ${color}` : '',
-              i === cells.length - 1 ? `inset -3px 0 0 0 ${color}` : '',
-            ].filter(Boolean);
-            cell.style.boxShadow = sides.join(', ');
-          });
-        }, '#e11d48');
-        await page.waitForTimeout(200);
-        // 505: cắt sát ngay dưới dòng được khoanh, không để dòng sau bị xén ngang.
-        return contentShot(page, page.locator('main').first(), { maxHeight: 505 });
-      },
-    },
-    {
-      name: 'chay-ngay-va-len-lich',
-      caption: 'cột thao tác của một chiến dịch, khoanh đỏ hai nút Chạy ngay và Lên lịch',
-      async take(page) {
-        await page.goto(RUN_PATH);
-        await page.getByRole('heading', { name: 'Chiến dịch' })
-          .first().waitFor({ state: 'visible', timeout: 30_000 });
-
-        const row = page.locator('main tbody tr').first();
-        await row.waitFor({ state: 'visible', timeout: 15_000 });
-        await settle(page);
-        await hideVolatileChrome(page);
-
-        // CHỈ khoanh, KHÔNG bấm: "Chạy ngay" bắt đầu gửi thật.
+        await openBuilder(page);
         for (const name of ['Chạy ngay', 'Lên lịch']) {
-          const button = row.getByRole('button', { name, exact: true }).first();
-          if (!(await button.isVisible().catch(() => false))) {
-            throw new Error(`Không thấy nút "${name}" trên dòng chiến dịch`);
+          const button = page.getByRole('button', { name, exact: true }).first();
+          if (!(await button.isVisible({ timeout: 10_000 }).catch(() => false))) {
+            throw new Error(`Không thấy nút "${name}" trên thanh công cụ trình dựng`);
           }
           await highlight(button);
         }
         await page.waitForTimeout(200);
-        return contentShot(page, row);
+        return contentShot(page, page.locator('main').first(), { maxHeight: 130 });
       },
     },
   ],

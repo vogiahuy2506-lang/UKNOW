@@ -64,6 +64,8 @@ async function openStudio(page, { tab, needsDocuments = false } = {}) {
 
 export default {
   slug: 'chatbot',
+  // 28/09/2026: 5 ảnh đầu mô tả giao diện 3 tab cũ (không còn) nên chờ hết hạn ~30s mỗi ảnh — cần viết lại bài.
+  timeoutMs: 480_000,
   shots: [
     {
       // Cùng một màn hình với ô "menu-lich-su-tro-chuyen" bên bài inbox, nhưng
@@ -170,10 +172,23 @@ export default {
     },
     {
       name: 'tab-trien-khai',
-      caption: 'tab Triển khai, khoanh đỏ bốn lựa chọn kênh',
+      // 28/09/2026: giao diện thêm Zalo cá nhân/WhatsApp/Telegram — "bốn lựa chọn" thành cả lưới
+      // "Kênh hội thoại"; chú thích seed đổi theo.
+      caption: 'tab Triển khai, khoanh đỏ các ô chọn kênh',
       async take(page) {
-        await openStudio(page, { tab: 'Triển khai' });
+        // Panel Triển khai luôn hiện bên phải Studio — KHÔNG qua openStudio (hàm đó chờ tab "Kiến thức"
+        // không còn tồn tại: Kiến thức nay là một mục trong hộp thoại Cấu hình).
+        await page.goto(STUDIO_PATH);
+        await page.getByText('Kênh hội thoại', { exact: true }).first()
+          .waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
         await hideVolatileChrome(page);
+        const grid = page.getByText('Kênh hội thoại', { exact: true }).first()
+          .locator('xpath=following-sibling::div[1]');
+        if (!(await grid.isVisible({ timeout: 10_000 }).catch(() => false))) {
+          throw new Error('Không thấy lưới "Kênh hội thoại" ở tab Triển khai');
+        }
+        await highlight(grid);
         await page.waitForTimeout(400);
         return contentShot(page, page.locator('main').first());
       },
