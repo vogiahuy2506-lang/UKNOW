@@ -6,9 +6,9 @@
  * `usage_logs` có ghi nhận đã gửi.
  *
  * process.env.SEND_QUOTA_RESERVATION_MODE = 'enforce' ở đầu file (cùng mẫu
- * synchronousSendQuota.test.js) để đi qua nhánh consumeSendQuota().persistSource — nhánh CÒN
- * LẠI (shadow/off, insert trực tiếp) dùng chung `trackingToken` vừa sinh, đã phủ gián tiếp qua
- * cùng biến, không cần lặp lại toàn bộ kịch bản.
+ * synchronousSendQuota.test.js) để đi qua nhánh consumeSendQuota().persistSource. Nhánh CÒN
+ * LẠI (shadow/off, insert trực tiếp — nhánh production đang chạy) có ca riêng ở cuối file:
+ * dùng chung biến KHÔNG đủ, đột biến chỉ nhánh đó từng sống sót.
  */
 process.env.SEND_QUOTA_RESERVATION_MODE = 'enforce';
 
@@ -122,5 +122,50 @@ describe('POST /api/zalo/preview/send-personal — ghi lịch sử zalo_messages
     expect(rows[0].tracking_token).toMatch(/^zpv_/);
     expect(rows[1].tracking_token).toMatch(/^zpv_/);
     expect(rows[0].tracking_token).not.toBe(rows[1].tracking_token);
+  });
+
+  // Review PR-1 — production chạy hạn mức KHÔNG enforce, tức đi nhánh insert trực tiếp (không qua
+  // persistSource). Đột biến "nhánh đó truyền trackingToken: null" SỐNG SÓT qua 2 ca enforce ở trên —
+  // "phủ gián tiếp qua cùng biến" là sai, phải có ca riêng.
+  describe.each(['shadow', 'off'])('chế độ hạn mức %s (nhánh production đang chạy)', (mode) => {
+    beforeEach(() => {
+      process.env.SEND_QUOTA_RESERVATION_MODE = mode;
+    });
+
+    afterEach(() => {
+      process.env.SEND_QUOTA_RESERVATION_MODE = 'enforce';
+    });
+
+    it('gửi thành công -> zalo_messages có 1 dòng is_preview=true, tracking_token bắt đầu "zpv_"', async () => {
+      const user = await createUser();
+      const token = await loginAs(user);
+      const accountId = await createConnectedZaloAccount(user.id);
+
+      const fakeSendMessage = jest.fn().mockResolvedValue({ message: { msgId: '777888999' } });
+      zaloAccountSessionService.setAccountApi(accountId, { sendMessage: fakeSendMessage });
+      activeFakeSessionAccountIds.push(accountId);
+
+      const res = await request(app)
+        .post('/api/zalo/preview/send-personal')
+        .set('Authorization', `Bearer ${token}`)
+        .send({
+          accountId,
+          recipients: ['fake-uid-003'],
+          recipientType: 'uid',
+          message: 'Xin chào từ gửi nhanh',
+        });
+
+      expect(res.status).toBe(200);
+      expect(res.body.data.items[0].status).toBe('success');
+
+      const { rows } = await db.query(
+        `SELECT is_preview, tracking_token, quota_reservation_id FROM zalo_messages WHERE account_id = $1`,
+        [accountId]
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].is_preview).toBe(true);
+      expect(rows[0].tracking_token).toMatch(/^zpv_/);
+      expect(rows[0].quota_reservation_id).toBeNull();
+    });
   });
 });
