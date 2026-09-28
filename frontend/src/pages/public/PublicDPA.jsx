@@ -1,19 +1,15 @@
 import { useState } from 'react';
 import PolicyHistory from './components/PolicyHistory.jsx';
 
-/**
- * Returns CSS class based on language selection.
- */
 function getLangClass(activeLang, itemLang) {
   return activeLang === itemLang ? '' : 'hidden';
 }
 
 /**
- * Public Data Processing Agreement (Public DPA) page.
- * Content based on VNG/Zalo Public DPA template.
- * Applies to DIGISO platforms.
- *
- * @returns {JSX.Element} Public DPA page.
+ * Thỏa thuận Xử lý Dữ liệu Cá nhân Công Khai (Public DPA).
+ * Nội dung cập nhật theo Luật 91/2025/QH15 và Nghị định 356/2025/NĐ-CP.
+ * Tham khảo Mẫu số 01 — Tờ khai thông báo nền tảng TMĐT kinh doanh trực tiếp.
+ * Áp dụng cho: DIGISO (vừa là Bên xử lý, vừa là Bên kiểm soát dữ liệu).
  */
 function PublicDPA() {
   const [language, setLanguage] = useState('vi');
@@ -23,8 +19,8 @@ function PublicDPA() {
     {
       date: '2026-09-28',
       note: {
-        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
-        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
+        vi: 'Viết lại toàn bộ nội dung theo Luật 91/2025/QH15 và Nghị định 356/2025/NĐ-CP (Mẫu số 01). Tham chiếu đúng văn bản pháp luật hiện hành, tách rõ vai trò Bên xử lý và Bên kiểm soát dữ liệu.',
+        en: 'Full rewrite per Law 91/2025/QH15 and Decree 356/2025/NĐ-CP (Template No. 01). Correct legal references, separated Processor and Controller roles.',
       },
     },
     {
@@ -58,6 +54,9 @@ function PublicDPA() {
           .pp-list li {
             margin-bottom: 0.5rem;
           }
+          .pp-tab-btn {
+            transition: all 0.2s ease;
+          }
         `}
       </style>
       <div className="pp-body">
@@ -89,12 +88,12 @@ function PublicDPA() {
             <h1
               className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}
             >
-              Thoả Thuận <span className="text-orange-400">Xử Lý Dữ Liệu</span> Công Khai
+              Thỏa Thuận <span className="text-orange-400">Xử Lý Dữ Liệu</span> Cá Nhân
             </h1>
             <h1
               className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}
             >
-              Public <span className="text-orange-400">Data Processing</span> Agreement
+              Personal Data <span className="text-orange-400">Processing</span> Agreement
             </h1>
 
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>
@@ -133,6 +132,7 @@ function PublicDPA() {
         </header>
 
         <div className="mx-auto max-w-4xl px-5 pb-24 pt-10 sm:px-8">
+
           {/* Meta info */}
           <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
             <span
@@ -143,437 +143,1004 @@ function PublicDPA() {
               <span className={lc(language, 'vi')}>
                 Cập nhật: <strong>28 tháng 9 năm 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
-                Áp dụng cho: digiso.vn, founderai.biz
+                Luật 91/2025/QH15 · Nghị định 356/2025/NĐ-CP
               </span>
               <span className={lc(language, 'en')}>
                 Last updated: <strong>September 28, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
-                Applies to: digiso.vn, founderai.biz
+                Law 91/2025/QH15 · Decree 356/2025/NĐ-CP
               </span>
             </p>
           </div>
 
-          {/* Section 1: Introduction */}
+          {/* ===== PHẦN A: BÊN XỬ LÝ DỮ LIỆU ===== */}
+
+          {/* A.1. Lời nói đầu */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              1. Mở đầu
+              Phần A — Chính sách xử lý dữ liệu cá nhân: Bên xử lý dữ liệu
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              1. Introduction
+              Part A — Personal Data Processing Policy: Data Processor
             </h2>
+
+            <h3 className={`text-lg font-semibold text-orange-600 mb-3 ${lc(language, 'vi')}`}>
+              Lời nói đầu
+            </h3>
+            <h3 className={`text-lg font-semibold text-orange-600 mb-3 ${lc(language, 'en')}`}>
+              Preamble
+            </h3>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Thoả Thuận Xử Lý Dữ Liệu Cá Nhân Công Khai ("<strong>Thoả Thuận</strong>") điều chỉnh về những vấn đề liên quan tới hoạt động Xử Lý Dữ Liệu Cá Nhân giữa <strong>Công ty TNHH Giải pháp số DIGISO</strong> ("<strong>Chúng Tôi</strong>" hoặc "<strong>DIGISO</strong>") và tất cả đối tượng có thực hiện hoạt động xử lý Dữ Liệu Cá Nhân, là đối tượng điều chỉnh của <strong>Nghị Định 13/2023/NĐ-CP</strong> về Bảo vệ Dữ Liệu Cá Nhân đang sử dụng sản phẩm, dịch vụ của Công ty TNHH Giải pháp số DIGISO, bao gồm nhưng không giới hạn: Người Dùng, Khách hàng, Developer, Nhà Phát Triển,... (được gọi chung là "<strong>Bạn</strong>").
+              Chính sách xử lý dữ liệu cá nhân – Bên xử lý dữ liệu quy định về những thông tin
+              mà Công ty TNHH Giải pháp số DIGISO thu thập trên hoặc thông qua các website:
+              founderai.biz và các ứng dụng, dịch vụ liên quan. Chính sách này được áp dụng
+              khi DIGISO đóng vai trò là <strong>Bên xử lý dữ liệu cá nhân</strong>.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              This Public Personal Data Processing Agreement ("<strong>Agreement</strong>") governs matters related to Personal Data Processing activities between <strong>DIGISO Digital Solutions Co., Ltd.</strong> ("<strong>We</strong>", "<strong>Us</strong>", or "<strong>DIGISO</strong>") and all parties who process Personal Data, subject to <strong>Decree 13/2023/ND-CP</strong> on Personal Data Protection using products and services of DIGISO Digital Solutions Co., Ltd., including but not limited to: Users, Customers, Developers, App Developers,... (collectively referred to as "<strong>You</strong>").
+              Personal Data Processing Policy – Data Processor governs information collected by
+              DIGISO Digital Solutions Co., Ltd. through websites: founderai.biz and related
+              applications and services. This Policy applies when DIGISO acts as the{' '}
+              <strong>Personal Data Processor</strong>.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Thoả Thuận này bổ sung cho, và là bộ phận không thể tách rời của các thoả thuận, quy định, quy chế, chính sách của DIGISO. Trong trường hợp có bất kỳ xung đột hoặc không nhất quán nào với các điều khoản liên quan tới hoạt động xử lý Dữ Liệu Cá Nhân với bất kỳ thoả thuận, quy định, quy chế, chính sách khác của DIGISO, Thoả Thuận này sẽ được ưu tiên áp dụng.
-            </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              This Agreement is a supplement to, and an integral part of, all agreements, regulations, and policies of DIGISO. In the event of any conflict or inconsistency with any terms related to Personal Data Processing activities with any other agreements, regulations, and policies of DIGISO, this Agreement shall take precedence.
-            </p>
-            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
-              DIGISO cam kết tuân thủ các quy định pháp luật về bảo vệ Dữ Liệu Cá Nhân, không thực hiện bất kỳ hoạt động xử lý dữ liệu cá nhân nào trái theo quy định pháp luật. Đồng thời, DIGISO bảo lưu quyền đơn phương được sửa đổi, bổ sung bất kỳ và toàn bộ nội dung của Thoả Thuận này tại bất kỳ thời điểm nào.
+              Trường hợp bạn là người dùng của khách hàng đã ký hợp đồng với DIGISO,
+              Chính sách này áp dụng cho bạn.
             </p>
             <p className={`text-slate-700 ${lc(language, 'en')}`}>
-              DIGISO commits to comply with all legal regulations on Personal Data Protection, and will not process any personal data in violation of legal regulations. Additionally, DIGISO reserves the right to unilaterally amend, supplement any or all contents of this Agreement at any time.
+              If you are a user of a customer who has signed a contract with DIGISO,
+              this Policy applies to you.
             </p>
           </section>
 
-          {/* Section 2: Definitions */}
+          {/* A.2. Định nghĩa */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              2. Giải thích từ ngữ
+              1. Định nghĩa
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              2. Definitions
+              1. Definitions
             </h2>
             <ul className="pp-list text-slate-700 space-y-3">
               <li className={lc(language, 'vi')}>
-                <strong>"Luật Bảo Vệ Dữ Liệu Cá Nhân"</strong>: Bộ Luật Dân sự năm 2015; Luật Bảo vệ quyền lợi người tiêu dùng 2010; Luật an toàn thông tin mạng 2015; Luật An ninh mạng 2018; <strong>Nghị định số 13/2023/NĐ-CP</strong>, và các văn bản sửa đổi, bổ sung hoặc hướng dẫn thi hành Luật Bảo Vệ Dữ Liệu Cá Nhân và các quy định pháp luật khác có liên quan.
+                <strong>DIGISO / chúng tôi:</strong> Công ty TNHH Giải pháp số DIGISO, đơn vị cung cấp các giải pháp số và nền tảng công nghệ cho doanh nghiệp Việt Nam.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Personal Data Protection Law"</strong>: Civil Code 2015; Consumer Protection Law 2010; Network Information Security Law 2015; Cybersecurity Law 2018; <strong>Decree No. 13/2023/ND-CP</strong>, and amendments, supplements, or implementing guidelines for the Personal Data Protection Law and other relevant legal regulations.
+                <strong>DIGISO / we / us:</strong> DIGISO Digital Solutions Co., Ltd., a digital solutions and technology platform provider for Vietnamese enterprises.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>"Dữ Liệu Cá Nhân"</strong>: Thông tin dưới dạng ký hiệu, chữ viết, chữ số, hình ảnh, âm thanh hoặc dạng tương tự trên môi trường điện tử gắn liền với một con người cụ thể hoặc giúp xác định một con người cụ thể theo quy định tại Luật Bảo Vệ Dữ Liệu Cá Nhân, Nghị Định 13/2023/NĐ-CP hoặc các quy định pháp luật khác có liên quan được cập nhật tùy thời điểm.
+                <strong>Khách hàng:</strong> Tổ chức hoặc cá nhân ký hợp đồng với DIGISO, đóng vai trò là Bên kiểm soát dữ liệu cá nhân.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Personal Data"</strong>: Information in the form of symbols, writing, numbers, images, sounds, or similar forms on electronic media associated with a specific individual or enabling identification of a specific individual as defined under the Personal Data Protection Law, Decree 13/2023/ND-CP, or other relevant legal regulations updated from time to time.
+                <strong>Customer:</strong> Organization or individual who signs a contract with DIGISO, acting as the Personal Data Controller.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>"Chủ Thể Dữ Liệu"</strong>: Cá nhân được Dữ Liệu Cá Nhân phản ánh.
+                <strong>Người dùng:</strong> Cá nhân truy cập, sử dụng các dịch vụ của DIGISO dưới sự quản lý của Khách hàng.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Data Subject"</strong>: An individual whose Personal Data is reflected.
+                <strong>User:</strong> Individual who accesses or uses DIGISO's services under the management of the Customer.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>"Xử Lý Dữ Liệu Cá Nhân"</strong>: Một hoặc nhiều hoạt động tác động tới Dữ Liệu Cá Nhân, như: thu thập, ghi, phân tích, xác nhận, lưu trữ, chỉnh sửa, công khai, kết hợp, truy cập, truy xuất, thu hồi, mã hóa, giải mã, sao chép, chia sẻ, truyền đưa, cung cấp, chuyển giao, xóa, hủy Dữ Liệu Cá Nhân hoặc các hành động khác có liên quan theo quy định tại Nghị Định 13 hoặc các quy định pháp luật khác có liên quan được cập nhật tùy thời điểm.
+                <strong>Chủ thể dữ liệu:</strong> Cá nhân được dữ liệu cá nhân phản ánh, là đối tượng của hoạt động xử lý dữ liệu.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Personal Data Processing"</strong>: One or more activities affecting Personal Data, such as: collection, recording, analysis, confirmation, storage, modification, disclosure, combination, access, retrieval, withdrawal, encryption, decryption, copying, sharing, transmission, provision, transfer, deletion, or destruction of Personal Data, or other related actions as defined under Decree 13 or other relevant legal regulations updated from time to time.
+                <strong>Data Subject:</strong> Individual reflected by personal data, the subject of data processing activities.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>"Bên Kiểm Soát và Xử Lý Dữ Liệu Cá Nhân"</strong>: Bên quyết định mục đích và phương tiện xử lý Dữ Liệu Cá Nhân.
+                <strong>Dữ liệu cá nhân:</strong> Dữ liệu cá nhân là dữ liệu số hoặc thông tin dưới dạng khác xác định hoặc giúp xác định một con người cụ thể, bao gồm: dữ liệu cá nhân cơ bản và dữ liệu cá nhân nhạy cảm.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Personal Data Controller and Processor"</strong>: The party that decides the purposes and means of processing Personal Data.
+                <strong>Personal Data:</strong> Digital data or information in other forms that identifies or helps identify a specific person, including: basic personal data and sensitive personal data.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>"Bên Xử Lý Dữ Liệu Cá Nhân"</strong>: Tổ chức, cá nhân thực hiện việc xử lý dữ liệu thay mặt cho Bên Kiểm soát dữ liệu, thông qua một hợp đồng hoặc thoả thuận.
+                <strong>Xử lý dữ liệu cá nhân:</strong> là hoạt động tác động đến dữ liệu cá nhân, bao gồm: thu thập, phân tích, tổng hợp, mã hóa, giải mã, chỉnh sửa, xóa, hủy, khử nhận dạng, cung cấp, công khai, chuyển giao dữ liệu cá nhân và hoạt động khác tác động đến dữ liệu cá nhân.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Personal Data Processor"</strong>: Organization or individual that processes data on behalf of the Data Controller, through a contract or agreement.
+                <strong>Personal Data Processing:</strong> activity that affects personal data, including: collection, analysis, synthesis, encryption, decryption, modification, deletion, destruction, de-identification, provision, disclosure, transfer of personal data, and other activities affecting personal data.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>"Cơ Quan Chuyên Trách Bảo Vệ Dữ Liệu Cá Nhân"</strong>: Cục An ninh mạng và Phòng, chống tội phạm sử dụng công nghệ cao - Bộ Công An hoặc cơ quan khác có trách nhiệm quản lý nhà nước về bảo vệ Dữ Liệu Cá Nhân theo quy định của pháp luật.
+                <strong>Bên kiểm soát dữ liệu cá nhân:</strong> là cơ quan, tổ chức, cá nhân quyết định mục đích và phương tiện xử lý dữ liệu cá nhân.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Personal Data Protection Authority"</strong>: The Cybersecurity and High-tech Crime Prevention Department - Ministry of Public Security, or other competent state authorities responsible for personal data protection under legal regulations.
+                <strong>Personal Data Controller:</strong> agency, organization, or individual that decides the purpose and means of personal data processing.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>"Nền Tảng"</strong>: Tất cả các sản phẩm, dịch vụ thuộc DIGISO, bao gồm nhưng không giới hạn phần mềm và các sản phẩm, dịch vụ yêu cầu sử dụng Tài khoản trên digiso.vn, founderai.biz.
+                <strong>Bên xử lý dữ liệu cá nhân:</strong> là cơ quan, tổ chức, cá nhân thực hiện việc xử lý dữ liệu cá nhân theo yêu cầu của Bên kiểm soát dữ liệu cá nhân.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>"Platform"</strong>: All products and services of DIGISO, including but not limited to software and products, services requiring Account usage on digiso.vn, founderai.biz.
+                <strong>Personal Data Processor:</strong> agency, organization, or individual that processes personal data at the request of the Personal Data Controller.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Bên kiểm soát và xử lý dữ liệu cá nhân:</strong> là cơ quan, tổ chức, cá nhân quyết định mục đích, phương tiện và trực tiếp xử lý dữ liệu cá nhân.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Personal Data Controller and Processor:</strong> agency, organization, or individual that decides the purpose, means, and directly processes personal data.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Bên thứ ba:</strong> là tổ chức, cá nhân ngoài chủ thể dữ liệu cá nhân, Bên kiểm soát dữ liệu cá nhân, Bên kiểm soát và xử lý dữ liệu cá nhân, Bên xử lý dữ liệu cá nhân tham gia vào việc xử lý dữ liệu cá nhân theo quy định pháp luật.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Third Party:</strong> organization or individual outside the data subject, Personal Data Controller, Personal Data Controller and Processor, or Personal Data Processor involved in personal data processing under legal regulations.
               </li>
             </ul>
           </section>
 
-          {/* Section 3: General Obligations */}
+          {/* A.3. Dữ liệu DIGISO xử lý */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              3. Nghĩa vụ chung khi xử lý dữ liệu trên Nền Tảng
+              2. Dữ liệu cá nhân DIGISO xử lý
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              3. General Obligations for Data Processing on the Platform
+              2. Personal Data Processed by DIGISO
             </h2>
 
-            <h3 className={`text-lg font-semibold text-slate-800 mb-3 ${lc(language, 'vi')}`}>
-              3.1. Tuân thủ quy định pháp luật
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              2.1. Dữ liệu do Khách hàng cung cấp
             </h3>
-            <h3 className={`text-lg font-semibold text-slate-800 mb-3 ${lc(language, 'en')}`}>
-              3.1. Legal Compliance
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              2.1. Data Provided by the Customer
             </h3>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Khi xử lý dữ liệu trên Nền Tảng, Bạn có trách nhiệm thực hiện đầy đủ các biện pháp bảo vệ Dữ Liệu Cá Nhân phù hợp theo quy định của pháp luật, cụ thể như sau:
+            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+              Với tư cách Bên xử lý, DIGISO không chủ động thu thập dữ liệu cá nhân mà xử lý dữ liệu theo ủy thác của Bên kiểm soát thông qua Hợp đồng. Khi sử dụng dịch vụ, Khách hàng có thể cung cấp các loại dữ liệu cá nhân sau của Người dùng:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              When processing data on the Platform, You are responsible for implementing adequate personal data protection measures in accordance with applicable laws, specifically as follows:
+            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
+              As a Processor, DIGISO does not proactively collect personal data but processes data under mandate from the Controller through a Contract. When using the service, the Customer may provide the following types of personal data of Users:
             </p>
-            <ol className="pp-list text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>
-                Bạn đồng ý, cam đoan và bảo đảm là mình có đầy đủ các giấy phép, phê duyệt, chấp thuận hoặc thực hiện các thủ tục pháp lý cần thiết khác tại các cơ quan Nhà nước có thẩm quyền để cung cấp Dữ Liệu Cá Nhân hợp pháp và cung cấp cho DIGISO khi có yêu cầu. Bạn đồng thời cam kết hoàn toàn chịu mọi trách nhiệm trước pháp luật liên quan đến hoạt động xử lý Dữ Liệu Cá Nhân và bảo vệ Dữ Liệu Cá Nhân của mình.
-              </li>
-              <li className={lc(language, 'en')}>
-                You agree, warrant, and assure that You have all necessary licenses, approvals, consents, or other required legal procedures from competent State authorities to provide Personal Data lawfully and to provide it to DIGISO upon request. You also commit to taking full legal responsibility for Your Personal Data Processing activities and Personal Data protection.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Bạn đồng ý tự chịu mọi trách nhiệm trong trường hợp phát sinh bất kỳ hoạt động xử lý, cung cấp, chia sẻ Dữ Liệu Cá Nhân phát sinh từ Nền Tảng cho bất kỳ Bên Thứ Ba nào khác trong khuôn khổ hoạt động của Bạn trên Nền Tảng.
-              </li>
-              <li className={lc(language, 'en')}>
-                You agree to take full responsibility for any processing, providing, or sharing of Personal Data arising from the Platform to any other Third Party within Your activities on the Platform.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Bạn đồng ý cam kết không xử lý Dữ Liệu Cá Nhân của trẻ em trái theo quy định pháp luật. Trong trường hợp Bạn xử lý Dữ Liệu Cá Nhân của trẻ em, Bạn có trách nhiệm thực hiện theo nguyên tắc bảo vệ các quyền và vì lợi ích tốt nhất của trẻ em, cam kết mọi hoạt động Xử Lý Dữ Liệu Cá Nhân của trẻ em là hợp pháp, và cần phải áp dụng các hoạt động bảo vệ Dữ Liệu Cá Nhân cần thiết, bao gồm nhưng không giới hạn: xác minh thông tin chủ thể, xác minh thông tin cha, mẹ hoặc người giám hộ, thu thập sự đồng ý của cha, mẹ, người giám hộ và xóa không khôi phục dữ liệu khi hết thời hạn.
-              </li>
-              <li className={lc(language, 'en')}>
-                You agree to commit not to process children&apos;s Personal Data in violation of legal regulations. If You process children&apos;s Personal Data, You are responsible for implementing the principle of protecting children&apos;s rights and best interests, committing that all Personal Data Processing activities for children are lawful, and must apply necessary Personal Data protection measures, including but not limited to: verifying subject information, verifying information of parents or guardians, obtaining consent from parents or guardians, and permanently deleting data when the retention period expires.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Bạn đồng ý có trách nhiệm ghi lại và lưu trữ nhật ký hệ thống quá trình xử lý Dữ Liệu Cá Nhân đối với mọi hoạt động xử lý của mình trên Nền Tảng và cung cấp cho DIGISO khi có yêu cầu.
-              </li>
-              <li className={lc(language, 'en')}>
-                You agree to be responsible for recording and storing system logs of Personal Data Processing activities for all Your processing activities on the Platform and providing them to DIGISO upon request.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Trường hợp Chủ Thể Dữ Liệu yêu cầu thực hiện các quyền đối với Dữ Liệu Cá Nhân theo quy định pháp luật (bao gồm nhưng không giới hạn quyền yêu cầu cung cấp dữ liệu, xóa dữ liệu, hạn chế xử lý dữ liệu, phản đối xử lý dữ liệu,…), Bạn đồng ý có trách nhiệm tự mình thực hiện theo yêu cầu của Chủ Thể Dữ Liệu trên cơ sở đảm bảo tuân thủ quy định pháp luật và thông báo, phối hợp với DIGISO ngay lập tức nhưng không trễ hơn <strong>72 giờ</strong> kể từ khi nhận được yêu cầu hợp lệ từ Chủ Thể Dữ Liệu.
-              </li>
-              <li className={lc(language, 'en')}>
-                In case the Data Subject requests to exercise rights to Personal Data under legal regulations (including but not limited to the right to request data provision, data deletion, restriction of data processing, objection to data processing,...), You agree to be responsible for personally fulfilling the Data Subject&apos;s request while ensuring compliance with legal regulations, and notify and cooperate with DIGISO immediately but no later than <strong>72 hours</strong> from receiving a valid request from the Data Subject.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Ngừng xử lý/hạn chế xử lý/xóa Dữ Liệu Cá Nhân và yêu cầu các tổ chức, cá nhân có liên quan ngừng xử lý/hạn chế xử lý/xóa Dữ Liệu Cá Nhân khi nhận được yêu cầu của Chủ Thể Dữ Liệu hoặc từ cơ quan nhà nước có thẩm quyền, hoặc ngừng xử lý/xóa Dữ Liệu Cá Nhân khi Chủ Thể Dữ Liệu đã rút lại sự đồng ý theo đúng quy định tại Luật Bảo Vệ Dữ Liệu Cá Nhân.
-              </li>
-              <li className={lc(language, 'en')}>
-                Stop processing/restrict processing/delete Personal Data and require related organizations and individuals to stop processing/restrict processing/delete Personal Data when receiving requests from Data Subjects or from competent state authorities, or stop processing/delete Personal Data when Data Subjects have withdrawn consent in accordance with the Personal Data Protection Law.
-              </li>
-            </ol>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Thông tin nhân thân: Họ tên đầy đủ, ngày tháng năm sinh, giới tính, quốc tịch, dân tộc, tôn giáo (nếu có)</li>
+              <li className={lc(language, 'en')}>Personal information: Full name, date of birth, gender, nationality, ethnicity, religion (if any)</li>
+              <li className={lc(language, 'vi')}>Thông tin liên lạc: Số điện thoại di động, địa chỉ email, địa chỉ liên hệ, địa chỉ thường trú, địa chỉ tạm trú</li>
+              <li className={lc(language, 'en')}>Contact information: Mobile phone number, email address, contact address, permanent residence, temporary residence</li>
+              <li className={lc(language, 'vi')}>Giấy tờ tùy thân: Hình ảnh cá nhân, số CMND/CCCD, số hộ chiếu, số giấy phép lái xe, số mã số thuế, số BHXH</li>
+              <li className={lc(language, 'en')}>Identity documents: Personal photos, ID card/Citizen ID number, passport number, driver license number, tax ID, social insurance number</li>
+              <li className={lc(language, 'vi')}>Thông tin tài khoản: Thông tin tài khoản ngân hàng, lịch sử hoạt động trực tuyến, địa chỉ IP, cookie</li>
+              <li className={lc(language, 'en')}>Account information: Bank account information, online activity history, IP address, cookies</li>
+              <li className={lc(language, 'vi')}>Dữ liệu học tập (founderai.biz): Tiến độ khóa học, kết quả kiểm tra, bài tập, chứng chỉ hoàn thành, lịch sử học tập</li>
+              <li className={lc(language, 'en')}>Learning data (founderai.biz): Course progress, test results, assignments, completion certificates, learning history</li>
+              <li className={lc(language, 'vi')}>Dữ liệu chiến dịch marketing: Thông tin đăng ký sự kiện, phản hồi chiến dịch, lịch sử tương tác với email, SMS, Zalo</li>
+              <li className={lc(language, 'en')}>Marketing campaign data: Event registration info, campaign responses, interaction history with email, SMS, Zalo</li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mb-4 ${lc(language, 'vi')}`}>
+              Khách hàng chịu trách nhiệm về tính hợp pháp của việc thu thập và cung cấp các dữ liệu này cho founderai.biz.
+            </p>
+            <p className={`text-slate-700 text-sm italic mb-4 ${lc(language, 'en')}`}>
+              The Customer is responsible for the legality of collecting and providing this data to founderai.biz.
+            </p>
 
-            <h3 className={`text-lg font-semibold text-slate-800 mb-3 mt-6 ${lc(language, 'vi')}`}>
-              3.2. Tuân thủ theo khuyến nghị của DIGISO
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              2.2. Dữ liệu tự động thu thập
             </h3>
-            <h3 className={`text-lg font-semibold text-slate-800 mb-3 mt-6 ${lc(language, 'en')}`}>
-              3.2. Comply with DIGISO&apos;s Recommendations
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              2.2. Automatically Collected Data
             </h3>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Bạn đồng ý có trách nhiệm thực hiện đầy đủ các biện pháp bảo vệ Dữ Liệu Cá Nhân phù hợp theo các khuyến nghị của DIGISO:
+            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+              Khi Người dùng sử dụng Dịch vụ, DIGISO tự động thu thập một số thông tin kỹ thuật:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              You agree to be responsible for implementing adequate personal data protection measures in accordance with DIGISO&apos;s recommendations:
+            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
+              When Users use the Service, DIGISO automatically collects some technical information:
             </p>
-            <ol className="pp-list text-slate-700 space-y-2">
-              <li className={lc(language, 'vi')}>
-                Mục đích xử lý Dữ Liệu Cá Nhân của Bạn phải phù hợp với mục đích, phạm vi của các sản phẩm, dịch vụ của DIGISO. Đồng thời Bạn chỉ được thực hiện các hoạt động Xử Lý Dữ Liệu Cá Nhân phù hợp với mục đích, phạm vi, quyền và nghĩa vụ của Bạn theo các thoả thuận, chính sách, thông báo, quy chế của DIGISO.
-              </li>
-              <li className={lc(language, 'en')}>
-                Your Personal Data Processing purposes must be consistent with the purposes and scope of DIGISO&apos;s products and services. Additionally, You may only perform Personal Data Processing activities consistent with Your purposes, scope, rights, and obligations under DIGISO&apos;s agreements, policies, notices, and regulations.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Bạn đồng ý cam kết chỉ nhận các dữ liệu cá nhân từ DIGISO (nếu có và dựa trên sự cho phép của chủ thể dữ liệu) trong phạm vi lãnh thổ nước Cộng Hoà Xã Hội Chủ Nghĩa Việt Nam. Trong trường hợp Bạn có thực hiện chuyển bất kỳ dữ liệu nào ra nước ngoài thì Bạn cần phải thực hiện các thủ tục theo quy định pháp luật của nước Cộng Hoà Xã Hội Chủ Nghĩa Việt Nam.
-              </li>
-              <li className={lc(language, 'en')}>
-                You agree to commit to only receive personal data from DIGISO (if any and based on the data subject&apos;s permission) within the territory of the Socialist Republic of Vietnam. If You transfer any data abroad, You must follow the procedures under Vietnamese law.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Trong trường hợp Bạn có chỉ định/lựa chọn Bên Thứ Ba tham gia vào quá trình xử lý dữ liệu được chuyển giao (nếu có và dựa trên sự cho phép của chủ thể dữ liệu) từ Nền tảng của DIGISO, thì Bạn phải ngay lập tức thông báo cho DIGISO. Bên Thứ Ba chỉ được tham gia vào hoạt động Xử Lý Dữ Liệu Cá Nhân khi và chỉ khi được sự đồng ý của DIGISO.
-              </li>
-              <li className={lc(language, 'en')}>
-                If You designate/select a Third Party to participate in the data processing transferred (if any and based on the data subject&apos;s permission) from DIGISO&apos;s Platform, You must immediately notify DIGISO. Third Party may only participate in Personal Data Processing activities when and only when DIGISO&apos;s consent is obtained.
-              </li>
-            </ol>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Địa chỉ IP: Địa chỉ giao thức Internet của thiết bị khi kết nối với máy chủ DIGISO</li>
+              <li className={lc(language, 'en')}>IP address: Internet Protocol address of the device when connecting to DIGISO servers</li>
+              <li className={lc(language, 'vi')}>Thông tin thiết bị: Loại thiết bị (máy tính, điện thoại, máy tính bảng), hệ điều hành, loại trình duyệt và phiên bản</li>
+              <li className={lc(language, 'en')}>Device information: Device type (computer, phone, tablet), operating system, browser type and version</li>
+              <li className={lc(language, 'vi')}>Hành vi truy cập: Các trang đã truy cập, thời gian truy cập, liên kết đã nhấp, từ khóa tìm kiếm</li>
+              <li className={lc(language, 'en')}>Access behavior: Pages visited, access time, links clicked, search keywords</li>
+              <li className={lc(language, 'vi')}>Cookie: Mã định danh phiên, mã định danh người dùng, tùy chọn ngôn ngữ, lịch sử hoạt động</li>
+              <li className={lc(language, 'en')}>Cookies: Session identifier, user identifier, language preferences, activity history</li>
+            </ul>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 mt-4 ${lc(language, 'vi')}`}>
+              2.3. Dữ liệu từ dịch vụ tích hợp
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 mt-4 ${lc(language, 'en')}`}>
+              2.3. Data from Integrated Services
+            </h3>
+            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+              Người dùng có thể đăng nhập qua Google hoặc Apple ID. Khi đó, DIGISO tiếp nhận: Họ và tên, địa chỉ email, ngày sinh (nếu được cung cấp), giới tính (nếu được cung cấp), ảnh đại diện.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              Users may log in via Google or Apple ID. In that case, DIGISO receives: Full name, email address, date of birth (if provided), gender (if provided), profile picture.
+            </p>
           </section>
 
-          {/* Section 4: Controller Responsibilities */}
+          {/* A.4. Mục đích xử lý dữ liệu */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              4. Trách nhiệm của Bạn khi là Bên Kiểm Soát Dữ Liệu Cá Nhân
+              3. Mục đích xử lý dữ liệu
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              4. Your Responsibilities when Acting as Personal Data Controller
+              3. Data Processing Purposes
             </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Bạn đồng ý có trách nhiệm thực hiện đầy đủ các biện pháp bảo vệ Dữ Liệu Cá Nhân phù hợp theo quy định của pháp luật với vai trò là Bên Kiểm Soát Dữ Liệu Cá Nhân, cụ thể như sau:
+            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+              DIGISO xử lý dữ liệu cá nhân cho các mục đích sau, theo đúng phạm vi được ủy quyền từ Khách hàng:
             </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              You agree to be responsible for implementing adequate personal data protection measures in accordance with legal regulations as a Personal Data Controller, specifically as follows:
+            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
+              DIGISO processes personal data for the following purposes, strictly within the scope authorized by the Customer:
             </p>
-            <ol className="pp-list text-slate-700 space-y-2">
+            <ul className="list-disc pl-6 text-slate-700 space-y-2">
               <li className={lc(language, 'vi')}>
-                Đồng ý thực hiện đầy đủ các Nghĩa vụ chung khi xử lý dữ liệu trên Nền Tảng theo Điều 3 Thoả Thuận này.
+                <strong>Vận hành dịch vụ:</strong> Duy trì và cung cấp đầy đủ tính năng của các nền tảng digiso.vn, founderai.biz, đảm bảo hệ thống hoạt động ổn định, an toàn và liên tục.
               </li>
               <li className={lc(language, 'en')}>
-                Agree to fully fulfill General Obligations when processing data on the Platform under Article 3 of this Agreement.
+                <strong>Service operation:</strong> Maintaining and providing full features of digiso.vn and founderai.biz platforms, ensuring stable, safe, and continuous system operation.
               </li>
               <li className={lc(language, 'vi')}>
-                Đồng ý thực hiện các biện pháp tổ chức và kỹ thuật cùng các biện pháp an toàn, bảo mật phù hợp để đảm bảo, chứng minh các hoạt động xử lý dữ liệu đã được thực hiện, tuân thủ theo quy định của pháp luật về bảo vệ Dữ Liệu Cá Nhân, tiến hành rà soát và cập nhật các biện pháp này khi cần thiết.
+                <strong>Cải thiện sản phẩm:</strong> Phân tích hành vi người dùng để hiểu nhu cầu, nâng cao trải nghiệm người dùng và phát triển các tính năng mới phù hợp với thị trường Việt Nam.
               </li>
               <li className={lc(language, 'en')}>
-                Agree to implement appropriate organizational and technical measures along with safety and security measures to ensure and demonstrate that data processing activities have been performed in compliance with Personal Data Protection laws, and review and update these measures when necessary.
+                <strong>Product improvement:</strong> Analyzing user behavior to understand needs, enhance user experience, and develop new features suitable for the Vietnamese market.
               </li>
               <li className={lc(language, 'vi')}>
-                Bạn đồng ý có trách nhiệm thông báo về hoạt động xử lý Dữ Liệu Cá Nhân với mục đích và phạm vi đã thông báo với Chủ Thể Dữ Liệu theo quy định của Luật Bảo Vệ Dữ Liệu Cá Nhân và cam kết, đảm bảo thu thập đầy đủ sự đồng ý của Chủ Thể Dữ Liệu một cách hợp pháp.
+                <strong>Giao tiếp và hỗ trợ:</strong> Gửi thông báo dịch vụ, cập nhật tính năng, phản hồi yêu cầu hỗ trợ khách hàng, xử lý khiếu nại và tranh chấp.
               </li>
               <li className={lc(language, 'en')}>
-                You agree to be responsible for notifying Personal Data Processing activities with the purposes and scope notified to Data Subjects under the Personal Data Protection Law, and commit to ensuring lawful collection of full Data Subject consent.
+                <strong>Communication and support:</strong> Sending service notifications, feature updates, responding to customer support requests, handling complaints and disputes.
               </li>
               <li className={lc(language, 'vi')}>
-                Bạn đồng ý có trách nhiệm bảo đảm các quyền của Chủ Thể Dữ Liệu theo Luật Bảo Vệ Dữ Liệu Cá Nhân.
+                <strong>Marketing:</strong> Quản lý và theo dõi hiệu quả các chiến dịch marketing, gửi email/SMS/Zalo notification đến người dùng đã đồng ý, đo lường tỷ lệ chuyển đổi và ROI.
               </li>
               <li className={lc(language, 'en')}>
-                You agree to be responsible for ensuring Data Subjects&apos; rights under the Personal Data Protection Law.
+                <strong>Marketing:</strong> Managing and tracking marketing campaign effectiveness, sending email/SMS/Zalo notifications to consenting users, measuring conversion rates and ROI.
               </li>
               <li className={lc(language, 'vi')}>
-                Trường hợp phát hiện về việc xảy ra vi phạm quy định về bảo vệ Dữ Liệu Cá Nhân (vi phạm rõ ràng hoặc tiềm tàng khả năng vi phạm), Bạn đồng ý có trách nhiệm: (i) Thông báo cho Cơ Quan Chuyên Trách Bảo Vệ Dữ Liệu Cá Nhân trong vòng <strong>72 giờ</strong> và (ii) Tích cực hỗ trợ, phản hồi, phối hợp, thông báo với DIGISO nhằm thực hiện các nghĩa vụ theo quy định pháp luật.
+                <strong>Đào tạo (founderai.biz):</strong> Quản lý tiến độ học tập của học viên, cấp chứng chỉ điện tử, theo dõi kết quả học tập, phân tích dữ liệu để cải thiện chất lượng khóa học.
               </li>
               <li className={lc(language, 'en')}>
-                Upon discovering any violation or potential violation of Personal Data Protection regulations, You agree to: (i) Notify the Personal Data Protection Authority within <strong>72 hours</strong> and (ii) Actively support, respond, cooperate, and notify DIGISO to fulfill legal obligations.
-              </li>
-            </ol>
-          </section>
-
-          {/* Section 5: Processor Responsibilities */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              5. Trách nhiệm của Bạn khi là Bên Xử Lý Dữ Liệu Cá Nhân
-            </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              5. Your Responsibilities when Acting as Personal Data Processor
-            </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Khi đóng vai trò là Bên Xử Lý Dữ Liệu Cá Nhân, Bạn đồng ý tuân thủ các trách nhiệm sau:
-            </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              When acting as a Personal Data Processor, You agree to comply with the following responsibilities:
-            </p>
-            <ol className="pp-list text-slate-700 space-y-2">
-              <li className={lc(language, 'vi')}>
-                Thực hiện đầy đủ các nghĩa vụ chung khi xử lý dữ liệu trên Nền Tảng theo Điều 3 Thoả Thuận này.
-              </li>
-              <li className={lc(language, 'en')}>
-                Fully fulfill general obligations when processing data on the Platform under Article 3 of this Agreement.
+                <strong>Training (founderai.biz):</strong> Managing student learning progress, issuing electronic certificates, tracking learning results, analyzing data to improve course quality.
               </li>
               <li className={lc(language, 'vi')}>
-                Bạn chỉ được tiếp nhận, Xử Lý Dữ Liệu Cá Nhân sau khi đồng ý với toàn bộ nội dung tại Thoả Thuận này. Bạn cam kết xử lý Dữ Liệu Cá Nhân đúng theo các nội dung tại Thoả Thuận này và các quy định của pháp luật.
+                <strong>Phân tích thống kê:</strong> Sử dụng Google Analytics để phân tích lưu lượng truy cập, hành vi người dùng trên website.
               </li>
               <li className={lc(language, 'en')}>
-                You may only receive and process Personal Data after agreeing to all contents of this Agreement. You commit to processing Personal Data in accordance with this Agreement and legal regulations.
+                <strong>Statistical analysis:</strong> Using Google Analytics to analyze website traffic and user behavior.
               </li>
               <li className={lc(language, 'vi')}>
-                Đồng ý thực hiện đầy đủ các biện pháp bảo vệ Dữ Liệu Cá Nhân theo quy định của Luật Bảo Vệ Dữ Liệu Cá Nhân.
+                <strong>Bảo mật và giám sát:</strong> Phát hiện và ngăn chặn các hoạt động gian lận, lạm dụng hệ thống, tấn công mạng; đảm bảo tuân thủ các quy định pháp luật.
               </li>
               <li className={lc(language, 'en')}>
-                Agree to implement adequate Personal Data protection measures under the Personal Data Protection Law.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Trường hợp Chủ Thể Dữ Liệu thực hiện các quyền đối với Dữ Liệu Cá Nhân theo quy định pháp luật, Bạn có nghĩa vụ tự mình thực hiện theo yêu cầu của Chủ Thể Dữ Liệu trên cơ sở đảm bảo tuân thủ quy định pháp luật sau khi thông báo, phối hợp với DIGISO ngay lập tức nhưng không trễ hơn <strong>72 giờ</strong> để xử lý yêu cầu này của Chủ Thể Dữ Liệu.
-              </li>
-              <li className={lc(language, 'en')}>
-                When Data Subjects exercise their rights to Personal Data under legal regulations, You are obligated to personally fulfill the Data Subject&apos;s request while ensuring legal compliance, after notifying and coordinating with DIGISO immediately but no later than <strong>72 hours</strong> to handle the Data Subject&apos;s request.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Bạn đồng ý có trách nhiệm xóa, hoàn trả lại toàn bộ Dữ Liệu Cá Nhân cho DIGISO sau khi kết thúc Xử Lý Dữ Liệu Cá Nhân trên Nền tảng.
-              </li>
-              <li className={lc(language, 'en')}>
-                You agree to be responsible for deleting or returning all Personal Data to DIGISO upon completion of Personal Data Processing on the Platform.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Trường hợp Bạn phát hiện về việc xảy ra vi phạm quy định về bảo vệ Dữ Liệu Cá Nhân (vi phạm rõ ràng hoặc tiềm tàng khả năng vi phạm), Bạn đồng ý có trách nhiệm: (i) Thông báo cho DIGISO ngay lập tức nhưng không được trễ hơn <strong>24 giờ</strong> kể từ khi xảy ra vi phạm và (ii) Tích cực hỗ trợ, phối hợp với DIGISO nhằm thực hiện các nghĩa vụ theo quy định pháp luật.
-              </li>
-              <li className={lc(language, 'en')}>
-                Upon discovering any violation or potential violation of Personal Data Protection regulations, You agree to: (i) Notify DIGISO immediately but no later than <strong>24 hours</strong> from the occurrence of the violation and (ii) Actively support and cooperate with DIGISO to fulfill legal obligations.
-              </li>
-            </ol>
-          </section>
-
-          {/* Section 6: Security Measures */}
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              6. Biện pháp bảo mật
-            </h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              6. Security Measures
-            </h2>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO khuyến nghị Bạn phải có trách nhiệm áp dụng các biện pháp kiểm soát và bảo mật cần thiết theo tiêu chuẩn, yêu cầu của DIGISO. Các biện pháp kiểm soát, biện pháp bảo mật phải được áp dụng để bảo vệ và ngăn chặn xâm nhập/truy cập trái phép Dữ Liệu Cá Nhân và/hoặc chuyển giao Dữ Liệu Cá Nhân cho bất kỳ bên nào và/hoặc bên xử lý dữ liệu thứ cấp của mình (nếu có), bao gồm nhưng không giới hạn:
-            </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO recommends that You must be responsible for implementing necessary control and security measures according to DIGISO&apos;s standards and requirements. Control measures and security measures must be applied to protect and prevent unauthorized intrusion/access to Personal Data and/or transfer of Personal Data to any party and/or Your sub-data processors (if any), including but not limited to:
-            </p>
-            <ul className="pp-list text-slate-700 space-y-2">
-              <li className={lc(language, 'vi')}>
-                Các biện pháp phòng chống rủi ro thất thoát, virus cũng như các phần mềm mã hóa theo tiêu chuẩn cập nhật và hiện hành dành cho việc lưu trữ và chuyển giao/luân chuyển trong trường hợp Dữ Liệu Cá Nhân là dữ liệu điện tử và khi di chuyển qua mạng/Internet.
-              </li>
-              <li className={lc(language, 'en')}>
-                Risk prevention measures against data loss, viruses, and encryption software according to updated and current standards for storage and transfer/transmission when Personal Data is electronic data and when transmitted over the network/Internet.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Dữ Liệu Cá Nhân phải được mã hóa hoặc có biện pháp bảo vệ để bảo mật thông tin trong quá trình tạo lập, trao đổi, lưu trữ, và/hoặc sử dụng các biện pháp mã hóa theo quy chuẩn kỹ thuật quốc gia về mã hóa dữ liệu hoặc tiêu chuẩn Quốc tế đã được công nhận.
-              </li>
-              <li className={lc(language, 'en')}>
-                Personal Data must be encrypted or have protection measures to secure information during creation, exchange, storage, and/or use encryption measures according to national technical standards for data encryption or recognized international standards.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Các dữ liệu nhận và/hoặc được chuyển giao phải tuân theo định dạng đã thống nhất theo quy định và hướng dẫn, tùy thời điểm; bao gồm nhưng không giới hạn: mã hóa đối xứng (hai chiều/Encryption), mã hóa một chiều, hàm băm (Hash với 256 bits), ẩn danh dữ liệu (Anonymization), che dữ liệu (Data Masking), làm nhiễu dữ liệu.
-              </li>
-              <li className={lc(language, 'en')}>
-                Data received and/or transferred must follow unified formats according to regulations and guidelines at each time; including but not limited to: symmetric encryption (two-way/Encryption), one-way encryption, hash function (Hash with 256 bits), data anonymization (Anonymization), data masking (Data Masking), data noise.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Theo dõi, gia cố, an toàn vật lý cho các hệ thống thuộc phạm vi tiếp nhận và xử lý dữ liệu.
-              </li>
-              <li className={lc(language, 'en')}>
-                Monitor, reinforce, and ensure physical security for systems within the data receiving and processing scope.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Đảm bảo các lỗ hổng/rủi ro (nếu có) phải được cập nhật.
-              </li>
-              <li className={lc(language, 'en')}>
-                Ensure vulnerabilities/risks (if any) are updated/patched.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Có biện pháp quản lý khóa mã hóa để bảo vệ Dữ Liệu Cá Nhân.
-              </li>
-              <li className={lc(language, 'en')}>
-                Have encryption key management measures to protect Personal Data.
+                <strong>Security and monitoring:</strong> Detecting and preventing fraud, system abuse, and cyber attacks; ensuring compliance with legal regulations.
               </li>
             </ul>
           </section>
 
-          {/* Section 7: Dispute Resolution */}
+          {/* A.5. Tiết lộ dữ liệu cho bên thứ ba */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              7. Tranh chấp, khiếu nại, khiếu kiện
+              4. Tiết lộ dữ liệu cho bên thứ ba
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              7. Disputes, Complaints, and Legal Proceedings
+              4. Data Disclosure to Third Parties
             </h2>
-            <ol className="pp-list text-slate-700 space-y-2">
-              <li className={lc(language, 'vi')}>
-                Trong trường hợp bất kỳ Bên nào có tranh chấp, khiếu nại hay khiếu kiện với Chủ Thể Dữ Liệu hay các bên liên quan khác về việc Xử Lý Dữ Liệu Cá Nhân, Bạn đồng ý có trách nhiệm hỗ trợ phù hợp cho DIGISO với sự nỗ lực tối đa trong quá trình thu thập, tập hợp chứng cứ và chứng minh về sự hợp pháp, hợp lệ trong việc Xử Lý Dữ Liệu Cá Nhân của Chủ Thể Dữ Liệu trong tranh chấp, khiếu nại hay khiếu kiện nói trên khi có yêu cầu từ DIGISO.
-              </li>
-              <li className={lc(language, 'en')}>
-                In case any party has a dispute, complaint, or legal proceeding with the Data Subject or other related parties regarding Personal Data Processing, You agree to provide appropriate support to DIGISO with maximum effort in collecting, gathering evidence, and proving the legality and validity of the Data Subject&apos;s Personal Data Processing in the said dispute, complaint, or legal proceeding when requested by DIGISO.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Trong trường hợp Bạn có lỗi, vi phạm dẫn đến tranh chấp, khiếu nại hay khiếu kiện cho DIGISO, Bạn đồng ý sẽ phải bảo vệ DIGISO tránh khỏi, hoặc bồi thường đầy đủ cho DIGISO đối với: mọi thiệt hại, tổn thất, chi phí, phí tổn phát sinh từ các tranh chấp, khiếu nại hay khiếu kiện đó.
-              </li>
-              <li className={lc(language, 'en')}>
-                In case You are at fault or violate regulations leading to disputes, complaints, or legal proceedings against DIGISO, You agree to defend DIGISO against, or fully compensate DIGISO for: all damages, losses, costs, and expenses arising from those disputes, complaints, or legal proceedings.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Bạn cam kết bồi thường và giữ cho DIGISO và toàn bộ các nhân viên, người quản lý, đối tác, đại lý, Bên tư vấn, công ty con và doanh nghiệp liên kết của DIGISO tránh khỏi bất kỳ thiệt hại, tổn thất, chi phí và phí tổn mà DIGISO phải hoặc có thể phải gánh chịu do việc vi phạm hoặc gây tổn thất của Bạn, bao gồm: (i) Các chi phí và phí tổn phát sinh liên quan đến việc thực hiện Thoả Thuận này (bao gồm cả chi phí pháp lý); và (ii) Tất cả các thiệt hại, chi phí và phí tổn phát sinh từ các yêu cầu bồi thường của Bên Thứ Ba, trong các vụ kiện, các cuộc thanh kiểm tra, các quy trình điều tra hình sự đối với các hành vi vi phạm pháp luật liên quan đến việc cung cấp Dữ Liệu Cá Nhân của Bạn hoặc việc Bạn không tuân thủ bất kỳ điều khoản nào theo quy định tại Thoả Thuận này.
-              </li>
-              <li className={lc(language, 'en')}>
-                You commit to compensate and hold DIGISO and all of DIGISO&apos;s employees, managers, partners, agents, consultants, subsidiaries, and affiliates harmless from any damages, losses, costs, and expenses that DIGISO must or may incur due to Your violation or causing losses, including: (i) Costs and expenses arising related to this Agreement (including legal costs); and (ii) All damages, costs, and expenses arising from Third Party compensation claims, in lawsuits, audits, or criminal investigation processes regarding Your illegal actions related to providing Your Personal Data or Your failure to comply with any terms under this Agreement.
-              </li>
-            </ol>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO cam kết không tiết lộ dữ liệu cá nhân của Người dùng mà không có sự chấp thuận của Khách hàng. Việc tiết lộ chỉ được thực hiện trong các trường hợp đặc biệt theo quy định dưới đây:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO commits not to disclose Users' personal data without Customer's approval. Disclosure is only made in special cases as follows:
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              4.1. Nhà cung cấp dịch vụ
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              4.1. Service Providers
+            </h3>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+              DIGISO sử dụng các nhà cung cấp bên thứ ba để vận hành hạ tầng và dịch vụ:
+            </p>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
+              DIGISO uses third-party service providers to operate infrastructure and services:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Google Cloud Platform (GCP): Lưu trữ dữ liệu tại Singapore, cung cấp các dịch vụ điện toán đám mây</li>
+              <li className={lc(language, 'en')}>Google Cloud Platform (GCP): Data storage in Singapore, providing cloud computing services</li>
+              <li className={lc(language, 'vi')}>Microsoft Azure: Các dịch vụ xác thực và quản lý identity</li>
+              <li className={lc(language, 'en')}>Microsoft Azure: Authentication and identity management services</li>
+              <li className={lc(language, 'vi')}>Twilio SendGrid: Dịch vụ gửi email thông báo và chiến dịch email marketing</li>
+              <li className={lc(language, 'en')}>Twilio SendGrid: Email notification and marketing campaign services</li>
+              <li className={lc(language, 'vi')}>FPT Smart Cloud: Máy chủ đặt tại Việt Nam, cung cấp hạ tầng nội địa</li>
+              <li className={lc(language, 'en')}>FPT Smart Cloud: Servers located in Vietnam, providing domestic infrastructure</li>
+              <li className={lc(language, 'vi')}>PayOS: Cổng thanh toán và hóa đơn điện tử (Mắt Bão e-Invoice)</li>
+              <li className={lc(language, 'en')}>PayOS: Payment gateway and e-invoice (Mat Bao e-Invoice)</li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mb-4 ${lc(language, 'vi')}`}>
+              Các nhà cung cấp này chỉ tiếp cận dữ liệu đã được mã hóa hoặc ẩn danh, trong phạm vi tối thiểu cần thiết để thực hiện dịch vụ.
+            </p>
+            <p className={`text-slate-700 text-sm italic mb-4 ${lc(language, 'en')}`}>
+              These providers only access encrypted or anonymized data, within the minimum scope necessary to perform the service.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              4.2. Người dùng nội bộ cùng hệ thống
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              4.2. Internal System Users
+            </h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Quản trị viên trong tổ chức của Khách hàng có thể truy cập một số dữ liệu cơ bản của Người dùng theo phân quyền đã thiết lập. DIGISO không chịu trách nhiệm về quyết định truy cập của Khách hàng.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Administrators within the Customer's organization may access some basic User data according to established permissions. DIGISO is not responsible for the Customer's access decisions.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              4.3. Cơ quan nhà nước có thẩm quyền
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              4.3. Competent State Authorities
+            </h3>
+            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+              Khi có quyết định, yêu cầu bằng văn bản từ cơ quan tố tụng hoặc cơ quan nhà nước có thẩm quyền theo quy định của pháp luật Việt Nam.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              When there is a written decision or request from investigative authorities or competent state agencies under Vietnamese law.
+            </p>
           </section>
 
-          {/* Section 8: General Provisions */}
+          {/* A.6. Quyền và nghĩa vụ của chủ thể dữ liệu */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              8. Điều khoản chung
+              5. Quyền và nghĩa vụ của chủ thể dữ liệu
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              8. General Provisions
+              5. Data Subject Rights and Obligations
             </h2>
-            <ol className="pp-list text-slate-700 space-y-2">
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              5.1. Quyền của chủ thể dữ liệu
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              5.1. Data Subject Rights
+            </h3>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+              Theo quy định của Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15, chủ thể dữ liệu có các quyền sau:
+            </p>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
+              Under Law 91/2025/QH15 on Personal Data Protection, data subjects have the following rights:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Quyền được biết: Được biết về hoạt động xử lý dữ liệu cá nhân của mình</li>
+              <li className={lc(language, 'en')}>Right to be informed: Know about personal data processing activities</li>
+              <li className={lc(language, 'vi')}>Quyền đồng ý hoặc không đồng ý: Đồng ý hoặc không đồng ý cho phép xử lý dữ liệu cá nhân</li>
+              <li className={lc(language, 'en')}>Right to consent or refuse: Consent or refuse to allow personal data processing</li>
+              <li className={lc(language, 'vi')}>Quyền truy cập: Được xem, chỉnh sửa dữ liệu cá nhân của mình</li>
+              <li className={lc(language, 'en')}>Right to access: View and edit personal data</li>
+              <li className={lc(language, 'vi')}>Quyền rút lại sự đồng ý: Rút lại sự đồng ý bất kỳ lúc nào</li>
+              <li className={lc(language, 'en')}>Right to withdraw consent: Withdraw consent at any time</li>
+              <li className={lc(language, 'vi')}>Quyền xóa dữ liệu: Yêu cầu xóa dữ liệu cá nhân trong các trường hợp pháp luật cho phép</li>
+              <li className={lc(language, 'en')}>Right to erasure: Request deletion of personal data in legally permitted cases</li>
+              <li className={lc(language, 'vi')}>Quyền hạn chế xử lý: Yêu cầu tạm ngừng một phần hoặc toàn bộ việc xử lý dữ liệu</li>
+              <li className={lc(language, 'en')}>Right to restrict processing: Request partial or full suspension of data processing</li>
+              <li className={lc(language, 'vi')}>Quyền phản đối: Phản đối việc xử lý dữ liệu cho mục đích marketing</li>
+              <li className={lc(language, 'en')}>Right to object: Object to data processing for marketing purposes</li>
+              <li className={lc(language, 'vi')}>Quyền yêu cầu cung cấp dữ liệu: Yêu cầu DIGISO cung cấp dữ liệu của mình</li>
+              <li className={lc(language, 'en')}>Right to data portability: Request DIGISO to provide their data</li>
+              <li className={lc(language, 'vi')}>Quyền bồi thường: Yêu cầu bồi thường khi có thiệt hại do vi phạm</li>
+              <li className={lc(language, 'en')}>Right to compensation: Request compensation for damages caused by violations</li>
+              <li className={lc(language, 'vi')}>Quyền khiếu nại, tố cáo, khởi kiện: Khiếu nại, tố cáo hoặc khởi kiện về hành vi vi phạm</li>
+              <li className={lc(language, 'en')}>Right to complain, denounce, or sue: File complaints, denouncements, or lawsuits about violations</li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mt-4 mb-3 ${lc(language, 'vi')}`}>
+              <strong>Thực thi quyền:</strong> Để thực hiện quyền của mình, chủ thể dữ liệu vui lòng liên hệ trực tiếp với Khách hàng (Bên kiểm soát dữ liệu) — đơn vị đã ủy quyền cho DIGISO xử lý dữ liệu. Mọi yêu cầu gửi trực tiếp về DIGISO sẽ được chuyển tiếp đến Khách hàng tương ứng để xử lý.
+            </p>
+            <p className={`text-slate-700 text-sm italic mt-4 mb-3 ${lc(language, 'en')}`}>
+              <strong>Exercising rights:</strong> To exercise your rights, please contact the Customer (Data Controller) directly — the entity that has authorized DIGISO to process data. Any requests sent directly to DIGISO will be forwarded to the relevant Customer for handling.
+            </p>
+            <p className={`text-slate-700 text-sm italic ${lc(language, 'vi')}`}>
+              Rút lại đồng ý tiếp thị cho khách hàng tiềm năng (lead): Chủ thể dữ liệu có quyền yêu cầu rút lại đồng ý tiếp thị bất kỳ lúc nào qua liên kết hủy nhận tin trong mỗi thông điệp tiếp thị.
+            </p>
+            <p className={`text-slate-700 text-sm italic ${lc(language, 'en')}`}>
+              Withdrawing marketing consent for leads: Data subjects have the right to withdraw marketing consent at any time via the unsubscribe link in each marketing message.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 mt-4 ${lc(language, 'vi')}`}>
+              5.2. Nghĩa vụ của chủ thể dữ liệu
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 mt-4 ${lc(language, 'en')}`}>
+              5.2. Data Subject Obligations
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Trách nhiệm về thông tin: Tự chịu trách nhiệm về tính đúng đắn, chính xác của thông tin đã cung cấp cho Bên kiểm soát</li>
+              <li className={lc(language, 'en')}>Information responsibility: Responsible for the accuracy of information provided to the Controller</li>
+              <li className={lc(language, 'vi')}>Tuân thủ quy định: Tuân thủ các quy định bảo vệ dữ liệu của Bên kiểm soát và Bên xử lý</li>
+              <li className={lc(language, 'en')}>Compliance: Comply with data protection regulations of the Controller and Processor</li>
+              <li className={lc(language, 'vi')}>Thông báo vi phạm: Kịp thời thông báo cho Bên kiểm soát khi phát hiện dấu hiệu vi phạm bảo mật dữ liệu</li>
+              <li className={lc(language, 'en')}>Report violations: Promptly notify the Controller when detecting data security breaches</li>
+              <li className={lc(language, 'vi')}>Bảo mật tài khoản: Bảo mật thông tin đăng nhập, mật khẩu và không chia sẻ cho người khác</li>
+              <li className={lc(language, 'en')}>Account security: Keep login information and passwords confidential</li>
+            </ul>
+          </section>
+
+          {/* A.7. Bảo vệ dữ liệu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              6. Bảo vệ dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              6. Data Protection
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO áp dụng các biện pháp kỹ thuật và tổ chức tiên tiến để bảo vệ dữ liệu cá nhân:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO applies advanced technical and organizational measures to protect personal data:
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              6.1. Mã hóa dữ liệu
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              6.1. Data Encryption
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Mã hóa dữ liệu tại tầng vật lý (encrypt-at-rest) sử dụng AES-256</li>
+              <li className={lc(language, 'en')}>Data encryption at rest (encrypt-at-rest) using AES-256</li>
+              <li className={lc(language, 'vi')}>Mã hóa dữ liệu tại tầng truyền tải (encrypt-in-transit) sử dụng HTTPS SSL/TLS</li>
+              <li className={lc(language, 'en')}>Data encryption in transit (encrypt-in-transit) using HTTPS SSL/TLS</li>
+              <li className={lc(language, 'vi')}>Mã hóa các bản sao lưu (backup encryption)</li>
+              <li className={lc(language, 'en')}>Encrypted backups</li>
+            </ul>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              6.2. Hạ tầng đám mây
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              6.2. Cloud Infrastructure
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Google Cloud Platform (GCP Singapore): Hạ tầng cloud toàn cầu với tính năng bảo mật nâng cao</li>
+              <li className={lc(language, 'en')}>Google Cloud Platform (GCP Singapore): Global cloud infrastructure with advanced security features</li>
+              <li className={lc(language, 'vi')}>FPT Smart Cloud: Máy chủ đặt tại Việt Nam, đáp ứng yêu cầu lưu trữ dữ liệu trong nước</li>
+              <li className={lc(language, 'en')}>FPT Smart Cloud: Servers in Vietnam, meeting domestic data storage requirements</li>
+            </ul>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              6.3. Xác thực và kiểm soát truy cập
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              6.3. Authentication and Access Control
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Xác thực 2 yếu tố (2FA) cho tài khoản quản trị</li>
+              <li className={lc(language, 'en')}>Two-factor authentication (2FA) for admin accounts</li>
+              <li className={lc(language, 'vi')}>Kiểm soát truy cập theo địa chỉ IP (IP whitelist)</li>
+              <li className={lc(language, 'en')}>IP-based access control (IP whitelist)</li>
+              <li className={lc(language, 'vi')}>Single Sign-On (SSO) qua SAML 2.0 cho doanh nghiệp</li>
+              <li className={lc(language, 'en')}>Single Sign-On (SSO) via SAML 2.0 for enterprise</li>
+              <li className={lc(language, 'vi')}>Phân quyền theo vai trò (Role-Based Access Control)</li>
+              <li className={lc(language, 'en')}>Role-Based Access Control (RBAC)</li>
+            </ul>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              6.4. Giám sát và sao lưu
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              6.4. Monitoring and Backup
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Giám sát bảo mật liên tục 24/7</li>
+              <li className={lc(language, 'en')}>24/7 continuous security monitoring</li>
+              <li className={lc(language, 'vi')}>Sao lưu dữ liệu định kỳ hàng ngày</li>
+              <li className={lc(language, 'en')}>Daily periodic data backups</li>
+              <li className={lc(language, 'vi')}>Kiểm thử xâm nhập định kỳ (penetration testing)</li>
+              <li className={lc(language, 'en')}>Periodic penetration testing</li>
+              <li className={lc(language, 'vi')}>Cập nhật bản vá bảo mật kịp thời</li>
+              <li className={lc(language, 'en')}>Timely security patch updates</li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'vi')}`}>
+              Khi phát hiện sự cố bảo mật, DIGISO sẽ thông báo cho chủ thể dữ liệu và trình báo cơ quan chức năng trong thời gian sớm nhất theo quy định của Luật Bảo vệ dữ liệu cá nhân.
+            </p>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'en')}`}>
+              When a security incident is detected, DIGISO will notify data subjects and report to authorities as soon as possible under the Personal Data Protection Law.
+            </p>
+          </section>
+
+          {/* A.8. Lưu trữ & Chuyển dữ liệu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              7. Lưu trữ & Chuyển dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              7. Storage & Data Transfer
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Dữ liệu cá nhân chỉ được lưu trữ trong thời gian tài khoản còn hoạt động hoặc trong thời gian cần thiết theo mục đích thu thập ban đầu và quy định pháp luật. DIGISO không sở hữu dữ liệu của Khách hàng và Người dùng — dữ liệu này thuộc về Khách hàng.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Personal data is stored only for the duration of account activity or for the time necessary according to the original collection purpose and legal requirements. DIGISO does not own Customer and User data — this data belongs to the Customer.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              7.1. Thời gian lưu trữ
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              7.1. Retention Period
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Khách hàng do người dùng đưa vào: Lưu trữ trong thời gian tài khoản còn hoạt động và tối đa 90 ngày sau khi tài khoản người dùng chấm dứt để hỗ trợ trích xuất dữ liệu trước khi xóa an toàn vĩnh viễn.</li>
+              <li className={lc(language, 'en')}>Customer-managed users: Stored during account activity and up to 90 days after account termination to support data export before permanent secure deletion.</li>
+              <li className={lc(language, 'vi')}>Khách hàng tiềm năng (lead) từ trang đích: Lưu trữ trong vòng 24 tháng kể từ lần tương tác cuối cùng.</li>
+              <li className={lc(language, 'en')}>Leads from landing pages: Stored for 24 months from the last interaction.</li>
+              <li className={lc(language, 'vi')}>Lịch sử gửi chiến dịch (email, tin nhắn, thông báo): Lưu trữ trong vòng 24 tháng phục vụ đối soát, thống kê và báo cáo hiệu quả.</li>
+              <li className={lc(language, 'en')}>Campaign sending history (email, SMS, notifications): Stored for 24 months for reconciliation and effectiveness reporting.</li>
+              <li className={lc(language, 'vi')}>Dữ liệu giao dịch và chứng từ liên quan: Lưu trữ tối thiểu theo thời hạn quy định của pháp luật kế toán và thuế.</li>
+              <li className={lc(language, 'en')}>Transaction data and related documents: Stored at minimum per accounting and tax law requirements.</li>
+            </ul>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              7.2. Địa điểm lưu trữ
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              7.2. Storage Location
+            </h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Dữ liệu được lưu trữ tại GCP Singapore và máy chủ đặt tại Việt Nam (FPT Smart Cloud) theo cơ chế backup.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Data is stored at GCP Singapore and servers in Vietnam (FPT Smart Cloud) under a backup mechanism.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              7.3. Chuyển dữ liệu xuyên biên giới
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              7.3. Cross-border Data Transfer
+            </h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Khi có chuyển dữ liệu ra nước ngoài, DIGISO đảm bảo tuân thủ đầy đủ quy định pháp luật Việt Nam về chuyển dữ liệu cá nhân ra nước ngoài, bao gồm đánh giá tác động và các thủ tục cần thiết theo Luật 91/2025/QH15 và Nghị định 356/2025/NĐ-CP.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              When transferring data abroad, DIGISO ensures full compliance with Vietnamese law on cross-border personal data transfer, including impact assessment and necessary procedures under Law 91/2025/QH15 and Decree 356/2025/NĐ-CP.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              7.4. Xóa dữ liệu
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              7.4. Data Deletion
+            </h3>
+            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+              Sau khi hết thời hạn lưu trữ hoặc theo yêu cầu của Khách hàng, dữ liệu sẽ được xóa an toàn không thể phục hồi hoặc ẩn danh hóa theo tiêu chuẩn.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              After the retention period expires or upon Customer's request, data will be securely and irreversibly deleted or anonymized according to standards.
+            </p>
+          </section>
+
+          {/* A.9. Cập nhật chính sách */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              8. Cập nhật chính sách — Phần A
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              8. Policy Updates — Part A
+            </h2>
+            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+              DIGISO sẽ cập nhật Chính sách này định kỳ hoặc khi có thay đổi về quy định pháp luật, công nghệ hoặc hoạt động kinh doanh. Mọi thay đổi quan trọng sẽ được thông báo qua email hoặc thông báo nổi bật trên website ít nhất 15 ngày trước khi có hiệu lực. Trong trường hợp Người dùng không đồng ý với các sửa đổi, Người dùng có quyền ngừng sử dụng dịch vụ, yêu cầu đóng tài khoản và rút lại sự đồng ý cho phép xử lý dữ liệu.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              DIGISO will update this Policy periodically or when there are changes in legal regulations, technology, or business operations. Significant changes will be notified via email or prominent notices on the website at least 15 days before taking effect. If Users disagree with amendments, they may stop using the service, request account closure, and withdraw consent for data processing.
+            </p>
+          </section>
+
+          {/* ===== PHẦN B: BÊN KIỂM SOÁT DỮ LIỆU ===== */}
+
+          {/* B.1. Lời nói đầu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              Phần B — Chính sách xử lý dữ liệu cá nhân: Bên kiểm soát dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              Part B — Personal Data Processing Policy: Data Controller
+            </h2>
+
+            <h3 className={`text-lg font-semibold text-orange-600 mb-3 ${lc(language, 'vi')}`}>
+              Lời nói đầu
+            </h3>
+            <h3 className={`text-lg font-semibold text-orange-600 mb-3 ${lc(language, 'en')}`}>
+              Preamble
+            </h3>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Chính sách xử lý dữ liệu cá nhân – Bên kiểm soát dữ liệu này quy định mục đích và phương tiện mà Công ty TNHH Giải pháp số DIGISO sử dụng để xử lý dữ liệu cá nhân với tư cách Bên kiểm soát và xử lý dữ liệu cá nhân, thông qua các website founderai.biz và các kênh giao tiếp liên quan. DIGISO là <strong>Bên kiểm soát và xử lý dữ liệu cá nhân</strong> khi trực tiếp thu thập và xử lý dữ liệu từ người dùng mà không thông qua Khách hàng (bên kiểm soát).
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Personal Data Processing Policy – Data Controller governs the purposes and means that DIGISO Digital Solutions Co., Ltd. uses to process personal data as the Personal Data Controller and Processor, through founderai.biz websites and related communication channels. DIGISO is the <strong>Personal Data Controller and Processor</strong> when directly collecting and processing data from users without going through a Customer (controller).
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+              Nếu bạn là người dùng của Khách hàng đã ký hợp đồng với DIGISO, vui lòng tham khảo Phần A để biết cách DIGISO xử lý dữ liệu thay mặt cho Khách hàng của bạn.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              If you are a user of a Customer who has signed a contract with DIGISO, please refer to Part A for how DIGISO processes data on behalf of your Customer.
+            </p>
+          </section>
+
+          {/* B.2. Dữ liệu DIGISO thu thập & xử lý */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              1. Dữ liệu DIGISO thu thập & xử lý
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              1. Data Collected & Processed by DIGISO
+            </h2>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              1.1. Dữ liệu cá nhân cơ bản
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              1.1. Basic Personal Data
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Thông tin nhân thân: Họ tên đầy đủ, ngày tháng năm sinh, giới tính, quốc tịch, dân tộc, nơi ở, địa chỉ thường trú, địa chỉ tạm trú</li>
+              <li className={lc(language, 'en')}>Personal information: Full name, date of birth, gender, nationality, ethnicity, place of residence, permanent address, temporary address</li>
+              <li className={lc(language, 'vi')}>Thông tin liên lạc: Số điện thoại di động, địa chỉ email, địa chỉ liên hệ, địa chỉ giao hàng (nếu có)</li>
+              <li className={lc(language, 'en')}>Contact information: Mobile phone, email address, contact address, delivery address (if any)</li>
+              <li className={lc(language, 'vi')}>Giấy tờ tùy thân: Hình ảnh cá nhân, số CMND/CCCD, số hộ chiếu, số giấy phép lái xe (GPLX), số mã số thuế, số BHXH, số tài khoản ngân hàng</li>
+              <li className={lc(language, 'en')}>Identity documents: Personal photos, ID card/Citizen ID number, passport number, driver license number, tax ID, social insurance number, bank account number</li>
+              <li className={lc(language, 'vi')}>Thông tin tài khoản: Thông tin tài khoản người dùng trên nền tảng, lịch sử hoạt động trực tuyến, địa chỉ IP, cookie, tùy chọn ngôn ngữ</li>
+              <li className={lc(language, 'en')}>Account information: Platform user account, online activity history, IP address, cookies, language preferences</li>
+              <li className={lc(language, 'vi')}>Dữ liệu học tập (founderai.biz): Tiến độ khóa học, kết quả kiểm tra, bài tập, chứng chỉ hoàn thành, lịch sử học tập</li>
+              <li className={lc(language, 'en')}>Learning data (founderai.biz): Course progress, test results, assignments, completion certificates, learning history</li>
+              <li className={lc(language, 'vi')}>Dữ liệu chiến dịch marketing: Thông tin đăng ký sự kiện, phản hồi chiến dịch, lịch sử tương tác với email, SMS, Zalo</li>
+              <li className={lc(language, 'en')}>Marketing campaign data: Event registration info, campaign responses, interaction history with email, SMS, Zalo</li>
+              <li className={lc(language, 'vi')}>Dữ liệu biểu mẫu liên hệ: Họ tên, địa chỉ email, số điện thoại, tên doanh nghiệp, nội dung yêu cầu và địa chỉ IP tại thời điểm gửi biểu mẫu</li>
+              <li className={lc(language, 'en')}>Contact form data: Name, email, phone, business name, request content, and IP address at time of submission</li>
+            </ul>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              1.2. Dữ liệu cá nhân nhạy cảm (có sự đồng ý)
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              1.2. Sensitive Personal Data (with consent)
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1 mb-4">
+              <li className={lc(language, 'vi')}>Thông tin sinh trắc học: Dữ liệu vân tay, khuôn mặt (nếu sử dụng tính năng xác thực sinh trắc học)</li>
+              <li className={lc(language, 'en')}>Biometric information: Fingerprint data, facial data (if using biometric authentication)</li>
+              <li className={lc(language, 'vi')}>Dữ liệu vị trí: Thông tin vị trí địa lý từ dịch vụ định vị (nếu người dùng cho phép)</li>
+              <li className={lc(language, 'en')}>Location data: Geographic location from positioning services (if user permits)</li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mb-4 ${lc(language, 'vi')}`}>
+              <strong>Lưu ý:</strong> DIGISO tuyệt đối không thu thập dữ liệu liên quan đến tôn giáo, quan điểm chính trị, đời tư cá nhân không liên quan đến dịch vụ.
+            </p>
+            <p className={`text-slate-700 text-sm italic mb-4 ${lc(language, 'en')}`}>
+              <strong>Note:</strong> DIGISO absolutely does not collect data related to religion, political opinions, or unrelated personal privacy matters.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              1.3. Dữ liệu tiếp thị
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              1.3. Marketing Data
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Cookie và tracking: Dữ liệu cookie, clickstream, lịch sử duyệt web, hành vi trên website</li>
+              <li className={lc(language, 'en')}>Cookies and tracking: Cookie data, clickstream, browsing history, website behavior</li>
+              <li className={lc(language, 'vi')}>Dữ liệu email marketing: Phản hồi với email marketing, tỷ lệ mở email, tỷ lệ nhấp liên kết, lựa chọn hủy đăng ký</li>
+              <li className={lc(language, 'en')}>Email marketing data: Email marketing responses, open rates, click-through rates, unsubscriptions</li>
+              <li className={lc(language, 'vi')}>Phân tích: Thông tin từ Google Analytics và các công cụ phân tích khác</li>
+              <li className={lc(language, 'en')}>Analytics: Information from Google Analytics and other analytics tools</li>
+            </ul>
+          </section>
+
+          {/* B.3. Cách thức thu thập dữ liệu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              2. Cách thức thu thập dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              2. Methods of Data Collection
+            </h2>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2">
               <li className={lc(language, 'vi')}>
-                <strong>Pháp Luật Điều Chỉnh và Điều Khoản Giải Quyết Tranh Chấp:</strong> Thoả Thuận này được điều chỉnh và giải thích theo quy định pháp luật Việt Nam. Bất kỳ tranh chấp nào phát sinh từ hoặc liên quan đến Thoả Thuận này, bao gồm bất kỳ vấn đề nào liên quan đến sự tồn tại, hiệu lực hoặc chấm dứt Thoả Thuận, sẽ được đưa ra giải quyết bởi tòa án có thẩm quyền tại <strong>Thành phố Hồ Chí Minh</strong>.
+                <strong>Giao kết hợp đồng:</strong> Khi ký kết hợp đồng cung cấp dịch vụ với DIGISO, khách hàng cung cấp: tên công ty, địa chỉ, mã số thuế, thông tin người đại diện, email, số điện thoại, thông tin tài khoản ngân hàng.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Governing Law and Dispute Resolution:</strong> This Agreement is governed by and interpreted in accordance with Vietnamese law. Any disputes arising from or related to this Agreement, including any issues related to the existence, validity, or termination of the Agreement, shall be submitted for resolution by competent courts in <strong>Ho Chi Minh City</strong>.
+                <strong>Contract execution:</strong> When signing a service contract with DIGISO, customers provide: company name, address, tax ID, representative information, email, phone, bank account details.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Thông báo:</strong> Mọi Thông Báo liên quan tới Dữ Liệu Cá Nhân cần phải được gửi tới: Người nhận: Bộ phận Bảo Vệ Dữ Liệu Cá Nhân - Công ty TNHH Giải pháp số DIGISO; Địa chỉ: Việt Nam; E-mail: <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Đăng ký dịch vụ:</strong> Thông tin cung cấp khi đăng ký tài khoản trên founderai.biz, bao gồm thông tin cá nhân, thông tin công ty, thông tin thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Notices:</strong> All Notices related to Personal Data must be sent to: Recipient: Personal Data Protection Department - DIGISO Digital Solutions Co., Ltd.; Address: Vietnam; Email: <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Service registration:</strong> Information provided when registering an account on founderai.biz, including personal information, company information, payment information.
               </li>
               <li className={lc(language, 'vi')}>
-                DIGISO được quyền từ chối cung cấp sản phẩm, dịch vụ cho Bạn trong trường hợp Bạn không tuân thủ bất kỳ quy định, thoả thuận nào tại Thoả Thuận này khi thực hiện hoạt động Xử Lý Dữ Liệu Cá Nhân.
+                <strong>Điền form trên website:</strong> Thông tin cung cấp khi điền các biểu mẫu trên website như form liên hệ, form đăng ký tư vấn, form tham gia sự kiện, webinar.
               </li>
               <li className={lc(language, 'en')}>
-                DIGISO has the right to refuse to provide products and services to You if You fail to comply with any regulations or agreements under this Agreement when performing Personal Data Processing activities.
+                <strong>Filling forms on website:</strong> Information provided when filling forms on the website such as contact forms, consultation registration, event registration, webinar registration.
               </li>
               <li className={lc(language, 'vi')}>
-                Thoả Thuận này có hiệu lực trong toàn bộ thời gian DIGISO thực hiện hoạt động kinh doanh trên lãnh thổ Việt Nam. Khi cần thiết, DIGISO có thể sửa đổi, cập nhật hoặc điều chỉnh các nội dung trong Thoả Thuận này tại bất cứ thời điểm nào, và phiên bản mới nhất của Thoả Thuận sẽ được đăng tải trên Website, Nền Tảng của DIGISO. Bạn đồng ý rằng sẽ định kỳ kiểm tra trên Website hoặc Nền Tảng của DIGISO để luôn được tiếp cận với phiên bản được cập nhật gần nhất.
+                <strong>Tự động thu thập:</strong> Cookie, địa chỉ IP, thông tin thiết bị, lịch sử truy cập website và dữ liệu thống kê lượt xem trang đích.
               </li>
               <li className={lc(language, 'en')}>
-                This Agreement is effective for the entire time DIGISO conducts business operations in Vietnam. When necessary, DIGISO may modify, update, or adjust any contents of this Agreement at any time, and the latest version of the Agreement will be posted on DIGISO&apos;s Website and Platform. You agree to periodically check DIGISO&apos;s Website or Platform to always access the most recently updated version.
+                <strong>Automatic collection:</strong> Cookies, IP address, device information, website access history, and landing page view statistics.
               </li>
-            </ol>
+              <li className={lc(language, 'vi')}>
+                <strong>Dịch vụ tích hợp bên thứ ba:</strong> Google, Apple ID khi đăng nhập qua tài khoản bên thứ ba.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Third-party integrated services:</strong> Google, Apple ID when logging in via third-party accounts.
+              </li>
+            </ul>
+          </section>
+
+          {/* B.4. Mục đích xử lý dữ liệu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              3. Mục đích xử lý dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              3. Data Processing Purposes
+            </h2>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2">
+              <li className={lc(language, 'vi')}>
+                <strong>Vận hành dịch vụ:</strong> Cung cấp và duy trì đầy đủ tính năng của các nền tảng digiso.vn, founderai.biz.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Service operation:</strong> Providing and maintaining full features of digiso.vn and founderai.biz platforms.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Cải thiện sản phẩm:</strong> Phân tích xu hướng sử dụng, nghiên cứu hành vi người dùng, phát triển tính năng mới.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Product improvement:</strong> Analyzing usage trends, studying user behavior, developing new features.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Giao tiếp và thông báo:</strong> Gửi thông báo dịch vụ, cập nhật tính năng, thông tin quan trọng về tài khoản; gửi email marketing (chỉ khi có sự đồng ý rõ ràng).
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Communication and notifications:</strong> Sending service notifications, feature updates, important account information; sending marketing emails (only with explicit consent).
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Dịch vụ Marketing:</strong> Quản lý, đo lường và tối ưu hóa chiến dịch quảng cáo; gửi email, SMS, Zalo notification.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Marketing services:</strong> Managing, measuring, and optimizing advertising campaigns; sending email, SMS, Zalo notifications.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Đào tạo (founderai.biz):</strong> Quản lý học viên và tiến độ học tập; cấp chứng chỉ điện tử.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Training (founderai.biz):</strong> Managing students and learning progress; issuing electronic certificates.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Tuân thủ pháp lý:</strong> Theo yêu cầu của cơ quan có thẩm quyền, quy định pháp luật về thuế, kế toán.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Legal compliance:</strong> Upon request from authorities, tax and accounting legal requirements.
+              </li>
+            </ul>
+          </section>
+
+          {/* B.5. Tiết lộ dữ liệu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              4. Tiết lộ dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              4. Data Disclosure
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO cam kết không tiết lộ dữ liệu cá nhân khi không có sự chấp thuận của chủ thể dữ liệu, ngoại trừ các trường hợp đặc biệt theo quy định pháp luật:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO commits not to disclose personal data without the data subject's approval, except in special cases provided by law:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2">
+              <li className={lc(language, 'vi')}>
+                <strong>Nhà cung cấp dịch vụ:</strong> Google (GCP), Microsoft Azure, Twilio SendGrid, FPT Smart Cloud, PayOS — chỉ tiếp cập trong phạm vi tối thiểu cần thiết.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Service providers:</strong> Google (GCP), Microsoft Azure, Twilio SendGrid, FPT Smart Cloud, PayOS — only accessed within minimum necessary scope.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Dữ liệu tổng hợp và ẩn danh:</strong> DIGISO có thể chia sẻ cho bên thứ ba phục vụ báo cáo, nghiên cứu thị trường. Dữ liệu này không thể nhận dạng cá nhân cụ thể.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Aggregated and anonymized data:</strong> May be shared with third parties for reporting and market research. This data cannot identify specific individuals.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Yêu cầu pháp lý:</strong> Theo lệnh tòa án, yêu cầu từ cơ quan nhà nước có thẩm quyền.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Legal requests:</strong> By court order, requests from competent state agencies.
+              </li>
+            </ul>
+          </section>
+
+          {/* B.6. Quyền và nghĩa vụ */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              5. Quyền và nghĩa vụ của chủ thể dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              5. Data Subject Rights and Obligations
+            </h2>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              5.1. Quyền của chủ thể dữ liệu
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              5.1. Data Subject Rights
+            </h3>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+              Theo quy định của Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15, bạn có các quyền sau:
+            </p>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
+              Under Law 91/2025/QH15 on Personal Data Protection, you have the following rights:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Quyền được biết, đồng ý, truy cập, chỉnh sửa, rút lại đồng ý, xóa dữ liệu, hạn chế xử lý, phản đối, cung cấp dữ liệu, bồi thường, khiếu nại/tố cáo/khởi kiện</li>
+              <li className={lc(language, 'en')}>Rights to be informed, consent, access, correct, withdraw consent, erasure, restrict processing, object, data portability, compensation, complain/denounce/sue</li>
+              <li className={lc(language, 'vi')}>Quyền hủy đăng ký email: Hủy nhận email marketing bất kỳ lúc nào qua link "Unsubscribe" trong mỗi email</li>
+              <li className={lc(language, 'en')}>Right to unsubscribe: Unsubscribe from marketing emails at any time via the "Unsubscribe" link in each email</li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'vi')}`}>
+              Để thực thi các quyền, vui lòng liên hệ DIGISO qua email <strong>info@digiso.vn</strong> hoặc sử dụng các tính năng tự phục vụ trên website. DIGISO sẽ phản hồi trong thời gian sớm nhất theo quy định pháp luật.
+            </p>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'en')}`}>
+              To exercise your rights, please contact DIGISO via email <strong>info@digiso.vn</strong> or use self-service features on the website. DIGISO will respond as soon as possible under legal regulations.
+            </p>
+
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 mt-4 ${lc(language, 'vi')}`}>
+              5.2. Nghĩa vụ của chủ thể dữ liệu
+            </h3>
+            <h3 className={`text-base font-semibold text-slate-800 mb-2 mt-4 ${lc(language, 'en')}`}>
+              5.2. Data Subject Obligations
+            </h3>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Tự chịu trách nhiệm về tính chính xác, đầy đủ của thông tin đã cung cấp; thông báo ngay khi thông tin thay đổi</li>
+              <li className={lc(language, 'en')}>Responsible for the accuracy and completeness of provided information; notify immediately when information changes</li>
+              <li className={lc(language, 'vi')}>Tuân thủ các quy định bảo vệ dữ liệu cá nhân của DIGISO và pháp luật Việt Nam</li>
+              <li className={lc(language, 'en')}>Comply with DIGISO's personal data protection regulations and Vietnamese law</li>
+              <li className={lc(language, 'vi')}>Bảo mật thông tin đăng nhập, mật khẩu, không chia sẻ cho người khác, đăng xuất khi sử dụng thiết bị chung</li>
+              <li className={lc(language, 'en')}>Keep login information and passwords confidential, log out when using shared devices</li>
+              <li className={lc(language, 'vi')}>Thông báo kịp thời cho DIGISO khi phát hiện bất kỳ vi phạm bảo mật dữ liệu nào liên quan đến tài khoản</li>
+              <li className={lc(language, 'en')}>Promptly notify DIGISO when detecting any data security breach related to the account</li>
+            </ul>
+          </section>
+
+          {/* B.7. Bảo vệ dữ liệu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              6. Bảo vệ dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              6. Data Protection
+            </h2>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+              DIGISO áp dụng các biện pháp bảo vệ dữ liệu cá nhân tiên tiến và phù hợp với các tiêu chuẩn quốc tế:
+            </p>
+            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
+              DIGISO applies advanced personal data protection measures in line with international standards:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-1">
+              <li className={lc(language, 'vi')}>Mã hóa SSL/TLS cho toàn bộ kết nối trên digiso.vn, founderai.biz</li>
+              <li className={lc(language, 'en')}>SSL/TLS encryption for all connections on digiso.vn and founderai.biz</li>
+              <li className={lc(language, 'vi')}>Mã hóa dữ liệu tại tầng vật lý (encrypt-at-rest) sử dụng AES-256</li>
+              <li className={lc(language, 'en')}>Data encryption at rest (encrypt-at-rest) using AES-256</li>
+              <li className={lc(language, 'vi')}>Phân quyền theo vai trò (RBAC), xác thực 2 lớp (2FA), SSO qua SAML 2.0, kiểm soát truy cập theo IP</li>
+              <li className={lc(language, 'en')}>Role-Based Access Control (RBAC), two-factor authentication (2FA), SSO via SAML 2.0, IP-based access control</li>
+              <li className={lc(language, 'vi')}>Giám sát bảo mật liên tục 24/7, sao lưu dữ liệu định kỳ hàng ngày, kiểm thử xâm nhập định kỳ</li>
+              <li className={lc(language, 'en')}>24/7 continuous security monitoring, daily periodic backups, periodic penetration testing</li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'vi')}`}>
+              Khi xảy ra sự cố bảo mật, DIGISO sẽ thông báo tới chủ thể dữ liệu trong thời gian sớm nhất và phối hợp với cơ quan chức năng theo quy định của Luật Bảo vệ dữ liệu cá nhân.
+            </p>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'en')}`}>
+              In case of a security incident, DIGISO will notify data subjects as soon as possible and coordinate with authorities under the Personal Data Protection Law.
+            </p>
+          </section>
+
+          {/* B.8. Lưu trữ & Chuyển dữ liệu */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              7. Lưu trữ & Chuyển dữ liệu
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              7. Storage & Data Transfer
+            </h2>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2">
+              <li className={lc(language, 'vi')}>
+                <strong>Thống kê lượt xem trang đích:</strong> Lưu trữ trong 13 tháng.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Landing page view statistics:</strong> Stored for 13 months.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Dữ liệu biểu mẫu liên hệ:</strong> Lưu trữ trong 24 tháng kể từ ngày gửi.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Contact form data:</strong> Stored for 24 months from date of submission.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Chứng từ kế toán:</strong> Lưu trữ tối thiểu 10 năm theo quy định của Luật Kế toán và pháp luật thuế.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Accounting documents:</strong> Stored for a minimum of 10 years per accounting and tax law requirements.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Dữ liệu tài khoản người dùng:</strong> Lưu trữ trong suốt thời gian tài khoản hoạt động và được xóa hoặc ẩn danh hóa an toàn sau khi chấm dứt tài khoản.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>User account data:</strong> Stored throughout account activity and securely deleted or anonymized after account termination.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mt-4 ${lc(language, 'vi')}`}>
+              Dữ liệu được lưu trữ tại Việt Nam (FPT Smart Cloud) và GCP Singapore theo cơ chế backup. Mọi chuyển dữ liệu ra nước ngoài đều tuân thủ đầy đủ quy định pháp luật Việt Nam, bao gồm đánh giá tác động và các thủ tục cần thiết theo Luật 91/2025/QH15 và Nghị định 356/2025/NĐ-CP.
+            </p>
+            <p className={`text-slate-700 mt-4 ${lc(language, 'en')}`}>
+              Data is stored in Vietnam (FPT Smart Cloud) and GCP Singapore under a backup mechanism. All cross-border data transfers comply fully with Vietnamese law, including impact assessments and necessary procedures under Law 91/2025/QH15 and Decree 356/2025/NĐ-CP.
+            </p>
+          </section>
+
+          {/* B.9. Cam kết của DIGISO */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              8. Cam kết của DIGISO
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              8. DIGISO's Commitments
+            </h2>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2">
+              <li className={lc(language, 'vi')}>
+                <strong>Không thu thập dữ liệu nhạy cảm không liên quan:</strong> DIGISO tuyệt đối không thu thập dữ liệu cá nhân nhạy cảm liên quan đến tôn giáo, quan điểm chính trị, nguồn gốc sắc tộc, hoặc các thông tin riêng tư không liên quan đến dịch vụ.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>No unrelated sensitive data collection:</strong> DIGISO absolutely does not collect sensitive personal data related to religion, political opinions, ethnic origin, or unrelated personal privacy matters.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Không bán dữ liệu:</strong> DIGISO cam kết không bán, không chuyển nhượng dữ liệu cá nhân của người dùng cho bất kỳ bên thứ ba nào vì mục đích thương mại.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>No data selling:</strong> DIGISO commits not to sell or transfer users' personal data to any third party for commercial purposes.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Chỉ sử dụng đúng mục đích:</strong> DIGISO không sử dụng dữ liệu cá nhân cho các mục đích khác ngoài các mục đích đã được thông báo và có sự đồng ý.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Use only for stated purposes:</strong> DIGISO does not use personal data for purposes other than those notified and consented to.
+              </li>
+            </ul>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'vi')}`}>
+              Nếu bạn phát hiện DIGISO đang xử lý dữ liệu ngoài phạm vi cho phép hoặc có bất kỳ lo ngại nào về việc bảo vệ dữ liệu cá nhân, vui lòng liên hệ ngay qua email <strong>info@digiso.vn</strong>.
+            </p>
+            <p className={`text-slate-700 text-sm italic mt-4 ${lc(language, 'en')}`}>
+              If you discover DIGISO is processing data beyond the permitted scope or have any concerns about personal data protection, please contact us immediately at <strong>info@digiso.vn</strong>.
+            </p>
+          </section>
+
+          {/* B.10. Cập nhật chính sách */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              9. Cập nhật chính sách — Phần B
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              9. Policy Updates — Part B
+            </h2>
+            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+              DIGISO sẽ cập nhật Chính sách này định kỳ hoặc khi có thay đổi về quy định pháp luật, công nghệ hoặc hoạt động kinh doanh. Mọi thay đổi quan trọng sẽ được thông báo qua email hoặc thông báo nổi bật trên website ít nhất 15 ngày trước khi có hiệu lực. Trong trường hợp Người dùng không đồng ý với các sửa đổi, Người dùng có quyền ngừng sử dụng dịch vụ, yêu cầu đóng tài khoản và rút lại sự đồng ý cho phép xử lý dữ liệu.
+            </p>
+            <p className={`text-slate-700 ${lc(language, 'en')}`}>
+              DIGISO will update this Policy periodically or when there are changes in legal regulations, technology, or business operations. Significant changes will be notified via email or prominent notices on the website at least 15 days before taking effect. If Users disagree with amendments, they may stop using the service, request account closure, and withdraw consent for data processing.
+            </p>
           </section>
 
           {/* Contact Block */}
           <div className="mt-10 overflow-hidden rounded-2xl border border-slate-700/30 bg-gradient-to-b from-slate-900 to-slate-950 px-5 py-8 text-white shadow-xl sm:px-8 sm:py-10">
             <div className="mb-6 max-w-2xl">
               <h2 className={`text-lg font-bold tracking-tight text-white sm:text-xl ${lc(language, 'vi')}`}>
-                Liên hệ về Dữ Liệu Cá Nhân
+                Liên hệ về Dữ liệu Cá nhân
               </h2>
               <h2 className={`text-lg font-bold tracking-tight text-white sm:text-xl ${lc(language, 'en')}`}>
                 Contact for Personal Data Matters
               </h2>
               <p className={`mt-2 text-[14px] leading-relaxed text-slate-300 ${lc(language, 'vi')}`}>
-                Nếu bạn có câu hỏi hoặc yêu cầu liên quan đến Thoả thuận Xử lý Dữ liệu Công khai này, vui lòng liên hệ:
+                Nếu bạn có câu hỏi hoặc yêu cầu liên quan đến Thỏa thuận Xử lý Dữ liệu Cá nhân này, vui lòng liên hệ:
               </p>
               <p className={`mt-2 text-[14px] leading-relaxed text-slate-300 ${lc(language, 'en')}`}>
-                If you have questions or requests regarding this Public Data Processing Agreement, please contact:
+                If you have questions or requests regarding this Personal Data Processing Agreement, please contact:
               </p>
             </div>
-            {/* Grid cho tiếng Việt */}
+            {/* Grid tiếng Việt */}
             <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${lc(language, 'vi')}`}>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Công ty</div>
@@ -602,12 +1169,12 @@ function PublicDPA() {
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Địa chỉ</div>
                 <div className="break-words text-[13.5px] text-slate-100 leading-relaxed">
-                  Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm Đại học Quốc gia Tp. Hồ Chí Minh
+                  Phòng I.101B Toà nhà A, Khu Công nghệ Phần mềm ĐH Quốc gia Tp.HCM, Đ. Võ Trường Toản, KP.33, P. Linh Xuân, TP.HCM
                 </div>
               </div>
             </div>
 
-            {/* Grid cho tiếng Anh */}
+            {/* Grid tiếng Anh */}
             <div className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${lc(language, 'en')}`}>
               <div className="rounded-xl border border-white/10 bg-white/[0.06] px-4 py-4 backdrop-blur-sm transition-colors hover:bg-white/[0.09]">
                 <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-orange-400/95">Company</div>
@@ -667,10 +1234,12 @@ function PublicDPA() {
             </a>
           </p>
           <p className={lc(language, 'vi')}>
-            Thoả thuận này được cập nhật và có hiệu lực từ ngày 28/09/2026.
+            Thỏa thuận này được cập nhật và có hiệu lực từ ngày 28/09/2026.
+            Cập nhật theo Luật 91/2025/QH15 và Nghị định 356/2025/NĐ-CP.
           </p>
           <p className={lc(language, 'en')}>
             This agreement was last updated and effective from September 28, 2026.
+            Updated per Law 91/2025/QH15 and Decree 356/2025/NĐ-CP.
           </p>
         </footer>
         <PolicyHistory language={language} lc={lc} entries={historyEntries} />
