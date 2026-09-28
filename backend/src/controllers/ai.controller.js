@@ -429,12 +429,16 @@ class AiController {
         && QUESTION_SHAPE_RE.test(lastUserContentForRouting)
       ) {
         try {
-          const { chunks } = await searchHelpChunks(lastUserContentForRouting, {
+          const { chunks, topSimilarity } = await searchHelpChunks(lastUserContentForRouting, {
             userId: req.user.id,
             locale: localeContext.conversationLocale,
             minSimilarity: 0.5,
           });
-          if (chunks.length > 0) {
+          // Review PR-2: searchHelpChunks tự rơi về dự phòng ILIKE (similarity ghi cứng 0.4) khi
+          // vector không có đoạn ≥ minSimilarity — nên "có đoạn" KHÔNG đồng nghĩa "khớp ≥ 0.5".
+          // Chỉ thay câu của não chiến dịch khi vector thật sự khớp; ILIKE vớt được vài đoạn thì
+          // giữ câu cũ (nếu không, mọi câu có từ "email"/"zalo" đều bị đổi thành bài hướng dẫn).
+          if (Number(topSimilarity) >= 0.5) {
             publicResponse = await answerWithDocs(
               lastUserContentForRouting,
               req.user.id,
@@ -444,7 +448,8 @@ class AiController {
             await helpRepo.insertUnanswered({
               question: lastUserContentForRouting,
               userId: req.user.id,
-              reason: 'no_chunks',
+              topSimilarity: chunks.length ? Number(topSimilarity) : null,
+              reason: chunks.length ? 'low_similarity' : 'no_chunks',
             });
             publicResponse = {
               ...publicResponse,

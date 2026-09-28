@@ -525,6 +525,48 @@ describe('ai.controller', () => {
       });
     });
 
+    // Review PR-2 — searchHelpChunks rơi về dự phòng ILIKE (similarity ghi cứng 0.4) khi vector
+    // không có đoạn ≥ 0.5, nên chunks gần như LUÔN có. Đột biến "if (chunks.length > 0)" phải đỏ
+    // ở ca này: có đoạn nhưng chỉ là ILIKE → KHÔNG được thay câu của não chiến dịch.
+    it('chỉ có đoạn từ dự phòng ILIKE (topSimilarity 0.4 < 0.5) → GIỮ câu não chiến dịch, ghi insertUnanswered reason=low_similarity', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue({
+        type: 'text',
+        content: 'Bạn muốn gửi email này cho nhóm khách nào?',
+      });
+      searchHelpChunks.mockResolvedValue({
+        chunks: [{ slug: 'soan-email', title: 'Soạn email', content_text: 'ILIKE vớt theo từ "email"' }],
+        topSimilarity: 0.4,
+      });
+
+      const req = {
+        body: {
+          history: [{ role: 'user', content: 'viết email cảm ơn khách, cách xưng hô thân mật?' }],
+          locale: 'vi',
+        },
+        user: { id: 7, role: 'user' },
+      };
+      const res = makeRes();
+
+      await aiController.chat(req, res);
+
+      expect(answerWithDocs).not.toHaveBeenCalled();
+      expect(insertUnanswered).toHaveBeenCalledTimes(1);
+      expect(insertUnanswered).toHaveBeenCalledWith(expect.objectContaining({
+        question: 'viết email cảm ơn khách, cách xưng hô thân mật?',
+        userId: 7,
+        topSimilarity: 0.4,
+        reason: 'low_similarity',
+      }));
+      expect(res.json).toHaveBeenCalledWith({
+        success: true,
+        data: expect.objectContaining({
+          content: 'Bạn muốn gửi email này cho nhóm khách nào?',
+          data: expect.objectContaining({ groundedBy: 'none' }),
+        }),
+      });
+    });
+
     it('câu KHÔNG có hình dạng câu hỏi (vd tuyên bố hành động) → KHÔNG chạm lưới an toàn', async () => {
       tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
       processSmartChat.mockResolvedValue({ type: 'text', content: 'Đã ghi nhận.' });

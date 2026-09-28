@@ -2824,6 +2824,19 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         }
         return;
       }
+      if (wizardQuestion.wizardGate === 'fileUsage') {
+        // PLAN_VA_TRO_LY_AI_2026-09-28 PR-2 mục 7 — gate này từng KHÔNG có nhánh marker nên rơi
+        // xuống đường chữ thường bên dưới: history gửi lên kết thúc bằng câu đệm không có `type`
+        // → backend isWizardAnswerTurn() = false → "Cách sử dụng tệp đính kèm? Cả hai" bị đưa cho
+        // não trợ giúp (hình dạng câu hỏi) → trả bài hướng dẫn, wizard không nhận được lựa chọn
+        // nên hỏi lại — production 09/2026 lặp 5 lượt. Backend đã nhận marker gate 'fileUsage'
+        // (aiCampaignWizard.service.js, nhánh marker.gate === 'fileUsage').
+        await emitWizardAnswer(
+          { gate: 'fileUsage', value: answers.fileUsage },
+          summaryText
+        );
+        return;
+      }
       if (wizardQuestion.wizardGate === 'campaignBrief') {
         const marker = buildCampaignBriefMarker(answers);
         if (!marker) {

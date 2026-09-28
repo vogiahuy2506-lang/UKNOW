@@ -3,6 +3,8 @@ import {
   buildFileUsageQuestion,
   createEmptyWizardState,
   evaluateNextGate,
+  extractWizardState,
+  isWizardAnswerTurn,
   mergeWizardState,
 } from '../aiCampaignWizard.service.js';
 
@@ -126,5 +128,39 @@ describe('Việc 1: Wizard hỏi cách dùng tệp (gate: fileUsage)', () => {
     const nextAttachment = evaluateNextGate(stateAttachment, {}, 'vi');
     // Khi chỉ gửi kèm, phải hỏi brief để biết nội dung tin lấy từ đâu
     expect(nextAttachment?.gate).toBe('campaignBrief');
+  });
+});
+
+// PLAN_VA_TRO_LY_AI_2026-09-28 PR-2 mục 7 — vòng lặp "Cách sử dụng tệp đính kèm? Cả hai" ×5 trên
+// production. Gốc ở FE: gate fileUsage không có nhánh marker nên câu trả lời đi đường chữ thường,
+// history kết thúc bằng câu đệm KHÔNG có `type` → backend không thấy wizard → não trợ giúp trả lời.
+// Hai ca dưới ghim hợp đồng backend mà bản sửa FE (AiChatbot.jsx, emitWizardAnswer gate fileUsage)
+// dựa vào: (1) đường chữ thường cũ thật sự KHÔNG được coi là lượt wizard; (2) marker thì được, và
+// extractWizardState đọc đúng lựa chọn.
+describe('PR-2 mục 7: câu trả lời fileUsage phải đi bằng marker [wizard]', () => {
+  const askCard = { role: 'assistant', type: 'ask_campaign_details', content: 'Bạn muốn tôi lấy nội dung trong tệp…' };
+
+  it('(1) đường chữ thường FE cũ (câu đệm không type + "Nhãn? Lựa chọn") KHÔNG phải lượt wizard → rơi vào não trợ giúp', () => {
+    const history = [
+      askCard,
+      { role: 'user', content: 'gửi tài liệu này cho nhóm học viên' },
+      { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
+      { role: 'user', content: 'Cách sử dụng tệp đính kèm? Cả hai' },
+    ];
+    expect(isWizardAnswerTurn(history)).toBe(false);
+  });
+
+  it.each([
+    ['both', 'Cả hai'],
+    ['as_content', 'Lấy nội dung'],
+    ['as_attachment', 'Gửi kèm tệp'],
+  ])('(2) marker {gate:fileUsage, value:%s} → là lượt wizard và extractWizardState ghi đúng lựa chọn', (value, label) => {
+    const marker = `[wizard]${JSON.stringify({ gate: 'fileUsage', value })}\nCách sử dụng tệp đính kèm? ${label}`;
+    const history = [askCard, { role: 'user', content: marker }];
+
+    expect(isWizardAnswerTurn(history)).toBe(true);
+    const state = extractWizardState(history);
+    expect(state.fileUsage).toBe(value);
+    expect(state.markerGates).toContain('fileUsage');
   });
 });
