@@ -153,6 +153,7 @@ const SEND_NODE_SUBTYPES = new Set([
   'send_zalo_personal',
   'send_zalo_friend_request',
   'send_zalo_group',
+  'send_telegram',
 ]);
 
 const isSendNodeSubtype = (nodeSubtype = '') => SEND_NODE_SUBTYPES.has(String(nodeSubtype || '').trim().toLowerCase());
@@ -206,6 +207,10 @@ const normalizeSendNodeItem = (nodeSubtype, payload = {}) => {
     ?? payloadRest?.recipientName
     ?? payloadRest?.displayName
     ?? payloadRest?.name
+    // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — engine kênh adapter (Telegram, PR-3
+    // campaignChannelRunner.service.js:591-596) ghi item bằng `...recipient` (từ resolveRecipients:
+    // {recipientKey, display, vars}), tức field tên là `display`, KHÔNG khớp field nào ở trên.
+    ?? payloadRest?.display
     ?? null;
   const groupName = payloadRest?.groupName
     ?? payloadRest?.group_name

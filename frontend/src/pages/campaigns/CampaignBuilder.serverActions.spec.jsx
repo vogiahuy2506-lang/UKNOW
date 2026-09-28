@@ -60,6 +60,8 @@ vi.mock('../../features/campaigns/services/campaignBuilderApi.service', () => ({
     }),
     updateCampaign: mockUpdateCampaign,
     createCampaign: vi.fn().mockResolvedValue({ data: { data: { id: 391 } } }),
+    // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — CampaignBuilder gọi 1 lần khi mount.
+    getChannels: vi.fn().mockResolvedValue({ data: { data: { channels: [] } } }),
   },
 }));
 

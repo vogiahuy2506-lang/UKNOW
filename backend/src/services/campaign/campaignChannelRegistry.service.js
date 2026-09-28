@@ -143,6 +143,26 @@ function getAllDescriptors() {
   return [...CHANNEL_DESCRIPTORS, ...staticAdapterDescriptors, ...testChannelDescriptors];
 }
 
+/** Nhãn hiển thị cho trình dựng — chỉ kênh 'adapter' cần (kênh 'legacy' đã có tên cứng trong FE). */
+const ADAPTER_CHANNEL_LABELS = Object.freeze({ telegram: 'Telegram' });
+
+/**
+ * PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1 — trình dựng hỏi "kênh adapter nào đang bật"
+ * qua `GET /api/campaigns/channels`. Chỉ lộ `key`/`sendNodeSubtype`/`label` — KHÔNG lộ `policy`
+ * (nhịp gửi/giờ yên lặng) hay `adapter` (hàm nội bộ).
+ *
+ * @returns {Array<{key: string, sendNodeSubtype: string, label: string}>}
+ */
+export function getEnabledAdapterChannelsForBuilder() {
+  return getAllDescriptors()
+    .filter((d) => d.engine === 'adapter')
+    .map((d) => ({
+      key: d.key,
+      sendNodeSubtype: d.sendNodeSubtype,
+      label: ADAPTER_CHANNEL_LABELS[d.key] || d.key,
+    }));
+}
+
 function findDescriptorBySubtype(subtype) {
   const value = String(subtype || '');
   return getAllDescriptors().find((d) => d.sendNodeSubtype === value) || null;
@@ -245,6 +265,7 @@ export default {
   getContinuousSupportedSubtypes,
   getAdapterDescriptorBySubtype,
   getAdapterChannelKeysByQuotaChannel,
+  getEnabledAdapterChannelsForBuilder,
   __registerChannelForTest,
   __resetTestChannels,
 };

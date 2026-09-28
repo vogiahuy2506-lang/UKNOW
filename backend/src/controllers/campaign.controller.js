@@ -25,9 +25,11 @@ import {
   isZaloOutboundResultSuccessful,
   describeZaloOutboundFailure,
 } from '../utils/zaloDispatchDelivery.util.js';
-import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { getWorkspaceContext, resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 import { ingestQuickSendAttachment } from '../services/campaign/quickSendAttachment.service.js';
 import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
+import { getEnabledAdapterChannelsForBuilder } from '../services/campaign/campaignChannelRegistry.service.js';
+import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.repository.js';
 
 class CampaignController {
   /**
@@ -934,6 +936,47 @@ class CampaignController {
         });
       }
     }
+
+  /**
+   * GET /api/campaigns/channels
+   * PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1 — trình dựng hỏi kênh 'adapter' nào đang
+   * bật (cờ tắt -> mảng rỗng). KHÔNG trả policy/secret.
+   */
+  async getChannels(req, res) {
+    try {
+      res.json({ success: true, data: { channels: getEnabledAdapterChannelsForBuilder() } });
+    } catch (error) {
+      console.error('Get campaign channels error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách kênh gửi' });
+    }
+  }
+
+  /**
+   * GET /api/campaigns/channels/telegram/accounts
+   * PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 2 — danh sách tài khoản Telegram (is_active)
+   * của CHỦ workspace cho người dựng chiến dịch chọn (nhân viên chỉ có campaigns_create vẫn xem
+   * được). KHÔNG trả phone/telegram_user_id.
+   */
+  async getTelegramAccountsForBuilder(req, res) {
+    try {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const accounts = await chatbotTelegramRepository.listAccountsForUser(ownerUserId);
+      const data = accounts
+        .filter((a) => a.is_active !== false)
+        .map((a) => {
+          const name = [a.first_name, a.last_name].filter(Boolean).join(' ').trim();
+          return {
+            id: a.id,
+            name: name || a.username || `Telegram #${a.id}`,
+            username: a.username || null,
+          };
+        });
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get Telegram accounts for builder error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách tài khoản Telegram' });
+    }
+  }
 
   /**
    * GET /api/campaigns/quick-send/estimate?channel=zalo|email&recipients=N

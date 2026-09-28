@@ -499,6 +499,14 @@ const buildNodeSuccessValidation = (nodeType, result) => {
       message: `Gửi tin nhắn nhóm Zalo xong (${attempted}/${total})`,
     };
   }
+  if (nodeType === 'send_telegram') {
+    // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 mục 6 Bẫy — thông điệp phải nói RÕ không có gì
+    // được gửi thật, khác hẳn "Thực thi thành công" mặc định bên dưới (dễ hiểu nhầm đã gửi).
+    return {
+      status: 'success',
+      message: 'Bỏ qua khi chạy thử — dùng "Chạy ngay" để gửi thật',
+    };
+  }
   return {
     status: 'success',
     message: 'Thực thi thành công',

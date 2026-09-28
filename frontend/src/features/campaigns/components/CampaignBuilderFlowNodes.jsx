@@ -2,6 +2,7 @@ import { useState } from 'react';
 /* eslint-disable react-refresh/only-export-components -- nodeConfigs registry exported alongside node UI */
 import { BaseEdge, getBezierPath, Handle, Position, useReactFlow } from 'reactflow';
 import { HiOutlineAdjustments, HiOutlineChat, HiOutlineClipboardList, HiOutlineCube, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePencil, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineTag, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
+import { FaTelegramPlane } from 'react-icons/fa';
 import { useI18n } from '../../../i18n';
 
 const NODE_CARD_CONTAINER_CLASS =
@@ -223,6 +224,18 @@ export const nodeConfigs = {
       iconColor: '#0068FF',
       description: 'Send message to Zalo groups',
       descriptionVi: 'Gửi tin nhắn đến danh sách nhóm Zalo',
+    },
+    {
+      // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — chỉ hiện trong palette khi cờ
+      // CAMPAIGN_CHANNEL_TELEGRAM_ENABLED bật (lọc ở CampaignBuilderPageLayout.jsx, không phải ở đây).
+      type: 'send_telegram',
+      name: 'Send Telegram Message',
+      nameVi: 'Gửi tin nhắn Telegram',
+      icon: FaTelegramPlane,
+      bgColor: '#E1F5FE',
+      iconColor: '#26A5E4',
+      description: 'Send message to Telegram chats',
+      descriptionVi: 'Gửi tin nhắn đến hội thoại Telegram',
     },
   ],
   logic: [

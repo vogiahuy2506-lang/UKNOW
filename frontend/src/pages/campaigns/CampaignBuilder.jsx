@@ -699,6 +699,7 @@ const CampaignBuilder = () => {
                     'send_zalo_personal',
                     'send_zalo_friend_request',
                     'send_zalo_group',
+                    'send_telegram',
                     'add_tag',
                     'update_customer',
                     'create_task',
@@ -832,9 +833,31 @@ const CampaignBuilder = () => {
     );
   };
 
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — nguồn cờ: gọi 1 lần khi mở trình dựng.
+  // Lỗi/404 (BE cũ) -> coi như tắt (mặc định false, không có node Telegram).
+  const [telegramChannelEnabled, setTelegramChannelEnabled] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    campaignBuilderApiService.getChannels()
+      .then((res) => {
+        if (cancelled) return;
+        const channels = res?.data?.data?.channels;
+        setTelegramChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'telegram'));
+      })
+      .catch(() => {
+        if (!cancelled) setTelegramChannelEnabled(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
+
+  const getAllowedActionNodeTypesForDrop = useCallback(
+    (type) => getAllowedActionNodeTypesByCampaignType(type, { telegramEnabled: telegramChannelEnabled }),
+    [telegramChannelEnabled]
+  );
+
   const allowedActionNodeTypes = useMemo(
-    () => getAllowedActionNodeTypesByCampaignType(campaignType),
-    [campaignType]
+    () => getAllowedActionNodeTypesByCampaignType(campaignType, { telegramEnabled: telegramChannelEnabled }),
+    [campaignType, telegramChannelEnabled]
   );
   const allowedDataNodeTypes = useMemo(
     () => getAllowedDataNodeTypesByCampaignType(campaignType),
@@ -1175,7 +1198,7 @@ const CampaignBuilder = () => {
       setNodes={setNodes}
       setEdges={setEdges}
       campaignType={campaignType}
-      getAllowedActionNodeTypesByCampaignType={getAllowedActionNodeTypesByCampaignType}
+      getAllowedActionNodeTypesByCampaignType={getAllowedActionNodeTypesForDrop}
       getAllowedDataNodeTypesByCampaignType={getAllowedDataNodeTypesByCampaignType}
       isTriggerNodeType={isTriggerNodeType}
       nodeDropOffsetX={NODE_DROP_OFFSET_X}

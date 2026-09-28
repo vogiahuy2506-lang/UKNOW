@@ -176,6 +176,18 @@ export const fetchZaloAccountOptions = async ({ signal } = {}) => {
 };
 
 /**
+ * PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — tài khoản Telegram (is_active) của chủ,
+ * lấy từ Việc 2 (`GET /campaigns/channels/telegram/accounts`, KHÔNG có phone/telegram_user_id).
+ *
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<Array<{id: number, name: string, username: string|null}>>}
+ */
+export const fetchTelegramAccountOptions = async ({ signal } = {}) => {
+  const response = await campaignBuilderApiService.getTelegramAccountsForBuilder(signal ? { signal } : {});
+  return Array.isArray(response.data?.data) ? response.data.data : [];
+};
+
+/**
  * Resolve selection mode with backward compatibility from legacy selected IDs.
  *
  * @param {string|undefined|null} mode explicit mode from config
@@ -195,6 +207,7 @@ export const createNodeConfigFormData = ({
   config = {},
   label = '',
   normalizeEmailSteps = false,
+  nodeType = '',
 }) => ({
   label: label || '',
   description: config.description || '',
@@ -252,7 +265,9 @@ export const createNodeConfigFormData = ({
   maxSendCount: config.maxSendCount || 100,
   recipientMode: 'multiple',
   sendMode: config.sendMode || 'all',
-  recipientSource: config.recipientSource || 'manual',
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — trường này dùng chung với email/Zalo
+  // (mặc định 'manual'); riêng send_telegram mặc định 'telegram_conversations' (nguồn hội thoại).
+  recipientSource: config.recipientSource || (nodeType === 'send_telegram' ? 'telegram_conversations' : 'manual'),
   recipientColumn: config.recipientColumn || '',
   recipientEmails: config.recipientEmails || '',
   recipientNodeId: config.recipientNodeId || '',
@@ -392,6 +407,12 @@ export const createNodeConfigFormData = ({
   formColumnsSnapshot: Array.isArray(config.formColumnsSnapshot) ? config.formColumnsSnapshot : [],
   formConsentEnabled: Boolean(config.formConsentEnabled),
   formSubmissionsLimit: config.formSubmissionsLimit || 1000,
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — send_telegram. `recipientKeys` giữ dạng
+  // chuỗi thô (mỗi dòng một chat id) trong form, tách mảng lúc lưu (handleNodeConfigSaveClick) —
+  // cùng khuôn recipientEmails/zaloRecipientPhones ở trên. `steps` chỉ 1 bước v1 (một ô soạn tin).
+  telegramAccountId: config.telegramAccountId || '',
+  recipientKeys: Array.isArray(config.recipientKeys) ? config.recipientKeys.join('\n') : (config.recipientKeys || ''),
+  steps: Array.isArray(config.steps) && config.steps.length ? config.steps : [{ message: '' }],
 });
 
 /**
@@ -725,6 +746,44 @@ export const handleNodeConfigSaveClick = async ({
       const invalidEmails = emails.filter((e) => !emailRegex.test(e));
       if (invalidEmails.length > 0) {
         toastNotifier.error(`Sai định dạng email: ${invalidEmails.slice(0, 3).join(', ')}${invalidEmails.length > 3 ? '...' : ''}`);
+        return;
+      }
+    }
+    onSave(formData);
+    return;
+  }
+
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — phải có tài khoản; nội dung không rỗng,
+  // ≤ 4000; nguồn nhập tay -> mọi dòng khớp /^-?\d+$/ (backend bỏ chat id sai định dạng IM LẶNG,
+  // xem telegram.campaignChannel.js TELEGRAM_CHAT_ID_PATTERN — chặn ở đây để không mất người nhận
+  // mà không ai biết).
+  if (nodeType === 'send_telegram') {
+    if (!String(formData.telegramAccountId || '').trim()) {
+      toastNotifier.error('Vui lòng chọn tài khoản Telegram trước khi lưu.');
+      return;
+    }
+    const message = String(formData.steps?.[0]?.message || '').trim();
+    if (!message) {
+      toastNotifier.error('Vui lòng nhập nội dung tin nhắn Telegram.');
+      return;
+    }
+    if (message.length > 4000) {
+      toastNotifier.error('Nội dung tin nhắn Telegram không được quá 4000 ký tự.');
+      return;
+    }
+    if (formData.recipientSource === 'manual') {
+      const chatIdPattern = /^-?\d+$/;
+      const chatIds = String(formData.recipientKeys || '')
+        .split(/[\n,;]/g)
+        .map((line) => line.trim())
+        .filter(Boolean);
+      if (chatIds.length === 0) {
+        toastNotifier.error('Vui lòng nhập ít nhất 1 chat id Telegram.');
+        return;
+      }
+      const invalidChatIds = chatIds.filter((id) => !chatIdPattern.test(id));
+      if (invalidChatIds.length > 0) {
+        toastNotifier.error(`Chat id không hợp lệ (chỉ nhận số): ${invalidChatIds.slice(0, 3).join(', ')}${invalidChatIds.length > 3 ? '...' : ''}`);
         return;
       }
     }

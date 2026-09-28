@@ -31,6 +31,16 @@ const campaignBuilderApiService = {
     return api.get(`/campaigns/${campaignId}`, options);
   },
 
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1 — kênh 'adapter' nào đang bật (cờ tắt -> []).
+  getChannels(options = {}) {
+    return api.get('/campaigns/channels', options);
+  },
+
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 2 — tài khoản Telegram (is_active) của chủ.
+  getTelegramAccountsForBuilder(options = {}) {
+    return api.get('/campaigns/channels/telegram/accounts', options);
+  },
+
   createCampaign(payload, options = {}) {
     return api.post('/campaigns', payload, options);
   },

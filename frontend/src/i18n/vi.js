@@ -1371,6 +1371,7 @@ export default {
     email: 'Email',
     zaloPersonal: 'Zalo cá nhân',
     zaloGroup: 'Zalo nhóm',
+    telegram: 'Telegram',
     startFirstWorkflow: '',
     createFirstWorkflow: 'Tạo quy trình',
     createdBy: 'Người tạo',
@@ -7203,6 +7204,28 @@ export default {
     minutes: 'Phút',
     hours: 'Giờ',
     days: 'Ngày',
+  },
+
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — hộp cấu hình node send_telegram.
+  telegramNodeSend: {
+    nodeName: 'Tên node',
+    nodeNamePlaceholder: 'VD: Gửi tin Telegram',
+    accountRequired: 'Tài khoản Telegram',
+    selectAccount: 'Chọn tài khoản',
+    loadingAccounts: 'Đang tải danh sách tài khoản Telegram...',
+    loadFailed: 'Không tải được danh sách tài khoản Telegram',
+    retry: 'Thử lại',
+    noAccountsAvailable: 'Chưa có tài khoản Telegram nào đang hoạt động. Kết nối tài khoản tại Cài đặt › Kênh.',
+    recipientSource: 'Người nhận',
+    sourceConversations: 'Hội thoại Telegram của tài khoản',
+    sourceManual: 'Nhập chat id',
+    recipientSourceNote: 'Telegram chỉ gửi được cho người đã từng nhắn với tài khoản này.',
+    chatIdsLabel: 'Danh sách chat id',
+    chatIdsPlaceholder: 'Mỗi dòng một chat id, VD:\n123456789\n-1001234567890',
+    chatIdsHint: 'Mỗi dòng một số (nhóm/kênh có thể là số âm). Chat id sai định dạng sẽ bị bỏ qua khi gửi.',
+    messageRequired: 'Nội dung tin nhắn',
+    messagePlaceholder: 'Nhập nội dung tin nhắn Telegram...',
+    variableHint: 'Gợi ý: dùng {{ten}} để chèn tên người nhận (chỉ áp dụng khi người nhận lấy từ hội thoại Telegram).',
   },
 
   // Read Sheet Section

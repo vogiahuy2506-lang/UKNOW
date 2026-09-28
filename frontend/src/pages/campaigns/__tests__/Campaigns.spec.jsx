@@ -39,6 +39,8 @@ vi.mock('../../../features/campaigns/services/campaignApi.service', () => ({
     createCampaign: vi.fn(),
     deleteCampaign: vi.fn(),
     duplicateCampaign: vi.fn(),
+    // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — Campaigns gọi 1 lần khi mount.
+    getChannels: vi.fn().mockResolvedValue({ data: { data: { channels: [] } } }),
   },
 }));
 

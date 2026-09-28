@@ -139,6 +139,30 @@ describe('telegram.campaignChannel.resolveRecipients — lọc chat id (nguồn 
   });
 });
 
+// PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 3 — nguồn 'telegram_conversations' phải gắn
+// vars.ten = display_name để nội dung tin dùng {{ten}} render đúng tên khách.
+describe('telegram.campaignChannel.resolveRecipients — nguồn "telegram_conversations" gắn vars.ten', () => {
+  it('vars.ten = display_name khi có tên; chuỗi rỗng khi không có', async () => {
+    listOpenConversationsForAccountMock.mockReset();
+    listOpenConversationsForAccountMock.mockResolvedValue([
+      { external_id: '111', display_name: 'Nguyễn Văn A' },
+      { external_id: '-222', display_name: null },
+    ]);
+
+    const recipients = await telegramChannelAdapter.resolveRecipients({
+      rows: [],
+      config: { recipientSource: 'telegram_conversations' },
+      account: { accountId: 5 },
+    });
+
+    expect(listOpenConversationsForAccountMock).toHaveBeenCalledWith(5);
+    expect(recipients).toEqual([
+      { recipientKey: '111', display: 'Nguyễn Văn A', vars: { ten: 'Nguyễn Văn A' } },
+      { recipientKey: '-222', display: '-222', vars: { ten: '' } },
+    ]);
+  });
+});
+
 describe('telegram.campaignChannel — review PR-6: chốt chủ + giờ 0', () => {
   it('resolveAccount không có chủ (null/0) → throw TELEGRAM_ACCOUNT_NOT_READY, KHÔNG tra repo', async () => {
     getAccountByIdMock.mockReset();

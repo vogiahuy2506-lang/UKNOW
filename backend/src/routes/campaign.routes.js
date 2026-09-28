@@ -30,6 +30,11 @@ router.get('/', requirePermission('campaigns_view'), campaignController.getAll.b
 
 router.get('/delay-config', requirePermission('campaigns_view'), campaignController.getDelayConfig.bind(campaignController));
 
+// PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1+2 — PHẢI đứng TRƯỚC `/:id` (dòng dưới),
+// nếu không Express khớp "channels" thành tham số :id.
+router.get('/channels', requirePermission('campaigns_view'), campaignController.getChannels.bind(campaignController));
+router.get('/channels/telegram/accounts', requirePermission('campaigns_create'), campaignController.getTelegramAccountsForBuilder.bind(campaignController));
+
 // Quick send estimate & test send (rate limited 5 tests/hour per user)
 router.get('/quick-send/estimate', requirePermission('campaigns_view'), campaignController.getQuickSendEstimate.bind(campaignController));
 router.post('/quick-send/test-send', quickSendTestLimiter, requirePermission('campaigns_create'), campaignController.testSendQuickCampaign.bind(campaignController));

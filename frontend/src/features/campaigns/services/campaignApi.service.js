@@ -14,6 +14,11 @@ export const campaignApiService = {
     return api.get(`/campaigns/${campaignId}`);
   },
 
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1 — kênh 'adapter' nào đang bật (cờ tắt -> []).
+  getChannels() {
+    return api.get('/campaigns/channels');
+  },
+
   createCampaign(payload) {
     return api.post('/campaigns', payload);
   },

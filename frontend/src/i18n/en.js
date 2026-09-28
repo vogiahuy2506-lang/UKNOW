@@ -1368,6 +1368,7 @@ export default {
     email: 'Email',
     zaloPersonal: 'Zalo Personal',
     zaloGroup: 'Zalo Group',
+    telegram: 'Telegram',
     startFirstWorkflow: 'Start creating your first workflow',
     createFirstWorkflow: 'Create workflow',
     createdBy: 'Created by',
@@ -7195,6 +7196,28 @@ export default {
     minutes: 'Minutes',
     hours: 'Hours',
     days: 'Days',
+  },
+
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — send_telegram config box.
+  telegramNodeSend: {
+    nodeName: 'Node name',
+    nodeNamePlaceholder: 'e.g. Send Telegram message',
+    accountRequired: 'Telegram account',
+    selectAccount: 'Select account',
+    loadingAccounts: 'Loading Telegram accounts...',
+    loadFailed: 'Could not load Telegram accounts',
+    retry: 'Retry',
+    noAccountsAvailable: 'No active Telegram account yet. Connect one under Settings › Channels.',
+    recipientSource: 'Recipients',
+    sourceConversations: "The account's open Telegram conversations",
+    sourceManual: 'Enter chat IDs',
+    recipientSourceNote: 'Telegram can only message people who have already messaged this account.',
+    chatIdsLabel: 'Chat ID list',
+    chatIdsPlaceholder: 'One chat ID per line, e.g.:\n123456789\n-1001234567890',
+    chatIdsHint: 'One number per line (groups/channels can be negative). Malformed chat IDs are silently skipped when sending.',
+    messageRequired: 'Message content',
+    messagePlaceholder: 'Enter the Telegram message content...',
+    variableHint: 'Tip: use {{ten}} to insert the recipient name (only when recipients come from Telegram conversations).',
   },
 
   // Read Sheet Section

@@ -33,14 +33,23 @@ const normalizeCampaignType = (campaignType) => {
  * Trả về danh sách action node hợp lệ theo loại chiến dịch.
  *
  * @param {string} campaignType loại chiến dịch hiện tại
+ * @param {object} [options]
+ * @param {boolean} [options.telegramEnabled] PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 —
+ *   mặc định false (an toàn: caller nào chưa cập nhật vẫn loại send_telegram như trước). Chỉ áp
+ *   dụng cho campaign_type 'mixed' (Telegram không thuộc email/zalo/zalo_group riêng lẻ).
  * @returns {Set<string>} tập node action được phép hiển thị
  */
-export const getAllowedActionNodeTypesByCampaignType = (campaignType) => {
+export const getAllowedActionNodeTypesByCampaignType = (campaignType, { telegramEnabled = false } = {}) => {
   const normalizedType = normalizeCampaignType(campaignType);
   if (normalizedType === 'email') return new Set(EMAIL_ACTION_TYPES);
   if (normalizedType === 'zalo') return new Set(ZALO_PERSONAL_ACTION_TYPES);
   if (normalizedType === 'zalo_group') return new Set(ZALO_GROUP_ACTION_TYPES);
-  return new Set([...EMAIL_ACTION_TYPES, ...ZALO_PERSONAL_ACTION_TYPES, ...ZALO_GROUP_ACTION_TYPES]);
+  return new Set([
+    ...EMAIL_ACTION_TYPES,
+    ...ZALO_PERSONAL_ACTION_TYPES,
+    ...ZALO_GROUP_ACTION_TYPES,
+    ...(telegramEnabled ? ['send_telegram'] : []),
+  ]);
 };
 
 /**

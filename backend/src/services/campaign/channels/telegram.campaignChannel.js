@@ -186,7 +186,12 @@ async function resolveRecipients({ rows, config, account }) {
     candidates = conversations.map((c) => ({
       recipientKey: String(c.external_id ?? '').trim(),
       display: c.display_name || c.external_id,
-      vars: {},
+      // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 3 — không có MỘT tên biến "tên khách"
+      // cố định nào đang dùng trong mẫu tin Zalo (nội dung Zalo là văn bản tự do, tên biến do
+      // người dùng/AI tự đặt; bộ dò ngữ nghĩa templateVariableAutoMap.js chấp nhận nhiều biến thể
+      // ngang nhau: ten/name/ho_ten/full_name/Họ Tên...). Dùng `ten` — nằm trong danh sách biến
+      // thể được bộ dò đó công nhận.
+      vars: { ten: c.display_name || '' },
     }));
   } else {
     candidates = (rows || []).map((row) => {

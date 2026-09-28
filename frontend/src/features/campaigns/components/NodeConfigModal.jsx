@@ -8,6 +8,7 @@ import { buildSchemaFromRows } from '../utils/campaignBuilderRuntime';
 import {
   createNodeConfigFormData,
   fetchZaloAccountOptions,
+  fetchTelegramAccountOptions,
   isRequestCanceled,
   describeRequestFailure,
   fetchInterestedCourseOptions,
@@ -38,6 +39,7 @@ import {
   NodeConfigSendZaloGroupSection,
   NodeConfigSendZaloPersonalSection,
 } from './NodeConfigModalSendZaloSection';
+import { NodeConfigSendTelegramSection } from './NodeConfigModalSendTelegramSection';
 import {
   NodeConfigReadCoursesDbSection,
   NodeConfigReadProductsDbSection,
@@ -76,6 +78,7 @@ const NodeConfigModal = ({
       config: existingConfig,
       label: node?.data?.label || '',
       normalizeEmailSteps: false,
+      nodeType,
     })
   );
 
@@ -108,6 +111,11 @@ const NodeConfigModal = ({
   const [zaloAccountsError, setZaloAccountsError] = useState('');
   const [zaloAccountsReloadKey, setZaloAccountsReloadKey] = useState(0);
   const [zaloFriendTemplate, setZaloFriendTemplate] = useState(null);
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — cùng khuôn zaloAccounts* ở trên.
+  const [telegramAccounts, setTelegramAccounts] = useState([]);
+  const [telegramAccountsStatus, setTelegramAccountsStatus] = useState('idle');
+  const [telegramAccountsError, setTelegramAccountsError] = useState('');
+  const [telegramAccountsReloadKey, setTelegramAccountsReloadKey] = useState(0);
 
   const handleCheckSheetConnection = async () => {
     return handleNodeSheetConnectionCheck({
@@ -159,6 +167,7 @@ const NodeConfigModal = ({
           config,
           label: node.data?.label || '',
           normalizeEmailSteps: true,
+          nodeType: node.data?.nodeType,
         })
       );
       setCourseSearchQuery(config.interestedCourseQuery || '');
@@ -365,6 +374,45 @@ const NodeConfigModal = ({
     // rồi tự huỷ chính request đang bay của mình.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, nodeType, node?.id, zaloAccountsReloadKey]);
+
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — cùng khuôn effect zaloAccounts ở trên.
+  useEffect(() => {
+    if (!isOpen || !node || nodeType !== 'send_telegram') {
+      setTelegramAccounts([]);
+      setTelegramAccountsStatus('idle');
+      setTelegramAccountsError('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const loadTelegramAccounts = async () => {
+      setTelegramAccountsStatus('loading');
+      setTelegramAccountsError('');
+      try {
+        const items = await fetchTelegramAccountOptions({ signal: controller.signal });
+        if (cancelled) return;
+        setTelegramAccounts(items);
+        setTelegramAccountsStatus('loaded');
+      } catch (error) {
+        if (cancelled) return;
+        if (isRequestCanceled(error)) {
+          setTelegramAccountsStatus('idle');
+          return;
+        }
+        setTelegramAccounts([]);
+        setTelegramAccountsError(describeRequestFailure(error));
+        setTelegramAccountsStatus('error');
+      }
+    };
+
+    loadTelegramAccounts();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, nodeType, node?.id, telegramAccountsReloadKey]);
 
   useEffect(() => {
     if (!isOpen || !node || nodeType !== 'send_zalo_friend_request') {
@@ -672,6 +720,17 @@ const NodeConfigModal = ({
             getSchemaForNodeId={getSchemaForNodeId}
             normalizeTemplateVariables={normalizeTemplateVariables}
             onOpenTemplateAttachment={handleOpenTemplateAttachment}
+          />
+        );
+      case 'send_telegram':
+        return (
+          <NodeConfigSendTelegramSection
+            formData={formData}
+            setFormData={setFormData}
+            telegramAccounts={telegramAccounts}
+            telegramAccountsStatus={telegramAccountsStatus}
+            telegramAccountsError={telegramAccountsError}
+            onRetryTelegramAccounts={() => setTelegramAccountsReloadKey((key) => key + 1)}
           />
         );
       case 'condition':

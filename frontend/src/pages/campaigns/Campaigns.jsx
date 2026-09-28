@@ -21,6 +21,7 @@ import {
   HiOutlineEye,
   HiOutlineRefresh,
 } from 'react-icons/hi';
+import { FaTelegramPlane } from 'react-icons/fa';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { getActiveRunPause, getRunPauseI18nKey } from '../../features/campaigns/utils/campaignQuotaPause.helpers';
@@ -88,6 +89,9 @@ const Campaigns = () => {
     campaignName: '',
     campaignType: 'email',
   });
+  // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — nguồn cờ: gọi 1 lần khi mở trang danh
+  // sách chiến dịch. Lỗi/404 (BE cũ) -> coi như tắt (mặc định false, không có nút Telegram).
+  const [telegramChannelEnabled, setTelegramChannelEnabled] = useState(false);
 
   const runController = useCampaignRunController({
     onCampaignsChanged: () => fetchCampaigns(),
@@ -110,6 +114,20 @@ const Campaigns = () => {
     openCreateModal();
     navigate(location.pathname, { replace: true, state: {} });
   }, [location.pathname, location.state, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    campaignApiService.getChannels()
+      .then((res) => {
+        if (cancelled) return;
+        const channels = res?.data?.data?.channels;
+        setTelegramChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'telegram'));
+      })
+      .catch(() => {
+        if (!cancelled) setTelegramChannelEnabled(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   const fetchCampaigns = async () => {
     setIsLoading(true);
@@ -1014,7 +1032,7 @@ const Campaigns = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {t('campaigns.campaignType')}
                 </label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className={`grid gap-3 ${telegramChannelEnabled ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
                   <button
                     type="button"
                     onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'email' }))}
@@ -1051,6 +1069,20 @@ const Campaigns = () => {
                     <HiOutlineChat className="w-4 h-4" />
                     {t('campaigns.zaloGroup')}
                   </button>
+                  {telegramChannelEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'mixed' }))}
+                      className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
+                        createCampaignForm.campaignType === 'mixed'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      <FaTelegramPlane className="w-4 h-4" />
+                      {t('campaigns.telegram')}
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
