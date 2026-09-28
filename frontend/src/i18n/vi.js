@@ -9070,6 +9070,18 @@ export default {
     minWithdrawalChip: 'Tối thiểu {amount}',
     withdrawalProcessingNotice: 'Kế toán xử lý trong 7 ngày làm việc.',
 
+    // Danh sách người đã dùng mã giới thiệu
+    referralsSectionTitle: 'Người đã dùng mã của bạn ({count})',
+    referralsEmpty: 'Chưa có ai đăng ký bằng mã của bạn. Chia sẻ link giới thiệu để bắt đầu nhận hoa hồng.',
+    referralsLoadError: 'Không thể tải danh sách người được giới thiệu',
+    referralsColName: 'Tên',
+    referralsColEmail: 'Email',
+    referralsColJoinedAt: 'Ngày tham gia',
+    referralsColStatus: 'Trạng thái',
+    referralsColRevenue: 'Doanh thu tính hoa hồng',
+    referralsStatusPurchased: 'Đã mua',
+    referralsStatusNotPurchased: 'Chưa mua',
+
     // Mục ĐANG CHỜ ĐỦ ĐIỀU KIỆN
     pendingApprovalTitle: 'Đơn hàng đang chờ đủ điều kiện',
     pendingApprovalDesc: 'Các đơn hàng dưới đây người mua chưa cập nhật số điện thoại tài khoản nên chưa được ghi nhận vào doanh thu hợp lệ. Vui lòng nhắc bạn bè bổ sung SĐT để nhận hoa hồng.',

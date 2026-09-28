@@ -18,6 +18,8 @@ const {
   getUserWithdrawalPrefill,
   getUserWithdrawals,
   adminListWithdrawals,
+  getReferralsList,
+  maskEmail,
 } = await import('../affiliateWithdrawal.service.js');
 
 // PR-4 (đợt rà soát 26/09), Việc 6.2 — email nội bộ nội suy thẳng full_name/bank_name/
@@ -120,5 +122,127 @@ describe('Việc 6.5 — id_card_issued_date phải ép ::text ở SQL, không t
     const [sql] = mockDbQuery.mock.calls[0];
     expect(sql).toContain('w.id_card_issued_date::text AS id_card_issued_date');
     expect(result[0].id_card_issued_date).toBe('2021-05-10');
+  });
+});
+
+// maskEmail đã dùng cho buyerEmailMasked ở pendingApproval — tái dùng nguyên cho danh sách
+// referrals thay vì viết thêm 1 quy tắc che email khác trên cùng trang (chốt của sếp 28/09).
+describe('maskEmail — 3 ký tự đầu + @tên miền', () => {
+  it('email dài (≥3 ký tự phần local) → giữ đúng 3 ký tự đầu', () => {
+    expect(maskEmail('nguyenvanan@gmail.com')).toBe('ngu***@gmail.com');
+  });
+
+  it('phần local đúng 2 ký tự → giữ nguyên 2 ký tự làm tiền tố', () => {
+    expect(maskEmail('ab@gmail.com')).toBe('ab***@gmail.com');
+  });
+
+  it('phần local 1 ký tự → giữ nguyên 1 ký tự làm tiền tố', () => {
+    expect(maskEmail('a@gmail.com')).toBe('a***@gmail.com');
+  });
+
+  it('không có "@" → trả "***"', () => {
+    expect(maskEmail('khong-hop-le')).toBe('***');
+  });
+
+  it('rỗng/null/undefined → trả "***"', () => {
+    expect(maskEmail('')).toBe('***');
+    expect(maskEmail(null)).toBe('***');
+    expect(maskEmail(undefined)).toBe('***');
+  });
+});
+
+describe('getReferralsList — danh sách người đã dùng mã giới thiệu', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('userId không hợp lệ → ném lỗi 400, KHÔNG gọi DB', async () => {
+    await expect(getReferralsList(null)).rejects.toMatchObject({ status: 400 });
+    expect(mockDbQuery).not.toHaveBeenCalled();
+  });
+
+  it('map đúng field, dùng activeRevenueEventSql (reversed_at IS NULL) — không tự viết lại điều kiện', async () => {
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [{ c: 2 }] }) // total count
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            full_name: 'Nguyễn Văn C',
+            username: 'c_user',
+            email: 'nguyenvanc@gmail.com',
+            referred_at: '2026-09-20T00:00:00.000Z',
+            attributed_revenue: '299000',
+            event_count: 1,
+          },
+          {
+            full_name: null,
+            username: 'b_user',
+            email: 'b@gmail.com',
+            referred_at: '2026-09-10T00:00:00.000Z',
+            attributed_revenue: '0',
+            event_count: 0,
+          },
+        ],
+      });
+
+    const result = await getReferralsList(1, { page: 1, limit: 20 });
+
+    const [countSql] = mockDbQuery.mock.calls[0];
+    expect(countSql).toContain('referred_by_user_id = $1');
+
+    const [listSql] = mockDbQuery.mock.calls[1];
+    expect(listSql).toContain('reversed_at IS NULL');
+    expect(listSql).toContain('referred_by_user_id = $1');
+    expect(listSql).toContain('ORDER BY u.referred_at DESC');
+
+    expect(result.total).toBe(2);
+    expect(result.items).toEqual([
+      {
+        name: 'Nguyễn Văn C',
+        emailMasked: 'ngu***@gmail.com',
+        referredAt: '2026-09-20T00:00:00.000Z',
+        hasPurchased: true,
+        attributedRevenue: 299000,
+      },
+      {
+        name: 'b_user', // full_name rỗng → username
+        emailMasked: 'b***@gmail.com',
+        referredAt: '2026-09-10T00:00:00.000Z',
+        hasPurchased: false,
+        attributedRevenue: 0,
+      },
+    ]);
+  });
+
+  it('không trả email đầy đủ hay id nội bộ ra ngoài', async () => {
+    mockDbQuery
+      .mockResolvedValueOnce({ rows: [{ c: 1 }] })
+      .mockResolvedValueOnce({
+        rows: [
+          {
+            full_name: 'A',
+            username: 'a_user',
+            email: 'nguyenvana@gmail.com',
+            referred_at: '2026-09-20T00:00:00.000Z',
+            attributed_revenue: '0',
+            event_count: 0,
+          },
+        ],
+      });
+
+    const result = await getReferralsList(1);
+    const item = result.items[0];
+    expect(item.id).toBeUndefined();
+    expect(item.email).toBeUndefined();
+    expect(item.emailMasked).not.toContain('nguyenvana@gmail.com');
+  });
+
+  it('limit vượt trần (REFERRALS_MAX_LIMIT) bị kẹp lại, page < 1 bị kẹp về 1', async () => {
+    mockDbQuery.mockResolvedValueOnce({ rows: [{ c: 0 }] }).mockResolvedValueOnce({ rows: [] });
+
+    const result = await getReferralsList(1, { page: 0, limit: 99999 });
+
+    const [, params] = mockDbQuery.mock.calls[1];
+    expect(params[1]).toBe(100); // limit kẹp về trần 100
+    expect(params[2]).toBe(0); // offset = (1-1)*limit
+    expect(result.page).toBe(1);
   });
 });

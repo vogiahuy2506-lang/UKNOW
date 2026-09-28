@@ -22,6 +22,11 @@ export const affiliateService = {
     return response.data;
   },
 
+  getReferrals: async (params = {}) => {
+    const response = await api.get('/affiliate/referrals', { params });
+    return response.data;
+  },
+
   // ─── Admin Endpoints ───────────────────────────────────────────────────────
   getAdminWithdrawals: async (params = {}) => {
     const response = await api.get('/admin/affiliate/withdrawals', { params });

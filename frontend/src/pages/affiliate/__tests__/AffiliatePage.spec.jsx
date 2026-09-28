@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../i18n';
 import AffiliatePage from '../AffiliatePage';
 
-const { mockGetOverview } = vi.hoisted(() => ({
+const { mockGetOverview, mockGetReferrals } = vi.hoisted(() => ({
   mockGetOverview: vi.fn(),
+  mockGetReferrals: vi.fn(),
 }));
 
 vi.mock('../../../services/affiliate.service', () => ({
@@ -12,12 +13,16 @@ vi.mock('../../../services/affiliate.service', () => ({
     getOverview: mockGetOverview,
     getPrefill: vi.fn(),
     requestWithdrawal: vi.fn(),
+    getReferrals: mockGetReferrals,
   },
 }));
 
 describe('AffiliatePage — Frontend UI', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Mặc định rỗng — các bài test dưới đây kiểm phần overview, không kiểm thẻ referrals
+    // (đã có ReferralsCard.spec.jsx riêng).
+    mockGetReferrals.mockResolvedValue({ data: { items: [], total: 0, totalPages: 1 } });
   });
 
   it('Hiển thị mã ref, link chia sẻ, số dư ví, bậc hiện tại và MỤC ĐANG CHỜ ĐỦ ĐIỀU KIỆN', async () => {

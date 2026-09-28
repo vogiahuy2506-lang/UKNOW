@@ -182,6 +182,33 @@ export async function getOverview(req, res) {
   }
 }
 
+export async function getReferrals(req, res) {
+  try {
+    const userId = req.user?.id;
+    const { page, limit } = req.query;
+    const result = await affiliateWithdrawalService.getReferralsList(userId, {
+      page,
+      limit,
+    });
+    return res.json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    if (error.status) {
+      return res.status(error.status).json({
+        success: false,
+        message: error.message,
+      });
+    }
+    console.error('[AffiliateWithdrawalController] getReferrals error:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi server khi tải danh sách người được giới thiệu',
+    });
+  }
+}
+
 export async function adminLedgerAdjustment(req, res) {
   try {
     const adminUserId = req.user?.id;

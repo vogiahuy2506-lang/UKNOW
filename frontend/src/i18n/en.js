@@ -9060,6 +9060,18 @@ Feel free to ask me anything!`,
     minWithdrawalChip: 'Minimum {amount}',
     withdrawalProcessingNotice: 'Processed by accounting within 7 business days.',
 
+    // Referrals list
+    referralsSectionTitle: 'People who used your code ({count})',
+    referralsEmpty: 'No one has registered with your code yet. Share your referral link to start earning commission.',
+    referralsLoadError: 'Unable to load the referrals list',
+    referralsColName: 'Name',
+    referralsColEmail: 'Email',
+    referralsColJoinedAt: 'Joined At',
+    referralsColStatus: 'Status',
+    referralsColRevenue: 'Commissionable Revenue',
+    referralsStatusPurchased: 'Purchased',
+    referralsStatusNotPurchased: 'Not Purchased',
+
     // Pending approval
     pendingApprovalTitle: 'Orders Pending Qualification',
     pendingApprovalDesc: 'The orders below have not yet been attributed to valid revenue because the buyers have not added their phone numbers. Please remind your referrals to update their phone numbers to receive commission.',

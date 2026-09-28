@@ -4,24 +4,13 @@ import { HiOutlineCurrencyDollar } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import affiliateService from '../../services/affiliate.service';
 import WithdrawalModal from './WithdrawalModal';
+import ReferralsCard from './ReferralsCard';
+import { formatVnd, formatDate } from './affiliateFormat.util';
 import PageHeader from '../../components/common/PageHeader';
 import Notice from '../../components/common/Notice';
 import StatusChip from '../../components/common/StatusChip';
 
 const MIN_WITHDRAWAL_AMOUNT = 1_000_000;
-
-function formatVnd(amount) {
-  return `${Number(amount || 0).toLocaleString('vi-VN')} đ`;
-}
-
-function formatDate(dateStr) {
-  if (!dateStr) return '—';
-  return new Date(dateStr).toLocaleDateString('vi-VN', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
-}
 
 function formatDateTime(dateStr) {
   if (!dateStr) return '—';
@@ -329,6 +318,11 @@ export default function AffiliatePage() {
           </div>
         </div>
       </div>
+
+      <ReferralsCard
+        referralLink={referralLink}
+        onCopyLink={() => handleCopy(referralLink, 'affiliate.copiedSuccess')}
+      />
 
       {/* Khung cảnh báo: CHỈ khi còn đơn chưa tính hoa hồng */}
       {pendingBuyersCount > 0 && (

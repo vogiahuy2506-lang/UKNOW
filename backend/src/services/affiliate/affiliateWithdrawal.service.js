@@ -762,6 +762,13 @@ export async function getAffiliateOverview(userId) {
   const referralCode = user.referral_code || '';
   const referralLink = referralCode ? `https://founderai.biz/register?ref=${referralCode}` : '';
 
+  // 1b. Tổng số người đã đăng ký bằng mã giới thiệu của user này
+  const referralCountResult = await db.query(
+    `SELECT COUNT(*)::int AS c FROM users WHERE referred_by_user_id = $1`,
+    [parsedUserId]
+  );
+  const referralCount = referralCountResult.rows[0]?.c || 0;
+
   // 2. Số dư ví hiện tại
   const balanceResult = await db.query(
     `SELECT COALESCE(SUM(amount), 0)::numeric AS balance FROM affiliate_ledger WHERE user_id = $1`,
@@ -859,6 +866,7 @@ export async function getAffiliateOverview(userId) {
   return {
     referralCode,
     referralLink,
+    referralCount,
     currentBalance,
     currentMonthKey,
     currentMonthGross,
@@ -884,6 +892,74 @@ export async function getAffiliateOverview(userId) {
       minRevenue,
       ratePercent,
     })),
+  };
+}
+
+const REFERRALS_DEFAULT_LIMIT = 20;
+const REFERRALS_MAX_LIMIT = 100;
+
+/**
+ * Danh sách người đã đăng ký bằng mã giới thiệu của một đối tác (referrer), có phân trang.
+ *
+ * attributedRevenue/hasPurchased dùng CHUNG activeRevenueEventSql() với getAffiliateOverview —
+ * KHÔNG tự viết lại điều kiện `reversed_at IS NULL` ở đây (xem chú thích đầu file
+ * affiliateRevenueSql.util.js: đã có 5 bản chép tay gây lệch số, chỗ này không được là bản thứ 6).
+ *
+ * @param {number|string} userId id của người giới thiệu ("tôi")
+ * @param {object} [options]
+ * @param {number} [options.page=1]
+ * @param {number} [options.limit=20]
+ * @returns {Promise<{items: object[], total: number, page: number, limit: number}>}
+ */
+export async function getReferralsList(userId, { page = 1, limit = REFERRALS_DEFAULT_LIMIT } = {}) {
+  const parsedUserId = Number(userId);
+  if (!parsedUserId || Number.isNaN(parsedUserId)) {
+    const error = new Error('ID người dùng không hợp lệ');
+    error.status = 400;
+    throw error;
+  }
+
+  const parsedPage = Math.max(1, Number.parseInt(page, 10) || 1);
+  const parsedLimit = Math.min(REFERRALS_MAX_LIMIT, Math.max(1, Number.parseInt(limit, 10) || REFERRALS_DEFAULT_LIMIT));
+  const offset = (parsedPage - 1) * parsedLimit;
+
+  const totalResult = await db.query(
+    `SELECT COUNT(*)::int AS c FROM users WHERE referred_by_user_id = $1`,
+    [parsedUserId]
+  );
+  const total = totalResult.rows[0]?.c || 0;
+
+  const rowsResult = await db.query(
+    `SELECT u.full_name, u.username, u.email, u.referred_at,
+            COALESCE(agg.total_amount, 0)::numeric AS attributed_revenue,
+            COALESCE(agg.event_count, 0)::int AS event_count
+     FROM users u
+     LEFT JOIN (
+       SELECT e.buyer_user_id, SUM(e.amount) AS total_amount, COUNT(*) AS event_count
+       FROM affiliate_revenue_events e
+       WHERE e.referrer_user_id = $1 AND ${activeRevenueEventSql('e')}
+       GROUP BY e.buyer_user_id
+     ) agg ON agg.buyer_user_id = u.id
+     WHERE u.referred_by_user_id = $1
+     ORDER BY u.referred_at DESC, u.id DESC
+     LIMIT $2 OFFSET $3`,
+    [parsedUserId, parsedLimit, offset]
+  );
+
+  const items = rowsResult.rows.map((row) => ({
+    name: row.full_name || row.username,
+    emailMasked: maskEmail(row.email),
+    referredAt: row.referred_at,
+    hasPurchased: row.event_count > 0,
+    attributedRevenue: Math.round(Number(row.attributed_revenue || 0)),
+  }));
+
+  return {
+    items,
+    total,
+    page: parsedPage,
+    limit: parsedLimit,
+    totalPages: Math.max(1, Math.ceil(total / parsedLimit)),
   };
 }
 

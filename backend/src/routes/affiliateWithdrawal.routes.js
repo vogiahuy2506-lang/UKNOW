@@ -34,6 +34,11 @@ affiliateRouter.get(
   authMiddleware,
   affiliateWithdrawalController.getOverview
 );
+affiliateRouter.get(
+  '/referrals',
+  authMiddleware,
+  affiliateWithdrawalController.getReferrals
+);
 affiliateRouter.use('/withdrawals', affiliateWithdrawalRouter);
 
 // ─── Admin Routes ────────────────────────────────────────────────────────────
