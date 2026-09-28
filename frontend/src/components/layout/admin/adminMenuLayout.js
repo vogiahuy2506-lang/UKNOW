@@ -2,7 +2,6 @@ import {
   HiOutlineInbox,
   HiOutlineLightningBolt,
   HiOutlineGlobeAlt,
-  HiOutlineCube,
   HiOutlineCurrencyDollar,
   HiOutlineCog,
 } from 'react-icons/hi';
@@ -97,7 +96,6 @@ export const DEFAULT_APP_MENU_CATEGORIES = Object.freeze([
   { id: 'ai_chatbot', nameVi: 'AI Chatbot', nameEn: 'AI Chatbot', icon: HiOutlineInbox },
   { id: 'campaigns', nameVi: 'Chiến dịch', nameEn: 'Campaigns', icon: HiOutlineLightningBolt },
   { id: 'landing_page', nameVi: 'Landing page', nameEn: 'Landing page', icon: HiOutlineGlobeAlt },
-  { id: 'admin_cluster', nameVi: 'Quản trị', nameEn: 'Admin', icon: HiOutlineCube },
   { id: 'billing', nameVi: 'Gói & Thanh toán', nameEn: 'Plan & Billing', icon: HiOutlineCurrencyDollar },
   { id: 'settings', nameVi: 'Cài đặt', nameEn: 'Settings', icon: HiOutlineCog },
 ]);

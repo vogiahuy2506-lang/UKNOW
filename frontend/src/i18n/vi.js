@@ -428,6 +428,7 @@ export default {
     channelManagement: 'Quản lý kênh gửi',
     messageTemplates: 'Thư viện nội dung',
     myProducts: 'Quản lý sản phẩm',
+    products: 'Sản phẩm',
     courseManagement: 'Quản lý khóa học',
     productManagement: 'Quản lý sản phẩm',
     landingPage: 'Landing page',

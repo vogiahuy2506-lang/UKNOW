@@ -113,37 +113,30 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     vi.unstubAllEnvs();
   });
 
-  it('chủ tài khoản (không giới hạn quyền): 3 mục không tiêu đề rồi 6 nhóm, đúng thứ tự đúng tên', () => {
+  it('chủ tài khoản (không giới hạn quyền): 4 mục không tiêu đề rồi 5 nhóm, đúng thứ tự đúng tên', () => {
     authState.user = { role: 'user', username: 'owner1', fullName: 'Chủ TK' };
     authState.activeContext = { type: 'self' };
-    // Nhóm "Quản trị" (admin_cluster) có 4 mục, cả 4 đều sau một VITE_FEATURE_* — cần bật ít
-    // nhất một để nhóm không rỗng (nếu không, đúng hành vi hôm nay là nhóm ẨN, không phải bug).
-    vi.stubEnv('VITE_FEATURE_COURSES', 'true');
 
     renderAppSidebar();
 
     const nav = screen.getByRole('navigation');
     const titles = within(nav).getAllByRole('button').map((b) => b.getAttribute('title'));
 
-    // 3 mục lá "main" (không tiêu đề nhóm) LUÔN đứng trước, rồi đúng 6 nhóm theo thứ tự
-    // DEFAULT_APP_MENU_CATEGORIES — khớp bảng nghiệm thu "3 mục không tiêu đề, rồi 6 nhóm".
-    // affiliate_program dồn lên cùng main (đã xác nhận với sếp 12/09 — xem adminMenuLayout.js).
+    // 4 mục lá "main" (không tiêu đề nhóm) LUÔN đứng trước, rồi đúng 5 nhóm theo thứ tự
+    // DEFAULT_APP_MENU_CATEGORIES (cụm "Quản trị" đã được ẩn, "Sản phẩm" hiển thị thành mục độc lập).
     expect(titles).toEqual([
-      'Trợ lý AI', 'Tổng quan', 'Chương trình đối tác',
-      'AI Chatbot', 'Chiến dịch', 'Landing page', 'Quản trị', 'Gói & Thanh toán', 'Cài đặt',
+      'Trợ lý AI', 'Tổng quan', 'Sản phẩm', 'Chương trình đối tác',
+      'AI Chatbot', 'Chiến dịch', 'Landing page', 'Gói & Thanh toán', 'Cài đặt',
     ]);
   });
 
-  // Ca chủ tài khoản ở trên chỉ khẳng định 9 TIÊU ĐỀ cấp 1 — nó không thấy mục nào nằm trong
+  // Ca chủ tài khoản ở trên chỉ khẳng định TIÊU ĐỀ cấp 1 — nó không thấy mục nào nằm trong
   // nhóm nào. Đột biến kiểm chứng 12/09: đổi `defaultCategory` của `customers` từ 'campaigns'
-  // sang 'settings' thì toàn bộ 9/9 ca VẪN XANH, dù menu của mọi khách đã đổi. Ca dưới bịt đúng
+  // sang 'settings' thì toàn bộ ca VẪN XANH, dù menu của mọi khách đã đổi. Ca dưới bịt đúng
   // chỗ đó: nó ghim thành phần con của từng nhóm, là thứ `groupAppMenuItems` thật sự quyết định.
   it('mỗi nhóm chứa ĐÚNG những mục của nó — ghim defaultCategory, không chỉ ghim tiêu đề', () => {
     authState.user = { role: 'user', username: 'owner2', fullName: 'Chủ TK' };
     authState.activeContext = { type: 'self' };
-    vi.stubEnv('VITE_FEATURE_COURSES', 'true');
-    vi.stubEnv('VITE_FEATURE_ORDERS', 'true');
-    vi.stubEnv('VITE_FEATURE_LANDING_CMS', 'true');
 
     renderAppSidebar();
 
@@ -155,7 +148,6 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
         'Hiệu quả chiến dịch', 'Khách hàng từ chiến dịch',
       ],
       'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
-      'Quản trị': ['Khóa học nổi bật', 'Đánh giá', 'Quản lý khóa học', 'Đơn hàng'],
       'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
       'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Nhật ký hoạt động'],
     };
@@ -235,6 +227,10 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     it('quyền sai chỗ không mở nhầm mục: inbox_reply đơn lẻ (không có inbox_view) không hiện "Lịch sử trò chuyện"', () => {
       expect(employeeTitles({ inbox_reply: true })).toEqual(['Trợ lý AI']);
+    });
+
+    it('courses → hiện "Sản phẩm"', () => {
+      expect(employeeTitles({ courses: true })).toEqual(['Trợ lý AI', 'Sản phẩm']);
     });
   });
 

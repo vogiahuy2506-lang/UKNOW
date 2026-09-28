@@ -428,6 +428,7 @@ export default {
     channelManagement: 'Channel Management',
     messageTemplates: 'Content library',
     myProducts: 'Product Management',
+    products: 'Products',
     courseManagement: 'Course Management',
     productManagement: 'Product Management',
     landingPage: 'Landing page',
