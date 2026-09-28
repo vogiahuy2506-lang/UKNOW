@@ -112,6 +112,19 @@ describe('handleNodeConfigSaveClick — send_telegram', () => {
     expect(toastNotifier.error).toHaveBeenCalledWith(expect.stringContaining('abc'));
   });
 
+  it('review PR-7a: chat id ngăn bằng ";" ("123;456") -> báo lỗi (backend chỉ tách xuống dòng và ",", "123;456" sẽ bị bỏ im lặng)', async () => {
+    const onSave = vi.fn();
+    const toastNotifier = makeToast();
+    await handleNodeConfigSaveClick({
+      nodeType: 'send_telegram',
+      formData: { ...baseFormData, recipientSource: 'manual', recipientKeys: '123;456' },
+      onSave,
+      toastNotifier,
+    });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(toastNotifier.error).toHaveBeenCalledWith(expect.stringContaining('123;456'));
+  });
+
   it('nguồn nhập tay, danh sách rỗng -> báo lỗi, KHÔNG gọi onSave', async () => {
     const onSave = vi.fn();
     const toastNotifier = makeToast();

@@ -773,8 +773,11 @@ export const handleNodeConfigSaveClick = async ({
     }
     if (formData.recipientSource === 'manual') {
       const chatIdPattern = /^-?\d+$/;
+      // Review PR-7a: tách ĐÚNG như backend (campaignChannelRunner.service.js resolveRecipientRows
+      // split(/[\n,]+/)) — FE mà chấp nhận thêm ';' thì "123;456" qua được kiểm ở đây nhưng
+      // backend coi là MỘT chat id, sai định dạng → bỏ im lặng.
       const chatIds = String(formData.recipientKeys || '')
-        .split(/[\n,;]/g)
+        .split(/[\n,]/g)
         .map((line) => line.trim())
         .filter(Boolean);
       if (chatIds.length === 0) {
