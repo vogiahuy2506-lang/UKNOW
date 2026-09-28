@@ -152,10 +152,19 @@ describe('matbaoInvoice.service', () => {
   });
 
   it('NLap is VN datetime YYYY-MM-DDTHH:mm:ss (not UTC toISOString)', () => {
-    const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
-    expect(payload[0].NLap).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
-    expect(payload[0].NLap).toBe(formatMatbaoNLap());
-    expect(payload[0].NLap).not.toContain('Z');
+    // Đóng băng đồng hồ: buildCreateInvoicePayload và formatMatbaoNLap() mỗi bên tự gọi new Date();
+    // trên runner chậm hai lần gọi rơi hai bên ranh giới giây → Deploy Backend đỏ giả 28/09
+    // (mong 22:53:32, nhận 22:53:31). Chốt mốc giờ để ca này ghim đúng "định dạng VN", không ghim "cùng giây".
+    jest.useFakeTimers({ now: new Date('2026-09-28T15:53:31.500Z') });
+    try {
+      const { payload } = buildCreateInvoicePayload(order, order.invoice_info);
+      expect(payload[0].NLap).toMatch(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}$/);
+      expect(payload[0].NLap).toBe(formatMatbaoNLap());
+      expect(payload[0].NLap).toBe('2026-09-28T22:53:31');
+      expect(payload[0].NLap).not.toContain('Z');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('formatMatbaoNLap uses Asia/Ho_Chi_Minh datetime around UTC day boundary', () => {
