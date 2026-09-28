@@ -104,6 +104,12 @@ export async function validateCampaignPreflight({
   // giải id cho từng node (xem campaignRun.service.js `_doExecuteCampaign`, các nhánh
   // `nodeSubtype === '...'`).
   const zaloAccountIds = new Set();
+  // PR-9 (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) Việc 2 — mỗi phần tử là danh sách id của MỘT
+  // node pool/nhiều tài khoản; node đó ĐẠT nếu ÍT NHẤT MỘT id trong danh sách đạt tiêu chí (giống
+  // engine sau PR-9 Việc 1 thử từng id theo thứ tự). KHÔNG dồn cả danh sách vào `zaloAccountIds`
+  // (set đó đòi MỌI id đều đạt — dồn vào sẽ chặn nhầm pool còn sống, lỗi này PR-4 từng sửa cho
+  // trường hợp id đơn lẻ).
+  const zaloAccountIdGroups = [];
   let hasZaloSendNode = false;
   let hasEmailSendNode = false;
 
@@ -136,6 +142,15 @@ export async function validateCampaignPreflight({
     }
   };
 
+  // PR-9 Việc 2 — id đơn lẻ vẫn theo luật cũ (addZaloAccountId, phải đạt); pool/nhiều tài khoản
+  // đi qua đây (đạt nếu ít nhất một id đạt).
+  const addZaloAccountIdGroup = (rawIds) => {
+    const parsedIds = (Array.isArray(rawIds) ? rawIds : [])
+      .map((id) => parseInt(id, 10))
+      .filter((id) => Number.isFinite(id) && id > 0);
+    zaloAccountIdGroups.push(parsedIds);
+  };
+
   for (const node of nodes) {
     const subtype = String(node.node_subtype || '').trim();
     const config = node.config || {};
@@ -147,12 +162,17 @@ export async function validateCampaignPreflight({
       hasEmailSendNode = true;
     }
 
-    // select_zalo_account (R:3450) — pool bật + có id: dùng poolIds[0] (id engine sẽ giải),
-    // bỏ qua zaloAccountId còn sót trên node.
+    // select_zalo_account (R:3595) — pool bật + có id: đạt nếu ÍT NHẤT MỘT id trong pool đạt
+    // (PR-9 Việc 1 — engine thử từng id theo thứ tự, không còn cứng poolIds[0]); bỏ qua
+    // zaloAccountId còn sót trên node.
     if (subtype === 'select_zalo_account') {
       const poolEnabled = isTruthyConfigFlag(config, 'zaloPoolMultiAccountEnabled');
       const poolIds = uniqueNonEmptyIds(config.zaloPoolAccountIds);
-      addZaloAccountId(poolEnabled && poolIds.length > 0 ? poolIds[0] : config.zaloAccountId);
+      if (poolEnabled && poolIds.length > 0) {
+        addZaloAccountIdGroup(poolIds);
+      } else {
+        addZaloAccountId(config.zaloAccountId);
+      }
       continue;
     }
 
@@ -164,7 +184,11 @@ export async function validateCampaignPreflight({
       if (!hasSelectZaloAccountNode) {
         const multiIds = uniqueNonEmptyIds(config.zaloPersonalAccountIds);
         const multiEnabled = multiIds.length > 0 && isTruthyConfigFlag(config, 'zaloPersonalMultiAccountEnabled');
-        addZaloAccountId(multiEnabled ? multiIds[0] : config.zaloAccountId);
+        if (multiEnabled) {
+          addZaloAccountIdGroup(multiIds);
+        } else {
+          addZaloAccountId(config.zaloAccountId);
+        }
       }
       continue;
     }
@@ -173,7 +197,11 @@ export async function validateCampaignPreflight({
       if (!hasSelectZaloAccountNode) {
         const multiIds = uniqueNonEmptyIds(config.zaloFriendAccountIds);
         const multiEnabled = multiIds.length > 0 && isTruthyConfigFlag(config, 'zaloFriendMultiAccountEnabled');
-        addZaloAccountId(multiEnabled ? multiIds[0] : config.zaloAccountId);
+        if (multiEnabled) {
+          addZaloAccountIdGroup(multiIds);
+        } else {
+          addZaloAccountId(config.zaloAccountId);
+        }
       }
       continue;
     }
@@ -213,7 +241,8 @@ export async function validateCampaignPreflight({
     }
   }
 
-  if (zaloAccountIds.size > 0) {
+  const allGroupIds = zaloAccountIdGroups.flat();
+  if (zaloAccountIds.size > 0 || allGroupIds.length > 0) {
     const parsedWorkspaceOwnerId = parseInt(workspaceOwnerId, 10);
     if (!Number.isFinite(parsedWorkspaceOwnerId) || parsedWorkspaceOwnerId <= 0) {
       const error = new Error('Không xác định được chủ tài khoản sở hữu chiến dịch để kiểm tra tài khoản Zalo.');
@@ -223,33 +252,60 @@ export async function validateCampaignPreflight({
     }
 
     const ids = Array.from(zaloAccountIds);
+    // PR-9 — MỘT truy vấn cho cả id đơn lẻ lẫn mọi id trong các pool/nhóm, tránh N+1.
+    const combinedIds = Array.from(new Set([...ids, ...allGroupIds]));
     const { rows: accounts } = await db.query(
       `SELECT id, is_active, status
        FROM zalo_settings
        WHERE id = ANY($1::int[]) AND id_user = $2`,
-      [ids, parsedWorkspaceOwnerId]
+      [combinedIds, parsedWorkspaceOwnerId]
     );
 
     const accountMap = new Map(accounts.map((a) => [Number(a.id), a]));
-    for (const accId of ids) {
+    const isUsable = async (accId) => {
       const acc = accountMap.get(accId);
-      if (
-        !acc
-        || acc.is_active === false
-        || acc.status !== 'connected'
-        || await resourceIsLockedFn('zalo_accounts', accId)
-      ) {
-        const error = new Error(
-          'Tài khoản Zalo gửi tin đã bị ngắt kết nối hoặc không khả dụng. Vui lòng kết nối lại tài khoản trước khi chạy.'
-        );
-        error.code = 'SENDER_DISCONNECTED';
-        error.statusCode = 400;
-        throw error;
+      return Boolean(
+        acc
+        && acc.is_active !== false
+        && acc.status === 'connected'
+        && !(await resourceIsLockedFn('zalo_accounts', accId))
+      );
+    };
+
+    const senderDisconnectedError = () => {
+      const error = new Error(
+        'Tài khoản Zalo gửi tin đã bị ngắt kết nối hoặc không khả dụng. Vui lòng kết nối lại tài khoản trước khi chạy.'
+      );
+      error.code = 'SENDER_DISCONNECTED';
+      error.statusCode = 400;
+      return error;
+    };
+
+    // Id đơn lẻ: giữ nguyên luật cũ — MỖI id phải đạt.
+    for (const accId of ids) {
+      // eslint-disable-next-line no-await-in-loop
+      if (!(await isUsable(accId))) {
+        throw senderDisconnectedError();
+      }
+    }
+
+    // Pool/nhiều tài khoản: mỗi nhóm ĐẠT nếu ÍT NHẤT MỘT id trong nhóm đạt.
+    for (const group of zaloAccountIdGroups) {
+      let anyUsable = false;
+      for (const accId of group) {
+        // eslint-disable-next-line no-await-in-loop
+        if (await isUsable(accId)) {
+          anyUsable = true;
+          break;
+        }
+      }
+      if (!anyUsable) {
+        throw senderDisconnectedError();
       }
     }
   }
 
-  if (hasZaloSendNode && zaloAccountIds.size === 0) {
+  if (hasZaloSendNode && zaloAccountIds.size === 0 && zaloAccountIdGroups.length === 0) {
     const error = new Error(
       'Chưa chọn tài khoản Zalo gửi tin hoặc tài khoản đã không còn khả dụng. Vui lòng chọn và kết nối lại tài khoản trước khi chạy.'
     );

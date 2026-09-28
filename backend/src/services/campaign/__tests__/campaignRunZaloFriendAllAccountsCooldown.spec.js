@@ -156,6 +156,12 @@ jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
   nextVnMonthStart: jest.fn(() => new Date('2026-09-30T17:00:00.000Z')),
 }));
 
+// PR-9 (28/09) Việc 1 — pickFirstUsableZaloAccount() (dùng bởi send_zalo_friend_request nhiều
+// tài khoản) gọi resourceIsLocked() thật nếu không mock — tránh chạm DB thật trong unit test.
+jest.unstable_mockModule('../../../utils/topupLockGate.util.js', () => ({
+  resourceIsLocked: jest.fn().mockResolvedValue(false),
+}));
+
 const { default: campaignRunService } = await import('../campaignRun.service.js');
 
 describe('CampaignRun Zalo kết bạn đa tài khoản — mọi tài khoản đều cooldown tra số', () => {

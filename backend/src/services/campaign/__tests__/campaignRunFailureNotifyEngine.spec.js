@@ -13,6 +13,7 @@ const mockNotifyCampaignRunFailed = jest.fn().mockResolvedValue({ sent: true });
 const mockGetCampaignZaloAccount = jest.fn();
 const mockGetConnectedApiOrSyncStatus = jest.fn();
 const mockCheckSendQuota = jest.fn().mockResolvedValue({ allowed: true });
+const mockLogExecutionNode = jest.fn().mockResolvedValue(null);
 
 jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.js', () => ({
   default: {
@@ -136,7 +137,7 @@ jest.unstable_mockModule('../../../repositories/zalo/zaloSetting.repository.js',
 jest.unstable_mockModule('../campaignEmailSender.service.js', () => ({ default: {} }));
 
 jest.unstable_mockModule('../campaignExecutionLog.service.js', () => ({
-  default: { logExecutionNode: jest.fn().mockResolvedValue(null) },
+  default: { logExecutionNode: mockLogExecutionNode },
 }));
 
 jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.repository.js', () => ({
@@ -168,6 +169,13 @@ jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
   checkSendQuota: mockCheckSendQuota,
   nextVnMidnight: jest.fn(() => new Date('2026-09-30T17:00:00.000Z')),
   nextVnMonthStart: jest.fn(() => new Date('2026-09-30T17:00:00.000Z')),
+}));
+
+// PR-9 (28/09) Việc 1 — pickFirstUsableZaloAccount() (dùng bởi send_zalo_personal nhiều tài
+// khoản) gọi resourceIsLocked() thật nếu không mock — tránh chạm DB thật trong unit test
+// (bài học "Unit chạm CSDL: xanh máy, đỏ CI").
+jest.unstable_mockModule('../../../utils/topupLockGate.util.js', () => ({
+  resourceIsLocked: jest.fn().mockResolvedValue(false),
 }));
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');
@@ -240,5 +248,77 @@ describe('PR-3 — failRun/notifyCampaignRunFailed đúng chỗ (catch tổng + 
         source: 'zalo_pool_unavailable',
       })
     );
+  });
+
+  // PR-9 (28/09) Việc 1 — trước đây pool [chết, sống] chết ngay ở bước giải tài khoản đại diện
+  // (cứng multiAccountIds[0]) TRƯỚC KHI cơ chế xoay vòng pickMultiZaloPersonalAccount (đã có sẵn,
+  // không đụng) có cơ hội chạy. Không recipient nào để tránh phải giả lập toàn bộ luồng gửi —
+  // chỉ cần chứng minh bước giải tài khoản đại diện không còn chết ngay vì id đầu.
+  it('pool [acc-1 chết, acc-2 sống] → thử cả hai id, KHÔNG failRun ngay ở bước giải tài khoản đại diện', async () => {
+    mockFindNodesByCampaignId.mockResolvedValue([
+      {
+        id: 301,
+        node_type: 'action',
+        node_subtype: 'send_zalo_personal',
+        execution_order: 1,
+        config: {
+          zaloPersonalMultiAccountEnabled: true,
+          zaloPersonalAccountIds: ['acc-1', 'acc-2'],
+          zaloRecipientSource: 'manual',
+          zaloRecipientPhones: '',
+          zaloPersonalTemplateSteps: [{ stepIndex: 1, templateId: 1 }],
+        },
+      },
+    ]);
+    mockGetCampaignZaloAccount.mockImplementation(async ({ accountId }) => {
+      if (accountId === 'acc-1') {
+        throw new Error('Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng');
+      }
+      return { id: accountId, userId: 10, displayName: 'Acc 2' };
+    });
+
+    await campaignRunService.executeCampaign(383, 200, 10);
+
+    expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-1' }));
+    expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 'acc-2' }));
+    // KHÔNG bị failRun/notify ngay lúc giải tài khoản (khác hẳn test "pool không tài khoản nào
+    // sẵn sàng" ở trên — ở đây acc-2 sống nên node phải qua được bước này).
+    expect(mockFailRun).not.toHaveBeenCalled();
+    expect(mockNotifyCampaignRunFailed).not.toHaveBeenCalled();
+  });
+
+  // PR-9 Việc 1 — select_zalo_account: R:3630 trước đây đánh dấu __zaloAccountSelected=true cho
+  // PHẦN TỬ ĐẦU (index === 0) của pool, bất kể đó có phải tài khoản THẬT SỰ được chọn hay không.
+  // Sau fix, phải đánh dấu đúng tài khoản pickFirstUsableZaloAccount đã chọn (id === 202, không
+  // phải id đầu 201 vốn đã chết).
+  it('select_zalo_account pool [201 chết, 202 sống] → đánh dấu __zaloAccountSelected đúng 202 (không phải phần tử đầu 201)', async () => {
+    mockFindNodesByCampaignId.mockResolvedValue([
+      {
+        id: 400,
+        node_type: 'action',
+        node_subtype: 'select_zalo_account',
+        execution_order: 1,
+        config: {
+          zaloPoolMultiAccountEnabled: true,
+          zaloPoolAccountIds: ['201', '202'],
+        },
+      },
+    ]);
+    mockGetCampaignZaloAccount.mockImplementation(async ({ accountId }) => {
+      if (accountId === '201') {
+        throw new Error('Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng');
+      }
+      return { id: accountId, userId: 10, displayName: `Acc ${accountId}` };
+    });
+
+    await campaignRunService.executeCampaign(383, 200, 10);
+
+    expect(mockFailRun).not.toHaveBeenCalled();
+    const logCall = mockLogExecutionNode.mock.calls.find((call) => call[0]?.node?.id === 400);
+    expect(logCall).toBeDefined();
+    const { items, meta } = logCall[0].executionData;
+    expect(meta.accountId).toBe('202');
+    expect(items.find((it) => it.id === '202').__zaloAccountSelected).toBe(true);
+    expect(items.find((it) => it.id === '201').__zaloAccountSelected).toBe(false);
   });
 });

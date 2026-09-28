@@ -30,6 +30,7 @@ import {
   shouldAdvanceZaloOneShotLedger,
 } from '../../utils/zaloDispatchDelivery.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
+import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import { checkSendQuota } from '../../utils/userSendLimit.util.js';
 import { EFFECTIVE_PLAN_ID_SQL, resolveBillingUserId } from '../../utils/billingCycle.util.js';
 import { maybeDebitWalletForSend } from '../payment/topupWallet.service.js';
@@ -238,6 +239,58 @@ class CampaignRunService {
         end: this.zaloRateLimiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE,
       },
     };
+  }
+
+  /**
+   * PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26 PR-9 Việc 1 — duyệt `ids` theo thứ tự, bỏ qua id đang
+   * bị khoá top-up (`resourceIsLocked`, cùng điều kiện `campaignPreflight.service.js` đã kiểm),
+   * thử `getCampaignZaloAccount` cho từng id, trả về tài khoản ĐẦU TIÊN dùng được.
+   *
+   * Trước PR-9: `select_zalo_account` (pool) và `send_zalo_personal`/`send_zalo_friend_request`
+   * (nhiều tài khoản, khi chưa có `selectedZaloAccount` từ node trước) đều cứng lấy phần tử ĐẦU
+   * TIÊN rồi gọi thẳng `getCampaignZaloAccount` không try — tài khoản đầu chết làm cả node "chết"
+   * dù tài khoản khác trong danh sách vẫn dùng được. Đo prod 28/09: chưa gây hại (0 node thật bật
+   * ≥2 tài khoản), sửa để tính năng pool không gãy khi khách dùng ≥2 tài khoản.
+   *
+   * Không đụng tới `pickMultiZaloPersonalAccount` (closure trong node `send_zalo_personal` nhiều
+   * tài khoản, ~dòng 5120) — đó là cơ chế xoay vòng tài khoản theo TỪNG người nhận lúc gửi thật,
+   * đã tự xử lý tốt. Hàm này chỉ sửa bước giải tài khoản ĐẠI DIỆN lúc vào node, bước gác trước cả
+   * `pickMultiZaloPersonalAccount` — tài khoản đầu chết ở đây là chặn đứng node trước khi cơ chế
+   * xoay vòng kia có cơ hội chạy.
+   *
+   * Không id nào dùng được → ném lỗi của id ĐẦU TIÊN (giữ nguyên thông điệp báo lỗi hôm nay).
+   *
+   * @param {object} params
+   * @param {Array<string|number>} params.ids danh sách id theo đúng thứ tự ưu tiên
+   * @param {number|string} params.userId
+   * @param {string} params.roleCode
+   * @returns {Promise<{account: object, id: string}>} tài khoản dùng được đầu tiên + id đã chọn
+   */
+  async pickFirstUsableZaloAccount({ ids, userId, roleCode }) {
+    const candidateIds = (Array.isArray(ids) ? ids : [])
+      .map((id) => String(id || '').trim())
+      .filter(Boolean);
+    if (candidateIds.length === 0) {
+      throw new Error('Chưa chọn tài khoản Zalo gửi');
+    }
+
+    let firstError = null;
+    for (const candidateId of candidateIds) {
+      // eslint-disable-next-line no-await-in-loop
+      const locked = await resourceIsLocked('zalo_accounts', candidateId);
+      if (locked) {
+        if (!firstError) firstError = new Error('Tài khoản Zalo đã chọn chưa ở trạng thái sẵn sàng');
+        continue;
+      }
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const account = await campaignZaloSenderService.getCampaignZaloAccount({ userId, accountId: candidateId, roleCode });
+        return { account, id: candidateId };
+      } catch (err) {
+        if (!firstError) firstError = err;
+      }
+    }
+    throw firstError;
   }
 
   /**
@@ -3548,17 +3601,24 @@ class CampaignRunService {
               .map((id) => String(id || '').trim())
               .filter(Boolean)
           )];
-          const selectedAccountId = poolEnabled && poolIds.length > 0
-            ? poolIds[0]
-            : String(config.zaloAccountId || '').trim();
-          if (!selectedAccountId) {
-            throw new Error('Node chọn tài khoản Zalo chưa có dữ liệu tài khoản (hoặc pool rỗng)');
+          let selectedAccountId;
+          let account;
+          if (poolEnabled && poolIds.length > 0) {
+            // PR-9 Việc 1 — thử từng id trong pool theo thứ tự, không cứng lấy phần tử đầu.
+            const picked = await this.pickFirstUsableZaloAccount({ ids: poolIds, userId, roleCode });
+            account = picked.account;
+            selectedAccountId = picked.id;
+          } else {
+            selectedAccountId = String(config.zaloAccountId || '').trim();
+            if (!selectedAccountId) {
+              throw new Error('Node chọn tài khoản Zalo chưa có dữ liệu tài khoản (hoặc pool rỗng)');
+            }
+            account = await campaignZaloSenderService.getCampaignZaloAccount({
+              userId,
+              accountId: selectedAccountId,
+              roleCode,
+            });
           }
-          const account = await campaignZaloSenderService.getCampaignZaloAccount({
-            userId,
-            accountId: selectedAccountId,
-            roleCode,
-          });
           selectedZaloAccount = account;
           /**
            * Với node chọn tài khoản ở chế độ pool:
@@ -3571,10 +3631,12 @@ class CampaignRunService {
           }];
           if (poolEnabled && poolIds.length > 0) {
             const resolvedPoolAccounts = await Promise.all(
-              poolIds.map(async (poolId, index) => {
+              poolIds.map(async (poolId) => {
                 const normalizedPoolId = String(poolId || '').trim();
                 if (!normalizedPoolId) return null;
-                if (index === 0) {
+                // PR-9 — đánh dấu đúng tài khoản THẬT SỰ được chọn (có thể không phải phần tử
+                // đầu, nếu id đầu tiên đã bị pickFirstUsableZaloAccount bỏ qua vì chết/khoá).
+                if (normalizedPoolId === selectedAccountId) {
                   return {
                     ...account,
                     id: normalizedPoolId || account.id,
@@ -4870,12 +4932,20 @@ class CampaignRunService {
             poolFromSelect || isTruthyConfigFlag(config, 'zaloPersonalMultiAccountEnabled')
           );
 
+          // PR-9 Việc 1 — thử từng id trong danh sách nhiều tài khoản theo thứ tự, không cứng
+          // lấy phần tử đầu (tài khoản đầu chết trước đây làm chết cả node dù tài khoản khác
+          // trong danh sách vẫn dùng được).
+          // PR-9 Việc 1 — thử từng id trong danh sách nhiều tài khoản theo thứ tự, không cứng
+          // lấy phần tử đầu (tài khoản đầu chết trước đây làm chết cả node dù tài khoản khác
+          // trong danh sách vẫn dùng được).
           const account = selectedZaloAccount
-            || await campaignZaloSenderService.getCampaignZaloAccount({
-              userId,
-              accountId: multiEnabled ? multiAccountIds[0] : config.zaloAccountId,
-              roleCode,
-            });
+            || (multiEnabled
+              ? (await this.pickFirstUsableZaloAccount({ ids: multiAccountIds, userId, roleCode })).account
+              : await campaignZaloSenderService.getCampaignZaloAccount({
+                userId,
+                accountId: config.zaloAccountId,
+                roleCode,
+              }));
           selectedZaloAccount = account;
           const api = multiEnabled
             ? null
@@ -6842,12 +6912,16 @@ class CampaignRunService {
           const friendMultiEnabled = friendMultiAccountIds.length > 0 && (
             poolFromSelectFr || isTruthyConfigFlag(config, 'zaloFriendMultiAccountEnabled')
           );
+          // PR-9 Việc 1 — thử từng id trong danh sách nhiều tài khoản theo thứ tự, không cứng
+          // lấy phần tử đầu.
           const account = selectedZaloAccount
-            || await campaignZaloSenderService.getCampaignZaloAccount({
-              userId,
-              accountId: friendMultiEnabled ? friendMultiAccountIds[0] : config.zaloAccountId,
-              roleCode,
-            });
+            || (friendMultiEnabled
+              ? (await this.pickFirstUsableZaloAccount({ ids: friendMultiAccountIds, userId, roleCode })).account
+              : await campaignZaloSenderService.getCampaignZaloAccount({
+                userId,
+                accountId: config.zaloAccountId,
+                roleCode,
+              }));
           selectedZaloAccount = account;
           const api = friendMultiEnabled
             ? null
