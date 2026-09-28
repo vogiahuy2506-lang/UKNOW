@@ -9078,7 +9078,7 @@ export default {
     referralsColEmail: 'Email',
     referralsColJoinedAt: 'Ngày tham gia',
     referralsColStatus: 'Trạng thái',
-    referralsColRevenue: 'Doanh thu tính hoa hồng',
+    referralsColRevenue: 'Doanh thu phát sinh',
     referralsStatusPurchased: 'Đã mua',
     referralsStatusNotPurchased: 'Chưa mua',
 

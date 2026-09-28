@@ -9068,7 +9068,7 @@ Feel free to ask me anything!`,
     referralsColEmail: 'Email',
     referralsColJoinedAt: 'Joined At',
     referralsColStatus: 'Status',
-    referralsColRevenue: 'Commissionable Revenue',
+    referralsColRevenue: 'Revenue generated',
     referralsStatusPurchased: 'Purchased',
     referralsStatusNotPurchased: 'Not Purchased',
 
