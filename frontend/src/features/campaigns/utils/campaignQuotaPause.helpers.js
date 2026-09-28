@@ -5,6 +5,13 @@ const DEFER_FAMILIES = [
     kind: 'zalo',
   },
   {
+    // PR-5 (tách tầng kênh gửi) — defer của node kênh "adapter" (Telegram/WhatsApp từ PR-6+).
+    // Khoá VÔ HƯỚNG (không phải map theo kênh): một node adapter defer là cả run defer.
+    untilKey: 'channelDeferredUntil',
+    reasonKey: 'channelDeferredReason',
+    kind: 'channel',
+  },
+  {
     untilKey: 'nonContinuousDeferredUntil',
     reasonKey: 'nonContinuousDeferredReason',
     kind: 'non_continuous',
@@ -117,6 +124,10 @@ export function getRunPauseI18nKey(pauseOrKind, maybeReason) {
     if (reason === 'all_recipients_waiting_next_due') {
       return 'campaignRun.waitingNextDueUntil';
     }
+    return 'campaignRun.genericPausedUntil';
+  }
+  if (kind === 'channel') {
+    // PR-5 — dùng lại khoá i18n sẵn có (chung với non_continuous), KHÔNG thêm khoá mới.
     return 'campaignRun.genericPausedUntil';
   }
   return 'campaignRun.quotaPausedUntil';

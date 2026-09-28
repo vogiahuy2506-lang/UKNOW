@@ -41,6 +41,32 @@ export function isWithinQuietHours(nowMs, quietHours) {
 }
 
 /**
+ * Còn bao lâu (ms) tới giờ KẾT THÚC khung yên lặng hiện tại (giờ Việt Nam) — PR-5, dùng để gắn
+ * `error.waitMs` cho CHANNEL_QUIET_HOURS (engine defer thay vì run failed). Hàm THUẦN, dịch UTC+7
+ * như `isWithinQuietHours`, có vắt nửa đêm. Giả định gọi ĐÚNG lúc đang trong khung — nếu không thì
+ * trả 0 (không có gì phải chờ).
+ *
+ * @param {number} nowMs
+ * @param {{startHour: number, endHour: number}|null} [quietHours]
+ * @returns {number}
+ */
+export function computeQuietHoursWaitMs(nowMs, quietHours) {
+  if (!isWithinQuietHours(nowMs, quietHours)) return 0;
+  const { startHour, endHour } = quietHours;
+  const shifted = new Date(nowMs + VN_UTC_OFFSET_MS);
+  const hour = shifted.getUTCHours();
+  const year = shifted.getUTCFullYear();
+  const month = shifted.getUTCMonth();
+  const day = shifted.getUTCDate();
+  // Vắt nửa đêm (startHour > endHour) mà đang ở nửa TRƯỚC nửa đêm (hour >= startHour) thì giờ kết
+  // thúc rơi vào NGÀY MAI; còn lại (hour < endHour) thì giờ kết thúc cùng ngày hôm nay.
+  const addDays = (startHour > endHour && hour >= startHour) ? 1 : 0;
+  const targetShiftedMs = Date.UTC(year, month, day + addDays, endHour, 0, 0, 0);
+  const targetRealMs = targetShiftedMs - VN_UTC_OFFSET_MS;
+  return Math.max(0, targetRealMs - nowMs);
+}
+
+/**
  * Cửa sổ trượt perHourLimit trong RAM theo (channel, accountKey) — sống suốt tiến trình, KHÔNG
  * persist DB (đủ dùng vì "một tiến trình duy nhất" chạy engine, xem mục 5 Bẫy plan).
  * @type {Map<string, number[]>}
@@ -439,6 +465,8 @@ export async function runAdapterSendNode(ctx) {
             `Kênh ${descriptor.key} đang trong khung giờ yên lặng, dừng node ${node.id}.`
           );
           quietError.code = 'CHANNEL_QUIET_HOURS';
+          // PR-5 — engine dùng waitMs để defer (persistRunDeferYieldSlot) thay vì đánh run failed.
+          quietError.waitMs = computeQuietHoursWaitMs(Date.now(), descriptor.policy?.quietHours);
           throw quietError;
         }
 
@@ -455,6 +483,8 @@ export async function runAdapterSendNode(ctx) {
               + `${descriptor.policy.perHourLimit} tin/giờ, chờ ${Math.ceil(waitMs / 1000)}s (> 60s) → dừng node.`
             );
             rateLimitError.code = 'CHANNEL_RATE_LIMIT';
+            // PR-5 — engine dùng waitMs để defer (persistRunDeferYieldSlot) thay vì đánh run failed.
+            rateLimitError.waitMs = waitMs;
             throw rateLimitError;
           }
         }
@@ -618,6 +648,7 @@ export async function runAdapterSendNode(ctx) {
 export default {
   runAdapterSendNode,
   isWithinQuietHours,
+  computeQuietHoursWaitMs,
   createCampaignChannelQuotaGate,
   createNoopChannelQuotaGate,
   __resetPerHourWindowForTest,

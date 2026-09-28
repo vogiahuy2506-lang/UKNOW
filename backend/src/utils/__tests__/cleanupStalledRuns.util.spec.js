@@ -42,6 +42,9 @@ describe('cleanupStalledRuns safety guards', () => {
     expect(sql).toContain("cr.run_metadata->>'quotaDeferredUntil'");
     expect(sql).toContain("cr.run_metadata->>'zaloOutboundDeferredUntil'");
     expect(sql).toContain("cr.run_metadata->>'nonContinuousDeferredUntil'");
+    // PR-5 (tách tầng kênh gửi) — thiếu khoá này thì run đang defer chờ kênh adapter (quiet_hours/
+    // rate_limit) sẽ bị script dọn nhầm là "treo" sau STALLED_RUN_CLEANUP_HOURS giờ.
+    expect(sql).toContain("cr.run_metadata->>'channelDeferredUntil'");
     expect(sql).toContain("NOW() - ($1 || ' hours')::interval");
   });
 });

@@ -5,6 +5,7 @@
 import { describe, it, expect, beforeEach } from '@jest/globals';
 import {
   isWithinQuietHours,
+  computeQuietHoursWaitMs,
   __recordSendForTest,
   __computePerHourWaitMsForTest,
   __resetPerHourWindowForTest,
@@ -84,5 +85,30 @@ describe('campaignChannelRunner — cửa sổ trượt perHourLimit', () => {
     __recordSendForTest(key, now - 500);
     expect(__computePerHourWaitMsForTest(key, 0, now)).toBe(0);
     expect(__computePerHourWaitMsForTest(key, undefined, now)).toBe(0);
+  });
+});
+
+describe('campaignChannelRunner.computeQuietHoursWaitMs — PR-5, waitMs tới hết khung yên lặng', () => {
+  it('22:00 VN, khung 23->6 — ngoài khung → 0', () => {
+    expect(computeQuietHoursWaitMs(vnHourToEpochMs(22, 0), QUIET_23_TO_6)).toBe(0);
+  });
+
+  it('23:30 VN, khung 23->6 (vắt nửa đêm) — còn 6.5 giờ tới 6:00 SÁNG MAI', () => {
+    const expectedMs = 6.5 * 60 * 60 * 1000;
+    expect(computeQuietHoursWaitMs(vnHourToEpochMs(23, 30), QUIET_23_TO_6)).toBe(expectedMs);
+  });
+
+  it('05:00 VN, khung 23->6 (vắt nửa đêm) — còn 1 giờ tới 6:00 CÙNG NGÀY', () => {
+    const expectedMs = 1 * 60 * 60 * 1000;
+    expect(computeQuietHoursWaitMs(vnHourToEpochMs(5, 0), QUIET_23_TO_6)).toBe(expectedMs);
+  });
+
+  it('quietHours null — 0 (không có gì phải chờ)', () => {
+    expect(computeQuietHoursWaitMs(vnHourToEpochMs(23, 30), null)).toBe(0);
+  });
+
+  it('khung không vắt nửa đêm (10->14 VN), đang trong khung lúc 12:00 — còn 2 giờ', () => {
+    const QUIET_10_TO_14 = { startHour: 10, endHour: 14 };
+    expect(computeQuietHoursWaitMs(vnHourToEpochMs(12, 0), QUIET_10_TO_14)).toBe(2 * 60 * 60 * 1000);
   });
 });

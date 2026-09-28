@@ -169,6 +169,47 @@ describe('getActiveRunPause', () => {
     });
     expect(result?.accountName).toBeNull();
   });
+
+  // PR-5 (tách tầng kênh gửi) — defer của node kênh "adapter", khoá VÔ HƯỚNG channelDeferredUntil.
+  it('nhận diện kind=channel từ channelDeferredUntil/channelDeferredReason', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-28T10:00:00.000Z'));
+    const result = getActiveRunPause({
+      channelDeferredUntil: '2026-09-28T12:00:00.000Z',
+      channelDeferredReason: 'channel_quiet_hours',
+      channelDeferredChannel: 'telegram',
+    });
+    expect(result).toEqual({
+      untilIso: '2026-09-28T12:00:00.000Z',
+      untilMs: Date.parse('2026-09-28T12:00:00.000Z'),
+      reason: 'channel_quiet_hours',
+      kind: 'channel',
+    });
+  });
+
+  it('ưu tiên zaloOutboundDeferredUntil hơn channelDeferredUntil khi có cả hai', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-28T10:00:00.000Z'));
+    const result = getActiveRunPause({
+      zaloOutboundDeferredUntil: '2026-09-28T11:00:00.000Z',
+      zaloDeferredReason: 'quiet_hours',
+      channelDeferredUntil: '2026-09-28T13:00:00.000Z',
+      channelDeferredReason: 'channel_rate_limit',
+    });
+    expect(result?.kind).toBe('zalo');
+  });
+
+  it('ưu tiên channelDeferredUntil hơn nonContinuousDeferredUntil khi có cả hai', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-28T10:00:00.000Z'));
+    const result = getActiveRunPause({
+      channelDeferredUntil: '2026-09-28T13:00:00.000Z',
+      channelDeferredReason: 'channel_rate_limit',
+      nonContinuousDeferredUntil: '2026-09-28T14:00:00.000Z',
+      nonContinuousDeferredReason: 'all_recipients_waiting_next_due',
+    });
+    expect(result?.kind).toBe('channel');
+  });
 });
 
 describe('getRunPauseI18nKey', () => {
@@ -257,6 +298,13 @@ describe('getRunPauseI18nKey', () => {
     expect(getRunPauseI18nKey('non_continuous', '')).toBe('campaignRun.genericPausedUntil');
     expect(getRunPauseI18nKey('non_continuous', 'some_unknown_reason')).toBe('campaignRun.genericPausedUntil');
     expect(getRunPauseI18nKey({ kind: 'non_continuous', reason: '' })).toBe('campaignRun.genericPausedUntil');
+  });
+
+  // PR-5 (tách tầng kênh gửi) — dùng LẠI khoá i18n sẵn có (genericPausedUntil), không thêm khoá mới.
+  it('với channel (defer kênh adapter): luôn ra genericPausedUntil bất kể reason', () => {
+    expect(getRunPauseI18nKey('channel', 'channel_quiet_hours')).toBe('campaignRun.genericPausedUntil');
+    expect(getRunPauseI18nKey('channel', 'channel_rate_limit')).toBe('campaignRun.genericPausedUntil');
+    expect(getRunPauseI18nKey({ kind: 'channel', reason: 'channel_quiet_hours' })).toBe('campaignRun.genericPausedUntil');
   });
 });
 

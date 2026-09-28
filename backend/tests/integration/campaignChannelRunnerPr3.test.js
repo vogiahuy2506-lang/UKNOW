@@ -6,18 +6,24 @@
  * b) chạy run MỚI cùng campaign trong cửa sổ dedupe → 0 lần sendOne, messages vẫn 10,
  *    skipped tăng, invariant giữ.
  * c) mock ném hard ở người 2 → người 2 failed, người 3-5 vẫn gửi;
- *    mock ném rate_limit ở người 3 → run failed, đúng 2 người đã gửi.
- * d) mock quietHours bao trùm giờ hiện tại → 0 lần gửi, run failed lý do quiet_hours.
+ *    mock ném rate_limit ở người 3 → run failed, đúng 2 người đã gửi (KHÔNG đổi ở PR-5 — đây là
+ *    rate_limit REACTIVE do sendOne ném/classifyError phân loại, không đi qua computePerHourWaitMs
+ *    nên không có error.waitMs → engine vẫn coi là lỗi cứng, ném tiếp như cũ).
+ * d) mock quietHours bao trùm giờ hiện tại → 0 lần gửi, run DEFER (run vẫn 'running',
+ *    channelDeferredReason='channel_quiet_hours') lý do quiet_hours — ĐỔI Ở PR-5, trước đó là
+ *    run failed.
  * e) engine: node mock subtype không bị cầu dao PR-1 chặn; preflight gọi checkReadiness
  *    (mock throw → 400 đúng code).
  * f) quotaGate mặc định (không truyền no-op) → run failed CHANNEL_QUOTA_NOT_WIRED, 0 lần gửi.
  *
  * Vòng 2 (review vòng 1, F1/F2/F3):
- * g) rate_limit ở người 3 (5 người x 1 bước) → run failed; total=3 success=2 failed=1 (F1).
+ * g) rate_limit ở người 3 (5 người x 1 bước) → run failed; total=3 success=2 failed=1 (F1) —
+ *    KHÔNG đổi ở PR-5, cùng lý do như (c) (rate_limit REACTIVE, không có waitMs).
  * h) hard ở người 2 (3 người x 2 bước), resume CÙNG run → lần 2 sendOne 0 lần cho người 2;
  *    ledger người 2 is_fully_completed + lastFailureReason='hard'; total sau 2 lần = 6 (F2).
  * i) quiet_hours bao trùm rồi tắt, resume CÙNG run → total không tăng thêm cho người đầu,
- *    người đó ĐƯỢC gửi ở lần 2 (không bị đánh dấu bỏ cuộc) (F2 nhánh không-xong).
+ *    người đó ĐƯỢC gửi ở lần 2 (không bị đánh dấu bỏ cuộc) (F2 nhánh không-xong) — run sau lần 1
+ *    giờ 'running' (defer), KHÔNG 'failed' — ĐỔI Ở PR-5.
  * j) 1 người x 2 bước: ledger meta.firstSentAt ≤ lastCompletedAt và khác nhau khi có delay
  *    giữa 2 bước (F3).
  */
@@ -297,7 +303,7 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     expect(sentRows.map((r) => r.recipient_key).sort()).toEqual(['peer1', 'peer2']);
   });
 
-  it('(d) mock quietHours bao trùm giờ hiện tại -> 0 lần gửi, run failed lý do quiet_hours', async () => {
+  it('(d) mock quietHours bao trùm giờ hiện tại -> 0 lần gửi, run defer (KHÔNG failed) lý do quiet_hours [PR-5]', async () => {
     campaignChannelRegistry.__resetTestChannels();
     const nowVnHour = new Date(Date.now() + 7 * 60 * 60 * 1000).getUTCHours();
     // Khung 24 giờ trọn vẹn quanh giờ hiện tại (vắt nửa đêm) — chắc chắn bao trùm bất kể giờ chạy test thật.
@@ -316,11 +322,14 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     expect(fakeSendOne).toHaveBeenCalledTimes(0);
 
     const { rows: runRows } = await db.query(
-      'SELECT status, error_message FROM campaign_runs WHERE id = $1',
+      'SELECT status, run_metadata FROM campaign_runs WHERE id = $1',
       [run.id]
     );
-    expect(runRows[0].status).toBe('failed');
-    expect(String(runRows[0].error_message || '')).toMatch(/yên lặng|quiet/i);
+    // PR-5 — quiet_hours giờ NHẢ SLOT chờ resume (channelDeferredUntil) thay vì đánh run failed.
+    expect(runRows[0].status).toBe('running');
+    expect(runRows[0].run_metadata.channelDeferredReason).toBe('channel_quiet_hours');
+    expect(runRows[0].run_metadata.channelDeferredChannel).toBe(MOCK_KEY);
+    expect(runRows[0].run_metadata.channelDeferredUntil).toBeTruthy();
 
     const { rows: msgRows } = await db.query(
       `SELECT COUNT(*)::int AS n FROM campaign_channel_messages WHERE id_node = $1`,
@@ -462,7 +471,7 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     expect(afterRun2[0].total_recipients).toBe(6);
   });
 
-  it('(i) quiet_hours bao trùm rồi tắt, resume CÙNG run -> total không tăng thêm cho người đầu, người đó ĐƯỢC gửi ở lần 2 (F2 nhánh không-xong)', async () => {
+  it('(i) quiet_hours bao trùm rồi tắt, resume CÙNG run -> total không tăng thêm cho người đầu, người đó ĐƯỢC gửi ở lần 2 (F2 nhánh không-xong) [run defer PR-5]', async () => {
     const nowVnHour = new Date(Date.now() + 7 * 60 * 60 * 1000).getUTCHours();
     campaignChannelRegistry.__resetTestChannels();
     registerMockChannel({ policy: { quietHours: { startHour: nowVnHour, endHour: (nowVnHour + 23) % 24 } } });
@@ -481,14 +490,25 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
       'SELECT status, total_recipients FROM campaign_runs WHERE id = $1',
       [run.id]
     );
-    expect(afterRun1[0].status).toBe('failed');
+    // PR-5 — quiet_hours giờ NHẢ SLOT chờ resume (run VẪN 'running') thay vì đánh run failed; dòng
+    // UPDATE status='running' bên dưới vì vậy thành no-op (đã sẵn 'running'), giữ lại cho rõ ý đồ
+    // "resume CÙNG run" và an toàn nếu logic defer đổi khác sau này.
+    expect(afterRun1[0].status).toBe('running');
     expect(afterRun1[0].total_recipients).toBe(1); // chỉ peer1 (người đầu) kịp "thấy" trước khi dừng
 
-    // Tắt quiet hours rồi resume CÙNG run.
+    // Tắt quiet hours rồi resume CÙNG run. channelDeferredUntil từ lần 1 còn cách rất xa (khung
+    // 23 giờ) — PHẢI lùi nó về quá khứ (như test (c) "đặt mốc về quá khứ"), không thì
+    // _exitIfRunDeferredUntilFuture (PR-5, campaignRun.service.js:~245) sẽ thoát sớm ngay từ đầu vì
+    // vẫn thấy channelDeferredUntil > NOW(), khiến peer1 không được gọi lại như test này cần.
     campaignChannelRegistry.__resetTestChannels();
     registerMockChannel({ policy: { quietHours: null } });
     fakeSendOne.mockClear();
-    await db.query(`UPDATE campaign_runs SET status = 'running' WHERE id = $1`, [run.id]);
+    await db.query(
+      `UPDATE campaign_runs SET status = 'running',
+         run_metadata = jsonb_set(run_metadata, '{channelDeferredUntil}', to_jsonb((NOW() - INTERVAL '1 minute')::text))
+       WHERE id = $1`,
+      [run.id]
+    );
     await runCampaignToCompletion(campaign.id, run.id);
 
     const peer1Calls = fakeSendOne.mock.calls.filter(([arg]) => arg.recipientKey === 'peer1');

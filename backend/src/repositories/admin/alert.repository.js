@@ -11,6 +11,9 @@ const SAFE_STALLED_ZALO_DEFER_UNTIL_SQL = safeMetadataTimestampSql(
 const SAFE_STALLED_NON_CONTINUOUS_DEFER_UNTIL_SQL = safeMetadataTimestampSql(
   "cr.run_metadata->>'nonContinuousDeferredUntil'"
 );
+const SAFE_STALLED_CHANNEL_DEFER_UNTIL_SQL = safeMetadataTimestampSql(
+  "cr.run_metadata->>'channelDeferredUntil'"
+);
 
 const STALLED_RUN_DEFER_READY_SQL = `AND (
   ${SAFE_STALLED_QUOTA_DEFER_UNTIL_SQL} IS NULL
@@ -23,6 +26,10 @@ AND (
 AND (
   ${SAFE_STALLED_NON_CONTINUOUS_DEFER_UNTIL_SQL} IS NULL
   OR ${SAFE_STALLED_NON_CONTINUOUS_DEFER_UNTIL_SQL} <= NOW()
+)
+AND (
+  ${SAFE_STALLED_CHANNEL_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_STALLED_CHANNEL_DEFER_UNTIL_SQL} <= NOW()
 )`;
 
 export async function listRules() {

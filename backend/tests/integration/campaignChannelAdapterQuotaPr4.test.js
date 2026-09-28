@@ -8,7 +8,9 @@
  * d) countCombinedSentInCycle(+WithLedger) cộng ccm; email count không đổi.
  * e) checkSendQuota({channel:'telegram'}) → throw.
  * f) runner + gate thật, mode off, plan daily_zalo_limit=2, đã có 2 zalo_messages hôm nay →
- *    reserve ném PLAN_SEND_LIMIT_EXCEEDED, run failed, 0 lần sendOne, partialResult giữ bất biến.
+ *    reserve ném PLAN_SEND_LIMIT_EXCEEDED, 0 lần sendOne, partialResult giữ bất biến. ĐỔI Ở PR-5:
+ *    daily limit luôn có resetAt (nextVnMidnight()) nên giờ run DEFER (quotaDeferredUntil, vẫn
+ *    'running') thay vì 'failed' — trước PR-5 test này kỳ vọng 'failed'.
  * g) mode enforce → ccm.quota_reservation_id khác NULL, reservation consumed, count không đôi.
  */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
@@ -243,7 +245,7 @@ describe('PR-4 — Quota tường minh cho kênh adapter (campaign_channel_messa
     ).rejects.toThrow(/kênh không hợp lệ/i);
   });
 
-  it('(f) runner + gate thật, mode off, plan daily_zalo_limit=2, đã có 2 zalo_messages hôm nay -> PLAN_SEND_LIMIT_EXCEEDED, run failed, 0 lần gửi', async () => {
+  it('(f) runner + gate thật, mode off, plan daily_zalo_limit=2, đã có 2 zalo_messages hôm nay -> PLAN_SEND_LIMIT_EXCEEDED, run DEFER (quotaDeferredUntil, KHÔNG failed) [PR-5], 0 lần gửi', async () => {
     process.env.SEND_QUOTA_RESERVATION_MODE = 'off';
     const plan = await createTestPlan({ dailyZalo: 2 });
     await assignPlanToUser(owner.id, plan.id);
@@ -281,11 +283,15 @@ describe('PR-4 — Quota tường minh cho kênh adapter (campaign_channel_messa
 
     expect(fakeSendOne).toHaveBeenCalledTimes(0);
     const { rows: afterRun } = await db.query(
-      'SELECT status, error_message, total_recipients, successful_sends, failed_sends, skipped_sends FROM campaign_runs WHERE id = $1',
+      'SELECT status, run_metadata, total_recipients, successful_sends, failed_sends, skipped_sends FROM campaign_runs WHERE id = $1',
       [run.id]
     );
-    expect(afterRun[0].status).toBe('failed');
-    expect(String(afterRun[0].error_message || '')).toMatch(/PLAN_QUOTA|giới hạn|quota/i);
+    // PR-5 — daily limit luôn có resetAt (nextVnMidnight()) nên PLAN_SEND_LIMIT_EXCEEDED giờ
+    // NHẢ SLOT chờ resume (quotaDeferredUntil) thay vì đánh run failed; xem test riêng (e) trong
+    // campaignChannelDeferPr5.test.js cho nhánh KHÔNG resetAt (gói hết hạn) vẫn failed.
+    expect(afterRun[0].status).toBe('running');
+    expect(String(afterRun[0].run_metadata.quotaDeferredReason || '')).toMatch(/^plan_quota/);
+    expect(afterRun[0].run_metadata.quotaDeferredUntil).toBeTruthy();
     const { total_recipients: total, successful_sends: ok, failed_sends: bad, skipped_sends: sk } = afterRun[0];
     expect(ok + bad + sk).toBeLessThanOrEqual(total);
   });

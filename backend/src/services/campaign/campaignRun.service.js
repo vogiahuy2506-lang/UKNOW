@@ -266,6 +266,13 @@ class CampaignRunService {
         label: 'plan_quota',
         clearKeys: QUOTA_DEFER_CLEAR_KEYS,
       },
+      {
+        untilKey: 'channelDeferredUntil',
+        reasonKey: 'channelDeferredReason',
+        atKey: 'channelDeferredAt',
+        label: 'channel',
+        clearKeys: null,
+      },
     ];
     for (const deferConfig of deferredConfigs) {
       const raw = meta?.[deferConfig.untilKey];
@@ -8664,6 +8671,56 @@ class CampaignRunService {
               skippedSends += pr.skipped;
               await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
             }
+
+            // PR-5 — quiet_hours/rate_limit của kênh adapter defer (run vẫn 'running', scheduler
+            // đánh thức) thay vì run failed. Ledger KHÔNG đổi: người dính lỗi này ở PR-3 đã ở trạng
+            // thái CHƯA XONG (không markRecipientStepCompleted), resume sẽ gửi lại đúng bước. Dùng
+            // reason 'channel_quiet_hours'/'channel_rate_limit' — TUYỆT ĐỐI không dùng 'quiet_hours'
+            // trần: persistRunDeferYieldSlot so sánh đúng chuỗi đó để chèn câu giải thích khung giờ
+            // yên lặng CỦA ZALO vào log (_explainZaloQuietHoursPolicyForLog), sai ngữ cảnh ở đây.
+            if (adapterError?.code === 'CHANNEL_QUIET_HOURS' || adapterError?.code === 'CHANNEL_RATE_LIMIT') {
+              const waitMs = Number.parseInt(adapterError?.waitMs, 10);
+              if (Number.isFinite(waitMs) && waitMs >= 0) {
+                const reason = adapterError.code === 'CHANNEL_QUIET_HOURS'
+                  ? 'channel_quiet_hours'
+                  : 'channel_rate_limit';
+                await this.persistRunDeferYieldSlot({
+                  runId,
+                  campaignId,
+                  waitMs,
+                  reason,
+                  untilKey: 'channelDeferredUntil',
+                  reasonKey: 'channelDeferredReason',
+                  atKey: 'channelDeferredAt',
+                  label: `Kênh ${adapterDescriptor.key}`,
+                  extra: { channelDeferredChannel: adapterDescriptor.key },
+                });
+                // persistRunDeferYieldSlot tự ném RUN_YIELD_SLOT — không rơi xuống throw bên dưới.
+              }
+            }
+
+            // PLAN_SEND_LIMIT_EXCEEDED — đúng khuôn assertSendQuotaOrYield (R:1460-1493): có
+            // resetAt thì defer bằng quotaDeferredUntil (dùng LẠI như Zalo, không phải khoá riêng
+            // cho kênh); không có resetAt (gói hết hạn) thì dừng cứng — tái dùng
+            // _stopRunIfPlanQuotaBlocked (helper CÓ SẴN, đang dùng cho nhánh Zalo/email) thay vì
+            // chép lại logic.
+            if (adapterError?.code === 'PLAN_SEND_LIMIT_EXCEEDED') {
+              if (adapterError.resetAt) {
+                await this.persistQuotaDeferYieldSlot({
+                  runId,
+                  campaignId,
+                  waitMs: Math.max(0, new Date(adapterError.resetAt).getTime() - Date.now()),
+                  reason: `plan_quota_${adapterError.limitType || 'unknown'}`,
+                });
+                // tự ném RUN_YIELD_SLOT.
+              } else {
+                await this._stopRunIfPlanQuotaBlocked(adapterError, { runId, campaignId });
+                // tự ném RUN_STOPPED khi resetAt rỗng; no-op (rơi xuống throw dưới) nếu không phải
+                // PLAN_SEND_LIMIT_EXCEEDED — không xảy ra ở đây vì đã kiểm code ở trên.
+              }
+            }
+
+            // Mã khác (auth/not_configured/RUN_STOPPED/RUN_YIELD_SLOT/…) → ném tiếp như cũ, run failed.
             throw adapterError;
           }
 

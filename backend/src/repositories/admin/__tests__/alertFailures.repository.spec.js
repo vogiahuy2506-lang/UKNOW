@@ -79,6 +79,9 @@ describe('PR-4: Alert repository failure metrics SQL behavior', () => {
     expect(sql).toContain("cr.run_metadata->>'nonContinuousDeferredUntil'");
     expect(sql).toContain("cr.run_metadata->>'quotaDeferredUntil'");
     expect(sql).toContain("cr.run_metadata->>'zaloOutboundDeferredUntil'");
+    // PR-5 (tách tầng kênh gửi) — thiếu khoá này thì run đang defer chờ kênh adapter bị cảnh báo
+    // "stalled" nhầm.
+    expect(sql).toContain("cr.run_metadata->>'channelDeferredUntil'");
     expect(sql).toContain('make_timestamptz');
     expect(sql).not.toContain("(cr.run_metadata->>'nonContinuousDeferredUntil')::timestamptz");
   });

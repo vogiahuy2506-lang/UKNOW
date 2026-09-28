@@ -65,5 +65,6 @@ export function buildSafeStalledRunPredicate(hoursParam) {
     AND NULLIF(TRIM(COALESCE(cr.run_metadata->>'quotaDeferredUntil', '')), '') IS NULL
     AND NULLIF(TRIM(COALESCE(cr.run_metadata->>'zaloOutboundDeferredUntil', '')), '') IS NULL
     AND NULLIF(TRIM(COALESCE(cr.run_metadata->>'nonContinuousDeferredUntil', '')), '') IS NULL
+    AND NULLIF(TRIM(COALESCE(cr.run_metadata->>'channelDeferredUntil', '')), '') IS NULL
   `;
 }

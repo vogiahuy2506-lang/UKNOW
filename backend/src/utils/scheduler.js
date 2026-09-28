@@ -30,6 +30,7 @@ const activeNonContinuousResumeRunIds = new Set();
 const SAFE_QUOTA_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'quotaDeferredUntil'");
 const SAFE_ZALO_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'zaloOutboundDeferredUntil'");
 const SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'nonContinuousDeferredUntil'");
+const SAFE_CHANNEL_DEFER_UNTIL_SQL = safeMetadataTimestampSql("cr.run_metadata->>'channelDeferredUntil'");
 
 /**
  * Quyết định lịch custom có đến hạn chạy ở ngày hiện tại hay chưa.
@@ -67,6 +68,9 @@ const stopAllCampaignScheduleTasks = () => {
 
 /** @internal test helper */
 export const _triggerCampaignScheduleForTests = (schedule) => triggerCampaignSchedule(schedule);
+
+/** @internal test helper — PR-5, gọi trực tiếp hàm scheduler nhặt run non-continuous để test defer channel. */
+export const _recoverNonContinuousCampaignRunsForTests = () => recoverNonContinuousCampaignRuns();
 
 /**
  * Lịch nổ mà hỏng trước khi tạo được lượt chạy (vd chiến dịch còn `draft` → createCampaignRunRecord
@@ -394,6 +398,10 @@ AND (
 AND (
   ${SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL} IS NULL
   OR ${SAFE_NON_CONTINUOUS_DEFER_UNTIL_SQL} <= NOW()
+)
+AND (
+  ${SAFE_CHANNEL_DEFER_UNTIL_SQL} IS NULL
+  OR ${SAFE_CHANNEL_DEFER_UNTIL_SQL} <= NOW()
 )`;
 
 const recoverContinuousCampaignRuns = async () => {
