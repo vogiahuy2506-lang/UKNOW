@@ -158,8 +158,27 @@ function RefundPolicy() {
           </section>
 
           <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>5. Liên hệ</h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>5. Contact</h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>5. Quy trình 6 bước chấm dứt dịch vụ từ phía Khách hàng</h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>5. Six-Step Customer-Initiated Termination Process</h2>
+            <ol className="list-decimal pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}><strong>Bước 1 — Gửi yêu cầu:</strong> Khách hàng gửi yêu cầu chấm dứt qua email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> hoặc hotline 0877909606, kèm thông tin tài khoản, lý do và mong muốn hoàn tiền (nếu có).</li>
+              <li className={lc(language, 'en')}><strong>Step 1 — Submit request:</strong> The Customer sends a termination request via <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> or hotline 0877909606, including account details, reason, and refund expectation (if any).</li>
+              <li className={lc(language, 'vi')}><strong>Bước 2 — Xác nhận tiếp nhận:</strong> DIGISO gửi email xác nhận tiếp nhận trong vòng 24 giờ làm việc.</li>
+              <li className={lc(language, 'en')}><strong>Step 2 — Acknowledgment:</strong> DIGISO acknowledges receipt via email within 24 business hours.</li>
+              <li className={lc(language, 'vi')}><strong>Bước 3 — Xét duyệt điều kiện:</strong> DIGISO xét duyệt điều kiện chấm dứt và hoàn tiền theo Mục 2, 3 ở trên trong vòng 3 ngày làm việc.</li>
+              <li className={lc(language, 'en')}><strong>Step 3 — Eligibility review:</strong> DIGISO reviews eligibility per Sections 2 and 3 above within 3 business days.</li>
+              <li className={lc(language, 'vi')}><strong>Bước 4 — Thông báo kết quả:</strong> DIGISO thông báo kết quả (chấp thuận/từ chối kèm lý do) qua email cho Khách hàng trong vòng 3 ngày làm việc.</li>
+              <li className={lc(language, 'en')}><strong>Step 4 — Result notification:</strong> DIGISO notifies the Customer of the result (approved/rejected with reason) via email within 3 business days.</li>
+              <li className={lc(language, 'vi')}><strong>Bước 5 — Vô hiệu hóa dịch vụ:</strong> DIGISO vô hiệu hóa tài khoản và các dịch vụ liên quan trong vòng 1 ngày làm việc sau khi chấp thuận.</li>
+              <li className={lc(language, 'en')}><strong>Step 5 — Service deactivation:</strong> DIGISO deactivates the account and related services within 1 business day after approval.</li>
+              <li className={lc(language, 'vi')}><strong>Bước 6 — Hoàn tiền (nếu có):</strong> DIGISO thực hiện hoàn tiền theo Chính sách thanh toán (Mục 8) trong vòng 7–14 ngày làm việc.</li>
+              <li className={lc(language, 'en')}><strong>Step 6 — Refund (if applicable):</strong> DIGISO processes the refund per the Payment Policy (Section 8) within 7–14 business days.</li>
+            </ol>
+          </section>
+
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>6. Liên hệ</h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>6. Contact</h2>
             <ul className="list-disc pl-6 text-slate-700 space-y-2">
               <li><strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a></li>
               <li><strong>Điện thoại:</strong> 0877909606</li>

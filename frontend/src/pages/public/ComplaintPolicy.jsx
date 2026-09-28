@@ -320,23 +320,29 @@ function ComplaintPolicy() {
               6. Escalation
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Nếu không hài lòng với phương án giải quyết, bạn có thể:
+              Nếu không hài lòng với phương án giải quyết của DIGISO, bạn có thể:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              If not satisfied with the resolution, you may:
+              If not satisfied with DIGISO's resolution, you may:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Yêu cầu chuyển lên cấp quản lý cao hơn của DIGISO.
+                Yêu cầu chuyển lên cấp quản lý cao hơn của DIGISO qua email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>.
               </li>
               <li className={lc(language, 'en')}>
-                Request escalation to a higher level of DIGISO management.
+                Request escalation to a higher level of DIGISO management via email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>.
               </li>
               <li className={lc(language, 'vi')}>
-                Gửi khiếu nại đến cơ quan có thẩm quyền theo quy định.
+                Gửi khiếu nại đến Sở Công Thương địa phương nơi DIGISO đặt trụ sở (Thành phố Hồ Chí Minh) hoặc cơ quan nhà nước có thẩm quyền theo quy định pháp luật.
               </li>
               <li className={lc(language, 'en')}>
-                Submit complaint to competent authorities as regulated.
+                Submit a complaint to the Department of Industry and Trade of the locality where DIGISO is headquartered (Ho Chi Minh City) or to other competent state authorities as provided by law.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Gọi Tổng đài hỗ trợ khách hàng và tiếp nhận phản ánh về hoạt động thương mại điện tử: <strong>1800-6838</strong> (Sở Công Thương TP.HCM / Cục Thương mại điện tử & Kinh tế số).
+              </li>
+              <li className={lc(language, 'en')}>
+                Call the national hotline for e-commerce complaints: <strong>1800-6838</strong> (Ho Chi Minh City Department of Industry and Trade / Department of E-commerce and Digital Economy).
               </li>
             </ul>
           </section>

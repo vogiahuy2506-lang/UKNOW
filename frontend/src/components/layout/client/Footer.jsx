@@ -23,6 +23,7 @@ const COLUMNS = (t) => [
       { label: t('footer.paymentPolicy'), href: '/payment-policy' },
       { label: t('footer.complaintPolicy'), href: '/complaint-policy' },
       { label: t('footer.refundPolicy'), href: '/refund-policy' },
+      { label: t('footer.rightsAndDuties'), href: '/rights-and-duties' },
       { label: t('footer.publicDPA'), href: '/public-dpa' },
       { label: t('footer.termsOfService'), href: '/terms' },
     ],
@@ -70,6 +71,8 @@ export default function Footer() {
             <div className="text-sm text-slate-500 space-y-1">
               <p className="font-medium text-slate-400">{t('footer.companyName')}</p>
               <p>{t('footer.companyAddress')}</p>
+              <p>{t('footer.companyRep')}</p>
+              <p>{t('footer.companyLicense')}</p>
               <p>{t('footer.companyPhone')}</p>
               <p><a href="mailto:info@digiso.vn" className="hover:text-orange-400 transition-colors">info@digiso.vn</a></p>
             </div>

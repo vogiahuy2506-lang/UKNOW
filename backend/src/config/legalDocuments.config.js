@@ -31,7 +31,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   dpa: {
     purpose: 'dpa',
     version: '2026-09-28',
-    hash: '0a84127ed5ce438d2fc388630cf2ccc73f6848ec1787077f9cb6cbac3ca2156d',
+    hash: '1669220576a59b2f19f19273ab23c7af0089c732fb899e8ca61db21469888230',
     title: 'Thỏa thuận xử lý dữ liệu (DPA)',
     path: '/public-dpa',
     frontendRelativePath: 'src/pages/public/PublicDPA.jsx',

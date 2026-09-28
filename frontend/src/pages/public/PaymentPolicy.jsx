@@ -367,13 +367,97 @@ function PaymentPolicy() {
             </p>
           </section>
 
-          {/* Section 7: Contact */}
+          {/* Section 7: Incorrect Payment */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              7. Liên hệ
+              7. Xử lý chuyển khoản sai thông tin
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              7. Contact
+              7. Handling of Incorrect Transfers
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Trường hợp Người dùng chuyển khoản sai số tiền, sai nội dung, sai tài khoản thụ hưởng hoặc gửi nhầm giao dịch, DIGISO xử lý như sau:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              If the User transfers an incorrect amount, content, beneficiary account, or sends a mistaken transaction, DIGISO handles it as follows:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Người dùng thông báo ngay cho DIGISO qua email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> hoặc hotline 0877909606, kèm theo ảnh chụp sao kê giao dịch.
+              </li>
+              <li className={lc(language, 'en')}>
+                Users must notify DIGISO immediately via <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> or hotline 0877909606, attaching a screenshot of the transaction receipt.
+              </li>
+              <li className={lc(language, 'vi')}>
+                DIGISO đối chiếu và phản hồi trong vòng 24 giờ làm việc kể từ khi nhận thông báo đầy đủ.
+              </li>
+              <li className={lc(language, 'en')}>
+                DIGISO will verify and respond within 24 business hours of receiving complete notification.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Giao dịch chuyển nhầm sang tài khoản hệ thống: DIGISO hoàn trả đúng số tiền đã nhận sau khi xác minh và trừ phí ngân hàng phát sinh (nếu có) trong vòng 3–7 ngày làm việc.
+              </li>
+              <li className={lc(language, 'en')}>
+                Transactions mistakenly sent to DIGISO's account: DIGISO refunds the exact amount received after verification, minus any bank fees incurred (if any), within 3–7 business days.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Giao dịch chuyển nhầm sang tài khoản bên thứ ba không thuộc DIGISO: DIGISO hỗ trợ cung cấp thông tin giao dịch để Người dùng tự liên hệ ngân hàng/đơn vị liên quan yêu cầu tra soát và hoàn tiền.
+              </li>
+              <li className={lc(language, 'en')}>
+                Transactions mistakenly sent to a third-party account not belonging to DIGISO: DIGISO will assist by providing transaction details so the User can contact the relevant bank or party for investigation and refund.
+              </li>
+            </ul>
+          </section>
+
+          {/* Section 8: Refund Upon Termination */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              8. Hoàn tiền khi chấm dứt dịch vụ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              8. Refund Upon Service Termination
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Người dùng có quyền yêu cầu hoàn tiền khi dịch vụ bị chấm dứt theo Chính sách chấm dứt dịch vụ và hoàn tiền. Nguyên tắc hoàn tiền:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Users may request a refund when a service is terminated in accordance with the Termination and Refund Policy. Refund principles:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Hoàn tiền theo phần giá trị dịch vụ chưa sử dụng tính theo ngày; đã sử dụng trên 50% thời hạn gói thì không hoàn.
+              </li>
+              <li className={lc(language, 'en')}>
+                Refund based on the unused portion calculated daily; if more than 50% of the package period has been used, no refund is provided.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Phí giao dịch ngân hàng phát sinh khi hoàn tiền do Người dùng chịu (nếu có).
+              </li>
+              <li className={lc(language, 'en')}>
+                Any bank transaction fees arising from the refund are borne by the User (if any).
+              </li>
+              <li className={lc(language, 'vi')}>
+                Thời hạn hoàn tiền: trong vòng 7–14 ngày làm việc kể từ khi DIGISO xác nhận yêu cầu hoàn tiền hợp lệ.
+              </li>
+              <li className={lc(language, 'en')}>
+                Refund timeframe: within 7–14 business days from the date DIGISO confirms a valid refund request.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Hình thức hoàn tiền: chuyển khoản ngân hàng về tài khoản đã dùng để thanh toán hoặc tài khoản do Người dùng cung cấp.
+              </li>
+              <li className={lc(language, 'en')}>
+                Refund method: bank transfer to the original payment account or another account provided by the User.
+              </li>
+            </ul>
+          </section>
+
+          {/* Section 9: Contact */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              9. Liên hệ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              9. Contact
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               Nếu bạn có câu hỏi về Chính sách Thanh toán, vui lòng liên hệ:

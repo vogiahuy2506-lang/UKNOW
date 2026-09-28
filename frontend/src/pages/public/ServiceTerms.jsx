@@ -119,6 +119,29 @@ function ServiceTerms() {
           </section>
 
           <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>3A. Phương thức cung cấp dịch vụ</h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>3A. Service Delivery Method</h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Dịch vụ trên nền tảng founderai.biz được DIGISO cung cấp theo các phương thức sau, tuân thủ Điều 15 Nghị định 248/2026/NĐ-CP:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Services on founderai.biz are delivered by DIGISO using the following methods, in compliance with Article 15 of Decree 248/2026/NĐ-CP:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}><strong>Nền tảng trực tuyến (SaaS):</strong> Toàn bộ dịch vụ được cung cấp dưới dạng phần mềm dịch vụ (SaaS) trên nền tảng web tại <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>; Người dùng truy cập qua trình duyệt và đăng nhập tài khoản để sử dụng.</li>
+              <li className={lc(language, 'en')}><strong>Online platform (SaaS):</strong> All services are delivered as Software-as-a-Service (SaaS) via the web platform at <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>; Users access through a browser after signing in.</li>
+              <li className={lc(language, 'vi')}><strong>Tự phục vụ (self-service):</strong> Người dùng tự thao tác các chức năng trên giao diện nền tảng để tạo chiến dịch, quản lý khách hàng, gửi tin nhắn, nạp tiền và tải xuất dữ liệu.</li>
+              <li className={lc(language, 'en')}><strong>Self-service:</strong> Users independently operate platform features to create campaigns, manage customers, send messages, top up, and export data.</li>
+              <li className={lc(language, 'vi')}><strong>Kích hoạt tự động:</strong> Sau khi thanh toán được xác nhận thành công (qua PayOS hoặc chuyển khoản ngân hàng), dịch vụ được kích hoạt tự động và Người dùng có thể sử dụng ngay.</li>
+              <li className={lc(language, 'en')}><strong>Automatic activation:</strong> After successful payment confirmation (via PayOS or bank transfer), the service is activated automatically and Users can use it immediately.</li>
+              <li className={lc(language, 'vi')}><strong>Hỗ trợ trực tuyến:</strong> DIGISO hỗ trợ Người dùng qua email, hotline và trang Hỗ trợ trực tuyến trong giờ làm việc 8:00 – 22:00, Thứ 2 – Thứ 7.</li>
+              <li className={lc(language, 'en')}><strong>Online support:</strong> DIGISO provides User support via email, hotline, and the Online Support page during business hours 8:00 AM – 10:00 PM, Mon – Sat.</li>
+              <li className={lc(language, 'vi')}><strong>Không giao nhận vật lý:</strong> Toàn bộ dịch vụ là dịch vụ số; không có sản phẩm vật lý, không phát sinh chi phí vận chuyển.</li>
+              <li className={lc(language, 'en')}><strong>No physical delivery:</strong> All services are digital; there are no physical products and no shipping fees.</li>
+            </ul>
+          </section>
+
+          <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>4. Chấm dứt dịch vụ</h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>4. Service Termination</h2>
 
