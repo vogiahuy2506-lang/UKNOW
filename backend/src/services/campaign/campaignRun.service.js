@@ -7,6 +7,7 @@ import campaignEmailSenderService from './campaignEmailSender.service.js';
 import campaignExecutionLogService from './campaignExecutionLog.service.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
 import campaignChannelRunner, { createCampaignChannelQuotaGate } from './campaignChannelRunner.service.js';
+import campaignShutdownGate from './campaignShutdownGate.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { buildZaloRateLimiterFromEnv } from './buildZaloRateLimiterFromEnv.js';
@@ -3820,7 +3821,16 @@ class CampaignRunService {
               const emailSendMeta = {
                 emailStep: Math.max(1, Number.parseInt(stepMeta?.stepIndex, 10) || 1),
               };
-              const sendResult = await executeWithTimeoutRetry({
+              // PR-A (PLAN_AN_TOAN_KHI_DEPLOY_2026-09-28) — TRƯỚC lời gọi nhà cung cấp: đang shutdown
+              // thì không mở lượt gửi mới, nhả slot cho container mới resume (run giữ 'running', KHÔNG
+              // ghi metadata defer nào — khác channelDeferredUntil của PR-5b, đây chỉ là tín hiệu
+              // điều phối tức thời, không cần lưu DB vì không có "chờ tới mốc" nào cả).
+              if (campaignShutdownGate.isShuttingDown()) {
+                const shutdownErr = new Error('Tiến trình đang shutdown, tạm dừng gửi email.');
+                shutdownErr.code = 'RUN_YIELD_SLOT';
+                throw shutdownErr;
+              }
+              const sendResult = await campaignShutdownGate.trackInFlight(() => executeWithTimeoutRetry({
                 operationName: 'send_email_node',
                 operation: () => campaignEmailSenderService.sendEmailToCustomer(
                   runtimeNode,
@@ -3836,7 +3846,7 @@ class CampaignRunService {
                     + `next_delay_ms=${delayMs} email=${String(customer?.email || '').trim()}`
                   );
                 },
-              });
+              }));
 
               // PR-6b — MỘT chỗ tính đúng cho MỌI đường ra của hàm (skip/bounce/failed khác/success
               // đều reset về 0; chỉ smtp_transient_retry_scheduled mới +1). Đặt Ở ĐÂY (trước mọi
@@ -5583,7 +5593,13 @@ class CampaignRunService {
               const sendStartedAt = Date.now();
               let sendResult;
               try {
-                sendResult = await campaignZaloSenderService.sendPersonalMessageQueued({
+                // PR-A — TRƯỚC lời gọi nhà cung cấp: xem chú thích ở nhánh email phía trên.
+                if (campaignShutdownGate.isShuttingDown()) {
+                  const shutdownErr = new Error('Tiến trình đang shutdown, tạm dừng gửi Zalo cá nhân.');
+                  shutdownErr.code = 'RUN_YIELD_SLOT';
+                  throw shutdownErr;
+                }
+                sendResult = await campaignShutdownGate.trackInFlight(() => campaignZaloSenderService.sendPersonalMessageQueued({
                   userId,
                   accountId: workingAccount.id,
                   recipient: resolvedRecipientUid,
@@ -5603,7 +5619,7 @@ class CampaignRunService {
                   zaloMessageId,
                   message: trackedMessage,
                   attachments,
-                });
+                }));
               } catch (error) {
                 campaignZaloSenderService.annotateZaloSendError(error, {
                   stage: error?.stage || 'send',
@@ -7220,7 +7236,13 @@ class CampaignRunService {
                   stepIndex: 1,
                 },
               });
-              const sendResult = await campaignZaloSenderService.sendFriendRequestQueued({
+              // PR-A — TRƯỚC lời gọi nhà cung cấp: xem chú thích ở nhánh email phía trên.
+              if (campaignShutdownGate.isShuttingDown()) {
+                const shutdownErr = new Error('Tiến trình đang shutdown, tạm dừng gửi lời mời kết bạn Zalo.');
+                shutdownErr.code = 'RUN_YIELD_SLOT';
+                throw shutdownErr;
+              }
+              const sendResult = await campaignShutdownGate.trackInFlight(() => campaignZaloSenderService.sendFriendRequestQueued({
                 userId,
                 accountId: workingAccount.id,
                 phone,
@@ -7231,7 +7253,7 @@ class CampaignRunService {
                 stepIndex: 1,
                 zaloMessageId,
                 message,
-              });
+              }));
               successfulSends += 1;
               void this._clearQuotaPauseStateAfterProgress(runId);
               markZaloOutboundSuccess({ accountId: workingAccount.id, channel: 'zalo_friend_request' });
@@ -7860,7 +7882,13 @@ class CampaignRunService {
               await updateZaloMessageTrackingMeta(zaloMessageId, {
                 linkTargets: trackedLinkTargets,
               });
-              const sendResult = await campaignZaloSenderService.sendGroupMessageQueued({
+              // PR-A — TRƯỚC lời gọi nhà cung cấp: xem chú thích ở nhánh email phía trên.
+              if (campaignShutdownGate.isShuttingDown()) {
+                const shutdownErr = new Error('Tiến trình đang shutdown, tạm dừng gửi Zalo nhóm.');
+                shutdownErr.code = 'RUN_YIELD_SLOT';
+                throw shutdownErr;
+              }
+              const sendResult = await campaignShutdownGate.trackInFlight(() => campaignZaloSenderService.sendGroupMessageQueued({
                 userId,
                 accountId: account.id,
                 groupId,
@@ -7872,7 +7900,7 @@ class CampaignRunService {
                 zaloMessageId,
                 message: trackedMessage,
                 attachments,
-              });
+              }));
               if (isZaloPartialDeliveryResult(sendResult)) {
                 failedSends += 1;
                 const mapped = mapZaloPartialDelivery(sendResult);

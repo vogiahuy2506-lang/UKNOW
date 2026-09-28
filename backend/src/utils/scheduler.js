@@ -10,6 +10,7 @@ import notificationService from '../services/admin/notification.service.js';
 import { safeMetadataTimestampSql } from './metadataTimestampSql.util.js';
 import campaignRunService from '../services/campaign/campaignRun.service.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
+import campaignShutdownGate from '../services/campaign/campaignShutdownGate.js';
 import { notifyCampaignRunFailed, notifyCampaignApprovalRequired } from './campaignQuotaPauseNotify.util.js';
 import { evaluateApprovalThreshold, markPendingOwnerApproval } from '../services/campaign/campaignApproval.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -55,7 +56,7 @@ const shouldTriggerCustomScheduleToday = (schedule) => {
   return dayDiff % intervalDays === 0;
 };
 
-const stopAllCampaignScheduleTasks = () => {
+export const stopAllCampaignScheduleTasks = () => {
   for (const task of campaignScheduleTasks.values()) {
     try {
       task.stop();
@@ -456,6 +457,10 @@ AND (
 )`;
 
 const recoverContinuousCampaignRuns = async () => {
+  // PR-A (PLAN_AN_TOAN_KHI_DEPLOY_2026-09-28) — đang shutdown thì không khởi run mới/resume
+  // mới; provider call sẽ tự yield qua campaignShutdownGate ở engine, nhưng chặn sớm ở đây
+  // đỡ lãng phí một vòng preflight/executeCampaign rồi lại yield ngay.
+  if (campaignShutdownGate.isShuttingDown()) return { recovered: 0 };
   const result = await db.query(
     `SELECT cr.id, cr.id_campaign,
             COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id
@@ -522,6 +527,8 @@ const triggerNonContinuousResume = ({ runId, campaignId, userId, resumedBy }) =>
  * @returns {Promise<void>}
  */
 const recoverNonContinuousCampaignRuns = async () => {
+  // PR-A — xem chú thích ở recoverContinuousCampaignRuns phía trên.
+  if (campaignShutdownGate.isShuttingDown()) return { recovered: 0 };
   const result = await db.query(
     `SELECT cr.id, cr.id_campaign,
             COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id

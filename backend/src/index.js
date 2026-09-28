@@ -31,7 +31,9 @@ process.on('uncaughtException', (err) => {
   console.error('[uncaughtException]', err);
 });
 
-import { initScheduler } from './utils/scheduler.js';
+import { initScheduler, stopAllCampaignScheduleTasks } from './utils/scheduler.js';
+import campaignShutdownGate from './services/campaign/campaignShutdownGate.js';
+import { runGracefulShutdownSequence } from './utils/gracefulShutdownSequence.util.js';
 import outboundMessageQueueService from './services/queue/outboundMessageQueue.service.js';
 import { registerOutboundMessageProcessors } from './services/queue/outboundMessageProcessorRegistry.js';
 import kbDocumentQueue from './services/queue/kbDocumentQueue.service.js';
@@ -179,7 +181,11 @@ const setupCleanupTask = () => {
 
 /**
  * Đóng tài nguyên theo thứ tự an toàn khi process nhận tín hiệu dừng.
- * Giúp worker BullMQ thoát sạch và tránh job bị treo.
+ *
+ * PR-A (PLAN_AN_TOAN_KHI_DEPLOY_2026-09-28) — trình tự thật nằm ở
+ * `utils/gracefulShutdownSequence.util.js` (tách riêng để unit test được — file này có side-effect
+ * nặng ở module scope, không import thẳng trong Jest được). Hàm ở đây chỉ lo phần KHÔNG tách được:
+ * cờ chống gọi 2 lần, log tín hiệu nhận, và `process.exit(0)` cuối cùng.
  *
  * @param {string} signal
  */
@@ -187,18 +193,16 @@ const gracefulShutdown = async (signal) => {
   if (isShuttingDown) return;
   isShuttingDown = true;
   console.info(`[Server] Nhận tín hiệu ${signal}, đang shutdown...`);
-  try {
-    await outboundMessageQueueService.close();
-    await kbDocumentQueue.close();
-  } catch (error) {
-    console.error(`[Server] Lỗi khi đóng BullMQ: ${error?.message || error}`);
-  }
-  try {
-    await db.pool.end();
-    console.info('[Server] Đã đóng pool PostgreSQL.');
-  } catch (error) {
-    console.error(`[Server] Lỗi khi đóng pool PostgreSQL: ${error?.message || error}`);
-  }
+  await runGracefulShutdownSequence({
+    gate: campaignShutdownGate,
+    waitForInFlightMs: 25_000,
+    stopCron: () => stopAllCampaignScheduleTasks(),
+    closeOutboundQueue: () => outboundMessageQueueService.close(),
+    closeKbQueue: () => kbDocumentQueue.close(),
+    closeDbPool: () => db.pool.end(),
+    logStep: (msg) => console.info(`[Server] ${msg}`),
+    logError: (msg) => console.error(`[Server] ${msg}`),
+  });
   process.exit(0);
 };
 

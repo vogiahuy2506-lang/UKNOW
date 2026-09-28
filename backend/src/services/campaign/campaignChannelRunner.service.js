@@ -8,6 +8,7 @@
 import campaignChannelMessageRepository from '../../repositories/campaign/campaignChannelMessage.repository.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
 import { ChannelSendError } from './campaignChannelRegistry.service.js';
+import campaignShutdownGate from './campaignShutdownGate.js';
 import {
   reserveSendQuota,
   markSendQuotaSending,
@@ -535,6 +536,17 @@ export async function runAdapterSendNode(ctx) {
 
         let messageId = null;
         try {
+          // PR-A (PLAN_AN_TOAN_KHI_DEPLOY_2026-09-28) — TRƯỚC lời gọi nhà cung cấp (và TRƯỚC
+          // insertQueued): catch bên dưới ném thẳng RUN_STOPPED/RUN_YIELD_SLOT mà KHÔNG gọi
+          // markFailed(messageId, …) (xem nhánh `if (sendError?.code === 'RUN_STOPPED' ||
+          // sendError?.code === 'RUN_YIELD_SLOT') throw sendError;` ngay dưới) — nếu đặt sau
+          // insertQueued, dòng 'queued' vừa tạo sẽ treo vĩnh viễn (không sent, không failed).
+          // Đặt TRƯỚC insertQueued để không tạo dòng đó khi đang shutdown.
+          if (campaignShutdownGate.isShuttingDown()) {
+            const shutdownErr = new Error('Tiến trình đang shutdown, tạm dừng gửi kênh ' + descriptor.key + '.');
+            shutdownErr.code = 'RUN_YIELD_SLOT';
+            throw shutdownErr;
+          }
           // eslint-disable-next-line no-await-in-loop
           messageId = await campaignChannelMessageRepository.insertQueued({
             campaignId,
@@ -550,12 +562,12 @@ export async function runAdapterSendNode(ctx) {
             quotaReservationId: reservationId,
           });
           // eslint-disable-next-line no-await-in-loop
-          const sendResult = await descriptor.adapter.sendOne({
+          const sendResult = await campaignShutdownGate.trackInFlight(() => descriptor.adapter.sendOne({
             account,
             recipientKey,
             text,
             stepIndex: oneBasedStep,
-          });
+          }));
           // eslint-disable-next-line no-await-in-loop
           await campaignChannelMessageRepository.markSent(messageId, {
             providerMessageId: sendResult?.messageId || null,
