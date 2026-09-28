@@ -181,34 +181,56 @@ async function applyGroup(client, group, maxId, batchSize, backupFd, log) {
 
 // ─── Nhóm (c): campaign_customers — 2 cột so MIN/MAX của bảng khác + last_activity_at có điều
 // kiện, không có cột `id` đơn (khoá tự nhiên là (id_campaign, id_customer)) nên KHÔNG dùng khuôn
-// generic ở trên. Áp dụng lại: chọn LIMIT batchSize dòng còn khớp mỗi lượt, dòng đã sửa tự rơi khỏi
-// tập khớp (matchWhere) ở lượt sau — không cần chốt "id <= max" vì không có id để chốt; dòng mới
-// sinh ra sau khi Việc 1 deploy vốn đã đúng giờ VN nên không bao giờ khớp matchWhere. ────────────
+// generic ở trên.
+//
+// Review 28/09 — bản đầu dùng subquery tương quan (MIN/MAX lặp nhiều lần mỗi dòng) trên cả bảng:
+// dry-run production quá statement_timeout 30s (110k dòng cc), còn apply `LIMIT` mỗi lô phải quét lại
+// cả những dòng đã sửa → còn chậm hơn. Nay: mốc gom MỘT lần (CC_REF_CTE, ~0,8s trên 291k thư), apply
+// lấy danh sách khoá khớp một lần rồi xử lý theo lô khoá; subquery tương quan chỉ còn chạy trên đúng
+// các dòng của lô (lưới an toàn giống nhóm (a)/(b)). Dòng mới sinh ra sau khi Việc 1 deploy vốn đúng
+// giờ VN nên không bao giờ khớp. ─────────────────────────────────────────────────────────────────
 
+const CC_REF_CTE = `cc_ref AS (
+  SELECT id_campaign, id_customer, MIN(created_at) AS first_ref, MAX(created_at) AS last_ref
+    FROM email_messages
+   WHERE NOT is_preview AND id_customer IS NOT NULL AND id_campaign IS NOT NULL
+   GROUP BY id_campaign, id_customer
+)`;
+// Hiệu số (giây) đã tính sẵn một lần — NULL khi cột của cc là NULL (FILTER/WHERE coi như không khớp).
+const CC_DIFFS_FROM = `WITH ${CC_REF_CTE},
+d AS (
+  SELECT cc.id_campaign, cc.id_customer,
+         extract(epoch FROM (r.first_ref - cc.first_email_sent_at)) AS fd,
+         extract(epoch FROM (r.last_ref - cc.last_email_sent_at)) AS ld
+    FROM campaign_customers cc
+    JOIN cc_ref r ON r.id_campaign = cc.id_campaign AND r.id_customer = cc.id_customer
+)`;
+const diffMatches = (col) => `abs(${col} - ${SEVEN_HOURS_SECONDS}) <= ${EPOCH_TOLERANCE_SECONDS}`;
+
+// Bản tương quan — chỉ dùng trên các dòng của MỘT lô (SELECT … FOR UPDATE và UPDATE).
 const CC_FIRST_REF = `(SELECT MIN(em.created_at) FROM email_messages em WHERE em.id_customer = cc.id_customer AND em.id_campaign = cc.id_campaign AND NOT em.is_preview)`;
 const CC_LAST_REF = `(SELECT MAX(em.created_at) FROM email_messages em WHERE em.id_customer = cc.id_customer AND em.id_campaign = cc.id_campaign AND NOT em.is_preview)`;
 const CC_FIRST_MATCHES = `(cc.first_email_sent_at IS NOT NULL AND ${CC_FIRST_REF} IS NOT NULL
    AND abs(extract(epoch FROM (${CC_FIRST_REF} - cc.first_email_sent_at)) - ${SEVEN_HOURS_SECONDS}) <= ${EPOCH_TOLERANCE_SECONDS})`;
 const CC_LAST_MATCHES = `(cc.last_email_sent_at IS NOT NULL AND ${CC_LAST_REF} IS NOT NULL
    AND abs(extract(epoch FROM (${CC_LAST_REF} - cc.last_email_sent_at)) - ${SEVEN_HOURS_SECONDS}) <= ${EPOCH_TOLERANCE_SECONDS})`;
-const CC_FIRST_DIFF = `extract(epoch FROM (${CC_FIRST_REF} - cc.first_email_sent_at))`;
-const CC_LAST_DIFF = `extract(epoch FROM (${CC_LAST_REF} - cc.last_email_sent_at))`;
 
 async function dryRunGroupC(client, log) {
   const bucketSelectsFirst = NON_MATCH_BUCKETS
-    .map((bucket, i) => `COUNT(*) FILTER (WHERE cc.first_email_sent_at IS NOT NULL AND ${CC_FIRST_REF} IS NOT NULL AND NOT (${CC_FIRST_MATCHES}) AND ${bucket.sql(CC_FIRST_DIFF)}) AS fb${i}`)
+    .map((bucket, i) => `COUNT(*) FILTER (WHERE fd IS NOT NULL AND NOT (${diffMatches('fd')}) AND ${bucket.sql('fd')}) AS fb${i}`)
     .join(',\n       ');
   const bucketSelectsLast = NON_MATCH_BUCKETS
-    .map((bucket, i) => `COUNT(*) FILTER (WHERE cc.last_email_sent_at IS NOT NULL AND ${CC_LAST_REF} IS NOT NULL AND NOT (${CC_LAST_MATCHES}) AND ${bucket.sql(CC_LAST_DIFF)}) AS lb${i}`)
+    .map((bucket, i) => `COUNT(*) FILTER (WHERE ld IS NOT NULL AND NOT (${diffMatches('ld')}) AND ${bucket.sql('ld')}) AS lb${i}`)
     .join(',\n       ');
   const { rows } = await client.query(
-    `SELECT
-       COUNT(*) FILTER (WHERE ${CC_FIRST_MATCHES}) AS first_matched,
-       COUNT(*) FILTER (WHERE ${CC_LAST_MATCHES}) AS last_matched,
-       COUNT(*) FILTER (WHERE ${CC_FIRST_MATCHES} OR ${CC_LAST_MATCHES}) AS matched,
+    `${CC_DIFFS_FROM}
+     SELECT
+       COUNT(*) FILTER (WHERE ${diffMatches('fd')}) AS first_matched,
+       COUNT(*) FILTER (WHERE ${diffMatches('ld')}) AS last_matched,
+       COUNT(*) FILTER (WHERE ${diffMatches('fd')} OR ${diffMatches('ld')}) AS matched,
        ${bucketSelectsFirst},
        ${bucketSelectsLast}
-     FROM campaign_customers cc`
+     FROM d`
   );
   const row = rows[0];
   const firstBuckets = {};
@@ -229,10 +251,30 @@ async function dryRunGroupC(client, log) {
   return { key: 'campaign_customers.first_last_email_sent_at', matched, firstMatched, lastMatched, firstBuckets, lastBuckets };
 }
 
+function keyValues(keys) {
+  const params = [];
+  const values = [];
+  keys.forEach((k, i) => {
+    params.push(k.id_campaign, k.id_customer);
+    values.push(`($${i * 2 + 1}::bigint, $${i * 2 + 2}::bigint)`);
+  });
+  return { params, valuesSql: values.join(', ') };
+}
+
 async function applyGroupC(client, batchSize, backupFd, log) {
+  // Chốt danh sách khoá khớp MỘT lần (giống chốt MAX(id) của nhóm (a)/(b)).
+  const { rows: candidates } = await client.query(
+    `${CC_DIFFS_FROM}
+     SELECT id_campaign, id_customer FROM d
+      WHERE ${diffMatches('fd')} OR ${diffMatches('ld')}
+      ORDER BY id_campaign, id_customer`
+  );
+  log(`[apply] campaign_customers.first_last_email_sent_at: chốt ${candidates.length} khoá khớp`);
+
   let updated = 0;
   let lastActivityUpdated = 0;
-  for (;;) {
+  for (let start = 0; start < candidates.length; start += batchSize) {
+    const { params, valuesSql } = keyValues(candidates.slice(start, start + batchSize));
     await client.query('BEGIN');
     let rows = [];
     try {
@@ -245,10 +287,11 @@ async function applyGroupC(client, batchSize, backupFd, log) {
                 ${CC_FIRST_MATCHES} AS first_matches,
                 ${CC_LAST_MATCHES} AS last_matches
            FROM campaign_customers cc
+           JOIN (VALUES ${valuesSql}) AS v(id_campaign, id_customer)
+             ON cc.id_campaign = v.id_campaign AND cc.id_customer = v.id_customer
           WHERE ${CC_FIRST_MATCHES} OR ${CC_LAST_MATCHES}
-          LIMIT $1
           FOR UPDATE OF cc`,
-        [batchSize]
+        params
       ));
       if (rows.length > 0) {
         const csvLines = [];
@@ -267,12 +310,7 @@ async function applyGroupC(client, batchSize, backupFd, log) {
         fs.writeSync(backupFd, csvLines.join(''));
         fs.fsyncSync(backupFd);
 
-        const values = [];
-        const params = [];
-        rows.forEach((r, i) => {
-          params.push(r.id_campaign, r.id_customer);
-          values.push(`($${i * 2 + 1}::bigint, $${i * 2 + 2}::bigint)`);
-        });
+        const locked = keyValues(rows);
         await client.query(
           `UPDATE campaign_customers cc
               SET first_email_sent_at = CASE WHEN ${CC_FIRST_MATCHES} THEN cc.first_email_sent_at + interval '7 hours' ELSE cc.first_email_sent_at END,
@@ -280,10 +318,10 @@ async function applyGroupC(client, batchSize, backupFd, log) {
                   last_activity_at    = CASE WHEN ${CC_LAST_MATCHES} AND cc.last_activity_at = cc.last_email_sent_at
                                               THEN cc.last_activity_at + interval '7 hours'
                                               ELSE cc.last_activity_at END
-             FROM (VALUES ${values.join(', ')}) AS v(id_campaign, id_customer)
+             FROM (VALUES ${locked.valuesSql}) AS v(id_campaign, id_customer)
             WHERE cc.id_campaign = v.id_campaign AND cc.id_customer = v.id_customer
               AND (${CC_FIRST_MATCHES} OR ${CC_LAST_MATCHES})`,
-          params
+          locked.params
         );
         updated += rows.length;
       }
@@ -292,9 +330,7 @@ async function applyGroupC(client, batchSize, backupFd, log) {
       await client.query('ROLLBACK').catch(() => {});
       throw error;
     }
-    log(`[apply] campaign_customers.first_last_email_sent_at: lô — ${rows.length} dòng`);
-    if (rows.length === 0) break;
-    if (rows.length < batchSize) break; // lô cuối chưa đầy — không còn dòng nào khớp nữa
+    log(`[apply] campaign_customers.first_last_email_sent_at: lô ${start / batchSize + 1} — ${rows.length} dòng`);
   }
   log(`[apply] campaign_customers.first_last_email_sent_at: tổng đã sửa = ${updated} (last_activity_at trong đó = ${lastActivityUpdated})`);
   return { key: 'campaign_customers.first_last_email_sent_at', updated, lastActivityUpdated };
