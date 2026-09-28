@@ -658,6 +658,24 @@ describe('aiCampaign.service', () => {
       expect(result.data?.permissionDenied).not.toBe('campaigns_create');
     });
 
+    // Review PR-3 — hợp đồng "thiếu khoá = thiếu quyền" (permissions[key] !== true): controller truyền
+    // `activeContext.permissions || {}` nên nhân viên chưa được cấp quyền nào tới đây bằng object RỖNG,
+    // không phải {campaigns_create:false}. Đột biến "!== true" → "=== false" sống sót qua ca (a) —
+    // ca này ghim đúng hợp đồng đó.
+    it('(a2) nhân viên với permissions RỖNG {} (chưa cấp quyền nào) + "tạo chiến dịch..." → vẫn bị chặn campaigns_create', async () => {
+      const result = await aiCampaignService.processSmartChat({
+        userId: 1,
+        history: [{ role: 'user', content: 'tạo chiến dịch email giới thiệu khoá học cho khách cũ' }],
+        locale: 'vi',
+        employeePermissions: {},
+      });
+
+      expect(result.type).toBe('text');
+      expect(result.data).toMatchObject({ permissionDenied: 'campaigns_create' });
+      expect(result.wizardShortCircuit).toBe(true);
+      expect(axiosPost).not.toHaveBeenCalled();
+    });
+
     it('(c) chủ (employeePermissions không truyền) → đi model, prompt KHÔNG chứa === QUYỀN NHÂN VIÊN', async () => {
       reserve.mockResolvedValue({ maxOutputTokens: 1024 });
       extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
