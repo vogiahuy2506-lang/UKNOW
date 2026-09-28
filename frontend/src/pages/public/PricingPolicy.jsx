@@ -142,17 +142,17 @@ function PricingPolicy() {
               1. General Pricing Regulations
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết minh bạch trong việc công bố giá dịch vụ. Giá hiển thị trên nền tảng founderai.biz là số tiền cuối cùng khách hàng thanh toán, không cộng thêm thuế giá trị gia tăng (VAT), trừ khi có ghi chú riêng biệt.
+              DIGISO cam kết minh bạch trong việc công bố giá dịch vụ. Tất cả các mức giá được hiển thị trên nền tảng founderai.biz <strong>đã bao gồm thuế giá trị gia tăng (VAT)</strong> theo quy định của pháp luật Việt Nam, trừ khi có ghi chú riêng biệt.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to transparency in service pricing. Prices displayed on the founderai.biz platform are the final amounts customers pay, with no Value Added Tax (VAT) added, unless otherwise stated.
+              DIGISO commits to transparency in service pricing. All prices displayed on the founderai.biz platform <strong>include Value Added Tax (VAT)</strong> in accordance with Vietnamese law, unless otherwise stated.
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Giá cuối cùng:</strong> Giá các gói dịch vụ hiển thị là số tiền bạn thanh toán, không cộng thêm VAT.
+                <strong>Giá đã bao gồm VAT:</strong> Các gói dịch vụ hiển thị giá đã bao gồm 10% VAT.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Final price:</strong> Displayed service package prices are the amounts you pay, with no VAT added.
+                <strong>Price includes VAT:</strong> Service package prices include 10% VAT.
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Đơn vị tiền tệ:</strong> Tất cả giá được niêm yết bằng Đồng Việt Nam (VND).
@@ -161,10 +161,22 @@ function PricingPolicy() {
                 <strong>Currency:</strong> All prices are listed in Vietnamese Dong (VND).
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Thay đổi giá:</strong> DIGISO có quyền thay đổi giá dịch vụ với thông báo trước ít nhất 30 ngày.
+                <strong>Thay đổi giá:</strong> DIGISO có quyền thay đổi giá dịch vụ với thông báo trước ít nhất 20 ngày, trừ trường hợp thay đổi do cập nhật ngay để tuân thủ quy định pháp luật về thuế hoặc áp dụng chương trình khuyến mãi, ưu đãi.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Price changes:</strong> DIGISO reserves the right to change service prices with at least 30 days prior notice.
+                <strong>Price changes:</strong> DIGISO reserves the right to change service prices with at least 20 days prior notice, except for changes made to comply with tax legal regulations or to apply promotional programs and offers.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Chi phí vận chuyển:</strong> Không áp dụng. Dịch vụ được cung cấp dưới dạng số (SaaS) hoàn toàn trên nền tảng trực tuyến, Người dùng không phải trả thêm bất kỳ khoản phí vận chuyển, giao nhận vật lý nào.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Shipping fees:</strong> Not applicable. Services are delivered as digital SaaS products entirely online; Users do not pay any physical shipping or delivery fees.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Phát sinh ngoài gói:</strong> Mọi khoản phát sinh ngoài gói dịch vụ (nếu có) sẽ được thông báo rõ ràng và chỉ phát sinh khi có sự đồng ý của Người dùng.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Out-of-package charges:</strong> Any charges outside the subscribed package (if any) will be clearly communicated and only incurred with the User's consent.
               </li>
             </ul>
           </section>

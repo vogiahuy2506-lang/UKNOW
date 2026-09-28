@@ -451,7 +451,7 @@ const TopupPage = () => {
           <div>
             <span className="block">{t('checkout.total')}</span>
             <span className="text-[10px] text-slate-400 font-normal">
-              {t('checkout.finalPriceNoVat')}
+              {t('checkout.finalPriceVatIncluded')}
             </span>
           </div>
           <span>
