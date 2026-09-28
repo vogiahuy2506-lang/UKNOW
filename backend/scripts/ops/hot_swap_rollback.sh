@@ -279,7 +279,7 @@ if [ "$PREV_CONTAINER_EXISTS" = "true" ]; then
 
   # Dừng container hiện tại và đổi tên thành standby
   docker update --restart=no "$CONTAINER_NAME" || true
-  docker stop "$CONTAINER_NAME" >/dev/null
+  docker stop -t 45 "$CONTAINER_NAME" >/dev/null
   docker rename "$CONTAINER_NAME" "$STANDBY_NAME"
   echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] [STANDBY] Đã chuyển container cũ sang standby: $STANDBY_NAME"
 fi
@@ -301,6 +301,8 @@ if ! docker run -d \
   --group-add "$DOCKER_GID" \
   --label org.opencontainers.image.revision="$IMAGE_REVISION" \
   --restart unless-stopped \
+  --init \
+  --stop-timeout 45 \
   -e SKIP_MIGRATIONS=true \
   -p "$PORT_MAPPING" \
   -v "$ENV_FILE":/app/.env \

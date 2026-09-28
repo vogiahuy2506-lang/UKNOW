@@ -310,7 +310,7 @@ jobs:
               echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Chuyển container cũ sang standby (đổi tên + stop, chưa xoá)..."
               docker update --restart=no uknow-campaign-backend || true
               docker rename uknow-campaign-backend "$CI_STANDBY_NAME" || true
-              docker stop "$CI_STANDBY_NAME" || true
+              docker stop -t 45 "$CI_STANDBY_NAME" || true
               sleep 2
               # Fallback: nếu daemon conflict khiến stop thất bại, kill PID trực tiếp
               if [ "$(docker inspect "$CI_STANDBY_NAME" --format '{{.State.Running}}' 2>/dev/null || echo false)" = "true" ]; then
@@ -377,6 +377,8 @@ jobs:
               --group-add "$DOCKER_GID" \
               --label org.opencontainers.image.revision="$EXPECTED_SHA" \
               --restart unless-stopped \
+              --init \
+              --stop-timeout 45 \
               -e SKIP_MIGRATIONS=true \
               -p 5001:5001 \
               -v /root/uknow/backend/.env:/app/.env \
@@ -427,6 +429,8 @@ jobs:
             MUTATION_IN_PROGRESS=false
             trap - TERM INT HUP
             if [ "$HAD_PREVIOUS_CONTAINER" = "true" ]; then
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Log drain container cũ ($CI_STANDBY_NAME) trước khi xoá:"
+              docker logs --tail 80 "$CI_STANDBY_NAME" 2>&1 | grep -E "SIGTERM|shutdown|drain|waitForInFlight|pool" || true
               docker rm -f "$CI_STANDBY_NAME" || true
             fi
             # Dọn image cũ >2h (không dùng plain -af để tránh xoá nhầm image vừa pull

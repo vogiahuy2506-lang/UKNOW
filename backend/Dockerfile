@@ -50,4 +50,4 @@ USER node
 
 EXPOSE 5001
 
-CMD ["npm", "run", "start"]
+CMD ["node", "-r", "dotenv/config", "src/index.js"]
