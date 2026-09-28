@@ -379,6 +379,68 @@ describe('POST /api/auth/register — chiếm lại tài khoản pending do ch�
     expect(resetRes.status).toBe(403);
     expect(resetRes.body.code).toBe('EMPLOYEE_ACCOUNT_NOT_OWNED');
   });
+
+  // Review PR-2 28/09: đường kích hoạt CHUẨN của nhân viên mới là bấm link trong thư mời
+  // (/register?invite=<token>). Link đó chứng minh người này nhận lời mời của chủ → vẫn 'created' +
+  // đã chấp nhận, vào được không gian công ty ngay. Bản đầu PR-2 đổi luôn sang 'linked' + NULL.
+  it('nhân viên mới kích hoạt bằng LINK MỜI → giữ origin created + accepted_at, vào context chủ được ngay', async () => {
+    const plan = await createPlan({ maxEmployees: 5 });
+    const owner = await createUser({ username: 'ownerlinkmoi', role: 'user' });
+    await db.query(
+      `UPDATE users SET active_plan_id = $1, subscription_expires_at = NOW() + INTERVAL '365 days',
+              max_employees = 1000 WHERE id = $2`,
+      [plan.id, owner.id]
+    );
+    const ownerLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ username: owner.username, password: owner.plainPassword });
+    const ownerToken = ownerLogin.body.data.accessToken;
+
+    const email = 'nhanvienmoi.linkmoi@test.local';
+    const inviteRes = await request(app)
+      .post('/api/employees/invite')
+      .set('Authorization', `Bearer ${ownerToken}`)
+      .send({ email });
+    expect(inviteRes.status).toBe(201);
+    expect(inviteRes.body.data.method).toBe('invited');
+    const employeeId = inviteRes.body.data.id;
+
+    const tokenRow = await db.query(
+      `SELECT code FROM verification_codes WHERE LOWER(email) = LOWER($1) AND type = 'employee_invitation'
+       ORDER BY created_at DESC LIMIT 1`,
+      [email]
+    );
+    const inviteToken = tokenRow.rows[0].code;
+
+    const registerRes = await request(app)
+      .post('/api/auth/register')
+      .send({
+        username: 'nhanvienlinkmoi',
+        email,
+        password: 'Passw0rd!',
+        fullName: 'Nhan Vien Moi',
+        phone: '0911000098',
+        inviteToken,
+        consents: { terms: true, privacy: true, dpa: true },
+      });
+    expect(registerRes.status).toBe(201);
+
+    const row = await db.query(
+      'SELECT origin, accepted_at FROM user_members WHERE employee_id = $1 AND owner_id = $2',
+      [employeeId, owner.id]
+    );
+    expect(row.rows[0].origin).toBe('created');
+    expect(row.rows[0].accepted_at).not.toBeNull();
+
+    const empLogin = await request(app)
+      .post('/api/auth/login')
+      .send({ username: 'nhanvienlinkmoi', password: 'Passw0rd!' });
+    const ctxRes = await request(app)
+      .get('/api/auth/me')
+      .set('Authorization', `Bearer ${empLogin.body.data.accessToken}`)
+      .set('X-Owner-Context', String(owner.id));
+    expect(ctxRes.status).toBe(200);
+  });
 });
 
 describe('POST /api/auth/google-login', () => {

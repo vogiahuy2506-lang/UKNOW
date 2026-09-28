@@ -222,12 +222,17 @@ class AuthController {
         // 'created' trên membership đó) — chủ mất quyền reset mật khẩu/đổi email (assertOwnerCreatedAccount
         // chỉ cho origin='created'), quan hệ chuyển sang 'linked' và chờ CHÍNH người này chấp nhận
         // (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28 mục 1 phần 9).
-        await client.query(
-          `UPDATE user_members
-           SET origin = 'linked', accepted_at = NULL, updated_at = CURRENT_TIMESTAMP
-           WHERE employee_id = $1 AND origin = 'created'`,
-          [existingPendingUser.id]
-        );
+        // CHỈ đường OTP. Có inviteToken = người này bấm đúng link trong thư mời của chủ — đó chính là
+        // chấp nhận; đổi sang 'linked' + chờ chấp nhận ở đây khoá mọi nhân viên mới ra khỏi không gian
+        // công ty ngay sau khi kích hoạt (review PR-2 28/09).
+        if (!invitation) {
+          await client.query(
+            `UPDATE user_members
+             SET origin = 'linked', accepted_at = NULL, updated_at = CURRENT_TIMESTAMP
+             WHERE employee_id = $1 AND origin = 'created'`,
+            [existingPendingUser.id]
+          );
+        }
       } else {
         // Sinh mã giới thiệu duy nhất cho user mới
         let myReferralCode = generateReferralCode();
