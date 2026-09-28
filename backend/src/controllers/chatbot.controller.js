@@ -1846,7 +1846,14 @@ class ChatbotController {
         content = `${content.trim()}\n\n${contactAck.footer}`;
       }
 
-      if (conversation) {
+      // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-A (mục 2): AI vừa soạn xong (customChatService.chat ở
+      // trên có thể mất vài giây) — kiểm lại tạm dừng NGAY TRƯỚC KHI lưu/trả câu trả lời, không
+      // chỉ trước khi gọi. Chủ nhảy vào đúng lúc AI đang soạn thì bot không được chen vào; trả
+      // ĐÚNG hình dạng JSON của nhánh tạm dừng sẵn có ở trên, không lưu câu AI vào webchat_messages.
+      // Không đổi vị trí trừ credit — lượt AI đã gọi (Gemini đã trả lời) vẫn tính 1 credit như cũ.
+      const pausedAfterAi = conversation && await unifiedInboxRepository.isAiPaused(conversation.id, 'webchat');
+
+      if (conversation && !pausedAfterAi) {
         await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
           role: 'assistant',
           content: content,
@@ -1854,6 +1861,19 @@ class ChatbotController {
       }
 
       await chargePublicChatCredit(chatbot.id_user, creditPrep.creditContext, 'chatbot_public_widget');
+
+      if (pausedAfterAi) {
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content: HANDOFF_VISITOR_ACK,
+            created_at: new Date().toISOString(),
+            sessionId: clientSessionId,
+            aiPaused: true,
+          },
+        });
+      }
 
       return res.json({
         success: true,
@@ -2093,8 +2113,13 @@ class ChatbotController {
         content = `${content.trim()}\n\n${contactAck.footer}`;
       }
 
+      // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-A (mục 2): kiểm lại tạm dừng NGAY TRƯỚC KHI lưu/trả câu
+      // trả lời — xem chú thích đầy đủ ở chatWithCustomChatbot (nhánh widget, cùng khuôn). Không
+      // đổi vị trí trừ credit.
+      const pausedAfterAi = conversation && await unifiedInboxRepository.isAiPaused(conversation.id, 'webchat');
+
       // Save assistant response
-      if (conversation) {
+      if (conversation && !pausedAfterAi) {
         await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
           role: 'assistant',
           content: content,
@@ -2102,6 +2127,19 @@ class ChatbotController {
       }
 
       await chargePublicChatCredit(chatbot.id_user, creditPrep.creditContext, 'chatbot_public_page');
+
+      if (pausedAfterAi) {
+        return res.json({
+          success: true,
+          data: {
+            role: 'assistant',
+            content: HANDOFF_VISITOR_ACK,
+            created_at: new Date().toISOString(),
+            sessionId: visitorSessionId,
+            aiPaused: true,
+          },
+        });
+      }
 
       return res.json({
         success: true,

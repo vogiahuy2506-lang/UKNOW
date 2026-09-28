@@ -212,6 +212,93 @@ describe('chatbot.controller public :chatbotId — widget_key bắt đầu bằn
   });
 });
 
+describe('PLAN_VA_BAT_TAT_AI_2026-09-28 PR-A (mục 2) — kiểm lại tạm dừng ngay trước khi gửi', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(chatbot);
+    findChatbotByWidgetKey.mockResolvedValue(chatbot);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'Dạ em chào anh chị ạ.' });
+    consume.mockResolvedValue(undefined);
+    broadcast.mockReturnValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+  });
+
+  it('chatWithCustomChatbotById: isAiPaused false rồi true (đang soạn thì bị tạm dừng) -> trả HANDOFF_VISITOR_ACK, KHÔNG lưu câu AI, VẪN trừ credit', async () => {
+    isAiPaused.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '12' }, body: { message: 'hi', sessionId: 'sess_1', history: [] } },
+      res
+    );
+
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(isAiPaused).toHaveBeenCalledTimes(2);
+    // Chỉ lưu tin khách (visitor) — KHÔNG lưu câu trả lời AI ('Dạ em chào anh chị ạ.').
+    expect(addWebChatMessage).toHaveBeenCalledTimes(1);
+    expect(addWebChatMessage.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ role: 'visitor' })
+    );
+    // Credit vẫn bị trừ — lượt AI đã gọi thật (chấp nhận theo plan).
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ content: expect.any(String), aiPaused: true, sessionId: 'sess_1' }),
+      })
+    );
+  });
+
+  it('chatWithCustomChatbotById: isAiPaused false cả hai lần -> lưu + trả câu AI như cũ', async () => {
+    isAiPaused.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '12' }, body: { message: 'hi', sessionId: 'sess_1', history: [] } },
+      res
+    );
+
+    expect(addWebChatMessage).toHaveBeenCalledTimes(2);
+    expect(addWebChatMessage.mock.calls[1][2]).toEqual(
+      expect.objectContaining({ role: 'assistant', content: 'Dạ em chào anh chị ạ.' })
+    );
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ content: 'Dạ em chào anh chị ạ.' }),
+      })
+    );
+  });
+
+  it('chatWithCustomChatbot (widget path): isAiPaused false rồi true -> trả HANDOFF_VISITOR_ACK, KHÔNG lưu câu AI', async () => {
+    isAiPaused.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbot(
+      { params: { widgetKey: 'wk_abc' }, body: { message: 'xin chào', sessionId: 'sess_widget_1', history: [] } },
+      res
+    );
+
+    expect(addWebChatMessage).toHaveBeenCalledTimes(1);
+    expect(addWebChatMessage.mock.calls[0][2]).toEqual(
+      expect.objectContaining({ role: 'visitor' })
+    );
+    expect(consume).toHaveBeenCalledTimes(1);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ aiPaused: true, sessionId: 'sess_widget_1' }),
+      })
+    );
+  });
+});
+
 describe('PR-1c — bot xác nhận khi khách để lại liên hệ & widget nhúng lưu hội thoại', () => {
   beforeEach(() => {
     jest.clearAllMocks();

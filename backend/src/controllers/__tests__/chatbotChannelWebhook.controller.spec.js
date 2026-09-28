@@ -241,6 +241,40 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
     expect(mockSendReply).not.toHaveBeenCalled();
   });
 
+  // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-A (mục 2): kiểm lại ngay TRƯỚC KHI GỬI, không chỉ trước khi
+  // gọi AI (test "skips AI reply if handoff occurs during debounce waiting period" ở trên đã phủ
+  // ca "đang tạm dừng SẴN TỪ ĐẦU" — ca này là "vừa bị tạm dừng NGAY TRONG LÚC routeChatbotMessage
+  // đang chạy", isAiPaused false lần đầu rồi true lần kiểm lại).
+  it('isAiPaused false rồi true (bị tạm dừng khi AI đang soạn) -> KHÔNG gửi, log result=paused_after_ai', async () => {
+    const channel = { id: 10, id_chatbot: 5 };
+    const chatbot = { id: 5, id_user: 1, is_active: true };
+    const conv = { id: 100 };
+
+    mockFindByWebhookToken.mockResolvedValue(channel);
+    mockFindChatbotById.mockResolvedValue(chatbot);
+    mockGetOrCreateConversation.mockResolvedValue(conv);
+    mockAddMessage.mockResolvedValue({ id: 1 });
+    mockUpdateLastActivity.mockResolvedValue();
+    mockFindActiveChannelById.mockResolvedValue(channel);
+    mockGetLatestMessageId.mockResolvedValue(1);
+    mockParseWebhookEvent.mockReturnValue({ message: 'Alo', senderId: 'user_123', messageId: 'oa_msg_1' });
+    mockCheckBeforeAi.mockResolvedValue({ allowed: true });
+    mockRouteChatbotMessage.mockResolvedValue({ content: 'Hi' });
+    mockSendReply.mockResolvedValue({ success: true });
+    mockIsAiPaused.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    const res = { send: jest.fn() };
+    await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, res);
+    await jest.advanceTimersByTimeAsync(6000);
+
+    expect(mockRouteChatbotMessage).toHaveBeenCalledTimes(1);
+    expect(mockSendReply).not.toHaveBeenCalled();
+    expect(mockIsAiPaused).toHaveBeenCalledTimes(2);
+    expect(logSpy.mock.calls.some(([line]) => line.includes('result=paused_after_ai'))).toBe(true);
+    logSpy.mockRestore();
+  });
+
   it('does not persist a bot row when sending the OA reply fails', async () => {
     const channel = { id: 10, id_chatbot: 5 };
     const chatbot = { id: 5, id_user: 1, is_active: true };

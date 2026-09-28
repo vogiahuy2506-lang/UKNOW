@@ -837,6 +837,14 @@ class ZaloPersonalInboxService {
       });
 
       if (result?.content) {
+        // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-A (mục 2): AI có thể mất vài giây để soạn xong —
+        // kiểm lại NGAY TRƯỚC KHI GỬI, không chỉ trước khi gọi Gemini ở bước 3 phía trên. Chủ
+        // nhảy vào đúng lúc AI đang soạn thì bot không được chen câu trả lời vào sau. Credit của
+        // lượt gọi AI này đã tính — chấp nhận, không hoàn.
+        if (await zaloPersonalRepository.isAiPaused(conversation.id)) {
+          console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused_after_ai`);
+          return;
+        }
         // Single persist path: sendReply(persist=true) inserts agent message once.
         const sent = await zaloPersonalAdapter.sendReply({
           externalId: String(senderId),

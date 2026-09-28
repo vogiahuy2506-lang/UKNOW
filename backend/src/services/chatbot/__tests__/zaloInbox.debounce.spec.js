@@ -209,6 +209,45 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
     expect(mockBroadcast).toHaveBeenCalledTimes(1); // inbound visitor SSE only
   });
 
+  // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-A (mục 2): chủ nhảy vào tạm dừng AI ngay TRONG LÚC Gemini
+  // đang soạn (isAiPaused false lúc kiểm ở bước 3, nhưng true khi kiểm lại ngay trước sendReply).
+  describe('PR-A (mục 2) — kiểm lại tạm dừng ngay trước khi gửi', () => {
+    it('isAiPaused false rồi true (đang soạn thì bị tạm dừng) -> KHÔNG gửi, log result=paused_after_ai', async () => {
+      mockIsAiPaused
+        .mockResolvedValueOnce(false) // bước 3: kiểm trước khi gọi AI
+        .mockResolvedValueOnce(true); // kiểm lại ngay trước khi gửi
+
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+      const handler = zaloInboxService.createMessageHandler(1, 10, 10);
+
+      await handler(
+        { msgId: 'paused_1', fromUid: 'visitor_99', content: 'Alo', type: 0 },
+        { conversationId: 200, messageId: 601 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
+      expect(mockSendReply).not.toHaveBeenCalled();
+      expect(mockIsAiPaused).toHaveBeenCalledTimes(2);
+      expect(logSpy.mock.calls.some(([line]) => line.includes('result=paused_after_ai'))).toBe(true);
+      logSpy.mockRestore();
+    });
+
+    it('isAiPaused false cả hai lần -> gửi như cũ', async () => {
+      mockIsAiPaused.mockResolvedValueOnce(false).mockResolvedValueOnce(false);
+      const handler = zaloInboxService.createMessageHandler(1, 10, 10);
+
+      await handler(
+        { msgId: 'notpaused_1', fromUid: 'visitor_99', content: 'Alo', type: 0 },
+        { conversationId: 200, messageId: 602 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(mockIsAiPaused).toHaveBeenCalledTimes(2);
+    });
+  });
+
   // Bug 1 regression: when multiple chatbots share the same Zalo account,
   // toggling chatbot A's enable flag must NOT bleed into chatbot B's
   // settings row. The fix uses (user, zalo, chatbot) as a composite key —

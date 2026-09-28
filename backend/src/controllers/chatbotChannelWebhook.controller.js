@@ -243,6 +243,13 @@ class ChatbotChannelWebhookController {
       });
 
       if (result?.content) {
+        // PLAN_VA_BAT_TAT_AI_2026-09-28 PR-A (mục 2): kiểm lại tạm dừng NGAY TRƯỚC KHI GỬI — AI
+        // có thể mất vài giây để soạn, chủ nhảy vào đúng lúc đó thì bot không được chen vào.
+        // KHÔNG áp dụng cho Facebook (sếp chốt chưa làm FB) — chỉ Zalo OA ở đây.
+        if (await unifiedInboxRepository.isAiPaused(conv.id, 'channel')) {
+          console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused_after_ai`);
+          return;
+        }
         const sent = await zaloOAAdapter.sendReply({
           conversationId: conv.id,
           message: result.content,
