@@ -145,6 +145,28 @@ function buildConversationChannelGates(channel) {
   return { channelGate: 'AND 1=0', zaloGate: 'AND 1=0', webGate: 'AND 1=0' };
 }
 
+/**
+ * Bảng chứa cờ tạm dừng AI theo loại hội thoại. Giá trị lạ phải NÉM LỖI, không được rơi về một bảng mặc định:
+ * bản cũ rơi về `channel_conversations` trong khi getConversationById rơi về `webchat_conversations`, nên kiểm
+ * quyền một bảng rồi ghi bảng kia (RA_SOAT_BAT_TAT_AI_2026-09-28 mục 1). Controller đã chặn trước; đây là lớp đỡ.
+ */
+const AI_PAUSE_TABLES = {
+  channel: 'channel_conversations',
+  zalo_personal: 'zalo_personal_conversations',
+  webchat: 'webchat_conversations',
+};
+
+function aiPauseTableFor(conversationType) {
+  const table = AI_PAUSE_TABLES[conversationType];
+  if (!table) {
+    const err = new Error(`Loại hội thoại không hợp lệ: ${conversationType}`);
+    err.status = 400;
+    err.code = 'INVALID_CONVERSATION_TYPE';
+    throw err;
+  }
+  return table;
+}
+
 class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
@@ -825,10 +847,7 @@ class UnifiedInboxRepository {
    * @returns {{ aiPaused: boolean, aiPausedAt: string|null }}
    */
   async setAiPaused(conversationId, conversationType, paused, reason = 'handoff') {
-    const table =
-      conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
-        : conversationType === 'webchat' ? 'webchat_conversations'
-          : 'channel_conversations';
+    const table = aiPauseTableFor(conversationType);
     const isPaused = !!paused;
     const pauseReason = isPaused && reason === 'manual' ? 'manual' : 'handoff';
     const { rows } = await db.query(
@@ -860,10 +879,7 @@ class UnifiedInboxRepository {
    */
   async isAiPaused(conversationId, conversationType) {
     if (!conversationId) return false;
-    const table =
-      conversationType === 'zalo_personal' ? 'zalo_personal_conversations'
-        : conversationType === 'webchat' ? 'webchat_conversations'
-          : 'channel_conversations';
+    const table = aiPauseTableFor(conversationType);
 
     try {
       const { shouldStayAiPaused, getCachedAutoResumeMinutes } = await import(

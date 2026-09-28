@@ -13,6 +13,19 @@ import {
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { resolveRequestIdempotencyKey } from '../services/quota/sendQuotaKey.service.js';
 
+/**
+ * `type` của hội thoại quyết định BẢNG nào được kiểm quyền và bảng nào được ghi. Các hàm repository không
+ * ánh xạ giá trị lạ giống nhau (getConversationById: lạ → webchat; setAiPaused: lạ → channel) nên một `type`
+ * tự chế cho phép kiểm quyền trên hội thoại web của mình rồi ghi sang hội thoại Zalo OA của khách khác cùng số
+ * id (RA_SOAT_BAT_TAT_AI_2026-09-28 mục 1). Chặn ngay cửa: chỉ 3 giá trị FE thật sự gửi.
+ */
+const CONVERSATION_TYPES = new Set(['channel', 'zalo_personal', 'webchat']);
+const INVALID_CONVERSATION_TYPE_BODY = {
+  success: false,
+  message: 'type phải là channel, zalo_personal hoặc webchat',
+  code: 'INVALID_CONVERSATION_TYPE',
+};
+
 function normalizeInboxQueryFilters(query = {}) {
   const rawStatus = String(query.status || '').trim().toLowerCase();
   const status = rawStatus === 'all' || !rawStatus
@@ -62,6 +75,9 @@ class UnifiedInboxController {
     try {
       const { id } = req.params;
       const { type = 'channel' } = req.query;
+      if (!CONVERSATION_TYPES.has(type)) {
+        return res.status(400).json(INVALID_CONVERSATION_TYPE_BODY);
+      }
 
       if (!id) {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
@@ -90,6 +106,9 @@ class UnifiedInboxController {
     try {
       const { id } = req.params;
       const { type = 'channel', limit = 50, before } = req.query;
+      if (!CONVERSATION_TYPES.has(type)) {
+        return res.status(400).json(INVALID_CONVERSATION_TYPE_BODY);
+      }
 
       if (!id) {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
@@ -121,6 +140,9 @@ class UnifiedInboxController {
     try {
       const { id } = req.params;
       const { type = 'channel' } = req.body;
+      if (!CONVERSATION_TYPES.has(type)) {
+        return res.status(400).json(INVALID_CONVERSATION_TYPE_BODY);
+      }
 
       if (!id) {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
@@ -198,6 +220,9 @@ class UnifiedInboxController {
     try {
       const { id } = req.params;
       const { type = 'channel', content, attachments } = req.body;
+      if (!CONVERSATION_TYPES.has(type)) {
+        return res.status(400).json(INVALID_CONVERSATION_TYPE_BODY);
+      }
 
       if (!id) {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
@@ -375,6 +400,9 @@ class UnifiedInboxController {
     try {
       const { id } = req.params;
       const { type = 'zalo_personal', paused } = req.body;
+      if (!CONVERSATION_TYPES.has(type)) {
+        return res.status(400).json(INVALID_CONVERSATION_TYPE_BODY);
+      }
       if (typeof paused !== 'boolean') {
         return res.status(400).json({ success: false, message: 'paused (boolean) is required' });
       }
@@ -452,6 +480,9 @@ class UnifiedInboxController {
     try {
       const { id } = req.params;
       const { type = 'zalo_personal' } = req.query;
+      if (!CONVERSATION_TYPES.has(type)) {
+        return res.status(400).json(INVALID_CONVERSATION_TYPE_BODY);
+      }
 
       if (!id) {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
