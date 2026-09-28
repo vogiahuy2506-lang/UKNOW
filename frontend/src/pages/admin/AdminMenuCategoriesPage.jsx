@@ -29,6 +29,10 @@ import adminMenuApiService, {
 
 const SCOPE_SUPER_ADMIN = 'super_admin';
 const SCOPE_APP_USER = 'app_user';
+// Chuyên mục `main` của menu khách là khối CẤP 1: groupAppMenuItems (adminMenuLayout.js) trải thẳng các
+// mục của nó ra menu, không có tiêu đề nhóm — tên của khối này không bao giờ hiện cho khách. Trang này
+// vẽ nó khác các nhóm thường để khỏi bị hiểu nhầm là một nhóm có tên.
+const APP_MAIN_CATEGORY_ID = 'main';
 
 function moveEntry(list, index, delta) {
   const target = index + delta;
@@ -125,6 +129,7 @@ export default function AdminMenuCategoriesPage() {
   const { t } = useI18n();
   const [activeScope, setActiveScope] = useState(SCOPE_SUPER_ADMIN);
   const isAppScope = activeScope === SCOPE_APP_USER;
+  const isMainCategory = (category) => isAppScope && category?.id === APP_MAIN_CATEGORY_ID;
 
   const catalog = useMemo(
     () => (isAppScope ? userMenuItems(t) : superAdminMenuItems(t)),
@@ -443,6 +448,12 @@ export default function AdminMenuCategoriesPage() {
         {categories.map((category, categoryIndex) => (
           <section key={category.id} className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm">
             <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/80 p-4 lg:flex-row lg:items-center">
+              {isMainCategory(category) ? (
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold text-gray-900">{t('adminMenu.mainCategoryTitle')}</p>
+                  <p className="mt-0.5 text-xs text-gray-500">{t('adminMenu.mainCategoryHint')}</p>
+                </div>
+              ) : (
               <div className="grid min-w-0 flex-1 gap-3 sm:grid-cols-2">
                 <input
                   value={category.nameVi}
@@ -459,6 +470,7 @@ export default function AdminMenuCategoriesPage() {
                   className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 />
               </div>
+              )}
               <span className="text-xs text-gray-400">
                 {t('adminMenu.itemCount', { count: category.itemKeys.length })}
               </span>
@@ -489,15 +501,17 @@ export default function AdminMenuCategoriesPage() {
                 >
                   <HiOutlineArrowDown className="h-4 w-4" />
                 </button>
-                <button
-                  type="button"
-                  onClick={() => removeCategory(category)}
-                  title={t('common.delete')}
-                  aria-label={t('common.delete')}
-                  className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
-                >
-                  <HiOutlineTrash className="h-4 w-4" />
-                </button>
+                {!isMainCategory(category) && (
+                  <button
+                    type="button"
+                    onClick={() => removeCategory(category)}
+                    title={t('common.delete')}
+                    aria-label={t('common.delete')}
+                    className="rounded-lg p-2 text-gray-500 hover:bg-red-50 hover:text-red-600"
+                  >
+                    <HiOutlineTrash className="h-4 w-4" />
+                  </button>
+                )}
               </div>
             </div>
 
@@ -550,7 +564,7 @@ export default function AdminMenuCategoriesPage() {
                       className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-600"
                     >
                       {categories.map((target) => (
-                        <option key={target.id} value={target.id}>{target.nameVi}</option>
+                        <option key={target.id} value={target.id}>{isMainCategory(target) ? t('adminMenu.mainCategoryTitle') : target.nameVi}</option>
                       ))}
                     </select>
                     <div className="flex items-center gap-1">

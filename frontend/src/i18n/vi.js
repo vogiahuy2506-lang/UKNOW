@@ -8810,6 +8810,8 @@ export default {
     categoryForItem: 'Chuyên mục của {item}',
     emptyCategory: 'Chuyên mục chưa có tab nào — sẽ KHÔNG hiện trong menu cho tới khi có ít nhất 1 tab',
     emptyCategoryBadge: 'Sẽ không hiện trong menu',
+    mainCategoryTitle: 'Mục cấp 1 — không thuộc nhóm nào',
+    mainCategoryHint: 'Các mục ở đây hiện thẳng trên menu, không có tiêu đề nhóm. Khối này không đổi tên hay xoá được.',
     emptyCategoriesConfirm: 'Các chuyên mục sau chưa có tab nào, sẽ không hiện trong menu cho tới khi có tab: {names}. Vẫn lưu?',
     appScopeHint: 'Tài khoản super admin không thấy menu này; mở bằng tài khoản khách, và khách đang mở web cần tải lại trang.',
     moveCategoryUp: 'Đưa chuyên mục lên',
