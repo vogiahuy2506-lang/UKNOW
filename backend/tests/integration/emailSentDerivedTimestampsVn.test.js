@@ -10,6 +10,7 @@ import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser } from './helpers/db.js';
 import emailSettingsSmtpService from '../../src/services/email/emailSettingsSmtp.service.js';
+import campaignEmailSenderRepository from '../../src/repositories/campaign/campaignEmailSender.repository.js';
 
 let app;
 
@@ -218,10 +219,64 @@ describe('PR-T3 Việc 3 — GET /api/customers/:id/journey đọc đúng giờ 
     }));
 
     const token = await loginAs(owner);
+    const before = Date.now();
     const res = await request(app)
       .get(`/api/customers/${customer.id}/journey`)
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.summary).toBeTruthy();
+    const participation = res.body.summary.campaigns.find((c) => c.campaignId === campaign.id);
+    expect(participation.lastActivityAt).toBe('2026-09-28T10:00:00.000Z');
+    // joined_at = CURRENT_TIMESTAMP giờ VN; đọc thô sẽ lệch +7h so với lúc gọi.
+    expect(Math.abs(new Date(participation.joinedAt).getTime() - before)).toBeLessThan(5 * 60 * 1000);
+  });
+});
+
+describe('PR-T3 mục SỬA — sự kiện "Đã gửi email" dựng từ email_messages bỏ qua thư hỏng', () => {
+  async function journeyTimeline(owner, customerId) {
+    const token = await loginAs(owner);
+    const res = await request(app).get(`/api/customers/${customerId}/journey`).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    return res.body.data;
+  }
+
+  it('thư failed và thư bounced (không có dòng journey) → không có email_sent cho hai thư đó', async () => {
+    const owner = await createUser({ username: 'ownert3sua', role: 'user' });
+    const customer = await createCustomer({ userId: owner.id });
+    const campaign = await createCampaign({ userId: owner.id });
+    const run = await createRun({ campaignId: campaign.id });
+
+    const failedId = await logSent(basePayload({
+      userId: owner.id, campaignId: campaign.id, customerId: customer.id, runId: run.id,
+      sentAt: new Date('2026-09-28T10:00:00Z'), extra: { deliveryFailed: true, trackingToken: 'tok-failed' },
+    }));
+    await campaignEmailSenderRepository.markEmailMessageFailed('tok-failed', '535 auth failed');
+    const bouncedId = await logSent(basePayload({
+      userId: owner.id, campaignId: campaign.id, customerId: customer.id, runId: run.id,
+      sentAt: new Date('2026-09-28T11:00:00Z'), extra: { deliveryFailed: true, trackingToken: 'tok-bounced' },
+    }));
+    await campaignEmailSenderRepository.markEmailMessageBounced('tok-bounced', new Date('2026-09-28T11:00:00Z'), '550 no such user');
+
+    const timeline = await journeyTimeline(owner, customer.id);
+    const sentFor = (id) => timeline.filter((e) => e.eventType === 'email_sent' && Number(e.eventData?.emailMessageId) === Number(id));
+    expect(sentFor(failedId)).toHaveLength(0);
+    expect(sentFor(bouncedId)).toHaveLength(0);
+  });
+
+  it('đối chứng: thư gửi thành công không có dòng journey (dữ liệu cũ) → vẫn dựng email_sent', async () => {
+    const owner = await createUser({ username: 'ownert3sub', role: 'user' });
+    const customer = await createCustomer({ userId: owner.id });
+    const campaign = await createCampaign({ userId: owner.id });
+    const run = await createRun({ campaignId: campaign.id });
+
+    const okId = await logSent(basePayload({
+      userId: owner.id, campaignId: campaign.id, customerId: customer.id, runId: run.id,
+      sentAt: new Date('2026-09-28T10:00:00Z'),
+    }));
+    await db.query(`DELETE FROM customer_journey WHERE id_email_message = $1`, [okId]);
+
+    const timeline = await journeyTimeline(owner, customer.id);
+    const derived = timeline.filter((e) => e.eventType === 'email_sent' && Number(e.eventData?.emailMessageId) === Number(okId));
+    expect(derived).toHaveLength(1);
+    expect(derived[0].eventAt).toBe('2026-09-28T10:00:00.000Z');
   });
 });

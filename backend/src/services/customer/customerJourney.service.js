@@ -84,7 +84,11 @@ class CustomerJourneyService {
     const derivedEmailEvents = [];
     emailMessages.forEach((message) => {
       const sentAt = message.sent_at || message.created_at;
-      if (sentAt && !existingEventKeys.has(`email_sent:${message.id}`)) {
+      // PR-T3 (PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, mục SỬA) — thư failed/bounced KHÔNG được dựng
+      // thành "Đã gửi email": đường lỗi không ghi journey (Việc 2) và dòng cũ bị script (d) xoá, nên
+      // thiếu lọc này thì sự kiện giả hiện lại y nguyên. Mở/nhấp giả giữ nguyên (thư hỏng không có).
+      const deliveryFailed = message.status === 'failed' || message.status === 'bounced';
+      if (sentAt && !deliveryFailed && !existingEventKeys.has(`email_sent:${message.id}`)) {
         derivedEmailEvents.push({
           id: `email-sent-${message.id}`,
           eventType: 'email_sent',
