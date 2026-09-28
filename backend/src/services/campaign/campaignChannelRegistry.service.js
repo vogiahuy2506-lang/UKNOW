@@ -47,6 +47,10 @@
  * @property {ChannelAdapter} [adapter] Chỉ kênh 'adapter'.
  */
 
+// PR-6 (tách tầng kênh gửi) — import tĩnh, KHÔNG kích hoạt side-effect thật nào (chỉ khai báo hàm)
+// cho tới khi cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED bật VÀ có node thật gọi tới.
+import { telegramChannelAdapter, buildTelegramPolicyFromEnv } from './channels/telegram.campaignChannel.js';
+
 /** Lỗi gửi kênh adapter — `category` quyết định runner bỏ qua người này hay dừng cả node. */
 export class ChannelSendError extends Error {
   /**
@@ -102,15 +106,41 @@ const CHANNEL_DESCRIPTORS = Object.freeze([
 ]);
 
 /**
- * Kênh 'adapter' đăng ký CHỈ TRONG TEST (PR-3 chưa có kênh thật nào bật ở production — Telegram
- * PR-6 sẽ đăng ký tĩnh vào đây, sau cờ tắt mặc định). Mutable, khác `CHANNEL_DESCRIPTORS` (frozen).
+ * Kênh 'adapter' đăng ký CHỈ TRONG TEST. Mutable, khác `CHANNEL_DESCRIPTORS` (frozen).
  *
  * @type {ChannelDescriptor[]}
  */
 let testChannelDescriptors = [];
 
+/**
+ * PR-6 — Telegram là kênh 'adapter' đầu tiên có build THẬT (đăng ký tĩnh, không qua
+ * `__registerChannelForTest`), nhưng chỉ "biết gửi" khi cờ bật — xem `TELEGRAM_CHANNEL_META` và
+ * "CHỐT PR-6" trong plan: cờ CHỈ chặn GỬI, KHÔNG chặn ĐẾM quota.
+ */
+const TELEGRAM_CHANNEL_META = Object.freeze({ key: 'telegram', quotaChannel: 'zalo' });
+
+function isTelegramChannelEnabled() {
+  // Đọc lúc GỌI, không lúc import — test đổi cờ giữa các ca không bị dính giá trị cũ.
+  return process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED === 'true';
+}
+
+/** Descriptor Telegram đầy đủ — CHỈ build khi cờ bật (adapter.sendOne cần cờ bật mới gọi tới). */
+function buildTelegramDescriptor() {
+  return {
+    key: TELEGRAM_CHANNEL_META.key,
+    sendNodeSubtype: 'send_telegram',
+    engine: 'adapter',
+    continuousSupported: false,
+    continuousReplay: false,
+    quotaChannel: TELEGRAM_CHANNEL_META.quotaChannel,
+    policy: buildTelegramPolicyFromEnv(),
+    adapter: telegramChannelAdapter,
+  };
+}
+
 function getAllDescriptors() {
-  return [...CHANNEL_DESCRIPTORS, ...testChannelDescriptors];
+  const staticAdapterDescriptors = isTelegramChannelEnabled() ? [buildTelegramDescriptor()] : [];
+  return [...CHANNEL_DESCRIPTORS, ...staticAdapterDescriptors, ...testChannelDescriptors];
 }
 
 function findDescriptorBySubtype(subtype) {
@@ -170,9 +200,16 @@ export function getAdapterDescriptorBySubtype(subtype) {
  * @returns {string[]}
  */
 export function getAdapterChannelKeysByQuotaChannel(quotaChannel) {
-  return getAllDescriptors()
+  const dynamicKeys = getAllDescriptors()
     .filter((d) => d.engine === 'adapter' && d.quotaChannel === quotaChannel)
     .map((d) => d.key);
+  // PR-6 (CHỐT PR-6) — cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED chỉ chặn GỬI (getAllDescriptors ở trên
+  // đã lọc theo cờ), KHÔNG được chặn ĐẾM: tắt cờ không có nghĩa tin Telegram đã gửi trước đó thôi
+  // tính vào hạn mức Zalo. Luôn cộng thêm 'telegram' vào đây bất kể cờ.
+  const alwaysOnKeys = TELEGRAM_CHANNEL_META.quotaChannel === quotaChannel
+    ? [TELEGRAM_CHANNEL_META.key]
+    : [];
+  return [...new Set([...dynamicKeys, ...alwaysOnKeys])];
 }
 
 /**

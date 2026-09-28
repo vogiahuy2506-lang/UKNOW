@@ -101,6 +101,23 @@ class ChatbotTelegramRepository {
   }
 
   /**
+   * PR-6 (tách tầng kênh gửi) — hội thoại ĐANG MỞ của một account, dùng cho node campaign nguồn
+   * 'telegram_conversations' (Telegram không gửi được người lạ theo SĐT/username — facade ép
+   * Number, nên chỉ gửi được cho peer đã từng nhắn tới, tức đã có dòng hội thoại).
+   */
+  async listOpenConversationsForAccount(telegramAccountId) {
+    const { rows } = await db.query(
+      `SELECT external_id, display_name
+       FROM telegram_personal_conversations
+       WHERE id_telegram_account = $1
+         AND status = 'open'
+       ORDER BY last_message_at DESC NULLS LAST`,
+      [telegramAccountId]
+    );
+    return rows;
+  }
+
+  /**
    * Read-only: fetch the encrypted session blob stored alongside an
    * account and decrypt it before returning. Returns the parsed
    * mtcute StorageProvider state, or `null` if no row exists, the

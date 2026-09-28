@@ -378,10 +378,12 @@ export async function runAdapterSendNode(ctx) {
   let skipped = 0;
   const outputItems = [];
 
-  const rows = resolveRecipientRows({ config, nodeOutputs, lastOutputItems });
-  const recipients = await descriptor.adapter.resolveRecipients({ rows, config });
-  const steps = Array.isArray(config?.steps) ? config.steps : [];
+  // PR-6 — resolveAccount TRƯỚC resolveRecipients (đổi thứ tự so với PR-3): nguồn "hội thoại"
+  // (Telegram) cần biết account để đọc đúng danh sách hội thoại của account đó.
   const account = await descriptor.adapter.resolveAccount({ userId, workspaceOwnerId, node, config });
+  const rows = resolveRecipientRows({ config, nodeOutputs, lastOutputItems });
+  const recipients = await descriptor.adapter.resolveRecipients({ rows, config, account });
+  const steps = Array.isArray(config?.steps) ? config.steps : [];
   const perHourKey = `${descriptor.key}::${account?.accountKey ?? ''}`;
 
   let hasSentAny = false;
