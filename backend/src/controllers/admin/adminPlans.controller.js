@@ -23,7 +23,11 @@ async function purgePublicPlansCache() {
 
 
 function handleError(res, err) {
-  if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+  if (err.status) {
+    // err.code là mã máy đọc tuỳ chọn (vd PLACEHOLDER_PLAN_NOT_ASSIGNABLE) — đa số lỗi throw ở service
+    // không có field này nên chỉ thêm vào response khi thật sự tồn tại, không đổi shape lỗi cũ.
+    return res.status(err.status).json({ success: false, message: err.message, ...(err.code ? { code: err.code } : {}) });
+  }
   if (err.code === '42703') {
     console.error('Admin plans error (missing DB column):', err);
     return res.status(500).json({

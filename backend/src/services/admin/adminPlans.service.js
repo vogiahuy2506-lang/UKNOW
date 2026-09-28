@@ -21,6 +21,7 @@ import { expireUserPlan } from '../../repositories/subscription/subscription.rep
 import { scheduledPlanChangeRepository } from '../../repositories/payment/scheduledPlanChange.repository.js';
 import { reconcileResourceLocks } from '../payment/topupLock.service.js';
 import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
+import { isPlaceholderPlan } from '../../utils/placeholderPlan.util.js';
 import db from '../../config/database.js';
 import payosClient from '../../utils/payos.util.js';
 
@@ -441,6 +442,12 @@ export async function assignPlan(planId, userEmail, {
 } = {}) {
   const plan = await findPlanById(planId);
   if (!plan) throw { status: 404, message: 'Không tìm thấy gói dịch vụ' };
+  // Gói giữ chỗ "Tùy chọn"/"Liên hệ" (is_custom=false) không có hạn mức thật — không cho gán qua đường
+  // super_admin override này. Gói custom THẬT (is_custom=true) đi qua đúng hàm này khi admin bấm "Kích
+  // hoạt" ở AdminPlansPage nên isPlaceholderPlan phải chừa nó ra, không chặn nhầm.
+  if (isPlaceholderPlan(plan)) {
+    throw { status: 400, message: 'Không thể gán gói giữ chỗ này cho tài khoản', code: 'PLACEHOLDER_PLAN_NOT_ASSIGNABLE' };
+  }
 
   const user = await findUserAdminByEmail(userEmail.trim().toLowerCase());
   if (!user) throw { status: 404, message: 'Không tìm thấy tài khoản với email này' };

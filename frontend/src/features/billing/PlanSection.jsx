@@ -9,17 +9,27 @@ import {
   HiOutlineSparkles,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
-import { getSubscriptionUiStatus } from '../../utils/subscriptionStatus.util.js';
+import { getSubscriptionUiStatus, isUnlimitedPlanLimit } from '../../utils/subscriptionStatus.util.js';
+import { isPlaceholderPlan } from '../../utils/placeholderPlan.util.js';
 import UsageBar from './UsageBar';
 import StorageUsageSection from '../storage/StorageUsageSection';
 import { HiOutlineUsers, HiOutlineDesktopComputer } from 'react-icons/hi';
 
-function formatPrice(price, t) {
+function formatPrice(price, t, isPlaceholder) {
+  if (isPlaceholder) return t('accountProfileModal.contactForPrice');
   if (price === null || price === undefined) return t('accountProfileModal.contactForPrice');
   const numericPrice = Number(price);
   if (!Number.isFinite(numericPrice)) return t('accountProfileModal.contactForPrice');
   if (numericPrice === 0) return t('accountProfileModal.free');
   return `${numericPrice.toLocaleString('vi-VN')} ₫`;
+}
+
+// -1 báo cho UsageBar biết "không giới hạn" — backend trả NULL cho không giới hạn (xem
+// isUnlimitedPlanLimit); collapse null/undefined/âm thành -1 ở đây, KHÔNG collapse về 0, để 0 thật (gói
+// đặt trần 0) vẫn hiện đúng "x / 0" thay vì bị coi là không giới hạn.
+function resourceLimit(rawLimit, addonQty) {
+  if (isUnlimitedPlanLimit(rawLimit)) return -1;
+  return (Number(rawLimit) || 0) + (Number(addonQty) || 0);
 }
 
 function unwrapFeature(feat, locale) {
@@ -43,6 +53,7 @@ export default function PlanSection({ data, t }) {
   const displayPrice = isYearly && data?.activePlanPriceYearly == null && isFreePlan
     ? data?.activePlanPrice
     : (isYearly ? data?.activePlanPriceYearly : data?.activePlanPrice);
+  const isPlaceholder = isPlaceholderPlan({ code: data?.activePlanCode, isCustom: data?.activePlanIsCustom });
 
   const features = useMemo(() => {
     if (!data?.activePlanFeatures) return [];
@@ -86,8 +97,8 @@ export default function PlanSection({ data, t }) {
               <span className="text-xs text-primary-600 font-mono">{data.activePlanCode}</span>
             )}
           </div>
-          <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(displayPrice, t)}</p>
-          {displayPrice > 0 && (
+          <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(displayPrice, t, isPlaceholder)}</p>
+          {!isPlaceholder && displayPrice > 0 && (
             <p className="text-xs text-gray-400">{isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth')}</p>
           )}
           <span className="inline-flex mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-white/70 text-primary-700 border border-primary-100">
@@ -226,7 +237,7 @@ export default function PlanSection({ data, t }) {
           icon={HiOutlineUsers}
           label={t('topup.items.employees')}
           used={data.employeesUsed || 0}
-          limit={data.planMaxEmployees === -1 ? -1 : (Number(data.planMaxEmployees) || 0) + (Number(data.addons?.employees) || 0)}
+          limit={resourceLimit(data.planMaxEmployees, data.addons?.employees)}
           t={t}
           serviceSuspended={serviceSuspended}
           usingAddons={!!data.addons?.employees}
@@ -235,7 +246,7 @@ export default function PlanSection({ data, t }) {
           icon={HiOutlineChatAlt2}
           label={t('topup.items.zaloAccounts')}
           used={data.zaloAccountsUsed || 0}
-          limit={data.maxZaloAccounts === -1 ? -1 : (Number(data.maxZaloAccounts) || 0) + (Number(data.addons?.zaloAccounts) || 0)}
+          limit={resourceLimit(data.maxZaloAccounts, data.addons?.zaloAccounts)}
           t={t}
           serviceSuspended={serviceSuspended}
           usingAddons={!!data.addons?.zaloAccounts}
@@ -244,7 +255,7 @@ export default function PlanSection({ data, t }) {
           icon={HiOutlineMail}
           label={t('topup.items.emailAccounts')}
           used={data.emailAccountsUsed || 0}
-          limit={data.maxEmailAccounts === -1 ? -1 : (Number(data.maxEmailAccounts) || 0) + (Number(data.addons?.emailAccounts) || 0)}
+          limit={resourceLimit(data.maxEmailAccounts, data.addons?.emailAccounts)}
           t={t}
           serviceSuspended={serviceSuspended}
           usingAddons={!!data.addons?.emailAccounts}
@@ -253,7 +264,7 @@ export default function PlanSection({ data, t }) {
           icon={HiOutlineDesktopComputer}
           label={t('topup.items.landingPages')}
           used={data.landingPagesUsed || 0}
-          limit={data.maxLandingPages === -1 ? -1 : (Number(data.maxLandingPages) || 0) + (Number(data.addons?.landingPages) || 0)}
+          limit={resourceLimit(data.maxLandingPages, data.addons?.landingPages)}
           t={t}
           serviceSuspended={serviceSuspended}
           usingAddons={!!data.addons?.landingPages}
@@ -263,7 +274,7 @@ export default function PlanSection({ data, t }) {
             icon={HiOutlineSparkles}
             label={t('topup.items.chatbots')}
             used={data.chatbotsUsed || 0}
-            limit={data.maxChatbots === -1 ? -1 : (Number(data.maxChatbots) || 0) + (Number(data.addons?.chatbots) || 0)}
+            limit={resourceLimit(data.maxChatbots, data.addons?.chatbots)}
             t={t}
             serviceSuspended={serviceSuspended}
             usingAddons={!!data.addons?.chatbots}

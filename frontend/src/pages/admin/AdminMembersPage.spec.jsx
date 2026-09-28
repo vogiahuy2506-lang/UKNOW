@@ -1,4 +1,4 @@
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import AdminMembersPage from './AdminMembersPage';
@@ -136,5 +136,47 @@ describe('AdminMembersPage — cột SĐT theo cờ phoneOtpEnabled', () => {
     expect(mockGetMembers).toHaveBeenLastCalledWith(
       expect.objectContaining({ phoneVerified: 'verified' })
     );
+  });
+});
+
+// fix/goi-giu-cho-admin, Việc 3 — gói giữ chỗ "Tùy chọn"/"Liên hệ" không gán được nữa (backend trả 400
+// PLACEHOLDER_PLAN_NOT_ASSIGNABLE), nên phải loại khỏi dropdown "Chọn gói" trong modal Gán gói — chọn nó
+// giờ chỉ dẫn tới lỗi. Bộ lọc DANH SÁCH THÀNH VIÊN theo gói (select riêng, phía trên bảng) KHÔNG bị đụng vì
+// vẫn cần tìm ra những user đang mắc kẹt ở gói này.
+describe('AdminMembersPage — dropdown gán gói loại gói giữ chỗ "Tùy chọn"', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.phoneOtpEnabled = false;
+  });
+
+  it('gói giữ chỗ (code custom, isCustom=false) không có trong dropdown gán gói; gói thường vẫn còn', async () => {
+    mockGetMembers.mockResolvedValue(membersResponse([verifiedMember]));
+    mockGetPlans.mockResolvedValue({
+      data: {
+        data: [
+          { id: 18, name: 'Gói Tùy chọn', code: 'custom', isCustom: false, price: 0, isActive: true },
+          { id: 5, name: 'Pro', code: 'pro', isCustom: false, price: 500000, isActive: true },
+        ],
+      },
+    });
+
+    renderPage();
+    await waitFor(() => expect(screen.getByText(verifiedMember.email)).toBeInTheDocument());
+
+    const row = screen.getByText(verifiedMember.email).closest('tr');
+    const assignButton = within(row).getAllByRole('button')[0];
+    fireEvent.click(assignButton);
+
+    // getByText('Gán gói dịch vụ') khớp CẢ tooltip ẩn của nút lẫn tiêu đề modal — dùng role heading
+    // để chỉ trúng modal.
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Gán gói dịch vụ' })).toBeInTheDocument());
+
+    const selects = screen.getAllByRole('combobox');
+    const planSelect = selects.find((el) =>
+      Array.from(el.options).some((o) => o.textContent === '-- Chọn gói --')
+    );
+    const optionValues = Array.from(planSelect.options).map((o) => o.value);
+    expect(optionValues).not.toContain('18');
+    expect(optionValues).toContain('5');
   });
 });

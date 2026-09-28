@@ -205,6 +205,23 @@ describe('activateFreePlan', () => {
     expect(mockClient.query).not.toHaveBeenCalledWith('COMMIT');
   });
 
+  // fix/goi-giu-cho-admin — isPlaceholderPlan giờ đọc thêm is_custom (xem placeholderPlan.util.js). Trong
+  // thực tế findPlanByCode đã lọc is_custom=false ở SQL nên plan tới đây luôn is_custom=false; ca này chỉ
+  // xác nhận logic tại đây không chặn nhầm NẾU một ngày nào đó plan có is_custom=true lọt tới (phòng thủ).
+  it('does not block a real custom plan sharing the "custom" code (is_custom=true)', async () => {
+    mockFindPlanByCode.mockResolvedValueOnce({ id: 55, code: 'custom', price: 0, price_yearly: null, is_custom: true });
+
+    await activateFreePlan({
+      planCode: 'custom',
+      userId: 10,
+      userEmail: 'trial@example.com',
+    });
+
+    expect(mockCreateOrder).toHaveBeenCalled();
+    expect(mockActivateUserPlan).toHaveBeenCalled();
+    expect(mockClient.query).toHaveBeenLastCalledWith('COMMIT');
+  });
+
   it('activates a free plan for its own duration even when the yearly toggle was on', async () => {
     await activateFreePlan({
       planCode: 'trial',

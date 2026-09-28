@@ -21,6 +21,7 @@ import {
 import adminMembersApiService from '../../features/admin/services/adminMembersApi.service';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
 import { useAuthStore } from '../../stores/authStore';
+import { isPlaceholderPlan } from '../../utils/placeholderPlan.util';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
@@ -131,7 +132,8 @@ const AssignPlanModal = ({ member, plans, onClose, onDone }) => {
         <label className="block text-sm font-medium text-gray-700 mb-1">{t('adminMembers.selectPlan')}</label>
         <select className="input w-full" value={selectedPlanId} onChange={(e) => setSelectedPlanId(e.target.value)}>
           <option value="">{t('adminMembers.selectPlanPlaceholder')}</option>
-          {plans.map((p) => (
+          {/* Gói giữ chỗ "Tùy chọn"/"Liên hệ" không gán được (backend trả 400 PLACEHOLDER_PLAN_NOT_ASSIGNABLE) — loại khỏi danh sách chọn. */}
+          {plans.filter((p) => !isPlaceholderPlan({ code: p.code, isCustom: p.isCustom })).map((p) => (
             <option key={p.id} value={p.id}>
               {p.name} {p.price > 0 ? `— ${Number(p.price).toLocaleString('vi-VN')} đ/tháng` : t('adminMembers.free')}
               {!p.is_active ? ` ${t('adminMembers.hidden')}` : ''}

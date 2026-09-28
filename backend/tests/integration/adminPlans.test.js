@@ -672,6 +672,66 @@ describe('POST /api/admin/plans/:id/assign', () => {
       .send({ userEmail: 'not-an-email' });
     expect(res.status).toBe(400);
   });
+
+  // fix/goi-giu-cho-admin — chặn nốt đường admin gán gói giữ chỗ "Tùy chọn"/"Liên hệ" (id 18 production:
+  // code 'custom', price 0, is_custom=false). f63fe8ca (26/09) đã chặn activate-free; đường admin override
+  // này (AssignPlanModal + nút "Kích hoạt" gói custom ở AdminPlansPage) còn hở.
+  it('gán gói giữ chỗ (code custom, is_custom=false) → 400 PLACEHOLDER_PLAN_NOT_ASSIGNABLE, không đổi active_plan_id, không tạo order', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const placeholderPlan = await createPlan({ code: 'custom', name: 'Gói Tùy chọn', price: 0, isCustom: false });
+    // withPlan: false — createUser mặc định tự gán 1 gói test cho user thường, ở đây cần biết chắc
+    // active_plan_id là NULL trước khi gọi assign để phép kiểm "không đổi" không bị nhiễu.
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com', withPlan: false });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post(`/api/admin/plans/${placeholderPlan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userEmail: customer.email });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PLACEHOLDER_PLAN_NOT_ASSIGNABLE');
+
+    const userRow = await db.query('SELECT active_plan_id FROM users WHERE id = $1', [customer.id]);
+    expect(userRow.rows[0].active_plan_id).toBeNull();
+
+    const orderRow = await db.query('SELECT id FROM orders WHERE user_id = $1', [customer.id]);
+    expect(orderRow.rows).toHaveLength(0);
+  });
+
+  it('gán gói "contact" (is_custom=false) → cũng 400 như code custom', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const plan = await createPlan({ code: 'contact', name: 'Liên hệ', price: 0, isCustom: false });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post(`/api/admin/plans/${plan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userEmail: customer.email });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('PLACEHOLDER_PLAN_NOT_ASSIGNABLE');
+  });
+
+  // Đột biến bắt được: nếu util bỏ điều kiện is_custom=false, ca này sẽ đỏ (400 sai) vì gói custom thật
+  // trùng code 'custom' bị chặn nhầm — đúng đường nút "Kích hoạt" ở AdminPlansPage.jsx dùng (handleActivate
+  // → assignPlan → findPlanById không lọc is_custom).
+  it('gán gói custom THẬT (is_custom=true, code trùng "custom") vẫn chạy bình thường', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const realCustomPlan = await createPlan({ code: 'custom', name: 'Custom Acme', price: 900000, isCustom: true });
+    const customer = await createUser({ role: 'user', username: 'cust', email: 'cust@x.com' });
+
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .post(`/api/admin/plans/${realCustomPlan.id}/assign`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ userEmail: customer.email });
+
+    expect(res.status).toBe(200);
+    const userRow = await db.query('SELECT active_plan_id FROM users WHERE id = $1', [customer.id]);
+    expect(Number(userRow.rows[0].active_plan_id)).toBe(Number(realCustomPlan.id));
+  });
 });
 
 describe('DELETE /api/admin/plans/user/:userId — gỡ gói của 1 user (PR-C2)', () => {

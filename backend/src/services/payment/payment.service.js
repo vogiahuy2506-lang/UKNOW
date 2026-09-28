@@ -45,6 +45,7 @@ import { scheduleDispatchEinvoiceAfterCommit } from './matbaoInvoice.service.js'
 import { resolvePlanChange } from '../../utils/planChange.util.js';
 import { buildPayosDescription } from '../../utils/payosDescription.util.js';
 import { scheduledPlanChangeRepository } from '../../repositories/payment/scheduledPlanChange.repository.js';
+import { isPlaceholderPlan } from '../../utils/placeholderPlan.util.js';
 
 const isTrialOrFreePlan = (plan) => {
     if (!plan) return false;
@@ -52,12 +53,8 @@ const isTrialOrFreePlan = (plan) => {
     return plan.code === trialCode || Number(plan.price) === 0;
 };
 
-// Thẻ "Gói Tùy chọn"/"Liên hệ" trên bảng giá là gói giữ chỗ: giá 0 và mọi hạn mức NULL — NULL nghĩa là KHÔNG
-// giới hạn ở mọi chốt chặn. Frontend coi hai mã này là gói liên hệ (planTranslation.util.js `isContactPlan`) nên
-// không bao giờ kích hoạt chúng; backend phải chặn cùng luật. 26/09/2026 tái hiện: một lệnh
-// POST /payments/activate-free {planCode:'custom'} cho gói không giới hạn miễn phí 30 ngày, kỳ 'yearly' là 365 ngày.
-const PLACEHOLDER_PLAN_CODES = new Set(['custom', 'contact']);
-const isPlaceholderPlan = (plan) => PLACEHOLDER_PLAN_CODES.has(String(plan?.code || '').trim().toLowerCase());
+// 26/09/2026 tái hiện: một lệnh POST /payments/activate-free {planCode:'custom'} cho gói không giới hạn
+// miễn phí 30 ngày, kỳ 'yearly' là 365 ngày. Luật gói giữ chỗ dùng chung ở utils/placeholderPlan.util.js.
 
 const assertTrialNotRegisteredTwice = async ({ plan, userId, userEmail, queryable = db }) => {
     // Rule: Mọi gói dùng thử / miễn phí chỉ được đăng ký 1 lần / tài khoản.
