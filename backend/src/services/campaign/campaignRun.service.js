@@ -153,6 +153,16 @@ class CampaignRunService {
       const rawMax = Number.parseInt(process.env.CONTINUOUS_EMAIL_MAX_SEND_FAILURES, 10);
       this.CONTINUOUS_EMAIL_MAX_SEND_FAILURES = Number.isFinite(rawMax) && rawMax >= 0 ? rawMax : 5;
     }
+    // PR-6b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — cầu dao SMTP: N kết quả smtp_transient_retry_scheduled
+    // LIÊN TIẾP (reset khi có kết quả khác) trong một lần chạy node email → nhả slot chờ, không gõ cửa cả
+    // danh sách khi SMTP đang sập (mỗi người vẫn phải chờ hết greeting timeout mới biết là lỗi).
+    {
+      const rawThreshold = Number.parseInt(process.env.EMAIL_TRANSIENT_BURST_THRESHOLD, 10);
+      this.EMAIL_TRANSIENT_BURST_THRESHOLD = Number.isFinite(rawThreshold) && rawThreshold > 0 ? rawThreshold : 10;
+
+      const rawPauseMs = Number.parseInt(process.env.EMAIL_TRANSIENT_BURST_PAUSE_MS, 10);
+      this.EMAIL_TRANSIENT_BURST_PAUSE_MS = Number.isFinite(rawPauseMs) && rawPauseMs >= 0 ? rawPauseMs : 15 * 60 * 1000;
+    }
     // PR-7b (PLAN_ON_DINH_GUI_CHIEN_DICH_2026-09-26) — cửa sổ chống trùng liên-run: nếu cùng
     // campaign + kênh + người nhận + bước đã có dòng sent ở RUN KHÁC trong N giờ gần nhất thì bỏ
     // qua gửi lại (vụ chiến dịch 396: lưu flow giữa 2 lượt đổi id_node, run sau gửi lại bước 1 cho
@@ -3775,6 +3785,10 @@ class CampaignRunService {
             registerNextContinuousWakeAt(emailRateLimitPausedUntilMs);
             return emailRateLimitPausedUntilMs;
           };
+          // PR-6b — sống theo MỘT lần chạy node email (khai báo ở closure bao ngoài, KHÔNG phải
+          // `this.` — instance CampaignRunService dùng chung cho nhiều run đồng thời). Reset về 0 ở
+          // MỌI kết quả không phải smtp_transient_retry_scheduled (xem ngay dưới đầu try).
+          let consecutiveSmtpTransientCount = 0;
           const sendEmailWithLogging = async ({
             customer,
             runtimeNode,
@@ -3823,6 +3837,14 @@ class CampaignRunService {
                   );
                 },
               });
+
+              // PR-6b — MỘT chỗ tính đúng cho MỌI đường ra của hàm (skip/bounce/failed khác/success
+              // đều reset về 0; chỉ smtp_transient_retry_scheduled mới +1). Đặt Ở ĐÂY (trước mọi
+              // nhánh rẽ) để không phải rải lại `= 0` ở từng return bên dưới.
+              consecutiveSmtpTransientCount = (
+                sendResult?.status === 'failed'
+                && sendResult?.errorType === 'smtp_transient_retry_scheduled'
+              ) ? consecutiveSmtpTransientCount + 1 : 0;
 
               // Xử lý các trường hợp bỏ qua (unsubscribed / hard bounced)
               if (sendResult.status === 'skipped') {
@@ -4006,6 +4028,41 @@ class CampaignRunService {
                   // KHÔNG gọi markCampaignPausedByEmailRateLimit / đặt pauseCampaignForRateLimit —
                   // lỗi tạm thời TRƯỚC DATA của MỘT lần gửi không phải "provider đang giới hạn cả
                   // tài khoản", không cần đóng băng toàn campaign 12h như nhánh rate-limit.
+                  //
+                  // PR-6b — cầu dao: N lần smtp_transient_retry_scheduled LIÊN TIẾP (không riêng gì
+                  // người này — mọi người trong node) là dấu hiệu SMTP đang sập, không phải một
+                  // recipient xui xẻo. Gõ cửa tiếp cả danh sách chỉ tổ chờ hết greeting timeout từng
+                  // người một cách vô ích (và với 421 "quá nhiều kết nối" thì càng làm nặng thêm) —
+                  // nhả slot 15 phút, scheduler resume sau. Người dính transient đã có nextDueAt
+                  // riêng trong ledger (PR-6), không đổi gì — resume xong ai tới hạn thì gửi lại.
+                  if (consecutiveSmtpTransientCount >= this.EMAIL_TRANSIENT_BURST_THRESHOLD) {
+                    const burstMessage = `Máy chủ email lỗi kết nối ${consecutiveSmtpTransientCount} lần liên tiếp, `
+                      + `tạm dừng ${Math.round(this.EMAIL_TRANSIENT_BURST_PAUSE_MS / 60000)} phút`;
+                    await campaignExecutionLogService.logExecutionNode({
+                      campaignId,
+                      runId,
+                      node,
+                      status: 'warning',
+                      executionData: {
+                        message: burstMessage,
+                        items: [],
+                        schema: [],
+                        meta: { consecutiveSmtpTransientCount },
+                      },
+                    });
+                    await this.persistRunDeferYieldSlot({
+                      runId,
+                      campaignId,
+                      waitMs: this.EMAIL_TRANSIENT_BURST_PAUSE_MS,
+                      reason: 'smtp_transient_burst',
+                      untilKey: 'channelDeferredUntil',
+                      reasonKey: 'channelDeferredReason',
+                      atKey: 'channelDeferredAt',
+                      label: 'Email SMTP',
+                      extra: { channelDeferredChannel: 'email' },
+                    });
+                    // persistRunDeferYieldSlot tự ném RUN_YIELD_SLOT — không rơi xuống return bên dưới.
+                  }
                   return {
                     success: false,
                     stopRemainingStepsForRecipient: true,
@@ -4106,6 +4163,9 @@ class CampaignRunService {
             } catch (error) {
               if (error?.code === 'RUN_YIELD_SLOT') throw error;
               if (error?.code === 'RUN_STOPPED') throw error;
+              // PR-6b — ném ra ngoài luồng sendResult (network/timeout chưa phân loại được thành
+              // smtp_transient_retry_scheduled) là "kết quả khác" theo đúng nghĩa của cầu dao — reset.
+              consecutiveSmtpTransientCount = 0;
               // PR-2, Việc 3 — trước đây continuous KHÔNG có trần: lỗi ném ra (SMTP/network không
               // phân loại được thành bounce/config/quota) tính failedSends MỖI CHU KỲ dù còn thử lại
               // vô hạn (bằng chứng production: hàng nghìn dòng failed lặp lại cho cùng một người).
