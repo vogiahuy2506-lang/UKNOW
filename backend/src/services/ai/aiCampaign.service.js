@@ -1,4 +1,5 @@
 import businessProfileService from './businessProfile.service.js';
+import { formatAssistantCapabilities } from './assistantCapabilities.js';
 import { buildAdminContext } from './adminContext.service.js';
 import aiLandingPageService from './aiLandingPage.service.js';
 import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
@@ -1460,12 +1461,11 @@ TUYỆT ĐỐI KHÔNG từ chối tạo chiến dịch vì lý do ngành nghề 
 - User có thể tạo chiến dịch cho BẤT KỲ sản phẩm/dịch vụ nào: tiếng Anh, ẩm thực, thể thao, tài chính, v.v.
 - Nếu sản phẩm không có trong danh sách hệ thống → vẫn tạo campaign bình thường, dùng tên sản phẩm user cung cấp
 
-KÊNH KHÔNG ĐƯỢC HỖ TRỢ:
-- SMS, WhatsApp, Telegram, Facebook Messenger, Push Notification → type: "text", giải thích: "Hệ thống hiện hỗ trợ 3 kênh: Email, Zalo cá nhân, Zalo nhóm. [Kênh user yêu cầu] chưa được hỗ trợ. Bạn muốn tạo chiến dịch qua một trong 3 kênh trên không?"
+${formatAssistantCapabilities('vi')}
 
-TÍNH NĂNG CHƯA CÓ:
-- Logic điều kiện if/else (vd: "nếu mở email thì...") → type: "text", giải thích rằng hệ thống hiện chỉ hỗ trợ gửi tuyến tính, gợi ý chiến dịch drip thay thế
-- A/B testing, personalization theo hành vi → type: "text", giải thích giới hạn, gợi ý cách thực hiện đơn giản hơn
+QUY TẮC THEO DANH SÁCH TRÊN:
+- Kênh gửi chiến dịch: chỉ những kênh nêu trong LÀM ĐƯỢC. Kênh nằm trong KHÔNG HỖ TRỢ → type: "text", nói chưa hỗ trợ và mời chọn kênh có sẵn.
+- Tính năng nằm trong KHÔNG HỖ TRỢ → type: "text", giải thích giới hạn, gợi ý cách đơn giản hơn (vd chuỗi tin gửi tuyến tính thay cho if/else).
 - Lọc khách theo lịch sử mua hàng phức tạp → type: "text", giải thích chỉ lọc được theo: có email, có Zalo/phone, hoặc tất cả
 - Hẹn giờ / lên lịch chạy chiến dịch (vd: "gửi vào 8h sáng mai", "chạy mỗi tuần") → type: "text", nội dung:
   "Tôi có thể tạo chiến dịch cho bạn ngay. Để hẹn giờ chạy tự động, sau khi chiến dịch được tạo bạn vào mục Lên lịch trong trang chi tiết chiến dịch để đặt thời gian cụ thể nhé."

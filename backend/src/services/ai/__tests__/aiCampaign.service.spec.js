@@ -591,6 +591,38 @@ describe('aiCampaign.service', () => {
     expect(systemPrompt).toContain('data/read_form_submissions');
   });
 
+  // PR-1 (PLAN_VA_TRO_LY_AI_2026-09-28) Việc 2 — một nguồn năng lực: khối "KÊNH KHÔNG ĐƯỢC HỖ TRỢ" /
+  // "TÍNH NĂNG CHƯA CÓ" viết tay (lệch với assistantCapabilities.js khi bật kênh mới, xem mục 3 báo
+  // cáo rà soát) được thay bằng formatAssistantCapabilities('vi') — một nguồn duy nhất với não trợ
+  // giúp. Ghim đúng 2 chuỗi mới có mặt, 2 chuỗi cũ KHÔNG còn.
+  it('PR-1: prompt chat (V1) dùng formatAssistantCapabilities làm nguồn năng lực chung, không còn khối viết tay cũ', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    axiosPost.mockResolvedValue({
+      data: {
+        candidates: [
+          {
+            finishReason: 'STOP',
+            content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] },
+          },
+        ],
+      },
+    });
+
+    await aiCampaignService.processSmartChat({
+      userId: 1,
+      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+      locale: 'vi',
+    });
+
+    const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+    const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+    expect(systemPrompt).toContain('=== NĂNG LỰC HÀNH ĐỘNG CỦA TRỢ LÝ');
+    expect(systemPrompt).toContain('## KHÔNG HỖ TRỢ');
+    expect(systemPrompt).not.toContain('Hệ thống hiện hỗ trợ 3 kênh');
+    expect(systemPrompt).not.toContain('KÊNH KHÔNG ĐƯỢC HỖ TRỢ');
+  });
+
   it('PR-5b-2b: prompt chat (V1) ghi rõ landing đã gắn Biểu mẫu (formId cạnh slug), landing khác vẫn ghi bình thường', async () => {
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });

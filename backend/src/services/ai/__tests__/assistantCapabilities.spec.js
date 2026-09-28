@@ -63,4 +63,118 @@ describe('assistantCapabilities', () => {
     const probe = classifyCapabilityProbe('chatbot có gửi tin trả lời qua Telegram được không', 'vi');
     expect(probe?.kind).not.toBe('unsupported');
   });
+
+  // PR-1 (PLAN_VA_TRO_LY_AI_2026-09-28) Việc 1 — bảng "Kết quả bắt buộc" của lệnh giao thợ: 11 câu
+  // trước đây bị probe sai (câu hỏi thật có nội dung khác ngoài năng lực) phải ra null, đi tiếp bộ
+  // định tuyến + RAG. Ghim từng câu riêng — không gộp — để đột biến nào làm hỏng 1 câu thì thấy
+  // đúng câu đó, không phải đoán qua một `it.each` chung chung mất chi tiết.
+  it('landing page có gắn được form đăng ký không → null (không phải "có, mình làm được tạo landing page")', () => {
+    expect(classifyCapabilityProbe('landing page có gắn được form đăng ký không', 'vi')).toBeNull();
+  });
+  it('landing có gắn tên miền riêng được không → null', () => {
+    expect(classifyCapabilityProbe('landing có gắn tên miền riêng được không', 'vi')).toBeNull();
+  });
+  it('trang web có thể thêm nút gọi điện không → null', () => {
+    expect(classifyCapabilityProbe('trang web có thể thêm nút gọi điện không', 'vi')).toBeNull();
+  });
+  it('template email có chèn ảnh được không → null (không phải "tạo chiến dịch đa kênh")', () => {
+    expect(classifyCapabilityProbe('template email có chèn ảnh được không', 'vi')).toBeNull();
+  });
+  it('mẫu email có thể thêm nút bấm không → null', () => {
+    expect(classifyCapabilityProbe('mẫu email có thể thêm nút bấm không', 'vi')).toBeNull();
+  });
+  it('nhân viên có thể chạy chiến dịch không → null (câu hỏi phân quyền, không phải hỏi tạo chiến dịch)', () => {
+    expect(classifyCapabilityProbe('nhân viên có thể chạy chiến dịch không', 'vi')).toBeNull();
+  });
+  it('có thể đổi tên chiến dịch không → null', () => {
+    expect(classifyCapabilityProbe('có thể đổi tên chiến dịch không', 'vi')).toBeNull();
+  });
+  it('chatbot có đọc được file pdf không → null (hỏi về chatbot khách, không phải trợ lý)', () => {
+    expect(classifyCapabilityProbe('chatbot có đọc được file pdf không', 'vi')).toBeNull();
+  });
+  it('chiến dịch của tôi bị dừng, có phải hết hạn mức không → null (đang báo sự cố, không hỏi năng lực)', () => {
+    expect(classifyCapabilityProbe('chiến dịch của tôi bị dừng, có phải hết hạn mức không', 'vi')).toBeNull();
+  });
+  it('bạn có thể gửi tin zalo cho danh sách khách này không → null (còn "danh sách khách" — đúng ý, đi tiếp làm_giúp)', () => {
+    expect(classifyCapabilityProbe('bạn có thể gửi tin zalo cho danh sách khách này không', 'vi')).toBeNull();
+  });
+  it('có thể dừng chiến dịch đang chạy không → null (còn "dừng" đứng riêng — kho bài trả lời được)', () => {
+    expect(classifyCapabilityProbe('có thể dừng chiến dịch đang chạy không', 'vi')).toBeNull();
+  });
+
+  // 6 câu probe THUẦN phải giữ nguyên kết quả cũ (không có nội dung nào khác ngoài năng lực).
+  it('bạn có thể tạo chiến dịch zalo cho tôi không → giữ core:campaign', () => {
+    expect(classifyCapabilityProbe('bạn có thể tạo chiến dịch zalo cho tôi không', 'vi')).toMatchObject({ kind: 'core', id: 'campaign' });
+  });
+  it('bạn có thể tạo landing page không → giữ core:landing_page', () => {
+    expect(classifyCapabilityProbe('bạn có thể tạo landing page không', 'vi')).toMatchObject({ kind: 'core', id: 'landing_page' });
+  });
+  it('chiến dịch có hẹn giờ được không → giữ guide:schedule', () => {
+    expect(classifyCapabilityProbe('chiến dịch có hẹn giờ được không', 'vi')).toMatchObject({ kind: 'guide', id: 'schedule' });
+  });
+  it('sửa chiến dịch đã tạo được không → giữ guide:edit_existing ("đã tạo" không thêm nghĩa khác)', () => {
+    expect(classifyCapabilityProbe('sửa chiến dịch đã tạo được không', 'vi')).toMatchObject({ kind: 'guide', id: 'edit_existing' });
+  });
+  it('có A/B test không → giữ unsupported:ab_testing (chữ "test" phải bị xoá cùng "A/B")', () => {
+    expect(classifyCapabilityProbe('có A/B test không', 'vi')).toMatchObject({ kind: 'unsupported', id: 'ab_testing' });
+  });
+  it('gửi sms được không → giữ unsupported:unsupported_channel', () => {
+    expect(classifyCapabilityProbe('gửi sms được không', 'vi')).toMatchObject({ kind: 'unsupported', id: 'unsupported_channel' });
+  });
+
+  // Regex campaign không còn khớp chữ trần "email"/"zalo" đứng riêng (28/09) — trước đây khớp qua
+  // \bemail\b/zalo trần, nay phải null vì landing_page mới là năng lực đúng, mà "gắn form" còn lại
+  // (ca "landing page có gắn..." ở trên) hoặc không khớp gì cả nếu không có năng lực nào khác.
+  it('câu chỉ có "email" trần, không năng lực khác → null (không tự nhận là hỏi tạo chiến dịch)', () => {
+    expect(classifyCapabilityProbe('email có gửi được không', 'vi')).toBeNull();
+  });
+  it('câu chỉ có "zalo" trần, không năng lực khác → null', () => {
+    expect(classifyCapabilityProbe('zalo có dùng được không', 'vi')).toBeNull();
+  });
+
+  // Câu chứa CẢ hai từ khoá "chiến dịch" (campaign) lẫn "template" — phần-còn-lại không phân biệt
+  // được (cả hai đều bị xoá, phần còn lại rỗng như nhau dù ai thắng), CHỈ thứ tự trong mảng `core`
+  // mới quyết định `id` trả về. Ghim trực tiếp: template phải thắng (đúng Việc 1.2 "đưa template
+  // lên trước campaign") — đột biến đảo thứ tự lại về cũ sẽ đỏ đúng ca này.
+  it('template xét TRƯỚC campaign: "chiến dịch template được không" → core:template, không phải core:campaign', () => {
+    expect(classifyCapabilityProbe('chiến dịch template được không', 'vi')).toMatchObject({ kind: 'core', id: 'template' });
+  });
+
+  // PR-1 Việc 1.4 — "ghim từng phần tử" bộ từ đệm: mỗi từ một câu riêng, neo vào core:landing_page
+  // (không tự khớp năng lực nào khác — đã kiểm tay từng từ trước khi viết). Đột biến bỏ 1 từ khỏi
+  // FILLER_WORDS phải làm ĐÚNG MỘT dòng dưới đây đỏ (còn lại từ đó làm hasMeaningfulRemainder=true).
+  // Từ dài < 3 ký tự (à, ừ, ở, có, là, đã, se, to, on, my...) KHÔNG ghim được bằng cách này: ngưỡng
+  // "≥ 3 ký tự" của thuật toán đã loại chúng dù có nằm trong danh sách hay không — liệt kê ở cuối để
+  // không bỏ sót, không viết ca giả vờ ghim. "sms" cũng không ghim theo khuôn này: nó tự khớp
+  // unsupported_channel qua chính pattern của nó (không cần có mặt trong FILLER_WORDS để bị xoá) —
+  // đã có ca "hệ thống có gửi SMS không" (dòng 27) làm bằng chứng hành vi đúng.
+  it.each([
+    ['bạn', 'xưng hô'], ['mình', 'xưng hô'], ['tôi', 'xưng hô'], ['anh', 'xưng hô'], ['chị', 'xưng hô'],
+    ['cho', 'xưng hô'], ['giúp', 'xưng hô'], ['nhé', 'xưng hô'], ['với', 'xưng hô'], ['của', 'xưng hô'],
+    ['này', 'xưng hô'], ['kia', 'xưng hô'], ['thì', 'xưng hô'], ['hay', 'xưng hô'], ['hoặc', 'xưng hô'],
+    ['qua', 'xưng hô'], ['bằng', 'xưng hô'], ['trên', 'xưng hô'], ['luôn', 'xưng hô'], ['ngay', 'xưng hô'],
+    ['rất', 'xưng hô'], ['hơi', 'xưng hô'],
+    ['không', 'dấu hiệu'], ['khong', 'dấu hiệu'], ['thể', 'dấu hiệu'], ['the', 'dấu hiệu/tiếng Anh'],
+    ['được', 'dấu hiệu'], ['duoc', 'dấu hiệu'], ['chứ', 'dấu hiệu'], ['chu', 'dấu hiệu'], ['trợ', 'dấu hiệu'],
+    ['tro', 'dấu hiệu'], ['phải', 'dấu hiệu'],
+    ['tạo', 'làm hộ'], ['tao', 'làm hộ'], ['làm', 'làm hộ'], ['lam', 'làm hộ'], ['soạn', 'làm hộ'],
+    ['soan', 'làm hộ'], ['viết', 'làm hộ'], ['viet', 'làm hộ'], ['thiết', 'làm hộ'], ['thiet', 'làm hộ'],
+    ['dựng', 'làm hộ'], ['dung', 'làm hộ'], ['xây', 'làm hộ'], ['xay', 'làm hộ'], ['gửi', 'làm hộ'],
+    ['gui', 'làm hộ'], ['nhắn', 'làm hộ'], ['nhan', 'làm hộ'], ['chạy', 'làm hộ'], ['chay', 'làm hộ'],
+    ['lên', 'làm hộ'], ['len', 'làm hộ'], ['sửa', 'làm hộ (edit_existing)'], ['sua', 'làm hộ (edit_existing)'],
+    ['đang', 'thì/trạng thái'], ['rồi', 'thì/trạng thái'], ['roi', 'thì/trạng thái'], ['vẫn', 'thì/trạng thái'],
+    ['van', 'thì/trạng thái'], ['hiện', 'thì/trạng thái'], ['hien', 'thì/trạng thái'], ['mới', 'thì/trạng thái'],
+    ['moi', 'thì/trạng thái'], ['giờ', 'thì/trạng thái'], ['gio', 'thì/trạng thái'],
+    ['thống', 'chủ ngữ hệ thống'], ['thong', 'chủ ngữ hệ thống'], ['phần', 'chủ ngữ hệ thống'],
+    ['mềm', 'chủ ngữ hệ thống'], ['app', 'chủ ngữ hệ thống'], ['founder', 'chủ ngữ hệ thống'],
+    ['mail', 'tên kênh'],
+    ['you', 'tiếng Anh'], ['and', 'tiếng Anh'], ['can', 'tiếng Anh'], ['could', 'tiếng Anh'],
+    ['does', 'tiếng Anh'], ['are', 'tiếng Anh'], ['please', 'tiếng Anh'], ['help', 'tiếng Anh'],
+    ['support', 'tiếng Anh'], ['supported', 'tiếng Anh'], ['possible', 'tiếng Anh'], ['create', 'tiếng Anh'],
+    ['make', 'tiếng Anh'], ['build', 'tiếng Anh'], ['design', 'tiếng Anh'], ['send', 'tiếng Anh'],
+    ['run', 'tiếng Anh'], ['this', 'tiếng Anh'], ['that', 'tiếng Anh'], ['for', 'tiếng Anh'],
+    ['with', 'tiếng Anh'], ['your', 'tiếng Anh'],
+  ])('từ đệm "%s" (%s) không cản probe: có %s landing page không → giữ core:landing_page', (word) => {
+    expect(classifyCapabilityProbe(`có ${word} landing page không`, 'vi')).toMatchObject({ kind: 'core', id: 'landing_page' });
+  });
 });
