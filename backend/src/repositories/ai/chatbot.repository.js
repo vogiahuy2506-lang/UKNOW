@@ -492,7 +492,7 @@ class ChatbotRepository {
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, launcher_label,
               COALESCE(origin, 'self_created') as origin, reply_limit_config,
-              active_hours, created_at, updated_at,
+              active_hours, replies_enabled, created_at, updated_at,
               (SELECT COUNT(*)::int FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_count
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`;
@@ -530,7 +530,7 @@ class ChatbotRepository {
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, allow_attachments, launcher_label,
-              active_hours, created_at, updated_at
+              active_hours, replies_enabled, created_at, updated_at
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true
        ORDER BY created_at DESC
@@ -570,7 +570,7 @@ class ChatbotRepository {
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, allow_attachments, launcher_label,
               temperature, max_tokens, ai_model, origin,
-              active_hours, created_at, updated_at
+              active_hours, replies_enabled, created_at, updated_at
        FROM custom_chatbots
        WHERE id = $1 AND is_active = true
          AND ($2::bigint IS NULL OR id_user = $2::bigint)`,
@@ -618,6 +618,7 @@ class ChatbotRepository {
          response_style = COALESCE($25, response_style),
          launcher_label = COALESCE($26, launcher_label),
          active_hours = CASE WHEN $27::boolean THEN $28::jsonb ELSE active_hours END,
+         replies_enabled = COALESCE($29::boolean, replies_enabled),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -632,7 +633,8 @@ class ChatbotRepository {
        data.temperature, data.max_tokens, data.ai_model, data.response_style,
        data.launcher_label,
        Boolean(data.active_hours_set),
-       data.active_hours === null || data.active_hours === undefined ? null : JSON.stringify(data.active_hours)];
+       data.active_hours === null || data.active_hours === undefined ? null : JSON.stringify(data.active_hours),
+       data.replies_enabled === undefined || data.replies_enabled === null ? null : Boolean(data.replies_enabled)];
     } else {
       // Update suggested_questions field
       query = `UPDATE custom_chatbots SET
@@ -662,6 +664,7 @@ class ChatbotRepository {
          response_style = COALESCE($26, response_style),
          launcher_label = COALESCE($27, launcher_label),
          active_hours = CASE WHEN $28::boolean THEN $29::jsonb ELSE active_hours END,
+         replies_enabled = COALESCE($30::boolean, replies_enabled),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -676,7 +679,8 @@ class ChatbotRepository {
        data.temperature, data.max_tokens, data.ai_model, data.response_style,
        data.launcher_label,
        Boolean(data.active_hours_set),
-       data.active_hours === null || data.active_hours === undefined ? null : JSON.stringify(data.active_hours)];
+       data.active_hours === null || data.active_hours === undefined ? null : JSON.stringify(data.active_hours),
+       data.replies_enabled === undefined || data.replies_enabled === null ? null : Boolean(data.replies_enabled)];
     }
 
     const { rows } = await db.query(query, params);
@@ -744,7 +748,7 @@ class ChatbotRepository {
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, allow_attachments, launcher_label,
               temperature, max_tokens, ai_model, response_style,
-              active_hours, created_at, updated_at
+              active_hours, replies_enabled, created_at, updated_at
        FROM custom_chatbots
        WHERE widget_key = $1 AND is_active = true`,
       [widgetKey]

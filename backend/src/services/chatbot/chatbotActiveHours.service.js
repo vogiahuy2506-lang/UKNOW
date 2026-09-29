@@ -37,13 +37,19 @@ class ChatbotActiveHoursService {
    *
    * @param {object} params
    * @param {object|null|undefined} params.activeHours - Cấu hình active_hours của chatbot
+   * @param {boolean} [params.repliesEnabled] - custom_chatbots.replies_enabled; `false` = chủ tắt trả lời (undefined coi như bật)
    * @param {string} params.channel - Tên kênh (zalo_personal, zalo_oa, facebook, whatsapp, web, telegram_personal...)
    * @param {number|string} params.chatbotId - ID chatbot
    * @param {string} params.senderKey - Mã định danh người gửi (senderId, phone, sessionId...)
    * @param {Date|string|number} [params.now=new Date()]
    * @returns {Promise<{ allowed: boolean, reason?: string, shouldNotify?: boolean, staticReply?: string|null }>}
    */
-  async checkBeforeAi({ activeHours, channel, chatbotId, senderKey, now = new Date() }) {
+  async checkBeforeAi({ activeHours, repliesEnabled, channel, chatbotId, senderKey, now = new Date() }) {
+    // Chủ tắt công tắc trả lời: im lặng ở mọi kênh, không gọi AI. Tin khách vẫn được lưu ở nơi gọi.
+    if (repliesEnabled === false) {
+      return { allowed: false, reason: 'replies_disabled', shouldNotify: false, staticReply: null };
+    }
+
     if (!activeHours || isWithinActiveHours(activeHours, now)) {
       return { allowed: true };
     }

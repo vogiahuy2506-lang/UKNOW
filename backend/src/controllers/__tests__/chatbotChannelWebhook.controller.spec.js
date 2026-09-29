@@ -15,6 +15,22 @@ const mockParseWebhookEvent = jest.fn();
 const mockSendReply = jest.fn();
 const mockFbParseWebhookEvent = jest.fn();
 const mockFbSendReply = jest.fn();
+const mockWaSendReply = jest.fn();
+const mockWaIsEnabledForChatbot = jest.fn();
+
+jest.unstable_mockModule('../../services/chatbot/channelAdapters/whatsapp.adapter.js', () => ({
+  default: {
+    parseWebhookEvent: jest.fn(() => []),
+    verifySignature: jest.fn(() => true),
+    sendReply: mockWaSendReply,
+  },
+}));
+
+jest.unstable_mockModule('../../repositories/chatbot/chatbotWhatsAppAccount.repository.js', () => ({
+  default: {
+    isEnabledForChatbot: mockWaIsEnabledForChatbot,
+  },
+}));
 
 jest.unstable_mockModule('../../repositories/ai/chatbotChannel.repository.js', () => ({
   default: {
@@ -360,5 +376,106 @@ describe('ChatbotChannelWebhookController - Facebook: AI tạm dừng kiểm tr�
     // Ngoài giờ thì dừng TRƯỚC cổng rate limit và không gọi AI.
     expect(mockCheckBeforeAi).not.toHaveBeenCalled();
     expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
+  });
+});
+
+// PLAN_CONG_TAC_TRANG_THAI_CHATBOT PR-2: chatbot tắt công tắc trả lời (custom_chatbots.replies_enabled=false)
+// → im lặng ở Zalo OA / Facebook / WhatsApp Cloud, tin khách VẪN được lưu, không gọi AI. Dùng
+// chatbotActiveHours.service THẬT (chỉ kho khoá được mock) nên bỏ `repliesEnabled` ở nơi gọi là đỏ.
+describe('ChatbotChannelWebhookController - replies_enabled=false', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-15T12:00:00+07:00'));
+    inboundReplyDebounceService._resetForTests();
+    mockAddMessage.mockResolvedValue({ id: 1 });
+    mockIsAiPaused.mockResolvedValue(false);
+    mockCheckBeforeAi.mockResolvedValue({ allowed: true });
+    mockRouteChatbotMessage.mockResolvedValue({ content: 'KHÔNG ĐƯỢC TRẢ LỜI' });
+    mockSendReply.mockResolvedValue({ success: true });
+    mockFbSendReply.mockResolvedValue({ success: true });
+    mockWaSendReply.mockResolvedValue({ success: true });
+    mockWaIsEnabledForChatbot.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    inboundReplyDebounceService._resetForTests();
+    jest.useRealTimers();
+  });
+
+  const flushDebounce = () => jest.advanceTimersByTimeAsync(10_000);
+
+  function expectNoAiNoReply(sendReply) {
+    expect(mockRouteChatbotMessage).not.toHaveBeenCalled();
+    expect(mockCheckBeforeAi).not.toHaveBeenCalled(); // không ăn hạn mức lượt trả lời
+    expect(sendReply).not.toHaveBeenCalled();
+    // Không có tin bot nào được ghi.
+    expect(mockAddMessage.mock.calls.some(([, data]) => data.role === 'bot')).toBe(false);
+  }
+
+  it('Zalo OA: lưu tin khách, không gọi AI, không gửi', async () => {
+    mockFindByWebhookToken.mockResolvedValue({ id: 10, id_chatbot: 5 });
+    mockFindActiveChannelById.mockResolvedValue({ id: 10, id_chatbot: 5 });
+    mockFindChatbotById.mockResolvedValue({ id: 5, id_user: 1, is_active: true, replies_enabled: false });
+    mockGetOrCreateConversation.mockResolvedValue({ id: 100 });
+    mockParseWebhookEvent.mockReturnValue({ message: 'Alo', senderId: 'user_off', messageId: 'oa_off_1' });
+
+    await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok' }, body: {} }, { send: jest.fn() });
+    await flushDebounce();
+
+    expect(mockAddMessage).toHaveBeenCalledWith(100, expect.objectContaining({ role: 'visitor', content: 'Alo' }));
+    expectNoAiNoReply(mockSendReply);
+  });
+
+  it('Facebook: lưu tin khách, không gọi AI, không gửi (kể cả khi có câu ngoài giờ)', async () => {
+    mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8 });
+    mockFindActiveChannelById.mockResolvedValue({ id: 20, id_chatbot: 8 });
+    mockFindChatbotById.mockResolvedValue({
+      id: 8,
+      id_user: 1,
+      is_active: true,
+      replies_enabled: false,
+      active_hours: { start: '08:00', end: '11:00', outsideAction: 'message', outsideMessage: 'Ngoài giờ' },
+    });
+    mockGetOrCreateConversation.mockResolvedValue({ id: 300 });
+    mockFbParseWebhookEvent.mockReturnValue([{ message: 'Alo', senderId: 'fb_off', messageId: 'fb_off_1' }]);
+
+    await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb' }, body: {} }, { send: jest.fn() });
+    await flushDebounce();
+
+    expect(mockAddMessage).toHaveBeenCalledWith(300, expect.objectContaining({ role: 'visitor', content: 'Alo' }));
+    expectNoAiNoReply(mockFbSendReply);
+  });
+
+  it('WhatsApp Cloud: batch không gọi AI, không gửi, không ghi tin bot', async () => {
+    mockFindActiveChannelById.mockResolvedValue({ id: 30, id_chatbot: 9, channel_type: 'whatsapp' });
+    mockFindChatbotById.mockResolvedValue({ id: 9, id_user: 1, is_active: true, replies_enabled: false });
+
+    await chatbotChannelWebhookController._processWhatsAppBatch({
+      channel: { id: 30, id_chatbot: 9 },
+      chatbotId: 9,
+      conv: { id: 400 },
+      senderId: '8490000',
+      batch: { messages: [{ content: 'Alo', persistedMessageId: 1 }], waitMs: 0, reason: 'test' },
+    });
+
+    // Batch ĐÃ chạy tới cổng (không phải dừng sớm ở khoá/tạm dừng).
+    expect(mockIsAiPaused).toHaveBeenCalledWith(400, 'channel');
+    expectNoAiNoReply(mockWaSendReply);
+  });
+
+  it('Đối chứng — replies_enabled thiếu/true thì Zalo OA vẫn gọi AI và trả lời', async () => {
+    mockFindByWebhookToken.mockResolvedValue({ id: 10, id_chatbot: 5 });
+    mockFindActiveChannelById.mockResolvedValue({ id: 10, id_chatbot: 5 });
+    mockFindChatbotById.mockResolvedValue({ id: 5, id_user: 1, is_active: true });
+    mockGetOrCreateConversation.mockResolvedValue({ id: 100 });
+    mockGetLatestMessageId.mockResolvedValue(1);
+    mockParseWebhookEvent.mockReturnValue({ message: 'Alo', senderId: 'user_on', messageId: 'oa_on_1' });
+
+    await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok' }, body: {} }, { send: jest.fn() });
+    await flushDebounce();
+
+    expect(mockRouteChatbotMessage).toHaveBeenCalledTimes(1);
+    expect(mockSendReply).toHaveBeenCalledTimes(1);
   });
 });

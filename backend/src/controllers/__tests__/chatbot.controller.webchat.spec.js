@@ -513,3 +513,56 @@ describe('PR-B (mục 7) — SSE inbox:new_message cho web chat phải kèm type
     );
   });
 });
+
+describe('PLAN_CONG_TAC_TRANG_THAI_CHATBOT PR-2 — replies_enabled=false chặn AI ở cả hai đường widget', () => {
+  const offBot = { ...chatbot, replies_enabled: false };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(offBot);
+    findChatbotByWidgetKey.mockResolvedValue(offBot);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'KHÔNG ĐƯỢC TRẢ LỜI' });
+    consume.mockResolvedValue(undefined);
+    broadcast.mockReturnValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    isAiPaused.mockResolvedValue(false);
+  });
+
+  const expectSilentButSaved = (res) => {
+    expect(chat).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+    // Tin khách vẫn vào hội thoại; không có tin assistant.
+    expect(addWebChatMessage).toHaveBeenCalledTimes(1);
+    expect(addWebChatMessage.mock.calls[0][2]).toEqual(expect.objectContaining({ role: 'visitor' }));
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({ content: null, reason: 'replies_disabled' }),
+      })
+    );
+  };
+
+  it('chatWithCustomChatbot (widget theo key): không gọi AI, không trừ credit, lưu tin khách', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbot(
+      { params: { widgetKey: 'wk_abc' }, body: { message: 'xin chào', sessionId: 'sess_off_1', history: [] } },
+      res
+    );
+    expectSilentButSaved(res);
+  });
+
+  it('chatWithCustomChatbotById (widget theo id): không gọi AI, không trừ credit, lưu tin khách', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '12' }, body: { message: 'xin chào', sessionId: 'sess_off_2', history: [] } },
+      res
+    );
+    expectSilentButSaved(res);
+  });
+});

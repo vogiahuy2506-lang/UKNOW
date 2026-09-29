@@ -1595,6 +1595,8 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   -- Migration 224: khung giờ chatbot được phép trả lời, mặc định NULL (24/7)
   active_hours        JSONB DEFAULT NULL
     CHECK (active_hours IS NULL OR jsonb_typeof(active_hours) = 'object'),
+  -- Migration 261: cong tac bat/tat tra loi tung chatbot (KHONG phai is_active = xoa mem)
+  replies_enabled     BOOLEAN NOT NULL DEFAULT true,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );

@@ -6,6 +6,55 @@ describe('chatbotActiveHours.service', () => {
   });
 
   describe('checkBeforeAi', () => {
+    it('repliesEnabled:false → replies_disabled, im lặng, kể cả khi đang trong giờ và khi không có khung giờ', async () => {
+      const inHours = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: { start: '00:00', end: '23:59', outsideAction: 'silent' },
+        repliesEnabled: false,
+        channel: 'zalo_personal',
+        chatbotId: 'bot-1',
+        senderKey: 'user-1',
+        now: new Date('2026-09-15T05:00:00.000Z'), // 12:00 VN — trong giờ
+      });
+      expect(inHours).toEqual({ allowed: false, reason: 'replies_disabled', shouldNotify: false, staticReply: null });
+
+      const noWindow = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: null,
+        repliesEnabled: false,
+        channel: 'web',
+        chatbotId: 'bot-1',
+        senderKey: 'user-1',
+      });
+      expect(noWindow.allowed).toBe(false);
+      expect(noWindow.reason).toBe('replies_disabled');
+    });
+
+    it('repliesEnabled:false thắng cả outsideAction=message (không gửi câu ngoài giờ)', async () => {
+      const res = await chatbotActiveHoursService.checkBeforeAi({
+        activeHours: { start: '08:00', end: '17:00', outsideAction: 'message', outsideMessage: 'Ngoài giờ' },
+        repliesEnabled: false,
+        channel: 'web',
+        chatbotId: 'bot-1',
+        senderKey: 'user-1',
+        now: new Date('2026-09-15T15:00:00.000Z'), // 22:00 VN
+      });
+      expect(res.reason).toBe('replies_disabled');
+      expect(res.shouldNotify).toBe(false);
+      expect(res.staticReply).toBeNull();
+    });
+
+    it('repliesEnabled undefined/true → như cũ (cho phép)', async () => {
+      for (const repliesEnabled of [undefined, true]) {
+        const res = await chatbotActiveHoursService.checkBeforeAi({
+          activeHours: null,
+          repliesEnabled,
+          channel: 'web',
+          chatbotId: 'bot-1',
+          senderKey: 'user-1',
+        });
+        expect(res).toEqual({ allowed: true });
+      }
+    });
+
     it('allows when activeHours is null or undefined (24/7)', async () => {
       const res = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: null,

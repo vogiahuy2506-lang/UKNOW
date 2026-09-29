@@ -156,7 +156,7 @@ async function findEnabledChatbots(sessionKey) {
             s.max_tokens, s.response_style,
             s.id_sub_assistant, sa.name AS sub_assistant_name,
             cb.id_user, cb.name AS chatbot_name,
-            cb.active_hours
+            cb.active_hours, cb.replies_enabled
      FROM chatbot_whatsapp_baileys_settings s
      JOIN custom_chatbots cb ON cb.id = s.id_chatbot
      LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant
@@ -359,7 +359,7 @@ async function resolveChatbotSettingsForBatch({ ownerUserId, sessionKey, chatbot
             s.max_tokens, s.response_style,
             s.id_sub_assistant, sa.name AS sub_assistant_name,
             cb.id_user, cb.name AS chatbot_name,
-            cb.active_hours
+            cb.active_hours, cb.replies_enabled
      FROM chatbot_whatsapp_baileys_settings s
      JOIN custom_chatbots cb ON cb.id = s.id_chatbot
      LEFT JOIN sub_assistants sa ON sa.id = s.id_sub_assistant
@@ -449,6 +449,7 @@ async function processIncomingMessage({ sessionKey, msg }) {
       const { default: chatbotActiveHoursService } = await import('./chatbotActiveHours.service.js');
       const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: cb.active_hours,
+        repliesEnabled: cb.replies_enabled,
         channel: 'whatsapp_baileys',
         chatbotId: cb.id_chatbot,
         senderKey: externalId,

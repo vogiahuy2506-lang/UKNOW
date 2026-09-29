@@ -475,6 +475,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
   const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
     activeHours: chatbotRecord?.active_hours,
+    repliesEnabled: chatbotRecord?.replies_enabled,
     channel: 'telegram_personal',
     chatbotId: idChatbot || account.id,
     senderKey: parsed.senderId,

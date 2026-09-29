@@ -737,6 +737,7 @@ class ZaloPersonalInboxService {
       const { default: chatbotActiveHoursService } = await import('./chatbotActiveHours.service.js');
       const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: chatbotRecord?.active_hours,
+        repliesEnabled: chatbotRecord?.replies_enabled,
         channel: 'zalo_personal',
         chatbotId: idChatbot || zaloSettingId,
         senderKey: senderId,

@@ -164,6 +164,7 @@ class ChatbotChannelWebhookController {
       const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
       const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: chatbot.active_hours,
+        repliesEnabled: chatbot.replies_enabled,
         channel: 'zalo_oa',
         chatbotId,
         senderKey: senderId,
@@ -429,6 +430,7 @@ class ChatbotChannelWebhookController {
       const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
       const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: chatbot.active_hours,
+        repliesEnabled: chatbot.replies_enabled,
         channel: 'facebook',
         chatbotId,
         senderKey: senderId,
@@ -722,6 +724,7 @@ class ChatbotChannelWebhookController {
       const { default: chatbotActiveHoursService } = await import('../services/chatbot/chatbotActiveHours.service.js');
       const activeCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: chatbot.active_hours,
+        repliesEnabled: chatbot.replies_enabled,
         channel: 'whatsapp',
         chatbotId,
         senderKey: senderId,

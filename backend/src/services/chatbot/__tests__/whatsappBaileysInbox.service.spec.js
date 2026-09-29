@@ -55,17 +55,21 @@ beforeEach(async () => {
     checkBeforeAi: jest.fn(async () => m.rate),
     markRateLimitNotified: jest.fn(async () => {}),
     botInserts: [],
+    visitorInserts: [],
+    settingsSqls: [],
+    repliesEnabled: undefined,
   };
 
   jest.unstable_mockModule(resolveUrl('config/database.js'), () => ({
     default: {
       query: jest.fn(async (sql, params) => {
         const s = String(sql);
+        if (/FROM chatbot_whatsapp_baileys_settings/i.test(s)) m.settingsSqls.push(s);
         if (/FROM chatbot_whatsapp_baileys_settings/i.test(s) && /s\.id_chatbot = \$2/i.test(s)) {
           return { rows: [{ id_chatbot: CHATBOT_ID, system_instruction: 'x', ai_model: 'gemini-2.5-flash', id_user: 42, chatbot_name: 'Bot', active_hours: null }] };
         }
         if (/FROM chatbot_whatsapp_baileys_settings/i.test(s)) {
-          return { rows: [{ id_chatbot: CHATBOT_ID, active_hours: null }] };
+          return { rows: [{ id_chatbot: CHATBOT_ID, active_hours: null, replies_enabled: m.repliesEnabled }] };
         }
         if (/FROM channel_connections/i.test(s)) return { rows: [{ id: 9 }] };
         if (/FROM channel_conversations/i.test(s) && /ai_paused/i.test(s)) return { rows: [{ ai_paused: false }] };
@@ -73,6 +77,7 @@ beforeEach(async () => {
         if (/FROM channel_messages/i.test(s) && /external_id = \$2/i.test(s)) return { rows: [] };
         if (/INSERT INTO channel_messages/i.test(s)) {
           if (params[3] === 'bot') m.botInserts.push(params[4]);
+          if (params[3] === 'visitor') m.visitorInserts.push(params[4]);
           return { rows: [{ id: 1000 + m.botInserts.length + Math.floor(Math.random() * 1e6) }] };
         }
         return { rows: [] };
@@ -106,7 +111,13 @@ beforeEach(async () => {
     },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/chatbotActiveHours.service.js'), () => ({
-    default: { checkBeforeAi: async () => ({ allowed: true, shouldNotify: false }), markNotified: async () => {} },
+    default: {
+      // Phản chiếu cổng thật: repliesEnabled===false → chặn (bỏ tham số ở nơi gọi thì ca replies_enabled đỏ).
+      checkBeforeAi: async (p) => (p?.repliesEnabled === false
+        ? { allowed: false, reason: 'replies_disabled', shouldNotify: false, staticReply: null }
+        : { allowed: true, shouldNotify: false }),
+      markNotified: async () => {},
+    },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/chatbotRateLimit.service.js'), () => ({
     default: {
@@ -174,6 +185,33 @@ describe('WhatsApp Baileys — cổng khoá + trần lượt tại điểm xả 
     expect(m.checkBeforeAi).not.toHaveBeenCalled(); // chưa xả đợt thì chưa đếm
     await flush();
     expect(m.checkBeforeAi).toHaveBeenCalledTimes(1);
+    expect(m.callAi).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WhatsApp Baileys — công tắc trả lời của chatbot (replies_enabled) — PLAN_CONG_TAC_TRANG_THAI_CHATBOT PR-2', () => {
+  it('replies_enabled=false: lưu tin khách, không gọi AI, không hỏi trần lượt, không gửi gì', async () => {
+    m.repliesEnabled = false;
+    await sendTexts(['Cho mình hỏi giá áo thun size L là bao nhiêu vậy shop']);
+    await flush();
+    expect(m.visitorInserts).toEqual(['Cho mình hỏi giá áo thun size L là bao nhiêu vậy shop']);
+    expect(m.callAi).not.toHaveBeenCalled();
+    expect(m.checkBeforeAi).not.toHaveBeenCalled();
+    expect(m.sendReply).not.toHaveBeenCalled();
+    expect(m.botInserts).toEqual([]);
+  });
+
+  it('cả hai câu SQL đọc cài đặt chatbot đều SELECT cb.replies_enabled (mock DB không tự chứng minh được cột)', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L là bao nhiêu vậy shop']);
+    await flush();
+    expect(m.settingsSqls.length).toBeGreaterThanOrEqual(2);
+    for (const sql of m.settingsSqls) expect(sql).toContain('cb.replies_enabled');
+  });
+
+  it('replies_enabled=true: gọi AI như cũ', async () => {
+    m.repliesEnabled = true;
+    await sendTexts(['Cho mình hỏi giá áo thun size L là bao nhiêu vậy shop']);
+    await flush();
     expect(m.callAi).toHaveBeenCalledTimes(1);
   });
 });

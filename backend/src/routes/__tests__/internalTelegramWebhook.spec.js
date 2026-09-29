@@ -216,7 +216,7 @@ beforeEach(async () => {
   // chatbot repository
   const chatbotRepoMock = {
     getSettings: jest.fn(async () => fakeChatbotSettingsFull),
-    findChatbotById: jest.fn(async () => ({ id: 55, active_hours: null })),
+    findChatbotById: jest.fn(async () => mocks._chatbotRecord || ({ id: 55, active_hours: null })),
   };
   jest.unstable_mockModule(
     resolveUrl('repositories/ai/chatbot.repository.js'),
@@ -317,7 +317,11 @@ beforeEach(async () => {
     resolveUrl('services/chatbot/chatbotActiveHours.service.js'),
     () => ({
       default: {
-        checkBeforeAi: async () => ({ allowed: true, shouldNotify: false }),
+        // Phản chiếu cổng thật: repliesEnabled===false → chặn (bỏ tham số ở nơi gọi thì ca replies_enabled đỏ).
+        checkBeforeAi: async (p) =>
+          p?.repliesEnabled === false
+            ? { allowed: false, reason: 'replies_disabled', shouldNotify: false, staticReply: null }
+            : { allowed: true, shouldNotify: false },
         markNotified: async () => {},
       },
     })
@@ -765,6 +769,28 @@ describe('Khoá tài nguyên + trần lượt trả lời (29/09/2026)', () => {
     expect(mocks._checkBeforeAi).toHaveBeenCalledWith(
       expect.objectContaining({ channel: 'telegram_personal', ownerUserId: 42, chatbotId: 55, senderKey: '8888' })
     );
+  });
+});
+
+describe('Công tắc trả lời của chatbot (replies_enabled) — PLAN_CONG_TAC_TRANG_THAI_CHATBOT PR-2', () => {
+  it('chatbot replies_enabled=false → lưu tin khách, không gọi AI, không hỏi trần lượt, không gửi gì', async () => {
+    mocks._chatbotRecord = { id: 55, active_hours: null, replies_enabled: false };
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks._checkBeforeAi).not.toHaveBeenCalled();
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+    // Tin khách đã được lưu trước cổng.
+    const visitorLog = (mocks._callsSoFar || []).find(
+      ({ sql }) => /INSERT INTO telegram_personal_messages/i.test(sql)
+    );
+    expect(visitorLog).toBeDefined();
+  });
+
+  it('chatbot replies_enabled=true → gọi AI như cũ', async () => {
+    mocks._chatbotRecord = { id: 55, active_hours: null, replies_enabled: true };
+    await postWebhook(inboundPayload);
+    expect(mocks.chatRouterCall()).not.toBeNull();
   });
 });
 

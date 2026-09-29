@@ -1667,6 +1667,7 @@ class ChatbotController {
       // Kiểm tra khung giờ hoạt động trước checkBeforeAi (ngoài giờ không ăn bộ đếm rate limit)
       const activeHoursCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: chatbot.active_hours,
+        repliesEnabled: chatbot.replies_enabled,
         channel: 'web',
         chatbotId: chatbot.id,
         senderKey: visitorKey,
@@ -1954,6 +1955,7 @@ class ChatbotController {
       // Kiểm tra khung giờ hoạt động trước checkBeforeAi
       const activeHoursCheck = await chatbotActiveHoursService.checkBeforeAi({
         activeHours: chatbot.active_hours,
+        repliesEnabled: chatbot.replies_enabled,
         channel: 'web',
         chatbotId: chatbot.id,
         senderKey: visitorSessionId,
