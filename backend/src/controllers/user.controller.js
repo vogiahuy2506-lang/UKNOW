@@ -28,6 +28,7 @@ import {
 } from '../repositories/user/user.repository.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
+import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
 import { sumActiveTopupGrants, getWalletBalance } from '../repositories/payment/topup.repository.js';
 import {
@@ -235,7 +236,10 @@ class UserController {
       // 3. Usage counts (best-effort)
       let usageCounts = { email_sent_today: 0, email_sent_month: 0, zalo_sent_today: 0, zalo_sent_month: 0 };
       try {
-        usageCounts = await findProfileUsageCounts(billingUserId) || usageCounts;
+        usageCounts = await findProfileUsageCounts(billingUserId, {
+          // W7b — Telegram/WhatsApp bị trừ hạn mức Zalo nên phải hiện trong "đã gửi hôm nay/tháng".
+          adapterChannels: campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo'),
+        }) || usageCounts;
       } catch (err) {
         console.error('[Profile] findProfileUsageCounts failed', { userId, message: err.message });
       }

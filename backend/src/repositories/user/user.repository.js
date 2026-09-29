@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL, findCurrentPlanActivation } from '../../utils/billingCycle.util.js';
+import campaignChannelMessageStatsRepository from '../campaign/campaignChannelMessageStats.repository.js';
 
 const PROFILE_LIMIT_COLUMNS = `
   u.max_campaigns,
@@ -192,7 +193,14 @@ export async function findProfilePlanByUserIdFallback(userId) {
   return rows[0] || null;
 }
 
-export async function findProfileUsageCounts(userId) {
+/**
+ * @param {number} userId
+ * @param {object} [options]
+ * @param {string[]} [options.adapterChannels] W7b — kênh adapter (Telegram/WhatsApp) đếm vào hạn mức
+ *   Zalo (`quotaChannel='zalo'`); tin `sent` của các kênh này ở `campaign_channel_messages` được cộng
+ *   vào `zalo_sent_today`/`zalo_sent_month` cho khớp với con số bị trừ hạn mức. Rỗng = như cũ.
+ */
+export async function findProfileUsageCounts(userId, { adapterChannels = [] } = {}) {
   const { rows } = await db.query(
     `SELECT
        COUNT(*) FILTER (WHERE cj.event_type = 'email_sent'
@@ -208,7 +216,14 @@ export async function findProfileUsageCounts(userId) {
      WHERE c.id_user = $1`,
     [userId]
   );
-  return rows[0] || null;
+  const base = rows[0] || null;
+  if (!base || !Array.isArray(adapterChannels) || adapterChannels.length === 0) return base;
+  const adapter = await campaignChannelMessageStatsRepository.countSentTodayAndMonth(userId, adapterChannels);
+  return {
+    ...base,
+    zalo_sent_today: Number(base.zalo_sent_today || 0) + adapter.today,
+    zalo_sent_month: Number(base.zalo_sent_month || 0) + adapter.month,
+  };
 }
 
 export async function findUserByEmailExceptId(email, userId) {

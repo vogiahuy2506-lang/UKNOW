@@ -8317,11 +8317,15 @@ export default {
       email: 'Email',
       zalo: 'Zalo cá nhân',
       zaloGroup: 'Zalo nhóm',
+      telegram: 'Telegram',
+      whatsapp: 'WhatsApp',
     },
     channel: {
       email: 'Email',
       zalo: 'Zalo cá nhân',
       zalo_group: 'Zalo nhóm',
+      telegram: 'Telegram',
+      whatsapp: 'WhatsApp',
     },
     queueMetric: {
       waiting: 'Chờ',
@@ -8559,11 +8563,15 @@ export default {
       email: 'Email',
       zalo: 'Zalo cá nhân',
       zaloGroup: 'Zalo nhóm',
+      telegram: 'Telegram',
+      whatsapp: 'WhatsApp',
     },
     channel: {
       email: 'Email',
       zalo: 'Zalo cá nhân',
       zalo_group: 'Zalo nhóm',
+      telegram: 'Telegram',
+      whatsapp: 'WhatsApp',
     },
     health: {
       hardBounce: 'Hard bounce',

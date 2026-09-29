@@ -1,5 +1,7 @@
 import outboundMessageQueueService from '../queue/outboundMessageQueue.service.js';
 import deliveryMonitorRepository from '../../repositories/admin/deliveryMonitor.repository.js';
+import campaignChannelMessageStatsRepository from '../../repositories/campaign/campaignChannelMessageStats.repository.js';
+import { buildDeliveryTimeline } from '../../utils/deliveryMonitorTimeline.util.js';
 import { buildTopRunsQuery, mapTopRunRow } from '../shared/deliveryMonitorTopRuns.query.js';
 import {
   buildZaloSilentDropHourlySql,
@@ -11,6 +13,8 @@ const CHANNEL_LABELS = {
   email: 'Email',
   zalo: 'Zalo cá nhân',
   zalo_group: 'Zalo nhóm',
+  telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
 };
 
 const clampWindowDays = (value) => {
@@ -35,6 +39,9 @@ const inferChannel = (row = {}) => {
   const joined = raw.join(' ');
   if (joined.includes('zalo_group')) return 'zalo_group';
   if (joined.includes('zalo')) return 'zalo';
+  // W7b — kênh adapter (campaign_type telegram/telegram_group/whatsapp, node send_telegram/send_whatsapp).
+  if (joined.includes('telegram')) return 'telegram';
+  if (joined.includes('whatsapp')) return 'whatsapp';
   return 'email';
 };
 
@@ -44,10 +51,19 @@ const buildChannelMap = () => ({
   email: { channel: 'email', label: CHANNEL_LABELS.email, sent: 0, failed: 0, opened: 0, clicked: 0, successRate: 0 },
   zalo: { channel: 'zalo', label: CHANNEL_LABELS.zalo, sent: 0, failed: 0, opened: 0, clicked: 0, successRate: 0 },
   zalo_group: { channel: 'zalo_group', label: CHANNEL_LABELS.zalo_group, sent: 0, failed: 0, opened: 0, clicked: 0, successRate: 0 },
+  telegram: { channel: 'telegram', label: CHANNEL_LABELS.telegram, sent: 0, failed: 0, opened: 0, clicked: 0, successRate: 0 },
+  whatsapp: { channel: 'whatsapp', label: CHANNEL_LABELS.whatsapp, sent: 0, failed: 0, opened: 0, clicked: 0, successRate: 0 },
 });
 
-const normalizeChannelSummary = ({ sentRows, failedRows, openedClickedRows }) => {
+const normalizeChannelSummary = ({ sentRows, failedRows, openedClickedRows, adapterRows = [] }) => {
   const channels = buildChannelMap();
+
+  // W7b — sent/failed của kênh adapter đến từ campaign_channel_messages.
+  adapterRows.forEach((row) => {
+    const channel = inferChannel({ channel: row.channel });
+    if (row.status === 'sent') channels[channel].sent += toNumber(row.count);
+    else if (row.status === 'failed') channels[channel].failed += toNumber(row.count);
+  });
 
   sentRows.forEach((row) => {
     const channel = inferChannel(row);
@@ -151,6 +167,8 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     zaloSkipRows,
     totalIntendedRows,
     silentDropAccountRows,
+    adapterRows,
+    adapterHourlyRows,
   ] = await Promise.all([
     safeQuery(
       `SELECT status, COUNT(*)::int AS count
@@ -319,6 +337,8 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
       [{ total: 0, successful: 0, skipped: 0 }]
     ),
     safeQuery(buildZaloSilentDropHourlySql(), [], []),
+    campaignChannelMessageStatsRepository.countByChannelStatus({ ownerUserId: null, windowDays }),
+    campaignChannelMessageStatsRepository.hourlySentByChannel({ ownerUserId: null, windowDays }),
   ]);
 
   const queueMetrics = await outboundMessageQueueService.getQueueMetrics();
@@ -332,7 +352,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     ? currentHourVN >= quietStart || currentHourVN < quietEnd
     : currentHourVN >= quietStart && currentHourVN < quietEnd;
   const failedRows = [...executionFailureRows, ...emailFailureRows, ...zaloFailureRows];
-  const channels = normalizeChannelSummary({ sentRows, failedRows, openedClickedRows });
+  const channels = normalizeChannelSummary({ sentRows, failedRows, openedClickedRows, adapterRows });
 
   const runStatus = runStatusRows.reduce((acc, row) => {
     acc[String(row.status || 'unknown')] = toNumber(row.count);
@@ -410,13 +430,7 @@ export async function getDeliveryMonitorOverview({ windowDays: rawWindowDays } =
     windowDays,
     summary,
     channels,
-    timeline: timelineRows.map((row) => ({
-      bucket: row.bucket,
-      email: toNumber(row.email),
-      zalo: toNumber(row.zalo),
-      zaloGroup: toNumber(row.zalo_group),
-      total: toNumber(row.email) + toNumber(row.zalo) + toNumber(row.zalo_group),
-    })),
+    timeline: buildDeliveryTimeline(timelineRows, adapterHourlyRows),
     topRuns,
     failureGroups,
     recentErrors,

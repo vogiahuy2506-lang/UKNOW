@@ -37,7 +37,7 @@ const fmtDuration = (seconds) => {
 
 const windowOptions = [7, 30, 90];
 
-const channelColor = { email: '#f97316', zalo: '#2563eb', zalo_group: '#10b981' };
+const channelColor = { email: '#f97316', zalo: '#2563eb', zalo_group: '#10b981', telegram: '#0ea5e9', whatsapp: '#22c55e' };
 
 const categoryClass = {
   rate_limit: 'badge-warning',
@@ -596,6 +596,8 @@ export default function UserDeliveryMonitorPage() {
                 <Line type="monotone" dataKey="email" stroke={channelColor.email} strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="zalo" stroke={channelColor.zalo} strokeWidth={2} dot={false} />
                 <Line type="monotone" dataKey="zaloGroup" stroke={channelColor.zalo_group} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="telegram" stroke={channelColor.telegram} strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="whatsapp" stroke={channelColor.whatsapp} strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           )}

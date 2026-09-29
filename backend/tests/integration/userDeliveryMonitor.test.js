@@ -130,7 +130,7 @@ describe('GET /api/delivery-monitor/overview — response shape', () => {
     });
   });
 
-  it('channels trả 3 kênh (email, zalo, zalo_group)', async () => {
+  it('channels trả 5 kênh (email, zalo, zalo_group, telegram, whatsapp)', async () => {
     const user = await createUser({ username: 'u1' });
     const token = await loginAs(user);
     const res = await request(app)
@@ -139,11 +139,13 @@ describe('GET /api/delivery-monitor/overview — response shape', () => {
 
     const channels = res.body.data.channels;
     expect(Array.isArray(channels)).toBe(true);
-    expect(channels).toHaveLength(3);
+    expect(channels).toHaveLength(5);
     const codes = channels.map((c) => c.channel);
     expect(codes).toContain('email');
     expect(codes).toContain('zalo');
     expect(codes).toContain('zalo_group');
+    expect(codes).toContain('telegram');
+    expect(codes).toContain('whatsapp');
   });
 
   it('health có zaloQuietHours', async () => {

@@ -145,7 +145,10 @@ const DashboardKpiCards = ({ overview }) => {
   const emailSent = journey.emailSent || 0;
   const zaloSent = journey.zaloSent || 0;
   const zaloGroupSent = journey.zaloGroupSent || 0;
-  const totalSent = emailSent + zaloSent + zaloGroupSent;
+  // W7b — Telegram/WhatsApp (campaign_channel_messages) cộng vào tổng đã gửi.
+  const telegramSent = journey.telegramSent || 0;
+  const whatsappSent = journey.whatsappSent || 0;
+  const totalSent = emailSent + zaloSent + zaloGroupSent + telegramSent + whatsappSent;
 
   const emailOpened = journey.emailOpened || 0;
   const emailClicked = journey.emailClicked || 0;
@@ -175,11 +178,15 @@ const DashboardKpiCards = ({ overview }) => {
     {
       key: 'sent',
       value: fn(totalSent),
-      sub: t('dashboardKpiCards.channelBreakdown', {
-        email: fn(emailSent),
-        zalo: fn(zaloSent),
-        group: fn(zaloGroupSent),
-      }),
+      sub: [
+        t('dashboardKpiCards.channelBreakdown', {
+          email: fn(emailSent),
+          zalo: fn(zaloSent),
+          group: fn(zaloGroupSent),
+        }),
+        telegramSent > 0 ? `Telegram: ${fn(telegramSent)}` : null,
+        whatsappSent > 0 ? `WhatsApp: ${fn(whatsappSent)}` : null,
+      ].filter(Boolean).join(' • '),
       isEmpty: !totalSent,
     },
     {

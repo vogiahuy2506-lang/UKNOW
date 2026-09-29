@@ -9,7 +9,7 @@ class DashboardRepository {
    * @param {string} input.userAlias
    * @param {number} input.userId
    * @param {number[]} input.campaignIds
-   * @param {'all'|'email'|'zalo'|'zalo_group'} input.campaignType
+   * @param {'all'|'email'|'zalo'|'zalo_group'|'telegram'|'whatsapp'} input.campaignType
    * @returns {{ clause: string, params: any[] }}
    */
   buildCampaignScopeClause({ userAlias = 'c', userId, roleCode, campaignIds = [], campaignType = 'all' }) {
@@ -32,7 +32,10 @@ class DashboardRepository {
       clause += ` AND ${userAlias}.id = ANY($${params.length}::bigint[])`;
     }
 
-    if (campaignType && campaignType !== 'all') {
+    if (campaignType === 'telegram') {
+      // W7b — chiến dịch Telegram gồm cả `telegram` (cá nhân) và `telegram_group`.
+      clause += ` AND ${userAlias}.campaign_type IN ('telegram', 'telegram_group')`;
+    } else if (campaignType && campaignType !== 'all') {
       params.push(campaignType);
       clause += ` AND ${userAlias}.campaign_type = $${params.length}`;
     }
@@ -447,6 +450,62 @@ class DashboardRepository {
       emailSentRows: emailSentResult.rows || [],
       zaloSentRows,
     };
+  }
+
+  /**
+   * W7b — số tin `sent` của kênh adapter (Telegram/WhatsApp) trong phạm vi lọc, từ
+   * `campaign_channel_messages` (các kênh này không ghi customer_journey). Loại `is_preview`.
+   *
+   * @param {object} filters
+   * @returns {Promise<Array<{channel: string, sent_count: number}>>}
+   */
+  async getAdapterSentByChannel(filters) {
+    const scope = this.buildCampaignScopeClause(filters);
+    const scoped = this.withDateRange({
+      baseClause: `${scope.clause} AND ccm.status = 'sent' AND NOT ccm.is_preview`,
+      params: scope.params,
+      dateColumn: 'ccm.sent_at',
+      startAt: filters.startAt,
+      endExclusive: filters.endExclusive,
+    });
+    const result = await db.query(
+      `SELECT ccm.channel, COUNT(*)::INTEGER AS sent_count
+       FROM campaign_channel_messages ccm
+       JOIN campaigns c ON c.id = ccm.id_campaign
+       WHERE ${scoped.clause}
+       GROUP BY ccm.channel`,
+      scoped.params
+    );
+    return result.rows || [];
+  }
+
+  /**
+   * W7b — như getAdapterSentByChannel nhưng theo ngày (cho timeline).
+   *
+   * @param {object} filters
+   * @returns {Promise<Array<{date: string, channel: string, sent_count: number}>>}
+   */
+  async getAdapterSentDaily(filters) {
+    const scope = this.buildCampaignScopeClause(filters);
+    const scoped = this.withDateRange({
+      baseClause: `${scope.clause} AND ccm.status = 'sent' AND NOT ccm.is_preview`,
+      params: scope.params,
+      dateColumn: 'ccm.sent_at',
+      startAt: filters.startAt,
+      endExclusive: filters.endExclusive,
+    });
+    const result = await db.query(
+      `SELECT TO_CHAR(DATE(ccm.sent_at), 'YYYY-MM-DD') AS date,
+              ccm.channel,
+              COUNT(*)::INTEGER AS sent_count
+       FROM campaign_channel_messages ccm
+       JOIN campaigns c ON c.id = ccm.id_campaign
+       WHERE ${scoped.clause}
+       GROUP BY DATE(ccm.sent_at), ccm.channel
+       ORDER BY DATE(ccm.sent_at) ASC`,
+      scoped.params
+    );
+    return result.rows || [];
   }
 
   /**

@@ -6,6 +6,9 @@ const CHANNEL_BADGE = {
   email: 'bg-sky-100 text-sky-700',
   zalo: 'bg-blue-100 text-blue-700',
   zalo_group: 'bg-purple-100 text-purple-700',
+  telegram: 'bg-cyan-100 text-cyan-700',
+  telegram_group: 'bg-cyan-100 text-cyan-700',
+  whatsapp: 'bg-green-100 text-green-700',
 };
 
 /**
@@ -208,6 +211,9 @@ const CAMPAIGN_TYPE_OPTIONS = [
   { value: 'email', label: '' }, // Will use channel.email
   { value: 'zalo', label: '' }, // Will use channel.zalo
   { value: 'zalo_group', label: '' }, // Will use channel.zaloGroup
+  // W7b — tên thương hiệu, không dịch.
+  { value: 'telegram', label: 'Telegram' },
+  { value: 'whatsapp', label: 'WhatsApp' },
 ];
 
 const QUICK_RANGES = [
@@ -453,7 +459,7 @@ const DashboardFilterPanel = ({
                   }`}
                   onClick={() => setDraftFilters((prev) => ({ ...prev, campaignType: opt.value }))}
                 >
-                  {opt.value === 'all' ? t('common.all') : t(`channel.${opt.value.replace('_', '')}`, t(`channel.${opt.value}`))}
+                  {opt.value === 'all' ? t('common.all') : (opt.label || t(`channel.${opt.value.replace('_', '')}`, t(`channel.${opt.value}`)))}
                 </button>
               ))}
             </div>

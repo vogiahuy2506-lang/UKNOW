@@ -15,7 +15,7 @@ class DashboardAnalyticsService {
    */
   parseFilters(input = {}) {
     const rawCampaignType = String(input.campaignType || 'all').trim().toLowerCase();
-    const campaignTypeOptions = new Set(['all', 'email', 'zalo', 'zalo_group']);
+    const campaignTypeOptions = new Set(['all', 'email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
     const campaignType = campaignTypeOptions.has(rawCampaignType) ? rawCampaignType : 'all';
 
     const campaignIds = this.parseCampaignIds(input.campaignIds);
@@ -129,6 +129,8 @@ class DashboardAnalyticsService {
         emailSent: 0,
         zaloSent: 0,
         zaloGroupSent: 0,
+        telegramSent: 0,
+        whatsappSent: 0,
         // Engagement metrics
         emailOpened: 0,
         emailClicked: 0,
@@ -162,7 +164,7 @@ class DashboardAnalyticsService {
     const filters = this.parseFilters(query);
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
-    const [campaignCount, runHeadline, emailMetrics, attachmentDownloads, zaloRows, orderRows, journeyEventRows] = await Promise.all([
+    const [campaignCount, runHeadline, emailMetrics, attachmentDownloads, zaloRows, orderRows, journeyEventRows, adapterSentRows] = await Promise.all([
       dashboardRepository.countCampaigns(scopedFilters),
       dashboardRepository.getRunHeadline(scopedFilters),
       dashboardRepository.getEmailMetrics(scopedFilters),
@@ -170,6 +172,7 @@ class DashboardAnalyticsService {
       dashboardRepository.getZaloClickMetrics(scopedFilters),
       dashboardRepository.getOrderMetricsByType(scopedFilters, purchaseOrderStatusExpr),
       dashboardRepository.getJourneyEventStats(scopedFilters),
+      dashboardRepository.getAdapterSentByChannel(scopedFilters),
     ]);
 
     const clicksByType = { zalo: 0, zalo_group: 0 };
@@ -224,6 +227,9 @@ class DashboardAnalyticsService {
       zaloClicked: getJourneyCount('zalo_clicked', 'zalo'),
       zaloGroupClicked: getJourneyCount('zalo_clicked', 'zalo_group'),
       orderPending: getJourneyCount('order_pending'),
+      // W7b — Telegram/WhatsApp không ghi customer_journey; số gửi lấy từ campaign_channel_messages.
+      telegramSent: adapterSentRows.find((row) => row.channel === 'telegram')?.sent_count || 0,
+      whatsappSent: adapterSentRows.find((row) => row.channel === 'whatsapp')?.sent_count || 0,
     };
 
     const totalRecipients = Number(runHeadline.total_recipients || 0);
@@ -322,6 +328,7 @@ class DashboardAnalyticsService {
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
     const rows = await dashboardRepository.getTimeline(scopedFilters, purchaseOrderStatusExpr);
+    const adapterSentDaily = await dashboardRepository.getAdapterSentDaily(scopedFilters);
     const timelineMap = this.createTimelineMap(filters.startDate, filters.endDate);
 
     for (const row of rows.journeyEngagementRows || []) {
@@ -362,6 +369,14 @@ class DashboardAnalyticsService {
       const key = String(row.date).slice(0, 10);
       if (!timelineMap.has(key)) continue;
       timelineMap.get(key).emailSent = Number(row.email_sent || 0);
+    }
+
+    for (const row of adapterSentDaily) {
+      const key = String(row.date).slice(0, 10);
+      if (!timelineMap.has(key)) continue;
+      const item = timelineMap.get(key);
+      if (row.channel === 'telegram') item.telegramSent = Number(row.sent_count || 0);
+      else if (row.channel === 'whatsapp') item.whatsappSent = Number(row.sent_count || 0);
     }
 
     for (const row of rows.zaloSentRows || []) {

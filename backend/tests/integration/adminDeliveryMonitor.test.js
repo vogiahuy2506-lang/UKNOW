@@ -118,7 +118,7 @@ describe('GET /api/admin/delivery-monitor/overview — response shape', () => {
     expect(summary).toHaveProperty('attempts');
   });
 
-  it('channels trả 3 kênh: email, zalo, zalo_group', async () => {
+  it('channels trả 5 kênh: email, zalo, zalo_group, telegram, whatsapp', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const token = await loginAs(admin);
     const res = await request(app)
@@ -127,11 +127,13 @@ describe('GET /api/admin/delivery-monitor/overview — response shape', () => {
 
     const channels = res.body.data.channels;
     expect(Array.isArray(channels)).toBe(true);
-    expect(channels).toHaveLength(3);
+    expect(channels).toHaveLength(5);
     const codes = channels.map((c) => c.channel);
     expect(codes).toContain('email');
     expect(codes).toContain('zalo');
     expect(codes).toContain('zalo_group');
+    expect(codes).toContain('telegram');
+    expect(codes).toContain('whatsapp');
   });
 
   it('health có zaloQuietHours với inQuietHours boolean', async () => {
