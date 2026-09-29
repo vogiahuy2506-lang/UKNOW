@@ -1,0 +1,48 @@
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import KnowledgeTab from '../KnowledgeTab';
+import chatbotApi from '../../../features/chatbot/services/chatbotApi.service';
+
+vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
+  default: {
+    listCustomChatDocuments: vi.fn(),
+    addCustomChatTextDocument: vi.fn(),
+  },
+}));
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+
+// Prop on dinh: mang moi moi lan render se lam effect tai lai vo han.
+const CHATBOT = { id: 7, name: 'Bot' };
+const NO_DOCS = [];
+
+const doc = (id) => ({ id, title: `Doc ${id}`, status: 'ready', source_type: 'text' });
+
+describe('KnowledgeTab - phat studio:knowledge-changed', () => {
+  const events = [];
+  const listener = (e) => events.push(e.detail);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    events.length = 0;
+    document.addEventListener('studio:knowledge-changed', listener);
+  });
+  afterEach(() => document.removeEventListener('studio:knowledge-changed', listener));
+
+  it('them van ban thanh cong -> phat su kien voi chatbotId va count moi', async () => {
+    chatbotApi.listCustomChatDocuments
+      .mockResolvedValueOnce({ data: { documents: [doc(1)] } })
+      .mockResolvedValueOnce({ data: { documents: [doc(1), doc(2)] } });
+    chatbotApi.addCustomChatTextDocument.mockResolvedValue({ data: { success: true } });
+
+    render(<KnowledgeTab chatbot={CHATBOT} initialDocuments={NO_DOCS} />);
+    await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 1 }));
+
+    fireEvent.click(screen.getByText('Văn bản'));
+    fireEvent.change(screen.getByPlaceholderText('Nhập nội dung kiến thức...'), {
+      target: { value: 'noi dung' },
+    });
+    fireEvent.click(screen.getByText('Thêm'));
+
+    await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 2 }));
+  });
+});

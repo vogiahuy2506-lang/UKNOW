@@ -68,6 +68,23 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     return () => document.removeEventListener('studio:create-new', handler);
   }, []);
 
+  // KnowledgeTab bao so tai lieu moi sau khi tai/them/xoa -> va vao dung bot, khong can F5.
+  useEffect(() => {
+    const handler = (e) => {
+      const { chatbotId, count } = e.detail || {};
+      if (chatbotId == null || !Number.isFinite(Number(count))) return;
+      setChatbots((prev) => {
+        const next = prev.map((b) =>
+          String(b.id) === String(chatbotId) ? { ...b, document_count: Number(count) } : b
+        );
+        saveToStorage(next);
+        return next;
+      });
+    };
+    document.addEventListener('studio:knowledge-changed', handler);
+    return () => document.removeEventListener('studio:knowledge-changed', handler);
+  }, []);
+
   useEffect(() => {
     const loadChatbots = async () => {
       try {
@@ -507,7 +524,7 @@ function EmptyState({ originTab, onCreate }) {
 
 function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu, deletingId }) {
   const isMarketplaceBot = bot.widget_key?.startsWith('chatbot_');
-  const docCount = bot.documents?.length || 0;
+  const docCount = Number(bot.document_count ?? bot.documents?.length ?? 0) || 0;
 
   return (
     <div

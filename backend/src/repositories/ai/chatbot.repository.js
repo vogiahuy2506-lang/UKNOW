@@ -492,7 +492,8 @@ class ChatbotRepository {
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, launcher_label,
               COALESCE(origin, 'self_created') as origin, reply_limit_config,
-              active_hours, created_at, updated_at
+              active_hours, created_at, updated_at,
+              (SELECT COUNT(*)::int FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_count
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`;
     const params = [userId];

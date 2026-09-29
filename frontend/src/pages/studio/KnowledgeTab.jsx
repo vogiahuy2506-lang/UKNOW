@@ -87,7 +87,15 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
     try {
       const res = await chatbotApi.listCustomChatDocuments(chatbot.id);
       const list = res?.data?.documents || res?.documents || res?.data || [];
-      setDocuments(Array.isArray(list) ? list : (chatbot.documents || []));
+      if (Array.isArray(list)) {
+        setDocuments(list);
+        // Bao cot trai cap nhat so tai lieu (chi sau khi tai xong tu API).
+        document.dispatchEvent(new CustomEvent('studio:knowledge-changed', {
+          detail: { chatbotId: chatbot.id, count: list.length },
+        }));
+      } else {
+        setDocuments(chatbot.documents || []);
+      }
     } catch {
       setDocuments(chatbot.documents || []);
     }
