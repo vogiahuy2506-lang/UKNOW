@@ -14,7 +14,11 @@
 import db from '../../config/database.js';
 import { listSessions as listBaileysSessions } from './whatsappBaileys.service.js';
 import whatsappAdapter from './channelAdapters/whatsapp.adapter.js';
-import { VISITOR_CHAT_ERROR_MESSAGE } from '../ai/aiCreditMeter.service.js';
+import aiCreditMeter, { VISITOR_CHAT_ERROR_MESSAGE } from '../ai/aiCreditMeter.service.js';
+import aiUsageMeter from '../ai/aiUsageMeter.service.js';
+import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
+import { extractContacts } from '../../utils/contactDetect.util.js';
+import { buildContactAck } from '../../utils/contactAck.util.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import subAssistantService from './subAssistant.service.js';
 import ragEngineService from './ragEngine.service.js';
@@ -27,6 +31,9 @@ import { formatBatchedContent } from '../../utils/chatbotReplyBatch.util.js';
 const log = (...args) => console.log('[WhatsApp/Baileys/Inbox]', ...args);
 
 const MAX_HISTORY_MESSAGES = 20;
+
+// Tên feature ghi vào usage_logs khi trừ credit — cùng khuôn `chatbot_${channel}` của chatRouter.
+const CREDIT_FEATURE = 'chatbot_whatsapp_baileys';
 
 /**
  * Trích JID người gửi (vd "8491234567@s.whatsapp.net") từ Baileys message.
@@ -424,16 +431,7 @@ async function processIncomingMessage({ sessionKey, msg }) {
         idChannelConnection,
       });
 
-      // Pause check trực tiếp trên channel_conversations.ai_paused.
-      const { rows: pauseRows } = await db.query(
-        `SELECT ai_paused FROM channel_conversations WHERE id = $1`,
-        [conversation.id]
-      );
-      if (pauseRows[0]?.ai_paused === true) {
-        log(`session=${sessionKey} conversation=${conversation.id} AI paused — skip`);
-        continue;
-      }
-
+      // Lưu tin khách TRƯỚC khi kiểm tạm dừng: chủ đang trả lời tay vẫn phải thấy tin khách trong Hộp thư.
       // Persist visitor message (idempotent nhờ messageId nếu có).
       const persistResult = await persistMessage({
         conversationId: conversation.id,
@@ -444,6 +442,16 @@ async function processIncomingMessage({ sessionKey, msg }) {
         externalId,
         externalMessageId: messageId,
       });
+
+      // Pause check trực tiếp trên channel_conversations.ai_paused.
+      const { rows: pauseRows } = await db.query(
+        `SELECT ai_paused FROM channel_conversations WHERE id = $1`,
+        [conversation.id]
+      );
+      if (pauseRows[0]?.ai_paused === true) {
+        log(`session=${sessionKey} conversation=${conversation.id} AI paused — tin khách đã lưu, không gọi AI`);
+        continue;
+      }
 
       // Active hours check
       const { default: chatbotActiveHoursService } = await import('./chatbotActiveHours.service.js');
@@ -604,6 +612,25 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     // ném ngay trước try nên mọi lượt gom tin WhatsApp chết im lặng.
     log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} history_size=${history.length} throughMessageId=${throughMessageId}`);
 
+    // Hạn mức credit AI của chủ: hết credit thì gửi câu báo cho khách, KHÔNG gọi AI.
+    const creditPrep = await chatRouterService._prepareChatCredit(ownerUserId, CREDIT_FEATURE);
+    if (creditPrep.visitorMessage) {
+      await persistMessage({
+        conversationId,
+        channelId: idChannelConnection,
+        userId: ownerUserId,
+        role: 'bot',
+        content: creditPrep.visitorMessage,
+      });
+      await whatsappAdapter.sendReply({
+        channelId: sessionKey,
+        externalId,
+        message: creditPrep.visitorMessage,
+      });
+      log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=out_of_credit`);
+      return;
+    }
+
     // Gọi AI với prompt từ batched messages
     const subAssistant = cb.id_sub_assistant
       ? await subAssistantService.getById(cb.id_sub_assistant, ownerUserId)
@@ -615,6 +642,14 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       .buildContext(ownerUserId, prompt, { customChatbotId: cb.id_chatbot })
       .catch(() => '');
     const isFirstMessage = history.length === 0;
+
+    // Khách để lại SĐT/email → lời xác nhận (khuôn chatRouter.routeMessageWithSettings).
+    const extractedContacts = extractContacts(prompt);
+    let contactAck = null;
+    if (extractedContacts.length > 0) {
+      const ownerContact = await chatbotContactAlertRepository.getOwnerContact(ownerUserId);
+      contactAck = buildContactAck(extractedContacts, ownerContact);
+    }
 
     const systemPrompt = chatRouterService.buildSystemPrompt({
       subAssistant,
@@ -628,17 +663,43 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       ragContext,
       profileContext,
       isFirstMessage,
+      contactNote: contactAck?.note || null,
     });
 
-    const { text: reply } = await chatRouterService._callAI({
-      userId: ownerUserId,
-      systemPrompt,
-      history,
-      message: prompt,
-      model: cb.ai_model || 'gemini-2.5-flash',
-      temperature: parseFloat(cb.temperature || 0.7),
-      maxTokens: cb.max_tokens || 2048,
-    });
+    let reply;
+    try {
+      ({ text: reply } = await chatRouterService._callAI({
+        userId: ownerUserId,
+        systemPrompt,
+        history,
+        message: prompt,
+        model: cb.ai_model || 'gemini-2.5-flash',
+        temperature: parseFloat(cb.temperature || 0.7),
+        maxTokens: cb.max_tokens || 2048,
+      }));
+    } catch (aiError) {
+      if (aiUsageMeter.isLimitError(aiError) || aiCreditMeter.isLimitError(aiError)) {
+        // Chạm giới hạn giữa chừng: báo khách, KHÔNG trừ credit.
+        log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=ai_limit error=${aiError.message}`);
+        await persistMessage({
+          conversationId,
+          channelId: idChannelConnection,
+          userId: ownerUserId,
+          role: 'bot',
+          content: VISITOR_CHAT_ERROR_MESSAGE,
+        });
+        await whatsappAdapter.sendReply({
+          channelId: sessionKey,
+          externalId,
+          message: VISITOR_CHAT_ERROR_MESSAGE,
+        });
+        return;
+      }
+      throw aiError;
+    }
+
+    // AI trả lời được → trừ 1 credit (giống các kênh khác).
+    await chatRouterService._chargeChatCredit(ownerUserId, CREDIT_FEATURE, creditPrep.creditContext);
 
     let cleanReply = stripMarkdown(reply || '');
 
@@ -653,6 +714,10 @@ async function _processWhatsAppBaileysBatch({ batch }) {
         assistantName: cb.sub_assistant_name || cb.chatbot_name || null,
         customerMessage: prompt,
       });
+    }
+
+    if (contactAck?.footer) {
+      cleanReply = `${cleanReply.trim()}\n\n${contactAck.footer}`;
     }
 
     // Persist bot reply

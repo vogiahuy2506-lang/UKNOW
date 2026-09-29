@@ -58,6 +58,10 @@ beforeEach(async () => {
     visitorInserts: [],
     settingsSqls: [],
     repliesEnabled: undefined,
+    paused: false,
+    prepareCredit: jest.fn(async () => ({ creditContext: { ctx: 1 } })),
+    chargeCredit: jest.fn(async () => {}),
+    getOwnerContact: jest.fn(async () => ({ phone: '0900000000' })),
   };
 
   jest.unstable_mockModule(resolveUrl('config/database.js'), () => ({
@@ -72,7 +76,7 @@ beforeEach(async () => {
           return { rows: [{ id_chatbot: CHATBOT_ID, active_hours: null, replies_enabled: m.repliesEnabled }] };
         }
         if (/FROM channel_connections/i.test(s)) return { rows: [{ id: 9 }] };
-        if (/FROM channel_conversations/i.test(s) && /ai_paused/i.test(s)) return { rows: [{ ai_paused: false }] };
+        if (/FROM channel_conversations/i.test(s) && /ai_paused/i.test(s)) return { rows: [{ ai_paused: m.paused }] };
         if (/FROM channel_conversations/i.test(s)) return { rows: [{ id: 101 }] };
         if (/FROM channel_messages/i.test(s) && /external_id = \$2/i.test(s)) return { rows: [] };
         if (/INSERT INTO channel_messages/i.test(s)) {
@@ -92,6 +96,13 @@ beforeEach(async () => {
   }));
   jest.unstable_mockModule(resolveUrl('services/ai/aiCreditMeter.service.js'), () => ({
     VISITOR_CHAT_ERROR_MESSAGE: 'loi-chung',
+    default: { isLimitError: (e) => e?.code === 'CREDIT_LIMIT' },
+  }));
+  jest.unstable_mockModule(resolveUrl('services/ai/aiUsageMeter.service.js'), () => ({
+    default: { isLimitError: (e) => e?.code === 'USAGE_LIMIT' },
+  }));
+  jest.unstable_mockModule(resolveUrl('repositories/chatbot/chatbotContactAlert.repository.js'), () => ({
+    default: { getOwnerContact: (...a) => m.getOwnerContact(...a) },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/subAssistant.service.js'), () => ({ default: { getById: async () => null } }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/ragEngine.service.js'), () => ({ default: { buildContext: async () => '' } }));
@@ -99,7 +110,12 @@ beforeEach(async () => {
     default: { getFormattedProfileForPrompt: async () => '' },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/chatRouter.service.js'), () => ({
-    default: { buildSystemPrompt: () => 'sys', _callAI: (...a) => m.callAi(...a) },
+    default: {
+      buildSystemPrompt: (...a) => { m.systemPromptArgs = a[0]; return 'sys'; },
+      _callAI: (...a) => m.callAi(...a),
+      _prepareChatCredit: (...a) => m.prepareCredit(...a),
+      _chargeChatCredit: (...a) => m.chargeCredit(...a),
+    },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/inboundReplyDebounce.service.js'), () => ({
     default: {
@@ -213,5 +229,80 @@ describe('WhatsApp Baileys — công tắc trả lời của chatbot (replies_en
     await sendTexts(['Cho mình hỏi giá áo thun size L là bao nhiêu vậy shop']);
     await flush();
     expect(m.callAi).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('WhatsApp Baileys — credit AI + xác nhận liên hệ', () => {
+  it('kiểm credit đúng feature TRƯỚC khi gọi AI, thành công thì trừ đúng 1 lần với creditContext đã giữ', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.prepareCredit).toHaveBeenCalledWith(42, 'chatbot_whatsapp_baileys');
+    expect(m.prepareCredit.mock.invocationCallOrder[0]).toBeLessThan(m.callAi.mock.invocationCallOrder[0]);
+    expect(m.chargeCredit).toHaveBeenCalledTimes(1);
+    expect(m.chargeCredit).toHaveBeenCalledWith(42, 'chatbot_whatsapp_baileys', { ctx: 1 });
+  });
+
+  it('hết credit (visitorMessage): gửi đúng câu đó, KHÔNG gọi AI, KHÔNG trừ', async () => {
+    m.prepareCredit = jest.fn(async () => ({ visitorMessage: 'het-credit' }));
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.callAi).not.toHaveBeenCalled();
+    expect(m.chargeCredit).not.toHaveBeenCalled();
+    expect(m.sendReply).toHaveBeenCalledTimes(1);
+    expect(m.sendReply).toHaveBeenCalledWith({ channelId: SESSION_KEY, externalId: '84901234567', message: 'het-credit' });
+    expect(m.botInserts).toEqual(['het-credit']);
+  });
+
+  it('AI ném lỗi giới hạn: gửi câu lỗi chung cho khách, KHÔNG trừ credit', async () => {
+    m.callAi = jest.fn(async () => { const e = new Error('limit'); e.code = 'CREDIT_LIMIT'; throw e; });
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.chargeCredit).not.toHaveBeenCalled();
+    expect(m.sendReply).toHaveBeenCalledTimes(1);
+    expect(m.sendReply.mock.calls[0][0].message).toBe('loi-chung');
+  });
+
+  it('AI ném lỗi thường: KHÔNG trừ credit (khách nhận câu lỗi chung như cũ)', async () => {
+    m.callAi = jest.fn(async () => { throw new Error('gemini 500'); });
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.chargeCredit).not.toHaveBeenCalled();
+    expect(m.sendReply.mock.calls.map((c) => c[0].message)).toEqual(['loi-chung']);
+  });
+
+  it('khách để lại SĐT: contactNote đi vào prompt và footer xác nhận nối sau câu trả lời', async () => {
+    await sendTexts(['Mình để lại số 0912345678 nhé, shop gọi lại giúp mình']);
+    await flush();
+    expect(m.getOwnerContact).toHaveBeenCalledWith(42);
+    expect(m.systemPromptArgs.contactNote).toEqual(expect.any(String));
+    expect(m.systemPromptArgs.contactNote.length).toBeGreaterThan(0);
+    const sent = m.sendReply.mock.calls[0][0].message;
+    expect(sent.startsWith('Giá áo thun size L là 199.000đ ạ')).toBe(true);
+    expect(sent.length).toBeGreaterThan('Giá áo thun size L là 199.000đ ạ'.length);
+    expect(sent).toMatch(/0912\s?345\s?678/);
+  });
+
+  it('khách không để lại liên hệ: không có footer, không tra liên hệ chủ', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.getOwnerContact).not.toHaveBeenCalled();
+    expect(m.sendReply.mock.calls[0][0].message).toBe('Giá áo thun size L là 199.000đ ạ');
+  });
+});
+
+describe('WhatsApp Baileys — hội thoại đang tạm dừng AI', () => {
+  it('ai_paused=true: tin khách VẪN được lưu vào Hộp thư, AI không được gọi', async () => {
+    m.paused = true;
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.visitorInserts).toEqual(['Cho mình hỏi giá áo thun size L']);
+    expect(m.buckets.size).toBe(0);
+    expect(m.callAi).not.toHaveBeenCalled();
+    expect(m.sendReply).not.toHaveBeenCalled();
+  });
+
+  it('ai_paused=false: tin khách lưu đúng 1 lần (không lưu đôi sau khi dời lên trước kiểm tạm dừng)', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    expect(m.visitorInserts).toEqual(['Cho mình hỏi giá áo thun size L']);
   });
 });
