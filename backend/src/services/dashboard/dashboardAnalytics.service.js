@@ -6,6 +6,9 @@ import formRepository from '../../repositories/form.repository.js';
 import customerHelperService from '../customer/customerHelper.service.js';
 import { getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 
+
+/** Múi giờ Việt Nam cố định (+07:00), không phụ thuộc TZ của máy chủ. */
+const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
 class DashboardAnalyticsService {
   /**
    * Parse and normalize dashboard filters from query params.
@@ -75,8 +78,11 @@ class DashboardAnalyticsService {
       return text;
     };
 
-    const today = new Date();
-    const defaultEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+    // Ngày trên biểu đồ = ngày VIỆT NAM (CSDL gộp DATE() theo múi phiên Asia/Ho_Chi_Minh, xem dashboard.repository).
+    // Trước đây lấy ngày UTC: từ 00:00 đến 07:00 giờ VN, "hôm nay" của CSDL chưa có trong timelineMap → tin gửi
+    // hôm nay bị rơi (0). CI 30/09/2026 00:13 VN làm lộ ở channelAdapterReportsW7b.test.js.
+    const vnNow = new Date(Date.now() + VN_OFFSET_MS);
+    const defaultEnd = new Date(Date.UTC(vnNow.getUTCFullYear(), vnNow.getUTCMonth(), vnNow.getUTCDate()));
     const periodMap = { '7d': 6, '30d': 29, '90d': 89 };
     const daysBack = periodMap[String(period || '').trim()] ?? 29;
 
@@ -104,8 +110,9 @@ class DashboardAnalyticsService {
     return {
       startDate: formatDate(safeStart),
       endDate: formatDate(safeEnd),
-      startAt: safeStart.toISOString(),
-      endExclusive: safeEndExclusive.toISOString(),
+      // Mốc lọc SQL = 00:00 giờ VN của ngày đầu / ngày sau ngày cuối (không phải 00:00 UTC = 07:00 VN).
+      startAt: new Date(safeStart.getTime() - VN_OFFSET_MS).toISOString(),
+      endExclusive: new Date(safeEndExclusive.getTime() - VN_OFFSET_MS).toISOString(),
     };
   }
 
