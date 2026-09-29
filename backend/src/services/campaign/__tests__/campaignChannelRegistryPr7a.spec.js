@@ -71,4 +71,13 @@ describe('campaignChannelRegistry — WhatsApp (W4a)', () => {
     process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
     expect(getEnabledAdapterChannelsForBuilder().map((c) => c.key).sort()).toEqual(['telegram', 'whatsapp']);
   });
+
+  // P2 (PLAN_TG_WA_DAY_DU mục 4.1): cổng "khách từ chối nhận tin" chỉ áp cho kênh có recipientKey là SĐT.
+  // Ghim ở registry — spec runner tự dựng descriptor nên đột biến `recipientIsPhone: false` ở đây lọt (review 29/09).
+  it('WhatsApp khai recipientIsPhone=true (kiểm từ chối nhận tin theo SĐT); Telegram thì không (chat id)', () => {
+    process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
+    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
+    expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_whatsapp').recipientIsPhone).toBe(true);
+    expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_telegram').recipientIsPhone).toBeFalsy();
+  });
 });
