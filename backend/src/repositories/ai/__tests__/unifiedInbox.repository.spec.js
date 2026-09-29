@@ -93,6 +93,23 @@ describe('unifiedInbox.repository conversation filters', () => {
     expect(params).toEqual([1, 20, 0, 'zalo_oa']);
   });
 
+  // P1 (PLAN_TG_WA_DAY_DU): Telegram vào Hộp thư qua channel_conversations — tab Telegram phải đi nhánh channel,
+  // không bị `AND 1=0` (review 29/09: đột biến bỏ 'telegram' khỏi CHANNEL_CONNECTION_TYPES lọt qua mọi test).
+  it('gates zalo/web branches when filtering conversations by telegram (channel_connections type)', async () => {
+    await unifiedInboxRepository.getConversations(1, { channel: 'telegram', limit: 20, offset: 0 });
+
+    const [sql, params] = db.query.mock.calls[0];
+    const channelBranch = sql.split('UNION ALL')[0];
+    const zaloBranch = sql.split('UNION ALL')[1];
+    const webBranch = sql.split('UNION ALL')[2];
+
+    expect(channelBranch).not.toMatch(/AND 1=0/);
+    expect(channelBranch).toMatch(/ch\.channel = \$4/);
+    expect(zaloBranch).toMatch(/AND 1=0/);
+    expect(webBranch).toMatch(/AND 1=0/);
+    expect(params).toEqual([1, 20, 0, 'telegram']);
+  });
+
   it('gates channel/web branches when filtering conversations by zalo_personal', async () => {
     await unifiedInboxRepository.getConversations(1, { channel: 'zalo_personal', limit: 20, offset: 0 });
 
