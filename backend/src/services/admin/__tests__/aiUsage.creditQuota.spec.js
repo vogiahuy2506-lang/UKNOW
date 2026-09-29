@@ -96,4 +96,15 @@ describe('getAiUsageOverview - han muc theo luot AI (credit)', () => {
       planCode: 'pro', totalTokens: 0, totalCredits: 90, p90UserCredits: 50, quotaUsagePctAtP90: 5,
     });
   });
+
+  // DB giả trả sẵn kết quả nên không tự kiểm được điều kiện lọc — ghim câu SQL: chỉ đếm lượt AI (ai_credit,
+  // delta > 0). Dòng ai_credit delta ÂM (mua marketplace, usageTracking.repository) không phải lượt dùng.
+  it('truy van credit chi lay ai_credit va delta > 0 (loai dong am cua marketplace)', async () => {
+    mockDb({});
+    await getAiUsageOverview();
+    const creditSql = mockSafeQuery.mock.calls.map(([sql]) => String(sql)).find(isCreditQuery);
+    expect(creditSql).toBeDefined();
+    expect(creditSql).toMatch(/resource_type = 'ai_credit'/);
+    expect(creditSql).toMatch(/ul\.delta > 0/);
+  });
 });
