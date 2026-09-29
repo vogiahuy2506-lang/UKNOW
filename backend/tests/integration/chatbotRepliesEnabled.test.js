@@ -94,6 +94,24 @@ describe('custom_chatbots.replies_enabled — đọc/ghi', () => {
   });
 });
 
+describe('listChatbotsByUser trả đủ cột hộp Cấu hình đọc', () => {
+  it('temperature / max_tokens / response_style / allow_attachments / ai_model là giá trị thật, không phải mặc định', async () => {
+    await db.query(
+      `UPDATE custom_chatbots
+          SET temperature = 0.3, max_tokens = 512, response_style = 'professional',
+              allow_attachments = true, ai_model = 'gemini-2.5-pro'
+        WHERE id = $1`,
+      [chatbot.id]
+    );
+    const [row] = await chatbotRepository.listChatbotsByUser(user.id);
+    expect(Number(row.temperature)).toBeCloseTo(0.3);
+    expect(row.max_tokens).toBe(512);
+    expect(row.response_style).toBe('professional');
+    expect(row.allow_attachments).toBe(true);
+    expect(row.ai_model).toBe('gemini-2.5-pro');
+  });
+});
+
 describe('widget chat với chatbot tắt trả lời', () => {
   async function creditRows() {
     const { rows } = await db.query(

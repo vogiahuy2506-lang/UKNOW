@@ -491,6 +491,8 @@ class ChatbotRepository {
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, launcher_label,
+              -- Hộp Cấu hình dựng form từ dòng này: thiếu cột thì form rơi về mặc định và Lưu ghi đè giá trị thật.
+              temperature, max_tokens, ai_model, response_style, allow_attachments,
               COALESCE(origin, 'self_created') as origin, reply_limit_config,
               active_hours, replies_enabled, created_at, updated_at,
               (SELECT COUNT(*)::int FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_count
