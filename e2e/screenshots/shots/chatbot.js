@@ -3,68 +3,60 @@
  *
  * Cần `E2E_SEED_CHATBOT=1` (nằm trong `E2E_SEED_ALL=1`): 2 chatbot, 1 cái có 3
  * tài liệu ở các trạng thái xử lý khác nhau.
+ *
+ * Giao diện Studio (từ 28/09/2026): cột trái danh sách chatbot, giữa khung chat thử có nút
+ * "Cấu hình" mở hộp năm phần (Kiến thức là MỘT PHẦN trong hộp đó), cột phải "Triển khai".
+ * Chỉ mở xem, KHÔNG bấm "Lưu cấu hình".
  */
 import {
-  sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
+  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, enclosingSection,
 } from '../lib/shotHelpers.js';
 
 const STUDIO_PATH = '/app/chatbot-studio';
 
 /**
- * Mở Studio và chọn một chatbot, rồi chuyển sang tab yêu cầu.
+ * Mở Studio, chọn chatbot có tài liệu (ảnh phần Kiến thức mới có danh sách + nhãn trạng thái).
  *
- * Chatbot mặc định được chọn không chắc là cái có tài liệu — seed gắn tài liệu
- * cho một cái thôi. `needsDocuments` sẽ chọn cái nào có tài liệu.
+ * Chọn theo TÊN chatbot mà seed gắn tài liệu. Không dò theo dòng "N tài liệu" ở cột trái được:
+ * cột đó đọc `bot.documents` mà API danh sách không trả, nên chatbot nào cũng ghi "Chưa có dữ liệu".
  */
-async function openStudio(page, { tab, needsDocuments = false } = {}) {
+const CHATBOT_WITH_DOCUMENTS = /^Trợ lý CSKH/;
+
+async function openStudio(page) {
   await page.goto(STUDIO_PATH);
-  await page.getByRole('button', { name: 'Kiến thức', exact: true })
-    .first().waitFor({ state: 'visible', timeout: 30_000 });
+  const configButton = page.getByRole('button', { name: /^Cấu hình$/ }).first();
+  await configButton.waitFor({ state: 'visible', timeout: 30_000 });
   await settle(page);
 
-  if (needsDocuments) {
-    // Lấy TÊN các chatbot ở cột trái rồi bấm theo tên. Bấm theo chỉ số trong
-    // danh sách `main button` không ăn: mục chatbot không phải thẻ <button>, và
-    // vài nút cùng khớp bộ lọc lại nằm ngoài vùng nhìn.
-    const names = await page.locator('main').evaluate((main) => {
-      const seen = new Set();
-      for (const el of main.querySelectorAll('*')) {
-        if (el.children.length) continue;
-        const text = (el.textContent || '').trim();
-        if (text.length > 6 && text.length < 60 && /chatbot|trợ lý/i.test(text)) seen.add(text);
-      }
-      return [...seen].slice(0, 6);
-    });
-
-    for (const name of names) {
-      const entry = page.getByText(name, { exact: true }).first();
-      if (!(await entry.isVisible().catch(() => false))) continue;
-      await entry.click({ timeout: 5_000 }).catch(() => {});
-      await page.waitForTimeout(900);
-      const knowledgeTab = page.getByRole('button', { name: 'Kiến thức', exact: true }).first();
-      if (!(await knowledgeTab.isVisible().catch(() => false))) continue;
-      await knowledgeTab.click({ timeout: 5_000 }).catch(() => {});
-      await page.waitForTimeout(1200);
-      // Đếm tài liệu hiện ngay cạnh chữ "Tài liệu"; 0 nghĩa là chatbot này rỗng.
-      const count = await page.locator('main').evaluate((main) => {
-        const match = (main.innerText || '').match(/Tài liệu\s+(\d+)/);
-        return match ? Number(match[1]) : 0;
-      });
-      if (count > 0) return true;
-    }
-    return false;
+  const withDocs = page.getByText(CHATBOT_WITH_DOCUMENTS).first();
+  if (await withDocs.isVisible().catch(() => false)) {
+    await withDocs.click({ timeout: 5_000 }).catch(() => {});
+    await page.waitForTimeout(1200);
   }
+  await hideVolatileChrome(page);
+  return { configButton };
+}
 
-  if (tab) {
-    await page.getByRole('button', { name: tab, exact: true }).first().click();
-    await page.waitForTimeout(900);
-  }
-  return true;
+/** Thẻ trắng của một hộp thoại (bỏ lớp nền mờ phủ cả màn hình). */
+function dialogCard(page, title) {
+  return page.locator('div.fixed.inset-0').filter({ hasText: title }).last()
+    .locator(':scope > div').first();
+}
+
+/** Mở hộp "Cấu hình chatbot" rồi nhảy tới một phần qua mục lục bên trái hộp. */
+async function openConfigSection(page, section) {
+  const { configButton } = await openStudio(page);
+  await configButton.click();
+  const card = dialogCard(page, 'Cấu hình chatbot');
+  await card.waitFor({ state: 'visible', timeout: 15_000 });
+  await card.getByRole('button', { name: section, exact: true }).first().click();
+  await page.waitForTimeout(900);
+  await hideVolatileChrome(page);
+  return card;
 }
 
 export default {
   slug: 'chatbot',
-  // 28/09/2026: 5 ảnh đầu mô tả giao diện 3 tab cũ (không còn) nên chờ hết hạn ~30s mỗi ảnh — cần viết lại bài.
   timeoutMs: 480_000,
   shots: [
     {
@@ -93,81 +85,54 @@ export default {
     },
     {
       name: 'toan-trang-studio',
-      caption: 'trang Tạo AI Chatbot, cột trái là danh sách chatbot',
+      caption: 'trang Tạo AI Chatbot gồm ba phần',
       async take(page) {
         await openStudio(page);
-        await hideVolatileChrome(page);
         return contentShot(page, page.locator('main').first());
       },
     },
     {
-      name: 'hang-ba-tab',
-      caption: 'hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng',
+      name: 'nut-cau-hinh',
+      caption: 'phía trên khung chat thử, khoanh đỏ nút "Cấu hình"',
       async take(page) {
-        await openStudio(page);
-        const tabs = page.locator('main').locator('div').filter({
-          has: page.getByRole('button', { name: 'Cấu hình', exact: true }),
-        }).filter({
-          has: page.getByRole('button', { name: 'Triển khai', exact: true }),
-        }).last();
-        await tabs.waitFor({ state: 'visible', timeout: 15_000 });
-        await hideVolatileChrome(page);
-        await highlight(tabs);
+        const { configButton } = await openStudio(page);
+        await highlight(configButton);
         await page.waitForTimeout(200);
-        return contentShot(page, page.locator('main').first(), { maxHeight: 420 });
+        return contentShot(page, page.locator('main').first(), { maxHeight: 330 });
       },
     },
     {
-      name: 'tab-cau-hinh',
-      caption: 'tab Cấu hình, khoanh đỏ ô nhập hướng dẫn cách trả lời',
+      name: 'huong-dan-ai',
+      caption: 'hộp Cấu hình ở phần Hướng dẫn AI, khoanh đỏ ô nhập hướng dẫn cách trả lời',
       async take(page) {
-        await openStudio(page, { tab: 'Cấu hình' });
-        const box = page.locator('main textarea').first();
+        const card = await openConfigSection(page, 'Hướng dẫn AI');
+        const box = card.getByPlaceholder(/Bạn là một trợ lý ảo thân thiện/).first();
         if (!(await box.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error('Không thấy ô nhập hướng dẫn trong tab Cấu hình');
+          throw new Error('Không thấy ô Hướng dẫn AI trong hộp Cấu hình');
         }
-        await hideVolatileChrome(page);
+        await box.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
         await highlight(box);
         await page.waitForTimeout(200);
-        return contentShot(page, page.locator('main').first());
+        return card;
       },
     },
     {
-      name: 'tab-kien-thuc-tai-len',
-      caption: 'tab Kiến thức, khoanh đỏ nút tải tài liệu lên',
+      name: 'kien-thuc-ba-nut',
+      caption: 'hộp Cấu hình ở phần Kiến thức chatbot, khoanh đỏ ba nút Upload, Văn bản và URL',
       async take(page) {
-        await openStudio(page, { tab: 'Kiến thức' });
-        const upload = page.getByRole('button', { name: 'Upload', exact: true }).first();
+        const card = await openConfigSection(page, 'Kiến thức');
+        const upload = card.getByRole('button', { name: 'Upload', exact: true }).first();
         if (!(await upload.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error('Không thấy nút tải tài liệu trong tab Kiến thức');
+          throw new Error('Không thấy nút Upload trong phần Kiến thức');
         }
-        await hideVolatileChrome(page);
-        await highlight(upload);
+        // Ba nút nằm chung một hàng — khoanh cả hàng.
+        const row = upload.locator('xpath=..');
+        await row.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        await highlight(row);
         await page.waitForTimeout(200);
-        return contentShot(page, page.locator('main').first());
-      },
-    },
-    {
-      name: 'trang-thai-tai-lieu',
-      caption: 'tab Kiến thức sau khi đã có vài tài liệu',
-      localOnly: true,
-      async take(page) {
-        if (!(await openStudio(page, { needsDocuments: true }))) {
-          throw new Error(
-            'Không chatbot nào có tài liệu. Nạp lại DB:\n'
-            + '  E2E_SEED_DEMO=1 E2E_SEED_CHATBOT=1 node scripts/seed-test-db.js',
-          );
-        }
-        await hideVolatileChrome(page);
-        // Chú thích chỉ đích danh CỘT TRẠNG THÁI XỬ LÝ — khoanh từng nhãn.
-        let marked = 0;
-        for (const status of ['ready', 'processing', 'error']) {
-          const badge = page.getByText(status, { exact: true }).first();
-          if (await badge.isVisible().catch(() => false)) { await highlight(badge); marked += 1; }
-        }
-        if (!marked) throw new Error('Có tài liệu nhưng không thấy nhãn trạng thái nào để khoanh');
-        await page.waitForTimeout(200);
-        return contentShot(page, page.locator('main').first());
+        return card;
       },
     },
     {
@@ -176,17 +141,11 @@ export default {
       // "Kênh hội thoại"; chú thích seed đổi theo.
       caption: 'tab Triển khai, khoanh đỏ các ô chọn kênh',
       async take(page) {
-        // Panel Triển khai luôn hiện bên phải Studio — KHÔNG qua openStudio (hàm đó chờ tab "Kiến thức"
-        // không còn tồn tại: Kiến thức nay là một mục trong hộp thoại Cấu hình).
-        await page.goto(STUDIO_PATH);
-        await page.getByText('Kênh hội thoại', { exact: true }).first()
-          .waitFor({ state: 'visible', timeout: 30_000 });
-        await settle(page);
-        await hideVolatileChrome(page);
+        await openStudio(page);
         const grid = page.getByText('Kênh hội thoại', { exact: true }).first()
           .locator('xpath=following-sibling::div[1]');
         if (!(await grid.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error('Không thấy lưới "Kênh hội thoại" ở tab Triển khai');
+          throw new Error('Không thấy lưới "Kênh hội thoại" ở cột Triển khai');
         }
         await highlight(grid);
         await page.waitForTimeout(400);
@@ -194,26 +153,39 @@ export default {
       },
     },
     {
-      name: 'huong-dan-zalo-oa',
-      caption: 'phần hướng dẫn Zalo OA, khoanh đỏ hai ô sao chép Webhook URL và Verify Token',
-      localOnly: true,
+      name: 'widget-nhan-nut-mo-chat',
+      caption: 'hộp Giao diện Widget, khoanh đỏ phần Nhãn nút mở chat',
       async take(page) {
-        await openStudio(page, { tab: 'Triển khai' });
-        const zaloOption = page.getByText(/Zalo OA/i).first();
-        if (await zaloOption.isVisible().catch(() => false)) {
-          await zaloOption.click();
-          await page.waitForTimeout(1200);
-        }
-        const webhook = page.getByText(/Webhook URL/i).first();
-        if (!(await webhook.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error('Không thấy phần hướng dẫn Zalo OA (Webhook URL / Verify Token)');
-        }
+        await openStudio(page);
+        await page.getByTitle('Tuỳ chỉnh giao diện widget', { exact: true }).first().click();
+        const card = dialogCard(page, 'Nhãn nút mở chat');
+        await card.waitFor({ state: 'visible', timeout: 15_000 });
+        const heading = card.getByText('Nhãn nút mở chat', { exact: true }).first();
+        await heading.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(400);
+        const section = await enclosingSection(page, heading, { minWidth: 200 });
         await hideVolatileChrome(page);
-        await highlight(webhook);
-        const token = page.getByText(/Verify Token/i).first();
-        if (await token.isVisible().catch(() => false)) await highlight(token);
+        await highlight(section);
         await page.waitForTimeout(200);
-        return contentShot(page, page.locator('main').first());
+        return card;
+      },
+    },
+    {
+      name: 'hop-zalo-oa',
+      caption: 'hộp Cấu hình Zalo OA, khoanh đỏ các ô App ID, App Secret và Webhook URL',
+      async take(page) {
+        await openStudio(page);
+        await page.getByTitle('Zalo OA — Tự động hồi đáp', { exact: true }).first().click();
+        const card = dialogCard(page, 'Cấu hình Zalo OA');
+        await card.waitFor({ state: 'visible', timeout: 15_000 });
+        await card.getByText('App ID (Zalo App ID)', { exact: true }).first()
+          .waitFor({ state: 'visible', timeout: 15_000 });
+        await hideVolatileChrome(page);
+        for (const label of ['App ID (Zalo App ID)', 'App Secret (Secret Key)', 'Webhook URL']) {
+          await highlight(card.getByText(label, { exact: true }).first().locator('xpath=..'));
+        }
+        await page.waitForTimeout(200);
+        return card;
       },
     },
   ],

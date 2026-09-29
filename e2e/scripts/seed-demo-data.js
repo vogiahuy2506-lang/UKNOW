@@ -1012,12 +1012,12 @@ export async function seedCampaignCustomers(client, { userId }) {
             `INSERT INTO zalo_messages (
                id_campaign, id_run, id_customer,
                recipient_type, recipient_value, account_name, channel,
-               message_text, status, click_count,
+               message_text, status, click_count, tracking_token,
                sent_at, created_at, updated_at
              ) VALUES (
                $1, $2, $3,
                'phone', $4, $5, 'zalo_oa',
-               $6, 'delivered', $7,
+               $6, 'delivered', $7, 'e2e_' || gen_random_uuid()::text,
                NOW() - ($8 || ' days')::INTERVAL,
                NOW() - ($8 || ' days')::INTERVAL,
                NOW() - ($8 || ' days')::INTERVAL

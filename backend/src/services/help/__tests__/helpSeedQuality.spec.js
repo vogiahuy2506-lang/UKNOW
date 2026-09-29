@@ -105,6 +105,12 @@ describe('chất lượng bài trợ giúp seed', () => {
       'Sửa trang hiện tại',
       'Tạo mới theo mô tả',
       'Trình sửa trực quan',
+      // Studio chatbot cũ có ba tab Cấu hình / Kiến thức / Triển khai; nay Cấu hình là nút mở hộp
+      // (Kiến thức là một phần trong hộp đó), Triển khai là cột bên phải. Bài `chatbot` vẫn tả ba
+      // tab tới 29/09/2026.
+      'Ba tab cần đi qua',
+      'tab Cấu hình',
+      'tab Kiến thức',
     ];
     const offenders = [];
     for (const article of HELP_SEED_ARTICLES) {

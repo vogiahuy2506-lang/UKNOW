@@ -1040,7 +1040,7 @@ Ngoài bốn trường hợp đó, chậm và dừng theo giờ đều là hoạ
     primary_route: '/app/chatbot-studio',
     sort_order: 80,
     title: 'Chatbot AI trả lời khách tự động',
-    summary: 'Tạo chatbot riêng, nạp tài liệu để nó trả lời đúng, rồi gắn lên website, Zalo OA, Facebook hoặc Zalo cá nhân.',
+    summary: 'Tạo chatbot riêng, nạp tài liệu để nó trả lời đúng, rồi gắn lên website, Zalo OA, Zalo cá nhân, Telegram hoặc WhatsApp.',
     body_md: `# Chatbot AI trả lời khách tự động
 Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng những gì bạn bán — không phải một trợ lý chung chung.
 
@@ -1049,50 +1049,70 @@ Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng
 
 [ẢNH: menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục "Tạo AI Chatbot"]
 
-Chỉ **chủ tài khoản** dùng được trang này. Tài khoản nhân viên bấm vào sẽ bị chặn.
+Chủ tài khoản luôn vào được trang này. Nhân viên chỉ vào được khi chủ tài khoản cấp quyền **Quản lý Chatbot & kho kiến thức** — xem [Nhân viên & phân quyền](nhan-vien).
 
-[ẢNH: trang Tạo AI Chatbot, cột trái là danh sách chatbot, phần chính bên phải là các tab]
+## Màn hình gồm ba phần
+- **Cột trái — Chatbots**: danh sách chatbot của bạn. Bấm nút **Chatbot mới** ở cuối cột, đặt tên, chọn một mẫu nhanh (Hỗ trợ khách hàng, Tư vấn bán hàng…) rồi bấm **Tạo ngay**.
+- **Ở giữa — khung chat thử**: nói chuyện thử với chatbot đang chọn trước khi cho khách dùng. Phía trên có nút **Chat mới** và nút **Cấu hình**.
+- **Cột phải — Triển khai**: nơi đưa chatbot lên website và các kênh nhắn tin.
 
-## Ba tab cần đi qua
-Sau khi chọn hoặc tạo một chatbot, phần chính của màn hình có ba tab xếp ngang. Đi lần lượt từ trái sang phải.
+[ẢNH: trang Tạo AI Chatbot gồm ba phần: danh sách chatbot bên trái, khung chat thử ở giữa, cột Triển khai bên phải]
 
-[ẢNH: hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng]
+## 1. Cấu hình: dạy chatbot cách trả lời
+Bấm nút **Cấu hình** phía trên khung chat thử. Một hộp mở ra, cột trái của hộp là mục lục năm phần để nhảy nhanh:
 
-### 1. Cấu hình
-Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website. Trong phần cài đặt khung chat còn có ô **Nhãn nút mở chat**: một dòng chữ ngắn hiện cạnh nút tròn, ví dụ *Chat với chúng tôi*. Để trống thì chỉ hiện nút tròn.
+- **Thông tin cơ bản** — tên, mô tả, ảnh đại diện, và công tắc **Trạng thái hoạt động** (tắt là chatbot ngừng trả lời).
+- **Hướng dẫn AI** — chọn phong cách trả lời, tin nhắn chào, và viết hướng dẫn cách trả lời.
+- **Kiến thức** — tài liệu chatbot dựa vào để trả lời.
+- **Câu hỏi gợi ý** — vài câu hỏi hiện sẵn để khách bấm khi mới mở chat.
+- **Giới hạn** — khung giờ hoạt động và giới hạn số lượt trả lời, xem [Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ](chatbot-khung-gio).
 
-Phần hướng dẫn cách trả lời quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ *"Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại."*
+Sửa xong bấm **Lưu cấu hình** ở cuối hộp. Chưa bấm thì chưa có gì thay đổi.
 
-[ẢNH: tab Cấu hình, khoanh đỏ ô nhập hướng dẫn cách trả lời]
+[ẢNH: phía trên khung chat thử, khoanh đỏ nút "Cấu hình"]
 
-### 2. Kiến thức
-Nơi quyết định bot trả lời đúng hay sai. Bạn tải tài liệu lên hoặc dán thẳng văn bản: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.
+### Viết hướng dẫn cách trả lời
+Ô **Hướng dẫn AI** quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ *"Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại."*
 
-Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung.
+Chưa biết viết thế nào thì bấm **AI viết hộ** ngay phía trên ô, tả ngắn trợ lý bạn muốn rồi để AI viết nháp.
+
+[ẢNH: hộp Cấu hình ở phần Hướng dẫn AI, khoanh đỏ ô nhập hướng dẫn cách trả lời]
+
+### Nạp kiến thức
+Phần **Kiến thức** quyết định bot trả lời đúng hay sai. Có ba nút để thêm tài liệu:
+
+- **Upload** — tải tệp lên: PDF, Word, Excel, PowerPoint, ảnh, tệp văn bản. Kéo thả tệp vào cũng được.
+- **Văn bản** — dán thẳng nội dung: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.
+- **URL** — dán địa chỉ website, hệ thống tự đọc trang đó và các trang liên kết bên trong.
+
+Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung. Mỗi tài liệu có một nhãn trạng thái: **ready** là đã dùng được, **processing** là còn đang xử lý, **error** là hệ thống không đọc được tệp — xoá đi rồi tải lại, hoặc dán nội dung bằng nút **Văn bản**.
 
 > Nạp tài liệu **không** tốn credit AI. Chỉ mỗi lượt bot trả lời khách mới tính.
 
-[ẢNH: tab Kiến thức, khoanh đỏ nút tải tài liệu lên]
+[ẢNH: hộp Cấu hình ở phần Kiến thức chatbot, khoanh đỏ ba nút Upload, Văn bản và URL]
 
-[ẢNH: tab Kiến thức sau khi đã có vài tài liệu, khoanh đỏ cột trạng thái xử lý của từng tài liệu]
+## 2. Triển khai: đưa chatbot tới khách
+Cột **Triển khai** luôn nằm bên phải khung chat thử, chia ba nhóm:
 
-### 3. Triển khai
-Chọn nơi đặt bot:
-
-- **Website** — chèn đoạn mã vào trang của bạn, hoặc dùng liên kết công khai nếu chưa có website
-- **Zalo Official Account** — cần App ID và App Secret từ Zalo Developer
-- **Facebook Messenger** — liên kết Fanpage
-- **Zalo cá nhân** — bot trả lời ngay trong tài khoản Zalo bạn đã kết nối
-- **Telegram** — liên kết tài khoản Telegram cá nhân bằng cách quét QR, rồi bật chatbot cho từng tài khoản
-- **WhatsApp** — gán chatbot trả lời cho từng tài khoản WhatsApp đã kết nối
-
-Cách nối hai kênh này xem [Kết nối Telegram và WhatsApp cho chatbot](chatbot-telegram-whatsapp).
+- **Nhúng lên website** — **Chat Widget** (nút chat nổi ở góc màn hình), **iFrame** (khung chat đặt giữa trang), **Public Link** (trang chat riêng, dùng khi chưa có website). Bấm vào ô nào sẽ hiện đoạn mã hoặc liên kết để sao chép.
+- **Kênh hội thoại** — **Zalo OA**, **Facebook**, **Zalo cá nhân**, **WhatsApp**, **Telegram**.
+- **Chia sẻ** — **Chia sẻ thành viên** để mời đồng đội dùng chung chatbot, **Đăng Marketplace** để đăng bán chatbot.
 
 [ẢNH: tab Triển khai, khoanh đỏ các ô chọn kênh]
 
-Với Zalo OA và Facebook, màn hình có sẵn hướng dẫn từng bước kèm ô sao chép Webhook URL và Verify Token. **Verify Token chỉ hiện một lần** lúc tạo — sao chép ngay, đóng lại là không xem lại được.
+Muốn đổi màu, logo, bo góc, vị trí hay kích thước khung chat trên website, bấm nút hình bảng màu cạnh chữ **Triển khai** (di chuột lên sẽ hiện *Tuỳ chỉnh giao diện widget*). Hộp **Giao diện Widget** mở ra; Chat Widget, iFrame và Public Link mỗi dạng chỉnh riêng. Với Chat Widget có thêm ô **Nhãn nút mở chat**: một dòng chữ ngắn hiện cạnh nút tròn, ví dụ *Chat với chúng tôi*. Để trống thì chỉ hiện nút tròn.
 
-[ẢNH: phần hướng dẫn Zalo OA, khoanh đỏ hai ô sao chép Webhook URL và Verify Token]
+[ẢNH: hộp Giao diện Widget, khoanh đỏ phần Nhãn nút mở chat]
+
+### Nối từng kênh
+Bấm vào ô của kênh, một hộp cấu hình mở ra. Ô **Zalo OA** và **Facebook** có chấm cam ở góc là chưa nối.
+
+- **Zalo OA** — nhập **App ID** và **App Secret** lấy từ trang Zalo Developer, rồi bấm **Lưu cấu hình**. Nối xong, ô **Webhook URL** mới hiện địa chỉ: sao chép dán sang Zalo Developer, rồi bấm **Test webhook** để thử.
+- **Facebook** — chọn Fanpage rồi làm theo các bước hiện trong hộp.
+- **Zalo cá nhân** — bật chatbot cho từng tài khoản Zalo bạn đã kết nối.
+- **Telegram** và **WhatsApp** — xem [Kết nối Telegram và WhatsApp cho chatbot](chatbot-telegram-whatsapp).
+
+[ẢNH: hộp Cấu hình Zalo OA, khoanh đỏ các ô App ID, App Secret và Webhook URL]
 
 ## Bot trả lời rồi thì xem ở đâu
 Mọi hội thoại đổ về một chỗ: **menu bên trái** → nhóm **AI Chatbot** → mục **Lịch sử trò chuyện**, ngay dưới mục bạn vừa dùng. Mọi kênh gộp chung ở đó. Xem [Hộp thư hợp nhất](inbox).
@@ -1100,19 +1120,22 @@ Mọi hội thoại đổ về một chỗ: **menu bên trái** → nhóm **AI C
 [ẢNH: menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục "Lịch sử trò chuyện"]
 
 ## Khi bot trả lời sai
-Gần như luôn là do phần Kiến thức, không phải do model. Kiểm theo thứ tự:
+Gần như luôn là do phần Kiến thức, không phải do model. Bấm **Cấu hình** rồi kiểm theo thứ tự:
 
-1. Câu hỏi đó đã có trong tài liệu chưa?
-2. Tài liệu đã xử lý xong chưa, hay còn đang nạp?
-3. Hướng dẫn cách trả lời có mâu thuẫn với tài liệu không?
+1. Câu hỏi đó đã có trong phần **Kiến thức** chưa?
+2. Tài liệu đã **ready** chưa, hay còn **processing**?
+3. Ô **Hướng dẫn AI** có mâu thuẫn với tài liệu không?
+
+Sửa xong, bấm **Chat mới** ở khung chat thử rồi hỏi lại đúng câu đó để kiểm.
 
 ## Liên quan
 - [Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ](chatbot-khung-gio)
 - [Liên hệ khách để lại trong chat và thư tổng hợp](lien-he-khach-de-lai)
+- [Kết nối Telegram và WhatsApp cho chatbot](chatbot-telegram-whatsapp)
 - [Hộp thư hợp nhất](inbox)
 - [Hồ sơ doanh nghiệp](ai-profile)
 - [Gói dịch vụ & thanh toán](plan-and-billing)`,
-    body_html: `<h2>Chatbot AI trả lời khách tự động</h2><p>Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng những gì bạn bán — không phải một trợ lý chung chung.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>AI Chatbot</strong> cho nó mở ra, rồi chọn mục <strong>Tạo AI Chatbot</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục &quot;Tạo AI Chatbot&quot;]</p><p>Chỉ <strong>chủ tài khoản</strong> dùng được trang này. Tài khoản nhân viên bấm vào sẽ bị chặn.</p><p>[ẢNH: trang Tạo AI Chatbot, cột trái là danh sách chatbot, phần chính bên phải là các tab]</p><h3>Ba tab cần đi qua</h3><p>Sau khi chọn hoặc tạo một chatbot, phần chính của màn hình có ba tab xếp ngang. Đi lần lượt từ trái sang phải.</p><p>[ẢNH: hàng ba tab Cấu hình / Kiến thức / Triển khai, khoanh đỏ cả hàng]</p><h4>1. Cấu hình</h4><p>Đặt tên chatbot, viết hướng dẫn cách trả lời, chỉnh màu và icon của khung chat trên website. Trong phần cài đặt khung chat còn có ô <strong>Nhãn nút mở chat</strong>: một dòng chữ ngắn hiện cạnh nút tròn, ví dụ <em>Chat với chúng tôi</em>. Để trống thì chỉ hiện nút tròn.</p><p>Phần hướng dẫn cách trả lời quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ <em>&quot;Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại.&quot;</em></p><p>[ẢNH: tab Cấu hình, khoanh đỏ ô nhập hướng dẫn cách trả lời]</p><h4>2. Kiến thức</h4><p>Nơi quyết định bot trả lời đúng hay sai. Bạn tải tài liệu lên hoặc dán thẳng văn bản: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.</p><p>Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung.</p><blockquote><p>Nạp tài liệu <strong>không</strong> tốn credit AI. Chỉ mỗi lượt bot trả lời khách mới tính.</p></blockquote><p>[ẢNH: tab Kiến thức, khoanh đỏ nút tải tài liệu lên]</p><p>[ẢNH: tab Kiến thức sau khi đã có vài tài liệu, khoanh đỏ cột trạng thái xử lý của từng tài liệu]</p><h4>3. Triển khai</h4><p>Chọn nơi đặt bot:</p><ul><li><strong>Website</strong> — chèn đoạn mã vào trang của bạn, hoặc dùng liên kết công khai nếu chưa có website</li><li><strong>Zalo Official Account</strong> — cần App ID và App Secret từ Zalo Developer</li><li><strong>Facebook Messenger</strong> — liên kết Fanpage</li><li><strong>Zalo cá nhân</strong> — bot trả lời ngay trong tài khoản Zalo bạn đã kết nối</li><li><strong>Telegram</strong> — liên kết tài khoản Telegram cá nhân bằng cách quét QR, rồi bật chatbot cho từng tài khoản</li><li><strong>WhatsApp</strong> — gán chatbot trả lời cho từng tài khoản WhatsApp đã kết nối</li></ul><p>Cách nối hai kênh này xem <a href="/huong-dan/chatbot-telegram-whatsapp">Kết nối Telegram và WhatsApp cho chatbot</a>.</p><p>[ẢNH: tab Triển khai, khoanh đỏ các ô chọn kênh]</p><p>Với Zalo OA và Facebook, màn hình có sẵn hướng dẫn từng bước kèm ô sao chép Webhook URL và Verify Token. <strong>Verify Token chỉ hiện một lần</strong> lúc tạo — sao chép ngay, đóng lại là không xem lại được.</p><p>[ẢNH: phần hướng dẫn Zalo OA, khoanh đỏ hai ô sao chép Webhook URL và Verify Token]</p><h3>Bot trả lời rồi thì xem ở đâu</h3><p>Mọi hội thoại đổ về một chỗ: <strong>menu bên trái</strong> → nhóm <strong>AI Chatbot</strong> → mục <strong>Lịch sử trò chuyện</strong>, ngay dưới mục bạn vừa dùng. Mọi kênh gộp chung ở đó. Xem <a href="/huong-dan/inbox">Hộp thư hợp nhất</a>.</p><p>[ẢNH: menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục &quot;Lịch sử trò chuyện&quot;]</p><h3>Khi bot trả lời sai</h3><p>Gần như luôn là do phần Kiến thức, không phải do model. Kiểm theo thứ tự:</p><ol><li>Câu hỏi đó đã có trong tài liệu chưa?</li><li>Tài liệu đã xử lý xong chưa, hay còn đang nạp?</li><li>Hướng dẫn cách trả lời có mâu thuẫn với tài liệu không?</li></ol><h3>Liên quan</h3><ul><li><a href="/huong-dan/chatbot-khung-gio">Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</a></li><li><a href="/huong-dan/lien-he-khach-de-lai">Liên hệ khách để lại trong chat và thư tổng hợp</a></li><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li></ul>`,
+    body_html: `<h2>Chatbot AI trả lời khách tự động</h2><p>Chatbot đọc tài liệu bạn nạp vào rồi trả lời khách theo đúng những gì bạn bán — không phải một trợ lý chung chung.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, bấm vào nhóm <strong>AI Chatbot</strong> cho nó mở ra, rồi chọn mục <strong>Tạo AI Chatbot</strong>.</p><p>[ẢNH: menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục &quot;Tạo AI Chatbot&quot;]</p><p>Chủ tài khoản luôn vào được trang này. Nhân viên chỉ vào được khi chủ tài khoản cấp quyền <strong>Quản lý Chatbot &amp; kho kiến thức</strong> — xem <a href="/huong-dan/nhan-vien">Nhân viên &amp; phân quyền</a>.</p><h3>Màn hình gồm ba phần</h3><ul><li><strong>Cột trái — Chatbots</strong>: danh sách chatbot của bạn. Bấm nút <strong>Chatbot mới</strong> ở cuối cột, đặt tên, chọn một mẫu nhanh (Hỗ trợ khách hàng, Tư vấn bán hàng…) rồi bấm <strong>Tạo ngay</strong>.</li><li><strong>Ở giữa — khung chat thử</strong>: nói chuyện thử với chatbot đang chọn trước khi cho khách dùng. Phía trên có nút <strong>Chat mới</strong> và nút <strong>Cấu hình</strong>.</li><li><strong>Cột phải — Triển khai</strong>: nơi đưa chatbot lên website và các kênh nhắn tin.</li></ul><p>[ẢNH: trang Tạo AI Chatbot gồm ba phần: danh sách chatbot bên trái, khung chat thử ở giữa, cột Triển khai bên phải]</p><h3>1. Cấu hình: dạy chatbot cách trả lời</h3><p>Bấm nút <strong>Cấu hình</strong> phía trên khung chat thử. Một hộp mở ra, cột trái của hộp là mục lục năm phần để nhảy nhanh:</p><ul><li><strong>Thông tin cơ bản</strong> — tên, mô tả, ảnh đại diện, và công tắc <strong>Trạng thái hoạt động</strong> (tắt là chatbot ngừng trả lời).</li><li><strong>Hướng dẫn AI</strong> — chọn phong cách trả lời, tin nhắn chào, và viết hướng dẫn cách trả lời.</li><li><strong>Kiến thức</strong> — tài liệu chatbot dựa vào để trả lời.</li><li><strong>Câu hỏi gợi ý</strong> — vài câu hỏi hiện sẵn để khách bấm khi mới mở chat.</li><li><strong>Giới hạn</strong> — khung giờ hoạt động và giới hạn số lượt trả lời, xem <a href="/huong-dan/chatbot-khung-gio">Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</a>.</li></ul><p>Sửa xong bấm <strong>Lưu cấu hình</strong> ở cuối hộp. Chưa bấm thì chưa có gì thay đổi.</p><p>[ẢNH: phía trên khung chat thử, khoanh đỏ nút &quot;Cấu hình&quot;]</p><h4>Viết hướng dẫn cách trả lời</h4><p>Ô <strong>Hướng dẫn AI</strong> quan trọng hơn bạn nghĩ. Hãy viết rõ: bot xưng hô thế nào, được phép hứa gì, gặp câu ngoài phạm vi thì nói sao. Ví dụ <em>&quot;Xưng em, gọi khách là anh/chị. Không báo giá cụ thể, hướng khách để lại số điện thoại.&quot;</em></p><p>Chưa biết viết thế nào thì bấm <strong>AI viết hộ</strong> ngay phía trên ô, tả ngắn trợ lý bạn muốn rồi để AI viết nháp.</p><p>[ẢNH: hộp Cấu hình ở phần Hướng dẫn AI, khoanh đỏ ô nhập hướng dẫn cách trả lời]</p><h4>Nạp kiến thức</h4><p>Phần <strong>Kiến thức</strong> quyết định bot trả lời đúng hay sai. Có ba nút để thêm tài liệu:</p><ul><li><strong>Upload</strong> — tải tệp lên: PDF, Word, Excel, PowerPoint, ảnh, tệp văn bản. Kéo thả tệp vào cũng được.</li><li><strong>Văn bản</strong> — dán thẳng nội dung: bảng giá, chính sách bảo hành, câu hỏi thường gặp, mô tả sản phẩm.</li><li><strong>URL</strong> — dán địa chỉ website, hệ thống tự đọc trang đó và các trang liên kết bên trong.</li></ul><p>Bot chỉ biết những gì có trong đây. Chưa nạp gì thì nó trả lời chung chung. Mỗi tài liệu có một nhãn trạng thái: <strong>ready</strong> là đã dùng được, <strong>processing</strong> là còn đang xử lý, <strong>error</strong> là hệ thống không đọc được tệp — xoá đi rồi tải lại, hoặc dán nội dung bằng nút <strong>Văn bản</strong>.</p><blockquote><p>Nạp tài liệu <strong>không</strong> tốn credit AI. Chỉ mỗi lượt bot trả lời khách mới tính.</p></blockquote><p>[ẢNH: hộp Cấu hình ở phần Kiến thức chatbot, khoanh đỏ ba nút Upload, Văn bản và URL]</p><h3>2. Triển khai: đưa chatbot tới khách</h3><p>Cột <strong>Triển khai</strong> luôn nằm bên phải khung chat thử, chia ba nhóm:</p><ul><li><strong>Nhúng lên website</strong> — <strong>Chat Widget</strong> (nút chat nổi ở góc màn hình), <strong>iFrame</strong> (khung chat đặt giữa trang), <strong>Public Link</strong> (trang chat riêng, dùng khi chưa có website). Bấm vào ô nào sẽ hiện đoạn mã hoặc liên kết để sao chép.</li><li><strong>Kênh hội thoại</strong> — <strong>Zalo OA</strong>, <strong>Facebook</strong>, <strong>Zalo cá nhân</strong>, <strong>WhatsApp</strong>, <strong>Telegram</strong>.</li><li><strong>Chia sẻ</strong> — <strong>Chia sẻ thành viên</strong> để mời đồng đội dùng chung chatbot, <strong>Đăng Marketplace</strong> để đăng bán chatbot.</li></ul><p>[ẢNH: tab Triển khai, khoanh đỏ các ô chọn kênh]</p><p>Muốn đổi màu, logo, bo góc, vị trí hay kích thước khung chat trên website, bấm nút hình bảng màu cạnh chữ <strong>Triển khai</strong> (di chuột lên sẽ hiện <em>Tuỳ chỉnh giao diện widget</em>). Hộp <strong>Giao diện Widget</strong> mở ra; Chat Widget, iFrame và Public Link mỗi dạng chỉnh riêng. Với Chat Widget có thêm ô <strong>Nhãn nút mở chat</strong>: một dòng chữ ngắn hiện cạnh nút tròn, ví dụ <em>Chat với chúng tôi</em>. Để trống thì chỉ hiện nút tròn.</p><p>[ẢNH: hộp Giao diện Widget, khoanh đỏ phần Nhãn nút mở chat]</p><h4>Nối từng kênh</h4><p>Bấm vào ô của kênh, một hộp cấu hình mở ra. Ô <strong>Zalo OA</strong> và <strong>Facebook</strong> có chấm cam ở góc là chưa nối.</p><ul><li><strong>Zalo OA</strong> — nhập <strong>App ID</strong> và <strong>App Secret</strong> lấy từ trang Zalo Developer, rồi bấm <strong>Lưu cấu hình</strong>. Nối xong, ô <strong>Webhook URL</strong> mới hiện địa chỉ: sao chép dán sang Zalo Developer, rồi bấm <strong>Test webhook</strong> để thử.</li><li><strong>Facebook</strong> — chọn Fanpage rồi làm theo các bước hiện trong hộp.</li><li><strong>Zalo cá nhân</strong> — bật chatbot cho từng tài khoản Zalo bạn đã kết nối.</li><li><strong>Telegram</strong> và <strong>WhatsApp</strong> — xem <a href="/huong-dan/chatbot-telegram-whatsapp">Kết nối Telegram và WhatsApp cho chatbot</a>.</li></ul><p>[ẢNH: hộp Cấu hình Zalo OA, khoanh đỏ các ô App ID, App Secret và Webhook URL]</p><h3>Bot trả lời rồi thì xem ở đâu</h3><p>Mọi hội thoại đổ về một chỗ: <strong>menu bên trái</strong> → nhóm <strong>AI Chatbot</strong> → mục <strong>Lịch sử trò chuyện</strong>, ngay dưới mục bạn vừa dùng. Mọi kênh gộp chung ở đó. Xem <a href="/huong-dan/inbox">Hộp thư hợp nhất</a>.</p><p>[ẢNH: menu bên trái, nhóm AI Chatbot đang mở, khoanh đỏ mục &quot;Lịch sử trò chuyện&quot;]</p><h3>Khi bot trả lời sai</h3><p>Gần như luôn là do phần Kiến thức, không phải do model. Bấm <strong>Cấu hình</strong> rồi kiểm theo thứ tự:</p><ol><li>Câu hỏi đó đã có trong phần <strong>Kiến thức</strong> chưa?</li><li>Tài liệu đã <strong>ready</strong> chưa, hay còn <strong>processing</strong>?</li><li>Ô <strong>Hướng dẫn AI</strong> có mâu thuẫn với tài liệu không?</li></ol><p>Sửa xong, bấm <strong>Chat mới</strong> ở khung chat thử rồi hỏi lại đúng câu đó để kiểm.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/chatbot-khung-gio">Chatbot: khung giờ hoạt động, giới hạn trả lời và AI viết hộ</a></li><li><a href="/huong-dan/lien-he-khach-de-lai">Liên hệ khách để lại trong chat và thư tổng hợp</a></li><li><a href="/huong-dan/chatbot-telegram-whatsapp">Kết nối Telegram và WhatsApp cho chatbot</a></li><li><a href="/huong-dan/inbox">Hộp thư hợp nhất</a></li><li><a href="/huong-dan/ai-profile">Hồ sơ doanh nghiệp</a></li><li><a href="/huong-dan/plan-and-billing">Gói dịch vụ &amp; thanh toán</a></li></ul>`,
   },
   {
     slug: 'inbox',
