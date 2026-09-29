@@ -114,6 +114,54 @@ function computePerHourWaitMs(key, perHourLimit, nowMs) {
   return Math.max(0, (oldestInWindow + HOUR_MS) - nowMs);
 }
 
+/**
+ * PLAN_GUI_NHANH_TELEGRAM_2026-09-28 Việc 1 (+ W7a tổng quát cho WhatsApp) — CỔNG NHỊP KHÔNG-NGỦ cho gửi
+ * nhanh: cùng luật với bộ chạy (giờ nghỉ -> trần giờ -> giãn cách) nhưng KHÔNG ngủ; nếu chưa được gửi thì
+ * trả `waitMs` để trình duyệt tự chờ/hoãn. Khoá `${descriptor.key}::${accountKey}` GIỐNG HỆT bộ chạy
+ * (`perHourKey`) -> gửi nhanh và chiến dịch dùng CHUNG một cửa sổ trần giờ theo tài khoản.
+ *
+ * Thứ tự: giờ nghỉ (`quiet_hours`) -> trần giờ (`rate_limited`) -> giãn cách so với lần thử gần nhất
+ * (`inter_message_delay`, `random(minDelayMs, maxDelayMs)`).
+ *
+ * Người gọi PHẢI gọi {@link recordAdapterSendAttempt} NGAY SAU khi `ok: true`, KHÔNG `await` ở giữa — hai tab
+ * gửi cùng lúc mới không lọt cả hai. Khác bộ chạy (ghi SAU khi gửi thành công): gửi nhanh ghi lần thử
+ * TRƯỚC khi gửi, có chủ ý — lỗi giữa chừng vẫn giữ nhịp, không cho hai request song song cùng đi qua.
+ * Giới hạn v1: bộ chạy ngủ giãn cách theo lượt của nó, không nhìn dấu thời gian gửi nhanh.
+ *
+ * @param {{descriptor: object, accountKey: string, nowMs?: number}} input
+ * @returns {{ok: true} | {ok: false, reason: 'quiet_hours'|'rate_limited'|'inter_message_delay', waitMs: number}}
+ */
+export function evaluateAdapterSendGate({ descriptor, accountKey, nowMs = Date.now() }) {
+  const policy = descriptor?.policy || {};
+  const key = `${descriptor.key}::${accountKey ?? ''}`;
+  if (isWithinQuietHours(nowMs, policy.quietHours)) {
+    return { ok: false, reason: 'quiet_hours', waitMs: computeQuietHoursWaitMs(nowMs, policy.quietHours) };
+  }
+  const perHourWaitMs = computePerHourWaitMs(key, policy.perHourLimit, nowMs);
+  if (perHourWaitMs > 0) {
+    return { ok: false, reason: 'rate_limited', waitMs: perHourWaitMs };
+  }
+  const timestamps = pruneAndGetTimestamps(key, nowMs);
+  if (timestamps.length > 0) {
+    const lastSentAt = Math.max(...timestamps);
+    const delayMs = randomDelayMs(policy.minDelayMs, policy.maxDelayMs);
+    const readyAt = lastSentAt + delayMs;
+    if (readyAt > nowMs) {
+      return { ok: false, reason: 'inter_message_delay', waitMs: readyAt - nowMs };
+    }
+  }
+  return { ok: true };
+}
+
+/**
+ * Ghi một lần thử gửi vào cửa sổ trượt dùng chung với bộ chạy (xem {@link evaluateAdapterSendGate}).
+ *
+ * @param {{descriptor: object, accountKey: string, nowMs?: number}} input
+ */
+export function recordAdapterSendAttempt({ descriptor, accountKey, nowMs = Date.now() }) {
+  recordSendTimestamp(`${descriptor.key}::${accountKey ?? ''}`, nowMs);
+}
+
 /** Chỉ dùng cho test — ghi một mốc gửi giả vào cửa sổ trượt (channel::accountKey). */
 export function __recordSendForTest(key, atMs) {
   if (process.env.NODE_ENV !== 'test') {
@@ -694,6 +742,8 @@ export async function runAdapterSendNode(ctx) {
 
 export default {
   runAdapterSendNode,
+  evaluateAdapterSendGate,
+  recordAdapterSendAttempt,
   isWithinQuietHours,
   computeQuietHoursWaitMs,
   createCampaignChannelQuotaGate,

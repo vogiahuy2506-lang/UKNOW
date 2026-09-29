@@ -32,6 +32,12 @@ import { getEnabledAdapterChannelsForBuilder } from '../services/campaign/campai
 import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.repository.js';
 import { listTelegramGroupsForAccount } from '../services/campaign/telegramGroups.service.js';
 import { listWhatsAppAccountsForOwner } from '../services/campaign/channels/whatsapp.campaignChannel.js';
+import {
+  isQuickSendAdapterChannel,
+  listQuickSendConversations,
+  estimateQuickSendAdapter,
+  sendQuickAdapterMessage,
+} from '../services/campaign/quickSendAdapter.service.js';
 
 class CampaignController {
   /**
@@ -1028,13 +1034,74 @@ class CampaignController {
   }
 
   /**
-   * GET /api/campaigns/quick-send/estimate?channel=zalo|email&recipients=N
+   * GET /api/campaigns/channels/:channel/accounts/:accountRef/conversations
+   * W7a — người ĐÃ NHẮN TỚI tài khoản (Telegram: accountId; WhatsApp: sessionKey) để chọn làm người nhận
+   * gửi nhanh. Tài khoản phải thuộc CHỦ workspace (404). Chỉ trả { recipientKey, name }.
+   */
+  async getQuickSendAdapterConversations(req, res) {
+    try {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const data = await listQuickSendConversations({
+        channel: req.params.channel,
+        ownerUserId,
+        accountRef: req.params.accountRef,
+      });
+      res.json({ success: true, data });
+    } catch (error) {
+      if (error?.status && error.status < 600) {
+        return res.status(error.status).json({ success: false, message: error.message, code: error.code });
+      }
+      console.error('Get quick-send adapter conversations error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách người đã nhắn' });
+    }
+  }
+
+  /**
+   * POST /api/campaigns/quick-send/:channel  (channel = telegram | whatsapp)
+   * W7a — gửi nhanh MỘT tin cho MỘT người (trình duyệt lặp). Body: { accountId | sessionKey, recipientKey, message }.
+   * Kết quả 200 luôn là { data: { item } } với item.status = success | failed | deferred.
+   */
+  async quickSendAdapter(req, res) {
+    try {
+      const rawKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key']
+        || req.body?.idempotencyKey || req.body?.requestKey || null;
+      const { item } = await sendQuickAdapterMessage({
+        channel: req.params.channel,
+        authUser: req.user,
+        body: req.body || {},
+        idempotencyKey: rawKey,
+      });
+      res.json({ success: true, data: { item } });
+    } catch (error) {
+      const status = error?.status || error?.statusCode;
+      if (status && status < 600) {
+        return res.status(status).json({ success: false, message: error.message, code: error.code });
+      }
+      console.error('[QuickSend] quickSendAdapter error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server khi gửi nhanh' });
+    }
+  }
+
+  /**
+   * GET /api/campaigns/quick-send/estimate?channel=zalo|email|telegram|whatsapp&recipients=N
    * Ước tính thời gian gửi và thông số khung giờ nghỉ đêm từ policy runtime thực tế.
    */
   async getQuickSendEstimate(req, res) {
     try {
       const channel = String(req.query.channel || 'email').trim().toLowerCase();
       const recipients = Math.max(1, parseInt(req.query.recipients, 10) || 1);
+
+      // W7a — kênh adapter (Telegram/WhatsApp): ước tính từ descriptor.policy; cờ tắt -> 409.
+      if (isQuickSendAdapterChannel(channel)) {
+        try {
+          return res.json({ success: true, data: estimateQuickSendAdapter({ channel, recipients }) });
+        } catch (adapterError) {
+          if (adapterError?.status && adapterError.status < 600) {
+            return res.status(adapterError.status).json({ success: false, message: adapterError.message, code: adapterError.code });
+          }
+          throw adapterError;
+        }
+      }
 
       if (channel.startsWith('zalo')) {
         const limiter = campaignRunService.zaloRateLimiter;

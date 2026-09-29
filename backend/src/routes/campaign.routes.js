@@ -36,6 +36,8 @@ router.get('/channels', requirePermission('campaigns_view'), campaignController.
 router.get('/channels/telegram/accounts', requirePermission('campaigns_create'), campaignController.getTelegramAccountsForBuilder.bind(campaignController));
 router.get('/channels/whatsapp/accounts', requirePermission('campaigns_create'), campaignController.getWhatsAppAccountsForBuilder.bind(campaignController));
 router.get('/channels/telegram/accounts/:id/groups', requirePermission('campaigns_create'), campaignController.getTelegramAccountGroups.bind(campaignController));
+// W7a — người đã nhắn tới tài khoản (Telegram: accountId, WhatsApp: sessionKey), cho gửi nhanh.
+router.get('/channels/:channel/accounts/:accountRef/conversations', requirePermission('campaigns_create'), campaignController.getQuickSendAdapterConversations.bind(campaignController));
 
 // Quick send estimate & test send (rate limited 5 tests/hour per user)
 router.get('/quick-send/estimate', requirePermission('campaigns_view'), campaignController.getQuickSendEstimate.bind(campaignController));
@@ -47,6 +49,9 @@ router.post(
   workspaceUploadCapacityGuard,
   campaignController.uploadQuickSendAttachment.bind(campaignController)
 );
+// W7a — gửi nhanh kênh adapter (Telegram/WhatsApp), 1 người/request. ĐỨNG SAU test-send/attachments (đường dẫn cố định
+// khớp trước); kênh lạ -> 404 ở service.
+router.post('/quick-send/:channel', requirePermission('campaigns_create'), campaignController.quickSendAdapter.bind(campaignController));
 
 // Get by id — chỉ cần quyền xem
 router.get('/:id', requirePermission('campaigns_view'), campaignController.getById.bind(campaignController));
