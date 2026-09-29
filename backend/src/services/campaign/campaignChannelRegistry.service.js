@@ -45,6 +45,8 @@
  * @property {string} [quotaChannel] Chỉ kênh 'adapter' — cột limit dùng để tính quota (vd 'zalo').
  * @property {boolean} [recipientIsPhone] Chỉ kênh 'adapter' — `recipientKey` là SĐT đã chuẩn hoá (WhatsApp: 84…):
  *   runner/gửi nhanh dùng nó để đối chiếu khách từ chối nhận tin (leads.marketing_consent=false). Telegram KHÔNG có.
+ * @property {string} [journeyEventType] Chỉ kênh 'adapter' — `event_type` ghi vào `customer_journey` sau mỗi tin gửi
+ *   thành công cho người nhận SĐT có trong `customers` (WhatsApp: 'whatsapp_sent'). Telegram KHÔNG có (không có SĐT).
  * @property {ChannelPolicy} [policy] Chỉ kênh 'adapter'.
  * @property {ChannelAdapter} [adapter] Chỉ kênh 'adapter'.
  */
@@ -162,6 +164,8 @@ function buildWhatsAppDescriptor() {
     quotaChannel: WHATSAPP_CHANNEL_META.quotaChannel,
     // recipientKey = SĐT chuẩn hoá (normalizeWhatsAppPhone) -> kiểm khách từ chối nhận tin (P2).
     recipientIsPhone: true,
+    // P8b — ghi customer_journey 'whatsapp_sent' khi người nhận (SĐT) là khách trong workspace.
+    journeyEventType: 'whatsapp_sent',
     policy: buildWhatsAppPolicyFromEnv(),
     adapter: whatsappChannelAdapter,
   };

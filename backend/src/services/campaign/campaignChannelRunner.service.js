@@ -5,6 +5,7 @@
  * riêng của 4 kênh legacy), KHÔNG ghi zalo_messages/email_messages (bảng riêng
  * campaign_channel_messages, PR-2).
  */
+import { recordAdapterSentJourney } from './campaignChannelJourney.service.js';
 import campaignChannelMessageRepository from '../../repositories/campaign/campaignChannelMessage.repository.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
 import { ChannelSendError } from './campaignChannelRegistry.service.js';
@@ -749,6 +750,17 @@ export async function runAdapterSendNode(ctx) {
             completedStep: oneBasedStep,
             totalSteps: steps.length,
             progress,
+          });
+          // P8b — journey khách (WhatsApp, người nhận SĐT có trong customers). Không bao giờ ném: lỗi chỉ log.
+          // eslint-disable-next-line no-await-in-loop
+          await recordAdapterSentJourney({
+            descriptor,
+            workspaceOwnerId: workspaceOwnerId ?? userId,
+            recipient,
+            campaignId,
+            runId,
+            nodeId: node.id,
+            messageId,
           });
           success += 1;
           outputItems.push({

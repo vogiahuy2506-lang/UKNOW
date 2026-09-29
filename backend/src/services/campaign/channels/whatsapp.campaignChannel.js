@@ -27,6 +27,7 @@ import whatsappCampaignConversationRepository, {
   extractPhoneFromExternalId,
 } from '../../../repositories/chatbot/whatsappCampaignConversation.repository.js';
 import { isPhoneHeader } from '../../../utils/columnHeaderMatch.util.js';
+import { deriveVariablesForText } from '../../../utils/templateVariableAutoMap.util.js';
 import channelAccountSettingsRepository from '../../../repositories/campaign/channelAccountSettings.repository.js';
 import {
   CHANNEL_MEDIA_LIMIT_ERROR_CODE,
@@ -210,6 +211,28 @@ function pickPhoneFromRow(row, config) {
   return null;
 }
 
+/** Gộp nội dung mọi bước của node — nguồn tên biến `{{...}}` cần suy ra từ cột của khối dữ liệu. */
+function collectStepMessages(config) {
+  const steps = Array.isArray(config?.steps) ? config.steps : [];
+  return steps.map((step) => String(step?.message ?? '')).filter(Boolean).join('\n');
+}
+
+/**
+ * P8b — cá nhân hoá theo CỘT của khối dữ liệu (khuôn Zalo: `deriveVariablesForText` khớp tên cột chính xác → không phân
+ * biệt hoa thường → ngữ nghĩa tên/họ tên/email/SĐT, có xử lý dấu tiếng Việt). Khối dữ liệu xuất mỗi dòng là object cột
+ * (không có `vars`), nên biến được suy ra từ chính dòng đó cho các `{{biến}}` xuất hiện trong nội dung. `row.vars` tường
+ * minh (nếu có) thắng giá trị suy ra.
+ *
+ * @param {unknown} row
+ * @param {string} templateText nội dung các bước đã gộp
+ * @returns {Record<string, string>}
+ */
+function buildVarsFromRow(row, templateText) {
+  if (!row || typeof row !== 'object') return {};
+  const derived = templateText ? deriveVariablesForText(templateText, { entry: { row } }).variables : {};
+  return { ...derived, ...(row.vars && typeof row.vars === 'object' ? row.vars : {}) };
+}
+
 function parseManualPhones(config) {
   const raw = config?.recipientKeys;
   const list = Array.isArray(raw) ? raw : String(raw ?? '').split(/[\n,]+/);
@@ -330,6 +353,7 @@ async function resolveRecipients({ rows, config, account }) {
       });
     }
   } else {
+    const templateText = collectStepMessages(config);
     for (const row of rows || []) {
       const phone = pickPhoneFromRow(row, config);
       if (!phone) continue;
@@ -337,7 +361,7 @@ async function resolveRecipients({ rows, config, account }) {
       candidates.push({
         recipientKey: phone,
         display: (isObject && row.display) || phone,
-        vars: (isObject && row.vars) || {},
+        vars: buildVarsFromRow(row, templateText),
       });
     }
   }

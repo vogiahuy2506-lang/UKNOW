@@ -47,6 +47,7 @@ export const formatEventType = (eventType) => {
   if (type === 'order_completed') return 'Đơn hàng hoàn thành';
   if (type === 'zalo_sent') return 'Tin nhắn Zalo đã gửi';
   if (type === 'zalo_clicked') return 'Đã nhấp link trong Zalo';
+  if (type === 'whatsapp_sent') return 'Tin nhắn WhatsApp đã gửi';
   return eventType || 'Sự kiện';
 };
 
@@ -65,6 +66,7 @@ export const normalizeJourneyDescription = (event) => {
   if (type === 'order_completed') return 'Đơn hàng hoàn thành - Khách hàng đã mua hàng thành công';
   if (type === 'zalo_sent') return 'Đã gửi tin nhắn Zalo';
   if (type === 'zalo_clicked') return 'Khách hàng đã nhấp link trong tin nhắn Zalo';
+  if (type === 'whatsapp_sent') return 'Đã gửi tin nhắn WhatsApp';
 
   if (lowered.includes('khach hang da mo email')) return 'Khách hàng đã mở email';
   if (lowered.includes('khach hang da click') || lowered.includes('khach hang da nhan link')) {

@@ -80,4 +80,12 @@ describe('campaignChannelRegistry — WhatsApp (W4a)', () => {
     expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_whatsapp').recipientIsPhone).toBe(true);
     expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_telegram').recipientIsPhone).toBeFalsy();
   });
+
+  // P8b: journey khách chỉ cho kênh có SĐT — ghim ở registry vì spec runner tự dựng descriptor.
+  it('WhatsApp khai journeyEventType=whatsapp_sent; Telegram không có journey (không có SĐT)', () => {
+    process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
+    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
+    expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_whatsapp').journeyEventType).toBe('whatsapp_sent');
+    expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_telegram').journeyEventType).toBeUndefined();
+  });
 });

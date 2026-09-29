@@ -137,6 +137,19 @@ export const NodeConfigSendWhatsAppSection = ({
     }));
   };
 
+  // P8b — nguồn "khối dữ liệu": mỗi cột là một biến dùng được trong nội dung ({{tên cột}}) — backend khớp tên cột chính
+  // xác/không phân biệt hoa thường/ngữ nghĩa (tên, họ tên, email, SĐT) cho từng người nhận.
+  const showColumnVariables = recipientSource === 'node' && sourceSchema.length > 0;
+  const handleInsertColumnVariable = (key) => {
+    setFormData((prev) => {
+      const current = prev.steps?.[0]?.message || '';
+      const token = `{{${key}}}`;
+      const next = `${current}${current && !/\s$/.test(current) ? ' ' : ''}${token}`;
+      if (next.length > MESSAGE_MAX) return prev;
+      return { ...prev, steps: [{ ...(prev.steps?.[0] || {}), message: next }] };
+    });
+  };
+
   const handleMessageChange = (value) => {
     setFormData((prev) => ({
       ...prev,
@@ -417,6 +430,23 @@ export const NodeConfigSendWhatsAppSection = ({
           <span>{t('whatsappNodeSend.variableHint')}</span>
           <span>{messageValue.length}/{MESSAGE_MAX}</span>
         </div>
+        {showColumnVariables && (
+          <div className="mt-2" data-testid="whatsapp-column-variables">
+            <p className="text-xs text-gray-500 mb-1">{t('whatsappNodeSend.columnVariablesHint')}</p>
+            <div className="flex flex-wrap gap-1">
+              {sourceSchema.map((f) => (
+                <button
+                  key={f.key}
+                  type="button"
+                  onClick={() => handleInsertColumnVariable(f.key)}
+                  className="px-2 py-0.5 text-xs font-mono bg-gray-100 border border-gray-200 rounded hover:bg-gray-200"
+                >
+                  {`{{${f.key}}}`}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

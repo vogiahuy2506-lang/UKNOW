@@ -7370,6 +7370,7 @@ export default {
     messageRequired: 'Message',
     messagePlaceholder: 'Enter the WhatsApp message...',
     variableHint: 'Tip: use {{ten}} to insert the recipient name (only when recipients come from WhatsApp conversations).',
+    columnVariablesHint: 'Columns of the data block can be used as variables — click to insert into the message; each recipient gets the value from their own row.',
     sourceGroups: 'WhatsApp groups',
     groupsHint: 'Pick the groups the account has joined and may post in. The list is read live from WhatsApp. Messages sent to a group are not personalised per person.',
     loadGroups: 'Load groups',

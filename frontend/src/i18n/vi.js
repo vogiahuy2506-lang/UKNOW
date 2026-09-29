@@ -7357,6 +7357,7 @@ export default {
     messageRequired: 'Nội dung tin nhắn',
     messagePlaceholder: 'Nhập nội dung tin nhắn WhatsApp...',
     variableHint: 'Gợi ý: dùng {{ten}} để chèn tên người nhận (chỉ áp dụng khi người nhận lấy từ hội thoại WhatsApp).',
+    columnVariablesHint: 'Cột của khối dữ liệu dùng được làm biến — bấm để chèn vào nội dung; mỗi người nhận sẽ nhận giá trị ở dòng của họ.',
     sourceGroups: 'Nhóm WhatsApp',
     groupsHint: 'Chọn các nhóm mà tài khoản đang tham gia và được phép gửi tin. Danh sách đọc trực tiếp từ WhatsApp. Tin gửi vào nhóm không cá nhân hoá theo người.',
     loadGroups: 'Tải danh sách nhóm',
