@@ -175,6 +175,25 @@ class ChannelConnectionsRepository {
     );
     return rows[0]?.external_channel_id ?? null;
   }
+
+  /**
+   * `telegram_accounts.id` của một dòng channel_connections Telegram (`external_channel_id = String(account.id)`).
+   * Hộp thư chỉ có `channel_conversations.id_channel` (số) — phải tra ra tài khoản mới gửi được.
+   * Ràng buộc id_user để không gửi nhầm qua tài khoản người khác.
+   * @param {number|string} id - channel_connections.id
+   * @param {number} userId
+   * @returns {Promise<number|null>}
+   */
+  async getTelegramAccountId(id, userId) {
+    const { rows } = await db.query(
+      `SELECT external_channel_id
+       FROM channel_connections
+       WHERE id = $1 AND id_user = $2 AND channel = 'telegram'`,
+      [id, userId]
+    );
+    const accountId = Number(rows[0]?.external_channel_id);
+    return Number.isFinite(accountId) ? accountId : null;
+  }
 }
 
 export default new ChannelConnectionsRepository();

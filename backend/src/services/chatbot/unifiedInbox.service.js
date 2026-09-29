@@ -8,6 +8,7 @@ import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
 import whatsappBaileysInboxAdapter from './channelAdapters/whatsappBaileysInbox.adapter.js';
+import telegramInboxAdapter from './channelAdapters/telegramInbox.adapter.js';
 import sseService from '../sse.service.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 import { resolveBillingUserId } from '../../utils/billingCycle.util.js';
@@ -1037,6 +1038,7 @@ class UnifiedInboxService {
       facebook: facebookAdapter,
       zalo_personal: zaloPersonalAdapter,
       whatsapp_baileys: whatsappBaileysInboxAdapter,
+      telegram: telegramInboxAdapter,
     };
     return adapters[channel];
   }

@@ -11,6 +11,7 @@ const mockFindForRetry = jest.fn();
 const mockDebit = jest.fn();
 const mockResolveBilling = jest.fn();
 const mockSendReply = jest.fn();
+const mockBindChannelMessageExternalId = jest.fn().mockResolvedValue(undefined);
 
 const mockFindReservationById = jest.fn().mockResolvedValue(null);
 const mockReserveSendQuota = jest.fn().mockResolvedValue({ mode: 'off', status: 'reserved', id: 99 });
@@ -73,6 +74,7 @@ jest.unstable_mockModule('../../../repositories/ai/unifiedInbox.repository.js', 
     findAgentMessageForRetry: mockFindForRetry,
     updateMessageQuotaReservationId: jest.fn().mockResolvedValue(undefined),
     bindZaloPersonalOutboundMsgIds: jest.fn().mockResolvedValue(undefined),
+    bindChannelMessageExternalId: mockBindChannelMessageExternalId,
     getAllSettingsForUser: jest.fn(),
   },
 }));
@@ -150,6 +152,14 @@ jest.unstable_mockModule('../channelAdapters/whatsapp.adapter.js', () => ({
 }));
 jest.unstable_mockModule('../../../repositories/ai/channelConnections.repository.js', () => ({
   default: { getBaileysSessionKey: mockGetBaileysSessionKey },
+}));
+
+// Telegram (P1 PLAN_TG_WA_DAY_DU): adapter Hộp thư giả ở đây (ca gửi thật với gateway ở
+// channelAdapters/__tests__/telegramInbox.adapter.spec.js) — spec này kiểm phần Hộp thư: chọn adapter theo
+// kênh, truyền đúng tham số, ghi id tin Telegram vào dòng agent (khử echo).
+const mockTelegramInboxSend = jest.fn();
+jest.unstable_mockModule('../channelAdapters/telegramInbox.adapter.js', () => ({
+  default: { sendReply: mockTelegramInboxSend },
 }));
 
 // sendMessage nay goi buildAiPausePayload -> getCachedAutoResumeMinutes (db.query that).
@@ -573,6 +583,55 @@ describe('UnifiedInbox send status + retry', () => {
       expect.objectContaining({ userId: employeeActorId }),
       expect.anything()
     );
+  });
+
+  describe('Telegram (telegram) trong Hộp thư', () => {
+    const tgConversation = {
+      id: 21,
+      channel: 'telegram',
+      id_channel: 31,
+      external_id: 'telegram:7:-1001234567',
+    };
+
+    beforeEach(() => {
+      mockSendMessage.mockResolvedValue(88);
+      mockTelegramInboxSend.mockResolvedValue({ success: true, messageId: 4242, provider: 'telegram' });
+    });
+
+    it('(e) _getChannelAdapter(\'telegram\') có adapter Hộp thư (không còn "Channel adapter not available")', () => {
+      const adapter = unifiedInboxService._getChannelAdapter('telegram');
+      expect(adapter).toBeDefined();
+      expect(typeof adapter.sendReply).toBe('function');
+    });
+
+    it('(c) trả lời tay: adapter Telegram nhận id_channel + external_id ghép, ghi id tin vào dòng agent, tạm dừng AI', async () => {
+      mockGetConversationById.mockResolvedValue(tgConversation);
+
+      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'Chào bạn');
+
+      expect(mockTelegramInboxSend).toHaveBeenCalledTimes(1);
+      expect(mockTelegramInboxSend).toHaveBeenCalledWith(expect.objectContaining({
+        channelId: 31,
+        externalId: 'telegram:7:-1001234567',
+        message: 'Chào bạn',
+        userId: 1,
+      }));
+      expect(result.sendStatus).toBe('sent');
+      // id tin Telegram thật được bind vào dòng agent vừa lưu → echo isOutgoing sau đó không tự dừng AI lần nữa.
+      expect(mockBindChannelMessageExternalId).toHaveBeenCalledWith(88, 4242);
+      expect(mockSetAiPaused).toHaveBeenCalledWith(21, 'channel', true, 'handoff');
+    });
+
+    it('adapter trả success:false → failed, KHÔNG bind id, KHÔNG giả sent', async () => {
+      mockGetConversationById.mockResolvedValue(tgConversation);
+      mockTelegramInboxSend.mockResolvedValue({ success: false, error: 'Telegram account 7 is inactive' });
+
+      const result = await unifiedInboxService.sendMessage(1, 21, 'channel', 'Chào bạn');
+
+      expect(result.sendStatus).toBe('failed');
+      expect(result.error).toMatch(/inactive/);
+      expect(mockBindChannelMessageExternalId).not.toHaveBeenCalled();
+    });
   });
 
   describe('WhatsApp QR (whatsapp_baileys) trong Hộp thư', () => {

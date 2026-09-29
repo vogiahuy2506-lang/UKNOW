@@ -8,6 +8,7 @@ import {
   HiUser,
   HiX,
   HiOutlineDeviceMobile,
+  HiOutlinePaperAirplane,
 } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 
@@ -38,6 +39,7 @@ const CHANNEL_OPTIONS = (t) => [
   { value: 'facebook', label: t('inbox.facebook'), Icon: HiChatAlt2, short: 'FB' },
   { value: 'zalo_personal', label: t('inbox.zaloPersonal'), Icon: HiUser, short: t('inbox.zaloPersonalShort') },
   { value: 'whatsapp_baileys', label: 'WhatsApp', Icon: HiOutlineDeviceMobile, short: 'WA' },
+  { value: 'telegram', label: 'Telegram', Icon: HiOutlinePaperAirplane, short: 'TG' },
 ];
 
 const ChannelTabs = ({ channels, value, onChange }) => (

@@ -10,6 +10,7 @@ import ConversationList from '../../features/inbox/ConversationList';
 import ConversationFilters from '../../features/inbox/ConversationFilters';
 import MessageThread from '../../features/inbox/MessageThread';
 import ReplyInput from '../../features/inbox/ReplyInput';
+import { channelSupportsInboxAttachments } from '../../features/inbox/utils/channelInfo';
 import ZaloAccountSelector from '../../features/inbox/ZaloAccountSelector';
 import TypingIndicator from '../../features/inbox/TypingIndicator';
 import ConversationDetails from '../../features/inbox/ConversationDetails';
@@ -754,6 +755,7 @@ const InboxPage = () => {
       facebook: 'Facebook',
       zalo_personal: t('inbox.zaloPersonal') || 'Zalo Cá nhân',
       whatsapp_baileys: 'WhatsApp',
+      telegram: 'Telegram',
     };
     return channelMap[channel] || channel || '';
   };
@@ -1193,6 +1195,7 @@ const InboxPage = () => {
                 placeholder={t('inbox.typeMessage')}
                 replyingTo={replyingTo}
                 onCancelReply={handleCancelReply}
+                allowAttachments={channelSupportsInboxAttachments(selectedConversation?.channel)}
               />
             )}
           </>

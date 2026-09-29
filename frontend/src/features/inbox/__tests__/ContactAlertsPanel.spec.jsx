@@ -375,4 +375,36 @@ describe('ContactAlertsPanel Component', () => {
     expect(screen.getAllByText('WhatsApp')).toHaveLength(2);
     expect(screen.queryByText('whatsapp_baileys')).not.toBeInTheDocument();
   });
+
+  it('hiển thị nhãn "Telegram" cho kênh telegram (không lộ mã kênh thô)', async () => {
+    chatbotApi.getContactAlerts.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          items: [{
+            id: '10',
+            last_conversation_id: 78,
+            last_source: 'channel',
+            channel: 'telegram',
+            visitor_name: 'Khách TG',
+            contact_type: 'phone',
+            contact_value: '0911222444',
+            last_seen_at: '2026-09-29T10:00:00.000Z',
+            seen_count: 1,
+            pending_notify: false,
+            suppressed_reason: null,
+            last_notified_at: null,
+            handled_at: null,
+            handled_by: null,
+          }],
+          total: 1,
+          openCount: 1,
+        },
+      },
+    });
+    render(<ContactAlertsPanel />);
+    expect(await screen.findByText('0911222444')).toBeInTheDocument();
+    expect(screen.getAllByText('Telegram')).toHaveLength(2);
+    expect(screen.queryByText('telegram')).not.toBeInTheDocument();
+  });
 });

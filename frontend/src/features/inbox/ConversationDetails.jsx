@@ -37,6 +37,8 @@ const ConversationDetails = ({ conversation, onClose, onAddTag, onAddNote }) => 
       facebook: { icon: '📘', label: t('inbox.facebook') || 'Facebook' },
       zalo_personal: { icon: '👤', label: t('inbox.zaloPersonal') || 'Zalo Cá nhân' },
       zalo_group: { icon: '👥', label: t('inbox.zaloGroup') || 'Zalo Nhóm' },
+      whatsapp_baileys: { icon: '🟢', label: 'WhatsApp' },
+      telegram: { icon: '✈️', label: 'Telegram' },
     };
     return channels[conversation.channel] || { icon: '💬', label: conversation.channel };
   };

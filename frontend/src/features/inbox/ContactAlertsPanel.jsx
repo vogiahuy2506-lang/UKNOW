@@ -14,6 +14,7 @@ import {
 } from 'react-icons/hi';
 import chatbotApi from '../chatbot/services/chatbotApi.service';
 import toast from 'react-hot-toast';
+import { getExternalChannelName } from './utils/channelInfo';
 
 function formatDateTime(isoStr, locale = 'vi') {
   if (!isoStr) return '—';
@@ -316,7 +317,7 @@ export default function ContactAlertsPanel({
       );
     }
     const ch = alert.channel || 'channel';
-    const label = ch === 'zalo_oa' ? 'Zalo OA' : ch === 'facebook' ? 'Facebook' : (ch === 'whatsapp' || ch === 'whatsapp_baileys') ? 'WhatsApp' : ch;
+    const label = getExternalChannelName(ch);
     return (
       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
         {label}{alert.display_name ? ` (${alert.display_name})` : ''}
@@ -508,7 +509,7 @@ export default function ContactAlertsPanel({
               })}
               <option value="web">Website</option>
               {otherChannels.map((ch) => {
-                const label = ch === 'zalo_oa' ? 'Zalo OA' : ch === 'facebook' ? 'Facebook' : (ch === 'whatsapp' || ch === 'whatsapp_baileys') ? 'WhatsApp' : ch;
+                const label = getExternalChannelName(ch);
                 return (
                   <option key={ch} value={ch}>
                     {label}

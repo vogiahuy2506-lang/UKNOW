@@ -13,7 +13,8 @@ const EMOJI_GROUPS = [
   { name: '🎉', emojis: ['🎉', '🎊', '🎈', '🎁', '🎀', '🏆', '🥇', '🥈', '🥉', '🏅', '🎖️', '🎗️', '🎟️', '🎫'] },
 ];
 
-const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }) => {
+// `allowAttachments=false`: kênh Hộp thư chưa gửi được tệp (Telegram, WhatsApp QR) — ẩn nút đính kèm.
+const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply, allowAttachments = true }) => {
   const { t, locale } = useI18n();
   const [message, setMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
@@ -213,6 +214,7 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
       {/* Input row */}
       <div className="flex items-end gap-3">
         {/* File attachment menu */}
+        {allowAttachments && (
         <div className="relative" ref={pickerRef}>
           <button
             type="button"
@@ -251,23 +253,28 @@ const ReplyInput = ({ onSend, disabled, placeholder, replyingTo, onCancelReply }
             </>
           )}
         </div>
+        )}
 
         {/* Hidden file inputs */}
-        <input
-          ref={imageInputRef}
-          type="file"
-          accept="image/*"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFileSelect(e, 'image')}
-        />
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFileSelect(e, 'file')}
-        />
+        {allowAttachments && (
+          <>
+            <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileSelect(e, 'image')}
+            />
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileSelect(e, 'file')}
+            />
+          </>
+        )}
 
         {/* Emoji picker */}
         <div className="relative" ref={pickerRef}>

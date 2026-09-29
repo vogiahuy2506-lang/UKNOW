@@ -352,6 +352,30 @@ describe('chatbotContactAlert.service — scanAndNotify', () => {
     expect(mockRepo.fetchVisitorMessagesAfter).not.toHaveBeenCalled();
   });
 
+  it('thư Telegram phải ghi "Telegram <tên tài khoản>" chứ không phải chuỗi thô "telegram"', async () => {
+    mockRepo.listPendingGroupedByUser.mockResolvedValue([
+      {
+        id: 31,
+        id_user: 1,
+        user_email: 'owner@uknow.vn',
+        contact_type: 'phone',
+        contact_value: '0912345678',
+        last_source: 'channel',
+        channel: 'telegram',
+        display_name: 'Minh',
+        last_conversation_id: 89,
+        visitor_name: 'Khách Telegram',
+      },
+    ]);
+
+    await chatbotContactAlertService.scanAndNotify({ now: fixedNow });
+
+    expect(mockSendSystemEmail).toHaveBeenCalledTimes(1);
+    const mailCall = mockSendSystemEmail.mock.calls[0][0];
+    expect(mailCall.html).toContain('Telegram Minh');
+    expect(mailCall.html).not.toContain('telegram Minh');
+  });
+
   it('thư Zalo OA phải chứa "Zalo OA" chứ không phải "Kênh"', async () => {
     mockRepo.listPendingGroupedByUser.mockResolvedValue([
       {

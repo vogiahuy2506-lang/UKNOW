@@ -38,6 +38,7 @@ function formatChannelLabel(alert) {
     if (ch === 'zalo_oa') return `Zalo OA${display}`;
     if (ch === 'facebook') return `Facebook${display}`;
     if (ch === 'whatsapp_baileys' || ch === 'whatsapp') return `WhatsApp${display}`;
+    if (ch === 'telegram') return `Telegram${display}`;
     return `${ch || 'Kênh'}${display}`;
   }
   return 'Chatbot';

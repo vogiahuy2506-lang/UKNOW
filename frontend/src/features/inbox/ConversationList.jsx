@@ -16,6 +16,8 @@ const CHANNEL_LABELS = (t) => ({
   facebook: { label: t('inbox.facebook'), icon: '📘', bg: 'bg-blue-600', text: 'text-blue-600' },
   zalo_personal: { label: t('inbox.zaloPersonal'), icon: '👤', bg: 'bg-orange-500', text: 'text-orange-500' },
   zalo_group: { label: t('inbox.zaloGroup') || 'Zalo Nhóm', icon: '👥', bg: 'bg-violet-500', text: 'text-violet-500' },
+  whatsapp_baileys: { label: 'WhatsApp', icon: '🟢', bg: 'bg-green-500', text: 'text-green-500' },
+  telegram: { label: 'Telegram', icon: '✈️', bg: 'bg-sky-500', text: 'text-sky-500' },
 });
 
 const parseVisitorInfo = (visitorInfo) => {
