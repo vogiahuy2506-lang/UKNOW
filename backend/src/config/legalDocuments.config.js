@@ -14,8 +14,8 @@ import crypto from 'crypto';
 export const LEGAL_DOCUMENTS = Object.freeze({
   terms: {
     purpose: 'terms',
-    version: '2026-09-28',
-    hash: '56757a5e6b14f3f722c8cf238c9324cd2f7ee09d69a9882155bbb7240187d4c5',
+    version: '2026-09-29',
+    hash: '3a2051df285a9f4ff33b44e1a41421715d7b703352c5e2cc30ac458b8c5d8db4',
     title: 'Điều khoản dịch vụ',
     path: '/terms',
     frontendRelativePath: 'src/pages/public/TermsOfService.jsx',
