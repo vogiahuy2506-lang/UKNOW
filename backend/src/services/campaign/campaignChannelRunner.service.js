@@ -234,12 +234,12 @@ function randomDelayMs(min, max) {
  * @param {Array<object>} input.lastOutputItems
  * @returns {Array<object>}
  */
-const STATIC_LIST_RECIPIENT_SOURCES = new Set(['manual', 'telegram_groups']);
+const STATIC_LIST_RECIPIENT_SOURCES = new Set(['manual', 'telegram_groups', 'whatsapp_groups']);
 
 function resolveRecipientRows({ config, nodeOutputs, lastOutputItems }) {
   const source = config?.recipientSource;
   // Nguồn "danh sách tĩnh" lưu thẳng trong config.recipientKeys: `manual` (nhập tay) và
-  // `telegram_groups` (nhóm Telegram đã chọn — mỗi phần tử {recipientKey, display}). Cùng cách gom.
+  // `telegram_groups`/`whatsapp_groups` (nhóm đã chọn — mỗi phần tử {recipientKey, display}). Cùng cách gom.
   if (STATIC_LIST_RECIPIENT_SOURCES.has(source)) {
     const raw = config?.recipientKeys;
     const list = Array.isArray(raw) ? raw : String(raw ?? '').split(/[\n,]+/);
@@ -577,7 +577,8 @@ export async function runAdapterSendNode(ctx) {
         // Telegram định danh bằng chat id, không có SĐT để đối chiếu nên KHÔNG áp (không giả vờ có kiểm).
         // Kiểm TRƯỚC cổng nhịp/giữ chỗ hạn mức: người từ chối không ăn nhịp, không ăn quota. Lead thuộc CHỦ
         // workspace (workspaceOwnerId) — nhân viên tạo chiến dịch thì userId là nhân viên, tra sai chủ.
-        if (descriptor.recipientIsPhone) {
+        // P8b — người nhận NHÓM (jid @g.us) không có SĐT để đối chiếu -> bỏ qua kiểm consent.
+        if (descriptor.recipientIsPhone && !recipient?.isGroup) {
           // eslint-disable-next-line no-await-in-loop
           const consentRefused = await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
             workspaceOwnerId ?? userId,

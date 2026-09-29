@@ -87,6 +87,26 @@ export function normalizeWhatsAppPhone(raw) {
   return WHATSAPP_PHONE_PATTERN.test(normalized) ? normalized : null;
 }
 
+/** jid nhóm WhatsApp: `<id>@g.us` (id mới toàn số ~18 chữ số, id cũ dạng `<sđt>-<thời gian>`). */
+const WHATSAPP_GROUP_JID_PATTERN = /^\d+(?:-\d+)*@g\.us$/;
+
+/**
+ * P8b — người nhận là NHÓM (jid `@g.us`). Nhóm KHÔNG đi qua `normalizeWhatsAppPhone` (jid 18 chữ số sẽ bị loại vì >15)
+ * và KHÔNG được đưa vào `checkNumberExists` (`onWhatsApp` chỉ dò số điện thoại).
+ * @param {unknown} raw
+ * @returns {boolean}
+ */
+export function isWhatsAppGroupJid(raw) {
+  return WHATSAPP_GROUP_JID_PATTERN.test(String(raw ?? '').trim());
+}
+
+/** Phần tử nhóm đã chọn (`{recipientKey, display}` hoặc chuỗi jid) -> jid hợp lệ, hoặc null. */
+function pickGroupJid(item) {
+  const raw = item && typeof item === 'object' ? item.recipientKey : item;
+  const jid = String(raw ?? '').trim();
+  return isWhatsAppGroupJid(jid) ? jid : null;
+}
+
 /**
  * Phân loại lỗi gửi WhatsApp (Baileys/Boom) — chuỗi message + mã số (`output.statusCode`/`statusCode`/`data`).
  * @param {Error|string} err
@@ -223,6 +243,12 @@ async function checkReadiness({ userId, node }) {
         "Tài khoản WhatsApp này chưa có hội thoại nào đang mở — chưa có ai để gửi. Chọn 'Nhập SĐT', hoặc đợi khách nhắn tới tài khoản trước."
       );
     }
+  } else if (config.recipientSource === 'whatsapp_groups') {
+    const raw = config.recipientKeys;
+    const list = Array.isArray(raw) ? raw : String(raw ?? '').split(/[\n,]+/);
+    if (!list.some((item) => pickGroupJid(item))) {
+      throw noRecipients('Chưa chọn nhóm WhatsApp nào — chọn ít nhất một nhóm để gửi.');
+    }
   } else if (config.recipientSource === 'manual') {
     if (parseManualPhones(config).length === 0) {
       throw noRecipients(
@@ -290,6 +316,19 @@ async function resolveRecipients({ rows, config, account }) {
         vars: { ten: c.visitor_name || '' },
       });
     }
+  } else if (config?.recipientSource === 'whatsapp_groups') {
+    // P8b — nhóm đã chọn: giữ NGUYÊN jid (không chuẩn hoá SĐT). `isGroup` để runner bỏ qua consent/journey (chỉ dành cho SĐT).
+    for (const row of rows || []) {
+      const jid = pickGroupJid(row);
+      if (!jid) continue;
+      const isObject = row && typeof row === 'object';
+      candidates.push({
+        recipientKey: jid,
+        display: (isObject && row.display) || jid,
+        vars: (isObject && row.vars) || {},
+        isGroup: true,
+      });
+    }
   } else {
     for (const row of rows || []) {
       const phone = pickPhoneFromRow(row, config);
@@ -328,9 +367,12 @@ function toChannelSendError(err) {
 async function sendOne({ account, recipientKey, text, stepIndex, attachments }) {
   const whatsapp = await loadWhatsAppService();
   try {
-    const exists = await whatsapp.checkNumberExists(account.sessionKey, recipientKey);
-    if (exists === false) {
-      throw new ChannelSendError('hard', 'Số không dùng WhatsApp');
+    // P8b — nhóm (jid @g.us): gửi thẳng, KHÔNG dò số. Người nhận thường: dò ngay trước khi gửi.
+    if (!isWhatsAppGroupJid(recipientKey)) {
+      const exists = await whatsapp.checkNumberExists(account.sessionKey, recipientKey);
+      if (exists === false) {
+        throw new ChannelSendError('hard', 'Số không dùng WhatsApp');
+      }
     }
     const attachmentList = resolveAttachmentsForSend({ account, stepIndex, attachments });
     if (attachmentList.length > 0) {

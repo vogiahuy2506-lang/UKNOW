@@ -54,6 +54,14 @@ const campaignBuilderApiService = {
     });
   },
 
+  // P8b — nhóm WhatsApp phiên gửi được (đọc trực tiếp từ WhatsApp, có thể chậm tới ~20s).
+  getWhatsAppAccountGroups(sessionKey, options = {}) {
+    return api.get(`/campaigns/channels/whatsapp/accounts/${encodeURIComponent(sessionKey)}/groups`, {
+      timeout: 30000,
+      ...options,
+    });
+  },
+
   createCampaign(payload, options = {}) {
     return api.post('/campaigns', payload, options);
   },

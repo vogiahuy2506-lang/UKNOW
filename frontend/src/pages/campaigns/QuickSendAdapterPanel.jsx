@@ -39,7 +39,7 @@ const DEFERRED_REASON_I18N_KEYS = {
   provider_rate_limit: 'quickSendAdapter.deferredReasonProviderRateLimit',
 };
 
-const RECIPIENT_MODES = { CONVERSATIONS: 'conversations', MANUAL: 'manual' };
+const RECIPIENT_MODES = { CONVERSATIONS: 'conversations', MANUAL: 'manual', GROUPS: 'groups' };
 // P5 — tệp tự tải lên: cùng danh sách định dạng với Gửi nhanh Email/Zalo (backend validateFile mặc định).
 const ATTACHMENT_ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 // 5 ảnh + 3 tài liệu — chặn cứng tổng số tệp; giới hạn theo từng loại + dung lượng do validateChannelAttachments.
@@ -49,7 +49,8 @@ const CHANNELS_SETTINGS_PATH = '/app/settings/channels';
 /**
  * W7a — Gửi nhanh cho kênh adapter (Telegram / WhatsApp), trình duyệt lặp MỖI REQUEST MỘT NGƯỜI
  * (POST /campaigns/quick-send/:channel). Panel tự chứa: chọn tài khoản, người nhận (đã nhắn tới / nhập tay),
- * nội dung, ước tính, vòng gửi có giãn cách + xử lý `deferred`. KHÔNG có mẫu, đính kèm, gửi thử (v1).
+ * nội dung, ước tính, vòng gửi có giãn cách + xử lý `deferred`. P8b: thêm nguồn "Nhóm" (Telegram: chat id âm; WhatsApp:
+ * jid `@g.us`) — danh sách đọc trực tiếp từ kênh, tải khi người dùng bấm (có thể chậm tới ~20s).
  *
  * Gắn `key={channel}` ở chỗ dùng để đổi kênh Telegram <-> WhatsApp không mang người nhận/khoá sang kênh kia.
  *
@@ -72,6 +73,11 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
   const [conversationsFailed, setConversationsFailed] = useState(false);
   const [selectedKeys, setSelectedKeys] = useState(() => new Set());
   const [manualText, setManualText] = useState('');
+  // P8b — nguồn "Nhóm": tải theo yêu cầu (đọc trực tiếp từ kênh), chọn nhiều nhóm.
+  const [groups, setGroups] = useState([]);
+  const [groupsStatus, setGroupsStatus] = useState('idle'); // idle | loading | loaded | error
+  const [groupsFilter, setGroupsFilter] = useState('');
+  const [selectedGroupKeys, setSelectedGroupKeys] = useState(() => new Set());
 
   const [message, setMessage] = useState('');
   // P5 — mẫu tin (kho mẫu Zalo, dùng chung) + tệp đính kèm của mẫu + tệp tự tải lên.
@@ -181,6 +187,51 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
     return () => { cancelled = true; };
   }, [channel, selectedRef]);
 
+  // Đổi tài khoản/kênh -> bỏ danh sách nhóm đã tải (id nhóm thuộc về từng tài khoản).
+  useEffect(() => {
+    setGroups([]);
+    setGroupsStatus('idle');
+    setGroupsFilter('');
+    setSelectedGroupKeys(new Set());
+  }, [channel, selectedRef]);
+
+  const handleLoadGroups = async () => {
+    if (!selectedRef) return;
+    setGroupsStatus('loading');
+    try {
+      const res = await (channel === 'whatsapp'
+        ? campaignBuilderApiService.getWhatsAppAccountGroups(selectedRef)
+        : campaignBuilderApiService.getTelegramAccountGroups(selectedRef));
+      const rows = Array.isArray(res?.data?.data) ? res.data.data : [];
+      // Telegram trả { chatId, title }, WhatsApp trả { recipientKey, title } — gộp về { recipientKey, name, membersCount }.
+      setGroups(rows
+        .map((g) => ({
+          recipientKey: String(g.recipientKey ?? g.chatId ?? '').trim(),
+          name: g.title || '',
+          membersCount: Number.isFinite(g.membersCount) ? g.membersCount : null,
+        }))
+        .filter((g) => g.recipientKey));
+      setGroupsStatus('loaded');
+    } catch {
+      setGroups([]);
+      setGroupsStatus('error');
+    }
+  };
+
+  const toggleGroupKey = (key) => {
+    setSelectedGroupKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const visibleGroups = useMemo(() => {
+    const q = groupsFilter.trim().toLowerCase();
+    return q ? groups.filter((g) => g.name.toLowerCase().includes(q)) : groups;
+  }, [groups, groupsFilter]);
+
   const parsedManual = useMemo(
     () => parseManualAdapterRecipients(channel, manualText),
     [channel, manualText]
@@ -191,8 +242,13 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
     if (recipientMode === RECIPIENT_MODES.MANUAL) {
       return parsedManual.valid.map((recipientKey) => ({ recipientKey, name: '' }));
     }
+    if (recipientMode === RECIPIENT_MODES.GROUPS) {
+      return groups
+        .filter((g) => selectedGroupKeys.has(g.recipientKey))
+        .map((g) => ({ recipientKey: g.recipientKey, name: g.name }));
+    }
     return conversations.filter((c) => selectedKeys.has(c.recipientKey));
-  }, [recipientMode, parsedManual, conversations, selectedKeys]);
+  }, [recipientMode, parsedManual, conversations, selectedKeys, groups, selectedGroupKeys]);
 
   const overLimit = recipients.length > cfg.maxRecipients;
   const trimmedMessage = message.trim();
@@ -494,6 +550,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
     setResult(null);
     setPhase('compose');
     setSelectedKeys(new Set());
+    setSelectedGroupKeys(new Set());
     setManualText('');
     setMessage('');
     setTemplateId('');
@@ -651,7 +708,7 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
       <div className={cardClass}>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSendAdapter.recipientsTitle')}</h2>
         <div className="flex gap-2 mb-4">
-          {[RECIPIENT_MODES.CONVERSATIONS, RECIPIENT_MODES.MANUAL].map((mode) => (
+          {[RECIPIENT_MODES.CONVERSATIONS, RECIPIENT_MODES.MANUAL, RECIPIENT_MODES.GROUPS].map((mode) => (
             <button
               key={mode}
               type="button"
@@ -660,14 +717,70 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
                 recipientMode === mode ? 'border-orange-500 bg-orange-50 text-orange-700' : 'border-gray-200 text-gray-600 hover:border-gray-300'
               }`}
             >
-              {mode === RECIPIENT_MODES.CONVERSATIONS
-                ? t('quickSendAdapter.modeConversations')
-                : t(channel === 'whatsapp' ? 'quickSendAdapter.modeManualWhatsApp' : 'quickSendAdapter.modeManualTelegram')}
+              {mode === RECIPIENT_MODES.CONVERSATIONS && t('quickSendAdapter.modeConversations')}
+              {mode === RECIPIENT_MODES.GROUPS && t('quickSendAdapter.modeGroups')}
+              {mode === RECIPIENT_MODES.MANUAL
+                && t(channel === 'whatsapp' ? 'quickSendAdapter.modeManualWhatsApp' : 'quickSendAdapter.modeManualTelegram')}
             </button>
           ))}
         </div>
 
-        {recipientMode === RECIPIENT_MODES.CONVERSATIONS ? (
+        {recipientMode === RECIPIENT_MODES.GROUPS ? (
+          <div data-testid="quick-send-adapter-groups" className="space-y-3">
+            <p className="text-xs text-gray-500">{t('quickSendAdapter.groupsHint', { channel: label })}</p>
+            {!selectedAccount ? (
+              <p className="text-sm text-gray-500">{t('quickSendAdapter.pickAccountFirst')}</p>
+            ) : (
+              <button
+                type="button"
+                onClick={handleLoadGroups}
+                disabled={groupsStatus === 'loading'}
+                className="px-3 py-1.5 text-sm font-semibold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+              >
+                {groupsStatus === 'loaded' ? t('quickSendAdapter.groupsReload') : t('quickSendAdapter.groupsLoad')}
+              </button>
+            )}
+            {groupsStatus === 'loading' && (
+              <p role="status" className="text-sm text-gray-500">{t('quickSendAdapter.groupsLoading')}</p>
+            )}
+            {groupsStatus === 'error' && (
+              <p role="alert" className="text-sm text-red-600">{t('quickSendAdapter.groupsLoadFailed')}</p>
+            )}
+            {groupsStatus === 'loaded' && groups.length === 0 && (
+              <p className="text-sm text-gray-500">{t('quickSendAdapter.groupsEmpty')}</p>
+            )}
+            {groupsStatus === 'loaded' && groups.length > 0 && (
+              <div>
+                <input
+                  type="text"
+                  value={groupsFilter}
+                  onChange={(e) => setGroupsFilter(e.target.value)}
+                  placeholder={t('quickSendAdapter.groupsFilterPlaceholder')}
+                  className="w-full px-3 py-2 mb-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                />
+                <div className="text-sm text-gray-500 mb-2">
+                  {t('quickSendAdapter.selectedCount', { count: selectedGroupKeys.size, total: groups.length })}
+                </div>
+                <div className="max-h-72 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                  {visibleGroups.map((g) => (
+                    <label key={g.recipientKey} className="flex items-center gap-3 px-3 py-2 cursor-pointer hover:bg-gray-50">
+                      <input
+                        type="checkbox"
+                        checked={selectedGroupKeys.has(g.recipientKey)}
+                        onChange={() => toggleGroupKey(g.recipientKey)}
+                        className="text-orange-500"
+                      />
+                      <span className="flex-1 truncate text-sm text-gray-900">{g.name || g.recipientKey}</span>
+                      {g.membersCount != null && (
+                        <span className="text-xs text-gray-400">{t('telegramNodeSend.groupsMembers', { count: g.membersCount })}</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ) : recipientMode === RECIPIENT_MODES.CONVERSATIONS ? (
           isLoadingConversations ? (
             <div className="flex items-center justify-center py-6">
               <div className="h-6 w-6 rounded-full border-2 border-orange-500 border-t-transparent animate-spin" />

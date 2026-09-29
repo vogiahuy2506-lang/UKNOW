@@ -783,6 +783,39 @@ export async function checkNumberExists(sessionKey, phone, { waitForConnectionMs
   return interpretOnWhatsAppResult(await record.socket.onWhatsApp(jid));
 }
 
+/**
+ * P8b — nhóm WhatsApp mà phiên đang tham gia. Baileys `sock.groupFetchAllParticipating()` (Socket/groups.js:22)
+ * trả OBJECT keyed theo jid (`{ '1203…@g.us': { id, subject, size, ... } }`), KHÔNG phải mảng — chuẩn hoá ở đây
+ * thành `[{ recipientKey: <jid @g.us>, title, membersCount }]` (cùng hình dạng Telegram: `title` là tên hiển thị).
+ * Ném `WhatsApp session X is not connected` khi phiên không mở (hợp đồng như sendMessage).
+ *
+ * @param {string} sessionKey
+ * @returns {Promise<Array<{recipientKey: string, title: string, membersCount: number|null}>>}
+ */
+export async function listGroups(sessionKey, { waitForConnectionMs = 8000 } = {}) {
+  let record = sessions.get(sessionKey);
+  if (!record) throw new Error(`WhatsApp session ${sessionKey} is not connected`);
+  if (record.status !== 'open' || !record.socket) {
+    record = await waitForOpen(sessionKey, waitForConnectionMs);
+  }
+  if (!record || record.status !== 'open' || !record.socket) {
+    throw new Error(`WhatsApp session ${sessionKey} is not connected`);
+  }
+  return mapBaileysGroups(await record.socket.groupFetchAllParticipating());
+}
+
+/** Object keyed theo jid (kết quả thật của `groupFetchAllParticipating`) -> mảng `{recipientKey, title, membersCount}`. */
+export function mapBaileysGroups(all) {
+  return Object.entries(all || {})
+    .map(([jid, meta]) => ({
+      recipientKey: String(meta?.id || jid),
+      title: String(meta?.subject ?? '').trim() || String(meta?.id || jid),
+      membersCount: Number.isFinite(meta?.size) ? meta.size : null,
+    }))
+    .filter((g) => g.recipientKey.endsWith('@g.us'))
+    .sort((a, b) => a.title.localeCompare(b.title));
+}
+
 /** Diễn giải kết quả `onWhatsApp` (xem ghi chú ở checkNumberExists): mảng rỗng = số không dùng WhatsApp. */
 export function interpretOnWhatsAppResult(result) {
   if (!Array.isArray(result)) return null;

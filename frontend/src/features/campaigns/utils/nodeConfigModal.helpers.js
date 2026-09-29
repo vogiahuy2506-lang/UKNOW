@@ -212,6 +212,19 @@ export const fetchWhatsAppAccountOptions = async ({ signal } = {}) => {
   return Array.isArray(response.data?.data) ? response.data.data : [];
 };
 
+/**
+ * P8b — nhóm WhatsApp phiên gửi được (đọc trực tiếp từ WhatsApp, có thể chậm tới ~20s):
+ * `GET /campaigns/channels/whatsapp/accounts/:sessionKey/groups` -> [{ recipientKey: '<id>@g.us', title, membersCount }].
+ *
+ * @param {string} sessionKey
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<Array<{recipientKey: string, title: string, membersCount: number|null}>>}
+ */
+export const fetchWhatsAppGroupOptions = async (sessionKey, { signal } = {}) => {
+  const response = await campaignBuilderApiService.getWhatsAppAccountGroups(sessionKey, signal ? { signal } : {});
+  return Array.isArray(response.data?.data) ? response.data.data : [];
+};
+
 /** Số WhatsApp hợp lệ SAU khi chuẩn hoá: 8–15 chữ số (hợp đồng W4a↔W4b mục 4, cùng quy tắc với backend). */
 export const WHATSAPP_PHONE_PATTERN = /^\d{8,15}$/;
 
@@ -501,8 +514,9 @@ export const createNodeConfigFormData = ({
   // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — send_whatsapp: sessionKey phiên WhatsApp (vd '40-default').
   // recipientKeys/steps/recipientSource/recipientNodeId/recipientColumn dùng chung field ở trên.
   whatsappSessionKey: config.whatsappSessionKey || '',
-  // PR-E2: nguồn 'telegram_groups' giữ MẢNG [{recipientKey, display}] (không join thành chuỗi).
-  recipientKeys: config.recipientSource === 'telegram_groups' && Array.isArray(config.recipientKeys)
+  // PR-E2: nguồn 'telegram_groups' giữ MẢNG [{recipientKey, display}] (không join thành chuỗi). P8b: 'whatsapp_groups' cùng khuôn.
+  recipientKeys: (config.recipientSource === 'telegram_groups' || config.recipientSource === 'whatsapp_groups')
+    && Array.isArray(config.recipientKeys)
     ? config.recipientKeys
     : (Array.isArray(config.recipientKeys) ? config.recipientKeys.join('\n') : (config.recipientKeys || '')),
   steps: Array.isArray(config.steps) && config.steps.length ? config.steps : [{ message: '' }],
@@ -920,6 +934,13 @@ export const handleNodeConfigSaveClick = async ({
     if (whatsappAttachmentProblem) {
       toastNotifier.error(whatsappAttachmentProblem);
       return;
+    }
+    if (formData.recipientSource === 'whatsapp_groups') {
+      const groups = Array.isArray(formData.recipientKeys) ? formData.recipientKeys : [];
+      if (!groups.some((g) => /^\d+(?:-\d+)*@g\.us$/.test(String(g?.recipientKey ?? '').trim()))) {
+        toastNotifier.error('Vui lòng chọn ít nhất 1 nhóm WhatsApp.');
+        return;
+      }
     }
     if (formData.recipientSource === 'manual') {
       const { valid, invalid } = parseWhatsAppPhoneList(formData.recipientKeys);

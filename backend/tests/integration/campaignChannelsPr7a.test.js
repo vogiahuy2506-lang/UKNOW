@@ -204,3 +204,32 @@ describe('GET /api/campaigns/channels/telegram/accounts/:id/groups — PR-E2', (
     expect(res.status).toBe(401);
   });
 });
+
+describe('GET /api/campaigns/channels/whatsapp/accounts/:sessionKey/groups — P8b', () => {
+  it('phiên của workspace KHÁC -> 404 (không lộ phiên có tồn tại hay không)', async () => {
+    const owner = await createUser({ username: `p8b_owner_${Date.now()}` });
+    const other = await createUser({ username: `p8b_other_${Date.now()}` });
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .get(`/api/campaigns/channels/whatsapp/accounts/${other.id}-default/groups`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('phiên của mình nhưng chưa kết nối -> 409 kèm câu quét lại QR', async () => {
+    const owner = await createUser({ username: `p8b_owner2_${Date.now()}` });
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .get(`/api/campaigns/channels/whatsapp/accounts/${owner.id}-default/groups`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(res.body.message).toContain('quét lại QR');
+  });
+
+  it('chưa đăng nhập -> 401', async () => {
+    const res = await request(app).get('/api/campaigns/channels/whatsapp/accounts/1-default/groups');
+    expect(res.status).toBe(401);
+  });
+});

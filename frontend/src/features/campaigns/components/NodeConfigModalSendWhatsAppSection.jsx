@@ -4,8 +4,9 @@
  * ba nguồn người nhận (hội thoại WhatsApp / nhập SĐT / từ khối dữ liệu phía trước), một ô soạn tin.
  * Khác Telegram: WhatsApp gửi được số lạ nên có nguồn 'node' (cùng khuôn khối email chọn khối + cột).
  *
- * config lưu: { whatsappSessionKey, recipientSource: 'whatsapp_conversations'|'manual'|'node',
- *   recipientKeys (manual) | recipientNodeId + recipientColumn (node), steps: [{ message }] }.
+ * config lưu: { whatsappSessionKey, recipientSource: 'whatsapp_conversations'|'manual'|'node'|'whatsapp_groups',
+ *   recipientKeys (manual: chuỗi SĐT; whatsapp_groups: mảng [{ recipientKey: '<id>@g.us', display }])
+ *   | recipientNodeId + recipientColumn (node), steps: [{ message }] }.
  *
  * @param {Object} props
  * @param {Object} props.formData
@@ -20,13 +21,18 @@
  * @param {Function} [props.fetchTemplateById] P5: lấy chi tiết mẫu (nội dung + tệp đính kèm).
  * @returns {JSX.Element}
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
-import { parseWhatsAppPhoneList } from '../utils/nodeConfigModal.helpers';
+import { fetchWhatsAppGroupOptions, parseWhatsAppPhoneList } from '../utils/nodeConfigModal.helpers';
 import { applyTemplateToStep, clearTemplateFromStep } from '../utils/channelAttachments';
 import ChannelTemplateAttachmentPicker from './ChannelTemplateAttachmentPicker';
 
 const MESSAGE_MAX = 4096;
+
+/** Nhóm đã chọn lưu ở config.recipientKeys dạng [{ recipientKey, display }]. */
+const getSelectedGroups = (formData) => (
+  Array.isArray(formData.recipientKeys) ? formData.recipientKeys : []
+);
 
 export const NodeConfigSendWhatsAppSection = ({
   formData,
@@ -43,6 +49,65 @@ export const NodeConfigSendWhatsAppSection = ({
   const { t } = useI18n();
   const recipientSource = formData.recipientSource || 'whatsapp_conversations';
   const isConversationSource = recipientSource === 'whatsapp_conversations';
+  const isGroupsSource = recipientSource === 'whatsapp_groups';
+  const selectedGroups = getSelectedGroups(formData);
+  const sessionKey = String(formData.whatsappSessionKey || '');
+
+  const [groups, setGroups] = useState([]);
+  const [groupsStatus, setGroupsStatus] = useState('idle'); // idle | loading | loaded | error
+  const [groupsError, setGroupsError] = useState('');
+  const [groupsFilter, setGroupsFilter] = useState('');
+
+  // Đổi tài khoản -> bỏ danh sách đã tải (jid nhóm thuộc về từng phiên).
+  useEffect(() => {
+    setGroups([]);
+    setGroupsStatus('idle');
+    setGroupsError('');
+    setGroupsFilter('');
+  }, [sessionKey]);
+
+  const handleLoadGroups = async () => {
+    if (!sessionKey) return;
+    setGroupsStatus('loading');
+    setGroupsError('');
+    try {
+      const items = await fetchWhatsAppGroupOptions(sessionKey);
+      setGroups(items);
+      setGroupsStatus('loaded');
+    } catch (error) {
+      setGroups([]);
+      setGroupsError(error?.response?.data?.message || error?.message || '');
+      setGroupsStatus('error');
+    }
+  };
+
+  const toggleGroup = (group) => {
+    const key = String(group.recipientKey);
+    setFormData((prev) => {
+      const current = getSelectedGroups(prev);
+      const exists = current.some((g) => String(g.recipientKey) === key);
+      return {
+        ...prev,
+        recipientKeys: exists
+          ? current.filter((g) => String(g.recipientKey) !== key)
+          : [...current, { recipientKey: key, display: group.title }],
+      };
+    });
+  };
+
+  const visibleGroups = useMemo(() => {
+    const q = groupsFilter.trim().toLowerCase();
+    return q ? groups.filter((g) => String(g.title || '').toLowerCase().includes(q)) : groups;
+  }, [groups, groupsFilter]);
+
+  const handleAccountChange = (value) => {
+    setFormData((prev) => ({
+      ...prev,
+      whatsappSessionKey: value,
+      // Nhóm đã chọn thuộc phiên cũ -> xoá khi đổi tài khoản.
+      ...(prev.recipientSource === 'whatsapp_groups' ? { recipientKeys: [] } : {}),
+    }));
+  };
   const messageValue = formData.steps?.[0]?.message || '';
   const isEmptyAfterSuccess = whatsappAccountsStatus === 'loaded' && whatsappAccounts.length === 0;
 
@@ -67,8 +132,8 @@ export const NodeConfigSendWhatsAppSection = ({
     setFormData((prev) => ({
       ...prev,
       recipientSource: value,
-      // recipientKeys chỉ dùng cho nhập tay -> đặt lại khi đổi nguồn.
-      recipientKeys: '',
+      // recipientKeys khác kiểu giữa nguồn nhóm (mảng object) và nhập tay (chuỗi) -> đặt lại khi đổi nguồn.
+      recipientKeys: value === 'whatsapp_groups' ? [] : '',
     }));
   };
 
@@ -119,7 +184,7 @@ export const NodeConfigSendWhatsAppSection = ({
         </label>
         <select
           value={formData.whatsappSessionKey || ''}
-          onChange={(e) => setFormData((prev) => ({ ...prev, whatsappSessionKey: e.target.value }))}
+          onChange={(e) => handleAccountChange(e.target.value)}
           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
         >
           <option value="">-- {t('whatsappNodeSend.selectAccount')} --</option>
@@ -176,6 +241,7 @@ export const NodeConfigSendWhatsAppSection = ({
           <option value="whatsapp_conversations">{t('whatsappNodeSend.sourceConversations')}</option>
           <option value="manual">{t('whatsappNodeSend.sourceManual')}</option>
           <option value="node">{t('whatsappNodeSend.sourceNode')}</option>
+          <option value="whatsapp_groups">{t('whatsappNodeSend.sourceGroups')}</option>
         </select>
         <p className="mt-1 text-xs text-gray-500">{t('whatsappNodeSend.recipientSourceNote')}</p>
         {showNoConversationsWarning && (
@@ -184,6 +250,75 @@ export const NodeConfigSendWhatsAppSection = ({
           </div>
         )}
       </div>
+
+      {isGroupsSource && (
+        <div data-testid="whatsapp-groups-picker" className="space-y-2">
+          <p className="text-xs text-gray-500">{t('whatsappNodeSend.groupsHint')}</p>
+          {!sessionKey ? (
+            <p className="text-sm text-amber-700">{t('whatsappNodeSend.groupsPickAccountFirst')}</p>
+          ) : (
+            <button
+              type="button"
+              onClick={handleLoadGroups}
+              disabled={groupsStatus === 'loading'}
+              className="px-3 py-1.5 text-sm font-semibold bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-60"
+            >
+              {groupsStatus === 'loaded' ? t('whatsappNodeSend.reloadGroups') : t('whatsappNodeSend.loadGroups')}
+            </button>
+          )}
+          {groupsStatus === 'loading' && (
+            <p role="status" className="text-sm text-gray-500">{t('whatsappNodeSend.loadingGroups')}</p>
+          )}
+          {groupsStatus === 'error' && (
+            <div role="alert" className="bg-red-50 border border-red-200 p-3 rounded-lg text-sm text-red-700">
+              <p className="font-medium">{t('whatsappNodeSend.groupsLoadFailed')}</p>
+              {groupsError && <p className="text-xs break-words">{groupsError}</p>}
+            </div>
+          )}
+          {groupsStatus === 'loaded' && groups.length === 0 && (
+            <div className="bg-amber-50 p-3 rounded-lg text-sm text-amber-700">{t('whatsappNodeSend.groupsEmpty')}</div>
+          )}
+          {groupsStatus === 'loaded' && groups.length > 0 && (
+            <>
+              <input
+                type="text"
+                value={groupsFilter}
+                onChange={(e) => setGroupsFilter(e.target.value)}
+                placeholder={t('whatsappNodeSend.groupsFilterPlaceholder')}
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-primary-500"
+              />
+              <ul className="max-h-56 overflow-y-auto border border-gray-200 rounded-lg divide-y divide-gray-100">
+                {visibleGroups.map((group) => {
+                  const checked = selectedGroups.some((g) => String(g.recipientKey) === String(group.recipientKey));
+                  return (
+                    <li key={group.recipientKey}>
+                      <label className="flex items-center gap-2 px-3 py-2 text-sm cursor-pointer hover:bg-gray-50">
+                        <input type="checkbox" checked={checked} onChange={() => toggleGroup(group)} />
+                        <span className="flex-1 truncate">{group.title}</span>
+                        {Number.isFinite(group.membersCount) && (
+                          <span className="text-xs text-gray-400">
+                            {t('whatsappNodeSend.groupsMembers', { count: group.membersCount })}
+                          </span>
+                        )}
+                      </label>
+                    </li>
+                  );
+                })}
+              </ul>
+            </>
+          )}
+          <p className="text-xs text-gray-600" data-testid="whatsapp-groups-selected">
+            {t('whatsappNodeSend.groupsSelectedCount', { count: selectedGroups.length })}
+          </p>
+          {selectedGroups.length > 0 && groupsStatus !== 'loaded' && (
+            <ul className="text-xs text-gray-500 list-disc pl-5">
+              {selectedGroups.map((g) => (
+                <li key={g.recipientKey}>{g.display || g.recipientKey}</li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
 
       {recipientSource === 'manual' && (
         <div>

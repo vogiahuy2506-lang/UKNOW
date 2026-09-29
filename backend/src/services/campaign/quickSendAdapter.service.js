@@ -24,7 +24,7 @@ import {
 import { evaluateAdapterSendGate, recordAdapterSendAttempt } from './campaignChannelRunner.service.js';
 import campaignShutdownGate from './campaignShutdownGate.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
-import { normalizeWhatsAppPhone } from './channels/whatsapp.campaignChannel.js';
+import { isWhatsAppGroupJid, normalizeWhatsAppPhone } from './channels/whatsapp.campaignChannel.js';
 import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
 import { applyAccountDelayOverride } from '../../utils/channelSendSpeed.util.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
@@ -75,8 +75,9 @@ const CHANNELS = Object.freeze({
     maxMessageLength: 4096,
     imageExtensions: WHATSAPP_IMAGE_EXTENSIONS,
     buildNodeConfig: (accountRef) => ({ whatsappSessionKey: accountRef }),
-    // CÙNG hàm với adapter/chiến dịch (W4a) — không tự viết quy tắc SĐT riêng.
-    normalizeRecipient: (raw) => normalizeWhatsAppPhone(raw),
+    // CÙNG hàm với adapter/chiến dịch (W4a) — không tự viết quy tắc SĐT riêng. P8b: jid nhóm `@g.us` giữ NGUYÊN
+    // (không chuẩn hoá SĐT — jid 18 chữ số sẽ bị loại vì >15).
+    normalizeRecipient: (raw) => (isWhatsAppGroupJid(raw) ? String(raw).trim() : normalizeWhatsAppPhone(raw)),
   },
 });
 
@@ -334,7 +335,8 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   // có recipientKey là SĐT (`descriptor.recipientIsPhone`, WhatsApp); Telegram không có SĐT để đối chiếu nên KHÔNG áp.
   // Kiểm TRƯỚC cổng nhịp/giữ chỗ hạn mức: không đốt nhịp, không ăn hạn mức, không ghi nhật ký gửi. Trả 'failed' để
   // FE báo lỗi đúng người (hình dạng giống mọi lỗi từng người nhận khác) — errorCategory 'consent_refused'.
-  if (descriptor.recipientIsPhone) {
+  // P8b — nhóm (jid @g.us) không có SĐT để đối chiếu nên không kiểm consent.
+  if (descriptor.recipientIsPhone && !isWhatsAppGroupJid(recipientKey)) {
     const consentRefused = await zaloCampaignRecipientService.isLeadPhoneConsentRefused(workspaceOwnerId, recipientKey);
     if (consentRefused) {
       return {
@@ -485,7 +487,7 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   let sendResult;
   try {
     let displayName = '';
-    if (message.includes('{{')) {
+    if (message.includes('{{') && !isWhatsAppGroupJid(recipientKey)) {
       displayName = await lookupDisplayName({ channel, ownerUserId: workspaceOwnerId, account, recipientKey });
     }
     text = neutralizeUnresolvedTemplateVariables(

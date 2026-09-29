@@ -31,6 +31,7 @@ import { StorageQuotaExceededError } from '../services/storage/storageQuota.serv
 import { getEnabledAdapterChannelsForBuilder } from '../services/campaign/campaignChannelRegistry.service.js';
 import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.repository.js';
 import { listTelegramGroupsForAccount } from '../services/campaign/telegramGroups.service.js';
+import { listWhatsAppGroupsForSession } from '../services/campaign/whatsappGroups.service.js';
 import { listWhatsAppAccountsForOwner } from '../services/campaign/channels/whatsapp.campaignChannel.js';
 import {
   isQuickSendAdapterChannel,
@@ -1030,6 +1031,25 @@ class CampaignController {
       }
       console.error('Get Telegram account groups error:', error);
       res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách nhóm Telegram' });
+    }
+  }
+
+  /**
+   * GET /api/campaigns/channels/whatsapp/accounts/:sessionKey/groups
+   * P8b — nhóm WhatsApp phiên gửi được (đọc trực tiếp từ WhatsApp). Phiên phải thuộc CHỦ workspace (404),
+   * chưa kết nối -> 409. Quyền như nhóm Telegram (`campaigns_create`).
+   */
+  async getWhatsAppAccountGroups(req, res) {
+    try {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const data = await listWhatsAppGroupsForSession({ ownerUserId, sessionKey: req.params.sessionKey });
+      res.json({ success: true, data });
+    } catch (error) {
+      if (error?.status && error.status < 600) {
+        return res.status(error.status).json({ success: false, message: error.message });
+      }
+      console.error('Get WhatsApp account groups error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách nhóm WhatsApp' });
     }
   }
 

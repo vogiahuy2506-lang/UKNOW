@@ -37,6 +37,7 @@ router.get('/channels', requirePermission('campaigns_view'), campaignController.
 router.get('/channels/telegram/accounts', requirePermission('campaigns_create'), campaignController.getTelegramAccountsForBuilder.bind(campaignController));
 router.get('/channels/whatsapp/accounts', requirePermission('campaigns_create'), campaignController.getWhatsAppAccountsForBuilder.bind(campaignController));
 router.get('/channels/telegram/accounts/:id/groups', requirePermission('campaigns_create'), campaignController.getTelegramAccountGroups.bind(campaignController));
+router.get('/channels/whatsapp/accounts/:sessionKey/groups', requirePermission('campaigns_create'), campaignController.getWhatsAppAccountGroups.bind(campaignController));
 // P4 (PLAN_TG_WA_DAY_DU) — trần gửi/ngày + tốc độ gửi theo tài khoản Telegram (accountRef = id) / WhatsApp (accountRef = sessionKey).
 // Quyền = chatbot_channels_manage (cùng quyền với trang Kênh Telegram/WhatsApp nơi đặt các giá trị này), KHÔNG dùng campaigns_create:
 // nhân viên chỉ dựng chiến dịch không được tự nới phanh an toàn của tài khoản. Chỉ CHỦ workspace/nhân viên có quyền trong workspace đó.
