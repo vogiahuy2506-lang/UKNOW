@@ -4,6 +4,8 @@ import QuickSendAdapterPanel from '../QuickSendAdapterPanel';
 import campaignApiService from '../../../features/campaigns/services/campaignApi.service';
 import campaignBuilderApiService from '../../../features/campaigns/services/campaignBuilderApi.service';
 import { quickSendSleepWithCountdown } from '../quickSendPacing.util';
+import zaloTemplateApiService from '../../../features/templates/services/zaloTemplateApi.service';
+import api from '../../../services/api';
 
 /**
  * W7a — QuickSendAdapterPanel (Telegram/WhatsApp): mỗi người một request, giãn cách TRƯỚC mỗi tin trừ tin đầu,
@@ -22,8 +24,15 @@ vi.mock('../../../features/campaigns/services/campaignApi.service', () => ({
     getQuickSendAdapterConversations: vi.fn(),
     sendQuickAdapterMessage: vi.fn(),
     getQuickSendEstimate: vi.fn(),
+    uploadQuickSendAttachment: vi.fn(),
   },
 }));
+// P5 — mẫu tin (kho mẫu Zalo), tải tệp tạm và hạn mức lưu trữ: giả ở ranh giới đúng hình dạng thật (`{ data: { data } }`).
+vi.mock('../../../features/templates/services/zaloTemplateApi.service', () => ({
+  default: { getTemplates: vi.fn(), getTemplateById: vi.fn() },
+}));
+vi.mock('../../../services/api', () => ({ default: { post: vi.fn() } }));
+vi.mock('../../../features/storage/useStorageQuota', () => ({ default: () => ({ usage: null }) }));
 vi.mock('../../../features/campaigns/services/campaignBuilderApi.service', () => ({
   default: { getTelegramAccountsForBuilder: vi.fn(), getWhatsAppAccountsForBuilder: vi.fn() },
 }));
@@ -61,6 +70,19 @@ beforeEach(() => {
     data: { data: { unit: 'seconds', value: 15, estimatedMs: 15000, quietHours: { startFormatted: '23:00', endFormatted: '06:00' } } },
   });
   campaignApiService.sendQuickAdapterMessage.mockImplementation((_channel, payload) => Promise.resolve(ok(payload.recipientKey)));
+  zaloTemplateApiService.getTemplates.mockResolvedValue({
+    data: { data: { items: [{ id: 5, templateName: 'Báo giá', bodyText: 'tóm tắt', attachments: [] }] } },
+  });
+  zaloTemplateApiService.getTemplateById.mockResolvedValue({
+    data: {
+      data: {
+        id: 5,
+        templateName: 'Báo giá',
+        bodyText: 'Chào {{ten}}, báo giá đây',
+        attachments: [{ key: 'uploads/1/zalo-templates/bg.pdf', name: 'bg.pdf', size: 2048 }],
+      },
+    },
+  });
 });
 
 async function renderTelegramWithAllSelected(text = 'Xin chào') {
@@ -264,5 +286,112 @@ describe('QuickSendAdapterPanel — WhatsApp', () => {
     rerender(<QuickSendAdapterPanel key="whatsapp" channel="whatsapp" channelLabel="WhatsApp" />);
     expect(await screen.findByText(/selectedCount/)).toHaveTextContent('"count":0');
     expect(screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ })).toBeDisabled();
+  });
+});
+
+describe('QuickSendAdapterPanel — mẫu tin + đính kèm (P5)', () => {
+  async function pickTemplate() {
+    fireEvent.click(await screen.findByRole('button', { name: 'channelAttachments.templatePlaceholder' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Báo giá' }));
+    await waitFor(() => expect(screen.getByPlaceholderText('quickSendAdapter.messagePlaceholder')).toHaveValue('Chào {{ten}}, báo giá đây'));
+  }
+
+  async function fillManualRecipient() {
+    fireEvent.click(await screen.findByText('quickSendAdapter.modeManualTelegram'));
+    fireEvent.change(screen.getByPlaceholderText('quickSendAdapter.manualPlaceholderTelegram'), { target: { value: '1001' } });
+  }
+
+  it('chọn mẫu -> điền nội dung + hiện tệp của mẫu; gửi kèm attachments (chỉ trường cần thiết)', async () => {
+    render(<QuickSendAdapterPanel channel="telegram" channelLabel="Telegram" />);
+    await fillManualRecipient();
+    await pickTemplate();
+    expect(screen.getByText('bg.pdf')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ }));
+    await waitFor(() => expect(screen.getByTestId('quick-send-adapter-done')).toBeInTheDocument());
+    const [channel, payload] = campaignApiService.sendQuickAdapterMessage.mock.calls[0];
+    expect(channel).toBe('telegram');
+    expect(payload).toEqual({
+      accountId: '7',
+      recipientKey: '1001',
+      message: 'Chào {{ten}}, báo giá đây',
+      attachments: [{ key: 'uploads/1/zalo-templates/bg.pdf', name: 'bg.pdf', size: 2048 }],
+    });
+  });
+
+  it('không mẫu/không tệp -> payload KHÔNG có trường attachments (hợp đồng cũ)', async () => {
+    render(<QuickSendAdapterPanel channel="telegram" channelLabel="Telegram" />);
+    await fillManualRecipient();
+    fireEvent.change(screen.getByPlaceholderText('quickSendAdapter.messagePlaceholder'), { target: { value: 'Chào' } });
+    fireEvent.click(screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ }));
+    await waitFor(() => expect(screen.getByTestId('quick-send-adapter-done')).toBeInTheDocument());
+    expect(campaignApiService.sendQuickAdapterMessage.mock.calls[0][1]).toEqual({
+      accountId: '7', recipientKey: '1001', message: 'Chào',
+    });
+  });
+
+  it('tải thêm tệp: đăng ký từng tệp qua /uploads/temp + quick-send/attachments rồi gửi kèm', async () => {
+    api.post.mockResolvedValue({ data: { data: { tempId: 't1', originalName: 'a.jpg', contentType: 'image/jpeg', size: 10 } } });
+    campaignApiService.uploadQuickSendAttachment.mockResolvedValue({
+      data: { data: { key: 'uploads/1/quick-send/a.jpg', originalName: 'a.jpg', size: 10, contentType: 'image/jpeg' } },
+    });
+    render(<QuickSendAdapterPanel channel="telegram" channelLabel="Telegram" />);
+    await fillManualRecipient();
+    fireEvent.change(screen.getByPlaceholderText('quickSendAdapter.messagePlaceholder'), { target: { value: 'Ảnh đây' } });
+    const file = new File(['x'], 'a.jpg', { type: 'image/jpeg' });
+    fireEvent.change(screen.getByTestId('quick-send-adapter-file-input'), { target: { files: [file] } });
+    expect(await screen.findByText('a.jpg')).toBeInTheDocument();
+    expect(campaignApiService.uploadQuickSendAttachment).toHaveBeenCalledWith({
+      tempId: 't1', originalName: 'a.jpg', contentType: 'image/jpeg', size: 10,
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ }));
+    await waitFor(() => expect(screen.getByTestId('quick-send-adapter-done')).toBeInTheDocument());
+    expect(campaignApiService.sendQuickAdapterMessage.mock.calls[0][1].attachments).toEqual([
+      { key: 'uploads/1/quick-send/a.jpg', originalName: 'a.jpg', size: 10 },
+    ]);
+  });
+
+  it('vượt giới hạn 5 ảnh (tệp của mẫu) -> báo đỏ, nút gửi tắt, KHÔNG gọi API', async () => {
+    zaloTemplateApiService.getTemplateById.mockResolvedValue({
+      data: {
+        data: {
+          id: 5,
+          bodyText: 'Nhiều ảnh',
+          attachments: Array.from({ length: 6 }, (_, i) => ({ key: `uploads/1/z/a${i}.jpg`, name: `a${i}.jpg`, size: 10 })),
+        },
+      },
+    });
+    render(<QuickSendAdapterPanel channel="telegram" channelLabel="Telegram" />);
+    await fillManualRecipient();
+    fireEvent.click(await screen.findByRole('button', { name: 'channelAttachments.templatePlaceholder' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Báo giá' }));
+    expect(await screen.findByTestId('channel-attachment-problem')).toBeInTheDocument();
+    const button = screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ });
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(campaignApiService.sendQuickAdapterMessage).not.toHaveBeenCalled();
+  });
+
+  it('tệp sau tin đầu lỗi (partialError) -> vẫn tính đã gửi, kèm cảnh báo', async () => {
+    campaignApiService.sendQuickAdapterMessage.mockResolvedValue(
+      item({ recipientKey: '1001', status: 'success', partialError: 'IMAGE_PROCESS_FAILED' })
+    );
+    render(<QuickSendAdapterPanel channel="telegram" channelLabel="Telegram" />);
+    await fillManualRecipient();
+    fireEvent.change(screen.getByPlaceholderText('quickSendAdapter.messagePlaceholder'), { target: { value: 'Chào' } });
+    fireEvent.click(screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ }));
+    await waitFor(() => expect(screen.getByTestId('quick-send-adapter-done')).toBeInTheDocument());
+    expect(screen.getByText(/resultSent/)).toHaveTextContent('"count":1');
+    expect(screen.getByTestId('quick-send-adapter-partial')).toHaveTextContent('IMAGE_PROCESS_FAILED');
+  });
+
+  it('lỗi tải mẫu -> vẫn soạn tay và gửi được', async () => {
+    zaloTemplateApiService.getTemplates.mockRejectedValue(new Error('down'));
+    render(<QuickSendAdapterPanel channel="telegram" channelLabel="Telegram" />);
+    await fillManualRecipient();
+    expect(await screen.findByText('channelAttachments.templatesLoadFailed')).toBeInTheDocument();
+    fireEvent.change(screen.getByPlaceholderText('quickSendAdapter.messagePlaceholder'), { target: { value: 'Chào' } });
+    expect(screen.getByRole('button', { name: /quickSendAdapter\.sendButton/ })).not.toBeDisabled();
   });
 });

@@ -781,6 +781,8 @@ const NodeConfigModal = ({
             telegramAccountsError={telegramAccountsError}
             onRetryTelegramAccounts={() => setTelegramAccountsReloadKey((key) => key + 1)}
             campaignType={campaignType}
+            zaloTemplates={zaloTemplates}
+            fetchTemplateById={fetchZaloTemplateDetail}
           />
         );
       case 'send_whatsapp':
@@ -794,6 +796,8 @@ const NodeConfigModal = ({
             onRetryWhatsappAccounts={() => setWhatsappAccountsReloadKey((key) => key + 1)}
             upstreamNodes={upstreamNodes}
             sourceSchema={sourceSchema}
+            zaloTemplates={zaloTemplates}
+            fetchTemplateById={fetchZaloTemplateDetail}
           />
         );
       case 'condition':

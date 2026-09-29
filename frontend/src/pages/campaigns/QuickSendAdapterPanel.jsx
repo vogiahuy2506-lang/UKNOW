@@ -1,10 +1,23 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { HiOutlinePaperAirplane, HiOutlineCheckCircle, HiOutlineXCircle, HiOutlineRefresh } from 'react-icons/hi';
+import {
+  HiOutlinePaperAirplane,
+  HiOutlineCheckCircle,
+  HiOutlineXCircle,
+  HiOutlineRefresh,
+  HiOutlinePaperClip,
+} from 'react-icons/hi';
 import { useI18n } from '../../i18n';
+import api from '../../services/api';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import campaignBuilderApiService from '../../features/campaigns/services/campaignBuilderApi.service';
+import zaloTemplateApiService from '../../features/templates/services/zaloTemplateApi.service';
+import ChannelTemplateAttachmentPicker from '../../features/campaigns/components/ChannelTemplateAttachmentPicker';
+import { validateChannelAttachments } from '../../features/campaigns/utils/channelAttachments';
+import useStorageQuota from '../../features/storage/useStorageQuota';
+import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
+import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import { resolveActionIdempotencyKey } from '../../utils/idempotency.util';
 import {
   MAX_DEFERRED_RESEND_WAIT_MS,
@@ -27,6 +40,10 @@ const DEFERRED_REASON_I18N_KEYS = {
 };
 
 const RECIPIENT_MODES = { CONVERSATIONS: 'conversations', MANUAL: 'manual' };
+// P5 — tệp tự tải lên: cùng danh sách định dạng với Gửi nhanh Email/Zalo (backend validateFile mặc định).
+const ATTACHMENT_ACCEPT = '.pdf,.docx,.pptx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
+// 5 ảnh + 3 tài liệu — chặn cứng tổng số tệp; giới hạn theo từng loại + dung lượng do validateChannelAttachments.
+const MAX_ATTACHMENTS_TOTAL = 8;
 const CHANNELS_SETTINGS_PATH = '/app/settings/channels';
 
 /**
@@ -57,6 +74,15 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
   const [manualText, setManualText] = useState('');
 
   const [message, setMessage] = useState('');
+  // P5 — mẫu tin (kho mẫu Zalo, dùng chung) + tệp đính kèm của mẫu + tệp tự tải lên.
+  const [templates, setTemplates] = useState([]);
+  const [templatesStatus, setTemplatesStatus] = useState('loading');
+  const [templateId, setTemplateId] = useState('');
+  const [templateAttachments, setTemplateAttachments] = useState([]);
+  const [extraAttachments, setExtraAttachments] = useState([]);
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
+  const attachmentInputRef = useRef(null);
+  const { usage: storageQuotaUsage } = useStorageQuota();
   const [estimate, setEstimate] = useState(null);
   const [isLoadingEstimate, setIsLoadingEstimate] = useState(false);
 
@@ -70,6 +96,21 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
 
   useEffect(() => () => {
     abortRef.current?.abort();
+  }, []);
+
+  // Mẫu tin (kho mẫu Zalo). Lỗi tải không chặn gửi: vẫn soạn tay được.
+  useEffect(() => {
+    let cancelled = false;
+    Promise.resolve(zaloTemplateApiService.getTemplates({ page: 1, limit: 50 }))
+      .then((res) => {
+        if (cancelled) return;
+        setTemplates(res?.data?.data?.items || []);
+        setTemplatesStatus('loaded');
+      })
+      .catch(() => {
+        if (!cancelled) setTemplatesStatus('error');
+      });
+    return () => { cancelled = true; };
   }, []);
 
   // Tài khoản gửi.
@@ -155,7 +196,13 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
 
   const overLimit = recipients.length > cfg.maxRecipients;
   const trimmedMessage = message.trim();
+  const allAttachments = useMemo(
+    () => [...templateAttachments, ...extraAttachments],
+    [templateAttachments, extraAttachments]
+  );
+  const attachmentProblem = validateChannelAttachments(allAttachments, channel);
   const canSend = phase === 'compose'
+    && !attachmentProblem
     && Boolean(selectedRef)
     && recipients.length > 0
     && !overLimit
@@ -184,6 +231,68 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
       });
     return () => { cancelled = true; };
   }, [channel, recipientCount, overLimit]);
+
+  const handleApplyTemplate = (template) => {
+    if (!template) {
+      setTemplateId('');
+      setTemplateAttachments([]);
+      return;
+    }
+    setTemplateId(String(template.id ?? ''));
+    setTemplateAttachments(Array.isArray(template.attachments) ? template.attachments.filter(Boolean) : []);
+    if (String(template.bodyText || '').trim()) setMessage(String(template.bodyText));
+  };
+
+  const handleRemoveAttachment = (index) => {
+    if (index < templateAttachments.length) {
+      setTemplateAttachments((prev) => prev.filter((_, i) => i !== index));
+    } else {
+      const extraIndex = index - templateAttachments.length;
+      setExtraAttachments((prev) => prev.filter((_, i) => i !== extraIndex));
+    }
+  };
+
+  // Đăng ký TỪNG tệp TUẦN TỰ (không Promise.all) — POST /campaigns/quick-send/attachments là JSON, request dedup của
+  // api.js huỷ lượt trước nếu 2 request cùng method+url bay song song (như Gửi nhanh Email/Zalo).
+  const handleAttachmentSelect = async (event) => {
+    const rawFiles = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (!rawFiles.length) return;
+    if (allAttachments.length + rawFiles.length > MAX_ATTACHMENTS_TOTAL) {
+      toast.error(t('channelAttachments.error.tooMany', { count: MAX_ATTACHMENTS_TOTAL }));
+      return;
+    }
+    const validation = validateFilesBeforeUpload(rawFiles, storageQuotaUsage);
+    if (!validation.ok) {
+      toast.error(getUploadValidationErrorMessage(validation, t));
+      return;
+    }
+    setIsUploadingAttachment(true);
+    try {
+      const uploaded = [];
+      for (const file of rawFiles) {
+        const formData = new FormData();
+        formData.append('file', file);
+        const tempRes = await api.post('/uploads/temp', formData, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        });
+        const temp = tempRes.data.data;
+        const registeredRes = await campaignApiService.uploadQuickSendAttachment({
+          tempId: temp.tempId,
+          originalName: temp.originalName,
+          contentType: temp.contentType,
+          size: temp.size,
+        });
+        uploaded.push(registeredRes.data.data);
+      }
+      setExtraAttachments((prev) => [...prev, ...uploaded]);
+      notifyStorageQuotaRefresh();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('quickSend.attachmentUploadError'));
+    } finally {
+      setIsUploadingAttachment(false);
+    }
+  };
 
   const toggleKey = (key) => {
     setSelectedKeys((prev) => {
@@ -214,11 +323,14 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
       account: selectedRef,
       recipients: list.map((r) => r.recipientKey),
       message: trimmedMessage,
+      attachments: allAttachments.map((a) => a?.key || ''),
     });
     const baseKey = idempotencyRef.current.key;
 
     let success = 0;
     let fail = 0;
+    let partialCount = 0;
+    const partialSamples = [];
     const failureSamples = [];
     const unsent = [];
     const failedRecipients = [];
@@ -233,6 +345,17 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
           [cfg.accountField]: selectedRef,
           recipientKey: recipient.recipientKey,
           message: trimmedMessage,
+          ...(allAttachments.length > 0
+            ? {
+              attachments: allAttachments.map((a) => ({
+                key: a.key,
+                ...(a.originalName ? { originalName: a.originalName } : {}),
+                ...(a.displayName ? { displayName: a.displayName } : {}),
+                ...(a.name ? { name: a.name } : {}),
+                ...(a.size ? { size: a.size } : {}),
+              })),
+            }
+            : {}),
         }, { idempotencyKey: `${baseKey}-${idx}`, signal });
         const item = res?.data?.data?.item;
         if (item?.status === 'deferred') {
@@ -275,6 +398,13 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
           const item = outcome.item;
           if (item?.status === 'success') {
             success += 1;
+            // P5: người nhận ĐÃ nhận tin đầu nhưng một tệp sau đó lỗi — vẫn tính đã gửi, kèm cảnh báo.
+            if (item.partialError) {
+              partialCount += 1;
+              if (partialSamples.length < 3) {
+                partialSamples.push({ recipientKey: recipient.recipientKey, error: item.partialError });
+              }
+            }
           } else {
             fail += 1;
             failedRecipients.push(recipient);
@@ -314,8 +444,10 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
     // Đợt xong -> lần gửi MỚI (kể cả trùng nội dung) tính khoá mới.
     idempotencyRef.current = { key: null, signature: null };
     setProgressMessage('');
-    return { success, fail, failureSamples, unsent, failedRecipients, deferredStop, stopError, aborted };
-  }, [channel, selectedRef, trimmedMessage, cfg, t]);
+    return {
+      success, fail, partialCount, partialSamples, failureSamples, unsent, failedRecipients, deferredStop, stopError, aborted,
+    };
+  }, [channel, selectedRef, trimmedMessage, allAttachments, cfg, t]);
 
   const startSend = async (list) => {
     if (sendGuardRef.current || list.length === 0) return;
@@ -327,6 +459,8 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
       setResult({
         success: outcome.success,
         fail: outcome.fail,
+        partialCount: outcome.partialCount,
+        partialSamples: outcome.partialSamples,
         failureSamples: outcome.failureSamples,
         retryList: [...outcome.failedRecipients, ...outcome.unsent],
         unsentCount: outcome.unsent.length,
@@ -362,6 +496,9 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
     setSelectedKeys(new Set());
     setManualText('');
     setMessage('');
+    setTemplateId('');
+    setTemplateAttachments([]);
+    setExtraAttachments([]);
   };
 
   const estimateText = (() => {
@@ -403,6 +540,16 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
         <p className="text-gray-500 mb-2">{t('quickSendAdapter.resultSent', { count: result.success })}</p>
         {result.fail > 0 && (
           <p className="text-red-600 text-sm mb-2">{t('quickSendAdapter.resultFailed', { count: result.fail })}</p>
+        )}
+        {result.partialCount > 0 && (
+          <div className="text-amber-700 text-sm mb-2" data-testid="quick-send-adapter-partial">
+            <p>{t('quickSendAdapter.resultPartial', { count: result.partialCount })}</p>
+            <ul className="text-xs text-amber-600 mt-1 space-y-0.5">
+              {result.partialSamples.map((s) => (
+                <li key={s.recipientKey}>{s.recipientKey}{s.error ? ` — ${s.error}` : ''}</li>
+              ))}
+            </ul>
+          </div>
         )}
         {result.failureSamples.length > 0 && (
           <ul className="text-xs text-gray-500 mb-2 space-y-0.5">
@@ -587,6 +734,21 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
       {/* Nội dung */}
       <div className={cardClass}>
         <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSendAdapter.messageTitle')}</h2>
+        <div className="mb-4">
+          <ChannelTemplateAttachmentPicker
+            channel={channel}
+            templates={templates}
+            fetchTemplateById={async (id) => {
+              const res = await zaloTemplateApiService.getTemplateById(id);
+              return res?.data?.data || null;
+            }}
+            templateId={templateId}
+            attachments={allAttachments}
+            onApply={handleApplyTemplate}
+            onRemoveAttachment={handleRemoveAttachment}
+            status={templatesStatus}
+          />
+        </div>
         <textarea
           value={message}
           onChange={(e) => setMessage(e.target.value)}
@@ -599,6 +761,31 @@ const QuickSendAdapterPanel = ({ channel, channelLabel }) => {
           <span className={message.length > cfg.maxMessageLength ? 'text-red-600' : 'text-gray-400'}>
             {t('quickSendAdapter.messageCounter', { count: message.length, max: cfg.maxMessageLength })}
           </span>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-200">
+          <input
+            ref={attachmentInputRef}
+            type="file"
+            multiple
+            accept={ATTACHMENT_ACCEPT}
+            onChange={handleAttachmentSelect}
+            className="hidden"
+            data-testid="quick-send-adapter-file-input"
+          />
+          <button
+            type="button"
+            onClick={() => attachmentInputRef.current?.click()}
+            disabled={isUploadingAttachment}
+            className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition"
+          >
+            {isUploadingAttachment ? (
+              <span className="w-4 h-4 border-2 border-orange-500 border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <HiOutlinePaperClip className="w-4 h-4" />
+            )}
+            {t('quickSend.attachmentAdd')}
+          </button>
         </div>
       </div>
 

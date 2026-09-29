@@ -16,11 +16,15 @@
  * @param {Function} [props.onRetryWhatsappAccounts]
  * @param {Array<Object>} [props.upstreamNodes] khối phía trước (chọn nguồn 'node')
  * @param {Array<{key: string}>} [props.sourceSchema] cột của khối đã chọn
+ * @param {Array<Object>} [props.zaloTemplates] P5: kho mẫu tin (dùng chung với Zalo) cho ô "Chọn mẫu".
+ * @param {Function} [props.fetchTemplateById] P5: lấy chi tiết mẫu (nội dung + tệp đính kèm).
  * @returns {JSX.Element}
  */
 import { useMemo } from 'react';
 import { useI18n } from '../../../i18n';
 import { parseWhatsAppPhoneList } from '../utils/nodeConfigModal.helpers';
+import { applyTemplateToStep, clearTemplateFromStep } from '../utils/channelAttachments';
+import ChannelTemplateAttachmentPicker from './ChannelTemplateAttachmentPicker';
 
 const MESSAGE_MAX = 4096;
 
@@ -33,6 +37,8 @@ export const NodeConfigSendWhatsAppSection = ({
   onRetryWhatsappAccounts,
   upstreamNodes = [],
   sourceSchema = [],
+  zaloTemplates = [],
+  fetchTemplateById,
 }) => {
   const { t } = useI18n();
   const recipientSource = formData.recipientSource || 'whatsapp_conversations';
@@ -70,6 +76,27 @@ export const NodeConfigSendWhatsAppSection = ({
     setFormData((prev) => ({
       ...prev,
       steps: [{ ...(prev.steps?.[0] || {}), message: value }],
+    }));
+  };
+
+  // P5 — mẫu tin (kho mẫu Zalo) + tệp đính kèm của mẫu, lưu vào bước đầu: { templateId, message, attachments }.
+  const handleApplyTemplate = (template) => {
+    setFormData((prev) => ({
+      ...prev,
+      steps: [template
+        ? applyTemplateToStep(prev.steps?.[0], template)
+        : clearTemplateFromStep(prev.steps?.[0])],
+    }));
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      steps: [{
+        ...(prev.steps?.[0] || {}),
+        attachments: (Array.isArray(prev.steps?.[0]?.attachments) ? prev.steps[0].attachments : [])
+          .filter((_, i) => i !== index),
+      }],
     }));
   };
 
@@ -228,6 +255,16 @@ export const NodeConfigSendWhatsAppSection = ({
           </div>
         </div>
       )}
+
+      <ChannelTemplateAttachmentPicker
+        channel="whatsapp"
+        templates={zaloTemplates}
+        fetchTemplateById={fetchTemplateById}
+        templateId={formData.steps?.[0]?.templateId || ''}
+        attachments={Array.isArray(formData.steps?.[0]?.attachments) ? formData.steps[0].attachments : []}
+        onApply={handleApplyTemplate}
+        onRemoveAttachment={handleRemoveAttachment}
+      />
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">

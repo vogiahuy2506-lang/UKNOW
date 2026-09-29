@@ -12,11 +12,15 @@
  * @param {string} [props.telegramAccountsError]
  * @param {Function} [props.onRetryTelegramAccounts]
  * @param {string} [props.campaignType] PR-E2: 'telegram_group' -> nguồn mặc định + tuỳ chọn "Nhóm Telegram".
+ * @param {Array<Object>} [props.zaloTemplates] P5: kho mẫu tin (dùng chung với Zalo) cho ô "Chọn mẫu".
+ * @param {Function} [props.fetchTemplateById] P5: lấy chi tiết mẫu (nội dung + tệp đính kèm).
  * @returns {JSX.Element}
  */
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { fetchTelegramGroupOptions } from '../utils/nodeConfigModal.helpers';
+import { applyTemplateToStep, clearTemplateFromStep } from '../utils/channelAttachments';
+import ChannelTemplateAttachmentPicker from './ChannelTemplateAttachmentPicker';
 
 /** Nhóm đã chọn lưu ở config.recipientKeys dạng [{ recipientKey, display }]. */
 const getSelectedGroups = (formData) => (
@@ -31,6 +35,8 @@ export const NodeConfigSendTelegramSection = ({
   telegramAccountsError = '',
   onRetryTelegramAccounts,
   campaignType = '',
+  zaloTemplates = [],
+  fetchTemplateById,
 }) => {
   const { t } = useI18n();
   const recipientSource = formData.recipientSource || (campaignType === 'telegram_group' ? 'telegram_groups' : 'telegram_conversations');
@@ -123,6 +129,27 @@ export const NodeConfigSendTelegramSection = ({
     setFormData((prev) => ({
       ...prev,
       steps: [{ ...(prev.steps?.[0] || {}), message: value }],
+    }));
+  };
+
+  // P5 — mẫu tin (kho mẫu Zalo) + tệp đính kèm của mẫu, lưu vào bước đầu: { templateId, message, attachments }.
+  const handleApplyTemplate = (template) => {
+    setFormData((prev) => ({
+      ...prev,
+      steps: [template
+        ? applyTemplateToStep(prev.steps?.[0], template)
+        : clearTemplateFromStep(prev.steps?.[0])],
+    }));
+  };
+
+  const handleRemoveAttachment = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      steps: [{
+        ...(prev.steps?.[0] || {}),
+        attachments: (Array.isArray(prev.steps?.[0]?.attachments) ? prev.steps[0].attachments : [])
+          .filter((_, i) => i !== index),
+      }],
     }));
   };
 
@@ -288,6 +315,16 @@ export const NodeConfigSendTelegramSection = ({
           <p className="mt-1 text-xs text-gray-500">{t('telegramNodeSend.chatIdsHint')}</p>
         </div>
       )}
+
+      <ChannelTemplateAttachmentPicker
+        channel="telegram"
+        templates={zaloTemplates}
+        fetchTemplateById={fetchTemplateById}
+        templateId={formData.steps?.[0]?.templateId || ''}
+        attachments={Array.isArray(formData.steps?.[0]?.attachments) ? formData.steps[0].attachments : []}
+        onApply={handleApplyTemplate}
+        onRemoveAttachment={handleRemoveAttachment}
+      />
 
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -35,6 +35,15 @@ import { isStubOnly } from '../../chatbot/inProcChannelGateway/stubCheck.js';
 import chatbotTelegramRepository from '../../../repositories/chatbot/chatbotTelegram.repository.js';
 import { hasPermanentAuthKey } from '../../../utils/telegramSession.util.js';
 import channelAccountSettingsRepository from '../../../repositories/campaign/channelAccountSettings.repository.js';
+import {
+  CHANNEL_MEDIA_LIMIT_ERROR_CODE,
+  TELEGRAM_PHOTO_EXTENSIONS,
+  assertAttachmentListWithinLimits,
+  extractStepAttachments,
+  prepareChannelAttachmentSources,
+  resolveAttachmentsForSend,
+} from '../../../utils/channelMediaSend.util.js';
+import { sendTelegramMessageWithMedia } from '../../chatbot/channelAdapters/telegram.adapter.js';
 
 /** Chỉ nhận chat id Telegram dạng số (âm cho group/channel) — không tra theo SĐT/username. */
 const TELEGRAM_CHAT_ID_PATTERN = /^-?\d+$/;
@@ -61,7 +70,7 @@ const HARD_ERROR_SUBSTRINGS = [
   'USER_BANNED_IN_CHANNEL',
 ];
 
-const TRANSIENT_ERROR_SUBSTRINGS = ['sendText timeout', 'ECONNRESET', 'ETIMEDOUT'];
+const TRANSIENT_ERROR_SUBSTRINGS = ['sendText timeout', 'sendMedia timeout', 'ECONNRESET', 'ETIMEDOUT'];
 
 // stub ('Telegram transport not implemented') VÀ guard 'chưa cấu hình' của telegramGateway.client.js
 // đều thuộc nhóm này — cả hai đều là "hạ tầng gửi chưa sẵn sàng", không phải lỗi của người nhận.
@@ -159,6 +168,23 @@ async function checkReadiness({ userId, node }) {
     throw err;
   }
   await assertHasRecipients({ node, account });
+  assertStepAttachmentsWithinLimits(node);
+}
+
+/**
+ * P5 — bao SOM (preflight) khi mot buoc dinh kem vuot gioi han so anh/tai lieu/dung luong khai bao, thay vi de MOI
+ * nguoi nhan deu loi luc gui. Dung luong kiem theo truong `size` cua metadata; byte that van duoc kiem lai luc gui.
+ */
+function assertStepAttachmentsWithinLimits(node) {
+  for (const attachments of extractStepAttachments(node?.config)) {
+    try {
+      assertAttachmentListWithinLimits(attachments, TELEGRAM_PHOTO_EXTENSIONS);
+    } catch (limitErr) {
+      const err = new Error(`${limitErr.message} (node ${node?.id ?? '?'})`);
+      err.code = 'TELEGRAM_ATTACHMENT_LIMIT';
+      throw err;
+    }
+  }
 }
 
 /**
@@ -224,6 +250,11 @@ async function resolveAccount({ workspaceOwnerId, config, node }) {
     accountId: account.id,
     telegramUserId: account.telegram_user_id,
     display: account.username || account.first_name || account.phone || `Telegram #${account.id}`,
+    // P5 — thong tin de sendOne gui dinh kem ma runner khong phai truyen them: chu workspace (loc tep theo chu),
+    // dinh kem cua tung buoc, va cache doc tep MOT node (mot tep gui cho nhieu nguoi chi doc kho 1 lan).
+    ownerUserId: workspaceOwnerId,
+    stepAttachments: extractStepAttachments(config),
+    attachmentCache: new Map(),
   };
 }
 
@@ -260,18 +291,45 @@ async function resolveRecipients({ rows, config, account }) {
 }
 
 /**
- * @param {{account: {telegramUserId: number}, recipientKey: string, text: string}} input
- * @returns {Promise<{messageId: string|null}>}
+ * @param {{account: {telegramUserId: number}, recipientKey: string, text: string, stepIndex?: number, attachments?: Array<object>}} input
+ *   `attachments` (gui nhanh) thang `account.stepAttachments[stepIndex-1]` (chien dich).
+ * @returns {Promise<{messageId: string|null, sentCount?: number, partialError?: string}>}
  */
-async function sendOne({ account, recipientKey, text }) {
+async function sendOne({ account, recipientKey, text, stepIndex, attachments }) {
   let result;
+  const attachmentList = resolveAttachmentsForSend({ account, stepIndex, attachments });
   try {
+    if (attachmentList.length > 0) {
+      const sources = await prepareChannelAttachmentSources(attachmentList, {
+        ownerUserId: account.ownerUserId,
+        cache: account.attachmentCache,
+      });
+      if (sources.length < attachmentList.length) {
+        // Giong chien dich Zalo: tep template hong/mat -> van gui phan doc duoc (khong dung ca dot vi mot tep).
+        console.warn(`[TelegramCampaignChannel] bo qua ${attachmentList.length - sources.length} tep dinh kem khong doc duoc`);
+      }
+      const sent = await sendTelegramMessageWithMedia({
+        telegramUserId: account.telegramUserId,
+        chatId: Number(recipientKey),
+        text,
+        sources,
+      });
+      if (sent.error) {
+        // Khach DA nhan mot phan (tin dau da toi) -> tinh la da gui 1 luot; runner chi ghi messageId tin dau.
+        console.warn(`[TelegramCampaignChannel] tep sau tin dau that bai (da gui ${sent.sentCount}): ${sent.error.message}`);
+        return { messageId: sent.firstMessageId, sentCount: sent.sentCount, partialError: String(sent.error.message) };
+      }
+      return { messageId: sent.firstMessageId, sentCount: sent.sentCount };
+    }
     result = await telegramGateway.sendMessage(
       account.telegramUserId,
       Number(recipientKey),
       String(text ?? '').slice(0, 4000)
     );
   } catch (err) {
+    if (err?.code === CHANNEL_MEDIA_LIMIT_ERROR_CODE) {
+      throw new ChannelSendError('hard', String(err.message));
+    }
     const message = String(err?.message ?? err ?? '');
     // classifyTelegramSendError là NGUỒN DUY NHẤT quyết định category (kể cả rate_limit) — sendOne
     // chỉ làm thêm một việc: khi category LÀ rate_limit, đào thêm retryAfterMs từ chuỗi. Tránh 2 nơi

@@ -1,4 +1,17 @@
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
+import { validateChannelAttachments } from './channelAttachments';
+
+/**
+ * P5 — câu báo lỗi (hoặc '') khi tệp đính kèm của khối Telegram/WhatsApp vượt giới hạn số ảnh/tài liệu/dung lượng.
+ * Cùng giới hạn với backend (channelMediaSend.util.js); cùng khuôn câu báo cứng của các nhánh send_* bên dưới.
+ */
+export const describeChannelAttachmentProblem = (attachments, channel) => {
+  const problem = validateChannelAttachments(attachments, channel);
+  if (!problem) return '';
+  if (problem.code === 'images') return `Tối đa ${problem.limit} ảnh mỗi tin nhắn.`;
+  if (problem.code === 'documents') return `Tối đa ${problem.limit} tài liệu mỗi tin nhắn.`;
+  return `Tổng dung lượng tệp đính kèm tối đa ${problem.limit} MB mỗi tin nhắn.`;
+};
 
 export const withDefaultNodeRef = (mapping = {}, defaultNodeId = '') => ({
   mode: mapping.mode || 'node',
@@ -851,6 +864,11 @@ export const handleNodeConfigSaveClick = async ({
       toastNotifier.error('Nội dung tin nhắn Telegram không được quá 4000 ký tự.');
       return;
     }
+    const telegramAttachmentProblem = describeChannelAttachmentProblem(formData.steps?.[0]?.attachments, 'telegram');
+    if (telegramAttachmentProblem) {
+      toastNotifier.error(telegramAttachmentProblem);
+      return;
+    }
     if (formData.recipientSource === 'telegram_groups') {
       const groups = Array.isArray(formData.recipientKeys) ? formData.recipientKeys : [];
       if (!groups.some((g) => /^-?\d+$/.test(String(g?.recipientKey ?? '').trim()))) {
@@ -896,6 +914,11 @@ export const handleNodeConfigSaveClick = async ({
     }
     if (message.length > 4096) {
       toastNotifier.error('Nội dung tin nhắn WhatsApp không được quá 4096 ký tự.');
+      return;
+    }
+    const whatsappAttachmentProblem = describeChannelAttachmentProblem(formData.steps?.[0]?.attachments, 'whatsapp');
+    if (whatsappAttachmentProblem) {
+      toastNotifier.error(whatsappAttachmentProblem);
       return;
     }
     if (formData.recipientSource === 'manual') {

@@ -133,6 +133,32 @@ export function assertAttachmentListWithinLimits(attachments, imageExtensions) {
 }
 
 /**
+ * Danh sach dinh kem cua TUNG buoc trong `config.steps` cua node (chi lay mang, bo phan tu rong). Runner kenh adapter
+ * chi truyen `stepIndex` (1-based) vao `sendOne`, nen adapter tu tra dinh kem cua buoc do qua `account.stepAttachments`
+ * (dat luc `resolveAccount`) — khong phai sua runner.
+ * @param {{ steps?: Array<{attachments?: unknown}> }} config
+ * @returns {Array<Array<object>>}
+ */
+export function extractStepAttachments(config) {
+  const steps = Array.isArray(config?.steps) ? config.steps : [];
+  return steps.map((step) => (Array.isArray(step?.attachments) ? step.attachments.filter(Boolean) : []));
+}
+
+/**
+ * Dinh kem cho MOT lan gui: tham so tuong minh (gui nhanh) THANG; khong co thi lay theo buoc cua node.
+ * @param {{ account?: { stepAttachments?: Array<Array<object>> }, stepIndex?: number, attachments?: unknown }} input
+ * @returns {Array<object>}
+ */
+export function resolveAttachmentsForSend({ account, stepIndex, attachments }) {
+  if (Array.isArray(attachments)) return attachments.filter(Boolean);
+  const index = Number.parseInt(stepIndex, 10) - 1;
+  const perStep = account?.stepAttachments;
+  return Number.isInteger(index) && index >= 0 && Array.isArray(perStep) && Array.isArray(perStep[index])
+    ? perStep[index]
+    : [];
+}
+
+/**
  * Chuan bi nguon tep tu metadata dinh kem (doc tu kho luu tru), LOC theo chu workspace.
  * Import tre `campaignZaloSender.service.js`: file do keo theo zca-js + hang loat phu thuoc; adapter Hop thu/Telegram
  * khong duoc nap chung khi chi dung Hop thu (khuon `telegramInbox.adapter.js`).

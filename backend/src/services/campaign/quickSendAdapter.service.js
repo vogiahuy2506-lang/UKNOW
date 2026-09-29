@@ -41,6 +41,11 @@ import {
   resolveRequestIdempotencyKey,
 } from '../quota/sendQuotaKey.service.js';
 import { checkSendQuota, recordDirectSendUsage } from '../../utils/userSendLimit.util.js';
+import {
+  TELEGRAM_PHOTO_EXTENSIONS,
+  WHATSAPP_IMAGE_EXTENSIONS,
+  assertAttachmentListWithinLimits,
+} from '../../utils/channelMediaSend.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 
 const TELEGRAM_CHAT_ID_PATTERN = /^-?\d+$/;
@@ -57,6 +62,7 @@ const CHANNELS = Object.freeze({
     subtype: 'send_telegram',
     accountField: 'accountId',
     maxMessageLength: 4000,
+    imageExtensions: TELEGRAM_PHOTO_EXTENSIONS,
     buildNodeConfig: (accountRef) => ({ telegramAccountId: accountRef }),
     normalizeRecipient: (raw) => {
       const value = String(raw ?? '').trim();
@@ -67,6 +73,7 @@ const CHANNELS = Object.freeze({
     subtype: 'send_whatsapp',
     accountField: 'sessionKey',
     maxMessageLength: 4096,
+    imageExtensions: WHATSAPP_IMAGE_EXTENSIONS,
     buildNodeConfig: (accountRef) => ({ whatsappSessionKey: accountRef }),
     // CÙNG hàm với adapter/chiến dịch (W4a) — không tự viết quy tắc SĐT riêng.
     normalizeRecipient: (raw) => normalizeWhatsAppPhone(raw),
@@ -94,6 +101,42 @@ function requireDescriptor(channel) {
     throw httpError(409, 'CHANNEL_DISABLED', 'Kênh này chưa được bật trên hệ thống.');
   }
   return { cfg, descriptor };
+}
+
+/**
+ * P5 — dinh kem cua gui nhanh: chi giu truong can thiet, CHI nhan khoa thuoc kho cua CHU workspace
+ * (`uploads/<chu>/...`, ca tep upload gui nhanh lan tep mau Zalo) va kiem gioi han so anh/tai lieu/dung luong TRUOC khi
+ * cham vao hang doi gui/han muc. Khoa la/ngoai workspace -> 400 (khong lang le bo roi gui moi phan text).
+ *
+ * @returns {Array<{key: string, originalName?: string, displayName?: string, name?: string, size?: number}>}
+ */
+function sanitizeQuickSendAttachments(raw, { ownerUserId, imageExtensions }) {
+  if (raw == null || (Array.isArray(raw) && raw.length === 0)) return [];
+  if (!Array.isArray(raw)) {
+    throw httpError(400, 'INVALID_ATTACHMENTS', 'Danh sách tệp đính kèm không hợp lệ.');
+  }
+  const prefix = `uploads/${Number(ownerUserId)}/`;
+  const list = [];
+  for (const item of raw) {
+    const key = String(item?.key ?? '').trim();
+    if (!key || !key.startsWith(prefix) || key.includes('..')) {
+      throw httpError(400, 'INVALID_ATTACHMENTS', 'Có tệp đính kèm không hợp lệ hoặc không thuộc không gian làm việc này.');
+    }
+    const size = Number(item?.size);
+    list.push({
+      key,
+      ...(item?.originalName ? { originalName: String(item.originalName).slice(0, 255) } : {}),
+      ...(item?.displayName ? { displayName: String(item.displayName).slice(0, 255) } : {}),
+      ...(item?.name ? { name: String(item.name).slice(0, 255) } : {}),
+      ...(Number.isFinite(size) && size > 0 ? { size } : {}),
+    });
+  }
+  try {
+    assertAttachmentListWithinLimits(list, imageExtensions);
+  } catch (limitErr) {
+    throw httpError(400, 'ATTACHMENT_LIMIT', limitErr.message);
+  }
+  return list;
 }
 
 function resolveRetryAfterMs(sendError) {
@@ -266,6 +309,10 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   const { adapter } = descriptor;
   const { actorUserId, workspaceOwnerId } = getWorkspaceContext(authUser);
   const nodeConfig = cfg.buildNodeConfig(accountRef);
+  const attachments = sanitizeQuickSendAttachments(body?.attachments, {
+    ownerUserId: workspaceOwnerId,
+    imageExtensions: cfg.imageExtensions,
+  });
 
   // 3. Sẵn sàng (giữ nguyên `code` của adapter: TELEGRAM_STUB_TRANSPORT, WHATSAPP_ACCOUNT_NOT_READY, ...).
   try {
@@ -350,7 +397,14 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   recordAdapterSendAttempt({ descriptor, accountKey });
 
   // 6. Giữ chỗ hạn mức (kênh `zalo`, nguồn `${channel}_preview`).
-  const requestPayload = { channel, accountRef: String(accountRef), recipientKey, message };
+  const requestPayload = {
+    channel,
+    accountRef: String(accountRef),
+    recipientKey,
+    message,
+    // Khoa tep dua vao chu ky idempotency: cung Idempotency-Key nhung doi tep -> KHONG phai "gui lai" cung mot yeu cau.
+    attachments: attachments.map((a) => a.key),
+  };
   let reservation = null;
   try {
     const reservationKey = buildPreviewReservationKey({
@@ -442,6 +496,8 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
       account,
       recipientKey,
       text,
+      // Chi truyen khi co: adapter khong dinh kem giu nguyen hop dong cu (chi {account, recipientKey, text}).
+      ...(attachments.length > 0 ? { attachments } : {}),
     }));
   } catch (sendError) {
     const category = sendError instanceof ChannelSendError
@@ -506,7 +562,15 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
     }
   }
 
-  return { item: { recipientKey, status: 'success', messageId: sendResult?.messageId || null } };
+  return {
+    item: {
+      recipientKey,
+      status: 'success',
+      messageId: sendResult?.messageId || null,
+      // Khach DA nhan tin dau nhung mot tep sau loi (P5): van 'success' (da toi tay khach), kem canh bao de FE hien.
+      ...(sendResult?.partialError ? { partialError: String(sendResult.partialError) } : {}),
+    },
+  };
 }
 
 export default {

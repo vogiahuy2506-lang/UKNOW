@@ -181,7 +181,7 @@ describe('resolveAccount', () => {
   it('trả sessionKey + display = tên WhatsApp; thiếu tên -> sessionKey', async () => {
     await expect(
       whatsappChannelAdapter.resolveAccount({ workspaceOwnerId: 40, config: { whatsappSessionKey: '40-default' }, node: { id: 1 } })
-    ).resolves.toEqual({ accountKey: '40-default', sessionKey: '40-default', display: 'Phúc' });
+    ).resolves.toMatchObject({ accountKey: '40-default', sessionKey: '40-default', display: 'Phúc', ownerUserId: 40 });
     getSessionMock.mockReturnValue({ ...openSession, userName: null });
     await expect(
       whatsappChannelAdapter.resolveAccount({ workspaceOwnerId: 40, config: { whatsappSessionKey: '40-default' }, node: { id: 1 } })

@@ -7300,6 +7300,27 @@ export default {
   },
 
   // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — send_whatsapp node config dialog.
+  // P5 (PLAN_TG_WA_DAY_DU) — message templates + attachments for Telegram/WhatsApp (campaign node, Quick Send).
+  channelAttachments: {
+    templateLabel: 'Message template (shared with Zalo)',
+    templatePlaceholder: '-- Choose a message template (optional) --',
+    templateSearch: 'Search templates...',
+    templateEmpty: 'No matching template',
+    templatesLoadFailed: 'Could not load templates — you can still write the message directly.',
+    clearTemplate: 'Clear selected template',
+    applying: 'Loading template...',
+    templateHint: 'Choosing a template fills in its message and attachments here. Editing the template later does not update what is already saved.',
+    attachmentsTitle: 'Attachments ({count})',
+    attachmentRemove: 'Remove this file',
+    sendOrderHint: 'Sent in order: the message, each image, then each document. Up to {images} images, {documents} documents, {mb} MB in total per message.',
+    error: {
+      images: 'At most {count} images per message.',
+      documents: 'At most {count} documents per message.',
+      size: 'Attachments may total at most {mb} MB per message.',
+      tooMany: 'You can attach at most {count} files per message.',
+    },
+  },
+
   whatsappNodeSend: {
     nodeName: 'Node name',
     nodeNamePlaceholder: 'E.g. Send WhatsApp message',
@@ -8822,6 +8843,7 @@ Feel free to ask me anything!`,
     sendSuccessToast: '{count} messages sent',
     sendFailedToast: 'Sending failed',
     resultSent: '{count} messages sent successfully.',
+    resultPartial: '{count} recipients got the message but an attachment could not be sent:',
     resultFailed: '{count} messages failed.',
     batchStopped: 'The batch stopped because the {channel} account or your plan quota has a problem — check the connection/plan, then continue.',
     unsentCount: '{count} people have not been sent yet',

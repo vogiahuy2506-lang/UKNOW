@@ -7341,6 +7341,27 @@ export default {
     variableHint: 'Gợi ý: dùng {{ten}} để chèn tên người nhận (chỉ áp dụng khi người nhận lấy từ hội thoại WhatsApp).',
   },
 
+  // P5 (PLAN_TG_WA_DAY_DU) — mẫu tin nhắn + tệp đính kèm cho Telegram/WhatsApp (node chiến dịch, Gửi nhanh).
+  channelAttachments: {
+    templateLabel: 'Mẫu tin nhắn (dùng chung với Zalo)',
+    templatePlaceholder: '-- Chọn mẫu tin nhắn (không bắt buộc) --',
+    templateSearch: 'Tìm mẫu...',
+    templateEmpty: 'Chưa có mẫu phù hợp',
+    templatesLoadFailed: 'Không tải được danh sách mẫu — bạn vẫn có thể soạn nội dung trực tiếp.',
+    clearTemplate: 'Bỏ mẫu đã chọn',
+    applying: 'Đang nạp mẫu...',
+    templateHint: 'Chọn mẫu sẽ điền nội dung và tệp đính kèm của mẫu vào đây. Sửa mẫu về sau không tự cập nhật nội dung đã lưu.',
+    attachmentsTitle: 'Tệp đính kèm ({count})',
+    attachmentRemove: 'Bỏ tệp này',
+    sendOrderHint: 'Gửi lần lượt: nội dung, từng ảnh, rồi từng tài liệu. Tối đa {images} ảnh, {documents} tài liệu, tổng {mb} MB mỗi tin.',
+    error: {
+      images: 'Tối đa {count} ảnh mỗi tin nhắn.',
+      documents: 'Tối đa {count} tài liệu mỗi tin nhắn.',
+      size: 'Tổng dung lượng tệp đính kèm tối đa {mb} MB mỗi tin nhắn.',
+      tooMany: 'Chỉ đính kèm tối đa {count} tệp mỗi tin nhắn.',
+    },
+  },
+
   // Read Sheet Section
   readSheetSection: {
     nodeName: 'Tên node',
@@ -8832,6 +8853,7 @@ export default {
     sendSuccessToast: 'Đã gửi {count} tin',
     sendFailedToast: 'Gửi tin thất bại',
     resultSent: 'Đã gửi thành công {count} tin.',
+    resultPartial: '{count} người đã nhận tin nhưng có tệp đính kèm chưa gửi được:',
     resultFailed: '{count} tin gửi lỗi.',
     batchStopped: 'Đã dừng đợt gửi vì tài khoản {channel} hoặc hạn mức đang có vấn đề — kiểm tra kết nối/gói rồi gửi tiếp.',
     unsentCount: '{count} người chưa được gửi',

@@ -28,6 +28,14 @@ import whatsappCampaignConversationRepository, {
 } from '../../../repositories/chatbot/whatsappCampaignConversation.repository.js';
 import { isPhoneHeader } from '../../../utils/columnHeaderMatch.util.js';
 import channelAccountSettingsRepository from '../../../repositories/campaign/channelAccountSettings.repository.js';
+import {
+  CHANNEL_MEDIA_LIMIT_ERROR_CODE,
+  WHATSAPP_IMAGE_EXTENSIONS,
+  assertAttachmentListWithinLimits,
+  extractStepAttachments,
+  prepareChannelAttachmentSources,
+  resolveAttachmentsForSend,
+} from '../../../utils/channelMediaSend.util.js';
 
 /** SĐT hợp lệ sau chuẩn hoá: chỉ chữ số, 8-15 ký tự — CÙNG quy tắc với FE (hợp đồng W4a/W4b mục 4). */
 const WHATSAPP_PHONE_PATTERN = /^\d{8,15}$/;
@@ -209,6 +217,21 @@ async function checkReadiness({ userId, node }) {
     }
   }
   // Nguồn 'node'/mặc định: người nhận lấy từ node phía trước lúc chạy — runner có lưới CHANNEL_NO_RECIPIENTS.
+  assertStepAttachmentsWithinLimits(node);
+}
+
+/**
+ * P5 — báo SỚM (preflight) khi một bước đính kèm vượt giới hạn số ảnh/tài liệu/dung lượng khai báo, thay vì để MỌI
+ * người nhận đều lỗi lúc gửi. Dung lượng kiểm theo trường `size` của metadata; byte thật vẫn được kiểm lại lúc gửi.
+ */
+function assertStepAttachmentsWithinLimits(node) {
+  for (const attachments of extractStepAttachments(node?.config)) {
+    try {
+      assertAttachmentListWithinLimits(attachments, WHATSAPP_IMAGE_EXTENSIONS);
+    } catch (limitErr) {
+      throw notReady(`${limitErr.message} (node ${node?.id ?? '?'})`);
+    }
+  }
 }
 
 /**
@@ -224,6 +247,11 @@ async function resolveAccount({ workspaceOwnerId, config, node }) {
     accountKey: sessionKey,
     sessionKey,
     display: session?.userName || sessionKey,
+    // P5 — để sendOne gửi đính kèm mà runner không phải truyền thêm: chủ workspace (lọc tệp theo chủ), đính kèm
+    // từng bước, và cache đọc tệp MỘT node (một tệp gửi nhiều người chỉ đọc kho 1 lần).
+    ownerUserId: workspaceOwnerId,
+    stepAttachments: extractStepAttachments(config),
+    attachmentCache: new Map(),
   };
 }
 
@@ -282,12 +310,37 @@ function toChannelSendError(err) {
  * @param {{account: {sessionKey: string}, recipientKey: string, text: string}} input
  * @returns {Promise<{messageId: string|null}>}
  */
-async function sendOne({ account, recipientKey, text }) {
+async function sendOne({ account, recipientKey, text, stepIndex, attachments }) {
   const whatsapp = await loadWhatsAppService();
   try {
     const exists = await whatsapp.checkNumberExists(account.sessionKey, recipientKey);
     if (exists === false) {
       throw new ChannelSendError('hard', 'Số không dùng WhatsApp');
+    }
+    const attachmentList = resolveAttachmentsForSend({ account, stepIndex, attachments });
+    if (attachmentList.length > 0) {
+      const sources = await prepareChannelAttachmentSources(attachmentList, {
+        ownerUserId: account.ownerUserId,
+        cache: account.attachmentCache,
+      });
+      if (sources.length < attachmentList.length) {
+        // Giống chiến dịch Zalo: tệp template hỏng/mất -> vẫn gửi phần đọc được (không dừng cả đợt vì một tệp).
+        console.warn(`[WhatsAppCampaignChannel] bỏ qua ${attachmentList.length - sources.length} tệp đính kèm không đọc được`);
+      }
+      // Import trễ: whatsapp.adapter kéo theo whatsappBaileys.service (hydrate DB lúc import) — như loadWhatsAppService.
+      const { sendWhatsAppBaileysMessageWithMedia } = await import('../../chatbot/channelAdapters/whatsapp.adapter.js');
+      const sent = await sendWhatsAppBaileysMessageWithMedia({
+        sessionKey: account.sessionKey,
+        phone: recipientKey,
+        text,
+        sources,
+      });
+      if (sent.error) {
+        // Khách ĐÃ nhận một phần (tin đầu đã tới) -> tính là đã gửi 1 lượt; runner chỉ ghi messageId tin đầu.
+        console.warn(`[WhatsAppCampaignChannel] tệp sau tin đầu thất bại (đã gửi ${sent.sentCount}): ${sent.error.message}`);
+        return { messageId: sent.firstMessageId, sentCount: sent.sentCount, partialError: String(sent.error.message) };
+      }
+      return { messageId: sent.firstMessageId, sentCount: sent.sentCount };
     }
     const result = await whatsapp.sendMessage(
       account.sessionKey,
@@ -297,6 +350,7 @@ async function sendOne({ account, recipientKey, text }) {
     return { messageId: result?.key?.id ?? null };
   } catch (err) {
     if (err instanceof ChannelSendError) throw err;
+    if (err?.code === CHANNEL_MEDIA_LIMIT_ERROR_CODE) throw new ChannelSendError('hard', String(err.message));
     throw toChannelSendError(err);
   }
 }
