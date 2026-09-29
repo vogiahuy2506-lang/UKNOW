@@ -212,10 +212,11 @@ export const WHATSAPP_PHONE_PATTERN = /^\d{8,15}$/;
  * @returns {string}
  */
 export const normalizeWhatsAppPhone = (raw) => {
-  let value = String(raw ?? '').trim();
-  if (value.startsWith('+')) value = value.slice(1);
-  if (/^\d+$/.test(value) && value.startsWith('0')) value = `84${value.slice(1)}`;
-  return value;
+  // Review W4b: ĐÚNG quy tắc backend (whatsapp.campaignChannel.js normalizeWhatsAppPhone) — bỏ MỌI ký tự
+  // không phải số ('+', khoảng trắng, gạch), rồi VN 0… -> 84…. FE chặt hơn BE thì "0912 345 678" bị báo sai
+  // dù backend nhận; FE lỏng hơn thì backend bỏ im lặng. Cùng một quy tắc mới an toàn.
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  return digits.startsWith('0') ? `84${digits.slice(1)}` : digits;
 };
 
 /**

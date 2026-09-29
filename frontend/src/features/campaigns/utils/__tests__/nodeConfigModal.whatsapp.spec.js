@@ -93,9 +93,11 @@ describe('normalizeWhatsAppPhone / parseWhatsAppPhoneList — quy tắc SĐT h�
     expect(invalid).toEqual(['0912345678;0913456789']);
   });
 
-  it('số 7 chữ số bị chặn; số có khoảng trắng bên trong bị chặn (không lọc im lặng)', () => {
+  it('số 7 chữ số bị chặn; khoảng trắng/gạch/dấu + bên trong bị BỎ như backend (0912 345-678 -> 84912345678)', () => {
     expect(parseWhatsAppPhoneList('1234567').invalid).toEqual(['1234567']);
-    expect(parseWhatsAppPhoneList('0912 345 678').invalid).toEqual(['0912 345 678']);
+    expect(parseWhatsAppPhoneList('0912 345-678').valid).toEqual(['84912345678']);
+    expect(parseWhatsAppPhoneList('0912 345-678').invalid).toEqual([]);
+    expect(normalizeWhatsAppPhone('(+84) 912 345 678')).toBe('84912345678');
   });
 
   it('khử trùng sau chuẩn hoá (0912… và 84912… là một số)', () => {
