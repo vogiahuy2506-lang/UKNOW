@@ -398,6 +398,22 @@ class ChatbotTelegramRepository {
   }
 
   /**
+   * Khoá tài khoản Telegram ĐANG HOẠT ĐỘNG (is_active) còn dòng phiên — ứng viên cho keep-alive.
+   * Tài khoản đã đăng xuất (is_active=false) hoặc đã bị xoá phiên (getClient xoá khi hết ủy quyền)
+   * không nằm trong đây, nên keep-alive không bao giờ thử đăng nhập lại chúng.
+   */
+  async listActiveSessionKeys() {
+    const { rows } = await db.query(
+      `SELECT ta.telegram_user_id
+       FROM telegram_accounts ta
+       JOIN telegram_session_state tss ON tss.telegram_user_id = ta.telegram_user_id
+       WHERE ta.is_active = true
+       ORDER BY tss.updated_at DESC`
+    );
+    return rows.map((r) => Number(r.telegram_user_id));
+  }
+
+  /**
    * Bind a session's owning Telegram user id to a specific
    * `telegram_accounts.id`. Called right after QR login.
    */

@@ -2566,6 +2566,8 @@ export default {
     statusConnecting: 'Đang kết nối',
     statusNotConnected: 'Chưa kết nối',
     statusOffline: 'Ngoại tuyến',
+    statusNeedsRescan: 'Cần quét lại QR',
+    needsRescanHint: 'Kết nối WhatsApp bị ngắt nhiều lần và đã dừng tự nối lại. Bấm "Quét lại" để quét lại mã QR.',
     phoneNumber: 'Số điện thoại',
     displayName: 'Tên hiển thị',
     displayNamePlaceholder: 'VD: WhatsApp cá nhân',

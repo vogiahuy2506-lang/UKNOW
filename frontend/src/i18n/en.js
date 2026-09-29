@@ -2564,6 +2564,8 @@ export default {
     statusConnecting: 'Connecting',
     statusNotConnected: 'Not connected',
     statusOffline: 'Offline',
+    statusNeedsRescan: 'Needs QR re-scan',
+    needsRescanHint: 'The WhatsApp connection dropped repeatedly and auto-reconnect stopped. Click "Rescan" to scan the QR code again.',
     phoneNumber: 'Phone number',
     displayName: 'Display name',
     displayNamePlaceholder: 'e.g. Personal WhatsApp',

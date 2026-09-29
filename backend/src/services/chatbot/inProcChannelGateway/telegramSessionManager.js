@@ -512,6 +512,54 @@ export class TelegramSessionManager {
     return true;
   }
 
+  /**
+   * P3 keep-alive: đảm bảo tài khoản đang NGHE tin đến. Trả 'alive' | 'restored' | 'failed'.
+   * - Đã có client + listening: không làm gì.
+   * - Có client nhưng mất handler (đăng ký lỗi lúc trước): đăng ký lại, KHÔNG dựng client thứ hai.
+   * - Chưa có client (rớt / bị dọn): dựng lại đúng đường lúc khởi động (`getClient`).
+   * Trùng khoá đang chạy thì bỏ qua ('alive') để hai lượt không dựng hai client cho cùng một tài khoản.
+   */
+  async ensureListening(telegramUserId) {
+    const key = String(telegramUserId);
+    if (!this._keepAlivePending) this._keepAlivePending = new Set();
+    if (this._keepAlivePending.has(key)) return 'alive';
+    this._keepAlivePending.add(key);
+    try {
+      const record = this._clients.get(key);
+      if (record?.listening) return 'alive';
+      if (record) {
+        if (!this._inboxForwarder || typeof record.client.registerMessageHandler !== 'function') {
+          return 'failed';
+        }
+        try {
+          await record.client.registerMessageHandler(
+            (event) => this._forwardInbound(event, telegramUserId),
+            { accountTelegramUserId: telegramUserId }
+          );
+          record.listening = true;
+          return 'restored';
+        } catch (err) {
+          logWarn(
+            `[TelegramSessionManager] ensureListening: registerMessageHandler failed for ${telegramUserId}: ${err.message}`
+          );
+          return 'failed';
+        }
+      }
+      const client = await this.getClient(telegramUserId);
+      return client ? 'restored' : 'failed';
+    } catch (err) {
+      logWarn(`[TelegramSessionManager] ensureListening failed for ${telegramUserId}: ${err.message}`);
+      return 'failed';
+    } finally {
+      this._keepAlivePending.delete(key);
+    }
+  }
+
+  /** Client đang nằm trong RAM VÀ đã đăng ký handler nhận tin đến. */
+  isListening(telegramUserId) {
+    return this._clients.get(String(telegramUserId))?.listening === true;
+  }
+
   isLoaded(telegramUserId) {
     return this._clients.has(String(telegramUserId));
   }

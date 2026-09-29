@@ -518,3 +518,70 @@ describe('TelegramSessionManager._evictIdle — client đang nghe tin', () => {
     expect(forwarder.forward).toHaveBeenCalledTimes(1);
   });
 });
+
+// P3 (29/09/2026): keep-alive khôi phục tài khoản không còn nghe tin.
+describe('TelegramSessionManager.ensureListening / isListening', () => {
+  const forwarder = { forward: jest.fn(async () => {}) };
+  const makeClient = () => ({
+    registerMessageHandler: jest.fn(async () => {}),
+    disconnect: jest.fn(async () => {}),
+  });
+
+  it('đã listening: không làm gì, không đăng ký lại', async () => {
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub, inboxForwarder: forwarder });
+    const client = makeClient();
+    mgr.adoptClient(801, client);
+    expect(mgr.isListening(801)).toBe(true);
+    client.registerMessageHandler.mockClear();
+    await expect(mgr.ensureListening(801)).resolves.toBe('alive');
+    expect(client.registerMessageHandler).not.toHaveBeenCalled();
+  });
+
+  it('có client nhưng mất handler: đăng ký lại trên CÙNG client, không dựng client thứ hai', async () => {
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub, inboxForwarder: forwarder });
+    const client = makeClient();
+    mgr.adoptClient(802, client);
+    mgr._clients.get('802').listening = false; // mô phỏng handler mất
+    client.registerMessageHandler.mockClear();
+    await expect(mgr.ensureListening(802)).resolves.toBe('restored');
+    expect(client.registerMessageHandler).toHaveBeenCalledTimes(1);
+    expect(mgr.isListening(802)).toBe(true);
+    expect(repoStub.getSessionString).not.toHaveBeenCalled();
+  });
+
+  it('đăng ký lại lỗi: trả failed, giữ listening=false', async () => {
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub, inboxForwarder: forwarder });
+    const client = makeClient();
+    mgr.adoptClient(803, client);
+    mgr._clients.get('803').listening = false;
+    client.registerMessageHandler.mockRejectedValueOnce(new Error('boom'));
+    await expect(mgr.ensureListening(803)).resolves.toBe('failed');
+    expect(mgr.isListening(803)).toBe(false);
+  });
+
+  it('chưa có client: dựng lại qua getClient (đường lúc khởi động)', async () => {
+    repoStub.getSessionString.mockResolvedValue({ kv: {} });
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    await expect(mgr.ensureListening(804)).resolves.toBe('restored');
+    expect(mgr.isLoaded(804)).toBe(true);
+  });
+
+  it('chưa có client và không còn phiên: failed', async () => {
+    repoStub.getSessionString.mockResolvedValue(null);
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    await expect(mgr.ensureListening(805)).resolves.toBe('failed');
+  });
+
+  it('cùng khoá đang chạy: lượt sau bỏ qua, chỉ dựng MỘT client', async () => {
+    let release;
+    repoStub.getSessionString.mockImplementation(
+      () => new Promise((r) => { release = () => r({ kv: {} }); })
+    );
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    const first = mgr.ensureListening(806);
+    await expect(mgr.ensureListening(806)).resolves.toBe('alive');
+    release();
+    await expect(first).resolves.toBe('restored');
+    expect(repoStub.getSessionString).toHaveBeenCalledTimes(1);
+  });
+});

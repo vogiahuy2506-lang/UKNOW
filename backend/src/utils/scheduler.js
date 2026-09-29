@@ -1013,6 +1013,14 @@ export const initScheduler = () => {
   startWhatsAppKeepAliveScheduler();
   console.log('[Scheduler] Đã khởi tạo WhatsApp Baileys Keep-Alive: rebuild socket mỗi 5 phút');
 
+  // ── Telegram Keep-Alive - khôi phục phiên đang nghe bị rớt (chỉ tài khoản session_ok) ──
+  if (process.env.NODE_ENV !== 'test' && process.env.TELEGRAM_GATEWAY_EMBEDDED !== 'false') {
+    import('../services/chatbot/telegramKeepAlive.service.js')
+      .then((mod) => mod.startTelegramKeepAliveScheduler())
+      .catch((err) => console.error('[Scheduler] Lỗi khởi tạo Telegram Keep-Alive:', err.message));
+    console.log('[Scheduler] Đã khởi tạo Telegram Keep-Alive: khôi phục phiên nghe tin mỗi 5 phút');
+  }
+
   // ── Custom Domain Auto-Verify - Tự động verify pending domains ─────────────────
   // Chạy mỗi 5 phút để tự động kích hoạt domain khi DNS đã propagate
   const autoVerifyDomains = async () => {

@@ -292,6 +292,11 @@ export function getChannelGateway(channel) {
   return getChannel(channel).facade;
 }
 
+/** Session manager của kênh — cho keep-alive định kỳ (P3), không dùng để gửi tin. */
+export function getSessionManager(channel) {
+  return getChannel(channel).sessionManager;
+}
+
 export function getSecret(channel) {
   return getChannel(channel).secret;
 }

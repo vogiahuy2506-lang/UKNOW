@@ -32,6 +32,8 @@ function StatusPill({ status, t }) {
     open: { label: t('whatsAppSettings.statusConnected'), cls: 'bg-green-50 text-green-700 border-green-200' },
     connecting: { label: t('whatsAppSettings.statusConnecting'), cls: 'bg-primary-50 text-primary-700 border-primary-200' },
     closed: { label: t('whatsAppSettings.statusNotConnected'), cls: 'bg-slate-50 text-slate-600 border-slate-200' },
+    // Socket đã bị dừng tự kết nối lại (chạm trần reconnect) — người dùng phải quét lại QR.
+    unrecoverable: { label: t('whatsAppSettings.statusNeedsRescan'), cls: 'bg-amber-50 text-amber-700 border-amber-200' },
     offline: { label: t('whatsAppSettings.statusOffline'), cls: 'bg-slate-50 text-slate-600 border-slate-200' },
   };
   const meta = metaMap[status] || metaMap.offline;
@@ -39,7 +41,8 @@ function StatusPill({ status, t }) {
     <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${meta.cls}`}>
       <span className={`h-1.5 w-1.5 rounded-full ${
         status === 'open' ? 'bg-green-500' :
-        status === 'connecting' ? 'bg-primary-500 animate-pulse' : 'bg-slate-400'
+        status === 'connecting' ? 'bg-primary-500 animate-pulse' :
+        status === 'unrecoverable' ? 'bg-amber-500' : 'bg-slate-400'
       }`} />
       {meta.label}
     </span>
@@ -325,6 +328,9 @@ export default function WhatsAppSettings() {
                           )}
                         </div>
                       </div>
+                      {s.status === 'unrecoverable' && (
+                        <p className="text-xs text-amber-700">{t('whatsAppSettings.needsRescanHint')}</p>
+                      )}
                       <InfoRow
                         icon={HiOutlineIdentification}
                         label={t('whatsAppSettings.jid')}
