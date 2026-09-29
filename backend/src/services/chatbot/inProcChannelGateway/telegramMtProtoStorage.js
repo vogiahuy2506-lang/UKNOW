@@ -430,6 +430,11 @@ function serialiseValue(value) {
  */
 function restoreBuffers(value) {
   if (value === null || value === undefined) return value;
+  // Repo thật trả blob đã qua `decryptChannelSessionBlob` → `reviveBufferInPlace` ĐÃ dựng lại Buffer.
+  // Thiếu nhánh này thì Buffer rơi xuống vòng `Object.keys` bên dưới và bị chép thành object thường
+  // `{0:…,1:…}` → mtcute `new DataView(object)` ném "First argument to DataView constructor must be an
+  // ArrayBuffer" → phiên Telegram hỏng sau MỖI lần backend khởi động lại (sự cố 28–29/09).
+  if (value instanceof Uint8Array) return value;
   if (Array.isArray(value)) return value.map(restoreBuffers);
   if (typeof value !== 'object') return value;
   if (

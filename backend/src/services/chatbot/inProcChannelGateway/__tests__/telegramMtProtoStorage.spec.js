@@ -24,6 +24,10 @@ import {
   InMemoryTelegramStorage,
   extractSerializedState,
 } from '../telegramMtProtoStorage.js';
+import {
+  encryptChannelSessionBlob,
+  decryptChannelSessionBlob,
+} from '../../../../utils/baileysAuthCrypto.util.js';
 
 // Pin a stable key so the repo's `encryptBaileysBlob` inside the
 // driver produces deterministic wire output (the repo is wired
@@ -147,6 +151,38 @@ describe('PostgresBackedTelegramStorage', () => {
       // Binary fields inside the peer `complete` should be restored.
       expect(Buffer.isBuffer(peer.complete)).toBe(true);
       expect(Array.from(peer.complete)).toEqual([0xde, 0xad]);
+    });
+
+    // Sự cố 28–29/09: repo THẬT trả blob đã qua decryptChannelSessionBlob (reviveBufferInPlace dựng lại
+    // Buffer sẵn). Repo giả ở ca trên trả thẳng marker { type:'Buffer' } nên không lộ lỗi. Ca này đi qua
+    // đúng cặp encrypt/decrypt thật ở ranh giới repo.
+    it('hydrates binary values as bytes when the repo returns already-revived Buffers (real crypto boundary)', async () => {
+      const stored = new Map();
+      const realBoundaryRepo = {
+        loadSessionState: jest.fn(async (id) => (
+          stored.has(Number(id)) ? decryptChannelSessionBlob(stored.get(Number(id))) : null
+        )),
+        saveSessionState: jest.fn(async (id, state) => {
+          stored.set(Number(id), JSON.parse(JSON.stringify(encryptChannelSessionBlob(state))));
+          return { telegram_user_id: Number(id) };
+        }),
+      };
+      const first = new PostgresBackedTelegramStorage({ telegramUserId: 777, repo: realBoundaryRepo });
+      await first.driver.load();
+      await first.kv.set('dc_main', Buffer.from([1, 2, 3, 4]));
+      await first.authKeys.set(2, Buffer.from('perm-key'));
+      await first.driver.save();
+
+      const fresh = new PostgresBackedTelegramStorage({ telegramUserId: 777, repo: realBoundaryRepo });
+      await fresh.driver.load();
+      const dcMain = await fresh.kv.get('dc_main');
+      expect(dcMain instanceof Uint8Array).toBe(true);
+      expect(Array.from(dcMain)).toEqual([1, 2, 3, 4]);
+      const authKey = await fresh.authKeys.get(2);
+      expect(authKey instanceof Uint8Array).toBe(true);
+      expect(Buffer.from(authKey).toString()).toBe('perm-key');
+      // mtcute đọc các giá trị này bằng TlBinaryReader → new DataView(...) — phải không ném.
+      expect(() => new DataView(dcMain.buffer, dcMain.byteOffset, dcMain.byteLength)).not.toThrow();
     });
   });
 
