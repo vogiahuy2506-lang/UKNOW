@@ -5,10 +5,6 @@ function normalizeLocale(locale) {
   return SUPPORTED_LOCALES.has(lang) ? lang : 'vi';
 }
 
-const CHATBOT_CAPABLE_CHANNEL_RE = /whatsapp|telegram|(?:facebook\s+)?messenger/i;
-// PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Việc 1.3 — cờ Telegram bật thì kênh này KHÔNG còn nằm
-// trong "chưa hỗ trợ gửi chiến dịch" (đã dựng được bằng trình dựng); WhatsApp/Messenger vẫn chưa.
-const NON_TELEGRAM_CHATBOT_CHANNEL_RE = /whatsapp|(?:facebook\s+)?messenger/i;
 const SEND_CONTEXT_RE = /gửi|gui|chiến dịch|chien dich|campaign|\bsend\b|broadcast|hàng loạt|hang loat/i;
 const CHATBOT_CONTEXT_RE = /chatbot|chat\s*bot|\bbot\b|trả lời|tra loi|\breply\b|\banswer\b/i;
 
@@ -16,6 +12,12 @@ const CHATBOT_CONTEXT_RE = /chatbot|chat\s*bot|\bbot\b|trả lời|tra loi|\brep
 // `isTelegramChannelEnabled`) — test đổi cờ giữa các ca không bị dính giá trị cũ.
 function isTelegramCampaignEnabled() {
   return process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED === 'true';
+}
+
+// P8a — WhatsApp đối xứng Telegram: cờ bật thì trợ lý dựng được chiến dịch WhatsApp (node send_whatsapp), kênh này
+// rời danh sách "chưa hỗ trợ". Cờ đọc lúc gọi như Telegram.
+function isWhatsAppCampaignEnabled() {
+  return process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED === 'true';
 }
 
 // PR-1 (PLAN_VA_TRO_LY_AI_2026-09-28) — mỗi năng lực khai `patterns` (regex dùng để khớp VÀ để xoá
@@ -31,21 +33,40 @@ function matchesAnyPattern(patterns) {
 // chốt thứ hai (giữ cả hai, không thay thế nhau).
 const INCIDENT_REPORT_RE = /bị|lỗi|không chạy|không gửi|tại sao|vì sao|sao lại|hết hạn mức|treo|đơ|failed|stuck|error/i;
 
-// PR-B Việc 1.2 — năng lực guide mới, ĐỨNG ĐẦU khi cờ bật (trình dựng đã có, trợ lý AI chưa dựng
-// hộ, chưa có gửi nhanh). Không dùng `matchesAnyPattern` mặc định vì cần kiểm thêm cờ + ngữ cảnh
-// gửi/chatbot giống unsupported_channel.
-const TELEGRAM_CAMPAIGN_CAPABILITY = {
-  id: 'telegram_campaign',
-  label: {
-    vi: 'gửi chiến dịch qua Telegram bằng trình dựng chiến dịch (trợ lý chưa dựng hộ, chưa có gửi nhanh)',
-    en: 'send Telegram campaigns using the campaign builder (the assistant does not build it for you yet, and quick send is not available)',
-  },
-  patterns: [/telegram/i],
-  matches: (text) => isTelegramCampaignEnabled()
-    && /telegram/i.test(text)
-    && SEND_CONTEXT_RE.test(text)
-    && !CHATBOT_CONTEXT_RE.test(text),
-};
+// P8a — Telegram/WhatsApp: trợ lý DỰNG ĐƯỢC chiến dịch (node send_telegram / send_whatsapp, tài khoản hỏi lại khi
+// thiếu, gửi MỘT tin) và Gửi nhanh có ở trang Gửi nhanh → thuộc "LÀM ĐƯỢC" (core), KHÔNG còn là "chỉ hướng dẫn"
+// như trước 30/09 (bản cũ nói "trợ lý chưa dựng hộ, chưa có gửi nhanh" — lỗi thời). Dựng lại mỗi lần gọi để
+// phản ánh đúng cờ hiện tại. Xét TRƯỚC năng lực `campaign` chung (câu "gửi chiến dịch qua Telegram" phải ra đúng kênh).
+function buildAdapterCampaignCapabilities() {
+  const capabilities = [];
+  if (isTelegramCampaignEnabled()) {
+    capabilities.push({
+      id: 'telegram_campaign',
+      label: {
+        vi: 'gửi chiến dịch qua Telegram (mình hỏi tài khoản Telegram, soạn nội dung rồi gửi một tin; gửi nhanh có ở trang Gửi nhanh)',
+        en: 'send Telegram campaigns (I ask which Telegram account to use, draft the message, and send one message; quick send is on the Quick Send page)',
+      },
+      patterns: [/telegram/i],
+      matches: (text) => /telegram/i.test(text)
+        && SEND_CONTEXT_RE.test(text)
+        && !CHATBOT_CONTEXT_RE.test(text),
+    });
+  }
+  if (isWhatsAppCampaignEnabled()) {
+    capabilities.push({
+      id: 'whatsapp_campaign',
+      label: {
+        vi: 'gửi chiến dịch qua WhatsApp (mình hỏi tài khoản WhatsApp, soạn nội dung rồi gửi một tin; gửi nhanh có ở trang Gửi nhanh)',
+        en: 'send WhatsApp campaigns (I ask which WhatsApp account to use, draft the message, and send one message; quick send is on the Quick Send page)',
+      },
+      patterns: [/whats\s?app/i],
+      matches: (text) => /whats\s?app/i.test(text)
+        && SEND_CONTEXT_RE.test(text)
+        && !CHATBOT_CONTEXT_RE.test(text),
+    });
+  }
+  return capabilities;
+}
 
 // Flag-độc lập, dựng một lần — schedule/edit_existing không đổi theo cờ Telegram.
 const STATIC_GUIDE_CAPABILITIES = [
@@ -70,25 +91,33 @@ const STATIC_GUIDE_CAPABILITIES = [
   },
 ];
 
-// PR-B Việc 1.3 — kênh không hỗ trợ GỬI CHIẾN DỊCH phụ thuộc cờ Telegram: dựng lại object mỗi lần
-// gọi (label + regex kênh) để luôn phản ánh đúng trạng thái cờ hiện tại, không lúc import.
+// PR-B Việc 1.3 / P8a — kênh không hỗ trợ GỬI CHIẾN DỊCH phụ thuộc cờ Telegram và WhatsApp: dựng lại object mỗi
+// lần gọi (label + regex kênh) để luôn phản ánh đúng trạng thái cờ hiện tại, không lúc import.
 function buildUnsupportedChannelCapability() {
   const telegramOn = isTelegramCampaignEnabled();
-  const channelRe = telegramOn ? NON_TELEGRAM_CHATBOT_CHANNEL_RE : CHATBOT_CAPABLE_CHANNEL_RE;
+  const whatsappOn = isWhatsAppCampaignEnabled();
+  const channelPatterns = [
+    ...(whatsappOn ? [] : ['whatsapp']),
+    ...(telegramOn ? [] : ['telegram']),
+    '(?:facebook\\s+)?messenger',
+  ];
+  const channelRe = new RegExp(channelPatterns.join('|'), 'i');
+  const labelChannels = {
+    vi: ['SMS', ...(whatsappOn ? [] : ['WhatsApp']), ...(telegramOn ? [] : ['Telegram']), 'Messenger'],
+    en: ['SMS', ...(whatsappOn ? [] : ['WhatsApp']), ...(telegramOn ? [] : ['Telegram']), 'Messenger'],
+  };
+  const joinVi = (items) => `${items.slice(0, -1).join(', ')} hoặc ${items[items.length - 1]}`;
+  const joinEn = (items) => `${items.slice(0, -1).join(', ')}, or ${items[items.length - 1]}`;
   return {
     id: 'unsupported_channel',
-    // Mục này nói về kênh GỬI CHIẾN DỊCH (Email, Zalo, và Telegram khi cờ bật). WhatsApp, Messenger
-    // thì chatbot VẪN nối được (tab Triển khai của Tạo AI Chatbot) — trước 21/09/2026 regex khớp
-    // trần tên kênh, nên hỏi "chatbot có nối Telegram được không" bị trả câu cố định "chưa hỗ trợ".
-    // Các kênh chatbot-nối-được chỉ tính là không hỗ trợ khi câu hỏi nói về GỬI/chiến dịch và KHÔNG
-    // nói về chatbot; còn lại để bộ định tuyến + bài hướng dẫn trả lời. SMS và push không có ở đâu cả.
+    // Mục này nói về kênh GỬI CHIẾN DỊCH (Email, Zalo, và Telegram/WhatsApp khi cờ bật). Messenger thì chatbot VẪN
+    // nối được (tab Triển khai của Tạo AI Chatbot) — trước 21/09/2026 regex khớp trần tên kênh, nên hỏi "chatbot
+    // có nối Telegram được không" bị trả câu cố định "chưa hỗ trợ". Các kênh chatbot-nối-được chỉ tính là không
+    // hỗ trợ khi câu hỏi nói về GỬI/chiến dịch và KHÔNG nói về chatbot; còn lại để bộ định tuyến + bài hướng dẫn
+    // trả lời. SMS và push không có ở đâu cả.
     label: {
-      vi: telegramOn
-        ? 'gửi chiến dịch qua SMS, WhatsApp, Messenger hoặc Push notification'
-        : 'gửi chiến dịch qua SMS, WhatsApp, Telegram, Messenger hoặc Push notification',
-      en: telegramOn
-        ? 'sending campaigns via SMS, WhatsApp, Messenger, or push notifications'
-        : 'sending campaigns via SMS, WhatsApp, Telegram, Messenger, or push notifications',
+      vi: `gửi chiến dịch qua ${joinVi([...labelChannels.vi, 'Push notification'])}`,
+      en: `sending campaigns via ${joinEn([...labelChannels.en, 'push notifications'])}`,
     },
     patterns: [/\bsms\b|push notification/i, channelRe],
     matches: (text) => /\bsms\b|push notification/i.test(text)
@@ -127,8 +156,7 @@ const STATIC_OTHER_UNSUPPORTED_CAPABILITIES = [
   },
 ];
 
-const CAPABILITY_DEFINITIONS = {
-  core: [
+const STATIC_CORE_CAPABILITIES = [
     // Xét TRƯỚC campaign: câu về template/mẫu email không được rơi vào "tạo chiến dịch đa kênh"
     // (trước 28/09 "email" trần trong regex campaign + campaign xét trước template làm mọi câu về
     // mẫu email bị nhận nhầm thành hỏi về chiến dịch).
@@ -183,14 +211,17 @@ const CAPABILITY_DEFINITIONS = {
       },
       patterns: [/(?:đọc|doc|phân tích|phan tich|analy[sz]e|read).*(?:tệp|tep|file|excel|csv|pdf|ảnh|anh|image)|(?:tệp|tep|file|excel|csv|pdf|ảnh|anh|image).*(?:đọc|doc|phân tích|phan tich|analy[sz]e|read)/i],
     },
-  ],
-  // PR-B Việc 1 — guide/unsupported ĐỌC LÚC GỌI (getter): thành phần phụ thuộc cờ Telegram
-  // (telegram_campaign có mặt hay không; label + regex kênh của unsupported_channel) phải luôn
+];
+
+const CAPABILITY_DEFINITIONS = {
+  // P8a — core/guide/unsupported ĐỌC LÚC GỌI (getter): thành phần phụ thuộc cờ Telegram/WhatsApp
+  // (telegram_campaign/whatsapp_campaign có mặt hay không; label + regex kênh của unsupported_channel) phải luôn
   // phản ánh giá trị process.env HIỆN TẠI, không phải giá trị lúc module được import.
+  get core() {
+    return [...buildAdapterCampaignCapabilities(), ...STATIC_CORE_CAPABILITIES];
+  },
   get guide() {
-    return isTelegramCampaignEnabled()
-      ? [TELEGRAM_CAMPAIGN_CAPABILITY, ...STATIC_GUIDE_CAPABILITIES]
-      : STATIC_GUIDE_CAPABILITIES;
+    return STATIC_GUIDE_CAPABILITIES;
   },
   get unsupported() {
     return [buildUnsupportedChannelCapability(), ...STATIC_OTHER_UNSUPPORTED_CAPABILITIES];
@@ -198,10 +229,10 @@ const CAPABILITY_DEFINITIONS = {
 };
 
 // matches mặc định chỉ cần gán MỘT LẦN cho các định nghĩa TĨNH (core + hai mảng guide/unsupported
-// flag-độc lập) — telegram_campaign và unsupported_channel đã tự khai matches riêng ở trên, và
+// flag-độc lập) — telegram_campaign/whatsapp_campaign và unsupported_channel đã tự khai matches riêng ở trên, và
 // được dựng lại mỗi lần gọi nên không có "một lần" nào để gán thêm.
 for (const capability of [
-  ...CAPABILITY_DEFINITIONS.core,
+  ...STATIC_CORE_CAPABILITIES,
   ...STATIC_GUIDE_CAPABILITIES,
   ...STATIC_OTHER_UNSUPPORTED_CAPABILITIES,
 ]) {
@@ -213,12 +244,13 @@ function localizedCapabilities(kind, locale) {
   return CAPABILITY_DEFINITIONS[kind].map(({ id, label }) => ({ id, label: label[lang] }));
 }
 
-export const CORE_CAPABILITIES = Object.freeze({
-  vi: Object.freeze(localizedCapabilities('core', 'vi')),
-  en: Object.freeze(localizedCapabilities('core', 'en')),
-});
+// P8a — `core` cũng phụ thuộc cờ (năng lực gửi chiến dịch Telegram/WhatsApp): getter như GUIDE_ONLY.
+export const CORE_CAPABILITIES = {
+  get vi() { return localizedCapabilities('core', 'vi'); },
+  get en() { return localizedCapabilities('core', 'en'); },
+};
 
-// PR-B — `guide`/`unsupported` phụ thuộc cờ Telegram: `.vi`/`.en` phải là getter (tính lại lúc
+// PR-B — `guide`/`unsupported` phụ thuộc cờ Telegram/WhatsApp: `.vi`/`.en` phải là getter (tính lại lúc
 // gọi), không phải giá trị đông cứng lúc import, để phản ánh đúng process.env HIỆN TẠI mỗi lần
 // đọc (test đổi cờ giữa các ca; formatAssistantCapabilities gọi lại mỗi lượt chat).
 export const GUIDE_ONLY = {
@@ -324,20 +356,15 @@ export function classifyCapabilityProbe(question = '', locale = 'vi') {
  * không phải câu hỏi năng lực "có...không"). Dùng lại đúng logic khớp của unsupported_channel
  * (`CAPABILITY_DEFINITIONS.unsupported`) — không chép lại regex.
  *
- * PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Việc 1.4 — cờ Telegram bật thì câu lệnh gửi Telegram
- * không còn "chưa hỗ trợ": kiểm `telegram_campaign` (guide) trước, khớp thì trả kind:'guide' luôn.
- * Cờ tắt, `CAPABILITY_DEFINITIONS.guide` không có `telegram_campaign` → rơi thẳng xuống nhánh cũ.
+ * PR-B / P8a — cờ kênh (Telegram, WhatsApp) bật thì kênh đó KHÔNG còn nằm trong regex `unsupported_channel`
+ * (trợ lý dựng được chiến dịch), nên câu lệnh "gửi tin telegram cho khách" trả null và đi tiếp vào luồng dựng
+ * chiến dịch — trước 30/09 nhánh này trả câu hướng dẫn "trợ lý chưa dựng hộ". Cờ tắt → nhánh cũ y nguyên.
  */
 export function classifyUnsupportedSendRequest(question = '', locale = 'vi') {
   const text = String(question || '').trim();
   if (!text || HOW_TO_RE.test(text)) return null;
 
   const lang = normalizeLocale(locale);
-
-  const telegramGuide = CAPABILITY_DEFINITIONS.guide.find((c) => c.id === 'telegram_campaign');
-  if (telegramGuide && telegramGuide.matches(text)) {
-    return { kind: 'guide', id: telegramGuide.id, label: telegramGuide.label[lang] };
-  }
 
   const capability = CAPABILITY_DEFINITIONS.unsupported.find((c) => c.id === 'unsupported_channel');
   if (!capability || !capability.matches(text)) return null;

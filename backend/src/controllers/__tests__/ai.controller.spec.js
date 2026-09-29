@@ -424,17 +424,51 @@ describe('ai.controller', () => {
   });
 
   // PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Việc 2 — LỆNH gửi kênh lạ gõ giữa wizard không có
-  // hình dạng câu hỏi (QUESTION_SHAPE_RE không khớp "gửi tin telegram cho khách") nhưng
-  // classifyUnsupportedSendRequest nhận ra được (cờ Telegram bật) → vẫn phải hỏi help-router,
+  // hình dạng câu hỏi (QUESTION_SHAPE_RE không khớp "gửi tin whatsapp cho khách") nhưng
+  // classifyUnsupportedSendRequest nhận ra được (kênh chưa hỗ trợ) → vẫn phải hỏi help-router,
   // thẻ chọn kênh vẫn mở để người dùng chọn kênh tiếp.
-  it('đang trả lời gate wizard NHƯNG gõ LỆNH gửi kênh lạ ("gửi tin telegram cho khách", cờ Telegram bật) → vẫn hỏi help-router', async () => {
-    const prevFlag = process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
-    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
+  // P8a — kênh nào "chưa hỗ trợ" phụ thuộc cờ: Telegram bật thì lệnh Telegram KHÔNG còn ở đây (xem ca dưới);
+  // ca này dùng WhatsApp với cờ WhatsApp tắt.
+  const withFlags = async (flags, fn) => {
+    const names = ['CAMPAIGN_CHANNEL_TELEGRAM_ENABLED', 'CAMPAIGN_CHANNEL_WHATSAPP_ENABLED'];
+    const prev = names.map((n) => process.env[n]);
+    names.forEach((n) => { if (flags[n]) process.env[n] = 'true'; else delete process.env[n]; });
     try {
+      await fn();
+    } finally {
+      names.forEach((n, i) => { if (prev[i] === undefined) delete process.env[n]; else process.env[n] = prev[i]; });
+    }
+  };
+
+  it('đang trả lời gate wizard NHƯNG gõ LỆNH gửi kênh chưa hỗ trợ ("gửi tin whatsapp cho khách", cờ WhatsApp tắt) → vẫn hỏi help-router', async () => {
+    await withFlags({ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED: true }, async () => {
       tryHandleHelpChat.mockResolvedValue({
         type: 'help',
-        content: 'Bạn vào Chiến dịch → Tạo chiến dịch, chọn loại Telegram, kéo khối "Gửi tin nhắn Telegram" vào luồng.',
+        content: 'Hiện chưa hỗ trợ gửi chiến dịch qua WhatsApp.',
       });
+
+      const req = {
+        body: {
+          history: [
+            { role: 'assistant', type: 'ask_campaign_details', content: 'Bạn muốn gửi qua kênh nào?' },
+            { role: 'user', content: 'gửi tin whatsapp cho khách' },
+          ],
+          locale: 'vi',
+        },
+        user: { id: 7, role: 'user' },
+      };
+      const res = makeRes();
+
+      await aiController.chat(req, res);
+
+      expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it('P8a: cờ Telegram bật, gõ "gửi tin telegram cho khách" giữa wizard → KHÔNG hỏi help-router (trợ lý dựng được, wizard tiếp tục)', async () => {
+    await withFlags({ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED: true }, async () => {
+      tryHandleHelpChat.mockResolvedValue({ type: 'help', content: 'KHÔNG ĐƯỢC HIỆN' });
+      processSmartChat.mockResolvedValue({ type: 'ask_campaign_details', content: 'Chọn tài khoản Telegram' });
 
       const req = {
         body: {
@@ -450,11 +484,8 @@ describe('ai.controller', () => {
 
       await aiController.chat(req, res);
 
-      expect(tryHandleHelpChat).toHaveBeenCalledTimes(1);
-    } finally {
-      if (prevFlag === undefined) delete process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
-      else process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = prevFlag;
-    }
+      expect(tryHandleHelpChat).not.toHaveBeenCalled();
+    });
   });
 
   // Đối chứng: "cả hai" không phải câu hỏi (QUESTION_SHAPE_RE) và không phải lệnh kênh lạ

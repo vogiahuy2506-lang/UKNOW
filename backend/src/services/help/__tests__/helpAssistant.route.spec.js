@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockGenerate = jest.fn();
 const mockRecord = jest.fn();
@@ -97,28 +97,41 @@ describe('tryHandleHelpChat route branches', () => {
     expect(mockGenerate).not.toHaveBeenCalled();
   });
 
-  // PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Nghiệm thu 2 — cờ Telegram bật: "gửi tin telegram cho
-  // khách" không còn "chưa hỗ trợ" mà chỉ hướng dẫn dùng trình dựng, vẫn short-circuit trước LLM.
-  it('cờ Telegram bật: câu LỆNH gửi Telegram → hướng dẫn dùng trình dựng, không gọi router LLM', async () => {
-    const prevFlag = process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
-    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
-    try {
-      const result = await tryHandleHelpChat({
-        history: historyWith('gửi tin telegram cho khách'),
-        userId: 1,
-      });
+  // P8a — cờ Telegram/WhatsApp bật: trợ lý DỰNG ĐƯỢC chiến dịch hai kênh này. Câu HỎI năng lực → "Có, mình làm
+  // được…" (không còn câu "chưa dựng hộ"); câu LỆNH gửi → KHÔNG bị chặn bởi help (đi tiếp vào luồng dựng chiến dịch).
+  describe('cờ Telegram/WhatsApp bật (P8a)', () => {
+    const FLAGS = ['CAMPAIGN_CHANNEL_TELEGRAM_ENABLED', 'CAMPAIGN_CHANNEL_WHATSAPP_ENABLED'];
+    let prev;
+    beforeEach(() => {
+      prev = FLAGS.map((f) => process.env[f]);
+      FLAGS.forEach((f) => { process.env[f] = 'true'; });
+    });
+    afterEach(() => {
+      FLAGS.forEach((f, i) => { if (prev[i] === undefined) delete process.env[f]; else process.env[f] = prev[i]; });
+    });
 
-      // Chỗ vênh Nghiệm thu mục 2 vs Việc 1.5: câu ghim nguyên văn ở Việc 1.5 không chứa chữ
-      // "trình dựng" (chỉ có "Chiến dịch → Tạo chiến dịch") — kiểm cụm thật thay vì tự chế thêm chữ.
-      expect(result.content).toContain('Tạo chiến dịch');
-      // Review PR-B (Việc 5): link hướng dẫn phải là link markdown bấm được, không phải chữ thường.
-      expect(result.content).toContain('](/huong-dan/campaign-create)');
-      expect(result.data).toMatchObject({ capabilityProbe: true, capabilityKind: 'guide' });
+    it.each([
+      ['có gửi chiến dịch qua Telegram được không', /Telegram/],
+      ['có gửi chiến dịch qua WhatsApp được không', /WhatsApp/],
+    ])('câu HỎI "%s" → core "Có, mình làm được", không gọi router LLM, không còn câu "chưa dựng hộ"', async (question, channelRe) => {
+      const result = await tryHandleHelpChat({ history: historyWith(question), userId: 1 });
+      expect(result.content).toMatch(/Có, mình làm được/);
+      expect(result.content).toMatch(channelRe);
+      expect(result.content).not.toMatch(/chưa dựng/);
+      expect(result.data).toMatchObject({ capabilityProbe: true, capabilityKind: 'core' });
       expect(mockGenerate).not.toHaveBeenCalled();
-    } finally {
-      if (prevFlag === undefined) delete process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
-      else process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = prevFlag;
-    }
+    });
+
+    it('câu LỆNH "gửi tin telegram cho khách" KHÔNG bị help chặn (đi tiếp bộ định tuyến → luồng dựng chiến dịch)', async () => {
+      mockGenerate.mockResolvedValue({ text: 'làm_giúp', modelName: 'm', raw: {} });
+      const result = await tryHandleHelpChat({ history: historyWith('gửi tin telegram cho khách'), userId: 1 });
+      expect(result).toEqual({ handled: false, route: HELP_ROUTE_LABELS.làm_giúp });
+    });
+
+    it('câu trả "chưa hỗ trợ" nêu kênh trợ lý làm được, gồm Telegram và WhatsApp khi cờ bật', async () => {
+      const result = await tryHandleHelpChat({ history: historyWith('hệ thống có gửi SMS không'), userId: 1 });
+      expect(result.content).toContain('Email, Zalo, Telegram hoặc WhatsApp');
+    });
   });
 
   it('plan-advisor short-circuits before sensitive docs/router', async () => {

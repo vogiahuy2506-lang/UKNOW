@@ -16,7 +16,10 @@ describe('bài hướng dẫn Telegram/WhatsApp (W7c)', () => {
     expect(md).toContain('Giới hạn lượt chatbot trả lời');
     expect(md).toContain('Kết nối kênh Chatbot');
     expect(md).toContain('Credit AI');
-    expect(md).toContain('chỉ gửi được **văn bản**');
+    // P5: Hộp thư gửi được đính kèm cho WhatsApp/Telegram — không còn câu "chỉ gửi được văn bản".
+    expect(md).not.toContain('chỉ gửi được **văn bản**');
+    expect(md).toContain('gửi được cả **ảnh và tệp đính kèm**');
+    expect(md).not.toContain('**Telegram** thì chưa có trong Lịch sử trò chuyện');
     expect(md).toContain('Cần đăng nhập lại');
     // Review W7c: W6 (chủ trả lời từ điện thoại → AI tạm dừng) ĐÃ lên main 54324797 → bài mô tả hành vi thật, không còn "khi được cập nhật".
     expect(md).toContain('Bạn tự trả lời trên điện thoại');
@@ -43,9 +46,37 @@ describe('bài hướng dẫn Telegram/WhatsApp (W7c)', () => {
     expect(md).toContain('khi quản trị viên đã bật kênh');
   });
 
-  it('inbox: WhatsApp có trong Hộp thư, Telegram chưa', () => {
-    const md = bySlug('inbox').body_md;
-    expect(md).toContain('Zalo cá nhân, WhatsApp');
-    expect(md).toMatch(/Telegram\*\* thì chưa có ở đây/);
+  it('inbox: WhatsApp và Telegram đều có trong Hộp thư, trả lời tay gửi được đính kèm', () => {
+    const a = bySlug('inbox');
+    expect(a.body_md).toContain('Zalo cá nhân, WhatsApp, Telegram');
+    expect(a.body_md).not.toMatch(/Telegram\*\* thì chưa có ở đây/);
+    expect(a.body_md).toContain('**văn bản, ảnh và tệp đính kèm**');
+    expect(a.body_md).not.toContain('Hộp thư WhatsApp chưa gửi được tệp đính kèm');
+    expect(a.summary).toContain('Telegram');
+  });
+
+  it('quick-send: Telegram/WhatsApp có trong Gửi nhanh, không còn câu "Telegram chưa có"', () => {
+    const md = bySlug('quick-send').body_md;
+    expect(md).not.toContain('Telegram chưa có trong Gửi nhanh');
+    expect(md).toContain('**Telegram** và **WhatsApp** cũng có trong Gửi nhanh');
+    expect(md).toContain('Giới hạn gửi/ngày');
+  });
+
+  it('campaign-create: trợ lý AI dựng hộ Telegram/WhatsApp + giới hạn/ngày, tốc độ, mẫu tin, đính kèm', () => {
+    const md = bySlug('campaign-create').body_md;
+    expect(md).not.toContain('chưa dựng hộ');
+    expect(md).toContain('Trợ lý AI dựng hộ được');
+    expect(md).toContain('một tin, gửi ngay');
+    expect(md).toContain('Giới hạn & tốc độ gửi chiến dịch');
+    expect(md).toContain('Mẫu tin nhắn (dùng chung với Zalo)');
+    expect(md).toContain('00:00 ngày mai');
+    expect(md).toContain('5 ảnh, 3 tài liệu, tổng 20 MB');
+  });
+
+  it('channels, mau-tin-nhan, doi-goi: nhắc slot/khoá vượt gói và mẫu Zalo dùng chung Telegram/WhatsApp', () => {
+    expect(bySlug('channels').body_md).toContain('Bị khoá (vượt gói)');
+    expect(bySlug('channels').body_md).toContain('Mua thêm slot');
+    expect(bySlug('mau-tin-nhan').body_md).toContain('cũng dùng được cho **Telegram** và **WhatsApp**');
+    expect(bySlug('doi-goi').body_md).toContain('tài khoản Zalo/Email/Telegram/WhatsApp');
   });
 });

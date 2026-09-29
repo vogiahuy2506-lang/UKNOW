@@ -268,22 +268,29 @@ describe('cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED (PR-B)', () => {
     });
   });
 
-  describe('cờ BẬT — Telegram chuyển sang chỉ hướng dẫn', () => {
+  describe('cờ BẬT — Telegram thuộc "LÀM ĐƯỢC" (P8a: trợ lý dựng được chiến dịch)', () => {
     beforeEach(() => {
       process.env[FLAG] = 'true';
     });
 
-    it('gửi tin telegram cho khách → guide:telegram_campaign', () => {
-      expect(classifyUnsupportedSendRequest('gửi tin telegram cho khách', 'vi'))
-        .toMatchObject({ kind: 'guide', id: 'telegram_campaign' });
+    it('gửi tin telegram cho khách → null (không còn bị chặn bằng câu hướng dẫn; đi tiếp vào luồng dựng chiến dịch)', () => {
+      expect(classifyUnsupportedSendRequest('gửi tin telegram cho khách', 'vi')).toBeNull();
     });
 
-    it('có gửi chiến dịch qua Telegram được không → guide:telegram_campaign', () => {
+    it('có gửi chiến dịch qua Telegram được không → core:telegram_campaign', () => {
       expect(classifyCapabilityProbe('có gửi chiến dịch qua Telegram được không', 'vi'))
-        .toMatchObject({ kind: 'guide', id: 'telegram_campaign' });
+        .toMatchObject({ kind: 'core', id: 'telegram_campaign' });
     });
 
-    it('gửi tin whatsapp cho khách hàng → vẫn unsupported_channel (chỉ Telegram được gỡ)', () => {
+    it('nhãn năng lực không còn nói "chưa dựng hộ, chưa có gửi nhanh" (lỗi thời)', () => {
+      const prompt = formatAssistantCapabilities('vi');
+      expect(prompt).not.toContain('chưa dựng hộ');
+      expect(prompt).not.toContain('chưa có gửi nhanh');
+      expect(formatAssistantCapabilities('en')).not.toContain('does not build it for you yet');
+    });
+
+    it('gửi tin whatsapp cho khách hàng → vẫn unsupported_channel (chỉ cờ Telegram bật, WhatsApp còn tắt)', () => {
+      delete process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED;
       expect(classifyUnsupportedSendRequest('gửi tin whatsapp cho khách hàng', 'vi'))
         .toMatchObject({ kind: 'unsupported', id: 'unsupported_channel' });
     });
@@ -294,16 +301,79 @@ describe('cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED (PR-B)', () => {
 
     // Đột biến (a) trong Nghiệm thu — bỏ `!CHATBOT_CONTEXT_RE` khỏi telegram_campaign.matches: câu
     // này có đủ cả 3 (kênh telegram + gửi + chatbot) nên là ca DUY NHẤT lật đỏ nếu bỏ nhánh loại trừ đó.
+    it('chatbot + gửi + telegram: hỏi năng lực "gửi tin nhắn cho chatbot qua telegram được không" → KHÔNG là telegram_campaign', () => {
+      const probe = classifyCapabilityProbe('gửi tin nhắn cho chatbot qua telegram được không', 'vi');
+      expect(probe?.id).not.toBe('telegram_campaign');
+    });
+
     it('gửi tin nhắn cho chatbot qua telegram → null (có "gửi" NHƯNG là hỏi chatbot, không phải chiến dịch)', () => {
       expect(classifyUnsupportedSendRequest('gửi tin nhắn cho chatbot qua telegram', 'vi')).toBeNull();
     });
 
-    it('formatAssistantCapabilities("vi") có Telegram trong CHỈ HƯỚNG DẪN, KHÔNG còn trong KHÔNG HỖ TRỢ', () => {
+    it('formatAssistantCapabilities("vi") có Telegram trong LÀM ĐƯỢC, KHÔNG còn trong KHÔNG HỖ TRỢ, WhatsApp vẫn ở KHÔNG HỖ TRỢ', () => {
+      delete process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED;
       const prompt = formatAssistantCapabilities('vi');
-      const guideSection = prompt.split('## KHÔNG HỖ TRỢ')[0];
+      const coreSection = prompt.split('## CHỈ HƯỚNG DẪN')[0];
       const unsupportedSection = prompt.split('## KHÔNG HỖ TRỢ')[1];
-      expect(guideSection).toContain('Telegram');
+      expect(coreSection).toContain('Telegram');
       expect(unsupportedSection).not.toContain('Telegram');
+      expect(unsupportedSection).toContain('WhatsApp');
     });
+  });
+});
+
+// P8a — WhatsApp đối xứng Telegram, cờ CAMPAIGN_CHANNEL_WHATSAPP_ENABLED đọc lúc GỌI.
+describe('cờ CAMPAIGN_CHANNEL_WHATSAPP_ENABLED (P8a)', () => {
+  const FLAG = 'CAMPAIGN_CHANNEL_WHATSAPP_ENABLED';
+  let prevWa;
+  let prevTg;
+
+  beforeEach(() => {
+    prevWa = process.env[FLAG];
+    prevTg = process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
+    delete process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
+  });
+
+  afterEach(() => {
+    if (prevWa === undefined) delete process.env[FLAG]; else process.env[FLAG] = prevWa;
+    if (prevTg === undefined) delete process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
+    else process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = prevTg;
+  });
+
+  it('dùng đúng tên biến env như campaignChannelRegistry.service.js', () => {
+    expect(fs.readFileSync(ASSISTANT_CAPABILITIES_SOURCE, 'utf8')).toContain(`process.env.${FLAG}`);
+    expect(fs.readFileSync(CAMPAIGN_CHANNEL_REGISTRY_SOURCE, 'utf8')).toContain(`process.env.${FLAG}`);
+  });
+
+  it('cờ TẮT: WhatsApp nằm trong KHÔNG HỖ TRỢ, câu lệnh gửi WhatsApp bị chặn như cũ', () => {
+    delete process.env[FLAG];
+    expect(classifyUnsupportedSendRequest('gửi tin whatsapp cho khách hàng', 'vi'))
+      .toMatchObject({ kind: 'unsupported', id: 'unsupported_channel' });
+    const unsupportedSection = formatAssistantCapabilities('vi').split('## KHÔNG HỖ TRỢ')[1];
+    expect(unsupportedSection).toContain('WhatsApp');
+  });
+
+  it('cờ BẬT: WhatsApp rời KHÔNG HỖ TRỢ (Telegram vẫn ở đó vì cờ Telegram tắt), lệnh gửi WhatsApp → null', () => {
+    process.env[FLAG] = 'true';
+    expect(classifyUnsupportedSendRequest('gửi tin whatsapp cho khách hàng', 'vi')).toBeNull();
+    expect(classifyUnsupportedSendRequest('gửi tin telegram cho khách hàng', 'vi'))
+      .toMatchObject({ kind: 'unsupported' });
+    const prompt = formatAssistantCapabilities('vi');
+    const unsupportedSection = prompt.split('## KHÔNG HỖ TRỢ')[1];
+    expect(unsupportedSection).not.toContain('WhatsApp');
+    expect(unsupportedSection).toContain('Telegram');
+    expect(prompt.split('## CHỈ HƯỚNG DẪN')[0]).toContain('WhatsApp');
+  });
+
+  it('cờ BẬT: câu hỏi năng lực WhatsApp → core:whatsapp_campaign', () => {
+    process.env[FLAG] = 'true';
+    expect(classifyCapabilityProbe('có gửi chiến dịch qua WhatsApp được không', 'vi'))
+      .toMatchObject({ kind: 'core', id: 'whatsapp_campaign' });
+  });
+
+  it('chatbot WhatsApp vẫn không bị coi là gửi chiến dịch (cờ bật)', () => {
+    process.env[FLAG] = 'true';
+    expect(classifyUnsupportedSendRequest('gửi tin nhắn cho chatbot qua whatsapp', 'vi')).toBeNull();
+    expect(classifyUnsupportedSendRequest('chatbot whatsapp của tôi không trả lời', 'vi')).toBeNull();
   });
 });
