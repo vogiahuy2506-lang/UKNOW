@@ -149,6 +149,10 @@ class WhatsAppBaileysController {
         ...myPersisted,
       ]));
 
+      // P6 — phiên bị khoá do vượt hạn mức gói (hạ gói / slot hết hạn): trang Quản lý kênh gắn nhãn + link mua thêm.
+      const { lockedChannelAccountRefs } = await import('../utils/topupLockGate.util.js');
+      const lockedKeys = await lockedChannelAccountRefs('whatsapp_accounts', userId);
+
       // Hydrate with detail (phone + name) so the UI can display nicely.
       const items = shortKeys.map((shortKey) => {
         const fullKey = `${userId}-${shortKey}`;
@@ -159,6 +163,7 @@ class WhatsAppBaileysController {
           status: detail.status || 'offline',
           phone: (detail.userId || '').split('@')[0] || null,
           name: detail.userName || null,
+          isLocked: lockedKeys.has(fullKey),
         };
       });
 

@@ -1,5 +1,5 @@
 import { isResourceLocked } from '../services/payment/topupLock.service.js';
-import { isWhatsappSessionLocked } from '../repositories/payment/topupLock.repository.js';
+import { isWhatsappSessionLocked, listLockedChannelAccountRefs } from '../repositories/payment/topupLock.repository.js';
 import db from '../config/database.js';
 
 /** Câu chung khi tài khoản kênh bị khoá do vượt hạn mức gói (P6, PLAN_TG_WA_DAY_DU). */
@@ -46,6 +46,24 @@ export async function whatsappSessionIsLocked(sessionKey) {
       console.error(`[TopupLock] whatsapp lock check failed (${sessionKey}):`, err.message);
     }
     return false;
+  }
+}
+
+/**
+ * Tập tài khoản kênh (Telegram: id, WhatsApp: session_key — dạng chuỗi) của chủ đang bị khoá, cho danh sách ở trang
+ * Quản lý kênh. Fail-open: lỗi/bảng thiếu -> tập rỗng (không gắn nhãn), không làm hỏng danh sách.
+ * @param {'telegram_accounts'|'whatsapp_accounts'} resourceKey
+ * @param {number|string} ownerUserId
+ * @returns {Promise<Set<string>>}
+ */
+export async function lockedChannelAccountRefs(resourceKey, ownerUserId) {
+  try {
+    return await listLockedChannelAccountRefs(resourceKey, ownerUserId);
+  } catch (err) {
+    if (err?.code !== '42P01' && err?.code !== '42703') {
+      console.error(`[TopupLock] locked refs lookup failed (${resourceKey}#${ownerUserId}):`, err.message);
+    }
+    return new Set();
   }
 }
 

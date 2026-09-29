@@ -174,6 +174,10 @@ class TelegramPersonalService {
         .map((row) => String(row.telegram_user_id))
     );
 
+    // P6 — tài khoản bị khoá do vượt hạn mức gói: trang Quản lý kênh gắn nhãn + link mua thêm.
+    const { lockedChannelAccountRefs } = await import('../../utils/topupLockGate.util.js');
+    const lockedIds = await lockedChannelAccountRefs('telegram_accounts', userId);
+
     // session_ok: phiên còn khoá đăng nhập không. Chỉ đọc CSDL (KHÔNG dựng client/kết nối — getClient
     // có thể xoá phiên). Client đang nằm trong RAM => chắc chắn còn phiên. Không trả blob ra API.
     return Promise.all(
@@ -190,7 +194,7 @@ class TelegramPersonalService {
             sessionOk = false;
           }
         }
-        return { ...row, is_loaded: isLoaded, session_ok: sessionOk };
+        return { ...row, is_loaded: isLoaded, session_ok: sessionOk, is_locked: lockedIds.has(String(row.id)) };
       })
     );
   }

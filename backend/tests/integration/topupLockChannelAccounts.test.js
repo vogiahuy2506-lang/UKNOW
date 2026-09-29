@@ -9,7 +9,7 @@ const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
 const { reconcileResourceLocks, getLockOverview, LOCKABLE_RESOURCE_KEYS } =
   await import('../../src/services/payment/topupLock.service.js');
-const { resourceIsLocked, whatsappSessionIsLocked } = await import('../../src/utils/topupLockGate.util.js');
+const { resourceIsLocked, whatsappSessionIsLocked, lockedChannelAccountRefs } = await import('../../src/utils/topupLockGate.util.js');
 
 async function makeOwner(username, { maxTelegram = null, maxWhatsapp = null } = {}) {
   const owner = await createUser({ username });
@@ -154,6 +154,21 @@ describe('P6 — khoá tài khoản Telegram/WhatsApp', () => {
       [owner.id]
     );
     expect(rows[0].n).toBe(0);
+  });
+
+  it('lockedChannelAccountRefs: danh sách trang Quản lý kênh — Telegram theo id, WhatsApp theo session_key, không lẫn chủ khác', async () => {
+    const owner = await makeOwner('p6-refs', { maxTelegram: 1, maxWhatsapp: 1 });
+    const other = await makeOwner('p6-refs-other', { maxTelegram: 1, maxWhatsapp: 1 });
+    const [, tgLocked] = await addTelegramAccounts(owner.id, 2);
+    await addWhatsappSession(`${owner.id}-a`, 20);
+    await addWhatsappSession(`${owner.id}-b`, 10);
+    await addTelegramAccounts(other.id, 2);
+    await reconcileResourceLocks(owner.id, db);
+    await reconcileResourceLocks(other.id, db);
+
+    expect([...(await lockedChannelAccountRefs('telegram_accounts', owner.id))]).toEqual([String(tgLocked)]);
+    expect([...(await lockedChannelAccountRefs('whatsapp_accounts', owner.id))]).toEqual([`${owner.id}-b`]);
+    expect((await lockedChannelAccountRefs('whatsapp_accounts', other.id)).size).toBe(0);
   });
 
   it('getLockOverview trả đủ 2 khoá mới với nhãn + trần', async () => {

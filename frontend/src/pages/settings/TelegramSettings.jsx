@@ -18,6 +18,7 @@ import {
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
+import ChannelAccountLockNotice, { ChannelAccountLockBadge } from '../../features/settings/components/ChannelAccountLockNotice';
 import { useI18n } from '../../i18n';
 
 /**
@@ -296,7 +297,9 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, loggi
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-slate-900 truncate">{displayName}</p>
             <StatusPill loaded={account.is_loaded} active={account.is_active} sessionOk={account.session_ok} t={t} />
+            {account.is_locked && <ChannelAccountLockBadge />}
           </div>
+          {account.is_locked && <ChannelAccountLockNotice />}
 
           {needsRelogin && (
             <p className="mt-2 text-xs text-amber-700">{t('telegramSettings.needsReloginHint')}</p>

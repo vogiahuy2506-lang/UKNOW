@@ -260,9 +260,10 @@ export default function PlanSection({ data, t }) {
             icon={HiOutlineChatAlt2}
             label={t('accountProfileModal.whatsappAccounts')}
             used={data.whatsappAccountsUsed || 0}
-            limit={resourceLimit(data.maxWhatsappAccounts, 0)}
+            limit={resourceLimit(data.maxWhatsappAccounts, data.addons?.whatsappAccounts)}
             t={t}
             serviceSuspended={serviceSuspended}
+            usingAddons={!!data.addons?.whatsappAccounts}
           />
         )}
         {(!isUnlimitedPlanLimit(data.maxTelegramAccounts) || data.telegramAccountsUsed > 0) && (
@@ -270,9 +271,10 @@ export default function PlanSection({ data, t }) {
             icon={HiOutlineChatAlt2}
             label={t('accountProfileModal.telegramAccounts')}
             used={data.telegramAccountsUsed || 0}
-            limit={resourceLimit(data.maxTelegramAccounts, 0)}
+            limit={resourceLimit(data.maxTelegramAccounts, data.addons?.telegramAccounts)}
             t={t}
             serviceSuspended={serviceSuspended}
+            usingAddons={!!data.addons?.telegramAccounts}
           />
         )}
         <UsageBar
@@ -320,6 +322,8 @@ export default function PlanSection({ data, t }) {
               ['emails', 'topup.items.emails', true],
               ['aiCredits', 'topup.items.aiCredits', true],
               ['zaloAccounts', 'topup.items.zaloAccounts', false],
+              ['telegramAccounts', 'topup.items.telegramAccounts', false],
+              ['whatsappAccounts', 'topup.items.whatsappAccounts', false],
               ['emailAccounts', 'topup.items.emailAccounts', false],
               ['landingPages', 'topup.items.landingPages', false],
               ['chatbots', 'topup.items.chatbots', false],

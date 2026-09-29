@@ -97,6 +97,31 @@ export async function isWhatsappSessionLocked(sessionKey, queryable = db) {
 }
 
 /**
+ * Tập tài khoản kênh của chủ đang bị khoá — cho trang Quản lý kênh gắn nhãn "Bị khoá (vượt gói)".
+ * Telegram: id tài khoản; WhatsApp: session_key. Một truy vấn cho cả danh sách (không N+1).
+ * @param {'telegram_accounts'|'whatsapp_accounts'} resourceKey
+ * @param {number|string} userId chủ workspace
+ * @returns {Promise<Set<string>>}
+ */
+export async function listLockedChannelAccountRefs(resourceKey, userId, queryable = db) {
+  if (resourceKey === 'whatsapp_accounts') {
+    const { rows } = await queryable.query(
+      `SELECT s.session_key AS ref
+       FROM topup_locked_resources t
+       JOIN whatsapp_account_settings s ON s.id = t.resource_id
+       WHERE t.user_id = $1 AND t.resource_key = 'whatsapp_accounts'`,
+      [userId]
+    );
+    return new Set(rows.map((r) => String(r.ref)));
+  }
+  const { rows } = await queryable.query(
+    `SELECT resource_id AS ref FROM topup_locked_resources WHERE user_id = $1 AND resource_key = $2`,
+    [userId, resourceKey]
+  );
+  return new Set(rows.map((r) => String(r.ref)));
+}
+
+/**
  * @param {string} resourceKey
  * @param {number|string} resourceId
  * @param {import('pg').Pool|import('pg').PoolClient} [queryable]

@@ -18,6 +18,7 @@ import {
 import { FaWhatsapp } from 'react-icons/fa';
 import whatsappSettingsApiService from '../../features/settings/services/whatsappSettingsApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
+import ChannelAccountLockNotice, { ChannelAccountLockBadge } from '../../features/settings/components/ChannelAccountLockNotice';
 import { useI18n } from '../../i18n';
 
 /**
@@ -270,7 +271,9 @@ export default function WhatsAppSettings() {
                         {s.name || s.phone || `WhatsApp #${s.shortKey || '?'}`}
                       </h3>
                       <StatusPill status={s.status} t={t} />
+                      {s.isLocked && <ChannelAccountLockBadge />}
                     </div>
+                    {s.isLocked && <ChannelAccountLockNotice />}
 
                     {/* Detail grid */}
                     <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">

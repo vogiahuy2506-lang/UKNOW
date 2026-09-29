@@ -112,6 +112,28 @@ describe('TelegramSettings — defensive rendering', () => {
     });
   });
 
+  // P6 (PLAN_TG_WA_DAY_DU): tài khoản bị khoá do vượt hạn mức gói -> nhãn + link mua thêm; tài khoản thường thì KHÔNG.
+  it('P6 — tài khoản is_locked hiện nhãn "Bị khoá (vượt gói)" + link mua thêm; tài khoản không khoá thì không', async () => {
+    listTelegramAccountsMock.mockResolvedValueOnce({
+      data: {
+        data: [
+          { id: 1, telegram_user_id: '111', first_name: 'Alice', is_active: true, is_loaded: true, is_locked: false },
+          { id: 2, telegram_user_id: '222', first_name: 'Bob', is_active: true, is_loaded: true, is_locked: true },
+        ],
+      },
+    });
+    getPersonalAccountsHealthMock.mockResolvedValueOnce({
+      data: { data: { channels: { telegram: null }, allHealthy: true } },
+    });
+
+    await renderTelegramSettings();
+
+    await waitFor(() => {
+      expect(screen.getAllByText('Bị khoá (vượt gói)')).toHaveLength(1);
+    });
+    expect(screen.getByRole('link', { name: 'Mua thêm slot' }).getAttribute('href')).toBe('/app/topup');
+  });
+
   // Hồi quy PR-3 (21/09/2026): api.js thôi khử trùng request có `signal` của người gọi, nên lượt
   // init trước KHÔNG còn bị huỷ hộ nữa. Nút "Tạo QR mới" trong modal không khoá theo `connecting`,
   // mà init mất 20–40s ở cold path → bấm lại là mở thêm một phiên Telegram ở server trong khi UI

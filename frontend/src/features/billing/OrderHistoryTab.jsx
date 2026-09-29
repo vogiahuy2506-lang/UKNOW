@@ -22,6 +22,8 @@ const TOPUP_ITEM_LABEL_KEYS = {
   emails: 'topup.items.emails',
   ai_credits: 'topup.items.aiCredits',
   zalo_accounts: 'topup.items.zaloAccounts',
+  telegram_accounts: 'topup.items.telegramAccounts',
+  whatsapp_accounts: 'topup.items.whatsappAccounts',
   email_accounts: 'topup.items.emailAccounts',
   landing_pages: 'topup.items.landingPages',
   chatbots: 'topup.items.chatbots',

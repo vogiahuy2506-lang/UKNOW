@@ -32,6 +32,8 @@ const camelItemKey = (key) => {
         emails: 'emails',
         ai_credits: 'aiCredits',
         zalo_accounts: 'zaloAccounts',
+        telegram_accounts: 'telegramAccounts',
+        whatsapp_accounts: 'whatsappAccounts',
         email_accounts: 'emailAccounts',
         landing_pages: 'landingPages',
         chatbots: 'chatbots',

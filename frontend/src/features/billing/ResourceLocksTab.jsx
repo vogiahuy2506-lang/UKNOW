@@ -3,6 +3,8 @@ import { getTopupLocks, putTopupLocks } from '../../services/topup.service';
 
 const RESOURCE_LABEL_KEYS = {
   zalo_accounts: 'resourceLocks.zaloAccounts',
+  telegram_accounts: 'resourceLocks.telegramAccounts',
+  whatsapp_accounts: 'resourceLocks.whatsappAccounts',
   email_accounts: 'resourceLocks.emailAccounts',
   landing_pages: 'resourceLocks.landingPages',
   chatbots: 'resourceLocks.chatbots',
@@ -11,6 +13,8 @@ const RESOURCE_LABEL_KEYS = {
 
 const VALID_RESOURCE_KEYS = [
   'zalo_accounts',
+  'telegram_accounts',
+  'whatsapp_accounts',
   'email_accounts',
   'landing_pages',
   'chatbots',

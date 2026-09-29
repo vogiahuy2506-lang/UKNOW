@@ -14,6 +14,8 @@ const LABEL_MAP = {
   emails: 'Email',
   ai_credits: 'Lượt AI',
   zalo_accounts: 'Tài khoản Zalo',
+  telegram_accounts: 'Tài khoản Telegram',
+  whatsapp_accounts: 'Tài khoản WhatsApp',
   email_accounts: 'Tài khoản Email',
   landing_pages: 'Landing page',
   chatbots: 'Chatbot',

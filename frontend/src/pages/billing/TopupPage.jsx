@@ -15,6 +15,8 @@ const ITEM_LABEL_KEYS = {
   emails: 'topup.items.emails',
   ai_credits: 'topup.items.aiCredits',
   zalo_accounts: 'topup.items.zaloAccounts',
+  telegram_accounts: 'topup.items.telegramAccounts',
+  whatsapp_accounts: 'topup.items.whatsappAccounts',
   email_accounts: 'topup.items.emailAccounts',
   landing_pages: 'topup.items.landingPages',
   chatbots: 'topup.items.chatbots',
@@ -27,6 +29,8 @@ const UNIT_LABEL_KEYS = {
   emails: 'topup.units.emails',
   ai_credits: 'topup.units.aiCredits',
   zalo_accounts: 'topup.units.zaloAccounts',
+  telegram_accounts: 'topup.units.telegramAccounts',
+  whatsapp_accounts: 'topup.units.whatsappAccounts',
   email_accounts: 'topup.units.emailAccounts',
   landing_pages: 'topup.units.landingPages',
   chatbots: 'topup.units.chatbots',
@@ -36,6 +40,8 @@ const UNIT_LABEL_KEYS = {
 
 const STRUCTURAL_KEYS = new Set([
   'zalo_accounts',
+  'telegram_accounts',
+  'whatsapp_accounts',
   'email_accounts',
   'landing_pages',
   'chatbots',
@@ -124,7 +130,11 @@ const TopupPage = () => {
     }
   }, [t]);
 
-  const items = useMemo(() => config?.items || [], [config]);
+  // P6 — gói không giới hạn số tài khoản Telegram/WhatsApp thì không bán slot (backend cũng chặn 400).
+  const items = useMemo(() => {
+    const unlimited = new Set(config?.unlimitedItemKeys || []);
+    return (config?.items || []).filter((item) => !unlimited.has(item.itemKey));
+  }, [config]);
 
   const quantityIssues = useMemo(() => {
     const issues = {};
