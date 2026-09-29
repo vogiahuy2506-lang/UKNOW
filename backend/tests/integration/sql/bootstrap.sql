@@ -1601,6 +1601,11 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
     CHECK (active_hours IS NULL OR jsonb_typeof(active_hours) = 'object'),
   -- Migration 261: cong tac bat/tat tra loi tung chatbot (KHONG phai is_active = xoa mem)
   replies_enabled     BOOLEAN NOT NULL DEFAULT true,
+  -- Migration 264: tuy chinh Giao dien Widget chay that
+  widget_auto_open    BOOLEAN NOT NULL DEFAULT false,
+  embed_show_header   BOOLEAN NOT NULL DEFAULT true,
+  embed_size          VARCHAR(10) NOT NULL DEFAULT 'medium'
+    CHECK (embed_size IN ('small', 'medium', 'large')),
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );

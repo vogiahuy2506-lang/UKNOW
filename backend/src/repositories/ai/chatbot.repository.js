@@ -484,7 +484,8 @@ class ChatbotRepository {
               -- Hộp Cấu hình dựng form từ dòng này: thiếu cột thì form rơi về mặc định và Lưu ghi đè giá trị thật.
               temperature, max_tokens, ai_model, response_style, allow_attachments,
               COALESCE(origin, 'self_created') as origin, reply_limit_config,
-              active_hours, replies_enabled, created_at, updated_at,
+              active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
+              created_at, updated_at,
               (SELECT COUNT(*)::int FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_count
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`;
@@ -562,7 +563,8 @@ class ChatbotRepository {
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, allow_attachments, launcher_label,
               temperature, max_tokens, ai_model, origin,
-              active_hours, replies_enabled, created_at, updated_at
+              active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
+              created_at, updated_at
        FROM custom_chatbots
        WHERE id = $1 AND is_active = true
          AND ($2::bigint IS NULL OR id_user = $2::bigint)`,
@@ -611,6 +613,9 @@ class ChatbotRepository {
          launcher_label = COALESCE($26, launcher_label),
          active_hours = CASE WHEN $27::boolean THEN $28::jsonb ELSE active_hours END,
          replies_enabled = COALESCE($29::boolean, replies_enabled),
+         widget_auto_open = COALESCE($30::boolean, widget_auto_open),
+         embed_show_header = COALESCE($31::boolean, embed_show_header),
+         embed_size = COALESCE($32, embed_size),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -626,7 +631,10 @@ class ChatbotRepository {
        data.launcher_label,
        Boolean(data.active_hours_set),
        data.active_hours === null || data.active_hours === undefined ? null : JSON.stringify(data.active_hours),
-       data.replies_enabled === undefined || data.replies_enabled === null ? null : Boolean(data.replies_enabled)];
+       data.replies_enabled === undefined || data.replies_enabled === null ? null : Boolean(data.replies_enabled),
+       data.widget_auto_open === undefined || data.widget_auto_open === null ? null : Boolean(data.widget_auto_open),
+       data.embed_show_header === undefined || data.embed_show_header === null ? null : Boolean(data.embed_show_header),
+       data.embed_size === undefined ? null : data.embed_size];
     } else {
       // Update suggested_questions field
       query = `UPDATE custom_chatbots SET
@@ -657,6 +665,9 @@ class ChatbotRepository {
          launcher_label = COALESCE($27, launcher_label),
          active_hours = CASE WHEN $28::boolean THEN $29::jsonb ELSE active_hours END,
          replies_enabled = COALESCE($30::boolean, replies_enabled),
+         widget_auto_open = COALESCE($31::boolean, widget_auto_open),
+         embed_show_header = COALESCE($32::boolean, embed_show_header),
+         embed_size = COALESCE($33, embed_size),
          updated_at = NOW()
        WHERE id = $1 AND id_user = $2
        RETURNING *`;
@@ -672,7 +683,10 @@ class ChatbotRepository {
        data.launcher_label,
        Boolean(data.active_hours_set),
        data.active_hours === null || data.active_hours === undefined ? null : JSON.stringify(data.active_hours),
-       data.replies_enabled === undefined || data.replies_enabled === null ? null : Boolean(data.replies_enabled)];
+       data.replies_enabled === undefined || data.replies_enabled === null ? null : Boolean(data.replies_enabled),
+       data.widget_auto_open === undefined || data.widget_auto_open === null ? null : Boolean(data.widget_auto_open),
+       data.embed_show_header === undefined || data.embed_show_header === null ? null : Boolean(data.embed_show_header),
+       data.embed_size === undefined ? null : data.embed_size];
     }
 
     const { rows } = await db.query(query, params);
@@ -740,7 +754,8 @@ class ChatbotRepository {
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, allow_attachments, launcher_label,
               temperature, max_tokens, ai_model, response_style,
-              active_hours, replies_enabled, created_at, updated_at
+              active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
+              created_at, updated_at
        FROM custom_chatbots
        WHERE widget_key = $1 AND is_active = true`,
       [widgetKey]

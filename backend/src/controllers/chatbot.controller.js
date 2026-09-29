@@ -1090,6 +1090,8 @@ class ChatbotController {
           // Suggested questions - applies to all deployment types
           suggested_questions: chatbot.suggested_questions || [],
           allow_attachments: chatbot.allow_attachments === true,
+          // Tuy chinh trang /chat/:id (iFrame + Public Link): an/hien thanh header.
+          embed_show_header: chatbot.embed_show_header !== false,
           // AI settings - public endpoint can doc de iframe render dung
           // model/temperature/max_tokens user da set trong ChatbotConfigModal.
           response_style: chatbot.response_style || 'friendly',
@@ -1150,6 +1152,8 @@ class ChatbotController {
           position: chatbot.position || 'bottom-right',
           launcherLabel: chatbot.launcher_label || '',
           allowAttachments: chatbot.allow_attachments === true,
+          // Tu dong mo khung chat sau 2s (widget.js quyet dinh 1 lan/phien).
+          autoOpen: chatbot.widget_auto_open === true,
           // AI settings - widget.js co the dung de tuy bien prompt neu sau nay can
           responseStyle: chatbot.response_style || 'friendly',
           temperature: chatbot.temperature ?? 0.7,
@@ -1489,6 +1493,17 @@ class ChatbotController {
           });
         }
         updatePayload.launcher_label = trimmedLabel;
+      }
+
+      // embed_size: chieu cao ma nhung iFrame. Gia tri la nam ngoai ba muc -> 400
+      // (CHECK DB cung chan, nhung tra 400 ro rang thay vi 500).
+      if (req.body.embed_size !== undefined
+          && !['small', 'medium', 'large'].includes(req.body.embed_size)) {
+        return res.status(400).json({
+          success: false,
+          message: `embed_size khong hop le: ${req.body.embed_size}`,
+          code: 'CHATBOT_EMBED_SIZE_INVALID',
+        });
       }
 
       const updated = await chatbotRepository.updateChatbot(id, userId, updatePayload);
