@@ -82,6 +82,9 @@ class ChatbotContactAlertRepository {
          JOIN channel_conversations c ON c.id = m.id_conversation
          LEFT JOIN channel_connections cc ON cc.id = c.id_channel
          WHERE m.id > $1 AND m.role = 'visitor' AND m.content IS NOT NULL AND TRIM(m.content) != ''
+           -- Nhóm Telegram cũng vào Hộp thư (visitor_info.is_group): tin nhắn trò chuyện trong nhóm không phải
+           -- khách để lại liên hệ — bỏ khỏi quét (cùng luật "bỏ hội thoại nhóm" của Zalo cá nhân).
+           AND COALESCE(c.visitor_info->>'is_group', 'false') <> 'true'
          ORDER BY m.id ASC
          LIMIT $2`,
         [lastMessageId, limit]

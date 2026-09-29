@@ -48,6 +48,15 @@ const fakeAccount = {
   is_active: true,
 };
 
+/** Dòng Hộp thư hợp nhất (channel_conversations) của (tài khoản 7, chat 7777). */
+const fakeInboxConversation = {
+  id: 501,
+  id_channel: 31,
+  id_user: 42,
+  visitor_name: 'Alice',
+  visitor_info: { chatbot_id: 55, is_group: false, telegram_conversation_id: 101 },
+};
+
 const fakeConversation = {
   id: 101,
   id_user: 42,
@@ -128,6 +137,14 @@ beforeEach(async () => {
     _sendReplyResult: { success: true },
     _echoRows: [],
     _consoleLog: [],
+    // Hộp thư hợp nhất (channel_*) — P1 PLAN_TG_WA_DAY_DU
+    _channelMessages: [],
+    _inboxFindRows: [fakeInboxConversation], // findTelegramInboxConversation
+    _inboxEnsureRows: [fakeInboxConversation], // SELECT của ensureTelegramInboxConversation ([] = tạo mới)
+    _scenarioLegacyOverride: null,
+    _batchMessages: null, // ghi đè đợt tin do debounce trả (mặc định 1 tin)
+    _setAiPausedCalls: [],
+    _sse: [],
     dbQuery: null,
     chatRouterCall: () => mocks._lastRouterCall,
     sendReplyCalls: () => mocks._sendReplyCalls,
@@ -139,12 +156,55 @@ beforeEach(async () => {
     mocks._callsSoFar = mocks._callsSoFar || [];
     mocks._callsSoFar.push({ sql: s, params });
 
+    // 0. Hộp thư hợp nhất: channel_connections / channel_conversations / channel_messages
+    if (/INSERT INTO channel_connections/i.test(s)) return { rows: [{ id: 31 }] };
+    if (/SELECT id\s+FROM channel_connections/i.test(s)) {
+      return { rows: [{ id: 31 }] };
+    }
+    if (/JOIN channel_connections ch ON ch\.id = cc\.id_channel/i.test(s)) {
+      return { rows: mocks._inboxFindRows };
+    }
+    if (/SELECT id, id_channel, id_user, visitor_name, visitor_info/i.test(s)) {
+      return { rows: mocks._inboxEnsureRows };
+    }
+    if (/INSERT INTO channel_conversations/i.test(s)) {
+      return { rows: [{ id: 501, id_channel: 31, id_user: 42, visitor_name: params?.[3] ?? null }] };
+    }
+    if (/UPDATE channel_conversations/i.test(s)) return { rows: [] };
+    if (/SELECT id FROM channel_messages WHERE id_conversation/i.test(s)) {
+      const hit = mocks._channelMessages.find(
+        (m) => m.id_conversation === params[0] && m.external_id === params[1]
+      );
+      return { rows: hit ? [{ id: hit.id }] : [] };
+    }
+    if (/INSERT INTO channel_messages/i.test(s)) {
+      const row = {
+        id: 700 + mocks._channelMessages.length,
+        id_conversation: params[0],
+        id_user: params[1],
+        id_channel: params[2],
+        role: params[3],
+        content: params[4],
+        external_id: params[5],
+      };
+      mocks._channelMessages.push(row);
+      return { rows: [{ id: row.id }] };
+    }
+    if (/UPDATE channel_messages SET external_id/i.test(s)) {
+      const row = mocks._channelMessages.find((m) => m.id === params[0] && m.external_id == null);
+      if (row) row.external_id = params[1];
+      return { rows: [] };
+    }
+    if (/FROM channel_messages/i.test(s) && /role IN/i.test(s)) {
+      return { rows: mocks._echoRows };
+    }
+
     // 1. Conversation lookup
     if (/SELECT \* FROM telegram_personal_conversations/i.test(s)) {
       if (mocks._scenarioConversationOverride === 'null') {
         return { rows: [] };
       }
-      return { rows: [fakeConversation] };
+      return { rows: [mocks._scenarioLegacyOverride || fakeConversation] };
     }
     if (/INSERT INTO telegram_personal_conversations/i.test(s)) {
       return { rows: [fakeConversation] };
@@ -182,14 +242,6 @@ beforeEach(async () => {
     //    đụng tới cái này nên return [] như code hiện tại.
     if (/FROM chatbot_settings/i.test(s) && /channel/i.test(s)) {
       return { rows: [fakeChatbotSettingsFull] };
-    }
-    // 4b. W6: dòng bot/agent gần đây để khử echo tin chủ gõ từ điện thoại
-    if (/SELECT external_message_id, content, created_at/i.test(s)) {
-      return { rows: mocks._echoRows };
-    }
-    // 5. ai_paused select
-    if (/ai_paused/i.test(s)) {
-      return { rows: [{ ai_paused: mocks._scenarioAiPaused }] };
     }
     // 6. Insert messages — return id (for throughMessageId tracking)
     if (/INSERT INTO telegram_personal_messages/i.test(s)) {
@@ -273,7 +325,7 @@ beforeEach(async () => {
       default: {
         enqueue: jest.fn(async ({ flushCallback }) => {
           await flushCallback({
-            messages: [
+            messages: mocks._batchMessages || [
               {
                 eventId: inboundPayload.message_id,
                 content: inboundPayload.text,
@@ -365,8 +417,27 @@ beforeEach(async () => {
   );
   jest.unstable_mockModule(
     resolveUrl('repositories/ai/unifiedInbox.repository.js'),
-    () => ({ default: { isAiPaused: async () => false } })
+    () => ({
+      default: {
+        // Nguồn sự thật tạm dừng AI = channel_conversations (Hộp thư), không còn cột của bảng Telegram cũ.
+        isAiPaused: jest.fn(async () => mocks._scenarioAiPaused),
+        setAiPaused: jest.fn(async (...args) => {
+          mocks._setAiPausedCalls.push(args);
+          return { aiPaused: true, aiPausedAt: '2026-09-29T10:00:00.000Z' };
+        }),
+      },
+    })
   );
+  jest.unstable_mockModule(resolveUrl('services/sse.service.js'), () => ({
+    default: { broadcast: (...args) => mocks._sse.push(args) },
+  }));
+  jest.unstable_mockModule(resolveUrl('utils/aiHandoffResume.util.js'), () => ({
+    buildAiPausePayload: async ({ aiPaused, aiPausedAt }) => ({
+      aiPaused: aiPaused === true,
+      aiPausedAt: aiPaused === true ? (aiPausedAt ?? null) : null,
+      aiResumeAt: null,
+    }),
+  }));
 
   // Khoá tài nguyên + trần lượt (mặc định: không khoá, cho phép)
   mocks._locked = false;
@@ -896,16 +967,17 @@ const agentLogs = () =>
   (mocks._callsSoFar || []).filter(
     ({ sql, params }) => /INSERT INTO telegram_personal_messages/i.test(sql) && params?.[3] === 'agent'
   );
-const pauseUpdates = () =>
-  (mocks._callsSoFar || []).filter(({ sql }) => /UPDATE telegram_personal_conversations/i.test(sql) && /SET ai_paused = true/i.test(sql));
+const channelRows = (role) => mocks._channelMessages.filter((m) => m.role === role);
+const sseFor = (role) => mocks._sse.filter(([, evt, p]) => evt === 'inbox:new_message' && p.role === role);
 
 describe('W6 — tin outgoing (chủ gõ từ điện thoại) không đi đường AI', () => {
   it('outgoing là echo của tin bot vừa gửi (khớp external_message_id) → bỏ, không dừng AI', async () => {
-    mocks._echoRows = [{ external_message_id: '555', content: 'nội dung khác', created_at: new Date() }];
+    mocks._echoRows = [{ external_id: '555', content: 'nội dung khác', created_at: new Date() }];
     const res = await postWebhook(outgoingPayload);
     expect(res.status).toBe(204);
     expect(agentLogs()).toHaveLength(0);
-    expect(pauseUpdates()).toHaveLength(0);
+    expect(channelRows('agent')).toHaveLength(0);
+    expect(mocks._setAiPausedCalls).toHaveLength(0);
     expect(mocks.chatRouterCall()).toBeNull();
   });
 
@@ -917,8 +989,13 @@ describe('W6 — tin outgoing (chủ gõ từ điện thoại) không đi đư�
     expect(logs).toHaveLength(1);
     expect(logs[0].params[2]).toBe('555'); // external_message_id
     expect(logs[0].params[4]).toBe('Em gọi lại anh nhé');
-    expect(pauseUpdates()).toHaveLength(1);
-    expect(pauseUpdates()[0].params).toEqual([fakeConversation.id]);
+    // Hộp thư: dòng agent + tạm dừng AI qua unifiedInboxRepository (một nguồn sự thật) + SSE isSelf.
+    expect(channelRows('agent')).toHaveLength(1);
+    expect(channelRows('agent')[0]).toMatchObject({ id_conversation: 501, content: 'Em gọi lại anh nhé', external_id: '555' });
+    expect(mocks._setAiPausedCalls).toEqual([[501, 'channel', true, 'handoff']]);
+    const selfSse = sseFor('agent').filter(([, , p]) => p.isSelf === true);
+    expect(selfSse).toHaveLength(1);
+    expect(selfSse[0][2]).toMatchObject({ conversationId: 501, channel: 'telegram', type: 'channel', aiPaused: true });
     expect(mocks.chatRouterCall()).toBeNull();
     expect(mocks.sendReplyCalls()).toHaveLength(0);
   });
@@ -927,8 +1004,16 @@ describe('W6 — tin outgoing (chủ gõ từ điện thoại) không đi đư�
     const res = await postWebhook({ ...outgoingPayload, is_group: true, is_private: false });
     expect(res.status).toBe(204);
     expect(agentLogs()).toHaveLength(0);
-    expect(pauseUpdates()).toHaveLength(0);
+    expect(mocks._setAiPausedCalls).toHaveLength(0);
     expect(mocks.chatRouterCall()).toBeNull();
+  });
+
+  it('outgoing khi chưa có hội thoại Hộp thư (khách chưa từng nhắn) → bỏ, không dừng AI', async () => {
+    mocks._inboxFindRows = [];
+    const res = await postWebhook(outgoingPayload);
+    expect(res.status).toBe(204);
+    expect(channelRows('agent')).toHaveLength(0);
+    expect(mocks._setAiPausedCalls).toHaveLength(0);
   });
 
   it('bot trả lời → id tin Telegram vừa gửi được ghi vào dòng bot (để khử echo)', async () => {
@@ -937,5 +1022,112 @@ describe('W6 — tin outgoing (chủ gõ từ điện thoại) không đi đư�
     const bind = (mocks._callsSoFar || []).find(({ sql }) => /UPDATE telegram_personal_messages SET external_message_id/i.test(sql));
     expect(bind).toBeDefined();
     expect(bind.params).toEqual([999, '4242']);
+    // Và cả dòng Hộp thư của tin bot (echo khớp theo id, không tự dừng AI).
+    const bot = channelRows('bot')[0];
+    expect(bot).toBeDefined();
+    expect(bot.external_id).toBe('4242');
+  });
+});
+
+// ── P1 PLAN_TG_WA_DAY_DU: Telegram vào Hộp thư hợp nhất ─────────────────
+
+describe('P1 — tin khách luôn vào Hộp thư (channel_messages) + SSE, kể cả khi không gọi AI', () => {
+  it('(a) chatbot tắt → tin khách VẪN có trong channel_messages + SSE, không gọi AI', async () => {
+    mocks._scenarioAccountSettings = fakeAccountSettingsDisabled;
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    const visitor = channelRows('visitor');
+    expect(visitor).toHaveLength(1);
+    expect(visitor[0]).toMatchObject({
+      id_conversation: 501,
+      id_channel: 31,
+      content: 'Xin chào',
+      external_id: '12345',
+    });
+    const sse = sseFor('visitor');
+    expect(sse).toHaveLength(1);
+    expect(sse[0][0]).toBe('42');
+    expect(sse[0][2]).toMatchObject({
+      conversationId: 501,
+      conversationType: 'channel',
+      type: 'channel',
+      channel: 'telegram',
+      message: 'Xin chào',
+      senderName: 'Alice',
+    });
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+    // Nhật ký vận hành "[Telegram] skip" vẫn ở bảng cũ, KHÔNG lẫn vào Hộp thư.
+    expect(insertSystemLog()).toBeDefined();
+    expect(channelRows('system')).toHaveLength(0);
+  });
+
+  it('đợt nhắn dồn 3 tin → cả 3 vào Hộp thư (không chỉ tin cuối) và AI nhận nội dung gộp', async () => {
+    mocks._batchMessages = [
+      { eventId: 1, content: 'tin một', receivedAt: 1 },
+      { eventId: 2, content: 'tin hai', receivedAt: 2 },
+      { eventId: 3, content: 'tin ba', receivedAt: 3 },
+    ];
+    await postWebhook({ ...inboundPayload, text: 'tin ba', message_id: 3 });
+    expect(channelRows('visitor').map((m) => [m.content, m.external_id])).toEqual([
+      ['tin một', '1'],
+      ['tin hai', '2'],
+      ['tin ba', '3'],
+    ]);
+    expect(mocks.chatRouterCall().message).toBe('tin một\ntin hai\ntin ba');
+  });
+
+  it('(a2) DM tắt cho tài khoản → tin khách vẫn vào Hộp thư', async () => {
+    mocks._scenarioAccountSettings = { ...fakeAccountSettings, is_enabled_dm: false };
+    await postWebhook(inboundPayload);
+    expect(channelRows('visitor')).toHaveLength(1);
+    expect(mocks.chatRouterCall()).toBeNull();
+  });
+
+  it('(b) AI đang dừng (Hộp thư) → lưu tin khách, không gọi AI, không gửi gì', async () => {
+    mocks._scenarioAiPaused = true;
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    expect(channelRows('visitor')).toHaveLength(1);
+    expect(sseFor('visitor')).toHaveLength(1);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+  });
+
+  it('AI chạy bình thường → tin khách + tin AI cùng vào Hộp thư, AI báo SSE role agent/AI', async () => {
+    await postWebhook(inboundPayload);
+    expect(channelRows('visitor')).toHaveLength(1);
+    const bot = channelRows('bot');
+    expect(bot).toHaveLength(1);
+    expect(bot[0].content).toBe('fake-bot-reply');
+    const aiSse = sseFor('agent');
+    expect(aiSse).toHaveLength(1);
+    expect(aiSse[0][2]).toMatchObject({ senderName: 'AI', message: 'fake-bot-reply', conversationId: 501 });
+  });
+
+  it('hội thoại Hộp thư dùng external_id ghép telegram:<tài khoản>:<chatId> (chatId đầy đủ)', async () => {
+    mocks._inboxEnsureRows = []; // chưa có → phải tạo
+    await postWebhook({ ...inboundPayload, chat_id: '-1001234567' });
+    const ins = (mocks._callsSoFar || []).find(({ sql }) => /INSERT INTO channel_conversations/i.test(sql));
+    expect(ins).toBeDefined();
+    expect(ins.params[2]).toBe('telegram:7:-1001234567');
+    expect(ins.params[0]).toBe(42); // id_user
+    expect(ins.params[1]).toBe(31); // id_channel
+  });
+
+  it('hội thoại cũ đang tạm dừng AI → dòng Hộp thư mới thừa hưởng trạng thái tạm dừng', async () => {
+    mocks._inboxEnsureRows = [];
+    mocks._scenarioLegacyOverride = { ...fakeConversation, ai_paused: true, ai_paused_at: '2026-09-29T09:00:00.000Z' };
+    await postWebhook(inboundPayload);
+    const ins = (mocks._callsSoFar || []).find(({ sql }) => /INSERT INTO channel_conversations/i.test(sql));
+    expect(ins.params[5]).toBe(true);
+    expect(ins.params[6]).toBe('2026-09-29T09:00:00.000Z');
+  });
+
+  it('lỗi ghi Hộp thư không làm hỏng đường AI (best-effort)', async () => {
+    mocks._inboxEnsureRows = null; // .rows[0] → TypeError trong ensure
+    await postWebhook(inboundPayload);
+    expect(mocks.chatRouterCall()).not.toBeNull();
+    expect(channelRows('visitor')).toHaveLength(0);
   });
 });

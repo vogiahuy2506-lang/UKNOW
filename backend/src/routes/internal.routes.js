@@ -12,6 +12,15 @@ import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
 import telegramAdapter from '../services/chatbot/channelAdapters/telegram.adapter.js';
+import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
+import {
+  ensureTelegramInboxConversation,
+  findTelegramInboxConversation,
+  persistTelegramChannelMessage,
+  bindTelegramChannelMessageId,
+  broadcastTelegramInbox,
+} from '../services/chatbot/telegramInbox.service.js';
+import { buildAiPausePayload } from '../utils/aiHandoffResume.util.js';
 import { isOwnerOutgoingEcho } from '../utils/ownerOutgoingEcho.util.js';
 import {
   isStubOnly,
@@ -116,93 +125,141 @@ async function getOrCreateTelegramConversation(account, chatId, displayName) {
 }
 
 /**
- * Tiny helper to record one message in `telegram_personal_messages` and
- * bump `last_message_at` on the parent conversation. Failures here should
- * never bubble up to the caller — chat history is best-effort.
+ * Ghi MỘT tin vào `telegram_personal_messages` (bảng cũ) và — khi hội thoại đã có dòng Hộp thư
+ * (`conversation.inbox`) — ghi song song vào `channel_messages` + phát SSE (P1, PLAN_TG_WA_DAY_DU).
+ * Dòng `system` ("[Telegram] skip …") CHỈ ở bảng cũ: đó là nhật ký vận hành, không phải tin của khách/chủ,
+ * để vào Hộp thư sẽ hiện như một tin nhắn thật.
+ * Lỗi ở đây không được nổi lên caller — lịch sử là best-effort.
+ *
+ * @param {object} conversation - dòng telegram_personal_conversations (bản sao) + `inbox` tuỳ chọn
+ * @param {object} [options]
+ * @param {boolean} [options.broadcast=true] - false: caller tự phát SSE (kèm trạng thái tạm dừng AI)
+ * @returns {Promise<{legacyId: number|null, channelMessageId: number|null, duplicate: boolean}>}
  */
-async function logTelegramMessage(conversation, role, content, metadata = {}) {
-  try {
-    const result = await db.query(
-      `INSERT INTO telegram_personal_messages
-         (id_conversation, id_user, external_message_id, role, content, metadata)
-       VALUES ($1, $2, $3, $4, $5, $6)
-       RETURNING id`,
-      [
-        conversation.id,
-        conversation.id_user,
-        metadata.external_message_id || null,
-        role,
-        content || null,
-        JSON.stringify(metadata || {}),
-      ]
-    );
-    const insertedId = result.rows[0]?.id;
-    await db.query(
-      `UPDATE telegram_personal_conversations
-       SET last_message_at = NOW(), updated_at = NOW()
-       WHERE id = $1`,
-      [conversation.id]
-    );
-    return insertedId;
-  } catch (err) {
-    console.warn('[Telegram] logTelegramMessage failed:', err.message);
-    return null;
+async function recordTelegramMessage(conversation, role, content, metadata = {}, options = {}) {
+  const { broadcast = true } = options;
+  let legacyId = null;
+  if (conversation?.id) {
+    try {
+      const result = await db.query(
+        `INSERT INTO telegram_personal_messages
+           (id_conversation, id_user, external_message_id, role, content, metadata)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         RETURNING id`,
+        [
+          conversation.id,
+          conversation.id_user,
+          metadata.external_message_id || null,
+          role,
+          content || null,
+          JSON.stringify(metadata || {}),
+        ]
+      );
+      legacyId = result.rows[0]?.id ?? null;
+      await db.query(
+        `UPDATE telegram_personal_conversations
+         SET last_message_at = NOW(), updated_at = NOW()
+         WHERE id = $1`,
+        [conversation.id]
+      );
+    } catch (err) {
+      console.warn('[Telegram] logTelegramMessage failed:', err.message);
+    }
   }
+
+  let channelMessageId = null;
+  let duplicate = false;
+  const inbox = conversation?.inbox;
+  if (inbox?.id && role !== 'system' && content) {
+    try {
+      const saved = await persistTelegramChannelMessage({
+        conversation: inbox,
+        userId: conversation.id_user,
+        role,
+        content,
+        externalId: metadata.external_message_id ?? null,
+        metadata: { source: metadata.source || null, chat_id: metadata.chat_id ?? null },
+      });
+      channelMessageId = saved?.id ?? null;
+      duplicate = saved?.duplicate === true;
+      if (broadcast && !duplicate) {
+        const isVisitor = role === 'visitor';
+        broadcastTelegramInbox({
+          ownerUserId: conversation.id_user,
+          conversation: inbox,
+          // Tin AI/bot: cùng cách Zalo cá nhân báo SSE (role 'agent', tên 'AI').
+          role: isVisitor ? 'visitor' : 'agent',
+          message: content,
+          messageId: channelMessageId,
+          senderId: isVisitor ? (metadata.sender_id ?? null) : null,
+          senderName: isVisitor ? (metadata.sender_name ?? null) : 'AI',
+          isGroup: metadata.is_group === true,
+        });
+      }
+    } catch (err) {
+      console.warn('[Telegram] channel_messages dual-write failed:', err.message);
+    }
+  }
+  return { legacyId, channelMessageId, duplicate };
+}
+
+/** Như cũ: trả id dòng bảng cũ (dùng cho throughMessageId / excludeMessageIds của chatRouter). */
+async function logTelegramMessage(conversation, role, content, metadata = {}, options = {}) {
+  const rec = await recordTelegramMessage(conversation, role, content, metadata, options);
+  return rec.legacyId;
 }
 
 /**
  * Ghi id tin Telegram vừa gửi vào dòng bot đã lưu — để khi tài khoản đẩy lại tin đó
  * (isOutgoing) ta nhận ra là echo, không phải chủ gõ tay. Best-effort.
+ * `ref` = kết quả `recordTelegramMessage` (cả hai bảng) hoặc id dòng bảng cũ.
  */
-async function bindTelegramOutboundId(rowId, messageId) {
-  if (!rowId || messageId == null || messageId === '') return;
-  try {
-    await db.query(
-      `UPDATE telegram_personal_messages SET external_message_id = $2 WHERE id = $1`,
-      [rowId, String(messageId)]
-    );
-  } catch (err) {
-    console.warn('[Telegram] bind outbound message id failed:', err.message);
+async function bindTelegramOutboundId(ref, messageId) {
+  if (messageId == null || messageId === '') return;
+  const legacyId = ref && typeof ref === 'object' ? ref.legacyId : ref;
+  const channelMessageId = ref && typeof ref === 'object' ? ref.channelMessageId : null;
+  if (legacyId) {
+    try {
+      await db.query(
+        `UPDATE telegram_personal_messages SET external_message_id = $2 WHERE id = $1`,
+        [legacyId, String(messageId)]
+      );
+    } catch (err) {
+      console.warn('[Telegram] bind outbound message id failed:', err.message);
+    }
   }
+  if (channelMessageId) await bindTelegramChannelMessageId(channelMessageId, messageId);
 }
 
 /**
  * Chủ tài khoản tự gõ từ điện thoại/app Telegram (mtcute `isOutgoing`): KHÔNG đi đường AI.
- * Echo của tin bot vừa gửi → bỏ. Tin thật của chủ → ghi dòng `agent` + tạm dừng AI cho hội thoại
- * (tự bật lại theo `isTelegramAiPaused`). Nhóm bỏ; hội thoại chưa có (AI chưa từng nói chuyện) bỏ.
- * Telegram chưa có Hộp thư nên không phát SSE.
+ * Echo của tin bot/Hộp thư vừa gửi → bỏ (so id/nội dung với `channel_messages`, nơi Hộp thư và AI đều ghi
+ * id tin thật). Tin thật của chủ → ghi dòng `agent` (cả hai bảng) + tạm dừng AI cho hội thoại Hộp thư
+ * (`setAiPaused` 'handoff', tự bật lại theo `ai_handoff_auto_resume_minutes` trong `isAiPaused`) + phát SSE.
+ * Nhóm bỏ; hội thoại chưa có (khách chưa từng nhắn) bỏ.
  */
 async function handleTelegramOwnerOutgoing({ account, parsed }) {
   if (parsed.isGroup || !parsed.chatId) return { handled: false, reason: 'group_or_no_chat' };
-  const { rows } = await db.query(
-    `SELECT * FROM telegram_personal_conversations
-     WHERE id_telegram_account = $1
-       AND external_id = $2
-       AND status = 'open'
-     ORDER BY last_message_at DESC NULLS LAST
-     LIMIT 1`,
-    [account.id, String(parsed.chatId)]
-  );
-  const conversation = rows[0];
-  if (!conversation?.id) return { handled: false, reason: 'no_conversation' };
+  const inbox = await findTelegramInboxConversation(account, parsed.chatId);
+  if (!inbox?.id) return { handled: false, reason: 'no_conversation' };
 
   let isEcho = false;
   try {
     const { rows: recent } = await db.query(
-      `SELECT external_message_id, content, created_at
-         FROM telegram_personal_messages
+      `SELECT external_id, content, created_at
+         FROM channel_messages
         WHERE id_conversation = $1
           AND role IN ('bot', 'agent')
           AND created_at >= NOW() - INTERVAL '5 minutes'
         ORDER BY id DESC
         LIMIT 40`,
-      [conversation.id]
+      [inbox.id]
     );
     isEcho = isOwnerOutgoingEcho({
       incomingId: parsed.messageId,
       incomingContent: parsed.message,
       candidates: (recent || []).map((r) => ({
-        externalId: r.external_message_id,
+        externalId: r.external_id,
         content: r.content,
         createdAt: r.created_at,
       })),
@@ -211,64 +268,66 @@ async function handleTelegramOwnerOutgoing({ account, parsed }) {
     console.warn('[Telegram] owner outgoing echo check failed (will pause):', err.message);
   }
   if (isEcho) {
-    console.log('[Telegram] owner outgoing = echo, skip', { conversationId: conversation.id, messageId: parsed.messageId });
+    console.log('[Telegram] owner outgoing = echo, skip', { conversationId: inbox.id, messageId: parsed.messageId });
     return { handled: false, reason: 'echo' };
   }
 
-  await logTelegramMessage(conversation, 'agent', parsed.message, {
-    external_message_id: parsed.messageId != null ? String(parsed.messageId) : null,
-    source: 'owner_phone',
-    chat_id: parsed.chatId,
-  });
-  // Tạm dừng kiểu handoff; không ghi đè tạm dừng TAY (ai_paused_at NULL).
-  await db.query(
-    `UPDATE telegram_personal_conversations
-        SET ai_paused = true,
-            ai_paused_at = CASE WHEN ai_paused = true AND ai_paused_at IS NULL THEN NULL ELSE NOW() END,
-            updated_at = NOW()
-      WHERE id = $1`,
-    [conversation.id]
+  // Bảng cũ: dòng `agent` vào hội thoại đang mở (nếu có) để lịch sử cũ đủ.
+  let legacy = null;
+  try {
+    const { rows } = await db.query(
+      `SELECT * FROM telegram_personal_conversations
+       WHERE id_telegram_account = $1
+         AND external_id = $2
+         AND status = 'open'
+       ORDER BY last_message_at DESC NULLS LAST
+       LIMIT 1`,
+      [account.id, String(parsed.chatId)]
+    );
+    legacy = rows[0] || null;
+  } catch (err) {
+    console.warn('[Telegram] owner outgoing legacy lookup failed:', err.message);
+  }
+  const conversation = { ...(legacy || { id: null, id_user: account.id_user }), inbox };
+  await recordTelegramMessage(
+    conversation,
+    'agent',
+    parsed.message,
+    {
+      external_message_id: parsed.messageId != null ? String(parsed.messageId) : null,
+      source: 'owner_phone',
+      chat_id: parsed.chatId,
+    },
+    { broadcast: false }
   );
-  console.log('[Telegram] owner replied from phone → AI paused', { conversationId: conversation.id });
-  return { handled: true, conversationId: conversation.id };
+
+  // Tạm dừng kiểu handoff; setAiPaused không ghi đè tạm dừng TAY (ai_paused_at NULL).
+  const pausedRow = await unifiedInboxRepository.setAiPaused(inbox.id, 'channel', true, 'handoff');
+  const pauseState = await buildAiPausePayload({
+    aiPaused: pausedRow.aiPaused,
+    aiPausedAt: pausedRow.aiPausedAt,
+    ownerUserId: account.id_user,
+  });
+  broadcastTelegramInbox({
+    ownerUserId: account.id_user,
+    conversation: inbox,
+    role: 'agent',
+    message: parsed.message,
+    isGroup: false,
+    extra: { isSelf: true, ...pauseState },
+  });
+  console.log('[Telegram] owner replied from phone → AI paused', { conversationId: inbox.id });
+  return { handled: true, conversationId: inbox.id };
 }
 
 /**
- * Check the AI-paused flag on a Telegram conversation.
+ * Tạm dừng AI: MỘT nguồn sự thật là `channel_conversations.ai_paused*` (Hộp thư). `isAiPaused` tự bật lại
+ * khi quá `ai_handoff_auto_resume_minutes`. Cột `telegram_personal_conversations.ai_paused*` để nguyên,
+ * KHÔNG còn được đọc hay ghi.
  */
-async function isTelegramAiPaused(conversationId) {
-  if (!conversationId) return false;
-  const { rows } = await db.query(
-    `SELECT ai_paused, ai_paused_at, id_user
-     FROM telegram_personal_conversations
-     WHERE id = $1`,
-    [conversationId]
-  );
-  if (!rows[0] || rows[0].ai_paused !== true) return false;
-
-  try {
-    const { shouldStayAiPaused, getCachedAutoResumeMinutes } = await import(
-      '../utils/aiHandoffResume.util.js'
-    );
-    const minutes = await getCachedAutoResumeMinutes(rows[0].id_user);
-    if (shouldStayAiPaused({
-      aiPaused: true,
-      aiPausedAt: rows[0].ai_paused_at,
-      autoResumeMinutes: minutes,
-    })) {
-      return true;
-    }
-    // Auto-expired → reset.
-    await db.query(
-      `UPDATE telegram_personal_conversations
-       SET ai_paused = false, ai_paused_at = NULL, updated_at = NOW()
-       WHERE id = $1`,
-      [conversationId]
-    );
-  } catch (err) {
-    console.warn('[Telegram] ai_paused auto-resume check failed:', err.message);
-  }
-  return false;
+async function isTelegramAiPaused(conversation) {
+  if (!conversation?.inbox?.id) return false;
+  return unifiedInboxRepository.isAiPaused(conversation.inbox.id, 'channel');
 }
 
 /**
@@ -298,11 +357,12 @@ async function isTelegramAiPaused(conversationId) {
  */
 async function processTelegramPersonalBatch({ account, parsed, batch }) {
   const peer = parsed.chatId || parsed.senderId;
-  const conversation = await getOrCreateTelegramConversation(
+  // Bản sao: `inbox` (dòng Hộp thư) gắn thêm bên dưới, không làm bẩn dòng gốc.
+  const conversation = { ...(await getOrCreateTelegramConversation(
     account,
     peer,
     parsed.senderName
-  );
+  )) };
 
   // ── NEW (Bug #1): re-evaluate chatbot theo cấu hình hiện tại ─────
   // Trước đây lấy thẳng `conversation.id_chatbot` (đã bị khoá cứng
@@ -401,6 +461,46 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
 
   // PR-3: ưu tiên/dự phòng system_instruction nằm TRONG mergeAccountAndChatbotSettings (đọc `_source`).
 
+  // ── P1 (PLAN_TG_WA_DAY_DU): hội thoại vào Hộp thư hợp nhất ─────────────
+  // Đảm bảo có dòng channel_conversations rồi LƯU TIN KHÁCH TRƯỚC mọi nhánh return bên dưới
+  // (chatbot tắt / DM tắt / nhóm tắt / AI đang dừng / khoá / ngoài giờ / hết lượt): khách nhắn thì
+  // chủ luôn thấy trong Hộp thư, dù không có AI trả lời (khuôn WhatsApp "Lưu tin khách TRƯỚC khi kiểm").
+  try {
+    conversation.inbox = await ensureTelegramInboxConversation({
+      account,
+      chatId: peer,
+      displayName: parsed.senderName,
+      idChatbot,
+      isGroup: parsed.isGroup,
+      legacyConversationId: conversation.id ?? null,
+      legacyPause: { ai_paused: conversation.ai_paused, ai_paused_at: conversation.ai_paused_at },
+    });
+  } catch (err) {
+    console.warn('[Telegram] ensure inbox conversation failed (tiếp tục không có Hộp thư):', err.message);
+  }
+
+  // Log visitor messages first so the UI shows them even if the AI
+  // call fails. Track IDs so we can exclude them from history.
+  // `batch` do InboundReplyDebounceService là OBJECT `{ messages: [...] }` (không phải mảng). Bản cũ chỉ nhận
+  // mảng nên luôn rơi về tin cuối cùng → cả đợt nhắn dồn chỉ lưu/trả lời tin cuối, các tin trước MẤT khỏi lịch sử
+  // và khỏi Hộp thư. Lấy đúng danh sách tin; vẫn nhận mảng trần (đường gọi kiểu cũ).
+  const batchList = Array.isArray(batch)
+    ? batch
+    : (Array.isArray(batch?.messages) ? batch.messages : []);
+  const batchItems = batchList.length ? batchList : [{ content: parsed.message }];
+  const visitorMessageIds = [];
+  for (const item of batchItems) {
+    if (!item?.content) continue;
+    const insertedId = await logTelegramMessage(conversation, 'visitor', item.content, {
+      external_message_id: item.eventId ?? null,
+      sender_id: parsed.senderId,
+      sender_name: parsed.senderName,
+      chat_id: parsed.chatId,
+      is_group: parsed.isGroup,
+    });
+    if (insertedId) visitorMessageIds.push(insertedId);
+  }
+
   // Nếu account đã tắt chatbot cho kênh này (is_enabled=false hoặc
   // dm/group disabled tuỳ loại), ghi một system row để operator thấy
   // khi đọc log + DB, RỒI return. Không được swallow im lặng.
@@ -450,7 +550,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     });
     return;
   }
-  if (await isTelegramAiPaused(conversation?.id)) {
+  if (await isTelegramAiPaused(conversation)) {
     console.log('[Telegram] batch skip: AI paused by owner', {
       conversationId: conversation?.id
     });
@@ -461,28 +561,12 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   // bursty inputs become one AI call. Fallback to the original
   // payload when `batch` is missing the helper aggregation we
   // expect (older unit-style paths).
-  const batchedContent = Array.isArray(batch) && batch.length
-    ? batch
+  const batchedContent = batchList.length
+    ? batchList
         .map((m) => (m && m.content ? String(m.content) : ''))
         .filter(Boolean)
         .join('\n')
     : parsed.message;
-
-  // Log visitor messages first so the UI shows them even if the AI
-  // call fails. Track IDs so we can exclude them from history.
-  const batchItems = Array.isArray(batch) && batch.length ? batch : [{ content: parsed.message }];
-  const visitorMessageIds = [];
-  for (const item of batchItems) {
-    if (!item?.content) continue;
-    const insertedId = await logTelegramMessage(conversation, 'visitor', item.content, {
-      external_message_id: item.eventId ?? null,
-      sender_id: parsed.senderId,
-      sender_name: parsed.senderName,
-      chat_id: parsed.chatId,
-      is_group: parsed.isGroup,
-    });
-    if (insertedId) visitorMessageIds.push(insertedId);
-  }
 
   // Get latest message ID in this conversation (for throughMessageId).
   // This ensures AI only sees history BEFORE this batch, not including
@@ -540,7 +624,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   });
   if (!activeCheck.allowed) {
     if (activeCheck.shouldNotify) {
-      const staticRowId = await logTelegramMessage(conversation, 'bot', activeCheck.staticReply, {
+      const staticRowId = await recordTelegramMessage(conversation, 'bot', activeCheck.staticReply, {
         model: 'ai_outside_hours',
         replySource: 'ai_outside_hours',
       });
@@ -579,7 +663,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   });
   if (!rate.allowed) {
     if (rate.shouldNotify) {
-      const rateRowId = await logTelegramMessage(conversation, 'bot', rate.staticReply, {
+      const rateRowId = await recordTelegramMessage(conversation, 'bot', rate.staticReply, {
         model: 'ai_rate_limited',
         replySource: 'ai_rate_limited',
       });
@@ -657,7 +741,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     { conversationId: conversation?.id, peer }
   );
   if (replyText) {
-    const botRowId = await logTelegramMessage(conversation, 'bot', replyText, {
+    const botRowId = await recordTelegramMessage(conversation, 'bot', replyText, {
       model:
         mergedSettings.ai_model || 'gemini-2.5-flash',
     });
