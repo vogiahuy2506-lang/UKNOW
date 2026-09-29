@@ -4,6 +4,7 @@
  */
 import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
 import telegramGateway from '../chatbot/telegramGateway.client.js';
+import { hasPermanentAuthKey } from '../../utils/telegramSession.util.js';
 
 export const TELEGRAM_GROUPS_TIMEOUT_MS = 20_000;
 
@@ -24,11 +25,6 @@ function httpError(status, message) {
   const err = new Error(message);
   err.status = status;
   return err;
-}
-
-function hasPermanentKey(session) {
-  const keys = session?.authKeys?.permanent;
-  return Boolean(keys && typeof keys === 'object' && Object.keys(keys).length > 0);
 }
 
 /**
@@ -52,7 +48,7 @@ export async function listTelegramGroupsForAccount(
 
   // Chỉ đọc CSDL — không dựng client chỉ để kiểm phiên.
   const session = await repo.getSessionString(account.telegram_user_id);
-  if (!hasPermanentKey(session)) throw httpError(409, SESSION_EXPIRED_MESSAGE);
+  if (!hasPermanentAuthKey(session)) throw httpError(409, SESSION_EXPIRED_MESSAGE);
 
   let timer;
   try {
@@ -63,7 +59,9 @@ export async function listTelegramGroupsForAccount(
         reject(err);
       }, timeoutMs);
     });
-    const groups = await Promise.race([gateway.listGroups(account.telegram_user_id), timeout]);
+    const result = await Promise.race([gateway.listGroups(account.telegram_user_id), timeout]);
+    // telegramGateway.client.js `wrap` bọc kết quả thành `{ data }` (khuôn axios cũ) — bóc lớp đó.
+    const groups = result && !Array.isArray(result) && 'data' in result ? result.data : result;
     return Array.isArray(groups) ? groups : [];
   } catch (err) {
     if (err?.isTimeout) {

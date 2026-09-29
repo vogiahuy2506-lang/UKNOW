@@ -61,6 +61,12 @@ describe('listTelegramGroupsForAccount', () => {
     expect(deps.gateway.listGroups).toHaveBeenCalledWith('555');
   });
 
+  it('gateway thật bọc {data} (telegramGateway.client.js wrap) -> vẫn trả mảng nhóm bên trong', async () => {
+    const groups = [{ chatId: -1002, title: 'B', type: 'group', membersCount: null }];
+    const deps = makeDeps({ account: acc, groups: { data: groups } });
+    await expect(listTelegramGroupsForAccount({ ownerUserId: 99, accountId: 7 }, deps)).resolves.toEqual(groups);
+  });
+
   it('quá thời gian -> 504', async () => {
     const deps = makeDeps({ account: acc });
     deps.gateway.listGroups = jest.fn(() => new Promise(() => {}));
