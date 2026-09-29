@@ -351,10 +351,10 @@ function RefundPolicy() {
               8.1. Refund Principle
             </h3>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO hoàn tiền trong hai nhóm trường hợp: (i) lỗi thuộc về DIGISO (mục 8.2.a–d); (ii) Khách hàng đổi ý sớm (mục 8.2.đ). Ngoài hai nhóm này DIGISO không hoàn tiền, nhằm bảo đảm quyền lợi chính đáng của khách hàng.
+              DIGISO hoàn tiền trong hai nhóm trường hợp: (i) lỗi thuộc về DIGISO (mục 8.2.a–d); (ii) Khách hàng đổi ý sớm (mục 8.2.đ). Ngoài hai nhóm này, DIGISO không hoàn tiền.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO refunds in two groups of cases: (i) the fault lies with DIGISO (sections 8.2.a–d); (ii) the Customer changes their mind early (section 8.2.đ). Outside these two groups DIGISO does not refund, in order to protect the Customer's legitimate interests.
+              DIGISO refunds in two groups of cases: (i) the fault lies with DIGISO (sections 8.2.a–d); (ii) the Customer changes their mind early (section 8.2.đ). Outside these two groups, DIGISO does not refund.
             </p>
             <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
               8.2. Điều kiện hoàn tiền
