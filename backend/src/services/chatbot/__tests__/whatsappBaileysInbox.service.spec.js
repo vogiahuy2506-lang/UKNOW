@@ -256,6 +256,20 @@ describe('WhatsApp Baileys — công tắc trả lời của chatbot (replies_en
     for (const sql of m.settingsSqls) expect(sql).toContain('cb.replies_enabled');
   });
 
+  it('cả hai câu SQL lấy cấu hình từ chatbot (cb) trước, dòng s chỉ dự phòng (29/09)', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L là bao nhiêu vậy shop']);
+    await flush();
+    expect(m.settingsSqls.length).toBeGreaterThanOrEqual(2);
+    for (const sql of m.settingsSqls) {
+      expect(sql).toMatch(/NULLIF\(BTRIM\(cb\.system_instruction\), ''\),\s*NULLIF\(BTRIM\(s\.system_instruction\), ''\)/);
+      expect(sql).toMatch(/NULLIF\(BTRIM\(cb\.welcome_message\), ''\),\s*NULLIF\(BTRIM\(s\.welcome_message\), ''\)/);
+      expect(sql).toContain('COALESCE(cb.temperature, s.temperature) AS temperature');
+      expect(sql).toContain('COALESCE(cb.max_tokens, s.max_tokens) AS max_tokens');
+      expect(sql).toContain('COALESCE(cb.response_style, s.response_style) AS response_style');
+      expect(sql).toContain('COALESCE(cb.ai_model, s.ai_model) AS ai_model');
+    }
+  });
+
   it('replies_enabled=true: gọi AI như cũ', async () => {
     m.repliesEnabled = true;
     await sendTexts(['Cho mình hỏi giá áo thun size L là bao nhiêu vậy shop']);

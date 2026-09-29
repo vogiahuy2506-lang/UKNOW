@@ -51,30 +51,19 @@ class ChatbotWhatsAppBaileysRepository {
 
   /**
    * Toggle is_enabled for (user, session, chatbot). Lazy-creates the row.
-   * Bug 22/09 (Zalo parity): khi enabled=true, snap
-   * `custom_chatbots.system_instruction` vào row mới tạo để
-   * fallback chain hoạt động (giống Telegram).
+   * Không chụp system_instruction nữa (29/09): WhatsApp đọc bản sống của
+   * chatbot (`custom_chatbots`) trước, cột của dòng này chỉ là dự phòng —
+   * bản chụp cũ khiến sửa hướng dẫn trong Studio không có hiệu lực.
    */
   async setEnabled(userId, sessionKey, idChatbot, enabled) {
     await this.assertOwnedSession(userId, sessionKey);
     const { rows } = await db.query(
       `INSERT INTO chatbot_whatsapp_baileys_settings
-         (id_user, session_key, id_chatbot, is_enabled,
-          -- Bug 22/09: snap chatbot system_instruction để fallback chain.
-          system_instruction)
-       VALUES ($1, $2, $3, $4,
-               (SELECT NULLIF(BTRIM(cb.system_instruction), '')
-                  FROM custom_chatbots cb
-                 WHERE cb.id = $3 AND cb.is_active = true))
+         (id_user, session_key, id_chatbot, is_enabled)
+       VALUES ($1, $2, $3, $4)
        ON CONFLICT ON CONSTRAINT uq_chatbot_whatsapp_baileys_user_session_chatbot
        DO UPDATE SET
          is_enabled = EXCLUDED.is_enabled,
-         -- Chỉ fill system_instruction khi row hiện tại trống —
-         -- không ghi đè giá trị user đã edit thủ công.
-         system_instruction = COALESCE(
-           NULLIF(BTRIM(chatbot_whatsapp_baileys_settings.system_instruction), ''),
-           NULLIF(BTRIM(EXCLUDED.system_instruction), '')
-         ),
          updated_at = NOW()
        RETURNING *`,
       [userId, sessionKey, idChatbot, enabled]
