@@ -93,6 +93,7 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
     topUserRows,
     p90Rows,
     timelineRows,
+    creditRows,
   ] = await Promise.all([
     aiUsageRepository.safeQuery(
       `SELECT
@@ -112,7 +113,7 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
          p.id AS plan_id,
          COALESCE(p.code, 'unknown') AS plan_code,
          COALESCE(p.name, p.code, 'Unknown plan') AS plan_name,
-         p.ai_tokens_per_period,
+         p.ai_credits_per_period,
          ${UL_TOKEN_SQL.model} AS model,
          COUNT(DISTINCT ul.id_user)::int AS user_count,
          COALESCE(SUM(ul.delta), 0)::bigint AS total_tokens,
@@ -123,7 +124,7 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
        LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE ul.resource_type = 'ai_token'
          AND ul.created_at >= NOW() - ($1::int * INTERVAL '1 day')
-       GROUP BY p.id, p.code, p.name, p.ai_tokens_per_period, model`,
+       GROUP BY p.id, p.code, p.name, p.ai_credits_per_period, model`,
       params
     ),
     aiUsageRepository.safeQuery(
@@ -212,6 +213,37 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
        ORDER BY bucket`,
       params
     ),
+    // Hạn mức chặn thật theo LƯỢT AI (credit), không phải token: 1 credit / lượt trả lời.
+    // delta > 0 = lượt đã dùng; dòng âm (mua marketplace) không phải lượt AI nên loại.
+    aiUsageRepository.safeQuery(
+      `WITH per_user AS (
+         SELECT
+           p.id AS plan_id,
+           COALESCE(p.code, 'unknown') AS plan_code,
+           COALESCE(p.name, p.code, 'Unknown plan') AS plan_name,
+           p.ai_credits_per_period,
+           ul.id_user,
+           COALESCE(SUM(ul.delta), 0)::bigint AS total_credits
+         FROM usage_logs ul
+         LEFT JOIN users u ON u.id = ul.id_user
+         LEFT JOIN plans p ON p.id = u.active_plan_id
+         WHERE ul.resource_type = 'ai_credit'
+           AND ul.delta > 0
+           AND ul.created_at >= NOW() - ($1::int * INTERVAL '1 day')
+         GROUP BY p.id, p.code, p.name, p.ai_credits_per_period, ul.id_user
+       )
+       SELECT
+         plan_id,
+         plan_code,
+         plan_name,
+         ai_credits_per_period,
+         COUNT(*)::int AS user_count,
+         COALESCE(SUM(total_credits), 0)::bigint AS total_credits,
+         ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY total_credits))::numeric, 1) AS p90_user_credits
+       FROM per_user
+       GROUP BY plan_id, plan_code, plan_name, ai_credits_per_period`,
+      params
+    ),
   ]);
 
   const byModel = aggregateRows(
@@ -225,19 +257,17 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
     .map((item) => ({ ...item, priceConfigured: hasConfiguredPrice(pricing, item.model) }))
     .sort((a, b) => b.totalTokens - a.totalTokens);
 
-  const p90ByPlan = new Map(p90Rows.map((row) => [String(row.plan_id || row.plan_code || 'unknown'), {
-    p90UserTokens: toNumber(row.p90_user_tokens),
-    p90UserCount: toNumber(row.user_count),
-  }]));
+  const planKey = (row) => String(row.plan_id || row.plan_code || 'unknown');
+  const creditByPlan = new Map(creditRows.map((row) => [planKey(row), row]));
 
-  const byPlan = aggregateRows(
+  const tokenPlans = aggregateRows(
     planRows,
-    (row) => String(row.plan_id || row.plan_code || 'unknown'),
+    planKey,
     (row) => ({
       planId: row.plan_id || null,
       planCode: row.plan_code || 'unknown',
       planName: row.plan_name || row.plan_code || 'Unknown plan',
-      aiTokensPerPeriod: toNullableNumber(row.ai_tokens_per_period),
+      aiCreditsPerPeriod: toNullableNumber(row.ai_credits_per_period),
       promptTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
@@ -245,14 +275,36 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
       estimatedCostUsd: 0,
     }),
     pricing
-  ).map((item) => {
-    const p90 = p90ByPlan.get(String(item.planId || item.planCode || 'unknown')) || {};
-    const quota = item.aiTokensPerPeriod;
-    const p90UserTokens = p90.p90UserTokens || 0;
+  );
+  const p90TokensByPlan = new Map(p90Rows.map((row) => [planKey(row), toNumber(row.p90_user_tokens)]));
+  const planItems = new Map(tokenPlans.map((item) => [String(item.planId || item.planCode || 'unknown'), item]));
+  // Gói chỉ có lượt AI (chưa có dòng token) vẫn phải hiện.
+  creditRows.forEach((row) => {
+    const key = planKey(row);
+    if (planItems.has(key)) return;
+    planItems.set(key, {
+      planId: row.plan_id || null,
+      planCode: row.plan_code || 'unknown',
+      planName: row.plan_name || row.plan_code || 'Unknown plan',
+      aiCreditsPerPeriod: toNullableNumber(row.ai_credits_per_period),
+      promptTokens: 0,
+      outputTokens: 0,
+      totalTokens: 0,
+      userCount: 0,
+      estimatedCostUsd: 0,
+    });
+  });
+
+  const byPlan = Array.from(planItems.entries()).map(([key, item]) => {
+    const credit = creditByPlan.get(key) || {};
+    const quota = item.aiCreditsPerPeriod;
+    const p90UserCredits = toNumber(credit.p90_user_credits);
     return {
       ...item,
-      p90UserTokens,
-      quotaUsagePctAtP90: quota > 0 ? Math.round((p90UserTokens / quota) * 1000) / 10 : null,
+      p90UserTokens: p90TokensByPlan.get(key) || 0,
+      totalCredits: toNumber(credit.total_credits),
+      p90UserCredits,
+      quotaUsagePctAtP90: quota > 0 ? Math.round((p90UserCredits / quota) * 1000) / 10 : null,
     };
   }).sort((a, b) => b.totalTokens - a.totalTokens);
 
