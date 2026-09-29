@@ -44,6 +44,12 @@ const buildPaletteOrderByCampaignType = (campaignType) => {
     return [...triggers, ...nodeConfigs.data, ...logic, ...nodeConfigs.actions];
   }
 
+  // WhatsApp (PR-W4b): trigger → data chung → logic → khối gửi WhatsApp.
+  if (normalizedType === 'whatsapp') {
+    const actions = nodeConfigs.actions.filter((n) => n.type === 'send_whatsapp');
+    return [...triggers, ...nodeConfigs.data, ...logic, ...actions];
+  }
+
   // Zalo cá nhân: trigger → chọn TK → lấy bạn bè → data → logic → action zalo cá nhân.
   if (normalizedType === 'zalo' || normalizedType === 'zalo_personal'
       || normalizedType === 'zalo-individual' || normalizedType === 'zalo_individual') {

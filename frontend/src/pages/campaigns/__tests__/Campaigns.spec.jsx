@@ -398,6 +398,57 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('telegram_group');
   });
 
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b: nút WhatsApp tạo loại 'whatsapp', chỉ khi /campaigns/channels có key 'whatsapp'.
+  it("cờ WhatsApp bật: chọn nút WhatsApp rồi tạo -> createCampaign nhận campaignType 'whatsapp'", async () => {
+    campaignApiService.getChannels.mockResolvedValue({
+      data: { data: { channels: [{ key: 'whatsapp', sendNodeSubtype: 'send_whatsapp', label: 'WhatsApp' }] } },
+    });
+    campaignApiService.createCampaign.mockResolvedValue({ data: { data: { id: 556 } } });
+
+    renderComponent(['/app/campaigns']);
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    const nameInput = await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
+    fireEvent.change(nameInput, { target: { value: 'Chiến dịch WhatsApp thử' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'WhatsApp' }));
+    fireEvent.click(screen.getByRole('button', { name: viTranslations.campaigns.createAndDesign }));
+
+    await waitFor(() => {
+      expect(campaignApiService.createCampaign).toHaveBeenCalledTimes(1);
+    });
+    expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('whatsapp');
+    // cờ Telegram không bật -> không có nút Telegram
+    expect(screen.queryByRole('button', { name: 'Telegram' })).not.toBeInTheDocument();
+  });
+
+  it('cờ WhatsApp tắt (chỉ có kênh Telegram): không có nút WhatsApp', async () => {
+    campaignApiService.getChannels.mockResolvedValue({
+      data: { data: { channels: [{ key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' }] } },
+    });
+    renderComponent(['/app/campaigns']);
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
+    expect(await screen.findByRole('button', { name: 'Telegram' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'WhatsApp' })).not.toBeInTheDocument();
+  });
+
+  it('getChannels lỗi -> không có nút WhatsApp', async () => {
+    campaignApiService.getChannels.mockRejectedValue(new Error('404'));
+    renderComponent(['/app/campaigns']);
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
+    expect(screen.queryByRole('button', { name: 'WhatsApp' })).not.toBeInTheDocument();
+  });
+
   it('cờ Telegram tắt: không có nút Telegram nhóm', async () => {
     campaignApiService.getChannels.mockResolvedValue({ data: { data: { channels: [] } } });
     renderComponent(['/app/campaigns']);

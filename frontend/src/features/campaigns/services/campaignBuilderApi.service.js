@@ -41,6 +41,11 @@ const campaignBuilderApiService = {
     return api.get('/campaigns/channels/telegram/accounts', options);
   },
 
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b (hợp đồng W4a mục 4) — phiên WhatsApp của chủ workspace.
+  getWhatsAppAccountsForBuilder(options = {}) {
+    return api.get('/campaigns/channels/whatsapp/accounts', options);
+  },
+
   // PR-E2 — nhóm Telegram tài khoản gửi được (đọc trực tiếp từ Telegram, có thể chậm tới ~20s).
   getTelegramAccountGroups(accountId, options = {}) {
     return api.get(`/campaigns/channels/telegram/accounts/${encodeURIComponent(accountId)}/groups`, {

@@ -2,6 +2,7 @@ const EMAIL_ACTION_TYPES = ['send_email'];
 const ZALO_PERSONAL_ACTION_TYPES = ['send_zalo_personal', 'send_zalo_friend_request'];
 const ZALO_GROUP_ACTION_TYPES = ['send_zalo_group'];
 const TELEGRAM_ACTION_TYPES = ['send_telegram'];
+const WHATSAPP_ACTION_TYPES = ['send_whatsapp'];
 
 const COMMON_DATA_NODE_TYPES = ['read_sheet', 'read_courses_db', 'read_products_db', 'read_interested_customers', 'read_landing_leads', 'read_form_submissions', 'save_customer'];
 const ZALO_ACCOUNT_NODE_TYPE = 'select_zalo_account';
@@ -33,6 +34,9 @@ const normalizeCampaignType = (campaignType) => {
   if (normalized === 'telegram_group') {
     return 'telegram_group';
   }
+  if (normalized === 'whatsapp') {
+    return 'whatsapp';
+  }
   return normalized;
 };
 
@@ -44,9 +48,14 @@ const normalizeCampaignType = (campaignType) => {
  * @param {boolean} [options.telegramEnabled] PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 —
  *   mặc định false (an toàn: caller nào chưa cập nhật vẫn loại send_telegram như trước). Chỉ áp
  *   dụng cho campaign_type 'telegram' (chỉ khối Telegram) và 'mixed' (chiến dịch cũ tạo 28–29/09).
+ * @param {boolean} [options.whatsappEnabled] PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — mặc định false;
+ *   loại 'whatsapp' chỉ có khối send_whatsapp khi bật (tắt -> rỗng); 'mixed' thêm send_whatsapp khi bật.
  * @returns {Set<string>} tập node action được phép hiển thị
  */
-export const getAllowedActionNodeTypesByCampaignType = (campaignType, { telegramEnabled = false } = {}) => {
+export const getAllowedActionNodeTypesByCampaignType = (
+  campaignType,
+  { telegramEnabled = false, whatsappEnabled = false } = {}
+) => {
   const normalizedType = normalizeCampaignType(campaignType);
   if (normalizedType === 'email') return new Set(EMAIL_ACTION_TYPES);
   if (normalizedType === 'zalo') return new Set(ZALO_PERSONAL_ACTION_TYPES);
@@ -56,11 +65,15 @@ export const getAllowedActionNodeTypesByCampaignType = (campaignType, { telegram
   if (normalizedType === 'telegram' || normalizedType === 'telegram_group') {
     return new Set(telegramEnabled ? TELEGRAM_ACTION_TYPES : []);
   }
+  if (normalizedType === 'whatsapp') {
+    return new Set(whatsappEnabled ? WHATSAPP_ACTION_TYPES : []);
+  }
   return new Set([
     ...EMAIL_ACTION_TYPES,
     ...ZALO_PERSONAL_ACTION_TYPES,
     ...ZALO_GROUP_ACTION_TYPES,
     ...(telegramEnabled ? TELEGRAM_ACTION_TYPES : []),
+    ...(whatsappEnabled ? WHATSAPP_ACTION_TYPES : []),
   ]);
 };
 
@@ -72,7 +85,8 @@ export const getAllowedActionNodeTypesByCampaignType = (campaignType, { telegram
  */
 export const getAllowedDataNodeTypesByCampaignType = (campaignType) => {
   const normalizedType = normalizeCampaignType(campaignType);
-  if (normalizedType === 'email') return new Set(COMMON_DATA_NODE_TYPES);
+  // 'whatsapp': WhatsApp gửi được số lạ (khác Telegram) -> dùng khối dữ liệu chung như email, nguồn 'node' dùng được.
+  if (normalizedType === 'email' || normalizedType === 'whatsapp') return new Set(COMMON_DATA_NODE_TYPES);
   if (normalizedType === 'zalo') {
     return new Set([...COMMON_DATA_NODE_TYPES, ZALO_ACCOUNT_NODE_TYPE, ...ZALO_PERSONAL_DATA_NODE_TYPES]);
   }

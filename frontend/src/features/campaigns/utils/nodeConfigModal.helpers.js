@@ -188,6 +188,62 @@ export const fetchTelegramAccountOptions = async ({ signal } = {}) => {
 };
 
 /**
+ * PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b (hợp đồng W4a mục 4) — phiên WhatsApp của chủ workspace,
+ * `GET /campaigns/channels/whatsapp/accounts` -> [{ sessionKey, display, status, openConversationCount }].
+ *
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<Array<{sessionKey: string, display: string, status: 'open'|'offline'|'connecting', openConversationCount?: number}>>}
+ */
+export const fetchWhatsAppAccountOptions = async ({ signal } = {}) => {
+  const response = await campaignBuilderApiService.getWhatsAppAccountsForBuilder(signal ? { signal } : {});
+  return Array.isArray(response.data?.data) ? response.data.data : [];
+};
+
+/** Số WhatsApp hợp lệ SAU khi chuẩn hoá: 8–15 chữ số (hợp đồng W4a↔W4b mục 4, cùng quy tắc với backend). */
+export const WHATSAPP_PHONE_PATTERN = /^\d{8,15}$/;
+
+/**
+ * Chuẩn hoá 1 số điện thoại WhatsApp theo hợp đồng: bỏ '+' đầu, chỉ nhận chữ số, số VN `0…` -> `84…`.
+ * KHÔNG dùng quy tắc Zalo (Zalo đổi 84 -> 0, ngược chiều). Ký tự khác chữ số (khoảng trắng, chữ, ';'…)
+ * KHÔNG được lọc bỏ — trả về nguyên để bị {@link WHATSAPP_PHONE_PATTERN} chặn, tránh FE chấp nhận thứ
+ * backend coi là sai rồi bỏ im lặng.
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export const normalizeWhatsAppPhone = (raw) => {
+  let value = String(raw ?? '').trim();
+  if (value.startsWith('+')) value = value.slice(1);
+  if (/^\d+$/.test(value) && value.startsWith('0')) value = `84${value.slice(1)}`;
+  return value;
+};
+
+/**
+ * Tách textarea SĐT — ĐÚNG như backend (`campaignChannelRunner.service.js resolveRecipientRows`
+ * split(/[\n,]+/)): chỉ xuống dòng và dấu phẩy, KHÔNG thêm ';'.
+ *
+ * @param {unknown} text
+ * @returns {{ valid: string[], invalid: string[] }} valid đã chuẩn hoá + khử trùng; invalid giữ nguyên bản gõ
+ */
+export const parseWhatsAppPhoneList = (text) => {
+  const tokens = String(text ?? '')
+    .split(/[\n,]/g)
+    .map((item) => item.trim())
+    .filter(Boolean);
+  const valid = [];
+  const invalid = [];
+  tokens.forEach((token) => {
+    const phone = normalizeWhatsAppPhone(token);
+    if (!WHATSAPP_PHONE_PATTERN.test(phone)) {
+      invalid.push(token);
+    } else if (!valid.includes(phone)) {
+      valid.push(phone);
+    }
+  });
+  return { valid, invalid };
+};
+
+/**
  * PR-E2 — nhóm Telegram của một tài khoản (đọc trực tiếp từ Telegram).
  *
  * @param {number|string} accountId
@@ -281,9 +337,10 @@ export const createNodeConfigFormData = ({
   // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — trường này dùng chung với email/Zalo
   // (mặc định 'manual'); riêng send_telegram mặc định 'telegram_conversations' (nguồn hội thoại).
   // PR-E2: chiến dịch 'telegram_group' mặc định nguồn nhóm đã chọn.
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — send_whatsapp mặc định nguồn hội thoại WhatsApp.
   recipientSource: config.recipientSource || (nodeType === 'send_telegram'
     ? (String(campaignType || '').trim().toLowerCase() === 'telegram_group' ? 'telegram_groups' : 'telegram_conversations')
-    : 'manual'),
+    : (nodeType === 'send_whatsapp' ? 'whatsapp_conversations' : 'manual')),
   recipientColumn: config.recipientColumn || '',
   recipientEmails: config.recipientEmails || '',
   recipientNodeId: config.recipientNodeId || '',
@@ -427,6 +484,9 @@ export const createNodeConfigFormData = ({
   // chuỗi thô (mỗi dòng một chat id) trong form, tách mảng lúc lưu (handleNodeConfigSaveClick) —
   // cùng khuôn recipientEmails/zaloRecipientPhones ở trên. `steps` chỉ 1 bước v1 (một ô soạn tin).
   telegramAccountId: config.telegramAccountId || '',
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — send_whatsapp: sessionKey phiên WhatsApp (vd '40-default').
+  // recipientKeys/steps/recipientSource/recipientNodeId/recipientColumn dùng chung field ở trên.
+  whatsappSessionKey: config.whatsappSessionKey || '',
   // PR-E2: nguồn 'telegram_groups' giữ MẢNG [{recipientKey, display}] (không join thành chuỗi).
   recipientKeys: config.recipientSource === 'telegram_groups' && Array.isArray(config.recipientKeys)
     ? config.recipientKeys
@@ -813,6 +873,48 @@ export const handleNodeConfigSaveClick = async ({
       const invalidChatIds = chatIds.filter((id) => !chatIdPattern.test(id));
       if (invalidChatIds.length > 0) {
         toastNotifier.error(`Chat id không hợp lệ (chỉ nhận số): ${invalidChatIds.slice(0, 3).join(', ')}${invalidChatIds.length > 3 ? '...' : ''}`);
+        return;
+      }
+    }
+    onSave(formData);
+    return;
+  }
+
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — send_whatsapp: phải có tài khoản; nội dung không rỗng,
+  // ≤ 4096; nguồn nhập tay -> mọi số khớp /^\d{8,15}$/ sau chuẩn hoá (backend bỏ số sai định dạng
+  // IM LẶNG — chặn ở đây); nguồn khối dữ liệu -> phải chọn khối + cột SĐT.
+  if (nodeType === 'send_whatsapp') {
+    if (!String(formData.whatsappSessionKey || '').trim()) {
+      toastNotifier.error('Vui lòng chọn tài khoản WhatsApp trước khi lưu.');
+      return;
+    }
+    const message = String(formData.steps?.[0]?.message || '').trim();
+    if (!message) {
+      toastNotifier.error('Vui lòng nhập nội dung tin nhắn WhatsApp.');
+      return;
+    }
+    if (message.length > 4096) {
+      toastNotifier.error('Nội dung tin nhắn WhatsApp không được quá 4096 ký tự.');
+      return;
+    }
+    if (formData.recipientSource === 'manual') {
+      const { valid, invalid } = parseWhatsAppPhoneList(formData.recipientKeys);
+      if (valid.length === 0 && invalid.length === 0) {
+        toastNotifier.error('Vui lòng nhập ít nhất 1 số điện thoại WhatsApp.');
+        return;
+      }
+      if (invalid.length > 0) {
+        toastNotifier.error(`Số điện thoại không hợp lệ (8–15 chữ số, không dấu cách): ${invalid.slice(0, 3).join(', ')}${invalid.length > 3 ? '...' : ''}`);
+        return;
+      }
+    }
+    if (formData.recipientSource === 'node') {
+      if (!String(formData.recipientNodeId || '').trim()) {
+        toastNotifier.error('Vui lòng chọn khối dữ liệu chứa số điện thoại.');
+        return;
+      }
+      if (!String(formData.recipientColumn || '').trim()) {
+        toastNotifier.error('Vui lòng chọn cột số điện thoại.');
         return;
       }
     }

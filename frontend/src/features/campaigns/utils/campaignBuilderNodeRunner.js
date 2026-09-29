@@ -2775,7 +2775,7 @@ export const createCampaignNodeRunner = (deps) => {
     // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4, mục 6 Bẫy — "đừng để chạy thử 'thành
     // công giả'": nhánh mặc định ngay dưới trả {ok:true} cho MỌI node lạ mà KHÔNG thật sự gửi gì.
     // send_telegram phải dừng ở đây, KHÔNG rơi xuống nhánh mặc định đó.
-    if (nodeType === 'send_telegram') {
+    if (nodeType === 'send_telegram' || nodeType === 'send_whatsapp') {
       return {
         input: config,
         output: { skipped: true, reason: 'dry_run_not_supported' },

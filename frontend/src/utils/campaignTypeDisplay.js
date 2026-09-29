@@ -20,6 +20,11 @@ const CAMPAIGN_TYPE_MAP = {
     label: 'Telegram nhóm',
     className: 'bg-sky-100 text-sky-700 border-sky-200',
   },
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b: 'whatsapp' là loại riêng (migration 261, BE PR-W4a).
+  whatsapp: {
+    label: 'WhatsApp',
+    className: 'bg-green-100 text-green-700 border-green-200',
+  },
   // 'mixed': chiến dịch Telegram cũ tạo 28–29/09 (PR-7a khi ENUM chưa có 'telegram') + chiến dịch đa kênh
   // từ AI. Không có nhãn thì hiện chữ "mixed" thô trong danh sách.
   mixed: {

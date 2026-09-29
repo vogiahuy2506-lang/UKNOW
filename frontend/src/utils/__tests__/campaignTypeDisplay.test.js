@@ -20,6 +20,13 @@ describe('getCampaignTypeMeta', () => {
     expect(meta.className).toContain('violet');
   });
 
+  it('trả về meta đúng cho whatsapp (PR-W4b) — nhãn WhatsApp, màu green', () => {
+    const meta = getCampaignTypeMeta('whatsapp');
+    expect(meta.label).toBe('WhatsApp');
+    expect(meta.className).toContain('green');
+    expect(getCampaignTypeMeta('WhatsApp').label).toBe('WhatsApp');
+  });
+
   it('không phân biệt hoa thường', () => {
     expect(getCampaignTypeMeta('EMAIL').label).toBe('Email');
     expect(getCampaignTypeMeta('ZALO').label).toBe('Zalo cá nhân');

@@ -9,6 +9,7 @@ import {
   createNodeConfigFormData,
   fetchZaloAccountOptions,
   fetchTelegramAccountOptions,
+  fetchWhatsAppAccountOptions,
   isRequestCanceled,
   describeRequestFailure,
   fetchInterestedCourseOptions,
@@ -40,6 +41,7 @@ import {
   NodeConfigSendZaloPersonalSection,
 } from './NodeConfigModalSendZaloSection';
 import { NodeConfigSendTelegramSection } from './NodeConfigModalSendTelegramSection';
+import { NodeConfigSendWhatsAppSection } from './NodeConfigModalSendWhatsAppSection';
 import {
   NodeConfigReadCoursesDbSection,
   NodeConfigReadProductsDbSection,
@@ -118,6 +120,11 @@ const NodeConfigModal = ({
   const [telegramAccountsStatus, setTelegramAccountsStatus] = useState('idle');
   const [telegramAccountsError, setTelegramAccountsError] = useState('');
   const [telegramAccountsReloadKey, setTelegramAccountsReloadKey] = useState(0);
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — cùng khuôn telegramAccounts* ở trên.
+  const [whatsappAccounts, setWhatsappAccounts] = useState([]);
+  const [whatsappAccountsStatus, setWhatsappAccountsStatus] = useState('idle');
+  const [whatsappAccountsError, setWhatsappAccountsError] = useState('');
+  const [whatsappAccountsReloadKey, setWhatsappAccountsReloadKey] = useState(0);
 
   const handleCheckSheetConnection = async () => {
     return handleNodeSheetConnectionCheck({
@@ -416,6 +423,45 @@ const NodeConfigModal = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, nodeType, node?.id, telegramAccountsReloadKey]);
+
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — cùng khuôn effect telegramAccounts ở trên.
+  useEffect(() => {
+    if (!isOpen || !node || nodeType !== 'send_whatsapp') {
+      setWhatsappAccounts([]);
+      setWhatsappAccountsStatus('idle');
+      setWhatsappAccountsError('');
+      return undefined;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const loadWhatsappAccounts = async () => {
+      setWhatsappAccountsStatus('loading');
+      setWhatsappAccountsError('');
+      try {
+        const items = await fetchWhatsAppAccountOptions({ signal: controller.signal });
+        if (cancelled) return;
+        setWhatsappAccounts(items);
+        setWhatsappAccountsStatus('loaded');
+      } catch (error) {
+        if (cancelled) return;
+        if (isRequestCanceled(error)) {
+          setWhatsappAccountsStatus('idle');
+          return;
+        }
+        setWhatsappAccounts([]);
+        setWhatsappAccountsError(describeRequestFailure(error));
+        setWhatsappAccountsStatus('error');
+      }
+    };
+
+    loadWhatsappAccounts();
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen, nodeType, node?.id, whatsappAccountsReloadKey]);
 
   useEffect(() => {
     if (!isOpen || !node || nodeType !== 'send_zalo_friend_request') {
@@ -735,6 +781,19 @@ const NodeConfigModal = ({
             telegramAccountsError={telegramAccountsError}
             onRetryTelegramAccounts={() => setTelegramAccountsReloadKey((key) => key + 1)}
             campaignType={campaignType}
+          />
+        );
+      case 'send_whatsapp':
+        return (
+          <NodeConfigSendWhatsAppSection
+            formData={formData}
+            setFormData={setFormData}
+            whatsappAccounts={whatsappAccounts}
+            whatsappAccountsStatus={whatsappAccountsStatus}
+            whatsappAccountsError={whatsappAccountsError}
+            onRetryWhatsappAccounts={() => setWhatsappAccountsReloadKey((key) => key + 1)}
+            upstreamNodes={upstreamNodes}
+            sourceSchema={sourceSchema}
           />
         );
       case 'condition':

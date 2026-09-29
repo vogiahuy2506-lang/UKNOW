@@ -2,7 +2,7 @@ import { useState } from 'react';
 /* eslint-disable react-refresh/only-export-components -- nodeConfigs registry exported alongside node UI */
 import { BaseEdge, getBezierPath, Handle, Position, useReactFlow } from 'reactflow';
 import { HiOutlineAdjustments, HiOutlineChat, HiOutlineClipboardList, HiOutlineCube, HiOutlineDocumentText, HiOutlineGlobe, HiOutlineMail, HiOutlinePencil, HiOutlinePlay, HiOutlineShoppingCart, HiOutlineStop, HiOutlineTable, HiOutlineTag, HiOutlineUserAdd, HiOutlineX } from 'react-icons/hi';
-import { FaTelegramPlane } from 'react-icons/fa';
+import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { useI18n } from '../../../i18n';
 
 const NODE_CARD_CONTAINER_CLASS =
@@ -236,6 +236,18 @@ export const nodeConfigs = {
       iconColor: '#26A5E4',
       description: 'Send message to Telegram chats',
       descriptionVi: 'Gửi tin nhắn đến hội thoại Telegram',
+    },
+    {
+      // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — chỉ hiện trong palette khi cờ WhatsApp bật
+      // (lọc ở CampaignBuilder.jsx theo getAllowedActionNodeTypesByCampaignType).
+      type: 'send_whatsapp',
+      name: 'Send WhatsApp Message',
+      nameVi: 'Gửi tin nhắn WhatsApp',
+      icon: FaWhatsapp,
+      bgColor: '#E8F5E9',
+      iconColor: '#25D366',
+      description: 'Send message to WhatsApp numbers',
+      descriptionVi: 'Gửi tin nhắn đến số WhatsApp',
     },
   ],
   logic: [

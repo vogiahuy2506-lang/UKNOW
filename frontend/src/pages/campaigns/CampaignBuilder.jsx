@@ -700,6 +700,7 @@ const CampaignBuilder = () => {
                     'send_zalo_friend_request',
                     'send_zalo_group',
                     'send_telegram',
+                    'send_whatsapp',
                     'add_tag',
                     'update_customer',
                     'create_task',
@@ -836,6 +837,8 @@ const CampaignBuilder = () => {
   // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — nguồn cờ: gọi 1 lần khi mở trình dựng.
   // Lỗi/404 (BE cũ) -> coi như tắt (mặc định false, không có node Telegram).
   const [telegramChannelEnabled, setTelegramChannelEnabled] = useState(false);
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — cùng nguồn /campaigns/channels (key 'whatsapp').
+  const [whatsappChannelEnabled, setWhatsappChannelEnabled] = useState(false);
   useEffect(() => {
     let cancelled = false;
     campaignBuilderApiService.getChannels()
@@ -843,21 +846,31 @@ const CampaignBuilder = () => {
         if (cancelled) return;
         const channels = res?.data?.data?.channels;
         setTelegramChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'telegram'));
+        setWhatsappChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'whatsapp'));
       })
       .catch(() => {
-        if (!cancelled) setTelegramChannelEnabled(false);
+        if (!cancelled) {
+          setTelegramChannelEnabled(false);
+          setWhatsappChannelEnabled(false);
+        }
       });
     return () => { cancelled = true; };
   }, []);
 
   const getAllowedActionNodeTypesForDrop = useCallback(
-    (type) => getAllowedActionNodeTypesByCampaignType(type, { telegramEnabled: telegramChannelEnabled }),
-    [telegramChannelEnabled]
+    (type) => getAllowedActionNodeTypesByCampaignType(type, {
+      telegramEnabled: telegramChannelEnabled,
+      whatsappEnabled: whatsappChannelEnabled,
+    }),
+    [telegramChannelEnabled, whatsappChannelEnabled]
   );
 
   const allowedActionNodeTypes = useMemo(
-    () => getAllowedActionNodeTypesByCampaignType(campaignType, { telegramEnabled: telegramChannelEnabled }),
-    [campaignType, telegramChannelEnabled]
+    () => getAllowedActionNodeTypesByCampaignType(campaignType, {
+      telegramEnabled: telegramChannelEnabled,
+      whatsappEnabled: whatsappChannelEnabled,
+    }),
+    [campaignType, telegramChannelEnabled, whatsappChannelEnabled]
   );
   const allowedDataNodeTypes = useMemo(
     () => getAllowedDataNodeTypesByCampaignType(campaignType),

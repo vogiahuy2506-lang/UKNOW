@@ -154,6 +154,7 @@ const SEND_NODE_SUBTYPES = new Set([
   'send_zalo_friend_request',
   'send_zalo_group',
   'send_telegram',
+  'send_whatsapp',
 ]);
 
 const isSendNodeSubtype = (nodeSubtype = '') => SEND_NODE_SUBTYPES.has(String(nodeSubtype || '').trim().toLowerCase());

@@ -21,7 +21,7 @@ import {
   HiOutlineEye,
   HiOutlineRefresh,
 } from 'react-icons/hi';
-import { FaTelegramPlane } from 'react-icons/fa';
+import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { getActiveRunPause, getRunPauseI18nKey } from '../../features/campaigns/utils/campaignQuotaPause.helpers';
@@ -92,6 +92,8 @@ const Campaigns = () => {
   // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — nguồn cờ: gọi 1 lần khi mở trang danh
   // sách chiến dịch. Lỗi/404 (BE cũ) -> coi như tắt (mặc định false, không có nút Telegram).
   const [telegramChannelEnabled, setTelegramChannelEnabled] = useState(false);
+  // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — cùng nguồn cờ /campaigns/channels (key 'whatsapp').
+  const [whatsappChannelEnabled, setWhatsappChannelEnabled] = useState(false);
 
   const runController = useCampaignRunController({
     onCampaignsChanged: () => fetchCampaigns(),
@@ -122,9 +124,13 @@ const Campaigns = () => {
         if (cancelled) return;
         const channels = res?.data?.data?.channels;
         setTelegramChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'telegram'));
+        setWhatsappChannelEnabled(Array.isArray(channels) && channels.some((c) => c.key === 'whatsapp'));
       })
       .catch(() => {
-        if (!cancelled) setTelegramChannelEnabled(false);
+        if (!cancelled) {
+          setTelegramChannelEnabled(false);
+          setWhatsappChannelEnabled(false);
+        }
       });
     return () => { cancelled = true; };
   }, []);
@@ -1032,7 +1038,7 @@ const Campaigns = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {t('campaigns.campaignType')}
                 </label>
-                <div className={`grid gap-3 ${telegramChannelEnabled ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-3'}`}>
+                <div className={`grid gap-3 ${telegramChannelEnabled ? (whatsappChannelEnabled ? 'grid-cols-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-5') : (whatsappChannelEnabled ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}`}>
                   <button
                     type="button"
                     onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'email' }))}
@@ -1095,6 +1101,20 @@ const Campaigns = () => {
                     >
                       <FaTelegramPlane className="w-4 h-4" />
                       {t('campaigns.telegramGroup')}
+                    </button>
+                  )}
+                  {whatsappChannelEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'whatsapp' }))}
+                      className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
+                        createCampaignForm.campaignType === 'whatsapp'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      <FaWhatsapp className="w-4 h-4" />
+                      {t('campaigns.whatsapp')}
                     </button>
                   )}
                 </div>
