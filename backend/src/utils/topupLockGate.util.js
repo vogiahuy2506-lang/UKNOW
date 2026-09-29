@@ -1,5 +1,10 @@
 import { isResourceLocked } from '../services/payment/topupLock.service.js';
+import { isWhatsappSessionLocked } from '../repositories/payment/topupLock.repository.js';
 import db from '../config/database.js';
+
+/** Câu chung khi tài khoản kênh bị khoá do vượt hạn mức gói (P6, PLAN_TG_WA_DAY_DU). */
+export const CHANNEL_ACCOUNT_LOCKED_MESSAGE =
+  'Tài khoản đang bị khoá do vượt hạn mức gói — nâng gói hoặc mua thêm slot để mở khoá.';
 
 /**
  * @param {string} resourceKey
@@ -19,6 +24,26 @@ export async function resourceIsLocked(resourceKey, resourceId) {
       console.warn('[TopupLock] table missing, skip lock check');
     } else {
       console.error(`[TopupLock] lock check failed (${resourceKey}#${resourceId}):`, err.message);
+    }
+    return false;
+  }
+}
+
+/**
+ * Phiên WhatsApp (`<userId>-<shortKey>`) có đang bị khoá do vượt hạn mức gói không. Cùng chính sách fail-open với
+ * `resourceIsLocked` (chốt doanh thu, không phải rào bảo mật).
+ * @param {string|null|undefined} sessionKey
+ * @returns {Promise<boolean>}
+ */
+export async function whatsappSessionIsLocked(sessionKey) {
+  if (!sessionKey) return false;
+  try {
+    return await isWhatsappSessionLocked(sessionKey);
+  } catch (err) {
+    if (err?.code === '42P01' || err?.code === '42703') {
+      console.warn('[TopupLock] whatsapp lock schema missing, skip lock check');
+    } else {
+      console.error(`[TopupLock] whatsapp lock check failed (${sessionKey}):`, err.message);
     }
     return false;
   }

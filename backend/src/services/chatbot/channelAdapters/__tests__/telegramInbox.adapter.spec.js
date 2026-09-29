@@ -135,6 +135,21 @@ describe('telegramInbox.adapter — trả lời tay từ Hộp thư', () => {
     });
   });
 
+  it('P6 — tài khoản bị khoá do vượt hạn mức gói: success:false kèm câu khoá, KHÔNG gọi gateway, không ghi bảng cũ', async () => {
+    mockDbQuery.mockImplementation(async (sql, params) => {
+      if (/FROM topup_locked_resources/i.test(sql)) {
+        return { rows: params?.[0] === 'telegram_accounts' && Number(params?.[1]) === 7 ? [{ '?column?': 1 }] : [] };
+      }
+      return { rows: [] };
+    });
+    const result = await adapter.sendReply({
+      channelId: 31, externalId: buildTelegramInboxExternalId(7, '7777'), message: 'Chào bạn', userId: 42,
+    });
+    expect(result).toMatchObject({ success: false, provider: 'telegram', error: expect.stringContaining('bị khoá') });
+    expect(mockGatewaySend).not.toHaveBeenCalled();
+    expect(mockDbQuery.mock.calls.find(([sql]) => /INSERT INTO telegram_personal_messages/i.test(sql))).toBeUndefined();
+  });
+
   it('external_id không phải dạng telegram:<tài khoản>:<chat> → success:false, không gọi gateway', async () => {
     const result = await adapter.sendReply({ channelId: 31, externalId: '7777', message: 'x', userId: 42 });
     expect(result.success).toBe(false);

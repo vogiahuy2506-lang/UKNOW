@@ -130,6 +130,20 @@ function assertOwnerPresent(ownerId, nodeId) {
 }
 
 /**
+ * P6 (PLAN_TG_WA_DAY_DU) — tài khoản bị khoá do vượt hạn mức gói (hạ gói / slot mua thêm hết hạn) thì không dùng để
+ * gửi: coi như không dùng được (giống cổng Zalo `campaignZaloSender.repository.js`). Dùng ở CẢ preflight lẫn lúc chạy
+ * (`resolveAccount`), nên chặn cả chiến dịch lẫn gửi nhanh.
+ */
+async function assertAccountNotLocked(accountId) {
+  const { resourceIsLocked, CHANNEL_ACCOUNT_LOCKED_MESSAGE } = await import('../../../utils/topupLockGate.util.js');
+  if (await resourceIsLocked('telegram_accounts', accountId)) {
+    const err = new Error(CHANNEL_ACCOUNT_LOCKED_MESSAGE);
+    err.code = 'TELEGRAM_ACCOUNT_LOCKED';
+    throw err;
+  }
+}
+
+/**
  * Preflight — throw SỚM (400 ở campaignPreflight.service.js) thay vì để lộ 503 lúc gửi.
  * @param {{userId: number, node: object}} input `userId` = chủ workspace (preflight truyền vậy).
  */
@@ -158,6 +172,7 @@ async function checkReadiness({ userId, node }) {
     err.code = 'TELEGRAM_ACCOUNT_NOT_READY';
     throw err;
   }
+  await assertAccountNotLocked(account.id);
   // Phiên phải còn khoá đăng nhập (chỉ đọc CSDL — không dựng client/kết nối). Không log/không trả nội dung khoá.
   const session = await chatbotTelegramRepository.getSessionString(account.telegram_user_id);
   if (!hasPermanentAuthKey(session)) {
@@ -245,6 +260,7 @@ async function resolveAccount({ workspaceOwnerId, config, node }) {
     err.code = 'TELEGRAM_ACCOUNT_NOT_READY';
     throw err;
   }
+  await assertAccountNotLocked(account.id);
   return {
     accountKey: String(account.id),
     accountId: account.id,

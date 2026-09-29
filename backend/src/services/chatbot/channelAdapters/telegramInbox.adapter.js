@@ -24,6 +24,11 @@ class TelegramInboxAdapter {
     if (!accountId || accountId !== target.accountId) {
       return { success: false, error: 'Không tìm thấy tài khoản Telegram của hội thoại này', provider: 'telegram' };
     }
+    // P6 — tài khoản bị khoá do vượt hạn mức gói: không trả lời tay (tin đánh dấu failed, thử lại được sau khi mở khoá).
+    const { resourceIsLocked, CHANNEL_ACCOUNT_LOCKED_MESSAGE } = await import('../../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('telegram_accounts', accountId)) {
+      return { success: false, error: CHANNEL_ACCOUNT_LOCKED_MESSAGE, provider: 'telegram' };
+    }
     try {
       // Import trễ: telegram.adapter kéo theo gateway (gắn hook tắt tiến trình) — đừng nạp khi chỉ dựng Hộp thư.
       const { default: telegramAdapter } = await import('./telegram.adapter.js');

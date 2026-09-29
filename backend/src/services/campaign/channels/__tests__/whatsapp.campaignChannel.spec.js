@@ -28,6 +28,13 @@ jest.unstable_mockModule('../../../../repositories/chatbot/whatsappCampaignConve
   },
 }));
 
+// P6 — cổng khoá sau hạ gói: mặc định KHÔNG khoá; ca riêng bật khoá.
+const whatsappSessionIsLockedMock = jest.fn(async () => false);
+jest.unstable_mockModule('../../../../utils/topupLockGate.util.js', () => ({
+  whatsappSessionIsLocked: whatsappSessionIsLockedMock,
+  CHANNEL_ACCOUNT_LOCKED_MESSAGE: 'Tài khoản đang bị khoá do vượt hạn mức gói — nâng gói hoặc mua thêm slot để mở khoá.',
+}));
+
 const {
   whatsappChannelAdapter,
   classifyWhatsAppSendError,
@@ -43,6 +50,7 @@ const node = (config) => ({ id: 7, config: { whatsappSessionKey: '40-default', .
 beforeEach(() => {
   jest.resetAllMocks();
   getSessionMock.mockReturnValue(openSession);
+  whatsappSessionIsLockedMock.mockResolvedValue(false);
 });
 
 describe('normalizeWhatsAppPhone', () => {
@@ -345,5 +353,22 @@ describe('listWhatsAppAccountsForOwner', () => {
     }));
     const data = await listWhatsAppAccountsForOwner(40);
     expect(data.map((d) => d.status)).toEqual(['connecting', 'offline']);
+  });
+});
+
+describe('P6 — phiên bị khoá do vượt hạn mức gói (hạ gói / slot hết hạn)', () => {
+  it('checkReadiness: phiên bị khoá -> WHATSAPP_ACCOUNT_LOCKED (tra đúng sessionKey)', async () => {
+    whatsappSessionIsLockedMock.mockResolvedValue(true);
+    await expect(
+      whatsappChannelAdapter.checkReadiness({ userId: 40, node: node({ recipientSource: 'manual', recipientKeys: '0912345678' }) })
+    ).rejects.toMatchObject({ code: 'WHATSAPP_ACCOUNT_LOCKED', message: expect.stringContaining('bị khoá') });
+    expect(whatsappSessionIsLockedMock).toHaveBeenCalledWith('40-default');
+  });
+
+  it('resolveAccount (lúc chạy + gửi nhanh): phiên bị khoá -> WHATSAPP_ACCOUNT_LOCKED', async () => {
+    whatsappSessionIsLockedMock.mockResolvedValue(true);
+    await expect(
+      whatsappChannelAdapter.resolveAccount({ workspaceOwnerId: 40, config: { whatsappSessionKey: '40-default' }, node: { id: 1 } })
+    ).rejects.toMatchObject({ code: 'WHATSAPP_ACCOUNT_LOCKED' });
   });
 });

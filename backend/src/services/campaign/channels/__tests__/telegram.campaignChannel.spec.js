@@ -2,7 +2,7 @@
  * PLAN_TACH_TANG_KENH_GUI_2026-09-27, PR-6 — unit test cho các hàm THUẦN của
  * telegram.campaignChannel.js (không chạm DB/mạng — mock telegramGateway.client.js + stubCheck).
  */
-import { describe, it, expect, jest } from '@jest/globals';
+import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const sendMessageMock = jest.fn();
 jest.unstable_mockModule('../../../chatbot/telegramGateway.client.js', () => ({
@@ -25,6 +25,13 @@ jest.unstable_mockModule('../../../../repositories/chatbot/chatbotTelegram.repos
     getSessionString: getSessionStringMock,
     listOpenConversationsForAccount: listOpenConversationsForAccountMock,
   },
+}));
+
+// P6 — cổng khoá sau hạ gói: mặc định KHÔNG khoá; ca riêng bật khoá theo key.
+const resourceIsLockedMock = jest.fn(async () => false);
+jest.unstable_mockModule('../../../../utils/topupLockGate.util.js', () => ({
+  resourceIsLocked: resourceIsLockedMock,
+  CHANNEL_ACCOUNT_LOCKED_MESSAGE: 'Tài khoản đang bị khoá do vượt hạn mức gói — nâng gói hoặc mua thêm slot để mở khoá.',
 }));
 
 const { classifyTelegramSendError, telegramChannelAdapter, buildTelegramPolicyFromEnv } = await import('../telegram.campaignChannel.js');
@@ -342,5 +349,39 @@ describe('telegram.campaignChannel — PR-E2: nguồn telegram_groups', () => {
       account: { accountId: 7 },
     });
     expect(out).toEqual([{ recipientKey: '-1001', display: 'Nhóm A', vars: {} }]);
+  });
+});
+
+describe('telegram.campaignChannel — P6: tài khoản bị khoá do vượt hạn mức gói (hạ gói / slot hết hạn)', () => {
+  const goodSession = { kv: {}, authKeys: { permanent: { 2: { 0: 1 } }, temp: {} } };
+  beforeEach(() => {
+    getAccountByIdMock.mockReset();
+    getSessionStringMock.mockReset();
+    getAccountByIdMock.mockResolvedValue({ id: 7, id_user: 99, is_active: true, telegram_user_id: '555' });
+    getSessionStringMock.mockResolvedValue(goodSession);
+    resourceIsLockedMock.mockReset();
+  });
+
+  it('checkReadiness: tài khoản bị khoá -> TELEGRAM_ACCOUNT_LOCKED (tra đúng key telegram_accounts + id)', async () => {
+    resourceIsLockedMock.mockResolvedValue(true);
+    await expect(
+      telegramChannelAdapter.checkReadiness({ userId: 99, node: { id: 1, config: { telegramAccountId: 7, recipientSource: 'node' } } })
+    ).rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_LOCKED', message: expect.stringContaining('bị khoá') });
+    expect(resourceIsLockedMock).toHaveBeenCalledWith('telegram_accounts', 7);
+  });
+
+  it('resolveAccount (lúc chạy + gửi nhanh): tài khoản bị khoá -> TELEGRAM_ACCOUNT_LOCKED', async () => {
+    resourceIsLockedMock.mockResolvedValue(true);
+    await expect(
+      telegramChannelAdapter.resolveAccount({ workspaceOwnerId: 99, config: { telegramAccountId: 7 }, node: { id: 1 } })
+    ).rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_LOCKED' });
+    expect(resourceIsLockedMock).toHaveBeenCalledWith('telegram_accounts', 7);
+  });
+
+  it('không bị khoá -> qua như cũ', async () => {
+    resourceIsLockedMock.mockResolvedValue(false);
+    await expect(
+      telegramChannelAdapter.resolveAccount({ workspaceOwnerId: 99, config: { telegramAccountId: 7 }, node: { id: 1 } })
+    ).resolves.toMatchObject({ accountId: 7, accountKey: '7' });
   });
 });

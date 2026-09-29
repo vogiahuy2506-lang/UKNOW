@@ -26,6 +26,11 @@ class WhatsAppBaileysInboxAdapter {
     if (!sessionKey) {
       return { success: false, error: 'Không tìm thấy tài khoản WhatsApp của hội thoại này', provider: 'baileys' };
     }
+    // P6 — tài khoản bị khoá do vượt hạn mức gói: không trả lời tay (tin đánh dấu failed, thử lại được sau khi mở khoá).
+    const { whatsappSessionIsLocked, CHANNEL_ACCOUNT_LOCKED_MESSAGE } = await import('../../../utils/topupLockGate.util.js');
+    if (await whatsappSessionIsLocked(sessionKey)) {
+      return { success: false, error: CHANNEL_ACCOUNT_LOCKED_MESSAGE, provider: 'baileys' };
+    }
     // P5: tep dinh kem (khoa kho chat cua chu) — whatsapp.adapter loc theo chu + gui text -> anh -> tai lieu.
     return whatsappAdapter.sendReply({ channelId: sessionKey, externalId: phone, message, attachments, userId });
   }

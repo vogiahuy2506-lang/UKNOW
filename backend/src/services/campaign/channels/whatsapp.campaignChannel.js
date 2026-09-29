@@ -153,6 +153,19 @@ function assertSessionOwnedBy(ownerId, sessionKey) {
   return key;
 }
 
+/**
+ * P6 (PLAN_TG_WA_DAY_DU) — phiên bị khoá do vượt hạn mức gói (hạ gói / slot mua thêm hết hạn) thì không dùng để gửi.
+ * Dùng ở CẢ preflight lẫn lúc chạy (`resolveAccount`), nên chặn cả chiến dịch lẫn gửi nhanh.
+ */
+async function assertSessionNotLocked(sessionKey) {
+  const { whatsappSessionIsLocked, CHANNEL_ACCOUNT_LOCKED_MESSAGE } = await import('../../../utils/topupLockGate.util.js');
+  if (await whatsappSessionIsLocked(sessionKey)) {
+    const err = new Error(CHANNEL_ACCOUNT_LOCKED_MESSAGE);
+    err.code = 'WHATSAPP_ACCOUNT_LOCKED';
+    throw err;
+  }
+}
+
 async function loadWhatsAppService() {
   return import('../../chatbot/whatsappBaileys.service.js');
 }
@@ -196,6 +209,7 @@ async function checkReadiness({ userId, node }) {
   assertOwnerPresent(userId, node?.id);
   const config = node?.config || {};
   const sessionKey = assertSessionOwnedBy(userId, config.whatsappSessionKey);
+  await assertSessionNotLocked(sessionKey);
   const { getSession } = await loadWhatsAppService();
   const session = getSession(sessionKey);
   if (!session || session.status !== 'open') {
@@ -241,6 +255,7 @@ function assertStepAttachmentsWithinLimits(node) {
 async function resolveAccount({ workspaceOwnerId, config, node }) {
   assertOwnerPresent(workspaceOwnerId, node?.id);
   const sessionKey = assertSessionOwnedBy(workspaceOwnerId, config?.whatsappSessionKey);
+  await assertSessionNotLocked(sessionKey);
   const { getSession } = await loadWhatsAppService();
   const session = getSession(sessionKey);
   return {

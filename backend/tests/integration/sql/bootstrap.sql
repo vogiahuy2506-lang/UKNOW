@@ -3907,3 +3907,7 @@ CREATE TABLE IF NOT EXISTS whatsapp_account_settings (
   updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_whatsapp_account_settings_user ON whatsapp_account_settings (id_user);
+
+-- --- Migration 268: whatsapp_account_settings.id (khoa tai khoan WhatsApp sau ha goi, P6 PLAN_TG_WA_DAY_DU) ---
+ALTER TABLE whatsapp_account_settings ADD COLUMN IF NOT EXISTS id BIGSERIAL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_account_settings_id ON whatsapp_account_settings (id);

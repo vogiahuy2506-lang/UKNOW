@@ -13,6 +13,12 @@ const mockPrepare = jest.fn();
 jest.unstable_mockModule('../../../../repositories/ai/channelConnections.repository.js', () => ({
   default: { getBaileysSessionKey: mockGetBaileysSessionKey },
 }));
+// P6 — cổng khoá sau hạ gói: mặc định KHÔNG khoá; ca riêng bật khoá.
+const mockSessionIsLocked = jest.fn();
+jest.unstable_mockModule('../../../../utils/topupLockGate.util.js', () => ({
+  whatsappSessionIsLocked: mockSessionIsLocked,
+  CHANNEL_ACCOUNT_LOCKED_MESSAGE: 'Tài khoản đang bị khoá do vượt hạn mức gói — nâng gói hoặc mua thêm slot để mở khoá.',
+}));
 jest.unstable_mockModule('../../whatsappBaileys.service.js', () => ({
   sendMessage: mockSendMessage,
   sendMedia: mockSendMedia,
@@ -32,6 +38,7 @@ const EXTERNAL_ID = 'baileys:42-abc:55:84912345678';
 describe('whatsappBaileysInbox.adapter — tep dinh kem (P5)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockSessionIsLocked.mockResolvedValue(false);
     mockGetBaileysSessionKey.mockResolvedValue('42-abc');
     let seq = 0;
     const next = async () => ({ key: { id: `WA${(seq += 1)}` } });
@@ -82,5 +89,25 @@ describe('whatsappBaileysInbox.adapter — tep dinh kem (P5)', () => {
     });
     expect(result.success).toBe(false);
     expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+});
+
+describe('whatsappBaileysInbox.adapter — P6 phiên bị khoá do vượt hạn mức gói', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetBaileysSessionKey.mockResolvedValue('42-abc');
+  });
+
+  it('phiên bị khoá -> success:false kèm câu khoá, KHÔNG gọi sendMessage/sendImage/sendMedia, tra đúng sessionKey', async () => {
+    mockSessionIsLocked.mockResolvedValue(true);
+    const result = await adapter.sendReply({
+      channelId: 31, externalId: EXTERNAL_ID, message: 'Chào', attachments: [{ key: 'uploads/42/chat/a.jpg' }], userId: 42,
+    });
+    expect(mockSessionIsLocked).toHaveBeenCalledWith('42-abc');
+    expect(result).toMatchObject({ success: false, provider: 'baileys', error: expect.stringContaining('bị khoá') });
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(mockSendImage).not.toHaveBeenCalled();
+    expect(mockSendMedia).not.toHaveBeenCalled();
+    expect(mockPrepare).not.toHaveBeenCalled();
   });
 });

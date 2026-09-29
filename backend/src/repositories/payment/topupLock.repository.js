@@ -7,6 +7,9 @@ export const LOCKABLE_RESOURCE_KEYS = Object.freeze([
   'landing_pages',
   'chatbots',
   'employees',
+  // P6 (PLAN_TG_WA_DAY_DU) — tài khoản kênh Telegram/WhatsApp: hạ gói / slot mua thêm hết hạn thì khoá bớt.
+  'telegram_accounts',
+  'whatsapp_accounts',
 ]);
 
 /**
@@ -18,13 +21,80 @@ export const LOCKABLE_RESOURCE_KEYS = Object.freeze([
  */
 export const REMINDER_ITEM_KEYS = Object.freeze([...LOCKABLE_RESOURCE_KEYS, 'storage_gb']);
 
+/**
+ * WhatsApp KHÔNG có bảng tài khoản với id số: phiên sống ở `whatsapp_baileys_session_creds` (khoá session_key
+ * TEXT) còn `topup_locked_resources.resource_id` là BIGINT. P6 dùng `whatsapp_account_settings.id` (migration 268,
+ * BIGSERIAL UNIQUE) làm id khoá. Nguồn "tài nguyên còn sống" = settings JOIN creds: phiên đã xoá (creds mất) thì
+ * dòng settings còn sót không được đếm/không giữ khoá (mục "xoá phiên WA không dọn dòng settings" của P4).
+ * Dạng subquery để mọi câu `FROM ${table} r WHERE r.id_user = … / r.id = …` bên dưới dùng lại nguyên văn.
+ */
+const WHATSAPP_LIVE_SOURCE = `(
+  SELECT s.id, s.id_user, s.session_key
+  FROM whatsapp_account_settings s
+  JOIN whatsapp_baileys_session_creds c ON c.session_key = s.session_key
+)`;
+
 const RESOURCE_TABLE = Object.freeze({
   zalo_accounts: 'zalo_settings',
   email_accounts: 'email_settings',
   landing_pages: 'landing_pages',
   chatbots: 'custom_chatbots',
   employees: 'user_members',
+  telegram_accounts: 'telegram_accounts',
+  whatsapp_accounts: WHATSAPP_LIVE_SOURCE,
 });
+
+/**
+ * Bảo đảm MỌI phiên WhatsApp của chủ có dòng `whatsapp_account_settings` (có id để khoá). Phiên cũ (trước P6) và
+ * phiên chưa từng đặt tốc độ gửi chưa có dòng. Idempotent. Không chạm dữ liệu của phiên đã có dòng.
+ * @param {number|string} userId chủ workspace (tiền tố của session_key)
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ */
+export async function ensureWhatsappSettingsRows(userId, queryable = db) {
+  await queryable.query(
+    `INSERT INTO whatsapp_account_settings (session_key, id_user)
+     SELECT c.session_key, $1::bigint
+     FROM whatsapp_baileys_session_creds c
+     WHERE split_part(c.session_key, '-', 1) = ($1::bigint)::text
+     ORDER BY c.updated_at ASC
+     ON CONFLICT (session_key) DO NOTHING`,
+    [userId]
+  );
+}
+
+/**
+ * Tạo dòng settings cho MỘT phiên vừa mở (gọi ngay lúc kết nối) để id phản ánh đúng thứ tự "thêm sau cùng" — id
+ * lớn = mới hơn = khoá trước. Best-effort ở nơi gọi.
+ * @param {number|string} userId
+ * @param {string} sessionKey
+ */
+export async function ensureWhatsappSettingsRow(userId, sessionKey, queryable = db) {
+  await queryable.query(
+    `INSERT INTO whatsapp_account_settings (session_key, id_user)
+     VALUES ($1, $2)
+     ON CONFLICT (session_key) DO NOTHING`,
+    [String(sessionKey), userId]
+  );
+}
+
+/**
+ * Phiên WhatsApp `sessionKey` có đang bị khoá không (tra id settings → topup_locked_resources).
+ * Không có dòng settings = chưa từng bị khoá (khoá luôn tạo dòng trước).
+ * @param {string} sessionKey
+ */
+export async function isWhatsappSessionLocked(sessionKey, queryable = db) {
+  if (!sessionKey) return false;
+  const { rows } = await queryable.query(
+    `SELECT 1
+     FROM whatsapp_account_settings s
+     JOIN topup_locked_resources t
+       ON t.resource_key = 'whatsapp_accounts' AND t.resource_id = s.id
+     WHERE s.session_key = $1
+     LIMIT 1`,
+    [String(sessionKey)]
+  );
+  return rows.length > 0;
+}
 
 /**
  * @param {string} resourceKey
@@ -134,6 +204,7 @@ export async function countValidLocks(userId, resourceKey, queryable = db) {
 export async function listUnlockedResourceIds(userId, resourceKey, queryable = db) {
   const table = RESOURCE_TABLE[resourceKey];
   if (!table) return [];
+  if (resourceKey === 'whatsapp_accounts') await ensureWhatsappSettingsRows(userId, queryable);
 
   let sql;
   if (resourceKey === 'chatbots') {
@@ -264,6 +335,17 @@ export async function countResourcesInUse(userId, resourceKey, queryable = db) {
     );
     return Number(rows[0]?.total) || 0;
   }
+  if (resourceKey === 'whatsapp_accounts') {
+    // Đếm THẲNG từ nguồn sự thật (creds) — không phụ thuộc dòng settings đã được tạo hay chưa; cùng công thức
+    // với cổng tạo phiên (RESOURCE_LIMIT_MAP.whatsappAccounts, userResourceLimit.util.js).
+    const { rows } = await queryable.query(
+      `SELECT COUNT(*)::int AS total
+       FROM whatsapp_baileys_session_creds
+       WHERE split_part(session_key, '-', 1) = ($1::bigint)::text`,
+      [userId]
+    );
+    return Number(rows[0]?.total) || 0;
+  }
   const table = RESOURCE_TABLE[resourceKey];
   if (!table) return 0;
   const { rows } = await queryable.query(
@@ -371,9 +453,33 @@ export async function incrementGrantReminderCount(grantId, queryable = db) {
 export async function listResourcesWithLockStatus(userId, resourceKey, queryable = db) {
   const table = RESOURCE_TABLE[resourceKey];
   if (!table) return [];
+  if (resourceKey === 'whatsapp_accounts') await ensureWhatsappSettingsRows(userId, queryable);
 
   let sql;
-  if (resourceKey === 'chatbots') {
+  if (resourceKey === 'telegram_accounts') {
+    sql = `
+      SELECT r.id,
+             COALESCE(NULLIF(r.username, ''), NULLIF(r.first_name, ''), NULLIF(r.phone, ''), 'Telegram #' || r.id) AS label,
+             (tlr.id IS NOT NULL) AS is_locked,
+             tlr.locked_at
+      FROM telegram_accounts r
+      LEFT JOIN topup_locked_resources tlr
+        ON tlr.resource_key = 'telegram_accounts' AND tlr.resource_id = r.id
+      WHERE r.id_user = $1
+      ORDER BY r.id ASC`;
+  } else if (resourceKey === 'whatsapp_accounts') {
+    sql = `
+      SELECT r.id,
+             COALESCE(NULLIF(p.me_name, ''), 'WhatsApp ' || split_part(r.session_key, '-', 2)) AS label,
+             (tlr.id IS NOT NULL) AS is_locked,
+             tlr.locked_at
+      FROM ${WHATSAPP_LIVE_SOURCE} r
+      LEFT JOIN whatsapp_baileys_session_profile p ON p.session_key = r.session_key
+      LEFT JOIN topup_locked_resources tlr
+        ON tlr.resource_key = 'whatsapp_accounts' AND tlr.resource_id = r.id
+      WHERE r.id_user = $1
+      ORDER BY r.id ASC`;
+  } else if (resourceKey === 'chatbots') {
     sql = `
       SELECT r.id,
              COALESCE(r.name, 'Chatbot #' || r.id) AS label,

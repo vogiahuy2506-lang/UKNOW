@@ -81,6 +81,22 @@ const PLAN_CEILING = Object.freeze({
     if (!plan) return 0; // không có gói hiệu lực (đã hết hạn) -> khoá hết, không phải không giới hạn
     return normalizeCeiling(plan.max_chatbots);
   },
+  // P6 — trần theo users.max_* (đồng bộ từ plans.* khi kích hoạt gói, migration 263); NULL = không giới hạn
+  // (gói hiện có không đổi hành vi), 0 = gói không hỗ trợ kênh (hết hạn gói cũng ghi 0 — subscription.repository).
+  telegram_accounts: async (userId, queryable) => {
+    const { rows } = await queryable.query(
+      `SELECT max_telegram_accounts FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+    return normalizeCeiling(rows[0]?.max_telegram_accounts);
+  },
+  whatsapp_accounts: async (userId, queryable) => {
+    const { rows } = await queryable.query(
+      `SELECT max_whatsapp_accounts FROM users WHERE id = $1 LIMIT 1`,
+      [userId]
+    );
+    return normalizeCeiling(rows[0]?.max_whatsapp_accounts);
+  },
   employees: async (userId, queryable) => {
     // PR-3, Việc 3.2 — ĐỔI nguồn đọc: users.max_employees không bao giờ được ghi (không route nào
     // set cột này khi activateUserPlan/assignPlanToUser), luôn NULL nên trần nhân viên trước đây
@@ -100,6 +116,8 @@ export const STRUCTURAL_ITEM_LABELS_VI = Object.freeze({
   landing_pages: 'landing page',
   chatbots: 'chatbot',
   employees: 'nhân viên',
+  telegram_accounts: 'tài khoản Telegram',
+  whatsapp_accounts: 'tài khoản WhatsApp',
 });
 
 export function structuralItemLabelVi(itemKey) {

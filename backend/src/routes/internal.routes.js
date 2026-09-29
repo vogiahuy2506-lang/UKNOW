@@ -621,6 +621,15 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     { accountId: account.id, idChatbot, length: batchedContent?.length, throughMessageId, visitorMessageIds: visitorMessageIds.length }
   );
 
+  // P6 — tài khoản Telegram bị khoá (vượt hạn mức gói / slot hết hạn): không gọi AI. Tin khách đã lưu ở trên.
+  {
+    const { resourceIsLocked: accountIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await accountIsLocked('telegram_accounts', account.id)) {
+      console.log('[Telegram] account locked — message saved, no AI reply', { accountId: account.id });
+      return;
+    }
+  }
+
   // Khoá tài nguyên (hạ gói / hết hạn): chatbot bị khoá thì không gọi AI. Tin khách đã lưu ở trên.
   if (idChatbot) {
     const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');

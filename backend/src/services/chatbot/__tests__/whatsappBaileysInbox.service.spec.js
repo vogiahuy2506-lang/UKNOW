@@ -49,6 +49,8 @@ beforeEach(async () => {
     sessions: [],
     buckets: new Map(),
     locked: false,
+    accountLocked: false,
+    accountLockedKeys: [],
     rate: { allowed: true },
     callAi: jest.fn(async () => ({ text: 'Giá áo thun size L là 199.000đ ạ' })),
     sendReply: jest.fn(async () => ({ success: true })),
@@ -188,6 +190,7 @@ beforeEach(async () => {
   }));
   jest.unstable_mockModule(resolveUrl('utils/topupLockGate.util.js'), () => ({
     resourceIsLocked: async () => m.locked,
+    whatsappSessionIsLocked: async (key) => (m.accountLocked ? (m.accountLockedKeys.push(key), true) : false),
   }));
 
   mod = await import('../whatsappBaileysInbox.service.js');
@@ -202,6 +205,16 @@ describe('WhatsApp Baileys — cổng khoá + trần lượt tại điểm xả 
     m.locked = true;
     await sendTexts(['xin chào']);
     await flush();
+    expect(m.callAi).not.toHaveBeenCalled();
+    expect(m.sendReply).not.toHaveBeenCalled();
+    expect(m.checkBeforeAi).not.toHaveBeenCalled();
+  });
+
+  it('P6 — TÀI KHOẢN WhatsApp bị khoá (vượt hạn mức gói): không gọi AI, không gửi gì, tra đúng sessionKey', async () => {
+    m.accountLocked = true;
+    await sendTexts(['xin chào']);
+    await flush();
+    expect(m.accountLockedKeys).toEqual([SESSION_KEY]);
     expect(m.callAi).not.toHaveBeenCalled();
     expect(m.sendReply).not.toHaveBeenCalled();
     expect(m.checkBeforeAi).not.toHaveBeenCalled();

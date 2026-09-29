@@ -471,11 +471,16 @@ beforeEach(async () => {
 
   // Khoá tài nguyên + trần lượt (mặc định: không khoá, cho phép)
   mocks._locked = false;
+  mocks._lockedKeys = null;
+  mocks._lockChecks = [];
   mocks._rate = { allowed: true };
   mocks._checkBeforeAi = jest.fn(async () => mocks._rate);
   mocks._markRateLimitNotified = jest.fn(async () => {});
   jest.unstable_mockModule(resolveUrl('utils/topupLockGate.util.js'), () => ({
-    resourceIsLocked: async () => mocks._locked,
+    resourceIsLocked: async (key, id) => {
+      mocks._lockChecks.push([key, id]);
+      return mocks._lockedKeys ? mocks._lockedKeys.includes(key) : mocks._locked;
+    },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/chatbotRateLimit.service.js'), () => ({
     default: {
@@ -893,6 +898,16 @@ describe('Khoá tài nguyên + trần lượt trả lời (29/09/2026)', () => {
     mocks._locked = true;
     const res = await postWebhook(inboundPayload);
     expect(res.status).toBe(204);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+    expect(mocks._checkBeforeAi).not.toHaveBeenCalled();
+  });
+
+  it('P6 — TÀI KHOẢN Telegram bị khoá (vượt hạn mức gói): không gọi AI, không gửi gì, tra key telegram_accounts', async () => {
+    mocks._lockedKeys = ['telegram_accounts'];
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    expect(mocks._lockChecks.map(([key]) => key)).toContain('telegram_accounts');
     expect(mocks.chatRouterCall()).toBeNull();
     expect(mocks.sendReplyCalls()).toHaveLength(0);
     expect(mocks._checkBeforeAi).not.toHaveBeenCalled();

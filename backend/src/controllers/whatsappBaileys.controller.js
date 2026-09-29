@@ -86,6 +86,13 @@ class WhatsAppBaileysController {
       // ở đây nữa; gọi thêm vẫn idempotent nhờ flag
       // `__baileysInboxRegistered` nhưng sẽ tạo log duplicate.
       const record = await connectWithAccountLimit(req.user, userId, sessionKey);
+      // P6 — tạo dòng `whatsapp_account_settings` (có id để khoá sau hạ gói) NGAY khi phiên mở, để id lớn = thêm sau.
+      try {
+        const { ensureWhatsappSettingsRow } = await import('../repositories/payment/topupLock.repository.js');
+        await ensureWhatsappSettingsRow(userId, sessionKey);
+      } catch (settingsErr) {
+        console.warn('[WhatsApp/Baileys] ensure settings row failed:', settingsErr.message);
+      }
       await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_CONNECT_STARTED, sessionKey, { status: record.status });
       return res.json({
         success: true,

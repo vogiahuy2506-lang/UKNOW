@@ -780,8 +780,14 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       return;
     }
 
+    // P6 — tài khoản WhatsApp bị khoá (vượt hạn mức gói / slot hết hạn): không gọi AI (tin khách đã lưu).
+    const { resourceIsLocked, whatsappSessionIsLocked } = await import('../../utils/topupLockGate.util.js');
+    if (await whatsappSessionIsLocked(sessionKey)) {
+      log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} chatbot=${cb.id_chatbot} conversation=${conversationId} result=account_locked`);
+      return;
+    }
+
     // Khoá tài nguyên (hạ gói / hết hạn): chatbot bị khoá thì không gọi AI (tin khách đã lưu).
-    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
     if (await resourceIsLocked('chatbots', cb.id_chatbot)) {
       log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} chatbot=${cb.id_chatbot} conversation=${conversationId} result=locked`);
       return;
