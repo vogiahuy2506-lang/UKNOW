@@ -11,6 +11,13 @@ function RightsAndDuties() {
 
   const historyEntries = [
     {
+      date: '2026-09-29',
+      note: {
+        vi: 'Bổ sung nội dung tối thiểu theo Điều 4–17 Nghị định 248/2026/NĐ-CP và góp ý của luật sư ngày 25–29/09/2026; ban hành lại toàn bộ chính sách.',
+        en: 'Added the minimum content required by Articles 4–17 of Decree 248/2026/NĐ-CP and the lawyer\'s comments of 25–29/09/2026; policy re-issued in full.',
+      },
+    },
+    {
       date: '2026-09-28',
       note: {
         vi: 'Tách riêng thành chính sách độc lập theo Mẫu số 01 (trang 46) và Điều 6 Nghị định 248/2026/NĐ-CP.',
@@ -64,10 +71,10 @@ function RightsAndDuties() {
             </div>
 
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}>
-              Quyền & <span className="text-orange-400">Nghĩa vụ</span>
+              Quyền và nghĩa vụ <span className="text-orange-400">của các bên</span>
             </h1>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}>
-              Rights & <span className="text-orange-400">Duties</span>
+              Rights and Obligations <span className="text-orange-400">of the Parties</span>
             </h1>
 
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>
@@ -114,19 +121,19 @@ function RightsAndDuties() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>28 tháng 9 năm 2026</strong>
+                Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>September 28, 2026</strong>
+                Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
             </p>
           </div>
 
-          {/* Section 1: Scope */}
+          {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               1. Phạm vi áp dụng
@@ -138,203 +145,163 @@ function RightsAndDuties() {
               Chính sách này quy định quyền và nghĩa vụ của Công ty TNHH Giải pháp số DIGISO (chủ quản nền tảng founderai.biz) và của Người dùng khi đăng ký, sử dụng dịch vụ trên nền tảng, tuân thủ theo Điều 6 Nghị định 248/2026/NĐ-CP.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              This policy sets forth the rights and duties of DIGISO Digital Solutions Co., Ltd. (operator of founderai.biz) and Users when registering and using services on the platform, in compliance with Article 6 of Decree 248/2026/NĐ-CP.
+              This policy sets out the rights and obligations of DIGISO Digital Solutions Co., Ltd. (the operator of the founderai.biz platform) and of Users when registering for and using services on the platform, in accordance with Article 6 of Decree 248/2026/NĐ-CP.
             </p>
           </section>
 
-          {/* Section 2: Rights and Duties of DIGISO */}
+          {/* Section 2 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              2. Quyền và nghĩa vụ của Công ty TNHH Giải pháp số DIGISO
+              2. Quyền và nghĩa vụ của Chủ quản nền tảng (DIGISO)
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              2. Rights and Duties of DIGISO Digital Solutions Co., Ltd.
+              2. Rights and Obligations of the Platform Operator (DIGISO)
             </h2>
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 ${lc(language, 'vi')}`}>
-              2.1. Quyền của DIGISO
+            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'vi')}`}>
+              <li>a) Ban hành, công khai và tổ chức thực hiện điều kiện hoạt động, điều kiện giao dịch;</li>
+              <li>b) Xây dựng, công khai tiêu chuẩn dịch vụ, quy trình tham gia hoạt động trên nền tảng;</li>
+              <li>c) Thu phí dịch vụ theo <a href="/pricing-policy" className="text-orange-600 hover:underline">Chính sách về giá</a> đã công khai;</li>
+              <li>d) Thông tin đầy đủ hoặc tóm tắt về hình thức khuyến mại được áp dụng cung cấp cho người mua trước khi đặt hàng;</li>
+              <li>đ) Bảo đảm vận hành an toàn, ổn định nền tảng;</li>
+              <li>e) Quy định các trường hợp tạm ngừng, chấm dứt, hạn chế tài khoản người dùng;</li>
+              <li>g) Áp dụng các biện pháp cần thiết để bảo đảm an toàn thông tin liên quan đến bí mật kinh doanh của người sử dụng và thông tin cá nhân của người tiêu dùng;</li>
+              <li>h) Tiếp nhận, giải quyết yêu cầu, phản ánh, khiếu nại từ người sử dụng theo <a href="/complaint-policy" className="text-orange-600 hover:underline">Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại</a>;</li>
+              <li>i) Giám sát, ngăn chặn hành vi vi phạm pháp luật; phối hợp và cung cấp thông tin, dữ liệu theo yêu cầu của cơ quan nhà nước có thẩm quyền.</li>
+            </ul>
+            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'en')}`}>
+              <li>a) Issue, publish and implement the conditions of operation and conditions of transaction;</li>
+              <li>b) Develop and publish service standards and the procedure for participating in activities on the platform;</li>
+              <li>c) Collect service fees in accordance with the published <a href="/pricing-policy" className="text-orange-600 hover:underline">Pricing Policy</a>;</li>
+              <li>d) Provide full or summary information on the promotions that apply to the buyer before an order is placed;</li>
+              <li>e) Ensure the safe and stable operation of the platform;</li>
+              <li>f) Specify the cases in which user accounts are suspended, terminated or restricted;</li>
+              <li>g) Apply the necessary measures to ensure the security of information relating to users' business secrets and consumers' personal information;</li>
+              <li>h) Receive and resolve requests, feedback and complaints from users under the <a href="/complaint-policy" className="text-orange-600 hover:underline">Procedure for Receiving and Resolving Feedback, Requests and Complaints</a>;</li>
+              <li>i) Monitor and prevent violations of the law; coordinate and provide information and data at the request of competent state authorities.</li>
+            </ul>
+            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              Các quyền và nghĩa vụ bổ sung của DIGISO
             </h3>
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 ${lc(language, 'en')}`}>
-              2.1. Rights of DIGISO
+            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              Additional rights and obligations of DIGISO
             </h3>
-            <ol className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Từ chối cung cấp dịch vụ nếu Người dùng cung cấp thông tin không trung thực, không chính xác, vi phạm pháp luật hoặc không đáp ứng điều kiện sử dụng.
               </li>
               <li className={lc(language, 'en')}>
-                Refuse to provide services if the User supplies false or inaccurate information, breaches the law, or fails to meet the conditions of use.
+                Refuse to provide the service if the User provides untruthful or inaccurate information, violates the law or does not meet the conditions of use.
               </li>
               <li className={lc(language, 'vi')}>
-                Tạm ngừng hoặc chấm dứt cung cấp dịch vụ đối với Người dùng vi phạm Điều khoản sử dụng hoặc các chính sách công bố trên nền tảng.
+                Tạm ngừng hoặc chấm dứt cung cấp dịch vụ đối với Người dùng vi phạm Điều khoản sử dụng hoặc các chính sách công bố trên nền tảng (xem <a href="/refund-policy" className="text-orange-600 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>).
               </li>
               <li className={lc(language, 'en')}>
-                Suspend or terminate service provision to Users who violate the Terms of Service or any policies published on the platform.
+                Suspend or terminate the service for Users who violate the Terms of Service or the policies published on the platform (see the <a href="/refund-policy" className="text-orange-600 hover:underline">Service Termination and Refund Policy</a>).
               </li>
               <li className={lc(language, 'vi')}>
                 Thu hồi, xóa bỏ nội dung, tài khoản hoặc dữ liệu do Người dùng đăng tải nếu vi phạm pháp luật hoặc ảnh hưởng đến quyền lợi của bên thứ ba.
               </li>
               <li className={lc(language, 'en')}>
-                Remove or delete User content, accounts, or data that violates the law or adversely affects the rights of third parties.
+                Remove or delete content, accounts or data uploaded by the User if they violate the law or affect the rights of third parties.
               </li>
               <li className={lc(language, 'vi')}>
                 Yêu cầu Người dùng cập nhật, bổ sung thông tin khi cần thiết để phục vụ hoạt động quản lý, vận hành nền tảng và tuân thủ pháp luật.
               </li>
               <li className={lc(language, 'en')}>
-                Request Users to update or supplement information as necessary for platform operation and legal compliance.
+                Require the User to update or supplement information where necessary for the management and operation of the platform and for legal compliance.
               </li>
               <li className={lc(language, 'vi')}>
                 Điều chỉnh, thay đổi tính năng, giao diện và các điều khoản dịch vụ với thông báo trước theo các chính sách công bố trên nền tảng.
               </li>
               <li className={lc(language, 'en')}>
-                Modify features, interfaces, and service terms with prior notice in accordance with the policies published on the platform.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Phối hợp với cơ quan nhà nước có thẩm quyền trong việc giải quyết khiếu nại, tố cáo và các vấn đề pháp lý liên quan đến hoạt động trên nền tảng.
-              </li>
-              <li className={lc(language, 'en')}>
-                Cooperate with competent state authorities in handling complaints, denunciations, and legal matters relating to activity on the platform.
-              </li>
-            </ol>
-
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 mt-5 ${lc(language, 'vi')}`}>
-              2.2. Nghĩa vụ của DIGISO
-            </h3>
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 mt-5 ${lc(language, 'en')}`}>
-              2.2. Duties of DIGISO
-            </h3>
-            <ol className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>
-                Công bố công khai, đầy đủ, chính xác các chính sách theo quy định tại Điều 4 đến Điều 17 Nghị định 248/2026/NĐ-CP trên nền tảng founderai.biz.
-              </li>
-              <li className={lc(language, 'en')}>
-                Publicly disclose complete and accurate policies as required by Articles 4 to 17 of Decree 248/2026/NĐ-CP on founderai.biz.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Cung cấp dịch vụ đúng với mô tả, đảm bảo chất lượng, ổn định và bảo mật thông tin của Người dùng theo quy định pháp luật.
-              </li>
-              <li className={lc(language, 'en')}>
-                Provide services as described, ensuring quality, stability, and the security of User information in compliance with the law.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Hỗ trợ, giải đáp thắc mắc, tiếp nhận phản ánh và giải quyết khiếu nại của Người dùng trong thời hạn cam kết tại Chính sách tiếp nhận và giải quyết khiếu nại.
-              </li>
-              <li className={lc(language, 'en')}>
-                Support Users, answer inquiries, and resolve complaints within the timeframes committed in the Complaint Handling Policy.
+                Adjust and change features, interface and service terms with prior notice under the policies published on the platform.
               </li>
               <li className={lc(language, 'vi')}>
                 Bảo vệ thông tin, dữ liệu cá nhân của Người dùng theo Luật Bảo vệ dữ liệu cá nhân 2025 (Luật 91/2025/QH15) và Nghị định 356/2025/NĐ-CP; không chia sẻ cho bên thứ ba khi chưa có sự đồng ý, trừ trường hợp pháp luật yêu cầu.
               </li>
               <li className={lc(language, 'en')}>
-                Protect Users' personal data in accordance with the Personal Data Protection Act 2025 (Law 91/2025/QH15) and Decree 356/2025/NĐ-CP; do not share with third parties without consent, except as required by law.
+                Protect Users' personal information and data under the 2025 Law on Personal Data Protection (Law 91/2025/QH15) and Decree 356/2025/NĐ-CP; not share it with third parties without consent, except where required by law.
               </li>
               <li className={lc(language, 'vi')}>
-                Gửi thông báo đến Người dùng khi có thay đổi về chính sách, giá dịch vụ, tính năng hoặc sự cố ảnh hưởng đến hoạt động sử dụng dịch vụ theo Điều 17, 23 Nghị định 248/2026/NĐ-CP.
+                Gửi thông báo đến Người dùng khi có thay đổi về chính sách, giá dịch vụ, tính năng hoặc sự cố ảnh hưởng đến việc sử dụng dịch vụ.
               </li>
               <li className={lc(language, 'en')}>
-                Notify Users of changes to policies, service prices, features, or incidents affecting service use per Articles 17 and 23 of Decree 248/2026/NĐ-CP.
+                Notify Users of changes to policies, service prices or features, or incidents affecting use of the service.
               </li>
               <li className={lc(language, 'vi')}>
                 Lưu trữ hồ sơ, dữ liệu liên quan đến giao dịch và sử dụng dịch vụ theo đúng quy định pháp luật về lưu trữ và an toàn thông tin.
               </li>
               <li className={lc(language, 'en')}>
-                Retain records and data relating to transactions and service use in accordance with legal provisions on record-keeping and information security.
+                Retain records and data relating to transactions and use of the service in accordance with the law on retention and information security.
               </li>
-            </ol>
+            </ul>
           </section>
 
-          {/* Section 3: Rights and Duties of Users */}
+          {/* Section 3 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               3. Quyền và nghĩa vụ của Người dùng
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              3. Rights and Duties of Users
+              3. Rights and Obligations of Users
             </h2>
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 ${lc(language, 'vi')}`}>
-              3.1. Quyền của Người dùng
+            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'vi')}`}>
+              <li>a) Được bảo đảm quyền lợi của người tiêu dùng; được cung cấp thông tin đầy đủ, chính xác về dịch vụ và nhà cung cấp;</li>
+              <li>b) Được lựa chọn dịch vụ, phương thức thanh toán; được bảo vệ dữ liệu cá nhân; được giải quyết phản ánh, yêu cầu, khiếu nại;</li>
+              <li>c) Cung cấp thông tin cần thiết, chính xác; thanh toán đầy đủ, đúng hạn;</li>
+              <li>d) Tuân thủ quy định pháp luật, điều kiện hoạt động và điều kiện giao dịch của nền tảng; không lợi dụng nền tảng để thực hiện hành vi vi phạm pháp luật;</li>
+              <li>đ) Chịu trách nhiệm đối với thiệt hại phát sinh do lỗi của mình;</li>
+              <li>e) Các quyền, nghĩa vụ khác theo <a href="/terms" className="text-orange-600 hover:underline">Điều khoản sử dụng dịch vụ</a>, các chính sách và pháp luật.</li>
+            </ul>
+            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'en')}`}>
+              <li>a) Be guaranteed consumer rights; be provided with full and accurate information about the service and the provider;</li>
+              <li>b) Be able to choose services and payment methods; have personal data protected; have feedback, requests and complaints resolved;</li>
+              <li>c) Provide necessary and accurate information; pay in full and on time;</li>
+              <li>d) Comply with the law and with the platform's conditions of operation and transaction; not use the platform to commit violations of the law;</li>
+              <li>e) Be liable for damage arising from their own fault;</li>
+              <li>f) Other rights and obligations under the <a href="/terms" className="text-orange-600 hover:underline">Terms of Service</a>, the policies and the law.</li>
+            </ul>
+            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
+              Các quyền và nghĩa vụ bổ sung của Người dùng
             </h3>
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 ${lc(language, 'en')}`}>
-              3.1. Rights of Users
+            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>
+              Additional rights and obligations of Users
             </h3>
-            <ol className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>
-                Được cung cấp đầy đủ thông tin về dịch vụ, giá, điều khoản và các chính sách liên quan trước và trong quá trình sử dụng.
-              </li>
-              <li className={lc(language, 'en')}>
-                Receive full information about services, pricing, terms, and related policies before and during use.
-              </li>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Được hỗ trợ, giải đáp thắc mắc, khiếu nại và yêu cầu hoàn tiền theo các chính sách công bố trên nền tảng.
               </li>
               <li className={lc(language, 'en')}>
-                Receive support, answers, complaint handling, and refund requests in accordance with the policies published on the platform.
+                Be supported and have questions answered, and be able to complain and request refunds under the policies published on the platform.
               </li>
               <li className={lc(language, 'vi')}>
-                Được bảo mật thông tin cá nhân theo quy định pháp luật và Thỏa thuận xử lý dữ liệu cá nhân công bố trên nền tảng.
+                Được chấm dứt sử dụng dịch vụ, yêu cầu xóa tài khoản và dữ liệu cá nhân theo <a href="/refund-policy" className="text-orange-600 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a> và <a href="/privacy-policy" className="text-orange-600 hover:underline">Chính sách bảo mật</a>.
               </li>
               <li className={lc(language, 'en')}>
-                Have personal data protected in accordance with the law and the Personal Data Processing Agreement published on the platform.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Được chấm dứt sử dụng dịch vụ, yêu cầu xóa tài khoản và dữ liệu cá nhân theo Chính sách chấm dứt dịch vụ và hoàn tiền.
-              </li>
-              <li className={lc(language, 'en')}>
-                Terminate service use and request account and personal data deletion per the Termination and Refund Policy.
+                Be able to stop using the service and request deletion of the account and personal data under the <a href="/refund-policy" className="text-orange-600 hover:underline">Service Termination and Refund Policy</a> and the <a href="/privacy-policy" className="text-orange-600 hover:underline">Privacy Policy</a>.
               </li>
               <li className={lc(language, 'vi')}>
                 Phản ánh, khiếu nại về chất lượng dịch vụ hoặc hành vi vi phạm của DIGISO tới các cơ quan có thẩm quyền theo quy định pháp luật.
               </li>
               <li className={lc(language, 'en')}>
-                Lodge complaints or denunciations about service quality or DIGISO's conduct with competent authorities in accordance with the law.
-              </li>
-            </ol>
-
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 mt-5 ${lc(language, 'vi')}`}>
-              3.2. Nghĩa vụ của Người dùng
-            </h3>
-            <h3 className={`text-base font-semibold text-slate-800 mb-3 mt-5 ${lc(language, 'en')}`}>
-              3.2. Duties of Users
-            </h3>
-            <ol className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>
-                Cung cấp đầy đủ, chính xác thông tin khi đăng ký tài khoản và chịu trách nhiệm về tính xác thực của thông tin đã cung cấp.
-              </li>
-              <li className={lc(language, 'en')}>
-                Provide complete and accurate information when registering and be responsible for the truthfulness of the information supplied.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Tuân thủ Điều khoản sử dụng và các chính sách công bố trên nền tảng founderai.biz cũng như quy định pháp luật hiện hành.
-              </li>
-              <li className={lc(language, 'en')}>
-                Comply with the Terms of Service and policies published on founderai.biz, as well as applicable laws.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Thanh toán đầy đủ, đúng hạn phí dịch vụ theo gói đã đăng ký và giá đã được công bố trên nền tảng.
-              </li>
-              <li className={lc(language, 'en')}>
-                Pay service fees in full and on time for the subscribed package at the prices published on the platform.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Không sử dụng dịch vụ cho mục đích vi phạm pháp luật, xâm phạm quyền lợi của tổ chức, cá nhân khác hoặc gây mất an toàn, an ninh thông tin.
-              </li>
-              <li className={lc(language, 'en')}>
-                Do not use the service for unlawful purposes, to infringe the rights of other organizations or individuals, or to compromise information safety or security.
+                Report or complain about service quality or violations by DIGISO to the competent authorities as provided by law.
               </li>
               <li className={lc(language, 'vi')}>
                 Bảo mật tài khoản, mật khẩu và thông báo ngay cho DIGISO khi phát hiện truy cập trái phép hoặc dấu hiệu bất thường.
               </li>
               <li className={lc(language, 'en')}>
-                Keep the account and password secure, and promptly notify DIGISO of any unauthorized access or unusual activity.
+                Keep the account and password secure and notify DIGISO immediately upon discovering unauthorised access or unusual signs.
               </li>
               <li className={lc(language, 'vi')}>
                 Tự chịu trách nhiệm về nội dung thông tin, hình ảnh, dữ liệu mà mình đăng tải, lưu trữ hoặc truyền gửi qua nền tảng.
               </li>
               <li className={lc(language, 'en')}>
-                Be solely responsible for the content, images, and data uploaded, stored, or transmitted through the platform.
+                Be responsible for the information, images and data that they upload, store or transmit through the platform.
               </li>
-            </ol>
+            </ul>
           </section>
 
-          {/* Section 4: Mutual Commitments */}
+          {/* Section 4 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               4. Cam kết chung
@@ -346,17 +313,17 @@ function RightsAndDuties() {
               Hai bên cam kết thực hiện đúng và đầy đủ các quyền, nghĩa vụ nêu trên trên tinh thần hợp tác, thiện chí và tuân thủ pháp luật Việt Nam. Mọi tranh chấp phát sinh sẽ được ưu tiên giải quyết thông qua thương lượng; nếu không thương lượng được, các bên có quyền yêu cầu Tòa án nhân dân có thẩm quyền giải quyết theo quy định pháp luật.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              Both parties commit to performing the rights and duties above in good faith, with cooperation, and in compliance with Vietnamese law. Any dispute shall first be resolved through amicable negotiation; failing that, either party may refer the matter to a competent People's Court in accordance with the law.
+              Both parties undertake to properly and fully perform the rights and obligations above in a spirit of cooperation and goodwill and in compliance with Vietnamese law. Any dispute will first be resolved through negotiation; if negotiation fails, the parties have the right to request the competent People's Court to resolve it under the law.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               <strong>Phạm vi vai trò của DIGISO:</strong> DIGISO là chủ quản nền tảng thương mại điện tử founderai.biz — cung cấp các công cụ quản lý khách hàng, marketing và vận hành cho doanh nghiệp. DIGISO không trực tiếp bán hàng hóa hay dịch vụ cuối cùng đến người tiêu dùng cuối của Khách hàng; mọi giao dịch giữa Khách hàng và khách hàng cuối của họ là quan hệ riêng giữa các bên đó và không thuộc trách nhiệm trực tiếp của DIGISO, trừ trường hợp pháp luật có quy định khác.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              <strong>Scope of DIGISO's role:</strong> DIGISO operates the founderai.biz e-commerce platform — providing customer management, marketing, and operations tools to businesses. DIGISO does not directly sell goods or final services to the end consumers of Customers; any transaction between a Customer and its own end consumers is a separate relationship between those parties and is not DIGISO's direct responsibility, unless otherwise provided by law.
+              <strong>Scope of DIGISO's role:</strong> DIGISO is the operator of the founderai.biz e-commerce platform — providing customer management, marketing and operations tools for businesses. DIGISO does not directly sell goods or services to the Customer's end consumers; every transaction between the Customer and its end customers is a private relationship between those parties and is not DIGISO's direct responsibility, except as otherwise provided by law.
             </p>
           </section>
 
-          {/* Section 5: Contact */}
+          {/* Section 5 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               5. Thông tin liên hệ
@@ -364,23 +331,42 @@ function RightsAndDuties() {
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
               5. Contact Information
             </h2>
-            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               Mọi yêu cầu liên quan đến quyền và nghĩa vụ, vui lòng liên hệ:
             </p>
-            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
-              For any request relating to rights and duties, please contact:
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              For any request relating to rights and obligations, please contact:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-1">
-              <li><strong>Công ty TNHH Giải pháp số DIGISO</strong></li>
-              <li><strong>DIGISO Digital Solutions Co., Ltd.</strong></li>
-              <li>Email: <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> | <a href="mailto:hotro.uweb@gmail.com" className="text-orange-600 hover:underline">hotro.uweb@gmail.com</a></li>
-              <li>Điện thoại / Phone: 0877909606</li>
-              <li>Website: <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a></li>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                <strong>Công ty TNHH Giải pháp số DIGISO</strong>
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>DIGISO Digital Solutions Co., Ltd.</strong>
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> | hotro.uweb@gmail.com
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> | hotro.uweb@gmail.com
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Điện thoại:</strong> 0877909606
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Phone:</strong> 0877909606
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+              </li>
             </ul>
           </section>
 
           {/* History */}
-          <PolicyHistory language={language} entries={historyEntries} />
+          <PolicyHistory language={language} lc={lc} entries={historyEntries} />
         </div>
       </div>
     </div>

@@ -11,6 +11,13 @@ function ServiceTerms() {
 
   const historyEntries = [
     {
+      date: '2026-09-29',
+      note: {
+        vi: 'Bổ sung nội dung tối thiểu theo Điều 4–17 Nghị định 248/2026/NĐ-CP và góp ý của luật sư ngày 25–29/09/2026; ban hành lại toàn bộ chính sách.',
+        en: 'Added the minimum content required by Articles 4–17 of Decree 248/2026/NĐ-CP and the lawyer\'s comments of 25–29/09/2026; policy re-issued in full.',
+      },
+    },
+    {
       date: '2026-09-28',
       note: {
         vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
@@ -58,10 +65,10 @@ function ServiceTerms() {
               </span>
             </div>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}>
-              Điều kiện <span className="text-orange-400">Cung cấp Dịch vụ</span>
+              Các điều kiện hoặc hạn chế trong việc cung cấp dịch vụ <span className="text-orange-400">trên nền tảng</span>
             </h1>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}>
-              Service <span className="text-orange-400">Terms</span>
+              Conditions and Restrictions on the Provision of Services <span className="text-orange-400">on the Platform</span>
             </h1>
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>Công ty TNHH Giải pháp số DIGISO</p>
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'en')}`}>DIGISO Digital Solutions Co., Ltd.</p>
@@ -76,163 +83,413 @@ function ServiceTerms() {
           <div className="mb-8 flex flex-wrap items-start gap-x-4 gap-y-3 rounded-xl border border-slate-200/90 bg-white px-5 py-4 shadow-sm">
             <span className="mt-1.5 inline-block h-2 w-2 shrink-0 rounded-full bg-orange-500 ring-4 ring-orange-500/15" aria-hidden />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
-              <span className={lc(language, 'vi')}>Cập nhật: <strong>28 tháng 9 năm 2026</strong> | Áp dụng cho: founderai.biz</span>
-              <span className={lc(language, 'en')}>Last updated: <strong>September 28, 2026</strong> | Applies to: founderai.biz</span>
+              <span className={lc(language, 'vi')}>
+                Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
+                {'\u00a0'}|{'\u00a0'}
+                Áp dụng cho: founderai.biz
+              </span>
+              <span className={lc(language, 'en')}>
+                Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
+                {'\u00a0'}|{'\u00a0'}
+                Applies to: founderai.biz
+              </span>
             </p>
           </div>
 
+          {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>1. Phạm vi dịch vụ</h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>1. Service Scope</h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              1. Phạm vi dịch vụ và hạn chế sử dụng
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              1. Service Scope and Usage Restrictions
+            </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cung cấp nền tảng Marketing Automation tên founderai.biz bao gồm: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports.
+              DIGISO cung cấp nền tảng Marketing Automation tên founderai.biz bao gồm: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Khách hàng chỉ được sử dụng dịch vụ trong phạm vi dịch vụ đã đăng ký hoặc đã thỏa thuận với DIGISO.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO provides the founderai.biz Marketing Automation platform including: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports.
+              DIGISO provides the founderai.biz Marketing Automation platform including: Landing Page Builder, Email Marketing, Zalo Marketing, CRM, AI Chatbot, Analytics & Reports. Customers may use the service only within the scope of the services registered or agreed with DIGISO.
             </p>
-          </section>
-
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>2. Điều kiện cung cấp</h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>2. Service Conditions</h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>Người dùng phải đăng ký tài khoản hợp lệ và xác thực email.</li>
-              <li className={lc(language, 'en')}>Users must register a valid account and verify their email.</li>
-              <li className={lc(language, 'vi')}>Người dùng phải đồng ý với các điều khoản và chính sách của nền tảng.</li>
-              <li className={lc(language, 'en')}>Users must agree to the platform's terms and policies.</li>
-              <li className={lc(language, 'vi')}>Tuân thủ quy định pháp luật Việt Nam về thương mại điện tử và bảo vệ dữ liệu.</li>
-              <li className={lc(language, 'en')}>Comply with Vietnamese law on e-commerce and data protection.</li>
-            </ul>
-          </section>
-
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>3. Hạn chế dịch vụ</h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>3. Service Limitations</h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>Giới hạn số lượng email/tin nhắn theo từng gói dịch vụ.</li>
-              <li className={lc(language, 'en')}>Email/message limits based on service package.</li>
-              <li className={lc(language, 'vi')}>Giới hạn dung lượng lưu trữ theo từng gói.</li>
-              <li className={lc(language, 'en')}>Storage limits based on package.</li>
-              <li className={lc(language, 'vi')}>Không sử dụng cho mục đích spam, lừa đảo, vi phạm pháp luật.</li>
-              <li className={lc(language, 'en')}>Not for spam, fraud, or illegal purposes.</li>
-            </ul>
-          </section>
-
-          <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>3A. Phương thức cung cấp dịch vụ</h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>3A. Service Delivery Method</h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Dịch vụ trên nền tảng founderai.biz được DIGISO cung cấp theo các phương thức sau, tuân thủ Điều 15 Nghị định 248/2026/NĐ-CP:
+              Người dùng không được:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              Services on founderai.biz are delivered by DIGISO using the following methods, in compliance with Article 15 of Decree 248/2026/NĐ-CP:
+              Users must not:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}><strong>Nền tảng trực tuyến (SaaS):</strong> Toàn bộ dịch vụ được cung cấp dưới dạng phần mềm dịch vụ (SaaS) trên nền tảng web tại <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>; Người dùng truy cập qua trình duyệt và đăng nhập tài khoản để sử dụng.</li>
-              <li className={lc(language, 'en')}><strong>Online platform (SaaS):</strong> All services are delivered as Software-as-a-Service (SaaS) via the web platform at <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>; Users access through a browser after signing in.</li>
-              <li className={lc(language, 'vi')}><strong>Tự phục vụ (self-service):</strong> Người dùng tự thao tác các chức năng trên giao diện nền tảng để tạo chiến dịch, quản lý khách hàng, gửi tin nhắn, nạp tiền và tải xuất dữ liệu.</li>
-              <li className={lc(language, 'en')}><strong>Self-service:</strong> Users independently operate platform features to create campaigns, manage customers, send messages, top up, and export data.</li>
-              <li className={lc(language, 'vi')}><strong>Kích hoạt tự động:</strong> Sau khi thanh toán được xác nhận thành công (qua PayOS hoặc chuyển khoản ngân hàng), dịch vụ được kích hoạt tự động và Người dùng có thể sử dụng ngay.</li>
-              <li className={lc(language, 'en')}><strong>Automatic activation:</strong> After successful payment confirmation (via PayOS or bank transfer), the service is activated automatically and Users can use it immediately.</li>
-              <li className={lc(language, 'vi')}><strong>Hỗ trợ trực tuyến:</strong> DIGISO hỗ trợ Người dùng qua email, hotline và trang Hỗ trợ trực tuyến trong giờ làm việc 8:00 – 22:00, Thứ 2 – Thứ 7.</li>
-              <li className={lc(language, 'en')}><strong>Online support:</strong> DIGISO provides User support via email, hotline, and the Online Support page during business hours 8:00 AM – 10:00 PM, Mon – Sat.</li>
-              <li className={lc(language, 'vi')}><strong>Không giao nhận vật lý:</strong> Toàn bộ dịch vụ là dịch vụ số; không có sản phẩm vật lý, không phát sinh chi phí vận chuyển.</li>
-              <li className={lc(language, 'en')}><strong>No physical delivery:</strong> All services are digital; there are no physical products and no shipping fees.</li>
+              <li className={lc(language, 'vi')}>
+                Chia sẻ, cho thuê, chuyển nhượng tài khoản hoặc quyền sử dụng dịch vụ trái phép.
+              </li>
+              <li className={lc(language, 'en')}>
+                Share, lease or transfer accounts or the right to use the service without authorisation.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Sử dụng dịch vụ cho mục đích vi phạm pháp luật.
+              </li>
+              <li className={lc(language, 'en')}>
+                Use the service for unlawful purposes.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Tải lên nội dung xuyên tạc, chống phá Nhà nước, vi phạm bản quyền, chứa mã độc hoặc vi phạm thuần phong mỹ tục.
+              </li>
+              <li className={lc(language, 'en')}>
+                Upload content that distorts facts or opposes the State, infringes copyright, contains malware or violates public morals.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Cố ý can thiệp, tấn công, quét lỗ hổng hoặc truy cập trái phép vào dữ liệu của người khác.
+              </li>
+              <li className={lc(language, 'en')}>
+                Deliberately interfere with, attack or scan for vulnerabilities in the system, or gain unauthorised access to other people's data.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Dùng bot hoặc công cụ khai thác quá mức làm nghẽn hệ thống.
+              </li>
+              <li className={lc(language, 'en')}>
+                Use bots or tools that exploit the service excessively and congest the system.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Bán lại, phân phối lại, cấp phép lại dịch vụ cho bên thứ ba khi chưa có thỏa thuận bằng văn bản với DIGISO.
+              </li>
+              <li className={lc(language, 'en')}>
+                Resell, redistribute or sub-license the service to third parties without a written agreement with DIGISO.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Truy cập trái phép tài khoản, dữ liệu hoặc hệ thống của người khác.
+              </li>
+              <li className={lc(language, 'en')}>
+                Gain unauthorised access to other people's accounts, data or systems.
+              </li>
             </ul>
           </section>
 
+          {/* Section 2 */}
           <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>4. Chấm dứt dịch vụ</h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>4. Service Termination</h2>
-
-            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>4.1. Các trường hợp chấm dứt dịch vụ</h3>
-            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>4.1. Cases of Service Termination</h3>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              2. Điều kiện cung cấp
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              2. Conditions of Provision
+            </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Dịch vụ có thể chấm dứt trong các trường hợp sau:
+              Để được cung cấp dịch vụ, người dùng cần đáp ứng các điều kiện sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              The Service may be terminated in the following cases:
+              To be provided with the service, users must meet the following conditions:
             </p>
-            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'vi')}`}>
-              <li>a) Khách hàng chủ động yêu cầu chấm dứt do không còn nhu cầu sử dụng;</li>
-              <li>b) Gói dịch vụ hết hạn mà khách hàng không gia hạn. Founder AI không tự động trừ tiền để gia hạn;</li>
-              <li>c) Khách hàng yêu cầu xoá tài khoản;</li>
-              <li>d) DIGISO chấm dứt dịch vụ do khách hàng vi phạm pháp luật, Điều khoản sử dụng hoặc có hành vi gây ảnh hưởng đến an toàn, bảo mật, hoạt động bình thường của nền tảng hoặc người dùng khác;</li>
-              <li>đ) DIGISO chấm dứt hoặc tạm ngừng một phần hay toàn bộ dịch vụ do sự kiện bất khả kháng, yêu cầu của cơ quan nhà nước có thẩm quyền hoặc vì lý do kỹ thuật, an toàn, bảo mật cần thiết;</li>
-              <li>e) DIGISO ngừng cung cấp dịch vụ theo quyết định kinh doanh, với thông báo trước ít nhất 30 ngày;</li>
-              <li>f) Khách hàng không thanh toán phí dịch vụ sau thời hạn quy định tại Điều khoản thanh toán;</li>
-              <li>g) Các trường hợp khác theo thoả thuận giữa các bên hoặc theo quy định của pháp luật.</li>
-            </ul>
-            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'en')}`}>
-              <li>a) The Customer proactively requests termination because they no longer need the Service;</li>
-              <li>b) The service package expires and the Customer does not renew it. Founder AI does not automatically charge fees to renew;</li>
-              <li>c) The Customer requests deletion of the account;</li>
-              <li>d) DIGISO terminates the Service because the Customer violates the law, the Terms of Use, or engages in conduct that affects the safety, security, or normal operation of the platform or other users;</li>
-              <li>đ) DIGISO terminates or suspends part or all of the Service due to a force majeure event, a request from a competent state authority, or for necessary technical, safety, or security reasons;</li>
-              <li>e) DIGISO discontinues the Service based on a business decision, with at least 30 days' prior notice;</li>
-              <li>f) The Customer fails to pay service fees after the deadline specified in the Payment Terms;</li>
-              <li>g) Other cases as agreed between the parties or as provided by law.</li>
-            </ul>
-
-            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>4.2. Hệ quả khi chấm dứt dịch vụ</h3>
-            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>4.2. Consequences of Service Termination</h3>
-            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'vi')}`}>
-              <li>a) Quyền truy cập và sử dụng các tính năng thuộc gói dịch vụ bị chấm dứt sẽ dừng kể từ thời điểm chấm dứt có hiệu lực;</li>
-              <li>b) Khi khách hàng tự chấm dứt, phần thời gian chưa sử dụng của gói đã kích hoạt không được hoàn tiền. Trường hợp lỗi thuộc về DIGISO, việc hoàn tiền thực hiện theo Chính sách hoàn tiền;</li>
-              <li>c) Trường hợp DIGISO chấm dứt dịch vụ trước thời hạn vì lý do thuộc về DIGISO mà không xuất phát từ vi phạm của khách hàng, DIGISO hoàn trả phần phí tương ứng với phần dịch vụ chưa cung cấp, trừ trường hợp các bên có thoả thuận khác hoặc pháp luật có quy định khác;</li>
-              <li>d) Lượt AI (credit) đã sử dụng trước thời điểm chấm dứt không được hoàn lại;</li>
-              <li>đ) Việc chấm dứt dịch vụ không mặc nhiên đồng nghĩa với việc xoá ngay dữ liệu. Việc lưu giữ, xoá dữ liệu thực hiện theo Chính sách bảo mật và quy định pháp luật;</li>
-              <li>e) Việc chấm dứt dịch vụ không ảnh hưởng đến quyền khiếu nại, đối soát và các quyền, nghĩa vụ đã phát sinh trước thời điểm chấm dứt.</li>
-            </ul>
-            <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'en')}`}>
-              <li>a) The right to access and use the features of the terminated service package stops from the date the termination takes effect;</li>
-              <li>b) When the Customer terminates on their own, the unused portion of an activated package is not refunded. Where the fault lies with DIGISO, refunds are handled under the Refund Policy;</li>
-              <li>c) Where DIGISO terminates the Service early for reasons attributable to DIGISO and not arising from the Customer's breach, DIGISO refunds the fee corresponding to the portion of the service not yet provided, unless otherwise agreed by the parties or provided by law;</li>
-              <li>d) AI usage (credits) already consumed before termination is not refunded;</li>
-              <li>đ) Termination of the Service does not automatically mean immediate deletion of data. Data retention and deletion are carried out under the Privacy Policy and applicable law;</li>
-              <li>e) Termination of the Service does not affect the right to complain, reconcile accounts, or any rights and obligations that arose before the termination.</li>
-            </ul>
-
-            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>4.3. Cách gửi yêu cầu chấm dứt và thời hạn phản hồi</h3>
-            <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'en')}`}>4.3. How to Submit a Termination Request and Response Timeline</h3>
-            <p className={`text-slate-700 mb-3 ${lc(language, 'vi')}`}>
-              Khách hàng gửi yêu cầu chấm dứt dịch vụ (và yêu cầu xoá tài khoản nếu có) qua email info@digiso.vn hoặc Hotline/Zalo 0877 909 606, kèm email tài khoản và gói dịch vụ cần chấm dứt.
-            </p>
-            <p className={`text-slate-700 mb-3 ${lc(language, 'en')}`}>
-              The Customer submits a request to terminate the Service (and to delete the account, if applicable) via email to info@digiso.vn or Hotline/Zalo 0877 909 606, together with the account email and the service package to be terminated.
-            </p>
-            <ul className={`list-disc pl-6 text-slate-700 space-y-2 ${lc(language, 'vi')}`}>
-              <li>Thời điểm chấm dứt: là thời điểm DIGISO ghi nhận yêu cầu hợp lệ, hoặc thời điểm khác do khách hàng lựa chọn (ví dụ: cuối chu kỳ hiện tại).</li>
-              <li>DIGISO xác nhận đã tiếp nhận yêu cầu trong tối đa 24 giờ kể từ khi nhận được. Trường hợp cần đối soát thanh toán hoặc xác định số tiền hoàn trả, DIGISO phản hồi kết quả trong tối đa 02 ngày làm việc kể từ khi xác nhận yêu cầu hợp lệ. Nếu yêu cầu thiếu thông tin, DIGISO thông báo để khách hàng bổ sung trong 24 giờ; thời hạn xử lý được tính lại từ khi nhận đủ thông tin.</li>
-              <li>Sau khi xử lý, DIGISO gửi thông báo xác nhận cuối cùng, gồm: thời điểm chấm dứt; gói dịch vụ bị chấm dứt; khoản phí đã sử dụng và khoản phải thanh toán (nếu có); số tiền được hoàn trả (nếu có); phương thức và thời gian dự kiến hoàn tiền; các quyền và nghĩa vụ còn tiếp tục có hiệu lực.</li>
-              <li>DIGISO không đặt ra thủ tục bất hợp lý nhằm cản trở khách hàng thực hiện quyền chấm dứt dịch vụ.</li>
-            </ul>
-            <ul className={`list-disc pl-6 text-slate-700 space-y-2 ${lc(language, 'en')}`}>
-              <li>Termination date: the date DIGISO records a valid request, or another date chosen by the Customer (for example, the end of the current cycle).</li>
-              <li>DIGISO confirms receipt of the request within 24 hours of receiving it. Where payment reconciliation or determination of the refund amount is required, DIGISO responds with the result within 02 business days of confirming the request is valid. If the request lacks information, DIGISO notifies the Customer to supplement it within 24 hours; the processing deadline is recalculated from when complete information is received.</li>
-              <li>After processing, DIGISO sends a final confirmation notice including: the termination date; the terminated service package; fees already used and any amount payable (if any); the refund amount (if any); the refund method and expected timeframe; and the rights and obligations that remain in effect.</li>
-              <li>DIGISO does not impose unreasonable procedures to hinder the Customer from exercising the right to terminate the Service.</li>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                <strong>Đối tượng:</strong> từ đủ 18 tuổi và có năng lực hành vi dân sự đầy đủ (đối với tổ chức, người đại diện đáp ứng điều kiện này).
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Eligibility:</strong> at least 18 years old with full civil legal capacity (for organisations, the representative meets this condition).
+              </li>
+              <li className={lc(language, 'vi')}>
+                Đăng ký tài khoản hợp lệ và xác thực email.
+              </li>
+              <li className={lc(language, 'en')}>
+                Register a valid account and verify the email address.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Đồng ý với các điều khoản và chính sách của nền tảng.
+              </li>
+              <li className={lc(language, 'en')}>
+                Agree to the platform's terms and policies.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Với gói dịch vụ phải thanh toán: thực hiện đầy đủ nghĩa vụ thanh toán.
+              </li>
+              <li className={lc(language, 'en')}>
+                For paid packages: fulfil the payment obligations in full.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Sử dụng thiết bị phù hợp, kết nối Internet ổn định và trình duyệt phù hợp.
+              </li>
+              <li className={lc(language, 'en')}>
+                Use a suitable device, a stable Internet connection and a suitable browser.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Tuân thủ pháp luật Việt Nam về thương mại điện tử và bảo vệ dữ liệu.
+              </li>
+              <li className={lc(language, 'en')}>
+                Comply with Vietnamese law on e-commerce and data protection.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Phạm vi địa lý:</strong> nền tảng được xây dựng và vận hành cho tổ chức, cá nhân hoạt động tại Việt Nam; DIGISO không áp dụng giới hạn kỹ thuật về nơi truy cập, nhưng người dùng phải tuân thủ pháp luật Việt Nam và chính sách của các nền tảng bên thứ ba mà mình kết nối.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Geographic scope:</strong> the platform is built and operated for organisations and individuals operating in Vietnam; DIGISO does not impose a technical restriction on where the service is accessed from, but users must comply with Vietnamese law and the policies of the third-party platforms they connect.
+              </li>
             </ul>
           </section>
 
+          {/* Section 3 */}
           <section className="mb-6 pp-section p-6">
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>5. Liên hệ</h2>
-            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>5. Contact</h2>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2">
-              <li><strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a></li>
-              <li><strong>Điện thoại:</strong> 0877909606</li>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              3. Giới hạn của dịch vụ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              3. Service Limits
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Dịch vụ được cung cấp có giới hạn theo từng gói, gồm:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              The service is provided subject to limits that depend on the package, including:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Số lượng lượt AI (credits).
+              </li>
+              <li className={lc(language, 'en')}>
+                The number of AI usage credits.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Số tài khoản Email, Zalo kết nối.
+              </li>
+              <li className={lc(language, 'en')}>
+                The number of connected Email and Zalo accounts.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Số mẫu template tin nhắn, email.
+              </li>
+              <li className={lc(language, 'en')}>
+                The number of message and email templates.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Giới hạn số landing page.
+              </li>
+              <li className={lc(language, 'en')}>
+                The limit on landing pages.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Giới hạn số email, tin nhắn gửi đi (theo gói, theo ngày và theo giờ).
+              </li>
+              <li className={lc(language, 'en')}>
+                The limit on emails and messages sent (per package, per day and per hour).
+              </li>
+              <li className={lc(language, 'vi')}>
+                Dung lượng lưu trữ.
+              </li>
+              <li className={lc(language, 'en')}>
+                Storage capacity.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Số lượng nhân viên (tài khoản nhân viên).
+              </li>
+              <li className={lc(language, 'en')}>
+                The number of employees (staff accounts).
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Giới hạn về thời gian:</strong> dịch vụ trực tuyến hoạt động liên tục, trừ thời gian bảo trì hoặc gián đoạn theo mục 4. Riêng tin nhắn Zalo không được gửi trong khung giờ yên lặng từ 23:00 đến 06:00 (giờ Việt Nam); chiến dịch đang chạy tạm dừng và tiếp tục gửi lại từ 06:00.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Time limits:</strong> the online service runs continuously, except during maintenance or interruptions described in section 4. In particular, Zalo messages are not sent during the quiet hours from 23:00 to 06:00 (Vietnam time); running campaigns pause and resume from 06:00.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Phạm vi tính năng, dung lượng, số nhân viên, thời hạn và giới hạn kỹ thuật khác được xác định theo gói tại trang <a href="/pricing" className="text-orange-600 hover:underline">Bảng giá</a>, đơn đặt hàng, tự cấu hình hạn mức, hợp đồng hoặc thỏa thuận. Không sử dụng dịch vụ cho mục đích spam, lừa đảo, vi phạm pháp luật. Hành vi tạo nhiều tài khoản giả mạo để lạm dụng chính sách dùng thử hoặc khuyến mãi là hành vi vi phạm chính sách, điều kiện sử dụng.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              The scope of features, storage, number of employees, term and other technical limits are determined by the package on the <a href="/pricing" className="text-orange-600 hover:underline">Pricing</a> page, the order, self-configured quotas, the contract or the agreement. The service must not be used for spam, fraud or unlawful purposes. Creating multiple fake accounts to abuse the trial or promotion policies is a violation of the policy and conditions of use.
+            </p>
+          </section>
+
+          {/* Section 4 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              4. Các điều kiện về tính khả dụng của dịch vụ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              4. Service Availability Conditions
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Dịch vụ có thể bị ngừng tạm thời hoặc gián đoạn trong các trường hợp sau:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              The service may be temporarily suspended or interrupted in the following cases:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Bảo trì, nâng cấp theo kế hoạch hoặc đột xuất để khắc phục lỗ hổng an ninh.
+              </li>
+              <li className={lc(language, 'en')}>
+                Scheduled or unscheduled maintenance and upgrades, including to fix security vulnerabilities.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Sự cố kỹ thuật ngoài tầm kiểm soát từ hạ tầng máy chủ, đường truyền của bên thứ ba.
+              </li>
+              <li className={lc(language, 'en')}>
+                Technical incidents beyond control from server infrastructure or third-party transmission lines.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Yêu cầu khẩn cấp của cơ quan nhà nước có thẩm quyền.
+              </li>
+              <li className={lc(language, 'en')}>
+                Urgent requests from competent state authorities.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Sự kiện bất khả kháng hoặc trở ngại khách quan.
+              </li>
+              <li className={lc(language, 'en')}>
+                Force majeure events or objective obstacles.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              <strong>Sự kiện bất khả kháng</strong> là sự kiện xảy ra một cách khách quan, không thể lường trước và không thể khắc phục được dù đã áp dụng mọi biện pháp cần thiết và khả năng cho phép, gồm thiên tai, hỏa hoạn, lũ lụt, động đất, dịch bệnh, chiến tranh, bạo loạn, đình công diện rộng, đứt cáp quang quốc tế, sự cố hạ tầng Internet diện rộng ngoài tầm kiểm soát hợp lý của DIGISO…
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              <strong>A force majeure event</strong> is an event that occurs objectively, cannot be foreseen and cannot be remedied despite all necessary measures and capabilities, including natural disasters, fires, floods, earthquakes, epidemics, war, riots, widespread strikes, international submarine cable cuts, and large-scale Internet infrastructure failures beyond DIGISO's reasonable control.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Đối với bảo trì theo kế hoạch có ảnh hưởng đáng kể đến việc sử dụng, DIGISO thông báo trước ít nhất 24 giờ trên giao diện website hoặc qua email, trừ trường hợp bảo trì khẩn cấp vì lý do an ninh mạng.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              For scheduled maintenance that significantly affects use, DIGISO gives at least 24 hours' prior notice on the website interface or by email, except for emergency maintenance for cybersecurity reasons.
+            </p>
+          </section>
+
+          {/* Section 5 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              5. Quyền từ chối cung cấp dịch vụ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              5. Right to Refuse Service
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO có quyền từ chối cung cấp hoặc chấm dứt cung cấp dịch vụ khi:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO has the right to refuse or stop providing the service when:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Người dùng cung cấp thông tin giả mạo, sai lệch khi đăng ký hoặc giao dịch.
+              </li>
+              <li className={lc(language, 'en')}>
+                The user provides false or misleading information when registering or transacting.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Người dùng vi phạm Điều khoản sử dụng, chính sách hoặc pháp luật.
+              </li>
+              <li className={lc(language, 'en')}>
+                The user violates the Terms of Service, policies or the law.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Có hành vi gian lận, tấn công mạng, khai thác trái phép ảnh hưởng đến hoạt động của nền tảng hoặc quyền lợi của người dùng khác.
+              </li>
+              <li className={lc(language, 'en')}>
+                There is fraud, a cyberattack or unauthorised exploitation that affects the operation of the platform or the rights of other users.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Trường hợp hủy dịch vụ do lỗi từ phía DIGISO, khách hàng được thông báo cụ thể và được hoàn trả toàn bộ số tiền tương ứng với phần dịch vụ chưa sử dụng.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Where a service is cancelled due to DIGISO's fault, the customer will be notified specifically and refunded in full the amount corresponding to the unused portion of the service.
+            </p>
+          </section>
+
+          {/* Section 6 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              6. Chấm dứt dịch vụ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              6. Service Termination
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO có quyền tạm ngừng hoặc chấm dứt cung cấp dịch vụ khi:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO has the right to suspend or terminate the service when:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Người dùng vi phạm điều khoản.
+              </li>
+              <li className={lc(language, 'en')}>
+                The user breaches the terms.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Người dùng không thanh toán.
+              </li>
+              <li className={lc(language, 'en')}>
+                The user fails to pay.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Có hành vi trái pháp luật, truy cập trái phép, phát tán mã độc hoặc nguy cơ ảnh hưởng an toàn hệ thống.
+              </li>
+              <li className={lc(language, 'en')}>
+                There is unlawful conduct, unauthorised access, malware distribution or a risk to system safety.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Cần bảo trì, nâng cấp, khắc phục sự cố.
+              </li>
+              <li className={lc(language, 'en')}>
+                Maintenance, upgrades or incident remediation are needed.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Có yêu cầu của cơ quan chức năng.
+              </li>
+              <li className={lc(language, 'en')}>
+                A competent authority so requests.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Xảy ra sự kiện bất khả kháng hoặc trường hợp khác theo Điều khoản sử dụng và pháp luật.
+              </li>
+              <li className={lc(language, 'en')}>
+                A force majeure event or another case under the Terms of Service and the law occurs.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Theo quyết định của DIGISO, với thông báo trước ít nhất 30 ngày.
+              </li>
+              <li className={lc(language, 'en')}>
+                By DIGISO's decision, with at least 30 days' prior notice.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO thông báo phù hợp cho khách hàng, trừ trường hợp xử lý khẩn cấp để bảo vệ hệ thống, dữ liệu, người sử dụng hoặc theo yêu cầu của cơ quan có thẩm quyền. Các trường hợp chấm dứt dịch vụ, hậu quả và việc hoàn tiền được quy định chi tiết tại <a href="/refund-policy" className="text-orange-600 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO gives appropriate notice to the customer, except where emergency action is needed to protect the system, data or users, or at the request of a competent authority. The cases of termination, their consequences and refunds are set out in detail in the <a href="/refund-policy" className="text-orange-600 hover:underline">Service Termination and Refund Policy</a>.
+            </p>
+          </section>
+
+          {/* Section 7 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              7. Liên hệ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              7. Contact
+            </h2>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Điện thoại:</strong> 0877909606
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Phone:</strong> 0877909606
+              </li>
             </ul>
           </section>
+
         </div>
 
         <footer className="border-t border-slate-200 bg-white px-5 py-8 text-center text-[12px] text-slate-500">
           <p className={lc(language, 'vi')}>© 2026 Công ty TNHH Giải pháp số DIGISO. Mọi quyền được bảo lưu.</p>
           <p className={lc(language, 'en')}>© 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.</p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 28/09/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from September 28, 2026.
+            This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
         <PolicyHistory language={language} lc={lc} entries={historyEntries} />

@@ -11,6 +11,13 @@ function PaymentPolicy() {
 
   const historyEntries = [
     {
+      date: '2026-09-29',
+      note: {
+        vi: 'Bổ sung nội dung tối thiểu theo Điều 4–17 Nghị định 248/2026/NĐ-CP và góp ý của luật sư ngày 25–29/09/2026; ban hành lại toàn bộ chính sách.',
+        en: 'Added the minimum content required by Articles 4–17 of Decree 248/2026/NĐ-CP and the lawyer\'s comments of 25–29/09/2026; policy re-issued in full.',
+      },
+    },
+    {
       date: '2026-09-28',
       note: {
         vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
@@ -71,7 +78,7 @@ function PaymentPolicy() {
             </div>
 
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}>
-              Chính sách <span className="text-orange-400">Thanh toán</span>
+              Chính sách về <span className="text-orange-400">thanh toán</span>
             </h1>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}>
               Payment <span className="text-orange-400">Policy</span>
@@ -121,19 +128,19 @@ function PaymentPolicy() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>28 tháng 9 năm 2026</strong>
+                Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>September 28, 2026</strong>
+                Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
             </p>
           </div>
 
-          {/* Section 1: Payment Methods */}
+          {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               1. Phương thức Thanh toán
@@ -142,28 +149,34 @@ function PaymentPolicy() {
               1. Payment Methods
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO hỗ trợ các phương thức thanh toán an toàn và tiện lợi sau:
+              DIGISO áp dụng hai phương thức thanh toán sau. Hai phương thức này đều được thực hiện trên trang thanh toán của đơn hàng:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO supports the following safe and convenient payment methods:
+              DIGISO applies the following two payment methods. Both are carried out on the order's payment page:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Thanh toán qua QR Code (PayOS):</strong> Hỗ trợ tất cả ngân hàng và ví điện tử tại Việt Nam.
+                <strong>Thanh toán qua mã QR (cổng PayOS):</strong> Hệ thống hiển thị mã QR của đơn hàng; bạn mở ứng dụng ngân hàng (hoặc ứng dụng khác có hỗ trợ quét mã VietQR), quét mã và xác nhận thanh toán. Số tiền và nội dung chuyển khoản được điền sẵn theo đơn hàng; hệ thống tự động ghi nhận khi giao dịch thành công.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>QR Code Payment (PayOS):</strong> Supports all banks and e-wallets in Vietnam.
+                <strong>Payment via QR code (PayOS gateway):</strong> The system displays the order's QR code; you open a banking application (or another application that supports VietQR scanning), scan the code and confirm the payment. The amount and transfer content are pre-filled from the order; the system records the payment automatically once it succeeds.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Chuyển khoản ngân hàng:</strong> Thông tin tài khoản được cung cấp trong quá trình thanh toán.
+                <strong>Chuyển khoản ngân hàng:</strong> Thông tin tài khoản nhận (ngân hàng, số tài khoản, chủ tài khoản), số tiền và nội dung chuyển khoản được hiển thị ngay trên trang thanh toán trong quá trình thanh toán. Bạn chuyển khoản đúng số tiền và đúng nội dung chuyển khoản do hệ thống hiển thị để đơn hàng được nhận diện và kích hoạt tự động.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Bank transfer:</strong> Account information is provided during the payment process.
+                <strong>Bank transfer:</strong> The receiving account information (bank, account number, account holder), the amount and the transfer content are displayed on the payment page during checkout. Please transfer the exact amount with the exact transfer content shown so that the order is identified and activated automatically.
               </li>
             </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Bạn có thể chọn phương thức thuận tiện nhất cho mình; mỗi đơn hàng chỉ cần thanh toán một lần theo một trong hai cách trên.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              You may choose whichever method is most convenient; each order only needs to be paid once, using one of the two methods above.
+            </p>
           </section>
 
-          {/* Section 2: Payment Security */}
+          {/* Section 2 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               2. Bảo mật Thanh toán
@@ -175,31 +188,31 @@ function PaymentPolicy() {
               DIGISO cam kết đảm bảo an toàn cho mọi giao dịch thanh toán:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to ensuring security for all payment transactions:
+              DIGISO is committed to the safety of every payment transaction:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Mã hóa SSL 256-bit:</strong> Tất cả thông tin thanh toán được mã hóa bảo mật.
+                <strong>Mã hóa SSL/TLS:</strong> Thông tin trao đổi giữa bạn và nền tảng được mã hóa trên đường truyền.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>256-bit SSL encryption:</strong> All payment information is securely encrypted.
+                <strong>SSL/TLS encryption:</strong> Information exchanged between you and the platform is encrypted in transit.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>PayOS:</strong> Xử lý thanh toán qua cổng thanh toán uy tín PayOS.
+                <strong>PayOS:</strong> Giao dịch QR được xử lý qua cổng thanh toán PayOS.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>PayOS:</strong> Payment processing through the trusted PayOS payment gateway.
+                <strong>PayOS:</strong> QR transactions are processed through the PayOS payment gateway.
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Kích hoạt tự động:</strong> Dịch vụ được kích hoạt ngay khi xác nhận thanh toán thành công.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Automatic activation:</strong> Services are activated immediately upon successful payment confirmation.
+                <strong>Automatic activation:</strong> The service is activated as soon as the payment is successfully confirmed.
               </li>
             </ul>
           </section>
 
-          {/* Section 3: Payment Process */}
+          {/* Section 3 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               3. Quy trình Thanh toán
@@ -211,43 +224,49 @@ function PaymentPolicy() {
               Quy trình thanh toán trên founderai.biz:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              Payment process on founderai.biz:
+              The payment process on founderai.biz:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Chọn gói dịch vụ phù hợp với nhu cầu.
+                <strong>Bước 1:</strong> Chọn gói dịch vụ phù hợp với nhu cầu.
               </li>
               <li className={lc(language, 'en')}>
-                Select a service package that suits your needs.
+                <strong>Step 1:</strong> Choose the service package that suits your needs.
               </li>
               <li className={lc(language, 'vi')}>
-                Điền thông tin xuất hóa đơn (nếu cần).
+                <strong>Bước 2:</strong> Điền thông tin xuất hóa đơn (nếu cần).
               </li>
               <li className={lc(language, 'en')}>
-                Fill in invoice information (if needed).
+                <strong>Step 2:</strong> Enter invoicing information (if needed).
               </li>
               <li className={lc(language, 'vi')}>
-                Xác nhận và đồng ý với các điều khoản thanh toán.
+                <strong>Bước 3:</strong> Kiểm tra thông tin đơn hàng gồm tên gói, số lượng (nếu có), giá bán, tổng giá trị, mã giảm giá (voucher) và thông tin thanh toán trước khi giao dịch.
               </li>
               <li className={lc(language, 'en')}>
-                Confirm and agree to the payment terms.
+                <strong>Step 3:</strong> Review the order information — package name, quantity (if any), price, total value, discount code (voucher) and payment details — before making the transaction.
               </li>
               <li className={lc(language, 'vi')}>
-                Thực hiện thanh toán qua QR Code hoặc chuyển khoản.
+                <strong>Bước 4:</strong> Xác nhận và đồng ý với các điều khoản thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                Make payment via QR Code or bank transfer.
+                <strong>Step 4:</strong> Confirm and agree to the payment terms.
               </li>
               <li className={lc(language, 'vi')}>
-                Hệ thống tự động kích hoạt dịch vụ sau khi xác nhận.
+                <strong>Bước 5:</strong> Thực hiện thanh toán qua mã QR hoặc chuyển khoản.
               </li>
               <li className={lc(language, 'en')}>
-                System automatically activates service after confirmation.
+                <strong>Step 5:</strong> Make the payment by QR code or bank transfer.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Bước 6:</strong> Hệ thống tự động kích hoạt dịch vụ sau khi xác nhận thanh toán.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Step 6:</strong> The system activates the service automatically after the payment is confirmed.
               </li>
             </ul>
           </section>
 
-          {/* Section 4: Payment Confirmation */}
+          {/* Section 4 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               4. Xác nhận Thanh toán
@@ -259,37 +278,37 @@ function PaymentPolicy() {
               Sau khi thanh toán thành công, bạn sẽ nhận được:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              After successful payment, you will receive:
+              After a successful payment, you will receive:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
                 Email xác nhận thanh toán từ DIGISO.
               </li>
               <li className={lc(language, 'en')}>
-                Payment confirmation email from DIGISO.
+                A payment confirmation email from DIGISO.
               </li>
               <li className={lc(language, 'vi')}>
                 Thông báo kích hoạt dịch vụ trên nền tảng.
               </li>
               <li className={lc(language, 'en')}>
-                Service activation notification on the platform.
+                A service activation notice on the platform.
               </li>
               <li className={lc(language, 'vi')}>
                 Hóa đơn VAT (nếu đã yêu cầu xuất hóa đơn).
               </li>
               <li className={lc(language, 'en')}>
-                VAT invoice (if invoice was requested).
+                A VAT invoice (if invoicing was requested).
               </li>
             </ul>
-            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               <strong>Lưu ý:</strong> Thời gian xử lý thanh toán thông thường là vài giây đến vài phút. Trong một số trường hợp đặc biệt (ngân hàng bảo trì, lỗi mạng), thời gian có thể kéo dài hơn.
             </p>
-            <p className={`text-slate-700 ${lc(language, 'en')}`}>
-              <strong>Note:</strong> Normal payment processing time is a few seconds to a few minutes. In special cases (bank maintenance, network errors), processing time may take longer.
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              <strong>Note:</strong> Payment processing normally takes a few seconds to a few minutes. In special cases (bank maintenance, network errors) it may take longer.
             </p>
           </section>
 
-          {/* Section 5: VAT Invoice */}
+          {/* Section 5 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               5. Hóa đơn VAT
@@ -298,23 +317,23 @@ function PaymentPolicy() {
               5. VAT Invoice
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO thực hiện xuất hóa đơn VAT theo đúng quy định của pháp luật:
+              DIGISO thực hiện xuất hóa đơn theo đúng quy định của pháp luật:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO issues VAT invoices in accordance with legal regulations:
+              DIGISO issues invoices in accordance with the law:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Hóa đơn VAT được xuất ngay khi thanh toán thành công.
+                Hóa đơn được xuất ngay khi thanh toán thành công.
               </li>
               <li className={lc(language, 'en')}>
-                VAT invoice is issued immediately upon successful payment.
+                The invoice is issued as soon as the payment succeeds.
               </li>
               <li className={lc(language, 'vi')}>
                 Thông tin xuất hóa đơn được cung cấp trước khi thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                Invoice information is provided before payment.
+                Invoicing information is provided before payment.
               </li>
               <li className={lc(language, 'vi')}>
                 Bạn có thể tải hóa đơn từ tài khoản của mình sau khi thanh toán.
@@ -325,19 +344,19 @@ function PaymentPolicy() {
             </ul>
           </section>
 
-          {/* Section 6: Payment Issues */}
+          {/* Section 6 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               6. Xử lý sự cố Thanh toán
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              6. Payment Issue Resolution
+              6. Handling Payment Issues
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               Nếu gặp sự cố trong quá trình thanh toán:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              If you encounter issues during the payment process:
+              If you encounter a problem during payment:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
@@ -347,132 +366,163 @@ function PaymentPolicy() {
                 Check your internet connection and try again.
               </li>
               <li className={lc(language, 'vi')}>
-                Liên hệ ngân hàng nếu tài khoản bị giữ hoặc từ chối.
+                Liên hệ ngân hàng nếu tài khoản bị giữ hoặc từ chối giao dịch.
               </li>
               <li className={lc(language, 'en')}>
-                Contact your bank if the account is held or declined.
+                Contact your bank if your account is held or the transaction is declined.
               </li>
               <li className={lc(language, 'vi')}>
                 Liên hệ bộ phận hỗ trợ DIGISO qua email hoặc điện thoại.
               </li>
               <li className={lc(language, 'en')}>
-                Contact DIGISO support via email or phone.
+                Contact DIGISO support by email or phone.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Hotline hỗ trợ:</strong> 0877909606 (8:00 - 22:00, Thứ 2 - Thứ 7).
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Support hotline:</strong> 0877909606 (8:00 AM - 10:00 PM, Monday - Saturday).
               </li>
             </ul>
-            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
-              <strong>Hotline hỗ trợ:</strong> 0877909606 (8:00 - 22:00, Thứ 2 - Thứ 7)
-            </p>
-            <p className={`text-slate-700 ${lc(language, 'en')}`}>
-              <strong>Support hotline:</strong> 0877909606 (8:00 AM - 10:00 PM, Monday - Saturday)
-            </p>
           </section>
 
-          {/* Section 7: Incorrect Payment */}
+          {/* Section 7 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              7. Xử lý chuyển khoản sai thông tin
+              7. Trường hợp thanh toán sai số tiền hoặc sai thông tin chuyển khoản
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              7. Handling of Incorrect Transfers
+              7. Incorrect Payment Amount or Transfer Information
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Trường hợp Người dùng chuyển khoản sai số tiền, sai nội dung, sai tài khoản thụ hưởng hoặc gửi nhầm giao dịch, DIGISO xử lý như sau:
+              Với chuyển khoản ngân hàng, khách hàng có trách nhiệm thanh toán đúng số tiền và đúng thông tin do founderai.biz hiển thị. Trường hợp Người dùng chuyển khoản sai số tiền, sai nội dung, sai tài khoản thụ hưởng hoặc gửi nhầm giao dịch, DIGISO xử lý như sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              If the User transfers an incorrect amount, content, beneficiary account, or sends a mistaken transaction, DIGISO handles it as follows:
+              For bank transfers, the customer is responsible for paying the exact amount and using the exact information displayed by founderai.biz. If the User transfers the wrong amount, uses wrong content, uses a wrong beneficiary account or sends a transaction by mistake, DIGISO handles it as follows:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Người dùng thông báo ngay cho DIGISO qua email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> hoặc hotline 0877909606, kèm theo ảnh chụp sao kê giao dịch.
+                Người dùng thông báo ngay cho DIGISO qua email info@digiso.vn hoặc hotline 0877909606, cung cấp thông tin giao dịch, kèm ảnh chụp sao kê giao dịch, để DIGISO kiểm tra, đối soát và hướng dẫn xử lý.
               </li>
               <li className={lc(language, 'en')}>
-                Users must notify DIGISO immediately via <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a> or hotline 0877909606, attaching a screenshot of the transaction receipt.
+                The User notifies DIGISO immediately by email at info@digiso.vn or by hotline 0877909606, providing the transaction details and a screenshot of the transaction statement, so that DIGISO can check, reconcile and advise on handling.
               </li>
               <li className={lc(language, 'vi')}>
                 DIGISO đối chiếu và phản hồi trong vòng 24 giờ làm việc kể từ khi nhận thông báo đầy đủ.
               </li>
               <li className={lc(language, 'en')}>
-                DIGISO will verify and respond within 24 business hours of receiving complete notification.
+                DIGISO reconciles and responds within 24 business hours of receiving the complete notice.
               </li>
               <li className={lc(language, 'vi')}>
                 Giao dịch chuyển nhầm sang tài khoản hệ thống: DIGISO hoàn trả đúng số tiền đã nhận sau khi xác minh và trừ phí ngân hàng phát sinh (nếu có) trong vòng 3–7 ngày làm việc.
               </li>
               <li className={lc(language, 'en')}>
-                Transactions mistakenly sent to DIGISO's account: DIGISO refunds the exact amount received after verification, minus any bank fees incurred (if any), within 3–7 business days.
+                Transactions mistakenly sent to the system account: DIGISO refunds the exact amount received after verification, less any bank fees incurred, within 3–7 business days.
               </li>
               <li className={lc(language, 'vi')}>
-                Giao dịch chuyển nhầm sang tài khoản bên thứ ba không thuộc DIGISO: DIGISO hỗ trợ cung cấp thông tin giao dịch để Người dùng tự liên hệ ngân hàng/đơn vị liên quan yêu cầu tra soát và hoàn tiền.
+                Giao dịch chuyển nhầm sang tài khoản bên thứ ba không thuộc DIGISO: DIGISO hỗ trợ cung cấp thông tin giao dịch để Người dùng tự liên hệ ngân hàng hoặc đơn vị liên quan yêu cầu tra soát và hoàn tiền. Lỗi do khách hàng dẫn đến việc DIGISO không nhận được phí thì DIGISO không chịu trách nhiệm đối với khoản tiền đã chuyển đi.
               </li>
               <li className={lc(language, 'en')}>
-                Transactions mistakenly sent to a third-party account not belonging to DIGISO: DIGISO will assist by providing transaction details so the User can contact the relevant bank or party for investigation and refund.
+                Transactions mistakenly sent to a third-party account not belonging to DIGISO: DIGISO helps provide transaction information so the User can contact the bank or the relevant party to request a trace and refund. Where the customer's error results in DIGISO not receiving the fee, DIGISO is not responsible for the amount already transferred.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Việc xử lý căn cứ kết quả kiểm tra giao dịch thực tế và xác nhận từ ngân hàng hoặc đơn vị liên quan.
+              </li>
+              <li className={lc(language, 'en')}>
+                Handling is based on the actual transaction check and confirmation from the bank or the relevant party.
               </li>
             </ul>
           </section>
 
-          {/* Section 8: Refund Upon Termination */}
+          {/* Section 8 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              8. Hoàn tiền khi chấm dứt dịch vụ
+              8. Phương thức hoàn tiền trong trường hợp chấm dứt dịch vụ hoặc đổi trả
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              8. Refund Upon Service Termination
+              8. Refund Method upon Service Termination or Return
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Người dùng có quyền yêu cầu hoàn tiền khi dịch vụ bị chấm dứt theo Chính sách chấm dứt dịch vụ và hoàn tiền. Nguyên tắc hoàn tiền:
+              Nếu đủ điều kiện hoàn tiền theo <a href="/refund-policy" className="text-orange-600 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>, khoản hoàn được thực hiện như sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              Users may request a refund when a service is terminated in accordance with the Termination and Refund Policy. Refund principles:
+              If the conditions for a refund under the <a href="/refund-policy" className="text-orange-600 hover:underline">Service Termination and Refund Policy</a> are met, the refund is made as follows:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Hoàn tiền theo phần giá trị dịch vụ chưa sử dụng tính theo ngày; đã sử dụng trên 50% thời hạn gói thì không hoàn.
+                <strong>Hình thức hoàn tiền:</strong> chuyển khoản ngân hàng về tài khoản đã dùng để thanh toán ban đầu hoặc tài khoản do Người dùng cung cấp (hoặc phương thức khác theo thỏa thuận).
               </li>
               <li className={lc(language, 'en')}>
-                Refund based on the unused portion calculated daily; if more than 50% of the package period has been used, no refund is provided.
+                <strong>Refund method:</strong> bank transfer to the account originally used for payment or to an account provided by the User (or another method as agreed).
               </li>
               <li className={lc(language, 'vi')}>
-                Phí giao dịch ngân hàng phát sinh khi hoàn tiền do Người dùng chịu (nếu có).
+                <strong>Thời hạn hoàn tiền:</strong> theo thời hạn quy định tại Chính sách chấm dứt dịch vụ và hoàn tiền; thời gian nhận tiền thực tế có thể phụ thuộc vào đơn vị thanh toán, ngân hàng và phương thức thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                Any bank transaction fees arising from the refund are borne by the User (if any).
+                <strong>Refund timeframe:</strong> as specified in the Service Termination and Refund Policy; the actual time to receive the money may depend on the payment provider, the bank and the payment method.
               </li>
               <li className={lc(language, 'vi')}>
-                Thời hạn hoàn tiền: trong vòng 7–14 ngày làm việc kể từ khi DIGISO xác nhận yêu cầu hoàn tiền hợp lệ.
+                <strong>Phí giao dịch ngân hàng</strong> phát sinh khi hoàn tiền do Người dùng chịu (nếu có).
               </li>
               <li className={lc(language, 'en')}>
-                Refund timeframe: within 7–14 business days from the date DIGISO confirms a valid refund request.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Hình thức hoàn tiền: chuyển khoản ngân hàng về tài khoản đã dùng để thanh toán hoặc tài khoản do Người dùng cung cấp.
-              </li>
-              <li className={lc(language, 'en')}>
-                Refund method: bank transfer to the original payment account or another account provided by the User.
+                <strong>Bank transaction fees</strong> arising from the refund are borne by the User (if any).
               </li>
             </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Toàn bộ điều kiện, phạm vi và mức hoàn tiền được quy định tại Chính sách chấm dứt dịch vụ và hoàn tiền công khai tại founderai.biz.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              All conditions, scope and amounts of refunds are set out in the Service Termination and Refund Policy published at founderai.biz.
+            </p>
           </section>
 
-          {/* Section 9: Contact */}
+          {/* Section 9 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              9. Liên hệ
+              9. Cơ chế điểm thưởng, ưu đãi quy đổi
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              9. Contact
+              9. Reward Points and Redeemable Offers
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Nếu bạn có câu hỏi về Chính sách Thanh toán, vui lòng liên hệ:
+              Founder AI hiện không áp dụng cơ chế tích điểm, hoàn điểm hoặc ưu đãi quy đổi điểm khi thanh toán. Nếu áp dụng trong tương lai, DIGISO sẽ công khai cách hình thành và sử dụng điểm, phạm vi, điều kiện, tỷ lệ, giới hạn quy đổi và trách nhiệm của các bên; điểm không được quy đổi để rút tiền mặt.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Founder AI does not currently apply any points accrual, points refund or points-redemption offers for payments. If introduced in the future, DIGISO will publish how points are earned and used, their scope, conditions, rates, redemption limits and the parties' responsibilities; points cannot be exchanged for cash.
+            </p>
+          </section>
+
+          {/* Section 10 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              10. Liên hệ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              10. Contact
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Nếu bạn có câu hỏi về Chính sách về thanh toán, vui lòng liên hệ:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
               If you have questions about the Payment Policy, please contact:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2">
-              <li>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
                 <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
-              <li>
+              <li className={lc(language, 'en')}>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+              </li>
+              <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
               </li>
-              <li>
+              <li className={lc(language, 'en')}>
+                <strong>Phone:</strong> 0877909606
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+              </li>
+              <li className={lc(language, 'en')}>
                 <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
               </li>
             </ul>
@@ -511,10 +561,10 @@ function PaymentPolicy() {
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 28/09/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from September 28, 2026.
+            This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
         <PolicyHistory language={language} lc={lc} entries={historyEntries} />

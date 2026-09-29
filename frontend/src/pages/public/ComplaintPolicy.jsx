@@ -11,6 +11,13 @@ function ComplaintPolicy() {
 
   const historyEntries = [
     {
+      date: '2026-09-29',
+      note: {
+        vi: 'Bổ sung nội dung tối thiểu theo Điều 4–17 Nghị định 248/2026/NĐ-CP và góp ý của luật sư ngày 25–29/09/2026; ban hành lại toàn bộ chính sách.',
+        en: 'Added the minimum content required by Articles 4–17 of Decree 248/2026/NĐ-CP and the lawyer\'s comments of 25–29/09/2026; policy re-issued in full.',
+      },
+    },
+    {
       date: '2026-09-28',
       note: {
         vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
@@ -71,10 +78,10 @@ function ComplaintPolicy() {
             </div>
 
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}>
-              Tiếp nhận & Giải quyết <span className="text-orange-400">Khiếu nại</span>
+              Phương thức tiếp nhận và giải quyết <span className="text-orange-400">phản ánh, yêu cầu, khiếu nại</span>
             </h1>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}>
-              Complaint Handling <span className="text-orange-400">Policy</span>
+              Procedure for Receiving and Resolving <span className="text-orange-400">Feedback, Requests and Complaints</span>
             </h1>
 
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>
@@ -121,19 +128,19 @@ function ComplaintPolicy() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>28 tháng 9 năm 2026</strong>
+                Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>September 28, 2026</strong>
+                Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
             </p>
           </div>
 
-          {/* Section 1: Scope */}
+          {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               1. Phạm vi áp dụng
@@ -142,14 +149,14 @@ function ComplaintPolicy() {
               1. Scope
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Chính sách này quy định quy trình tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại của khách hàng đối với các dịch vụ cung cấp trên nền tảng founderai.biz.
+              Chính sách này quy định phương thức, quy trình tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại của khách hàng đối với các dịch vụ cung cấp trên nền tảng founderai.biz do Công ty TNHH Giải pháp số DIGISO (DIGISO) là chủ quản, theo Điều 7 Nghị định 248/2026/NĐ-CP.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              This policy establishes the procedure for receiving and resolving customer feedback, requests, and complaints regarding services provided on the founderai.biz platform.
+              This policy sets out the methods and procedure for receiving and resolving feedback, requests and complaints from customers about the services provided on the founderai.biz platform operated by DIGISO Digital Solutions Co., Ltd. (DIGISO), in accordance with Article 7 of Decree 248/2026/NĐ-CP.
             </p>
           </section>
 
-          {/* Section 2: How to Submit */}
+          {/* Section 2 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               2. Cách thức tiếp nhận
@@ -158,17 +165,17 @@ function ComplaintPolicy() {
               2. How to Submit
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO tiếp nhận phản ánh, yêu cầu, khiếu nại qua các kênh sau:
+              DIGISO tiếp nhận phản ánh, yêu cầu, khiếu nại qua các kênh sau (trong đó có phương thức liên hệ trực tuyến là email và trang liên hệ):
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO receives feedback, requests, and complaints through the following channels:
+              DIGISO receives feedback, requests and complaints through the following channels (including online contact by email and the contact page):
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> info@digiso.vn
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> info@digiso.vn
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606 (8:00 - 22:00, Thứ 2 - Thứ 7)
@@ -177,69 +184,81 @@ function ComplaintPolicy() {
                 <strong>Phone:</strong> 0877909606 (8:00 AM - 10:00 PM, Monday - Saturday)
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Trang liên hệ:</strong> founderai.biz/contact
+                <strong>Trang liên hệ:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Contact page:</strong> founderai.biz/contact
+                <strong>Contact page:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
               </li>
             </ul>
           </section>
 
-          {/* Section 3: Process */}
+          {/* Section 3 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              3. Quy trình giải quyết
+              3. Trình tự, thủ tục tiếp nhận và xử lý
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              3. Resolution Process
+              3. Receiving and Handling Procedure
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết giải quyết khiếu nại theo quy trình sau:
+              DIGISO giải quyết phản ánh, yêu cầu, khiếu nại theo các bước sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to resolving complaints through the following process:
+              DIGISO handles feedback, requests and complaints through the following steps:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Tiếp nhận:</strong> DIGISO tiếp nhận và xác nhận đã nhận được khiếu nại trong vòng 24 giờ làm việc.
+                <strong>Bước 1 — Tiếp nhận:</strong> DIGISO tiếp nhận phản ánh, yêu cầu, khiếu nại qua các kênh được công bố tại mục 2.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Receipt:</strong> DIGISO receives and confirms receipt of the complaint within 24 business hours.
+                <strong>Step 1 — Receipt:</strong> DIGISO receives the feedback, request or complaint through the channels published in section 2.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Xác minh:</strong> DIGISO xác minh thông tin và thu thập bằng chứng liên quan trong vòng 3 ngày làm việc.
+                <strong>Bước 2 — Xác nhận:</strong> Sau khi tiếp nhận đầy đủ thông tin, DIGISO xác nhận đã nhận trong vòng 24 giờ làm việc và có thể liên hệ để xác minh thêm thông tin.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Verification:</strong> DIGISO verifies information and gathers relevant evidence within 3 business days.
+                <strong>Step 2 — Acknowledgement:</strong> After receiving complete information, DIGISO confirms receipt within 24 business hours and may contact you to verify further information.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Xử lý:</strong> DIGISO đưa ra phương án xử lý và phản hồi trong vòng 7 ngày làm việc.
+                <strong>Bước 3 — Kiểm tra và xác minh:</strong> DIGISO kiểm tra, xác minh dựa trên thông tin đơn hàng, lịch sử giao dịch, thanh toán và tài liệu khách hàng cung cấp; phối hợp bộ phận, đơn vị liên quan khi cần. Việc xác minh và thu thập bằng chứng được thực hiện trong vòng 3 ngày làm việc.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Handling:</strong> DIGISO provides a resolution and response within 7 business days.
+                <strong>Step 3 — Review and verification:</strong> DIGISO reviews and verifies based on order information, transaction and payment history, and the documents you provide, coordinating with relevant departments or units where needed. Verification and evidence collection are completed within 3 business days.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Theo dõi:</strong> DIGISO theo dõi và đảm bảo khiếu nại được giải quyết triệt để.
+                <strong>Bước 4 — Đánh giá và đưa ra phương án xử lý:</strong> DIGISO đánh giá nguyên nhân, trách nhiệm của các bên và đưa ra phương án xử lý phù hợp với chính sách của nền tảng, thỏa thuận giao dịch và quy định pháp luật; phản hồi trong vòng 7 ngày làm việc.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Follow-up:</strong> DIGISO monitors and ensures complaints are thoroughly resolved.
+                <strong>Step 4 — Assessment and resolution proposal:</strong> DIGISO assesses the cause and the responsibilities of the parties and proposes a resolution consistent with the platform policies, the transaction agreement and applicable law; DIGISO responds within 7 business days.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Bước 5 — Thông báo kết quả:</strong> DIGISO thông báo kết quả xử lý qua email, điện thoại hoặc phương thức khác đã thỏa thuận.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Step 5 — Notification of result:</strong> DIGISO notifies the outcome by email, phone or another agreed method.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Bước 6 — Theo dõi và hoàn tất:</strong> DIGISO theo dõi việc thực hiện phương án xử lý và bảo đảm khiếu nại được giải quyết triệt để.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Step 6 — Follow-up and closure:</strong> DIGISO follows up on the implementation of the resolution and ensures the complaint is fully resolved.
               </li>
             </ul>
           </section>
 
-          {/* Section 4: Types of Complaints */}
+          {/* Section 4 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              4. Các loại khiếu nại được tiếp nhận
+              4. Các loại khiếu nại được tiếp nhận và thông tin cần cung cấp
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              4. Types of Complaints Received
+              4. Types of Complaints Received and Information Required
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO tiếp nhận các loại khiếu nại sau:
+              DIGISO tiếp nhận các loại phản ánh, yêu cầu, khiếu nại sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO receives the following types of complaints:
+              DIGISO receives the following types of feedback, requests and complaints:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
@@ -252,30 +271,92 @@ function ComplaintPolicy() {
                 Lỗi kỹ thuật ảnh hưởng đến việc sử dụng dịch vụ.
               </li>
               <li className={lc(language, 'en')}>
-                Technical errors affecting service usage.
+                Technical errors affecting the use of the service.
               </li>
               <li className={lc(language, 'vi')}>
                 Thanh toán và hoàn tiền.
               </li>
               <li className={lc(language, 'en')}>
-                Payment and refund issues.
+                Payment and refunds.
               </li>
               <li className={lc(language, 'vi')}>
                 Bảo mật và quyền riêng tư.
               </li>
               <li className={lc(language, 'en')}>
-                Security and privacy concerns.
+                Security and privacy.
               </li>
               <li className={lc(language, 'vi')}>
                 Hành vi của nhân viên hoặc đại lý.
               </li>
               <li className={lc(language, 'en')}>
-                Employee or agent conduct.
+                Conduct of employees or agents.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Các quyền, lợi ích hợp pháp khác của khách hàng hoặc theo quy định của pháp luật.
+              </li>
+              <li className={lc(language, 'en')}>
+                Other lawful rights and interests of the customer or as provided by law.
               </li>
             </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Để việc xử lý nhanh chóng, khi gửi phản ánh, yêu cầu, khiếu nại, vui lòng cung cấp:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              For prompt handling, please provide the following when submitting:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Tên công ty, mã số thuế (đối với doanh nghiệp, tổ chức); họ và tên (đối với cá nhân).
+              </li>
+              <li className={lc(language, 'en')}>
+                Company name and tax code (for businesses and organisations); full name (for individuals).
+              </li>
+              <li className={lc(language, 'vi')}>
+                Số điện thoại hoặc email liên hệ chính xác.
+              </li>
+              <li className={lc(language, 'en')}>
+                An accurate contact phone number or email.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Thông tin gói dịch vụ hoặc tài khoản liên quan.
+              </li>
+              <li className={lc(language, 'en')}>
+                Information on the relevant service package or account.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Nội dung cụ thể của phản ánh, yêu cầu, khiếu nại.
+              </li>
+              <li className={lc(language, 'en')}>
+                The specific content of the feedback, request or complaint.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Thời gian, địa điểm phát sinh vấn đề.
+              </li>
+              <li className={lc(language, 'en')}>
+                When and where the issue arose.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Tài liệu, hình ảnh, hóa đơn, chứng từ liên quan (nếu có).
+              </li>
+              <li className={lc(language, 'en')}>
+                Related documents, images, invoices and vouchers (if any).
+              </li>
+              <li className={lc(language, 'vi')}>
+                Phương án giải quyết mong muốn.
+              </li>
+              <li className={lc(language, 'en')}>
+                Your desired resolution.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO cam kết bảo mật thông tin của người gửi và chỉ sử dụng thông tin đó để xác minh, xử lý vụ việc.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO undertakes to keep the sender's information confidential and to use it only to verify and handle the matter.
+            </p>
           </section>
 
-          {/* Section 5: Response Time */}
+          {/* Section 5 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               5. Thời hạn phản hồi
@@ -284,46 +365,94 @@ function ComplaintPolicy() {
               5. Response Timeframes
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết các thời hạn phản hồi sau:
+              DIGISO cam kết các thời hạn phản hồi ban đầu và thời hạn dự kiến giải quyết như sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to the following response timeframes:
+              DIGISO commits to the following initial response and expected resolution timeframes:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Xác nhận tiếp nhận:</strong> Trong vòng 24 giờ làm việc.
+                <strong>Xác nhận tiếp nhận (phản hồi ban đầu):</strong> trong vòng 24 giờ làm việc.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Acknowledgment:</strong> Within 24 business hours.
+                <strong>Acknowledgement (initial response):</strong> within 24 business hours.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Khiếu nại đơn giản:</strong> Giải quyết trong vòng 3 ngày làm việc.
+                <strong>Khiếu nại đơn giản:</strong> giải quyết trong vòng 3 ngày làm việc.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Simple complaints:</strong> Resolved within 3 business days.
+                <strong>Simple complaints:</strong> resolved within 3 business days.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Khiếu nại phức tạp:</strong> Giải quyết trong vòng 7 ngày làm việc.
+                <strong>Khiếu nại phức tạp:</strong> giải quyết trong vòng 7 ngày làm việc.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Complex complaints:</strong> Resolved within 7 business days.
+                <strong>Complex complaints:</strong> resolved within 7 business days.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Thời hạn được tính từ ngày DIGISO nhận đủ thông tin và tài liệu cần thiết. Trường hợp cần kéo dài thời hạn, DIGISO thông báo cho khách hàng lý do và thời gian dự kiến giải quyết.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Timeframes are counted from the date DIGISO receives the complete information and documents required. If more time is needed, DIGISO will notify you of the reason and the expected resolution time.
+            </p>
+          </section>
+
+          {/* Section 6 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              6. Biện pháp và công cụ hỗ trợ giải quyết
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              6. Measures and Tools Used to Support Resolution
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Để hỗ trợ giải quyết, DIGISO áp dụng các biện pháp, công cụ sau:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              To support resolution, DIGISO applies the following measures and tools:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                Đối soát đơn hàng, lịch sử thanh toán và hóa đơn của tài khoản liên quan trên hệ thống.
+              </li>
+              <li className={lc(language, 'en')}>
+                Reconciling the orders, payment history and invoices of the relevant account on the system.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Kiểm tra nhật ký hoạt động và nhật ký gửi (nếu có) của tài khoản liên quan để xác minh sự việc.
+              </li>
+              <li className={lc(language, 'en')}>
+                Checking the activity logs and sending logs (if any) of the relevant account to verify the matter.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Trao đổi trực tiếp với khách hàng qua email hoặc điện thoại để thu thập thêm thông tin, hướng dẫn xử lý.
+              </li>
+              <li className={lc(language, 'en')}>
+                Communicating directly with the customer by email or phone to collect further information and guide resolution.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Phối hợp với đơn vị thanh toán, ngân hàng hoặc đơn vị cung cấp dịch vụ liên quan khi cần đối soát.
+              </li>
+              <li className={lc(language, 'en')}>
+                Coordinating with payment providers, banks or relevant service providers when reconciliation is needed.
               </li>
             </ul>
           </section>
 
-          {/* Section 6: Escalation */}
+          {/* Section 7 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              6. Khiếu nại lên cấp cao hơn
+              7. Trường hợp không đạt được thỏa thuận
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              6. Escalation
+              7. Where No Agreement Is Reached
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Nếu không hài lòng với phương án giải quyết của DIGISO, bạn có thể:
+              Nếu không hài lòng với phương án giải quyết của DIGISO, khách hàng có thể yêu cầu DIGISO xem xét lại và cung cấp thêm tài liệu, thông tin. Trường hợp không giải quyết được bằng thương lượng, khách hàng có quyền:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              If not satisfied with DIGISO's resolution, you may:
+              If you are not satisfied with DIGISO's resolution, you may ask DIGISO to reconsider and provide additional documents and information. If the matter cannot be resolved by negotiation, you have the right to:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
@@ -333,27 +462,27 @@ function ComplaintPolicy() {
                 Request escalation to a higher level of DIGISO management via email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>.
               </li>
               <li className={lc(language, 'vi')}>
-                Gửi khiếu nại đến Sở Công Thương địa phương nơi DIGISO đặt trụ sở (Thành phố Hồ Chí Minh) hoặc cơ quan nhà nước có thẩm quyền theo quy định pháp luật.
+                Đề nghị cơ quan quản lý nhà nước có thẩm quyền, tổ chức bảo vệ quyền lợi người tiêu dùng hoặc Tòa án có thẩm quyền tại Việt Nam giải quyết theo quy định pháp luật, trong đó có Sở Công Thương nơi DIGISO đặt trụ sở (Thành phố Hồ Chí Minh).
               </li>
               <li className={lc(language, 'en')}>
-                Submit a complaint to the Department of Industry and Trade of the locality where DIGISO is headquartered (Ho Chi Minh City) or to other competent state authorities as provided by law.
+                Petition the competent state management authority, a consumer protection organisation or the competent court in Vietnam to resolve the matter under the law, including the Department of Industry and Trade of the locality where DIGISO is headquartered (Ho Chi Minh City).
               </li>
               <li className={lc(language, 'vi')}>
                 Gọi Tổng đài hỗ trợ khách hàng và tiếp nhận phản ánh về hoạt động thương mại điện tử: <strong>1800-6838</strong> (Sở Công Thương TP.HCM / Cục Thương mại điện tử & Kinh tế số).
               </li>
               <li className={lc(language, 'en')}>
-                Call the national hotline for e-commerce complaints: <strong>1800-6838</strong> (Ho Chi Minh City Department of Industry and Trade / Department of E-commerce and Digital Economy).
+                Call the customer support hotline for e-commerce complaints: <strong>1800-6838</strong> (Ho Chi Minh City Department of Industry and Trade / Department of E-commerce and Digital Economy).
               </li>
             </ul>
           </section>
 
-          {/* Section 7: Contact */}
+          {/* Section 8 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              7. Liên hệ
+              8. Liên hệ
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              7. Contact
+              8. Contact
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               Nếu bạn có câu hỏi hoặc cần hỗ trợ, vui lòng liên hệ:
@@ -361,14 +490,23 @@ function ComplaintPolicy() {
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
               If you have questions or need assistance, please contact:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2">
-              <li>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
                 <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
-              <li>
+              <li className={lc(language, 'en')}>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+              </li>
+              <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
               </li>
-              <li>
+              <li className={lc(language, 'en')}>
+                <strong>Phone:</strong> 0877909606
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+              </li>
+              <li className={lc(language, 'en')}>
                 <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
               </li>
             </ul>
@@ -407,10 +545,10 @@ function ComplaintPolicy() {
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 28/09/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from September 28, 2026.
+            This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
         <PolicyHistory language={language} lc={lc} entries={historyEntries} />

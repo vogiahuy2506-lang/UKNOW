@@ -11,6 +11,13 @@ function PricingPolicy() {
 
   const historyEntries = [
     {
+      date: '2026-09-29',
+      note: {
+        vi: 'Bổ sung nội dung tối thiểu theo Điều 4–17 Nghị định 248/2026/NĐ-CP và góp ý của luật sư ngày 25–29/09/2026; ban hành lại toàn bộ chính sách.',
+        en: 'Added the minimum content required by Articles 4–17 of Decree 248/2026/NĐ-CP and the lawyer\'s comments of 25–29/09/2026; policy re-issued in full.',
+      },
+    },
+    {
       date: '2026-09-28',
       note: {
         vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
@@ -71,7 +78,7 @@ function PricingPolicy() {
             </div>
 
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}>
-              Chính sách <span className="text-orange-400">Giá</span>
+              Chính sách về <span className="text-orange-400">giá</span>
             </h1>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}>
               Pricing <span className="text-orange-400">Policy</span>
@@ -121,19 +128,19 @@ function PricingPolicy() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật: <strong>28 tháng 9 năm 2026</strong>
+                Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated: <strong>September 28, 2026</strong>
+                Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
             </p>
           </div>
 
-          {/* Section 1: General Pricing */}
+          {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               1. Quy định chung về Giá
@@ -161,10 +168,10 @@ function PricingPolicy() {
                 <strong>Currency:</strong> All prices are listed in Vietnamese Dong (VND).
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Thay đổi giá:</strong> DIGISO có quyền thay đổi giá dịch vụ với thông báo trước ít nhất 20 ngày, trừ trường hợp thay đổi do cập nhật ngay để tuân thủ quy định pháp luật về thuế hoặc áp dụng chương trình khuyến mãi, ưu đãi.
+                <strong>Thay đổi giá:</strong> DIGISO có quyền thay đổi giá dịch vụ với thông báo trước ít nhất 30 ngày, trừ trường hợp cập nhật ngay để tuân thủ quy định pháp luật về thuế hoặc áp dụng chương trình khuyến mãi, ưu đãi. Thay đổi giá được công khai trên nền tảng trước thời điểm áp dụng theo mục 5.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Price changes:</strong> DIGISO reserves the right to change service prices with at least 20 days prior notice, except for changes made to comply with tax legal regulations or to apply promotional programs and offers.
+                <strong>Price changes:</strong> DIGISO reserves the right to change service prices with at least 30 days' prior notice, except for changes made immediately to comply with tax laws or to apply promotional programs and offers. Price changes are published on the platform before they take effect, as described in section 5.
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Chi phí vận chuyển:</strong> Không áp dụng. Dịch vụ được cung cấp dưới dạng số (SaaS) hoàn toàn trên nền tảng trực tuyến, Người dùng không phải trả thêm bất kỳ khoản phí vận chuyển, giao nhận vật lý nào.
@@ -181,7 +188,7 @@ function PricingPolicy() {
             </ul>
           </section>
 
-          {/* Section 2: Service Packages */}
+          {/* Section 2 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               2. Các gói dịch vụ và Bảng giá
@@ -190,34 +197,58 @@ function PricingPolicy() {
               2. Service Packages and Pricing
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cung cấp nhiều gói dịch vụ với mức giá và quyền lợi khác nhau. Chi tiết các gói dịch vụ được công bố công khai tại trang Bảng giá (Pricing) của nền tảng.
+              Biểu giá các gói dịch vụ được công bố công khai tại trang <a href="/pricing" className="text-orange-600 hover:underline">Bảng giá</a> của nền tảng. Gói dịch vụ có thời hạn theo tháng hoặc theo năm; giá theo tháng và giá theo năm của từng gói được niêm yết riêng trên trang Bảng giá.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO offers various service packages with different pricing and benefits. Details of service packages are publicly announced on the Pricing page of the platform.
+              The price list of service packages is published on the platform's <a href="/pricing" className="text-orange-600 hover:underline">Pricing</a> page. Packages have a monthly or yearly term; the monthly and yearly price of each package are listed separately on the Pricing page.
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Gói cơ bản (Basic):</strong> Phù hợp cho cá nhân hoặc doanh nghiệp nhỏ mới bắt đầu.
+                <strong>Gói Dùng thử:</strong> Trải nghiệm nền tảng với hạn mức giới hạn, không thu phí.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Basic Package:</strong> Suitable for individuals or small businesses just starting out.
+                <strong>Trial package:</strong> Try the platform with limited quotas, free of charge.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Gói chuyên nghiệp (Professional):</strong> Dành cho doanh nghiệp cần quản lý khách hàng và chiến dịch nâng cao.
+                <strong>Gói Starter:</strong> Gói cơ bản dành cho cá nhân và freelancer quản lý khách hàng.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Professional Package:</strong> For businesses requiring advanced customer management and campaign features.
+                <strong>Starter package:</strong> A basic package for individuals and freelancers managing customers.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Gói doanh nghiệp (Enterprise):</strong> Giải pháp toàn diện cho tổ chức lớn với nhu cầu tùy chỉnh cao.
+                <strong>Gói Basic:</strong> Phù hợp cho cá nhân hoặc doanh nghiệp nhỏ mới bắt đầu.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Enterprise Package:</strong> Comprehensive solution for large organizations with high customization needs.
+                <strong>Basic package:</strong> Suitable for individuals or small businesses just starting out.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Gói Professional:</strong> Dành cho doanh nghiệp cần quản lý khách hàng và chiến dịch nâng cao.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Professional package:</strong> For businesses requiring advanced customer and campaign management.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Gói Enterprise:</strong> Giải pháp toàn diện cho tổ chức lớn với nhu cầu tùy chỉnh cao.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Enterprise package:</strong> A comprehensive solution for large organisations with high customisation needs.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Gói Tùy chọn:</strong> Khách hàng tự chọn số tin Zalo, email, lượt AI, tài khoản… và thanh toán ngay. Giá được xác định theo cấu hình khách hàng chọn, hiển thị và được khách hàng xác nhận trước khi đặt hàng.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Custom package:</strong> The customer chooses the number of Zalo messages, emails, AI usage, accounts, etc. and pays immediately. The price is determined by the configuration chosen, and is displayed and confirmed by the customer before placing the order.
               </li>
             </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Cách tính giá: giá của từng gói là mức phí trọn gói cho một kỳ (một tháng hoặc một năm), thu một lần khi đặt mua; giá áp dụng là mức hiển thị trên nền tảng tại thời điểm khách hàng xác nhận đặt hàng và bắt đầu áp dụng từ thời điểm gói được kích hoạt.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              How prices are calculated: the price of each package is an all-inclusive fee for one term (one month or one year), collected once at purchase; the applicable price is the one displayed on the platform when the customer confirms the order, and applies from the time the package is activated.
+            </p>
           </section>
 
-          {/* Section 3: Payment Methods */}
+          {/* Section 3 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               3. Phương thức Thanh toán
@@ -226,34 +257,28 @@ function PricingPolicy() {
               3. Payment Methods
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO hỗ trợ các phương thức thanh toán sau:
+              DIGISO hỗ trợ các phương thức thanh toán sau (chi tiết xem <a href="/payment-policy" className="text-orange-600 hover:underline">Chính sách về thanh toán</a>):
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO supports the following payment methods:
+              DIGISO supports the following payment methods (see the <a href="/payment-policy" className="text-orange-600 hover:underline">Payment Policy</a> for details):
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2">
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Thanh toán trực tuyến qua QR Code:</strong> Sử dụng ứng dụng ngân hàng để quét mã QR.
+                <strong>Thanh toán qua mã QR (cổng PayOS):</strong> Sử dụng ứng dụng ngân hàng để quét mã QR.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Online payment via QR Code:</strong> Use banking applications to scan QR codes.
+                <strong>Payment via QR code (PayOS gateway):</strong> Use a banking application to scan the QR code.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Chuyển khoản ngân hàng:</strong> Thông tin tài khoản được cung cấp khi tạo đơn hàng.
+                <strong>Chuyển khoản ngân hàng:</strong> Thông tin tài khoản nhận được cung cấp khi tạo đơn hàng.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Bank transfer:</strong> Account information is provided when placing an order.
-              </li>
-              <li className={lc(language, 'vi')}>
-                <strong>Thanh toán qua ví điện tử:</strong> Hỗ trợ các ví phổ biến tại Việt Nam.
-              </li>
-              <li className={lc(language, 'en')}>
-                <strong>E-wallet payment:</strong> Supports popular e-wallets in Vietnam.
+                <strong>Bank transfer:</strong> The receiving account information is provided when the order is created.
               </li>
             </ul>
           </section>
 
-          {/* Section 4: Billing Cycles */}
+          {/* Section 4 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               4. Chu kỳ Thanh toán
@@ -262,41 +287,53 @@ function PricingPolicy() {
               4. Billing Cycles
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cung cấp các chu kỳ thanh toán linh hoạt:
+              DIGISO cung cấp các chu kỳ thanh toán sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO offers flexible billing cycles:
+              DIGISO offers the following billing cycles:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Thanh toán hàng tháng:</strong> Phí được tính và thu vào ngày đầu tiên của mỗi tháng.
+                <strong>Gói theo tháng:</strong> thời hạn 30 ngày kể từ ngày gói được kích hoạt. Phí được thu một lần khi đặt mua; Founder AI không tự động trừ tiền để gia hạn — khi hết hạn, bạn chủ động đặt mua gia hạn.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Monthly payment:</strong> Fees are calculated and charged on the first day of each month.
+                <strong>Monthly packages:</strong> a 30-day term from the date the package is activated. The fee is collected once at purchase; Founder AI does not automatically charge to renew — when the term ends, you choose whether to purchase a renewal.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Thanh toán hàng năm:</strong> Thanh toán trước 12 tháng với ưu đãi giảm giá.
+                <strong>Gói theo năm:</strong> thanh toán trước cho 12 tháng (365 ngày kể từ ngày kích hoạt) với ưu đãi giảm giá so với mua theo tháng.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Annual payment:</strong> Prepay for 12 months with a discount benefit.
+                <strong>Yearly packages:</strong> prepay for 12 months (365 days from the activation date) with a discount compared with buying monthly.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Hạn mức sử dụng:</strong> hạn mức của gói (số tin, lượt AI…) được làm mới theo chu kỳ 30 ngày tính từ ngày kích hoạt gói.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Usage quotas:</strong> the package quotas (messages, AI usage, etc.) are refreshed every 30 days counted from the package activation date.
               </li>
             </ul>
-            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
-              Nâng lên gói cao hơn: gói mới có hiệu lực ngay, thời hạn tính lại từ ngày nâng cấp; thời gian còn lại của gói cũ không được quy đổi hay hoàn tiền. Chuyển xuống gói thấp hơn: bạn thanh toán trước cho gói mới, gói hiện tại được dùng hết chu kỳ và gói mới tự kích hoạt khi chu kỳ kết thúc; lệnh hẹn này không huỷ được và không hoàn tiền.
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              <strong>Khi chuyển đổi gói:</strong> Nâng lên gói cao hơn: gói mới có hiệu lực ngay, thời hạn tính lại từ ngày nâng cấp; thời gian còn lại của gói cũ không được quy đổi hay hoàn tiền. Chuyển xuống gói thấp hơn: bạn thanh toán trước cho gói mới, gói hiện tại được dùng hết chu kỳ và gói mới tự kích hoạt khi chu kỳ kết thúc; lệnh hẹn này không huỷ được và không hoàn tiền.
             </p>
-            <p className={`text-slate-700 ${lc(language, 'en')}`}>
-              Upgrading to a higher-tier plan: the new plan takes effect immediately and its term restarts from the upgrade date; the remaining time on the old plan cannot be converted or refunded. Downgrading to a lower-tier plan: you prepay for the new plan, the current plan continues until the end of its cycle, and the new plan activates automatically when that cycle ends; this scheduled change cannot be cancelled and is not refundable.
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              <strong>When changing packages:</strong> Upgrading to a higher-tier package: the new package takes effect immediately and its term restarts from the upgrade date; the remaining time on the old package cannot be converted or refunded. Downgrading to a lower-tier package: you prepay for the new package, the current package continues until the end of its cycle and the new package activates automatically when that cycle ends; this scheduled change cannot be cancelled and is not refundable.
             </p>
           </section>
 
-          {/* Section 5: Price Adjustments */}
+          {/* Section 5 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              5. Điều chỉnh Giá
+              5. Khuyến mại, ưu đãi và điều chỉnh Giá
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              5. Price Adjustments
+              5. Promotions, Offers and Price Adjustments
             </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Khi có chương trình khuyến mại, ưu đãi (bao gồm mã giảm giá), DIGISO công khai mức giá áp dụng, điều kiện, phạm vi và thời gian áp dụng của từng đợt trên nền tảng, và thông tin đầy đủ hoặc tóm tắt về hình thức khuyến mại được hiển thị cho người mua trước khi đặt hàng.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              When a promotion or offer (including discount codes) is available, DIGISO publishes on the platform the applicable price, conditions, scope and period of each campaign, and full or summary information on the promotion is shown to the buyer before ordering.
+            </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               DIGISO có thể điều chỉnh giá dịch vụ trong các trường hợp sau:
             </p>
@@ -314,24 +351,36 @@ function PricingPolicy() {
                 Cập nhật tính năng và dịch vụ mới.
               </li>
               <li className={lc(language, 'en')}>
-                Updates to new features and services.
+                Updates to features and new services.
               </li>
               <li className={lc(language, 'vi')}>
                 Điều chỉnh theo biến động thị trường và chi phí vận hành.
               </li>
               <li className={lc(language, 'en')}>
-                Adjustments based on market fluctuations and operational costs.
+                Adjustments based on market fluctuations and operating costs.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Áp dụng chương trình khuyến mại.
+              </li>
+              <li className={lc(language, 'en')}>
+                Application of promotional programs.
               </li>
             </ul>
-            <p className={`text-slate-700 ${lc(language, 'vi')}`}>
-              DIGISO sẽ thông báo cho người dùng về việc điều chỉnh giá ít nhất 30 ngày trước khi áp dụng bằng email và thông báo trên nền tảng.
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              DIGISO thông báo cho người dùng về việc điều chỉnh giá ít nhất 30 ngày trước khi áp dụng bằng email và thông báo trên nền tảng (không ít hơn 20 ngày công khai theo Điều 8 Nghị định 248/2026/NĐ-CP), trừ trường hợp thay đổi để tuân thủ quy định pháp luật về thuế hoặc theo thời gian của chương trình khuyến mại. Việc điều chỉnh giá không làm thay đổi khoản phí đã thanh toán cho thời hạn gói đã mua, trừ khi có thỏa thuận khác.
             </p>
-            <p className={`text-slate-700 ${lc(language, 'en')}`}>
-              DIGISO will notify users of price adjustments at least 30 days before implementation via email and platform notifications.
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              DIGISO notifies users of price adjustments at least 30 days before they apply, by email and platform notification (in any case no less than the 20 days' public notice required by Article 8 of Decree 248/2026/NĐ-CP), except for changes made to comply with tax law or in line with the duration of a promotion. A price adjustment does not change the fee already paid for the term of a purchased package, unless otherwise agreed.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Đối với dịch vụ cung cấp liên tục, định kỳ, người dùng có quyền ngừng sử dụng hoặc chấm dứt dịch vụ nếu không đồng ý với mức phí mới trước ngày mức phí đó có hiệu lực; việc tiếp tục sử dụng sau ngày hiệu lực được xem là chấp nhận mức phí mới.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              For continuously or periodically provided services, users may stop using or terminate the service if they do not agree to the new fee before it takes effect; continued use after the effective date is deemed acceptance of the new fee.
             </p>
           </section>
 
-          {/* Section 6: Contact */}
+          {/* Section 6 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
               6. Liên hệ
@@ -340,19 +389,28 @@ function PricingPolicy() {
               6. Contact
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Nếu bạn có câu hỏi về Chính sách Giá, vui lòng liên hệ:
+              Nếu bạn có câu hỏi về Chính sách về giá, vui lòng liên hệ:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
               If you have questions about the Pricing Policy, please contact:
             </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2">
-              <li>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
                 <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
-              <li>
+              <li className={lc(language, 'en')}>
+                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+              </li>
+              <li className={lc(language, 'vi')}>
                 <strong>Điện thoại:</strong> 0877909606
               </li>
-              <li>
+              <li className={lc(language, 'en')}>
+                <strong>Phone:</strong> 0877909606
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
+              </li>
+              <li className={lc(language, 'en')}>
                 <strong>Website:</strong> <a href="https://founderai.biz" className="text-orange-600 hover:underline">founderai.biz</a>
               </li>
             </ul>
@@ -391,10 +449,10 @@ function PricingPolicy() {
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 28/09/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from September 28, 2026.
+            This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
         <PolicyHistory language={language} lc={lc} entries={historyEntries} />
