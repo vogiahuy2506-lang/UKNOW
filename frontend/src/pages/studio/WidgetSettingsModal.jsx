@@ -143,7 +143,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         launcher_label: cfg.launcher_label,
         border_radius: cfg.border_radius,
         auto_open: cfg.auto_open,
-        chat_height: '600px',
         widget_key: chatbot.widget_key,
         // KHONG gui suggested_questions tu modal nay.
         // Truoc day gui [] -> DB bi xoa sach moi lan luu widget settings,

@@ -90,7 +90,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
       avatar_url: chatbot.avatar_url || chatbot.logo_url || '',
       system_instruction: chatbot.system_instruction || '',
       ai_model: chatbot.ai_model || 'gemini-2.5-flash',
-      temperature: chatbot.temperature || 0.7,
+      temperature: chatbot.temperature ?? 0.7,
       max_tokens: chatbot.max_tokens || 2048,
       response_style: chatbot.response_style || 'friendly',
       welcome_message: chatbot.welcome_message || chatbot.greeting_msg || '',

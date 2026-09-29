@@ -28,6 +28,8 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     maxZaloGroupCampaigns: plan.maxZaloGroupCampaigns ?? '',
     maxEmailCampaigns: plan.maxEmailCampaigns ?? '',
     maxZaloAccounts: plan.maxZaloAccounts ?? '',
+    maxWhatsappAccounts: plan.maxWhatsappAccounts ?? '',
+    maxTelegramAccounts: plan.maxTelegramAccounts ?? '',
     maxEmailAccounts: plan.maxEmailAccounts ?? '',
     maxEmailTemplates: plan.maxEmailTemplates ?? '',
     maxZaloTemplates: plan.maxZaloTemplates ?? '',

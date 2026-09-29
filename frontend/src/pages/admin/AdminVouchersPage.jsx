@@ -17,6 +17,7 @@ import { MODAL_FORM, renderModal } from '../../features/admin/plans/planUtils.js
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
 import { useI18n } from '../../i18n';
 import { getVoucherLifecycleStatus } from './voucherStatus.util.js';
+import { toInputDate } from '../../utils/voucherDate.util.js';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtDate = (d, locale = 'vi') => d ? new Date(d).toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN') : '—';
@@ -42,8 +43,6 @@ const emptyForm = {
   legacyAllCycles: false,
   legacyNoEndDate: false,
 };
-
-const toInputDate = (value) => value ? String(value).slice(0, 10) : '';
 
 const normalizeCsv = (value) => String(value || '').split(',').map((item) => item.trim()).filter(Boolean);
 
