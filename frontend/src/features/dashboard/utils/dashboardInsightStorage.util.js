@@ -255,6 +255,8 @@ export function getOrdersTrendInsightForMode(charts, mode) {
  */
 export function getChannelEngagementInsightForChannel(charts, channelId, options = {}) {
   const { forPrint = false } = options;
+  // Telegram/WhatsApp (P2) chưa có insight riêng — KHÔNG rơi về insight "Tất cả" (nói về kênh khác).
+  if (channelId === 'telegram' || channelId === 'whatsapp') return '';
   const ce = charts?.channelEngagement;
   if (ce == null) return '';
   if (typeof ce === 'string') {

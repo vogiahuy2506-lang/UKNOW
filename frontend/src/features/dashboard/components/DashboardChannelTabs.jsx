@@ -13,12 +13,15 @@ import { useI18n } from '../../../i18n';
 import { aggregateToMonthly, formatMonthAxis, formatMonthTooltip } from '../utils/timelineUtils';
 import DashboardInsightBlock from './DashboardInsightBlock';
 import DashboardRechartsLegend from './DashboardRechartsLegend';
+import { buildChartConfig, buildChannelTabs } from '../utils/channelChartConfig';
 
 const CHANNEL_TAB_STYLES = {
   gray: 'bg-gray-700 text-white border-gray-700',
   sky: 'bg-sky-500 text-white border-sky-500',
   blue: 'bg-blue-500 text-white border-blue-500',
   purple: 'bg-purple-500 text-white border-purple-500',
+  cyan: 'bg-cyan-600 text-white border-cyan-600',
+  green: 'bg-green-600 text-white border-green-600',
 };
 
 const formatAxisDate = (value) => {
@@ -65,10 +68,10 @@ const RATIO_DENOMINATOR = {
  *  Row 4 → Tải tệp  (Email only)
  */
 const TOOLTIP_METRIC_ROWS = [
-  { email: 'emailSent',      zalo: 'zaloSent',   zaloGroup: 'zaloGroupSent'  },
-  { email: 'emailOpened',    zalo: null,          zaloGroup: null             },
-  { email: 'emailClicked',   zalo: 'zaloClicks',  zaloGroup: 'zaloGroupClicks'},
-  { email: 'emailDownloads', zalo: null,          zaloGroup: null             },
+  { email: 'emailSent',      zalo: 'zaloSent',   zaloGroup: 'zaloGroupSent',   telegram: 'telegramSent', whatsapp: 'whatsappSent' },
+  { email: 'emailOpened',    zalo: null,          zaloGroup: null,              telegram: null,           whatsapp: null },
+  { email: 'emailClicked',   zalo: 'zaloClicks',  zaloGroup: 'zaloGroupClicks', telegram: null,           whatsapp: null },
+  { email: 'emailDownloads', zalo: null,          zaloGroup: null,              telegram: null,           whatsapp: null },
 ];
 
 /** Strip the " (Channel)" suffix for compact column display */
@@ -96,14 +99,17 @@ const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, 
 
   const dateLabel = getTooltipLabel(label, isMonthlyView);
 
+  // Build a lookup map: dataKey → recharts entry (value + color)
+  const dataMap = Object.fromEntries(payload.map((e) => [e.dataKey, e]));
+
+  // Telegram/WhatsApp (P2): chỉ thêm cột khi biểu đồ có đường tương ứng (khách có dữ liệu kênh đó).
   const tooltipColumns = [
     { label: labels.email || 'Email', field: 'email' },
     { label: labels.zalo || 'Zalo', field: 'zalo' },
     { label: labels.zaloGroup || 'Zalo Group', field: 'zaloGroup' },
+    ...(dataMap.telegramSent ? [{ label: labels.telegram || 'Telegram', field: 'telegram' }] : []),
+    ...(dataMap.whatsappSent ? [{ label: labels.whatsapp || 'WhatsApp', field: 'whatsapp' }] : []),
   ];
-
-  // Build a lookup map: dataKey → recharts entry (value + color)
-  const dataMap = Object.fromEntries(payload.map((e) => [e.dataKey, e]));
 
   const getSent = (denomKey) => dataMap[denomKey]?.value || 0;
 
@@ -207,68 +213,14 @@ const ChannelTooltip = ({ active, payload, label, activeChannel, isMonthlyView, 
 };
 
 /**
- * Build chart line config based on active channel.
- * Each channel shows its sent count + engagement metrics + its own order breakdown.
- *
- * @param {'all'|'email'|'zalo'|'zalo_group'} activeChannel
- * @returns {Array<{key: string, name: string, color: string}>}
- */
-const buildChartConfig = (activeChannel, t) => {
-  const sent = t ? t('sent') : 'Gửi';
-  const opened = t ? t('opened') : 'Mở';
-  const clicked = t ? t('clicked') : 'Click';
-  const downloaded = t ? t('downloaded') : 'Tải tệp';
-  const pendingOrders = t ? t('pendingOrders') : 'Đơn chờ';
-  const completedOrders = t ? t('completedOrders') : 'Đơn đặt';
-
-  if (activeChannel === 'email') {
-    return [
-      { key: 'emailSent', name: `${sent} (Email)`, color: '#06b6d4' },
-      { key: 'emailOpened', name: `${opened} (Email)`, color: '#0ea5e9' },
-      { key: 'emailClicked', name: `${clicked} (Email)`, color: '#6366f1' },
-      { key: 'emailDownloads', name: `${downloaded} (Email)`, color: '#f59e0b' },
-      { key: 'emailPendingOrders', name: `${pendingOrders} (Email)`, color: '#fb923c' },
-      { key: 'emailCompletedOrders', name: `${completedOrders} (Email)`, color: '#22c55e' },
-    ];
-  }
-  if (activeChannel === 'zalo') {
-    return [
-      { key: 'zaloSent', name: `${sent} (Zalo)`, color: '#2563eb' },
-      { key: 'zaloClicks', name: `${clicked} (Zalo)`, color: '#3b82f6' },
-      { key: 'zaloPendingOrders', name: `${pendingOrders} (Zalo)`, color: '#fb923c' },
-      { key: 'zaloCompletedOrders', name: `${completedOrders} (Zalo)`, color: '#22c55e' },
-    ];
-  }
-  if (activeChannel === 'zalo_group') {
-    return [
-      { key: 'zaloGroupSent', name: `${sent} (Zalo Group)`, color: '#7c3aed' },
-      { key: 'zaloGroupClicks', name: `${clicked} (Zalo Group)`, color: '#8b5cf6' },
-      { key: 'zaloGroupPendingOrders', name: `${pendingOrders} (Zalo Group)`, color: '#fb923c' },
-      { key: 'zaloGroupCompletedOrders', name: `${completedOrders} (Zalo Group)`, color: '#22c55e' },
-    ];
-  }
-  // All channels — show sent + engagement metrics (orders are in the dedicated chart)
-  return [
-    { key: 'emailSent', name: `${sent} (Email)`, color: '#06b6d4' },
-    { key: 'emailOpened', name: `${opened} (Email)`, color: '#0ea5e9' },
-    { key: 'emailClicked', name: `${clicked} (Email)`, color: '#6366f1' },
-    { key: 'emailDownloads', name: `${downloaded} (Email)`, color: '#f59e0b' },
-    { key: 'zaloSent', name: `${sent} (Zalo)`, color: '#2563eb' },
-    { key: 'zaloClicks', name: `${clicked} (Zalo)`, color: '#3b82f6' },
-    { key: 'zaloGroupSent', name: `${sent} (Zalo Group)`, color: '#7c3aed' },
-    { key: 'zaloGroupClicks', name: `${clicked} (Zalo Group)`, color: '#8b5cf6' },
-  ];
-};
-
-/**
  * Channel engagement chart with per-channel order breakdown.
  *
- * Tabs: Tất cả | Email | Zalo | Zalo Group
+ * Tabs: Tất cả | Email | Zalo | Zalo Group | (Telegram | WhatsApp khi có dữ liệu)
  * - "Tất cả" shows engagement metrics across all channels
  * - Each channel tab shows channel-specific metrics + that channel's order data
  *
  * @param {object}  props
- * @param {'all'|'email'|'zalo'|'zalo_group'} props.activeChannel
+ * @param {'all'|'email'|'zalo'|'zalo_group'|'telegram'|'whatsapp'} props.activeChannel
  * @param {function} props.onChangeChannel
  * @param {object}  props.analytics
  * @param {boolean} props.isMonthlyView - Aggregate to monthly + use month-year axis when true
@@ -292,7 +244,13 @@ const DashboardChannelTabs = ({
   const rawTimeline = analytics?.timeline || [];
   const timeline = isMonthlyView ? aggregateToMonthly(rawTimeline) : rawTimeline;
 
-  const chartConfig = useMemo(() => buildChartConfig(activeChannel, t), [activeChannel, t]);
+  const hasTelegram = rawTimeline.some((item) => (item.telegramSent || 0) > 0);
+  const hasWhatsapp = rawTimeline.some((item) => (item.whatsappSent || 0) > 0);
+
+  const chartConfig = useMemo(
+    () => buildChartConfig(activeChannel, t, { hasTelegram, hasWhatsapp }),
+    [activeChannel, t, hasTelegram, hasWhatsapp]
+  );
 
   const hasData = timeline.some((item) =>
     chartConfig.some((cfg) => (item[cfg.key] || 0) > 0)
@@ -303,12 +261,16 @@ const DashboardChannelTabs = ({
     email: t('emailEffectivenessOrders'),
     zalo: t('zaloEffectivenessOrders'),
     zalo_group: t('zaloGroupEffectivenessOrders'),
+    telegram: t('telegramEffectiveness'),
+    whatsapp: t('whatsappEffectiveness'),
   }[activeChannel] || '';
 
   const tooltipLabels = {
     email: t('email'),
     zalo: t('zalo'),
     zaloGroup: t('zaloGroup'),
+    telegram: t('telegram'),
+    whatsapp: t('whatsapp'),
   };
 
   return (
@@ -320,18 +282,15 @@ const DashboardChannelTabs = ({
           <p className="text-xs text-gray-400 mt-0.5">
             {activeChannel === 'all'
               ? t('selectChannelForOrders')
-              : t('interactionOrdersForChannel')}
+              : (activeChannel === 'telegram' || activeChannel === 'whatsapp')
+                ? t('sentOnlyForChannel')
+                : t('interactionOrdersForChannel')}
           </p>
         </div>
 
         {/* Channel tabs */}
         <div className="flex items-center gap-1.5 p-1 rounded-xl bg-gray-100 shrink-0">
-          {[
-            { id: 'all', label: t('all'), color: 'gray' },
-            { id: 'email', label: t('email'), color: 'sky' },
-            { id: 'zalo', label: t('zalo'), color: 'blue' },
-            { id: 'zalo_group', label: t('zaloGroup'), color: 'purple' },
-          ].map((item) => (
+          {buildChannelTabs({ hasTelegram, hasWhatsapp, activeChannel, t }).map((item) => (
             <button
               key={item.id}
               type="button"

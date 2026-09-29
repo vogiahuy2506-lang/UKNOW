@@ -426,8 +426,19 @@ const TopRunsTable = ({ runs, t }) => {
                                         <tr key={`${item.recipient}-${idx}`} className="hover:bg-gray-50/60" data-testid="failure-item-row">
                                           <td className="px-4 py-2 font-mono font-medium text-gray-900">
                                             <span className="inline-flex items-center gap-1.5">
-                                              <span className={`inline-block h-1.5 w-1.5 rounded-full ${item.channel === 'email' ? 'bg-orange-400' : 'bg-blue-500'}`} />
+                                              <span
+                                                className="inline-block h-1.5 w-1.5 rounded-full"
+                                                style={{ backgroundColor: channelColor[item.channel] || channelColor.zalo }}
+                                              />
                                               {item.recipient}
+                                              {(item.channel === 'telegram' || item.channel === 'whatsapp') && (
+                                                <span
+                                                  data-testid="failure-channel-label"
+                                                  className="rounded bg-gray-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-gray-600"
+                                                >
+                                                  {t(`userDeliveryMonitor.channel.${item.channel}`)}
+                                                </span>
+                                              )}
                                             </span>
                                           </td>
                                           <td className="px-4 py-2">

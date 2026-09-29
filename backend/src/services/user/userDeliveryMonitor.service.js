@@ -507,6 +507,10 @@ export async function getRunFailures({ userId, runId }) {
     [safeRunId]
   );
 
+  // 4. Lấy lỗi kênh adapter (Telegram/WhatsApp) — bảng riêng campaign_channel_messages (P2). Không dùng
+  // zalo_messages/email_messages nên hai truy vấn trên KHÔNG thấy các lỗi này.
+  const adapterRows = await campaignChannelMessageStatsRepository.listRunFailures({ runId: safeRunId });
+
   const zaloFailures = (zaloRows || []).map((row) => {
     const errorMsg = String(row.error || '').trim();
     const reason = row.ledger_reason
@@ -539,7 +543,20 @@ export async function getRunFailures({ userId, runId }) {
     };
   });
 
-  const allFailures = [...zaloFailures, ...emailFailures]
+  const adapterFailures = (adapterRows || []).map((row) => ({
+    channel: row.channel, // 'telegram' | 'whatsapp' — FE hiện nhãn kênh
+    recipient: row.recipient_display && row.recipient_display !== row.recipient
+      ? `${row.recipient_display} (${row.recipient})`
+      : row.recipient,
+    // ledger_reason là nhãn ổn định nhất (hard/transient/consent...); rơi về error_category rồi 'unknown'.
+    reason: row.ledger_reason || row.error_category || 'unknown',
+    error: String(row.error_message || '').trim(),
+    count: Number(row.count) || 1,
+    lastAt: row.last_at,
+    ledgerStep: row.ledger_step != null ? Number(row.ledger_step) : 0,
+  }));
+
+  const allFailures = [...zaloFailures, ...emailFailures, ...adapterFailures]
     .sort((a, b) => b.count - a.count)
     .slice(0, 200);
 

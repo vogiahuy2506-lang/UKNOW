@@ -35,6 +35,8 @@ class CampaignChannelMessageStatsRepository {
        WHERE ccm.created_at >= NOW() - ($1::int * INTERVAL '1 day')
          AND ccm.status IN ('sent', 'failed')
          AND NOT ccm.is_preview
+         -- P2: lần thử transient ĐÃ được thử lại không phải "tin lỗi" (người nhận có thể vẫn nhận được ở lần sau).
+         AND ccm.error_category IS DISTINCT FROM 'transient_retry'
          ${ownerClause}
        GROUP BY ccm.channel, ccm.status`,
       params
@@ -70,6 +72,55 @@ class CampaignChannelMessageStatsRepository {
        GROUP BY date_trunc('hour', ccm.sent_at), ccm.channel
        ORDER BY date_trunc('hour', ccm.sent_at) ASC`,
       params
+    );
+  }
+
+  /**
+   * P2 — lỗi TỪNG người nhận của một lượt chạy (kênh adapter), cùng hình dạng dòng với phần Zalo/Email của
+   * `getRunFailures` (userDeliveryMonitor.service.js). Người gọi PHẢI đã xác thực quyền sở hữu run.
+   *
+   * Chỉ tính lỗi CUỐI CÙNG của mỗi người/bước: bỏ lần thử transient đã được thử lại (`transient_retry`, xem
+   * campaignChannelRunner.service.js — bảng không có cột meta nên nhãn nằm ở error_category) và bỏ người/bước
+   * ĐÃ gửi được ở một dòng `sent` khác cùng run (lỗi rate_limit/auth từng dừng node rồi resume gửi thành công).
+   *
+   * @param {{runId: number}} input
+   * @returns {Promise<Array<{channel: string, recipient: string, recipient_display: string|null, error_category: string|null, error_message: string|null, count: number, last_at: Date, ledger_reason: string|null, ledger_step: number|null}>>}
+   */
+  async listRunFailures({ runId }) {
+    return deliveryMonitorRepository.safeQuery(
+      `SELECT
+         ccm.channel,
+         ccm.recipient_key AS recipient,
+         MAX(ccm.recipient_display) AS recipient_display,
+         ccm.error_category,
+         LEFT(ccm.error_message, 300) AS error_message,
+         COUNT(*)::int AS count,
+         MAX(COALESCE(ccm.sent_at, ccm.created_at)) AS last_at,
+         crrs.meta->>'lastFailureReason' AS ledger_reason,
+         crrs.last_completed_step AS ledger_step
+       FROM campaign_channel_messages ccm
+       LEFT JOIN campaign_run_recipient_steps crrs
+         ON crrs.id_run = ccm.id_run
+        AND LOWER(TRIM(crrs.recipient_key)) = LOWER(TRIM(ccm.recipient_key))
+        AND crrs.channel = ccm.channel
+       WHERE ccm.id_run = $1
+         AND ccm.status = 'failed'
+         AND NOT ccm.is_preview
+         AND ccm.error_category IS DISTINCT FROM 'transient_retry'
+         AND NOT EXISTS (
+           SELECT 1 FROM campaign_channel_messages sent_row
+           WHERE sent_row.id_run = ccm.id_run
+             AND sent_row.id_node IS NOT DISTINCT FROM ccm.id_node
+             AND sent_row.channel = ccm.channel
+             AND sent_row.recipient_key = ccm.recipient_key
+             AND sent_row.step_index = ccm.step_index
+             AND sent_row.status = 'sent'
+         )
+       GROUP BY ccm.channel, ccm.recipient_key, ccm.error_category, LEFT(ccm.error_message, 300),
+                crrs.meta->>'lastFailureReason', crrs.last_completed_step
+       ORDER BY COUNT(*) DESC
+       LIMIT 200`,
+      [runId]
     );
   }
 

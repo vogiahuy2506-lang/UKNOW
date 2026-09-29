@@ -243,6 +243,38 @@ describe('UserDeliveryMonitorPage — PR-2 failure details & recipientAudit', ()
     });
   });
 
+  // PLAN_TG_WA_DAY_DU_2026-09-29, P2 bước 4 — lỗi từng người nhận của Telegram/WhatsApp có nhãn kênh
+  // (Zalo/Email giữ nguyên, KHÔNG có nhãn kênh phụ).
+  it('lỗi Telegram/WhatsApp hiện nhãn kênh + lý do tiếng Việt; Zalo không có nhãn kênh', async () => {
+    userDeliveryMonitorApiService.getRunFailures.mockResolvedValue({
+      data: {
+        data: {
+          runId: 406,
+          recipientAudit: null,
+          failures: [
+            { channel: 'zalo', recipient: '0388180856', reason: 'invalid_parameter', error: 'x', count: 1, lastAt: '2026-09-13T15:19:21.000Z', ledgerStep: 0 },
+            { channel: 'whatsapp', recipient: '84900000001', reason: 'hard', error: 'Số không dùng WhatsApp', count: 1, lastAt: '2026-09-13T15:20:00.000Z', ledgerStep: 1 },
+            { channel: 'telegram', recipient: '4001', reason: 'transient', error: '[lần 3/3] sendText timeout', count: 1, lastAt: '2026-09-13T15:21:00.000Z', ledgerStep: 1 },
+          ],
+        },
+      },
+    });
+
+    render(<UserDeliveryMonitorPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /\/ 2 lỗi/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /\/ 2 lỗi/i }));
+
+    await waitFor(() => {
+      expect(screen.getAllByTestId('failure-item-row')).toHaveLength(3);
+    });
+    const labels = screen.getAllByTestId('failure-channel-label').map((el) => el.textContent);
+    expect(labels).toEqual(['WhatsApp', 'Telegram']); // chỉ hai kênh adapter có nhãn, Zalo thì không
+    expect(screen.getByText('Không gửi được cho người này')).toBeInTheDocument();
+    expect(screen.getByText('Lỗi tạm thời (đã thử lại)')).toBeInTheDocument();
+  });
+
   it('khi API getRunFailures lỗi → hiện toast error', async () => {
     userDeliveryMonitorApiService.getRunFailures.mockRejectedValue({
       response: { data: { message: 'Lỗi server khi lấy chi tiết' } },
