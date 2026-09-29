@@ -41,3 +41,16 @@ export const CLOUDFLARE_IP_RANGES = [...CLOUDFLARE_IPV4_RANGES, ...CLOUDFLARE_IP
  * `true` (tin mọi chặng — kẻ gọi thẳng :5001 tự đặt được IP).
  */
 export const TRUSTED_PROXIES = ['loopback', 'linklocal', 'uniquelocal', ...CLOUDFLARE_IP_RANGES];
+
+/**
+ * Bật `trust proxy` cho app (production, hoặc TRUST_PROXY=true khi thử cục bộ). Tách hàm để spec thử trên một app
+ * express trống, không phải nạp cả createApp() (mọi route, pool DB, cache chạy nền).
+ *
+ * @param {import('express').Express} app
+ * @param {NodeJS.ProcessEnv} [env]
+ */
+export function applyTrustProxy(app, env = process.env) {
+  if (env.NODE_ENV === 'production' || env.TRUST_PROXY === 'true') {
+    app.set('trust proxy', TRUSTED_PROXIES);
+  }
+}

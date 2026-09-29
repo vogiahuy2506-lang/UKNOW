@@ -100,7 +100,7 @@ import { createDynamicCorsMiddleware, publicCorsMiddleware } from './middleware/
 import landingPagePublicController from './controllers/landingPagePublic.controller.js';
 import chatbotRepository from './repositories/ai/chatbot.repository.js';
 import { getRuntimeReadiness } from './utils/runtimeReadiness.util.js';
-import { TRUSTED_PROXIES } from './config/cloudflareIpRanges.js';
+import { applyTrustProxy } from './config/cloudflareIpRanges.js';
 
 /**
  * Khởi tạo Express app (không listen).
@@ -113,9 +113,7 @@ export function createApp() {
 
   // VPS/nginx + Cloudflare gửi X-Forwarded-For nhiều chặng. Chỉ tin các chặng nội bộ và dải IP
   // Cloudflare; `1` sẽ làm req.ip = IP máy Cloudflare, `true` cho kẻ gọi thẳng :5001 giả IP.
-  if (process.env.NODE_ENV === 'production' || process.env.TRUST_PROXY === 'true') {
-    app.set('trust proxy', TRUSTED_PROXIES);
-  }
+  applyTrustProxy(app);
 
   // Dynamic CORS - allows verified domains and known subdomains
   const dynamicCors = createDynamicCorsMiddleware();
