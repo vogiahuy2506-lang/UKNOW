@@ -314,6 +314,9 @@ export default function DeployTab({
 
 /* ─── Modal riêng cho từng dạng nhúng ───────────────────────────────────── */
 
+// Chiều cao mã nhúng iFrame theo embed_size (Giao diện Widget). Khớp SIZES trong WidgetSettingsModal.
+const EMBED_HEIGHTS = { small: 480, medium: 600, large: 760 };
+
 function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
   const [copied, setCopied] = useState(false);
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
@@ -328,10 +331,11 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
 </script>
 <script src="${baseUrl}/widget.js" defer></script>`;
 
+  const iframeHeight = EMBED_HEIGHTS[chatbot.embed_size] || EMBED_HEIGHTS.medium;
   const iframeCode = `<iframe
   src="${baseUrl}/chat/${chatbot.id}"
   width="100%"
-  height="600"
+  height="${iframeHeight}"
   style="border:none;border-radius:12px;"
   title="${chatbot.name}"
 ></iframe>`;
@@ -438,7 +442,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
               <HiOutlineColorSwatch className="w-4 h-4 text-primary-600 mt-0.5 shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-slate-700">
-                  Bạn có thể tuỳ chỉnh giao diện riêng cho dạng nhúng này.
+                  Bạn có thể tuỳ chỉnh giao diện nhúng của chatbot.
                 </p>
               </div>
               <button

@@ -72,6 +72,8 @@ export default function PublicChatbotPage() {
   const showAvatar = chatbot?.show_avatar !== false;
   const suggestedQuestions = chatbot?.suggested_questions || [];
   const allowAttachments = chatbot?.allow_attachments === true;
+  // Áp cho cả iFrame và Public Link (cùng trang /chat/:id, cùng cột embed_show_header).
+  const showHeader = chatbot?.embed_show_header !== false;
 
   useEffect(() => {
     loadChatbot();
@@ -302,7 +304,9 @@ export default function PublicChatbotPage() {
 
   return (
     <div className="h-screen flex flex-col" style={{ backgroundColor, color: textColor }}>
+      {showHeader && (
       <div
+        data-testid="public-chat-header"
         className="shadow-lg"
         style={{
           background: `linear-gradient(135deg, ${primaryColor}, ${accentColor})`,
@@ -328,6 +332,7 @@ export default function PublicChatbotPage() {
           </div>
         </div>
       </div>
+      )}
 
       {suggestedQuestions.length > 0 && messages.length === 1 && (
         <div className="max-w-lg mx-auto w-full px-4 pt-4">

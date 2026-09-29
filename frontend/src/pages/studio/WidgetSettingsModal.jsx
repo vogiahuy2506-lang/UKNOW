@@ -25,9 +25,10 @@ const POSITIONS = [
 ];
 
 const SIZES = [
-  { key: 'small', label: 'Nhỏ', w: 320, h: 480 },
-  { key: 'medium', label: 'Vừa', w: 380, h: 560 },
-  { key: 'large', label: 'Lớn', w: 440, h: 640 },
+  // h = chiều cao (px) ghi vào mã nhúng iFrame (DeployTab EMBED_HEIGHTS); chiều rộng luôn 100%.
+  { key: 'small', label: 'Nhỏ', h: 480 },
+  { key: 'medium', label: 'Vừa', h: 600 },
+  { key: 'large', label: 'Lớn', h: 760 },
 ];
 
 function Toggle({ checked, onChange }) {
@@ -81,19 +82,17 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
     accent_color: '#f19342',
     position: 'bottom-right',
     show_avatar: true,
-    show_header: true,        // used by iframe & public_link
+    embed_show_header: true,  // used by iframe & public_link
     welcome_message: '',
-    auto_open: false,         // used by script
+    widget_auto_open: false,  // used by script
     // Cố ý KHÔNG điền sẵn — rỗng = widget chỉ hiện nút tròn như hôm nay. Điền sẵn ở
     // đây sẽ tự ghi nhãn vào DB ở lần lưu bất kỳ (kể cả chỉ đổi màu), tự bật viên
     // nhãn trên site khách mà không ai yêu cầu. Xem quyết định 2.1 trong plan.
     launcher_label: '', // used by script
     border_radius: 16,
-    show_suggested: true,     // used by public_link
-    require_name: false,      // used by public_link
   });
 
-  // ── iFrame / public_link only fields (no DB column — read-only preview) ─
+  // ── iFrame / public_link: chiều cao mã nhúng (custom_chatbots.embed_size) ─
   const [embedSize, setEmbedSize] = useState('medium');
 
   useEffect(() => {
@@ -102,23 +101,20 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
       // Logo: avatar_url cua Setting Chatbot la NGUON CHINH duy nhat.
       // Widget settings khong luu logo nua — luon lay tu day de 3 dang
       // deploy (script / iframe / public link) dong bo logo voi Setting Chatbot.
-      const ws = chatbot.widget_settings || {};
       setCfg({
-        primary_color: ws.primary_color || chatbot.primary_color || '#ee7518',
-        background_color: ws.background_color || chatbot.background_color || '#ffffff',
-        text_color: ws.text_color || chatbot.text_color || '#1f2937',
-        accent_color: ws.accent_color || chatbot.accent_color || '#f19342',
-        position: ws.position || chatbot.position || 'bottom-right',
-        show_avatar: ws.show_avatar !== false && chatbot.show_avatar !== false,
-        show_header: ws.show_header !== false,
-        welcome_message: ws.welcome_message || chatbot.welcome_message || '',
-        auto_open: ws.auto_open === true,
+        primary_color: chatbot.primary_color || '#ee7518',
+        background_color: chatbot.background_color || '#ffffff',
+        text_color: chatbot.text_color || '#1f2937',
+        accent_color: chatbot.accent_color || '#f19342',
+        position: chatbot.position || 'bottom-right',
+        show_avatar: chatbot.show_avatar !== false,
+        embed_show_header: chatbot.embed_show_header !== false,
+        welcome_message: chatbot.welcome_message || '',
+        widget_auto_open: chatbot.widget_auto_open === true,
         launcher_label: chatbot.launcher_label ?? '',
-        border_radius: ws.border_radius ?? chatbot.border_radius ?? 16,
-        show_suggested: ws.show_suggested !== false,
-        require_name: ws.require_name === true,
+        border_radius: chatbot.border_radius ?? 16,
       });
-      setEmbedSize(ws.size || 'medium');
+      setEmbedSize(SIZES.some((sz) => sz.key === chatbot.embed_size) ? chatbot.embed_size : 'medium');
     }
   }, [open, chatbot, embedKind]);
 
@@ -138,22 +134,17 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         // KHONG gui logo_url / avatar_url: logo luon lay tu avatar_url cua
         // Setting Chatbot. Widget chi quan ly mau/position/avatar toggle.
         show_avatar: cfg.show_avatar,
-        show_header: cfg.show_header,
+        embed_show_header: cfg.embed_show_header,
         welcome_message: cfg.welcome_message,
         launcher_label: cfg.launcher_label,
         border_radius: cfg.border_radius,
-        auto_open: cfg.auto_open,
+        widget_auto_open: cfg.widget_auto_open,
         widget_key: chatbot.widget_key,
         // KHONG gui suggested_questions tu modal nay.
         // Truoc day gui [] -> DB bi xoa sach moi lan luu widget settings,
         // lam mat cau hoi goi y da thiet lap trong ChatbotConfigModal.
-        // Persist size even though the UI only uses it as a preview hint
-        // (avoids a second silent round-trip on next open).
-        size: embedSize,
-        show_suggested: cfg.show_suggested,
-        require_name: cfg.require_name,
-        // Remove dead fields: iframe_settings and public_link_settings had no
-        // DB column so backend silently dropped them. All UI now shares cfg.
+        // Chieu cao ma nhung iFrame (DeployTab doc lai tu cot nay).
+        embed_size: embedSize,
       };
       const res = await chatbotApi.updateChatbot(chatbot.id, payload);
       if (res.success && res.data) {
@@ -191,7 +182,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                 Giao diện Widget
               </h2>
               <p className="text-xs text-slate-500 truncate">
-                Tuỳ chỉnh cho từng dạng nhúng — {chatbot.name}
+                Áp dụng cho mọi dạng nhúng — {chatbot.name}
               </p>
             </div>
           </div>
@@ -406,9 +397,9 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Tự động mở chat</p>
-                        <p className="text-xs text-slate-400">Mở widget sau 2s khi tải trang</p>
+                        <p className="text-xs text-slate-400">Mở widget sau 2s, mỗi phiên một lần (không tự mở trên màn hình hẹp)</p>
                       </div>
-                      <Toggle checked={cfg.auto_open} onChange={(v) => update({ auto_open: v })} />
+                      <Toggle checked={cfg.widget_auto_open} onChange={(v) => update({ widget_auto_open: v })} />
                     </div>
                   </section>
                 </>
@@ -433,7 +424,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                           }`}
                         >
                           {s.label}
-                          <p className="text-[10px] text-slate-400 mt-0.5">{s.w}×{s.h}</p>
+                          <p className="text-[10px] text-slate-400 mt-0.5">Cao {s.h}px</p>
                         </button>
                       ))}
                     </div>
@@ -444,9 +435,9 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     <div className="flex items-center justify-between">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Hiển thị header</p>
-                        <p className="text-xs text-slate-400">Tiêu đề + nút đóng</p>
+                        <p className="text-xs text-slate-400">Thanh tiêu đề (tên + avatar) trên trang chat</p>
                       </div>
-                      <Toggle checked={cfg.show_header} onChange={(v) => update({ show_header: v })} />
+                      <Toggle checked={cfg.embed_show_header} onChange={(v) => update({ embed_show_header: v })} />
                     </div>
                     <div className="flex items-center justify-between pt-3 border-t border-slate-100">
                       <div>
@@ -455,24 +446,6 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       </div>
                       <Toggle checked={cfg.show_avatar} onChange={(v) => update({ show_avatar: v })} />
                     </div>
-                    {activeTab === 'public_link' && (
-                      <>
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                          <div>
-                            <p className="text-sm font-medium text-slate-700">Câu hỏi gợi ý</p>
-                            <p className="text-xs text-slate-400">Hiện các câu hỏi mẫu khi mở</p>
-                          </div>
-                          <Toggle checked={cfg.show_suggested} onChange={(v) => update({ show_suggested: v })} />
-                        </div>
-                        <div className="flex items-center justify-between pt-3 border-t border-slate-100">
-                          <div>
-                            <p className="text-sm font-medium text-slate-700">Yêu cầu nhập tên</p>
-                            <p className="text-xs text-slate-400">Hỏi tên trước khi chat</p>
-                          </div>
-                          <Toggle checked={cfg.require_name} onChange={(v) => update({ require_name: v })} />
-                        </div>
-                      </>
-                    )}
                   </section>
                 </>
               )}
@@ -483,7 +456,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0">
           <p className="text-xs text-slate-500 hidden md:block">
-            Tuỳ chỉnh áp dụng riêng cho dạng <strong>{activeTabMeta.label}</strong>
+            Cấu hình áp dụng cho cả 3 dạng nhúng: Chat Widget, iFrame và Public Link
           </p>
           <div className="flex items-center gap-2 ml-auto">
             <button
@@ -598,7 +571,7 @@ function IframePreview({ cfg, chatbot }) {
         className="mx-auto overflow-hidden border border-slate-200"
         style={{ width: sz.w, height: sz.h, background: cfg.background_color, color: cfg.text_color, borderRadius: cfg.border_radius }}
       >
-        {cfg.show_header && (
+        {cfg.embed_show_header && (
           <div
             className="px-2 py-1.5 text-[10px] font-semibold text-white flex items-center gap-1"
             style={{ background: cfg.primary_color }}

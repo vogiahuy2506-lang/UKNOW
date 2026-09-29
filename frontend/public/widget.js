@@ -43,6 +43,10 @@
   let ALLOW_ATTACHMENTS = false;
   // Nhãn kêu gọi mở chat cạnh bong bóng — rỗng = tắt (chỉ hiện nút tròn như hôm nay).
   let LAUNCHER_LABEL = config.launcherLabel || '';
+  // Tự mở khung chat sau vài giây (chủ shop bật ở Giao diện Widget). Chỉ đọc từ API config.
+  let AUTO_OPEN = false;
+  const AUTO_OPEN_DELAY_MS = 2000;
+  const AUTO_OPEN_MIN_WIDTH = 640; // màn hẹp (điện thoại): không tự mở, tránh che nội dung
 
   // Bộ nhớ an toàn. Landing page của Founder AI hiển thị trong iframe sandbox KHÔNG có
   // allow-same-origin (LpRendererPage.jsx, LpRendererByHost.jsx — cố ý, để HTML khách tự viết
@@ -121,6 +125,7 @@
         // '' hợp lệ (tắt nhãn) nên không dùng `||` — chỉ giữ giá trị cũ khi server
         // không trả field này (ví dụ config cũ chưa có cột).
         LAUNCHER_LABEL = typeof c.launcherLabel === 'string' ? c.launcherLabel : LAUNCHER_LABEL;
+        AUTO_OPEN = c.autoOpen === true;
         configLoaded = true;
       }
     } catch (err) {
@@ -405,6 +410,30 @@
     }
   }
 
+  // Tự mở khung chat: mỗi PHIÊN trình duyệt đúng 1 lần (cờ trong sessionStorage).
+  // Landing sandbox (iframe không allow-same-origin) ném SecurityError khi chạm sessionStorage —
+  // ở đó KHÔNG tự mở, vì không nhớ được đã mở thì sẽ mở lại mỗi lần tải trang. Không dùng
+  // memoryStore như localStorage: bộ nhớ trang mất khi tải lại nên không chứng minh được "1 lần/phiên".
+  function maybeAutoOpen() {
+    if (!AUTO_OPEN) return;
+    if (window.innerWidth < AUTO_OPEN_MIN_WIDTH) return;
+    const flagKey = 'uknow_autoopen_' + WIDGET_KEY;
+    try {
+      if (window.sessionStorage.getItem(flagKey)) return;
+    } catch (err) {
+      return;
+    }
+    setTimeout(function () {
+      if (isOpen) return; // khách đã tự mở trong 2 giây đầu
+      try {
+        window.sessionStorage.setItem(flagKey, '1');
+      } catch (err) {
+        return;
+      }
+      toggleChat();
+    }, AUTO_OPEN_DELAY_MS);
+  }
+
   /**
    * Render text with clickable links safely using DOM APIs (no innerHTML).
    * Logic synchronized with frontend/src/utils/renderTextWithLinks.jsx.
@@ -572,6 +601,7 @@
   async function init() {
     await loadConfig();
     buildWidget();
+    maybeAutoOpen();
   }
 
   if (document.readyState === 'loading') {
