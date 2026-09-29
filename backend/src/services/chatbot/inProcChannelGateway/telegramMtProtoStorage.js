@@ -525,11 +525,17 @@ export function extractSerializedState(storage) {
   const peersState = storage.driver.getState('peers', () => ({}));
   const refMessagesState = storage.driver.getState('refMessages', () => ({}));
 
-  const kv = kvState instanceof Map ? Object.fromEntries(kvState) : kvState || {};
-  return {
-    kv: serialiseValue(kv),
-    authKeys: serialiseValue(authKeysState),
-    peers: serialiseValue(peersState),
-    refMessages: serialiseValue(refMessagesState),
+  // Dùng CHUNG bộ serialise với PostgresBackedDriver.save() — đúng dạng `load()` đọc ({ permanent, temp },
+  // peers.entities…). Bản cũ đưa thẳng state (object chứa các Map) vào `serialiseValue`: Map → `{}` rỗng →
+  // KHOÁ ĐĂNG NHẬP MẤT ngay lần lưu đầu sau QR; phiên chỉ sống trong RAM tới lần evict/khởi động lại (sự cố 29/09).
+  const blob = {
+    kv: kvState instanceof Map ? serializeMap(kvState) : serialiseValue(kvState || {}),
+    authKeys: serializeAuthKeys(authKeysState),
+    peers: serializePeers(peersState),
+    refMessages: serializeRefMessages(refMessagesState),
   };
+  for (const key of Object.keys(blob)) {
+    if (blob[key] === null) delete blob[key];
+  }
+  return blob;
 }

@@ -321,6 +321,37 @@ describe('InMemoryTelegramStorage (QR login path)', () => {
     expect(() => JSON.parse(json)).not.toThrow();
   });
 
+  // Sự cố 29/09: sau QR, blob lưu `authKeys: { authKeys:{}, authKeysTemp:{}, … }` (Map → {}) — khoá đăng nhập mất,
+  // phiên chết ở lần evict/khởi động lại kế tiếp. Ca trên chỉ kiểm "ra JSON được" nên không lộ.
+  it('extractSerializedState keeps the auth key: the post-QR blob reloads authKeys + peers through the real crypto boundary', async () => {
+    const s = new InMemoryTelegramStorage();
+    await s.kv.set('dc_main', Buffer.from([9, 9]));
+    await s.authKeys.set(2, Buffer.from('perm-key'));
+    s.peers.store({
+      id: 555,
+      accessHash: '123',
+      isMin: false,
+      usernames: ['alice'],
+      updated: Math.floor(Date.now() / 1000),
+      complete: Buffer.from([0xde, 0xad]),
+    });
+
+    const blob = extractSerializedState(s);
+    expect(Object.keys(blob.authKeys.permanent)).toEqual(['2']);
+
+    const stored = JSON.parse(JSON.stringify(encryptChannelSessionBlob(blob)));
+    const repo = {
+      loadSessionState: jest.fn(async () => decryptChannelSessionBlob(stored)),
+      saveSessionState: jest.fn(async () => ({})),
+    };
+    const fresh = new PostgresBackedTelegramStorage({ telegramUserId: 888, repo });
+    await fresh.driver.load();
+    expect(Buffer.from(await fresh.authKeys.get(2)).toString()).toBe('perm-key');
+    const peer = await fresh.peers.getById(555);
+    expect(peer).not.toBeNull();
+    expect(Array.from(peer.complete)).toEqual([0xde, 0xad]);
+  });
+
   it('extractSerializedState returns null when given a non-driver object', () => {
     // Defensive: nếu ai đó pass storage sai type, helper phải trả null
     // để caller fallback về logInfo thay vì throw.
