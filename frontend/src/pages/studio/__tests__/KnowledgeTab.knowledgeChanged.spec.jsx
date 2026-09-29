@@ -45,4 +45,14 @@ describe('KnowledgeTab - phat studio:knowledge-changed', () => {
 
     await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 2 }));
   });
+
+  it('khong truyen initialDocuments -> chi tai tai lieu MOT lan (mac dinh la mang co dinh)', async () => {
+    chatbotApi.listCustomChatDocuments.mockResolvedValue({ data: { documents: [] } });
+
+    render(<KnowledgeTab chatbot={CHATBOT} />);
+    await waitFor(() => expect(chatbotApi.listCustomChatDocuments).toHaveBeenCalled());
+    // Mac dinh `= []` tao mang moi moi lan render -> effect tai lai vo han; trong 300ms se goi hang chuc lan.
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(chatbotApi.listCustomChatDocuments).toHaveBeenCalledTimes(1);
+  });
 });

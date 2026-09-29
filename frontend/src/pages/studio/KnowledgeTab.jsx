@@ -28,6 +28,10 @@ const ALLOWED_FORMATS_LABEL = [...new Set(
     })
 )].join(', ');
 const MAX_FILE_MB = 100;
+// Mặc định PHẢI là một mảng cố định. Viết `initialDocuments = []` ở tham số thì mỗi lần render có mảng
+// mới → effect tải tài liệu (deps có `initialDocuments`) chạy lại mãi: gọi API vô hạn, 100% CPU.
+// 29/09/2026 một spec thiếu prop này đã treo vitest >10 phút.
+const NO_INITIAL_DOCUMENTS = [];
 
 function formatBytes(bytes) {
   if (!bytes) return '0 B';
@@ -43,7 +47,7 @@ function formatDate(dateStr) {
   return date.toLocaleDateString('vi-VN', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
-export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocuments = [] }) {
+export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocuments = NO_INITIAL_DOCUMENTS }) {
   const [documents, setDocuments] = useState(initialDocuments);
   const [showUpload, setShowUpload] = useState(false);
   const [showText, setShowText] = useState(false);
