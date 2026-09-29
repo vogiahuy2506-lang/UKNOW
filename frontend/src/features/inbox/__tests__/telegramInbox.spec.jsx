@@ -38,9 +38,9 @@ describe('Hộp thư — kênh Telegram (P1 PLAN_TG_WA_DAY_DU)', () => {
     expect(getExternalChannelName('abc')).toBe('abc');
   });
 
-  it('Telegram và WhatsApp QR không hỗ trợ tệp đính kèm; kênh khác vẫn có', () => {
-    expect(channelSupportsInboxAttachments('telegram')).toBe(false);
-    expect(channelSupportsInboxAttachments('whatsapp_baileys')).toBe(false);
+  it('P5: Telegram và WhatsApp QR ĐÃ hỗ trợ tệp đính kèm (như các kênh khác)', () => {
+    expect(channelSupportsInboxAttachments('telegram')).toBe(true);
+    expect(channelSupportsInboxAttachments('whatsapp_baileys')).toBe(true);
     expect(channelSupportsInboxAttachments('zalo_oa')).toBe(true);
     expect(channelSupportsInboxAttachments('zalo_personal')).toBe(true);
     expect(channelSupportsInboxAttachments(undefined)).toBe(true);

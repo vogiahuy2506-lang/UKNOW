@@ -98,3 +98,25 @@ describe('telegram.adapter.sendReply — dinh kem (P5)', () => {
     expect(result).toMatchObject({ success: true, messageId: 101 });
   });
 });
+
+describe('telegram.adapter.parseWebhookEvent — media chiều vào (P5)', () => {
+  const base = { telegram_user_id: 9999, sender_id: 8888, chat_id: 7777, message_id: 12, text: '' };
+
+  it('nhận media photo/document (chỉ metadata), chuẩn hoá kiểu', () => {
+    expect(adapter.parseWebhookEvent({ ...base, media: { kind: 'photo', fileName: null, mimeType: 'image/jpeg', size: null } }).media)
+      .toEqual({ kind: 'photo', fileName: null, mimeType: 'image/jpeg', size: null });
+    expect(adapter.parseWebhookEvent({ ...base, media: { kind: 'document', fileName: 'a.pdf', mimeType: 'application/pdf', size: '2048' } }).media)
+      .toEqual({ kind: 'document', fileName: 'a.pdf', mimeType: 'application/pdf', size: 2048 });
+  });
+
+  it('kiểu lạ (sticker/voice/...) hoặc thiếu -> media null (bỏ như cũ)', () => {
+    expect(adapter.parseWebhookEvent({ ...base, media: { kind: 'sticker' } }).media).toBeNull();
+    expect(adapter.parseWebhookEvent({ ...base, media: 'photo' }).media).toBeNull();
+    expect(adapter.parseWebhookEvent(base).media).toBeNull();
+  });
+
+  it('không làm mất các trường cũ (messageId, chatId, isOutgoing)', () => {
+    const parsed = adapter.parseWebhookEvent({ ...base, is_outgoing: true, media: { kind: 'photo' } });
+    expect(parsed).toMatchObject({ messageId: 12, chatId: '7777', senderId: '8888', isOutgoing: true });
+  });
+});

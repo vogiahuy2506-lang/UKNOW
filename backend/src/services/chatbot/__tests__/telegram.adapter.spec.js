@@ -83,6 +83,8 @@ describe('telegram.adapter', () => {
         // Bug #3 fix: surface messageId for InboundReplyDebounceService dedupe.
         messageId: 100,
         isOutgoing: false,
+        // P5: tin chữ thuần không có media (null) — anh/tai lieu khach gui co spec rieng (telegram.adapter.media.spec.js).
+        media: null,
       });
     });
 

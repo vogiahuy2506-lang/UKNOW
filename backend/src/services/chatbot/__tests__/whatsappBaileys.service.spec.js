@@ -81,3 +81,15 @@ describe('checkNumberExists / interpretOnWhatsAppResult (W4a)', () => {
     expect(service.interpretOnWhatsAppResult(undefined)).toBeNull();
   });
 });
+
+describe('sendImage / downloadInboundMedia (P5)', () => {
+  it('sendImage: phiên không tồn tại -> ném "is not connected" (runner/Hộp thư phân loại auth)', async () => {
+    await expect(service.sendImage('99-none', '84912345678', Buffer.from('x'), 'image/jpeg', 'cap'))
+      .rejects.toThrow('is not connected');
+  });
+
+  it('downloadInboundMedia: tin không phải media -> ném (người gọi bắt và ghi lý do), không trả buffer rỗng im lặng', async () => {
+    await expect(service.downloadInboundMedia('99-none', { key: { id: 'x' }, message: { conversation: 'chữ' } }))
+      .rejects.toBeDefined();
+  });
+});

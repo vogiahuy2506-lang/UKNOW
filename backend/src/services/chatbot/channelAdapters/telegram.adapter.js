@@ -109,8 +109,21 @@ class TelegramPersonalAdapter {
     const text = body.text || body.message || '';
     const senderId = body.sender_id != null ? String(body.sender_id) : null;
     const senderName = body.sender_name || null;
+    // P5: anh/tai lieu khach gui (chi metadata; byte tai sau bang gateway.downloadMedia). Chi 'photo' | 'document'.
+    const rawMedia = body.media && typeof body.media === 'object' ? body.media : null;
+    const media = rawMedia && (rawMedia.kind === 'photo' || rawMedia.kind === 'document')
+      ? {
+        kind: rawMedia.kind,
+        fileName: rawMedia.fileName != null ? String(rawMedia.fileName) : null,
+        mimeType: rawMedia.mimeType != null ? String(rawMedia.mimeType) : null,
+        size: rawMedia.size != null && rawMedia.size !== '' && Number.isFinite(Number(rawMedia.size))
+          ? Number(rawMedia.size)
+          : null,
+      }
+      : null;
     return {
       event: 'message',
+      media,
       message: text,
       senderId,
       senderName,

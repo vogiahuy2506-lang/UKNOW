@@ -10,8 +10,6 @@ import whatsappAdapter from './whatsapp.adapter.js';
  * nên phải tra session key + tách số điện thoại rồi mới gọi adapter gửi thật.
  */
 
-export const ATTACHMENTS_UNSUPPORTED_ERROR = 'Hộp thư WhatsApp chưa gửi được tệp đính kèm';
-
 /** Số điện thoại = phần cuối của `baileys:<sessionKey>:<chatbotId>:<phone>`. */
 export function extractPhoneFromCompositeExternalId(externalId) {
   const parts = String(externalId || '').split(':');
@@ -20,9 +18,6 @@ export function extractPhoneFromCompositeExternalId(externalId) {
 
 class WhatsAppBaileysInboxAdapter {
   async sendReply({ channelId, externalId, message, attachments, userId }) {
-    if (Array.isArray(attachments) && attachments.length > 0) {
-      return { success: false, error: ATTACHMENTS_UNSUPPORTED_ERROR, provider: 'baileys' };
-    }
     const phone = extractPhoneFromCompositeExternalId(externalId);
     if (!phone) {
       return { success: false, error: 'Không xác định được số WhatsApp của khách', provider: 'baileys' };
@@ -31,7 +26,8 @@ class WhatsAppBaileysInboxAdapter {
     if (!sessionKey) {
       return { success: false, error: 'Không tìm thấy tài khoản WhatsApp của hội thoại này', provider: 'baileys' };
     }
-    return whatsappAdapter.sendReply({ channelId: sessionKey, externalId: phone, message });
+    // P5: tep dinh kem (khoa kho chat cua chu) — whatsapp.adapter loc theo chu + gui text -> anh -> tai lieu.
+    return whatsappAdapter.sendReply({ channelId: sessionKey, externalId: phone, message, attachments, userId });
   }
 }
 

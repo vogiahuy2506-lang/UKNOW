@@ -3,11 +3,12 @@
  */
 
 /**
- * Kênh Hộp thư CHƯA gửi được tệp đính kèm (adapter backend trả lỗi) — ẩn nút đính kèm
- * để khách hàng không bấm rồi mới thấy lỗi. Giữ đồng bộ với `telegramInbox.adapter.js` /
- * `whatsappBaileysInbox.adapter.js` (ATTACHMENTS_UNSUPPORTED_ERROR).
+ * Kênh Hộp thư CHƯA gửi được tệp đính kèm — ẩn nút đính kèm để khách hàng không bấm rồi mới thấy lỗi.
+ * P5 (PLAN_TG_WA_DAY_DU): Telegram và WhatsApp QR đã gửi được ảnh/tài liệu (`telegramInbox.adapter.js` /
+ * `whatsappBaileysInbox.adapter.js` không còn trả ATTACHMENTS_UNSUPPORTED_ERROR) nên tập này hiện RỖNG;
+ * giữ lại hằng + hàm để kênh mới chưa hỗ trợ tệp chỉ cần thêm mã vào đây.
  */
-export const INBOX_ATTACHMENT_UNSUPPORTED_CHANNELS = new Set(['telegram', 'whatsapp_baileys']);
+export const INBOX_ATTACHMENT_UNSUPPORTED_CHANNELS = new Set([]);
 
 export const channelSupportsInboxAttachments = (channel) =>
   !INBOX_ATTACHMENT_UNSUPPORTED_CHANNELS.has(channel);

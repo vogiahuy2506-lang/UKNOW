@@ -63,7 +63,81 @@ function extractMessageText(msg) {
   if (m.extendedTextMessage?.text) return m.extendedTextMessage.text;
   if (m.imageMessage?.caption) return m.imageMessage.caption;
   if (m.videoMessage?.caption) return m.videoMessage.caption;
+  // P5: tai lieu co caption (WhatsApp boc trong documentWithCaptionMessage khi kem chu).
+  const doc = m.documentMessage || m.documentWithCaptionMessage?.message?.documentMessage;
+  if (doc?.caption) return doc.caption;
   return null;
+}
+
+/** Long (protobufjs) -> number; thieu/khong doc duoc -> null. */
+function toSafeNumber(value) {
+  if (value == null) return null;
+  const n = typeof value?.toNumber === 'function' ? value.toNumber() : Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+/**
+ * P5 - mo ta ANH / TAI LIEU khach gui (chi metadata, chua tai). Sticker/audio/video khong thuoc pham vi: tra null
+ * (van xu ly theo chu nhu truoc).
+ * @returns {{ kind: 'image'|'file', fileName: string|null, mimeType: string|null, size: number|null }|null}
+ */
+export function extractMediaInfo(msg) {
+  const m = msg?.message;
+  if (!m) return null;
+  if (m.imageMessage) {
+    return {
+      kind: 'image',
+      fileName: null,
+      mimeType: m.imageMessage.mimetype || 'image/jpeg',
+      size: toSafeNumber(m.imageMessage.fileLength),
+    };
+  }
+  const doc = m.documentMessage || m.documentWithCaptionMessage?.message?.documentMessage;
+  if (doc) {
+    return {
+      kind: 'file',
+      fileName: doc.fileName || null,
+      mimeType: doc.mimetype || null,
+      size: toSafeNumber(doc.fileLength),
+    };
+  }
+  return null;
+}
+
+/**
+ * P5 - tai + luu anh/tai lieu khach gui; tra noi dung text (caption hoac cho giu cho), tep da luu, ly do neu khong luu.
+ * Khong bao gio nem: loi -> tin van vao Hop thu voi cho giu cho kem ly do.
+ */
+async function resolveWhatsAppInboundMedia({ sessionKey, msg, media, ownerUserId, caption }) {
+  const {
+    INBOUND_MEDIA_MAX_BYTES, buildInboundMediaContent, storeInboundMedia,
+  } = await import('./channelInboundMedia.service.js');
+  let attachment = null;
+  let skipReason = null;
+  if (media.size != null && media.size > INBOUND_MEDIA_MAX_BYTES) {
+    skipReason = 'too_large';
+  } else {
+    try {
+      const baileys = await import('./whatsappBaileys.service.js');
+      const buffer = await baileys.downloadInboundMedia(sessionKey, msg);
+      ({ attachment, skipReason } = await storeInboundMedia({
+        ownerUserId,
+        buffer,
+        fileName: media.fileName,
+        mimeType: media.mimeType,
+        kind: media.kind,
+      }));
+    } catch (err) {
+      skipReason = 'error';
+      log(`[incoming] tai media that bai session=${sessionKey}: ${err?.message}`);
+    }
+  }
+  return {
+    content: buildInboundMediaContent({ caption, kind: media.kind, skipReason }),
+    attachments: attachment ? [attachment] : [],
+    messageType: media.kind,
+    skipReason,
+  };
 }
 
 /**
@@ -251,7 +325,7 @@ async function getOrCreateConversation({ sessionKey, ownerUserId, externalPhone,
  * uniq_chatbot_message_conversation_external (nếu có) để chống Baileys
  * upsert trùng message.
  */
-async function persistMessage({ conversationId, channelId, userId, role, content, externalId, externalMessageId, metadata }) {
+async function persistMessage({ conversationId, channelId, userId, role, content, externalId, externalMessageId, metadata, attachments = [], messageType = 'text' }) {
   const externalRef = externalId || externalMessageId || null;
   // channel_messages không có unique index trên (conversation, external_id)
   // nên dùng cách check trước để idempotent:
@@ -267,9 +341,14 @@ async function persistMessage({ conversationId, channelId, userId, role, content
     `INSERT INTO channel_messages
        (id_conversation, id_user, id_channel, role, content, message_type,
         external_id, external_ts, attachments, metadata, raw_data)
-     VALUES ($1, $2, $3, $4, $5, 'text', $6, NOW(), '[]'::jsonb, $7::jsonb, '{}'::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $8, $6, NOW(), $9::jsonb, $7::jsonb, '{}'::jsonb)
      RETURNING id`,
-    [conversationId, userId, channelId, role, content, externalRef, JSON.stringify(metadata || {})]
+    [
+      conversationId, userId, channelId, role, content, externalRef, JSON.stringify(metadata || {}),
+      // P5: anh/tep khach gui. Tham so moi o CUOI de giu nguyen vi tri $1..$7.
+      messageType || 'text',
+      JSON.stringify(Array.isArray(attachments) ? attachments : []),
+    ]
   );
   return rows[0];
 }
@@ -500,8 +579,10 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
     const senderJid = extractSenderJid(msg);
     const messageText = extractMessageText(msg);
     const messageId = extractMessageId(msg);
-    log(`[incoming] parsed session=${sessionKey} jid=${senderJid} text="${(messageText || '').slice(0, 80)}" msgId=${messageId}`);
-    if (!messageText || !senderJid) {
+    // P5: anh/tai lieu khong caption truoc day bi bo o day (messageText rong) — gio di tiep neu la anh/tai lieu.
+    const media = extractMediaInfo(msg);
+    log(`[incoming] parsed session=${sessionKey} jid=${senderJid} text="${(messageText || '').slice(0, 80)}" media=${media?.kind || 'none'} msgId=${messageId}`);
+    if ((!messageText && !media) || !senderJid) {
       log(`[incoming] skipped session=${sessionKey} reason=emptyTextOrJid`);
       return;
     }
@@ -531,6 +612,19 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
     const channelConn = await getOrCreateBaileysChannelConnection(sessionKey);
     const idChannelConnection = channelConn.id;
 
+    // Nội dung tin khách: chữ, hoặc (P5) caption / chỗ giữ chỗ của ảnh-tài liệu đã tải + lưu MỘT lần cho mọi chatbot.
+    let inboundContent = messageText;
+    let inboundAttachments = [];
+    let inboundMessageType = 'text';
+    let inboundSkipReason = null;
+    if (media) {
+      const resolved = await resolveWhatsAppInboundMedia({ sessionKey, msg, media, ownerUserId, caption: messageText });
+      inboundContent = resolved.content;
+      inboundAttachments = resolved.attachments;
+      inboundMessageType = resolved.messageType;
+      inboundSkipReason = resolved.skipReason;
+    }
+
     // Với mỗi chatbot bật AI, đảm bảo có conversation và enqueue message.
     for (const cb of enabledChatbots) {
       const conversation = await getOrCreateConversation({
@@ -549,9 +643,20 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
         channelId: idChannelConnection,
         userId: ownerUserId,
         role: 'visitor',
-        content: messageText,
+        content: inboundContent,
         externalMessageId: messageId,
+        attachments: inboundAttachments,
+        messageType: inboundMessageType,
+        ...(inboundSkipReason ? { metadata: { media_skip_reason: inboundSkipReason } } : {}),
       });
+
+      // Ảnh/tệp khách gửi đang ở 'temp' (hết hạn sau 24h): đổi sang 'active' ngay khi dòng tin đã ghi.
+      let presentedAttachments = [];
+      if (inboundAttachments.length > 0 && !persistResult?.duplicate) {
+        const inboundMedia = await import('./channelInboundMedia.service.js');
+        await inboundMedia.promoteInboundAttachments(inboundAttachments);
+        presentedAttachments = inboundMedia.presentInboundAttachments(inboundAttachments);
+      }
 
       // Hộp thư tự cập nhật khi khách nhắn (khuôn zaloInbox) — FE đọc conversationId/type/channel/message.
       if (!persistResult?.duplicate) {
@@ -560,7 +665,8 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
           conversationType: 'channel',
           type: 'channel',
           channel: 'whatsapp_baileys',
-          message: messageText,
+          message: inboundContent,
+          ...(media ? { messageType: inboundMessageType, attachments: presentedAttachments } : {}),
           senderId: externalId,
           senderName: senderName || null,
           visitorName: senderName || null,
@@ -620,7 +726,7 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
           eventId: messageId || null,
           persistedMessageId: persistResult?.id || null,
           receivedAt: Date.now(),
-          content: messageText,
+          content: inboundContent,
           metadata: {
             ownerUserId,
             sessionKey,

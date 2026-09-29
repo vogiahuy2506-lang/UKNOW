@@ -883,7 +883,7 @@ const GROUP_CHAT_TYPES = new Set(['group', 'supergroup', 'gigagroup']);
 export function describeInboundMedia(msg) {
   const media = msg?.media;
   if (!media || (media.type !== 'photo' && media.type !== 'document')) return null;
-  const size = Number(media.fileSize);
+  const size = media.fileSize != null ? Number(media.fileSize) : NaN;
   return {
     kind: media.type,
     fileName: media.type === 'document' ? (media.fileName ?? null) : null,

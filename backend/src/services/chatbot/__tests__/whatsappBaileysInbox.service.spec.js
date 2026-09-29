@@ -71,6 +71,12 @@ beforeEach(async () => {
     prepareCredit: jest.fn(async () => ({ creditContext: { ctx: 1 } })),
     chargeCredit: jest.fn(async () => {}),
     getOwnerContact: jest.fn(async () => ({ phone: '0900000000' })),
+    // P5 — ảnh/tệp khách gửi: tải byte (Baileys) + lưu kho chat (persistChatBlob trả đúng hình dạng thật).
+    downloadMedia: jest.fn(async () => Buffer.from('imgbytes')),
+    persistBlob: jest.fn(async () => ({
+      _key: 'uploads/42/chat/1700000000_hinh-anh.jpg', displayName: 'hinh-anh.jpg', size: 8, mime: 'image/jpeg', type: 'image',
+    })),
+    promote: jest.fn(async () => {}),
   };
 
   jest.unstable_mockModule(resolveUrl('config/database.js'), () => ({
@@ -122,6 +128,13 @@ beforeEach(async () => {
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/whatsappBaileys.service.js'), () => ({
     listSessions: () => m.sessions,
+    downloadInboundMedia: (...a) => m.downloadMedia(...a),
+  }));
+  jest.unstable_mockModule(resolveUrl('services/chatbot/chatAttachment.service.js'), () => ({
+    CHAT_ATTACHMENT_SOURCES: { INBOX_OUTBOUND: 'inbox_outbound' },
+    persistChatBlob: (...a) => m.persistBlob(...a),
+    promoteChatAttachments: (...a) => m.promote(...a),
+    presentAttachmentsForClient: (list) => list.map((a) => ({ type: a.type, url: `signed:${a.key}`, name: a.displayName })),
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/channelAdapters/whatsapp.adapter.js'), () => ({
     default: { sendReply: (...a) => m.sendReply(...a) },
@@ -505,5 +518,127 @@ describe('WhatsApp Baileys — tự bật lại AI, id tin đi, SSE tin khách',
     await sendTexts(['một']);
     const visitorRow = m.inserts.find((p) => p[3] === 'visitor');
     expect(visitorRow[5]).toBe('mid-0');
+  });
+});
+
+// ── P5 buoc 5: anh/tai lieu khach gui ─────────────────────────────────────────────────────────
+function inboundMedia(id, message, extra = {}) {
+  return { key: { remoteJid: '84901234567@s.whatsapp.net', id, fromMe: false }, message, pushName: 'Alice', ...extra };
+}
+
+async function sendRaw(msg) {
+  const emitter = new EventEmitter();
+  m.sessions = [{ sessionKey: SESSION_KEY, emitter }];
+  mod.registerSessionHandlers(SESSION_KEY);
+  emitter.emit('message', { sessionKey: SESSION_KEY, message: msg });
+  for (let i = 0; i < 60; i += 1) await new Promise((r) => setImmediate(r));
+}
+
+const visitorRows = () => m.inserts.filter((params) => params[3] === 'visitor');
+const IMAGE_NO_CAPTION = { imageMessage: { mimetype: 'image/jpeg', fileLength: { toNumber: () => 1234 } } };
+
+describe('WhatsApp Baileys — anh/tai lieu khach gui (P5)', () => {
+  it('anh KHONG caption: khong con bi bo — luu voi attachments, message_type image, cho giu cho cho AI', async () => {
+    await sendRaw(inboundMedia('img-1', IMAGE_NO_CAPTION));
+    const rows = visitorRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0][4]).toBe('[Hình ảnh]'); // content
+    expect(rows[0][7]).toBe('image'); // message_type
+    expect(JSON.parse(rows[0][8])).toEqual([
+      { key: 'uploads/42/chat/1700000000_hinh-anh.jpg', displayName: 'hinh-anh.jpg', size: 8, mime: 'image/jpeg', type: 'image' },
+    ]);
+    // Tai byte dung phien + tin; luu vao kho cua CHU (42), nhan inbox_outbound.
+    expect(m.downloadMedia).toHaveBeenCalledWith(SESSION_KEY, expect.objectContaining({ key: expect.objectContaining({ id: 'img-1' }) }));
+    expect(m.persistBlob).toHaveBeenCalledWith(expect.objectContaining({
+      ownerUserId: 42, originalName: 'hinh-anh.jpg', mimetype: 'image/jpeg', source: 'inbox_outbound',
+    }));
+    // Nang tu temp len active (khong thi mat sau 24h).
+    expect(m.promote).toHaveBeenCalledWith([{ key: 'uploads/42/chat/1700000000_hinh-anh.jpg' }]);
+    // AI chi thay chu giu cho.
+    expect([...m.buckets.values()][0].messages[0].content).toBe('[Hình ảnh]');
+  });
+
+  it('SSE tin khach mang messageType + attachments da ky (khong lo khoa luu tru)', async () => {
+    await sendRaw(inboundMedia('img-2', IMAGE_NO_CAPTION));
+    const sse = m.sse.filter(([, event]) => event === 'inbox:new_message');
+    expect(sse).toHaveLength(1);
+    expect(sse[0][2]).toMatchObject({
+      message: '[Hình ảnh]',
+      messageType: 'image',
+      attachments: [{ type: 'image', url: 'signed:uploads/42/chat/1700000000_hinh-anh.jpg', name: 'hinh-anh.jpg' }],
+    });
+    expect(JSON.stringify(sse[0][2])).not.toContain('"key"');
+  });
+
+  it('anh CO caption: noi dung = caption', async () => {
+    await sendRaw(inboundMedia('img-3', { imageMessage: { mimetype: 'image/jpeg', caption: 'Xem giup mình' } }));
+    const rows = visitorRows();
+    expect(rows[0][4]).toBe('Xem giup mình');
+    expect(rows[0][7]).toBe('image');
+    expect(JSON.parse(rows[0][8])).toHaveLength(1);
+  });
+
+  it('tai lieu (kem caption qua documentWithCaptionMessage): luu voi ten tep that, message_type file', async () => {
+    m.persistBlob.mockResolvedValue({ _key: 'uploads/42/chat/x.pdf', displayName: 'bao-gia.pdf', size: 5, mime: 'application/pdf', type: 'file' });
+    await sendRaw(inboundMedia('doc-1', {
+      documentWithCaptionMessage: {
+        message: { documentMessage: { mimetype: 'application/pdf', fileName: 'bao-gia.pdf', caption: 'Bao gia thang 10' } },
+      },
+    }));
+    const rows = visitorRows();
+    expect(rows[0][4]).toBe('Bao gia thang 10');
+    expect(rows[0][7]).toBe('file');
+    expect(m.persistBlob).toHaveBeenCalledWith(expect.objectContaining({ originalName: 'bao-gia.pdf', mimetype: 'application/pdf' }));
+  });
+
+  it('tai lieu khong caption: cho giu cho [Tệp]', async () => {
+    await sendRaw(inboundMedia('doc-2', { documentMessage: { mimetype: 'application/pdf', fileName: 'a.pdf' } }));
+    expect(visitorRows()[0][4]).toBe('[Tệp]');
+  });
+
+  it('QUA 20 MB (khai bao) -> KHONG tai, van luu tin voi cho giu cho kem ly do + metadata', async () => {
+    await sendRaw(inboundMedia('doc-3', {
+      documentMessage: { mimetype: 'application/pdf', fileName: 'big.pdf', fileLength: 30 * 1024 * 1024 },
+    }));
+    expect(m.downloadMedia).not.toHaveBeenCalled();
+    const rows = visitorRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0][4]).toBe('[Tệp] (quá 20 MB, không lưu)');
+    expect(JSON.parse(rows[0][8])).toEqual([]);
+    expect(JSON.parse(rows[0][6]).media_skip_reason).toBe('too_large');
+    expect(m.promote).not.toHaveBeenCalled();
+  });
+
+  it('tai byte loi -> tin van vao Hop thu (error), khong mat tin khach', async () => {
+    m.downloadMedia.mockRejectedValue(new Error('media expired'));
+    await sendRaw(inboundMedia('img-4', IMAGE_NO_CAPTION));
+    const rows = visitorRows();
+    expect(rows).toHaveLength(1);
+    expect(rows[0][4]).toBe('[Hình ảnh] (không tải được)');
+    expect(JSON.parse(rows[0][6]).media_skip_reason).toBe('error');
+  });
+
+  it('dinh dang khong ho tro (kho tu choi) -> van luu tin, ly do unsupported', async () => {
+    m.persistBlob.mockRejectedValue(Object.assign(new Error('Định dạng file không được hỗ trợ'), { status: 400 }));
+    await sendRaw(inboundMedia('doc-4', { documentMessage: { mimetype: 'application/zip', fileName: 'a.zip' } }));
+    const rows = visitorRows();
+    expect(rows[0][4]).toBe('[Tệp] (định dạng không hỗ trợ, không lưu)');
+    expect(JSON.parse(rows[0][6]).media_skip_reason).toBe('unsupported');
+  });
+
+  it('tin chu thuan: KHONG tai media, message_type text, attachments rong (duong cu nguyen ven)', async () => {
+    await sendRaw(inboundMedia('t-1', { conversation: 'xin chào' }));
+    expect(m.downloadMedia).not.toHaveBeenCalled();
+    const rows = visitorRows();
+    expect(rows[0][4]).toBe('xin chào');
+    expect(rows[0][7]).toBe('text');
+    expect(JSON.parse(rows[0][8])).toEqual([]);
+  });
+
+  it('sticker / audio khong chu -> van bo nhu cu (ngoai pham vi)', async () => {
+    await sendRaw(inboundMedia('s-1', { stickerMessage: {} }));
+    await sendRaw(inboundMedia('a-1', { audioMessage: { mimetype: 'audio/ogg' } }));
+    expect(visitorRows()).toHaveLength(0);
+    expect(m.downloadMedia).not.toHaveBeenCalled();
   });
 });

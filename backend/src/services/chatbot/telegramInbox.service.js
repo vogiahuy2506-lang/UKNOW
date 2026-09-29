@@ -186,7 +186,7 @@ export async function findTelegramInboxConversation(account, chatId) {
  * Ghi một tin vào channel_messages. Có `externalId` thì chống trùng theo (hội thoại, external_id).
  * @returns {Promise<{id: number|null, duplicate?: boolean}>}
  */
-export async function persistTelegramChannelMessage({ conversation, userId, role, content, externalId = null, metadata = {} }) {
+export async function persistTelegramChannelMessage({ conversation, userId, role, content, externalId = null, metadata = {}, attachments = [], messageType = 'text' }) {
   const externalRef = externalId != null && externalId !== '' ? String(externalId) : null;
   if (externalRef) {
     const { rows: dup } = await db.query(
@@ -199,9 +199,14 @@ export async function persistTelegramChannelMessage({ conversation, userId, role
     `INSERT INTO channel_messages
        (id_conversation, id_user, id_channel, role, content, message_type,
         external_id, external_ts, attachments, metadata, raw_data)
-     VALUES ($1, $2, $3, $4, $5, 'text', $6, NOW(), '[]'::jsonb, $7::jsonb, '{}'::jsonb)
+     VALUES ($1, $2, $3, $4, $5, $8, $6, NOW(), $9::jsonb, $7::jsonb, '{}'::jsonb)
      RETURNING id`,
-    [conversation.id, userId, conversation.id_channel, role, content, externalRef, JSON.stringify(metadata || {})]
+    [
+      conversation.id, userId, conversation.id_channel, role, content, externalRef, JSON.stringify(metadata || {}),
+      // P5: anh/tep khach gui (chieu vao). Tham so moi de o CUOI de giu nguyen vi tri $1..$7.
+      messageType || 'text',
+      JSON.stringify(Array.isArray(attachments) ? attachments : []),
+    ]
   );
   return { id: rows[0]?.id ?? null };
 }

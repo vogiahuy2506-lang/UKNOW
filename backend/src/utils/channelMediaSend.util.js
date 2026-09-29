@@ -172,7 +172,7 @@ export async function prepareChannelAttachmentSources(attachments, { ownerUserId
   if (list.length === 0) return [];
   if (ownerUserId == null || String(ownerUserId).trim() === '') {
     // Khong co chu thi KHONG doc tep: prepareZaloAttachmentSources bo loc khi thieu ownerUserId.
-    throw limitError('Không xác định được chủ workspace để đọc tệp đính kèm.');
+    throw limitError('Không xác định được chủ tài khoản để đọc tệp đính kèm.');
   }
   const { default: campaignZaloSender } = await import('../services/campaign/campaignZaloSender.service.js');
   return campaignZaloSender.prepareZaloAttachmentSources(list, { ownerUserId, cache });

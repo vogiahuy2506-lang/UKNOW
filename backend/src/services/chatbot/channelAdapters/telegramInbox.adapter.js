@@ -14,13 +14,8 @@ import {
  * `{ success:false, error }` để UnifiedInboxService đánh dấu tin `failed` (cho thử lại).
  */
 
-export const ATTACHMENTS_UNSUPPORTED_ERROR = 'Hộp thư Telegram chưa gửi được tệp đính kèm';
-
 class TelegramInboxAdapter {
   async sendReply({ channelId, externalId, message, attachments, userId }) {
-    if (Array.isArray(attachments) && attachments.length > 0) {
-      return { success: false, error: ATTACHMENTS_UNSUPPORTED_ERROR, provider: 'telegram' };
-    }
     const target = parseTelegramInboxExternalId(externalId);
     if (!target) {
       return { success: false, error: 'Không xác định được cuộc trò chuyện Telegram của khách', provider: 'telegram' };
@@ -38,15 +33,24 @@ class TelegramInboxAdapter {
         channelId: accountId,
         externalId: target.chatId,
         message,
+        // P5: tep dinh kem (khoa kho chat cua chu) — telegram.adapter loc theo chu + gui text -> anh -> tai lieu.
+        attachments,
       });
       const messageId = sent?.messageId ?? null;
-      await recordManualReplyInLegacyTables({
-        accountId,
-        chatId: target.chatId,
-        userId,
-        text: message,
-        messageId,
-      });
+      // Bang cu chi luu CHU; tin chi co tep (khong chu) khong tao dong rong.
+      if (String(message || '').trim() !== '') {
+        await recordManualReplyInLegacyTables({
+          accountId,
+          chatId: target.chatId,
+          userId,
+          text: message,
+          messageId,
+        });
+      }
+      if (sent?.success === false) {
+        // Gui mot phan: khach DA nhan tin dau nhung co tep chua toi -> bao failed (chu thay va thu lai), kem id tin da toi.
+        return { success: false, error: sent.error, messageId, provider: 'telegram' };
+      }
       return { success: true, messageId, provider: 'telegram' };
     } catch (err) {
       return { success: false, error: err?.message || 'Gửi Telegram thất bại', provider: 'telegram' };

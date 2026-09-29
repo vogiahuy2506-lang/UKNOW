@@ -143,6 +143,11 @@ beforeEach(async () => {
     _inboxEnsureRows: [fakeInboxConversation], // SELECT của ensureTelegramInboxConversation ([] = tạo mới)
     _scenarioLegacyOverride: null,
     _batchMessages: null, // ghi đè đợt tin do debounce trả (mặc định 1 tin)
+    _captureEnqueue: false, // P5: true -> đợt tin = CHÍNH tin route đưa vào debounce (thay vì tin cố định)
+    _enqueued: [],
+    _mediaCalls: [],
+    _mediaResult: null,
+    _promoteCalls: [],
     _setAiPausedCalls: [],
     _sse: [],
     dbQuery: null,
@@ -186,6 +191,9 @@ beforeEach(async () => {
         role: params[3],
         content: params[4],
         external_id: params[5],
+        metadata: params[6],
+        message_type: params[7],
+        attachments: params[8],
       };
       mocks._channelMessages.push(row);
       return { rows: [{ id: row.id }] };
@@ -323,15 +331,18 @@ beforeEach(async () => {
     resolveUrl('services/chatbot/inboundReplyDebounce.service.js'),
     () => ({
       default: {
-        enqueue: jest.fn(async ({ flushCallback }) => {
+        enqueue: jest.fn(async ({ message, flushCallback }) => {
+          mocks._enqueued.push(message);
           await flushCallback({
-            messages: mocks._batchMessages || [
-              {
-                eventId: inboundPayload.message_id,
-                content: inboundPayload.text,
-                receivedAt: Date.now(),
-              },
-            ],
+            messages: mocks._batchMessages || (mocks._captureEnqueue
+              ? [{ ...message, receivedAt: Date.now() }]
+              : [
+                {
+                  eventId: inboundPayload.message_id,
+                  content: inboundPayload.text,
+                  receivedAt: Date.now(),
+                },
+              ]),
             firstReceivedAt: Date.now(),
             lastReceivedAt: Date.now(),
             waitMs: 0,
@@ -358,6 +369,7 @@ beforeEach(async () => {
           telegramUserId: body?.telegram_user_id != null ? Number(body.telegram_user_id) : null,
           messageId: body?.message_id != null ? Number(body.message_id) : null,
           isOutgoing: body?.is_outgoing === true,
+          media: body?.media ?? null,
         })),
         verifyWebhookSecret: jest.fn(async (provided) => {
           if (!provided) throw new Error('TELEGRAM_GATEWAY_SECRET is not configured');
@@ -368,6 +380,24 @@ beforeEach(async () => {
           return mocks._sendReplyResult;
         }),
       },
+    })
+  );
+
+  // P5 — tải + lưu ảnh/tệp khách gửi: giả ở RANH GIỚI (kết quả đúng hình dạng `resolveTelegramInboundMedia` trả).
+  jest.unstable_mockModule(
+    resolveUrl('services/chatbot/telegramInboundMedia.service.js'),
+    () => ({
+      resolveTelegramInboundMedia: jest.fn(async (arg) => {
+        mocks._mediaCalls.push(arg);
+        return mocks._mediaResult;
+      }),
+    })
+  );
+  jest.unstable_mockModule(
+    resolveUrl('services/chatbot/channelInboundMedia.service.js'),
+    () => ({
+      promoteInboundAttachments: jest.fn(async (list) => { mocks._promoteCalls.push(list); }),
+      presentInboundAttachments: (list) => list.map((a) => ({ type: a.type, url: `signed:${a.key}`, name: a.displayName })),
     })
   );
 
@@ -1155,5 +1185,89 @@ describe('P1 — tin khách luôn vào Hộp thư (channel_messages) + SSE, kể
     await postWebhook(inboundPayload);
     expect(mocks.chatRouterCall()).not.toBeNull();
     expect(channelRows('visitor')).toHaveLength(0);
+  });
+});
+
+
+describe('P5 — ảnh/tệp khách gửi tới Telegram vào Hộp thư (trước đây tin không chữ bị bỏ im lặng)', () => {
+  const PHOTO = { kind: 'photo', fileName: null, mimeType: 'image/jpeg', size: null };
+  const ATTACHMENT = { key: 'uploads/42/chat/1700000000_hinh-anh.jpg', displayName: 'hinh-anh.jpg', size: 3, mime: 'image/jpeg', type: 'image' };
+
+  beforeEach(() => {
+    mocks._captureEnqueue = true;
+    mocks._mediaResult = { content: '[Hình ảnh]', attachments: [ATTACHMENT], skipReason: null, kind: 'image' };
+  });
+
+  it('ảnh KHÔNG caption → không bị bỏ: vào Hộp thư kèm attachments + message_type image, chữ giữ chỗ cho AI', async () => {
+    const res = await postWebhook({ ...inboundPayload, text: '', media: PHOTO });
+    expect(res.status).toBe(204);
+    expect(mocks._mediaCalls).toHaveLength(1);
+    expect(mocks._mediaCalls[0].account.id).toBe(7);
+    expect(mocks._mediaCalls[0].parsed.media).toEqual(PHOTO);
+
+    const visitor = channelRows('visitor');
+    expect(visitor).toHaveLength(1);
+    expect(visitor[0]).toMatchObject({ content: '[Hình ảnh]', message_type: 'image', external_id: '12345' });
+    expect(JSON.parse(visitor[0].attachments)).toEqual([ATTACHMENT]);
+    // AI chỉ thấy chữ giữ chỗ (không thấy byte ảnh).
+    expect(mocks.chatRouterCall().message).toBe('[Hình ảnh]');
+    // Bảng cũ cũng có chữ giữ chỗ (không có dòng rỗng).
+    const legacy = (mocks._callsSoFar || []).filter(
+      ({ sql, params }) => /INSERT INTO telegram_personal_messages/i.test(sql) && params?.[3] === 'visitor'
+    );
+    expect(legacy[0].params[4]).toBe('[Hình ảnh]');
+  });
+
+  it('tệp đã ghi vào dòng tin thì được nâng từ temp lên active (không mất sau 24h) và SSE mang attachments đã ký', async () => {
+    await postWebhook({ ...inboundPayload, text: '', media: PHOTO });
+    expect(mocks._promoteCalls).toEqual([[ATTACHMENT]]);
+    const sse = sseFor('visitor');
+    expect(sse).toHaveLength(1);
+    expect(sse[0][2]).toMatchObject({
+      message: '[Hình ảnh]',
+      messageType: 'image',
+      attachments: [{ type: 'image', url: `signed:${ATTACHMENT.key}`, name: 'hinh-anh.jpg' }],
+    });
+    // Không lộ khoá lưu trữ ra SSE.
+    expect(JSON.stringify(sse[0][2])).not.toContain('"key"');
+  });
+
+  it('ảnh CÓ caption → nội dung là caption (không phải chữ giữ chỗ)', async () => {
+    mocks._mediaResult = { content: 'Xem giúp mình', attachments: [ATTACHMENT], skipReason: null, kind: 'image' };
+    await postWebhook({ ...inboundPayload, text: 'Xem giúp mình', media: PHOTO });
+    expect(channelRows('visitor')[0]).toMatchObject({ content: 'Xem giúp mình', message_type: 'image' });
+  });
+
+  it('tệp không lưu được (quá 20 MB) → tin VẪN vào Hộp thư với chữ giữ chỗ kèm lý do, attachments rỗng, lý do ở metadata', async () => {
+    mocks._mediaResult = { content: '[Tệp] (quá 20 MB, không lưu)', attachments: [], skipReason: 'too_large', kind: 'file' };
+    await postWebhook({ ...inboundPayload, text: '', media: { kind: 'document', fileName: 'big.pdf', mimeType: 'application/pdf', size: 30 * 1024 * 1024 } });
+    const visitor = channelRows('visitor');
+    expect(visitor).toHaveLength(1);
+    expect(visitor[0]).toMatchObject({ content: '[Tệp] (quá 20 MB, không lưu)', message_type: 'file' });
+    expect(JSON.parse(visitor[0].attachments)).toEqual([]);
+    expect(JSON.parse(visitor[0].metadata).media_skip_reason).toBe('too_large');
+    expect(mocks._promoteCalls).toHaveLength(0);
+  });
+
+  it('tin chữ thuần: KHÔNG chạm tới tải media, message_type text, attachments rỗng (đường cũ nguyên vẹn)', async () => {
+    await postWebhook(inboundPayload);
+    expect(mocks._mediaCalls).toHaveLength(0);
+    const visitor = channelRows('visitor');
+    expect(visitor[0]).toMatchObject({ content: 'Xin chào', message_type: 'text' });
+    expect(JSON.parse(visitor[0].attachments)).toEqual([]);
+    expect(mocks._enqueued[0]).not.toHaveProperty('attachments');
+  });
+
+  it('ảnh do CHÍNH tài khoản gửi (echo, isOutgoing, không chữ) → vẫn bỏ như cũ, không tải, không ghi', async () => {
+    const res = await postWebhook({ ...inboundPayload, text: '', media: PHOTO, is_outgoing: true });
+    expect(res.status).toBe(204);
+    expect(mocks._mediaCalls).toHaveLength(0);
+    expect(mocks._channelMessages).toHaveLength(0);
+  });
+
+  it('không có người gửi → bỏ, không tải media', async () => {
+    const res = await postWebhook({ ...inboundPayload, text: '', media: PHOTO, sender_id: null });
+    expect(res.status).toBe(204);
+    expect(mocks._mediaCalls).toHaveLength(0);
   });
 });

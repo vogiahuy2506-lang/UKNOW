@@ -137,7 +137,7 @@ async function getOrCreateTelegramConversation(account, chatId, displayName) {
  * @returns {Promise<{legacyId: number|null, channelMessageId: number|null, duplicate: boolean}>}
  */
 async function recordTelegramMessage(conversation, role, content, metadata = {}, options = {}) {
-  const { broadcast = true } = options;
+  const { broadcast = true, attachments = [], messageType = 'text' } = options;
   let legacyId = null;
   if (conversation?.id) {
     try {
@@ -178,10 +178,25 @@ async function recordTelegramMessage(conversation, role, content, metadata = {},
         role,
         content,
         externalId: metadata.external_message_id ?? null,
-        metadata: { source: metadata.source || null, chat_id: metadata.chat_id ?? null },
+        metadata: {
+          source: metadata.source || null,
+          chat_id: metadata.chat_id ?? null,
+          // P5: ly do khong luu duoc anh/tep khach gui (qua 20 MB / dinh dang la / het dung luong / loi tai).
+          ...(metadata.media_skip_reason ? { media_skip_reason: metadata.media_skip_reason } : {}),
+        },
+        attachments,
+        messageType,
       });
       channelMessageId = saved?.id ?? null;
       duplicate = saved?.duplicate === true;
+      // P5: tep khach gui dang o 'temp' (het han sau 24h) — doi sang 'active' ngay khi dong tin da ghi, khong thi anh
+      // trong Hop thu mat sau mot ngay. Import tre: chi keo kho tep vao khi that su co tep.
+      let presentedAttachments = [];
+      if (attachments.length > 0 && !duplicate) {
+        const inboundMedia = await import('../services/chatbot/channelInboundMedia.service.js');
+        await inboundMedia.promoteInboundAttachments(attachments);
+        presentedAttachments = inboundMedia.presentInboundAttachments(attachments);
+      }
       if (broadcast && !duplicate) {
         const isVisitor = role === 'visitor';
         broadcastTelegramInbox({
@@ -194,6 +209,7 @@ async function recordTelegramMessage(conversation, role, content, metadata = {},
           senderId: isVisitor ? (metadata.sender_id ?? null) : null,
           senderName: isVisitor ? (metadata.sender_name ?? null) : 'AI',
           isGroup: metadata.is_group === true,
+          ...(messageType !== 'text' ? { extra: { messageType, attachments: presentedAttachments } } : {}),
         });
       }
     } catch (err) {
@@ -501,6 +517,11 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
       sender_name: parsed.senderName,
       chat_id: parsed.chatId,
       is_group: parsed.isGroup,
+      media_skip_reason: item.mediaSkipReason ?? null,
+    }, {
+      // P5: anh/tep khach gui (da tai + luu o webhook) đi cung dong tin; tin chu thuan giu nguyen (khong co 2 truong nay).
+      attachments: Array.isArray(item.attachments) ? item.attachments : [],
+      messageType: item.messageType || 'text',
     });
     if (insertedId) visitorMessageIds.push(insertedId);
   }
@@ -831,7 +852,10 @@ function mergeAccountAndChatbotSettings(accountSettings, chatbotSettings) {
 router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
   try {
     const parsed = telegramAdapter.parseWebhookEvent(req.body);
-    if (!parsed.message || !parsed.senderId) {
+    // P5: tin khach gui CHI co anh/tai lieu (khong caption) truoc day bi bo o day. Gio di tiep neu co media — tru tin do
+    // CHINH tai khoan gui (isOutgoing, vd echo anh minh vua gui): khong chu thi bo nhu cu.
+    const hasInboundMedia = Boolean(parsed.media) && !parsed.isOutgoing;
+    if ((!parsed.message && !hasInboundMedia) || !parsed.senderId) {
       console.log('[Telegram] webhook skip: no message/sender', { parsed });
       return res.status(204).end();
     }
@@ -869,12 +893,29 @@ router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
     // dedupe Set in `InboundReplyDebounceService` saw `null` eventId on
     // every inbound and could not dedupe — every retry produced a fresh
     // batch.
+    // P5: tai + luu anh/tai lieu khach gui. Noi dung gui AI la caption hoac cho giu cho "[Hình ảnh]" / "[Tệp]".
+    let inboundContent = parsed.message;
+    let inboundAttachments = [];
+    let inboundMediaSkipReason = null;
+    let inboundMessageType = 'text';
+    if (hasInboundMedia) {
+      const { resolveTelegramInboundMedia } = await import('../services/chatbot/telegramInboundMedia.service.js');
+      const resolved = await resolveTelegramInboundMedia({ account, parsed });
+      inboundContent = resolved.content;
+      inboundAttachments = resolved.attachments;
+      inboundMediaSkipReason = resolved.skipReason;
+      inboundMessageType = resolved.kind;
+    }
+
     const debounceKey = `telegram_personal:${account.id}:${parsed.chatId || parsed.senderId}`;
     const enqueueResult = inboundReplyDebounceService.enqueue({
       key: debounceKey,
       message: {
         eventId: parsed.messageId ?? null,
-        content: parsed.message,
+        content: inboundContent,
+        ...(hasInboundMedia
+          ? { attachments: inboundAttachments, messageType: inboundMessageType, mediaSkipReason: inboundMediaSkipReason }
+          : {}),
         metadata: {
           senderId: parsed.senderId,
           senderName: parsed.senderName,

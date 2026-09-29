@@ -454,6 +454,8 @@ const InboxPage = () => {
           isRead: true,
           messageType: data.messageType || 'text',
           attachmentUrl: data.attachmentUrl || null,
+          // P5: anh/tep khach gui qua Telegram/WhatsApp (SSE mang url ky san) — hien ngay, khong doi tai lai.
+          attachments: Array.isArray(data.attachments) ? data.attachments : [],
           senderName: data.senderName,
         };
         return [...prev, newMsg];
@@ -485,6 +487,8 @@ const InboxPage = () => {
           isRead: false,
           messageType: data.messageType || 'text',
           attachmentUrl: data.attachmentUrl || null,
+          // P5: anh/tep khach gui qua Telegram/WhatsApp (SSE mang url ky san) — hien ngay, khong doi tai lai.
+          attachments: Array.isArray(data.attachments) ? data.attachments : [],
           senderName: data.senderName,
         };
         

@@ -654,10 +654,13 @@ describe('UnifiedInbox send status + retry', () => {
       const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn');
 
       expect(mockGetBaileysSessionKey).toHaveBeenCalledWith(9, 1);
+      // P5: adapter Hộp thư chuyển thêm `attachments` (rỗng khi không đính kèm) + `userId` chủ để lọc tệp theo chủ.
       expect(mockWaSendReply).toHaveBeenCalledWith({
         channelId: '40-default',
         externalId: '84901234567',
         message: 'Chào bạn',
+        attachments: [],
+        userId: 1,
       });
       expect(result.sendStatus).toBe('sent');
       expect(result.error).toBeUndefined();
@@ -680,16 +683,36 @@ describe('UnifiedInbox send status + retry', () => {
       );
     });
 
-    it('có tệp đính kèm → failed kèm câu giải thích, không gọi gửi', async () => {
+    it('P5: có tệp đính kèm (khoá kho chat của chủ) → adapter WhatsApp NHẬN tệp, trạng thái sent (không còn "chưa gửi được tệp")', async () => {
       mockGetConversationById.mockResolvedValue(waConversation);
 
       const result = await unifiedInboxService.sendMessage(
-        1, 12, 'channel', 'Xem ảnh', [{ url: 'https://x/y.png', name: 'y.png' }]
+        1, 12, 'channel', 'Xem ảnh', [{ key: 'uploads/1/chat/1700000000_y.png', name: 'y.png', type: 'image' }]
+      );
+
+      expect(result.sendStatus).toBe('sent');
+      expect(mockWaSendReply).toHaveBeenCalledTimes(1);
+      expect(mockWaSendReply.mock.calls[0][0]).toMatchObject({
+        channelId: '40-default',
+        externalId: '84901234567',
+        message: 'Xem ảnh',
+        userId: 1,
+        attachments: [expect.objectContaining({ key: 'uploads/1/chat/1700000000_y.png' })],
+      });
+    });
+
+    it('P5: gửi một phần (tin chữ đã tới, tệp lỗi) → failed kèm câu lỗi để chủ thấy và thử lại', async () => {
+      mockGetConversationById.mockResolvedValue(waConversation);
+      mockWaSendReply.mockResolvedValue({
+        success: false, partial: true, error: 'Đã gửi 1 phần nhưng có tệp chưa gửi được: rate-overlimit', messageId: 'wa-1', provider: 'baileys',
+      });
+
+      const result = await unifiedInboxService.sendMessage(
+        1, 12, 'channel', 'Xem ảnh', [{ key: 'uploads/1/chat/1700000000_y.png', name: 'y.png', type: 'image' }]
       );
 
       expect(result.sendStatus).toBe('failed');
-      expect(result.error).toBe('Hộp thư WhatsApp chưa gửi được tệp đính kèm');
-      expect(mockWaSendReply).not.toHaveBeenCalled();
+      expect(result.error).toMatch(/tệp chưa gửi được/);
     });
 
     it('không tra được tài khoản WhatsApp → failed, không gọi gửi', async () => {
@@ -726,6 +749,8 @@ describe('UnifiedInbox send status + retry', () => {
         channelId: '40-default',
         externalId: '84901234567',
         message: 'Chào bạn',
+        attachments: [],
+        userId: 1,
       });
       expect(result.sendStatus).toBe('sent');
     });
