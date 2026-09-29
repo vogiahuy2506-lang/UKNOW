@@ -63,7 +63,7 @@ describe('PR-N5: Privacy Policy Panels Verification', () => {
       const text = container.textContent;
 
       // 2d. Rút lại đồng ý cho lead (cơ chế trực tuyến)
-      expect(text).toContain('Rút lại đồng ý tiếp thị cho khách hàng tiềm năng (lead)');
+      expect(text).toContain('Rút lại đồng ý tiếp thị');
       expect(text).toContain('liên kết hủy nhận tin');
 
       // 2c. Thời hạn lưu: 90 ngày, 24 tháng
@@ -78,7 +78,7 @@ describe('PR-N5: Privacy Policy Panels Verification', () => {
       const text = container.textContent;
 
       // 2d. Lead consent withdrawal (online mechanism)
-      expect(text).toContain('Marketing consent withdrawal for prospective customers (leads)');
+      expect(text).toContain('Withdrawing marketing consent');
       expect(text).toContain('unsubscribe link');
 
       // 2c. Retention: 90 days, 24 months
