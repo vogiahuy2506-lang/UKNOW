@@ -2,6 +2,7 @@ import express from 'express';
 import { body } from 'express-validator';
 import campaignController from '../controllers/campaign.controller.js';
 import campaignShareController from '../controllers/campaignShare.controller.js';
+import channelAccountSendSettingsController from '../controllers/channelAccountSendSettings.controller.js';
 import founderaiController from '../controllers/founderai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
@@ -36,6 +37,19 @@ router.get('/channels', requirePermission('campaigns_view'), campaignController.
 router.get('/channels/telegram/accounts', requirePermission('campaigns_create'), campaignController.getTelegramAccountsForBuilder.bind(campaignController));
 router.get('/channels/whatsapp/accounts', requirePermission('campaigns_create'), campaignController.getWhatsAppAccountsForBuilder.bind(campaignController));
 router.get('/channels/telegram/accounts/:id/groups', requirePermission('campaigns_create'), campaignController.getTelegramAccountGroups.bind(campaignController));
+// P4 (PLAN_TG_WA_DAY_DU) — trần gửi/ngày + tốc độ gửi theo tài khoản Telegram (accountRef = id) / WhatsApp (accountRef = sessionKey).
+// Quyền = chatbot_channels_manage (cùng quyền với trang Kênh Telegram/WhatsApp nơi đặt các giá trị này), KHÔNG dùng campaigns_create:
+// nhân viên chỉ dựng chiến dịch không được tự nới phanh an toàn của tài khoản. Chỉ CHỦ workspace/nhân viên có quyền trong workspace đó.
+router.get(
+  '/channels/:channel/accounts/:accountRef/send-settings',
+  requirePermission('chatbot_channels_manage'),
+  channelAccountSendSettingsController.get.bind(channelAccountSendSettingsController)
+);
+router.patch(
+  '/channels/:channel/accounts/:accountRef/send-settings',
+  requirePermission('chatbot_channels_manage'),
+  channelAccountSendSettingsController.update.bind(channelAccountSendSettingsController)
+);
 // W7a — người đã nhắn tới tài khoản (Telegram: accountId, WhatsApp: sessionKey), cho gửi nhanh.
 router.get('/channels/:channel/accounts/:accountRef/conversations', requirePermission('campaigns_create'), campaignController.getQuickSendAdapterConversations.bind(campaignController));
 

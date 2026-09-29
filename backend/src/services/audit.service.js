@@ -125,6 +125,11 @@ export const AUDIT_ACTIONS = {
   EMAIL_ACCOUNT_SEND_LIMIT_UPDATED: 'EMAIL_ACCOUNT_SEND_LIMIT_UPDATED',
   ZALO_ACCOUNT_SEND_LIMIT_UPDATED: 'ZALO_ACCOUNT_SEND_LIMIT_UPDATED',
   ZALO_ACCOUNT_SEND_SPEED_UPDATED: 'ZALO_ACCOUNT_SEND_SPEED_UPDATED',
+  // P4 (PLAN_TG_WA_DAY_DU_2026-09-29): giới hạn gửi/ngày + tốc độ gửi của tài khoản Telegram/WhatsApp. details gồm
+  // channel, accountKey, previous, next (mỗi bên có userDailySendLimit + sendSpeed). entity = telegram_account (entity_id = id)
+  // hoặc whatsapp_account (entity_id NULL — session_key là chuỗi, để trong details.accountKey). KHÔNG dùng dấu ngoặc nhọn
+  // trong chú thích của khối này: auditLogLabels.spec.js đọc khối AUDIT_ACTIONS dạng văn bản tới dấu ngoặc nhọn đóng đầu tiên.
+  CHANNEL_ACCOUNT_SEND_SETTINGS_UPDATED: 'CHANNEL_ACCOUNT_SEND_SETTINGS_UPDATED',
 
   // Workspace — customers
   CUSTOMER_CREATED: 'CUSTOMER_CREATED',
@@ -218,6 +223,7 @@ export const AUDIT_ENTITY_TYPES = {
   EMAIL_SETTING: 'email_setting',
   ZALO_SETTING: 'zalo_setting',
   WHATSAPP_ACCOUNT: 'whatsapp_account',
+  TELEGRAM_ACCOUNT: 'telegram_account',
   CHATBOT: 'chatbot',
   CHATBOT_CHANNEL: 'chatbot_channel',
   KNOWLEDGE_BASE: 'knowledge_base',
