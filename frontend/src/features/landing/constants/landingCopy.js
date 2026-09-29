@@ -23,14 +23,13 @@ export const LANDING_COPY = {
       titleLine2: 'trong',
       titleAccent: '30 ngày',
       subtitle:
-        'Học cùng ThS. Ngô Hữu Thống — hơn 10 năm kinh nghiệm tư vấn chuyển đổi số và ứng dụng AI. Hơn 10,000 học viên đã thay đổi sự nghiệp nhờ Founder AI.',
+        'Học cùng ThS. Ngô Hữu Thống — hơn 10 năm kinh nghiệm tư vấn chuyển đổi số và ứng dụng AI.',
       instructorMini: {
         name: 'ThS. Ngô Hữu Thống',
         title: 'Chuyên gia AI & Chuyển đổi số',
         badge: 'Chủ nhân các khóa học Founder AI',
       },
       stats: [
-        { value: '10K', sup: '+', label: 'Học viên' },
         { value: '50', sup: '+', label: 'Khóa học AI' },
         { value: '4.9', sup: '★', label: 'Đánh giá TB' },
       ],
@@ -39,7 +38,7 @@ export const LANDING_COPY = {
     },
     about: {
       badge1: 'Hơn 10 năm\nKinh nghiệm AI',
-      badge2: '10,000+\nHọc viên',
+      badge2: 'Chủ tịch\nDIGISO',
       label: 'Giảng viên chính',
       name: 'Ngô Hữu Thống',
       degree: 'ThS. Quản lý Khoa học & Công nghệ · Cử nhân Luật · Kỹ sư Kỹ thuật Viễn thông',
@@ -47,7 +46,7 @@ export const LANDING_COPY = {
       photoDegree: 'Thạc sỹ Quản lý KH&CN · Cử nhân Luật · Kỹ sư Viễn thông',
       bioParagraphs: [
         'ThS. Ngô Hữu Thống là chuyên gia trong lĩnh vực chuyển đổi số và ứng dụng Trí tuệ Nhân tạo tại Việt Nam, với hơn 10 năm kinh nghiệm tư vấn quản trị tài sản trí tuệ, tài sản số và phát triển doanh nghiệp.',
-        'Hiện là Chủ tịch DIGISO và Viện trưởng AIoV, anh còn là sáng lập viên cộng đồng "Xóa Mù A.I" — nơi hàng nghìn người Việt học AI miễn phí, dễ hiểu, dễ áp dụng.',
+        'Hiện là Chủ tịch DIGISO và Viện trưởng AIoV, anh còn là sáng lập viên cộng đồng "Xóa Mù A.I" — nơi người Việt học AI miễn phí, dễ hiểu, dễ áp dụng.',
       ],
       tags: [
         'ChatGPT & Prompt Engineering',
@@ -276,14 +275,13 @@ export const LANDING_COPY = {
       titleLine2: 'in',
       titleAccent: '30 days',
       subtitle:
-        'Learn with M.Sc. Ngo Huu Thong — 10+ years of experience advising on digital transformation and applied AI. Over 10,000 learners have transformed their careers with Founder AI.',
+        'Learn with M.Sc. Ngo Huu Thong — 10+ years of experience advising on digital transformation and applied AI.',
       instructorMini: {
         name: 'M.Sc. Ngo Huu Thong',
         title: 'AI & digital transformation expert',
         badge: 'Creator of Founder AI courses',
       },
       stats: [
-        { value: '10K', sup: '+', label: 'Learners' },
         { value: '50', sup: '+', label: 'AI courses' },
         { value: '4.9', sup: '★', label: 'Avg. rating' },
       ],
@@ -291,7 +289,7 @@ export const LANDING_COPY = {
     },
     about: {
       badge1: '10+ years\nAI experience',
-      badge2: '10,000+\nlearners',
+      badge2: 'Chairman\nof DIGISO',
       label: 'Lead instructor',
       name: 'Ngo Huu Thong',
       degree:
@@ -300,7 +298,7 @@ export const LANDING_COPY = {
       photoDegree: 'M.Sc. · Law · Telecommunications',
       bioParagraphs: [
         'M.Sc. Ngo Huu Thong is an expert in digital transformation and applied AI, with over 10 years of experience advising on intellectual property, digital assets, and business growth.',
-        'Chairman of DIGISO and Director of AIoV, he also founded the “AI Literacy” community where thousands of Vietnamese learn AI for free — simply and practically.',
+        'Chairman of DIGISO and Director of AIoV, he also founded the “AI Literacy” community where Vietnamese learners study AI for free — simply and practically.',
       ],
       tags: [
         'ChatGPT & prompt engineering',

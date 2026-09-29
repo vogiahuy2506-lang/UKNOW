@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { FaStar, FaUsers, FaCheck, FaRocket, FaBriefcase, FaUserGraduate, FaChalkboardTeacher, FaHandshake, FaQuoteLeft, FaArrowRight, FaExclamationTriangle, FaChartLine, FaCogs, FaCheckCircle, FaFire } from 'react-icons/fa';
+import { FaStar, FaCheck, FaRocket, FaBriefcase, FaUserGraduate, FaChalkboardTeacher, FaHandshake, FaQuoteLeft, FaArrowRight, FaExclamationTriangle, FaChartLine, FaCogs, FaCheckCircle, FaFire } from 'react-icons/fa';
 
 const instructor = {
   name: 'Ngô Hữu Thống',
@@ -9,7 +9,6 @@ const instructor = {
 };
 
 const stats = {
-  students: 5000,
   courses: 12,
   rating: 4.9,
   partners: 50,
@@ -136,45 +135,6 @@ const testimonials = [
 
 const formatPrice = (price) => {
   return new Intl.NumberFormat('vi-VN').format(price) + 'đ';
-};
-
-const useAnimatedCounter = (end, duration = 2000) => {
-  const [count, setCount] = useState(0);
-  const [isVisible, setIsVisible] = useState(false);
-  const ref = useRef(null);
-
-  useEffect(() => {
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting && !isVisible) {
-          setIsVisible(true);
-        }
-      },
-      { threshold: 0.1 }
-    );
-
-    if (ref.current) {
-      observer.observe(ref.current);
-    }
-    return () => observer.disconnect();
-  }, [isVisible]);
-
-  useEffect(() => {
-    if (!isVisible) return;
-    let startTime;
-    const animate = (currentTime) => {
-      if (!startTime) startTime = currentTime;
-      const progress = Math.min((currentTime - startTime) / duration, 1);
-      const easeOutQuart = 1 - Math.pow(1 - progress, 4);
-      setCount(Math.floor(easeOutQuart * end));
-      if (progress < 1) {
-        requestAnimationFrame(animate);
-      }
-    };
-    requestAnimationFrame(animate);
-  }, [isVisible, end, duration]);
-
-  return { count, ref };
 };
 
 const useInViewAnimation = () => {
@@ -382,7 +342,6 @@ export default function LearningPage() {
   const [selectedCourse, setSelectedCourse] = useState(null);
   const [showEnrollmentModal, setShowEnrollmentModal] = useState(false);
 
-  const { count: studentCount } = useAnimatedCounter(stats.students);
 
   const handleEnroll = (course) => {
     setSelectedCourse(course);
@@ -420,7 +379,7 @@ export default function LearningPage() {
                   </span>
                 </h1>
                 <p className="text-xl text-gray-600 mb-10 leading-relaxed max-w-2xl mx-auto lg:mx-0">
-                  Khóa học thực chiến <strong className="text-gray-900">1 ngày làm chủ AI</strong> giúp bạn tối ưu quy trình, tự động hóa công việc và <span className="underline decoration-orange-500 decoration-4 underline-offset-4">X5 năng suất lao động</span> ngay lập tức.
+                  Khóa học thực chiến <strong className="text-gray-900">1 ngày làm chủ AI</strong> giúp bạn tối ưu quy trình, tự động hóa công việc và <span className="underline decoration-orange-500 decoration-4 underline-offset-4">nâng năng suất làm việc</span>.
                 </p>
                 
                 <div className="flex flex-col sm:flex-row items-center gap-4 justify-center lg:justify-start">
@@ -435,11 +394,6 @@ export default function LearningPage() {
 
               {/* Trust Indicators */}
               <AnimatedSection delay={200} className="mt-12 pt-12 border-t border-gray-100 flex flex-wrap items-center justify-center lg:justify-start gap-8">
-                <div>
-                  <p className="text-3xl font-black text-gray-900">{studentCount}+</p>
-                  <p className="text-sm text-gray-500 font-medium">Học viên tin tưởng</p>
-                </div>
-                <div className="w-px h-12 bg-gray-200 hidden sm:block"></div>
                 <div>
                   <div className="flex items-center gap-1 text-yellow-400 mb-1">
                     {[1,2,3,4,5].map(i => <FaStar key={i} />)}
@@ -512,7 +466,6 @@ export default function LearningPage() {
                     <p className="font-black text-2xl text-gray-900">{instructor.name}</p>
                     <p className="text-orange-600 font-bold mb-2">{instructor.title}</p>
                     <div className="flex items-center gap-4 text-sm text-gray-500 font-medium">
-                      <span className="flex items-center gap-1"><FaUsers className="text-orange-500"/> {studentCount}+ Học viên</span>
                       <span className="flex items-center gap-1"><FaBriefcase className="text-orange-500"/> {stats.partners}+ Doanh nghiệp</span>
                     </div>
                   </div>
@@ -529,7 +482,7 @@ export default function LearningPage() {
                 <div className="space-y-6">
                   {[
                     { title: 'Kiến thức thực tiễn', desc: 'Không dạy lý thuyết hàn lâm. Mọi bài giảng đều đúc kết từ case study thực tế.' },
-                    { title: 'Cầm tay chỉ việc', desc: 'Đảm bảo 100% học viên tự tay triển khai được các luồng tự động hóa bằng AI sau khóa học.' },
+                    { title: 'Cầm tay chỉ việc', desc: 'Cầm tay chỉ việc để học viên tự tay triển khai được luồng tự động hoá bằng AI sau khoá học.' },
                     { title: 'Hỗ trợ trọn đời', desc: 'Tham gia cộng đồng Alumni, nhận update kiến thức AI mới nhất hoàn toàn miễn phí.' }
                   ].map((item, idx) => (
                     <div key={idx} className="flex gap-4">
@@ -557,7 +510,7 @@ export default function LearningPage() {
         <div className="max-w-7xl mx-auto px-4 relative z-10">
           <AnimatedSection className="text-center max-w-3xl mx-auto mb-16">
             <h2 className="text-4xl md:text-5xl font-black text-white mb-6">Chọn Gói Đào Tạo Phù Hợp</h2>
-            <p className="text-xl text-gray-400">Đầu tư một lần, sử dụng kỹ năng trọn đời. Bảng giá ưu đãi <span className="text-orange-500 font-bold">giảm lên đến 50%</span> chỉ áp dụng trong hôm nay.</p>
+            <p className="text-xl text-gray-400">Đầu tư một lần, sử dụng kỹ năng trọn đời.</p>
           </AnimatedSection>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8 max-w-7xl mx-auto items-end">
@@ -578,7 +531,7 @@ export default function LearningPage() {
         <div className="max-w-7xl mx-auto px-4">
           <AnimatedSection className="text-center mb-16">
             <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-6">Học viên nói gì về chúng tôi?</h2>
-            <p className="text-xl text-gray-600">Hàng ngàn người đã thay đổi cách làm việc. Bạn sẽ là người tiếp theo?</p>
+            <p className="text-xl text-gray-600">Học viên đã thay đổi cách làm việc. Bạn sẽ là người tiếp theo?</p>
           </AnimatedSection>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -612,7 +565,7 @@ export default function LearningPage() {
         <div className="max-w-4xl mx-auto px-4 relative z-10 text-center">
           <AnimatedSection>
             <h2 className="text-4xl md:text-6xl font-black text-white mb-8 leading-tight">
-              Sẵn Sàng X5 Năng Suất Làm Việc?
+              Sẵn sàng nâng năng suất làm việc?
             </h2>
             <p className="text-2xl text-orange-100 mb-10 max-w-2xl mx-auto">
               Cơ hội không chờ đợi ai. Tham gia ngay hôm nay để nhận trọn bộ template AI.

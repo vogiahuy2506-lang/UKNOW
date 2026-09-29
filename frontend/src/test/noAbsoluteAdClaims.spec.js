@@ -29,6 +29,21 @@ const FORBIDDEN = new RegExp(
     'exclusive (AI|offer)',
     'Phổ Biến Nhất',
     'Most Popular',
+    // Đợt 3 (29/09/2026): số liệu / cam kết / khuyến mại chưa có chứng cứ.
+    'đảm bảo 100%',
+    '100% guarantee',
+    'x\\s?[2-9]\\s*năng suất',
+    '[2-9]x (your )?productivity',
+    '\\bX[2-9] (your )?productivity',
+    'chỉ (áp dụng )?(trong )?hôm nay',
+    'only today',
+    'today only',
+    'hàng ngàn (người|khách|học viên)',
+    // "gửi cho hàng nghìn khách hàng" là năng lực gửi của hệ thống, không phải số liệu khách — chỉ chặn người/học viên.
+    'hàng nghìn (người|học viên)',
+    'thousands (of (people|Vietnamese|learners) )?have',
+    'thousands of (people|Vietnamese|learners)',
+    '\\d[\\d.,]*\\s*\\+?\\s*(học viên|learners|students)\\b',
   ].join('|'),
   'i'
 );
