@@ -3825,6 +3825,30 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
               )}
               <AiContent text={userDisplayText} />
 
+              {/* PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Việc 3.1 — lối ra khi chưa có tài liệu
+                  chính thức: backend đặt data.unanswered=true (helpAssistant.service.js), FE chỉ
+                  hiển thị gợi ý, không gọi API mới. */}
+              {msg.role === 'assistant' && msg.data?.unanswered === true && (
+                <div className="mt-2 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-slate-400">
+                  <span>{t('aiChatbot.unansweredHint')}</span>
+                  <Link
+                    to="/huong-dan"
+                    onClick={() => { if (!isFullscreen) onToggle?.(); }}
+                    className="font-semibold text-slate-500 hover:text-orange-500"
+                  >
+                    {t('aiChatbot.unansweredHelpLink')}
+                  </Link>
+                  <span>·</span>
+                  <Link
+                    to="/contact"
+                    onClick={() => { if (!isFullscreen) onToggle?.(); }}
+                    className="font-semibold text-slate-500 hover:text-orange-500"
+                  >
+                    {t('aiChatbot.unansweredContactLink')}
+                  </Link>
+                </div>
+              )}
+
               {/* Files */}
               {msg.files?.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-1.5">

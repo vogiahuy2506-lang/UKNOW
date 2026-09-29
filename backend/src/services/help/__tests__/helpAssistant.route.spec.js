@@ -97,6 +97,28 @@ describe('tryHandleHelpChat route branches', () => {
     expect(mockGenerate).not.toHaveBeenCalled();
   });
 
+  // PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Nghiệm thu 2 — cờ Telegram bật: "gửi tin telegram cho
+  // khách" không còn "chưa hỗ trợ" mà chỉ hướng dẫn dùng trình dựng, vẫn short-circuit trước LLM.
+  it('cờ Telegram bật: câu LỆNH gửi Telegram → hướng dẫn dùng trình dựng, không gọi router LLM', async () => {
+    const prevFlag = process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
+    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
+    try {
+      const result = await tryHandleHelpChat({
+        history: historyWith('gửi tin telegram cho khách'),
+        userId: 1,
+      });
+
+      // Chỗ vênh Nghiệm thu mục 2 vs Việc 1.5: câu ghim nguyên văn ở Việc 1.5 không chứa chữ
+      // "trình dựng" (chỉ có "Chiến dịch → Tạo chiến dịch") — kiểm cụm thật thay vì tự chế thêm chữ.
+      expect(result.content).toContain('Tạo chiến dịch');
+      expect(result.data).toMatchObject({ capabilityProbe: true, capabilityKind: 'guide' });
+      expect(mockGenerate).not.toHaveBeenCalled();
+    } finally {
+      if (prevFlag === undefined) delete process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
+      else process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = prevFlag;
+    }
+  });
+
   it('plan-advisor short-circuits before sensitive docs/router', async () => {
     const result = await tryHandleHelpChat({
       history: historyWith('bảng giá có những tính năng gì'),
@@ -290,11 +312,18 @@ describe('tryHandleHelpChat route branches', () => {
       .mockResolvedValueOnce({ text: 'Best effort', modelName: 'm', raw: {} });
     mockSearchHelpChunks.mockResolvedValue({ chunks: [], topSimilarity: 0 });
 
-    await tryHandleHelpChat({ history: historyWith('cách dùng tính năng mới'), userId: 1 });
+    // Câu how-to KHÔNG khớp OVERVIEW_RE (không có "tính năng/chức năng/…") để thật sự đi vào
+    // nhánh "không có chunk, không phải overview" (softSystemPrompt) — không phải nhánh tổng quan.
+    await tryHandleHelpChat({ history: historyWith('cách xuất báo cáo doanh thu theo tháng'), userId: 1 });
 
     const softPrompt = mockGenerate.mock.calls[1][0].systemPrompt;
     expect(softPrompt).toContain('NĂNG LỰC HÀNH ĐỘNG CỦA TRỢ LÝ');
     expect(softPrompt).toContain('QUY TẮC NĂNG LỰC');
+    // PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Việc 3.2 — ghim câu chữ luật cấm đoán vị trí
+    // nút/menu/màn hình khi không có đoạn tài liệu khớp.
+    expect(softPrompt).toContain(
+      'Không mô tả vị trí nút/menu/màn hình cụ thể khi không có đoạn tài liệu; chỉ nói khái niệm và bảo người dùng xem mục Hướng dẫn hoặc liên hệ hỗ trợ.',
+    );
   });
 
   it('leaves actual commands to the existing LLM router', async () => {

@@ -9,6 +9,7 @@ import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { tryHandleHelpChat, HELP_ROUTE_LABELS, answerWithDocs } from '../services/help/helpAssistant.service.js';
+import { classifyUnsupportedSendRequest } from '../services/ai/assistantCapabilities.js';
 import { searchHelpChunks } from '../services/help/helpCenter.service.js';
 import * as helpRepo from '../repositories/help/helpArticle.repository.js';
 import campaignController from './campaign.controller.js';
@@ -371,9 +372,14 @@ class AiController {
         : '';
       const isWizardMarkerTurn = Boolean(lastUserContentForRouting)
         && isWizardMarkerMessage(lastUserContentForRouting);
+      // PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Việc 2 — một LỆNH gửi qua kênh lạ gõ giữa wizard
+      // ("gửi tin telegram cho khách" khi thẻ chọn kênh còn mở) không có hình dạng câu hỏi
+      // (QUESTION_SHAPE_RE không khớp) nhưng vẫn phải được não trợ giúp trả lời thay vì bị wizard
+      // ép im — thẻ chọn kênh vẫn mở, người dùng chọn kênh tiếp bình thường.
       const wizardTypedQuestion = inWizard
         && !isWizardMarkerTurn
-        && QUESTION_SHAPE_RE.test(lastUserContentForRouting);
+        && (QUESTION_SHAPE_RE.test(lastUserContentForRouting)
+          || Boolean(classifyUnsupportedSendRequest(lastUserContentForRouting)));
       const skipHelpRouter = hasFiles || isMachinePrompt || (inWizard && !wizardTypedQuestion);
       const helpResponse = skipHelpRouter
         ? null
