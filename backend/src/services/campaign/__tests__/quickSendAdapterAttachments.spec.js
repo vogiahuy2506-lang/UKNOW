@@ -26,6 +26,8 @@ jest.unstable_mockModule('../../quota/sendQuotaReservation.service.js', () => ({
   consumeSendQuota: jest.fn(),
   releaseSendQuota: jest.fn(),
   markSendQuotaUncertain: jest.fn(),
+  // Review P5: P4 (accountDailyLimit.service.js) import thêm getVnDayBoundaries từ module bị mock này -> thiếu là SyntaxError cả suite.
+  getVnDayBoundaries: jest.fn(() => ({ vnDayStart: new Date('2026-09-29T17:00:00.000Z'), vnDayEnd: new Date('2026-09-30T17:00:00.000Z') })),
 }));
 jest.unstable_mockModule('../../../repositories/campaign/campaignChannelMessage.repository.js', () => ({
   default: {
