@@ -54,6 +54,10 @@ function reclaimIfStale() {
     const started = Date.parse(owner.startedAt);
     const tooOld = Number.isFinite(started) && Date.now() - started > STALE_AGE_MS;
     if (!pidAlive(owner.pid) || tooOld) {
+      // Doc lai ngay truoc khi xoa: neu mot luot khac vua lay lai khoa mo coi va gianh khoa moi
+      // trong luc minh dang xet, owner da doi — dung xoa khoa moi cua ho (review 29/09).
+      const current = readOwner();
+      if (!current || current.pid !== owner.pid || current.startedAt !== owner.startedAt) return false;
       removeLockDir();
       return true;
     }
