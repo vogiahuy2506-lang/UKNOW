@@ -454,6 +454,18 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     { accountId: account.id, idChatbot, length: batchedContent?.length, throughMessageId, visitorMessageIds: visitorMessageIds.length }
   );
 
+  // Khoá tài nguyên (hạ gói / hết hạn): chatbot bị khoá thì không gọi AI. Tin khách đã lưu ở trên.
+  if (idChatbot) {
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('chatbots', idChatbot)) {
+      console.log('[Telegram] chatbot locked — message saved, no AI reply', {
+        accountId: account.id,
+        idChatbot,
+      });
+      return;
+    }
+  }
+
   // Active hours check (trước khi gọi AI, sau khi đã lưu tin visitor)
   let chatbotRecord = null;
   if (idChatbot) {
@@ -493,6 +505,46 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     console.log('[Telegram] outside active hours — message saved, no AI reply', {
       accountId: account.id,
       idChatbot,
+    });
+    return;
+  }
+
+  // Trần lượt trả lời (mỗi đợt gom một lần) — khuôn zaloInbox.service.js.
+  const { default: chatbotRateLimitService } = await import('../services/chatbot/chatbotRateLimit.service.js');
+  const rate = await chatbotRateLimitService.checkBeforeAi({
+    channel: 'telegram_personal',
+    ownerUserId: account.id_user,
+    chatbotId: idChatbot || account.id,
+    senderKey: parsed.senderId,
+  });
+  if (!rate.allowed) {
+    if (rate.shouldNotify) {
+      await logTelegramMessage(conversation, 'bot', rate.staticReply, {
+        model: 'ai_rate_limited',
+        replySource: 'ai_rate_limited',
+      });
+      try {
+        await telegramAdapter.sendReply({
+          userId: account.id_user,
+          channelId: account.id,
+          externalId: peer,
+          message: rate.staticReply,
+        });
+        await chatbotRateLimitService.markRateLimitNotified({
+          channel: 'telegram_personal',
+          ownerUserId: account.id_user,
+          chatbotId: idChatbot || account.id,
+          senderKey: parsed.senderId,
+          reason: rate.reason,
+        });
+      } catch (sendErr) {
+        console.warn('[Telegram] sendReply rate-limited failed:', sendErr.message);
+      }
+    }
+    console.log('[Telegram] rate limited — message saved, no AI reply', {
+      accountId: account.id,
+      idChatbot,
+      reason: rate.reason,
     });
     return;
   }

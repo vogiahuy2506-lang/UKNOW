@@ -357,6 +357,21 @@ beforeEach(async () => {
     () => ({ default: { isAiPaused: async () => false } })
   );
 
+  // Khoá tài nguyên + trần lượt (mặc định: không khoá, cho phép)
+  mocks._locked = false;
+  mocks._rate = { allowed: true };
+  mocks._checkBeforeAi = jest.fn(async () => mocks._rate);
+  mocks._markRateLimitNotified = jest.fn(async () => {});
+  jest.unstable_mockModule(resolveUrl('utils/topupLockGate.util.js'), () => ({
+    resourceIsLocked: async () => mocks._locked,
+  }));
+  jest.unstable_mockModule(resolveUrl('services/chatbot/chatbotRateLimit.service.js'), () => ({
+    default: {
+      checkBeforeAi: (...args) => mocks._checkBeforeAi(...args),
+      markRateLimitNotified: (...args) => mocks._markRateLimitNotified(...args),
+    },
+  }));
+
   // Build mini express app — wrap router with json() + catch-all error handler
   app = express();
   app.use(express.json());
@@ -705,6 +720,51 @@ describe('Bug #1 — đổi chatbot qua DeployTab phải có hiệu lực cho h�
     );
     expect(updateCall).toBeDefined();
     expect(updateCall.params).toContain(88);
+  });
+});
+
+describe('Khoá tài nguyên + trần lượt trả lời (29/09/2026)', () => {
+  it('chatbot bị khoá → không gọi AI, không gửi gì', async () => {
+    mocks._locked = true;
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+    expect(mocks._checkBeforeAi).not.toHaveBeenCalled();
+  });
+
+  it('allowed=false + shouldNotify=true → gửi đúng staticReply 1 lần, markRateLimitNotified, không gọi AI', async () => {
+    mocks._rate = { allowed: false, shouldNotify: true, staticReply: 'het-luot', reason: 'per_hour' };
+    await postWebhook(inboundPayload);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls()).toHaveLength(1);
+    expect(mocks.sendReplyCalls()[0].message).toBe('het-luot');
+    expect(mocks._markRateLimitNotified).toHaveBeenCalledTimes(1);
+    expect(mocks._markRateLimitNotified).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: 'telegram_personal', ownerUserId: 42, chatbotId: 55, reason: 'per_hour' })
+    );
+    const botLog = (mocks._callsSoFar || []).find(
+      ({ sql, params }) =>
+        /INSERT INTO telegram_personal_messages/i.test(sql) && Array.isArray(params) && params.includes('het-luot')
+    );
+    expect(botLog).toBeDefined();
+  });
+
+  it('allowed=false + shouldNotify=false → không gửi gì, không gọi AI', async () => {
+    mocks._rate = { allowed: false, shouldNotify: false, staticReply: 'het-luot' };
+    await postWebhook(inboundPayload);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls().map((c) => c.message)).not.toContain('het-luot');
+    expect(mocks._markRateLimitNotified).not.toHaveBeenCalled();
+  });
+
+  it('được phép → gọi AI như cũ, checkBeforeAi nhận đúng kênh + chatbot', async () => {
+    await postWebhook(inboundPayload);
+    expect(mocks.chatRouterCall()).not.toBeNull();
+    expect(mocks._checkBeforeAi).toHaveBeenCalledTimes(1);
+    expect(mocks._checkBeforeAi).toHaveBeenCalledWith(
+      expect.objectContaining({ channel: 'telegram_personal', ownerUserId: 42, chatbotId: 55, senderKey: '8888' })
+    );
   });
 });
 

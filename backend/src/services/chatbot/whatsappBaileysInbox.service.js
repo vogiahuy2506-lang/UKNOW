@@ -542,6 +542,49 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       return;
     }
 
+    // Khoá tài nguyên (hạ gói / hết hạn): chatbot bị khoá thì không gọi AI (tin khách đã lưu).
+    const { resourceIsLocked } = await import('../../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('chatbots', cb.id_chatbot)) {
+      log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} chatbot=${cb.id_chatbot} conversation=${conversationId} result=locked`);
+      return;
+    }
+
+    // Trần lượt trả lời — đếm MỖI ĐỢT GOM một lần (khuôn zaloInbox.service.js).
+    const { default: chatbotRateLimitService } = await import('./chatbotRateLimit.service.js');
+    const rate = await chatbotRateLimitService.checkBeforeAi({
+      channel: 'whatsapp_baileys',
+      ownerUserId,
+      chatbotId: cb.id_chatbot,
+      senderKey: externalId,
+    });
+    if (!rate.allowed) {
+      if (rate.shouldNotify) {
+        const sent = await whatsappAdapter.sendReply({
+          channelId: sessionKey,
+          externalId,
+          message: rate.staticReply,
+        });
+        if (sent?.success !== false) {
+          await persistMessage({
+            conversationId,
+            channelId: idChannelConnection,
+            userId: ownerUserId,
+            role: 'bot',
+            content: rate.staticReply,
+          });
+          await chatbotRateLimitService.markRateLimitNotified({
+            channel: 'whatsapp_baileys',
+            ownerUserId,
+            chatbotId: cb.id_chatbot,
+            senderKey: externalId,
+            reason: rate.reason,
+          });
+        }
+      }
+      log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} chatbot=${cb.id_chatbot} conversation=${conversationId} result=rate_limited`);
+      return;
+    }
+
     // Lấy lịch sử hội thoại (chỉ tin TRƯỚC batch này, không lấy 20 tin gần nhất).
     // throughMessageId đảm bảo AI chỉ thấy tin trước khi visitor nhắn batch này.
     // excludeMessageIds loại trừ visitor messages trong batch để tránh thấy lặp.
