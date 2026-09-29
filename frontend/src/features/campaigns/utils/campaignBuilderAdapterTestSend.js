@@ -158,7 +158,6 @@ export async function runAdapterChannelTestSend({
 
     let item;
     try {
-      // eslint-disable-next-line no-await-in-loop
       const response = await apiService.sendQuickAdapterMessage(channel, {
         [accountField]: accountRef,
         recipientKey: recipient.recipientKey,
