@@ -13,8 +13,8 @@ function RefundPolicy() {
     {
       date: '2026-09-29',
       note: {
-        vi: 'Đổi tên thành “Chính sách chấm dứt dịch vụ và hoàn tiền” và bổ sung nội dung tối thiểu theo Điều 16 Nghị định 248/2026/NĐ-CP (các trường hợp chấm dứt, thời điểm chấm dứt, quy trình và thời hạn phản hồi, cách thức hoàn tiền); chuyển các nội dung chấm dứt dịch vụ từ trang Điều kiện cung cấp dịch vụ sang trang này.',
-        en: 'Renamed “Service Termination and Refund Policy” and added the minimum content required by Article 16 of Decree 248/2026/NĐ-CP (cases of termination, time of termination, procedure and response times, refund method); moved the service termination content from the Service Terms page to this page.',
+        vi: 'Đổi tên thành “Chính sách chấm dứt dịch vụ và hoàn tiền” và bổ sung nội dung tối thiểu theo Điều 16 Nghị định 248/2026/NĐ-CP (các trường hợp chấm dứt, thời điểm chấm dứt, quy trình và thời hạn phản hồi, cách thức hoàn tiền); thêm quyền huỷ trong 07 ngày đầu chưa sử dụng (hoàn 100%); chuyển các nội dung chấm dứt dịch vụ từ trang Điều kiện cung cấp dịch vụ sang trang này.',
+        en: 'Renamed “Service Termination and Refund Policy” and added the minimum content required by Article 16 of Decree 248/2026/NĐ-CP (cases of termination, time of termination, procedure and response times, refund method); added the right to cancel within the first 07 days if unused (100% refund); moved the service termination content from the Service Terms page to this page.',
       },
     },
     {
@@ -199,7 +199,7 @@ function RefundPolicy() {
             <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'vi')}`}>
               <li>a) Quyền truy cập và sử dụng các tính năng thuộc gói dịch vụ bị chấm dứt sẽ dừng kể từ thời điểm chấm dứt có hiệu lực;</li>
               <li>b) Các khoản phí phát sinh trước thời điểm chấm dứt được xử lý theo điều kiện dịch vụ và thỏa thuận; các nghĩa vụ còn lại thực hiện theo điều kiện dịch vụ và pháp luật;</li>
-              <li>c) Khi khách hàng tự chấm dứt, phần thời gian chưa sử dụng của gói đã kích hoạt không được hoàn tiền. Trường hợp lỗi thuộc về DIGISO, việc hoàn tiền thực hiện theo mục 8;</li>
+              <li>c) Khi khách hàng tự chấm dứt, phần thời gian chưa sử dụng của gói đã kích hoạt không được hoàn tiền, trừ trường hợp mục 8.2.đ (huỷ trong 07 ngày đầu, chưa sử dụng). Trường hợp lỗi thuộc về DIGISO, việc hoàn tiền thực hiện theo mục 8;</li>
               <li>d) Trường hợp DIGISO chấm dứt dịch vụ trước thời hạn vì lý do thuộc về DIGISO mà không xuất phát từ vi phạm của khách hàng, DIGISO hoàn trả phần phí tương ứng với phần dịch vụ chưa cung cấp, trừ trường hợp các bên có thỏa thuận khác hoặc pháp luật có quy định khác;</li>
               <li>đ) Lượt AI (credit) đã sử dụng trước thời điểm chấm dứt không được hoàn lại;</li>
               <li>e) Việc chấm dứt dịch vụ không mặc nhiên đồng nghĩa với việc xóa ngay dữ liệu. Việc lưu giữ, xóa dữ liệu thực hiện theo <a href="/privacy-policy" className="text-orange-600 hover:underline">Chính sách bảo mật</a> và quy định pháp luật;</li>
@@ -208,7 +208,7 @@ function RefundPolicy() {
             <ul className={`list-none pl-0 text-slate-700 mb-4 space-y-2 ${lc(language, 'en')}`}>
               <li>a) The right to access and use the features of the terminated service package stops from the time the termination takes effect;</li>
               <li>b) Fees incurred before the time of termination are handled under the service conditions and the agreement; remaining obligations are performed under the service conditions and the law;</li>
-              <li>c) When the Customer terminates on their own, the unused portion of an activated package is not refunded. Where the fault lies with DIGISO, refunds are made under section 8;</li>
+              <li>c) When the Customer terminates on their own, the unused portion of an activated package is not refunded, except in the case of section 8.2.đ (cancellation within the first 07 days, not yet used). Where the fault lies with DIGISO, refunds are made under section 8;</li>
               <li>d) Where DIGISO terminates the service early for reasons attributable to DIGISO and not arising from the Customer's breach, DIGISO refunds the fee corresponding to the portion of the service not yet provided, unless otherwise agreed by the parties or provided by law;</li>
               <li>e) AI usage (credits) already consumed before the time of termination is not refunded;</li>
               <li>f) Termination of the service does not automatically mean immediate deletion of data. Data retention and deletion are carried out under the <a href="/privacy-policy" className="text-orange-600 hover:underline">Privacy Policy</a> and applicable law;</li>
@@ -351,10 +351,10 @@ function RefundPolicy() {
               8.1. Refund Principle
             </h3>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO chỉ hoàn tiền khi lỗi thuộc về DIGISO, trong các trường hợp quy định tại mục 8.2, nhằm bảo đảm quyền lợi chính đáng của khách hàng.
+              DIGISO hoàn tiền trong hai nhóm trường hợp: (i) lỗi thuộc về DIGISO (mục 8.2.a–d); (ii) Khách hàng đổi ý sớm (mục 8.2.đ). Ngoài hai nhóm này DIGISO không hoàn tiền, nhằm bảo đảm quyền lợi chính đáng của khách hàng.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO refunds only where the fault lies with DIGISO, in the cases set out in section 8.2, in order to protect the Customer's legitimate interests.
+              DIGISO refunds in two groups of cases: (i) the fault lies with DIGISO (sections 8.2.a–d); (ii) the Customer changes their mind early (section 8.2.đ). Outside these two groups DIGISO does not refund, in order to protect the Customer's legitimate interests.
             </p>
             <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
               8.2. Điều kiện hoàn tiền
@@ -364,28 +364,34 @@ function RefundPolicy() {
             </h3>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                DIGISO không thể cung cấp dịch vụ do sự cố kỹ thuật hoặc hạ tầng từ phía DIGISO kéo dài từ 7 ngày trở lên, hoặc không cung cấp được dịch vụ đã cam kết.
+                a) DIGISO không thể cung cấp dịch vụ do sự cố kỹ thuật hoặc hạ tầng từ phía DIGISO kéo dài từ 7 ngày trở lên, hoặc không cung cấp được dịch vụ đã cam kết.
               </li>
               <li className={lc(language, 'en')}>
-                DIGISO cannot provide the service due to a technical or infrastructure incident on DIGISO's side lasting 7 days or more, or cannot provide the service it committed to.
+                a) DIGISO cannot provide the service due to a technical or infrastructure incident on DIGISO's side lasting 7 days or more, or cannot provide the service it committed to.
               </li>
               <li className={lc(language, 'vi')}>
-                Khách hàng thanh toán thừa, thanh toán trùng hoặc giao dịch bị lỗi (thu hai lần, thu sai số tiền do hệ thống).
+                b) Khách hàng thanh toán thừa, thanh toán trùng hoặc giao dịch bị lỗi (thu hai lần, thu sai số tiền do hệ thống).
               </li>
               <li className={lc(language, 'en')}>
-                The Customer overpays, pays twice, or the transaction is faulty (double charge, wrong amount charged by the system).
+                b) The Customer overpays, pays twice, or the transaction is faulty (double charge, wrong amount charged by the system).
               </li>
               <li className={lc(language, 'vi')}>
-                Dịch vụ không đúng nội dung đã xác nhận khi mua.
+                c) Dịch vụ không đúng nội dung đã xác nhận khi mua.
               </li>
               <li className={lc(language, 'en')}>
-                The service does not match what was confirmed at purchase.
+                c) The service does not match what was confirmed at purchase.
               </li>
               <li className={lc(language, 'vi')}>
-                DIGISO chấm dứt dịch vụ trước thời hạn vì lý do thuộc về DIGISO: hoàn phần phí tương ứng với phần dịch vụ chưa cung cấp.
+                d) DIGISO chấm dứt dịch vụ trước thời hạn vì lý do thuộc về DIGISO: hoàn phần phí tương ứng với phần dịch vụ chưa cung cấp.
               </li>
               <li className={lc(language, 'en')}>
-                DIGISO terminates the service early for reasons attributable to DIGISO: the fee corresponding to the service not yet provided is refunded.
+                d) DIGISO terminates the service early for reasons attributable to DIGISO: the fee corresponding to the service not yet provided is refunded.
+              </li>
+              <li className={lc(language, 'vi')}>
+                đ) Khách hàng đổi ý sớm: Khách hàng gửi yêu cầu trong vòng 07 ngày kể từ ngày thanh toán và chưa sử dụng dịch vụ — được hiểu là tài khoản chưa phát sinh lượt gửi tin nhắn/email nào và chưa tiêu credit AI kể từ lần thanh toán đó — thì được hoàn 100% số tiền đã thanh toán cho gói hoặc lượt nạp credit đó. Áp dụng cho gói trả phí và nạp credit AI; không áp dụng cho gói dùng thử miễn phí.
+              </li>
+              <li className={lc(language, 'en')}>
+                đ) Early change of mind: the Customer submits a request within 07 days of the payment date and has not yet used the service — meaning the account has not sent any message/email and has not spent any AI credit since that payment — and is refunded 100% of the amount paid for that package or credit top-up. Applies to paid packages and AI credit top-ups; does not apply to free trial packages.
               </li>
             </ul>
             <h3 className={`text-lg font-semibold text-slate-800 mb-2 ${lc(language, 'vi')}`}>
@@ -396,10 +402,10 @@ function RefundPolicy() {
             </h3>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Khách hàng tự chấm dứt dịch vụ khi gói đã được kích hoạt (phần thời gian chưa sử dụng không được hoàn).
+                Khách hàng tự chấm dứt dịch vụ khi gói đã được kích hoạt, ngoài trường hợp mục 8.2.đ (quá 07 ngày hoặc đã sử dụng) — phần thời gian/credit còn lại không được hoàn.
               </li>
               <li className={lc(language, 'en')}>
-                The Customer terminates the service on their own after the package has been activated (the unused period is not refunded).
+                The Customer terminates the service on their own after the package has been activated, other than in the case of section 8.2.đ (past 07 days or already used) — the remaining period/credits are not refunded.
               </li>
               <li className={lc(language, 'vi')}>
                 Dịch vụ bị chấm dứt do khách hàng vi phạm Điều khoản sử dụng hoặc pháp luật.
@@ -412,6 +418,12 @@ function RefundPolicy() {
               </li>
               <li className={lc(language, 'en')}>
                 AI usage (credits) already consumed.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Yêu cầu hoàn tiền không thuộc các trường hợp tại mục 8.2.
+              </li>
+              <li className={lc(language, 'en')}>
+                Refund requests that do not fall within the cases in section 8.2.
               </li>
               <li className={lc(language, 'vi')}>
                 Gói dùng thử miễn phí.
