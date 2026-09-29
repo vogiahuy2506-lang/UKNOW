@@ -131,7 +131,7 @@ const ARTICLES = [
         'The Customer agrees that DIGISO may use the following sub-processors, only to the minimum extent necessary to provide the service:'
       ),
       UL(
-        LI('Hosting máy chủ ứng dụng, cơ sở dữ liệu tại Việt Nam.', 'Hosting of application servers and database in Vietnam.', 'AZDIGI', 'AZDIGI'),
+        LI('Hosting máy chủ ứng dụng, cơ sở dữ liệu tại Việt Nam.', 'Hosting of application servers and database in Vietnam.', 'Công ty cổ phần giải pháp mạng Bạch Kim', 'Bach Kim Network Solutions Joint Stock Company'),
         LI('Lưu trữ tệp tải lên (Google Cloud Storage); xử lý AI (Gemini API).', 'Storage of uploaded files (Google Cloud Storage); AI processing (Gemini API).', 'Google', 'Google'),
         LI('Mạng phân phối nội dung, bảo mật, chứng chỉ SSL cho founderai.biz và tên miền tùy chỉnh.', 'Content delivery network, security and SSL certificates for founderai.biz and custom domains.', 'Cloudflare', 'Cloudflare'),
         LI('Máy chủ SMTP hạ tầng của DIGISO hoặc SMTP riêng do Khách hàng cấu hình, dùng để gửi email chiến dịch và thông báo.', 'DIGISO’s SMTP infrastructure or the Customer’s own SMTP configuration, used to send campaign and notification email.', 'Gửi email', 'Email delivery'),

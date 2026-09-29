@@ -126,7 +126,7 @@ const SECTIONS = [
         LI('DIGISO sử dụng các nhà cung cấp sau; họ chỉ tiếp cận dữ liệu trong phạm vi tối thiểu cần thiết:', 'DIGISO uses the following providers; they access data only to the minimum extent necessary:', 'Nhà cung cấp dịch vụ', 'Service providers')
       ),
       UL(
-        LI('Máy chủ ứng dụng, cơ sở dữ liệu đặt tại Việt Nam, hosting do AZDIGI cung cấp.', 'Application servers and database located in Vietnam, hosted by AZDIGI.', 'Hạ tầng máy chủ', 'Server infrastructure'),
+        LI('Máy chủ ứng dụng, cơ sở dữ liệu đặt tại Việt Nam, hosting do Công ty cổ phần giải pháp mạng Bạch Kim cung cấp.', 'Application servers and database located in Vietnam, hosted by Bach Kim Network Solutions Joint Stock Company.', 'Hạ tầng máy chủ', 'Server infrastructure'),
         LI('Google Cloud Storage lưu tệp tải lên; Google Gemini API xử lý nội dung khi bạn dùng tính năng AI; Google Analytics đo lưu lượng truy cập.', 'Google Cloud Storage stores uploaded files; the Google Gemini API processes content when you use AI features; Google Analytics measures traffic.', 'Google', 'Google'),
         LI('Cloudflare cung cấp mạng phân phối nội dung, bảo mật và chứng chỉ SSL; lưu lượng truy cập đi qua hạ tầng của Cloudflare.', 'Cloudflare provides content delivery, security and SSL certificates; traffic passes through Cloudflare’s infrastructure.', 'Cloudflare', 'Cloudflare'),
         LI('Máy chủ SMTP gửi email thông báo và email chiến dịch của DIGISO.', 'SMTP servers deliver DIGISO’s notification and campaign email.', 'Gửi email', 'Email delivery'),
