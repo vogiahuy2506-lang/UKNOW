@@ -37,6 +37,7 @@ const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
 const campaignRunService = (await import('../../src/services/campaign/campaignRun.service.js')).default;
 const { validateCampaignPreflight } = await import('../../src/services/campaign/campaignPreflight.service.js');
+const chatbotTelegramRepository = (await import('../../src/repositories/chatbot/chatbotTelegram.repository.js')).default;
 const campaignChannelRegistry = (await import('../../src/services/campaign/campaignChannelRegistry.service.js')).default;
 const { countZaloSentToday, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
 
@@ -125,6 +126,11 @@ async function insertTelegramAccount({ userId = owner.id, telegramUserId, isActi
      VALUES ($1, $2, '+84900000000', 'Bot', $3) RETURNING *`,
     [userId, telegramUserId, isActive]
   );
+  // checkReadiness (chặn sớm phiên hỏng) đòi phiên còn khoá đăng nhập — dựng blob tối thiểu có authKeys.permanent.
+  await chatbotTelegramRepository.saveSessionState(telegramUserId, {
+    kv: {},
+    authKeys: { permanent: { 2: { 0: 1 } }, temp: {} },
+  });
   return rows[0];
 }
 

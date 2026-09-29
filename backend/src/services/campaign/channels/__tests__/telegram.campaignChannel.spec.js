@@ -18,9 +18,11 @@ jest.unstable_mockModule('../../../chatbot/inProcChannelGateway/stubCheck.js', (
 
 const getAccountByIdMock = jest.fn();
 const listOpenConversationsForAccountMock = jest.fn();
+const getSessionStringMock = jest.fn();
 jest.unstable_mockModule('../../../../repositories/chatbot/chatbotTelegram.repository.js', () => ({
   default: {
     getAccountById: getAccountByIdMock,
+    getSessionString: getSessionStringMock,
     listOpenConversationsForAccount: listOpenConversationsForAccountMock,
   },
 }));
@@ -82,6 +84,16 @@ describe('telegram.campaignChannel — classifyTelegramSendError (bảng phân l
     expect(
       classifyTelegramSendError(telegramTransportError(`MtProtoTelegramClient.sendMessage failed: Telegram API error 401: ${code}`))
     ).toBe(expected);
+  });
+
+  it('lỗi phiên hỏng "First argument to DataView constructor must be an ArrayBuffer" -> auth (dừng node, không đốt danh sách)', async () => {
+    sendMessageMock.mockReset();
+    sendMessageMock.mockRejectedValue(
+      telegramTransportError('sendMessage: MtProtoTelegramClient.sendMessage failed: First argument to DataView constructor must be an ArrayBuffer')
+    );
+    const rejection = telegramChannelAdapter.sendOne({ account: { telegramUserId: 555 }, recipientKey: '123', text: 'x' });
+    await expect(rejection).rejects.toBeInstanceOf(ChannelSendError);
+    await expect(rejection).rejects.toMatchObject({ category: 'auth' });
   });
 
   it('"called before connect()" -> auth', () => {
@@ -196,5 +208,39 @@ describe('telegram.campaignChannel — review PR-6: chốt chủ + giờ 0', () 
       if (saved.s === undefined) delete process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START; else process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_START = saved.s;
       if (saved.e === undefined) delete process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END; else process.env.TELEGRAM_OUTBOUND_QUIET_HOURS_END = saved.e;
     }
+  });
+});
+
+describe('telegram.campaignChannel.checkReadiness — phiên phải còn khoá đăng nhập', () => {
+  const input = { userId: 99, node: { id: 1, config: { telegramAccountId: 7 } } };
+  const setup = (blob) => {
+    getAccountByIdMock.mockReset();
+    getSessionStringMock.mockReset();
+    getAccountByIdMock.mockResolvedValue({ id: 7, id_user: 99, is_active: true, telegram_user_id: '555' });
+    getSessionStringMock.mockResolvedValue(blob);
+  };
+
+  it('blob có authKeys.permanent >= 1 khoá -> qua', async () => {
+    setup({ kv: {}, authKeys: { permanent: { 2: { 0: 1 } }, temp: {} } });
+    await expect(telegramChannelAdapter.checkReadiness(input)).resolves.toBeUndefined();
+    expect(getSessionStringMock).toHaveBeenCalledWith('555');
+  });
+
+  it('blob null -> TELEGRAM_ACCOUNT_NOT_READY, thông điệp nhắc đăng nhập lại', async () => {
+    setup(null);
+    await expect(telegramChannelAdapter.checkReadiness(input)).rejects.toMatchObject({
+      code: 'TELEGRAM_ACCOUNT_NOT_READY',
+      message: expect.stringContaining('đăng nhập lại Telegram'),
+    });
+  });
+
+  it('blob có kv nhưng không có authKeys (dạng hỏng trên production) -> TELEGRAM_ACCOUNT_NOT_READY', async () => {
+    setup({ kv: { 0: 1, 1: 2 } });
+    await expect(telegramChannelAdapter.checkReadiness(input)).rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_NOT_READY' });
+  });
+
+  it('authKeys.permanent rỗng -> TELEGRAM_ACCOUNT_NOT_READY', async () => {
+    setup({ kv: {}, authKeys: { permanent: {}, temp: {} } });
+    await expect(telegramChannelAdapter.checkReadiness(input)).rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_NOT_READY' });
   });
 });

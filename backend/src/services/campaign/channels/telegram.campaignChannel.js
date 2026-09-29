@@ -46,6 +46,8 @@ const AUTH_ERROR_SUBSTRINGS = [
   'AUTH_KEY_DUPLICATED',
   'USER_DEACTIVATED_BAN',
   'called before connect()',
+  // Phiên lưu hỏng (Buffer thành object, vd sự cố 28-29/09) — lỗi của TÀI KHOẢN gửi, không phải của từng người nhận.
+  'DataView constructor',
 ];
 
 const HARD_ERROR_SUBSTRINGS = [
@@ -141,6 +143,18 @@ async function checkReadiness({ userId, node }) {
   if (!account || account.is_active === false) {
     const err = new Error(
       `Chưa chọn tài khoản Telegram hợp lệ, hoặc tài khoản đã ngắt kết nối (node ${node?.id}).`
+    );
+    err.code = 'TELEGRAM_ACCOUNT_NOT_READY';
+    throw err;
+  }
+  // Phiên phải còn khoá đăng nhập (chỉ đọc CSDL — không dựng client/kết nối). Không log/không trả nội dung khoá.
+  const session = await chatbotTelegramRepository.getSessionString(account.telegram_user_id);
+  const permanentKeys = session?.authKeys?.permanent;
+  const hasPermanentKey =
+    permanentKeys && typeof permanentKeys === 'object' && Object.keys(permanentKeys).length > 0;
+  if (!hasPermanentKey) {
+    const err = new Error(
+      'Phiên Telegram của tài khoản đã hết hiệu lực — vui lòng đăng nhập lại Telegram trong Cài đặt.'
     );
     err.code = 'TELEGRAM_ACCOUNT_NOT_READY';
     throw err;
