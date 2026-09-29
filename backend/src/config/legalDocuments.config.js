@@ -23,7 +23,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   privacy: {
     purpose: 'privacy',
     version: '2026-09-29',
-    hash: '382c7f7663bf665e7c19a82c440f5b3727c979d83d8649cc9e871b4ace3c6b77',
+    hash: '1f268cd0f47ddb80e6c4f516a331e9bb793687981454f240be308379a896e093',
     title: 'Chính sách bảo mật',
     path: '/privacy-policy',
     frontendRelativePath: 'src/pages/public/PrivacyPolicy.jsx',
@@ -31,7 +31,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   dpa: {
     purpose: 'dpa',
     version: '2026-09-29',
-    hash: '0a8237210c313c16c3305dc86a5bfd65116490f2227f38eba65d1aa28412a1d8',
+    hash: '715e90efb1181027249abd0af7a2cac8a36a1f0ffa229876b7c54a6b055972f7',
     title: 'Thỏa thuận xử lý dữ liệu (DPA)',
     path: '/public-dpa',
     frontendRelativePath: 'src/pages/public/PublicDPA.jsx',
