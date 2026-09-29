@@ -216,7 +216,7 @@ CREATE TABLE campaigns (
   campaign_name         VARCHAR(255) NOT NULL,
   description           TEXT,
   campaign_type         VARCHAR(30)  NOT NULL DEFAULT 'email'
-    CHECK (campaign_type IN ('email', 'zalo', 'zalo_group', 'mixed')),
+    CHECK (campaign_type IN ('email', 'zalo', 'zalo_group', 'mixed', 'telegram', 'telegram_group')),
   status                VARCHAR(50)  NOT NULL DEFAULT 'draft',
   id_data_source        BIGINT,
   flow_json             JSONB,

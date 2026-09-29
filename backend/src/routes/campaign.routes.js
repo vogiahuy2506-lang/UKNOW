@@ -17,7 +17,7 @@ import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.j
 import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
-const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed'];
+const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed', 'telegram'];
 const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePaths().uploads] });
 
 router.use(authMiddleware);

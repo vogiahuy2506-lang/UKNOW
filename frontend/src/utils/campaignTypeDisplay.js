@@ -11,9 +11,17 @@ const CAMPAIGN_TYPE_MAP = {
     label: 'Zalo nhóm',
     className: 'bg-violet-100 text-violet-700 border-violet-200',
   },
-  // Review PR-7a (PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28): nút "Telegram" ở trang danh sách
-  // tạo chiến dịch campaign_type 'mixed' (ENUM prod: email|zalo|mixed|zalo_group, không thêm giá trị
-  // mới) — trước đây 'mixed' rơi xuống nhãn mặc định, hiện chữ "mixed" thô trong danh sách.
+  // PR-E1: 'telegram' là loại riêng (migration 260); 'telegram_group' dành cho PR-E2.
+  telegram: {
+    label: 'Telegram',
+    className: 'bg-sky-100 text-sky-700 border-sky-200',
+  },
+  telegram_group: {
+    label: 'Telegram nhóm',
+    className: 'bg-sky-100 text-sky-700 border-sky-200',
+  },
+  // 'mixed': chiến dịch Telegram cũ tạo 28–29/09 (PR-7a khi ENUM chưa có 'telegram') + chiến dịch đa kênh
+  // từ AI. Không có nhãn thì hiện chữ "mixed" thô trong danh sách.
   mixed: {
     label: 'Đa kênh',
     className: 'bg-sky-100 text-sky-700 border-sky-200',

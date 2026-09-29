@@ -3,7 +3,10 @@
  * cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED bật, và chỉ áp dụng cho campaign_type 'mixed'.
  */
 import { describe, expect, it } from 'vitest';
-import { getAllowedActionNodeTypesByCampaignType } from '../campaignBuilderFlow';
+import {
+  getAllowedActionNodeTypesByCampaignType,
+  getAllowedDataNodeTypesByCampaignType,
+} from '../campaignBuilderFlow';
 
 describe('getAllowedActionNodeTypesByCampaignType — cờ Telegram', () => {
   it("campaign_type 'mixed' + cờ tắt (mặc định) -> KHÔNG có send_telegram", () => {
@@ -37,5 +40,34 @@ describe('getAllowedActionNodeTypesByCampaignType — cờ Telegram', () => {
     const allowed = getAllowedActionNodeTypesByCampaignType('mixed');
     expect(() => allowed.has('send_telegram')).not.toThrow();
     expect(allowed.has('send_telegram')).toBe(false);
+  });
+});
+
+describe("PR-E1 — loại chiến dịch 'telegram' riêng", () => {
+  it("'telegram' + cờ bật -> action đúng {send_telegram}, KHÔNG email/zalo", () => {
+    const allowed = getAllowedActionNodeTypesByCampaignType('telegram', { telegramEnabled: true });
+    expect([...allowed]).toEqual(['send_telegram']);
+  });
+
+  it("'telegram' + cờ tắt -> action rỗng", () => {
+    expect(getAllowedActionNodeTypesByCampaignType('telegram').size).toBe(0);
+    expect(getAllowedActionNodeTypesByCampaignType('telegram', { telegramEnabled: false }).size).toBe(0);
+  });
+
+  it("'telegram' -> tập data node rỗng (không phải null = không lọc), viết hoa/khoảng trắng vẫn nhận", () => {
+    const data = getAllowedDataNodeTypesByCampaignType('telegram');
+    expect(data).toBeInstanceOf(Set);
+    expect(data.size).toBe(0);
+    expect(getAllowedDataNodeTypesByCampaignType(' Telegram ')?.size).toBe(0);
+  });
+
+  it("'mixed' không đổi (ghim): data null = không lọc; action đủ email/zalo/zalo_group (+telegram khi bật)", () => {
+    expect(getAllowedDataNodeTypesByCampaignType('mixed')).toBeNull();
+    expect([...getAllowedActionNodeTypesByCampaignType('mixed', { telegramEnabled: true })].sort()).toEqual(
+      ['send_email', 'send_telegram', 'send_zalo_friend_request', 'send_zalo_group', 'send_zalo_personal']
+    );
+    expect([...getAllowedActionNodeTypesByCampaignType('mixed')].sort()).toEqual(
+      ['send_email', 'send_zalo_friend_request', 'send_zalo_group', 'send_zalo_personal']
+    );
   });
 });

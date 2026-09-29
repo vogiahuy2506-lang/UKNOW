@@ -629,12 +629,12 @@ CREATE TABLE campaigns (
   created_by            BIGINT       REFERENCES users(id) ON DELETE SET NULL,
   campaign_name         VARCHAR(255) NOT NULL,
   description           TEXT,
-  -- Production: cột kiểu ENUM `campaign_type` ('email','zalo','mixed','zalo_group') — đo information_schema/pg_enum
+  -- Production: cột kiểu ENUM `campaign_type` ('email','zalo','mixed','zalo_group' + 'telegram','telegram_group' từ migration 260) — đo information_schema/pg_enum
   -- 28/09/2026. CHECK dưới đây giới hạn đúng tập đó. (PR-2 tách tầng kênh từng GỠ CHECK vì chỉ tìm trong
   -- pg_constraint — enum không nằm ở đó — làm bootstrap lỏng hơn prod; khôi phục 28/09.) Thêm loại chiến dịch
   -- mới phải `ALTER TYPE campaign_type ADD VALUE` trên prod VÀ sửa CHECK này.
   campaign_type         VARCHAR(30)  NOT NULL DEFAULT 'email'
-    CHECK (campaign_type IN ('email', 'zalo', 'zalo_group', 'mixed')),
+    CHECK (campaign_type IN ('email', 'zalo', 'zalo_group', 'mixed', 'telegram', 'telegram_group')),
   status                VARCHAR(50)  NOT NULL DEFAULT 'draft',
   id_data_source        BIGINT,
   flow_json             JSONB,

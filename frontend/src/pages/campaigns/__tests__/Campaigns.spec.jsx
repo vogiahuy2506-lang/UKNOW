@@ -348,4 +348,28 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
       expect(screen.getByPlaceholderText('Tìm theo tên lịch, tên chiến dịch hoặc ID chiến dịch')).toBeInTheDocument();
     });
   });
+
+  // PR-E1: nút Telegram tạo loại chiến dịch riêng 'telegram' (không còn 'mixed').
+  it("cờ Telegram bật: chọn nút Telegram rồi tạo -> createCampaign nhận campaignType 'telegram'", async () => {
+    campaignApiService.getChannels.mockResolvedValue({
+      data: { data: { channels: [{ key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' }] } },
+    });
+    campaignApiService.createCampaign.mockResolvedValue({ data: { data: { id: 555 } } });
+
+    renderComponent(['/app/campaigns']);
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    const nameInput = await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
+    fireEvent.change(nameInput, { target: { value: 'Chiến dịch Telegram thử' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Telegram' }));
+    fireEvent.click(screen.getByRole('button', { name: viTranslations.campaigns.createAndDesign }));
+
+    await waitFor(() => {
+      expect(campaignApiService.createCampaign).toHaveBeenCalledTimes(1);
+    });
+    expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('telegram');
+  });
 });

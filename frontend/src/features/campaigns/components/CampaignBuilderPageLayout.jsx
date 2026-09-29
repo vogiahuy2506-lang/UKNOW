@@ -64,6 +64,12 @@ const buildPaletteOrderByCampaignType = (campaignType) => {
     return [...triggers, ...zaloFlow, ...data, ...logic, ...actions];
   }
 
+  // Telegram (PR-E1): chỉ trigger → logic → khối gửi Telegram (khối tự lấy người nhận, không có node dữ liệu).
+  if (normalizedType === 'telegram') {
+    const actions = nodeConfigs.actions.filter((n) => n.type === 'send_telegram');
+    return [...triggers, ...logic, ...actions];
+  }
+
   // Fallback: giữ thứ tự gộp đầy đủ (mọi node đều có số, không hiển thị '-').
   return [
     ...triggers,
