@@ -480,6 +480,21 @@ export class TelegramSessionManager {
   }
 
   /**
+   * List groups the account can post to. Reads live from Telegram
+   * (not persisted). Throws TelegramTransportError when no session.
+   */
+  async listGroups(telegramUserId, opts = {}) {
+    const client = await this.getClient(telegramUserId);
+    if (!client) {
+      throw new TelegramTransportError(
+        `No active session for telegram_user_id=${telegramUserId}`
+      );
+    }
+    const record = this._clients.get(String(telegramUserId));
+    return record.exec(() => client.listGroups(opts));
+  }
+
+  /**
    * Disconnect and drop the in-memory client. Does NOT touch the
    * stored blob — caller decides whether to delete it.
    */

@@ -372,4 +372,40 @@ describe('Campaigns — Trang gộp Quản lý & Vận hành chiến dịch', ()
     });
     expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('telegram');
   });
+
+  // PR-E2: nút "Telegram nhóm" tạo loại 'telegram_group'.
+  it("cờ Telegram bật: chọn nút Telegram nhóm rồi tạo -> createCampaign nhận campaignType 'telegram_group'", async () => {
+    campaignApiService.getChannels.mockResolvedValue({
+      data: { data: { channels: [{ key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' }] } },
+    });
+    campaignApiService.createCampaign.mockReset();
+    campaignApiService.createCampaign.mockResolvedValue({ data: { data: { id: 556 } } });
+
+    renderComponent(['/app/campaigns']);
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    const nameInput = await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
+    fireEvent.change(nameInput, { target: { value: 'Chiến dịch Telegram nhóm thử' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Telegram nhóm' }));
+    fireEvent.click(screen.getByRole('button', { name: viTranslations.campaigns.createAndDesign }));
+
+    await waitFor(() => {
+      expect(campaignApiService.createCampaign).toHaveBeenCalledTimes(1);
+    });
+    expect(campaignApiService.createCampaign.mock.calls[0][0].campaignType).toBe('telegram_group');
+  });
+
+  it('cờ Telegram tắt: không có nút Telegram nhóm', async () => {
+    campaignApiService.getChannels.mockResolvedValue({ data: { data: { channels: [] } } });
+    renderComponent(['/app/campaigns']);
+    await waitFor(() => {
+      expect(screen.getByText('Chiến dịch Chào thu')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Tạo' }));
+    await screen.findByPlaceholderText(viTranslations.campaigns.campaignNamePlaceholder);
+    expect(screen.queryByRole('button', { name: 'Telegram nhóm' })).not.toBeInTheDocument();
+  });
 });

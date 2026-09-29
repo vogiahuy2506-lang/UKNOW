@@ -30,6 +30,9 @@ const normalizeCampaignType = (campaignType) => {
   if (normalized === 'telegram') {
     return 'telegram';
   }
+  if (normalized === 'telegram_group') {
+    return 'telegram_group';
+  }
   return normalized;
 };
 
@@ -49,7 +52,10 @@ export const getAllowedActionNodeTypesByCampaignType = (campaignType, { telegram
   if (normalizedType === 'zalo') return new Set(ZALO_PERSONAL_ACTION_TYPES);
   if (normalizedType === 'zalo_group') return new Set(ZALO_GROUP_ACTION_TYPES);
   // PR-E1: loại 'telegram' chỉ có khối gửi Telegram (khi cờ bật); cờ tắt -> rỗng.
-  if (normalizedType === 'telegram') return new Set(telegramEnabled ? TELEGRAM_ACTION_TYPES : []);
+  // PR-E2: 'telegram_group' cùng khối gửi Telegram (nguồn người nhận mặc định = nhóm đã chọn).
+  if (normalizedType === 'telegram' || normalizedType === 'telegram_group') {
+    return new Set(telegramEnabled ? TELEGRAM_ACTION_TYPES : []);
+  }
   return new Set([
     ...EMAIL_ACTION_TYPES,
     ...ZALO_PERSONAL_ACTION_TYPES,
@@ -75,7 +81,7 @@ export const getAllowedDataNodeTypesByCampaignType = (campaignType) => {
   }
   // PR-E1: khối Telegram tự lấy người nhận (hội thoại / nhập chat id), không đọc khối dữ liệu
   // (plan PR-7 cấm nguồn 'node') -> tập rỗng: ẩn/chặn mọi khối dữ liệu + khối Zalo.
-  if (normalizedType === 'telegram') return new Set();
+  if (normalizedType === 'telegram' || normalizedType === 'telegram_group') return new Set();
   return null;
 };
 

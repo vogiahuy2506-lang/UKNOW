@@ -65,7 +65,7 @@ const buildPaletteOrderByCampaignType = (campaignType) => {
   }
 
   // Telegram (PR-E1): chỉ trigger → logic → khối gửi Telegram (khối tự lấy người nhận, không có node dữ liệu).
-  if (normalizedType === 'telegram') {
+  if (normalizedType === 'telegram' || normalizedType === 'telegram_group') {
     const actions = nodeConfigs.actions.filter((n) => n.type === 'send_telegram');
     return [...triggers, ...logic, ...actions];
   }
@@ -705,6 +705,7 @@ const CampaignBuilderPageLayout = ({
       edges={edges}
       runLogs={runLogs}
       campaignId={campaignId}
+      campaignType={campaignType}
     />
   </div>
   );

@@ -301,3 +301,46 @@ describe('telegram.campaignChannel.checkReadiness — PLAN_TELEGRAM_0_NGUOI_NHAN
     expect(listOpenConversationsForAccountMock).not.toHaveBeenCalled();
   });
 });
+
+describe('telegram.campaignChannel — PR-E2: nguồn telegram_groups', () => {
+  const goodSession = { kv: {}, authKeys: { permanent: { 2: { 0: 1 } }, temp: {} } };
+  const nodeWith = (config) => ({ userId: 99, node: { id: 1, config: { telegramAccountId: 7, ...config } } });
+  const setup = () => {
+    getAccountByIdMock.mockReset();
+    getSessionStringMock.mockReset();
+    listOpenConversationsForAccountMock.mockReset();
+    getAccountByIdMock.mockResolvedValue({ id: 7, id_user: 99, is_active: true, telegram_user_id: '555' });
+    getSessionStringMock.mockResolvedValue(goodSession);
+  };
+
+  it.each([
+    ['mảng rỗng', []],
+    ['không phải số', [{ recipientKey: 'abc', display: 'x' }]],
+  ])('preflight: telegram_groups %s -> TELEGRAM_NO_RECIPIENTS "Chưa chọn nhóm Telegram nào"', async (_label, recipientKeys) => {
+    setup();
+    await expect(
+      telegramChannelAdapter.checkReadiness(nodeWith({ recipientSource: 'telegram_groups', recipientKeys }))
+    ).rejects.toMatchObject({
+      code: 'TELEGRAM_NO_RECIPIENTS',
+      message: expect.stringContaining('Chưa chọn nhóm Telegram nào'),
+    });
+  });
+
+  it('preflight: có >= 1 nhóm hợp lệ -> qua', async () => {
+    setup();
+    await expect(
+      telegramChannelAdapter.checkReadiness(
+        nodeWith({ recipientSource: 'telegram_groups', recipientKeys: [{ recipientKey: '-1001234567890', display: 'A' }] })
+      )
+    ).resolves.toBeUndefined();
+  });
+
+  it('resolveRecipients: chuẩn hoá {recipientKey, display} từ rows, giữ id âm', async () => {
+    const out = await telegramChannelAdapter.resolveRecipients({
+      rows: [{ recipientKey: '-1001', display: 'Nhóm A' }, { recipientKey: 'zzz' }],
+      config: { recipientSource: 'telegram_groups' },
+      account: { accountId: 7 },
+    });
+    expect(out).toEqual([{ recipientKey: '-1001', display: 'Nhóm A', vars: {} }]);
+  });
+});

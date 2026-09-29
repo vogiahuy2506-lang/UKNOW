@@ -112,6 +112,10 @@ const telegramGateway = {
     gateway.sendMessage(telegramUserId, chatId, text)
   ),
 
+  listGroups: guard('listGroups', (telegramUserId, opts) =>
+    gateway.listGroups(telegramUserId, opts)
+  ),
+
   ensureHandler: guard('ensureHandler', (telegramUserId) => gateway.ensureHandler(telegramUserId)),
 
   /**

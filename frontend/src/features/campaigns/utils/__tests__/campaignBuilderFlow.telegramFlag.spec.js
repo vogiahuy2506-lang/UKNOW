@@ -71,3 +71,27 @@ describe("PR-E1 — loại chiến dịch 'telegram' riêng", () => {
     );
   });
 });
+
+describe("PR-E2 — loại chiến dịch 'telegram_group'", () => {
+  it("cờ bật -> action đúng {send_telegram}; cờ tắt -> rỗng", () => {
+    expect([...getAllowedActionNodeTypesByCampaignType('telegram_group', { telegramEnabled: true })]).toEqual(['send_telegram']);
+    expect(getAllowedActionNodeTypesByCampaignType('telegram_group').size).toBe(0);
+    expect(getAllowedActionNodeTypesByCampaignType('telegram_group', { telegramEnabled: false }).size).toBe(0);
+  });
+
+  it("data node rỗng (Set, không phải null), viết hoa/khoảng trắng vẫn nhận", () => {
+    const data = getAllowedDataNodeTypesByCampaignType('telegram_group');
+    expect(data).toBeInstanceOf(Set);
+    expect(data.size).toBe(0);
+    expect(getAllowedDataNodeTypesByCampaignType(' Telegram_Group ')?.size).toBe(0);
+  });
+
+  it("'telegram' và 'mixed' không đổi (ghim)", () => {
+    expect([...getAllowedActionNodeTypesByCampaignType('telegram', { telegramEnabled: true })]).toEqual(['send_telegram']);
+    expect(getAllowedDataNodeTypesByCampaignType('telegram').size).toBe(0);
+    expect(getAllowedDataNodeTypesByCampaignType('mixed')).toBeNull();
+    expect([...getAllowedActionNodeTypesByCampaignType('mixed', { telegramEnabled: true })].sort()).toEqual(
+      ['send_email', 'send_telegram', 'send_zalo_friend_request', 'send_zalo_group', 'send_zalo_personal']
+    );
+  });
+});

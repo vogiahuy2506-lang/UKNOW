@@ -161,9 +161,13 @@ function randomDelayMs(min, max) {
  * @param {Array<object>} input.lastOutputItems
  * @returns {Array<object>}
  */
+const STATIC_LIST_RECIPIENT_SOURCES = new Set(['manual', 'telegram_groups']);
+
 function resolveRecipientRows({ config, nodeOutputs, lastOutputItems }) {
   const source = config?.recipientSource;
-  if (source === 'manual') {
+  // Nguồn "danh sách tĩnh" lưu thẳng trong config.recipientKeys: `manual` (nhập tay) và
+  // `telegram_groups` (nhóm Telegram đã chọn — mỗi phần tử {recipientKey, display}). Cùng cách gom.
+  if (STATIC_LIST_RECIPIENT_SOURCES.has(source)) {
     const raw = config?.recipientKeys;
     const list = Array.isArray(raw) ? raw : String(raw ?? '').split(/[\n,]+/);
     return list

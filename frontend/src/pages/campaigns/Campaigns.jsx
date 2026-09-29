@@ -1032,7 +1032,7 @@ const Campaigns = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {t('campaigns.campaignType')}
                 </label>
-                <div className={`grid gap-3 ${telegramChannelEnabled ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3'}`}>
+                <div className={`grid gap-3 ${telegramChannelEnabled ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-3'}`}>
                   <button
                     type="button"
                     onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'email' }))}
@@ -1081,6 +1081,20 @@ const Campaigns = () => {
                     >
                       <FaTelegramPlane className="w-4 h-4" />
                       {t('campaigns.telegram')}
+                    </button>
+                  )}
+                  {telegramChannelEnabled && (
+                    <button
+                      type="button"
+                      onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'telegram_group' }))}
+                      className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
+                        createCampaignForm.campaignType === 'telegram_group'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
+                      }`}
+                    >
+                      <FaTelegramPlane className="w-4 h-4" />
+                      {t('campaigns.telegramGroup')}
                     </button>
                   )}
                 </div>

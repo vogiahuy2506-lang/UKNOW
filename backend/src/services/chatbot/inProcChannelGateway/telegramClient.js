@@ -135,6 +135,11 @@ export class TelegramClient {
     throw new Error('Plug in a real Telegram transport');
   }
 
+  /** List groups the account can post to. Base class: none. */
+  async listGroups(_opts) {
+    return [];
+  }
+
   /** Return an opaque string representing the session for persistence. */
   saveSession() {
     return this.sessionString || '';
@@ -189,6 +194,10 @@ export class StubTelegramClient extends TelegramClient {
 
   async sendMessage(_chatId, _text) {
     throw new TelegramTransportError('Telegram transport not implemented');
+  }
+
+  async listGroups(_opts) {
+    return [];
   }
 
   saveSession() {

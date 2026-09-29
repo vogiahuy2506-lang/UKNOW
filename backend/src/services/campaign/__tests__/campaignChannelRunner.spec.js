@@ -2,7 +2,7 @@
  * PLAN_TACH_TANG_KENH_GUI_2026-09-27, PR-3 — unit test cho các hàm THUẦN của
  * campaignChannelRunner.service.js (không chạm DB).
  */
-import { describe, it, expect, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import {
   isWithinQuietHours,
   computeQuietHoursWaitMs,
@@ -140,5 +140,48 @@ describe('campaignChannelRunner.runAdapterSendNode — PLAN_TELEGRAM_0_NGUOI_NHA
     expect(error.code).toBe('CHANNEL_NO_RECIPIENTS');
     expect(error.message).toContain('4152');
     expect(error.partialResult).toBeUndefined();
+  });
+});
+
+describe('campaignChannelRunner.runAdapterSendNode — PR-E2: nguồn người nhận telegram_groups', () => {
+  const buildCtx = (config, lastOutputItems = []) => {
+    const resolveRecipients = jest.fn(async () => []);
+    return {
+      resolveRecipients,
+      ctx: {
+        descriptor: {
+          key: 'telegram',
+          adapter: { resolveAccount: async () => ({ accountKey: '7' }), resolveRecipients },
+        },
+        runId: 1,
+        campaignId: 2,
+        userId: 3,
+        workspaceOwnerId: 3,
+        node: { id: 4152 },
+        config,
+        nodeOutputs: {},
+        lastOutputItems,
+        ensureRunStillRunning: async () => {},
+      },
+    };
+  };
+
+  it('telegram_groups -> rows lấy đúng từ recipientKeys (danh sách tĩnh, như manual)', async () => {
+    const groups = [
+      { recipientKey: '-1001', display: 'Nhóm A' },
+      { recipientKey: '-1002', display: 'Nhóm B' },
+      { recipientKey: '  ', display: 'rỗng' },
+    ];
+    const { ctx, resolveRecipients } = buildCtx({ recipientSource: 'telegram_groups', recipientKeys: groups }, [{ recipientKey: 'x' }]);
+    await runAdapterSendNode(ctx).catch(() => {});
+    expect(resolveRecipients).toHaveBeenCalledTimes(1);
+    expect(resolveRecipients.mock.calls[0][0].rows).toEqual([groups[0], groups[1]]);
+  });
+
+  it('nguồn lạ vẫn rơi về lastOutputItems như cũ', async () => {
+    const last = [{ recipientKey: '123' }];
+    const { ctx, resolveRecipients } = buildCtx({ recipientSource: 'nguon_la', recipientKeys: [{ recipientKey: '-1' }] }, last);
+    await runAdapterSendNode(ctx).catch(() => {});
+    expect(resolveRecipients.mock.calls[0][0].rows).toBe(last);
   });
 });

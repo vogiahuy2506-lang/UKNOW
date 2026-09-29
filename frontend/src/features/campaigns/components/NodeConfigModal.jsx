@@ -68,6 +68,7 @@ const NodeConfigModal = ({
   edges = [],
   runLogs = [],
   campaignId = null,
+  campaignType = '',
 }) => {
   const { t } = useI18n();
   const nodeType = node?.data?.nodeType;
@@ -79,6 +80,7 @@ const NodeConfigModal = ({
       label: node?.data?.label || '',
       normalizeEmailSteps: false,
       nodeType,
+      campaignType,
     })
   );
 
@@ -168,6 +170,7 @@ const NodeConfigModal = ({
           label: node.data?.label || '',
           normalizeEmailSteps: true,
           nodeType: node.data?.nodeType,
+          campaignType,
         })
       );
       setCourseSearchQuery(config.interestedCourseQuery || '');
@@ -290,7 +293,7 @@ const NodeConfigModal = ({
         }
       }
     }
-  }, [node, nodes]);
+  }, [node, nodes, campaignType]);
 
   useEffect(() => {
     if (!isOpen || !node || nodeType !== 'read_interested_customers') {
@@ -731,6 +734,7 @@ const NodeConfigModal = ({
             telegramAccountsStatus={telegramAccountsStatus}
             telegramAccountsError={telegramAccountsError}
             onRetryTelegramAccounts={() => setTelegramAccountsReloadKey((key) => key + 1)}
+            campaignType={campaignType}
           />
         );
       case 'condition':

@@ -41,6 +41,14 @@ const campaignBuilderApiService = {
     return api.get('/campaigns/channels/telegram/accounts', options);
   },
 
+  // PR-E2 — nhóm Telegram tài khoản gửi được (đọc trực tiếp từ Telegram, có thể chậm tới ~20s).
+  getTelegramAccountGroups(accountId, options = {}) {
+    return api.get(`/campaigns/channels/telegram/accounts/${encodeURIComponent(accountId)}/groups`, {
+      timeout: 30000,
+      ...options,
+    });
+  },
+
   createCampaign(payload, options = {}) {
     return api.post('/campaigns', payload, options);
   },

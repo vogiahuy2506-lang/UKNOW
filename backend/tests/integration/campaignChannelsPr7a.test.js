@@ -173,3 +173,34 @@ describe('GET /api/campaigns/channels/telegram/accounts', () => {
     expect(res.status).toBe(403);
   });
 });
+
+describe('GET /api/campaigns/channels/telegram/accounts/:id/groups — PR-E2', () => {
+  it('tài khoản của workspace KHÁC -> 404', async () => {
+    const owner = await createUser({ username: `pre2_owner_${Date.now()}` });
+    const other = await createUser({ username: `pre2_other_${Date.now()}` });
+    const token = await loginAs(owner);
+    const foreign = await insertTelegramAccount({ userId: other.id, telegramUserId: '9001' });
+
+    const res = await request(app)
+      .get(`/api/campaigns/channels/telegram/accounts/${foreign.id}/groups`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
+  });
+
+  it('tài khoản của mình nhưng không còn phiên đăng nhập -> 409 kèm câu đăng nhập lại', async () => {
+    const owner = await createUser({ username: `pre2_owner2_${Date.now()}` });
+    const token = await loginAs(owner);
+    const mine = await insertTelegramAccount({ userId: owner.id, telegramUserId: '9002' });
+
+    const res = await request(app)
+      .get(`/api/campaigns/channels/telegram/accounts/${mine.id}/groups`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(409);
+    expect(res.body.message).toContain('đăng nhập lại');
+  });
+
+  it('chưa đăng nhập -> 401', async () => {
+    const res = await request(app).get('/api/campaigns/channels/telegram/accounts/1/groups');
+    expect(res.status).toBe(401);
+  });
+});

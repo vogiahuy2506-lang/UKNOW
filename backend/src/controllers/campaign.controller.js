@@ -30,6 +30,7 @@ import { ingestQuickSendAttachment } from '../services/campaign/quickSendAttachm
 import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 import { getEnabledAdapterChannelsForBuilder } from '../services/campaign/campaignChannelRegistry.service.js';
 import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.repository.js';
+import { listTelegramGroupsForAccount } from '../services/campaign/telegramGroups.service.js';
 
 class CampaignController {
   /**
@@ -987,6 +988,25 @@ class CampaignController {
     } catch (error) {
       console.error('Get Telegram accounts for builder error:', error);
       res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách tài khoản Telegram' });
+    }
+  }
+
+  /**
+   * GET /api/campaigns/channels/telegram/accounts/:id/groups
+   * PLAN_TELEGRAM_TRANG_THAI_PHIEN_VA_NHOM_2026-09-29 PR-E2 — nhóm Telegram tài khoản gửi được (đọc trực tiếp
+   * từ Telegram). Tài khoản phải thuộc CHỦ workspace (404), phiên hỏng → 409.
+   */
+  async getTelegramAccountGroups(req, res) {
+    try {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const data = await listTelegramGroupsForAccount({ ownerUserId, accountId: req.params.id });
+      res.json({ success: true, data });
+    } catch (error) {
+      if (error?.status && error.status < 600) {
+        return res.status(error.status).json({ success: false, message: error.message });
+      }
+      console.error('Get Telegram account groups error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách nhóm Telegram' });
     }
   }
 

@@ -34,6 +34,7 @@ const mockTgInstance = {
     return { id: 1, firstName: 'Mock', lastName: 'User', username: 'mockuser' };
   }),
   sendText: jest.fn(async () => ({ id: 999 })),
+  iterDialogs: jest.fn(),
   onNewMessage: { add: jest.fn() },
   destroy: jest.fn(async () => {}),
 };
@@ -263,6 +264,99 @@ describe('MtProtoTelegramClient.sendMessage', () => {
     await client.connect();
     await expect(client.sendMessage(null, 'x')).rejects.toThrow();
     await expect(client.sendMessage('1', null)).rejects.toThrow();
+  });
+});
+
+// PR-E2 — nhóm Telegram
+const chat = (over = {}) => ({
+  id: -1001,
+  title: 'Nhóm A',
+  displayName: 'Nhóm A',
+  chatType: 'supergroup',
+  isBanned: false,
+  isLikelyUnavailable: false,
+  isMember: true,
+  isCreator: false,
+  isAdmin: false,
+  permissions: null,
+  defaultPermissions: null,
+  membersCount: 10,
+  ...over,
+});
+const dialogsOf = (peers) => async function* () {
+  for (const peer of peers) yield { peer };
+};
+
+describe('MtProtoTelegramClient.listGroups', () => {
+  it('chỉ trả nhóm gửi được, sắp theo tên, đúng chatId (bỏ user/channel/nhóm cấm gửi/đã rời)', async () => {
+    mockTgInstance.iterDialogs.mockImplementation(dialogsOf([
+      chat({ id: -1003, title: 'Zeta', chatType: 'group' }),
+      { id: 555, title: 'Một người', chatType: undefined },
+      chat({ id: -1002, title: 'Bán hàng', chatType: 'supergroup' }),
+      chat({ id: -1004, title: 'Kênh tin', chatType: 'channel' }),
+      chat({ id: -1005, title: 'Cấm gửi', permissions: { canSendMessages: false } }),
+      chat({ id: -1006, title: 'Tắt gửi mặc định', defaultPermissions: { canSendMessages: false } }),
+      chat({ id: -1007, title: 'Tắt gửi mặc định nhưng là admin', defaultPermissions: { canSendMessages: false }, isAdmin: true }),
+      chat({ id: -1008, title: 'Đã rời', isMember: false }),
+      chat({ id: -1009, title: 'Bị cấm', isBanned: true }),
+      chat({ id: -1010, title: 'Gigagroup thường', chatType: 'gigagroup' }),
+    ]));
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const groups = await client.listGroups();
+    expect(groups.map((g) => g.chatId)).toEqual([-1002, -1007, -1003]);
+    expect(groups.map((g) => g.title)).toEqual(['Bán hàng', 'Tắt gửi mặc định nhưng là admin', 'Zeta']);
+    expect(groups[0]).toEqual({ chatId: -1002, title: 'Bán hàng', type: 'supergroup', membersCount: 10 });
+  });
+
+  it('ném TelegramTransportError khi chưa connect()', async () => {
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await expect(client.listGroups()).rejects.toBeInstanceOf(TelegramTransportError);
+  });
+});
+
+describe('MtProtoTelegramClient.sendMessage — peer chưa có trong cache', () => {
+  class MtPeerNotFoundError extends Error {}
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('nạp cache bằng iterDialogs rồi thử lại ĐÚNG 1 lần và gửi được', async () => {
+    mockTgInstance.iterDialogs.mockImplementation(dialogsOf([chat()]));
+    mockTgInstance.sendText
+      .mockReset()
+      .mockRejectedValueOnce(new MtPeerNotFoundError('Peer -1001 is not found in local cache'))
+      .mockResolvedValueOnce({ id: 42 });
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const out = await client.sendMessage(-1001, 'hi');
+    expect(out.messageId).toBe(42);
+    expect(mockTgInstance.iterDialogs).toHaveBeenCalledTimes(1);
+    expect(mockTgInstance.sendText).toHaveBeenCalledTimes(2);
+    mockTgInstance.sendText.mockReset().mockImplementation(async () => ({ id: 999 }));
+  });
+
+  it('vẫn không thấy peer sau khi nạp -> lỗi cứng câu đọc được, không thử lần 3', async () => {
+    mockTgInstance.iterDialogs.mockImplementation(dialogsOf([]));
+    mockTgInstance.sendText
+      .mockReset()
+      .mockRejectedValue(new MtPeerNotFoundError('Peer -1001 is not found in local cache'));
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    await expect(client.sendMessage(-1001, 'hi')).rejects.toThrow(/Không tìm thấy nhóm/);
+    expect(mockTgInstance.sendText).toHaveBeenCalledTimes(2);
+    expect(mockTgInstance.iterDialogs).toHaveBeenCalledTimes(1);
+    mockTgInstance.sendText.mockReset().mockImplementation(async () => ({ id: 999 }));
+  });
+
+  it('lỗi khác (không phải peer not found) -> không gọi iterDialogs', async () => {
+    mockTgInstance.sendText.mockReset().mockRejectedValueOnce(new Error('CHAT_WRITE_FORBIDDEN'));
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    await expect(client.sendMessage(-1001, 'hi')).rejects.toThrow(/CHAT_WRITE_FORBIDDEN/);
+    expect(mockTgInstance.iterDialogs).not.toHaveBeenCalled();
+    mockTgInstance.sendText.mockReset().mockImplementation(async () => ({ id: 999 }));
   });
 });
 

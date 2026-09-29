@@ -188,6 +188,18 @@ export const fetchTelegramAccountOptions = async ({ signal } = {}) => {
 };
 
 /**
+ * PR-E2 — nhóm Telegram của một tài khoản (đọc trực tiếp từ Telegram).
+ *
+ * @param {number|string} accountId
+ * @param {{ signal?: AbortSignal }} [options]
+ * @returns {Promise<Array<{chatId: number, title: string, type: string, membersCount: number|null}>>}
+ */
+export const fetchTelegramGroupOptions = async (accountId, { signal } = {}) => {
+  const response = await campaignBuilderApiService.getTelegramAccountGroups(accountId, signal ? { signal } : {});
+  return Array.isArray(response.data?.data) ? response.data.data : [];
+};
+
+/**
  * Resolve selection mode with backward compatibility from legacy selected IDs.
  *
  * @param {string|undefined|null} mode explicit mode from config
@@ -208,6 +220,7 @@ export const createNodeConfigFormData = ({
   label = '',
   normalizeEmailSteps = false,
   nodeType = '',
+  campaignType = '',
 }) => ({
   label: label || '',
   description: config.description || '',
@@ -267,7 +280,10 @@ export const createNodeConfigFormData = ({
   sendMode: config.sendMode || 'all',
   // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — trường này dùng chung với email/Zalo
   // (mặc định 'manual'); riêng send_telegram mặc định 'telegram_conversations' (nguồn hội thoại).
-  recipientSource: config.recipientSource || (nodeType === 'send_telegram' ? 'telegram_conversations' : 'manual'),
+  // PR-E2: chiến dịch 'telegram_group' mặc định nguồn nhóm đã chọn.
+  recipientSource: config.recipientSource || (nodeType === 'send_telegram'
+    ? (String(campaignType || '').trim().toLowerCase() === 'telegram_group' ? 'telegram_groups' : 'telegram_conversations')
+    : 'manual'),
   recipientColumn: config.recipientColumn || '',
   recipientEmails: config.recipientEmails || '',
   recipientNodeId: config.recipientNodeId || '',
@@ -411,7 +427,10 @@ export const createNodeConfigFormData = ({
   // chuỗi thô (mỗi dòng một chat id) trong form, tách mảng lúc lưu (handleNodeConfigSaveClick) —
   // cùng khuôn recipientEmails/zaloRecipientPhones ở trên. `steps` chỉ 1 bước v1 (một ô soạn tin).
   telegramAccountId: config.telegramAccountId || '',
-  recipientKeys: Array.isArray(config.recipientKeys) ? config.recipientKeys.join('\n') : (config.recipientKeys || ''),
+  // PR-E2: nguồn 'telegram_groups' giữ MẢNG [{recipientKey, display}] (không join thành chuỗi).
+  recipientKeys: config.recipientSource === 'telegram_groups' && Array.isArray(config.recipientKeys)
+    ? config.recipientKeys
+    : (Array.isArray(config.recipientKeys) ? config.recipientKeys.join('\n') : (config.recipientKeys || '')),
   steps: Array.isArray(config.steps) && config.steps.length ? config.steps : [{ message: '' }],
 });
 
@@ -770,6 +789,13 @@ export const handleNodeConfigSaveClick = async ({
     if (message.length > 4000) {
       toastNotifier.error('Nội dung tin nhắn Telegram không được quá 4000 ký tự.');
       return;
+    }
+    if (formData.recipientSource === 'telegram_groups') {
+      const groups = Array.isArray(formData.recipientKeys) ? formData.recipientKeys : [];
+      if (!groups.some((g) => /^-?\d+$/.test(String(g?.recipientKey ?? '').trim()))) {
+        toastNotifier.error('Vui lòng chọn ít nhất 1 nhóm Telegram.');
+        return;
+      }
     }
     if (formData.recipientSource === 'manual') {
       const chatIdPattern = /^-?\d+$/;

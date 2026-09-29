@@ -66,6 +66,7 @@ export const CampaignNameModal = ({
               <option value="zalo">{t('campaignBuilder.zaloPersonal')}</option>
               <option value="zalo_group">{t('campaignBuilder.zaloGroup')}</option>
               {campaignType === 'telegram' ? <option value="telegram">{t('campaigns.telegram')}</option> : null}
+              {campaignType === 'telegram_group' ? <option value="telegram_group">{t('campaigns.telegramGroup')}</option> : null}
               {campaignType === 'mixed' ? <option value="mixed">{t('campaignBuilder.mixed')}</option> : null}
             </select>
           </div>

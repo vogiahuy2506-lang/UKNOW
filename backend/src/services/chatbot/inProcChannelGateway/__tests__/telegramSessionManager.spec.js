@@ -169,6 +169,25 @@ beforeEach(async () => {
   lastStorageProvider = null;
 });
 
+describe('TelegramSessionManager.listGroups', () => {
+  it('ném TelegramTransportError khi không có phiên', async () => {
+    repoStub.getSessionString.mockResolvedValueOnce(null);
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    await expect(mgr.listGroups(12345)).rejects.toBeInstanceOf(TelegramTransportError);
+  });
+
+  it('gọi client.listGroups qua record.exec và trả kết quả', async () => {
+    repoStub.getSessionString.mockResolvedValueOnce({ kv: {} });
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    const client = await mgr.getClient(12345);
+    client.listGroups = jest.fn(async () => [{ chatId: -1001, title: 'A', type: 'supergroup', membersCount: 3 }]);
+    await expect(mgr.listGroups(12345, { limit: 50 })).resolves.toEqual([
+      { chatId: -1001, title: 'A', type: 'supergroup', membersCount: 3 },
+    ]);
+    expect(client.listGroups).toHaveBeenCalledWith({ limit: 50 });
+  });
+});
+
 describe('TelegramSessionManager.getClient', () => {
   it('returns null when no session is stored', async () => {
     repoStub.getSessionString.mockResolvedValueOnce(null);

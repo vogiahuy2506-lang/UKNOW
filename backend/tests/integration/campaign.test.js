@@ -855,7 +855,7 @@ describe('POST /api/campaigns', () => {
     expect(res.status).toBe(400);
   });
 
-  // PR-E1: 'telegram' là loại chiến dịch riêng; 'telegram_group' chưa mở (PR-E2).
+  // PR-E1: 'telegram' là loại chiến dịch riêng; PR-E2 mở thêm 'telegram_group'.
   it("campaignType 'telegram' → 201, đọc lại đúng loại (API + cột DB)", async () => {
     const o = await createUser({ role: 'user', username: 'o_tg_type' });
     const t = await loginAs(o);
@@ -876,14 +876,24 @@ describe('POST /api/campaigns', () => {
     expect(detail.body.data.campaignType).toBe('telegram');
   });
 
-  it("campaignType 'telegram_group' → 400 (chưa mở, chờ PR-E2)", async () => {
+  it("campaignType 'telegram_group' → 201, đọc lại đúng loại (API + cột DB) — PR-E2", async () => {
     const o = await createUser({ role: 'user', username: 'o_tg_group' });
     const t = await loginAs(o);
     const res = await request(app)
       .post('/api/campaigns')
       .set('Authorization', `Bearer ${t}`)
       .send({ campaignName: 'Telegram nhóm', campaignType: 'telegram_group' });
-    expect(res.status).toBe(400);
+    expect(res.status).toBe(201);
+    expect(res.body.data.campaignType).toBe('telegram_group');
+
+    const { rows } = await db.query('SELECT campaign_type FROM campaigns WHERE id = $1', [res.body.data.id]);
+    expect(rows[0].campaign_type).toBe('telegram_group');
+
+    const detail = await request(app)
+      .get(`/api/campaigns/${res.body.data.id}`)
+      .set('Authorization', `Bearer ${t}`);
+    expect(detail.status).toBe(200);
+    expect(detail.body.data.campaignType).toBe('telegram_group');
   });
 
   it('vượt max_campaigns trong plan → 400', async () => {

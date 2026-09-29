@@ -614,23 +614,29 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
     }
     const t0 = Date.now();
     console.log(`[MtProtoTelegramClient] sendMessage start chatId=${chatId} textLen=${String(text).length} elapsed=${Date.now() - t0}ms`);
-    let sendTimeout;
     try {
-      // mtcute's `sendText` accepts a peer-shaped argument; the
-      // chatId we receive is already a Telegram user id (string
-      // of digits). Wrap it in the appropriate InputPeer shape.
-      const sendPromise = this._tg.sendText(chatId, text);
-      console.log(`[MtProtoTelegramClient] sendText returned promise, awaiting...`);
-      // Sentinel: a tick to detect event-loop starvation.
-      const tickPromise = new Promise((resolve) => setImmediate(resolve));
-      let timedOut = false;
-      const timeoutPromise = new Promise((_, reject) => {
-        sendTimeout = setTimeout(() => {
-          timedOut = true;
-          reject(new Error('mtcute sendText timeout (20s)'));
-        }, 20000);
-      });
-      const result = await Promise.race([sendPromise, timeoutPromise]);
+      let result;
+      try {
+        result = await this._sendTextWithTimeout(chatId, text);
+      } catch (err) {
+        // Peer (nhom/supergroup) chua co trong peer cache -> nap cache bang
+        // MOT lan duyet dialogs roi thu lai DUNG 1 lan. Khong thu lai vo han.
+        if (!isPeerNotFoundError(err)) throw err;
+        console.warn(`[MtProtoTelegramClient] peer ${chatId} not in cache — warming via iterDialogs then retry once`);
+        try {
+          await this._warmPeerCache();
+        } catch (warmErr) {
+          console.warn(`[MtProtoTelegramClient] warm peer cache failed: ${warmErr.message}`);
+        }
+        try {
+          result = await this._sendTextWithTimeout(chatId, text);
+        } catch (err2) {
+          if (isPeerNotFoundError(err2)) {
+            throw new Error('Không tìm thấy nhóm — tài khoản không còn trong nhóm?');
+          }
+          throw err2;
+        }
+      }
       console.log(`[MtProtoTelegramClient] sendMessage OK after ${Date.now() - t0}ms id=${result?.id}`);
       return { messageId: result?.id ?? null };
     } catch (err) {
@@ -639,9 +645,78 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
       throw new TelegramTransportError(
         `MtProtoTelegramClient.sendMessage failed: ${err.message}`
       );
+    }
+  }
+
+  /** sendText with the 20s guard. Returns the raw mtcute message. */
+  async _sendTextWithTimeout(chatId, text) {
+    let sendTimeout;
+    try {
+      // mtcute's `sendText` accepts a peer-shaped argument; the
+      // chatId we receive is already a Telegram marked id (number).
+      const sendPromise = this._tg.sendText(chatId, text);
+      const timeoutPromise = new Promise((_, reject) => {
+        sendTimeout = setTimeout(() => {
+          reject(new Error('mtcute sendText timeout (20s)'));
+        }, 20000);
+      });
+      return await Promise.race([sendPromise, timeoutPromise]);
     } finally {
       if (sendTimeout) clearTimeout(sendTimeout);
     }
+  }
+
+  /**
+   * Duyet dialogs de mtcute luu peer (access hash) vao cache/blob phien.
+   * `client.call` cua mtcute tu goi storage.peers.updatePeersFrom.
+   */
+  async _warmPeerCache(limit = 500) {
+    let n = 0;
+    for await (const _d of this._tg.iterDialogs({ limit })) {
+      n += 1;
+      if (n >= limit) break;
+    }
+    return n;
+  }
+
+  /**
+   * Danh sach nhom/supergroup ma tai khoan gui duoc.
+   * v1: bo `channel` phat song (chi chu/admin dang duoc, chua ho tro), monoforum, community.
+   *
+   * @returns {Promise<Array<{chatId:number,title:string,type:string,membersCount:number|null}>>}
+   */
+  async listGroups({ limit = 500 } = {}) {
+    if (!this._tg) {
+      throw new TelegramTransportError(
+        'MtProtoTelegramClient.listGroups called before connect()'
+      );
+    }
+    const out = [];
+    const seen = new Set();
+    let n = 0;
+    try {
+      for await (const dialog of this._tg.iterDialogs({ limit })) {
+        n += 1;
+        const chat = dialog?.peer;
+        if (!isSendableGroup(chat)) continue;
+        const chatId = Number(chat.id);
+        if (!Number.isFinite(chatId) || seen.has(chatId)) continue;
+        seen.add(chatId);
+        out.push({
+          chatId,
+          title: String(chat.title || chat.displayName || chatId),
+          type: chat.chatType,
+          membersCount: Number.isFinite(chat.membersCount) ? chat.membersCount : null,
+        });
+        if (n >= limit) break;
+      }
+    } catch (err) {
+      throw new TelegramTransportError(
+        `MtProtoTelegramClient.listGroups failed: ${err.message}`
+      );
+    }
+    out.sort((a, b) => a.title.localeCompare(b.title, 'vi'));
+    return out;
   }
 
   /**
@@ -669,6 +744,40 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
     if (this._storageProvider) return 'postgres:loaded';
     return `mtcute:${this._storageKey}`;
   }
+}
+
+const GROUP_CHAT_TYPES = new Set(['group', 'supergroup', 'gigagroup']);
+
+/** mtcute MtPeerNotFoundError (peer khong co trong cache local). */
+function isPeerNotFoundError(err) {
+  if (!err) return false;
+  return (
+    err.constructor?.name === 'MtPeerNotFoundError' ||
+    err.name === 'MtPeerNotFoundError' ||
+    /not found in local cache/i.test(String(err.message || ''))
+  );
+}
+
+/**
+ * Nhom ma tai khoan co the gui tin. Duck-typed tren mtcute `Chat`.
+ * Loai: channel phat song, monoforum, community, nhom bi cam/da roi/da xoa,
+ * nhom bi tat gui tin (tru admin/chu), gigagroup khi khong phai admin.
+ */
+function isSendableGroup(chat) {
+  if (!chat || !GROUP_CHAT_TYPES.has(chat.chatType)) return false;
+  if (chat.isBanned || chat.isLikelyUnavailable) return false;
+  if (chat.isMember === false) return false;
+  const privileged = Boolean(chat.isCreator || chat.isAdmin);
+  if (chat.chatType === 'gigagroup' && !privileged) return false;
+  if (chat.permissions && chat.permissions.canSendMessages === false) return false;
+  if (
+    !privileged &&
+    chat.defaultPermissions &&
+    chat.defaultPermissions.canSendMessages === false
+  ) {
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -730,6 +839,6 @@ function buildDefaultDcs(list) {
 }
 
 // Exported for unit tests; do not use at runtime.
-export const __test__ = { parseDcWhitelist, buildDefaultDcs };
+export const __test__ = { parseDcWhitelist, buildDefaultDcs, isSendableGroup, isPeerNotFoundError };
 
 export default MtProtoTelegramClient;

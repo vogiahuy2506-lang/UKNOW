@@ -281,6 +281,9 @@ function makeTelegramFacade(state) {
         String(text)
       ),
 
+    listGroups: (telegramUserId, opts) =>
+      sessionManager.listGroups(Number(telegramUserId), opts),
+
     ensureHandler: async () => ({ data: { ok: true } }),
   };
 }
