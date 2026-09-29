@@ -337,16 +337,6 @@ class ChatbotRepository {
     return rows.reverse();
   }
 
-  async findWebChatConversationWithOwner(conversationId) {
-    const { rows } = await db.query(
-      `SELECT wc.*, ww.id_user FROM webchat_conversations wc
-       JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
-       WHERE wc.id = $1`,
-      [conversationId]
-    );
-    return rows[0] || null;
-  }
-
   async findActiveWebChatConversationId({ widgetConfigId, sessionId }) {
     const { rows } = await db.query(
       `SELECT id FROM webchat_conversations
