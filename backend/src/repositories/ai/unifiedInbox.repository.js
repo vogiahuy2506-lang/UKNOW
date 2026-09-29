@@ -873,6 +873,19 @@ class UnifiedInboxRepository {
   }
 
   /**
+   * Ghi id tin phía nhà cung cấp (vd key.id WhatsApp) vào dòng tin gửi tay đã lưu của
+   * `channel_messages` — để listener nhận ra echo (fromMe) của chính tin đó, khỏi tự dừng AI lần nữa.
+   * Không ghi đè id đã có.
+   */
+  async bindChannelMessageExternalId(messageId, externalId) {
+    if (!messageId || externalId == null || externalId === '') return;
+    await db.query(
+      `UPDATE channel_messages SET external_id = $2 WHERE id = $1 AND external_id IS NULL`,
+      [messageId, String(externalId)]
+    );
+  }
+
+  /**
    * Whether AI auto-reply is paused for this conversation (owner handoff).
    * Lazy auto-resume when owner setting ai_handoff_auto_resume_minutes has elapsed
    * since ai_paused_at (see aiHandoffResume.util.js).

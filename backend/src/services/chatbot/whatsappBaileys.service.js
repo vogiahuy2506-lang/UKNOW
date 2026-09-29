@@ -463,7 +463,8 @@ async function buildSocket(sessionKey, emitter) {
   sock.ev.on('messages.upsert', async (msgSet) => {
     for (const msg of msgSet.messages || []) {
       captureNameFromMessage(msg);
-      emitter.emit('message', { sessionKey, message: msg });
+      // `type` ('notify' | 'append') để listener phân biệt tin chủ gõ trực tiếp với echo/tin cũ.
+      emitter.emit('message', { sessionKey, message: msg, type: msgSet.type });
       if (msg.key?.remoteJid && !msg.key.fromMe) {
         try {
           await maybeAutoReply(sock, msg, emitter);

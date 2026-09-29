@@ -27,6 +27,10 @@ import chatRouterService from './chatRouter.service.js';
 import { detectOffTopicReply, buildOffTopicFallback } from '../../utils/aiOffTopicReply.util.js';
 import inboundReplyDebounceService from './inboundReplyDebounce.service.js';
 import { formatBatchedContent } from '../../utils/chatbotReplyBatch.util.js';
+import sseService from '../sse.service.js';
+import unifiedInboxRepository from '../../repositories/ai/unifiedInbox.repository.js';
+import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
+import { isOwnerOutgoingEcho } from '../../utils/ownerOutgoingEcho.util.js';
 
 const log = (...args) => console.log('[WhatsApp/Baileys/Inbox]', ...args);
 
@@ -125,16 +129,16 @@ function resolveSenderName(phone, directName) {
 }
 
 /**
- * Bỏ qua tin nhắn từ chính mình (echo), tin nhắn từ group broadcast, status.
+ * Bỏ qua tin nhóm, broadcast, status (chỉ xử lý chat 1-1; nhóm cần router riêng).
+ * Tin `fromMe` KHÔNG bị bỏ ở đây nữa: tin 1-1 chủ gõ từ điện thoại đi nhánh `handleOwnerOutgoing`
+ * (dừng AI), còn tin bot vừa gửi được khử echo ở đó.
  */
 function shouldSkip(msg) {
   if (!msg?.key) return true;
-  if (msg.key.fromMe === true) return true;
   const jid = extractSenderJid(msg);
   if (!jid) return true;
   if (jid.endsWith('@broadcast')) return true;
   if (jid === 'status@broadcast') return true;
-  // Chỉ xử lý 1-1 chat; group cần router riêng (Zalo có sẵn flow).
   if (jid.endsWith('@g.us')) return true;
   return false;
 }
@@ -241,7 +245,7 @@ async function getOrCreateConversation({ sessionKey, ownerUserId, externalPhone,
  * uniq_chatbot_message_conversation_external (nếu có) để chống Baileys
  * upsert trùng message.
  */
-async function persistMessage({ conversationId, channelId, userId, role, content, externalId, externalMessageId }) {
+async function persistMessage({ conversationId, channelId, userId, role, content, externalId, externalMessageId, metadata }) {
   const externalRef = externalId || externalMessageId || null;
   // channel_messages không có unique index trên (conversation, external_id)
   // nên dùng cách check trước để idempotent:
@@ -251,17 +255,123 @@ async function persistMessage({ conversationId, channelId, userId, role, content
        WHERE id_conversation = $1 AND external_id = $2 LIMIT 1`,
       [conversationId, externalRef]
     );
-    if (dup[0]) return dup[0];
+    if (dup[0]) return { ...dup[0], duplicate: true };
   }
   const { rows } = await db.query(
     `INSERT INTO channel_messages
        (id_conversation, id_user, id_channel, role, content, message_type,
         external_id, external_ts, attachments, metadata, raw_data)
-     VALUES ($1, $2, $3, $4, $5, 'text', $6, NOW(), '[]'::jsonb, '{}'::jsonb, '{}'::jsonb)
+     VALUES ($1, $2, $3, $4, $5, 'text', $6, NOW(), '[]'::jsonb, $7::jsonb, '{}'::jsonb)
      RETURNING id`,
-    [conversationId, userId, channelId, role, content, externalRef]
+    [conversationId, userId, channelId, role, content, externalRef, JSON.stringify(metadata || {})]
   );
   return rows[0];
+}
+
+/**
+ * Ghi id tin WhatsApp vừa gửi vào dòng bot đã lưu — để khi WhatsApp đẩy lại tin đó (fromMe) ta nhận
+ * ra là echo (khuôn Zalo `bindZaloPersonalOutboundMsgIds`). Best-effort.
+ */
+async function bindBotExternalId(rowId, messageId) {
+  if (!rowId || !messageId) return;
+  try {
+    await db.query(
+      `UPDATE channel_messages SET external_id = $2 WHERE id = $1 AND external_id IS NULL`,
+      [rowId, String(messageId)]
+    );
+  } catch (err) {
+    log('bindBotExternalId failed:', err.message);
+  }
+}
+
+/**
+ * Chủ đang tạm dừng AI cho hội thoại này? Dùng chung `isAiPaused` của Hộp thư: TỰ BẬT LẠI khi
+ * quá `ai_handoff_auto_resume_minutes` (đọc cờ thô thì tạm dừng kẹt vĩnh viễn).
+ */
+async function isConversationAiPaused(conversationId) {
+  return unifiedInboxRepository.isAiPaused(conversationId, 'channel');
+}
+
+/**
+ * Chủ tự gõ từ điện thoại tới khách 1-1 → dừng AI cho MỌI hội thoại của (sessionKey, phone)
+ * (nhiều chatbot = nhiều dòng), ghi dòng `agent` + SSE. Echo của tin bot/Hộp thư vừa gửi → bỏ.
+ * Echo quyết định trên TOÀN BỘ hội thoại của số đó: tin bot nằm ở hội thoại của MỘT chatbot,
+ * không được dừng nhầm hội thoại của chatbot còn lại.
+ */
+async function handleOwnerOutgoing({ sessionKey, msg, type }) {
+  // 'append' = tin do chính socket này gửi (echo `emitOwnEvents`) hoặc tin cũ giao lúc offline.
+  // Chủ gõ trực tiếp lúc socket online về dạng 'notify'.
+  if (type === 'append') {
+    log(`[owner-outgoing] skipped session=${sessionKey} reason=append`);
+    return;
+  }
+  if (shouldSkip(msg)) return;
+  const jid = extractSenderJid(msg);
+  const text = extractMessageText(msg);
+  const waMessageId = extractMessageId(msg);
+  if (!jid || !text) return;
+  const phone = jid.split('@')[0];
+  const ownerUserId = parseInt(sessionKey.split('-')[0], 10);
+  if (!Number.isFinite(ownerUserId)) return;
+
+  const { rows: conversations } = await db.query(
+    `SELECT id, id_channel, visitor_name FROM channel_conversations
+     WHERE id_user = $1 AND channel = 'whatsapp_baileys'
+       AND starts_with(external_id, $2)
+       AND right(external_id, length($3)) = $3`,
+    [ownerUserId, `baileys:${sessionKey}:`, `:${phone}`]
+  );
+  if (!conversations.length) return;
+
+  const candidates = [];
+  for (const conv of conversations) {
+    const { rows } = await db.query(
+      `SELECT external_id, content, created_at FROM channel_messages
+       WHERE id_conversation = $1 AND role IN ('bot', 'agent')
+         AND created_at >= NOW() - INTERVAL '5 minutes'
+       ORDER BY id DESC LIMIT 40`,
+      [conv.id]
+    );
+    for (const r of rows || []) {
+      candidates.push({ externalId: r.external_id, content: r.content, createdAt: r.created_at });
+    }
+  }
+  if (isOwnerOutgoingEcho({ incomingId: waMessageId, incomingContent: text, candidates })) {
+    log(`[owner-outgoing] echo skipped session=${sessionKey} msgId=${waMessageId}`);
+    return;
+  }
+
+  for (const conv of conversations) {
+    await persistMessage({
+      conversationId: conv.id,
+      channelId: conv.id_channel,
+      userId: ownerUserId,
+      role: 'agent',
+      content: text,
+      externalMessageId: waMessageId,
+      metadata: { source: 'owner_phone' },
+    });
+    const pausedRow = await unifiedInboxRepository.setAiPaused(conv.id, 'channel', true, 'handoff');
+    const pauseState = await buildAiPausePayload({
+      aiPaused: pausedRow.aiPaused,
+      aiPausedAt: pausedRow.aiPausedAt,
+      ownerUserId,
+    });
+    sseService.broadcast(String(ownerUserId), 'inbox:new_message', {
+      conversationId: conv.id,
+      conversationType: 'channel',
+      type: 'channel',
+      channel: 'whatsapp_baileys',
+      message: text,
+      senderName: null,
+      visitorName: conv.visitor_name || null,
+      role: 'agent',
+      isSelf: true,
+      timestamp: new Date().toISOString(),
+      ...pauseState,
+    });
+    log(`[owner-outgoing] session=${sessionKey} conversation=${conv.id} owner replied from phone → AI paused`);
+  }
 }
 
 /**
@@ -379,9 +489,13 @@ async function resolveChatbotSettingsForBatch({ ownerUserId, sessionKey, chatbot
 /**
  * Xử lý 1 inbound message từ Baileys — persist và enqueue vào debounce bucket.
  */
-async function processIncomingMessage({ sessionKey, msg }) {
+async function processIncomingMessage({ sessionKey, msg, type }) {
   log(`[incoming] session=${sessionKey} raw=${JSON.stringify({ key: msg?.key, hasMsg: !!msg?.message }).slice(0, 200)}`);
   try {
+    if (msg?.key?.fromMe === true) {
+      await handleOwnerOutgoing({ sessionKey, msg, type });
+      return;
+    }
     if (shouldSkip(msg)) {
       log(`[incoming] skipped session=${sessionKey} reason=shouldSkip`);
       return;
@@ -439,16 +553,27 @@ async function processIncomingMessage({ sessionKey, msg }) {
         userId: ownerUserId,
         role: 'visitor',
         content: messageText,
-        externalId,
         externalMessageId: messageId,
       });
 
-      // Pause check trực tiếp trên channel_conversations.ai_paused.
-      const { rows: pauseRows } = await db.query(
-        `SELECT ai_paused FROM channel_conversations WHERE id = $1`,
-        [conversation.id]
-      );
-      if (pauseRows[0]?.ai_paused === true) {
+      // Hộp thư tự cập nhật khi khách nhắn (khuôn zaloInbox) — FE đọc conversationId/type/channel/message.
+      if (!persistResult?.duplicate) {
+        sseService.broadcast(String(ownerUserId), 'inbox:new_message', {
+          conversationId: conversation.id,
+          conversationType: 'channel',
+          type: 'channel',
+          channel: 'whatsapp_baileys',
+          message: messageText,
+          senderId: externalId,
+          senderName: senderName || null,
+          visitorName: senderName || null,
+          role: 'visitor',
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      // Tạm dừng (chủ đang trả lời tay) — có tự bật lại theo ai_handoff_auto_resume_minutes.
+      if (await isConversationAiPaused(conversation.id)) {
         log(`session=${sessionKey} conversation=${conversation.id} AI paused — tin khách đã lưu, không gọi AI`);
         continue;
       }
@@ -476,6 +601,7 @@ async function processIncomingMessage({ sessionKey, msg }) {
               userId: ownerUserId,
               role: 'bot',
               content: activeCheck.staticReply,
+              externalId: sent?.messageId,
             });
             await chatbotActiveHoursService.markNotified({
               channel: 'whatsapp_baileys',
@@ -580,6 +706,7 @@ async function _processWhatsAppBaileysBatch({ batch }) {
             userId: ownerUserId,
             role: 'bot',
             content: rate.staticReply,
+            externalId: sent?.messageId,
           });
           await chatbotRateLimitService.markRateLimitNotified({
             channel: 'whatsapp_baileys',
@@ -615,18 +742,19 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     // Hạn mức credit AI của chủ: hết credit thì gửi câu báo cho khách, KHÔNG gọi AI.
     const creditPrep = await chatRouterService._prepareChatCredit(ownerUserId, CREDIT_FEATURE);
     if (creditPrep.visitorMessage) {
-      await persistMessage({
+      const creditRow = await persistMessage({
         conversationId,
         channelId: idChannelConnection,
         userId: ownerUserId,
         role: 'bot',
         content: creditPrep.visitorMessage,
       });
-      await whatsappAdapter.sendReply({
+      const creditSent = await whatsappAdapter.sendReply({
         channelId: sessionKey,
         externalId,
         message: creditPrep.visitorMessage,
       });
+      await bindBotExternalId(creditRow?.id, creditSent?.messageId);
       log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=out_of_credit`);
       return;
     }
@@ -681,18 +809,19 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       if (aiUsageMeter.isLimitError(aiError) || aiCreditMeter.isLimitError(aiError)) {
         // Chạm giới hạn giữa chừng: báo khách, KHÔNG trừ credit.
         log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=ai_limit error=${aiError.message}`);
-        await persistMessage({
+        const limitRow = await persistMessage({
           conversationId,
           channelId: idChannelConnection,
           userId: ownerUserId,
           role: 'bot',
           content: VISITOR_CHAT_ERROR_MESSAGE,
         });
-        await whatsappAdapter.sendReply({
+        const limitSent = await whatsappAdapter.sendReply({
           channelId: sessionKey,
           externalId,
           message: VISITOR_CHAT_ERROR_MESSAGE,
         });
+        await bindBotExternalId(limitRow?.id, limitSent?.messageId);
         return;
       }
       throw aiError;
@@ -721,7 +850,7 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     }
 
     // Persist bot reply
-    await persistMessage({
+    const botRow = await persistMessage({
       conversationId,
       channelId: idChannelConnection,
       userId: ownerUserId,
@@ -730,11 +859,12 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     });
 
     // Gửi qua WhatsApp
-    await whatsappAdapter.sendReply({
+    const sentReply = await whatsappAdapter.sendReply({
       channelId: sessionKey,
       externalId,
       message: cleanReply,
     });
+    await bindBotExternalId(botRow?.id, sentReply?.messageId);
 
     log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} result=sent`);
   } catch (err) {
@@ -766,6 +896,7 @@ export function registerSessionHandlers(sessionKey) {
     processIncomingMessage({
       sessionKey,
       msg: payload.message,
+      type: payload.type,
     });
   });
   log(`Subscribed message handler for session=${sessionKey}`);

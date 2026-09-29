@@ -59,6 +59,15 @@ beforeEach(async () => {
     settingsSqls: [],
     repliesEnabled: undefined,
     paused: false,
+    pausedAt: null,
+    autoResume: null,
+    ownerConvs: [{ id: 101, id_channel: 9, visitor_name: 'Alice' }],
+    recent: {},
+    inserts: [],
+    pauseUpdates: [],
+    resumeClears: 0,
+    bindUpdates: [],
+    sse: [],
     prepareCredit: jest.fn(async () => ({ creditContext: { ctx: 1 } })),
     chargeCredit: jest.fn(async () => {}),
     getOwnerContact: jest.fn(async () => ({ phone: '0900000000' })),
@@ -76,10 +85,30 @@ beforeEach(async () => {
           return { rows: [{ id_chatbot: CHATBOT_ID, active_hours: null, replies_enabled: m.repliesEnabled }] };
         }
         if (/FROM channel_connections/i.test(s)) return { rows: [{ id: 9 }] };
-        if (/FROM channel_conversations/i.test(s) && /ai_paused/i.test(s)) return { rows: [{ ai_paused: m.paused }] };
+        if (/UPDATE channel_conversations/i.test(s) && /SET ai_paused = \$2/i.test(s)) {
+          m.pauseUpdates.push(params[0]);
+          return { rows: [{ ai_paused: true, ai_paused_at: new Date() }] };
+        }
+        if (/UPDATE channel_conversations/i.test(s) && /SET ai_paused = false/i.test(s)) {
+          m.resumeClears += 1;
+          return { rows: [] };
+        }
+        if (/UPDATE channel_messages SET external_id/i.test(s)) {
+          m.bindUpdates.push(params);
+          return { rows: [] };
+        }
+        if (/FROM users/i.test(s) && /ai_handoff_auto_resume_minutes/i.test(s)) {
+          return { rows: [{ ai_handoff_auto_resume_minutes: m.autoResume }] };
+        }
+        if (/FROM channel_conversations/i.test(s) && /starts_with/i.test(s)) return { rows: m.ownerConvs };
+        if (/FROM channel_messages/i.test(s) && /role IN/i.test(s)) return { rows: m.recent[params[0]] || [] };
+        if (/FROM channel_conversations/i.test(s) && /ai_paused/i.test(s)) {
+          return { rows: [{ ai_paused: m.paused, ai_paused_at: m.pausedAt, id_user: 42 }] };
+        }
         if (/FROM channel_conversations/i.test(s)) return { rows: [{ id: 101 }] };
         if (/FROM channel_messages/i.test(s) && /external_id = \$2/i.test(s)) return { rows: [] };
         if (/INSERT INTO channel_messages/i.test(s)) {
+          m.inserts.push(params);
           if (params[3] === 'bot') m.botInserts.push(params[4]);
           if (params[3] === 'visitor') m.visitorInserts.push(params[4]);
           return { rows: [{ id: 1000 + m.botInserts.length + Math.floor(Math.random() * 1e6) }] };
@@ -87,6 +116,9 @@ beforeEach(async () => {
         return { rows: [] };
       }),
     },
+  }));
+  jest.unstable_mockModule(resolveUrl('services/sse.service.js'), () => ({
+    default: { broadcast: (...a) => m.sse.push(a) },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/whatsappBaileys.service.js'), () => ({
     listSessions: () => m.sessions,
@@ -304,5 +336,160 @@ describe('WhatsApp Baileys — hội thoại đang tạm dừng AI', () => {
   it('ai_paused=false: tin khách lưu đúng 1 lần (không lưu đôi sau khi dời lên trước kiểm tạm dừng)', async () => {
     await sendTexts(['Cho mình hỏi giá áo thun size L']);
     expect(m.visitorInserts).toEqual(['Cho mình hỏi giá áo thun size L']);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// W6 — chủ trả lời từ điện thoại → dừng AI; khử echo; id tin đi; SSE.
+
+const OWNER_JID = '84901234567@s.whatsapp.net';
+
+function fromMe(id, text, { jid = OWNER_JID, type } = {}) {
+  return { message: { key: { remoteJid: jid, id, fromMe: true }, message: { conversation: text } }, type };
+}
+
+async function emitRaw(events) {
+  const emitter = new EventEmitter();
+  m.sessions = [{ sessionKey: SESSION_KEY, emitter }];
+  mod.registerSessionHandlers(SESSION_KEY);
+  events.forEach((e) => emitter.emit('message', { sessionKey: SESSION_KEY, ...e }));
+  for (let i = 0; i < 60; i += 1) await new Promise((r) => setImmediate(r));
+}
+
+const agentInserts = () => m.inserts.filter((p) => p[3] === 'agent');
+const selfSse = () => m.sse.filter(([, ev, data]) => ev === 'inbox:new_message' && data.isSelf === true);
+
+describe('WhatsApp Baileys — chủ trả lời từ điện thoại (fromMe)', () => {
+  it('(a) fromMe có id khớp dòng bot vừa gửi → echo: không lưu, không dừng AI, không SSE', async () => {
+    m.recent[101] = [{ external_id: 'BOT-ID-1', content: 'nội dung khác hẳn', created_at: new Date() }];
+    await emitRaw([fromMe('BOT-ID-1', 'gõ gì đó')]);
+    expect(agentInserts()).toHaveLength(0);
+    expect(m.pauseUpdates).toHaveLength(0);
+    expect(selfSse()).toHaveLength(0);
+  });
+
+  it('(b) fromMe nội dung trùng dòng bot trong 5 phút (chưa có id) → echo', async () => {
+    m.recent[101] = [{ external_id: null, content: 'Dạ shop còn hàng ạ', created_at: new Date() }];
+    await emitRaw([fromMe('LA-1', 'Dạ shop còn hàng ạ')]);
+    expect(agentInserts()).toHaveLength(0);
+    expect(m.pauseUpdates).toHaveLength(0);
+  });
+
+  it('(b2) nội dung trùng nhưng dòng bot đã quá 5 phút → KHÔNG phải echo', async () => {
+    m.recent[101] = [{ external_id: null, content: 'Dạ shop còn hàng ạ', created_at: new Date(Date.now() - 10 * 60 * 1000) }];
+    await emitRaw([fromMe('LA-2', 'Dạ shop còn hàng ạ')]);
+    expect(m.pauseUpdates).toEqual([101]);
+  });
+
+  it('(c) fromMe lạ → dòng agent + ai_paused cho CẢ 2 hội thoại của 2 chatbot, SSE đúng 1 lần mỗi hội thoại', async () => {
+    m.ownerConvs = [
+      { id: 101, id_channel: 9, visitor_name: 'Alice' },
+      { id: 102, id_channel: 9, visitor_name: 'Alice' },
+    ];
+    await emitRaw([fromMe('PHONE-1', 'Để mình tư vấn trực tiếp nhé', { type: 'notify' })]);
+    const agents = agentInserts();
+    expect(agents).toHaveLength(2);
+    expect(agents.map((p) => p[0]).sort()).toEqual([101, 102]);
+    expect(agents[0][4]).toBe('Để mình tư vấn trực tiếp nhé');
+    expect(agents[0][5]).toBe('PHONE-1');
+    expect(m.pauseUpdates.sort()).toEqual([101, 102]);
+    const sse = selfSse();
+    expect(sse).toHaveLength(2);
+    expect(sse.map(([uid]) => uid)).toEqual(['42', '42']);
+    expect(sse.map(([, , d]) => d.conversationId).sort()).toEqual([101, 102]);
+    expect(sse[0][2]).toEqual(expect.objectContaining({ channel: 'whatsapp_baileys', type: 'channel', role: 'agent', aiPaused: true }));
+  });
+
+  it('(c2) echo nằm ở hội thoại của MỘT chatbot → không dừng nhầm hội thoại chatbot còn lại', async () => {
+    m.ownerConvs = [
+      { id: 101, id_channel: 9, visitor_name: 'Alice' },
+      { id: 102, id_channel: 9, visitor_name: 'Alice' },
+    ];
+    m.recent[102] = [{ external_id: 'BOT-ID-9', content: 'x', created_at: new Date() }];
+    await emitRaw([fromMe('BOT-ID-9', 'x')]);
+    expect(m.pauseUpdates).toHaveLength(0);
+    expect(agentInserts()).toHaveLength(0);
+  });
+
+  it('fromMe tới nhóm / broadcast, hoặc type=append (echo socket / tin cũ lúc offline) → bỏ', async () => {
+    await emitRaw([
+      fromMe('G-1', 'chào nhóm', { jid: '12036302@g.us' }),
+      fromMe('B-1', 'chào', { jid: 'status@broadcast' }),
+      fromMe('AP-1', 'tin cũ', { type: 'append' }),
+    ]);
+    expect(m.pauseUpdates).toHaveLength(0);
+    expect(agentInserts()).toHaveLength(0);
+  });
+
+  it('fromMe khi chưa có hội thoại nào của số đó → không làm gì', async () => {
+    m.ownerConvs = [];
+    await emitRaw([fromMe('N-1', 'xin chào')]);
+    expect(m.inserts).toHaveLength(0);
+    expect(m.pauseUpdates).toHaveLength(0);
+  });
+
+  it('fromMe không đi đường AI: không tạo hàng đợi gom, không gọi AI', async () => {
+    await emitRaw([fromMe('PHONE-2', 'mình trả lời tay')]);
+    expect(m.buckets.size).toBe(0);
+    expect(m.callAi).not.toHaveBeenCalled();
+    expect(m.sendReply).not.toHaveBeenCalled();
+  });
+});
+
+describe('WhatsApp Baileys — tự bật lại AI, id tin đi, SSE tin khách', () => {
+  it('(d) tin khách sau khi chủ dừng AI (mới dừng): lưu, AI không được gọi', async () => {
+    m.paused = true;
+    m.pausedAt = new Date();
+    m.autoResume = 30;
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    expect(m.visitorInserts).toHaveLength(1);
+    expect(m.buckets.size).toBe(0);
+    expect(m.resumeClears).toBe(0);
+  });
+
+  it('(e) ai_paused_at cũ hơn autoResumeMinutes → AI trả lời lại và cờ được xoá', async () => {
+    m.paused = true;
+    m.pausedAt = new Date(Date.now() - 2 * 60 * 60 * 1000);
+    m.autoResume = 30;
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    expect(m.resumeClears).toBe(1);
+    expect(m.buckets.size).toBe(1);
+    await flush();
+    expect(m.callAi).toHaveBeenCalledTimes(1);
+  });
+
+  it('(f) bot trả lời → dòng bot được ghi external_id = messageId của WhatsApp', async () => {
+    m.sendReply = jest.fn(async () => ({ success: true, messageId: 'WA-BOT-77' }));
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.bindUpdates).toHaveLength(1);
+    expect(m.bindUpdates[0][1]).toBe('WA-BOT-77');
+  });
+
+  it('(f2) câu báo trần lượt (gửi rồi mới lưu) cũng mang external_id = messageId', async () => {
+    m.sendReply = jest.fn(async () => ({ success: true, messageId: 'WA-RATE-1' }));
+    m.rate = { allowed: false, shouldNotify: true, staticReply: 'het-luot', reason: 'per_hour' };
+    await sendTexts(['xin chào']);
+    await flush();
+    const botRows = m.inserts.filter((p) => p[3] === 'bot');
+    expect(botRows).toHaveLength(1);
+    expect(botRows[0][5]).toBe('WA-RATE-1');
+  });
+
+  it('(g) tin khách → SSE inbox:new_message tới chủ session, đúng 1 lần mỗi hội thoại', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    const events = m.sse.filter(([, ev]) => ev === 'inbox:new_message');
+    expect(events).toHaveLength(1);
+    expect(events[0][0]).toBe('42');
+    expect(events[0][2]).toEqual(expect.objectContaining({
+      conversationId: 101, type: 'channel', channel: 'whatsapp_baileys', message: 'Cho mình hỏi giá áo thun size L', role: 'visitor',
+    }));
+    expect(events[0][2].isSelf).toBeUndefined();
+  });
+
+  it('dòng tin khách lưu external_id = id tin WhatsApp (KHÔNG phải SĐT: SĐT làm id khiến tin thứ 2 bị coi trùng)', async () => {
+    await sendTexts(['một']);
+    const visitorRow = m.inserts.find((p) => p[3] === 'visitor');
+    expect(visitorRow[5]).toBe('mid-0');
   });
 });

@@ -577,6 +577,13 @@ class UnifiedInboxService {
         if (result && result.success === false) {
           sendStatus = 'failed';
           sendError = result.error || 'Channel send failed';
+        } else if (conversationType === 'channel' && messageId && result?.messageId) {
+          // W6: ghi id tin WhatsApp vừa gửi vào dòng agent — echo fromMe sau đó khớp theo id, không tự dừng AI.
+          try {
+            await unifiedInboxRepository.bindChannelMessageExternalId(messageId, result.messageId);
+          } catch (bindErr) {
+            console.warn('[UnifiedInbox] bind channel external id failed:', bindErr.message);
+          }
         } else if (conversationType === 'zalo_personal' && zaloAccountId && messageId) {
           // Durable echo keys: bind Zalo msgId(s) onto the pre-inserted inbox row so
           // later sync ON CONFLICT / isSelf skip does not re-pause after owner resumes AI.
