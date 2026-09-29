@@ -6,7 +6,7 @@ import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import { globalLimiter, authLimiter, webhookLimiter } from './middleware/rateLimiter.middleware.js';
+import { globalLimiter, webhookLimiter } from './middleware/rateLimiter.middleware.js';
 import { attachUserIdForRateLimit } from './middleware/auth.middleware.js';
 
 import authRoutes from './routes/auth.routes.js';
@@ -157,8 +157,10 @@ export function createApp() {
   // Soft-resolve user id for rate-limit keys (never 401) then global limit
   app.use('/api', attachUserIdForRateLimit, globalLimiter);
 
-  // Auth rate limit (chống brute-force login)
-  app.use('/api/auth', authLimiter, authRoutes);
+  // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — limiter chống brute-force login giờ gắn theo
+  // từng route trong auth.routes.js (loginAccountLimiter/loginIpLimiter/authCredentialLimiter),
+  // không còn áp cho cả router (trước đây đếm nhầm cả /me, /refresh-token, /features).
+  app.use('/api/auth', authRoutes);
   app.use('/api/users', userRoutes);
   app.use('/api/email-settings', emailSettingsRoutes);
   app.use('/api/email-templates', emailTemplateRoutes);

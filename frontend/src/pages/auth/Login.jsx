@@ -21,7 +21,7 @@ const Login = () => {
   const { t } = useI18n();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const { login, googleLogin } = useAuthStore();
+  const { login, googleLogin, sessionCheckFailed } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
@@ -93,6 +93,17 @@ const Login = () => {
 
   return (
     <div className="w-full max-w-md mx-auto opacity-0 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease forwards' }}>
+      {/* PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — initialize() gặp lỗi tạm thời (429/5xx/mất
+          mạng) khi kiểm tra phiên cũ; token vẫn còn, không phải bị đăng xuất thật. */}
+      {sessionCheckFailed && (
+        <div
+          className="mb-6 p-4 rounded-xl bg-amber-50 border border-amber-200 opacity-0 animate-slideDown"
+          style={{ animation: 'slideDown 0.4s ease forwards' }}
+        >
+          <p className="text-amber-700 text-sm leading-relaxed">{t('auth.sessionCheckFailed')}</p>
+        </div>
+      )}
+
       {/* Banner đặt lại mật khẩu */}
       {isPasswordReset && (
         <div 

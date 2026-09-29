@@ -246,6 +246,10 @@ export const useAuthStore = create((set, get) => ({
   phoneReminderDismissed: false,
   /** Cờ tắt popup mã giới thiệu trong phiên hiện tại. */
   referralPromptDismissed: false,
+  // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — true khi initialize() không kiểm tra được phiên
+  // vì lỗi TẠM THỜI (429/5xx/mất mạng), không phải vì token thật sự không hợp lệ (401/403). Trang
+  // đăng nhập đọc cờ này để giải thích, không để người dùng tưởng bị đăng xuất vô cớ.
+  sessionCheckFailed: false,
 
   /**
    * Khởi tạo trạng thái auth từ storage khi load app.
@@ -279,22 +283,32 @@ export const useAuthStore = create((set, get) => ({
           isAuthenticated: true,
           isLoading: false,
           activeContext,
+          sessionCheckFailed: false,
         });
       } catch (error) {
         console.error('Auth initialization failed:', error);
-        removeToken('accessToken');
-        removeToken('refreshToken');
-        safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
-        set({
-          user: null,
-          isAuthenticated: false,
-          isLoading: false,
-          aiCredits: { used: 0, limit: null },
-          sendUsage: { ...EMPTY_SEND_USAGE },
-          addons: null,
-          billingStatus: null,
-          activeContext: { type: 'self' },
-        });
+        // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — chỉ đăng xuất khi token THẬT SỰ không hợp lệ
+        // (401) hoặc tài khoản bị khoá/vô hiệu hoá (403). Lỗi tạm thời (429 hạn mức, 5xx, mất mạng —
+        // không có response) phải GIỮ token: F5 lúc dính 429 không được biến thành đăng xuất.
+        const status = error?.response?.status;
+        if (status === 401 || status === 403) {
+          removeToken('accessToken');
+          removeToken('refreshToken');
+          safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
+          set({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+            aiCredits: { used: 0, limit: null },
+            sendUsage: { ...EMPTY_SEND_USAGE },
+            addons: null,
+            billingStatus: null,
+            activeContext: { type: 'self' },
+            sessionCheckFailed: false,
+          });
+        } else {
+          set({ isLoading: false, isAuthenticated: false, sessionCheckFailed: true });
+        }
       }
     } else {
       set({ isLoading: false, isAuthenticated: false });

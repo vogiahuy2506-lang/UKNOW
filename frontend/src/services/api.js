@@ -294,8 +294,14 @@ api.interceptors.response.use(
         originalRequest.headers = originalRequest.headers || {};
         originalRequest.headers.Authorization = `Bearer ${accessToken}`;
         return api(originalRequest);
-      } catch {
-        await forceLogoutAndRedirect();
+      } catch (refreshError) {
+        // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — /auth/refresh-token hỏng vì 429/5xx/mất
+        // mạng không phải phiên hết hạn thật; chỉ đăng xuất khi refresh token THẬT SỰ không hợp
+        // lệ (401/403). Lỗi khác giữ nguyên phiên, request gốc báo lỗi như cũ.
+        const refreshStatus = refreshError?.response?.status;
+        if (refreshStatus === 401 || refreshStatus === 403) {
+          await forceLogoutAndRedirect();
+        }
         return Promise.reject(error);
       }
     }

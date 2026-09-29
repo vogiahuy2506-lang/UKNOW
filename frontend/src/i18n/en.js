@@ -258,6 +258,7 @@ export default {
     and: 'and',
     acceptPublicDPA: 'Please agree to the Public Data Processing Agreement',
     invalidCredentials: 'Invalid email or password',
+    sessionCheckFailed: "Couldn't check your session right now — try reloading the page in a few minutes.",
     emailRequired: 'Email is required',
     invalidEmail: 'Invalid email address',
     passwordRequired: 'Password is required',

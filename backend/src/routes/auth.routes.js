@@ -3,12 +3,14 @@ import { body } from 'express-validator';
 import authController from '../controllers/auth.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
+import { loginAccountLimiter, loginIpLimiter, authCredentialLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 const USERNAME_REGEX = /^[A-Za-z0-9]+$/;
 
 // Đăng ký
 router.post('/register',
+  authCredentialLimiter,
   [
     body('username')
       .trim()
@@ -65,6 +67,8 @@ router.post('/register',
 
 // Đăng nhập
 router.post('/login',
+  loginAccountLimiter,
+  loginIpLimiter,
   [
     body('username')
       .trim()
@@ -80,6 +84,7 @@ router.post('/login',
 
 // Đăng nhập Google
 router.post('/google-login',
+  loginIpLimiter,
   [
     body().custom((payload) => {
       const hasCredential = typeof payload?.credential === 'string' && payload.credential.trim();
@@ -105,11 +110,14 @@ router.get('/me', authMiddleware, authController.getMe.bind(authController));
 
 // Cờ tính năng public — KHÔNG authMiddleware, trang đăng ký (chưa có token) cần đọc trước
 // khi hiện/ẩn ô SĐT (PR-2, _internal/PLAN_XAC_THUC_SDT_OTP_2026-09-11.md mục 4 PR-2 việc 1).
-// authLimiter đã áp cho toàn router này ở app.js ('/api/auth', authLimiter, authRoutes).
+// PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — không còn limiter riêng cho /me, /refresh-token,
+// /logout, /features, /invitation-info (trước đây bị authLimiter áp cho cả router đếm nhầm); chỉ
+// còn globalLimiter chung (app.js:158, 300/IP hoặc 1000/người dùng mỗi 15 phút).
 router.get('/features', authController.getFeatures.bind(authController));
 
 // Quên mật khẩu — gửi email reset
 router.post('/forgot-password',
+  authCredentialLimiter,
   [body('email').trim().isEmail().withMessage('Email không hợp lệ')],
   handleValidationErrors,
   authController.forgotPassword.bind(authController)
@@ -117,6 +125,7 @@ router.post('/forgot-password',
 
 // Đặt lại mật khẩu bằng token từ email
 router.post('/reset-password',
+  authCredentialLimiter,
   [
     body('token').notEmpty().withMessage('Token không được để trống'),
     body('password')
@@ -131,6 +140,7 @@ router.post('/reset-password',
 
 // Kích hoạt tài khoản nhân viên qua link email
 router.post('/activate',
+  authCredentialLimiter,
   [
     body('token').notEmpty().withMessage('Token không được để trống'),
     body('password')
@@ -148,6 +158,7 @@ router.get('/invitation-info', authController.getInvitationInfo.bind(authControl
 
 // Đổi mật khẩu khi bị yêu cầu (must_change_password = TRUE)
 router.post('/change-password',
+  authCredentialLimiter,
   authMiddleware,
   [
     body('currentPassword').notEmpty().withMessage('Mật khẩu hiện tại không được để trống'),

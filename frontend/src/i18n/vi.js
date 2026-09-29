@@ -258,6 +258,7 @@ export default {
     and: 'và',
     acceptPublicDPA: 'Vui lòng đồng ý với Thoả thuận Xử lý Dữ liệu Công khai',
     invalidCredentials: 'Email hoặc mật khẩu không đúng',
+    sessionCheckFailed: 'Không kiểm tra được phiên đăng nhập lúc này — thử tải lại trang sau ít phút.',
     emailRequired: 'Vui lòng nhập email',
     invalidEmail: 'Email không hợp lệ',
     passwordRequired: 'Vui lòng nhập mật khẩu',

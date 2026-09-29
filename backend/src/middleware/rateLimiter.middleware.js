@@ -53,7 +53,12 @@ export const globalLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKeyForRequest(req),
 });
 
-// Stricter limiter for auth endpoints - 10 requests per 15 minutes
+// Auth endpoints limiter - 10 requests per 15 minutes. PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F
+// đã bỏ authLimiter khỏi app.js ('/api/auth', authLimiter, authRoutes) và khỏi auth.routes.js —
+// login/register/forgot-password/... giờ dùng 3 bộ mới bên dưới. PHÁT HIỆN LÚC PHẢN BIỆN: grep của
+// plan chỉ kiểm app.js:9 và spec, bỏ sót verification.routes.js (`/send-code`, `/phone/send-code`,
+// `/phone/verify` — chống email/SMS bombing, không liên quan đăng nhập) vẫn import authLimiter —
+// xoá export này sẽ vỡ ESM import, sập cả app lúc khởi động. GIỮ NGUYÊN export, chỉ đổi nơi dùng.
 export const authLimiter = rateLimit({
   skip: skipInTest,
   windowMs: 15 * 60 * 1000,
@@ -67,6 +72,101 @@ export const authLimiter = rateLimit({
   legacyHeaders: false,
   skipSuccessfulRequests: false,
 });
+
+// PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 mục 1.F — 3 bộ đúng mục đích cho auth.routes.js, thay cho
+// authLimiter áp lên CẢ router (đếm nhầm /me, /refresh-token) và khoá CHỈ theo IP (NAT văn phòng
+// dùng chung 10 lượt). Mỗi bộ export cả hàm dựng (nhận { skip } cho test tự bật limiter thật, mặc
+// định skipInTest) lẫn instance dùng trong route — khuôn theo PUBLIC_FORM_SUBMISSION_CONFIG/
+// publicFormSubmissionLimiter phía trên.
+function normalizeLoginUsername(rawUsername) {
+  const normalized = String(rawUsername ?? '').trim().toLowerCase().slice(0, 100);
+  return normalized || '-';
+}
+
+// Khoá theo IP + tài khoản, chỉ đếm lượt LỖI — chặn dò mật khẩu một tài khoản mà không khoá
+// nhầm người dùng chung IP (NAT văn phòng) đang đăng nhập đúng, và không đếm lượt kiểm tra phiên
+// (/me, /refresh-token không đi qua limiter này nữa — xem app.js, auth.routes.js).
+export const LOGIN_ACCOUNT_LIMITER_CONFIG = Object.freeze({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  code: 'LOGIN_RATE_LIMIT_EXCEEDED',
+  message: 'Bạn nhập sai mật khẩu quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+});
+
+export function createLoginAccountLimiter({ skip = skipInTest } = {}) {
+  return rateLimit({
+    skip,
+    windowMs: LOGIN_ACCOUNT_LIMITER_CONFIG.windowMs,
+    max: LOGIN_ACCOUNT_LIMITER_CONFIG.max,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `login:${clientIpKey(req)}:${normalizeLoginUsername(req.body?.username)}`,
+    message: {
+      success: false,
+      message: LOGIN_ACCOUNT_LIMITER_CONFIG.message,
+      code: LOGIN_ACCOUNT_LIMITER_CONFIG.code,
+    },
+  });
+}
+
+export const loginAccountLimiter = createLoginAccountLimiter();
+
+// Khoá theo IP — chặn dò hàng loạt (nhiều tài khoản khác nhau từ cùng một IP), trần rộng hơn
+// hẳn để không khoá cả văn phòng chỉ vì vài người gõ sai một lần.
+export const LOGIN_IP_LIMITER_CONFIG = Object.freeze({
+  windowMs: 15 * 60 * 1000,
+  max: 50,
+  code: 'LOGIN_IP_RATE_LIMIT_EXCEEDED',
+  message: 'Bạn nhập sai mật khẩu quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+});
+
+export function createLoginIpLimiter({ skip = skipInTest } = {}) {
+  return rateLimit({
+    skip,
+    windowMs: LOGIN_IP_LIMITER_CONFIG.windowMs,
+    max: LOGIN_IP_LIMITER_CONFIG.max,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `login-ip:${clientIpKey(req)}`,
+    message: {
+      success: false,
+      message: LOGIN_IP_LIMITER_CONFIG.message,
+      code: LOGIN_IP_LIMITER_CONFIG.code,
+    },
+  });
+}
+
+export const loginIpLimiter = createLoginIpLimiter();
+
+// Bộ chặn nhẹ hơn cho các endpoint credential khác (đăng ký, quên/đặt lại/đổi mật khẩu, kích
+// hoạt) — đếm MỌI lượt (không chỉ lượt lỗi), khoá theo IP.
+export const AUTH_CREDENTIAL_LIMITER_CONFIG = Object.freeze({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  code: 'AUTH_RATE_LIMIT_EXCEEDED',
+  message: 'Quá nhiều yêu cầu. Vui lòng thử lại sau 15 phút.',
+});
+
+export function createAuthCredentialLimiter({ skip = skipInTest } = {}) {
+  return rateLimit({
+    skip,
+    windowMs: AUTH_CREDENTIAL_LIMITER_CONFIG.windowMs,
+    max: AUTH_CREDENTIAL_LIMITER_CONFIG.max,
+    skipSuccessfulRequests: false,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `auth-cred:${clientIpKey(req)}`,
+    message: {
+      success: false,
+      message: AUTH_CREDENTIAL_LIMITER_CONFIG.message,
+      code: AUTH_CREDENTIAL_LIMITER_CONFIG.code,
+    },
+  });
+}
+
+export const authCredentialLimiter = createAuthCredentialLimiter();
 
 // API limiter - 200 requests per 15 minutes (mounted after auth on voucher routes)
 export const apiLimiter = rateLimit({
