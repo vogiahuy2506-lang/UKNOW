@@ -69,6 +69,7 @@ import { compileCampaign } from './campaignCompiler.service.js';
 import { mergeCompiledWithContent, assertNoEmptyContent } from './campaignScriptMerge.service.js';
 import { fillContentSlots } from './campaignSlotFiller.service.js';
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
+import { isAdapterCampaignChannel } from '../campaign/campaignChannelFlags.util.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
 
 export const USER_CONFIRMS_FILE_RE = /vẫn\s*dùng|van\s*dung|cứ\s*tiếp\s*tục|cu\s*tiep\s*tuc|dùng\s*(?:file|tệp|này|luôn|đi)|tiếp\s*tục|tiep\s*tuc|làm\s*tiếp|lam\s*tiep|cứ\s*làm|cu\s*lam|proceed|continue/i;
@@ -499,13 +500,32 @@ D. ZALO NHÓM:
   }
 
   async _getWizardResources(userId) {
-    if (!userId) return { zaloAccounts: [], emailSenders: [], courses: [] };
-    const [zaloAccounts, emailSenders, courses] = await Promise.all([
+    if (!userId) return { zaloAccounts: [], emailSenders: [], courses: [], telegramAccounts: [], whatsappAccounts: [] };
+    const [zaloAccounts, emailSenders, courses, adapterAccounts] = await Promise.all([
       aiPromptResources.getZaloAccountsFull(userId),
       aiPromptResources.getActiveEmailSenders(userId),
       aiPromptResources.getCourses(userId),
+      // P8a — rỗng khi cờ Telegram/WhatsApp tắt (không chạm DB/Baileys).
+      aiPromptResources.getAdapterChannelAccounts(userId),
     ]);
-    return { zaloAccounts, emailSenders, courses };
+    return {
+      zaloAccounts,
+      emailSenders,
+      courses,
+      telegramAccounts: adapterAccounts.telegram,
+      whatsappAccounts: adapterAccounts.whatsapp,
+    };
+  }
+
+  /**
+   * P8a — kênh adapter chỉ có MỘT tài khoản dùng được thì đó là tài khoản gửi mặc định (người dùng không phải
+   * chọn); nhiều hơn/không có thì trả null (wizard nhả cho LLM hỏi / hướng dẫn kết nối).
+   * @returns {Promise<string|number|null>}
+   */
+  async _resolveOnlyAdapterAccountId(ownerId, channel) {
+    const accounts = await aiPromptResources.getAdapterChannelAccounts(ownerId);
+    const usable = (channel === 'telegram' ? accounts.telegram : accounts.whatsapp).filter((a) => a.usable);
+    return usable.length === 1 ? usable[0].id : null;
   }
 
   // mergedGates: state đã merge persisted + derived (bước wizard-state DB); nếu không
@@ -1089,7 +1109,7 @@ ${zaloTemplates.length > 0 ? zaloTemplates.map(t => `  - ID: ${t.id} | "${t.name
 
 🔑 Zalo Accounts (zaloAccountId):
 ${zaloAccounts.length > 0 ? zaloAccounts.map(a => `  - ID: ${a.id} | ${a.displayName}`).join('\n') : '  (chưa kết nối — đặt null)'}
-Tài khoản Zalo mặc định: ${firstZaloAccountId ?? 'null'}
+Tài khoản Zalo mặc định: ${firstZaloAccountId ?? 'null'}${await aiPromptResources.getAdapterAccountsPromptBlock(ownerId)}
 
 ${zaloGroups.length > 0 ? `👥 Nhóm Zalo:\n${zaloGroups.map(g => `  - "${g.groupName}"`).join('\n')}` : ''}
 
@@ -1115,7 +1135,7 @@ NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại n
 • action/send_email — gửi email (recipientSource, recipientNodeId, recipientField: "email", delayValue, delayUnit)
 • action/send_zalo_personal — gửi Zalo cá nhân (zaloAccountId, zaloRecipientSource, zaloRecipientNodeId, zaloRecipientField: "phone"|"uid", delayValue, delayUnit)
 • action/send_zalo_group — gửi Zalo nhóm (zaloAccountId, zaloGroupSource: "node", zaloGroupNodeId, zaloGroupField: "groupId", zaloGroupMessage, delayValue, delayUnit)
-• action/send_zalo_friend_request — gửi lời mời kết bạn
+• action/send_zalo_friend_request — gửi lời mời kết bạn${aiPromptResources.getAdapterNodeTypesPromptLines()}
 • end/end — kết thúc
 
 DELAY: KHÔNG tạo node wait/delay riêng. Delay đặt trong delayValue+delayUnit của action node tiếp theo.
@@ -1833,7 +1853,13 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           // Bản đầu dùng nhầm biến đó nên `isCompilableIntent` luôn trả false và compiler
           // KHÔNG BAO GIỜ chạy — một no-op im lặng, log ra lý do trông rất hợp lý.
           // Phải tự dựng intent có cấu trúc, giống cách runCompilerShadowCompare làm bên trong.
-          const { intent: campaignIntent } = deriveIntent(gateState, briefForState || null, { files });
+          // P8a — kênh adapter chưa có tài khoản được chốt mà workspace chỉ có ĐÚNG 1 tài khoản dùng được → dùng nó.
+          let gateStateForIntent = gateState;
+          if (isAdapterCampaignChannel(gateState?.channel) && gateState?.senderAccountId == null) {
+            const onlyAccountId = await this._resolveOnlyAdapterAccountId(ownerId, gateState.channel);
+            if (onlyAccountId != null) gateStateForIntent = { ...gateState, senderAccountId: onlyAccountId };
+          }
+          const { intent: campaignIntent } = deriveIntent(gateStateForIntent, briefForState || null, { files });
 
           const compilableCheck = isCompilableIntent(campaignIntent);
           const isCompilerActive =
@@ -2091,7 +2117,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
 🔑 Zalo accounts:
 ${zaloAccountsList}
-Tài khoản mặc định: ${firstZaloAccountId ?? 'null'}
+Tài khoản mặc định: ${firstZaloAccountId ?? 'null'}${await aiPromptResources.getAdapterAccountsPromptBlock(ownerId)}
 
 ${zaloGroupsList}
 

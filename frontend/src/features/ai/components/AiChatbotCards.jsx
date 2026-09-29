@@ -2004,6 +2004,8 @@ const formatPreviewTiming = (timing, locale) => {
 const previewChannelLabel = (channel, locale) => {
   if (channel === 'email') return 'Email';
   if (channel === 'zalo_group') return locale === 'en' ? 'Zalo group' : 'Zalo nhóm';
+  if (channel === 'telegram') return 'Telegram';
+  if (channel === 'whatsapp') return 'WhatsApp';
   return locale === 'en' ? 'Zalo personal' : 'Zalo cá nhân';
 };
 

@@ -8,9 +8,112 @@
  * 3. Hỗ trợ multi-step trong 1 node (nhiều email/zalo cách nhau thời gian)
  */
 
+import { isTelegramCampaignChannelEnabled, isWhatsAppCampaignChannelEnabled } from './campaignChannelFlags.util.js';
+
 class CampaignNodeRegistryService {
   constructor() {
-    this.nodeTypes = this._buildNodeTypeRegistry();
+    this._baseNodeTypes = this._buildNodeTypeRegistry();
+  }
+
+  /**
+   * P8a — node kênh adapter (Telegram/WhatsApp) CHỈ có mặt khi cờ kênh bật (đọc LÚC GỌI, không cache lúc
+   * import): cờ tắt thì AI không được biết tới node này và `validateNodeConfig` coi nó là subtype lạ,
+   * đúng như engine (`campaignChannelRegistry`) không nhận subtype đó. Khối lượng dựng mỗi lần đọc rất nhỏ.
+   */
+  get nodeTypes() {
+    const adapterNodes = this._buildAdapterNodeTypes();
+    return Object.keys(adapterNodes).length > 0
+      ? { ...this._baseNodeTypes, ...adapterNodes }
+      : this._baseNodeTypes;
+  }
+
+  _buildAdapterNodeTypes() {
+    const nodes = {};
+    const stepsSchema = {
+      type: 'array',
+      label: 'Nội dung tin nhắn',
+      description: 'Chỉ 1 bước (1 tin, gửi ngay). Chưa hỗ trợ nhiều tin cách nhau thời gian cho kênh này.',
+      itemSchema: {
+        templateId: { type: 'number', label: 'Mẫu tin (tuỳ chọn)' },
+        message: { type: 'string', label: 'Nội dung tin nhắn', maxLength: 4000 },
+        attachments: { type: 'array', label: 'Tệp đính kèm (tuỳ chọn)' },
+      },
+    };
+    if (isTelegramCampaignChannelEnabled()) {
+      nodes.send_telegram = {
+        nodeType: 'action',
+        name: 'Gửi tin nhắn Telegram',
+        description: 'Gửi tin nhắn Telegram từ tài khoản đã kết nối (1 tin, gửi ngay). Người nhận: hội thoại đang mở hoặc chat id nhập tay.',
+        color: '#E1F5FE',
+        configRequired: true,
+        multiStep: false,
+        configSchema: {
+          telegramAccountId: {
+            type: 'number',
+            required: true,
+            label: 'Tài khoản Telegram',
+          },
+          recipientSource: {
+            type: 'enum',
+            values: ['telegram_conversations', 'manual', 'telegram_groups', 'node'],
+            default: 'telegram_conversations',
+            label: 'Nguồn người nhận',
+          },
+          recipientKeys: {
+            type: 'array',
+            label: 'Chat id (khi nguồn = manual / telegram_groups)',
+          },
+          steps: stepsSchema,
+        },
+        exampleConfig: {
+          telegramAccountId: null,
+          recipientSource: 'telegram_conversations',
+          steps: [{ message: 'Xin chào {{ten}}! Cảm ơn bạn đã nhắn cho chúng tôi.' }],
+        },
+      };
+    }
+    if (isWhatsAppCampaignChannelEnabled()) {
+      nodes.send_whatsapp = {
+        nodeType: 'action',
+        name: 'Gửi tin nhắn WhatsApp',
+        description: 'Gửi tin nhắn WhatsApp từ số đã quét QR (1 tin, gửi ngay). Người nhận: hội thoại đang mở, node dữ liệu (cột SĐT) hoặc SĐT nhập tay.',
+        color: '#E8F5E9',
+        configRequired: true,
+        multiStep: false,
+        configSchema: {
+          whatsappSessionKey: {
+            type: 'string',
+            required: true,
+            label: 'Tài khoản WhatsApp (mã phiên, dạng "<idChủ>-<tênPhiên>")',
+          },
+          recipientSource: {
+            type: 'enum',
+            values: ['whatsapp_conversations', 'node', 'manual'],
+            default: 'whatsapp_conversations',
+            label: 'Nguồn người nhận',
+          },
+          recipientNodeId: {
+            type: 'string',
+            label: 'Node dữ liệu (khi nguồn = node)',
+          },
+          recipientColumn: {
+            type: 'string',
+            label: 'Cột SĐT của node dữ liệu',
+          },
+          recipientKeys: {
+            type: 'array',
+            label: 'Danh sách SĐT (khi nguồn = manual)',
+          },
+          steps: stepsSchema,
+        },
+        exampleConfig: {
+          whatsappSessionKey: null,
+          recipientSource: 'whatsapp_conversations',
+          steps: [{ message: 'Xin chào {{ten}}! Cảm ơn bạn đã nhắn cho chúng tôi.' }],
+        },
+      };
+    }
+    return nodes;
   }
 
   /**
@@ -711,6 +814,25 @@ class CampaignNodeRegistryService {
     lines.push('  config: { "zaloAccountId": <ID>, "zaloFriendSource": "node", ... }');
     lines.push('');
 
+    // P8a — kênh adapter: chỉ liệt kê khi cờ kênh bật (đọc lúc gọi).
+    if (isTelegramCampaignChannelEnabled()) {
+      lines.push('★ NODE GỬI TELEGRAM (1 TIN, GỬI NGAY — KHÔNG có nhiều tin cách nhau thời gian):');
+      lines.push('• nodeType: "action", nodeSubtype: "send_telegram"   ← KHÔNG cần node select_zalo_account, KHÔNG dùng zaloAccountId');
+      lines.push('  config: { "telegramAccountId": <ID|null>, "recipientSource": "telegram_conversations", "steps": [ { "message": "Nội dung tin..." } ] }');
+      lines.push('  recipientSource: "telegram_conversations" (những người đã nhắn tới tài khoản này — mặc định) | "manual" (kèm "recipientKeys": ["123456789", ...] là chat id SỐ)');
+      lines.push('  Telegram KHÔNG gửi được cho người lạ theo SĐT/username — chỉ chat id hoặc hội thoại đã có.');
+      lines.push('  Luồng ĐÚNG: trigger → send_telegram (không cần node dữ liệu khi nguồn là hội thoại).');
+      lines.push('');
+    }
+    if (isWhatsAppCampaignChannelEnabled()) {
+      lines.push('★ NODE GỬI WHATSAPP (1 TIN, GỬI NGAY — KHÔNG có nhiều tin cách nhau thời gian):');
+      lines.push('• nodeType: "action", nodeSubtype: "send_whatsapp"   ← KHÔNG cần node select_zalo_account, KHÔNG dùng zaloAccountId');
+      lines.push('  config: { "whatsappSessionKey": "<mã phiên|null>", "recipientSource": "whatsapp_conversations", "steps": [ { "message": "Nội dung tin..." } ] }');
+      lines.push('  recipientSource: "whatsapp_conversations" (người đã nhắn tới số này — mặc định) | "node" (kèm "recipientNodeId": "<tempId node dữ liệu>", "recipientColumn": "<cột SĐT>") | "manual" (kèm "recipientKeys": ["84912345678", ...])');
+      lines.push('  Luồng ĐÚNG: trigger → send_whatsapp (nguồn hội thoại) hoặc trigger → <node dữ liệu> → send_whatsapp (nguồn node).');
+      lines.push('');
+    }
+
     // End
     lines.push('── END ──');
     lines.push('• nodeType: "end", nodeSubtype: "end"');
@@ -853,6 +975,21 @@ Yêu cầu: Gửi 2 email - email chào hỏi ngay, email nhắc nhở sau 3 ng�
     for (const [field, fieldSchema] of Object.entries(schema)) {
       if (fieldSchema.required && (config[field] === undefined || config[field] === null)) {
         errors.push(`Trường "${field}" là bắt buộc (${fieldSchema.label || field})`);
+      }
+    }
+
+    // P8a — node kênh adapter: cần đúng 1 bước có nội dung (hoặc mẫu tin). Kênh adapter chưa có nhiều bước hẹn giờ.
+    if (subtype === 'send_telegram' || subtype === 'send_whatsapp') {
+      const steps = Array.isArray(config.steps) ? config.steps : [];
+      if (steps.length === 0) {
+        errors.push('steps phải là mảng có đúng 1 phần tử (nội dung tin nhắn)');
+      } else if (steps.length > 1) {
+        errors.push('Kênh Telegram/WhatsApp chỉ gửi 1 tin mỗi lượt (steps chỉ được 1 phần tử)');
+      } else {
+        const step = steps[0] || {};
+        const hasMessage = String(step.message ?? '').trim() !== '';
+        const hasTemplate = step.templateId !== undefined && step.templateId !== null && String(step.templateId).trim() !== '';
+        if (!hasMessage && !hasTemplate) errors.push('steps[0] cần nội dung message hoặc templateId');
       }
     }
 

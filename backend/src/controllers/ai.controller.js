@@ -202,6 +202,7 @@ class AiController {
       const confirmationView = await campaignConfirmationService.buildConfirmationView({
         script: preparedScript,
         userId: req.user.id,
+        ownerUserId: resolveOwnerUserId(req.user),
       });
       return res.json({ success: true, data: { preparedScript, confirmationView, maxRecipients: MAX_AI_MANUAL_RECIPIENTS } });
     } catch (error) {
@@ -1054,6 +1055,7 @@ class AiController {
       const ownershipPreview = await campaignConfirmationService.buildConfirmationView({
         script: preparedScript,
         userId: req.user.id,
+        ownerUserId: resolveOwnerUserId(req.user),
       });
       if (!ownershipPreview.readyToCreate) {
         return res.status(400).json({
@@ -1382,6 +1384,7 @@ class AiController {
       const ownershipPreview = await campaignConfirmationService.buildConfirmationView({
         script: { ...script, nodes: normalizedNodes },
         userId: req.user.id,
+        ownerUserId: resolveOwnerUserId(req.user),
       });
       if (!ownershipPreview.readyToCreate) {
         return res.status(400).json({

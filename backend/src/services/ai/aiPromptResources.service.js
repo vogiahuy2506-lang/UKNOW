@@ -1,6 +1,7 @@
 import businessProfileService, { serializeProductList } from './businessProfile.service.js';
 import productRepository from '../../repositories/products/product.repository.js';
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
+import { getEnabledAdapterCampaignChannels } from '../campaign/campaignChannelFlags.util.js';
 
 /**
  * Format user resources for AI campaign prompts.
@@ -8,6 +9,90 @@ import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js
  * Moved out of aiCampaign.service.js (god-object split PR3).
  */
 class AiPromptResourcesService {
+  /**
+   * P8a — tài khoản kênh adapter (Telegram/WhatsApp) của workspace, CHỈ kênh có cờ bật (cờ tắt → mảng rỗng, không
+   * chạm DB/Baileys). `id` Telegram là số; `id` WhatsApp là MÃ PHIÊN chuỗi ("<idChủ>-<tên>"). `usable`: Telegram =
+   * còn active; WhatsApp = phiên đang mở (status 'open').
+   * @param {number} ownerId workspace owner
+   * @returns {Promise<{telegram: Array, whatsapp: Array}>}
+   */
+  async getAdapterChannelAccounts(ownerId) {
+    const result = { telegram: [], whatsapp: [] };
+    if (!ownerId) return result;
+    const enabled = getEnabledAdapterCampaignChannels();
+    if (enabled.includes('telegram')) {
+      try {
+        const { default: chatbotTelegramRepository } = await import('../../repositories/chatbot/chatbotTelegram.repository.js');
+        const rows = await chatbotTelegramRepository.listAccountsByUser(ownerId);
+        result.telegram = rows.map((r) => ({
+          id: r.id,
+          name: r.username || r.first_name || r.phone || `Telegram #${r.id}`,
+          usable: r.is_active !== false,
+        }));
+      } catch (e) {
+        console.warn('[AI] Không lấy được tài khoản Telegram:', e.message);
+      }
+    }
+    if (enabled.includes('whatsapp')) {
+      try {
+        const { listSessions } = await import('../chatbot/whatsappBaileys.service.js');
+        const prefix = `${Number(ownerId)}-`;
+        result.whatsapp = listSessions()
+          .filter((session) => String(session.sessionKey || '').startsWith(prefix))
+          .map((session) => ({
+            id: session.sessionKey,
+            name: session.userName || session.sessionKey,
+            usable: session.status === 'open',
+          }));
+      } catch (e) {
+        console.warn('[AI] Không lấy được phiên WhatsApp:', e.message);
+      }
+    }
+    return result;
+  }
+
+  /**
+   * P8a — dòng liệt kê node gửi Telegram/WhatsApp trong danh sách "NODE TYPES THỰC SỰ TỒN TẠI" của prompt chiến dịch.
+   * Rỗng khi cờ tắt; khi có nội dung, bắt đầu bằng xuống dòng.
+   */
+  getAdapterNodeTypesPromptLines() {
+    const enabled = getEnabledAdapterCampaignChannels();
+    const lines = [];
+    if (enabled.includes('telegram')) {
+      lines.push('• action/send_telegram — gửi Telegram, MỘT tin gửi ngay (telegramAccountId, recipientSource: "telegram_conversations"|"manual", recipientKeys: chat id số khi manual, steps: [{ message }] đúng 1 phần tử). KHÔNG cần select_zalo_account; KHÔNG có delay/nhiều bước');
+    }
+    if (enabled.includes('whatsapp')) {
+      lines.push('• action/send_whatsapp — gửi WhatsApp, MỘT tin gửi ngay (whatsappSessionKey, recipientSource: "whatsapp_conversations"|"node"|"manual", recipientNodeId + recipientColumn khi node, recipientKeys: SĐT khi manual, steps: [{ message }] đúng 1 phần tử). KHÔNG cần select_zalo_account; KHÔNG có delay/nhiều bước');
+    }
+    return lines.length > 0 ? `\n${lines.join('\n')}` : '';
+  }
+
+  /**
+   * P8a — đoạn "tài khoản Telegram/WhatsApp" nối vào TÀI NGUYÊN CÓ SẴN của prompt chiến dịch. Rỗng khi cả hai cờ
+   * tắt (prompt cũ giữ nguyên từng byte); khi có nội dung, bắt đầu bằng xuống dòng để nối thẳng vào cuối dòng trước.
+   * @param {number} ownerId
+   * @returns {Promise<string>}
+   */
+  async getAdapterAccountsPromptBlock(ownerId) {
+    if (getEnabledAdapterCampaignChannels().length === 0) return '';
+    const accounts = await this.getAdapterChannelAccounts(ownerId);
+    const lines = [];
+    if (getEnabledAdapterCampaignChannels().includes('telegram')) {
+      lines.push('✈️ Tài khoản Telegram (telegramAccountId của send_telegram):');
+      lines.push(accounts.telegram.length > 0
+        ? accounts.telegram.map((a) => `  - ID: ${a.id} | ${a.name}${a.usable ? '' : ' (đã ngắt kết nối)'}`).join('\n')
+        : '  (chưa kết nối — đặt telegramAccountId: null)');
+    }
+    if (getEnabledAdapterCampaignChannels().includes('whatsapp')) {
+      lines.push('🟢 Tài khoản WhatsApp (whatsappSessionKey của send_whatsapp — dùng NGUYÊN mã phiên):');
+      lines.push(accounts.whatsapp.length > 0
+        ? accounts.whatsapp.map((a) => `  - Mã phiên: "${a.id}" | ${a.name}${a.usable ? '' : ' (chưa kết nối)'}`).join('\n')
+        : '  (chưa kết nối — đặt whatsappSessionKey: null)');
+    }
+    lines.push('Nếu có NHIỀU tài khoản cùng kênh mà người dùng chưa nói dùng cái nào → HỎI lại, KHÔNG tự chọn.');
+    return `\n${lines.join('\n')}`;
+  }
+
   /**
    * Lấy danh sách email templates của user để AI điền sẵn config.
    * @param {number} userId

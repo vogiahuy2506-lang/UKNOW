@@ -3,10 +3,17 @@ import emailTemplateRepository from '../../repositories/email/emailTemplate.repo
 import zaloTemplateRepository from '../../repositories/zalo/zaloTemplate.repository.js';
 import campaignEmailSenderRepository from '../../repositories/campaign/campaignEmailSender.repository.js';
 import campaignZaloSenderRepository from '../../repositories/campaign/campaignZaloSender.repository.js';
+import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
+import { isAdapterCampaignChannelEnabled } from '../campaign/campaignChannelFlags.util.js';
 
 const EMAIL_TYPES = new Set(['send_email', 'email', 'email_send']);
 const ZALO_PERSONAL_TYPES = new Set(['send_zalo_personal', 'zalo_personal', 'zalo']);
 const ZALO_GROUP_TYPES = new Set(['send_zalo_group', 'zalo_group']);
+// P8a — kênh adapter (Telegram/WhatsApp): 1 bước `steps[0]`, chỉ nhận diện khi cờ kênh bật.
+const TELEGRAM_TYPES = new Set(['send_telegram']);
+const WHATSAPP_TYPES = new Set(['send_whatsapp']);
+const ADAPTER_CHANNEL_TITLES = { telegram: 'Telegram', whatsapp: 'WhatsApp' };
+const WHATSAPP_SESSION_KEY_PATTERN = /^\d+-[A-Za-z0-9_-]{1,128}$/;
 
 const asNumber = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -109,7 +116,9 @@ class CampaignConfirmationService {
     }
   }
 
-  async buildConfirmationView({ script, userId }) {
+  async buildConfirmationView({ script, userId, ownerUserId = null }) {
+    // Tài khoản Telegram/WhatsApp thuộc CHỦ workspace (nhân viên dùng chung) — khác userId thao tác.
+    const channelOwnerId = ownerUserId != null ? ownerUserId : userId;
     const nodes = Array.isArray(script?.nodes) ? script.nodes : [];
     const issues = [];
     const resourceVersions = [];
@@ -128,6 +137,32 @@ class CampaignConfirmationService {
           return { id: null, label: null };
         }
         return { id: sender.id, label: sender.sender_name || sender.from_name || sender.email || `Email #${sender.id}` };
+      }
+
+      if (channel === 'telegram') {
+        const telegramId = asNumber(config?.telegramAccountId);
+        const account = telegramId ? await chatbotTelegramRepository.getAccountById(telegramId, { userId: channelOwnerId }) : null;
+        if (!account || account.is_active === false) {
+          addIssue({ code: 'missing_sender', nodeId: issueNodeId });
+          return { id: null, label: null };
+        }
+        return { id: account.id, label: account.username || account.first_name || account.phone || `Telegram #${account.id}` };
+      }
+
+      if (channel === 'whatsapp') {
+        const sessionKey = String(config?.whatsappSessionKey ?? '').trim();
+        if (!WHATSAPP_SESSION_KEY_PATTERN.test(sessionKey) || !sessionKey.startsWith(`${Number(channelOwnerId)}-`)) {
+          addIssue({ code: 'missing_sender', nodeId: issueNodeId });
+          return { id: null, label: null };
+        }
+        let label = sessionKey;
+        try {
+          const { getSession } = await import('../chatbot/whatsappBaileys.service.js');
+          label = getSession(sessionKey)?.userName || sessionKey;
+        } catch {
+          // Không đọc được tên phiên → dùng mã phiên làm nhãn; quyền sở hữu đã kiểm ở trên.
+        }
+        return { id: sessionKey, label };
       }
 
       const id = asNumber(config?.zaloAccountId) || await aiCampaignDraftRepository.findDefaultZaloSettingId(userId);
@@ -181,8 +216,15 @@ class CampaignConfirmationService {
       } else if (ZALO_GROUP_TYPES.has(type)) {
         channel = 'zalo_group';
         multiStepField = 'zaloGroupTemplateSteps';
+      } else if (TELEGRAM_TYPES.has(type) && isAdapterCampaignChannelEnabled('telegram')) {
+        channel = 'telegram';
+        multiStepField = 'steps';
+      } else if (WHATSAPP_TYPES.has(type) && isAdapterCampaignChannelEnabled('whatsapp')) {
+        channel = 'whatsapp';
+        multiStepField = 'steps';
       }
       if (!channel) continue;
+      const isAdapterChannel = channel === 'telegram' || channel === 'whatsapp';
 
       const sender = await resolveSender(channel, config, currentNodeId);
       const rawSteps = Array.isArray(config[multiStepField]) ? config[multiStepField] : [];
@@ -237,12 +279,16 @@ class CampaignConfirmationService {
         const selectedGroupIds = channel === 'zalo_group' && config.zaloGroupSource !== 'manual'
           ? selectedGroupIdsOnNode(config)
           : [];
-        const manual = channel === 'email'
+        const manual = isAdapterChannel
+          ? (config.recipientSource === 'manual' || config.recipientSource === 'telegram_groups')
+          : channel === 'email'
           ? config.recipientSource === 'manual'
           : channel === 'zalo_group'
             ? (config.zaloGroupSource === 'manual' || selectedGroupIds.length > 0)
             : config.zaloRecipientSource === 'manual';
-        const recipientList = channel === 'email'
+        const recipientList = isAdapterChannel
+          ? config.recipientKeys
+          : channel === 'email'
           ? config.recipientEmails
           : channel === 'zalo_group'
             ? (selectedGroupIds.length > 0 ? selectedGroupIds : config.zaloGroupIds)
@@ -255,7 +301,7 @@ class CampaignConfirmationService {
           nodeId: currentNodeId,
           stepIndex,
           channel,
-          title: extractText(node?.nodeName || node?.node_name || node?.name || (channel === 'email' ? 'Email' : 'Zalo')),
+          title: extractText(node?.nodeName || node?.node_name || node?.name || (isAdapterChannel ? ADAPTER_CHANNEL_TITLES[channel] : channel === 'email' ? 'Email' : 'Zalo')),
           content,
           timing: {
             anchor: stepConfig?.delayFrom === 'previous' || stepConfig?.delayFrom === 'prev' ? 'prev' : 'start',
@@ -267,7 +313,7 @@ class CampaignConfirmationService {
             mode: manual ? 'manual' : 'source',
             type: channel === 'zalo_personal' ? (config.zaloRecipientType || 'phone') : null,
             count: manual ? manualRecipientCount(recipientList) : null,
-            sourceLabel: manual ? null : sourceLabel(config, nodes, channel === 'email' ? 'email' : 'zalo'),
+            sourceLabel: manual ? null : sourceLabel(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo'),
           },
         });
       }

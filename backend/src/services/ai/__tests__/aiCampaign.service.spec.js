@@ -88,6 +88,10 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
     getCourses,
     getLandingPages,
     getForms,
+    // P8a — cờ Telegram/WhatsApp tắt trong spec này: không có tài khoản/dòng prompt nào.
+    getAdapterChannelAccounts: async () => ({ telegram: [], whatsapp: [] }),
+    getAdapterAccountsPromptBlock: async () => '',
+    getAdapterNodeTypesPromptLines: () => '',
   },
 }));
 

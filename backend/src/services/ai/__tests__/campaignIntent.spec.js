@@ -70,7 +70,7 @@ describe('PR-1: CampaignIntentV1 schema & deriveIntent', () => {
     it('schema định nghĩa đúng cấu trúc OpenAPI subset cho Gemini', () => {
       expect(CAMPAIGN_INTENT_V1_SCHEMA.type).toBe('object');
       expect(CAMPAIGN_INTENT_V1_SCHEMA.required).toEqual(['version', 'channel']);
-      expect(CAMPAIGN_INTENT_V1_SCHEMA.properties.channel.enum).toEqual(['email', 'zalo', 'zalo_group']);
+      expect(CAMPAIGN_INTENT_V1_SCHEMA.properties.channel.enum).toEqual(['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
     });
 
     it('validateCampaignIntentV1 chấp nhận intent hợp lệ', () => {

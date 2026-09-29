@@ -1,4 +1,5 @@
 import { normalizeChannel } from './aiCampaignWizard.service.js';
+import { isAdapterCampaignChannel, isAdapterCampaignChannelEnabled } from '../campaign/campaignChannelFlags.util.js';
 
 /**
  * Schema OpenAPI subset cho CampaignIntentV1, tương thích trực tiếp với responseSchema của Gemini.
@@ -12,18 +13,20 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
     // IntentShadow chưa từng chạy thành công lần nào. Ràng buộc version === 1
     // đã được validateCampaignIntent kiểm ở dưới, đúng chỗ hơn.
     version: { type: 'integer' },
-    channel: { type: 'string', enum: ['email', 'zalo', 'zalo_group'] },
+    channel: { type: 'string', enum: ['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp'] },
     sender: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['email_account', 'zalo_account'] },
+        type: { type: 'string', enum: ['email_account', 'zalo_account', 'telegram_account', 'whatsapp_session'] },
         id: { type: 'integer' },
+        // WhatsApp: tài khoản là MÃ PHIÊN chuỗi ("<idChủ>-<tênPhiên>"), không có id số.
+        sessionKey: { type: 'string' },
       },
     },
     audience: {
       type: 'object',
       properties: {
-        type: { type: 'string', enum: ['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts'] },
+        type: { type: 'string', enum: ['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts', 'conversations'] },
         url: { type: 'string' },
         slugs: { type: 'array', items: { type: 'string' } },
         formId: { type: 'integer' },
@@ -70,9 +73,17 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
   required: ['version', 'channel'],
 };
 
-const VALID_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
-const VALID_SENDER_TYPES = new Set(['email_account', 'zalo_account']);
-const VALID_AUDIENCE_TYPES = new Set(['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts']);
+const VALID_CHANNELS = new Set(['email', 'zalo', 'zalo_group', 'telegram', 'whatsapp']);
+const VALID_SENDER_TYPES = new Set(['email_account', 'zalo_account', 'telegram_account', 'whatsapp_session']);
+const VALID_AUDIENCE_TYPES = new Set(['sheet', 'db', 'landing', 'form', 'manual', 'zalo_contacts', 'conversations']);
+// P8a — nguồn người nhận compiler dựng được cho kênh adapter. Telegram không gửi được cho người lạ
+// (chỉ hội thoại đang mở); WhatsApp thêm các nguồn node dữ liệu (cột SĐT). 'manual' KHÔNG có (danh sách nhập
+// tay đi qua lớp phủ directRecipients của Email/Zalo — chưa nối cho Telegram/WhatsApp).
+const ADAPTER_AUDIENCE_TYPES = {
+  telegram: new Set(['conversations']),
+  whatsapp: new Set(['conversations', 'sheet', 'db', 'landing', 'form']),
+};
+const ADAPTER_SENDER_TYPE = { telegram: 'telegram_account', whatsapp: 'whatsapp_session' };
 const VALID_RECIPIENT_KINDS = new Set(['email', 'phone']);
 const VALID_SCHEDULE_TYPES = new Set(['once', 'drip']);
 const VALID_LOCALES = new Set(['vi', 'en']);
@@ -94,7 +105,7 @@ export function validateCampaignIntentV1(intent) {
   }
 
   if (!VALID_CHANNELS.has(intent.channel)) {
-    errors.push(`channel không hợp lệ: "${intent.channel}" (cho phép: email, zalo, zalo_group)`);
+    errors.push(`channel không hợp lệ: "${intent.channel}" (cho phép: email, zalo, zalo_group, telegram, whatsapp)`);
   }
 
   if (intent.sender != null) {
@@ -176,15 +187,25 @@ export function deriveIntent(gates = {}, brief = null, options = {}) {
   // Sender
   let sender = null;
   if (gates?.senderAccountId != null) {
-    sender = {
-      type: channel === 'email' ? 'email_account' : 'zalo_account',
-      id: Number(gates.senderAccountId),
-    };
+    if (channel === 'whatsapp') {
+      // WhatsApp: mã phiên chuỗi, KHÔNG ép Number (Number('12-abc') = NaN).
+      sender = { type: 'whatsapp_session', sessionKey: String(gates.senderAccountId) };
+    } else {
+      sender = {
+        type: channel === 'email'
+          ? 'email_account'
+          : channel === 'telegram' ? 'telegram_account' : 'zalo_account',
+        id: Number(gates.senderAccountId),
+      };
+    }
   }
 
   // Audience
   let audience = null;
-  if (
+  if (isAdapterCampaignChannel(channel) && !gates?.dataSource && !gates?.sheetUrl) {
+    // Kênh adapter: wizard không hỏi nguồn người nhận — mặc định "những người đã nhắn tới tài khoản này".
+    audience = { type: 'conversations', ...(channel === 'whatsapp' ? { recipientKind: 'phone' } : {}) };
+  } else if (
     gates?.dataSource ||
     gates?.sheetUrl ||
     (Array.isArray(gates?.zaloGroupIds) && gates.zaloGroupIds.length > 0) ||
@@ -283,17 +304,29 @@ export function isCompilableIntent(intent) {
     missing.push('version');
   }
 
-  if (!intent.channel || !VALID_CHANNELS.has(intent.channel)) {
+  const isAdapterChannel = isAdapterCampaignChannel(intent.channel);
+  if (!intent.channel || !VALID_CHANNELS.has(intent.channel)
+    // Kênh adapter chỉ biên dịch được khi cờ kênh bật (đọc lúc gọi) — tắt cờ thì như kênh không tồn tại.
+    || (isAdapterChannel && !isAdapterCampaignChannelEnabled(intent.channel))) {
     missing.push('channel');
   }
 
   if (!intent.sender || typeof intent.sender !== 'object' || Array.isArray(intent.sender)) {
     missing.push('sender');
+  } else if (intent.channel === 'whatsapp') {
+    // WhatsApp không có id số: bắt buộc mã phiên chuỗi hợp lệ.
+    if (!/^\d+-[A-Za-z0-9_-]{1,128}$/.test(String(intent.sender.sessionKey ?? '').trim())) {
+      missing.push('sender.sessionKey');
+    }
+    if (intent.sender.type !== 'whatsapp_session') {
+      missing.push('sender.type');
+    }
   } else {
     if (intent.sender.id == null || !Number.isInteger(Number(intent.sender.id))) {
       missing.push('sender.id');
     }
-    if (!intent.sender.type || !VALID_SENDER_TYPES.has(intent.sender.type)) {
+    if (!intent.sender.type || !VALID_SENDER_TYPES.has(intent.sender.type)
+      || (isAdapterChannel && intent.sender.type !== ADAPTER_SENDER_TYPE[intent.channel])) {
       missing.push('sender.type');
     }
   }
@@ -301,7 +334,10 @@ export function isCompilableIntent(intent) {
   if (!intent.audience || typeof intent.audience !== 'object' || Array.isArray(intent.audience)) {
     missing.push('audience');
   } else {
-    if (!intent.audience.type || !VALID_AUDIENCE_TYPES.has(intent.audience.type)) {
+    if (!intent.audience.type || !VALID_AUDIENCE_TYPES.has(intent.audience.type)
+      || (isAdapterChannel && !ADAPTER_AUDIENCE_TYPES[intent.channel]?.has(intent.audience.type))
+      // 'conversations' chỉ có nghĩa với kênh adapter (Email/Zalo không có "hội thoại đang mở" làm nguồn).
+      || (!isAdapterChannel && intent.audience.type === 'conversations')) {
       missing.push('audience.type');
     } else {
       if (intent.audience.type === 'sheet' && (!intent.audience.url || !String(intent.audience.url).trim())) {
@@ -320,6 +356,9 @@ export function isCompilableIntent(intent) {
     missing.push('schedule');
   } else {
     if (!intent.schedule.type || !VALID_SCHEDULE_TYPES.has(intent.schedule.type)) {
+      missing.push('schedule.type');
+    } else if (isAdapterChannel && intent.schedule.type !== 'once') {
+      // Engine kênh adapter chỉ chạy một lần (chưa có nhiều bước hẹn giờ) — không dựng chuỗi drip.
       missing.push('schedule.type');
     } else if (intent.schedule.type === 'drip') {
       if (!intent.schedule.days || Number(intent.schedule.days) <= 0) {

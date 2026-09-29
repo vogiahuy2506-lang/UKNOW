@@ -122,6 +122,42 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
       }
     }
 
+    // 2b. Kênh adapter (P8a): send_telegram / send_whatsapp — 1 bước `steps[0]`, không templateMappings
+    // (kênh adapter thay biến qua recipient.vars lúc chạy).
+    else if (subtype === 'send_telegram' || subtype === 'send_whatsapp') {
+      const legNode = legacyNodes.find((n) => getNodeSubtype(n) === subtype);
+      const legCfg = legNode?.config || legNode?.settings || {};
+      const legSteps = Array.isArray(legCfg.steps) ? legCfg.steps : [];
+      const compSteps = Array.isArray(compNode.config?.steps) ? compNode.config.steps : [];
+
+      for (let i = 0; i < compSteps.length; i++) {
+        const legStep = legSteps[i];
+        let message = '';
+        if (legStep && typeof legStep.message === 'string') {
+          message = legStep.message;
+        } else if (i === 0 && typeof legCfg.messageText === 'string') {
+          message = legCfg.messageText;
+        } else if (i === 0 && typeof legCfg.message === 'string') {
+          message = legCfg.message;
+        }
+
+        if (message && message.trim()) {
+          compSteps[i].message = message;
+          if (legStep?.templateId) compSteps[i].templateId = legStep.templateId;
+          if (!compSteps[i].attachments && Array.isArray(legStep?.attachments) && legStep.attachments.length > 0) {
+            compSteps[i].attachments = legStep.attachments;
+          }
+        } else {
+          unmatchedSlots.push({
+            nodeId: compNode.id,
+            channel: subtype === 'send_telegram' ? 'telegram' : 'whatsapp',
+            stepIndex: i,
+            reason: 'missing_legacy_content',
+          });
+        }
+      }
+    }
+
     // 3. Kênh Email: send_email
     else if (subtype === 'send_email') {
       const legNode = legacyNodes.find((n) => getNodeSubtype(n) === 'send_email');
@@ -178,6 +214,8 @@ export function mergeCompiledWithContent(compiledGraph, legacyScript) {
     ['send_zalo_group', 'zaloGroupTemplateSteps', 'zalo_group'],
     ['send_zalo_personal', 'zaloPersonalTemplateSteps', 'zalo'],
     ['send_email', 'emailSteps', 'email'],
+    ['send_telegram', 'steps', 'telegram'],
+    ['send_whatsapp', 'steps', 'whatsapp'],
   ];
 
   for (const [subtype, field, channel] of STEP_FIELDS) {
@@ -252,6 +290,25 @@ export function assertNoEmptyContent(script) {
         const step = steps[i];
         if (!step?.message || !String(step.message).trim()) {
           const err = new Error(`Node ${node.id || 'send_zalo_personal'} bước #${i + 1} có nội dung message rỗng`);
+          err.code = 'EMPTY_CONTENT';
+          err.stepIndex = i;
+          throw err;
+        }
+      }
+    } else if (subtype === 'send_telegram' || subtype === 'send_whatsapp') {
+      // P8a — kênh adapter: mỗi bước cần nội dung (hoặc mẫu tin) — không để chiến dịch gửi tin rỗng.
+      const steps = Array.isArray(cfg.steps) ? cfg.steps : [];
+      if (steps.length === 0) {
+        const err = new Error(`Node ${node.id || subtype} không có steps`);
+        err.code = 'EMPTY_CONTENT';
+        throw err;
+      }
+      for (let i = 0; i < steps.length; i++) {
+        const step = steps[i];
+        const hasMessage = Boolean(step?.message && String(step.message).trim());
+        const hasTemplate = step?.templateId !== undefined && step?.templateId !== null && String(step.templateId).trim() !== '';
+        if (!hasMessage && !hasTemplate) {
+          const err = new Error(`Node ${node.id || subtype} bước #${i + 1} có nội dung message rỗng`);
           err.code = 'EMPTY_CONTENT';
           err.stepIndex = i;
           throw err;

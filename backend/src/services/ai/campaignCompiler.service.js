@@ -78,6 +78,12 @@ export function compileCampaign(intent, options = {}) {
     }
   }
 
+  // Luồng 5 (P8a): Telegram / WhatsApp — CHỈ gửi một lần (engine kênh adapter chưa có nhiều bước hẹn giờ);
+  // isCompilableIntent đã chặn drip + cờ kênh tắt ở trên nên tới đây intent luôn once + cờ bật.
+  if (channel === 'telegram' || channel === 'whatsapp') {
+    return compileAdapterChannelOnceCampaign({ channel, sender, audience, contentBrief, fileUsage, attachments, options });
+  }
+
   // Luồng 4: Zalo nhóm (Once & Drip)
   if (channel === 'zalo_group') {
     if (schedule.type === 'once') {
@@ -89,6 +95,132 @@ export function compileCampaign(intent, options = {}) {
   }
 
   throw new Error(`Unsupported compiler channel/schedule combination: channel="${channel}", schedule="${schedule?.type}"`);
+}
+
+/**
+ * Node đọc dữ liệu làm nguồn người nhận cho kênh adapter (WhatsApp đọc cột SĐT). Cùng config với các nhánh
+ * Zalo/Email (đã kiểm bằng test no-op mục 1.1) — chỉ tách ra hàm riêng để không đụng golden của Zalo/Email.
+ * @returns {{ node: object|null }}
+ */
+function buildAdapterAudienceNode(audience, prefix) {
+  const base = { nodeType: 'data', positionX: 300, positionY: 200 };
+  if (audience.type === 'sheet') {
+    const id = `${prefix}_read_sheet_1`;
+    return { node: { ...base, id, tempId: id, nodeSubtype: 'read_sheet', nodeName: 'Đọc dữ liệu Google Sheet',
+      nodeDescription: 'Đọc danh sách khách từ Google Sheet hoặc Excel',
+      config: { sheetUrl: audience.url || '', sheetName: '', headerRow: 1, dataStartRow: 2, dataSelectedColumns: [] } } };
+  }
+  if (audience.type === 'db') {
+    const id = `${prefix}_interested_customers_1`;
+    return { node: { ...base, id, tempId: id, nodeSubtype: 'interested_customers', nodeName: 'Lấy dữ liệu khách hàng',
+      nodeDescription: 'Lấy danh sách khách hàng từ database hệ thống',
+      config: { interestedCustomerType: 'both', interestedLimit: 1000 } } };
+  }
+  if (audience.type === 'landing') {
+    const id = `${prefix}_read_landing_leads_1`;
+    return { node: { ...base, id, tempId: id, nodeSubtype: 'read_landing_leads', nodeName: 'Dữ liệu Landing Page',
+      nodeDescription: 'Lấy leads từ form đăng ký landing page',
+      config: { landingLeadsSlugs: Array.isArray(audience.slugs) ? audience.slugs : [] } } };
+  }
+  if (audience.type === 'form') {
+    const id = `${prefix}_read_form_submissions_1`;
+    return { node: { ...base, id, tempId: id, nodeSubtype: 'read_form_submissions', nodeName: 'Dữ liệu Biểu mẫu',
+      nodeDescription: 'Lấy người đã nộp biểu mẫu và đồng ý nhận tin',
+      config: { formId: audience.formId != null ? Number(audience.formId) : null } } };
+  }
+  return { node: null };
+}
+
+/**
+ * P8a — Telegram / WhatsApp gửi MỘT LẦN.
+ * Graph: Trigger -> [Audience (chỉ WhatsApp khi nguồn là node dữ liệu)] -> send_telegram | send_whatsapp.
+ * KHÔNG có node select_*_account (khác Zalo): tài khoản nằm thẳng trong config node gửi
+ * (`telegramAccountId` | `whatsappSessionKey`), và nguồn 'conversations' không cần node dữ liệu.
+ * Config khớp CHÍNH XÁC những gì FE lưu (NodeConfigModalSend{Telegram,WhatsApp}Section.jsx) và adapter đọc
+ * (`channels/*.campaignChannel.js`): recipientSource, recipientNodeId/recipientColumn, steps:[{message}].
+ * Không nhúng templateMappings — kênh adapter thay biến qua `recipient.vars` (vd `{{ten}}`), không qua mapping.
+ */
+function compileAdapterChannelOnceCampaign({ channel, sender, audience, contentBrief, fileUsage, attachments, options = {} }) {
+  const isWhatsApp = channel === 'whatsapp';
+  const prefix = options.idPrefix || 'node';
+  const triggerId = `${prefix}_trigger_1`;
+  const sendId = `${prefix}_send_${channel}_1`;
+  const stepAttachments = resolveStepAttachments(fileUsage, attachments);
+
+  const nodes = [];
+  const connections = [];
+  const contentSlots = [];
+
+  nodes.push({
+    id: triggerId,
+    tempId: triggerId,
+    nodeType: 'trigger',
+    nodeSubtype: 'manual',
+    nodeName: 'Bắt đầu (Manual Trigger)',
+    nodeDescription: 'Khởi chạy chiến dịch thủ công',
+    positionX: 100,
+    positionY: 200,
+    config: {},
+  });
+
+  const { node: audienceNode } = audience.type === 'conversations'
+    ? { node: null }
+    : buildAdapterAudienceNode(audience, prefix);
+  if (audienceNode) nodes.push(audienceNode);
+
+  const stepConfig = {
+    templateId: null,
+    message: '',
+    ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
+  };
+  const sendConfig = isWhatsApp
+    ? {
+      whatsappSessionKey: String(sender.sessionKey).trim(),
+      recipientSource: audienceNode ? 'node' : 'whatsapp_conversations',
+      ...(audienceNode ? { recipientNodeId: audienceNode.id, recipientColumn: '' } : {}),
+      steps: [stepConfig],
+    }
+    : {
+      telegramAccountId: Number(sender.id),
+      recipientSource: 'telegram_conversations',
+      steps: [stepConfig],
+    };
+
+  nodes.push({
+    id: sendId,
+    tempId: sendId,
+    nodeType: 'action',
+    nodeSubtype: isWhatsApp ? 'send_whatsapp' : 'send_telegram',
+    nodeName: isWhatsApp ? 'Gửi tin nhắn WhatsApp' : 'Gửi tin nhắn Telegram',
+    nodeDescription: isWhatsApp ? 'Gửi tin nhắn WhatsApp (1 tin, gửi ngay)' : 'Gửi tin nhắn Telegram (1 tin, gửi ngay)',
+    positionX: audienceNode ? 550 : 300,
+    positionY: 200,
+    config: sendConfig,
+  });
+
+  const chain = [triggerId, ...(audienceNode ? [audienceNode.id] : []), sendId];
+  for (let i = 0; i < chain.length - 1; i += 1) {
+    connections.push({
+      sourceNodeId: chain[i],
+      targetNodeId: chain[i + 1],
+      connectionType: 'default',
+      connectionLabel: '',
+      sourceHandle: 'default_out',
+      targetHandle: 'default_in',
+    });
+  }
+
+  contentSlots.push({
+    slotId: `${sendId}_step_0`,
+    nodeId: sendId,
+    channel,
+    stepIndex: 0,
+    day: 1,
+    type: channel,
+    brief: contentBrief,
+  });
+
+  return { nodes, connections, contentSlots };
 }
 
 function resolveStepAttachments(fileUsage, attachments) {

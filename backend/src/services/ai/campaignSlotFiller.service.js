@@ -52,6 +52,38 @@ export function buildSlotFillingPrompt({ slots = [], campaignIntent = {}, brief 
     ? [...history].reverse().find((m) => m?.role === 'user')?.content || ''
     : '';
 
+  // P8a — kênh adapter (Telegram/WhatsApp) có prompt riêng: tin nhắn chat 1-1, không phải tin nhóm Zalo.
+  const adapterChannel = slots.find((slot) => slot?.channel === 'telegram' || slot?.channel === 'whatsapp')?.channel || null;
+  if (adapterChannel) {
+    const channelName = adapterChannel === 'telegram' ? 'Telegram' : 'WhatsApp';
+    const adapterSystemPrompt = `Bạn là chuyên gia soạn thảo nội dung Marketing Automation cho kênh ${channelName} (tin nhắn chat 1-1 tới khách).
+Nhiệm vụ của bạn là điền nội dung văn bản (message) cho các slot được chỉ định trong chiến dịch.
+
+QUY TẮC NỘI DUNG CHO ${channelName.toUpperCase()}:
+1. Tin ngắn gọn, tự nhiên như người thật nhắn, không dùng HTML/markdown nặng; tối đa khoảng 1000 ký tự.
+2. Tiếng Việt chuẩn có dấu (trừ khi được yêu cầu tiếng Anh), thân thiện, emoji tiết chế.
+3. Có lời kêu gọi hành động rõ ràng (CTA) nhưng không thúc ép.
+4. TUYỆT ĐỐI KHÔNG để nội dung rỗng hoặc chỉ có khoảng trắng.
+5. Biến cá nhân hoá: chỉ được dùng {{ten}} (tên khách) nếu cần; KHÔNG bịa biến khác. Không chắc thì dùng câu chào chung.
+6. Mỗi slot trong kết quả trả về PHẢI mang đúng \`slotId\` tương ứng được yêu cầu.`;
+    const adapterSlotsDescription = slots
+      .map((s, idx) => `- Slot ID: "${s.slotId}" | Bước ${(s.stepIndex ?? idx) + 1} | Kênh: ${s.channel}`)
+      .join('\n');
+    const adapterUserPrompt = `Hãy soạn thảo nội dung tin nhắn ${channelName} cho từng slot dưới đây.
+
+THÔNG TIN CHIẾN DỊCH:
+- Chủ đề chính: ${topic}
+- Giọng văn: ${tone}
+- Ngôn ngữ: ${locale === 'en' ? 'Tiếng Anh' : 'Tiếng Việt'}
+${lastUserMsg ? `- Yêu cầu bổ sung của người dùng: "${lastUserMsg.slice(0, 500)}"` : ''}
+
+DANH SÁCH SLOTS CẦN ĐIỀN:
+${adapterSlotsDescription}
+
+Yêu cầu trả về đúng định dạng JSON với mảng "slots" chứa slotId và message đầy đủ.`;
+    return { systemPrompt: adapterSystemPrompt, userPrompt: adapterUserPrompt };
+  }
+
   const systemPrompt = `Bạn là chuyên gia soạn thảo nội dung Marketing Automation cho kênh Zalo Nhóm (Zalo Community/Group).
 Nhiệm vụ của bạn là điền nội dung văn bản (message) chất lượng cao cho các slot được chỉ định trong chiến dịch.
 
@@ -175,6 +207,13 @@ export function applySlotsToGraph(compiledGraph, filledSlots = []) {
         node.config?.zaloRecipientNodeId
       );
       node.config.zaloPersonalTemplateSteps = steps;
+      appliedCount++;
+    } else if (subtype === 'send_telegram' || subtype === 'send_whatsapp') {
+      const steps = Array.isArray(node.config?.steps) ? node.config.steps : [];
+      const stepIdx = slot.stepIndex ?? 0;
+      if (!steps[stepIdx]) steps[stepIdx] = { templateId: null, message: '' };
+      steps[stepIdx].message = message;
+      node.config.steps = steps;
       appliedCount++;
     } else if (subtype === 'send_email') {
       const steps = Array.isArray(node.config?.emailSteps) ? node.config.emailSteps : [];

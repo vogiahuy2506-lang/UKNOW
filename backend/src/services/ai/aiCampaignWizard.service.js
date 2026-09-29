@@ -1,5 +1,10 @@
 import { MAX_AI_MANUAL_RECIPIENTS } from '../../utils/manualRecipients.util.js';
 import {
+  getEnabledAdapterCampaignChannels,
+  isAdapterCampaignChannel,
+  isAdapterCampaignChannelEnabled,
+} from '../campaign/campaignChannelFlags.util.js';
+import {
   createEmptyCampaignBrief,
   isCampaignBriefReady,
   mergeCampaignBrief,
@@ -45,6 +50,11 @@ export const normalizeChannel = (value = '') => {
   if (!raw) return null;
   if (raw === 'zalo_personal') return 'zalo';
   if (raw === 'zalo_group') return 'zalo_group';
+  // P8a — Telegram/WhatsApp chỉ nhận diện khi cờ kênh bật (cờ tắt → hành vi cũ y nguyên).
+  if (!raw.includes('zalo')) {
+    if (raw.includes('telegram') && isAdapterCampaignChannelEnabled('telegram')) return 'telegram';
+    if (/whats\s?app/.test(raw) && isAdapterCampaignChannelEnabled('whatsapp')) return 'whatsapp';
+  }
   if (raw.includes('nhóm') || raw.includes('nhom') || raw.includes('group')) return 'zalo_group';
   if (raw.includes('zalo')) return 'zalo';
   if (raw.includes('email') || raw.includes('mail')) return 'email';
@@ -87,8 +97,20 @@ export function parseWizardMarker(content = '') {
   }
 }
 
+// P8a — câu nói ĐÚNG MỘT kênh adapter (không kèm zalo/email) và cờ kênh đó bật → kênh đó.
+const inferAdapterChannelFromText = (normalized) => {
+  if (/zalo|email|\bmail\b/.test(normalized)) return null;
+  const mentionsTelegram = /telegram/.test(normalized);
+  const mentionsWhatsApp = /whats\s?app/.test(normalized);
+  if (mentionsTelegram === mentionsWhatsApp) return null;
+  const channel = mentionsTelegram ? 'telegram' : 'whatsapp';
+  return isAdapterCampaignChannelEnabled(channel) ? channel : null;
+};
+
 const inferChannelFromText = (text = '') => {
   const normalized = String(text || '').toLowerCase();
+  const adapterChannel = inferAdapterChannelFromText(normalized);
+  if (adapterChannel) return adapterChannel;
   if (/zalo\s*group|zalo\s*nh[oó]m|nh[oó]m\s*zalo|gửi\s*nh[oó]m|gui\s*nhom/.test(normalized)) {
     return 'zalo_group';
   }
@@ -593,6 +615,11 @@ export function buildChannelQuestion(locale = 'vi') {
             { value: 'email', label: isEnglish ? 'Email' : 'Email' },
             { value: 'zalo', label: isEnglish ? 'Zalo personal' : 'Zalo cá nhân' },
             { value: 'zalo_group', label: isEnglish ? 'Zalo groups' : 'Zalo nhóm' },
+            // P8a — chỉ hiện kênh adapter khi cờ bật (đọc lúc gọi).
+            ...getEnabledAdapterCampaignChannels().map((channel) => ({
+              value: channel,
+              label: channel === 'telegram' ? 'Telegram' : 'WhatsApp',
+            })),
           ],
         },
       ],
@@ -709,8 +736,10 @@ export function buildFileUsageQuestion(locale = 'vi') {
   };
 }
 
-export function buildScheduleQuestion(locale = 'vi') {
+export function buildScheduleQuestion(locale = 'vi', gateState = null) {
   const isEnglish = locale === 'en';
+  // P8a — kênh adapter chưa có nhiều bước hẹn giờ (engine one-shot): chỉ cho "gửi một lần".
+  const onceOnly = isAdapterCampaignChannel(gateState?.channel);
   return {
     type: 'ask_campaign_details',
     content: isEnglish
@@ -726,13 +755,13 @@ export function buildScheduleQuestion(locale = 'vi') {
           inputType: 'schedule',
           options: [
             { value: 'once', label: isEnglish ? 'Send once' : 'Gửi một lần' },
-            {
+            ...(onceOnly ? [] : [{
               value: 'drip',
               label: isEnglish ? 'Multi-day sequence' : 'Chuỗi nhiều ngày',
               description: isEnglish
                 ? 'Pick number of days and messages per day'
                 : 'Tự chọn số ngày và số tin mỗi ngày',
-            },
+            }]),
           ],
           defaults: { days: 3, slotsPerDay: 1 },
         },
@@ -854,8 +883,16 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
     if (state.channel) {
       lines.push(`- channel: "${state.channel}"`);
     }
+    if (isAdapterCampaignChannel(state.channel)) {
+      const subtype = state.channel === 'telegram' ? 'send_telegram' : 'send_whatsapp';
+      lines.push(`- LUỒNG ${state.channel === 'telegram' ? 'TELEGRAM' : 'WHATSAPP'}: dùng node action/${subtype} (KHÔNG dùng select_zalo_account/zaloAccountId, KHÔNG dùng send_email/send_zalo_*), chỉ MỘT tin gửi ngay (steps có đúng 1 phần tử), nguồn người nhận mặc định là hội thoại đang mở`);
+    }
     if (state.senderAccountId) {
-      if (state.channel === 'zalo' || state.channel === 'zalo_group') {
+      if (state.channel === 'telegram') {
+        lines.push(`- telegramAccountId: ${state.senderAccountId} (BẮT BUỘC dùng ID này cho send_telegram.telegramAccountId)`);
+      } else if (state.channel === 'whatsapp') {
+        lines.push(`- whatsappSessionKey: "${state.senderAccountId}" (BẮT BUỘC dùng mã phiên này cho send_whatsapp.whatsappSessionKey)`);
+      } else if (state.channel === 'zalo' || state.channel === 'zalo_group') {
         lines.push(`- zaloSenderAccountId: ${state.senderAccountId} (BẮT BUỘC dùng ID này cho select_zalo_account.zaloAccountId và mọi node Zalo; KHÔNG dùng firstZaloAccountId khi có giá trị này)`);
       } else if (state.channel === 'email') {
         lines.push(`- emailSenderId: ${state.senderAccountId} (dùng ID này cho fromEmailId)`);
@@ -1053,10 +1090,7 @@ export function buildSheetProblemMessage(state, locale = 'vi') {
   };
 }
 
-export function evaluateNextGate(state, resources = {}, locale = 'vi') {
-  if (!state?.isCampaignFlow) return null;
-  if (!state.channel) return { gate: 'channel', response: buildChannelQuestion(locale) };
-
+function evaluateEmailZaloSenderAndSourceGates(state, resources, locale) {
   const accountsForChannel = state.channel === 'email' ? resources.emailSenders : resources.zaloAccounts;
   const accounts = Array.isArray(accountsForChannel) ? accountsForChannel : [];
   const selectedAccount = state.senderAccountId
@@ -1101,6 +1135,55 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
 
   if (state.channel !== 'zalo_group' && !state.dataSource) {
     return { gate: 'dataSource', response: buildDataSourceQuestion(locale, state) };
+  }
+  return null;
+}
+
+/**
+ * P8a — cổng tài khoản cho kênh adapter. Trả:
+ * - `{ gate, response }` : hướng dẫn kết nối khi chưa có tài khoản dùng được (chặn, như Zalo/Email);
+ * - `null`               : nhiều tài khoản + chưa rõ dùng cái nào → nhả cho LLM hỏi (prompt có danh sách tài khoản).
+ *                          Không dùng thẻ chọn tài khoản của Email/Zalo vì nút "Khác" của thẻ đó dẫn tới QR Zalo;
+ * - `undefined`          : đủ điều kiện, đi tiếp các cổng chung (tệp, brief, lịch).
+ */
+function evaluateAdapterSenderGate(state, resources, locale) {
+  const raw = state.channel === 'telegram' ? resources.telegramAccounts : resources.whatsappAccounts;
+  const accounts = Array.isArray(raw) ? raw : [];
+  const usable = accounts.filter((account) => account.usable !== false);
+  if (usable.length === 0) {
+    return { gate: 'senderAccount', response: buildAdapterChannelSetupGuide(state.channel, locale) };
+  }
+  const chosen = state.senderAccountId
+    ? usable.find((account) => String(account.id) === String(state.senderAccountId))
+    : null;
+  if (chosen || usable.length === 1) return undefined;
+  return null;
+}
+
+export function buildAdapterChannelSetupGuide(channel, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  const name = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+  return {
+    type: 'text',
+    content: isEnglish
+      ? `You have no connected ${name} account yet. Open Settings → Sending channels, connect a ${name} account (${channel === 'telegram' ? 'log in with your phone number' : 'scan the QR code'}), then come back and tell me to continue.`
+      : `Bạn chưa có tài khoản ${name} nào đang kết nối. Vào Cài đặt → Kênh gửi để kết nối tài khoản ${name} (${channel === 'telegram' ? 'đăng nhập bằng số điện thoại' : 'quét mã QR'}), rồi quay lại nói mình tiếp tục nhé.`,
+    missing_fields: [],
+    data: null,
+  };
+}
+
+export function evaluateNextGate(state, resources = {}, locale = 'vi') {
+  if (!state?.isCampaignFlow) return null;
+  if (!state.channel) return { gate: 'channel', response: buildChannelQuestion(locale) };
+
+  // P8a — kênh adapter (Telegram/WhatsApp) có cổng tài khoản riêng và KHÔNG có cổng nguồn người nhận/nhóm Zalo.
+  if (isAdapterCampaignChannel(state.channel)) {
+    const adapterGate = evaluateAdapterSenderGate(state, resources, locale);
+    if (adapterGate !== undefined) return adapterGate;
+  } else {
+    const senderAndSourceGate = evaluateEmailZaloSenderAndSourceGates(state, resources, locale);
+    if (senderAndSourceGate) return senderAndSourceGate;
   }
 
   const hasSpreadsheetSource = Boolean(
@@ -1169,9 +1252,10 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     };
   }
 
-  const hasValidSchedule = isValidWizardSchedule(state.schedule);
+  const hasValidSchedule = isValidWizardSchedule(state.schedule)
+    && !(isAdapterCampaignChannel(state.channel) && state.schedule?.mode === 'drip');
   if (!hasValidSchedule) {
-    const response = buildScheduleQuestion(locale);
+    const response = buildScheduleQuestion(locale, state);
     if (state.schedule?.mode === 'recurring') {
       response.content = locale === 'en'
         ? 'Recurring schedules (e.g. every 7 days) are coming soon. For now, please choose a one-time send or a multi-day drip sequence:'

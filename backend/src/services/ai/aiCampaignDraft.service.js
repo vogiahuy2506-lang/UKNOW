@@ -204,6 +204,39 @@ class AiCampaignDraftService {
     }
   }
 
+  /**
+   * P8a — node gửi Telegram/WhatsApp chưa có tài khoản mà workspace chỉ có ĐÚNG 1 tài khoản dùng được → điền nó
+   * (như autoFillZaloAccounts với tài khoản Zalo mặc định). Nhiều hơn/không có → để trống: thẻ xác nhận báo
+   * `missing_sender` (chặn tạo) chứ KHÔNG tự chọn hộ — gửi nhầm số/tài khoản là gửi cho khách thật.
+   */
+  async autoFillAdapterChannelAccounts(nodes, ownerUserId) {
+    const adapterNodes = nodes.filter((node) => {
+      const st = node.node_subtype || node.nodeSubtype || '';
+      return st === 'send_telegram' || st === 'send_whatsapp';
+    });
+    if (adapterNodes.length === 0 || !ownerUserId) return;
+    try {
+      // Nạp động: đường thường (không có node adapter) không phải kéo cả aiPromptResources vào module này.
+      const { default: aiPromptResources } = await import('./aiPromptResources.service.js');
+      const accounts = await aiPromptResources.getAdapterChannelAccounts(ownerUserId);
+      const usableTelegram = accounts.telegram.filter((a) => a.usable);
+      const usableWhatsApp = accounts.whatsapp.filter((a) => a.usable);
+      for (const node of adapterNodes) {
+        const cfg = node.config || {};
+        const st = node.node_subtype || node.nodeSubtype;
+        if (st === 'send_telegram' && !cfg.telegramAccountId && usableTelegram.length === 1) {
+          cfg.telegramAccountId = usableTelegram[0].id;
+        }
+        if (st === 'send_whatsapp' && !cfg.whatsappSessionKey && usableWhatsApp.length === 1) {
+          cfg.whatsappSessionKey = usableWhatsApp[0].id;
+        }
+        node.config = cfg;
+      }
+    } catch (e) {
+      console.warn('[AI] Không tự điền được tài khoản Telegram/WhatsApp:', e.message);
+    }
+  }
+
   normalizeNodes(nodes) {
     if (!Array.isArray(nodes)) return [];
 
@@ -556,6 +589,15 @@ class AiCampaignDraftService {
             node.config = cfg;
           }
         }
+        // P8a — WhatsApp đọc SĐT từ node dữ liệu (recipientSource 'node', cột tự dò).
+        if (getNodeSubtype(node) === 'send_whatsapp') {
+          const cfg = node.config || node.settings || {};
+          if (!cfg.recipientNodeId) {
+            cfg.recipientSource = 'node';
+            cfg.recipientNodeId = sheetId;
+            node.config = cfg;
+          }
+        }
       }
     }
 
@@ -868,6 +910,7 @@ class AiCampaignDraftService {
     const nodes = this.normalizeNodes(canonical.nodes);
     await this.autoFillEmailChannels(nodes, userId);
     await this.autoFillZaloAccounts(nodes, userId);
+    await this.autoFillAdapterChannelAccounts(nodes, ownerUserId);
     return { ...canonical, nodes };
   }
 }
