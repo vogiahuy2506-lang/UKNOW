@@ -8,8 +8,8 @@
     "build": "vite build",
     "lint": "eslint . --ext js,jsx --report-unused-disable-directives --max-warnings 5",
     "preview": "vite preview",
-    "test": "vitest run",
-    "test:ci": "vitest run --reporter=verbose",
+    "test": "node ../scripts/test-lock.mjs vitest run",
+    "test:ci": "node ../scripts/test-lock.mjs vitest run --reporter=verbose",
     "test:watch": "vitest"
   },
   "dependencies": {

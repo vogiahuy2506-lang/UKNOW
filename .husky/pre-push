@@ -40,7 +40,7 @@ cd "$REPO_ROOT/backend" || exit 1
 # Goi node truc tiep (khong qua `npm run`) de tranh loi
 # `NODE_ENV=test` inline trong package.json khong hoat dong tren Windows PowerShell.
 # Dung `env` prefix de set bien moi truong cross-platform.
-env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50% --ci --silent && echo "[pre-push] Unit test OK" || {
+node "$REPO_ROOT/scripts/test-lock.mjs" env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50% --ci --silent && echo "[pre-push] Unit test OK" || {
   echo "[pre-push] Unit test FAIL — fix truoc hoac dung --no-verify de bypass."
   exit 1
 }
