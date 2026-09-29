@@ -535,6 +535,27 @@ export async function metricZaloDisconnected(minutes, maxAgeMinutes) {
 }
 
 /**
+ * Tài khoản Telegram/WhatsApp mất kết nối lâu hơn `minutes` NHƯNG chưa quá `maxAgeMinutes`
+ * (bảng channel_disconnect_alerts, migration 266). Cận trên bắt buộc — xem metricZaloDisconnected.
+ *
+ * @param {'telegram'|'whatsapp'} channel
+ * @param {number} minutes
+ * @param {number} maxAgeMinutes
+ */
+export async function metricChannelDisconnected(channel, minutes, maxAgeMinutes) {
+  const { rows } = await db.query(
+    `SELECT COUNT(*)::int AS cnt
+     FROM channel_disconnect_alerts
+     WHERE channel = $1
+       AND disconnected_since IS NOT NULL
+       AND disconnected_since <= NOW() - ($2 || ' minutes')::interval
+       AND disconnected_since >= NOW() - ($3 || ' minutes')::interval`,
+    [channel, String(minutes), String(maxAgeMinutes)]
+  );
+  return Number(rows[0]?.cnt || 0);
+}
+
+/**
  * Đơn pending lâu hơn `hours` NHƯNG được tạo trong vòng `maxAgeHours`.
  * Xem ghi chú ở `metricZaloDisconnected` về lý do phải có cận trên.
  */

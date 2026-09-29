@@ -3,7 +3,7 @@
  * `tracked: true` = đã gọi recordRun.
  * `optional: true` = có thể không được đăng ký lúc khởi động (env).
  * KHÔNG gồm cron động campaign_schedules (scheduler.js ~:270).
- * KHÔNG gồm Zalo / WhatsApp Baileys keep-alive (setInterval scheduler).
+ * KHÔNG gồm Zalo / WhatsApp Baileys / Telegram keep-alive (setInterval scheduler).
  */
 export const CRON_JOBS = [
   {
@@ -240,6 +240,14 @@ export const CRON_JOBS = [
     schedule: 'Mỗi 5 phút',
     description: 'Quét tin nhắn mới của khách chứa số điện thoại hoặc email và gửi email thông báo cho chủ shop.',
     impact: 'Chủ shop không nhận được thông báo khi khách để lại liên hệ trong các cuộc hội thoại AI.',
+    tracked: true,
+  },
+  {
+    code: 'channel_disconnect_alert',
+    label: 'Báo chủ khi kênh Zalo/Telegram/WhatsApp mất kết nối',
+    schedule: 'Mỗi 10 phút',
+    description: 'Ghi mốc mất kết nối của từng tài khoản kênh và gửi email cho chủ khi mất hơn 15 phút (mỗi tài khoản tối đa một lần mỗi 24 giờ). Cũng là nguồn số liệu cho luật cảnh báo Telegram/WhatsApp mất kết nối.',
+    impact: 'Chủ shop không được báo khi tài khoản kênh rớt, và luật cảnh báo admin Telegram/WhatsApp mất kết nối không có số liệu.',
     tracked: true,
   },
   {

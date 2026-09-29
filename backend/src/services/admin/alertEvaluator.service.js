@@ -268,6 +268,24 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'telegram_disconnected':
+    case 'whatsapp_disconnected': {
+      // Nguồn: bảng channel_disconnect_alerts (cron channel_disconnect_alert 10 phút ghi mốc bắt đầu mất).
+      // Cận trên 7 ngày cùng lý do zalo_disconnected: tài khoản bỏ dùng từ lâu không được bắn mãi.
+      const channel = rule.code === 'telegram_disconnected' ? 'telegram' : 'whatsapp';
+      const channelLabel = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+      const minutes = windowMinutes || threshold || 30;
+      const maxAgeMinutes = Number(config.maxAgeMinutes) || 7 * 24 * 60;
+      const cnt = await alertRepo.metricChannelDisconnected(channel, minutes, maxAgeMinutes);
+      if (cnt > 0) {
+        return {
+          measuredValue: cnt,
+          message: `${cnt} tài khoản ${channelLabel} mất kết nối > ${minutes} phút (trong ${Math.round(maxAgeMinutes / 60)} giờ qua)`,
+          payload: { count: cnt, channel, minutes, maxAgeMinutes },
+        };
+      }
+      return null;
+    }
     case 'order_pending_stale': {
       const hours = threshold || 2;
       const maxAgeHours = Number(config.maxAgeHours) || 48;

@@ -1258,6 +1258,22 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Chatbot contact alert: mỗi 5 phút');
 
+  // ── Báo chủ tài khoản khi kênh Zalo/Telegram/WhatsApp mất kết nối (P3 PLAN_TG_WA_DAY_DU) ──
+  cron.schedule('*/10 * * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('channel_disconnect_alert', async () => {
+        const { scanAndNotify } = await import('../services/chatbot/channelDisconnectAlert.service.js');
+        return scanAndNotify();
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi báo kênh mất kết nối:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Channel disconnect alert: mỗi 10 phút');
+
   // ── Chatbot digest weekly (PR-3 PLAN_BAO_LIEN_HE_KHACH_DE_LAI_TRONG_CHAT) ────
   cron.schedule('0 8 * * 1', async () => {
     if (process.env.NODE_ENV === 'test') return;

@@ -2488,6 +2488,24 @@ VALUES
   '{"thresholdPercent": 85}'::jsonb
 );
 
+-- migration 266 (rules)
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES
+(
+  'telegram_disconnected',
+  'Tai khoan Telegram mat ket noi',
+  'Tai khoan Telegram khong con nghe tin den qua N phut (nguon: channel_disconnect_alerts)',
+  30, 30, 'email', 'critical', 60,
+  '{}'::jsonb
+),
+(
+  'whatsapp_disconnected',
+  'Tai khoan WhatsApp mat ket noi',
+  'Phien WhatsApp khong o trang thai open qua N phut (nguon: channel_disconnect_alerts)',
+  30, 30, 'email', 'critical', 60,
+  '{}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
@@ -3861,3 +3879,16 @@ CREATE INDEX IF NOT EXISTS idx_email_messages_node_recipient_step_created
 CREATE INDEX IF NOT EXISTS idx_zalo_messages_node_channel_created
   ON zalo_messages (id_node, channel, created_at)
   WHERE (tracking_metadata->>'status') = 'sent';
+
+-- --- Migration 266: channel_disconnect_alerts (P3 PLAN_TG_WA_DAY_DU) ---
+CREATE TABLE IF NOT EXISTS channel_disconnect_alerts (
+  channel            VARCHAR(20)  NOT NULL CHECK (channel IN ('zalo_personal', 'telegram', 'whatsapp')),
+  account_ref        VARCHAR(255) NOT NULL,
+  id_user            BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  account_label      VARCHAR(255),
+  disconnected_since TIMESTAMPTZ,
+  last_alerted_at    TIMESTAMPTZ,
+  updated_at         TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (channel, account_ref)
+);
+CREATE INDEX IF NOT EXISTS idx_channel_disconnect_alerts_user ON channel_disconnect_alerts (id_user);

@@ -84,7 +84,7 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     }
   });
 
-  it('đúng 33 cron cố định, không trùng mã', () => {
+  it('đúng 34 cron cố định, không trùng mã', () => {
     // 29 → 30: thêm notification_templates (PLAN_NOTIFICATION_CENTER_SAVE_AS_TEMPLATE,
     // PR-1 — Save As Template MVP, dispatch mark-only vì template chưa lưu targeting).
     // 30 → 31: thêm facebook_token_refresh (06209dca, 21/09/2026 — làm mới Page Access Token 03:00
@@ -92,8 +92,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     // 31 → 33: thêm affiliate_revenue_sweep + affiliate_month_closing (PR-4 đợt rà soát 26/09,
     // PLAN_VA_LOI_LUONG_TIEN_2026-09-26 PR-6 Việc 6.3 — 2 job affiliate đã gọi recordRun từ trước
     // nhưng chưa có trong CRON_JOBS nên không được cronJobRegistry giám sát/cảnh báo).
-    expect(CRON_JOBS).toHaveLength(33);
+    // 33 → 34: thêm channel_disconnect_alert (P3 PLAN_TG_WA_DAY_DU_2026-09-29 — báo chủ khi kênh mất kết nối).
+    expect(CRON_JOBS).toHaveLength(34);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(33);
+    expect(new Set(codes).size).toBe(34);
   });
 });
