@@ -744,7 +744,11 @@ const EmployeeManagement = () => {
 
       {/* ── Modal chi tiết nhân viên (3 tab) ─────────────────────────────────── */}
       {selectedEmployee && renderModal(
-        <div className="flex flex-col h-full">
+        // min-h-0 + flex-1 (không phải h-full): khung MODAL_MD chỉ có max-h-[85vh], không có chiều cao cố định,
+        // nên h-full rơi về auto → khối này nở theo nội dung, khung cắt phần thừa và vùng cuộn bên dưới KHÔNG BAO
+        // GIỜ cuộn — nút "Lưu quyền hạn" ở cuối tab bị cắt mất (sếp không lưu được quyền, 29/09). Đo bằng Chromium:
+        // trước sửa scrollHeight = clientHeight (không cuộn), sau sửa cuộn được và thấy nút.
+        <div className="flex flex-col min-h-0 flex-1">
           {/* Modal header */}
           <div className="flex items-start justify-between gap-4 px-6 pt-6 pb-4 border-b border-gray-100">
             <div>
@@ -777,7 +781,7 @@ const EmployeeManagement = () => {
           </div>
 
           {/* Tab content */}
-          <div className="flex-1 overflow-y-auto px-6 py-5">
+          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5">
 
             {/* ── Tab Thông tin ── */}
             {activeTab === 'info' && (

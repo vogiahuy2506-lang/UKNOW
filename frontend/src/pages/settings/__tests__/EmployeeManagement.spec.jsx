@@ -258,6 +258,24 @@ describe('cột Quyền trong bảng', () => {
     expect(await screen.findByRole('button', { name: 'Lưu quyền hạn' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reset mật khẩu' })).not.toBeInTheDocument();
   });
+
+  // 29/09: nút "Lưu quyền hạn" bị khung modal (max-h-[85vh] overflow-hidden) cắt mất, không cuộn tới được —
+  // sếp tick quyền rồi không lưu được. jsdom không đo bố cục; đo thật bằng Chromium lúc sửa (trước: vùng nội dung
+  // scrollHeight = clientHeight; sau: cuộn được, thấy nút). Test này ghim chuỗi flex đúng: vùng cuộn chứa nút
+  // phải có min-h-0, và khối bọc giữa khung với vùng cuộn phải là min-h-0 flex-1 — KHÔNG phải h-full.
+  it('nút Lưu quyền hạn nằm trong vùng cuộn được: vùng cuộn có min-h-0, khối bọc là flex-1 min-h-0 (không h-full)', async () => {
+    setEmployees([makeEmployee()]);
+    const user = await renderPage();
+    await user.click(await screen.findByRole('button', { name: 'Chưa cấp quyền' }));
+    const saveBtn = await screen.findByRole('button', { name: 'Lưu quyền hạn' });
+    const scroller = saveBtn.closest('.overflow-y-auto');
+    expect(scroller).not.toBeNull();
+    expect(scroller.classList.contains('min-h-0')).toBe(true);
+    const wrapper = scroller.parentElement;
+    expect(wrapper.classList.contains('min-h-0')).toBe(true);
+    expect(wrapper.classList.contains('flex-1')).toBe(true);
+    expect(wrapper.classList.contains('h-full')).toBe(false);
+  });
 });
 
 // ── (c) hộp thoại thêm nhân viên chỉ cần email ────────────────────────────────
