@@ -27,6 +27,17 @@ jest.unstable_mockModule('../../campaignZaloSender.service.js', () => ({
   default: { prepareZaloAttachmentSources: prepareMock },
 }));
 
+// Review 30/09 (CI đỏ 1596841c): P6 thêm kiểm khoá (resourceIsLocked/whatsappSessionIsLocked → CSDL thật) vào
+// checkReadiness/resolveAccount; spec này chỉ thử đính kèm nên giả lập cổng khoá (tái hiện: DB_HOST=127.0.0.1 DB_PORT=5999).
+jest.unstable_mockModule('../../../../utils/topupLockGate.util.js', () => ({
+  CHANNEL_ACCOUNT_LOCKED_MESSAGE: 'Tài khoản đang bị khoá do vượt hạn mức gói',
+  resourceIsLocked: jest.fn().mockResolvedValue(false),
+  whatsappSessionIsLocked: jest.fn().mockResolvedValue(false),
+  lockedChannelAccountRefs: jest.fn().mockResolvedValue([]),
+  getLandingLockBySlug: jest.fn().mockResolvedValue(null),
+  pausedLandingHtml: jest.fn(() => ''),
+}));
+
 const { whatsappChannelAdapter } = await import('../whatsapp.campaignChannel.js');
 
 const source = (filename, size = 10) => ({ data: Buffer.alloc(size, 1), filename, metadata: { totalSize: size } });

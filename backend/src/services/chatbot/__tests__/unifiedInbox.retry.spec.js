@@ -158,6 +158,23 @@ jest.unstable_mockModule('../../../repositories/ai/channelConnections.repository
 // channelAdapters/__tests__/telegramInbox.adapter.spec.js) — spec này kiểm phần Hộp thư: chọn adapter theo
 // kênh, truyền đúng tham số, ghi id tin Telegram vào dòng agent (khử echo).
 const mockTelegramInboxSend = jest.fn();
+// Review 30/09 (CI đỏ e0f7629e/1596841c): P5 gọi chatAttachmentService.promoteChatAttachments và P6 gọi
+// topupLockGate.whatsappSessionIsLocked trong đường trả lời tay — cả hai chạm CSDL thật; máy dev có CSDL nên xanh,
+// CI không có → pool retry 6 lần → timeout 5s. Giả lập ở ranh giới (tái hiện: DB_HOST=127.0.0.1 DB_PORT=5999).
+jest.unstable_mockModule('../chatAttachment.service.js', () => ({
+  default: {
+    promoteChatAttachments: jest.fn().mockResolvedValue(undefined),
+    presentAttachmentsForClient: jest.fn((raw) => (Array.isArray(raw) ? raw : [])),
+  },
+}));
+jest.unstable_mockModule('../../../utils/topupLockGate.util.js', () => ({
+  CHANNEL_ACCOUNT_LOCKED_MESSAGE: 'Tài khoản đang bị khoá do vượt hạn mức gói',
+  resourceIsLocked: jest.fn().mockResolvedValue(false),
+  whatsappSessionIsLocked: jest.fn().mockResolvedValue(false),
+  lockedChannelAccountRefs: jest.fn().mockResolvedValue([]),
+  getLandingLockBySlug: jest.fn().mockResolvedValue(null),
+  pausedLandingHtml: jest.fn(() => ''),
+}));
 jest.unstable_mockModule('../channelAdapters/telegramInbox.adapter.js', () => ({
   default: { sendReply: mockTelegramInboxSend },
 }));
