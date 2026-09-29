@@ -231,9 +231,21 @@ function QrModal({ open, onClose, qrPayload, qrStatus, qrError, onCancel, onNewQ
 
 // ── Account Card ───────────────────────────────────────────────────────────────
 
-function StatusPill({ loaded, active, t }) {
-  const key = loaded && active ? 'loaded' : active ? 'active' : 'inactive';
+function StatusPill({ loaded, active, sessionOk, t }) {
+  // sessionOk === false (BE mới) = phiên mất khoá đăng nhập; undefined (BE cũ) giữ hành vi cũ.
+  const key = !active
+    ? 'inactive'
+    : sessionOk === false
+      ? 'needsRelogin'
+      : loaded
+        ? 'loaded'
+        : 'active';
   const metaMap = {
+    needsRelogin: {
+      label: t('telegramSettings.statusNeedsRelogin'),
+      cls: 'bg-amber-50 text-amber-700 border-amber-200',
+      dot: 'bg-amber-500',
+    },
     loaded: {
       label: t('telegramSettings.statusConnected'),
       cls: 'bg-green-50 text-green-700 border-green-200',
@@ -264,7 +276,8 @@ function StatusPill({ loaded, active, t }) {
   );
 }
 
-function AccountCard({ account, onLogout, onDelete, loggingOut, deleting, t }) {
+function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, loggingOut, deleting, t }) {
+  const needsRelogin = account.is_active && account.session_ok === false;
   const fullName = [account.first_name, account.last_name].filter(Boolean).join(' ');
   const displayName = fullName || account.username || account.phone || 'Telegram User';
   const avatarChar = (displayName || 'T').trim().charAt(0).toUpperCase();
@@ -281,8 +294,12 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting, t }) {
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="text-sm font-semibold text-slate-900 truncate">{displayName}</p>
-            <StatusPill loaded={account.is_loaded} active={account.is_active} t={t} />
+            <StatusPill loaded={account.is_loaded} active={account.is_active} sessionOk={account.session_ok} t={t} />
           </div>
+
+          {needsRelogin && (
+            <p className="mt-2 text-xs text-amber-700">{t('telegramSettings.needsReloginHint')}</p>
+          )}
 
           <div className="mt-2.5 space-y-1.5">
             {account.username && (
@@ -306,6 +323,16 @@ function AccountCard({ account, onLogout, onDelete, loggingOut, deleting, t }) {
 
         {/* Actions */}
         <div className="flex flex-col gap-1.5 shrink-0 sm:items-end">
+          {needsRelogin && (
+            <button
+              type="button"
+              onClick={onRelogin}
+              disabled={!canRelogin}
+              className="inline-flex items-center gap-1.5 rounded-xl border border-amber-300 bg-amber-50 px-3 py-1.5 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors disabled:opacity-50"
+            >
+              {t('telegramSettings.relogin')}
+            </button>
+          )}
           {account.is_active && (
             <button
               type="button"
@@ -557,7 +584,9 @@ export default function TelegramSettings() {
     finally { setRefreshing(false); }
   }, [fetchAccounts]);
 
-  const totalActive = safeAccounts.filter((a) => a && a.is_active && a.is_loaded).length;
+  const totalActive = safeAccounts.filter(
+    (a) => a && a.is_active && a.is_loaded && a.session_ok !== false
+  ).length;
 
   const canOpenQr = !qrModalOpen && !connecting && (gatewayStatus?.canStartLogin !== false);
 
@@ -684,6 +713,8 @@ export default function TelegramSettings() {
                 account={acc}
                 onLogout={handleLogout}
                 onDelete={handleDelete}
+                onRelogin={handleStartQrLogin}
+                canRelogin={canOpenQr}
                 loggingOut={loggingOut}
                 deleting={deleting}
                 t={t}

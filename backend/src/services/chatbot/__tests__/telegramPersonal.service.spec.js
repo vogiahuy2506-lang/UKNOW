@@ -47,6 +47,7 @@ const repoStub = {
   deactivateAccount: jest.fn(async () => ({ id: 1, is_active: false })),
   setEnabled: jest.fn(async () => ({ enabled: true })),
   listAccountsForUser: jest.fn(async () => []),
+  getSessionString: jest.fn(async () => null),
 };
 
 jest.unstable_mockModule(
@@ -222,6 +223,65 @@ describe('telegramPersonalService.listAccounts', () => {
     gatewayMock.listAccounts.mockRejectedValueOnce(new Error('boom'));
     const accounts = await telegramPersonalService.listAccounts(100);
     expect(accounts[0].is_loaded).toBe(false);
+  });
+});
+
+describe('telegramPersonalService.listAccounts — session_ok (PR-T1)', () => {
+  const goodBlob = { authKeys: { permanent: { 2: 'k' } }, secret: 'x' };
+
+  it('dòng loaded: session_ok=true và không đọc blob', async () => {
+    repoStub.listAccountsByUser.mockResolvedValueOnce([
+      { id: 1, id_user: 100, telegram_user_id: 12345, is_active: true },
+    ]);
+    gatewayMock.listAccounts.mockResolvedValueOnce({ data: [{ telegram_user_id: 12345, is_loaded: true }] });
+    const [a] = await telegramPersonalService.listAccounts(100);
+    expect(a.session_ok).toBe(true);
+    expect(repoStub.getSessionString).not.toHaveBeenCalled();
+  });
+
+  it('dòng active, không loaded, blob có authKeys.permanent: session_ok=true', async () => {
+    repoStub.listAccountsByUser.mockResolvedValueOnce([
+      { id: 1, id_user: 100, telegram_user_id: 12345, is_active: true },
+    ]);
+    repoStub.getSessionString.mockResolvedValueOnce(goodBlob);
+    const [a] = await telegramPersonalService.listAccounts(100);
+    expect(a.is_loaded).toBe(false);
+    expect(a.session_ok).toBe(true);
+  });
+
+  it('blob null / permanent rỗng / đọc ném lỗi: session_ok=false, dòng khác không ảnh hưởng', async () => {
+    repoStub.listAccountsByUser.mockResolvedValueOnce([
+      { id: 1, id_user: 100, telegram_user_id: 1, is_active: true },
+      { id: 2, id_user: 100, telegram_user_id: 2, is_active: true },
+      { id: 3, id_user: 100, telegram_user_id: 3, is_active: true },
+      { id: 4, id_user: 100, telegram_user_id: 4, is_active: true },
+    ]);
+    repoStub.getSessionString
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ authKeys: { permanent: {} } })
+      .mockRejectedValueOnce(new Error('decrypt failed'))
+      .mockResolvedValueOnce(goodBlob);
+    const accounts = await telegramPersonalService.listAccounts(100);
+    expect(accounts.map((a) => a.session_ok)).toEqual([false, false, false, true]);
+  });
+
+  it('dòng is_active=false: session_ok=false, không đọc blob', async () => {
+    repoStub.listAccountsByUser.mockResolvedValueOnce([
+      { id: 1, id_user: 100, telegram_user_id: 12345, is_active: false },
+    ]);
+    const [a] = await telegramPersonalService.listAccounts(100);
+    expect(a.session_ok).toBe(false);
+    expect(repoStub.getSessionString).not.toHaveBeenCalled();
+  });
+
+  it('response không chứa blob/khoá phiên', async () => {
+    repoStub.listAccountsByUser.mockResolvedValueOnce([
+      { id: 1, id_user: 100, telegram_user_id: 12345, is_active: true },
+    ]);
+    repoStub.getSessionString.mockResolvedValueOnce(goodBlob);
+    const accounts = await telegramPersonalService.listAccounts(100);
+    const json = JSON.stringify(accounts);
+    expect(json).not.toMatch(/authKeys|"state"|permanent|secret/);
   });
 });
 

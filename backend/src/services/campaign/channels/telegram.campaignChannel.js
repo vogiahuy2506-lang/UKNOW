@@ -33,6 +33,7 @@ import { ChannelSendError } from '../campaignChannelRegistry.service.js';
 import telegramGateway from '../../chatbot/telegramGateway.client.js';
 import { isStubOnly } from '../../chatbot/inProcChannelGateway/stubCheck.js';
 import chatbotTelegramRepository from '../../../repositories/chatbot/chatbotTelegram.repository.js';
+import { hasPermanentAuthKey } from '../../../utils/telegramSession.util.js';
 
 /** Chỉ nhận chat id Telegram dạng số (âm cho group/channel) — không tra theo SĐT/username. */
 const TELEGRAM_CHAT_ID_PATTERN = /^-?\d+$/;
@@ -149,10 +150,7 @@ async function checkReadiness({ userId, node }) {
   }
   // Phiên phải còn khoá đăng nhập (chỉ đọc CSDL — không dựng client/kết nối). Không log/không trả nội dung khoá.
   const session = await chatbotTelegramRepository.getSessionString(account.telegram_user_id);
-  const permanentKeys = session?.authKeys?.permanent;
-  const hasPermanentKey =
-    permanentKeys && typeof permanentKeys === 'object' && Object.keys(permanentKeys).length > 0;
-  if (!hasPermanentKey) {
+  if (!hasPermanentAuthKey(session)) {
     const err = new Error(
       'Phiên Telegram của tài khoản đã hết hiệu lực — vui lòng đăng nhập lại Telegram trong Cài đặt.'
     );

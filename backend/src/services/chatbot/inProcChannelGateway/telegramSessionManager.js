@@ -49,6 +49,8 @@ class ClientRecord {
     this.accountKey = String(accountKey);
     this.client = client;
     this.lastUsed = Date.now();
+    // true khi đã đăng ký handler nhận tin đến — _evictIdle không được ngắt client đang nghe tin.
+    this.listening = false;
     // Promise-chain queue: serialises all operations on this client.
     this._tail = Promise.resolve();
   }
@@ -316,6 +318,7 @@ export class TelegramSessionManager {
           (event) => this._forwardInbound(event, telegramUserId),
           { accountTelegramUserId: telegramUserId }
         );
+        record.listening = true;
         logInfo(
           `[TelegramSessionManager] subscribed inbound handler for ${telegramUserId}`
         );
@@ -404,12 +407,15 @@ export class TelegramSessionManager {
           (event) => this._forwardInbound(event, telegramUserId),
           { accountTelegramUserId: telegramUserId }
         );
+        // Đánh dấu đang nghe ngay (đăng ký chạy bất đồng bộ); đăng ký lỗi thì bỏ cờ để dọn như client thường.
+        record.listening = true;
         if (subPromise && typeof subPromise.catch === 'function') {
-          subPromise.catch((err) =>
+          subPromise.catch((err) => {
+            record.listening = false;
             logWarn(
               `[TelegramSessionManager] registerMessageHandler (adopted) failed for ${telegramUserId}: ${err.message}`
-            )
-          );
+            );
+          });
         }
         logInfo(
           `[TelegramSessionManager] adopted client for ${telegramUserId} with inbound handler`
@@ -435,6 +441,8 @@ export class TelegramSessionManager {
    */
   async _forwardInbound(event, accountTelegramUserId) {
     if (!this._inboxForwarder) return;
+    // Tin đến là hoạt động thật của tài khoản — làm mới lastUsed.
+    this._clients.get(String(accountTelegramUserId))?.touch();
     try {
       await this._inboxForwarder.forward({
         telegram_user_id: accountTelegramUserId,
@@ -502,6 +510,8 @@ export class TelegramSessionManager {
     const cutoff = Date.now() - this._config.idleDisconnectMinutes * 60_000;
     const stale = [];
     for (const [key, record] of this._clients.entries()) {
+      // Client đang nghe tin đến không bao giờ bị ngắt vì rảnh — ngắt là mất socket, tin khách không vào.
+      if (record.listening) continue;
       if (record.lastUsed < cutoff) stale.push(key);
     }
     for (const key of stale) {

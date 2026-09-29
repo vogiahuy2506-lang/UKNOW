@@ -11,6 +11,7 @@
  */
 import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
 import telegramGateway from './telegramGateway.client.js';
+import { hasPermanentAuthKey } from '../../utils/telegramSession.util.js';
 
 const LOGIN_CONTEXT_TTL_SECONDS = 15 * 60;
 
@@ -138,10 +139,25 @@ class TelegramPersonalService {
         .map((row) => String(row.telegram_user_id))
     );
 
-    return local.map((row) => ({
-      ...row,
-      is_loaded: loadedSet.has(String(row.telegram_user_id)),
-    }));
+    // session_ok: phiên còn khoá đăng nhập không. Chỉ đọc CSDL (KHÔNG dựng client/kết nối — getClient
+    // có thể xoá phiên). Client đang nằm trong RAM => chắc chắn còn phiên. Không trả blob ra API.
+    return Promise.all(
+      local.map(async (row) => {
+        const isLoaded = loadedSet.has(String(row.telegram_user_id));
+        let sessionOk = false;
+        if (isLoaded) {
+          sessionOk = true;
+        } else if (row.is_active) {
+          try {
+            const blob = await chatbotTelegramRepository.getSessionString(row.telegram_user_id);
+            sessionOk = hasPermanentAuthKey(blob);
+          } catch {
+            sessionOk = false;
+          }
+        }
+        return { ...row, is_loaded: isLoaded, session_ok: sessionOk };
+      })
+    );
   }
 
   async deleteAccount(userId, id) {

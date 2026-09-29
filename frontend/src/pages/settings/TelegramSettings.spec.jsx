@@ -142,3 +142,52 @@ describe('TelegramSettings — defensive rendering', () => {
     expect(signals[1].aborted).toBe(false);  // lượt mới còn sống
   });
 });
+
+// PR-T1 (29/09/2026): nhãn trạng thái phải theo phiên thật (session_ok), không chỉ is_active.
+describe('TelegramSettings — trạng thái phiên (session_ok)', () => {
+  beforeEach(() => {
+    listTelegramAccountsMock.mockReset();
+    getPersonalAccountsHealthMock.mockReset();
+    initTelegramLoginMock.mockReset();
+    getPersonalAccountsHealthMock.mockResolvedValue({
+      data: { data: { channels: { telegram: null }, allHealthy: true, canStartLogin: true } },
+    });
+  });
+
+  it('active + session_ok:false -> "Cần đăng nhập lại" + nút "Đăng nhập lại" gọi initTelegramLogin', async () => {
+    listTelegramAccountsMock.mockResolvedValue({
+      data: { data: [{ id: 1, telegram_user_id: '123', first_name: 'Alice', is_active: true, is_loaded: false, session_ok: false }] },
+    });
+    initTelegramLoginMock.mockImplementation(() => new Promise(() => {}));
+    await renderTelegramSettings();
+    expect(await screen.findByText('Cần đăng nhập lại')).toBeTruthy();
+    expect(screen.queryByText('Đang hoạt động')).toBeNull();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Đăng nhập lại' }));
+    await waitFor(() => expect(initTelegramLoginMock).toHaveBeenCalled());
+  });
+
+  it('active + không loaded + thiếu session_ok (BE cũ) -> vẫn "Đang hoạt động", không có nút đăng nhập lại', async () => {
+    listTelegramAccountsMock.mockResolvedValue({
+      data: { data: [{ id: 1, telegram_user_id: '123', first_name: 'Alice', is_active: true, is_loaded: false }] },
+    });
+    await renderTelegramSettings();
+    expect(await screen.findByText('Đang hoạt động')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Đăng nhập lại' })).toBeNull();
+  });
+
+  it('activeCount không đếm tài khoản cần đăng nhập lại', async () => {
+    listTelegramAccountsMock.mockResolvedValue({
+      data: {
+        data: [
+          { id: 1, telegram_user_id: '1', first_name: 'A', is_active: true, is_loaded: true, session_ok: true },
+          { id: 2, telegram_user_id: '2', first_name: 'B', is_active: true, is_loaded: true, session_ok: false },
+          { id: 3, telegram_user_id: '3', first_name: 'C', is_active: true, is_loaded: false, session_ok: false },
+        ],
+      },
+    });
+    await renderTelegramSettings();
+    expect(await screen.findByText(/1 đang hoạt động/i)).toBeTruthy();
+    expect(screen.queryByText(/2 đang hoạt động/i)).toBeNull();
+  });
+});

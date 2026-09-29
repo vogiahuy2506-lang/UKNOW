@@ -442,3 +442,60 @@ describe('TelegramSessionManager.restoreSessionsFromDb', () => {
     expect(summary.failed).toBeGreaterThanOrEqual(1);
   });
 });
+
+// PR-T1 (29/09/2026): client đang nghe tin đến không bị ngắt vì rảnh.
+describe('TelegramSessionManager._evictIdle — client đang nghe tin', () => {
+  const TEN_MIN = 10 * 60_000;
+  const makeListeningClient = () => ({
+    registerMessageHandler: jest.fn(async () => {}),
+    disconnect: jest.fn(async () => {}),
+  });
+
+  it('KHÔNG ngắt client đã adopt (đang nghe) dù lastUsed cũ 10 phút', async () => {
+    const forwarder = { forward: jest.fn(async () => {}) };
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub, inboxForwarder: forwarder });
+    const client = makeListeningClient();
+    expect(mgr.adoptClient(777, client)).toBe(true);
+    mgr._clients.get('777').lastUsed = Date.now() - TEN_MIN;
+    await mgr._evictIdle();
+    expect(client.disconnect).not.toHaveBeenCalled();
+    expect(mgr.isLoaded(777)).toBe(true);
+  });
+
+  it('ngắt client không nghe tin (không có forwarder) cũ 10 phút như cũ', async () => {
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    const client = makeListeningClient();
+    mgr.adoptClient(778, client);
+    mgr._clients.get('778').lastUsed = Date.now() - TEN_MIN;
+    await mgr._evictIdle();
+    expect(client.disconnect).toHaveBeenCalledTimes(1);
+    expect(mgr.isLoaded(778)).toBe(false);
+  });
+
+  it('client adopt có đăng ký handler lỗi thì bỏ cờ listening và bị dọn như client thường', async () => {
+    const forwarder = { forward: jest.fn(async () => {}) };
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub, inboxForwarder: forwarder });
+    const client = {
+      registerMessageHandler: jest.fn(async () => {
+        throw new Error('boom');
+      }),
+      disconnect: jest.fn(async () => {}),
+    };
+    mgr.adoptClient(779, client);
+    await new Promise((r) => setImmediate(r));
+    mgr._clients.get('779').lastUsed = Date.now() - TEN_MIN;
+    await mgr._evictIdle();
+    expect(client.disconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('tin đến qua _forwardInbound làm mới lastUsed', async () => {
+    const forwarder = { forward: jest.fn(async () => {}) };
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub, inboxForwarder: forwarder });
+    mgr.adoptClient(780, makeListeningClient());
+    const rec = mgr._clients.get('780');
+    rec.lastUsed = Date.now() - TEN_MIN;
+    await mgr._forwardInbound({ chatId: 1, messageId: 2, text: 'hi' }, 780);
+    expect(Date.now() - rec.lastUsed).toBeLessThan(5000);
+    expect(forwarder.forward).toHaveBeenCalledTimes(1);
+  });
+});
