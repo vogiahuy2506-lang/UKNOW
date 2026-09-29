@@ -294,10 +294,10 @@ function PaymentPolicy() {
                 A service activation notice on the platform.
               </li>
               <li className={lc(language, 'vi')}>
-                Hóa đơn VAT (nếu đã yêu cầu xuất hóa đơn).
+                Hóa đơn điện tử (nếu đã yêu cầu xuất hóa đơn).
               </li>
               <li className={lc(language, 'en')}>
-                A VAT invoice (if invoicing was requested).
+                An e-invoice (if invoicing was requested).
               </li>
             </ul>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
@@ -311,10 +311,10 @@ function PaymentPolicy() {
           {/* Section 5 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              5. Hóa đơn VAT
+              5. Hóa đơn điện tử
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              5. VAT Invoice
+              5. E-invoice
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
               DIGISO thực hiện xuất hóa đơn theo đúng quy định của pháp luật:
@@ -340,6 +340,12 @@ function PaymentPolicy() {
               </li>
               <li className={lc(language, 'en')}>
                 You can download the invoice from your account after payment.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Hóa đơn ghi thuế suất KCT (không chịu thuế GTGT), đúng bản chất dịch vụ phần mềm.
+              </li>
+              <li className={lc(language, 'en')}>
+                The invoice shows the tax rate as KCT (not subject to VAT), in line with the nature of a software service.
               </li>
             </ul>
           </section>

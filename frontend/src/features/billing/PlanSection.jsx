@@ -101,6 +101,9 @@ export default function PlanSection({ data, t }) {
           {!isPlaceholder && displayPrice > 0 && (
             <p className="text-xs text-gray-400">{isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth')}</p>
           )}
+          {!isPlaceholder && displayPrice > 0 && (
+            <p className="text-xs text-gray-400">{t('pricing.taxNoteKct')}</p>
+          )}
           <span className="inline-flex mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-white/70 text-primary-700 border border-primary-100">
             {isYearly ? t('accountProfileModal.billingYearly') : t('accountProfileModal.billingMonthly')}
           </span>

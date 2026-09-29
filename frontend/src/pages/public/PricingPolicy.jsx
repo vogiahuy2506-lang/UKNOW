@@ -149,17 +149,17 @@ function PricingPolicy() {
               1. General Pricing Regulations
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết minh bạch trong việc công bố giá dịch vụ. Tất cả các mức giá được hiển thị trên nền tảng founderai.biz <strong>đã bao gồm thuế giá trị gia tăng (VAT)</strong> theo quy định của pháp luật Việt Nam, trừ khi có ghi chú riêng biệt.
+              DIGISO cam kết minh bạch trong việc công bố giá dịch vụ. Tất cả các mức giá được hiển thị trên nền tảng founderai.biz là giá cuối cùng bạn thanh toán. Dịch vụ phần mềm của Founder AI thuộc đối tượng <strong>không chịu thuế giá trị gia tăng (GTGT)</strong> theo Luật Thuế GTGT, nên không có khoản thuế cộng thêm; hoá đơn điện tử ghi thuế suất KCT.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to transparency in service pricing. All prices displayed on the founderai.biz platform <strong>include Value Added Tax (VAT)</strong> in accordance with Vietnamese law, unless otherwise stated.
+              DIGISO commits to transparency in service pricing. All prices displayed on the founderai.biz platform are the final amount you pay. Founder AI's software service is <strong>not subject to value-added tax (VAT)</strong> under Vietnam's VAT Law, so no tax is added; the e-invoice shows the tax rate as KCT (not subject to VAT).
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Giá đã bao gồm VAT:</strong> Các gói dịch vụ hiển thị giá đã bao gồm 10% VAT.
+                <strong>Thuế GTGT:</strong> Dịch vụ không chịu thuế GTGT, hoá đơn ghi KCT, không có khoản thuế cộng thêm.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Price includes VAT:</strong> Service package prices include 10% VAT.
+                <strong>VAT:</strong> The service is not subject to VAT, the invoice shows KCT, and no tax is added.
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Đơn vị tiền tệ:</strong> Tất cả giá được niêm yết bằng Đồng Việt Nam (VND).

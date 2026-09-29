@@ -513,6 +513,10 @@ export default function PricingSection({ embedded = false, compact = false, glas
           </div>
         )}
 
+        <p className={`text-center text-xs text-slate-500 ${compact ? 'mb-4' : 'mb-6'}`}>
+          {t('pricing.taxNoteKct')}
+        </p>
+
         {/* Layout giống ContactPage grid: 1/2/3 cột responsive */}
         <div className={`grid ${compact ? 'gap-4' : 'gap-5'} mx-auto items-stretch ${
           plans.length === 1 ? 'grid-cols-1 max-w-md' :

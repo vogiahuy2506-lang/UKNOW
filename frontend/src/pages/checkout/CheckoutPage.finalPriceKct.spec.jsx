@@ -1,5 +1,5 @@
-// Commit mới (28/09/2026): Sở Công Thương yêu cầu ghi rõ "đã bao gồm 10% VAT".
-// Dòng nhỏ "Giá cuối cùng, đã bao gồm 10% VAT" phải hiện đúng chữ TIẾNG VIỆT thật,
+// Commit mới (28/09/2026): giá ghi rõ dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT (bỏ câu "đã bao gồm 10% VAT" 29/09/2026).
+// Dòng nhỏ "Giá cuối cùng — dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT" phải hiện đúng chữ TIẾNG VIỆT thật,
 // không phải khoá thô (t() thiếu khoá trả nguyên khoá — dùng I18nProvider THẬT,
 // không mock '../../i18n' như spec khác trong cùng thư mục).
 import { render, screen, waitFor, cleanup } from '@testing-library/react';
@@ -31,7 +31,7 @@ vi.mock('../../constants/invoiceVat', () => ({ isInvoiceVatUiEnabled: () => fals
 vi.mock('../../utils/analytics', () => ({ trackEvent: vi.fn() }));
 vi.mock('qrcode', () => ({ default: { toDataURL: async () => 'data:fake' } }));
 
-describe('CheckoutPage — dòng "Giá cuối cùng, đã bao gồm 10% VAT"', () => {
+describe('CheckoutPage — dòng "Giá cuối cùng — dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT"', () => {
   afterEach(cleanup);
 
   it('hiện đúng chữ tiếng Việt thật, không phải khoá i18n thô', async () => {
@@ -41,7 +41,7 @@ describe('CheckoutPage — dòng "Giá cuối cùng, đã bao gồm 10% VAT"', (
       </I18nProvider>,
     );
 
-    await waitFor(() => expect(screen.getByText('Giá cuối cùng, đã bao gồm 10% VAT')).toBeInTheDocument());
-    expect(screen.queryByText('checkout.finalPriceVatIncluded')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Giá cuối cùng — dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT')).toBeInTheDocument());
+    expect(screen.queryByText('checkout.finalPriceKct')).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
-// Commit 28/09/2026: Sở Công Thương yêu cầu ghi rõ "đã bao gồm 10% VAT".
-// Dòng nhỏ "Giá cuối cùng, đã bao gồm 10% VAT" phải hiện đúng chữ TIẾNG VIỆT thật,
+// Commit 28/09/2026: giá ghi rõ dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT (bỏ câu "đã bao gồm 10% VAT" 29/09/2026).
+// Dòng nhỏ "Giá cuối cùng — dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT" phải hiện đúng chữ TIẾNG VIỆT thật,
 // không phải khoá thô (t() thiếu khoá trả nguyên khoá i18n.actions.KEY — dùng I18nProvider THẬT,
 // không mock '../../i18n').
 import { render, screen, waitFor } from '@testing-library/react';
@@ -22,7 +22,7 @@ vi.mock('../../services/topup.service', () => ({
   createTopupPayment: vi.fn(),
 }));
 
-describe('TopupPage — dòng "Giá cuối cùng, đã bao gồm 10% VAT"', () => {
+describe('TopupPage — dòng "Giá cuối cùng — dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT"', () => {
   it('hiện đúng chữ tiếng Việt thật, không phải khoá i18n thô', async () => {
     render(
       <I18nProvider>
@@ -30,7 +30,7 @@ describe('TopupPage — dòng "Giá cuối cùng, đã bao gồm 10% VAT"', () =
       </I18nProvider>,
     );
 
-    await waitFor(() => expect(screen.getByText('Giá cuối cùng, đã bao gồm 10% VAT')).toBeInTheDocument());
-    expect(screen.queryByText('checkout.finalPriceVatIncluded')).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText('Giá cuối cùng — dịch vụ không chịu thuế GTGT (KCT), không cộng thêm VAT')).toBeInTheDocument());
+    expect(screen.queryByText('checkout.finalPriceKct')).not.toBeInTheDocument();
   });
 });
