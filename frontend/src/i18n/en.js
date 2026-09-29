@@ -3961,7 +3961,7 @@ export default {
     smtpGuidePortList: 'Port 587 (TLS), Port 465 (SSL), Port 25 (usually blocked)',
     smtpGuidePortInfo: 'Port 587: Send via TLS (recommended). Port 465: Send via SSL. Port 25: Usually blocked by ISPs.',
     smtpGuideSecurityNote: 'Security: Never use regular passwords for SMTP. Always use App Password or API Key to protect your main email account.',
-    platformModeDescription: 'The system uses SendGrid to send emails. Emails will use the platform default domain and pass through SendGrid\'s spam filters.',
+    platformModeDescription: 'Emails are sent through Digiso\'s own SMTP infrastructure using the platform default domain. No extra setup needed.',
     tabPlatformDefault: 'Platform Default',
     tabSmtpRieng: 'Custom SMTP',
     senderInfo: 'Sender Information',

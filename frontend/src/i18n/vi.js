@@ -3971,7 +3971,7 @@ export default {
     smtpGuidePortList: 'Port 587 (TLS), Port 465 (SSL), Port 25 (thường bị chặn)',
     smtpGuidePortInfo: 'Port 587: Gửi email qua TLS (khuyến nghị). Port 465: Gửi qua SSL. Port 25: Thường bị nhà mạng chặn.',
     smtpGuideSecurityNote: 'Bảo mật: Không bao giờ dùng password thường cho SMTP. Luôn dùng App Password hoặc API Key để bảo mật tài khoản email chính.',
-    platformModeDescription: 'Hệ thống sử dụng SendGrid để gửi email. Email sẽ có domain mặc định của nền tảng và đi qua các bộ lọc spam của SendGrid.',
+    platformModeDescription: 'Email gửi qua máy chủ SMTP hạ tầng của Digiso, dùng tên miền mặc định của nền tảng. Bạn không cần cấu hình gì thêm.',
     tabPlatformDefault: 'Mặc định nền tảng',
     tabSmtpRieng: 'SMTP riêng',
     senderInfo: 'Thông tin người gửi',
