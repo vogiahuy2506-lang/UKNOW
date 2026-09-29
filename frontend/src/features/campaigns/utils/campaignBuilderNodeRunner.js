@@ -14,6 +14,7 @@ import {
   mergeVariablesPreferNonEmpty,
 } from './templateVariableAutoMap.js';
 import { generateIdempotencyKey } from '../../../utils/idempotency.util.js';
+import { runAdapterChannelTestSend } from './campaignBuilderAdapterTestSend.js';
 import { formatCampaignTime } from './campaignDateTime.helpers.js';
 
 /**
@@ -2772,14 +2773,20 @@ export const createCampaignNodeRunner = (deps) => {
       };
     }
 
-    // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4, mục 6 Bẫy — "đừng để chạy thử 'thành
-    // công giả'": nhánh mặc định ngay dưới trả {ok:true} cho MỌI node lạ mà KHÔNG thật sự gửi gì.
-    // send_telegram phải dừng ở đây, KHÔNG rơi xuống nhánh mặc định đó.
+    // P8b — chạy thử node Telegram/WhatsApp: GỬI THẬT tối đa 1 tin cho người đầu tiên qua quick-send (đủ cổng hạn mức/nhịp/
+    // consent/nhật ký is_preview). Thay cho nhánh cũ `dry_run_not_supported` (bỏ qua). Không rơi xuống nhánh mặc định
+    // {ok:true} bên dưới ("thành công giả").
     if (nodeType === 'send_telegram' || nodeType === 'send_whatsapp') {
-      return {
-        input: config,
-        output: { skipped: true, reason: 'dry_run_not_supported' },
-      };
+      return runAdapterChannelTestSend({
+        nodeType,
+        node,
+        ctx,
+        apiService,
+        signal,
+        onProgress,
+        isRunCancelledError,
+        buildSchemaFromRows,
+      });
     }
 
     return {

@@ -380,7 +380,8 @@ export const executeCampaignRun = async (params) => {
   }
 };
 
-const buildNodeSuccessValidation = (nodeType, result) => {
+// Xuất ra để test tóm tắt kết quả từng loại node.
+export const buildNodeSuccessValidation = (nodeType, result) => {
   if (nodeType === 'read_sheet') {
     return {
       status: 'success',
@@ -500,11 +501,26 @@ const buildNodeSuccessValidation = (nodeType, result) => {
     };
   }
   if (nodeType === 'send_telegram' || nodeType === 'send_whatsapp') {
-    // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 mục 6 Bẫy — thông điệp phải nói RÕ không có gì
-    // được gửi thật, khác hẳn "Thực thi thành công" mặc định bên dưới (dễ hiểu nhầm đã gửi).
+    // P8b — chạy thử GỬI THẬT 1 tin (xem campaignBuilderAdapterTestSend.js): thông điệp phải nói RÕ đã gửi thật hay chưa.
+    const channelLabel = nodeType === 'send_whatsapp' ? 'WhatsApp' : 'Telegram';
+    const meta = result?.output?.meta || {};
+    const firstItem = Array.isArray(result?.output?.items) ? result.output.items[0] : null;
+    const total = meta.totalItems || meta.attempted || 1;
+    if ((meta.sent || 0) > 0) {
+      return {
+        status: 'success',
+        message: `Đã gửi THẬT ${meta.sent} tin thử qua ${channelLabel} (${meta.attempted || 1}/${total} người nhận)`,
+      };
+    }
+    if ((meta.deferred || 0) > 0) {
+      return {
+        status: 'success',
+        message: `Chưa gửi tin thử ${channelLabel} — bị hoãn để giữ nhịp gửi (giờ yên lặng / giãn cách / trần giờ). Thử lại sau.`,
+      };
+    }
     return {
-      status: 'success',
-      message: 'Bỏ qua khi chạy thử — dùng "Chạy ngay" để gửi thật',
+      status: 'failed',
+      message: `Gửi thử ${channelLabel} thất bại${firstItem?.error ? `: ${firstItem.error}` : ''}`,
     };
   }
   return {

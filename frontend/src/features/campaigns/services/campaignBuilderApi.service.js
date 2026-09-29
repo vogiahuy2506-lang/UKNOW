@@ -54,6 +54,27 @@ const campaignBuilderApiService = {
     });
   },
 
+  // P8b — người ĐÃ NHẮN TỚI tài khoản (Telegram: accountId; WhatsApp: sessionKey) -> [{ recipientKey, name }].
+  getQuickSendAdapterConversations(channel, accountRef, options = {}) {
+    return api.get(
+      `/campaigns/channels/${encodeURIComponent(channel)}/accounts/${encodeURIComponent(accountRef)}/conversations`,
+      options
+    );
+  },
+
+  // P8b — chạy thử trong trình dựng: gửi THẬT một tin cho một người qua quick-send (telegram | whatsapp).
+  // 200 luôn có data.item.status = success|failed|deferred; lỗi toàn cục (403/409/429/503) ném HTTP error.
+  sendQuickAdapterMessage(channel, payload, options = {}) {
+    const { idempotencyKey, ...rest } = options;
+    return api.post(`/campaigns/quick-send/${encodeURIComponent(channel)}`, payload, {
+      ...rest,
+      headers: {
+        'Idempotency-Key': idempotencyKey || generateIdempotencyKey(),
+        ...(rest.headers || {}),
+      },
+    });
+  },
+
   // P8b — nhóm WhatsApp phiên gửi được (đọc trực tiếp từ WhatsApp, có thể chậm tới ~20s).
   getWhatsAppAccountGroups(sessionKey, options = {}) {
     return api.get(`/campaigns/channels/whatsapp/accounts/${encodeURIComponent(sessionKey)}/groups`, {
