@@ -99,4 +99,20 @@ describe('api.js — refresh token hỏng vì 429/5xx/mất mạng không đư�
 
     expect(window.location.href).toBe('/login');
   });
+
+  // Review PR-C — lỗi TẠM của bước làm mới phải được trả ra cho nơi gọi, không phải lỗi 401 gốc: authStore.initialize()
+  // quyết đăng xuất theo status nó nhận. Trả 401 gốc thì ca "access token hết hạn + F5 + làm mới bị 429" vẫn bị đăng xuất.
+  it('refresh trả 429 → promise bị từ chối với status 429 (không phải 401 gốc)', async () => {
+    mockAxiosPost.mockRejectedValue(httpError(429));
+    const rejected = await getRejectedHandler();
+    await expect(rejected(originalRequestUnauthorized())).rejects.toMatchObject({ response: { status: 429 } });
+  });
+
+  it('refresh hỏng vì mất mạng → promise bị từ chối KHÔNG mang status 401', async () => {
+    mockAxiosPost.mockRejectedValue(networkError());
+    const rejected = await getRejectedHandler();
+    const err = await rejected(originalRequestUnauthorized()).catch((e) => e);
+    expect(err?.response?.status).not.toBe(401);
+  });
 });
+

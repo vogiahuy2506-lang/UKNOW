@@ -79,6 +79,18 @@ describe('loginAccountLimiter + loginIpLimiter (/login)', () => {
     expect(res11.body.code).toBe('LOGIN_RATE_LIMIT_EXCEEDED');
   });
 
+  // Review PR-C — bẫy trong lệnh giao: khoá CHỈ theo username thì kẻ gian gõ sai 10 lần tên của nạn nhân là khoá được
+  // nạn nhân khỏi MỌI IP. Khoá phải là IP + username: cùng tài khoản đăng nhập từ IP khác vẫn qua.
+  it('(c2) sau khi 10 lượt SAI khoá "victim" ở IP A, chính "victim" đăng nhập ĐÚNG từ IP B → vẫn qua', async () => {
+    const app = buildLoginApp();
+    for (let i = 0; i < 10; i += 1) {
+      await loginAs(app, '10.0.0.9', 'victim', 'wrong');
+    }
+    expect((await loginAs(app, '10.0.0.9', 'victim', 'wrong')).status).toBe(429);
+    const fromOtherIp = await loginAs(app, '10.0.0.10', 'victim', 'right');
+    expect(fromOtherIp.status).toBe(200);
+  });
+
   it('(e) 50 lượt SAI cùng IP, 50 username khác nhau → lượt 51 = 429 LOGIN_IP_RATE_LIMIT_EXCEEDED', async () => {
     const app = buildLoginApp();
     for (let i = 0; i < 50; i += 1) {

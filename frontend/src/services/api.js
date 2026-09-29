@@ -301,8 +301,12 @@ api.interceptors.response.use(
         const refreshStatus = refreshError?.response?.status;
         if (refreshStatus === 401 || refreshStatus === 403) {
           await forceLogoutAndRedirect();
+          return Promise.reject(error);
         }
-        return Promise.reject(error);
+        // Review PR-C: trả LỖI CỦA BƯỚC LÀM MỚI (429/5xx/mất mạng), không phải 401 gốc — nơi gọi (vd
+        // authStore.initialize) quyết đăng xuất theo status nhận được; trả 401 gốc thì ca "access token hết
+        // hạn + F5 + làm mới bị 429" vẫn bị đăng xuất.
+        return Promise.reject(refreshError);
       }
     }
 
