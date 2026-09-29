@@ -810,6 +810,52 @@ export async function sendMedia(sessionKey, toJidOrPhone, buffer, mimetype, file
   });
 }
 
+/**
+ * P5 — gui MOT anh (`{ image, mimetype, caption }` cua Baileys). `mimetype` DUNG la bat buoc: sai/thieu thi
+ * WhatsApp hien anh vo hoac coi la tep. Cung dieu kien ket noi va cach chuan hoa JID voi sendMedia/sendMessage.
+ */
+export async function sendImage(sessionKey, toJidOrPhone, buffer, mimetype, caption, { waitForConnectionMs = 8000 } = {}) {
+  let record = sessions.get(sessionKey);
+  if (!record) throw new Error(`WhatsApp session ${sessionKey} is not connected`);
+  if (record.status !== 'open' || !record.socket) {
+    record = await waitForOpen(sessionKey, waitForConnectionMs);
+  }
+  if (!record || record.status !== 'open' || !record.socket) {
+    throw new Error(`WhatsApp session ${sessionKey} is not connected`);
+  }
+  const jid = toJidOrPhone.includes('@')
+    ? jidNormalizedUser(toJidOrPhone)
+    : jidNormalizedUser(`${toJidOrPhone}@s.whatsapp.net`);
+  return record.socket.sendMessage(jid, {
+    image: buffer,
+    mimetype,
+    ...(caption ? { caption } : {}),
+  });
+}
+
+/**
+ * P5 (chieu vao) - tai anh/tai lieu cua MOT tin WhatsApp da nhan ve Buffer. `reuploadRequest` cho phep Baileys xin lai
+ * media khi URL het han. Nem loi neu tin khong co media / tai that bai - nguoi goi bat va ghi "bo qua".
+ *
+ * @param {string} sessionKey
+ * @param {object} msg WAMessage (co `message.imageMessage|documentMessage`)
+ * @returns {Promise<Buffer>}
+ */
+export async function downloadInboundMedia(sessionKey, msg) {
+  const record = sessions.get(sessionKey);
+  const ctx = record?.socket
+    ? {
+      reuploadRequest: record.socket.updateMediaMessage,
+      logger: {
+        level: 'silent',
+        child() { return this; },
+        trace() {}, debug() {}, info() {}, warn() {}, error() {}, fatal() {},
+      },
+    }
+    : undefined;
+  return downloadMediaMessage(msg, 'buffer', {}, ctx);
+}
+
 export function subscribe(sessionKey, handler) {
   const record = sessions.get(sessionKey);
   if (!record) return () => {};

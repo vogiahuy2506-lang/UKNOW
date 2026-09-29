@@ -345,6 +345,52 @@ describe('TelegramSessionManager.sendMessage', () => {
   });
 });
 
+describe('TelegramSessionManager.sendMedia / downloadMedia (P5)', () => {
+  it('sendMedia ném khi không có phiên', async () => {
+    repoStub.getSessionString.mockResolvedValueOnce(null);
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    await expect(mgr.sendMedia(12345, 1, { buffer: Buffer.from('x'), kind: 'photo' })).rejects.toBeInstanceOf(
+      TelegramTransportError
+    );
+  });
+
+  it('sendMedia chuyển đúng (chatId, file) cho client và trả kết quả', async () => {
+    repoStub.getSessionString.mockResolvedValueOnce({ kv: {} });
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    const client = await mgr.getClient(12345);
+    const file = { buffer: Buffer.from('x'), kind: 'document', fileName: 'a.pdf' };
+    client.sendMedia = jest.fn(async () => ({ messageId: 55 }));
+    await expect(mgr.sendMedia(12345, -1001, file)).resolves.toEqual({ messageId: 55 });
+    expect(client.sendMedia).toHaveBeenCalledWith(-1001, file);
+  });
+
+  it('downloadMedia chuyển (chatId, messageId, opts) cho client', async () => {
+    repoStub.getSessionString.mockResolvedValueOnce({ kv: {} });
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub });
+    const client = await mgr.getClient(12345);
+    client.downloadMedia = jest.fn(async () => ({ buffer: Buffer.from('x'), kind: 'photo' }));
+    await mgr.downloadMedia(12345, 7, 9, { maxBytes: 100 });
+    expect(client.downloadMedia).toHaveBeenCalledWith(7, 9, { maxBytes: 100 });
+  });
+
+  it('_forwardInbound mang media (metadata) sang webhook', async () => {
+    const forward = jest.fn(async () => ({ status: 204 }));
+    const mgr = new TelegramSessionManager({ sessionRepo: repoStub, inboxForwarder: { forward } });
+    await mgr._forwardInbound(
+      {
+        chatId: '5', messageId: 3, text: '', senderId: '5', senderName: 'A', isGroup: false, isPrivate: true,
+        isOutgoing: false, media: { kind: 'photo', fileName: null, mimeType: 'image/jpeg', size: null },
+      },
+      12345
+    );
+    expect(forward.mock.calls[0][0]).toMatchObject({
+      chat_id: '5',
+      message_id: 3,
+      media: { kind: 'photo', mimeType: 'image/jpeg' },
+    });
+  });
+});
+
 describe('TelegramSessionManager.disconnect', () => {
   it('returns false for an unknown client', async () => {
     const mgr = new TelegramSessionManager({ sessionRepo: repoStub });

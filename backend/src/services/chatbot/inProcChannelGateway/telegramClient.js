@@ -45,6 +45,7 @@ export class TelegramMessageEvent {
     isGroup = false,
     isPrivate = true,
     isOutgoing = false,
+    media = null,
     raw = null,
   }) {
     this.telegramUserId = String(telegramUserId);
@@ -57,6 +58,8 @@ export class TelegramMessageEvent {
     this.isPrivate = Boolean(isPrivate);
     // Tin do CHÍNH tài khoản gõ (vd từ điện thoại) — không phải tin khách gửi tới.
     this.isOutgoing = Boolean(isOutgoing);
+    // P5: anh/tai lieu dinh kem (chi metadata `{ kind, fileName, mimeType, size }`); byte tai sau qua downloadMedia.
+    this.media = media ?? null;
     this.raw = raw;
   }
 }
@@ -138,6 +141,16 @@ export class TelegramClient {
     throw new Error('Plug in a real Telegram transport');
   }
 
+  /** P5: send one photo/document (`{ buffer, kind, fileName, mimeType, caption }`). */
+  async sendMedia(_chatId, _file) {
+    throw new Error('Plug in a real Telegram transport');
+  }
+
+  /** P5: download the photo/document of an inbound message. */
+  async downloadMedia(_chatId, _messageId, _opts) {
+    throw new Error('Plug in a real Telegram transport');
+  }
+
   /** List groups the account can post to. Base class: none. */
   async listGroups(_opts) {
     return [];
@@ -196,6 +209,14 @@ export class StubTelegramClient extends TelegramClient {
   }
 
   async sendMessage(_chatId, _text) {
+    throw new TelegramTransportError('Telegram transport not implemented');
+  }
+
+  async sendMedia(_chatId, _file) {
+    throw new TelegramTransportError('Telegram transport not implemented');
+  }
+
+  async downloadMedia(_chatId, _messageId, _opts) {
     throw new TelegramTransportError('Telegram transport not implemented');
   }
 

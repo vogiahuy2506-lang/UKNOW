@@ -112,6 +112,15 @@ const telegramGateway = {
     gateway.sendMessage(telegramUserId, chatId, text)
   ),
 
+  // P5: `wrap` boc ket qua thanh `{ data }` (giong sendMessage) - nguoi goi boc `{data}`/`messageId` nhu cu.
+  sendMedia: guard('sendMedia', (telegramUserId, chatId, file) =>
+    gateway.sendMedia(telegramUserId, chatId, file)
+  ),
+
+  downloadMedia: guard('downloadMedia', (telegramUserId, chatId, messageId, opts) =>
+    gateway.downloadMedia(telegramUserId, chatId, messageId, opts)
+  ),
+
   listGroups: guard('listGroups', (telegramUserId, opts) =>
     gateway.listGroups(telegramUserId, opts)
   ),

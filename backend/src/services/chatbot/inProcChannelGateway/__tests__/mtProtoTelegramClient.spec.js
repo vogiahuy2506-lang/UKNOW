@@ -34,6 +34,9 @@ const mockTgInstance = {
     return { id: 1, firstName: 'Mock', lastName: 'User', username: 'mockuser' };
   }),
   sendText: jest.fn(async () => ({ id: 999 })),
+  sendMedia: jest.fn(async () => ({ id: 777 })),
+  getMessages: jest.fn(async () => [null]),
+  downloadAsBuffer: jest.fn(async () => new Uint8Array([1, 2, 3])),
   iterDialogs: jest.fn(),
   onNewMessage: { add: jest.fn() },
   destroy: jest.fn(async () => {}),
@@ -464,5 +467,105 @@ describe('MtProtoTelegramClient.disconnect', () => {
     // After disconnect the next checkQrToken returns not_found
     const status = await client.checkQrToken('x');
     expect(status.status).toBe('not_found');
+  });
+});
+
+describe('MtProtoTelegramClient.sendMedia (P5)', () => {
+  beforeEach(() => {
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  it('anh -> media {type:photo, file:buffer} (mtcute 0.32 nhan object thuan), tra messageId', async () => {
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const buffer = Buffer.from([1, 2, 3]);
+    const out = await client.sendMedia(123, { buffer, kind: 'photo', fileName: 'a.jpg', mimeType: 'image/jpeg' });
+    expect(out).toEqual({ messageId: 777 });
+    expect(mockTgInstance.sendMedia).toHaveBeenCalledWith(123, { type: 'photo', file: buffer }, undefined);
+  });
+
+  it('tai lieu -> media {type:document, file, fileName, fileMime}; caption di qua params', async () => {
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const buffer = Buffer.from('pdf');
+    await client.sendMedia(-1001, { buffer, kind: 'document', fileName: 'bao-gia.pdf', mimeType: 'application/pdf', caption: 'Bao gia' });
+    expect(mockTgInstance.sendMedia).toHaveBeenCalledWith(
+      -1001,
+      { type: 'document', file: buffer, fileName: 'bao-gia.pdf', fileMime: 'application/pdf' },
+      { caption: 'Bao gia' }
+    );
+  });
+
+  it('boc loi mtcute thanh TelegramTransportError giu nguyen chuoi de tang chien dich phan loai (FLOOD_WAIT)', async () => {
+    mockTgInstance.sendMedia.mockRejectedValueOnce(new Error('Telegram API error 420: FLOOD_WAIT_1800'));
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const err = await client.sendMedia(1, { buffer: Buffer.from('x'), kind: 'photo' }).catch((e) => e);
+    expect(err).toBeInstanceOf(TelegramTransportError);
+    expect(err.message).toContain('MtProtoTelegramClient.sendMedia failed');
+    expect(err.message).toContain('FLOOD_WAIT_1800');
+  });
+
+  it('ném khi chưa connect() hoặc thiếu buffer/kind', async () => {
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await expect(client.sendMedia(1, { buffer: Buffer.from('x'), kind: 'photo' })).rejects.toBeInstanceOf(TelegramTransportError);
+    await client.connect();
+    await expect(client.sendMedia(1, { kind: 'photo' })).rejects.toBeInstanceOf(TelegramTransportError);
+    await expect(client.sendMedia(1, { buffer: Buffer.from('x'), kind: 'video' })).rejects.toBeInstanceOf(TelegramTransportError);
+  });
+});
+
+describe('MtProtoTelegramClient.downloadMedia + describeInboundMedia (P5)', () => {
+  it('tai anh cua tin ve Buffer (getMessages + downloadAsBuffer)', async () => {
+    mockTgInstance.getMessages.mockResolvedValueOnce([{ media: { type: 'photo' } }]);
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const out = await client.downloadMedia(55, 9);
+    expect(mockTgInstance.getMessages).toHaveBeenCalledWith(55, [9]);
+    expect(out.kind).toBe('photo');
+    expect(out.mimeType).toBe('image/jpeg');
+    expect(Buffer.isBuffer(out.buffer)).toBe(true);
+    expect([...out.buffer]).toEqual([1, 2, 3]);
+  });
+
+  it('tep khai bao lon hon tran -> tooLarge, KHONG tai byte', async () => {
+    mockTgInstance.getMessages.mockResolvedValueOnce([
+      { media: { type: 'document', fileName: 'big.pdf', mimeType: 'application/pdf', fileSize: 30 * 1024 * 1024 } },
+    ]);
+    mockTgInstance.downloadAsBuffer.mockClear();
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const out = await client.downloadMedia(55, 9, { maxBytes: 20 * 1024 * 1024 });
+    expect(out).toMatchObject({ buffer: null, tooLarge: true, kind: 'document', fileName: 'big.pdf' });
+    expect(mockTgInstance.downloadAsBuffer).not.toHaveBeenCalled();
+  });
+
+  it('tin khong co anh/tai lieu (vd sticker) -> buffer null', async () => {
+    mockTgInstance.getMessages.mockResolvedValueOnce([{ media: { type: 'sticker' } }]);
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const out = await client.downloadMedia(55, 9);
+    expect(out.buffer).toBeNull();
+  });
+
+  it('describeInboundMedia: chi photo/document; sticker/voice bo qua', async () => {
+    const { describeInboundMedia } = await import('../mtProtoTelegramClient.js');
+    expect(describeInboundMedia({ media: { type: 'photo' } })).toEqual({ kind: 'photo', fileName: null, mimeType: 'image/jpeg', size: null });
+    expect(describeInboundMedia({ media: { type: 'document', fileName: 'a.pdf', mimeType: 'application/pdf', fileSize: 10 } }))
+      .toEqual({ kind: 'document', fileName: 'a.pdf', mimeType: 'application/pdf', size: 10 });
+    expect(describeInboundMedia({ media: { type: 'sticker' } })).toBeNull();
+    expect(describeInboundMedia({ media: { type: 'voice' } })).toBeNull();
+    expect(describeInboundMedia({})).toBeNull();
+  });
+
+  it('onNewMessage dua media vao event (chi metadata)', async () => {
+    const client = new MtProtoTelegramClient({ apiId: 1, apiHash: 'h' });
+    await client.connect();
+    const received = [];
+    await client.registerMessageHandler(async (event) => { received.push(event); });
+    const handler = mockTgInstance.onNewMessage.add.mock.calls[0][0];
+    await handler({ chatId: 5, id: 3, text: '', sender: { id: 5 }, media: { type: 'photo' } });
+    expect(received[0].media).toEqual({ kind: 'photo', fileName: null, mimeType: 'image/jpeg', size: null });
   });
 });

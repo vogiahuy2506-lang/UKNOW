@@ -454,6 +454,7 @@ export class TelegramSessionManager {
         is_group: event.isGroup,
         is_private: event.isPrivate,
         is_outgoing: event.isOutgoing === true,
+        media: event.media ?? null,
       });
     } catch (err) {
       // Forwarder is supposed to swallow its own errors; this is
@@ -478,6 +479,32 @@ export class TelegramSessionManager {
     }
     const record = this._clients.get(String(telegramUserId));
     return record.exec(() => client.sendMessage(chatId, text));
+  }
+
+  /**
+   * P5 — gui MOT anh/tai lieu qua client dang ket noi (cung dieu kien va cung `record.exec` nhu sendMessage).
+   */
+  async sendMedia(telegramUserId, chatId, file) {
+    const client = await this.getClient(telegramUserId);
+    if (!client) {
+      throw new TelegramTransportError(
+        `No active session for telegram_user_id=${telegramUserId}`
+      );
+    }
+    const record = this._clients.get(String(telegramUserId));
+    return record.exec(() => client.sendMedia(chatId, file));
+  }
+
+  /** P5 — tai anh/tai lieu cua mot tin da nhan (chieu vao). */
+  async downloadMedia(telegramUserId, chatId, messageId, opts) {
+    const client = await this.getClient(telegramUserId);
+    if (!client) {
+      throw new TelegramTransportError(
+        `No active session for telegram_user_id=${telegramUserId}`
+      );
+    }
+    const record = this._clients.get(String(telegramUserId));
+    return record.exec(() => client.downloadMedia(chatId, messageId, opts));
   }
 
   /**

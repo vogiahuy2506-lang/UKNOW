@@ -11,6 +11,26 @@
  */
 import telegramGateway from '../telegramGateway.client.js';
 import chatbotTelegramRepository from '../../../repositories/chatbot/chatbotTelegram.repository.js';
+import {
+  TELEGRAM_PHOTO_EXTENSIONS,
+  prepareChannelAttachmentSources,
+  sendChannelMessageWithMedia,
+} from '../../../utils/channelMediaSend.util.js';
+
+/**
+ * P5 — gui text + anh/tai lieu toi mot chat Telegram (dung chung util thu tu: text -> tung anh -> tung tai lieu).
+ * Nem loi khi tin DAU that bai (khach chua nhan gi); loi o tep SAU tra `{ sentCount, error }`.
+ */
+export async function sendTelegramMessageWithMedia({ telegramUserId, chatId, text, sources }) {
+  return sendChannelMessageWithMedia({
+    text: String(text || '').slice(0, 4000),
+    sources,
+    imageExtensions: TELEGRAM_PHOTO_EXTENSIONS,
+    sendText: (value) => telegramGateway.sendMessage(telegramUserId, chatId, value),
+    sendImage: (file) => telegramGateway.sendMedia(telegramUserId, chatId, { ...file, kind: 'photo' }),
+    sendDocument: (file) => telegramGateway.sendMedia(telegramUserId, chatId, { ...file, kind: 'document' }),
+  });
+}
 
 class TelegramPersonalAdapter {
   /**
@@ -22,8 +42,9 @@ class TelegramPersonalAdapter {
    * @param {number} params.userId         - UKNOW owner user id
    * @param {number} params.channelId      - telegram_accounts.id (NOT telegram_user_id)
    * @param {string} params.externalId     - chat id (Telegram peer)
+   * @param {Array}  [params.attachments]  - P5: tep dinh kem (metadata kho media, co `key`) — loc theo chu `userId`
    */
-  async sendReply({ conversationId, message, userId, channelId, externalId }) {
+  async sendReply({ conversationId, message, userId, channelId, externalId, attachments }) {
     if (!channelId) {
       throw new Error('Telegram adapter: channelId is required');
     }
@@ -40,6 +61,34 @@ class TelegramPersonalAdapter {
     }
 
     const chatId = Number.isFinite(Number(externalId)) ? Number(externalId) : externalId;
+
+    const attachmentList = Array.isArray(attachments) ? attachments.filter(Boolean) : [];
+    if (attachmentList.length > 0) {
+      // Hop thu: nguoi dung chu dong dinh kem -> thieu tep (khong doc duoc / khong thuoc chu) la LOI, khong lang le
+      // gui moi phan text (khac chien dich: chay nhieu nguoi, bo tep hong roi van gui).
+      const sources = await prepareChannelAttachmentSources(attachmentList, { ownerUserId: userId });
+      if (sources.length < attachmentList.length) {
+        throw new Error('Không đọc được một số tệp đính kèm — hãy đính kèm lại.');
+      }
+      const result = await sendTelegramMessageWithMedia({
+        telegramUserId: account.telegram_user_id,
+        chatId,
+        text: message,
+        sources,
+      });
+      await chatbotTelegramRepository.touchActivity(channelId);
+      if (result.error) {
+        return {
+          success: false,
+          partial: true,
+          error: `Đã gửi ${result.sentCount} phần nhưng có tệp chưa gửi được: ${result.error.message}`,
+          messageId: result.firstMessageId,
+          messageIds: result.messageIds,
+        };
+      }
+      return { success: true, messageId: result.firstMessageId, messageIds: result.messageIds };
+    }
+
     const sent = await telegramGateway.sendMessage(account.telegram_user_id, chatId, String(message || '').slice(0, 4000));
     await chatbotTelegramRepository.touchActivity(channelId);
 

@@ -585,6 +585,7 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
           isGroup: Boolean(msg.isGroup),
           isPrivate: !msg.isGroup,
           isOutgoing: Boolean(msg.isOutgoing),
+          media: describeInboundMedia(msg),
           raw: msg,
         });
         await onMessage(event);
@@ -645,6 +646,130 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
       console.error(`[MtProtoTelegramClient] stack: ${err.stack}`);
       throw new TelegramTransportError(
         `MtProtoTelegramClient.sendMessage failed: ${err.message}`
+      );
+    }
+  }
+
+  /**
+   * P5 — gui MOT anh hoac MOT tai lieu toi `chatId` (mtcute `sendMedia`, ban 0.32: media la object thuan
+   * `{ type: 'photo'|'document', file: Uint8Array, fileName?, fileMime? }`, KHONG can import InputMedia).
+   * Document BAT BUOC co `fileName` (thieu thi Telegram hien "unnamed"). Ket qua/loi dung dang cua `sendMessage`
+   * (`{ messageId }`, loi boc `TelegramTransportError`) de tang chien dich phan loai loi bang CUNG bang chuoi.
+   * Peer chua co trong cache -> nap cache bang mot lan duyet dialogs roi thu lai dung 1 lan (nhu sendMessage).
+   *
+   * @param {number|string} chatId
+   * @param {{ buffer: Buffer|Uint8Array, kind: 'photo'|'document', fileName?: string, mimeType?: string, caption?: string }} file
+   * @returns {Promise<{messageId: number|null}>}
+   */
+  async sendMedia(chatId, file) {
+    if (!this._tg) {
+      throw new TelegramTransportError(
+        'MtProtoTelegramClient.sendMedia called before connect()'
+      );
+    }
+    if (chatId == null || !file || !file.buffer || !(file.kind === 'photo' || file.kind === 'document')) {
+      throw new TelegramTransportError(
+        'MtProtoTelegramClient.sendMedia requires chatId, buffer and kind photo|document'
+      );
+    }
+    const t0 = Date.now();
+    // Khong log noi dung tep - chi loai + dung luong.
+    console.log(`[MtProtoTelegramClient] sendMedia start chatId=${chatId} kind=${file.kind} bytes=${file.buffer.length}`);
+    try {
+      let result;
+      try {
+        result = await this._sendMediaWithTimeout(chatId, file);
+      } catch (err) {
+        if (!isPeerNotFoundError(err)) throw err;
+        console.warn(`[MtProtoTelegramClient] peer ${chatId} not in cache — warming via iterDialogs then retry media once`);
+        try {
+          await this._warmPeerCache();
+        } catch (warmErr) {
+          console.warn(`[MtProtoTelegramClient] warm peer cache failed: ${warmErr.message}`);
+        }
+        try {
+          result = await this._sendMediaWithTimeout(chatId, file);
+        } catch (err2) {
+          if (isPeerNotFoundError(err2)) {
+            throw new Error('Không tìm thấy nhóm — tài khoản không còn trong nhóm?');
+          }
+          throw err2;
+        }
+      }
+      console.log(`[MtProtoTelegramClient] sendMedia OK after ${Date.now() - t0}ms id=${result?.id}`);
+      return { messageId: result?.id ?? null };
+    } catch (err) {
+      console.error(`[MtProtoTelegramClient] sendMedia FAILED after ${Date.now() - t0}ms: ${err.message}`);
+      throw new TelegramTransportError(
+        `MtProtoTelegramClient.sendMedia failed: ${err.message}`
+      );
+    }
+  }
+
+  /** sendMedia with a 60s guard (upload lon cham hon sendText). Returns the raw mtcute message. */
+  async _sendMediaWithTimeout(chatId, file) {
+    let sendTimeout;
+    try {
+      const media = file.kind === 'photo'
+        ? { type: 'photo', file: file.buffer }
+        : {
+          type: 'document',
+          file: file.buffer,
+          fileName: file.fileName || 'tep_dinh_kem',
+          ...(file.mimeType ? { fileMime: file.mimeType } : {}),
+        };
+      const params = file.caption ? { caption: file.caption } : undefined;
+      const sendPromise = this._tg.sendMedia(chatId, media, params);
+      const timeoutPromise = new Promise((_, reject) => {
+        sendTimeout = setTimeout(() => {
+          reject(new Error('mtcute sendMedia timeout (60s)'));
+        }, 60000);
+      });
+      return await Promise.race([sendPromise, timeoutPromise]);
+    } finally {
+      if (sendTimeout) clearTimeout(sendTimeout);
+    }
+  }
+
+  /**
+   * P5 (chieu vao) - tai anh/tai lieu cua MOT tin da nhan ve Buffer. Tra cuu tin theo (chatId, messageId) roi
+   * `downloadAsBuffer(msg.media)`. Vuot `maxBytes` (theo `fileSize` khai bao HOAC byte that) -> tra `{ tooLarge: true }`
+   * khong nem, de nguoi goi ghi "bo qua" thay vi coi la loi ha tang.
+   *
+   * @param {number|string} chatId
+   * @param {number} messageId
+   * @param {{ maxBytes?: number }} [opts]
+   * @returns {Promise<{ buffer: Buffer|null, fileName: string|null, mimeType: string|null, kind: string|null, tooLarge?: boolean }>}
+   */
+  async downloadMedia(chatId, messageId, { maxBytes = 20 * 1024 * 1024 } = {}) {
+    if (!this._tg) {
+      throw new TelegramTransportError(
+        'MtProtoTelegramClient.downloadMedia called before connect()'
+      );
+    }
+    try {
+      const [msg] = await this._tg.getMessages(chatId, [Number(messageId)]);
+      const media = msg?.media;
+      if (!media || (media.type !== 'photo' && media.type !== 'document')) {
+        return { buffer: null, fileName: null, mimeType: null, kind: null };
+      }
+      const declared = Number(media.fileSize);
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        return { buffer: null, fileName: media.fileName ?? null, mimeType: media.mimeType ?? null, kind: media.type, tooLarge: true };
+      }
+      const bytes = await this._tg.downloadAsBuffer(media);
+      if (bytes.length > maxBytes) {
+        return { buffer: null, fileName: media.fileName ?? null, mimeType: media.mimeType ?? null, kind: media.type, tooLarge: true };
+      }
+      return {
+        buffer: Buffer.from(bytes),
+        fileName: media.type === 'document' ? (media.fileName ?? null) : null,
+        mimeType: media.type === 'photo' ? 'image/jpeg' : (media.mimeType ?? null),
+        kind: media.type,
+      };
+    } catch (err) {
+      throw new TelegramTransportError(
+        `MtProtoTelegramClient.downloadMedia failed: ${err.message}`
       );
     }
   }
@@ -750,6 +875,23 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
 const GROUP_CHAT_TYPES = new Set(['group', 'supergroup', 'gigagroup']);
 
 /** mtcute MtPeerNotFoundError (peer khong co trong cache local). */
+/**
+ * P5 — mo ta anh/tai lieu dinh kem tin den (CHI metadata, khong tai): `{ kind, fileName, mimeType, size }`.
+ * Chi 'photo' va 'document' chung: sticker/voice/video/audio co type rieng nen bo qua (nhu truoc day).
+ * @returns {{kind: 'photo'|'document', fileName: string|null, mimeType: string|null, size: number|null}|null}
+ */
+export function describeInboundMedia(msg) {
+  const media = msg?.media;
+  if (!media || (media.type !== 'photo' && media.type !== 'document')) return null;
+  const size = Number(media.fileSize);
+  return {
+    kind: media.type,
+    fileName: media.type === 'document' ? (media.fileName ?? null) : null,
+    mimeType: media.type === 'document' ? (media.mimeType ?? null) : 'image/jpeg',
+    size: Number.isFinite(size) ? size : null,
+  };
+}
+
 function isPeerNotFoundError(err) {
   if (!err) return false;
   return (

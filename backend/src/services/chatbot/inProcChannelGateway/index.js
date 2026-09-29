@@ -281,6 +281,13 @@ function makeTelegramFacade(state) {
         String(text)
       ),
 
+    // P5: gui anh/tai lieu + tai media cua tin den.
+    sendMedia: (telegramUserId, chatId, file) =>
+      sessionManager.sendMedia(Number(telegramUserId), Number(chatId), file),
+
+    downloadMedia: (telegramUserId, chatId, messageId, opts) =>
+      sessionManager.downloadMedia(Number(telegramUserId), Number(chatId), Number(messageId), opts),
+
     listGroups: (telegramUserId, opts) =>
       sessionManager.listGroups(Number(telegramUserId), opts),
 
