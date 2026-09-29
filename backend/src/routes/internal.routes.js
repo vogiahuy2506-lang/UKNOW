@@ -465,11 +465,15 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   // Đảm bảo có dòng channel_conversations rồi LƯU TIN KHÁCH TRƯỚC mọi nhánh return bên dưới
   // (chatbot tắt / DM tắt / nhóm tắt / AI đang dừng / khoá / ngoài giờ / hết lượt): khách nhắn thì
   // chủ luôn thấy trong Hộp thư, dù không có AI trả lời (khuôn WhatsApp "Lưu tin khách TRƯỚC khi kiểm").
+  // Nhóm CHỈ vào Hộp thư khi nhóm được bật AI cho tài khoản: tài khoản ở nhiều nhóm sôi nổi sẽ làm ngập Hộp thư
+  // (bảng cũ telegram_personal_* vẫn ghi như trước). DM luôn vào. Gateway không gửi tiêu đề nhóm nên đặt tên
+  // "Nhóm <chatId>" — `senderName` là người gửi, dùng làm tên nhóm sẽ hiển thị sai người.
+  const inboxEligible = !parsed.isGroup || (mergedSettings.is_enabled && mergedSettings.is_enabled_group);
   try {
-    conversation.inbox = await ensureTelegramInboxConversation({
+    if (inboxEligible) conversation.inbox = await ensureTelegramInboxConversation({
       account,
       chatId: peer,
-      displayName: parsed.senderName,
+      displayName: parsed.isGroup ? `Nhóm ${peer}` : parsed.senderName,
       idChatbot,
       isGroup: parsed.isGroup,
       legacyConversationId: conversation.id ?? null,

@@ -1084,6 +1084,32 @@ describe('P1 — tin khách luôn vào Hộp thư (channel_messages) + SSE, kể
     expect(mocks.chatRouterCall()).toBeNull();
   });
 
+  it('nhóm TẮT AI → KHÔNG có channel_messages/SSE, vẫn có telegram_personal_messages', async () => {
+    mocks._scenarioAccountSettings = { ...fakeAccountSettings, is_enabled_group: false };
+    await postWebhook({ ...inboundPayload, chat_id: '-1001234567', is_group: true, is_private: false });
+    expect(mocks._channelMessages).toHaveLength(0);
+    expect(mocks._sse).toHaveLength(0);
+    expect((mocks._callsSoFar || []).some(({ sql }) => /INSERT INTO channel_conversations/i.test(sql))).toBe(false);
+    const legacy = (mocks._callsSoFar || []).filter(
+      ({ sql, params }) => /INSERT INTO telegram_personal_messages/i.test(sql) && params?.[3] === 'visitor'
+    );
+    expect(legacy).toHaveLength(1);
+  });
+
+  it('nhóm BẬT AI → có cả hai bảng; tên hội thoại là "Nhóm <chatId>", không phải tên người gửi', async () => {
+    mocks._scenarioAccountSettings = { ...fakeAccountSettings, is_enabled_group: true };
+    mocks._inboxEnsureRows = [];
+    await postWebhook({ ...inboundPayload, chat_id: '-1001234567', is_group: true, is_private: false });
+    expect(channelRows('visitor')).toHaveLength(1);
+    const legacy = (mocks._callsSoFar || []).filter(
+      ({ sql, params }) => /INSERT INTO telegram_personal_messages/i.test(sql) && params?.[3] === 'visitor'
+    );
+    expect(legacy).toHaveLength(1);
+    const ins = (mocks._callsSoFar || []).find(({ sql }) => /INSERT INTO channel_conversations/i.test(sql));
+    expect(ins.params[3]).toBe('Nhóm -1001234567');
+    expect(JSON.parse(ins.params[4]).is_group).toBe(true);
+  });
+
   it('(b) AI đang dừng (Hộp thư) → lưu tin khách, không gọi AI, không gửi gì', async () => {
     mocks._scenarioAiPaused = true;
     const res = await postWebhook(inboundPayload);
