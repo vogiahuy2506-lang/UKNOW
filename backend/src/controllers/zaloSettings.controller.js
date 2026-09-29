@@ -2541,7 +2541,11 @@ class ZaloSettingsController {
           // với chiến dịch) để chiến dịch đang chạy cùng tài khoản cũng dừng tra số ngay, không chờ
           // tới lần tra số riêng của nó mới phát hiện.
           if (getSharedZaloRateLimiter().isZaloPersonalPhoneLookupRateLimitError(providerErr)) {
-            getSharedZaloRateLimiter().scheduleZaloPersonalPhoneLookupCooldown(account.id);
+            const untilMs = getSharedZaloRateLimiter().scheduleZaloPersonalPhoneLookupCooldown(account.id);
+            // PR-3 Việc 2 — ghi xuống CSDL (khuôn campaignRun._persistPhoneLookupCooldown): chỉ ở RAM thì
+            // deploy/khởi động lại là mất khoá. Lỗi ghi chỉ log, không làm hỏng request.
+            await zaloSettingRepository.setPhoneLookupCooldown(account.id, new Date(untilMs))
+              .catch((err) => console.warn(`[ZaloCooldown] không ghi được cooldown account=${account.id}:`, err?.message || err));
           }
           const classified = classifyZaloSendError(providerErr?.message || 'send_failed');
           if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
@@ -2876,7 +2880,10 @@ class ZaloSettingsController {
           // PR-2 Việc 5 — Zalo báo tra số quá nhiều: khoá tra số cho tài khoản này, dùng chung Map
           // với chiến dịch để chiến dịch cùng tài khoản cũng dừng tra số ngay.
           if (getSharedZaloRateLimiter().isZaloPersonalPhoneLookupRateLimitError(error)) {
-            getSharedZaloRateLimiter().scheduleZaloPersonalPhoneLookupCooldown(account.id);
+            const untilMs = getSharedZaloRateLimiter().scheduleZaloPersonalPhoneLookupCooldown(account.id);
+            // PR-3 Việc 2 — ghi xuống CSDL (khuôn campaignRun._persistPhoneLookupCooldown), lỗi ghi chỉ log.
+            await zaloSettingRepository.setPhoneLookupCooldown(account.id, new Date(untilMs))
+              .catch((err) => console.warn(`[ZaloCooldown] không ghi được cooldown account=${account.id}:`, err?.message || err));
           }
           const classified = classifyZaloSendError(error?.message || 'friend_request_failed');
           if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
@@ -2905,11 +2912,42 @@ class ZaloSettingsController {
           continue;
         }
 
+        // PR-3 Việc 1 — token duy nhất mỗi người nhận (cột tracking_token UNIQUE NOT NULL).
+        const friendTrackingToken = `zpv_${crypto.randomUUID()}`;
+        const friendAccountName = String(account.displayName || account.zaloName || account.name || '').trim() || null;
         if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
           try {
             await consumeSendQuota({
               reservationId: reservation.id,
               responseSnapshot: sent,
+              persistSource: async (txClient) => {
+                const insertedId = await zaloMessageRepository.insertCampaignZaloMessage({
+                  campaignId: null,
+                  runId: null,
+                  customerId: null,
+                  nodeId: null,
+                  channel: 'zalo_friend_request',
+                  recipientType: 'phone',
+                  recipientValue: phone,
+                  uid: sent.uid || null,
+                  groupId: null,
+                  accountId: account.id,
+                  accountName: friendAccountName,
+                  messageText: message,
+                  trackingToken: friendTrackingToken,
+                  trackingBaseUrl: null,
+                  trackingMetadata: {
+                    status: 'sent',
+                    source: 'preview',
+                    response: sent.response || null,
+                  },
+                  isPreview: true,
+                  quotaReservationId: reservation.id,
+                  workspaceOwnerId: userId,
+                  actorUserId,
+                }, txClient);
+                return { sourceKey: `zalo_preview:${insertedId}` };
+              },
             });
           } catch (consumeErr) {
             console.warn('[previewSendFriendRequest] consumeSendQuota error:', consumeErr.message);
@@ -2920,6 +2958,34 @@ class ZaloSettingsController {
           }
         } else {
           await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_friend_request');
+          try {
+            await zaloMessageRepository.insertCampaignZaloMessage({
+              campaignId: null,
+              runId: null,
+              customerId: null,
+              nodeId: null,
+              channel: 'zalo_friend_request',
+              recipientType: 'phone',
+              recipientValue: phone,
+              uid: sent.uid || null,
+              groupId: null,
+              accountId: account.id,
+              accountName: friendAccountName,
+              messageText: message,
+              trackingToken: friendTrackingToken,
+              trackingBaseUrl: null,
+              trackingMetadata: {
+                status: 'sent',
+                source: 'preview',
+                response: sent.response || null,
+              },
+              isPreview: true,
+              workspaceOwnerId: userId,
+              actorUserId,
+            });
+          } catch (logErr) {
+            console.error('[ZaloPreview] Log friend request error:', logErr);
+          }
         }
 
         items.push({
@@ -3178,11 +3244,42 @@ class ZaloSettingsController {
             attachmentsCount: preparedAttachments.length,
           });
         } else {
+          // PR-3 Việc 1 — token duy nhất mỗi nhóm nhận (cột tracking_token UNIQUE NOT NULL).
+          const groupTrackingToken = `zpv_${crypto.randomUUID()}`;
+          const groupAccountName = String(account.displayName || account.zaloName || account.name || '').trim() || null;
           if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
             try {
               await consumeSendQuota({
                 reservationId: reservation.id,
                 responseSnapshot: sent,
+                persistSource: async (txClient) => {
+                  const insertedId = await zaloMessageRepository.insertCampaignZaloMessage({
+                    campaignId: null,
+                    runId: null,
+                    customerId: null,
+                    nodeId: null,
+                    channel: 'zalo_group',
+                    recipientType: 'group',
+                    recipientValue: groupId,
+                    uid: null,
+                    groupId,
+                    accountId: account.id,
+                    accountName: groupAccountName,
+                    messageText: message,
+                    trackingToken: groupTrackingToken,
+                    trackingBaseUrl: null,
+                    trackingMetadata: {
+                      status: 'sent',
+                      source: 'preview',
+                      response: sent.response || null,
+                    },
+                    isPreview: true,
+                    quotaReservationId: reservation.id,
+                    workspaceOwnerId: userId,
+                    actorUserId,
+                  }, txClient);
+                  return { sourceKey: `zalo_preview:${insertedId}` };
+                },
               });
             } catch (consumeErr) {
               console.warn('[previewSendGroupMessage] consumeSendQuota error:', consumeErr.message);
@@ -3193,6 +3290,34 @@ class ZaloSettingsController {
             }
           } else {
             await this.recordPreviewSendQuota(quota, actorUserId, 'zalo_preview_group');
+            try {
+              await zaloMessageRepository.insertCampaignZaloMessage({
+                campaignId: null,
+                runId: null,
+                customerId: null,
+                nodeId: null,
+                channel: 'zalo_group',
+                recipientType: 'group',
+                recipientValue: groupId,
+                uid: null,
+                groupId,
+                accountId: account.id,
+                accountName: groupAccountName,
+                messageText: message,
+                trackingToken: groupTrackingToken,
+                trackingBaseUrl: null,
+                trackingMetadata: {
+                  status: 'sent',
+                  source: 'preview',
+                  response: sent.response || null,
+                },
+                isPreview: true,
+                workspaceOwnerId: userId,
+                actorUserId,
+              });
+            } catch (logErr) {
+              console.error('[ZaloPreview] Log group message error:', logErr);
+            }
           }
           items.push({
             groupId,

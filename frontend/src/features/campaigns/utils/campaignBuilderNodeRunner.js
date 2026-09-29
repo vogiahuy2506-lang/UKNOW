@@ -1939,6 +1939,10 @@ export const createCampaignNodeRunner = (deps) => {
         }
         const totalAttempts = uniqueRecipients.length * steps.length;
         const results = [];
+        // PR-3 Việc 3 — thấy 1 lượt gửi bị hoãn (cổng nhịp/khoá tra số/giờ yên lặng) thì dừng gửi
+        // tiếp mọi người/bước còn lại của node: request sau cùng accountId+channel gần như chắc chắn
+        // cũng bị hoãn (khuôn nhánh 1 bước phía dưới). Request ĐANG bay (pool song song) không huỷ được.
+        let stepWaveSawDeferred = false;
         const emitProgress = () => {
           if (!onProgress) return;
           const current = results.length;
@@ -2000,6 +2004,7 @@ export const createCampaignNodeRunner = (deps) => {
             campaignId: campaignIdNum,
           }, { signal, idempotencyKey: generateIdempotencyKey() });
           const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
+          if (stepItems.some(isDeferredZaloItem)) stepWaveSawDeferred = true;
           const { variables } = deriveVariablesForText(
             step.message,
             {
@@ -2080,10 +2085,10 @@ export const createCampaignNodeRunner = (deps) => {
           const recipientsForStep = uniqueRecipients.filter(
             (recipient) => getRecipientNextStepIndex(zaloProgressMap, recipient) <= stepIndex
           );
-          if (recipientsForStep.length <= 0) return;
+          if (recipientsForStep.length <= 0 || stepWaveSawDeferred) return;
           if (zaloPreviewPoolParallel > 1) {
             const totalBatches = Math.ceil(recipientsForStep.length / zaloPreviewPoolParallel);
-            for (let offset = 0; offset < recipientsForStep.length; offset += zaloPreviewPoolParallel) {
+            for (let offset = 0; offset < recipientsForStep.length && !stepWaveSawDeferred; offset += zaloPreviewPoolParallel) {
               if (offset > 0) {
                 await waitRandomTemplateStepDelay(`zalo_personal_single_batch_${offset}`, signal, 'zalo', {
                   onProgress,
@@ -2099,7 +2104,7 @@ export const createCampaignNodeRunner = (deps) => {
             }
             return;
           }
-          for (let index = 0; index < recipientsForStep.length; index += 1) {
+          for (let index = 0; index < recipientsForStep.length && !stepWaveSawDeferred; index += 1) {
             if (index > 0) {
 
               await waitRandomTemplateStepDelay(`zalo_personal_step_${stepIndex + 1}`, signal, 'zalo', {
@@ -2116,7 +2121,7 @@ export const createCampaignNodeRunner = (deps) => {
         if (sendMode === 'schedule') {
           const scheduleStartAt = Date.now();
           let previousStepTargetAt = scheduleStartAt;
-          for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
+          for (let stepIndex = 0; stepIndex < steps.length && !stepWaveSawDeferred; stepIndex += 1) {
             const step = steps[stepIndex];
 
             previousStepTargetAt = await waitForScheduledStep({
@@ -2128,7 +2133,7 @@ export const createCampaignNodeRunner = (deps) => {
             await runZaloStepWave(step, stepIndex);
           }
         } else {
-          for (let stepIndex = 0; stepIndex < steps.length; stepIndex += 1) {
+          for (let stepIndex = 0; stepIndex < steps.length && !stepWaveSawDeferred; stepIndex += 1) {
 
             await runZaloStepWave(steps[stepIndex], stepIndex);
           }
