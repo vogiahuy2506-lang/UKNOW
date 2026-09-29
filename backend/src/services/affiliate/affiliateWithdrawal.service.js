@@ -762,9 +762,11 @@ export async function getAffiliateOverview(userId) {
   const referralCode = user.referral_code || '';
   const referralLink = referralCode ? `https://founderai.biz/register?ref=${referralCode}` : '';
 
-  // 1b. Tổng số người đã đăng ký bằng mã giới thiệu của user này
+  // 1b. Tổng số người đã đăng ký bằng mã giới thiệu của user này — cùng bộ lọc "đã xoá" với
+  // getReferralsList, để hai con số không lệch nhau.
   const referralCountResult = await db.query(
-    `SELECT COUNT(*)::int AS c FROM users WHERE referred_by_user_id = $1`,
+    `SELECT COUNT(*)::int AS c FROM users
+     WHERE referred_by_user_id = $1 AND deleted_at IS NULL AND status <> 'deleted'`,
     [parsedUserId]
   );
   const referralCount = referralCountResult.rows[0]?.c || 0;
