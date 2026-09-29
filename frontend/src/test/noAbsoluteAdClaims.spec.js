@@ -43,7 +43,8 @@ const FORBIDDEN = new RegExp(
     'hàng nghìn (người|học viên)',
     'thousands (of (people|Vietnamese|learners) )?have',
     'thousands of (people|Vietnamese|learners)',
-    '\\d[\\d.,]*\\s*\\+?\\s*(học viên|learners|students)\\b',
+    // (?:\\s|\\\\n)* : chuỗi nguồn hay ngắt dòng bằng ký tự \\n literal ('10,000+\\nHọc viên') — review 29/09 đột biến lọt.
+    '\\d[\\d.,]*\\s*\\+?(?:\\s|\\\\n)*(học viên|learners|students)\\b',
   ].join('|'),
   'i'
 );
