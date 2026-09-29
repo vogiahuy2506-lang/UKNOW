@@ -83,11 +83,17 @@ export default function ReferralsCard({ referralLink, onCopyLink }) {
                     <td className="px-6 py-3.5 text-xs font-mono">{item.emailMasked}</td>
                     <td className="px-6 py-3.5 text-xs text-gray-500">{formatDate(item.referredAt)}</td>
                     <td className="px-6 py-3.5">
-                      <StatusChip tone={item.hasPurchased ? 'good' : 'muted'}>
-                        {item.hasPurchased
-                          ? t('affiliate.referralsStatusPurchased')
-                          : t('affiliate.referralsStatusNotPurchased')}
-                      </StatusChip>
+                      {item.hasPurchased && item.awaitingPhone ? (
+                        <StatusChip tone="warning" title={t('affiliate.referralsAwaitingPhoneHint')}>
+                          {t('affiliate.referralsStatusAwaitingPhone')}
+                        </StatusChip>
+                      ) : (
+                        <StatusChip tone={item.hasPurchased ? 'good' : 'muted'}>
+                          {item.hasPurchased
+                            ? t('affiliate.referralsStatusPurchased')
+                            : t('affiliate.referralsStatusNotPurchased')}
+                        </StatusChip>
+                      )}
                     </td>
                     <td className="px-6 py-3.5 text-right tabular-nums font-semibold text-emerald-600">
                       {formatVnd(item.attributedRevenue)}

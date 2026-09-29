@@ -3,6 +3,7 @@
  *
  * @param {object} props
  * @param {'good'|'accent'|'muted'|'warning'|'danger'} [props.tone]
+ * @param {string} [props.title] tooltip giải thích (thuộc tính title)
  * @param {React.ReactNode} props.children
  */
 const TONE_STYLES = {
@@ -13,10 +14,10 @@ const TONE_STYLES = {
   danger: 'text-red-700 bg-red-100',
 };
 
-export default function StatusChip({ tone = 'muted', children }) {
+export default function StatusChip({ tone = 'muted', title, children }) {
   const toneClass = TONE_STYLES[tone] || TONE_STYLES.muted;
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${toneClass}`}>
+    <span title={title} className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold whitespace-nowrap ${toneClass}`}>
       {children}
     </span>
   );

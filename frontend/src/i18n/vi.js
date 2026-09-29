@@ -9135,6 +9135,8 @@ export default {
     referralsColRevenue: 'Doanh thu phát sinh',
     referralsStatusPurchased: 'Đã mua',
     referralsStatusNotPurchased: 'Chưa mua',
+    referralsStatusAwaitingPhone: 'Chờ SĐT',
+    referralsAwaitingPhoneHint: 'Doanh thu từ người này chỉ được tính hoa hồng khi họ cập nhật số điện thoại tài khoản',
 
     // Mục ĐANG CHỜ ĐỦ ĐIỀU KIỆN
     pendingApprovalTitle: 'Đơn hàng đang chờ đủ điều kiện',

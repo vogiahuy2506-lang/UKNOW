@@ -71,6 +71,36 @@ describe('ReferralsCard — thẻ "Người đã dùng mã của bạn"', () => 
     expect(screen.queryByText('1 / 1')).not.toBeInTheDocument();
   });
 
+  it('Chip "Chờ SĐT" chỉ hiện khi hasPurchased && awaitingPhone; kèm tooltip giải thích', async () => {
+    mockGetReferrals.mockResolvedValueOnce({
+      data: {
+        items: [
+          { name: 'Mua chờ SĐT', emailMasked: 'a***@gmail.com', referredAt: '2026-09-20T00:00:00.000Z', hasPurchased: true, awaitingPhone: true, attributedRevenue: 299000 },
+          { name: 'Mua đủ SĐT', emailMasked: 'b***@gmail.com', referredAt: '2026-09-19T00:00:00.000Z', hasPurchased: true, awaitingPhone: false, attributedRevenue: 199000 },
+          { name: 'Người chưa mua', emailMasked: 'c***@gmail.com', referredAt: '2026-09-18T00:00:00.000Z', hasPurchased: false, awaitingPhone: false, attributedRevenue: 0 },
+          // Dữ liệu bất thường: awaitingPhone=true nhưng chưa mua → vẫn KHÔNG hiện chip "Chờ SĐT"
+          { name: 'Chưa mua nhưng cờ bật', emailMasked: 'd***@gmail.com', referredAt: '2026-09-17T00:00:00.000Z', hasPurchased: false, awaitingPhone: true, attributedRevenue: 0 },
+        ],
+        total: 4,
+        totalPages: 1,
+      },
+    });
+
+    render(
+      <I18nProvider>
+        <ReferralsCard referralLink="" onCopyLink={vi.fn()} />
+      </I18nProvider>
+    );
+
+    await waitFor(() => expect(screen.getByText('Mua chờ SĐT')).toBeInTheDocument());
+
+    const chips = screen.getAllByText('Chờ SĐT');
+    expect(chips).toHaveLength(1);
+    expect(chips[0]).toHaveAttribute('title', expect.stringContaining('số điện thoại'));
+    expect(screen.getAllByText('Đã mua')).toHaveLength(1);
+    expect(screen.getAllByText('Chưa mua')).toHaveLength(2);
+  });
+
   it('Phân trang: totalPages > 1 → hiện nút Trước/Tiếp theo, bấm Tiếp theo gọi lại API với page=2', async () => {
     mockGetReferrals.mockResolvedValueOnce({
       data: {

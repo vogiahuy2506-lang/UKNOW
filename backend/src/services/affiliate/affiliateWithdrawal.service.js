@@ -924,7 +924,8 @@ export async function getReferralsList(userId, { page = 1, limit = REFERRALS_DEF
   const offset = (parsedPage - 1) * parsedLimit;
 
   const totalResult = await db.query(
-    `SELECT COUNT(*)::int AS c FROM users WHERE referred_by_user_id = $1`,
+    `SELECT COUNT(*)::int AS c FROM users
+     WHERE referred_by_user_id = $1 AND deleted_at IS NULL AND status <> 'deleted'`,
     [parsedUserId]
   );
   const total = totalResult.rows[0]?.c || 0;
@@ -932,7 +933,8 @@ export async function getReferralsList(userId, { page = 1, limit = REFERRALS_DEF
   const rowsResult = await db.query(
     `SELECT u.full_name, u.username, u.email, u.referred_at,
             COALESCE(agg.total_amount, 0)::numeric AS attributed_revenue,
-            COALESCE(agg.event_count, 0)::int AS event_count
+            COALESCE(agg.event_count, 0)::int AS event_count,
+            (u.phone IS NULL OR TRIM(u.phone) = '') AS missing_phone
      FROM users u
      LEFT JOIN (
        SELECT e.buyer_user_id, SUM(e.amount) AS total_amount, COUNT(*) AS event_count
@@ -940,7 +942,7 @@ export async function getReferralsList(userId, { page = 1, limit = REFERRALS_DEF
        WHERE e.referrer_user_id = $1 AND ${activeRevenueEventSql('e')}
        GROUP BY e.buyer_user_id
      ) agg ON agg.buyer_user_id = u.id
-     WHERE u.referred_by_user_id = $1
+     WHERE u.referred_by_user_id = $1 AND u.deleted_at IS NULL AND u.status <> 'deleted'
      ORDER BY u.referred_at DESC, u.id DESC
      LIMIT $2 OFFSET $3`,
     [parsedUserId, parsedLimit, offset]
@@ -951,6 +953,9 @@ export async function getReferralsList(userId, { page = 1, limit = REFERRALS_DEF
     emailMasked: maskEmail(row.email),
     referredAt: row.referred_at,
     hasPurchased: row.event_count > 0,
+    // Doanh thu của người mua chưa có SĐT chưa được tính hoa hồng (xem mục "ĐANG CHỜ" ở overview).
+    // Chỉ trả cờ, KHÔNG trả số điện thoại.
+    awaitingPhone: row.event_count > 0 && Boolean(row.missing_phone),
     attributedRevenue: Math.round(Number(row.attributed_revenue || 0)),
   }));
 

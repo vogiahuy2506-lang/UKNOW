@@ -168,6 +168,65 @@ describe('GET /api/affiliate/referrals — danh sách người dùng mã giới 
   });
 });
 
+describe('GET /api/affiliate/referrals — ẩn người dùng đã xoá + cờ awaitingPhone', () => {
+  async function getList(referrer, query = '') {
+    const res = await request(app)
+      .get(`/api/affiliate/referrals${query}`)
+      .set('Authorization', `Bearer ${createAuthToken(referrer)}`);
+    expect(res.status).toBe(200);
+    return res.body.data;
+  }
+
+  it('9. B (status=deleted) và C (deleted_at) bị ẩn; chỉ còn D, total=1', async () => {
+    const a = await createUser({ email: 'a9@test.com', username: 'user_a9' });
+    const b = await createUser({ email: 'b9@test.com', username: 'user_b9' });
+    const c = await createUser({ email: 'c9@test.com', username: 'user_c9' });
+    const d = await createUser({ email: 'd9@test.com', username: 'user_d9' });
+    await setReferredBy(b, a, new Date('2026-09-10T00:00:00Z'));
+    await setReferredBy(c, a, new Date('2026-09-11T00:00:00Z'));
+    await setReferredBy(d, a, new Date('2026-09-12T00:00:00Z'));
+    await db.query(`UPDATE users SET status = 'deleted' WHERE id = $1`, [b.id]);
+    await db.query(`UPDATE users SET deleted_at = NOW() WHERE id = $1`, [c.id]);
+
+    const { items, total, totalPages } = await getList(a);
+    expect(total).toBe(1);
+    expect(totalPages).toBe(1);
+    expect(items.map((it) => it.name)).toEqual([d.full_name]);
+  });
+
+  it('10. awaitingPhone: chỉ true khi ĐÃ MUA và CHƯA có SĐT; không lộ trường phone', async () => {
+    const a = await createUser({ email: 'a10@test.com', username: 'user_a10' });
+    const plan = await createPlan();
+    const buyNoPhone = await createUser({ email: 'buynophone@test.com', username: 'u_buy_nophone', phone: null });
+    const buyBlankPhone = await createUser({ email: 'buyblank@test.com', username: 'u_buy_blank' });
+    const buyPhone = await createUser({ email: 'buyphone@test.com', username: 'u_buy_phone' });
+    const noBuyNoPhone = await createUser({ email: 'nobuy@test.com', username: 'u_nobuy_nophone', phone: null });
+    await db.query(`UPDATE users SET phone = '   ' WHERE id = $1`, [buyBlankPhone.id]);
+
+    await setReferredBy(buyNoPhone, a, new Date('2026-09-10T00:00:00Z'));
+    await setReferredBy(buyBlankPhone, a, new Date('2026-09-11T00:00:00Z'));
+    await setReferredBy(buyPhone, a, new Date('2026-09-12T00:00:00Z'));
+    await setReferredBy(noBuyNoPhone, a, new Date('2026-09-13T00:00:00Z'));
+    await insertRevenueEvent({ referrer: a, buyer: buyNoPhone, plan });
+    await insertRevenueEvent({ referrer: a, buyer: buyBlankPhone, plan });
+    await insertRevenueEvent({ referrer: a, buyer: buyPhone, plan });
+
+    const { items } = await getList(a);
+    const byName = Object.fromEntries(items.map((it) => [it.name, it]));
+
+    expect(byName[buyNoPhone.full_name]).toMatchObject({ hasPurchased: true, awaitingPhone: true });
+    expect(byName[buyBlankPhone.full_name]).toMatchObject({ hasPurchased: true, awaitingPhone: true });
+    expect(byName[buyPhone.full_name]).toMatchObject({ hasPurchased: true, awaitingPhone: false });
+    expect(byName[noBuyNoPhone.full_name]).toMatchObject({ hasPurchased: false, awaitingPhone: false });
+
+    items.forEach((it) => {
+      expect(it.phone).toBeUndefined();
+      expect(it.missing_phone).toBeUndefined();
+    });
+    expect(JSON.stringify(items)).not.toContain(buyPhone.phone);
+  });
+});
+
 describe('GET /api/affiliate/overview — referralCount', () => {
   it('8. referralCount của A = 2 (B, C), không tính E của D', async () => {
     const a = await createUser({ email: 'a4@test.com', username: 'user_a4' });

@@ -171,6 +171,7 @@ describe('getReferralsList — danh sách người đã dùng mã giới thiệu
             referred_at: '2026-09-20T00:00:00.000Z',
             attributed_revenue: '299000',
             event_count: 1,
+            missing_phone: true,
           },
           {
             full_name: null,
@@ -179,6 +180,7 @@ describe('getReferralsList — danh sách người đã dùng mã giới thiệu
             referred_at: '2026-09-10T00:00:00.000Z',
             attributed_revenue: '0',
             event_count: 0,
+            missing_phone: true, // chưa mua → không "chờ SĐT"
           },
         ],
       });
@@ -187,11 +189,15 @@ describe('getReferralsList — danh sách người đã dùng mã giới thiệu
 
     const [countSql] = mockDbQuery.mock.calls[0];
     expect(countSql).toContain('referred_by_user_id = $1');
+    expect(countSql).toContain('deleted_at IS NULL');
+    expect(countSql).toContain("status <> 'deleted'");
 
     const [listSql] = mockDbQuery.mock.calls[1];
     expect(listSql).toContain('reversed_at IS NULL');
     expect(listSql).toContain('referred_by_user_id = $1');
     expect(listSql).toContain('ORDER BY u.referred_at DESC');
+    expect(listSql).toContain('u.deleted_at IS NULL');
+    expect(listSql).toContain("u.status <> 'deleted'");
 
     expect(result.total).toBe(2);
     expect(result.items).toEqual([
@@ -200,6 +206,7 @@ describe('getReferralsList — danh sách người đã dùng mã giới thiệu
         emailMasked: 'ngu***@gmail.com',
         referredAt: '2026-09-20T00:00:00.000Z',
         hasPurchased: true,
+        awaitingPhone: true,
         attributedRevenue: 299000,
       },
       {
@@ -207,6 +214,7 @@ describe('getReferralsList — danh sách người đã dùng mã giới thiệu
         emailMasked: 'b***@gmail.com',
         referredAt: '2026-09-10T00:00:00.000Z',
         hasPurchased: false,
+        awaitingPhone: false,
         attributedRevenue: 0,
       },
     ]);

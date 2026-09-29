@@ -9125,6 +9125,8 @@ Feel free to ask me anything!`,
     referralsColRevenue: 'Revenue generated',
     referralsStatusPurchased: 'Purchased',
     referralsStatusNotPurchased: 'Not Purchased',
+    referralsStatusAwaitingPhone: 'Awaiting phone',
+    referralsAwaitingPhoneHint: 'Revenue from this person only earns commission once they add a phone number to their account',
 
     // Pending approval
     pendingApprovalTitle: 'Orders Pending Qualification',
