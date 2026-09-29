@@ -16,8 +16,27 @@
 import { EventEmitter } from 'node:events';
 import * as whatsappBaileysModule from '../services/chatbot/whatsappBaileys.service.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
+import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
 const whatsappBaileysService = whatsappBaileysModule;
+
+/**
+ * Ghi nhật ký hoạt động cho vòng đời tài khoản WhatsApp. `audit_logs.entity_id` là BIGINT nên KHÔNG nhét
+ * sessionKey (chuỗi "<userId>-<key>") vào entityId — để ở details. Không ghi SĐT (chỉ sessionKey/shortKey).
+ * Lỗi ghi nhật ký không được làm hỏng thao tác chính.
+ */
+async function auditAccount(req, action, sessionKey, extra = {}) {
+  try {
+    await logWorkspace(getWorkspaceAuditContext(req), action, AUDIT_ENTITY_TYPES.WHATSAPP_ACCOUNT, null, {
+      channel: 'whatsapp_baileys',
+      sessionKey,
+      ...extra,
+    });
+  } catch (err) {
+    console.warn('[WhatsApp/Baileys] audit error:', err.message);
+  }
+}
 
 function safeSessionKey(userId, sessionKey) {
   // Owner-scoped: only the owner can act on the session.
@@ -35,6 +54,7 @@ class WhatsAppBaileysController {
       // ở đây nữa; gọi thêm vẫn idempotent nhờ flag
       // `__baileysInboxRegistered` nhưng sẽ tạo log duplicate.
       const record = await whatsappBaileysService.connectSession(sessionKey);
+      await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_CONNECT_STARTED, sessionKey, { status: record.status });
       return res.json({
         success: true,
         data: {
@@ -106,6 +126,7 @@ class WhatsAppBaileysController {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
       const ok = await whatsappBaileysService.disconnectSession(sessionKey);
+      if (ok) await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_DISCONNECTED, sessionKey);
       return res.json({ success: ok });
     } catch (err) {
       console.error('[WhatsApp/Baileys] disconnect error:', err.message);
@@ -117,7 +138,9 @@ class WhatsAppBaileysController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const sessionKey = safeSessionKey(userId, req.params.key);
-      const ok = whatsappBaileysService.deleteSessionFiles(sessionKey);
+      // deleteSessionFiles là async — thiếu await thì `ok` là Promise (JSON ra `{}`) và xoá chưa xong đã trả lời.
+      const ok = await whatsappBaileysService.deleteSessionFiles(sessionKey);
+      if (ok) await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_DELETED, sessionKey);
       return res.json({ success: ok });
     } catch (err) {
       console.error('[WhatsApp/Baileys] remove error:', err.message);
@@ -133,6 +156,7 @@ class WhatsAppBaileysController {
       // nickname cho phép empty string để xoá tên, max 255 chars
       const trimmed = typeof nickname === 'string' ? nickname.trim().slice(0, 255) : null;
       whatsappBaileysService.updateSessionNickname(sessionKey, trimmed);
+      await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_RENAMED, sessionKey, { nickname: trimmed });
       return res.json({ success: true });
     } catch (err) {
       console.error('[WhatsApp/Baileys] updateSession error:', err.message);

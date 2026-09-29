@@ -382,7 +382,7 @@ function AppContent() {
             <Route path="customers/:campaignId/:customerId" element={<PermissionRoute permission="customers"><CampaignCustomers /></PermissionRoute>} />
 
             {/* Settings — owner only */}
-            <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings']}><ChannelSettings /></PermissionRoute>} />
+            <Route path="settings/channels" element={<PermissionRoute permission={['email_settings', 'zalo_settings', 'chatbot_channels_manage']}><ChannelSettings /></PermissionRoute>} />
             <Route path="settings/employees" element={<OwnerRoute><EmployeeManagement /></OwnerRoute>} />
             <Route path="settings/audit-logs" element={<OwnerRoute><AuditLogsPage /></OwnerRoute>} />
             {/* Admin-only cluster: gác bằng cờ tính năng độc lập */}

@@ -19,6 +19,8 @@ export const WORKSPACE_AUDIT_ACTIONS = [
   'CAMPAIGN_APPROVAL_REQUESTED', 'CAMPAIGN_APPROVAL_APPROVED', 'CAMPAIGN_APPROVAL_REJECTED',
   'CAMPAIGN_APPROVAL_THRESHOLD_UPDATED',
   'EMAIL_ACCOUNT_CONNECTED', 'ZALO_ACCOUNT_CONNECTED',
+  'WHATSAPP_ACCOUNT_CONNECT_STARTED', 'WHATSAPP_ACCOUNT_DISCONNECTED', 'WHATSAPP_ACCOUNT_DELETED',
+  'WHATSAPP_ACCOUNT_RENAMED',
   'EMAIL_ACCOUNT_SEND_LIMIT_UPDATED', 'ZALO_ACCOUNT_SEND_LIMIT_UPDATED',
   'EMAIL_TEMPLATE_CREATED', 'EMAIL_TEMPLATE_UPDATED', 'EMAIL_TEMPLATE_DELETED',
   'ZALO_TEMPLATE_CREATED', 'ZALO_TEMPLATE_UPDATED', 'ZALO_TEMPLATE_DELETED',
@@ -36,7 +38,7 @@ export const WORKSPACE_AUDIT_ACTIONS = [
 ];
 
 export const WORKSPACE_AUDIT_ENTITIES = [
-  'employee', 'campaign', 'email_setting', 'zalo_setting', 'email_template', 'zalo_template', 'customer',
+  'employee', 'campaign', 'email_setting', 'zalo_setting', 'whatsapp_account', 'email_template', 'zalo_template', 'customer',
   'landing_page', 'landing_page_domain', 'landing_page_version', 'form',
   'chatbot', 'chatbot_channel', 'knowledge_base', 'knowledge_document',
   'inbox_conversation', 'inbox_message', 'media_object',

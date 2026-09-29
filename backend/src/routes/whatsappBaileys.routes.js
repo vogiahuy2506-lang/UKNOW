@@ -14,7 +14,9 @@ import authMiddleware from '../middleware/auth.middleware.js';
 import {
   requirePasswordChange,
   requirePhone,
+  requirePermission,
 } from '../middleware/authorization.middleware.js';
+import { whatsappTestSendLimiter } from '../middleware/rateLimiter.middleware.js';
 import whatsappBaileysController from '../controllers/whatsappBaileys.controller.js';
 
 const router = express.Router();
@@ -24,6 +26,8 @@ const router = express.Router();
 router.use(authMiddleware);
 router.use(requirePasswordChange);
 router.use(requirePhone);
+// Quyền quản lý kênh chatbot (cùng quyền với tab Kênh Zalo/Facebook). Nhân viên thiếu quyền -> 403.
+router.use(requirePermission('chatbot_channels_manage'));
 
 // Open (or fetch existing) a session. Returns the current QR data-URL (if any).
 router.post('/sessions', whatsappBaileysController.connect.bind(whatsappBaileysController));
@@ -44,7 +48,7 @@ router.delete('/sessions/:key', whatsappBaileysController.remove.bind(whatsappBa
 router.patch('/sessions/:key', whatsappBaileysController.updateSession.bind(whatsappBaileysController));
 
 // Send a test message — used by the onboarding UI to verify the connection.
-router.post('/sessions/:key/messages', whatsappBaileysController.sendMessage.bind(whatsappBaileysController));
+router.post('/sessions/:key/messages', whatsappTestSendLimiter, whatsappBaileysController.sendMessage.bind(whatsappBaileysController));
 router.post('/sessions/:key/_inject', whatsappBaileysController.injectTestMessage.bind(whatsappBaileysController));
 
 export default router;

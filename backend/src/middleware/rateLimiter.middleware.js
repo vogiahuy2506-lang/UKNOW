@@ -507,6 +507,27 @@ export const phoneOtpSendLimiter = rateLimit({
   keyGenerator: (req) => `phone-otp-send:${clientIpKey(req)}`,
 });
 
+// WhatsApp (Baileys) gửi thử — 10 lượt / 1 giờ / tài khoản. Gửi thật ra số ngoài từ số của khách,
+// không có hạn mức nào khác chặn route này.
+export const WHATSAPP_TEST_SEND_CONFIG = {
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  code: 'WHATSAPP_TEST_SEND_RATE_LIMIT_EXCEEDED',
+};
+export const whatsappTestSendLimiter = rateLimit({
+  skip: skipInTest,
+  windowMs: WHATSAPP_TEST_SEND_CONFIG.windowMs,
+  max: WHATSAPP_TEST_SEND_CONFIG.max,
+  message: {
+    success: false,
+    message: 'Bạn đã đạt giới hạn 10 lần gửi thử WhatsApp trong 1 giờ. Vui lòng thử lại sau.',
+    code: WHATSAPP_TEST_SEND_CONFIG.code,
+  },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => rateLimitKeyForRequest(req, 'whatsapp-test-send:'),
+});
+
 // Quick Send Test Message limiter — tối đa 5 lần gửi thử / 1 giờ / tài khoản
 export const quickSendTestLimiter = rateLimit({
   skip: skipInTest,
