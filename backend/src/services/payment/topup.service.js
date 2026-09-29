@@ -117,6 +117,25 @@ async function buildZaloCapacityContext(billingUserId, requestedQty = 0) {
   });
 }
 
+/**
+ * P6 (PLAN_TG_WA_DAY_DU) — slot tài khoản Telegram/WhatsApp chỉ có nghĩa khi gói CÓ trần. Cột NULL = không giới hạn
+ * (gói hiện có, migration 263) → mua slot là trả tiền cho thứ đã có. Trả về các item_key KHÔNG nên bán cho chủ này.
+ *
+ * @returns {Promise<string[]>}
+ */
+async function findUnlimitedChannelSlotKeys(billingUserId, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT max_telegram_accounts, max_whatsapp_accounts FROM users WHERE id = $1 LIMIT 1`,
+    [billingUserId]
+  );
+  const row = rows[0];
+  if (!row) return [];
+  const keys = [];
+  if (row.max_telegram_accounts === null) keys.push('telegram_accounts');
+  if (row.max_whatsapp_accounts === null) keys.push('whatsapp_accounts');
+  return keys;
+}
+
 async function assertSubscriptionAllowsTopup(userId, billingOptions = {}) {
   const subscription = await getSubscriptionStatus(userId, billingOptions);
   if (!subscription.hasPlan) {
@@ -149,8 +168,11 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
   });
 
   const maxMonths = resolveMaxTopupMonths(subscription);
+  const unlimitedItemKeys = await findUnlimitedChannelSlotKeys(billingUserId);
   return {
     minOrderAmount: TOPUP_MIN_ORDER_AMOUNT,
+    // Món không bán cho chủ này (gói không giới hạn số tài khoản kênh) — FE ẩn.
+    unlimitedItemKeys,
     items: pricingRows.map((r) => ({
       itemKey: r.item_key,
       unitPrice: Number(r.unit_price),
@@ -187,6 +209,17 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {}, mont
   const validation = validateTopupQuantities(pricingRows, quantities);
   if (!validation.ok) {
     throw { status: 400, message: validation.errors.join('; '), errors: validation.errors };
+  }
+
+  const unlimitedItemKeys = await findUnlimitedChannelSlotKeys(billingUserId);
+  const buyingUnlimited = unlimitedItemKeys.filter((key) => (validation.quantities[key] || 0) > 0);
+  if (buyingUnlimited.length > 0) {
+    throw {
+      status: 400,
+      code: 'CHANNEL_SLOTS_UNLIMITED',
+      message: 'Gói hiện tại không giới hạn số tài khoản Telegram/WhatsApp — không cần mua thêm slot.',
+      itemKeys: buyingUnlimited,
+    };
   }
 
   const monthsResolved = resolveTopupMonths({

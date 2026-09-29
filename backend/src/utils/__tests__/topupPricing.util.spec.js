@@ -223,3 +223,23 @@ describe('topupPricing.util', () => {
     });
   });
 });
+
+describe('topupPricing.util — P6 slot tài khoản Telegram/WhatsApp', () => {
+  it('telegram_accounts/whatsapp_accounts là món CẤU TRÚC (hết hạn theo tháng, nhân months, cần months hợp lệ)', async () => {
+    const { TOPUP_STRUCTURAL_KEYS } = await import('../topupPricing.util.js');
+    expect(TOPUP_STRUCTURAL_KEYS).toEqual(expect.arrayContaining(['telegram_accounts', 'whatsapp_accounts']));
+    const rows = [
+      ...pricingRows,
+      { item_key: 'telegram_accounts', unit_price: 50000, min_qty: 1, step_qty: 1, max_qty: 50, is_active: true, sort_order: 41 },
+    ];
+    const priced = computeTopupPrice(rows, { telegram_accounts: 2 }, 3);
+    expect(priced.total).toBe(2 * 50000 * 3);
+    expect(priced.items[0]).toMatchObject({ itemKey: 'telegram_accounts', months: 3, subtotal: 300000 });
+  });
+
+  it('TOPUP_GRANT_KEY_BY_RESOURCE: cổng TẠO tài khoản (userResourceLimit) cộng grant slot vào trần', async () => {
+    const { TOPUP_GRANT_KEY_BY_RESOURCE } = await import('../topupPricing.util.js');
+    expect(TOPUP_GRANT_KEY_BY_RESOURCE.telegramAccounts).toBe('telegram_accounts');
+    expect(TOPUP_GRANT_KEY_BY_RESOURCE.whatsappAccounts).toBe('whatsapp_accounts');
+  });
+});

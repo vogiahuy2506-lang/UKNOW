@@ -102,6 +102,7 @@ export async function updateCustomPlanLimits(planId, {
   maxEmployees, maxLandingPages, maxCampaigns,
   maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
+  maxTelegramAccounts, maxWhatsappAccounts,
   maxChatbots, messagesPerPeriod = null, dailyEmailLimit = null, dailyZaloLimit = null,
   isFupEnabled = false, durationDays = 30, gracePeriodDays = 0,
   storageLimitBytes, maxKbDocuments, maxKbExtractedChars,
@@ -135,6 +136,8 @@ export async function updateCustomPlanLimits(planId, {
        storage_limit_bytes = COALESCE($26, storage_limit_bytes),
        max_kb_documents = COALESCE($27, max_kb_documents),
        max_kb_extracted_chars = COALESCE($28, max_kb_extracted_chars),
+       max_telegram_accounts = $29,
+       max_whatsapp_accounts = $30,
        updated_at = NOW()
      WHERE id = $1 AND is_custom = TRUE
      RETURNING *`,
@@ -149,6 +152,7 @@ export async function updateCustomPlanLimits(planId, {
       maxChatbots ?? null, messagesPerPeriod, dailyEmailLimit, dailyZaloLimit,
       Boolean(isFupEnabled), durationDays ?? 30, gracePeriodDays ?? 0,
       storageLimitBytes ?? null, maxKbDocuments ?? null, maxKbExtractedChars ?? null,
+      maxTelegramAccounts ?? null, maxWhatsappAccounts ?? null,
     ]
   );
   return rows[0] || null;

@@ -693,6 +693,8 @@ export const createCustomPaymentLink = async ({
                 maxZaloGroupCampaigns: planColumns.maxZaloGroupCampaigns,
                 maxEmailCampaigns: planColumns.maxEmailCampaigns,
                 maxZaloAccounts: planColumns.maxZaloAccounts,
+                maxTelegramAccounts: planColumns.maxTelegramAccounts,
+                maxWhatsappAccounts: planColumns.maxWhatsappAccounts,
                 maxEmailAccounts: planColumns.maxEmailAccounts,
                 maxEmailTemplates: planColumns.maxEmailTemplates,
                 maxZaloTemplates: planColumns.maxZaloTemplates,

@@ -59,6 +59,8 @@ export function normalizeWalletAddon(value) {
  *   emails?: object|number,
  *   aiCredits?: object|number,
  *   zaloAccounts?: number,
+ *   telegramAccounts?: number,
+ *   whatsappAccounts?: number,
  *   emailAccounts?: number,
  *   landingPages?: number,
  *   chatbots?: number,
@@ -71,6 +73,8 @@ export function buildAddonsPayload({
   emails = 0,
   aiCredits = 0,
   zaloAccounts = 0,
+  telegramAccounts = 0,
+  whatsappAccounts = 0,
   emailAccounts = 0,
   landingPages = 0,
   chatbots = 0,
@@ -83,6 +87,8 @@ export function buildAddonsPayload({
   };
   const structural = {
     zaloAccounts: Number(zaloAccounts) || 0,
+    telegramAccounts: Number(telegramAccounts) || 0,
+    whatsappAccounts: Number(whatsappAccounts) || 0,
     emailAccounts: Number(emailAccounts) || 0,
     landingPages: Number(landingPages) || 0,
     chatbots: Number(chatbots) || 0,

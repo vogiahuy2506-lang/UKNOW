@@ -19,6 +19,9 @@ export const TOPUP_STRUCTURAL_KEYS = Object.freeze([
   'landing_pages',
   'chatbots',
   'employees',
+  // P6 (PLAN_TG_WA_DAY_DU) — slot tài khoản kênh Telegram/WhatsApp, giá mặc định = giá slot Zalo (migration 269).
+  'telegram_accounts',
+  'whatsapp_accounts',
   'storage_gb',
 ]);
 
@@ -154,6 +157,8 @@ export const TOPUP_GRANT_KEY_BY_RESOURCE = Object.freeze({
   zaloAccounts: 'zalo_accounts',
   emailAccounts: 'email_accounts',
   landingPages: 'landing_pages',
+  telegramAccounts: 'telegram_accounts',
+  whatsappAccounts: 'whatsapp_accounts',
 });
 
 function normalizeRow(row) {

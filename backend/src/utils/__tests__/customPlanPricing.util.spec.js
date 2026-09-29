@@ -527,3 +527,34 @@ describe('customPlanPricing.util', () => {
     });
   });
 });
+
+describe('customPlanPricing.util — P6 tài khoản Telegram/WhatsApp', () => {
+  const rows = [
+    ...sampleRows,
+    { item_key: 'telegram_accounts', plan_column: 'max_telegram_accounts', unit_price: 40000, unit_size: 1, included_qty: 0, min_qty: 0, max_qty: 50, step_qty: 1, is_active: true, sort_order: 51 },
+    { item_key: 'whatsapp_accounts', plan_column: 'max_whatsapp_accounts', unit_price: 40000, unit_size: 1, included_qty: 0, min_qty: 0, max_qty: 50, step_qty: 1, is_active: true, sort_order: 52 },
+  ];
+
+  test('không chọn → 0 tài khoản, không tốn tiền; cột gói ra 0 (KHÔNG null = không giới hạn)', () => {
+    const valid = validateQuantities(rows, minQty);
+    expect(valid.ok).toBe(true);
+    expect(valid.quantities.telegram_accounts).toBe(0);
+    const priced = computeCustomPlanPrice(rows, valid.quantities, 'monthly');
+    expect(priced.items.find((i) => i.itemKey === 'telegram_accounts')?.subtotal ?? 0).toBe(0);
+    const cols = mapQuantitiesToPlanColumns(rows, valid.quantities);
+    expect(cols.maxTelegramAccounts).toBe(0);
+    expect(cols.maxWhatsappAccounts).toBe(0);
+  });
+
+  test('chọn 2 Telegram + 1 WhatsApp → tính 3 × đơn giá, cột gói map đúng tên camelCase', () => {
+    const qty = { ...minQty, telegram_accounts: 2, whatsapp_accounts: 1 };
+    const valid = validateQuantities(rows, qty);
+    expect(valid.ok).toBe(true);
+    const base = computeCustomPlanPrice(rows, validateQuantities(rows, minQty).quantities, 'monthly').monthlyTotal;
+    const priced = computeCustomPlanPrice(rows, valid.quantities, 'monthly');
+    expect(priced.monthlyTotal - base).toBe(3 * 40000);
+    const cols = mapQuantitiesToPlanColumns(rows, valid.quantities);
+    expect(cols.maxTelegramAccounts).toBe(2);
+    expect(cols.maxWhatsappAccounts).toBe(1);
+  });
+});

@@ -64,11 +64,19 @@ describe('topupDisplay.util', () => {
         emails: { granted: 0, used: 0, remaining: 0 },
         aiCredits: { granted: 0, used: 0, remaining: 0 },
         zaloAccounts: 0,
+        telegramAccounts: 0,
+        whatsappAccounts: 0,
         emailAccounts: 0,
         landingPages: 0,
         chatbots: 0,
         employees: 0,
       });
+    });
+
+    it('P6 — chỉ mua slot tài khoản Telegram/WhatsApp cũng hiện addons', () => {
+      expect(buildAddonsPayload({ telegramAccounts: 2, whatsappAccounts: 1 })).toEqual(
+        expect.objectContaining({ telegramAccounts: 2, whatsappAccounts: 1 })
+      );
     });
 
     it('hiện khi chỉ mua slot cấu trúc', () => {

@@ -349,7 +349,10 @@ VALUES
   ('email_campaigns', 'max_email_campaigns', 10000, 1, 0, 0, 200, 1, TRUE, 130),
   ('email_templates', 'max_email_templates', 8000, 1, 0, 0, 500, 1, TRUE, 140),
   ('zalo_templates', 'max_zalo_templates', 8000, 1, 0, 0, 500, 1, TRUE, 150),
-  ('storage_gb', 'storage_limit_bytes', 15000, 1, 10, 10, 1000, 10, TRUE, 160);
+  ('storage_gb', 'storage_limit_bytes', 15000, 1, 10, 10, 1000, 10, TRUE, 160),
+  -- Migration 269 (P6): TK Telegram/WhatsApp — gia don vi = gia TK Zalo (40000), khach chon 0 duoc (min/included 0).
+  ('telegram_accounts', 'max_telegram_accounts', 40000, 1, 0, 0, 50, 1, TRUE, 51),
+  ('whatsapp_accounts', 'max_whatsapp_accounts', 40000, 1, 0, 0, 50, 1, TRUE, 52);
 
 -- Khớp production (PLAN_SCHEMA_BUOC2): id/plan_id int4, amount numeric,
 -- status/payment_method varchar(50), FK ON DELETE NO ACTION (giữ lịch sử tiền).
@@ -491,7 +494,10 @@ VALUES
   ('landing_pages',  30000, 1, 1, 200, TRUE,  60),
   ('chatbots',      100000, 1, 1, 100, TRUE,  70),
   ('employees',      50000, 1, 1, 100, FALSE, 80),
-  ('storage_gb',     25000, 5, 5, 200, TRUE,  90);
+  ('storage_gb',     25000, 5, 5, 200, TRUE,  90),
+  -- Migration 269 (P6): slot TK Telegram/WhatsApp — gia mac dinh = gia slot Zalo (50000).
+  ('telegram_accounts', 50000, 1, 1, 50, TRUE, 41),
+  ('whatsapp_accounts', 50000, 1, 1, 50, TRUE, 42);
 
 CREATE TABLE topup_grants (
   id         BIGSERIAL PRIMARY KEY,

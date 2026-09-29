@@ -202,6 +202,8 @@ export function mapQuantitiesToPlanColumns(configRows, quantities) {
     monthly_email_limit: 'monthlyEmailLimit',
     ai_credits_per_period: 'aiCreditsPerPeriod',
     max_zalo_accounts: 'maxZaloAccounts',
+    max_telegram_accounts: 'maxTelegramAccounts',
+    max_whatsapp_accounts: 'maxWhatsappAccounts',
     max_email_accounts: 'maxEmailAccounts',
     max_landing_pages: 'maxLandingPages',
     max_chatbots: 'maxChatbots',

@@ -363,6 +363,8 @@ describe('UserController.getProfile', () => {
           emails: { granted: 0, used: 0, remaining: 0 },
           aiCredits: { granted: 50, used: 0, remaining: 50 },
           zaloAccounts: 0,
+          telegramAccounts: 0,
+          whatsappAccounts: 0,
           emailAccounts: 0,
           landingPages: 0,
           chatbots: 0,
