@@ -14,6 +14,7 @@ import {
   mergeVariablesPreferNonEmpty,
 } from './templateVariableAutoMap.js';
 import { generateIdempotencyKey } from '../../../utils/idempotency.util.js';
+import { formatCampaignTime } from './campaignDateTime.helpers.js';
 
 /**
  * Trần chạy thử cho 3 nút Zalo (cá nhân/kết bạn/nhóm) — PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối
@@ -480,6 +481,28 @@ export const createCampaignNodeRunner = (deps) => {
       zaloName,
       groupName,
     };
+  };
+
+  /**
+   * PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28 PR-2 Việc 7 — backend giờ có thể trả item
+   * `status:'deferred'` (cổng tryAcquireOutboundSlot dùng chung nhịp với chiến dịch). Không có
+   * nhánh riêng thì "Chạy thử" coi nó như một item lạ, không báo rõ lý do — đúng lúc có chiến dịch
+   * đang gửi cùng tài khoản, người bấm "Chạy thử" sẽ thấy kết quả khó hiểu nhất.
+   */
+  const isDeferredZaloItem = (item) => item?.status === 'deferred';
+
+  const DEFERRED_REASON_LABELS = {
+    phone_lookup_cooldown: 'tài khoản đang bị khoá tra số điện thoại',
+    quiet_hours: 'đang trong khung giờ yên lặng',
+    rate_limited: 'tài khoản đã đạt giới hạn gửi trong giờ',
+    inter_message_delay: 'cần giãn cách thêm giữa các tin',
+  };
+
+  const buildDeferredProgressMessage = (item) => {
+    const label = DEFERRED_REASON_LABELS[item?.reason] || 'hệ thống đang bận';
+    const resumeAtMs = Number(item?.resumeAt);
+    const timeLabel = Number.isFinite(resumeAtMs) ? formatCampaignTime(resumeAtMs) : null;
+    return `Tạm hoãn: ${label}${timeLabel ? ` — thử lại sau ${timeLabel}` : ''}`;
   };
 
   const collectRecipientEntriesFromSource = (ctx, input = {}) => {
@@ -1921,8 +1944,10 @@ export const createCampaignNodeRunner = (deps) => {
           const current = results.length;
           const latest = results[current - 1] || null;
           onProgress({
-            status: latest?.status === 'failed' ? 'warning' : 'info',
-            message: `Đang gửi tin Zalo cá nhân (${current}/${totalAttempts})`,
+            status: isDeferredZaloItem(latest) ? 'warning' : (latest?.status === 'failed' ? 'warning' : 'info'),
+            message: isDeferredZaloItem(latest)
+              ? buildDeferredProgressMessage(latest)
+              : `Đang gửi tin Zalo cá nhân (${current}/${totalAttempts})`,
             result: {
               input: {
                 accountId: selectedAccount.id,
@@ -2175,8 +2200,10 @@ export const createCampaignNodeRunner = (deps) => {
           }
           if (onProgress) {
             onProgress({
-              status: item?.status === 'failed' ? 'warning' : 'info',
-              message: `Đang gửi tin Zalo cá nhân (${results.length}/${pendingRecipients.length})`,
+              status: isDeferredZaloItem(item) ? 'warning' : (item?.status === 'failed' ? 'warning' : 'info'),
+              message: isDeferredZaloItem(item)
+                ? buildDeferredProgressMessage(item)
+                : `Đang gửi tin Zalo cá nhân (${results.length}/${pendingRecipients.length})`,
               result: {
                 input: {
                   accountId: selectedAccount.id,
@@ -2199,7 +2226,11 @@ export const createCampaignNodeRunner = (deps) => {
       };
 
       if (zaloPreviewPoolParallel > 1) {
-        for (let offset = 0; offset < pendingRecipients.length; offset += zaloPreviewPoolParallel) {
+        // PR-2 Việc 7 — batch ĐANG bay khi thấy deferred thì không huỷ được (đã gửi request), nhưng
+        // KHÔNG lên lịch thêm batch mới nữa: mọi request sau cũng cùng accountId+channel nên gần như
+        // chắc chắn cũng bị hoãn — chờ thêm chỉ tốn thời gian người bấm "Chạy thử" đang đợi.
+        let sawDeferred = false;
+        for (let offset = 0; offset < pendingRecipients.length && !sawDeferred; offset += zaloPreviewPoolParallel) {
           const batch = pendingRecipients.slice(offset, offset + zaloPreviewPoolParallel);
 
           await Promise.all(
@@ -2219,6 +2250,8 @@ export const createCampaignNodeRunner = (deps) => {
                 message,
                 campaignId: campaignIdNum,
               }, { signal });
+              const stepItems = Array.isArray(response.data?.data?.items) ? response.data.data.items : [];
+              if (stepItems.some(isDeferredZaloItem)) sawDeferred = true;
               pushItemsFromResponse(response, accountForSend, recipient);
             })
           );
@@ -2257,8 +2290,10 @@ export const createCampaignNodeRunner = (deps) => {
           }
           if (onProgress) {
             onProgress({
-              status: item?.status === 'failed' ? 'warning' : 'info',
-              message: `Đang gửi tin Zalo cá nhân (${idx + 1}/${allItems.length})`,
+              status: isDeferredZaloItem(item) ? 'warning' : (item?.status === 'failed' ? 'warning' : 'info'),
+              message: isDeferredZaloItem(item)
+                ? buildDeferredProgressMessage(item)
+                : `Đang gửi tin Zalo cá nhân (${idx + 1}/${allItems.length})`,
               result: {
                 input: {
                   accountId: selectedAccount.id,
@@ -2395,6 +2430,10 @@ export const createCampaignNodeRunner = (deps) => {
           ...item,
           requestMessage: renderedMessage,
         })));
+        // PR-2 Việc 7 — bị hoãn thì mọi lời mời kết bạn kế tiếp (cùng accountId+channel) gần như
+        // chắc chắn cũng bị hoãn — dừng ngay, đừng bắt người bấm "Chạy thử" ngồi chờ thêm 150 giây
+        // mỗi lời mời chỉ để thấy thêm deferred.
+        if (items.some(isDeferredZaloItem)) break;
       }
 
       const results = [];
@@ -2403,8 +2442,10 @@ export const createCampaignNodeRunner = (deps) => {
         results.push(item);
         if (onProgress) {
           onProgress({
-            status: item?.status === 'failed' ? 'warning' : 'info',
-            message: `Đang gửi lời mời kết bạn (${idx + 1}/${allItems.length})`,
+            status: isDeferredZaloItem(item) ? 'warning' : (item?.status === 'failed' ? 'warning' : 'info'),
+            message: isDeferredZaloItem(item)
+              ? buildDeferredProgressMessage(item)
+              : `Đang gửi lời mời kết bạn (${idx + 1}/${allItems.length})`,
             result: {
               input: {
                 accountId: selectedAccount.id,
@@ -2497,8 +2538,10 @@ export const createCampaignNodeRunner = (deps) => {
           const current = results.length;
           const latest = results[current - 1] || null;
           onProgress({
-            status: latest?.status === 'failed' ? 'warning' : 'info',
-            message: `Đang gửi tin nhắn nhóm Zalo (${current}/${totalAttempts})`,
+            status: isDeferredZaloItem(latest) ? 'warning' : (latest?.status === 'failed' ? 'warning' : 'info'),
+            message: isDeferredZaloItem(latest)
+              ? buildDeferredProgressMessage(latest)
+              : `Đang gửi tin nhắn nhóm Zalo (${current}/${totalAttempts})`,
             result: {
               input: { accountId: selectedAccount.id },
               output: {
@@ -2577,6 +2620,10 @@ export const createCampaignNodeRunner = (deps) => {
               });
               emitProgress();
             });
+            // PR-2 Việc 7 — bị hoãn thì các nhóm còn lại của CÙNG step (cùng accountId+channel) gần
+            // như chắc chắn cũng bị hoãn — dừng step này ngay, đừng bắt chờ thêm nhiều lượt
+            // waitRandomTemplateStepDelay chỉ để thấy thêm deferred.
+            if (stepItems.some(isDeferredZaloItem)) break;
           }
         };
         /**
@@ -2674,8 +2721,10 @@ export const createCampaignNodeRunner = (deps) => {
         });
         if (onProgress) {
           onProgress({
-            status: item?.status === 'failed' ? 'warning' : 'info',
-            message: `Đang gửi tin nhắn nhóm Zalo (${idx + 1}/${allItems.length})`,
+            status: isDeferredZaloItem(item) ? 'warning' : (item?.status === 'failed' ? 'warning' : 'info'),
+            message: isDeferredZaloItem(item)
+              ? buildDeferredProgressMessage(item)
+              : `Đang gửi tin nhắn nhóm Zalo (${idx + 1}/${allItems.length})`,
             result: {
               input: {
                 accountId: selectedAccount.id,

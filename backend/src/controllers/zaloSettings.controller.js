@@ -47,6 +47,7 @@ import {
   computeRequestFingerprint,
   resolveRequestIdempotencyKey,
 } from '../services/quota/sendQuotaKey.service.js';
+import { getSharedZaloRateLimiter } from '../services/campaign/zaloOutboundRateLimiterSingleton.js';
 
 
 class ZaloSettingsController {
@@ -2429,26 +2430,34 @@ class ZaloSettingsController {
       );
 
       const items = [];
-      const parsePositiveInt = (value, defaultValue) => {
-        const parsed = Number.parseInt(value, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
-        return parsed;
-      };
-      const minDelayMs = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MIN_MS, 0)
-        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
-      const maxDelayMs = parsePositiveInt(process.env.ZALO_PERSONAL_INTER_MESSAGE_MAX_MS, 0)
-        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
-      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
       const rawHeaderKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.idempotencyKey || req.body?.requestKey || null;
       const baseRequestKey = resolveRequestIdempotencyKey(rawHeaderKey);
 
       for (let i = 0; i < normalizedRecipients.length; i++) {
         const recipient = normalizedRecipients[i];
-        if (i > 0) {
-          const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
-          console.info(`[CampaignBuilder][ZaloPersonalPreviewDelay] delay_ms=${delayMs} to=${recipient}`);
-          await sleep(delayMs);
+
+        // PR-2 Việc 5 — cổng không-ngủ, dùng CHUNG nhịp với chiến dịch trên cùng accountId+channel,
+        // đặt TRƯỚC reserveSendQuota (bị hoãn thì không giữ chỗ hạn mức, không gửi, không ghi usage_logs).
+        const gate = getSharedZaloRateLimiter().tryAcquireOutboundSlot({
+          accountId: account.id,
+          channel: 'zalo_personal',
+          accountHint: account,
+          requiresPhoneLookup: recipientType === 'phone',
+        });
+        if (!gate.ok) {
+          const resumeAt = Date.now() + gate.waitMs;
+          for (let j = i; j < normalizedRecipients.length; j++) {
+            items.push({
+              recipient: normalizedRecipients[j],
+              recipientType,
+              status: 'deferred',
+              reason: gate.reason,
+              retryAfterMs: gate.waitMs,
+              resumeAt,
+            });
+          }
+          break;
         }
 
         let reservation = null;
@@ -2528,6 +2537,12 @@ class ZaloSettingsController {
             attachments: preparedAttachments,
           });
         } catch (providerErr) {
+          // PR-2 Việc 5 — Zalo báo tra số quá nhiều: khoá tra số cho TÀI KHOẢN này (Map dùng chung
+          // với chiến dịch) để chiến dịch đang chạy cùng tài khoản cũng dừng tra số ngay, không chờ
+          // tới lần tra số riêng của nó mới phát hiện.
+          if (getSharedZaloRateLimiter().isZaloPersonalPhoneLookupRateLimitError(providerErr)) {
+            getSharedZaloRateLimiter().scheduleZaloPersonalPhoneLookupCooldown(account.id);
+          }
           const classified = classifyZaloSendError(providerErr?.message || 'send_failed');
           if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
             try {
@@ -2760,26 +2775,32 @@ class ZaloSettingsController {
       });
 
       const items = [];
-      const parsePositiveInt = (value, defaultValue) => {
-        const parsed = Number.parseInt(value, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
-        return parsed;
-      };
-      const minDelayMs = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MIN_MS, 0)
-        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
-      const maxDelayMs = parsePositiveInt(process.env.ZALO_FRIEND_REQUEST_INTER_MESSAGE_MAX_MS, 0)
-        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
-      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
       const rawHeaderKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.idempotencyKey || req.body?.requestKey || null;
       const baseRequestKey = resolveRequestIdempotencyKey(rawHeaderKey);
 
       for (let i = 0; i < normalizedRecipients.length; i++) {
         const phone = normalizedRecipients[i];
-        if (i > 0) {
-          const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
-          console.info(`[CampaignBuilder][ZaloFriendPreviewDelay] delay_ms=${delayMs} to=${phone}`);
-          await sleep(delayMs);
+
+        // PR-2 Việc 5 — kết bạn LUÔN tra số (requiresPhoneLookup: true).
+        const gate = getSharedZaloRateLimiter().tryAcquireOutboundSlot({
+          accountId: account.id,
+          channel: 'zalo_friend_request',
+          accountHint: account,
+          requiresPhoneLookup: true,
+        });
+        if (!gate.ok) {
+          const resumeAt = Date.now() + gate.waitMs;
+          for (let j = i; j < normalizedRecipients.length; j++) {
+            items.push({
+              phone: normalizedRecipients[j],
+              status: 'deferred',
+              reason: gate.reason,
+              retryAfterMs: gate.waitMs,
+              resumeAt,
+            });
+          }
+          break;
         }
 
         let reservation = null;
@@ -2852,6 +2873,11 @@ class ZaloSettingsController {
             message,
           });
         } catch (error) {
+          // PR-2 Việc 5 — Zalo báo tra số quá nhiều: khoá tra số cho tài khoản này, dùng chung Map
+          // với chiến dịch để chiến dịch cùng tài khoản cũng dừng tra số ngay.
+          if (getSharedZaloRateLimiter().isZaloPersonalPhoneLookupRateLimitError(error)) {
+            getSharedZaloRateLimiter().scheduleZaloPersonalPhoneLookupCooldown(account.id);
+          }
           const classified = classifyZaloSendError(error?.message || 'friend_request_failed');
           if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
             try {
@@ -2983,26 +3009,32 @@ class ZaloSettingsController {
       );
 
       const items = [];
-      const parsePositiveInt = (value, defaultValue) => {
-        const parsed = Number.parseInt(value, 10);
-        if (!Number.isFinite(parsed) || parsed <= 0) return defaultValue;
-        return parsed;
-      };
-      const minDelayMs = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MIN_MS, 0)
-        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT, 1000);
-      const maxDelayMs = parsePositiveInt(process.env.ZALO_GROUP_INTER_MESSAGE_MAX_MS, 0)
-        || parsePositiveInt(process.env.ZALO_OUTBOUND_INTER_MESSAGE_MAX_MS_DEFAULT, 1000);
-      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
       const rawGroupHeaderKey = req.headers['idempotency-key'] || req.headers['x-idempotency-key'] || req.body?.idempotencyKey || req.body?.requestKey || null;
       const baseGroupRequestKey = resolveRequestIdempotencyKey(rawGroupHeaderKey);
 
       for (let i = 0; i < normalizedGroupIds.length; i++) {
         const groupId = normalizedGroupIds[i];
-        if (i > 0) {
-          const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
-          console.info(`[CampaignBuilder][ZaloGroupPreviewDelay] delay_ms=${delayMs} to=${groupId}`);
-          await sleep(delayMs);
+
+        // PR-2 Việc 5 — nhóm gửi thẳng theo groupId, không tra số (requiresPhoneLookup: false).
+        const gate = getSharedZaloRateLimiter().tryAcquireOutboundSlot({
+          accountId: account.id,
+          channel: 'zalo_group',
+          accountHint: account,
+          requiresPhoneLookup: false,
+        });
+        if (!gate.ok) {
+          const resumeAt = Date.now() + gate.waitMs;
+          for (let j = i; j < normalizedGroupIds.length; j++) {
+            items.push({
+              groupId: normalizedGroupIds[j],
+              status: 'deferred',
+              reason: gate.reason,
+              retryAfterMs: gate.waitMs,
+              resumeAt,
+            });
+          }
+          break;
         }
 
         let reservation = null;

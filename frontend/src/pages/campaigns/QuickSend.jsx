@@ -257,6 +257,40 @@ function getQuickSendRandomDelayMs(minMs, maxMs) {
   return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
 }
 
+/**
+ * PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28 PR-2 Việc 6 — backend giờ có thể trả item
+ * `status:'deferred'` (cổng tryAcquireOutboundSlot dùng chung nhịp với chiến dịch). Chỉ tự chờ rồi
+ * gửi lại NGAY trong phiên này khi lý do là giãn cách bình thường VÀ thời gian chờ ngắn (≤5 phút —
+ * production 80–150s/tin nên trong thực tế luôn rơi vào nhánh này); lý do khác (giờ nghỉ/trần
+ * giờ/khoá tra số) hoặc chờ dài hơn thì KHÔNG tự lặp mãi — dừng cả đợt, để người dùng tự bấm gửi
+ * lại sau.
+ */
+const MAX_DEFERRED_RESEND_WAIT_MS = 5 * 60 * 1000;
+
+const DEFERRED_REASON_I18N_KEYS = {
+  phone_lookup_cooldown: 'quickSend.deferredReasonPhoneLookupCooldown',
+  quiet_hours: 'quickSend.deferredReasonQuietHours',
+  rate_limited: 'quickSend.deferredReasonRateLimited',
+  inter_message_delay: 'quickSend.deferredReasonInterMessageDelay',
+};
+
+function resolveDeferredReasonLabel(t, reason) {
+  const key = DEFERRED_REASON_I18N_KEYS[reason] || 'quickSend.deferredReasonUnknown';
+  return t(key);
+}
+
+/** Giờ:phút theo giờ Việt Nam (Asia/Ho_Chi_Minh) — KHÔNG dùng giờ hệ thống/trình duyệt của người xem. */
+function formatResumeTimeVn(resumeAtMs) {
+  const date = new Date(Number(resumeAtMs));
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleTimeString('vi-VN', {
+    hourCycle: 'h23',
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 const QuickSend = () => {
   const { t } = useI18n();
   const location = useLocation();
@@ -341,6 +375,10 @@ const QuickSend = () => {
   const [sendProgressMessage, setSendProgressMessage] = useState('');
   // Việc 1 — huỷ vòng chờ giãn cách khi rời trang giữa chừng (unmount).
   const sendAbortControllerRef = useRef(null);
+  // PR-2 Việc 6 — backend hoãn (deferred) vì lý do KHÔNG tự chờ được (giờ nghỉ/trần giờ/khoá tra
+  // số) hoặc chờ quá dài: dừng cả đợt, hiện thông báo "Tạm dừng vì …, gửi tiếp sau HH:mm" thay vì
+  // coi là lỗi. null khi không có gì đang bị hoãn.
+  const [deferredNotice, setDeferredNotice] = useState(null);
   // Retry state — `failedRecipients` lets the user resend only to recipients
   // that previously failed (e.g. transient SMTP / Zalo session errors).
   const [failedRecipients, setFailedRecipients] = useState([]);
@@ -934,6 +972,9 @@ const QuickSend = () => {
     const failureSamples = new Map();
     let quotaExceededEarly = false;
     const failed = [];
+    // PR-2 Việc 6 — set khi backend hoãn vì lý do KHÔNG tự chờ được trong phiên này (giờ nghỉ/trần
+    // giờ/khoá tra số) hoặc chờ quá dài; khác null nghĩa là đợt đã dừng SỚM, không phải do lỗi.
+    let deferredStop = null;
 
     // Một khoá cho CẢ ĐỢT (không phải mỗi request một khoá ngẫu nhiên như trước — bấm gửi
     // 2 lần với cùng nội dung/người nhận trước đây ra 2 khoá khác nhau, gửi trùng thật).
@@ -997,6 +1038,31 @@ const QuickSend = () => {
       });
     };
 
+    // PR-2 Việc 6 — gọi sendFn(), tự chờ-rồi-gửi-lại (CÙNG idempotencyKey, không sinh khoá mới) khi
+    // backend hoãn vì giãn cách bình thường và chờ ngắn; báo "cần dừng cả đợt" cho các lý do khác.
+    const sendZaloRecipientWithDeferRetry = async (sendFn) => {
+      // eslint-disable-next-line no-constant-condition -- thoát bằng return bên trong, không phải counter.
+      while (true) {
+        const res = await sendFn();
+        const item = res?.data?.data?.items?.[0];
+        if (item?.status === 'deferred') {
+          const retryAfterMs = Number(item.retryAfterMs) || 0;
+          if (item.reason === 'inter_message_delay' && retryAfterMs <= MAX_DEFERRED_RESEND_WAIT_MS) {
+            await quickSendSleepWithCountdown(retryAfterMs, sendAbortController.signal, (seconds) => {
+              setSendProgressMessage(t('quickSend.deferredWaitingLabel', { seconds }));
+            });
+            continue;
+          }
+          return {
+            deferred: true,
+            reason: item.reason || 'unknown',
+            resumeAt: Number(item.resumeAt) || (Date.now() + retryAfterMs),
+          };
+        }
+        return { deferred: false, res };
+      }
+    };
+
     if (isEmail) {
       const { html, text } = resolveEmailBody();
       const subject = activeContent.subject || activeTemplate?.subject || 'Không có tiêu đề';
@@ -1034,13 +1100,19 @@ const QuickSend = () => {
         await waitBeforeNextZaloSend(CHANNEL_TYPES.ZALO_GROUP, idx, recipients.length);
         try {
           // recipient.phone == groupId (xem finalRecipients() — dùng chung shape {email,phone,name}).
-          const res = await zaloSettingsApiService.sendGroupMessage({
+          const outcome = await sendZaloRecipientWithDeferRetry(() => zaloSettingsApiService.sendGroupMessage({
             accountId: selectedZaloAccount.id,
             groupId: recipient.phone,
             message,
             attachments,
-          }, { idempotencyKey: `${baseKey}-${idx}` });
-          throwIfZaloItemFailed(res);
+          }, { idempotencyKey: `${baseKey}-${idx}` }));
+          if (outcome.deferred) {
+            deferredStop = { reason: outcome.reason, resumeAt: outcome.resumeAt };
+            failed.push(recipient);
+            for (let j = idx + 1; j < recipients.length; j++) failed.push(recipients[j]);
+            break;
+          }
+          throwIfZaloItemFailed(outcome.res);
           successCount++;
         } catch (err) {
           console.error('Send Zalo group error to:', recipient.name, err);
@@ -1060,14 +1132,20 @@ const QuickSend = () => {
       for (const [idx, recipient] of recipients.entries()) {
         await waitBeforeNextZaloSend(CHANNEL_TYPES.ZALO, idx, recipients.length);
         try {
-          const res = await zaloSettingsApiService.sendMessage({
+          const outcome = await sendZaloRecipientWithDeferRetry(() => zaloSettingsApiService.sendMessage({
             accountId: selectedZaloAccount.id,
             phone: recipient.phone,
             recipientType: zaloRecipientType,
             message,
             attachments,
-          }, { idempotencyKey: `${baseKey}-${idx}` });
-          throwIfZaloItemFailed(res);
+          }, { idempotencyKey: `${baseKey}-${idx}` }));
+          if (outcome.deferred) {
+            deferredStop = { reason: outcome.reason, resumeAt: outcome.resumeAt };
+            failed.push(recipient);
+            for (let j = idx + 1; j < recipients.length; j++) failed.push(recipients[j]);
+            break;
+          }
+          throwIfZaloItemFailed(outcome.res);
           successCount++;
         } catch (err) {
           console.error('Send Zalo error to:', recipient.phone, err);
@@ -1088,7 +1166,7 @@ const QuickSend = () => {
     // testSendActionKeyRef đã dùng ở handleTestSend).
     sendActionKeyRef.current = { key: null, signature: null };
     setSendProgressMessage('');
-    return { isEmail, successCount, failCount, failureSamples, failed };
+    return { isEmail, successCount, failCount, failureSamples, failed, deferredStop };
   }, [
     selectedChannel,
     selectedEmailAccount,
@@ -1099,6 +1177,7 @@ const QuickSend = () => {
     activeTemplate,
     activeAttachments,
     zaloRecipientType,
+    t,
   ]);
 
   // Send quick campaign - gửi trực tiếp không cần tạo campaign
@@ -1157,10 +1236,18 @@ const QuickSend = () => {
     try {
       const totalRecipients = recipients.length;
       const result = await runSendLoop(recipients);
-      const { isEmail, successCount, failCount, failureSamples, failed } = result;
+      const { isEmail, successCount, failCount, failureSamples, failed, deferredStop } = result;
+      setDeferredNotice(deferredStop || null);
 
       if (successCount === 0) {
-        toast.error(buildFailureToast(failureSamples, isEmail));
+        if (deferredStop) {
+          toast.error(t('quickSend.deferredResumeNotice', {
+            reason: resolveDeferredReasonLabel(t, deferredStop.reason),
+            time: formatResumeTimeVn(deferredStop.resumeAt),
+          }));
+        } else {
+          toast.error(buildFailureToast(failureSamples, isEmail));
+        }
         setSendResult({
           success: false,
           recipientsCount: totalRecipients,
@@ -1171,7 +1258,12 @@ const QuickSend = () => {
         setFailedRecipients(failed);
         setCurrentStep(QUICK_SEND_STEPS.DONE);
       } else {
-        if (failCount > 0 && failureSamples.size > 0) {
+        if (deferredStop) {
+          toast.error(t('quickSend.deferredResumeNotice', {
+            reason: resolveDeferredReasonLabel(t, deferredStop.reason),
+            time: formatResumeTimeVn(deferredStop.resumeAt),
+          }));
+        } else if (failCount > 0 && failureSamples.size > 0) {
           // Partial success — show why some failed (single toast, not one per recipient).
           toast.error(buildFailureToast(failureSamples, isEmail));
         }
@@ -1184,7 +1276,9 @@ const QuickSend = () => {
         });
         setFailedRecipients(failed);
         setCurrentStep(QUICK_SEND_STEPS.DONE);
-        toast.success(t('quickSend.sendSuccess'));
+        if (!deferredStop) {
+          toast.success(t('quickSend.sendSuccess'));
+        }
       }
     } catch (error) {
       console.error('Quick send error:', error);
@@ -1212,12 +1306,18 @@ const QuickSend = () => {
     setIsRetrying(true);
     try {
       const result = await runSendLoop(failedRecipients);
-      const { successCount, failCount, failureSamples, failed } = result;
+      const { successCount, failCount, failureSamples, failed, deferredStop } = result;
+      setDeferredNotice(deferredStop || null);
       const previouslySucceeded = (sendResult?.successCount || 0);
       const totalSuccess = previouslySucceeded + successCount;
       const totalRecipients = sendResult?.recipientsCount || failedRecipients.length;
 
-      if (failCount > 0 && failureSamples.size > 0) {
+      if (deferredStop) {
+        toast.error(t('quickSend.deferredResumeNotice', {
+          reason: resolveDeferredReasonLabel(t, deferredStop.reason),
+          time: formatResumeTimeVn(deferredStop.resumeAt),
+        }));
+      } else if (failCount > 0 && failureSamples.size > 0) {
         toast.error(buildFailureToast(failureSamples, selectedChannel === CHANNEL_TYPES.EMAIL));
       }
       setSendResult({
@@ -1228,7 +1328,7 @@ const QuickSend = () => {
         failureTypes: Array.from(failureSamples.keys()),
       });
       setFailedRecipients(failed);
-      if (successCount > 0) {
+      if (successCount > 0 && !deferredStop) {
         toast.success(
           t('quickSend.retrySuccess', { count: successCount }) ||
           `Đã gửi lại thành công ${successCount} người.`,
@@ -1274,6 +1374,7 @@ const QuickSend = () => {
     sendActionKeyRef.current = { key: null, signature: null };
     setSendResult(null);
     setFailedRecipients([]);
+    setDeferredNotice(null);
   };
 
   // Đổi kênh gửi — Email dùng subject+HTML, Zalo (cá nhân/nhóm) chỉ dùng plain text. Đổi
@@ -2231,10 +2332,20 @@ const QuickSend = () => {
                 <p className="text-gray-500 mb-4">{t('quickSend.sendAllFailedDesc')}</p>
               </>
             )}
+            {deferredNotice && (
+              <p className="text-amber-600 text-sm mb-4">
+                {t('quickSend.deferredResumeNotice', {
+                  reason: resolveDeferredReasonLabel(t, deferredNotice.reason),
+                  time: formatResumeTimeVn(deferredNotice.resumeAt),
+                })}
+              </p>
+            )}
             {failedRecipients.length > 0 && !isRetrying && (
               <p className="text-xs text-gray-400 mb-3">
-                {t('quickSend.failedRecipientCount', { count: failedRecipients.length }) ||
-                  `${failedRecipients.length} người nhận bị lỗi`}
+                {deferredNotice
+                  ? t('quickSend.deferredRecipientCount', { count: failedRecipients.length })
+                  : (t('quickSend.failedRecipientCount', { count: failedRecipients.length }) ||
+                     `${failedRecipients.length} người nhận bị lỗi`)}
               </p>
             )}
             <div className="flex justify-center gap-3 flex-wrap">

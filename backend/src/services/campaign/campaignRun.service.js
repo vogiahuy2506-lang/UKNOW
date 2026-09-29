@@ -10,7 +10,7 @@ import campaignChannelRunner, { createCampaignChannelQuotaGate } from './campaig
 import campaignShutdownGate from './campaignShutdownGate.js';
 import campaignZaloSenderService from './campaignZaloSender.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
-import { buildZaloRateLimiterFromEnv } from './buildZaloRateLimiterFromEnv.js';
+import { getSharedZaloRateLimiter } from './zaloOutboundRateLimiterSingleton.js';
 import {
   isZaloGroupUnreachableError,
   isZaloSenderBlockedError,
@@ -175,7 +175,9 @@ class CampaignRunService {
     }
 
     // --- Zalo rate-limit state & policy (shared env builder with diagnostic runner) ---
-    this.zaloRateLimiter = buildZaloRateLimiterFromEnv();
+    // PR-2 Việc 5 — instance dùng CHUNG với zaloSettings.controller.js (gửi nhanh), không phải
+    // instance riêng của tiến trình chiến dịch nữa (xem zaloOutboundRateLimiterSingleton.js).
+    this.zaloRateLimiter = getSharedZaloRateLimiter();
 
     // PR-4 (tách tầng kênh gửi) — quotaGate THẬT cho node kênh 'adapter' (thay bản throw
     // CHANNEL_QUOTA_NOT_WIRED của PR-3). Property (không phải hằng số) để test override bằng bản

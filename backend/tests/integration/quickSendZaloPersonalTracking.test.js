@@ -92,7 +92,7 @@ describe('POST /api/zalo/preview/send-personal — ghi lịch sử zalo_messages
     expect(rows[0].channel).toBe('zalo_personal');
   });
 
-  it('gửi 2 người trong 1 request -> mỗi dòng zalo_messages có tracking_token RIÊNG (UNIQUE), không đụng nhau', async () => {
+  it('gửi 2 người trong 1 request, không nghỉ giữa 2 lần gọi -> người 1 success (PR-2 Việc 5: cổng chặn người 2 deferred)', async () => {
     const user = await createUser();
     const token = await loginAs(user);
     const accountId = await createConnectedZaloAccount(user.id);
@@ -111,17 +111,33 @@ describe('POST /api/zalo/preview/send-personal — ghi lịch sử zalo_messages
         message: 'Xin chào',
       });
 
+    // PR-2 Việc 5 (PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28) — cổng tryAcquireOutboundSlot giờ chặn
+    // người 2 trong CÙNG request vì không có gì chờ giữa 2 lần gọi (đúng Nghiệm thu PR-2: "Request 2
+    // người | người 1 success, người 2 deferred, không ngủ trong request"). Trước PR-2, cả 2 đều
+    // success vì backend không có cổng nào chặn khi gọi liên tiếp không nghỉ.
     expect(res.status).toBe(200);
-    expect(res.body.data.items.every((item) => item.status === 'success')).toBe(true);
+    expect(res.body.data.items[0].status).toBe('success');
+    expect(res.body.data.items[1].status).toBe('deferred');
+    expect(res.body.data.items[1].reason).toBe('inter_message_delay');
 
     const { rows } = await db.query(
       `SELECT tracking_token FROM zalo_messages WHERE account_id = $1 ORDER BY id`,
       [accountId]
     );
-    expect(rows).toHaveLength(2);
+    // Người bị deferred KHÔNG giữ chỗ hạn mức, KHÔNG gửi, KHÔNG ghi usage_logs (plan Việc 5) — chỉ
+    // người 1 có dòng trong zalo_messages.
+    expect(rows).toHaveLength(1);
     expect(rows[0].tracking_token).toMatch(/^zpv_/);
-    expect(rows[1].tracking_token).toMatch(/^zpv_/);
-    expect(rows[0].tracking_token).not.toBe(rows[1].tracking_token);
+
+    // Đột biến "đặt cổng sau reserveSendQuota" sẽ làm ca này đỏ: cổng bị hoãn phải nằm TRƯỚC
+    // reserveSendQuota, nên người 2 (deferred) KHÔNG được giữ chỗ hạn mức nào cả — chỉ có đúng 1
+    // dòng send_quota_reservations (của người 1).
+    const { rows: reservationRows } = await db.query(
+      `SELECT id FROM send_quota_reservations WHERE billing_user_id = $1 AND channel = 'zalo'`,
+      [user.id]
+    );
+    expect(reservationRows).toHaveLength(1);
+    expect(fakeSendMessage).toHaveBeenCalledTimes(1);
   });
 
   // Review PR-1 — production chạy hạn mức KHÔNG enforce, tức đi nhánh insert trực tiếp (không qua

@@ -6,6 +6,7 @@
 import bcrypt from 'bcryptjs';
 import db from '../../../src/config/database.js';
 import { _clearQuotaCache } from '../../../src/utils/userSendLimit.util.js';
+import { _resetSharedZaloRateLimiterForTests } from '../../../src/services/campaign/zaloOutboundRateLimiterSingleton.js';
 
 /**
  * Truncate hết bảng dữ liệu giữa các test để bảo đảm test idempotent.
@@ -138,6 +139,10 @@ export async function truncateAll() {
   // (TTL 10s, key theo billingUserId) để limits/counts của test trước không
   // rò sang test sau trong cùng process (runInBand dùng chung process cho mọi file).
   _clearQuotaCache();
+  // PR-2 Việc 5 — cùng lý do: accountId lặp số cũ giữa các test, Map nhịp gửi Zalo (dùng chung
+  // giữa campaignRun.service.js và zaloSettings.controller.js) phải reset theo, không thì
+  // nextAllowedAtMs/cooldown tra số của test trước rò sang test sau trùng accountId.
+  _resetSharedZaloRateLimiterForTests();
   await retryOnCleanupContention(truncateAllTables);
 }
 

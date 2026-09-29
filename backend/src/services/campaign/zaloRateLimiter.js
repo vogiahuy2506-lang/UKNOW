@@ -330,6 +330,106 @@ class ZaloRateLimiter {
   }
 
   /**
+   * PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28 PR-2 Việc 4 — cổng KHÔNG-NGỦ dùng cho gửi nhanh/preview
+   * (request/response, không thể "ngủ" 80–150s trong 1 request — Cloudflare cắt /api ở 100s, axios
+   * 10s). Hàm ĐỒNG BỘ (không `await` giữa kiểm và ghi) → nguyên tử trong một tiến trình Node, đúng
+   * giả định "chỉ một backend" (CLAUDE.md — Campaign runtime single process only).
+   *
+   * Cùng 4 cổng, CÙNG THỨ TỰ với `enforceOutboundPolicyBeforeSend`: khoá tra số → giờ nghỉ → trần
+   * giờ → giãn cách. Dùng CHUNG state (`zaloOutboundRateLimitState`) với chiến dịch — accountId+
+   * channel nào chiến dịch đang gửi thì gửi nhanh trên CÙNG accountId+channel cũng thấy đúng nhịp đó.
+   *
+   * @param {object} input
+   * @param {string|number} input.accountId
+   * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
+   * @param {object|null} [input.accountHint] cùng shape với `zaloAccountPolicyHint` của enforce...
+   * @param {boolean} [input.requiresPhoneLookup=true]
+   * @param {number} [input.nowMs=Date.now()]
+   * @returns {{ok: true} | {ok: false, reason: 'phone_lookup_cooldown'|'quiet_hours'|'rate_limited'|'inter_message_delay', waitMs: number}}
+   */
+  tryAcquireOutboundSlot({
+    accountId,
+    channel,
+    accountHint = null,
+    requiresPhoneLookup = true,
+    nowMs = Date.now(),
+  }) {
+    const safeAccountId = String(accountId || '').trim();
+    const safeChannel = String(channel || '').trim();
+    if (!safeAccountId || !safeChannel) {
+      return { ok: false, reason: 'invalid_input', waitMs: 0 };
+    }
+
+    // Cổng 1 — khoá tra số điện thoại quá nhiều (chỉ kênh có tra số, xem PHONE_LOOKUP_CHANNELS).
+    const phoneLookupUntilMs = PHONE_LOOKUP_CHANNELS.has(safeChannel) && requiresPhoneLookup
+      ? Number(this.zaloPersonalPhoneLookupCooldownUntil.get(safeAccountId)) || 0
+      : 0;
+    if (phoneLookupUntilMs > nowMs) {
+      return { ok: false, reason: 'phone_lookup_cooldown', waitMs: phoneLookupUntilMs - nowMs };
+    }
+
+    // Cổng 2 — khung giờ yên lặng.
+    const quietUntilMs = this.computeNextAllowedSendAtByQuietHours(nowMs);
+    if (quietUntilMs) {
+      return { ok: false, reason: 'quiet_hours', waitMs: Math.max(0, quietUntilMs - nowMs) };
+    }
+
+    const stateKey = `${safeAccountId}:${safeChannel}`;
+    const policy = this.resolveOutboundPolicy(safeChannel, accountHint);
+    const limitPerWindow = Math.max(1, Number.parseInt(policy.limitPerWindow, 10) || 1);
+    const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
+    const minDelayMs = Math.max(0, Number.parseInt(policy.minDelayMs, 10) || 0);
+    const maxDelayMs = Math.max(minDelayMs, Number.parseInt(policy.maxDelayMs, 10) || minDelayMs);
+
+    const current = this.zaloOutboundRateLimitState.get(stateKey) || {
+      windowStartMs: nowMs,
+      attemptCount: 0,
+      lastAttemptAtMs: null,
+      policyFingerprint: null,
+      nextAllowedAtMs: null,
+    };
+    const policyFingerprint = `${limitPerWindow}:${windowMs}:${minDelayMs}:${maxDelayMs}`;
+    if (current.policyFingerprint != null && current.policyFingerprint !== policyFingerprint) {
+      current.windowStartMs = nowMs;
+      current.attemptCount = 0;
+      current.lastAttemptAtMs = null;
+      current.nextAllowedAtMs = null;
+    }
+    current.policyFingerprint = policyFingerprint;
+
+    // Cổng 3 — trần số tin/giờ (cùng cách reset cửa sổ với enforceOutboundPolicyBeforeSend).
+    if (nowMs - current.windowStartMs >= windowMs) {
+      current.windowStartMs = nowMs;
+      current.attemptCount = 0;
+    }
+    if (current.attemptCount >= limitPerWindow) {
+      this.zaloOutboundRateLimitState.set(stateKey, current);
+      return { ok: false, reason: 'rate_limited', waitMs: Math.max(0, current.windowStartMs + windowMs - nowMs) };
+    }
+
+    // Cổng 4 — giãn cách giữa 2 tin. `nextAllowedAtMs` là mốc "phải chờ tới đâu" được GHI lúc cấp
+    // lượt trước (bởi CHIẾN DỊCH hoặc GỬI NHANH, ai cấp trước thì mốc đó có hiệu lực cho cả hai).
+    if (current.lastAttemptAtMs) {
+      const nextAllowed = Math.max(
+        Number(current.nextAllowedAtMs) || 0,
+        Number(current.lastAttemptAtMs) + minDelayMs
+      );
+      if (nowMs < nextAllowed) {
+        this.zaloOutboundRateLimitState.set(stateKey, current);
+        return { ok: false, reason: 'inter_message_delay', waitMs: nextAllowed - nowMs };
+      }
+    }
+
+    // Được phép — ghi lần thử (đếm vào trần giờ, giống enforceOutboundPolicyBeforeSend) VÀ mốc
+    // "phải chờ tới đâu" cho lượt kế tiếp, để dù chiến dịch hay gửi nhanh hỏi trước cũng thấy đúng.
+    current.lastAttemptAtMs = nowMs;
+    current.attemptCount += 1;
+    current.nextAllowedAtMs = nowMs + Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
+    this.zaloOutboundRateLimitState.set(stateKey, current);
+    return { ok: true };
+  }
+
+  /**
    * Enforce rate-limit + giờ yên lặng cho outbound Zalo theo `accountId + channel`.
    * Delegates sleeping / yielding to the provided callbacks so the caller controls I/O.
    *
@@ -435,20 +535,32 @@ class ZaloRateLimiter {
       }
 
       if (current.lastAttemptAtMs) {
+        // PR-2 Việc 4 — nhớ mốc lastAttemptAtMs TRƯỚC KHI ngủ: nếu gửi nhanh (tryAcquireOutboundSlot)
+        // chen vào ghi lần thử MỚI trong lúc chiến dịch đang ngủ ở đây, mốc sẽ khác đi sau khi thức
+        // dậy — đừng xoá, ngủ tiếp một vòng nữa tính từ lần gửi mới đó. Độ dài mỗi lần ngủ KHÔNG đổi
+        // (vẫn random mới mỗi lần) — chỉ thêm việc kiểm "có ai chen vào không" sau khi ngủ.
+        const observedLastAttemptAtMs = current.lastAttemptAtMs;
         const delayMs = Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
         console.log(
           `[CampaignRun][ZaloOutbound] run=${runId} channel=${safeChannel} account=${safeAccountId} `
           + `inter_message_delay_ms=${delayMs}`
         );
         await sleepWithRunCheck(delayMs);
+        const latest = this.zaloOutboundRateLimitState.get(stateKey) || current;
+        if (Number(latest.lastAttemptAtMs) !== Number(observedLastAttemptAtMs)) {
+          continue;
+        }
         current.lastAttemptAtMs = null;
         this.zaloOutboundRateLimitState.set(stateKey, current);
         continue;
       }
 
-      // Đếm lần thử (không chỉ thành công) — Zalo tính mọi request vào anti-spam.
+      // Đếm lần thử (không chỉ thành công) — Zalo tính mọi request vào anti-spam. Ghi thêm
+      // nextAllowedAtMs (PR-2 Việc 4) để gửi nhanh (tryAcquireOutboundSlot) biết chính xác phải
+      // chờ tới đâu, dù ai cấp lượt này trước (chiến dịch hay gửi nhanh) mốc cũng dùng chung.
       current.lastAttemptAtMs = nowMs;
       current.attemptCount += 1;
+      current.nextAllowedAtMs = nowMs + Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
       this.zaloOutboundRateLimitState.set(stateKey, current);
       return;
     }
