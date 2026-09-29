@@ -542,6 +542,13 @@ class CampaignController {
         }
       });
     } catch (error) {
+      if (error?.code === 'CAMPAIGN_HAS_RUNNING_RUN') {
+        return res.status(409).json({
+          success: false,
+          code: 'CAMPAIGN_HAS_RUNNING_RUN',
+          message: 'Chiến dịch đang chạy. Vui lòng bấm Dừng trên dòng chiến dịch trước khi tạm dừng.'
+        });
+      }
       console.error('Pause campaign error:', error);
       res.status(500).json({
         success: false,

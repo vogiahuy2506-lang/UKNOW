@@ -772,12 +772,38 @@ class CampaignCrudService {
    */
   async pauseCampaign({ authUser, userId, roleCode, workspaceOwnerId, campaignId }) {
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
-    return campaignCrudRepository.pauseCampaign({
+    const scope = {
       campaignId,
       isAdmin: context.isSuperAdmin,
       userId: context.actorUserId,
       workspaceOwnerId: context.workspaceOwnerId,
-    });
+    };
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      const locked = await campaignCrudRepository.lockCampaignForPauseTx(client, scope);
+      if (!locked || locked.status !== 'active') {
+        await client.query('ROLLBACK');
+        return null;
+      }
+      // Bộ chạy không kiểm trạng thái chiến dịch giữa chừng: nếu còn lượt running thì
+      // "paused" chỉ là nhãn, tin vẫn gửi. Áp đúng luật giao diện: từ chối.
+      if (await campaignCrudRepository.hasRunningRunTx(client, campaignId)) {
+        const error = createConflictError(
+          'Chiến dịch đang chạy. Vui lòng bấm Dừng trên dòng chiến dịch trước khi tạm dừng.'
+        );
+        error.code = 'CAMPAIGN_HAS_RUNNING_RUN';
+        throw error;
+      }
+      const paused = await campaignCrudRepository.pauseCampaign({ ...scope, client });
+      await client.query('COMMIT');
+      return paused;
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 }
 

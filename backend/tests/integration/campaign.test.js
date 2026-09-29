@@ -1226,6 +1226,49 @@ describe('POST /api/campaigns/:id/publish + /pause', () => {
     expect(res.status).toBe(404);
   });
 
+  it('pause: có lượt running → 409 CAMPAIGN_HAS_RUNNING_RUN, status vẫn active', async () => {
+    const o = await createUser({ role: 'user', username: 'o1' });
+    const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertRun({ campaignId: c.id, status: 'running' });
+
+    const t = await loginAs(o);
+    const res = await request(app)
+      .post(`/api/campaigns/${c.id}/pause`)
+      .set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe('CAMPAIGN_HAS_RUNNING_RUN');
+
+    const { rows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [c.id]);
+    expect(rows[0].status).toBe('active');
+  });
+
+  it('pause: lượt completed/failed không chặn → 200', async () => {
+    const o = await createUser({ role: 'user', username: 'o1' });
+    const c = await insertCampaign({ ownerId: o.id, status: 'active' });
+    await insertRun({ campaignId: c.id, status: 'completed' });
+    await insertRun({ campaignId: c.id, status: 'failed' });
+
+    const t = await loginAs(o);
+    const res = await request(app)
+      .post(`/api/campaigns/${c.id}/pause`)
+      .set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.status).toBe('paused');
+  });
+
+  it('pause: chiến dịch workspace khác (dù có lượt running) → 404', async () => {
+    const a = await createUser({ role: 'user', username: 'oa' });
+    const b = await createUser({ role: 'user', username: 'ob' });
+    const c = await insertCampaign({ ownerId: a.id, status: 'active' });
+    await insertRun({ campaignId: c.id, status: 'running' });
+
+    const t = await loginAs(b);
+    const res = await request(app)
+      .post(`/api/campaigns/${c.id}/pause`)
+      .set('Authorization', `Bearer ${t}`);
+    expect(res.status).toBe(404);
+  });
+
   it('publish/pause của user khác → 404', async () => {
     const a = await createUser({ role: 'user', username: 'oa' });
     const b = await createUser({ role: 'user', username: 'ob' });

@@ -648,7 +648,7 @@ class CampaignCrudRepository {
    * @param {number} params.userId
    * @returns {Promise<object|null>}
    */
-  async pauseCampaign({ campaignId, isAdmin, userId, workspaceOwnerId = userId }) {
+  async pauseCampaign({ campaignId, isAdmin, userId, workspaceOwnerId = userId, client = null }) {
     const params = [campaignId];
     let query = `UPDATE campaigns SET
       status = 'paused',
@@ -660,7 +660,26 @@ class CampaignCrudRepository {
     }
     query += ' RETURNING *';
 
-    const result = await db.query(query, params);
+    const result = await (client || db).query(query, params);
+    return result.rows[0] || null;
+  }
+
+  /**
+   * Khoá dòng chiến dịch (FOR UPDATE) trong giao dịch để kiểm-rồi-tạm-dừng không bị chen ngang.
+   *
+   * @param {object} client pg transaction client
+   * @param {object} params
+   * @returns {Promise<{id: number, status: string}|null>}
+   */
+  async lockCampaignForPauseTx(client, { campaignId, isAdmin, userId, workspaceOwnerId = userId }) {
+    const params = [campaignId];
+    let query = 'SELECT id, status FROM campaigns WHERE id = $1';
+    if (!isAdmin) {
+      params.push(workspaceOwnerId);
+      query += ` AND COALESCE(workspace_owner_id, id_user) = $${params.length}`;
+    }
+    query += ' FOR UPDATE';
+    const result = await client.query(query, params);
     return result.rows[0] || null;
   }
 }
