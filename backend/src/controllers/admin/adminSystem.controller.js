@@ -55,3 +55,19 @@ export async function sendQuotaShadow(_req, res) {
     handleError(res, err);
   }
 }
+
+/**
+ * Chẩn đoán IP: server đang thấy người gọi là ai. `reqIp` phải là IP công cộng của chính người
+ * gọi (không phải dải Cloudflare). Không ghi log, không lưu DB.
+ */
+export function requestIp(req, res) {
+  res.json({
+    success: true,
+    data: {
+      reqIp: req.ip,
+      remoteAddress: req.socket?.remoteAddress ?? null,
+      xForwardedFor: req.headers['x-forwarded-for'] ?? null,
+      cfConnectingIp: req.headers['cf-connecting-ip'] ?? null,
+    },
+  });
+}

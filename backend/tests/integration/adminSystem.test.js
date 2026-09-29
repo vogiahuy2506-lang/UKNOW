@@ -301,3 +301,37 @@ describe('GET /api/admin/system/send-quota-shadow', () => {
     expect(uptimeSeconds).toBeGreaterThanOrEqual(0);
   });
 });
+
+// ─── GET /request-ip ─────────────────────────────────────────────────────────
+describe('GET /api/admin/system/request-ip', () => {
+  it('user role thường → 403', async () => {
+    const user = await createUser({ role: 'user', username: 'plain' });
+    const token = await loginAs(user);
+    const res = await request(app)
+      .get('/api/admin/system/request-ip')
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(403);
+  });
+
+  it('admin → đủ 4 trường chẩn đoán', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin1' });
+    const token = await loginAs(admin);
+    const res = await request(app)
+      .get('/api/admin/system/request-ip')
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Forwarded-For', '203.0.113.5')
+      .set('CF-Connecting-IP', '203.0.113.5');
+    expect(res.status).toBe(200);
+    expect(res.body.data).toEqual(
+      expect.objectContaining({
+        reqIp: expect.any(String),
+        remoteAddress: expect.any(String),
+        xForwardedFor: '203.0.113.5',
+        cfConnectingIp: '203.0.113.5',
+      })
+    );
+    expect(Object.keys(res.body.data).sort()).toEqual(
+      ['cfConnectingIp', 'remoteAddress', 'reqIp', 'xForwardedFor'].sort()
+    );
+  });
+});
