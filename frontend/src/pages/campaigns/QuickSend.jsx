@@ -18,6 +18,13 @@ import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import { pickTemplateContent } from './quickSend.util';
+import QuickSendAdapterPanel from './QuickSendAdapterPanel';
+import {
+  MAX_DEFERRED_RESEND_WAIT_MS,
+  quickSendSleepWithCountdown,
+  getQuickSendRandomDelayMs,
+  formatResumeTimeVn,
+} from './quickSendPacing.util';
 import {
   HiOutlinePlus,
   HiOutlineMail,
@@ -34,6 +41,7 @@ import {
   HiOutlinePaperClip,
   HiOutlineX,
 } from 'react-icons/hi';
+import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 
 // Trần đính kèm Gửi nhanh khi soạn nội dung mới (khớp backend MAX_QUICK_SEND_ATTACHMENT_BYTES).
 const MAX_QUICK_SEND_ATTACHMENT_COUNT = 5;
@@ -64,6 +72,16 @@ const CHANNEL_TYPES = {
   EMAIL: 'email',
   ZALO: 'zalo',
   ZALO_GROUP: 'zalo_group',
+};
+
+// W7a — kênh 'adapter' (Telegram/WhatsApp) chỉ hiện khi GET /campaigns/channels báo bật; giao diện riêng
+// ở QuickSendAdapterPanel (không dùng bước mẫu/đính kèm/xem trước của Email/Zalo).
+const ADAPTER_CHANNEL_KEYS = ['telegram', 'whatsapp'];
+const ADAPTER_CHANNEL_ICONS = { telegram: FaTelegramPlane, whatsapp: FaWhatsapp };
+const CHANNEL_GRID_CLASSES = {
+  3: 'grid-cols-3',
+  4: 'grid-cols-2 sm:grid-cols-4',
+  5: 'grid-cols-2 sm:grid-cols-5',
 };
 
 const ZALO_RECIPIENT_TYPES = {
@@ -191,71 +209,6 @@ function throwIfZaloItemFailed(res) {
  * campaign.controller.js#getDelayConfig.
  */
 const QUICK_SEND_ZALO_DELAY_FALLBACK_MS = { minMs: 80000, maxMs: 150000 };
-const QUICK_SEND_DELAY_COUNTDOWN_TICK_MS = 1000;
-
-function buildQuickSendAbortError() {
-  const error = new Error('Quick send cancelled');
-  error.name = 'AbortError';
-  return error;
-}
-
-/**
- * Chờ `ms` mili-giây, huỷ ngay nếu `signal` bị abort giữa chừng (rời trang / unmount).
- *
- * @param {number} ms
- * @param {AbortSignal|undefined} signal
- * @returns {Promise<void>}
- */
-function quickSendSleepWithAbort(ms, signal) {
-  return new Promise((resolve, reject) => {
-    const waitMs = Math.max(0, Number.parseInt(ms, 10) || 0);
-    if (signal?.aborted) {
-      reject(buildQuickSendAbortError());
-      return;
-    }
-    if (waitMs <= 0) {
-      resolve();
-      return;
-    }
-    const timeoutId = setTimeout(() => {
-      signal?.removeEventListener('abort', onAbort);
-      resolve();
-    }, waitMs);
-    const onAbort = () => {
-      clearTimeout(timeoutId);
-      signal?.removeEventListener('abort', onAbort);
-      reject(buildQuickSendAbortError());
-    };
-    signal?.addEventListener('abort', onAbort, { once: true });
-  });
-}
-
-/**
- * Chờ có đếm ngược mỗi giây (giống campaignBuilderNodeRunner.js sleepWithCountdownTicks — không
- * import lại được vì hàm đó là closure riêng của createCampaignNodeRunner, viết bản tương đương
- * ở đây) để trang "Đang gửi" không trông như treo trong lúc chờ 80–150 giây thật.
- *
- * @param {number} totalMs
- * @param {AbortSignal|undefined} signal
- * @param {(seconds: number) => void} [onTick]
- * @returns {Promise<void>}
- */
-async function quickSendSleepWithCountdown(totalMs, signal, onTick) {
-  let remainingMs = Math.max(0, Number.parseInt(totalMs, 10) || 0);
-  while (remainingMs > 0) {
-    const seconds = Math.ceil(remainingMs / 1000);
-    onTick?.(seconds);
-    const stepMs = Math.min(QUICK_SEND_DELAY_COUNTDOWN_TICK_MS, remainingMs);
-    await quickSendSleepWithAbort(stepMs, signal);
-    remainingMs -= stepMs;
-  }
-}
-
-function getQuickSendRandomDelayMs(minMs, maxMs) {
-  const safeMin = Math.max(0, Number.parseInt(minMs, 10) || 0);
-  const safeMax = Math.max(safeMin, Number.parseInt(maxMs, 10) || safeMin);
-  return Math.floor(Math.random() * (safeMax - safeMin + 1)) + safeMin;
-}
 
 /**
  * PLAN_GUI_NHANH_ZALO_GIAN_CACH_2026-09-28 PR-2 Việc 6 — backend giờ có thể trả item
@@ -265,7 +218,6 @@ function getQuickSendRandomDelayMs(minMs, maxMs) {
  * giờ/khoá tra số) hoặc chờ dài hơn thì KHÔNG tự lặp mãi — dừng cả đợt, để người dùng tự bấm gửi
  * lại sau.
  */
-const MAX_DEFERRED_RESEND_WAIT_MS = 5 * 60 * 1000;
 
 const DEFERRED_REASON_I18N_KEYS = {
   phone_lookup_cooldown: 'quickSend.deferredReasonPhoneLookupCooldown',
@@ -279,24 +231,15 @@ function resolveDeferredReasonLabel(t, reason) {
   return t(key);
 }
 
-/** Giờ:phút theo giờ Việt Nam (Asia/Ho_Chi_Minh) — KHÔNG dùng giờ hệ thống/trình duyệt của người xem. */
-function formatResumeTimeVn(resumeAtMs) {
-  const date = new Date(Number(resumeAtMs));
-  if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleTimeString('vi-VN', {
-    hourCycle: 'h23',
-    timeZone: 'Asia/Ho_Chi_Minh',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-}
-
 const QuickSend = () => {
   const { t } = useI18n();
   const location = useLocation();
   const navigate = useNavigate();
   const [currentStep, setCurrentStep] = useState(QUICK_SEND_STEPS.RECIPIENTS);
   const [selectedChannel, setSelectedChannel] = useState(CHANNEL_TYPES.EMAIL);
+  // W7a — kênh adapter đang bật ([{ key, label }]); lỗi/BE cũ -> [] (không có thẻ Telegram/WhatsApp).
+  const [adapterChannels, setAdapterChannels] = useState([]);
+  const isAdapterChannel = adapterChannels.some((c) => c.key === selectedChannel);
 
   // Manual input state
   const [manualEmails, setManualEmails] = useState('');
@@ -498,6 +441,25 @@ const QuickSend = () => {
     // Xóa state để tránh F5 nạp lại draft cũ
     navigate(location.pathname, { replace: true, state: null });
   }, [location.state, location.pathname, navigate]);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await campaignApiService.getChannels();
+        if (cancelled) return;
+        const channels = res?.data?.data?.channels;
+        setAdapterChannels(
+          Array.isArray(channels)
+            ? channels.filter((c) => ADAPTER_CHANNEL_KEYS.includes(c?.key)).map((c) => ({ key: c.key, label: c.label || c.key }))
+            : []
+        );
+      } catch {
+        if (!cancelled) setAdapterChannels([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   const tRef = useRef(t);
   useEffect(() => {
@@ -1490,7 +1452,8 @@ const QuickSend = () => {
           <p className="text-sm text-gray-500 mt-1">{t('quickSend.subtitle')}</p>
         </div>
 
-        {/* Step Indicators */}
+        {/* Step Indicators — kênh adapter có giao diện một trang riêng, không đi qua các bước này */}
+        {!isAdapterChannel && (
         <div className="max-w-6xl mx-auto px-4 pb-4">
           <div className="flex items-center gap-2">
             {steps.map((step, index) => {
@@ -1523,6 +1486,7 @@ const QuickSend = () => {
             })}
           </div>
         </div>
+        )}
       </div>
 
       {/* Content */}
@@ -1533,7 +1497,7 @@ const QuickSend = () => {
             {/* Channel Type */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectChannel')}</h2>
-              <div className="grid grid-cols-3 gap-4">
+              <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[3 + adapterChannels.length] || 'grid-cols-3'}`}>
                 <button
                   onClick={() => handleChannelChange(CHANNEL_TYPES.EMAIL)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
@@ -1573,8 +1537,38 @@ const QuickSend = () => {
                     {t('quickSend.channelZaloGroup')}
                   </span>
                 </button>
+                {adapterChannels.map((adapter) => {
+                  const AdapterIcon = ADAPTER_CHANNEL_ICONS[adapter.key];
+                  const isActive = selectedChannel === adapter.key;
+                  return (
+                    <button
+                      key={adapter.key}
+                      data-testid={`quick-send-channel-${adapter.key}`}
+                      onClick={() => handleChannelChange(adapter.key)}
+                      className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
+                        isActive ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <AdapterIcon className={`w-8 h-8 ${isActive ? 'text-orange-500' : 'text-gray-400'}`} />
+                      <span className={`font-medium ${isActive ? 'text-orange-700' : 'text-gray-700'}`}>
+                        {adapter.label}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
+
+            {isAdapterChannel && (
+              <QuickSendAdapterPanel
+                key={selectedChannel}
+                channel={selectedChannel}
+                channelLabel={adapterChannels.find((c) => c.key === selectedChannel)?.label}
+              />
+            )}
+
+            {!isAdapterChannel && (
+            <>
 
             {/* Sender Account Selection */}
             {selectedChannel === CHANNEL_TYPES.EMAIL ? (
@@ -1887,6 +1881,8 @@ const QuickSend = () => {
                 <HiOutlineChevronRight className="w-5 h-5" />
               </button>
             </div>
+            </>
+            )}
           </div>
         )}
 
