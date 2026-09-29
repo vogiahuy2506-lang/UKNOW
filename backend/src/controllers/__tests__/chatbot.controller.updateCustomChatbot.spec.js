@@ -1,4 +1,5 @@
 /**
+ * PR-B (29/09): updateCustomChatbot cũng thôi ghi cài đặt AI sang chatbot_settings theo kênh.
  * PR-A dọn cài đặt kênh chatbot (29/09) — updateCustomChatbot KHÔNG còn dùng `is_active` làm cờ
  * bật/tắt kênh: nhánh đồng bộ chatbot_settings không được kích hoạt bởi `is_active`, và
  * `is_enabled` không được ghi xuống upsertSettings (cờ bật/tắt chỉ do PR-2 công tắc trạng thái lo).
@@ -91,18 +92,15 @@ describe('chatbotController.updateCustomChatbot — is_active không còn đồn
     expect(mockUpsertSettings).not.toHaveBeenCalled();
   });
 
-  it('gửi is_active:false kèm system_instruction → upsertSettings nhận KHOÁ is_enabled vắng', async () => {
+  it('gửi system_instruction/temperature/max_tokens → vẫn KHÔNG ghi chatbot_settings (PR-B)', async () => {
     const res = mockRes();
     await chatbotController.updateCustomChatbot(
-      buildReq({ is_active: false, system_instruction: 'Bạn là trợ lý bán hàng' }),
+      buildReq({ system_instruction: 'Bạn là trợ lý bán hàng', temperature: 1, max_tokens: 1024 }),
       res
     );
 
     expect(res.statusCode).toBe(200);
-    expect(mockUpsertSettings).toHaveBeenCalledTimes(7);
-    for (const [, , aiSettings] of mockUpsertSettings.mock.calls) {
-      expect(aiSettings.system_instruction).toBe('Bạn là trợ lý bán hàng');
-      expect(Object.prototype.hasOwnProperty.call(aiSettings, 'is_enabled')).toBe(false);
-    }
+    expect(mockUpdateChatbot).toHaveBeenCalledTimes(1);
+    expect(mockUpsertSettings).not.toHaveBeenCalled();
   });
 });

@@ -389,4 +389,62 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
       expect(mockSendReply).not.toHaveBeenCalled();
     });
   });
+  // PR-B (29/09): cấu hình AI lấy từ chatbot ĐƯỢC GÁN; dòng chatbot_settings kênh chỉ dự phòng;
+  // cột AI của chatbot_zalo_account_settings (DEFAULT bảng) không được đè.
+  describe('PR-B — cấu hình AI theo chatbot được gán', () => {
+    async function runOnce(convId, chatbotId) {
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: convId, id_chatbot: chatbotId });
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: `prb_${convId}`, fromUid: 'visitor_prb', content: 'Alo', type: 0 },
+        { conversationId: convId, messageId: convId + 1000 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+      expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
+      return mockRouteMessageWithSettings.mock.calls[0][0].chatbotSettings;
+    }
+
+    it('chatbot gán thắng DEFAULT czs và dòng kênh (temperature/max_tokens/style/welcome)', async () => {
+      mockPickEnabledChatbotForZalo.mockResolvedValue(10);
+      mockGetChatbotSettings.mockResolvedValue({
+        is_enabled: true, temperature: 0.3, max_tokens: 512, response_style: 'formal', welcome_message: 'kenh', ai_model: 'kenh-model',
+      });
+      mockGetAccountSettings.mockResolvedValue({
+        is_enabled: true, chatbot_enabled: true,
+        temperature: 0.7, max_tokens: 2048, response_style: 'friendly', welcome_message: null, ai_model: 'czs-model',
+        chatbot_temperature: 1.0, chatbot_max_tokens: 1024, chatbot_response_style: 'concise',
+        chatbot_welcome_message: 'X', chatbot_ai_model: 'bot-model',
+      });
+      const merged = await runOnce(700, 10);
+      expect(merged.temperature).toBe(1.0);
+      expect(merged.max_tokens).toBe(1024);
+      expect(merged.response_style).toBe('concise');
+      expect(merged.welcome_message).toBe('X');
+      expect(merged.ai_model).toBe('bot-model');
+      expect(merged.is_enabled).toBe(true);
+    });
+
+    it('chatbot gán để trống instruction → dùng instruction dòng kênh (dự phòng)', async () => {
+      mockPickEnabledChatbotForZalo.mockResolvedValue(10);
+      mockGetChatbotSettings.mockResolvedValue({ is_enabled: true, system_instruction: 'HUONG DAN KENH', temperature: 0.4 });
+      mockGetAccountSettings.mockResolvedValue({
+        is_enabled: true, chatbot_enabled: true, temperature: 0.7,
+        chatbot_system_instruction: '   ', chatbot_temperature: null,
+      });
+      const merged = await runOnce(701, 10);
+      expect(merged.system_instruction).toBe('HUONG DAN KENH');
+      // chatbot không đặt temperature → dự phòng dòng kênh, KHÔNG phải DEFAULT czs 0.7
+      expect(merged.temperature).toBe(0.4);
+    });
+
+    it('dòng kênh = hướng dẫn A, kênh gán chatbot B → dùng hướng dẫn B', async () => {
+      mockPickEnabledChatbotForZalo.mockResolvedValue(20);
+      mockGetChatbotSettings.mockResolvedValue({ is_enabled: true, system_instruction: 'HUONG DAN A' });
+      mockGetAccountSettings.mockResolvedValue({
+        is_enabled: true, chatbot_enabled: true, chatbot_system_instruction: 'HUONG DAN B',
+      });
+      const merged = await runOnce(702, 20);
+      expect(merged.system_instruction).toBe('HUONG DAN B');
+    });
+  });
 });

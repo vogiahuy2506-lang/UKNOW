@@ -44,7 +44,12 @@ class ChatbotZaloAccountRepository {
   async getSettings(userId, zaloSettingId, { idChatbot } = {}) {
     const { rows } = await db.query(
       `SELECT czs.*, sa.name AS sub_assistant_name, sa.greeting_msg,
-              cb.name AS chatbot_name, cb.system_instruction AS chatbot_system_instruction
+              cb.name AS chatbot_name, cb.system_instruction AS chatbot_system_instruction,
+              cb.ai_model AS chatbot_ai_model,
+              cb.temperature AS chatbot_temperature,
+              cb.max_tokens AS chatbot_max_tokens,
+              cb.response_style AS chatbot_response_style,
+              cb.welcome_message AS chatbot_welcome_message
        FROM chatbot_zalo_account_settings czs
        LEFT JOIN sub_assistants sa
               ON sa.id = czs.id_sub_assistant AND sa.id_user = czs.id_user

@@ -1502,37 +1502,8 @@ class ChatbotController {
         chatbotRateLimitService.invalidateChatbotConfigCache(id);
       }
 
-      // Sync AI settings to chatbot_settings table for ALL channels
-      // This ensures all channels use shared AI config
-      if (req.body.system_instruction !== undefined ||
-          req.body.ai_model !== undefined ||
-          req.body.temperature !== undefined ||
-          req.body.max_tokens !== undefined ||
-          req.body.response_style !== undefined ||
-          req.body.welcome_message !== undefined) {
-        // updatePayload.ai_model da duoc clamp boi resolveAllowedModel o tren
-        // (ap dung cho ca repo va sync de custom_chatbots va chatbot_settings
-        // dong bo). Neu khong clamp o day, model sai se ghi vao chatbot_settings
-        // nhung custom_chatbots van ghi dung (hoac nguoc lai).
-        const aiSettings = {
-          system_instruction: req.body.system_instruction,
-          ai_model: updatePayload.ai_model,
-          temperature: req.body.temperature,
-          max_tokens: req.body.max_tokens,
-          response_style: req.body.response_style,
-          welcome_message: req.body.welcome_message,
-        };
-        const channels = ['zalo_personal', 'zalo_oa', 'facebook', 'web', 'script', 'iframe', 'public_link'];
-        try {
-          await Promise.all(
-            channels.map(channel =>
-              chatbotRepository.upsertSettings(userId, channel, aiSettings)
-            )
-          );
-        } catch (syncErr) {
-          console.warn('[CustomChatbot] Failed to sync AI settings to chatbot_settings:', syncErr.message);
-        }
-      }
+      // Không còn đồng bộ AI settings sang chatbot_settings theo kênh: các kênh đọc thẳng
+      // cấu hình chatbot được gán (custom_chatbots); dòng kênh cũ chỉ còn là dự phòng.
 
       return res.json({
         success: true,

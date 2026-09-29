@@ -42,6 +42,16 @@ import { LRUCache } from '../../utils/lruCache.util.js';
 import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
 import db from '../../config/database.js';
 
+/** Giá trị đầu tiên "có cấu hình": không null/undefined và (nếu là chuỗi) không rỗng. */
+function pickConfigured(...values) {
+  for (const v of values) {
+    if (v == null) continue;
+    if (typeof v === 'string' && v.trim() === '') continue;
+    return v;
+  }
+  return null;
+}
+
 /**
  * Tiny deterministic string → small integer hash, used as a stable seed for
  * round-robin chatbot selection. Goal is uniform distribution across the
@@ -799,19 +809,35 @@ class ZaloPersonalInboxService {
         return;
       }
 
-      let mergedSettings = {
+      // Cấu hình AI: chatbot ĐƯỢC GÁN (chatbot_*) thắng, dòng chatbot_settings kênh chỉ là dự phòng.
+      // Các cột AI của chatbot_zalo_account_settings chỉ là DEFAULT bảng (không nơi nào ghi) nên
+      // KHÔNG được spread đè lên.
+      const {
+        welcome_message: _czsWelcome,
+        ai_model: _czsModel,
+        temperature: _czsTemperature,
+        max_tokens: _czsMaxTokens,
+        response_style: _czsStyle,
+        system_instruction: _czsInstruction,
+        ...accountNonAiSettings
+      } = accountSettings || {};
+      const mergedSettings = {
         ...chatbotSettings,
-        ...accountSettings,
+        ...accountNonAiSettings,
+        system_instruction: pickConfigured(
+          accountSettings?.chatbot_system_instruction,
+          chatbotSettings?.system_instruction
+        ),
+        welcome_message: pickConfigured(
+          accountSettings?.chatbot_welcome_message,
+          chatbotSettings?.welcome_message
+        ),
+        ai_model: pickConfigured(accountSettings?.chatbot_ai_model, chatbotSettings?.ai_model),
+        temperature: pickConfigured(accountSettings?.chatbot_temperature, chatbotSettings?.temperature),
+        max_tokens: pickConfigured(accountSettings?.chatbot_max_tokens, chatbotSettings?.max_tokens),
+        response_style: pickConfigured(accountSettings?.chatbot_response_style, chatbotSettings?.response_style),
         is_enabled: true,
       };
-
-      if (!mergedSettings.system_instruction && accountSettings?.chatbot_system_instruction) {
-        mergedSettings.system_instruction = accountSettings.chatbot_system_instruction;
-      }
-      
-      if (!mergedSettings.system_instruction && chatbotSettings?.system_instruction) {
-        mergedSettings.system_instruction = chatbotSettings.system_instruction;
-      }
 
       // 5. Snapshot history and exclude just this batch's visitor rows. A bot
       // reply from the preceding batch remains visible even if it was stored
