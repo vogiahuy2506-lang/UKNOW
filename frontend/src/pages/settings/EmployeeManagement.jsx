@@ -172,6 +172,8 @@ const EmployeeManagement = () => {
   const [deleteConfirmEmp, setDeleteConfirmEmp]   = useState(null);
   const [isDeleting, setIsDeleting]               = useState(false);
   const [resendingInviteId, setResendingInviteId] = useState(null);
+  // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 PR-A — hộp xác nhận khi đóng modal nhân viên lúc còn thay đổi chưa lưu.
+  const [showUnsavedConfirm, setShowUnsavedConfirm] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -295,6 +297,7 @@ const EmployeeManagement = () => {
   const openEmployeeModal = (emp, tab = 'info') => {
     setSelectedEmployee(emp);
     setActiveTab(tab);
+    setShowUnsavedConfirm(false);
     editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
     // Nhân viên mới có permissions = [] (mảng rỗng) — nạp thành {} để không gửi lại `[]` khi lưu.
     setPermState(toPermissionState(emp.permissions));
@@ -334,9 +337,14 @@ const EmployeeManagement = () => {
       // Backend kéo thêm quyền phụ thuộc (vd tạo chiến dịch → xem chiến dịch): phản chiếu lại để ô tick khớp DB.
       const saved = res?.data?.data?.permissions;
       if (saved && typeof saved === 'object' && !Array.isArray(saved)) setPermState(saved);
-      fetchEmployees(true);
+      // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 PR-A — await: đóng modal ngay sau lưu (Việc 3 "Lưu rồi
+      // đóng") phải chờ fetchEmployees xong, không thì setSelectedEmployee(updated) của nó chạy SAU
+      // setSelectedEmployee(null) của người bấm đóng, làm modal tự mở lại.
+      await fetchEmployees(true);
+      return true;
     } catch (err) {
       toast.error(err?.response?.data?.message || t('employee.updatePermFailed'));
+      return false;
     } finally {
       setIsSavingPerm(false);
     }
@@ -348,9 +356,12 @@ const EmployeeManagement = () => {
       setIsSavingLimits(true);
       await userManagementApiService.updateSendLimits(selectedEmployee.id, limitsState);
       toast.success(t('employee.updateLimitsSuccess'));
-      fetchEmployees(true);
+      // Cùng lý do await ở handleSavePermissions phía trên.
+      await fetchEmployees(true);
+      return true;
     } catch (err) {
       toast.error(err?.response?.data?.message || t('employee.updateLimitsFailed'));
+      return false;
     } finally {
       setIsSavingLimits(false);
     }
@@ -500,6 +511,28 @@ const EmployeeManagement = () => {
     { key: 'permissions', label: t('employee.permissionsTab') },
     { key: 'limits',      label: t('employee.limitsTab') },
   ];
+
+  // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 PR-A — so từng khoá (KHÔNG JSON.stringify: thứ tự khoá trả
+  // về từ backend không cố định) để biết tab đang mở có thay đổi chưa lưu hay không.
+  const isPermDirty = Boolean(selectedEmployee) && ALL_PERMISSION_KEYS.some(
+    (k) => Boolean(permState[k]) !== Boolean(toPermissionState(selectedEmployee?.permissions)[k])
+  );
+  const LIMIT_STATE_FIELDS = [
+    'dailyEmailLimit', 'monthlyEmailLimit', 'dailyZaloLimit', 'monthlyZaloLimit',
+    'dailyAiCreditLimit', 'periodAiCreditLimit',
+  ];
+  const isLimitsDirty = Boolean(selectedEmployee) && LIMIT_STATE_FIELDS.some(
+    (k) => (limitsState[k] ?? null) !== (selectedEmployee?.[k] ?? null)
+  );
+  const isModalDirty = activeTab === 'permissions' ? isPermDirty : activeTab === 'limits' ? isLimitsDirty : false;
+
+  const requestCloseEmployeeModal = () => {
+    if (isModalDirty) {
+      setShowUnsavedConfirm(true);
+    } else {
+      setSelectedEmployee(null);
+    }
+  };
 
   // ── Render ────────────────────────────────────────────────────────────────
   return (
@@ -758,7 +791,7 @@ const EmployeeManagement = () => {
             <button
               type="button"
               className="btn btn-secondary shrink-0"
-              onClick={() => setSelectedEmployee(null)}
+              onClick={requestCloseEmployeeModal}
             >
               {t('common.close')}
             </button>
@@ -909,6 +942,9 @@ const EmployeeManagement = () => {
                     </button>
                   ))}
                 </div>
+                {isPermDirty && (
+                  <p className="text-xs text-amber-700">{t('employee.presetTickedHint')}</p>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {PERMISSION_FIELDS(t).map(({ keys, label }) => {
                     const isChecked = keys.some((k) => permState[k] === true);
@@ -928,11 +964,6 @@ const EmployeeManagement = () => {
                       </label>
                     );
                   })}
-                </div>
-                <div className="flex justify-end pt-2">
-                  <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
-                    {isSavingPerm ? t('employee.saving') : t('employee.savePerm')}
-                  </button>
                 </div>
               </div>
             )}
@@ -1006,26 +1037,76 @@ const EmployeeManagement = () => {
                     />
                   </div>
                 </div>
-                <div className="flex justify-end pt-2">
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={handleSaveLimits}
-                    disabled={isSavingLimits || [
-                      [limitsState.dailyEmailLimit,   planLimits.dailyEmail],
-                      [limitsState.monthlyEmailLimit, planLimits.monthlyEmail],
-                      [limitsState.dailyZaloLimit,    planLimits.dailyZalo],
-                      [limitsState.monthlyZaloLimit,  planLimits.monthlyZalo],
-                    ].some(([v, m]) => m !== null && m !== undefined && v !== null && v > m)}
-                  >
-                    {isSavingLimits ? t('employee.saving') : t('employee.saveLimits')}
-                  </button>
-                </div>
               </div>
             )}
           </div>
+          {activeTab !== 'info' && (
+            <div className="border-t border-gray-100 px-6 py-3 flex items-center justify-end gap-3">
+              {isModalDirty && (
+                <span className="text-sm text-amber-600 mr-auto">{t('employee.unsavedHint')}</span>
+              )}
+              {activeTab === 'permissions' && (
+                <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
+                  {isSavingPerm ? t('employee.saving') : t('employee.savePerm')}
+                </button>
+              )}
+              {activeTab === 'limits' && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveLimits}
+                  disabled={isSavingLimits || [
+                    [limitsState.dailyEmailLimit,   planLimits.dailyEmail],
+                    [limitsState.monthlyEmailLimit, planLimits.monthlyEmail],
+                    [limitsState.dailyZaloLimit,    planLimits.dailyZalo],
+                    [limitsState.monthlyZaloLimit,  planLimits.monthlyZalo],
+                  ].some(([v, m]) => m !== null && m !== undefined && v !== null && v > m)}
+                >
+                  {isSavingLimits ? t('employee.saving') : t('employee.saveLimits')}
+                </button>
+              )}
+            </div>
+          )}
         </div>,
-        () => setSelectedEmployee(null)
+        requestCloseEmployeeModal
+      )}
+
+      {/* ── Modal xác nhận: còn thay đổi chưa lưu khi đóng modal nhân viên ──────── */}
+      {showUnsavedConfirm && renderModal(
+        <div>
+          <h2 className="text-xl font-semibold text-gray-900">{t('employee.unsavedTitle')}</h2>
+          <p className="text-sm text-gray-500 mt-2">{t('employee.unsavedBody')}</p>
+          <div className="flex justify-end gap-2 mt-6">
+            <button type="button" className="btn btn-secondary" onClick={() => setShowUnsavedConfirm(false)}>
+              {t('employee.backToEditing')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setShowUnsavedConfirm(false);
+                setSelectedEmployee(null);
+              }}
+            >
+              {t('employee.discardChanges')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={async () => {
+                const ok = activeTab === 'permissions'
+                  ? await handleSavePermissions()
+                  : await handleSaveLimits();
+                setShowUnsavedConfirm(false);
+                if (ok) setSelectedEmployee(null);
+              }}
+            >
+              {t('employee.saveAndClose')}
+            </button>
+          </div>
+        </div>,
+        () => setShowUnsavedConfirm(false),
+        MODAL_SM
       )}
 
       {/* ── Modal thêm nhân viên (chỉ cần email) ─────────────────────────────── */}
