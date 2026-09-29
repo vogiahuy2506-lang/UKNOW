@@ -357,6 +357,10 @@ describe('PR-6 — Adapter Telegram tham chiếu (sau cờ, TẮT mặc định)
     // stopError.code='CHANNEL_AUTH' không tự nó vào error_message (chỉ error.message được
     // failRun ghi) — chứng minh gián tiếp qua chuỗi lỗi gốc AUTH_KEY_UNREGISTERED còn nguyên vẹn.
     expect(String(runRow.error_message || '')).toContain('AUTH_KEY_UNREGISTERED');
+    // P2 — mất phiên tài khoản gửi: chiến dịch bị tạm dừng + câu tiếng Việt nêu kênh (không còn 'active').
+    expect(String(runRow.error_message || '')).toContain('Tài khoản Telegram đã mất phiên đăng nhập');
+    const { rows: campaignRows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaignId]);
+    expect(campaignRows[0].status).toBe('paused');
     expect(runRow.failed_sends).toBe(0);
   });
 });

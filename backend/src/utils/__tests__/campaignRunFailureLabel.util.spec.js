@@ -90,6 +90,16 @@ describe('campaignRunFailureLabel.util — labelCampaignRunFailure', () => {
     expect(message).toBe('Lượt chạy bị gián đoạn khi hệ thống khởi động lại và đã được đóng.');
   });
 
+  it.each([
+    ['Tài khoản Telegram đã mất phiên đăng nhập hoặc mất kết nối. Chiến dịch đã được tạm dừng, vui lòng đăng nhập lại tài khoản rồi kích hoạt lại chiến dịch.', 'Telegram'],
+    ['Tài khoản WhatsApp đã mất phiên đăng nhập hoặc mất kết nối. Chiến dịch đã được tạm dừng, vui lòng đăng nhập lại tài khoản rồi kích hoạt lại chiến dịch.', 'WhatsApp'],
+  ])('P2 — kênh adapter mất phiên (%#) → nêu đúng kênh, không phải "Lỗi hệ thống"', (raw, channelName) => {
+    const { message, actionHint } = labelCampaignRunFailure(raw);
+    expect(message).toContain(channelName);
+    expect(message).not.toContain('Lỗi hệ thống');
+    expect(actionHint).toContain(channelName);
+  });
+
   it('message lạ (không khớp mục nào) → câu mặc định có message gốc', () => {
     const { message, actionHint } = labelCampaignRunFailure('Một lỗi hoàn toàn mới chưa từng thấy XYZ');
     expect(message).toBe('Lỗi hệ thống khi chạy chiến dịch (Một lỗi hoàn toàn mới chưa từng thấy XYZ).');

@@ -23,6 +23,7 @@ import {
 } from './campaignChannelRegistry.service.js';
 import { evaluateAdapterSendGate, recordAdapterSendAttempt } from './campaignChannelRunner.service.js';
 import campaignShutdownGate from './campaignShutdownGate.js';
+import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { normalizeWhatsAppPhone } from './channels/whatsapp.campaignChannel.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
 import {
@@ -279,6 +280,25 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
     throw httpError(409, err?.code || 'CHANNEL_NOT_READY', err?.message || 'Không xác định được tài khoản gửi.');
   }
   const accountKey = account.accountKey;
+
+  // P2 — khách ĐÃ TỪ CHỐI nhận tin (lead mới nhất marketing_consent=false) thì không gửi, kể cả gửi nhanh. Chỉ kênh
+  // có recipientKey là SĐT (`descriptor.recipientIsPhone`, WhatsApp); Telegram không có SĐT để đối chiếu nên KHÔNG áp.
+  // Kiểm TRƯỚC cổng nhịp/giữ chỗ hạn mức: không đốt nhịp, không ăn hạn mức, không ghi nhật ký gửi. Trả 'failed' để
+  // FE báo lỗi đúng người (hình dạng giống mọi lỗi từng người nhận khác) — errorCategory 'consent_refused'.
+  if (descriptor.recipientIsPhone) {
+    const consentRefused = await zaloCampaignRecipientService.isLeadPhoneConsentRefused(workspaceOwnerId, recipientKey);
+    if (consentRefused) {
+      return {
+        item: {
+          recipientKey,
+          status: 'failed',
+          errorCategory: 'consent_refused',
+          errorCode: 'CONSENT_REFUSED',
+          error: 'Khách đã từ chối nhận tin nhắn (ở biểu mẫu/landing) — không gửi.',
+        },
+      };
+    }
+  }
 
   const baseRequestKey = resolveRequestIdempotencyKey(idempotencyKey ?? null);
 

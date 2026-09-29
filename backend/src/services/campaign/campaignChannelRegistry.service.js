@@ -43,6 +43,8 @@
  * @property {boolean} continuousReplay Node subtype này có được chạy lại ở các chu kỳ replay
  *   (continuousCycleIndex > 0) của continuous mode không (nguồn cho allowlist R:3335).
  * @property {string} [quotaChannel] Chỉ kênh 'adapter' — cột limit dùng để tính quota (vd 'zalo').
+ * @property {boolean} [recipientIsPhone] Chỉ kênh 'adapter' — `recipientKey` là SĐT đã chuẩn hoá (WhatsApp: 84…):
+ *   runner/gửi nhanh dùng nó để đối chiếu khách từ chối nhận tin (leads.marketing_consent=false). Telegram KHÔNG có.
  * @property {ChannelPolicy} [policy] Chỉ kênh 'adapter'.
  * @property {ChannelAdapter} [adapter] Chỉ kênh 'adapter'.
  */
@@ -158,6 +160,8 @@ function buildWhatsAppDescriptor() {
     continuousSupported: false,
     continuousReplay: false,
     quotaChannel: WHATSAPP_CHANNEL_META.quotaChannel,
+    // recipientKey = SĐT chuẩn hoá (normalizeWhatsAppPhone) -> kiểm khách từ chối nhận tin (P2).
+    recipientIsPhone: true,
     policy: buildWhatsAppPolicyFromEnv(),
     adapter: whatsappChannelAdapter,
   };
@@ -173,6 +177,11 @@ function getAllDescriptors() {
 
 /** Nhãn hiển thị cho trình dựng — chỉ kênh 'adapter' cần (kênh 'legacy' đã có tên cứng trong FE). */
 const ADAPTER_CHANNEL_LABELS = Object.freeze({ telegram: 'Telegram', whatsapp: 'WhatsApp' });
+
+/** Nhãn tiếng Việt của kênh adapter (cho câu báo chủ chiến dịch); kênh lạ trả nguyên `key`. */
+export function getAdapterChannelLabel(key) {
+  return ADAPTER_CHANNEL_LABELS[key] || String(key || '');
+}
 
 /**
  * PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1 — trình dựng hỏi "kênh adapter nào đang bật"
@@ -295,6 +304,7 @@ export default {
   getAdapterDescriptorBySubtype,
   getAdapterChannelKeysByQuotaChannel,
   getEnabledAdapterChannelsForBuilder,
+  getAdapterChannelLabel,
   __registerChannelForTest,
   __resetTestChannels,
 };

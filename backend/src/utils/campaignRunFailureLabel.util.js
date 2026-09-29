@@ -80,6 +80,15 @@ export function labelCampaignRunFailure(message) {
     };
   }
 
+  // P2 — kênh adapter mất phiên (campaignRun.service.js CAMPAIGN_PAUSED_BY_CHANNEL_ACCOUNT_UNAVAILABLE): chiến dịch đã tạm dừng.
+  if ((msg.includes('telegram') || msg.includes('whatsapp')) && msg.includes('mất phiên đăng nhập')) {
+    const channelName = msg.includes('whatsapp') ? 'WhatsApp' : 'Telegram';
+    return {
+      message: `Tài khoản ${channelName} dùng để gửi đã mất phiên đăng nhập hoặc mất kết nối — chiến dịch đã được tạm dừng.`,
+      actionHint: `Vào Quản lý kênh gửi, đăng nhập lại tài khoản ${channelName} (quét mã) rồi kích hoạt lại chiến dịch.`,
+    };
+  }
+
   if (msg.includes('thiếu nội dung tin nhắn zalo')) {
     return {
       message: 'Thiếu nội dung tin nhắn Zalo trong cấu hình chiến dịch.',

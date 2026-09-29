@@ -267,7 +267,7 @@ describe('W4a — Adapter WhatsApp cho chiến dịch (sau cờ, TẮT mặc đ�
     expect(ledgerRows[0].meta.lastFailureReason).toBe('hard');
   });
 
-  it('(e) mất kết nối giữa chừng ("is not connected") -> run failed CHANNEL_AUTH, không đốt danh sách', async () => {
+  it('(e) mất kết nối giữa chừng ("is not connected") -> run failed + chiến dịch TẠM DỪNG (P2), không đốt danh sách', async () => {
     process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
     const key = `${owner.id}-default`;
     openSession(key);
@@ -287,6 +287,10 @@ describe('W4a — Adapter WhatsApp cho chiến dịch (sau cờ, TẮT mặc đ�
     const runRow = await getRunRow(run.id);
     expect(runRow.status).toBe('failed');
     expect(String(runRow.error_message || '')).toContain('is not connected');
+    // P2 — mất phiên tài khoản gửi: chiến dịch bị tạm dừng (không còn 'active' để lịch chạy lại vô ích).
+    expect(String(runRow.error_message || '')).toContain('Tài khoản WhatsApp đã mất phiên đăng nhập');
+    const { rows: campaignRows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaignId]);
+    expect(campaignRows[0].status).toBe('paused');
     expect(runRow.failed_sends).toBe(0);
     expect(sendMessageMock).toHaveBeenCalledTimes(1);
   });

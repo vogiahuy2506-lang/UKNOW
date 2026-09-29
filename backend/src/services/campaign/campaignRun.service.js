@@ -8912,7 +8912,27 @@ class CampaignRunService {
               }
             }
 
-            // Mã khác (auth/not_configured/RUN_STOPPED/RUN_YIELD_SLOT/…) → ném tiếp như cũ, run failed.
+            // P2 — MẤT PHIÊN tài khoản gửi (category 'auth': Telegram AUTH_KEY_UNREGISTERED/SESSION_REVOKED…, WhatsApp
+            // đăng xuất/mất kết nối): trước đây ném thẳng CHANNEL_AUTH -> run failed, chiến dịch VẪN 'active' nên
+            // lịch chạy lại và lại lỗi. Đúng khuôn Zalo (ALL_ZALO_POOL_ACCOUNTS_UNAVAILABLE / ACCOUNT_UNAVAILABLE):
+            // tạm dừng chiến dịch + câu tiếng Việt nêu kênh; catch tổng bên dưới đóng sổ run + email chủ qua
+            // _failRunAndNotify -> notifyCampaignRunFailed (đường "run hỏng" sẵn có). Lịch (campaignSchedule) tự tắt
+            // sau 3 lỗi liên tiếp — giữ nguyên. Chỉ 'auth'; 'not_configured' (hạ tầng chưa bật) vẫn là run failed.
+            if (adapterError?.code === 'CHANNEL_AUTH') {
+              const channelLabel = campaignChannelRegistry.getAdapterChannelLabel(adapterDescriptor.key);
+              await campaignCrudRepository.pauseCampaignIfActive(campaignId);
+              const pauseNote = new Error(
+                `Tài khoản ${channelLabel} đã mất phiên đăng nhập hoặc mất kết nối. `
+                + 'Chiến dịch đã được tạm dừng, vui lòng đăng nhập lại tài khoản rồi kích hoạt lại chiến dịch.'
+                // Lỗi gốc của nhà cung cấp giữ lại cho người vận hành đọc campaign_runs.error_message (email chủ
+                // dùng câu thân thiện từ campaignRunFailureLabel, không đưa nguyên chuỗi này).
+                + ` (Chi tiết kỹ thuật: ${String(adapterError?.message || 'không rõ')})`
+              );
+              pauseNote.code = 'CAMPAIGN_PAUSED_BY_CHANNEL_ACCOUNT_UNAVAILABLE';
+              throw pauseNote;
+            }
+
+            // Mã khác (not_configured/RUN_STOPPED/RUN_YIELD_SLOT/…) → ném tiếp như cũ, run failed.
             throw adapterError;
           }
 
@@ -9107,6 +9127,14 @@ class CampaignRunService {
         const poolMessage = String(error?.message || 'Chiến dịch đã tạm dừng do toàn bộ tài khoản Zalo không sẵn sàng');
         await this._failRunAndNotify(runId, campaignId, poolMessage, 'zalo_pool_unavailable');
         console.warn(`[Campaign ${campaignId}] ${poolMessage}`);
+        return;
+      }
+      if (error?.code === 'CAMPAIGN_PAUSED_BY_CHANNEL_ACCOUNT_UNAVAILABLE') {
+        // P2 — kênh adapter (Telegram/WhatsApp) mất phiên: chiến dịch đã tạm dừng ở nhánh adapter phía trên; đóng
+        // sổ run 'failed' + email chủ (cùng khuôn nhánh pool Zalo ngay trên).
+        const channelMessage = String(error?.message || 'Chiến dịch đã tạm dừng do tài khoản gửi mất phiên đăng nhập');
+        await this._failRunAndNotify(runId, campaignId, channelMessage, 'channel_account_unavailable');
+        console.warn(`[Campaign ${campaignId}] ${channelMessage}`);
         return;
       }
       if (error?.code === 'RUN_STOPPED') {

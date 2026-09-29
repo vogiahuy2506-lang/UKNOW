@@ -8,6 +8,7 @@
 import campaignChannelMessageRepository from '../../repositories/campaign/campaignChannelMessage.repository.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
 import { ChannelSendError } from './campaignChannelRegistry.service.js';
+import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import campaignShutdownGate from './campaignShutdownGate.js';
 import {
   reserveSendQuota,
@@ -25,6 +26,25 @@ const PER_HOUR_MAX_WAIT_MS = 60 * 1000;
 // 15 phút; trần 24h để một con số lạ từ nhà cung cấp không treo run nhiều ngày.
 const REACTIVE_RATE_LIMIT_DEFAULT_WAIT_MS = 15 * 60 * 1000;
 const REACTIVE_RATE_LIMIT_MAX_WAIT_MS = 24 * HOUR_MS;
+
+// P2 (PLAN_TG_WA_DAY_DU 29/09) — lỗi TẠM (transient: timeout/ECONNRESET…) thử lại TRONG CÙNG LƯỢT, không bỏ cuộc
+// ngay như v1. Đọc env LÚC GỌI (test đổi giữa các ca). Chờ nhân đôi mỗi lần: 30s -> 60s -> (lần 3 là lần cuối).
+// KHÁC rate_limit (resolveReactiveRateLimitWaitMs ở dưới: dừng node + defer) — đừng gộp hai đường.
+const TRANSIENT_MAX_ATTEMPTS_DEFAULT = 3;
+const TRANSIENT_RETRY_MS_DEFAULT = 30 * 1000;
+// Nhãn error_category của một lần thử transient ĐÃ được thử lại (cột varchar(40); bảng không có cột meta và
+// không có status 'aborted' — migration 255): báo cáo lỗi chỉ đếm dòng KHÁC nhãn này (= lỗi cuối cùng).
+export const TRANSIENT_RETRY_CATEGORY = 'transient_retry';
+
+export function resolveTransientMaxAttempts() {
+  const value = Number.parseInt(process.env.CHANNEL_TRANSIENT_MAX_ATTEMPTS, 10);
+  return Number.isInteger(value) && value >= 1 ? value : TRANSIENT_MAX_ATTEMPTS_DEFAULT;
+}
+
+export function resolveTransientRetryBaseMs() {
+  const value = Number.parseInt(process.env.CHANNEL_TRANSIENT_RETRY_MS, 10);
+  return Number.isInteger(value) && value >= 0 ? value : TRANSIENT_RETRY_MS_DEFAULT;
+}
 
 function resolveReactiveRateLimitWaitMs(sendError) {
   const hinted = Number.parseInt(sendError?.retryAfterMs, 10);
@@ -381,8 +401,8 @@ export function createNoopChannelQuotaGate() {
 /**
  * Chạy MỘT node gửi kênh "adapter" cho tới khi hết người nhận hoặc phải dừng node (rate_limit/
  * auth/not_configured/quiet_hours/quota chưa đấu nối). KHÔNG throw cho lỗi 'hard'/'transient' của
- * TỪNG người nhận — những lỗi đó chỉ đánh dấu người đó failed rồi đi tiếp người sau (v1 KHÔNG
- * retry — nâng cấp retry là việc của PR sau, không phải PR-3).
+ * TỪNG người nhận — 'hard' đánh dấu người đó failed rồi đi tiếp người sau; 'transient' được thử lại
+ * trong lượt (P2, xem resolveTransientMaxAttempts) rồi mới bỏ cuộc.
  *
  * Bộ đếm `total/success/failed/skipped` là state CỤC BỘ của hàm này — TRẢ VỀ để engine
  * (campaignRun.service.js) tự cộng vào `let totalRecipients/successfulSends/failedSends/
@@ -488,6 +508,8 @@ export async function runAdapterSendNode(ctx) {
 
       let stepIndex = Math.max(0, Number.parseInt(progress.lastCompletedStep, 10) || 0);
       let stopRecipient = false;
+      // Số lần đã thử bước hiện tại (lỗi transient) — về 0 mỗi khi sang bước mới.
+      let transientAttempts = 0;
 
       while (stepIndex < steps.length && !stopRecipient) {
         await ensureRunStillRunning();
@@ -527,12 +549,52 @@ export async function runAdapterSendNode(ctx) {
           });
           skipped += 1;
           stepIndex += 1;
+          transientAttempts = 0;
           // F3 (review vòng 1) — đọc lại progress SAU KHI ledger vừa cập nhật (cache được làm mới
           // ngay trong upsertRecipientProgress, khuôn R:1929) — bước kế không được dùng object
           // progress cũ (firstSentAt/lastCompletedStep đã lệch với DB).
           // eslint-disable-next-line no-await-in-loop
           progress = await getRecipientProgress({ nodeId: node.id, channel: descriptor.key, recipientKey });
           continue;
+        }
+
+        // P2 — khách ĐÃ TỪ CHỐI nhận tin (lead mới nhất marketing_consent=false; NULL = chưa hỏi vẫn gửi, chốt
+        // 19/09) thì KHÔNG gửi. Chỉ áp cho kênh có recipientKey là SĐT (`descriptor.recipientIsPhone`, WhatsApp) —
+        // Telegram định danh bằng chat id, không có SĐT để đối chiếu nên KHÔNG áp (không giả vờ có kiểm).
+        // Kiểm TRƯỚC cổng nhịp/giữ chỗ hạn mức: người từ chối không ăn nhịp, không ăn quota. Lead thuộc CHỦ
+        // workspace (workspaceOwnerId) — nhân viên tạo chiến dịch thì userId là nhân viên, tra sai chủ.
+        if (descriptor.recipientIsPhone) {
+          // eslint-disable-next-line no-await-in-loop
+          const consentRefused = await zaloCampaignRecipientService.isLeadPhoneConsentRefused(
+            workspaceOwnerId ?? userId,
+            recipientKey
+          );
+          if (consentRefused) {
+            // Bỏ nốt MỌI bước còn lại của người này (total đã cộng steps.length lúc thấy lần đầu) — giữ ok+failed+skipped ≤ total.
+            skipped += steps.length - stepIndex;
+            const nowIso = toHoChiMinhIso();
+            // eslint-disable-next-line no-await-in-loop
+            await upsertRecipientProgress({
+              nodeId: node.id,
+              channel: descriptor.key,
+              recipientKey,
+              completedStep: steps.length,
+              totalSteps: steps.length,
+              firstSentAt: progress?.firstSentAt || nowIso,
+              lastCompletedAt: nowIso,
+              nextDueAt: null,
+              lastFailureReason: 'consent_refused',
+              lastFailureAt: nowIso,
+            });
+            outputItems.push({
+              ...recipient,
+              status: 'skipped',
+              skipReason: 'consent_refused',
+              stepIndex: oneBasedStep,
+            });
+            stopRecipient = true;
+            continue;
+          }
         }
 
         // Pacing 1: quiet hours — trong khung thì dừng CẢ NODE (không phải chỉ người này).
@@ -640,6 +702,7 @@ export async function runAdapterSendNode(ctx) {
             await quotaGate.consume(reservationId, { responseSnapshot: sendResult || null });
           }
           hasSentAny = true;
+          transientAttempts = 0;
           recordSendTimestamp(perHourKey, Date.now());
           // eslint-disable-next-line no-await-in-loop
           await markRecipientStepCompleted({
@@ -675,18 +738,35 @@ export async function runAdapterSendNode(ctx) {
           const category = sendError instanceof ChannelSendError
             ? sendError.category
             : descriptor.adapter.classifyError(sendError);
+          // P2 — lỗi TẠM: thử lại trong cùng lượt tối đa CHANNEL_TRANSIENT_MAX_ATTEMPTS lần (mặc định 3), chờ
+          // CHANNEL_TRANSIENT_RETRY_MS (30s) nhân đôi mỗi lần. Thử lại = `continue` vòng bước KHÔNG tăng stepIndex nên
+          // đi lại qua giờ yên lặng / trần giờ / giãn cách như một lần gửi mới. Chưa hết lượt thì KHÔNG cộng
+          // failed và KHÔNG đẩy outputItems (mới đếm khi bỏ cuộc) — giữ ok+failed+skipped ≤ total.
+          const maxAttempts = resolveTransientMaxAttempts();
+          const attemptNo = category === 'transient' ? transientAttempts + 1 : 1;
+          const willRetry = category === 'transient' && attemptNo < maxAttempts;
           if (messageId) {
+            // Bảng không có cột meta (migration 255): số lần thử = số dòng của (run, node, người, bước); lần thử
+            // đã được thử lại mang nhãn TRANSIENT_RETRY_CATEGORY, dòng cuối giữ 'transient' + tiền tố "[lần n/max]".
+            const rawMessage = sendError?.message || String(sendError);
             // eslint-disable-next-line no-await-in-loop
             await campaignChannelMessageRepository.markFailed(messageId, {
-              errorCategory: category,
-              errorMessage: sendError?.message || String(sendError),
+              errorCategory: willRetry ? TRANSIENT_RETRY_CATEGORY : category,
+              errorMessage: category === 'transient' ? `[lần ${attemptNo}/${maxAttempts}] ${rawMessage}` : rawMessage,
             });
+          }
+          if (willRetry) {
+            transientAttempts = attemptNo;
+            // eslint-disable-next-line no-await-in-loop
+            await sleep(resolveTransientRetryBaseMs() * (2 ** (attemptNo - 1)));
+            continue;
           }
           outputItems.push({
             ...recipient,
             status: 'failed',
             stepIndex: oneBasedStep,
             errorCategory: category,
+            ...(category === 'transient' ? { attempts: attemptNo } : {}),
           });
 
           if (category === 'hard' || category === 'transient') {
@@ -695,7 +775,7 @@ export async function runAdapterSendNode(ctx) {
             // cả failed lẫn success, vỡ ok+failed+skipped ≤ total (khuôn: lỗi còn thử lại không cộng
             // failedSends — email continuous R:4100–4105).
             failed += 1;
-            // F2 — v1 KHÔNG retry: người này COI NHƯ XONG (bỏ cuộc), ghi ledger completedStep=
+            // F2 — bỏ cuộc (hard, hoặc transient đã hết lượt thử): người này COI NHƯ XONG, ghi ledger completedStep=
             // totalSteps + lastFailureReason để resume KHÔNG gửi lại (khuôn email bỏ cuộc, R:4118-
             // 4133) rồi đi tiếp người sau.
             const nowIso = toHoChiMinhIso();
@@ -730,6 +810,7 @@ export async function runAdapterSendNode(ctx) {
         }
 
         stepIndex += 1;
+        transientAttempts = 0;
       }
     }
   } catch (loopError) {
