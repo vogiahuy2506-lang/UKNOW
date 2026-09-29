@@ -222,4 +222,22 @@ describe('EmployeeManagement — chân modal cố định + hộp xác nhận th
 
     expect(screen.queryByText('Đã tick — bấm Lưu quyền hạn để áp dụng.')).not.toBeInTheDocument();
   });
+
+  // Review PR-A — dirty phải tính trên CẢ HAI tab, không chỉ tab đang mở: tick quyền, sang tab "Giới hạn" rồi
+  // bấm Đóng từng đóng im lặng và mất quyền vừa tick (đúng lỗi sếp gặp 28/09, chỉ khác đường đi).
+  it('(g) tick quyền → chuyển sang tab Giới hạn → Đóng: VẪN hỏi; "Lưu rồi đóng" lưu quyền (không gọi lưu giới hạn)', async () => {
+    const user = await openPermissionsTab();
+    api.updateEmployeePermissions.mockReturnValue(ok({ permissions: {} }));
+    await user.click(screen.getByRole('button', { name: 'Chỉ xem' }));
+    await user.click(screen.getByRole('button', { name: 'Giới hạn' }));
+    const panel = (await screen.findByRole('button', { name: 'Lưu giới hạn' })).closest('.rounded-xl');
+    await user.click(within(panel).getByRole('button', { name: 'Đóng' }));
+
+    expect(await screen.findByRole('heading', { name: 'Có thay đổi chưa lưu' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Lưu rồi đóng' }));
+
+    await waitFor(() => expect(api.updateEmployeePermissions).toHaveBeenCalledTimes(1));
+    expect(api.updateSendLimits).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Lưu giới hạn' })).not.toBeInTheDocument());
+  });
 });

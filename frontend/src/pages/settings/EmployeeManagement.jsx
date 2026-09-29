@@ -524,7 +524,8 @@ const EmployeeManagement = () => {
   const isLimitsDirty = Boolean(selectedEmployee) && LIMIT_STATE_FIELDS.some(
     (k) => (limitsState[k] ?? null) !== (selectedEmployee?.[k] ?? null)
   );
-  const isModalDirty = activeTab === 'permissions' ? isPermDirty : activeTab === 'limits' ? isLimitsDirty : false;
+  // Review PR-A: tính trên CẢ HAI tab — tick quyền rồi sang tab Giới hạn mà bấm Đóng từng mất im lặng.
+  const isModalDirty = isPermDirty || isLimitsDirty;
 
   const requestCloseEmployeeModal = () => {
     if (isModalDirty) {
@@ -1094,9 +1095,10 @@ const EmployeeManagement = () => {
               type="button"
               className="btn btn-primary"
               onClick={async () => {
-                const ok = activeTab === 'permissions'
-                  ? await handleSavePermissions()
-                  : await handleSaveLimits();
+                // Lưu MỌI tab còn thay đổi (không chỉ tab đang mở); dừng ở tab đầu tiên lưu hỏng.
+                let ok = true;
+                if (isPermDirty) ok = await handleSavePermissions();
+                if (ok && isLimitsDirty) ok = await handleSaveLimits();
                 setShowUnsavedConfirm(false);
                 if (ok) setSelectedEmployee(null);
               }}

@@ -260,21 +260,23 @@ describe('cột Quyền trong bảng', () => {
   });
 
   // 29/09: nút "Lưu quyền hạn" bị khung modal (max-h-[85vh] overflow-hidden) cắt mất, không cuộn tới được —
-  // sếp tick quyền rồi không lưu được. jsdom không đo bố cục; đo thật bằng Chromium lúc sửa (trước: vùng nội dung
-  // scrollHeight = clientHeight; sau: cuộn được, thấy nút). Test này ghim chuỗi flex đúng: vùng cuộn chứa nút
-  // phải có min-h-0, và khối bọc giữa khung với vùng cuộn phải là min-h-0 flex-1 — KHÔNG phải h-full.
-  it('nút Lưu quyền hạn nằm trong vùng cuộn được: vùng cuộn có min-h-0, khối bọc là flex-1 min-h-0 (không h-full)', async () => {
+  // sếp tick quyền rồi không lưu được. jsdom không đo bố cục; đo thật bằng Chromium lúc sửa (5ad2a3ec). Từ PR-A nút
+  // nằm ở CHÂN modal (ngoài vùng cuộn). Ghim chuỗi flex đúng: khối bọc min-h-0 flex-1 (KHÔNG h-full), vùng cuộn
+  // min-h-0 và chân là anh em ĐỨNG SAU vùng cuộn trong cùng khối bọc — thiếu một mắt là chân lại bị khung cắt.
+  it('chuỗi flex modal: khối bọc min-h-0 flex-1 (không h-full), vùng cuộn min-h-0, chân chứa nút Lưu đứng sau vùng cuộn', async () => {
     setEmployees([makeEmployee()]);
     const user = await renderPage();
     await user.click(await screen.findByRole('button', { name: 'Chưa cấp quyền' }));
     const saveBtn = await screen.findByRole('button', { name: 'Lưu quyền hạn' });
-    const scroller = saveBtn.closest('.overflow-y-auto');
-    expect(scroller).not.toBeNull();
-    expect(scroller.classList.contains('min-h-0')).toBe(true);
-    const wrapper = scroller.parentElement;
+    expect(saveBtn.closest('.overflow-y-auto')).toBeNull();
+    const footer = saveBtn.parentElement;
+    const wrapper = footer.parentElement;
     expect(wrapper.classList.contains('min-h-0')).toBe(true);
     expect(wrapper.classList.contains('flex-1')).toBe(true);
     expect(wrapper.classList.contains('h-full')).toBe(false);
+    const scroller = footer.previousElementSibling;
+    expect(scroller.classList.contains('overflow-y-auto')).toBe(true);
+    expect(scroller.classList.contains('min-h-0')).toBe(true);
   });
 });
 
