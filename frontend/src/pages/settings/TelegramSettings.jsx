@@ -17,6 +17,7 @@ import {
 } from 'react-icons/hi';
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
 import { useI18n } from '../../i18n';
 
 /**
@@ -355,6 +356,9 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, loggi
           </button>
         </div>
       </div>
+
+      {/* P4 — giới hạn gửi/ngày + tốc độ gửi chiến dịch của tài khoản này */}
+      <ChannelAccountSendSettings channel="telegram" accountRef={account.id} />
     </div>
   );
 }

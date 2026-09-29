@@ -17,6 +17,7 @@ import {
 } from 'react-icons/hi';
 import { FaWhatsapp } from 'react-icons/fa';
 import whatsappSettingsApiService from '../../features/settings/services/whatsappSettingsApi.service';
+import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
 import { useI18n } from '../../i18n';
 
 /**
@@ -375,6 +376,9 @@ export default function WhatsAppSettings() {
                   </button>
                 </div>
               </div>
+
+              {/* P4 — giới hạn gửi/ngày + tốc độ gửi chiến dịch của phiên này (khoá theo sessionKey) */}
+              <ChannelAccountSendSettings channel="whatsapp" accountRef={s.sessionKey} />
             </div>
           ))}
         </div>
