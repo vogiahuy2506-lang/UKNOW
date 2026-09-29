@@ -45,6 +45,9 @@ const FORBIDDEN = new RegExp(
     'thousands of (people|Vietnamese|learners)',
     // (?:\\s|\\\\n)* : chuỗi nguồn hay ngắt dòng bằng ký tự \\n literal ('10,000+\\nHọc viên') — review 29/09 đột biến lọt.
     '\\d[\\d.,]*\\s*\\+?(?:\\s|\\\\n)*(học viên|learners|students)\\b',
+    // Đợt 4 (29/09/2026): điểm đánh giá / số lượng doanh nghiệp-khoá học cứng trên trang công khai.
+    '\\d\\.\\d\\s*/\\s*5(\\.0)?\\s*(đánh giá|rating)',
+    '\\d+\\s*\\+\\s*(doanh nghiệp|hội thảo|khóa học|khoá học|workshops?|courses|businesses|enterprises)',
   ].join('|'),
   'i'
 );

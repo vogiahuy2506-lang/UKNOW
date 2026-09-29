@@ -1,17 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { FaStar, FaCheck, FaRocket, FaBriefcase, FaUserGraduate, FaChalkboardTeacher, FaHandshake, FaQuoteLeft, FaArrowRight, FaExclamationTriangle, FaChartLine, FaCogs, FaCheckCircle, FaFire } from 'react-icons/fa';
+import { FaCheck, FaRocket, FaBriefcase, FaUserGraduate, FaChalkboardTeacher, FaHandshake, FaArrowRight, FaExclamationTriangle, FaChartLine, FaCogs, FaCheckCircle, FaFire } from 'react-icons/fa';
 
 const instructor = {
   name: 'Ngô Hữu Thống',
   title: 'Founder & CEO - Digiso Education',
   avatar: '/images/instructor-ngo-huu-thong.png',
   bio: 'ThS. Ngô Hữu Thống — hơn 10 năm kinh nghiệm tư vấn chuyển đổi số và ứng dụng AI. Chuyên gia tư vấn chiến lược AI cho các doanh nghiệp SME và Tập đoàn.',
-};
-
-const stats = {
-  courses: 12,
-  rating: 4.9,
-  partners: 50,
 };
 
 const courses = [
@@ -23,11 +17,8 @@ const courses = [
     icon: FaBriefcase,
     color: 'from-orange-500 to-red-600',
     price: 4990000,
-    originalPrice: 7990000,
     duration: 16,
     lessons: 8,
-    students: 850,
-    rating: 4.9,
     level: 'Doanh nghiệp',
     popular: true,
     features: [
@@ -46,11 +37,8 @@ const courses = [
     icon: FaHandshake,
     color: 'from-blue-600 to-cyan-500',
     price: 2990000,
-    originalPrice: 4990000,
     duration: 12,
     lessons: 6,
-    students: 620,
-    rating: 4.8,
     level: 'Hành chính công',
     popular: false,
     features: [
@@ -69,11 +57,8 @@ const courses = [
     icon: FaChalkboardTeacher,
     color: 'from-emerald-500 to-teal-500',
     price: 1990000,
-    originalPrice: 3490000,
     duration: 10,
     lessons: 5,
-    students: 1200,
-    rating: 4.9,
     level: 'Giáo dục',
     popular: false,
     features: [
@@ -92,11 +77,8 @@ const courses = [
     icon: FaUserGraduate,
     color: 'from-purple-600 to-pink-500',
     price: 990000,
-    originalPrice: 1990000,
     duration: 20,
     lessons: 10,
-    students: 2500,
-    rating: 4.8,
     level: 'Sinh viên',
     popular: false,
     features: [
@@ -106,30 +88,6 @@ const courses = [
       'Bí quyết phỏng vấn kỹ thuật',
       'Kết nối nhà tuyển dụng'
     ],
-  }
-];
-
-const testimonials = [
-  {
-    name: 'Vũ Quốc Thịnh',
-    role: 'Giám đốc',
-    content: 'Ứng dụng AI giúp công ty tôi tiết kiệm 40% thời gian xử lý giấy tờ. Tôi ước mình đã biết đến khóa học này sớm hơn.',
-    rating: 5,
-    avatar: 'V'
-  },
-  {
-    name: 'Nguyễn Văn Tân',
-    role: 'Trưởng khoa KTQT - ĐH Lạc Hồng',
-    content: 'Chương trình được thiết kế cực kỳ thực tế. Tôi có thể ứng dụng ngay vào việc giảng dạy và quản lý sinh viên.',
-    rating: 5,
-    avatar: 'N'
-  },
-  {
-    name: 'Lê Uyên Thảo',
-    role: 'Founder AI Agents',
-    content: 'Đầu tư xứng đáng nhất năm nay của tôi. Lượng kiến thức khổng lồ được truyền đạt vô cùng dễ hiểu và bám sát thực tế.',
-    rating: 5,
-    avatar: 'L'
   }
 ];
 
@@ -192,7 +150,6 @@ const PainPointCard = ({ icon: Icon, title, desc, delay }) => (
 
 const CourseCard = ({ course, onEnroll, index }) => {
   const { ref, isVisible } = useInViewAnimation();
-  const discount = Math.round((1 - course.price / course.originalPrice) * 100);
   const IconComponent = course.icon;
 
   return (
@@ -216,9 +173,6 @@ const CourseCard = ({ course, onEnroll, index }) => {
               <IconComponent className={`w-8 h-8 text-transparent bg-clip-text bg-gradient-to-br ${course.color}`} />
             </div>
           </div>
-          <div className="bg-red-100 text-red-600 font-bold px-3 py-1 rounded-full text-sm">
-            Tiết kiệm {discount}%
-          </div>
         </div>
 
         <h3 className="text-2xl font-bold text-gray-900 mb-2">{course.title}</h3>
@@ -236,7 +190,6 @@ const CourseCard = ({ course, onEnroll, index }) => {
         <div className="border-t border-gray-100 pt-6 mt-auto">
           <div className="flex items-end justify-between mb-6">
             <div>
-              <p className="text-gray-400 line-through mb-1">{formatPrice(course.originalPrice)}</p>
               <p className={`text-3xl font-black bg-gradient-to-r ${course.color} text-transparent bg-clip-text`}>
                 {formatPrice(course.price)}
               </p>
@@ -391,16 +344,6 @@ export default function LearningPage() {
                   </button>
                 </div>
               </AnimatedSection>
-
-              {/* Trust Indicators */}
-              <AnimatedSection delay={200} className="mt-12 pt-12 border-t border-gray-100 flex flex-wrap items-center justify-center lg:justify-start gap-8">
-                <div>
-                  <div className="flex items-center gap-1 text-yellow-400 mb-1">
-                    {[1,2,3,4,5].map(i => <FaStar key={i} />)}
-                  </div>
-                  <p className="text-sm text-gray-500 font-medium">{stats.rating}/5.0 Đánh giá</p>
-                </div>
-              </AnimatedSection>
             </div>
 
             {/* Right Content - Visual/Lead Magnet */}
@@ -465,9 +408,6 @@ export default function LearningPage() {
                   <div className="absolute bottom-6 left-6 right-6 bg-white/90 backdrop-blur-md p-6 rounded-2xl z-20 shadow-xl border border-white/50">
                     <p className="font-black text-2xl text-gray-900">{instructor.name}</p>
                     <p className="text-orange-600 font-bold mb-2">{instructor.title}</p>
-                    <div className="flex items-center gap-4 text-sm text-gray-500 font-medium">
-                      <span className="flex items-center gap-1"><FaBriefcase className="text-orange-500"/> {stats.partners}+ Doanh nghiệp</span>
-                    </div>
                   </div>
                 </div>
               </AnimatedSection>
@@ -521,37 +461,6 @@ export default function LearningPage() {
                 onEnroll={handleEnroll}
                 index={index}
               />
-            ))}
-          </div>
-        </div>
-      </div>
-
-      {/* 5. SOCIAL PROOF (Testimonials) */}
-      <div className="py-24 bg-[#FAFAFA]">
-        <div className="max-w-7xl mx-auto px-4">
-          <AnimatedSection className="text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-black text-gray-900 mb-6">Học viên nói gì về chúng tôi?</h2>
-            <p className="text-xl text-gray-600">Học viên đã thay đổi cách làm việc. Bạn sẽ là người tiếp theo?</p>
-          </AnimatedSection>
-
-          <div className="grid md:grid-cols-3 gap-8">
-            {testimonials.map((test, idx) => (
-              <AnimatedSection key={idx} delay={idx * 150} className="bg-white p-8 rounded-3xl shadow-lg border border-gray-100 relative">
-                <FaQuoteLeft className="text-4xl text-orange-100 absolute top-6 right-8" />
-                <div className="flex gap-1 text-yellow-400 mb-6">
-                  {[...Array(test.rating)].map((_, i) => <FaStar key={i} />)}
-                </div>
-                <p className="text-gray-700 text-lg mb-8 leading-relaxed relative z-10">"{test.content}"</p>
-                <div className="flex items-center gap-4">
-                  <div className="w-14 h-14 bg-gradient-to-br from-orange-400 to-red-500 rounded-full flex items-center justify-center text-white font-bold text-xl">
-                    {test.avatar}
-                  </div>
-                  <div>
-                    <p className="font-bold text-gray-900">{test.name}</p>
-                    <p className="text-sm text-gray-500">{test.role}</p>
-                  </div>
-                </div>
-              </AnimatedSection>
             ))}
           </div>
         </div>
