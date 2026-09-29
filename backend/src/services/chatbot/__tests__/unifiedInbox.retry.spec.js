@@ -142,6 +142,16 @@ jest.unstable_mockModule('../channelAdapters/zaloPersonal.adapter.js', () => ({
   default: { sendReply: mockSendReply },
 }));
 
+// WhatsApp QR (Baileys): adapter Hộp thư THẬT chạy, chỉ giả tra session key + adapter gửi chatbot.
+const mockWaSendReply = jest.fn();
+const mockGetBaileysSessionKey = jest.fn();
+jest.unstable_mockModule('../channelAdapters/whatsapp.adapter.js', () => ({
+  default: { sendReply: mockWaSendReply },
+}));
+jest.unstable_mockModule('../../../repositories/ai/channelConnections.repository.js', () => ({
+  default: { getBaileysSessionKey: mockGetBaileysSessionKey },
+}));
+
 // sendMessage nay goi buildAiPausePayload -> getCachedAutoResumeMinutes (db.query that).
 // Mock de unit test khong cham DB (tranh reject tre gay "Cannot log after tests are done" tren CI).
 jest.unstable_mockModule('../../../utils/aiHandoffResume.util.js', () => ({
@@ -563,5 +573,102 @@ describe('UnifiedInbox send status + retry', () => {
       expect.objectContaining({ userId: employeeActorId }),
       expect.anything()
     );
+  });
+
+  describe('WhatsApp QR (whatsapp_baileys) trong Hộp thư', () => {
+    const waConversation = {
+      id: 12,
+      channel: 'whatsapp_baileys',
+      id_channel: 9,
+      external_id: 'baileys:40-default:59:84901234567',
+    };
+
+    beforeEach(() => {
+      mockGetBaileysSessionKey.mockResolvedValue('40-default');
+      mockSendMessage.mockResolvedValue(77);
+      mockWaSendReply.mockResolvedValue({ success: true, messageId: 'wa-1', provider: 'baileys' });
+    });
+
+    it('trả lời tay: tra session key từ id_channel, tách số từ chuỗi ghép, gửi qua adapter WhatsApp, trạng thái sent', async () => {
+      mockGetConversationById.mockResolvedValue(waConversation);
+
+      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn');
+
+      expect(mockGetBaileysSessionKey).toHaveBeenCalledWith(9, 1);
+      expect(mockWaSendReply).toHaveBeenCalledWith({
+        channelId: '40-default',
+        externalId: '84901234567',
+        message: 'Chào bạn',
+      });
+      expect(result.sendStatus).toBe('sent');
+      expect(result.error).toBeUndefined();
+      // Gửi tay xong AI phải tạm dừng đúng bảng hội thoại kênh.
+      expect(mockSetAiPaused).toHaveBeenCalledWith(12, 'channel', true, 'handoff');
+    });
+
+    it('adapter trả success:false → failed, KHÔNG giả sent', async () => {
+      mockGetConversationById.mockResolvedValue(waConversation);
+      mockWaSendReply.mockResolvedValue({ success: false, error: 'not connected', provider: 'baileys' });
+
+      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn');
+
+      expect(result.sendStatus).toBe('failed');
+      expect(result.error).toMatch(/not connected/);
+      expect(mockUpdateSendStatus).toHaveBeenCalledWith(
+        'channel',
+        77,
+        expect.objectContaining({ status: 'failed' })
+      );
+    });
+
+    it('có tệp đính kèm → failed kèm câu giải thích, không gọi gửi', async () => {
+      mockGetConversationById.mockResolvedValue(waConversation);
+
+      const result = await unifiedInboxService.sendMessage(
+        1, 12, 'channel', 'Xem ảnh', [{ url: 'https://x/y.png', name: 'y.png' }]
+      );
+
+      expect(result.sendStatus).toBe('failed');
+      expect(result.error).toBe('Hộp thư WhatsApp chưa gửi được tệp đính kèm');
+      expect(mockWaSendReply).not.toHaveBeenCalled();
+    });
+
+    it('không tra được tài khoản WhatsApp → failed, không gọi gửi', async () => {
+      mockGetConversationById.mockResolvedValue(waConversation);
+      mockGetBaileysSessionKey.mockResolvedValue(null);
+
+      const result = await unifiedInboxService.sendMessage(1, 12, 'channel', 'Chào bạn');
+
+      expect(result.sendStatus).toBe('failed');
+      expect(mockWaSendReply).not.toHaveBeenCalled();
+    });
+
+    it('thử lại: nút "Gửi lại" dùng chung adapter, không còn "Channel adapter not available"', async () => {
+      mockFindReservationById.mockResolvedValue(null);
+      mockFindForRetry.mockResolvedValue({
+        id: 77,
+        id_conversation: 12,
+        id_channel: 9,
+        content: 'Chào bạn',
+        role: 'agent',
+        channel: 'whatsapp_baileys',
+        external_id: 'baileys:40-default:59:84901234567',
+      });
+      mockClaimRetry.mockResolvedValue({ id: 77 });
+      mockGetConversationById.mockResolvedValue(waConversation);
+      mockUpdateSendStatus.mockResolvedValue({
+        id: 77,
+        metadata: { source: 'manual_inbox', send: { status: 'sent' } },
+      });
+
+      const result = await unifiedInboxService.retryMessage(1, 77, 'channel');
+
+      expect(mockWaSendReply).toHaveBeenCalledWith({
+        channelId: '40-default',
+        externalId: '84901234567',
+        message: 'Chào bạn',
+      });
+      expect(result.sendStatus).toBe('sent');
+    });
   });
 });

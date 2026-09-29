@@ -157,6 +157,24 @@ class ChannelConnectionsRepository {
     );
     return rows[0]?.token ?? null;
   }
+
+  /**
+   * Session key Baileys (`<userId>-<shortKey>`) của một dòng channel_connections
+   * WhatsApp QR. Hộp thư chỉ có `channel_conversations.id_channel` (số) — phải tra
+   * ra session key mới gửi được. Ràng buộc id_user để không gửi nhầm qua phiên người khác.
+   * @param {number|string} id - channel_connections.id
+   * @param {number} userId
+   * @returns {Promise<string|null>}
+   */
+  async getBaileysSessionKey(id, userId) {
+    const { rows } = await db.query(
+      `SELECT external_channel_id
+       FROM channel_connections
+       WHERE id = $1 AND id_user = $2 AND channel = 'whatsapp_baileys'`,
+      [id, userId]
+    );
+    return rows[0]?.external_channel_id ?? null;
+  }
 }
 
 export default new ChannelConnectionsRepository();

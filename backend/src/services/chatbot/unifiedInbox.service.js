@@ -7,6 +7,7 @@ import chatbotChannelRepository from '../../repositories/ai/chatbotChannel.repos
 import zaloOAAdapter from './channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from './channelAdapters/facebook.adapter.js';
 import zaloPersonalAdapter from './channelAdapters/zaloPersonal.adapter.js';
+import whatsappBaileysInboxAdapter from './channelAdapters/whatsappBaileysInbox.adapter.js';
 import sseService from '../sse.service.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 import { resolveBillingUserId } from '../../utils/billingCycle.util.js';
@@ -1028,6 +1029,7 @@ class UnifiedInboxService {
       zalo_oa: zaloOAAdapter,
       facebook: facebookAdapter,
       zalo_personal: zaloPersonalAdapter,
+      whatsapp_baileys: whatsappBaileysInboxAdapter,
     };
     return adapters[channel];
   }

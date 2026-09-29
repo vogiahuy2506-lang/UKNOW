@@ -316,7 +316,7 @@ export default function ContactAlertsPanel({
       );
     }
     const ch = alert.channel || 'channel';
-    const label = ch === 'zalo_oa' ? 'Zalo OA' : ch === 'facebook' ? 'Facebook' : ch === 'whatsapp' ? 'WhatsApp' : ch;
+    const label = ch === 'zalo_oa' ? 'Zalo OA' : ch === 'facebook' ? 'Facebook' : (ch === 'whatsapp' || ch === 'whatsapp_baileys') ? 'WhatsApp' : ch;
     return (
       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-purple-50 text-purple-700 border border-purple-100">
         {label}{alert.display_name ? ` (${alert.display_name})` : ''}
@@ -508,7 +508,7 @@ export default function ContactAlertsPanel({
               })}
               <option value="web">Website</option>
               {otherChannels.map((ch) => {
-                const label = ch === 'zalo_oa' ? 'Zalo OA' : ch === 'facebook' ? 'Facebook' : ch;
+                const label = ch === 'zalo_oa' ? 'Zalo OA' : ch === 'facebook' ? 'Facebook' : (ch === 'whatsapp' || ch === 'whatsapp_baileys') ? 'WhatsApp' : ch;
                 return (
                   <option key={ch} value={ch}>
                     {label}

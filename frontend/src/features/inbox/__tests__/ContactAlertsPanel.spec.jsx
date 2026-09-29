@@ -342,4 +342,37 @@ describe('ContactAlertsPanel Component', () => {
     expect(screen.getByText('khach@gmail.com')).toBeInTheDocument();
     expect(screen.queryByText('0844790999')).not.toBeInTheDocument();
   });
+
+  it('hiển thị nhãn "WhatsApp" cho kênh whatsapp_baileys (không lộ tên kênh thô)', async () => {
+    chatbotApi.getContactAlerts.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          items: [{
+            id: '9',
+            last_conversation_id: 77,
+            last_source: 'channel',
+            channel: 'whatsapp_baileys',
+            visitor_name: 'Khách WA',
+            contact_type: 'phone',
+            contact_value: '0911222333',
+            last_seen_at: '2026-09-29T10:00:00.000Z',
+            seen_count: 1,
+            pending_notify: false,
+            suppressed_reason: null,
+            last_notified_at: null,
+            handled_at: null,
+            handled_by: null,
+          }],
+          total: 1,
+          openCount: 1,
+        },
+      },
+    });
+    render(<ContactAlertsPanel />);
+    expect(await screen.findByText('0911222333')).toBeInTheDocument();
+    // Một nhãn ở dòng cảnh báo + một mục trong ô lọc kênh — cả hai phải là chữ thân thiện.
+    expect(screen.getAllByText('WhatsApp')).toHaveLength(2);
+    expect(screen.queryByText('whatsapp_baileys')).not.toBeInTheDocument();
+  });
 });
