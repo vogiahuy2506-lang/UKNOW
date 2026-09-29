@@ -453,6 +453,7 @@ export class TelegramSessionManager {
         sender_name: event.senderName,
         is_group: event.isGroup,
         is_private: event.isPrivate,
+        is_outgoing: event.isOutgoing === true,
       });
     } catch (err) {
       // Forwarder is supposed to swallow its own errors; this is

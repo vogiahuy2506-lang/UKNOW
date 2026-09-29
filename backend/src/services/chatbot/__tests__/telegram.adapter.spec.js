@@ -82,7 +82,13 @@ describe('telegram.adapter', () => {
         telegramUserId: 123456789,
         // Bug #3 fix: surface messageId for InboundReplyDebounceService dedupe.
         messageId: 100,
+        isOutgoing: false,
       });
+    });
+
+    it('is_outgoing=true (chủ gõ từ điện thoại) → isOutgoing=true', () => {
+      const parsed = telegramAdapter.parseWebhookEvent({ telegram_user_id: 1, chat_id: 2, message_id: 3, text: 'x', sender_id: 1, is_outgoing: true });
+      expect(parsed.isOutgoing).toBe(true);
     });
 
     it('falls back to `message` field if `text` missing', () => {

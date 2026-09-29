@@ -584,6 +584,7 @@ export class MtProtoTelegramClient extends BaseTelegramClient {
             : null,
           isGroup: Boolean(msg.isGroup),
           isPrivate: !msg.isGroup,
+          isOutgoing: Boolean(msg.isOutgoing),
           raw: msg,
         });
         await onMessage(event);

@@ -12,6 +12,7 @@ import chatbotRepository from '../repositories/ai/chatbot.repository.js';
 import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
 import telegramAdapter from '../services/chatbot/channelAdapters/telegram.adapter.js';
+import { isOwnerOutgoingEcho } from '../utils/ownerOutgoingEcho.util.js';
 import {
   isStubOnly,
 } from '../services/chatbot/inProcChannelGateway/index.js';
@@ -147,6 +148,89 @@ async function logTelegramMessage(conversation, role, content, metadata = {}) {
     console.warn('[Telegram] logTelegramMessage failed:', err.message);
     return null;
   }
+}
+
+/**
+ * Ghi id tin Telegram vừa gửi vào dòng bot đã lưu — để khi tài khoản đẩy lại tin đó
+ * (isOutgoing) ta nhận ra là echo, không phải chủ gõ tay. Best-effort.
+ */
+async function bindTelegramOutboundId(rowId, messageId) {
+  if (!rowId || messageId == null || messageId === '') return;
+  try {
+    await db.query(
+      `UPDATE telegram_personal_messages SET external_message_id = $2 WHERE id = $1`,
+      [rowId, String(messageId)]
+    );
+  } catch (err) {
+    console.warn('[Telegram] bind outbound message id failed:', err.message);
+  }
+}
+
+/**
+ * Chủ tài khoản tự gõ từ điện thoại/app Telegram (mtcute `isOutgoing`): KHÔNG đi đường AI.
+ * Echo của tin bot vừa gửi → bỏ. Tin thật của chủ → ghi dòng `agent` + tạm dừng AI cho hội thoại
+ * (tự bật lại theo `isTelegramAiPaused`). Nhóm bỏ; hội thoại chưa có (AI chưa từng nói chuyện) bỏ.
+ * Telegram chưa có Hộp thư nên không phát SSE.
+ */
+async function handleTelegramOwnerOutgoing({ account, parsed }) {
+  if (parsed.isGroup || !parsed.chatId) return { handled: false, reason: 'group_or_no_chat' };
+  const { rows } = await db.query(
+    `SELECT * FROM telegram_personal_conversations
+     WHERE id_telegram_account = $1
+       AND external_id = $2
+       AND status = 'open'
+     ORDER BY last_message_at DESC NULLS LAST
+     LIMIT 1`,
+    [account.id, String(parsed.chatId)]
+  );
+  const conversation = rows[0];
+  if (!conversation?.id) return { handled: false, reason: 'no_conversation' };
+
+  let isEcho = false;
+  try {
+    const { rows: recent } = await db.query(
+      `SELECT external_message_id, content, created_at
+         FROM telegram_personal_messages
+        WHERE id_conversation = $1
+          AND role IN ('bot', 'agent')
+          AND created_at >= NOW() - INTERVAL '5 minutes'
+        ORDER BY id DESC
+        LIMIT 40`,
+      [conversation.id]
+    );
+    isEcho = isOwnerOutgoingEcho({
+      incomingId: parsed.messageId,
+      incomingContent: parsed.message,
+      candidates: (recent || []).map((r) => ({
+        externalId: r.external_message_id,
+        content: r.content,
+        createdAt: r.created_at,
+      })),
+    });
+  } catch (err) {
+    console.warn('[Telegram] owner outgoing echo check failed (will pause):', err.message);
+  }
+  if (isEcho) {
+    console.log('[Telegram] owner outgoing = echo, skip', { conversationId: conversation.id, messageId: parsed.messageId });
+    return { handled: false, reason: 'echo' };
+  }
+
+  await logTelegramMessage(conversation, 'agent', parsed.message, {
+    external_message_id: parsed.messageId != null ? String(parsed.messageId) : null,
+    source: 'owner_phone',
+    chat_id: parsed.chatId,
+  });
+  // Tạm dừng kiểu handoff; không ghi đè tạm dừng TAY (ai_paused_at NULL).
+  await db.query(
+    `UPDATE telegram_personal_conversations
+        SET ai_paused = true,
+            ai_paused_at = CASE WHEN ai_paused = true AND ai_paused_at IS NULL THEN NULL ELSE NOW() END,
+            updated_at = NOW()
+      WHERE id = $1`,
+    [conversation.id]
+  );
+  console.log('[Telegram] owner replied from phone → AI paused', { conversationId: conversation.id });
+  return { handled: true, conversationId: conversation.id };
 }
 
 /**
@@ -482,17 +566,18 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   });
   if (!activeCheck.allowed) {
     if (activeCheck.shouldNotify) {
-      await logTelegramMessage(conversation, 'bot', activeCheck.staticReply, {
+      const staticRowId = await logTelegramMessage(conversation, 'bot', activeCheck.staticReply, {
         model: 'ai_outside_hours',
         replySource: 'ai_outside_hours',
       });
       try {
-        await telegramAdapter.sendReply({
+        const sentStatic = await telegramAdapter.sendReply({
           userId: account.id_user,
           channelId: account.id,
           externalId: peer,
           message: activeCheck.staticReply,
         });
+        await bindTelegramOutboundId(staticRowId, sentStatic?.messageId);
         await chatbotActiveHoursService.markNotified({
           channel: 'telegram_personal',
           chatbotId: idChatbot || account.id,
@@ -520,17 +605,18 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   });
   if (!rate.allowed) {
     if (rate.shouldNotify) {
-      await logTelegramMessage(conversation, 'bot', rate.staticReply, {
+      const rateRowId = await logTelegramMessage(conversation, 'bot', rate.staticReply, {
         model: 'ai_rate_limited',
         replySource: 'ai_rate_limited',
       });
       try {
-        await telegramAdapter.sendReply({
+        const sentRate = await telegramAdapter.sendReply({
           userId: account.id_user,
           channelId: account.id,
           externalId: peer,
           message: rate.staticReply,
         });
+        await bindTelegramOutboundId(rateRowId, sentRate?.messageId);
         await chatbotRateLimitService.markRateLimitNotified({
           channel: 'telegram_personal',
           ownerUserId: account.id_user,
@@ -597,18 +683,19 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     { conversationId: conversation?.id, peer }
   );
   if (replyText) {
-    await logTelegramMessage(conversation, 'bot', replyText, {
+    const botRowId = await logTelegramMessage(conversation, 'bot', replyText, {
       model:
         mergedSettings.ai_model || 'gemini-2.5-flash',
     });
     console.log(`[Telegram] bot message logged, now sendReply → peer=${peer}`);
     try {
-      await telegramAdapter.sendReply({
+      const sentReply = await telegramAdapter.sendReply({
         userId: account.id_user,
         channelId: account.id,
         externalId: peer,
         message: replyText,
       });
+      await bindTelegramOutboundId(botRowId, sentReply?.messageId);
       console.log(`[Telegram] sendReply OK to ${peer}`);
     } catch (sendErr) {
       console.warn('[Telegram] sendReply failed:', sendErr.message);
@@ -684,6 +771,12 @@ router.post('/telegram-webhook', requireGatewaySecret, async (req, res) => {
         '[Telegram] webhook skip: account not found or inactive',
         { telegramUserId, accountFound: !!account }
       );
+      return res.status(204).end();
+    }
+
+    // Chủ tự gõ từ điện thoại (mtcute isOutgoing): không đi đường AI — ghi tin + dừng AI, hoặc bỏ nếu là echo.
+    if (parsed.isOutgoing) {
+      await handleTelegramOwnerOutgoing({ account, parsed });
       return res.status(204).end();
     }
 

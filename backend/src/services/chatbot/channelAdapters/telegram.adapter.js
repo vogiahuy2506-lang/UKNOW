@@ -40,10 +40,12 @@ class TelegramPersonalAdapter {
     }
 
     const chatId = Number.isFinite(Number(externalId)) ? Number(externalId) : externalId;
-    await telegramGateway.sendMessage(account.telegram_user_id, chatId, String(message || '').slice(0, 4000));
+    const sent = await telegramGateway.sendMessage(account.telegram_user_id, chatId, String(message || '').slice(0, 4000));
     await chatbotTelegramRepository.touchActivity(channelId);
 
-    return { success: true };
+    // messageId để ghi vào dòng bot — khử echo khi chủ trả lời từ điện thoại (W6).
+    const messageId = sent?.messageId ?? sent?.data?.messageId ?? null;
+    return { success: true, messageId };
   }
 
   /**
@@ -66,6 +68,7 @@ class TelegramPersonalAdapter {
       chatId: body.chat_id != null ? String(body.chat_id) : null,
       isGroup: Boolean(body.is_group),
       isPrivate: body.is_private !== false ? !body.is_group : Boolean(body.is_private),
+      isOutgoing: body.is_outgoing === true,
       telegramUserId: body.telegram_user_id != null ? Number(body.telegram_user_id) : null,
       // Surfaced for InboundReplyDebounceService dedupe. The webhook
       // (`internal.routes.js`) uses this as the `eventId` so a provider

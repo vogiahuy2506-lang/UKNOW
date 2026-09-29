@@ -125,6 +125,8 @@ beforeEach(async () => {
     _scenarioEnabledChatbots: [{ id_chatbot: 55 }],
     _lastRouterCall: null,
     _sendReplyCalls: [],
+    _sendReplyResult: { success: true },
+    _echoRows: [],
     _consoleLog: [],
     dbQuery: null,
     chatRouterCall: () => mocks._lastRouterCall,
@@ -180,6 +182,10 @@ beforeEach(async () => {
     //    đụng tới cái này nên return [] như code hiện tại.
     if (/FROM chatbot_settings/i.test(s) && /channel/i.test(s)) {
       return { rows: [fakeChatbotSettingsFull] };
+    }
+    // 4b. W6: dòng bot/agent gần đây để khử echo tin chủ gõ từ điện thoại
+    if (/SELECT external_message_id, content, created_at/i.test(s)) {
+      return { rows: mocks._echoRows };
     }
     // 5. ai_paused select
     if (/ai_paused/i.test(s)) {
@@ -299,6 +305,7 @@ beforeEach(async () => {
           isPrivate: body?.is_private !== false ? !body?.is_group : Boolean(body?.is_private),
           telegramUserId: body?.telegram_user_id != null ? Number(body.telegram_user_id) : null,
           messageId: body?.message_id != null ? Number(body.message_id) : null,
+          isOutgoing: body?.is_outgoing === true,
         })),
         verifyWebhookSecret: jest.fn(async (provided) => {
           if (!provided) throw new Error('TELEGRAM_GATEWAY_SECRET is not configured');
@@ -306,7 +313,7 @@ beforeEach(async () => {
         }),
         sendReply: jest.fn(async (args) => {
           mocks._sendReplyCalls.push(args);
-          return { success: true };
+          return mocks._sendReplyResult;
         }),
       },
     })
@@ -819,5 +826,63 @@ describe('Webhook authentication', () => {
     expect(res.status).toBe(204);
     // Không gọi router cho account không tồn tại.
     expect(mocks.chatRouterCall()).toBeNull();
+  });
+});
+
+// ── W6: chủ trả lời từ điện thoại (mtcute isOutgoing) ───────────────────
+
+const outgoingPayload = {
+  ...inboundPayload,
+  sender_id: '9999', // chính chủ
+  text: 'Em gọi lại anh nhé',
+  message_id: 555,
+  is_outgoing: true,
+};
+
+const agentLogs = () =>
+  (mocks._callsSoFar || []).filter(
+    ({ sql, params }) => /INSERT INTO telegram_personal_messages/i.test(sql) && params?.[3] === 'agent'
+  );
+const pauseUpdates = () =>
+  (mocks._callsSoFar || []).filter(({ sql }) => /UPDATE telegram_personal_conversations/i.test(sql) && /SET ai_paused = true/i.test(sql));
+
+describe('W6 — tin outgoing (chủ gõ từ điện thoại) không đi đường AI', () => {
+  it('outgoing là echo của tin bot vừa gửi (khớp external_message_id) → bỏ, không dừng AI', async () => {
+    mocks._echoRows = [{ external_message_id: '555', content: 'nội dung khác', created_at: new Date() }];
+    const res = await postWebhook(outgoingPayload);
+    expect(res.status).toBe(204);
+    expect(agentLogs()).toHaveLength(0);
+    expect(pauseUpdates()).toHaveLength(0);
+    expect(mocks.chatRouterCall()).toBeNull();
+  });
+
+  it('outgoing lạ → ghi dòng agent + dừng AI hội thoại, KHÔNG gọi AI, KHÔNG gửi gì', async () => {
+    mocks._echoRows = [];
+    const res = await postWebhook(outgoingPayload);
+    expect(res.status).toBe(204);
+    const logs = agentLogs();
+    expect(logs).toHaveLength(1);
+    expect(logs[0].params[2]).toBe('555'); // external_message_id
+    expect(logs[0].params[4]).toBe('Em gọi lại anh nhé');
+    expect(pauseUpdates()).toHaveLength(1);
+    expect(pauseUpdates()[0].params).toEqual([fakeConversation.id]);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+  });
+
+  it('outgoing tới nhóm → bỏ hẳn', async () => {
+    const res = await postWebhook({ ...outgoingPayload, is_group: true, is_private: false });
+    expect(res.status).toBe(204);
+    expect(agentLogs()).toHaveLength(0);
+    expect(pauseUpdates()).toHaveLength(0);
+    expect(mocks.chatRouterCall()).toBeNull();
+  });
+
+  it('bot trả lời → id tin Telegram vừa gửi được ghi vào dòng bot (để khử echo)', async () => {
+    mocks._sendReplyResult = { success: true, messageId: 4242 };
+    await postWebhook(inboundPayload);
+    const bind = (mocks._callsSoFar || []).find(({ sql }) => /UPDATE telegram_personal_messages SET external_message_id/i.test(sql));
+    expect(bind).toBeDefined();
+    expect(bind.params).toEqual([999, '4242']);
   });
 });

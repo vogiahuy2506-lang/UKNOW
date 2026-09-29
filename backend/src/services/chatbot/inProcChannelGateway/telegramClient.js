@@ -44,6 +44,7 @@ export class TelegramMessageEvent {
     senderName = null,
     isGroup = false,
     isPrivate = true,
+    isOutgoing = false,
     raw = null,
   }) {
     this.telegramUserId = String(telegramUserId);
@@ -54,6 +55,8 @@ export class TelegramMessageEvent {
     this.senderName = senderName ?? null;
     this.isGroup = Boolean(isGroup);
     this.isPrivate = Boolean(isPrivate);
+    // Tin do CHÍNH tài khoản gõ (vd từ điện thoại) — không phải tin khách gửi tới.
+    this.isOutgoing = Boolean(isOutgoing);
     this.raw = raw;
   }
 }
