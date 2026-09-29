@@ -159,6 +159,45 @@ async function checkReadiness({ userId, node }) {
     err.code = 'TELEGRAM_ACCOUNT_NOT_READY';
     throw err;
   }
+  await assertHasRecipients({ node, account });
+}
+
+/**
+ * PLAN_TELEGRAM_0_NGUOI_NHAN_2026-09-29 Việc 1 — chặn SỚM chiến dịch không có ai để gửi (trước đây
+ * run 'completed' 0 người trong 0,06 giây, người dùng tưởng đã gửi). Chỉ kiểm hai nguồn tự xác định
+ * được ở thời điểm preflight: 'telegram_conversations' và 'manual'. Nguồn 'node'/mặc định lấy người
+ * nhận từ node phía trước lúc chạy nên preflight không biết — đã có lưới ở bộ chạy.
+ */
+async function assertHasRecipients({ node, account }) {
+  const config = node?.config || {};
+  if (config.recipientSource === 'telegram_conversations') {
+    const conversations = await chatbotTelegramRepository.listOpenConversationsForAccount(account.id);
+    if (!conversations || conversations.length === 0) {
+      const err = new Error(
+        "Tài khoản Telegram này chưa có hội thoại nào đang mở — chưa có ai để gửi. Chọn 'Nhập chat id', hoặc đợi khách nhắn tới tài khoản trước."
+      );
+      err.code = 'TELEGRAM_NO_RECIPIENTS';
+      throw err;
+    }
+    return;
+  }
+  if (config.recipientSource === 'manual') {
+    const raw = config.recipientKeys;
+    const list = Array.isArray(raw) ? raw : String(raw ?? '').split(/[\n,]+/);
+    const hasValidChatId = list.some((item) => {
+      const key = item && typeof item === 'object'
+        ? item.telegramChatId ?? item.chatId ?? item.recipientKey
+        : item;
+      return TELEGRAM_CHAT_ID_PATTERN.test(String(key ?? '').trim());
+    });
+    if (!hasValidChatId) {
+      const err = new Error(
+        'Danh sách chat id Telegram trống hoặc không có chat id hợp lệ (chỉ nhận số, ví dụ 123456789 hoặc -1001234567890) — chưa có ai để gửi.'
+      );
+      err.code = 'TELEGRAM_NO_RECIPIENTS';
+      throw err;
+    }
+  }
 }
 
 /**

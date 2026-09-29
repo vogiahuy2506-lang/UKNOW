@@ -94,4 +94,47 @@ describe('NodeConfigModal — send_telegram: danh sách tài khoản Telegram', 
     fireEvent.click(screen.getByRole('button', { name: /Lưu/ }));
     await waitFor(() => expect(onSave).not.toHaveBeenCalled());
   });
+
+  describe('cảnh báo nguồn hội thoại mà tài khoản 0 hội thoại (PLAN_TELEGRAM_0_NGUOI_NHAN)', () => {
+    const WARNING = /Tài khoản này chưa có hội thoại nào/;
+    const accounts = [
+      apiAccount({ id: 7, name: 'Bot rỗng', openConversationCount: 0 }),
+      apiAccount({ id: 8, name: 'Bot có khách', openConversationCount: 3 }),
+    ];
+    const nodeWithAccount = (accountId, recipientSource) => ({
+      id: 'node-telegram-w',
+      data: { nodeType: 'send_telegram', label: 'Gửi Telegram', config: { telegramAccountId: accountId, ...(recipientSource ? { recipientSource } : {}) } },
+    });
+
+    it('nguồn hội thoại + tài khoản 0 -> hiện cảnh báo; nhãn tài khoản kèm số hội thoại', async () => {
+      campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue(ok(accounts));
+      renderModal(nodeWithAccount(7));
+      expect(await screen.findByText(WARNING)).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: /Bot có khách.*3 hội thoại/ })).toBeInTheDocument();
+    });
+
+    it('đổi sang tài khoản có hội thoại -> mất cảnh báo', async () => {
+      campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue(ok(accounts));
+      renderModal(nodeWithAccount(7));
+      await screen.findByText(WARNING);
+      const accountSelect = screen.getByRole('option', { name: /Bot có khách/ }).closest('select');
+      fireEvent.change(accountSelect, { target: { value: '8' } });
+      await waitFor(() => expect(screen.queryByText(WARNING)).not.toBeInTheDocument());
+    });
+
+    it('đổi nguồn sang nhập chat id -> mất cảnh báo', async () => {
+      campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue(ok(accounts));
+      renderModal(nodeWithAccount(7));
+      await screen.findByText(WARNING);
+      fireEvent.change(screen.getByDisplayValue('Hội thoại Telegram của tài khoản'), { target: { value: 'manual' } });
+      await waitFor(() => expect(screen.queryByText(WARNING)).not.toBeInTheDocument());
+    });
+
+    it('BE không trả openConversationCount -> không cảnh báo (không biết thì không dọa)', async () => {
+      campaignBuilderApiService.getTelegramAccountsForBuilder.mockResolvedValue(ok([apiAccount({ id: 7 })]));
+      renderModal(nodeWithAccount(7));
+      await waitFor(() => expect(screen.getByRole('option', { name: /Bot chăm sóc khách/ })).toBeInTheDocument());
+      expect(screen.queryByText(WARNING)).not.toBeInTheDocument();
+    });
+  });
 });

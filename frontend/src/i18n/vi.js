@@ -7239,6 +7239,8 @@ export default {
     messageRequired: 'Nội dung tin nhắn',
     messagePlaceholder: 'Nhập nội dung tin nhắn Telegram...',
     variableHint: 'Gợi ý: dùng {{ten}} để chèn tên người nhận (chỉ áp dụng khi người nhận lấy từ hội thoại Telegram).',
+    conversationCount: '{count} hội thoại',
+    noConversationsWarning: "Tài khoản này chưa có hội thoại nào — chiến dịch sẽ không gửi được. Chọn 'Nhập chat id'.",
   },
 
   // Read Sheet Section

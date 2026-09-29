@@ -384,6 +384,17 @@ export async function runAdapterSendNode(ctx) {
   const account = await descriptor.adapter.resolveAccount({ userId, workspaceOwnerId, node, config });
   const rows = resolveRecipientRows({ config, nodeOutputs, lastOutputItems });
   const recipients = await descriptor.adapter.resolveRecipients({ rows, config, account });
+  // PLAN_TELEGRAM_0_NGUOI_NHAN_2026-09-29 Việc 2 — lưới cuối: không có người nhận thì KHÔNG trả
+  // {total:0} để run 'completed' im lặng. Mã CHANNEL_NO_RECIPIENTS không nằm trong nhánh defer
+  // (QUIET_HOURS/RATE_LIMIT) của engine nên rơi xuống catch tổng → run 'failed' + error_message.
+  // Ném TRƯỚC try nên không có partialResult (chưa cộng gì).
+  if (!Array.isArray(recipients) || recipients.length === 0) {
+    const noRecipientsError = new Error(
+      `Không có người nhận nào để gửi ở node ${node?.id ?? '?'} (kênh ${descriptor.key}) — kiểm tra nguồn người nhận và tài khoản gửi.`
+    );
+    noRecipientsError.code = 'CHANNEL_NO_RECIPIENTS';
+    throw noRecipientsError;
+  }
   const steps = Array.isArray(config?.steps) ? config.steps : [];
   const perHourKey = `${descriptor.key}::${account?.accountKey ?? ''}`;
 

@@ -81,10 +81,37 @@ describe('GET /api/campaigns/channels/telegram/accounts', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.data).toEqual([
-      { id: active.id, name: 'Alice', username: null },
+      { id: active.id, name: 'Alice', username: null, openConversationCount: 0 },
     ]);
     expect(JSON.stringify(res.body)).not.toContain('900000000');
     expect(JSON.stringify(res.body)).not.toContain('"telegram_user_id"');
+  });
+
+  it('openConversationCount đúng từng tài khoản: chỉ đếm hội thoại status=open của CHÍNH tài khoản đó', async () => {
+    const owner = await createUser({ username: `pr7a_owner_cnt_${Date.now()}` });
+    const token = await loginAs(owner);
+    const busy = await insertTelegramAccount({ userId: owner.id, telegramUserId: '801', firstName: 'Busy' });
+    const empty = await insertTelegramAccount({ userId: owner.id, telegramUserId: '802', firstName: 'Empty' });
+    const onlyClosed = await insertTelegramAccount({ userId: owner.id, telegramUserId: '803', firstName: 'Closed' });
+    const insertConv = (accountId, externalId, status) => db.query(
+      `INSERT INTO telegram_personal_conversations (id_user, id_telegram_account, external_id, status)
+       VALUES ($1, $2, $3, $4)`,
+      [owner.id, accountId, externalId, status]
+    );
+    await insertConv(busy.id, '1001', 'open');
+    await insertConv(busy.id, '1002', 'open');
+    await insertConv(busy.id, '1003', 'closed');
+    await insertConv(onlyClosed.id, '1004', 'closed');
+
+    const res = await request(app)
+      .get('/api/campaigns/channels/telegram/accounts')
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    const byId = Object.fromEntries(res.body.data.map((a) => [a.id, a.openConversationCount]));
+    expect(byId[busy.id]).toBe(2);
+    expect(byId[empty.id]).toBe(0);
+    expect(byId[onlyClosed.id]).toBe(0);
   });
 
   it('name rỗng (không first/last name) -> rơi về username, rồi Telegram #id', async () => {
@@ -125,7 +152,7 @@ describe('GET /api/campaigns/channels/telegram/accounts', () => {
       .set('X-Owner-Context', String(owner.id));
 
     expect(res.status).toBe(200);
-    expect(res.body.data).toEqual([{ id: account.id, name: 'Owner Bot', username: null }]);
+    expect(res.body.data).toEqual([{ id: account.id, name: 'Owner Bot', username: null, openConversationCount: 0 }]);
   });
 
   it('nhân viên KHÔNG có quyền chiến dịch nào -> 403', async () => {

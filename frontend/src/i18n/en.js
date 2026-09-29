@@ -7231,6 +7231,8 @@ export default {
     messageRequired: 'Message content',
     messagePlaceholder: 'Enter the Telegram message content...',
     variableHint: 'Tip: use {{ten}} to insert the recipient name (only when recipients come from Telegram conversations).',
+    conversationCount: '{count} conversations',
+    noConversationsWarning: "This account has no conversations yet — the campaign will not be able to send. Choose 'Enter chat IDs'.",
   },
 
   // Read Sheet Section

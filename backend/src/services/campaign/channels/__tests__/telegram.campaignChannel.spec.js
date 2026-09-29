@@ -244,3 +244,60 @@ describe('telegram.campaignChannel.checkReadiness — phiên phải còn khoá �
     await expect(telegramChannelAdapter.checkReadiness(input)).rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_NOT_READY' });
   });
 });
+
+describe('telegram.campaignChannel.checkReadiness — PLAN_TELEGRAM_0_NGUOI_NHAN: chặn sớm khi không có người nhận', () => {
+  const goodSession = { kv: {}, authKeys: { permanent: { 2: { 0: 1 } }, temp: {} } };
+  const nodeWith = (config) => ({ userId: 99, node: { id: 1, config: { telegramAccountId: 7, ...config } } });
+  const setup = () => {
+    getAccountByIdMock.mockReset();
+    getSessionStringMock.mockReset();
+    listOpenConversationsForAccountMock.mockReset();
+    getAccountByIdMock.mockResolvedValue({ id: 7, id_user: 99, is_active: true, telegram_user_id: '555' });
+    getSessionStringMock.mockResolvedValue(goodSession);
+  };
+
+  it('nguồn hội thoại + tài khoản 0 hội thoại mở -> TELEGRAM_NO_RECIPIENTS, câu tiếng Việt gợi ý "Nhập chat id"', async () => {
+    setup();
+    listOpenConversationsForAccountMock.mockResolvedValue([]);
+    await expect(
+      telegramChannelAdapter.checkReadiness(nodeWith({ recipientSource: 'telegram_conversations' }))
+    ).rejects.toMatchObject({
+      code: 'TELEGRAM_NO_RECIPIENTS',
+      message: expect.stringContaining("chưa có hội thoại nào đang mở"),
+    });
+    expect(listOpenConversationsForAccountMock).toHaveBeenCalledWith(7);
+  });
+
+  it('nguồn hội thoại + có >= 1 hội thoại mở -> qua', async () => {
+    setup();
+    listOpenConversationsForAccountMock.mockResolvedValue([{ external_id: '123', display_name: 'A' }]);
+    await expect(
+      telegramChannelAdapter.checkReadiness(nodeWith({ recipientSource: 'telegram_conversations' }))
+    ).resolves.toBeUndefined();
+  });
+
+  it.each([
+    ['toàn chữ', 'abc\nxyz, @user'],
+    ['chuỗi rỗng', ''],
+    ['mảng rỗng', []],
+  ])('nguồn manual, recipientKeys %s -> TELEGRAM_NO_RECIPIENTS', async (_label, recipientKeys) => {
+    setup();
+    await expect(
+      telegramChannelAdapter.checkReadiness(nodeWith({ recipientSource: 'manual', recipientKeys }))
+    ).rejects.toMatchObject({ code: 'TELEGRAM_NO_RECIPIENTS', message: expect.stringContaining('chat id') });
+    expect(listOpenConversationsForAccountMock).not.toHaveBeenCalled();
+  });
+
+  it('nguồn manual, có ít nhất một chat id hợp lệ (lẫn rác) -> qua', async () => {
+    setup();
+    await expect(
+      telegramChannelAdapter.checkReadiness(nodeWith({ recipientSource: 'manual', recipientKeys: 'abc\n-1001234567890' }))
+    ).resolves.toBeUndefined();
+  });
+
+  it('nguồn khác (node/mặc định) -> không tra hội thoại, qua (lưới nằm ở bộ chạy)', async () => {
+    setup();
+    await expect(telegramChannelAdapter.checkReadiness(nodeWith({}))).resolves.toBeUndefined();
+    expect(listOpenConversationsForAccountMock).not.toHaveBeenCalled();
+  });
+});

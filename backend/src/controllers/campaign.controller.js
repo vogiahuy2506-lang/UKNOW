@@ -968,14 +968,19 @@ class CampaignController {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
       const accounts = await chatbotTelegramRepository.listAccountsForUser(ownerUserId);
-      const data = accounts
-        .filter((a) => a.is_active !== false)
+      const activeAccounts = accounts.filter((a) => a.is_active !== false);
+      // Một truy vấn gom cho mọi tài khoản (không N+1) — FE cảnh báo khi nguồn hội thoại mà tài khoản có 0.
+      const openCounts = await chatbotTelegramRepository.countOpenConversationsByAccountIds(
+        activeAccounts.map((a) => a.id)
+      );
+      const data = activeAccounts
         .map((a) => {
           const name = [a.first_name, a.last_name].filter(Boolean).join(' ').trim();
           return {
             id: a.id,
             name: name || a.username || `Telegram #${a.id}`,
             username: a.username || null,
+            openConversationCount: openCounts.get(Number(a.id)) ?? 0,
           };
         });
       res.json({ success: true, data });

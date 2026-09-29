@@ -6,6 +6,7 @@ import { describe, it, expect, beforeEach } from '@jest/globals';
 import {
   isWithinQuietHours,
   computeQuietHoursWaitMs,
+  runAdapterSendNode,
   __recordSendForTest,
   __computePerHourWaitMsForTest,
   __resetPerHourWindowForTest,
@@ -110,5 +111,34 @@ describe('campaignChannelRunner.computeQuietHoursWaitMs — PR-5, waitMs tới h
   it('khung không vắt nửa đêm (10->14 VN), đang trong khung lúc 12:00 — còn 2 giờ', () => {
     const QUIET_10_TO_14 = { startHour: 10, endHour: 14 };
     expect(computeQuietHoursWaitMs(vnHourToEpochMs(12, 0), QUIET_10_TO_14)).toBe(2 * 60 * 60 * 1000);
+  });
+});
+
+describe('campaignChannelRunner.runAdapterSendNode — PLAN_TELEGRAM_0_NGUOI_NHAN: 0 người nhận là LỖI, không phải "xong"', () => {
+  const buildCtx = (recipients) => ({
+    descriptor: {
+      key: 'telegram',
+      adapter: {
+        resolveAccount: async () => ({ accountKey: '7' }),
+        resolveRecipients: async () => recipients,
+      },
+    },
+    runId: 1,
+    campaignId: 2,
+    userId: 3,
+    workspaceOwnerId: 3,
+    node: { id: 4152 },
+    config: { recipientSource: 'telegram_conversations', steps: [{ message: 'hi' }] },
+    nodeOutputs: {},
+    lastOutputItems: [],
+    ensureRunStillRunning: async () => {},
+  });
+
+  it('adapter trả mảng rỗng -> ném CHANNEL_NO_RECIPIENTS (không partialResult, không trả total:0)', async () => {
+    const error = await runAdapterSendNode(buildCtx([])).then(() => null, (e) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.code).toBe('CHANNEL_NO_RECIPIENTS');
+    expect(error.message).toContain('4152');
+    expect(error.partialResult).toBeUndefined();
   });
 });

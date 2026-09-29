@@ -609,4 +609,29 @@ describe('PR-3 — Runner chung kênh adapter (mock)', () => {
     expect(firstMs).toBeLessThanOrEqual(lastMs);
     expect(lastMs - firstMs).toBeGreaterThanOrEqual(900); // delay 1100ms giữa 2 bước, chừa dư sai số
   }, 20000);
+
+  it('(k) PLAN_TELEGRAM_0_NGUOI_NHAN: adapter trả 0 người nhận -> run FAILED có error_message, KHÔNG completed; đếm giữ 0', async () => {
+    const campaign = await insertCampaign();
+    const node = await insertNode({
+      campaignId: campaign.id,
+      config: { recipientSource: 'manual', recipientKeys: [], steps: [{ message: 'Bước 1' }] },
+    });
+    const run = await insertRun({ campaignId: campaign.id });
+
+    await runCampaignToCompletion(campaign.id, run.id);
+
+    expect(fakeSendOne).not.toHaveBeenCalled();
+    const { rows } = await db.query(
+      `SELECT status, error_message, total_recipients, successful_sends, failed_sends, skipped_sends
+       FROM campaign_runs WHERE id = $1`,
+      [run.id]
+    );
+    expect(rows[0].status).toBe('failed');
+    expect(rows[0].error_message).toContain('Không có người nhận');
+    expect(rows[0].error_message).toContain(String(node.id));
+    expect(rows[0].total_recipients).toBe(0);
+    expect(rows[0].successful_sends).toBe(0);
+    expect(rows[0].failed_sends).toBe(0);
+    expect(rows[0].skipped_sends).toBe(0);
+  });
 });

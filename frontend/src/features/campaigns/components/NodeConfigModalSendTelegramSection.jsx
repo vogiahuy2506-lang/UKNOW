@@ -7,7 +7,7 @@
  * @param {Object} props
  * @param {Object} props.formData
  * @param {Function} props.setFormData
- * @param {Array<{id: number, name: string, username: string|null}>} props.telegramAccounts
+ * @param {Array<{id: number, name: string, username: string|null, openConversationCount?: number}>} props.telegramAccounts
  * @param {'idle'|'loading'|'loaded'|'error'} [props.telegramAccountsStatus='loaded']
  * @param {string} [props.telegramAccountsError]
  * @param {Function} [props.onRetryTelegramAccounts]
@@ -26,6 +26,16 @@ export const NodeConfigSendTelegramSection = ({
   const { t } = useI18n();
   const isEmptyAfterSuccess = telegramAccountsStatus === 'loaded' && telegramAccounts.length === 0;
   const messageValue = formData.steps?.[0]?.message || '';
+  // PLAN_TELEGRAM_0_NGUOI_NHAN_2026-09-29 Việc 3 — cảnh báo khi nguồn là hội thoại mà tài khoản đang
+  // chọn chưa có hội thoại mở nào. Chỉ cảnh báo khi BE trả số (số thiếu = không biết = không cảnh báo).
+  const selectedAccount = telegramAccounts.find((a) => String(a.id) === String(formData.telegramAccountId || ''));
+  const isConversationSource = (formData.recipientSource || 'telegram_conversations') === 'telegram_conversations';
+  const showNoConversationsWarning = Boolean(
+    selectedAccount
+    && isConversationSource
+    && Number.isFinite(selectedAccount.openConversationCount)
+    && selectedAccount.openConversationCount === 0
+  );
 
   const handleMessageChange = (value) => {
     setFormData((prev) => ({
@@ -61,6 +71,9 @@ export const NodeConfigSendTelegramSection = ({
             <option key={account.id} value={account.id}>
               {account.name}
               {account.username ? ` (@${account.username})` : ''}
+              {Number.isFinite(account.openConversationCount)
+                ? ` (${t('telegramNodeSend.conversationCount', { count: account.openConversationCount })})`
+                : ''}
             </option>
           ))}
         </select>
@@ -103,6 +116,11 @@ export const NodeConfigSendTelegramSection = ({
           <option value="manual">{t('telegramNodeSend.sourceManual')}</option>
         </select>
         <p className="mt-1 text-xs text-gray-500">{t('telegramNodeSend.recipientSourceNote')}</p>
+        {showNoConversationsWarning && (
+          <div role="alert" className="mt-2 bg-amber-50 border border-amber-200 p-3 rounded-lg text-sm text-amber-700">
+            {t('telegramNodeSend.noConversationsWarning')}
+          </div>
+        )}
       </div>
 
       {formData.recipientSource === 'manual' && (

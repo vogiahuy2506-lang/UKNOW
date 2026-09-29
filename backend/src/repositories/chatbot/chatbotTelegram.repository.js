@@ -105,6 +105,20 @@ class ChatbotTelegramRepository {
    * 'telegram_conversations' (Telegram không gửi được người lạ theo SĐT/username — facade ép
    * Number, nên chỉ gửi được cho peer đã từng nhắn tới, tức đã có dòng hội thoại).
    */
+  async countOpenConversationsByAccountIds(accountIds) {
+    const ids = (accountIds || []).map(Number).filter((n) => Number.isInteger(n) && n > 0);
+    if (ids.length === 0) return new Map();
+    const { rows } = await db.query(
+      `SELECT id_telegram_account, COUNT(*)::int AS open_count
+       FROM telegram_personal_conversations
+       WHERE id_telegram_account = ANY($1::int[])
+         AND status = 'open'
+       GROUP BY id_telegram_account`,
+      [ids]
+    );
+    return new Map(rows.map((r) => [Number(r.id_telegram_account), r.open_count]));
+  }
+
   async listOpenConversationsForAccount(telegramAccountId) {
     const { rows } = await db.query(
       `SELECT external_id, display_name
