@@ -709,8 +709,8 @@ QUY TẮC:
         const empty = createEmptyWizardState();
         const deniedBrief = createEmptyCampaignBrief(defaultContentLocale);
         const content = uiLocale === 'en'
-          ? `Your employee account doesn't have the "${missingPermission.labelEn}" permission yet, so I can't ${missingPermission.actionEn} for you right now. Ask your team owner to enable it in Settings › Employees (guide: /huong-dan/nhan-vien). In the meantime, I can still answer questions and draft content for you to review.`
-          : `Tài khoản nhân viên của bạn chưa được cấp quyền "${missingPermission.labelVi}" nên mình chưa thể ${missingPermission.actionVi} giúp bạn. Bạn nhờ chủ nhóm vào Cài đặt › Nhân viên bật quyền này nhé (hướng dẫn: /huong-dan/nhan-vien). Trong lúc chờ, mình vẫn trả lời câu hỏi và soạn nội dung thử được.`;
+          ? `Your employee account doesn't have the "${missingPermission.labelEn}" permission yet, so I can't ${missingPermission.actionEn} for you right now. Ask your team owner to enable it in Settings › Employees ([see the guide](/huong-dan/nhan-vien)). In the meantime, I can still answer questions and draft content for you to review.`
+          : `Tài khoản nhân viên của bạn chưa được cấp quyền "${missingPermission.labelVi}" nên mình chưa thể ${missingPermission.actionVi} giúp bạn. Bạn nhờ chủ nhóm vào Cài đặt › Nhân viên bật quyền này nhé ([xem hướng dẫn](/huong-dan/nhan-vien)). Trong lúc chờ, mình vẫn trả lời câu hỏi và soạn nội dung thử được.`;
         return {
           type: 'text',
           content,

@@ -148,14 +148,14 @@ function fixedCapabilityReply(probe, locale) {
       schedule: 'Mình tạo chiến dịch được ngay; để hẹn giờ, bạn thiết lập ở màn hình Lên lịch trong trang chi tiết chiến dịch nhé.',
       edit_existing: 'Mình chưa sửa trực tiếp chiến dịch đã lưu. Bạn mở chiến dịch đó để chỉnh sửa, xóa hoặc dừng theo nhu cầu nhé.',
       // PR-B (LENH_GIAO_TRO_LY_AI_PR4_2026-09-29) Việc 1.5 — copy ghim nguyên văn theo lệnh giao.
-      telegram_campaign: 'Trợ lý chưa dựng chiến dịch Telegram hộ bạn. Bạn vào Chiến dịch → Tạo chiến dịch, chọn loại Telegram, kéo khối "Gửi tin nhắn Telegram" vào luồng, chọn tài khoản Telegram đã kết nối — người nhận là những hội thoại đã nhắn với tài khoản đó. Gửi nhanh Telegram hiện chưa có. Xem bài: /huong-dan/campaign-create',
+      telegram_campaign: 'Trợ lý chưa dựng chiến dịch Telegram hộ bạn. Bạn vào Chiến dịch → Tạo chiến dịch, chọn loại Telegram, kéo khối "Gửi tin nhắn Telegram" vào luồng, chọn tài khoản Telegram đã kết nối — người nhận là những hội thoại đã nhắn với tài khoản đó. Gửi nhanh Telegram hiện chưa có. [Xem hướng dẫn](/huong-dan/campaign-create)',
       unsupported: `Hiện chưa hỗ trợ ${probe.label}. Mình có thể giúp bạn tạo chiến dịch qua Email hoặc Zalo nhé.`,
     },
     en: {
       core: `Yes, I can ${probe.label}. Would you like to start? Tell me your goal, product or service, and intended audience.`,
       schedule: 'I can create the campaign now; to schedule it, set that up from the campaign detail page.',
       edit_existing: 'I cannot directly edit an existing saved campaign. Open that campaign to edit, delete, or stop it.',
-      telegram_campaign: 'The assistant does not build Telegram campaigns for you yet. Go to Campaigns → Create campaign, pick the Telegram type, drag the "Send Telegram message" block into the flow, and choose a connected Telegram account — recipients are conversations that have already messaged that account. Telegram quick send is not available yet. See the guide: /huong-dan/campaign-create',
+      telegram_campaign: 'The assistant does not build Telegram campaigns for you yet. Go to Campaigns → Create campaign, pick the Telegram type, drag the "Send Telegram message" block into the flow, and choose a connected Telegram account — recipients are conversations that have already messaged that account. Telegram quick send is not available yet. [See the guide](/huong-dan/campaign-create)',
       unsupported: `This does not currently support ${probe.label}. I can help you create an Email or Zalo campaign instead.`,
     },
   };

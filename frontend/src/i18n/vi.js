@@ -7227,7 +7227,7 @@ export default {
     loadingAccounts: 'Đang tải danh sách tài khoản Telegram...',
     loadFailed: 'Không tải được danh sách tài khoản Telegram',
     retry: 'Thử lại',
-    noAccountsAvailable: 'Chưa có tài khoản Telegram nào đang hoạt động. Kết nối tài khoản tại Cài đặt › Kênh.',
+    noAccountsAvailable: 'Chưa có tài khoản Telegram nào đang hoạt động. Kết nối tài khoản tại Chiến dịch › Quản lý kênh gửi (thẻ Telegram).',
     recipientSource: 'Người nhận',
     sourceConversations: 'Hội thoại Telegram của tài khoản',
     sourceManual: 'Nhập chat id',

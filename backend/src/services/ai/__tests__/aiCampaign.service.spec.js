@@ -636,6 +636,8 @@ describe('aiCampaign.service', () => {
 
       expect(result.type).toBe('text');
       expect(result.data).toMatchObject({ permissionDenied: 'campaigns_create' });
+      // Review PR-B (Việc 5): link hướng dẫn nhân viên phải bấm được (link markdown), không phải chữ thường.
+      expect(result.content).toContain('](/huong-dan/nhan-vien)');
       expect(result.wizardShortCircuit).toBe(true);
       expect(axiosPost).not.toHaveBeenCalled();
     });

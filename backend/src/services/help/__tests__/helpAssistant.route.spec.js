@@ -111,6 +111,8 @@ describe('tryHandleHelpChat route branches', () => {
       // Chỗ vênh Nghiệm thu mục 2 vs Việc 1.5: câu ghim nguyên văn ở Việc 1.5 không chứa chữ
       // "trình dựng" (chỉ có "Chiến dịch → Tạo chiến dịch") — kiểm cụm thật thay vì tự chế thêm chữ.
       expect(result.content).toContain('Tạo chiến dịch');
+      // Review PR-B (Việc 5): link hướng dẫn phải là link markdown bấm được, không phải chữ thường.
+      expect(result.content).toContain('](/huong-dan/campaign-create)');
       expect(result.data).toMatchObject({ capabilityProbe: true, capabilityKind: 'guide' });
       expect(mockGenerate).not.toHaveBeenCalled();
     } finally {

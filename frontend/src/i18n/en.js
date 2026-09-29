@@ -7219,7 +7219,7 @@ export default {
     loadingAccounts: 'Loading Telegram accounts...',
     loadFailed: 'Could not load Telegram accounts',
     retry: 'Retry',
-    noAccountsAvailable: 'No active Telegram account yet. Connect one under Settings › Channels.',
+    noAccountsAvailable: 'No active Telegram account yet. Connect one under Campaigns › Channel management (Telegram tab).',
     recipientSource: 'Recipients',
     sourceConversations: "The account's open Telegram conversations",
     sourceManual: 'Enter chat IDs',
