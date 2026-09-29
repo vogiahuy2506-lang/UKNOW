@@ -130,6 +130,17 @@ jobs:
         env:
           CI: 'true'
 
+      # Bộ dữ liệu mẫu đầy đủ (seed-demo-data.js) chỉ chạy khi bật cờ E2E_SEED_* — test e2e thường dùng DB gần rỗng
+      # nên không ai chạy nó trên CI. 29/09/2026: bootstrap.sql đặt zalo_messages.tracking_token NOT NULL (e0ec79b3)
+      # làm E2E_SEED_ALL chết ở bước nạp mẫu mà không ai biết, tới khi chụp ảnh hướng dẫn ở máy mới lộ.
+      # Chạy SAU các bước test (seed DROP SCHEMA rồi dựng lại) để không đụng dữ liệu test đang dùng.
+      - name: Seed dữ liệu mẫu đầy đủ (E2E_SEED_ALL) nạp được trên bootstrap hiện tại
+        if: ${{ !cancelled() }}
+        run: node scripts/seed-test-db.js
+        working-directory: e2e
+        env:
+          E2E_SEED_ALL: '1'
+
       - name: Upload Playwright HTML report
         if: always()
         uses: actions/upload-artifact@v4
