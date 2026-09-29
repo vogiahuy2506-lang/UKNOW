@@ -37,10 +37,10 @@ export default function PlaygroundHeader({ bot, onConfig, onShare, onNewChat, on
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-900 truncate tracking-tight">{bot.name}</h2>
             <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-              bot.is_active !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
+              bot.replies_enabled !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
             }`}>
-              <span className={`w-1 h-1 rounded-full ${bot.is_active !== false ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              {bot.is_active !== false ? 'Online' : 'Offline'}
+              <span className={`w-1 h-1 rounded-full ${bot.replies_enabled !== false ? 'bg-emerald-500' : 'bg-slate-400'}`} />
+              {bot.replies_enabled !== false ? 'Online' : 'Offline'}
             </span>
           </div>
         </div>

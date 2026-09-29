@@ -560,7 +560,7 @@ function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu
             )}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${bot.is_active ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            <span className={`w-1.5 h-1.5 rounded-full ${bot.replies_enabled !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
             <span className="text-[11px] text-slate-400">
               {docCount > 0 ? `${docCount} tài liệu` : 'Chưa có dữ liệu'}
             </span>

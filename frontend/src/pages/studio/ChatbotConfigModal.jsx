@@ -59,7 +59,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
     max_tokens: 2048,
     response_style: 'friendly',
     welcome_message: '',
-    is_active: true,
+    replies_enabled: true,
     allow_attachments: false,
     suggested_questions: [],
     reply_limit_config: null,
@@ -94,7 +94,8 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
       max_tokens: chatbot.max_tokens || 2048,
       response_style: chatbot.response_style || 'friendly',
       welcome_message: chatbot.welcome_message || chatbot.greeting_msg || '',
-      is_active: chatbot.is_active !== false,
+      // Công tắc trả lời của TỪNG chatbot (custom_chatbots.replies_enabled). KHÔNG dùng is_active = cờ xoá mềm.
+      replies_enabled: chatbot.replies_enabled !== false,
       allow_attachments: chatbot.allow_attachments === true,
       suggested_questions: chatbot.suggested_questions || [],
       reply_limit_config: chatbot.reply_limit_config || null,
@@ -150,7 +151,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
         max_tokens: form.max_tokens,
         response_style: form.response_style,
         welcome_message: form.welcome_message,
-        is_active: form.is_active,
+        replies_enabled: form.replies_enabled !== false,
         allow_attachments: form.allow_attachments === true,
         widget_key: chatbot.widget_key || form.widget_key,
         suggested_questions: form.suggested_questions || [],
@@ -193,7 +194,6 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
         max_tokens: form.max_tokens,
         response_style: form.response_style,
         welcome_message: form.welcome_message,
-        is_enabled: form.is_active,
       };
       const ALL_CHANNELS = [
         'zalo_personal',
@@ -367,11 +367,11 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
                     <div className="flex items-center justify-between py-2">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Trạng thái hoạt động</p>
-                        <p className="text-xs text-slate-400">Bật để chatbot nhận và trả lời</p>
+                        <p className="text-xs text-slate-400">Tắt thì chatbot không tự trả lời ở mọi kênh; tin khách vẫn vào Lịch sử trò chuyện để bạn trả lời tay.</p>
                       </div>
                       <Toggle
-                        checked={form.is_active}
-                        onChange={(val) => update({ is_active: val })}
+                        checked={form.replies_enabled !== false}
+                        onChange={(val) => update({ replies_enabled: val })}
                       />
                     </div>
                     <div className="flex items-center justify-between py-2">
