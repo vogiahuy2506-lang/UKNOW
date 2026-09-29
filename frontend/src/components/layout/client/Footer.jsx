@@ -19,20 +19,22 @@ const COLUMNS = (t) => [
     title: t('footer.policies'),
     links: [
       { label: t('footer.privacyPolicy'), href: '/privacy-policy' },
+      { label: t('footer.dpaPolicy'), href: '/public-dpa' },
+      { label: t('footer.complaintPolicy'), href: '/complaint-policy' },
       { label: t('footer.pricingPolicy'), href: '/pricing-policy' },
       { label: t('footer.paymentPolicy'), href: '/payment-policy' },
-      { label: t('footer.complaintPolicy'), href: '/complaint-policy' },
+      { label: t('footer.serviceTerms'), href: '/service-terms' },
+      { label: t('footer.serviceDeliveryPolicy'), href: '/service-delivery-policy' },
       { label: t('footer.refundPolicy'), href: '/refund-policy' },
       { label: t('footer.rightsAndDuties'), href: '/rights-and-duties' },
-      { label: t('footer.publicDPA'), href: '/public-dpa' },
       { label: t('footer.termsOfService'), href: '/terms' },
+      { label: t('footer.supportPolicy'), href: '/support' },
     ],
   },
   {
     title: t('footer.company'),
     links: [
       { label: t('footer.contact'), to: '/contact' },
-      { label: t('footer.supportPolicy'), href: '/support' },
     ],
   },
 ];

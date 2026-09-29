@@ -53,6 +53,7 @@ import PaymentPolicy from './pages/public/PaymentPolicy';
 import ComplaintPolicy from './pages/public/ComplaintPolicy';
 import RefundPolicy from './pages/public/RefundPolicy';
 import ServiceTerms from './pages/public/ServiceTerms';
+import ServiceDeliveryPolicy from './pages/public/ServiceDeliveryPolicy';
 import Support from './pages/public/Support';
 import RightsAndDuties from './pages/public/RightsAndDuties';
 import TrialDemoPage from './pages/public/TrialDemoPage';
@@ -328,6 +329,8 @@ function AppContent() {
             <Route path="/refund-policy/" element={<RefundPolicy />} />
             <Route path="/service-terms" element={<ServiceTerms />} />
             <Route path="/service-terms/" element={<ServiceTerms />} />
+            <Route path="/service-delivery-policy" element={<ServiceDeliveryPolicy />} />
+            <Route path="/service-delivery-policy/" element={<ServiceDeliveryPolicy />} />
             <Route path="/rights-and-duties" element={<RightsAndDuties />} />
             <Route path="/rights-and-duties/" element={<RightsAndDuties />} />
             <Route path="/support" element={<Support />} />

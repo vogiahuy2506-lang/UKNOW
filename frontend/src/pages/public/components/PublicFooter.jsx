@@ -42,12 +42,14 @@ export default function PublicFooter() {
             <ul className="space-y-3 text-sm text-slate-400">
               <li><a href="/privacy-policy" className="hover:text-orange-400 transition-colors">{t('footer.privacyPolicy')}</a></li>
               <li><a href="/public-dpa" className="hover:text-orange-400 transition-colors">{t('footer.dpaPolicy')}</a></li>
-              <li><a href="/terms" className="hover:text-orange-400 transition-colors">{t('footer.termsOfService')}</a></li>
+              <li><a href="/complaint-policy" className="hover:text-orange-400 transition-colors">{t('footer.complaintPolicy')}</a></li>
               <li><a href="/pricing-policy" className="hover:text-orange-400 transition-colors">{t('footer.pricingPolicy')}</a></li>
               <li><a href="/payment-policy" className="hover:text-orange-400 transition-colors">{t('footer.paymentPolicy')}</a></li>
-              <li><a href="/complaint-policy" className="hover:text-orange-400 transition-colors">{t('footer.complaintPolicy')}</a></li>
               <li><a href="/service-terms" className="hover:text-orange-400 transition-colors">{t('footer.serviceTerms')}</a></li>
+              <li><a href="/service-delivery-policy" className="hover:text-orange-400 transition-colors">{t('footer.serviceDeliveryPolicy')}</a></li>
               <li><a href="/refund-policy" className="hover:text-orange-400 transition-colors">{t('footer.refundPolicy')}</a></li>
+              <li><a href="/rights-and-duties" className="hover:text-orange-400 transition-colors">{t('footer.rightsAndDuties')}</a></li>
+              <li><a href="/terms" className="hover:text-orange-400 transition-colors">{t('footer.termsOfService')}</a></li>
               <li><a href="/support" className="hover:text-orange-400 transition-colors">{t('footer.supportPolicy')}</a></li>
             </ul>
           </div>
