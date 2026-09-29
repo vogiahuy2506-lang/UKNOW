@@ -18,7 +18,9 @@ describe('bài hướng dẫn Telegram/WhatsApp (W7c)', () => {
     expect(md).toContain('Credit AI');
     expect(md).toContain('chỉ gửi được **văn bản**');
     expect(md).toContain('Cần đăng nhập lại');
-    expect(md).toContain('Khi được cập nhật');
+    // Review W7c: W6 (chủ trả lời từ điện thoại → AI tạm dừng) ĐÃ lên main 54324797 → bài mô tả hành vi thật, không còn "khi được cập nhật".
+    expect(md).toContain('Bạn tự trả lời trên điện thoại');
+    expect(md).not.toContain('Khi được cập nhật');
     expect(md).toContain('[Tạo chiến dịch](campaign-create)');
   });
 
