@@ -638,6 +638,10 @@ function ChatbotStudioPage() {
 
   const handleUpdateBot = useCallback((updatedBot) => {
     setSelectedBot(updatedBot);
+    // Cột trái giữ danh sách riêng: báo để nó gộp bản mới, kẻo chọn lại bot sẽ nhận object cũ.
+    if (updatedBot?.id != null) {
+      document.dispatchEvent(new CustomEvent('studio:bot-updated', { detail: updatedBot }));
+    }
   }, []);
 
   const handleCreateNew = useCallback(() => {

@@ -85,6 +85,25 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     return () => document.removeEventListener('studio:knowledge-changed', handler);
   }, []);
 
+  // Hộp Cấu hình / modal khác vừa lưu bot: gộp bản mới vào danh sách (giữ document_count đang có).
+  useEffect(() => {
+    const handler = (e) => {
+      const detail = e.detail;
+      if (!detail || detail.id == null) return;
+      setChatbots((prev) => {
+        const next = prev.map((b) => (
+          String(b.id) === String(detail.id)
+            ? { ...b, ...detail, document_count: b.document_count ?? detail.document_count }
+            : b
+        ));
+        saveToStorage(next);
+        return next;
+      });
+    };
+    document.addEventListener('studio:bot-updated', handler);
+    return () => document.removeEventListener('studio:bot-updated', handler);
+  }, []);
+
   useEffect(() => {
     const loadChatbots = async () => {
       try {
