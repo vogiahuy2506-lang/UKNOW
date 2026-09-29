@@ -311,6 +311,21 @@ describe('W7a — Telegram', () => {
       expect(await directUsage('telegram_preview')).toBe(1);
     });
 
+    it('hai request ĐỒNG THỜI cùng tài khoản (hai tab) -> chỉ MỘT gửi, một bị hoãn (lần thử ghi TRƯỚC khi gửi)', async () => {
+      const account = await insertTelegramAccount(owner.id);
+      telegramSendMock.mockImplementation(
+        () => new Promise((resolve) => setTimeout(() => resolve({ data: { messageId: 'slow' } }), 150))
+      );
+      const [a, b] = await Promise.all([
+        post('telegram', { accountId: account.id, recipientKey: '1001', message: 'A' }, { key: 'k-par-a' }),
+        post('telegram', { accountId: account.id, recipientKey: '1002', message: 'B' }, { key: 'k-par-b' }),
+      ]);
+      const statuses = [a.body.data.item.status, b.body.data.item.status].sort();
+      expect(statuses).toEqual(['deferred', 'success']);
+      expect(telegramSendMock).toHaveBeenCalledTimes(1);
+      expect(await ccmRows('telegram')).toHaveLength(1);
+    });
+
     it('trong giờ nghỉ -> deferred quiet_hours, không giữ chỗ/ghi gì', async () => {
       const account = await insertTelegramAccount(owner.id);
       const hourVn = (new Date().getUTCHours() + 7) % 24;
@@ -407,6 +422,13 @@ describe('W7a — Telegram', () => {
       const lastText = telegramSendMock.mock.calls.at(-1)[2];
       expect(lastText).not.toContain('{{');
       expect(lastText).not.toContain('ten}}');
+    });
+
+    it('tên khách chứa cú pháp {{...}} (dữ liệu do khách điền) -> bị trung hoà, tin gửi đi không còn "{{"', async () => {
+      const account = await insertTelegramAccount(owner.id);
+      await insertTgConversation(owner.id, account.id, '1001', '{{ten}}');
+      await post('telegram', { accountId: account.id, recipientKey: '1001', message: 'Chào {{ten}}!' }, { key: 'k-evil' });
+      expect(telegramSendMock).toHaveBeenLastCalledWith('111', 1001, 'Chào bạn!');
     });
 
     it('chế độ enforce: có quota_reservation_id, reservation consumed, hạn mức +1; gửi lại cùng Idempotency-Key -> success isReplay, không gửi lần hai', async () => {
