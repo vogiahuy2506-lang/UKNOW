@@ -733,6 +733,37 @@ class CampaignRunService {
   }
 
   /**
+   * Nạp lại bộ đếm tin/giờ + mốc lần thử gần nhất của bộ giới hạn gửi Zalo từ `zalo_messages` —
+   * chạy một lần lúc khởi động (initScheduler), cạnh `hydratePhoneLookupCooldowns`. Map
+   * `zaloOutboundRateLimitState` nằm trong RAM nên mất trắng mỗi lần deploy: không nạp lại thì
+   * tài khoản vừa gửi đủ hạn mức giờ được gửi tiếp ngay và bỏ qua khoảng giãn cách giữa 2 tin.
+   *
+   * Mỗi kênh dùng `windowMs` của policy kênh đó. "Lần thử" = mọi dòng có account_id trong cửa sổ
+   * (xem `zaloMessageRepository.listRecentOutboundAttemptsByAccount`).
+   *
+   * @returns {Promise<number>} số cặp (tài khoản, kênh) đã nạp
+   */
+  async hydrateOutboundRateLimitState() {
+    let loaded = 0;
+    for (const channel of ['zalo_personal', 'zalo_group', 'zalo_friend_request']) {
+      const policy = this.zaloRateLimiter.resolveOutboundPolicy(channel);
+      const windowMs = Math.max(1, Number.parseInt(policy.windowMs, 10) || (60 * 60 * 1000));
+      const rows = await zaloMessageRepository.listRecentOutboundAttemptsByAccount(channel, windowMs);
+      for (const row of rows) {
+        const created = this.zaloRateLimiter.hydrateOutboundAttemptState({
+          accountId: row.accountId,
+          channel,
+          attemptCount: row.attemptCount,
+          windowStartMs: new Date(row.firstAttemptAt).getTime(),
+          lastAttemptAtMs: new Date(row.lastAttemptAt).getTime(),
+        });
+        if (created) loaded += 1;
+      }
+    }
+    return loaded;
+  }
+
+  /**
    * Nhận diện lỗi tài khoản Zalo mất phiên đăng nhập/không sẵn sàng để loại khỏi pool gửi.
    *
    * @param {unknown} error

@@ -592,6 +592,16 @@ export const initScheduler = () => {
       console.error('[Scheduler] Lỗi khi nạp cooldown tra số Zalo:', err?.message || err);
     });
 
+  // PR-S2: nạp lại bộ đếm tin/giờ + mốc lần thử gần nhất của bộ giới hạn gửi Zalo từ zalo_messages
+  // (Map trong RAM mất mỗi lần deploy). Cùng lý do fire-and-forget như trên.
+  campaignRunService.hydrateOutboundRateLimitState()
+    .then((count) => {
+      console.log(`[Scheduler] Đã nạp lại bộ đếm gửi Zalo cho ${count} cặp tài khoản/kênh`);
+    })
+    .catch((err) => {
+      console.error('[Scheduler] Lỗi khi nạp bộ đếm gửi Zalo:', err?.message || err);
+    });
+
   if (String(process.env.SCHEDULER_ENABLED).toLowerCase() === 'false') {
     console.log('[Scheduler] SCHEDULER_ENABLED=false — bỏ qua toàn bộ scheduled job.');
     return;

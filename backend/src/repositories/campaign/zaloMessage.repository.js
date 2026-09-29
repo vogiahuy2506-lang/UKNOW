@@ -246,6 +246,47 @@ class ZaloMessageRepository {
   }
 
   /**
+   * Gom các "lần thử gửi" Zalo gần đây theo tài khoản, cho một kênh — nguồn nạp lại bộ đếm
+   * giới hạn giờ (`ZaloRateLimiter.zaloOutboundRateLimitState`) sau khi backend khởi động lại.
+   *
+   * Định nghĩa "lần thử" = MỌI dòng `zalo_messages` có `account_id`, KHÔNG lọc `status`
+   * (sent/failed/aborted/queued đều tính) và KHÔNG lọc `is_preview` (gửi nhanh ghi `is_preview`
+   * = true nhưng vẫn đi qua cùng bộ giới hạn). Lý do: bộ đếm trong RAM tăng `attemptCount` ở cổng
+   * TRƯỚC khi gửi, bất kể kết quả; dòng được INSERT sau cổng đó với `sent_at = CURRENT_TIMESTAMP`
+   * (lúc xếp hàng, không phải lúc có kết quả) nên mọi dòng đều là một lần đã qua cổng. Đếm hụt
+   * (lần thử chết ở bước tra số, trước khi có dòng) là sai lệch theo hướng an toàn phía hệ thống.
+   *
+   * Múi giờ: `sent_at` là `timestamp WITHOUT time zone` chứa GIỜ TƯỜNG VN (`CURRENT_TIMESTAMP` của
+   * phiên VN), trong khi tiến trình Node production chạy UTC — nên KHÔNG bind `Date` JS vào so
+   * sánh (lệch 7h). Mốc cửa sổ tính trong SQL bằng `LOCALTIMESTAMP` (đúng cho cả cột naive lẫn
+   * timestamptz), và mốc trả ra được đổi về thời điểm thật bằng `AT TIME ZONE ... ::timestamptz`.
+   *
+   * @param {string} channel zalo_personal | zalo_group | zalo_friend_request
+   * @param {number} windowMs độ dài cửa sổ giới hạn (ms); chỉ lấy dòng trong `windowMs` gần nhất
+   * @returns {Promise<Array<{accountId: string, attemptCount: number, firstAttemptAt: Date, lastAttemptAt: Date}>>} mốc là thời điểm thật (Date)
+   */
+  async listRecentOutboundAttemptsByAccount(channel, windowMs) {
+    const { rows } = await db.query(
+      `SELECT account_id,
+              COUNT(*)::int AS attempt_count,
+              (MIN(sent_at) AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamptz AS first_attempt_at,
+              (MAX(sent_at) AT TIME ZONE 'Asia/Ho_Chi_Minh')::timestamptz AS last_attempt_at
+         FROM zalo_messages
+        WHERE account_id IS NOT NULL
+          AND channel = $1
+          AND sent_at >= LOCALTIMESTAMP - ($2::bigint * INTERVAL '1 millisecond')
+        GROUP BY account_id`,
+      [channel, Math.max(1, Math.trunc(Number(windowMs)) || 0)]
+    );
+    return rows.map((row) => ({
+      accountId: String(row.account_id),
+      attemptCount: Number(row.attempt_count) || 0,
+      firstAttemptAt: row.first_attempt_at,
+      lastAttemptAt: row.last_attempt_at,
+    }));
+  }
+
+  /**
    * Gắn quota_reservation_id vào một zalo_messages đã tồn tại (PR-Q4b).
    * Dùng sau khi consumeSendQuota() thành công cho message đã insert trước đó (placeholder 'queued').
    */

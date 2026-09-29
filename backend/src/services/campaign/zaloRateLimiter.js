@@ -274,6 +274,42 @@ class ZaloRateLimiter {
   }
 
   /**
+   * Nạp lại một mục bộ đếm giờ từ nguồn bền (DB) sau khi khởi động lại. `policyFingerprint` để
+   * null: lần `tryAcquireOutboundSlot`/`enforce...` đầu tiên sẽ gán mà KHÔNG reset (chỉ reset khi
+   * fingerprint đã có và khác). Không bao giờ ghi đè trạng thái đang có trong Map bằng số liệu
+   * cũ hơn — trạng thái sống là nguồn đúng hơn DB; chỉ nâng `lastAttemptAtMs` (Math.max).
+   *
+   * @param {object} input
+   * @param {string|number} input.accountId
+   * @param {'zalo_personal'|'zalo_group'|'zalo_friend_request'} input.channel
+   * @param {number} input.attemptCount
+   * @param {number} input.windowStartMs
+   * @param {number} input.lastAttemptAtMs
+   * @returns {boolean} true nếu đã tạo mục mới
+   */
+  hydrateOutboundAttemptState({ accountId, channel, attemptCount, windowStartMs, lastAttemptAtMs }) {
+    const safeAccountId = String(accountId ?? '').trim();
+    const safeChannel = String(channel ?? '').trim();
+    const count = Number.parseInt(attemptCount, 10);
+    if (!safeAccountId || !safeChannel || !Number.isFinite(count) || count <= 0) return false;
+    if (!Number.isFinite(windowStartMs) || !Number.isFinite(lastAttemptAtMs)) return false;
+    const stateKey = `${safeAccountId}:${safeChannel}`;
+    const existing = this.zaloOutboundRateLimitState.get(stateKey);
+    if (existing) {
+      const prevLast = Number(existing.lastAttemptAtMs) || 0;
+      existing.lastAttemptAtMs = Math.max(prevLast, lastAttemptAtMs);
+      return false;
+    }
+    this.zaloOutboundRateLimitState.set(stateKey, {
+      windowStartMs,
+      attemptCount: count,
+      lastAttemptAtMs,
+      policyFingerprint: null,
+    });
+    return true;
+  }
+
+  /**
    * Đọc quota outbound hiện tại cho account/channel, không mutate state.
    *
    * @param {string|number} accountId
