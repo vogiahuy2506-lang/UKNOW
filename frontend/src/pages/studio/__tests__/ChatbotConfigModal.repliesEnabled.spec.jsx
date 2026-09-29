@@ -42,8 +42,9 @@ describe('ChatbotConfigModal — công tắc trả lời', () => {
     chatbotApi.updateChatbot.mockResolvedValue({ success: true, data: { id: 7, name: 'Bot thử', replies_enabled: false } });
   });
 
-  it('tắt công tắc + Lưu → updateChatbot nhận replies_enabled:false, không is_active; cài đặt kênh KHÔNG có is_enabled', async () => {
-    render(<ChatbotConfigModal open chatbot={baseBot} onClose={vi.fn()} onUpdate={vi.fn()} />);
+  it('tắt công tắc + Lưu → updateChatbot nhận replies_enabled:false, không is_active; không ghi cài đặt theo kênh (updateChatbotSettings)', async () => {
+    const onUpdate = vi.fn();
+    render(<ChatbotConfigModal open chatbot={baseBot} onClose={vi.fn()} onUpdate={onUpdate} />);
     const sw = statusSwitch();
     expect(sw).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(sw);
@@ -55,10 +56,9 @@ describe('ChatbotConfigModal — công tắc trả lời', () => {
     expect(payload.replies_enabled).toBe(false);
     expect('is_active' in payload).toBe(false);
 
-    await waitFor(() => expect(chatbotApi.updateChatbotSettings).toHaveBeenCalled());
-    for (const call of chatbotApi.updateChatbotSettings.mock.calls) {
-      expect('is_enabled' in call[1]).toBe(false);
-    }
+    // Đợi lưu xong hẳn (onUpdate chạy sau khối từng ghi dòng kênh) rồi mới khẳng định không gọi.
+    await waitFor(() => expect(onUpdate).toHaveBeenCalled());
+    expect(chatbotApi.updateChatbotSettings).not.toHaveBeenCalled();
   });
 
   it('mở lại với replies_enabled:false → công tắc tắt; thiếu trường → bật', async () => {
