@@ -292,6 +292,13 @@ export function extractWizardState(history = [], options = {}) {
 
   const messages = Array.isArray(history) ? history : [];
   let latestFreeTextCampaign = null;
+  // Chỉ số tin MỞ luồng chiến dịch hiện tại = lần đầu isCampaignFlow bật lên sau lần reset gần nhất (ranh giới
+  // đã-tạo-xong / mốc huỷ). Dùng làm mốc cắt tệp đính kèm — KHÁC latestCampaignMessageIndex/lastChannelMarkerIndex
+  // (hai mốc đó nhích lên mỗi lượt nên không phải "đầu luồng").
+  let campaignFlowStartIndex = null;
+  const markCampaignFlowStart = (idx) => {
+    if (campaignFlowStartIndex == null) campaignFlowStartIndex = idx;
+  };
 
   messages.forEach((message, index) => {
     // Khi session đã bị huỷ ở mốc abandonedAtMessageCount, toàn bộ tin nhắn / marker
@@ -325,6 +332,7 @@ export function extractWizardState(history = [], options = {}) {
       // index ranh giới để marker của chiến dịch trước (dù không có marker channel) cũng
       // không lọt qua, và minCampaignFileIndex bên dưới bỏ luôn tệp đính kèm cũ.
       state.lastChannelMarkerIndex = index;
+      campaignFlowStartIndex = null;
       return;
     }
 
@@ -340,6 +348,7 @@ export function extractWizardState(history = [], options = {}) {
 
     if (message?.role === 'user' && !marker && !isMachinePlanPrompt && isCampaignRequestText(content)) {
       state.isCampaignFlow = true;
+      markCampaignFlowStart(index);
       state.latestCampaignMessageIndex = index;
       latestFreeTextCampaign = content;
       state.channel ||= inferChannelFromText(content);
@@ -376,6 +385,7 @@ export function extractWizardState(history = [], options = {}) {
 
     if (message?.role === 'assistant' && CAMPAIGN_RESPONSE_TYPES.has(message?.type)) {
       state.isCampaignFlow = true;
+      markCampaignFlowStart(index);
       state.latestCampaignMessageIndex = index;
       const data = getAssistantData(message);
       state.channel ||= normalizeChannel(data?.campaignType || data?.channel || data?.days?.[0]?.channel || data?.days?.[0]?.slots?.[0]?.channel);
@@ -430,6 +440,7 @@ export function extractWizardState(history = [], options = {}) {
       return;
     }
     state.isCampaignFlow = true;
+    markCampaignFlowStart(index);
     state.latestCampaignMessageIndex = index;
 
     if (marker.gate === 'channel') {
@@ -516,6 +527,7 @@ export function extractWizardState(history = [], options = {}) {
   // kích hoạt isCampaignFlow song song với regex từ khoá cũ.
   if (routeSaysActionRequest) {
     state.isCampaignFlow = true;
+    markCampaignFlowStart(messages.length > 0 ? messages.length - 1 : 0);
     state.latestCampaignMessageIndex = Math.max(
       state.latestCampaignMessageIndex ?? -1,
       messages.length > 0 ? messages.length - 1 : 0,
@@ -529,12 +541,13 @@ export function extractWizardState(history = [], options = {}) {
     state.dataSource ||= inferDataSourceFromText(lastContent);
   }
 
-  // Chỉ tính các file được đính kèm từ khi bắt đầu luồng chiến dịch hiện tại (hoặc trong options.files)
-  const minCampaignFileIndex = Math.max(
-    abandonMark ?? 0,
-    state.lastChannelMarkerIndex >= 0 ? state.lastChannelMarkerIndex : 0,
-    state.latestCampaignMessageIndex ?? 0
-  );
+  // Chỉ tính các file được đính kèm từ khi bắt đầu luồng chiến dịch hiện tại (hoặc trong options.files).
+  // "Đầu luồng" = tin mở luồng (campaignFlowStartIndex), tính từ sau mốc huỷ / ranh giới đã-tạo-xong — tệp gửi
+  // TRƯỚC đó (chat thường rồi mới "tạo chiến dịch") vẫn không lọt vào. TRƯỚC 29/09 mốc cắt lấy max với
+  // lastChannelMarkerIndex và latestCampaignMessageIndex — hai mốc nhích lên MỖI lượt (chọn kênh, mỗi thẻ
+  // wizard), nên tệp gửi kèm chính câu "tạo chiến dịch…" bị quên ngay khi chọn kênh → wizard không bao giờ hỏi
+  // "Cách sử dụng tệp đính kèm?" (sếp thử 29/09: PDF + Email + nhập người nhận → nhảy thẳng sang thẻ nội dung).
+  const minCampaignFileIndex = Math.max(abandonMark ?? 0, campaignFlowStartIndex ?? 0);
 
   const campaignFiles = [
     ...(Array.isArray(options?.files) ? options.files : []),

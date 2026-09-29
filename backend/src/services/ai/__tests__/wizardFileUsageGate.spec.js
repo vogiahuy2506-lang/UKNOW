@@ -164,3 +164,54 @@ describe('PR-2 mục 7: câu trả lời fileUsage phải đi bằng marker [wiz
     expect(state.markerGates).toContain('fileUsage');
   });
 });
+
+// 29/09 — sếp thử: gửi PDF kèm "tạo chiến dịch…", chọn Email, tài khoản, nhập người nhận → wizard nhảy thẳng sang thẻ
+// nội dung, KHÔNG hỏi "Cách sử dụng tệp đính kèm?". Gốc: mốc cắt tệp lấy max với lastChannelMarkerIndex và
+// latestCampaignMessageIndex — hai mốc nhích lên mỗi lượt nên tệp ở câu đầu bị quên ngay khi chọn kênh.
+describe('tệp đính kèm ở câu mở đầu vẫn được tính suốt luồng (mốc cắt = lần reset gần nhất)', () => {
+  const mk = (payload, text) => `[wizard]${JSON.stringify(payload)}\n${text}`;
+  const pdf = [{ name: 'bao-cao.pdf', mimetype: 'application/pdf', size: 1000 }];
+  const flowUntilRecipients = [
+    { role: 'user', content: 'tạo chiến dịch giới thiệu tài liệu này', files: pdf },
+    { role: 'assistant', type: 'ask_campaign_details', content: 'kênh?' },
+    { role: 'user', content: mk({ gate: 'channel', channel: 'email' }, 'Kênh gửi: Email') },
+    { role: 'assistant', type: 'ask_sender_account', content: 'sender?' },
+    { role: 'user', content: mk({ gate: 'senderAccount', channel: 'email', accountId: 1, accountName: 'x' }, 'sender') },
+    { role: 'assistant', type: 'ask_campaign_details', content: 'nguồn?' },
+    { role: 'user', content: mk({ gate: 'dataSource', value: 'manual', recipientCount: 1 }, 'Nhập trực tiếp') },
+  ];
+
+  it('chọn kênh + tài khoản + người nhận xong → vẫn còn tệp, cổng kế là fileUsage (không phải campaignBrief)', () => {
+    const state = extractWizardState(flowUntilRecipients);
+    expect(state.hasAttachedFile).toBe(true);
+    expect(evaluateNextGate(state, {}, 'vi')?.gate).toBe('fileUsage');
+  });
+
+  it('chọn "Cả hai" → cổng kế là schedule (nội dung lấy từ tệp, không hỏi thẻ nội dung)', () => {
+    const history = [
+      ...flowUntilRecipients,
+      { role: 'assistant', type: 'ask_campaign_details', content: 'Cách sử dụng tệp đính kèm?' },
+      { role: 'user', content: mk({ gate: 'fileUsage', value: 'both' }, 'Cách sử dụng tệp đính kèm? Cả hai') },
+    ];
+    expect(evaluateNextGate(extractWizardState(history), {}, 'vi')?.gate).toBe('schedule');
+  });
+
+  it('chiến dịch MỚI sau ranh giới "đã tạo xong" → tệp của chiến dịch trước KHÔNG tính', () => {
+    const history = [
+      ...flowUntilRecipients,
+      { role: 'assistant', type: 'campaign_created', content: 'Đã tạo chiến dịch' },
+      { role: 'user', content: 'tạo chiến dịch email mới chào khách' },
+    ];
+    expect(extractWizardState(history).hasAttachedFile).toBe(false);
+  });
+
+  it('tệp nằm trước mốc huỷ (abandonedAtMessageCount) → KHÔNG tính', () => {
+    const history = [
+      { role: 'user', content: 'tạo chiến dịch giới thiệu tài liệu này', files: pdf },
+      { role: 'assistant', type: 'ask_campaign_details', content: 'kênh?' },
+      { role: 'user', content: 'tạo chiến dịch email chào khách' },
+    ];
+    expect(extractWizardState(history, { abandonedAtMessageCount: 2 }).hasAttachedFile).toBe(false);
+  });
+});
+
