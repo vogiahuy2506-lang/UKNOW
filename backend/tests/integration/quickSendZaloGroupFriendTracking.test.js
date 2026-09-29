@@ -12,7 +12,7 @@
  */
 process.env.SEND_QUOTA_RESERVATION_MODE = 'enforce';
 
-import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
@@ -22,8 +22,26 @@ const zaloAccountSessionService = (await import('../../src/services/zalo/zaloAcc
 
 let app;
 
+// Khung giờ yên lặng Zalo (23:00–06:00 VN) là giờ THẬT — CI chạy đúng 23:00 VN ngày 29/09/2026 làm 2 suite này
+// đỏ ("deferred" thay vì "success"). Tắt giờ yên lặng trên singleton cho cả file (24 = không bao giờ quiet),
+// cùng khuôn campaignChannelRegistryPr1.test.js:181-184; trả lại ở afterAll.
+const { getSharedZaloRateLimiter } = await import('../../src/services/campaign/zaloOutboundRateLimiterSingleton.js');
+let originalQuietStart;
+let originalQuietEnd;
+
 beforeAll(() => {
   app = createApp();
+  const limiter = getSharedZaloRateLimiter();
+  originalQuietStart = limiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE;
+  originalQuietEnd = limiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE;
+  limiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = 24;
+  limiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = 0;
+});
+
+afterAll(() => {
+  const limiter = getSharedZaloRateLimiter();
+  limiter.ZALO_OUTBOUND_QUIET_HOURS_START_SAFE = originalQuietStart;
+  limiter.ZALO_OUTBOUND_QUIET_HOURS_END_SAFE = originalQuietEnd;
 });
 
 beforeEach(async () => {
