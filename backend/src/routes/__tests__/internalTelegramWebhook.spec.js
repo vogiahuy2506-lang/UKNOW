@@ -550,19 +550,18 @@ describe('Bug 22/09 — Telegram fallback chain cho system_instruction (Zalo par
     expect(call.chatbotSettings.system_instruction).toBe(
       'Bạn là trợ lý Tia Chớp Consult — chuyên tư vấn dịch thuật & visa.'
     );
-    // 4. _source phải mark là 'telegram_chatbot_settings_fallback' để debug.
-    expect(call.chatbotSettings._source?.system_instruction).toBe(
-      'telegram_chatbot_settings_fallback'
-    );
+    // 4. PR-3: _source ghi nguồn là chatbot được gán (custom_chatbots) để debug.
+    expect(call.chatbotSettings._source?.system_instruction).toBe('custom_chatbots');
   });
 
-  it('chatbot_settings CÓ system_instruction → KHÔNG override bằng fallback', async () => {
-    // chatbot_settings.system_instruction là nguồn ưu tiên hơn — giữ nguyên.
+  it('PR-3: chatbot ĐƯỢC GÁN có system_instruction → THẮNG chatbot_settings kênh (đảo bản 22/09)', async () => {
+    // Bản 22/09 ghim ngược lại (chatbot_settings ưu tiên) → tài khoản 2 chatbot, gán B nhưng lưu A sau
+    // cùng trong Studio → Telegram trả lời bằng hướng dẫn của A. PR-3 đảo: chatbot được gán thắng.
     mocks._scenarioAccountSettings = {
       ...fakeAccountSettings,
-      chatbot_system_instruction: 'FROM_CUSTOM_CHATBOTS — phải bị bỏ qua',
+      chatbot_system_instruction: 'FROM_CUSTOM_CHATBOTS — chatbot được gán, phải THẮNG',
     };
-    // fakeChatbotSettingsFull vẫn có system_instruction='Bạn là trợ lý bán hàng chuyên nghiệp'.
+    // fakeChatbotSettingsFull vẫn có system_instruction='Bạn là trợ lý bán hàng chuyên nghiệp' (chatbot A lưu sau).
 
     const res = await postWebhook(inboundPayload);
     expect(res.status).toBe(204);
@@ -570,8 +569,62 @@ describe('Bug 22/09 — Telegram fallback chain cho system_instruction (Zalo par
     const call = mocks.chatRouterCall();
     expect(call).not.toBeNull();
     expect(call.chatbotSettings.system_instruction).toBe(
-      fakeChatbotSettingsFull.system_instruction
+      'FROM_CUSTOM_CHATBOTS — chatbot được gán, phải THẮNG'
     );
+    expect(call.chatbotSettings._source?.system_instruction).toBe('custom_chatbots');
+  });
+});
+
+describe('PR-3 — Telegram dùng hướng dẫn/model/style của chatbot ĐƯỢC GÁN, chatbot_settings kênh chỉ dự phòng', () => {
+  const assignedB = {
+    ...fakeAccountSettings,
+    chatbot_system_instruction: 'B-instr',
+    chatbot_ai_model: 'gemini-b',
+    chatbot_temperature: 0.9,
+    chatbot_max_tokens: 512,
+    chatbot_response_style: 'casual',
+    chatbot_welcome_message: 'Welcome B',
+  };
+
+  it('gán B, dòng kênh = A lưu sau cùng → mọi field AI của B', async () => {
+    mocks._scenarioAccountSettings = assignedB;
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    const settings = mocks.chatRouterCall().chatbotSettings;
+    expect(settings.system_instruction).toBe('B-instr');
+    expect(settings.ai_model).toBe('gemini-b');
+    expect(settings.temperature).toBe(0.9);
+    expect(settings.max_tokens).toBe(512);
+    expect(settings.response_style).toBe('casual');
+    expect(settings.welcome_message).toBe('Welcome B');
+    expect(settings._source?.system_instruction).toBe('custom_chatbots');
+  });
+
+  it('B để trống system_instruction/ai_model (NULL hoặc chuỗi rỗng) → rơi về A (dự phòng), field khác vẫn của B', async () => {
+    mocks._scenarioAccountSettings = {
+      ...assignedB,
+      chatbot_system_instruction: '   ',
+      chatbot_ai_model: null,
+    };
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    const settings = mocks.chatRouterCall().chatbotSettings;
+    expect(settings.system_instruction).toBe(fakeChatbotSettingsFull.system_instruction);
+    expect(settings.ai_model).toBe(fakeChatbotSettingsFull.ai_model);
+    expect(settings.response_style).toBe('casual');
+    expect(settings._source?.system_instruction).toBe('chatbot_settings');
+  });
+
+  it('dòng chatbot_settings kênh KHÔNG có (null) → vẫn dùng B, is_enabled theo tài khoản', async () => {
+    const { default: chatbotRepo } = await import(resolveUrl('repositories/ai/chatbot.repository.js'));
+    chatbotRepo.getSettings = jest.fn(async () => null);
+    mocks._scenarioAccountSettings = assignedB;
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    const settings = mocks.chatRouterCall().chatbotSettings;
+    expect(settings.system_instruction).toBe('B-instr');
+    expect(settings.ai_model).toBe('gemini-b');
+    expect(settings.is_enabled).toBe(true);
   });
 });
 

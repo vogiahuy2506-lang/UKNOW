@@ -284,13 +284,17 @@ async function isTelegramAiPaused(conversationId) {
  * `max_tokens`, `response_style`, `id_sub_assistant` do user cấu hình
  * trong Studio → câu trả lời "không tuân theo cấu hình".
  *
- * Sau fix: lấy THÊM `chatbot_settings.channel='telegram_personal'`
- * (full row đã LEFT JOIN `sub_assistants`) rồi merge:
- *   - Các field AI/system/welcome/style lấy từ `chatbotSettings` (config
- *     chính của chatbot — có thể share giữa nhiều channels).
- *   - 3 cột enable lấy từ `accountSettings` (override per-account).
- *   - Nếu cả 2 cùng truthy thì `accountSettings.is_enabled_dm/group`
- *     đè lên `chatbotSettings.is_enabled` (giữ semantic cũ).
+ * Sau fix 22/09: lấy THÊM `chatbot_settings.channel='telegram_personal'` rồi merge.
+ * PR-3 (PLAN_CONG_TAC_TRANG_THAI_CHATBOT 29/09) — thứ tự ưu tiên ĐẢO so với bản 22/09:
+ *   - Các field AI/system/welcome/style lấy từ CHATBOT ĐƯỢC GÁN cho tài khoản
+ *     (`accountSettings.chatbot_*`, JOIN sống `custom_chatbots` trong
+ *     chatbotTelegram.repository getSettingsForAccount). `chatbot_settings` kênh chỉ là
+ *     DỰ PHÒNG khi chatbot để trống — dòng kênh đó theo TÀI KHOẢN (UNIQUE id_user, channel)
+ *     và bị hộp Cấu hình Studio ghi đè bằng chatbot nào lưu SAU CÙNG: tài khoản 2 chatbot,
+ *     gán Telegram cho B nhưng lưu A sau → Telegram trả lời bằng hướng dẫn của A.
+ *     Zalo cá nhân đã đúng thứ tự này (zaloInbox.service.js ~796-812).
+ *   - 3 cột enable lấy từ `accountSettings` (override per-account); nếu cả 2 cùng truthy
+ *     thì `accountSettings.is_enabled_dm/group` đè lên `chatbotSettings.is_enabled`.
  */
 async function processTelegramPersonalBatch({ account, parsed, batch }) {
   const peer = parsed.chatId || parsed.senderId;
@@ -395,37 +399,7 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     chatbotSettings
   );
 
-  // ── NEW (Bug 22/09 — Zalo parity): fallback chain cho
-  // ── system_instruction. Zalo cá nhân đã có sẵn chain này ở
-  // ── zaloInbox.service.js (dòng ~807-811). Telegram thiếu nên AI
-  // ── không thấy system_instruction của chatbot user tạo.
-  //
-  // Thứ tự ưu tiên (giống Zalo, KHÔNG lẫn lộn):
-  //   1. `accountSettings.chatbot_system_instruction`  ← snap từ
-  //      `custom_chatbots.system_instruction` lúc user bật chatbot
-  //      cho account (DeployTab UI).
-  //   2. `chatbotSettings.system_instruction`           ← từ
-  //      `chatbot_settings.channel='telegram_personal'` (Studio Lưu).
-  //
-  // Fallback A→B: chỉ fill khi B trống. Như vậy:
-  //   - User cấu hình ở Studio Lưu (chatbot_settings) → ưu tiên.
-  //   - User chỉ cấu hình ở Studio chatbot mà chưa lưu channel-specific
-  //     → fallback sang chatbot_system_instruction (snap khi bật).
-  if (!mergedSettings.system_instruction && accountSettings?.chatbot_system_instruction) {
-    mergedSettings = {
-      ...mergedSettings,
-      system_instruction: accountSettings.chatbot_system_instruction,
-      _source: {
-        ...(mergedSettings._source || {}),
-        system_instruction: 'telegram_chatbot_settings_fallback',
-      },
-    };
-    console.log('[Telegram] backfilled system_instruction from chatbot_system_instruction', {
-      accountId: account.id,
-      idChatbot,
-      length: accountSettings.chatbot_system_instruction.length,
-    });
-  }
+  // PR-3: ưu tiên/dự phòng system_instruction nằm TRONG mergeAccountAndChatbotSettings (đọc `_source`).
 
   // Nếu account đã tắt chatbot cho kênh này (is_enabled=false hoặc
   // dm/group disabled tuỳ loại), ghi một system row để operator thấy
@@ -714,20 +688,34 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
  *
  * Test pin: `expect(merged.system_instruction).toBe(...)` v.v.
  */
+/** Giá trị đầu tiên "có cấu hình": không null/undefined và (nếu là chuỗi) không rỗng. */
+function pickConfigured(...values) {
+  for (const v of values) {
+    if (v == null) continue;
+    if (typeof v === 'string' && v.trim() === '') continue;
+    return v;
+  }
+  return null;
+}
+
 function mergeAccountAndChatbotSettings(accountSettings, chatbotSettings) {
   const base = chatbotSettings || {};
   const acc = accountSettings || {};
+  // PR-3: chatbot ĐƯỢC GÁN (acc.chatbot_*) trước, dòng chatbot_settings kênh (base) chỉ dự phòng.
+  const systemInstruction = pickConfigured(acc.chatbot_system_instruction, base.system_instruction);
+  const systemInstructionSource = pickConfigured(acc.chatbot_system_instruction) != null
+    ? 'custom_chatbots'
+    : (systemInstruction != null ? 'chatbot_settings' : null);
   return {
-    // AI / system config — luôn từ chatbotSettings
     id_sub_assistant: base.id_sub_assistant ?? acc.id_sub_assistant ?? null,
     sub_assistant_name: base.sub_assistant_name ?? null,
-    system_instruction: base.system_instruction ?? null,
-    welcome_message: base.welcome_message ?? base.greeting_msg ?? null,
+    system_instruction: systemInstruction,
+    welcome_message: pickConfigured(acc.chatbot_welcome_message, base.welcome_message, base.greeting_msg),
     greeting_msg: base.greeting_msg ?? null,
-    ai_model: base.ai_model ?? null,
-    temperature: base.temperature ?? null,
-    max_tokens: base.max_tokens ?? null,
-    response_style: base.response_style ?? null,
+    ai_model: pickConfigured(acc.chatbot_ai_model, base.ai_model),
+    temperature: pickConfigured(acc.chatbot_temperature, base.temperature),
+    max_tokens: pickConfigured(acc.chatbot_max_tokens, base.max_tokens),
+    response_style: pickConfigured(acc.chatbot_response_style, base.response_style),
 
     // Enable flags — chatbotSettings cho default, accountSettings override
     // (giữ semantic cũ: nếu accountSettings.is_enabled=false → tắt,
@@ -740,6 +728,7 @@ function mergeAccountAndChatbotSettings(accountSettings, chatbotSettings) {
     _source: {
       account: acc ? 'telegram_chatbot_settings' : null,
       chatbot: base ? 'chatbot_settings' : null,
+      system_instruction: systemInstructionSource,
     },
   };
 }
