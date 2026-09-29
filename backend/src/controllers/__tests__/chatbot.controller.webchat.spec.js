@@ -566,3 +566,52 @@ describe('PLAN_CONG_TAC_TRANG_THAI_CHATBOT PR-2 — replies_enabled=false chặn
     expectSilentButSaved(res);
   });
 });
+
+describe('S3-a/S3-b — phong cách trả lời + bo góc chạy thật ở widget web', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    const styled = { ...chatbot, response_style: 'professional', border_radius: 0 };
+    findChatbotById.mockResolvedValue(styled);
+    findChatbotByWidgetKey.mockResolvedValue(styled);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'ok' });
+    consume.mockResolvedValue(undefined);
+    broadcast.mockReturnValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    isAiPaused.mockResolvedValue(false);
+    getOwnerContact.mockResolvedValue(null);
+  });
+
+  it('chatWithCustomChatbot (widget theo key) truyền responseStyle của chatbot', async () => {
+    await chatbotController.chatWithCustomChatbot(
+      { params: { widgetKey: 'wk_abc' }, body: { message: 'xin chào', sessionId: 's1', history: [] } },
+      makeRes()
+    );
+    expect(chat.mock.calls[0][0].responseStyle).toBe('professional');
+  });
+
+  it('chatWithCustomChatbotById (key/id công khai) truyền responseStyle của chatbot', async () => {
+    await chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '12' }, body: { message: 'xin chào', sessionId: 's2', history: [] } },
+      makeRes()
+    );
+    expect(chat.mock.calls[0][0].responseStyle).toBe('professional');
+  });
+
+  it('getCustomChatbotConfig trả borderRadius; 0 vẫn là 0 (không rơi về 16)', async () => {
+    const res = makeRes();
+    await chatbotController.getCustomChatbotConfig({ params: { widgetKey: 'wk_abc' } }, res);
+    expect(res.json.mock.calls[0][0].data.borderRadius).toBe(0);
+  });
+
+  it('getPublicChatbotById: border_radius 0 giữ 0', async () => {
+    const res = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '12' } }, res);
+    expect(res.json.mock.calls[0][0].data.border_radius).toBe(0);
+  });
+});

@@ -1085,7 +1085,7 @@ class ChatbotController {
           logo_url: chatbot.avatar_url || chatbot.logo_url || null,
           show_avatar: chatbot.show_avatar !== false,
           position: chatbot.position || 'bottom-right',
-          border_radius: chatbot.border_radius || 16,
+          border_radius: chatbot.border_radius ?? 16,
           chat_height: chatbot.chat_height || '600px',
           // Suggested questions - applies to all deployment types
           suggested_questions: chatbot.suggested_questions || [],
@@ -1150,6 +1150,7 @@ class ChatbotController {
           showAvatar: chatbot.show_avatar !== false,
           suggestedQuestions: chatbot.suggested_questions || [],
           position: chatbot.position || 'bottom-right',
+          borderRadius: chatbot.border_radius ?? 16,
           launcherLabel: chatbot.launcher_label || '',
           allowAttachments: chatbot.allow_attachments === true,
           // Tu dong mo khung chat sau 2s (widget.js quyet dinh 1 lan/phien).
@@ -1778,6 +1779,7 @@ class ChatbotController {
         userId: chatbot.id_user,
         systemInstruction: chatbot.system_instruction,
         extraSystemNote: contactAck?.note || null,
+        responseStyle: chatbot.response_style,
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
         attachments: currentAttachments,
@@ -2049,6 +2051,7 @@ class ChatbotController {
         userId: chatbot.id_user,
         systemInstruction: chatbot.system_instruction,
         extraSystemNote: contactAck?.note || null,
+        responseStyle: chatbot.response_style,
         temperature: chatbot.temperature || 0.7,
         maxTokens: chatbot.max_tokens || 2048,
         attachments: currentAttachments,

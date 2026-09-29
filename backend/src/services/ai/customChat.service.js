@@ -5,6 +5,7 @@ import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } fr
 import { scrapeUrlWithJs } from '../../utils/puppeteerScraper.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
+import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
 
 /** Timeout for Gemini API calls (30 seconds) */
@@ -173,6 +174,7 @@ class CustomChatService {
     userId,
     systemInstruction,
     extraSystemNote,
+    responseStyle,
     temperature,
     maxTokens,
     attachments = [],
@@ -210,7 +212,12 @@ QUY TẮC TRẢ LỜI:
 - Khong dung link markdown dang [ten](https://example.com)
 - Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
 
-    const baseSystem = systemInstruction || defaultSystem;
+    const baseSystemRaw = systemInstruction || defaultSystem;
+    // Phong cach tra loi (custom_chatbots.response_style): chi noi them khi caller truyen vao,
+    // khong truyen thi prompt giu nguyen nhu cu.
+    const baseSystem = responseStyle
+      ? `${baseSystemRaw}\n\n## PHONG CACH TRA LOI\n${getResponseStyleInstruction(responseStyle)}`
+      : baseSystemRaw;
     const systemPrompt = extraSystemNote?.trim()
       ? `${baseSystem}\n\n${extraSystemNote.trim()}`
       : baseSystem;

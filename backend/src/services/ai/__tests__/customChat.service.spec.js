@@ -79,3 +79,46 @@ describe('customChat.callGeminiWithRetry thinking config', () => {
     expect(second.generationConfig.maxOutputTokens).toBe(3072); // Math.max(min(512,65536), 3072)
   });
 });
+
+describe('customChat.chat — phong cách trả lời (responseStyle)', () => {
+  const runChat = async (extra = {}) => {
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
+    const svc = customChatService;
+    const searchSpy = jest.spyOn(svc, 'searchChunks').mockResolvedValue([]);
+    const callSpy = jest.spyOn(svc, 'callGeminiWithRetry').mockResolvedValue({ text: 'ok', usage: {} });
+    const meter = (await import('../aiUsageMeter.service.js')).default;
+    meter.reserve = jest.fn().mockResolvedValue({ maxOutputTokens: 100 });
+    meter.record = jest.fn().mockResolvedValue(undefined);
+    const chatAttachment = (await import('../../chatbot/chatAttachment.service.js')).default;
+    chatAttachment.buildAiPartsFromHistory = jest.fn().mockResolvedValue([]);
+    await svc.chat({
+      history: [{ role: 'user', content: 'xin chao' }],
+      chatbotId: 1,
+      userId: 2,
+      systemInstruction: 'Ban la tro ly cua shop.',
+      temperature: 0.7,
+      maxTokens: 100,
+      ...extra,
+    });
+    const text = callSpy.mock.calls[0][0][0].text;
+    searchSpy.mockRestore();
+    callSpy.mockRestore();
+    return text;
+  };
+
+  it("responseStyle 'professional' -> prompt chứa câu phong cách chuyên nghiệp", async () => {
+    const text = await runChat({ responseStyle: 'professional' });
+    expect(text).toContain('## PHONG CACH TRA LOI\nChuyen nghiep, ngan gon, suc tich.');
+    expect(text).toContain('Ban la tro ly cua shop.');
+  });
+
+  it("responseStyle 'casual' -> prompt chứa câu phong cách thoải mái", async () => {
+    const text = await runChat({ responseStyle: 'casual' });
+    expect(text).toContain('Than thien nhung thoai mai, co the dung tieng long nhe.');
+  });
+
+  it('không truyền responseStyle -> prompt giữ nguyên như cũ (không thêm mục phong cách)', async () => {
+    const text = await runChat();
+    expect(text).not.toContain('PHONG CACH TRA LOI');
+  });
+});

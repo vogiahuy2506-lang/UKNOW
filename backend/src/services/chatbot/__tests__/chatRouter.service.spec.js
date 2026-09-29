@@ -8,6 +8,8 @@ const getWebChatMessages = jest.fn();
 const addWebChatMessage = jest.fn();
 const getChannelMessages = jest.fn();
 const addChannelMessage = jest.fn();
+const findChatbotById = jest.fn();
+const getConversationHistory = jest.fn();
 
 const assertAvailable = jest.fn();
 const charge = jest.fn();
@@ -30,6 +32,8 @@ jest.unstable_mockModule('../../../repositories/ai/chatbot.repository.js', () =>
     addWebChatMessage,
     getChannelMessages,
     addChannelMessage,
+    findChatbotById,
+    getConversationHistory,
   },
 }));
 
@@ -416,3 +420,39 @@ describe('PR-1c — bot xác nhận khi khách để lại liên hệ trong chat
   });
 });
 
+
+describe('routeChatbotMessage — response_style của chatbot đi vào prompt (Zalo OA / Facebook / WhatsApp Cloud)', () => {
+  const run = async (responseStyle) => {
+    findChatbotById.mockResolvedValue({
+      id: 9, id_user: 3, name: 'Bot', welcome_message: 'Chao', system_instruction: '', response_style: responseStyle,
+    });
+    getConversationHistory.mockResolvedValue([]);
+    buildContext.mockResolvedValue('');
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
+    const prep = jest.spyOn(chatRouterService, '_prepareChatCredit').mockResolvedValue({ creditContext: {} });
+    const charge_ = jest.spyOn(chatRouterService, '_chargeChatCredit').mockResolvedValue(undefined);
+    const callAI = jest.spyOn(chatRouterService, '_callAI').mockResolvedValue({ text: 'ok' });
+    await chatRouterService.routeChatbotMessage({ chatbotId: 9, message: 'hi', conversationId: 1 });
+    const prompt = callAI.mock.calls[0][0].systemPrompt;
+    prep.mockRestore();
+    charge_.mockRestore();
+    callAI.mockRestore();
+    return prompt;
+  };
+
+  it("response_style 'professional' -> prompt có câu phong cách chuyên nghiệp", async () => {
+    const prompt = await run('professional');
+    expect(prompt).toContain('Chuyen nghiep, ngan gon, suc tich.');
+    expect(prompt).not.toContain('Than thien, gan gui, dung emoji phu hop.');
+  });
+
+  it("response_style 'casual' -> prompt có câu phong cách thoải mái", async () => {
+    const prompt = await run('casual');
+    expect(prompt).toContain('Than thien nhung thoai mai, co the dung tieng long nhe.');
+  });
+
+  it('không có response_style -> rơi về friendly như cũ', async () => {
+    const prompt = await run(undefined);
+    expect(prompt).toContain('Than thien, gan gui, dung emoji phu hop.');
+  });
+});

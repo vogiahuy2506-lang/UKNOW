@@ -562,7 +562,7 @@ class ChatbotRepository {
               primary_color, background_color, text_color, accent_color,
               logo_url, show_avatar, border_radius, chat_height,
               suggested_questions, widget_key, allow_attachments, launcher_label,
-              temperature, max_tokens, ai_model, origin,
+              temperature, max_tokens, ai_model, response_style, origin,
               active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
               created_at, updated_at
        FROM custom_chatbots

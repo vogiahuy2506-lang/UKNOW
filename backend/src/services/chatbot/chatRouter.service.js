@@ -20,6 +20,7 @@ import aiCreditMeter, {
 import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
 import { extractContacts } from '../../utils/contactDetect.util.js';
 import { buildContactAck } from '../../utils/contactAck.util.js';
+import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
 import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
 
 const ADAPTERS = {
@@ -188,12 +189,6 @@ class ChatRouterService {
     const welcomeMessage = settings?.welcome_message || subAssistant?.greeting_msg || 'Xin chao! Toi co the giup gi cho ban?';
     const style = settings?.response_style || 'friendly';
 
-    const styleInstructions = {
-      friendly: 'Than thien, gan gui, dung emoji phu hop.',
-      professional: 'Chuyen nghiep, ngan gon, suc tich.',
-      casual: 'Than thien nhung thoai mai, co the dung tieng long nhe.',
-    };
-
     let moTaBlock = '';
     if (chatbot?.description) {
       moTaBlock = `\n\n## MO TA\n${chatbot.description}`;
@@ -208,7 +203,7 @@ class ChatRouterService {
 - Neu khong tim thay thong tin phu hop, hay noi ro va goi y lien he voi doanh nghiep
 
 ## PHONG CACH TRA LOI
-${styleInstructions[style] || styleInstructions.friendly}`;
+${getResponseStyleInstruction(style)}`;
 
     // Nếu là tin nhắn đầu tiên, thêm lời chào vào prompt
     if (isFirstMessage) {
@@ -551,8 +546,9 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       // + description_map lần lượt map vào `subAssistant` / `settings` / `chatbot`.
       const ownSettings = {
         welcome_message: chatbot.welcome_message,
-        // response_style trên custom_chatbots không tồn tại — để undefined,
-        // buildSystemPrompt sẽ fallback 'friendly'.
+        // custom_chatbots.response_style có thật (migration 185) — thiếu/không hợp lệ thì
+        // buildSystemPrompt tự rơi về 'friendly'.
+        response_style: chatbot.response_style,
         system_instruction: chatbot.system_instruction,
       };
       const ownSubAssistant = chatbot.description
