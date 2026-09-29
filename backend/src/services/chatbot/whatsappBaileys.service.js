@@ -757,6 +757,38 @@ export async function sendMessage(sessionKey, toJidOrPhone, text, { waitForConne
   return record.socket.sendMessage(jid, { text });
 }
 
+/**
+ * Kiểm một số điện thoại có dùng WhatsApp không (chiến dịch WhatsApp gọi NGAY TRƯỚC khi gửi từng số —
+ * KHÔNG gọi hàng loạt cả danh sách: WhatsApp tính là dò số).
+ *
+ * Baileys 6.x `sock.onWhatsApp(...jids)` (Socket/chats.js:148) trả `[{ jid, exists, lid }]` nhưng ĐÃ LỌC
+ * `.filter(a => !!a.contact)` — số KHÔNG dùng WhatsApp thì KHÔNG có phần tử nào (mảng rỗng), không phải
+ * `{exists:false}`. Trả `undefined` khi usync không có kết quả. Ném (Boom) khi hết giờ/mất kết nối.
+ *
+ * @param {string} sessionKey
+ * @param {string} phone chỉ chữ số, không '+'
+ * @returns {Promise<boolean|null>} true = có WhatsApp, false = chắc chắn không, null = không xác định được
+ */
+export async function checkNumberExists(sessionKey, phone, { waitForConnectionMs = 8000 } = {}) {
+  let record = sessions.get(sessionKey);
+  if (!record) throw new Error(`WhatsApp session ${sessionKey} is not connected`);
+  if (record.status !== 'open' || !record.socket) {
+    record = await waitForOpen(sessionKey, waitForConnectionMs);
+  }
+  if (!record || record.status !== 'open' || !record.socket) {
+    throw new Error(`WhatsApp session ${sessionKey} is not connected`);
+  }
+  const jid = `${String(phone).replace(/\D/g, '')}@s.whatsapp.net`;
+  return interpretOnWhatsAppResult(await record.socket.onWhatsApp(jid));
+}
+
+/** Diễn giải kết quả `onWhatsApp` (xem ghi chú ở checkNumberExists): mảng rỗng = số không dùng WhatsApp. */
+export function interpretOnWhatsAppResult(result) {
+  if (!Array.isArray(result)) return null;
+  if (result.length === 0) return false;
+  return result.some((r) => r?.exists !== false);
+}
+
 export async function sendMedia(sessionKey, toJidOrPhone, buffer, mimetype, fileName, caption, { waitForConnectionMs = 8000 } = {}) {
   let record = sessions.get(sessionKey);
   if (!record) throw new Error(`WhatsApp session ${sessionKey} is not connected`);

@@ -62,3 +62,22 @@ describe('listPersistedSessions', () => {
     );
   });
 });
+
+describe('checkNumberExists / interpretOnWhatsAppResult (W4a)', () => {
+  it('phiên không tồn tại -> ném "is not connected" (runner phân loại auth)', async () => {
+    await expect(service.checkNumberExists('99-none', '84912345678')).rejects.toThrow('is not connected');
+  });
+
+  it('Baileys onWhatsApp lọc bỏ số không có WhatsApp -> mảng rỗng = false (không phải {exists:false})', () => {
+    expect(service.interpretOnWhatsAppResult([])).toBe(false);
+  });
+
+  it('có phần tử exists=true -> true; exists=false tường minh -> false', () => {
+    expect(service.interpretOnWhatsAppResult([{ jid: '84912345678@s.whatsapp.net', exists: true }])).toBe(true);
+    expect(service.interpretOnWhatsAppResult([{ jid: 'x', exists: false }])).toBe(false);
+  });
+
+  it('usync không có kết quả (undefined) -> null (không xác định, không kết luận "không có WhatsApp")', () => {
+    expect(service.interpretOnWhatsAppResult(undefined)).toBeNull();
+  });
+});

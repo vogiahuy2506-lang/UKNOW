@@ -50,6 +50,8 @@
 // PR-6 (tách tầng kênh gửi) — import tĩnh, KHÔNG kích hoạt side-effect thật nào (chỉ khai báo hàm)
 // cho tới khi cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED bật VÀ có node thật gọi tới.
 import { telegramChannelAdapter, buildTelegramPolicyFromEnv } from './channels/telegram.campaignChannel.js';
+// W4a (WhatsApp) — adapter import tĩnh nhưng service Baileys chỉ được nạp động lúc gọi (xem whatsapp.campaignChannel.js).
+import { whatsappChannelAdapter, buildWhatsAppPolicyFromEnv } from './channels/whatsapp.campaignChannel.js';
 
 /** Lỗi gửi kênh adapter — `category` quyết định runner bỏ qua người này hay dừng cả node. */
 export class ChannelSendError extends Error {
@@ -138,13 +140,39 @@ function buildTelegramDescriptor() {
   };
 }
 
+/**
+ * W4a — WhatsApp (Baileys) cùng khuôn Telegram: OTT đếm vào hạn mức Zalo, cờ CHỈ chặn GỬI, KHÔNG chặn ĐẾM.
+ * Số nhịp gửi mặc định BẢO THỦ (WhatsApp khoá số nhanh khi gửi số lạ hàng loạt; chưa có số liệu).
+ */
+const WHATSAPP_CHANNEL_META = Object.freeze({ key: 'whatsapp', quotaChannel: 'zalo' });
+
+function isWhatsAppChannelEnabled() {
+  return process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED === 'true';
+}
+
+function buildWhatsAppDescriptor() {
+  return {
+    key: WHATSAPP_CHANNEL_META.key,
+    sendNodeSubtype: 'send_whatsapp',
+    engine: 'adapter',
+    continuousSupported: false,
+    continuousReplay: false,
+    quotaChannel: WHATSAPP_CHANNEL_META.quotaChannel,
+    policy: buildWhatsAppPolicyFromEnv(),
+    adapter: whatsappChannelAdapter,
+  };
+}
+
 function getAllDescriptors() {
-  const staticAdapterDescriptors = isTelegramChannelEnabled() ? [buildTelegramDescriptor()] : [];
+  const staticAdapterDescriptors = [
+    ...(isTelegramChannelEnabled() ? [buildTelegramDescriptor()] : []),
+    ...(isWhatsAppChannelEnabled() ? [buildWhatsAppDescriptor()] : []),
+  ];
   return [...CHANNEL_DESCRIPTORS, ...staticAdapterDescriptors, ...testChannelDescriptors];
 }
 
 /** Nhãn hiển thị cho trình dựng — chỉ kênh 'adapter' cần (kênh 'legacy' đã có tên cứng trong FE). */
-const ADAPTER_CHANNEL_LABELS = Object.freeze({ telegram: 'Telegram' });
+const ADAPTER_CHANNEL_LABELS = Object.freeze({ telegram: 'Telegram', whatsapp: 'WhatsApp' });
 
 /**
  * PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1 — trình dựng hỏi "kênh adapter nào đang bật"
@@ -226,9 +254,10 @@ export function getAdapterChannelKeysByQuotaChannel(quotaChannel) {
   // PR-6 (CHỐT PR-6) — cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED chỉ chặn GỬI (getAllDescriptors ở trên
   // đã lọc theo cờ), KHÔNG được chặn ĐẾM: tắt cờ không có nghĩa tin Telegram đã gửi trước đó thôi
   // tính vào hạn mức Zalo. Luôn cộng thêm 'telegram' vào đây bất kể cờ.
-  const alwaysOnKeys = TELEGRAM_CHANNEL_META.quotaChannel === quotaChannel
-    ? [TELEGRAM_CHANNEL_META.key]
-    : [];
+  // W4a — 'whatsapp' cùng quy tắc: cờ tắt vẫn đếm tin đã gửi.
+  const alwaysOnKeys = [TELEGRAM_CHANNEL_META, WHATSAPP_CHANNEL_META]
+    .filter((meta) => meta.quotaChannel === quotaChannel)
+    .map((meta) => meta.key);
   return [...new Set([...dynamicKeys, ...alwaysOnKeys])];
 }
 

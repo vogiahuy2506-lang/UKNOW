@@ -31,6 +31,7 @@ import { StorageQuotaExceededError } from '../services/storage/storageQuota.serv
 import { getEnabledAdapterChannelsForBuilder } from '../services/campaign/campaignChannelRegistry.service.js';
 import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.repository.js';
 import { listTelegramGroupsForAccount } from '../services/campaign/telegramGroups.service.js';
+import { listWhatsAppAccountsForOwner } from '../services/campaign/channels/whatsapp.campaignChannel.js';
 
 class CampaignController {
   /**
@@ -988,6 +989,22 @@ class CampaignController {
     } catch (error) {
       console.error('Get Telegram accounts for builder error:', error);
       res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách tài khoản Telegram' });
+    }
+  }
+
+  /**
+   * GET /api/campaigns/channels/whatsapp/accounts
+   * PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4a — phiên WhatsApp (Baileys) của CHỦ workspace cho người dựng chiến
+   * dịch chọn. Nhân viên chỉ có campaigns_create vẫn xem được. KHÔNG trả SĐT/JID của chủ.
+   */
+  async getWhatsAppAccountsForBuilder(req, res) {
+    try {
+      const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const data = await listWhatsAppAccountsForOwner(ownerUserId);
+      res.json({ success: true, data });
+    } catch (error) {
+      console.error('Get WhatsApp accounts for builder error:', error);
+      res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách tài khoản WhatsApp' });
     }
   }
 

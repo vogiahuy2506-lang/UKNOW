@@ -32,3 +32,43 @@ describe('campaignChannelRegistry.getEnabledAdapterChannelsForBuilder', () => {
     expect(typeof campaignChannelRegistry.getEnabledAdapterChannelsForBuilder).toBe('function');
   });
 });
+
+/** PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4a — kênh WhatsApp cùng khuôn Telegram. */
+describe('campaignChannelRegistry — WhatsApp (W4a)', () => {
+  afterEach(() => {
+    delete process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED;
+    delete process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED;
+  });
+
+  it('cờ WhatsApp tắt -> không có kênh, send_whatsapp không phải node gửi đã biết', () => {
+    expect(getEnabledAdapterChannelsForBuilder()).toEqual([]);
+    expect(campaignChannelRegistry.isKnownSendSubtype('send_whatsapp')).toBe(false);
+  });
+
+  it('cờ bật -> whatsapp đúng hợp đồng, không continuous, quota đếm vào zalo', () => {
+    process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
+    expect(getEnabledAdapterChannelsForBuilder()).toEqual([
+      { key: 'whatsapp', sendNodeSubtype: 'send_whatsapp', label: 'WhatsApp' },
+    ]);
+    const descriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype('send_whatsapp');
+    expect(descriptor).toMatchObject({
+      key: 'whatsapp', engine: 'adapter', quotaChannel: 'zalo',
+      continuousSupported: false, continuousReplay: false,
+    });
+    expect(campaignChannelRegistry.getContinuousSupportedSubtypes()).not.toContain('send_whatsapp');
+    expect(campaignChannelRegistry.getContinuousReplaySubtypes()).not.toContain('send_whatsapp');
+  });
+
+  it('đếm quota Zalo luôn có whatsapp + telegram bất kể cờ; email không có', () => {
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo')).toEqual(
+      expect.arrayContaining(['whatsapp', 'telegram'])
+    );
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('email')).toEqual([]);
+  });
+
+  it('hai cờ cùng bật -> cả hai kênh', () => {
+    process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
+    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
+    expect(getEnabledAdapterChannelsForBuilder().map((c) => c.key).sort()).toEqual(['telegram', 'whatsapp']);
+  });
+});

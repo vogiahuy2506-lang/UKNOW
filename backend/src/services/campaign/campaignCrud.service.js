@@ -195,7 +195,7 @@ class CampaignCrudService {
     connections,
   }) {
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
-    // 'mixed', 'telegram' và 'telegram_group': không có hạn mức số chiến dịch riêng theo loại → null (chỉ chịu trần 'campaigns' chung).
+    // 'mixed', 'telegram', 'telegram_group' và 'whatsapp': không có hạn mức số chiến dịch riêng theo loại → null (chỉ chịu trần 'campaigns' chung).
     const typeResourceKey = campaignType === 'email'
       ? 'emailCampaigns'
       : campaignType === 'zalo_group'

@@ -17,7 +17,7 @@ import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.j
 import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
 const router = express.Router();
-const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed', 'telegram', 'telegram_group'];
+const CAMPAIGN_TYPE_OPTIONS = ['email', 'zalo', 'zalo_group', 'mixed', 'telegram', 'telegram_group', 'whatsapp'];
 const workspaceUploadCapacityGuard = storageCapacityGuard({ paths: [getStoragePaths().uploads] });
 
 router.use(authMiddleware);
@@ -34,6 +34,7 @@ router.get('/delay-config', requirePermission('campaigns_view'), campaignControl
 // nếu không Express khớp "channels" thành tham số :id.
 router.get('/channels', requirePermission('campaigns_view'), campaignController.getChannels.bind(campaignController));
 router.get('/channels/telegram/accounts', requirePermission('campaigns_create'), campaignController.getTelegramAccountsForBuilder.bind(campaignController));
+router.get('/channels/whatsapp/accounts', requirePermission('campaigns_create'), campaignController.getWhatsAppAccountsForBuilder.bind(campaignController));
 router.get('/channels/telegram/accounts/:id/groups', requirePermission('campaigns_create'), campaignController.getTelegramAccountGroups.bind(campaignController));
 
 // Quick send estimate & test send (rate limited 5 tests/hour per user)
