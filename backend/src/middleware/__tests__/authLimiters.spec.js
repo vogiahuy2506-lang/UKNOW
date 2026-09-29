@@ -4,7 +4,7 @@
  * limiter thật (mặc định skipInTest sẽ bỏ qua hoàn toàn trong NODE_ENV=test), giả IP bằng
  * X-Forwarded-For + trust proxy.
  */
-import { describe, it, expect } from '@jest/globals';
+import { describe, it, expect, afterEach } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
 import {
@@ -14,6 +14,23 @@ import {
 } from '../rateLimiter.middleware.js';
 
 const NO_SKIP = { skip: () => false };
+
+// Mỗi ca dựng MỘT server đang lắng nghe và dùng lại cho mọi request, tắt ở afterEach.
+// Trước đây `request(app)` dựng + tắt một server tạm cho TỪNG request (ca (e) = 51 server). Chạy cả bộ
+// unit lúc máy tải nặng, suite này đỏ chập chờn "Exceeded timeout of 20000 ms" (29/09/2026, 2 lần) dù
+// chạy riêng chỉ mất ~30 ms — dấu hiệu một request TREO chứ không phải chậm: Node 20 bật keep-alive mặc
+// định, cổng tạm của server đã tắt bị cấp lại, client đẩy request vào socket cũ. `Connection: close`
+// chặn nốt việc dùng lại socket giữa các request.
+const openServers = [];
+afterEach(async () => {
+  await Promise.all(openServers.splice(0).map((server) => new Promise((resolve) => server.close(resolve))));
+});
+
+function listenOnce(app) {
+  const server = app.listen(0);
+  openServers.push(server);
+  return server;
+}
 
 function buildLoginApp() {
   const app = express();
@@ -28,12 +45,13 @@ function buildLoginApp() {
       return res.status(401).json({ success: false });
     }
   );
-  return app;
+  return listenOnce(app);
 }
 
 const loginAs = (app, ip, username, password) => request(app)
   .post('/login')
   .set('X-Forwarded-For', ip)
+  .set('Connection', 'close')
   .send({ username, password });
 
 describe('loginAccountLimiter + loginIpLimiter (/login)', () => {
@@ -109,16 +127,16 @@ describe('authCredentialLimiter', () => {
     app.set('trust proxy', 1);
     app.use(express.json());
     app.post('/register', createAuthCredentialLimiter(NO_SKIP), (req, res) => res.status(200).json({ success: true }));
-    return app;
+    return listenOnce(app);
   }
 
   it('(f) 20 lượt → lượt 21 = 429 AUTH_RATE_LIMIT_EXCEEDED (đếm cả lượt thành công)', async () => {
     const app = buildCredentialApp();
     for (let i = 0; i < 20; i += 1) {
-      const res = await request(app).post('/register').set('X-Forwarded-For', '10.0.0.6').send({});
+      const res = await request(app).post('/register').set('X-Forwarded-For', '10.0.0.6').set('Connection', 'close').send({});
       expect(res.status).toBe(200);
     }
-    const res21 = await request(app).post('/register').set('X-Forwarded-For', '10.0.0.6').send({});
+    const res21 = await request(app).post('/register').set('X-Forwarded-For', '10.0.0.6').set('Connection', 'close').send({});
     expect(res21.status).toBe(429);
     expect(res21.body.code).toBe('AUTH_RATE_LIMIT_EXCEEDED');
   });
