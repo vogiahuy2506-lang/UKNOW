@@ -136,8 +136,10 @@ function buildTelegramDescriptor() {
     key: TELEGRAM_CHANNEL_META.key,
     sendNodeSubtype: 'send_telegram',
     engine: 'adapter',
-    continuousSupported: false,
-    continuousReplay: false,
+    // P7 — chạy liên tục: mỗi chu kỳ replay node chạy lại, runner đọc lại người nhận (hội thoại mới) và ledger
+    // (`campaign_run_recipient_steps`) + dedupe same-run/cross-run bảo đảm người đã xong KHÔNG bị gửi lại.
+    continuousSupported: true,
+    continuousReplay: true,
     quotaChannel: TELEGRAM_CHANNEL_META.quotaChannel,
     policy: buildTelegramPolicyFromEnv(),
     adapter: telegramChannelAdapter,
@@ -159,8 +161,9 @@ function buildWhatsAppDescriptor() {
     key: WHATSAPP_CHANNEL_META.key,
     sendNodeSubtype: 'send_whatsapp',
     engine: 'adapter',
-    continuousSupported: false,
-    continuousReplay: false,
+    // P7 — như Telegram: continuous + replay mỗi chu kỳ (ledger/dedupe chặn gửi lại).
+    continuousSupported: true,
+    continuousReplay: true,
     quotaChannel: WHATSAPP_CHANNEL_META.quotaChannel,
     // recipientKey = SĐT chuẩn hoá (normalizeWhatsAppPhone) -> kiểm khách từ chối nhận tin (P2).
     recipientIsPhone: true,

@@ -45,7 +45,7 @@ describe('campaignChannelRegistry — WhatsApp (W4a)', () => {
     expect(campaignChannelRegistry.isKnownSendSubtype('send_whatsapp')).toBe(false);
   });
 
-  it('cờ bật -> whatsapp đúng hợp đồng, không continuous, quota đếm vào zalo', () => {
+  it('cờ bật -> whatsapp đúng hợp đồng, có continuous + replay (P7), quota đếm vào zalo', () => {
     process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
     expect(getEnabledAdapterChannelsForBuilder()).toEqual([
       { key: 'whatsapp', sendNodeSubtype: 'send_whatsapp', label: 'WhatsApp' },
@@ -53,10 +53,19 @@ describe('campaignChannelRegistry — WhatsApp (W4a)', () => {
     const descriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype('send_whatsapp');
     expect(descriptor).toMatchObject({
       key: 'whatsapp', engine: 'adapter', quotaChannel: 'zalo',
-      continuousSupported: false, continuousReplay: false,
+      continuousSupported: true, continuousReplay: true,
     });
-    expect(campaignChannelRegistry.getContinuousSupportedSubtypes()).not.toContain('send_whatsapp');
-    expect(campaignChannelRegistry.getContinuousReplaySubtypes()).not.toContain('send_whatsapp');
+    expect(campaignChannelRegistry.getContinuousSupportedSubtypes()).toContain('send_whatsapp');
+    expect(campaignChannelRegistry.getContinuousReplaySubtypes()).toContain('send_whatsapp');
+  });
+
+  it('cờ bật -> telegram cũng continuous + replay (P7)', () => {
+    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
+    expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_telegram')).toMatchObject({
+      continuousSupported: true, continuousReplay: true,
+    });
+    expect(campaignChannelRegistry.getContinuousSupportedSubtypes()).toContain('send_telegram');
+    expect(campaignChannelRegistry.getContinuousReplaySubtypes()).toContain('send_telegram');
   });
 
   it('đếm quota Zalo luôn có whatsapp + telegram bất kể cờ; email không có', () => {
