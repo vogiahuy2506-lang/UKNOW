@@ -5,6 +5,7 @@ import { I18nProvider } from '../../../i18n';
 import Footer from '../../../components/layout/client/Footer.jsx';
 import PublicFooter from '../components/PublicFooter.jsx';
 import { POLICY_LINKS_VI } from './policyFooterLabels.js';
+import { isPathExcludedFromPostAuthGates } from '../../../features/auth/components/PostAuthGateModals.jsx';
 
 function renderWith(node) {
   return render(
@@ -32,5 +33,14 @@ describe.each([
   it('có link tới Chính sách về phương thức cung cấp dịch vụ (/service-delivery-policy)', () => {
     const { container } = renderWith(<Component />);
     expect(container.querySelector('a[href="/service-delivery-policy"]')).not.toBeNull();
+  });
+});
+
+// Modal cổng sau đăng nhập (SĐT/đồng ý) gắn toàn cục; người đang bị chặn phải đọc được
+// mọi trang chính sách mà không bị modal đè lên — từng thiếu /rights-and-duties.
+describe('11 route chính sách được miễn cổng sau đăng nhập', () => {
+  it.each(POLICY_LINKS_VI)('%s', (href) => {
+    expect(isPathExcludedFromPostAuthGates(href)).toBe(true);
+    expect(isPathExcludedFromPostAuthGates(`${href}/`)).toBe(true);
   });
 });

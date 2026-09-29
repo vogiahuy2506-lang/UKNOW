@@ -33,6 +33,8 @@ export const GATE_EXCLUDED_PATH_PREFIXES = [
   '/complaint-policy',
   '/refund-policy',
   '/service-terms',
+  '/service-delivery-policy',
+  '/rights-and-duties',
   '/support',
   '/contact',
   // Trang công khai của chủ shop cho khách hàng
