@@ -192,6 +192,11 @@ export const AUDIT_ACTIONS = {
   WHATSAPP_ACCOUNT_DELETED: 'WHATSAPP_ACCOUNT_DELETED',
   WHATSAPP_ACCOUNT_RENAMED: 'WHATSAPP_ACCOUNT_RENAMED',
 
+  // Workspace — Telegram (cá nhân) account lifecycle. Xoá tài khoản vẫn ghi CHATBOT_CHANNEL_DISCONNECTED
+  // (channelType 'telegram_personal') như trước — không đổi để không lệch số liệu/phễu kích hoạt hiện có.
+  TELEGRAM_ACCOUNT_LOGIN: 'TELEGRAM_ACCOUNT_LOGIN',
+  TELEGRAM_ACCOUNT_LOGOUT: 'TELEGRAM_ACCOUNT_LOGOUT',
+
   // System — einvoices
   EINVOICE_RETRIED: 'EINVOICE_RETRIED',
   EINVOICE_EMAIL_RESENT: 'EINVOICE_EMAIL_RESENT',

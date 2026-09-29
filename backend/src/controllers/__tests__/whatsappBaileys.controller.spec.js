@@ -12,13 +12,19 @@ const svc = {
   listSessions: jest.fn(() => []),
   getSession: jest.fn(() => undefined),
   listPersistedSessions: jest.fn(async () => []),
+  sendMessage: jest.fn(),
 };
+const whatsappSessionIsLocked = jest.fn(async () => false);
 const txClient = { query: jest.fn(async () => ({ rows: [] })), release: jest.fn() };
 const enforceResourceLimitTx = jest.fn(async () => {});
 jest.unstable_mockModule('../../config/database.js', () => ({
   default: { getClient: jest.fn(async () => txClient) },
 }));
 jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({ enforceResourceLimitTx }));
+jest.unstable_mockModule('../../utils/topupLockGate.util.js', () => ({
+  whatsappSessionIsLocked,
+  CHANNEL_ACCOUNT_LOCKED_MESSAGE: 'Tài khoản đang bị khoá do vượt hạn mức gói',
+}));
 const logWorkspace = jest.fn(async () => {});
 
 jest.unstable_mockModule('../../services/chatbot/whatsappBaileys.service.js', () => svc);
@@ -163,5 +169,54 @@ describe('whatsappBaileys.controller — W5 hạn mức số tài khoản', () =
     expect(svc.connectSession).not.toHaveBeenCalled();
     expect(txClient.query.mock.calls.map((c) => c[0])).toEqual(['BEGIN', 'ROLLBACK']);
     expect(txClient.release).toHaveBeenCalled();
+  });
+});
+
+// P8a — nút "Gửi thử" trên trang kênh dùng POST /sessions/:key/messages: chuẩn hoá SĐT, chặn phiên bị khoá.
+describe('whatsappBaileys.controller — sendMessage (gửi thử, P8a)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    whatsappSessionIsLocked.mockResolvedValue(false);
+    svc.sendMessage.mockResolvedValue({ key: { id: 'MSG1' } });
+  });
+
+  it.each([
+    ['0912 345 678', '84912345678'],
+    ['+84 912-345-678', '84912345678'],
+    ['84912345678', '84912345678'],
+  ])('SĐT "%s" gửi tới %s trên đúng phiên của chủ', async (input, expected) => {
+    const res = makeRes();
+    await controller.sendMessage(makeReq({ body: { to: input, text: 'Xin chào' } }), res);
+    expect(res.body).toEqual({ success: true, data: { messageId: 'MSG1' } });
+    expect(svc.sendMessage).toHaveBeenCalledWith('7-default', expected, 'Xin chào');
+  });
+
+  it('SĐT sai định dạng -> 400, KHÔNG gửi', async () => {
+    const res = makeRes();
+    await controller.sendMessage(makeReq({ body: { to: '12ab', text: 'x' } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(svc.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('thiếu to/text -> 400', async () => {
+    const res = makeRes();
+    await controller.sendMessage(makeReq({ body: { to: '0912345678' } }), res);
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('phiên bị khoá vượt gói -> 403 WHATSAPP_ACCOUNT_LOCKED, KHÔNG gửi', async () => {
+    whatsappSessionIsLocked.mockResolvedValue(true);
+    const res = makeRes();
+    await controller.sendMessage(makeReq({ body: { to: '0912345678', text: 'x' } }), res);
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toMatchObject({ success: false, code: 'WHATSAPP_ACCOUNT_LOCKED' });
+    expect(whatsappSessionIsLocked).toHaveBeenCalledWith('7-default');
+    expect(svc.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('nội dung dài bị cắt 1000 ký tự', async () => {
+    const res = makeRes();
+    await controller.sendMessage(makeReq({ body: { to: '0912345678', text: 'a'.repeat(1500) } }), res);
+    expect(svc.sendMessage.mock.calls[0][2]).toHaveLength(1000);
   });
 });

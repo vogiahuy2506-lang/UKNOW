@@ -40,6 +40,14 @@ async function auditAccount(req, action, sessionKey, extra = {}) {
   }
 }
 
+/** SĐT gửi thử → chỉ chữ số, 0… → 84…, 8–15 số; sai định dạng trả null. */
+function normalizeTestSendPhone(raw) {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (!digits) return null;
+  const normalized = digits.startsWith('0') ? `84${digits.slice(1)}` : digits;
+  return /^\d{8,15}$/.test(normalized) ? normalized : null;
+}
+
 function safeSessionKey(userId, sessionKey) {
   // Owner-scoped: only the owner can act on the session.
   return `${userId}-${sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
@@ -225,7 +233,17 @@ class WhatsAppBaileysController {
       if (!to || !text) {
         return res.status(400).json({ success: false, message: 'to và text là bắt buộc' });
       }
-      const result = await whatsappBaileysService.sendMessage(sessionKey, to, text);
+      // Gửi thử từ trang kênh: số nội địa (0912…) đổi thành 84…; JID đầy đủ (có '@') giữ nguyên.
+      const recipient = String(to).includes('@') ? String(to) : normalizeTestSendPhone(to);
+      if (!recipient) {
+        return res.status(400).json({ success: false, message: 'Số điện thoại không hợp lệ (8–15 chữ số).' });
+      }
+      // P6 — phiên bị khoá do vượt hạn mức gói thì không gửi được gì, kể cả tin thử.
+      const { whatsappSessionIsLocked, CHANNEL_ACCOUNT_LOCKED_MESSAGE } = await import('../utils/topupLockGate.util.js');
+      if (await whatsappSessionIsLocked(sessionKey)) {
+        return res.status(403).json({ success: false, code: 'WHATSAPP_ACCOUNT_LOCKED', message: CHANNEL_ACCOUNT_LOCKED_MESSAGE });
+      }
+      const result = await whatsappBaileysService.sendMessage(sessionKey, recipient, String(text).slice(0, 1000));
       return res.json({ success: true, data: { messageId: result?.key?.id } });
     } catch (err) {
       console.error('[WhatsApp/Baileys] sendMessage error:', err.message);

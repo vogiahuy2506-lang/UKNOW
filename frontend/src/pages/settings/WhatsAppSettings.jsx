@@ -18,6 +18,7 @@ import {
 import { FaWhatsapp } from 'react-icons/fa';
 import whatsappSettingsApiService from '../../features/settings/services/whatsappSettingsApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
+import WhatsAppTestSend from '../../features/settings/components/WhatsAppTestSend';
 import ChannelAccountLockNotice, { ChannelAccountLockBadge } from '../../features/settings/components/ChannelAccountLockNotice';
 import { useI18n } from '../../i18n';
 
@@ -382,6 +383,9 @@ export default function WhatsAppSettings() {
 
               {/* P4 — giới hạn gửi/ngày + tốc độ gửi chiến dịch của phiên này (khoá theo sessionKey) */}
               <ChannelAccountSendSettings channel="whatsapp" accountRef={s.sessionKey} />
+
+              {/* P8a — gửi thử một tin để kiểm tra kết nối (chỉ khi số đang mở và không bị khoá vượt gói) */}
+              {s.status === 'open' && !s.isLocked && <WhatsAppTestSend sessionKey={s.sessionKey} />}
             </div>
           ))}
         </div>

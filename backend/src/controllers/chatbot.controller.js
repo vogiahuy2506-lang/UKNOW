@@ -180,6 +180,21 @@ async function resolvePublicChatbotParam(chatbotId) {
   return chatbotRepository.findChatbotByWidgetKey(raw);
 }
 
+/**
+ * Nhật ký hoạt động cho vòng đời tài khoản Telegram (đăng nhập/đăng xuất). Lỗi ghi nhật ký không được làm hỏng
+ * thao tác chính. Chỉ ghi id tài khoản, không ghi số điện thoại.
+ */
+async function auditTelegramAccount(req, action, telegramAccountId) {
+  try {
+    await logWorkspace(getWorkspaceAuditContext(req), action, AUDIT_ENTITY_TYPES.TELEGRAM_ACCOUNT, telegramAccountId, {
+      channelType: 'telegram_personal',
+      telegramAccountId,
+    });
+  } catch (err) {
+    console.warn('[Telegram] audit failed:', err.message);
+  }
+}
+
 class ChatbotController {
   // ── Knowledge Base ─────────────────────────────────────────────
 
@@ -2708,6 +2723,11 @@ class ChatbotController {
       if (result.status === 'not_found') {
         return res.status(404).json({ success: false, message: 'Phiên đăng nhập đã hết hạn' });
       }
+      // Đăng nhập thành công chỉ trả 'success' MỘT lần (ngữ cảnh QR bị xoá ngay sau đó) nên ghi nhật ký ở đây
+      // không bị lặp theo số lần poll. Không ghi SĐT/tên — chỉ id tài khoản.
+      if (result.status === 'success' && result.account?.id != null) {
+        await auditTelegramAccount(req, AUDIT_ACTIONS.TELEGRAM_ACCOUNT_LOGIN, result.account.id);
+      }
       return res.json({ success: true, data: result });
     } catch (err) {
       console.error('[Telegram] checkTelegramLoginStatus error:', err.message);
@@ -2789,6 +2809,7 @@ class ChatbotController {
       if (!updated) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy tài khoản Telegram' });
       }
+      await auditTelegramAccount(req, AUDIT_ACTIONS.TELEGRAM_ACCOUNT_LOGOUT, id);
       return res.json({ success: true, data: updated, message: 'Đã ngắt kết nối Telegram' });
     } catch (err) {
       return res.status(err.status || 500).json({ success: false, message: err.message });
