@@ -7,6 +7,7 @@ import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 
 const mockCountEmail = jest.fn();
 const mockCountZalo = jest.fn();
+const mockCountChannel = jest.fn();
 // `accountDailyLimit.service.js` cũng import `getVnDayBoundaries` từ `sendQuotaReservation.service.js`
 // (theo đúng lệnh giao: dùng lại mốc ngày VN, không tự tính lại) — module đó import RẤT nhiều thứ
 // khác từ chính `sendQuota.repository.js`. Mock cả module là thay THẨN CẢ file, nên phải khai đủ mọi
@@ -16,6 +17,7 @@ const mockCountZalo = jest.fn();
 jest.unstable_mockModule('../../../repositories/sendQuota.repository.js', () => ({
   countEmailSentTodayByAccount: mockCountEmail,
   countZaloSentTodayByAccount: mockCountZalo,
+  countChannelSentTodayByAccount: mockCountChannel,
   acquireWorkspaceQuotaLock: jest.fn(),
   createReservation: jest.fn(),
   findReservationByKey: jest.fn(),
@@ -151,9 +153,42 @@ describe('checkAccountDailyLimit — resetAt là ranh giới ngày VN, giống m
 
 describe('checkAccountDailyLimit — kênh không hợp lệ', () => {
   it('ném lỗi rõ ràng thay vì gọi nhầm hàm đếm', async () => {
-    await expect(checkAccountDailyLimit({ channel: 'telegram', accountId: 1, limit: 10 }))
+    await expect(checkAccountDailyLimit({ channel: 'sms', accountId: 1, limit: 10 })) // telegram/whatsapp đã hợp lệ từ P4
       .rejects.toThrow(/kênh không hợp lệ/);
     expect(mockCountEmail).not.toHaveBeenCalled();
     expect(mockCountZalo).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * P4 (PLAN_TG_WA_DAY_DU_2026-09-29) — kênh adapter: accountId là `account_key` runner ghi vào
+ * campaign_channel_messages (Telegram: id tài khoản; WhatsApp: sessionKey), truyền NGUYÊN xuống hàm đếm cùng tên kênh.
+ */
+describe('checkAccountDailyLimit — telegram/whatsapp', () => {
+  it('telegram: đếm theo kênh "telegram" + accountKey, không đụng hàm đếm email/zalo', async () => {
+    mockCountChannel.mockResolvedValue(10);
+    const result = await checkAccountDailyLimit({ channel: 'telegram', accountId: '12', limit: 50 });
+    expect(result).toEqual({ allowed: true });
+    expect(mockCountChannel).toHaveBeenCalledTimes(1);
+    expect(mockCountChannel.mock.calls[0][1]).toBe('telegram');
+    expect(mockCountChannel.mock.calls[0][2]).toBe('12');
+    expect(mockCountEmail).not.toHaveBeenCalled();
+    expect(mockCountZalo).not.toHaveBeenCalled();
+  });
+
+  it('whatsapp: đếm theo kênh "whatsapp" + sessionKey; chạm trần -> allowed:false kèm resetAt', async () => {
+    mockCountChannel.mockResolvedValue(30);
+    const result = await checkAccountDailyLimit({ channel: 'whatsapp', accountId: '3-abc', limit: 30 });
+    expect(mockCountChannel.mock.calls[0][1]).toBe('whatsapp');
+    expect(mockCountChannel.mock.calls[0][2]).toBe('3-abc');
+    expect(result.allowed).toBe(false);
+    expect(result.limit).toBe(30);
+    expect(result.resetAt).toBeInstanceOf(Date);
+  });
+
+  it('limit null -> không đếm (đường mặc định rẻ) cho cả hai kênh adapter', async () => {
+    await checkAccountDailyLimit({ channel: 'telegram', accountId: '12', limit: null });
+    await checkAccountDailyLimit({ channel: 'whatsapp', accountId: '3-abc', limit: null });
+    expect(mockCountChannel).not.toHaveBeenCalled();
   });
 });

@@ -34,6 +34,7 @@ import telegramGateway from '../../chatbot/telegramGateway.client.js';
 import { isStubOnly } from '../../chatbot/inProcChannelGateway/stubCheck.js';
 import chatbotTelegramRepository from '../../../repositories/chatbot/chatbotTelegram.repository.js';
 import { hasPermanentAuthKey } from '../../../utils/telegramSession.util.js';
+import channelAccountSettingsRepository from '../../../repositories/campaign/channelAccountSettings.repository.js';
 
 /** Chỉ nhận chat id Telegram dạng số (âm cho group/channel) — không tra theo SĐT/username. */
 const TELEGRAM_CHAT_ID_PATTERN = /^-?\d+$/;
@@ -289,6 +290,15 @@ async function sendOne({ account, recipientKey, text }) {
   return { messageId: result?.data?.messageId ?? result?.messageId ?? null };
 }
 
+/**
+ * P4 (PLAN_TG_WA_DAY_DU) — cấu hình gửi theo TÀI KHOẢN (trần/ngày + ghi đè giãn cách, migration 267). Runner đọc MỘT lần
+ * mỗi lượt chạy node; gửi nhanh đọc mỗi request. Chủ luôn có mặt (resolveAccount đã kiểm) nên lọc `id_user` an toàn.
+ * @param {{account: {accountId: number}, workspaceOwnerId: number}} input
+ */
+async function getAccountSendSettings({ account, workspaceOwnerId }) {
+  return channelAccountSettingsRepository.getSendSettings('telegram', account.accountId, workspaceOwnerId);
+}
+
 /** Hợp đồng adapter yêu cầu — sendOne LUÔN ném ChannelSendError sẵn nên nhánh còn lại (lỗi từ
  * checkReadiness, hoặc lỗi lạ chưa kịp bọc) mới thật sự chạy qua bảng phân loại. */
 function classifyError(err) {
@@ -301,6 +311,7 @@ export const telegramChannelAdapter = {
   resolveRecipients,
   sendOne,
   classifyError,
+  getAccountSendSettings,
 };
 
 export default telegramChannelAdapter;

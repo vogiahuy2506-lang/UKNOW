@@ -3892,3 +3892,18 @@ CREATE TABLE IF NOT EXISTS channel_disconnect_alerts (
   PRIMARY KEY (channel, account_ref)
 );
 CREATE INDEX IF NOT EXISTS idx_channel_disconnect_alerts_user ON channel_disconnect_alerts (id_user);
+
+-- --- Migration 267: tran gui/ngay + toc do gui theo tai khoan Telegram/WhatsApp (P4 PLAN_TG_WA_DAY_DU) ---
+ALTER TABLE telegram_accounts
+  ADD COLUMN IF NOT EXISTS user_daily_send_limit INTEGER NULL,
+  ADD COLUMN IF NOT EXISTS outbound_delay_min_ms INTEGER NULL,
+  ADD COLUMN IF NOT EXISTS outbound_delay_max_ms INTEGER NULL;
+CREATE TABLE IF NOT EXISTS whatsapp_account_settings (
+  session_key           TEXT        PRIMARY KEY,
+  id_user               BIGINT      NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  user_daily_send_limit INTEGER     NULL,
+  outbound_delay_min_ms INTEGER     NULL,
+  outbound_delay_max_ms INTEGER     NULL,
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_whatsapp_account_settings_user ON whatsapp_account_settings (id_user);

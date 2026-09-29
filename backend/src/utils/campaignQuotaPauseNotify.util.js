@@ -52,6 +52,8 @@ export function channelLabelFromQuotaReason(reason) {
   const r = String(reason || '').toLowerCase();
   if (r.includes('email')) return 'email';
   if (r.includes('zalo')) return 'Zalo';
+  if (r.includes('telegram')) return 'Telegram';
+  if (r.includes('whatsapp')) return 'WhatsApp';
   return 'gửi';
 }
 

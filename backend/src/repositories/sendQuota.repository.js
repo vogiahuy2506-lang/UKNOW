@@ -872,6 +872,35 @@ export async function countZaloSentTodayByAccount(queryable, zaloSettingId, dayS
 }
 
 /**
+ * Đếm tin kênh ADAPTER (Telegram/WhatsApp) đã gửi hôm nay (giờ VN) TỪ MỘT TÀI KHOẢN cụ thể — cho giới hạn/ngày do
+ * người dùng tự đặt (PLAN_TG_WA_DAY_DU P4). Nguồn: `campaign_channel_messages` (migration 255).
+ * `account_key` là dạng runner ghi: Telegram = `String(telegram_accounts.id)`, WhatsApp = sessionKey.
+ * `status = 'sent'` (dòng `queued`/`failed` không đếm) và `NOT is_preview`: gửi nhanh ghi `is_preview = true` nên
+ * KHÔNG ăn trần ngày — đúng như Zalo (`countZaloSentTodayByAccount`). Cột `sent_at` là TIMESTAMPTZ (ghi bằng `now()`
+ * lúc markSent) nên so sánh thẳng với hai mốc Date, không cần AT TIME ZONE như email/zalo.
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {'telegram'|'whatsapp'} channel
+ * @param {string|number} accountKey
+ * @param {Date} dayStart
+ * @param {Date} dayEnd
+ * @returns {Promise<number>}
+ */
+export async function countChannelSentTodayByAccount(queryable, channel, accountKey, dayStart, dayEnd) {
+  const { rows } = await queryable.query(
+    `SELECT COUNT(*)::int AS total
+     FROM campaign_channel_messages
+     WHERE channel = $1
+       AND account_key = $2
+       AND status = 'sent'
+       AND NOT is_preview
+       AND sent_at >= $3::timestamptz
+       AND sent_at < $4::timestamptz`,
+    [channel, String(accountKey), dayStart, dayEnd]
+  );
+  return Number(rows[0]?.total || 0);
+}
+
+/**
  * Đếm tổng Email trong kỳ (kết hợp legacy rows + ledger active reservations).
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} billingUserId

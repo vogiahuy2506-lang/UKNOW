@@ -74,6 +74,7 @@ jest.unstable_mockModule('../../../repositories/sendQuota.repository.js', () => 
   findStaleCampaignRunReservations: jest.fn(),
   countEmailSentTodayByAccount: jest.fn(),
   countZaloSentTodayByAccount: jest.fn(),
+  countChannelSentTodayByAccount: jest.fn(),
   acquireWorkspaceQuotaLock: jest.fn(),
   createReservation: jest.fn(),
   findReservationByKey: jest.fn(),

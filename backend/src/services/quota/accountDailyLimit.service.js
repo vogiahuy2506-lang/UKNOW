@@ -8,6 +8,7 @@
  */
 import db from '../../config/database.js';
 import {
+  countChannelSentTodayByAccount,
   countEmailSentTodayByAccount,
   countZaloSentTodayByAccount,
 } from '../../repositories/sendQuota.repository.js';
@@ -16,12 +17,18 @@ import { getVnDayBoundaries } from './sendQuotaReservation.service.js';
 const COUNTERS_BY_CHANNEL = {
   email: countEmailSentTodayByAccount,
   zalo: countZaloSentTodayByAccount,
+  // P4 (PLAN_TG_WA_DAY_DU) — kênh adapter: accountId = account_key runner ghi vào campaign_channel_messages
+  // (Telegram: id tài khoản; WhatsApp: sessionKey).
+  telegram: (queryable, accountId, dayStart, dayEnd) =>
+    countChannelSentTodayByAccount(queryable, 'telegram', accountId, dayStart, dayEnd),
+  whatsapp: (queryable, accountId, dayStart, dayEnd) =>
+    countChannelSentTodayByAccount(queryable, 'whatsapp', accountId, dayStart, dayEnd),
 };
 
 /**
  * @param {object} params
- * @param {'email'|'zalo'} params.channel
- * @param {number|string} params.accountId — `email_settings.id` hoặc `zalo_settings.id`
+ * @param {'email'|'zalo'|'telegram'|'whatsapp'} params.channel
+ * @param {number|string} params.accountId — `email_settings.id`, `zalo_settings.id`, id tài khoản Telegram hoặc sessionKey WhatsApp
  * @param {number|null} params.limit — `user_daily_send_limit`; null = không giới hạn
  * @param {number} [params.quantity] — số tin sắp gửi thêm (mặc định 1)
  * @param {import('pg').Pool|import('pg').PoolClient} [params.queryable]

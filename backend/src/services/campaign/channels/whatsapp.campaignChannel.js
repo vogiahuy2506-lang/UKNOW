@@ -27,6 +27,7 @@ import whatsappCampaignConversationRepository, {
   extractPhoneFromExternalId,
 } from '../../../repositories/chatbot/whatsappCampaignConversation.repository.js';
 import { isPhoneHeader } from '../../../utils/columnHeaderMatch.util.js';
+import channelAccountSettingsRepository from '../../../repositories/campaign/channelAccountSettings.repository.js';
 
 /** SĐT hợp lệ sau chuẩn hoá: chỉ chữ số, 8-15 ký tự — CÙNG quy tắc với FE (hợp đồng W4a/W4b mục 4). */
 const WHATSAPP_PHONE_PATTERN = /^\d{8,15}$/;
@@ -304,6 +305,15 @@ function classifyError(err) {
   return classifyWhatsAppSendError(err);
 }
 
+/**
+ * P4 (PLAN_TG_WA_DAY_DU) — cấu hình gửi theo TÀI KHOẢN (trần/ngày + ghi đè giãn cách, migration 267; bảng
+ * `whatsapp_account_settings`, khoá sessionKey). Runner đọc MỘT lần mỗi lượt chạy node; gửi nhanh đọc mỗi request.
+ * @param {{account: {sessionKey: string}, workspaceOwnerId: number}} input
+ */
+async function getAccountSendSettings({ account, workspaceOwnerId }) {
+  return channelAccountSettingsRepository.getSendSettings('whatsapp', account.sessionKey, workspaceOwnerId);
+}
+
 function mapSessionStatus(status) {
   if (status === 'open') return 'open';
   if (status === 'connecting') return 'connecting';
@@ -345,6 +355,7 @@ export const whatsappChannelAdapter = {
   resolveRecipients,
   sendOne,
   classifyError,
+  getAccountSendSettings,
 };
 
 export default whatsappChannelAdapter;

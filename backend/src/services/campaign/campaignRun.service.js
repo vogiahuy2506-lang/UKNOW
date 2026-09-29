@@ -8891,6 +8891,23 @@ class CampaignRunService {
               }
             }
 
+            // P4 (PLAN_TG_WA_DAY_DU) — chạm trần gửi/NGÀY do người dùng tự đặt cho tài khoản Telegram/WhatsApp: hoãn CẢ NODE tới
+            // 00:00 giờ VN hôm sau, y như Zalo (`enforceZaloOutboundPolicyBeforeSend`). Dùng persistQuotaDeferYieldSlot với reason
+            // mang tiền tố `plan_quota_account_daily` để chủ nhận đúng email "chiến dịch tạm dừng vì giới hạn bạn tự đặt"
+            // (notifyCampaignQuotaPaused bỏ qua reason không bắt đầu bằng plan_quota) và scheduler đánh thức theo quotaDeferredUntil.
+            if (adapterError?.code === 'CHANNEL_DAILY_LIMIT') {
+              const dailyWaitMs = Number.parseInt(adapterError?.waitMs, 10);
+              if (Number.isFinite(dailyWaitMs) && dailyWaitMs >= 0) {
+                await this.persistQuotaDeferYieldSlot({
+                  runId,
+                  campaignId,
+                  waitMs: dailyWaitMs,
+                  reason: `plan_quota_account_daily_${adapterDescriptor.key}`,
+                });
+                // tự ném RUN_YIELD_SLOT.
+              }
+            }
+
             // PLAN_SEND_LIMIT_EXCEEDED — đúng khuôn assertSendQuotaOrYield (R:1460-1493): có
             // resetAt thì defer bằng quotaDeferredUntil (dùng LẠI như Zalo, không phải khoá riêng
             // cho kênh); không có resetAt (gói hết hạn) thì dừng cứng — tái dùng

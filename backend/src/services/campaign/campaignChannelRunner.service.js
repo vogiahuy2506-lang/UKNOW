@@ -10,6 +10,8 @@ import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../..
 import { ChannelSendError } from './campaignChannelRegistry.service.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import campaignShutdownGate from './campaignShutdownGate.js';
+import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
+import { applyAccountDelayOverride } from '../../utils/channelSendSpeed.util.js';
 import {
   reserveSendQuota,
   markSendQuotaSending,
@@ -148,11 +150,14 @@ function computePerHourWaitMs(key, perHourLimit, nowMs) {
  * TRƯỚC khi gửi, có chủ ý — lỗi giữa chừng vẫn giữ nhịp, không cho hai request song song cùng đi qua.
  * Giới hạn v1: bộ chạy ngủ giãn cách theo lượt của nó, không nhìn dấu thời gian gửi nhanh.
  *
- * @param {{descriptor: object, accountKey: string, nowMs?: number}} input
+ * `policy` (tuỳ chọn, P4): policy ĐÃ áp ghi đè giãn cách theo tài khoản (`applyAccountDelayOverride`); thiếu thì dùng
+ * `descriptor.policy` (mức env).
+ *
+ * @param {{descriptor: object, accountKey: string, nowMs?: number, policy?: object}} input
  * @returns {{ok: true} | {ok: false, reason: 'quiet_hours'|'rate_limited'|'inter_message_delay', waitMs: number}}
  */
-export function evaluateAdapterSendGate({ descriptor, accountKey, nowMs = Date.now() }) {
-  const policy = descriptor?.policy || {};
+export function evaluateAdapterSendGate({ descriptor, accountKey, nowMs = Date.now(), policy: policyOverride = null }) {
+  const policy = policyOverride || descriptor?.policy || {};
   const key = `${descriptor.key}::${accountKey ?? ''}`;
   if (isWithinQuietHours(nowMs, policy.quietHours)) {
     return { ok: false, reason: 'quiet_hours', waitMs: computeQuietHoursWaitMs(nowMs, policy.quietHours) };
@@ -470,6 +475,15 @@ export async function runAdapterSendNode(ctx) {
   const steps = Array.isArray(config?.steps) ? config.steps : [];
   const perHourKey = `${descriptor.key}::${account?.accountKey ?? ''}`;
 
+  // P4 (PLAN_TG_WA_DAY_DU) — cấu hình gửi THEO TÀI KHOẢN đọc MỘT lần mỗi lượt chạy node (đổi mức tốc độ áp dụng từ lượt
+  // kế tiếp — như Zalo): (1) ghi đè giãn cách, không bao giờ dưới sàn cứng (applyAccountDelayOverride); (2) trần gửi/ngày
+  // người dùng tự đặt (NULL = không giới hạn → KHÔNG chạm DB thêm mỗi tin). Adapter không có hook (kênh thử nghiệm) = mặc định.
+  const accountSendSettings = typeof descriptor.adapter?.getAccountSendSettings === 'function'
+    ? await descriptor.adapter.getAccountSendSettings({ account, workspaceOwnerId: workspaceOwnerId ?? userId })
+    : null;
+  const effectivePolicy = applyAccountDelayOverride(descriptor.key, descriptor.policy || {}, accountSendSettings);
+  const accountDailyLimit = accountSendSettings?.userDailySendLimit ?? null;
+
   let hasSentAny = false;
 
   // F1 (review vòng 1) — bọc TOÀN BỘ vòng lặp người nhận: lỗi bất kỳ ném ra từ đây (RUN_STOPPED/
@@ -609,6 +623,28 @@ export async function runAdapterSendNode(ctx) {
           throw quietError;
         }
 
+        // Trần gửi/NGÀY do người dùng tự đặt cho tài khoản (P4) — chạm trần thì hoãn CẢ NODE tới 00:00 giờ VN hôm sau
+        // (engine defer như quiet_hours, KHÔNG đánh failed, KHÔNG đốt danh sách: bước dở dang chưa vào ledger nên resume
+        // gửi lại đúng chỗ). Đặt SAU consent (người từ chối không ăn quota) và TRƯỚC nhịp giờ/giãn cách (khỏi ngủ vô ích).
+        if (accountDailyLimit != null) {
+          // eslint-disable-next-line no-await-in-loop
+          const dailyCheck = await checkAccountDailyLimit({
+            channel: descriptor.key,
+            accountId: account?.accountKey,
+            limit: accountDailyLimit,
+          });
+          if (!dailyCheck.allowed) {
+            const dailyLimitError = new ChannelSendError(
+              'rate_limit',
+              `Tài khoản ${descriptor.key} đã đạt giới hạn ${dailyCheck.limit} tin/ngày do bạn đặt (đã gửi ${dailyCheck.currentCount}) `
+              + '— chiến dịch tiếp tục từ 00:00 giờ Việt Nam hôm sau.'
+            );
+            dailyLimitError.code = 'CHANNEL_DAILY_LIMIT';
+            dailyLimitError.waitMs = Math.max(0, dailyCheck.resetAt.getTime() - Date.now());
+            throw dailyLimitError;
+          }
+        }
+
         // Pacing 2: perHourLimit — chờ nếu ≤ 60s, dừng cả node nếu lâu hơn.
         const waitMs = computePerHourWaitMs(perHourKey, descriptor.policy?.perHourLimit, Date.now());
         if (waitMs > 0) {
@@ -630,7 +666,7 @@ export async function runAdapterSendNode(ctx) {
 
         // Delay ngẫu nhiên giữa 2 lần gửi — KHÔNG áp cho tin đầu tiên của cả node.
         if (hasSentAny) {
-          const delayMs = randomDelayMs(descriptor.policy?.minDelayMs, descriptor.policy?.maxDelayMs);
+          const delayMs = randomDelayMs(effectivePolicy.minDelayMs, effectivePolicy.maxDelayMs);
           if (delayMs > 0) {
             // eslint-disable-next-line no-await-in-loop
             await sleep(delayMs);

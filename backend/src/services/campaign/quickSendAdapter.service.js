@@ -25,6 +25,8 @@ import { evaluateAdapterSendGate, recordAdapterSendAttempt } from './campaignCha
 import campaignShutdownGate from './campaignShutdownGate.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import { normalizeWhatsAppPhone } from './channels/whatsapp.campaignChannel.js';
+import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
+import { applyAccountDelayOverride } from '../../utils/channelSendSpeed.util.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
 import {
   reserveSendQuota,
@@ -300,6 +302,29 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
     }
   }
 
+  // P4 (PLAN_TG_WA_DAY_DU) — cấu hình gửi THEO TÀI KHOẢN: trần gửi/ngày người dùng tự đặt + ghi đè giãn cách (không dưới
+  // sàn cứng). Trần đếm tin CHIẾN DỊCH đã gửi hôm nay (gửi nhanh ghi is_preview nên không tự ăn trần — như Zalo). Chạm trần
+  // -> 429 (KHÔNG phải 'deferred': hoãn tới nửa đêm không phải thứ trình duyệt nên chờ). Kiểm TRƯỚC hạn mức gói/cổng nhịp.
+  const accountSendSettings = typeof adapter.getAccountSendSettings === 'function'
+    ? await adapter.getAccountSendSettings({ account, workspaceOwnerId })
+    : null;
+  const accountDailyLimit = accountSendSettings?.userDailySendLimit ?? null;
+  if (accountDailyLimit != null) {
+    const dailyCheck = await checkAccountDailyLimit({
+      channel: descriptor.key,
+      accountId: accountKey,
+      limit: accountDailyLimit,
+    });
+    if (!dailyCheck.allowed) {
+      throw httpError(
+        429,
+        'ACCOUNT_DAILY_LIMIT',
+        `Tài khoản đã đạt giới hạn ${dailyCheck.limit} tin/ngày do bạn đặt. Thử lại từ 00:00 ngày mai hoặc tăng giới hạn trong Cài đặt kênh.`
+      );
+    }
+  }
+  const effectivePolicy = applyAccountDelayOverride(descriptor.key, descriptor.policy || {}, accountSendSettings);
+
   const baseRequestKey = resolveRequestIdempotencyKey(idempotencyKey ?? null);
 
   // Kiểm hạn mức gói (chỉ đọc) TRƯỚC cổng nhịp — hết hạn mức thì không đốt một lượt nhịp vô ích.
@@ -310,7 +335,7 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   }
 
   // 5. Cổng nhịp — TRƯỚC mọi giữ chỗ/ghi nhật ký; ghi lần thử LIỀN SAU, không `await` ở giữa.
-  const gate = evaluateAdapterSendGate({ descriptor, accountKey });
+  const gate = evaluateAdapterSendGate({ descriptor, accountKey, policy: effectivePolicy });
   if (!gate.ok) {
     return {
       item: {
