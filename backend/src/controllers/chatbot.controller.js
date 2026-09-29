@@ -8,7 +8,6 @@ import chatbotZaloAccountRepository from '../repositories/chatbot/chatbotZaloAcc
 import chatbotWhatsAppAccountRepository from '../repositories/chatbot/chatbotWhatsAppAccount.repository.js';
 import chatbotWhatsAppBaileysRepository from '../repositories/chatbot/chatbotWhatsAppBaileys.repository.js';
 import { listSessions as listBaileysSessions, listPersistedSessions as listBaileysPersistedSessions } from '../services/chatbot/whatsappBaileys.service.js';
-import chatRouterService from '../services/chatbot/chatRouter.service.js';
 import chatbotRateLimitService from '../services/chatbot/chatbotRateLimit.service.js';
 import zaloOAAdapter from '../services/chatbot/channelAdapters/zaloOA.adapter.js';
 import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapter.js';
@@ -1040,51 +1039,6 @@ class ChatbotController {
     }
   }
 
-  async sendWebChatMessage(req, res) {
-    try {
-      const { conversationId, content, attachments } = req.body;
-      if (!conversationId || !content?.trim()) {
-        return res.status(400).json({ success: false, message: 'conversationId and content are required' });
-      }
-
-      const conv = await chatbotRepository.findWebChatConversationWithOwner(conversationId);
-
-      if (!conv) return res.status(404).json({ success: false, message: 'Conversation not found' });
-
-      const userId = conv.id_user;
-
-      // Log visitor message
-      await chatbotRepository.addWebChatMessage(conversationId, userId, {
-        role: 'visitor',
-        content,
-        attachments,
-      });
-
-      // Route to AI
-      const result = await chatRouterService.routeMessage({
-        channel: 'web',
-        userId,
-        message: content,
-        conversationId,
-        attachments: attachments || [],
-      });
-
-      // Get bot message from log
-      const messages = await chatbotRepository.getWebChatMessages(conversationId, { limit: 2 });
-
-      return res.json({
-        success: true,
-        data: {
-          result,
-          messages,
-        },
-      });
-    } catch (err) {
-      console.error('[WebChat] Send message error:', err);
-      return res.status(500).json({ success: false, message: err.message });
-    }
-  }
-
   // ── Custom AI Chatbot Widget ─────────────────────────────────────
 
   async getPublicChatbotById(req, res) {
@@ -1555,8 +1509,7 @@ class ChatbotController {
           req.body.temperature !== undefined ||
           req.body.max_tokens !== undefined ||
           req.body.response_style !== undefined ||
-          req.body.welcome_message !== undefined ||
-          req.body.is_active !== undefined) {
+          req.body.welcome_message !== undefined) {
         // updatePayload.ai_model da duoc clamp boi resolveAllowedModel o tren
         // (ap dung cho ca repo va sync de custom_chatbots va chatbot_settings
         // dong bo). Neu khong clamp o day, model sai se ghi vao chatbot_settings
@@ -1568,7 +1521,6 @@ class ChatbotController {
           max_tokens: req.body.max_tokens,
           response_style: req.body.response_style,
           welcome_message: req.body.welcome_message,
-          is_enabled: req.body.is_active,
         };
         const channels = ['zalo_personal', 'zalo_oa', 'facebook', 'web', 'script', 'iframe', 'public_link'];
         try {

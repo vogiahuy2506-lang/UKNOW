@@ -121,6 +121,7 @@ describe('chatRouter.service AI fallback', () => {
     addWebChatMessage.mockReset();
     assertAvailable.mockReset();
     charge.mockReset();
+    consume.mockReset();
     isCreditLimitError.mockReset();
     isUsageLimitError.mockReset();
     reserve.mockReset();
@@ -153,11 +154,18 @@ describe('chatRouter.service AI fallback', () => {
       .spyOn(chatRouterService, '_callAI')
       .mockRejectedValue(new Error('AI call timeout (30s)'));
 
-    const result = await chatRouterService.routeMessage({
+    const result = await chatRouterService.routeMessageWithSettings({
       channel: 'web',
       userId: 7,
       message: 'xin chào',
       conversationId: 99,
+      chatbotSettings: {
+        is_enabled: true,
+        id_sub_assistant: null,
+        ai_model: 'gemini-2.5-flash',
+        temperature: 0.7,
+        max_tokens: 512,
+      },
     });
 
     expect(result).toEqual({
@@ -165,10 +173,11 @@ describe('chatRouter.service AI fallback', () => {
       content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.',
     });
     expect(charge).not.toHaveBeenCalled();
-    expect(sendReply).toHaveBeenCalledWith({
-      conversationId: 99,
-      message: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.',
-      attachments: [],
+    // _chargeChatCredit thật gọi aiCreditMeter.consume (không phải charge).
+    expect(consume).not.toHaveBeenCalled();
+    expect(addWebChatMessage).toHaveBeenCalledWith(99, 7, {
+      role: 'bot',
+      content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.',
     });
 
     callAI.mockRestore();
@@ -179,16 +188,24 @@ describe('chatRouter.service AI fallback', () => {
     isUsageLimitError.mockReturnValue(true);
     const callAI = jest.spyOn(chatRouterService, '_callAI').mockRejectedValue(quotaError);
 
-    const result = await chatRouterService.routeMessage({
+    const result = await chatRouterService.routeMessageWithSettings({
       channel: 'web',
       userId: 7,
       message: 'xin chào',
       conversationId: 99,
+      chatbotSettings: {
+        is_enabled: true,
+        id_sub_assistant: null,
+        ai_model: 'gemini-2.5-flash',
+        temperature: 0.7,
+        max_tokens: 512,
+      },
     });
 
     expect(result.type).toBe('text');
     expect(result.content).toContain('Xin lỗi');
     expect(charge).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
 
     callAI.mockRestore();
   });
@@ -363,11 +380,18 @@ describe('PR-1c — bot xác nhận khi khách để lại liên hệ trong chat
       .spyOn(chatRouterService, '_callAI')
       .mockResolvedValue({ text: 'Em chào anh chị ạ, em có thể giúp gì thêm không?' });
 
-    const result = await chatRouterService.routeMessage({
+    const result = await chatRouterService.routeMessageWithSettings({
       channel: 'web',
       userId: 7,
       message: 'alo tư vấn giúp tôi qua số 844790999 nhé',
       conversationId: 99,
+      chatbotSettings: {
+        is_enabled: true,
+        id_sub_assistant: null,
+        ai_model: 'gemini-2.5-flash',
+        temperature: 0.7,
+        max_tokens: 512,
+      },
     });
 
     expect(callAI).toHaveBeenCalledTimes(1);
@@ -379,10 +403,12 @@ describe('PR-1c — bot xác nhận khi khách để lại liên hệ trong chat
     expect(result.content).toContain('Em chào anh chị ạ');
     expect(result.content).toContain(expectedFooter);
 
-    expect(sendReply).toHaveBeenCalledWith(
+    expect(addWebChatMessage).toHaveBeenCalledWith(
+      99,
+      7,
       expect.objectContaining({
-        conversationId: 99,
-        message: expect.stringContaining(expectedFooter),
+        role: 'bot',
+        content: expect.stringContaining(expectedFooter),
       })
     );
 

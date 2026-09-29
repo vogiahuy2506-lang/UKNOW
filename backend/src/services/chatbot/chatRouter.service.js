@@ -35,120 +35,6 @@ const MAX_HISTORY_MESSAGES = 20;
 
 class ChatRouterService {
   /**
-   * Route an incoming message through the unified AI pipeline.
-   * Optimized: parallelizes independent operations (history, subAssistant, profileContext).
-   *
-   * @param {object} params
-   * @param {string} params.channel - 'web' | 'zalo_oa' | 'facebook' | 'zalo_personal'
-   * @param {number} params.userId
-   * @param {string} params.message - raw user message
-   * @param {string} [params.conversationId] - internal conversation ID
-   * @param {object} [params.visitorInfo] - visitor metadata
-   * @param {Array} [params.attachments] - files/images
-   */
-  async routeMessage({ channel, userId, message, conversationId, visitorInfo = {}, attachments = [] }) {
-    const adapter = ADAPTERS[channel];
-    if (!adapter) throw new Error(`Unknown channel: ${channel}`);
-
-    const creditFeature = `chatbot_${channel}`;
-
-    // 1. Get chatbot settings
-    const settings = await chatbotRepository.getSettings(userId, channel);
-    if (!settings?.is_enabled) {
-      return { type: 'disabled', content: null };
-    }
-
-    // Handoff: skip AI when owner paused this conversation
-    const pauseType = channel === 'web' ? 'webchat'
-      : channel === 'zalo_personal' ? 'zalo_personal'
-        : 'channel';
-    if (conversationId && await unifiedInboxRepository.isAiPaused(conversationId, pauseType)) {
-      console.log(`[ChatRouter] AI paused for ${pauseType} conversation ${conversationId}`);
-      return { type: 'paused', content: null };
-    }
-
-    const creditPrep = await this._prepareChatCredit(userId, creditFeature);
-    if (creditPrep.visitorMessage) {
-      return { type: 'text', content: creditPrep.visitorMessage };
-    }
-
-    // 2. PARALLEL: Get history, subAssistant, and profileContext (all independent)
-    const [history, subAssistant, profileContext] = await Promise.all([
-      this._getHistory(channel, conversationId, MAX_HISTORY_MESSAGES),
-      settings.id_sub_assistant
-        ? subAssistantService.getById(settings.id_sub_assistant, userId)
-        : Promise.resolve(null),
-      businessProfileService.getFormattedProfileForPrompt(userId).catch(() => ''),
-    ]);
-
-    // 3. Get linked KB id (depends on subAssistant, but fast)
-    const linkedKbId = subAssistant ? await this._getLinkedKbId(subAssistant, userId) : null;
-
-    // 4. Build RAG context (uses cached embeddings, ~100-200ms typically)
-    const ragContext = await ragEngineService.buildContext(userId, message, {
-      kbId: linkedKbId,
-    });
-
-    const extractedContacts = extractContacts(message);
-    let contactAck = null;
-    if (extractedContacts.length > 0) {
-      const ownerContact = await chatbotContactAlertRepository.getOwnerContact(userId);
-      contactAck = buildContactAck(extractedContacts, ownerContact);
-    }
-
-    // 5. Build system prompt
-    const isFirstMessage = history.length === 0;
-    const systemPrompt = this.buildSystemPrompt({
-      subAssistant,
-      settings,
-      ragContext,
-      profileContext,
-      isFirstMessage,
-      contactNote: contactAck?.note || null,
-    });
-
-    let aiResponse;
-    let shouldChargeCredit = false;
-    try {
-      aiResponse = await this._callAI({
-        userId,
-        systemPrompt,
-        history,
-        message,
-        model: settings.ai_model || 'gemini-2.5-flash',
-        temperature: parseFloat(settings.temperature || 0.7),
-        maxTokens: settings.max_tokens || 2048,
-      });
-      shouldChargeCredit = true;
-    } catch (error) {
-      // Quota/credit limits and transient AI failures both return a static visitor message.
-      // Do not rethrow — public/channel callers must not see HTTP 500.
-      if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) {
-        console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}):`, error.message);
-      }
-      aiResponse = { text: VISITOR_CHAT_ERROR_MESSAGE };
-    }
-
-    if (shouldChargeCredit) {
-      await this._chargeChatCredit(userId, creditFeature, creditPrep.creditContext);
-    }
-
-    // 8. Strip markdown formatting before sending (Zalo cannot render markdown)
-    let cleanResponse = stripMarkdown(aiResponse.text);
-    if (contactAck?.footer) {
-      cleanResponse = `${cleanResponse.trim()}\n\n${contactAck.footer}`;
-    }
-    await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
-    await this._logMessage(channel, conversationId, userId, { role: 'bot', content: cleanResponse });
-
-    if (adapter.sendReply) {
-      await adapter.sendReply({ conversationId, message: cleanResponse, attachments });
-    }
-
-    return { type: 'text', content: cleanResponse };
-  }
-
-  /**
    * Route message with pre-fetched chatbot settings (for Zalo per-account settings).
    * Optimized: parallelizes independent operations.
    *
@@ -614,17 +500,6 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     } catch {
       return null;
     }
-  }
-
-  async getWelcomeMessage(userId, channel) {
-    const settings = await chatbotRepository.getSettings(userId, channel);
-    if (!settings?.is_enabled) return null;
-    if (settings.welcome_message) return settings.welcome_message;
-    if (settings.id_sub_assistant) {
-      const sa = await subAssistantService.getById(settings.id_sub_assistant, userId);
-      if (sa?.greeting_msg) return sa.greeting_msg;
-    }
-    return 'Xin chao! Toi co the giup gi cho ban?';
   }
 
   async routeChatbotMessage({ chatbotId, message, conversationId, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [] }) {
