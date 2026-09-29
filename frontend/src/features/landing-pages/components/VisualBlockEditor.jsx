@@ -205,7 +205,7 @@ function getBlockDefaultData(blockType, t) {
   const defaults = {
     hero: {
       headline: 'Chào mừng đến với sản phẩm của chúng tôi',
-      subheadline: 'Giải pháp tốt nhất cho doanh nghiệp của bạn. Đăng ký ngay để trải nghiệm!',
+      subheadline: 'Giải pháp phù hợp cho doanh nghiệp của bạn. Đăng ký ngay để trải nghiệm!',
       cta_primary: 'Đăng ký ngay',
       cta_secondary: 'Tìm hiểu thêm',
       primary_color: '#f97316',
@@ -276,7 +276,7 @@ function getBlockDefaultData(blockType, t) {
     },
     footer: {
       brand_name: 'Your Brand',
-      brand_desc: 'Mang đến giải pháp tốt nhất cho doanh nghiệp của bạn.',
+      brand_desc: 'Mang đến giải pháp phù hợp cho doanh nghiệp của bạn.',
       footer_contact: 'Liên hệ',
       address: '123 Đường ABC, Quận 1, TP.HCM',
       phone: '0901 234 567',

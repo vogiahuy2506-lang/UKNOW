@@ -5,7 +5,7 @@ const instructor = {
   name: 'Ngô Hữu Thống',
   title: 'Founder & CEO - Digiso Education',
   avatar: '/images/instructor-ngo-huu-thong.png',
-  bio: 'Chuyên gia AI hàng đầu Việt Nam, tiên phong đào tạo ứng dụng trí tuệ nhân tạo. Chuyên gia tư vấn chiến lược AI cho các doanh nghiệp SME và Tập đoàn.',
+  bio: 'ThS. Ngô Hữu Thống — hơn 10 năm kinh nghiệm tư vấn chuyển đổi số và ứng dụng AI. Chuyên gia tư vấn chiến lược AI cho các doanh nghiệp SME và Tập đoàn.',
 };
 
 const stats = {
@@ -245,7 +245,7 @@ const CourseCard = ({ course, onEnroll, index }) => {
     >
       {course.popular && (
         <div className="absolute top-0 inset-x-0 bg-gradient-to-r from-orange-500 to-red-500 text-white text-center py-2 text-sm font-bold tracking-wider uppercase flex items-center justify-center gap-2">
-          <FaFire className="w-4 h-4" /> Lựa chọn hàng đầu
+          <FaFire className="w-4 h-4" /> Lựa chọn phổ biến
         </div>
       )}
       
@@ -522,9 +522,9 @@ export default function LearningPage() {
             
             <div className="lg:w-1/2">
               <AnimatedSection delay={200}>
-                <h2 className="text-3xl md:text-5xl font-black text-gray-900 mb-6 leading-tight">Học từ chuyên gia <br/><span className="text-orange-500">thực chiến hàng đầu</span></h2>
+                <h2 className="text-3xl md:text-5xl font-black text-gray-900 mb-6 leading-tight">Học từ chuyên gia <br/><span className="text-orange-500">giàu thực chiến</span></h2>
                 <p className="text-lg text-gray-600 mb-8 leading-relaxed">
-                  Digiso Education được dẫn dắt bởi chuyên gia Ngô Hữu Thống - người đi tiên phong trong việc mang ứng dụng AI thực tiễn vào quy trình vận hành của các doanh nghiệp tại Việt Nam.
+                  Digiso Education được dẫn dắt bởi chuyên gia Ngô Hữu Thống - người có nhiều năm kinh nghiệm đưa ứng dụng AI thực tiễn vào quy trình vận hành của các doanh nghiệp tại Việt Nam.
                 </p>
                 <div className="space-y-6">
                   {[
@@ -615,7 +615,7 @@ export default function LearningPage() {
               Sẵn Sàng X5 Năng Suất Làm Việc?
             </h2>
             <p className="text-2xl text-orange-100 mb-10 max-w-2xl mx-auto">
-              Cơ hội không chờ đợi ai. Tham gia ngay hôm nay để nhận trọn bộ template AI độc quyền.
+              Cơ hội không chờ đợi ai. Tham gia ngay hôm nay để nhận trọn bộ template AI.
             </p>
             <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
               <button 
@@ -636,7 +636,7 @@ export default function LearningPage() {
           <div className="flex flex-col md:flex-row justify-between items-center gap-6">
             <div className="text-center md:text-left">
               <p className="text-2xl font-black text-white mb-2">DIGISO EDUCATION</p>
-              <p className="text-sm">Tiên phong đào tạo AI ứng dụng tại Việt Nam</p>
+              <p className="text-sm">Đào tạo AI ứng dụng tại Việt Nam</p>
             </div>
             <div className="text-center md:text-right text-sm">
               <p className="text-white font-bold mb-1">Hotline: +84 866 914 382</p>

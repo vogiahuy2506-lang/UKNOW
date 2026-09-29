@@ -251,7 +251,7 @@ const PROMOTION_TEMPLATE = {
   key: 'promotion',
   label: 'Khuyến mãi',
   subject: '[Founder AI] 🎁 Ưu đãi đặc biệt dành riêng cho bạn',
-  headerSubtitle: 'Ưu đãi độc quyền',
+  headerSubtitle: 'Ưu đãi dành cho bạn',
   bodyHtml: `
 <h1 style="${TXT_H1}">🎁 Ưu đãi giới hạn tháng này</h1>
 <p style="${TXT_LEAD}">

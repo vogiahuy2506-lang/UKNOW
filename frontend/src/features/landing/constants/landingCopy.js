@@ -16,14 +16,14 @@ export const LANDING_COPY = {
       langEn: 'EN',
     },
     hero: {
-      eyebrowTag: 'AI No.1',
-      eyebrowText: 'Nền tảng AI hàng đầu Việt Nam',
+      eyebrowTag: 'AI ứng dụng',
+      eyebrowText: 'Nền tảng AI cho founder và doanh nghiệp Việt Nam',
       titleLine1: 'Thành thạo',
       titleHighlight: 'Trí Tuệ Nhân Tạo',
       titleLine2: 'trong',
       titleAccent: '30 ngày',
       subtitle:
-        'Học cùng ThS. Ngô Hữu Thống — chuyên gia AI hàng đầu với hơn 10 năm kinh nghiệm. Hơn 10,000 học viên đã thay đổi sự nghiệp nhờ Founder AI.',
+        'Học cùng ThS. Ngô Hữu Thống — hơn 10 năm kinh nghiệm tư vấn chuyển đổi số và ứng dụng AI. Hơn 10,000 học viên đã thay đổi sự nghiệp nhờ Founder AI.',
       instructorMini: {
         name: 'ThS. Ngô Hữu Thống',
         title: 'Chuyên gia AI & Chuyển đổi số',
@@ -38,7 +38,7 @@ export const LANDING_COPY = {
       instructorPhotoAlt: 'Chân dung ThS. Ngô Hữu Thống',
     },
     about: {
-      badge1: 'Chuyên gia AI\nHàng đầu Việt Nam',
+      badge1: 'Hơn 10 năm\nKinh nghiệm AI',
       badge2: '10,000+\nHọc viên',
       label: 'Giảng viên chính',
       name: 'Ngô Hữu Thống',
@@ -46,7 +46,7 @@ export const LANDING_COPY = {
       photoName: 'ThS. Ngô Hữu Thống',
       photoDegree: 'Thạc sỹ Quản lý KH&CN · Cử nhân Luật · Kỹ sư Viễn thông',
       bioParagraphs: [
-        'ThS. Ngô Hữu Thống là một trong những chuyên gia hàng đầu trong lĩnh vực chuyển đổi số và ứng dụng Trí tuệ Nhân tạo tại Việt Nam, với hơn 10 năm kinh nghiệm tư vấn quản trị tài sản trí tuệ, tài sản số và phát triển doanh nghiệp.',
+        'ThS. Ngô Hữu Thống là chuyên gia trong lĩnh vực chuyển đổi số và ứng dụng Trí tuệ Nhân tạo tại Việt Nam, với hơn 10 năm kinh nghiệm tư vấn quản trị tài sản trí tuệ, tài sản số và phát triển doanh nghiệp.',
         'Hiện là Chủ tịch DIGISO và Viện trưởng AIoV, anh còn là sáng lập viên cộng đồng "Xóa Mù A.I" — nơi hàng nghìn người Việt học AI miễn phí, dễ hiểu, dễ áp dụng.',
       ],
       tags: [
@@ -102,7 +102,7 @@ export const LANDING_COPY = {
       subtitle: 'Từ ChatGPT cơ bản đến AI nâng cao — ThS. Ngô Hữu Thống có khóa học phù hợp cho mọi cấp độ.',
       items: [
         {
-          tag: 'Phổ biến nhất',
+          tag: 'Lựa chọn phổ biến',
           title: 'Xóa Mù A.I — Khóa học dành cho người chưa biết gì',
           imageUrl: null,
           linkUrl: 'https://founderai.biz/',
@@ -208,7 +208,7 @@ export const LANDING_COPY = {
       buttonSecondary: 'Xem tất cả khóa học',
     },
     footer: {
-      tagline: '© 2026 Founder AI Education. Nền tảng học AI hàng đầu Việt Nam.',
+      tagline: '© 2026 Founder AI Education.',
       instructorLine: 'Giảng viên: ThS. Ngô Hữu Thống —',
       privacy: 'Chính sách bảo mật',
       ngohuuLink: 'ngohuuthong.com →',
@@ -221,7 +221,7 @@ export const LANDING_COPY = {
       cardTitleLine1: 'Bắt đầu hành trình AI',
       cardTitleLine2: 'của bạn ngay hôm nay',
       cardSubtitle:
-        'Điền thông tin để nhận lộ trình học cá nhân hóa & ưu đãi độc quyền từ ThS. Ngô Hữu Thống.',
+        'Điền thông tin để nhận lộ trình học cá nhân hóa & ưu đãi từ ThS. Ngô Hữu Thống.',
       lastName: 'Họ',
       firstName: 'Tên',
       fullName: 'Họ và tên',
@@ -269,14 +269,14 @@ export const LANDING_COPY = {
       langEn: 'EN',
     },
     hero: {
-      eyebrowTag: 'AI No.1',
-      eyebrowText: 'Vietnam’s leading AI learning platform',
+      eyebrowTag: 'Applied AI',
+      eyebrowText: 'AI platform for founders and businesses in Vietnam',
       titleLine1: 'Master',
       titleHighlight: 'Artificial Intelligence',
       titleLine2: 'in',
       titleAccent: '30 days',
       subtitle:
-        'Learn with M.Sc. Ngo Huu Thong — a leading AI expert with 10+ years of experience. Over 10,000 learners have transformed their careers with Founder AI.',
+        'Learn with M.Sc. Ngo Huu Thong — 10+ years of experience advising on digital transformation and applied AI. Over 10,000 learners have transformed their careers with Founder AI.',
       instructorMini: {
         name: 'M.Sc. Ngo Huu Thong',
         title: 'AI & digital transformation expert',
@@ -290,7 +290,7 @@ export const LANDING_COPY = {
       instructorPhotoAlt: 'Portrait of M.Sc. Ngo Huu Thong',
     },
     about: {
-      badge1: 'Leading AI\nexpert in Vietnam',
+      badge1: '10+ years\nAI experience',
       badge2: '10,000+\nlearners',
       label: 'Lead instructor',
       name: 'Ngo Huu Thong',
@@ -299,7 +299,7 @@ export const LANDING_COPY = {
       photoName: 'M.Sc. Ngo Huu Thong',
       photoDegree: 'M.Sc. · Law · Telecommunications',
       bioParagraphs: [
-        'M.Sc. Ngo Huu Thong is one of Vietnam’s leading experts in digital transformation and applied AI, with over 10 years of experience advising on intellectual property, digital assets, and business growth.',
+        'M.Sc. Ngo Huu Thong is an expert in digital transformation and applied AI, with over 10 years of experience advising on intellectual property, digital assets, and business growth.',
         'Chairman of DIGISO and Director of AIoV, he also founded the “AI Literacy” community where thousands of Vietnamese learn AI for free — simply and practically.',
       ],
       tags: [
@@ -355,7 +355,7 @@ export const LANDING_COPY = {
       subtitle: 'From ChatGPT basics to advanced AI — there is a course for every level.',
       items: [
         {
-          tag: 'Most popular',
+          tag: 'Popular choice',
           title: 'AI Literacy — for complete beginners',
           imageUrl: null,
           linkUrl: 'https://founderai.biz/',
@@ -459,7 +459,7 @@ export const LANDING_COPY = {
       buttonSecondary: 'Browse all courses',
     },
     footer: {
-      tagline: '© 2026 Founder AI Education. Vietnam’s leading AI learning platform.',
+      tagline: '© 2026 Founder AI Education.',
       instructorLine: 'Instructor: M.Sc. Ngo Huu Thong —',
       privacy: 'Privacy policy',
       ngohuuLink: 'ngohuuthong.com →',
@@ -471,7 +471,7 @@ export const LANDING_COPY = {
       cardTitleLine1: 'Start your AI journey',
       cardTitleLine2: 'today',
       cardSubtitle:
-        'Share your details for a personalized roadmap and exclusive offers from M.Sc. Ngo Huu Thong.',
+        'Share your details for a personalized roadmap and offers from M.Sc. Ngo Huu Thong.',
       lastName: 'Last name',
       firstName: 'First name',
       fullName: 'Full name',

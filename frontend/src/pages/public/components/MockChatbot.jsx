@@ -272,7 +272,7 @@ const LandingPreviewCard = ({ title, features, locale = 'vi' }) => {
           <p className="text-white/80 text-[10px] mb-4 max-w-xs mx-auto">
             {locale === 'en'
               ? 'Learn programming from scratch with expert guidance'
-              : 'Học lập trình từ con số 0 cùng chuyên gia hàng đầu'}
+              : 'Học lập trình từ con số 0 cùng chuyên gia giàu kinh nghiệm'}
           </p>
 
           {/* Mini form */}
