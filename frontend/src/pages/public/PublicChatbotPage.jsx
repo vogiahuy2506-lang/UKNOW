@@ -74,6 +74,13 @@ export default function PublicChatbotPage() {
   const allowAttachments = chatbot?.allow_attachments === true;
   // Áp cho cả iFrame và Public Link (cùng trang /chat/:id, cùng cột embed_show_header).
   const showHeader = chatbot?.embed_show_header !== false;
+  // Bo góc (0–32px) chỉ áp khi chạy trong iframe (khung nhúng); Public Link toàn màn hình giữ vuông.
+  let inIframe = false;
+  try { inIframe = window.self !== window.top; } catch { inIframe = true; }
+  const rawRadius = Number(chatbot?.border_radius);
+  const frameRadius = inIframe && chatbot?.border_radius != null && Number.isFinite(rawRadius)
+    ? Math.min(32, Math.max(0, Math.round(rawRadius)))
+    : 0;
 
   useEffect(() => {
     loadChatbot();
@@ -303,7 +310,11 @@ export default function PublicChatbotPage() {
   }
 
   return (
-    <div className="h-screen flex flex-col" style={{ backgroundColor, color: textColor }}>
+    <div
+      data-testid="public-chat-frame"
+      className="h-screen flex flex-col overflow-hidden"
+      style={{ backgroundColor, color: textColor, borderRadius: `${frameRadius}px` }}
+    >
       {showHeader && (
       <div
         data-testid="public-chat-header"

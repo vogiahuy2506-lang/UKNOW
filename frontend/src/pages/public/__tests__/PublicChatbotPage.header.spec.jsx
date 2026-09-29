@@ -55,3 +55,38 @@ describe('PublicChatbotPage — ẩn/hiện header', () => {
     expect(screen.getByTestId('public-chat-header')).toBeInTheDocument();
   });
 });
+
+describe('PublicChatbotPage — bo góc khi chạy trong iframe', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    localStorage.clear();
+    Element.prototype.scrollIntoView = vi.fn();
+  });
+
+  const withIframe = (fn) => async () => {
+    const spy = vi.spyOn(window, 'top', 'get').mockReturnValue({});
+    try { await fn(); } finally { spy.mockRestore(); }
+  };
+
+  it('trong iframe: border_radius 0 -> khung vuông; 12 -> 12px; 99 -> kẹp 32px', withIframe(async () => {
+    const { unmount } = renderPage({ ...bot, border_radius: 0 });
+    await screen.findByText('Chao ban');
+    expect(screen.getByTestId('public-chat-frame').style.borderRadius).toBe('0px');
+    unmount();
+
+    const r2 = renderPage({ ...bot, border_radius: 12 });
+    await screen.findByText('Chao ban');
+    expect(screen.getByTestId('public-chat-frame').style.borderRadius).toBe('12px');
+    r2.unmount();
+
+    renderPage({ ...bot, border_radius: 99 });
+    await screen.findByText('Chao ban');
+    expect(screen.getByTestId('public-chat-frame').style.borderRadius).toBe('32px');
+  }));
+
+  it('ngoài iframe (Public Link toàn màn hình): không bo', async () => {
+    renderPage({ ...bot, border_radius: 24 });
+    await screen.findByText('Chao ban');
+    expect(screen.getByTestId('public-chat-frame').style.borderRadius).toBe('0px');
+  });
+});

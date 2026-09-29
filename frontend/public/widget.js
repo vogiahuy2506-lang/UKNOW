@@ -43,6 +43,13 @@
   let ALLOW_ATTACHMENTS = false;
   // Nhãn kêu gọi mở chat cạnh bong bóng — rỗng = tắt (chỉ hiện nút tròn như hôm nay).
   let LAUNCHER_LABEL = config.launcherLabel || '';
+  // Bo góc khung chat (px, 0–32). Mặc định 20 = giá trị cũ; chỉ đổi khi server trả borderRadius.
+  let BORDER_RADIUS = 20;
+  function clampRadius(v) {
+    const n = Number(v);
+    if (v === null || v === undefined || v === '' || !Number.isFinite(n)) return null;
+    return Math.min(32, Math.max(0, Math.round(n)));
+  }
   // Tự mở khung chat sau vài giây (chủ shop bật ở Giao diện Widget). Chỉ đọc từ API config.
   let AUTO_OPEN = false;
   const AUTO_OPEN_DELAY_MS = 2000;
@@ -126,6 +133,8 @@
         // không trả field này (ví dụ config cũ chưa có cột).
         LAUNCHER_LABEL = typeof c.launcherLabel === 'string' ? c.launcherLabel : LAUNCHER_LABEL;
         AUTO_OPEN = c.autoOpen === true;
+        const radius = clampRadius(c.borderRadius);
+        if (radius !== null) BORDER_RADIUS = radius;
         configLoaded = true;
       }
     } catch (err) {
@@ -212,7 +221,7 @@
       width: 380px;
       height: 560px;
       background: ${BACKGROUND_COLOR};
-      border-radius: 20px;
+      border-radius: ${BORDER_RADIUS}px;
       box-shadow: 0 12px 48px rgba(0,0,0,0.15);
       display: none;
       flex-direction: column;
