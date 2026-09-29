@@ -6360,6 +6360,8 @@ export default {
     zaloGroupCampaigns: 'Zalo Group Campaigns',
     emailCampaigns: 'Email Campaigns',
     zaloAccounts: 'Zalo accounts',
+    whatsappAccounts: 'WhatsApp accounts',
+    telegramAccounts: 'Telegram accounts',
     emailAccounts: 'Email accounts',
     emailTemplates: 'Email templates',
     zaloTemplates: 'Zalo templates',
@@ -6836,6 +6838,8 @@ export default {
     emailThisMonth: 'Email this month',
     zaloToday: 'Zalo today',
     zaloThisMonth: 'Zalo this month',
+    whatsappAccounts: 'WhatsApp accounts',
+    telegramAccounts: 'Telegram accounts',
     aiTokens: 'AI tokens',
     aiCredits: 'AI credits',
     // Plan expiry

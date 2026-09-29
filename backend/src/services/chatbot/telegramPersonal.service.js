@@ -12,12 +12,14 @@
 import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
 import telegramGateway from './telegramGateway.client.js';
 import { hasPermanentAuthKey } from '../../utils/telegramSession.util.js';
+import db from '../../config/database.js';
+import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 
 const LOGIN_CONTEXT_TTL_SECONDS = 15 * 60;
 
 class TelegramPersonalService {
   constructor() {
-    // sessionId → { userId, expiresAt }
+    // sessionId → { userId, roleCode, expiresAt }
     this._loginContexts = new Map();
     this._sweepInterval = setInterval(() => this._sweepContexts(), 60 * 1000);
     // Allow Node to exit cleanly during tests.
@@ -39,7 +41,7 @@ class TelegramPersonalService {
    * Begin a new QR login flow for `userId`.
    * Returns the session_id + QR payload that the SPA renders.
    */
-  async startLogin(userId) {
+  async startLogin(userId, roleCode = undefined) {
     const { data } = await telegramGateway.createSession(userId);
     const sessionId = data.session_id;
     if (!sessionId) {
@@ -47,6 +49,7 @@ class TelegramPersonalService {
     }
     this._loginContexts.set(sessionId, {
       userId,
+      roleCode,
       expiresAt: Date.now() + LOGIN_CONTEXT_TTL_SECONDS * 1000,
     });
     return {
@@ -77,14 +80,46 @@ class TelegramPersonalService {
       return { status: 'error', error: 'Telegram gateway did not return a user' };
     }
 
-    const account = await chatbotTelegramRepository.createAccount({
+    const accountInput = {
       idUser: ctx.userId,
       telegramUserId: Number(user.telegram_user_id),
       phone: user.phone || null,
       firstName: user.first_name || null,
       lastName: user.last_name || null,
       username: user.username || null,
-    });
+    };
+    // W5 — hạn mức số tài khoản Telegram theo gói: chỉ tài khoản MỚI (chưa có (id_user, telegram_user_id))
+    // bị đếm; đăng nhập lại tài khoản cũ chỉ cập nhật dòng, không tốn thêm chỗ. Enforce + INSERT cùng giao dịch.
+    const alreadyLinked = await chatbotTelegramRepository.getAccountByTelegramUserId(
+      accountInput.telegramUserId,
+      { userId: ctx.userId }
+    );
+    let account;
+    if (alreadyLinked) {
+      account = await chatbotTelegramRepository.createAccount(accountInput);
+    } else {
+      const client = await db.getClient();
+      try {
+        await client.query('BEGIN');
+        await enforceResourceLimitTx(client, {
+          userId: ctx.userId,
+          roleCode: ctx.roleCode,
+          resourceKey: 'telegramAccounts',
+        });
+        account = await chatbotTelegramRepository.createAccount(accountInput, client);
+        await client.query('COMMIT');
+      } catch (error) {
+        await client.query('ROLLBACK').catch(() => {});
+        if (error?.code === 'RESOURCE_LIMIT_EXCEEDED') {
+          // Vượt hạn mức: không giữ phiên QR đã đăng nhập mà không có dòng tài khoản nào trỏ tới.
+          this._loginContexts.delete(sessionId);
+          await telegramGateway.cancelSession(sessionId).catch(() => {});
+        }
+        throw error;
+      } finally {
+        client.release();
+      }
+    }
 
     // Tell the gateway to remember which `account_id` this Telegram
     // session is bound to. Future `listAccounts` calls include `is_loaded`.

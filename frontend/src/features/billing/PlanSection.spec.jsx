@@ -118,3 +118,24 @@ describe('PlanSection — hạn mức null phải hiện không giới hạn, kh
     expect(screen.getByTestId('usage-topup.items.employees').textContent).toBe('-1');
   });
 });
+
+// W5 — hạn mức số tài khoản WhatsApp/Telegram: chỉ hiện dòng khi gói có trần (NULL = không giới hạn thì ẩn,
+// trừ khi đã có tài khoản); trần 0 hiện "x / 0".
+describe('PlanSection — W5 hạn mức tài khoản WhatsApp/Telegram', () => {
+  it('gói NULL và chưa có tài khoản -> ẩn cả hai dòng', () => {
+    renderPlan({ maxWhatsappAccounts: null, maxTelegramAccounts: null });
+    expect(screen.queryByTestId('usage-accountProfileModal.whatsappAccounts')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('usage-accountProfileModal.telegramAccounts')).not.toBeInTheDocument();
+  });
+
+  it('có trần -> hiện đúng limit; trần 0 vẫn là 0, không bị hiểu là không giới hạn', () => {
+    renderPlan({ maxWhatsappAccounts: 2, whatsappAccountsUsed: 1, maxTelegramAccounts: 0 });
+    expect(screen.getByTestId('usage-accountProfileModal.whatsappAccounts').textContent).toBe('2');
+    expect(screen.getByTestId('usage-accountProfileModal.telegramAccounts').textContent).toBe('0');
+  });
+
+  it('gói NULL nhưng đã có tài khoản Telegram -> hiện dòng, limit = -1 (không giới hạn)', () => {
+    renderPlan({ maxTelegramAccounts: null, telegramAccountsUsed: 2 });
+    expect(screen.getByTestId('usage-accountProfileModal.telegramAccounts').textContent).toBe('-1');
+  });
+});

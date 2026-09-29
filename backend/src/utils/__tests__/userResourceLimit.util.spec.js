@@ -301,4 +301,76 @@ describe('userResourceLimit.util', () => {
       expect(mockClient.query).toHaveBeenCalledTimes(2);
     });
   });
+  // W5 — hạn mức số tài khoản WhatsApp/Telegram: ghim column/table/ownerExpression qua SQL thật gửi đi.
+  describe('W5 whatsappAccounts / telegramAccounts', () => {
+    const mockClient = { query: jest.fn() };
+    beforeEach(() => mockClient.query.mockReset());
+
+    it('whatsappAccounts: SELECT hạn mức có cả 2 cột mới; đếm theo session_key của chủ', async () => {
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] }) // advisory lock
+        .mockResolvedValueOnce({ rows: [{ max_whatsapp_accounts: 1 }] })
+        .mockResolvedValueOnce({ rows: [{ total: 1 }] });
+
+      await expect(
+        enforceResourceLimitTx(mockClient, { userId: 10, roleCode: 'user', resourceKey: 'whatsappAccounts' })
+      ).rejects.toMatchObject({ code: 'RESOURCE_LIMIT_EXCEEDED', statusCode: 400, resource: 'whatsappAccounts' });
+
+      const limitSql = mockClient.query.mock.calls[1][0];
+      expect(limitSql).toContain('max_whatsapp_accounts');
+      expect(limitSql).toContain('max_telegram_accounts');
+      const [countSql, countParams] = mockClient.query.mock.calls[2];
+      expect(countSql).toContain('FROM whatsapp_baileys_session_creds');
+      expect(countSql).toContain("split_part(session_key, '-', 1)::bigint = $1");
+      expect(countParams).toEqual([10]);
+    });
+
+    it('telegramAccounts: đếm telegram_accounts theo id_user', async () => {
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ max_telegram_accounts: 2 }] })
+        .mockResolvedValueOnce({ rows: [{ total: 2 }] });
+
+      await expect(
+        enforceResourceLimitTx(mockClient, { userId: 10, roleCode: 'user', resourceKey: 'telegramAccounts' })
+      ).rejects.toMatchObject({ code: 'RESOURCE_LIMIT_EXCEEDED', resource: 'telegramAccounts' });
+
+      const countSql = mockClient.query.mock.calls[2][0];
+      expect(countSql).toContain('FROM telegram_accounts');
+      expect(countSql).toContain('id_user = $1');
+    });
+
+    it('NULL = không giới hạn (không đếm); 0 = không hỗ trợ (chặn ngay, không đếm); dưới trần = cho qua', async () => {
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ max_whatsapp_accounts: null }] });
+      await expect(
+        enforceResourceLimitTx(mockClient, { userId: 10, roleCode: 'user', resourceKey: 'whatsappAccounts' })
+      ).resolves.toBeUndefined();
+      expect(mockClient.query).toHaveBeenCalledTimes(2);
+
+      mockClient.query.mockReset();
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ max_telegram_accounts: 0 }] });
+      await expect(
+        enforceResourceLimitTx(mockClient, { userId: 10, roleCode: 'user', resourceKey: 'telegramAccounts' })
+      ).rejects.toThrow(/không được hỗ trợ/);
+      expect(mockClient.query).toHaveBeenCalledTimes(2);
+
+      mockClient.query.mockReset();
+      mockClient.query
+        .mockResolvedValueOnce({ rows: [] })
+        .mockResolvedValueOnce({ rows: [{ max_whatsapp_accounts: 2 }] })
+        .mockResolvedValueOnce({ rows: [{ total: 1 }] });
+      await expect(
+        enforceResourceLimitTx(mockClient, { userId: 10, roleCode: 'user', resourceKey: 'whatsappAccounts' })
+      ).resolves.toBeUndefined();
+    });
+
+    it('admin bỏ qua, không chạm DB', async () => {
+      await enforceResourceLimitTx(mockClient, { userId: 1, roleCode: 'admin', resourceKey: 'whatsappAccounts' });
+      expect(mockClient.query).not.toHaveBeenCalled();
+    });
+  });
 });

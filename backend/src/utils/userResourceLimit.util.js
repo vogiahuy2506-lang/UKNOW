@@ -36,6 +36,19 @@ const RESOURCE_LIMIT_MAP = {
     table: 'zalo_settings',
     label: 'số tài khoản Zalo quản lý',
   },
+  whatsappAccounts: {
+    column: 'max_whatsapp_accounts',
+    table: 'whatsapp_baileys_session_creds',
+    // Phiên WhatsApp không có cột id_user — chủ nằm trong session_key = "<userId>-<shortKey>".
+    ownerExpression: "split_part(session_key, '-', 1)::bigint",
+    label: 'số tài khoản WhatsApp',
+  },
+  telegramAccounts: {
+    column: 'max_telegram_accounts',
+    table: 'telegram_accounts',
+    label: 'số tài khoản Telegram',
+  },
+
   emailAccounts: {
     column: 'max_email_accounts',
     table: 'email_settings',
@@ -121,6 +134,8 @@ async function getUserLimitRow(queryable, userId) {
          max_zalo_group_campaigns,
          max_email_campaigns,
          max_zalo_accounts,
+         max_whatsapp_accounts,
+         max_telegram_accounts,
          max_email_accounts,
          max_email_templates,
          max_zalo_templates,

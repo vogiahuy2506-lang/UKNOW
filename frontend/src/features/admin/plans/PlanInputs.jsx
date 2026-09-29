@@ -717,6 +717,8 @@ export const ResourceLimitsFields = ({ form, set, hint }) => {
           ['maxZaloGroupCampaigns', t('planInputs.zaloGroupCampaigns')],
           ['maxEmailCampaigns',     t('planInputs.emailCampaigns')],
           ['maxZaloAccounts',       t('planInputs.zaloAccounts')],
+          ['maxWhatsappAccounts',   t('planInputs.whatsappAccounts')],
+          ['maxTelegramAccounts',   t('planInputs.telegramAccounts')],
           ['maxEmailAccounts',      t('planInputs.emailAccounts')],
           ['maxEmailTemplates',     t('planInputs.emailTemplates')],
           ['maxZaloTemplates',      t('planInputs.zaloTemplates')],

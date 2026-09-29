@@ -122,6 +122,8 @@ const mapProfileResponse = (userRow) => ({
   roleName: userRow.role_name || 'Người dùng',
   maxCampaigns: userRow.max_campaigns ?? null,
   maxZaloAccounts: userRow.max_zalo_accounts ?? null,
+  maxWhatsappAccounts: userRow.max_whatsapp_accounts ?? null,
+  maxTelegramAccounts: userRow.max_telegram_accounts ?? null,
   maxEmailAccounts: userRow.max_email_accounts ?? null,
   maxEmailTemplates: userRow.max_email_templates ?? null,
   maxZaloTemplates: userRow.max_zalo_templates ?? null,
@@ -159,6 +161,8 @@ const mapProfileResponse = (userRow) => ({
   chatbotsUsed: Number(userRow.chatbots_used ?? 0),
   landingPagesUsed: Number(userRow.landing_pages_used ?? 0),
   zaloAccountsUsed: Number(userRow.zalo_accounts_used ?? 0),
+  whatsappAccountsUsed: Number(userRow.whatsapp_accounts_used ?? 0),
+  telegramAccountsUsed: Number(userRow.telegram_accounts_used ?? 0),
   emailAccountsUsed: Number(userRow.email_accounts_used ?? 0),
   employeesUsed: Number(userRow.employees_used ?? 0),
 });
@@ -236,7 +240,7 @@ class UserController {
         console.error('[Profile] findProfileUsageCounts failed', { userId, message: err.message });
       }
 
-      let structuralUsage = { chatbots_used: 0, landing_pages_used: 0, zalo_accounts_used: 0, email_accounts_used: 0, employees_used: 0 };
+      let structuralUsage = { chatbots_used: 0, landing_pages_used: 0, zalo_accounts_used: 0, email_accounts_used: 0, employees_used: 0, whatsapp_accounts_used: 0, telegram_accounts_used: 0 };
       try {
         structuralUsage = await findStructuralUsageCounts(billingUserId);
       } catch (err) {

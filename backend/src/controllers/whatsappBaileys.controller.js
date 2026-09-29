@@ -14,6 +14,8 @@
  *   POST  /api/whatsapp/sessions/:key/messages  send a message (chatbot use)
  */
 import { EventEmitter } from 'node:events';
+import db from '../config/database.js';
+import { enforceResourceLimitTx } from '../utils/userResourceLimit.util.js';
 import * as whatsappBaileysModule from '../services/chatbot/whatsappBaileys.service.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -43,6 +45,36 @@ function safeSessionKey(userId, sessionKey) {
   return `${userId}-${sessionKey.replace(/[^a-zA-Z0-9_-]/g, '_')}`;
 }
 
+/**
+ * W5 — hạn mức số tài khoản WhatsApp theo gói. Chỉ phiên MỚI (chưa có dòng creds, chưa có trong bộ nhớ) mới bị
+ * đếm: kết nối lại phiên đã có không tốn thêm chỗ. Advisory lock giữ suốt `connectSession` để hai lần kết nối
+ * song song của cùng chủ không cùng qua cổng; dòng creds do Baileys ghi ngay sau khi tạo socket nên cửa sổ hở còn lại rất hẹp.
+ */
+async function connectWithAccountLimit(authUser, userId, sessionKey) {
+  const inMemory = whatsappBaileysService.getSession(sessionKey);
+  const persisted = inMemory ? [] : await whatsappBaileysService.listPersistedSessions();
+  if (inMemory || persisted.includes(sessionKey)) {
+    return whatsappBaileysService.connectSession(sessionKey);
+  }
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    await enforceResourceLimitTx(client, {
+      userId,
+      roleCode: authUser?.role,
+      resourceKey: 'whatsappAccounts',
+    });
+    const record = await whatsappBaileysService.connectSession(sessionKey);
+    await client.query('COMMIT');
+    return record;
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 class WhatsAppBaileysController {
   async connect(req, res) {
     try {
@@ -53,7 +85,7 @@ class WhatsAppBaileysController {
       // lẫn user-initiated connect). Không cần gọi `registerSessionHandlers`
       // ở đây nữa; gọi thêm vẫn idempotent nhờ flag
       // `__baileysInboxRegistered` nhưng sẽ tạo log duplicate.
-      const record = await whatsappBaileysService.connectSession(sessionKey);
+      const record = await connectWithAccountLimit(req.user, userId, sessionKey);
       await auditAccount(req, AUDIT_ACTIONS.WHATSAPP_ACCOUNT_CONNECT_STARTED, sessionKey, { status: record.status });
       return res.json({
         success: true,
@@ -65,6 +97,15 @@ class WhatsAppBaileysController {
       });
     } catch (err) {
       console.error('[WhatsApp/Baileys] connect error:', err.message);
+      if (err.code === 'RESOURCE_LIMIT_EXCEEDED') {
+        return res.status(400).json({
+          success: false,
+          message: err.message,
+          code: err.code,
+          resource: err.resource,
+          limitReached: true,
+        });
+      }
       return res.status(500).json({ success: false, message: err.message });
     }
   }

@@ -78,7 +78,7 @@ export async function create(req, res) {
     const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays, storageLimitBytes } = req.body;
     // Gói công khai BẮT BUỘC có code: checkout gửi planCode lên (payment.controller.js:23),
@@ -95,7 +95,7 @@ export async function create(req, res) {
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays, storageLimitBytes,
     });
@@ -111,7 +111,7 @@ export async function update(req, res) {
     const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays, storageLimitBytes } = req.body;
     const plan = await adminPlansService.editPlan(Number(req.params.id), {
@@ -119,7 +119,7 @@ export async function update(req, res) {
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
       gracePeriodDays, storageLimitBytes,
     });
@@ -146,7 +146,7 @@ export async function createCustomWithPayment(req, res) {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     const result = await adminPlansService.createCustomPlanWithPayment(userEmail, {
@@ -154,7 +154,7 @@ export async function createCustomWithPayment(req, res) {
       maxEmployees: Number(maxEmployees ?? -1), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes,
     });
     return res.status(201).json({
@@ -171,7 +171,7 @@ export async function createCustom(req, res) {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes } = req.body;
     if (!userEmail) return res.status(400).json({ success: false, message: 'Vui lòng nhập email người dùng' });
     const result = await adminPlansService.createCustomPlanForUser(userEmail, {
@@ -179,7 +179,7 @@ export async function createCustom(req, res) {
       maxEmployees: Number(maxEmployees ?? 0), durationDays,
       dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
-      maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
+      maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes,
     });
     return res.status(201).json({ success: true, message: `Đã tạo và gán gói "${result.plan.name}" cho ${result.assignedTo.email}`, data: result });

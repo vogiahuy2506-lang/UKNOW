@@ -54,8 +54,8 @@ class ChatbotTelegramRepository {
     firstName = null,
     lastName = null,
     username = null,
-  }) {
-    const { rows } = await db.query(
+  }, queryable = db) {
+    const { rows } = await queryable.query(
       `INSERT INTO telegram_accounts
          (id_user, telegram_user_id, phone, first_name, last_name, username)
        VALUES ($1, $2, $3, $4, $5, $6)

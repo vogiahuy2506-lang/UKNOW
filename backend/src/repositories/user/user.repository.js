@@ -4,6 +4,8 @@ import { EFFECTIVE_PLAN_ID_SQL, findCurrentPlanActivation } from '../../utils/bi
 const PROFILE_LIMIT_COLUMNS = `
   u.max_campaigns,
   u.max_zalo_accounts,
+  u.max_whatsapp_accounts,
+  u.max_telegram_accounts,
   u.max_email_accounts,
   u.max_email_templates,
   u.max_zalo_templates,
@@ -118,6 +120,7 @@ export async function findProfileBaseFallback(userId) {
             NULL AS referrer_code, NULL AS referrer_name,
             NULL AS subscription_expires_at,
             NULL::int AS max_campaigns, NULL::int AS max_zalo_accounts,
+            NULL::int AS max_whatsapp_accounts, NULL::int AS max_telegram_accounts,
             NULL::int AS max_email_accounts, NULL::int AS max_email_templates,
             NULL::int AS max_zalo_templates, NULL::int AS max_landing_pages,
             NULL::int AS bot_daily_reply_cap,
@@ -350,6 +353,8 @@ export async function findRoleAndLimitsFallback(userId) {
     `SELECT u.role AS role_code, u.role AS role_name,
             NULL::int AS max_campaigns,
             NULL::int AS max_zalo_accounts,
+            NULL::int AS max_whatsapp_accounts,
+            NULL::int AS max_telegram_accounts,
             NULL::int AS max_email_accounts,
             NULL::int AS max_email_templates,
             NULL::int AS max_zalo_templates,
@@ -554,12 +559,14 @@ export async function insertRefreshToken({ userId, tokenHash, deviceInfo, ipAddr
 }
 
 export async function findStructuralUsageCounts(billingUserId) {
-  const [cBots, cLps, cZalo, cEmail, cEmp] = await Promise.all([
+  const [cBots, cLps, cZalo, cEmail, cEmp, cWa, cTg] = await Promise.all([
     db.query('SELECT count(*) FROM chatbots WHERE user_id = $1 AND deleted_at IS NULL', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
     db.query('SELECT count(*) FROM landing_pages WHERE owner_user_id = $1 AND deleted_at IS NULL', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
     db.query('SELECT count(*) FROM zalo_settings WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
     db.query('SELECT count(*) FROM email_settings WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
     db.query('SELECT count(*) FROM user_members WHERE owner_id = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
+    db.query("SELECT count(*) FROM whatsapp_baileys_session_creds WHERE split_part(session_key, '-', 1) = $1::text", [String(billingUserId)]).then(r => r.rows).catch(() => [{count: 0}]),
+    db.query('SELECT count(*) FROM telegram_accounts WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
   ]);
   return {
     chatbots_used: Number(cBots[0]?.count) || 0,
@@ -567,5 +574,7 @@ export async function findStructuralUsageCounts(billingUserId) {
     zalo_accounts_used: Number(cZalo[0]?.count) || 0,
     email_accounts_used: Number(cEmail[0]?.count) || 0,
     employees_used: Number(cEmp[0]?.count) || 0,
+    whatsapp_accounts_used: Number(cWa[0]?.count) || 0,
+    telegram_accounts_used: Number(cTg[0]?.count) || 0,
   };
 }

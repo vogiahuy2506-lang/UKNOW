@@ -6366,6 +6366,8 @@ export default {
     zaloGroupCampaigns: 'Chiến dịch Zalo Nhóm',
     emailCampaigns: 'Chiến dịch Email',
     zaloAccounts: 'Tài khoản Zalo',
+    whatsappAccounts: 'Tài khoản WhatsApp',
+    telegramAccounts: 'Tài khoản Telegram',
     emailAccounts: 'Tài khoản Email',
     emailTemplates: 'Email template',
     zaloTemplates: 'Zalo template',
@@ -6842,6 +6844,8 @@ export default {
     emailThisMonth: 'Email tháng này',
     zaloToday: 'Zalo hôm nay',
     zaloThisMonth: 'Zalo tháng này',
+    whatsappAccounts: 'Tài khoản WhatsApp',
+    telegramAccounts: 'Tài khoản Telegram',
     aiTokens: 'Token AI',
     aiCredits: 'Lượt AI / Credit',
     // Plan expiry

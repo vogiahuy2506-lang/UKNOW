@@ -10,7 +10,15 @@ const svc = {
   deleteSessionFiles: jest.fn(),
   updateSessionNickname: jest.fn(),
   listSessions: jest.fn(() => []),
+  getSession: jest.fn(() => undefined),
+  listPersistedSessions: jest.fn(async () => []),
 };
+const txClient = { query: jest.fn(async () => ({ rows: [] })), release: jest.fn() };
+const enforceResourceLimitTx = jest.fn(async () => {});
+jest.unstable_mockModule('../../config/database.js', () => ({
+  default: { getClient: jest.fn(async () => txClient) },
+}));
+jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({ enforceResourceLimitTx }));
 const logWorkspace = jest.fn(async () => {});
 
 jest.unstable_mockModule('../../services/chatbot/whatsappBaileys.service.js', () => svc);
@@ -47,7 +55,12 @@ const makeReq = (extra = {}) => ({
 });
 
 describe('whatsappBaileys.controller — audit', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    svc.getSession.mockReturnValue(undefined);
+    svc.listPersistedSessions.mockResolvedValue([]);
+    enforceResourceLimitTx.mockResolvedValue(undefined);
+  });
 
   it('connect -> WHATSAPP_ACCOUNT_CONNECT_STARTED, details.channel + sessionKey, không SĐT', async () => {
     svc.connectSession.mockResolvedValue({ status: 'qr', lastQr: 'data:x' });
@@ -109,5 +122,46 @@ describe('whatsappBaileys.controller — _inject', () => {
     await controller.injectTestMessage(makeReq({ body: { text: 'x' } }), res);
     expect(res.statusCode).toBe(403);
     expect(svc.listSessions).not.toHaveBeenCalled();
+  });
+});
+
+describe('whatsappBaileys.controller — W5 hạn mức số tài khoản', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    svc.getSession.mockReturnValue(undefined);
+    svc.listPersistedSessions.mockResolvedValue([]);
+    enforceResourceLimitTx.mockResolvedValue(undefined);
+    svc.connectSession.mockResolvedValue({ status: 'qr', lastQr: 'data:x' });
+  });
+
+  it('phiên MỚI -> enforce whatsappAccounts trong giao dịch rồi mới connectSession, COMMIT', async () => {
+    const res = makeRes();
+    await controller.connect(makeReq({ user: { id: 7, role: 'user', activeContext: { type: 'self' } }, body: { sessionKey: 'a' } }), res);
+    expect(enforceResourceLimitTx).toHaveBeenCalledTimes(1);
+    expect(enforceResourceLimitTx.mock.calls[0][1]).toEqual({ userId: 7, roleCode: 'user', resourceKey: 'whatsappAccounts' });
+    expect(enforceResourceLimitTx.mock.invocationCallOrder[0]).toBeLessThan(svc.connectSession.mock.invocationCallOrder[0]);
+    expect(txClient.query.mock.calls.map((c) => c[0])).toEqual(['BEGIN', 'COMMIT']);
+    expect(res.body.success).toBe(true);
+  });
+
+  it('kết nối lại phiên ĐÃ có creds -> KHÔNG enforce (không tốn thêm chỗ)', async () => {
+    svc.listPersistedSessions.mockResolvedValue(['7-a']);
+    const res = makeRes();
+    await controller.connect(makeReq({ body: { sessionKey: 'a' } }), res);
+    expect(enforceResourceLimitTx).not.toHaveBeenCalled();
+    expect(svc.connectSession).toHaveBeenCalledWith('7-a');
+    expect(res.body.success).toBe(true);
+  });
+
+  it('vượt hạn mức -> 400 RESOURCE_LIMIT_EXCEEDED, KHÔNG connectSession, ROLLBACK', async () => {
+    const err = Object.assign(new Error('Tài khoản đã đạt giới hạn'), { code: 'RESOURCE_LIMIT_EXCEEDED', statusCode: 400, resource: 'whatsappAccounts' });
+    enforceResourceLimitTx.mockRejectedValue(err);
+    const res = makeRes();
+    await controller.connect(makeReq({ body: { sessionKey: 'b' } }), res);
+    expect(res.statusCode).toBe(400);
+    expect(res.body).toMatchObject({ success: false, code: 'RESOURCE_LIMIT_EXCEEDED', limitReached: true });
+    expect(svc.connectSession).not.toHaveBeenCalled();
+    expect(txClient.query.mock.calls.map((c) => c[0])).toEqual(['BEGIN', 'ROLLBACK']);
+    expect(txClient.release).toHaveBeenCalled();
   });
 });

@@ -2734,7 +2734,7 @@ class ChatbotController {
         });
       }
       const userId = resolveWorkspaceOwnerId(req.user);
-      const result = await telegramPersonalService.startLogin(userId);
+      const result = await telegramPersonalService.startLogin(userId, req.user?.role);
       return res.json({ success: true, data: result });
     } catch (err) {
       console.error('[Telegram] initTelegramLogin error:', err.message);
@@ -2770,6 +2770,15 @@ class ChatbotController {
       return res.json({ success: true, data: result });
     } catch (err) {
       console.error('[Telegram] checkTelegramLoginStatus error:', err.message);
+      if (err.code === 'RESOURCE_LIMIT_EXCEEDED') {
+        return res.status(400).json({
+          success: false,
+          message: err.message,
+          code: err.code,
+          resource: err.resource,
+          limitReached: true,
+        });
+      }
       return res.status(err.status || 500).json({ success: false, message: err.message });
     }
   }

@@ -27,6 +27,8 @@ const COLUMNS = Object.freeze({
     max_employees: Object.freeze({ udt: 'int4', nullable: true }),
     max_campaigns: Object.freeze({ udt: 'int4', nullable: true }),
     max_zalo_accounts: Object.freeze({ udt: 'int4', nullable: true }),
+    max_whatsapp_accounts: Object.freeze({ udt: 'int4', nullable: true }),
+    max_telegram_accounts: Object.freeze({ udt: 'int4', nullable: true }),
     max_email_accounts: Object.freeze({ udt: 'int4', nullable: true }),
     max_email_templates: Object.freeze({ udt: 'int4', nullable: true }),
     max_zalo_templates: Object.freeze({ udt: 'int4', nullable: true }),

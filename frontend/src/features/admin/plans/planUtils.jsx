@@ -103,7 +103,7 @@ export const emptyForm = () => ({
   messagesPerPeriod: '', isFupEnabled: false,
   maxLandingPages: '', maxCampaigns: '',
   maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',
-  maxZaloAccounts: '', maxEmailAccounts: '',
+  maxZaloAccounts: '', maxWhatsappAccounts: '', maxTelegramAccounts: '', maxEmailAccounts: '',
   maxEmailTemplates: '', maxZaloTemplates: '',
   maxChatbots: '', aiCreditsPerPeriod: '', aiTokensPerPeriod: '', aiModel: 'gemini-2.5-flash',
   storageLimitBytes: 104857600,

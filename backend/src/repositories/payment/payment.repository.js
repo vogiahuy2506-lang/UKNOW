@@ -486,6 +486,8 @@ export const activateUserPlan = async (userId, planId, billingPeriod = 'monthly'
              max_zalo_group_campaigns = p.max_zalo_group_campaigns,
              max_email_campaigns      = p.max_email_campaigns,
              max_zalo_accounts        = p.max_zalo_accounts,
+             max_whatsapp_accounts    = p.max_whatsapp_accounts,
+             max_telegram_accounts    = p.max_telegram_accounts,
              max_email_accounts       = p.max_email_accounts,
              max_email_templates      = p.max_email_templates,
              max_zalo_templates       = p.max_zalo_templates,

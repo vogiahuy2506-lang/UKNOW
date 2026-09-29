@@ -42,6 +42,7 @@ const repoStub = {
     first_name: 'Bob',
     is_active: true,
   })),
+  getAccountByTelegramUserId: jest.fn(async () => null),
   listAccountsByUser: jest.fn(async () => []),
   deleteAccount: jest.fn(async () => true),
   deactivateAccount: jest.fn(async () => ({ id: 1, is_active: false })),
@@ -54,6 +55,14 @@ jest.unstable_mockModule(
   '../../../repositories/chatbot/chatbotTelegram.repository.js',
   () => ({ default: repoStub })
 );
+
+// ── DB + hạn mức (W5) ────────────────────────────────────────────────
+const txClient = { query: jest.fn(async () => ({ rows: [] })), release: jest.fn() };
+const enforceResourceLimitTx = jest.fn(async () => {});
+jest.unstable_mockModule('../../../config/database.js', () => ({
+  default: { getClient: jest.fn(async () => txClient) },
+}));
+jest.unstable_mockModule('../../../utils/userResourceLimit.util.js', () => ({ enforceResourceLimitTx }));
 
 // ── Imports AFTER mockModule ─────────────────────────────────────────
 const telegramPersonalService = (await import('../telegramPersonal.service.js')).default;
@@ -138,9 +147,51 @@ describe('telegramPersonalService.checkLoginStatus', () => {
       firstName: 'Bob',
       lastName: 'Smith',
       username: 'bob',
-    });
+    }, txClient);
     expect(gatewayMock.bindAccount).toHaveBeenCalledWith(12345, 7);
     expect(gatewayMock.ensureHandler).toHaveBeenCalledWith(12345);
+  });
+
+  describe('W5 hạn mức số tài khoản Telegram', () => {
+    const successStatus = {
+      data: { status: 'success', user: { telegram_user_id: 555, first_name: 'A' } },
+    };
+    const login = async (sid, role) => {
+      gatewayMock.createSession.mockResolvedValueOnce({ data: { session_id: sid, qr_image_base64: 'A', expires_at: 1 } });
+      await telegramPersonalService.startLogin(100, role);
+      gatewayMock.getStatus.mockResolvedValueOnce(successStatus);
+    };
+
+    it('tài khoản MỚI -> enforce telegramAccounts (kèm role) TRƯỚC INSERT, cùng giao dịch', async () => {
+      await login('tg-w5-1', 'user');
+      const result = await telegramPersonalService.checkLoginStatus('tg-w5-1');
+      expect(result.status).toBe('success');
+      expect(enforceResourceLimitTx).toHaveBeenCalledWith(txClient, { userId: 100, roleCode: 'user', resourceKey: 'telegramAccounts' });
+      expect(enforceResourceLimitTx.mock.invocationCallOrder[0]).toBeLessThan(repoStub.createAccount.mock.invocationCallOrder[0]);
+      expect(txClient.query.mock.calls.map((c) => c[0])).toEqual(['BEGIN', 'COMMIT']);
+    });
+
+    it('đăng nhập lại tài khoản ĐÃ có -> KHÔNG enforce, không mở giao dịch', async () => {
+      repoStub.getAccountByTelegramUserId.mockResolvedValueOnce({ id: 7 });
+      await login('tg-w5-2', 'user');
+      const result = await telegramPersonalService.checkLoginStatus('tg-w5-2');
+      expect(result.status).toBe('success');
+      expect(enforceResourceLimitTx).not.toHaveBeenCalled();
+      expect(txClient.query).not.toHaveBeenCalled();
+      expect(repoStub.createAccount).toHaveBeenCalledTimes(1);
+    });
+
+    it('vượt hạn mức -> ném RESOURCE_LIMIT_EXCEEDED, ROLLBACK, không INSERT/bind, huỷ phiên gateway', async () => {
+      const err = Object.assign(new Error('đạt giới hạn'), { code: 'RESOURCE_LIMIT_EXCEEDED', statusCode: 400 });
+      enforceResourceLimitTx.mockRejectedValueOnce(err);
+      await login('tg-w5-3', 'user');
+      await expect(telegramPersonalService.checkLoginStatus('tg-w5-3')).rejects.toMatchObject({ code: 'RESOURCE_LIMIT_EXCEEDED' });
+      expect(repoStub.createAccount).not.toHaveBeenCalled();
+      expect(gatewayMock.bindAccount).not.toHaveBeenCalled();
+      expect(gatewayMock.cancelSession).toHaveBeenCalledWith('tg-w5-3');
+      expect(txClient.query.mock.calls.map((c) => c[0])).toEqual(['BEGIN', 'ROLLBACK']);
+      expect(txClient.release).toHaveBeenCalled();
+    });
   });
 
   it('errors when success payload omits user.telegram_user_id', async () => {

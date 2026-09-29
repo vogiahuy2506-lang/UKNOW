@@ -251,6 +251,27 @@ export default function PlanSection({ data, t }) {
           serviceSuspended={serviceSuspended}
           usingAddons={!!data.addons?.zaloAccounts}
         />
+        {/* W5: WhatsApp/Telegram chỉ hiện khi gói có đặt trần (NULL = không giới hạn) hoặc đã có tài khoản. */}
+        {(!isUnlimitedPlanLimit(data.maxWhatsappAccounts) || data.whatsappAccountsUsed > 0) && (
+          <UsageBar
+            icon={HiOutlineChatAlt2}
+            label={t('accountProfileModal.whatsappAccounts')}
+            used={data.whatsappAccountsUsed || 0}
+            limit={resourceLimit(data.maxWhatsappAccounts, 0)}
+            t={t}
+            serviceSuspended={serviceSuspended}
+          />
+        )}
+        {(!isUnlimitedPlanLimit(data.maxTelegramAccounts) || data.telegramAccountsUsed > 0) && (
+          <UsageBar
+            icon={HiOutlineChatAlt2}
+            label={t('accountProfileModal.telegramAccounts')}
+            used={data.telegramAccountsUsed || 0}
+            limit={resourceLimit(data.maxTelegramAccounts, 0)}
+            t={t}
+            serviceSuspended={serviceSuspended}
+          />
+        )}
         <UsageBar
           icon={HiOutlineMail}
           label={t('topup.items.emailAccounts')}
