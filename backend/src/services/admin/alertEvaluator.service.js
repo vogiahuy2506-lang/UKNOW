@@ -308,6 +308,54 @@ async function evaluateRule(rule) {
       }
       return null;
     }
+    case 'db_backup_stale': {
+      // Chỉ có ý nghĩa khi production dùng GCS; dev/local không có GCS → không báo động giả.
+      if (String(process.env.STORAGE_BACKEND || '').toLowerCase().trim() !== 'gcs') return null;
+      const maxAgeHours = Number(config.maxAgeHours) || 30;
+      try {
+        const [{ getStorageBackend }, { getDbBackupFreshness }] = await Promise.all([
+          import('../storage/storageBackend.js'),
+          import('../storage/dbBackupGcs.service.js'),
+        ]);
+        const f = await getDbBackupFreshness(getStorageBackend().bucket, { maxAgeHours });
+        if (!f.stale) return null;
+        const ageText = f.ageHours == null
+          ? 'chưa có bản sao lưu nào trên GCS'
+          : `bản mới nhất ${f.ageHours.toFixed(1)} giờ tuổi (> ${maxAgeHours} giờ)`;
+        return {
+          measuredValue: f.ageHours == null ? maxAgeHours : Math.round(f.ageHours),
+          message: `Sao lưu DB ngoài VPS quá cũ: ${ageText}`,
+          payload: { maxAgeHours, count: f.count, latestAt: f.latestAt },
+        };
+      } catch (err) {
+        return {
+          measuredValue: 0,
+          message: `Không kiểm tra được sao lưu DB trên GCS: ${err.message}`,
+          payload: { error: err.message },
+        };
+      }
+    }
+    case 'disk_usage_high': {
+      const thresholdPercent = Number(config.thresholdPercent) || 85;
+      const { getStorageCapacitySummary } = await import('../../utils/storageCapacity.util.js');
+      const disk = await getStorageCapacitySummary();
+      if (!disk.paths || disk.paths.length === 0) {
+        return {
+          measuredValue: 0,
+          message: 'Không đọc được dung lượng đĩa của máy chủ',
+          payload: { unavailablePaths: disk.unavailablePaths },
+        };
+      }
+      if (disk.percent > thresholdPercent) {
+        const freeGb = disk.available / (1024 ** 3);
+        return {
+          measuredValue: Math.round(disk.percent * 10) / 10,
+          message: `Đĩa máy chủ dùng ${disk.percent.toFixed(1)}% (> ${thresholdPercent}%), còn trống ${freeGb.toFixed(1)} GB`,
+          payload: { percent: disk.percent, availableBytes: disk.available, thresholdPercent },
+        };
+      }
+      return null;
+    }
     default:
       return null;
   }

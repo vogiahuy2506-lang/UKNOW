@@ -2470,6 +2470,24 @@ VALUES (
   '{"jobCode": "affiliate_month_closing"}'::jsonb
 );
 
+-- migration 265
+INSERT INTO alert_rules (code, name, description, threshold_value, window_minutes, channel, severity, cooldown_minutes, config)
+VALUES
+(
+  'db_backup_stale',
+  'Sao luu DB ngoai VPS qua cu hoac mat',
+  'Ban sao luu moi nhat trong GCS db-backups/ cu hon maxAgeHours (mac dinh 30 gio), khong co ban nao, hoac khong doc duoc GCS - kiem tra cron backup-offsite.sh tren host',
+  1, NULL, 'email', 'critical', 360,
+  '{"maxAgeHours": 30}'::jsonb
+),
+(
+  'disk_usage_high',
+  'Dia may chu gan day',
+  'Dung luong dia may chu vuot thresholdPercent (mac dinh 85%) - don backup cu / docker image / log truoc khi dia day',
+  1, NULL, 'email', 'warning', 360,
+  '{"thresholdPercent": 85}'::jsonb
+);
+
 CREATE TABLE alert_events (
   id              BIGSERIAL PRIMARY KEY,
   rule_id         INT NOT NULL REFERENCES alert_rules(id) ON DELETE CASCADE,
