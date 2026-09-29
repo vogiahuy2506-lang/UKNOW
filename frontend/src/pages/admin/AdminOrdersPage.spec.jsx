@@ -297,7 +297,8 @@ describe('AdminOrdersPage — hoàn tiền', () => {
     const confirm = within(dialog).getByRole('button', { name: 'Ghi nhận đã hoàn tiền' });
     expect(confirm).toBeDisabled();
     await user.click(within(dialog).getByLabelText('Tôi xác nhận công ty chịu 1.200.000 đ'));
-    expect(confirm).toBeEnabled();
+    // waitFor: state React sau click có thể chưa flush khi máy tải nặng — CI 29/09 đỏ "element is not enabled".
+    await waitFor(() => expect(confirm).toBeEnabled());
     await user.click(confirm);
     await waitFor(() => {
       expect(mockRefundOrder).toHaveBeenCalledWith('MONTHLY-1', expect.objectContaining({ acknowledgeShortfall: true }));
