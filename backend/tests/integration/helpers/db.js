@@ -141,7 +141,7 @@ export async function truncateAll() {
   _clearQuotaCache();
   // PR-2 Việc 5 — cùng lý do: accountId lặp số cũ giữa các test, Map nhịp gửi Zalo (dùng chung
   // giữa campaignRun.service.js và zaloSettings.controller.js) phải reset theo, không thì
-  // nextAllowedAtMs/cooldown tra số của test trước rò sang test sau trùng accountId.
+  // lastAttemptAtMs/cooldown tra số của test trước rò sang test sau trùng accountId.
   _resetSharedZaloRateLimiterForTests();
   await retryOnCleanupContention(truncateAllTables);
 }

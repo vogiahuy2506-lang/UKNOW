@@ -20,20 +20,30 @@ describe('ZaloRateLimiter — tryAcquireOutboundSlot (PR-2 Việc 4, cổng khô
     expect(res).toEqual({ ok: true });
   });
 
-  it('Lần 2 gọi ngay sau (cùng nowMs) -> inter_message_delay, waitMs ∈ [minDelayMs, maxDelayMs]', () => {
+  it('Lần 2 gọi ngay sau (cùng nowMs) -> inter_message_delay, waitMs = minDelayMs', () => {
     const limiter = new ZaloRateLimiter();
     const t0 = 1_000_000;
     limiter.tryAcquireOutboundSlot({ accountId: 'acc1', channel: 'zalo_personal', nowMs: t0 });
     const res = limiter.tryAcquireOutboundSlot({ accountId: 'acc1', channel: 'zalo_personal', nowMs: t0 });
     expect(res.ok).toBe(false);
     expect(res.reason).toBe('inter_message_delay');
-    // Mặc định ZALO_OUTBOUND_INTER_MESSAGE_MIN/MAX_MS_DEFAULT = 20000/50000.
-    expect(res.waitMs).toBeGreaterThanOrEqual(20_000);
-    expect(res.waitMs).toBeLessThanOrEqual(50_000);
+    // Mặc định ZALO_OUTBOUND_INTER_MESSAGE_MIN_MS_DEFAULT = 20000 — backend chỉ giữ khoảng TỐI THIỂU.
+    expect(res.waitMs).toBe(20_000);
   });
 
-  it('Tiến đúng tới nextAllowedAtMs -> ok', () => {
-    jest.spyOn(Math, 'random').mockReturnValue(0); // -> luôn đúng minDelayMs (20000ms mặc định)
+  // Review 28/09 — bản đầu bốc thêm một mốc ngẫu nhiên riêng ở backend: bên gọi (trình duyệt) đã chờ
+  // đủ ngẫu nhiên ≥ minDelayMs vẫn bị hoãn ~50% lần, "Chạy thử" trình dựng dừng hẳn. Ghim: đúng mốc
+  // tối thiểu thì LUÔN được, bất kể Math.random ra gì.
+  it.each([0, 0.5, 0.999])('Bên gọi chờ đúng minDelayMs -> ok, không phụ thuộc Math.random (=%s)', (randomValue) => {
+    jest.spyOn(Math, 'random').mockReturnValue(randomValue);
+    const limiter = new ZaloRateLimiter();
+    const t0 = 1_000_000;
+    limiter.tryAcquireOutboundSlot({ accountId: 'acc1', channel: 'zalo_personal', nowMs: t0 });
+    const res = limiter.tryAcquireOutboundSlot({ accountId: 'acc1', channel: 'zalo_personal', nowMs: t0 + 20_000 });
+    expect(res).toEqual({ ok: true });
+  });
+
+  it('Tiến đúng tới lần thử trước + minDelayMs -> ok; sớm 1ms -> hoãn', () => {
     const limiter = new ZaloRateLimiter();
     const t0 = 1_000_000;
     limiter.tryAcquireOutboundSlot({ accountId: 'acc1', channel: 'zalo_personal', nowMs: t0 });
@@ -107,7 +117,7 @@ describe('ZaloRateLimiter — tryAcquireOutboundSlot (PR-2 Việc 4, cổng khô
     const sleepWithRunCheck = jest.fn().mockImplementation(async () => {
       sleepCallCount += 1;
       if (sleepCallCount === 1) {
-        // Đúng lúc chiến dịch đang ở bước ngủ LẦN 1 — thời gian đã trôi tới nextAllowedAtMs,
+        // Đúng lúc chiến dịch đang ở bước ngủ LẦN 1 — thời gian đã trôi tới lần thử trước + minDelayMs,
         // gửi nhanh chen vào giành đúng slot này (ghi lastAttemptAtMs MỚI).
         jest.setSystemTime(new Date(t0 + 20_000));
         const interjected = limiter.tryAcquireOutboundSlot({ accountId: 'acc1', channel: 'zalo_personal' });
@@ -128,5 +138,23 @@ describe('ZaloRateLimiter — tryAcquireOutboundSlot (PR-2 Việc 4, cổng khô
 
     expect(sleepWithRunCheck).toHaveBeenCalledTimes(2);
     expect(yieldOrSleep).not.toHaveBeenCalled();
+  });
+});
+
+describe('zaloOutboundRateLimiterSingleton — reset cho test', () => {
+  // Review 28/09 — campaignRunService giữ tham chiếu instance từ lúc khởi tạo; reset mà tạo instance MỚI
+  // thì controller gửi nhanh và chiến dịch tách thành 2 instance trong integration test.
+  it('reset giữ NGUYÊN instance (cùng tham chiếu) và xoá trạng thái nhịp + cooldown tra số', async () => {
+    const { getSharedZaloRateLimiter, _resetSharedZaloRateLimiterForTests } = await import('../zaloOutboundRateLimiterSingleton.js');
+    const before = getSharedZaloRateLimiter();
+    before.tryAcquireOutboundSlot({ accountId: 'acc-reset', channel: 'zalo_personal', nowMs: 1_000_000 });
+    before.scheduleZaloPersonalPhoneLookupCooldown('acc-reset');
+
+    _resetSharedZaloRateLimiterForTests();
+
+    const after = getSharedZaloRateLimiter();
+    expect(after).toBe(before);
+    expect(after.zaloOutboundRateLimitState.size).toBe(0);
+    expect(after.zaloPersonalPhoneLookupCooldownUntil.size).toBe(0);
   });
 });

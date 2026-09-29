@@ -32,10 +32,17 @@ export function getSharedZaloRateLimiter() {
 /**
  * CHỈ dùng trong test. `truncateAll()` của integration test chạy `RESTART IDENTITY` — accountId
  * lặp lại số cũ (1, 2, 3...) giữa các test/file (jest `--runInBand` dùng chung một tiến trình).
- * Không reset thì trạng thái nhịp gửi (`nextAllowedAtMs`, cooldown tra số...) của test TRƯỚC rò
+ * Không reset thì trạng thái nhịp gửi (`lastAttemptAtMs`, cooldown tra số...) của test TRƯỚC rò
  * sang test SAU cùng trùng accountId, y hệt lý do `_clearQuotaCache()` đã có sẵn trong
  * `truncateAll()` cho cache hạn mức.
+ *
+ * Xoá trạng thái NGAY TRÊN instance hiện có — KHÔNG gán `sharedInstance = null`: `campaignRunService`
+ * giữ tham chiếu từ lúc khởi tạo (`this.zaloRateLimiter = getSharedZaloRateLimiter()`), tạo instance
+ * mới thì controller gửi nhanh và chiến dịch tách thành HAI instance trong test (review 28/09).
  */
 export function _resetSharedZaloRateLimiterForTests() {
-  sharedInstance = null;
+  if (!sharedInstance) return;
+  sharedInstance.zaloOutboundRateLimitState.clear();
+  sharedInstance.zaloPersonalPhoneLookupCooldownUntil.clear();
+  sharedInstance.zaloOutboundAccountMutex.clear();
 }

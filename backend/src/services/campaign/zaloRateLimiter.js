@@ -386,14 +386,12 @@ class ZaloRateLimiter {
       attemptCount: 0,
       lastAttemptAtMs: null,
       policyFingerprint: null,
-      nextAllowedAtMs: null,
     };
     const policyFingerprint = `${limitPerWindow}:${windowMs}:${minDelayMs}:${maxDelayMs}`;
     if (current.policyFingerprint != null && current.policyFingerprint !== policyFingerprint) {
       current.windowStartMs = nowMs;
       current.attemptCount = 0;
       current.lastAttemptAtMs = null;
-      current.nextAllowedAtMs = null;
     }
     current.policyFingerprint = policyFingerprint;
 
@@ -407,24 +405,22 @@ class ZaloRateLimiter {
       return { ok: false, reason: 'rate_limited', waitMs: Math.max(0, current.windowStartMs + windowMs - nowMs) };
     }
 
-    // Cổng 4 — giãn cách giữa 2 tin. `nextAllowedAtMs` là mốc "phải chờ tới đâu" được GHI lúc cấp
-    // lượt trước (bởi CHIẾN DỊCH hoặc GỬI NHANH, ai cấp trước thì mốc đó có hiệu lực cho cả hai).
+    // Cổng 4 — giãn cách giữa 2 tin: backend chỉ giữ KHOẢNG TỐI THIỂU (lần thử trước + minDelayMs,
+    // ai thử trước — chiến dịch hay gửi nhanh — cũng tính). Phần ngẫu nhiên [min, max] do bên gọi lo
+    // (trình duyệt chờ theo /campaigns/delay-config; chiến dịch tự ngủ ở enforceOutboundPolicyBeforeSend).
+    // Review 28/09: bản đầu bốc thêm một mốc ngẫu nhiên RIÊNG ở đây → hai số ngẫu nhiên độc lập, ~50%
+    // khoảng trình duyệt gọi sớm hơn mốc backend → bị hoãn oan, và "Chạy thử" trình dựng dừng hẳn.
     if (current.lastAttemptAtMs) {
-      const nextAllowed = Math.max(
-        Number(current.nextAllowedAtMs) || 0,
-        Number(current.lastAttemptAtMs) + minDelayMs
-      );
+      const nextAllowed = Number(current.lastAttemptAtMs) + minDelayMs;
       if (nowMs < nextAllowed) {
         this.zaloOutboundRateLimitState.set(stateKey, current);
         return { ok: false, reason: 'inter_message_delay', waitMs: nextAllowed - nowMs };
       }
     }
 
-    // Được phép — ghi lần thử (đếm vào trần giờ, giống enforceOutboundPolicyBeforeSend) VÀ mốc
-    // "phải chờ tới đâu" cho lượt kế tiếp, để dù chiến dịch hay gửi nhanh hỏi trước cũng thấy đúng.
+    // Được phép — ghi lần thử (đếm vào trần giờ, giống enforceOutboundPolicyBeforeSend).
     current.lastAttemptAtMs = nowMs;
     current.attemptCount += 1;
-    current.nextAllowedAtMs = nowMs + Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
     this.zaloOutboundRateLimitState.set(stateKey, current);
     return { ok: true };
   }
@@ -555,12 +551,9 @@ class ZaloRateLimiter {
         continue;
       }
 
-      // Đếm lần thử (không chỉ thành công) — Zalo tính mọi request vào anti-spam. Ghi thêm
-      // nextAllowedAtMs (PR-2 Việc 4) để gửi nhanh (tryAcquireOutboundSlot) biết chính xác phải
-      // chờ tới đâu, dù ai cấp lượt này trước (chiến dịch hay gửi nhanh) mốc cũng dùng chung.
+      // Đếm lần thử (không chỉ thành công) — Zalo tính mọi request vào anti-spam.
       current.lastAttemptAtMs = nowMs;
       current.attemptCount += 1;
-      current.nextAllowedAtMs = nowMs + Math.floor(Math.random() * (maxDelayMs - minDelayMs + 1)) + minDelayMs;
       this.zaloOutboundRateLimitState.set(stateKey, current);
       return;
     }
