@@ -40,6 +40,12 @@ jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({
 }));
 
 // Mock storageCapacityGuard
+// P9 — middleware quyền kênh chạm CSDL; spec này kiểm quyền nhân viên (RBAC), không kiểm quyền kênh -> cho qua.
+jest.unstable_mockModule('../../middleware/channelEntitlement.middleware.js', () => ({
+  channelEntitlementContext: (req, res, next) => next(),
+  default: (req, res, next) => next(),
+}));
+
 jest.unstable_mockModule('../../middleware/storageCapacity.middleware.js', () => ({
   storageCapacityGuard: () => (req, res, next) => next(),
 }));

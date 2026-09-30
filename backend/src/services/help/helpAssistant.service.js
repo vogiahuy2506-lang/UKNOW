@@ -165,7 +165,15 @@ function fixedCapabilityReply(probe, locale) {
     },
   };
   const copy = replies[lang];
-  const content = probe.kind === 'core'
+  // P9 — gói không có kênh này: nói đúng lý do + lối thoát (Nạp thêm / nâng gói), không nói "chưa hỗ trợ".
+  const notInPlanContent = probe.id === 'channel_not_in_plan'
+    ? (lang === 'en'
+      ? `Your plan does not include the ${probe.label} channel. Buy more slots in Top-up or upgrade your plan to use it. Meanwhile I can help you create a campaign via ${supportedChannelsEn}.`
+      : `Gói của bạn chưa có kênh ${probe.label}. Bạn mua thêm slot ở mục Nạp thêm hoặc nâng gói để dùng kênh này nhé. Trong lúc đó mình vẫn giúp bạn tạo chiến dịch qua ${supportedChannelsVi} được.`)
+    : null;
+  const content = notInPlanContent
+    ? notInPlanContent
+    : probe.kind === 'core'
     ? copy.core
     : probe.kind === 'guide'
       ? copy[probe.id]

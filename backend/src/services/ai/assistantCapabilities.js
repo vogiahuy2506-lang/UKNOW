@@ -1,3 +1,5 @@
+import { getChannelsBlockedByPlan, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
+
 const SUPPORTED_LOCALES = new Set(['en', 'vi']);
 
 function normalizeLocale(locale) {
@@ -10,14 +12,33 @@ const CHATBOT_CONTEXT_RE = /chatbot|chat\s*bot|\bbot\b|trả lời|tra loi|\brep
 
 // PR-B Việc 1.1 — đọc lúc GỌI, không lúc import (khuôn campaignChannelRegistry.service.js:122-125
 // `isTelegramChannelEnabled`) — test đổi cờ giữa các ca không bị dính giá trị cũ.
+// P9 — cờ toàn cục VÀ quyền kênh theo gói của người đang chat (`campaignChannelFlags.util`). Vẫn đọc env TẠI ĐÂY
+// (spec ghim tên biến env ở cả hai nơi khớp nhau).
 function isTelegramCampaignEnabled() {
-  return process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED === 'true';
+  return process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED === 'true' && !isChannelBlockedByPlan('telegram');
 }
 
 // P8a — WhatsApp đối xứng Telegram: cờ bật thì trợ lý dựng được chiến dịch WhatsApp (node send_whatsapp), kênh này
 // rời danh sách "chưa hỗ trợ". Cờ đọc lúc gọi như Telegram.
 function isWhatsAppCampaignEnabled() {
-  return process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED === 'true';
+  return process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED === 'true' && !isChannelBlockedByPlan('whatsapp');
+}
+
+// P9 — kênh có cờ bật nhưng GÓI của người đang chat không có: câu nói về GỬI qua kênh đó không được trả "chưa hỗ trợ"
+// (sai — hệ thống hỗ trợ, chỉ là gói chưa có) mà phải hướng tới "mua thêm slot / nâng gói".
+const BLOCKED_CHANNEL_PATTERN = Object.freeze({
+  telegram: /telegram/i,
+  whatsapp: /whats\s?app/i,
+});
+
+function findBlockedChannelInSendRequest(text) {
+  if (!SEND_CONTEXT_RE.test(text) || CHATBOT_CONTEXT_RE.test(text)) return null;
+  return getChannelsBlockedByPlan().find((channel) => BLOCKED_CHANNEL_PATTERN[channel].test(text)) || null;
+}
+
+function notInPlanResult(channel) {
+  const name = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+  return { kind: 'unsupported', id: 'channel_not_in_plan', channel, label: name };
 }
 
 // PR-1 (PLAN_VA_TRO_LY_AI_2026-09-28) — mỗi năng lực khai `patterns` (regex dùng để khớp VÀ để xoá
@@ -337,6 +358,10 @@ export function classifyCapabilityProbe(question = '', locale = 'vi') {
   const text = String(question || '').trim();
   if (!text || HOW_TO_RE.test(text) || !CAPABILITY_MARKER_RE.test(text)) return null;
 
+  // P9 — gói không có kênh: nói đúng lý do, xét TRƯỚC (kênh bị coi là tắt nên các nhánh dưới sẽ trả "chưa hỗ trợ").
+  const blockedChannel = findBlockedChannelInSendRequest(text);
+  if (blockedChannel) return notInPlanResult(blockedChannel);
+
   // Keep unsupported answers conservative when a sentence mentions mixed capabilities.
   for (const kind of ['unsupported', 'guide', 'core']) {
     const match = CAPABILITY_DEFINITIONS[kind].find((capability) => capability.matches(text));
@@ -365,6 +390,10 @@ export function classifyUnsupportedSendRequest(question = '', locale = 'vi') {
   if (!text || HOW_TO_RE.test(text)) return null;
 
   const lang = normalizeLocale(locale);
+
+  // P9 — như probe: lệnh gửi qua kênh mà gói không có -> báo "mua thêm slot", không phải "chưa hỗ trợ".
+  const blockedChannel = findBlockedChannelInSendRequest(text);
+  if (blockedChannel) return notInPlanResult(blockedChannel);
 
   const capability = CAPABILITY_DEFINITIONS.unsupported.find((c) => c.id === 'unsupported_channel');
   if (!capability || !capability.matches(text)) return null;

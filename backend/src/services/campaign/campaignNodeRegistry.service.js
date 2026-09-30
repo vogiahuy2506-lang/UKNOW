@@ -8,7 +8,12 @@
  * 3. Hỗ trợ multi-step trong 1 node (nhiều email/zalo cách nhau thời gian)
  */
 
-import { isTelegramCampaignChannelEnabled, isWhatsAppCampaignChannelEnabled } from './campaignChannelFlags.util.js';
+import {
+  isTelegramCampaignChannelEnabled,
+  isWhatsAppCampaignChannelEnabled,
+  isChannelBlockedByPlan,
+  buildChannelNotInPlanMessage,
+} from './campaignChannelFlags.util.js';
 import { MAX_CHANNEL_STEPS, validateChannelSteps } from '../../utils/channelSteps.util.js';
 
 class CampaignNodeRegistryService {
@@ -967,6 +972,11 @@ Yêu cầu: Gửi 2 email - email chào hỏi ngay, email nhắc nhở sau 3 ng�
   validateNodeConfig(subtype, config) {
     const nodeType = this.nodeTypes[subtype];
     if (!nodeType) {
+      // P9 — node kênh mà gói của người dùng không có: nói đúng lý do thay vì "subtype lạ".
+      const planChannel = subtype === 'send_telegram' ? 'telegram' : subtype === 'send_whatsapp' ? 'whatsapp' : null;
+      if (planChannel && isChannelBlockedByPlan(planChannel)) {
+        return { valid: false, errors: [buildChannelNotInPlanMessage(planChannel)] };
+      }
       return { valid: false, errors: [`Unknown node subtype: ${subtype}`] };
     }
 

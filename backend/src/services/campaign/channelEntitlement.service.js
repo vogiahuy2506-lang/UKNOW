@@ -13,26 +13,20 @@
 import db from '../../config/database.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
+import { buildChannelNotInPlanMessage } from './campaignChannelFlags.util.js';
 
 const CHANNEL_RESOURCE_KEY = Object.freeze({
   telegram: 'telegramAccounts',
   whatsapp: 'whatsappAccounts',
 });
 
-const CHANNEL_LABEL = Object.freeze({
-  telegram: 'Telegram',
-  whatsapp: 'WhatsApp',
-});
-
 export const ENTITLEMENT_CHANNELS = Object.freeze(Object.keys(CHANNEL_RESOURCE_KEY));
+
+export { buildChannelNotInPlanMessage };
 
 /** @param {number|null} limit */
 export function limitGrantsChannel(limit) {
   return limit === null || (Number.isFinite(limit) && limit > 0);
-}
-
-export function buildChannelNotInPlanMessage(channel) {
-  return `Gói của bạn không có kênh ${CHANNEL_LABEL[channel] || channel} — mua thêm slot ở mục Nạp thêm hoặc nâng gói.`;
 }
 
 async function lookupRoleCode(userId) {
