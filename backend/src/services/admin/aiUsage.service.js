@@ -1,9 +1,19 @@
 import aiUsageRepository from '../../repositories/admin/aiUsage.repository.js';
+import usageTrackingRepository from '../../repositories/payment/usageTracking.repository.js';
+import { getBillingCycle } from '../../utils/billingCycle.util.js';
 import {
   parsePricing,
   estimateCost,
   hasConfiguredPrice,
 } from '../../utils/aiPricing.util.js';
+
+const AI_CREDIT_RESOURCE = 'ai_credit';
+// Khách có lượt AI trong kỳ hiện tại chắc chắn có ≥ 1 dòng trong 30 ngày qua (kỳ dài đúng 30 ngày); 31 = dư một ngày.
+const CREDIT_CUSTOMER_LOOKBACK_DAYS = 31;
+// Số khách tra kỳ + "đã dùng" song song: mỗi khách 2-3 truy vấn nhẹ, đủ nhanh mà không chiếm hết pool.
+const CREDIT_LOOKUP_CONCURRENCY = 8;
+// "Sắp chạm trần" = đã dùng từ 80% hạn mức của kỳ hiện tại trở lên.
+const NEAR_LIMIT_PERCENT = 80;
 
 const TOKEN_SQL = {
   prompt: "CASE WHEN COALESCE(metadata->>'promptTokens', '') ~ '^[0-9]+$' THEN (metadata->>'promptTokens')::bigint ELSE 0 END",
@@ -27,6 +37,99 @@ const clampWindowDays = (value) => {
 const toNumber = (value) => Number(value || 0);
 const toNullableNumber = (value) => (value === null || value === undefined ? null : Number(value));
 const roundMoney = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 10000) / 10000;
+const round1 = (value) => Math.round((Number(value || 0) + Number.EPSILON) * 10) / 10;
+
+const planKey = (row) => String(row.plan_id || row.plan_code || 'unknown');
+
+/** Ánh xạ mảng có giới hạn đồng thời (số worker cố định kéo việc từ cùng một con trỏ). */
+async function mapWithConcurrency(items, limit, mapper) {
+  const results = new Array(items.length);
+  let cursor = 0;
+  const worker = async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await mapper(items[index]);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()));
+  return results;
+}
+
+/** percentile_cont của Postgres: nội suy tuyến tính giữa hai giá trị kề rank; đầu vào ĐÃ sắp tăng dần. */
+function percentileCont(sortedAsc, fraction) {
+  if (sortedAsc.length === 0) return 0;
+  const rank = fraction * (sortedAsc.length - 1);
+  const lower = Math.floor(rank);
+  const upper = Math.ceil(rank);
+  if (lower === upper) return sortedAsc[lower];
+  return sortedAsc[lower] + (rank - lower) * (sortedAsc[upper] - sortedAsc[lower]);
+}
+
+/**
+ * Thống kê lượt AI của MỘT gói từ "đã dùng trong kỳ hiện tại" của từng khách thuộc gói.
+ * Mẫu = khách có đã dùng > 0 (đúng nghĩa "p90 trong số người đang dùng AI"); khách đã dùng 0 không kéo p90 xuống.
+ *
+ * @param {number[]} [usedByCustomer] đã dùng trong kỳ hiện tại của từng khách (mỗi phần tử một khách)
+ * @param {number|null} quota `plans.ai_credits_per_period`; ≤ 0 hoặc null = không giới hạn
+ */
+export function summarizeCreditUsage(usedByCustomer = [], quota = null) {
+  const used = usedByCustomer.filter((value) => value > 0).sort((a, b) => a - b);
+  const limited = quota > 0;
+  const p90UserCredits = round1(percentileCont(used, 0.9));
+  return {
+    creditUserCount: used.length,
+    totalCredits: used.reduce((sum, value) => sum + value, 0),
+    p90UserCredits,
+    // used ≥ 80% quota, viết bằng phép nhân số nguyên để không dính sai số dấu phẩy động (80/100 đúng 80% vẫn tính).
+    usersNearLimit: limited ? used.filter((value) => value * 100 >= quota * NEAR_LIMIT_PERCENT).length : 0,
+    quotaUsagePctAtP90: limited ? Math.round((p90UserCredits / quota) * 1000) / 10 : null,
+  };
+}
+
+/**
+ * Lượt AI đã dùng theo GÓI, tính trong KỲ HIỆN TẠI của từng khách — CÙNG hàm cổng chặn dùng
+ * (getBillingCycle + usageTrackingRepository.getUsageInRange, loại dòng bán Marketplace), không theo bộ lọc 7/30/90 ngày.
+ * Bản cũ lấy tổng N ngày của cửa sổ rồi chia cho hạn mức MỘT kỳ 30 ngày nên cùng dữ liệu cho ba con số theo ba nút lọc.
+ *
+ * @returns {Promise<Map<string, { planId: number|null, planCode: string, planName: string,
+ *   aiCreditsPerPeriod: number|null, usedByCustomer: number[] }>>}
+ */
+async function collectCreditUsageByPlan() {
+  const customers = await aiUsageRepository.listCreditCustomers({ lookbackDays: CREDIT_CUSTOMER_LOOKBACK_DAYS });
+
+  const usages = await mapWithConcurrency(customers, CREDIT_LOOKUP_CONCURRENCY, async (customer) => {
+    const userId = Number(customer.user_id);
+    // ownerContextId = chính khách: `id_user` của dòng credit LÀ tài khoản thanh toán. Không để getBillingCycle nhảy sang
+    // chủ khác khi khách này tình cờ cũng là nhân viên nơi khác (và không có gói riêng nữa).
+    const cycle = await getBillingCycle(userId, { ownerContextId: userId });
+    if (!cycle?.hasPlan || !cycle.cycleStart) return null;
+    const used = await usageTrackingRepository.getUsageInRange(
+      userId,
+      AI_CREDIT_RESOURCE,
+      cycle.cycleStart,
+      new Date()
+    );
+    return { customer, used: Number(used) || 0 };
+  });
+
+  const plans = new Map();
+  usages.forEach((entry) => {
+    if (!entry) return;
+    const key = planKey(entry.customer);
+    if (!plans.has(key)) {
+      plans.set(key, {
+        planId: entry.customer.plan_id || null,
+        planCode: entry.customer.plan_code || 'unknown',
+        planName: entry.customer.plan_name || entry.customer.plan_code || 'Unknown plan',
+        aiCreditsPerPeriod: toNullableNumber(entry.customer.ai_credits_per_period),
+        usedByCustomer: [],
+      });
+    }
+    plans.get(key).usedByCustomer.push(entry.used);
+  });
+  return plans;
+}
 
 const aggregateRows = (rows, keyFn, seedFn, pricing) => {
   const map = new Map();
@@ -93,7 +196,7 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
     topUserRows,
     p90Rows,
     timelineRows,
-    creditRows,
+    creditPlans,
   ] = await Promise.all([
     aiUsageRepository.safeQuery(
       `SELECT
@@ -213,37 +316,9 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
        ORDER BY bucket`,
       params
     ),
-    // Hạn mức chặn thật theo LƯỢT AI (credit), không phải token: 1 credit / lượt trả lời.
-    // delta > 0 = lượt đã dùng; dòng âm (mua marketplace) không phải lượt AI nên loại.
-    aiUsageRepository.safeQuery(
-      `WITH per_user AS (
-         SELECT
-           p.id AS plan_id,
-           COALESCE(p.code, 'unknown') AS plan_code,
-           COALESCE(p.name, p.code, 'Unknown plan') AS plan_name,
-           p.ai_credits_per_period,
-           ul.id_user,
-           COALESCE(SUM(ul.delta), 0)::bigint AS total_credits
-         FROM usage_logs ul
-         LEFT JOIN users u ON u.id = ul.id_user
-         LEFT JOIN plans p ON p.id = u.active_plan_id
-         WHERE ul.resource_type = 'ai_credit'
-           AND ul.delta > 0
-           AND ul.created_at >= NOW() - ($1::int * INTERVAL '1 day')
-         GROUP BY p.id, p.code, p.name, p.ai_credits_per_period, ul.id_user
-       )
-       SELECT
-         plan_id,
-         plan_code,
-         plan_name,
-         ai_credits_per_period,
-         COUNT(*)::int AS user_count,
-         COALESCE(SUM(total_credits), 0)::bigint AS total_credits,
-         ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY total_credits))::numeric, 1) AS p90_user_credits
-       FROM per_user
-       GROUP BY plan_id, plan_code, plan_name, ai_credits_per_period`,
-      params
-    ),
+    // Hạn mức chặn thật theo LƯỢT AI (credit), không phải token: 1 credit / lượt trả lời. Khối này KHÔNG theo cửa sổ
+    // windowDays — là "đã dùng trong KỲ HIỆN TẠI của từng khách", cùng hàm với cổng chặn (xem collectCreditUsageByPlan).
+    collectCreditUsageByPlan(),
   ]);
 
   const byModel = aggregateRows(
@@ -256,9 +331,6 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
     // phải giá thật của model này. Frontend đánh dấu để không ai tin nhầm con số.
     .map((item) => ({ ...item, priceConfigured: hasConfiguredPrice(pricing, item.model) }))
     .sort((a, b) => b.totalTokens - a.totalTokens);
-
-  const planKey = (row) => String(row.plan_id || row.plan_code || 'unknown');
-  const creditByPlan = new Map(creditRows.map((row) => [planKey(row), row]));
 
   const tokenPlans = aggregateRows(
     planRows,
@@ -278,15 +350,16 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
   );
   const p90TokensByPlan = new Map(p90Rows.map((row) => [planKey(row), toNumber(row.p90_user_tokens)]));
   const planItems = new Map(tokenPlans.map((item) => [String(item.planId || item.planCode || 'unknown'), item]));
-  // Gói chỉ có lượt AI (chưa có dòng token) vẫn phải hiện.
-  creditRows.forEach((row) => {
-    const key = planKey(row);
+  // Gói chỉ có lượt AI (chưa có dòng token) vẫn phải hiện — nhưng chỉ khi có khách đã dùng > 0 trong kỳ hiện tại;
+  // gói mà mọi khách đều đã dùng 0 trong kỳ này không thêm dòng trống.
+  creditPlans.forEach((plan, key) => {
     if (planItems.has(key)) return;
+    if (!plan.usedByCustomer.some((used) => used > 0)) return;
     planItems.set(key, {
-      planId: row.plan_id || null,
-      planCode: row.plan_code || 'unknown',
-      planName: row.plan_name || row.plan_code || 'Unknown plan',
-      aiCreditsPerPeriod: toNullableNumber(row.ai_credits_per_period),
+      planId: plan.planId,
+      planCode: plan.planCode,
+      planName: plan.planName,
+      aiCreditsPerPeriod: plan.aiCreditsPerPeriod,
       promptTokens: 0,
       outputTokens: 0,
       totalTokens: 0,
@@ -295,18 +368,14 @@ export async function getAiUsageOverview({ windowDays: rawWindowDays } = {}) {
     });
   });
 
-  const byPlan = Array.from(planItems.entries()).map(([key, item]) => {
-    const credit = creditByPlan.get(key) || {};
-    const quota = item.aiCreditsPerPeriod;
-    const p90UserCredits = toNumber(credit.p90_user_credits);
-    return {
-      ...item,
-      p90UserTokens: p90TokensByPlan.get(key) || 0,
-      totalCredits: toNumber(credit.total_credits),
-      p90UserCredits,
-      quotaUsagePctAtP90: quota > 0 ? Math.round((p90UserCredits / quota) * 1000) / 10 : null,
-    };
-  }).sort((a, b) => b.totalTokens - a.totalTokens);
+  // Cột token/chi phí theo cửa sổ windowDays; cột lượt AI (creditUserCount, totalCredits, p90UserCredits,
+  // usersNearLimit, quotaUsagePctAtP90) theo KỲ HIỆN TẠI của từng khách — hai mốc thời gian khác nhau có chủ ý.
+  // `userCount` giữ nguyên nghĩa cũ (quần thể có dòng token); quần thể lượt AI là `creditUserCount`.
+  const byPlan = Array.from(planItems.entries()).map(([key, item]) => ({
+    ...item,
+    p90UserTokens: p90TokensByPlan.get(key) || 0,
+    ...summarizeCreditUsage(creditPlans.get(key)?.usedByCustomer, item.aiCreditsPerPeriod),
+  })).sort((a, b) => b.totalTokens - a.totalTokens);
 
   const byFeature = aggregateRows(
     featureRows,

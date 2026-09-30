@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { aiCreditConsumptionRowSql } from '../../constants/aiCreditUsage.js';
 
 /**
  * Danh sách tất cả user_admin, kèm thông tin gói và số nhân viên.
@@ -60,10 +61,13 @@ export async function findAllMembers({ search, planId, status, expiry, role, pho
              AND cr.started_at >= NOW() - INTERVAL '30 days'
          ) AS "failedSends30d",
          (
+           -- Loại dòng bán Marketplace (thu nhập người bán, ghi nhầm vào sổ tiêu thụ). Mốc vẫn là THÁNG dương lịch,
+           -- chưa theo kỳ 30 ngày của khách: đổi kỳ thuộc PR-9 (một định nghĩa khách cho admin).
            SELECT COALESCE(SUM(ABS(delta)), 0)::int
            FROM usage_logs ul
            WHERE ul.id_user = u.id
              AND ul.resource_type = 'ai_credit'
+             AND ${aiCreditConsumptionRowSql('ul')}
              AND ul.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
          ) AS "aiCreditsUsedThisMonth",
          COALESCE(p.ai_credits_per_period, 0)::int AS "aiCreditsLimit",

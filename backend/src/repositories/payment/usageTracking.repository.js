@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL } from '../../utils/billingCycle.util.js';
+import { aiCreditConsumptionRowSql } from '../../constants/aiCreditUsage.js';
 
 class UsageTrackingRepository {
   /**
@@ -15,6 +16,9 @@ class UsageTrackingRepository {
 
   /**
    * Get current period usage for a specific resource
+   *
+   * Hiện không có nơi nào gọi hàm này cho `ai_credit` (kỳ theo tháng dương lịch — hạn mức AI tính theo kỳ 30 ngày, dùng
+   * getUsageInRange). Vẫn loại dòng bán Marketplace để ai gọi sau này không tái phạm lỗi "bán được hàng lại mất hạn mức".
    */
   async getCurrentUsage(userId, resourceType, client = null) {
     const queryable = client || db;
@@ -27,7 +31,8 @@ class UsageTrackingRepository {
        WHERE id_user = $1
          AND resource_type = $2
          AND period_start >= $3
-         AND period_start <= $4`,
+         AND period_start <= $4
+         AND ${aiCreditConsumptionRowSql()}`,
       [userId, resourceType, periodStart.toISOString(), now.toISOString()]
     );
     return parseInt(rows[0]?.total_usage || 0);
@@ -35,6 +40,11 @@ class UsageTrackingRepository {
 
   /**
    * Sum usage for a resource within an arbitrary date range (billing cycle).
+   *
+   * Với `ai_credit` đây là hàm "lượt AI đã dùng" DUY NHẤT của cổng chặn (aiCreditMeter), trang khách và trang admin AI.
+   * Dòng bán Marketplace (`metadata.type = 'marketplace_sale'`) là thu nhập người bán, ghi nhầm vào sổ tiêu thụ trước
+   * 4ba3b99b (26/09/2026) → LOẠI ở đây, kẻo bán được hàng lại mất hạn mức. Dòng MUA Marketplace
+   * (`feature = 'marketplace_purchase:<id>'`) là tiêu thụ thật → vẫn cộng. Xem constants/aiCreditUsage.js.
    */
   async getUsageInRange(userId, resourceType, from, to, client = null) {
     const queryable = client || db;
@@ -45,7 +55,8 @@ class UsageTrackingRepository {
        WHERE id_user = $1
          AND resource_type = $2
          AND created_at >= $3
-         AND created_at <= $4`,
+         AND created_at <= $4
+         AND ${aiCreditConsumptionRowSql()}`,
       [userId, resourceType, from, to]
     );
     return parseInt(rows[0]?.total_usage || 0, 10);
@@ -53,6 +64,7 @@ class UsageTrackingRepository {
 
   /**
    * Get usage summary for all resources in current period
+   * (loại dòng bán Marketplace của `ai_credit` — cùng lý do getUsageInRange.)
    */
   async getUsageSummary(userId) {
     const now = new Date();
@@ -65,6 +77,7 @@ class UsageTrackingRepository {
        FROM usage_logs
        WHERE id_user = $1
          AND period_start >= $2
+         AND ${aiCreditConsumptionRowSql()}
        GROUP BY resource_type`,
       [userId, periodStart.toISOString()]
     );

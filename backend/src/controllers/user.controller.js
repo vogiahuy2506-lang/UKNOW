@@ -50,6 +50,13 @@ import { getRequestAuditContext } from '../utils/auditContext.util.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
+/** Date | chuỗi ngày → ISO 8601; rỗng hoặc không hợp lệ → null (gói chưa kích hoạt không có kỳ). */
+const toIsoOrNull = (value) => {
+  if (value == null || value === '') return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
+
 /**
  * Phần mua thêm còn hiệu lực theo chu kỳ billing (không cộng vào hạn mức gói).
  * @param {number|string} billingUserId
@@ -157,6 +164,10 @@ const mapProfileResponse = (userRow) => ({
   aiTokensUsed: Number(userRow.ai_tokens_used ?? 0),
   aiCreditsPerPeriod: userRow.ai_credits_per_period ?? null,
   aiCreditsUsed: Number(userRow.ai_credits_used ?? 0),
+  // Kỳ hạn mức AI hiện tại (30 ngày từ ngày kích hoạt gói) mà `aiCreditsUsed` được tính trong đó — để trang khách ghi
+  // "làm mới ngày …". null khi chưa có gói/không dựng được kỳ.
+  aiCreditCycleStart: toIsoOrNull(userRow.ai_credit_cycle_start),
+  aiCreditCycleEnd: toIsoOrNull(userRow.ai_credit_cycle_end),
   botDailyReplyCap: userRow.bot_daily_reply_cap ?? null,
   aiHandoffAutoResumeMinutes: userRow.ai_handoff_auto_resume_minutes ?? null,
   planGracePeriodDays: userRow.grace_period_days ?? 0,
@@ -286,6 +297,9 @@ class UserController {
         active_billing_period: activeBillingPeriod,
         ai_tokens_used: aiTokenUsage.used,
         ai_credits_used: aiCreditUsage.used,
+        // Cùng `cycle` mà getCreditUsageForCycle đã dùng để tính ai_credits_used (không dựng kỳ lần hai → không lệch).
+        ai_credit_cycle_start: aiCreditUsage.cycle?.cycleStart ?? null,
+        ai_credit_cycle_end: aiCreditUsage.cycle?.cycleEnd ?? null,
         ...structuralUsage,
       };
 

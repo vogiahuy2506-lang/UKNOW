@@ -336,9 +336,13 @@ export async function findTeamOverview(ownerId, { employeeId = null } = {}) {
        )                                                             AS "templatesThisMonth",
 
        (
+         -- Chỉ tính lượt AI trong ví của CHÍNH chủ đang xem (khoá theo cột chủ ví). Nhân viên làm cho 2 chủ (production:
+         -- user 162 thuộc chủ 1 và 12) hoặc dùng AI trong không gian riêng của mình thì lượt ở chỗ khác bị cộng lẫn vào
+         -- bảng của chủ. Mốc vẫn là THÁNG dương lịch, chưa theo kỳ của chủ: đổi kỳ thuộc PR-7 (làm lại cả bảng).
          SELECT COALESCE(SUM(ABS(ul.delta)), 0)::int
          FROM usage_logs ul
-         WHERE ul.actor_user_id = u.id
+         WHERE ul.id_user = $1
+           AND ul.actor_user_id = u.id
            AND ul.resource_type = 'ai_credit'
            AND ul.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
        )                                                             AS "aiCreditsThisMonth"

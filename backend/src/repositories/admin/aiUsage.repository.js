@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { aiCreditConsumptionRowSql } from '../../constants/aiCreditUsage.js';
 
 const PROMPT_EXPR = "(metadata->>'promptTokens')::bigint";
 const OUTPUT_EXPR = "(metadata->>'outputTokens')::bigint";
@@ -18,6 +19,36 @@ class AiUsageRepository {
       if (safeCodes.includes(error?.code)) return fallback;
       throw error;
     }
+  }
+
+  /**
+   * Tập khách (tài khoản thanh toán = `usage_logs.id_user`) CÓ lượt AI trong `lookbackDays` ngày qua, kèm gói ĐANG dùng.
+   * Chỉ là tập ỨNG VIÊN: "đã dùng trong kỳ hiện tại" phải tính bằng đúng hàm của cổng chặn
+   * (getBillingCycle + usageTrackingRepository.getUsageInRange), không tổng hợp ở đây.
+   *
+   * Kỳ hạn mức dài đúng 30 ngày (computeBillingWindow) nên khách có dùng trong kỳ hiện tại chắc chắn có ≥ 1 dòng trong
+   * 30 ngày qua — 31 ngày là dư một ngày cho lệch giờ. Dòng bán Marketplace không tính là "có dùng"; khách không có gói
+   * (`users.active_plan_id` rỗng) không có kỳ hiện tại nên bị loại bằng JOIN.
+   *
+   * @param {{ lookbackDays?: number }} [options]
+   * @returns {Promise<Array<{ user_id: string, plan_id: number, plan_code: string, plan_name: string, ai_credits_per_period: number|null }>>}
+   */
+  async listCreditCustomers({ lookbackDays = 31 } = {}) {
+    return this.safeQuery(
+      `SELECT DISTINCT
+         ul.id_user AS user_id,
+         p.id AS plan_id,
+         COALESCE(p.code, 'unknown') AS plan_code,
+         COALESCE(p.name, p.code, 'Unknown plan') AS plan_name,
+         p.ai_credits_per_period
+       FROM usage_logs ul
+       JOIN users u ON u.id = ul.id_user
+       JOIN plans p ON p.id = u.active_plan_id
+       WHERE ul.resource_type = 'ai_credit'
+         AND ${aiCreditConsumptionRowSql('ul')}
+         AND ul.created_at >= NOW() - ($1::int * INTERVAL '1 day')`,
+      [lookbackDays]
+    );
   }
 
   /**

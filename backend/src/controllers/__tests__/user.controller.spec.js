@@ -379,6 +379,50 @@ describe('UserController.getProfile', () => {
     await userController.getProfile({ user: { id: 42 } }, res);
     expect(res.json.mock.calls[0][0].data.addons).toBeNull();
   });
+
+  // PR-2 (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30): trang khách cần ngày làm mới hạn mức AI. Kỳ lấy từ ĐÚNG `cycle` mà
+  // getCreditUsageForCycle đã dùng để tính aiCreditsUsed (không dựng kỳ lần hai) và trả dạng ISO.
+  it('trả aiCreditCycleStart/aiCreditCycleEnd (ISO) lấy từ cycle của getCreditUsageForCycle, giữ nguyên các trường cũ', async () => {
+    findProfilePlan.mockResolvedValue({ plan_id: 7, plan_code: 'starter', ai_credits_per_period: 100 });
+    getCreditUsageForCycle.mockResolvedValue({
+      used: 37,
+      cycle: {
+        hasPlan: true,
+        billingUserId: 42,
+        cycleStart: new Date('2026-09-10T02:30:00.000Z'),
+        cycleEnd: new Date('2026-10-10T02:30:00.000Z'),
+      },
+    });
+
+    await userController.getProfile({ user: { id: 42 } }, res);
+
+    const { data } = res.json.mock.calls[0][0];
+    expect(data.aiCreditCycleStart).toBe('2026-09-10T02:30:00.000Z');
+    expect(data.aiCreditCycleEnd).toBe('2026-10-10T02:30:00.000Z');
+    // trường cũ không đổi
+    expect(data.aiCreditsUsed).toBe(37);
+    expect(data.aiCreditsPerPeriod).toBe(100);
+    expect(data.aiTokensUsed).toBe(100);
+  });
+
+  it('chưa có gói / không dựng được kỳ → aiCreditCycleStart/End = null (không phải chuỗi "Invalid Date")', async () => {
+    getCreditUsageForCycle.mockResolvedValue({
+      used: 0,
+      cycle: { hasPlan: false, billingUserId: 42, cycleStart: null, cycleEnd: null },
+    });
+    await userController.getProfile({ user: { id: 42 } }, res);
+    expect(res.json.mock.calls[0][0].data.aiCreditCycleStart).toBeNull();
+    expect(res.json.mock.calls[0][0].data.aiCreditCycleEnd).toBeNull();
+  });
+
+  it('getCreditUsageForCycle ném lỗi → hồ sơ vẫn trả được, kỳ = null, aiCreditsUsed = 0', async () => {
+    getCreditUsageForCycle.mockRejectedValue(new Error('db down'));
+    await userController.getProfile({ user: { id: 42 } }, res);
+    const { data } = res.json.mock.calls[0][0];
+    expect(data.aiCreditCycleStart).toBeNull();
+    expect(data.aiCreditCycleEnd).toBeNull();
+    expect(data.aiCreditsUsed).toBe(0);
+  });
 });
 
 describe('UserController.getMyOrders', () => {

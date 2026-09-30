@@ -205,6 +205,9 @@ export default function AdminAiUsagePage() {
                     <td className="px-5 py-4">
                       <p>{plan.aiCreditsPerPeriod > 0 ? t('adminAiUsage.creditsPerPeriod', { count: fmt(plan.aiCreditsPerPeriod) }) : t('adminAiUsage.unlimited')}</p>
                       <p className="text-xs text-gray-400">{t('adminAiUsage.p90Credits', { count: fmt(plan.p90UserCredits), pct: fmtPct(plan.quotaUsagePctAtP90) })}</p>
+                      {plan.aiCreditsPerPeriod > 0 && (
+                        <p className="text-xs text-gray-400">{t('adminAiUsage.nearLimit', { count: fmt(plan.usersNearLimit) })}</p>
+                      )}
                     </td>
                   </tr>
                 ))}
