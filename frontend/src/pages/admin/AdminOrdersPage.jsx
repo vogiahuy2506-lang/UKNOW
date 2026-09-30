@@ -2,7 +2,8 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
-import { HiOutlineRefresh, HiOutlineSearch, HiOutlineBan } from 'react-icons/hi';
+import { HiOutlineRefresh, HiOutlineSearch, HiOutlineBan, HiOutlineShoppingBag } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminOrdersApiService from '../../features/admin/services/adminOrdersApi.service';
 import RefundOrderModal from '../../features/admin/components/RefundOrderModal';
 import { orderStatusBadge } from './orderStatus.util';
@@ -178,13 +179,11 @@ const AdminOrdersPage = () => {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminOrders.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('adminOrders.description')}</p>
-        </div>
+    <PageContainer
+      title={t('adminOrders.title')}
+      subtitle={t('adminOrders.description')}
+      icon={HiOutlineShoppingBag}
+      actions={
         <button
           type="button"
           onClick={() => fetchOrders(filters, page)}
@@ -194,7 +193,8 @@ const AdminOrdersPage = () => {
           <HiOutlineRefresh className="w-4 h-4 mr-2" />
           {t('adminOrders.refresh')}
         </button>
-      </div>
+      }
+    >
 
       {/* KPI — THEO BỘ LỌC (khoảng ngày + tìm kiếm), nhãn kỳ ghi rõ ngay dưới */}
       <div className="space-y-2">
@@ -486,7 +486,7 @@ const AdminOrdersPage = () => {
           onRefunded={() => { setRefundingCode(null); fetchOrders(filters, page); }}
         />
       )}
-    </div>
+    </PageContainer>
   );
 };
 

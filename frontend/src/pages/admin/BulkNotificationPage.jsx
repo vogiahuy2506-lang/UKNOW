@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HiOutlineMail, HiOutlineExclamationCircle, HiOutlineCheckCircle } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import toast from 'react-hot-toast';
 import adminBulkNotificationApiService from '../../features/admin/services/adminBulkNotificationApi.service';
 import { useI18n } from '../../i18n';
@@ -79,12 +80,11 @@ export default function BulkNotificationPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('bulkNotification.title')}</h1>
-        <p className="mt-1 text-gray-500">{t('bulkNotification.subtitle')}</p>
-      </div>
+    <PageContainer
+      title={t('bulkNotification.title')}
+      subtitle={t('bulkNotification.subtitle')}
+      icon={HiOutlineMail}
+    >
 
       {/* Info banner */}
       <div className="rounded-xl border border-blue-100 bg-blue-50 px-5 py-4">
@@ -308,6 +308,6 @@ export default function BulkNotificationPage() {
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

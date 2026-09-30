@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HiOutlineBell, HiOutlineCheck, HiOutlineRefresh } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminAlertsApiService from '../../features/admin/services/adminAlertsApi.service';
 
 const fmtDate = (d) => (d ? new Date(d).toLocaleString('vi-VN') : '—');
@@ -69,15 +70,11 @@ const AdminAlertsPage = () => {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <HiOutlineBell className="w-7 h-7 text-primary-600" />
-            Trung tâm cảnh báo
-          </h1>
-          <p className="text-gray-500 mt-1">Quy tắc tự động + lịch sử đã bắn. Kênh gửi: email.</p>
-        </div>
+    <PageContainer
+      title="Trung tâm cảnh báo"
+      subtitle="Quy tắc tự động + lịch sử đã bắn. Kênh gửi: email."
+      icon={HiOutlineBell}
+      actions={
         <div className="flex gap-2">
           <button type="button" className="btn btn-secondary" onClick={load}>
             <HiOutlineRefresh className="w-4 h-4 mr-2" /> Làm mới
@@ -86,7 +83,8 @@ const AdminAlertsPage = () => {
             Chạy đánh giá ngay
           </button>
         </div>
-      </div>
+      }
+    >
 
       {error && <div className="card p-4 text-red-600 text-sm">{error}</div>}
 
@@ -186,7 +184,7 @@ const AdminAlertsPage = () => {
           </table>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

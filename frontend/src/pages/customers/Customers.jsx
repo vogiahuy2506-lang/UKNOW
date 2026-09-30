@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import PageHeader from '../../components/common/PageHeader';
 import {
   HiOutlineLightningBolt,
   HiOutlineUsers,
@@ -76,12 +77,11 @@ const Customers = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('customers.title')}</h1>
-        <p className="mt-1 text-gray-500">
-          {t('customers.selectCampaign')}
-        </p>
-      </div>
+      <PageHeader
+        icon={HiOutlineUsers}
+        title={t('customers.title')}
+        subtitle={t('customers.selectCampaign')}
+      />
 
       {/* Search */}
       <div className="card p-4">

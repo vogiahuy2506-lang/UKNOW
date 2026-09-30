@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { HiOutlineQuestionMarkCircle } from 'react-icons/hi';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
 
@@ -43,10 +44,11 @@ export default function AdminHelpUnansweredPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('adminHelp.unansweredTitle')}</h1>
-        <p className="mt-1 text-gray-500">{t('adminHelp.unansweredSubtitle')}</p>
-      </div>
+      <PageHeader
+        icon={HiOutlineQuestionMarkCircle}
+        title={t('adminHelp.unansweredTitle')}
+        subtitle={t('adminHelp.unansweredSubtitle')}
+      />
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (

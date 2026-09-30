@@ -14,7 +14,9 @@ import {
   HiOutlineLogout,
   HiOutlineRefresh,
   HiOutlineX,
+  HiOutlinePaperAirplane,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { FaTelegramPlane } from 'react-icons/fa';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
@@ -599,20 +601,11 @@ export default function TelegramSettings({ readOnly = false } = {}) {
   const canOpenQr = !qrModalOpen && !connecting && (gatewayStatus?.canStartLogin !== false);
 
   return (
-    <div className="space-y-5">
-      {/* ── Header ── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2.5 mb-1">
-            <div className="w-9 h-9 rounded-xl bg-primary-500 flex items-center justify-center text-white shadow-sm">
-              <FaTelegramPlane className="w-5 h-5" />
-            </div>
-            <h2 className="text-lg font-bold text-slate-900">{t('telegramSettings.title')}</h2>
-          </div>
-          <p className="text-sm text-slate-500 max-w-2xl leading-relaxed">
-            {t('telegramSettings.subtitle')}
-          </p>
-        </div>
+    <PageContainer
+      icon={HiOutlinePaperAirplane}
+      title={t('telegramSettings.title')}
+      subtitle={t('telegramSettings.subtitle')}
+      actions={
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -642,7 +635,8 @@ export default function TelegramSettings({ readOnly = false } = {}) {
           </button>
           )}
         </div>
-      </div>
+      }
+    >
 
       {/* ── Gateway warning banner ── */}
       {gatewayStatus && !gatewayStatus.canStartLogin && (
@@ -763,6 +757,6 @@ export default function TelegramSettings({ readOnly = false } = {}) {
         onCancel={handleCancelQr}
         onNewQr={handleStartQrLogin}
       />
-    </div>
+    </PageContainer>
   );
 }

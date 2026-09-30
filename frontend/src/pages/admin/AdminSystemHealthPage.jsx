@@ -1,4 +1,6 @@
 import { NavLink, Outlet, Navigate, useLocation } from 'react-router-dom';
+import { HiOutlineHeart } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { useI18n } from '../../i18n';
 
 const AdminSystemHealthPage = () => {
@@ -16,11 +18,11 @@ const AdminSystemHealthPage = () => {
   ];
 
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">{t('adminHealth.title')}</h1>
-        <p className="text-gray-500 mt-1">{t('adminHealth.subtitle')}</p>
-      </div>
+    <PageContainer
+      title={t('adminHealth.title')}
+      subtitle={t('adminHealth.subtitle')}
+      icon={HiOutlineHeart}
+    >
       <div className="flex flex-wrap gap-2 border-b border-gray-200 pb-2">
         {tabs.map((tab) => (
           <NavLink
@@ -38,7 +40,7 @@ const AdminSystemHealthPage = () => {
         ))}
       </div>
       <Outlet />
-    </div>
+    </PageContainer>
   );
 };
 

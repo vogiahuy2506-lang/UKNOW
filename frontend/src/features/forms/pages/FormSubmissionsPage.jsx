@@ -2,7 +2,6 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  HiOutlineArrowLeft,
   HiOutlineInbox,
   HiOutlineChevronLeft,
   HiOutlineChevronRight,
@@ -11,7 +10,9 @@ import {
   HiOutlinePhone,
   HiOutlineX,
   HiOutlinePhotograph,
+  HiOutlineClipboardList,
 } from 'react-icons/hi';
+import PageContainer from '../../../components/common/PageContainer';
 import { useI18n } from '../../../i18n';
 import {
   fetchFormById,
@@ -246,38 +247,23 @@ export default function FormSubmissionsPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div className="flex items-center gap-3">
+    <PageContainer
+      icon={HiOutlineClipboardList}
+      title={t('forms.submissionsPage.title', { title: form?.title || '...' })}
+      subtitle={t('forms.submissionsPage.subtitle')}
+      onBack={() => navigate('/app/forms')}
+      backLabel={t('forms.submissionsPage.backToForms')}
+      actions={
+        form && (
           <button
-            onClick={() => navigate('/app/forms')}
-            className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
-            title={t('forms.submissionsPage.backToForms')}
+            onClick={() => navigate(`/app/forms/${form.id}/edit`)}
+            className="btn btn-secondary text-xs"
           >
-            <HiOutlineArrowLeft className="w-5 h-5" />
+            {t('forms.submissionsPage.editFormConfig')}
           </button>
-          <div>
-            <h1 className="text-xl sm:text-2xl font-bold text-gray-900">
-              {t('forms.submissionsPage.title', { title: form?.title || '...' })}
-            </h1>
-            <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-              {t('forms.submissionsPage.subtitle')}
-            </p>
-          </div>
-        </div>
-
-        {form && (
-          <div className="self-end sm:self-auto">
-            <button
-              onClick={() => navigate(`/app/forms/${form.id}/edit`)}
-              className="text-xs font-medium text-primary-600 hover:text-primary-700 hover:underline"
-            >
-              {t('forms.submissionsPage.editFormConfig')}
-            </button>
-          </div>
-        )}
-      </div>
+        )
+      }
+    >
 
       {showBookingColumns && (
         <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -769,6 +755,6 @@ export default function FormSubmissionsPage() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

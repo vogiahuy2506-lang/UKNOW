@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import PageContainer from '../../components/common/PageContainer';
 import courseApiService from '../../features/courses/services/courseApi.service';
 import {
   HiOutlineAcademicCap,
@@ -123,15 +124,11 @@ const Courses = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('courses.courseManagement')}</h1>
-          <p className="mt-1 text-gray-500">
-            {t('courses.courseDescription')}
-          </p>
-        </div>
+    <PageContainer
+      icon={HiOutlineAcademicCap}
+      title={t('courses.courseManagement')}
+      subtitle={t('courses.courseDescription')}
+      actions={
         <button
           onClick={handleSync}
           disabled={isSyncing}
@@ -140,7 +137,8 @@ const Courses = () => {
           <HiOutlineRefresh className={`w-5 h-5 ${isSyncing ? 'animate-spin' : ''}`} />
           {isSyncing ? t('courses.syncing') : t('courses.syncNow')}
         </button>
-      </div>
+      }
+    >
 
       {/* Search */}
       <div className="card p-4">
@@ -263,7 +261,7 @@ const Courses = () => {
           </>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

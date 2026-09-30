@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { useReactToPrint } from 'react-to-print';
 import {
   HiOutlineRefresh, HiOutlineUsers, HiOutlineCurrencyDollar, HiOutlineClipboardList, HiOutlinePrinter,
-  HiOutlineReceiptTax, HiOutlineClock, HiOutlineExclamationCircle,
+  HiOutlineReceiptTax, HiOutlineClock, HiOutlineExclamationCircle, HiOutlineChartSquareBar,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
@@ -166,18 +167,20 @@ const AdminDashboard = () => {
   const printDate = new Date().toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
+    <PageContainer
+      title={t('adminDashboard.title')}
+      subtitle={
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminDashboard.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('adminDashboard.description')}</p>
+          <span>{t('adminDashboard.description')}</span>
           {(dataSince || dataSinceNote) && (
             <p className="text-xs text-amber-700 mt-1">
               {dataSince ? `Dữ liệu từ ${dataSince}. ` : ''}{dataSinceNote || ''}
             </p>
           )}
         </div>
+      }
+      icon={HiOutlineChartSquareBar}
+      actions={
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -193,7 +196,8 @@ const AdminDashboard = () => {
             {t('adminDashboard.refresh')}
           </button>
         </div>
-      </div>
+      }
+    >
 
       {/* 6 số */}
       <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -420,7 +424,7 @@ const AdminDashboard = () => {
           </div>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

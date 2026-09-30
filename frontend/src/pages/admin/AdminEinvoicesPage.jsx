@@ -1,7 +1,8 @@
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
-import { HiOutlineRefresh, HiOutlineSearch, HiOutlineMail } from 'react-icons/hi';
+import { HiOutlineRefresh, HiOutlineSearch, HiOutlineMail, HiOutlineDocumentText } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminEinvoicesApiService from '../../features/admin/services/adminEinvoicesApi.service';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
@@ -170,13 +171,11 @@ const AdminEinvoicesPage = () => {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminEinvoices.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('adminEinvoices.description')}</p>
-        </div>
+    <PageContainer
+      title={t('adminEinvoices.title')}
+      subtitle={t('adminEinvoices.description')}
+      icon={HiOutlineDocumentText}
+      actions={
         <button
           type="button"
           onClick={() => fetchEinvoices(filters, page)}
@@ -186,7 +185,8 @@ const AdminEinvoicesPage = () => {
           <HiOutlineRefresh className="w-4 h-4 mr-2" />
           {t('adminEinvoices.refresh')}
         </button>
-      </div>
+      }
+    >
 
       {/* Filter bar */}
       <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3">
@@ -420,7 +420,7 @@ const AdminEinvoicesPage = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

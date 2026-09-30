@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencil } from 'react-icons/hi';
+import { HiOutlinePlus, HiOutlineRefresh, HiOutlineTrash, HiOutlinePencil, HiOutlineAcademicCap } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import {
   createLandingFeaturedCourse,
   deleteLandingFeaturedCourse,
@@ -210,34 +211,32 @@ const LandingFeaturedCoursesPage = () => {
   };
 
   return (
-    <div className="p-6 max-w-6xl mx-auto">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('landingFeaturedCourses.title')}</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            {t('landingFeaturedCourses.description')}
-          </p>
-        </div>
-        <div className="flex gap-2">
+    <PageContainer
+      icon={HiOutlineAcademicCap}
+      title={t('landingFeaturedCourses.title')}
+      subtitle={t('landingFeaturedCourses.description')}
+      actions={
+        <>
           <button
             type="button"
             onClick={() => load(true)}
             disabled={refreshing || loading}
-            className="inline-flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 disabled:opacity-50"
+            className="btn btn-secondary flex items-center gap-2"
           >
-            <HiOutlineRefresh className={refreshing ? 'animate-spin' : ''} />
+            <HiOutlineRefresh className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             {t('landingFeaturedCourses.refresh')}
           </button>
           <button
             type="button"
             onClick={openCreate}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-primary-600 hover:bg-primary-700"
+            className="btn btn-primary flex items-center gap-2"
           >
-            <HiOutlinePlus />
+            <HiOutlinePlus className="w-5 h-5" />
             {t('landingFeaturedCourses.addCourse')}
           </button>
-        </div>
-      </div>
+        </>
+      }
+    >
 
       {loading ? (
         <p className="text-gray-500">{t('landingFeaturedCourses.loading')}</p>
@@ -435,7 +434,7 @@ const LandingFeaturedCoursesPage = () => {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };
 

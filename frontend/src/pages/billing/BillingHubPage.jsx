@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { HiOutlineCurrencyDollar, HiOutlineTag } from 'react-icons/hi';
+import { HiOutlineCurrencyDollar, HiOutlineTag, HiOutlineClipboardList } from 'react-icons/hi';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
@@ -70,11 +71,12 @@ const BillingHubPage = () => {
   }
 
   return (
-    <div className="w-full space-y-8 p-4 sm:p-6 lg:p-8">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t('billingHub.title')}</h1>
-        <p className="mt-1 text-sm text-slate-500">{t('billingHub.subtitle')}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={HiOutlineClipboardList}
+        title={t('billingHub.title')}
+        subtitle={t('billingHub.subtitle')}
+      />
 
       {error && (
         <p className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>

@@ -165,7 +165,7 @@ export default function AffiliatePage() {
   const netAmount = currentBalance - taxAmount;
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6 pb-12">
+    <div className="space-y-6 pb-12">
       <PageHeader
         icon={HiOutlineCurrencyDollar}
         title={t('affiliate.title')}

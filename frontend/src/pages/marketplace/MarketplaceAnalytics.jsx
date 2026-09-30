@@ -7,7 +7,9 @@ import {
   HiOutlineStar,
   HiOutlineEye,
   HiOutlineUser,
+  HiOutlineChartBar,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import api from '../../services/api';
 
 const MarketplaceAnalytics = () => {
@@ -62,14 +64,11 @@ const MarketplaceAnalytics = () => {
     : 0;
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Phân tích Marketplace</h1>
-        <p className="text-gray-500 mt-1">
-          Thống kê và insights về hoạt động marketplace
-        </p>
-      </div>
+    <PageContainer
+      icon={HiOutlineChartBar}
+      title="Phân tích Marketplace"
+      subtitle="Thống kê và insights về hoạt động marketplace"
+    >
 
       {/* Overview Stats */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -219,7 +218,7 @@ const MarketplaceAnalytics = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

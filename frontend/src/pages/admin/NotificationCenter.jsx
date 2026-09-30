@@ -30,6 +30,7 @@ import {
   HiOutlineSparkles,
   HiOutlineBookmark,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { FaBell, FaClock } from 'react-icons/fa';
 import adminNotificationApiService from '../../features/admin/services/adminNotificationApi.service';
 import {
@@ -651,22 +652,18 @@ export default function NotificationCenter() {
   // ----------------------------------------------------------------- Render
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+    <PageContainer
+      icon={HiOutlineSparkles}
+      title="Trung tâm Chiến dịch Email"
+      subtitle={
         <div>
-          <div className="flex items-center gap-2">
-            <HiOutlineSparkles className="h-7 w-7 text-orange-500" />
-            <h1 className="text-2xl font-bold text-slate-900">Trung tâm Chiến dịch Email</h1>
-          </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Soạn mẫu HTML theo từng dạng email → lưu thành mẫu có tên riêng (super admin) → chọn người nhận → gửi ngay hoặc hẹn giờ.
-          </p>
+          <span>Soạn mẫu HTML theo từng dạng email → lưu thành mẫu có tên riêng (super admin) → chọn người nhận → gửi ngay hoặc hẹn giờ.</span>
           <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
             Dùng <code className="font-mono">{`{{user_name}}`}</code>, <code className="font-mono">{`{{dashboard_url}}`}</code>… sẽ tự thay bằng dữ liệu người nhận.
           </p>
         </div>
-      </div>
+      }
+    >
 
       {/* Tabs */}
       <PillTabs active={activeTab} onChange={setActiveTab} tabs={TABS} />
@@ -979,7 +976,7 @@ export default function NotificationCenter() {
           typeLabel: TYPE_TEMPLATES[typeKey]?.label || typeKey,
         }}
       />
-    </div>
+    </PageContainer>
   );
 }
 

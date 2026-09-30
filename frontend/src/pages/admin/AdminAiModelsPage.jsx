@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { HiOutlineExclamation, HiOutlineRefresh, HiOutlineSparkles } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminAiModelsApiService from '../../features/admin/services/adminAiModelsApi.service';
 import { useI18n } from '../../i18n';
 
@@ -176,13 +177,16 @@ export default function AdminAiModelsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <PageContainer
+      title={t('adminAiModels.title')}
+      subtitle={
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminAiModels.title')}</h1>
-          <p className="mt-1 text-gray-500">{t('adminAiModels.subtitle')}</p>
-          <p className="mt-2 max-w-3xl text-sm text-amber-700">{t('adminAiModels.metadataHint')}</p>
+          <span>{t('adminAiModels.subtitle')}</span>
+          <p className="mt-1 max-w-3xl text-sm text-amber-700">{t('adminAiModels.metadataHint')}</p>
         </div>
+      }
+      icon={HiOutlineSparkles}
+      actions={
         <button
           type="button"
           className="btn btn-primary inline-flex items-center gap-2"
@@ -192,7 +196,8 @@ export default function AdminAiModelsPage() {
           <HiOutlineRefresh className={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
           {syncing ? t('adminAiModels.syncing') : t('adminAiModels.sync')}
         </button>
-      </div>
+      }
+    >
 
       {systemModelUnpriced && (
         <div className="flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -409,6 +414,6 @@ export default function AdminAiModelsPage() {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

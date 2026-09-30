@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { HiOutlineChat } from 'react-icons/hi';
 import PageHeader from '../PageHeader';
@@ -30,5 +30,20 @@ describe('PageHeader', () => {
 
     rerender(<PageHeader title="Không actions" />);
     expect(screen.queryByRole('button', { name: 'Hành động' })).not.toBeInTheDocument();
+  });
+
+  it('gọi onBack khi bấm nút quay lại', () => {
+    const handleBack = vi.fn();
+    render(<PageHeader title="Có quay lại" onBack={handleBack} />);
+    const backBtn = screen.getByRole('button', { name: 'Quay lại' });
+    expect(backBtn).toBeInTheDocument();
+    backBtn.click();
+    expect(handleBack).toHaveBeenCalledTimes(1);
+  });
+
+  it('backLabel đổi nhãn nút quay lại (trang truyền t(...) để theo ngôn ngữ)', () => {
+    render(<PageHeader title="Has back" onBack={() => {}} backLabel="Back" />);
+    expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Quay lại' })).not.toBeInTheDocument();
   });
 });

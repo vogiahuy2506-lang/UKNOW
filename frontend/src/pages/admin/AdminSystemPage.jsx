@@ -9,6 +9,7 @@ import {
   HiOutlineTerminal,
 } from 'react-icons/hi';
 import adminSystemApiService from '../../features/admin/services/adminSystemApi.service';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 
 const fmtBytes = (value) => {
@@ -375,16 +376,17 @@ export default function AdminSystemPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminSystem.title')}</h1>
-          <p className="mt-1 text-gray-500">{t('adminSystem.subtitle')}</p>
-        </div>
-        <button type="button" className="btn btn-secondary" onClick={fetchOverview} disabled={loading}>
-          <HiOutlineRefresh className="mr-2 h-4 w-4" />
-          {t('adminSystem.refresh')}
-        </button>
-      </div>
+      <PageHeader
+        icon={HiOutlineServer}
+        title={t('adminSystem.title')}
+        subtitle={t('adminSystem.subtitle')}
+        actions={
+          <button type="button" className="btn btn-secondary" onClick={fetchOverview} disabled={loading}>
+            <HiOutlineRefresh className="mr-2 h-4 w-4" />
+            {t('adminSystem.refresh')}
+          </button>
+        }
+      />
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <MetricCard

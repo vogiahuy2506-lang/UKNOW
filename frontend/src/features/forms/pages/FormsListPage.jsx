@@ -10,7 +10,9 @@ import {
   HiOutlineEye,
   HiOutlineEyeOff,
   HiOutlineExclamationCircle,
+  HiOutlineClipboardList,
 } from 'react-icons/hi';
+import PageHeader from '../../../components/common/PageHeader';
 import { useI18n } from '../../../i18n';
 import {
   fetchForms,
@@ -79,21 +81,22 @@ export default function FormsListPage() {
   };
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('forms.title')}</h1>
-          <p className="text-sm text-gray-500 mt-1">{t('forms.subtitle')}</p>
-        </div>
-        <button
-          onClick={() => navigate('/app/forms/new')}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl shadow-sm transition-all active:scale-[0.99]"
-        >
-          <HiOutlinePlus className="w-5 h-5" />
-          {t('forms.createNew')}
-        </button>
-      </div>
+      <PageHeader
+        icon={HiOutlineClipboardList}
+        title={t('forms.title')}
+        subtitle={t('forms.subtitle')}
+        actions={
+          <button
+            onClick={() => navigate('/app/forms/new')}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white text-sm font-medium rounded-xl shadow-sm transition-all active:scale-[0.99]"
+          >
+            <HiOutlinePlus className="w-5 h-5" />
+            {t('forms.createNew')}
+          </button>
+        }
+      />
 
       {/* Lỗi tải */}
       {error && (

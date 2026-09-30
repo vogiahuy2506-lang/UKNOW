@@ -8,6 +8,7 @@ import {
 } from 'react-icons/hi';
 import api from '../../services/api';
 import MessageAttachments, { FileTypeIcon } from '../../components/MessageAttachments';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import { formatBytes } from '../../features/storage/storageUtils';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
@@ -308,16 +309,12 @@ export default function MediaLibraryPage() {
   ]), [t]);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-6 space-y-5">
-      <div className="flex items-start gap-3">
-        <div className="w-10 h-10 rounded-xl bg-orange-50 text-orange-600 flex items-center justify-center shrink-0">
-          <HiOutlinePhotograph className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="text-xl font-bold text-slate-900">{t('mediaLibrary.title')}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{t('mediaLibrary.subtitle')}</p>
-        </div>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={HiOutlinePhotograph}
+        title={t('mediaLibrary.title')}
+        subtitle={t('mediaLibrary.subtitle')}
+      />
 
       {/* Tabs */}
       <div className="flex flex-wrap gap-2 items-center">

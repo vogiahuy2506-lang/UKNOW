@@ -9,7 +9,9 @@ import {
   HiOutlineClipboard,
   HiOutlineCalendar,
   HiOutlineX,
+  HiOutlineUsers,
 } from 'react-icons/hi';
+import PageHeader from '../../components/common/PageHeader';
 import useLandingLeadsList from '../../features/landing/hooks/useLandingLeadsList.js';
 import { LandingLeadsAdminFilters } from '../../features/landing/components/LandingLeadsAdminFilters.jsx';
 import { fetchLandingLeadsCustomFieldDefinitions } from '../../features/landing/services/landingLeadsAdminApi.service.js';
@@ -140,43 +142,44 @@ export default function LandingLeadsListPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">{t('landingLeads.pageTitle')}</h1>
-          <p className="text-sm text-gray-500 mt-1">{t('landingLeads.pageDescription')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="relative">
-            <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="search"
-              value={quickSearch}
-              onChange={(e) => setQuickSearch(e.target.value)}
-              placeholder={t('landingLeads.quickSearchPlaceholder')}
-              className="w-full sm:w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-200"
-            />
-            {quickSearch ? (
-              <button
-                type="button"
-                onClick={() => setQuickSearch('')}
-                aria-label={t('landingLeads.clearSearch')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
-              >
-                <HiOutlineX className="w-3.5 h-3.5" />
-              </button>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={() => reload()}
-            disabled={isLoading}
-            className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
-          >
-            <HiOutlineRefresh className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
-            {t('landingLeads.refresh')}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HiOutlineUsers}
+        title={t('landingLeads.pageTitle')}
+        subtitle={t('landingLeads.pageDescription')}
+        actions={
+          <>
+            <div className="relative">
+              <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+              <input
+                type="search"
+                value={quickSearch}
+                onChange={(e) => setQuickSearch(e.target.value)}
+                placeholder={t('landingLeads.quickSearchPlaceholder')}
+                className="w-full sm:w-64 rounded-lg border border-gray-200 bg-white py-2 pl-9 pr-8 text-sm placeholder-gray-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-200"
+              />
+              {quickSearch ? (
+                <button
+                  type="button"
+                  onClick={() => setQuickSearch('')}
+                  aria-label={t('landingLeads.clearSearch')}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-0.5 text-gray-400 hover:text-gray-600"
+                >
+                  <HiOutlineX className="w-3.5 h-3.5" />
+                </button>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={() => reload()}
+              disabled={isLoading}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 disabled:opacity-50"
+            >
+              <HiOutlineRefresh className={`w-5 h-5 ${isLoading ? 'animate-spin' : ''}`} />
+              {t('landingLeads.refresh')}
+            </button>
+          </>
+        }
+      />
 
       {/* Filter trigger (drawer) + Export Excel */}
       <div className="flex flex-wrap items-center gap-2">

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import productApiService from '../../features/products/services/productApi.service';
+import PageHeader from '../../components/common/PageHeader';
 import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
@@ -215,16 +216,17 @@ const Products = () => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('products.productManagement')}</h1>
-          <p className="mt-1 text-gray-500">{t('products.productDescription')}</p>
-        </div>
-        <button type="button" onClick={openCreate} className="btn btn-primary flex items-center gap-2">
-          <HiOutlinePlus className="w-5 h-5" />
-          {t('products.addProduct')}
-        </button>
-      </div>
+      <PageHeader
+        icon={HiOutlineCube}
+        title={t('products.productManagement')}
+        subtitle={t('products.productDescription')}
+        actions={
+          <button type="button" onClick={openCreate} className="btn btn-primary flex items-center gap-2">
+            <HiOutlinePlus className="w-5 h-5" />
+            {t('products.addProduct')}
+          </button>
+        }
+      />
 
       <div className="card p-4">
         <form onSubmit={handleSearch} className="flex gap-3">

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
-import { useNavigate, useParams, Link } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
-  HiOutlineArrowLeft,
   HiOutlineTrash,
   HiOutlineRefresh,
   HiOutlineTranslate,
+  HiOutlineBookOpen,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
 import RichTextEditor from '../../components/editor/RichTextEditor';
@@ -230,28 +231,25 @@ export default function AdminHelpArticleEditPage() {
   const showStale = currentLocale === 'en' && form.is_stale;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          <Link to="/admin/help-articles" className="p-2 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-100">
-            <HiOutlineArrowLeft className="h-5 w-5" />
-          </Link>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">
-              {isCreate ? t('adminHelp.newArticle') : t('adminHelp.editArticle')}
-            </h1>
-            {!isCreate && form.slug && (
-              <p className="mt-1 text-sm text-gray-500">/huong-dan/{form.slug}</p>
-            )}
-            {!isCreate && pendingEmbedCount > 0 && (
-              <p className="mt-2 inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-900">
-                {t('adminHelp.pendingEmbedBadge')}
-              </p>
-            )}
-          </div>
+    <PageContainer
+      title={isCreate ? t('adminHelp.newArticle') : t('adminHelp.editArticle')}
+      subtitle={
+        <div>
+          {!isCreate && form.slug && (
+            <span>/huong-dan/{form.slug}</span>
+          )}
+          {!isCreate && pendingEmbedCount > 0 && (
+            <span className="ml-2 inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2.5 py-0.5 text-xs font-medium text-amber-900">
+              {t('adminHelp.pendingEmbedBadge')}
+            </span>
+          )}
         </div>
-
-        {!isCreate && (
+      }
+      icon={HiOutlineBookOpen}
+      onBack={() => navigate('/admin/help-articles')}
+      backLabel={t('common.back')}
+      actions={
+        !isCreate && (
           <div className="flex flex-wrap items-center gap-2">
             <div className="inline-flex rounded-lg border border-slate-200 p-0.5">
               <button
@@ -289,8 +287,9 @@ export default function AdminHelpArticleEditPage() {
               </button>
             )}
           </div>
-        )}
-      </div>
+        )
+      }
+    >
 
       {showStale && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-800">
@@ -493,6 +492,6 @@ export default function AdminHelpArticleEditPage() {
           </div>
         </div>
       </form>
-    </div>
+    </PageContainer>
   );
 }

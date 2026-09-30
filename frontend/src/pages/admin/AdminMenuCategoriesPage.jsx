@@ -13,6 +13,7 @@ import {
   HiOutlineSave,
   HiOutlineTrash,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { useI18n } from '../../i18n';
 import {
   superAdminMenuItems,
@@ -362,15 +363,11 @@ export default function AdminMenuCategoriesPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <div className="flex items-center gap-2">
-            <HiOutlineCollection className="h-7 w-7 text-orange-500" />
-            <h1 className="text-2xl font-bold text-gray-900">{t('adminMenu.title')}</h1>
-          </div>
-          <p className="mt-1 text-sm text-gray-500">{t('adminMenu.subtitle')}</p>
-        </div>
+    <PageContainer
+      title={t('adminMenu.title')}
+      subtitle={t('adminMenu.subtitle')}
+      icon={HiOutlineCollection}
+      actions={
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn btn-secondary inline-flex items-center gap-2" onClick={restoreDefaults}>
             <HiOutlineRefresh className="h-4 w-4" />
@@ -386,7 +383,8 @@ export default function AdminMenuCategoriesPage() {
             {isSaving ? t('common.saving') : t('common.save')}
           </button>
         </div>
-      </div>
+      }
+    >
 
       <div className="flex border-b border-gray-200 gap-2">
         <button
@@ -616,6 +614,6 @@ export default function AdminMenuCategoriesPage() {
           </section>
         ))}
       </div>
-    </div>
+    </PageContainer>
   );
 }

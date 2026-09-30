@@ -6,6 +6,7 @@ import {
   HiOutlineExclamationCircle,
   HiOutlineRefresh,
   HiOutlineServer,
+  HiOutlineTrendingUp,
 } from 'react-icons/hi';
 import {
   Bar,
@@ -18,6 +19,7 @@ import {
   YAxis,
 } from 'recharts';
 import adminDeliveryMonitorApiService from '../../features/admin/services/adminDeliveryMonitorApi.service';
+import PageHeader from '../../components/common/PageHeader';
 import {
   DELIVERY_WINDOWS,
   buildDailySlots,
@@ -408,30 +410,31 @@ export default function AdminDeliveryMonitorPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminDeliveryMonitor.title')}</h1>
-          <p className="mt-1 text-gray-500">{t('adminDeliveryMonitor.description')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-xl border border-gray-200 bg-white p-1">
-            {windowOptions.map((days) => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => setWindowDays(days)}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold ${windowDays === days ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
-              >
-                {t(`adminDeliveryMonitor.window.${days}`)}
-              </button>
-            ))}
+      <PageHeader
+        icon={HiOutlineTrendingUp}
+        title={t('adminDeliveryMonitor.title')}
+        subtitle={t('adminDeliveryMonitor.description')}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-xl border border-gray-200 bg-white p-1">
+              {windowOptions.map((days) => (
+                <button
+                  key={days}
+                  type="button"
+                  onClick={() => setWindowDays(days)}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${windowDays === days ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  {t(`adminDeliveryMonitor.window.${days}`)}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={fetchData} className="btn btn-secondary" disabled={loading}>
+              <HiOutlineRefresh className="mr-2 h-4 w-4" />
+              {t('adminDeliveryMonitor.refresh')}
+            </button>
           </div>
-          <button type="button" onClick={fetchData} className="btn btn-secondary" disabled={loading}>
-            <HiOutlineRefresh className="mr-2 h-4 w-4" />
-            {t('adminDeliveryMonitor.refresh')}
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" data-testid="toolbar">
         <label className={`inline-flex items-center gap-2 text-gray-700 ${ownerFilter ? 'opacity-50' : 'cursor-pointer'}`}>

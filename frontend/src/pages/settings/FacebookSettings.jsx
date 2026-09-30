@@ -5,7 +5,9 @@ import {
   HiOutlineRefresh,
   HiOutlineExclamation,
   HiOutlineExternalLink,
+  HiOutlineGlobeAlt,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import toast from 'react-hot-toast';
 import facebookSettingsApiService from '../../features/settings/services/facebookSettingsApi.service';
 
@@ -153,15 +155,11 @@ export default function FacebookSettings() {
   };
 
   return (
-    <div className="space-y-5">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-base font-semibold text-gray-900">Facebook Pages</h2>
-          <p className="mt-1 text-sm text-gray-500">
-            Kết nối Fanpage để chatbot tự động trả lời tin nhắn Messenger.
-          </p>
-        </div>
+    <PageContainer
+      icon={HiOutlineGlobeAlt}
+      title="Facebook Pages"
+      subtitle="Kết nối Fanpage để chatbot tự động trả lời tin nhắn Messenger."
+      actions={
         <button
           type="button"
           onClick={handleConnect}
@@ -171,7 +169,8 @@ export default function FacebookSettings() {
           <HiOutlineLink className="w-4 h-4" />
           {connecting ? 'Đang mở...' : 'Kết nối tài khoản Facebook'}
         </button>
-      </div>
+      }
+    >
 
       {/* Help card */}
       <div className="flex items-start gap-3 rounded-xl border border-indigo-100 bg-indigo-50/50 p-4">
@@ -279,6 +278,6 @@ export default function FacebookSettings() {
           để làm mới trước khi hết hạn.
         </p>
       )}
-    </div>
+    </PageContainer>
   );
 }

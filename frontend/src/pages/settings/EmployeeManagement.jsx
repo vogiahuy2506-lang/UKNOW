@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useForm } from 'react-hook-form';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import {
   HiOutlinePlus,
@@ -13,6 +14,7 @@ import {
   HiOutlineKey,
   HiOutlineMail,
   HiOutlineChat,
+  HiOutlineUserGroup,
 } from 'react-icons/hi';
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
 import TeamActivityCard from '../../features/users/components/TeamActivityCard';
@@ -541,50 +543,55 @@ const EmployeeManagement = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('employee.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('employee.description')}</p>
-          {limitMeta && (
-            <p className="text-sm text-gray-500 mt-1">
-              <span>
-                {limitMeta.max === null
-                  ? t('employee.slotUsageUnlimited', { used: limitMeta.used })
-                  : t('employee.slotUsage', { used: limitMeta.used, max: limitMeta.max })}
+      <PageHeader
+        icon={HiOutlineUserGroup}
+        title={t('employee.title')}
+        subtitle={
+          <>
+            <span>{t('employee.description')}</span>
+            {limitMeta && (
+              <span className="block mt-1">
+                <span>
+                  {limitMeta.max === null
+                    ? t('employee.slotUsageUnlimited', { used: limitMeta.used })
+                    : t('employee.slotUsage', { used: limitMeta.used, max: limitMeta.max })}
+                </span>
+                {limitMeta.lockedCount > 0 && (
+                  <span className="text-amber-600"> {t('employee.slotLockedSuffix', { count: limitMeta.lockedCount })}</span>
+                )}
+                {limitMeta.canBuySlot && (
+                  <>
+                    {' · '}
+                    <button
+                      type="button"
+                      onClick={() => navigate('/app/topup')}
+                      className="text-primary-600 hover:text-primary-700 font-medium"
+                    >
+                      {t('employee.buySlotCta')}
+                    </button>
+                  </>
+                )}
               </span>
-              {limitMeta.lockedCount > 0 && (
-                <span className="text-amber-600"> {t('employee.slotLockedSuffix', { count: limitMeta.lockedCount })}</span>
-              )}
-              {limitMeta.canBuySlot && (
-                <>
-                  {' · '}
-                  <button
-                    type="button"
-                    onClick={() => navigate('/app/topup')}
-                    className="text-primary-600 hover:text-primary-700 font-medium"
-                  >
-                    {t('employee.buySlotCta')}
-                  </button>
-                </>
-              )}
-            </p>
-          )}
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => fetchEmployees(true)} className="btn btn-secondary" disabled={isRefreshing}>
-            <HiOutlineRefresh className="w-5 h-5 mr-2" />
-            {t('employee.refresh')}
-          </button>
-          <button
-            type="button"
-            className="btn btn-primary"
-            onClick={openCreateModal}
-          >
-            <HiOutlinePlus className="w-5 h-5 mr-2" />
-            {t('employee.addEmployee')}
-          </button>
-        </div>
-      </div>
+            )}
+          </>
+        }
+        actions={
+          <div className="flex items-center gap-2">
+            <button type="button" onClick={() => fetchEmployees(true)} className="btn btn-secondary" disabled={isRefreshing}>
+              <HiOutlineRefresh className="w-5 h-5 mr-2" />
+              {t('employee.refresh')}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary"
+              onClick={openCreateModal}
+            >
+              <HiOutlinePlus className="w-5 h-5 mr-2" />
+              {t('employee.addEmployee')}
+            </button>
+          </div>
+        }
+      />
 
       {/* Bảng nhân viên */}
       <div className="card">

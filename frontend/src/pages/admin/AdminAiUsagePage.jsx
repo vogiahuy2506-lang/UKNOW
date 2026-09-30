@@ -18,6 +18,7 @@ import {
   YAxis,
 } from 'recharts';
 import adminAiUsageApiService from '../../features/admin/services/adminAiUsageApi.service';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 
 const fmt = (value) => Number(value || 0).toLocaleString('vi-VN');
@@ -133,31 +134,32 @@ export default function AdminAiUsagePage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminAiUsage.title')}</h1>
-          <p className="mt-1 text-gray-500">{t('adminAiUsage.description')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-xl border border-gray-200 bg-white p-1">
-            {rangeOptions.map((option) => (
-              <button
-                key={option.value}
-                type="button"
-                onClick={() => setRange(option.value)}
-                aria-pressed={range === option.value}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold ${range === option.value ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
-              >
-                {option.label}
-              </button>
-            ))}
+      <PageHeader
+        icon={HiOutlineSparkles}
+        title={t('adminAiUsage.title')}
+        subtitle={t('adminAiUsage.description')}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-xl border border-gray-200 bg-white p-1">
+              {rangeOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRange(option.value)}
+                  aria-pressed={range === option.value}
+                  className={`rounded-lg px-3 py-2 text-sm font-semibold ${range === option.value ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+            <button type="button" onClick={fetchData} className="btn btn-secondary" disabled={loading}>
+              <HiOutlineRefresh className="mr-2 h-4 w-4" />
+              {t('adminAiUsage.refresh')}
+            </button>
           </div>
-          <button type="button" onClick={fetchData} className="btn btn-secondary" disabled={loading}>
-            <HiOutlineRefresh className="mr-2 h-4 w-4" />
-            {t('adminAiUsage.refresh')}
-          </button>
-        </div>
-      </div>
+        }
+      />
 
       {error && <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 

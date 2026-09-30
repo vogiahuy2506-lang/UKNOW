@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import PageHeader from '../../components/common/PageHeader';
 import {
   HiOutlineChatAlt2,
   HiOutlineCheckCircle,
@@ -440,21 +441,21 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('zaloSettings.title')}</h1>
-          
-        </div>
-        <button
-          type="button"
-          onClick={handleRefreshStatus}
-          className="btn btn-secondary"
-          disabled={isRefreshing}
-        >
-          <HiOutlineRefresh className="w-4 h-4 mr-2" />
-          {isRefreshing ? t('zaloSettings.refreshing') : t('zaloSettings.refresh')}
-        </button>
-      </div>
+      <PageHeader
+        icon={HiOutlineChatAlt2}
+        title={t('zaloSettings.title')}
+        actions={
+          <button
+            type="button"
+            onClick={handleRefreshStatus}
+            className="btn btn-secondary"
+            disabled={isRefreshing}
+          >
+            <HiOutlineRefresh className="w-4 h-4 mr-2" />
+            {isRefreshing ? t('zaloSettings.refreshing') : t('zaloSettings.refresh')}
+          </button>
+        }
+      />
 
       {!isBackendReady && (
         <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">

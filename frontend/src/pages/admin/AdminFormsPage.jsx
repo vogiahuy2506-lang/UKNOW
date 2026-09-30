@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlineSearch, HiOutlineRefresh, HiOutlineBan, HiOutlineCheck } from 'react-icons/hi';
+import { HiOutlineSearch, HiOutlineRefresh, HiOutlineBan, HiOutlineCheck, HiOutlineClipboardList } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { useI18n } from '../../i18n';
 import adminFormsApiService from '../../features/admin/services/adminFormsApi.service';
 
@@ -69,12 +70,11 @@ export default function AdminFormsPage() {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminForms.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('adminForms.description')}</p>
-        </div>
+    <PageContainer
+      title={t('adminForms.title')}
+      subtitle={t('adminForms.description')}
+      icon={HiOutlineClipboardList}
+      actions={
         <button
           type="button"
           onClick={() => load(query, page)}
@@ -84,7 +84,8 @@ export default function AdminFormsPage() {
           <HiOutlineRefresh className="w-4 h-4 mr-2" />
           {t('adminForms.refresh')}
         </button>
-      </div>
+      }
+    >
 
       <form onSubmit={handleSearch} className="card p-4 flex flex-wrap items-end gap-3">
         <div className="flex-1 min-w-[220px]">
@@ -247,6 +248,6 @@ export default function AdminFormsPage() {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

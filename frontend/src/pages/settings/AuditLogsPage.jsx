@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { HiOutlineRefresh, HiOutlineSearch } from 'react-icons/hi';
+import { HiOutlineRefresh, HiOutlineSearch, HiOutlineClipboard } from 'react-icons/hi';
+import PageHeader from '../../components/common/PageHeader';
 import auditLogsApiService from '../../features/settings/services/auditLogsApi.service';
 import { useI18n } from '../../i18n';
 import { WORKSPACE_AUDIT_ACTIONS, WORKSPACE_AUDIT_ENTITIES, auditLabel } from './auditLogLabels';
@@ -61,16 +62,17 @@ export default function AuditLogsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('auditLogs.title') || 'Nhật ký hoạt động'}</h1>
-          <p className="mt-1 text-sm text-gray-500">{t('auditLogs.subtitle') || 'Theo dõi mọi thay đổi trong tổ chức của bạn'}</p>
-        </div>
-        <button type="button" onClick={() => fetchLogs(page)} disabled={loading} className="btn btn-secondary">
-          <HiOutlineRefresh className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          {t('common.refresh') || 'Làm mới'}
-        </button>
-      </div>
+      <PageHeader
+        icon={HiOutlineClipboard}
+        title={t('auditLogs.title') || 'Nhật ký hoạt động'}
+        subtitle={t('auditLogs.subtitle') || 'Theo dõi mọi thay đổi trong tổ chức của bạn'}
+        actions={
+          <button type="button" onClick={() => fetchLogs(page)} disabled={loading} className="btn btn-secondary">
+            <HiOutlineRefresh className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            {t('common.refresh') || 'Làm mới'}
+          </button>
+        }
+      />
 
       {/* Filters */}
       <form onSubmit={handleFilter} className="card p-5">

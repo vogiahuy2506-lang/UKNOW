@@ -11,6 +11,7 @@ import {
 } from 'react-icons/hi';
 import api from '../../services/api';
 import Pagination from '../../components/common/Pagination';
+import PageContainer from '../../components/common/PageContainer';
 import { useMarketplaceModal } from '../../contexts/useMarketplaceModal';
 
 const AdminMarketplace = () => {
@@ -135,16 +136,11 @@ const AdminMarketplace = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Quản lý Marketplace</h1>
-          <p className="text-gray-500 mt-1">
-            Kiểm duyệt và quản lý các listing trên marketplace
-          </p>
-        </div>
-      </div>
+    <PageContainer
+      icon={HiOutlineShoppingBag}
+      title="Quản lý Marketplace"
+      subtitle="Kiểm duyệt và quản lý các listing trên marketplace"
+    >
 
       {/* Stats Cards */}
       {stats && (
@@ -401,7 +397,7 @@ const AdminMarketplace = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

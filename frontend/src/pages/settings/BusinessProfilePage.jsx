@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  HiOutlineSparkles, HiOutlineSave, HiOutlineRefresh,
+  HiOutlineSave, HiOutlineRefresh,
   HiOutlinePlus, HiOutlineTrash, HiOutlineChevronDown, HiOutlineChevronUp,
   HiOutlineOfficeBuilding, HiOutlineUserGroup, HiOutlineColorSwatch,
   HiOutlineDocumentText, HiOutlinePhotograph, HiOutlineUpload,
@@ -8,6 +8,7 @@ import {
 } from 'react-icons/hi';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import businessProfileApiService from '../../features/settings/services/businessProfileApi.service';
 import productApiService from '../../features/products/services/productApi.service';
@@ -250,19 +251,13 @@ const BusinessProfilePage = () => {
   );
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
-          <HiOutlineSparkles className="w-5 h-5 text-orange-500" />
-        </div>
-        <div>
-          <h2 className="text-base font-bold text-slate-800">{t('businessProfile.title')}</h2>
-          <p className="text-xs text-slate-400 mt-0.5">
-            {t('businessProfile.description')}
-          </p>
-        </div>
-      </div>
+      <PageHeader
+        icon={HiOutlineOfficeBuilding}
+        title={t('businessProfile.title')}
+        subtitle={t('businessProfile.description')}
+      />
 
       {hasProfile && (
         <div className="flex items-center gap-2 text-xs text-green-700 bg-green-50 border border-green-200 rounded-xl px-4 py-2.5">

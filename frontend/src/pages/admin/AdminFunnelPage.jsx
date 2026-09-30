@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { HiOutlineFilter, HiOutlineRefresh } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminFunnelApiService from '../../features/admin/services/adminFunnelApi.service';
 import { useI18n } from '../../i18n';
 
@@ -52,26 +53,25 @@ const AdminFunnelPage = () => {
   const cohorts = data?.cohorts || [];
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <PageContainer
+      title="Phễu kích hoạt"
+      subtitle={
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <HiOutlineFilter className="w-7 h-7 text-primary-600" />
-            Phễu kích hoạt
-          </h1>
-          <p className="text-gray-500 mt-1">
-            Đăng ký → nối kênh → tạo chiến dịch → chạy → trả tiền.
-            {data?.dataSince && (
-              <span className="block text-xs text-amber-700 mt-1">
-                Dữ liệu từ {data.dataSince}. {data.note}
-              </span>
-            )}
-          </p>
+          <span>Đăng ký → nối kênh → tạo chiến dịch → chạy → trả tiền.</span>
+          {data?.dataSince && (
+            <span className="block text-xs text-amber-700 mt-1">
+              Dữ liệu từ {data.dataSince}. {data.note}
+            </span>
+          )}
         </div>
+      }
+      icon={HiOutlineFilter}
+      actions={
         <button type="button" className="btn btn-secondary" onClick={load}>
           <HiOutlineRefresh className="w-4 h-4 mr-2" /> Làm mới
         </button>
-      </div>
+      }
+    >
 
       <p className="text-sm text-gray-500" data-testid="funnel-scope">
         {t('adminFunnel.scopeNote', { since: ymdToVn(data?.since) })}
@@ -175,7 +175,7 @@ const AdminFunnelPage = () => {
           </table>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

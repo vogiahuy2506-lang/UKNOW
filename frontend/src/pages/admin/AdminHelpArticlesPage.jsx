@@ -8,7 +8,9 @@ import {
   HiOutlineDatabase,
   HiOutlineDocumentText,
   HiOutlineTrash,
+  HiOutlineBookOpen,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { useI18n } from '../../i18n';
 import help from '../../services/help.service';
 
@@ -135,12 +137,11 @@ export default function AdminHelpArticlesPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminHelp.title')}</h1>
-          <p className="mt-1 text-gray-500">{t('adminHelp.subtitle')}</p>
-        </div>
+    <PageContainer
+      title={t('adminHelp.title')}
+      subtitle={t('adminHelp.subtitle')}
+      icon={HiOutlineBookOpen}
+      actions={
         <div className="flex flex-wrap items-center gap-2">
           <button
             type="button"
@@ -156,7 +157,8 @@ export default function AdminHelpArticlesPage() {
             {t('adminHelp.newArticle')}
           </Link>
         </div>
-      </div>
+      }
+    >
 
       <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
         {isLoading ? (
@@ -268,6 +270,6 @@ export default function AdminHelpArticlesPage() {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

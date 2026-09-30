@@ -16,8 +16,9 @@ const Tooltip = ({ label, children }) => (
 import {
   HiOutlineRefresh, HiOutlineSearch,
   HiOutlineLockClosed, HiOutlineLockOpen, HiOutlineShieldCheck, HiOutlineShieldExclamation,
-  HiOutlineCurrencyDollar, HiOutlineXCircle, HiOutlineMailOpen, HiOutlineTrash,
+  HiOutlineCurrencyDollar, HiOutlineXCircle, HiOutlineMailOpen, HiOutlineTrash, HiOutlineUsers,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminMembersApiService from '../../features/admin/services/adminMembersApi.service';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
 import { useAuthStore } from '../../stores/authStore';
@@ -520,18 +521,17 @@ const AdminMembersPage = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminMembers.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('adminMembers.systemAccountsDescription')}</p>
-        </div>
+    <PageContainer
+      title={t('adminMembers.title')}
+      subtitle={t('adminMembers.systemAccountsDescription')}
+      icon={HiOutlineUsers}
+      actions={
         <button type="button" onClick={() => { fetchMembers(); fetchPlans(); }} className="btn btn-secondary" disabled={isLoading}>
           <HiOutlineRefresh className="w-4 h-4 mr-2" />
           {t('common.refresh')}
         </button>
-      </div>
+      }
+    >
 
       {/* Năm số đầu trang — theo định nghĩa "khách" (customerDefinitions.js); bấm thẻ để lọc danh sách */}
       {!isAdminView && summary && (
@@ -970,7 +970,7 @@ const AdminMembersPage = () => {
           onClose={() => setPurgeConfirm(null)}
         />
       )}
-    </div>
+    </PageContainer>
   );
 };
 

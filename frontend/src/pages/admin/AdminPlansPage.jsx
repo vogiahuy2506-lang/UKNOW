@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import { HiOutlinePlus, HiOutlineRefresh, HiOutlineSparkles } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminPlansApiService from '../../features/admin/services/adminPlansApi.service';
 import { renderModal, MODAL_SM } from '../../features/admin/plans/planUtils.jsx';
 import { PlanCard, CustomPlanCard } from '../../features/admin/plans/PlanCards';
@@ -144,13 +145,11 @@ const AdminPlansPage = () => {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('adminPlans.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('adminPlans.subtitle')}</p>
-        </div>
+    <PageContainer
+      title={t('adminPlans.title')}
+      subtitle={t('adminPlans.subtitle')}
+      icon={HiOutlineSparkles}
+      actions={
         <div className="flex items-center gap-2">
           <button type="button" onClick={handleRefresh} className="btn btn-secondary" disabled={isLoading}>
             <HiOutlineRefresh className="w-4 h-4 mr-2" />
@@ -166,8 +165,10 @@ const AdminPlansPage = () => {
               <HiOutlinePlus className="w-4 h-4 mr-2" />
               {t('adminPlans.createPlan')}
             </button>
-          ) : null}        </div>
-      </div>
+          ) : null}
+        </div>
+      }
+    >
 
       {/* Toggle tabs */}
       <div className="flex bg-gray-100 rounded-lg p-1 w-fit">
@@ -322,7 +323,7 @@ const AdminPlansPage = () => {
         () => { if (!isDeleting) setDeletePlan(null); },
         MODAL_SM
       )}
-    </div>
+    </PageContainer>
   );
 };
 

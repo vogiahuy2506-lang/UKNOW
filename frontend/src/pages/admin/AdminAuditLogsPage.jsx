@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { HiOutlineRefresh, HiOutlineSearch } from 'react-icons/hi';
+import { HiOutlineRefresh, HiOutlineSearch, HiOutlineClipboardList } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminAuditLogsApiService from '../../features/admin/services/adminAuditLogsApi.service';
 
 const ACTION_LABELS = {
@@ -76,18 +77,17 @@ export default function AdminAuditLogsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Nhật ký hệ thống</h1>
-          <p className="mt-1 text-sm text-gray-500">Theo dõi các thay đổi cấp hệ thống: gói dịch vụ, voucher, đăng ký mới</p>
-        </div>
+    <PageContainer
+      title="Nhật ký hệ thống"
+      subtitle="Theo dõi các thay đổi cấp hệ thống: gói dịch vụ, voucher, đăng ký mới"
+      icon={HiOutlineClipboardList}
+      actions={
         <button type="button" onClick={() => fetchLogs(page)} disabled={loading} className="btn btn-secondary">
           <HiOutlineRefresh className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           Làm mới
         </button>
-      </div>
+      }
+    >
 
       {/* Filters */}
       <form onSubmit={handleFilter} className="card p-5">
@@ -196,6 +196,6 @@ export default function AdminAuditLogsPage() {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 }

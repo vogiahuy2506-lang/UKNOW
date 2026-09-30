@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import PageHeader from '../../components/common/PageHeader';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 import { resolveActionIdempotencyKey } from '../../utils/idempotency.util';
 import {
@@ -972,33 +973,34 @@ const EmailSettings = () => {
   };
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">{t('emailSettings.title')}</h1>
-          <p className="mt-1 text-sm text-slate-500">{t('emailSettings.subtitle')}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={isRefreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-orange-200 hover:text-orange-700 disabled:opacity-70"
-          >
-            <HiOutlineRefresh className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {t('common.refresh')}
-          </button>
-          <button
-            type="button"
-            onClick={openNew}
-            className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
-          >
-            <HiOutlinePlus className="h-4 w-4" />
-            {t('emailSettings.addNewEmail')}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HiOutlineMail}
+        title={t('emailSettings.title')}
+        subtitle={t('emailSettings.subtitle')}
+        actions={
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={refresh}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-orange-200 hover:text-orange-700 disabled:opacity-70"
+            >
+              <HiOutlineRefresh className={`h-4 w-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              {t('common.refresh')}
+            </button>
+            <button
+              type="button"
+              onClick={openNew}
+              className="inline-flex items-center gap-2 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-orange-700"
+            >
+              <HiOutlinePlus className="h-4 w-4" />
+              {t('emailSettings.addNewEmail')}
+            </button>
+          </div>
+        }
+      />
 
       {/* Main Content */}
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-3">

@@ -11,6 +11,7 @@ import {
   HiOutlineShieldCheck,
 } from 'react-icons/hi';
 import diagnosticApiService from '../../features/admin/diagnostic/services/diagnosticApi.service';
+import PageHeader from '../../components/common/PageHeader';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
 import emailSettingsApiService from '../../features/settings/services/emailSettingsApi.service';
 
@@ -683,15 +684,11 @@ export default function DiagnosticPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 rounded-xl bg-orange-100 shrink-0">
-          <HiOutlineBeaker className="w-5 h-5 text-orange-600" />
-        </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Kiểm tra hiệu năng gửi tin</h1>
-          <p className="text-sm text-gray-400">Gửi thực tế với số lượng nhỏ — quan sát thời gian từng chặng và lỗi dễ hiểu</p>
-        </div>
-      </div>
+      <PageHeader
+        icon={HiOutlineBeaker}
+        title="Kiểm tra hiệu năng gửi tin"
+        subtitle="Gửi thực tế với số lượng nhỏ — quan sát thời gian từng chặng và lỗi dễ hiểu"
+      />
 
       <form onSubmit={handleSubmit} className="card overflow-hidden divide-y divide-gray-100">
         <div className="px-5 py-4 flex items-center justify-between gap-3">

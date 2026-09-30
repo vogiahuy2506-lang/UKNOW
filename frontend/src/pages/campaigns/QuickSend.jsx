@@ -26,6 +26,7 @@ import {
   getQuickSendRandomDelayMs,
   formatResumeTimeVn,
 } from './quickSendPacing.util';
+import PageHeader from '../../components/common/PageHeader';
 import {
   HiOutlinePlus,
   HiOutlineMail,
@@ -1453,56 +1454,52 @@ const QuickSend = () => {
   const currentStepIndex = steps.findIndex((s) => s.key === currentStep);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200 sticky top-0 z-10">
-        <div className="max-w-6xl mx-auto px-4 py-4">
-          <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-            <HiOutlineMail className="w-7 h-7 text-orange-500" />
-            {t('quickSend.title')}
-          </h1>
-          <p className="text-sm text-gray-500 mt-1">{t('quickSend.subtitle')}</p>
-        </div>
+    <div className="space-y-6">
+      {/* Header & Step Indicators */}
+      <div className="space-y-4">
+        <PageHeader
+          icon={HiOutlineMail}
+          title={t('quickSend.title')}
+          subtitle={t('quickSend.subtitle')}
+        />
 
         {/* Step Indicators — kênh adapter có giao diện một trang riêng, không đi qua các bước này */}
         {!isAdapterChannel && (
-        <div className="max-w-6xl mx-auto px-4 pb-4">
-          <div className="flex items-center gap-2">
-            {steps.map((step, index) => {
-              const isActive = step.key === currentStep;
-              const isCompleted = index < currentStepIndex || currentStep === QUICK_SEND_STEPS.DONE;
-              const Icon = step.icon;
-              return (
-                <div key={step.key} className="flex items-center">
-                  <div
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition ${
-                      isActive
-                        ? 'bg-orange-100 text-orange-700'
-                        : isCompleted
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-gray-100 text-gray-500'
-                    }`}
-                  >
-                    {isCompleted ? (
-                      <HiOutlineCheckCircle className="w-4 h-4" />
-                    ) : (
-                      <Icon className="w-4 h-4" />
-                    )}
-                    <span>{step.label}</span>
-                  </div>
-                  {index < steps.length - 1 && (
-                    <HiOutlineChevronRight className="w-4 h-4 text-gray-300 mx-1" />
+        <div className="flex items-center gap-2 overflow-x-auto pb-4 border-b border-gray-200">
+          {steps.map((step, index) => {
+            const isActive = step.key === currentStep;
+            const isCompleted = index < currentStepIndex || currentStep === QUICK_SEND_STEPS.DONE;
+            const Icon = step.icon;
+            return (
+              <div key={step.key} className="flex items-center shrink-0">
+                <div
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition ${
+                    isActive
+                      ? 'bg-orange-100 text-orange-700'
+                      : isCompleted
+                      ? 'bg-green-100 text-green-700'
+                      : 'bg-gray-100 text-gray-500'
+                  }`}
+                >
+                  {isCompleted ? (
+                    <HiOutlineCheckCircle className="w-4 h-4" />
+                  ) : (
+                    <Icon className="w-4 h-4" />
                   )}
+                  <span>{step.label}</span>
                 </div>
-              );
-            })}
-          </div>
+                {index < steps.length - 1 && (
+                  <HiOutlineChevronRight className="w-4 h-4 text-gray-300 mx-1" />
+                )}
+              </div>
+            );
+          })}
         </div>
         )}
       </div>
 
       {/* Content */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
+      <div className="space-y-6">
         {/* Channel Selection */}
         {currentStep === QUICK_SEND_STEPS.RECIPIENTS && (
           <div className="space-y-6">

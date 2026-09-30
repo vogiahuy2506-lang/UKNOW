@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import PageHeader from '../../components/common/PageHeader';
 import {
   HiOutlinePlus,
   HiOutlineSearch,
@@ -20,6 +21,7 @@ import {
   HiOutlineClock,
   HiOutlineEye,
   HiOutlineRefresh,
+  HiOutlineViewList,
 } from 'react-icons/hi';
 import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
@@ -365,26 +367,26 @@ const Campaigns = () => {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('campaigns.title')}</h1>
-          <p className="text-gray-500 mt-1">
-            {isAdmin
-              ? t('campaigns.adminDescription')
-              : t('campaigns.userDescription')}
-          </p>
-        </div>
-        {/* Chỉ hiển thị nút tạo khi ở tab tự tạo của tab danh sách chiến dịch */}
-        {activeTab === 'campaigns' && originTab === 'self_created' && (
-          <button
-            onClick={openCreateModal}
-            className="btn btn-primary"
-          >
-            <HiOutlinePlus className="w-5 h-5 mr-2" />
-            {t('campaigns.create')}
-          </button>
-        )}
-      </div>
+      <PageHeader
+        icon={HiOutlineViewList}
+        title={t('campaigns.title')}
+        subtitle={
+          isAdmin
+            ? t('campaigns.adminDescription')
+            : t('campaigns.userDescription')
+        }
+        actions={
+          activeTab === 'campaigns' && originTab === 'self_created' && (
+            <button
+              onClick={openCreateModal}
+              className="btn btn-primary"
+            >
+              <HiOutlinePlus className="w-5 h-5 mr-2" />
+              {t('campaigns.create')}
+            </button>
+          )
+        }
+      />
 
       {/* Main Tabs: Chiến dịch (?tab=campaigns) vs Lịch chạy (?tab=schedules) */}
       <div className="flex gap-6 border-b border-gray-200">

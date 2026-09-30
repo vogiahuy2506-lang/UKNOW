@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { HiMinus, HiPlus, HiOutlineExclamation } from 'react-icons/hi';
+import { HiMinus, HiPlus, HiOutlineExclamation, HiOutlinePlusCircle } from 'react-icons/hi';
+import PageHeader from '../../components/common/PageHeader';
 import { toast } from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
@@ -300,11 +301,12 @@ const TopupPage = () => {
   }
 
   return (
-    <div className="w-full space-y-6 p-4 sm:p-6">
-      <div>
-        <h1 className="text-2xl font-bold text-slate-900">{t('topup.title')}</h1>
-        <p className="mt-1 text-sm text-slate-500">{t('topup.subtitle')}</p>
-      </div>
+    <div className="space-y-6">
+      <PageHeader
+        icon={HiOutlinePlusCircle}
+        title={t('topup.title')}
+        subtitle={t('topup.subtitle')}
+      />
 
       {config?.subscription?.isExpired && (
         <div className="flex items-start gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">

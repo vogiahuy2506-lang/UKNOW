@@ -9,7 +9,9 @@ import {
   HiOutlineTrash,
   HiOutlinePencilAlt,
   HiOutlineReply,
+  HiOutlineTag,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import adminVouchersApiService from '../../features/admin/services/adminVouchersApi.service';
 import { Field, FormSection, ModalShell } from '../../features/admin/plans/PlanModalsShared.jsx';
 import { PriceInput } from '../../features/admin/plans/PlanInputs.jsx';
@@ -644,12 +646,11 @@ export default function AdminVouchersPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('voucherAdmin.title')}</h1>
-          <p className="text-gray-500 mt-1">{t('voucherAdmin.subtitle')}</p>
-        </div>
+    <PageContainer
+      title={t('voucherAdmin.title')}
+      subtitle={t('voucherAdmin.subtitle')}
+      icon={HiOutlineTag}
+      actions={
         <div className="flex items-center gap-2">
           <button type="button" className="btn btn-secondary" onClick={fetchVouchers} disabled={loading}>
             <HiOutlineRefresh className="w-4 h-4 mr-2" /> {t('voucherAdmin.refresh')}
@@ -658,7 +659,8 @@ export default function AdminVouchersPage() {
             <HiOutlinePlus className="w-4 h-4 mr-2" /> {t('voucherAdmin.createButton')}
           </button>
         </div>
-      </div>
+      }
+    >
 
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="card p-4"><p className="text-xs text-gray-400 uppercase">{t('voucherAdmin.activeVouchers')}</p><p className="text-2xl font-bold">{counts.active}</p></div>
@@ -814,6 +816,6 @@ export default function AdminVouchersPage() {
           </table>
         </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }

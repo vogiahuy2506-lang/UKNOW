@@ -8,7 +8,9 @@ import {
   HiOutlineDownload,
   HiOutlineStar,
   HiOutlineClock,
+  HiOutlineShoppingBag,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import toast from 'react-hot-toast';
 import marketplaceService from '../../services/marketplace.service';
 
@@ -179,75 +181,70 @@ const SellerDashboard = () => {
   const { balance, listings: listingsStats, topListings } = dashboard;
 
   return (
-    <div className="min-h-full bg-gray-50">
-      {/* Header */}
-      <div className="bg-white border-b border-gray-200">
-        <div className="px-6 py-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-xl font-bold text-gray-900">Seller Dashboard</h1>
-              <p className="text-sm text-gray-500 mt-1">Thống kê doanh thu từ marketplace</p>
-            </div>
-            <button
-              onClick={fetchDashboard}
-              className="p-2 hover:bg-gray-100 rounded-lg text-gray-500"
-            >
-              <HiOutlineRefresh className="w-5 h-5" />
-            </button>
-          </div>
+    <PageContainer
+      icon={HiOutlineShoppingBag}
+      title="Seller Dashboard"
+      subtitle="Thống kê doanh thu từ marketplace"
+      actions={
+        <button
+          onClick={fetchDashboard}
+          className="btn btn-secondary flex items-center gap-2"
+        >
+          <HiOutlineRefresh className="w-4 h-4" />
+          <span>Làm mới</span>
+        </button>
+      }
+    >
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <StatCard
+          icon={HiOutlineCurrencyDollar}
+          label="Tổng thu nhập"
+          value={balance?.totalEarnings || 0}
+          color="green"
+        />
+        <StatCard
+          icon={HiOutlineTrendingUp}
+          label="Số dư khả dụng"
+          value={balance?.availableBalance || 0}
+          color="orange"
+        />
+        <StatCard
+          icon={HiOutlineChartBar}
+          label="Tổng lượt bán"
+          value={balance?.totalSales || 0}
+          color="blue"
+        />
+        <StatCard
+          icon={HiOutlineEye}
+          label="Tổng lượt xem"
+          value={balance?.totalViews || 0}
+          color="purple"
+        />
+      </div>
 
-          {/* Stats Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-            <StatCard
-              icon={HiOutlineCurrencyDollar}
-              label="Tổng thu nhập"
-              value={balance?.totalEarnings || 0}
-              color="green"
-            />
-            <StatCard
-              icon={HiOutlineTrendingUp}
-              label="Số dư khả dụng"
-              value={balance?.availableBalance || 0}
-              color="orange"
-            />
-            <StatCard
-              icon={HiOutlineChartBar}
-              label="Tổng lượt bán"
-              value={balance?.totalSales || 0}
-              color="blue"
-            />
-            <StatCard
-              icon={HiOutlineEye}
-              label="Tổng lượt xem"
-              value={balance?.totalViews || 0}
-              color="purple"
-            />
-          </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="px-6 flex gap-4 border-t border-gray-100">
-          {[
-            { id: 'overview', label: 'Tổng quan' },
-            { id: 'earnings', label: 'Lịch sử thu nhập' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
-                activeTab === tab.id
-                  ? 'border-orange-500 text-orange-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
+      {/* Tabs */}
+      <div className="flex gap-4 border-b border-gray-100">
+        {[
+          { id: 'overview', label: 'Tổng quan' },
+          { id: 'earnings', label: 'Lịch sử thu nhập' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`py-3 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              activeTab === tab.id
+                ? 'border-orange-500 text-orange-600'
+                : 'border-transparent text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
       </div>
 
       {/* Content */}
-      <div className="p-6">
+      <div>
         {activeTab === 'overview' && (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             {/* Left column */}
@@ -374,7 +371,7 @@ const SellerDashboard = () => {
           </div>
         )}
       </div>
-    </div>
+    </PageContainer>
   );
 };
 

@@ -4,7 +4,7 @@ import { HiOutlineCurrencyDollar } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import affiliateService from '../../services/affiliate.service';
 import { getWithdrawalUrgency } from './affiliateWithdrawalUrgency.util.js';
-import PageHeader from '../../components/common/PageHeader';
+import PageContainer from '../../components/common/PageContainer';
 import Notice from '../../components/common/Notice';
 import StatusChip from '../../components/common/StatusChip';
 
@@ -188,24 +188,23 @@ export default function AdminAffiliatePage() {
   ).length;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6 pb-12">
-      <PageHeader
-        icon={HiOutlineCurrencyDollar}
-        title={t('affiliate.adminTitle')}
-        subtitle={t('affiliate.adminSubtitle')}
-        actions={
-          <button
-            type="button"
-            onClick={() => setIsAdjModalOpen(true)}
-            className="btn btn-primary gap-2"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-            </svg>
-            {t('affiliate.actionAdjustment')}
-          </button>
-        }
-      />
+    <PageContainer
+      icon={HiOutlineCurrencyDollar}
+      title={t('affiliate.adminTitle')}
+      subtitle={t('affiliate.adminSubtitle')}
+      actions={
+        <button
+          type="button"
+          onClick={() => setIsAdjModalOpen(true)}
+          className="btn btn-primary gap-2"
+        >
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+          </svg>
+          {t('affiliate.actionAdjustment')}
+        </button>
+      }
+    >
 
       {/* Tabs */}
       <div className="flex items-center gap-2 border-b border-gray-200">
@@ -747,6 +746,6 @@ export default function AdminAffiliatePage() {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 }

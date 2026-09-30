@@ -12,7 +12,6 @@ import {
   resolveCampaignStatus,
 } from '../../features/customers/utils/campaignCustomerStatus';
 import {
-  HiOutlineArrowLeft,
   HiOutlineSearch,
   HiOutlineMail,
   HiOutlinePhone,
@@ -21,7 +20,9 @@ import {
   HiOutlineCalendar,
   HiOutlineUser,
   HiOutlineEye,
+  HiOutlineUsers,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import {
   CustomerDetailModal,
@@ -170,34 +171,24 @@ const CampaignCustomers = () => {
 
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={() => navigate('/app/customers')}
-          className="p-2 rounded-lg hover:bg-gray-100 shrink-0 transition-colors"
-          aria-label={t('campaignCustomers.goBackAriaLabel')}
-        >
-          <HiOutlineArrowLeft className="w-5 h-5" />
-        </button>
-        <div className="min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h1 className="text-2xl font-bold text-gray-900 truncate">
-              {campaign?.campaignName ?? t('customers.loadingDetail')}
-            </h1>
-            {campaign?.campaignType ? (
-              <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
-                getCampaignTypeMeta(campaign.campaignType).className
-              }`}>
-                {getCampaignTypeMeta(campaign.campaignType).label}
-              </span>
-            ) : null}
-          </div>
-          <p className="text-sm text-gray-500 mt-0.5">
-            {t('campaignCustomers.customerListTitle')}
-          </p>
+    <PageContainer
+      icon={HiOutlineUsers}
+      title={
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="truncate">{campaign?.campaignName ?? t('customers.loadingDetail')}</span>
+          {campaign?.campaignType ? (
+            <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+              getCampaignTypeMeta(campaign.campaignType).className
+            }`}>
+              {getCampaignTypeMeta(campaign.campaignType).label}
+            </span>
+          ) : null}
         </div>
-      </div>
+      }
+      subtitle={t('campaignCustomers.customerListTitle')}
+      onBack={() => navigate('/app/customers')}
+      backLabel={t('campaignCustomers.goBackAriaLabel')}
+    >
 
       {isZaloGroupCampaign && (
         <div className="card p-2 inline-flex gap-1">
@@ -430,7 +421,7 @@ const CampaignCustomers = () => {
         isOpen={!isZaloGroupCampaign && showJourneyModal}
         onClose={closeJourneyModal}
       />
-    </div>
+    </PageContainer>
   );
 };
 

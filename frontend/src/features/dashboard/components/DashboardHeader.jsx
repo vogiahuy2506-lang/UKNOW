@@ -14,9 +14,11 @@
  * @param {import('react').ReactNode} [props.extraActions]
  * @returns {JSX.Element}
  */
+import { HiOutlineHome } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
 const DashboardHeader = ({
+  icon: Icon = HiOutlineHome,
   filters,
   onOpenFilter,
   isLoading,
@@ -39,7 +41,10 @@ const DashboardHeader = ({
     <div className="flex flex-col xl:flex-row xl:items-start xl:justify-between gap-3">
       {/* Title block */}
       <div className="min-w-0">
-        <h1 className="text-2xl font-semibold text-gray-900 tracking-tight">{_title}</h1>
+        <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2.5">
+          {Icon && <Icon className="w-7 h-7 text-orange-500 shrink-0" aria-hidden="true" />}
+          <span>{_title}</span>
+        </h1>
         <p className="text-sm text-gray-500 mt-1">
           {_description}
         </p>

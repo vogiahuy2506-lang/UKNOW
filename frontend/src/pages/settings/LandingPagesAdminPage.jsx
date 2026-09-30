@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import {
   HiOutlinePlus,
@@ -479,39 +480,38 @@ export default function LandingPagesAdminPage() {
   return (
     <div className="relative flex h-full min-h-0 flex-col">
       <div className="space-y-6 flex-1 min-h-0 overflow-auto pr-1">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold text-gray-900">{t('landingPagesAdmin.title')}</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              {t('landingPagesAdmin.description')}
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              type="button"
-              className="btn btn-secondary flex items-center gap-2"
-              onClick={() => {
-                if (activeTab === 'mine') reloadMine();
-                else if (activeTab === 'purchased') reloadPurchased();
-                else reloadShared();
-              }}
-              disabled={loading || purchasedLoading || sharedLoading}
-            >
-              <HiOutlineRefresh className="w-4 h-4" />
-              {t('landingPagesAdmin.reload')}
-            </button>
-            {activeTab === 'mine' && (
+        <PageHeader
+          icon={HiOutlineGlobeAlt}
+          title={t('landingPagesAdmin.title')}
+          subtitle={t('landingPagesAdmin.description')}
+          actions={
+            <>
               <button
                 type="button"
-                className="btn btn-primary flex items-center gap-2"
-                onClick={openCreate}
+                className="btn btn-secondary flex items-center gap-2"
+                onClick={() => {
+                  if (activeTab === 'mine') reloadMine();
+                  else if (activeTab === 'purchased') reloadPurchased();
+                  else reloadShared();
+                }}
+                disabled={loading || purchasedLoading || sharedLoading}
               >
-                <HiOutlinePlus className="w-4 h-4" />
-                {t('landingPagesAdmin.createNew')}
+                <HiOutlineRefresh className="w-4 h-4" />
+                {t('landingPagesAdmin.reload')}
               </button>
-            )}
-          </div>
-        </div>
+              {activeTab === 'mine' && (
+                <button
+                  type="button"
+                  className="btn btn-primary flex items-center gap-2"
+                  onClick={openCreate}
+                >
+                  <HiOutlinePlus className="w-4 h-4" />
+                  {t('landingPagesAdmin.createNew')}
+                </button>
+              )}
+            </>
+          }
+        />
 
         {/* Tabs */}
         <div className="border-b border-gray-200">

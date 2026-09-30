@@ -6,6 +6,8 @@ import {
   HiOutlineRefresh,
   HiOutlineSave,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
+import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import adminSystemEmailTemplateApiService from '../../features/admin/services/adminSystemEmailTemplateApi.service';
 import adminSubscriptionReminderSettingsApiService from '../../features/admin/services/adminSubscriptionReminderSettingsApi.service';
@@ -325,7 +327,7 @@ export default function AdminWelcomeEmailPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <PageContainer>
       <div className="flex flex-wrap gap-2" role="group" aria-label={t('adminWelcomeEmail.pageTabsLabel')}>
         <button
           type="button"
@@ -358,38 +360,40 @@ export default function AdminWelcomeEmailPage() {
           <div className="py-16 text-center text-sm text-gray-400">{t('common.loading')}</div>
         ) : (
           <>
-            <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <HiOutlineMail className="h-7 w-7 text-orange-500" />
-                  <h1 className="text-2xl font-bold text-gray-900">{templateMeta.title}</h1>
+            <PageHeader
+              icon={HiOutlineMail}
+              title={templateMeta.title}
+              subtitle={
+                <div>
+                  <p className="mt-1 text-sm text-gray-500">{templateMeta.subtitle}</p>
+                  <p className="mt-2 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
+                    {t('adminWelcomeEmail.locationNote')}
+                  </p>
                 </div>
-                <p className="mt-1 text-sm text-gray-500">{templateMeta.subtitle}</p>
-                <p className="mt-2 inline-flex rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700">
-                  {t('adminWelcomeEmail.locationNote')}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn btn-secondary inline-flex items-center gap-2"
-                  onClick={reset}
-                  disabled={isResetting || isSaving}
-                >
-                  <HiOutlineRefresh className="h-4 w-4" />
-                  {isResetting ? t('adminWelcomeEmail.resetting') : t('adminWelcomeEmail.restoreDefault')}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn-primary inline-flex items-center gap-2"
-                  onClick={save}
-                  disabled={isSaving || !isDirty}
-                >
-                  <HiOutlineSave className="h-4 w-4" />
-                  {isSaving ? t('common.saving') : t('common.save')}
-                </button>
-              </div>
-            </div>
+              }
+              actions={
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-secondary inline-flex items-center gap-2"
+                    onClick={reset}
+                    disabled={isResetting || isSaving}
+                  >
+                    <HiOutlineRefresh className="h-4 w-4" />
+                    {isResetting ? t('adminWelcomeEmail.resetting') : t('adminWelcomeEmail.restoreDefault')}
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-primary inline-flex items-center gap-2"
+                    onClick={save}
+                    disabled={isSaving || !isDirty}
+                  >
+                    <HiOutlineSave className="h-4 w-4" />
+                    {isSaving ? t('common.saving') : t('common.save')}
+                  </button>
+                </div>
+              }
+            />
 
             <div className="space-y-1.5">
               <span className="text-sm font-medium text-gray-700">{t('adminWelcomeEmail.templateSelector')}</span>
@@ -535,6 +539,6 @@ export default function AdminWelcomeEmailPage() {
           onSave={saveSchedule}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

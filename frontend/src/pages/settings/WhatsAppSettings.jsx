@@ -14,7 +14,9 @@ import {
   HiOutlineIdentification,
   HiOutlineKey,
   HiOutlineUserCircle,
+  HiOutlineChat,
 } from 'react-icons/hi';
+import PageContainer from '../../components/common/PageContainer';
 import { FaWhatsapp } from 'react-icons/fa';
 import whatsappSettingsApiService from '../../features/settings/services/whatsappSettingsApi.service';
 import ChannelAccountSendSettings from '../../features/settings/components/ChannelAccountSendSettings';
@@ -206,15 +208,11 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
   };
 
   return (
-    <div className="space-y-5">
-      {/* ── Header ───────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">WhatsApp</h1>
-          <p className="mt-1 text-sm text-slate-500">
-            {t('whatsAppSettings.subtitle')}
-          </p>
-        </div>
+    <PageContainer
+      icon={HiOutlineChat}
+      title="WhatsApp"
+      subtitle={t('whatsAppSettings.subtitle')}
+      actions={
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -237,7 +235,8 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
             </button>
           )}
         </div>
-      </div>
+      }
+    >
 
       {/* ── Accounts list (mỗi session = 1 card riêng, giống Zalo) ──── */}
       {loading ? (
@@ -413,7 +412,7 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
           }}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 

@@ -4,6 +4,7 @@ import DashboardFilterPanel from '../../features/dashboard/components/DashboardF
 import DashboardOrdersListTable from '../../features/dashboard/components/DashboardOrdersListTable';
 import useOrdersList from '../../features/orders/hooks/useOrdersList';
 import { useI18n } from '../../i18n';
+import { HiOutlineShoppingBag } from 'react-icons/hi';
 
 // ─── Page skeleton ─────────────────────────────────────────────────────────────
 
@@ -110,6 +111,7 @@ const Orders = () => {
     <div className="space-y-6">
       {/* Header + bộ lọc dashboard dùng lại cho trang đơn hàng */}
       <DashboardHeader
+        icon={HiOutlineShoppingBag}
         filters={filters}
         onOpenFilter={() => setIsFilterPanelOpen(true)}
         isLoading={isLoadingOrders}
