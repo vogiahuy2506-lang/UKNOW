@@ -145,7 +145,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       'AI Chatbot': ['Tạo AI Chatbot', 'Lịch sử trò chuyện', 'Thư viện media'],
       'Chiến dịch': [
         'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
-        'Hiệu quả chiến dịch', 'Khách hàng từ chiến dịch',
+        'Giám sát gửi tin', 'Khách hàng từ chiến dịch',
       ],
       'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
       'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
@@ -183,7 +183,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     const linkNames = links.map((l) => l.textContent);
     // ĐÚNG 2 mục — không phải quick_send/channel_management/message_templates/
     // customers (mỗi mục đó cần một permission khác mà nhân viên này không có).
-    expect(linkNames).toEqual(['Quản lý chiến dịch', 'Hiệu quả chiến dịch']);
+    expect(linkNames).toEqual(['Quản lý chiến dịch', 'Giám sát gửi tin']);
   });
 
   // PLAN_NHAN_VIEN PR-3 mục 5 (P2): 3 mục AI Chatbot từng `ownerOnly` dù route + backend cho nhân viên có
@@ -346,7 +346,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     const links = screen.getAllByRole('link');
     const linkNames = links.map((l) => l.textContent);
     // Vẫn chỉ đúng 2 mục có quyền campaigns_view
-    expect(linkNames).toEqual(['Quản lý chiến dịch', 'Hiệu quả chiến dịch']);
+    expect(linkNames).toEqual(['Quản lý chiến dịch', 'Giám sát gửi tin']);
   });
 
   it('render tại /app/campaigns, mock cấu hình dời campaign_management vào chuyên mục "Vận hành" → nhóm "Vận hành" tự mở, link có aria-current="page"', async () => {

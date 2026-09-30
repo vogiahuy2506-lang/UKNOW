@@ -6,7 +6,7 @@ import { EMAIL_SENT_STATUS_SQL_LIST } from '../../constants/emailMessageStatus.j
  * (email_messages, zalo_messages, campaign_channel_messages), không đọc customer_journey hay bộ đếm
  * campaign_runs / campaigns.total_sent (hai nguồn đó lệch: thiếu thư không gắn khách, phình với lượt cũ).
  *
- * MỘT bộ dựng CTE cho cả 6 truy vấn; các hàm public chỉ khác câu SELECT cuối:
+ * MỘT bộ dựng CTE cho cả 7 truy vấn; các hàm public chỉ khác câu SELECT cuối:
  *
  *   msgs  = UNION ALL 3 bảng, mỗi nhánh TỰ lọc phạm vi + cửa sổ trên cột gốc của bảng đó (để dùng index
  *           (workspace_owner_id, sent_at)), chỉ giữ dòng "đã gửi" hoặc "lỗi"; mỗi dòng mang cờ is_sent / is_failed …
@@ -87,15 +87,27 @@ function makeScopePredicate(scope, bag) {
 }
 
 /**
- * Điều kiện cửa sổ thời gian — hai dạng, đều tính trong SQL:
+ * Điều kiện cửa sổ thời gian — ba dạng, đều tính trong SQL:
  * - `{ kind: 'days', days }`: N×24 giờ gần nhất tính đến lúc chạy.
  * - `{ kind: 'range', fromDate, toDate }`: 'YYYY-MM-DD' theo NGÀY VN, gồm trọn ngày `toDate`.
+ * - `{ kind: 'hours', hours }`: `hours` giờ TRÒN gần nhất (gồm giờ hiện tại) — chỉ cho chuỗi theo giờ.
  * `naive(cột)` cho cột `timestamp` (giờ VN); `tz(biểu thức)` cho `timestamptz` — mốc ngày VN đổi sang
  * timestamptz bằng AT TIME ZONE. `null` = không giới hạn thời gian (số theo lượt chạy / chiến dịch).
  */
 function makeWindowPredicates(window, bag) {
   if (!window) {
     return { naive: () => 'TRUE', tz: () => 'TRUE' };
+  }
+  if (window.kind === 'hours') {
+    // `hours` giờ TRÒN gần nhất, gồm giờ hiện tại đang chạy dở: mốc đầu = đầu giờ VN của (hours - 1) giờ trước.
+    // Chuỗi theo giờ cần ranh giới giờ chẵn — cửa sổ cuộn "24×60 phút" sẽ cắt cụt cột giờ đầu tiên.
+    // Chỉ dùng nội bộ cho hourlySeries (normalizeWindow không nhận dạng này).
+    const hours = bag.add(window.hours);
+    const start = `(date_trunc('hour', LOCALTIMESTAMP) - make_interval(hours => (${hours}::int - 1)))`;
+    return {
+      naive: (column) => `${column} >= ${start}`,
+      tz: (expression) => `${expression} >= (${start} AT TIME ZONE '${VN_TZ}')`,
+    };
   }
   if (window.kind === 'days') {
     const days = bag.add(window.days);
@@ -226,7 +238,7 @@ function adapterBranch({ channelsRef, scope, window, filter, detail }) {
  *
  * @param {object} input
  * @param {{ ownerId: number|null, excludeOwnerIds: number[] }} input.scope
- * @param {null|{kind: 'days', days: number}|{kind: 'range', fromDate: string, toDate: string}} input.window
+ * @param {null|{kind: 'days', days: number}|{kind: 'range', fromDate: string, toDate: string}|{kind: 'hours', hours: number}} input.window
  * @param {{ email: string|null, zalo: string[], adapter: string[] }} input.channels khoá kênh theo bảng chứa
  * @param {{ runIds?: number[], runId?: number, campaignIds?: number[] }} [input.filters]
  * @param {boolean} [input.detail] thêm lý do / người nhận cho `dest` (liệt kê lỗi)
@@ -340,6 +352,35 @@ class SendStatsRepository {
        ) per_day
        GROUP BY day, channel
        ORDER BY day, channel`,
+      bag.values
+    );
+    return rows;
+  }
+
+  /**
+   * Như dailySeries nhưng nhóm theo GIỜ VN. Cùng một bộ CTE (không chép SQL): tin đã gửi theo giờ của tin, đích lỗi
+   * tính vào giờ của lần thử lỗi cuối trong cửa sổ. `hour` là timestamptz đầu giờ (Date).
+   *
+   * @returns {Promise<Array<{hour: Date, channel: string, sent: string, failed: string}>>}
+   */
+  async hourlySeries({ scope, window, channels }) {
+    const { sql, bag } = buildSourceCtes({ scope, window, channels });
+    const { rows } = await db.query(
+      `${sql}
+       SELECT (hour_vn AT TIME ZONE '${VN_TZ}') AS hour, channel, SUM(sent) AS sent, SUM(failed) AS failed
+       FROM (
+         SELECT date_trunc('hour', at_vn) AS hour_vn, channel, COUNT(*) AS sent, 0::bigint AS failed
+         FROM msgs
+         WHERE is_sent
+         GROUP BY 1, 2
+         UNION ALL
+         SELECT date_trunc('hour', last_failed_at) AS hour_vn, channel, 0::bigint AS sent, COUNT(*) AS failed
+         FROM dest
+         WHERE ${FINAL_FAILED_DEST_SQL}
+         GROUP BY 1, 2
+       ) per_hour
+       GROUP BY hour_vn, channel
+       ORDER BY hour_vn, channel`,
       bag.values
     );
     return rows;

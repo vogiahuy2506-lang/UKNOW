@@ -8,6 +8,7 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 const repository = {
   channelTotals: jest.fn(),
   dailySeries: jest.fn(),
+  hourlySeries: jest.fn(),
   runTotals: jest.fn(),
   campaignTotals: jest.fn(),
   actorTotals: jest.fn(),
@@ -163,6 +164,47 @@ describe('getDailySeries', () => {
       { day: '2026-03-11', channel: 'email', sent: 2, failed: 0 },
       { day: '2026-03-11', channel: 'telegram', sent: 2, failed: 1 },
     ]);
+  });
+});
+
+describe('getHourlySeries', () => {
+  it('cửa sổ { kind: hours } + phạm vi chuẩn hoá đi xuống repository; hour ra ISO, số ở dạng số, sắp theo giờ rồi kênh', async () => {
+    repository.hourlySeries.mockResolvedValue([
+      { hour: new Date('2026-09-29T17:00:00.000Z'), channel: 'telegram', sent: '2', failed: '1' },
+      { hour: new Date('2026-09-29T16:00:00.000Z'), channel: 'zalo_personal', sent: '4', failed: '0' },
+      { hour: new Date('2026-09-29T17:00:00.000Z'), channel: 'email', sent: '3', failed: '0' },
+      { hour: new Date('2026-09-29T16:00:00.000Z'), channel: 'email', sent: '1', failed: '2' },
+    ]);
+    expect(await service.getHourlySeries({ ownerId: '39' }, { hours: 24 })).toEqual([
+      { hour: '2026-09-29T16:00:00.000Z', channel: 'email', sent: 1, failed: 2 },
+      { hour: '2026-09-29T16:00:00.000Z', channel: 'zalo_personal', sent: 4, failed: 0 },
+      { hour: '2026-09-29T17:00:00.000Z', channel: 'email', sent: 3, failed: 0 },
+      { hour: '2026-09-29T17:00:00.000Z', channel: 'telegram', sent: 2, failed: 1 },
+    ]);
+    expect(repository.hourlySeries).toHaveBeenCalledWith({
+      scope: { ownerId: 39, excludeOwnerIds: [] },
+      window: { kind: 'hours', hours: 24 },
+      channels: KENH_CHO_REPOSITORY,
+    });
+  });
+
+  it.each([
+    ['thiếu tham số', undefined],
+    ['hours thiếu', {}],
+    ['hours = 0', { hours: 0 }],
+    ['hours âm', { hours: -1 }],
+    ['hours thập phân', { hours: 1.5 }],
+    ['hours là chuỗi', { hours: '24' }],
+    ['hours quá lớn (744 là trần)', { hours: 745 }],
+  ])('ném RangeError và KHÔNG chạm repository: %s', async (_ten, options) => {
+    await expect(service.getHourlySeries({ ownerId: 1 }, options)).rejects.toThrow(RangeError);
+    expect(repository.hourlySeries).not.toHaveBeenCalled();
+  });
+
+  it('phạm vi thiếu chủ thì ném TypeError, không rơi sang toàn hệ thống', async () => {
+    await expect(service.getHourlySeries({}, { hours: 24 })).rejects.toThrow(TypeError);
+    await expect(service.getHourlySeries(undefined, { hours: 24 })).rejects.toThrow(TypeError);
+    expect(repository.hourlySeries).not.toHaveBeenCalled();
   });
 });
 

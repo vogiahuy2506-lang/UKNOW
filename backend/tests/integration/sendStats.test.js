@@ -17,6 +17,7 @@ import * as dbHelpers from './helpers/db.js';
 import {
   getChannelTotals,
   getDailySeries,
+  getHourlySeries,
   getRunTotals,
   getCampaignTotals,
   getActorTotals,
@@ -637,6 +638,163 @@ describe('sendStats — cửa sổ cuộn { days }', () => {
     await expect(getChannelTotals({ ownerId: owner }, { days: 0 })).rejects.toThrow(RangeError);
     await expect(getChannelTotals({ ownerId: owner }, { fromDate: '2026-02-30', toDate: '2026-03-01' })).rejects.toThrow(TypeError);
     await expect(getChannelTotals({ ownerId: owner }, { fromDate: '2026-03-02', toDate: '2026-03-01' })).rejects.toThrow(RangeError);
+  });
+});
+
+// ───────────────────────── Chuỗi theo giờ VN (PR-4b) ─────────────────────────
+
+describe('sendStats — getHourlySeries: dòng 23:30 hôm qua và 00:30 hôm nay vào đúng giờ VN', () => {
+  let owner;
+  let stranger;
+  let day;
+
+  // Giờ VN = UTC + 7: đầu giờ 23:00 VN hôm qua = 16:00 UTC hôm qua, đầu giờ 00:00 VN hôm nay = 17:00 UTC hôm qua.
+  // Mốc kỳ vọng viết tay từ ngày VN mà DB báo, không tính bằng chính code đang test.
+  const hourIso = (date, hh) => new Date(`${date}T${hh}:00:00+07:00`).toISOString();
+  const yesterdayAt = (time) => `((CURRENT_DATE - 1)::timestamp + interval '${time}')`;
+  const todayAt = (time) => `(CURRENT_DATE::timestamp + interval '${time}')`;
+
+  beforeAll(async () => {
+    await dbHelpers.truncateAll();
+    owner = await createOwner('hourly');
+    stranger = await createOwner('hourly_stranger');
+    const { rows } = await db.query(
+      `SELECT to_char(CURRENT_DATE, 'YYYY-MM-DD') AS today, to_char(CURRENT_DATE - 1, 'YYYY-MM-DD') AS yesterday`
+    );
+    day = rows[0];
+    const c = await createContext(owner);
+
+    // Email (timestamp giờ VN): 23:30 hôm qua → giờ 23; 00:30 và 00:45 hôm nay → cùng giờ 00 của hôm nay.
+    await insertEmail(c, { to: 'h1@t.vn', when: yesterdayAt('23:30:00') });
+    await insertEmail(c, { to: 'h2@t.vn', when: todayAt('00:30:00') });
+    await insertEmail(c, { to: 'h3@t.vn', when: todayAt('00:45:00') });
+    // Zalo cá nhân: giây cuối 23:59:59 vẫn thuộc giờ 23, giây đầu 00:00:00 thuộc giờ 00 ngày kế.
+    await insertZalo(c, { to: '0900000001', colStatus: 'sent', when: yesterdayAt('23:59:59') });
+    await insertZalo(c, { to: '0900000002', colStatus: 'sent', when: todayAt('00:00:00') });
+    // Telegram (timestamptz) viết bằng giờ VN: 23:05 hôm qua = 16:05 UTC, 00:15 hôm nay = 17:15 UTC hôm qua.
+    await insertAdapter(c, { to: 't1', status: 'sent', when: yesterdayAt('23:05:00') });
+    await insertAdapter(c, { to: 't2', status: 'sent', when: todayAt('00:15:00') });
+
+    // Lỗi: hai lần thử 23:10 và 23:40 hôm qua, không bao giờ gửi được → MỘT đích lỗi, tính vào giờ của lần thử lỗi cuối (23).
+    await insertEmail(c, { to: 'f1@t.vn', status: 'failed', when: yesterdayAt('23:10:00') });
+    await insertEmail(c, { to: 'f1@t.vn', status: 'failed', when: yesterdayAt('23:40:00') });
+    // Lỗi 23:50 hôm qua rồi gửi được lúc 00:10 hôm nay → đích đã gửi: chỉ có dòng "đã gửi" ở giờ 00, không có lỗi nào.
+    await insertEmail(c, { to: 'f2@t.vn', status: 'failed', when: yesterdayAt('23:50:00') });
+    await insertEmail(c, { to: 'f2@t.vn', status: 'sent', when: todayAt('00:10:00') });
+    // Zalo nhóm lỗi 00:20 hôm nay; lời mời kết bạn là kênh riêng nhưng vẫn có mặt ở phép gom (màn tự loại khỏi "tin").
+    await insertZalo(c, { channel: 'zalo_group', to: 'g1', colStatus: 'failed', when: todayAt('00:20:00') });
+    await insertZalo(c, { channel: 'zalo_friend_request', to: '0911000001', colStatus: 'sent', when: todayAt('00:25:00') });
+    // Gửi nhanh (preview) và tin của chủ khác không vào.
+    await insertEmail(c, { to: 'quick@t.vn', preview: true, when: todayAt('00:30:00') });
+    const other = await createContext(stranger);
+    await insertEmail(other, { to: 's@t.vn', when: todayAt('00:30:00') });
+  });
+
+  it('mỗi dòng vào đúng đầu giờ VN (timestamptz), sắp theo giờ rồi thứ tự kênh; lỗi tính theo ĐÍCH ở giờ của lần thử cuối', async () => {
+    const yesterday23 = hourIso(day.yesterday, '23');
+    const today00 = hourIso(day.today, '00');
+    expect(await getHourlySeries({ ownerId: owner }, { hours: 72 })).toEqual([
+      { hour: yesterday23, channel: 'email', sent: 1, failed: 1 }, // sent: h1 ; failed: f1 (hai lần thử = MỘT đích, giờ của lần 23:40)
+      { hour: yesterday23, channel: 'zalo_personal', sent: 1, failed: 0 }, // 23:59:59
+      { hour: yesterday23, channel: 'telegram', sent: 1, failed: 0 }, // 23:05 VN
+      { hour: today00, channel: 'email', sent: 3, failed: 0 }, // h2, h3, f2 (gửi được sau lần lỗi → không còn là lỗi)
+      { hour: today00, channel: 'zalo_personal', sent: 1, failed: 0 }, // 00:00:00
+      { hour: today00, channel: 'zalo_group', sent: 0, failed: 1 }, // 00:20
+      { hour: today00, channel: 'zalo_friend_request', sent: 1, failed: 0 },
+      { hour: today00, channel: 'telegram', sent: 1, failed: 0 }, // 00:15 VN
+    ]);
+  });
+
+  it('cộng theo giờ = tổng theo kênh cùng dữ liệu (sent và failed)', async () => {
+    const series = await getHourlySeries({ ownerId: owner }, { hours: 72 });
+    const totals = await getChannelTotals({ ownerId: owner }, { days: 7 });
+    for (const total of totals) {
+      const rows = series.filter((row) => row.channel === total.channel);
+      expect(rows.reduce((sum, row) => sum + row.sent, 0)).toBe(total.sent);
+      expect(rows.reduce((sum, row) => sum + row.failed, 0)).toBe(total.failed);
+    }
+    // Đối chứng dương: tổng không phải toàn số 0.
+    expect(totals.reduce((sum, row) => sum + row.sent, 0)).toBe(9);
+  });
+
+  it('chủ khác không thấy số của chủ này; chủ mới không có dữ liệu → mảng rỗng', async () => {
+    expect(await getHourlySeries({ ownerId: stranger }, { hours: 72 })).toEqual([
+      { hour: hourIso(day.today, '00'), channel: 'email', sent: 1, failed: 0 },
+    ]);
+    const nobody = await createOwner('hourly_nobody');
+    expect(await getHourlySeries({ ownerId: nobody }, { hours: 72 })).toEqual([]);
+  });
+
+  it('toàn hệ thống cộng cả hai chủ (bộ lọc phạm vi có mặt ở cả ba bảng)', async () => {
+    const all = await getHourlySeries({ ownerId: null }, { hours: 72 });
+    const email00 = all.find((row) => row.channel === 'email' && row.hour === hourIso(day.today, '00'));
+    expect(email00).toEqual({ hour: hourIso(day.today, '00'), channel: 'email', sent: 4, failed: 0 });
+  });
+});
+
+describe('sendStats — getHourlySeries: mốc đầu cửa sổ là ĐẦU GIỜ VN, cho cả cột timestamp lẫn timestamptz', () => {
+  let owner;
+  let startHourIso;
+  let currentHourIso;
+  let beforeCurrentHourIso;
+  // Cửa sổ 24 giờ = 23 giờ đã khép + giờ hiện tại → mốc đầu = đầu giờ của 23 giờ trước (không phải "bây giờ - 24 giờ").
+  const START = "date_trunc('hour', LOCALTIMESTAMP) - interval '23 hours'";
+  const CURRENT = "date_trunc('hour', LOCALTIMESTAMP)";
+
+  beforeAll(async () => {
+    await dbHelpers.truncateAll();
+    owner = await createOwner('hourly_edge');
+    const { rows } = await db.query(
+      `SELECT to_char(${START}, 'YYYY-MM-DD"T"HH24:MI:SS') || '+07:00' AS start_at,
+              to_char(${CURRENT}, 'YYYY-MM-DD"T"HH24:MI:SS') || '+07:00' AS current_at`
+    );
+    startHourIso = new Date(rows[0].start_at).toISOString();
+    currentHourIso = new Date(rows[0].current_at).toISOString();
+    const c = await createContext(owner);
+
+    await insertEmail(c, { to: 'in@t.vn', when: START }); // đúng giây đầu của cửa sổ → trong
+    await insertEmail(c, { to: 'out@t.vn', when: `${START} - interval '1 second'` }); // giây cuối của giờ trước → ngoài
+    await insertZalo(c, { to: '0900000001', colStatus: 'sent', when: START });
+    await insertZalo(c, { to: '0900000002', colStatus: 'sent', when: `${START} - interval '1 second'` });
+    await insertAdapter(c, { to: 't-in', status: 'sent', when: START });
+    await insertAdapter(c, { to: 't-out', status: 'sent', when: `${START} - interval '1 second'` });
+    await insertEmail(c, { to: 'now@t.vn', when: CURRENT }); // giờ hiện tại đang chạy dở vẫn có mặt
+    await insertEmail(c, { to: 'before-now@t.vn', when: `${CURRENT} - interval '1 second'` }); // giây cuối của giờ liền trước giờ hiện tại
+    beforeCurrentHourIso = new Date(new Date(currentHourIso).getTime() - 3600_000).toISOString();
+  });
+
+  it('hours = 24: giây đầu của giờ thứ 24 (tính lùi) trong, giây liền trước ngoài — email, Zalo và Telegram đều đúng biên', async () => {
+    expect(await getHourlySeries({ ownerId: owner }, { hours: 24 })).toEqual([
+      { hour: startHourIso, channel: 'email', sent: 1, failed: 0 },
+      { hour: startHourIso, channel: 'zalo_personal', sent: 1, failed: 0 },
+      { hour: startHourIso, channel: 'telegram', sent: 1, failed: 0 },
+      { hour: beforeCurrentHourIso, channel: 'email', sent: 1, failed: 0 },
+      { hour: currentHourIso, channel: 'email', sent: 1, failed: 0 },
+    ]);
+  });
+
+  it('hours = 1: chỉ giờ hiện tại — giây cuối của giờ liền trước nằm NGOÀI; hours = 2 thì lấy thêm đúng một giờ đó', async () => {
+    expect(await getHourlySeries({ ownerId: owner }, { hours: 1 })).toEqual([
+      { hour: currentHourIso, channel: 'email', sent: 1, failed: 0 },
+    ]);
+    expect(await getHourlySeries({ ownerId: owner }, { hours: 2 })).toEqual([
+      { hour: beforeCurrentHourIso, channel: 'email', sent: 1, failed: 0 },
+      { hour: currentHourIso, channel: 'email', sent: 1, failed: 0 },
+    ]);
+  });
+
+  it('hours = 25: lấy thêm đúng MỘT giờ phía trước — ba dòng "out" (giây cuối của giờ trước) nay vào cửa sổ', async () => {
+    const previousHourIso = new Date(new Date(startHourIso).getTime() - 3600_000).toISOString();
+    expect(await getHourlySeries({ ownerId: owner }, { hours: 25 })).toEqual([
+      { hour: previousHourIso, channel: 'email', sent: 1, failed: 0 },
+      { hour: previousHourIso, channel: 'zalo_personal', sent: 1, failed: 0 },
+      { hour: previousHourIso, channel: 'telegram', sent: 1, failed: 0 },
+      { hour: startHourIso, channel: 'email', sent: 1, failed: 0 },
+      { hour: startHourIso, channel: 'zalo_personal', sent: 1, failed: 0 },
+      { hour: startHourIso, channel: 'telegram', sent: 1, failed: 0 },
+      { hour: beforeCurrentHourIso, channel: 'email', sent: 1, failed: 0 },
+      { hour: currentHourIso, channel: 'email', sent: 1, failed: 0 },
+    ]);
   });
 });
 

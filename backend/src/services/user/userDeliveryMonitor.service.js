@@ -1,569 +1,249 @@
+import sendStats from '../stats/sendStats.service.js';
+import userDeliveryMonitorRepository from '../../repositories/user/userDeliveryMonitor.repository.js';
 import deliveryMonitorRepository from '../../repositories/admin/deliveryMonitor.repository.js';
-import campaignChannelMessageStatsRepository from '../../repositories/campaign/campaignChannelMessageStats.repository.js';
-import { buildDeliveryTimeline } from '../../utils/deliveryMonitorTimeline.util.js';
-import { buildTopRunsQuery, mapTopRunRow } from '../shared/deliveryMonitorTopRuns.query.js';
 import {
   buildZaloSilentDropHourlySql,
   buildZaloSilentDropSignals,
-  classifyDeliveryMonitorFailure,
 } from '../../utils/deliveryMonitorSignals.util.js';
-import { inferZaloUnreachableReason } from '../../utils/zaloPhoneCampaign.util.js';
 
-const clampWindowDays = (value) => {
-  const parsed = Number.parseInt(value, 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return 7;
-  return Math.min(parsed, 90);
-};
+/**
+ * PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-4b — trang "Giám sát gửi tin" trả lời MỘT câu: hôm nay gửi tới đâu rồi,
+ * có gì đang kẹt. Số theo khoảng thời gian dài thuộc trang Báo cáo.
+ *
+ * Mọi con số ĐẾM TIN đi qua module services/stats/sendStats.service.js (đọc bảng tin, "chưa gửi được" đếm theo người
+ * nhận đã trừ lần gửi lại thành công, `aborted` không phải lỗi). File này KHÔNG được tự đếm từ customer_journey,
+ * bộ đếm campaign_runs hay nhật ký node campaign_executions — ba nguồn đó đã làm màn cũ đếm đôi và báo "tụt" giả.
+ */
+
+const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+const RECENT_RUNS_LIMIT = 10;
+const HOURLY_WINDOW_HOURS = 24;
+const FAILURES_LIMIT = 200;
+
+// Lời mời kết bạn Zalo là một kênh riêng của module đếm (plan mục 2): không cộng vào "tin" đã gửi / chưa gửi được.
+const FRIEND_REQUEST_CHANNEL = 'zalo_friend_request';
+
+// Chiến dịch one-shot chờ tới bước kế / chờ SMTP nhả đều ghi cùng mã lý do này; dấu hiệu thật để biết là SMTP chặn
+// là run_metadata.emailRateLimitAt trong khung 12 giờ (+1 giờ dư). KHỚP frontend/src/features/campaigns/utils/
+// campaignQuotaPause.helpers.js (danh sách chiến dịch) — hai màn phải nói cùng một câu về cùng một lượt chạy.
+const ALL_RECIPIENTS_WAITING_REASON = 'all_recipients_waiting_next_due';
+const SMTP_RATE_LIMITED_REASON = 'smtp_rate_limited';
+const SMTP_RATE_LIMIT_PAUSE_WINDOW_MS = 13 * 60 * 60 * 1000;
 
 const toNumber = (value) => Number(value || 0);
 
-const safeQuery = (sql, params = [], fallback = []) =>
-  deliveryMonitorRepository.safeQuery(sql, params, fallback);
-
-const inferChannel = (row = {}) => {
-  const raw = [row.channel, row.event_channel, row.node_subtype, row.action_type, row.campaign_type]
-    .map((item) => String(item || '').toLowerCase());
-  const joined = raw.join(' ');
-  if (joined.includes('zalo_group')) return 'zalo_group';
-  if (joined.includes('zalo')) return 'zalo';
-  // W7b — kênh adapter (campaign_type telegram/telegram_group/whatsapp, node send_telegram/send_whatsapp).
-  if (joined.includes('telegram')) return 'telegram';
-  if (joined.includes('whatsapp')) return 'whatsapp';
-  return 'email';
+const toIso = (value) => {
+  if (value == null) return null;
+  const date = value instanceof Date ? value : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
 };
 
-const classifyFailure = classifyDeliveryMonitorFailure;
+function toPositiveInt(value) {
+  if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
+  if (typeof value === 'string' && /^[0-9]{1,15}$/.test(value) && Number(value) > 0) return Number(value);
+  return null;
+}
 
-export async function getUserDeliveryMonitorOverview({ userId, windowDays: rawWindowDays } = {}) {
-  const windowDays = clampWindowDays(rawWindowDays);
-  const params = [windowDays, userId];
+function httpError(status, message) {
+  const err = new Error(message);
+  err.status = status;
+  return err;
+}
 
-  const params48h = [2, userId];
+/**
+ * Ngày hôm nay theo giờ VN dạng 'YYYY-MM-DD' — đúng bất kể múi giờ của tiến trình (production chạy UTC: 00:30 giờ VN
+ * vẫn còn là ngày hôm trước theo UTC).
+ *
+ * @param {Date} [now]
+ * @returns {string}
+ */
+export function getVnToday(now = new Date()) {
+  return now.toLocaleDateString('sv-SE', { timeZone: VN_TIME_ZONE });
+}
 
-  const [
-    runStatusRows,
-    sentRows,
-    executionFailureRows,
-    emailFailureRows,
-    zaloFailureRows,
-    openedClickedRows,
-    timelineRows,
-    topRunRows,
-    recentErrorRows,
-    runLevelErrorRows,
-    hardBounceRows,
-    zaloDisconnectedRows,
-    pendingRetryRows,
-    zaloSkipRows,
-    sentRows48h,
-    execFail48h,
-    emailFail48h,
-    zaloFail48h,
-    totalRecipientsRows,
-    silentDropAccountRows,
-    adapterRows,
-    adapterRows48h,
-    adapterHourlyRows,
-  ] = await Promise.all([
-    safeQuery(
-      `SELECT cr.status, COUNT(*)::int AS count
-       FROM campaign_runs cr
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND c.id_user = $2
-       GROUP BY cr.status`,
-      params
-    ),
-    safeQuery(
-      `SELECT
-         CASE
-           WHEN cj.event_type = 'email_sent' THEN 'email'
-           WHEN cj.event_channel = 'zalo_group' OR c.campaign_type = 'zalo_group' THEN 'zalo_group'
-           ELSE 'zalo'
-         END AS channel,
-         COUNT(*)::int AS count
-       FROM customer_journey cj
-       JOIN campaigns c ON c.id = cj.id_campaign
-       JOIN campaign_runs cr ON cr.id = cj.id_run
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND cj.event_type IN ('email_sent', 'zalo_sent')
-         AND c.id_user = $2
-       GROUP BY channel`,
-      params
-    ),
-    safeQuery(
-      `SELECT
-         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'email') AS channel,
-         COUNT(*)::int AS count
-       FROM campaign_executions ce
-       JOIN campaign_runs cr ON cr.id = ce.id_run
-       JOIN campaigns c ON c.id = ce.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
-         AND c.id_user = $2
-       GROUP BY channel`,
-      params
-    ),
-    safeQuery(
-      `SELECT 'email' AS channel, COUNT(*)::int AS count
-       FROM email_messages em
-       JOIN campaign_runs cr ON cr.id = em.id_run
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
-         AND NOT em.is_preview
-         AND c.id_user = $2`,
-      params
-    ),
-    safeQuery(
-      `SELECT COALESCE(zm.channel, 'zalo') AS channel, COUNT(*)::int AS count
-       FROM zalo_messages zm
-       JOIN campaign_runs cr ON cr.id = zm.id_run
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
-         AND NOT zm.is_preview
-         AND c.id_user = $2
-       GROUP BY COALESCE(zm.channel, 'zalo')`,
-      params,
-      [{ channel: 'zalo', count: 0 }]
-    ),
-    safeQuery(
-      `SELECT
-         cj.event_type,
-         CASE
-           WHEN cj.event_type LIKE 'email_%' THEN 'email'
-           WHEN cj.event_channel = 'zalo_group' OR c.campaign_type = 'zalo_group' THEN 'zalo_group'
-           ELSE 'zalo'
-         END AS channel,
-         COUNT(*)::int AS count
-       FROM customer_journey cj
-       JOIN campaigns c ON c.id = cj.id_campaign
-       JOIN campaign_runs cr ON cr.id = cj.id_run
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND cj.event_type IN ('email_opened', 'email_clicked', 'zalo_clicked')
-         AND c.id_user = $2
-       GROUP BY cj.event_type, channel`,
-      params
-    ),
-    safeQuery(
-      `SELECT
-         to_char(date_trunc('hour', cj.event_at), 'YYYY-MM-DD HH24:00') AS bucket,
-         COUNT(*) FILTER (WHERE cj.event_type = 'email_sent')::int AS email,
-         COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent' AND COALESCE(cj.event_channel,'') <> 'zalo_group')::int AS zalo,
-         COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent' AND cj.event_channel = 'zalo_group')::int AS zalo_group
-       FROM customer_journey cj
-       JOIN campaigns c ON c.id = cj.id_campaign
-       WHERE cj.event_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND cj.event_type IN ('email_sent', 'zalo_sent')
-         AND c.id_user = $2
-       GROUP BY date_trunc('hour', cj.event_at)
-       ORDER BY date_trunc('hour', cj.event_at) ASC`,
-      params
-    ),
-    safeQuery(buildTopRunsQuery({ limit: 20, userScoped: true }), params),
-    safeQuery(
-      `SELECT
-         ce.id, ce.id_run, ce.node_name, ce.node_subtype, ce.action_type,
-         ce.error_message, ce.updated_at::timestamptz AS updated_at,
-         c.campaign_name, c.campaign_type
-       FROM campaign_executions ce
-       JOIN campaigns c ON c.id = ce.id_campaign
-       WHERE ce.updated_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND ce.error_message IS NOT NULL
-         AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
-         AND c.id_user = $2
-       ORDER BY ce.updated_at DESC
-       LIMIT 15`,
-      params
-    ),
-    // Pre-flight / run-level failures (no execution rows) — show in recentErrors only.
-    safeQuery(
-      `SELECT
-         cr.id AS run_id,
-         cr.error_message,
-         COALESCE(cr.completed_at, cr.started_at)::timestamptz AS updated_at,
-         c.campaign_name, c.campaign_type
-       FROM campaign_runs cr
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND c.id_user = $2
-         AND LOWER(cr.status) = 'failed'
-         AND NULLIF(BTRIM(COALESCE(cr.error_message, '')), '') IS NOT NULL
-         AND NOT EXISTS (
-           SELECT 1 FROM campaign_executions ce
-           WHERE ce.id_run = cr.id
-             AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
-         )
-       ORDER BY COALESCE(cr.completed_at, cr.started_at) DESC
-       LIMIT 15`,
-      params
-    ),
-    safeQuery(
-      `SELECT COUNT(*)::int AS count FROM customers WHERE id_user = $1 AND email_hard_bounced = true`,
-      [userId],
-      [{ count: 0 }]
-    ),
-    safeQuery(
-      `SELECT COUNT(*)::int AS count FROM zalo_settings
-       WHERE id_user = $1
-         AND is_active = true
-         AND (status <> 'connected' OR restore_fail_count > 0)`,
-      [userId],
-      [{ count: 0 }]
-    ),
-    safeQuery(
-      `SELECT COUNT(*)::int AS count
-       FROM campaign_run_recipient_steps crrs
-       JOIN campaign_runs cr ON cr.id = crrs.id_run
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE c.id_user = $1
-         AND crrs.meta ? 'retryCount'
-         AND TRIM(COALESCE(crrs.meta->>'retryCount','')) ~ '^[0-9]+$'
-         AND (crrs.meta->>'retryCount')::int > 0`,
-      [userId],
-      [{ count: 0 }]
-    ),
-    safeQuery(
-      `SELECT COUNT(*)::int AS count
-       FROM campaign_run_recipient_steps crrs
-       JOIN campaign_runs cr ON cr.id = crrs.id_run
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE c.id_user = $2
-         AND crrs.meta ? 'zaloAbandonReason'
-         AND crrs.updated_at >= NOW() - ($1::int * INTERVAL '1 day')`,
-      params,
-      [{ count: 0 }]
-    ),
-    safeQuery(
-      `SELECT
-         CASE
-           WHEN cj.event_type = 'email_sent' THEN 'email'
-           WHEN cj.event_channel = 'zalo_group' OR c.campaign_type = 'zalo_group' THEN 'zalo_group'
-           ELSE 'zalo'
-         END AS channel,
-         COUNT(*)::int AS count
-       FROM customer_journey cj
-       JOIN campaigns c ON c.id = cj.id_campaign
-       JOIN campaign_runs cr ON cr.id = cj.id_run
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND cj.event_type IN ('email_sent', 'zalo_sent')
-         AND c.id_user = $2
-       GROUP BY channel`,
-      params48h
-    ),
-    safeQuery(
-      `SELECT
-         COALESCE(ce.node_subtype, ce.action_type, c.campaign_type::text, 'email') AS channel,
-         COUNT(*)::int AS count
-       FROM campaign_executions ce
-       JOIN campaign_runs cr ON cr.id = ce.id_run
-       JOIN campaigns c ON c.id = ce.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(ce.status::text, '')) IN ('failed', 'error', 'failure')
-         AND c.id_user = $2
-       GROUP BY channel`,
-      params48h
-    ),
-    safeQuery(
-      `SELECT 'email' AS channel, COUNT(*)::int AS count
-       FROM email_messages em
-       JOIN campaign_runs cr ON cr.id = em.id_run
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(em.status::text, '')) IN ('failed', 'bounced', 'error')
-         AND NOT em.is_preview
-         AND c.id_user = $2`,
-      params48h
-    ),
-    safeQuery(
-      `SELECT COALESCE(zm.channel, 'zalo') AS channel, COUNT(*)::int AS count
-       FROM zalo_messages zm
-       JOIN campaign_runs cr ON cr.id = zm.id_run
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND LOWER(COALESCE(zm.status::text, '')) IN ('failed', 'error')
-         AND NOT zm.is_preview
-         AND c.id_user = $2
-       GROUP BY COALESCE(zm.channel, 'zalo')`,
-      params48h,
-      [{ channel: 'zalo', count: 0 }]
-    ),
-    safeQuery(
-      `SELECT
-         CASE
-           WHEN c.campaign_type::text ILIKE '%zalo_group%' THEN 'zalo_group'
-           WHEN c.campaign_type::text ILIKE '%zalo%' THEN 'zalo'
-           WHEN c.campaign_type::text ILIKE '%telegram%' THEN 'telegram'
-           WHEN c.campaign_type::text ILIKE '%whatsapp%' THEN 'whatsapp'
-           ELSE 'email'
-         END AS channel,
-         SUM(GREATEST(cr.total_recipients, 0))::int AS total_recipients
-       FROM campaign_runs cr
-       JOIN campaigns c ON c.id = cr.id_campaign
-       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-         AND c.id_user = $2
-       GROUP BY channel`,
-      params
-    ),
-    safeQuery(buildZaloSilentDropHourlySql({ userScoped: true }), [userId], []),
-    // W7b — Telegram/WhatsApp ghi ở campaign_channel_messages (không có customer_journey/zalo_messages).
-    campaignChannelMessageStatsRepository.countByChannelStatus({ ownerUserId: userId, windowDays }),
-    campaignChannelMessageStatsRepository.countByChannelStatus({ ownerUserId: userId, windowDays: 2 }),
-    campaignChannelMessageStatsRepository.hourlySentByChannel({ ownerUserId: userId, windowDays }),
+/**
+ * Bảng lượt chạy "Đang chờ": mốc chờ còn ở tương lai (mốc đã qua là dấu vết chưa dọn, lượt sẽ được đánh thức) và mã
+ * lý do. `nonContinuous…` cùng mã cho hai chuyện khác nhau nên tách SMTP chặn ra bằng emailRateLimitAt.
+ *
+ * @param {{ deferred_until: string|null, deferred_reason: string|null, email_rate_limit_at: string|null }} row
+ * @param {number} nowMs
+ * @returns {{ until: string, reason: string|null }|null}
+ */
+function resolveWaiting(row, nowMs) {
+  const untilMs = Date.parse(String(row.deferred_until || ''));
+  if (!Number.isFinite(untilMs) || untilMs <= nowMs) return null;
+
+  let reason = String(row.deferred_reason || '').trim() || null;
+  if (reason === ALL_RECIPIENTS_WAITING_REASON) {
+    const limitedAtMs = Date.parse(String(row.email_rate_limit_at || ''));
+    if (Number.isFinite(limitedAtMs) && untilMs > limitedAtMs && untilMs - limitedAtMs <= SMTP_RATE_LIMIT_PAUSE_WINDOW_MS) {
+      reason = SMTP_RATE_LIMITED_REASON;
+    }
+  }
+  return { until: new Date(untilMs).toISOString(), reason };
+}
+
+/**
+ * "Cần gửi" của lượt = total_recipients CHỈ khi bộ đếm đáng tin: lượt tạo sau bản sửa 26/09 20:36 (lượt cũ phình / về
+ * 0) VÀ total_recipients ≥ số đã gửi thật (nhỏ hơn thì bộ đếm sai). total_recipients = 0 nghĩa là "chưa biết", không
+ * phải "cần gửi 0 tin" → null. Không tin được thì null và màn chỉ hiện số đã gửi.
+ */
+function resolvePlanned(row, sent) {
+  if (!row.counters_reliable) return null;
+  const total = toNumber(row.total_recipients);
+  return total > 0 && total >= sent ? total : null;
+}
+
+/** Tổng hôm nay: kênh "tin" cộng lại, lời mời kết bạn tách riêng. */
+function buildToday(channelTotals, date) {
+  const messageChannels = channelTotals.filter((row) => row.channel !== FRIEND_REQUEST_CHANNEL);
+  const friendRequests = channelTotals.find((row) => row.channel === FRIEND_REQUEST_CHANNEL);
+  return {
+    date,
+    sent: messageChannels.reduce((sum, row) => sum + row.sent, 0),
+    failed: messageChannels.reduce((sum, row) => sum + row.failed, 0),
+    byChannel: messageChannels.map(({ channel, sent, failed }) => ({ channel, sent, failed })),
+    friendRequests: { sent: friendRequests?.sent ?? 0, failed: friendRequests?.failed ?? 0 },
+  };
+}
+
+/** 10 lượt mới nhất + số đã gửi / chưa gửi được của từng lượt (cộng mọi kênh của lượt, đọc từ bảng tin). */
+async function loadRecentRuns(scope, ownerId) {
+  const rows = await userDeliveryMonitorRepository.listRecentRuns({ ownerId, limit: RECENT_RUNS_LIMIT });
+  const totals = await sendStats.getRunTotals(scope, rows.map((row) => Number(row.id)));
+  return { rows, totals };
+}
+
+/**
+ * Tổng quan "hôm nay" của một chủ tài khoản.
+ *
+ * @param {{ userId: number }} input `userId` = chủ tài khoản (controller đã đổi nhân viên → chủ)
+ * @returns {Promise<{
+ *   generatedAt: string,
+ *   today: { date: string, sent: number, failed: number,
+ *     byChannel: Array<{ channel: string, sent: number, failed: number }>,
+ *     friendRequests: { sent: number, failed: number } },
+ *   hourly: Array<{ hour: string, channel: string, sent: number, failed: number }>,
+ *   runs: Array<{ runId: number, campaignId: number, campaignName: string, campaignType: string, status: string,
+ *     startedAt: string|null, waitingUntil: string|null, waitingReason: string|null,
+ *     sent: number, failed: number, planned: number|null }>,
+ *   waiting: { count: number, first: { campaignName: string, waitingReason: string|null, waitingUntil: string }|null },
+ *   running: number,
+ *   signals: Array<object>
+ * }>}
+ */
+export async function getUserDeliveryMonitorOverview({ userId } = {}) {
+  const ownerId = toPositiveInt(userId);
+  if (ownerId == null) {
+    throw new TypeError('userDeliveryMonitor: userId phải là số nguyên dương (chủ tài khoản)');
+  }
+  const scope = { ownerId };
+  const now = new Date();
+  const nowMs = now.getTime();
+  const today = getVnToday(now);
+
+  const [channelTotals, hourlyRows, recentRuns, runningRows, silentDropRows] = await Promise.all([
+    sendStats.getChannelTotals(scope, { fromDate: today, toDate: today }),
+    sendStats.getHourlySeries(scope, { hours: HOURLY_WINDOW_HOURS }),
+    loadRecentRuns(scope, ownerId),
+    userDeliveryMonitorRepository.listRunningRuns({ ownerId }),
+    // Tín hiệu "Zalo gửi mà không tới" giữ nguyên như trước (một truy vấn 1 giờ gần nhất theo tài khoản Zalo).
+    deliveryMonitorRepository.safeQuery(buildZaloSilentDropHourlySql({ userScoped: true }), [ownerId], []),
   ]);
 
-  const CHANNEL_LABELS = { email: 'Email', zalo: 'Zalo cá nhân', zalo_group: 'Zalo nhóm', telegram: 'Telegram', whatsapp: 'WhatsApp' };
-  const buildChannels = (sRows, execFRows, emailFRows, zaloFRows, ocRows = [], totRows = [], adapterCountRows = []) => {
-    const map = {
-      email: { channel: 'email', label: CHANNEL_LABELS.email, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
-      zalo: { channel: 'zalo', label: CHANNEL_LABELS.zalo, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
-      zalo_group: { channel: 'zalo_group', label: CHANNEL_LABELS.zalo_group, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
-      telegram: { channel: 'telegram', label: CHANNEL_LABELS.telegram, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
-      whatsapp: { channel: 'whatsapp', label: CHANNEL_LABELS.whatsapp, sent: 0, failed: 0, opened: 0, clicked: 0, totalRecipients: 0 },
+  const totalsByRun = new Map();
+  for (const row of recentRuns.totals) {
+    const acc = totalsByRun.get(row.runId) || { sent: 0, failed: 0 };
+    acc.sent += row.sent;
+    acc.failed += row.failed;
+    totalsByRun.set(row.runId, acc);
+  }
+
+  const runs = recentRuns.rows.map((row) => {
+    const runId = Number(row.id);
+    const { sent, failed } = totalsByRun.get(runId) || { sent: 0, failed: 0 };
+    // Mốc chờ chỉ có nghĩa với lượt đang chạy; lượt đã xong / dừng còn sót khoá defer trong metadata thì bỏ qua.
+    const waiting = row.status === 'running' ? resolveWaiting(row, nowMs) : null;
+    return {
+      runId,
+      campaignId: Number(row.id_campaign),
+      campaignName: row.campaign_name,
+      campaignType: row.campaign_type,
+      status: row.status,
+      startedAt: toIso(row.started_at),
+      waitingUntil: waiting?.until ?? null,
+      waitingReason: waiting?.reason ?? null,
+      sent,
+      failed,
+      planned: resolvePlanned(row, sent),
     };
-    sRows.forEach((row) => { map[inferChannel(row)].sent += toNumber(row.count); });
-    [...execFRows, ...emailFRows, ...zaloFRows].forEach((row) => {
-      map[inferChannel(row)].failed += toNumber(row.count);
-    });
-    ocRows.forEach((row) => {
-      const ch = map[inferChannel(row)];
-      const type = String(row.event_type || '').toLowerCase();
-      if (type.includes('opened')) ch.opened += toNumber(row.count);
-      if (type.includes('clicked')) ch.clicked += toNumber(row.count);
-    });
-    totRows.forEach((row) => { map[inferChannel(row)].totalRecipients += toNumber(row.total_recipients); });
-    // W7b — sent/failed của kênh adapter đến từ campaign_channel_messages (không trùng nguồn với các hàng trên).
-    adapterCountRows.forEach((row) => {
-      const ch = map[inferChannel({ channel: row.channel })];
-      if (row.status === 'sent') ch.sent += toNumber(row.count);
-      else if (row.status === 'failed') ch.failed += toNumber(row.count);
-    });
-    return Object.values(map).map((item) => {
-      const attempts = item.sent + item.failed;
-      const successRate = attempts > 0 ? Math.round((item.sent / attempts) * 1000) / 10 : 0;
-      const coverage = item.totalRecipients > 0
-        ? Math.round((item.sent / item.totalRecipients) * 1000) / 10
-        : null;
-      return { ...item, attempts, successRate, coverage };
-    });
-  };
-  const channels = buildChannels(sentRows, executionFailureRows, emailFailureRows, zaloFailureRows, openedClickedRows, totalRecipientsRows, adapterRows);
-  const channelsRecent = buildChannels(sentRows48h, execFail48h, emailFail48h, zaloFail48h, [], [], adapterRows48h);
+  });
 
-  const runStatus = runStatusRows.reduce((acc, row) => {
-    acc[String(row.status || 'unknown')] = toNumber(row.count);
-    return acc;
-  }, {});
-
-  const summary = channels.reduce(
-    (acc, item) => { acc.sent += item.sent; acc.failed += item.failed; acc.opened += item.opened; acc.clicked += item.clicked; return acc; },
-    { sent: 0, failed: 0, opened: 0, clicked: 0,
-      totalRuns: Object.values(runStatus).reduce((s, v) => s + toNumber(v), 0),
-      runningRuns: toNumber(runStatus.running),
-      completedRuns: toNumber(runStatus.completed),
-      failedRuns: toNumber(runStatus.failed) }
-  );
-  summary.attempts = summary.sent + summary.failed;
-  summary.successRate = summary.attempts > 0 ? Math.round((summary.sent / summary.attempts) * 1000) / 10 : 0;
-
-  const topRuns = topRunRows.map(mapTopRunRow);
-
-  const recentErrorsFromExecutions = recentErrorRows.map((row) => ({
-    id: row.id, runId: row.id_run, campaignName: row.campaign_name,
-    channel: inferChannel(row), nodeName: row.node_name, nodeSubtype: row.node_subtype,
-    category: classifyFailure(row.error_message),
-    errorMessage: String(row.error_message || '').slice(0, 500), updatedAt: row.updated_at,
-  }));
-
-  const runLevelErrors = runLevelErrorRows.map((row) => ({
-    id: `run-${row.run_id}`,
-    runId: row.run_id,
-    campaignName: row.campaign_name,
-    channel: inferChannel({ campaign_type: row.campaign_type }),
-    nodeName: null,
-    nodeSubtype: null,
-    category: classifyFailure(row.error_message),
-    errorMessage: String(row.error_message || '').slice(0, 500),
-    updatedAt: row.updated_at,
-  }));
-
-  const recentErrors = [...recentErrorsFromExecutions, ...runLevelErrors]
-    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
-    .slice(0, 15);
-
-  const quietStart = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_START ?? '23', 10);
-  const quietEnd = Number.parseInt(process.env.ZALO_OUTBOUND_QUIET_HOURS_END ?? '6', 10);
-  const nowVN = new Date(Date.now() + 7 * 60 * 60 * 1000);
-  const currentHourVN = nowVN.getUTCHours();
-  const inQuietHours = quietStart > quietEnd
-    ? currentHourVN >= quietStart || currentHourVN < quietEnd
-    : currentHourVN >= quietStart && currentHourVN < quietEnd;
+  // "Đang chờ" / "đang gửi" xét trên MỌI lượt running của chủ, không chỉ 10 lượt mới nhất.
+  const waitingRuns = runningRows
+    .map((row) => ({ row, waiting: resolveWaiting(row, nowMs) }))
+    .filter((item) => item.waiting)
+    .sort((a, b) => Date.parse(a.waiting.until) - Date.parse(b.waiting.until));
+  const soonest = waitingRuns[0];
 
   return {
-    generatedAt: new Date().toISOString(),
-    windowDays,
-    summary,
-    channels,
-    channelsRecent,
-    timeline: buildDeliveryTimeline(timelineRows, adapterHourlyRows),
-    topRuns,
-    recentErrors,
-    signals: buildZaloSilentDropSignals(silentDropAccountRows),
-    health: {
-      hardBounceCount: toNumber(hardBounceRows[0]?.count),
-      zaloDisconnectedCount: toNumber(zaloDisconnectedRows[0]?.count),
-      pendingRetryCount: toNumber(pendingRetryRows[0]?.count),
-      zaloSkipCount: toNumber(zaloSkipRows[0]?.count),
-      zaloQuietHours: { inQuietHours, start: quietStart, end: quietEnd, currentHourVN },
+    generatedAt: now.toISOString(),
+    today: buildToday(channelTotals, today),
+    hourly: hourlyRows.filter((row) => row.channel !== FRIEND_REQUEST_CHANNEL),
+    runs,
+    waiting: {
+      count: waitingRuns.length,
+      first: soonest
+        ? {
+          campaignName: soonest.row.campaign_name,
+          waitingReason: soonest.waiting.reason,
+          waitingUntil: soonest.waiting.until,
+        }
+        : null,
     },
+    running: runningRows.length - waitingRuns.length,
+    signals: buildZaloSilentDropSignals(silentDropRows),
   };
 }
 
 /**
- * Lấy chi tiết lỗi người nhận của một lượt chạy (dành cho trang Delivery Monitor).
+ * Người nhận CHƯA GỬI ĐƯỢC của một lượt chạy (trang Giám sát gửi tin, bấm số "Chưa gửi được" ở hàng lượt chạy).
+ * Mỗi người/bước một dòng (người thử 3 lần rồi gửi được thì KHÔNG có mặt), lần lỗi mới nhất trước; `aborted` (tin chưa
+ * từng gửi: hoãn / bỏ qua / lượt bị dừng) không phải lỗi. Số phần tử (khi chưa chạm trần 200) đúng bằng `failed` của lượt
+ * ở overview vì cùng một module đếm.
  *
  * @param {object} input
- * @param {number} input.userId
+ * @param {number} input.userId chủ tài khoản
  * @param {number|string} input.runId
- * @returns {Promise<{ runId: number, recipientAudit: object|null, failures: Array }>}
+ * @returns {Promise<{ runId: number, recipientAudit: object|null, failures: Array<{
+ *   channel: string, recipient: string|null, recipientDisplay: string|null, reason: string|null,
+ *   attempts: number, lastAt: Date|string|null }> }>}
  */
 export async function getRunFailures({ userId, runId }) {
-  const safeUserId = Number.parseInt(userId, 10);
-  const safeRunId = Number.parseInt(runId, 10);
-  if (!Number.isFinite(safeUserId) || !Number.isFinite(safeRunId)) {
-    const err = new Error('Tham số không hợp lệ');
-    err.status = 400;
-    throw err;
+  const ownerId = toPositiveInt(userId);
+  const safeRunId = toPositiveInt(runId);
+  if (ownerId == null || safeRunId == null) {
+    throw httpError(400, 'Tham số không hợp lệ');
   }
 
-  // 1. Xác thực quyền sở hữu run
-  const runRows = await safeQuery(
-    `SELECT cr.id, cr.run_metadata
-     FROM campaign_runs cr
-     JOIN campaigns c ON c.id = cr.id_campaign
-     WHERE cr.id = $1 AND c.id_user = $2`,
-    [safeRunId, safeUserId]
-  );
-
-  if (!runRows || runRows.length === 0) {
-    const err = new Error('Không tìm thấy lượt chạy');
-    err.status = 404;
-    throw err;
+  // Kiểm lượt thuộc chủ TRƯỚC khi đọc tin: id của người khác không được lộ người nhận.
+  const run = await userDeliveryMonitorRepository.findOwnedRun({ ownerId, runId: safeRunId });
+  if (!run) {
+    throw httpError(404, 'Không tìm thấy lượt chạy');
   }
 
-  const recipientAudit = runRows[0]?.run_metadata?.recipientAudit || null;
-
-  // 2. Lấy lỗi Zalo
-  // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, SỬA 27/09 chiều — cùng loại C với em.sent_at/created_at
-  // (khối email ngay dưới), bị sót ở lượt PR-T1 đầu: zm.sent_at/zm.created_at đều không múi giờ
-  // (production 27/09), node-pg đọc thô như giờ tiến trình. Bọc AT TIME ZONE để trả đúng giờ VN.
-  const zaloRows = await safeQuery(
-    `SELECT
-       zm.recipient_value AS recipient,
-       zm.tracking_metadata->>'error' AS error,
-       COUNT(*)::int AS count,
-       (MAX(COALESCE(zm.sent_at, zm.created_at)) AT TIME ZONE 'Asia/Ho_Chi_Minh') AS last_at,
-       crrs.meta->>'lastFailureReason' AS ledger_reason,
-       crrs.last_completed_step AS ledger_step
-     FROM zalo_messages zm
-     LEFT JOIN campaign_run_recipient_steps crrs
-       ON crrs.id_run = zm.id_run
-      AND LOWER(TRIM(crrs.recipient_key)) = LOWER(TRIM(zm.recipient_value))
-      AND crrs.channel = 'zalo_personal'
-     WHERE zm.id_run = $1
-       AND zm.status IN ('failed', 'aborted')
-       AND NOT COALESCE(zm.is_preview, false)
-     GROUP BY zm.recipient_value, zm.tracking_metadata->>'error', crrs.meta->>'lastFailureReason', crrs.last_completed_step
-     ORDER BY COUNT(*)::int DESC
-     LIMIT 200`,
-    [safeRunId]
-  );
-
-  // 3. Lấy lỗi Email (chỉ cột có trong bootstrap.sql)
-  // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 việc 3 — em.sent_at/em.created_at đều không múi
-  // giờ (production 27/09), node-pg đọc thô như giờ tiến trình (UTC). Bọc AT TIME ZONE để trả
-  // đúng giờ VN dù nhánh COALESCE rơi vào cột nào.
-  const emailRows = await safeQuery(
-    `SELECT
-       em.recipient_email AS recipient,
-       COUNT(*)::int AS count,
-       (MAX(COALESCE(em.sent_at, em.created_at)) AT TIME ZONE 'Asia/Ho_Chi_Minh') AS last_at,
-       em.bounce_type,
-       em.bounce_code,
-       crrs.meta->>'lastFailureReason' AS ledger_reason,
-       crrs.last_completed_step AS ledger_step
-     FROM email_messages em
-     LEFT JOIN campaign_run_recipient_steps crrs
-       ON crrs.id_run = em.id_run
-      AND LOWER(TRIM(crrs.recipient_key)) = LOWER(TRIM(em.recipient_email))
-      AND crrs.channel = 'email'
-     WHERE em.id_run = $1
-       AND em.status IN ('failed', 'bounced')
-       AND NOT COALESCE(em.is_preview, false)
-     GROUP BY em.recipient_email, em.bounce_type, em.bounce_code, crrs.meta->>'lastFailureReason', crrs.last_completed_step
-     ORDER BY COUNT(*)::int DESC
-     LIMIT 200`,
-    [safeRunId]
-  );
-
-  // 4. Lấy lỗi kênh adapter (Telegram/WhatsApp) — bảng riêng campaign_channel_messages (P2). Không dùng
-  // zalo_messages/email_messages nên hai truy vấn trên KHÔNG thấy các lỗi này.
-  const adapterRows = await campaignChannelMessageStatsRepository.listRunFailures({ runId: safeRunId });
-
-  const zaloFailures = (zaloRows || []).map((row) => {
-    const errorMsg = String(row.error || '').trim();
-    const reason = row.ledger_reason
-      || (errorMsg ? inferZaloUnreachableReason(errorMsg) : null)
-      || 'unknown';
-    return {
-      channel: 'zalo',
-      recipient: row.recipient,
-      reason,
-      error: errorMsg,
-      count: Number(row.count) || 1,
-      lastAt: row.last_at,
-      ledgerStep: row.ledger_step != null ? Number(row.ledger_step) : 0,
-    };
-  });
-
-  const emailFailures = (emailRows || []).map((row) => {
-    const reason = row.ledger_reason || (row.bounce_type ? 'bounced' : 'failed');
-    const errorMsg = row.bounce_type
-      ? `Bounce (${row.bounce_type}${row.bounce_code ? ` - ${row.bounce_code}` : ''})`
-      : 'Gửi email thất bại';
-    return {
-      channel: 'email',
-      recipient: row.recipient,
-      reason,
-      error: errorMsg,
-      count: Number(row.count) || 1,
-      lastAt: row.last_at,
-      ledgerStep: row.ledger_step != null ? Number(row.ledger_step) : 0,
-    };
-  });
-
-  const adapterFailures = (adapterRows || []).map((row) => ({
-    channel: row.channel, // 'telegram' | 'whatsapp' — FE hiện nhãn kênh
-    recipient: row.recipient_display && row.recipient_display !== row.recipient
-      ? `${row.recipient_display} (${row.recipient})`
-      : row.recipient,
-    // ledger_reason là nhãn ổn định nhất (hard/transient/consent...); rơi về error_category rồi 'unknown'.
-    reason: row.ledger_reason || row.error_category || 'unknown',
-    error: String(row.error_message || '').trim(),
-    count: Number(row.count) || 1,
-    lastAt: row.last_at,
-    ledgerStep: row.ledger_step != null ? Number(row.ledger_step) : 0,
-  }));
-
-  const allFailures = [...zaloFailures, ...emailFailures, ...adapterFailures]
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 200);
+  const failures = await sendStats.listFinalFailures({ ownerId }, { runId: safeRunId, limit: FAILURES_LIMIT });
 
   return {
     runId: safeRunId,
-    recipientAudit,
-    failures: allFailures,
+    recipientAudit: run.recipient_audit || null,
+    failures: failures.map((failure) => ({
+      channel: failure.channel,
+      recipient: failure.recipient,
+      recipientDisplay: failure.recipientDisplay,
+      reason: failure.reason,
+      attempts: failure.attempts,
+      lastAt: failure.at,
+    })),
   };
 }
-

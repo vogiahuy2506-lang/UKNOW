@@ -10,7 +10,7 @@ export const HELP_UI_GLOSSARY = [
   ['Gói & Thanh toán', 'Plan & Billing'],
   ['Quản lý kênh gửi', 'Channel Management'],
   ['Chạy chiến dịch', 'Run Campaign'],
-  ['Hiệu quả chiến dịch', 'Campaign performance'],
+  ['Giám sát gửi tin', 'Delivery monitor'],
   ['Quản lý chiến dịch', 'Campaign Management'],
   ['Thư viện nội dung', 'Content library'],
   ['Mẫu tin nhắn', 'Message Templates'],

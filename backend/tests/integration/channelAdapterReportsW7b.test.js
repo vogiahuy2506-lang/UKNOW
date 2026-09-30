@@ -7,7 +7,7 @@
  *
  * Covered:
  *   - Giám sát gửi (user): tổng gửi +5, theo kênh telegram 3 / whatsapp 2, failed +1, preview KHÔNG tính,
- *     không thấy dữ liệu của user khác; timeline có cột telegram/whatsapp
+ *     không thấy dữ liệu của user khác; biểu đồ giờ có dòng telegram/whatsapp
  *   - Giám sát gửi (admin): toàn hệ thống (5 + 4), preview không tính
  *   - Dashboard: journeyEvents.telegramSent/whatsappSent, bộ lọc campaignType=telegram/whatsapp/email
  *   - Hồ sơ: telegramSentCycle/whatsappSentCycle theo KỲ gói (P10: hạn mức riêng; messagingSent* chỉ còn Zalo, không cộng tin adapter)
@@ -96,17 +96,17 @@ describe('W7b — giám sát gửi của user', () => {
       .get('/api/delivery-monitor/overview')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    const { summary, channels, timeline } = res.body.data;
+    // PR-4b: trang chỉ còn "hôm nay" (today) + biểu đồ 24 giờ (hourly) — hết `channels` / `summary` / `timeline`.
+    const { today, hourly } = res.body.data;
 
-    expect(byChannel(channels, 'telegram')).toMatchObject({ sent: 3, failed: 1, label: 'Telegram' });
-    expect(byChannel(channels, 'whatsapp')).toMatchObject({ sent: 2, failed: 0, label: 'WhatsApp' });
-    expect(summary.sent).toBe(5);
-    expect(summary.failed).toBe(1);
+    expect(byChannel(today.byChannel, 'telegram')).toMatchObject({ sent: 3, failed: 1 });
+    expect(byChannel(today.byChannel, 'whatsapp')).toMatchObject({ sent: 2, failed: 0 });
+    expect(today.sent).toBe(5);
+    expect(today.failed).toBe(1);
 
-    const tgTotal = timeline.reduce((s, r) => s + r.telegram, 0);
-    const waTotal = timeline.reduce((s, r) => s + r.whatsapp, 0);
-    expect(tgTotal).toBe(3);
-    expect(waTotal).toBe(2);
+    const hourlySent = (channel) => hourly.filter((r) => r.channel === channel).reduce((s, r) => s + r.sent, 0);
+    expect(hourlySent('telegram')).toBe(3);
+    expect(hourlySent('whatsapp')).toBe(2);
   });
 });
 

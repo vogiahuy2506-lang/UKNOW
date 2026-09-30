@@ -176,6 +176,12 @@ jest.unstable_mockModule('../../controllers/scheduledPlanChange.controller.js', 
   };
 });
 
+// PR-4b — trang Giám sát gửi tin: route dùng `import * as ctrl` (export có tên) nên giả lập tường minh, không qua Proxy.
+jest.unstable_mockModule('../../controllers/userDeliveryMonitor.controller.js', () => ({
+  overview: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'overview' }),
+  runFailures: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'runFailures' }),
+}));
+
 // Import routes after mocking
 const { default: adminLandingPageRoutes } = await import('../adminLandingPage.routes.js');
 const { default: customerRoutes } = await import('../customer.routes.js');
@@ -195,6 +201,7 @@ const { default: uploadRoutes } = await import('../upload.routes.js');
 const { default: dashboardRoutes } = await import('../dashboard.routes.js');
 const { default: marketplaceRoutes } = await import('../marketplace.routes.js');
 const { default: paymentRoutes } = await import('../payment.routes.js');
+const { default: userDeliveryMonitorRoutes } = await import('../userDeliveryMonitor.routes.js');
 
 const app = express();
 app.use(express.json());
@@ -216,6 +223,7 @@ app.use('/api/uploads', uploadRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/marketplace', marketplaceRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/delivery-monitor', userDeliveryMonitorRoutes);
 
 describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   const selfUser = {
@@ -714,6 +722,44 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       const res = await request(app).post('/api/campaigns/quick-send/attachments').send({});
       expect(res.status).toBe(200);
       expect(res.body.method).toBe('uploadQuickSendAttachment');
+    });
+  });
+
+  // PR-4b (audit C-06) — trang Giám sát gửi tin là trang VẬN HÀNH CHIẾN DỊCH: FE (App.jsx `delivery-monitor`,
+  // navConfig `delivery_monitor`) đòi `campaigns_view`, nên BE phải đòi ĐÚNG khoá đó. Trước đây BE đòi
+  // `reports_view`: nhân viên chỉ có `campaigns_view` thấy menu nhưng mọi API trả 403.
+  describe('15. Delivery monitor (/api/delivery-monitor)', () => {
+    const endpoints = ['/api/delivery-monitor/overview', '/api/delivery-monitor/runs/7/failures'];
+
+    it('allows employee with campaigns_view permission (200) on both endpoints — cùng khoá với menu FE', async () => {
+      currentTestUser = createEmployee({ campaigns_view: true });
+      for (const url of endpoints) {
+        const res = await request(app).get(url);
+        expect(res.status).toBe(200);
+      }
+    });
+
+    it('blocks employee that only has reports_view (403) — khoá cũ của BE không còn mở trang này', async () => {
+      currentTestUser = createEmployee({ reports_view: true, campaigns_view: false });
+      for (const url of endpoints) {
+        const res = await request(app).get(url);
+        expect(res.status).toBe(403);
+        expect(res.body.code).toBe('PERMISSION_DENIED');
+      }
+    });
+
+    it('blocks employee without any of the two permissions (403)', async () => {
+      currentTestUser = createEmployee({});
+      const res = await request(app).get(endpoints[0]);
+      expect(res.status).toBe(403);
+    });
+
+    it('allows owner in self context (200)', async () => {
+      currentTestUser = selfUser;
+      for (const url of endpoints) {
+        const res = await request(app).get(url);
+        expect(res.status).toBe(200);
+      }
     });
   });
 });

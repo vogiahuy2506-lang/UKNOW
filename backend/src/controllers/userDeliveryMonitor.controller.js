@@ -7,9 +7,9 @@ const handleError = (res, err) => {
 
 export async function overview(req, res) {
   try {
+    // Trang chỉ trả lời "hôm nay": bộ chọn 7/30/90 ngày đã bỏ (PR-4b), `?windowDays=` gửi lên bị bỏ qua.
     const data = await userDeliveryMonitorService.getUserDeliveryMonitorOverview({
       userId: resolveWorkspaceOwnerId(req.user),
-      windowDays: req.query.windowDays,
     });
     res.json({ success: true, data });
   } catch (err) {

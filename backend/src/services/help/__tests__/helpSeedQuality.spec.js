@@ -26,7 +26,7 @@ const REAL_MENU = {
     'Quản lý kênh gửi',
     'Thư viện nội dung',
     'Quản lý chiến dịch',
-    'Hiệu quả chiến dịch',
+    'Giám sát gửi tin',
     'Khách hàng từ chiến dịch',
   ],
   'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
@@ -89,6 +89,8 @@ describe('chất lượng bài trợ giúp seed', () => {
   it('không gọi tên cũ của các mục đã đổi tên', () => {
     // Ba tên này KHÔNG tồn tại trên giao diện, nhưng bài từng dùng.
     const bannedMenuLabels = [
+      // PLAN_SO_LIEU_DUNG_GON_KHOP PR-4b: mục menu đổi "Hiệu quả chiến dịch" → "Giám sát gửi tin" (menu = tiêu đề trang).
+      'Hiệu quả chiến dịch',
       'Menu **Chatbot Studio**',
       'Menu **Hộp thư**',
       'Menu **Nhân viên**',

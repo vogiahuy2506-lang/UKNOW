@@ -1,13 +1,13 @@
+import { runDeferredReasonSql, runDeferredUntilSql } from '../../utils/runDeferMetadataSql.util.js';
+
 /**
- * Shared SQL for delivery monitor "top runs" table.
+ * Shared SQL for delivery monitor "top runs" table (admin).
  * Combines journey sends, message-level failures, execution failures, and run counters.
  *
- * @param {{ limit: number, userScoped?: boolean }} options
+ * @param {{ limit: number }} options
  * @returns {string}
  */
-export function buildTopRunsQuery({ limit, userScoped = false }) {
-  const userFilter = userScoped ? 'AND c.id_user = $2' : '';
-
+export function buildTopRunsQuery({ limit }) {
   return `
     WITH run_base AS (
       SELECT
@@ -28,7 +28,6 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       FROM campaign_runs cr
       JOIN campaigns c ON c.id = cr.id_campaign
       WHERE cr.started_at >= NOW() - ($1::int * INTERVAL '1 day')
-        ${userFilter}
     ),
     sent_by_run AS (
       SELECT cj.id_run, COUNT(*)::int AS successful_sends
@@ -95,8 +94,8 @@ export function buildTopRunsQuery({ limit, userScoped = false }) {
       rm.run_metadata->>'lastResumeReason' AS last_resume_reason,
       rm.run_metadata->>'lastResumeResumedBy' AS last_resume_resumed_by,
       rm.run_metadata->>'lastResumeStep' AS last_resume_step,
-      COALESCE(rm.run_metadata->>'quotaDeferredUntil', rm.run_metadata->>'nonContinuousDeferredUntil', rm.run_metadata->>'zaloOutboundDeferredUntil', rm.run_metadata->>'channelDeferredUntil') AS deferred_until,
-      COALESCE(rm.run_metadata->>'quotaDeferredReason', rm.run_metadata->>'nonContinuousDeferredReason', rm.run_metadata->>'zaloDeferredReason', rm.run_metadata->>'channelDeferredReason') AS deferred_reason,
+      ${runDeferredUntilSql('rm')} AS deferred_until,
+      ${runDeferredReasonSql('rm')} AS deferred_reason,
       rm.run_metadata->>'quotaDeferredUntil' AS quota_deferred_until,
       rm.run_metadata->>'quotaDeferredReason' AS quota_deferred_reason,
       rm.duration_seconds

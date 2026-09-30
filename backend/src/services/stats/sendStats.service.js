@@ -36,13 +36,15 @@ import campaignChannelRegistry from '../campaign/campaignChannelRegistry.service
  * created_at) vì dòng lỗi của bảng đó không có sent_at), KHÔNG theo ngày bắt đầu lượt chạy.
  * Cửa sổ quyết định dòng nào được NHÌN THẤY: "đích chưa gửi được" xét trong các dòng của cửa sổ. Đích lỗi ở cuối
  * cửa sổ mà gửi được sau cửa sổ vẫn tính là lỗi của cửa sổ đó; nhờ vậy số của một cửa sổ đã khép không đổi về sau,
- * và các cửa sổ liền nhau không tự thay đổi lẫn nhau. Số theo lượt chạy (getRunTotals) không có cửa sổ.
+ * và các cửa sổ liền nhau không tự thay đổi lẫn nhau. Số theo lượt chạy (getRunTotals) không có cửa sổ. Chuỗi theo giờ
+ * (getHourlySeries) nhận `{ hours }` — cửa sổ neo vào ranh giới giờ chẵn, xem hàm.
  *
  * Mọi hàm ném lỗi khi đầu vào sai (scope / window / id) thay vì trả số rỗng: số liệu rỗng do lỗi gọi là loại lỗi
  * khó thấy nhất. Lỗi truy vấn cũng KHÔNG bị nuốt (khác safeQuery).
  */
 
 const MAX_WINDOW_DAYS = 3660;
+const MAX_HOURLY_HOURS = 24 * 31;
 const MAX_ID_LIST_SIZE = 1000;
 const MAX_FAILURE_LIMIT = 500;
 const DEFAULT_FAILURE_LIMIT = 50;
@@ -215,6 +217,38 @@ export async function getDailySeries(scope, window) {
 }
 
 /**
+ * Chuỗi theo GIỜ VN cho `hours` giờ TRÒN gần nhất, gồm giờ hiện tại đang chạy dở (hours = 24 → 23 giờ đã khép + giờ
+ * này). Cùng bộ CTE và cùng quy ước với getDailySeries: tin đã gửi tính vào giờ của tin, đích lỗi tính vào giờ của lần
+ * thử lỗi cuối trong cửa sổ. Chỉ trả (giờ, kênh) CÓ dữ liệu, sắp theo giờ rồi thứ tự kênh; giờ trống do màn tự bù.
+ * Tham số là `{ hours }` chứ không dùng `window` vì đây là cửa sổ neo vào ranh giới giờ chẵn, không cuộn theo phút.
+ *
+ * @param {{ ownerId: number|null, excludeOwnerIds?: number[] }} scope
+ * @param {{ hours: number }} options số nguyên từ 1 đến 744
+ * @returns {Promise<Array<{ hour: string, channel: string, sent: number, failed: number }>>}
+ *   `hour` = ISO timestamptz của ĐẦU giờ VN (vd '2026-09-29T16:00:00.000Z' = 23:00 giờ VN ngày 29/09).
+ */
+export async function getHourlySeries(scope, { hours } = {}) {
+  const normalizedScope = normalizeScope(scope);
+  if (!Number.isInteger(hours) || hours < 1 || hours > MAX_HOURLY_HOURS) {
+    throw new RangeError(`sendStats: hours phải là số nguyên từ 1 đến ${MAX_HOURLY_HOURS}`);
+  }
+  const channels = resolveChannels();
+  const rows = await sendStatsRepository.hourlySeries({
+    scope: normalizedScope,
+    window: { kind: 'hours', hours },
+    channels: forRepository(channels),
+  });
+  return rows
+    .map((row) => ({
+      hour: new Date(row.hour).toISOString(),
+      channel: row.channel,
+      sent: toCount(row.sent),
+      failed: toCount(row.failed),
+    }))
+    .sort((a, b) => (a.hour < b.hour ? -1 : a.hour > b.hour ? 1 : byOrder(channels, a.channel) - byOrder(channels, b.channel)));
+}
+
+/**
  * Tổng theo LƯỢT CHẠY — toàn bộ dòng của lượt, không theo cửa sổ (lượt sống lâu vẫn đủ số). Chỉ trả (lượt, kênh) có
  * dữ liệu; lượt không có dòng tin nào không xuất hiện (màn tự coi là 0).
  *
@@ -355,6 +389,7 @@ export async function listFinalFailures(scope, { runId, window, limit } = {}) {
 export default {
   getChannelTotals,
   getDailySeries,
+  getHourlySeries,
   getRunTotals,
   getCampaignTotals,
   getActorTotals,

@@ -9,7 +9,8 @@
  *   - lỗi rate_limit từng dừng node rồi resume gửi thành công (id_node NULL) → KHÔNG hiện
  *   - dòng is_preview không hiện
  *   - run của user khác → 404
- *   - tổng "tin lỗi" ở overview KHÔNG cộng dòng transient_retry
+ *   - "chưa gửi được" ở overview (PR-4b) đếm theo NGƯỜI: không cộng dòng transient_retry, không cộng người đã gửi
+ *     được sau lỗi rate_limit từng dừng node
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
@@ -88,19 +89,23 @@ describe('P2 — lỗi từng người nhận kênh adapter', () => {
     const byRecipient = Object.fromEntries(failures.map((f) => [f.recipient, f]));
 
     expect(Object.keys(byRecipient).sort()).toEqual(['84900000001', '84900000002']);
-    expect(byRecipient['84900000001']).toMatchObject({ channel: 'whatsapp', reason: 'hard', count: 1 });
-    expect(byRecipient['84900000001'].error).toContain('Số không dùng WhatsApp');
-    expect(byRecipient['84900000002']).toMatchObject({ channel: 'whatsapp', reason: 'transient', count: 1 });
-    expect(byRecipient['84900000002'].error).toMatch(/^\[lần 3\/3\]/);
+    // Lý do = "loại lỗi: nội dung" của lần thử lỗi cuối; attempts đếm dòng lỗi CUỐI (transient_retry không tính).
+    expect(byRecipient['84900000001']).toMatchObject({
+      channel: 'whatsapp', reason: 'hard: Số không dùng WhatsApp', attempts: 1,
+    });
+    expect(byRecipient['84900000002']).toMatchObject({ channel: 'whatsapp', attempts: 1 });
+    expect(byRecipient['84900000002'].reason).toMatch(/^transient: \[lần 3\/3\]/);
 
-    // Overview: 'failed' của kênh = hard + transient cuối + rate_limit đã resume (đều status failed, KHÔNG có
-    // transient_retry) = 3; nếu lọc transient_retry bị bỏ sẽ ra 6.
+    // Overview: "chưa gửi được" của kênh đếm theo NGƯỜI = 84900000001 (hard) + 84900000002 (transient cuối) = 2.
+    // 84900000004 từng lỗi rate_limit rồi resume gửi được → không còn là lỗi (đếm theo dòng sẽ ra 3, không lọc
+    // transient_retry sẽ ra 6). Đã gửi: 84900000003 (sau 1 lần thử lại) + 84900000004 = 2.
     const overview = await request(app)
       .get('/api/delivery-monitor/overview')
       .set('Authorization', `Bearer ${token}`);
     expect(overview.status).toBe(200);
-    const wa = overview.body.data.channels.find((c) => c.channel === 'whatsapp');
-    expect(wa.failed).toBe(3);
+    const wa = overview.body.data.today.byChannel.find((c) => c.channel === 'whatsapp');
+    expect(wa).toEqual({ channel: 'whatsapp', sent: 2, failed: 2 });
+    expect(overview.body.data.runs[0]).toMatchObject({ runId: Number(runId), sent: 2, failed: 2 });
 
     // User khác không xem được run này.
     const otherToken = await loginAs(other);

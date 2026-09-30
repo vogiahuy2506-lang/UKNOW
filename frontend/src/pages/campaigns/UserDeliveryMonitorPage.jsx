@@ -1,96 +1,98 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   HiChevronDown,
   HiOutlineCheckCircle,
   HiOutlineClock,
   HiOutlineExclamationCircle,
   HiOutlineRefresh,
-  HiOutlineTrendingUp,
+  HiOutlineServer,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
+import PageHeader from '../../components/common/PageHeader';
 import userDeliveryMonitorApiService from '../../features/campaign/services/userDeliveryMonitorApi.service';
 import { useI18n } from '../../i18n';
-import { getRunStatusLabel } from '../../features/campaigns/utils/campaignRunStatus.helpers';
+import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
+import {
+  HOURLY_CHART_CHANNELS,
+  buildHourlySlots,
+  formatVnDayMonthTime,
+  formatVnResumeTime,
+  formatVnTime,
+  getWaitReasonI18nKey,
+} from '../../features/campaigns/utils/deliveryMonitor.helpers';
+
+// PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-4b — trang trả lời MỘT câu: hôm nay gửi tới đâu rồi, có gì đang kẹt.
+// Số theo khoảng thời gian dài thuộc trang Báo cáo; ở đây không có bộ chọn 7/30/90 ngày.
 
 const fmt = (value) => Number(value || 0).toLocaleString('vi-VN');
-const fmtPct = (value) => `${Number(value || 0).toFixed(1)}%`;
-const fmtDateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN') : '-');
-const fmtRate = (value) => `${Number(value || 0).toFixed(1)}/min`;
-const fmtDuration = (seconds) => {
-  if (!seconds || seconds < 1) return '—';
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = Math.floor(seconds % 60);
-  if (h > 0) return `${h}g ${m}p`;
-  if (m > 0) return `${m}p ${s}s`;
-  return `${s}s`;
+
+// Tự làm mới mỗi phút và CHỈ khi tab đang hiển thị (mỗi lượt đọc tin của chủ lớn tốn hàng trăm ms).
+const REFRESH_INTERVAL_MS = 60_000;
+const isTabHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+const channelColor = {
+  email: '#f97316',
+  zalo_personal: '#2563eb',
+  zalo_group: '#10b981',
+  zalo_friend_request: '#8b5cf6',
+  telegram: '#0ea5e9',
+  whatsapp: '#22c55e',
 };
 
-const windowOptions = [7, 30, 90];
+const KNOWN_RUN_STATUSES = ['running', 'completed', 'stopped', 'failed'];
 
-const channelColor = { email: '#f97316', zalo: '#2563eb', zalo_group: '#10b981', telegram: '#0ea5e9', whatsapp: '#22c55e' };
-
-const categoryClass = {
-  rate_limit: 'badge-warning',
-  provider_block: 'badge-error',
-  network_timeout: 'badge-gray',
-  account_session: 'badge-warning',
-  recipient_invalid: 'badge-gray',
-  email_provider: 'badge-warning',
-  zalo_silent_drop: 'badge-warning',
-  other: 'badge-gray',
-  unknown: 'badge-gray',
-};
-
-const runStatusBadgeClass = (status) => {
-  const normalized = String(status || '').toLowerCase();
-  if (normalized === 'failed') return 'badge-error';
-  if (normalized === 'running') return 'badge-warning';
-  if (normalized === 'completed') return 'badge-success';
-  if (normalized === 'stopped') return 'badge-gray';
+// Đang chờ KHÔNG đỏ / vàng: chờ hạn mức, giờ yên lặng, SMTP nhả... là vận hành bình thường, không phải sự cố.
+const runStatusBadgeClass = (run) => {
+  if (run.waitingUntil) return 'badge-gray';
+  const status = String(run.status || '').toLowerCase();
+  if (status === 'failed') return 'badge-error';
+  if (status === 'running') return 'badge-info';
+  if (status === 'completed') return 'badge-success';
   return 'badge-gray';
 };
 
-const KpiCard = ({ icon: Icon, label, value, sub, tone = 'orange' }) => {
-  const toneMap = {
-    orange: 'bg-orange-50 text-orange-600',
-    green: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    red: 'bg-red-50 text-red-600',
-  };
-  return (
-    <div className="card p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm text-gray-500">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-          {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
-        </div>
-        <div className={`rounded-xl p-3 ${toneMap[tone] || toneMap.orange}`}>
-          <Icon className="h-6 w-6" />
-        </div>
-      </div>
-    </div>
-  );
+const toneMap = {
+  green: 'bg-emerald-50 text-emerald-600',
+  red: 'bg-red-50 text-red-600',
+  neutral: 'bg-gray-100 text-gray-600',
 };
 
-const CustomTooltip = ({ active, payload, label, t }) => {
+const SummaryCard = ({ testId, icon: Icon, label, value, tone = 'green', children }) => (
+  <div className="card p-5" data-testid={testId}>
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="truncate text-sm text-gray-500">{label}</p>
+        <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
+        <div className="mt-1 space-y-1 text-xs text-gray-500">{children}</div>
+      </div>
+      <div className={`rounded-xl p-3 ${toneMap[tone] || toneMap.green}`}>
+        <Icon className="h-6 w-6" />
+      </div>
+    </div>
+  </div>
+);
+
+const HourlyTooltip = ({ active, payload, label, t }) => {
   if (!active || !payload?.length) return null;
+  const rows = payload.filter((item) => Number(item.value) > 0);
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-lg">
       <p className="mb-1 font-semibold text-gray-700">{label}</p>
-      {payload.map((item) => (
+      {rows.length === 0 ? (
+        <p className="text-gray-400">{t('userDeliveryMonitor.hourlyNone')}</p>
+      ) : rows.map((item) => (
         <p key={item.dataKey} style={{ color: item.color }}>
-          {t(`userDeliveryMonitor.chart.${item.dataKey}`)}: <strong>{fmt(item.value)}</strong>
+          {t(`userDeliveryMonitor.channel.${item.dataKey}`)}: <strong>{fmt(item.value)}</strong>
         </p>
       ))}
     </div>
@@ -124,124 +126,6 @@ const SignalsBanner = ({ signals, t }) => {
   );
 };
 
-const HealthPanel = ({ health, t }) => {
-  if (!health) return null;
-  const { hardBounceCount, zaloDisconnectedCount, pendingRetryCount, zaloSkipCount, zaloQuietHours } = health;
-  const items = [
-    {
-      label: t('userDeliveryMonitor.health.hardBounce'),
-      value: fmt(hardBounceCount),
-      warn: hardBounceCount > 0,
-      hint: t('userDeliveryMonitor.health.hardBounceHint'),
-    },
-    {
-      label: t('userDeliveryMonitor.health.zaloDisconnected'),
-      value: fmt(zaloDisconnectedCount),
-      warn: zaloDisconnectedCount > 0,
-      hint: t('userDeliveryMonitor.health.zaloDisconnectedHint'),
-    },
-    {
-      label: t('userDeliveryMonitor.health.pendingRetry'),
-      value: fmt(pendingRetryCount),
-      warn: pendingRetryCount > 0,
-      hint: t('userDeliveryMonitor.health.pendingRetryHint'),
-    },
-    {
-      label: t('userDeliveryMonitor.health.zaloSkip'),
-      value: fmt(zaloSkipCount),
-      warn: zaloSkipCount > 0,
-      hint: t('userDeliveryMonitor.health.zaloSkipHint'),
-    },
-  ];
-  return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.healthTitle')}</h2>
-        {zaloQuietHours?.inQuietHours && (
-          <span className="badge badge-warning text-xs">{t('userDeliveryMonitor.health.quietHoursActive', { start: zaloQuietHours.start, end: zaloQuietHours.end })}</span>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {items.map((item) => (
-          <div key={item.label} className={`rounded-xl border px-4 py-3 text-center ${item.warn ? 'border-amber-100 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
-            <p className={`text-xl font-bold ${item.warn ? 'text-amber-700' : 'text-gray-900'}`}>{item.value}</p>
-            <p className="mt-0.5 text-[11px] font-medium text-gray-600">{item.label}</p>
-            <p className="mt-1 text-[10px] text-gray-400 leading-tight">{item.hint}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const ChannelPanel = ({ channels, channelsRecent, windowDays, t }) => {
-  const recentMap = Object.fromEntries((channelsRecent || []).map((c) => [c.channel, c]));
-  return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-start justify-between gap-2">
-        <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.channels')}</h2>
-        <span className="text-xs text-gray-400">{t('userDeliveryMonitor.channelWindowHint', { days: windowDays })}</span>
-      </div>
-      <div className="space-y-4">
-        {channels.map((channel) => {
-          const recent = recentMap[channel.channel];
-          const recentDrop = recent && channel.sent > 0 && recent.sent === 0;
-          const hasCoverage = channel.coverage !== null && channel.coverage !== undefined;
-          const barWidth = Math.min(100, Math.max(0, hasCoverage ? channel.coverage : channel.successRate));
-          return (
-            <div key={channel.channel} className={`rounded-xl border px-4 py-3 ${recentDrop ? 'border-amber-100 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-semibold text-gray-900">{t(`userDeliveryMonitor.channel.${channel.channel}`)}</p>
-                  <p className="text-xs text-gray-500">
-                    {hasCoverage
-                      ? t('userDeliveryMonitor.channelSubCoverage', { sent: fmt(channel.sent), total: fmt(channel.totalRecipients), clicked: fmt(channel.clicked) })
-                      : t('userDeliveryMonitor.channelSub', { sent: fmt(channel.sent), failed: fmt(channel.failed), clicked: fmt(channel.clicked) })}
-                  </p>
-                  {recent && (
-                    <p className={`mt-0.5 text-xs ${recentDrop ? 'font-medium text-amber-600' : 'text-gray-400'}`}>
-                      {t('userDeliveryMonitor.channelRecent', { sent: fmt(recent.sent), failed: fmt(recent.failed) })}
-                    </p>
-                  )}
-                </div>
-                <div className="flex shrink-0 flex-col items-end gap-1">
-                  {hasCoverage && (
-                    <span className={`badge text-xs ${recentDrop ? 'badge-warning' : channel.coverage >= 80 ? 'badge-success' : channel.coverage >= 40 ? 'badge-warning' : 'badge-error'}`}>
-                      {fmtPct(channel.coverage)} {t('userDeliveryMonitor.channelCoverageLabel')}
-                    </span>
-                  )}
-                  {channel.attempts > 0 && (
-                    <span className="text-xs text-gray-400">
-                      {t('userDeliveryMonitor.channelQuality', { rate: fmtPct(channel.successRate) })}
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-                <div className="h-full rounded-full" style={{ width: `${barWidth}%`, backgroundColor: channelColor[channel.channel] || '#f97316' }} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
-
-const runRowClass = (run) => {
-  if (run.failedSends > 0) return run.failureRate >= 10 ? 'bg-red-50' : 'bg-orange-50';
-  if (run.hasRunError && String(run.status || '').toLowerCase() === 'failed') return 'bg-orange-50';
-  // PR-8a (UI nói thật) Việc 4 — run đang chờ hợp lệ (SMTP pause 12h, quota, quiet hours Zalo...)
-  // không phải "kẹt": deferredUntil đã có sẵn ở DTO (deliveryMonitorTopRuns.query.js:98-99, 148),
-  // chỉ cần loại trừ ở đây, KHÔNG cần backend thêm trường mới.
-  const deferredUntilMs = run.deferredUntil ? Date.parse(run.deferredUntil) : NaN;
-  const isDeferred = Number.isFinite(deferredUntilMs) && deferredUntilMs > Date.now();
-  const stuck = !isDeferred && run.totalRecipients > 0 && run.successfulSends === 0 && run.status === 'running';
-  if (stuck) return 'bg-red-50';
-  if (run.successfulSends > 0) return 'bg-emerald-50/40';
-  return '';
-};
-
 const formatAuditExplanation = (audit, t) => {
   if (!audit) return null;
   const parts = [];
@@ -266,7 +150,105 @@ const formatAuditExplanation = (audit, t) => {
   });
 };
 
-const TopRunsTable = ({ runs, t }) => {
+const recipientLabel = (item) => (
+  item.recipientDisplay && item.recipientDisplay !== item.recipient
+    ? `${item.recipientDisplay} (${item.recipient})`
+    : item.recipient
+);
+
+/** Danh sách người chưa gửi được của một lượt: mỗi người/bước một dòng, đã trừ lần gửi lại thành công. */
+const FailuresDetail = ({ state, failedCount, t }) => {
+  if (state?.loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-500" data-testid="failures-loading">
+        <HiOutlineRefresh className="h-4 w-4 animate-spin text-gray-400" />
+        <span>{t('userDeliveryMonitor.failures.loading')}</span>
+      </div>
+    );
+  }
+  if (!state?.data) {
+    return <p className="py-2 text-xs text-red-500">{state?.error || t('userDeliveryMonitor.failures.loadError')}</p>;
+  }
+
+  const items = state.data.failures || [];
+  const auditText = state.data.recipientAudit ? formatAuditExplanation(state.data.recipientAudit, t) : null;
+
+  return (
+    <div className="space-y-3">
+      {auditText && (
+        <div
+          className="flex items-center gap-2 rounded-lg border border-amber-200/60 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900"
+          data-testid="recipient-audit-explanation"
+        >
+          <HiOutlineExclamationCircle className="h-4 w-4 shrink-0 text-amber-600" />
+          <span>{auditText}</span>
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <p className="py-2 text-xs text-gray-500">{t('userDeliveryMonitor.failures.noFailures')}</p>
+      ) : (
+        <>
+          <div className="overflow-x-auto rounded-lg border border-gray-200/80 bg-white shadow-xs">
+            <table className="min-w-full text-xs">
+              <thead className="border-b border-gray-100 bg-gray-50 text-left font-medium text-gray-500">
+                <tr>
+                  <th className="px-4 py-2">{t('userDeliveryMonitor.failures.recipient')}</th>
+                  <th className="px-4 py-2">{t('userDeliveryMonitor.failures.reason')}</th>
+                  <th className="px-4 py-2">{t('userDeliveryMonitor.failures.count')}</th>
+                  <th className="px-4 py-2">{t('userDeliveryMonitor.failures.lastAt')}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 text-gray-700" data-testid="failures-table-body">
+                {items.map((item, idx) => {
+                  const reasonText = item.reason || t('userDeliveryMonitor.failures.reasonUnknown');
+                  return (
+                    <tr key={`${item.channel}-${item.recipient}-${idx}`} className="hover:bg-gray-50/60" data-testid="failure-item-row">
+                      <td className="px-4 py-2 font-mono font-medium text-gray-900">
+                        <span className="inline-flex items-center gap-1.5">
+                          <span
+                            className="inline-block h-1.5 w-1.5 rounded-full"
+                            style={{ backgroundColor: channelColor[item.channel] || channelColor.zalo_personal }}
+                          />
+                          {recipientLabel(item)}
+                          {item.channel !== 'email' && (
+                            <span
+                              data-testid="failure-channel-label"
+                              className="rounded bg-gray-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-gray-600"
+                            >
+                              {t(`userDeliveryMonitor.channel.${item.channel}`)}
+                            </span>
+                          )}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2">
+                        <span
+                          title={reasonText}
+                          className="inline-flex max-w-[28rem] items-center rounded-md border border-red-200/60 bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700"
+                        >
+                          <span className="truncate">{reasonText}</span>
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 font-medium text-gray-800">
+                        {t('userDeliveryMonitor.failures.countText', { count: item.attempts || 1 })}
+                      </td>
+                      <td className="px-4 py-2 text-gray-500">{formatVnDayMonthTime(item.lastAt)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {failedCount > items.length && (
+            <p className="text-xs text-gray-400">{t('userDeliveryMonitor.failures.truncated', { shown: fmt(items.length), total: fmt(failedCount) })}</p>
+          )}
+        </>
+      )}
+    </div>
+  );
+};
+
+const RunsTable = ({ runs, now, t }) => {
   const [expandedRunId, setExpandedRunId] = useState(null);
   const [failuresMap, setFailuresMap] = useState({});
 
@@ -277,195 +259,97 @@ const TopRunsTable = ({ runs, t }) => {
     }
     setExpandedRunId(runId);
     if (!failuresMap[runId] || failuresMap[runId].error) {
-      setFailuresMap((prev) => ({
-        ...prev,
-        [runId]: { loading: true, data: null, error: null },
-      }));
+      setFailuresMap((prev) => ({ ...prev, [runId]: { loading: true, data: null, error: null } }));
       try {
         const res = await userDeliveryMonitorApiService.getRunFailures(runId);
-        setFailuresMap((prev) => ({
-          ...prev,
-          [runId]: { loading: false, data: res.data?.data || null, error: null },
-        }));
+        setFailuresMap((prev) => ({ ...prev, [runId]: { loading: false, data: res.data?.data || null, error: null } }));
       } catch (err) {
         const errMsg = err?.response?.data?.message || t('userDeliveryMonitor.failures.loadError');
         toast.error(errMsg);
-        setFailuresMap((prev) => ({
-          ...prev,
-          [runId]: { loading: false, data: null, error: errMsg },
-        }));
+        setFailuresMap((prev) => ({ ...prev, [runId]: { loading: false, data: null, error: errMsg } }));
       }
     }
   }, [expandedRunId, failuresMap, t]);
 
+  const statusLabel = (run) => {
+    if (run.waitingUntil) {
+      return t('userDeliveryMonitor.runStatus.waiting', {
+        reason: t(getWaitReasonI18nKey(run.waitingReason)),
+        time: formatVnResumeTime(run.waitingUntil, now),
+      });
+    }
+    const status = String(run.status || '').toLowerCase();
+    // Trạng thái lạ (dữ liệu cũ) in nguyên chuỗi gốc — in khoá dịch thô còn tệ hơn.
+    return KNOWN_RUN_STATUSES.includes(status) ? t(`userDeliveryMonitor.runStatus.${status}`) : (run.status || '-');
+  };
+
   return (
     <div className="card overflow-hidden">
       <div className="border-b border-gray-100 px-5 py-4">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.topRuns')}</h2>
-            <p className="mt-0.5 text-xs text-gray-400">{t('userDeliveryMonitor.topRunsDesc')}</p>
-          </div>
-          <span className="text-xs text-gray-400">{t('userDeliveryMonitor.topRunsCount', { count: runs.length })}</span>
-        </div>
+        <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.runsTitle')}</h2>
+        <p className="mt-0.5 text-xs text-gray-400">{t('userDeliveryMonitor.runsDesc')}</p>
       </div>
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
             <tr>
-              <th className="px-5 py-3">{t('userDeliveryMonitor.campaign')}</th>
-              <th className="px-5 py-3">{t('userDeliveryMonitor.status')}</th>
-              <th className="px-5 py-3">{t('userDeliveryMonitor.sentFailed')}</th>
-              <th className="px-5 py-3">{t('userDeliveryMonitor.runDuration')}</th>
-              <th className="px-5 py-3">{t('userDeliveryMonitor.speed')}</th>
-              <th className="px-5 py-3">{t('userDeliveryMonitor.failRate')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.col.campaign')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.col.startedAt')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.col.status')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.col.sent')}</th>
+              <th className="px-5 py-3">{t('userDeliveryMonitor.col.failed')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
             {runs.length === 0 ? (
-              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.noData')}</td></tr>
+              <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-400">{t('userDeliveryMonitor.runsEmpty')}</td></tr>
             ) : runs.map((run) => {
-              const isExpanded = expandedRunId === run.id;
-              const runFailureState = failuresMap[run.id];
-              const auditText = runFailureState?.data?.recipientAudit
-                ? formatAuditExplanation(runFailureState.data.recipientAudit, t)
-                : null;
-              const failureItems = runFailureState?.data?.failures || [];
-
+              const isExpanded = expandedRunId === run.runId;
+              const typeMeta = getCampaignTypeMeta(run.campaignType);
               return (
-                <Fragment key={run.id}>
-                  <tr className={runRowClass(run)}>
+                <Fragment key={run.runId}>
+                  <tr data-testid={`run-row-${run.runId}`}>
                     <td className="px-5 py-3">
-                      <p className="font-semibold text-gray-900">{run.campaignName || run.runName || `#${run.id}`}</p>
-                      <p className="text-xs text-gray-400">{fmtDateTime(run.startedAt)}</p>
-                      {run.hasRunError && run.errorMessage && (
-                        <p className="mt-1 line-clamp-1 text-xs text-orange-600" title={run.errorMessage}>{run.errorMessage}</p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className={`badge text-xs ${runStatusBadgeClass(run.status)}`}>
-                        {getRunStatusLabel(t, run.status)}
+                      <p className="font-semibold text-gray-900">{run.campaignName || `#${run.runId}`}</p>
+                      <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${typeMeta.className}`}>
+                        {typeMeta.label}
                       </span>
-                      {run.deferredUntil && (
-                        <div className="mt-1 space-y-0.5">
-                          <span className="badge badge-gray text-xs">{t('userDeliveryMonitor.deferred')}</span>
-                          <p className="text-xs text-gray-400">{fmtDateTime(run.deferredUntil)}</p>
-                          {run.deferredReason && <p className="text-[11px] text-gray-400">{run.deferredReason}</p>}
-                        </div>
-                      )}
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3 text-gray-700">{formatVnDayMonthTime(run.startedAt)}</td>
+                    <td className="px-5 py-3">
+                      <span className={`badge text-xs ${runStatusBadgeClass(run)}`} data-testid="run-status">
+                        {statusLabel(run)}
+                      </span>
+                    </td>
+                    <td className="whitespace-nowrap px-5 py-3">
+                      <span className="font-medium text-gray-900" data-testid="run-sent">
+                        {run.planned != null ? `${fmt(run.sent)} / ${fmt(run.planned)}` : fmt(run.sent)}
+                      </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span className={`font-medium ${run.successfulSends > 0 ? 'text-emerald-700' : 'text-gray-700'}`}>{fmt(run.successfulSends)}</span>
-                      {run.skippedSends > 0 && <span className="ml-1 text-amber-600">+{fmt(run.skippedSends)} bỏ qua</span>}
-                      {run.failedSends > 0 ? (
+                      {run.failed > 0 ? (
                         <button
                           type="button"
-                          onClick={() => toggleRunFailures(run.id)}
-                          className="ml-1 inline-flex items-center gap-1 font-medium text-red-600 hover:text-red-800 hover:underline cursor-pointer focus:outline-none"
+                          onClick={() => toggleRunFailures(run.runId)}
+                          className="inline-flex cursor-pointer items-center gap-1 font-medium text-red-600 hover:text-red-800 hover:underline focus:outline-none"
                           title={isExpanded ? t('userDeliveryMonitor.failures.hideDetails') : t('userDeliveryMonitor.failures.viewDetails')}
+                          aria-label={isExpanded
+                            ? t('userDeliveryMonitor.failures.hideLabel', { count: fmt(run.failed) })
+                            : t('userDeliveryMonitor.failures.openLabel', { count: fmt(run.failed) })}
                           aria-expanded={isExpanded}
                         >
-                          / {fmt(run.failedSends)} {t('userDeliveryMonitor.failures.errorCountLabel')}
+                          {fmt(run.failed)}
                           <HiChevronDown className={`inline-block h-3.5 w-3.5 transition-transform duration-200 ${isExpanded ? 'rotate-180' : ''}`} />
                         </button>
                       ) : (
-                        <span className="text-gray-500"> / {fmt(run.failedSends)} {t('userDeliveryMonitor.failures.errorCountLabel')}</span>
+                        <span className="text-gray-400">0</span>
                       )}
-                      <span className="text-gray-400"> · {t('userDeliveryMonitor.plannedSends', { count: fmt(run.totalRecipients) })}</span>
-                    </td>
-                    <td className="px-5 py-3 text-gray-700">
-                      <span>{fmtDuration(run.durationSeconds)}</span>
-                      {run.completedAt && (
-                        <p className="text-xs text-gray-400">{fmtDateTime(run.completedAt)}</p>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
-                    <td className="px-5 py-3 text-gray-700">
-                      <span className={run.failureRate >= 10 ? 'font-semibold text-red-600' : ''}>{fmtPct(run.failureRate)}</span>
                     </td>
                   </tr>
                   {isExpanded && (
-                    <tr className="bg-slate-50/75 border-b border-gray-100" data-testid={`run-failures-row-${run.id}`}>
-                      <td colSpan={6} className="px-5 py-4">
-                        {runFailureState?.loading ? (
-                          <div className="flex items-center justify-center gap-2 py-4 text-xs text-gray-500" data-testid="failures-loading">
-                            <HiOutlineRefresh className="h-4 w-4 animate-spin text-gray-400" />
-                            <span>{t('userDeliveryMonitor.failures.loading')}</span>
-                          </div>
-                        ) : runFailureState?.data ? (
-                          <div className="space-y-3">
-                            {auditText && (
-                              <div
-                                className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900 border border-amber-200/60"
-                                data-testid="recipient-audit-explanation"
-                              >
-                                <HiOutlineExclamationCircle className="h-4 w-4 shrink-0 text-amber-600" />
-                                <span>{auditText}</span>
-                              </div>
-                            )}
-
-                            {failureItems.length === 0 ? (
-                              <p className="text-xs text-gray-500 py-2">{t('userDeliveryMonitor.failures.noFailures')}</p>
-                            ) : (
-                              <div className="overflow-x-auto rounded-lg border border-gray-200/80 bg-white shadow-xs">
-                                <table className="min-w-full text-xs">
-                                  <thead className="bg-gray-50 text-left font-medium text-gray-500 border-b border-gray-100">
-                                    <tr>
-                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.recipient')}</th>
-                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.reason')}</th>
-                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.count')}</th>
-                                      <th className="px-4 py-2">{t('userDeliveryMonitor.failures.lastAt')}</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="divide-y divide-gray-100 text-gray-700" data-testid="failures-table-body">
-                                    {failureItems.map((item, idx) => {
-                                      const reasonKey = item.reason;
-                                      const reasonLabel = t(`userDeliveryMonitor.failures.reasons.${reasonKey}`) || reasonKey || t('userDeliveryMonitor.failures.reasons.unknown');
-                                      const rawErrorText = item.error || reasonLabel;
-                                      return (
-                                        <tr key={`${item.recipient}-${idx}`} className="hover:bg-gray-50/60" data-testid="failure-item-row">
-                                          <td className="px-4 py-2 font-mono font-medium text-gray-900">
-                                            <span className="inline-flex items-center gap-1.5">
-                                              <span
-                                                className="inline-block h-1.5 w-1.5 rounded-full"
-                                                style={{ backgroundColor: channelColor[item.channel] || channelColor.zalo }}
-                                              />
-                                              {item.recipient}
-                                              {(item.channel === 'telegram' || item.channel === 'whatsapp') && (
-                                                <span
-                                                  data-testid="failure-channel-label"
-                                                  className="rounded bg-gray-100 px-1.5 py-0.5 font-sans text-[10px] font-medium text-gray-600"
-                                                >
-                                                  {t(`userDeliveryMonitor.channel.${item.channel}`)}
-                                                </span>
-                                              )}
-                                            </span>
-                                          </td>
-                                          <td className="px-4 py-2">
-                                            <span
-                                              title={rawErrorText}
-                                              className="inline-flex items-center rounded-md bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700 border border-red-200/60 cursor-help"
-                                            >
-                                              {reasonLabel}
-                                            </span>
-                                          </td>
-                                          <td className="px-4 py-2 font-medium text-gray-800">
-                                            {t('userDeliveryMonitor.failures.countText', { count: item.count || 1 })}
-                                          </td>
-                                          <td className="px-4 py-2 text-gray-500">
-                                            {fmtDateTime(item.lastAt)}
-                                          </td>
-                                        </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-red-500 py-2">{runFailureState?.error || t('userDeliveryMonitor.failures.loadError')}</p>
-                        )}
+                    <tr className="border-b border-gray-100 bg-slate-50/75" data-testid={`run-failures-row-${run.runId}`}>
+                      <td colSpan={5} className="px-5 py-4">
+                        <FailuresDetail state={failuresMap[run.runId]} failedCount={run.failed} t={t} />
                       </td>
                     </tr>
                   )}
@@ -479,68 +363,56 @@ const TopRunsTable = ({ runs, t }) => {
   );
 };
 
-const RecentErrorsPanel = ({ recentErrors, t }) => (
-  <div className="card p-5">
-    <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.recentErrors')}</h2>
-    {recentErrors.length === 0 ? (
-      <p className="text-sm text-gray-400">{t('userDeliveryMonitor.noRecentErrors')}</p>
-    ) : (
-      <div className="space-y-3">
-        {recentErrors.map((item) => (
-          <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="truncate font-semibold text-gray-900">{item.campaignName || `Run #${item.runId}`}</p>
-                <p className="text-xs text-gray-400">{item.nodeName || item.nodeSubtype || t(`userDeliveryMonitor.channel.${item.channel}`)}</p>
-              </div>
-              <span className={`badge shrink-0 text-xs ${categoryClass[item.category] || 'badge-gray'}`}>
-                {t(`userDeliveryMonitor.failureCategory.${item.category}`)}
-              </span>
-            </div>
-            <p className="mt-2 line-clamp-2 text-sm text-gray-700">{item.errorMessage}</p>
-            <p className="mt-1 text-xs text-gray-400">{fmtDateTime(item.updatedAt)}</p>
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
-
 export default function UserDeliveryMonitorPage() {
   const { t } = useI18n();
-  const [windowDays, setWindowDays] = useState(7);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const lastFetchAtRef = useRef(0);
 
   const fetchData = useCallback(async () => {
+    lastFetchAtRef.current = Date.now();
     setError('');
     setLoading(true);
     try {
-      const res = await userDeliveryMonitorApiService.getOverview(windowDays);
+      const res = await userDeliveryMonitorApiService.getOverview();
       setData(res.data.data);
     } catch (err) {
       setError(err?.response?.data?.message || t('userDeliveryMonitor.loadFailed'));
     } finally {
       setLoading(false);
     }
-  }, [t, windowDays]);
+  }, [t]);
 
   useEffect(() => {
     fetchData();
-    const id = setInterval(fetchData, 15000);
-    return () => clearInterval(id);
+    // Chỉ làm mới khi tab đang hiển thị; quay lại tab sau khi dữ liệu đã cũ hơn một chu kỳ thì làm mới ngay.
+    const timerId = setInterval(() => {
+      if (!isTabHidden()) fetchData();
+    }, REFRESH_INTERVAL_MS);
+    const onVisibilityChange = () => {
+      if (!isTabHidden() && Date.now() - lastFetchAtRef.current >= REFRESH_INTERVAL_MS) fetchData();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(timerId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [fetchData]);
 
-  const summary = data?.summary || {};
-  const timeline = useMemo(() => data?.timeline || [], [data]);
+  const today = data?.today;
+  const waiting = data?.waiting;
+  const now = useMemo(() => (data?.generatedAt ? new Date(data.generatedAt) : new Date()), [data?.generatedAt]);
+  const hourlySlots = useMemo(() => buildHourlySlots(data?.hourly, data?.generatedAt), [data?.hourly, data?.generatedAt]);
+  const hasHourlyData = hourlySlots.some((slot) => slot.total > 0);
+  const sentChannels = (today?.byChannel || []).filter((row) => row.sent > 0);
 
   if (loading && !data) {
     return (
       <div className="space-y-6">
         <div className="h-10 w-72 animate-pulse rounded-xl bg-gray-100" />
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-          {[0, 1, 2, 3].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-gray-100" />)}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {[0, 1, 2].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-gray-100" />)}
         </div>
         <div className="h-80 animate-pulse rounded-2xl bg-gray-100" />
       </div>
@@ -549,75 +421,126 @@ export default function UserDeliveryMonitorPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">{t('userDeliveryMonitor.title')}</h1>
-          <p className="mt-1 text-gray-500">{t('userDeliveryMonitor.description')}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex rounded-xl border border-gray-200 bg-white p-1">
-            {windowOptions.map((days) => (
-              <button
-                key={days}
-                type="button"
-                onClick={() => setWindowDays(days)}
-                className={`rounded-lg px-3 py-2 text-sm font-semibold ${windowDays === days ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
-              >
-                {t('userDeliveryMonitor.days', { days })}
-              </button>
-            ))}
-          </div>
-          <button type="button" onClick={fetchData} className="btn btn-secondary" disabled={loading}>
-            <HiOutlineRefresh className="mr-2 h-4 w-4" />
-            {t('userDeliveryMonitor.refresh')}
-          </button>
-        </div>
-      </div>
+      <PageHeader
+        icon={HiOutlineServer}
+        title={t('userDeliveryMonitor.title')}
+        subtitle={t('userDeliveryMonitor.description')}
+        actions={(
+          <>
+            {data?.generatedAt && (
+              <span className="text-xs text-gray-400" data-testid="updated-at">
+                {t('userDeliveryMonitor.updatedAt', { time: formatVnTime(data.generatedAt) })}
+              </span>
+            )}
+            <button type="button" onClick={fetchData} className="btn btn-secondary" disabled={loading}>
+              <HiOutlineRefresh className="mr-2 h-4 w-4" />
+              {t('userDeliveryMonitor.refresh')}
+            </button>
+          </>
+        )}
+      />
 
       {error && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      <SignalsBanner signals={data?.signals || []} t={t} />
+      {data && (
+        <>
+          <SignalsBanner signals={data.signals || []} t={t} />
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <KpiCard icon={HiOutlineCheckCircle} label={t('userDeliveryMonitor.kpi.sent')} value={fmt(summary.sent)} sub={t('userDeliveryMonitor.kpi.attempts', { attempts: fmt(summary.attempts) })} tone="green" />
-        <KpiCard icon={HiOutlineExclamationCircle} label={t('userDeliveryMonitor.kpi.failed')} value={fmt(summary.failed)} sub={t('userDeliveryMonitor.kpi.successRate', { rate: fmtPct(summary.successRate) })} tone={summary.failed > 0 ? 'red' : 'green'} />
-        <KpiCard icon={HiOutlineTrendingUp} label={t('userDeliveryMonitor.kpi.clicked')} value={fmt(summary.clicked)} sub={t('userDeliveryMonitor.kpi.opened', { opened: fmt(summary.opened) })} tone="blue" />
-        <KpiCard icon={HiOutlineClock} label={t('userDeliveryMonitor.kpi.runningRuns')} value={fmt(summary.runningRuns)} sub={t('userDeliveryMonitor.kpi.runBreakdown', { total: fmt(summary.totalRuns), failed: fmt(summary.failedRuns), completed: fmt(summary.completedRuns) })} tone="orange" />
-      </div>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+            <SummaryCard
+              testId="card-sent"
+              icon={HiOutlineCheckCircle}
+              label={t('userDeliveryMonitor.cards.sent')}
+              value={fmt(today?.sent)}
+              tone="green"
+            >
+              {sentChannels.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {sentChannels.map((row) => (
+                    <span
+                      key={row.channel}
+                      data-testid="sent-channel-chip"
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600"
+                    >
+                      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: channelColor[row.channel] }} />
+                      {t(`userDeliveryMonitor.channel.${row.channel}`)} {fmt(row.sent)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {today?.friendRequests?.sent > 0 && (
+                <p data-testid="friend-requests-sent">{t('userDeliveryMonitor.cards.friendRequests', { count: fmt(today.friendRequests.sent) })}</p>
+              )}
+            </SummaryCard>
 
-      <HealthPanel health={data?.health} t={t} />
+            <SummaryCard
+              testId="card-failed"
+              icon={HiOutlineExclamationCircle}
+              label={t('userDeliveryMonitor.cards.failed')}
+              value={fmt(today?.failed)}
+              tone={today?.failed > 0 ? 'red' : 'green'}
+            >
+              <p>{t('userDeliveryMonitor.cards.failedHint')}</p>
+              {today?.friendRequests?.failed > 0 && (
+                <p data-testid="friend-requests-failed">{t('userDeliveryMonitor.cards.friendRequestsFailed', { count: fmt(today.friendRequests.failed) })}</p>
+              )}
+            </SummaryCard>
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
-        <div className="card p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.throughput')}</h2>
-            <span className="badge badge-gray text-xs">{t('userDeliveryMonitor.autoRefresh')}</span>
+            <SummaryCard
+              testId="card-waiting"
+              icon={HiOutlineClock}
+              label={t('userDeliveryMonitor.cards.waiting')}
+              value={fmt(waiting?.count)}
+              tone="neutral"
+            >
+              {waiting?.count > 0 && waiting.first ? (
+                <p data-testid="waiting-detail">
+                  {t('userDeliveryMonitor.cards.waitingDetail', {
+                    count: fmt(waiting.count),
+                    reason: t(getWaitReasonI18nKey(waiting.first.waitingReason)),
+                    time: formatVnResumeTime(waiting.first.waitingUntil, now),
+                  })}
+                </p>
+              ) : (
+                <p>{t('userDeliveryMonitor.cards.waitingNone')}</p>
+              )}
+              {data.running > 0 && (
+                <p data-testid="running-count">{t('userDeliveryMonitor.cards.running', { count: fmt(data.running) })}</p>
+              )}
+            </SummaryCard>
           </div>
-          {timeline.length === 0 ? (
-            <p className="py-16 text-center text-sm text-gray-400">{t('userDeliveryMonitor.noData')}</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={timeline} margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="bucket" tick={{ fontSize: 11 }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip t={t} />} />
-                <Line type="monotone" dataKey="email" stroke={channelColor.email} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="zalo" stroke={channelColor.zalo} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="zaloGroup" stroke={channelColor.zalo_group} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="telegram" stroke={channelColor.telegram} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="whatsapp" stroke={channelColor.whatsapp} strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-        <ChannelPanel channels={data?.channels || []} channelsRecent={data?.channelsRecent} windowDays={windowDays} t={t} />
-      </div>
 
-      <TopRunsTable runs={data?.topRuns || []} t={t} />
-      <RecentErrorsPanel recentErrors={data?.recentErrors || []} t={t} />
+          <div className="card p-5">
+            <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('userDeliveryMonitor.hourlyTitle')}</h2>
+            {hasHourlyData ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={hourlySlots} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={2} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip content={<HourlyTooltip t={t} />} />
+                  <Legend />
+                  {HOURLY_CHART_CHANNELS.map((channel) => (
+                    <Bar
+                      key={channel}
+                      dataKey={channel}
+                      name={t(`userDeliveryMonitor.channel.${channel}`)}
+                      stackId="sent"
+                      fill={channelColor[channel]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="py-16 text-center text-sm text-gray-400">{t('userDeliveryMonitor.hourlyEmpty')}</p>
+            )}
+          </div>
+
+          <RunsTable runs={data.runs || []} now={now} t={t} />
+        </>
+      )}
     </div>
   );
 }
