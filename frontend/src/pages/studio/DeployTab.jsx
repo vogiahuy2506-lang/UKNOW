@@ -16,6 +16,7 @@ import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import { ChannelModal } from './ChannelModals';
 import ShareChatbotModal from '../../components/marketplace/ShareChatbotModal';
 import MarketplaceListingModal from '../../components/marketplace/MarketplaceListingModal';
+import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
 
 const EMBED_OPTIONS = [
   {
@@ -126,6 +127,8 @@ export default function DeployTab({
   onOpenWidgetSettings,
 }) {
   const [channels, setChannels] = useState([]);
+  // P9 — gói không có Telegram/WhatsApp (trần 0) thì ẩn ô kênh đó (không còn tài khoản nào dùng được để gán chatbot).
+  const entitlements = useChannelEntitlements();
   const [embedModal, setEmbedModal] = useState(null); // 'script' | 'iframe' | 'public_link' | null
   const [channelModal, setChannelModal] = useState(null); // 'zalo' | 'facebook' | 'zalo_personal' | 'whatsapp' | 'telegram_personal' | null
   const [shareModal, setShareModal] = useState(false);
@@ -204,7 +207,10 @@ export default function DeployTab({
             Kênh hội thoại
           </p>
           <div className="grid grid-cols-3 gap-2">
-            {CHANNEL_TILES.map((tile) => {
+            {CHANNEL_TILES.filter((tile) => (
+              !(tile.key === 'whatsapp' && !entitlements.whatsapp)
+              && !(tile.key === 'telegram_personal' && !entitlements.telegram)
+            )).map((tile) => {
               const isConnected = tile.key === 'zalo'
                 ? !!zaloChannel
                 : tile.key === 'facebook'

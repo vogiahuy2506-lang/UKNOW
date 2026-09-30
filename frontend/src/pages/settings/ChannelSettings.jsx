@@ -4,6 +4,8 @@ import ZaloSettings from './ZaloSettings';
 import WhatsAppSettings from './WhatsAppSettings';
 import TelegramSettings from './TelegramSettings';
 import FacebookSettings from './FacebookSettings';
+import ChannelNotInPlanNotice from '../../features/settings/components/ChannelNotInPlanNotice';
+import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
 
 const TABS = [
   { key: 'email', label: 'Email' },
@@ -14,6 +16,8 @@ const TABS = [
 ];
 
 const ChannelSettings = () => {
+  // P9 — gói không có Telegram/WhatsApp (trần 0): tab vẫn hiện nhưng nội dung là thông báo + nút mua, không có nút kết nối/quét QR.
+  const entitlements = useChannelEntitlements();
   // Allow opening directly on a tab via /app/settings/channels#tab (used by the
   // OAuth callback redirect after Embedded Signup).
   const [active, setActive] = useState(() => {
@@ -64,8 +68,18 @@ const ChannelSettings = () => {
       {active === 'email' && <EmailSettings />}
       {active === 'facebook' && <FacebookSettings />}
       {active === 'zalo' && <ZaloSettings />}
-      {active === 'whatsapp' && <WhatsAppSettings />}
-      {active === 'telegram' && <TelegramSettings />}
+      {active === 'whatsapp' && (entitlements.isLoading ? null : (
+        <>
+          {!entitlements.whatsapp && <ChannelNotInPlanNotice channel="whatsapp" />}
+          <WhatsAppSettings readOnly={!entitlements.whatsapp} />
+        </>
+      ))}
+      {active === 'telegram' && (entitlements.isLoading ? null : (
+        <>
+          {!entitlements.telegram && <ChannelNotInPlanNotice channel="telegram" />}
+          <TelegramSettings readOnly={!entitlements.telegram} />
+        </>
+      ))}
     </div>
   );
 };

@@ -73,7 +73,8 @@ function InfoRow({ icon: Icon, label, value, mono = false }) {
   );
 }
 
-export default function WhatsAppSettings() {
+// P9 — `readOnly`: gói không có kênh WhatsApp -> chỉ xem/xoá tài khoản cũ, KHÔNG có nút quét QR/quét lại.
+export default function WhatsAppSettings({ readOnly = false } = {}) {
   const { t } = useI18n();
   const [sessions, setSessions] = useState([]); // { sessionKey, phone, name, status }
   const [loading, setLoading] = useState(true);
@@ -224,15 +225,17 @@ export default function WhatsAppSettings() {
             <HiOutlineRefresh className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
             {t('whatsAppSettings.refresh')}
           </button>
-          <button
-            type="button"
-            onClick={handleOpenQr}
-            disabled={connecting}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
-          >
-            <HiOutlineQrcode className="h-4 w-4" />
-            {connecting ? t('whatsAppSettings.opening') : t('whatsAppSettings.scanQr')}
-          </button>
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleOpenQr}
+              disabled={connecting}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
+            >
+              <HiOutlineQrcode className="h-4 w-4" />
+              {connecting ? t('whatsAppSettings.opening') : t('whatsAppSettings.scanQr')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -354,7 +357,7 @@ export default function WhatsAppSettings() {
 
                 {/* Right: actions */}
                 <div className="flex items-center gap-2 shrink-0">
-                  {s.status !== 'open' && (
+                  {!readOnly && s.status !== 'open' && (
                     <button
                       type="button"
                       onClick={() => handleReconnect(s)}

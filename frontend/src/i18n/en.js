@@ -5666,6 +5666,14 @@ export default {
     manage: 'Choose accounts to keep',
   },
 
+  // P9 (PLAN_TG_WA_DAY_DU) — current plan has no Telegram/WhatsApp channel (channel account cap = 0).
+  channelNotInPlan: {
+    title: 'Your current plan does not include {channel}',
+    hint: 'Your plan does not include the {channel} channel, so you cannot connect accounts, send campaigns or quick-send through it. Past conversations and reports are kept as they are.',
+    buyMore: 'Buy more slots',
+    upgrade: 'Upgrade plan',
+  },
+
   topup: {
     title: 'Buy more quota',
     subtitle: 'Add Zalo messages, emails, or AI credits for the current billing cycle.',

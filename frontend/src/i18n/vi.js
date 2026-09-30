@@ -5675,6 +5675,14 @@ export default {
     manage: 'Chọn tài khoản giữ lại',
   },
 
+  // P9 (PLAN_TG_WA_DAY_DU) — gói hiện tại không có kênh Telegram/WhatsApp (trần tài khoản kênh = 0).
+  channelNotInPlan: {
+    title: 'Gói hiện tại không có {channel}',
+    hint: 'Gói của bạn chưa bao gồm kênh {channel}, nên chưa thể kết nối tài khoản, gửi chiến dịch hay gửi nhanh qua kênh này. Lịch sử hội thoại và báo cáo cũ vẫn được giữ nguyên.',
+    buyMore: 'Mua thêm slot',
+    upgrade: 'Nâng gói',
+  },
+
   topup: {
     title: 'Mua thêm hạn mức',
     subtitle: 'Bổ sung tin Zalo, email hoặc lượt AI trong chu kỳ hiện tại.',

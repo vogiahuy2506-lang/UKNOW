@@ -278,7 +278,7 @@ function StatusPill({ loaded, active, sessionOk, t }) {
   );
 }
 
-function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, loggingOut, deleting, t }) {
+function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readOnly = false, loggingOut, deleting, t }) {
   const needsRelogin = account.is_active && account.session_ok === false;
   const fullName = [account.first_name, account.last_name].filter(Boolean).join(' ');
   const displayName = fullName || account.username || account.phone || 'Telegram User';
@@ -327,7 +327,7 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, loggi
 
         {/* Actions */}
         <div className="flex flex-col gap-1.5 shrink-0 sm:items-end">
-          {needsRelogin && (
+          {needsRelogin && !readOnly && (
             <button
               type="button"
               onClick={onRelogin}
@@ -368,7 +368,8 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, loggi
 
 // ── Main Component ────────────────────────────────────────────────────────────
 
-export default function TelegramSettings() {
+// P9 — `readOnly`: gói không có kênh Telegram -> chỉ xem/đăng xuất/xoá tài khoản cũ, KHÔNG có nút quét QR/đăng nhập lại.
+export default function TelegramSettings({ readOnly = false } = {}) {
   const { t } = useI18n();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -622,6 +623,7 @@ export default function TelegramSettings() {
             <HiOutlineRefresh className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             {refreshing ? t('telegramSettings.loading') : t('telegramSettings.refresh')}
           </button>
+          {!readOnly && (
           <button
             type="button"
             onClick={handleStartQrLogin}
@@ -638,6 +640,7 @@ export default function TelegramSettings() {
             <HiOutlineQrcode className="w-3.5 h-3.5" />
             {t('telegramSettings.scanQr')}
           </button>
+          )}
         </div>
       </div>
 
@@ -701,15 +704,17 @@ export default function TelegramSettings() {
                 {t('telegramSettings.emptySubtitle', { action: t('telegramSettings.scanQr') })}
               </p>
             </div>
-            <button
-              type="button"
-              onClick={handleStartQrLogin}
-              disabled={!canOpenQr}
-              className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
-            >
-              <HiOutlineQrcode className="w-4 h-4" />
-              {t('telegramSettings.scanQr')}
-            </button>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleStartQrLogin}
+                disabled={!canOpenQr}
+                className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
+              >
+                <HiOutlineQrcode className="w-4 h-4" />
+                {t('telegramSettings.scanQr')}
+              </button>
+            )}
           </div>
         ) : (
           /* Account cards */
@@ -722,6 +727,7 @@ export default function TelegramSettings() {
                 onDelete={handleDelete}
                 onRelogin={handleStartQrLogin}
                 canRelogin={canOpenQr}
+                readOnly={readOnly}
                 loggingOut={loggingOut}
                 deleting={deleting}
                 t={t}

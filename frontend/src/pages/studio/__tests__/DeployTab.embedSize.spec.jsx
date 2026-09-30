@@ -8,6 +8,9 @@ import DeployTab from '../DeployTab';
 vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
   default: { getChatbotChannels: vi.fn().mockResolvedValue({ data: { data: [] } }) },
 }));
+vi.mock('../../../hooks/queries/useChannelEntitlements', () => ({
+  useChannelEntitlements: () => ({ telegram: true, whatsapp: true, limits: {}, isLoading: false }),
+}));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('../ChannelModals', () => ({ ChannelModal: () => null }));
 vi.mock('../../../components/marketplace/ShareChatbotModal', () => ({ default: () => null }));
