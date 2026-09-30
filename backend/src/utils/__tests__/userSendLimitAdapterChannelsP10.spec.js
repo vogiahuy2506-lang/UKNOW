@@ -103,7 +103,7 @@ describe('checkSendQuota — kênh adapter có hạn mức tin/tháng riêng (P1
   it.each([
     ['telegram', 100, 'Telegram'],
     ['whatsapp', 200, 'WhatsApp'],
-  ])('%s: đọc cột monthly_%s_limit (không phải cột Zalo) — 50 tin < %i → cho phép dù đã vượt trần Zalo (5)', async (channel, limit) => {
+  ])('%s: đọc cột monthly_<kênh>_limit (trần riêng %s, không phải cột Zalo) — 50 tin → cho phép dù đã vượt trần Zalo (5)', async (channel, limit) => {
     state.adapterCount = 50;
     const quota = await checkSendQuota({ userId: 10, channel });
     expect(quota.allowed).toBe(true);

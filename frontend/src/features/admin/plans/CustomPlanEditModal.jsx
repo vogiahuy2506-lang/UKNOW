@@ -20,6 +20,8 @@ export const CustomPlanEditModal = ({ plan, onClose, onSaved }) => {
     monthlyEmailLimit: plan.monthlyEmailLimit ?? '',
     dailyZaloLimit: plan.dailyZaloLimit ?? '',
     monthlyZaloLimit: plan.monthlyZaloLimit ?? '',
+    monthlyTelegramLimit: plan.monthlyTelegramLimit ?? '',
+    monthlyWhatsappLimit: plan.monthlyWhatsappLimit ?? '',
     messagesPerPeriod: plan.messagesPerPeriod ?? '',
     isFupEnabled: plan.isFupEnabled ?? false,
     maxLandingPages: plan.maxLandingPages ?? '',

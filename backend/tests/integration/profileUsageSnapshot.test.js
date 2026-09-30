@@ -13,11 +13,11 @@
  *   gửi nhanh email: usage_logs email_direct_send 3 (-2 ngày) + 2 (hôm nay) = 5.
  *   => EMAIL_KỲ = 8 + 5 = 13; EMAIL_HÔM_NAY = 1 + 2 = 3.
  *   zalo_messages  : sent 3 (-1 ngày) + 2 (hôm nay) = 5; loại: failed, aborted, preview, sent -20 ngày.
- *   kênh adapter   : campaign_channel_messages sent telegram 2 + whatsapp 1 (-2 ngày) + telegram 1 (hôm nay) = 4;
- *                    loại: failed, preview.
+ *   kênh adapter   : campaign_channel_messages sent telegram 2 + whatsapp 1 (-2 ngày) + telegram 1 (hôm nay);
+ *                    loại: failed, preview. P10: mỗi kênh có hạn mức RIÊNG => TELEGRAM_KỲ = 3, WHATSAPP_KỲ = 1.
  *   gửi nhanh Zalo : usage_logs zalo_direct_send 4 (-3 ngày).
- *   => NHẮN_TIN_KỲ = 5 + 4 + 4 = 13; NHẮN_TIN_HÔM_NAY = 2 + 1 = 3.
- *   => TỔNG_KỲ (countCombinedSentInCycle) = 13 + 13 = 26.
+ *   => NHẮN_TIN_KỲ (CHỈ Zalo, P10) = 5 + 4 = 9; NHẮN_TIN_HÔM_NAY = 2 (tin adapter hôm nay không còn cộng vào Zalo).
+ *   => TỔNG_KỲ (countCombinedSentInCycle, vẫn cộng cả Telegram/WhatsApp) = 13 + 9 + 3 + 1 = 26.
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
@@ -30,6 +30,7 @@ import {
   countEmailSentInCycle,
   countZaloSentInCycle,
   countCombinedSentInCycle,
+  countAdapterSentInCycle,
   countEmailSentToday,
   countZaloSentToday,
 } from '../../src/utils/userSendLimit.util.js';
@@ -41,8 +42,10 @@ const daysAgo = (days) => new Date(Date.now() - days * DAY);
 // Bảng chân lý cộng tay (xem đầu file) — KHÔNG tính từ mã đang test.
 const EMAIL_KY = 13;
 const EMAIL_HOM_NAY = 3;
-const NHAN_TIN_KY = 13;
-const NHAN_TIN_HOM_NAY = 3;
+const NHAN_TIN_KY = 9;
+const NHAN_TIN_HOM_NAY = 2;
+const TELEGRAM_KY = 3;
+const WHATSAPP_KY = 1;
 const TONG_KY = 26;
 
 const EMAIL_STATUSES = [
@@ -154,7 +157,7 @@ async function seedSendHistory(ownerId, otherOwnerId) {
   await insertZalo({ ownerId, status: 'aborted' }); // chưa từng gửi: loại
   await insertZalo({ ownerId, isPreview: true }); // preview: loại
   await insertZalo({ ownerId, daysBack: 20 }); // ngoài kỳ: loại
-  // kênh adapter (Telegram / WhatsApp) — cùng hạn mức với Zalo
+  // kênh adapter (Telegram / WhatsApp) — hạn mức tin RIÊNG từng kênh (P10)
   await insertAdapter({ ownerId, channel: 'telegram' });
   await insertAdapter({ ownerId, channel: 'telegram' });
   await insertAdapter({ ownerId, channel: 'whatsapp' });
@@ -179,6 +182,8 @@ describe('GET /api/users/profile — tin gửi theo kỳ, bằng số cổng ch�
     // (a) bảng chân lý cộng tay
     expect(data.emailSentCycle).toBe(EMAIL_KY);
     expect(data.messagingSentCycle).toBe(NHAN_TIN_KY);
+    expect(data.telegramSentCycle).toBe(TELEGRAM_KY);
+    expect(data.whatsappSentCycle).toBe(WHATSAPP_KY);
     expect(data.combinedSentCycle).toBe(TONG_KY);
     expect(data.emailSentToday).toBe(EMAIL_HOM_NAY);
     expect(data.messagingSentToday).toBe(NHAN_TIN_HOM_NAY);
@@ -195,6 +200,10 @@ describe('GET /api/users/profile — tin gửi theo kỳ, bằng số cổng ch�
     expect(data.emailSentCycle).toBe(await countEmailSentInCycle(user.id, cycle.cycleStart, cycle.cycleEnd));
     _clearQuotaCache();
     expect(data.messagingSentCycle).toBe(await countZaloSentInCycle(user.id, cycle.cycleStart, cycle.cycleEnd));
+    _clearQuotaCache();
+    expect(data.telegramSentCycle).toBe(await countAdapterSentInCycle(user.id, 'telegram', cycle.cycleStart, cycle.cycleEnd));
+    _clearQuotaCache();
+    expect(data.whatsappSentCycle).toBe(await countAdapterSentInCycle(user.id, 'whatsapp', cycle.cycleStart, cycle.cycleEnd));
     _clearQuotaCache();
     expect(data.combinedSentCycle).toBe(await countCombinedSentInCycle(user.id, cycle.cycleStart, cycle.cycleEnd));
     _clearQuotaCache();
@@ -242,6 +251,8 @@ describe('GET /api/users/profile — tin gửi theo kỳ, bằng số cổng ch�
     // số theo kỳ của từng kênh vẫn có (FE hiện "đã dùng · Không giới hạn")
     expect(data.emailSentCycle).toBe(EMAIL_KY);
     expect(data.messagingSentCycle).toBe(NHAN_TIN_KY);
+    expect(data.telegramSentCycle).toBe(TELEGRAM_KY);
+    expect(data.whatsappSentCycle).toBe(WHATSAPP_KY);
   });
 
   it('gói không đặt trần tổng kỳ → combinedSentCycle = null', async () => {
@@ -259,6 +270,8 @@ describe('GET /api/users/profile — tin gửi theo kỳ, bằng số cổng ch�
     expect(data.sendCycleEnd).toBeNull();
     expect(data.emailSentCycle).toBeNull();
     expect(data.messagingSentCycle).toBeNull();
+    expect(data.telegramSentCycle).toBeNull();
+    expect(data.whatsappSentCycle).toBeNull();
     expect(data.combinedSentCycle).toBeNull();
   });
 });

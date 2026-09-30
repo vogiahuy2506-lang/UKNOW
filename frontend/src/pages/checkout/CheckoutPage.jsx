@@ -29,6 +29,8 @@ const camelItemKey = (key) => {
     const map = {
         base_fee: 'baseFee',
         zalo_messages: 'zaloMessages',
+        telegram_messages: 'telegramMessages',
+        whatsapp_messages: 'whatsappMessages',
         emails: 'emails',
         ai_credits: 'aiCredits',
         zalo_accounts: 'zaloAccounts',

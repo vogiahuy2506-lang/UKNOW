@@ -17,6 +17,7 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
     gracePeriodDays: '',
     dailyEmailLimit: '', monthlyEmailLimit: '',
     dailyZaloLimit: '', monthlyZaloLimit: '',
+    monthlyTelegramLimit: '', monthlyWhatsappLimit: '',
     messagesPerPeriod: '', isFupEnabled: false,
     maxLandingPages: '', maxCampaigns: '',
     maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',

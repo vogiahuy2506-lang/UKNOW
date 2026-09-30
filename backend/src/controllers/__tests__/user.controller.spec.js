@@ -64,6 +64,8 @@ const SEND_USAGE_EMPTY = {
   emailSentCycle: null,
   messagingSentCycle: null,
   combinedSentCycle: null,
+  telegramSentCycle: null,
+  whatsappSentCycle: null,
   emailSentToday: null,
   messagingSentToday: null,
 };
@@ -384,6 +386,8 @@ describe('UserController.getProfile', () => {
         monthlyZaloLimit: 2000,
         addons: {
           zaloMessages: { granted: 300, used: 0, remaining: 300 },
+          telegramMessages: { granted: 0, used: 0, remaining: 0 },
+          whatsappMessages: { granted: 0, used: 0, remaining: 0 },
           emails: { granted: 0, used: 0, remaining: 0 },
           aiCredits: { granted: 50, used: 0, remaining: 50 },
           zaloAccounts: 0,
@@ -545,6 +549,52 @@ describe('UserController.getProfile — số đã dùng lấy từ profileUsage.
       chatbots: { used: 2, limit: 3 },
       landingPages: { used: 1, limit: null },
       employees: { used: 0, limit: 1 },
+    });
+  });
+
+  // P10 — hạn mức tin/tháng RIÊNG Telegram/WhatsApp: trần lấy từ dòng gói, số đã dùng từ service (hàm của cổng chặn);
+  // ví tin riêng trong addons. 0 giữ là 0 (gói không có kênh), thiếu cột -> null (không giới hạn).
+  it('P10: trả monthlyTelegramLimit/monthlyWhatsappLimit + telegramSentCycle/whatsappSentCycle; ví tin riêng trong addons', async () => {
+    findProfilePlan.mockResolvedValue({
+      plan_id: 7,
+      monthly_zalo_limit: 5000,
+      monthly_telegram_limit: 300,
+      monthly_whatsapp_limit: 0,
+    });
+    getProfileSendUsage.mockResolvedValue({
+      ...SEND_USAGE_EMPTY,
+      messagingSentCycle: 120,
+      telegramSentCycle: 11,
+      whatsappSentCycle: 22,
+    });
+    getWalletBalance.mockImplementation(async (_uid, itemKey) => (
+      itemKey === 'telegram_messages'
+        ? { granted: 100, used: 40, remaining: 60, rawRemaining: 60 }
+        : { granted: 0, used: 0, remaining: 0, rawRemaining: 0 }
+    ));
+
+    await userController.getProfile({ user: { id: 42 } }, res);
+
+    const { data } = res.json.mock.calls[0][0];
+    expect(data).toMatchObject({
+      monthlyZaloLimit: 5000,
+      monthlyTelegramLimit: 300,
+      monthlyWhatsappLimit: 0,
+      messagingSentCycle: 120,
+      telegramSentCycle: 11,
+      whatsappSentCycle: 22,
+    });
+    expect(data.addons.telegramMessages).toEqual({ granted: 100, used: 40, remaining: 60 });
+  });
+
+  it('P10: gói thiếu cột hạn mức riêng -> null (không giới hạn), số đã dùng null khi đồng hồ lỗi', async () => {
+    findProfilePlan.mockResolvedValue({ plan_id: 7, monthly_zalo_limit: 5000 });
+    await userController.getProfile({ user: { id: 42 } }, res);
+    expect(res.json.mock.calls[0][0].data).toMatchObject({
+      monthlyTelegramLimit: null,
+      monthlyWhatsappLimit: null,
+      telegramSentCycle: null,
+      whatsappSentCycle: null,
     });
   });
 

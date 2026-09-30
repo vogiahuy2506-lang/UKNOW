@@ -126,6 +126,8 @@ export const CustomPlanCard = ({ plan, onEdit, onDelete, onActivate, onRestore }
         <span>{t('plans.emailPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyEmailLimit)}</strong></span>
         <span>{t('plans.zaloPerDay')}: <strong className="text-gray-700">{fmtLimit(plan.dailyZaloLimit)}</strong></span>
         <span>{t('plans.zaloPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyZaloLimit)}</strong></span>
+        <span>{t('plans.telegramPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyTelegramLimit)}</strong></span>
+        <span>{t('plans.whatsappPerMonth')}: <strong className="text-gray-700">{fmtLimit(plan.monthlyWhatsappLimit)}</strong></span>
         <span className="col-span-2">{t('planInputs.messagesPerPeriod')}: <strong className="text-gray-700">{fmtPeriodMessages(plan.messagesPerPeriod)}</strong></span>
         <span className="col-span-2">{t('plans.employees')}: <strong className="text-gray-700">{fmtEmp(plan.maxEmployees, t)}</strong></span>
       </div>

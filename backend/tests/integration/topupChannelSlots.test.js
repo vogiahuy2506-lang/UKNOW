@@ -156,6 +156,46 @@ describe('P6 — bán lẻ slot Telegram/WhatsApp (top-up)', () => {
   });
 });
 
+describe('P10 — mua ví tin Telegram/WhatsApp (top-up tiêu hao)', () => {
+  it('gói có trần tin Telegram: mua 100 tin = 10.000đ (100đ/tin như Zalo) → webhook cấp grant VĨNH VIỄN (cycle_end NULL) cho telegram_messages; gói KHÔNG trần thì 400', async () => {
+    const user = await createUser({ username: 'p10-buy-tg-msg' });
+    const token = await loginAs(user);
+    mockPaymentRequestsCreate.mockResolvedValue({ qrCode: '000201fake', checkoutUrl: 'https://pay.payos.vn/web/fake' });
+
+    // Gói thử nghiệm không khai trần tin (NULL = không giới hạn) → không bán.
+    const blocked = await request(app)
+      .post('/api/topup/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { telegram_messages: 500 } });
+    expect(blocked.status).toBe(400);
+    expect(blocked.body.code).toBe('CHANNEL_SLOTS_UNLIMITED');
+
+    await db.query(
+      `UPDATE plans SET monthly_telegram_limit = 2000 WHERE id = (SELECT active_plan_id FROM users WHERE id = $1)`,
+      [user.id]
+    );
+    const created = await request(app)
+      .post('/api/topup/create-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { telegram_messages: 500 }, amount: 1 });
+    expect(created.status).toBe(200);
+    expect(Number(created.body.result.amount)).toBe(50000); // 500 tin x 100đ = 50.000đ (đúng mức tối thiểu đơn)
+    const orderCode = created.body.result.orderCode;
+
+    mockWebhooksVerify.mockResolvedValue({ code: '00', orderCode, amount: 50000 });
+    await request(app).post('/api/payments/webhook').send({});
+
+    const grants = await db.query(
+      `SELECT item_key, qty, cycle_end FROM topup_grants WHERE order_id = (SELECT id FROM orders WHERE order_code = $1)`,
+      [orderCode]
+    );
+    expect(grants.rows).toHaveLength(1);
+    expect(grants.rows[0].item_key).toBe('telegram_messages');
+    expect(Number(grants.rows[0].qty)).toBe(500);
+    expect(grants.rows[0].cycle_end).toBeNull();
+  });
+});
+
 describe('P6 — gói tuỳ chỉnh có max_telegram_accounts / max_whatsapp_accounts', () => {
   // Migration 270 (30/09): TG/WA min 1, kèm sẵn 1 như Zalo/email — bỏ trống = 1 (không tốn thêm), 0 bị từ chối.
   it('cấu hình giá trả 2 hạng mục mới; báo giá tính đúng theo đơn giá TK Zalo; bỏ trống = 1 kèm sẵn không tốn tiền; 0 bị từ chối', async () => {

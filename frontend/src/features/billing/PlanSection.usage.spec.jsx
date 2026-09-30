@@ -125,12 +125,12 @@ describe('PlanSection — khối Tin nhắn trong kỳ', () => {
     expect(messagesCard()).not.toHaveTextContent('(đến');
   });
 
-  it('hai dòng: Email và "Zalo · Telegram · WhatsApp", đã dùng / trần; có ghi chú gồm cả gửi nhanh', () => {
+  it('hai dòng: Email và "Zalo", đã dùng / trần; có ghi chú gồm cả gửi nhanh (Telegram/WhatsApp có hạn mức riêng)', () => {
     renderPlan();
     const card = messagesCard();
     expect(within(card).getByText('Email')).toBeInTheDocument();
     expect(within(card).getByText('3.400 / 10.000')).toBeInTheDocument();
-    expect(within(card).getByText('Zalo · Telegram · WhatsApp')).toBeInTheDocument();
+    expect(within(card).getByText('Zalo')).toBeInTheDocument();
     expect(within(card).getByText('120 / 5.000')).toBeInTheDocument();
     expect(card).toHaveTextContent('Đã gồm cả tin gửi nhanh.');
   });

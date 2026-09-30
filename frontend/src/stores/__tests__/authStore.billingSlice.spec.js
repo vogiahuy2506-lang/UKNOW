@@ -35,11 +35,18 @@ describe('authStore.syncBillingFromProfile — sendUsage theo kỳ', () => {
       monthlyZaloLimit: 5000,
       combinedSentCycle: 26,
       messagesPerPeriod: 100,
+      telegramSentCycle: 12,
+      monthlyTelegramLimit: 300,
+      whatsappSentCycle: 0,
+      monthlyWhatsappLimit: 0,
     });
 
+    // P10: nhắn tin = Zalo; Telegram/WhatsApp có số đã dùng + trần RIÊNG (0 giữ là 0).
     expect(sendUsage).toEqual({
       email: { used: 3400, limit: 10000 },
       messaging: { used: 120, limit: 5000 },
+      telegram: { used: 12, limit: 300 },
+      whatsapp: { used: 0, limit: 0 },
       combined: { used: 26, limit: 100 },
     });
   });

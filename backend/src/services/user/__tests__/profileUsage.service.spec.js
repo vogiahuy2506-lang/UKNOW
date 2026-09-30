@@ -12,6 +12,7 @@ const countZaloSentInCycle = jest.fn();
 const countCombinedSentInCycle = jest.fn();
 const countEmailSentToday = jest.fn();
 const countZaloSentToday = jest.fn();
+const countAdapterSentInCycle = jest.fn();
 const getResourceUsageSnapshot = jest.fn();
 const countActiveChatbotsByUser = jest.fn();
 const resolveEffectiveCeiling = jest.fn();
@@ -24,6 +25,7 @@ jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
   countCombinedSentInCycle,
   countEmailSentToday,
   countZaloSentToday,
+  countAdapterSentInCycle,
 }));
 jest.unstable_mockModule('../../../utils/userResourceLimit.util.js', () => ({ getResourceUsageSnapshot }));
 jest.unstable_mockModule('../../../repositories/ai/chatbot.repository.js', () => ({
@@ -43,7 +45,7 @@ let errorSpy;
 beforeEach(() => {
   [
     getBillingCycle, countEmailSentInCycle, countZaloSentInCycle, countCombinedSentInCycle,
-    countEmailSentToday, countZaloSentToday, getResourceUsageSnapshot, countActiveChatbotsByUser,
+    countEmailSentToday, countZaloSentToday, countAdapterSentInCycle, getResourceUsageSnapshot, countActiveChatbotsByUser,
     resolveEffectiveCeiling, computeEmployeeLimitInfo,
   ].forEach((fn) => fn.mockReset());
   getBillingCycle.mockResolvedValue(CYCLE);
@@ -52,6 +54,7 @@ beforeEach(() => {
   countCombinedSentInCycle.mockResolvedValue(3520);
   countEmailSentToday.mockResolvedValue(12);
   countZaloSentToday.mockResolvedValue(5);
+  countAdapterSentInCycle.mockImplementation(async (_uid, channel) => (channel === 'telegram' ? 7 : 9));
   errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
@@ -72,6 +75,34 @@ describe('getProfileSendUsage — tin gửi theo kỳ, đúng hàm của cổng 
       emailSentCycle: 3400,
       messagingSentCycle: 120,
     });
+  });
+
+  // P10 — Telegram/WhatsApp có hạn mức tin/tháng RIÊNG: đếm bằng countAdapterSentInCycle (hàm của cổng chặn), cùng kỳ; Zalo
+  // (messagingSentCycle) chỉ còn Zalo.
+  it('P10: telegramSentCycle/whatsappSentCycle qua countAdapterSentInCycle đúng kênh + đúng kỳ; lỗi một kênh chỉ null kênh đó', async () => {
+    const out = await getProfileSendUsage(42, {});
+    expect(countAdapterSentInCycle).toHaveBeenCalledWith(42, 'telegram', CYCLE_START, CYCLE_END);
+    expect(countAdapterSentInCycle).toHaveBeenCalledWith(42, 'whatsapp', CYCLE_START, CYCLE_END);
+    expect(out).toMatchObject({ telegramSentCycle: 7, whatsappSentCycle: 9, messagingSentCycle: 120 });
+
+    countAdapterSentInCycle.mockImplementation(async (_uid, channel) => {
+      if (channel === 'telegram') throw new Error('tg down');
+      return 9;
+    });
+    const partial = await getProfileSendUsage(42, {});
+    expect(partial.telegramSentCycle).toBeNull();
+    expect(partial.whatsappSentCycle).toBe(9);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ meter: 'telegramSentCycle', billingUserId: 42, message: 'tg down' })
+    );
+  });
+
+  it('P10: chưa có kỳ (hasPlan=false) → telegramSentCycle/whatsappSentCycle null, không gọi hàm đếm', async () => {
+    getBillingCycle.mockResolvedValue({ hasPlan: false, billingUserId: 42, cycleStart: null, cycleEnd: null });
+    const out = await getProfileSendUsage(42, {});
+    expect(countAdapterSentInCycle).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ telegramSentCycle: null, whatsappSentCycle: null });
   });
 
   it('gói KHÔNG đặt trần tổng kỳ / trần ngày → không gọi hàm tương ứng, trả null (không phải 0)', async () => {

@@ -647,6 +647,9 @@ export const SendLimitsFields = ({ form, set, hint }) => {
           ['monthlyEmailLimit', t('planInputs.emailPerMonth'),  t('planInputs.emailPerMonthPlaceholder')],
           ['dailyZaloLimit',    t('planInputs.zaloPerDay'),    t('planInputs.zaloPerDayPlaceholder')],
           ['monthlyZaloLimit',  t('planInputs.zaloPerMonth'),   t('planInputs.zaloPerMonthPlaceholder')],
+          // P10 — hạn mức tin/tháng RIÊNG cho Telegram/WhatsApp (trước đây dùng chung Zalo).
+          ['monthlyTelegramLimit', t('planInputs.telegramPerMonth'), t('planInputs.telegramPerMonthPlaceholder')],
+          ['monthlyWhatsappLimit', t('planInputs.whatsappPerMonth'), t('planInputs.whatsappPerMonthPlaceholder')],
         ].map(([key, label, ph]) => (
           <div key={key}>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">{label}</label>

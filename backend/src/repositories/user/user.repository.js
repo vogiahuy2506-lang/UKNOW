@@ -27,6 +27,8 @@ const PLAN_COLUMNS = `
   p.daily_zalo_limit,
   p.monthly_zalo_limit,
   p.messages_per_period,
+  p.monthly_telegram_limit,
+  p.monthly_whatsapp_limit,
   p.ai_tokens_per_period,
   p.ai_credits_per_period,
   p.grace_period_days
@@ -48,6 +50,8 @@ const PLAN_COLUMNS_FALLBACK = `
   NULL::int AS daily_zalo_limit,
   NULL::int AS monthly_zalo_limit,
   NULL::int AS messages_per_period,
+  NULL::int AS monthly_telegram_limit,
+  NULL::int AS monthly_whatsapp_limit,
   NULL::int AS ai_tokens_per_period,
   NULL::int AS ai_credits_per_period,
   NULL::int AS grace_period_days

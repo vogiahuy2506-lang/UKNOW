@@ -18,6 +18,7 @@ import {
   countEmailSentInCycle,
   countZaloSentInCycle,
   countCombinedSentInCycle,
+  countAdapterSentInCycle,
   countEmailSentToday,
   countZaloSentToday,
 } from '../../utils/userSendLimit.util.js';
@@ -50,8 +51,9 @@ async function readMeter(meter, billingUserId, read) {
  * Tin đã gửi trong KỲ của gói (30 ngày từ ngày kích hoạt) — đúng số cổng gửi tin so với hạn mức.
  *
  * - Email : countEmailSentInCycle (7 trạng thái thư đã gửi + gửi nhanh) so với `monthly_email_limit`.
- * - Nhắn tin (Zalo + Telegram + WhatsApp, cùng hạn mức `monthly_zalo_limit`): countZaloSentInCycle — hàm này đã
- *   cộng sẵn kênh adapter (campaign_channel_messages) và gửi nhanh.
+ * - Zalo (`messagingSentCycle`, so với `monthly_zalo_limit`): countZaloSentInCycle. P10: hàm này CHỈ còn đếm Zalo —
+ *   Telegram/WhatsApp có hạn mức tin/tháng RIÊNG (cột `monthly_telegram_limit`/`monthly_whatsapp_limit`), đếm bằng
+ *   countAdapterSentInCycle (campaign_channel_messages loại xem thử + gửi nhanh) — đúng hàm cổng chặn dùng.
  * - Tổng kỳ : countCombinedSentInCycle so với `messages_per_period`, CHỈ khi gói đặt trần tổng.
  * - Hôm nay : CHỈ khi gói có trần ngày tương ứng (countEmailSentToday / countZaloSentToday — cấp chủ tài khoản,
  *   không phải bản `countEmployee*` cấp nhân viên).
@@ -61,6 +63,7 @@ async function readMeter(meter, billingUserId, read) {
  * @returns {Promise<{
  *   cycleStart: Date|null, cycleEnd: Date|null,
  *   emailSentCycle: number|null, messagingSentCycle: number|null, combinedSentCycle: number|null,
+ *   telegramSentCycle: number|null, whatsappSentCycle: number|null,
  *   emailSentToday: number|null, messagingSentToday: number|null,
  * }>}
  */
@@ -81,6 +84,8 @@ export async function getProfileSendUsage(billingUserId, planRow) {
     emailSentCycle,
     messagingSentCycle,
     combinedSentCycle,
+    telegramSentCycle,
+    whatsappSentCycle,
     emailSentToday,
     messagingSentToday,
   ] = await Promise.all([
@@ -92,6 +97,12 @@ export async function getProfileSendUsage(billingUserId, planRow) {
       : null,
     hasCycle && messagesPerPeriod !== null
       ? readMeter('combinedSentCycle', billingUserId, () => countCombinedSentInCycle(billingUserId, cycle.cycleStart, cycle.cycleEnd))
+      : null,
+    hasCycle
+      ? readMeter('telegramSentCycle', billingUserId, () => countAdapterSentInCycle(billingUserId, 'telegram', cycle.cycleStart, cycle.cycleEnd))
+      : null,
+    hasCycle
+      ? readMeter('whatsappSentCycle', billingUserId, () => countAdapterSentInCycle(billingUserId, 'whatsapp', cycle.cycleStart, cycle.cycleEnd))
       : null,
     dailyEmailLimit !== null
       ? readMeter('emailSentToday', billingUserId, () => countEmailSentToday(billingUserId))
@@ -107,6 +118,8 @@ export async function getProfileSendUsage(billingUserId, planRow) {
     emailSentCycle,
     messagingSentCycle,
     combinedSentCycle,
+    telegramSentCycle,
+    whatsappSentCycle,
     emailSentToday,
     messagingSentToday,
   };

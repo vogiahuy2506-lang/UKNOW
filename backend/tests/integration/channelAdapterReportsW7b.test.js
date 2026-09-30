@@ -10,13 +10,13 @@
  *     không thấy dữ liệu của user khác; timeline có cột telegram/whatsapp
  *   - Giám sát gửi (admin): toàn hệ thống (5 + 4), preview không tính
  *   - Dashboard: journeyEvents.telegramSent/whatsappSent, bộ lọc campaignType=telegram/whatsapp/email
- *   - Hồ sơ: "đã gửi trong kỳ / hôm nay" (messagingSent*) cộng tin adapter (cùng hàm đếm với hạn mức)
+ *   - Hồ sơ: telegramSentCycle/whatsappSentCycle theo KỲ gói (P10: hạn mức riêng; messagingSent* chỉ còn Zalo, không cộng tin adapter)
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser, createPlan } from './helpers/db.js';
+import { truncateAll, createUser } from './helpers/db.js';
 
 let app;
 
@@ -163,26 +163,32 @@ describe('W7b — dashboard', () => {
   });
 });
 
-describe('W7b — hồ sơ: đã gửi trong kỳ / hôm nay', () => {
-  // PLAN_SO_LIEU_DUNG_GON_KHOP PR-3: hồ sơ đếm theo KỲ của gói bằng chính hàm của cổng chặn (countZaloSentInCycle /
-  // countZaloSentToday, đã cộng sẵn kênh adapter) — nên user phải có gói; trần ngày được đặt để có số "hôm nay".
-  // Bản cũ đếm `customer_journey` theo tháng dương lịch (chỉ chạy được nhờ nhánh cộng adapter).
-  it('messagingSentCycle/messagingSentToday cộng 5 tin adapter (không tính preview, failed, user khác)', async () => {
+describe('W7b/P10 — hồ sơ: đã gửi trong kỳ / hôm nay', () => {
+  // PLAN_SO_LIEU_DUNG_GON_KHOP PR-3: hồ sơ đếm theo KỲ của gói bằng chính hàm của cổng chặn — nên user phải có gói.
+  // P10: Telegram/WhatsApp có hạn mức riêng nên messagingSent*/zaloSent* chỉ còn Zalo; tin adapter hiện ở telegramSentCycle/whatsappSentCycle.
+  it('P10: tin adapter KHÔNG còn cộng vào messagingSent*/zaloSent*; telegramSentCycle/whatsappSentCycle đếm theo kỳ gói (không tính preview, failed, user khác)', async () => {
     const { a } = await seed();
-    const plan = await createPlan({ isActive: true, dailyZaloLimit: 200, monthlyZaloLimit: 1000 });
+    // Chu kỳ gói chỉ dựng được khi user CÓ gói (seed() cố ý không gán) — gán gói mở, kích hoạt hôm qua.
+    const { rows: planRows } = await db.query(
+      `INSERT INTO plans (name, price, monthly_telegram_limit, monthly_whatsapp_limit, is_active)
+       VALUES ('P10 profile', 1000, 300, 0, true) RETURNING id`
+    );
     await db.query(
-      `UPDATE users SET active_plan_id = $1, plan_activated_at = NOW() - INTERVAL '2 days' WHERE id = $2`,
-      [plan.id, a.id]
+      `UPDATE users SET active_plan_id = $1, subscription_expires_at = NOW() + INTERVAL '30 days',
+              plan_activated_at = NOW() - INTERVAL '1 day' WHERE id = $2`,
+      [planRows[0].id, a.id]
     );
     const token = await loginAs(a);
     const res = await request(app)
       .get('/api/users/profile')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.messagingSentToday).toBe(5);
-    expect(res.body.data.messagingSentCycle).toBe(5);
-    // Tên cũ còn được giữ cho bản FE chưa nạp lại, mang cùng số mới.
-    expect(res.body.data.zaloSentToday).toBe(5);
-    expect(res.body.data.zaloSentMonth).toBe(5);
+    expect(res.body.data.messagingSentCycle).toBe(0);
+    expect(res.body.data.zaloSentMonth).toBe(0);
+    expect(res.body.data.telegramSentCycle).toBe(3);
+    expect(res.body.data.whatsappSentCycle).toBe(2);
+    // Trần riêng của gói đi cùng hồ sơ (0 = gói không có kênh, KHÔNG bị đổi thành null).
+    expect(res.body.data.monthlyTelegramLimit).toBe(300);
+    expect(res.body.data.monthlyWhatsappLimit).toBe(0);
   });
 });

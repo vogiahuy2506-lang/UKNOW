@@ -100,6 +100,7 @@ export const emptyForm = () => ({
   durationDays: '',
   dailyEmailLimit: '', monthlyEmailLimit: '',
   dailyZaloLimit: '',  monthlyZaloLimit: '',
+  monthlyTelegramLimit: '', monthlyWhatsappLimit: '',
   messagesPerPeriod: '', isFupEnabled: false,
   maxLandingPages: '', maxCampaigns: '',
   maxZaloCampaigns: '', maxZaloGroupCampaigns: '', maxEmailCampaigns: '',

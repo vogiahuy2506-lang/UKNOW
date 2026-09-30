@@ -56,6 +56,8 @@ export function normalizeWalletAddon(value) {
 /**
  * @param {{
  *   zaloMessages?: object|number,
+ *   telegramMessages?: object|number,
+ *   whatsappMessages?: object|number,
  *   emails?: object|number,
  *   aiCredits?: object|number,
  *   zaloAccounts?: number,
@@ -70,6 +72,8 @@ export function normalizeWalletAddon(value) {
  */
 export function buildAddonsPayload({
   zaloMessages = 0,
+  telegramMessages = 0,
+  whatsappMessages = 0,
   emails = 0,
   aiCredits = 0,
   zaloAccounts = 0,
@@ -82,6 +86,9 @@ export function buildAddonsPayload({
 } = {}) {
   const wallet = {
     zaloMessages: normalizeWalletAddon(zaloMessages),
+    // P10 — ví tin Telegram/WhatsApp riêng (trước đây dùng chung ví Zalo).
+    telegramMessages: normalizeWalletAddon(telegramMessages),
+    whatsappMessages: normalizeWalletAddon(whatsappMessages),
     emails: normalizeWalletAddon(emails),
     aiCredits: normalizeWalletAddon(aiCredits),
   };

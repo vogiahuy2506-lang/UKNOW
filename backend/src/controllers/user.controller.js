@@ -67,6 +67,8 @@ const toIsoOrNull = (value) => {
 async function loadProfileAddons(billingUserId) {
   const [
     zaloWallet,
+    telegramWallet,
+    whatsappWallet,
     emailWallet,
     aiWallet,
     zaloAccounts,
@@ -78,6 +80,8 @@ async function loadProfileAddons(billingUserId) {
     employees,
   ] = await Promise.all([
     getWalletBalance(billingUserId, 'zalo_messages'),
+    getWalletBalance(billingUserId, 'telegram_messages'),
+    getWalletBalance(billingUserId, 'whatsapp_messages'),
     getWalletBalance(billingUserId, 'emails'),
     getWalletBalance(billingUserId, 'ai_credits'),
     sumActiveTopupGrants(billingUserId, 'zalo_accounts'),
@@ -90,6 +94,8 @@ async function loadProfileAddons(billingUserId) {
   ]);
   return buildAddonsPayload({
     zaloMessages: zaloWallet,
+    telegramMessages: telegramWallet,
+    whatsappMessages: whatsappWallet,
     emails: emailWallet,
     aiCredits: aiWallet,
     zaloAccounts,
@@ -162,6 +168,9 @@ const mapProfileResponse = (userRow) => ({
   // Trần TỔNG tin nhắn trong kỳ (Email + Zalo + Telegram + WhatsApp gộp) — cổng gửi tin chặn theo cột này
   // (userSendLimit.util.js). null = gói không đặt. Gói dùng thử: 100 và các trần theo kênh để NULL.
   messagesPerPeriod: userRow.messages_per_period ?? null,
+  // P10 — hạn mức tin/tháng RIÊNG Telegram/WhatsApp (null = không giới hạn, 0 = gói không có kênh).
+  monthlyTelegramLimit: userRow.monthly_telegram_limit ?? null,
+  monthlyWhatsappLimit: userRow.monthly_whatsapp_limit ?? null,
   aiTokensPerPeriod: userRow.ai_tokens_per_period ?? null,
   aiCreditsPerPeriod: userRow.ai_credits_per_period ?? null,
   botDailyReplyCap: userRow.bot_daily_reply_cap ?? null,
@@ -192,12 +201,15 @@ const mapProfileUsage = ({ aiTokensUsed, aiCreditsUsed, aiCreditCycle, send, res
   // "làm mới ngày …". null khi chưa có gói/không dựng được kỳ.
   aiCreditCycleStart: toIsoOrNull(aiCreditCycle?.cycleStart),
   aiCreditCycleEnd: toIsoOrNull(aiCreditCycle?.cycleEnd),
-  // Tin đã gửi trong KỲ của gói (cùng kỳ, cùng hàm đếm với cổng gửi tin). `messaging` = Zalo + Telegram + WhatsApp
-  // (cùng hạn mức monthlyZaloLimit), đã gồm tin gửi nhanh.
+  // Tin đã gửi trong KỲ của gói (cùng kỳ, cùng hàm đếm với cổng gửi tin), đã gồm tin gửi nhanh. P10: `messaging` CHỈ còn
+  // Zalo (so với monthlyZaloLimit); Telegram/WhatsApp có hạn mức tin/tháng riêng (monthlyTelegramLimit/monthlyWhatsappLimit).
   sendCycleStart: toIsoOrNull(send.cycleStart),
   sendCycleEnd: toIsoOrNull(send.cycleEnd),
   emailSentCycle: send.emailSentCycle,
   messagingSentCycle: send.messagingSentCycle,
+  // P10 — tin Telegram/WhatsApp trong kỳ gói (số của countAdapterSentInCycle, cùng hàm với cổng chặn).
+  telegramSentCycle: send.telegramSentCycle,
+  whatsappSentCycle: send.whatsappSentCycle,
   // Chỉ có số khi gói đặt trần tổng (messagesPerPeriod); nếu không là null.
   combinedSentCycle: send.combinedSentCycle,
   // Chỉ có số khi gói có trần ngày tương ứng (dailyEmailLimit / dailyZaloLimit); nếu không là null.

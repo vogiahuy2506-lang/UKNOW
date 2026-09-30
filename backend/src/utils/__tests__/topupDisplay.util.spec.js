@@ -61,6 +61,8 @@ describe('topupDisplay.util', () => {
         })
       ).toEqual({
         zaloMessages: { granted: 300, used: 10, remaining: 290 },
+        telegramMessages: { granted: 0, used: 0, remaining: 0 },
+        whatsappMessages: { granted: 0, used: 0, remaining: 0 },
         emails: { granted: 0, used: 0, remaining: 0 },
         aiCredits: { granted: 0, used: 0, remaining: 0 },
         zaloAccounts: 0,
@@ -71,6 +73,16 @@ describe('topupDisplay.util', () => {
         chatbots: 0,
         employees: 0,
       });
+    });
+
+    it('P10 — chỉ mua ví tin Telegram/WhatsApp cũng hiện addons (ví riêng, không cộng vào Zalo)', () => {
+      expect(buildAddonsPayload({ telegramMessages: { granted: 100, used: 40, remaining: 60 } })).toEqual(
+        expect.objectContaining({
+          telegramMessages: { granted: 100, used: 40, remaining: 60 },
+          whatsappMessages: { granted: 0, used: 0, remaining: 0 },
+          zaloMessages: { granted: 0, used: 0, remaining: 0 },
+        })
+      );
     });
 
     it('P6 — chỉ mua slot tài khoản Telegram/WhatsApp cũng hiện addons', () => {

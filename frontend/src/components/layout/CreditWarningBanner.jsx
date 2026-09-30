@@ -29,7 +29,7 @@ const walletRemaining = (addons, field) => {
  * Yellow/red only when wallet remaining is 0 (null addons = 0).
  *
  * `resourceKey` chọn CẢ tên tài nguyên lẫn đơn vị trong câu (creditBanner.resources.<key> / units.<key>): AI, email,
- * nhắn tin (Zalo · Telegram · WhatsApp), tổng tin nhắn — không phải lúc nào cũng "credit AI".
+ * nhắn tin Zalo, tin Telegram, tin WhatsApp (mỗi kênh một hạn mức riêng — P10), tổng tin nhắn — không phải lúc nào cũng "credit AI".
  */
 const metricAlert = ({ key, used, limit, remainingWallet, t, resourceKey }) => {
   if (isUnlimitedPlanLimit(limit)) return null;
@@ -164,7 +164,7 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
       });
       if (emailAlert) candidates.push(emailAlert);
 
-      // Zalo + Telegram + WhatsApp dùng chung một hạn mức.
+      // P10 — Zalo, Telegram, WhatsApp mỗi kênh MỘT hạn mức riêng (ví mua thêm cũng riêng theo kênh).
       const messagingAlert = metricAlert({
         key: 'messaging',
         used: sendUsage?.messaging?.used,
@@ -174,6 +174,26 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
         resourceKey: 'messaging',
       });
       if (messagingAlert) candidates.push(messagingAlert);
+
+      const telegramAlert = metricAlert({
+        key: 'telegram',
+        used: sendUsage?.telegram?.used,
+        limit: sendUsage?.telegram?.limit,
+        remainingWallet: walletRemaining(addons, 'telegramMessages'),
+        t,
+        resourceKey: 'telegram',
+      });
+      if (telegramAlert) candidates.push(telegramAlert);
+
+      const whatsappAlert = metricAlert({
+        key: 'whatsapp',
+        used: sendUsage?.whatsapp?.used,
+        limit: sendUsage?.whatsapp?.limit,
+        remainingWallet: walletRemaining(addons, 'whatsappMessages'),
+        t,
+        resourceKey: 'whatsapp',
+      });
+      if (whatsappAlert) candidates.push(whatsappAlert);
 
       // Trần TỔNG tin nhắn trong kỳ (gói dùng thử: 100, các trần theo kênh để trống) — cổng chặn theo nó và ví mua thêm
       // KHÔNG gỡ được chặn này, nên không trừ ví vào cảnh báo.

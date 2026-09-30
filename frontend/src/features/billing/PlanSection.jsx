@@ -122,6 +122,8 @@ export default function PlanSection({ data, t }) {
   // Ví mua thêm (email / tin nhắn) — chỉ để UsageBar biết khi vượt trần gói là đang dùng phần mua thêm.
   const usingEmailWallet = Number(data.addons?.emails?.granted) > 0;
   const usingMessagingWallet = Number(data.addons?.zaloMessages?.granted) > 0;
+  const usingTelegramWallet = Number(data.addons?.telegramMessages?.granted) > 0;
+  const usingWhatsappWallet = Number(data.addons?.whatsappMessages?.granted) > 0;
 
   // ── Lượt AI ────────────────────────────────────────────────────────────────────────────────────────────
   // Hạn mức NULL hoặc ≤ 0 = không giới hạn (đúng cổng aiCreditMeter: baseLimit <= 0 → không chặn) — hiện
@@ -264,6 +266,30 @@ export default function PlanSection({ data, t }) {
           serviceSuspended={serviceSuspended}
           usingAddons={usingMessagingWallet}
         />
+        {/* P10: Telegram/WhatsApp có hạn mức tin/tháng RIÊNG (không còn dùng chung Zalo). Chỉ hiện khi gói có đặt trần
+            (NULL = không giới hạn) hoặc đã gửi; số đã dùng là số của backend (cùng hàm + cùng kỳ với cổng chặn). */}
+        {(!isUnlimitedPlanLimit(data.monthlyTelegramLimit) || data.telegramSentCycle > 0) && (
+          <UsageBar
+            icon={HiOutlineChatAlt2}
+            label={t('accountProfileModal.telegramMessages')}
+            used={data.telegramSentCycle}
+            limit={data.monthlyTelegramLimit}
+            t={t}
+            serviceSuspended={serviceSuspended}
+            usingAddons={usingTelegramWallet}
+          />
+        )}
+        {(!isUnlimitedPlanLimit(data.monthlyWhatsappLimit) || data.whatsappSentCycle > 0) && (
+          <UsageBar
+            icon={HiOutlineChatAlt2}
+            label={t('accountProfileModal.whatsappMessages')}
+            used={data.whatsappSentCycle}
+            limit={data.monthlyWhatsappLimit}
+            t={t}
+            serviceSuspended={serviceSuspended}
+            usingAddons={usingWhatsappWallet}
+          />
+        )}
         {hasCombinedCap && (
           <UsageBar
             icon={HiOutlineChatAlt2}
@@ -355,6 +381,8 @@ export default function PlanSection({ data, t }) {
           <ul className="space-y-1 text-sm text-amber-950">
             {[
               ['zaloMessages', 'topup.items.zaloMessages', true],
+              ['telegramMessages', 'topup.items.telegramMessages', true],
+              ['whatsappMessages', 'topup.items.whatsappMessages', true],
               ['emails', 'topup.items.emails', true],
               ['aiCredits', 'topup.items.aiCredits', true],
               ['zaloAccounts', 'topup.items.zaloAccounts', false],

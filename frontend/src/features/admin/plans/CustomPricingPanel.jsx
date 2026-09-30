@@ -11,6 +11,8 @@ const LABEL_MAP = {
   zalo_monthly_capacity_per_account: 'Năng lực Zalo / tài khoản',
   base_fee: 'Phí nền',
   zalo_messages: 'Tin Zalo',
+  telegram_messages: 'Tin Telegram',
+  whatsapp_messages: 'Tin WhatsApp',
   emails: 'Email',
   ai_credits: 'Lượt AI',
   zalo_accounts: 'Tài khoản Zalo',

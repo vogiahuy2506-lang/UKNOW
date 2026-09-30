@@ -207,6 +207,33 @@ describe('POST /api/admin/plans', () => {
     expect(row.rows).toHaveLength(1);
   });
 
+  it('P10: monthlyTelegramLimit/monthlyWhatsappLimit ghi vào plans (0 giữ là 0, rỗng = NULL không giới hạn)', async () => {
+    const admin = await createUser({ role: 'admin', username: 'admin_p10' });
+    const token = await loginAs(admin);
+
+    const res = await request(app)
+      .post('/api/admin/plans')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        code: 'p10_tg_wa', name: 'P10', price: 49000, maxEmployees: 1, storageLimitBytes: 100 * 1024 * 1024,
+        monthlyZaloLimit: 8000, monthlyTelegramLimit: 300, monthlyWhatsappLimit: 0,
+      });
+    expect(res.status).toBe(201);
+    let row = (await db.query('SELECT monthly_zalo_limit, monthly_telegram_limit, monthly_whatsapp_limit FROM plans WHERE code = $1', ['p10_tg_wa'])).rows[0];
+    expect(row).toEqual({ monthly_zalo_limit: 8000, monthly_telegram_limit: 300, monthly_whatsapp_limit: 0 });
+
+    const patch = await request(app)
+      .patch(`/api/admin/plans/${res.body.data.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        name: 'P10', price: 49000, maxEmployees: 1, storageLimitBytes: 100 * 1024 * 1024,
+        monthlyZaloLimit: 8000, monthlyTelegramLimit: '', monthlyWhatsappLimit: 1500,
+      });
+    expect(patch.status).toBe(200);
+    row = (await db.query('SELECT monthly_telegram_limit, monthly_whatsapp_limit FROM plans WHERE code = $1', ['p10_tg_wa'])).rows[0];
+    expect(row).toEqual({ monthly_telegram_limit: null, monthly_whatsapp_limit: 1500 });
+  });
+
   it('thiếu name → 400 (validation)', async () => {
     const admin = await createUser({ role: 'admin', username: 'admin1' });
     const token = await loginAs(admin);

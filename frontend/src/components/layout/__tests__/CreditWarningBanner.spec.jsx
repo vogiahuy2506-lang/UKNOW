@@ -31,6 +31,8 @@ const NO_ALERT_AI = { used: 0, limit: 100 };
 const NO_SEND = {
   email: { used: null, limit: null },
   messaging: { used: null, limit: null },
+  telegram: { used: null, limit: null },
+  whatsapp: { used: null, limit: null },
   combined: { used: null, limit: null },
 };
 
@@ -62,10 +64,32 @@ describe('CreditWarningBanner — nói đúng tài nguyên', () => {
     expect(banner()).not.toHaveTextContent('creditBanner.');
   });
 
-  it('nhắn tin gần hết → "hạn mức tin nhắn Zalo · Telegram · WhatsApp", đơn vị "tin"', () => {
+  it('nhắn tin Zalo gần hết → "hạn mức tin nhắn Zalo", đơn vị "tin" (P10: không còn nêu Telegram/WhatsApp)', () => {
     setState({ sendUsage: { ...NO_SEND, messaging: { used: 4600, limit: 5000 } } });
     renderBanner();
-    expect(banner()).toHaveTextContent('Sắp hết hạn mức tin nhắn Zalo · Telegram · WhatsApp — còn 400 tin (8%).');
+    expect(banner()).toHaveTextContent('Sắp hết hạn mức tin nhắn Zalo — còn 400 tin (8%).');
+    expect(banner()).not.toHaveTextContent('Telegram');
+  });
+
+  // P10 — Telegram/WhatsApp có hạn mức tin RIÊNG, ví mua thêm cũng riêng theo kênh.
+  it('P10: Telegram gần hết → "hạn mức tin nhắn Telegram"; WhatsApp gần hết → "hạn mức tin nhắn WhatsApp"', () => {
+    setState({ sendUsage: { ...NO_SEND, telegram: { used: 280, limit: 300 } } });
+    const first = renderBanner();
+    expect(banner()).toHaveTextContent('Sắp hết hạn mức tin nhắn Telegram — còn 20 tin (7%).');
+    first.unmount();
+    window.sessionStorage.clear();
+    setState({ sendUsage: { ...NO_SEND, whatsapp: { used: 190, limit: 200 } } });
+    renderBanner();
+    expect(banner()).toHaveTextContent('Sắp hết hạn mức tin nhắn WhatsApp — còn 10 tin (5%).');
+  });
+
+  it('P10: ví telegram_messages còn số dư → không cảnh báo Telegram (ví WhatsApp không gỡ được cảnh báo Telegram)', () => {
+    setState({
+      sendUsage: { ...NO_SEND, telegram: { used: 300, limit: 300 } },
+      addons: { telegramMessages: { granted: 100, used: 10, remaining: 90 } },
+    });
+    renderBanner();
+    expect(banner()).not.toBeInTheDocument();
   });
 
   it('tổng tin nhắn trong kỳ (gói dùng thử 100) gần hết → "hạn mức tổng tin nhắn"', () => {

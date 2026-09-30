@@ -166,6 +166,33 @@ describe('Custom plan self-serve', () => {
     expect(Number(plan.rows[0].price)).toBe(199000);
     expect(plan.rows[0].messages_per_period).toBeNull();
     expect(Number(plan.rows[0].monthly_zalo_limit)).toBe(500);
+    // P10 — khách không chọn tin Telegram/WhatsApp: mặc định = mức tối thiểu 500 kèm sẵn trong phí nền (giá không đổi),
+    // và cột riêng của gói được ghi (KHÔNG để NULL = không giới hạn).
+    expect(Number(plan.rows[0].monthly_telegram_limit)).toBe(500);
+    expect(Number(plan.rows[0].monthly_whatsapp_limit)).toBe(500);
+  });
+
+  it('P10: quote + tạo gói tuỳ chỉnh tính tiền tin Telegram/WhatsApp như tin Zalo (30.000đ / 500 tin) và ghi cột riêng', async () => {
+    const user = await createUser({ username: 'custom-tgwa' });
+    const token = await loginAs(user);
+    mockPaymentRequestsCreate.mockResolvedValue({ qrCode: '000201fake', checkoutUrl: 'https://pay.payos.vn/web/fake' });
+    const quantities = { ...baseQuantities, telegram_messages: 1500, whatsapp_messages: 1000 };
+
+    const quote = await request(app)
+      .post('/api/plans/custom/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities, billingPeriod: 'monthly' });
+    expect(quote.status).toBe(200);
+    // 199.000 phí nền + Telegram (1500-500)/500*30.000 = 60.000 + WhatsApp (1000-500)/500*30.000 = 30.000
+    expect(Number(quote.body.data.monthlyTotal)).toBe(289000);
+
+    const res = await request(app)
+      .post('/api/payments/create-custom-payment')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities, billingPeriod: 'monthly' });
+    expect(res.status).toBe(200);
+    const plan = await db.query('SELECT monthly_zalo_limit, monthly_telegram_limit, monthly_whatsapp_limit FROM plans WHERE id = $1', [res.body.result.planId]);
+    expect(plan.rows[0]).toEqual({ monthly_zalo_limit: 500, monthly_telegram_limit: 1500, monthly_whatsapp_limit: 1000 });
   });
 
   it('rejects reusePlanId owned by another user', async () => {

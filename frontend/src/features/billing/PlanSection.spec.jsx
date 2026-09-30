@@ -261,3 +261,46 @@ describe('PlanSection — tin nhắn trong kỳ', () => {
     expect(usedOf('accountProfileModal.email')).toBe('3400');
   });
 });
+
+// P10 — hạn mức tin RIÊNG Telegram/WhatsApp (không còn dùng chung Zalo): hiện dòng khi gói có trần (NULL = không giới hạn thì
+// ẩn, trừ khi đã gửi); trần 0 vẫn là 0 (không bị hiểu là không giới hạn); số đã dùng lấy từ telegramSentCycle/
+// whatsappSentCycle (số của backend, cùng hàm + cùng kỳ với cổng chặn), KHÔNG phải messagingSentCycle (chỉ còn Zalo).
+describe('PlanSection — P10 hạn mức tin Telegram/WhatsApp', () => {
+  it('gói NULL và chưa gửi -> ẩn cả hai dòng', () => {
+    renderPlan({ monthlyTelegramLimit: null, monthlyWhatsappLimit: null, telegramSentCycle: 0, whatsappSentCycle: 0 });
+    expect(screen.queryByTestId('usage-accountProfileModal.telegramMessages')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('usage-accountProfileModal.whatsappMessages')).not.toBeInTheDocument();
+  });
+
+  it('có trần -> hiện đúng limit của TỪNG kênh (khác nhau, khác Zalo); trần 0 vẫn là 0; dòng Zalo giữ trần Zalo', () => {
+    renderPlan({
+      monthlyZaloLimit: 8000,
+      monthlyTelegramLimit: 300,
+      monthlyWhatsappLimit: 0,
+      messagingSentCycle: 40,
+      telegramSentCycle: 12,
+    });
+    expect(limitOf('accountProfileModal.telegramMessages')).toBe('300');
+    expect(limitOf('accountProfileModal.whatsappMessages')).toBe('0');
+    expect(limitOf('accountProfileModal.messagingChannels')).toBe('8000');
+  });
+
+  it('số đã dùng của từng dòng lấy đúng trường của kênh đó', () => {
+    renderPlan({
+      monthlyTelegramLimit: 300,
+      monthlyWhatsappLimit: 200,
+      messagingSentCycle: 40,
+      telegramSentCycle: 12,
+      whatsappSentCycle: 5,
+    });
+    expect(usedOf('accountProfileModal.telegramMessages')).toBe('12');
+    expect(usedOf('accountProfileModal.whatsappMessages')).toBe('5');
+    expect(usedOf('accountProfileModal.messagingChannels')).toBe('40');
+  });
+
+  it('gói NULL nhưng đã gửi Telegram -> vẫn hiện dòng (limit null = không giới hạn)', () => {
+    renderPlan({ monthlyTelegramLimit: null, telegramSentCycle: 5 });
+    expect(limitOf('accountProfileModal.telegramMessages')).toBe('null');
+    expect(screen.queryByTestId('usage-accountProfileModal.whatsappMessages')).not.toBeInTheDocument();
+  });
+});

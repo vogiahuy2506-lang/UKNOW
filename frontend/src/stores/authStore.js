@@ -193,11 +193,14 @@ const normalizeUser = (user) => {
   };
 };
 
-// Tin đã gửi TRONG KỲ của gói / trần tương ứng (PLAN_SO_LIEU_DUNG_GON_KHOP PR-3): email; nhắn tin = Zalo + Telegram +
-// WhatsApp (cùng hạn mức); tổng kỳ (messages_per_period). used null = chưa có số (chưa tải / không đọc được).
+// Tin đã gửi TRONG KỲ của gói / trần tương ứng (PLAN_SO_LIEU_DUNG_GON_KHOP PR-3): email; nhắn tin = Zalo; P10: Telegram và
+// WhatsApp có hạn mức tin RIÊNG (không còn chung Zalo); tổng kỳ (messages_per_period). used null = chưa có số (chưa tải /
+// không đọc được).
 const EMPTY_SEND_USAGE = {
   email: { used: null, limit: null },
   messaging: { used: null, limit: null },
+  telegram: { used: null, limit: null },
+  whatsapp: { used: null, limit: null },
   combined: { used: null, limit: null },
 };
 
@@ -227,6 +230,14 @@ const billingSliceFromProfile = (profile = {}) => ({
     messaging: {
       used: profile.messagingSentCycle ?? null,
       limit: profile.monthlyZaloLimit ?? null,
+    },
+    telegram: {
+      used: profile.telegramSentCycle ?? null,
+      limit: profile.monthlyTelegramLimit ?? null,
+    },
+    whatsapp: {
+      used: profile.whatsappSentCycle ?? null,
+      limit: profile.monthlyWhatsappLimit ?? null,
     },
     combined: {
       used: profile.combinedSentCycle ?? null,

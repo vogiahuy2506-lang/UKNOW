@@ -19,6 +19,8 @@ const STATUS_MAP = (t) => ({
 
 const TOPUP_ITEM_LABEL_KEYS = {
   zalo_messages: 'topup.items.zaloMessages',
+  telegram_messages: 'topup.items.telegramMessages',
+  whatsapp_messages: 'topup.items.whatsappMessages',
   emails: 'topup.items.emails',
   ai_credits: 'topup.items.aiCredits',
   zalo_accounts: 'topup.items.zaloAccounts',

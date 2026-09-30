@@ -11,6 +11,8 @@ const fmtVnd = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
 const ITEM_LABEL_KEYS = {
   base_fee: 'customPlan.items.baseFee',
   zalo_messages: 'customPlan.items.zaloMessages',
+  telegram_messages: 'customPlan.items.telegramMessages',
+  whatsapp_messages: 'customPlan.items.whatsappMessages',
   emails: 'customPlan.items.emails',
   ai_credits: 'customPlan.items.aiCredits',
   zalo_accounts: 'customPlan.items.zaloAccounts',
@@ -31,6 +33,8 @@ const ITEM_LABEL_KEYS = {
 
 const UNIT_LABEL_KEYS = {
   zalo_messages: 'customPlan.units.zaloMessages',
+  telegram_messages: 'customPlan.units.telegramMessages',
+  whatsapp_messages: 'customPlan.units.whatsappMessages',
   emails: 'customPlan.units.emails',
   ai_credits: 'customPlan.units.aiCredits',
   zalo_accounts: 'customPlan.units.zaloAccounts',
