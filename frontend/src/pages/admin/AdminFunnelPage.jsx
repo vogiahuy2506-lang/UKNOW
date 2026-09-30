@@ -55,16 +55,12 @@ const AdminFunnelPage = () => {
   return (
     <PageContainer
       title="Phễu kích hoạt"
-      subtitle={
-        <div>
-          <span>Đăng ký → nối kênh → tạo chiến dịch → chạy → trả tiền.</span>
-          {data?.dataSince && (
-            <span className="block text-xs text-amber-700 mt-1">
-              Dữ liệu từ {data.dataSince}. {data.note}
-            </span>
-          )}
-        </div>
-      }
+      subtitle={[
+        t('adminFunnel.steps.registered'),
+        t('adminFunnel.steps.channelConnected'),
+        t('adminFunnel.steps.firstSend'),
+        t('adminFunnel.steps.paid'),
+      ].join(' → ')}
       icon={HiOutlineFilter}
       actions={
         <button type="button" className="btn btn-secondary" onClick={load}>
