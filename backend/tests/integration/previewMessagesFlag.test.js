@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, jest } from '@jest/globals';
+import { EMAIL_SENT_STATUS_SQL_LIST } from '../../src/constants/emailMessageStatus.js';
 
 const mockVerify = jest.fn().mockResolvedValue(true);
 const mockSendMail = jest.fn().mockResolvedValue({
@@ -266,7 +267,7 @@ describe('Preview Messages Flag & Isolation (Plan 172)', () => {
        FROM email_messages em
        JOIN campaigns c ON c.id = em.id_campaign
        WHERE c.id_user = $1
-         AND em.status IN ('sent', 'delivered', 'bounced')
+         AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
          AND NOT em.is_preview`,
       [ownerUser.id]
     );

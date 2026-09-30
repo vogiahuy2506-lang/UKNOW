@@ -13,6 +13,11 @@ import {
 } from '../services/payment/topupWallet.service.js';
 import usageTrackingRepository from '../repositories/payment/usageTracking.repository.js';
 import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
+import { EMAIL_SENT_STATUS_SQL_LIST } from '../constants/emailMessageStatus.js';
+
+// PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-1 — mọi phép đếm email trong file này lọc `em.status` bằng
+// EMAIL_SENT_STATUS_SQL_LIST (7 trạng thái thư đã gửi, gồm opened/clicked/unsubscribed). KHÔNG viết lại
+// bộ 3 sent/delivered/bounced: thư khách đã mở rơi khỏi hạn mức, đếm thiếu ~22% (giải thích ở hằng).
 
 // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 — LUẬT mọi mốc giờ đi vào SQL trong file này:
 // 1. Tham số giờ từ JS (Date/ISO string) luôn ép `$n::timestamptz` NGAY LẦN XUẤT HIỆN ĐẦU TIÊN
@@ -153,7 +158,7 @@ async function countEmployeeEmailSentToday(ownerId, employeeId) {
          (SELECT COUNT(*) FROM email_messages em
           WHERE em.workspace_owner_id = $1
             AND em.actor_user_id = $2
-            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
             AND NOT em.is_preview
             AND em.sent_at >= CURRENT_DATE)
          + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
@@ -178,7 +183,7 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
            (SELECT COUNT(*) FROM email_messages em
             WHERE em.workspace_owner_id = $1
               AND em.actor_user_id = $2
-              AND em.status IN ('sent', 'delivered', 'bounced')
+              AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
             AND NOT em.is_preview
               AND em.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
               AND em.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
@@ -199,7 +204,7 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
          (SELECT COUNT(*) FROM email_messages em
           WHERE em.workspace_owner_id = $1
             AND em.actor_user_id = $2
-            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
             AND NOT em.is_preview
             AND em.sent_at >= DATE_TRUNC('month', NOW()))
          + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
@@ -333,7 +338,7 @@ async function countEmailSentToday(billingUserId) {
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
           WHERE em.workspace_owner_id = $1
-            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
             AND NOT em.is_preview
             AND em.sent_at >= CURRENT_DATE)
          + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
@@ -354,7 +359,7 @@ export async function countEmailSentInCycleUncached(billingUserId, cycleStart, c
     `SELECT (
        (SELECT COUNT(*) FROM email_messages em
         WHERE em.workspace_owner_id = $1
-          AND em.status IN ('sent', 'delivered', 'bounced')
+          AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
           AND NOT em.is_preview
           AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
           AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))
@@ -489,7 +494,7 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
       `SELECT (
          (SELECT COUNT(*) FROM email_messages em
           WHERE em.workspace_owner_id = $1
-            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
             AND NOT em.is_preview
             AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
             AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh'))

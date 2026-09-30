@@ -2,6 +2,11 @@ import db from '../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL } from '../utils/billingCycle.util.js';
 import { getStaleSendingSeconds } from '../config/sendQuota.config.js';
 import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
+import { EMAIL_SENT_STATUS_SQL_LIST } from '../constants/emailMessageStatus.js';
+
+// PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-1 — mọi phép đếm email trong file này lọc `status` bằng
+// EMAIL_SENT_STATUS_SQL_LIST (7 trạng thái thư đã gửi, gồm opened/clicked/unsubscribed). KHÔNG viết lại
+// bộ 3 sent/delivered/bounced: thư khách đã mở rơi khỏi hạn mức, đếm thiếu ~22% (giải thích ở hằng).
 
 // PLAN_EMAIL_SENT_AT_GIO_UTC_2026-09-27, PR-T1 — LUẬT mọi mốc giờ đi vào SQL trong file này:
 // 1. Tham số giờ từ JS (Date) luôn ép `$n::timestamptz` NGAY LẦN XUẤT HIỆN ĐẦU TIÊN trong câu.
@@ -714,7 +719,7 @@ export async function countEmailSentTodayWithLedger(queryable, billingUserId, da
         FROM email_messages em
         WHERE em.workspace_owner_id = $1
           AND em.quota_reservation_id IS NULL
-          AND em.status IN ('sent', 'delivered', 'bounced')
+          AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
           AND NOT em.is_preview
           AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
           AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
@@ -822,9 +827,12 @@ export async function countZaloSentTodayWithLedger(queryable, billingUserId, day
  * `countEmailSentTodayWithLedger` ở trên vốn đếm theo billing user cho hạn mức GÓI).
  * Đếm thẳng từ `email_messages`, không dùng `daily_sent_count` (reset bằng cron riêng, không có
  * ledger đối chiếu — xem bẫy 2 của plan). `NOT is_preview` để loại preview chạy thử trong trình dựng.
- * `status IN ('sent','delivered','bounced')` là bắt buộc, không phải trang trí: `sent_at` được ghi
- * NGAY LÚC GỬI THỬ (kể cả khi thất bại — `sentAt: failedAt`/`bouncedAt` ở campaignEmailSender.service.js
- * rồi mới UPDATE status='failed' sau), nên thiếu điều kiện này sẽ đếm cả tin lỗi vào giới hạn ngày.
+ * Bộ lọc status (`EMAIL_SENT_STATUS_SQL_LIST`: 7 trạng thái thư đã gửi, xem constants/emailMessageStatus.js)
+ * là bắt buộc, không phải trang trí: `sent_at` được ghi NGAY LÚC GỬI THỬ (kể cả khi thất bại —
+ * `sentAt: failedAt`/`bouncedAt` ở campaignEmailSender.service.js rồi mới UPDATE status='failed' sau), nên
+ * thiếu điều kiện này sẽ đếm cả tin lỗi vào giới hạn ngày. Nhưng cũng KHÔNG được thu hẹp về
+ * sent/delivered/bounced: thư khách đã mở/nhấp/huỷ đăng ký đổi status (opened/clicked/unsubscribed) và vẫn
+ * là thư đã gửi — bộ 3 cũ đếm thiếu ~22% (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-1).
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} emailSettingId
  * @param {Date} dayStart
@@ -836,7 +844,7 @@ export async function countEmailSentTodayByAccount(queryable, emailSettingId, da
     `SELECT COUNT(*)::int AS total
      FROM email_messages
      WHERE id_email_setting = $1
-       AND status IN ('sent', 'delivered', 'bounced')
+       AND status IN ${EMAIL_SENT_STATUS_SQL_LIST}
        AND NOT is_preview
        AND sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
        AND sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')`,
@@ -916,7 +924,7 @@ export async function countEmailSentInCycleWithLedger(queryable, billingUserId, 
         FROM email_messages em
         WHERE em.workspace_owner_id = $1
           AND em.quota_reservation_id IS NULL
-          AND em.status IN ('sent', 'delivered', 'bounced')
+          AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
           AND NOT em.is_preview
           AND em.sent_at >= ($2::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
           AND em.sent_at < ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
@@ -1050,7 +1058,7 @@ export async function countEmployeeSentTodayWithLedger(
           WHERE em.workspace_owner_id = $1
             AND em.actor_user_id = $2
             AND em.quota_reservation_id IS NULL
-            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
             AND NOT em.is_preview
             AND em.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
             AND em.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
@@ -1174,7 +1182,7 @@ export async function countEmployeeSentInCycleWithLedger(
           WHERE em.workspace_owner_id = $1
             AND em.actor_user_id = $2
             AND em.quota_reservation_id IS NULL
-            AND em.status IN ('sent', 'delivered', 'bounced')
+            AND em.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
             AND NOT em.is_preview
             AND em.sent_at >= ($3::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')
             AND em.sent_at < ($4::timestamptz AT TIME ZONE 'Asia/Ho_Chi_Minh')

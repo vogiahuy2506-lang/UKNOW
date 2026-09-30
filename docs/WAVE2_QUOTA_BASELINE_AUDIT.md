@@ -60,7 +60,7 @@ Tier 4: Workspace Combined Period Limit (messages_per_period)
 
 | Kênh | Nguồn dữ liệu đếm | Điều kiện lọc |
 |---|---|---|
-| **Email** | `email_messages` + `usage_logs` (`email_direct_send`) | `status IN ('sent', 'delivered', 'bounced') AND NOT is_preview` |
+| **Email** | `email_messages` + `usage_logs` (`email_direct_send`) | `status IN ('sent', 'delivered', 'opened', 'clicked', 'bounced', 'spam', 'unsubscribed') AND NOT is_preview` (hằng `EMAIL_SENT_STATUSES`, `backend/src/constants/emailMessageStatus.js`). Cập nhật 30/09/2026: baseline 01/09 chỉ lọc `('sent', 'delivered', 'bounced')` nên thư đã mở/nhấp/huỷ đăng ký rơi khỏi phép đếm (thiếu ~22%). |
 | **Zalo** | `zalo_messages` + `zalo_personal_messages` + `usage_logs` (`zalo_direct_send`) | `tracking_metadata->>'status' = 'sent' AND NOT is_preview` (campaign)<br>`role = 'agent' AND metadata->>'source' = 'manual_inbox'` (personal) |
 
 ---
