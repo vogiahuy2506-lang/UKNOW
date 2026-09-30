@@ -72,6 +72,9 @@
         "testEnvironment": "node",
         "transform": {},
         "clearMocks": true,
+        "setupFiles": [
+          "<rootDir>/tests/setup/loopbackListen.js"
+        ],
         "setupFilesAfterEnv": [
           "<rootDir>/tests/integration/jest-timeout.js"
         ],
