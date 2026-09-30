@@ -6,7 +6,7 @@ import { getConfigValue } from '../../utils/customPlanPricing.util.js';
 import {
   validateTopupQuantities,
   computeTopupPrice,
-  checkTopupZaloCapacity,
+  checkTopupChannelCapacity,
   checkTopupStorageCapacity,
   resolveMaxTopupMonths,
   filterAllowedTopupMonths,
@@ -42,22 +42,6 @@ function ownerContextFromReqUser(user) {
   return {};
 }
 
-/**
- * Load plan monthly_zalo_limit + max_zalo_accounts for billing owner.
- */
-async function getBillingPlanZaloContext(billingUserId, queryable = db) {
-  const { rows } = await queryable.query(
-    `SELECT p.monthly_zalo_limit, p.max_zalo_accounts,
-            u.subscription_expires_at
-     FROM users u
-     LEFT JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
-     WHERE u.id = $1
-     LIMIT 1`,
-    [billingUserId]
-  );
-  return rows[0] || null;
-}
-
 async function countConnectedZaloAccounts(billingUserId, queryable = db) {
   const { rows } = await queryable.query(
     `SELECT COUNT(*)::int AS total
@@ -89,32 +73,99 @@ function resolveAccountCount(planRow, connectedCount, accountGrants = 0) {
   return Math.max(connected, 1) + grants;
 }
 
-async function buildZaloCapacityContext(billingUserId, requestedQty = 0) {
+/**
+ * P11 — bảng kênh của phép kiểm năng lực top-up tin lẻ. Cột gói (`plans.*`), ví/grant, khoá cấu hình năng lực/tài khoản.
+ * Đếm tài khoản "đã nối" chỉ là dự phòng khi gói không khai báo trần slot (xem resolveAccountCount).
+ */
+const CHANNEL_CAPACITY_SOURCES = Object.freeze({
+  zalo: {
+    slotColumn: 'max_zalo_accounts',
+    limitColumn: 'monthly_zalo_limit',
+    walletItem: 'zalo_messages',
+    accountGrantItem: 'zalo_accounts',
+    configKey: 'zalo_monthly_capacity_per_account',
+    countConnected: countConnectedZaloAccounts,
+  },
+  telegram: {
+    slotColumn: 'max_telegram_accounts',
+    limitColumn: 'monthly_telegram_limit',
+    walletItem: 'telegram_messages',
+    accountGrantItem: 'telegram_accounts',
+    configKey: 'telegram_monthly_capacity_per_account',
+    countConnected: countActiveTelegramAccounts,
+  },
+  whatsapp: {
+    slotColumn: 'max_whatsapp_accounts',
+    limitColumn: 'monthly_whatsapp_limit',
+    walletItem: 'whatsapp_messages',
+    accountGrantItem: 'whatsapp_accounts',
+    configKey: 'whatsapp_monthly_capacity_per_account',
+    countConnected: countWhatsappSessions,
+  },
+});
+
+async function countActiveTelegramAccounts(billingUserId, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT COUNT(*)::int AS total FROM telegram_accounts WHERE id_user = $1 AND is_active = TRUE`,
+    [billingUserId]
+  );
+  return Number(rows[0]?.total) || 0;
+}
+
+async function countWhatsappSessions(billingUserId, queryable = db) {
+  // Phiên WhatsApp không có cột id_user — chủ nằm trong session_key = "<userId>-<shortKey>" (userResourceLimit.util.js).
+  const { rows } = await queryable.query(
+    `SELECT COUNT(*)::int AS total FROM whatsapp_baileys_session_creds WHERE split_part(session_key, '-', 1)::bigint = $1`,
+    [billingUserId]
+  );
+  return Number(rows[0]?.total) || 0;
+}
+
+async function getBillingPlanChannelRow(billingUserId, source, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT p.${source.limitColumn} AS monthly_limit, p.${source.slotColumn} AS max_accounts
+     FROM users u
+     LEFT JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
+     WHERE u.id = $1
+     LIMIT 1`,
+    [billingUserId]
+  );
+  return rows[0] || null;
+}
+
+async function buildChannelCapacityContext(billingUserId, channel, requestedQty = 0) {
+  const source = CHANNEL_CAPACITY_SOURCES[channel];
+  if (!source) throw new Error(`buildChannelCapacityContext: kênh không hợp lệ '${channel}'`);
   const [planRow, connectedCount, existingGrants, accountGrants, customPricingRows] = await Promise.all([
-    getBillingPlanZaloContext(billingUserId),
-    countConnectedZaloAccounts(billingUserId),
-    sumWalletGrants(billingUserId, 'zalo_messages'),
-    sumActiveTopupGrants(billingUserId, 'zalo_accounts'),
+    getBillingPlanChannelRow(billingUserId, source),
+    source.countConnected(billingUserId),
+    sumWalletGrants(billingUserId, source.walletItem),
+    sumActiveTopupGrants(billingUserId, source.accountGrantItem),
     findAllPricingRows(),
   ]);
 
-  const capacityPerAccount = getConfigValue(
-    customPricingRows,
-    'zalo_monthly_capacity_per_account',
-    16000
-  );
-  const accounts = resolveAccountCount(planRow, connectedCount, accountGrants);
-  const planMonthlyZaloLimit = planRow?.monthly_zalo_limit == null
-    ? null
-    : Number(planRow.monthly_zalo_limit);
+  const capacityPerAccount = getConfigValue(customPricingRows, source.configKey, 16000);
+  const accounts = resolveAccountCount({ max_zalo_accounts: planRow?.max_accounts }, connectedCount, accountGrants);
+  const planMonthlyLimit = planRow?.monthly_limit == null ? null : Number(planRow.monthly_limit);
 
-  return checkTopupZaloCapacity({
+  return checkTopupChannelCapacity({
+    channel,
     accounts,
     capacityPerAccount,
-    planMonthlyZaloLimit,
-    existingZaloGrants: existingGrants,
+    planMonthlyLimit,
+    existingGrants,
     requestedQty,
   });
+}
+
+async function buildZaloCapacityContext(billingUserId, requestedQty = 0) {
+  // Giữ field cũ của Zalo (`planMonthlyZaloLimit`, `existingGrants`) cho FE/spec cũ; lõi dùng chung với Telegram/WhatsApp.
+  const cap = await buildChannelCapacityContext(billingUserId, 'zalo', requestedQty);
+  const { planMonthlyLimit, channel, ...rest } = cap;
+  const out = { ...rest, planMonthlyZaloLimit: planMonthlyLimit };
+  if (cap.code === 'ZALO_NO_SLOT') out.code = cap.code;
+  else delete out.code;
+  return out;
 }
 
 /**
@@ -177,6 +228,10 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
   const pricingRows = await findAllTopupPricing();
   const subscription = await getSubscriptionStatus(userId, billingOptions);
   const zaloCapacity = await buildZaloCapacityContext(billingUserId, 0);
+  const [telegramCapacity, whatsappCapacity] = await Promise.all([
+    buildChannelCapacityContext(billingUserId, 'telegram', 0),
+    buildChannelCapacityContext(billingUserId, 'whatsapp', 0),
+  ]);
   const storageCapacity = checkTopupStorageCapacity({
     existingStorageGrants: await sumActiveTopupGrants(billingUserId, 'storage_gb'),
     requestedQty: 0,
@@ -205,6 +260,8 @@ export async function getTopupConfig({ userId, ownerContextId } = {}) {
     maxMonths,
     allowedMonths: filterAllowedTopupMonths(maxMonths),
     zaloCapacity,
+    telegramCapacity,
+    whatsappCapacity,
     storageCapacity,
     billingUserId,
   };
@@ -267,6 +324,23 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {}, mont
     };
   }
 
+  // P11: Telegram/WhatsApp cùng khuôn năng lực theo số slot tài khoản như Zalo.
+  const channelCapacities = { zalo: zaloCapacity };
+  for (const channel of ['telegram', 'whatsapp']) {
+    const requestedQty = validation.quantities[`${channel}_messages`] || 0;
+    // eslint-disable-next-line no-await-in-loop
+    const capacity = await buildChannelCapacityContext(billingUserId, channel, requestedQty);
+    channelCapacities[channel] = capacity;
+    if (requestedQty > 0 && !capacity.ok) {
+      throw {
+        status: 400,
+        message: capacity.message,
+        code: capacity.code || `${channel.toUpperCase()}_CAPACITY_EXCEEDED`,
+        capacity,
+      };
+    }
+  }
+
   const storageCapacity = checkTopupStorageCapacity({
     existingStorageGrants: await sumActiveTopupGrants(billingUserId, 'storage_gb'),
     requestedQty: validation.quantities.storage_gb || 0,
@@ -284,6 +358,15 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {}, mont
   const items = priced.items.map((item) => {
     if (item.itemKey === 'zalo_messages') {
       const dynamicMax = zaloCapacity.remaining;
+      return {
+        ...item,
+        maxQty: item.maxQty == null
+          ? dynamicMax
+          : Math.min(Number(item.maxQty), dynamicMax),
+      };
+    }
+    if (item.itemKey === 'telegram_messages' || item.itemKey === 'whatsapp_messages') {
+      const dynamicMax = channelCapacities[item.itemKey === 'telegram_messages' ? 'telegram' : 'whatsapp'].remaining;
       return {
         ...item,
         maxQty: item.maxQty == null
@@ -311,6 +394,8 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {}, mont
     shortfall: priced.shortfall,
     minOrderAmount: priced.minOrderAmount,
     zaloCapacity,
+    telegramCapacity: channelCapacities.telegram,
+    whatsappCapacity: channelCapacities.whatsapp,
     storageCapacity,
     billingUserId,
     months: monthsResolved.months,

@@ -3,6 +3,8 @@
  * Linear unit pricing — never Math.ceil by block (unlike customPlanPricing).
  */
 
+import { QUOTA_CHANNEL_LABEL } from '../constants/sendQuotaChannels.js';
+
 export const TOPUP_MIN_ORDER_AMOUNT = 50_000;
 
 /** Consumable quotas — permanent wallet (cycle_end NULL). */
@@ -283,16 +285,90 @@ export function computeTopupPrice(pricingRows, quantities = {}, months = 1) {
 }
 
 /**
- * Remaining Zalo top-up slots under physical capacity.
- * qty_mua ≤ capacity − planMonthlyLimit − existingActiveGrants
+ * P11 — số tin top-up còn mua thêm được dưới năng lực vật lý của MỘT kênh (Zalo/Telegram/WhatsApp cùng khuôn):
+ * qty_mua ≤ capacity − planMonthlyLimit − existingActiveGrants, capacity = số slot tài khoản × năng lực/tài khoản.
  *
  * @param {{
+ *   channel: 'zalo'|'telegram'|'whatsapp',
  *   accounts: number,
  *   capacityPerAccount?: number,
- *   planMonthlyZaloLimit: number|null,
- *   existingZaloGrants?: number,
+ *   planMonthlyLimit: number|null,
+ *   existingGrants?: number,
  *   requestedQty?: number,
  * }} input
+ */
+export function checkTopupChannelCapacity({
+  channel = 'zalo',
+  accounts,
+  capacityPerAccount = 16000,
+  planMonthlyLimit,
+  existingGrants = 0,
+  requestedQty = 0,
+} = {}) {
+  const label = QUOTA_CHANNEL_LABEL[channel];
+  if (!label || channel === 'email') throw new Error(`checkTopupChannelCapacity: kênh không hợp lệ '${channel}'`);
+  const upper = channel.toUpperCase();
+  const acct = Math.max(0, Number(accounts) || 0);
+  const perAcct = Math.max(0, Number(capacityPerAccount) || 0);
+  const capacity = acct * perAcct;
+  const planLimit = planMonthlyLimit == null ? null : Math.max(0, Number(planMonthlyLimit) || 0);
+  const grants = Math.max(0, Number(existingGrants) || 0);
+  const requested = Math.max(0, Number(requestedQty) || 0);
+  const base = { channel, accounts: acct, capacityPerAccount: perAcct, existingGrants: grants, requested };
+
+  // Gói không giới hạn tin/tháng → không cần (và không còn chỗ) mua thêm.
+  if (planLimit === null) {
+    return {
+      ...base,
+      ok: requested === 0,
+      capacity,
+      planMonthlyLimit: null,
+      remaining: 0,
+      message: requested > 0
+        ? `Gói hiện tại không giới hạn tin ${label} theo tháng — không cần mua thêm.`
+        : undefined,
+    };
+  }
+
+  // accounts=0: gói không cấp slot tài khoản của kênh → không còn chỗ mua thêm.
+  if (acct === 0) {
+    return {
+      ...base,
+      ok: requested === 0,
+      capacity: 0,
+      planMonthlyLimit: planLimit,
+      remaining: 0,
+      message: requested > 0
+        ? `Gói hiện tại không có slot tài khoản ${label} — không thể mua thêm tin.`
+        : undefined,
+      code: requested > 0 ? `${upper}_NO_SLOT` : undefined,
+    };
+  }
+
+  const remaining = Math.max(0, capacity - planLimit - grants);
+  if (requested > remaining) {
+    return {
+      ...base,
+      ok: false,
+      capacity,
+      planMonthlyLimit: planLimit,
+      remaining,
+      code: `${upper}_CAPACITY_EXCEEDED`,
+      message:
+        `Số tin ${label} mua thêm (${requested.toLocaleString('vi-VN')}) vượt năng lực còn lại ` +
+        `(${remaining.toLocaleString('vi-VN')} tin). ` +
+        `Tối đa ${capacity.toLocaleString('vi-VN')} tin/tháng cho ${acct} slot tài khoản ${label} ` +
+        `(đã cấp gói ${planLimit.toLocaleString('vi-VN')}` +
+        (grants > 0 ? ` + đã mua thêm ${grants.toLocaleString('vi-VN')}` : '') +
+        ').',
+    };
+  }
+
+  return { ...base, ok: true, capacity, planMonthlyLimit: planLimit, remaining };
+}
+
+/**
+ * Giữ nguyên chữ ký + field cũ của Zalo (spec/FE cũ đọc `planMonthlyZaloLimit`, không có `channel`, mã CAPACITY_EXCEEDED do tầng service thêm).
  */
 export function checkTopupZaloCapacity({
   accounts,
@@ -301,80 +377,17 @@ export function checkTopupZaloCapacity({
   existingZaloGrants = 0,
   requestedQty = 0,
 } = {}) {
-  const acct = Math.max(0, Number(accounts) || 0);
-  const perAcct = Math.max(0, Number(capacityPerAccount) || 0);
-  const capacity = acct * perAcct;
-  const planLimit = planMonthlyZaloLimit == null ? null : Math.max(0, Number(planMonthlyZaloLimit) || 0);
-  const grants = Math.max(0, Number(existingZaloGrants) || 0);
-  const requested = Math.max(0, Number(requestedQty) || 0);
-
-  // Unlimited plan monthly → no need (and no room) to buy more under capacity model.
-  if (planLimit === null) {
-    return {
-      ok: requested === 0,
-      capacity,
-      accounts: acct,
-      capacityPerAccount: perAcct,
-      planMonthlyZaloLimit: null,
-      existingGrants: grants,
-      remaining: 0,
-      requested,
-      message: requested > 0
-        ? 'Gói hiện tại không giới hạn tin Zalo theo tháng — không cần mua thêm.'
-        : undefined,
-    };
-  }
-
-  // accounts=0: gói không cấp slot Zalo (hoặc feature tắt) → không còn chỗ mua thêm.
-  // Không còn bắt buộc đã kết nối QR — capacity lấy theo slot gói (+ grant) ở tầng service.
-  if (acct === 0) {
-    return {
-      ok: requested === 0,
-      capacity: 0,
-      accounts: 0,
-      capacityPerAccount: perAcct,
-      planMonthlyZaloLimit: planLimit,
-      existingGrants: grants,
-      remaining: 0,
-      requested,
-      message: requested > 0
-        ? 'Gói hiện tại không có slot tài khoản Zalo — không thể mua thêm tin.'
-        : undefined,
-      code: requested > 0 ? 'ZALO_NO_SLOT' : undefined,
-    };
-  }
-
-  const remaining = Math.max(0, capacity - planLimit - grants);
-  if (requested > remaining) {
-    return {
-      ok: false,
-      capacity,
-      accounts: acct,
-      capacityPerAccount: perAcct,
-      planMonthlyZaloLimit: planLimit,
-      existingGrants: grants,
-      remaining,
-      requested,
-      message:
-        `Số tin Zalo mua thêm (${requested.toLocaleString('vi-VN')}) vượt năng lực còn lại ` +
-        `(${remaining.toLocaleString('vi-VN')} tin). ` +
-        `Tối đa ${capacity.toLocaleString('vi-VN')} tin/tháng cho ${acct} slot tài khoản Zalo ` +
-        `(đã cấp gói ${planLimit.toLocaleString('vi-VN')}` +
-        (grants > 0 ? ` + đã mua thêm ${grants.toLocaleString('vi-VN')}` : '') +
-        ').',
-    };
-  }
-
-  return {
-    ok: true,
-    capacity,
-    accounts: acct,
-    capacityPerAccount: perAcct,
-    planMonthlyZaloLimit: planLimit,
-    existingGrants: grants,
-    remaining,
-    requested,
-  };
+  const { channel, planMonthlyLimit, code, ...rest } = checkTopupChannelCapacity({
+    channel: 'zalo',
+    accounts,
+    capacityPerAccount,
+    planMonthlyLimit: planMonthlyZaloLimit,
+    existingGrants: existingZaloGrants,
+    requestedQty,
+  });
+  const result = { ...rest, planMonthlyZaloLimit: planMonthlyLimit };
+  if (code === 'ZALO_NO_SLOT') result.code = code;
+  return result;
 }
 
 /** Trần dung lượng một tài khoản tự mua thêm được, không cần admin duyệt. */

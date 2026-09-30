@@ -11,11 +11,21 @@ import {
   CONFIG_ITEM_KEYS,
   CUSTOM_PLAN_VOUCHER_CODE,
   validateQuantities,
-  checkZaloCapacity,
+  checkChannelCapacity,
   computeCustomPlanPrice,
   mapQuantitiesToPlanColumns,
   applyPublicPlanGuardrail,
 } from '../../utils/customPlanPricing.util.js';
+
+function summarizeCapacity(cap) {
+  return {
+    ok: true,
+    capacity: cap.capacity,
+    requested: cap.requested,
+    accounts: cap.accounts,
+    capacityPerAccount: cap.capacityPerAccount,
+  };
+}
 
 /**
  * Public/admin config for the custom-plan builder.
@@ -38,6 +48,8 @@ export async function getCustomPlanPricingConfig() {
     config: {
       yearlyDiscountPercent: config.yearly_discount_percent ?? 20,
       zaloMonthlyCapacityPerAccount: config.zalo_monthly_capacity_per_account ?? 16000,
+      telegramMonthlyCapacityPerAccount: config.telegram_monthly_capacity_per_account ?? 16000,
+      whatsappMonthlyCapacityPerAccount: config.whatsapp_monthly_capacity_per_account ?? 16000,
     },
     items,
     voucherPlanCode: CUSTOM_PLAN_VOUCHER_CODE,
@@ -58,15 +70,25 @@ export async function quoteCustomPlan({ quantities = {}, billingPeriod = 'monthl
     throw { status: 400, message: validation.errors.join('; '), errors: validation.errors };
   }
 
-  const capacity = checkZaloCapacity(validation.quantities, pricingRows);
-  if (!capacity.ok) {
-    throw {
-      status: 400,
-      message: capacity.message,
-      code: 'ZALO_CAPACITY_EXCEEDED',
-      capacity,
-    };
+  // P11: Zalo, Telegram, WhatsApp cùng khuôn "năng lực theo số tài khoản". Mã lỗi <KÊNH>_CAPACITY_EXCEEDED; trường `capacity` giữ nguyên
+  // là của kênh vi phạm (Zalo khi lỗi Zalo → tương thích FE/spec cũ).
+  const capacities = {
+    zalo: checkChannelCapacity(validation.quantities, pricingRows, 'zalo'),
+    telegram: checkChannelCapacity(validation.quantities, pricingRows, 'telegram'),
+    whatsapp: checkChannelCapacity(validation.quantities, pricingRows, 'whatsapp'),
+  };
+  for (const channel of ['zalo', 'telegram', 'whatsapp']) {
+    const cap = capacities[channel];
+    if (!cap.ok) {
+      throw {
+        status: 400,
+        message: cap.message,
+        code: `${channel.toUpperCase()}_CAPACITY_EXCEEDED`,
+        capacity: cap,
+      };
+    }
   }
+  const capacity = capacities.zalo;
 
   const priced = computeCustomPlanPrice(pricingRows, validation.quantities, billingPeriod);
   const publicPlans = await findAllPlans();
@@ -115,12 +137,12 @@ export async function quoteCustomPlan({ quantities = {}, billingPeriod = 'monthl
     flooredToPlan: guardrail.flooredToPlan,
     suggestedPlan: guardrail.suggestedPlan,
     warnings,
-    capacity: {
-      ok: true,
-      capacity: capacity.capacity,
-      requested: capacity.requested,
-      accounts: capacity.accounts,
-      capacityPerAccount: capacity.capacityPerAccount,
+    // `capacity` = Zalo (giữ nguyên field cũ); `capacities` có đủ 3 kênh.
+    capacity: summarizeCapacity(capacity),
+    capacities: {
+      zalo: summarizeCapacity(capacities.zalo),
+      telegram: summarizeCapacity(capacities.telegram),
+      whatsapp: summarizeCapacity(capacities.whatsapp),
     },
     planColumns: mapQuantitiesToPlanColumns(pricingRows, validation.quantities),
   };

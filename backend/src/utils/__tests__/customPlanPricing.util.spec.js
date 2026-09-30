@@ -1,6 +1,7 @@
 import {
   validateQuantities,
   checkZaloCapacity,
+  checkChannelCapacity,
   computeCustomPlanPrice,
   mapQuantitiesToPlanColumns,
   applyPublicPlanGuardrail,
@@ -556,5 +557,35 @@ describe('customPlanPricing.util — P6 tài khoản Telegram/WhatsApp', () => {
     const cols = mapQuantitiesToPlanColumns(rows, valid.quantities);
     expect(cols.maxTelegramAccounts).toBe(2);
     expect(cols.maxWhatsappAccounts).toBe(1);
+  });
+});
+
+// P11 — năng lực theo số tài khoản cho Telegram/WhatsApp (cùng khuôn Zalo).
+describe('checkChannelCapacity (P11)', () => {
+  const rows = [
+    ...sampleRows,
+    { item_key: 'telegram_monthly_capacity_per_account', unit_price: 10000, unit_size: 1, is_active: true, sort_order: 0 },
+  ];
+
+  test.each([
+    ['telegram', 'telegram_accounts', 'telegram_messages', 'Telegram', 10000],
+    ['whatsapp', 'whatsapp_accounts', 'whatsapp_messages', 'WhatsApp', 16000],
+    ['zalo', 'zalo_accounts', 'zalo_messages', 'Zalo', 16000],
+  ])('%s: chặn khi vượt số tài khoản × năng lực, thông điệp có nhãn kênh', (channel, accounts, messages, label, perAccount) => {
+    const fail = checkChannelCapacity({ [accounts]: 2, [messages]: perAccount * 2 + 1 }, rows, channel);
+    expect(fail).toMatchObject({ ok: false, channel, capacity: perAccount * 2 });
+    expect(fail.message).toContain(label);
+    const pass = checkChannelCapacity({ [accounts]: 2, [messages]: perAccount * 2 }, rows, channel);
+    expect(pass.ok).toBe(true);
+  });
+
+  test('mỗi kênh đọc khoá năng lực RIÊNG (telegram 10.000 không ảnh hưởng zalo 16.000)', () => {
+    expect(checkChannelCapacity({ telegram_accounts: 1, telegram_messages: 10001 }, rows, 'telegram').ok).toBe(false);
+    expect(checkChannelCapacity({ zalo_accounts: 1, zalo_messages: 10001 }, rows, 'zalo').ok).toBe(true);
+  });
+
+  test('checkZaloCapacity = checkChannelCapacity(zalo); kênh lạ ném lỗi', () => {
+    expect(checkZaloCapacity({ zalo_accounts: 1, zalo_messages: 20000 }, rows).channel).toBe('zalo');
+    expect(() => checkChannelCapacity({}, rows, 'email')).toThrow();
   });
 });

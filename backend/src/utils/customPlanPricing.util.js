@@ -6,6 +6,8 @@
 export const CONFIG_ITEM_KEYS = Object.freeze([
   'yearly_discount_percent',
   'zalo_monthly_capacity_per_account',
+  'telegram_monthly_capacity_per_account',
+  'whatsapp_monthly_capacity_per_account',
 ]);
 
 export const BASE_FEE_KEY = 'base_fee';
@@ -97,29 +99,57 @@ export function validateQuantities(configRows, rawQuantities = {}) {
 }
 
 /**
- * Hard block: Zalo monthly messages cannot exceed ~16k per connected account.
- * @returns {{ ok: true } | { ok: false, message: string, capacity: number, requested: number, accounts: number }}
+ * P11 — bảng kênh của phép kiểm "năng lực theo số tài khoản": số tin/tháng ≤ số tài khoản × năng lực/tài khoản.
+ * Zalo/Telegram/WhatsApp cùng khuôn (giá trị năng lực do admin chỉnh ở Giá gói tuỳ chỉnh, mặc định 16.000 = số của Zalo).
  */
-export function checkZaloCapacity(quantities, configRows = []) {
-  const capacityPerAccount = getConfigValue(configRows, 'zalo_monthly_capacity_per_account', 16000);
-  const accounts = Math.max(0, Number(quantities?.zalo_accounts || 0));
-  const requested = Math.max(0, Number(quantities?.zalo_messages || 0));
+export const CHANNEL_CAPACITY_SPEC = Object.freeze({
+  zalo: Object.freeze({
+    accounts: 'zalo_accounts', messages: 'zalo_messages', config: 'zalo_monthly_capacity_per_account', label: 'Zalo',
+  }),
+  telegram: Object.freeze({
+    accounts: 'telegram_accounts', messages: 'telegram_messages', config: 'telegram_monthly_capacity_per_account', label: 'Telegram',
+  }),
+  whatsapp: Object.freeze({
+    accounts: 'whatsapp_accounts', messages: 'whatsapp_messages', config: 'whatsapp_monthly_capacity_per_account', label: 'WhatsApp',
+  }),
+});
+
+/**
+ * Hard block: tin/tháng của một kênh không được vượt ~16k mỗi tài khoản đã nối.
+ * @param {Record<string, number>} quantities
+ * @param {Array} configRows
+ * @param {'zalo'|'telegram'|'whatsapp'} channel
+ * @returns {{ ok: true, channel: string, capacity: number, requested: number, accounts: number, capacityPerAccount: number }
+ *   | { ok: false, message: string, channel: string, capacity: number, requested: number, accounts: number, capacityPerAccount: number }}
+ */
+export function checkChannelCapacity(quantities, configRows = [], channel = 'zalo') {
+  const spec = CHANNEL_CAPACITY_SPEC[channel];
+  if (!spec) throw new Error(`checkChannelCapacity: kênh không hợp lệ '${channel}'`);
+  const capacityPerAccount = getConfigValue(configRows, spec.config, 16000);
+  const accounts = Math.max(0, Number(quantities?.[spec.accounts] || 0));
+  const requested = Math.max(0, Number(quantities?.[spec.messages] || 0));
   const capacity = accounts * capacityPerAccount;
 
   if (requested > capacity) {
     return {
       ok: false,
+      channel,
       message:
-        `Số tin Zalo (${requested.toLocaleString('vi-VN')}/tháng) vượt năng lực ` +
+        `Số tin ${spec.label} (${requested.toLocaleString('vi-VN')}/tháng) vượt năng lực ` +
         `${accounts} tài khoản (≈ ${capacityPerAccount.toLocaleString('vi-VN')} tin/tài khoản). ` +
-        `Tối đa ${capacity.toLocaleString('vi-VN')} tin/tháng — hãy thêm tài khoản Zalo hoặc giảm số tin.`,
+        `Tối đa ${capacity.toLocaleString('vi-VN')} tin/tháng — hãy thêm tài khoản ${spec.label} hoặc giảm số tin.`,
       capacity,
       requested,
       accounts,
       capacityPerAccount,
     };
   }
-  return { ok: true, capacity, requested, accounts, capacityPerAccount };
+  return { ok: true, channel, capacity, requested, accounts, capacityPerAccount };
+}
+
+/** Giữ nguyên chữ ký cũ (Zalo) — spec/FE cũ đọc hàm này. */
+export function checkZaloCapacity(quantities, configRows = []) {
+  return checkChannelCapacity(quantities, configRows, 'zalo');
 }
 
 /**

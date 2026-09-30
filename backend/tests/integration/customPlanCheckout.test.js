@@ -136,6 +136,45 @@ describe('Custom plan self-serve', () => {
     expect(over.body.code).toBe('ZALO_CAPACITY_EXCEEDED');
   });
 
+  // P11 — Telegram/WhatsApp cùng khuôn "năng lực theo số tài khoản" (16.000 tin/tài khoản, mặc định = Zalo).
+  it.each([
+    ['telegram', 'TELEGRAM_CAPACITY_EXCEEDED', 'Telegram'],
+    ['whatsapp', 'WHATSAPP_CAPACITY_EXCEEDED', 'WhatsApp'],
+  ])('%s: 1 tài khoản, 16500 tin → 400 %s; đúng 16000 → 200; response có capacities đủ 3 kênh', async (channel, code, label) => {
+    const user = await createUser({ username: `custom-cap-${channel}` });
+    const token = await loginAs(user);
+    const quote = (messages) => request(app)
+      .post('/api/plans/custom/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        quantities: { ...baseQuantities, [`${channel}_accounts`]: 1, [`${channel}_messages`]: messages },
+        billingPeriod: 'monthly',
+      });
+
+    const over = await quote(16500);
+    expect(over.status).toBe(400);
+    expect(over.body.code).toBe(code);
+    expect(over.body.message).toContain(label);
+
+    const ok = await quote(16000);
+    expect(ok.status).toBe(200);
+    expect(ok.body.data.capacity.accounts).toBe(1); // field cũ = Zalo
+    expect(ok.body.data.capacities[channel]).toMatchObject({ ok: true, accounts: 1, capacity: 16000, requested: 16000 });
+    expect(Object.keys(ok.body.data.capacities).sort()).toEqual(['telegram', 'whatsapp', 'zalo']);
+  });
+
+  it('config custom plan trả năng lực/tài khoản của cả 3 kênh', async () => {
+    const user = await createUser({ username: 'custom-cap-cfg' });
+    const token = await loginAs(user);
+    const res = await request(app).get('/api/plans/custom/config').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data.config).toMatchObject({
+      zaloMonthlyCapacityPerAccount: 16000,
+      telegramMonthlyCapacityPerAccount: 16000,
+      whatsappMonthlyCapacityPerAccount: 16000,
+    });
+  });
+
   it('create-custom-payment ignores client price and creates owned custom plan', async () => {
     const user = await createUser({ username: 'custom-pay' });
     const token = await loginAs(user);

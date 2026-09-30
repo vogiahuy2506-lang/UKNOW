@@ -51,6 +51,7 @@ jest.unstable_mockModule('../../../utils/topupPricing.util.js', () => ({
     minOrderAmount: 50000,
   }),
   checkTopupZaloCapacity: jest.fn().mockReturnValue({ ok: true, remaining: 100000 }),
+  checkTopupChannelCapacity: jest.fn().mockReturnValue({ ok: true, remaining: 100000 }),
   checkTopupStorageCapacity: jest.fn().mockReturnValue({ ok: true, remaining: 100 }),
   resolveMaxTopupMonths: jest.fn().mockReturnValue(12),
   filterAllowedTopupMonths: jest.fn().mockReturnValue([1, 3, 6, 12]),

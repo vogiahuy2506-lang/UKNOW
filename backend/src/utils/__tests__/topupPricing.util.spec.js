@@ -3,6 +3,7 @@ import {
   validateTopupQuantities,
   computeTopupPrice,
   checkTopupZaloCapacity,
+  checkTopupChannelCapacity,
   resolveMaxTopupMonths,
   filterAllowedTopupMonths,
   resolveTopupMonths,
@@ -241,5 +242,52 @@ describe('topupPricing.util — P6 slot tài khoản Telegram/WhatsApp', () => {
     const { TOPUP_GRANT_KEY_BY_RESOURCE } = await import('../topupPricing.util.js');
     expect(TOPUP_GRANT_KEY_BY_RESOURCE.telegramAccounts).toBe('telegram_accounts');
     expect(TOPUP_GRANT_KEY_BY_RESOURCE.whatsappAccounts).toBe('whatsapp_accounts');
+  });
+});
+
+// P11 — năng lực tin lẻ theo số tài khoản cho Telegram/WhatsApp (cùng khuôn Zalo).
+describe('checkTopupChannelCapacity (P11)', () => {
+  it('WhatsApp · 2 TK · gói 8000 · mua 24050 → chặn, còn 24000, mã WHATSAPP_CAPACITY_EXCEEDED, thông điệp có "WhatsApp"', () => {
+    const r = checkTopupChannelCapacity({
+      channel: 'whatsapp', accounts: 2, capacityPerAccount: 16000, planMonthlyLimit: 8000, existingGrants: 0, requestedQty: 24050,
+    });
+    expect(r).toMatchObject({ ok: false, remaining: 24000, code: 'WHATSAPP_CAPACITY_EXCEEDED', channel: 'whatsapp' });
+    expect(r.message).toContain('WhatsApp');
+  });
+
+  it('đúng bằng phần còn lại → ok', () => {
+    const r = checkTopupChannelCapacity({
+      channel: 'telegram', accounts: 2, capacityPerAccount: 16000, planMonthlyLimit: 8000, requestedQty: 24000,
+    });
+    expect(r).toMatchObject({ ok: true, remaining: 24000 });
+  });
+
+  it('accounts 0 → WHATSAPP_NO_SLOT; TELEGRAM_NO_SLOT', () => {
+    expect(checkTopupChannelCapacity({ channel: 'whatsapp', accounts: 0, planMonthlyLimit: 100, requestedQty: 50 }))
+      .toMatchObject({ ok: false, code: 'WHATSAPP_NO_SLOT' });
+    expect(checkTopupChannelCapacity({ channel: 'telegram', accounts: 0, planMonthlyLimit: 100, requestedQty: 50 }))
+      .toMatchObject({ ok: false, code: 'TELEGRAM_NO_SLOT' });
+  });
+
+  it('gói NULL (không giới hạn) → remaining 0, ok chỉ khi requested 0', () => {
+    expect(checkTopupChannelCapacity({ channel: 'telegram', accounts: 3, planMonthlyLimit: null, requestedQty: 0 }))
+      .toMatchObject({ ok: true, remaining: 0 });
+    const r = checkTopupChannelCapacity({ channel: 'telegram', accounts: 3, planMonthlyLimit: null, requestedQty: 50 });
+    expect(r).toMatchObject({ ok: false, remaining: 0 });
+    expect(r.message).toContain('Telegram');
+  });
+
+  it('trừ grant cũ; kênh lạ ném lỗi', () => {
+    expect(checkTopupChannelCapacity({ channel: 'telegram', accounts: 1, planMonthlyLimit: 8000, existingGrants: 3000, requestedQty: 1 }).remaining).toBe(5000);
+    expect(() => checkTopupChannelCapacity({ channel: 'email', accounts: 1, planMonthlyLimit: 1 })).toThrow();
+  });
+
+  it('checkTopupZaloCapacity vẫn trả field cũ (planMonthlyZaloLimit, không có channel)', () => {
+    const r = checkTopupZaloCapacity({ accounts: 1, planMonthlyZaloLimit: 8000, requestedQty: 10000 });
+    expect(r.planMonthlyZaloLimit).toBe(8000);
+    expect(r).not.toHaveProperty('channel');
+    expect(r).not.toHaveProperty('code');
+    expect(r.remaining).toBe(8000);
+    expect(checkTopupZaloCapacity({ accounts: 0, planMonthlyZaloLimit: 8000, requestedQty: 50 }).code).toBe('ZALO_NO_SLOT');
   });
 });
