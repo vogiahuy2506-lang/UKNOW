@@ -1,5 +1,6 @@
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
 import { validateChannelAttachments } from './channelAttachments';
+import { describeChannelStepsProblem } from './channelSteps';
 
 /**
  * P5 — câu báo lỗi (hoặc '') khi tệp đính kèm của khối Telegram/WhatsApp vượt giới hạn số ảnh/tài liệu/dung lượng.
@@ -509,7 +510,7 @@ export const createNodeConfigFormData = ({
   formSubmissionsLimit: config.formSubmissionsLimit || 1000,
   // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — send_telegram. `recipientKeys` giữ dạng
   // chuỗi thô (mỗi dòng một chat id) trong form, tách mảng lúc lưu (handleNodeConfigSaveClick) —
-  // cùng khuôn recipientEmails/zaloRecipientPhones ở trên. `steps` chỉ 1 bước v1 (một ô soạn tin).
+  // cùng khuôn recipientEmails/zaloRecipientPhones ở trên. `steps` tối đa 5 bước (P7, xem channelSteps.js), bước 2+ có delayValue/delayUnit.
   telegramAccountId: config.telegramAccountId || '',
   // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — send_whatsapp: sessionKey phiên WhatsApp (vd '40-default').
   // recipientKeys/steps/recipientSource/recipientNodeId/recipientColumn dùng chung field ở trên.
@@ -869,19 +870,29 @@ export const handleNodeConfigSaveClick = async ({
       toastNotifier.error('Vui lòng chọn tài khoản Telegram trước khi lưu.');
       return;
     }
-    const message = String(formData.steps?.[0]?.message || '').trim();
-    if (!message) {
-      toastNotifier.error('Vui lòng nhập nội dung tin nhắn Telegram.');
+    // P7 — nhiều bước: kiểm số bước/độ trễ, rồi từng bước (nội dung không rỗng, ≤ 4000, đính kèm trong giới hạn).
+    const telegramSteps = Array.isArray(formData.steps) && formData.steps.length ? formData.steps : [{}];
+    const telegramStepsProblem = describeChannelStepsProblem(telegramSteps);
+    if (telegramStepsProblem) {
+      toastNotifier.error(telegramStepsProblem);
       return;
     }
-    if (message.length > 4000) {
-      toastNotifier.error('Nội dung tin nhắn Telegram không được quá 4000 ký tự.');
-      return;
-    }
-    const telegramAttachmentProblem = describeChannelAttachmentProblem(formData.steps?.[0]?.attachments, 'telegram');
-    if (telegramAttachmentProblem) {
-      toastNotifier.error(telegramAttachmentProblem);
-      return;
+    for (let i = 0; i < telegramSteps.length; i += 1) {
+      const message = String(telegramSteps[i]?.message || '').trim();
+      const stepLabel = telegramSteps.length > 1 ? ` (bước ${i + 1})` : '';
+      if (!message) {
+        toastNotifier.error(`Vui lòng nhập nội dung tin nhắn Telegram${stepLabel}.`);
+        return;
+      }
+      if (message.length > 4000) {
+        toastNotifier.error(`Nội dung tin nhắn Telegram không được quá 4000 ký tự${stepLabel}.`);
+        return;
+      }
+      const telegramAttachmentProblem = describeChannelAttachmentProblem(telegramSteps[i]?.attachments, 'telegram');
+      if (telegramAttachmentProblem) {
+        toastNotifier.error(`${telegramAttachmentProblem}${stepLabel}`);
+        return;
+      }
     }
     if (formData.recipientSource === 'telegram_groups') {
       const groups = Array.isArray(formData.recipientKeys) ? formData.recipientKeys : [];
@@ -921,19 +932,29 @@ export const handleNodeConfigSaveClick = async ({
       toastNotifier.error('Vui lòng chọn tài khoản WhatsApp trước khi lưu.');
       return;
     }
-    const message = String(formData.steps?.[0]?.message || '').trim();
-    if (!message) {
-      toastNotifier.error('Vui lòng nhập nội dung tin nhắn WhatsApp.');
+    // P7 — nhiều bước: kiểm số bước/độ trễ, rồi từng bước (nội dung không rỗng, ≤ 4096, đính kèm trong giới hạn).
+    const whatsappSteps = Array.isArray(formData.steps) && formData.steps.length ? formData.steps : [{}];
+    const whatsappStepsProblem = describeChannelStepsProblem(whatsappSteps);
+    if (whatsappStepsProblem) {
+      toastNotifier.error(whatsappStepsProblem);
       return;
     }
-    if (message.length > 4096) {
-      toastNotifier.error('Nội dung tin nhắn WhatsApp không được quá 4096 ký tự.');
-      return;
-    }
-    const whatsappAttachmentProblem = describeChannelAttachmentProblem(formData.steps?.[0]?.attachments, 'whatsapp');
-    if (whatsappAttachmentProblem) {
-      toastNotifier.error(whatsappAttachmentProblem);
-      return;
+    for (let i = 0; i < whatsappSteps.length; i += 1) {
+      const message = String(whatsappSteps[i]?.message || '').trim();
+      const stepLabel = whatsappSteps.length > 1 ? ` (bước ${i + 1})` : '';
+      if (!message) {
+        toastNotifier.error(`Vui lòng nhập nội dung tin nhắn WhatsApp${stepLabel}.`);
+        return;
+      }
+      if (message.length > 4096) {
+        toastNotifier.error(`Nội dung tin nhắn WhatsApp không được quá 4096 ký tự${stepLabel}.`);
+        return;
+      }
+      const whatsappAttachmentProblem = describeChannelAttachmentProblem(whatsappSteps[i]?.attachments, 'whatsapp');
+      if (whatsappAttachmentProblem) {
+        toastNotifier.error(`${whatsappAttachmentProblem}${stepLabel}`);
+        return;
+      }
     }
     if (formData.recipientSource === 'whatsapp_groups') {
       const groups = Array.isArray(formData.recipientKeys) ? formData.recipientKeys : [];

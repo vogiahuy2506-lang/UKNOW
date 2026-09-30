@@ -7300,6 +7300,20 @@ export default {
   },
 
   // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — send_telegram config box.
+  channelSteps: {
+    stepTitle: 'Step {n}',
+    removeStep: 'Remove step',
+    sendAfter: 'Send after',
+    sinceStep: 'since step {n} was sent',
+    delayValueLabel: 'Wait time before step {n}',
+    delayUnitLabel: 'Wait time unit before step {n}',
+    unitMinutes: 'minutes',
+    unitHours: 'hours',
+    unitDays: 'days',
+    addStep: '+ Add step',
+    addHint: 'Up to {max} steps. Each later step is only sent to people who received the previous one, after exactly the wait you set.',
+    maxReached: 'Reached the maximum of {max} steps.',
+  },
   telegramNodeSend: {
     nodeName: 'Node name',
     nodeNamePlaceholder: 'e.g. Send Telegram message',

@@ -43,8 +43,8 @@ function buildAdapterCampaignCapabilities() {
     capabilities.push({
       id: 'telegram_campaign',
       label: {
-        vi: 'gửi chiến dịch qua Telegram (mình hỏi tài khoản Telegram, soạn nội dung rồi gửi một tin; gửi nhanh có ở trang Gửi nhanh)',
-        en: 'send Telegram campaigns (I ask which Telegram account to use, draft the message, and send one message; quick send is on the Quick Send page)',
+        vi: 'gửi chiến dịch qua Telegram (mình hỏi tài khoản Telegram, soạn nội dung rồi gửi một tin hoặc chuỗi tối đa 5 tin cách nhau thời gian; gửi nhanh có ở trang Gửi nhanh)',
+        en: 'send Telegram campaigns (I ask which Telegram account to use, draft the message, and send one message or a sequence of up to 5 timed messages; quick send is on the Quick Send page)',
       },
       patterns: [/telegram/i],
       matches: (text) => /telegram/i.test(text)
@@ -56,8 +56,8 @@ function buildAdapterCampaignCapabilities() {
     capabilities.push({
       id: 'whatsapp_campaign',
       label: {
-        vi: 'gửi chiến dịch qua WhatsApp (mình hỏi tài khoản WhatsApp, soạn nội dung rồi gửi một tin; gửi nhanh có ở trang Gửi nhanh)',
-        en: 'send WhatsApp campaigns (I ask which WhatsApp account to use, draft the message, and send one message; quick send is on the Quick Send page)',
+        vi: 'gửi chiến dịch qua WhatsApp (mình hỏi tài khoản WhatsApp, soạn nội dung rồi gửi một tin hoặc chuỗi tối đa 5 tin cách nhau thời gian; gửi nhanh có ở trang Gửi nhanh)',
+        en: 'send WhatsApp campaigns (I ask which WhatsApp account to use, draft the message, and send one message or a sequence of up to 5 timed messages; quick send is on the Quick Send page)',
       },
       patterns: [/whats\s?app/i],
       matches: (text) => /whats\s?app/i.test(text)

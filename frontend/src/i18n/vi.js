@@ -7308,6 +7308,20 @@ export default {
   },
 
   // PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 4 — hộp cấu hình node send_telegram.
+  channelSteps: {
+    stepTitle: 'Bước {n}',
+    removeStep: 'Xoá bước',
+    sendAfter: 'Gửi sau',
+    sinceStep: 'kể từ khi gửi xong bước {n}',
+    delayValueLabel: 'Số thời gian chờ trước bước {n}',
+    delayUnitLabel: 'Đơn vị thời gian chờ trước bước {n}',
+    unitMinutes: 'phút',
+    unitHours: 'giờ',
+    unitDays: 'ngày',
+    addStep: '+ Thêm bước',
+    addHint: 'Tối đa {max} bước. Bước sau chỉ gửi cho người đã nhận bước trước, sau đúng khoảng chờ bạn đặt.',
+    maxReached: 'Đã đủ {max} bước (tối đa).',
+  },
   telegramNodeSend: {
     nodeName: 'Tên node',
     nodeNamePlaceholder: 'VD: Gửi tin Telegram',

@@ -19,8 +19,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { fetchTelegramGroupOptions } from '../utils/nodeConfigModal.helpers';
-import { applyTemplateToStep, clearTemplateFromStep } from '../utils/channelAttachments';
-import ChannelTemplateAttachmentPicker from './ChannelTemplateAttachmentPicker';
+import ChannelStepsEditor from './ChannelStepsEditor';
 
 /** Nhóm đã chọn lưu ở config.recipientKeys dạng [{ recipientKey, display }]. */
 const getSelectedGroups = (formData) => (
@@ -113,7 +112,6 @@ export const NodeConfigSendTelegramSection = ({
     }));
   };
   const isEmptyAfterSuccess = telegramAccountsStatus === 'loaded' && telegramAccounts.length === 0;
-  const messageValue = formData.steps?.[0]?.message || '';
   // PLAN_TELEGRAM_0_NGUOI_NHAN_2026-09-29 Việc 3 — cảnh báo khi nguồn là hội thoại mà tài khoản đang
   // chọn chưa có hội thoại mở nào. Chỉ cảnh báo khi BE trả số (số thiếu = không biết = không cảnh báo).
   const selectedAccount = telegramAccounts.find((a) => String(a.id) === String(formData.telegramAccountId || ''));
@@ -124,34 +122,6 @@ export const NodeConfigSendTelegramSection = ({
     && Number.isFinite(selectedAccount.openConversationCount)
     && selectedAccount.openConversationCount === 0
   );
-
-  const handleMessageChange = (value) => {
-    setFormData((prev) => ({
-      ...prev,
-      steps: [{ ...(prev.steps?.[0] || {}), message: value }],
-    }));
-  };
-
-  // P5 — mẫu tin (kho mẫu Zalo) + tệp đính kèm của mẫu, lưu vào bước đầu: { templateId, message, attachments }.
-  const handleApplyTemplate = (template) => {
-    setFormData((prev) => ({
-      ...prev,
-      steps: [template
-        ? applyTemplateToStep(prev.steps?.[0], template)
-        : clearTemplateFromStep(prev.steps?.[0])],
-    }));
-  };
-
-  const handleRemoveAttachment = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      steps: [{
-        ...(prev.steps?.[0] || {}),
-        attachments: (Array.isArray(prev.steps?.[0]?.attachments) ? prev.steps[0].attachments : [])
-          .filter((_, i) => i !== index),
-      }],
-    }));
-  };
 
   return (
     <div className="space-y-4">
@@ -316,33 +286,16 @@ export const NodeConfigSendTelegramSection = ({
         </div>
       )}
 
-      <ChannelTemplateAttachmentPicker
+      {/* P7 — nhiều bước (tối đa 5), bước 2+ có "gửi sau … kể từ bước trước"; mỗi bước có mẫu/đính kèm (P5). */}
+      <ChannelStepsEditor
         channel="telegram"
+        steps={formData.steps}
+        setFormData={setFormData}
         templates={zaloTemplates}
         fetchTemplateById={fetchTemplateById}
-        templateId={formData.steps?.[0]?.templateId || ''}
-        attachments={Array.isArray(formData.steps?.[0]?.attachments) ? formData.steps[0].attachments : []}
-        onApply={handleApplyTemplate}
-        onRemoveAttachment={handleRemoveAttachment}
+        messageMax={4000}
+        i18nPrefix="telegramNodeSend"
       />
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t('telegramNodeSend.messageRequired')} <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          rows={6}
-          value={messageValue}
-          onChange={(e) => handleMessageChange(e.target.value)}
-          maxLength={4000}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder={t('telegramNodeSend.messagePlaceholder')}
-        />
-        <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
-          <span>{t('telegramNodeSend.variableHint')}</span>
-          <span>{messageValue.length}/4000</span>
-        </div>
-      </div>
     </div>
   );
 };

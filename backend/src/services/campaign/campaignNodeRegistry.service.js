@@ -9,6 +9,7 @@
  */
 
 import { isTelegramCampaignChannelEnabled, isWhatsAppCampaignChannelEnabled } from './campaignChannelFlags.util.js';
+import { MAX_CHANNEL_STEPS, validateChannelSteps } from '../../utils/channelSteps.util.js';
 
 class CampaignNodeRegistryService {
   constructor() {
@@ -32,10 +33,12 @@ class CampaignNodeRegistryService {
     const stepsSchema = {
       type: 'array',
       label: 'Nội dung tin nhắn',
-      description: 'Chỉ 1 bước (1 tin, gửi ngay). Chưa hỗ trợ nhiều tin cách nhau thời gian cho kênh này.',
+      description: `1 đến ${MAX_CHANNEL_STEPS} bước. Bước 1 gửi ngay; bước 2 trở đi có "delayValue" + "delayUnit" (minutes|hours|days) = chờ bao lâu kể từ khi bước trước gửi xong.`,
       itemSchema: {
         templateId: { type: 'number', label: 'Mẫu tin (tuỳ chọn)' },
         message: { type: 'string', label: 'Nội dung tin nhắn', maxLength: 4000 },
+        delayValue: { type: 'number', label: 'Chờ bao lâu trước bước này (bước 2 trở đi)' },
+        delayUnit: { type: 'enum', values: ['minutes', 'hours', 'days'], default: 'minutes', label: 'Đơn vị thời gian chờ' },
         attachments: { type: 'array', label: 'Tệp đính kèm (tuỳ chọn)' },
       },
     };
@@ -43,7 +46,7 @@ class CampaignNodeRegistryService {
       nodes.send_telegram = {
         nodeType: 'action',
         name: 'Gửi tin nhắn Telegram',
-        description: 'Gửi tin nhắn Telegram từ tài khoản đã kết nối (1 tin, gửi ngay). Người nhận: hội thoại đang mở hoặc chat id nhập tay.',
+        description: 'Gửi tin nhắn Telegram từ tài khoản đã kết nối (1 tin hoặc chuỗi tối đa 5 tin cách nhau thời gian). Người nhận: hội thoại đang mở hoặc chat id nhập tay.',
         color: '#E1F5FE',
         configRequired: true,
         multiStep: false,
@@ -76,7 +79,7 @@ class CampaignNodeRegistryService {
       nodes.send_whatsapp = {
         nodeType: 'action',
         name: 'Gửi tin nhắn WhatsApp',
-        description: 'Gửi tin nhắn WhatsApp từ số đã quét QR (1 tin, gửi ngay). Người nhận: hội thoại đang mở, node dữ liệu (cột SĐT) hoặc SĐT nhập tay.',
+        description: 'Gửi tin nhắn WhatsApp từ số đã quét QR (1 tin hoặc chuỗi tối đa 5 tin cách nhau thời gian). Người nhận: hội thoại đang mở, node dữ liệu (cột SĐT) hoặc SĐT nhập tay.',
         color: '#E8F5E9',
         configRequired: true,
         multiStep: false,
@@ -816,7 +819,7 @@ class CampaignNodeRegistryService {
 
     // P8a — kênh adapter: chỉ liệt kê khi cờ kênh bật (đọc lúc gọi).
     if (isTelegramCampaignChannelEnabled()) {
-      lines.push('★ NODE GỬI TELEGRAM (1 TIN, GỬI NGAY — KHÔNG có nhiều tin cách nhau thời gian):');
+      lines.push('★ NODE GỬI TELEGRAM (1 tin gửi ngay, hoặc CHUỖI tối đa 5 tin — bước 2+ có "delayValue"+"delayUnit" (minutes|hours|days) = chờ bao lâu kể từ bước trước):');
       lines.push('• nodeType: "action", nodeSubtype: "send_telegram"   ← KHÔNG cần node select_zalo_account, KHÔNG dùng zaloAccountId');
       lines.push('  config: { "telegramAccountId": <ID|null>, "recipientSource": "telegram_conversations", "steps": [ { "message": "Nội dung tin..." } ] }');
       lines.push('  recipientSource: "telegram_conversations" (những người đã nhắn tới tài khoản này — mặc định) | "manual" (kèm "recipientKeys": ["123456789", ...] là chat id SỐ)');
@@ -825,7 +828,7 @@ class CampaignNodeRegistryService {
       lines.push('');
     }
     if (isWhatsAppCampaignChannelEnabled()) {
-      lines.push('★ NODE GỬI WHATSAPP (1 TIN, GỬI NGAY — KHÔNG có nhiều tin cách nhau thời gian):');
+      lines.push('★ NODE GỬI WHATSAPP (1 tin gửi ngay, hoặc CHUỖI tối đa 5 tin — bước 2+ có "delayValue"+"delayUnit" (minutes|hours|days) = chờ bao lâu kể từ bước trước):');
       lines.push('• nodeType: "action", nodeSubtype: "send_whatsapp"   ← KHÔNG cần node select_zalo_account, KHÔNG dùng zaloAccountId');
       lines.push('  config: { "whatsappSessionKey": "<mã phiên|null>", "recipientSource": "whatsapp_conversations", "steps": [ { "message": "Nội dung tin..." } ] }');
       lines.push('  recipientSource: "whatsapp_conversations" (người đã nhắn tới số này — mặc định) | "node" (kèm "recipientNodeId": "<tempId node dữ liệu>", "recipientColumn": "<cột SĐT>") | "manual" (kèm "recipientKeys": ["84912345678", ...])');
@@ -978,18 +981,21 @@ Yêu cầu: Gửi 2 email - email chào hỏi ngay, email nhắc nhở sau 3 ng�
       }
     }
 
-    // P8a — node kênh adapter: cần đúng 1 bước có nội dung (hoặc mẫu tin). Kênh adapter chưa có nhiều bước hẹn giờ.
+    // P8a + P7 — node kênh adapter: 1 đến MAX_CHANNEL_STEPS bước, mỗi bước có nội dung (hoặc mẫu tin); bước 2+ có thể có
+    // độ trễ (delayValue/delayUnit) kể từ bước trước.
     if (subtype === 'send_telegram' || subtype === 'send_whatsapp') {
       const steps = Array.isArray(config.steps) ? config.steps : [];
       if (steps.length === 0) {
-        errors.push('steps phải là mảng có đúng 1 phần tử (nội dung tin nhắn)');
-      } else if (steps.length > 1) {
-        errors.push('Kênh Telegram/WhatsApp chỉ gửi 1 tin mỗi lượt (steps chỉ được 1 phần tử)');
+        errors.push(`steps phải là mảng có từ 1 đến ${MAX_CHANNEL_STEPS} phần tử (nội dung tin nhắn)`);
       } else {
-        const step = steps[0] || {};
-        const hasMessage = String(step.message ?? '').trim() !== '';
-        const hasTemplate = step.templateId !== undefined && step.templateId !== null && String(step.templateId).trim() !== '';
-        if (!hasMessage && !hasTemplate) errors.push('steps[0] cần nội dung message hoặc templateId');
+        const stepsProblem = validateChannelSteps(steps);
+        if (stepsProblem) errors.push(stepsProblem.message);
+        steps.forEach((rawStep, index) => {
+          const step = rawStep || {};
+          const hasMessage = String(step.message ?? '').trim() !== '';
+          const hasTemplate = step.templateId !== undefined && step.templateId !== null && String(step.templateId).trim() !== '';
+          if (!hasMessage && !hasTemplate) errors.push(`steps[${index}] cần nội dung message hoặc templateId`);
+        });
       }
     }
 

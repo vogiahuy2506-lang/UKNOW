@@ -24,8 +24,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useI18n } from '../../../i18n';
 import { fetchWhatsAppGroupOptions, parseWhatsAppPhoneList } from '../utils/nodeConfigModal.helpers';
-import { applyTemplateToStep, clearTemplateFromStep } from '../utils/channelAttachments';
-import ChannelTemplateAttachmentPicker from './ChannelTemplateAttachmentPicker';
+import ChannelStepsEditor from './ChannelStepsEditor';
 
 const MESSAGE_MAX = 4096;
 
@@ -108,7 +107,6 @@ export const NodeConfigSendWhatsAppSection = ({
       ...(prev.recipientSource === 'whatsapp_groups' ? { recipientKeys: [] } : {}),
     }));
   };
-  const messageValue = formData.steps?.[0]?.message || '';
   const isEmptyAfterSuccess = whatsappAccountsStatus === 'loaded' && whatsappAccounts.length === 0;
 
   const selectedAccount = whatsappAccounts.find(
@@ -140,44 +138,6 @@ export const NodeConfigSendWhatsAppSection = ({
   // P8b — nguồn "khối dữ liệu": mỗi cột là một biến dùng được trong nội dung ({{tên cột}}) — backend khớp tên cột chính
   // xác/không phân biệt hoa thường/ngữ nghĩa (tên, họ tên, email, SĐT) cho từng người nhận.
   const showColumnVariables = recipientSource === 'node' && sourceSchema.length > 0;
-  const handleInsertColumnVariable = (key) => {
-    setFormData((prev) => {
-      const current = prev.steps?.[0]?.message || '';
-      const token = `{{${key}}}`;
-      const next = `${current}${current && !/\s$/.test(current) ? ' ' : ''}${token}`;
-      if (next.length > MESSAGE_MAX) return prev;
-      return { ...prev, steps: [{ ...(prev.steps?.[0] || {}), message: next }] };
-    });
-  };
-
-  const handleMessageChange = (value) => {
-    setFormData((prev) => ({
-      ...prev,
-      steps: [{ ...(prev.steps?.[0] || {}), message: value }],
-    }));
-  };
-
-  // P5 — mẫu tin (kho mẫu Zalo) + tệp đính kèm của mẫu, lưu vào bước đầu: { templateId, message, attachments }.
-  const handleApplyTemplate = (template) => {
-    setFormData((prev) => ({
-      ...prev,
-      steps: [template
-        ? applyTemplateToStep(prev.steps?.[0], template)
-        : clearTemplateFromStep(prev.steps?.[0])],
-    }));
-  };
-
-  const handleRemoveAttachment = (index) => {
-    setFormData((prev) => ({
-      ...prev,
-      steps: [{
-        ...(prev.steps?.[0] || {}),
-        attachments: (Array.isArray(prev.steps?.[0]?.attachments) ? prev.steps[0].attachments : [])
-          .filter((_, i) => i !== index),
-      }],
-    }));
-  };
-
   return (
     <div className="space-y-4">
       <div>
@@ -404,50 +364,17 @@ export const NodeConfigSendWhatsAppSection = ({
         </div>
       )}
 
-      <ChannelTemplateAttachmentPicker
+      {/* P7 — nhiều bước (tối đa 5), bước 2+ có "gửi sau … kể từ bước trước"; mỗi bước có mẫu/đính kèm (P5). */}
+      <ChannelStepsEditor
         channel="whatsapp"
+        steps={formData.steps}
+        setFormData={setFormData}
         templates={zaloTemplates}
         fetchTemplateById={fetchTemplateById}
-        templateId={formData.steps?.[0]?.templateId || ''}
-        attachments={Array.isArray(formData.steps?.[0]?.attachments) ? formData.steps[0].attachments : []}
-        onApply={handleApplyTemplate}
-        onRemoveAttachment={handleRemoveAttachment}
+        messageMax={MESSAGE_MAX}
+        i18nPrefix="whatsappNodeSend"
+        columnVariableKeys={showColumnVariables ? sourceSchema.map((f) => f.key) : []}
       />
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">
-          {t('whatsappNodeSend.messageRequired')} <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          rows={6}
-          value={messageValue}
-          onChange={(e) => handleMessageChange(e.target.value)}
-          maxLength={MESSAGE_MAX}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-          placeholder={t('whatsappNodeSend.messagePlaceholder')}
-        />
-        <div className="mt-1 flex items-center justify-between text-xs text-gray-500">
-          <span>{t('whatsappNodeSend.variableHint')}</span>
-          <span>{messageValue.length}/{MESSAGE_MAX}</span>
-        </div>
-        {showColumnVariables && (
-          <div className="mt-2" data-testid="whatsapp-column-variables">
-            <p className="text-xs text-gray-500 mb-1">{t('whatsappNodeSend.columnVariablesHint')}</p>
-            <div className="flex flex-wrap gap-1">
-              {sourceSchema.map((f) => (
-                <button
-                  key={f.key}
-                  type="button"
-                  onClick={() => handleInsertColumnVariable(f.key)}
-                  className="px-2 py-0.5 text-xs font-mono bg-gray-100 border border-gray-200 rounded hover:bg-gray-200"
-                >
-                  {`{{${f.key}}}`}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 };

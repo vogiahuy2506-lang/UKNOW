@@ -78,10 +78,10 @@ export function compileCampaign(intent, options = {}) {
     }
   }
 
-  // Luồng 5 (P8a): Telegram / WhatsApp — CHỈ gửi một lần (engine kênh adapter chưa có nhiều bước hẹn giờ);
-  // isCompilableIntent đã chặn drip + cờ kênh tắt ở trên nên tới đây intent luôn once + cờ bật.
+  // Luồng 5 (P8a + P7): Telegram / WhatsApp — một lần HOẶC chuỗi nhiều bước hẹn giờ (drip, tối đa MAX_CHANNEL_STEPS bước;
+  // isCompilableIntent đã chặn chuỗi quá dài + cờ kênh tắt ở trên).
   if (channel === 'telegram' || channel === 'whatsapp') {
-    return compileAdapterChannelOnceCampaign({ channel, sender, audience, contentBrief, fileUsage, attachments, options });
+    return compileAdapterChannelCampaign({ channel, sender, audience, schedule, contentBrief, fileUsage, attachments, options });
   }
 
   // Luồng 4: Zalo nhóm (Once & Drip)
@@ -132,7 +132,8 @@ function buildAdapterAudienceNode(audience, prefix) {
 }
 
 /**
- * P8a — Telegram / WhatsApp gửi MỘT LẦN.
+ * P8a + P7 — Telegram / WhatsApp: gửi MỘT LẦN (1 bước) hoặc chuỗi drip (ngày × tin/ngày bước, bước sau có độ trễ
+ * kể từ bước trước: 1 ngày, hoặc 24/slotsPerDay giờ khi có nhiều tin mỗi ngày).
  * Graph: Trigger -> [Audience (chỉ WhatsApp khi nguồn là node dữ liệu)] -> send_telegram | send_whatsapp.
  * KHÔNG có node select_*_account (khác Zalo): tài khoản nằm thẳng trong config node gửi
  * (`telegramAccountId` | `whatsappSessionKey`), và nguồn 'conversations' không cần node dữ liệu.
@@ -140,7 +141,7 @@ function buildAdapterAudienceNode(audience, prefix) {
  * (`channels/*.campaignChannel.js`): recipientSource, recipientNodeId/recipientColumn, steps:[{message}].
  * Không nhúng templateMappings — kênh adapter thay biến qua `recipient.vars` (vd `{{ten}}`), không qua mapping.
  */
-function compileAdapterChannelOnceCampaign({ channel, sender, audience, contentBrief, fileUsage, attachments, options = {} }) {
+function compileAdapterChannelCampaign({ channel, sender, audience, schedule, contentBrief, fileUsage, attachments, options = {} }) {
   const isWhatsApp = channel === 'whatsapp';
   const prefix = options.idPrefix || 'node';
   const triggerId = `${prefix}_trigger_1`;
@@ -168,22 +169,37 @@ function compileAdapterChannelOnceCampaign({ channel, sender, audience, contentB
     : buildAdapterAudienceNode(audience, prefix);
   if (audienceNode) nodes.push(audienceNode);
 
-  const stepConfig = {
-    templateId: null,
-    message: '',
-    ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
-  };
+  const isDrip = schedule?.type === 'drip';
+  const totalDays = isDrip ? Math.max(1, Number(schedule.days) || 1) : 1;
+  const slotsPerDay = isDrip ? Math.max(1, Number(schedule.slotsPerDay) || 1) : 1;
+  const stepDelay = slotsPerDay === 1
+    ? { delayValue: 1, delayUnit: 'days' }
+    : { delayValue: Math.max(1, Math.round(24 / slotsPerDay)), delayUnit: 'hours' };
+  const steps = [];
+  const stepSlots = [];
+  for (let day = 1; day <= totalDays; day += 1) {
+    for (let slot = 1; slot <= slotsPerDay; slot += 1) {
+      steps.push({
+        templateId: null,
+        message: '',
+        // Bước đầu gửi ngay (không có delay — khớp bản một lần P8a); bước sau chờ kể từ bước trước.
+        ...(steps.length > 0 ? stepDelay : {}),
+        ...(stepAttachments.length > 0 ? { attachments: stepAttachments } : {}),
+      });
+      stepSlots.push({ day, slot });
+    }
+  }
   const sendConfig = isWhatsApp
     ? {
       whatsappSessionKey: String(sender.sessionKey).trim(),
       recipientSource: audienceNode ? 'node' : 'whatsapp_conversations',
       ...(audienceNode ? { recipientNodeId: audienceNode.id, recipientColumn: '' } : {}),
-      steps: [stepConfig],
+      steps,
     }
     : {
       telegramAccountId: Number(sender.id),
       recipientSource: 'telegram_conversations',
-      steps: [stepConfig],
+      steps,
     };
 
   nodes.push({
@@ -192,7 +208,9 @@ function compileAdapterChannelOnceCampaign({ channel, sender, audience, contentB
     nodeType: 'action',
     nodeSubtype: isWhatsApp ? 'send_whatsapp' : 'send_telegram',
     nodeName: isWhatsApp ? 'Gửi tin nhắn WhatsApp' : 'Gửi tin nhắn Telegram',
-    nodeDescription: isWhatsApp ? 'Gửi tin nhắn WhatsApp (1 tin, gửi ngay)' : 'Gửi tin nhắn Telegram (1 tin, gửi ngay)',
+    nodeDescription: isDrip
+      ? `Chuỗi ${steps.length} tin nhắn ${isWhatsApp ? 'WhatsApp' : 'Telegram'} theo thời gian`
+      : (isWhatsApp ? 'Gửi tin nhắn WhatsApp (1 tin, gửi ngay)' : 'Gửi tin nhắn Telegram (1 tin, gửi ngay)'),
     positionX: audienceNode ? 550 : 300,
     positionY: 200,
     config: sendConfig,
@@ -210,14 +228,18 @@ function compileAdapterChannelOnceCampaign({ channel, sender, audience, contentB
     });
   }
 
-  contentSlots.push({
-    slotId: `${sendId}_step_0`,
-    nodeId: sendId,
-    channel,
-    stepIndex: 0,
-    day: 1,
-    type: channel,
-    brief: contentBrief,
+  stepSlots.forEach(({ day, slot }, stepIndex) => {
+    contentSlots.push({
+      slotId: `${sendId}_step_${stepIndex}`,
+      nodeId: sendId,
+      channel,
+      stepIndex,
+      day,
+      // Một lần: giữ đúng hình dạng slot P8a (không có `slot`); drip: thêm `slot` như compiler Zalo.
+      ...(isDrip ? { slot } : {}),
+      type: channel,
+      brief: contentBrief,
+    });
   });
 
   return { nodes, connections, contentSlots };

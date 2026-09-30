@@ -1,5 +1,6 @@
 import { normalizeChannel } from './aiCampaignWizard.service.js';
 import { isAdapterCampaignChannel, isAdapterCampaignChannelEnabled } from '../campaign/campaignChannelFlags.util.js';
+import { MAX_CHANNEL_STEPS, countDripSteps } from '../../utils/channelSteps.util.js';
 
 /**
  * Schema OpenAPI subset cho CampaignIntentV1, tương thích trực tiếp với responseSchema của Gemini.
@@ -357,11 +358,12 @@ export function isCompilableIntent(intent) {
   } else {
     if (!intent.schedule.type || !VALID_SCHEDULE_TYPES.has(intent.schedule.type)) {
       missing.push('schedule.type');
-    } else if (isAdapterChannel && intent.schedule.type !== 'once') {
-      // Engine kênh adapter chỉ chạy một lần (chưa có nhiều bước hẹn giờ) — không dựng chuỗi drip.
-      missing.push('schedule.type');
     } else if (intent.schedule.type === 'drip') {
       if (!intent.schedule.days || Number(intent.schedule.days) <= 0) {
+        missing.push('schedule.days');
+      } else if (isAdapterChannel && countDripSteps(intent.schedule) > MAX_CHANNEL_STEPS) {
+        // P7 — kênh adapter chạy được chuỗi drip (nhiều bước hẹn giờ) nhưng node chỉ chứa tối đa MAX_CHANNEL_STEPS bước:
+        // số ngày × số tin/ngày vượt trần thì hỏi lại thay vì cắt bớt tin im lặng.
         missing.push('schedule.days');
       }
     }

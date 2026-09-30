@@ -1,4 +1,5 @@
 import { MAX_AI_MANUAL_RECIPIENTS } from '../../utils/manualRecipients.util.js';
+import { MAX_CHANNEL_STEPS, countDripSteps } from '../../utils/channelSteps.util.js';
 import {
   getEnabledAdapterCampaignChannels,
   isAdapterCampaignChannel,
@@ -738,8 +739,9 @@ export function buildFileUsageQuestion(locale = 'vi') {
 
 export function buildScheduleQuestion(locale = 'vi', gateState = null) {
   const isEnglish = locale === 'en';
-  // P8a — kênh adapter chưa có nhiều bước hẹn giờ (engine one-shot): chỉ cho "gửi một lần".
-  const onceOnly = isAdapterCampaignChannel(gateState?.channel);
+  // P7 — kênh adapter đã có nhiều bước hẹn giờ: cho cả chuỗi nhiều ngày, nhưng tối đa MAX_CHANNEL_STEPS tin
+  // (số ngày × số tin/ngày) — mặc định nhắc trong mô tả để người dùng không chọn quá trần rồi bị hỏi lại.
+  const isAdapterChannel = isAdapterCampaignChannel(gateState?.channel);
   return {
     type: 'ask_campaign_details',
     content: isEnglish
@@ -755,13 +757,17 @@ export function buildScheduleQuestion(locale = 'vi', gateState = null) {
           inputType: 'schedule',
           options: [
             { value: 'once', label: isEnglish ? 'Send once' : 'Gửi một lần' },
-            ...(onceOnly ? [] : [{
+            {
               value: 'drip',
               label: isEnglish ? 'Multi-day sequence' : 'Chuỗi nhiều ngày',
-              description: isEnglish
-                ? 'Pick number of days and messages per day'
-                : 'Tự chọn số ngày và số tin mỗi ngày',
-            }]),
+              description: isAdapterChannel
+                ? (isEnglish
+                  ? `Pick number of days and messages per day (at most ${MAX_CHANNEL_STEPS} messages in total)`
+                  : `Tự chọn số ngày và số tin mỗi ngày (tối đa ${MAX_CHANNEL_STEPS} tin cả chuỗi)`)
+                : (isEnglish
+                  ? 'Pick number of days and messages per day'
+                  : 'Tự chọn số ngày và số tin mỗi ngày'),
+            },
           ],
           defaults: { days: 3, slotsPerDay: 1 },
         },
@@ -1252,10 +1258,18 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
     };
   }
 
-  const hasValidSchedule = isValidWizardSchedule(state.schedule)
-    && !(isAdapterCampaignChannel(state.channel) && state.schedule?.mode === 'drip');
+  // P7 — kênh adapter: chuỗi drip vượt MAX_CHANNEL_STEPS tin (ngày × tin/ngày) thì hỏi lại, không cắt bớt im lặng.
+  const adapterDripTooLong = isAdapterCampaignChannel(state.channel)
+    && state.schedule?.mode === 'drip'
+    && countDripSteps(state.schedule) > MAX_CHANNEL_STEPS;
+  const hasValidSchedule = isValidWizardSchedule(state.schedule) && !adapterDripTooLong;
   if (!hasValidSchedule) {
     const response = buildScheduleQuestion(locale, state);
+    if (adapterDripTooLong) {
+      response.content = locale === 'en'
+        ? `Telegram and WhatsApp sequences can have at most ${MAX_CHANNEL_STEPS} messages (days x messages per day). Please pick a shorter sequence:`
+        : `Chuỗi tin Telegram/WhatsApp tối đa ${MAX_CHANNEL_STEPS} tin (số ngày × số tin mỗi ngày). Bạn chọn chuỗi ngắn hơn nhé:`;
+    }
     if (state.schedule?.mode === 'recurring') {
       response.content = locale === 'en'
         ? 'Recurring schedules (e.g. every 7 days) are coming soon. For now, please choose a one-time send or a multi-day drip sequence:'

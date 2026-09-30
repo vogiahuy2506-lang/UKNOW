@@ -115,11 +115,23 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       expect(ctx).toContain('recipientSource');
     });
 
-    it('validateNodeConfig: thiếu tài khoản, 2 bước, thân tin rỗng đều bị chặn; config đủ thì qua', () => {
+    it('validateNodeConfig: thiếu tài khoản, >5 bước, trễ sai, thân tin rỗng đều bị chặn; 2 bước có trễ (P7) và config đủ thì qua', () => {
       setFlags({ telegram: true, whatsapp: true });
       expect(registry.validateNodeConfig('send_telegram', { steps: [{ message: 'x' }] }).valid).toBe(false);
       expect(registry.validateNodeConfig('send_whatsapp', { steps: [{ message: 'x' }] }).valid).toBe(false);
-      expect(registry.validateNodeConfig('send_telegram', { telegramAccountId: 1, steps: [{ message: 'a' }, { message: 'b' }] }).valid).toBe(false);
+      // P7 — nhiều bước có hẹn giờ ĐƯỢC PHÉP (tối đa 5); trần + độ trễ sai vẫn bị chặn.
+      expect(registry.validateNodeConfig('send_telegram', {
+        telegramAccountId: 1, steps: [{ message: 'a' }, { message: 'b', delayValue: 1, delayUnit: 'days' }],
+      })).toMatchObject({ valid: true });
+      expect(registry.validateNodeConfig('send_telegram', {
+        telegramAccountId: 1, steps: Array.from({ length: 6 }, (_, i) => ({ message: `m${i}` })),
+      }).valid).toBe(false);
+      expect(registry.validateNodeConfig('send_whatsapp', {
+        whatsappSessionKey: WA_KEY, steps: [{ message: 'a' }, { message: 'b', delayValue: -2, delayUnit: 'hours' }],
+      }).valid).toBe(false);
+      expect(registry.validateNodeConfig('send_telegram', {
+        telegramAccountId: 1, steps: [{ message: 'a' }, { message: '' }],
+      }).valid).toBe(false);
       expect(registry.validateNodeConfig('send_telegram', { telegramAccountId: 1, steps: [{ message: '  ' }] }).valid).toBe(false);
       expect(registry.validateNodeConfig('send_telegram', { telegramAccountId: 1, steps: [{ message: 'Chào bạn' }] })).toMatchObject({ valid: true });
       expect(registry.validateNodeConfig('send_whatsapp', { whatsappSessionKey: WA_KEY, steps: [{ templateId: 5 }] })).toMatchObject({ valid: true });
@@ -139,19 +151,52 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       expect(isCompilableIntent(whatsappIntent())).toEqual({ ok: true, missing: [] });
     });
 
-    it('thiếu tài khoản / sai kiểu tài khoản / drip / nguồn không hỗ trợ → không biên dịch', () => {
+    it('thiếu tài khoản / sai kiểu tài khoản / drip quá 5 bước / nguồn không hỗ trợ → không biên dịch', () => {
       setFlags({ telegram: true, whatsapp: true });
       expect(isCompilableIntent(whatsappIntent({ sender: { type: 'whatsapp_session' } })).missing).toContain('sender.sessionKey');
       expect(isCompilableIntent(whatsappIntent({ sender: { type: 'whatsapp_session', sessionKey: 'khong-co-chu' } })).missing).toContain('sender.sessionKey');
       expect(isCompilableIntent(telegramIntent({ sender: undefined })).missing).toContain('sender');
       expect(isCompilableIntent(telegramIntent({ sender: { type: 'zalo_account', id: 12 } })).missing).toContain('sender.type');
-      expect(isCompilableIntent(telegramIntent({ schedule: { type: 'drip', days: 3 } })).missing).toContain('schedule.type');
+      // P7 — drip HỢP LỆ khi ngày × tin/ngày <= 5; vượt trần thì hỏi lại (schedule.days), không cắt bớt im lặng.
+      expect(isCompilableIntent(telegramIntent({ schedule: { type: 'drip', days: 3 } }))).toEqual({ ok: true, missing: [] });
+      expect(isCompilableIntent(telegramIntent({ schedule: { type: 'drip', days: 3, slotsPerDay: 2 } })).missing).toContain('schedule.days');
+      expect(isCompilableIntent(whatsappIntent({ schedule: { type: 'drip', days: 5, slotsPerDay: 1 } })).ok).toBe(true);
       expect(isCompilableIntent(telegramIntent({ audience: { type: 'db' } })).missing).toContain('audience.type');
       expect(isCompilableIntent(telegramIntent({ audience: { type: 'manual' } })).missing).toContain('audience.type');
       // 'conversations' không có nghĩa với Email/Zalo
       expect(isCompilableIntent({
         version: 1, channel: 'zalo', sender: { type: 'zalo_account', id: 3 }, audience: { type: 'conversations' }, schedule: { type: 'once' },
       }).missing).toContain('audience.type');
+    });
+
+    it('P7 drip: 3 ngày × 1 tin → 3 bước, bước 2+ trễ 1 ngày kể từ bước trước; slot có day/slot; 2 tin/ngày → trễ 12 giờ', () => {
+      setFlags({ telegram: true, whatsapp: true });
+      const graph = compileCampaign(telegramIntent({ schedule: { type: 'drip', days: 3, slotsPerDay: 1 } }));
+      const send = graph.nodes.find((n) => n.nodeSubtype === 'send_telegram');
+      expect(send.config.steps).toEqual([
+        { templateId: null, message: '' },
+        { templateId: null, message: '', delayValue: 1, delayUnit: 'days' },
+        { templateId: null, message: '', delayValue: 1, delayUnit: 'days' },
+      ]);
+      expect(graph.contentSlots.map((s) => [s.stepIndex, s.day, s.slot])).toEqual([[0, 1, 1], [1, 2, 1], [2, 3, 1]]);
+      const wa = compileCampaign(whatsappIntent({ schedule: { type: 'drip', days: 2, slotsPerDay: 2 } }));
+      const waSteps = wa.nodes.find((n) => n.nodeSubtype === 'send_whatsapp').config.steps;
+      expect(waSteps).toHaveLength(4);
+      expect(waSteps[1]).toMatchObject({ delayValue: 12, delayUnit: 'hours' });
+      expect(waSteps[0].delayValue).toBeUndefined();
+    });
+
+    it('P7 wizard: drip vượt 5 tin ở kênh adapter → hỏi lại lịch; vừa 5 tin thì qua cổng lịch', () => {
+      setFlags({ telegram: true });
+      const state = (schedule) => ({
+        isCampaignFlow: true, channel: 'telegram', senderAccountId: 12, dataSource: 'conversations', zaloGroupIds: [], zaloFriendIds: [],
+        schedule, brief: { topic: 'x' },
+      });
+      const tooLong = wizard.evaluateNextGate(state({ mode: 'drip', days: 4, slotsPerDay: 2 }), { telegramAccounts: [{ id: 12, name: 'a', usable: true }] }, 'vi');
+      expect(tooLong?.gate).toBe('schedule');
+      expect(tooLong.response.content).toContain('tối đa 5 tin');
+      const ok = wizard.evaluateNextGate(state({ mode: 'drip', days: 5, slotsPerDay: 1 }), { telegramAccounts: [{ id: 12, name: 'a', usable: true }] }, 'vi');
+      expect(ok?.gate).not.toBe('schedule');
     });
 
     it('ví dụ Telegram: "gửi tin Telegram cho khách đang nhắn" → Trigger → send_telegram (hội thoại đang mở)', () => {
@@ -275,9 +320,10 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       expect(wizard.normalizeChannel('zalo')).toBe('zalo');
     });
 
-    it('lịch cho kênh adapter chỉ có "Gửi một lần"', () => {
+    it('lịch cho kênh adapter có cả "Gửi một lần" và chuỗi nhiều ngày (P7, kèm nhắc trần 5 tin)', () => {
       const opts = (q) => q.data.questions[0].options.map((o) => o.value);
-      expect(opts(wizard.buildScheduleQuestion('vi', { channel: 'telegram' }))).toEqual(['once']);
+      expect(opts(wizard.buildScheduleQuestion('vi', { channel: 'telegram' }))).toEqual(['once', 'drip']);
+      expect(wizard.buildScheduleQuestion('vi', { channel: 'whatsapp' }).data.questions[0].options[1].description).toContain('tối đa 5');
       expect(opts(wizard.buildScheduleQuestion('vi', { channel: 'email' }))).toEqual(['once', 'drip']);
       expect(opts(wizard.buildScheduleQuestion('vi'))).toEqual(['once', 'drip']);
     });

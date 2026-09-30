@@ -11,6 +11,7 @@ import { checkSheetForChannel } from '../ai/sheetRecipientCheck.service.js';
 import { MAX_SHEET_RECIPIENTS } from '../../utils/manualRecipients.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
+import { validateChannelSteps } from '../../utils/channelSteps.util.js';
 
 // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. `send_zalo` (chuỗi
 // cũ) đã BỎ: 0 node trên production, engine không còn xử lý (xem fallback bên dưới ~dòng 177 và
@@ -81,6 +82,14 @@ export async function validateCampaignPreflight({
     const subtype = String(node.node_subtype || '').trim();
     const adapterDescriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype(subtype);
     if (!adapterDescriptor) continue;
+    // P7 — tối đa 5 bước, độ trễ giữa các bước >= 0 (chặn cả cấu hình nhập bằng API/trợ lý AI, không chỉ FE).
+    const stepsProblem = validateChannelSteps(node?.config?.steps);
+    if (stepsProblem) {
+      const error = new Error(`${stepsProblem.message} (node ${node.id})`);
+      error.code = stepsProblem.code;
+      error.statusCode = 400;
+      throw error;
+    }
     try {
       // eslint-disable-next-line no-await-in-loop
       await adapterDescriptor.adapter.checkReadiness({ userId: workspaceOwnerId, node });
