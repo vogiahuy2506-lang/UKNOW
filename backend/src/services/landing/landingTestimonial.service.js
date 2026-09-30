@@ -202,7 +202,7 @@ class LandingTestimonialService {
       }
       const newKey = extractStorageKeyFromImageUrl(updatedRow.imageUrl);
       if (oldKey && oldKey !== newKey) {
-        await deleteUploadedFileIfAny(oldKey, 'landingTestimonial');
+        await deleteUploadedFileIfAny(oldKey, 'landingTestimonial', existing.idUser);
       }
       return updatedRow;
     }
@@ -214,7 +214,7 @@ class LandingTestimonialService {
     const row = await landingTestimonialRepository.updateById(id, mergePayload(imageUrl));
     const newKey = extractStorageKeyFromImageUrl(row.imageUrl);
     if (oldKey && oldKey !== newKey) {
-      await deleteUploadedFileIfAny(oldKey, 'landingTestimonial');
+      await deleteUploadedFileIfAny(oldKey, 'landingTestimonial', existing.idUser);
     }
     return row;
   }
@@ -241,7 +241,7 @@ class LandingTestimonialService {
       throw err;
     }
     if (fileKey) {
-      await deleteUploadedFileIfAny(fileKey, 'landingTestimonial');
+      await deleteUploadedFileIfAny(fileKey, 'landingTestimonial', existing.idUser);
     }
     return true;
   }

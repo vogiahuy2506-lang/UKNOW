@@ -181,7 +181,7 @@ class LandingFeaturedCourseService {
       }
       const newKey = extractStorageKeyFromImageUrl(updatedRow.imageUrl);
       if (oldKey && oldKey !== newKey) {
-        await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse');
+        await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse', existing.idUser);
       }
       return updatedRow;
     }
@@ -193,7 +193,7 @@ class LandingFeaturedCourseService {
     const row = await landingFeaturedCourseRepository.updateById(id, mergePayload(imageUrl));
     const newKey = extractStorageKeyFromImageUrl(row.imageUrl);
     if (oldKey && oldKey !== newKey) {
-      await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse');
+      await deleteUploadedFileIfAny(oldKey, 'landingFeaturedCourse', existing.idUser);
     }
     return row;
   }
@@ -217,7 +217,7 @@ class LandingFeaturedCourseService {
       throw err;
     }
     if (fileKey) {
-      await deleteUploadedFileIfAny(fileKey, 'landingFeaturedCourse');
+      await deleteUploadedFileIfAny(fileKey, 'landingFeaturedCourse', existing.idUser);
     }
     return true;
   }

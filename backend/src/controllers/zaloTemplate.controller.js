@@ -347,16 +347,17 @@ class ZaloTemplateController {
         : null;
       let finalAttachments = incomingAttachments ? [...incomingAttachments] : [...currentAttachments];
 
+      const currentKeys = new Set(currentAttachments.map(resolveAttachmentKey).filter(Boolean));
       const deletedKeys = new Set();
       if (Array.isArray(deletedAttachments)) {
         deletedAttachments.forEach((item) => {
           const key = resolveAttachmentKey(item);
-          if (key) deletedKeys.add(key);
+          // Chỉ nhận key đang là tệp đính kèm của CHÍNH mẫu này.
+          if (key && currentKeys.has(key)) deletedKeys.add(key);
         });
       }
 
       if (incomingAttachments) {
-        const currentKeys = new Set(currentAttachments.map(resolveAttachmentKey).filter(Boolean));
         const incomingKeys = new Set(incomingAttachments.map(resolveAttachmentKey).filter(Boolean));
         for (const key of currentKeys) {
           if (!incomingKeys.has(key)) {
@@ -432,8 +433,14 @@ class ZaloTemplateController {
         });
       }
 
-      if (deletedKeys.size > 0) {
-        await uploadController.deleteFromS3(Array.from(deletedKeys));
+      // Gỡ khỏi mẫu thì được, nhưng chỉ XOÁ tệp nằm trong không gian của chủ mẫu.
+      const ownedDeletedKeys = Array.from(deletedKeys).filter((key) => {
+        if (key.startsWith(`uploads/${templateOwnerUserId}/`)) return true;
+        console.warn(`[zaloTemplate.controller] Không xoá tệp ngoài workspace ${templateOwnerUserId} khi lưu mẫu ${id}: ${key}`);
+        return false;
+      });
+      if (ownedDeletedKeys.length > 0) {
+        await uploadController.deleteFromS3(ownedDeletedKeys, { ownerUserId: templateOwnerUserId });
       }
 
       await this.logMutation(req, AUDIT_ACTIONS.ZALO_TEMPLATE_UPDATED, template);
@@ -480,11 +487,15 @@ class ZaloTemplateController {
       await zaloTemplateRepository.delete({ id, userId, isAdmin });
       await this.logMutation(req, AUDIT_ACTIONS.ZALO_TEMPLATE_DELETED, template);
 
+      // Chỉ xoá tệp trong không gian của chủ mẫu.
+      const templateOwnerUserId = template.id_user || userId;
       const attachments = Array.isArray(template.attachments) ? template.attachments : [];
-      const fileKeys = attachments.map((att) => uploadController.normalizeStorageKey(att)).filter(Boolean);
+      const fileKeys = attachments
+        .map((att) => uploadController.normalizeStorageKey(att))
+        .filter((key) => key && key.startsWith(`uploads/${templateOwnerUserId}/`));
       if (fileKeys.length > 0) {
         try {
-          await uploadController.deleteFromS3(fileKeys);
+          await uploadController.deleteFromS3(fileKeys, { ownerUserId: templateOwnerUserId });
         } catch (deleteError) {
           console.error('Delete zalo template S3 warning:', deleteError);
         }

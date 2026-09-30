@@ -7,6 +7,7 @@ import { serverError } from '../helpers.js';
 import { getStorageBackend } from '../services/storage/storageBackend.js';
 import { isSuperAdmin } from '../utils/roleScope.util.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { escapeHtml } from '../utils/htmlEscape.util.js';
 
 class DownloadController {
   /**
@@ -22,13 +23,12 @@ class DownloadController {
     return getStorageBackend().stream(normalizedKey, res, { fileName, mimeType, preview });
   }
 
-  /** IP thực từ request (hỗ trợ proxy) */
+  /**
+   * IP thực từ request. Dùng `req.ip` (đã qua `trust proxy` chỉ tin nginx/Cloudflare — xem
+   * config/cloudflareIpRanges.js), không đọc thẳng X-Forwarded-For vì client tự đặt được.
+   */
   _getIp(req) {
-    return (
-      String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-      req.socket?.remoteAddress ||
-      null
-    );
+    return req.ip || req.socket?.remoteAddress || null;
   }
 
   /**
@@ -470,11 +470,19 @@ h2{color:#ef4444;margin:0 0 .75rem}p{color:#64748b;margin:0}</style></head>
 <body><div class="card"><h2>⚠️ Lỗi</h2><p>${message}</p></div></body></html>`;
   }
 
-  _viewerPage({ displayName, originalName, mimeType, previewUrl, downloadUrl }) {
-    const isImage = mimeType.startsWith('image/');
-    const isPdf   = mimeType === 'application/pdf';
-    const isVideo = mimeType.startsWith('video/');
-    const isAudio = mimeType.startsWith('audio/');
+  _viewerPage({ displayName: rawDisplayName, originalName: rawOriginalName, mimeType: rawMimeType, previewUrl: rawPreviewUrl, downloadUrl: rawDownloadUrl }) {
+    const isImage = rawMimeType.startsWith('image/');
+    const isPdf   = rawMimeType === 'application/pdf';
+    const isVideo = rawMimeType.startsWith('video/');
+    const isAudio = rawMimeType.startsWith('audio/');
+
+    // Tên tệp/MIME lấy từ DB (người dùng đặt được) — escape trước khi ghép vào HTML trả từ
+    // origin ứng dụng.
+    const displayName = escapeHtml(rawDisplayName);
+    const originalName = escapeHtml(rawOriginalName);
+    const mimeType = escapeHtml(rawMimeType);
+    const previewUrl = escapeHtml(rawPreviewUrl);
+    const downloadUrl = escapeHtml(rawDownloadUrl);
 
     let previewBlock = '';
     if (previewUrl) {

@@ -27,16 +27,17 @@ export function extractStorageKeyFromImageUrl(raw) {
 }
 
 /**
- * Xóa file trong thư mục uploads (lỗi I/O không throw).
+ * Xóa file trong thư mục uploads (lỗi I/O không throw). Chỉ xoá trong `uploads/<ownerUserId>/`.
  *
  * @param {string} storageKey
  * @param {string} [logTag]
+ * @param {number|string|null} [ownerUserId] chủ bản ghi (id_user) — thiếu thì không xoá gì
  * @returns {Promise<void>}
  */
-export async function deleteUploadedFileIfAny(storageKey, logTag = 'landingImageAsset') {
+export async function deleteUploadedFileIfAny(storageKey, logTag = 'landingImageAsset', ownerUserId = null) {
   if (!storageKey) return;
   try {
-    await uploadController.deleteFromS3([storageKey]);
+    await uploadController.deleteFromS3([storageKey], { ownerUserId });
   } catch (e) {
     console.warn(`[${logTag}] deleteUploadedFileIfAny`, storageKey, e?.message || e);
   }

@@ -405,6 +405,13 @@ class CampaignController {
       });
     } catch (error) {
       console.error('Update campaign error:', error);
+      if (error?.statusCode === 403) {
+        return res.status(403).json({
+          success: false,
+          code: error.code || 'PERMISSION_DENIED',
+          message: error.message,
+        });
+      }
       if (error?.statusCode === 404) {
         return res.status(404).json({
           success: false,
@@ -437,15 +444,15 @@ class CampaignController {
     try {
       const { id } = req.params;
 
-      const { fileKeysToDelete } = await campaignCrudService.deleteCampaign({
+      const { fileKeysToDelete, ownerUserId } = await campaignCrudService.deleteCampaign({
         campaignId: id,
         authUser: req.user,
       });
 
       if (fileKeysToDelete.length > 0) {
         try {
-          await uploadController.deleteFromS3(fileKeysToDelete);
-          console.log(`🗑️ Deleted ${fileKeysToDelete.length} local files for campaign ${id}`);
+          const result = await uploadController.deleteFromS3(fileKeysToDelete, { ownerUserId });
+          console.log(`🗑️ Deleted ${result?.deletedCount ?? 0}/${fileKeysToDelete.length} local files for campaign ${id}`);
         } catch (s3Error) {
           console.error('Error deleting local files for campaign:', id, s3Error);
         }

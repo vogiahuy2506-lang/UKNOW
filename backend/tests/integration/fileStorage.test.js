@@ -150,6 +150,28 @@ describe('GET /file/:token — handleView', () => {
     expect(res.text).toContain(`/file/${encodeURIComponent(token)}/download`);
   });
 
+  it('tên hiển thị / tên gốc chứa HTML → được escape trong trang xem', async () => {
+    const user = await createUser({ username: 'view-xss' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${user.id}/xss.png`,
+      content: 'PNG',
+    });
+    await insertTemplateFile({
+      idUser: user.id,
+      storageKey,
+      displayName: '<img src=x onerror=alert(1)>',
+      originalName: '"><script>alert(2)</script>.png',
+      mimeType: 'image/png',
+    });
+
+    const token = generateFileToken(storageKey, null, null, null);
+    const res = await request(app).get(`/file/${encodeURIComponent(token)}`);
+    expect(res.status).toBe(200);
+    expect(res.text).not.toContain('<img src=x onerror=alert(1)>');
+    expect(res.text).not.toContain('<script>alert(2)</script>');
+    expect(res.text).toContain('&lt;img src=x onerror=alert(1)&gt;');
+  });
+
   it('token hợp lệ + DB metadata + customerId+campaignId → log OPEN + customer_journey + cập nhật campaign_customers', async () => {
     const user = await createUser({ username: 'view-1' });
     const { rows: cusRows } = await db.query(
@@ -267,6 +289,74 @@ describe('GET /file/:token/download — handleDownload', () => {
     expect(res.status).toBe(200);
     expect(res.headers['content-disposition']).toBe('inline');
     expect(res.headers['cross-origin-resource-policy']).toBe('cross-origin');
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['content-security-policy']).toMatch(/^sandbox; default-src 'none'/);
+  });
+
+  it('?preview=true với SVG → vẫn attachment + nosniff + CSP sandbox (không inline trên origin ứng dụng)', async () => {
+    const { storageKey } = await writeFakeUpload({
+      relPath: 'pub/logo.svg',
+      content: '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>',
+    });
+    const token = generateFileToken(storageKey, null, null, null);
+    const res = await request(app)
+      .get(`/file/${encodeURIComponent(token)}/download?preview=true`)
+      .buffer(true)
+      .parse((response, cb) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toMatch(/^attachment; filename="logo\.svg"/);
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+    expect(res.headers['content-security-policy']).toMatch(/^sandbox;/);
+  });
+
+  it('?preview=true với tệp khai MIME text/html → attachment', async () => {
+    const user = await createUser({ username: 'preview-html' });
+    const { storageKey } = await writeFakeUpload({
+      relPath: `${user.id}/page.png`,
+      content: '<script>alert(1)</script>',
+    });
+    await insertTemplateFile({
+      idUser: user.id,
+      storageKey,
+      originalName: 'page.png',
+      mimeType: 'text/html',
+    });
+    const token = generateFileToken(storageKey, null, null, null);
+    const res = await request(app)
+      .get(`/file/${encodeURIComponent(token)}/download?preview=true`)
+      .buffer(true)
+      .parse((response, cb) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toMatch(/^attachment;/);
+    expect(res.headers['x-content-type-options']).toBe('nosniff');
+  });
+
+  it('?preview=true với PDF → inline, KHÔNG gắn CSP sandbox (trình xem PDF)', async () => {
+    const { storageKey } = await writeFakeUpload({
+      relPath: 'pub/doc.pdf',
+      content: '%PDF-1.4',
+    });
+    const token = generateFileToken(storageKey, null, null, null);
+    const res = await request(app)
+      .get(`/file/${encodeURIComponent(token)}/download?preview=true`)
+      .buffer(true)
+      .parse((response, cb) => {
+        const chunks = [];
+        response.on('data', (chunk) => chunks.push(chunk));
+        response.on('end', () => cb(null, Buffer.concat(chunks)));
+      });
+    expect(res.status).toBe(200);
+    expect(res.headers['content-disposition']).toBe('inline');
+    expect(res.headers['content-type']).toMatch(/^application\/pdf/);
+    expect(res.headers['content-security-policy']).toBeUndefined();
   });
 
   it('mount alias /download/:token/download cũng hoạt động', async () => {
@@ -668,6 +758,72 @@ describe('GET /lp-assets/* (Landing Assets)', () => {
 
     const res = await request(app).get(`/lp-assets/${storageKey}`);
     expect(res.status).toBe(404);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// Xoá tệp đính kèm mẫu email — chỉ trong không gian `uploads/<chủ mẫu>/`
+// ═══════════════════════════════════════════════════════════════════════
+describe('Xoá tệp đính kèm mẫu email — chỉ trong không gian chủ mẫu', () => {
+  async function fileExists(absPath) {
+    return fs.access(absPath).then(() => true, () => false);
+  }
+
+  async function insertEmailTemplate(ownerId, attachments = []) {
+    const { rows } = await db.query(
+      `INSERT INTO email_templates (id_user, template_name, subject, body_html, attachments)
+       VALUES ($1, 'Mẫu', 'Tiêu đề', '<p>x</p>', $2::jsonb) RETURNING id`,
+      [ownerId, JSON.stringify(attachments)]
+    );
+    return rows[0].id;
+  }
+
+  it('PUT với deletedAttachments trỏ tệp workspace khác → tệp và dòng sổ của chủ kia còn nguyên', async () => {
+    const victim = await createUser({ username: 'del-victim-1' });
+    const actor = await createUser({ username: 'del-actor-1' });
+    const victimFile = await writeFakeUpload({ relPath: `${victim.id}/bi-mat.pdf`, content: 'SECRET' });
+    await insertTrackedWorkspaceFile({ ownerUserId: victim.id, storageKey: victimFile.storageKey });
+    const templateId = await insertEmailTemplate(actor.id);
+    const token = await loginAs(actor);
+
+    const res = await request(app)
+      .put(`/api/email-templates/${templateId}`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ attachments: [], deletedAttachments: [victimFile.storageKey, { key: victimFile.storageKey }] });
+
+    expect(res.status).toBe(200);
+    expect(await fileExists(victimFile.absPath)).toBe(true);
+    const { rows } = await db.query(`SELECT state FROM storage_objects WHERE storage_key = $1`, [victimFile.storageKey]);
+    expect(rows[0].state).toBe('active');
+  });
+
+  it('DELETE mẫu có attachments trỏ tệp workspace khác → chỉ xoá tệp của chính chủ mẫu', async () => {
+    const victim = await createUser({ username: 'del-victim-2' });
+    const actor = await createUser({ username: 'del-actor-2' });
+    const victimFile = await writeFakeUpload({ relPath: `${victim.id}/bi-mat.pdf`, content: 'SECRET' });
+    const ownFile = await writeFakeUpload({ relPath: `${actor.id}/cua-toi.pdf`, content: 'MINE' });
+    await insertTrackedWorkspaceFile({ ownerUserId: victim.id, storageKey: victimFile.storageKey });
+    await insertTrackedWorkspaceFile({ ownerUserId: actor.id, storageKey: ownFile.storageKey });
+    const templateId = await insertEmailTemplate(actor.id, [
+      { key: ownFile.storageKey, originalName: 'cua-toi.pdf' },
+      { key: victimFile.storageKey, originalName: 'bi-mat.pdf' },
+    ]);
+    const token = await loginAs(actor);
+
+    const res = await request(app)
+      .delete(`/api/email-templates/${templateId}`)
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(await fileExists(victimFile.absPath)).toBe(true);
+    expect(await fileExists(ownFile.absPath)).toBe(false);
+    const { rows } = await db.query(
+      `SELECT storage_key, state FROM storage_objects WHERE storage_key = ANY($1::text[])`,
+      [[victimFile.storageKey, ownFile.storageKey]]
+    );
+    const stateByKey = Object.fromEntries(rows.map((row) => [row.storage_key, row.state]));
+    expect(stateByKey[victimFile.storageKey]).toBe('active');
+    expect(stateByKey[ownFile.storageKey]).toBe('deleted');
   });
 });
 

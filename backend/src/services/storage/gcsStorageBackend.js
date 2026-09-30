@@ -1,4 +1,5 @@
 import { Storage } from '@google-cloud/storage';
+import { resolveFileServePolicy } from '../../utils/fileServePolicy.util.js';
 
 export class GcsStorageBackend {
   constructor({
@@ -122,6 +123,9 @@ export class GcsStorageBackend {
   /**
    * Phục vụ stream file bằng cách 302 Redirect sang Signed URL hạn ngắn (15 phút).
    * Không proxy byte qua tiến trình Node.js để tránh phình RAM/băng thông.
+   * Cùng chính sách với LocalStorageBackend: `inline` chỉ cho loại tệp an toàn, loại khác luôn
+   * `attachment`; khi inline, Content-Type của signed URL được ép về đúng loại an toàn thay vì
+   * dùng metadata đã lưu trên object.
    * @param {string} key
    * @param {import('express').Response} res
    * @param {object} [options]
@@ -135,18 +139,17 @@ export class GcsStorageBackend {
     const [exists] = await file.exists().catch(() => [false]);
     if (!exists) return false;
 
-    const safeName = String(fileName || 'file').replace(/"/g, '');
-    const disposition = preview ? 'inline' : `attachment; filename="${safeName}"`;
+    const policy = resolveFileServePolicy({ mimeType, storageKey: cleanKey, fileName, preview });
 
     const ttl = Number(signedUrlTtlMs) > 0 ? Number(signedUrlTtlMs) : 15 * 60 * 1000;
     const signOptions = {
       version: 'v4',
       action: 'read',
       expires: Date.now() + ttl,
-      responseDisposition: disposition,
+      responseDisposition: policy.disposition,
     };
-    if (mimeType) {
-      signOptions.responseType = mimeType;
+    if (policy.contentType) {
+      signOptions.responseType = policy.contentType;
     }
 
     const [signedUrl] = await file.getSignedUrl(signOptions);

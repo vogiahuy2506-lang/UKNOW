@@ -135,8 +135,10 @@ class UploadController {
     const key = this.normalizeStorageKey(storageKey);
     if (!key) return '';
     const relativePath = key.slice('uploads/'.length);
-    const resolvedPath = path.resolve(this.uploadsRootDir, relativePath);
-    if (!resolvedPath.startsWith(this.uploadsRootDir)) return '';
+    const rootDir = path.resolve(this.uploadsRootDir);
+    const resolvedPath = path.resolve(rootDir, relativePath);
+    // So khớp kèm dấu phân cách: `<root>-khac/...` có cùng tiền tố chuỗi nhưng nằm ngoài root.
+    if (resolvedPath !== rootDir && !resolvedPath.startsWith(rootDir + path.sep)) return '';
     return resolvedPath;
   }
 
@@ -456,21 +458,45 @@ class UploadController {
 
   // Xóa files từ permanent storage
   /**
-   * Xóa một hoặc nhiều file theo storage key.
+   * Xóa một hoặc nhiều file theo storage key, CHỈ trong không gian `uploads/<ownerUserId>/`.
+   *
+   * Key đến từ dữ liệu client ghi được (attachments của mẫu, config node chiến dịch, URL ảnh...),
+   * nên key ngoài không gian của chủ tài nguyên bị bỏ qua (log cảnh báo). Thiếu `ownerUserId`
+   * thì không xóa gì (log lỗi) — không bao giờ xóa theo key chưa xác định được chủ.
+   *
    * @param {string[]} fileKeys - Mảng storage key cần xóa
-   * @returns {Promise<{success: boolean, deletedCount: number, errors: Array}>}
+   * @param {{ ownerUserId?: number|string|null }} [options] - chủ workspace sở hữu tài nguyên
+   * @returns {Promise<{success: boolean, deletedCount: number, skippedCount: number, errors: Array}>}
    */
-  async deleteFromS3(fileKeys) {
+  async deleteFromS3(fileKeys, { ownerUserId = null } = {}) {
     try {
       if (!fileKeys || fileKeys.length === 0) {
-        return { success: true, deletedCount: 0, errors: [] };
+        return { success: true, deletedCount: 0, skippedCount: 0, errors: [] };
       }
 
+      const ownerId = Number.parseInt(ownerUserId, 10);
+      if (!Number.isSafeInteger(ownerId) || ownerId <= 0 || String(ownerId) !== String(ownerUserId).trim()) {
+        console.error(`[Upload] deleteFromS3: thiếu/sai ownerUserId (${ownerUserId}) — không xóa ${fileKeys.length} tệp`);
+        return {
+          success: false,
+          deletedCount: 0,
+          skippedCount: fileKeys.length,
+          errors: [{ key: null, message: 'Thiếu chủ sở hữu tệp' }],
+        };
+      }
+      const ownerPrefix = `uploads/${ownerId}/`;
+
       let deletedCount = 0;
+      let skippedCount = 0;
       const errors = [];
       for (const rawKey of fileKeys) {
         const normalizedKey = this.normalizeStorageKey(rawKey);
         if (!normalizedKey) continue;
+        if (!normalizedKey.startsWith(ownerPrefix)) {
+          skippedCount += 1;
+          console.warn(`[Upload] deleteFromS3: bỏ qua key không thuộc workspace ${ownerId}: ${normalizedKey}`);
+          continue;
+        }
         try {
           // eslint-disable-next-line no-await-in-loop
           await markDeletedAfterUnlink({
@@ -487,6 +513,7 @@ class UploadController {
       return {
         success: true,
         deletedCount,
+        skippedCount,
         errors,
       };
     } catch (error) {

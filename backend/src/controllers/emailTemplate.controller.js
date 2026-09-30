@@ -372,18 +372,19 @@ class EmailTemplateController {
         : null;
       let finalAttachments = incomingAttachments ? [...incomingAttachments] : [...currentAttachments];
 
+      const currentKeys = new Set(
+        currentAttachments.map(resolveAttachmentKey).filter(Boolean)
+      );
       const deletedKeys = new Set();
       if (Array.isArray(deletedAttachments)) {
         deletedAttachments.forEach((item) => {
           const key = resolveAttachmentKey(item);
-          if (key) deletedKeys.add(key);
+          // Chỉ nhận key đang là tệp đính kèm của CHÍNH mẫu này.
+          if (key && currentKeys.has(key)) deletedKeys.add(key);
         });
       }
 
       if (incomingAttachments) {
-        const currentKeys = new Set(
-          currentAttachments.map(resolveAttachmentKey).filter(Boolean)
-        );
         const incomingKeys = new Set(
           incomingAttachments.map(resolveAttachmentKey).filter(Boolean)
         );
@@ -468,8 +469,14 @@ class EmailTemplateController {
         await this.syncTemplateFiles(item.id, finalAttachments);
       }
 
-      if (deletedKeys.size > 0) {
-        await uploadController.deleteFromS3(Array.from(deletedKeys));
+      // Gỡ khỏi mẫu thì được, nhưng chỉ XOÁ tệp nằm trong không gian của chủ mẫu.
+      const ownedDeletedKeys = Array.from(deletedKeys).filter((key) => {
+        if (key.startsWith(`uploads/${templateOwnerUserId}/`)) return true;
+        console.warn(`[emailTemplate.controller] Không xoá tệp ngoài workspace ${templateOwnerUserId} khi lưu mẫu ${id}: ${key}`);
+        return false;
+      });
+      if (ownedDeletedKeys.length > 0) {
+        await uploadController.deleteFromS3(ownedDeletedKeys, { ownerUserId: templateOwnerUserId });
       }
 
       await this.logMutation(req, AUDIT_ACTIONS.EMAIL_TEMPLATE_UPDATED, item);
@@ -518,19 +525,20 @@ class EmailTemplateController {
       }
 
       const attachments = template.attachments;
+      const templateOwnerUserId = template.id_user || userId;
 
       // Delete template từ database
       await emailTemplateRepository.delete({ id, userId, isAdmin });
       await this.logMutation(req, AUDIT_ACTIONS.EMAIL_TEMPLATE_DELETED, template);
 
-      // Xóa files local nếu có attachments
-      if (attachments && attachments.length > 0) {
+      // Xóa files local nếu có attachments — chỉ tệp trong không gian của chủ mẫu.
+      if (Array.isArray(attachments) && attachments.length > 0) {
         try {
           const fileKeys = attachments
             .map((att) => uploadController.normalizeStorageKey(att))
-            .filter(Boolean);
+            .filter((key) => key && key.startsWith(`uploads/${templateOwnerUserId}/`));
           if (fileKeys.length > 0) {
-            await uploadController.deleteFromS3(fileKeys);
+            await uploadController.deleteFromS3(fileKeys, { ownerUserId: templateOwnerUserId });
           }
         } catch (s3Error) {
           // Log error nhưng không fail vì template đã được xóa

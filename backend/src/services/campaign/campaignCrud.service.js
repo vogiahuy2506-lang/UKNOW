@@ -37,6 +37,33 @@ function createConflictError(message) {
   return err;
 }
 
+/**
+ * Trạng thái mà `PUT /campaigns/:id` được đặt không cần `campaigns_run` — đều là trạng thái
+ * KHÔNG gửi tin. Chuyển sang trạng thái khác (active...) là kích hoạt/phát hành, cùng quyền với
+ * POST /:id/publish (docs/employee-route-policy-matrix.md).
+ */
+const STATUSES_WITHOUT_RUN_PERMISSION = new Set(['draft', 'paused']);
+
+/**
+ * Nhân viên thiếu `campaigns_run` không được đổi trạng thái chiến dịch sang trạng thái gửi được.
+ * Chủ workspace và super admin giữ toàn quyền (cùng quy tắc với requirePermission).
+ *
+ * @param {object} context kết quả resolveCampaignContext
+ * @param {unknown} nextStatus status client gửi (undefined/null = không đổi)
+ * @param {string|null} currentStatus
+ */
+function assertCanChangeCampaignStatus(context, nextStatus, currentStatus) {
+  if (nextStatus === undefined || nextStatus === null) return;
+  if (String(nextStatus) === String(currentStatus ?? '')) return;
+  if (STATUSES_WITHOUT_RUN_PERMISSION.has(String(nextStatus))) return;
+  if (context.isSuperAdmin || context.contextType !== 'employee') return;
+  if (context.permissions?.campaigns_run === true) return;
+  const error = new Error('Bạn không có quyền kích hoạt chiến dịch (cần quyền campaigns_run)');
+  error.statusCode = 403;
+  error.code = 'PERMISSION_DENIED';
+  throw error;
+}
+
 function resolveCampaignContext({ authUser = null, userId = null, roleCode = null, workspaceOwnerId = null } = {}) {
   if (authUser) return getWorkspaceContext(authUser);
   return {
@@ -376,6 +403,8 @@ class CampaignCrudService {
         throw createNotFoundError();
       }
 
+      assertCanChangeCampaignStatus(context, status, existing.status);
+
       if (isContentUpdate) {
         const hasRunning = await campaignCrudRepository.hasRunningRunTx(client, campaignId);
         if (hasRunning) {
@@ -521,9 +550,11 @@ class CampaignCrudService {
 
   /**
    * Xóa campaign (CASCADE nodes/connections) và thu thập file keys cần dọn S3.
+   * `config.attachments` của node do client ghi, nên chỉ giữ key trong không gian
+   * `uploads/<chủ workspace của chiến dịch>/`; `ownerUserId` đi kèm để lớp xoá kiểm lại.
    *
    * @param {object} input
-   * @returns {Promise<{ fileKeysToDelete: string[] }>}
+   * @returns {Promise<{ fileKeysToDelete: string[], ownerUserId: number }>}
    */
   async deleteCampaign({ campaignId, authUser, userId, roleCode, workspaceOwnerId }) {
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
@@ -583,7 +614,15 @@ class CampaignCrudService {
       });
       await client.query('COMMIT');
 
-      return { fileKeysToDelete: allFileKeysToDelete };
+      const campaignOwnerId = Number(existing.workspace_owner_id || existing.id_user);
+      const ownerPrefix = `uploads/${campaignOwnerId}/`;
+      const fileKeysToDelete = [...new Set(allFileKeysToDelete)].filter((key) => {
+        if (key.startsWith(ownerPrefix)) return true;
+        console.warn(`[CampaignCrud] Không xoá tệp ngoài workspace ${campaignOwnerId} khi xoá chiến dịch ${campaignId}: ${key}`);
+        return false;
+      });
+
+      return { fileKeysToDelete, ownerUserId: campaignOwnerId };
     } catch (error) {
       await client.query('ROLLBACK');
       throw error;

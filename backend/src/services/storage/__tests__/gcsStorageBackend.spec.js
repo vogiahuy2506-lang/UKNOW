@@ -98,6 +98,44 @@ describe('GcsStorageBackend', () => {
     expect(res.redirect).toHaveBeenCalledWith(302, 'https://storage.googleapis.com/signed-url');
   });
 
+  it('stream preview SVG → signed URL ép attachment (không inline)', async () => {
+    const res = { setHeader: jest.fn(), redirect: jest.fn() };
+
+    const success = await backend.stream('uploads/1/logo.svg', res, {
+      fileName: 'logo.svg',
+      mimeType: 'image/svg+xml',
+      preview: true,
+    });
+
+    expect(success).toBe(true);
+    expect(mockFile.getSignedUrl).toHaveBeenCalledWith(
+      expect.objectContaining({
+        responseDisposition: 'attachment; filename="logo.svg"',
+        responseType: 'image/svg+xml',
+      })
+    );
+  });
+
+  it('stream preview HTML không khai MIME → attachment, không ép responseType', async () => {
+    const res = { setHeader: jest.fn(), redirect: jest.fn() };
+
+    await backend.stream('uploads/1/page.html', res, { fileName: 'page.html', preview: true });
+
+    const signOptions = mockFile.getSignedUrl.mock.calls[0][0];
+    expect(signOptions.responseDisposition).toBe('attachment; filename="page.html"');
+    expect(signOptions).not.toHaveProperty('responseType');
+  });
+
+  it('stream preview ảnh PNG không khai MIME → inline, responseType ép image/png (bỏ metadata đã lưu)', async () => {
+    const res = { setHeader: jest.fn(), redirect: jest.fn() };
+
+    await backend.stream('uploads/1/photo.png', res, { fileName: 'photo.png', preview: true });
+
+    expect(mockFile.getSignedUrl).toHaveBeenCalledWith(
+      expect.objectContaining({ responseDisposition: 'inline', responseType: 'image/png' })
+    );
+  });
+
   it('stream returns false if object does not exist', async () => {
     mockFile.exists.mockResolvedValueOnce([false]);
     const res = { redirect: jest.fn() };

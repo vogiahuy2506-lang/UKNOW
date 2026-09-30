@@ -514,6 +514,53 @@ describe('Campaign employee workspace ownership', () => {
     );
     expect(rows[0].total).toBe(1);
   });
+
+  it('employee thiếu campaigns_run đổi status sang active qua PUT → 403, status giữ nguyên', async () => {
+    const owner = await createUser({ role: 'user', username: 'status_owner' });
+    const employee = await createUser({ role: 'user', username: 'status_employee' });
+    await addCampaignMembership(owner.id, employee.id, { campaigns_run: false });
+    const campaign = await insertCampaign({ ownerId: owner.id, status: 'draft' });
+    await insertNode({ campaignId: campaign.id });
+
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .put(`/api/campaigns/${campaign.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ status: 'active' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('PERMISSION_DENIED');
+    const { rows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaign.id]);
+    expect(rows[0].status).toBe('draft');
+
+    // Sửa nội dung (không đổi status) vẫn được.
+    const renameRes = await request(app)
+      .put(`/api/campaigns/${campaign.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ campaignName: 'Đổi tên bởi nhân viên' });
+    expect(renameRes.status).toBe(200);
+  });
+
+  it('employee có campaigns_run đổi status sang active qua PUT → 200', async () => {
+    const owner = await createUser({ role: 'user', username: 'status_owner_run' });
+    const employee = await createUser({ role: 'user', username: 'status_employee_run' });
+    await addCampaignMembership(owner.id, employee.id, { campaigns_run: true });
+    const campaign = await insertCampaign({ ownerId: owner.id, status: 'draft' });
+    await insertNode({ campaignId: campaign.id });
+
+    const token = await loginAs(employee);
+    const res = await request(app)
+      .put(`/api/campaigns/${campaign.id}`)
+      .set('Authorization', `Bearer ${token}`)
+      .set('X-Owner-Context', String(owner.id))
+      .send({ status: 'active' });
+
+    expect(res.status).toBe(200);
+    const { rows } = await db.query('SELECT status FROM campaigns WHERE id = $1', [campaign.id]);
+    expect(rows[0].status).toBe('active');
+  });
 });
 
 // ===========================================================================

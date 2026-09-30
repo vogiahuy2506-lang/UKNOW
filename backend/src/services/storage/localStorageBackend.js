@@ -1,5 +1,9 @@
 import path from 'path';
 import { promises as fs } from 'fs';
+import {
+  applyUploadedFileSecurityHeaders,
+  resolveFileServePolicy,
+} from '../../utils/fileServePolicy.util.js';
 
 const UPLOADS_ROOT_DIR = path.resolve(process.cwd(), 'uploads');
 const TEMP_DIR = path.resolve(process.cwd(), 'temp_uploads');
@@ -28,8 +32,10 @@ export class LocalStorageBackend {
     if (key.includes('..')) return '';
     const cleanKey = key.replace(/\\/g, '/');
     const relativePath = cleanKey.slice('uploads/'.length);
-    const resolvedPath = path.resolve(this.uploadsRootDir, relativePath);
-    if (!resolvedPath.startsWith(this.uploadsRootDir)) return '';
+    const rootDir = path.resolve(this.uploadsRootDir);
+    const resolvedPath = path.resolve(rootDir, relativePath);
+    // So khớp kèm dấu phân cách: `<root>-khac/...` có cùng tiền tố chuỗi nhưng nằm ngoài root.
+    if (resolvedPath !== rootDir && !resolvedPath.startsWith(rootDir + path.sep)) return '';
     return resolvedPath;
   }
 
@@ -100,7 +106,9 @@ export class LocalStorageBackend {
   }
 
   /**
-   * Trả file ra HTTP response
+   * Trả file ra HTTP response.
+   * `preview` chỉ cho `inline` với loại tệp an toàn (ảnh raster, PDF, audio/video, text/plain) —
+   * loại khác luôn `attachment`; luôn kèm `nosniff`, và CSP sandbox cho mọi loại trừ PDF.
    * @param {string} key
    * @param {import('express').Response} res
    * @param {object} [options]
@@ -115,12 +123,14 @@ export class LocalStorageBackend {
       return false;
     }
 
-    const safeName = String(fileName || 'file').replace(/"/g, '');
-    const disposition = preview ? 'inline' : `attachment; filename="${safeName}"`;
-    if (mimeType) {
-      res.setHeader('Content-Type', mimeType);
+    const policy = resolveFileServePolicy({ mimeType, storageKey: absPath, fileName, preview });
+    // Có contentType thì đặt tường minh (sendFile không ghi đè); không có thì sendFile tự suy
+    // theo đuôi — loại suy ra đó không nằm trong danh sách inline nên đã bị ép `attachment`.
+    if (policy.contentType) {
+      res.setHeader('Content-Type', policy.contentType);
     }
-    res.setHeader('Content-Disposition', disposition);
+    res.setHeader('Content-Disposition', policy.disposition);
+    applyUploadedFileSecurityHeaders(res, policy);
     if (preview) {
       res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
     }
