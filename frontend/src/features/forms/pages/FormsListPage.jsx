@@ -159,7 +159,16 @@ export default function FormsListPage() {
                         )}
                       </td>
                       <td className="py-4 px-4 sm:px-6">
-                        {form.isPublished ? (
+                        {/* Admin tắt biểu mẫu (admin_disabled_at) thì khách KHÔNG nộp được dù is_published=true —
+                            chủ phải thấy "Đã bị tắt" chứ không phải "Đã xuất bản" (giống trang admin). */}
+                        {form.adminDisabledAt ? (
+                          <span
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-red-50 text-red-700 border border-red-200"
+                            title={t('forms.listPage.statusAdminDisabledHint')}
+                          >
+                            {t('forms.listPage.statusAdminDisabled')}
+                          </span>
+                        ) : form.isPublished ? (
                           <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-green-50 text-green-700 border border-green-200">
                             {t('forms.isPublished')}
                           </span>

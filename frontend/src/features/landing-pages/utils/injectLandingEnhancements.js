@@ -83,28 +83,33 @@ export function restoreOriginalHttpAnchors(html) {
 
 /**
  * Xem trước gần đúng bản sẽ lưu (strip + khôi phục link gốc + inject script) — dùng origin + VITE_API_URL hiện tại.
- * Inject CẢ lp-track.js + founderai-capture.js để preview đồng nhất với backend.
+ * Chỉ inject founderai-capture.js (bắt form) để preview giống bản thật; KHÔNG inject lp-track.js.
+ *
+ * Vì sao bỏ lp-track.js ở preview (C2-01): iframe trình soạn nạp lại mỗi lần chủ sửa nội dung, và
+ * lp-track.js gọi `POST /public/landing-analytics/view` mỗi lần nạp (+ ghi `click` khi bấm liên kết ngoài).
+ * Server ghi view nếu landing đã xuất bản → chủ ngồi chỉnh sửa tự cộng lượt xem/click giả vào thống kê.
+ * Bản LƯU vẫn có lp-track.js (backend `landingHtmlInjection.util.js` chèn lúc lưu) nên số liệu thật không đổi.
  */
 export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBase }) {
   const s = String(slug || '').trim().toLowerCase();
   if (!s) return String(html ?? '');
   let out = stripFounderLandingAutoBlocks(html);
   out = restoreOriginalHttpAnchors(out);
-  out = injectLandingEnhancements(out, { slug: s, frontendOrigin, apiBase });
+  out = injectLandingEnhancements(out, { slug: s, frontendOrigin, apiBase, includeTracking: false });
   return out;
 }
 
 /**
  * Chèn `lp-track.js` + `founderai-capture.js` vào HTML landing page.
- * * lp-track.js: tracking view + click
+ * * lp-track.js: tracking view + click (bỏ qua khi `includeTracking: false` — chế độ xem trước của chủ)
  * * founderai-capture.js: auto-capture form (tự động suy name từ id/placeholder,
  *   dùng capture phase để ưu tiên hơn custom submit handler).
  *
  * @param {string} html
- * @param {{ slug: string, frontendOrigin: string, apiBase: string }} opts
+ * @param {{ slug: string, frontendOrigin: string, apiBase: string, includeTracking?: boolean }} opts
  * @returns {string}
  */
-export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase }) {
+export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase, includeTracking = true }) {
   const s = String(slug || '').trim().toLowerCase();
   let out = String(html ?? '');
   if (!s) return out;
@@ -124,7 +129,7 @@ export function injectLandingEnhancements(html, { slug, frontendOrigin, apiBase 
   const hasCaptureScript = /founderai-capture\.js/i.test(out);
 
   let scriptBlock = '';
-  if (!hasTrackScript) {
+  if (includeTracking && !hasTrackScript) {
     scriptBlock += `<script src="${trackScriptSrc}" data-api-base="${api}" data-slug="${s}" defer></script>\n`;
   }
   if (!hasCaptureScript) {

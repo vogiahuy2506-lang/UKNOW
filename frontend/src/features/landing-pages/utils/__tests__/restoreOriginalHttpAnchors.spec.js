@@ -30,7 +30,10 @@ describe('restoreOriginalHttpAnchors & prepareLandingHtmlForPreview (Clean URLs)
     });
     expect(out).toContain('href="https://digiso.vn"');
     expect(out).not.toContain('landing-track/go');
-    expect(out).toContain('lp-track.js');
+    // PR-10: xem trước KHÔNG nạp lp-track.js (chủ ngồi soạn không được cộng lượt xem/click giả) —
+    // vẫn nạp founderai-capture.js để form chạy giống bản thật.
+    expect(out).not.toContain('lp-track.js');
+    expect(out).toContain('founderai-capture.js');
   });
 
   it('prepareLandingHtmlForPreview khôi phục các link từng bị rewrite trước đó', () => {

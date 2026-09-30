@@ -19,12 +19,12 @@ function buildLeadWhere(filters) {
 
   if (useDateRange && dateFrom) {
     conditions.push(`created_at >= $${idx}::timestamptz`);
-    params.push(`${dateFrom}T00:00:00.000Z`);
+    params.push(`${dateFrom}T00:00:00.000+07:00`); // ngày VN, không UTC (C2-04)
     idx += 1;
   }
   if (useDateRange && dateTo) {
     conditions.push(`created_at <= $${idx}::timestamptz`);
-    params.push(`${dateTo}T23:59:59.999Z`);
+    params.push(`${dateTo}T23:59:59.999+07:00`); // ngày VN, không UTC (C2-04)
     idx += 1;
   }
   if (occupations.length > 0) {
@@ -257,12 +257,12 @@ class LeadRepository {
     let idx = 1;
     if (dateFrom) {
       conditions.push(`created_at >= $${idx}::timestamptz`);
-      params.push(`${dateFrom}T00:00:00.000Z`);
+      params.push(`${dateFrom}T00:00:00.000+07:00`); // ngày VN, không UTC (C2-04)
       idx += 1;
     }
     if (dateTo) {
       conditions.push(`created_at <= $${idx}::timestamptz`);
-      params.push(`${dateTo}T23:59:59.999Z`);
+      params.push(`${dateTo}T23:59:59.999+07:00`); // ngày VN, không UTC (C2-04)
       idx += 1;
     }
     if (scope?.isSuperAdmin !== true) {

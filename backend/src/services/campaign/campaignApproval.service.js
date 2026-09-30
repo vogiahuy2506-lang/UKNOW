@@ -2,24 +2,15 @@ import db from '../../config/database.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../audit.service.js';
 
 /**
- * Ngưỡng duyệt chiến dịch (users.employee_campaign_approval_threshold) — nhân viên chạy chiến dịch
- * vượt ngưỡng thì phải chờ chủ duyệt. Tách khỏi campaign.controller.js#run() để scheduler
- * (utils/scheduler.js) dùng chung, tránh né qua đường hẹn lịch (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28
- * mục 4, PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-3).
+ * Số người nhận ƯỚC TÍNH của chiến dịch — MỘT nguồn cho ngưỡng duyệt (evaluateApprovalThreshold) và cho
+ * hộp thoại "Duyệt & gửi" (danh sách chiến dịch). Trước đây hộp thoại đọc `totalCustomers` của API danh
+ * sách (= COUNT(campaign_customers)), luôn 0 với chiến dịch nhân viên gửi lên chờ duyệt vì chưa chạy lần
+ * nào → chủ bấm duyệt đợt gửi lớn khi màn nói "0 người nhận" (C-28).
  *
- * @param {{ ownerId: number, campaignId: number }} input
- * @returns {Promise<{ threshold: number|null, totalCustomers: number, requiresApproval: boolean }>}
+ * @param {number|string} campaignId
+ * @returns {Promise<number>}
  */
-export async function evaluateApprovalThreshold({ ownerId, campaignId }) {
-  const { rows: ownerRows } = await db.query(
-    `SELECT employee_campaign_approval_threshold FROM users WHERE id = $1`,
-    [ownerId]
-  );
-  const threshold = ownerRows[0]?.employee_campaign_approval_threshold;
-  if (threshold == null || threshold <= 0) {
-    return { threshold: null, totalCustomers: 0, requiresApproval: false };
-  }
-
+export async function countCampaignRecipientsEstimate(campaignId) {
   const { rows: countRows } = await db.query(
     `SELECT COUNT(*)::int AS count FROM campaign_customers WHERE id_campaign = $1`,
     [campaignId]
@@ -45,6 +36,29 @@ export async function evaluateApprovalThreshold({ ownerId, campaignId }) {
       }
     }
   }
+  return totalCustomers;
+}
+
+/**
+ * Ngưỡng duyệt chiến dịch (users.employee_campaign_approval_threshold) — nhân viên chạy chiến dịch
+ * vượt ngưỡng thì phải chờ chủ duyệt. Tách khỏi campaign.controller.js#run() để scheduler
+ * (utils/scheduler.js) dùng chung, tránh né qua đường hẹn lịch (RA_SOAT_NHAN_VIEN_PHAN_QUYEN_2026-09-28
+ * mục 4, PLAN_VA_NHAN_VIEN_PHAN_QUYEN PR-3).
+ *
+ * @param {{ ownerId: number, campaignId: number }} input
+ * @returns {Promise<{ threshold: number|null, totalCustomers: number, requiresApproval: boolean }>}
+ */
+export async function evaluateApprovalThreshold({ ownerId, campaignId }) {
+  const { rows: ownerRows } = await db.query(
+    `SELECT employee_campaign_approval_threshold FROM users WHERE id = $1`,
+    [ownerId]
+  );
+  const threshold = ownerRows[0]?.employee_campaign_approval_threshold;
+  if (threshold == null || threshold <= 0) {
+    return { threshold: null, totalCustomers: 0, requiresApproval: false };
+  }
+
+  const totalCustomers = await countCampaignRecipientsEstimate(campaignId);
 
   return { threshold, totalCustomers, requiresApproval: totalCustomers >= threshold };
 }

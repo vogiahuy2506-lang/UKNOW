@@ -181,7 +181,7 @@ class CampaignController {
    */
   async getAll(req, res) {
     try {
-      const { page = 1, limit = 10, status, type, search, origin, state } = req.query;
+      const { page = 1, limit = 10, status, type, search, origin, state, excludeDraft } = req.query;
 
       if (state !== undefined && state !== null && state !== '') {
         if (!['running', 'scheduled', 'inactive', 'draft'].includes(state)) {
@@ -201,6 +201,8 @@ class CampaignController {
         search,
         origin,
         state: state || undefined,
+        // Bỏ chiến dịch nháp ngay trong SQL — `/app/customers` cần phân trang + tổng đúng (C-09).
+        excludeDraft: ['1', 'true'].includes(String(excludeDraft ?? '').toLowerCase()) || undefined,
       });
 
       res.json({

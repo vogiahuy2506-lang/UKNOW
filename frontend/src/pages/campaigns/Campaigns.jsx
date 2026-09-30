@@ -535,6 +535,11 @@ const Campaigns = () => {
                 <option value="email">{t('campaigns.email')}</option>
                 <option value="zalo">{t('campaigns.zaloPersonal')}</option>
                 <option value="zalo_group">{t('campaigns.zaloGroup')}</option>
+                {telegramChannelEnabled && <option value="telegram">{t('campaigns.telegram')}</option>}
+                {telegramChannelEnabled && <option value="telegram_group">{t('campaigns.telegramGroup')}</option>}
+                {whatsappChannelEnabled && <option value="whatsapp">{t('campaigns.whatsapp')}</option>}
+                {/* Chiến dịch đa kênh do AI tạo (+ Telegram cũ 28–29/09) có loại 'mixed' và nhãn "Đa kênh" ở cột Loại — phải lọc được (C-10). */}
+                <option value="mixed">{t('campaigns.multiChannel')}</option>
               </select>
             </div>
           </div>
@@ -574,7 +579,7 @@ const Campaigns = () => {
                       <th>{t('campaigns.createdBy')}</th>
                       <th>{t('campaigns.createdAt')}</th>
                       <th>{t('campaigns.updatedAt')}</th>
-                      <th>{t('campaigns.completed')}</th>
+                      <th title={t('campaigns.completedRunsHint')}>{t('campaigns.completedRuns')}</th>
                       <th className="text-right">{t('common.actions')}</th>
                     </tr>
                   </thead>
@@ -674,7 +679,8 @@ const Campaigns = () => {
                                 )}
                                 {activePause && (
                                   <>
-                                    <span className="badge badge-danger text-xs font-normal">
+                                    {/* Đang CHỜ (hết hạn mức / giờ yên lặng / SMTP tạm dừng) — không phải lỗi. `badge-danger` không tồn tại trong index.css nên trước đây không có màu; dùng badge-warning, không tô đỏ (C-15). */}
+                                    <span className="badge badge-warning text-xs font-normal">
                                       {t(getRunPauseI18nKey(activePause), {
                                         until: formatCampaignDateTime(activePause.untilIso),
                                         account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
@@ -1155,15 +1161,35 @@ const Campaigns = () => {
                 {t('campaigns.approveConfirmTitle')}
               </h3>
             </div>
-            <p className="text-sm text-gray-600">
-              {t('campaigns.approveConfirmMessage', {
-                name: approveModal.campaign.campaignName,
-                count: (approveModal.campaign.totalCustomers ?? 0).toLocaleString('vi-VN'),
-              })}
-            </p>
-            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
-              ⚠️ Số người nhận: <strong>{(approveModal.campaign.totalCustomers ?? 0).toLocaleString('vi-VN')}</strong>. Khi duyệt, chiến dịch sẽ bắt đầu chạy và gửi tin ngay lập tức.
-            </div>
+            {/* C-28 — không bao giờ nói "0 người nhận": API đã trả số ước tính cho chiến dịch chờ duyệt; nếu vẫn
+                không biết (người nhận lấy từ nguồn dữ liệu lúc chạy) thì bỏ hẳn con số thay vì in số 0 sai. */}
+            {(() => {
+              const recipientCount = Number(approveModal.campaign.totalCustomers) || 0;
+              return (
+                <>
+                  <p className="text-sm text-gray-600">
+                    {recipientCount > 0
+                      ? t('campaigns.approveConfirmMessage', {
+                          name: approveModal.campaign.campaignName,
+                          count: recipientCount.toLocaleString('vi-VN'),
+                        })
+                      : t('campaigns.approveConfirmMessageNoCount', {
+                          name: approveModal.campaign.campaignName,
+                        })}
+                  </p>
+                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-xs text-amber-800">
+                    ⚠️{' '}
+                    {recipientCount > 0 && (
+                      <>
+                        {t('campaigns.approveRecipientsLabel')}{' '}
+                        <strong>{recipientCount.toLocaleString('vi-VN')}</strong>.{' '}
+                      </>
+                    )}
+                    {t('campaigns.approveStartsImmediately')}
+                  </div>
+                </>
+              );
+            })()}
             <div className="flex justify-end gap-3 pt-2">
               <button
                 type="button"

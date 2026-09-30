@@ -3,6 +3,7 @@ import { isAdminRole } from '../../utils/roleScope.util.js';
 import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
 import campaignCrudRepository from '../../repositories/campaign/campaignCrud.repository.js';
 import campaignFlowService from './campaignFlow.service.js';
+import { countCampaignRecipientsEstimate } from './campaignApproval.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 import { labelCampaignRunFailure } from '../../utils/campaignRunFailureLabel.util.js';
@@ -54,7 +55,7 @@ class CampaignCrudService {
    * @param {object} input
    * @returns {Promise<object>}
    */
-  async getAllCampaigns({ authUser, userId, roleCode, workspaceOwnerId, page = 1, limit = 10, status, type, search, origin, state }) {
+  async getAllCampaigns({ authUser, userId, roleCode, workspaceOwnerId, page = 1, limit = 10, status, type, search, origin, state, excludeDraft }) {
     const offset = (page - 1) * limit;
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
     const isAdmin = context.isSuperAdmin;
@@ -64,8 +65,19 @@ class CampaignCrudService {
       workspaceOwnerId: context.workspaceOwnerId,
       isAdmin,
     };
-    const rows = await campaignCrudRepository.findCampaigns({ ...scope, status, type, search, origin, state, limit, offset });
-    const total = await campaignCrudRepository.countCampaigns({ ...scope, status, type, search, origin, state });
+    const rows = await campaignCrudRepository.findCampaigns({ ...scope, status, type, search, origin, state, excludeDraft, limit, offset });
+    const total = await campaignCrudRepository.countCampaigns({ ...scope, status, type, search, origin, state, excludeDraft });
+
+    // C-28 — chiến dịch nhân viên gửi lên chờ chủ duyệt CHƯA chạy nên campaign_customers rỗng, cột
+    // total_customers ra 0; hộp thoại "Duyệt & gửi" sẽ nói "0 người nhận". Với đúng các dòng này, dùng
+    // cùng phép đếm với ngưỡng duyệt (countCampaignRecipientsEstimate) để số hiển thị = số quyết định.
+    await Promise.all(
+      rows
+        .filter((item) => item.status === 'pending_owner_approval' && !Number(item.total_customers))
+        .map(async (item) => {
+          item.total_customers = await countCampaignRecipientsEstimate(item.id);
+        })
+    );
 
     return {
       items: rows.map((item) => ({

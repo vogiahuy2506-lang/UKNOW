@@ -42,21 +42,23 @@ const Customers = () => {
   const fetchCampaigns = async () => {
     setIsLoading(true);
     try {
+      // Bản nháp bị loại NGAY Ở API (excludeDraft) rồi dùng `pagination` của API. Trước đây API cắt 20 dòng
+      // trước, trình duyệt lọc nháp sau và tự gán totalPages = 1 → chiến dịch thứ 21 trở đi không mở được.
       const params = {
         page: pagination.page,
         limit: 20,
+        excludeDraft: 1,
         ...(search && { search }),
       };
       const res = await campaignApiService.getCampaigns(params);
       const data = res.data?.data || {};
-      const visibleCampaigns = (data.items || []).filter(
-        (item) => String(item?.status || '').toLowerCase() !== 'draft'
-      );
-      setCampaigns(visibleCampaigns);
+      const items = data.items || [];
+      const apiPagination = data.pagination || {};
+      setCampaigns(items);
       setPagination((p) => ({
         ...p,
-        total: visibleCampaigns.length,
-        totalPages: Math.max(1, Math.ceil(visibleCampaigns.length / 20)),
+        total: Number.isFinite(Number(apiPagination.total)) ? Number(apiPagination.total) : items.length,
+        totalPages: Math.max(1, Number(apiPagination.totalPages) || 1),
       }));
     } catch {
       toast.error(t('customers.loadFailed'));

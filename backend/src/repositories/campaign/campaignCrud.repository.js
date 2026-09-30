@@ -9,11 +9,13 @@ import db from '../../config/database.js';
  * @param {string|undefined} filters.search
  * @param {string|undefined} filters.origin
  * @param {string|undefined} filters.state - 'running' | 'scheduled' | 'inactive' | 'draft'
+ * @param {boolean|undefined} filters.excludeDraft - true = bỏ chiến dịch nháp NGAY TRONG SQL. Lọc ở trình
+ *   duyệt sau khi API đã cắt trang làm `total`/`totalPages` sai (C-09 `/app/customers`).
  * @param {any[]} params - mảng bind parameters của truy vấn SQL
  * @param {string} [alias='c'] - alias của bảng campaigns ('c' hoặc 'campaigns')
  * @returns {string} Chuỗi AND ...
  */
-export function buildCampaignFilterSql({ status, type, search, origin, state } = {}, params = [], alias = 'c') {
+export function buildCampaignFilterSql({ status, type, search, origin, state, excludeDraft } = {}, params = [], alias = 'c') {
   const p = alias ? `${alias}.` : '';
   let sql = '';
 
@@ -32,6 +34,9 @@ export function buildCampaignFilterSql({ status, type, search, origin, state } =
   if (origin) {
     params.push(origin);
     sql += ` AND ${p}origin = $${params.length}`;
+  }
+  if (excludeDraft) {
+    sql += ` AND ${p}status <> 'draft'`;
   }
   if (state === 'running') {
     sql += ` AND EXISTS (SELECT 1 FROM campaign_runs cr WHERE cr.id_campaign = ${p}id AND cr.status = 'running')`;
@@ -60,11 +65,12 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.search
    * @param {string|undefined} params.origin - 'self_created' | 'marketplace_purchased'
    * @param {string|undefined} params.state - 'running' | 'scheduled' | 'inactive' | 'draft'
+   * @param {boolean|undefined} params.excludeDraft - bỏ chiến dịch nháp trong SQL (phân trang khớp)
    * @param {number} params.limit
    * @param {number} params.offset
    * @returns {Promise<object[]>}
    */
-  async findCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, state, limit, offset }) {
+  async findCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, state, excludeDraft, limit, offset }) {
     let query = `
       SELECT c.id, c.campaign_name, c.description, c.campaign_type, c.status,
              c.start_date::timestamptz AS start_date, c.end_date::timestamptz AS end_date,
@@ -123,7 +129,7 @@ class CampaignCrudRepository {
       query += ` AND COALESCE(c.workspace_owner_id, c.id_user) = $${params.length}`;
     }
 
-    query += buildCampaignFilterSql({ status, type, search, origin, state }, params, 'c');
+    query += buildCampaignFilterSql({ status, type, search, origin, state, excludeDraft }, params, 'c');
 
     query += ` ORDER BY c.created_at DESC LIMIT $${params.length + 1} OFFSET $${params.length + 2}`;
     params.push(limit, offset);
@@ -143,9 +149,10 @@ class CampaignCrudRepository {
    * @param {string|undefined} params.search
    * @param {string|undefined} params.origin
    * @param {string|undefined} params.state
+   * @param {boolean|undefined} params.excludeDraft
    * @returns {Promise<number>}
    */
-  async countCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, state }) {
+  async countCampaigns({ userId, workspaceOwnerId = userId, isAdmin, status, type, search, origin, state, excludeDraft }) {
     let countQuery = 'SELECT COUNT(*) FROM campaigns c WHERE 1=1';
     const countParams = [];
 
@@ -154,7 +161,7 @@ class CampaignCrudRepository {
       countQuery += ` AND COALESCE(c.workspace_owner_id, c.id_user) = $${countParams.length}`;
     }
 
-    countQuery += buildCampaignFilterSql({ status, type, search, origin, state }, countParams, 'c');
+    countQuery += buildCampaignFilterSql({ status, type, search, origin, state, excludeDraft }, countParams, 'c');
 
     const countResult = await db.query(countQuery, countParams);
     return parseInt(countResult.rows[0].count, 10);
