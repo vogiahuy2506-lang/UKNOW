@@ -78,6 +78,18 @@ describe('encryptBaileysBlob', () => {
       enc: expect.stringMatching(/^enc:v1:/),
     });
   });
+
+  it('throws (fail-closed) instead of storing plaintext when the key is missing', () => {
+    // Bảo mật: thiếu SMTP_SECRET_KEY thì KHÔNG được ghi session credential
+    // dạng plaintext vào DB — thà chặn lần ghi còn hơn lộ bí mật đăng nhập kênh.
+    const originalKey = process.env.SMTP_SECRET_KEY;
+    try {
+      process.env.SMTP_SECRET_KEY = '';
+      expect(() => encryptBaileysBlob(sampleCreds)).toThrow(/SMTP_SECRET_KEY/);
+    } finally {
+      process.env.SMTP_SECRET_KEY = originalKey;
+    }
+  });
 });
 
 describe('decryptBaileysBlob', () => {

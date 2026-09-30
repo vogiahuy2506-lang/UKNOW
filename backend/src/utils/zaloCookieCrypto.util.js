@@ -10,7 +10,10 @@ import {
  * (cùng format `enc:v1:` nên decrypt tương thích ngược với plaintext cũ).
  *
  * Nguyên tắc an toàn vận hành:
- * - Ghi: mã hóa; nếu thiếu key thì log lỗi và lưu plaintext (không chặn kết nối Zalo).
+ * - Ghi: mã hóa; nếu thiếu key (hoặc lỗi mã hóa khác) thì NÉM lỗi, KHÔNG lưu
+ *   plaintext — cookie là bí mật đăng nhập phiên Zalo, ghi plaintext vào DB khi
+ *   cấu hình sai còn nguy hiểm hơn là chặn lần ghi này. SMTP_SECRET_KEY vốn bắt
+ *   buộc nên production đã có; throw chỉ xảy ra khi cấu hình sai.
  * - Đọc: bản ghi plaintext cũ trả nguyên (tự nâng cấp dần khi keep-alive ghi lại);
  *   giải mã thất bại (sai key) → trả '' để flow coi như mất cookie, user quét QR lại,
  *   thay vì đưa chuỗi rác vào zca-js gây lỗi khó hiểu.
@@ -20,12 +23,7 @@ export function encryptZaloCookie(cookieText) {
   if (cookieText == null) return cookieText;
   const value = String(cookieText);
   if (!value.trim()) return cookieText;
-  try {
-    return encryptSmtpSecret(value);
-  } catch (err) {
-    console.error('[ZaloCookieCrypto] Không mã hóa được cookie (thiếu SMTP_SECRET_KEY?) — lưu plaintext:', err.message);
-    return cookieText;
-  }
+  return encryptSmtpSecret(value);
 }
 
 export function decryptZaloCookie(storedValue) {

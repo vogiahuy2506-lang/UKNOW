@@ -116,26 +116,14 @@ export function encryptChannelSessionBlob(plainObject) {
   if (plainObject === null || plainObject === undefined) return plainObject;
   // Đã được wrap trước đó thì giữ nguyên (tránh double-encrypt)
   if (isEncryptedBlob(plainObject)) return plainObject;
-  let serialized;
-  try {
-    serialized = JSON.stringify(plainObject);
-  } catch (err) {
-    console.error('[BaileysAuthCrypto] JSON.stringify failed:', err.message);
-    return plainObject;
-  }
-  try {
-    const enc = encryptSmtpSecret(serialized);
-    return { [ENC_FIELD]: enc };
-  } catch (err) {
-    // Thiếu SMTP_SECRET_KEY thì KHÔNG block — fallback plaintext.
-    // Lý do: mất key là lỗi vận hành nhưng user đã có session hoạt
-    // động thì không nên đá login. Sẽ log để admin thấy.
-    console.error(
-      '[BaileysAuthCrypto] Không mã hóa được blob (thiếu SMTP_SECRET_KEY?) — lưu plaintext:',
-      err.message
-    );
-    return plainObject;
-  }
+  const serialized = JSON.stringify(plainObject);
+  // Fail-closed: nếu thiếu SMTP_SECRET_KEY (hoặc lỗi mã hóa khác) thì NÉM lỗi,
+  // KHÔNG lưu plaintext. Session credential là bí mật đăng nhập kênh; ghi
+  // plaintext vào DB khi cấu hình sai còn nguy hiểm hơn là chặn lần ghi này.
+  // SMTP_SECRET_KEY vốn bắt buộc cho cả SMTP/Zalo nên production đã có; throw
+  // ở đây chỉ xảy ra khi vận hành cấu hình sai, và được caller bắt lại.
+  const enc = encryptSmtpSecret(serialized);
+  return { [ENC_FIELD]: enc };
 }
 
 /**

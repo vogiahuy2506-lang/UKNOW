@@ -49,9 +49,10 @@ describe('zaloCookieCrypto.util', () => {
     expect(decryptZaloCookie(stored)).toBe('');
   });
 
-  it('falls back to plaintext write when the key is missing (không chặn kết nối Zalo)', () => {
+  it('throws (fail-closed) instead of writing plaintext when the key is missing', () => {
+    // Bảo mật: thiếu SMTP_SECRET_KEY thì KHÔNG được lưu cookie plaintext vào DB.
     delete process.env.SMTP_SECRET_KEY;
-    expect(encryptZaloCookie('cookie-value')).toBe('cookie-value');
+    expect(() => encryptZaloCookie('cookie-value')).toThrow(/SMTP_SECRET_KEY/);
   });
 
   it('decrypts cookie_text in-place for repository rows', () => {
