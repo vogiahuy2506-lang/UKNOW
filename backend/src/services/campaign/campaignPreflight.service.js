@@ -12,6 +12,7 @@ import { MAX_SHEET_RECIPIENTS } from '../../utils/manualRecipients.util.js';
 import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
 import { validateChannelSteps } from '../../utils/channelSteps.util.js';
+import { assertChannelEntitled } from './channelEntitlement.service.js';
 
 // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. `send_zalo` (chuỗi
 // cũ) đã BỎ: 0 node trên production, engine không còn xử lý (xem fallback bên dưới ~dòng 177 và
@@ -26,6 +27,7 @@ export const SEND_NODE_SUBTYPES = new Set(campaignChannelRegistry.getSendNodeSub
  * @param {number|string} [params.workspaceOwnerId]
  * @param {Function} [params.sheetCheckFn] - Optional override for unit tests
  * @param {Function} [params.resourceIsLockedFn] - Optional override for unit tests
+ * @param {Function} [params.assertChannelEntitledFn] - Optional override for unit tests
  * @returns {Promise<{ valid: true, nodes: Array }>}
  */
 export async function validateCampaignPreflight({
@@ -33,6 +35,7 @@ export async function validateCampaignPreflight({
   workspaceOwnerId = null,
   sheetCheckFn = checkSheetForChannel,
   resourceIsLockedFn = resourceIsLocked,
+  assertChannelEntitledFn = assertChannelEntitled,
 }) {
   const parsedCampaignId = parseInt(campaignId, 10);
   if (!Number.isFinite(parsedCampaignId)) {
@@ -101,6 +104,20 @@ export async function validateCampaignPreflight({
       error.code = readinessError?.code || 'CHANNEL_NOT_READY';
       error.statusCode = 400;
       throw error;
+    }
+  }
+
+  // 1d. P12 (PLAN_TG_WA_DAY_DU mục 19) — chiến dịch có node Zalo cá nhân/nhóm/kết bạn/chọn tài khoản mà gói của chủ
+  // workspace không có kênh Zalo (trần tài khoản = 0) -> 403 CHANNEL_NOT_IN_PLAN rõ ràng, TRƯỚC khi báo "tài khoản
+  // ngắt kết nối". Cùng cổng với Telegram/WhatsApp (`checkReadiness` của adapter). Chiến dịch cũ còn node Zalo cũng bị chặn ở đây.
+  const hasZaloNode = nodes.some((node) => {
+    const subtype = String(node.node_subtype || '').trim();
+    return subtype.startsWith('send_zalo') || subtype === 'select_zalo_account';
+  });
+  if (hasZaloNode) {
+    const ownerIdForEntitlement = parseInt(workspaceOwnerId, 10);
+    if (Number.isFinite(ownerIdForEntitlement) && ownerIdForEntitlement > 0) {
+      await assertChannelEntitledFn({ channel: 'zalo', ownerUserId: ownerIdForEntitlement });
     }
   }
 

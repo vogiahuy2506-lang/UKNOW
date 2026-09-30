@@ -13,12 +13,67 @@ jest.unstable_mockModule('../../../utils/topupLockGate.util.js', () => ({
   resourceIsLocked: mockResourceIsLocked,
 }));
 
+// P12 — cổng quyền kênh Zalo chạy độc lập (spec riêng bên dưới); mock để không ăn hàng đợi `mockQuery` của các ca cũ.
+const mockAssertChannelEntitled = jest.fn(async () => undefined);
+jest.unstable_mockModule('../channelEntitlement.service.js', () => ({
+  assertChannelEntitled: mockAssertChannelEntitled,
+  default: { assertChannelEntitled: mockAssertChannelEntitled },
+}));
+
 const { validateCampaignPreflight } = await import('../campaignPreflight.service.js');
 
 describe('validateCampaignPreflight service (PR-A3)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     mockResourceIsLocked.mockResolvedValue(false);
+    mockAssertChannelEntitled.mockResolvedValue(undefined);
+  });
+
+  describe('P12 — cổng quyền kênh Zalo theo gói', () => {
+    const zaloRows = (subtype, config = { zaloAccountId: 5 }) => ({
+      rows: [{ id: 1, node_type: 'action', node_subtype: subtype, config }],
+    });
+
+    it.each(['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request'])(
+      'gói không có Zalo -> 403 CHANNEL_NOT_IN_PLAN với node %s, KHÔNG chạm bảng zalo_settings',
+      async (subtype) => {
+        mockQuery.mockResolvedValueOnce(zaloRows(subtype));
+        const planError = Object.assign(new Error('Gói của bạn không có kênh Zalo'), { statusCode: 403, code: 'CHANNEL_NOT_IN_PLAN' });
+        mockAssertChannelEntitled.mockRejectedValueOnce(planError);
+
+        await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 7 })).rejects.toMatchObject({
+          code: 'CHANNEL_NOT_IN_PLAN',
+          statusCode: 403,
+        });
+        expect(mockAssertChannelEntitled).toHaveBeenCalledWith({ channel: 'zalo', ownerUserId: 7 });
+        expect(mockQuery).toHaveBeenCalledTimes(1);
+      }
+    );
+
+    it('node select_zalo_account (kèm node gửi) cũng bị cổng chặn', async () => {
+      mockQuery.mockResolvedValueOnce({
+        rows: [
+          { id: 1, node_type: 'action', node_subtype: 'select_zalo_account', config: { zaloAccountId: 5 } },
+          { id: 2, node_type: 'action', node_subtype: 'send_zalo_personal', config: {} },
+        ],
+      });
+      mockAssertChannelEntitled.mockRejectedValueOnce(Object.assign(new Error('x'), { statusCode: 403, code: 'CHANNEL_NOT_IN_PLAN' }));
+      await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 7 })).rejects.toMatchObject({ code: 'CHANNEL_NOT_IN_PLAN' });
+    });
+
+    it('gói CÓ Zalo (limit=1 -> cổng qua) -> đi tiếp kiểm tài khoản như cũ', async () => {
+      mockQuery
+        .mockResolvedValueOnce(zaloRows('send_zalo_personal'))
+        .mockResolvedValueOnce({ rows: [{ id: 5, is_active: true, status: 'connected' }] });
+      await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 7 })).resolves.toMatchObject({ valid: true });
+      expect(mockAssertChannelEntitled).toHaveBeenCalledTimes(1);
+    });
+
+    it('chiến dịch chỉ có email -> KHÔNG gọi cổng Zalo', async () => {
+      mockQuery.mockResolvedValueOnce({ rows: [{ id: 1, node_type: 'action', node_subtype: 'send_email', config: {} }] });
+      await validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: 7 });
+      expect(mockAssertChannelEntitled).not.toHaveBeenCalled();
+    });
   });
 
   it('rejects with NO_SEND_NODE when campaign has 0 send nodes', async () => {
