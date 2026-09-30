@@ -112,6 +112,19 @@ const CHANNEL_DESCRIPTORS = Object.freeze([
 ]);
 
 /**
+ * Bảng tin đang chứa dòng của từng kênh 'legacy' — nguồn cho `listChannelsForStats` (module số liệu gửi
+ * tin sendStats, PLAN_SO_LIEU_DUNG_GON_KHOP PR-4a). Thêm kênh 'legacy' mới PHẢI khai ở đây: spec
+ * campaignChannelRegistryStats.spec.js đỏ nếu một descriptor không có bảng. Kênh 'adapter' luôn ghi vào
+ * `campaign_channel_messages` nên không cần khai.
+ */
+const LEGACY_MESSAGE_TABLE_BY_KEY = Object.freeze({
+  email: 'email_messages',
+  zalo_personal: 'zalo_messages',
+  zalo_group: 'zalo_messages',
+  zalo_friend_request: 'zalo_messages',
+});
+
+/**
  * Kênh 'adapter' đăng ký CHỈ TRONG TEST. Mutable, khác `CHANNEL_DESCRIPTORS` (frozen).
  *
  * @type {ChannelDescriptor[]}
@@ -278,6 +291,31 @@ export function getAdapterChannelKeysByQuotaChannel(quotaChannel) {
 }
 
 /**
+ * Mọi kênh có thể có dòng trong bảng tin, kèm bảng chứa nó — nguồn kênh CHUẨN của module số liệu gửi tin
+ * (services/stats/sendStats.service.js). KHÁC getAllDescriptors(): KHÔNG lọc theo cờ bật/tắt gửi — cờ CHỈ
+ * chặn GỬI, KHÔNG chặn ĐẾM (cùng quy tắc getAdapterChannelKeysByQuotaChannel): tin Telegram/WhatsApp đã gửi
+ * vẫn phải hiện ở số liệu khi cờ tắt. Thứ tự = thứ tự hiển thị: email, Zalo cá nhân, Zalo nhóm, kết bạn Zalo,
+ * rồi các kênh adapter.
+ *
+ * @returns {Array<{ key: string, table: 'email_messages'|'zalo_messages'|'campaign_channel_messages' }>}
+ */
+export function listChannelsForStats() {
+  const legacyChannels = CHANNEL_DESCRIPTORS.map((descriptor) => ({
+    key: descriptor.key,
+    table: LEGACY_MESSAGE_TABLE_BY_KEY[descriptor.key],
+  }));
+  const adapterKeys = [...new Set([
+    TELEGRAM_CHANNEL_META.key,
+    WHATSAPP_CHANNEL_META.key,
+    ...testChannelDescriptors.filter((descriptor) => descriptor.engine === 'adapter').map((descriptor) => descriptor.key),
+  ])];
+  return [
+    ...legacyChannels,
+    ...adapterKeys.map((key) => ({ key, table: 'campaign_channel_messages' })),
+  ];
+}
+
+/**
  * Đăng ký một kênh 'adapter' CHỈ DÙNG CHO TEST (mock descriptor). Throw nếu gọi ngoài
  * `NODE_ENV=test` — PR-3 không đăng ký kênh thật nào ở production/dev.
  *
@@ -310,6 +348,7 @@ export default {
   getContinuousSupportedSubtypes,
   getAdapterDescriptorBySubtype,
   getAdapterChannelKeysByQuotaChannel,
+  listChannelsForStats,
   getEnabledAdapterChannelsForBuilder,
   getAdapterChannelLabel,
   __registerChannelForTest,
