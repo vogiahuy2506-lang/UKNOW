@@ -60,8 +60,11 @@ const EmailTemplatePreviewModal = ({
         <div className="flex-1 overflow-auto p-0 bg-gray-50">
           <div className="max-w-[800px] mx-auto h-full bg-white shadow-2xl">
             {previewTemplate.bodyHtml ? (
+              // HTML do tenant soạn: sandbox không có allow-scripts nên script/onerror không chạy;
+              // allow-same-origin chỉ để resizeIframeToContent đọc được chiều cao nội dung.
               <iframe
                 ref={modalPreviewIframeRef}
+                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                 srcDoc={wrapEmailSrcDoc(previewTemplate.bodyHtml)}
                 onLoad={() => resizeIframeToContent(modalPreviewIframeRef.current)}
                 className="w-full min-h-[500px]"

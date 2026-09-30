@@ -15,6 +15,7 @@ const RouteAnalytics = () => {
   }, []);
 
   useEffect(() => {
+    // trackPageView tự lọc tham số nhạy cảm (token, invite, code/state OAuth…) trước khi gửi GA.
     trackPageView(location.pathname + location.search);
   }, [location.pathname, location.search]);
 

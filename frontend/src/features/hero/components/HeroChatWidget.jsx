@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { HiOutlineX, HiOutlineSparkles } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { generatePaymentQr } from '../services/paymentAccountApi';
+import { escapeHtml } from '../../../utils/miniMarkdownToHtml';
 import VietQrMessage from './VietQrMessage';
 
 // Custom SVG Icons
@@ -377,8 +378,10 @@ export default function HeroChatWidget() {
     }
   };
 
+  // Nội dung gồm chữ người dùng gõ và câu trả lời AI → escape HTML TRƯỚC, sau đó mới dựng đúng
+  // hai thẻ cố định (<strong>, <br/>). Không bao giờ để HTML thô trong tin nhắn lọt vào DOM.
   const formatMarkdown = (text) => {
-    return text
+    return escapeHtml(text)
       .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
       .replace(/\n/g, '<br/>');
   };

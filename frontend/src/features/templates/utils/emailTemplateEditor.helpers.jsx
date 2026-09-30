@@ -1,6 +1,10 @@
 /**
  * Build safe preview HTML document for iframe rendering.
  *
+ * Dùng kèm iframe `sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"`
+ * (không có allow-scripts). CSP `script-src 'none'` là lớp chặn thứ hai: tài liệu không chạy và
+ * không khởi tạo được script nào, kể cả điều hướng `javascript:` từ liên kết của nó.
+ *
  * @param {string} html template html body
  * @returns {string}
  */
@@ -8,6 +12,7 @@ export const wrapEmailSrcDoc = (html) => `<!doctype html>
 <html>
   <head>
     <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <base target="_blank" />
     <style>

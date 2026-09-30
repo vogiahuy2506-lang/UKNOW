@@ -867,8 +867,10 @@ export default function MockChatbot({ flow, initialMessage, onComplete, locale =
               </button>
             </div>
             <div className="flex-1 p-0">
+              {/* Bản xem trước cần script (Tailwind CDN) nhưng không cần origin của app. */}
               <iframe
                 srcDoc={previewHtml}
+                sandbox="allow-scripts"
                 className="w-full h-full border-0"
                 title="Landing Page Preview"
               />

@@ -8,6 +8,7 @@ import {
   normalizeMessageContent,
 } from './utils/normalizeMessageContent';
 import RenderTextWithLinks from '../../utils/renderTextWithLinks';
+import { getSafeImageUrl, getSafeLinkUrl } from '../../utils/safeUrl.util';
 
 const RETRYING_STALE_MS = 2 * 60 * 1000;
 
@@ -119,6 +120,10 @@ const MessageBubble = ({
   const isAgentMessage = isOwn || isAgent || isBot;
   const normalizedContent = normalizeMessageContent(message.content, messageLabels);
   const normalizedText = getNormalizedMessageText(normalizedContent);
+  // Nội dung thẻ link đến từ tin nhắn của bên thứ ba: chỉ dựng <a>/<img> khi scheme an toàn
+  // (http/https/mailto/tel; ảnh: http/https/data:image). Còn lại hiện chữ thường.
+  const linkHref = normalizedContent.type === 'link' ? getSafeLinkUrl(normalizedContent.href) : '';
+  const linkThumbUrl = linkHref ? getSafeImageUrl(normalizedContent.thumbUrl) : '';
 
   const renderTextWithLinks = (text) => (
     <p
@@ -190,11 +195,11 @@ const MessageBubble = ({
             }`} />
             
             <div className="px-4 py-3 min-w-0">
-              {normalizedText && normalizedContent.type === 'link' && normalizedContent.href && (
+              {normalizedText && linkHref && (
                 <div className="space-y-1.5">
-                  {normalizedContent.thumbUrl && (
+                  {linkThumbUrl && (
                     <img
-                      src={normalizedContent.thumbUrl}
+                      src={linkThumbUrl}
                       alt={normalizedContent.title || messageLabels.link}
                       className="max-h-32 w-full rounded-2xl object-cover"
                     />
@@ -212,19 +217,19 @@ const MessageBubble = ({
                     </p>
                   )}
                   <a
-                    href={normalizedContent.href}
+                    href={linkHref}
                     target="_blank"
                     rel="noopener noreferrer"
                     className={`block break-all text-sm underline font-medium hover:opacity-80 transition-opacity ${
                       sendFailed || sendRetrying ? 'text-red-700' : isAgentMessage ? 'text-white/90' : 'text-primary-600'
                     }`}
                   >
-                    {normalizedContent.href}
+                    {linkHref}
                   </a>
                 </div>
               )}
 
-              {normalizedText && (normalizedContent.type !== 'link' || !normalizedContent.href) && (
+              {normalizedText && !linkHref && (
                 renderTextWithLinks(normalizedText)
               )}
               

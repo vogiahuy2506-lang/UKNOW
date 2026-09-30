@@ -1,6 +1,8 @@
 import { HiOutlinePaperClip, HiOutlineX } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
+import { wrapEmailSrcDoc } from '../../templates/utils/emailTemplateEditor.helpers';
+import { getSafeLinkUrl } from '../../../utils/safeUrl.util';
 
 /**
  * Chuẩn hóa key attachment từ nhiều định dạng metadata.
@@ -85,8 +87,10 @@ const NodeConfigTemplatePreviewModal = ({
       await onOpenAttachment(attachment);
       return;
     }
-    if (attachment?.url) {
-      window.open(attachment.url, '_blank', 'noopener,noreferrer');
+    // URL đính kèm nằm trong dữ liệu template: chỉ mở khi scheme an toàn.
+    const safeUrl = getSafeLinkUrl(attachment?.url, window.location.href);
+    if (safeUrl) {
+      window.open(safeUrl, '_blank', 'noopener,noreferrer');
     }
   };
 
@@ -140,8 +144,11 @@ const NodeConfigTemplatePreviewModal = ({
 
         <div className="flex-1 overflow-auto bg-gray-50 p-4">
           {bodyHtml ? (
+            // HTML template do tenant soạn: sandbox không có allow-scripts, tài liệu bọc qua
+            // wrapEmailSrcDoc (CSP chặn script, link mở tab mới) như màn xem trước template.
             <iframe
-              srcDoc={bodyHtml}
+              sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+              srcDoc={wrapEmailSrcDoc(bodyHtml)}
               title="Template preview"
               className="w-full min-h-[520px] bg-white rounded-lg border border-gray-200"
               style={{ border: '1px solid rgb(229 231 235)' }}

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import {
   HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
@@ -9,6 +9,7 @@ import {
 import api from '../../../services/api';
 import aiApi from '../../../services/aiApi';
 import templateLabelApiService from '../../templates/services/templateLabelApi.service';
+import { getSafeLinkUrl } from '../../../utils/safeUrl.util';
 import { foldDiacritics } from '../utils/foldDiacritics.js';
 import { describeAudienceFilter } from '../utils/audienceFilter.js';
 import { isValidGoogleSheetUrl } from '../utils/googleSheetUrl.js';
@@ -44,11 +45,14 @@ function normalizeHref(href) {
   return href;
 }
 
-// Link tô xanh, LUÔN mở tab mới để không mất đoạn chat trợ lý.
+// Link tô xanh, LUÔN mở tab mới để không mất đoạn chat trợ lý. URL do AI sinh: chỉ thành link
+// khi scheme an toàn (http/https/mailto/tel hoặc đường dẫn nội bộ), còn lại hiện nhãn dạng chữ.
 function InlineLink({ href, children }) {
+  const safeHref = getSafeLinkUrl(normalizeHref(href), window.location.href);
+  if (!safeHref) return <span>{children}</span>;
   return (
     <a
-      href={normalizeHref(href)}
+      href={safeHref}
       target="_blank"
       rel="noopener noreferrer"
       className="text-blue-600 underline hover:text-blue-700 break-words"
@@ -216,6 +220,60 @@ const CategoryPicker = ({ onSelect, onCancel, t }) => {
   );
 };
 
+// Khung xem trước HTML email trong thẻ nháp: cao tối đa như khung cũ (max-h-40), vượt thì cuộn.
+const DRAFT_HTML_PREVIEW_MAX_HEIGHT = 160;
+const DRAFT_HTML_PREVIEW_MIN_HEIGHT = 32;
+
+// Tài liệu xem trước giữ kiểu chữ của khung cũ (text-xs, slate-600, nền gray-50). CSP chặn script
+// là lớp thứ hai sau sandbox.
+const buildDraftHtmlSrcDoc = (html) => `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="script-src 'none'; object-src 'none'" />
+    <style>
+      html, body { margin: 0; }
+      body { padding: 8px; font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; font-size: 12px; line-height: 1.625; color: #475569; background: #f9fafb; overflow-wrap: anywhere; }
+      img { max-width: 100%; height: auto; }
+    </style>
+  </head>
+  <body>${html || ''}</body>
+</html>`;
+
+/**
+ * HTML email nháp (AI sinh hoặc lấy từ thư viện template) hiện trong iframe
+ * `sandbox="allow-same-origin"` — không allow-scripts nên không script/handler nào chạy, và HTML
+ * không bao giờ vào DOM của app. allow-same-origin chỉ để đo chiều cao nội dung.
+ */
+const TemplateDraftHtmlPreview = ({ html, title }) => {
+  const iframeRef = useRef(null);
+  const [height, setHeight] = useState(DRAFT_HTML_PREVIEW_MAX_HEIGHT);
+  const srcDoc = useMemo(() => buildDraftHtmlSrcDoc(html), [html]);
+
+  const handleLoad = () => {
+    try {
+      // body.scrollHeight (chuẩn, có doctype) theo nội dung, không theo khung iframe hiện tại.
+      const contentHeight = iframeRef.current?.contentDocument?.body?.scrollHeight || 0;
+      if (!contentHeight) return;
+      setHeight(Math.min(DRAFT_HTML_PREVIEW_MAX_HEIGHT, Math.max(DRAFT_HTML_PREVIEW_MIN_HEIGHT, contentHeight)));
+    } catch {
+      // Không đo được thì giữ chiều cao mặc định.
+    }
+  };
+
+  return (
+    <iframe
+      ref={iframeRef}
+      title={title}
+      sandbox="allow-same-origin"
+      srcDoc={srcDoc}
+      onLoad={handleLoad}
+      className="block w-full border border-slate-100 rounded-lg bg-gray-50"
+      style={{ height }}
+    />
+  );
+};
+
 // Template preview card
 export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, autoSaveCategory = null, fromLibrary = false, externallySaved = false, canSave = true }) => {
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
@@ -294,10 +352,7 @@ export const TemplateDraftCard = ({ draft, onSave, onEdit, onUseExisting, t, aut
         <div>
           <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider mb-1">{t('aiChatbot.content')}</p>
           {draft.channel === 'email' && draft.bodyHtml ? (
-            <div
-              className="text-xs text-slate-600 leading-relaxed max-h-40 overflow-y-auto border border-slate-100 rounded-lg p-2 bg-gray-50"
-              dangerouslySetInnerHTML={{ __html: draft.bodyHtml }}
-            />
+            <TemplateDraftHtmlPreview html={draft.bodyHtml} title={t('aiChatbot.content')} />
           ) : (
             <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap max-h-40 overflow-y-auto">
               {draft.bodyText}

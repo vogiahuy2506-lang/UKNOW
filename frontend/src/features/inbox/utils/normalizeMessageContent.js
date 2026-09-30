@@ -1,3 +1,5 @@
+import { getSafeImageUrl, getSafeLinkUrl } from '../../../utils/safeUrl.util';
+
 const DEFAULT_LABELS = {
   sticker: '[Sticker]',
   groupEvent: 'Group event',
@@ -156,14 +158,17 @@ const normalizeParsedObject = (value, rawText, labels) => {
   }
 
   const title = getTitle(value);
-  const href = getUrl(value);
+  // Payload đến từ nền tảng bên ngoài: chỉ giữ href/ảnh có scheme an toàn. URL bị loại vẫn
+  // hiện được dưới dạng chữ thường (type 'text'), không bao giờ thành link bấm được.
+  const rawHref = getUrl(value);
+  const href = getSafeLinkUrl(rawHref);
   const description = getDescription(value);
-  const thumbUrl = getThumbUrl(value);
+  const thumbUrl = getSafeImageUrl(getThumbUrl(value));
 
-  if (title || href || description) {
+  if (title || rawHref || description) {
     return {
       type: href ? 'link' : 'text',
-      text: title || description || href || labels.link,
+      text: title || description || rawHref || labels.link,
       title,
       href,
       description,

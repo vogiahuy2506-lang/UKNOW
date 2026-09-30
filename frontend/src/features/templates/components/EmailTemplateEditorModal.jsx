@@ -595,8 +595,11 @@ const EmailTemplateEditorModal = ({
                         <div className="flex-1 p-6 overflow-auto flex justify-center bg-gray-100">
                           <div className="w-full max-w-[760px] bg-white shadow-md border border-gray-200 min-h-full">
                             {formData.bodyHtml ? (
+                              // Không có allow-scripts: HTML đang soạn không chạy được script trong
+                              // origin của app; allow-same-origin để resizeIframeToContent đo chiều cao.
                               <iframe
                                 ref={editorPreviewIframeRef}
+                                sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
                                 srcDoc={editorPreviewSrcDoc}
                                 onLoad={() => resizeIframeToContent(editorPreviewIframeRef.current)}
                                 className="w-full min-h-[500px] outline-none focus:outline-none"
