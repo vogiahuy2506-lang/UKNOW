@@ -32,10 +32,11 @@ export async function buildAdminContext() {
   const lines = [
     `=== DỮ LIỆU NỀN TẢNG Founder AI (cập nhật lúc ${now}) ===`,
     '',
-    '## THÀNH VIÊN',
-    `- Tổng user_admin: ${kpi.totalMembers}`,
-    `- Đang có gói active: ${kpi.activeMembers}`,
-    `- Tổng nhân viên (employee): ${kpi.totalEmployees}`,
+    '## KHÁCH (không tính nhân viên, tài khoản nội bộ, tài khoản đã xoá)',
+    `- Tổng khách: ${kpi.totalCustomers}`,
+    `- Đang trả tiền: ${kpi.payingCustomers}`,
+    `- Đang dùng thử / miễn phí: ${kpi.trialCustomers}`,
+    `- Đăng ký mới tháng ${kpi.monthLabel}: ${kpi.newCustomersThisMonth}`,
   ];
 
   if (expiring.length > 0) {
@@ -48,21 +49,20 @@ export async function buildAdminContext() {
   }
 
   lines.push('');
-  lines.push('## DOANH THU THÁNG NÀY');
+  lines.push(`## DOANH THU THÁNG ${kpi.monthLabel} (đã trừ đơn hoàn, tính theo ngày trả tiền)`);
   lines.push(`- Doanh thu: ${Number(kpi.revenueThisMonth).toLocaleString('vi-VN')}đ`);
-  lines.push(`- Đơn thành công: ${kpi.completedOrdersThisMonth}`);
-  lines.push(`- Đơn chờ xử lý: ${kpi.pendingOrdersThisMonth}`);
+  lines.push(`- Đơn đã trả tiền: ${kpi.paidOrdersThisMonth}`);
 
   if (monthly.length > 0) {
     lines.push('');
     lines.push('## DOANH THU 6 THÁNG GẦN NHẤT');
     monthly.forEach(m => {
-      lines.push(`- ${m.month}: ${Number(m.revenue).toLocaleString('vi-VN')}đ (${m.completedOrders}/${m.totalOrders} đơn)`);
+      lines.push(`- ${m.month}: ${Number(m.revenue).toLocaleString('vi-VN')}đ (${m.paidOrders} đơn đã trả)`);
     });
   }
 
   lines.push('');
-  lines.push('## PHÂN BỐ GÓI DỊCH VỤ');
+  lines.push('## PHÂN BỐ GÓI DỊCH VỤ (khách đang có gói còn hạn)');
   plans.forEach(p => {
     lines.push(`- ${p.name} (${Number(p.price).toLocaleString('vi-VN')}đ/tháng): ${p.userCount} user`);
   });
@@ -77,9 +77,9 @@ export async function buildAdminContext() {
 
   if (weeklyUsers.length > 0) {
     lines.push('');
-    lines.push('## USER MỚI THEO TUẦN (4 tuần gần nhất)');
+    lines.push('## KHÁCH MỚI THEO TUẦN (4 tuần gần nhất)');
     weeklyUsers.forEach(w => {
-      lines.push(`- Tuần từ ${w.week}: ${w.newUsers} user mới`);
+      lines.push(`- Tuần từ ${w.week}: ${w.newUsers} khách mới`);
     });
   }
 

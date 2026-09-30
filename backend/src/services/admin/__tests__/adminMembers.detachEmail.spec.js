@@ -6,6 +6,7 @@ const mockRevokeAllRefreshTokensForUser = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/admin/adminMembers.repository.js', () => ({
   findAllMembers: jest.fn(),
+  getMembersSummary: jest.fn(),
   findMemberById: mockFindMemberById,
   setMemberStatus: jest.fn(),
   promoteMemberToSuperAdmin: jest.fn(),

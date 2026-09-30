@@ -11,6 +11,7 @@ router.use(authMiddleware);
 router.use(requireRole('admin'));
 
 router.get('/', ctrl.list);
+router.get('/summary', ctrl.summary);
 
 router.patch('/:id/status',
   [param('id').isInt({ min: 1 })],

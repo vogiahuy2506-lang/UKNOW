@@ -1,50 +1,66 @@
 import {
   getKpiStats,
   getMonthlyRevenue,
-  getPlanDistribution,
   getRecentOrders,
   getRecentMembers,
 } from '../../repositories/admin/adminStats.repository.js';
+import { metricStuckEinvoices } from '../../repositories/admin/alert.repository.js';
 
+/** Hoá đơn "kẹt" theo cùng ngưỡng với cảnh báo `einvoice_stuck` và trang Hoá đơn (6 giờ). */
+export const STUCK_EINVOICE_STALE_HOURS = 6;
+
+/**
+ * % thay đổi so với cùng kỳ tháng trước. Kỳ trước = 0 thì KHÔNG có phần trăm hợp lệ (trả null, giao diện không hiện) —
+ * bản cũ trả +100% ở mọi lần kỳ trước bằng 0.
+ */
+export function pctChange(curr, prev) {
+  const c = Number(curr || 0);
+  const p = Number(prev || 0);
+  if (p === 0) return null;
+  return Math.round(((c - p) / p) * 1000) / 10;
+}
+
+/**
+ * Tổng quan admin: 6 số + biểu đồ 6 tháng + 2 bảng ngắn (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-9).
+ * Định nghĩa "khách" / "khách trả tiền" / "đơn đã trả" nằm ở customerDefinitions.js và revenueDefinitions.js.
+ */
 export async function getDashboardOverview() {
-  const [kpi, monthlyRevenue, planDistribution, recentOrders, recentMembers] = await Promise.all([
+  const [kpi, monthlyRevenue, recentOrders, recentMembers, stuck] = await Promise.all([
     getKpiStats(),
     getMonthlyRevenue(),
-    getPlanDistribution(),
     getRecentOrders(10),
     getRecentMembers(10),
+    metricStuckEinvoices(STUCK_EINVOICE_STALE_HOURS),
   ]);
 
-  const pctChange = (curr, prev) => {
-    const c = Number(curr || 0);
-    const p = Number(prev || 0);
-    if (p === 0) return c > 0 ? 100 : 0;
-    return Math.round(((c - p) / p) * 1000) / 10;
+  const stuckEinvoices = Number(stuck?.total || 0);
+  const attention = {
+    paidAfterCancelled: { count: kpi.paidAfterCancelledCount, amount: kpi.paidAfterCancelledAmount },
+    stuckEinvoices,
+    overdueWithdrawals: kpi.overdueWithdrawals,
+    total: kpi.paidAfterCancelledCount + stuckEinvoices + kpi.overdueWithdrawals,
   };
-
-  const registered = Number(kpi.registeredThisMonthForActivation || kpi.newMembersThisMonth || 0);
-  const activated = Number(kpi.activatedThisMonth || 0);
-  const activationRate = registered > 0 ? Math.round((activated / registered) * 1000) / 10 : null;
-  const paying = Number(kpi.payingActiveMembers || 0);
-  const churned = Number(kpi.churnedThisMonth || 0);
-  const churnRate = paying + churned > 0
-    ? Math.round((churned / (paying + churned)) * 1000) / 10
-    : 0;
 
   return {
     kpi: {
-      ...kpi,
-      revenueMomPct: pctChange(kpi.revenueThisMonth, kpi.revenueLastMonth),
-      newMembersMomPct: pctChange(kpi.newMembersThisMonth, kpi.newMembersLastMonth),
-      activationRate,
-      churnRate,
-      churnedThisMonth: churned,
+      monthKey: kpi.monthKey,
+      monthLabel: kpi.monthLabel,
+      todayLabel: kpi.todayLabel,
+      revenueThisMonth: kpi.revenueThisMonth,
+      revenueBySource: kpi.revenueBySource,
+      refundedThisMonth: kpi.refundedThisMonth,
+      revenueMomPct: pctChange(kpi.revenueThisMonth, kpi.revenuePrevSamePeriod),
+      paidOrdersThisMonth: kpi.paidOrdersThisMonth,
+      totalCustomers: kpi.totalCustomers,
+      payingCustomers: kpi.payingCustomers,
+      trialCustomers: kpi.trialCustomers,
+      newCustomersThisMonth: kpi.newCustomersThisMonth,
+      newCustomersMomPct: pctChange(kpi.newCustomersThisMonth, kpi.newCustomersPrevSamePeriod),
+      expiringPaid7d: kpi.expiringPaid7d,
+      attention,
     },
     monthlyRevenue,
-    planDistribution,
     recentOrders,
     recentMembers,
-    dataSince: '2025-06-01',
-    dataSinceNote: 'Một số chỉ số activation dựa trên audit_logs (từ migration 040 / PR1 attribution).',
   };
 }

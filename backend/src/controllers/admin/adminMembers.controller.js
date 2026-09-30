@@ -10,17 +10,29 @@ function handleError(res, err) {
 
 const PHONE_VERIFIED_VALUES = new Set(['verified', 'unverified']);
 
-/** GET /api/admin/members?search=&planId=&status=&role=&phoneVerified= */
+/**
+ * GET /api/admin/members?search=&planId=&status=&role=&phoneVerified=&segment=&planState=
+ * `segment` (customer mặc định | employee | internal | deleted | all) và `planState` (paying | trial | expiring | expired30):
+ * giá trị lạ bị bỏ qua ở repository (về mặc định / không lọc).
+ */
 export async function list(req, res) {
   try {
-    const { search, planId, status, expiry, role, phoneVerified } = req.query;
+    const { search, planId, status, expiry, role, phoneVerified, segment, planState } = req.query;
     // Giá trị lạ (không phải verified/unverified) → bỏ qua, không 400 — cùng triết lý
     // "im lặng bỏ qua filter không hiểu" như planId/status/expiry ở trên.
     const phoneVerifiedFilter = PHONE_VERIFIED_VALUES.has(phoneVerified) ? phoneVerified : undefined;
     const members = await adminMembersService.listMembers({
-      search, planId, status, expiry, role, phoneVerified: phoneVerifiedFilter,
+      search, planId, status, expiry, role, phoneVerified: phoneVerifiedFilter, segment, planState,
     });
     return res.json({ success: true, data: members });
+  } catch (err) { return handleError(res, err); }
+}
+
+/** GET /api/admin/members/summary — năm số đầu trang Thành viên + số theo nhóm (PR-9). */
+export async function summary(req, res) {
+  try {
+    const data = await adminMembersService.getMembersSummary();
+    return res.json({ success: true, data });
   } catch (err) { return handleError(res, err); }
 }
 

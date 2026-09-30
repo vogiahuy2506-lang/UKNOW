@@ -1,100 +1,193 @@
 import db from '../../config/database.js';
-
-const TZ = 'Asia/Ho_Chi_Minh';
+import {
+  VN_TZ as TZ,
+  activePlanSql,
+  customerSql,
+  expiringSql,
+  payingSql,
+} from '../../services/admin/customerDefinitions.js';
+import {
+  orderKindSql,
+  orderPeriodAtSql,
+  paidAfterCancelledSql,
+  paidOrderSql,
+} from '../../services/admin/revenueDefinitions.js';
 
 /**
- * KPI tổng quan: thành viên, doanh thu, đơn hàng tháng này.
+ * Số liệu Tổng quan admin (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-9).
  *
- * Lưu ý: bảng `orders` dùng giá trị `status = 'success'` cho đơn đã thanh toán
- * (xem `payment.service.js` cập nhật sau webhook PayOS). Trước đây query này
- * dùng 'completed' nên doanh thu tháng/đơn thành công luôn = 0.
+ * "Khách" và "khách trả tiền" lấy từ customerDefinitions.js, "đơn đã trả" / mốc kỳ từ revenueDefinitions.js — không
+ * viết lại điều kiện ở đây. Mọi mốc tháng tính TRONG SQL theo giờ VN và trả ra dạng chuỗi (to_char): trả cột
+ * timestamp về JS thì node-pg dựng Date theo giờ máy và ra JSON lệch một ngày / một tháng.
+ */
+
+const num = (value) => Number(value || 0);
+
+/**
+ * KPI tháng này (theo lịch, giờ VN).
+ *
+ * Doanh thu = đơn đã trả có mốc kỳ trong tháng, tách "gói · mua thêm · gán tay" (ba nhóm không chồng lấn, cộng lại bằng
+ * doanh thu). Đơn hoàn tự rơi khỏi tổng (status 'refunded'); số đã hoàn của tháng đọc riêng theo `refunded_at`.
+ *
+ * "Cùng kỳ tháng trước" = từ đầu tháng trước tới CÙNG NGÀY GIỜ của tháng trước (không phải cả tháng trước): so tháng
+ * đang dở với tháng trước đủ làm ngày 3 hàng tháng luôn hiện "âm mạnh".
  */
 export async function getKpiStats() {
-  const { rows } = await db.query(`
-    SELECT
-      (SELECT COUNT(*) FROM users WHERE role = 'user')                                    AS "totalMembers",
-      (SELECT COUNT(*) FROM users WHERE role = 'user' AND active_plan_id IS NOT NULL)     AS "activeMembers",
-      (SELECT COUNT(*) FROM users WHERE role = 'employee')                                      AS "totalEmployees",
-      (SELECT COALESCE(SUM(amount), 0) FROM orders
-        WHERE status = 'success'
-          AND COALESCE(payment_method, 'payos') != 'free'
-          AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
-      ) AS "revenueThisMonth",
-      (SELECT COALESCE(SUM(amount), 0) FROM orders
-        WHERE status = 'success'
-          AND COALESCE(payment_method, 'payos') != 'free'
-          AND DATE_TRUNC('month', created_at AT TIME ZONE $1)
-            = DATE_TRUNC('month', NOW() AT TIME ZONE $1) - INTERVAL '1 month'
-      ) AS "revenueLastMonth",
-      (SELECT COUNT(*) FROM orders
-        WHERE DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
-      ) AS "ordersThisMonth",
-      (SELECT COUNT(*) FROM orders WHERE status = 'success'
-          AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
-      ) AS "completedOrdersThisMonth",
-      (SELECT COUNT(*) FROM orders WHERE status = 'pending'
-          AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
-      ) AS "pendingOrdersThisMonth",
-      (SELECT COUNT(*) FROM users WHERE role = 'user'
-          AND DATE_TRUNC('month', created_at AT TIME ZONE $1) = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
-      ) AS "newMembersThisMonth",
-      (SELECT COUNT(*) FROM users WHERE role = 'user'
-          AND DATE_TRUNC('month', created_at AT TIME ZONE $1)
-            = DATE_TRUNC('month', NOW() AT TIME ZONE $1) - INTERVAL '1 month'
-      ) AS "newMembersLastMonth",
-      (SELECT COUNT(*) FROM users WHERE role = 'user'
-          AND active_plan_id IS NOT NULL
-          AND (subscription_expires_at IS NULL OR subscription_expires_at > NOW())
-      ) AS "payingActiveMembers",
-      (SELECT COUNT(*) FROM users WHERE role = 'user'
-          AND subscription_expires_at IS NOT NULL
-          AND subscription_expires_at < NOW()
-          AND DATE_TRUNC('month', subscription_expires_at AT TIME ZONE $1)
-            = DATE_TRUNC('month', NOW() AT TIME ZONE $1)
-      ) AS "churnedThisMonth",
-      (SELECT COUNT(DISTINCT COALESCE(owner_id, id_user)) FROM audit_logs
-          WHERE action IN ('EMAIL_ACCOUNT_CONNECTED', 'ZALO_ACCOUNT_CONNECTED')
-            AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE $1) AT TIME ZONE $1
-      ) AS "activatedThisMonth",
-      (SELECT COUNT(*) FROM users WHERE role = 'user'
-          AND created_at >= DATE_TRUNC('month', NOW() AT TIME ZONE $1) AT TIME ZONE $1
-      ) AS "registeredThisMonthForActivation"
-  `, [TZ]);
-  return rows[0];
+  const [revenueRes, customersRes, attentionRes] = await Promise.all([
+    db.query(
+      `WITH b AS (
+         SELECT date_trunc('month', NOW() AT TIME ZONE $1) AS m0,
+                NOW() AT TIME ZONE $1 AS now_vn
+       ),
+       x AS (
+         SELECT o.amount, ${orderKindSql('o')} AS kind, (${orderPeriodAtSql('o')} AT TIME ZONE $1) AS p
+           FROM orders o
+          WHERE ${paidOrderSql('o')}
+       )
+       SELECT
+         to_char(b.m0, 'YYYY-MM') AS "monthKey",
+         to_char(b.m0, 'MM/YYYY') AS "monthLabel",
+         to_char(b.now_vn, 'DD/MM') AS "todayLabel",
+         COALESCE(SUM(x.amount) FILTER (WHERE x.p >= b.m0 AND x.p < b.m0 + INTERVAL '1 month'), 0) AS revenue,
+         COALESCE(SUM(x.amount) FILTER (WHERE x.p >= b.m0 AND x.p < b.m0 + INTERVAL '1 month' AND x.kind = 'plan'), 0) AS "revenuePlan",
+         COALESCE(SUM(x.amount) FILTER (WHERE x.p >= b.m0 AND x.p < b.m0 + INTERVAL '1 month' AND x.kind = 'topup'), 0) AS "revenueTopup",
+         COALESCE(SUM(x.amount) FILTER (WHERE x.p >= b.m0 AND x.p < b.m0 + INTERVAL '1 month' AND x.kind = 'manual'), 0) AS "revenueManual",
+         COUNT(*) FILTER (WHERE x.p >= b.m0 AND x.p < b.m0 + INTERVAL '1 month') AS "paidOrders",
+         COALESCE(SUM(x.amount) FILTER (
+           WHERE x.p >= b.m0 - INTERVAL '1 month'
+             AND x.p < LEAST(b.m0 - INTERVAL '1 month' + (b.now_vn - b.m0), b.m0)
+         ), 0) AS "revenuePrev",
+         (SELECT COALESCE(SUM(r.amount), 0) FROM orders r
+           WHERE r.status = 'refunded'
+             AND (r.refunded_at AT TIME ZONE $1) >= b.m0
+             AND (r.refunded_at AT TIME ZONE $1) < b.m0 + INTERVAL '1 month') AS refunded
+       FROM b LEFT JOIN x ON TRUE
+       GROUP BY b.m0, b.now_vn`,
+      [TZ]
+    ),
+    db.query(
+      `WITH b AS (
+         SELECT date_trunc('month', NOW() AT TIME ZONE $1) AS m0,
+                NOW() AT TIME ZONE $1 AS now_vn
+       ),
+       c AS (
+         SELECT (u.created_at AT TIME ZONE $1) AS created_vn,
+                ${activePlanSql('u')} AS is_active,
+                ${payingSql('u')} AS is_paying,
+                ${expiringSql('u', 7)} AS is_expiring
+           FROM users u
+          WHERE ${customerSql('u')}
+       )
+       SELECT
+         COUNT(c.created_vn) AS total,
+         COUNT(*) FILTER (WHERE c.is_paying) AS paying,
+         COUNT(*) FILTER (WHERE c.is_active AND NOT c.is_paying) AS trial,
+         COUNT(*) FILTER (WHERE c.is_paying AND c.is_expiring) AS "expiringPaid7d",
+         COUNT(*) FILTER (WHERE c.created_vn >= b.m0 AND c.created_vn < b.m0 + INTERVAL '1 month') AS "newThisMonth",
+         COUNT(*) FILTER (
+           WHERE c.created_vn >= b.m0 - INTERVAL '1 month'
+             AND c.created_vn < LEAST(b.m0 - INTERVAL '1 month' + (b.now_vn - b.m0), b.m0)
+         ) AS "newPrev"
+       FROM b LEFT JOIN c ON TRUE
+       GROUP BY b.m0, b.now_vn`,
+      [TZ]
+    ),
+    db.query(
+      // "Rút tiền quá hạn": yêu cầu pending đã quá 7 NGÀY LÀM VIỆC (trừ Thứ Bảy / Chủ Nhật, không trừ ngày lễ) kể từ
+      // ngày yêu cầu, không tính ngày yêu cầu — cùng cách đếm với affiliateWithdrawalUrgency.util.js ở giao diện
+      // (lời hứa "chi trả trong 07 ngày làm việc", ToS 15.3). generate_series phải ép ::timestamp: truyền date thì
+      // Postgres chọn biến thể timestamptz và kết quả phụ thuộc múi giờ phiên.
+      `SELECT
+         (SELECT COUNT(*)::int FROM orders o WHERE ${paidAfterCancelledSql('o')}) AS "paidAfterCancelledCount",
+         (SELECT COALESCE(SUM(o.amount), 0) FROM orders o WHERE ${paidAfterCancelledSql('o')}) AS "paidAfterCancelledAmount",
+         (SELECT COUNT(*)::int FROM affiliate_withdrawals w
+           WHERE w.status = 'pending'
+             AND (
+               SELECT COUNT(*) FROM generate_series(
+                 ((w.requested_at AT TIME ZONE $1)::date + 1)::timestamp,
+                 (NOW() AT TIME ZONE $1)::date::timestamp,
+                 INTERVAL '1 day'
+               ) d WHERE EXTRACT(ISODOW FROM d) < 6
+             ) > 7) AS "overdueWithdrawals"`,
+      [TZ]
+    ),
+  ]);
+
+  const r = revenueRes.rows[0] || {};
+  const c = customersRes.rows[0] || {};
+  const a = attentionRes.rows[0] || {};
+  return {
+    monthKey: r.monthKey,
+    monthLabel: r.monthLabel,
+    todayLabel: r.todayLabel,
+    revenueThisMonth: num(r.revenue),
+    revenueBySource: {
+      plan: num(r.revenuePlan),
+      topup: num(r.revenueTopup),
+      manual: num(r.revenueManual),
+    },
+    refundedThisMonth: num(r.refunded),
+    revenuePrevSamePeriod: num(r.revenuePrev),
+    paidOrdersThisMonth: num(r.paidOrders),
+    totalCustomers: num(c.total),
+    payingCustomers: num(c.paying),
+    trialCustomers: num(c.trial),
+    expiringPaid7d: num(c.expiringPaid7d),
+    newCustomersThisMonth: num(c.newThisMonth),
+    newCustomersPrevSamePeriod: num(c.newPrev),
+    paidAfterCancelledCount: num(a.paidAfterCancelledCount),
+    paidAfterCancelledAmount: num(a.paidAfterCancelledAmount),
+    overdueWithdrawals: num(a.overdueWithdrawals),
+  };
 }
 
-/** Doanh thu + số đơn theo tháng (6 tháng gần nhất) */
+/**
+ * Doanh thu + số đơn đã trả theo tháng: 6 THÁNG DƯƠNG LỊCH đầy đủ (tháng này và 5 tháng trước, giờ VN), tháng không có
+ * đơn hiện 0 (không biến mất khỏi biểu đồ). Trước đây `created_at >= NOW() - '6 months'` cho tới 7 cột với cột đầu chỉ
+ * có vài ngày.
+ */
 export async function getMonthlyRevenue() {
-  const { rows } = await db.query(`
-    SELECT
-      TO_CHAR(DATE_TRUNC('month', created_at AT TIME ZONE $1), 'MM/YYYY') AS month,
-      DATE_TRUNC('month', created_at AT TIME ZONE $1)                      AS "monthDate",
-      COALESCE(SUM(CASE WHEN status = 'success' AND COALESCE(payment_method, 'payos') != 'free' THEN amount ELSE 0 END), 0) AS revenue,
-      COUNT(*) AS "totalOrders",
-      COUNT(CASE WHEN status = 'success' THEN 1 END) AS "completedOrders"
-    FROM orders
-    WHERE created_at >= NOW() - INTERVAL '6 months'
-    GROUP BY DATE_TRUNC('month', created_at AT TIME ZONE $1)
-    ORDER BY "monthDate" ASC
-  `, [TZ]);
-  return rows;
+  const { rows } = await db.query(
+    `WITH b AS (SELECT date_trunc('month', NOW() AT TIME ZONE $1) AS m0),
+     months AS (SELECT generate_series(b.m0 - INTERVAL '5 months', b.m0, INTERVAL '1 month') AS m FROM b),
+     x AS (
+       SELECT o.amount, date_trunc('month', ${orderPeriodAtSql('o')} AT TIME ZONE $1) AS m
+         FROM orders o
+        WHERE ${paidOrderSql('o')}
+     )
+     SELECT to_char(months.m, 'MM/YYYY') AS month,
+            to_char(months.m, 'YYYY-MM') AS "monthKey",
+            COALESCE(SUM(x.amount), 0) AS revenue,
+            COUNT(x.amount) AS "paidOrders"
+       FROM months LEFT JOIN x ON x.m = months.m
+      GROUP BY months.m
+      ORDER BY months.m ASC`,
+    [TZ]
+  );
+  return rows.map((row) => ({
+    month: row.month,
+    monthKey: row.monthKey,
+    revenue: num(row.revenue),
+    paidOrders: num(row.paidOrders),
+  }));
 }
 
-/** Số user_admin theo từng gói dịch vụ */
+/**
+ * Số khách đang có gói còn hiệu lực theo từng gói. Mọi gói tự chọn (is_custom) gộp thành MỘT nhóm "Gói tuỳ chọn" —
+ * mỗi khách một gói riêng tên "Gói tự chọn — <email> — <yyyy-mm>" làm mỗi dòng chỉ có 1 người.
+ */
 export async function getPlanDistribution() {
-  const { rows } = await db.query(`
-    SELECT
-      p.id,
-      p.name,
-      p.code,
-      p.price,
-      COUNT(u.id) AS "userCount"
-    FROM plans p
-    LEFT JOIN users u ON u.active_plan_id = p.id AND u.role = 'user'
-    WHERE p.is_active = true
-    GROUP BY p.id, p.name, p.code, p.price
-    ORDER BY p.price ASC
-  `);
+  const { rows } = await db.query(
+    `SELECT CASE WHEN p.is_custom THEN 'Gói tuỳ chọn' ELSE p.name END AS name,
+            CASE WHEN p.is_custom THEN 'custom' ELSE p.code END AS code,
+            MAX(p.price) AS price,
+            COUNT(*)::int AS "userCount"
+       FROM users u
+       JOIN plans p ON p.id = u.active_plan_id
+      WHERE ${customerSql('u')} AND ${activePlanSql('u')}
+      GROUP BY 1, 2
+      ORDER BY MAX(p.price) ASC, 1`
+  );
   return rows;
 }
 
@@ -118,7 +211,7 @@ export async function getRecentOrders(limit = 10) {
   return rows;
 }
 
-/** 10 thành viên (user_admin) mới nhất */
+/** Khách mới nhất (theo định nghĩa khách: không gồm nhân viên / tài khoản nội bộ / đã xoá / admin). */
 export async function getRecentMembers(limit = 10) {
   const { rows } = await db.query(`
     SELECT
@@ -132,14 +225,14 @@ export async function getRecentMembers(limit = 10) {
       p.code AS "planCode"
     FROM users u
     LEFT JOIN plans p ON p.id = u.active_plan_id
-    WHERE u.role = 'user'
+    WHERE ${customerSql('u')}
     ORDER BY u.created_at DESC
     LIMIT $1
   `, [limit]);
   return rows;
 }
 
-/** Thành viên sắp hết hạn trong N ngày tới */
+/** Khách sắp hết hạn trong N ngày tới */
 export async function getExpiringSoon(days = 7) {
   const { rows } = await db.query(`
     SELECT
@@ -150,12 +243,10 @@ export async function getExpiringSoon(days = 7) {
       EXTRACT(DAY FROM (u.subscription_expires_at - NOW()))::INTEGER AS "daysLeft"
     FROM users u
     LEFT JOIN plans p ON p.id = u.active_plan_id
-    WHERE u.role = 'user'
-      AND u.subscription_expires_at IS NOT NULL
-      AND u.subscription_expires_at > NOW()
-      AND u.subscription_expires_at <= NOW() + ($1 || ' days')::INTERVAL
+    WHERE ${customerSql('u')}
+      AND ${expiringSql('u', days)}
     ORDER BY u.subscription_expires_at ASC
-  `, [days]);
+  `);
   return rows;
 }
 
@@ -173,17 +264,17 @@ export async function getCampaignStats() {
   return rows[0];
 }
 
-/** Thống kê user mới theo tuần (4 tuần gần nhất) */
+/** Khách mới theo tuần (4 tuần gần nhất) */
 export async function getNewUsersWeekly() {
   const { rows } = await db.query(`
     SELECT
-      TO_CHAR(DATE_TRUNC('week', created_at AT TIME ZONE $1), 'DD/MM') AS week,
+      TO_CHAR(DATE_TRUNC('week', u.created_at AT TIME ZONE $1), 'DD/MM') AS week,
       COUNT(*) AS "newUsers"
-    FROM users
-    WHERE role = 'user'
-      AND created_at >= NOW() - INTERVAL '4 weeks'
-    GROUP BY DATE_TRUNC('week', created_at AT TIME ZONE $1)
-    ORDER BY DATE_TRUNC('week', created_at AT TIME ZONE $1) ASC
+    FROM users u
+    WHERE ${customerSql('u')}
+      AND u.created_at >= NOW() - INTERVAL '4 weeks'
+    GROUP BY DATE_TRUNC('week', u.created_at AT TIME ZONE $1)
+    ORDER BY DATE_TRUNC('week', u.created_at AT TIME ZONE $1) ASC
   `, [TZ]);
   return rows;
 }

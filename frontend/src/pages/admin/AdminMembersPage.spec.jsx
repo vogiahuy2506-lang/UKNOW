@@ -10,14 +10,16 @@ import AdminMembersPage from './AdminMembersPage';
  * (trang này cần currentUser/phoneOtpEnabled, hai file kia không dùng authStore nên không
  * có tiền lệ để soi — mock ở đây theo đúng khuôn PR-2 (selector lẫn no-arg đều gọi được).
  */
-const { mockGetMembers, mockGetPlans } = vi.hoisted(() => ({
+const { mockGetMembers, mockGetPlans, mockGetSummary } = vi.hoisted(() => ({
   mockGetMembers: vi.fn(),
   mockGetPlans: vi.fn(),
+  mockGetSummary: vi.fn(),
 }));
 
 vi.mock('../../features/admin/services/adminMembersApi.service', () => ({
   default: {
     getMembers: mockGetMembers,
+    getSummary: mockGetSummary,
     toggleStatus: vi.fn(),
     promote: vi.fn(),
     demote: vi.fn(),
@@ -81,6 +83,7 @@ describe('AdminMembersPage — cột SĐT theo cờ phoneOtpEnabled', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetPlans.mockResolvedValue({ data: { data: [] } });
+    mockGetSummary.mockResolvedValue({ data: { data: null } });
     authState.phoneOtpEnabled = false;
   });
 
@@ -146,6 +149,7 @@ describe('AdminMembersPage — cột SĐT theo cờ phoneOtpEnabled', () => {
 describe('AdminMembersPage — dropdown gán gói loại gói giữ chỗ "Tùy chọn"', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetSummary.mockResolvedValue({ data: { data: null } });
     authState.phoneOtpEnabled = false;
   });
 
@@ -178,5 +182,120 @@ describe('AdminMembersPage — dropdown gán gói loại gói giữ chỗ "Tùy 
     const optionValues = Array.from(planSelect.options).map((o) => o.value);
     expect(optionValues).not.toContain('18');
     expect(optionValues).toContain('5');
+  });
+});
+
+// PR-9 (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30) — đầu trang 5 số, danh sách mặc định chỉ khách, bỏ cột "% AI" /
+// "Gửi lỗi 30 ngày", "nguy cơ" kèm lý do chữ.
+describe('AdminMembersPage — PR-9: đầu trang, nhóm, cột, lý do nguy cơ', () => {
+  const summary = {
+    customers: 8, paying: 4, trial: 3, expiring7d: 1, expiring7dPaying: 1, expired30d: 1, employees: 2, internal: 1, deleted: 1,
+  };
+  const riskMember = {
+    id: 12,
+    username: 'idle_user',
+    fullName: 'Lê Văn C',
+    email: 'c@test.local',
+    status: 'active',
+    segment: 'customer',
+    planState: 'trial',
+    employeeCount: 0,
+    churnRisk: true,
+    churnRiskReason: 'inactive_21d',
+    lastActivityAt: '2026-08-01T00:00:00.000Z',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+  const deletedMember = {
+    id: 13,
+    username: 'gone',
+    fullName: 'Đã Gỡ',
+    email: 'freed+13@deleted.local',
+    status: 'deleted',
+    segment: 'deleted',
+    planState: 'none',
+    employeeCount: 0,
+    churnRisk: false,
+    churnRiskReason: null,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    authState.phoneOtpEnabled = false;
+    mockGetPlans.mockResolvedValue({ data: { data: [] } });
+    mockGetSummary.mockResolvedValue({ data: { data: summary } });
+    mockGetMembers.mockResolvedValue(membersResponse([riskMember, deletedMember]));
+  });
+
+  it('hiện đúng 5 thẻ đầu trang với số từ API', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('members-summary-customers')).toBeInTheDocument());
+    const value = (key) => within(screen.getByTestId(`members-summary-${key}`)).getByText(/^\d+$/).textContent;
+    expect(value('customers')).toBe('8');
+    expect(value('paying')).toBe('4');
+    expect(value('trial')).toBe('3');
+    expect(value('expiring7d')).toBe('1');
+    expect(value('expired30d')).toBe('1');
+    const labels = ['Khách', 'Đang trả tiền', 'Đang dùng thử', 'Sắp hết hạn 7 ngày', 'Đã hết hạn 30 ngày'];
+    labels.forEach((label) => expect(screen.getAllByText(label).length).toBeGreaterThan(0));
+    expect(screen.getByText('Trong đó trả tiền: 1')).toBeInTheDocument();
+  });
+
+  it('lần tải đầu gọi API với segment=customer (mặc định chỉ khách), không kèm planState', async () => {
+    renderPage();
+    await waitFor(() => expect(mockGetMembers).toHaveBeenCalledTimes(1));
+    expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ role: 'user', segment: 'customer' }));
+    expect(mockGetMembers.mock.calls[0][0]).not.toHaveProperty('planState');
+  });
+
+  it('bấm thẻ "Đang trả tiền" → lọc planState=paying; bấm lại → bỏ lọc', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('members-summary-paying')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('members-summary-paying'));
+    await waitFor(() => expect(mockGetMembers).toHaveBeenLastCalledWith(
+      expect.objectContaining({ segment: 'customer', planState: 'paying' })
+    ));
+    fireEvent.click(screen.getByTestId('members-summary-paying'));
+    await waitFor(() => expect(mockGetMembers).toHaveBeenCalledTimes(3));
+    expect(mockGetMembers.mock.calls[2][0]).not.toHaveProperty('planState');
+  });
+
+  it('bộ lọc nhóm ghi số của từng nhóm và gửi segment tương ứng', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Nhân viên (2)' })).toBeInTheDocument());
+    expect(screen.getByRole('option', { name: 'Nội bộ (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: 'Đã xoá (1)' })).toBeInTheDocument();
+    const select = screen.getByRole('option', { name: 'Nhân viên (2)' }).closest('select');
+    fireEvent.change(select, { target: { value: 'employee' } });
+    await waitFor(() => expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ segment: 'employee' })));
+  });
+
+  it('không còn cột "% AI" và "Fail 30d"; có "Hoạt động gần nhất"', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('c@test.local')).toBeInTheDocument());
+    expect(screen.queryByText('% AI')).not.toBeInTheDocument();
+    expect(screen.queryByText('Fail 30d')).not.toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: 'Hoạt động gần nhất' })).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Đăng nhập gần nhất' })).not.toBeInTheDocument();
+  });
+
+  it('"Nguy cơ" kèm lý do bằng chữ; tài khoản đã xoá hiện "Đã gỡ", không phải "Đã khóa"', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('c@test.local')).toBeInTheDocument());
+    expect(screen.getByText('Nguy cơ')).toBeInTheDocument();
+    expect(screen.getByText('Hơn 21 ngày không hoạt động')).toBeInTheDocument();
+    const goneRow = screen.getByText('freed+13@deleted.local').closest('tr');
+    expect(within(goneRow).getByText('Đã gỡ')).toBeInTheDocument();
+    expect(within(goneRow).queryByText('Đã khóa')).not.toBeInTheDocument();
+  });
+
+  it('tab Admin: ẩn thẻ đầu trang và bộ lọc nhóm, không gửi segment', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('members-summary-customers')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: 'Admin' }));
+    await waitFor(() => expect(mockGetMembers).toHaveBeenLastCalledWith(expect.objectContaining({ role: 'admin' })));
+    expect(mockGetMembers.mock.calls[mockGetMembers.mock.calls.length - 1][0]).not.toHaveProperty('segment');
+    expect(screen.queryByTestId('members-summary-customers')).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: 'Nhân viên (2)' })).not.toBeInTheDocument();
   });
 });

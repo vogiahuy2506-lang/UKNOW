@@ -1,14 +1,36 @@
 import db from '../../config/database.js';
-import { aiCreditConsumptionRowSql } from '../../constants/aiCreditUsage.js';
+import {
+  activePlanSql,
+  customerSegmentSql,
+  expiredWithinSql,
+  expiringSql,
+  payingSql,
+  planStateFilterSql,
+  segmentFilterSql,
+} from '../../services/admin/customerDefinitions.js';
 
 /**
- * Danh sách tất cả user_admin, kèm thông tin gói và số nhân viên.
- * Hỗ trợ tìm kiếm theo tên/email và lọc theo plan/status.
+ * Danh sách thành viên kèm thông tin gói và số nhân viên.
+ *
+ * MẶC ĐỊNH CHỈ CÓ "KHÁCH" (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-9): không nhân viên thuần, không tài khoản nội bộ,
+ * không tài khoản đã xoá, không admin — định nghĩa ở customerDefinitions.js. `segment` chọn xem nhóm khác
+ * (employee / internal / deleted) hoặc 'all' (mọi nhóm trừ admin); `role: 'admin'` là tab Admin riêng.
+ * `planState` (paying / trial / expiring / expired30) là bộ lọc của các thẻ đầu trang: dùng ĐÚNG mảnh SQL đã đếm ở
+ * getMembersSummary nên bấm thẻ ra đúng số dòng.
+ *
+ * Bỏ khỏi bản cũ: cột "% AI" (kỳ dương lịch ≠ kỳ 30 ngày của khách và của cổng chặn — đã có ở trang AI) và "Gửi lỗi
+ * 30 ngày" (bộ đếm campaign_runs phình — đã có ở trang Giám sát gửi tin), cùng nhánh dự phòng "migration 007 chưa
+ * chạy": nhánh đó nuốt mọi lỗi SQL rồi trả danh sách KHÔNG có bộ lọc nhóm — đúng loại số sai im lặng cần tránh.
+ *
+ * `lastActivityAt` = mốc muộn hơn giữa lần đăng nhập gần nhất và lần cấp / xoay refresh token gần nhất. users.last_login_at
+ * chỉ đổi khi đăng nhập bằng mật khẩu / Google; refresh token xoay khi phiên còn dùng (access token 3 giờ) nên người dùng
+ * đều đặn không còn bị gắn "nguy cơ rời bỏ" chỉ vì lâu không gõ lại mật khẩu. Bảng refresh_tokens dọn 30 ngày sau hạn,
+ * đủ dài cho ngưỡng 21 ngày.
  */
-export async function findAllMembers({ search, planId, status, expiry, role, phoneVerified } = {}) {
-  // Default to role='user' for member listing, allow override
-  const roleCondition = role ? `u.role = '${role}'` : "u.role = 'user'";
-  const conditions = [roleCondition];
+export async function findAllMembers({ search, planId, status, expiry, role, phoneVerified, segment, planState } = {}) {
+  // `role` chỉ có hai giá trị hợp lệ; trước đây được nội suy thẳng vào SQL.
+  const isAdminView = role === 'admin';
+  const conditions = [isAdminView ? "u.role = 'admin'" : segmentFilterSql(segment, 'u')];
   const params = [];
 
   if (search) {
@@ -33,6 +55,8 @@ export async function findAllMembers({ search, planId, status, expiry, role, pho
   } else if (expiry === 'expired') {
     conditions.push(`u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at < NOW() AND u.active_plan_id IS NULL`);
   }
+  const planStateCondition = planStateFilterSql(planState, 'u');
+  if (planStateCondition) conditions.push(planStateCondition);
   if (phoneVerified === 'verified') {
     conditions.push(`u.phone_verified_at IS NOT NULL`);
   } else if (phoneVerified === 'unverified') {
@@ -42,67 +66,91 @@ export async function findAllMembers({ search, planId, status, expiry, role, pho
 
   const where = conditions.join(' AND ');
 
-  let rows;
-  try {
-    ({ rows } = await db.query(
-      `SELECT
-         u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
-         u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt",
-         u.last_login_at AS "lastLoginAt",
-         u.phone AS "phone", u.phone_verified_at AS "phoneVerifiedAt",
-         p.name AS "planName",
-         p.code AS "planCode",
-         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount",
-         (
-           SELECT COALESCE(SUM(cr.failed_sends), 0)::int
-           FROM campaigns c
-           JOIN campaign_runs cr ON cr.id_campaign = c.id
-           WHERE c.id_user = u.id
-             AND cr.started_at >= NOW() - INTERVAL '30 days'
-         ) AS "failedSends30d",
-         (
-           -- Loại dòng bán Marketplace (thu nhập người bán, ghi nhầm vào sổ tiêu thụ). Mốc vẫn là THÁNG dương lịch,
-           -- chưa theo kỳ 30 ngày của khách: đổi kỳ thuộc PR-9 (một định nghĩa khách cho admin).
-           SELECT COALESCE(SUM(ABS(delta)), 0)::int
-           FROM usage_logs ul
-           WHERE ul.id_user = u.id
-             AND ul.resource_type = 'ai_credit'
-             AND ${aiCreditConsumptionRowSql('ul')}
-             AND ul.created_at >= date_trunc('month', NOW() AT TIME ZONE 'Asia/Ho_Chi_Minh')
-         ) AS "aiCreditsUsedThisMonth",
-         COALESCE(p.ai_credits_per_period, 0)::int AS "aiCreditsLimit",
-         CASE
-           WHEN u.last_login_at IS NULL THEN TRUE
-           WHEN u.last_login_at < NOW() - INTERVAL '21 days' THEN TRUE
-           WHEN u.subscription_expires_at IS NOT NULL
-             AND u.subscription_expires_at <= NOW() + INTERVAL '7 days'
-             AND u.subscription_expires_at > NOW() THEN TRUE
-           ELSE FALSE
-         END AS "churnRisk"
-       FROM users u
-       LEFT JOIN plans p ON p.id = u.active_plan_id
-       WHERE ${where}
-       ORDER BY u.subscription_expires_at ASC NULLS LAST, u.created_at DESC`,
-      params
-    ));
-  } catch {
-    // Fallback khi migration 007 chưa chạy (cột subscription_expires_at chưa có)
-    ({ rows } = await db.query(
-      `SELECT
-         u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
-         u.active_plan_id AS "activePlanId", NULL AS "subscriptionExpiresAt",
-         u.phone AS "phone", u.phone_verified_at AS "phoneVerifiedAt",
-         p.name AS "planName",
-         p.code AS "planCode",
-         (SELECT COUNT(*) FROM user_members um WHERE um.owner_id = u.id) AS "employeeCount"
-       FROM users u
-       LEFT JOIN plans p ON p.id = u.active_plan_id
-       WHERE ${where}
-       ORDER BY u.created_at DESC`,
-      params
-    ));
-  }
+  const { rows } = await db.query(
+    `SELECT t.*, (t."churnRiskReason" IS NOT NULL) AS "churnRisk"
+       FROM (
+         SELECT
+           u.id, u.username, u.email, u.full_name AS "fullName", u.status, u.created_at AS "createdAt",
+           u.active_plan_id AS "activePlanId", u.subscription_expires_at AS "subscriptionExpiresAt",
+           u.last_login_at AS "lastLoginAt",
+           la.at AS "lastActivityAt",
+           u.phone AS "phone", u.phone_verified_at AS "phoneVerifiedAt",
+           p.name AS "planName",
+           p.code AS "planCode",
+           ${customerSegmentSql('u')} AS "segment",
+           (CASE
+              WHEN ${payingSql('u')} THEN 'paying'
+              WHEN ${activePlanSql('u')} THEN 'trial'
+              WHEN u.subscription_expires_at IS NOT NULL AND u.subscription_expires_at <= NOW() THEN 'expired'
+              ELSE 'none'
+            END) AS "planState",
+           -- Cùng cách đếm với cổng thêm nhân viên (countActiveEmployees): chỉ 'active' và tài khoản chưa xoá.
+           (SELECT COUNT(*) FROM user_members um
+              JOIN users e ON e.id = um.employee_id
+             WHERE um.owner_id = u.id AND um.status = 'active' AND e.status <> 'deleted') AS "employeeCount",
+           -- Lý do "nguy cơ rời bỏ" bằng mã (giao diện dịch ra chữ): chưa từng hoạt động / 21 ngày không hoạt động /
+           -- gói sắp hết hạn trong 7 ngày.
+           (CASE
+              WHEN la.at IS NULL THEN 'never_active'
+              WHEN la.at < NOW() - INTERVAL '21 days' THEN 'inactive_21d'
+              WHEN ${expiringSql('u', 7)} THEN 'expiring_7d'
+              ELSE NULL
+            END) AS "churnRiskReason"
+         FROM users u
+         LEFT JOIN plans p ON p.id = u.active_plan_id
+         LEFT JOIN LATERAL (
+           SELECT GREATEST(u.last_login_at, MAX(rt.created_at)) AS at
+             FROM refresh_tokens rt
+            WHERE rt.id_user = u.id
+         ) la ON TRUE
+         WHERE ${where}
+       ) t
+      ORDER BY t."subscriptionExpiresAt" ASC NULLS LAST, t."createdAt" DESC`,
+    params
+  );
   return rows;
+}
+
+/**
+ * Năm số đầu trang Thành viên + đếm các nhóm còn lại (để bộ lọc nhóm ghi số). Mọi số "khách" đều theo định nghĩa ở
+ * customerDefinitions.js; `expiring7d` / `expired30d` gồm cả khách dùng thử (khớp bộ lọc `planState`), `expiring7dPaying`
+ * là phần khách trả tiền trong đó (con số của Tổng quan).
+ */
+export async function getMembersSummary() {
+  const { rows } = await db.query(
+    `WITH c AS (
+       SELECT ${customerSegmentSql('u')} AS segment,
+              ${payingSql('u')} AS is_paying,
+              ${activePlanSql('u')} AS is_active,
+              ${expiringSql('u', 7)} AS is_expiring,
+              ${expiredWithinSql('u', 30)} AS is_expired30
+         FROM users u
+     )
+     SELECT
+       COUNT(*) FILTER (WHERE segment = 'customer') AS customers,
+       COUNT(*) FILTER (WHERE segment = 'customer' AND is_paying) AS paying,
+       COUNT(*) FILTER (WHERE segment = 'customer' AND is_active AND NOT is_paying) AS trial,
+       COUNT(*) FILTER (WHERE segment = 'customer' AND is_expiring) AS "expiring7d",
+       COUNT(*) FILTER (WHERE segment = 'customer' AND is_paying AND is_expiring) AS "expiring7dPaying",
+       COUNT(*) FILTER (WHERE segment = 'customer' AND is_expired30) AS "expired30d",
+       COUNT(*) FILTER (WHERE segment = 'employee') AS employees,
+       COUNT(*) FILTER (WHERE segment = 'internal') AS internal,
+       COUNT(*) FILTER (WHERE segment = 'deleted') AS deleted
+     FROM c`
+  );
+  const row = rows[0] || {};
+  const n = (value) => Number(value || 0);
+  return {
+    customers: n(row.customers),
+    paying: n(row.paying),
+    trial: n(row.trial),
+    expiring7d: n(row.expiring7d),
+    expiring7dPaying: n(row.expiring7dPaying),
+    expired30d: n(row.expired30d),
+    employees: n(row.employees),
+    internal: n(row.internal),
+    deleted: n(row.deleted),
+  };
 }
 
 export async function findMemberById(id) {

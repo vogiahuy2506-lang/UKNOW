@@ -4,7 +4,8 @@
  * tests/integration/aiCreditUsedPerCycle.test.js.
  *
  *   - aiUsage.repository.listCreditCustomers: tập khách "có dùng" trong 31 ngày (chỉ dòng bán → KHÔNG tính là có dùng).
- *   - adminMembers.repository.findAllMembers: cột "% AI" (aiCreditsUsedThisMonth).
+ *
+ * (Cột "% AI" của trang Thành viên đã bị bỏ ở PR-9 — số đó nằm ở trang AI — nên phần test findAllMembers ở đây cũng bỏ.)
  */
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
@@ -15,7 +16,6 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 }));
 
 const aiUsageRepository = (await import('../aiUsage.repository.js')).default;
-const { findAllMembers } = await import('../adminMembers.repository.js');
 
 const SALE_EXCLUSION_UL = "COALESCE(ul.metadata->>'type', '') <> 'marketplace_sale'";
 const sqlOf = (call) => String(call[0]).replace(/\s+/g, ' ');
@@ -43,20 +43,5 @@ describe('aiUsage.repository.listCreditCustomers', () => {
   it('mac dinh 31 ngay', async () => {
     await aiUsageRepository.listCreditCustomers();
     expect(mockDb.query.mock.calls[0][1]).toEqual([31]);
-  });
-});
-
-describe('adminMembers.repository.findAllMembers - cot % AI', () => {
-  beforeEach(() => {
-    mockDb.query.mockReset();
-    mockDb.query.mockResolvedValue({ rows: [] });
-  });
-
-  it('truy van con aiCreditsUsedThisMonth loai marketplace_sale', async () => {
-    await findAllMembers();
-    const sql = sqlOf(mockDb.query.mock.calls[0]);
-    const subselect = sql.slice(sql.indexOf('FROM usage_logs ul'), sql.indexOf('"aiCreditsUsedThisMonth"'));
-    expect(subselect).toContain("ul.resource_type = 'ai_credit'");
-    expect(subselect).toContain(SALE_EXCLUSION_UL);
   });
 });

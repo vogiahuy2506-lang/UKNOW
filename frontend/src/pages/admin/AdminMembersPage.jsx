@@ -26,6 +26,29 @@ import { isPlaceholderPlan } from '../../utils/placeholderPlan.util';
 // ── Helpers ───────────────────────────────────────────────────────────────────
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN') : '—';
 
+// Thẻ đầu trang (PR-9): bấm thẻ = lọc danh sách đúng theo điều kiện đã đếm. `filter` là giá trị planState gửi lên API
+// ('' = không lọc theo trạng thái gói).
+const SUMMARY_CARDS = [
+  { key: 'customers', filter: '' },
+  { key: 'paying', filter: 'paying' },
+  { key: 'trial', filter: 'trial' },
+  { key: 'expiring7d', filter: 'expiring' },
+  { key: 'expired30d', filter: 'expired30' },
+];
+
+const SummaryCard = ({ cardKey, value, hint, active, onClick, label }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    data-testid={`members-summary-${cardKey}`}
+    className={`card p-4 text-left transition-colors ${active ? 'ring-2 ring-primary-500' : 'hover:bg-gray-50'}`}
+  >
+    <p className="text-xs text-gray-500">{label}</p>
+    <p className="text-2xl font-bold text-gray-900 mt-0.5">{value}</p>
+    {hint && <p className="text-xs text-gray-400 mt-0.5">{hint}</p>}
+  </button>
+);
+
 const ExpiryBadge = ({ expiresAt, _hasPlan }) => {
   const { t } = useI18n();
   if (!expiresAt) return <span className="text-xs text-gray-400">—</span>;
@@ -294,6 +317,7 @@ const AdminMembersPage = () => {
   const { user: currentUser, phoneOtpEnabled } = useAuthStore();
   const [members, setMembers]     = useState([]);
   const [plans, setPlans]         = useState([]);
+  const [summary, setSummary]     = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters
@@ -302,6 +326,10 @@ const AdminMembersPage = () => {
   const [statusFilter, setStatusFilter] = useState('');
   const [expiryFilter, setExpiryFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('user');
+  // PR-9: danh sách mặc định CHỈ có khách; 'employee' / 'internal' / 'deleted' / 'all' xem nhóm còn lại.
+  const [segmentFilter, setSegmentFilter] = useState('customer');
+  // Bộ lọc theo thẻ đầu trang: '' | paying | trial | expiring | expired30.
+  const [planStateFilter, setPlanStateFilter] = useState('');
   // Chỉ có ý nghĩa khi phoneOtpEnabled — UI lọc này không render lúc cờ tắt (xem JSX),
   // nên state không bao giờ đổi khỏi '' trong trường hợp đó.
   const [phoneVerifiedFilter, setPhoneVerifiedFilter] = useState('');
@@ -321,12 +349,29 @@ const AdminMembersPage = () => {
   const [isPurging, setIsPurging]         = useState(false);
   const [statusUpdatingId, setStatusUpdatingId] = useState(null);
 
+  // Số đầu trang không phụ thuộc bộ lọc của danh sách; lỗi tải số không được làm hỏng danh sách.
+  const fetchSummary = async () => {
+    try {
+      const res = await adminMembersApiService.getSummary();
+      setSummary(res?.data?.data || null);
+    } catch {
+      setSummary(null);
+    }
+  };
+
   const fetchMembers = async (overrides = {}) => {
     setIsLoading(true);
+    fetchSummary();
     try {
       const params = {};
       const role = overrides.role ?? roleFilter;
+      const segment = overrides.segment ?? segmentFilter;
+      const planState = overrides.planState ?? planStateFilter;
       if (role) params.role = role;
+      if (role !== 'admin') {
+        if (segment) params.segment = segment;
+        if (planState) params.planState = planState;
+      }
       if (search)       params.search = search;
       if (planFilter)   params.planId = planFilter;
       if (statusFilter) params.status = statusFilter;
@@ -448,7 +493,31 @@ const AdminMembersPage = () => {
     fetchMembers({ role });
   };
 
+  const handleSegmentChange = (segment) => {
+    setSegmentFilter(segment);
+    fetchMembers({ segment });
+  };
+
+  // Bấm thẻ: lọc theo trạng thái gói của thẻ (bấm lại thẻ đang chọn = bỏ lọc). Thẻ "Khách" đưa danh sách về mặc định
+  // (chỉ khách, không lọc trạng thái gói). Các thẻ đếm KHÁCH nên luôn chuyển về nhóm "Khách".
+  const handleSummaryCardClick = (card) => {
+    const next = card.filter && planStateFilter === card.filter ? '' : card.filter;
+    setPlanStateFilter(next);
+    setSegmentFilter('customer');
+    fetchMembers({ planState: next, segment: 'customer' });
+  };
+
   const isAdminView = roleFilter === 'admin';
+
+  const segmentLabel = (member) => {
+    if (isAdminView) return t('adminMembers.segment.adminLabel');
+    switch (member.segment) {
+      case 'employee': return t('adminMembers.segment.employeeLabel');
+      case 'internal': return t('adminMembers.segment.internalLabel');
+      case 'deleted': return t('adminMembers.segment.deletedLabel');
+      default: return t('adminMembers.segment.customer');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -463,6 +532,30 @@ const AdminMembersPage = () => {
           {t('common.refresh')}
         </button>
       </div>
+
+      {/* Năm số đầu trang — theo định nghĩa "khách" (customerDefinitions.js); bấm thẻ để lọc danh sách */}
+      {!isAdminView && summary && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {SUMMARY_CARDS.map((card) => {
+            const hints = {
+              customers: t('adminMembers.summary.customersHint'),
+              trial: t('adminMembers.summary.trialHint'),
+              expiring7d: t('adminMembers.summary.expiring7dHint', { n: Number(summary.expiring7dPaying || 0).toLocaleString('vi-VN') }),
+            };
+            return (
+              <SummaryCard
+                key={card.key}
+                cardKey={card.key}
+                label={t(`adminMembers.summary.${card.key}`)}
+                value={Number(summary[card.key] || 0).toLocaleString('vi-VN')}
+                hint={hints[card.key]}
+                active={card.filter ? planStateFilter === card.filter : !planStateFilter && segmentFilter === 'customer'}
+                onClick={() => handleSummaryCardClick(card)}
+              />
+            );
+          })}
+        </div>
+      )}
 
       {/* Filters — 1 hàng */}
       <div className="card p-3">
@@ -491,6 +584,20 @@ const AdminMembersPage = () => {
               {t('adminMembers.roleFilterAdmin')}
             </button>
           </div>
+          {!isAdminView && (
+            <select
+              className="input py-1.5 text-sm shrink-0"
+              value={segmentFilter}
+              onChange={(e) => handleSegmentChange(e.target.value)}
+              aria-label={t('adminMembers.table.segment')}
+            >
+              <option value="customer">{t('adminMembers.segment.customer')}</option>
+              <option value="employee">{t('adminMembers.segment.employee', { n: summary?.employees ?? 0 })}</option>
+              <option value="internal">{t('adminMembers.segment.internal', { n: summary?.internal ?? 0 })}</option>
+              <option value="deleted">{t('adminMembers.segment.deleted', { n: summary?.deleted ?? 0 })}</option>
+              <option value="all">{t('adminMembers.segment.all')}</option>
+            </select>
+          )}
           <div className="flex flex-[2] min-w-0 items-center rounded-lg border border-gray-300 bg-white px-3 focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
             <HiOutlineSearch className="w-4 h-4 text-gray-400 shrink-0" />
             <input
@@ -558,13 +665,11 @@ const AdminMembersPage = () => {
               <thead>
                 <tr>
                   <th>{t('adminMembers.table.member')}</th>
-                  <th>{t('adminMembers.table.role')}</th>
+                  <th>{t('adminMembers.table.segment')}</th>
                   <th>{t('adminMembers.table.servicePlan')}</th>
                   <th>{t('adminMembers.table.employees')}</th>
                   <th>{t('adminMembers.table.phone')}</th>
-                  <th>{t('adminMembers.table.lastLogin')}</th>
-                  <th>{t('adminMembers.table.aiUsagePercent')}</th>
-                  <th>{t('adminMembers.table.failedSends30d')}</th>
+                  <th>{t('adminMembers.table.lastActivity')}</th>
                   <th>{t('adminMembers.table.churnRisk')}</th>
                   <th>{t('adminMembers.table.status')}</th>
                   <th>{t('adminMembers.table.expiry')}</th>
@@ -590,14 +695,15 @@ const AdminMembersPage = () => {
                           </div>
                         </div>
                       </td>
-                      <td className="text-sm text-gray-600">
-                        {isAdminView ? t('adminMembers.roleBadgeAdmin') : t('adminMembers.roleFilterUser')}
-                      </td>
+                      <td className="text-sm text-gray-600">{segmentLabel(m)}</td>
                       <td>
                         {m.planName
                           ? <span className="badge badge-success">{m.planName}</span>
                           : <span className="badge badge-gray">{t('adminMembers.noPlan')}</span>
                         }
+                        {(m.planState === 'paying' || m.planState === 'trial') && (
+                          <p className="text-xs text-gray-400 mt-0.5">{t(`adminMembers.planState.${m.planState}`)}</p>
+                        )}
                       </td>
                       <td className="text-sm text-gray-600">{m.employeeCount ?? 0}</td>
                       <td className="text-sm text-gray-600 whitespace-nowrap">
@@ -611,25 +717,26 @@ const AdminMembersPage = () => {
                         )}
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
-                        {m.lastLoginAt ? new Date(m.lastLoginAt).toLocaleDateString('vi-VN') : '—'}
-                      </td>
-                      <td className="text-sm text-gray-600">
-                        {m.aiCreditsLimit > 0
-                          ? `${Math.min(100, Math.round((Number(m.aiCreditsUsedThisMonth || 0) / m.aiCreditsLimit) * 100))}%`
-                          : '—'}
-                      </td>
-                      <td className={`text-sm ${Number(m.failedSends30d) > 0 ? 'text-red-500 font-medium' : 'text-gray-400'}`}>
-                        {m.failedSends30d ?? 0}
+                        {m.lastActivityAt ? new Date(m.lastActivityAt).toLocaleDateString('vi-VN') : '—'}
                       </td>
                       <td>
-                        {m.churnRisk
-                          ? <span className="badge badge-warning">{t('adminMembers.table.churnRiskBadge')}</span>
-                          : <span className="text-gray-300">—</span>}
+                        {m.churnRisk ? (
+                          <div>
+                            <span className="badge badge-warning">{t('adminMembers.table.churnRiskBadge')}</span>
+                            {m.churnRiskReason && (
+                              <p className="text-xs text-gray-500 mt-0.5">{t(`adminMembers.churnReason.${m.churnRiskReason}`)}</p>
+                            )}
+                          </div>
+                        ) : <span className="text-gray-300">—</span>}
                       </td>
                       <td>
-                        <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
-                          {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
-                        </span>
+                        {m.status === 'deleted' ? (
+                          <span className="badge badge-gray">{t('adminMembers.statusDeleted')}</span>
+                        ) : (
+                          <span className={`badge ${isActive ? 'badge-success' : 'badge-gray'}`}>
+                            {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
+                          </span>
+                        )}
                       </td>
                       <td>
                         <ExpiryBadge expiresAt={m.subscriptionExpiresAt} hasPlan={!!m.activePlanId} />

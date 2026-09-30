@@ -1,5 +1,6 @@
 import {
   findAllMembers,
+  getMembersSummary as getMembersSummaryRow,
   findMemberById,
   setMemberStatus,
   promoteMemberToSuperAdmin,
@@ -13,6 +14,10 @@ import { revokeAllRefreshTokensForUser } from '../../repositories/user/user.repo
 
 export async function listMembers(filters) {
   return findAllMembers(filters);
+}
+
+export async function getMembersSummary() {
+  return getMembersSummaryRow();
 }
 
 export async function toggleMemberStatus(id) {

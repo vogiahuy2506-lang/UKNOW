@@ -17,7 +17,6 @@ import usageTrackingRepository from '../../src/repositories/payment/usageTrackin
 import aiUsageRepository from '../../src/repositories/admin/aiUsage.repository.js';
 import aiCreditMeter from '../../src/services/ai/aiCreditMeter.service.js';
 import { getAiUsageOverview } from '../../src/services/admin/aiUsage.service.js';
-import { findAllMembers } from '../../src/repositories/admin/adminMembers.repository.js';
 import { getTeamOverview } from '../../src/services/user/teamOverview.service.js';
 import { truncateAll, createUser, createPlan } from './helpers/db.js';
 
@@ -407,25 +406,6 @@ describe('getAiUsageOverview — lượt AI theo gói, kỳ hiện tại của t
       .rows.map((row) => row.username).sort();
     // c5 có (lượt kỳ trước trong 31 ngày) nhưng đã dùng 0 kỳ này; v3 dùng cách 29 ngày vẫn trong 31 ngày
     expect(names).toEqual(['c1', 'c2', 'c3', 'c5', 'c7', 'c8', 'v1', 'v2', 'v3']);
-  });
-});
-
-// ===========================================================================
-// 5. Admin Thành viên: cột "% AI" loại dòng bán
-// ===========================================================================
-describe('admin Thành viên — aiCreditsUsedThisMonth loại dòng bán Marketplace', () => {
-  it('5 lượt + 20 (MUA) = 25; dòng bán 900 không cộng', async () => {
-    const plan = await planWithLimit(100);
-    const seller = await createUser({ username: 'member_seller', planId: plan.id });
-    await answerRow(seller.id, 5);
-    await purchaseRow(seller.id, 20, seller.id);
-    await saleRow(seller.id, 900);
-
-    const members = await findAllMembers();
-    const row = members.find((member) => Number(member.id) === Number(seller.id));
-    expect(row).toBeDefined();
-    expect(row.aiCreditsUsedThisMonth).toBe(25);
-    expect(row.aiCreditsLimit).toBe(100);
   });
 });
 
