@@ -54,12 +54,26 @@ describe('giá seed gói tuỳ chỉnh (custom_plan_pricing) — Telegram/WhatsA
   it.each([
     ['telegram_accounts', 'max_telegram_accounts'],
     ['whatsapp_accounts', 'max_whatsapp_accounts'],
-  ])('%s: đơn giá = Zalo, min/included = 0 (chọn 0 được), cột gói đúng', (key, planColumn) => {
+  ])('%s: đơn giá = Zalo, seed 269 min/included = 0 rồi 270 nâng lên 1 (như Zalo/email), cột gói đúng', (key, planColumn) => {
     const [unitPrice, unitSize, included, min] = rowNumbers(migration.split('INSERT INTO custom_plan_pricing')[1], key);
     expect(unitPrice).toBe(zaloUnitPrice);
     expect(unitSize).toBe(1);
     expect(included).toBe(0);
     expect(min).toBe(0);
     expect(migration).toContain(`'${key}', '${planColumn}'`);
+  });
+
+  // 30/09/2026 (user chốt): để 0 thì cột gói = 0 → tài khoản TG/WA đang dùng bị khoá; Zalo/email min/included = 1 nên chưa từng vậy.
+  it('migration 270 nâng min/included của telegram_accounts + whatsapp_accounts lên 1 và bootstrap khớp', () => {
+    const m270 = read('migrations/270_custom_plan_telegram_whatsapp_included_1.sql');
+    const bootstrap = read('tests/integration/sql/bootstrap.sql');
+    expect(m270).toMatch(/UPDATE custom_plan_pricing[\s\S]*included_qty\s*=\s*1[\s\S]*min_qty\s*=\s*1[\s\S]*'telegram_accounts',\s*'whatsapp_accounts'/);
+    for (const key of ['telegram_accounts', 'whatsapp_accounts']) {
+      const custom = [...bootstrap.matchAll(new RegExp(`\\(\\s*'${key}'\\s*,\\s*'max_${key}'\\s*,([^)]*)\\)`, 'g'))]
+        .map((x) => x[1].split(',').map((p) => p.trim()).filter((p) => /^-?\d+$/.test(p)).map(Number));
+      expect(custom.length).toBe(1);
+      const [, , included, min] = custom[0];
+      expect({ included, min }).toEqual({ included: 1, min: 1 });
+    }
   });
 });
