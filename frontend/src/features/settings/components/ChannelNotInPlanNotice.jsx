@@ -5,11 +5,11 @@ import { useI18n } from '../../../i18n';
 /**
  * P9 (PLAN_TG_WA_DAY_DU) — gói hiện tại KHÔNG có kênh (trần tài khoản kênh = 0): thay cho nút kết nối/quét QR.
  * Lối thoát: mua thêm slot (Nạp thêm) hoặc nâng gói.
- * @param {{channel: 'telegram'|'whatsapp'}} props
+ * @param {{channel: 'telegram'|'whatsapp'|'zalo'}} props
  */
 export default function ChannelNotInPlanNotice({ channel }) {
   const { t } = useI18n();
-  const name = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+  const name = { telegram: 'Telegram', whatsapp: 'WhatsApp', zalo: 'Zalo' }[channel] || 'WhatsApp';
   return (
     <div
       role="alert"

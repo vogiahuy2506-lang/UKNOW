@@ -4,7 +4,7 @@ import { getChannelEntitlements } from '../../services/channelEntitlement.servic
 export const CHANNEL_ENTITLEMENTS_QUERY_KEY = ['channel-entitlements'];
 
 /**
- * P9 — quyền kênh Telegram/WhatsApp theo gói (theo CHỦ workspace, do backend tính).
+ * P9 — quyền kênh Telegram/WhatsApp/Zalo (P12) theo gói (theo CHỦ workspace, do backend tính).
  * Cache theo workspace nhờ `clearQueryCache()` khi đăng xuất/đổi workspace; `staleTime: 0` để mua thêm slot/đổi gói
  * xong mở lại trang là lấy số mới (endpoint rẻ).
  *
@@ -25,7 +25,9 @@ export function useChannelEntitlements(options = {}) {
   return {
     telegram: data ? data.telegram !== false : true,
     whatsapp: data ? data.whatsapp !== false : true,
-    limits: data?.limits || { telegram: null, whatsapp: null },
+    // P12 — tài khoản Zalo cá nhân; thiếu trường (backend cũ) -> có quyền.
+    zalo: data ? data.zalo !== false : true,
+    limits: data?.limits || { telegram: null, whatsapp: null, zalo: null },
     isLoading: query.isLoading,
     refetch: query.refetch,
   };

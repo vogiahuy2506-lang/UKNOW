@@ -9,13 +9,28 @@ import { MemoryRouter } from 'react-router-dom';
 import { I18nProvider } from '../../i18n';
 import ChannelSettings from './ChannelSettings.jsx';
 
-const entitlementsState = { telegram: true, whatsapp: true, limits: {}, isLoading: false };
+const entitlementsState = { telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false };
 vi.mock('../../hooks/queries/useChannelEntitlements', () => ({
   useChannelEntitlements: () => entitlementsState,
 }));
 
 vi.mock('./EmailSettings', () => ({ default: () => null }));
-vi.mock('./ZaloSettings', () => ({ default: () => null }));
+vi.mock('../../features/settings/services/zaloSettingsApi.service', () => ({
+  default: {
+    listAccounts: vi.fn().mockResolvedValue({
+      data: {
+        data: {
+          items: [
+            { id: 8, displayName: 'Zalo Cũ', status: 'disconnected', isActive: true, isDefault: false },
+            { id: 9, displayName: 'Zalo Nối', status: 'connected', isActive: true, isDefault: true },
+          ],
+        },
+      },
+    }),
+    deleteAccount: vi.fn(),
+    setDefaultAccount: vi.fn(),
+  },
+}));
 vi.mock('./FacebookSettings', () => ({ default: () => null }));
 vi.mock('../../features/settings/components/ChannelAccountSendSettings', () => ({ default: () => null }));
 vi.mock('../../features/settings/components/WhatsAppTestSend', () => ({ default: () => null }));
@@ -69,6 +84,7 @@ describe('ChannelSettings — P9 quyền kênh theo gói', () => {
   beforeEach(() => {
     entitlementsState.telegram = true;
     entitlementsState.whatsapp = true;
+    entitlementsState.zalo = true;
     entitlementsState.isLoading = false;
   });
 
@@ -104,6 +120,30 @@ describe('ChannelSettings — P9 quyền kênh theo gói', () => {
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Cũ' })).toBeTruthy());
     expect(screen.queryByTestId('channel-not-in-plan')).toBeNull();
     expect(screen.getAllByRole('button', { name: SCAN_QR }).length).toBeGreaterThan(0);
+  });
+
+  // P12 — Zalo cá nhân vào cùng cổng quyền kênh theo gói.
+  it('P12 Zalo trần 0: có thông báo nhắc Zalo + link mua thêm, KHÔNG có nút Tạo QR / Kết nối lại / khôi phục phiên (tài khoản cũ vẫn hiện, xoá vẫn được)', async () => {
+    entitlementsState.zalo = false;
+    renderAt('#zalo');
+    expect(screen.getByTestId('channel-not-in-plan').textContent).toMatch(/Zalo/);
+    expect(screen.getByRole('link', { name: /mua thêm slot|buy more slots/i }).getAttribute('href')).toBe('/app/topup');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Zalo Cũ' })).toBeTruthy());
+    expect(screen.queryByRole('button', { name: /tạo qr|create qr/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /kết nối lại|reconnect/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /khôi phục|restore/i })).toBeNull();
+    expect(screen.getAllByTitle(/xóa|xoá|delete/i).length).toBeGreaterThan(0);
+  });
+
+  it('P12 Zalo có quyền (kể cả limit=1): không thông báo, có nút Tạo QR và Kết nối lại cho tài khoản mất kết nối', async () => {
+    entitlementsState.zalo = true;
+    entitlementsState.limits = { zalo: 1 };
+    renderAt('#zalo');
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Zalo Cũ' })).toBeTruthy());
+    expect(screen.queryByTestId('channel-not-in-plan')).toBeNull();
+    expect(screen.getAllByRole('button', { name: /tạo qr|create qr/i }).length).toBeGreaterThan(0);
+    expect(screen.getAllByRole('button', { name: /kết nối lại|reconnect/i }).length).toBeGreaterThan(0);
+    entitlementsState.limits = {};
   });
 
   it('đang tải quyền: chưa vẽ nội dung kênh (không nhấp nháy nút quét QR)', () => {

@@ -16,7 +16,7 @@ const TABS = [
 ];
 
 const ChannelSettings = () => {
-  // P9 — gói không có Telegram/WhatsApp (trần 0): tab vẫn hiện nhưng nội dung là thông báo + nút mua, không có nút kết nối/quét QR.
+  // P9 — gói không có Telegram/WhatsApp/Zalo (trần 0): tab vẫn hiện nhưng nội dung là thông báo + nút mua, không có nút kết nối/quét QR.
   const entitlements = useChannelEntitlements();
   // Allow opening directly on a tab via /app/settings/channels#tab (used by the
   // OAuth callback redirect after Embedded Signup).
@@ -67,7 +67,12 @@ const ChannelSettings = () => {
 
       {active === 'email' && <EmailSettings />}
       {active === 'facebook' && <FacebookSettings />}
-      {active === 'zalo' && <ZaloSettings />}
+      {active === 'zalo' && (entitlements.isLoading ? null : (
+        <>
+          {!entitlements.zalo && <ChannelNotInPlanNotice channel="zalo" />}
+          <ZaloSettings readOnly={!entitlements.zalo} />
+        </>
+      ))}
       {active === 'whatsapp' && (entitlements.isLoading ? null : (
         <>
           {!entitlements.whatsapp && <ChannelNotInPlanNotice channel="whatsapp" />}

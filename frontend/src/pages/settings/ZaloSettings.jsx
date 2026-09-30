@@ -62,7 +62,8 @@ function normalizeAccount(account = {}) {
   };
 }
 
-const ZaloSettings = () => {
+// P12 — `readOnly`: gói không có kênh Zalo -> chỉ xem/đặt mặc định/xoá tài khoản cũ, KHÔNG có nút tạo QR/quét lại/khôi phục phiên.
+const ZaloSettings = ({ readOnly = false } = {}) => {
   const { t } = useI18n();
   const [accounts, setAccounts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -469,6 +470,7 @@ const ZaloSettings = () => {
         </div>
       )}
 
+      {!readOnly && (
       <div className="card p-6 space-y-4">
         <div className="flex items-center gap-2 text-gray-900">
           <HiOutlineQrcode className="w-5 h-5 text-primary-600" />
@@ -486,6 +488,7 @@ const ZaloSettings = () => {
           </button>
         </div>
       </div>
+      )}
 
       <div className="card p-6">
           <div className="flex items-center justify-between mb-4">
@@ -501,7 +504,7 @@ const ZaloSettings = () => {
             <div className="text-center py-12 text-gray-500">
               <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
               <p>{t('zaloSettings.noAccounts')}</p>
-              <p className="text-xs mt-1">{t('zaloSettings.addFirstAccount')}</p>
+              {!readOnly && <p className="text-xs mt-1">{t('zaloSettings.addFirstAccount')}</p>}
             </div>
           ) : (
             <div className="space-y-3">
@@ -657,7 +660,7 @@ const ZaloSettings = () => {
                     </div>
 
                     <div className="flex items-center gap-2">
-                      {!(account.status === 'connected' && account.isActive) && (
+                      {!readOnly && !(account.status === 'connected' && account.isActive) && (
                         <>
                           {(account.status === 'needs_reauth' || account.status === 'disconnected') && (
                             <button
