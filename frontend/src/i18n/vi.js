@@ -8141,7 +8141,7 @@ export default {
   consentRequired: {
     title: 'Cập nhật thoả thuận điều khoản & dữ liệu cá nhân',
     titleOutdated: 'Văn bản pháp lý đã cập nhật, vui lòng xác nhận lại',
-    description: 'Theo quy định của Nghị định 330/2026/NĐ-CP về bảo vệ dữ liệu cá nhân, vui lòng xác nhận sự đồng ý của bạn đối với các văn bản pháp lý dưới đây.',
+    description: 'Theo quy định của Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 và Nghị định 356/2025/NĐ-CP, vui lòng xác nhận sự đồng ý của bạn đối với các văn bản pháp lý dưới đây.',
     agreeTerms: 'Tôi đã đọc và đồng ý với',
     termsLink: 'Điều khoản dịch vụ',
     agreePrivacy: 'Tôi đã đọc và đồng ý với',
@@ -9502,7 +9502,7 @@ export default {
     bankAccountLabel: 'Số tài khoản ngân hàng',
     bankAccountNameLabel: 'Tên chủ tài khoản (viết hoa không dấu)',
     legalNoticeTitle: 'Lưu ý pháp lý',
-    legalNotice: 'Theo Nghị định 330/2026/NĐ-CP và Điều khoản Sử dụng mục 15.3: Thông tin CCCD/CMND và tài khoản ngân hàng chỉ được sử dụng cho mục đích khấu trừ thuế TNCN, kê khai thuế theo quy định pháp luật và chi trả hoa hồng. Dữ liệu được mã hoá theo tiêu chuẩn an toàn khi lưu trữ.',
+    legalNotice: 'Theo Luật Bảo vệ dữ liệu cá nhân số 91/2025/QH15 và Điều khoản Sử dụng mục 15.3: Thông tin CCCD/CMND và tài khoản ngân hàng chỉ được sử dụng cho mục đích khấu trừ thuế TNCN, kê khai thuế theo quy định pháp luật và chi trả hoa hồng. Dữ liệu được mã hoá theo tiêu chuẩn an toàn khi lưu trữ.',
     submitWithdrawal: 'Gửi yêu cầu rút',
     submitting: 'Đang gửi yêu cầu...',
     errMinAmount: 'Số tiền rút tối thiểu là 1.000.000đ',
