@@ -68,8 +68,8 @@ import { isCompilableIntent, deriveIntent } from './campaignIntent.schema.js';
 import { compileCampaign } from './campaignCompiler.service.js';
 import { mergeCompiledWithContent, assertNoEmptyContent } from './campaignScriptMerge.service.js';
 import { fillContentSlots } from './campaignSlotFiller.service.js';
-import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
-import { isAdapterCampaignChannel } from '../campaign/campaignChannelFlags.util.js';
+import campaignNodeRegistryService, { isZaloPlanNodeSubtype } from '../campaign/campaignNodeRegistry.service.js';
+import { isAdapterCampaignChannel, isChannelBlockedByPlan, buildChannelNotInPlanMessage } from '../campaign/campaignChannelFlags.util.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
 
 export const USER_CONFIRMS_FILE_RE = /vẫn\s*dùng|van\s*dung|cứ\s*tiếp\s*tục|cu\s*tiep\s*tuc|dùng\s*(?:file|tệp|này|luôn|đi)|tiếp\s*tục|tiep\s*tuc|làm\s*tiếp|lam\s*tiep|cứ\s*làm|cu\s*lam|proceed|continue/i;
@@ -229,7 +229,7 @@ CHỈ được dùng các node sau. Ngoài danh sách này đều KHÔNG hợp l
     "zaloRecipientField": "phone",
     "message": "Lời mời kết bạn...",
     "saveMessageLog": true
-
+${aiPromptResources.getBlockedZaloPromptNotice()}
 ── END ──
 • nodeType: "end", nodeSubtype: "end"
   config: {}
@@ -1135,7 +1135,7 @@ NODE TYPES THỰC SỰ TỒN TẠI trong hệ thống (chỉ dùng các loại n
 • action/send_email — gửi email (recipientSource, recipientNodeId, recipientField: "email", delayValue, delayUnit)
 • action/send_zalo_personal — gửi Zalo cá nhân (zaloAccountId, zaloRecipientSource, zaloRecipientNodeId, zaloRecipientField: "phone"|"uid", delayValue, delayUnit)
 • action/send_zalo_group — gửi Zalo nhóm (zaloAccountId, zaloGroupSource: "node", zaloGroupNodeId, zaloGroupField: "groupId", zaloGroupMessage, delayValue, delayUnit)
-• action/send_zalo_friend_request — gửi lời mời kết bạn${aiPromptResources.getAdapterNodeTypesPromptLines()}
+• action/send_zalo_friend_request — gửi lời mời kết bạn${aiPromptResources.getAdapterNodeTypesPromptLines()}${aiPromptResources.getBlockedZaloPromptNotice()}
 • end/end — kết thúc
 
 DELAY: KHÔNG tạo node wait/delay riêng. Delay đặt trong delayValue+delayUnit của action node tiếp theo.
@@ -2360,6 +2360,11 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
 
     // Check each node
     for (const node of script.nodes) {
+      // P12 — node Zalo mà gói không có kênh Zalo: lỗi CỨNG (400 ở controller), không chỉ cảnh báo.
+      if (isZaloPlanNodeSubtype(node.nodeSubtype) && isChannelBlockedByPlan('zalo')) {
+        errors.push(buildChannelNotInPlanMessage('zalo'));
+        break;
+      }
       const validation = campaignNodeRegistryService.validateNodeConfig(node.nodeSubtype, node.config || {});
       if (!validation.valid) {
         warnings.push(`Node "${node.nodeName}": ${validation.errors.join(', ')}`);

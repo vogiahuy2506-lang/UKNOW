@@ -1,5 +1,5 @@
 import { normalizeChannel } from './aiCampaignWizard.service.js';
-import { isAdapterCampaignChannel, isAdapterCampaignChannelEnabled } from '../campaign/campaignChannelFlags.util.js';
+import { isAdapterCampaignChannel, isAdapterCampaignChannelEnabled, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
 import { MAX_CHANNEL_STEPS, countDripSteps } from '../../utils/channelSteps.util.js';
 
 /**
@@ -308,7 +308,9 @@ export function isCompilableIntent(intent) {
   const isAdapterChannel = isAdapterCampaignChannel(intent.channel);
   if (!intent.channel || !VALID_CHANNELS.has(intent.channel)
     // Kênh adapter chỉ biên dịch được khi cờ kênh bật (đọc lúc gọi) — tắt cờ thì như kênh không tồn tại.
-    || (isAdapterChannel && !isAdapterCampaignChannelEnabled(intent.channel))) {
+    || (isAdapterChannel && !isAdapterCampaignChannelEnabled(intent.channel))
+    // P12 — gói không có kênh Zalo: intent Zalo (cá nhân/nhóm) không biên dịch được (đọc lúc gọi, theo người đang chat).
+    || ((intent.channel === 'zalo' || intent.channel === 'zalo_group') && isChannelBlockedByPlan('zalo'))) {
     missing.push('channel');
   }
 

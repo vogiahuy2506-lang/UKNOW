@@ -16,6 +16,21 @@ import {
 } from './campaignChannelFlags.util.js';
 import { MAX_CHANNEL_STEPS, validateChannelSteps } from '../../utils/channelSteps.util.js';
 
+// P12 — node phụ thuộc kênh Zalo (tài khoản Zalo cá nhân): gửi + chọn tài khoản + lấy danh sách bạn/nhóm.
+const ZALO_PLAN_NODE_SUBTYPES = new Set([
+  'send_zalo_personal',
+  'send_zalo_group',
+  'send_zalo_friend_request',
+  'select_zalo_account',
+  'get_all_friends',
+  'get_all_groups',
+]);
+
+/** Subtype có thuộc kênh Zalo (bị cổng quyền kênh theo gói chặn) không. */
+export function isZaloPlanNodeSubtype(subtype) {
+  return ZALO_PLAN_NODE_SUBTYPES.has(String(subtype || ''));
+}
+
 class CampaignNodeRegistryService {
   constructor() {
     this._baseNodeTypes = this._buildNodeTypeRegistry();
@@ -28,9 +43,12 @@ class CampaignNodeRegistryService {
    */
   get nodeTypes() {
     const adapterNodes = this._buildAdapterNodeTypes();
-    return Object.keys(adapterNodes).length > 0
+    const merged = Object.keys(adapterNodes).length > 0
       ? { ...this._baseNodeTypes, ...adapterNodes }
       : this._baseNodeTypes;
+    // P12 — gói không có kênh Zalo: AI không được biết tới các node Zalo (validateNodeConfig coi là bị chặn theo gói).
+    if (!isChannelBlockedByPlan('zalo')) return merged;
+    return Object.fromEntries(Object.entries(merged).filter(([subtype]) => !isZaloPlanNodeSubtype(subtype)));
   }
 
   _buildAdapterNodeTypes() {
@@ -793,34 +811,40 @@ class CampaignNodeRegistryService {
     lines.push('      }');
     lines.push('    ]');
     lines.push('');
-    lines.push('★ NODE GỬI ZALO CÁ NHÂN - HỖ TRỢ NHIỀU TIN TRONG 1 NODE:');
-    lines.push('• nodeType: "action", nodeSubtype: "send_zalo_personal"');
-    lines.push('  config bắt buộc:');
-    lines.push('    "zaloAccountId": <ID|null>');
-    lines.push('    "zaloRecipientSource": "node"');
-    lines.push('    "zaloRecipientNodeId": "<tempId>"');
-    lines.push('    "zaloRecipientField": "phone"');
-    lines.push('    "zaloPersonalTemplateSteps": [          ← ★ MẢNG - NHIỀU TIN TRONG 1 NODE');
-    lines.push('      {');
-    lines.push('        "message": "Nội dung tin nhắn 1...",');
-    lines.push('        "delayValue": 0,                     ← ★ Gửi ngay');
-    lines.push('        "delayUnit": "days",');
-    lines.push('        "enableLinkTracking": true');
-    lines.push('      },');
-    lines.push('      {');
-    lines.push('        "message": "Nội dung tin nhắn 2...",');
-    lines.push('        "delayValue": 2,                     ← ★ Gửi sau 2 ngày');
-    lines.push('        "delayUnit": "days"');
-    lines.push('      }');
-    lines.push('    ]');
-    lines.push('');
-    lines.push('★ NODE GỬI ZALO NHÓM:');
-    lines.push('• nodeType: "action", nodeSubtype: "send_zalo_group"');
-    lines.push('  config: { "zaloGroupSource": "node", "zaloGroupNodeId": "<tempId>", "zaloGroupField": "groupId", "zaloGroupTemplateSteps": [...] }');
-    lines.push('');
-    lines.push('• nodeType: "action", nodeSubtype: "send_zalo_friend_request"');
-    lines.push('  config: { "zaloAccountId": <ID>, "zaloFriendSource": "node", ... }');
-    lines.push('');
+    // P12 — gói của người đang chat không có kênh Zalo: KHÔNG liệt kê node Zalo, nói rõ để LLM không dựng.
+    if (isChannelBlockedByPlan('zalo')) {
+      lines.push('⛔ KÊNH ZALO KHÔNG KHẢ DỤNG (gói của người dùng chưa có Zalo): TUYỆT ĐỐI KHÔNG tạo node send_zalo_personal, send_zalo_group, send_zalo_friend_request, select_zalo_account, get_all_friends, get_all_groups. Chỉ dùng các kênh còn lại.');
+      lines.push('');
+    } else {
+      lines.push('★ NODE GỬI ZALO CÁ NHÂN - HỖ TRỢ NHIỀU TIN TRONG 1 NODE:');
+      lines.push('• nodeType: "action", nodeSubtype: "send_zalo_personal"');
+      lines.push('  config bắt buộc:');
+      lines.push('    "zaloAccountId": <ID|null>');
+      lines.push('    "zaloRecipientSource": "node"');
+      lines.push('    "zaloRecipientNodeId": "<tempId>"');
+      lines.push('    "zaloRecipientField": "phone"');
+      lines.push('    "zaloPersonalTemplateSteps": [          ← ★ MẢNG - NHIỀU TIN TRONG 1 NODE');
+      lines.push('      {');
+      lines.push('        "message": "Nội dung tin nhắn 1...",');
+      lines.push('        "delayValue": 0,                     ← ★ Gửi ngay');
+      lines.push('        "delayUnit": "days",');
+      lines.push('        "enableLinkTracking": true');
+      lines.push('      },');
+      lines.push('      {');
+      lines.push('        "message": "Nội dung tin nhắn 2...",');
+      lines.push('        "delayValue": 2,                     ← ★ Gửi sau 2 ngày');
+      lines.push('        "delayUnit": "days"');
+      lines.push('      }');
+      lines.push('    ]');
+      lines.push('');
+      lines.push('★ NODE GỬI ZALO NHÓM:');
+      lines.push('• nodeType: "action", nodeSubtype: "send_zalo_group"');
+      lines.push('  config: { "zaloGroupSource": "node", "zaloGroupNodeId": "<tempId>", "zaloGroupField": "groupId", "zaloGroupTemplateSteps": [...] }');
+      lines.push('');
+      lines.push('• nodeType: "action", nodeSubtype: "send_zalo_friend_request"');
+      lines.push('  config: { "zaloAccountId": <ID>, "zaloFriendSource": "node", ... }');
+      lines.push('');
+    }
 
     // P8a — kênh adapter: chỉ liệt kê khi cờ kênh bật (đọc lúc gọi).
     if (isTelegramCampaignChannelEnabled()) {
@@ -973,7 +997,9 @@ Yêu cầu: Gửi 2 email - email chào hỏi ngay, email nhắc nhở sau 3 ng�
     const nodeType = this.nodeTypes[subtype];
     if (!nodeType) {
       // P9 — node kênh mà gói của người dùng không có: nói đúng lý do thay vì "subtype lạ".
-      const planChannel = subtype === 'send_telegram' ? 'telegram' : subtype === 'send_whatsapp' ? 'whatsapp' : null;
+      const planChannel = subtype === 'send_telegram' ? 'telegram'
+        : subtype === 'send_whatsapp' ? 'whatsapp'
+          : isZaloPlanNodeSubtype(subtype) ? 'zalo' : null;
       if (planChannel && isChannelBlockedByPlan(planChannel)) {
         return { valid: false, errors: [buildChannelNotInPlanMessage(planChannel)] };
       }

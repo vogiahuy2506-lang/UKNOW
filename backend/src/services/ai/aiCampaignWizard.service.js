@@ -4,6 +4,7 @@ import {
   getEnabledAdapterCampaignChannels,
   isAdapterCampaignChannel,
   isAdapterCampaignChannelEnabled,
+  isChannelBlockedByPlan,
 } from '../campaign/campaignChannelFlags.util.js';
 import {
   createEmptyCampaignBrief,
@@ -46,7 +47,15 @@ const CAMPAIGN_RESPONSE_TYPES = new Set([
 // Khai lại y hệt ở frontend (wizardContext.js) — test wizardContext.spec.js so khớp trực tiếp.
 export const FLOW_BOUNDARY_TYPES = new Set(['campaign_created', 'auto_created_success', 'campaign_abandoned']);
 
-export const normalizeChannel = (value = '') => {
+// P12 — gói của người đang chat không có kênh Zalo: Zalo (cá nhân/nhóm) coi như KHÔNG tồn tại trong wizard (đọc lúc gọi,
+// từ kho quyền của middleware `channelEntitlementContext`; ngoài ngữ cảnh -> không chặn, như trước P12).
+const dropZaloWhenBlockedByPlan = (channel) => (
+  (channel === 'zalo' || channel === 'zalo_group') && isChannelBlockedByPlan('zalo') ? null : channel
+);
+
+export const normalizeChannel = (value = '') => dropZaloWhenBlockedByPlan(normalizeChannelBase(value));
+
+const normalizeChannelBase = (value = '') => {
   const raw = String(value || '').trim().toLowerCase();
   if (!raw) return null;
   if (raw === 'zalo_personal') return 'zalo';
@@ -108,7 +117,9 @@ const inferAdapterChannelFromText = (normalized) => {
   return isAdapterCampaignChannelEnabled(channel) ? channel : null;
 };
 
-const inferChannelFromText = (text = '') => {
+const inferChannelFromText = (text = '') => dropZaloWhenBlockedByPlan(inferChannelFromTextBase(text));
+
+const inferChannelFromTextBase = (text = '') => {
   const normalized = String(text || '').toLowerCase();
   const adapterChannel = inferAdapterChannelFromText(normalized);
   if (adapterChannel) return adapterChannel;
@@ -614,8 +625,11 @@ export function buildChannelQuestion(locale = 'vi') {
           wizardGate: 'channel',
           options: [
             { value: 'email', label: isEnglish ? 'Email' : 'Email' },
-            { value: 'zalo', label: isEnglish ? 'Zalo personal' : 'Zalo cá nhân' },
-            { value: 'zalo_group', label: isEnglish ? 'Zalo groups' : 'Zalo nhóm' },
+            // P12 — gói không có kênh Zalo: bỏ 2 lựa chọn Zalo khỏi thẻ chọn kênh.
+            ...(isChannelBlockedByPlan('zalo') ? [] : [
+              { value: 'zalo', label: isEnglish ? 'Zalo personal' : 'Zalo cá nhân' },
+              { value: 'zalo_group', label: isEnglish ? 'Zalo groups' : 'Zalo nhóm' },
+            ]),
             // P8a — chỉ hiện kênh adapter khi cờ bật (đọc lúc gọi).
             ...getEnabledAdapterCampaignChannels().map((channel) => ({
               value: channel,

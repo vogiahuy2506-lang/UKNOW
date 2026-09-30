@@ -29,15 +29,25 @@ function isWhatsAppCampaignEnabled() {
 const BLOCKED_CHANNEL_PATTERN = Object.freeze({
   telegram: /telegram/i,
   whatsapp: /whats\s?app/i,
+  zalo: /zalo/i,
 });
+
+// P12 — Zalo là kênh MẶC ĐỊNH của hầu hết câu gửi chiến dịch ("Email và Zalo"): câu còn nhắc Email thì KHÔNG chặn ở đây
+// (Zalo bị bỏ khỏi wizard/registry, chiến dịch vẫn dựng được bằng Email; node Zalo lọt vào sẽ bị 400 lúc tạo).
+const EMAIL_MENTION_RE = /\bemail\b|\bmail\b|thư điện tử|thu dien tu/i;
 
 function findBlockedChannelInSendRequest(text) {
   if (!SEND_CONTEXT_RE.test(text) || CHATBOT_CONTEXT_RE.test(text)) return null;
-  return getChannelsBlockedByPlan().find((channel) => BLOCKED_CHANNEL_PATTERN[channel].test(text)) || null;
+  // Kênh adapter có cờ bật mà gói không có + Zalo (không có cờ env — chỉ theo gói).
+  const blockedChannels = [...getChannelsBlockedByPlan(), ...(isChannelBlockedByPlan('zalo') ? ['zalo'] : [])];
+  return blockedChannels.find((channel) => (
+    BLOCKED_CHANNEL_PATTERN[channel].test(text)
+    && !(channel === 'zalo' && EMAIL_MENTION_RE.test(text))
+  )) || null;
 }
 
 function notInPlanResult(channel) {
-  const name = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+  const name = { telegram: 'Telegram', whatsapp: 'WhatsApp', zalo: 'Zalo' }[channel] || channel;
   return { kind: 'unsupported', id: 'channel_not_in_plan', channel, label: name };
 }
 
@@ -234,12 +244,24 @@ const STATIC_CORE_CAPABILITIES = [
     },
 ];
 
+const NO_ZALO_LABELS = {
+  template: { vi: 'soạn template Email', en: 'draft Email message templates' },
+  campaign: { vi: 'tạo chiến dịch qua Email', en: 'create Email campaigns' },
+};
+
+function withoutZaloLabel(capability) {
+  const label = NO_ZALO_LABELS[capability.id];
+  return label ? { ...capability, label } : capability;
+}
+
 const CAPABILITY_DEFINITIONS = {
   // P8a — core/guide/unsupported ĐỌC LÚC GỌI (getter): thành phần phụ thuộc cờ Telegram/WhatsApp
   // (telegram_campaign/whatsapp_campaign có mặt hay không; label + regex kênh của unsupported_channel) phải luôn
   // phản ánh giá trị process.env HIỆN TẠI, không phải giá trị lúc module được import.
   get core() {
-    return [...buildAdapterCampaignCapabilities(), ...STATIC_CORE_CAPABILITIES];
+    const capabilities = [...buildAdapterCampaignCapabilities(), ...STATIC_CORE_CAPABILITIES];
+    // P12 — gói không có kênh Zalo: nhãn "LÀM ĐƯỢC" không được hứa Zalo (giữ nguyên regex/matches, chỉ đổi nhãn).
+    return isChannelBlockedByPlan('zalo') ? capabilities.map(withoutZaloLabel) : capabilities;
   },
   get guide() {
     return STATIC_GUIDE_CAPABILITIES;

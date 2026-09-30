@@ -1,7 +1,7 @@
 import businessProfileService, { serializeProductList } from './businessProfile.service.js';
 import productRepository from '../../repositories/products/product.repository.js';
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
-import { getEnabledAdapterCampaignChannels } from '../campaign/campaignChannelFlags.util.js';
+import { getEnabledAdapterCampaignChannels, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
 
 /**
  * Format user resources for AI campaign prompts.
@@ -65,6 +65,18 @@ class AiPromptResourcesService {
       lines.push('• action/send_whatsapp — gửi WhatsApp, MỘT tin gửi ngay (whatsappSessionKey, recipientSource: "whatsapp_conversations"|"node"|"manual", recipientNodeId + recipientColumn khi node, recipientKeys: SĐT khi manual, steps: [{ message }] đúng 1 phần tử). KHÔNG cần select_zalo_account; KHÔNG có delay/nhiều bước');
     }
     return lines.length > 0 ? `\n${lines.join('\n')}` : '';
+  }
+
+  /**
+   * P12 — gói của người đang chat không có kênh Zalo: câu cấm dựng node Zalo nối vào prompt chiến dịch (prompt
+   * cứng còn liệt kê node Zalo). Rỗng khi có quyền -> prompt giữ nguyên từng byte. Chặn cứng vẫn ở
+   * `validateNodeConfig`/`validateCampaignScript` (400 nói đúng lý do), đây là để LLM khỏi dựng ngay từ đầu.
+   * @returns {string}
+   */
+  getBlockedZaloPromptNotice() {
+    return isChannelBlockedByPlan('zalo')
+      ? '\n⛔ KÊNH ZALO KHÔNG KHẢ DỤNG: gói của người dùng chưa có Zalo. TUYỆT ĐỐI KHÔNG tạo node send_zalo_personal, send_zalo_group, send_zalo_friend_request, select_zalo_account, get_all_friends, get_all_groups; bỏ qua mọi dòng mô tả node Zalo ở trên. Nếu người dùng chỉ muốn Zalo, hãy nói gói chưa có kênh Zalo (mua thêm slot ở Nạp thêm hoặc nâng gói) và đề xuất Email.\n'
+      : '';
   }
 
   /**

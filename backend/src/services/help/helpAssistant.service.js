@@ -13,7 +13,7 @@ import {
   formatAssistantCapabilities,
 } from '../ai/assistantCapabilities.js';
 import { isPlanAdviceQuestion } from '../../utils/planAdviceIntent.util.js';
-import { getEnabledAdapterCampaignChannels } from '../campaign/campaignChannelFlags.util.js';
+import { getEnabledAdapterCampaignChannels, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
 import { answerPlanAdvice } from './planAdvisor.service.js';
 
 const FIXED_REPLIES = {
@@ -145,11 +145,12 @@ function fixedCapabilityReply(probe, locale) {
   const lang = normalizeLocale(locale);
   // P8a — kênh nào trợ lý dựng được phụ thuộc cờ Telegram/WhatsApp (đọc lúc gọi).
   const adapterNames = getEnabledAdapterCampaignChannels().map((c) => (c === 'telegram' ? 'Telegram' : 'WhatsApp'));
-  const channelNames = ['Email', 'Zalo', ...adapterNames];
+  // P12 — gói không có kênh Zalo: không gợi ý Zalo là kênh thay thế.
+  const channelNames = ['Email', ...(isChannelBlockedByPlan('zalo') ? [] : ['Zalo']), ...adapterNames];
   const head = channelNames.slice(0, -1);
   const last = channelNames[channelNames.length - 1];
-  const supportedChannelsVi = `${head.join(', ')} hoặc ${last}`;
-  const supportedChannelsEn = channelNames.length === 2 ? `${head[0]} or ${last}` : `${head.join(', ')}, or ${last}`;
+  const supportedChannelsVi = head.length === 0 ? last : `${head.join(', ')} hoặc ${last}`;
+  const supportedChannelsEn = head.length === 0 ? last : (channelNames.length === 2 ? `${head[0]} or ${last}` : `${head.join(', ')}, or ${last}`);
   const replies = {
     vi: {
       core: `Có, mình làm được ${probe.label}. Bạn muốn bắt đầu không? Cho mình biết mục tiêu, sản phẩm/dịch vụ và đối tượng bạn muốn hướng tới nhé.`,
