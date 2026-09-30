@@ -21,8 +21,14 @@ export function stuckEinvoiceKindSql(staleHoursPlaceholder) {
   // PLAN_HOAN_TIEN_DON_HANG (27/09) — hoá đơn của đơn đã hoàn tiền bị CHỦ Ý dừng (failed /
   // ORDER_REFUNDED, adminOrderRefund.repository.js). Không loại ở đây thì mã lỗi ngoài danh sách
   // retry xếp nó vào 'dead' → cảnh báo hoá đơn kẹt bắn mãi cho một việc đã xong.
+  //
+  // PR-10 (C-22) — hoá đơn ĐÃ phát hành (issued / cqt_ok) không bao giờ "kẹt". Nhánh 'stalled' cuối chỉ nhìn
+  // updated_at nên mọi hoá đơn đã phát hành cũ hơn N giờ bị coi là kẹt → trang admin (không có WHERE trạng
+  // thái như cảnh báo) liệt kê cả đống hoá đơn xong, số ≠ số cảnh báo, hoá đơn kẹt thật chìm trong đó.
+  // Đặt tiền lọc trạng thái NGAY TRONG mệnh đề dùng chung để hai nơi không thể lệch nhau.
   return `CASE
   WHEN e.error_code = 'ORDER_REFUNDED' THEN NULL
+  WHEN e.status NOT IN ('pending', 'processing', 'failed', 'cqt_rejected') THEN NULL
   WHEN e.status = 'cqt_rejected' THEN 'dead'
   WHEN e.status = 'failed'
     AND (e.error_code IS NULL OR NOT (e.error_code = ANY(ARRAY[${codes}]::text[]))) THEN 'dead'

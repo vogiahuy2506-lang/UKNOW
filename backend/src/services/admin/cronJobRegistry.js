@@ -2,6 +2,8 @@
  * Danh mục cron cố định của hệ thống.
  * `tracked: true` = đã gọi recordRun.
  * `optional: true` = có thể không được đăng ký lúc khởi động (env).
+ * `monthly: true` = chạy ~1 lần/tháng; lịch sử `cron_job_runs` của job này được giữ lâu hơn 14 ngày mặc định
+ *   (xem `deleteOlderThan` + scheduler) để trang "Tác vụ định kỳ" không báo "Chưa ghi nhận" cho job khoẻ.
  * KHÔNG gồm cron động campaign_schedules (scheduler.js ~:270).
  * KHÔNG gồm Zalo / WhatsApp Baileys / Telegram keep-alive (setInterval scheduler).
  */
@@ -274,6 +276,7 @@ export const CRON_JOBS = [
     description: 'Gửi email tổng hợp hoạt động chatbot tháng trước cho chủ shop có cấu hình nhận theo tháng.',
     impact: 'Chủ shop không nhận được thư tổng kết tháng về hiệu quả hoạt động của trợ lý AI.',
     tracked: true,
+    monthly: true,
   },
   {
     code: 'affiliate_revenue_sweep',
@@ -290,8 +293,14 @@ export const CRON_JOBS = [
     description: 'Tính hoa hồng theo bậc cho tháng liền trước và chạy lại vài tháng cũ để cấp bù hoa hồng treo (khách bổ sung SĐT muộn). Tắt mặc định trên production qua AFFILIATE_CLOSING_ENABLED.',
     impact: 'Hoa hồng tháng đó không được tính vào ví đối tác; hoa hồng treo do khách bổ sung SĐT muộn không bao giờ được cấp bù.',
     tracked: true,
+    monthly: true,
   },
 ];
+
+/** Mã các job chạy hằng tháng — giữ lịch sử lâu hơn khi dọn `cron_job_runs`. */
+export function getMonthlyCronJobCodes() {
+  return CRON_JOBS.filter((j) => j.monthly).map((j) => j.code);
+}
 
 export function getCronJobByCode(code) {
   return CRON_JOBS.find((j) => j.code === code) || null;

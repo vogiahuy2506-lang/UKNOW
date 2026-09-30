@@ -147,7 +147,7 @@ export default function AffiliatePage() {
     amountToNextTier = 0,
     estimatedCommission = 0,
     hasPendingWithdrawal = false,
-    pendingApproval = { pendingRevenue: 0, pendingBuyersCount: 0, events: [] },
+    pendingApproval = { pendingRevenue: 0, pendingBuyersCount: 0, pendingEventsCount: 0, events: [] },
     monthlyHistory = [],
     withdrawalHistory = [],
     ledgerHistory = [],
@@ -155,8 +155,10 @@ export default function AffiliatePage() {
   } = data || {};
 
   const canWithdraw = currentBalance >= MIN_WITHDRAWAL_AMOUNT && !hasPendingWithdrawal;
-  const pendingBuyersCount = pendingApproval.pendingBuyersCount || 0;
   const pendingEvents = pendingApproval.events || [];
+  // Nhãn nói "đơn" thì phải đếm ĐƠN (sự kiện doanh thu), không phải số NGƯỜI MUA (`pendingBuyersCount`).
+  // Một người mua 3 đơn trước đây hiện "1 đơn" trong khi bảng bên dưới liệt kê 3 dòng (C-17).
+  const pendingOrdersCount = Number(pendingApproval.pendingEventsCount ?? pendingEvents.length) || 0;
   const pendingCommissionEstimated = Math.round((pendingApproval.pendingRevenue || 0) * (currentTier.ratePercent / 100));
 
   const taxAmount = Math.round(currentBalance * 0.1);
@@ -325,10 +327,10 @@ export default function AffiliatePage() {
       />
 
       {/* Khung cảnh báo: CHỈ khi còn đơn chưa tính hoa hồng */}
-      {pendingBuyersCount > 0 && (
+      {pendingOrdersCount > 0 && (
         <Notice
           variant="warning"
-          title={t('affiliate.pendingNoticeTitle', { count: pendingBuyersCount })}
+          title={t('affiliate.pendingNoticeTitle', { count: pendingOrdersCount })}
           action={
             <button
               type="button"
@@ -337,7 +339,7 @@ export default function AffiliatePage() {
             >
               {showPendingList
                 ? t('affiliate.hidePendingOrders')
-                : t('affiliate.viewPendingOrders', { count: pendingBuyersCount })}
+                : t('affiliate.viewPendingOrders', { count: pendingOrdersCount })}
             </button>
           }
         >
@@ -427,7 +429,8 @@ export default function AffiliatePage() {
                     <th className="px-6 py-3">{t('affiliate.month')}</th>
                     <th className="px-6 py-3 text-right">{t('affiliate.grossRevenue')}</th>
                     <th className="px-6 py-3">{t('affiliate.currentTier')}</th>
-                    <th className="px-6 py-3 text-right">{t('affiliate.estimatedCommission')}</th>
+                    {/* Cột này lấy `affiliate_periods.commission_amount` = số ĐÃ CHỐT sổ, không còn là ước tính (C-17). */}
+                    <th className="px-6 py-3 text-right">{t('affiliate.closedCommission')}</th>
                     <th className="px-6 py-3">{t('affiliate.closedAt')}</th>
                   </tr>
                 </thead>

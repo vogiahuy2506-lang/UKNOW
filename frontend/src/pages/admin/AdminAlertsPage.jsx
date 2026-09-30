@@ -118,7 +118,8 @@ const AdminAlertsPage = () => {
                   <td className="text-sm">{r.thresholdValue ?? '—'}</td>
                   <td className="text-sm">{r.windowMinutes ? `${r.windowMinutes}p` : '—'}</td>
                   <td>
-                    <span className={`badge ${r.severity === 'critical' ? 'badge-danger' : 'badge-warning'}`}>
+                    {/* `badge-danger` không có trong index.css nên mức "critical" không có màu; lớp đúng là badge-error (C-15). */}
+                    <span className={`badge ${r.severity === 'critical' ? 'badge-error' : 'badge-warning'}`}>
                       {r.severity}
                     </span>
                   </td>

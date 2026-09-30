@@ -339,4 +339,64 @@ describe('AffiliatePage — Frontend UI', () => {
     );
     expect(elementsWithDarkClass).toHaveLength(0);
   });
+
+  // PR-10 (C-17a) — "{n} đơn chưa được tính hoa hồng" / "Xem {n} đơn" trước đây nhận số NGƯỜI MUA
+  // (pendingBuyersCount) trong khi danh sách bên dưới liệt kê từng ĐƠN (events).
+  it('7. Khung cảnh báo đếm ĐƠN (pendingEventsCount), không phải số người mua: 1 người mua 3 đơn → "3 đơn"', async () => {
+    mockGetOverview.mockResolvedValueOnce({
+      data: baseOverviewData({
+        pendingApproval: {
+          pendingRevenue: 897000,
+          pendingBuyersCount: 1,
+          pendingEventsCount: 3,
+          events: [
+            { id: 401, buyerEmailMasked: 'mua***@gmail.com', amount: 299000, createdAt: '2026-09-10T00:00:00.000Z' },
+            { id: 402, buyerEmailMasked: 'mua***@gmail.com', amount: 299000, createdAt: '2026-09-11T00:00:00.000Z' },
+            { id: 403, buyerEmailMasked: 'mua***@gmail.com', amount: 299000, createdAt: '2026-09-12T00:00:00.000Z' },
+          ],
+        },
+      }),
+    });
+
+    const view = render(
+      <I18nProvider>
+        <AffiliatePage />
+      </I18nProvider>
+    );
+    await waitFor(() => expect(view.getByText('AFF001')).toBeInTheDocument());
+
+    expect(view.getByText(/3 đơn chưa được tính hoa hồng/)).toBeInTheDocument();
+    expect(view.queryByText(/^1 đơn chưa được tính hoa hồng/)).not.toBeInTheDocument();
+    fireEvent.click(view.getByRole('button', { name: /Xem 3 đơn/i }));
+    expect(view.getAllByText('mua***@gmail.com')).toHaveLength(3);
+  });
+
+  // PR-10 (C-17b) — cột hoa hồng của tab "theo tháng" là số ĐÃ CHỐT sổ (affiliate_periods), không phải ước tính.
+  it('8. Tab theo tháng: cột hoa hồng ghi "Hoa hồng đã chốt", không ghi "ước tính"', async () => {
+    mockGetOverview.mockResolvedValueOnce({
+      data: baseOverviewData({
+        monthlyHistory: [
+          {
+            id: 1,
+            monthKey: '2026-08',
+            grossRevenue: 20000000,
+            tierLevel: 3,
+            ratePercent: 20,
+            commissionAmount: 4000000,
+            closedAt: '2026-09-02T03:00:00.000Z',
+          },
+        ],
+      }),
+    });
+
+    const view = render(
+      <I18nProvider>
+        <AffiliatePage />
+      </I18nProvider>
+    );
+    await waitFor(() => expect(view.getByText('AFF001')).toBeInTheDocument());
+
+    expect(view.getByRole('columnheader', { name: 'Hoa hồng đã chốt' })).toBeInTheDocument();
+    expect(view.queryByRole('columnheader', { name: 'Hoa hồng ước tính' })).not.toBeInTheDocument();
+  });
 });

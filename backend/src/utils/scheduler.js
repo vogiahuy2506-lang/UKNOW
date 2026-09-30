@@ -702,7 +702,13 @@ export const initScheduler = () => {
         console.log(`[Scheduler] Reset daily_sent_count: ${rowCount} email accounts`);
         let pruned = 0;
         try {
-          pruned = await cronJobRunRepository.deleteOlderThan({ olderThanDays: 14 });
+          // Job hằng tháng giữ 45 ngày (C6-01): 14 ngày < chu kỳ tháng nên "lần chạy gần nhất" luôn bị xoá trước lần kế.
+          // Import nằm TRONG try dọn dẹp để lỗi nạp registry không làm hỏng việc reset daily_sent_count ở trên.
+          const { getMonthlyCronJobCodes } = await import('../services/admin/cronJobRegistry.js');
+          pruned = await cronJobRunRepository.deleteOlderThan({
+            olderThanDays: 14,
+            keepJobCodes: getMonthlyCronJobCodes(),
+          });
           if (pruned > 0) {
             console.log(`[Scheduler] Đã xoá ${pruned} dòng cron_job_runs cũ hơn 14 ngày`);
           }

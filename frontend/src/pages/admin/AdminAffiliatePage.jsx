@@ -435,7 +435,7 @@ export default function AdminAffiliatePage() {
                       <th className="px-4 py-3">{t('affiliate.grossRevenue')}</th>
                       <th className="px-4 py-3">{t('affiliate.currentTier')}</th>
                       <th className="px-4 py-3">{t('affiliate.commissionRate')}</th>
-                      <th className="px-4 py-3">{t('affiliate.estimatedCommission')}</th>
+                      <th className="px-4 py-3">{t('affiliate.closedCommission')}</th>
                       <th className="px-4 py-3">{t('affiliate.closedAt')}</th>
                       <th className="px-4 py-3 text-right">{t('common.actions')}</th>
                     </tr>

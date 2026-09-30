@@ -61,12 +61,22 @@ export async function listLatestByJob({ limit = 100 } = {}) {
   return rows;
 }
 
-/** Xoá lịch sử chạy cũ hơn `olderThanDays` (mặc định 14). */
-export async function deleteOlderThan({ olderThanDays = 14 } = {}) {
+/**
+ * Xoá lịch sử chạy cũ hơn `olderThanDays` (mặc định 14).
+ *
+ * Job chạy HÀNG THÁNG (chatbot_digest_monthly, affiliate_month_closing) chỉ có ~1 dòng/tháng nên giữ lâu hơn
+ * (`keepJobCodes` giữ tới `keepDays`, mặc định 45): với 14 ngày, dòng lần chạy cuối bị xoá sau nửa tháng và trang
+ * "Tác vụ định kỳ" báo "Chưa ghi nhận" + "Hỏng thì…" ~16 ngày mỗi tháng cho job hoàn toàn khoẻ (C6-01).
+ */
+export async function deleteOlderThan({ olderThanDays = 14, keepJobCodes = [], keepDays = 45 } = {}) {
   const days = Math.max(1, Number(olderThanDays) || 14);
+  const keepCodes = Array.isArray(keepJobCodes) ? keepJobCodes.filter(Boolean) : [];
+  const longDays = Math.max(days, Number(keepDays) || 45);
   const { rowCount } = await db.query(
-    `DELETE FROM cron_job_runs WHERE started_at < NOW() - make_interval(days => $1)`,
-    [days]
+    `DELETE FROM cron_job_runs
+     WHERE started_at < NOW() - make_interval(days => $1)
+       AND (NOT (job_code = ANY($2::text[])) OR started_at < NOW() - make_interval(days => $3))`,
+    [days, keepCodes, longDays]
   );
   return rowCount || 0;
 }

@@ -10,7 +10,10 @@
  * @returns {'active'|'expired'|'disabled'}
  */
 export const getVoucherLifecycleStatus = (voucher, now = Date.now()) => {
-  if (voucher.isActive) return 'active';
+  // Hạn được xét TRƯỚC cờ isActive: cờ này chỉ bị cron 00:30 hằng ngày hạ xuống (và cron đó nằm sau bước đồng bộ
+  // khoá học nên có thể không chạy), trong khi cổng áp mã ở server đã chặn theo `ends_at >= NOW()`. Xét cờ trước
+  // thì voucher quá hạn vẫn hiện "Đang chạy" ở trang admin dù khách không dùng được nữa (C-21).
   if (voucher.endsAt && new Date(voucher.endsAt).getTime() < now) return 'expired';
+  if (voucher.isActive) return 'active';
   return 'disabled';
 };

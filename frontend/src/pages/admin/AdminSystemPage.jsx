@@ -347,7 +347,9 @@ export default function AdminSystemPage() {
     if (!overview) return null;
     const cpuTone = metricTone(overview.cpu?.percent, 75, 90);
     const memoryTone = metricTone(overview.memory?.percent, 85, 95);
-    const diskTone = metricTone(overview.disk?.percent, 80, 90);
+    // Ngưỡng ổ đĩa theo chính sách backend (storageCapacity.util.js DEFAULT_POLICY: cảnh báo 70%, nghiêm trọng 90%).
+    // Trước đây cứng 80 nên khoảng 70–79% thẻ vẫn xanh trong khi mục Cảnh báo đã bật "Ổ đĩa đang vượt …" (C6).
+    const diskTone = metricTone(overview.disk?.percent, 70, 90);
     return { cpuTone, memoryTone, diskTone };
   }, [overview]);
 
