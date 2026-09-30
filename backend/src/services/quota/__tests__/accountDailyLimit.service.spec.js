@@ -30,6 +30,7 @@ jest.unstable_mockModule('../../../repositories/sendQuota.repository.js', () => 
   countZaloSentTodayWithLedger: jest.fn(),
   countEmailSentInCycleWithLedger: jest.fn(),
   countZaloSentInCycleWithLedger: jest.fn(),
+  countAdapterSentInCycleWithLedger: jest.fn(), // P10
   countCombinedSentInCycleWithLedger: jest.fn(),
   countEmployeeSentTodayWithLedger: jest.fn(),
   countEmployeeSentInCycleWithLedger: jest.fn(),

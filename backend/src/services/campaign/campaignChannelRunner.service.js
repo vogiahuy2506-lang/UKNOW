@@ -13,6 +13,7 @@ import { resolveStepDelayMs } from '../../utils/channelSteps.util.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import campaignShutdownGate from './campaignShutdownGate.js';
 import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
+import { debitAdapterMessageIfNeeded } from '../payment/topupWallet.service.js';
 import { applyAccountDelayOverride } from '../../utils/channelSendSpeed.util.js';
 import {
   reserveSendQuota,
@@ -263,10 +264,9 @@ function resolveRecipientRows({ config, nodeOutputs, lastOutputItems }) {
 /**
  * PR-4 — quotaGate THẬT, engine truyền mặc định cho MỌI node adapter (thay bản throw
  * CHANNEL_QUOTA_NOT_WIRED của PR-3). Khuôn ĐÚNG `reserveCampaignZaloQuota`
- * (campaignZaloSender.service.js:1987-2050): `reserveSendQuota()` nhận `channel: quotaChannel`
- * ('zalo') là cột limit/CHECK thật sự bị trừ (SỬA PR-4: không migration mới nới `chk_sqr_channel`,
- * reservation của kênh adapter TRÔNG Y HỆT một reservation Zalo bình thường —
- * evaluateReservationQuotaPolicy vì vậy KHÔNG cần sửa gì thêm).
+ * (campaignZaloSender.service.js:1987-2050): `reserveSendQuota()` nhận `channel: quotaChannel` là khoá hạn mức
+ * thật sự bị trừ. P10: `quotaChannel` = 'telegram' | 'whatsapp' (hạn mức tin/tháng RIÊNG, `plans.monthly_<kênh>_limit`,
+ * ví `<kênh>_messages`; migration 271 mở `chk_sqr_channel`); trước P10 cả hai mượn 'zalo' để tránh migration.
  *
  * LỆCH LỆNH GIAO (phát hiện qua test tích hợp (g), đã báo lại) — lệnh giao viết
  * `channel: descriptor.key` (kênh THẬT) cho `buildCampaignReservationKey`, nhưng
@@ -288,7 +288,7 @@ export function createCampaignChannelQuotaGate() {
      * @param {string} input.realChannel descriptor.key — vd 'telegram' (chỉ dùng để ghi vào
      *   requestPayload.channel cho dễ đọc log/fingerprint — KHÔNG dùng cho reservation KEY, xem
      *   ghi chú "LỆCH LỆNH GIAO" phía trên).
-     * @param {string} input.quotaChannel descriptor.quotaChannel — 'email' | 'zalo' (dùng cho
+     * @param {string} input.quotaChannel descriptor.quotaChannel — 'telegram' | 'whatsapp' (P10; dùng cho
      *   CẢ reservation KEY lẫn reserveSendQuota's channel — cột limit/CHECK thật).
      * @param {number} [input.quantity=1]
      * @param {number} input.userId billingUserId (chủ workspace — campaign luôn tính quota chủ).
@@ -315,10 +315,9 @@ export function createCampaignChannelQuotaGate() {
       // LỆCH LỆNH GIAO (phát hiện qua test (g), báo lại) — lệnh giao viết
       // `channel: descriptor.key` (kênh THẬT, vd 'telegram') cho reservationKey, nhưng
       // `CANONICAL_CAMPAIGN` (sendQuota.repository.js) hard-code đoạn kênh của key phải khớp
-      // `(email|zalo)` — bất kỳ kênh thật nào khác 'zalo' đều bị validateReservationKey chặn
-      // INVALID_RESERVATION_KEY ngay khi vào mode enforce/test_enforce. Dùng `quotaChannel`
-      // ('zalo') ở đây thay vì `realChannel` — an toàn vì `nodeId` đã tự phân biệt kênh (một
-      // node chỉ gắn với đúng 1 subtype/kênh, không có 2 kênh thật cùng dùng chung nodeId).
+      // `(email|zalo)` (P10 đã mở thành email|zalo|telegram|whatsapp) — dùng `quotaChannel` (= khoá kênh từ P10)
+      // cho cả KEY lẫn reserveSendQuota; `nodeId` đã tự phân biệt kênh (một node chỉ gắn với đúng 1 subtype).
+      // `sourceType: 'campaign_zalo'` GIỮ NGUYÊN: allowlist SEND_QUOTA_RESERVATION_SOURCES/log chẩn đoán đã khoá theo tên đó.
       const reservationKey = buildCampaignReservationKey({
         runId,
         nodeId,
@@ -794,6 +793,15 @@ export async function runAdapterSendNode(ctx) {
           if (quotaActive) {
             // eslint-disable-next-line no-await-in-loop
             await quotaGate.consume(reservationId, { responseSnapshot: sendResult || null });
+          } else {
+            // P10 — đường legacy (mode off/shadow): không có reservation nên phải tự trừ ví top-up của kênh khi tin
+            // vượt hạn mức gói (giống Zalo ở campaignRun.updateZaloMessageTrackingMeta). Không ném: tin đã đi.
+            // eslint-disable-next-line no-await-in-loop
+            await debitAdapterMessageIfNeeded({
+              billingUserId: userId,
+              channel: descriptor.quotaChannel,
+              messageId,
+            });
           }
           hasSentAny = true;
           transientAttempts = 0;

@@ -87,6 +87,7 @@ jest.unstable_mockModule('../../../repositories/sendQuota.repository.js', () => 
   countZaloSentTodayWithLedger: jest.fn(),
   countEmailSentInCycleWithLedger: jest.fn(),
   countZaloSentInCycleWithLedger: jest.fn(),
+  countAdapterSentInCycleWithLedger: jest.fn(), // P10
   countCombinedSentInCycleWithLedger: jest.fn(),
   countEmployeeSentTodayWithLedger: jest.fn(),
   countEmployeeSentInCycleWithLedger: jest.fn(),
@@ -101,7 +102,10 @@ jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
   nextVnMonthStart: jest.fn(() => new Date('2026-02-01T17:00:00.000Z')),
   _clearQuotaCache: jest.fn(),
 }));
-jest.unstable_mockModule('../../payment/topupWallet.service.js', () => ({ maybeDebitWalletForSend: jest.fn() }));
+jest.unstable_mockModule('../../payment/topupWallet.service.js', () => ({
+  maybeDebitWalletForSend: jest.fn(),
+  debitAdapterMessageIfNeeded: jest.fn(), // P10 — campaignChannelRunner import
+}));
 
 const { default: campaignRunService } = await import('../campaignRun.service.js');
 

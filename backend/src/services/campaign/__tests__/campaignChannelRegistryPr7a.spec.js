@@ -45,14 +45,14 @@ describe('campaignChannelRegistry — WhatsApp (W4a)', () => {
     expect(campaignChannelRegistry.isKnownSendSubtype('send_whatsapp')).toBe(false);
   });
 
-  it('cờ bật -> whatsapp đúng hợp đồng, có continuous + replay (P7), quota đếm vào zalo', () => {
+  it('cờ bật -> whatsapp đúng hợp đồng, có continuous + replay (P7), hạn mức RIÊNG (P10: quotaChannel whatsapp)', () => {
     process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
     expect(getEnabledAdapterChannelsForBuilder()).toEqual([
       { key: 'whatsapp', sendNodeSubtype: 'send_whatsapp', label: 'WhatsApp' },
     ]);
     const descriptor = campaignChannelRegistry.getAdapterDescriptorBySubtype('send_whatsapp');
     expect(descriptor).toMatchObject({
-      key: 'whatsapp', engine: 'adapter', quotaChannel: 'zalo',
+      key: 'whatsapp', engine: 'adapter', quotaChannel: 'whatsapp',
       continuousSupported: true, continuousReplay: true,
     });
     expect(campaignChannelRegistry.getContinuousSupportedSubtypes()).toContain('send_whatsapp');
@@ -68,11 +68,18 @@ describe('campaignChannelRegistry — WhatsApp (W4a)', () => {
     expect(campaignChannelRegistry.getContinuousReplaySubtypes()).toContain('send_telegram');
   });
 
-  it('đếm quota Zalo luôn có whatsapp + telegram bất kể cờ; email không có', () => {
-    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo')).toEqual(
-      expect.arrayContaining(['whatsapp', 'telegram'])
-    );
+  it('P10: mỗi kênh đếm hạn mức của CHÍNH nó bất kể cờ; Zalo/email KHÔNG còn nhận tin Telegram/WhatsApp', () => {
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('whatsapp')).toEqual(['whatsapp']);
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('telegram')).toEqual(['telegram']);
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo')).toEqual([]);
     expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('email')).toEqual([]);
+  });
+
+  it('P10: quotaChannel của descriptor = khoá kênh (telegram/whatsapp) khi cờ bật', () => {
+    process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
+    process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
+    expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_telegram').quotaChannel).toBe('telegram');
+    expect(campaignChannelRegistry.getAdapterDescriptorBySubtype('send_whatsapp').quotaChannel).toBe('whatsapp');
   });
 
   it('hai cờ cùng bật -> cả hai kênh', () => {

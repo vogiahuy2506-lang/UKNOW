@@ -1,5 +1,5 @@
 /**
- * Wallet debit helpers for consumable top-ups (emails / zalo_messages / ai_credits).
+ * Wallet debit helpers for consumable top-ups (emails / zalo_messages / telegram_messages / whatsapp_messages / ai_credits).
  * Debit must run inside an open transaction with the same client that records the send.
  */
 import {
@@ -10,11 +10,10 @@ import {
   sumWalletDebits,
 } from '../../repositories/payment/topup.repository.js';
 import { EFFECTIVE_PLAN_ID_SQL } from '../../utils/billingCycle.util.js';
+import { WALLET_ITEM_BY_QUOTA_CHANNEL } from '../../constants/sendQuotaChannels.js';
 
-export const WALLET_ITEM_BY_CHANNEL = Object.freeze({
-  email: 'emails',
-  zalo: 'zalo_messages',
-});
+// P10 — thêm telegram_messages / whatsapp_messages; bảng gốc ở constants/sendQuotaChannels.js.
+export const WALLET_ITEM_BY_CHANNEL = WALLET_ITEM_BY_QUOTA_CHANNEL;
 
 /**
  * @param {import('pg').PoolClient} client
@@ -134,6 +133,63 @@ export async function debitZaloPersonalInboxIfNeeded(client, { billingUserId, me
     planLimit: Number.isFinite(planLimit) ? planLimit : null,
     usageCountAfterSend,
   });
+}
+
+/**
+ * P10 — trừ ví top-up (telegram_messages / whatsapp_messages) cho MỘT tin chiến dịch Telegram/WhatsApp đã gửi xong, ở đường
+ * legacy (SEND_QUOTA_RESERVATION_MODE off/shadow — production hiện là shadow). Ở mode enforce việc trừ ví đi qua
+ * `consumeSendQuota` (reservation) nên KHÔNG gọi hàm này. Trước P10 tin adapter không hề trừ ví (đếm chung vào Zalo, cổng cho
+ * qua khi ví Zalo còn số dư nhưng không ghi debit) — từ khi có ví riêng, thiếu bước này ví sẽ dùng mãi không hết.
+ *
+ * Tự mở giao dịch riêng (dòng ccm đã markSent trước đó, không có TX chung để nối vào). Idempotent theo `ccm:<messageId>`
+ * (UNIQUE item_key+source_key) — gọi lại không trừ hai lần. Không ném lỗi ra ngoài: tin đã đi, ví lệch chỉ ghi log.
+ *
+ * @param {{ billingUserId: number|string, channel: 'telegram'|'whatsapp', messageId: number|string }} input
+ */
+export async function debitAdapterMessageIfNeeded({ billingUserId, channel, messageId }) {
+  const itemKey = WALLET_ITEM_BY_QUOTA_CHANNEL[channel];
+  if (!billingUserId || !messageId || !itemKey || (channel !== 'telegram' && channel !== 'whatsapp')) {
+    return { debited: false, reason: 'missing_args' };
+  }
+  const { default: db } = await import('../../config/database.js');
+  const { PLAN_MONTHLY_LIMIT_COLUMN } = await import('../../constants/sendQuotaChannels.js');
+  const { getBillingCycle } = await import('../../utils/billingCycle.util.js');
+  const { countChannelSentInCycle, _clearQuotaCache } = await import('../../utils/userSendLimit.util.js');
+  const client = await db.getClient();
+  try {
+    await client.query('BEGIN');
+    const limitColumn = PLAN_MONTHLY_LIMIT_COLUMN[channel];
+    const { rows: limitRows } = await client.query(
+      `SELECT p.${limitColumn} AS plan_limit
+       FROM users u
+       JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
+       WHERE u.id = $1
+       LIMIT 1`,
+      [billingUserId]
+    );
+    const rawLimit = limitRows[0]?.plan_limit;
+    const planLimit = rawLimit == null || rawLimit === '' ? null : Number.parseInt(rawLimit, 10);
+    const cycle = await getBillingCycle(billingUserId, {}, client);
+    _clearQuotaCache();
+    const usageCountAfterSend = (cycle?.hasPlan && cycle.cycleStart && cycle.cycleEnd)
+      ? await countChannelSentInCycle(billingUserId, channel, cycle.cycleStart, cycle.cycleEnd, client, { cache: false })
+      : 0;
+    const result = await maybeDebitWalletForSend(client, {
+      billingUserId,
+      itemKey,
+      sourceKey: `ccm:${messageId}`,
+      planLimit: Number.isFinite(planLimit) ? planLimit : null,
+      usageCountAfterSend,
+    });
+    await client.query('COMMIT');
+    return result;
+  } catch (error) {
+    try { await client.query('ROLLBACK'); } catch (_) { /* bỏ qua */ }
+    console.warn(`[TopupWallet] debitAdapterMessageIfNeeded ${channel}#${messageId} lỗi:`, error?.message);
+    return { debited: false, reason: 'error' };
+  } finally {
+    client.release();
+  }
 }
 
 /**

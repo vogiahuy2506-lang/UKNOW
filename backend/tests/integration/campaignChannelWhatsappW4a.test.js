@@ -1,11 +1,11 @@
 /**
  * PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4a — Adapter WhatsApp cho chiến dịch (sau cờ, TẮT mặc định).
  *
- * a) cờ tắt: preflight node send_whatsapp -> 400 UNSUPPORTED_SEND_NODE; getAdapterChannelKeysByQuotaChannel('zalo')
- *    vẫn có 'whatsapp' (cờ chỉ chặn GỬI, không chặn ĐẾM); campaign_type='whatsapp' được CHECK chấp nhận.
+ * a) cờ tắt: preflight node send_whatsapp -> 400 UNSUPPORTED_SEND_NODE; getAdapterChannelKeysByQuotaChannel('whatsapp')
+ *    vẫn có 'whatsapp' (cờ chỉ chặn GỬI, không chặn ĐẾM; P10: hạn mức riêng, Zalo không nhận); campaign_type='whatsapp' được CHECK chấp nhận.
  * b) cờ bật: phiên không mở / khác chủ / 0 hội thoại -> preflight 400 đúng mã.
  * c) nguồn whatsapp_conversations: 2 chatbot cùng 1 khách + 2 khách khác + 1 hội thoại closed + 1 của phiên khác ->
- *    đúng 3 lần sendMessage; 3 dòng ccm sent (channel='whatsapp'); countZaloSentToday +3.
+ *    đúng 3 lần sendMessage; 3 dòng ccm sent (channel='whatsapp'); hạn mức whatsapp +3.
  * d) exists=false ở người 2 -> người 2 failed (hard), người 3 vẫn gửi, run completed.
  * e) sendMessage ném "is not connected" -> run failed CHANNEL_AUTH (không đốt danh sách).
  * f) GET /api/campaigns/channels(/whatsapp/accounts): cờ bật liệt kê whatsapp; chỉ phiên của chủ; 401/403.
@@ -36,7 +36,12 @@ const { createApp } = await import('../../src/app.js');
 const campaignRunService = (await import('../../src/services/campaign/campaignRun.service.js')).default;
 const { validateCampaignPreflight } = await import('../../src/services/campaign/campaignPreflight.service.js');
 const campaignChannelRegistry = (await import('../../src/services/campaign/campaignChannelRegistry.service.js')).default;
-const { countZaloSentToday, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
+const { countAdapterSentInCycleUncached, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
+
+// P10 — tin whatsapp có hạn mức tin/tháng RIÊNG (không còn cộng vào Zalo): đo bằng bộ đếm kênh adapter trên cửa sổ rộng.
+const adapterSentCount = () => countAdapterSentInCycleUncached(
+  owner.id, 'whatsapp', new Date(Date.now() - 24 * 3600 * 1000), new Date(Date.now() + 24 * 3600 * 1000)
+);
 
 const SUBTYPE = 'send_whatsapp';
 let owner;
@@ -133,7 +138,7 @@ async function insertConversation({ userId, connectionId, sessionKey, chatbotId,
 }
 
 describe('W4a — Adapter WhatsApp cho chiến dịch (sau cờ, TẮT mặc định)', () => {
-  it('(a) cờ tắt: UNSUPPORTED_SEND_NODE; đếm quota Zalo vẫn có whatsapp; campaign_type whatsapp hợp lệ', async () => {
+  it('(a) cờ tắt: UNSUPPORTED_SEND_NODE; đếm quota kênh whatsapp vẫn có whatsapp; campaign_type whatsapp hợp lệ', async () => {
     const campaignId = await insertCampaign();
     await insertNode({
       campaignId,
@@ -142,7 +147,8 @@ describe('W4a — Adapter WhatsApp cho chiến dịch (sau cờ, TẮT mặc đ�
     await expect(
       validateCampaignPreflight({ campaignId, workspaceOwnerId: owner.id })
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_SEND_NODE', statusCode: 400 });
-    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo')).toContain('whatsapp');
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('whatsapp')).toContain('whatsapp');
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo')).toEqual([]);
   });
 
   it('(b) cờ bật: phiên không mở / phiên của chủ khác / 0 hội thoại -> preflight 400 đúng mã', async () => {
@@ -184,7 +190,7 @@ describe('W4a — Adapter WhatsApp cho chiến dịch (sau cờ, TẮT mặc đ�
     ).rejects.toMatchObject({ code: 'WHATSAPP_ACCOUNT_NOT_READY', statusCode: 400 });
   });
 
-  it('(c) nguồn hội thoại: 3 khách (1 khách ở 2 chatbot) + 1 closed + 1 phiên khác -> đúng 3 lần sendMessage; 3 ccm sent; countZaloSentToday +3', async () => {
+  it('(c) nguồn hội thoại: 3 khách (1 khách ở 2 chatbot) + 1 closed + 1 phiên khác -> đúng 3 lần sendMessage; 3 ccm sent; hạn mức whatsapp +3', async () => {
     process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED = 'true';
     const key = `${owner.id}-default`;
     openSession(key);
@@ -209,10 +215,10 @@ describe('W4a — Adapter WhatsApp cho chiến dịch (sau cờ, TẮT mặc đ�
     await validateCampaignPreflight({ campaignId, workspaceOwnerId: owner.id });
     const run = await insertRun({ campaignId });
 
-    const before = await countZaloSentToday(owner.id);
+    const before = await adapterSentCount();
     await campaignRunService.executeCampaign(campaignId, run.id, owner.id);
     _clearQuotaCache();
-    const after = await countZaloSentToday(owner.id);
+    const after = await adapterSentCount();
 
     expect(sendMessageMock).toHaveBeenCalledTimes(3);
     const phones = sendMessageMock.mock.calls.map(([, phone]) => phone).sort();

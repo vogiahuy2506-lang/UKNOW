@@ -12,6 +12,7 @@ import {
   countZaloSentTodayWithLedger,
   countEmailSentInCycleWithLedger,
   countZaloSentInCycleWithLedger,
+  countAdapterSentInCycleWithLedger,
   countCombinedSentInCycleWithLedger,
   countEmployeeSentTodayWithLedger,
   countEmployeeSentInCycleWithLedger,
@@ -34,6 +35,12 @@ import {
   checkSendQuota,
 } from '../../utils/userSendLimit.util.js';
 import { getBillingCycle, resolveBillingUserId } from '../../utils/billingCycle.util.js';
+import {
+  PLAN_MONTHLY_LIMIT_COLUMN,
+  QUOTA_CHANNEL_LABEL,
+  WALLET_ITEM_BY_QUOTA_CHANNEL,
+  isAdapterQuotaChannel,
+} from '../../constants/sendQuotaChannels.js';
 
 export const SEND_QUOTA_RESERVATION_MODE = process.env.SEND_QUOTA_RESERVATION_MODE || 'off';
 
@@ -299,7 +306,10 @@ export async function evaluateReservationQuotaPolicy(client, params) {
   const billingUserId = initialBillingUserId || (await resolveBillingUserId(userId, { ownerContextId }, client));
 
   const isEmail = channel === 'email';
-  const channelLabel = isEmail ? 'Email' : 'Zalo';
+  // P10 — Telegram/WhatsApp có hạn mức tin/tháng riêng (plans.monthly_<kênh>_limit, ví <kênh>_messages); không có trần ngày
+  // của gói và không áp trần nhân viên (user_members không có cột cho hai kênh này).
+  const isAdapter = isAdapterQuotaChannel(channel);
+  const channelLabel = isEmail ? 'Email' : (QUOTA_CHANNEL_LABEL[channel] || 'Zalo');
   const unitLabel = isEmail ? 'email' : 'tin';
 
   // 1. Employee limits check (Tier 1)
@@ -324,7 +334,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
         throw err;
       }
 
-      const empDailyLimit = toInt(isEmail ? empLimits.daily_email_limit : empLimits.daily_zalo_limit);
+      const empDailyLimit = isAdapter ? null : toInt(isEmail ? empLimits.daily_email_limit : empLimits.daily_zalo_limit);
       if (empDailyLimit !== null) {
         if (empDailyLimit === 0) {
           const err = new Error(`Hạn mức gửi ${channelLabel} trong ngày của bạn là 0. Vui lòng liên hệ chủ tài khoản.`);
@@ -361,7 +371,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
         }
       }
 
-      const empMonthlyLimit = toInt(isEmail ? empLimits.monthly_email_limit : empLimits.monthly_zalo_limit);
+      const empMonthlyLimit = isAdapter ? null : toInt(isEmail ? empLimits.monthly_email_limit : empLimits.monthly_zalo_limit);
       if (empMonthlyLimit !== null) {
         if (empMonthlyLimit === 0) {
           const err = new Error(`Hạn mức gửi ${channelLabel} trong tháng của bạn là 0. Vui lòng liên hệ chủ tài khoản.`);
@@ -427,7 +437,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
     throw err;
   }
 
-  const dailyLimit = toInt(isEmail ? planInfo.daily_email_limit : planInfo.daily_zalo_limit);
+  const dailyLimit = isAdapter ? null : toInt(isEmail ? planInfo.daily_email_limit : planInfo.daily_zalo_limit);
   // Ghi lại đúng thứ tier này ĐỌC ĐƯỢC, để khi shadow lệch còn phân biệt được "đọc hụt hạn mức"
   // với "đếm hụt lượt đã gửi". Ngày 10/09/2026 một lượt lệch thật (legacy từ chối 2/1, atomic cho
   // phép) không truy được nguyên nhân vì dòng log chỉ có legacy/atomic true-false, không có hai
@@ -478,7 +488,7 @@ export async function evaluateReservationQuotaPolicy(client, params) {
   }
 
   // 3. Workspace plan monthly limit & wallet fallback (Tier 3)
-  const monthlyLimit = toInt(isEmail ? planInfo.monthly_email_limit : planInfo.monthly_zalo_limit);
+  const monthlyLimit = toInt(planInfo[PLAN_MONTHLY_LIMIT_COLUMN[channel] || PLAN_MONTHLY_LIMIT_COLUMN.zalo]);
   let walletItemKey = null;
   let walletQuantity = 0;
 
@@ -497,14 +507,19 @@ export async function evaluateReservationQuotaPolicy(client, params) {
       throw err;
     }
 
-    const monthlyCount = isEmail
-      ? await countEmailSentInCycleWithLedger(client, billingUserId, cycleStart, cycleEnd)
-      : await countZaloSentInCycleWithLedger(client, billingUserId, cycleStart, cycleEnd);
+    let monthlyCount;
+    if (isEmail) {
+      monthlyCount = await countEmailSentInCycleWithLedger(client, billingUserId, cycleStart, cycleEnd);
+    } else if (isAdapter) {
+      monthlyCount = await countAdapterSentInCycleWithLedger(client, billingUserId, channel, cycleStart, cycleEnd);
+    } else {
+      monthlyCount = await countZaloSentInCycleWithLedger(client, billingUserId, cycleStart, cycleEnd);
+    }
 
     if (monthlyCount + quantity > monthlyLimit) {
       const coveredByPlan = Math.max(0, monthlyLimit - monthlyCount);
       const requiredTopup = quantity - coveredByPlan;
-      const itemKey = isEmail ? 'emails' : 'zalo_messages';
+      const itemKey = WALLET_ITEM_BY_QUOTA_CHANNEL[channel] || WALLET_ITEM_BY_QUOTA_CHANNEL.zalo;
 
       // Strict lock order: workspace lock already held, now acquire wallet lock
       await acquireWalletLock(client, billingUserId, itemKey);

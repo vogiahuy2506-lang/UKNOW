@@ -8921,7 +8921,9 @@ class CampaignRunService {
                   runId,
                   campaignId,
                   waitMs: Math.max(0, new Date(adapterError.resetAt).getTime() - Date.now()),
-                  reason: `plan_quota_${adapterError.limitType || 'unknown'}`,
+                  // P10 — hậu tố kênh: email "tạm dừng vì hết hạn mức" nói đúng Telegram/WhatsApp (channelLabelFromQuotaReason),
+                  // trước đây `plan_quota_monthly` trần → nhãn chung "gửi". Tiền tố `plan_quota` giữ nguyên (isPlanQuotaReason).
+                  reason: `plan_quota_${adapterError.limitType || 'unknown'}_${adapterDescriptor.key}`,
                 });
                 // tự ném RUN_YIELD_SLOT.
               } else {

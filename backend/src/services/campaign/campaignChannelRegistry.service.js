@@ -42,7 +42,8 @@
  *   không (nguồn cho CONTINUOUS_SUPPORTED_ACTION_SUBTYPES, R:3256).
  * @property {boolean} continuousReplay Node subtype này có được chạy lại ở các chu kỳ replay
  *   (continuousCycleIndex > 0) của continuous mode không (nguồn cho allowlist R:3335).
- * @property {string} [quotaChannel] Chỉ kênh 'adapter' — cột limit dùng để tính quota (vd 'zalo').
+ * @property {string} [quotaChannel] Chỉ kênh 'adapter' — khoá hạn mức dùng để tính quota (P10: 'telegram' | 'whatsapp', mỗi kênh có
+ *   cột `plans.monthly_<kênh>_limit` và ví top-up riêng; trước P10 cả hai đều là 'zalo').
  * @property {boolean} [recipientIsPhone] Chỉ kênh 'adapter' — `recipientKey` là SĐT đã chuẩn hoá (WhatsApp: 84…):
  *   runner/gửi nhanh dùng nó để đối chiếu khách từ chối nhận tin (leads.marketing_consent=false). Telegram KHÔNG có.
  * @property {string} [journeyEventType] Chỉ kênh 'adapter' — `event_type` ghi vào `customer_journey` sau mỗi tin gửi
@@ -136,7 +137,8 @@ let testChannelDescriptors = [];
  * `__registerChannelForTest`), nhưng chỉ "biết gửi" khi cờ bật — xem `TELEGRAM_CHANNEL_META` và
  * "CHỐT PR-6" trong plan: cờ CHỈ chặn GỬI, KHÔNG chặn ĐẾM quota.
  */
-const TELEGRAM_CHANNEL_META = Object.freeze({ key: 'telegram', quotaChannel: 'zalo' });
+// P10 — hạn mức tin/tháng RIÊNG (trước P10 đếm chung vào 'zalo'): quotaChannel = chính khoá kênh.
+const TELEGRAM_CHANNEL_META = Object.freeze({ key: 'telegram', quotaChannel: 'telegram' });
 
 function isTelegramChannelEnabled() {
   // Đọc lúc GỌI, không lúc import — test đổi cờ giữa các ca không bị dính giá trị cũ.
@@ -160,10 +162,10 @@ function buildTelegramDescriptor() {
 }
 
 /**
- * W4a — WhatsApp (Baileys) cùng khuôn Telegram: OTT đếm vào hạn mức Zalo, cờ CHỈ chặn GỬI, KHÔNG chặn ĐẾM.
+ * W4a — WhatsApp (Baileys) cùng khuôn Telegram: hạn mức tin/tháng riêng (P10), cờ CHỈ chặn GỬI, KHÔNG chặn ĐẾM.
  * Số nhịp gửi mặc định BẢO THỦ (WhatsApp khoá số nhanh khi gửi số lạ hàng loạt; chưa có số liệu).
  */
-const WHATSAPP_CHANNEL_META = Object.freeze({ key: 'whatsapp', quotaChannel: 'zalo' });
+const WHATSAPP_CHANNEL_META = Object.freeze({ key: 'whatsapp', quotaChannel: 'whatsapp' });
 
 function isWhatsAppChannelEnabled() {
   return process.env.CAMPAIGN_CHANNEL_WHATSAPP_ENABLED === 'true';
@@ -269,11 +271,11 @@ export function getAdapterDescriptorBySubtype(subtype) {
 }
 
 /**
- * `key` của mọi kênh 'adapter' có `quotaChannel` khớp giá trị truyền vào — PR-4 dùng để cộng vế
- * `campaign_channel_messages` vào các hàm đếm quota Zalo (userSendLimit.util.js/sendQuota.repository.js).
- * Danh sách rỗng khi chưa kênh adapter nào đăng ký (production hiện tại) — vế SQL tương ứng = 0.
+ * `key` của mọi kênh 'adapter' có `quotaChannel` khớp giá trị truyền vào. Trước P10 PR-4 dùng nó để cộng vế
+ * `campaign_channel_messages` vào các hàm đếm quota Zalo; từ P10 mỗi kênh adapter đếm hạn mức của CHÍNH nó
+ * (`countAdapterSentInCycle*`, khoá kênh = khoá hạn mức) nên Zalo/email trả []. Giữ hàm cho spec đăng ký kênh.
  *
- * @param {string} quotaChannel 'email' | 'zalo'
+ * @param {string} quotaChannel 'email' | 'zalo' | 'telegram' | 'whatsapp' (P10: 'zalo' trả []).
  * @returns {string[]}
  */
 export function getAdapterChannelKeysByQuotaChannel(quotaChannel) {
@@ -282,7 +284,7 @@ export function getAdapterChannelKeysByQuotaChannel(quotaChannel) {
     .map((d) => d.key);
   // PR-6 (CHỐT PR-6) — cờ CAMPAIGN_CHANNEL_TELEGRAM_ENABLED chỉ chặn GỬI (getAllDescriptors ở trên
   // đã lọc theo cờ), KHÔNG được chặn ĐẾM: tắt cờ không có nghĩa tin Telegram đã gửi trước đó thôi
-  // tính vào hạn mức Zalo. Luôn cộng thêm 'telegram' vào đây bất kể cờ.
+  // tính vào hạn mức của chính kênh đó. Luôn cộng thêm 'telegram' vào đây bất kể cờ.
   // W4a — 'whatsapp' cùng quy tắc: cờ tắt vẫn đếm tin đã gửi.
   const alwaysOnKeys = [TELEGRAM_CHANNEL_META, WHATSAPP_CHANNEL_META]
     .filter((meta) => meta.quotaChannel === quotaChannel)

@@ -1,17 +1,18 @@
 /**
- * PLAN_TACH_TANG_KENH_GUI_2026-09-27, PR-4 — Quota tường minh cho kênh adapter.
+ * PLAN_TACH_TANG_KENH_GUI_2026-09-27, PR-4 -> viết lại theo P10 (PLAN_TG_WA_DAY_DU mục 17, 30/09/2026):
+ * kênh adapter (Telegram/WhatsApp) có hạn mức tin/THÁNG RIÊNG (`plans.monthly_<kênh>_limit`), KHÔNG còn đếm chung vào Zalo.
  *
- * a) owner có 3 zalo_messages sent + 2 ccm sent (reservation NULL) hôm nay → count = 5 (cả 2 hàm);
- *    +1 ccm preview, 1 ccm failed, 1 ccm có quota_reservation_id → vẫn 5.
- * b) ccm sent 23:30 VN hôm qua → KHÔNG tính hôm nay; ccm 00:30 VN hôm nay → tính.
- * c) employee: ccm actor_user_id = nhân viên → tính; nhân viên khác → không.
- * d) countCombinedSentInCycle(+WithLedger) cộng ccm; email count không đổi.
- * e) checkSendQuota({channel:'telegram'}) → throw.
- * f) runner + gate thật, mode off, plan daily_zalo_limit=2, đã có 2 zalo_messages hôm nay →
- *    reserve ném PLAN_SEND_LIMIT_EXCEEDED, 0 lần sendOne, partialResult giữ bất biến. ĐỔI Ở PR-5:
- *    daily limit luôn có resetAt (nextVnMidnight()) nên giờ run DEFER (quotaDeferredUntil, vẫn
- *    'running') thay vì 'failed' — trước PR-5 test này kỳ vọng 'failed'.
- * g) mode enforce → ccm.quota_reservation_id khác NULL, reservation consumed, count không đôi.
+ * a) Zalo KHÔNG đếm ccm: 3 zalo_messages + 2 ccm telegram sent -> Zalo = 3, telegram (kỳ gói) = 2; +preview/failed/có reservation
+ *    vẫn 2; +usage_logs telegram_direct_send -> 3; whatsapp không bị ảnh hưởng.
+ * b) biên chu kỳ gói: ccm sent trước cycleStart KHÔNG tính; trong chu kỳ -> tính.
+ * c) nhân viên: bộ đếm nhân viên Zalo KHÔNG cộng ccm của kênh adapter (TG/WA không áp trần nhân viên).
+ * d) countCombinedSentInCycle(+WithLedger) VẪN cộng ccm (trần tổng messages_per_period không đổi); Zalo ledger = 0; email không đổi.
+ * e) checkSendQuota({channel:'telegram'}) không còn ném; kênh lạ vẫn ném.
+ * f) runner + cổng thật, mode off, plan monthly_telegram_limit=2 đã có 2 ccm telegram trong chu kỳ -> defer `plan_quota_monthly_telegram`,
+ *    0 lần gửi; và plan có trần Zalo=1 nhưng Telegram không giới hạn -> vẫn gửi (không mượn cột Zalo).
+ * g) mode test_enforce -> reservation kênh 'telegram' (CHECK chk_sqr_channel đã mở) consumed, ccm.quota_reservation_id khác NULL, đếm không đôi.
+ * h) mode off + hết hạn mức gói + ví telegram_messages còn -> gửi được và ví bị trừ đúng 1 (source ccm:<id>); ví whatsapp không đụng.
+ * i) CHECK ledger + ví: chèn reservation kênh telegram/whatsapp được, kênh lạ bị chặn; grant món tiêu hao có hạn (cycle_end) bị chặn.
  */
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
@@ -21,40 +22,39 @@ const db = (await import('../../src/config/database.js')).default;
 const { truncateAll, createUser } = await import('./helpers/db.js');
 const campaignRunService = (await import('../../src/services/campaign/campaignRun.service.js')).default;
 const campaignChannelRegistry = (await import('../../src/services/campaign/campaignChannelRegistry.service.js')).default;
-const { createNoopChannelQuotaGate } = await import('../../src/services/campaign/campaignChannelRunner.service.js');
+const { getBillingCycle } = await import('../../src/utils/billingCycle.util.js');
 const {
   checkSendQuota,
-  countZaloSentToday,
   countZaloSentInCycleUncached,
   countEmployeeZaloSentToday,
   countEmployeeZaloSentThisMonth,
   countCombinedSentInCycle,
   countEmailSentInCycleUncached,
+  countAdapterSentInCycleUncached,
   _clearQuotaCache,
 } = await import('../../src/utils/userSendLimit.util.js');
 const {
-  countZaloSentTodayWithLedger,
   countZaloSentInCycleWithLedger,
-  countEmployeeSentTodayWithLedger,
+  countAdapterSentInCycleWithLedger,
   countEmployeeSentInCycleWithLedger,
 } = await import('../../src/repositories/sendQuota.repository.js');
-const { getVnDayBoundaries } = await import('../../src/services/quota/sendQuotaReservation.service.js');
 
 const MOCK_SUBTYPE = 'send_mock_quota_channel';
-const MOCK_KEY = 'mock_quota_channel';
+// Khoá kênh THẬT (`ccm.channel` = khoá hạn mức từ P10). Node dùng subtype giả để không cần adapter Telegram thật.
+const CHANNEL = 'telegram';
 
 let owner;
 let fakeSendOne;
 let originalQuotaGate;
 
-function registerMockChannel() {
+function registerMockChannel(quotaChannel = CHANNEL) {
   campaignChannelRegistry.__registerChannelForTest({
-    key: MOCK_KEY,
+    key: CHANNEL,
     sendNodeSubtype: MOCK_SUBTYPE,
     engine: 'adapter',
     continuousSupported: false,
     continuousReplay: false,
-    quotaChannel: 'zalo',
+    quotaChannel,
     policy: { minDelayMs: 0, maxDelayMs: 0, perHourLimit: 0, quietHours: null },
     adapter: {
       checkReadiness: jest.fn().mockResolvedValue(),
@@ -92,10 +92,10 @@ afterEach(async () => {
   _clearQuotaCache();
 });
 
-async function insertZaloMessageSent({ workspaceOwnerId, actorUserId = null, sentAtSql = 'now()' }) {
+async function insertZaloMessageSent({ workspaceOwnerId, actorUserId = null }) {
   await db.query(
     `INSERT INTO zalo_messages (workspace_owner_id, actor_user_id, channel, tracking_metadata, is_preview, sent_at, created_at, updated_at, tracking_token)
-     VALUES ($1, $2, 'zalo_personal', '{"status":"sent"}'::jsonb, false, ${sentAtSql}, now(), now(), 'zpv_test_' || gen_random_uuid())`,
+     VALUES ($1, $2, 'zalo_personal', '{"status":"sent"}'::jsonb, false, now(), now(), now(), 'zpv_test_' || gen_random_uuid())`,
     [workspaceOwnerId, actorUserId]
   );
 }
@@ -107,7 +107,7 @@ async function insertCcm({
   isPreview = false,
   quotaReservationId = null,
   sentAtSql = 'now()',
-  channel = MOCK_KEY,
+  channel = CHANNEL,
 }) {
   await db.query(
     `INSERT INTO campaign_channel_messages
@@ -118,25 +118,71 @@ async function insertCcm({
   );
 }
 
+async function insertUsageLog({ userId, resourceType, delta = 1 }) {
+  await db.query(
+    `INSERT INTO usage_logs (id_user, resource_type, delta, period_start, period_end, metadata)
+     VALUES ($1, $2, $3, date_trunc('month', now()), date_trunc('month', now()) + interval '1 month', '{}'::jsonb)`,
+    [userId, resourceType, delta]
+  );
+}
+
 async function createTestPlan(limits = {}) {
-  const { dailyZalo = null, monthlyZalo = null, dailyEmail = null, monthlyEmail = null } = limits;
+  const {
+    dailyZalo = null, monthlyZalo = null, dailyEmail = null, monthlyEmail = null,
+    monthlyTelegram = null, monthlyWhatsapp = null,
+  } = limits;
   const { rows } = await db.query(
-    `INSERT INTO plans (name, price, daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit, is_active)
-     VALUES ($1, 100000, $2, $3, $4, $5, true) RETURNING *`,
-    [`Plan_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, dailyEmail, monthlyEmail, dailyZalo, monthlyZalo]
+    `INSERT INTO plans (name, price, daily_email_limit, monthly_email_limit, daily_zalo_limit, monthly_zalo_limit,
+                        monthly_telegram_limit, monthly_whatsapp_limit, is_active)
+     VALUES ($1, 100000, $2, $3, $4, $5, $6, $7, true) RETURNING *`,
+    [`Plan_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`, dailyEmail, monthlyEmail, dailyZalo, monthlyZalo,
+      monthlyTelegram, monthlyWhatsapp]
   );
   return rows[0];
 }
 
 async function assignPlanToUser(userId, planId) {
   await db.query(
-    `UPDATE users SET active_plan_id = $1, subscription_expires_at = NOW() + INTERVAL '30 days' WHERE id = $2`,
+    `UPDATE users SET active_plan_id = $1, subscription_expires_at = NOW() + INTERVAL '30 days', plan_activated_at = NOW() - INTERVAL '1 day' WHERE id = $2`,
     [planId, userId]
   );
 }
 
-describe('PR-4 — Quota tường minh cho kênh adapter (campaign_channel_messages đếm vào limit Zalo)', () => {
-  it('(a) 3 zalo_messages sent + 2 ccm sent hôm nay -> count = 5; +preview/failed/có reservation -> vẫn 5', async () => {
+async function cycleOf(userId) {
+  const cycle = await getBillingCycle(userId);
+  return { cycleStart: cycle.cycleStart, cycleEnd: cycle.cycleEnd };
+}
+
+async function createRunWithNode(name, recipientKeys = ['peer1']) {
+  const { rows: campaignRows } = await db.query(
+    `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name, campaign_type, status)
+     VALUES ($1, $1, $2, 'email', 'active') RETURNING id`,
+    [owner.id, name]
+  );
+  const campaignId = campaignRows[0].id;
+  const { rows: nodeRows } = await db.query(
+    `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
+     VALUES ($1, 'action', $2, $2, $3::jsonb, 1) RETURNING id`,
+    [
+      campaignId,
+      MOCK_SUBTYPE,
+      JSON.stringify({ recipientSource: 'manual', recipientKeys, steps: [{ message: 'Bước 1' }] }),
+    ]
+  );
+  const { rows: runRows } = await db.query(
+    `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status, run_metadata)
+     VALUES ($1, $2, 'manual', 'running', '{}'::jsonb) RETURNING *`,
+    [campaignId, owner.id]
+  );
+  return { campaignId, nodeId: nodeRows[0].id, run: runRows[0] };
+}
+
+describe('P10 — kênh adapter có hạn mức tin/tháng RIÊNG (campaign_channel_messages KHÔNG còn đếm vào Zalo)', () => {
+  it('(a) Zalo không đếm ccm; telegram đếm ccm sent + usage_logs telegram_direct_send, loại preview/failed/có reservation; whatsapp độc lập', async () => {
+    const plan = await createTestPlan();
+    await assignPlanToUser(owner.id, plan.id);
+    const { cycleStart, cycleEnd } = await cycleOf(owner.id);
+
     for (let i = 0; i < 3; i += 1) {
       // eslint-disable-next-line no-await-in-loop
       await insertZaloMessageSent({ workspaceOwnerId: owner.id });
@@ -144,74 +190,54 @@ describe('PR-4 — Quota tường minh cho kênh adapter (campaign_channel_messa
     await insertCcm({ workspaceOwnerId: owner.id });
     await insertCcm({ workspaceOwnerId: owner.id });
 
-    const { vnDayStart, vnDayEnd } = getVnDayBoundaries();
-    expect(await countZaloSentToday(owner.id)).toBe(5);
-    expect(await countZaloSentTodayWithLedger(db, owner.id, vnDayStart, vnDayEnd)).toBe(5);
+    expect(await countZaloSentInCycleUncached(owner.id, cycleStart, cycleEnd)).toBe(3);
+    expect(await countZaloSentInCycleWithLedger(db, owner.id, cycleStart, cycleEnd)).toBe(3);
+    expect(await countAdapterSentInCycleUncached(owner.id, 'telegram', cycleStart, cycleEnd)).toBe(2);
+    expect(await countAdapterSentInCycleWithLedger(db, owner.id, 'telegram', cycleStart, cycleEnd)).toBe(2);
+    expect(await countAdapterSentInCycleUncached(owner.id, 'whatsapp', cycleStart, cycleEnd)).toBe(0);
 
     await insertCcm({ workspaceOwnerId: owner.id, isPreview: true });
     await insertCcm({ workspaceOwnerId: owner.id, status: 'failed' });
     await insertCcm({ workspaceOwnerId: owner.id, quotaReservationId: 999999 });
+    await insertCcm({ workspaceOwnerId: owner.id, channel: 'whatsapp' });
 
-    _clearQuotaCache();
-    expect(await countZaloSentToday(owner.id)).toBe(5);
-    expect(await countZaloSentTodayWithLedger(db, owner.id, vnDayStart, vnDayEnd)).toBe(5);
+    expect(await countAdapterSentInCycleUncached(owner.id, 'telegram', cycleStart, cycleEnd)).toBe(2);
+    expect(await countAdapterSentInCycleWithLedger(db, owner.id, 'telegram', cycleStart, cycleEnd)).toBe(2);
+    expect(await countAdapterSentInCycleUncached(owner.id, 'whatsapp', cycleStart, cycleEnd)).toBe(1);
+
+    // Gửi nhanh: dòng ccm is_preview + usage_logs -> chỉ đi qua usage_logs, đúng loại kênh.
+    await insertUsageLog({ userId: owner.id, resourceType: 'telegram_direct_send' });
+    await insertUsageLog({ userId: owner.id, resourceType: 'zalo_direct_send' });
+    expect(await countAdapterSentInCycleUncached(owner.id, 'telegram', cycleStart, cycleEnd)).toBe(3);
+    expect(await countAdapterSentInCycleWithLedger(db, owner.id, 'telegram', cycleStart, cycleEnd)).toBe(3);
+    expect(await countZaloSentInCycleUncached(owner.id, cycleStart, cycleEnd)).toBe(4); // + 1 zalo_direct_send
   });
 
-  it('(b) ccm sent 23:30 VN hôm qua KHÔNG tính hôm nay; ccm 00:30 VN hôm nay tính', async () => {
-    // now() phiên DB chạy theo timezone Asia/Ho_Chi_Minh (config/database.js) — chèn giờ tường minh
-    // bằng chuỗi ::timestamptz +07 để không phụ thuộc "hôm nay" của máy chạy test thật.
-    await db.query(
-      `INSERT INTO campaign_channel_messages
-         (workspace_owner_id, channel, recipient_key, step_index, status, is_preview, sent_at, created_at, updated_at)
-       VALUES ($1, $2, 'peer_yesterday', 1, 'sent', false,
-               (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh') - interval '30 minutes',
-               now(), now())`,
-      [owner.id, MOCK_KEY]
-    );
-    await db.query(
-      `INSERT INTO campaign_channel_messages
-         (workspace_owner_id, channel, recipient_key, step_index, status, is_preview, sent_at, created_at, updated_at)
-       VALUES ($1, $2, 'peer_today', 1, 'sent', false,
-               (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh') + interval '30 minutes',
-               now(), now())`,
-      [owner.id, MOCK_KEY]
-    );
-
-    expect(await countZaloSentToday(owner.id)).toBe(1);
-    const { vnDayStart, vnDayEnd } = getVnDayBoundaries();
-    expect(await countZaloSentTodayWithLedger(db, owner.id, vnDayStart, vnDayEnd)).toBe(1);
+  it('(b) biên chu kỳ GÓI: ccm trước cycleStart không tính, trong chu kỳ tính', async () => {
+    const plan = await createTestPlan();
+    await assignPlanToUser(owner.id, plan.id);
+    const { cycleStart, cycleEnd } = await cycleOf(owner.id);
+    await insertCcm({ workspaceOwnerId: owner.id, sentAtSql: `'${cycleStart.toISOString()}'::timestamptz - interval '1 minute'` });
+    await insertCcm({ workspaceOwnerId: owner.id, sentAtSql: `'${cycleStart.toISOString()}'::timestamptz + interval '1 minute'` });
+    expect(await countAdapterSentInCycleUncached(owner.id, 'telegram', cycleStart, cycleEnd)).toBe(1);
+    expect(await countAdapterSentInCycleWithLedger(db, owner.id, 'telegram', cycleStart, cycleEnd)).toBe(1);
   });
 
-  it('(c) employee: ccm.actor_user_id = nhân viên -> tính; nhân viên khác -> không', async () => {
+  it('(c) bộ đếm nhân viên Zalo KHÔNG cộng ccm của kênh adapter', async () => {
     const employee = await createUser({
       email: `pr4_emp_${Date.now()}_${Math.random().toString(36).slice(2, 6)}@example.com`,
     });
-    const otherEmployee = await createUser({
-      email: `pr4_emp2_${Date.now()}_${Math.random().toString(36).slice(2, 6)}@example.com`,
-    });
-
     await insertCcm({ workspaceOwnerId: owner.id, actorUserId: employee.id });
-    await insertCcm({ workspaceOwnerId: owner.id, actorUserId: otherEmployee.id });
-
-    const { vnDayStart, vnDayEnd } = getVnDayBoundaries();
-    expect(await countEmployeeZaloSentToday(owner.id, employee.id)).toBe(1);
-    expect(await countEmployeeSentTodayWithLedger(db, owner.id, employee.id, 'zalo', vnDayStart, vnDayEnd)).toBe(1);
+    await insertZaloMessageSent({ workspaceOwnerId: owner.id, actorUserId: employee.id });
 
     const cycleStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
     const cycleEnd = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1));
+    expect(await countEmployeeZaloSentToday(owner.id, employee.id)).toBe(1);
     expect(await countEmployeeZaloSentThisMonth(owner.id, employee.id, cycleStart, cycleEnd)).toBe(1);
-    expect(
-      await countEmployeeSentInCycleWithLedger(db, owner.id, employee.id, 'zalo', cycleStart, cycleEnd)
-    ).toBe(1);
-
-    // Nhân viên khác không được tính vào.
-    const thirdEmployee = await createUser({
-      email: `pr4_emp3_${Date.now()}_${Math.random().toString(36).slice(2, 6)}@example.com`,
-    });
-    expect(await countEmployeeZaloSentToday(owner.id, thirdEmployee.id)).toBe(0);
+    expect(await countEmployeeSentInCycleWithLedger(db, owner.id, employee.id, 'zalo', cycleStart, cycleEnd)).toBe(1);
   });
 
-  it('(d) countCombinedSentInCycle(+WithLedger) cộng ccm; email count không đổi', async () => {
+  it('(d) trần TỔNG theo kỳ vẫn cộng ccm; Zalo ledger = 0 (không còn mượn); email không đổi', async () => {
     const cycleStart = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth(), 1));
     const cycleEnd = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1));
 
@@ -220,65 +246,37 @@ describe('PR-4 — Quota tường minh cho kênh adapter (campaign_channel_messa
        VALUES ($1, 'cust@example.com', 'sender@example.com', 'Sub', 'sent', false, NOW())`,
       [owner.id]
     );
-    const beforeCombined = await countCombinedSentInCycle(owner.id, cycleStart, cycleEnd);
     const beforeEmail = await countEmailSentInCycleUncached(owner.id, cycleStart, cycleEnd);
-    expect(beforeCombined).toBe(1);
+    expect(await countCombinedSentInCycle(owner.id, cycleStart, cycleEnd)).toBe(1);
 
     await insertCcm({ workspaceOwnerId: owner.id });
-    await insertCcm({ workspaceOwnerId: owner.id });
+    await insertCcm({ workspaceOwnerId: owner.id, channel: 'whatsapp' });
 
     _clearQuotaCache();
-    const afterCombined = await countCombinedSentInCycle(owner.id, cycleStart, cycleEnd);
-    const afterEmail = await countEmailSentInCycleUncached(owner.id, cycleStart, cycleEnd);
-    expect(afterCombined).toBe(3);
-    expect(afterEmail).toBe(beforeEmail); // email count không đổi
-
-    const zaloWithLedgerBefore = await countZaloSentInCycleWithLedger(db, owner.id, cycleStart, cycleEnd);
-    expect(zaloWithLedgerBefore).toBe(2);
-    const zaloUncachedBefore = await countZaloSentInCycleUncached(owner.id, cycleStart, cycleEnd);
-    expect(zaloUncachedBefore).toBe(2);
+    expect(await countCombinedSentInCycle(owner.id, cycleStart, cycleEnd)).toBe(3);
+    expect(await countEmailSentInCycleUncached(owner.id, cycleStart, cycleEnd)).toBe(beforeEmail);
+    expect(await countZaloSentInCycleWithLedger(db, owner.id, cycleStart, cycleEnd)).toBe(0);
+    expect(await countZaloSentInCycleUncached(owner.id, cycleStart, cycleEnd)).toBe(0);
   });
 
-  it('(e) checkSendQuota({channel:"telegram"}) -> throw', async () => {
-    await expect(
-      checkSendQuota({ userId: owner.id, channel: 'telegram' })
-    ).rejects.toThrow(/kênh không hợp lệ/i);
-  });
-
-  it('(f) runner + gate thật, mode off, plan daily_zalo_limit=2, đã có 2 zalo_messages hôm nay -> PLAN_SEND_LIMIT_EXCEEDED, run DEFER (quotaDeferredUntil, KHÔNG failed) [PR-5], 0 lần gửi', async () => {
-    process.env.SEND_QUOTA_RESERVATION_MODE = 'off';
-    const plan = await createTestPlan({ dailyZalo: 2 });
+  it('(e) checkSendQuota telegram/whatsapp không còn ném; kênh lạ vẫn ném', async () => {
+    const plan = await createTestPlan({ monthlyTelegram: 5, monthlyWhatsapp: 5 });
     await assignPlanToUser(owner.id, plan.id);
-    await insertZaloMessageSent({ workspaceOwnerId: owner.id });
-    await insertZaloMessageSent({ workspaceOwnerId: owner.id });
+    _clearQuotaCache();
+    expect((await checkSendQuota({ userId: owner.id, channel: 'telegram' })).allowed).toBe(true);
+    expect((await checkSendQuota({ userId: owner.id, channel: 'whatsapp' })).allowed).toBe(true);
+    await expect(checkSendQuota({ userId: owner.id, channel: 'viber' })).rejects.toThrow(/kênh không hợp lệ/i);
+  });
+
+  it('(f) runner + cổng thật, mode off: chạm trần Telegram -> defer plan_quota_monthly_telegram, 0 lần gửi; trần Zalo thấp KHÔNG chặn Telegram', async () => {
+    process.env.SEND_QUOTA_RESERVATION_MODE = 'off';
+    const plan = await createTestPlan({ monthlyTelegram: 2, monthlyZalo: 1000 });
+    await assignPlanToUser(owner.id, plan.id);
+    await insertCcm({ workspaceOwnerId: owner.id });
+    await insertCcm({ workspaceOwnerId: owner.id });
     _clearQuotaCache();
 
-    const { rows: campaignRows } = await db.query(
-      `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name, campaign_type, status)
-       VALUES ($1, $1, 'PR-4 quota test', 'email', 'active') RETURNING id`,
-      [owner.id]
-    );
-    const campaignId = campaignRows[0].id;
-    await db.query(
-      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
-       VALUES ($1, 'action', $2, $2, $3::jsonb, 1)`,
-      [
-        campaignId,
-        MOCK_SUBTYPE,
-        JSON.stringify({
-          recipientSource: 'manual',
-          recipientKeys: ['peer1'],
-          steps: [{ message: 'Bước 1' }],
-        }),
-      ]
-    );
-    const { rows: runRows } = await db.query(
-      `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status, run_metadata)
-       VALUES ($1, $2, 'manual', 'running', '{}'::jsonb) RETURNING *`,
-      [campaignId, owner.id]
-    );
-    const run = runRows[0];
-
+    const { campaignId, run } = await createRunWithNode('P10 telegram chạm trần');
     await campaignRunService.executeCampaign(campaignId, run.id, owner.id);
 
     expect(fakeSendOne).toHaveBeenCalledTimes(0);
@@ -286,49 +284,33 @@ describe('PR-4 — Quota tường minh cho kênh adapter (campaign_channel_messa
       'SELECT status, run_metadata, total_recipients, successful_sends, failed_sends, skipped_sends FROM campaign_runs WHERE id = $1',
       [run.id]
     );
-    // PR-5 — daily limit luôn có resetAt (nextVnMidnight()) nên PLAN_SEND_LIMIT_EXCEEDED giờ
-    // NHẢ SLOT chờ resume (quotaDeferredUntil) thay vì đánh run failed; xem test riêng (e) trong
-    // campaignChannelDeferPr5.test.js cho nhánh KHÔNG resetAt (gói hết hạn) vẫn failed.
     expect(afterRun[0].status).toBe('running');
-    expect(String(afterRun[0].run_metadata.quotaDeferredReason || '')).toMatch(/^plan_quota/);
+    expect(afterRun[0].run_metadata.quotaDeferredReason).toBe('plan_quota_monthly_telegram');
     expect(afterRun[0].run_metadata.quotaDeferredUntil).toBeTruthy();
     const { total_recipients: total, successful_sends: ok, failed_sends: bad, skipped_sends: sk } = afterRun[0];
     expect(ok + bad + sk).toBeLessThanOrEqual(total);
+
+    // Trần Zalo = 1 và đã dùng hết, Telegram không giới hạn -> vẫn gửi (không mượn cột Zalo).
+    await truncateAll();
+    _clearQuotaCache();
+    owner = await createUser({ email: `pr4_owner2_${Date.now()}@example.com` });
+    const plan2 = await createTestPlan({ monthlyZalo: 1, monthlyTelegram: null });
+    await assignPlanToUser(owner.id, plan2.id);
+    await insertZaloMessageSent({ workspaceOwnerId: owner.id });
+    await insertZaloMessageSent({ workspaceOwnerId: owner.id });
+    _clearQuotaCache();
+    const second = await createRunWithNode('P10 telegram không giới hạn');
+    await campaignRunService.executeCampaign(second.campaignId, second.run.id, owner.id);
+    expect(fakeSendOne).toHaveBeenCalledTimes(1);
   });
 
-  it('(g) mode test_enforce -> ccm.quota_reservation_id khác NULL, reservation consumed, count không đôi', async () => {
+  it('(g) mode test_enforce -> reservation kênh telegram consumed (CHECK đã mở), ccm gắn reservation, đếm không đôi', async () => {
     process.env.SEND_QUOTA_RESERVATION_MODE = 'test_enforce';
-    const plan = await createTestPlan({ dailyZalo: 100 });
+    const plan = await createTestPlan({ monthlyTelegram: 100 });
     await assignPlanToUser(owner.id, plan.id);
     _clearQuotaCache();
 
-    const { rows: campaignRows } = await db.query(
-      `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name, campaign_type, status)
-       VALUES ($1, $1, 'PR-4 enforce test', 'email', 'active') RETURNING id`,
-      [owner.id]
-    );
-    const campaignId = campaignRows[0].id;
-    const { rows: nodeRows } = await db.query(
-      `INSERT INTO campaign_nodes (id_campaign, node_type, node_subtype, node_name, config, execution_order)
-       VALUES ($1, 'action', $2, $2, $3::jsonb, 1) RETURNING id`,
-      [
-        campaignId,
-        MOCK_SUBTYPE,
-        JSON.stringify({
-          recipientSource: 'manual',
-          recipientKeys: ['peer1'],
-          steps: [{ message: 'Bước 1' }],
-        }),
-      ]
-    );
-    const nodeId = nodeRows[0].id;
-    const { rows: runRows } = await db.query(
-      `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status, run_metadata)
-       VALUES ($1, $2, 'manual', 'running', '{}'::jsonb) RETURNING *`,
-      [campaignId, owner.id]
-    );
-    const run = runRows[0];
-
+    const { campaignId, nodeId, run } = await createRunWithNode('P10 enforce');
     await campaignRunService.executeCampaign(campaignId, run.id, owner.id);
 
     expect(fakeSendOne).toHaveBeenCalledTimes(1);
@@ -341,15 +323,67 @@ describe('PR-4 — Quota tường minh cho kênh adapter (campaign_channel_messa
     expect(ccmRows[0].quota_reservation_id).not.toBeNull();
 
     const { rows: reservationRows } = await db.query(
-      `SELECT status FROM send_quota_reservations WHERE id = $1`,
+      `SELECT status, channel FROM send_quota_reservations WHERE id = $1`,
       [ccmRows[0].quota_reservation_id]
     );
-    expect(reservationRows[0].status).toBe('consumed');
+    expect(reservationRows[0]).toEqual({ status: 'consumed', channel: 'telegram' });
 
-    // Đếm KHÔNG đôi: countZaloSentTodayWithLedger loại ccm có quota_reservation_id khác NULL (đã có
-    // vế reservation riêng trong send_quota_reservations cộng vào, xem SỬA PR-4).
-    const { vnDayStart, vnDayEnd } = getVnDayBoundaries();
-    const countAfter = await countZaloSentTodayWithLedger(db, owner.id, vnDayStart, vnDayEnd);
-    expect(countAfter).toBe(1);
+    const { cycleStart, cycleEnd } = await cycleOf(owner.id);
+    expect(await countAdapterSentInCycleWithLedger(db, owner.id, 'telegram', cycleStart, cycleEnd)).toBe(1);
+    expect(await countZaloSentInCycleWithLedger(db, owner.id, cycleStart, cycleEnd)).toBe(0);
+  });
+
+  it('(h) mode off + hết hạn mức gói + ví telegram_messages còn: gửi được, ví bị trừ đúng 1 (source ccm:<id>); ví whatsapp không đụng', async () => {
+    process.env.SEND_QUOTA_RESERVATION_MODE = 'off';
+    const plan = await createTestPlan({ monthlyTelegram: 1, monthlyWhatsapp: 1 });
+    await assignPlanToUser(owner.id, plan.id);
+    await insertCcm({ workspaceOwnerId: owner.id }); // đã dùng hết 1/1
+    const { rows: orderRows } = await db.query(
+      `INSERT INTO orders (user_id, order_code, status, amount) VALUES ($1, $2, 'success', 50000) RETURNING id`,
+      [owner.id, Date.now()]
+    );
+    await db.query(
+      `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end) VALUES ($1, 'telegram_messages', 5, $2, NULL)`,
+      [owner.id, orderRows[0].id]
+    );
+    _clearQuotaCache();
+
+    const { campaignId, run } = await createRunWithNode('P10 ví telegram');
+    await campaignRunService.executeCampaign(campaignId, run.id, owner.id);
+
+    expect(fakeSendOne).toHaveBeenCalledTimes(1);
+    const { rows: ccmRows } = await db.query(
+      `SELECT id FROM campaign_channel_messages WHERE id_run = $1 AND status = 'sent'`,
+      [run.id]
+    );
+    const { rows: debits } = await db.query(
+      `SELECT item_key, qty, source_key FROM topup_debits WHERE user_id = $1`,
+      [owner.id]
+    );
+    expect(debits).toEqual([{ item_key: 'telegram_messages', qty: 1, source_key: `ccm:${ccmRows[0].id}` }]);
+  });
+
+  it('(i) CHECK ledger: kênh telegram/whatsapp + món ví mới hợp lệ, kênh lạ bị chặn; món tiêu hao mới không được có hạn', async () => {
+    const baseInsert = (channel, walletQty = 0, walletItem = null) => db.query(
+      `INSERT INTO send_quota_reservations
+         (reservation_key, request_fingerprint, billing_user_id, channel, quantity, wallet_item_key, wallet_quantity,
+          source_type, status, vn_day_start, vn_day_end)
+       VALUES ($1, $2, $3, $4, 2, $5, $6, 'campaign_zalo', 'reserved', now(), now() + interval '1 day')`,
+      [`test_res_${channel}_${walletQty}_${Math.random().toString(36).slice(2, 8)}`, 'a'.repeat(64), owner.id, channel, walletItem, walletQty]
+    );
+    await expect(baseInsert('telegram')).resolves.toBeTruthy();
+    await expect(baseInsert('whatsapp')).resolves.toBeTruthy();
+    await expect(baseInsert('telegram', 1, 'telegram_messages')).resolves.toBeTruthy();
+    await expect(baseInsert('whatsapp', 1, 'whatsapp_messages')).resolves.toBeTruthy();
+    await expect(baseInsert('viber')).rejects.toThrow(/chk_sqr_channel/);
+
+    const { rows: orderRows } = await db.query(
+      `INSERT INTO orders (user_id, order_code, status, amount) VALUES ($1, $2, 'success', 50000) RETURNING id`,
+      [owner.id, Date.now() + 1]
+    );
+    await expect(db.query(
+      `INSERT INTO topup_grants (user_id, item_key, qty, order_id, cycle_end) VALUES ($1, 'whatsapp_messages', 5, $2, now() + interval '1 day')`,
+      [owner.id, orderRows[0].id]
+    )).rejects.toThrow(/topup_grants_consumable_no_expiry/);
   });
 });

@@ -1,13 +1,13 @@
 /**
  * PLAN_TACH_TANG_KENH_GUI_2026-09-27, PR-6 — Adapter Telegram tham chiếu (sau cờ, TẮT mặc định).
  *
- * a) cờ tắt: preflight node send_telegram -> 400 UNSUPPORTED_SEND_NODE; getAdapterChannelKeysByQuotaChannel('zalo')
- *    vẫn có 'telegram' (cờ chỉ chặn GỬI, không chặn ĐẾM).
+ * a) cờ tắt: preflight node send_telegram -> 400 UNSUPPORTED_SEND_NODE; getAdapterChannelKeysByQuotaChannel('telegram')
+ *    vẫn có 'telegram' (cờ chỉ chặn GỬI, không chặn ĐẾM; P10: hạn mức riêng, Zalo không nhận).
  * b) cờ bật + stub -> preflight 400 TELEGRAM_STUB_TRANSPORT; gateway chưa cấu hình -> 400
  *    TELEGRAM_GATEWAY_NOT_CONFIGURED; tài khoản is_active=false hoặc của chủ khác -> 400 TELEGRAM_ACCOUNT_NOT_READY.
  * c) nguồn telegram_conversations: 3 hội thoại open + 1 closed của tài khoản, 1 open của tài khoản khác ->
  *    đúng 3 lần sendMessage với (telegram_user_id, Number(chat id), text đã render); 3 dòng ccm sent;
- *    countZaloSentToday của chủ tăng 3.
+ *    hạn mức telegram của chủ tăng 3.
  * d) gateway ném Error("MtProtoTelegramClient.sendMessage failed: FLOOD_WAIT_1800") ở người 2 -> run
  *    'running', channelDeferredUntil ~ now+30' (+-60s), channelDeferredChannel='telegram', người 1 đã gửi
  *    được đếm.
@@ -39,7 +39,12 @@ const campaignRunService = (await import('../../src/services/campaign/campaignRu
 const { validateCampaignPreflight } = await import('../../src/services/campaign/campaignPreflight.service.js');
 const chatbotTelegramRepository = (await import('../../src/repositories/chatbot/chatbotTelegram.repository.js')).default;
 const campaignChannelRegistry = (await import('../../src/services/campaign/campaignChannelRegistry.service.js')).default;
-const { countZaloSentToday, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
+const { countAdapterSentInCycleUncached, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
+
+// P10 — tin telegram có hạn mức tin/tháng RIÊNG (không còn cộng vào Zalo): đo bằng bộ đếm kênh adapter trên cửa sổ rộng.
+const adapterSentCount = () => countAdapterSentInCycleUncached(
+  owner.id, 'telegram', new Date(Date.now() - 24 * 3600 * 1000), new Date(Date.now() + 24 * 3600 * 1000)
+);
 
 const SUBTYPE = 'send_telegram';
 
@@ -144,7 +149,7 @@ async function insertConversation({ accountId, userId = owner.id, externalId, st
 }
 
 describe('PR-6 — Adapter Telegram tham chiếu (sau cờ, TẮT mặc định)', () => {
-  it('(a) cờ tắt: preflight UNSUPPORTED_SEND_NODE; getAdapterChannelKeysByQuotaChannel vẫn có telegram', async () => {
+  it('(a) cờ tắt: preflight UNSUPPORTED_SEND_NODE; đếm hạn mức kênh telegram vẫn có telegram, Zalo thì không', async () => {
     const campaignId = await insertCampaign();
     await insertNode({
       campaignId,
@@ -155,7 +160,8 @@ describe('PR-6 — Adapter Telegram tham chiếu (sau cờ, TẮT mặc định)
       validateCampaignPreflight({ campaignId, workspaceOwnerId: owner.id })
     ).rejects.toMatchObject({ code: 'UNSUPPORTED_SEND_NODE', statusCode: 400 });
 
-    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo')).toContain('telegram');
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('telegram')).toContain('telegram');
+    expect(campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo')).toEqual([]);
   });
 
   it('(b) cờ bật + stub -> TELEGRAM_STUB_TRANSPORT; chưa cấu hình -> TELEGRAM_GATEWAY_NOT_CONFIGURED; tài khoản không sẵn sàng -> TELEGRAM_ACCOUNT_NOT_READY', async () => {
@@ -201,7 +207,7 @@ describe('PR-6 — Adapter Telegram tham chiếu (sau cờ, TẮT mặc định)
     ).rejects.toMatchObject({ code: 'TELEGRAM_ACCOUNT_NOT_READY', statusCode: 400 });
   });
 
-  it('(c) nguồn telegram_conversations: 3 open + 1 closed của tài khoản, 1 open của tài khoản khác -> đúng 3 lần sendMessage; 3 ccm sent; countZaloSentToday +3', async () => {
+  it('(c) nguồn telegram_conversations: 3 open + 1 closed của tài khoản, 1 open của tài khoản khác -> đúng 3 lần sendMessage; 3 ccm sent; hạn mức telegram +3', async () => {
     process.env.CAMPAIGN_CHANNEL_TELEGRAM_ENABLED = 'true';
     const account = await insertTelegramAccount({ telegramUserId: 222 });
     const otherAccount = await insertTelegramAccount({ telegramUserId: 333 });
@@ -225,10 +231,10 @@ describe('PR-6 — Adapter Telegram tham chiếu (sau cờ, TẮT mặc định)
     });
     const run = await insertRun({ campaignId });
 
-    const before = await countZaloSentToday(owner.id);
+    const before = await adapterSentCount();
     await campaignRunService.executeCampaign(campaignId, run.id, owner.id);
     _clearQuotaCache();
-    const after = await countZaloSentToday(owner.id);
+    const after = await adapterSentCount();
 
     expect(sendMessageMock).toHaveBeenCalledTimes(3);
     const calledChatIds = sendMessageMock.mock.calls.map(([, chatId]) => chatId).sort((a, b) => a - b);

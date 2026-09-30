@@ -40,7 +40,12 @@ const { truncateAll, createUser } = await import('./helpers/db.js');
 const { createApp } = await import('../../src/app.js');
 const { __recordSendForTest, __resetPerHourWindowForTest } =
   await import('../../src/services/campaign/campaignChannelRunner.service.js');
-const { countZaloSentToday, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
+const { countAdapterSentInCycleUncached, _clearQuotaCache } = await import('../../src/utils/userSendLimit.util.js');
+
+// P10 — hạn mức tin/tháng RIÊNG từng kênh (không còn cộng vào Zalo): đo bằng bộ đếm kênh adapter trên cửa sổ rộng.
+const adapterSentCount = (channel) => countAdapterSentInCycleUncached(
+  owner.id, channel, new Date(Date.now() - 24 * 3600 * 1000), new Date(Date.now() + 24 * 3600 * 1000)
+);
 
 let app;
 let owner;
@@ -165,8 +170,8 @@ async function ccmRows(channel) {
 async function directUsage(source) {
   const { rows } = await db.query(
     `SELECT COALESCE(SUM(delta), 0)::int AS total FROM usage_logs
-     WHERE id_user = $1 AND resource_type = 'zalo_direct_send' AND metadata->>'source' = $2`,
-    [owner.id, source]
+     WHERE id_user = $1 AND resource_type = $3 AND metadata->>'source' = $2`,
+    [owner.id, source, source.replace('_preview', '_direct_send')]
   );
   return rows[0].total;
 }
@@ -266,9 +271,9 @@ describe('W7a — Telegram', () => {
   });
 
   describe('POST quick-send/telegram', () => {
-    it('gửi thành công: 1 dòng ccm is_preview/sent, usage_logs +1, countZaloSentToday +1 (không +2)', async () => {
+    it('gửi thành công: 1 dòng ccm is_preview/sent, usage_logs telegram_direct_send +1, hạn mức Telegram +1 (không +2), Zalo không đổi', async () => {
       const account = await insertTelegramAccount(owner.id);
-      const before = await countZaloSentToday(owner.id);
+      const before = await adapterSentCount('telegram');
       _clearQuotaCache();
 
       const res = await post('telegram', { accountId: account.id, recipientKey: '1001', message: 'Xin chào' }, { key: 'k-tg-1' });
@@ -292,7 +297,8 @@ describe('W7a — Telegram', () => {
       });
       expect(await directUsage('telegram_preview')).toBe(1);
       _clearQuotaCache();
-      expect(await countZaloSentToday(owner.id)).toBe(before + 1);
+      expect(await adapterSentCount('telegram')).toBe(before + 1);
+      expect(await adapterSentCount('whatsapp')).toBe(0);
     });
 
     it('gửi lần 2 ngay sau, cùng tài khoản -> deferred inter_message_delay waitMs [5000,10000]; không dòng nhật ký / usage_logs mới', async () => {
@@ -457,13 +463,13 @@ describe('W7a — Telegram', () => {
       const account = await insertTelegramAccount(owner.id);
       telegramSendMock.mockRejectedValue(new Error('MtProtoTelegramClient.sendMessage failed: PEER_ID_INVALID'));
       _clearQuotaCache();
-      const before = await countZaloSentToday(owner.id);
+      const before = await adapterSentCount('telegram');
       const res = await post('telegram', { accountId: account.id, recipientKey: '1001', message: 'A' }, { key: 'k-enf2' });
       expect(res.body.data.item).toMatchObject({ status: 'failed', errorCategory: 'hard' });
       const { rows: resv } = await db.query(`SELECT status FROM send_quota_reservations WHERE user_id = $1`, [owner.id]).catch(() => ({ rows: [] }));
       if (resv.length > 0) expect(resv.every((r) => r.status !== 'consumed')).toBe(true);
       _clearQuotaCache();
-      expect(await countZaloSentToday(owner.id)).toBe(before);
+      expect(await adapterSentCount('telegram')).toBe(before);
     });
   });
 });
@@ -513,7 +519,7 @@ describe('W7a — WhatsApp', () => {
   describe('POST quick-send/whatsapp', () => {
     it('gửi thành công (SĐT nhập 0912 345 678 -> 84912345678): ccm is_preview/sent channel whatsapp, usage_logs +1', async () => {
       openWaSession(sessionKey);
-      const before = await countZaloSentToday(owner.id);
+      const before = await adapterSentCount('whatsapp');
       _clearQuotaCache();
       const res = await post('whatsapp', { sessionKey, recipientKey: '0912 345 678', message: 'Xin chào' }, { key: 'k-wa-1' });
       expect(res.status).toBe(200);
@@ -528,7 +534,7 @@ describe('W7a — WhatsApp', () => {
       });
       expect(await directUsage('whatsapp_preview')).toBe(1);
       _clearQuotaCache();
-      expect(await countZaloSentToday(owner.id)).toBe(before + 1);
+      expect(await adapterSentCount('whatsapp')).toBe(before + 1);
     });
 
     it('lần 2 ngay sau -> deferred inter_message_delay waitMs [8000,20000]', async () => {

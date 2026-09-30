@@ -1,8 +1,12 @@
 import db from '../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL } from '../utils/billingCycle.util.js';
 import { getStaleSendingSeconds } from '../config/sendQuota.config.js';
-import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
 import { EMAIL_SENT_STATUS_SQL_LIST } from '../constants/emailMessageStatus.js';
+import {
+  ADAPTER_QUOTA_CHANNELS,
+  DIRECT_SEND_RESOURCE_TYPE,
+  WALLET_ITEM_BY_QUOTA_CHANNEL,
+} from '../constants/sendQuotaChannels.js';
 
 // PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-1 — mọi phép đếm email trong file này lọc `status` bằng
 // EMAIL_SENT_STATUS_SQL_LIST (7 trạng thái thư đã gửi, gồm opened/clicked/unsubscribed). KHÔNG viết lại
@@ -161,8 +165,8 @@ export function assertNoPiiOrSecret(val, path = 'root') {
   }
 }
 
-const CANONICAL_DIRECT_PREVIEW_QUICK = /^(?:direct|preview|quick):(email|zalo):(\d+):h_[0-9a-f]{20}:[0-9a-f]{16}$/;
-const CANONICAL_CAMPAIGN = /^campaign:([a-zA-Z0-9_-]+):([a-zA-Z0-9_-]{1,32}|h_[0-9a-f]{20}):(email|zalo):[0-9a-f]{16}:(\d+)$/;
+const CANONICAL_DIRECT_PREVIEW_QUICK = /^(?:direct|preview|quick):(email|zalo|telegram|whatsapp):(\d+):h_[0-9a-f]{20}:[0-9a-f]{16}$/;
+const CANONICAL_CAMPAIGN = /^campaign:([a-zA-Z0-9_-]+):([a-zA-Z0-9_-]{1,32}|h_[0-9a-f]{20}):(email|zalo|telegram|whatsapp):[0-9a-f]{16}:(\d+)$/;
 const CANONICAL_INBOX = /^inbox:(zalo|email):([0-9]{1,18}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|h_[0-9a-f]{20})$/i;
 
 /**
@@ -441,8 +445,8 @@ export async function createReservation(client, data) {
     throw err;
   }
   if (walletQuantity > 0) {
-    if (!walletItemKey || !['emails', 'zalo_messages'].includes(walletItemKey)) {
-      const err = new Error('wallet_quantity > 0 requires a valid wallet_item_key (emails or zalo_messages)');
+    if (!walletItemKey || !Object.values(WALLET_ITEM_BY_QUOTA_CHANNEL).includes(walletItemKey)) {
+      const err = new Error('wallet_quantity > 0 requires a valid wallet_item_key (emails, zalo_messages, telegram_messages or whatsapp_messages)');
       err.status = 400;
       err.code = 'INVALID_WALLET_ITEM_KEY';
       throw err;
@@ -758,7 +762,6 @@ export async function countEmailSentTodayWithLedger(queryable, billingUserId, da
  * @returns {Promise<number>}
  */
 export async function countZaloSentTodayWithLedger(queryable, billingUserId, dayStart, dayEnd) {
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -803,20 +806,8 @@ export async function countZaloSentTodayWithLedger(queryable, billingUserId, day
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND vn_day_start = $2 AND vn_day_end = $3
       ), 0)
-      +
-      COALESCE((
-        SELECT COUNT(*)
-        FROM campaign_channel_messages ccm
-        WHERE ccm.workspace_owner_id = $1
-          AND ccm.channel = ANY($4::text[])
-          AND ccm.status = 'sent'
-          AND NOT ccm.is_preview
-          AND ccm.quota_reservation_id IS NULL
-          AND ccm.sent_at >= $2::timestamptz
-          AND ccm.sent_at < $3::timestamptz
-      ), 0)
     )::int AS total`,
-    [billingUserId, dayStart, dayEnd, adapterZaloKeys]
+    [billingUserId, dayStart, dayEnd]
   );
   return Number(rows[0]?.total || 0);
 }
@@ -963,7 +954,6 @@ export async function countEmailSentInCycleWithLedger(queryable, billingUserId, 
  * @returns {Promise<number>}
  */
 export async function countZaloSentInCycleWithLedger(queryable, billingUserId, cycleStart, cycleEnd) {
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -1008,20 +998,8 @@ export async function countZaloSentInCycleWithLedger(queryable, billingUserId, c
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND cycle_start = $2 AND cycle_end = $3
       ), 0)
-      +
-      COALESCE((
-        SELECT COUNT(*)
-        FROM campaign_channel_messages ccm
-        WHERE ccm.workspace_owner_id = $1
-          AND ccm.channel = ANY($4::text[])
-          AND ccm.status = 'sent'
-          AND NOT ccm.is_preview
-          AND ccm.quota_reservation_id IS NULL
-          AND ccm.sent_at >= $2::timestamptz
-          AND ccm.sent_at < $3::timestamptz
-      ), 0)
     )::int AS total`,
-    [billingUserId, cycleStart, cycleEnd, adapterZaloKeys]
+    [billingUserId, cycleStart, cycleEnd]
   );
   return Number(rows[0]?.total || 0);
 }
@@ -1091,7 +1069,6 @@ export async function countEmployeeSentTodayWithLedger(
   }
 
   // channel === 'zalo'
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -1136,21 +1113,8 @@ export async function countEmployeeSentTodayWithLedger(
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND vn_day_start = $3 AND vn_day_end = $4
       ), 0)
-      +
-      COALESCE((
-        SELECT COUNT(*)
-        FROM campaign_channel_messages ccm
-        WHERE ccm.workspace_owner_id = $1
-          AND ccm.actor_user_id = $2
-          AND ccm.channel = ANY($5::text[])
-          AND ccm.status = 'sent'
-          AND NOT ccm.is_preview
-          AND ccm.quota_reservation_id IS NULL
-          AND ccm.sent_at >= $3::timestamptz
-          AND ccm.sent_at < $4::timestamptz
-      ), 0)
     )::int AS total`,
-    [ownerId, employeeId, dayStart, dayEnd, adapterZaloKeys]
+    [ownerId, employeeId, dayStart, dayEnd]
   );
   return Number(rows[0]?.total || 0);
 }
@@ -1215,7 +1179,6 @@ export async function countEmployeeSentInCycleWithLedger(
   }
 
   // channel === 'zalo'
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
       COALESCE((
@@ -1260,27 +1223,64 @@ export async function countEmployeeSentInCycleWithLedger(
           AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
           AND cycle_start = $3 AND cycle_end = $4
       ), 0)
-      +
-      COALESCE((
-        SELECT COUNT(*)
-        FROM campaign_channel_messages ccm
-        WHERE ccm.workspace_owner_id = $1
-          AND ccm.actor_user_id = $2
-          AND ccm.channel = ANY($5::text[])
-          AND ccm.status = 'sent'
-          AND NOT ccm.is_preview
-          AND ccm.quota_reservation_id IS NULL
-          AND ccm.sent_at >= $3::timestamptz
-          AND ccm.sent_at < $4::timestamptz
-      ), 0)
     )::int AS total`,
-    [ownerId, employeeId, cycleStart, cycleEnd, adapterZaloKeys]
+    [ownerId, employeeId, cycleStart, cycleEnd]
   );
   return Number(rows[0]?.total || 0);
 }
 
 /**
- * Đếm tổng tin Email + Zalo trong kỳ của workspace (cho messages_per_period).
+ * P10 — tổng tin Telegram/WhatsApp trong kỳ gói (kết hợp dòng ccm chưa gắn đặt chỗ + usage_logs gửi nhanh chưa gắn đặt chỗ
+ * + ledger đặt chỗ đang giữ/đã tiêu). Cùng khuôn `countZaloSentInCycleWithLedger`: mỗi tin đi qua đúng MỘT nguồn.
+ * Dòng ccm gửi nhanh ghi `is_preview = true` nên bị loại (tin gửi nhanh đi qua usage_logs hoặc ledger).
+ * @param {import('pg').Pool|import('pg').PoolClient} queryable
+ * @param {number|string} billingUserId
+ * @param {'telegram'|'whatsapp'} channel
+ * @param {Date} cycleStart
+ * @param {Date} cycleEnd
+ * @returns {Promise<number>}
+ */
+export async function countAdapterSentInCycleWithLedger(queryable, billingUserId, channel, cycleStart, cycleEnd) {
+  const { rows } = await queryable.query(
+    `SELECT (
+      COALESCE((
+        SELECT COUNT(*)
+        FROM campaign_channel_messages ccm
+        WHERE ccm.workspace_owner_id = $1
+          AND ccm.channel = $4
+          AND ccm.status = 'sent'
+          AND NOT ccm.is_preview
+          AND ccm.quota_reservation_id IS NULL
+          AND ccm.sent_at >= $2::timestamptz
+          AND ccm.sent_at < $3::timestamptz
+      ), 0)
+      +
+      COALESCE((
+        SELECT SUM(delta)
+        FROM usage_logs
+        WHERE id_user = $1
+          AND quota_reservation_id IS NULL
+          AND resource_type = $5
+          AND created_at >= $2 AND created_at < $3
+      ), 0)
+      +
+      COALESCE((
+        SELECT SUM(quantity)
+        FROM send_quota_reservations
+        WHERE billing_user_id = $1
+          AND channel = $4
+          AND is_metered = true
+          AND status IN ('reserved', 'sending', 'uncertain', 'consumed')
+          AND cycle_start = $2 AND cycle_end = $3
+      ), 0)
+    )::int AS total`,
+    [billingUserId, cycleStart, cycleEnd, channel, DIRECT_SEND_RESOURCE_TYPE[channel]]
+  );
+  return Number(rows[0]?.total || 0);
+}
+
+/**
+ * Đếm tổng tin Email + Zalo + Telegram + WhatsApp trong kỳ của workspace (cho messages_per_period).
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} billingUserId
  * @param {Date} cycleStart
@@ -1290,7 +1290,13 @@ export async function countEmployeeSentInCycleWithLedger(
 export async function countCombinedSentInCycleWithLedger(queryable, billingUserId, cycleStart, cycleEnd) {
   const emailCount = await countEmailSentInCycleWithLedger(queryable, billingUserId, cycleStart, cycleEnd);
   const zaloCount = await countZaloSentInCycleWithLedger(queryable, billingUserId, cycleStart, cycleEnd);
-  return emailCount + zaloCount;
+  // P10 — Telegram/WhatsApp có hạn mức riêng nhưng vẫn cộng vào tổng messages_per_period như trước P10 (không đổi trần tổng).
+  let adapterCount = 0;
+  for (const adapterChannel of ADAPTER_QUOTA_CHANNELS) {
+    // eslint-disable-next-line no-await-in-loop
+    adapterCount += await countAdapterSentInCycleWithLedger(queryable, billingUserId, adapterChannel, cycleStart, cycleEnd);
+  }
+  return emailCount + zaloCount + adapterCount;
 }
 
 /**
@@ -1354,6 +1360,8 @@ export async function getWorkspacePlanLimits(queryable, billingUserId) {
        p.monthly_email_limit,
        p.daily_zalo_limit,
        p.monthly_zalo_limit,
+       p.monthly_telegram_limit,
+       p.monthly_whatsapp_limit,
        p.messages_per_period,
        COALESCE(p.grace_period_days, 0)::int AS grace_period_days,
        u.subscription_expires_at,
@@ -1391,6 +1399,8 @@ export async function getWorkspacePlanLimits(queryable, billingUserId) {
     monthly_email_limit: row.monthly_email_limit,
     daily_zalo_limit: row.daily_zalo_limit,
     monthly_zalo_limit: row.monthly_zalo_limit,
+    monthly_telegram_limit: row.monthly_telegram_limit,
+    monthly_whatsapp_limit: row.monthly_whatsapp_limit,
     messages_per_period: row.messages_per_period,
     subscription_expires_at: expiresAt,
     is_subscription_expired: isExpired,

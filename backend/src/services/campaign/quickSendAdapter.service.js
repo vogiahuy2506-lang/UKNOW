@@ -8,9 +8,9 @@
  * KHÔNG tạo chiến dịch tạm: trần số chiến dịch của gói đếm mọi dòng `campaigns` (mỗi lần gửi nhanh sẽ ăn một
  * suất) và `campaigns.origin` bị CHECK chỉ `self_created | marketplace_purchased`.
  *
- * Hạn mức đi dưới kênh `zalo` (chk_sqr_channel production chỉ nhận email|zalo; `checkSendQuota` ném kênh lạ),
- * `source_type` = `${channel}_preview`. Dòng ccm ghi `is_preview = true` để các vế đếm hạn mức
- * (`AND NOT ccm.is_preview`) KHÔNG đếm đôi — tin gửi nhanh chỉ được tính qua `usage_logs`, y như Zalo gửi nhanh.
+ * Hạn mức đi dưới CHÍNH kênh (P10: `descriptor.quotaChannel` = 'telegram' | 'whatsapp' — hạn mức tin/tháng riêng, ví riêng;
+ * trước P10 mượn 'zalo'), `source_type` = `${channel}_preview`. Dòng ccm ghi `is_preview = true` để các vế đếm hạn mức
+ * (`AND NOT ccm.is_preview`) KHÔNG đếm đôi — tin gửi nhanh chỉ được tính qua `usage_logs` (`<kênh>_direct_send`), y như Zalo gửi nhanh.
  */
 import campaignChannelMessageRepository from '../../repositories/campaign/campaignChannelMessage.repository.js';
 import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
@@ -153,9 +153,9 @@ function isActiveQuotaMode(reservation) {
 
 /**
  * Kiểm hạn mức gói TRƯỚC khi gửi — khuôn `zaloSettings.controller.js assertPreviewSendQuota` (chế độ enforce
- * kiểm ở reserveSendQuota nên bỏ qua ở đây). Kênh `zalo`, 1 tin.
+ * kiểm ở reserveSendQuota nên bỏ qua ở đây). Kênh = `quotaChannel` của descriptor (P10), 1 tin.
  */
-async function assertQuickSendQuota(authUser) {
+async function assertQuickSendQuota(authUser, quotaChannel) {
   const mode = process.env.SEND_QUOTA_RESERVATION_MODE || 'off';
   if (mode === 'enforce' || mode === 'test_enforce') return { allowed: true, mode };
   const { actorUserId, workspaceOwnerId } = getWorkspaceContext(authUser);
@@ -163,7 +163,7 @@ async function assertQuickSendQuota(authUser) {
     userId: actorUserId,
     roleCode: authUser?.role,
     ownerContextId: workspaceOwnerId,
-    channel: 'zalo',
+    channel: quotaChannel,
     requiredCount: 1,
   });
   if (!quota.allowed) {
@@ -384,7 +384,8 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   const baseRequestKey = resolveRequestIdempotencyKey(idempotencyKey ?? null);
 
   // Kiểm hạn mức gói (chỉ đọc) TRƯỚC cổng nhịp — hết hạn mức thì không đốt một lượt nhịp vô ích.
-  const quota = await assertQuickSendQuota(authUser);
+  const quotaChannel = descriptor.quotaChannel;
+  const quota = await assertQuickSendQuota(authUser, quotaChannel);
 
   if (campaignShutdownGate.isShuttingDown()) {
     throw httpError(503, 'SERVER_SHUTTING_DOWN', 'Hệ thống đang khởi động lại, thử lại sau ít phút.');
@@ -405,7 +406,7 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   }
   recordAdapterSendAttempt({ descriptor, accountKey });
 
-  // 6. Giữ chỗ hạn mức (kênh `zalo`, nguồn `${channel}_preview`).
+  // 6. Giữ chỗ hạn mức (kênh = quotaChannel của descriptor, nguồn `${channel}_preview`).
   const requestPayload = {
     channel,
     accountRef: String(accountRef),
@@ -417,7 +418,7 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
   let reservation = null;
   try {
     const reservationKey = buildPreviewReservationKey({
-      channel: 'zalo',
+      channel: quotaChannel,
       billingUserId: workspaceOwnerId,
       requestKey: baseRequestKey,
       recipient: `${channel}:${recipientKey}`,
@@ -426,7 +427,7 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
       userId: actorUserId,
       roleCode: authUser?.role,
       ownerContextId: workspaceOwnerId,
-      channel: 'zalo',
+      channel: quotaChannel,
       quantity: 1,
       reservationKey,
       requestFingerprint: computeRequestFingerprint(requestPayload),
@@ -561,7 +562,7 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
     try {
       await recordDirectSendUsage({
         billingUserId: quota.billingUserId,
-        channel: 'zalo',
+        channel: quotaChannel,
         amount: 1,
         actorUserId,
         source: `${channel}_preview`,

@@ -90,7 +90,22 @@ describe('P6 — bán lẻ slot Telegram/WhatsApp (top-up)', () => {
       expect({ p: item.unitPrice, min: item.minQty, step: item.stepQty, max: item.maxQty })
         .toEqual({ p: zalo.unitPrice, min: zalo.minQty, step: zalo.stepQty, max: zalo.maxQty });
     }
-    expect(res.body.result.unlimitedItemKeys).toEqual(['whatsapp_accounts']);
+    // P10 — gói thử nghiệm không khai hạn mức tin (NULL = không giới hạn) nên hai ví tin cũng KHÔNG bán; đặt trần riêng cho
+    // Telegram thì ví telegram_messages hiện lại (còn whatsapp_messages vẫn ẩn).
+    expect([...res.body.result.unlimitedItemKeys].sort())
+      .toEqual(['telegram_messages', 'whatsapp_accounts', 'whatsapp_messages']);
+    const zaloMessages = items.find((i) => i.itemKey === 'zalo_messages');
+    for (const key of ['telegram_messages', 'whatsapp_messages']) {
+      const item = items.find((i) => i.itemKey === key);
+      expect({ p: item.unitPrice, min: item.minQty, step: item.stepQty, max: item.maxQty })
+        .toEqual({ p: zaloMessages.unitPrice, min: zaloMessages.minQty, step: zaloMessages.stepQty, max: zaloMessages.maxQty });
+    }
+    await db.query(
+      `UPDATE plans SET monthly_telegram_limit = 2000 WHERE id = (SELECT active_plan_id FROM users WHERE id = $1)`,
+      [user.id]
+    );
+    const res2 = await request(app).get('/api/topup/config').set('Authorization', `Bearer ${token}`);
+    expect([...res2.body.result.unlimitedItemKeys].sort()).toEqual(['whatsapp_accounts', 'whatsapp_messages']);
   });
 
   it('mua 1 slot Telegram: đơn 50.000đ → webhook cấp grant → MỞ khoá tài khoản đang bị khoá', async () => {

@@ -9,10 +9,17 @@ import {
 import {
   getWalletSnapshot,
   maybeDebitWalletForSend,
-  WALLET_ITEM_BY_CHANNEL,
 } from '../services/payment/topupWallet.service.js';
 import usageTrackingRepository from '../repositories/payment/usageTracking.repository.js';
-import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
+import {
+  ADAPTER_QUOTA_CHANNELS,
+  DIRECT_SEND_RESOURCE_TYPE,
+  PLAN_MONTHLY_LIMIT_COLUMN,
+  QUOTA_CHANNEL_LABEL,
+  SEND_QUOTA_CHANNELS,
+  WALLET_ITEM_BY_QUOTA_CHANNEL,
+  isAdapterQuotaChannel,
+} from '../constants/sendQuotaChannels.js';
 import { EMAIL_SENT_STATUS_SQL_LIST } from '../constants/emailMessageStatus.js';
 
 // PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-1 — mọi phép đếm email trong file này lọc `em.status` bằng
@@ -108,6 +115,7 @@ async function getUserPlanSendLimits(billingUserId) {
     const { rows } = await db.query(
       `SELECT p.daily_email_limit, p.monthly_email_limit,
               p.daily_zalo_limit,  p.monthly_zalo_limit,
+              p.monthly_telegram_limit, p.monthly_whatsapp_limit,
               p.messages_per_period
        FROM users u
        JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
@@ -124,6 +132,9 @@ async function getUserPlanSendLimits(billingUserId) {
       messages_per_period: row.messages_per_period,
       monthly_email_limit: toInt(row.monthly_email_limit),
       monthly_zalo_limit: toInt(row.monthly_zalo_limit),
+      // P10 — hạn mức tin/tháng riêng Telegram/WhatsApp (NULL = không giới hạn, 0 = gói không có kênh).
+      monthly_telegram_limit: toInt(row.monthly_telegram_limit),
+      monthly_whatsapp_limit: toInt(row.monthly_whatsapp_limit),
     };
   });
 }
@@ -220,9 +231,7 @@ async function countEmployeeEmailSentThisMonth(ownerId, employeeId, cycleStart =
 }
 
 async function countEmployeeZaloSentToday(ownerId, employeeId) {
-  // PR-4 (tách tầng kênh gửi) — vế campaign_channel_messages cho kênh adapter đếm vào limit Zalo
-  // (quotaChannel='zalo'). Danh sách rỗng khi chưa kênh nào đăng ký (production hiện tại) → vế = 0.
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
+  // P10 — tin Telegram/WhatsApp có hạn mức riêng (checkSendQuota channel='telegram'|'whatsapp'), KHÔNG cộng vào Zalo.
   return cached(`emp:${ownerId}:${employeeId}:zalo_today`, async () => {
     const { rows } = await db.query(
       `SELECT (
@@ -242,24 +251,14 @@ async function countEmployeeZaloSentToday(ownerId, employeeId) {
               AND (ul.metadata->>'actorUserId')::bigint = $2
               AND ul.resource_type = 'zalo_direct_send'
               AND ul.created_at >= CURRENT_DATE)
-         + (SELECT COUNT(*) FROM campaign_channel_messages ccm
-            WHERE ccm.workspace_owner_id = $1
-              AND ccm.actor_user_id = $2
-              AND ccm.channel = ANY($3::text[])
-              AND ccm.status = 'sent'
-              AND NOT ccm.is_preview
-              AND ccm.quota_reservation_id IS NULL
-              AND ccm.sent_at >= (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')
-              AND ccm.sent_at < ((CURRENT_DATE + 1)::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh'))
        )::int AS total`,
-      [ownerId, employeeId, adapterZaloKeys]
+      [ownerId, employeeId]
     );
     return toCount(rows[0]?.total);
   });
 }
 
 async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = null, cycleEnd = null, queryable = db) {
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   if (cycleStart && cycleEnd) {
     const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
     const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
@@ -283,17 +282,8 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
                 AND (ul.metadata->>'actorUserId')::bigint = $2
                 AND ul.resource_type = 'zalo_direct_send'
                 AND ul.created_at >= $3 AND ul.created_at < $4)
-           + (SELECT COUNT(*) FROM campaign_channel_messages ccm
-              WHERE ccm.workspace_owner_id = $1
-                AND ccm.actor_user_id = $2
-                AND ccm.channel = ANY($5::text[])
-                AND ccm.status = 'sent'
-                AND NOT ccm.is_preview
-                AND ccm.quota_reservation_id IS NULL
-                AND ccm.sent_at >= $3::timestamptz
-                AND ccm.sent_at < $4::timestamptz)
          )::int AS total`,
-        [ownerId, employeeId, startIso, endIso, adapterZaloKeys]
+        [ownerId, employeeId, startIso, endIso]
       );
       return toCount(rows[0]?.total);
     });
@@ -317,16 +307,8 @@ async function countEmployeeZaloSentThisMonth(ownerId, employeeId, cycleStart = 
               AND (ul.metadata->>'actorUserId')::bigint = $2
               AND ul.resource_type = 'zalo_direct_send'
               AND ul.created_at >= DATE_TRUNC('month', NOW()))
-         + (SELECT COUNT(*) FROM campaign_channel_messages ccm
-            WHERE ccm.workspace_owner_id = $1
-              AND ccm.actor_user_id = $2
-              AND ccm.channel = ANY($3::text[])
-              AND ccm.status = 'sent'
-              AND NOT ccm.is_preview
-              AND ccm.quota_reservation_id IS NULL
-              AND ccm.sent_at >= DATE_TRUNC('month', NOW()))
        )::int AS total`,
-      [ownerId, employeeId, adapterZaloKeys]
+      [ownerId, employeeId]
     );
     return toCount(rows[0]?.total);
   });
@@ -395,7 +377,6 @@ export async function countEmailSentThisMonth(billingUserId, cycleStart = null, 
 export { countEmailSentThisMonth as countEmailsSentThisMonth };
 
 async function countZaloSentToday(billingUserId) {
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   return cached(`${billingUserId}:zalo_today`, async () => {
     const { rows } = await db.query(
       `SELECT (
@@ -413,16 +394,8 @@ async function countZaloSentToday(billingUserId) {
           WHERE ul.id_user = $1
             AND ul.resource_type = 'zalo_direct_send'
             AND ul.created_at >= CURRENT_DATE)
-       + (SELECT COUNT(*) FROM campaign_channel_messages ccm
-          WHERE ccm.workspace_owner_id = $1
-            AND ccm.channel = ANY($2::text[])
-            AND ccm.status = 'sent'
-            AND NOT ccm.is_preview
-            AND ccm.quota_reservation_id IS NULL
-            AND ccm.sent_at >= (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')
-            AND ccm.sent_at < ((CURRENT_DATE + 1)::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh'))
        )::int AS total`,
-      [billingUserId, adapterZaloKeys]
+      [billingUserId]
     );
     return toCount(rows[0]?.total);
   });
@@ -431,7 +404,6 @@ async function countZaloSentToday(billingUserId) {
 export async function countZaloSentInCycleUncached(billingUserId, cycleStart, cycleEnd, queryable = db) {
   const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
   const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
   const { rows } = await queryable.query(
     `SELECT (
        (SELECT COUNT(*) FROM zalo_messages zm
@@ -449,16 +421,8 @@ export async function countZaloSentInCycleUncached(billingUserId, cycleStart, cy
         WHERE ul.id_user = $1
           AND ul.resource_type = 'zalo_direct_send'
           AND ul.created_at >= $2 AND ul.created_at < $3)
-     + (SELECT COUNT(*) FROM campaign_channel_messages ccm
-        WHERE ccm.workspace_owner_id = $1
-          AND ccm.channel = ANY($4::text[])
-          AND ccm.status = 'sent'
-          AND NOT ccm.is_preview
-          AND ccm.quota_reservation_id IS NULL
-          AND ccm.sent_at >= $2::timestamptz
-          AND ccm.sent_at < $3::timestamptz)
      )::int AS total`,
-    [billingUserId, startIso, endIso, adapterZaloKeys]
+    [billingUserId, startIso, endIso]
   );
   return toCount(rows[0]?.total);
 }
@@ -483,12 +447,70 @@ export async function countZaloSentThisMonth(billingUserId, cycleStart = null, c
 }
 
 /**
+ * P10 — số tin Telegram/WhatsApp đã gửi trong chu kỳ billing [cycleStart, cycleEnd) của một workspace.
+ *
+ * Nguồn = `campaign_channel_messages` (chiến dịch/Hộp thư: dòng `sent`, `NOT is_preview`) + `usage_logs`
+ * `<kênh>_direct_send` (gửi nhanh — dòng ccm gửi nhanh ghi `is_preview = true` nên KHÔNG đếm đôi). Chu kỳ = chu kỳ
+ * GÓI của chủ workspace (`getBillingCycle`, tính từ ngày kích hoạt), không phải tháng lịch. `quota_reservation_id IS NULL`:
+ * tin đã đi qua hệ đặt chỗ (mode enforce) được tính ở ledger `send_quota_reservations`, không cộng hai lần.
+ * Cột `sent_at` của ccm và `created_at` của usage_logs đều TIMESTAMPTZ (luật 3 đầu file).
+ */
+export async function countAdapterSentInCycleUncached(billingUserId, channel, cycleStart, cycleEnd, queryable = db) {
+  if (!isAdapterQuotaChannel(channel)) {
+    throw new Error(`countAdapterSentInCycle: kênh không phải kênh adapter '${channel}'`);
+  }
+  const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+  const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  const { rows } = await queryable.query(
+    `SELECT (
+       (SELECT COUNT(*) FROM campaign_channel_messages ccm
+        WHERE ccm.workspace_owner_id = $1
+          AND ccm.channel = $4
+          AND ccm.status = 'sent'
+          AND NOT ccm.is_preview
+          AND ccm.quota_reservation_id IS NULL
+          AND ccm.sent_at >= $2::timestamptz
+          AND ccm.sent_at < $3::timestamptz)
+     + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
+        WHERE ul.id_user = $1
+          AND ul.resource_type = $5
+          AND ul.created_at >= $2 AND ul.created_at < $3)
+     )::int AS total`,
+    [billingUserId, startIso, endIso, channel, DIRECT_SEND_RESOURCE_TYPE[channel]]
+  );
+  return toCount(rows[0]?.total);
+}
+
+export async function countAdapterSentInCycle(billingUserId, channel, cycleStart, cycleEnd, queryable = db, options = {}) {
+  const isCacheDisabled = options.cache === false || queryable !== db;
+  if (isCacheDisabled) {
+    return countAdapterSentInCycleUncached(billingUserId, channel, cycleStart, cycleEnd, queryable);
+  }
+  const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
+  const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
+  return cached(`${billingUserId}:${channel}_cycle:${startIso}:${endIso}`, () =>
+    countAdapterSentInCycleUncached(billingUserId, channel, cycleStart, cycleEnd, queryable)
+  );
+}
+
+/** Đếm tin của MỘT kênh (email/zalo/telegram/whatsapp) trong chu kỳ gói — điểm vào chung cho gate và ghi ví. */
+export async function countChannelSentInCycle(billingUserId, channel, cycleStart, cycleEnd, queryable = db, options = {}) {
+  if (channel === 'email') return countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd, queryable, options);
+  if (channel === 'zalo') return countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd, queryable, options);
+  if (!cycleStart || !cycleEnd) {
+    throw new Error(`countChannelSentInCycle requires explicit cycleStart and cycleEnd for user ${billingUserId}`);
+  }
+  return countAdapterSentInCycle(billingUserId, channel, cycleStart, cycleEnd, queryable, options);
+}
+
+/**
  * Tổng email + zalo campaign + inbox manual trong chu kỳ billing [cycleStart, cycleEnd).
  */
 export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleEnd) {
   const startIso = cycleStart instanceof Date ? cycleStart.toISOString() : String(cycleStart);
   const endIso = cycleEnd instanceof Date ? cycleEnd.toISOString() : String(cycleEnd);
-  const adapterZaloKeys = campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo');
+  // P10 — Telegram/WhatsApp có hạn mức riêng nhưng VẪN cộng vào tổng `messages_per_period` như trước (không đổi hành vi
+  // của trần tổng theo kỳ): vế ccm lấy mọi kênh adapter, vế usage_logs lấy cả 4 loại gửi trực tiếp.
   return cached(`${billingUserId}:combined:${startIso}:${endIso}`, async () => {
     const { rows } = await db.query(
       `SELECT (
@@ -511,7 +533,7 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
             AND zpm.created_at >= $2 AND zpm.created_at < $3)
        + (SELECT COALESCE(SUM(ul.delta), 0) FROM usage_logs ul
           WHERE ul.id_user = $1
-            AND ul.resource_type IN ('email_direct_send', 'zalo_direct_send')
+            AND ul.resource_type = ANY($5::text[])
             AND ul.created_at >= $2 AND ul.created_at < $3)
        + (SELECT COUNT(*) FROM campaign_channel_messages ccm
           WHERE ccm.workspace_owner_id = $1
@@ -522,7 +544,7 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
             AND ccm.sent_at >= $2::timestamptz
             AND ccm.sent_at < $3::timestamptz)
        )::int AS total`,
-      [billingUserId, startIso, endIso, adapterZaloKeys]
+      [billingUserId, startIso, endIso, [...ADAPTER_QUOTA_CHANNELS], Object.values(DIRECT_SEND_RESOURCE_TYPE)]
     );
     return toCount(rows[0]?.total);
   });
@@ -558,7 +580,11 @@ const denyResult = ({
 /**
  * Entry point hợp nhất kiểm tra hạn mức gửi.
  *
- * @param {{ userId: number|string, channel: 'email'|'zalo', roleCode?: string, ownerContextId?: number|string|null, requiredCount?: number }} input
+ * P10 — 'telegram'|'whatsapp' có hạn mức tin/tháng RIÊNG (cột `plans.monthly_<kênh>_limit`, chu kỳ gói, ví top-up
+ * `<kênh>_messages`). Chúng KHÔNG có trần theo ngày của gói và KHÔNG áp trần nhân viên (`user_members` không có cột cho
+ * hai kênh này) — trần theo ngày/tài khoản của TG/WA nằm ở `accountDailyLimit.service.js`.
+ *
+ * @param {{ userId: number|string, channel: 'email'|'zalo'|'telegram'|'whatsapp', roleCode?: string, ownerContextId?: number|string|null, requiredCount?: number }} input
  * @returns {Promise<{allowed: boolean, limitType: null|string, limit: number|null, currentCount: number, resetAt: Date|null, message: string|null, billingUserId: *}>}
  */
 export async function checkSendQuota({
@@ -583,17 +609,15 @@ export async function checkSendQuota({
     return okResult(null);
   }
 
-  // PR-4 (tách tầng kênh gửi) Việc 4 — trước đây bất kỳ channel khác 'email' đều âm thầm tính như
-  // Zalo (isEmail=false). Kênh adapter (Telegram/WhatsApp) LUÔN gọi quotaGate với
-  // channel=descriptor.quotaChannel ('email'|'zalo') đã dịch sẵn ở registry — hàm này KHÔNG cần tự
-  // dịch 'whatsapp'/'telegram'; nhận được giá trị khác thì chỉ có thể là lỗi gọi sai, khuôn
-  // accountDailyLimit.service.js:45.
-  if (channel !== 'email' && channel !== 'zalo') {
+  // Kênh lạ (không thuộc 4 kênh hạn mức) chỉ có thể là lỗi gọi sai — trước PR-4 nó âm thầm bị tính như Zalo. P10: kênh
+  // adapter (Telegram/WhatsApp) đi thẳng bằng khoá kênh của chính nó (registry `quotaChannel`), không còn dịch sang 'zalo'.
+  if (!SEND_QUOTA_CHANNELS.includes(channel)) {
     throw new Error(`checkSendQuota: kênh không hợp lệ '${channel}'`);
   }
   const isEmail = channel === 'email';
+  const isAdapter = isAdapterQuotaChannel(channel);
   const requestedCount = Math.max(1, Number.parseInt(requiredCount, 10) || 1);
-  const channelLabel = isEmail ? 'email' : 'Zalo';
+  const channelLabel = QUOTA_CHANNEL_LABEL[channel];
   const unitLabel = isEmail ? 'email' : 'tin';
 
   // 1. Employee limits check (Tier 1)
@@ -615,8 +639,9 @@ export async function checkSendQuota({
         });
       }
 
-      const empDailyLimit = toInt(isEmail ? empLimits.daily_email_limit : empLimits.daily_zalo_limit);
-      const empMonthlyLimit = toInt(isEmail ? empLimits.monthly_email_limit : empLimits.monthly_zalo_limit);
+      // P10 — Telegram/WhatsApp: không có cột trần nhân viên → bỏ qua (null), KHÔNG mượn cột Zalo.
+      const empDailyLimit = isAdapter ? null : toInt(isEmail ? empLimits.daily_email_limit : empLimits.daily_zalo_limit);
+      const empMonthlyLimit = isAdapter ? null : toInt(isEmail ? empLimits.monthly_email_limit : empLimits.monthly_zalo_limit);
 
       if (empDailyLimit !== null) {
         if (empDailyLimit === 0) {
@@ -708,8 +733,9 @@ export async function checkSendQuota({
     });
   }
 
-  const dailyLimit = toInt(isEmail ? limits.daily_email_limit : limits.daily_zalo_limit);
-  const monthlyLimit = toInt(isEmail ? limits.monthly_email_limit : limits.monthly_zalo_limit);
+  // P10 — kênh adapter không có trần theo ngày của gói (cột daily_* chỉ có email/Zalo): không đọc cột Zalo.
+  const dailyLimit = isAdapter ? null : toInt(isEmail ? limits.daily_email_limit : limits.daily_zalo_limit);
+  const monthlyLimit = toInt(limits[PLAN_MONTHLY_LIMIT_COLUMN[channel]]);
 
   if (dailyLimit !== null) {
     if (dailyLimit === 0) {
@@ -755,12 +781,10 @@ export async function checkSendQuota({
     const cycleStart = cycle?.hasPlan ? cycle.cycleStart : null;
     const cycleEnd = cycle?.hasPlan ? cycle.cycleEnd : null;
 
-    const count = isEmail
-      ? await countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd)
-      : await countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd);
+    const count = await countChannelSentInCycle(billingUserId, channel, cycleStart, cycleEnd);
     if (count + requestedCount > monthlyLimit) {
       // Hết hạn mức gói — còn ví thì vẫn cho gửi (trừ lúc ghi tin). Đọc ví không qua cache.
-      const walletItemKey = WALLET_ITEM_BY_CHANNEL[isEmail ? 'email' : 'zalo'];
+      const walletItemKey = WALLET_ITEM_BY_QUOTA_CHANNEL[channel];
       const coveredByPlan = Math.max(0, monthlyLimit - count);
       const requiredTopup = Math.max(0, requestedCount - coveredByPlan);
       const wallet = walletItemKey
@@ -826,10 +850,10 @@ export async function recordDirectSendUsage({
   source,
 } = {}) {
   const quantity = Math.max(1, Number.parseInt(amount, 10) || 1);
-  if (!billingUserId || !['email', 'zalo'].includes(channel)) return null;
+  if (!billingUserId || !SEND_QUOTA_CHANNELS.includes(channel)) return null;
 
-  const resourceType = channel === 'email' ? 'email_direct_send' : 'zalo_direct_send';
-  const walletItemKey = WALLET_ITEM_BY_CHANNEL[channel];
+  const resourceType = DIRECT_SEND_RESOURCE_TYPE[channel];
+  const walletItemKey = WALLET_ITEM_BY_QUOTA_CHANNEL[channel];
   const client = await db.getClient();
 
   try {
@@ -850,11 +874,9 @@ export async function recordDirectSendUsage({
     const cycleStart = cycle?.hasPlan ? cycle.cycleStart : null;
     const cycleEnd = cycle?.hasPlan ? cycle.cycleEnd : null;
     const usageAfter = (cycleStart && cycleEnd)
-      ? (channel === 'email'
-          ? await countEmailSentThisMonth(billingUserId, cycleStart, cycleEnd, client, { cache: false })
-          : await countZaloSentThisMonth(billingUserId, cycleStart, cycleEnd, client, { cache: false }))
+      ? await countChannelSentInCycle(billingUserId, channel, cycleStart, cycleEnd, client, { cache: false })
       : 0;
-    const planLimit = toInt(channel === 'email' ? limits?.monthly_email_limit : limits?.monthly_zalo_limit);
+    const planLimit = toInt(limits?.[PLAN_MONTHLY_LIMIT_COLUMN[channel]]);
     const usageBefore = Math.max(0, usageAfter - quantity);
     const coveredByPlan = planLimit === null ? quantity : Math.max(0, planLimit - usageBefore);
     const debitQuantity = Math.max(0, quantity - coveredByPlan);
