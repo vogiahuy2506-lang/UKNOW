@@ -1,7 +1,7 @@
 /**
- * PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — "lưu → payload node_type: 'action', node_subtype:
- * 'send_whatsapp'". Khuôn từ CampaignBuilder.telegramSaveMapping.spec.jsx (cùng đường "Lưu rồi tiếp tục").
- * Thiếu 'send_whatsapp' trong danh sách action của CampaignBuilder.jsx thì node bị lưu thành 'data'.
+ * P12 (PLAN_TG_WA_DAY_DU mục 19) — trình dựng chiến dịch: gói không có kênh Zalo thì palette KHÔNG cho thêm node
+ * send_zalo_* (allowedActionNodeTypes) và ẩn section Zalo (zaloEnabled=false); gói có Zalo (kể cả limit=1) giữ nguyên.
+ * Layout được mock để đọc thẳng các prop mà CampaignBuilder truyền xuống palette.
  */
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
@@ -9,14 +9,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import CampaignBuilder from './CampaignBuilder';
 
-const { mockUpdateCampaign, mockFetchZaloAccountOptions } = vi.hoisted(() => ({
+const { mockUpdateCampaign, mockFetchZaloAccountOptions, entitlementsState } = vi.hoisted(() => ({
+  entitlementsState: { telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false },
   mockUpdateCampaign: vi.fn().mockResolvedValue({ data: { data: { id: 391 } } }),
   mockFetchZaloAccountOptions: vi.fn().mockResolvedValue([]),
 }));
 
-// P12 — trang dùng useChannelEntitlements (TanStack Query); spec này không bọc QueryClientProvider nên mock hook (có quyền mọi kênh).
 vi.mock('../../hooks/queries/useChannelEntitlements', () => ({
-  useChannelEntitlements: () => ({ telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false }),
+  useChannelEntitlements: () => entitlementsState,
 }));
 vi.mock('../../features/campaigns/utils/nodeConfigModal.helpers', () => ({
   fetchZaloAccountOptions: mockFetchZaloAccountOptions,
@@ -112,25 +112,11 @@ vi.mock('../../utils/campaignDraftStorage', () => ({
 }));
 
 vi.mock('../../features/campaigns/components/CampaignBuilderPageLayout', () => ({
-  default: ({ campaignName, setNodes, onRunNow, canUseServerRunActions }) => (
+  default: ({ campaignName, allowedActionNodeTypes, zaloEnabled }) => (
     <div>
       <span data-testid="campaign-name">{campaignName}</span>
-      <button
-        type="button"
-        onClick={() => setNodes((prev) => [...prev, {
-          id: 'node-whatsapp-moi',
-          type: 'task',
-          position: { x: 10, y: 10 },
-          data: {
-            label: 'Gửi WhatsApp',
-            nodeType: 'send_whatsapp',
-            config: { whatsappSessionKey: '40-default', recipientSource: 'whatsapp_conversations', steps: [{ message: 'Xin chào' }] },
-          },
-        }])}
-      >
-        Thêm node WhatsApp
-      </button>
-      <button type="button" onClick={onRunNow} disabled={!canUseServerRunActions}>Chạy ngay</button>
+      <span data-testid="allowed-actions">{[...allowedActionNodeTypes].sort().join(',')}</span>
+      <span data-testid="zalo-enabled">{String(zaloEnabled)}</span>
     </div>
   ),
 }));
@@ -147,30 +133,29 @@ function renderBuilder(path = '/app/campaigns/391') {
   );
 }
 
-describe('CampaignBuilder — lưu node send_whatsapp (PR-W4b)', () => {
+describe('CampaignBuilder — P12 palette theo quyền kênh Zalo', () => {
   beforeEach(() => {
     localStorage.clear();
     sessionStorage.clear();
     vi.clearAllMocks();
-    mockUpdateCampaign.mockResolvedValue({ data: { data: { id: 391 } } });
+    entitlementsState.zalo = true;
+    entitlementsState.limits = {};
   });
 
-  it('thêm node send_whatsapp rồi lưu → payload có nodeType "action", nodeSubtype "send_whatsapp"', async () => {
+  it('zalo:false -> palette chỉ còn email (+ kênh adapter đang bật), không có send_zalo_*, section Zalo tắt', async () => {
+    entitlementsState.zalo = false;
     renderBuilder();
     await waitFor(() => expect(screen.getByTestId('campaign-name')).toHaveTextContent('Chiến dịch trộn kênh'));
+    await waitFor(() => expect(screen.getByTestId('allowed-actions').textContent).toBe('send_email,send_whatsapp'));
+    expect(screen.getByTestId('zalo-enabled').textContent).toBe('false');
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Thêm node WhatsApp' }));
-
-    // Mượn đúng đường lưu thật đã có test khác đi qua (CampaignBuilder.serverActions.spec.jsx):
-    // sơ đồ dirty -> "Chạy ngay" mở hộp "Sơ đồ chưa được lưu" -> "Lưu rồi tiếp tục" gọi handleSave() thật.
-    fireEvent.click(screen.getByRole('button', { name: 'Chạy ngay' }));
-    await waitFor(() => expect(screen.getByText('Sơ đồ chưa được lưu')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu rồi tiếp tục' }));
-
-    await waitFor(() => expect(mockUpdateCampaign).toHaveBeenCalledTimes(1));
-    const [, payload] = mockUpdateCampaign.mock.calls[0];
-    const whatsappNode = payload.nodes.find((n) => n.nodeSubtype === 'send_whatsapp');
-    expect(whatsappNode).toBeDefined();
-    expect(whatsappNode.nodeType).toBe('action');
+  it('zalo:true (limit=1) -> palette có đủ send_zalo_personal/friend_request/group', async () => {
+    entitlementsState.limits = { zalo: 1 };
+    renderBuilder();
+    await waitFor(() => expect(screen.getByTestId('allowed-actions').textContent).toContain('send_zalo_group'));
+    expect(screen.getByTestId('allowed-actions').textContent).toContain('send_zalo_personal');
+    expect(screen.getByTestId('allowed-actions').textContent).toContain('send_zalo_friend_request');
+    expect(screen.getByTestId('zalo-enabled').textContent).toBe('true');
   });
 });

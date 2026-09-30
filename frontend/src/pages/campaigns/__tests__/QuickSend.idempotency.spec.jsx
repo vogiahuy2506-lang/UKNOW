@@ -10,6 +10,10 @@ import campaignApiService from '../../../features/campaigns/services/campaignApi
 const mockNavigate = vi.fn();
 let mockLocationState = null;
 
+// P12 — trang dùng useChannelEntitlements (TanStack Query); spec này không bọc QueryClientProvider nên mock hook (có quyền mọi kênh).
+vi.mock('../../../hooks/queries/useChannelEntitlements', () => ({
+  useChannelEntitlements: () => ({ telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false }),
+}));
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/app/quick-send', state: mockLocationState }),
   useNavigate: () => mockNavigate,

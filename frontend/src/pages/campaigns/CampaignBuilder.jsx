@@ -35,6 +35,7 @@ import {
   createPastedCampaignNode,
   isEditableClipboardTarget,
 } from '../../features/campaigns/utils/campaignNodeClipboard';
+import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
 import CampaignBuilderPageLayout from '../../features/campaigns/components/CampaignBuilderPageLayout';
 import CampaignRunModals from '../../features/campaigns/components/CampaignRunModals';
 import CampaignShareModal from '../../features/campaigns/components/CampaignShareModal';
@@ -857,20 +858,26 @@ const CampaignBuilder = () => {
     return () => { cancelled = true; };
   }, []);
 
+  // P12 — quyền kênh Zalo theo gói (mặc định "có quyền" khi đang tải/lỗi). Node Zalo đã có trong chiến dịch cũ vẫn hiện
+  // trên canvas (preflight báo 403 CHANNEL_NOT_IN_PLAN); chỉ palette thôi không cho kéo thêm.
+  const { zalo: zaloEntitled } = useChannelEntitlements();
+
   const getAllowedActionNodeTypesForDrop = useCallback(
     (type) => getAllowedActionNodeTypesByCampaignType(type, {
       telegramEnabled: telegramChannelEnabled,
       whatsappEnabled: whatsappChannelEnabled,
+      zaloEnabled: zaloEntitled,
     }),
-    [telegramChannelEnabled, whatsappChannelEnabled]
+    [telegramChannelEnabled, whatsappChannelEnabled, zaloEntitled]
   );
 
   const allowedActionNodeTypes = useMemo(
     () => getAllowedActionNodeTypesByCampaignType(campaignType, {
       telegramEnabled: telegramChannelEnabled,
       whatsappEnabled: whatsappChannelEnabled,
+      zaloEnabled: zaloEntitled,
     }),
-    [campaignType, telegramChannelEnabled, whatsappChannelEnabled]
+    [campaignType, telegramChannelEnabled, whatsappChannelEnabled, zaloEntitled]
   );
   const allowedDataNodeTypes = useMemo(
     () => getAllowedDataNodeTypesByCampaignType(campaignType),
@@ -1193,6 +1200,7 @@ const CampaignBuilder = () => {
       expandedCategories={expandedCategories}
       filterNodes={filterNodes}
       allowedActionNodeTypes={allowedActionNodeTypes}
+      zaloEnabled={zaloEntitled}
       allowedDataNodeTypes={allowedDataNodeTypes}
       suppressGetAllFriendsPalette={suppressGetAllFriendsPalette}
       onDragStart={onDragStart}

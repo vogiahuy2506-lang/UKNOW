@@ -9,12 +9,12 @@ import campaignApiService from '../../../features/campaigns/services/campaignApi
 import campaignBuilderApiService from '../../../features/campaigns/services/campaignBuilderApi.service';
 
 /**
- * W7a — thẻ kênh Telegram/WhatsApp trong trang Gửi nhanh: chỉ hiện khi GET /campaigns/channels báo bật
- * (rỗng/lỗi/BE cũ -> ẩn); chọn thẻ -> panel riêng, ẩn thanh bước Email/Zalo; đổi lại Zalo -> panel biến mất.
+ * P12 (PLAN_TG_WA_DAY_DU mục 19) — Gửi nhanh: gói không có kênh Zalo thì ẩn 2 thẻ Zalo (cá nhân, nhóm) và nếu đang
+ * chọn Zalo thì chuyển sang Email; gói có Zalo (kể cả limit=1) vẫn đủ 3 thẻ lõi.
  */
-// P12 — trang dùng useChannelEntitlements (TanStack Query); spec này không bọc QueryClientProvider nên mock hook (có quyền mọi kênh).
+const entitlementsState = { telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false };
 vi.mock('../../../hooks/queries/useChannelEntitlements', () => ({
-  useChannelEntitlements: () => ({ telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false }),
+  useChannelEntitlements: () => entitlementsState,
 }));
 vi.mock('react-router-dom', () => ({
   useLocation: () => ({ pathname: '/app/quick-send', state: null }),
@@ -71,51 +71,36 @@ beforeEach(() => {
   campaignBuilderApiService.getDelayConfig.mockResolvedValue({ data: { success: true, data: {} } });
 });
 
-describe('QuickSend — thẻ kênh adapter', () => {
-  it('/campaigns/channels rỗng -> không có thẻ Telegram/WhatsApp', async () => {
+describe('QuickSend — P12 quyền kênh Zalo', () => {
+  beforeEach(() => {
+    entitlementsState.zalo = true;
+    entitlementsState.limits = {};
     campaignApiService.getChannels.mockResolvedValue({ data: { data: { channels: [] } } });
-    render(<QuickSend />);
-    await waitFor(() => expect(campaignApiService.getChannels).toHaveBeenCalled());
-    await screen.findByText('quickSend.selectChannel');
-    expect(screen.queryByTestId('quick-send-channel-telegram')).toBeNull();
-    expect(screen.queryByTestId('quick-send-channel-whatsapp')).toBeNull();
   });
 
-  it('/campaigns/channels lỗi -> không có thẻ (ẩn, không vỡ trang)', async () => {
-    campaignApiService.getChannels.mockRejectedValue(new Error('404'));
+  it('zalo:false -> không có thẻ Zalo / Zalo nhóm, còn thẻ Email', async () => {
+    entitlementsState.zalo = false;
     render(<QuickSend />);
     await screen.findByText('quickSend.selectChannel');
-    expect(screen.queryByTestId('quick-send-channel-telegram')).toBeNull();
+    expect(screen.queryByTestId('quick-send-channel-zalo')).toBeNull();
+    expect(screen.queryByTestId('quick-send-channel-zalo_group')).toBeNull();
+    expect(screen.getByText('Email')).toBeInTheDocument();
   });
 
-  it('có telegram + whatsapp -> 2 thẻ; chọn Telegram -> panel + ẩn thanh bước; quay về Zalo -> panel biến mất', async () => {
-    campaignApiService.getChannels.mockResolvedValue({
-      data: { data: { channels: [
-        { key: 'telegram', sendNodeSubtype: 'send_telegram', label: 'Telegram' },
-        { key: 'whatsapp', sendNodeSubtype: 'send_whatsapp', label: 'WhatsApp' },
-      ] } },
-    });
+  it('zalo:true với limit=1 -> đủ 3 thẻ lõi (Zalo không biến mất với khách trả phí)', async () => {
+    entitlementsState.limits = { zalo: 1 };
     render(<QuickSend />);
-    const telegramCard = await screen.findByTestId('quick-send-channel-telegram');
-    expect(screen.getByTestId('quick-send-channel-whatsapp')).toBeInTheDocument();
-    expect(screen.getByText('quickSend.stepRecipients')).toBeInTheDocument();
-
-    fireEvent.click(telegramCard);
-    expect(await screen.findByTestId('quick-send-adapter-panel')).toBeInTheDocument();
-    expect(screen.queryByText('quickSend.stepRecipients')).toBeNull();
-    expect(campaignBuilderApiService.getTelegramAccountsForBuilder).toHaveBeenCalledTimes(1);
-
-    fireEvent.click(screen.getByText('Zalo'));
-    await waitFor(() => expect(screen.queryByTestId('quick-send-adapter-panel')).toBeNull());
-    expect(screen.getByText('quickSend.stepRecipients')).toBeInTheDocument();
+    expect(await screen.findByTestId('quick-send-channel-zalo')).toBeInTheDocument();
+    expect(screen.getByTestId('quick-send-channel-zalo_group')).toBeInTheDocument();
   });
 
-  it('chỉ WhatsApp bật -> chỉ có thẻ WhatsApp', async () => {
-    campaignApiService.getChannels.mockResolvedValue({
-      data: { data: { channels: [{ key: 'whatsapp', sendNodeSubtype: 'send_whatsapp', label: 'WhatsApp' }] } },
-    });
-    render(<QuickSend />);
-    expect(await screen.findByTestId('quick-send-channel-whatsapp')).toBeInTheDocument();
-    expect(screen.queryByTestId('quick-send-channel-telegram')).toBeNull();
+  it('đang chọn Zalo rồi quyền về false (đổi gói/tải xong) -> chuyển sang Email, thẻ Zalo biến mất', async () => {
+    const { rerender } = render(<QuickSend />);
+    fireEvent.click(await screen.findByTestId('quick-send-channel-zalo'));
+    entitlementsState.zalo = false;
+    rerender(<QuickSend />);
+    await waitFor(() => expect(screen.queryByTestId('quick-send-channel-zalo')).toBeNull());
+    expect(screen.getByText('quickSend.selectSenderAccount')).toBeInTheDocument();
+    expect(screen.queryByText('quickSend.zaloRecipientTypeLabel')).toBeNull();
   });
 });

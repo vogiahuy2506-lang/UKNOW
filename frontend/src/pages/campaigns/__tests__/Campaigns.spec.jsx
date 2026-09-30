@@ -26,6 +26,10 @@ const mockT = (key, params) => {
   return key;
 };
 
+// P12 — trang dùng useChannelEntitlements (TanStack Query); spec này không bọc QueryClientProvider nên mock hook (có quyền mọi kênh).
+vi.mock('../../../hooks/queries/useChannelEntitlements', () => ({
+  useChannelEntitlements: () => ({ telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false }),
+}));
 vi.mock('../../../i18n', () => ({
   useI18n: () => ({ t: mockT }),
 }));

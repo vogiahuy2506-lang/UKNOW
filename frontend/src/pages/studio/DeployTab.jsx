@@ -210,6 +210,7 @@ export default function DeployTab({
             {CHANNEL_TILES.filter((tile) => (
               !(tile.key === 'whatsapp' && !entitlements.whatsapp)
               && !(tile.key === 'telegram_personal' && !entitlements.telegram)
+              && !(tile.key === 'zalo_personal' && !entitlements.zalo)
             )).map((tile) => {
               const isConnected = tile.key === 'zalo'
                 ? !!zaloChannel

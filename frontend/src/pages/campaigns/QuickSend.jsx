@@ -14,6 +14,7 @@ import { ZaloGroupPickerCard } from '../../features/ai/components/AiChatbotWizar
 import { htmlToPlainText } from '../../utils/htmlToPlainText.util.js';
 import { miniMarkdownToHtml } from '../../utils/miniMarkdownToHtml.js';
 import { resolveActionIdempotencyKey } from '../../utils/idempotency.util.js';
+import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
 import useStorageQuota from '../../features/storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
@@ -79,6 +80,8 @@ const CHANNEL_TYPES = {
 const ADAPTER_CHANNEL_KEYS = ['telegram', 'whatsapp'];
 const ADAPTER_CHANNEL_ICONS = { telegram: FaTelegramPlane, whatsapp: FaWhatsapp };
 const CHANNEL_GRID_CLASSES = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
   3: 'grid-cols-3',
   4: 'grid-cols-2 sm:grid-cols-4',
   5: 'grid-cols-2 sm:grid-cols-5',
@@ -240,6 +243,8 @@ const QuickSend = () => {
   // W7a — kênh adapter đang bật ([{ key, label }]); lỗi/BE cũ -> [] (không có thẻ Telegram/WhatsApp).
   const [adapterChannels, setAdapterChannels] = useState([]);
   const isAdapterChannel = adapterChannels.some((c) => c.key === selectedChannel);
+  // P12 — gói không có kênh Zalo: ẩn 2 thẻ Zalo (cá nhân, nhóm). Mặc định "có quyền" khi đang tải/lỗi (BE vẫn 403 khi gửi).
+  const { zalo: zaloEntitled } = useChannelEntitlements();
 
   // Manual input state
   const [manualEmails, setManualEmails] = useState('');
@@ -1344,6 +1349,13 @@ const QuickSend = () => {
   // cũng là hai danh sách riêng) — xoá để không lỡ tay gửi nội dung của kênh cũ sang kênh mới.
   // Đổi giữa Zalo cá nhân ↔ Zalo nhóm giữ nguyên vì cùng "họ" (cùng danh sách mẫu, cùng dạng
   // plain text).
+  useEffect(() => {
+    // Bản nháp từ trợ lý AI/điều hướng có thể mang sẵn kênh Zalo -> chuyển sang email khi gói không có Zalo.
+    if (!zaloEntitled && (selectedChannel === CHANNEL_TYPES.ZALO || selectedChannel === CHANNEL_TYPES.ZALO_GROUP)) {
+      handleChannelChange(CHANNEL_TYPES.EMAIL);
+    }
+  }, [zaloEntitled, selectedChannel]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleChannelChange = (nextChannel) => {
     if (nextChannel === selectedChannel) return;
     const wasEmail = selectedChannel === CHANNEL_TYPES.EMAIL;
@@ -1497,7 +1509,7 @@ const QuickSend = () => {
             {/* Channel Type */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectChannel')}</h2>
-              <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[3 + adapterChannels.length] || 'grid-cols-3'}`}>
+              <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[1 + (zaloEntitled ? 2 : 0) + adapterChannels.length] || 'grid-cols-3'}`}>
                 <button
                   onClick={() => handleChannelChange(CHANNEL_TYPES.EMAIL)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
@@ -1511,7 +1523,10 @@ const QuickSend = () => {
                     Email
                   </span>
                 </button>
+                {zaloEntitled && (
+                <>
                 <button
+                  data-testid="quick-send-channel-zalo"
                   onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
                     selectedChannel === CHANNEL_TYPES.ZALO
@@ -1525,6 +1540,7 @@ const QuickSend = () => {
                   </span>
                 </button>
                 <button
+                  data-testid="quick-send-channel-zalo_group"
                   onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO_GROUP)}
                   className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
                     selectedChannel === CHANNEL_TYPES.ZALO_GROUP
@@ -1537,6 +1553,8 @@ const QuickSend = () => {
                     {t('quickSend.channelZaloGroup')}
                   </span>
                 </button>
+                </>
+                )}
                 {adapterChannels.map((adapter) => {
                   const AdapterIcon = ADAPTER_CHANNEL_ICONS[adapter.key];
                   const isActive = selectedChannel === adapter.key;

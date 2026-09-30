@@ -24,6 +24,10 @@ const m = vi.hoisted(() => ({
   testSendQuickCampaign: vi.fn(),
 }));
 
+// P12 — trang dùng useChannelEntitlements (TanStack Query); spec này không bọc QueryClientProvider nên mock hook (có quyền mọi kênh).
+vi.mock('../../hooks/queries/useChannelEntitlements', () => ({
+  useChannelEntitlements: () => ({ telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false }),
+}));
 vi.mock('react-router-dom', () => ({
   useNavigate: () => m.navigate,
   useLocation: () => ({ pathname: '/app/quick-send', state: m.locationState }),

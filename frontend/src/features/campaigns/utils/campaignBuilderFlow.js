@@ -50,16 +50,18 @@ const normalizeCampaignType = (campaignType) => {
  *   dụng cho campaign_type 'telegram' (chỉ khối Telegram) và 'mixed' (chiến dịch cũ tạo 28–29/09).
  * @param {boolean} [options.whatsappEnabled] PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — mặc định false;
  *   loại 'whatsapp' chỉ có khối send_whatsapp khi bật (tắt -> rỗng); 'mixed' thêm send_whatsapp khi bật.
+ * @param {boolean} [options.zaloEnabled] P12 (PLAN_TG_WA_DAY_DU mục 19) — mặc định TRUE (caller cũ không đổi hành vi);
+ *   false khi gói của chủ workspace không có kênh Zalo: các khối send_zalo_* bị loại khỏi palette ('zalo'/'zalo_group' -> rỗng).
  * @returns {Set<string>} tập node action được phép hiển thị
  */
 export const getAllowedActionNodeTypesByCampaignType = (
   campaignType,
-  { telegramEnabled = false, whatsappEnabled = false } = {}
+  { telegramEnabled = false, whatsappEnabled = false, zaloEnabled = true } = {}
 ) => {
   const normalizedType = normalizeCampaignType(campaignType);
   if (normalizedType === 'email') return new Set(EMAIL_ACTION_TYPES);
-  if (normalizedType === 'zalo') return new Set(ZALO_PERSONAL_ACTION_TYPES);
-  if (normalizedType === 'zalo_group') return new Set(ZALO_GROUP_ACTION_TYPES);
+  if (normalizedType === 'zalo') return new Set(zaloEnabled ? ZALO_PERSONAL_ACTION_TYPES : []);
+  if (normalizedType === 'zalo_group') return new Set(zaloEnabled ? ZALO_GROUP_ACTION_TYPES : []);
   // PR-E1: loại 'telegram' chỉ có khối gửi Telegram (khi cờ bật); cờ tắt -> rỗng.
   // PR-E2: 'telegram_group' cùng khối gửi Telegram (nguồn người nhận mặc định = nhóm đã chọn).
   if (normalizedType === 'telegram' || normalizedType === 'telegram_group') {
@@ -70,8 +72,8 @@ export const getAllowedActionNodeTypesByCampaignType = (
   }
   return new Set([
     ...EMAIL_ACTION_TYPES,
-    ...ZALO_PERSONAL_ACTION_TYPES,
-    ...ZALO_GROUP_ACTION_TYPES,
+    ...(zaloEnabled ? ZALO_PERSONAL_ACTION_TYPES : []),
+    ...(zaloEnabled ? ZALO_GROUP_ACTION_TYPES : []),
     ...(telegramEnabled ? TELEGRAM_ACTION_TYPES : []),
     ...(whatsappEnabled ? WHATSAPP_ACTION_TYPES : []),
   ]);

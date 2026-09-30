@@ -152,6 +152,7 @@ const CampaignBuilderPageLayout = ({
   expandedCategories,
   filterNodes,
   allowedActionNodeTypes,
+  zaloEnabled = true,
   allowedDataNodeTypes,
   /** Khi true — ẩn «Lấy danh sách bạn bè Zalo» khỏi palette (đang bật pool đa TK) */
   suppressGetAllFriendsPalette = false,
@@ -236,7 +237,8 @@ const CampaignBuilderPageLayout = ({
   const normalizedCampaignType = String(campaignType || '').trim().toLowerCase();
   // Campaign Email không có node Zalo → ẩn cả section Zalo để palette không
   // hiển thị category rỗng / gây hiểu nhầm.
-  const showZaloSection = normalizedCampaignType !== 'email';
+  // P12 — gói không có kênh Zalo: cũng ẩn section Zalo (select_zalo_account, get_all_friends/groups chỉ phục vụ Zalo).
+  const showZaloSection = zaloEnabled && normalizedCampaignType !== 'email';
 
   return (
     <div className="h-full min-h-0 w-full min-w-0 overflow-hidden flex flex-col">

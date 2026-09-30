@@ -26,6 +26,7 @@ import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import { getActiveRunPause, getRunPauseI18nKey } from '../../features/campaigns/utils/campaignQuotaPause.helpers';
 import { useAuthStore } from '../../stores/authStore';
+import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
 import campaignApiService from '../../features/campaigns/services/campaignApi.service';
 import CampaignMarketplaceModal from '../../components/campaigns/CampaignMarketplaceModal';
 import CampaignShareModal from '../../features/campaigns/components/CampaignShareModal';
@@ -94,6 +95,17 @@ const Campaigns = () => {
   const [telegramChannelEnabled, setTelegramChannelEnabled] = useState(false);
   // PLAN_WHATSAPP_DAY_DU_2026-09-29 PR-W4b — cùng nguồn cờ /campaigns/channels (key 'whatsapp').
   const [whatsappChannelEnabled, setWhatsappChannelEnabled] = useState(false);
+  // P12 — gói không có kênh Zalo: modal tạo chiến dịch bỏ 2 lựa chọn Zalo (bộ lọc loại vẫn giữ để tìm chiến dịch cũ).
+  const { zalo: zaloEntitled } = useChannelEntitlements();
+  const createTypeColumnCount = 1 + (zaloEntitled ? 2 : 0) + (telegramChannelEnabled ? 2 : 0) + (whatsappChannelEnabled ? 1 : 0);
+  const CREATE_TYPE_GRID_CLASSES = {
+    1: 'grid-cols-1',
+    2: 'grid-cols-2',
+    3: 'grid-cols-3',
+    4: 'grid-cols-2 sm:grid-cols-4',
+    5: 'grid-cols-2 sm:grid-cols-5',
+    6: 'grid-cols-2 sm:grid-cols-6',
+  };
 
   const runController = useCampaignRunController({
     onCampaignsChanged: () => fetchCampaigns(),
@@ -1044,7 +1056,7 @@ const Campaigns = () => {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   {t('campaigns.campaignType')}
                 </label>
-                <div className={`grid gap-3 ${telegramChannelEnabled ? (whatsappChannelEnabled ? 'grid-cols-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-5') : (whatsappChannelEnabled ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}`}>
+                <div className={`grid gap-3 ${CREATE_TYPE_GRID_CLASSES[createTypeColumnCount] || 'grid-cols-3'}`}>
                   <button
                     type="button"
                     onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'email' }))}
@@ -1057,6 +1069,8 @@ const Campaigns = () => {
                     <HiOutlineMail className="w-4 h-4" />
                     {t('campaigns.email')}
                   </button>
+                  {zaloEntitled && (
+                  <>
                   <button
                     type="button"
                     onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'zalo' }))}
@@ -1081,6 +1095,8 @@ const Campaigns = () => {
                     <HiOutlineChat className="w-4 h-4" />
                     {t('campaigns.zaloGroup')}
                   </button>
+                  </>
+                  )}
                   {telegramChannelEnabled && (
                     <button
                       type="button"
