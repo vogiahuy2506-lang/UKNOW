@@ -1,5 +1,11 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import chatbotChannelRepository from '../../../repositories/ai/chatbotChannel.repository.js';
+import {
+  FACEBOOK_VERIFY_TOKEN_ENV_NAMES,
+  resolveWebhookVerifyToken,
+  timingSafeStringEqual,
+} from '../../../utils/webhookVerification.util.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 
@@ -194,17 +200,51 @@ class FacebookAdapter {
 
   /**
    * Verify Facebook webhook.
+   * Token hợp lệ: token riêng của kênh → FACEBOOK_WEBHOOK_VERIFY_TOKEN → FACEBOOK_VERIFY_TOKEN.
+   * Không có token nào thì luôn từ chối.
    * @param {string} mode
    * @param {string} token
    * @param {string} challenge
    * @param {string} customVerifyToken - verify token from channel credentials
    */
   verifyWebhook(mode, token, challenge, customVerifyToken = null) {
-    const verifyToken = customVerifyToken || process.env.FACEBOOK_VERIFY_TOKEN || 'founderai';
-    if (mode === 'subscribe' && token === verifyToken) {
+    const verifyToken = resolveWebhookVerifyToken({
+      channelToken: customVerifyToken,
+      envNames: FACEBOOK_VERIFY_TOKEN_ENV_NAMES,
+    });
+    if (verifyToken && mode === 'subscribe' && timingSafeStringEqual(token, verifyToken)) {
       return { challenge };
     }
     throw new Error('Invalid Facebook verify token');
+  }
+
+  /**
+   * Kiểm chữ ký `X-Hub-Signature-256` Meta gắn vào mọi webhook:
+   * `sha256=<hex HMAC-SHA256(rawBody, appSecret)>`. Chấp nhận khi khớp MỘT trong các App Secret
+   * truyền vào (so khớp hằng thời gian). Thiếu body/header/secret → false.
+   *
+   * @param {Buffer|string} rawBody thân request nguyên bản (`req.rawBody`)
+   * @param {string} signatureHeader giá trị header `x-hub-signature-256`
+   * @param {string|string[]} appSecrets App Secret của app Meta gửi webhook
+   * @returns {boolean}
+   */
+  verifySignature(rawBody, signatureHeader, appSecrets) {
+    const secrets = (Array.isArray(appSecrets) ? appSecrets : [appSecrets])
+      .filter((secret) => typeof secret === 'string' && secret.length > 0);
+    if (!rawBody || typeof signatureHeader !== 'string' || secrets.length === 0) return false;
+    const prefix = 'sha256=';
+    if (!signatureHeader.startsWith(prefix)) return false;
+    const providedHex = signatureHeader.slice(prefix.length).trim();
+    if (!/^[0-9a-f]{64}$/i.test(providedHex)) return false;
+    const provided = Buffer.from(providedHex, 'hex');
+    const body = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody), 'utf8');
+    let matched = false;
+    for (const secret of secrets) {
+      const computed = crypto.createHmac('sha256', secret).update(body).digest();
+      // Không dừng sớm khi khớp: thời gian không phụ thuộc secret nào khớp.
+      if (crypto.timingSafeEqual(provided, computed)) matched = true;
+    }
+    return matched;
   }
 
   /**

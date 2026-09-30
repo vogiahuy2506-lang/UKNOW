@@ -1,5 +1,11 @@
 import axios from 'axios';
+import crypto from 'crypto';
 import chatbotChannelRepository from '../../../repositories/ai/chatbotChannel.repository.js';
+import {
+  ZALO_OA_VERIFY_TOKEN_ENV_NAMES,
+  resolveWebhookVerifyToken,
+  timingSafeStringEqual,
+} from '../../../utils/webhookVerification.util.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 
@@ -54,16 +60,61 @@ class ZaloOAAdapter {
 
   /**
    * Verify Zalo OA webhook.
+   * Token hợp lệ: token riêng của kênh → ZALO_OA_WEBHOOK_VERIFY_TOKEN → ZALO_OA_VERIFY_TOKEN.
+   * Không có token nào thì luôn từ chối.
    * @param {string} verifyToken
    * @param {string} customVerifyToken - verify token from channel credentials
    * @returns {object} { challenge: string }
    */
   verifyWebhook(verifyToken, customVerifyToken = null) {
-    const expectedToken = customVerifyToken || process.env.ZALO_OA_VERIFY_TOKEN || 'uknow_zalo_oa_verify';
-    if (verifyToken !== expectedToken) {
+    const expectedToken = resolveWebhookVerifyToken({
+      channelToken: customVerifyToken,
+      envNames: ZALO_OA_VERIFY_TOKEN_ENV_NAMES,
+    });
+    if (!expectedToken || !timingSafeStringEqual(verifyToken, expectedToken)) {
       throw new Error('Invalid verify token');
     }
     return { challenge: 'uknow_zalo_oa_verified' };
+  }
+
+  /**
+   * Kiểm chữ ký header `X-ZEvent-Signature` Zalo gắn vào webhook OA:
+   * `mac=<hex SHA-256(appId + rawBody + timestamp + oaSecretKey)>` — SHA-256 thường trên chuỗi nối,
+   * không phải HMAC. `appId` và `timestamp` lấy từ chính payload (trường `app_id`, `timestamp`),
+   * `oaSecretKey` là "OA Secret Key" ở mục Webhook của app trên Zalo Developers (KHÁC App Secret).
+   * Chấp nhận khi khớp MỘT trong các khoá truyền vào (so khớp hằng thời gian).
+   *
+   * @param {object} params
+   * @param {Buffer|string} params.rawBody thân request nguyên bản (`req.rawBody`)
+   * @param {string} params.signatureHeader giá trị header `x-zevent-signature`
+   * @param {string|number} params.appId
+   * @param {string|number} params.timestamp
+   * @param {string|string[]} params.oaSecretKeys
+   * @returns {boolean}
+   */
+  verifySignature({ rawBody, signatureHeader, appId, timestamp, oaSecretKeys }) {
+    const keys = (Array.isArray(oaSecretKeys) ? oaSecretKeys : [oaSecretKeys])
+      .filter((key) => typeof key === 'string' && key.length > 0);
+    if (!rawBody || typeof signatureHeader !== 'string' || keys.length === 0) return false;
+    if (appId === undefined || appId === null || appId === '') return false;
+    if (timestamp === undefined || timestamp === null || timestamp === '') return false;
+    const match = /^\s*mac\s*=\s*([0-9a-f]{64})\s*$/i.exec(signatureHeader);
+    if (!match) return false;
+    const provided = Buffer.from(match[1], 'hex');
+    const body = Buffer.isBuffer(rawBody) ? rawBody : Buffer.from(String(rawBody), 'utf8');
+    let matched = false;
+    for (const key of keys) {
+      const computed = crypto
+        .createHash('sha256')
+        .update(String(appId), 'utf8')
+        .update(body)
+        .update(String(timestamp), 'utf8')
+        .update(key, 'utf8')
+        .digest();
+      // Không dừng sớm khi khớp: thời gian không phụ thuộc khoá nào khớp.
+      if (crypto.timingSafeEqual(provided, computed)) matched = true;
+    }
+    return matched;
   }
 
   /**

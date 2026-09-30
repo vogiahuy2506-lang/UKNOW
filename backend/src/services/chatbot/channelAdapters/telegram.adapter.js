@@ -9,6 +9,7 @@
  * Keeping the adapter thin means Node.js never holds MTProto sockets;
  * all session / connection concerns live in Python.
  */
+import crypto from 'crypto';
 import telegramGateway from '../telegramGateway.client.js';
 import chatbotTelegramRepository from '../../../repositories/chatbot/chatbotTelegram.repository.js';
 import {
@@ -152,6 +153,9 @@ class TelegramPersonalAdapter {
    * (now in-process). Throws on mismatch. The secret is read from the
    * channel gateway state — populated by the bootstrap with the same
    * symmetric key the embedded mode used to generate.
+   *
+   * So khớp hằng thời gian trên digest SHA-256 của hai giá trị (cùng độ dài 32 byte nên
+   * `timingSafeEqual` không ném lỗi và không lộ độ dài secret).
    */
   async verifyWebhookSecret(provided) {
     let expected = '';
@@ -164,7 +168,12 @@ class TelegramPersonalAdapter {
     if (!expected) {
       throw new Error('TELEGRAM_GATEWAY_SECRET is not configured');
     }
-    if (!provided || provided !== expected) {
+    if (typeof provided !== 'string' || !provided) {
+      throw new Error('Invalid Telegram gateway secret');
+    }
+    const providedDigest = crypto.createHash('sha256').update(provided, 'utf8').digest();
+    const expectedDigest = crypto.createHash('sha256').update(String(expected), 'utf8').digest();
+    if (!crypto.timingSafeEqual(providedDigest, expectedDigest)) {
       throw new Error('Invalid Telegram gateway secret');
     }
   }

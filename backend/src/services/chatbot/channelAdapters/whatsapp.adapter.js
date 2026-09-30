@@ -10,6 +10,11 @@ import {
   prepareChannelAttachmentSources,
   sendChannelMessageWithMedia,
 } from '../../../utils/channelMediaSend.util.js';
+import {
+  WHATSAPP_VERIFY_TOKEN_ENV_NAMES,
+  resolveWebhookVerifyToken,
+  timingSafeStringEqual,
+} from '../../../utils/webhookVerification.util.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 
@@ -155,8 +160,12 @@ class WhatsAppAdapter {
     const mode = query?.['hub.mode'];
     const token = query?.['hub.verify_token'];
     const challenge = query?.['hub.challenge'];
-    const expected = customVerifyToken || process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN;
-    if (mode === 'subscribe' && token && token === expected && challenge) {
+    // Token riêng của kênh → WHATSAPP_WEBHOOK_VERIFY_TOKEN; không có cả hai thì luôn từ chối.
+    const expected = resolveWebhookVerifyToken({
+      channelToken: customVerifyToken,
+      envNames: WHATSAPP_VERIFY_TOKEN_ENV_NAMES,
+    });
+    if (expected && mode === 'subscribe' && timingSafeStringEqual(token, expected) && challenge) {
       return { challenge: String(challenge) };
     }
     return null;

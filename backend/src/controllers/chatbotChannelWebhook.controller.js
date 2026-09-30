@@ -9,6 +9,58 @@ import chatbotWhatsAppAccountRepository from '../repositories/chatbot/chatbotWha
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
 import { formatBatchedContent } from '../utils/chatbotReplyBatch.util.js';
+import {
+  FACEBOOK_VERIFY_TOKEN_ENV_NAMES,
+  ZALO_OA_VERIFY_TOKEN_ENV_NAMES,
+  resolveWebhookVerifyToken,
+  timingSafeStringEqual,
+  warnOnce,
+} from '../utils/webhookVerification.util.js';
+
+/** Chuỗi khác rỗng hoặc null. */
+function nonEmptyString(value) {
+  return typeof value === 'string' && value.trim() ? value : null;
+}
+
+/**
+ * App Secret dùng kiểm chữ ký webhook Messenger của một kênh: `credentials.app_secret` riêng của
+ * kênh (nếu có) và FACEBOOK_APP_SECRET của app Meta nền tảng (app OAuth mà Fanpage được đăng ký
+ * `subscribed_apps` khi kết nối). Rỗng = chưa cấu hình.
+ *
+ * @param {object} channel
+ * @returns {string[]}
+ */
+function facebookWebhookSecrets(channel) {
+  const secrets = [
+    nonEmptyString(channel?.credentials?.app_secret),
+    nonEmptyString(process.env.FACEBOOK_APP_SECRET),
+  ].filter(Boolean);
+  return [...new Set(secrets)];
+}
+
+/**
+ * OA Secret Key dùng kiểm chữ ký webhook Zalo OA của một kênh: `credentials.oa_secret_key` riêng
+ * của kênh (nếu có) và ZALO_OA_SECRET_KEY — khoá này chỉ áp cho kênh thuộc app Zalo nền tảng
+ * (app id của kênh = ZALO_OA_APP_ID) vì mỗi app Zalo có OA Secret Key riêng. Rỗng = chưa cấu hình.
+ *
+ * @param {object} channel
+ * @returns {string[]}
+ */
+function zaloOaWebhookSecrets(channel) {
+  const secrets = [nonEmptyString(channel?.credentials?.oa_secret_key)];
+  const platformKey = nonEmptyString(process.env.ZALO_OA_SECRET_KEY);
+  const platformAppId = nonEmptyString(process.env.ZALO_OA_APP_ID);
+  const channelAppId = channel?.credentials?.zalo_app_id ?? channel?.external_channel_id ?? null;
+  if (platformKey && platformAppId && channelAppId != null && String(channelAppId).trim() === platformAppId.trim()) {
+    secrets.push(platformKey);
+  }
+  return [...new Set(secrets.filter(Boolean))];
+}
+
+/** Giá trị query khi Meta gửi `hub.mode` (có dấu chấm) hoặc dạng gạch dưới cũ. */
+function hubParam(query, name) {
+  return query?.[`hub.${name}`] ?? query?.[`hub_${name}`];
+}
 
 class ChatbotChannelWebhookController {
   // ── Zalo OA Webhook ───────────────────────────────────────────
@@ -24,13 +76,17 @@ class ChatbotChannelWebhookController {
 
       const channel = await chatbotChannelRepository.findByWebhookToken(token);
 
-      if (!channel) {
+      if (!channel || channel.channel_type !== 'zalo_oa') {
         console.warn('[ZaloOA] Channel not found for token');
         return res.status(404).send('Channel not found');
       }
 
-      const verifyToken = channel.credentials?.verify_token || 'uknow_zalo_oa_verify';
-      if (verify_token === verifyToken) {
+      // Token riêng của kênh → ZALO_OA_WEBHOOK_VERIFY_TOKEN; không có cả hai thì từ chối.
+      const verifyToken = resolveWebhookVerifyToken({
+        channelToken: channel.credentials?.verify_token,
+        envNames: ZALO_OA_VERIFY_TOKEN_ENV_NAMES,
+      });
+      if (verifyToken && timingSafeStringEqual(verify_token, verifyToken)) {
         return res.send(challenge);
       }
       return res.status(403).send('Invalid verify token');
@@ -38,6 +94,34 @@ class ChatbotChannelWebhookController {
       console.error('[ZaloOA Webhook] Verify error:', err.message);
       return res.status(500).send('Internal error');
     }
+  }
+
+  /**
+   * Kiểm chữ ký `X-ZEvent-Signature` của webhook Zalo OA. Có khoá → bắt buộc khớp; chưa có khoá
+   * → cho qua như trước và cảnh báo một lần.
+   *
+   * @private
+   * @returns {boolean} true nếu được phép xử lý tiếp
+   */
+  _verifyZaloOaSignature(req, channel) {
+    const secrets = zaloOaWebhookSecrets(channel);
+    if (secrets.length === 0) {
+      warnOnce(
+        'zalo-oa-webhook-signature',
+        '[ZaloOA] Chưa có OA Secret Key (credentials.oa_secret_key của kênh, hoặc ZALO_OA_SECRET_KEY + ZALO_OA_APP_ID '
+          + 'cho app nền tảng) — webhook Zalo OA đang được xử lý KHÔNG kiểm chữ ký X-ZEvent-Signature.'
+      );
+      return true;
+    }
+    const ok = zaloOAAdapter.verifySignature({
+      rawBody: req.rawBody,
+      signatureHeader: req.headers?.['x-zevent-signature'],
+      appId: req.body?.app_id ?? channel.credentials?.zalo_app_id ?? channel.external_channel_id,
+      timestamp: req.body?.timestamp,
+      oaSecretKeys: secrets,
+    });
+    if (!ok) console.warn(`[ZaloOA] Signature verification failed channel=${channel.id}`);
+    return ok;
   }
 
   /**
@@ -53,10 +137,13 @@ class ChatbotChannelWebhookController {
     try {
       const channel = await chatbotChannelRepository.findByWebhookToken(token);
 
-      if (!channel) {
+      if (!channel || channel.channel_type !== 'zalo_oa') {
         console.warn('[ZaloOA] Channel not found for token');
         return;
       }
+
+      // Chữ ký phải được kiểm TRƯỚC khi đọc payload (lưu tin, gọi AI, gửi trả lời).
+      if (!this._verifyZaloOaSignature(req, channel)) return;
 
       const event = zaloOAAdapter.parseWebhookEvent(req.body);
       if (!event.message || !event.senderId) {
@@ -287,24 +374,57 @@ class ChatbotChannelWebhookController {
   async verifyFacebook(req, res) {
     try {
       const { token } = req.params;
-      const { hub_mode, hub_verify_token, hub_challenge } = req.query;
+      // Meta gửi `hub.mode` / `hub.verify_token` / `hub.challenge` (có dấu chấm).
+      const hubMode = hubParam(req.query, 'mode');
+      const hubVerifyToken = hubParam(req.query, 'verify_token');
+      const hubChallenge = hubParam(req.query, 'challenge');
 
       const channel = await chatbotChannelRepository.findByWebhookToken(token);
 
-      if (!channel) {
+      if (!channel || channel.channel_type !== 'facebook') {
         console.warn('[Facebook] Channel not found for token');
         return res.status(404).send('Channel not found');
       }
 
-      const verifyToken = channel.credentials?.verify_token || 'founderai';
-      if (hub_mode === 'subscribe' && hub_verify_token === verifyToken) {
-        return res.send(hub_challenge);
+      // Token riêng của kênh → FACEBOOK_WEBHOOK_VERIFY_TOKEN; không có cả hai thì từ chối.
+      const verifyToken = resolveWebhookVerifyToken({
+        channelToken: channel.credentials?.verify_token,
+        envNames: FACEBOOK_VERIFY_TOKEN_ENV_NAMES,
+      });
+      if (verifyToken && hubMode === 'subscribe' && timingSafeStringEqual(hubVerifyToken, verifyToken)) {
+        return res.send(hubChallenge);
       }
       return res.status(403).send('Invalid verify token');
     } catch (err) {
       console.error('[Facebook Webhook] Verify error:', err.message);
       return res.status(500).send('Internal error');
     }
+  }
+
+  /**
+   * Kiểm chữ ký `X-Hub-Signature-256` của webhook Messenger. Có App Secret → bắt buộc khớp; chưa
+   * có → cho qua như trước và cảnh báo một lần.
+   *
+   * @private
+   * @returns {boolean} true nếu được phép xử lý tiếp
+   */
+  _verifyFacebookSignature(req, channel) {
+    const secrets = facebookWebhookSecrets(channel);
+    if (secrets.length === 0) {
+      warnOnce(
+        'facebook-webhook-signature',
+        '[Facebook] Chưa cấu hình FACEBOOK_APP_SECRET (hoặc credentials.app_secret của kênh) — webhook '
+          + 'Messenger đang được xử lý KHÔNG kiểm chữ ký X-Hub-Signature-256.'
+      );
+      return true;
+    }
+    const ok = facebookAdapter.verifySignature(
+      req.rawBody,
+      req.headers?.['x-hub-signature-256'],
+      secrets
+    );
+    if (!ok) console.warn(`[Facebook] Signature verification failed channel=${channel.id}`);
+    return ok;
   }
 
   /**
@@ -320,10 +440,13 @@ class ChatbotChannelWebhookController {
     try {
       const channel = await chatbotChannelRepository.findByWebhookToken(token);
 
-      if (!channel) {
+      if (!channel || channel.channel_type !== 'facebook') {
         console.warn('[Facebook] Channel not found for token');
         return;
       }
+
+      // Chữ ký phải được kiểm TRƯỚC khi đọc payload (lưu tin, gọi AI, gửi trả lời).
+      if (!this._verifyFacebookSignature(req, channel)) return;
 
       const messages = facebookAdapter.parseWebhookEvent(req.body);
       if (!messages.length) return;

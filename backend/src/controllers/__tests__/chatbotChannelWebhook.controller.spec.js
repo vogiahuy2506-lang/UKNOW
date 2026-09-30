@@ -109,7 +109,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
   });
 
   it('responds ok immediately, saves visitor message, and aggregates burst into 1 AI reply', async () => {
-    const channel = { id: 10, id_chatbot: 5 };
+    const channel = { id: 10, id_chatbot: 5, channel_type: 'zalo_oa' };
     const chatbot = { id: 5, id_user: 1, is_active: true };
     const conv = { id: 100 };
 
@@ -188,7 +188,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
   });
 
   it('skips AI reply if handoff occurs during debounce waiting period', async () => {
-    const channel = { id: 10, id_chatbot: 5 };
+    const channel = { id: 10, id_chatbot: 5, channel_type: 'zalo_oa' };
     const chatbot = { id: 5, id_user: 1, is_active: true };
     const conv = { id: 100 };
 
@@ -220,7 +220,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
   });
 
   it('does not enqueue a duplicate visitor row returned by the database constraint', async () => {
-    const channel = { id: 10, id_chatbot: 5 };
+    const channel = { id: 10, id_chatbot: 5, channel_type: 'zalo_oa' };
     const chatbot = { id: 5, id_user: 1, is_active: true };
     const conv = { id: 100 };
     mockFindByWebhookToken.mockResolvedValue(channel);
@@ -239,7 +239,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
   });
 
   it('does not call AI when the OA channel is disconnected during the debounce window', async () => {
-    const channel = { id: 10, id_chatbot: 5 };
+    const channel = { id: 10, id_chatbot: 5, channel_type: 'zalo_oa' };
     const chatbot = { id: 5, id_user: 1, is_active: true };
     const conv = { id: 100 };
     mockFindByWebhookToken.mockResolvedValue(channel);
@@ -262,7 +262,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
   // ca "đang tạm dừng SẴN TỪ ĐẦU" — ca này là "vừa bị tạm dừng NGAY TRONG LÚC routeChatbotMessage
   // đang chạy", isAiPaused false lần đầu rồi true lần kiểm lại).
   it('isAiPaused false rồi true (bị tạm dừng khi AI đang soạn) -> KHÔNG gửi, log result=paused_after_ai', async () => {
-    const channel = { id: 10, id_chatbot: 5 };
+    const channel = { id: 10, id_chatbot: 5, channel_type: 'zalo_oa' };
     const chatbot = { id: 5, id_user: 1, is_active: true };
     const conv = { id: 100 };
 
@@ -292,7 +292,7 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
   });
 
   it('does not persist a bot row when sending the OA reply fails', async () => {
-    const channel = { id: 10, id_chatbot: 5 };
+    const channel = { id: 10, id_chatbot: 5, channel_type: 'zalo_oa' };
     const chatbot = { id: 5, id_user: 1, is_active: true };
     const conv = { id: 100 };
     mockFindByWebhookToken.mockResolvedValue(channel);
@@ -334,7 +334,7 @@ describe('ChatbotChannelWebhookController - Facebook: AI tạm dừng kiểm tr�
   const flushDebounce = () => jest.advanceTimersByTimeAsync(10_000);
 
   function arrange({ paused }) {
-    mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8 });
+    mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8, channel_type: 'facebook' });
     mockFindActiveChannelById.mockResolvedValue({ id: 20, id_chatbot: 8 });
     mockFindChatbotById.mockResolvedValue({
       id: 8,
@@ -414,7 +414,7 @@ describe('ChatbotChannelWebhookController - replies_enabled=false', () => {
   }
 
   it('Zalo OA: lưu tin khách, không gọi AI, không gửi', async () => {
-    mockFindByWebhookToken.mockResolvedValue({ id: 10, id_chatbot: 5 });
+    mockFindByWebhookToken.mockResolvedValue({ id: 10, id_chatbot: 5, channel_type: 'zalo_oa' });
     mockFindActiveChannelById.mockResolvedValue({ id: 10, id_chatbot: 5 });
     mockFindChatbotById.mockResolvedValue({ id: 5, id_user: 1, is_active: true, replies_enabled: false });
     mockGetOrCreateConversation.mockResolvedValue({ id: 100 });
@@ -428,7 +428,7 @@ describe('ChatbotChannelWebhookController - replies_enabled=false', () => {
   });
 
   it('Facebook: lưu tin khách, không gọi AI, không gửi (kể cả khi có câu ngoài giờ)', async () => {
-    mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8 });
+    mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8, channel_type: 'facebook' });
     mockFindActiveChannelById.mockResolvedValue({ id: 20, id_chatbot: 8 });
     mockFindChatbotById.mockResolvedValue({
       id: 8,
@@ -465,7 +465,7 @@ describe('ChatbotChannelWebhookController - replies_enabled=false', () => {
   });
 
   it('Đối chứng — replies_enabled thiếu/true thì Zalo OA vẫn gọi AI và trả lời', async () => {
-    mockFindByWebhookToken.mockResolvedValue({ id: 10, id_chatbot: 5 });
+    mockFindByWebhookToken.mockResolvedValue({ id: 10, id_chatbot: 5, channel_type: 'zalo_oa' });
     mockFindActiveChannelById.mockResolvedValue({ id: 10, id_chatbot: 5 });
     mockFindChatbotById.mockResolvedValue({ id: 5, id_user: 1, is_active: true });
     mockGetOrCreateConversation.mockResolvedValue({ id: 100 });

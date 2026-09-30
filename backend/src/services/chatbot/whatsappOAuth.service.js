@@ -50,7 +50,9 @@ function readAppCredentials() {
     redirectUri:
       process.env.WHATSAPP_OAUTH_REDIRECT_URI
       || `${process.env.BACKEND_PUBLIC_URL || ''}/api/webhooks/oauth/callback/whatsapp`,
-    verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'uknow_whatsapp_verify',
+    // Không có giá trị mặc định viết cứng: chưa đặt biến môi trường thì null (bước bắt tay webhook
+    // dùng token riêng của kênh, không có token nào thì từ chối — xem whatsapp.adapter.verifyWebhook).
+    verifyToken: process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || null,
   };
 }
 

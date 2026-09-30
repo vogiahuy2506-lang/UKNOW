@@ -2,8 +2,16 @@
  * internal.routes.js
  *
  * Routes used by sibling services running inside the same trust boundary
- * (e.g. the Python `telegram-gateway`). They authenticate with a
- * shared secret rather than the user JWT — no UKNOW user is logged in.
+ * (the in-process Telegram gateway — inProcChannelGateway/inboxForwarder.js —
+ * gọi qua loopback 127.0.0.1). They authenticate with a shared secret rather
+ * than the user JWT — no UKNOW user is logged in.
+ *
+ * Hai lớp chặn cho CẢ router:
+ *   1. `requireLoopbackSocket`: chỉ nhận kết nối có địa chỉ socket là loopback. Đọc
+ *      `req.socket.remoteAddress` (địa chỉ TCP thật), KHÔNG đọc `req.ip`/X-Forwarded-For —
+ *      header do client tự đặt được. Request đi qua nginx/Cloudflare/cổng publish của Docker
+ *      có địa chỉ socket không phải loopback → 404 như route không tồn tại.
+ *   2. `requireGatewaySecret`: header `x-gateway-secret` khớp secret dùng chung.
  */
 import express from 'express';
 import db from '../config/database.js';
@@ -29,6 +37,54 @@ import {
 const isTelegramStubOnly = () => isStubOnly({ channel: 'telegram' });
 
 const router = express.Router();
+
+/**
+ * Địa chỉ socket được coi là loopback: 127.0.0.0/8 (IPv4 hoặc dạng IPv4-mapped `::ffff:127.x.y.z`
+ * khi server nghe dual-stack) và `::1`.
+ *
+ * @param {string|undefined|null} address giá trị `req.socket.remoteAddress`
+ * @returns {boolean}
+ */
+export function isLoopbackAddress(address) {
+  const addr = String(address || '').trim().toLowerCase();
+  if (!addr) return false;
+  if (addr === '::1') return true;
+  const v4 = addr.startsWith('::ffff:') ? addr.slice('::ffff:'.length) : addr;
+  return /^127\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(v4);
+}
+
+/**
+ * Chặn mọi request không đến từ chính máy chủ (xem chú thích đầu file). Trả 404 để không lộ
+ * sự tồn tại của route nội bộ.
+ */
+export function requireLoopbackSocket(req, res, next) {
+  const address = req.socket?.remoteAddress ?? req.connection?.remoteAddress;
+  if (isLoopbackAddress(address)) return next();
+  return res.status(404).json({ success: false, message: 'Route not found' });
+}
+
+/**
+ * NODEJS_INTERNAL_URL (nếu đặt) là đích gateway gọi webhook nội bộ. Trỏ ra host không phải
+ * loopback thì mọi tin Telegram bị router này chặn → cảnh báo MỘT lần lúc nạp module.
+ */
+function warnIfInternalUrlNotLoopback() {
+  const raw = process.env.NODEJS_INTERNAL_URL;
+  if (!raw) return;
+  let host = '';
+  try {
+    host = new URL(raw).hostname.replace(/^\[|\]$/g, '').toLowerCase();
+  } catch {
+    host = '';
+  }
+  if (host === 'localhost' || isLoopbackAddress(host)) return;
+  console.warn(
+    '[internal.routes] NODEJS_INTERNAL_URL không trỏ về loopback — /api/internal/* chỉ nhận kết nối '
+      + 'loopback nên webhook Telegram nội bộ sẽ bị từ chối. Bỏ biến này hoặc đặt http://127.0.0.1:<PORT>.'
+  );
+}
+warnIfInternalUrlNotLoopback();
+
+router.use(requireLoopbackSocket);
 
 function requireGatewaySecret(req, res, next) {
   Promise.resolve()

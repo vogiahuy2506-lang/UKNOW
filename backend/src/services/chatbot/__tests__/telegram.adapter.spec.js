@@ -42,6 +42,23 @@ describe('telegram.adapter', () => {
       ).rejects.toThrow(/Invalid Telegram gateway secret/);
     });
 
+    it('rejects a same-length secret that differs in one character', async () => {
+      const tampered = `${TEST_SECRET.slice(0, -1)}X`;
+      expect(tampered).toHaveLength(TEST_SECRET.length);
+      await expect(
+        telegramAdapter.verifyWebhookSecret(tampered)
+      ).rejects.toThrow(/Invalid Telegram gateway secret/);
+    });
+
+    it('rejects a secret with a trailing suffix and a non-string header value', async () => {
+      await expect(
+        telegramAdapter.verifyWebhookSecret(`${TEST_SECRET}x`)
+      ).rejects.toThrow(/Invalid Telegram gateway secret/);
+      await expect(
+        telegramAdapter.verifyWebhookSecret([TEST_SECRET])
+      ).rejects.toThrow(/Invalid Telegram gateway secret/);
+    });
+
     it('throws when backend secret is unconfigured', async () => {
       const facade = (await import(
         '../inProcChannelGateway/index.js'
