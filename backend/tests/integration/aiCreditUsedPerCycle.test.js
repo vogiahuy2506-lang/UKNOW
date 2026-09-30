@@ -337,7 +337,7 @@ describe('getAiUsageOverview — lượt AI theo gói, kỳ hiện tại của t
 
   it('gói P: 3 khách 10/50/90 → tổng 150, p90 = 82, % = 82, gần trần = 1 — không tính dòng bán, kỳ trước, khách không gói', async () => {
     await seedOverview();
-    const { byPlan } = await getAiUsageOverview({ windowDays: 30 });
+    const { byPlan } = await getAiUsageOverview({ range: '30d' });
     expect(planRow(byPlan, 'plan_p')).toMatchObject({
       aiCreditsPerPeriod: 100,
       creditUserCount: 3,
@@ -350,7 +350,7 @@ describe('getAiUsageOverview — lượt AI theo gói, kỳ hiện tại của t
 
   it('gói V: khách sát mép tập 31 ngày (dùng cách 14 và 29 ngày, vẫn trong kỳ) được tính → tổng 230, p90 = 136, % = 68, gần trần = 1', async () => {
     await seedOverview();
-    const { byPlan } = await getAiUsageOverview({ windowDays: 30 });
+    const { byPlan } = await getAiUsageOverview({ range: '30d' });
     expect(planRow(byPlan, 'plan_v')).toMatchObject({
       aiCreditsPerPeriod: 200,
       creditUserCount: 3,
@@ -361,7 +361,7 @@ describe('getAiUsageOverview — lượt AI theo gói, kỳ hiện tại của t
     });
   });
 
-  it('cửa sổ 7 ngày và 90 ngày cho CÙNG các số lượt AI (bản cũ: ba nút ba con số)', async () => {
+  it('bộ lọc "Tháng này" và "30 ngày qua" cho CÙNG các số lượt AI (bản cũ: ba nút ba con số)', async () => {
     await seedOverview();
     const creditFields = ({ byPlan }, code) => {
       const plan = planRow(byPlan, code);
@@ -373,18 +373,16 @@ describe('getAiUsageOverview — lượt AI theo gói, kỳ hiện tại của t
         usersNearLimit: plan.usersNearLimit,
       };
     };
-    const w7 = await getAiUsageOverview({ windowDays: 7 });
-    const w30 = await getAiUsageOverview({ windowDays: 30 });
-    const w90 = await getAiUsageOverview({ windowDays: 90 });
-    expect(creditFields(w7, 'plan_p')).toEqual({
+    const month = await getAiUsageOverview({ range: 'month' });
+    const last30 = await getAiUsageOverview({ range: '30d' });
+    expect(creditFields(month, 'plan_p')).toEqual({
       creditUserCount: 3, totalCredits: 150, p90UserCredits: 82, quotaUsagePctAtP90: 82, usersNearLimit: 1,
     });
-    expect(creditFields(w7, 'plan_v')).toEqual({
+    expect(creditFields(month, 'plan_v')).toEqual({
       creditUserCount: 3, totalCredits: 230, p90UserCredits: 136, quotaUsagePctAtP90: 68, usersNearLimit: 1,
     });
     for (const code of ['plan_p', 'plan_u', 'plan_v']) {
-      expect(creditFields(w30, code)).toEqual(creditFields(w7, code));
-      expect(creditFields(w90, code)).toEqual(creditFields(w7, code));
+      expect(creditFields(last30, code)).toEqual(creditFields(month, code));
     }
   });
 

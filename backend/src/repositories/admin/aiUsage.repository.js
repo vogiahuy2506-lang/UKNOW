@@ -3,6 +3,8 @@ import { aiCreditConsumptionRowSql } from '../../constants/aiCreditUsage.js';
 
 const PROMPT_EXPR = "(metadata->>'promptTokens')::bigint";
 const OUTPUT_EXPR = "(metadata->>'outputTokens')::bigint";
+/** Đầu ra tính tiền của một dòng: output, hoặc tổng − prompt nếu lớn hơn (thêm token suy nghĩ). Chỉ dùng trong FILTER hợp lệ. */
+const BILLABLE_OUTPUT_EXPR = `GREATEST(${OUTPUT_EXPR}, COALESCE(delta, 0) - ${PROMPT_EXPR})`;
 /** Positive integers only — exclude missing/zero so they don't dilute the average. */
 const PROMPT_VALID = "(metadata->>'promptTokens') ~ '^[1-9][0-9]*$'";
 const OUTPUT_VALID = "(metadata->>'outputTokens') ~ '^[1-9][0-9]*$'";
@@ -31,7 +33,8 @@ class AiUsageRepository {
    * (`users.active_plan_id` rỗng) không có kỳ hiện tại nên bị loại bằng JOIN.
    *
    * @param {{ lookbackDays?: number }} [options]
-   * @returns {Promise<Array<{ user_id: string, plan_id: number, plan_code: string, plan_name: string, ai_credits_per_period: number|null }>>}
+   * @returns {Promise<Array<{ user_id: string, plan_id: number, plan_code: string, plan_name: string,
+   *   ai_credits_per_period: number|null, plan_price: string|number|null }>>}
    */
   async listCreditCustomers({ lookbackDays = 31 } = {}) {
     return this.safeQuery(
@@ -40,7 +43,8 @@ class AiUsageRepository {
          p.id AS plan_id,
          COALESCE(p.code, 'unknown') AS plan_code,
          COALESCE(p.name, p.code, 'Unknown plan') AS plan_name,
-         p.ai_credits_per_period
+         p.ai_credits_per_period,
+         p.price AS plan_price
        FROM usage_logs ul
        JOIN users u ON u.id = ul.id_user
        JOIN plans p ON p.id = u.active_plan_id
@@ -52,9 +56,12 @@ class AiUsageRepository {
   }
 
   /**
-   * Average prompt/output tokens per AI answer across all models.
-   * Each usage_logs row with resource_type=ai_token is one answer (1 credit).
+   * Average prompt/output tokens per Gemini call across all models.
+   * Each usage_logs row with resource_type=ai_token is one call.
    * Rows missing positive token metadata are excluded from AVG (not treated as 0).
+   *
+   * "Output" ở đây là đầu ra TÍNH TIỀN = max(output, delta − prompt): gồm token suy nghĩ (Google tính theo giá đầu ra,
+   * nằm trong `delta` = tổng nhưng không nằm trong metadata.outputTokens) — cùng công thức với estimateCost.
    */
   async getAvgAiTokenUsage({ windowDays = 30 } = {}) {
     const days = Math.min(Math.max(Number.parseInt(windowDays, 10) || 30, 1), 90);
@@ -62,7 +69,7 @@ class AiUsageRepository {
       `SELECT
          COUNT(*) FILTER (WHERE ${PROMPT_VALID} AND ${OUTPUT_VALID})::int AS calls,
          COALESCE(AVG(${PROMPT_EXPR}) FILTER (WHERE ${PROMPT_VALID} AND ${OUTPUT_VALID}), 0)::float AS avg_prompt_tokens,
-         COALESCE(AVG(${OUTPUT_EXPR}) FILTER (WHERE ${PROMPT_VALID} AND ${OUTPUT_VALID}), 0)::float AS avg_output_tokens
+         COALESCE(AVG(${BILLABLE_OUTPUT_EXPR}) FILTER (WHERE ${PROMPT_VALID} AND ${OUTPUT_VALID}), 0)::float AS avg_output_tokens
        FROM usage_logs
        WHERE resource_type = 'ai_token'
          AND created_at >= NOW() - ($1::int * INTERVAL '1 day')`,

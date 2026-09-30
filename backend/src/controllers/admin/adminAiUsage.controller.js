@@ -7,7 +7,7 @@ const handleError = (res, err) => {
 export async function overview(req, res) {
   try {
     const data = await aiUsageService.getAiUsageOverview({
-      windowDays: req.query.windowDays,
+      range: req.query.range,
     });
     res.json({ success: true, data });
   } catch (err) {

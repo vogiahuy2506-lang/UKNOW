@@ -7,6 +7,7 @@ import {
   updateCatalogModel,
 } from '../ai/aiModelCatalog.service.js';
 import aiUsageRepository from '../../repositories/admin/aiUsage.repository.js';
+import { getMeasuredCostByModel } from './aiUsage.service.js';
 import {
   parsePricing,
   hasConfiguredPrice,
@@ -16,7 +17,15 @@ import {
   getUsdVndRate,
 } from '../../utils/aiPricing.util.js';
 
-function attachPricing(models, { avgPromptTokens, avgOutputTokens, usdVndRate, pricing }) {
+/**
+ * `measured` = chi phí THỰC ĐO mỗi lượt gọi Gemini của model này trong 30 ngày qua (cùng nguồn với trang Chi phí AI;
+ * gồm token suy nghĩ; không kể embedding) — null khi model chưa có lượt gọi nào. `costPerAnswerVnd` là số ƯỚC TÍNH theo
+ * token trung bình, chỉ để so sánh model chưa dùng. Cả hai là chi phí mỗi LƯỢT GỌI Gemini, không phải mỗi lượt AI (credit):
+ * một credit có thể gọi nhiều lần (audit_ai.md C-16).
+ */
+function attachPricing(models, {
+  avgPromptTokens, avgOutputTokens, usdVndRate, pricing, measuredByModel = {},
+}) {
   return models.map((model) => {
     const modelId = model.modelId || model.model_id;
     const configured = hasConfiguredPrice(pricing, modelId);
@@ -27,10 +36,12 @@ function attachPricing(models, { avgPromptTokens, avgOutputTokens, usdVndRate, p
           inputUsdPerM: null,
           outputUsdPerM: null,
           costPerAnswerVnd: null,
+          measured: null,
           configured: false,
         },
       };
     }
+    const measured = measuredByModel[modelId];
     const price = pricingForModel(pricing, modelId);
     return {
       ...model,
@@ -42,6 +53,9 @@ function attachPricing(models, { avgPromptTokens, avgOutputTokens, usdVndRate, p
           avgOutputTokens,
           usdVndRate,
         }),
+        measured: measured
+          ? { calls: measured.calls, costPerCallVnd: measured.costPerCallVnd }
+          : null,
         configured: true,
       },
     };
@@ -49,9 +63,10 @@ function attachPricing(models, { avgPromptTokens, avgOutputTokens, usdVndRate, p
 }
 
 export async function listModels() {
-  const [models, usage] = await Promise.all([
+  const [models, usage, measured] = await Promise.all([
     getCatalog({ enabledOnly: false }),
     aiUsageRepository.getAvgAiTokenUsage({ windowDays: 30 }),
+    getMeasuredCostByModel({ range: '30d' }),
   ]);
 
   const resolved = resolveAvgTokens(usage);
@@ -64,6 +79,7 @@ export async function listModels() {
       avgOutputTokens: resolved.avgOutputTokens,
       usdVndRate,
       pricing,
+      measuredByModel: measured.byModel,
     }),
     avgPromptTokens: resolved.avgPromptTokens,
     avgOutputTokens: resolved.avgOutputTokens,

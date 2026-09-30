@@ -330,9 +330,26 @@ export default function AdminAiModelsPage() {
                       <td className="px-5 py-4">
                         {pricing.configured ? (
                           <div>
-                            <p className="font-semibold text-slate-800">
-                              ~{Number(pricing.costPerAnswerVnd).toLocaleString('vi-VN')}đ
-                            </p>
+                            {pricing.measured ? (
+                              <>
+                                <p className="font-semibold text-slate-800">
+                                  ~{Number(pricing.measured.costPerCallVnd).toLocaleString('vi-VN')}đ
+                                </p>
+                                <p className="mt-0.5 text-xs text-slate-500">
+                                  {t('adminAiModels.measuredHint', {
+                                    calls: Number(pricing.measured.calls).toLocaleString('vi-VN'),
+                                  })}
+                                </p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="font-semibold text-slate-500">
+                                  ~{Number(pricing.costPerAnswerVnd).toLocaleString('vi-VN')}đ{' '}
+                                  <span className="text-xs font-normal">({t('adminAiModels.estimatedTag')})</span>
+                                </p>
+                                <p className="mt-0.5 text-xs text-slate-500">{t('adminAiModels.noCallsHint')}</p>
+                              </>
+                            )}
                             <p className="mt-0.5 text-xs text-slate-500">
                               {fmtUsd(pricing.inputUsdPerM)} / {fmtUsd(pricing.outputUsdPerM)}{' '}
                               {t('adminAiModels.perMillionTokens')}

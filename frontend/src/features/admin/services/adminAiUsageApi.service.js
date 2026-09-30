@@ -1,8 +1,9 @@
 import api from '../../../services/api';
 
 const adminAiUsageApiService = {
-  getOverview(windowDays = 30) {
-    return api.get('/admin/ai-usage/overview', { params: { windowDays } });
+  /** @param {'month'|'30d'} [range] "Tháng này" | "30 ngày qua" (mốc tính ở máy chủ theo giờ Việt Nam) */
+  getOverview(range = '30d') {
+    return api.get('/admin/ai-usage/overview', { params: { range } });
   },
 };
 

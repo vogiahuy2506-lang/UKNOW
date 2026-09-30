@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import toast from 'react-hot-toast';
 import { I18nProvider } from '../../i18n';
@@ -274,5 +274,78 @@ describe('AdminAiModelsPage — Fallback model selection and retired warnings (P
     await waitFor(() => {
       expect(screen.getByText(/Model dự phòng \(model-b\) đã bị Google ngừng cung cấp/)).toBeInTheDocument();
     });
+  });
+});
+
+// PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-8 (C-16): cot gia la "chi phi moi LUOT GOI Gemini", uu tien so THUC DO 30 ngay.
+describe('AdminAiModelsPage - chi phi moi luot goi (thuc do 30 ngay)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const priced = (over = {}) => ({
+    configured: true,
+    inputUsdPerM: 1.5,
+    outputUsdPerM: 9,
+    costPerAnswerVnd: 468,
+    measured: null,
+    ...over,
+  });
+
+  it('cot doi ten "Chi phi moi luot goi (30 ngay)", khong con "Gia moi luot tra loi"', async () => {
+    mockList.mockResolvedValueOnce(listResponse([
+      { modelId: 'model-a', displayName: 'A', isEnabled: true, isFallback: false, supportsGenerateContent: true, pricing: priced() },
+    ]));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('model-a')).toBeInTheDocument());
+    expect(screen.getByText('Chi phí mỗi lượt gọi (30 ngày)')).toBeInTheDocument();
+    expect(screen.queryByText('Giá mỗi lượt trả lời')).not.toBeInTheDocument();
+  });
+
+  it('model co luot goi thuc: hien so THUC DO + so luot goi (khong hien so uoc tinh)', async () => {
+    mockList.mockResolvedValueOnce(listResponse([
+      {
+        modelId: 'model-a', displayName: 'A', isEnabled: true, isFallback: false, supportsGenerateContent: true,
+        pricing: priced({ measured: { calls: 1593, costPerCallVnd: 1320 } }),
+      },
+    ]));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('model-a')).toBeInTheDocument());
+    const row = screen.getByText('model-a').closest('tr');
+    expect(within(row).getByText('~1.320đ')).toBeInTheDocument();
+    expect(within(row).getByText(/Thực đo · 1\.593 lượt gọi trong 30 ngày/)).toBeInTheDocument();
+    expect(within(row).queryByText(/468/)).not.toBeInTheDocument();
+    expect(within(row).queryByText(/ước tính/)).not.toBeInTheDocument();
+    // gia niem yet van hien
+    expect(within(row).getByText(/\$1\.50 \/ \$9\.00/)).toBeInTheDocument();
+  });
+
+  it('model chua co luot goi: hien so UOC TINH ghi ro "uoc tinh" thay vi bo trong', async () => {
+    mockList.mockResolvedValueOnce(listResponse([
+      {
+        modelId: 'model-b', displayName: 'B', isEnabled: true, isFallback: false, supportsGenerateContent: true,
+        pricing: priced({ costPerAnswerVnd: 225, measured: null }),
+      },
+    ]));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('model-b')).toBeInTheDocument());
+    const row = screen.getByText('model-b').closest('tr');
+    expect(within(row).getByText(/~225đ/)).toBeInTheDocument();
+    expect(within(row).getByText('(ước tính)')).toBeInTheDocument();
+    expect(within(row).getByText(/Chưa có lượt gọi trong 30 ngày/)).toBeInTheDocument();
+  });
+
+  it('model chua co gia: van bao "Chua co gia", khong hien so nao', async () => {
+    mockList.mockResolvedValueOnce(listResponse([
+      {
+        modelId: 'model-c', displayName: 'C', isEnabled: true, isFallback: false, supportsGenerateContent: true,
+        pricing: { configured: false, inputUsdPerM: null, outputUsdPerM: null, costPerAnswerVnd: null, measured: null },
+      },
+    ]));
+    renderPage();
+    await waitFor(() => expect(screen.getByText('model-c')).toBeInTheDocument());
+    const row = screen.getByText('model-c').closest('tr');
+    expect(within(row).getByText(/Chưa có giá/)).toBeInTheDocument();
+    expect(within(row).queryByText(/~\d/)).not.toBeInTheDocument();
   });
 });

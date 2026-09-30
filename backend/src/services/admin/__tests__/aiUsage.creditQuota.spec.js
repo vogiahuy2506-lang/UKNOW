@@ -125,7 +125,7 @@ describe('getAiUsageOverview - luot AI da dung trong KY HIEN TAI cua tung khach'
 
   it('3 khach cung goi han muc 100, da dung 10/50/90 -> p90 = 82, % = 82, usersNearLimit = 1', async () => {
     mockDb({ customers: [customer(11), customer(12), customer(13)], usedByUser: { 11: 10, 12: 50, 13: 90 } });
-    const { byPlan } = await getAiUsageOverview({ windowDays: 30 });
+    const { byPlan } = await getAiUsageOverview({ range: '30d' });
     expect(byPlan).toHaveLength(1);
     expect(byPlan[0]).toMatchObject({
       planCode: 'basic',
@@ -138,23 +138,28 @@ describe('getAiUsageOverview - luot AI da dung trong KY HIEN TAI cua tung khach'
     });
   });
 
-  it('cua so 7 hay 90 ngay KHONG doi cac so luot AI (chi token/chi phi theo cua so)', async () => {
+  it('bo loc "Thang nay" hay "30 ngay qua" KHONG doi cac so luot AI (chi token/chi phi theo bo loc)', async () => {
     const setup = () => mockDb({
       customers: [customer(11), customer(12), customer(13)],
       usedByUser: { 11: 10, 12: 50, 13: 90 },
     });
     setup();
-    const w7 = (await getAiUsageOverview({ windowDays: 7 })).byPlan[0];
+    const month = (await getAiUsageOverview({ range: 'month' })).byPlan[0];
+    const monthSql = mockSafeQuery.mock.calls.map(([sql]) => sql);
+    mockSafeQuery.mockClear();
     setup();
-    const w90 = (await getAiUsageOverview({ windowDays: 90 })).byPlan[0];
+    const last30 = (await getAiUsageOverview({ range: '30d' })).byPlan[0];
+    const last30Sql = mockSafeQuery.mock.calls.map(([sql]) => sql);
     for (const field of ['creditUserCount', 'totalCredits', 'p90UserCredits', 'quotaUsagePctAtP90', 'usersNearLimit']) {
-      expect(w7[field]).toBe(w90[field]);
+      expect(month[field]).toBe(last30[field]);
     }
-    // Tập khách luôn tra theo 31 ngày, KHÔNG theo windowDays.
+    // Tập khách luôn tra theo 31 ngày, KHÔNG theo bộ lọc.
     expect(mockListCreditCustomers.mock.calls.map(([arg]) => arg.lookbackDays)).toEqual([31, 31]);
-    // Còn các truy vấn token vẫn nhận đúng cửa sổ người dùng chọn.
-    const windows = new Set(mockSafeQuery.mock.calls.map(([, params]) => params[0]));
-    expect(windows).toEqual(new Set([7, 90]));
+    // Còn các truy vấn token dùng đúng mốc của bộ lọc được chọn (mốc nằm trong SQL, giờ VN).
+    expect(monthSql.filter((sql) => sql.includes("date_trunc('month'")).length).toBeGreaterThan(0);
+    expect(monthSql.some((sql) => sql.includes("INTERVAL '29 days'"))).toBe(false);
+    expect(last30Sql.filter((sql) => sql.includes("INTERVAL '29 days'")).length).toBeGreaterThan(0);
+    expect(last30Sql.some((sql) => sql.includes("date_trunc('month'"))).toBe(false);
   });
 
   it('"da dung" lay tu CUNG ham cong chan: getBillingCycle(khach, chinh khach lam chu) + getUsageInRange(khach, ai_credit, dau ky, bay gio)', async () => {

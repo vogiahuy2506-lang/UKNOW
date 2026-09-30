@@ -18,12 +18,23 @@ export const DEFAULT_AVG_OUTPUT_TOKENS = 500;
 // Giá của model đã khai tử CHỈ được gỡ khi không còn dòng lịch sử nào, không thì báo cáo chi phí quá
 // khứ bị tính lại bằng _default.
 //
-// THIẾU GIÁ, đang rơi về _default: gemini-3.5-flash (model hệ thống) và gemini-embedding-001. Điền
-// bằng biến AI_PRICING_JSON trên máy chủ sau khi tra trang giá Google — đừng đoán số vào đây.
+// 30/09/2026: điền giá 3.5-flash, 3.8-flash và embedding. Nguồn: bảng giá niêm yết của Google
+// (https://ai.google.dev/gemini-api/docs/pricing), tra ngày 30/09/2026, gói trả phí, USD / 1 triệu token.
+// Giá "output" của các model flash ĐÃ gồm token suy nghĩ (thinking) — xem estimateCost.
+//   - gemini-3.5-flash: 1,50 vào / 9,00 ra (model hệ thống).
+//   - gemini-3.8-flash: 0,75 vào / 3,75 ra là GIÁ KHUYẾN MÃI tới 31/12/2026. Từ 01/01/2027 Google tính
+//     1,50 / 7,50 — tới mốc đó phải sửa dòng này (hoặc đặt AI_PRICING_JSON), không thì báo cáo chi phí
+//     thấp hơn thật một nửa mà vẫn trông hợp lệ.
+//   - gemini-embedding-001: trang giá không còn liệt kê ("Gemini Embedding 2" giá 0,20). Dùng 0,15 là
+//     GIÁ CŨ của embedding-001; embedding không có token ra nên output = 0.
+// Model nào chưa có dòng ở đây vẫn rơi về _default và bị cờ "giá tạm" trên trang Chi phí AI.
 export const DEFAULT_PRICING = Object.freeze({
   'gemini-2.5-pro': { input: 1.25, output: 10.0 },
   'gemini-2.5-flash': { input: 0.3, output: 2.5 },
   'gemini-2.5-flash-lite': { input: 0.1, output: 0.4 },
+  'gemini-3.5-flash': { input: 1.5, output: 9.0 },
+  'gemini-3.8-flash': { input: 0.75, output: 3.75 },
+  'gemini-embedding-001': { input: 0.15, output: 0 },
   _default: { input: 0.3, output: 2.5 },
 });
 
@@ -62,10 +73,24 @@ export function hasConfiguredPrice(pricing, model) {
   return Boolean(pricing?.[model]);
 }
 
-export function estimateCost(pricing, { model, promptTokens = 0, outputTokens = 0 } = {}) {
+/**
+ * USD cost of some tokens: `prompt × giá_vào + max(output, total − prompt) × giá_ra`.
+ *
+ * Token "suy nghĩ" (thinking) KHÔNG nằm trong `outputTokens` (`candidatesTokenCount`) nhưng Google tính nó theo
+ * giá đầu ra, và nó nằm trong `totalTokens` (= `delta` của dòng usage_logs). Nên phần đầu ra tính tiền là
+ * `total − prompt` (= output + suy nghĩ); `max` để dòng thiếu/sai `total` không bị tính đầu ra thấp hơn `output`.
+ * Không truyền `totalTokens` (ước lượng theo token trung bình) thì tính như cũ: chỉ prompt + output.
+ */
+export function estimateCost(pricing, {
+  model, promptTokens = 0, outputTokens = 0, totalTokens = null,
+} = {}) {
   const price = pricingForModel(pricing, model);
-  return ((toNumber(promptTokens) / 1_000_000) * toNumber(price.input))
-    + ((toNumber(outputTokens) / 1_000_000) * toNumber(price.output));
+  const prompt = toNumber(promptTokens);
+  const output = toNumber(outputTokens);
+  const total = toNumber(totalTokens);
+  const billableOutput = total > 0 ? Math.max(output, total - prompt) : output;
+  return ((prompt / 1_000_000) * toNumber(price.input))
+    + ((billableOutput / 1_000_000) * toNumber(price.output));
 }
 
 /**
