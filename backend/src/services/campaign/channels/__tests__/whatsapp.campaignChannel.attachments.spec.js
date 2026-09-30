@@ -9,6 +9,11 @@ const checkNumberExistsMock = jest.fn();
 const sendMessageMock = jest.fn();
 const sendImageMock = jest.fn();
 const sendMediaMock = jest.fn();
+// P9 — cổng quyền kênh theo gói chạm CSDL (trần tài khoản kênh); spec này không kiểm nó nên giả lập cho qua (CI không có CSDL).
+jest.unstable_mockModule('../../channelEntitlement.service.js', () => ({
+  assertChannelEntitled: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.unstable_mockModule('../../../chatbot/whatsappBaileys.service.js', () => ({
   getSession: getSessionMock,
   listPersistedSessions: jest.fn(),

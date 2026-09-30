@@ -29,6 +29,10 @@ import { getWorkspaceContext, resolveWorkspaceOwnerId } from '../utils/workspace
 import { ingestQuickSendAttachment } from '../services/campaign/quickSendAttachment.service.js';
 import { StorageQuotaExceededError } from '../services/storage/storageQuota.service.js';
 import { getEnabledAdapterChannelsForBuilder } from '../services/campaign/campaignChannelRegistry.service.js';
+import {
+  getChannelEntitlements,
+  filterChannelsByEntitlement,
+} from '../services/campaign/channelEntitlement.service.js';
 import chatbotTelegramRepository from '../repositories/chatbot/chatbotTelegram.repository.js';
 import { listTelegramGroupsForAccount } from '../services/campaign/telegramGroups.service.js';
 import { listWhatsAppGroupsForSession } from '../services/campaign/whatsappGroups.service.js';
@@ -957,10 +961,13 @@ class CampaignController {
    * GET /api/campaigns/channels
    * PLAN_PR7_NODE_TELEGRAM_TRINH_DUNG_2026-09-28 Việc 1 — trình dựng hỏi kênh 'adapter' nào đang
    * bật (cờ tắt -> mảng rỗng). KHÔNG trả policy/secret.
+   * P9 — chỉ trả kênh mà GÓI của chủ workspace có (trần tài khoản kênh 0 -> ẩn khỏi palette/Gửi nhanh/nút tạo chiến dịch).
    */
   async getChannels(req, res) {
     try {
-      res.json({ success: true, data: { channels: getEnabledAdapterChannelsForBuilder() } });
+      const entitlements = await getChannelEntitlements(req.user);
+      const channels = filterChannelsByEntitlement(getEnabledAdapterChannelsForBuilder(), entitlements);
+      res.json({ success: true, data: { channels } });
     } catch (error) {
       console.error('Get campaign channels error:', error);
       res.status(500).json({ success: false, message: 'Lỗi server khi lấy danh sách kênh gửi' });

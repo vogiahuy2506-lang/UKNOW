@@ -47,6 +47,7 @@ import { getAppMenuLayout } from '../services/admin/adminMenu.service.js';
 import { acceptMembershipInvite, declineMembershipInvite } from '../services/user/employee.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getRequestAuditContext } from '../utils/auditContext.util.js';
+import { getChannelEntitlements } from '../services/campaign/channelEntitlement.service.js';
 
 const AI_HANDOFF_AUTO_RESUME_ALLOWED = new Set([5, 15, 30, 60]);
 
@@ -186,6 +187,25 @@ const mapProfileResponse = (userRow) => ({
 });
 
 class UserController {
+  /**
+   * GET /api/users/channel-entitlements
+   * P9 — quyền dùng kênh Telegram/WhatsApp theo gói của CHỦ workspace: { telegram, whatsapp, limits }.
+   * `true` = trần null (không giới hạn) hoặc > 0; `limits` là trần thật (null = không giới hạn) để FE hiện thông báo.
+   */
+  async getChannelEntitlements(req, res) {
+    try {
+      const data = await getChannelEntitlements(req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error?.statusCode || error?.status;
+      if (status && status < 500) {
+        return res.status(status).json({ success: false, message: error.message, code: error.code });
+      }
+      console.error('getChannelEntitlements error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server khi lấy quyền kênh' });
+    }
+  }
+
   /**
    * Lấy thông tin profile của user đang đăng nhập.
    * @param {import('express').Request} req

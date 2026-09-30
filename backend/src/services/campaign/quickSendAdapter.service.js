@@ -47,6 +47,7 @@ import {
   assertAttachmentListWithinLimits,
 } from '../../utils/channelMediaSend.util.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
+import { assertChannelEntitled } from './channelEntitlement.service.js';
 
 const TELEGRAM_CHAT_ID_PATTERN = /^-?\d+$/;
 const DEFAULT_RATE_LIMIT_RETRY_MS = 15 * 60 * 1000;
@@ -308,7 +309,13 @@ export async function sendQuickAdapterMessage({ channel, authUser, body = {}, id
     throw httpError(400, 'INVALID_MESSAGE', `Nội dung tối đa ${cfg.maxMessageLength} ký tự.`);
   }
   const { adapter } = descriptor;
-  const { actorUserId, workspaceOwnerId } = getWorkspaceContext(authUser);
+  const { actorUserId, workspaceOwnerId, contextType, roleCode } = getWorkspaceContext(authUser);
+  // P9 — gói của chủ workspace không có kênh (trần 0) -> 403 CHANNEL_NOT_IN_PLAN, trước mọi việc chạm tài khoản/hạn mức.
+  await assertChannelEntitled({
+    channel,
+    ownerUserId: workspaceOwnerId,
+    roleCode: contextType === 'self' ? roleCode : undefined,
+  });
   const nodeConfig = cfg.buildNodeConfig(accountRef);
   const attachments = sanitizeQuickSendAttachments(body?.attachments, {
     ownerUserId: workspaceOwnerId,

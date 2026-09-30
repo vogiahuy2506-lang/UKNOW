@@ -7,6 +7,11 @@ import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals
 const mockConsentRefused = jest.fn();
 const mockCheckSendQuota = jest.fn();
 
+// P9 — cổng quyền kênh theo gói chạm CSDL (trần tài khoản kênh); spec này không kiểm nó nên giả lập cho qua (CI không có CSDL).
+jest.unstable_mockModule('../channelEntitlement.service.js', () => ({
+  assertChannelEntitled: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.unstable_mockModule('../zaloCampaignRecipient.service.js', () => ({
   default: { isLeadPhoneConsentRefused: mockConsentRefused },
 }));

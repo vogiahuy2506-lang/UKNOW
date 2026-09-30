@@ -16,6 +16,9 @@ router.get('/app-menu-layout', userController.getAppMenuLayout.bind(userControll
 // Get profile
 router.get('/profile', userController.getProfile.bind(userController));
 
+// P9 — quyền dùng kênh Telegram/WhatsApp theo gói của chủ workspace (FE ẩn/khoá giao diện kênh)
+router.get('/channel-entitlements', userController.getChannelEntitlements.bind(userController));
+
 // Lịch sử mua gói dịch vụ của user đang đăng nhập
 router.get('/my-orders', userController.getMyOrders.bind(userController));
 

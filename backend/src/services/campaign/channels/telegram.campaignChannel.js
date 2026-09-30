@@ -130,6 +130,15 @@ function assertOwnerPresent(ownerId, nodeId) {
 }
 
 /**
+ * P9 — gói của chủ workspace không có kênh Telegram (trần 0) thì không dùng để gửi (chiến dịch lẫn gửi nhanh), dù còn
+ * tài khoản cũ. Dùng ở preflight + `resolveAccount`. Nạp động để spec không kéo CSDL khi chỉ import module.
+ */
+async function assertChannelInPlan(ownerId) {
+  const { assertChannelEntitled } = await import('../channelEntitlement.service.js');
+  await assertChannelEntitled({ channel: 'telegram', ownerUserId: ownerId });
+}
+
+/**
  * P6 (PLAN_TG_WA_DAY_DU) — tài khoản bị khoá do vượt hạn mức gói (hạ gói / slot mua thêm hết hạn) thì không dùng để
  * gửi: coi như không dùng được (giống cổng Zalo `campaignZaloSender.repository.js`). Dùng ở CẢ preflight lẫn lúc chạy
  * (`resolveAccount`), nên chặn cả chiến dịch lẫn gửi nhanh.
@@ -161,6 +170,7 @@ async function checkReadiness({ userId, node }) {
     throw err;
   }
   assertOwnerPresent(userId, node?.id);
+  await assertChannelInPlan(userId);
   const accountId = node?.config?.telegramAccountId;
   const account = accountId
     ? await chatbotTelegramRepository.getAccountById(accountId, { userId })
@@ -260,6 +270,7 @@ async function resolveAccount({ workspaceOwnerId, config, node }) {
     err.code = 'TELEGRAM_ACCOUNT_NOT_READY';
     throw err;
   }
+  await assertChannelInPlan(workspaceOwnerId);
   await assertAccountNotLocked(account.id);
   return {
     accountKey: String(account.id),

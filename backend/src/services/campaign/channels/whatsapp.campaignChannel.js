@@ -175,6 +175,15 @@ function assertSessionOwnedBy(ownerId, sessionKey) {
 }
 
 /**
+ * P9 — gói của chủ workspace không có kênh WhatsApp (trần 0) thì không dùng để gửi (chiến dịch lẫn gửi nhanh), dù còn
+ * phiên cũ. Dùng ở preflight + `resolveAccount`. Nạp động để spec không kéo CSDL khi chỉ import module.
+ */
+async function assertChannelInPlan(ownerId) {
+  const { assertChannelEntitled } = await import('../channelEntitlement.service.js');
+  await assertChannelEntitled({ channel: 'whatsapp', ownerUserId: ownerId });
+}
+
+/**
  * P6 (PLAN_TG_WA_DAY_DU) — phiên bị khoá do vượt hạn mức gói (hạ gói / slot mua thêm hết hạn) thì không dùng để gửi.
  * Dùng ở CẢ preflight lẫn lúc chạy (`resolveAccount`), nên chặn cả chiến dịch lẫn gửi nhanh.
  */
@@ -252,6 +261,7 @@ async function checkReadiness({ userId, node }) {
   assertOwnerPresent(userId, node?.id);
   const config = node?.config || {};
   const sessionKey = assertSessionOwnedBy(userId, config.whatsappSessionKey);
+  await assertChannelInPlan(userId);
   await assertSessionNotLocked(sessionKey);
   const { getSession } = await loadWhatsAppService();
   const session = getSession(sessionKey);
@@ -304,6 +314,7 @@ function assertStepAttachmentsWithinLimits(node) {
 async function resolveAccount({ workspaceOwnerId, config, node }) {
   assertOwnerPresent(workspaceOwnerId, node?.id);
   const sessionKey = assertSessionOwnedBy(workspaceOwnerId, config?.whatsappSessionKey);
+  await assertChannelInPlan(workspaceOwnerId);
   await assertSessionNotLocked(sessionKey);
   const { getSession } = await loadWhatsAppService();
   const session = getSession(sessionKey);
