@@ -48,6 +48,26 @@ describe('helpAssistant.service routeQuestion', () => {
     expect(mockRecord).toHaveBeenCalledTimes(1);
   });
 
+  // PR-12 (audit_ai.md C-4): trợ giúp cho KHÁCH CHƯA ĐĂNG NHẬP cũng gọi Gemini và Google tính tiền. Đường này không được tự
+  // bỏ qua ghi sổ khi không có userId: nó luôn đưa tới aiUsageMeter.record (chủ = null → dòng id_user NULL, `help_route`
+  // nằm nhóm "Trợ giúp" theo tiền tố help_ trong aiFeatureCatalog).
+  it('khách chưa đăng nhập (userId null): vẫn ghi usage help_route với chủ = null', async () => {
+    mockGenerate.mockResolvedValue({
+      text: 'hỏi_đáp',
+      modelName: 'gemini-3.5-flash',
+      raw: { usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 2, totalTokenCount: 12 } },
+    });
+
+    await routeQuestion('cách gửi zalo', null);
+
+    expect(mockRecord).toHaveBeenCalledTimes(1);
+    expect(mockRecord).toHaveBeenCalledWith(
+      null,
+      { promptTokens: 10, outputTokens: 2, totalTokens: 12 },
+      expect.objectContaining({ feature: 'help_route', model: 'gemini-3.5-flash' }),
+    );
+  });
+
   it.each([
     'Budget 0 is invalid. This model only works in thinking mode.',
     'thinking_budget is not supported for this model',

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const trackUsage = jest.fn();
 const generateGeminiContent = jest.fn();
@@ -106,6 +106,75 @@ describe('aiUsageMeter.service', () => {
       model: 'gemini-du-phong',
       totalTokens: 30,
     }));
+  });
+
+  // PR-12 (audit_ai.md C-4): loi goi Gemini KHONG co chu tai khoan (khach vang lai) van ghi, id_user = NULL.
+  describe('record — loi goi khong co chu tai khoan (id_user NULL)', () => {
+    it.each([[null], [undefined], [0], ['']])('userId = %p -> van ghi, id_user NULL, actorUserId null', async (userId) => {
+      await aiUsageMeter.record(userId, { promptTokens: 10, outputTokens: 5, totalTokens: 15 }, {
+        feature: 'hero_consultation',
+        model: 'gemini-3.5-flash',
+      });
+
+      expect(trackUsage).toHaveBeenCalledTimes(1);
+      expect(trackUsage).toHaveBeenCalledWith(null, 'ai_token', 15, expect.objectContaining({
+        feature: 'hero_consultation',
+        model: 'gemini-3.5-flash',
+        promptTokens: 10,
+        outputTokens: 5,
+        totalTokens: 15,
+        actorUserId: null,
+      }));
+    });
+
+    it('totalTokens <= 0 thi khong ghi (du co hay khong co chu)', async () => {
+      await aiUsageMeter.record(null, { totalTokens: 0 }, { feature: 'hero_consultation' });
+      await aiUsageMeter.record(7, { totalTokens: 0 }, { feature: 'smart_chat' });
+      await aiUsageMeter.record(null, undefined, { feature: 'hero_consultation' });
+      expect(trackUsage).not.toHaveBeenCalled();
+    });
+
+    it('co chu: van ghi id_user = chu, actorUserId mac dinh = chu (khong doi hanh vi cu)', async () => {
+      await aiUsageMeter.record(7, { totalTokens: 3 }, { feature: 'smart_chat' });
+      expect(trackUsage).toHaveBeenCalledWith(7, 'ai_token', 3, expect.objectContaining({ actorUserId: 7 }));
+    });
+  });
+
+  describe('record — ghi hut vi loi CSDL phai LO ra trong log', () => {
+    let errorSpy;
+    let warnSpy;
+    beforeEach(() => {
+      errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+    afterEach(() => {
+      errorSpy.mockRestore();
+      warnSpy.mockRestore();
+    });
+
+    it('console.error co tag "[aiUsageMeter] ghi usage that bai", kem feature va model; khong nem loi', async () => {
+      trackUsage.mockRejectedValue(new Error('connection terminated'));
+
+      await expect(aiUsageMeter.record(7, { totalTokens: 12 }, { feature: 'kb_ocr', model: 'gemini-3.5-flash' }))
+        .resolves.toBeUndefined();
+
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const line = String(errorSpy.mock.calls[0][0]);
+      expect(line).toContain('[aiUsageMeter] ghi usage thất bại');
+      expect(line).toContain('feature=kb_ocr');
+      expect(line).toContain('model=gemini-3.5-flash');
+      expect(line).toContain('user=7');
+      expect(line).toContain('connection terminated');
+      expect(warnSpy).not.toHaveBeenCalled(); // truoc day chi la warn — de bi lan trong nhieu canh bao khac
+    });
+
+    it('khach vang lai ghi hut: log ghi user=null (thay duoc do la dong khong co chu)', async () => {
+      trackUsage.mockRejectedValue(new Error('boom'));
+      await aiUsageMeter.record(null, { totalTokens: 9 }, { feature: 'hero_consultation' });
+      const line = String(errorSpy.mock.calls[0][0]);
+      expect(line).toContain('feature=hero_consultation');
+      expect(line).toContain('user=null');
+    });
   });
 
   it('isLimitError recognizes ai_credit resource', () => {

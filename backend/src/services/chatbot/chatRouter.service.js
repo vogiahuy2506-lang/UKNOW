@@ -332,12 +332,15 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 
     console.log(`[ChatRouter] fetchOnce resolved; candidates=${data?.candidates?.length || 0}, text-len=${(joinGeminiTextParts(data?.candidates?.[0]?.content?.parts) || '').length}`);
     const textResponse = joinGeminiTextParts(data?.candidates?.[0]?.content?.parts);
-    if (!textResponse) throw new Error('AI returned empty response');
 
+    // Ghi token TRƯỚC khi kiểm câu trả lời rỗng: Google đã tính tiền lượt này dù model trả về không có chữ (chặn MAX_TOKENS,
+    // bộ lọc an toàn…). Bản cũ ném lỗi trước `record` nên lượt rỗng tốn tiền mà sổ không có. Lượt rỗng vẫn KHÔNG trừ credit
+    // (caller chỉ đặt shouldChargeCredit sau khi _callAI trả về bình thường).
     await aiUsageMeter.record(userId, extractGeminiUsage(data), {
       feature: 'chatbot_reply',
       model: modelName,
     });
+    if (!textResponse) throw new Error('AI returned empty response');
     return { text: textResponse };
   }
 

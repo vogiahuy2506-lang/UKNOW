@@ -1900,11 +1900,10 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
                   campaignIntent,
                   brief: briefForState || null,
                   userPrompt: intentPrompt || lastUserText || '',
-                  options: {
-                    model,
-                    userId,
-                    teamId: null,
-                  },
+                  // `userId` / `requestedModel` là tham số Ở MỨC NGOÀI của fillContentSlots. Bản cũ lồng chúng trong `options: {…}`
+                  // mà hàm không đọc → luôn null: chọn model không theo người dùng và token `campaign_slots` không có chủ.
+                  userId,
+                  requestedModel: model,
                 });
 
                 const filledScript = fillRes.filledGraph || fillRes.script;

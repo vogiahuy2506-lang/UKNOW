@@ -17,6 +17,7 @@ import { buildCompilerTemplateMappings } from './campaignCompiler.service.js';
 import { assertNoEmptyContent } from './campaignScriptMerge.service.js';
 import { scoreGeneratedContent } from './contentQuality.util.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
+import aiUsageMeter from './aiUsageMeter.service.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 
 export const SLOTS_RESPONSE_SCHEMA = {
@@ -282,6 +283,15 @@ export async function fillContentSlots({
       temperature: 0.7,
       timeoutMs: 30000,
       model: modelName,
+    });
+
+    // Ghi token `campaign_slots` NGAY sau lời gọi, trước mọi nhánh trả về lỗi bên dưới (rỗng / JSON hỏng / không đạt chất
+    // lượng): Google đã tính tiền dù nội dung bị bỏ. KHÔNG trừ credit — lượt sinh chiến dịch đã trừ 1 credit ở tầng
+    // controller (chargeAiCredit sau processSmartChat), slot filling nằm trong lượt đó. `record` không ném lỗi nên không
+    // phá đường fail-open của hàm này.
+    await aiUsageMeter.record(userId, res?.usage, {
+      feature: 'campaign_slots',
+      model: res?.modelUsed || modelName,
     });
 
     const raw = res?.text || '';

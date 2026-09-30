@@ -287,6 +287,23 @@ describe('chatRouter._callAI thinking config', () => {
     expect(second.generationConfig.thinkingConfig).toBeUndefined();
     expect(second.generationConfig.maxOutputTokens).toBe(3072);
   });
+
+  // PR-12 (audit_ai.md C-4): Google tính tiền lượt trả lời RỖNG (MAX_TOKENS, bộ lọc an toàn) mà bản cũ ném lỗi TRƯỚC record.
+  it('câu trả lời RỖNG: vẫn ghi token `chatbot_reply` TRƯỚC khi ném lỗi', async () => {
+    const order = [];
+    record.mockImplementation(async () => { order.push('record'); });
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ candidates: [{ content: { parts: [{ text: 'suy nghĩ', thought: true }] } }] }),
+    });
+
+    await expect(chatRouterService._callAI(callArgs).catch((error) => { order.push('throw'); throw error; }))
+      .rejects.toThrow('AI returned empty response');
+
+    expect(record).toHaveBeenCalledTimes(1);
+    expect(record).toHaveBeenCalledWith(7, expect.anything(), { feature: 'chatbot_reply', model: 'gemini-2.5-flash' });
+    expect(order).toEqual(['record', 'throw']); // ghi TRƯỚC khi ném
+  });
 });
 
 describe('ChatRouterService.buildSystemPrompt — natural pronouns + no internal note leak', () => {

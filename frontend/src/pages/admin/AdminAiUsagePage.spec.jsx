@@ -149,10 +149,12 @@ describe('AdminAiUsagePage - bon so tren cung (VND)', () => {
     expect(within(kpiCard('Chi phí AI')).getByText('0đ')).toBeTruthy();
   });
 
-  it('ghi ro khoang ngay (gio Viet Nam) va nhung duong goi chua ghi usage ("Chua gom: ...")', async () => {
+  it('ghi ro khoang ngay (gio Viet Nam); KHONG con dong "Chua gom: ..." (PR-12: moi duong goi Gemini deu ghi usage)', async () => {
     renderOverview();
     expect(await screen.findByText(/Số liệu từ 01\/09\/2026 đến 30\/09\/2026 \(giờ Việt Nam\)/)).toBeTruthy();
-    expect(screen.getByText(/Chưa gồm: đọc chữ trong ảnh\/PDF/)).toBeTruthy();
+    // Banner tinh cu liet ke 4 duong goi chua ghi usage; nay da ghi du nen khong duoc hien lai (ke ca chu OCR / chat trang chu).
+    expect(screen.queryByText(/Chưa gồm/)).toBeNull();
+    expect(screen.queryByText(/chưa ghi lượt dùng/)).toBeNull();
   });
 });
 
@@ -217,6 +219,20 @@ describe('AdminAiUsagePage - bang theo tinh nang (ten tieng Viet)', () => {
     const embeddingRow = screen.getByText('Nạp tài liệu (không tính lượt)').closest('tr');
     expect(within(embeddingRow).getByText('14.400đ')).toBeTruthy();
     expect(within(embeddingRow).getAllByText('—')).toHaveLength(2); // khong co so luot, khong co chi phi/luot
+  });
+
+  // PR-12: chat tu van trang chu (khach vang lai, id_user NULL) la nhom rieng, dat ten tieng Viet, co luot + chi phi/luot.
+  it('nhom "hero" (chat tu van trang chu) hien ten tieng Viet, khong hien ma dev / khoa i18n tho', async () => {
+    renderOverview({
+      byFeature: [
+        { group: 'hero', features: ['hero_consultation'], calls: 30, countsAsCall: true, estimatedCostVnd: 30000, costPerCallVnd: 1000 },
+      ],
+    });
+    const heroRow = (await screen.findByText('Chat tư vấn trang chủ')).closest('tr');
+    expect(within(heroRow).getByText('30')).toBeTruthy();
+    expect(within(heroRow).getByText('30.000đ')).toBeTruthy();
+    expect(within(heroRow).getByText('1.000đ')).toBeTruthy();
+    expect(screen.queryByText(/hero_consultation|adminAiUsage\.group/)).toBeNull();
   });
 });
 

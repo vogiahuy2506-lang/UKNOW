@@ -3934,3 +3934,6 @@ ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS quota_reservation_id BIGIN
 CREATE UNIQUE INDEX IF NOT EXISTS uq_cm_quota_reservation_id
   ON channel_messages (quota_reservation_id)
   WHERE quota_reservation_id IS NOT NULL;
+
+-- --- Migration 273: usage_logs.id_user nullable (PR-12: dong usage cua khach vang lai / he thong khong co chu) ---
+ALTER TABLE usage_logs ALTER COLUMN id_user DROP NOT NULL;

@@ -175,12 +175,11 @@ export default function AdminAiUsagePage() {
         </div>
       )}
 
-      <p className="text-xs text-gray-500">
-        {data?.rangeStart && data?.rangeEnd && (
-          <span>{t('adminAiUsage.rangeInfo', { from: fmtDay(data.rangeStart), to: fmtDay(data.rangeEnd) })} </span>
-        )}
-        <span>{t('adminAiUsage.notIncluded')}</span>
-      </p>
+      {data?.rangeStart && data?.rangeEnd && (
+        <p className="text-xs text-gray-500">
+          {t('adminAiUsage.rangeInfo', { from: fmtDay(data.rangeStart), to: fmtDay(data.rangeEnd) })}
+        </p>
+      )}
 
       <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
         <KpiCard

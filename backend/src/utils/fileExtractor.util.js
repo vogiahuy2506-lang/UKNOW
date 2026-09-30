@@ -2,7 +2,27 @@
  * Extract text content from various file formats
  */
 
-export async function extractTextFromBuffer(buffer, filename) {
+/**
+ * Ghi token của lời gọi Gemini đọc chữ (OCR) khi nạp tài liệu: ảnh, hoặc PDF không trích được chữ. Prompt có cả ảnh/PDF
+ * nên nặng — bản cũ bỏ `result.usage` nên khoản này Google tính mà trang Chi phí AI không thấy (audit_ai.md C-4).
+ *
+ * Chỉ GHI TOKEN cho admin, KHÔNG trừ credit: chính sách credit — nạp tài liệu vào KB là lập chỉ mục, không sinh câu trả
+ * lời cho khách (project_ai_credit_policy). `record` không ném lỗi nên OCR không bao giờ hỏng vì sổ.
+ */
+async function recordOcrUsage(userId, result, requestedModel) {
+  const { default: aiUsageMeter } = await import('../services/ai/aiUsageMeter.service.js');
+  await aiUsageMeter.record(userId, result?.usage, {
+    feature: 'kb_ocr',
+    model: result?.modelUsed || requestedModel,
+  });
+}
+
+/**
+ * @param {Buffer} buffer
+ * @param {string} filename
+ * @param {{ userId?: number|string|null }} [options] userId = chủ chatbot/tài liệu — người mà chi phí OCR được gán cho
+ */
+export async function extractTextFromBuffer(buffer, filename, { userId = null } = {}) {
   const ext = filename.toLowerCase().split('.').pop();
 
   try {
@@ -21,7 +41,7 @@ export async function extractTextFromBuffer(buffer, filename) {
         return extractTextFromHtml(buffer.toString('utf-8'));
 
       case 'pdf':
-        return await extractTextFromPdf(buffer);
+        return await extractTextFromPdf(buffer, { userId });
 
       case 'doc':
       case 'docx':
@@ -38,7 +58,7 @@ export async function extractTextFromBuffer(buffer, filename) {
       case 'jpg':
       case 'jpeg':
       case 'webp':
-        return await extractTextFromImage(buffer, ext);
+        return await extractTextFromImage(buffer, ext, { userId });
 
       default:
         // Try to read as text
@@ -61,7 +81,7 @@ function extractTextFromHtml(html) {
     .trim();
 }
 
-async function extractTextFromPdf(buffer) {
+async function extractTextFromPdf(buffer, { userId = null } = {}) {
   try {
     const pdfParse = (await import('pdf-parse')).default;
     const data = await pdfParse(buffer);
@@ -93,11 +113,14 @@ async function extractTextFromPdf(buffer) {
     // ghi lý do) nên đường này không nghe theo lựa chọn của admin, và sẽ gãy riêng một mình khi Google
     // khai tử 2.5-flash như đã làm với 2.0-flash hôm 10/08. Đã thử thật trên production 24/09:
     // model hệ thống (gemini-3.5-flash) đọc đúng PDF gửi kèm kiểu inlineData này.
+    const model = await resolveAllowedModel(null);
     const result = await generateGeminiContent({
       parts,
-      model: await resolveAllowedModel(null),
+      model,
       temperature: 0.1
     });
+    // Ghi TRƯỚC khi đọc kết quả: kể cả khi bài chỉ ra "NO_RELEVANT_TEXT_FOUND" thì Google vẫn đã tính tiền lượt này.
+    await recordOcrUsage(userId, result, model);
 
     if (result?.text?.includes('NO_RELEVANT_TEXT_FOUND')) {
       return '';
@@ -153,7 +176,7 @@ async function extractTextFromExcel(buffer) {
   }
 }
 
-async function extractTextFromImage(buffer, ext) {
+async function extractTextFromImage(buffer, ext, { userId = null } = {}) {
   try {
     const { generateGeminiContent } = await import('./geminiClient.util.js');
     const { resolveAllowedModel } = await import('../services/ai/aiModelPolicy.service.js');
@@ -176,11 +199,14 @@ async function extractTextFromImage(buffer, ext) {
 
     // Cùng lý do với extractTextFromPdf: theo model admin chọn, không ghim tên. Thử thật 24/09:
     // model hệ thống nhận ảnh gửi kèm kiểu inlineData.
+    const model = await resolveAllowedModel(null);
     const result = await generateGeminiContent({
       parts,
-      model: await resolveAllowedModel(null),
+      model,
       temperature: 0.1
     });
+    // Ghi TRƯỚC khi đọc kết quả (xem extractTextFromPdf).
+    await recordOcrUsage(userId, result, model);
 
     if (result?.text?.includes('NO_RELEVANT_TEXT_FOUND')) {
       return '';

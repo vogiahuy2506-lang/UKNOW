@@ -351,7 +351,8 @@ QUY TẮC TRẢ LỜI:
       .trim()
       .normalize('NFC');
 
-    const text = await extractTextFromBuffer(file.buffer, cleanName);
+    // userId = chủ chatbot: OCR (ảnh / PDF quét) gọi Gemini và ghi token `kb_ocr` cho chủ này, không trừ credit.
+    const text = await extractTextFromBuffer(file.buffer, cleanName, { userId });
 
     if (!text || text.trim().length < 10) {
       const error = new Error('Could not extract text from file');

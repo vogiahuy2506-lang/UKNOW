@@ -14,6 +14,8 @@ import IORedis from 'ioredis';
 import db from '../config/database.js';
 import { vnDayKey } from '../utils/vnTimeFormat.util.js';
 import { resolveAllowedModel } from './ai/aiModelPolicy.service.js';
+import aiUsageMeter from './ai/aiUsageMeter.service.js';
+import { extractGeminiUsage } from '../utils/geminiClient.util.js';
 import { DEFAULT_AI_MODEL } from '../utils/aiModelTier.util.js';
 
 const MAX_FREE_CHATS = 5;
@@ -229,6 +231,15 @@ async function callGemini(prompt) {
     }
 
     const data = await response.json();
+
+    // Khách vãng lai không có tài khoản → ghi token với id_user NULL (migration 273), feature `hero_consultation`. Google tính
+    // tiền các lượt này (≤ 30/ngày/IP) nhưng bản cũ không ghi gì. KHÔNG await: khung chat này cố ý sống sót khi CSDL lỗi
+    // (xem chú thích đầu hàm), mà chờ ghi sẽ kéo dài phản hồi tới connectionTimeoutMillis của pool. `record` không bao giờ
+    // ném lỗi (tự console.error nếu ghi hụt) nên bỏ mặc promise là an toàn.
+    Promise.resolve(
+      aiUsageMeter.record(null, extractGeminiUsage(data), { feature: 'hero_consultation', model })
+    ).catch(() => {});
+
     return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
   } finally {
     clearTimeout(timeoutId);

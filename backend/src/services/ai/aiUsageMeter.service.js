@@ -39,13 +39,20 @@ class AiUsageMeterService {
     };
   }
 
+  /**
+   * Ghi token của MỘT lời gọi Gemini vào `usage_logs` (`resource_type = 'ai_token'`). Không bao giờ ném lỗi.
+   *
+   * `userId` rỗng = lời gọi KHÔNG CÓ CHỦ (khách vãng lai chat tư vấn trang chủ, trợ giúp cho khách chưa đăng nhập): vẫn ghi,
+   * `id_user = NULL` (migration 273). Google tính tiền các lượt này nên bản cũ `return` sớm làm trang Chi phí AI thấp hơn
+   * hoá đơn. Dòng NULL CÓ trong tổng chi phí nhưng không thuộc gói / khách nào (xem aiUsage.service.js).
+   */
   async record(userId, usage, metadata = {}) {
-    if (!userId) return;
+    const ownerId = userId || null;
     const totalTokens = Number(usage?.totalTokens) || 0;
     if (totalTokens <= 0) return;
 
     const baseMeta = metadata && typeof metadata === 'object' ? metadata : {};
-    const actorUserId = baseMeta.actorUserId ?? userId;
+    const actorUserId = baseMeta.actorUserId ?? ownerId;
     const usageMetadata = {
       ...baseMeta,
       actorUserId,
@@ -55,9 +62,13 @@ class AiUsageMeterService {
     };
 
     try {
-      await usageTrackingService.trackUsage(userId, AI_TOKEN_RESOURCE, totalTokens, usageMetadata);
+      await usageTrackingService.trackUsage(ownerId, AI_TOKEN_RESOURCE, totalTokens, usageMetadata);
     } catch (error) {
-      console.warn(`[aiUsageMeter] Failed to record token usage for user=${userId}: ${error?.message || 'Unknown error'}`);
+      // console.error (không phải warn): ghi hụt = chi phí Google có mà sổ không có. Kèm feature/model để tìm ra đường gọi.
+      console.error(
+        `[aiUsageMeter] ghi usage thất bại feature=${baseMeta.feature ?? 'null'} model=${baseMeta.model ?? 'null'} `
+        + `user=${ownerId ?? 'null'} tokens=${totalTokens}: ${error?.message || 'Unknown error'}`
+      );
     }
   }
 

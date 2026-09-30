@@ -44,6 +44,21 @@ describe('Call site của compiler trong aiCampaign.service.js', () => {
    * Canh MỌI hàm nhận CampaignIntentV1, không canh từng cái một — nếu không lần thứ tư nó
    * lại chui sang một dòng khác.
    */
+  /**
+   * PR-12 (audit_ai.md C-4) — cùng kiểu bẫy "đấu dây sai mà không ai thấy": nơi gọi truyền `userId` / `model` LỒNG trong
+   * `options: { … }` trong khi `fillContentSlots` nhận `userId` / `requestedModel` ở MỨC NGOÀI → luôn null. Hậu quả: token
+   * `campaign_slots` không có chủ (mà slot filler đi thẳng generateGeminiContent nên không còn dòng usage nào khác).
+   */
+  it('fillContentSlots nhận `userId` và `requestedModel` Ở MỨC NGOÀI, không lồng trong `options`', () => {
+    const start = source.indexOf('await fillContentSlots({');
+    expect(start).toBeGreaterThan(-1);
+    // Bỏ chú thích `//` (chú thích giải thích lỗi cũ có nhắc chữ "options") để chỉ soi phần mã thật.
+    const block = source.slice(start, source.indexOf('});', start)).replace(/\/\/.*$/gm, '');
+    expect(block).toMatch(/^\s*userId,\s*$/m);
+    expect(block).toMatch(/requestedModel:\s*model\b/);
+    expect(block).not.toMatch(/\boptions\s*:/);
+  });
+
   it('KHÔNG hàm nào nhận CampaignIntentV1 được truyền thẳng biến `intent` của hàm bao ngoài', () => {
     const viPham = [];
     for (const fn of ['isCompilableIntent', 'compileCampaign', 'deriveIntent']) {

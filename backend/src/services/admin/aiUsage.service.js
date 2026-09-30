@@ -326,6 +326,8 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
     aiUsageRepository.safeQuery(featureModelSql(startSql), noParams),
     // Ai đã dùng tính năng nào: đủ để đếm "khách đang dùng AI" (bỏ người chỉ có embedding/trợ giúp) mà chỉ phân loại
     // tính năng ở MỘT nơi (aiFeatureCatalog), không lặp điều kiện trong SQL.
+    // `id_user IS NOT NULL`: dòng không có chủ (khách vãng lai chat trang chủ / trợ giúp chưa đăng nhập, migration 273)
+    // có trong TỔNG CHI PHÍ nhưng không phải một khách — không được đếm vào "khách đang dùng AI" / "user dùng AI".
     aiUsageRepository.safeQuery(
       `SELECT DISTINCT
          id_user,
@@ -333,9 +335,13 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
          ${TOKEN_SQL.kind} AS kind
        FROM usage_logs
        WHERE resource_type = 'ai_token'
+         AND id_user IS NOT NULL
          AND created_at >= ${startSql}`,
       noParams
     ),
+    // Ba truy vấn theo CHỦ (theo gói, top user, p90/user) bỏ dòng `id_user IS NULL`: chi phí của khách vãng lai / hệ thống
+    // không thuộc gói hay user nào — để lẫn vào "Unknown plan" sẽ làm sai chi phí gói không có gói, và gom mọi khách vãng
+    // lai thành MỘT "user" khổng lồ trong p90 / top user. Chúng vẫn có trong tổng, bảng theo tính năng / model và biểu đồ.
     aiUsageRepository.safeQuery(
       `SELECT
          p.id AS plan_id,
@@ -352,6 +358,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
        LEFT JOIN users u ON u.id = ul.id_user
        LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE ul.resource_type = 'ai_token'
+         AND ul.id_user IS NOT NULL
          AND ul.created_at >= ${startSql}
        GROUP BY p.id, p.code, p.name, p.ai_credits_per_period, p.price, model`,
       noParams
@@ -370,6 +377,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
        LEFT JOIN users u ON u.id = ul.id_user
        LEFT JOIN plans p ON p.id = u.active_plan_id
        WHERE ul.resource_type = 'ai_token'
+         AND ul.id_user IS NOT NULL
          AND ul.created_at >= ${startSql}
        GROUP BY ul.id_user, u.email, u.username, p.code, p.name, model`,
       noParams
@@ -387,6 +395,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
          LEFT JOIN users u ON u.id = ul.id_user
          LEFT JOIN plans p ON p.id = u.active_plan_id
          WHERE ul.resource_type = 'ai_token'
+           AND ul.id_user IS NOT NULL
            AND ul.created_at >= ${startSql}
          GROUP BY p.id, p.code, p.name, p.ai_tokens_per_period, ul.id_user
        )
