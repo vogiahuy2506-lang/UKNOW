@@ -6,7 +6,9 @@ import {
   validateEditHtmlOutput,
   LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
+  MAX_FULL_REWRITE_HTML_CHARS,
 } from '../../utils/landingEditGuard.util.js';
+import { applyHtmlEdits } from '../../utils/landingHtmlPatch.util.js';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
 import { countFormSlots, hasMalformedFormSlot } from '../../utils/landingHtmlInjection.util.js';
 import { normalizeChangeSummary } from '../../utils/landingLayoutFindings.util.js';
@@ -24,10 +26,18 @@ export const LAYOUT_SAFETY_RULE =
 
 /**
  * Lượt sửa landing là MỘT yêu cầu đồng bộ; /api đi thẳng Cloudflare → backend (không qua nginx),
- * Cloudflare cắt ở 100 giây. Chừa ~15 giây cho tải lên, nạp tệp đính kèm, ghi phiên: editHtml chỉ
- * sinh lại vì ảnh bịa khi (lượt đầu × 2) còn dưới mốc này.
+ * Cloudflare cắt ở 100 giây. Chừa ~15 giây cho tải lên, nạp tệp đính kèm, ghi phiên. Dùng chung cho:
+ * timeout lượt vá, quyết định dự phòng viết-lại-cả-trang, và việc editHtml chỉ sinh lại vì ảnh bịa
+ * khi (lượt đầu × 2) còn dưới mốc này.
  */
-export const EDIT_FAKE_IMAGE_RETRY_BUDGET_MS = 85000;
+export const EDIT_TIME_BUDGET_MS = 85000;
+
+/**
+ * Ước tính ms mỗi ký tự trang khi AI viết lại NGUYÊN trang. Đo production 29–30/09 (16 lượt
+ * `[LandingAI] done mode=edit`, model gemini-3.8-flash): 0,77–0,88 ms/ký tự, trung bình 0,82; hệ
+ * số 0,9 phủ lượt chậm nhất đo được (0,884).
+ */
+export const EDIT_FULL_REWRITE_MS_PER_CHAR = 0.9;
 
 /**
  * PR-5b-2a — công tắc "AI dựng landing dùng Biểu mẫu thay form lead" (mặc định TẮT). Đọc
@@ -39,6 +49,16 @@ export const EDIT_FAKE_IMAGE_RETRY_BUDGET_MS = 85000;
  */
 export function isAiLandingFormMode() {
   return process.env.AI_LANDING_FORM_MODE === 'form';
+}
+
+/**
+ * Cầu dao chế độ sửa landing: `full` → viết lại cả trang như trước (trần 80.000); giá trị khác /
+ * không đặt → sửa theo ĐOẠN (bản vá). Đọc `process.env` LÚC GỌI (cùng lý do isAiLandingFormMode).
+ *
+ * @returns {boolean} true nếu đang ở chế độ vá
+ */
+export function isAiLandingPatchMode() {
+  return process.env.AI_LANDING_EDIT_MODE !== 'full';
 }
 
 function stripJsonFences(raw) {
@@ -63,6 +83,9 @@ function logLandingAiLifecycle({
   promptChars = 0,
   htmlChars = 0,
   outputTokens = null,
+  strategy = null,
+  patchEdits = null,
+  patchFail = null,
   outcome = null,
   fakeImageUrls = null,
   fakeImageRetry = null,
@@ -83,6 +106,9 @@ function logLandingAiLifecycle({
     `htmlChars=${htmlChars}`,
   ];
   if (outputTokens != null) fields.push(`outputTokens=${outputTokens}`);
+  if (strategy != null) fields.push(`strategy=${strategy}`);
+  if (patchEdits != null) fields.push(`patchEdits=${patchEdits}`);
+  if (patchFail != null) fields.push(`patchFail=${patchFail}`);
   if (fakeImageRetry != null) fields.push(`fakeImageRetry=${fakeImageRetry}`);
   if (strippedImages != null) fields.push(`strippedImages=${strippedImages}`);
   if (Array.isArray(fakeImageUrls) && fakeImageUrls.length > 0) {
@@ -705,11 +731,13 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
-    // Chốt chặn kích thước input — cách tính con số (token đầu ra + trần 100 giây Cloudflare) ở
-    // MAX_EDIT_HTML_INPUT_CHARS, landingEditGuard.util.js.
-    if (rawCurrent.length > MAX_EDIT_HTML_INPUT_CHARS) {
+    // Chốt chặn kích thước input — cách tính con số ở MAX_EDIT_HTML_INPUT_CHARS (chế độ vá) và
+    // MAX_FULL_REWRITE_HTML_CHARS (viết lại cả trang), landingEditGuard.util.js.
+    const patchMode = isAiLandingPatchMode();
+    const cap = patchMode ? MAX_EDIT_HTML_INPUT_CHARS : MAX_FULL_REWRITE_HTML_CHARS;
+    if (rawCurrent.length > cap) {
       const err = new Error(
-        `Landing page hiện tại quá dài (${rawCurrent.length.toLocaleString('vi-VN')} ký tự, giới hạn ${MAX_EDIT_HTML_INPUT_CHARS.toLocaleString('vi-VN')} ký tự) để chỉnh sửa an toàn bằng AI. Vui lòng chỉnh sửa trực tiếp trong trình soạn thảo.`
+        `Landing page hiện tại quá dài (${rawCurrent.length.toLocaleString('vi-VN')} ký tự, giới hạn ${cap.toLocaleString('vi-VN')} ký tự) để chỉnh sửa an toàn bằng AI. Vui lòng chỉnh sửa trực tiếp trong trình soạn thảo.`
       );
       err.status = 400;
       throw err;
@@ -756,7 +784,11 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       ? 'Widened the date column in the Timeline section so the year is no longer covered'
       : 'Đã nới cột ngày ở phần Dòng thời gian để năm không bị che';
 
-    const fullPrompt = `Bạn là UI/UX + front-end (HTML) chuyên chỉnh sửa landing page marketing.
+    // Các khối luật DÙNG CHUNG cho prompt viết-lại-cả-trang (đường dự phòng, giữ nguyên từng byte) và
+    // prompt vá — chỉ quy tắc 3, quy tắc kỹ thuật 1 và dòng ví dụ cuối khác nhau.
+    const changeSummaryRule = `"changeSummary" là MỘT câu ${summaryLanguage} tối đa 160 ký tự, viết cho người KHÔNG rành kỹ thuật, nói bạn đã đổi gì ở phần nào của trang (ví dụ: "${summaryExample}"); TUYỆT ĐỐI không nhắc class, CSS, pixel, tên thẻ HTML hay mã nguồn trong câu này.`;
+
+    const buildEditPrompt = ({ rule3, techRule1, exampleLine }) => `Bạn là UI/UX + front-end (HTML) chuyên chỉnh sửa landing page marketing.
 
 Nhiệm vụ: Chỉnh sửa trang landing HTML5 hiện tại theo ĐÚNG yêu cầu của người dùng.
 
@@ -766,10 +798,10 @@ QUY TẮC CHỈNH SỬA TỐI QUAN TRỌNG:
 1) Dưới đây là HTML hiện tại của trang. Nhiệm vụ của bạn là CHỈ thay đổi đúng phần người dùng yêu cầu.
 2) Giữ NGUYÊN VĂN mọi phần còn lại: cấu trúc trang, thứ tự các section, nội dung chữ, class Tailwind, và form đăng ký lead hiện có của trang — comment "${LANDING_FORM_PLACEHOLDER}" (trang cũ), hoặc thẻ iframe form nhúng "/embed/lead-form/..." (trang cũ), hoặc form có thuộc tính "data-founderai-capture" cùng đủ 3 trường name="name"/"email"/"phone" và checkbox name="marketingConsent" (trang mới) — GIỮ NGUYÊN VĂN toàn bộ form đó, không đổi tên thuộc tính, không xóa trường nào. Nếu trang có khối nhúng Biểu mẫu (thẻ section mang thuộc tính data-founderai-form-section, bên trong có div mang thuộc tính data-founderai-form, thẻ noscript, và thẻ script nạp form-embed.js) thì GIỮ NGUYÊN VĂN toàn bộ khối đó — không đổi giá trị thuộc tính data-founderai-form, không xóa hay sửa thẻ script form-embed.js bên trong; được phép DI CHUYỂN cả khối nguyên vẹn sang vị trí khác trong trang nếu người dùng yêu cầu. Tuyệt đối KHÔNG tự ý viết lại, xóa bỏ hay tái cấu trúc các section không được yêu cầu.
 2b) NGOẠI LỆ CỦA QUY TẮC 2 — khi yêu cầu là THÊM một trường mới vào form đăng ký (ví dụ: "thêm ô Tên công ty vào form", "thêm trường Quy mô kiểu chọn với 3 lựa chọn..."): đây là thay đổi ĐƯỢC PHÉP trên chính form đó. Thêm ĐÚNG các thẻ input/textarea/select/radio/checkbox được yêu cầu vào BÊN TRONG form "data-founderai-capture" hiện có (đặt sau các trường đang có, trước nút submit) — KHÔNG tạo form thứ 2, KHÔNG đổi thuộc tính "data-founderai-capture", và bắt buộc GIỮ NGUYÊN mọi trường đang có (name/email/phone/marketingConsent và mọi trường cf_* khác) — chỉ THÊM, không xoá, không đổi tên trường nào khác ngoài trường mới được yêu cầu.
-${declaredFieldsRule}${formSlotEditRule}3) Trả về JSON { "title": "...", "html": "...", "changeSummary": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích trong "html". "changeSummary" là MỘT câu ${summaryLanguage} tối đa 160 ký tự, viết cho người KHÔNG rành kỹ thuật, nói bạn đã đổi gì ở phần nào của trang (ví dụ: "${summaryExample}"); TUYỆT ĐỐI không nhắc class, CSS, pixel, tên thẻ HTML hay mã nguồn trong câu này.
+${declaredFieldsRule}${formSlotEditRule}3) ${rule3}
 
 QUY TẮC KỸ THUẬT:
-1) Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Ba khóa: "title" (string), "html" (string) và "changeSummary" (string).
+1) ${techRule1}
 2) Nếu bản gốc có thẻ <head> chứa Tailwind CDN, hãy luôn giữ nguyên: <script src="https://cdn.tailwindcss.com"></script>
 3) KHÔNG tự ý chèn thêm thuộc tính style="..." inline; chỉ dùng class Tailwind utility.
 4) Không dùng JavaScript logic ngoài script Tailwind CDN — trừ thẻ script nạp form-embed.js nằm trong khối nhúng Biểu mẫu (nếu trang có): giữ nguyên thẻ đó, không xóa, không thêm logic JS nào khác.
@@ -783,7 +815,24 @@ YÊU CẦU CHỈNH SỬA TỪ NGƯỜI DÙNG:
 """${instr}"""
 ${dataPromptBlock}
 Ví dụ định dạng trả về (JSON hợp lệ):
-{"title":"...","html":"...","changeSummary":"..."}`;
+${exampleLine}`;
+
+    // Prompt viết-lại-cả-trang: đường dự phòng đã chạy thật + công tắc AI_LANDING_EDIT_MODE=full.
+    // ĐỪNG sửa chữ ở đây — test ghim từng byte.
+    const fullPrompt = buildEditPrompt({
+      rule3: `Trả về JSON { "title": "...", "html": "...", "changeSummary": "..." } với "html" là TOÀN BỘ tài liệu/đoạn mã HTML sau khi sửa. Giữ đúng dạng tài liệu như bản gốc: nếu bản gốc là đoạn HTML fragment (không có <!DOCTYPE html>) thì trả lại đúng đoạn HTML fragment; nếu bản gốc là tài liệu HTML hoàn chỉnh (có <!DOCTYPE html>) thì trả lại tài liệu HTML hoàn chỉnh bắt đầu bằng <!DOCTYPE html>. KHÔNG trả về code diff hay phần giải thích trong "html". ${changeSummaryRule}`,
+      techRule1: 'Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Ba khóa: "title" (string), "html" (string) và "changeSummary" (string).',
+      exampleLine: '{"title":"...","html":"...","changeSummary":"..."}',
+    });
+
+    // Prompt vá: AI đọc cả trang nhưng chỉ trả các bản vá {find, replace}; backend ghép (applyHtmlEdits).
+    const patchPrompt = patchMode
+      ? buildEditPrompt({
+          rule3: `Trả về JSON { "title": "...", "edits": [{"find": "...", "replace": "..."}], "changeSummary": "..." } — CHỈ gồm các BẢN VÁ, KHÔNG trả về toàn bộ trang. Mỗi phần tử của "edits": "find" là MỘT đoạn liền mạch COPY Y NGUYÊN từ HTML HIỆN TẠI, đủ dài để CHỈ xuất hiện MỘT lần trong toàn trang (thường kèm thẻ mở và vài chữ nội dung), càng ngắn càng tốt trong giới hạn đó; "replace" là đoạn thay thế cho "find". Muốn XOÁ một đoạn: "replace": "". Muốn THÊM nội dung: "find" là đoạn nằm ngay cạnh chỗ cần thêm, "replace" = đoạn đó + nội dung mới. Các bản vá KHÔNG chồng lấn nhau và được áp theo thứ tự từ trên xuống. "find"/"replace" là chuỗi JSON: thoát đúng dấu nháy kép (\\") và xuống dòng (\\n). KHÔNG trả về code diff hay phần giải thích trong "find"/"replace". Giữ nguyên "title" như trang hiện tại nếu người dùng không yêu cầu đổi. ${changeSummaryRule}`,
+          techRule1: 'Trả về ĐÚNG một đối tượng JSON, không markdown, không giải thích ngoài JSON. Ba khóa: "title" (string), "edits" (array) và "changeSummary" (string).',
+          exampleLine: '{"title":"...","edits":[{"find":"...","replace":"..."}],"changeSummary":"..."}',
+        })
+      : null;
 
     const telemetry = {
       mode: 'edit',
@@ -805,7 +854,43 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       sourceMatches.forEach((u) => allowlistUrls.add(u));
     }
 
-    const runOnce = async (extraRule = '') => {
+    // Chốt kiểm chất lượng + ảnh bịa — DÙNG CHUNG cho đường vá và đường viết-lại-cả-trang. Lỗi của các
+    // chốt này KHÔNG kích hoạt dự phòng (AI làm hỏng form thì viết lại cả trang cũng có thể hỏng tiếp).
+    const finalizeEdit = ({ title, html, changeSummary, finishReason }) => {
+      telemetry.htmlChars = html.length;
+
+      // Chốt chặn kiểm tra chất lượng kết quả
+      validateEditHtmlOutput({
+        currentHtml: rawCurrent,
+        newHtml: html,
+        finishReason,
+      });
+
+      let valRes;
+      try {
+        valRes = validateLandingImageUrls({
+          html,
+          assets,
+          allowedSourceText: rawCurrent,
+          requireAssetsUsed: false,
+        });
+      } catch (valErr) {
+        valErr.generatedTitle = title;
+        valErr.generatedHtml = html;
+        valErr.generatedChangeSummary = changeSummary;
+        throw valErr;
+      }
+
+      return {
+        title,
+        html,
+        unusedAssets: valRes.unusedAssets,
+        ...(changeSummary ? { changeSummary } : {}),
+      };
+    };
+
+    // Đường viết-lại-cả-trang (prompt cũ nguyên byte): công tắc `full` và dự phòng khi vá hỏng.
+    const runFullRewrite = async (extraRule = '') => {
       const promptToSend = extraRule ? `${fullPrompt}\n\n${extraRule}` : fullPrompt;
       const generation = await aiUsageMeter.generateWithBudget(userId, {
         parts: buildModelParts(promptToSend, assets, documents),
@@ -855,36 +940,127 @@ Ví dụ định dạng trả về (JSON hợp lệ):
         const titleMatch = html.match(/<title[^>]*>([^<]+)<\/title>/i);
         if (titleMatch) title = titleMatch[1].trim();
       }
-      telemetry.htmlChars = html.length;
 
-      // Chốt chặn kiểm tra chất lượng kết quả
-      validateEditHtmlOutput({
-        currentHtml: rawCurrent,
-        newHtml: html,
-        finishReason,
-      });
+      return finalizeEdit({ title, html, changeSummary, finishReason });
+    };
 
-      let valRes;
+    // "Hỏng vá" (không phải lỗi mạng/quá tải, không phải lỗi chốt kiểm): mang cờ isPatchFailure để
+    // `attempt` quyết định dự phòng viết-lại-cả-trang.
+    const patchFailure = (reason, detail = '') => {
+      const err = new Error(`Lượt vá landing hỏng (${reason})${detail ? `: ${detail}` : ''}`);
+      err.isPatchFailure = true;
+      err.patchFail = reason;
+      return err;
+    };
+    const PATCH_FAIL_BY_CODE = {
+      LANDING_PATCH_EMPTY: 'empty',
+      LANDING_PATCH_INVALID: 'invalid',
+      LANDING_PATCH_NOT_FOUND: 'not_found',
+      LANDING_PATCH_AMBIGUOUS: 'ambiguous',
+    };
+
+    // Đường vá: AI trả {title, edits, changeSummary}; backend ghép rồi chạy chốt kiểm chung.
+    const runPatch = async (extraRule = '') => {
+      const promptToSend = extraRule ? `${patchPrompt}\n\n${extraRule}` : patchPrompt;
+      let generation;
       try {
-        valRes = validateLandingImageUrls({
-          html,
-          assets,
-          allowedSourceText: rawCurrent,
-          requireAssetsUsed: false,
+        generation = await aiUsageMeter.generateWithBudget(userId, {
+          parts: buildModelParts(promptToSend, assets, documents),
+          jsonMode: true,
+          maxOutputTokens: 32768,
+          timeoutMs: EDIT_TIME_BUDGET_MS,
+          temperature: 0.2,
+          feature: 'landing_page',
+          metadata: {
+            actorUserId: actorUserId != null ? Number(actorUserId) : Number(userId),
+            mode: 'edit',
+            strategy: 'patch',
+            ...(autoLayoutFix ? { autoLayoutFix: true } : {}),
+          },
         });
-      } catch (valErr) {
-        valErr.generatedTitle = title;
-        valErr.generatedHtml = html;
-        valErr.generatedChangeSummary = changeSummary;
-        throw valErr;
+      } catch (genErr) {
+        // Quá giờ: fetch bị AbortController huỷ ném AbortError (không có geminiStatus → không bị thử lại).
+        if (genErr?.name === 'AbortError') throw patchFailure('timeout');
+        throw genErr;
+      }
+      const { text, blockReason, finishReason } = generation;
+      telemetry.finishReason = finishReason;
+      telemetry.outputTokens = getOutputTokens(generation);
+
+      if (blockReason) {
+        const err = new Error('Nội dung bị chặn bởi chính sách mô hình. Hãy thử yêu cầu khác.');
+        err.status = 400;
+        throw err;
       }
 
-      return {
-        title,
-        html,
-        unusedAssets: valRes.unusedAssets,
-        ...(changeSummary ? { changeSummary } : {}),
-      };
+      // Cắt cụt → JSON không tin được, kể cả khi còn parse được.
+      if (finishReason === 'MAX_TOKENS') throw patchFailure('truncated');
+
+      let parsed;
+      try {
+        parsed = JSON.parse(stripJsonFences(text));
+      } catch {
+        throw patchFailure('parse');
+      }
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw patchFailure('parse');
+
+      const title = String(parsed.title || '').trim() || 'Landing';
+      const changeSummary = normalizeChangeSummary(parsed.changeSummary);
+
+      let html;
+      if (Array.isArray(parsed.edits)) {
+        try {
+          const patched = applyHtmlEdits(rawCurrent, parsed.edits);
+          html = patched.html;
+          telemetry.strategy = 'patch';
+          telemetry.patchEdits = patched.applied;
+        } catch (patchErr) {
+          throw patchFailure(PATCH_FAIL_BY_CODE[patchErr?.code] || 'invalid', patchErr?.message);
+        }
+      } else if (typeof parsed.html === 'string' && parsed.html.trim()) {
+        // Model tự trả cả trang thay vì bản vá — dùng luôn.
+        html = parsed.html.trim();
+        telemetry.strategy = 'patch_full_html';
+      } else {
+        throw patchFailure('empty');
+      }
+
+      return finalizeEdit({ title, html, changeSummary, finishReason });
+    };
+
+    // Một lượt thử = vá (có thể rơi xuống viết-lại-cả-trang khi vá hỏng). Công tắc `full` → chỉ viết lại.
+    const attempt = async (extraRule = '') => {
+      if (!patchMode) {
+        telemetry.strategy = 'full';
+        return runFullRewrite(extraRule);
+      }
+      telemetry.strategy = 'patch';
+      telemetry.patchEdits = null;
+      try {
+        return await runPatch(extraRule);
+      } catch (err) {
+        if (!err?.isPatchFailure) throw err;
+        telemetry.patchFail = err.patchFail;
+        telemetry.patchEdits = null;
+
+        const elapsed = Date.now() - telemetry.startedAt;
+        const estFullMs = rawCurrent.length * EDIT_FULL_REWRITE_MS_PER_CHAR;
+        const canFallback =
+          rawCurrent.length <= MAX_FULL_REWRITE_HTML_CHARS && elapsed + estFullMs <= EDIT_TIME_BUDGET_MS;
+        if (canFallback) {
+          telemetry.strategy = 'patch_fallback_full';
+          return runFullRewrite(extraRule);
+        }
+
+        const failErr = new Error(
+          err.patchFail === 'timeout'
+            ? 'Yêu cầu sửa này chạm quá nhiều chỗ trên một trang dài nên AI không kịp làm trong một lượt. Hãy chia nhỏ: sửa từng phần của trang.'
+            : 'AI không xác định được chính xác đoạn cần sửa. Hãy mô tả cụ thể hơn phần cần sửa (ví dụ: tên mục, câu chữ đang có), rồi thử lại.'
+        );
+        failErr.status = 422;
+        failErr.code = 'LANDING_PATCH_FAILED';
+        throw failErr;
+      }
     };
 
     const stripFakeImages = (fakeErr) => {
@@ -909,21 +1085,22 @@ Ví dụ định dạng trả về (JSON hợp lệ):
     try {
       let editResult;
       try {
-        editResult = await runOnce('');
+        editResult = await attempt('');
       } catch (firstErr) {
         if (firstErr.code === 'LANDING_FAKE_IMAGE_URL') {
           telemetry.fakeImageUrls = firstErr.details?.fakeImageUrls || [];
           // Lượt sinh lại tốn xấp xỉ lượt đầu; hai lượt không vừa trần Cloudflare thì gỡ ảnh bịa
           // ngay — thử lại chỉ đổi kết quả tốt thành 524 trong khi backend vẫn sửa xong.
           const firstRunMs = Date.now() - telemetry.startedAt;
-          if (firstRunMs * 2 > EDIT_FAKE_IMAGE_RETRY_BUDGET_MS) {
+          if (firstRunMs * 2 > EDIT_TIME_BUDGET_MS) {
             telemetry.fakeImageRetry = 0;
             editResult = stripFakeImages(firstErr);
           } else {
             telemetry.fakeImageRetry = 1;
-            const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. Sinh lại toàn bộ trang, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
+            const regenerateWhat = patchMode ? 'Sinh lại kết quả sửa' : 'Sinh lại toàn bộ trang';
+            const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. ${regenerateWhat}, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
             try {
-              editResult = await runOnce(extraRule);
+              editResult = await attempt(extraRule);
             } catch (secondErr) {
               if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
                 editResult = stripFakeImages(secondErr);

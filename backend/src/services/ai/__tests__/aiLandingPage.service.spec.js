@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../../utils/landingLeadFormConfig.util.js';
 
 const getContextForLandingAi = jest.fn(async () => '');
@@ -18,9 +18,26 @@ const {
   buildAttachmentPromptBlock,
   validateLandingImageUrls,
   stripDisallowedImages,
-  EDIT_FAKE_IMAGE_RETRY_BUDGET_MS,
+  EDIT_TIME_BUDGET_MS,
+  EDIT_FULL_REWRITE_MS_PER_CHAR,
 } = await import('../aiLandingPage.service.js');
-const { MAX_EDIT_HTML_INPUT_CHARS } = await import('../../../utils/landingEditGuard.util.js');
+const { MAX_EDIT_HTML_INPUT_CHARS, MAX_FULL_REWRITE_HTML_CHARS } = await import('../../../utils/landingEditGuard.util.js');
+
+/**
+ * Chạy `fn` với AI_LANDING_EDIT_MODE = mode (undefined = xoá biến → chế độ vá mặc định), trả lại giá
+ * trị cũ ở finally. Prompt viết-lại-cả-trang chỉ còn đi qua đường này (công tắc `full`) hoặc dự phòng.
+ */
+const withEditMode = async (mode, fn) => {
+  const prev = process.env.AI_LANDING_EDIT_MODE;
+  if (mode === undefined) delete process.env.AI_LANDING_EDIT_MODE;
+  else process.env.AI_LANDING_EDIT_MODE = mode;
+  try {
+    return await fn();
+  } finally {
+    if (prev === undefined) delete process.env.AI_LANDING_EDIT_MODE;
+    else process.env.AI_LANDING_EDIT_MODE = prev;
+  }
+};
 
 /**
  * Chốt kiểm sau sinh (aiLandingPage.service.js): trang phải có ĐÚNG MỘT
@@ -389,7 +406,7 @@ describe('aiLandingPageService.editHtml — rule 2b: thêm trường vào form h
 
       const doneLog = logSpy.mock.calls.map(([line]) => line)[1];
       expect(doneLog).toMatch(new RegExp(
-        `^\\[LandingAI\\] done mode=edit outcome=success ms=\\d+ finishReason=STOP promptChars=\\d+ htmlChars=${validFormHtml.length}$`
+        `^\\[LandingAI\\] done mode=edit outcome=success ms=\\d+ finishReason=STOP promptChars=\\d+ htmlChars=${validFormHtml.length} strategy=patch_full_html$`
       ));
       expect(doneLog).not.toContain('outputTokens=');
     } finally {
@@ -1140,8 +1157,8 @@ describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T10)', () =>
     }
   };
 
-  it('T9: editHtml lượt đầu chậm (2 lượt > EDIT_FAKE_IMAGE_RETRY_BUDGET_MS) bịa ảnh → KHÔNG sinh lại, gỡ ảnh bịa ngay', async () => {
-    const { result, fakeUrl, doneLog } = await editWithFakeImageAfter(EDIT_FAKE_IMAGE_RETRY_BUDGET_MS / 2 + 1);
+  it('T9: editHtml lượt đầu chậm (2 lượt > EDIT_TIME_BUDGET_MS) bịa ảnh → KHÔNG sinh lại, gỡ ảnh bịa ngay', async () => {
+    const { result, fakeUrl, doneLog } = await editWithFakeImageAfter(EDIT_TIME_BUDGET_MS / 2 + 1);
     expect(generateWithBudget).toHaveBeenCalledTimes(1);
     expect(result.html).not.toContain(fakeUrl);
     expect(result.strippedImageUrls).toEqual([fakeUrl]);
@@ -1151,14 +1168,14 @@ describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T10)', () =>
   });
 
   it('T10: editHtml lượt đầu vừa đúng nửa ngân sách → vẫn sinh lại như cũ (2 lượt), log fakeImageRetry=1', async () => {
-    const { result, fakeUrl, doneLog } = await editWithFakeImageAfter(EDIT_FAKE_IMAGE_RETRY_BUDGET_MS / 2);
+    const { result, fakeUrl, doneLog } = await editWithFakeImageAfter(EDIT_TIME_BUDGET_MS / 2);
     expect(generateWithBudget).toHaveBeenCalledTimes(2);
     expect(result.strippedImageUrls).toEqual([fakeUrl]);
     expect(doneLog).toContain('fakeImageRetry=1');
   });
 });
 
-describe('aiLandingPageService.editHtml — trần độ dài HTML hiện tại (MAX_EDIT_HTML_INPUT_CHARS)', () => {
+describe('aiLandingPageService.editHtml — trần độ dài HTML hiện tại (đường viết-lại-cả-trang, AI_LANDING_EDIT_MODE=full)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
   });
@@ -1167,24 +1184,28 @@ describe('aiLandingPageService.editHtml — trần độ dài HTML hiện tại 
   const htmlOfLength = (n) => validFormHtml.replace('</body>', `<p>${'a'.repeat(n - validFormHtml.length - 7)}</p></body>`);
 
   it('trang đúng bằng trần (80.000 ký tự) → gọi AI sửa bình thường', async () => {
-    const html = htmlOfLength(MAX_EDIT_HTML_INPUT_CHARS);
-    expect(html).toHaveLength(80000);
-    mockGenerateReturns(html);
-    const result = await aiLandingPageService.editHtml({ userId: 1, currentHtml: html, instruction: 'Tinh gọn' });
-    expect(generateWithBudget).toHaveBeenCalledTimes(1);
-    expect(result.html).toBe(html);
+    await withEditMode('full', async () => {
+      const html = htmlOfLength(MAX_FULL_REWRITE_HTML_CHARS);
+      expect(html).toHaveLength(80000);
+      mockGenerateReturns(html);
+      const result = await aiLandingPageService.editHtml({ userId: 1, currentHtml: html, instruction: 'Tinh gọn' });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(result.html).toBe(html);
+    });
   });
 
   it('trang vượt trần 1 ký tự → 400 báo đúng độ dài + trần, KHÔNG gọi AI', async () => {
-    await expect(aiLandingPageService.editHtml({
-      userId: 1,
-      currentHtml: htmlOfLength(MAX_EDIT_HTML_INPUT_CHARS + 1),
-      instruction: 'Tinh gọn',
-    })).rejects.toMatchObject({
-      status: 400,
-      message: expect.stringContaining('80.001 ký tự, giới hạn 80.000 ký tự'),
+    await withEditMode('full', async () => {
+      await expect(aiLandingPageService.editHtml({
+        userId: 1,
+        currentHtml: htmlOfLength(MAX_FULL_REWRITE_HTML_CHARS + 1),
+        instruction: 'Tinh gọn',
+      })).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining('80.001 ký tự, giới hạn 80.000 ký tự'),
+      });
+      expect(generateWithBudget).not.toHaveBeenCalled();
     });
-    expect(generateWithBudget).not.toHaveBeenCalled();
   });
 });
 
@@ -1221,8 +1242,9 @@ describe('aiLandingPageService — changeSummary + BỐ CỤC AN TOÀN (PR-2 lan
   });
 
   it('prompt SỬA có luật BỐ CỤC AN TOÀN (chỉ cho phần thêm/sửa) và đòi changeSummary tiếng người', async () => {
+    // Prompt viết-lại-cả-trang (đường dự phòng + công tắc full): khoá nguyên byte dưới AI_LANDING_EDIT_MODE=full.
     returnsSummary('Đã nới cột ngày ở phần Dòng thời gian để năm không bị che');
-    await edit();
+    await withEditMode('full', () => edit());
     const sentPrompt = generateWithBudget.mock.calls[0][1].parts[0].text;
     expect(sentPrompt).toContain('grid grid-cols-[9rem_1fr] gap-6');
     expect(sentPrompt).toContain('BỐ CỤC AN TOÀN');
@@ -1299,7 +1321,7 @@ describe('aiLandingPageService — changeSummary + BỐ CỤC AN TOÀN (PR-2 lan
     await edit({ autoLayoutFix: true, layoutFindingsCount: 2 });
     expect(generateWithBudget.mock.calls[0][1].metadata).toMatchObject({ mode: 'edit', autoLayoutFix: true });
     returnsSummary('Đã sửa');
-    await edit();
+    await withEditMode('full', () => edit());
     expect(generateWithBudget.mock.calls[1][1].metadata).toEqual({ actorUserId: 1, mode: 'edit' });
   });
 
@@ -1323,5 +1345,322 @@ describe('aiLandingPageService — changeSummary + BỐ CỤC AN TOÀN (PR-2 lan
     } finally {
       logSpy.mockRestore();
     }
+  });
+});
+
+/**
+ * PLAN_SUA_LANDING_THEO_DOAN_2026-09-30 — editHtml sửa theo ĐOẠN (bản vá {find, replace}), dự phòng
+ * viết lại cả trang, công tắc AI_LANDING_EDIT_MODE, log strategy/patchEdits/patchFail.
+ */
+describe('aiLandingPageService.editHtml — sửa theo đoạn (bản vá)', () => {
+  const baseHtml = validFormHtml.replace('<body>', '<body><h1>Khoá học Alpha</h1><p>Giá 99$ mỗi tháng</p>');
+  const patchedHtml = baseHtml.replace('<h1>Khoá học Alpha</h1>', '<h1>Khoá học Beta</h1>');
+  const goodEdit = { find: '<h1>Khoá học Alpha</h1>', replace: '<h1>Khoá học Beta</h1>' };
+
+  // Đệm baseHtml tới ĐÚNG n ký tự.
+  const htmlOfLength = (n) => baseHtml.replace('</body>', `<p>${'a'.repeat(n - baseHtml.length - 7)}</p></body>`);
+
+  const patchResponse = (edits, extra = {}) => ({
+    text: JSON.stringify({ title: 'T', edits, changeSummary: 'Đã đổi tên khoá học', ...extra }),
+    blockReason: null,
+    finishReason: 'STOP',
+  });
+  const fullResponse = (html) => ({
+    text: JSON.stringify({ title: 'T', html, changeSummary: 'Đã đổi tên khoá học' }),
+    blockReason: null,
+    finishReason: 'STOP',
+  });
+  const promptOf = (callIndex) => generateWithBudget.mock.calls[callIndex][1].parts[0].text;
+  const edit = (over = {}) =>
+    aiLandingPageService.editHtml({ userId: 1, currentHtml: baseHtml, instruction: 'Đổi tên khoá học', ...over });
+  const doneLogOf = (logSpy) =>
+    logSpy.mock.calls.map((c) => c[0]).find((m) => typeof m === 'string' && m.startsWith('[LandingAI] done'));
+
+  let logSpy;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    logSpy.mockRestore();
+    console.warn.mockRestore();
+    delete process.env.AI_LANDING_EDIT_MODE;
+  });
+
+  it('vá 1 edit hợp lệ → 1 lần gọi, đúng 1 chỗ đổi, prompt vá, log strategy=patch patchEdits=1', async () => {
+    generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+    const result = await edit();
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(result.html).toBe(patchedHtml);
+    expect(result.title).toBe('T');
+    expect(result.changeSummary).toBe('Đã đổi tên khoá học');
+    const prompt = promptOf(0);
+    expect(prompt).toContain('"edits"');
+    expect(prompt).not.toContain('"html" là TOÀN BỘ');
+    expect(doneLogOf(logSpy)).toMatch(/ htmlChars=\d+ strategy=patch patchEdits=1$/);
+    const opts = generateWithBudget.mock.calls[0][1];
+    expect(opts.timeoutMs).toBe(EDIT_TIME_BUDGET_MS);
+    expect(opts.maxOutputTokens).toBe(32768);
+    expect(opts.metadata).toEqual({ actorUserId: 1, mode: 'edit', strategy: 'patch' });
+  });
+
+  it('prompt vá có luật BỐ CỤC AN TOÀN, changeSummary tiếng người, khoá "edits"', async () => {
+    generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+    await edit();
+    const sentPrompt = promptOf(0);
+    expect(sentPrompt).toContain('grid grid-cols-[9rem_1fr] gap-6');
+    expect(sentPrompt).toContain('BỐ CỤC AN TOÀN');
+    expect(sentPrompt).toMatch(/áp dụng cho phần bạn THÊM hoặc SỬA; KHÔNG viết lại phần không được yêu cầu/);
+    expect(sentPrompt).toContain('{ "title": "...", "edits": [{"find": "...", "replace": "..."}], "changeSummary": "..." }');
+    expect(sentPrompt).toContain('Ba khóa: "title" (string), "edits" (array) và "changeSummary" (string).');
+    expect(sentPrompt).toMatch(/MỘT câu tiếng Việt tối đa 160 ký tự, viết cho người KHÔNG rành kỹ thuật/);
+    expect(sentPrompt).toMatch(/TUYỆT ĐỐI không nhắc class, CSS, pixel, tên thẻ HTML hay mã nguồn/);
+    expect(sentPrompt).toContain('{"title":"...","edits":[{"find":"...","replace":"..."}],"changeSummary":"..."}');
+    expect(sentPrompt).toMatch(/không đổi tên trường nào khác ngoài trường mới được yêu cầu\.\n3\) Trả về JSON/);
+    expect(sentPrompt).not.toContain('Ba khóa: "title" (string), "html" (string)');
+    expect(sentPrompt).toContain(baseHtml);
+  });
+
+  it('vá hỏng not_found, trang nhỏ, còn giờ → 2 lần gọi, lần 2 là prompt CŨ, log strategy=patch_fallback_full patchFail=not_found', async () => {
+    generateWithBudget
+      .mockResolvedValueOnce(patchResponse([{ find: '<h1>Không có đoạn này</h1>', replace: 'x' }]))
+      .mockResolvedValueOnce(fullResponse(patchedHtml));
+    const result = await edit();
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(promptOf(0)).not.toContain('"html" là TOÀN BỘ');
+    expect(promptOf(1)).toContain('"html" là TOÀN BỘ');
+    expect(generateWithBudget.mock.calls[1][1].timeoutMs).toBe(120000);
+    expect(generateWithBudget.mock.calls[1][1].metadata).toEqual({ actorUserId: 1, mode: 'edit' });
+    expect(result.html).toBe(patchedHtml);
+    expect(doneLogOf(logSpy)).toMatch(/ strategy=patch_fallback_full patchFail=not_found$/);
+  });
+
+  it.each([
+    ['not_found', () => patchResponse([{ find: '<h1>Không có</h1>', replace: 'x' }])],
+    ['ambiguous', () => patchResponse([{ find: 'input', replace: 'x' }])],
+    ['empty', () => patchResponse([])],
+    ['invalid', () => patchResponse([{ replace: 'x' }])],
+    ['parse', () => ({ text: 'không phải JSON', blockReason: null, finishReason: 'STOP' })],
+  ])('vá hỏng: %s → dự phòng viết lại cả trang, log patchFail tương ứng', async (reason, makeResponse) => {
+    generateWithBudget.mockResolvedValueOnce(makeResponse()).mockResolvedValueOnce(fullResponse(patchedHtml));
+    const result = await edit();
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(result.html).toBe(patchedHtml);
+    expect(doneLogOf(logSpy)).toContain(`strategy=patch_fallback_full patchFail=${reason}`);
+    expect(doneLogOf(logSpy)).not.toContain('patchEdits=');
+  });
+
+  it('vá hỏng, trang 80.001 ký tự → 1 lần gọi, 422 LANDING_PATCH_FAILED câu "mô tả cụ thể hơn"', async () => {
+    generateWithBudget.mockResolvedValue(patchResponse([{ find: '<h1>Không có</h1>', replace: 'x' }]));
+    await expect(edit({ currentHtml: htmlOfLength(MAX_FULL_REWRITE_HTML_CHARS + 1) })).rejects.toMatchObject({
+      status: 422,
+      code: 'LANDING_PATCH_FAILED',
+      message: expect.stringContaining('mô tả cụ thể hơn'),
+    });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+  });
+
+  it('vá hỏng, trang đúng 80.000 ký tự và còn giờ → vẫn dự phòng (trần dùng <=, không phải <)', async () => {
+    const page = htmlOfLength(MAX_FULL_REWRITE_HTML_CHARS);
+    let now = 1_000_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      generateWithBudget
+        .mockImplementationOnce(async () => {
+          now += 1000; // 1000 + 80.000 × 0,9 = 73.000 ≤ 85.000
+          return patchResponse([{ find: '<h1>Không có</h1>', replace: 'x' }]);
+        })
+        .mockResolvedValueOnce(fullResponse(page));
+      await edit({ currentHtml: page });
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
+  describe('ngân sách thời gian dự phòng: elapsed + ước tính viết lại ≤ EDIT_TIME_BUDGET_MS', () => {
+    const PAGE_CHARS = 10000;
+    const estFullMs = PAGE_CHARS * EDIT_FULL_REWRITE_MS_PER_CHAR; // 9000
+    const runWithFakeClock = async (elapsedMs, firstResponse) => {
+      const page = htmlOfLength(PAGE_CHARS);
+      let now = 1_000_000;
+      const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
+      generateWithBudget
+        .mockImplementationOnce(async () => {
+          now += elapsedMs;
+          if (firstResponse instanceof Error) throw firstResponse;
+          return firstResponse;
+        })
+        .mockResolvedValueOnce(fullResponse(page));
+      try {
+        return await edit({ currentHtml: page });
+      } finally {
+        nowSpy.mockRestore();
+      }
+    };
+    const notFound = () => patchResponse([{ find: '<h1>Không có</h1>', replace: 'x' }]);
+
+    it('elapsed + est ĐÚNG bằng ngân sách → vẫn dự phòng (2 lần gọi)', async () => {
+      await runWithFakeClock(EDIT_TIME_BUDGET_MS - estFullMs, notFound());
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    });
+
+    it('elapsed + est vượt ngân sách 1 ms → KHÔNG dự phòng: 1 lần gọi, 422', async () => {
+      await expect(runWithFakeClock(EDIT_TIME_BUDGET_MS - estFullMs + 1, notFound())).rejects.toMatchObject({
+        status: 422,
+        code: 'LANDING_PATCH_FAILED',
+        message: expect.stringContaining('mô tả cụ thể hơn'),
+      });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('lượt vá ném AbortError (quá giờ) → không thử lại, 422 câu "chia nhỏ" khi không đủ giờ dự phòng', async () => {
+      const abort = Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+      await expect(runWithFakeClock(EDIT_TIME_BUDGET_MS, abort)).rejects.toMatchObject({
+        status: 422,
+        code: 'LANDING_PATCH_FAILED',
+        message: expect.stringContaining('chia nhỏ'),
+      });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(doneLogOf(logSpy)).toContain('patchFail=timeout');
+    });
+
+    it('AbortError nhưng còn giờ (trang nhỏ, hỏng nhanh) → coi là hỏng vá timeout và dự phòng', async () => {
+      const abort = Object.assign(new Error('The operation was aborted'), { name: 'AbortError' });
+      await runWithFakeClock(1000, abort);
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+      expect(doneLogOf(logSpy)).toContain('strategy=patch_fallback_full patchFail=timeout');
+    });
+  });
+
+  it('finishReason MAX_TOKENS ở lượt vá → hỏng vá (truncated), KHÔNG ném câu "AI sinh HTML quá dài" của chốt kiểm', async () => {
+    generateWithBudget.mockResolvedValue({ ...patchResponse([goodEdit]), finishReason: 'MAX_TOKENS' });
+    await expect(edit({ currentHtml: htmlOfLength(MAX_FULL_REWRITE_HTML_CHARS + 1) })).rejects.toMatchObject({
+      status: 422,
+      code: 'LANDING_PATCH_FAILED',
+    });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(doneLogOf(logSpy)).toContain('patchFail=truncated');
+  });
+
+  it('finishReason MAX_TOKENS, trang nhỏ → dự phòng, log patchFail=truncated', async () => {
+    generateWithBudget
+      .mockResolvedValueOnce({ ...patchResponse([goodEdit]), finishReason: 'MAX_TOKENS' })
+      .mockResolvedValueOnce(fullResponse(patchedHtml));
+    const result = await edit();
+    expect(result.html).toBe(patchedHtml);
+    expect(doneLogOf(logSpy)).toContain('strategy=patch_fallback_full patchFail=truncated');
+  });
+
+  it('model trả {title, html} ở chế độ vá → dùng html, strategy=patch_full_html, 1 lần gọi', async () => {
+    generateWithBudget.mockResolvedValue(fullResponse(patchedHtml));
+    const result = await edit();
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(result.html).toBe(patchedHtml);
+    expect(doneLogOf(logSpy)).toMatch(/ strategy=patch_full_html$/);
+  });
+
+  it('vá làm mất form data-founderai-capture → 422 từ chốt kiểm, KHÔNG dự phòng (1 lần gọi)', async () => {
+    generateWithBudget.mockResolvedValue(
+      patchResponse([{ find: '<form data-founderai-capture>', replace: '<form>' }])
+    );
+    await expect(edit()).rejects.toMatchObject({
+      status: 422,
+      message: expect.stringContaining('mất form đăng ký'),
+    });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(doneLogOf(logSpy)).not.toContain('patchFail=');
+  });
+
+  it('vá chèn URL ảnh bịa → lượt 2 sạch: 2 lần gọi, cả hai là prompt vá, fakeImageRetry=1', async () => {
+    const fakeUrl = 'https://fake.cdn.com/fake-patch.png';
+    generateWithBudget
+      .mockResolvedValueOnce(patchResponse([{ find: '<h1>Khoá học Alpha</h1>', replace: `<h1>Khoá học Alpha</h1><img src="${fakeUrl}">` }]))
+      .mockResolvedValueOnce(patchResponse([goodEdit]));
+    const result = await edit({ instruction: 'Thêm ảnh' });
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    for (const i of [0, 1]) {
+      expect(promptOf(i)).toContain('"edits"');
+      expect(promptOf(i)).not.toContain('"html" là TOÀN BỘ');
+    }
+    expect(promptOf(1)).toContain(fakeUrl);
+    expect(promptOf(1)).not.toContain('Sinh lại toàn bộ trang');
+    expect(result.html).toBe(patchedHtml);
+    expect(result).not.toHaveProperty('strippedImageUrls');
+    expect(doneLogOf(logSpy)).toContain('fakeImageRetry=1');
+  });
+
+  it('503 quá tải ở lượt vá → ném nguyên, 1 lần gọi, KHÔNG dự phòng', async () => {
+    const overloaded = Object.assign(new Error('Model overloaded'), { status: 503 });
+    generateWithBudget.mockRejectedValue(overloaded);
+    await expect(edit()).rejects.toBe(overloaded);
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(doneLogOf(logSpy)).not.toContain('patchFail=');
+  });
+
+  it('blockReason ở lượt vá → 400 như cũ, KHÔNG dự phòng', async () => {
+    generateWithBudget.mockResolvedValue({ text: '', blockReason: 'SAFETY', finishReason: 'SAFETY' });
+    await expect(edit()).rejects.toMatchObject({ status: 400 });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+  });
+
+  describe('công tắc AI_LANDING_EDIT_MODE (đọc lúc gọi)', () => {
+    it('full → 1 lần gọi prompt CŨ, metadata không có strategy, log strategy=full', async () => {
+      generateWithBudget.mockResolvedValue(fullResponse(patchedHtml));
+      await withEditMode('full', () => edit());
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(promptOf(0)).toContain('"html" là TOÀN BỘ');
+      expect(promptOf(0)).not.toContain('"edits"');
+      expect(generateWithBudget.mock.calls[0][1].metadata).toEqual({ actorUserId: 1, mode: 'edit' });
+      expect(generateWithBudget.mock.calls[0][1].timeoutMs).toBe(120000);
+      expect(doneLogOf(logSpy)).toMatch(/ strategy=full$/);
+    });
+
+    it('full: trang 80.001 ký tự → 400 "giới hạn 80.000", không gọi AI', async () => {
+      await withEditMode('full', async () => {
+        await expect(edit({ currentHtml: htmlOfLength(MAX_FULL_REWRITE_HTML_CHARS + 1) })).rejects.toMatchObject({
+          status: 400,
+          message: expect.stringContaining('giới hạn 80.000 ký tự'),
+        });
+      });
+      expect(generateWithBudget).not.toHaveBeenCalled();
+    });
+
+    it('bật/tắt trong CÙNG file: full rồi bỏ biến → lượt sau lại là chế độ vá', async () => {
+      generateWithBudget.mockResolvedValue(fullResponse(patchedHtml));
+      await withEditMode('full', () => edit());
+      expect(promptOf(0)).toContain('"html" là TOÀN BỘ');
+      generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+      await withEditMode(undefined, () => edit());
+      expect(promptOf(1)).toContain('"edits"');
+      expect(promptOf(1)).not.toContain('"html" là TOÀN BỘ');
+    });
+
+    it('giá trị lạ (không phải "full") → vẫn chế độ vá', async () => {
+      generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+      await withEditMode('patch', () => edit());
+      expect(promptOf(0)).toContain('"edits"');
+    });
+  });
+
+  describe('trần độ dài chế độ vá (MAX_EDIT_HTML_INPUT_CHARS = 500.000)', () => {
+    it('trang đúng 500.000 ký tự → gọi AI (bản vá áp lên trang lớn)', async () => {
+      const page = htmlOfLength(MAX_EDIT_HTML_INPUT_CHARS);
+      expect(page).toHaveLength(500000);
+      generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+      const result = await edit({ currentHtml: page });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(result.html).toBe(page.replace(goodEdit.find, goodEdit.replace));
+    });
+
+    it('trang 500.001 ký tự → 400 "giới hạn 500.000", KHÔNG gọi AI', async () => {
+      await expect(edit({ currentHtml: htmlOfLength(MAX_EDIT_HTML_INPUT_CHARS + 1) })).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining('500.001 ký tự, giới hạn 500.000 ký tự'),
+      });
+      expect(generateWithBudget).not.toHaveBeenCalled();
+    });
   });
 });

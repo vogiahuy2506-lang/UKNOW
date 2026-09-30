@@ -4,6 +4,7 @@ import {
   validateEditHtmlOutput,
   LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
+  MAX_FULL_REWRITE_HTML_CHARS,
 } from '../landingEditGuard.util.js';
 
 const baseValidHtml = `<!DOCTYPE html>
@@ -234,8 +235,12 @@ describe('landingEditGuard.util', () => {
     expect(isValid).toBe(true);
   });
 
-  it('MAX_EDIT_HTML_INPUT_CHARS hằng số là 80000', () => {
-    expect(MAX_EDIT_HTML_INPUT_CHARS).toBe(80000);
+  it('MAX_EDIT_HTML_INPUT_CHARS (trần chế độ vá) hằng số là 500000', () => {
+    expect(MAX_EDIT_HTML_INPUT_CHARS).toBe(500000);
+  });
+
+  it('MAX_FULL_REWRITE_HTML_CHARS (trần viết lại cả trang) hằng số là 80000', () => {
+    expect(MAX_FULL_REWRITE_HTML_CHARS).toBe(80000);
   });
 });
 

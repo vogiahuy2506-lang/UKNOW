@@ -6,7 +6,16 @@ import { countFormSlots, hasMalformedFormSlot } from './landingHtmlInjection.uti
 export const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
 
 /**
- * Ngưỡng an toàn độ dài tối đa của currentHtml khi gửi cho AI edit — AI phải trả lại NGUYÊN trang.
+ * Trần độ dài currentHtml khi AI sửa theo ĐOẠN (chế độ vá, mặc định): AI đọc cả trang nhưng chỉ trả
+ * các bản vá `{find, replace}`, nên đầu ra không còn tỉ lệ với độ dài trang. Đầu vào là nút thắt
+ * duy nhất: 500.000 ký tự ≈ 165.000 token (~3 ký tự/token), dư xa trần 1.048.576 token của model
+ * (`ai_models.input_token_limit`). Khớp trần dán HTML ở `ai.controller.js` và "Nhập HTML" ở vi.js.
+ */
+export const MAX_EDIT_HTML_INPUT_CHARS = 500000;
+
+/**
+ * Trần độ dài currentHtml cho đường VIẾT LẠI CẢ TRANG (dự phòng khi vá hỏng + công tắc
+ * `AI_LANDING_EDIT_MODE=full`) — AI phải trả lại NGUYÊN trang.
  * Số đo production 29–30/09 (16 lượt, log `[LandingAI] done`): ~3,0 ký tự HTML/token đầu ra (đã
  * gồm escape JSON), ~2,5 ms/token. 80.000 ký tự ≈ 26.500 token ≈ 66 giây:
  * - còn ~6.000 token (~+23% độ dài) trước trần maxOutputTokens 32768 của editHtml;
@@ -14,7 +23,7 @@ export const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
  *   sửa chưa chạy nền — trang to hơn sẽ bị Cloudflare cắt (524) dù backend vẫn sửa xong.
  * Trước 30/09 là 60.000 (tính ~3 ký tự/token và chừa ~40%) — sếp chạm trần với trang 66.753 ký tự.
  */
-export const MAX_EDIT_HTML_INPUT_CHARS = 80000;
+export const MAX_FULL_REWRITE_HTML_CHARS = 80000;
 
 /**
  * Vớt HTML từ phản hồi model khi JSON.parse thất bại (model kèm lời dẫn,
