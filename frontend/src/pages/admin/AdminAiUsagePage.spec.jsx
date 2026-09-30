@@ -163,7 +163,10 @@ describe('AdminAiUsagePage - bo loc Thang nay | 30 ngay qua', () => {
     mockGetOverview.mockClear();
     renderOverview();
     await waitFor(() => expect(mockGetOverview).toHaveBeenCalledWith('30d'));
-    expect(screen.getByRole('button', { name: '30 ngày qua' }).getAttribute('aria-pressed')).toBe('true');
+    // Chờ trang vẽ xong (dữ liệu giả trả về rồi mới hết khung tải) — getByRole ngay sau khi API được GỌI là đua với
+    // lần render; trên CI chậm trang còn đang skeleton nên ca này đỏ chập chờn và chặn Deploy Frontend (30/09).
+    const thirtyDays = await screen.findByRole('button', { name: '30 ngày qua' }, { timeout: 5000 });
+    expect(thirtyDays.getAttribute('aria-pressed')).toBe('true');
     expect(screen.getByRole('button', { name: 'Tháng này' }).getAttribute('aria-pressed')).toBe('false');
     expect(screen.queryByRole('button', { name: /^(7|90) ngày$/ })).toBeNull();
 
