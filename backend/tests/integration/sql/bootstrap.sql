@@ -337,6 +337,8 @@ INSERT INTO custom_plan_pricing (item_key, plan_column, unit_price, unit_size, i
 VALUES
   ('yearly_discount_percent', NULL, 20, 1, 0, 0, NULL, 1, TRUE, 0),
   ('zalo_monthly_capacity_per_account', NULL, 16000, 1, 0, 0, NULL, 1, TRUE, 0),
+  ('telegram_monthly_capacity_per_account', NULL, 16000, 1, 0, 0, NULL, 1, TRUE, 0),
+  ('whatsapp_monthly_capacity_per_account', NULL, 16000, 1, 0, 0, NULL, 1, TRUE, 0),
   ('base_fee', NULL, 199000, 1, 0, 1, 1, 1, TRUE, 10),
   ('zalo_messages', 'monthly_zalo_limit', 30000, 500, 500, 500, 200000, 500, TRUE, 20),
   ('emails', 'monthly_email_limit', 25000, 2500, 2500, 2500, 500000, 2500, TRUE, 30),
@@ -3926,3 +3928,9 @@ CREATE INDEX IF NOT EXISTS idx_whatsapp_account_settings_user ON whatsapp_accoun
 -- --- Migration 268: whatsapp_account_settings.id (khoa tai khoan WhatsApp sau ha goi, P6 PLAN_TG_WA_DAY_DU) ---
 ALTER TABLE whatsapp_account_settings ADD COLUMN IF NOT EXISTS id BIGSERIAL;
 CREATE UNIQUE INDEX IF NOT EXISTS uq_whatsapp_account_settings_id ON whatsapp_account_settings (id);
+
+-- --- Migration 272: channel_messages.quota_reservation_id (Hop thu TG/WA tinh han muc, P11 PLAN_TG_WA_DAY_DU) ---
+ALTER TABLE channel_messages ADD COLUMN IF NOT EXISTS quota_reservation_id BIGINT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cm_quota_reservation_id
+  ON channel_messages (quota_reservation_id)
+  WHERE quota_reservation_id IS NOT NULL;

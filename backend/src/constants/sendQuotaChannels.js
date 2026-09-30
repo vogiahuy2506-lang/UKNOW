@@ -44,3 +44,24 @@ export const WALLET_ITEM_BY_QUOTA_CHANNEL = Object.freeze({
   telegram: 'telegram_messages',
   whatsapp: 'whatsapp_messages',
 });
+
+/**
+ * P11 — Hộp thư trả lời tay: `channel_connections.channel` / `channel_conversations.channel` (kênh HỘP THƯ) → kênh HẠN MỨC.
+ * Hai tên KHÁC nhau cho WhatsApp ('whatsapp_baileys' vs 'whatsapp') — map ở đúng một chỗ này, đừng so `= 'whatsapp'` với cột kênh Hộp thư.
+ * Kênh khác (zalo_oa, facebook, webchat…) không nằm trong bảng → không đo hạn mức tin/tháng.
+ */
+export const INBOX_CHANNEL_TO_QUOTA_CHANNEL = Object.freeze({
+  telegram: 'telegram',
+  whatsapp_baileys: 'whatsapp',
+});
+
+/** Kênh Hộp thư cần đếm cho một kênh hạn mức (ngược của bảng trên). */
+export const INBOX_CHANNEL_BY_QUOTA_CHANNEL = Object.freeze({
+  telegram: 'telegram',
+  whatsapp: 'whatsapp_baileys',
+});
+
+/** @returns {'telegram'|'whatsapp'|null} */
+export function resolveInboxQuotaChannel(conversationChannel) {
+  return INBOX_CHANNEL_TO_QUOTA_CHANNEL[conversationChannel] || null;
+}

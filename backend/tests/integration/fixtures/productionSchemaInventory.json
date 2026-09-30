@@ -441,6 +441,7 @@
       "is_read",
       "message_type",
       "metadata",
+      "quota_reservation_id",
       "raw_data",
       "read_at",
       "role"
