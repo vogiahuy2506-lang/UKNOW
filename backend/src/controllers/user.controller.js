@@ -7,8 +7,6 @@ import {
   findProfileBaseFallback,
   findProfilePlan,
   findProfilePlanFallback,
-  findProfileUsageCounts,
-  findStructuralUsageCounts,
   findActiveBillingPeriod,
   findRoleAndLimits,
   findRoleAndLimitsFallback,
@@ -28,7 +26,7 @@ import {
 } from '../repositories/user/user.repository.js';
 import { isPhoneOtpEnabled } from '../services/sms/otpProvider.service.js';
 import usageTrackingService from '../services/payment/usageTracking.service.js';
-import campaignChannelRegistry from '../services/campaign/campaignChannelRegistry.service.js';
+import { getProfileSendUsage, getProfileResourceUsage } from '../services/user/profileUsage.service.js';
 import { resolveBillingUserId } from '../utils/billingCycle.util.js';
 import { sumActiveTopupGrants, getWalletBalance } from '../repositories/payment/topup.repository.js';
 import {
@@ -161,29 +159,66 @@ const mapProfileResponse = (userRow) => ({
   monthlyEmailLimit: userRow.monthly_email_limit ?? null,
   dailyZaloLimit: userRow.daily_zalo_limit ?? null,
   monthlyZaloLimit: userRow.monthly_zalo_limit ?? null,
+  // Trần TỔNG tin nhắn trong kỳ (Email + Zalo + Telegram + WhatsApp gộp) — cổng gửi tin chặn theo cột này
+  // (userSendLimit.util.js). null = gói không đặt. Gói dùng thử: 100 và các trần theo kênh để NULL.
+  messagesPerPeriod: userRow.messages_per_period ?? null,
   aiTokensPerPeriod: userRow.ai_tokens_per_period ?? null,
-  aiTokensUsed: Number(userRow.ai_tokens_used ?? 0),
   aiCreditsPerPeriod: userRow.ai_credits_per_period ?? null,
-  aiCreditsUsed: Number(userRow.ai_credits_used ?? 0),
-  // Kỳ hạn mức AI hiện tại (30 ngày từ ngày kích hoạt gói) mà `aiCreditsUsed` được tính trong đó — để trang khách ghi
-  // "làm mới ngày …". null khi chưa có gói/không dựng được kỳ.
-  aiCreditCycleStart: toIsoOrNull(userRow.ai_credit_cycle_start),
-  aiCreditCycleEnd: toIsoOrNull(userRow.ai_credit_cycle_end),
   botDailyReplyCap: userRow.bot_daily_reply_cap ?? null,
   aiHandoffAutoResumeMinutes: userRow.ai_handoff_auto_resume_minutes ?? null,
   planGracePeriodDays: userRow.grace_period_days ?? 0,
-  // Send usage counts (today and this month)
-  emailSentToday: Number(userRow.email_sent_today ?? 0),
-  emailSentMonth: Number(userRow.email_sent_month ?? 0),
-  zaloSentToday: Number(userRow.zalo_sent_today ?? 0),
-  zaloSentMonth: Number(userRow.zalo_sent_month ?? 0),
-  chatbotsUsed: Number(userRow.chatbots_used ?? 0),
-  landingPagesUsed: Number(userRow.landing_pages_used ?? 0),
-  zaloAccountsUsed: Number(userRow.zalo_accounts_used ?? 0),
-  whatsappAccountsUsed: Number(userRow.whatsapp_accounts_used ?? 0),
-  telegramAccountsUsed: Number(userRow.telegram_accounts_used ?? 0),
-  emailAccountsUsed: Number(userRow.email_accounts_used ?? 0),
-  employeesUsed: Number(userRow.employees_used ?? 0),
+});
+
+/**
+ * Các số "đã dùng" — CHỈ GET /users/profile mới có (PUT /users/profile dùng mapProfileResponse ở trên, không kèm
+ * các trường này): response của PUT chỉ có dòng users vừa lưu nên mọi số đã dùng sẽ là 0/null, mà
+ * AccountProfileModal từng gộp thẳng response đó vào hồ sơ đang hiển thị → ghi đè số thật bằng số giả.
+ *
+ * PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-3 — mọi con số lấy từ ĐÚNG hàm của cổng chặn (xem
+ * services/user/profileUsage.service.js). Đồng hồ nào lỗi là null (FE hiện "—"), không phải 0.
+ *
+ * @param {{
+ *   aiTokensUsed?: number|null, aiCreditsUsed?: number|null,
+ *   aiCreditCycle?: {cycleStart?: Date|null, cycleEnd?: Date|null}|null,
+ *   send: Awaited<ReturnType<typeof getProfileSendUsage>>,
+ *   resources: Awaited<ReturnType<typeof getProfileResourceUsage>>,
+ * }} input
+ */
+const mapProfileUsage = ({ aiTokensUsed, aiCreditsUsed, aiCreditCycle, send, resources }) => ({
+  aiTokensUsed: Number(aiTokensUsed ?? 0),
+  // null khi không đọc được (getCreditUsageForCycle lỗi) — KHÔNG đổi thành 0 giả.
+  aiCreditsUsed: aiCreditsUsed == null ? null : Number(aiCreditsUsed),
+  // Kỳ hạn mức AI hiện tại (30 ngày từ ngày kích hoạt gói) mà `aiCreditsUsed` được tính trong đó — để trang khách ghi
+  // "làm mới ngày …". null khi chưa có gói/không dựng được kỳ.
+  aiCreditCycleStart: toIsoOrNull(aiCreditCycle?.cycleStart),
+  aiCreditCycleEnd: toIsoOrNull(aiCreditCycle?.cycleEnd),
+  // Tin đã gửi trong KỲ của gói (cùng kỳ, cùng hàm đếm với cổng gửi tin). `messaging` = Zalo + Telegram + WhatsApp
+  // (cùng hạn mức monthlyZaloLimit), đã gồm tin gửi nhanh.
+  sendCycleStart: toIsoOrNull(send.cycleStart),
+  sendCycleEnd: toIsoOrNull(send.cycleEnd),
+  emailSentCycle: send.emailSentCycle,
+  messagingSentCycle: send.messagingSentCycle,
+  // Chỉ có số khi gói đặt trần tổng (messagesPerPeriod); nếu không là null.
+  combinedSentCycle: send.combinedSentCycle,
+  // Chỉ có số khi gói có trần ngày tương ứng (dailyEmailLimit / dailyZaloLimit); nếu không là null.
+  emailSentToday: send.emailSentToday,
+  messagingSentToday: send.messagingSentToday,
+  // Tài nguyên cấu trúc: { used, limit } (limit null = không giới hạn) hoặc null khi đồng hồ đó lỗi.
+  resourceUsage: resources,
+
+  // ── TƯƠNG THÍCH NGƯỢC — tên cũ mà bản FE chưa nạp lại còn đọc: PlanSection cũ truyền thẳng
+  // `data.emailSentMonth`/`zaloSentMonth` vào UsageBar (thiếu là TypeError trắng trang với gói có trần). Giá trị = số
+  // mới ở trên. FE mới không đọc tên nào dưới đây → XOÁ khối này khi FE mới đã lên production ≥ 1 ngày.
+  emailSentMonth: send.emailSentCycle,
+  zaloSentToday: send.messagingSentToday,
+  zaloSentMonth: send.messagingSentCycle,
+  chatbotsUsed: resources.chatbots?.used ?? 0,
+  landingPagesUsed: resources.landingPages?.used ?? 0,
+  zaloAccountsUsed: resources.zaloAccounts?.used ?? 0,
+  whatsappAccountsUsed: resources.whatsappAccounts?.used ?? 0,
+  telegramAccountsUsed: resources.telegramAccounts?.used ?? 0,
+  emailAccountsUsed: resources.emailAccounts?.used ?? 0,
+  employeesUsed: resources.employees?.used ?? 0,
 });
 
 class UserController {
@@ -270,25 +305,14 @@ class UserController {
         }
       }
 
-      // 3. Usage counts (best-effort)
-      let usageCounts = { email_sent_today: 0, email_sent_month: 0, zalo_sent_today: 0, zalo_sent_month: 0 };
-      try {
-        usageCounts = await findProfileUsageCounts(billingUserId, {
-          // W7b — Telegram/WhatsApp bị trừ hạn mức Zalo nên phải hiện trong "đã gửi hôm nay/tháng".
-          adapterChannels: campaignChannelRegistry.getAdapterChannelKeysByQuotaChannel('zalo'),
-        }) || usageCounts;
-      } catch (err) {
-        console.error('[Profile] findProfileUsageCounts failed', { userId, message: err.message });
-      }
+      // 3. "Đã dùng" — PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-3: mọi đồng hồ (tin gửi theo KỲ, tài nguyên) gọi
+      // ĐÚNG hàm của cổng chặn, cùng kỳ (services/user/profileUsage.service.js). Hai hàm này không bao giờ ném lỗi:
+      // đồng hồ hỏng → null + console.error kèm tên, đồng hồ khác vẫn có số. Chạy song song với phần AI bên dưới.
+      const sendUsagePromise = getProfileSendUsage(billingUserId, planRow);
+      const resourceUsagePromise = getProfileResourceUsage(billingUserId);
 
-      let structuralUsage = { chatbots_used: 0, landing_pages_used: 0, zalo_accounts_used: 0, email_accounts_used: 0, employees_used: 0, whatsapp_accounts_used: 0, telegram_accounts_used: 0 };
-      try {
-        structuralUsage = await findStructuralUsageCounts(billingUserId);
-      } catch (err) {
-        console.error('[Profile] structuralUsage failed', err.message);
-      }
-
-      let aiCreditUsage = { used: 0 };
+      // used: null khi đọc lỗi (không đổi thành 0 giả — trang hiện "—").
+      let aiCreditUsage = { used: null };
       try {
         aiCreditUsage = await usageTrackingService.getCreditUsageForCycle(userId, null, billingOptions);
       } catch (err) {
@@ -313,15 +337,18 @@ class UserController {
           ?? userRow.ai_handoff_auto_resume_minutes
           ?? null,
         ...(planRow || {}),
-        ...usageCounts,
         active_billing_period: activeBillingPeriod,
-        ai_tokens_used: aiTokenUsage.used,
-        ai_credits_used: aiCreditUsage.used,
-        // Cùng `cycle` mà getCreditUsageForCycle đã dùng để tính ai_credits_used (không dựng kỳ lần hai → không lệch).
-        ai_credit_cycle_start: aiCreditUsage.cycle?.cycleStart ?? null,
-        ai_credit_cycle_end: aiCreditUsage.cycle?.cycleEnd ?? null,
-        ...structuralUsage,
       };
+
+      const [sendUsage, resourceUsage] = await Promise.all([sendUsagePromise, resourceUsagePromise]);
+      const usageFields = mapProfileUsage({
+        aiTokensUsed: aiTokenUsage.used,
+        aiCreditsUsed: aiCreditUsage.used,
+        // Cùng `cycle` mà getCreditUsageForCycle đã dùng để tính aiCreditsUsed (không dựng kỳ lần hai → không lệch).
+        aiCreditCycle: aiCreditUsage.cycle,
+        send: sendUsage,
+        resources: resourceUsage,
+      });
 
       let addons = null;
       try {
@@ -332,7 +359,7 @@ class UserController {
         console.error('[Profile] loadProfileAddons failed', { userId, billingUserId, message: err.message });
       }
 
-      const data = { ...mapProfileResponse(profileRow), addons };
+      const data = { ...mapProfileResponse(profileRow), ...usageFields, addons };
       data.chatbotRateLimits = chatbotRateLimitService.systemLimits;
       try {
         // billingUserId — bộ đếm Redis khoá theo chủ workspace, không phải employee

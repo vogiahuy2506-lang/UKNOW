@@ -1,6 +1,5 @@
 import db from '../../config/database.js';
 import { EFFECTIVE_PLAN_ID_SQL, findCurrentPlanActivation } from '../../utils/billingCycle.util.js';
-import campaignChannelMessageStatsRepository from '../campaign/campaignChannelMessageStats.repository.js';
 
 const PROFILE_LIMIT_COLUMNS = `
   u.max_campaigns,
@@ -22,10 +21,12 @@ const PLAN_COLUMNS = `
   p.features    AS plan_features,
   p.is_custom   AS plan_is_custom,
   p.max_employees AS plan_max_employees,
+  p.max_chatbots,
   p.daily_email_limit,
   p.monthly_email_limit,
   p.daily_zalo_limit,
   p.monthly_zalo_limit,
+  p.messages_per_period,
   p.ai_tokens_per_period,
   p.ai_credits_per_period,
   p.grace_period_days
@@ -41,10 +42,12 @@ const PLAN_COLUMNS_FALLBACK = `
   p.features    AS plan_features,
   NULL::boolean AS plan_is_custom,
   p.max_employees AS plan_max_employees,
+  NULL::int AS max_chatbots,
   NULL::int AS daily_email_limit,
   NULL::int AS monthly_email_limit,
   NULL::int AS daily_zalo_limit,
   NULL::int AS monthly_zalo_limit,
+  NULL::int AS messages_per_period,
   NULL::int AS ai_tokens_per_period,
   NULL::int AS ai_credits_per_period,
   NULL::int AS grace_period_days
@@ -193,38 +196,10 @@ export async function findProfilePlanByUserIdFallback(userId) {
   return rows[0] || null;
 }
 
-/**
- * @param {number} userId
- * @param {object} [options]
- * @param {string[]} [options.adapterChannels] W7b — kênh adapter (Telegram/WhatsApp) đếm vào hạn mức
- *   Zalo (`quotaChannel='zalo'`); tin `sent` của các kênh này ở `campaign_channel_messages` được cộng
- *   vào `zalo_sent_today`/`zalo_sent_month` cho khớp với con số bị trừ hạn mức. Rỗng = như cũ.
- */
-export async function findProfileUsageCounts(userId, { adapterChannels = [] } = {}) {
-  const { rows } = await db.query(
-    `SELECT
-       COUNT(*) FILTER (WHERE cj.event_type = 'email_sent'
-         AND cj.created_at >= CURRENT_DATE) AS email_sent_today,
-       COUNT(*) FILTER (WHERE cj.event_type = 'email_sent'
-         AND cj.created_at >= date_trunc('month', CURRENT_DATE)) AS email_sent_month,
-       COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent'
-         AND cj.created_at >= CURRENT_DATE) AS zalo_sent_today,
-       COUNT(*) FILTER (WHERE cj.event_type = 'zalo_sent'
-         AND cj.created_at >= date_trunc('month', CURRENT_DATE)) AS zalo_sent_month
-     FROM customer_journey cj
-     JOIN campaigns c ON c.id = cj.campaign_id
-     WHERE c.id_user = $1`,
-    [userId]
-  );
-  const base = rows[0] || null;
-  if (!base || !Array.isArray(adapterChannels) || adapterChannels.length === 0) return base;
-  const adapter = await campaignChannelMessageStatsRepository.countSentTodayAndMonth(userId, adapterChannels);
-  return {
-    ...base,
-    zalo_sent_today: Number(base.zalo_sent_today || 0) + adapter.today,
-    zalo_sent_month: Number(base.zalo_sent_month || 0) + adapter.month,
-  };
-}
+// PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-3 — ĐÃ GỠ `findProfileUsageCounts` và `findStructuralUsageCounts`:
+// hai hàm này tự đếm "đã dùng" cho hồ sơ từ `customer_journey` (JOIN qua cột campaign_id chưa từng được ghi),
+// bảng `chatbots` và cột `landing_pages.owner_user_id` (đều không tồn tại), lỗi bị .catch nuốt → trang Thanh
+// toán luôn hiện 0. Số "đã dùng" nay lấy từ services/user/profileUsage.service.js, gọi đúng hàm của cổng chặn.
 
 export async function findUserByEmailExceptId(email, userId) {
   const { rows } = await db.query(
@@ -571,25 +546,4 @@ export async function insertRefreshToken({ userId, tokenHash, deviceInfo, ipAddr
      VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)`,
     [userId, tokenHash, deviceInfo, ipAddress, expiresAt]
   );
-}
-
-export async function findStructuralUsageCounts(billingUserId) {
-  const [cBots, cLps, cZalo, cEmail, cEmp, cWa, cTg] = await Promise.all([
-    db.query('SELECT count(*) FROM chatbots WHERE user_id = $1 AND deleted_at IS NULL', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
-    db.query('SELECT count(*) FROM landing_pages WHERE owner_user_id = $1 AND deleted_at IS NULL', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
-    db.query('SELECT count(*) FROM zalo_settings WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
-    db.query('SELECT count(*) FROM email_settings WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
-    db.query('SELECT count(*) FROM user_members WHERE owner_id = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
-    db.query("SELECT count(*) FROM whatsapp_baileys_session_creds WHERE split_part(session_key, '-', 1) = $1::text", [String(billingUserId)]).then(r => r.rows).catch(() => [{count: 0}]),
-    db.query('SELECT count(*) FROM telegram_accounts WHERE id_user = $1', [billingUserId]).then(r => r.rows).catch(() => [{count: 0}]),
-  ]);
-  return {
-    chatbots_used: Number(cBots[0]?.count) || 0,
-    landing_pages_used: Number(cLps[0]?.count) || 0,
-    zalo_accounts_used: Number(cZalo[0]?.count) || 0,
-    email_accounts_used: Number(cEmail[0]?.count) || 0,
-    employees_used: Number(cEmp[0]?.count) || 0,
-    whatsapp_accounts_used: Number(cWa[0]?.count) || 0,
-    telegram_accounts_used: Number(cTg[0]?.count) || 0,
-  };
 }

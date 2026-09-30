@@ -272,3 +272,55 @@ export async function checkUserResourceLimit(input) {
     message: isAllowed ? null : buildLimitExceededMessage(resourceConfig, normalizedLimit),
   };
 }
+
+/**
+ * ĐỌC-KHÔNG-KHOÁ "đã dùng / trần" của các tài nguyên trong RESOURCE_LIMIT_MAP, cho trang Thanh toán
+ * (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-3). Số khách thấy phải BẰNG số cổng tạo mới dùng để chặn, nên hàm
+ * này gọi ĐÚNG các hàm của cổng: `getUserLimitRow` (trần gốc ở cột `users.max_*`) + `resolveEffectiveLimit`
+ * (cộng slot mua thêm còn hạn) + `countResourceForUser` (đếm). Khác cổng ở đúng một điểm: KHÔNG lấy advisory
+ * lock và KHÔNG ném lỗi khi đạt trần — chỉ trả số.
+ *
+ * - `limit` = trần hiệu lực (gốc + mua thêm); `null` = không giới hạn (cột NULL: cổng cho tạo không trần);
+ *   `0` = gói không hỗ trợ tài nguyên này.
+ * - Một tài nguyên lỗi → `null` cho ĐÚNG tài nguyên đó (kèm console.error ghi tên), các tài nguyên khác vẫn có
+ *   số. KHÔNG trả 0 giả: trang hiện "—" thay vì "0 / N".
+ * - Khoá không có trong RESOURCE_LIMIT_MAP là lỗi lập trình → ném ngay, không nuốt.
+ * - KHÔNG dùng cho `chatbots`: cổng tạo chatbot (chatbot.controller.js createCustomChatbot) không đi qua bản đồ
+ *   này (đếm dòng `is_active`, trần `plans.max_chatbots`; còn `users.max_chatbots` không tồn tại nên mục
+ *   `chatbots` ở đây luôn ra trần null) — xem services/user/profileUsage.service.js.
+ *
+ * @param {number|string} userId chủ tài khoản (billing user)
+ * @param {Array<keyof typeof RESOURCE_LIMIT_MAP>} resourceKeys
+ * @param {import('pg').Pool|import('pg').PoolClient} [queryable]
+ * @returns {Promise<Record<string, {used: number, limit: number|null}|null>>}
+ */
+export async function getResourceUsageSnapshot(userId, resourceKeys, queryable = db) {
+  const configs = resourceKeys.map((resourceKey) => [resourceKey, resolveResourceConfig(resourceKey)]);
+
+  // Trần gốc nằm ở MỘT hàng `users` — đọc một lần cho mọi khoá (cổng cũng đọc đúng hàng này).
+  let userLimitRow = null;
+  let limitRowError = null;
+  try {
+    userLimitRow = await getUserLimitRow(queryable, userId);
+  } catch (error) {
+    limitRowError = error;
+  }
+
+  const snapshot = {};
+  await Promise.all(configs.map(async ([resourceKey, resourceConfig]) => {
+    try {
+      if (limitRowError) throw limitRowError;
+      const baseLimit = normalizeLimitValue(userLimitRow?.[resourceConfig.column] ?? null);
+      const effectiveLimit = await resolveEffectiveLimit(queryable, userId, resourceKey, baseLimit);
+      const used = await countResourceForUser(queryable, userId, resourceConfig);
+      snapshot[resourceKey] = {
+        used,
+        limit: Number.isFinite(effectiveLimit) ? effectiveLimit : null,
+      };
+    } catch (error) {
+      console.error('[ResourceUsage] đồng hồ lỗi, trả null', { resource: resourceKey, userId, message: error?.message });
+      snapshot[resourceKey] = null;
+    }
+  }));
+  return snapshot;
+}

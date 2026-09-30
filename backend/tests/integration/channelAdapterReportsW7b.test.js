@@ -10,13 +10,13 @@
  *     không thấy dữ liệu của user khác; timeline có cột telegram/whatsapp
  *   - Giám sát gửi (admin): toàn hệ thống (5 + 4), preview không tính
  *   - Dashboard: journeyEvents.telegramSent/whatsappSent, bộ lọc campaignType=telegram/whatsapp/email
- *   - Hồ sơ: "đã gửi hôm nay/tháng" (zaloSent*) cộng tin adapter (cùng nguồn với hạn mức)
+ *   - Hồ sơ: "đã gửi trong kỳ / hôm nay" (messagingSent*) cộng tin adapter (cùng hàm đếm với hạn mức)
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
-import { truncateAll, createUser } from './helpers/db.js';
+import { truncateAll, createUser, createPlan } from './helpers/db.js';
 
 let app;
 
@@ -163,14 +163,25 @@ describe('W7b — dashboard', () => {
   });
 });
 
-describe('W7b — hồ sơ: đã gửi hôm nay/tháng', () => {
-  it('zaloSentToday/zaloSentMonth cộng 5 tin adapter (không tính preview, failed, user khác)', async () => {
+describe('W7b — hồ sơ: đã gửi trong kỳ / hôm nay', () => {
+  // PLAN_SO_LIEU_DUNG_GON_KHOP PR-3: hồ sơ đếm theo KỲ của gói bằng chính hàm của cổng chặn (countZaloSentInCycle /
+  // countZaloSentToday, đã cộng sẵn kênh adapter) — nên user phải có gói; trần ngày được đặt để có số "hôm nay".
+  // Bản cũ đếm `customer_journey` theo tháng dương lịch (chỉ chạy được nhờ nhánh cộng adapter).
+  it('messagingSentCycle/messagingSentToday cộng 5 tin adapter (không tính preview, failed, user khác)', async () => {
     const { a } = await seed();
+    const plan = await createPlan({ isActive: true, dailyZaloLimit: 200, monthlyZaloLimit: 1000 });
+    await db.query(
+      `UPDATE users SET active_plan_id = $1, plan_activated_at = NOW() - INTERVAL '2 days' WHERE id = $2`,
+      [plan.id, a.id]
+    );
     const token = await loginAs(a);
     const res = await request(app)
       .get('/api/users/profile')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
+    expect(res.body.data.messagingSentToday).toBe(5);
+    expect(res.body.data.messagingSentCycle).toBe(5);
+    // Tên cũ còn được giữ cho bản FE chưa nạp lại, mang cùng số mới.
     expect(res.body.data.zaloSentToday).toBe(5);
     expect(res.body.data.zaloSentMonth).toBe(5);
   });

@@ -123,31 +123,6 @@ class CampaignChannelMessageStatsRepository {
       [runId]
     );
   }
-
-  /**
-   * "Đã gửi hôm nay / tháng này" (mốc theo giờ VN) của một chủ tài khoản cho các kênh adapter đếm
-   * vào hạn mức đang xét. Khoá theo `workspace_owner_id` như phép đếm hạn mức.
-   *
-   * @param {number} ownerUserId
-   * @param {string[]} channels danh sách `channel` cần cộng (rỗng → 0)
-   * @returns {Promise<{today: number, month: number}>}
-   */
-  async countSentTodayAndMonth(ownerUserId, channels) {
-    if (!Array.isArray(channels) || channels.length === 0) return { today: 0, month: 0 };
-    const { rows } = await db.query(
-      `SELECT
-         COUNT(*) FILTER (WHERE ccm.sent_at >= (CURRENT_DATE::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh'))::int AS today,
-         COUNT(*)::int AS month
-       FROM campaign_channel_messages ccm
-       WHERE ccm.workspace_owner_id = $1
-         AND ccm.channel = ANY($2::text[])
-         AND ccm.status = 'sent'
-         AND NOT ccm.is_preview
-         AND ccm.sent_at >= (date_trunc('month', CURRENT_DATE)::timestamp AT TIME ZONE 'Asia/Ho_Chi_Minh')`,
-      [ownerUserId, channels]
-    );
-    return { today: Number(rows[0]?.today || 0), month: Number(rows[0]?.month || 0) };
-  }
 }
 
 export default new CampaignChannelMessageStatsRepository();

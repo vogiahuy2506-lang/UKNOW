@@ -24,13 +24,40 @@ function formatPrice(price, t, isPlaceholder) {
   return `${numericPrice.toLocaleString('vi-VN')} ₫`;
 }
 
-// -1 báo cho UsageBar biết "không giới hạn" — backend trả NULL cho không giới hạn (xem
-// isUnlimitedPlanLimit); collapse null/undefined/âm thành -1 ở đây, KHÔNG collapse về 0, để 0 thật (gói
-// đặt trần 0) vẫn hiện đúng "x / 0" thay vì bị coi là không giới hạn.
-function resourceLimit(rawLimit, addonQty) {
-  if (isUnlimitedPlanLimit(rawLimit)) return -1;
-  return (Number(rawLimit) || 0) + (Number(addonQty) || 0);
+const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh';
+
+const formatNumber = (value) => Number(value).toLocaleString('vi-VN');
+
+/**
+ * ISO → "dd/mm" theo giờ Việt Nam (ngày kỳ hạn mức làm mới). Rỗng / không hợp lệ → ''.
+ * Ghép từ các phần (formatToParts) chứ không tin mẫu của locale: chỉ có ngày + tháng thì vi-VN ở nhiều bản
+ * ICU/trình duyệt cho "10-10" (gạch ngang) thay vì "10/10" (đo trên Node 20).
+ */
+function formatDayMonth(iso) {
+  if (!iso) return '';
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = new Intl.DateTimeFormat('vi-VN', { day: '2-digit', month: '2-digit', timeZone: VN_TIME_ZONE })
+    .formatToParts(date);
+  const day = parts.find((part) => part.type === 'day')?.value;
+  const month = parts.find((part) => part.type === 'month')?.value;
+  return day && month ? `${day}/${month}` : '';
 }
+
+/**
+ * Tài nguyên cấu trúc hiển thị ở trang Thanh toán. `data.resourceUsage[key]` = { used, limit } do backend tính bằng
+ * ĐÚNG hàm của cổng tạo mới (limit đã gồm slot mua thêm còn hạn; null = không giới hạn) hoặc null khi đồng hồ đó
+ * lỗi (hiện "—"). `optional`: chỉ hiện khi gói có đặt trần hoặc đã có tài nguyên (WhatsApp/Telegram — W5).
+ */
+const RESOURCE_ROWS = [
+  { key: 'chatbots', icon: HiOutlineSparkles, labelKey: 'topup.items.chatbots' },
+  { key: 'landingPages', icon: HiOutlineDesktopComputer, labelKey: 'topup.items.landingPages' },
+  { key: 'zaloAccounts', icon: HiOutlineChatAlt2, labelKey: 'topup.items.zaloAccounts' },
+  { key: 'emailAccounts', icon: HiOutlineMail, labelKey: 'topup.items.emailAccounts' },
+  { key: 'whatsappAccounts', icon: HiOutlineChatAlt2, labelKey: 'accountProfileModal.whatsappAccounts', optional: true },
+  { key: 'telegramAccounts', icon: HiOutlineChatAlt2, labelKey: 'accountProfileModal.telegramAccounts', optional: true },
+  { key: 'employees', icon: HiOutlineUsers, labelKey: 'topup.items.employees' },
+];
 
 function unwrapFeature(feat, locale) {
   if (typeof feat === 'object' && feat !== null) {
@@ -83,6 +110,28 @@ export default function PlanSection({ data, t }) {
       </div>
     );
   }
+
+  // ── Tin nhắn trong KỲ (PLAN_SO_LIEU_DUNG_GON_KHOP PR-3) ───────────────────────────────────────────────
+  // Số "đã dùng" do backend đếm bằng ĐÚNG hàm của cổng chặn gửi tin, cùng kỳ 30 ngày từ ngày kích hoạt gói
+  // (không phải tháng dương lịch). null = đồng hồ không đọc được → UsageBar hiện "—".
+  const sendCycleEnd = formatDayMonth(data.sendCycleEnd);
+  // Thanh "hôm nay" và "tổng kỳ" chỉ có nghĩa khi gói THẬT SỰ đặt trần đó; không đặt thì không vẽ thanh nào.
+  const hasDailyEmailCap = !isUnlimitedPlanLimit(data.dailyEmailLimit);
+  const hasDailyMessagingCap = !isUnlimitedPlanLimit(data.dailyZaloLimit);
+  const hasCombinedCap = !isUnlimitedPlanLimit(data.messagesPerPeriod);
+  // Ví mua thêm (email / tin nhắn) — chỉ để UsageBar biết khi vượt trần gói là đang dùng phần mua thêm.
+  const usingEmailWallet = Number(data.addons?.emails?.granted) > 0;
+  const usingMessagingWallet = Number(data.addons?.zaloMessages?.granted) > 0;
+
+  // ── Lượt AI ────────────────────────────────────────────────────────────────────────────────────────────
+  // Hạn mức NULL hoặc ≤ 0 = không giới hạn (đúng cổng aiCreditMeter: baseLimit <= 0 → không chặn) — hiện
+  // "Không giới hạn", không bao giờ "0 / 0". Ví AI mua thêm KHÔNG hết hạn và không tính vào trần của kỳ.
+  const aiLimit = Number(data.aiCreditsPerPeriod);
+  const aiUnlimited = !(aiLimit > 0);
+  const aiUsed = data.aiCreditsUsed ?? null;
+  const aiRemaining = !aiUnlimited && aiUsed !== null ? Math.max(0, aiLimit - Number(aiUsed)) : null;
+  const aiRefreshDate = formatDayMonth(data.aiCreditCycleEnd);
+  const aiWalletRemaining = Math.max(0, Number(data.addons?.aiCredits?.remaining) || 0);
 
   return (
     <div className="space-y-5">
@@ -190,122 +239,109 @@ export default function PlanSection({ data, t }) {
         </div>
       )}
 
-      {/* Usage bars — always show when user has a plan; each row handles null limit as unlimited */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.sendLimits')}</p>
+      {/* Tin nhắn trong kỳ — mọi số lấy từ ĐÚNG hàm của cổng chặn gửi tin, cùng kỳ 30 ngày từ ngày kích hoạt gói */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3" data-testid="messages-usage">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+          {sendCycleEnd
+            ? t('accountProfileModal.messagesInCycleUntil', { date: sendCycleEnd })
+            : t('accountProfileModal.messagesInCycle')}
+        </p>
         <UsageBar
           icon={HiOutlineMail}
-          label={t('accountProfileModal.emailToday')}
-          used={data.emailSentToday}
-          limit={data.dailyEmailLimit}
-          t={t}
-          serviceSuspended={serviceSuspended}
-        />
-        <UsageBar
-          icon={HiOutlineMail}
-          label={t('accountProfileModal.emailThisMonth')}
-          used={data.emailSentMonth}
+          label={t('accountProfileModal.email')}
+          used={data.emailSentCycle}
           limit={data.monthlyEmailLimit}
           t={t}
           serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons}
+          usingAddons={usingEmailWallet}
         />
         <UsageBar
           icon={HiOutlineChatAlt2}
-          label={t('accountProfileModal.zaloToday')}
-          used={data.zaloSentToday}
-          limit={data.dailyZaloLimit}
-          t={t}
-          serviceSuspended={serviceSuspended}
-        />
-        <UsageBar
-          icon={HiOutlineChatAlt2}
-          label={t('accountProfileModal.zaloThisMonth')}
-          used={data.zaloSentMonth}
+          label={t('accountProfileModal.messagingChannels')}
+          used={data.messagingSentCycle}
           limit={data.monthlyZaloLimit}
           t={t}
           serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons}
+          usingAddons={usingMessagingWallet}
         />
+        {hasCombinedCap && (
+          <UsageBar
+            icon={HiOutlineChatAlt2}
+            label={t('accountProfileModal.messagesCombined')}
+            used={data.combinedSentCycle}
+            limit={data.messagesPerPeriod}
+            t={t}
+            serviceSuspended={serviceSuspended}
+          />
+        )}
+        {hasDailyEmailCap && (
+          <UsageBar
+            icon={HiOutlineMail}
+            label={t('accountProfileModal.emailToday')}
+            used={data.emailSentToday}
+            limit={data.dailyEmailLimit}
+            t={t}
+            serviceSuspended={serviceSuspended}
+          />
+        )}
+        {hasDailyMessagingCap && (
+          <UsageBar
+            icon={HiOutlineChatAlt2}
+            label={t('accountProfileModal.messagingToday')}
+            used={data.messagingSentToday}
+            limit={data.dailyZaloLimit}
+            t={t}
+            serviceSuspended={serviceSuspended}
+          />
+        )}
+        <p className="text-[11px] text-gray-400">{t('accountProfileModal.includesQuickSend')}</p>
+      </div>
+
+      {/* Lượt AI — đã dùng / hạn mức kỳ, còn lại, ngày làm mới; ví mua thêm không hết hạn */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3" data-testid="ai-usage">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.aiUsageTitle')}</p>
         <UsageBar
           icon={HiOutlineSparkles}
-          label={t('accountProfileModal.aiCredits')}
-          used={data.aiCreditsUsed || 0}
-          limit={data.aiCreditsPerPeriod}
+          label={t('accountProfileModal.aiUsed')}
+          used={aiUsed}
+          limit={aiUnlimited ? null : aiLimit}
           t={t}
           serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons}
+          usingAddons={aiWalletRemaining > 0}
         />
-        <UsageBar
-          icon={HiOutlineUsers}
-          label={t('topup.items.employees')}
-          used={data.employeesUsed || 0}
-          limit={resourceLimit(data.planMaxEmployees, data.addons?.employees)}
-          t={t}
-          serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons?.employees}
-        />
-        <UsageBar
-          icon={HiOutlineChatAlt2}
-          label={t('topup.items.zaloAccounts')}
-          used={data.zaloAccountsUsed || 0}
-          limit={resourceLimit(data.maxZaloAccounts, data.addons?.zaloAccounts)}
-          t={t}
-          serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons?.zaloAccounts}
-        />
-        {/* W5: WhatsApp/Telegram chỉ hiện khi gói có đặt trần (NULL = không giới hạn) hoặc đã có tài khoản. */}
-        {(!isUnlimitedPlanLimit(data.maxWhatsappAccounts) || data.whatsappAccountsUsed > 0) && (
-          <UsageBar
-            icon={HiOutlineChatAlt2}
-            label={t('accountProfileModal.whatsappAccounts')}
-            used={data.whatsappAccountsUsed || 0}
-            limit={resourceLimit(data.maxWhatsappAccounts, data.addons?.whatsappAccounts)}
-            t={t}
-            serviceSuspended={serviceSuspended}
-            usingAddons={!!data.addons?.whatsappAccounts}
-          />
+        {!serviceSuspended && aiRemaining !== null && (
+          <p className="text-xs text-gray-500" data-testid="ai-usage-remaining">
+            {aiRefreshDate
+              ? t('accountProfileModal.aiRemainingRefresh', { remaining: formatNumber(aiRemaining), date: aiRefreshDate })
+              : t('accountProfileModal.aiRemaining', { remaining: formatNumber(aiRemaining) })}
+          </p>
         )}
-        {(!isUnlimitedPlanLimit(data.maxTelegramAccounts) || data.telegramAccountsUsed > 0) && (
-          <UsageBar
-            icon={HiOutlineChatAlt2}
-            label={t('accountProfileModal.telegramAccounts')}
-            used={data.telegramAccountsUsed || 0}
-            limit={resourceLimit(data.maxTelegramAccounts, data.addons?.telegramAccounts)}
-            t={t}
-            serviceSuspended={serviceSuspended}
-            usingAddons={!!data.addons?.telegramAccounts}
-          />
+        {!serviceSuspended && aiWalletRemaining > 0 && (
+          <p className="text-xs text-amber-700" data-testid="ai-usage-wallet">
+            {t('accountProfileModal.aiWalletExtra', { n: formatNumber(aiWalletRemaining) })}
+          </p>
         )}
-        <UsageBar
-          icon={HiOutlineMail}
-          label={t('topup.items.emailAccounts')}
-          used={data.emailAccountsUsed || 0}
-          limit={resourceLimit(data.maxEmailAccounts, data.addons?.emailAccounts)}
-          t={t}
-          serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons?.emailAccounts}
-        />
-        <UsageBar
-          icon={HiOutlineDesktopComputer}
-          label={t('topup.items.landingPages')}
-          used={data.landingPagesUsed || 0}
-          limit={resourceLimit(data.maxLandingPages, data.addons?.landingPages)}
-          t={t}
-          serviceSuspended={serviceSuspended}
-          usingAddons={!!data.addons?.landingPages}
-        />
-        {((data.maxChatbots && data.maxChatbots > 0) || data.maxChatbots === -1 || (data.addons?.chatbots && data.addons.chatbots > 0) || data.chatbotsUsed > 0) && (
-          <UsageBar
-            icon={HiOutlineSparkles}
-            label={t('topup.items.chatbots')}
-            used={data.chatbotsUsed || 0}
-            limit={resourceLimit(data.maxChatbots, data.addons?.chatbots)}
-            t={t}
-            serviceSuspended={serviceSuspended}
-            usingAddons={!!data.addons?.chatbots}
-          />
-        )}
+      </div>
+
+      {/* Tài nguyên — cùng hàm đếm và cùng trần với cổng tạo mới (trần đã gồm slot mua thêm còn hạn) */}
+      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3" data-testid="resources-usage">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.resourcesTitle')}</p>
+        {RESOURCE_ROWS.map(({ key, icon, labelKey, optional }) => {
+          const entry = data.resourceUsage?.[key] ?? null;
+          // W5: WhatsApp/Telegram chỉ hiện khi gói có đặt trần (NULL = không giới hạn) hoặc đã có tài khoản.
+          if (optional && (!entry || (isUnlimitedPlanLimit(entry.limit) && !(entry.used > 0)))) return null;
+          return (
+            <UsageBar
+              key={key}
+              icon={icon}
+              label={t(labelKey)}
+              used={entry ? entry.used : null}
+              limit={entry ? entry.limit : null}
+              t={t}
+              serviceSuspended={serviceSuspended}
+            />
+          );
+        })}
       </div>
 
       {/* Storage quota usage */}

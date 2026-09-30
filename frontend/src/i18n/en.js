@@ -199,8 +199,8 @@ export default {
   },
 
   creditBanner: {
-    low: 'AI credits are running low — {remaining} left ({percent}%).',
-    empty: 'AI credits are used up for this period — upgrade to continue.',
+    low: 'Running low on {resource} — {remaining} {unit} left ({percent}%).',
+    empty: 'You have used up {resource} for this period — upgrade or buy more to continue.',
     expired: 'Your plan has expired — messaging and AI are paused until renewal.',
     storageCritical: 'Storage space is critically low ({remaining} remaining). Please clean up files or upgrade your plan.',
     storageWarning: 'Storage space is {percent}% full ({remaining} remaining). Please review to avoid interruptions.',
@@ -210,8 +210,18 @@ export default {
     viewPricing: 'View pricing',
     goBilling: 'Go to billing',
     dismiss: 'Dismiss warning',
+    // Resource name + unit used in the warning sentence: CreditWarningBanner looks up `resources.<key>` and `units.<key>`.
     resources: {
       ai: 'AI credits',
+      email: 'email quota',
+      messaging: 'Zalo · Telegram · WhatsApp message quota',
+      combined: 'total message quota',
+    },
+    units: {
+      ai: 'credits',
+      email: 'emails',
+      messaging: 'messages',
+      combined: 'messages',
     },
   },
 
@@ -6904,21 +6914,32 @@ export default {
     maxEmployees: 'Max Employees',
     unlimited: 'Unlimited',
     people: '{count} people',
-    sendLimits: 'Send Limits',
-    addonsTitle: 'Bought extra this cycle',
-    addonsExpiryNote: 'Expires with this cycle ({date}); does not roll over',
+    // "Messages this period" block: counts follow the plan's billing period (30 days from activation), same functions as the send limiter.
+    messagesInCycle: 'Messages this period',
+    messagesInCycleUntil: 'Messages this period (until {date})',
+    messagingChannels: 'Zalo · Telegram · WhatsApp',
+    messagesCombined: 'Total messages this period',
+    emailToday: 'Email today',
+    messagingToday: 'Messages today',
+    includesQuickSend: 'Includes Quick Send messages.',
+    // "AI credits" block
+    aiUsageTitle: 'AI credits this period',
+    aiUsed: 'Used',
+    aiRemaining: '{remaining} left',
+    aiRemainingRefresh: '{remaining} left · resets on {date}',
+    aiWalletExtra: '+ {n} extra credits purchased (never expire)',
+    // "Resources" block
+    resourcesTitle: 'Resources',
+    meterUnavailable: 'This figure could not be loaded — try reloading the page.',
+    // "Bought extra" block
+    addonsTitle: 'Bought extra',
     addonsRemaining: '{n} left',
-    addonsRolloverNote: 'Add-ons apply within the current billing cycle and do not carry over to the next.',
+    addonsRolloverNote: 'Extra messages, emails and AI credits never expire. Slots (accounts, landing pages, chatbots, employees) are valid for 30 days × the months purchased.',
     topupOrderTitle: 'Extra quota purchase',
     usingAddonsHint: 'Using purchased add-on quota',
-    emailToday: 'Email today',
-    emailThisMonth: 'Email this month',
-    zaloToday: 'Zalo today',
-    zaloThisMonth: 'Zalo this month',
     whatsappAccounts: 'WhatsApp accounts',
     telegramAccounts: 'Telegram accounts',
     aiTokens: 'AI tokens',
-    aiCredits: 'AI credits',
     // Plan expiry
     expiresOn: 'Expires on {date}',
     daysLeft: '— {days} days left',

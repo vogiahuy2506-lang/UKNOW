@@ -315,7 +315,17 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
       const updatedProfile = response?.data || null;
       if (!updatedProfile) { setError(t('accountProfileModal.noDataError')); return; }
 
-      setProfileData((prev) => ({ ...prev, ...updatedProfile }));
+      // PUT /users/profile chỉ trả lại dòng hồ sơ vừa lưu — KHÔNG có gói, hạn mức, số "đã dùng" hay kỳ (backend map
+      // chúng thành null/rỗng). Gộp nguyên response vào profileData sẽ ghi đè khối Gói & hạn mức đang hiển thị bằng
+      // giá trị rỗng (trang hiện "chưa có gói", mất số đã dùng và ngày làm mới). Chỉ gộp đúng các trường vừa lưu; phần
+      // còn lại giữ nguyên số của GET /users/profile.
+      setProfileData((prev) => ({
+        ...prev,
+        fullName: updatedProfile.fullName,
+        email: updatedProfile.email,
+        phone: updatedProfile.phone,
+        avatarUrl: updatedProfile.avatarUrl,
+      }));
       setFormValues({
         fullName: String(updatedProfile.fullName || ''),
         email: String(updatedProfile.email || ''),

@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 const findProfileBase = jest.fn();
 const findProfilePlan = jest.fn();
 const findProfilePlanFallback = jest.fn();
-const findProfileUsageCounts = jest.fn();
+const getProfileSendUsage = jest.fn();
+const getProfileResourceUsage = jest.fn();
 const getResourceUsage = jest.fn();
 const getCreditUsageForCycle = jest.fn();
 const resolveBillingUserId = jest.fn();
@@ -23,8 +24,6 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
   findProfilePlanByUserId: jest.fn(),
   findProfilePlanByUserIdFallback: jest.fn(),
   findProfilePlanFallback,
-  findProfileUsageCounts,
-  findStructuralUsageCounts: jest.fn().mockResolvedValue({}),
   findActiveBillingPeriod: jest.fn().mockResolvedValue('monthly'),
   findRoleAndLimits: jest.fn(),
   findRoleAndLimitsFallback: jest.fn(),
@@ -49,6 +48,34 @@ jest.unstable_mockModule('../../repositories/user/user.repository.js', () => ({
 jest.unstable_mockModule('../../utils/billingCycle.util.js', () => ({
   resolveBillingUserId,
 }));
+
+// PR-3 (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30): số "đã dùng" do service riêng tính bằng chính hàm của cổng chặn —
+// controller chỉ ghép vào payload. Phần tính (đúng hàm, đúng kỳ, lỗi từng phần) có spec riêng ở
+// services/user/__tests__/profileUsage.service.spec.js và integration profileUsageSnapshot.test.js.
+jest.unstable_mockModule('../../services/user/profileUsage.service.js', () => ({
+  getProfileSendUsage,
+  getProfileResourceUsage,
+}));
+
+// Hình dạng thật service trả khi gói không có trần ngày / trần tổng và chưa có kỳ.
+const SEND_USAGE_EMPTY = {
+  cycleStart: null,
+  cycleEnd: null,
+  emailSentCycle: null,
+  messagingSentCycle: null,
+  combinedSentCycle: null,
+  emailSentToday: null,
+  messagingSentToday: null,
+};
+const RESOURCE_USAGE_EMPTY = {
+  chatbots: null,
+  landingPages: null,
+  zaloAccounts: null,
+  emailAccounts: null,
+  whatsappAccounts: null,
+  telegramAccounts: null,
+  employees: null,
+};
 
 jest.unstable_mockModule('../../services/payment/usageTracking.service.js', () => ({
   default: {
@@ -92,7 +119,8 @@ describe('UserController.getProfile', () => {
     findProfileBase.mockReset();
     findProfilePlan.mockReset();
     findProfilePlanFallback.mockReset();
-    findProfileUsageCounts.mockReset();
+    getProfileSendUsage.mockReset();
+    getProfileResourceUsage.mockReset();
     getResourceUsage.mockReset();
     getCreditUsageForCycle.mockReset();
     resolveBillingUserId.mockReset();
@@ -134,12 +162,8 @@ describe('UserController.getProfile', () => {
       role_code: 'user',
       role_name: 'Người dùng',
     });
-    findProfileUsageCounts.mockResolvedValue({
-      email_sent_today: 1,
-      email_sent_month: 2,
-      zalo_sent_today: 3,
-      zalo_sent_month: 4,
-    });
+    getProfileSendUsage.mockResolvedValue(SEND_USAGE_EMPTY);
+    getProfileResourceUsage.mockResolvedValue(RESOURCE_USAGE_EMPTY);
     getResourceUsage.mockResolvedValue({ used: 100 });
     getCreditUsageForCycle.mockResolvedValue({ used: 3, cycle: { billingUserId: 42 } });
 
@@ -415,13 +439,185 @@ describe('UserController.getProfile', () => {
     expect(res.json.mock.calls[0][0].data.aiCreditCycleEnd).toBeNull();
   });
 
-  it('getCreditUsageForCycle ném lỗi → hồ sơ vẫn trả được, kỳ = null, aiCreditsUsed = 0', async () => {
+  // PR-3: đồng hồ lỗi là null (FE hiện "—"), KHÔNG đổi thành 0 giả — trước đây trả 0 nên trang hiện "0 / N" như thể
+  // khách chưa dùng gì.
+  it('getCreditUsageForCycle ném lỗi → hồ sơ vẫn trả được, kỳ = null, aiCreditsUsed = null (không phải 0 giả)', async () => {
     getCreditUsageForCycle.mockRejectedValue(new Error('db down'));
     await userController.getProfile({ user: { id: 42 } }, res);
     const { data } = res.json.mock.calls[0][0];
     expect(data.aiCreditCycleStart).toBeNull();
     expect(data.aiCreditCycleEnd).toBeNull();
-    expect(data.aiCreditsUsed).toBe(0);
+    expect(data.aiCreditsUsed).toBeNull();
+  });
+});
+
+// PR-3 (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30): GET /users/profile ghép số "đã dùng" do profileUsage.service tính.
+describe('UserController.getProfile — số đã dùng lấy từ profileUsage.service (hàm của cổng chặn)', () => {
+  let res;
+
+  beforeEach(() => {
+    findProfileBase.mockReset();
+    findProfilePlan.mockReset();
+    getProfileSendUsage.mockReset();
+    getProfileResourceUsage.mockReset();
+    getCreditUsageForCycle.mockReset();
+    getResourceUsage.mockReset();
+    resolveBillingUserId.mockReset();
+    sumActiveTopupGrants.mockReset();
+    getWalletBalance.mockReset();
+    getOwnerUsedToday.mockReset();
+
+    resolveBillingUserId.mockImplementation(async (userId, options = {}) => (
+      options.ownerContextId != null && options.ownerContextId !== '' ? Number(options.ownerContextId) : userId
+    ));
+    sumActiveTopupGrants.mockResolvedValue(0);
+    getWalletBalance.mockResolvedValue({ granted: 0, used: 0, remaining: 0, rawRemaining: 0 });
+    getOwnerUsedToday.mockResolvedValue(0);
+    getResourceUsage.mockResolvedValue({ used: 0 });
+    getCreditUsageForCycle.mockResolvedValue({ used: 3, cycle: { billingUserId: 42 } });
+    findProfileBase.mockImplementation(async (id) => ({
+      id,
+      username: `u${id}`,
+      email: `u${id}@test.local`,
+      status: 'active',
+      role: 'user',
+      active_plan_id: 7,
+      subscription_expires_at: null,
+      created_at: new Date('2026-06-01'),
+      last_login_at: null,
+      role_code: 'user',
+      role_name: 'Người dùng',
+    }));
+    findProfilePlan.mockResolvedValue({
+      plan_id: 7,
+      plan_code: 'starter',
+      daily_email_limit: 500,
+      monthly_email_limit: 10000,
+      daily_zalo_limit: null,
+      monthly_zalo_limit: 5000,
+      messages_per_period: 100,
+      max_chatbots: 3,
+      ai_credits_per_period: 100,
+    });
+    getProfileSendUsage.mockResolvedValue(SEND_USAGE_EMPTY);
+    getProfileResourceUsage.mockResolvedValue(RESOURCE_USAGE_EMPTY);
+    res = { status: jest.fn().mockReturnThis(), json: jest.fn() };
+  });
+
+  it('ghép kỳ + số tin trong kỳ + số hôm nay + tài nguyên vào payload; kỳ trả dạng ISO', async () => {
+    getProfileSendUsage.mockResolvedValue({
+      cycleStart: new Date('2026-09-10T02:30:00.000Z'),
+      cycleEnd: new Date('2026-10-10T02:30:00.000Z'),
+      emailSentCycle: 3400,
+      messagingSentCycle: 120,
+      combinedSentCycle: 3520,
+      emailSentToday: 12,
+      messagingSentToday: null,
+    });
+    getProfileResourceUsage.mockResolvedValue({
+      ...RESOURCE_USAGE_EMPTY,
+      chatbots: { used: 2, limit: 3 },
+      landingPages: { used: 1, limit: null },
+      employees: { used: 0, limit: 1 },
+    });
+
+    await userController.getProfile({ user: { id: 42 } }, res);
+
+    const { data } = res.json.mock.calls[0][0];
+    expect(data.sendCycleStart).toBe('2026-09-10T02:30:00.000Z');
+    expect(data.sendCycleEnd).toBe('2026-10-10T02:30:00.000Z');
+    expect(data).toMatchObject({
+      emailSentCycle: 3400,
+      messagingSentCycle: 120,
+      combinedSentCycle: 3520,
+      emailSentToday: 12,
+      messagingSentToday: null,
+      // Trần lấy từ chính dòng gói: trần tổng kỳ + trần ngày/tháng theo kênh.
+      messagesPerPeriod: 100,
+      dailyEmailLimit: 500,
+      monthlyEmailLimit: 10000,
+      dailyZaloLimit: null,
+      monthlyZaloLimit: 5000,
+      maxChatbots: 3,
+    });
+    expect(data.resourceUsage).toEqual({
+      ...RESOURCE_USAGE_EMPTY,
+      chatbots: { used: 2, limit: 3 },
+      landingPages: { used: 1, limit: null },
+      employees: { used: 0, limit: 1 },
+    });
+  });
+
+  it('service được gọi với chủ tài khoản (billing user) và dòng gói của hồ sơ — nhân viên ở ngữ cảnh chủ thấy số của chủ', async () => {
+    const req = { user: { id: 99, activeContext: { type: 'employee', ownerId: 42 } } };
+
+    await userController.getProfile(req, res);
+
+    expect(getProfileSendUsage).toHaveBeenCalledWith(42, expect.objectContaining({
+      daily_email_limit: 500,
+      messages_per_period: 100,
+    }));
+    expect(getProfileResourceUsage).toHaveBeenCalledWith(42);
+  });
+
+  it('đồng hồ lỗi (null từ service) được giữ nguyên là null, KHÔNG bị ép thành 0 ở trường mới', async () => {
+    getProfileSendUsage.mockResolvedValue({
+      ...SEND_USAGE_EMPTY,
+      cycleStart: new Date('2026-09-10T02:30:00.000Z'),
+      cycleEnd: new Date('2026-10-10T02:30:00.000Z'),
+      emailSentCycle: 50,
+      messagingSentCycle: null, // đồng hồ này lỗi
+    });
+    getProfileResourceUsage.mockResolvedValue({
+      ...RESOURCE_USAGE_EMPTY,
+      chatbots: null, // đồng hồ này lỗi
+      zaloAccounts: { used: 1, limit: 2 },
+    });
+
+    await userController.getProfile({ user: { id: 42 } }, res);
+
+    const { data } = res.json.mock.calls[0][0];
+    expect(data.emailSentCycle).toBe(50);
+    expect(data.messagingSentCycle).toBeNull();
+    expect(data.resourceUsage.chatbots).toBeNull();
+    expect(data.resourceUsage.zaloAccounts).toEqual({ used: 1, limit: 2 });
+  });
+
+  // Tương thích ngược: FE cũ (chưa nạp lại) truyền thẳng data.emailSentMonth… vào UsageBar (used.toLocaleString());
+  // thiếu là TypeError. Tên cũ vẫn có mặt, mang số MỚI (theo kỳ, đúng hàm cổng), không phải số đếm journey sai.
+  it('tên cũ (emailSentMonth, zaloSentMonth, zaloSentToday, *Used) vẫn có mặt và mang số mới', async () => {
+    getProfileSendUsage.mockResolvedValue({
+      ...SEND_USAGE_EMPTY,
+      emailSentCycle: 3400,
+      messagingSentCycle: 120,
+      messagingSentToday: 7,
+    });
+    getProfileResourceUsage.mockResolvedValue({
+      chatbots: { used: 2, limit: 3 },
+      landingPages: { used: 4, limit: 5 },
+      zaloAccounts: { used: 1, limit: 2 },
+      emailAccounts: { used: 3, limit: 4 },
+      whatsappAccounts: { used: 5, limit: null },
+      telegramAccounts: { used: 6, limit: null },
+      employees: null,
+    });
+
+    await userController.getProfile({ user: { id: 42 } }, res);
+
+    const { data } = res.json.mock.calls[0][0];
+    expect(data).toMatchObject({
+      emailSentMonth: 3400,
+      zaloSentMonth: 120,
+      zaloSentToday: 7,
+      chatbotsUsed: 2,
+      landingPagesUsed: 4,
+      zaloAccountsUsed: 1,
+      emailAccountsUsed: 3,
+      whatsappAccountsUsed: 5,
+      telegramAccountsUsed: 6,
+      employeesUsed: 0, // đồng hồ lỗi → tên cũ về 0 (chỉ để FE cũ khỏi vỡ); trường mới ở resourceUsage.employees là null
+    });
+    expect(data.resourceUsage.employees).toBeNull();
   });
 });
 

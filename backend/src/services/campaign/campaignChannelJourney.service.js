@@ -8,7 +8,7 @@
  *
  * Journey là ghi chú phụ: MỌI lỗi ở đây chỉ log, không bao giờ làm hỏng lượt gửi (khách đã nhận tin).
  * Dùng event_type riêng (`whatsapp_sent`), KHÔNG dùng `zalo_sent`: hạn mức Zalo đã cộng tin adapter từ
- * `campaign_channel_messages` (user.repository.js findProfileUsageCounts) — ghi `zalo_sent` sẽ đếm đôi.
+ * `campaign_channel_messages` (userSendLimit.util.js countZaloSentInCycle) — ghi `zalo_sent` sẽ đếm đôi.
  */
 import customerChannelJourneyRepository from '../../repositories/customer/customerChannelJourney.repository.js';
 

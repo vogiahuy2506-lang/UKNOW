@@ -27,6 +27,9 @@ const walletRemaining = (addons, field) => {
 /**
  * Build alert for a single quota metric.
  * Yellow/red only when wallet remaining is 0 (null addons = 0).
+ *
+ * `resourceKey` chọn CẢ tên tài nguyên lẫn đơn vị trong câu (creditBanner.resources.<key> / units.<key>): AI, email,
+ * nhắn tin (Zalo · Telegram · WhatsApp), tổng tin nhắn — không phải lúc nào cũng "credit AI".
  */
 const metricAlert = ({ key, used, limit, remainingWallet, t, resourceKey }) => {
   if (isUnlimitedPlanLimit(limit)) return null;
@@ -34,6 +37,7 @@ const metricAlert = ({ key, used, limit, remainingWallet, t, resourceKey }) => {
   if (limitN <= 0) return null;
   if (remainingWallet > 0) return null;
 
+  // used null/undefined (chưa tải hoặc đồng hồ không đọc được) → 0 → ratio 0 → không cảnh báo bừa.
   const usedN = Math.max(0, toFiniteNumber(used));
   const ratio = usedN / limitN;
   if (ratio < 0.8) return null;
@@ -41,6 +45,7 @@ const metricAlert = ({ key, used, limit, remainingWallet, t, resourceKey }) => {
   const leftover = Math.max(0, Math.ceil(limitN - usedN));
   const remainingPercent = Math.max(0, Math.round((1 - ratio) * 100));
   const resource = t(`creditBanner.resources.${resourceKey}`);
+  const unit = t(`creditBanner.units.${resourceKey}`);
   const isEmpty = ratio >= 1;
 
   return {
@@ -52,7 +57,8 @@ const metricAlert = ({ key, used, limit, remainingWallet, t, resourceKey }) => {
       ? t('creditBanner.empty', { resource })
       : t('creditBanner.low', {
           resource,
-          remaining: leftover.toLocaleString(),
+          remaining: leftover.toLocaleString('vi-VN'),
+          unit,
           percent: remainingPercent,
         }),
     used: usedN,
@@ -145,8 +151,8 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
       if (aiLow) candidates.push(aiLow);
     }
 
-    // Email/Zalo usage counts are scoped to the logged-in userId, not billing
-    // owner — only meaningful in self context.
+    // Tin gửi: số theo KỲ của gói, đếm bằng đúng hàm của cổng chặn (PLAN_SO_LIEU_DUNG_GON_KHOP PR-3). Chỉ hiện ở ngữ
+    // cảnh chủ tài khoản — nhân viên không tự mua thêm được, việc nâng gói thuộc về chủ.
     if (!isEmployeeCtx) {
       const emailAlert = metricAlert({
         key: 'email',
@@ -158,15 +164,28 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
       });
       if (emailAlert) candidates.push(emailAlert);
 
-      const zaloAlert = metricAlert({
-        key: 'zalo',
-        used: sendUsage?.zalo?.used,
-        limit: sendUsage?.zalo?.limit,
+      // Zalo + Telegram + WhatsApp dùng chung một hạn mức.
+      const messagingAlert = metricAlert({
+        key: 'messaging',
+        used: sendUsage?.messaging?.used,
+        limit: sendUsage?.messaging?.limit,
         remainingWallet: walletRemaining(addons, 'zaloMessages'),
         t,
-        resourceKey: 'zalo',
+        resourceKey: 'messaging',
       });
-      if (zaloAlert) candidates.push(zaloAlert);
+      if (messagingAlert) candidates.push(messagingAlert);
+
+      // Trần TỔNG tin nhắn trong kỳ (gói dùng thử: 100, các trần theo kênh để trống) — cổng chặn theo nó và ví mua thêm
+      // KHÔNG gỡ được chặn này, nên không trừ ví vào cảnh báo.
+      const combinedAlert = metricAlert({
+        key: 'combined',
+        used: sendUsage?.combined?.used,
+        limit: sendUsage?.combined?.limit,
+        remainingWallet: 0,
+        t,
+        resourceKey: 'combined',
+      });
+      if (combinedAlert) candidates.push(combinedAlert);
     }
 
     if (candidates.length === 0) return null;

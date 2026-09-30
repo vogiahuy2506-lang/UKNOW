@@ -199,8 +199,8 @@ export default {
   },
 
   creditBanner: {
-    low: 'Sắp hết credit AI — còn {remaining} lượt ({percent}%).',
-    empty: 'Đã hết credit AI kỳ này — nâng cấp để tiếp tục.',
+    low: 'Sắp hết {resource} — còn {remaining} {unit} ({percent}%).',
+    empty: 'Đã hết {resource} trong kỳ này — nâng cấp hoặc mua thêm để tiếp tục.',
     expired: 'Gói đã hết hạn — gửi tin & AI tạm dừng cho đến khi gia hạn.',
     storageCritical: 'Dung lượng lưu trữ sắp hết (còn {remaining}). Hãy dọn bớt tệp hoặc nâng cấp gói.',
     storageWarning: 'Dung lượng lưu trữ đã dùng {percent}% (còn {remaining}). Hãy kiểm tra để tránh gián đoạn.',
@@ -210,8 +210,18 @@ export default {
     viewPricing: 'Xem bảng giá',
     goBilling: 'Đi tới trang Thanh toán',
     dismiss: 'Ẩn cảnh báo',
+    // Tên tài nguyên + đơn vị trong câu cảnh báo: CreditWarningBanner tra `resources.<khoá>` và `units.<khoá>`.
     resources: {
-      ai: 'credit AI',
+      ai: 'lượt AI',
+      email: 'hạn mức email',
+      messaging: 'hạn mức tin nhắn Zalo · Telegram · WhatsApp',
+      combined: 'hạn mức tổng tin nhắn',
+    },
+    units: {
+      ai: 'lượt',
+      email: 'email',
+      messaging: 'tin',
+      combined: 'tin',
     },
   },
 
@@ -6910,21 +6920,32 @@ export default {
     maxEmployees: 'Nhân viên tối đa',
     unlimited: 'Không giới hạn',
     people: '{count} người',
-    sendLimits: 'Giới hạn gửi tin',
-    addonsTitle: 'Đã mua thêm trong chu kỳ này',
-    addonsExpiryNote: 'Hết hạn cùng chu kỳ ({date}), không cộng dồn sang tháng sau',
+    // Khối "Tin nhắn trong kỳ": số đếm theo KỲ của gói (30 ngày từ ngày kích hoạt), cùng hàm với cổng chặn gửi tin.
+    messagesInCycle: 'Tin nhắn trong kỳ',
+    messagesInCycleUntil: 'Tin nhắn trong kỳ (đến {date})',
+    messagingChannels: 'Zalo · Telegram · WhatsApp',
+    messagesCombined: 'Tổng tin nhắn trong kỳ',
+    emailToday: 'Email hôm nay',
+    messagingToday: 'Tin nhắn hôm nay',
+    includesQuickSend: 'Đã gồm cả tin gửi nhanh.',
+    // Khối "Lượt AI"
+    aiUsageTitle: 'Lượt AI trong kỳ',
+    aiUsed: 'Đã dùng',
+    aiRemaining: 'Còn {remaining}',
+    aiRemainingRefresh: 'Còn {remaining} · làm mới ngày {date}',
+    aiWalletExtra: '+ {n} lượt mua thêm (không hết hạn)',
+    // Khối "Tài nguyên"
+    resourcesTitle: 'Tài nguyên',
+    meterUnavailable: 'Chưa đọc được số liệu này — thử tải lại trang.',
+    // Khối "Đã mua thêm"
+    addonsTitle: 'Đã mua thêm',
     addonsRemaining: 'Còn lại {n}',
-    addonsRolloverNote: 'Phần mua thêm dùng trong chu kỳ hiện tại, không cộng dồn sang chu kỳ sau.',
+    addonsRolloverNote: 'Lượt tin nhắn, email và lượt AI mua thêm không hết hạn. Slot (tài khoản, landing page, chatbot, nhân viên) có hiệu lực 30 ngày × số tháng đã mua.',
     topupOrderTitle: 'Mua thêm hạn mức',
     usingAddonsHint: 'Đang dùng phần mua thêm',
-    emailToday: 'Email hôm nay',
-    emailThisMonth: 'Email tháng này',
-    zaloToday: 'Zalo hôm nay',
-    zaloThisMonth: 'Zalo tháng này',
     whatsappAccounts: 'Tài khoản WhatsApp',
     telegramAccounts: 'Tài khoản Telegram',
     aiTokens: 'Token AI',
-    aiCredits: 'Lượt AI / Credit',
     // Plan expiry
     expiresOn: 'Hết hạn ngày {date}',
     daysLeft: '— còn {days} ngày',
