@@ -17,10 +17,12 @@ const NO_SKIP = { skip: () => false };
 
 // Mỗi ca dựng MỘT server đang lắng nghe và dùng lại cho mọi request, tắt ở afterEach.
 // Trước đây `request(app)` dựng + tắt một server tạm cho TỪNG request (ca (e) = 51 server). Chạy cả bộ
-// unit lúc máy tải nặng, suite này đỏ chập chờn "Exceeded timeout of 20000 ms" (29/09/2026, 2 lần) dù
-// chạy riêng chỉ mất ~30 ms — dấu hiệu một request TREO chứ không phải chậm: Node 20 bật keep-alive mặc
-// định, cổng tạm của server đã tắt bị cấp lại, client đẩy request vào socket cũ. `Connection: close`
-// chặn nốt việc dùng lại socket giữa các request.
+// unit suite này đỏ chập chờn "Exceeded timeout of 20000 ms" (29/09/2026, 2 lần) dù chạy riêng chỉ ~30 ms.
+// Nhiều khả năng gốc KHÔNG phải keep-alive mà là cơ chế đã tái hiện được ở employeeRoutePolicy (30/09/2026):
+// `app.listen(0)` bind `::` còn supertest nối `127.0.0.1:<cổng>`, mà macOS cho một tiến trình lạ (IDE,
+// language server) giữ cùng cổng ở 127.0.0.1 — request rơi vào tiến trình lạ, trả sai hoặc không bao giờ
+// trả lời (treo tới hết timeout). Đã vá ở tests/setup/loopbackListen.js (jest setupFiles). Một server mỗi
+// ca + `Connection: close` vẫn giữ: rẻ và vô hại.
 const openServers = [];
 afterEach(async () => {
   await Promise.all(openServers.splice(0).map((server) => new Promise((resolve) => server.close(resolve))));
