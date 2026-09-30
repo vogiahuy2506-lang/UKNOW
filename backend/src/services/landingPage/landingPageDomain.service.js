@@ -715,32 +715,80 @@ class LandingPageDomainService {
   }
 
   /**
+   * Hostname đã chuẩn hoá nếu an toàn để làm đối số dòng lệnh cho script cấp SSL, ngược lại null.
+   * Cùng cú pháp với assertValidHostname nhưng KHÔNG xét danh sách chặn: domain đã active vẫn phải
+   * gia hạn được. Kiểm lại ngay trước khi spawn vì hostname ở đây còn đến từ DB (cron gia hạn),
+   * không chỉ từ request đã qua assertValidHostname.
+   * @param {unknown} hostname
+   * @returns {string|null}
+   */
+  _scriptSafeHostname(hostname) {
+    const h = String(hostname ?? '').trim().toLowerCase();
+    if (!h || h.length > 253) return null;
+    if (!/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/.test(h)) return null;
+    return h;
+  }
+
+  /**
    * Trigger SSL certificate provisioning for a domain.
+   * Script chạy KHÔNG qua shell: hostname chỉ là một phần tử argv, không bao giờ được shell diễn giải.
    * @param {string} hostname
    */
   async provisionSsl(hostname) {
-    const scriptPath = process.env.SSL_PROVISION_SCRIPT;
+    const scriptPath = String(process.env.SSL_PROVISION_SCRIPT || '').trim();
     if (!scriptPath) {
       console.log(`[LandingPageDomainService] SSL provision skipped: SSL_PROVISION_SCRIPT not set`);
       return;
     }
 
-    return new Promise((resolve) => {
-      const proc = spawn(scriptPath, [hostname], { shell: true });
-      let stdout = '';
-      let stderr = '';
+    const safeHostname = this._scriptSafeHostname(hostname);
+    if (!safeHostname) {
+      const err = new Error('Hostname không hợp lệ — không chạy script cấp SSL');
+      err.statusCode = 400;
+      throw err;
+    }
 
-      proc.stdout.on('data', (data) => { stdout += data.toString(); });
-      proc.stderr.on('data', (data) => { stderr += data.toString(); });
+    // SSL_PROVISION_SCRIPT do vận hành đặt. Vẫn nhận dạng "lệnh + tham số" (vd. "sudo /opt/x.sh")
+    // bằng cách tách theo khoảng trắng như shell từng làm, nhưng không còn shell nào ở giữa.
+    const [command, ...scriptArgs] = scriptPath.split(/\s+/);
+
+    return new Promise((resolve) => {
+      let settled = false;
+      const done = () => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+
+      let proc;
+      try {
+        proc = spawn(command, [...scriptArgs, safeHostname], {
+          shell: false,
+          stdio: ['ignore', 'ignore', 'pipe'],
+        });
+      } catch (err) {
+        console.error(`[LandingPageDomainService] SSL provision could not start for ${safeHostname}: ${err.message}`);
+        done();
+        return;
+      }
+
+      let stderr = '';
+      proc.stderr?.on('data', (data) => { stderr += data.toString(); });
+
+      // Không có shell thì script thiếu/không chạy được sẽ phát 'error' (ENOENT/EACCES) — phải
+      // nghe, nếu không EventEmitter ném lỗi và làm sập tiến trình.
+      proc.on('error', (err) => {
+        console.error(`[LandingPageDomainService] SSL provision could not start for ${safeHostname}: ${err.message}`);
+        done();
+      });
 
       proc.on('close', (code) => {
         if (code === 0) {
-          console.log(`[LandingPageDomainService] SSL provisioned for ${hostname}`);
-          resolve();
+          console.log(`[LandingPageDomainService] SSL provisioned for ${safeHostname}`);
         } else {
-          console.error(`[LandingPageDomainService] SSL provision failed for ${hostname}: ${stderr}`);
-          resolve();
+          console.error(`[LandingPageDomainService] SSL provision failed for ${safeHostname}: ${stderr}`);
         }
+        done();
       });
     });
   }
