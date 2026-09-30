@@ -89,13 +89,18 @@ export default function LandingPageShareModal({ landingPage, open, onClose, onCh
       ).length;
 
       if (failed > 0) {
+        // Server mới không cho biết email nào đã có tài khoản (chống dò email) → không có số
+        // "đã có tài khoản / chờ đăng ký" để hiện, chỉ báo số lượt thành công.
+        const hasBreakdown = existingCount + pendingCount > 0;
         toast.success(
-          t('landingPagesAdmin.sharePartialSuccess', {
-            succeeded,
-            total: results.length,
-            existing: existingCount,
-            pending: pendingCount,
-          })
+          hasBreakdown
+            ? t('landingPagesAdmin.sharePartialSuccess', {
+              succeeded,
+              total: results.length,
+              existing: existingCount,
+              pending: pendingCount,
+            })
+            : `Đã chia sẻ cho ${succeeded}/${results.length} người.`
         );
       } else if (pendingCount > 0 && existingCount === 0) {
         toast.success(t('landingPagesAdmin.shareToastAllPending'));

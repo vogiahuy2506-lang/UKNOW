@@ -528,6 +528,41 @@ export const whatsappTestSendLimiter = rateLimit({
   keyGenerator: (req) => rateLimitKeyForRequest(req, 'whatsapp-test-send:'),
 });
 
+// Chia sẻ chiến dịch / landing page qua email — 30 lượt / 1 giờ / tài khoản, mỗi loại một bucket.
+// Mỗi lượt gửi một email thông báo tới địa chỉ bất kỳ người dùng nhập; trần chặn dùng tính năng để
+// gửi thư hàng loạt hoặc dò địa chỉ email. Hộp thoại chia sẻ gửi một request cho mỗi email.
+export const SHARE_INVITE_LIMITER_CONFIG = Object.freeze({
+  windowMs: 60 * 60 * 1000,
+  max: 30,
+  code: 'SHARE_RATE_LIMIT_EXCEEDED',
+  message: 'Bạn đã chia sẻ quá nhiều lần trong 1 giờ. Vui lòng thử lại sau.',
+});
+
+/**
+ * @param {object} opts
+ * @param {string} opts.prefix tiền tố khoá (tách bucket chiến dịch / landing page)
+ * @param {(req: import('express').Request) => boolean} [opts.skip]
+ */
+export function createShareInviteLimiter({ prefix, skip = skipInTest }) {
+  return rateLimit({
+    skip,
+    windowMs: SHARE_INVITE_LIMITER_CONFIG.windowMs,
+    max: SHARE_INVITE_LIMITER_CONFIG.max,
+    message: {
+      success: false,
+      message: SHARE_INVITE_LIMITER_CONFIG.message,
+      code: SHARE_INVITE_LIMITER_CONFIG.code,
+    },
+    standardHeaders: true,
+    legacyHeaders: false,
+    // Mount SAU authMiddleware — khoá theo id tài khoản (rơi về IP nếu vì lý do nào đó thiếu user).
+    keyGenerator: (req) => rateLimitKeyForRequest(req, prefix),
+  });
+}
+
+export const campaignShareLimiter = createShareInviteLimiter({ prefix: 'campaign-share:' });
+export const landingPageShareLimiter = createShareInviteLimiter({ prefix: 'landing-share:' });
+
 // Quick Send Test Message limiter — tối đa 5 lần gửi thử / 1 giờ / tài khoản
 export const quickSendTestLimiter = rateLimit({
   skip: skipInTest,

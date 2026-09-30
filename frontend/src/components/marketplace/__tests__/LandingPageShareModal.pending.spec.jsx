@@ -125,6 +125,28 @@ describe('LandingPageShareModal — toast theo nhánh (PR-1)', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });
 
+  it('server không trả isExistingUser (chống dò email): 1 thành công + 1 lỗi → không hiện số "0 existing"', async () => {
+    mockShareLandingPage
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: { share: { id: 1, shareType: 'view' }, recipient: { email: 'a@x.com' }, notificationSent: true },
+        },
+      })
+      .mockRejectedValueOnce(new Error('Lỗi 500'));
+    renderModal();
+    const input = screen.getByPlaceholderText(/email/i);
+    fireEvent.change(input, { target: { value: 'a@x.com' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.change(input, { target: { value: 'b@x.com' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: /chia sẻ|share/i }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+    const successMsg = mockToastSuccess.mock.calls[0][0];
+    expect(successMsg).toMatch(/Đã chia sẻ cho 1\/2/);
+    expect(successMsg).not.toMatch(/tài khoản|đăng ký|existing|pending/i);
+  });
+
   it('shareLandingPage được gọi với payload đúng', async () => {
     mockShareLandingPage.mockResolvedValue({
       data: {

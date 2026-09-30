@@ -6,6 +6,7 @@ import landingPageShareController from '../controllers/landingPageShare.controll
 import { requireSelfContext } from '../middleware/authorization.middleware.js';
 import { body } from 'express-validator';
 import handleValidationErrors from '../middleware/validate.middleware.js';
+import { landingPageShareLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
@@ -37,6 +38,7 @@ router.get('/shared/with-me',
 // Share a landing page with another user
 router.post('/:id/share',
   requireSelfContext,
+  landingPageShareLimiter,
   [
     body('recipientEmail').isEmail().withMessage('Email không hợp lệ'),
     body('shareType').optional().isIn(['view', 'edit']).withMessage('Loại chia sẻ không hợp lệ')

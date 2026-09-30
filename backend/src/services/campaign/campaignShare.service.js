@@ -26,11 +26,15 @@ class CampaignShareService {
    * Share a campaign với một email — hỗ trợ cả email đã có user (active)
    * và email ngoài hệ thống (pending).
    *
+   * Phản hồi GIỐNG NHAU dù email đã có tài khoản hay chưa: không trả `isExistingUser`, id/họ tên
+   * người nhận hay `status`/`id_recipient` của bản ghi share — người chia sẻ nhập email bất kỳ nên
+   * các trường đó cho phép dò email nào đã đăng ký và đọc họ tên chủ tài khoản. Chỉ trả lại email
+   * người dùng đã nhập (đã chuẩn hoá).
+   *
    * @returns {Promise<{
    *   success: true,
-   *   share: object,
-   *   recipient: { id: number, name: string, email: string } | null,
-   *   isExistingUser: boolean,
+   *   share: { id: number, shareType: string, canRun: boolean },
+   *   recipient: { email: string },
    *   notificationSent: boolean,
    * }>}
    */
@@ -94,15 +98,12 @@ class CampaignShareService {
 
     return {
       success: true,
-      share: result.share,
-      recipient: result.recipient
-        ? {
-            id: result.recipient.id,
-            name: result.recipient.full_name || result.recipient.username,
-            email: result.recipient.email,
-          }
-        : null,
-      isExistingUser: result.isExistingUser,
+      share: {
+        id: result.share?.id ?? null,
+        shareType: result.share?.share_type ?? shareType,
+        canRun: result.share?.can_run ?? Boolean(canRun),
+      },
+      recipient: { email: normalizedEmail },
       notificationSent,
     };
   }
@@ -247,11 +248,11 @@ class CampaignShareService {
     }
     const shares = await campaignShareRepository.findByCampaign(campaignId, ownerId);
 
+    // Chỉ email người chia sẻ đã nhập (+ id để thu hồi) — không trả họ tên chủ tài khoản nhận.
     return shares.map((share) => ({
       id: share.id,
       recipient: {
         id: share.id_recipient,
-        name: share.recipient_name,
         email: share.recipient_email,
       },
       shareType: share.share_type,

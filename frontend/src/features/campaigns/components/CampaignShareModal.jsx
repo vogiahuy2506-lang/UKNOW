@@ -71,13 +71,18 @@ const CampaignShareModal = ({ campaign, open, onClose, onDone }) => {
       ).length;
 
       if (failed > 0) {
+        // Server mới không cho biết email nào đã có tài khoản (chống dò email) → không có số
+        // "đã có tài khoản / chờ đăng ký" để hiện, chỉ báo số lượt thành công.
+        const hasBreakdown = existingCount + pendingCount > 0;
         toast.success(
-          t('campaigns.sharePartialSuccess', {
-            succeeded,
-            total: results.length,
-            existing: existingCount,
-            pending: pendingCount,
-          }) || `Đã chia sẻ cho ${succeeded}/${results.length} người (${existingCount} đã có tài khoản, ${pendingCount} chờ đăng ký)`
+          hasBreakdown
+            ? t('campaigns.sharePartialSuccess', {
+              succeeded,
+              total: results.length,
+              existing: existingCount,
+              pending: pendingCount,
+            }) || `Đã chia sẻ cho ${succeeded}/${results.length} người (${existingCount} đã có tài khoản, ${pendingCount} chờ đăng ký)`
+            : `Đã chia sẻ cho ${succeeded}/${results.length} người.`
         );
       } else if (pendingCount > 0 && existingCount === 0) {
         toast.success(t('campaigns.shareToastAllPending') || 'Đã lưu quyền chia sẻ. Hệ thống sẽ gửi email mời người nhận đăng ký để nhận chiến dịch');

@@ -123,8 +123,10 @@ class CampaignShareRepository {
    * Get all shares for a campaign (for owner to see who they shared with)
    */
   async findByCampaign(idCampaign, ownerId) {
+    // Email = email người chia sẻ đã nhập (bản ghi cũ thiếu thì lấy email tài khoản); không lấy
+    // họ tên người nhận.
     const { rows } = await db.query(
-      `SELECT cs.*, u.full_name as recipient_name, u.email as recipient_email
+      `SELECT cs.*, COALESCE(cs.recipient_email, u.email) as recipient_email
        FROM campaign_shares cs
        JOIN campaigns c ON c.id = cs.id_campaign
        JOIN users u ON cs.id_recipient = u.id

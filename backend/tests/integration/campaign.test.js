@@ -592,6 +592,10 @@ describe('Campaign sharing workspace ownership', () => {
       .set('Authorization', `Bearer ${tokenA}`)
       .send({ recipientEmail: recipient.email, shareType: 'edit', canRun: true });
     expect(shareRes.status).toBe(200);
+    // Phản hồi không cho biết email đã có tài khoản hay chưa, không có id/họ tên người nhận.
+    expect(shareRes.body.data).not.toHaveProperty('isExistingUser');
+    expect(shareRes.body.data.recipient).toEqual({ email: recipient.email });
+    expect(shareRes.body.data.share).not.toHaveProperty('id_recipient');
 
     const { rows: shareRows } = await db.query(
       `SELECT id_owner, id_recipient, share_type, can_run
@@ -611,6 +615,8 @@ describe('Campaign sharing workspace ownership', () => {
     expect(listRes.status).toBe(200);
     expect(listRes.body.data).toHaveLength(1);
     expect(Number(listRes.body.data[0].recipient.id)).toBe(Number(recipient.id));
+    expect(listRes.body.data[0].recipient.email).toBe(recipient.email);
+    expect(listRes.body.data[0].recipient).not.toHaveProperty('name');
 
     const crossTenantList = await request(app)
       .get(`/api/campaigns/${campaignA.id}/shares`)

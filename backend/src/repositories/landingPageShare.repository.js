@@ -69,8 +69,10 @@ class LandingPageShareRepository {
    * Get all shares for a specific landing page (for owner to see who they shared with)
    */
   async findByLandingPage(idLandingPage, ownerId) {
+    // Email = email người chia sẻ đã nhập (bản ghi cũ thiếu thì lấy email tài khoản); không lấy
+    // họ tên người nhận.
     const { rows } = await db.query(
-      `SELECT lps.*, u.full_name as recipient_name, u.email as recipient_email
+      `SELECT lps.*, COALESCE(lps.recipient_email, u.email) as recipient_email
        FROM landing_page_shares lps
        JOIN landing_pages lp ON lp.id = lps.id_landing_page
        JOIN users u ON u.id = lps.id_recipient

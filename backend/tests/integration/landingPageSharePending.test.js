@@ -98,10 +98,17 @@ describe('POST /api/admin/landing-pages/:id/share (PR-1)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    expect(res.body.data.isExistingUser).toBe(true);
-    expect(res.body.data.recipient.email).toBe(recipient.email);
-    expect(res.body.data.share.status).toBe('active');
-    expect(res.body.data.share.id_recipient).toBe(recipient.id);
+    // Phản hồi không cho biết email đã có tài khoản hay chưa (chống dò email) — kiểm trạng thái ở DB.
+    expect(res.body.data).not.toHaveProperty('isExistingUser');
+    expect(res.body.data.recipient).toEqual({ email: recipient.email });
+    expect(res.body.data.share).not.toHaveProperty('status');
+    expect(res.body.data.share).not.toHaveProperty('id_recipient');
+    const { rows: shareRows } = await db.query(
+      `SELECT status, id_recipient FROM landing_page_shares WHERE id = $1`,
+      [res.body.data.share.id]
+    );
+    expect(shareRows[0].status).toBe('active');
+    expect(Number(shareRows[0].id_recipient)).toBe(Number(recipient.id));
 
     // Đợi fire-and-forget mail
     await new Promise((r) => setTimeout(r, 200));
@@ -125,10 +132,16 @@ describe('POST /api/admin/landing-pages/:id/share (PR-1)', () => {
       .send({ recipientEmail: pendingEmail, shareType: 'edit' });
 
     expect(res.status).toBe(200);
-    expect(res.body.data.isExistingUser).toBe(false);
-    expect(res.body.data.recipient).toBe(null);
-    expect(res.body.data.share.status).toBe('pending');
-    expect(res.body.data.share.id_recipient).toBe(null);
+    // Cùng dạng phản hồi với nhánh email đã có tài khoản.
+    expect(res.body.data).not.toHaveProperty('isExistingUser');
+    expect(res.body.data.recipient).toEqual({ email: pendingEmail });
+    expect(res.body.data.share).not.toHaveProperty('status');
+    const { rows: shareRows } = await db.query(
+      `SELECT status, id_recipient FROM landing_page_shares WHERE id = $1`,
+      [res.body.data.share.id]
+    );
+    expect(shareRows[0].status).toBe('pending');
+    expect(shareRows[0].id_recipient).toBe(null);
 
     await new Promise((r) => setTimeout(r, 200));
     expect(mockSendMail).toHaveBeenCalled();

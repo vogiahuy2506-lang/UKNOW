@@ -13,7 +13,7 @@ import {
   requirePhone,
   requireSelfContext,
 } from '../middleware/authorization.middleware.js';
-import { campaignRunLimiter, quickSendTestLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
+import { campaignRunLimiter, campaignShareLimiter, quickSendTestLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
 import { getStoragePaths } from '../utils/storageCapacity.util.js';
 
@@ -130,6 +130,7 @@ router.post('/:id/sync-founderai', requirePermission('campaigns_view'), foundera
 router.post('/:id/share',
   requireSelfContext,
   requirePermission('campaigns_view'),
+  campaignShareLimiter,
   [
     body('recipientEmail').isEmail().withMessage('Email không hợp lệ'),
     body('shareType').optional().isIn(['view', 'edit']).withMessage('Loại chia sẻ không hợp lệ')

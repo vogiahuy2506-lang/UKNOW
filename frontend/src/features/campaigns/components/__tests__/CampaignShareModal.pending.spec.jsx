@@ -121,6 +121,42 @@ describe('CampaignShareModal — toast theo nhánh (PR-2)', () => {
     await waitFor(() => expect(mockToastError).toHaveBeenCalled());
   });
 
+  it('server không trả isExistingUser (chống dò email): 1 thành công + 1 lỗi → không hiện số "0 đã có tài khoản"', async () => {
+    mockShareCampaign
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: { share: { id: 1, shareType: 'view', canRun: false }, recipient: { email: 'a@x.com' }, notificationSent: true },
+        },
+      })
+      .mockRejectedValueOnce(new Error('Lỗi 500'));
+    renderModal();
+    const input = screen.getByPlaceholderText(/nhập email/i);
+    fireEvent.change(input, { target: { value: 'a@x.com' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.change(input, { target: { value: 'b@x.com' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.click(screen.getByRole('button', { name: /^ch(ia|ẩ) s(ẻ|e)/i }));
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+    const successMsg = mockToastSuccess.mock.calls[0][0];
+    expect(successMsg).toMatch(/Đã chia sẻ cho 1\/2/);
+    expect(successMsg).not.toMatch(/tài khoản|đăng ký/);
+  });
+
+  it('server không trả isExistingUser: tất cả thành công → thông báo chung', async () => {
+    mockShareCampaign.mockResolvedValue({
+      data: {
+        success: true,
+        data: { share: { id: 3, shareType: 'view', canRun: false }, recipient: { email: 'c@x.com' }, notificationSent: true },
+      },
+    });
+    renderModal();
+    setEmailAndSubmit('c@x.com');
+    await waitFor(() => expect(mockToastSuccess).toHaveBeenCalled());
+    expect(mockToastSuccess.mock.calls[0][0]).toMatch(/chia sẻ/i);
+    expect(mockToastError).not.toHaveBeenCalled();
+  });
+
   it('shareCampaign được gọi với payload đúng (recipientEmail, shareType, canRun)', async () => {
     mockShareCampaign.mockResolvedValue({
       data: {
