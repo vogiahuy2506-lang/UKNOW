@@ -53,14 +53,43 @@ export function rewriteHttpAnchorsToTrack(html, { slug, apiBase }) {
 }
 
 /**
- * Xem trước gần đúng bản sẽ lưu (strip + rewrite + inject script) — dùng origin + VITE_API_URL hiện tại.
+ * Khôi phục các URL gốc từ link tracking `/public/landing-track/go?slug=...&u=...`
+ * nếu HTML từng bị rewrite trước đây hoặc dán từ mã đã qua xử lý.
+ */
+export function restoreOriginalHttpAnchors(html) {
+  if (!html) return String(html ?? '');
+  return String(html).replace(/<a\b([^>]*)>/gi, (full, attrs) => {
+    const next = attrs.replace(
+      /\bhref\s*=\s*(["'])([^"']*\/public\/landing-track\/go[^"']*)\1/gi,
+      (m, q, trackUrl) => {
+        try {
+          const uMatch = trackUrl.match(/(?:[?&]|&amp;)(?:u|url)=([^&#"'\s]+)/i);
+          if (uMatch && uMatch[1]) {
+            const originalUrl = decodeURIComponent(uMatch[1]);
+            if (/^https?:\/\//i.test(originalUrl)) {
+              return `href=${q}${originalUrl}${q}`;
+            }
+          }
+        } catch {
+          // ignore error
+        }
+        return m;
+      }
+    );
+    if (next === attrs) return full;
+    return `<a${next}>`;
+  });
+}
+
+/**
+ * Xem trước gần đúng bản sẽ lưu (strip + khôi phục link gốc + inject script) — dùng origin + VITE_API_URL hiện tại.
  * Inject CẢ lp-track.js + founderai-capture.js để preview đồng nhất với backend.
  */
 export function prepareLandingHtmlForPreview(html, { slug, frontendOrigin, apiBase }) {
   const s = String(slug || '').trim().toLowerCase();
   if (!s) return String(html ?? '');
   let out = stripFounderLandingAutoBlocks(html);
-  out = rewriteHttpAnchorsToTrack(out, { slug: s, apiBase });
+  out = restoreOriginalHttpAnchors(out);
   out = injectLandingEnhancements(out, { slug: s, frontendOrigin, apiBase });
   return out;
 }

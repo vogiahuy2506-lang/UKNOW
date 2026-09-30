@@ -90,6 +90,60 @@ router.post('/landing-analytics/view', publicLandingAnalyticsLimiter, async (req
   }
 });
 
+router.post('/landing-analytics/click', publicLandingAnalyticsLimiter, async (req, res) => {
+  try {
+    const { slug, targetUrl, visitorId, utmSource, utmCampaign, utmMedium } = req.body || {};
+
+    if (!slug || !/^[a-z0-9-]+$/i.test(slug)) {
+      return res.status(400).json({ success: false, message: 'Slug không hợp lệ' });
+    }
+
+    const cleanTargetUrl = targetUrl ? String(targetUrl).slice(0, 2048) : null;
+
+    if (slug === 'l') {
+      await db.query(
+        `INSERT INTO landing_page_events (landing_page_slug, event_type, visitor_id, utm_source, utm_campaign, utm_medium, target_url)
+         VALUES ($1, 'click', $2, $3, $4, $5, $6)`,
+        [slug, visitorId || null, utmSource || null, utmCampaign || null, utmMedium || null, cleanTargetUrl]
+      );
+      return res.status(201).json({ success: true });
+    }
+
+    const { rows } = await db.query(
+      `SELECT id, COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId"
+       FROM landing_pages
+       WHERE slug = $1 AND is_published = true`,
+      [slug]
+    );
+    if (!rows[0]) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
+    }
+    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
+    if (await resourceIsLocked('landing_pages', rows[0].id)) {
+      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
+    }
+
+    await db.query(
+      `INSERT INTO landing_page_events
+         (landing_page_slug, event_type, visitor_id, utm_source, utm_campaign, utm_medium, target_url, id_user)
+       VALUES ($1, 'click', $2, $3, $4, $5, $6, $7)`,
+      [
+        slug,
+        visitorId || null,
+        utmSource || null,
+        utmCampaign || null,
+        utmMedium || null,
+        cleanTargetUrl,
+        rows[0].workspaceOwnerId,
+      ]
+    );
+    return res.status(201).json({ success: true });
+  } catch (error) {
+    console.error('Landing analytics click error:', error);
+    return res.status(500).json({ success: false, message: 'Lỗi server' });
+  }
+});
+
 router.get('/landing-track/go', async (req, res) => {
   try {
     const { slug, u } = req.query;

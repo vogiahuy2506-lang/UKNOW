@@ -63,8 +63,27 @@
   }
 
   // ============================================================
-  // 2. CLICK TRACKING - Chuyển link qua API để đếm
+  // 2. CLICK TRACKING - Đếm click động mà không làm biến dạng URL
   // ============================================================
+  function trackClick(targetUrl) {
+    try {
+      var payload = JSON.stringify({ slug: slug, targetUrl: targetUrl });
+      if (navigator.sendBeacon) {
+        var blob = new Blob([payload], { type: 'application/json' });
+        navigator.sendBeacon(apiBase + '/public/landing-analytics/click', blob);
+      } else if (window.fetch) {
+        fetch(apiBase + '/public/landing-analytics/click', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: payload,
+          keepalive: true,
+        }).catch(function() {});
+      }
+    } catch (e) {
+      // Silently fail - không ảnh hưởng UX
+    }
+  }
+
   document.addEventListener(
     'click',
     function (ev) {
@@ -74,21 +93,15 @@
       var a = el.closest('a[href]');
       if (!a) return;
 
+      // Hỗ trợ opt-out bằng data-no-track hoặc data-tracking="false"
+      if (a.hasAttribute('data-no-track') || a.getAttribute('data-tracking') === 'false') return;
+
       var href = String(a.getAttribute('href') || '').trim();
-      if (!href || href.charAt(0) === '#' || href.indexOf('mailto:') === 0 || href.indexOf('tel:') === 0) return;
+      if (!href || href.charAt(0) === '#' || href.indexOf('mailto:') === 0 || href.indexOf('tel:') === 0 || href.indexOf('javascript:') === 0) return;
       if (href.indexOf('http://') !== 0 && href.indexOf('https://') !== 0) return;
 
-      ev.preventDefault();
-
-      /** URL đã rewrite khi lưu CMS — chỉ mở tab mới, không bọc thêm query u=. Vẫn sửa /api/api nếu HTML cũ. */
-      var finalUrl =
-        href.indexOf('landing-track/go') !== -1
-          ? fixDoubleApiSegment(href)
-          : fixDoubleApiSegment(
-              apiBase + '/public/landing-track/go?slug=' + encodeURIComponent(slug) + '&u=' + encodeURIComponent(href)
-            );
-
-      openUrlInNewTab(finalUrl);
+      // Ghi nhận click tracking trong nền — không ngăn cản hay thay đổi hành vi mặc định của trình duyệt
+      trackClick(href);
     },
     true
   );

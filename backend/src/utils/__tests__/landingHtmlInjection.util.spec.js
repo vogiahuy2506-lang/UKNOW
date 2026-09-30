@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach } from '@jest/globals';
 import {
   stripFounderLandingAutoBlocks,
+  restoreOriginalHttpAnchors,
   rewriteHttpAnchorsToTrack,
   normalizeLandingLpTrackApiBase,
   prepareLandingHtmlOnSave,
@@ -200,6 +201,31 @@ describe('landingHtmlInjection.util', () => {
     });
   });
 
+  describe('restoreOriginalHttpAnchors', () => {
+    it('khôi phục URL gốc từ link tracking trong href', () => {
+      const html = '<a class="policy-link" href="https://api.founderai.biz/api/public/landing-track/go?slug=promo&u=https%3A%2F%2Fapp.hanhchinh.ai.vn%2Fpolicies%2Fprivacy-policy">Link</a>';
+      const out = restoreOriginalHttpAnchors(html);
+      expect(out).toBe('<a class="policy-link" href="https://app.hanhchinh.ai.vn/policies/privacy-policy">Link</a>');
+    });
+
+    it('giữ nguyên các link bình thường không phải tracking', () => {
+      const html = '<a href="https://example.com/page">Link</a>';
+      expect(restoreOriginalHttpAnchors(html)).toBe(html);
+    });
+
+    it('xử lý query param u viết hoa hoặc dạng &amp;', () => {
+      const html = '<a href="http://api.test/public/landing-track/go?slug=promo&amp;u=https%3A%2F%2Fdigiso.vn">Web</a>';
+      const out = restoreOriginalHttpAnchors(html);
+      expect(out).toBe('<a href="https://digiso.vn">Web</a>');
+    });
+
+    it('input rỗng / null / undefined trả chuỗi an toàn', () => {
+      expect(restoreOriginalHttpAnchors('')).toBe('');
+      expect(restoreOriginalHttpAnchors(null)).toBe('');
+      expect(restoreOriginalHttpAnchors(undefined)).toBe('');
+    });
+  });
+
   describe('injectLandingEnhancements', () => {
     const opts = {
       slug: 'promo',
@@ -305,15 +331,16 @@ describe('landingHtmlInjection.util', () => {
       apiBase: 'http://localhost:5001/api',
     };
 
-    it('chạy đủ pipeline: strip script cũ → rewrite link → inject scripts tracking', () => {
+    it('chạy đủ pipeline: strip script cũ → giữ nguyên link gốc (không chèn tracking URL) → inject scripts tracking', () => {
       const html =
         '<html><body>' +
         '<section data-founder-lp-embed="1">admin-thiết-kế-riêng</section>' +
         '<a href="https://target.com">click</a>' +
         '</body></html>';
       const out = prepareLandingHtmlOnSave(html, opts);
-      // Link đã rewrite
-      expect(out).toContain('landing-track/go');
+      // Link giữ nguyên gốc, không bị biến thành landing-track/go
+      expect(out).toContain('href="https://target.com"');
+      expect(out).not.toContain('landing-track/go');
       // Scripts được inject
       expect(out).toContain('lp-track.js');
       expect(out).toContain('founderai-capture.js');
@@ -323,6 +350,13 @@ describe('landingHtmlInjection.util', () => {
       expect(out).toContain('admin-thiết-kế-riêng');
       // KHÔNG có iframe tự động chèn (v2.0 trở đi)
       expect(out).not.toContain('/embed/lead-form');
+    });
+
+    it('khôi phục link tracking cũ về URL gốc khi lưu', () => {
+      const oldHtml = '<html><body><a href="http://api.test/api/public/landing-track/go?slug=promo&u=https%3A%2F%2Fdigiso.vn">Web</a></body></html>';
+      const out = prepareLandingHtmlOnSave(oldHtml, opts);
+      expect(out).toContain('href="https://digiso.vn"');
+      expect(out).not.toContain('landing-track/go');
     });
 
     it('idempotent: gọi 2 lần kết quả không thay đổi', () => {

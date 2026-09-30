@@ -11,6 +11,7 @@ import {
   normalizeLeadFormConfig,
   snapshotLeadFormPersistedMeta,
 } from '../../landing-pages/utils/landingLeadFormConfig.js';
+import { restoreOriginalHttpAnchors } from '../../landing-pages/utils/injectLandingEnhancements.js';
 import { useI18n } from '../../../i18n';
 
 /**
@@ -92,7 +93,7 @@ export default function LandingCanvasPage() {
         setForm({
           slug: full.slug || '',
           title: full.title || '',
-          htmlContent: full.htmlContent || '',
+          htmlContent: restoreOriginalHttpAnchors(full.htmlContent || ''),
           isPublished: Boolean(full.isPublished),
           domainType: full.domainType === 'custom' ? 'custom' : 'system',
           customDomainHostname: full.customDomainHostname || null,
