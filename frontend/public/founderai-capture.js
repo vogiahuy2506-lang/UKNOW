@@ -338,6 +338,10 @@ if (typeof window !== 'undefined') {
   while (/\/api\/api$/i.test(apiBase)) {
     apiBase = apiBase.replace(/\/api\/api$/i, '/api');
   }
+  // Tránh lỗi SSL trên api.founderai.biz (subdomain trỏ thẳng VPS hết hạn SSL) → chuyển sang founderai.biz/api (Cloudflare SSL hợp lệ)
+  if (apiBase.indexOf('://api.founderai.biz') !== -1) {
+    apiBase = apiBase.replace('://api.founderai.biz', '://founderai.biz');
+  }
   var slug = (sc.getAttribute('data-slug') || '').trim().toLowerCase();
   // Mặc định bật auto mode khi landing page không có form data-founderai-capture
   // → capture form đầu tiên CÓ input email/phone/tel/phoneNumber (pickAutoCaptureForm).

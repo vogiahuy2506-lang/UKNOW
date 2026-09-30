@@ -38,6 +38,9 @@ export function normalizeLandingLpTrackApiBase(raw) {
   while (/\/api\/api$/i.test(base)) {
     base = base.replace(/\/api\/api$/i, '/api');
   }
+  if (base.includes('://api.founderai.biz')) {
+    base = base.replace('://api.founderai.biz', '://founderai.biz');
+  }
   return base;
 }
 

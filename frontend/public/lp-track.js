@@ -21,6 +21,9 @@
   while (/\/api\/api$/i.test(apiBase)) {
     apiBase = apiBase.replace(/\/api\/api$/i, '/api');
   }
+  if (apiBase.indexOf('://api.founderai.biz') !== -1) {
+    apiBase = apiBase.replace('://api.founderai.biz', '://founderai.biz');
+  }
   var slug = (sc.getAttribute('data-slug') || '').trim().toLowerCase();
   if (!apiBase || !slug) return;
 
