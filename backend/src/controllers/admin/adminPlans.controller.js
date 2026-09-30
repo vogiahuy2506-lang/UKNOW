@@ -76,7 +76,7 @@ export async function listCustom(req, res) {
 export async function create(req, res) {
   try {
     const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
@@ -93,7 +93,7 @@ export async function create(req, res) {
     const plan = await adminPlansService.createNewPlan({
       code, name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
@@ -109,7 +109,7 @@ export async function create(req, res) {
 export async function update(req, res) {
   try {
     const { code, name, price, priceYearly, description, features, maxEmployees, isActive, durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
@@ -117,7 +117,7 @@ export async function update(req, res) {
     const plan = await adminPlansService.editPlan(Number(req.params.id), {
       code, name, price: Number(price), priceYearly, description, features,
       maxEmployees: Number(maxEmployees ?? 0), isActive, durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, aiModel,
@@ -144,7 +144,7 @@ export async function remove(req, res) {
 export async function createCustomWithPayment(req, res) {
   try {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes } = req.body;
@@ -152,7 +152,7 @@ export async function createCustomWithPayment(req, res) {
     const result = await adminPlansService.createCustomPlanWithPayment(userEmail, {
       name, code, price: Number(price), priceYearly, description,
       maxEmployees: Number(maxEmployees ?? -1), durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes,
@@ -169,7 +169,7 @@ export async function createCustomWithPayment(req, res) {
 export async function createCustom(req, res) {
   try {
     const { userEmail, name, code, price, priceYearly, description, maxEmployees, durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes } = req.body;
@@ -177,7 +177,7 @@ export async function createCustom(req, res) {
     const result = await adminPlansService.createCustomPlanForUser(userEmail, {
       name, code, price: Number(price), priceYearly, description,
       maxEmployees: Number(maxEmployees ?? 0), durationDays,
-      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, messagesPerPeriod, isFupEnabled,
+      dailyEmailLimit, monthlyEmailLimit, dailyZaloLimit, monthlyZaloLimit, monthlyTelegramLimit, monthlyWhatsappLimit, messagesPerPeriod, isFupEnabled,
       maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
       maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates, maxChatbots,
       aiTokensPerPeriod, aiCreditsPerPeriod, storageLimitBytes,

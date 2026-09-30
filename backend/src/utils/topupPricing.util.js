@@ -8,6 +8,9 @@ export const TOPUP_MIN_ORDER_AMOUNT = 50_000;
 /** Consumable quotas — permanent wallet (cycle_end NULL). */
 export const TOPUP_CONSUMABLE_KEYS = Object.freeze([
   'zalo_messages',
+  // P10 (PLAN_TG_WA_DAY_DU mục 17) — tin Telegram/WhatsApp có hạn mức riêng nên có ví riêng, giá seed = zalo_messages (migration 271).
+  'telegram_messages',
+  'whatsapp_messages',
   'emails',
   'ai_credits',
 ]);

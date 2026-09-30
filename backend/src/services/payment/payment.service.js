@@ -685,6 +685,8 @@ export const createCustomPaymentLink = async ({
                 monthlyEmailLimit: planColumns.monthlyEmailLimit,
                 dailyZaloLimit: planColumns.dailyZaloLimit,
                 monthlyZaloLimit: planColumns.monthlyZaloLimit,
+                monthlyTelegramLimit: planColumns.monthlyTelegramLimit,
+                monthlyWhatsappLimit: planColumns.monthlyWhatsappLimit,
                 messagesPerPeriod: null,
                 isFupEnabled: false,
                 maxLandingPages: planColumns.maxLandingPages,

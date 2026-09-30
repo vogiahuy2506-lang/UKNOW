@@ -118,7 +118,7 @@ async function buildZaloCapacityContext(billingUserId, requestedQty = 0) {
 }
 
 /**
- * P6 (PLAN_TG_WA_DAY_DU) — slot tài khoản Telegram/WhatsApp chỉ có nghĩa khi gói CÓ trần. Cột NULL = không giới hạn
+ * P6 (PLAN_TG_WA_DAY_DU) — slot tài khoản (và P10: ví tin) Telegram/WhatsApp chỉ có nghĩa khi gói CÓ trần. Cột NULL = không giới hạn
  * (gói hiện có, migration 263) → mua slot là trả tiền cho thứ đã có. Trả về các item_key KHÔNG nên bán cho chủ này.
  *
  * @returns {Promise<string[]>}
@@ -133,6 +133,21 @@ async function findUnlimitedChannelSlotKeys(billingUserId, queryable = db) {
   const keys = [];
   if (row.max_telegram_accounts === null) keys.push('telegram_accounts');
   if (row.max_whatsapp_accounts === null) keys.push('whatsapp_accounts');
+  // P10 — tin/tháng Telegram/WhatsApp: gói có hạn mức riêng NULL = không giới hạn → bán ví tin là thu tiền thứ đã có.
+  // Chỉ xét khi user CÓ gói (không có gói thì assertSubscriptionAllowsTopup đã chặn ở quote).
+  const { rows: planRows } = await queryable.query(
+    `SELECT p.id AS plan_id, p.monthly_telegram_limit, p.monthly_whatsapp_limit
+     FROM users u
+     LEFT JOIN plans p ON p.id = (${EFFECTIVE_PLAN_ID_SQL})
+     WHERE u.id = $1
+     LIMIT 1`,
+    [billingUserId]
+  );
+  const plan = planRows[0];
+  if (plan?.plan_id != null) {
+    if (plan.monthly_telegram_limit === null) keys.push('telegram_messages');
+    if (plan.monthly_whatsapp_limit === null) keys.push('whatsapp_messages');
+  }
   return keys;
 }
 
@@ -217,7 +232,7 @@ export async function quoteTopup({ userId, ownerContextId, quantities = {}, mont
     throw {
       status: 400,
       code: 'CHANNEL_SLOTS_UNLIMITED',
-      message: 'Gói hiện tại không giới hạn số tài khoản Telegram/WhatsApp — không cần mua thêm slot.',
+      message: 'Gói hiện tại không giới hạn Telegram/WhatsApp (số tài khoản hoặc số tin) — không cần mua thêm.',
       itemKeys: buyingUnlimited,
     };
   }

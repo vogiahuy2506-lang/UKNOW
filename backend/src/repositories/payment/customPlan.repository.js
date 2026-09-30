@@ -103,6 +103,7 @@ export async function updateCustomPlanLimits(planId, {
   maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
   maxTelegramAccounts, maxWhatsappAccounts,
+  monthlyTelegramLimit, monthlyWhatsappLimit,
   maxChatbots, messagesPerPeriod = null, dailyEmailLimit = null, dailyZaloLimit = null,
   isFupEnabled = false, durationDays = 30, gracePeriodDays = 0,
   storageLimitBytes, maxKbDocuments, maxKbExtractedChars,
@@ -138,6 +139,8 @@ export async function updateCustomPlanLimits(planId, {
        max_kb_extracted_chars = COALESCE($28, max_kb_extracted_chars),
        max_telegram_accounts = $29,
        max_whatsapp_accounts = $30,
+       monthly_telegram_limit = CASE WHEN $31::boolean THEN $32 ELSE monthly_telegram_limit END,
+       monthly_whatsapp_limit = CASE WHEN $33::boolean THEN $34 ELSE monthly_whatsapp_limit END,
        updated_at = NOW()
      WHERE id = $1 AND is_custom = TRUE
      RETURNING *`,
@@ -153,6 +156,8 @@ export async function updateCustomPlanLimits(planId, {
       Boolean(isFupEnabled), durationDays ?? 30, gracePeriodDays ?? 0,
       storageLimitBytes ?? null, maxKbDocuments ?? null, maxKbExtractedChars ?? null,
       maxTelegramAccounts ?? null, maxWhatsappAccounts ?? null,
+      monthlyTelegramLimit !== undefined, monthlyTelegramLimit ?? null,
+      monthlyWhatsappLimit !== undefined, monthlyWhatsappLimit ?? null,
     ]
   );
   return rows[0] || null;

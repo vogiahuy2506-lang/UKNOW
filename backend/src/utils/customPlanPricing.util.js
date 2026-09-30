@@ -199,6 +199,8 @@ export function mapQuantitiesToPlanColumns(configRows, quantities) {
 
   const snakeToCamel = {
     monthly_zalo_limit: 'monthlyZaloLimit',
+    monthly_telegram_limit: 'monthlyTelegramLimit',
+    monthly_whatsapp_limit: 'monthlyWhatsappLimit',
     monthly_email_limit: 'monthlyEmailLimit',
     ai_credits_per_period: 'aiCreditsPerPeriod',
     max_zalo_accounts: 'maxZaloAccounts',

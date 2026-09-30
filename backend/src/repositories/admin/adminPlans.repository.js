@@ -10,6 +10,7 @@ const PLAN_COLS = `
   duration_days AS "durationDays",
   daily_email_limit AS "dailyEmailLimit", monthly_email_limit AS "monthlyEmailLimit",
   daily_zalo_limit AS "dailyZaloLimit", monthly_zalo_limit AS "monthlyZaloLimit",
+  monthly_telegram_limit AS "monthlyTelegramLimit", monthly_whatsapp_limit AS "monthlyWhatsappLimit",
   messages_per_period AS "messagesPerPeriod", is_fup_enabled AS "isFupEnabled",
   max_landing_pages AS "maxLandingPages", max_campaigns AS "maxCampaigns",
   max_zalo_campaigns AS "maxZaloCampaigns",
@@ -43,6 +44,7 @@ export async function findCustomPlans({ showHidden = false } = {}) {
             p.is_active AS "isActive", p.is_custom AS "isCustom",
             p.max_employees AS "maxEmployees", p.daily_email_limit AS "dailyEmailLimit", p.monthly_email_limit AS "monthlyEmailLimit",
             p.daily_zalo_limit AS "dailyZaloLimit", p.monthly_zalo_limit AS "monthlyZaloLimit",
+            p.monthly_telegram_limit AS "monthlyTelegramLimit", p.monthly_whatsapp_limit AS "monthlyWhatsappLimit",
             p.messages_per_period AS "messagesPerPeriod", p.is_fup_enabled AS "isFupEnabled",
             p.duration_days AS "durationDays",
             p.max_landing_pages AS "maxLandingPages", p.max_campaigns AS "maxCampaigns",
@@ -90,6 +92,7 @@ export async function createPlan({ code, name, price, priceYearly, description, 
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
+  monthlyTelegramLimit, monthlyWhatsappLimit,
   maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes,
   maxKbDocuments, maxKbExtractedChars,
   customOwnerUserId = null, customConfig = null }, queryable = db) {
@@ -106,8 +109,9 @@ export async function createPlan({ code, name, price, priceYearly, description, 
                         custom_owner_user_id, custom_config, storage_limit_bytes,
                         max_kb_documents, max_kb_extracted_chars,
                         max_whatsapp_accounts, max_telegram_accounts,
+                        monthly_telegram_limit, monthly_whatsapp_limit,
                         created_at, updated_at)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,NOW(),NOW())
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,$35,$36,$37,$38,$39,NOW(),NOW())
      RETURNING *`,
     [code, name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive, isCustom,
      durationDays ?? null,
@@ -122,7 +126,8 @@ export async function createPlan({ code, name, price, priceYearly, description, 
      customOwnerUserId ?? null,
      customConfig != null ? JSON.stringify(customConfig) : null,
      storageLimitBytes ?? 104857600, maxKbDocuments ?? 3, maxKbExtractedChars ?? 100000,
-     maxWhatsappAccounts ?? null, maxTelegramAccounts ?? null]
+     maxWhatsappAccounts ?? null, maxTelegramAccounts ?? null,
+     monthlyTelegramLimit ?? null, monthlyWhatsappLimit ?? null]
   );
   return rows[0];
 }
@@ -132,12 +137,13 @@ export async function updatePlan(id, { code, name, price, priceYearly, descripti
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
+  monthlyTelegramLimit, monthlyWhatsappLimit,
   maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes }) {
   // code: CHỈ điền được khi đang NULL (vá gói lỡ tạo thiếu code). Không cho đổi code đã có
   // vì voucher gán theo planCode và đơn cũ tham chiếu tới nó.
   const { rows } = await db.query(
     `UPDATE plans
-     SET code = COALESCE(code, NULLIF($33, '')),
+     SET code = COALESCE(code, NULLIF($35, '')),
          name = $1, price = $2, price_yearly = $3, description = $4, features = $5,
          max_employees = $6, is_active = $7,
          duration_days = $8,
@@ -152,8 +158,9 @@ export async function updatePlan(id, { code, name, price, priceYearly, descripti
          grace_period_days = $28,
          storage_limit_bytes = $29,
          max_whatsapp_accounts = $30, max_telegram_accounts = $31,
+         monthly_telegram_limit = $32, monthly_whatsapp_limit = $33,
          updated_at = NOW()
-     WHERE id = $32
+     WHERE id = $34
      RETURNING *`,
     [name, price, toNullableBigint(priceYearly), description || null, JSON.stringify(features || []), maxEmployees, isActive,
      durationDays ?? null,
@@ -166,6 +173,7 @@ export async function updatePlan(id, { code, name, price, priceYearly, descripti
      maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
      gracePeriodDays ?? 0, storageLimitBytes,
      maxWhatsappAccounts ?? null, maxTelegramAccounts ?? null,
+     monthlyTelegramLimit ?? null, monthlyWhatsappLimit ?? null,
      id, String(code || '').trim().toLowerCase()]
   );
   return rows[0] || null;
@@ -278,6 +286,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
   messagesPerPeriod, isFupEnabled,
   maxLandingPages, maxCampaigns, maxZaloCampaigns, maxZaloGroupCampaigns, maxEmailCampaigns,
   maxZaloAccounts, maxWhatsappAccounts, maxTelegramAccounts, maxEmailAccounts, maxEmailTemplates, maxZaloTemplates,
+  monthlyTelegramLimit, monthlyWhatsappLimit,
   maxChatbots, aiTokensPerPeriod, aiCreditsPerPeriod, aiModel, gracePeriodDays, storageLimitBytes,
   maxKbDocuments, maxKbExtractedChars }) {
   const client = await db.getClient();
@@ -296,8 +305,9 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
                           max_chatbots, ai_tokens_per_period, ai_credits_per_period, ai_model, grace_period_days, storage_limit_bytes,
                           max_kb_documents, max_kb_extracted_chars,
                           max_whatsapp_accounts, max_telegram_accounts,
+                          monthly_telegram_limit, monthly_whatsapp_limit,
                           created_at, updated_at)
-       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,NOW(),NOW())
+       VALUES ($1,$2,$3,$4,$5,'[]',$6,true,true,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30,$31,$32,$33,$34,NOW(),NOW())
        RETURNING *`,
       [code || null, name, price, toNullableBigint(priceYearly), description || null, maxEmployees,
        durationDays ?? null,
@@ -310,7 +320,8 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
        maxChatbots ?? null, aiTokensPerPeriod ?? null, aiCreditsPerPeriod ?? null, aiModel || 'gemini-2.5-flash',
        gracePeriodDays ?? 0, storageLimitBytes,
        maxKbDocuments ?? 3, maxKbExtractedChars ?? 100000,
-       maxWhatsappAccounts ?? null, maxTelegramAccounts ?? null]
+       maxWhatsappAccounts ?? null, maxTelegramAccounts ?? null,
+       monthlyTelegramLimit ?? null, monthlyWhatsappLimit ?? null]
     );
     const plan = planResult.rows[0];
 

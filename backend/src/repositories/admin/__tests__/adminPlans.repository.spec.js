@@ -54,9 +54,9 @@ describe('adminPlans.repository.updatePlan — code backfill (PR-B)', () => {
     await updatePlan(5, payload({ code: 'attempted-override' }));
 
     const [sql, params] = query.mock.calls[0];
-    expect(String(sql)).toMatch(/code\s*=\s*COALESCE\(code,\s*NULLIF\(\$33,\s*''\)\)/);
+    expect(String(sql)).toMatch(/code\s*=\s*COALESCE\(code,\s*NULLIF\(\$35,\s*''\)\)/);
     expect(params[params.length - 1]).toBe('attempted-override');
-    expect(params[params.length - 2]).toBe(5); // id still bound to $32
+    expect(params[params.length - 2]).toBe(5); // id still bound (P10: $34 — hai tham số hạn mức tin TG/WA chèn trước id/code)
   });
 
   it('passes empty string through as NULLIF input when code is omitted, leaving an existing code untouched', async () => {
@@ -88,5 +88,29 @@ describe('adminPlans.repository.updatePlan — W5 hạn mức tài khoản Whats
     [sql, params] = query.mock.calls[0];
     expect(params[29]).toBeNull();
     expect(params[30]).toBeNull();
+  });
+});
+
+describe('adminPlans.repository.updatePlan — P10 han muc tin/thang Telegram/WhatsApp', () => {
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  it('ghi monthly_telegram_limit=$32 / monthly_whatsapp_limit=$33 dung vi tri; thieu -> NULL; id/code van la hai tham so cuoi', async () => {
+    query.mockResolvedValue({ rows: [{ id: 5 }] });
+
+    await updatePlan(5, payload({ code: 'starter', monthlyTelegramLimit: 2000, monthlyWhatsappLimit: 0 }));
+    let [sql, params] = query.mock.calls[0];
+    expect(String(sql)).toMatch(/monthly_telegram_limit = \$32, monthly_whatsapp_limit = \$33/);
+    expect(params[31]).toBe(2000);
+    expect(params[32]).toBe(0);
+    expect(params[33]).toBe(5);
+    expect(params[34]).toBe('starter');
+
+    query.mockClear();
+    await updatePlan(5, payload());
+    [sql, params] = query.mock.calls[0];
+    expect(params[31]).toBeNull();
+    expect(params[32]).toBeNull();
   });
 });

@@ -204,6 +204,9 @@ CREATE TABLE plans (
   monthly_email_limit   INTEGER,
   daily_zalo_limit      INTEGER,
   monthly_zalo_limit    INTEGER,
+  -- migration 271 (P10): han muc tin/thang rieng Telegram/WhatsApp (NULL = khong gioi han)
+  monthly_telegram_limit INTEGER,
+  monthly_whatsapp_limit INTEGER,
   max_landing_pages     INTEGER,
   max_campaigns         INTEGER,
   max_zalo_campaigns      INTEGER,
@@ -352,7 +355,10 @@ VALUES
   ('storage_gb', 'storage_limit_bytes', 15000, 1, 10, 10, 1000, 10, TRUE, 160),
   -- Migration 269 (P6) + 270: TK Telegram/WhatsApp — gia don vi = gia TK Zalo (40000), min/included = 1 nhu Zalo/email (270).
   ('telegram_accounts', 'max_telegram_accounts', 40000, 1, 1, 1, 50, 1, TRUE, 51),
-  ('whatsapp_accounts', 'max_whatsapp_accounts', 40000, 1, 1, 1, 50, 1, TRUE, 52);
+  ('whatsapp_accounts', 'max_whatsapp_accounts', 40000, 1, 1, 1, 50, 1, TRUE, 52),
+  -- Migration 271 (P10): tin/thang Telegram/WhatsApp — giong dong zalo_messages.
+  ('telegram_messages', 'monthly_telegram_limit', 30000, 500, 500, 500, 200000, 500, TRUE, 21),
+  ('whatsapp_messages', 'monthly_whatsapp_limit', 30000, 500, 500, 500, 200000, 500, TRUE, 22);
 
 -- Khớp production (PLAN_SCHEMA_BUOC2): id/plan_id int4, amount numeric,
 -- status/payment_method varchar(50), FK ON DELETE NO ACTION (giữ lịch sử tiền).
@@ -497,7 +503,10 @@ VALUES
   ('storage_gb',     25000, 5, 5, 200, TRUE,  90),
   -- Migration 269 (P6): slot TK Telegram/WhatsApp — gia mac dinh = gia slot Zalo (50000).
   ('telegram_accounts', 50000, 1, 1, 50, TRUE, 41),
-  ('whatsapp_accounts', 50000, 1, 1, 50, TRUE, 42);
+  ('whatsapp_accounts', 50000, 1, 1, 50, TRUE, 42),
+  -- Migration 271 (P10): mon tieu hao tin Telegram/WhatsApp — gia = gia zalo_messages (100d/tin, min/buoc 50).
+  ('telegram_messages', 100, 50, 50, NULL, TRUE, 11),
+  ('whatsapp_messages', 100, 50, 50, NULL, TRUE, 12);
 
 CREATE TABLE topup_grants (
   id         BIGSERIAL PRIMARY KEY,
@@ -2700,7 +2709,7 @@ ALTER TABLE topup_grants ALTER COLUMN cycle_end DROP NOT NULL;
 -- Món tiêu hao KHÔNG được có hạn — ghi sai thì lỗi ngay tại chỗ ghi (migration 110).
 ALTER TABLE topup_grants
   ADD CONSTRAINT topup_grants_consumable_no_expiry CHECK (
-    item_key NOT IN ('zalo_messages', 'emails', 'ai_credits')
+    item_key NOT IN ('zalo_messages', 'emails', 'ai_credits', 'telegram_messages', 'whatsapp_messages')
     OR cycle_end IS NULL
   );
 
@@ -3415,11 +3424,11 @@ CREATE TABLE IF NOT EXISTS send_quota_reservations (
   consumed_at TIMESTAMPTZ,
   released_at TIMESTAMPTZ,
   uncertain_at TIMESTAMPTZ,
-  CONSTRAINT chk_sqr_channel CHECK (channel IN ('email', 'zalo')),
+  CONSTRAINT chk_sqr_channel CHECK (channel IN ('email', 'zalo', 'telegram', 'whatsapp')),
   CONSTRAINT chk_sqr_status CHECK (status IN ('reserved', 'sending', 'consumed', 'released', 'uncertain')),
   CONSTRAINT chk_sqr_wallet_quantity CHECK (wallet_quantity <= quantity),
   CONSTRAINT chk_sqr_fingerprint CHECK (request_fingerprint ~ '^[0-9a-f]{64}$'),
-  CONSTRAINT chk_sqr_wallet_item_key CHECK ((wallet_quantity > 0 AND wallet_item_key IN ('emails', 'zalo_messages')) OR (wallet_quantity = 0 AND wallet_item_key IS NULL)),
+  CONSTRAINT chk_sqr_wallet_item_key CHECK ((wallet_quantity > 0 AND wallet_item_key IN ('emails', 'zalo_messages', 'telegram_messages', 'whatsapp_messages')) OR (wallet_quantity = 0 AND wallet_item_key IS NULL)),
   CONSTRAINT chk_sqr_metered_wallet CHECK (is_metered = true OR wallet_quantity = 0),
   CONSTRAINT chk_sqr_response_snapshot_size CHECK (response_snapshot IS NULL OR octet_length(response_snapshot::text) <= 4096)
 );
