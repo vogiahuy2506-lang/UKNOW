@@ -106,6 +106,21 @@ describe('applyHtmlEdits — tầng khớp nới khoảng trắng', () => {
     expect(err.code).toBe('LANDING_PATCH_NOT_FOUND');
   });
 
+  // Review 30/09 trên trang thật (66.753 ký tự): kiểu thụt lề này có ở khắp trang; bản đầu chỉ nới
+  // giữa `><` nên trượt ~40% khối AI chép lại.
+  it('AI bỏ thụt lề giữa THẺ và CHỮ (gốc `">\\n      Chữ`) → khớp tầng 2', () => {
+    const html = '<div>\n  <h3 class="t">Tiêu đề</h3>\n  <p class="d">\n    Mô hình AI chạy\n    tại chỗ.\n  </p>\n</div>';
+    const find = '<h3 class="t">Tiêu đề</h3><p class="d">Mô hình AI chạy tại chỗ.</p>';
+    const { html: out } = applyHtmlEdits(html, [{ find, replace: '<h3 class="t">Mới</h3>' }]);
+    expect(out).toBe('<div>\n  <h3 class="t">Mới</h3>\n</div>');
+  });
+
+  it('thẻ inline giữa câu khớp tầng 2 → GIỮ dấu cách hai bên, không dính chữ', () => {
+    const html = '<p>Xem <a href="#x">\n  chi tiết\n</a> tại đây</p>';
+    const { html: out } = applyHtmlEdits(html, [{ find: '<a href="#x">chi tiết</a>', replace: '<a href="#y">mới</a>' }]);
+    expect(out).toBe('<p>Xem <a href="#y">mới</a> tại đây</p>');
+  });
+
   it('find chứa ký tự regex (. ( [ * ? + | \\) → khớp tầng 2 đúng, không ném SyntaxError', () => {
     const html = '<p>\n  a.b (c) [d] * e ? f + g | h \\ i\n</p>';
     const find = '<p> a.b (c) [d] * e ? f + g | h \\ i </p>';

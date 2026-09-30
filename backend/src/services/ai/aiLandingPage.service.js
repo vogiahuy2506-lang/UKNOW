@@ -968,7 +968,9 @@ ${exampleLine}`;
           parts: buildModelParts(promptToSend, assets, documents),
           jsonMode: true,
           maxOutputTokens: 32768,
-          timeoutMs: EDIT_TIME_BUDGET_MS,
+          // Phần ngân sách CÒN LẠI, không phải trọn 85 giây: lượt vá thứ hai (sinh lại vì ảnh bịa) mà
+          // treo trọn 85 giây thì tổng vượt trần 100 giây của Cloudflare.
+          timeoutMs: Math.max(1000, EDIT_TIME_BUDGET_MS - (Date.now() - telemetry.startedAt)),
           temperature: 0.2,
           feature: 'landing_page',
           metadata: {
@@ -1004,7 +1006,6 @@ ${exampleLine}`;
       }
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw patchFailure('parse');
 
-      const title = String(parsed.title || '').trim() || 'Landing';
       const changeSummary = normalizeChangeSummary(parsed.changeSummary);
 
       let html;
@@ -1024,6 +1025,12 @@ ${exampleLine}`;
       } else {
         throw patchFailure('empty');
       }
+
+      // Bản vá không bắt AI nhắc lại tiêu đề; thiếu thì lấy <title> của trang sau khi ghép — controller
+      // lưu `title` vào phiên, rơi về 'Landing' là thẻ landing đổi tên sai.
+      const title = String(parsed.title || '').trim()
+        || (html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || '').trim()
+        || 'Landing';
 
       return finalizeEdit({ title, html, changeSummary, finishReason });
     };

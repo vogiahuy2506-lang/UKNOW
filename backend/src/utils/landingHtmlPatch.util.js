@@ -23,13 +23,25 @@ function findExactPositions(html, find) {
 }
 
 /**
- * Regex khớp nới khoảng trắng: AI hay chép sai thụt lề/xuống dòng. Bỏ khoảng trắng giữa `>` và
- * `<`, escape ký tự đặc biệt regex, mỗi đoạn khoảng trắng → `\s+`, mỗi `><` → `>\s*<`.
+ * Regex khớp nới khoảng trắng: AI hay chép sai thụt lề/xuống dòng. Bỏ khoảng trắng sát sau `>` và
+ * sát trước `<`, escape ký tự đặc biệt regex, mỗi đoạn khoảng trắng → `\s+`, rồi cho phép khoảng
+ * trắng tuỳ ý sau mọi `>` và trước mọi `<`.
+ *
+ * Review 30/09 trên trang thật 66.753 ký tự (1.468 khối 1–6 dòng, chép lại kiểu AI: bỏ thụt lề,
+ * nối dòng bằng dấu cách): khớp chính xác chỉ được 226; bản chỉ nới giữa `><` được 900 — hỏng mọi
+ * khối có `">\n      Chữ…`; bản này 1.468/1.468, span đúng từng ký tự.
+ * `\s*` ở HAI ĐẦU mẫu bị cắt bỏ: để lại thì span nuốt dấu cách ngoài đoạn, thẻ inline giữa câu
+ * (`Xem <a>…</a> tại đây`) bị dính chữ sau khi thay.
  */
 function buildLooseRegex(find) {
-  const compact = find.trim().replace(/>\s+</g, '><');
+  const compact = find.trim().replace(/>\s+/g, '>').replace(/\s+</g, '<');
   const escaped = compact.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const pattern = escaped.replace(/\s+/g, '\\s+').replace(/></g, '>\\s*<');
+  const pattern = escaped
+    .replace(/\s+/g, '\\s+')
+    .replace(/>/g, '>\\s*')
+    .replace(/</g, '\\s*<')
+    .replace(/^\\s\*/, '')
+    .replace(/\\s\*$/, '');
   return new RegExp(pattern, 'g');
 }
 

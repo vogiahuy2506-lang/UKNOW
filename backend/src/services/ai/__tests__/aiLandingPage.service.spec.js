@@ -1391,7 +1391,14 @@ describe('aiLandingPageService.editHtml — sửa theo đoạn (bản vá)', () 
 
   it('vá 1 edit hợp lệ → 1 lần gọi, đúng 1 chỗ đổi, prompt vá, log strategy=patch patchEdits=1', async () => {
     generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
-    const result = await edit();
+    // Đóng băng đồng hồ: timeoutMs = ngân sách − thời gian đã trôi, đồng hồ thật lệch vài ms là đỏ giả.
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    let result;
+    try {
+      result = await edit();
+    } finally {
+      nowSpy.mockRestore();
+    }
     expect(generateWithBudget).toHaveBeenCalledTimes(1);
     expect(result.html).toBe(patchedHtml);
     expect(result.title).toBe('T');
@@ -1590,6 +1597,34 @@ describe('aiLandingPageService.editHtml — sửa theo đoạn (bản vá)', () 
     expect(result.html).toBe(patchedHtml);
     expect(result).not.toHaveProperty('strippedImageUrls');
     expect(doneLogOf(logSpy)).toContain('fakeImageRetry=1');
+  });
+
+  it('lượt vá thứ 2 (sinh lại vì ảnh bịa) chỉ được PHẦN NGÂN SÁCH CÒN LẠI làm timeout, không trọn 85 giây', async () => {
+    const fakeUrl = 'https://fake.cdn.com/fake-timeout.png';
+    let now = 1_000_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    generateWithBudget
+      .mockImplementationOnce(async () => {
+        now += 30000;
+        return patchResponse([{ find: '<h1>Khoá học Alpha</h1>', replace: `<h1>Khoá học Alpha</h1><img src="${fakeUrl}">` }]);
+      })
+      .mockResolvedValueOnce(patchResponse([goodEdit]));
+    try {
+      await edit({ instruction: 'Thêm ảnh' });
+    } finally {
+      nowSpy.mockRestore();
+    }
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(generateWithBudget.mock.calls[0][1].timeoutMs).toBe(EDIT_TIME_BUDGET_MS);
+    expect(generateWithBudget.mock.calls[1][1].timeoutMs).toBe(EDIT_TIME_BUDGET_MS - 30000);
+  });
+
+  it('AI không trả title ở lượt vá → lấy <title> của trang sau khi ghép, KHÔNG rơi về "Landing"', async () => {
+    const withTitle = baseHtml.replace('<head>', '<head><title>Chuyển giao bản quyền AI</title>');
+    generateWithBudget.mockResolvedValue(patchResponse([goodEdit], { title: '' }));
+    const result = await edit({ currentHtml: withTitle });
+    expect(result.title).toBe('Chuyển giao bản quyền AI');
+    expect(result.html).toBe(withTitle.replace('<h1>Khoá học Alpha</h1>', '<h1>Khoá học Beta</h1>'));
   });
 
   it('503 quá tải ở lượt vá → ném nguyên, 1 lần gọi, KHÔNG dự phòng', async () => {
