@@ -4,11 +4,18 @@ import { useI18n } from '../../../i18n';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { PriceInput } from './PlanInputs.jsx';
 
-const CONFIG_KEYS = new Set(['yearly_discount_percent', 'zalo_monthly_capacity_per_account']);
+const CONFIG_KEYS = new Set([
+  'yearly_discount_percent',
+  'zalo_monthly_capacity_per_account',
+  'telegram_monthly_capacity_per_account',
+  'whatsapp_monthly_capacity_per_account',
+]);
 
 const LABEL_MAP = {
   yearly_discount_percent: 'Giảm giá năm (%)',
   zalo_monthly_capacity_per_account: 'Năng lực Zalo / tài khoản',
+  telegram_monthly_capacity_per_account: 'Năng lực Telegram / tài khoản',
+  whatsapp_monthly_capacity_per_account: 'Năng lực WhatsApp / tài khoản',
   base_fee: 'Phí nền',
   zalo_messages: 'Tin Zalo',
   telegram_messages: 'Tin Telegram',

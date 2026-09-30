@@ -5535,6 +5535,7 @@ export default {
     priceFloorTitle: 'Price adjusted',
     priceFloorFallback: 'Price was raised to match the nearest standard plan for this near-clone setup.',
     capacityHint: 'Each Zalo account can send up to ~{n} messages/month.',
+    capacityHintChannel: 'Each {channel} account can send up to ~{n} messages/month.',
     storageKbHint: 'Includes: ~{docs} AI knowledge docs (~{chars} characters)',
     storageNoYearlyDiscount: 'Yearly discount does not apply to storage capacity.',
     items: {
@@ -5655,6 +5656,8 @@ export default {
     viewPricing: 'View pricing',
     stepHint: 'Step {step}',
     zaloRemaining: 'You can buy up to {n} more messages based on connected account capacity',
+    telegramRemaining: 'You can buy up to {n} more Telegram messages based on your plan\'s Telegram account capacity',
+    whatsappRemaining: 'You can buy up to {n} more WhatsApp messages based on your plan\'s WhatsApp account capacity',
     storageRemaining: 'You can buy up to {n} more GB (self-serve cap: 200 GB per account)',
     zaloConnectFirst: 'Connect a Zalo account before buying more messages.',
     qtyRequired: 'Please enter a quantity',

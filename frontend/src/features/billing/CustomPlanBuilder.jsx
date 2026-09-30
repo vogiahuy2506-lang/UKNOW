@@ -115,7 +115,12 @@ export default function CustomPlanBuilder({
   const [loading, setLoading] = useState(true);
   const [quoting, setQuoting] = useState(false);
   const [items, setItems] = useState([]);
-  const [config, setConfig] = useState({ yearlyDiscountPercent: 20, zaloMonthlyCapacityPerAccount: 16000 });
+  const [config, setConfig] = useState({
+    yearlyDiscountPercent: 20,
+    zaloMonthlyCapacityPerAccount: 16000,
+    telegramMonthlyCapacityPerAccount: 16000,
+    whatsappMonthlyCapacityPerAccount: 16000,
+  });
   const [quantities, setQuantities] = useState({});
   const [billingPeriod, setBillingPeriod] = useState(initialBillingPeriod);
   const [quote, setQuote] = useState(null);
@@ -507,6 +512,16 @@ export default function CustomPlanBuilder({
           <p className="text-xs text-slate-500">
             {t('customPlan.capacityHint', {
               n: Number(config.zaloMonthlyCapacityPerAccount || 16000).toLocaleString('vi-VN'),
+            })}
+            {' '}
+            {t('customPlan.capacityHintChannel', {
+              channel: 'Telegram',
+              n: Number(config.telegramMonthlyCapacityPerAccount || 16000).toLocaleString('vi-VN'),
+            })}
+            {' '}
+            {t('customPlan.capacityHintChannel', {
+              channel: 'WhatsApp',
+              n: Number(config.whatsappMonthlyCapacityPerAccount || 16000).toLocaleString('vi-VN'),
             })}
           </p>
           <div className="flex gap-2">

@@ -26,6 +26,12 @@ const ITEM_LABEL_KEYS = {
   storage_gb: 'topup.items.storageGb',
 };
 
+const REMAINING_LABEL_KEY = {
+  zalo_messages: 'topup.zaloRemaining',
+  telegram_messages: 'topup.telegramRemaining',
+  whatsapp_messages: 'topup.whatsappRemaining',
+};
+
 const UNIT_LABEL_KEYS = {
   zalo_messages: 'topup.units.zaloMessages',
   telegram_messages: 'topup.units.telegramMessages',
@@ -199,9 +205,16 @@ const TopupPage = () => {
     return () => clearTimeout(timer);
   }, [loading, quantities, months, runQuote, hasQuantityIssues]);
 
-  const zaloRemaining = quote?.zaloCapacity?.remaining
-    ?? config?.zaloCapacity?.remaining
+  // P11: mỗi món tin lẻ có "còn mua được" theo năng lực số tài khoản của CHÍNH kênh đó (quote ưu tiên hơn config).
+  const remainingFor = (capacityKey) => quote?.[capacityKey]?.remaining
+    ?? config?.[capacityKey]?.remaining
     ?? null;
+  const zaloRemaining = remainingFor('zaloCapacity');
+  const remainingByItem = {
+    zalo_messages: zaloRemaining,
+    telegram_messages: remainingFor('telegramCapacity'),
+    whatsapp_messages: remainingFor('whatsappCapacity'),
+  };
 
   const storageRemaining = quote?.storageCapacity?.remaining
     ?? config?.storageCapacity?.remaining
@@ -212,8 +225,8 @@ const TopupPage = () => {
     const step = Number(item.stepQty || 1);
     const min = Number(item.minQty || 0);
     let max = item.maxQty == null ? Infinity : Number(item.maxQty);
-    if (item.itemKey === 'zalo_messages' && zaloRemaining != null) {
-      max = Math.min(max, Number(zaloRemaining));
+    if (remainingByItem[item.itemKey] != null) {
+      max = Math.min(max, Number(remainingByItem[item.itemKey]));
     }
     if (item.itemKey === 'storage_gb' && storageRemaining != null) {
       max = Math.min(max, Number(storageRemaining));
@@ -378,9 +391,9 @@ const TopupPage = () => {
                       {disabled ? t('topup.structuralDisabledGrace') : t('topup.structuralHint')}
                     </div>
                   )}
-                  {item.itemKey === 'zalo_messages' && zaloRemaining != null && (
+                  {REMAINING_LABEL_KEY[item.itemKey] && remainingByItem[item.itemKey] != null && (
                     <div className="mt-1 text-xs text-amber-700">
-                      {t('topup.zaloRemaining', { n: Number(zaloRemaining).toLocaleString('vi-VN') })}
+                      {t(REMAINING_LABEL_KEY[item.itemKey], { n: Number(remainingByItem[item.itemKey]).toLocaleString('vi-VN') })}
                     </div>
                   )}
                   {item.itemKey === 'storage_gb' && storageRemaining != null && (

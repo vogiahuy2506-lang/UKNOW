@@ -5544,6 +5544,7 @@ export default {
     priceFloorTitle: 'Giá đã được điều chỉnh',
     priceFloorFallback: 'Giá đã được đưa về mức tối thiểu so với gói đại trà gần trùng cấu hình.',
     capacityHint: 'Mỗi tài khoản Zalo gửi tối đa ~{n} tin/tháng.',
+    capacityHintChannel: 'Mỗi tài khoản {channel} gửi tối đa ~{n} tin/tháng.',
     storageKbHint: 'Kèm theo: ~{docs} tài liệu kiến thức AI (~{chars} ký tự)',
     storageNoYearlyDiscount: 'Chiết khấu năm không áp dụng cho dung lượng lưu trữ.',
     items: {
@@ -5664,6 +5665,8 @@ export default {
     viewPricing: 'Xem bảng giá',
     stepHint: 'Bước {step}',
     zaloRemaining: 'Còn mua được tối đa {n} tin theo năng lực tài khoản đã kết nối',
+    telegramRemaining: 'Còn mua được tối đa {n} tin Telegram theo năng lực số tài khoản Telegram của gói',
+    whatsappRemaining: 'Còn mua được tối đa {n} tin WhatsApp theo năng lực số tài khoản WhatsApp của gói',
     storageRemaining: 'Còn mua được tối đa {n} GB (giới hạn tự mua 200 GB/tài khoản)',
     zaloConnectFirst: 'Hãy kết nối tài khoản Zalo trước khi mua thêm tin.',
     qtyRequired: 'Vui lòng nhập số lượng',
