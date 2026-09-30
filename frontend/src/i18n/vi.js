@@ -1513,6 +1513,7 @@ export default {
     status: 'Trạng thái',
     emailLimit: 'Giới hạn Email',
     zaloLimit: 'Giới hạn Zalo',
+    sendLimitsColumn: 'Giới hạn gửi',
     aiLimit: 'Giới hạn AI',
     noPermissionsAssigned: 'Chưa được phân quyền tính năng nào',
     dateAdded: 'Ngày thêm',

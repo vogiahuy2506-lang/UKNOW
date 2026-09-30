@@ -1509,6 +1509,7 @@ export default {
     status: 'Status',
     emailLimit: 'Email Limit',
     zaloLimit: 'Zalo Limit',
+    sendLimitsColumn: 'Send limits',
     aiLimit: 'AI Limit',
     noPermissionsAssigned: 'No feature permissions assigned yet',
     dateAdded: 'Date Added',

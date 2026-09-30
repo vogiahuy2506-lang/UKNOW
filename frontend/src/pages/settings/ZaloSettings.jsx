@@ -444,6 +444,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       <PageHeader
         icon={HiOutlineChatAlt2}
         title={t('zaloSettings.title')}
+        subtitle={t('zaloSettings.description')}
         actions={
           <button
             type="button"

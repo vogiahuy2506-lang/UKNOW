@@ -604,13 +604,10 @@ const EmployeeManagement = () => {
             <table className="table">
               <thead>
                 <tr>
-                  <th>{t('auth.username')}</th>
-                  <th>{t('employee.fullName')}</th>
-                  <th>{t('employee.email')}</th>
+                  <th>{t('employee.teamColEmployee')}</th>
                   <th>{t('employee.status')}</th>
                   <th>{t('employee.permissionsColumn')}</th>
-                  <th>{t('employee.emailLimit')}</th>
-                  <th>{t('employee.zaloLimit')}</th>
+                  <th>{t('employee.sendLimitsColumn')}</th>
                   <th>{t('employee.dateAdded')}</th>
                 </tr>
               </thead>
@@ -624,9 +621,14 @@ const EmployeeManagement = () => {
                       className="cursor-pointer hover:bg-primary-50/40 transition-colors"
                       onClick={() => openEmployeeModal(emp)}
                     >
-                      <td className="font-medium text-primary-600">{emp.username}</td>
-                      <td>{emp.fullName || <span className="text-gray-400">—</span>}</td>
-                      <td className="text-sm text-gray-600">{emp.email}</td>
+                      {/* Gộp tên đăng nhập + họ tên + email vào một cột (trước là 3 cột, bảng 8 cột phải cuộn ngang). */}
+                      <td className="min-w-0">
+                        <div className="font-medium text-gray-900">{emp.fullName || emp.username}</div>
+                        <div className="text-xs text-gray-500">
+                          <span className="text-primary-600">{emp.username}</span>
+                          {emp.email && <span className="ml-1.5 break-all">{emp.email}</span>}
+                        </div>
+                      </td>
                       <td>
                         {emp.acceptedAt === null ? (
                           <span className="badge badge-warning">{t('employee.pendingAcceptance')}</span>
@@ -653,14 +655,18 @@ const EmployeeManagement = () => {
                         )}
                       </td>
                       <td className="text-sm text-gray-500 whitespace-nowrap">
-                        {limitLabel(emp.dailyEmailLimit)}{t('employee.perDay')}
-                        <span className="mx-1 text-gray-300">·</span>
-                        {limitLabel(emp.monthlyEmailLimit)}{t('employee.perMonth')}
-                      </td>
-                      <td className="text-sm text-gray-500 whitespace-nowrap">
-                        {limitLabel(emp.dailyZaloLimit)}{t('employee.perDay')}
-                        <span className="mx-1 text-gray-300">·</span>
-                        {limitLabel(emp.monthlyZaloLimit)}{t('employee.perMonth')}
+                        <div>
+                          <span className="text-gray-700">{t('employee.emailLabel')}:</span>{' '}
+                          {limitLabel(emp.dailyEmailLimit)}{t('employee.perDay')}
+                          <span className="mx-1 text-gray-300">·</span>
+                          {limitLabel(emp.monthlyEmailLimit)}{t('employee.perMonth')}
+                        </div>
+                        <div>
+                          <span className="text-gray-700">{t('employee.zaloLabel')}:</span>{' '}
+                          {limitLabel(emp.dailyZaloLimit)}{t('employee.perDay')}
+                          <span className="mx-1 text-gray-300">·</span>
+                          {limitLabel(emp.monthlyZaloLimit)}{t('employee.perMonth')}
+                        </div>
                       </td>
                       <td className="text-sm text-gray-500">
                         {emp.joinedAt ? new Date(emp.joinedAt).toLocaleDateString('vi-VN') : '—'}
