@@ -1,6 +1,6 @@
 import db from '../../config/database.js';
 import { aiCreditConsumptionRowSql } from '../../constants/aiCreditUsage.js';
-import { safeMetadataTimestampSql } from '../../utils/metadataTimestampSql.util.js';
+import { runDeferredUntilLatestSql } from '../../utils/runDeferMetadataSql.util.js';
 
 /**
  * SQL của khối "Hoạt động nhóm" (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-7). Số tin đã gửi KHÔNG nằm ở đây — chúng
@@ -18,21 +18,8 @@ const VN_TZ = 'Asia/Ho_Chi_Minh';
 // repository không phụ thuộc service).
 const AI_CREDIT_RESOURCE = 'ai_credit';
 
-/**
- * Lượt chạy đang "chờ tới giờ": có mốc hoãn còn ở tương lai trong run_metadata. Bốn khoá do các nơi hoãn khác nhau ghi
- * (hạn mức, giãn cách Zalo, chiến dịch một lần, kênh adapter) — cùng bộ khoá scheduler.js đọc khi nhặt lượt để chạy
- * tiếp. Mốc quá khứ (metadata còn sót) hoặc hỏng → không phải "đang chờ". safeMetadataTimestampSql trả NULL với giá
- * trị hỏng thay vì làm cả truy vấn ném lỗi.
- *
- * GHI CHÚ GỘP: PR-4b (trang Giám sát gửi tin) cũng cần khái niệm này. Khi PR-4b lên main, đưa biểu thức dưới đây vào
- * một chỗ dùng chung với nó rồi xoá bản trong file này.
- */
-const RUN_DEFERRED_UNTIL_SQL = `GREATEST(
-  ${safeMetadataTimestampSql("cr.run_metadata->>'quotaDeferredUntil'")},
-  ${safeMetadataTimestampSql("cr.run_metadata->>'zaloOutboundDeferredUntil'")},
-  ${safeMetadataTimestampSql("cr.run_metadata->>'nonContinuousDeferredUntil'")},
-  ${safeMetadataTimestampSql("cr.run_metadata->>'channelDeferredUntil'")}
-)`;
+// Lượt chạy đang "chờ tới giờ" = mốc hoãn muộn nhất còn ở tương lai (biểu thức dùng chung với các màn khác).
+const RUN_DEFERRED_UNTIL_SQL = runDeferredUntilLatestSql('cr');
 
 const toId = (value) => (value == null ? null : Number(value));
 
