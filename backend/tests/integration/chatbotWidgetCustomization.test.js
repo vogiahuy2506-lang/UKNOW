@@ -138,4 +138,18 @@ describe('cấu hình công khai', () => {
     const after = await request(app).get(`/api/chatbot-public/chatbot/${chatbot.id}`);
     expect(after.body.data.embed_show_header).toBe(false);
   });
+
+  it('không endpoint công khai nào trả system_instruction của chủ chatbot', async () => {
+    const secret = 'Câu lệnh hệ thống nội bộ — không được lộ ra ngoài';
+    await db.query(`UPDATE custom_chatbots SET system_instruction = $2 WHERE id = $1`, [chatbot.id, secret]);
+
+    const byId = await request(app).get(`/api/chatbot-public/chatbot/${chatbot.id}`);
+    const byKey = await request(app).get(`/api/chatbot-public/custom-chatbot/${chatbot.widget_key}/config`);
+    for (const res of [byId, byKey]) {
+      expect(res.status).toBe(200);
+      expect(res.body.data).not.toHaveProperty('system_instruction');
+      expect(res.body.data).not.toHaveProperty('systemInstruction');
+      expect(JSON.stringify(res.body)).not.toContain(secret);
+    }
+  });
 });
