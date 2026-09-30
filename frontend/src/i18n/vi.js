@@ -494,7 +494,7 @@ export default {
     summary: 'Tổng hợp',
     compareChannels: 'So sánh kênh',
     insightOrdersOverTime: 'Insight · Đơn hàng theo thời gian',
-    ordersDescription: 'Theo dõi đơn hàng theo thời gian, kênh và chiến dịch',
+    ordersDescription: 'Kết quả gửi tin, tương tác và đơn hàng trong khoảng thời gian bạn chọn',
     noOrderDataInPeriod: 'Chưa có dữ liệu đơn hàng trong khoảng thời gian này',
     pendingOrdersBadge: 'để lại thông tin',
     completedOrdersBadge: 'đã mua',

@@ -494,7 +494,7 @@ export default {
     summary: 'Summary',
     compareChannels: 'Compare Channels',
     insightOrdersOverTime: 'Insight · Orders Over Time',
-    ordersDescription: 'Track orders by time, channel and campaign',
+    ordersDescription: 'Messages sent, engagement and orders for the period you choose',
     noOrderDataInPeriod: 'No order data in this time period',
     pendingOrdersBadge: 'left details',
     completedOrdersBadge: 'purchased',
