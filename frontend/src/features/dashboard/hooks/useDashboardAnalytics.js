@@ -123,7 +123,13 @@ export const useDashboardAnalytics = () => {
         dashboardApiService.getOverview(params),
         dashboardApiService.getAnalytics(params),
         dashboardApiService.getRuns({ ...params, page: 1, limit: 20 }),
-        dashboardApiService.getOrders({ ...params, orderStatus: 'all', page: 1, limit: 20 }),
+        // Danh sách đơn (có SĐT/email khách) chỉ chủ xem được: route `/dashboard/orders` có
+        // requireSelfContext nên nhân viên có quyền reports_view nhận 403. Để 403 đó rơi vào
+        // Promise.all thì CẢ trang Báo cáo về 0 với nhân viên (khách thật 233 có 2 nhân viên
+        // như vậy, đo 30/09) — nên lỗi riêng lời gọi này chỉ làm trống bảng đơn.
+        dashboardApiService
+          .getOrders({ ...params, orderStatus: 'all', page: 1, limit: 20 })
+          .catch(() => null),
         dashboardApiService.getTopLists({ ...params, limit: 5 }),
         /** Thống kê landing: toàn thời gian, không phụ thuộc bộ lọc ngày dashboard. */
         dashboardApiService.getLandingPageStats({ allTime: 1 }),
