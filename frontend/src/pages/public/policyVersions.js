@@ -14,6 +14,9 @@
  *      `policyArchive/<slug>/<ngày hiện hành cũ>/`, sửa đường import tương đối cho chạy được,
  *      BỎ `<PolicyHistory>` và liên kết "Các phiên bản đã lưu trữ" đầu trang trong bản chép;
  *      thêm loader vào `policyArchive/index.js`.
+ *      Từ phiên bản lưu trữ ĐẦU TIÊN, `PolicyHistory` sinh `<Link>` → 9 ca test đang render trang trần không có
+ *      Router (`__tests__/PolicyPages.spec.jsx`, `__tests__/PrivacyPolicyPage.spec.jsx`) sẽ đỏ "useHref() may be
+ *      used only in the context of a <Router>": bọc chúng trong `<MemoryRouter>`, đừng đổi `Link` thành `<a>`.
  *   3. Sửa file trang; đổi dòng "Cập nhật ngày … — Áp dụng từ …"; thêm ngày mới vào ĐẦU `versions`;
  *      cập nhật `currentHash`.
  *   4. Nếu là terms/privacy/dpa: tăng `version` + `hash` ở `backend/src/config/legalDocuments.config.js`
