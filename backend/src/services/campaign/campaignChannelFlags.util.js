@@ -68,7 +68,7 @@ export function isAdapterCampaignChannel(channel) {
   return ADAPTER_CAMPAIGN_CHANNELS.includes(channel);
 }
 
-const CHANNEL_LABEL = Object.freeze({ telegram: 'Telegram', whatsapp: 'WhatsApp' });
+const CHANNEL_LABEL = Object.freeze({ telegram: 'Telegram', whatsapp: 'WhatsApp', zalo: 'Zalo' });
 
 /** Câu chung cho người dùng khi gói không có kênh (dùng ở 403 CHANNEL_NOT_IN_PLAN và ở trợ lý AI). */
 export function buildChannelNotInPlanMessage(channel) {

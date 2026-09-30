@@ -51,15 +51,49 @@ describe('getChannelEntitlements', () => {
     await expect(getChannelEntitlements({ id: 7, role: 'user' })).resolves.toEqual({
       telegram: false,
       whatsapp: true,
-      limits: { telegram: 0, whatsapp: 2 },
+      zalo: true,
+      limits: { telegram: 0, whatsapp: 2, zalo: null },
     });
 
     limitFor({});
     await expect(getChannelEntitlements({ id: 7, role: 'user' })).resolves.toEqual({
       telegram: true,
       whatsapp: true,
-      limits: { telegram: null, whatsapp: null },
+      zalo: true,
+      limits: { telegram: null, whatsapp: null, zalo: null },
     });
+  });
+
+  it('P12 Zalo: trần 0 -> false (kèm limits.zalo=0); limit=1 -> VẪN có quyền; null/n -> có quyền', async () => {
+    limitFor({ zaloAccounts: 0 });
+    const none = await getChannelEntitlements({ id: 7, role: 'user' });
+    expect(none.zalo).toBe(false);
+    expect(none.limits.zalo).toBe(0);
+    expect(mockCheckLimit).toHaveBeenCalledWith(expect.objectContaining({ resourceKey: 'zaloAccounts' }));
+
+    limitFor({ zaloAccounts: 1 });
+    const one = await getChannelEntitlements({ id: 7, role: 'user' });
+    expect(one.zalo).toBe(true);
+    expect(one.limits.zalo).toBe(1);
+
+    limitFor({ zaloAccounts: 5 });
+    expect((await getChannelEntitlements({ id: 7, role: 'user' })).zalo).toBe(true);
+    limitFor({});
+    expect((await getChannelEntitlements({ id: 7, role: 'user' })).zalo).toBe(true);
+  });
+
+  it('P12 Zalo: đã DÙNG ĐỦ (allowed=false, limit=1) vẫn có quyền; nhân viên theo CHỦ; admin luôn có', async () => {
+    mockCheckLimit.mockResolvedValue({ allowed: false, limit: 1, currentCount: 1, message: 'đủ rồi' });
+    expect((await getChannelEntitlements({ id: 7, role: 'user' })).zalo).toBe(true);
+
+    limitFor({ zaloAccounts: 0 });
+    const employee = { id: 90, role: 'admin', activeContext: { type: 'employee', ownerId: 12, membershipId: 4 } };
+    expect((await getChannelEntitlements(employee)).zalo).toBe(false);
+    expect(mockCheckLimit).toHaveBeenCalledWith(expect.objectContaining({ userId: 12, roleCode: 'user', resourceKey: 'zaloAccounts' }));
+
+    limitFor({});
+    await getChannelEntitlements({ id: 1, role: 'admin' });
+    expect(mockCheckLimit).toHaveBeenCalledWith(expect.objectContaining({ userId: 1, roleCode: 'admin', resourceKey: 'zaloAccounts' }));
   });
 
   it('đã DÙNG ĐỦ trần (allowed=false, limit>0) vẫn có quyền', async () => {
@@ -99,7 +133,9 @@ describe('getChannelEntitlements', () => {
     const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockCheckLimit.mockRejectedValue(new Error('db down'));
     const result = await getChannelEntitlements({ id: 7, role: 'user' });
-    expect(result).toEqual({ telegram: true, whatsapp: true, limits: { telegram: null, whatsapp: null } });
+    expect(result).toEqual({
+      telegram: true, whatsapp: true, zalo: true, limits: { telegram: null, whatsapp: null, zalo: null },
+    });
     spy.mockRestore();
   });
 });
@@ -114,6 +150,14 @@ describe('assertChannelEntitled', () => {
     limitFor({ whatsappAccounts: 0 });
     await expect(assertChannelEntitled({ channel: 'whatsapp', ownerUserId: 5 }))
       .rejects.toMatchObject({ status: 403, code: 'CHANNEL_NOT_IN_PLAN', message: expect.stringMatching(/WhatsApp.*mua thêm slot/) });
+  });
+
+  it('P12 Zalo: trần 0 -> 403 CHANNEL_NOT_IN_PLAN nhắc Zalo; limit=1 -> qua', async () => {
+    limitFor({ zaloAccounts: 0 });
+    await expect(assertChannelEntitled({ channel: 'zalo', ownerUserId: 5 }))
+      .rejects.toMatchObject({ status: 403, code: 'CHANNEL_NOT_IN_PLAN', message: expect.stringMatching(/kênh Zalo.*mua thêm slot/) });
+    limitFor({ zaloAccounts: 1 });
+    await expect(assertChannelEntitled({ channel: 'zalo', ownerUserId: 5 })).resolves.toBeUndefined();
   });
 
   it('có trần > 0 hoặc null -> qua', async () => {

@@ -18,6 +18,8 @@ import { buildChannelNotInPlanMessage } from './campaignChannelFlags.util.js';
 const CHANNEL_RESOURCE_KEY = Object.freeze({
   telegram: 'telegramAccounts',
   whatsapp: 'whatsappAccounts',
+  // P12 — tài khoản Zalo CÁ NHÂN (`users.max_zalo_accounts` + slot mua lẻ). Zalo OA (chatbot) là resource khác, không thuộc đây.
+  zalo: 'zaloAccounts',
 });
 
 export const ENTITLEMENT_CHANNELS = Object.freeze(Object.keys(CHANNEL_RESOURCE_KEY));
@@ -42,7 +44,7 @@ async function lookupRoleCode(userId) {
 /**
  * Trần kênh của MỘT chủ workspace.
  * @param {number|string} ownerUserId
- * @param {'telegram'|'whatsapp'} channel
+ * @param {'telegram'|'whatsapp'|'zalo'} channel
  * @param {string|null} [roleCode] bỏ trống -> tra role của chủ (nhánh chiến dịch chỉ biết id chủ).
  * @returns {Promise<{entitled: boolean, limit: number|null}>}
  */
@@ -62,26 +64,28 @@ export async function getChannelLimitForOwner(ownerUserId, channel, roleCode) {
 
 /**
  * @param {object} authUser `req.user`
- * @returns {Promise<{telegram: boolean, whatsapp: boolean, limits: {telegram: number|null, whatsapp: number|null}}>}
+ * @returns {Promise<{telegram: boolean, whatsapp: boolean, zalo: boolean, limits: {telegram: number|null, whatsapp: number|null, zalo: number|null}}>}
  */
 export async function getChannelEntitlements(authUser) {
   const { workspaceOwnerId, contextType, roleCode } = getWorkspaceContext(authUser);
   // Nhân viên: role của CHÍNH nhân viên không nói gì về chủ -> để trống cho hàm tự tra role chủ.
   const ownerRole = contextType === 'self' ? roleCode : undefined;
-  const [telegram, whatsapp] = await Promise.all([
+  const [telegram, whatsapp, zalo] = await Promise.all([
     getChannelLimitForOwner(workspaceOwnerId, 'telegram', ownerRole),
     getChannelLimitForOwner(workspaceOwnerId, 'whatsapp', ownerRole),
+    getChannelLimitForOwner(workspaceOwnerId, 'zalo', ownerRole),
   ]);
   return {
     telegram: telegram.entitled,
     whatsapp: whatsapp.entitled,
-    limits: { telegram: telegram.limit, whatsapp: whatsapp.limit },
+    zalo: zalo.entitled,
+    limits: { telegram: telegram.limit, whatsapp: whatsapp.limit, zalo: zalo.limit },
   };
 }
 
 /**
  * Chặn (403 CHANNEL_NOT_IN_PLAN) khi gói của chủ workspace không có kênh.
- * @param {{channel: 'telegram'|'whatsapp', ownerUserId: number|string, roleCode?: string|null}} input
+ * @param {{channel: 'telegram'|'whatsapp'|'zalo', ownerUserId: number|string, roleCode?: string|null}} input
  */
 export async function assertChannelEntitled({ channel, ownerUserId, roleCode }) {
   const { entitled } = await getChannelLimitForOwner(ownerUserId, channel, roleCode);
