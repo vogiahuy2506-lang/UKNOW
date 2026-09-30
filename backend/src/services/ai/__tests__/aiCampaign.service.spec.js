@@ -92,6 +92,7 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
     getAdapterChannelAccounts: async () => ({ telegram: [], whatsapp: [] }),
     getAdapterAccountsPromptBlock: async () => '',
     getAdapterNodeTypesPromptLines: () => '',
+    getBlockedZaloPromptNotice: () => '',
   },
 }));
 

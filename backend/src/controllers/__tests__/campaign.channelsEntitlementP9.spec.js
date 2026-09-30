@@ -75,13 +75,13 @@ describe('GET /users/channel-entitlements (P9)', () => {
     mockDbQuery.mockResolvedValue({ rows: [{ role: 'user' }] });
   });
 
-  it('trả hình dạng { telegram, whatsapp, limits }', async () => {
+  it('trả hình dạng { telegram, whatsapp, zalo, limits } (P12 thêm zalo)', async () => {
     limitFor({ telegramAccounts: 0, whatsappAccounts: 5 });
     const res = makeRes();
     await userController.getChannelEntitlements({ user: { id: 7, role: 'user' } }, res);
     expect(res.body).toEqual({
       success: true,
-      data: { telegram: false, whatsapp: true, limits: { telegram: 0, whatsapp: 5 } },
+      data: { telegram: false, whatsapp: true, zalo: true, limits: { telegram: 0, whatsapp: 5, zalo: null } },
     });
   });
 });
