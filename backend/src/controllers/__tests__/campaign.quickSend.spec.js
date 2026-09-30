@@ -7,6 +7,18 @@ const mockPrepareZaloAttachmentSources = jest.fn();
 const mockSendCustomEmail = jest.fn();
 const mockResolvePreviewAccountAndApi = jest.fn();
 
+// P12 — cổng quyền kênh Zalo (đọc trần tài khoản từ CSDL) ở nhánh Zalo của gửi thử; spec này không có CSDL -> mock (có quyền).
+jest.unstable_mockModule('../../services/campaign/channelEntitlement.service.js', () => ({
+  assertChannelEntitled: jest.fn().mockResolvedValue(undefined),
+  getChannelEntitlements: jest.fn().mockResolvedValue({ telegram: true, whatsapp: true, zalo: true, limits: {} }),
+  filterChannelsByEntitlement: (channels) => channels,
+  getChannelLimitForOwner: jest.fn().mockResolvedValue({ entitled: true, limit: null }),
+  limitGrantsChannel: () => true,
+  buildChannelNotInPlanMessage: () => '',
+  ENTITLEMENT_CHANNELS: ['telegram', 'whatsapp', 'zalo'],
+  default: {},
+}));
+
 jest.unstable_mockModule('../../utils/userSendLimit.util.js', () => ({
   checkSendQuota: mockCheckSendQuota,
   recordDirectSendUsage: mockRecordDirectSendUsage,

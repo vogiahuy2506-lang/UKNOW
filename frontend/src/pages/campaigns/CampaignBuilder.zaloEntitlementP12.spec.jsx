@@ -3,7 +3,7 @@
  * send_zalo_* (allowedActionNodeTypes) và ẩn section Zalo (zaloEnabled=false); gói có Zalo (kể cả limit=1) giữ nguyên.
  * Layout được mock để đọc thẳng các prop mà CampaignBuilder truyền xuống palette.
  */
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
