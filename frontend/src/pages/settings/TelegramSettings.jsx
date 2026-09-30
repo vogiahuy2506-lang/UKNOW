@@ -14,7 +14,6 @@ import {
   HiOutlineLogout,
   HiOutlineRefresh,
   HiOutlineX,
-  HiOutlinePaperAirplane,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
 import { FaTelegramPlane } from 'react-icons/fa';
@@ -602,7 +601,7 @@ export default function TelegramSettings({ readOnly = false } = {}) {
 
   return (
     <PageContainer
-      icon={HiOutlinePaperAirplane}
+      icon={FaTelegramPlane}
       title={t('telegramSettings.title')}
       subtitle={t('telegramSettings.subtitle')}
       actions={
