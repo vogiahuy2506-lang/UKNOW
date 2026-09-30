@@ -12,7 +12,13 @@ import {
 } from '../../utils/storageCapacity.util.js';
 
 
-const DOCKER_SOCKET = process.env.DOCKER_SOCKET_PATH || '/var/run/docker.sock';
+const DEFAULT_DOCKER_SOCKET = '/var/run/docker.sock';
+const DEFAULT_DOCKER_TCP_PORT = 2375;
+// Hạn chót cho CẢ một lượt gọi (kết nối + đọc hết body), không chỉ thời gian socket rảnh:
+// trang admin không được treo theo một proxy/daemon trả lời nhỏ giọt.
+const DOCKER_API_TIMEOUT_MS = 4000;
+// Tail tối đa 500 dòng log nên vài MB là dư; chặn trần để một đích lạ không làm phình bộ nhớ.
+const DOCKER_API_MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 const CONTAINER_ALLOWLIST = {
   backend: process.env.SYSTEM_MONITOR_BACKEND_CONTAINER || 'uknow-campaign-backend',
   frontend: process.env.SYSTEM_MONITOR_FRONTEND_CONTAINER || 'uknow-campaign-frontend',
@@ -125,35 +131,143 @@ const getNetworkUsage = async () => {
   return { ...current, rxRate, txRate };
 };
 
-const dockerRequest = async (path) => {
-  try {
-    await fs.access(DOCKER_SOCKET);
-  } catch {
-    const err = new Error('Docker socket is not mounted');
-    err.code = 'DOCKER_UNAVAILABLE';
-    throw err;
+const dockerUnavailable = (message) => {
+  const err = new Error(message);
+  err.code = 'DOCKER_UNAVAILABLE';
+  return err;
+};
+
+/**
+ * Chọn đích Docker Engine API theo đúng quy ước của Docker CLI:
+ * - `DOCKER_HOST=unix:///duong/dan.sock` → unix socket (production: socket của proxy chỉ-đọc
+ *   uknow-docker-proxy, KHÔNG phải /var/run/docker.sock của host).
+ * - `DOCKER_HOST=tcp://host:port` (hoặc `http://`) → HTTP thường tới host:port (mặc định 2375).
+ * - Không đặt DOCKER_HOST → `DOCKER_SOCKET_PATH` hoặc /var/run/docker.sock (hành vi cũ).
+ * Scheme khác (ssh://, npipe://, https/TLS...) không hỗ trợ → `invalid`, trang admin báo "chưa nối".
+ *
+ * @param {Record<string, string|undefined>} [env]
+ * @returns {{ type: 'socket', socketPath: string }
+ *   | { type: 'tcp', host: string, port: number }
+ *   | { type: 'invalid', reason: string }}
+ */
+export function resolveDockerEndpoint(env = process.env) {
+  const dockerHost = String(env.DOCKER_HOST || '').trim();
+  if (!dockerHost) {
+    const socketPath = String(env.DOCKER_SOCKET_PATH || '').trim() || DEFAULT_DOCKER_SOCKET;
+    return { type: 'socket', socketPath };
   }
 
+  const unixMatch = dockerHost.match(/^unix:\/\/(\/.*)$/i);
+  if (unixMatch) {
+    return { type: 'socket', socketPath: unixMatch[1] };
+  }
+
+  const tcpMatch = dockerHost.match(/^(?:tcp|http):\/\/(.+)$/i);
+  if (tcpMatch) {
+    let parsed;
+    try {
+      parsed = new URL(`http://${tcpMatch[1]}`);
+    } catch {
+      return { type: 'invalid', reason: 'DOCKER_HOST is not a valid tcp:// address' };
+    }
+    const host = parsed.hostname.replace(/^\[(.*)\]$/, '$1');
+    const port = parsed.port ? Number(parsed.port) : DEFAULT_DOCKER_TCP_PORT;
+    if (!host || !Number.isInteger(port) || port < 1 || port > 65535) {
+      return { type: 'invalid', reason: 'DOCKER_HOST is not a valid tcp:// address' };
+    }
+    return { type: 'tcp', host, port };
+  }
+
+  return { type: 'invalid', reason: 'DOCKER_HOST scheme is not supported (use unix:// or tcp://)' };
+}
+
+/**
+ * GET một đường Docker Engine API. Chỉ GET: proxy production cũng chặn mọi phương thức khác.
+ * Mọi lỗi đều reject; nơi gọi đổi thành kết quả `available: false`, không bao giờ ném lên route.
+ *
+ * @param {string} path
+ * @param {{ env?: Record<string, string|undefined>, timeoutMs?: number, maxBytes?: number }} [options]
+ * @returns {Promise<Buffer>}
+ */
+export const dockerRequest = async (path, {
+  env = process.env,
+  timeoutMs = DOCKER_API_TIMEOUT_MS,
+  maxBytes = DOCKER_API_MAX_RESPONSE_BYTES,
+} = {}) => {
+  const endpoint = resolveDockerEndpoint(env);
+  if (endpoint.type === 'invalid') {
+    throw dockerUnavailable(endpoint.reason);
+  }
+
+  if (endpoint.type === 'socket') {
+    try {
+      await fs.access(endpoint.socketPath);
+    } catch {
+      throw dockerUnavailable('Docker socket is not mounted');
+    }
+  }
+
+  const target = endpoint.type === 'socket'
+    ? { socketPath: endpoint.socketPath }
+    : { host: endpoint.host, port: endpoint.port };
+
   return new Promise((resolve, reject) => {
-    const req = http.request({ socketPath: DOCKER_SOCKET, path, method: 'GET' }, (res) => {
+    let settled = false;
+    let timer = null;
+    const finish = (fn, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      fn(value);
+    };
+
+    // agent: false — mỗi lượt một kết nối riêng, không giữ socket keep-alive tới Docker API.
+    // Hủy kết nối KHÔNG kèm đối tượng lỗi: promise đã được chốt bằng lỗi của mình rồi, truyền
+    // lỗi vào destroy() chỉ sinh thêm sự kiện 'error' trên socket mà không ai nghe.
+    const req = http.request({ ...target, path, method: 'GET', agent: false }, (res) => {
       const chunks = [];
-      res.on('data', (chunk) => chunks.push(chunk));
+      let received = 0;
+      res.on('data', (chunk) => {
+        if (settled) return;
+        received += chunk.length;
+        if (received > maxBytes) {
+          finish(reject, new Error('Docker API response too large'));
+          res.destroy();
+          return;
+        }
+        chunks.push(chunk);
+      });
       res.on('end', () => {
         const buffer = Buffer.concat(chunks);
         if (res.statusCode >= 400) {
-          const err = new Error(buffer.toString('utf8') || `Docker API ${res.statusCode}`);
+          const err = new Error(buffer.toString('utf8').slice(0, 500) || `Docker API ${res.statusCode}`);
           err.statusCode = res.statusCode;
-          reject(err);
+          finish(reject, err);
           return;
         }
-        resolve(buffer);
+        finish(resolve, buffer);
+      });
+      res.on('error', (err) => finish(reject, err));
+      res.on('close', () => {
+        if (!res.complete) finish(reject, new Error('Docker API connection closed early'));
       });
     });
-    req.on('error', reject);
-    req.setTimeout(4000, () => req.destroy(new Error('Docker API timeout')));
+
+    timer = setTimeout(() => {
+      const err = new Error('Docker API timeout');
+      err.code = 'DOCKER_TIMEOUT';
+      finish(reject, err);
+      req.destroy();
+    }, timeoutMs);
+
+    req.on('error', (err) => finish(reject, err));
     req.end();
   });
 };
+
+const dockerErrorCode = (err) => (
+  err?.code === 'DOCKER_UNAVAILABLE' ? 'DOCKER_SOCKET_NOT_MOUNTED' : 'DOCKER_API_ERROR'
+);
 
 const normalizeContainer = (container) => ({
   id: container.Id,
@@ -192,6 +306,7 @@ const getDockerContainers = async () => {
   try {
     const buffer = await dockerRequest('/containers/json?all=1');
     const containers = JSON.parse(buffer.toString('utf8'));
+    if (!Array.isArray(containers)) throw new Error('Unexpected Docker API response');
     const names = new Set(Object.values(CONTAINER_ALLOWLIST));
     return {
       available: true,
@@ -200,7 +315,7 @@ const getDockerContainers = async () => {
   } catch (err) {
     return {
       available: false,
-      error: err.code === 'DOCKER_UNAVAILABLE' ? 'DOCKER_SOCKET_NOT_MOUNTED' : 'DOCKER_API_ERROR',
+      error: dockerErrorCode(err),
       containers: [],
     };
   }
@@ -324,7 +439,7 @@ export async function getSystemLogs(service = 'backend', tail = 200) {
       available: false,
       service: normalizedService,
       container: containerName,
-      error: err.code === 'DOCKER_UNAVAILABLE' ? 'DOCKER_SOCKET_NOT_MOUNTED' : 'DOCKER_API_ERROR',
+      error: dockerErrorCode(err),
       lines: [],
     };
   }
