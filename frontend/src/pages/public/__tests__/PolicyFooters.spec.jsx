@@ -43,4 +43,8 @@ describe('11 route chính sách được miễn cổng sau đăng nhập', () =>
     expect(isPathExcludedFromPostAuthGates(href)).toBe(true);
     expect(isPathExcludedFromPostAuthGates(`${href}/`)).toBe(true);
   });
+
+  it('trang xem phiên bản lưu trữ /policy-versions/... cũng được miễn cổng', () => {
+    expect(isPathExcludedFromPostAuthGates('/policy-versions/terms/2026-09-29')).toBe(true);
+  });
 });

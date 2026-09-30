@@ -28,6 +28,12 @@ describe('legalDocuments.config', () => {
     }
   });
 
+  it('version của 3 văn bản vẫn là 2026-09-29 (30/09 chỉ đổi khối lịch sử, không đổi lời văn → không bắt đồng ý lại)', () => {
+    for (const purpose of REQUIRED_REGISTRATION_PURPOSES) {
+      expect(getLegalDocument(purpose).version).toBe('2026-09-29');
+    }
+  });
+
   it('hash của 3 văn bản phải khớp chính xác với nội dung file frontend hiện hành', () => {
     for (const purpose of REQUIRED_REGISTRATION_PURPOSES) {
       const doc = getLegalDocument(purpose);

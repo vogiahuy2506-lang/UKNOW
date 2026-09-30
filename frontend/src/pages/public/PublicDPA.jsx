@@ -290,30 +290,6 @@ function PublicDPA() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
 
-  const historyEntries = [
-    {
-      date: '2026-09-29',
-      note: {
-        vi: 'Soạn lại Thỏa thuận xử lý dữ liệu cá nhân theo khung 15 điều, tách khỏi Chính sách bảo mật: phạm vi ủy thác, nghĩa vụ hai bên, bên xử lý phụ theo hạ tầng thực tế, chuyển dữ liệu xuyên biên giới, sự cố, xóa và trả dữ liệu; bỏ cơ chế coi việc tiếp tục sử dụng là đồng ý đối với dữ liệu cá nhân (Nghị định 248/2026/NĐ-CP và góp ý luật sư 25–29/09/2026).',
-        en: 'Rewrote the Personal Data Processing Agreement in a 15-article structure, separate from the Privacy Policy: scope of delegation, duties of both parties, sub-processors matching the actual infrastructure, cross-border transfer, incidents, deletion and return of data; removed treating continued use as consent for personal data (Decree 248/2026/NĐ-CP and lawyer feedback of 25–29/09/2026).',
-      },
-    },
-    {
-      date: '2026-09-28',
-      note: {
-        vi: 'Viết lại toàn bộ nội dung theo Luật 91/2025/QH15 và Nghị định 356/2025/NĐ-CP (Mẫu số 01). Tham chiếu đúng văn bản pháp luật hiện hành, tách rõ vai trò Bên xử lý và Bên kiểm soát dữ liệu.',
-        en: 'Full rewrite per Law 91/2025/QH15 and Decree 356/2025/NĐ-CP (Template No. 01). Correct legal references, separated Processor and Controller roles.',
-      },
-    },
-    {
-      date: '2026-08-04',
-      note: {
-        vi: 'Phiên bản trước — ngày hiệu lực 04/08/2026 (đã thay thế).',
-        en: 'Previous version — effective 04/08/2026 (now superseded).',
-      },
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
       <style>
@@ -409,11 +385,13 @@ function PublicDPA() {
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
                 {' '}|{' '}
                 Luật 91/2025/QH15 · Nghị định 356/2025/NĐ-CP
               </span>
               <span className={lc(language, 'en')}>
                 Updated on <strong>29/09/2026</strong> — Effective from <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
                 {' '}|{' '}
                 Law 91/2025/QH15 · Decree 356/2025/NĐ-CP
               </span>
@@ -487,7 +465,7 @@ function PublicDPA() {
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved. This Agreement was last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
+        <PolicyHistory slug="dpa" language={language} lc={lc} />
       </div>
     </div>
   );

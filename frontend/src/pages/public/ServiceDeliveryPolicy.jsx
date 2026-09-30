@@ -9,16 +9,6 @@ function ServiceDeliveryPolicy() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
 
-  const historyEntries = [
-    {
-      date: '2026-09-29',
-      note: {
-        vi: 'Ban hành lần đầu dưới dạng chính sách riêng theo Điều 15 Nghị định 248/2026/NĐ-CP (trước đây là mục 3A của trang Điều kiện cung cấp dịch vụ).',
-        en: 'First issued as a separate policy under Article 15 of Decree 248/2026/NĐ-CP (previously section 3A of the Service Terms page).',
-      },
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
       <style>{`
@@ -71,11 +61,13 @@ function ServiceDeliveryPolicy() {
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -326,7 +318,7 @@ function ServiceDeliveryPolicy() {
             This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
+        <PolicyHistory slug="delivery" language={language} lc={lc} />
       </div>
     </div>
   );

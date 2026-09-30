@@ -338,37 +338,6 @@ function PrivacyPolicy() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
 
-  const historyEntries = [
-    {
-      date: '2026-09-29',
-      note: {
-        vi: 'Bổ sung nội dung tối thiểu theo Điều 4–17 Nghị định 248/2026/NĐ-CP và góp ý của luật sư ngày 25–29/09/2026: tách Chính sách bảo mật thành ba phần có tiêu đề rõ vai trò, đủ 8 nội dung Điều 5, cập nhật danh sách nhà cung cấp và biện pháp bảo mật theo đúng hạ tầng thực tế, nêu rõ chuyển dữ liệu xuyên biên giới.',
-        en: 'Added the minimum content required by Articles 4–17 of Decree 248/2026/NĐ-CP and lawyer feedback of 25–29/09/2026: split the Privacy Policy into three parts with clearly titled roles, covered all 8 items of Article 5, updated the provider list and security measures to match the actual infrastructure, and disclosed cross-border data transfer.',
-      },
-    },
-    {
-      date: '2026-09-28',
-      note: {
-        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
-        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
-      },
-    },
-    {
-      date: '2026-09-10',
-      note: {
-        vi: 'Phiên bản trước — ngày hiệu lực 10/09/2026 (đã thay thế).',
-        en: 'Previous version — effective 10/09/2026 (now superseded).',
-      },
-    },
-    {
-      date: '2026-04-01',
-      note: {
-        vi: 'Bản gốc áp dụng từ 01/04/2026.',
-        en: 'Original version effective from 01/04/2026.',
-      },
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
       <style>
@@ -470,11 +439,13 @@ function PrivacyPolicy() {
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
                 {' '}|{' '}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Updated on <strong>29/09/2026</strong> — Effective from <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
                 {' '}|{' '}
                 Applies to: founderai.biz
               </span>
@@ -666,7 +637,7 @@ function PrivacyPolicy() {
             This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
+        <PolicyHistory slug="privacy" language={language} lc={lc} />
       </div>
     </div>
   );

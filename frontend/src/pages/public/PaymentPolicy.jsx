@@ -9,30 +9,6 @@ function PaymentPolicy() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
 
-  const historyEntries = [
-    {
-      date: '2026-09-29',
-      note: {
-        vi: 'Bổ sung nội dung tối thiểu theo Điều 4–17 Nghị định 248/2026/NĐ-CP và góp ý của luật sư ngày 25–29/09/2026; ban hành lại toàn bộ chính sách.',
-        en: 'Added the minimum content required by Articles 4–17 of Decree 248/2026/NĐ-CP and the lawyer\'s comments of 25–29/09/2026; policy re-issued in full.',
-      },
-    },
-    {
-      date: '2026-09-28',
-      note: {
-        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
-        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
-      },
-    },
-    {
-      date: '2026-09-10',
-      note: {
-        vi: 'Phiên bản trước — ngày hiệu lực 10/09/2026 (đã thay thế).',
-        en: 'Previous version — effective 10/09/2026 (now superseded).',
-      },
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
       <style>{`
@@ -129,11 +105,13 @@ function PaymentPolicy() {
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -573,7 +551,7 @@ function PaymentPolicy() {
             This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
+        <PolicyHistory slug="payment" language={language} lc={lc} />
       </div>
     </div>
   );

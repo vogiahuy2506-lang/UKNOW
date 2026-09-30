@@ -1,72 +1,71 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render } from '@testing-library/react';
+import { MemoryRouter } from 'react-router-dom';
 import PolicyHistory from './PolicyHistory.jsx';
 
-/**
- * PR-2 Section 5 — unit test cho component "Lịch sử cập nhật" ở footer chính sách.
- */
-describe('PolicyHistory', () => {
-  function lc() {
-    return '';
-  }
+let mockVersions = ['2026-09-29'];
+vi.mock('../policyVersions.js', () => ({
+  POLICY_VERSIONS: {
+    get terms() {
+      return { path: '/terms', versions: mockVersions };
+    },
+  },
+}));
 
-  it('không render gì khi entries rỗng hoặc undefined', () => {
-    const { container } = render(<PolicyHistory language="vi" lc={lc} entries={[]} />);
+const lc = () => '';
+const renderHistory = (props = {}) =>
+  render(
+    <MemoryRouter>
+      <PolicyHistory slug="terms" language="vi" lc={lc} {...props} />
+    </MemoryRouter>,
+  );
+
+describe('PolicyHistory', () => {
+  it('slug lạ → không render gì', () => {
+    const { container } = renderHistory({ slug: 'khong-co' });
     expect(container.firstChild).toBeNull();
   });
 
-  it('render đúng số lượng entry theo thứ tự mới nhất trước', () => {
-    const entries = [
-      {
-        date: '2026-09-28',
-        note: {
-          vi: 'Bản mới nhất',
-          en: 'Latest version',
-        },
-      },
-      {
-        date: '2026-08-04',
-        note: {
-          vi: 'Bản cũ',
-          en: 'Previous version',
-        },
-      },
-    ];
-    const { container } = render(
-      <PolicyHistory language="vi" lc={lc} entries={entries} />
-    );
+  it('1 phiên bản → đúng 1 dòng, có ngày + "Phiên bản hiện hành", không có liên kết', () => {
+    mockVersions = ['2026-09-29'];
+    const { container } = renderHistory();
     const items = container.querySelectorAll('ol li');
-    expect(items.length).toBe(2);
-    // Bản mới nhất xuất hiện trước (thứ tự trong DOM).
-    expect(items[0].textContent).toMatch(/2026/);
-    expect(items[1].textContent).toMatch(/2026/);
+    expect(items).toHaveLength(1);
+    expect(items[0].textContent).toContain('29/09/2026');
+    expect(items[0].textContent).toContain('Phiên bản hiện hành');
+    expect(container.querySelectorAll('a')).toHaveLength(0);
   });
 
-  it('format ngày VI theo DD/MM/YYYY và EN theo Month DD, YYYY', () => {
-    const entries = [
-      {
-        date: '2026-09-28',
-        note: { vi: 'a', en: 'b' },
-      },
-    ];
-    // Test cả 2 locale đều chứa cả 2 format (vì DOM render cả 2 <span>, chỉ ẩn theo class).
-    const { container } = render(
-      <PolicyHistory language="vi" lc={lc} entries={entries} />
-    );
-    expect(container.textContent).toContain('28/09/2026');
-    expect(container.textContent).toContain('September 28, 2026');
+  it('3 phiên bản → dòng 1 không liên kết, dòng 2-3 liên kết tới /policy-versions/<slug>/<date>', () => {
+    mockVersions = ['2026-11-01', '2026-09-29', '2026-08-01'];
+    const { container } = renderHistory();
+    const items = container.querySelectorAll('ol li');
+    expect(items).toHaveLength(3);
+    expect(items[0].querySelectorAll('a')).toHaveLength(0);
+    expect(items[1].querySelector('a').getAttribute('href')).toBe('/policy-versions/terms/2026-09-29');
+    expect(items[2].querySelector('a').getAttribute('href')).toBe('/policy-versions/terms/2026-08-01');
   });
 
-  it('hiển thị hint về Nghị định 248/2026/NĐ-CP (VI + EN)', () => {
-    const entries = [{ date: '2026-09-28', note: { vi: 'x', en: 'x' } }];
-    const { container: viContainer } = render(
-      <PolicyHistory language="vi" lc={lc} entries={entries} />
-    );
-    expect(viContainer.textContent).toContain('248/2026/NĐ-CP');
+  it('EN hiện "September 29, 2026" và "Current version"', () => {
+    mockVersions = ['2026-09-29'];
+    const { container } = renderHistory({ language: 'en' });
+    expect(container.textContent).toContain('September 29, 2026');
+    expect(container.textContent).toContain('Current version');
+  });
 
-    const { container: enContainer } = render(
-      <PolicyHistory language="en" lc={lc} entries={entries} />
+  it('không render chữ nào ngoài ngày và nhãn (không có lý do cập nhật)', () => {
+    mockVersions = ['2026-09-29'];
+    const { container } = renderHistory();
+    expect(container.querySelector('ol').textContent).toBe(
+      '29/09/2026September 29, 2026Phiên bản hiện hànhCurrent version',
     );
-    expect(enContainer.textContent).toContain('248/2026/NĐ-CP');
+  });
+
+  it('có id lich-su-cap-nhat và data-policy-history trên section', () => {
+    mockVersions = ['2026-09-29'];
+    const { container } = renderHistory();
+    const section = container.querySelector('section');
+    expect(section.id).toBe('lich-su-cap-nhat');
+    expect(section.hasAttribute('data-policy-history')).toBe(true);
   });
 });

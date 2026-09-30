@@ -9,30 +9,6 @@ function RefundPolicy() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
 
-  const historyEntries = [
-    {
-      date: '2026-09-29',
-      note: {
-        vi: 'Đổi tên thành “Chính sách chấm dứt dịch vụ và hoàn tiền” và bổ sung nội dung tối thiểu theo Điều 16 Nghị định 248/2026/NĐ-CP (các trường hợp chấm dứt, thời điểm chấm dứt, quy trình và thời hạn phản hồi, cách thức hoàn tiền); thêm quyền huỷ trong 07 ngày đầu chưa sử dụng (hoàn 100%); chuyển các nội dung chấm dứt dịch vụ từ trang Điều kiện cung cấp dịch vụ sang trang này.',
-        en: 'Renamed “Service Termination and Refund Policy” and added the minimum content required by Article 16 of Decree 248/2026/NĐ-CP (cases of termination, time of termination, procedure and response times, refund method); added the right to cancel within the first 07 days if unused (100% refund); moved the service termination content from the Service Terms page to this page.',
-      },
-    },
-    {
-      date: '2026-09-28',
-      note: {
-        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
-        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
-      },
-    },
-    {
-      date: '2026-10-13',
-      note: {
-        vi: 'Phiên bản trước — ngày hiệu lực 13/10/2026 (đã thay thế).',
-        en: 'Previous version — effective 13/10/2026 (now superseded).',
-      },
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
       <style>{`
@@ -95,11 +71,13 @@ function RefundPolicy() {
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -508,7 +486,7 @@ function RefundPolicy() {
             This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
+        <PolicyHistory slug="refund" language={language} lc={lc} />
       </div>
     </div>
   );

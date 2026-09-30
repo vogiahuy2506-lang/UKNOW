@@ -40,6 +40,24 @@ describe.each(PAGES)('trang %s', (path, Component, h1Vi) => {
     expect(text).toContain('Cập nhật ngày 29/09/2026 — Áp dụng từ 29/09/2026');
     expect(text).toContain('Lịch sử cập nhật');
   });
+
+  it('không còn lý do cập nhật cũ; có liên kết "Các phiên bản đã lưu trữ" tới #lich-su-cap-nhat', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={[path]}>
+        <Routes>
+          <Route path={path} element={<Component />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const text = norm(container.textContent);
+    for (const banned of ['Bổ sung nội dung', 'Đồng bộ ngày hiệu lực', 'Phiên bản trước', 'Bản gốc áp dụng', '13/10/2026']) {
+      expect(text).not.toContain(banned);
+    }
+    const link = [...container.querySelectorAll('a')].find((a) => a.textContent === 'Các phiên bản đã lưu trữ');
+    expect(link).toBeTruthy();
+    expect(link.getAttribute('href')).toBe('#lich-su-cap-nhat');
+    expect(container.querySelector('section#lich-su-cap-nhat[data-policy-history]')).not.toBeNull();
+  });
 });
 
 describe('ServiceDeliveryPolicy — nội dung tối thiểu Điều 15 NĐ 248', () => {

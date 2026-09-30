@@ -36,6 +36,7 @@ export const GATE_EXCLUDED_PATH_PREFIXES = [
   '/service-delivery-policy',
   '/rights-and-duties',
   '/support',
+  '/policy-versions',
   '/contact',
   // Trang công khai của chủ shop cho khách hàng
   '/lp',

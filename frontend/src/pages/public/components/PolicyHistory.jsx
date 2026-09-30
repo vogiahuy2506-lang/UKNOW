@@ -1,52 +1,61 @@
+import { Link } from 'react-router-dom';
+import { POLICY_VERSIONS } from '../policyVersions.js';
+
 /**
- * Khối "Lịch sử cập nhật" đặt cuối mỗi trang chính sách — đáp ứng yêu cầu tại
- * `Hướng dẫn cập nhật founderai.biz 25.09.md` Section 5: mỗi lần cập nhật phải
- * được lưu vết, khách hàng có thể xem lại bản cập nhật trước đó (tuân thủ Nghị định
- * 248/2026/NĐ-CP).
+ * Khối "Lịch sử cập nhật" đặt cuối mỗi trang chính sách.
  *
- * Cập nhật hướng dẫn: thêm 1 entry mới ở đầu mảng `entries` mỗi lần policy đổi.
- * Mỗi entry là 1 dòng: `{ date: 'YYYY-MM-DD', note: { vi, en } }`.
+ * Chỉ liệt kê NGÀY của từng phiên bản (mới nhất trước). Phiên bản hiện hành có nhãn, không liên kết;
+ * phiên bản cũ liên kết tới toàn văn tại `/policy-versions/<slug>/<date>`. Không có lý do/ghi chú cập nhật.
+ * Nguồn dữ liệu: `policyVersions.js`.
  *
  * Props:
+ *   @param {string} slug       Khoá trong POLICY_VERSIONS (vd 'terms')
  *   @param {string} language   'vi' | 'en'
  *   @param {(a, b) => string} lc  Hàm class ẩn/hiện theo ngôn ngữ
- *   @param {Array<{ date: string, note: { vi: string, en: string } }>} entries
- *     Danh sách lịch sử cập nhật (mới nhất trước). Nếu bỏ trống, không render gì.
  *
  * @returns {JSX.Element | null}
  */
-export default function PolicyHistory({ language, lc, entries }) {
-  if (!Array.isArray(entries) || entries.length === 0) return null;
+const MONTHS = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+// 'YYYY-MM-DD' → { vi: 'DD/MM/YYYY', en: 'Month D, YYYY' }
+function formatPolicyDate(iso) {
+  if (!iso || typeof iso !== 'string') return { vi: iso, en: iso };
+  const [y, m, d] = iso.split('-');
+  if (!y || !m || !d) return { vi: iso, en: iso };
+  return {
+    vi: `${d}/${m}/${y}`,
+    en: `${MONTHS[Number(m) - 1]} ${Number(d)}, ${y}`,
+  };
+}
+
+export default function PolicyHistory({ slug, language, lc }) {
+  const entry = POLICY_VERSIONS[slug];
+  const versions = entry?.versions;
+  if (!Array.isArray(versions) || versions.length === 0) return null;
 
   const labels = {
     vi: {
       title: 'Lịch sử cập nhật',
-      hint: 'Bạn có thể xem lại các phiên bản trước của chính sách này theo mốc thời gian bên dưới. Việc cập nhật được lưu vết theo quy định tại Nghị định 248/2026/NĐ-CP.',
+      hint: 'Toàn văn các phiên bản của chính sách này, theo ngày bắt đầu có hiệu lực.',
+      current: 'Phiên bản hiện hành',
     },
     en: {
       title: 'Update history',
-      hint: 'You can review previous versions of this policy by date below. Update records are retained in accordance with Decree 248/2026/NĐ-CP.',
+      hint: 'The full text of every version of this policy, by the date it took effect.',
+      current: 'Current version',
     },
   };
 
-  const formatDate = (iso) => {
-    if (!iso || typeof iso !== 'string') return iso;
-    // 'YYYY-MM-DD' → 'DD/MM/YYYY' (VI) / 'Month DD, YYYY' (EN).
-    const [y, m, d] = iso.split('-');
-    if (!y || !m || !d) return iso;
-    const months = [
-      'January', 'February', 'March', 'April', 'May', 'June',
-      'July', 'August', 'September', 'October', 'November', 'December',
-    ];
-    return {
-      vi: `${d}/${m}/${y}`,
-      en: `${months[Number(m) - 1]} ${Number(d)}, ${y}`,
-    };
-  };
+  const dateClass = 'font-semibold tabular-nums';
 
   return (
     <section
-      className="mt-10 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-7 sm:py-6"
+      id="lich-su-cap-nhat"
+      data-policy-history
+      className="mt-10 scroll-mt-6 rounded-xl border border-slate-200 bg-white px-5 py-5 shadow-sm sm:px-7 sm:py-6"
       aria-label={language === 'vi' ? 'Lịch sử cập nhật' : 'Update history'}
     >
       <h3 className={`mb-1.5 text-base font-semibold text-slate-800 ${lc(language, 'vi')}`}>
@@ -55,27 +64,39 @@ export default function PolicyHistory({ language, lc, entries }) {
       <h3 className={`mb-1.5 text-base font-semibold text-slate-800 ${lc(language, 'en')}`}>
         {labels.en.title}
       </h3>
-      <p className={`mb-4 text-[13px] text-slate-500 ${lc(language, 'vi')}`}>
-        {labels.vi.hint}
-      </p>
-      <p className={`mb-4 text-[13px] text-slate-500 ${lc(language, 'en')}`}>
-        {labels.en.hint}
-      </p>
+      <p className={`mb-4 text-[13px] text-slate-500 ${lc(language, 'vi')}`}>{labels.vi.hint}</p>
+      <p className={`mb-4 text-[13px] text-slate-500 ${lc(language, 'en')}`}>{labels.en.hint}</p>
       <ol className="space-y-2.5">
-        {entries.map((entry, idx) => {
-          const fmt = formatDate(entry.date);
-          const dateLabel = typeof fmt === 'object' ? fmt : { vi: fmt, en: fmt };
+        {versions.map((date, idx) => {
+          const label = formatPolicyDate(date);
           return (
             <li
-              key={`${entry.date}-${idx}`}
+              key={date}
               className="flex flex-col gap-0.5 border-l-2 border-orange-400/70 pl-3 text-[13px] text-slate-600 sm:flex-row sm:gap-3"
             >
-              <span className={`font-semibold tabular-nums text-slate-700 ${lc(language, 'vi')}`}>{dateLabel.vi}</span>
-              <span className={`font-semibold tabular-nums text-slate-700 ${lc(language, 'en')}`}>{dateLabel.en}</span>
-              <span className={`hidden sm:inline ${lc(language, 'vi')}`}>—</span>
-              <span className={`hidden sm:inline ${lc(language, 'en')}`}>—</span>
-              <span className={lc(language, 'vi')}>{entry.note.vi}</span>
-              <span className={lc(language, 'en')}>{entry.note.en}</span>
+              {idx === 0 ? (
+                <>
+                  <span className={`${dateClass} text-slate-700 ${lc(language, 'vi')}`}>{label.vi}</span>
+                  <span className={`${dateClass} text-slate-700 ${lc(language, 'en')}`}>{label.en}</span>
+                  <span className={lc(language, 'vi')}>{labels.vi.current}</span>
+                  <span className={lc(language, 'en')}>{labels.en.current}</span>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to={`/policy-versions/${slug}/${date}`}
+                    className={`${dateClass} text-orange-600 hover:underline ${lc(language, 'vi')}`}
+                  >
+                    {label.vi}
+                  </Link>
+                  <Link
+                    to={`/policy-versions/${slug}/${date}`}
+                    className={`${dateClass} text-orange-600 hover:underline ${lc(language, 'en')}`}
+                  >
+                    {label.en}
+                  </Link>
+                </>
+              )}
             </li>
           );
         })}

@@ -18,30 +18,6 @@ function TermsOfService() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
 
-  const historyEntries = [
-    {
-      date: '2026-09-29',
-      note: {
-        vi: 'Cập nhật Điều khoản sử dụng dịch vụ theo góp ý của luật sư 25–29/09/2026 và Nghị định 248/2026/NĐ-CP: bổ sung cơ chế xác nhận chấp thuận riêng; điều chỉnh phạm vi áp dụng về nền tảng founderai.biz; bỏ quy định cho phép ngừng dịch vụ không cần thông báo trước; chuyển mục Chấm dứt dịch vụ sang Chính sách chấm dứt dịch vụ và hoàn tiền; bổ sung giới hạn trách nhiệm 9.1–9.5, sửa đổi điều khoản (thông báo trước 15 ngày, đồng ý riêng đối với dữ liệu cá nhân).',
-        en: 'Updated the Terms of Service following the lawyer\'s comments of 25–29/09/2026 and Decree 248/2026/NĐ-CP: added a separate acceptance mechanism; limited the scope to the founderai.biz platform; removed the provision allowing services to be stopped without notice; moved Service Termination to the Service Termination and Refund Policy; added limitation of liability 9.1–9.5 and amendment of terms (15 days\' notice, separate consent for personal data).',
-      },
-    },
-    {
-      date: '2026-09-28',
-      note: {
-        vi: 'Đồng bộ ngày hiệu lực về 28/09/2026 theo yêu cầu cập nhật founderai.biz 25.09 (Nghị định 248/2026/NĐ-CP).',
-        en: 'Aligned effective date to 28/09/2026 per the founderai.biz 25.09 update request (Decree 248/2026/NĐ-CP).',
-      },
-    },
-    {
-      date: '2026-10-13',
-      note: {
-        vi: 'Phiên bản trước — ngày hiệu lực 13/10/2026 (đã thay thế).',
-        en: 'Previous version — effective 13/10/2026 (now superseded).',
-      },
-    },
-  ];
-
   return (
     <div className="min-h-screen bg-slate-100/90 text-slate-900 antialiased">
       <style>
@@ -144,11 +120,13 @@ function TermsOfService() {
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
                 Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
                 Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
+                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
@@ -995,7 +973,7 @@ function TermsOfService() {
             These terms were last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory language={language} lc={lc} entries={historyEntries} />
+        <PolicyHistory slug="terms" language={language} lc={lc} />
       </div>
     </div>
   );

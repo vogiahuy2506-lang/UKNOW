@@ -56,6 +56,7 @@ import ServiceTerms from './pages/public/ServiceTerms';
 import ServiceDeliveryPolicy from './pages/public/ServiceDeliveryPolicy';
 import Support from './pages/public/Support';
 import RightsAndDuties from './pages/public/RightsAndDuties';
+import PolicyArchivedVersionPage from './pages/public/PolicyArchivedVersionPage';
 import TrialDemoPage from './pages/public/TrialDemoPage';
 import HeroPage from './pages/public/HeroPage';
 import PricingPage from './pages/public/PricingPage';
@@ -335,6 +336,7 @@ function AppContent() {
             <Route path="/rights-and-duties/" element={<RightsAndDuties />} />
             <Route path="/support" element={<Support />} />
             <Route path="/support/" element={<Support />} />
+            <Route path="/policy-versions/:slug/:date" element={<PolicyArchivedVersionPage />} />
           </Route>
 
           {/* Kích hoạt tài khoản nhân viên qua link email */}

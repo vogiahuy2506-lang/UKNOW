@@ -3,19 +3,23 @@
  *
  * NGUYÊN TẮC:
  * 1. Hằng số phiên bản và hash của văn bản nằm tại MỘT CHỖ DUY NHẤT ở đây.
- * 2. Khi sửa nội dung bất kỳ văn bản nào (TermsOfService.jsx, PrivacyPolicy.jsx, PublicDPA.jsx),
- *    BẮT BUỘC phải tính lại hash và tăng version tại file này.
+ * 2. Khi sửa NỘI DUNG (lời văn) bất kỳ văn bản nào (TermsOfService.jsx, PrivacyPolicy.jsx, PublicDPA.jsx),
+ *    BẮT BUỘC phải tính lại hash và tăng version tại file này. Sửa không thực chất (khối
+ *    "Lịch sử cập nhật", CSS, chính tả hiển thị…) chỉ cập nhật hash, KHÔNG tăng version.
  * 3. Unit test `legalDocuments.config.spec.js` sẽ tự động kiểm tra hash này với file frontend thật;
  *    nếu nội dung bị sửa mà chưa tăng version/hash thì test sẽ fail đỏ.
  */
 
 import crypto from 'crypto';
 
+// 30/09: hash của 3 văn bản được tính lại vì chỉ đổi khối "Lịch sử cập nhật" (bỏ lý do) + liên kết
+// lưu trữ đầu trang; lời văn chính sách không đổi → KHÔNG tăng version (tăng version = mọi người
+// dùng phải đồng ý lại).
 export const LEGAL_DOCUMENTS = Object.freeze({
   terms: {
     purpose: 'terms',
     version: '2026-09-29',
-    hash: '3a2051df285a9f4ff33b44e1a41421715d7b703352c5e2cc30ac458b8c5d8db4',
+    hash: '16957d7458a662fcf7952fe93bb67e106c7a3911902ce2db22e1af607e92f2c5',
     title: 'Điều khoản dịch vụ',
     path: '/terms',
     frontendRelativePath: 'src/pages/public/TermsOfService.jsx',
@@ -23,7 +27,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   privacy: {
     purpose: 'privacy',
     version: '2026-09-29',
-    hash: '0bce4ef060fdc13c1062dac41aa79516e0717283bc4615333aa979b297a552b6',
+    hash: '658fab596a297ea22639a928b9f8e37b751f94a44e858ea541f61ac48ae18fa8',
     title: 'Chính sách bảo mật',
     path: '/privacy-policy',
     frontendRelativePath: 'src/pages/public/PrivacyPolicy.jsx',
@@ -31,7 +35,7 @@ export const LEGAL_DOCUMENTS = Object.freeze({
   dpa: {
     purpose: 'dpa',
     version: '2026-09-29',
-    hash: '2c16bcd2a7727f2847ea26395a610426dfc73f0de565d3e1a97a7ec6463c5ac1',
+    hash: 'b7d0d37f50a039637ebabc3a6b05669f84206f34bdcd14857e663c3439479310',
     title: 'Thỏa thuận xử lý dữ liệu (DPA)',
     path: '/public-dpa',
     frontendRelativePath: 'src/pages/public/PublicDPA.jsx',
