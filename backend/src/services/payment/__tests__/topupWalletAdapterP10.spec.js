@@ -32,7 +32,7 @@ jest.unstable_mockModule('../../../utils/userSendLimit.util.js', () => ({
   _clearQuotaCache: jest.fn(),
 }));
 
-const { debitAdapterMessageIfNeeded } = await import('../topupWallet.service.js');
+const { debitAdapterMessageIfNeeded, debitInboxChannelMessageIfNeeded } = await import('../topupWallet.service.js');
 
 const CYCLE = { hasPlan: true, cycleStart: new Date('2025-12-31T17:00:00.000Z'), cycleEnd: new Date('2026-01-31T17:00:00.000Z') };
 
@@ -96,5 +96,50 @@ describe('debitAdapterMessageIfNeeded (P10)', () => {
     expect(mockClientQuery).toHaveBeenCalledWith('ROLLBACK');
     expect(mockRelease).toHaveBeenCalledTimes(1);
     warn.mockRestore();
+  });
+});
+
+// P11 — Hộp thư trả lời tay: cùng lõi, khác sourceKey (cm:<id>) để không đụng dòng ccm:<id> của chiến dịch.
+describe('debitInboxChannelMessageIfNeeded (P11)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetClient.mockResolvedValue({ query: mockClientQuery, release: mockRelease });
+    mockGetCycle.mockResolvedValue(CYCLE);
+    mockInsertDebit.mockResolvedValue({ id: 1 });
+    setPlanLimit(100);
+  });
+
+  it.each([
+    ['telegram', 'telegram_messages'],
+    ['whatsapp', 'whatsapp_messages'],
+  ])('%s: vượt hạn mức → debit ví %s với sourceKey cm:<id> (KHÔNG phải ccm:)', async (channel, item) => {
+    mockCountChannel.mockResolvedValue(101);
+    const result = await debitInboxChannelMessageIfNeeded({ billingUserId: 10, channel, messageId: 88 });
+    expect(result).toMatchObject({ debited: true });
+    expect(mockInsertDebit).toHaveBeenCalledWith({ userId: 10, itemKey: item, qty: 1, sourceKey: 'cm:88' }, expect.anything());
+  });
+
+  it('debitAdapterMessageIfNeeded vẫn dùng sourceKey ccm:<id> (giữ nguyên hành vi P10)', async () => {
+    mockCountChannel.mockResolvedValue(101);
+    await debitAdapterMessageIfNeeded({ billingUserId: 10, channel: 'telegram', messageId: 88 });
+    expect(mockInsertDebit).toHaveBeenCalledWith(expect.objectContaining({ sourceKey: 'ccm:88' }), expect.anything());
+  });
+
+  it('còn trong hạn mức / gói không giới hạn → không trừ ví', async () => {
+    mockCountChannel.mockResolvedValue(100);
+    expect(await debitInboxChannelMessageIfNeeded({ billingUserId: 10, channel: 'telegram', messageId: 1 }))
+      .toMatchObject({ debited: false, reason: 'within_plan' });
+    setPlanLimit(null);
+    mockCountChannel.mockResolvedValue(9999);
+    expect(await debitInboxChannelMessageIfNeeded({ billingUserId: 10, channel: 'whatsapp', messageId: 1 }))
+      .toMatchObject({ debited: false, reason: 'unlimited_plan' });
+    expect(mockInsertDebit).not.toHaveBeenCalled();
+  });
+
+  it('kênh không phải adapter / thiếu id tin / thiếu billingUserId → bỏ qua, không mở kết nối', async () => {
+    expect(await debitInboxChannelMessageIfNeeded({ billingUserId: 10, channel: 'zalo', messageId: 1 })).toMatchObject({ reason: 'missing_args' });
+    expect(await debitInboxChannelMessageIfNeeded({ billingUserId: 10, channel: 'telegram', messageId: null })).toMatchObject({ reason: 'missing_args' });
+    expect(await debitInboxChannelMessageIfNeeded({ billingUserId: null, channel: 'telegram', messageId: 5 })).toMatchObject({ reason: 'missing_args' });
+    expect(mockGetClient).not.toHaveBeenCalled();
   });
 });

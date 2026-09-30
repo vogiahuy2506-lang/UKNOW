@@ -724,16 +724,16 @@ class UnifiedInboxRepository {
    * Send a message from agent/admin
    * @returns {Promise<number|null>} zalo_personal message id when applicable; otherwise null
    */
-  async sendMessage(conversationId, userId, conversationType, channelId, { role = 'agent', content, attachments = [], metadata = {} } = {}) {
+  async sendMessage(conversationId, userId, conversationType, channelId, { role = 'agent', content, attachments = [], metadata = {}, quotaReservationId = null } = {}) {
     const now = new Date().toISOString();
     const metadataJson = JSON.stringify(metadata && typeof metadata === 'object' ? metadata : {});
 
     if (conversationType === 'channel') {
       const { rows } = await db.query(
-        `INSERT INTO channel_messages (id_conversation, id_user, id_channel, role, content, attachments, metadata, is_read, read_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8)
+        `INSERT INTO channel_messages (id_conversation, id_user, id_channel, role, content, attachments, metadata, is_read, read_at, quota_reservation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, true, $8, $9)
          RETURNING id`,
-        [conversationId, userId, channelId, role, content, JSON.stringify(attachments), metadataJson, now]
+        [conversationId, userId, channelId, role, content, JSON.stringify(attachments), metadataJson, now, quotaReservationId || null]
       );
       await db.query(
         `UPDATE channel_conversations SET last_message_at = $2 WHERE id = $1`,
@@ -1300,9 +1300,13 @@ class UnifiedInboxRepository {
   }
 
   async updateMessageQuotaReservationId(conversationType, messageId, quotaReservationId) {
-    if (conversationType !== 'zalo_personal') return null;
+    // P11: `channel_messages` (Hộp thư Telegram/WhatsApp) cũng có cột đặt chỗ — trước đó trả null ở đây nên retry không bao giờ replay được.
+    let table = null;
+    if (conversationType === 'zalo_personal') table = 'zalo_personal_messages';
+    else if (conversationType === 'channel') table = 'channel_messages';
+    if (!table) return null;
     const { rows } = await db.query(
-      `UPDATE zalo_personal_messages
+      `UPDATE ${table}
        SET quota_reservation_id = $2
        WHERE id = $1
        RETURNING id, quota_reservation_id`,
@@ -1386,7 +1390,7 @@ class UnifiedInboxRepository {
     if (conversationType === 'channel') {
       const { rows } = await db.query(
         `SELECT cm.id, cm.id_conversation, cm.id_user, cm.id_channel, cm.role,
-                cm.content, cm.attachments, cm.metadata,
+                cm.content, cm.attachments, cm.metadata, cm.quota_reservation_id,
                 cc.external_id, cc.id_user AS conversation_user_id,
                 ch.channel AS channel
          FROM channel_messages cm

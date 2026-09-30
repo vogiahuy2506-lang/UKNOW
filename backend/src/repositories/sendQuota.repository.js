@@ -5,6 +5,7 @@ import { EMAIL_SENT_STATUS_SQL_LIST } from '../constants/emailMessageStatus.js';
 import {
   ADAPTER_QUOTA_CHANNELS,
   DIRECT_SEND_RESOURCE_TYPE,
+  INBOX_CHANNEL_BY_QUOTA_CHANNEL,
   WALLET_ITEM_BY_QUOTA_CHANNEL,
 } from '../constants/sendQuotaChannels.js';
 
@@ -1231,7 +1232,8 @@ export async function countEmployeeSentInCycleWithLedger(
 
 /**
  * P10 — tổng tin Telegram/WhatsApp trong kỳ gói (kết hợp dòng ccm chưa gắn đặt chỗ + usage_logs gửi nhanh chưa gắn đặt chỗ
- * + ledger đặt chỗ đang giữ/đã tiêu). Cùng khuôn `countZaloSentInCycleWithLedger`: mỗi tin đi qua đúng MỘT nguồn.
+ * + (P11) tin trả lời tay Hộp thư `channel_messages` đã `sent` chưa gắn đặt chỗ — chủ = `channel_connections.id_user`, kênh Hộp thư
+ * `whatsapp_baileys` ≠ kênh hạn mức `whatsapp`; trần/ngày theo tài khoản KHÔNG cộng Hộp thư (Zalo cũng không) + ledger đặt chỗ đang giữ/đã tiêu). Cùng khuôn `countZaloSentInCycleWithLedger`: mỗi tin đi qua đúng MỘT nguồn.
  * Dòng ccm gửi nhanh ghi `is_preview = true` nên bị loại (tin gửi nhanh đi qua usage_logs hoặc ledger).
  * @param {import('pg').Pool|import('pg').PoolClient} queryable
  * @param {number|string} billingUserId
@@ -1265,6 +1267,19 @@ export async function countAdapterSentInCycleWithLedger(queryable, billingUserId
       ), 0)
       +
       COALESCE((
+        SELECT COUNT(*)
+        FROM channel_messages cm
+        JOIN channel_connections ch ON ch.id = cm.id_channel
+        WHERE ch.id_user = $1
+          AND ch.channel = $6
+          AND cm.role = 'agent'
+          AND cm.metadata->>'source' = 'manual_inbox'
+          AND cm.metadata->'send'->>'status' = 'sent'
+          AND cm.quota_reservation_id IS NULL
+          AND cm.created_at >= $2 AND cm.created_at < $3
+      ), 0)
+      +
+      COALESCE((
         SELECT SUM(quantity)
         FROM send_quota_reservations
         WHERE billing_user_id = $1
@@ -1274,7 +1289,7 @@ export async function countAdapterSentInCycleWithLedger(queryable, billingUserId
           AND cycle_start = $2 AND cycle_end = $3
       ), 0)
     )::int AS total`,
-    [billingUserId, cycleStart, cycleEnd, channel, DIRECT_SEND_RESOURCE_TYPE[channel]]
+    [billingUserId, cycleStart, cycleEnd, channel, DIRECT_SEND_RESOURCE_TYPE[channel], INBOX_CHANNEL_BY_QUOTA_CHANNEL[channel]]
   );
   return Number(rows[0]?.total || 0);
 }

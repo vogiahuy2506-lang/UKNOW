@@ -147,8 +147,25 @@ export async function debitZaloPersonalInboxIfNeeded(client, { billingUserId, me
  * @param {{ billingUserId: number|string, channel: 'telegram'|'whatsapp', messageId: number|string }} input
  */
 export async function debitAdapterMessageIfNeeded({ billingUserId, channel, messageId }) {
+  if (!messageId) return { debited: false, reason: 'missing_args' };
+  return debitChannelMessageWalletIfNeeded({ billingUserId, channel, sourceKey: `ccm:${messageId}` });
+}
+
+/**
+ * P11 — trừ ví top-up cho MỘT tin trả lời tay Telegram/WhatsApp ở Hộp thư (bảng `channel_messages`), đường legacy off/shadow.
+ * Khác Zalo cá nhân (`debitZaloPersonalInboxIfNeeded` trừ lúc CHÈN dòng, trước khi gửi, và đếm cả tin lỗi): gọi hàm này SAU khi tin đã
+ * `sent` — tin lỗi không được đếm cũng không bị trừ. Idempotent theo `cm:<messageId>`; không ném lỗi ra ngoài.
+ *
+ * @param {{ billingUserId: number|string, channel: 'telegram'|'whatsapp', messageId: number|string }} input
+ */
+export async function debitInboxChannelMessageIfNeeded({ billingUserId, channel, messageId }) {
+  if (!messageId) return { debited: false, reason: 'missing_args' };
+  return debitChannelMessageWalletIfNeeded({ billingUserId, channel, sourceKey: `cm:${messageId}` });
+}
+
+async function debitChannelMessageWalletIfNeeded({ billingUserId, channel, sourceKey }) {
   const itemKey = WALLET_ITEM_BY_QUOTA_CHANNEL[channel];
-  if (!billingUserId || !messageId || !itemKey || (channel !== 'telegram' && channel !== 'whatsapp')) {
+  if (!billingUserId || !sourceKey || !itemKey || (channel !== 'telegram' && channel !== 'whatsapp')) {
     return { debited: false, reason: 'missing_args' };
   }
   const { default: db } = await import('../../config/database.js');
@@ -177,7 +194,7 @@ export async function debitAdapterMessageIfNeeded({ billingUserId, channel, mess
     const result = await maybeDebitWalletForSend(client, {
       billingUserId,
       itemKey,
-      sourceKey: `ccm:${messageId}`,
+      sourceKey: sourceKey,
       planLimit: Number.isFinite(planLimit) ? planLimit : null,
       usageCountAfterSend,
     });
@@ -185,7 +202,7 @@ export async function debitAdapterMessageIfNeeded({ billingUserId, channel, mess
     return result;
   } catch (error) {
     try { await client.query('ROLLBACK'); } catch (_) { /* bỏ qua */ }
-    console.warn(`[TopupWallet] debitAdapterMessageIfNeeded ${channel}#${messageId} lỗi:`, error?.message);
+    console.warn(`[TopupWallet] debit ${channel} ${sourceKey} lỗi:`, error?.message);
     return { debited: false, reason: 'error' };
   } finally {
     client.release();

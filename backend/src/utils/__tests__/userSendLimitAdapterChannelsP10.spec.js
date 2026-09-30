@@ -109,7 +109,13 @@ describe('checkSendQuota — kênh adapter có hạn mức tin/tháng riêng (P1
     expect(quota.allowed).toBe(true);
     expect(limit).toBeGreaterThan(50);
     // Đếm đúng kênh + chu kỳ GÓI (không phải tháng lịch) + loại xem thử.
-    expect(state.adapterParams).toEqual([10, CYCLE_START.toISOString(), CYCLE_END.toISOString(), channel, `${channel}_direct_send`]);
+    // $6 = kênh HỘP THƯ (whatsapp → 'whatsapp_baileys') cho vế channel_messages — P11.
+    const inboxChannel = channel === 'whatsapp' ? 'whatsapp_baileys' : channel;
+    expect(state.adapterParams).toEqual([10, CYCLE_START.toISOString(), CYCLE_END.toISOString(), channel, `${channel}_direct_send`, inboxChannel]);
+    expect(state.adapterSql).toContain('channel_messages');
+    expect(state.adapterSql).toContain("cm.metadata->>'source' = 'manual_inbox'");
+    expect(state.adapterSql).toContain("cm.metadata->'send'->>'status' = 'sent'");
+    expect(state.adapterSql).toMatch(/ch\.channel = \$6/);
     expect(state.adapterSql).toMatch(/NOT ccm\.is_preview/);
     expect(state.adapterSql).toMatch(/ccm\.status = 'sent'/);
     expect(state.adapterSql).toMatch(/resource_type = \$5/);

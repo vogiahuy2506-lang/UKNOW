@@ -67,11 +67,18 @@ describe('countAdapterSentInCycleWithLedger (P10)', () => {
     const total = await repo.countAdapterSentInCycleWithLedger(queryable, 10, 'whatsapp', start, end);
     expect(total).toBe(7);
     const [sql, params] = queryable.query.mock.calls[0];
-    expect(params).toEqual([10, start, end, 'whatsapp', 'whatsapp_direct_send']);
+    // $6 = kênh HỘP THƯ ('whatsapp_baileys'), KHÔNG phải kênh hạn mức ('whatsapp') — P11.
+    expect(params).toEqual([10, start, end, 'whatsapp', 'whatsapp_direct_send', 'whatsapp_baileys']);
     expect(sql).toMatch(/FROM campaign_channel_messages ccm/);
     expect(sql).toMatch(/NOT ccm\.is_preview/);
     expect(sql).toMatch(/ccm\.quota_reservation_id IS NULL/);
     expect(sql).toMatch(/resource_type = \$5/);
+    // P11: Hộp thư — tin trả lời tay đã gửi, chủ = channel_connections.id_user, chưa gắn đặt chỗ (ledger tự đếm).
+    expect(sql).toMatch(/FROM channel_messages cm\s+JOIN channel_connections ch ON ch\.id = cm\.id_channel/);
+    expect(sql).toMatch(/ch\.id_user = \$1\s+AND ch\.channel = \$6/);
+    expect(sql).toMatch(/cm\.metadata->>'source' = 'manual_inbox'/);
+    expect(sql).toMatch(/cm\.metadata->'send'->>'status' = 'sent'/);
+    expect(sql).toMatch(/cm\.quota_reservation_id IS NULL/);
     expect(sql).toMatch(/FROM send_quota_reservations[\s\S]*channel = \$4[\s\S]*cycle_start = \$2 AND cycle_end = \$3/);
   });
 

@@ -12,7 +12,7 @@ import telegramInboxAdapter from './channelAdapters/telegramInbox.adapter.js';
 import sseService from '../sse.service.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 import { resolveBillingUserId } from '../../utils/billingCycle.util.js';
-import { debitZaloPersonalInboxIfNeeded } from '../payment/topupWallet.service.js';
+import { debitInboxChannelMessageIfNeeded, debitZaloPersonalInboxIfNeeded } from '../payment/topupWallet.service.js';
 import {
   isZaloGroupConversation,
   resolveZaloGroupSendId,
@@ -41,6 +41,8 @@ import {
   findReservationById,
 } from '../../repositories/sendQuota.repository.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import { classifyInboxChannelSendFailure } from '../../utils/inboxChannelSendFailure.util.js';
+import { QUOTA_CHANNEL_LABEL, resolveInboxQuotaChannel } from '../../constants/sendQuotaChannels.js';
 import { isZaloPartialDeliveryResult } from '../../utils/zaloDispatchDelivery.util.js';
 
 function presentInboxAttachments(raw) {
@@ -512,6 +514,80 @@ class UnifiedInboxService {
       }
     }
 
+    // P11 — Telegram/WhatsApp trả lời tay: đặt chỗ hạn mức tin/tháng của kênh đó như Zalo cá nhân. zalo_oa/facebook/webchat → null (không đo).
+    const inboxQuotaChannel = conversationType === 'channel' ? resolveInboxQuotaChannel(conversation.channel) : null;
+    if (inboxQuotaChannel) {
+      const billingOptions = options.ownerContextId != null && options.ownerContextId !== ''
+        ? { ownerContextId: options.ownerContextId }
+        : {};
+      const billingUserId = await resolveBillingUserId(userId, billingOptions);
+      const recipient = conversation.external_id || String(conversationId);
+
+      const reservationKey = buildDirectReservationKey({
+        channel: inboxQuotaChannel,
+        billingUserId: billingUserId || userId,
+        clientKey: resolvedIdempotencyKey,
+        recipient,
+      });
+
+      const requestPayload = {
+        conversationId: parseInt(conversationId),
+        recipient,
+        content: String(content || '').trim(),
+        attachments: attachments || [],
+      };
+      const requestFingerprint = computeRequestFingerprint(requestPayload);
+
+      reservation = await reserveSendQuota({
+        userId: options.actorUserId || userId,
+        roleCode: options.roleCode || 'user',
+        ownerContextId: options.ownerContextId || null,
+        membershipId: options.membershipId || null,
+        channel: inboxQuotaChannel,
+        quantity: 1,
+        reservationKey,
+        requestFingerprint,
+        requestPayload,
+        sourceType: 'inbox',
+      }, options);
+
+      if (reservation.mode === 'enforce' || reservation.mode === 'test_enforce') {
+        if (reservation.status === 'consumed') {
+          return {
+            messageId: reservation.responseSnapshot?.messageId || reservation.response_snapshot?.messageId || null,
+            conversationId: parseInt(conversationId),
+            isReplay: true,
+            pauseState: { aiPaused: true, aiPausedAt: null, aiResumeAt: null },
+          };
+        }
+        await markSendQuotaSending({ reservationId: reservation.id }, options);
+      }
+
+      try {
+        messageId = await unifiedInboxRepository.sendMessage(
+          parseInt(conversationId),
+          userId,
+          conversationType,
+          channelId,
+          { ...messagePayload, quotaReservationId: reservation?.id || null }
+        );
+      } catch (persistErr) {
+        // Provider CHƯA được gọi — release an toàn (giống nhánh Zalo cá nhân), không để đặt chỗ kẹt 'sending'.
+        if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+          try {
+            await releaseSendQuota({
+              reservationId: reservation.id,
+              failureCode: 'INBOX_PERSIST_FAILED',
+              reason: persistErr.message || 'Failed to persist inbox message before send',
+            }, options);
+          } catch (releaseErr) {
+            console.warn('[UnifiedInbox] releaseSendQuota after persist failure error:', releaseErr.message);
+          }
+        }
+        throw persistErr;
+      }
+    }
+
     if (!messageId) {
       messageId = await unifiedInboxRepository.sendMessage(
         parseInt(conversationId),
@@ -641,6 +717,22 @@ class UnifiedInboxService {
             }, ...optArg);
           } catch (_) {}
         }
+      } else if (inboxQuotaChannel) {
+        // P11: Telegram/WhatsApp — phân loại riêng (không dùng mã lỗi zca-js). Một phần/timeout → uncertain, còn lại release.
+        const classified = classifyInboxChannelSendFailure(lastSendResult, sendError);
+        if (classified.uncertain) {
+          await markSendQuotaUncertain({
+            reservationId: reservation.id,
+            failureCode: classified.failureCode,
+            reason: classified.reason,
+          }, ...optArg);
+        } else {
+          await releaseSendQuota({
+            reservationId: reservation.id,
+            failureCode: classified.failureCode,
+            reason: classified.reason,
+          }, ...optArg);
+        }
       } else {
         const classified = classifyZaloSendError(sendError);
         const failureCode = classified.failureCode || classified.category || 'INBOX_SEND_FAILED';
@@ -663,14 +755,43 @@ class UnifiedInboxService {
       }
     }
 
+    let sendStatusPersisted = false;
     if (canTrackSend) {
       await unifiedInboxRepository.updateMessageSendStatus(conversationType, messageId, {
         status: sendStatus,
         error: sendError,
         attempts: 1,
+      }).then(() => {
+        sendStatusPersisted = true;
       }).catch((e) => {
         console.warn('[UnifiedInbox] updateMessageSendStatus failed:', e.message);
       });
+    }
+
+    // P11 — trừ ví top-up (đường legacy off/shadow = production) SAU khi tin đã 'sent' để phép đếm thấy chính tin này. Khác Zalo cá nhân
+    // (trừ lúc chèn, trước khi gửi, và đếm cả tin lỗi — lỗi cũ, KHÔNG sao chép): tin TG/WA lỗi không tốn hạn mức cũng không bị trừ ví.
+    // billingUserId lấy từ reservation.legacyDecision, KHÔNG resolve lại (admin bypass cố ý trả null = không trừ; xem chú thích nhánh Zalo).
+    if (
+      inboxQuotaChannel
+      && sendStatus === 'sent'
+      && sendStatusPersisted
+      && reservation
+      && reservation.mode !== 'enforce'
+      && reservation.mode !== 'test_enforce'
+    ) {
+      const legacyDecision = reservation.legacyDecision || reservation.legacyResult;
+      const debitBillingUserId = legacyDecision?.billingUserId || null;
+      if (debitBillingUserId && messageId) {
+        try {
+          await debitInboxChannelMessageIfNeeded({
+            billingUserId: debitBillingUserId,
+            channel: inboxQuotaChannel,
+            messageId,
+          });
+        } catch (debitErr) {
+          console.warn('[UnifiedInbox] debitInboxChannelMessageIfNeeded failed:', debitErr.message);
+        }
+      }
     }
 
     return {
@@ -738,8 +859,12 @@ class UnifiedInboxService {
       };
     }
 
+    // P11: Telegram/WhatsApp trả lời tay cũng có đặt chỗ hạn mức (cột channel_messages.quota_reservation_id).
+    const inboxQuotaChannel = type === 'channel' ? resolveInboxQuotaChannel(owned.channel) : null;
+    const retryQuotaChannel = type === 'zalo_personal' ? 'zalo' : inboxQuotaChannel;
+
     // Check existing reservation status BEFORE claiming
-    if (type === 'zalo_personal' && owned.quota_reservation_id) {
+    if (retryQuotaChannel && owned.quota_reservation_id) {
       const prevRes = await findReservationById(db, owned.quota_reservation_id);
       if (prevRes?.status === 'consumed') {
         return {
@@ -800,7 +925,7 @@ class UnifiedInboxService {
     let sendError = null;
 
     let reservation = null;
-    if (type === 'zalo_personal') {
+    if (retryQuotaChannel) {
       const retryClientKey = resolveRequestIdempotencyKey(options.idempotencyKey || options.clientKey || null);
       const recipient = conversation.external_id || owned.external_id || String(owned.id_conversation);
       // retryClientKey có thể dài tới 128 ký tự (trần của resolveRequestIdempotencyKey).
@@ -813,7 +938,7 @@ class UnifiedInboxService {
         .digest('hex')
         .slice(0, 32);
       const reservationKey = buildDirectReservationKey({
-        channel: 'zalo',
+        channel: retryQuotaChannel,
         billingUserId: options.ownerContextId || userId,
         clientKey: `inbox_retry_${retryKeyDigest}`,
         recipient,
@@ -847,7 +972,7 @@ class UnifiedInboxService {
           roleCode: options.roleCode || 'user',
           ownerContextId: options.ownerContextId || null,
           membershipId: options.membershipId || null,
-          channel: 'zalo',
+          channel: retryQuotaChannel,
           quantity: 1,
           reservationKey,
           requestFingerprint,
@@ -878,7 +1003,8 @@ class UnifiedInboxService {
         }
         await unifiedInboxRepository.updateMessageSendStatus(type, owned.id, {
           status: 'failed',
-          error: quotaErr.message || 'Lỗi kiểm tra hạn mức gửi tin Zalo',
+          error: quotaErr.message
+            || (retryQuotaChannel === 'zalo' ? 'Lỗi kiểm tra hạn mức gửi tin Zalo' : `Lỗi kiểm tra hạn mức gửi tin ${QUOTA_CHANNEL_LABEL[retryQuotaChannel]}`),
         }).catch(() => {});
         throw quotaErr;
       }
@@ -909,7 +1035,25 @@ class UnifiedInboxService {
         if (sendResult && sendResult.success === false) {
           sendStatus = 'failed';
           sendError = sendResult.error || 'Send failed';
-          if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+          if (reservation?.id && inboxQuotaChannel && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+            // P11: Telegram/WhatsApp — phân loại riêng (một phần/timeout → uncertain, còn lại release).
+            const classifiedInbox = classifyInboxChannelSendFailure(sendResult, sendError);
+            try {
+              if (classifiedInbox.uncertain) {
+                await markSendQuotaUncertain({
+                  reservationId: reservation.id,
+                  failureCode: classifiedInbox.failureCode,
+                  reason: classifiedInbox.reason,
+                }, options);
+              } else {
+                await releaseSendQuota({
+                  reservationId: reservation.id,
+                  failureCode: classifiedInbox.failureCode,
+                  reason: classifiedInbox.reason,
+                }, options);
+              }
+            } catch (_) {}
+          } else if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
             const classified = classifyZaloSendError(sendError);
             try {
               // Partial: một phần nội dung đã tới khách thật. Release ở đây mở lại slot
@@ -969,7 +1113,24 @@ class UnifiedInboxService {
     } catch (err) {
       sendStatus = 'failed';
       sendError = err.message || 'Send failed';
-      if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+      if (reservation?.id && inboxQuotaChannel && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
+        const classifiedInbox = classifyInboxChannelSendFailure(null, err);
+        try {
+          if (classifiedInbox.uncertain) {
+            await markSendQuotaUncertain({
+              reservationId: reservation.id,
+              failureCode: classifiedInbox.failureCode,
+              reason: classifiedInbox.reason,
+            }, options);
+          } else {
+            await releaseSendQuota({
+              reservationId: reservation.id,
+              failureCode: classifiedInbox.failureCode,
+              reason: classifiedInbox.reason,
+            }, options);
+          }
+        } catch (_) {}
+      } else if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
         const classified = classifyZaloSendError(sendError);
         try {
           if (classified.isTimeout) {
@@ -993,6 +1154,29 @@ class UnifiedInboxService {
       status: sendStatus,
       error: sendStatus === 'failed' ? sendError : null,
     });
+
+    // P11 — gửi lại thành công ở đường legacy (off/shadow): trừ ví SAU khi tin 'sent' (lần đầu lỗi nên chưa từng đếm/trừ). Idempotent `cm:<id>`.
+    if (
+      inboxQuotaChannel
+      && sendStatus === 'sent'
+      && reservation
+      && reservation.mode !== 'enforce'
+      && reservation.mode !== 'test_enforce'
+    ) {
+      const legacyDecision = reservation.legacyDecision || reservation.legacyResult;
+      const debitBillingUserId = legacyDecision?.billingUserId || null;
+      if (debitBillingUserId) {
+        try {
+          await debitInboxChannelMessageIfNeeded({
+            billingUserId: debitBillingUserId,
+            channel: inboxQuotaChannel,
+            messageId: owned.id,
+          });
+        } catch (debitErr) {
+          console.warn('[UnifiedInbox] retry debitInboxChannelMessageIfNeeded failed:', debitErr.message);
+        }
+      }
+    }
 
     return {
       success: true,

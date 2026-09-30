@@ -299,3 +299,44 @@ describe('unifiedInbox.repository outbox search filters', () => {
     expect(params).toEqual([9, 'zalo_oa']);
   });
 });
+
+// P11 — Hộp thư Telegram/WhatsApp: dòng channel_messages mang quota_reservation_id như zalo_personal_messages.
+describe('unifiedInbox.repository quota_reservation_id cho channel_messages (P11)', () => {
+  beforeEach(() => {
+    db.query.mockReset();
+    db.query.mockResolvedValue({ rows: [{ id: 5, quota_reservation_id: 77 }] });
+  });
+
+  it('sendMessage(channel) chèn kèm quota_reservation_id (mặc định null)', async () => {
+    await unifiedInboxRepository.sendMessage(3, 1, 'channel', 9, {
+      role: 'agent', content: 'hi', quotaReservationId: 77,
+    });
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toMatch(/INSERT INTO channel_messages[\s\S]*quota_reservation_id\)[\s\S]*\$9\)/);
+    expect(params[8]).toBe(77);
+
+    db.query.mockClear();
+    await unifiedInboxRepository.sendMessage(3, 1, 'channel', 9, { role: 'agent', content: 'hi' });
+    expect(db.query.mock.calls[0][1][8]).toBeNull();
+  });
+
+  it('updateMessageQuotaReservationId hỗ trợ channel_messages (trước đây trả null nên retry không replay được)', async () => {
+    const row = await unifiedInboxRepository.updateMessageQuotaReservationId('channel', 5, 77);
+    expect(row).toEqual({ id: 5, quota_reservation_id: 77 });
+    expect(db.query.mock.calls[0][0]).toMatch(/UPDATE channel_messages/);
+    expect(db.query.mock.calls[0][1]).toEqual([5, 77]);
+
+    db.query.mockClear();
+    await unifiedInboxRepository.updateMessageQuotaReservationId('zalo_personal', 5, 77);
+    expect(db.query.mock.calls[0][0]).toMatch(/UPDATE zalo_personal_messages/);
+
+    db.query.mockClear();
+    expect(await unifiedInboxRepository.updateMessageQuotaReservationId('webchat', 5, 77)).toBeNull();
+    expect(db.query).not.toHaveBeenCalled();
+  });
+
+  it('findAgentMessageForRetry(channel) SELECT cột quota_reservation_id', async () => {
+    await unifiedInboxRepository.findAgentMessageForRetry(1, 5, 'channel');
+    expect(db.query.mock.calls[0][0]).toMatch(/cm\.quota_reservation_id/);
+  });
+});

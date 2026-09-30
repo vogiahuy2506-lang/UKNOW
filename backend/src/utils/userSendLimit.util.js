@@ -14,6 +14,8 @@ import usageTrackingRepository from '../repositories/payment/usageTracking.repos
 import {
   ADAPTER_QUOTA_CHANNELS,
   DIRECT_SEND_RESOURCE_TYPE,
+  INBOX_CHANNEL_BY_QUOTA_CHANNEL,
+  INBOX_CHANNEL_TO_QUOTA_CHANNEL,
   PLAN_MONTHLY_LIMIT_COLUMN,
   QUOTA_CHANNEL_LABEL,
   SEND_QUOTA_CHANNELS,
@@ -449,8 +451,11 @@ export async function countZaloSentThisMonth(billingUserId, cycleStart = null, c
 /**
  * P10 — số tin Telegram/WhatsApp đã gửi trong chu kỳ billing [cycleStart, cycleEnd) của một workspace.
  *
- * Nguồn = `campaign_channel_messages` (chiến dịch/Hộp thư: dòng `sent`, `NOT is_preview`) + `usage_logs`
- * `<kênh>_direct_send` (gửi nhanh — dòng ccm gửi nhanh ghi `is_preview = true` nên KHÔNG đếm đôi). Chu kỳ = chu kỳ
+ * Nguồn = `campaign_channel_messages` (CHIẾN DỊCH: dòng `sent`, `NOT is_preview`) + `usage_logs` `<kênh>_direct_send`
+ * (gửi nhanh — dòng ccm gửi nhanh ghi `is_preview = true` nên KHÔNG đếm đôi) + (P11) `channel_messages` (HỘP THƯ: tin agent
+ * `manual_inbox` có `metadata.send.status = 'sent'` — Hộp thư KHÔNG ghi ccm; chủ = `channel_connections.id_user`, kênh Hộp thư
+ * `whatsapp_baileys` ≠ kênh hạn mức `whatsapp`, xem `INBOX_CHANNEL_BY_QUOTA_CHANNEL`). Khác Zalo cá nhân: chỉ đếm tin ĐÃ gửi
+ * (tin lỗi/đang gửi không tốn hạn mức). Chu kỳ
  * GÓI của chủ workspace (`getBillingCycle`, tính từ ngày kích hoạt), không phải tháng lịch. `quota_reservation_id IS NULL`:
  * tin đã đi qua hệ đặt chỗ (mode enforce) được tính ở ledger `send_quota_reservations`, không cộng hai lần.
  * Cột `sent_at` của ccm và `created_at` của usage_logs đều TIMESTAMPTZ (luật 3 đầu file).
@@ -475,8 +480,17 @@ export async function countAdapterSentInCycleUncached(billingUserId, channel, cy
         WHERE ul.id_user = $1
           AND ul.resource_type = $5
           AND ul.created_at >= $2 AND ul.created_at < $3)
+     + (SELECT COUNT(*) FROM channel_messages cm
+        JOIN channel_connections ch ON ch.id = cm.id_channel
+        WHERE ch.id_user = $1
+          AND ch.channel = $6
+          AND cm.role = 'agent'
+          AND cm.metadata->>'source' = 'manual_inbox'
+          AND cm.metadata->'send'->>'status' = 'sent'
+          AND cm.quota_reservation_id IS NULL
+          AND cm.created_at >= $2 AND cm.created_at < $3)
      )::int AS total`,
-    [billingUserId, startIso, endIso, channel, DIRECT_SEND_RESOURCE_TYPE[channel]]
+    [billingUserId, startIso, endIso, channel, DIRECT_SEND_RESOURCE_TYPE[channel], INBOX_CHANNEL_BY_QUOTA_CHANNEL[channel]]
   );
   return toCount(rows[0]?.total);
 }
@@ -543,8 +557,20 @@ export async function countCombinedSentInCycle(billingUserId, cycleStart, cycleE
             AND ccm.quota_reservation_id IS NULL
             AND ccm.sent_at >= $2::timestamptz
             AND ccm.sent_at < $3::timestamptz)
+       + (SELECT COUNT(*) FROM channel_messages cm
+          JOIN channel_connections ch ON ch.id = cm.id_channel
+          WHERE ch.id_user = $1
+            AND ch.channel = ANY($6::text[])
+            AND cm.role = 'agent'
+            AND cm.metadata->>'source' = 'manual_inbox'
+            AND cm.metadata->'send'->>'status' = 'sent'
+            AND cm.quota_reservation_id IS NULL
+            AND cm.created_at >= $2 AND cm.created_at < $3)
        )::int AS total`,
-      [billingUserId, startIso, endIso, [...ADAPTER_QUOTA_CHANNELS], Object.values(DIRECT_SEND_RESOURCE_TYPE)]
+      [
+        billingUserId, startIso, endIso, [...ADAPTER_QUOTA_CHANNELS], Object.values(DIRECT_SEND_RESOURCE_TYPE),
+        Object.keys(INBOX_CHANNEL_TO_QUOTA_CHANNEL),
+      ]
     );
     return toCount(rows[0]?.total);
   });
