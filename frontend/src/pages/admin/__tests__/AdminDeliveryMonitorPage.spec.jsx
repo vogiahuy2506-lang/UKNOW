@@ -182,7 +182,7 @@ describe('AdminDeliveryMonitorPage — bốn thẻ', () => {
     expect(card).toHaveTextContent('Lượt đang gửi');
     expect(within(card).getByTestId('runs-waiting')).toHaveTextContent('5 lượt đang chờ');
     // plan_quota_daily (2) + plan_quota_account_daily_email (1) = 3 > quiet_hours (2).
-    expect(within(card).getByTestId('runs-waiting-reason')).toHaveTextContent('Phổ biến nhất: đã hết lượt gửi (theo gói hoặc giới hạn bạn đặt) (3 lượt)');
+    expect(within(card).getByTestId('runs-waiting-reason')).toHaveTextContent('Hay gặp: đã hết lượt gửi (theo gói hoặc giới hạn bạn đặt) (3 lượt)');
     expect(within(card).getByTestId('runs-failed')).toHaveTextContent('2 lượt lỗi trong kỳ');
   });
 

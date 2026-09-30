@@ -8461,7 +8461,7 @@ export default {
       friendRequestsFailed: '+ {count} lời mời kết bạn chưa gửi được',
       sending: 'Lượt đang gửi',
       waiting: '{count} lượt đang chờ',
-      waitingReason: 'Phổ biến nhất: {reason} ({count} lượt)',
+      waitingReason: 'Hay gặp: {reason} ({count} lượt)',
       waitingNone: 'Không có lượt nào đang chờ.',
       runsFailed: '{count} lượt lỗi trong kỳ',
       runsFailedNone: 'Không có lượt lỗi trong kỳ.',
@@ -8480,7 +8480,7 @@ export default {
       none: 'Không có tin nào',
     },
     reasons: {
-      title: 'Nguyên nhân chưa gửi được hàng đầu',
+      title: 'Nguyên nhân chưa gửi được thường gặp',
       desc: 'Gom theo kênh và lý do; mỗi người nhận chỉ tính một lần. Địa chỉ email và dãy số dài được thay bằng <email> / <số>.',
       empty: 'Không có tin nào chưa gửi được trong khoảng thời gian này.',
       unknown: 'Không rõ lý do',
