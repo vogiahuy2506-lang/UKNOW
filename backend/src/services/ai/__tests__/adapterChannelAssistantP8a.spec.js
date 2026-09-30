@@ -190,7 +190,7 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       setFlags({ telegram: true });
       const state = (schedule) => ({
         isCampaignFlow: true, channel: 'telegram', senderAccountId: 12, dataSource: 'conversations', zaloGroupIds: [], zaloFriendIds: [],
-        schedule, brief: { topic: 'x' },
+        schedule, brief: { contentMode: 'custom_topic', topicText: 'Ưu đãi tháng mười cho khách quen' },
       });
       const tooLong = wizard.evaluateNextGate(state({ mode: 'drip', days: 4, slotsPerDay: 2 }), { telegramAccounts: [{ id: 12, name: 'a', usable: true }] }, 'vi');
       expect(tooLong?.gate).toBe('schedule');
