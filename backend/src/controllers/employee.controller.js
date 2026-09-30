@@ -1,4 +1,5 @@
 import * as employeeService from '../services/user/employee.service.js';
+import * as teamOverviewService from '../services/user/teamOverview.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { PERMISSION_CATALOG } from '../config/employeePermissionCatalog.js';
@@ -316,7 +317,7 @@ export async function teamOverview(req, res) {
       return res.status(403).json({ success: false, message: 'Chỉ chủ tài khoản xem được tổng quan nhóm' });
     }
     const ownerId = req.user.id;
-    const data = await employeeService.getTeamOverview(ownerId);
+    const data = await teamOverviewService.getTeamOverview(ownerId);
     return res.json({ success: true, data });
   } catch (err) {
     return handleServiceError(res, err);
@@ -340,7 +341,7 @@ export async function teamContribution(req, res) {
     void req.query?.ownerId;
     void req.body?.ownerId;
     const ownerId = req.user.id;
-    const data = await employeeService.getTeamOverview(ownerId);
+    const data = await teamOverviewService.getTeamOverview(ownerId);
     return res.json({ success: true, data });
   } catch (err) {
     return handleServiceError(res, err);
@@ -353,7 +354,7 @@ export async function teamContribution(req, res) {
  */
 export async function myContribution(req, res) {
   try {
-    const data = await employeeService.getMyContribution({
+    const data = await teamOverviewService.getMyContribution({
       userId: req.user.id,
       activeContext: req.user.activeContext,
     });

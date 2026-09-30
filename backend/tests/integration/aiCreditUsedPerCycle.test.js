@@ -18,7 +18,7 @@ import aiUsageRepository from '../../src/repositories/admin/aiUsage.repository.j
 import aiCreditMeter from '../../src/services/ai/aiCreditMeter.service.js';
 import { getAiUsageOverview } from '../../src/services/admin/aiUsage.service.js';
 import { findAllMembers } from '../../src/repositories/admin/adminMembers.repository.js';
-import { findTeamOverview } from '../../src/repositories/user/employee.repository.js';
+import { getTeamOverview } from '../../src/services/user/teamOverview.service.js';
 import { truncateAll, createUser, createPlan } from './helpers/db.js';
 
 const DAY = 86400000;
@@ -430,9 +430,9 @@ describe('admin Thành viên — aiCreditsUsedThisMonth loại dòng bán Market
 });
 
 // ===========================================================================
-// 6. Hoạt động nhóm: lượt AI của nhân viên chỉ tính trong ví của CHỦ đang xem
+// 6. Hoạt động nhóm: lượt AI của nhân viên chỉ tính trong ví của CHỦ đang xem (PR-7: theo KỲ của chủ, cột aiCreditsUsed)
 // ===========================================================================
-describe('Hoạt động nhóm — aiCreditsThisMonth khoá theo chủ', () => {
+describe('Hoạt động nhóm — aiCreditsUsed khoá theo chủ', () => {
   async function addMember(ownerId, employeeId) {
     await db.query(
       `INSERT INTO user_members (owner_id, employee_id, status, origin, accepted_at)
@@ -443,8 +443,8 @@ describe('Hoạt động nhóm — aiCreditsThisMonth khoá theo chủ', () => {
 
   it('nhân viên làm cho 2 chủ + dùng AI trong không gian riêng: mỗi chủ chỉ thấy phần trong ví của mình', async () => {
     const plan = await planWithLimit(1000);
-    const owner1 = await createUser({ username: 'team_owner1', planId: plan.id });
-    const owner2 = await createUser({ username: 'team_owner2', planId: plan.id });
+    const owner1 = await customerOnPlan('team_owner1', plan, 10);
+    const owner2 = await customerOnPlan('team_owner2', plan, 10);
     const staff = await createUser({ username: 'team_staff', withPlan: false });
     await addMember(owner1.id, staff.id);
     await addMember(owner2.id, staff.id);
@@ -467,25 +467,25 @@ describe('Hoạt động nhóm — aiCreditsThisMonth khoá theo chủ', () => {
     // Dòng bán của chủ 1 (actor NULL) — không thuộc nhân viên nào
     await saleRow(owner1.id, 900);
 
-    const forOwner1 = (await findTeamOverview(owner1.id)).find((row) => Number(row.id) === Number(staff.id));
-    const forOwner2 = (await findTeamOverview(owner2.id)).find((row) => Number(row.id) === Number(staff.id));
+    const forOwner1 = (await getTeamOverview(owner1.id)).employees.find((row) => Number(row.id) === Number(staff.id));
+    const forOwner2 = (await getTeamOverview(owner2.id)).employees.find((row) => Number(row.id) === Number(staff.id));
     // Trước bản sửa: cả hai đều = 12 (3 + 4 + 5).
-    expect(forOwner1.aiCreditsThisMonth).toBe(3);
-    expect(forOwner2.aiCreditsThisMonth).toBe(4);
+    expect(forOwner1.aiCreditsUsed).toBe(3);
+    expect(forOwner2.aiCreditsUsed).toBe(4);
   });
 
   it('lọc theo một nhân viên (employeeId) vẫn khoá theo chủ', async () => {
     const plan = await planWithLimit(1000);
-    const owner1 = await createUser({ username: 'team_o1', planId: plan.id });
-    const owner2 = await createUser({ username: 'team_o2', planId: plan.id });
+    const owner1 = await customerOnPlan('team_o1', plan, 10);
+    const owner2 = await customerOnPlan('team_o2', plan, 10);
     const staff = await createUser({ username: 'team_s', withPlan: false });
     await addMember(owner1.id, staff.id);
     await addMember(owner2.id, staff.id);
     await answerRow(owner1.id, 2, { actor: staff.id });
     await answerRow(owner2.id, 9, { actor: staff.id });
 
-    const rows = await findTeamOverview(owner1.id, { employeeId: staff.id });
-    expect(rows).toHaveLength(1);
-    expect(rows[0].aiCreditsThisMonth).toBe(2);
+    const { employees } = await getTeamOverview(owner1.id, { employeeId: staff.id });
+    expect(employees).toHaveLength(1);
+    expect(employees[0].aiCreditsUsed).toBe(2);
   });
 });

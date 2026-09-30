@@ -271,6 +271,51 @@ describe('getActorTotals', () => {
   });
 });
 
+describe('excludeChannels (PR-7: Hoạt động nhóm bỏ lời mời kết bạn ngay trong module, không lọc sau)', () => {
+  const KENH_KHONG_KET_BAN = {
+    email: 'email',
+    zalo: ['zalo_personal', 'zalo_group'],
+    adapter: ['telegram', 'whatsapp'],
+  };
+
+  it('getActorTotals: kênh bị loại KHÔNG được gửi cho repository', async () => {
+    repository.actorTotals.mockResolvedValue([]);
+    await service.getActorTotals({ ownerId: 1 }, { days: 7 }, { excludeChannels: ['zalo_friend_request'] });
+    expect(repository.actorTotals.mock.calls[0][0].channels).toEqual(KENH_KHONG_KET_BAN);
+  });
+
+  it('getChannelTotals: kênh bị loại không được đếm và không có mặt trong kết quả (kể cả khi repository lỡ trả về)', async () => {
+    repository.channelTotals.mockResolvedValue([
+      { channel: 'email', sent: '3', failed: '0', bounced: '0', opened: '0', clicked: '0' },
+      { channel: 'zalo_friend_request', sent: '9', failed: '9', bounced: '0', opened: '0', clicked: '0' },
+    ]);
+    const totals = await service.getChannelTotals({ ownerId: 1 }, { days: 7 }, { excludeChannels: ['zalo_friend_request'] });
+    expect(repository.channelTotals.mock.calls[0][0].channels).toEqual(KENH_KHONG_KET_BAN);
+    expect(totals.map((row) => row.channel)).toEqual(['email', 'zalo_personal', 'zalo_group', 'telegram', 'whatsapp']);
+    expect(totals.reduce((sum, row) => sum + row.sent, 0)).toBe(3);
+  });
+
+  it('không truyền options (hoặc rỗng) thì vẫn đủ 6 kênh — hành vi cũ của PR-4a giữ nguyên', async () => {
+    repository.actorTotals.mockResolvedValue([]);
+    await service.getActorTotals({ ownerId: 1 }, { days: 7 });
+    await service.getActorTotals({ ownerId: 1 }, { days: 7 }, {});
+    await service.getActorTotals({ ownerId: 1 }, { days: 7 }, { excludeChannels: [] });
+    for (const call of repository.actorTotals.mock.calls) {
+      expect(call[0].channels).toEqual(KENH_CHO_REPOSITORY);
+    }
+  });
+
+  it('khoá kênh lạ / sai kiểu / loại hết mọi kênh → ném lỗi thay vì âm thầm không loại gì', async () => {
+    await expect(service.getActorTotals({ ownerId: 1 }, { days: 7 }, { excludeChannels: ['zalo_friend'] })).rejects.toThrow(/không tồn tại/);
+    await expect(service.getChannelTotals({ ownerId: 1 }, { days: 7 }, { excludeChannels: 'zalo_friend_request' })).rejects.toThrow(TypeError);
+    await expect(service.getActorTotals({ ownerId: 1 }, { days: 7 }, {
+      excludeChannels: SAU_KENH.map((channel) => channel.key),
+    })).rejects.toThrow(/loại hết/);
+    expect(repository.actorTotals).not.toHaveBeenCalled();
+    expect(repository.channelTotals).not.toHaveBeenCalled();
+  });
+});
+
 describe('listFinalFailures', () => {
   it('cần runId hoặc window; limit nằm trong 1..500 (mặc định 50)', async () => {
     await expect(service.listFinalFailures({ ownerId: 1 })).rejects.toThrow(TypeError);

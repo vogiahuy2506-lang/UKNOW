@@ -1115,8 +1115,9 @@ describe('Contribution tenant isolation (Phần D)', () => {
 
     expect(res.status).toBe(200);
     expect(res.body.success).toBe(true);
-    const rows = res.body.data || [];
-    const ids = rows.map((r) => r.id);
+    // PR-7: data = { period, aiCycle, owner, employees, other, company } — dòng "Bạn" (chủ A) + nhân viên của A.
+    const rows = res.body.data?.employees || [];
+    const ids = [res.body.data?.owner?.id, ...rows.map((r) => r.id)];
     const usernames = rows.map((r) => r.username).sort();
 
     // Không một dòng nào của workspace B
@@ -1127,6 +1128,7 @@ describe('Contribution tenant isolation (Phần D)', () => {
     expect(usernames).not.toContain('dave_b');
 
     // Chỉ đúng team của A (token), bất chấp ownerId=B trên request
+    expect(res.body.data.owner.id).toBe(ownerA.id);
     expect(ids).toContain(empA1.id);
     expect(ids).toContain(empA2.id);
     expect(rows).toHaveLength(2);
@@ -1152,8 +1154,9 @@ describe('Contribution tenant isolation (Phần D)', () => {
       .set('Authorization', `Bearer ${tokenA}`);
 
     expect(res.status).toBe(200);
-    const rows = res.body.data || [];
+    const rows = res.body.data?.employees || [];
     expect(rows.some((r) => r.id === empB.id)).toBe(false);
+    expect(res.body.data.owner.id).toBe(ownerA.id);
     expect(rows).toHaveLength(1);
     expect(rows[0].id).toBe(empA.id);
   });
@@ -1709,17 +1712,22 @@ describe('PATCH /api/employees/:id/status — chưa chấp nhận thì chặn kh
   });
 });
 
-describe('findTeamOverview — đếm chiến dịch trong KHÔNG GIAN CỦA CHỦ, bỏ người chưa chấp nhận', () => {
+describe('team-overview — đếm chiến dịch ĐANG CHẠY (lượt running) trong KHÔNG GIAN CỦA CHỦ, bỏ người chưa chấp nhận', () => {
   it('nhân viên linked có chiến dịch trong KHÔNG GIAN RIÊNG của họ → KHÔNG được đếm vào team overview của chủ', async () => {
     const { owner, token } = await setupOwnerWithPlan();
     const emp = await createUser({ username: 'ownspace', role: 'user' });
     await addMembership(owner.id, emp.id, { origin: 'linked' }); // đã chấp nhận (mặc định)
 
-    // Chiến dịch trong KHÔNG GIAN RIÊNG của emp (workspace_owner_id = chính họ, không phải owner).
-    await db.query(
+    // Chiến dịch trong KHÔNG GIAN RIÊNG của emp (workspace_owner_id = chính họ, không phải owner), đang có lượt chạy.
+    const own = await db.query(
       `INSERT INTO campaigns (id_user, workspace_owner_id, created_by, campaign_name, status)
-       VALUES ($1, $1, $1, 'Chien dich rieng', 'running')`,
+       VALUES ($1, $1, $1, 'Chien dich rieng', 'running') RETURNING id`,
       [emp.id]
+    );
+    await db.query(
+      `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status)
+       VALUES ($1, $2, 'manual', 'running')`,
+      [own.rows[0].id, emp.id]
     );
 
     const res = await request(app)
@@ -1727,7 +1735,7 @@ describe('findTeamOverview — đếm chiến dịch trong KHÔNG GIAN CỦA CH�
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    const row = res.body.data.find((r) => Number(r.id) === Number(emp.id));
+    const row = res.body.data.employees.find((r) => Number(r.id) === Number(emp.id));
     expect(row.runningCampaigns).toBe(0);
   });
 
@@ -1736,10 +1744,22 @@ describe('findTeamOverview — đếm chiến dịch trong KHÔNG GIAN CỦA CH�
     const emp = await createUser({ username: 'inspace', role: 'user' });
     await addMembership(owner.id, emp.id);
 
-    await db.query(
+    const created = await db.query(
       `INSERT INTO campaigns (id_user, workspace_owner_id, created_by, campaign_name, status)
-       VALUES ($1, $1, $2, 'Chien dich cho chu', 'running')`,
+       VALUES ($1, $1, $2, 'Chien dich cho chu', 'running') RETURNING id`,
       [owner.id, emp.id]
+    );
+
+    // Chỉ có chiến dịch (kể cả trạng thái 'running'/'active') mà CHƯA có lượt chạy nào → không phải "đang chạy".
+    const before = await request(app)
+      .get('/api/employees/team-overview')
+      .set('Authorization', `Bearer ${token}`);
+    expect(before.body.data.employees.find((r) => Number(r.id) === Number(emp.id)).runningCampaigns).toBe(0);
+
+    await db.query(
+      `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status)
+       VALUES ($1, $2, 'manual', 'running')`,
+      [created.rows[0].id, owner.id]
     );
 
     const res = await request(app)
@@ -1747,7 +1767,7 @@ describe('findTeamOverview — đếm chiến dịch trong KHÔNG GIAN CỦA CH�
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    const row = res.body.data.find((r) => Number(r.id) === Number(emp.id));
+    const row = res.body.data.employees.find((r) => Number(r.id) === Number(emp.id));
     expect(row.runningCampaigns).toBe(1);
   });
 
@@ -1761,7 +1781,7 @@ describe('findTeamOverview — đếm chiến dịch trong KHÔNG GIAN CỦA CH�
       .set('Authorization', `Bearer ${token}`);
 
     expect(res.status).toBe(200);
-    expect(res.body.data.find((r) => Number(r.id) === Number(emp.id))).toBeUndefined();
+    expect(res.body.data.employees.find((r) => Number(r.id) === Number(emp.id))).toBeUndefined();
   });
 });
 

@@ -3,8 +3,6 @@ import crypto from 'crypto';
 import {
   findEmployeesByOwner,
   findEmployeeByIdAndOwner,
-  findTeamOverview,
-  findOwnerIdForEmployee,
   countActiveEmployees,
   findOwnerPlanLimit,
   findUserByEmail,
@@ -443,10 +441,6 @@ export async function resetEmployeePassword(ownerId, employeeId) {
 }
 
 
-export async function getTeamOverview(ownerId, options = {}) {
-  return findTeamOverview(ownerId, options);
-}
-
 /**
  * Người bị liên kết (origin='linked', accepted_at NULL) tự chấp nhận lời mời của một chủ cụ thể.
  * `userId` luôn lấy từ token (self context, requireSelfContext) — không bao giờ nhận ownerId ngoài
@@ -469,25 +463,6 @@ export async function declineMembershipInvite(userId, ownerId) {
     throw { status: 404, message: 'Không tìm thấy lời mời đang chờ chấp nhận' };
   }
   return result;
-}
-
-/**
- * Employee self contribution — owner_id ALWAYS from membership/token, never client.
- */
-export async function getMyContribution({ userId, activeContext }) {
-  const employeeId = Number(userId);
-  let ownerId = null;
-
-  if (activeContext?.type === 'employee' && activeContext.ownerId) {
-    ownerId = Number(activeContext.ownerId);
-  } else {
-    ownerId = await findOwnerIdForEmployee(employeeId);
-  }
-
-  if (!ownerId) return null;
-
-  const rows = await findTeamOverview(ownerId, { employeeId });
-  return rows[0] || null;
 }
 
 export async function getCampaignApprovalThreshold(ownerId) {

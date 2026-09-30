@@ -624,3 +624,43 @@ describe('lỗi vượt trần khi thêm nhân viên — gợi ý mua slot', () 
     expect(screen.queryByRole('heading', { name: 'Thêm nhân viên' })).not.toBeInTheDocument();
   });
 });
+
+// ── (h) khối "Hoạt động nhóm" — PR-7: bảng 5 cột lấy từ MỘT nguồn, cộng khớp "Cả công ty" ───────────────────────
+describe('khối Hoạt động nhóm (PR-7)', () => {
+  const overview = {
+    period: { fromDate: '2026-09-01', toDate: '2026-09-30' },
+    aiCycle: { start: '2026-09-10T03:00:00.000Z', end: '2026-10-10T03:00:00.000Z' },
+    owner: {
+      id: 1, username: 'chu', fullName: 'Chủ', runningCampaigns: 0, waitingCampaigns: 0, sentThisMonth: 100,
+      failedThisMonth: 0, aiCreditsUsed: 8, aiCreditsLimit: null, lastActiveAt: null,
+    },
+    employees: [{
+      id: 12, username: 'nv01', fullName: 'Nhân Viên Một', runningCampaigns: 2, waitingCampaigns: 1,
+      sentThisMonth: 1234, failedThisMonth: 12, aiCreditsUsed: 35, aiCreditsLimit: 100,
+      lastActiveAt: '2026-09-15T11:00:00.000Z',
+    }],
+    other: null,
+    company: { sentThisMonth: 1334, failedThisMonth: 12, aiCreditsUsed: 43, aiCreditsLimit: 500 },
+  };
+
+  it('hiện bảng 5 cột với dòng "Bạn" và "Cả công ty", không còn dòng vàng kỹ thuật', async () => {
+    setEmployees([makeEmployee()]);
+    api.getTeamOverview.mockResolvedValue({ data: { success: true, data: overview } });
+    await renderPage();
+
+    await screen.findByText('Hoạt động nhóm');
+    const rows = screen.getAllByTestId(/^team-row-/);
+    expect(rows.map((row) => row.dataset.testid)).toEqual(['team-row-owner', 'team-row-employee', 'team-row-company']);
+    expect(within(screen.getByTestId('team-row-employee')).getByText('35 / 100')).toBeInTheDocument();
+    expect(within(screen.getByTestId('team-row-employee')).getByText('1.234 · 12 chưa gửi được')).toBeInTheDocument();
+    expect(screen.queryByText(/triggered_by/)).not.toBeInTheDocument();
+    expect(screen.queryByText('Tỉ lệ thành công')).not.toBeInTheDocument();
+  });
+
+  it('chưa có nhân viên nào đã chấp nhận → không hiện khối', async () => {
+    setEmployees([]);
+    api.getTeamOverview.mockResolvedValue({ data: { success: true, data: { ...overview, employees: [], other: null } } });
+    await renderPage();
+    expect(screen.queryByText('Hoạt động nhóm')).not.toBeInTheDocument();
+  });
+});

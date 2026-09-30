@@ -138,9 +138,33 @@ export function normalizeWindow(window, { required }) {
   return { kind: 'range', fromDate: window.fromDate, toDate: window.toDate };
 }
 
+/**
+ * Danh sách kênh cần loại khỏi phép đếm (`options.excludeChannels`). Loại NGAY từ danh sách kênh gửi cho repository —
+ * KHÔNG lọc sau khi đã gom — để mọi tổng (theo kênh / người thực hiện) cùng một tập và luôn cộng khớp nhau. Khoá lạ
+ * (gõ sai, kênh đã đổi tên) ném lỗi thay vì âm thầm không loại gì: đếm dư một kênh là loại sai số khó thấy nhất.
+ * Ví dụ: Hoạt động nhóm bỏ 'zalo_friend_request' (lời mời kết bạn không phải "tin", plan mục 2).
+ */
+function normalizeExcludeChannels(options, knownKeys) {
+  const excludeChannels = options?.excludeChannels;
+  if (excludeChannels == null) return [];
+  if (!Array.isArray(excludeChannels)) {
+    throw new TypeError('sendStats: excludeChannels phải là mảng khoá kênh');
+  }
+  const unknown = excludeChannels.filter((key) => !knownKeys.includes(key));
+  if (unknown.length > 0) {
+    throw new TypeError(`sendStats: excludeChannels có khoá kênh không tồn tại: ${unknown.join(', ')}`);
+  }
+  return [...new Set(excludeChannels)];
+}
+
 /** Kênh theo registry, tách theo bảng chứa; `order` = thứ tự hiển thị. */
-function resolveChannels() {
-  const list = campaignChannelRegistry.listChannelsForStats();
+function resolveChannels(options) {
+  const fullList = campaignChannelRegistry.listChannelsForStats();
+  const excluded = normalizeExcludeChannels(options, fullList.map((channel) => channel.key));
+  const list = fullList.filter((channel) => !excluded.includes(channel.key));
+  if (list.length === 0) {
+    throw new TypeError('sendStats: excludeChannels loại hết mọi kênh');
+  }
   const emailKeys = list.filter((channel) => channel.table === 'email_messages').map((channel) => channel.key);
   if (emailKeys.length > 1) {
     throw new Error(`sendStats: registry khai ${emailKeys.length} kênh email, bảng email_messages chỉ chứa một`);
@@ -165,12 +189,13 @@ const byOrder = (channels, key) => channels.order.get(key) ?? Number.MAX_SAFE_IN
  *
  * @param {{ ownerId: number|null, excludeOwnerIds?: number[] }} scope
  * @param {{ days: number }|{ fromDate: string, toDate: string }} window
+ * @param {{ excludeChannels?: string[] }} [options] kênh loại khỏi phép đếm (kênh bị loại không có mặt trong kết quả)
  * @returns {Promise<Array<{ channel: string, sent: number, failed: number, bounced: number, opened: number, clicked: number }>>}
  */
-export async function getChannelTotals(scope, window) {
+export async function getChannelTotals(scope, window, options) {
   const normalizedScope = normalizeScope(scope);
   const normalizedWindow = normalizeWindow(window, { required: true });
-  const channels = resolveChannels();
+  const channels = resolveChannels(options);
   const rows = await sendStatsRepository.channelTotals({
     scope: normalizedScope,
     window: normalizedWindow,
@@ -316,13 +341,17 @@ export async function getCampaignTotals(scope, window, campaignIds) {
 /**
  * Tổng theo NGƯỜI THỰC HIỆN (actor_user_id = người tạo chiến dịch), cộng mọi kênh.
  * `actorUserId: null` = dòng chưa gắn người thực hiện (giữ để tổng khớp getChannelTotals).
+ * `options.excludeChannels` loại kênh khỏi phép đếm — truyền CÙNG giá trị với getChannelTotals thì tổng hai hàm khớp nhau.
  *
+ * @param {{ ownerId: number|null, excludeOwnerIds?: number[] }} scope
+ * @param {{ days: number }|{ fromDate: string, toDate: string }} window
+ * @param {{ excludeChannels?: string[] }} [options]
  * @returns {Promise<Array<{ actorUserId: number|null, sent: number, failed: number }>>}
  */
-export async function getActorTotals(scope, window) {
+export async function getActorTotals(scope, window, options) {
   const normalizedScope = normalizeScope(scope);
   const normalizedWindow = normalizeWindow(window, { required: true });
-  const channels = resolveChannels();
+  const channels = resolveChannels(options);
   const rows = await sendStatsRepository.actorTotals({
     scope: normalizedScope,
     window: normalizedWindow,
