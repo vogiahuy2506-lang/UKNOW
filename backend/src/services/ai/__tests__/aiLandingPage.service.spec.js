@@ -18,7 +18,9 @@ const {
   buildAttachmentPromptBlock,
   validateLandingImageUrls,
   stripDisallowedImages,
+  EDIT_FAKE_IMAGE_RETRY_BUDGET_MS,
 } = await import('../aiLandingPage.service.js');
+const { MAX_EDIT_HTML_INPUT_CHARS } = await import('../../../utils/landingEditGuard.util.js');
 
 /**
  * Chốt kiểm sau sinh (aiLandingPage.service.js): trang phải có ĐÚNG MỘT
@@ -913,7 +915,7 @@ describe('PDF scan inline landing page — C10, C11', () => {
   });
 });
 
-describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T8)', () => {
+describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T10)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     getContextForLandingAi.mockResolvedValue('');
@@ -1103,6 +1105,86 @@ describe('Ảnh tham khảo và chốt kiểm URL ảnh bịa (T1 - T8)', () => 
     expect(result.html).not.toContain(fakeUrl);
     expect(result.strippedImageUrls).toEqual([fakeUrl]);
     expect(generateWithBudget).toHaveBeenCalledTimes(2);
+  });
+
+  /**
+   * Trang ~80.000 ký tự mất ~66 giây một lượt (đo production 30/09); sinh lại lần 2 vượt trần
+   * 100 giây của Cloudflare → trình duyệt nhận 524 dù backend sửa xong. Đồng hồ giả: mỗi lượt gọi
+   * model "tốn" firstRunMs.
+   */
+  const editWithFakeImageAfter = async (firstRunMs) => {
+    const fakeUrl = 'https://fake.cdn.com/fake-slow.png';
+    let now = 1_000_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    generateWithBudget.mockImplementation(async () => {
+      now += firstRunMs;
+      return {
+        text: JSON.stringify({ title: 'T', html: validFormHtml.replace('</body>', `<img src="${fakeUrl}"></body>`) }),
+        blockReason: null,
+        finishReason: 'STOP',
+      };
+    });
+    try {
+      const result = await aiLandingPageService.editHtml({
+        userId: 1,
+        currentHtml: validFormHtml,
+        instruction: 'Thêm ảnh',
+        assets: [],
+      });
+      const doneLog = logSpy.mock.calls.map((c) => c[0]).find((m) => typeof m === 'string' && m.includes('[LandingAI] done'));
+      return { result, fakeUrl, doneLog };
+    } finally {
+      nowSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+  };
+
+  it('T9: editHtml lượt đầu chậm (2 lượt > EDIT_FAKE_IMAGE_RETRY_BUDGET_MS) bịa ảnh → KHÔNG sinh lại, gỡ ảnh bịa ngay', async () => {
+    const { result, fakeUrl, doneLog } = await editWithFakeImageAfter(EDIT_FAKE_IMAGE_RETRY_BUDGET_MS / 2 + 1);
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(result.html).not.toContain(fakeUrl);
+    expect(result.strippedImageUrls).toEqual([fakeUrl]);
+    expect(doneLog).toContain('outcome=success');
+    expect(doneLog).toContain('fakeImageRetry=0');
+    expect(doneLog).toContain('strippedImages=1');
+  });
+
+  it('T10: editHtml lượt đầu vừa đúng nửa ngân sách → vẫn sinh lại như cũ (2 lượt), log fakeImageRetry=1', async () => {
+    const { result, fakeUrl, doneLog } = await editWithFakeImageAfter(EDIT_FAKE_IMAGE_RETRY_BUDGET_MS / 2);
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(result.strippedImageUrls).toEqual([fakeUrl]);
+    expect(doneLog).toContain('fakeImageRetry=1');
+  });
+});
+
+describe('aiLandingPageService.editHtml — trần độ dài HTML hiện tại (MAX_EDIT_HTML_INPUT_CHARS)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  // Đệm validFormHtml tới ĐÚNG n ký tự ('<p>' + '</p>' = 7 ký tự).
+  const htmlOfLength = (n) => validFormHtml.replace('</body>', `<p>${'a'.repeat(n - validFormHtml.length - 7)}</p></body>`);
+
+  it('trang đúng bằng trần (80.000 ký tự) → gọi AI sửa bình thường', async () => {
+    const html = htmlOfLength(MAX_EDIT_HTML_INPUT_CHARS);
+    expect(html).toHaveLength(80000);
+    mockGenerateReturns(html);
+    const result = await aiLandingPageService.editHtml({ userId: 1, currentHtml: html, instruction: 'Tinh gọn' });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(result.html).toBe(html);
+  });
+
+  it('trang vượt trần 1 ký tự → 400 báo đúng độ dài + trần, KHÔNG gọi AI', async () => {
+    await expect(aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: htmlOfLength(MAX_EDIT_HTML_INPUT_CHARS + 1),
+      instruction: 'Tinh gọn',
+    })).rejects.toMatchObject({
+      status: 400,
+      message: expect.stringContaining('80.001 ký tự, giới hạn 80.000 ký tự'),
+    });
+    expect(generateWithBudget).not.toHaveBeenCalled();
   });
 });
 

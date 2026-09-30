@@ -23,6 +23,13 @@ export const LAYOUT_SAFETY_RULE =
   'chữ trong ô hẹp dùng break-words, không whitespace-nowrap.';
 
 /**
+ * Lượt sửa landing là MỘT yêu cầu đồng bộ; /api đi thẳng Cloudflare → backend (không qua nginx),
+ * Cloudflare cắt ở 100 giây. Chừa ~15 giây cho tải lên, nạp tệp đính kèm, ghi phiên: editHtml chỉ
+ * sinh lại vì ảnh bịa khi (lượt đầu × 2) còn dưới mốc này.
+ */
+export const EDIT_FAKE_IMAGE_RETRY_BUDGET_MS = 85000;
+
+/**
  * PR-5b-2a — công tắc "AI dựng landing dùng Biểu mẫu thay form lead" (mặc định TẮT). Đọc
  * `process.env` LÚC GỌI (không cache ở module scope) — test bật/tắt trong cùng file phải thấy
  * hiệu lực ngay, và production đổi biến môi trường (không phải sửa code) là bật/tắt được ngay khi
@@ -698,8 +705,8 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       throw err;
     }
 
-    // Chốt chặn kích thước input:
-    // maxOutputTokens = 32768, ~3 ký tự/token tiếng Việt, trừ escape JSON và phần mở rộng thêm -> ~60.000 ký tự.
+    // Chốt chặn kích thước input — cách tính con số (token đầu ra + trần 100 giây Cloudflare) ở
+    // MAX_EDIT_HTML_INPUT_CHARS, landingEditGuard.util.js.
     if (rawCurrent.length > MAX_EDIT_HTML_INPUT_CHARS) {
       const err = new Error(
         `Landing page hiện tại quá dài (${rawCurrent.length.toLocaleString('vi-VN')} ký tự, giới hạn ${MAX_EDIT_HTML_INPUT_CHARS.toLocaleString('vi-VN')} ký tự) để chỉnh sửa an toàn bằng AI. Vui lòng chỉnh sửa trực tiếp trong trình soạn thảo.`
@@ -880,38 +887,49 @@ Ví dụ định dạng trả về (JSON hợp lệ):
       };
     };
 
+    const stripFakeImages = (fakeErr) => {
+      const { html: strippedHtml, stripped } = stripDisallowedImages(fakeErr.generatedHtml, allowlistUrls);
+      telemetry.strippedImages = stripped.length;
+      telemetry.htmlChars = strippedHtml.length;
+      const valRes = validateLandingImageUrls({
+        html: strippedHtml,
+        assets,
+        allowedSourceText: rawCurrent,
+        requireAssetsUsed: false,
+      });
+      return {
+        title: fakeErr.generatedTitle || 'Landing',
+        html: strippedHtml,
+        unusedAssets: valRes.unusedAssets,
+        strippedImageUrls: stripped,
+        ...(fakeErr.generatedChangeSummary ? { changeSummary: fakeErr.generatedChangeSummary } : {}),
+      };
+    };
+
     try {
       let editResult;
       try {
         editResult = await runOnce('');
       } catch (firstErr) {
         if (firstErr.code === 'LANDING_FAKE_IMAGE_URL') {
-          telemetry.fakeImageRetry = 1;
           telemetry.fakeImageUrls = firstErr.details?.fakeImageUrls || [];
-          const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. Sinh lại toàn bộ trang, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
-          try {
-            editResult = await runOnce(extraRule);
-          } catch (secondErr) {
-            if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
-              const rawHtml = secondErr.generatedHtml;
-              const { html: strippedHtml, stripped } = stripDisallowedImages(rawHtml, allowlistUrls);
-              telemetry.strippedImages = stripped.length;
-              telemetry.htmlChars = strippedHtml.length;
-              const valRes = validateLandingImageUrls({
-                html: strippedHtml,
-                assets,
-                allowedSourceText: rawCurrent,
-                requireAssetsUsed: false,
-              });
-              editResult = {
-                title: secondErr.generatedTitle || 'Landing',
-                html: strippedHtml,
-                unusedAssets: valRes.unusedAssets,
-                strippedImageUrls: stripped,
-                ...(secondErr.generatedChangeSummary ? { changeSummary: secondErr.generatedChangeSummary } : {}),
-              };
-            } else {
-              throw secondErr;
+          // Lượt sinh lại tốn xấp xỉ lượt đầu; hai lượt không vừa trần Cloudflare thì gỡ ảnh bịa
+          // ngay — thử lại chỉ đổi kết quả tốt thành 524 trong khi backend vẫn sửa xong.
+          const firstRunMs = Date.now() - telemetry.startedAt;
+          if (firstRunMs * 2 > EDIT_FAKE_IMAGE_RETRY_BUDGET_MS) {
+            telemetry.fakeImageRetry = 0;
+            editResult = stripFakeImages(firstErr);
+          } else {
+            telemetry.fakeImageRetry = 1;
+            const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. Sinh lại toàn bộ trang, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
+            try {
+              editResult = await runOnce(extraRule);
+            } catch (secondErr) {
+              if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
+                editResult = stripFakeImages(secondErr);
+              } else {
+                throw secondErr;
+              }
             }
           }
         } else {

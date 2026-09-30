@@ -6,10 +6,15 @@ import { countFormSlots, hasMalformedFormSlot } from './landingHtmlInjection.uti
 export const LANDING_FORM_PLACEHOLDER = '<!-- UKNOW_LP_FORM -->';
 
 /**
- * Ngưỡng an toàn độ dài tối đa của currentHtml khi gửi cho AI edit.
- * Tính toán: maxOutputTokens = 32768, ~3 ký tự/token tiếng Việt, trừ escape JSON và phần mở rộng thêm -> ~60.000 ký tự.
+ * Ngưỡng an toàn độ dài tối đa của currentHtml khi gửi cho AI edit — AI phải trả lại NGUYÊN trang.
+ * Số đo production 29–30/09 (16 lượt, log `[LandingAI] done`): ~3,0 ký tự HTML/token đầu ra (đã
+ * gồm escape JSON), ~2,5 ms/token. 80.000 ký tự ≈ 26.500 token ≈ 66 giây:
+ * - còn ~6.000 token (~+23% độ dài) trước trần maxOutputTokens 32768 của editHtml;
+ * - vừa trần 100 giây của Cloudflare (lượt sửa là MỘT yêu cầu đồng bộ). Đừng nâng tiếp khi lượt
+ *   sửa chưa chạy nền — trang to hơn sẽ bị Cloudflare cắt (524) dù backend vẫn sửa xong.
+ * Trước 30/09 là 60.000 (tính ~3 ký tự/token và chừa ~40%) — sếp chạm trần với trang 66.753 ký tự.
  */
-export const MAX_EDIT_HTML_INPUT_CHARS = 60000;
+export const MAX_EDIT_HTML_INPUT_CHARS = 80000;
 
 /**
  * Vớt HTML từ phản hồi model khi JSON.parse thất bại (model kèm lời dẫn,

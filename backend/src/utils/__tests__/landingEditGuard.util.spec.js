@@ -234,8 +234,8 @@ describe('landingEditGuard.util', () => {
     expect(isValid).toBe(true);
   });
 
-  it('MAX_EDIT_HTML_INPUT_CHARS hằng số là 60000', () => {
-    expect(MAX_EDIT_HTML_INPUT_CHARS).toBe(60000);
+  it('MAX_EDIT_HTML_INPUT_CHARS hằng số là 80000', () => {
+    expect(MAX_EDIT_HTML_INPUT_CHARS).toBe(80000);
   });
 });
 
