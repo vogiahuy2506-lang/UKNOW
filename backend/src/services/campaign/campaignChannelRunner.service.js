@@ -9,6 +9,7 @@ import { recordAdapterSentJourney } from './campaignChannelJourney.service.js';
 import campaignChannelMessageRepository from '../../repositories/campaign/campaignChannelMessage.repository.js';
 import { renderTemplateText, neutralizeUnresolvedTemplateVariables } from '../../utils/templateVariableAutoMap.util.js';
 import { ChannelSendError } from './campaignChannelRegistry.service.js';
+import { resolveStepDelayMs } from '../../utils/channelSteps.util.js';
 import zaloCampaignRecipientService from './zaloCampaignRecipient.service.js';
 import campaignShutdownGate from './campaignShutdownGate.js';
 import { checkAccountDailyLimit } from '../quota/accountDailyLimit.service.js';
@@ -449,12 +450,19 @@ export async function runAdapterSendNode(ctx) {
     ensureRunStillRunning,
     quotaGate,
     crossRunDedupeHours = 24,
+    // P7 — chu kỳ replay của run continuous: danh sách người nhận rỗng là bình thường (chưa có hội thoại mới) nên
+    // KHÔNG được ném CHANNEL_NO_RECIPIENTS làm run failed.
+    allowEmptyRecipients = false,
   } = ctx;
 
   let total = 0;
   let success = 0;
   let failed = 0;
   let skipped = 0;
+  // P7 — người đang CHỜ bước kế (chưa đến hạn): không cộng failed/skipped; `nextDueAtMs` = mốc sớm nhất để engine
+  // đánh thức chu kỳ continuous (one-shot thì run giữ 'running' nhờ ledger `nextDueAt`, xem campaignRun cuối lượt).
+  let waiting = 0;
+  let nextDueAtMs = null;
   const outputItems = [];
 
   // PR-6 — resolveAccount TRƯỚC resolveRecipients (đổi thứ tự so với PR-3): nguồn "hội thoại"
@@ -466,6 +474,9 @@ export async function runAdapterSendNode(ctx) {
   // {total:0} để run 'completed' im lặng. Mã CHANNEL_NO_RECIPIENTS không nằm trong nhánh defer
   // (QUIET_HOURS/RATE_LIMIT) của engine nên rơi xuống catch tổng → run 'failed' + error_message.
   // Ném TRƯỚC try nên không có partialResult (chưa cộng gì).
+  if ((!Array.isArray(recipients) || recipients.length === 0) && allowEmptyRecipients) {
+    return { total: 0, success: 0, failed: 0, skipped: 0, waiting: 0, nextDueAtMs: null, outputItems: [] };
+  }
   if (!Array.isArray(recipients) || recipients.length === 0) {
     const noRecipientsError = new Error(
       `Không có người nhận nào để gửi ở node ${node?.id ?? '?'} (kênh ${descriptor.key}) — kiểm tra nguồn người nhận và tài khoản gửi.`
@@ -474,6 +485,12 @@ export async function runAdapterSendNode(ctx) {
     throw noRecipientsError;
   }
   const steps = Array.isArray(config?.steps) ? config.steps : [];
+  // P7 — ledger tính `nextDueAt` của bước kế qua `computeStepDueAt` (engine): chỉ cần độ trễ, luôn tính từ bước TRƯỚC.
+  const ledgerSteps = steps.map((item) => ({
+    delayValue: item?.delayValue,
+    delayUnit: item?.delayUnit,
+    delayFrom: 'prev',
+  }));
   const perHourKey = `${descriptor.key}::${account?.accountKey ?? ''}`;
 
   // P4 (PLAN_TG_WA_DAY_DU) — cấu hình gửi THEO TÀI KHOẢN đọc MỘT lần mỗi lượt chạy node (đổi mức tốc độ áp dụng từ lượt
@@ -561,6 +578,10 @@ export async function runAdapterSendNode(ctx) {
             completedStep: oneBasedStep,
             totalSteps: steps.length,
             progress,
+            steps: ledgerSteps,
+            sendMode: 'schedule',
+            // Mốc bước kế tính theo lúc đã gửi THẬT (dòng cũ), không phải lúc dedupe thấy nó.
+            completedAtOverride: existingSent.sent_at || existingSent.sent_at_tz || null,
           });
           skipped += 1;
           stepIndex += 1;
@@ -571,6 +592,41 @@ export async function runAdapterSendNode(ctx) {
           // eslint-disable-next-line no-await-in-loop
           progress = await getRecipientProgress({ nodeId: node.id, channel: descriptor.key, recipientKey });
           continue;
+        }
+
+        // P7 — bước k >= 2 có độ trễ: chưa đến hạn (`lastCompletedAt` + trễ) thì KHÔNG gửi, ghi `nextDueAt` vào ledger
+        // và đi tiếp người sau. Đặt TRƯỚC consent/cổng nhịp/giữ chỗ hạn mức: người còn chờ không ăn nhịp, không ăn
+        // quota, không tốn truy vấn consent (consent được kiểm lại đúng lúc thật sự gửi bước này). `lastCompletedAt`
+        // thiếu (ledger cũ) = coi như đến hạn.
+        if (stepIndex > 0) {
+          const stepDelayMs = resolveStepDelayMs(step);
+          const lastCompletedAtMs = Date.parse(progress?.lastCompletedAt || '');
+          if (stepDelayMs > 0 && Number.isFinite(lastCompletedAtMs)) {
+            const dueAtMs = lastCompletedAtMs + stepDelayMs;
+            if (Date.now() < dueAtMs) {
+              // eslint-disable-next-line no-await-in-loop
+              await upsertRecipientProgress({
+                nodeId: node.id,
+                channel: descriptor.key,
+                recipientKey,
+                completedStep: stepIndex,
+                totalSteps: steps.length,
+                firstSentAt: progress?.firstSentAt || null,
+                lastCompletedAt: progress?.lastCompletedAt || null,
+                nextDueAt: toHoChiMinhIso(dueAtMs),
+              });
+              waiting += 1;
+              nextDueAtMs = nextDueAtMs === null ? dueAtMs : Math.min(nextDueAtMs, dueAtMs);
+              outputItems.push({
+                ...recipient,
+                status: 'waiting',
+                stepIndex: oneBasedStep,
+                nextDueAt: toHoChiMinhIso(dueAtMs),
+              });
+              stopRecipient = true;
+              continue;
+            }
+          }
         }
 
         // P2 — khách ĐÃ TỪ CHỐI nhận tin (lead mới nhất marketing_consent=false; NULL = chưa hỏi vẫn gửi, chốt
@@ -750,6 +806,8 @@ export async function runAdapterSendNode(ctx) {
             completedStep: oneBasedStep,
             totalSteps: steps.length,
             progress,
+            steps: ledgerSteps,
+            sendMode: 'schedule',
           });
           // P8b — journey khách (WhatsApp, người nhận SĐT có trong customers). Không bao giờ ném: lỗi chỉ log.
           // eslint-disable-next-line no-await-in-loop
@@ -863,15 +921,16 @@ export async function runAdapterSendNode(ctx) {
       }
     }
   } catch (loopError) {
-    loopError.partialResult = { total, success, failed, skipped, outputItems };
+    loopError.partialResult = { total, success, failed, skipped, waiting, nextDueAtMs, outputItems };
     throw loopError;
   }
 
-  return { total, success, failed, skipped, outputItems };
+  return { total, success, failed, skipped, waiting, nextDueAtMs, outputItems };
 }
 
 export default {
   runAdapterSendNode,
+  resolveStepDelayMs,
   evaluateAdapterSendGate,
   recordAdapterSendAttempt,
   isWithinQuietHours,

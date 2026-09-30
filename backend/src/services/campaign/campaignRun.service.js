@@ -8842,6 +8842,8 @@ class CampaignRunService {
               nodeOutputs,
               lastOutputItems,
               crossRunDedupeHours: this.CAMPAIGN_CROSS_RUN_DEDUPE_HOURS,
+              // P7 — run continuous: hết người nhận ở một chu kỳ là bình thường (chờ hội thoại mới), không failed.
+              allowEmptyRecipients: isContinuousMode,
               getRecipientProgress,
               markRecipientStepCompleted,
               upsertRecipientProgress,
@@ -8960,19 +8962,34 @@ class CampaignRunService {
           nodeOutputs[String(node.id)] = adapterResult.outputItems;
           lastOutputItems = adapterResult.outputItems;
 
-          await campaignExecutionLogService.logExecutionNode({
-            campaignId,
-            runId,
-            node,
-            status: 'success',
-            executionData: {
-              message: `Đã gửi ${adapterResult.success}/${adapterResult.total}, thất bại `
-                + `${adapterResult.failed}, bỏ qua ${adapterResult.skipped}`,
-              items: adapterResult.outputItems,
-              schema: [],
-              meta: { channel: adapterDescriptor.key },
-            },
-          });
+          // P7 — có người đang CHỜ bước kế (độ trễ giữa các bước): continuous đánh thức chu kỳ đúng mốc sớm nhất
+          // (thay vì đợi hết chu kỳ quét 2-5 phút). One-shot không cần gì thêm: ledger đã có `nextDueAt` nên cuối lượt
+          // `syncPendingEmailRetryFromLedger` giữ run 'running' + `nonContinuousDeferredUntil` (đúng cơ chế Zalo/email),
+          // scheduler resume khi tới hạn.
+          registerNextContinuousWakeAt(adapterResult.nextDueAtMs);
+
+          // P7 — chu kỳ replay không có gì mới (0 người mới/0 gửi) thì KHÔNG ghi log node: continuous quét mỗi
+          // 2-5 phút, ghi mỗi chu kỳ sẽ phình bảng log vô ích.
+          const isIdleReplayCycle = isReplayCycle
+            && adapterResult.total === 0
+            && adapterResult.success === 0
+            && adapterResult.failed === 0
+            && adapterResult.skipped === 0;
+          if (!isIdleReplayCycle) {
+            await campaignExecutionLogService.logExecutionNode({
+              campaignId,
+              runId,
+              node,
+              status: 'success',
+              executionData: {
+                message: `Đã gửi ${adapterResult.success}/${adapterResult.total}, thất bại `
+                  + `${adapterResult.failed}, bỏ qua ${adapterResult.skipped}`,
+                items: adapterResult.outputItems,
+                schema: [],
+                meta: { channel: adapterDescriptor.key },
+              },
+            });
+          }
 
           await campaignRunRepository.updateRunProgress(runId, { totalRecipients, successfulSends, failedSends, skippedSends });
           continue;
