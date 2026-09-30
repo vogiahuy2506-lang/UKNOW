@@ -142,7 +142,8 @@ describe('P6 — bán lẻ slot Telegram/WhatsApp (top-up)', () => {
 });
 
 describe('P6 — gói tuỳ chỉnh có max_telegram_accounts / max_whatsapp_accounts', () => {
-  it('cấu hình giá trả 2 hạng mục mới; báo giá tính đúng theo đơn giá TK Zalo; mặc định 0 không tốn tiền', async () => {
+  // Migration 270 (30/09): TG/WA min 1, kèm sẵn 1 như Zalo/email — bỏ trống = 1 (không tốn thêm), 0 bị từ chối.
+  it('cấu hình giá trả 2 hạng mục mới; báo giá tính đúng theo đơn giá TK Zalo; bỏ trống = 1 kèm sẵn không tốn tiền; 0 bị từ chối', async () => {
     await seedProductionPublicPlans();
     const user = await createUser({ username: 'p6-custom-quote' });
     const token = await loginAs(user);
@@ -153,8 +154,14 @@ describe('P6 — gói tuỳ chỉnh có max_telegram_accounts / max_whatsapp_acc
       .send({ quantities: baseCustomQuantities, billingPeriod: 'monthly' });
     expect(zeroRes.status).toBe(200);
     expect(Number(zeroRes.body.data.total)).toBe(199000);
-    expect(Number(zeroRes.body.data.planColumns.maxTelegramAccounts)).toBe(0);
-    expect(Number(zeroRes.body.data.planColumns.maxWhatsappAccounts)).toBe(0);
+    expect(Number(zeroRes.body.data.planColumns.maxTelegramAccounts)).toBe(1);
+    expect(Number(zeroRes.body.data.planColumns.maxWhatsappAccounts)).toBe(1);
+
+    const belowMin = await request(app)
+      .post('/api/plans/custom/quote')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ quantities: { ...baseCustomQuantities, telegram_accounts: 0 }, billingPeriod: 'monthly' });
+    expect(belowMin.status).toBe(400);
 
     const res = await request(app)
       .post('/api/plans/custom/quote')
@@ -164,8 +171,8 @@ describe('P6 — gói tuỳ chỉnh có max_telegram_accounts / max_whatsapp_acc
         billingPeriod: 'monthly',
       });
     expect(res.status).toBe(200);
-    // 199.000 + 3 tài khoản × 40.000 (= đơn giá TK Zalo, đã trừ included_qty 0)
-    expect(Number(res.body.data.monthlyTotal)).toBe(199000 + 3 * 40000);
+    // 199.000 + (2 − 1 kèm sẵn) Telegram × 40.000 + (1 − 1 kèm sẵn) WhatsApp × 40.000 (= đơn giá TK Zalo)
+    expect(Number(res.body.data.monthlyTotal)).toBe(199000 + 1 * 40000);
     expect(Number(res.body.data.planColumns.maxTelegramAccounts)).toBe(2);
     expect(Number(res.body.data.planColumns.maxWhatsappAccounts)).toBe(1);
 
@@ -191,7 +198,7 @@ describe('P6 — gói tuỳ chỉnh có max_telegram_accounts / max_whatsapp_acc
       });
     expect(created.status).toBe(200);
     const { orderCode, planId, amount } = created.body.result;
-    expect(Number(amount)).toBe(199000 + 3 * 40000);
+    expect(Number(amount)).toBe(199000 + 1 * 40000);
 
     const planRow = await db.query(`SELECT max_telegram_accounts, max_whatsapp_accounts FROM plans WHERE id = $1`, [planId]);
     expect(Number(planRow.rows[0].max_telegram_accounts)).toBe(2);
