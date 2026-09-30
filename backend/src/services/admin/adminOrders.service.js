@@ -7,10 +7,11 @@ import {
 } from '../../repositories/admin/adminOrders.repository.js';
 import payosClient from '../../utils/payos.util.js';
 
-export async function listOrders({ status, search, dateFrom, dateTo, page, limit }) {
+export async function listOrders({ status, search, dateFrom, dateTo, attention, page, limit }) {
   const [{ rows, total }, kpi] = await Promise.all([
-    findOrders({ status, search, dateFrom, dateTo, page, limit }),
-    getOrdersKpi(),
+    findOrders({ status, search, dateFrom, dateTo, attention, page, limit }),
+    // KPI theo khoảng ngày + ô tìm kiếm của bộ lọc (không theo trạng thái) — xem getOrdersKpi.
+    getOrdersKpi({ search, dateFrom, dateTo }),
   ]);
   return { orders: rows, total, kpi };
 }

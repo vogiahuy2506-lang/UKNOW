@@ -27,7 +27,8 @@ export async function findEinvoices({
     params.push(dateFrom);
   }
   if (dateTo) {
-    conditions.push(`e.created_at < $${p++}`);
+    // "Đến ngày" gồm TRỌN ngày cuối (`< đến_ngày + 1`) — `< 'YYYY-MM-DD'` làm mất cả ngày cuối (PR-9, C-12).
+    conditions.push(`e.created_at < ($${p++}::date + 1)`);
     params.push(dateTo);
   }
   if (search) {

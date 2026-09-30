@@ -333,7 +333,9 @@ class AuthController {
       const refreshToken = await this.generateRefreshToken(user, req);
       this.setRefreshTokenCookie(res, refreshToken);
 
-      await logSystem(getSystemAuditContext(req), AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email });
+      // `/auth/register` không qua authMiddleware nên req.user rỗng: không truyền userId thì dòng audit ghi id_user NULL
+      // (production 30/09/2026: 39/39 dòng NULL) — người đăng ký chính là actor, phải gắn vào.
+      await logSystem({ ...getSystemAuditContext(req), userId: user.id }, AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email, provider: 'local' });
 
       // Gửi Welcome Email (async, không block response)
       const { full_name, email: userEmail } = user;
@@ -698,6 +700,14 @@ class AuthController {
 
         await client.query('COMMIT');
         inNewUserTx = false;
+
+        // Đăng ký Google trước đây không ghi sự kiện nào (chỉ USER_PLAN_CHANGED) — ghi cùng dạng với đăng ký bằng email.
+        // Sau COMMIT và bọc try/catch: mất một dòng audit không được làm hỏng đăng nhập vừa thành công.
+        try {
+          await logSystem({ ...getSystemAuditContext(req), userId: user.id }, AUDIT_ACTIONS.USER_REGISTERED, AUDIT_ENTITY_TYPES.USER, user.id, { username: user.username, email: user.email, provider: 'google' });
+        } catch (auditErr) {
+          console.warn('[Auth] Không ghi được USER_REGISTERED (Google):', auditErr?.message || auditErr);
+        }
 
         // Gửi Welcome Email cho user mới đăng ký qua Google (async)
         const { full_name, email: userEmail } = user;

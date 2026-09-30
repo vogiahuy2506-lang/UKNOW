@@ -76,14 +76,18 @@ export async function refund(req, res) {
   } catch (err) { return handleError(res, err); }
 }
 
-/** GET /api/admin/orders?status=&search=&dateFrom=&dateTo=&page=&limit= */
+/**
+ * GET /api/admin/orders?status=&search=&dateFrom=&dateTo=&attention=&page=&limit=
+ * dateFrom / dateTo: 'YYYY-MM-DD' theo ngày VN, "đến ngày" gồm trọn ngày cuối (sai định dạng → 400).
+ * attention: paid_after_cancelled | needs_action (giá trị lạ bị bỏ qua).
+ */
 export async function list(req, res) {
   try {
-    const { status, search, dateFrom, dateTo } = req.query;
+    const { status, search, dateFrom, dateTo, attention } = req.query;
     const page  = Math.max(1, parseInt(req.query.page  || '1', 10));
     const limit = Math.min(100, parseInt(req.query.limit || '20', 10));
 
-    const result = await adminOrdersService.listOrders({ status, search, dateFrom, dateTo, page, limit });
+    const result = await adminOrdersService.listOrders({ status, search, dateFrom, dateTo, attention, page, limit });
     return res.json({ success: true, data: result });
   } catch (err) { return handleError(res, err); }
 }

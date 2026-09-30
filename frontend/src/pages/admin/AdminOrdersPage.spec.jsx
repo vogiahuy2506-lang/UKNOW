@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import AdminOrdersPage from './AdminOrdersPage';
@@ -90,7 +91,7 @@ const response = {
           isTopup: false,
         },
       ],
-      kpi: { totalRevenue: '349000', totalOrders: 4, pendingCount: 0, cancelledCount: 1 },
+      kpi: { revenue: 349000, refunded: 299000, paidOrders: 2, needsAction: 1, period: { from: '2026-09-01', to: '2026-09-30' } },
     },
   },
 };
@@ -103,9 +104,11 @@ describe('AdminOrdersPage billing metadata', () => {
 
   it('renders yearly/monthly/top-up labels and voucher/payment details', async () => {
     render(
-      <I18nProvider>
-        <AdminOrdersPage />
-      </I18nProvider>,
+      <MemoryRouter>
+        <I18nProvider>
+          <AdminOrdersPage />
+        </I18nProvider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => expect(screen.getByText('YEARLY-1')).toBeInTheDocument());
@@ -127,9 +130,11 @@ describe('AdminOrdersPage — đơn PAID_AFTER_CANCELLED', () => {
 
   it('hiện badge và nút "Đánh dấu đã xử lý" cho đơn có tag PAID_AFTER_CANCELLED chưa xử lý', async () => {
     render(
-      <I18nProvider>
-        <AdminOrdersPage />
-      </I18nProvider>,
+      <MemoryRouter>
+        <I18nProvider>
+          <AdminOrdersPage />
+        </I18nProvider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => expect(screen.getByText('PAID-CANCELLED-1')).toBeInTheDocument());
@@ -144,9 +149,11 @@ describe('AdminOrdersPage — đơn PAID_AFTER_CANCELLED', () => {
     mockGetOrders.mockResolvedValue(handled);
 
     render(
-      <I18nProvider>
-        <AdminOrdersPage />
-      </I18nProvider>,
+      <MemoryRouter>
+        <I18nProvider>
+          <AdminOrdersPage />
+        </I18nProvider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => expect(screen.getByText('PAID-CANCELLED-1')).toBeInTheDocument());
@@ -159,9 +166,11 @@ describe('AdminOrdersPage — đơn PAID_AFTER_CANCELLED', () => {
     const user = userEvent.setup();
 
     render(
-      <I18nProvider>
-        <AdminOrdersPage />
-      </I18nProvider>,
+      <MemoryRouter>
+        <I18nProvider>
+          <AdminOrdersPage />
+        </I18nProvider>
+      </MemoryRouter>,
     );
 
     await waitFor(() => expect(screen.getByText('PAID-CANCELLED-1')).toBeInTheDocument());
@@ -210,9 +219,11 @@ describe('AdminOrdersPage — hoàn tiền', () => {
   });
 
   const renderPage = () => render(
-    <I18nProvider>
-      <AdminOrdersPage />
-    </I18nProvider>,
+    <MemoryRouter>
+      <I18nProvider>
+        <AdminOrdersPage />
+      </I18nProvider>
+    </MemoryRouter>,
   );
 
   beforeEach(() => {
@@ -319,5 +330,103 @@ describe('AdminOrdersPage — hoàn tiền', () => {
     });
     expect(within(dialog).queryByRole('button', { name: 'Ghi nhận đã hoàn tiền' })).not.toBeInTheDocument();
     expect(mockRefundOrder).not.toHaveBeenCalled();
+  });
+});
+
+// PR-9 (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30) — KPI theo bộ lọc, mặc định "tháng này", nhãn kỳ, lọc "Thất bại",
+// lọc "cần chú ý" từ liên kết Tổng quan.
+describe('AdminOrdersPage — PR-9: KPI theo bộ lọc', () => {
+  const pad = (n) => String(n).padStart(2, '0');
+  const now = new Date();
+  const monthStart = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`;
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const vn = (value) => value.split('-').reverse().join('/');
+
+  const renderAt = (url = '/admin/orders') => render(
+    <MemoryRouter initialEntries={[url]}>
+      <I18nProvider>
+        <AdminOrdersPage />
+      </I18nProvider>
+    </MemoryRouter>,
+  );
+  const lastParams = () => mockGetOrders.mock.calls[mockGetOrders.mock.calls.length - 1][0];
+
+  beforeEach(() => {
+    mockGetOrders.mockReset().mockResolvedValue(response);
+  });
+
+  it('mặc định "tháng này": gọi API với dateFrom = mùng 1, dateTo = hôm nay; nhãn kỳ ghi rõ', async () => {
+    renderAt();
+    await waitFor(() => expect(mockGetOrders).toHaveBeenCalled());
+    expect(mockGetOrders.mock.calls[0][0]).toMatchObject({ dateFrom: monthStart, dateTo: today });
+    expect(mockGetOrders.mock.calls[0][0]).not.toHaveProperty('attention');
+    await waitFor(() => expect(screen.getByTestId('orders-kpi-period')).toHaveTextContent(`Kỳ: ${vn(monthStart)} – ${vn(today)}`));
+  });
+
+  it('bốn thẻ: Doanh thu (đã trừ hoàn) · Đã hoàn · Đơn đã trả · Cần xử lý, số lấy từ kpi của API', async () => {
+    renderAt();
+    await waitFor(() => expect(screen.getByTestId('orders-kpi-revenue')).toHaveTextContent('349.000 đ'));
+    const text = (id) => screen.getByTestId(id).textContent;
+    expect(text('orders-kpi-revenue')).toContain('Doanh thu (đã trừ hoàn)');
+    expect(text('orders-kpi-refunded')).toContain('Đã hoàn');
+    expect(text('orders-kpi-refunded')).toContain('299.000 đ');
+    expect(text('orders-kpi-paid')).toContain('Đơn đã trả');
+    expect(text('orders-kpi-paid')).toContain('2');
+    expect(text('orders-kpi-needs-action')).toContain('Cần xử lý');
+    expect(text('orders-kpi-needs-action')).toContain('1');
+    // Không còn 4 thẻ cũ (Tổng đơn / Chờ thanh toán / Đã hủy, Doanh thu toàn thời gian).
+    expect(screen.queryByText('Tổng đơn')).not.toBeInTheDocument();
+    expect(screen.queryByText('Từ đơn thành công')).not.toBeInTheDocument();
+  });
+
+  it('"Xoá lọc" → toàn thời gian: không gửi mốc ngày, nhãn kỳ đổi', async () => {
+    const user = userEvent.setup();
+    renderAt();
+    await waitFor(() => expect(mockGetOrders).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: 'Xóa lọc' }));
+    await waitFor(() => expect(screen.getByTestId('orders-kpi-period')).toHaveTextContent('Kỳ: Toàn thời gian'));
+    expect(lastParams()).not.toHaveProperty('dateFrom');
+    expect(lastParams()).not.toHaveProperty('dateTo');
+  });
+
+  it('bộ lọc trạng thái có "Thất bại"; đơn failed hiện nhãn tiếng Việt, đơn success có màu thật', async () => {
+    const withFailed = structuredClone(response);
+    withFailed.data.data.orders.push({
+      id: 9, orderCode: 'FAILED-1', planName: 'Starter', planCode: 'starter', billingPeriod: 'monthly', voucherCode: null,
+      discountAmount: '0.00', amount: '299000.00', paymentMethod: 'payos', userEmail: 'failed@example.com', status: 'failed',
+      createdAt: '2026-09-10T00:00:00.000Z', isTopup: false,
+    });
+    mockGetOrders.mockResolvedValue(withFailed);
+    renderAt();
+    await waitFor(() => expect(screen.getByText('FAILED-1')).toBeInTheDocument());
+    expect(screen.getByRole('option', { name: 'Thất bại' })).toHaveValue('failed');
+    const failedRow = screen.getByText('FAILED-1').closest('tr');
+    const failedBadge = within(failedRow).getByText('Thất bại');
+    expect(failedBadge.className).toContain('badge-error');
+    expect(within(failedRow).queryByText('failed')).not.toBeInTheDocument();
+    const successBadge = within(screen.getByText('MONTHLY-1').closest('tr')).getByText('Thành công');
+    expect(successBadge.className).toContain('badge-success');
+  });
+
+  it('liên kết từ Tổng quan (?attention=paid_after_cancelled): lọc đúng những đơn đó, KHÔNG áp mặc định tháng này', async () => {
+    renderAt('/admin/orders?attention=paid_after_cancelled');
+    await waitFor(() => expect(mockGetOrders).toHaveBeenCalled());
+    expect(mockGetOrders.mock.calls[0][0]).toMatchObject({ attention: 'paid_after_cancelled' });
+    expect(mockGetOrders.mock.calls[0][0]).not.toHaveProperty('dateFrom');
+    expect(mockGetOrders.mock.calls[0][0]).not.toHaveProperty('dateTo');
+    expect(screen.getByTestId('orders-attention-chip')).toHaveTextContent('tiền đã vào');
+    await waitFor(() => expect(screen.getByTestId('orders-kpi-period')).toHaveTextContent('Kỳ: Toàn thời gian'));
+  });
+
+  it('bấm thẻ "Cần xử lý" → lọc attention=needs_action; bấm "Bỏ lọc" → về danh sách thường', async () => {
+    const user = userEvent.setup();
+    renderAt();
+    await waitFor(() => expect(mockGetOrders).toHaveBeenCalled());
+    await user.click(screen.getByTestId('orders-kpi-needs-action'));
+    await waitFor(() => expect(lastParams()).toMatchObject({ attention: 'needs_action' }));
+    expect(screen.getByTestId('orders-attention-chip')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Bỏ lọc' }));
+    await waitFor(() => expect(lastParams()).not.toHaveProperty('attention'));
+    expect(screen.queryByTestId('orders-attention-chip')).not.toBeInTheDocument();
   });
 });

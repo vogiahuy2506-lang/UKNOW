@@ -1,9 +1,11 @@
 import { useEffect, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import { HiOutlineRefresh, HiOutlineSearch, HiOutlineBan } from 'react-icons/hi';
 import adminOrdersApiService from '../../features/admin/services/adminOrdersApi.service';
 import RefundOrderModal from '../../features/admin/components/RefundOrderModal';
+import { orderStatusBadge } from './orderStatus.util';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -14,12 +16,28 @@ const paymentLabel = (o, t) => {
   return o.paymentMethod || 'PayOS';
 };
 
-const STATUS_LABEL = (t) => ({
-  success: { label: t('orders.success'), cls: 'badge-green' },
-  pending: { label: t('orders.pending'), cls: 'badge-yellow' },
-  cancelled: { label: t('orders.cancelled'), cls: 'badge-gray' },
-  refunded: { label: t('orders.refunded'), cls: 'badge-red' },
-});
+const EMPTY_FILTERS = { status: '', search: '', dateFrom: '', dateTo: '', attention: '' };
+const ATTENTION_VALUES = ['paid_after_cancelled', 'needs_action'];
+
+const pad2 = (n) => String(n).padStart(2, '0');
+/** Ngày 'YYYY-MM-DD' theo lịch máy (admin ở giờ VN) — chuỗi thuần, không qua Date/UTC nên không lệch ngày. */
+const ymd = (date) => `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+/** 'YYYY-MM-DD' → 'DD/MM/YYYY' bằng cắt chuỗi (không dựng Date: tránh lùi một ngày do múi giờ). */
+const ymdToVn = (value) => String(value).split('-').reverse().join('/');
+
+/**
+ * Bộ lọc ban đầu: mặc định "tháng này" (từ mùng 1 tới hôm nay) để cả danh sách lẫn KPI cùng nói về một kỳ. Liên kết từ
+ * Tổng quan (`?attention=paid_after_cancelled`) chỉ muốn đúng những đơn đó — mọi tháng — nên có `attention` hoặc mốc
+ * ngày trên URL thì KHÔNG áp mặc định tháng này.
+ */
+function initialFiltersFromUrl(searchParams, today = new Date()) {
+  const attention = ATTENTION_VALUES.includes(searchParams.get('attention')) ? searchParams.get('attention') : '';
+  const dateFrom = searchParams.get('dateFrom') || '';
+  const dateTo = searchParams.get('dateTo') || '';
+  const status = searchParams.get('status') || '';
+  if (attention || dateFrom || dateTo) return { ...EMPTY_FILTERS, status, attention, dateFrom, dateTo };
+  return { ...EMPTY_FILTERS, status, dateFrom: ymd(new Date(today.getFullYear(), today.getMonth(), 1)), dateTo: ymd(today) };
+}
 
 // "Nợ nhỏ" PR-4 (26/09) — payment.service.js gắn tag PAID_AFTER_CANCELLED vào note (text thô, không
 // phải cột riêng) khi PayOS báo đơn đã trả dù đơn đã cancelled/failed. Admin bấm nút xử lý sẽ nối
@@ -39,32 +57,49 @@ const canOfferRefund = (order) => {
   return ['cancelled', 'failed'].includes(order.status) && (order.note || '').includes('PAID_AFTER_CANCELLED');
 };
 
-const KpiCard = ({ label, value, sub }) => (
-  <div className="card p-5">
-    <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{label}</p>
-    <p className="text-2xl font-bold text-gray-900">{value}</p>
-    {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
-  </div>
-);
+const KpiCard = ({ label, value, sub, onClick, active, testId }) => {
+  const body = (
+    <>
+      <p className="text-xs text-gray-400 uppercase tracking-wide mb-1">{label}</p>
+      <p className="text-2xl font-bold text-gray-900">{value}</p>
+      {sub && <p className="text-xs text-gray-400 mt-1">{sub}</p>}
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        data-testid={testId}
+        className={`card p-5 text-left transition-colors ${active ? 'ring-2 ring-primary-500' : 'hover:bg-gray-50'}`}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <div className="card p-5" data-testid={testId}>{body}</div>;
+};
 
 const StatusBadge = ({ status }) => {
   const { t } = useI18n();
-  const s = STATUS_LABEL(t)[status] || { label: status, cls: 'badge-gray' };
-  return <span className={`badge ${s.cls} text-xs`}>{s.label}</span>;
+  const s = orderStatusBadge(status, t);
+  return <span className={`badge ${s.className} text-xs`}>{s.label}</span>;
 };
 
 const PAGE_SIZE = 20;
 
 const AdminOrdersPage = () => {
   const { t } = useI18n();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState([]);
   const [kpi, setKpi] = useState(null);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
 
-  const [filters, setFilters] = useState({ status: '', search: '', dateFrom: '', dateTo: '' });
-  const [draft, setDraft] = useState({ status: '', search: '', dateFrom: '', dateTo: '' });
+  const [initialFilters] = useState(() => initialFiltersFromUrl(searchParams));
+  const [filters, setFilters] = useState(initialFilters);
+  const [draft, setDraft] = useState(initialFilters);
   const [cancellingCode, setCancellingCode] = useState(null); // orderCode đang confirm huỷ
   const [refundingCode, setRefundingCode] = useState(null); // orderCode đang mở modal hoàn tiền
 
@@ -94,12 +129,30 @@ const AdminOrdersPage = () => {
     setFilters({ ...draft });
   };
 
+  // "Xoá lọc" = toàn thời gian, không bộ lọc nào — nhãn kỳ ở KPI đổi thành "Toàn thời gian" cho khớp.
   const handleReset = () => {
-    const empty = { status: '', search: '', dateFrom: '', dateTo: '' };
-    setDraft(empty);
-    setFilters(empty);
+    setDraft(EMPTY_FILTERS);
+    setFilters(EMPTY_FILTERS);
+    setPage(1);
+    if (searchParams.toString()) setSearchParams({}, { replace: true });
+  };
+
+  // Lọc "cần chú ý" (thẻ "Cần xử lý" / liên kết từ Tổng quan) chỉ thu hẹp danh sách; bấm lại thẻ = bỏ lọc.
+  const setAttention = (attention) => {
+    const next = { ...filters, attention };
+    setDraft((d) => ({ ...d, attention }));
+    setFilters(next);
     setPage(1);
   };
+
+  const periodLabel = (() => {
+    const from = filters.dateFrom ? ymdToVn(filters.dateFrom) : '';
+    const to = filters.dateTo ? ymdToVn(filters.dateTo) : '';
+    if (from && to) return t('adminOrders.kpi.periodRange', { from, to });
+    if (from) return t('adminOrders.kpi.periodFrom', { from });
+    if (to) return t('adminOrders.kpi.periodTo', { to });
+    return t('adminOrders.kpi.periodAll');
+  })();
 
   const handleCancel = async (orderCode) => {
     try {
@@ -143,25 +196,39 @@ const AdminOrdersPage = () => {
         </button>
       </div>
 
-      {/* KPI */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <KpiCard
-          label={t('adminDashboard.revenue')}
-          value={kpi ? fmtVnd(kpi.totalRevenue) : '—'}
-          sub={t('adminOrders.fromSuccessfulOrders')}
-        />
-        <KpiCard
-          label={t('adminOrders.totalOrders')}
-          value={kpi ? Number(kpi.totalOrders).toLocaleString() : '—'}
-        />
-        <KpiCard
-          label={t('adminOrders.pendingOrders')}
-          value={kpi ? Number(kpi.pendingCount).toLocaleString() : '—'}
-        />
-        <KpiCard
-          label={t('adminOrders.cancelledOrders')}
-          value={kpi ? Number(kpi.cancelledCount).toLocaleString() : '—'}
-        />
+      {/* KPI — THEO BỘ LỌC (khoảng ngày + tìm kiếm), nhãn kỳ ghi rõ ngay dưới */}
+      <div className="space-y-2">
+        <p className="text-xs text-gray-500" data-testid="orders-kpi-period">
+          {t('adminOrders.kpi.caption', { period: periodLabel })}
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <KpiCard
+            testId="orders-kpi-revenue"
+            label={t('adminOrders.kpi.revenue')}
+            value={kpi ? fmtVnd(kpi.revenue) : '—'}
+            sub={t('adminOrders.kpi.revenueHint')}
+          />
+          <KpiCard
+            testId="orders-kpi-refunded"
+            label={t('adminOrders.kpi.refunded')}
+            value={kpi ? fmtVnd(kpi.refunded) : '—'}
+            sub={t('adminOrders.kpi.refundedHint')}
+          />
+          <KpiCard
+            testId="orders-kpi-paid"
+            label={t('adminOrders.kpi.paidOrders')}
+            value={kpi ? Number(kpi.paidOrders).toLocaleString('vi-VN') : '—'}
+            sub={t('adminOrders.kpi.paidOrdersHint')}
+          />
+          <KpiCard
+            testId="orders-kpi-needs-action"
+            label={t('adminOrders.kpi.needsAction')}
+            value={kpi ? Number(kpi.needsAction).toLocaleString('vi-VN') : '—'}
+            sub={t('adminOrders.kpi.needsActionHint')}
+            active={filters.attention === 'needs_action'}
+            onClick={() => setAttention(filters.attention === 'needs_action' ? '' : 'needs_action')}
+          />
+        </div>
       </div>
 
       {/* Filter bar */}
@@ -191,6 +258,7 @@ const AdminOrdersPage = () => {
             <option value="success">{t('adminOrders.success')}</option>
             <option value="pending">{t('adminOrders.pending')}</option>
             <option value="cancelled">{t('adminOrders.cancelled')}</option>
+            <option value="failed">{t('adminOrders.failed')}</option>
             <option value="refunded">{t('adminOrders.refunded')}</option>
           </select>
         </div>
@@ -220,6 +288,15 @@ const AdminOrdersPage = () => {
           <button type="button" className="btn btn-secondary" onClick={handleReset}>{t('adminOrders.clearFilters')}</button>
         </div>
       </form>
+
+      {filters.attention && (
+        <div className="flex items-center gap-3 rounded-lg bg-amber-50 px-4 py-2 text-sm text-amber-800" data-testid="orders-attention-chip">
+          <span>{t(`adminOrders.attention.${filters.attention}`)}</span>
+          <button type="button" className="underline" onClick={() => setAttention('')}>
+            {t('adminOrders.attention.clear')}
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="card overflow-hidden">

@@ -106,12 +106,14 @@ describe('GET /api/admin/orders — list + KPI', () => {
     expect(res.status).toBe(200);
     expect(res.body.data.orders).toHaveLength(4);
     expect(Number(res.body.data.total)).toBe(4);
-    expect(Number(res.body.data.kpi.totalOrders)).toBe(4);
-    expect(Number(res.body.data.kpi.successCount)).toBe(1);
-    expect(Number(res.body.data.kpi.pendingCount)).toBe(1);
-    expect(Number(res.body.data.kpi.cancelledCount)).toBe(1);
-    // totalRevenue chỉ tính đơn success
-    expect(Number(res.body.data.kpi.totalRevenue)).toBe(500000);
+    // PR-9: KPI theo bộ lọc (không bộ lọc = toàn thời gian) — 4 số: doanh thu, đã hoàn, đơn đã trả, cần xử lý.
+    expect(res.body.data.kpi).toEqual({
+      revenue: 500000, // chỉ đơn success có amount > 0
+      paidOrders: 1,
+      refunded: 0,
+      needsAction: 1, // đơn failed (800.000); đơn pending mới tạo chưa quá 2 giờ
+      period: { from: null, to: null },
+    });
   });
 
   it('filter status=pending → chỉ trả đơn pending', async () => {
@@ -381,7 +383,7 @@ describe('GET /:orderCode/refund-preview + POST /:orderCode/refund', () => {
     const token = await loginAs(admin);
 
     const kpiBefore = await request(app).get('/api/admin/orders').set('Authorization', `Bearer ${token}`);
-    const revenueBefore = Number(kpiBefore.body.data.kpi.totalRevenue);
+    const revenueBefore = Number(kpiBefore.body.data.kpi.revenue);
 
     const preview = await request(app)
       .get(`/api/admin/orders/${order.order_code}/refund-preview`)
@@ -397,7 +399,9 @@ describe('GET /:orderCode/refund-preview + POST /:orderCode/refund', () => {
     expect(res.body.data.meta).toMatchObject({ plan: 'revoked', transferRef: 'FT999' });
 
     const kpiAfter = await request(app).get('/api/admin/orders').set('Authorization', `Bearer ${token}`);
-    expect(revenueBefore - Number(kpiAfter.body.data.kpi.totalRevenue)).toBe(299000);
+    expect(revenueBefore - Number(kpiAfter.body.data.kpi.revenue)).toBe(299000);
+    // Đơn hoàn tự rơi khỏi doanh thu và hiện ở "Đã hoàn" (theo ngày hoàn).
+    expect(Number(kpiAfter.body.data.kpi.refunded)).toBe(299000);
 
     const u = await db.query(`SELECT active_plan_id FROM users WHERE id = $1`, [user.id]);
     expect(u.rows[0].active_plan_id).toBeNull();

@@ -1,23 +1,14 @@
 import db from '../../config/database.js';
+import {
+  isValidYmd,
+  orderNeedsActionSql,
+  orderPeriodAtSql,
+  paidAfterCancelledSql,
+  paidOrderSql,
+  vnDayRangeSql,
+} from '../../services/admin/revenueDefinitions.js';
 
-export async function findOrders({ status, search, dateFrom, dateTo, page = 1, limit = 20 }) {
-  const conditions = ['1=1'];
-  const params = [];
-  let p = 1;
-
-  if (status)   { conditions.push(`o.status = $${p++}`);          params.push(status); }
-  if (dateFrom) { conditions.push(`o.created_at >= $${p++}`);     params.push(dateFrom); }
-  if (dateTo)   { conditions.push(`o.created_at < $${p++}`);      params.push(dateTo); }
-  if (search) {
-    conditions.push(`(o.user_email ILIKE $${p}
-      OR CAST(o.order_code AS TEXT) ILIKE $${p}
-      OR COALESCE(NULLIF(o.voucher_code, ''), redemption.voucher_code) ILIKE $${p})`);
-    params.push(`%${search}%`); p++;
-  }
-
-  const where = conditions.join(' AND ');
-  const offset = (page - 1) * limit;
-  const redemptionJoin = `
+const REDEMPTION_JOIN = `
        LEFT JOIN LATERAL (
          SELECT v.code AS voucher_code, vr.discount_amount
          FROM voucher_redemptions vr
@@ -26,6 +17,61 @@ export async function findOrders({ status, search, dateFrom, dateTo, page = 1, l
          ORDER BY vr.id DESC
          LIMIT 1
        ) redemption ON TRUE`;
+
+// Lọc "cần chú ý" (thẻ "Cần xử lý" của trang Đơn hàng và liên kết từ Tổng quan). Giá trị lạ bị bỏ qua.
+const ATTENTION_FILTERS = {
+  paid_after_cancelled: paidAfterCancelledSql,
+  needs_action: orderNeedsActionSql,
+};
+
+function assertDate(label, value) {
+  if (value && !isValidYmd(value)) {
+    throw { status: 400, message: `${label} không hợp lệ (định dạng YYYY-MM-DD)` };
+  }
+}
+
+/**
+ * Bộ lọc dùng chung cho danh sách, đếm và KPI — MỘT nơi dựng WHERE để ba truy vấn luôn cùng một tập đơn.
+ *
+ * Khoảng ngày theo giờ VN trên MỐC KỲ (`periodExpr`, mặc định COALESCE(paid_at, created_at)); "đến ngày" gồm TRỌN ngày
+ * cuối — trước đây `created_at < 'YYYY-MM-DD'` làm mất mọi đơn của ngày cuối (kế toán cộng danh sách đối chiếu PayOS
+ * cuối tháng sẽ thiếu ngày 30/31, còn tổng KPI không đổi nên khó phát hiện).
+ *
+ * @param {{ status?: string, search?: string, dateFrom?: string, dateTo?: string, attention?: string }} filters
+ * @param {{ includeStatus?: boolean, periodExpr?: string }} [options]
+ */
+function buildOrderFilters(filters, { includeStatus = true, periodExpr = orderPeriodAtSql('o') } = {}) {
+  const { status, search, dateFrom, dateTo, attention } = filters;
+  assertDate('Từ ngày', dateFrom);
+  assertDate('Đến ngày', dateTo);
+
+  const conditions = ['1=1'];
+  const params = [];
+  const add = (value) => {
+    params.push(value);
+    return `$${params.length}`;
+  };
+
+  if (includeStatus && status) conditions.push(`o.status = ${add(status)}`);
+  conditions.push(...vnDayRangeSql(periodExpr, {
+    fromRef: dateFrom ? add(dateFrom) : null,
+    toRef: dateTo ? add(dateTo) : null,
+  }));
+  if (includeStatus && ATTENTION_FILTERS[attention]) conditions.push(ATTENTION_FILTERS[attention]('o'));
+  if (search) {
+    const ref = add(`%${search}%`);
+    conditions.push(`(o.user_email ILIKE ${ref}
+      OR CAST(o.order_code AS TEXT) ILIKE ${ref}
+      OR COALESCE(NULLIF(o.voucher_code, ''), redemption.voucher_code) ILIKE ${ref})`);
+  }
+  return { where: conditions.join(' AND '), params };
+}
+
+export async function findOrders({ status, search, dateFrom, dateTo, attention, page = 1, limit = 20 }) {
+  const { where, params } = buildOrderFilters({ status, search, dateFrom, dateTo, attention });
+  const offset = (page - 1) * limit;
+  const limitRef = `$${params.length + 1}`;
+  const offsetRef = `$${params.length + 2}`;
 
   const [rowsRes, countRes] = await Promise.all([
     db.query(
@@ -43,13 +89,13 @@ export async function findOrders({ status, search, dateFrom, dateTo, page = 1, l
        FROM orders o
        LEFT JOIN plans p ON o.plan_id = p.id
        LEFT JOIN users u ON o.user_id = u.id
-       ${redemptionJoin}
+       ${REDEMPTION_JOIN}
        WHERE ${where}
        ORDER BY o.created_at DESC
-       LIMIT $${p} OFFSET $${p + 1}`,
+       LIMIT ${limitRef} OFFSET ${offsetRef}`,
       [...params, limit, offset]
     ),
-    db.query(`SELECT COUNT(*) FROM orders o ${redemptionJoin} WHERE ${where}`, params),
+    db.query(`SELECT COUNT(*) FROM orders o ${REDEMPTION_JOIN} WHERE ${where}`, params),
   ]);
 
   return { rows: rowsRes.rows, total: Number(countRes.rows[0].count) };
@@ -101,15 +147,47 @@ export async function markPaidAfterCancelledHandled(orderCode, note) {
   return rows[0] || null;
 }
 
-export async function getOrdersKpi() {
-  const { rows } = await db.query(`
-    SELECT
-      COUNT(*)                                                        AS "totalOrders",
-      COUNT(CASE WHEN status = 'success'   THEN 1 END)               AS "successCount",
-      COUNT(CASE WHEN status = 'pending'   THEN 1 END)               AS "pendingCount",
-      COUNT(CASE WHEN status = 'cancelled' THEN 1 END)               AS "cancelledCount",
-      COALESCE(SUM(CASE WHEN status = 'success' THEN amount END), 0) AS "totalRevenue"
-    FROM orders
-  `);
-  return rows[0];
+/**
+ * KPI trang Đơn hàng — THEO BỘ LỌC (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-9): khoảng ngày và ô tìm kiếm áp cho
+ * cả bốn số; bộ lọc TRẠNG THÁI và "cần chú ý" chỉ thu hẹp danh sách (bốn thẻ vốn đã tách theo trạng thái — lọc "Thất
+ * bại" mà doanh thu về 0 thì mất hết ý nghĩa của thẻ). Không có bộ lọc nào = toàn thời gian.
+ *
+ *   revenue     tổng đơn đã trả (success, amount > 0) theo mốc kỳ COALESCE(paid_at, created_at); đơn hoàn tự rơi ra.
+ *   paidOrders  số đơn đã trả — KHÔNG gồm đơn 0đ (dùng thử free, voucher 100%).
+ *   refunded    tiền đã hoàn, theo NGÀY HOÀN (refunded_at) — đơn trả tháng 8, hoàn tháng 9 thì "Đã hoàn" ở tháng 9.
+ *   needsAction đơn failed + tiền đã vào nhưng đơn huỷ (chưa xử lý) + pending quá hạn — cùng điều kiện với bộ lọc
+ *               `attention=needs_action`.
+ */
+export async function getOrdersKpi({ search, dateFrom, dateTo } = {}) {
+  const filters = { search, dateFrom, dateTo };
+  const period = buildOrderFilters(filters, { includeStatus: false });
+  const refundPeriod = buildOrderFilters(filters, { includeStatus: false, periodExpr: 'o.refunded_at' });
+  const join = search ? REDEMPTION_JOIN : '';
+
+  const [periodRes, refundRes] = await Promise.all([
+    db.query(
+      `SELECT
+         COALESCE(SUM(o.amount) FILTER (WHERE ${paidOrderSql('o')}), 0) AS revenue,
+         COUNT(*) FILTER (WHERE ${paidOrderSql('o')}) AS "paidOrders",
+         COUNT(*) FILTER (WHERE ${orderNeedsActionSql('o')}) AS "needsAction"
+       FROM orders o ${join}
+       WHERE ${period.where}`,
+      period.params
+    ),
+    db.query(
+      `SELECT COALESCE(SUM(o.amount), 0) AS refunded
+       FROM orders o ${join}
+       WHERE o.status = 'refunded' AND ${refundPeriod.where}`,
+      refundPeriod.params
+    ),
+  ]);
+
+  const p = periodRes.rows[0] || {};
+  return {
+    revenue: Number(p.revenue || 0),
+    paidOrders: Number(p.paidOrders || 0),
+    refunded: Number(refundRes.rows[0]?.refunded || 0),
+    needsAction: Number(p.needsAction || 0),
+    period: { from: dateFrom || null, to: dateTo || null },
+  };
 }

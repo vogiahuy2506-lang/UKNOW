@@ -316,6 +316,43 @@ const REASON_KEY_SQL = `NULLIF(btrim(regexp_replace(regexp_replace(regexp_replac
                 '[0-9]{7,}', '<số>', 'g'),
                 '[[:space:]]+', ' ', 'g')), '')`;
 
+/**
+ * Biểu thức SQL (vô hướng, timestamptz): thời điểm tin ĐÃ GỬI đầu tiên của một CHỦ tài khoản, qua cả ba bảng tin, theo
+ * ĐÚNG định nghĩa "đã gửi" ở trên (email ∈ EMAIL_SENT_STATUSES, Zalo status hiệu lực = 'sent', Telegram / WhatsApp
+ * status = 'sent'; luôn loại is_preview). NULL = chủ đó chưa từng gửi được tin nào.
+ *
+ * Thêm ở PR-9 cho phễu admin ("chạy chiến dịch đầu tiên", thời gian tới tin đầu tiên): mọi hàm ở trên đều nhận CỬA SỔ
+ * thời gian, còn phễu cần MỐC ĐẦU TIÊN mọi thời điểm. Chạy dạng truy vấn con tương quan trên từng chủ nên dùng index
+ * (workspace_owner_id, sent_at) của cả ba bảng. `ownerRef` là biểu thức SQL trỏ tới id chủ (vd 'u.id') — do mã gọi
+ * truyền, không phải đầu vào người dùng.
+ *
+ * Cột thời gian: email_messages / zalo_messages là `timestamp` chứa GIỜ VN → AT TIME ZONE đổi sang timestamptz;
+ * campaign_channel_messages đã là timestamptz.
+ */
+export function firstSentAtSql(ownerRef) {
+  return `(SELECT MIN(first_at) FROM (
+      SELECT MIN(m.sent_at AT TIME ZONE '${VN_TZ}') AS first_at
+        FROM email_messages m
+       WHERE m.workspace_owner_id = ${ownerRef}
+         AND m.status IN ${EMAIL_SENT_STATUS_SQL_LIST}
+         AND NOT COALESCE(m.is_preview, FALSE)
+         AND m.sent_at IS NOT NULL
+      UNION ALL
+      SELECT MIN(m.sent_at AT TIME ZONE '${VN_TZ}')
+        FROM zalo_messages m
+       WHERE m.workspace_owner_id = ${ownerRef}
+         AND ${ZALO_STATUS_SQL} = 'sent'
+         AND NOT COALESCE(m.is_preview, FALSE)
+         AND m.sent_at IS NOT NULL
+      UNION ALL
+      SELECT MIN(COALESCE(m.sent_at, m.created_at))
+        FROM campaign_channel_messages m
+       WHERE m.workspace_owner_id = ${ownerRef}
+         AND m.status = 'sent'
+         AND NOT COALESCE(m.is_preview, FALSE)
+    ) firsts)`;
+}
+
 class SendStatsRepository {
   /**
    * @returns {Promise<Array<{channel: string, sent: string, failed: string, bounced: string, opened: string, clicked: string}>>}
