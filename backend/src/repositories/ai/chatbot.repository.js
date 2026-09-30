@@ -507,8 +507,12 @@ class ChatbotRepository {
     return rows;
   }
 
-  async countActiveChatbotsByUser(userId) {
-    const { rows } = await db.query(
+  /**
+   * Đếm chatbot ĐANG HOẠT ĐỘNG (`is_active = true`; xoá mềm không tính) của một chủ.
+   * `queryable` cho phép đếm trong cùng transaction với lần clone/mua (chatbotSlot.service.js).
+   */
+  async countActiveChatbotsByUser(userId, queryable = db) {
+    const { rows } = await queryable.query(
       `SELECT COUNT(*)::int AS count FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`,
       [userId]

@@ -70,11 +70,9 @@ const RESOURCE_LIMIT_MAP = {
     ownerExpression: 'COALESCE(workspace_owner_id, id_user)',
     label: 'số landing page',
   },
-  chatbots: {
-    column: 'max_chatbots',
-    table: 'custom_chatbots',
-    label: 'số chatbot',
-  },
+  // KHÔNG có mục `chatbots` ở đây (gỡ 30/09/2026): mục cũ đọc cột `users.max_chatbots` không tồn tại (trần luôn
+  // null = không giới hạn), đếm cả chatbot đã xoá mềm và không cộng slot mua thêm → clone/mua Marketplace lọt trần.
+  // Trần chatbot đi qua services/ai/chatbotSlot.service.js (assertChatbotSlotAvailable), dùng chung cổng tạo.
 };
 
 const isMissingLimitColumnsError = (error) => error?.code === '42703';
@@ -285,9 +283,9 @@ export async function checkUserResourceLimit(input) {
  * - Một tài nguyên lỗi → `null` cho ĐÚNG tài nguyên đó (kèm console.error ghi tên), các tài nguyên khác vẫn có
  *   số. KHÔNG trả 0 giả: trang hiện "—" thay vì "0 / N".
  * - Khoá không có trong RESOURCE_LIMIT_MAP là lỗi lập trình → ném ngay, không nuốt.
- * - KHÔNG dùng cho `chatbots`: cổng tạo chatbot (chatbot.controller.js createCustomChatbot) không đi qua bản đồ
- *   này (đếm dòng `is_active`, trần `plans.max_chatbots`; còn `users.max_chatbots` không tồn tại nên mục
- *   `chatbots` ở đây luôn ra trần null) — xem services/user/profileUsage.service.js.
+ * - KHÔNG dùng cho `chatbots`: bản đồ này không còn mục `chatbots` (30/09/2026) — cổng tạo/clone/Marketplace đi qua
+ *   services/ai/chatbotSlot.service.js (đếm dòng `is_active`, trần `plans.max_chatbots` + slot mua thêm); xem
+ *   thêm services/user/profileUsage.service.js.
  *
  * @param {number|string} userId chủ tài khoản (billing user)
  * @param {Array<keyof typeof RESOURCE_LIMIT_MAP>} resourceKeys

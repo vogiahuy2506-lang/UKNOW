@@ -77,6 +77,18 @@ jest.unstable_mockModule('../../../utils/userResourceLimit.util.js', () => ({
   enforceResourceLimitTx: mockEnforceResourceLimitTx,
 }));
 
+// Mock hàm kiểm suất chatbot (đếm/trần của nó có spec riêng + integration chatbotSlotCloneMarketplace.test.js).
+const mockAssertChatbotSlotAvailable = jest.fn();
+jest.unstable_mockModule('../../ai/chatbotSlot.service.js', () => ({
+  assertChatbotSlotAvailable: mockAssertChatbotSlotAvailable,
+}));
+
+// Chatbot clone repository — chỉ cần nhánh clone chatbot chạy được trong unit test.
+const mockCloneFromSnapshot = jest.fn();
+jest.unstable_mockModule('../../../repositories/ai/chatbotClone.repository.js', () => ({
+  default: { cloneFromSnapshot: mockCloneFromSnapshot },
+}));
+
 const { default: marketplacePurchaseService } = await import('../marketplacePurchase.service.js');
 
 describe('marketplacePurchase.service.purchase', () => {
@@ -93,6 +105,8 @@ describe('marketplacePurchase.service.purchase', () => {
     mockGetClient.mockResolvedValue(mockClient);
     mockCreateTx.mockResolvedValue({ id: 999, cloned_resource_type: 'campaign' });
     mockIncrementPurchaseCountTx.mockResolvedValue(undefined);
+    mockAssertChatbotSlotAvailable.mockReset().mockResolvedValue(undefined);
+    mockCloneFromSnapshot.mockReset().mockResolvedValue({ id: 700, type: 'chatbot' });
   });
 
   it('mua listing miễn phí KHÔNG gọi deductCredits', async () => {
@@ -226,5 +240,65 @@ describe('marketplacePurchase.service.purchase', () => {
     await expect(marketplacePurchaseService.purchase(1, 10)).rejects.toBeTruthy();
 
     expect(mockClient.release).toHaveBeenCalled();
+  });
+
+  describe('trần chatbot của gói (30/09/2026)', () => {
+    const chatbotListing = (priceCredits) => ({
+      id: 1, status: 'published', price_credits: priceCredits, resource_type: 'chatbot',
+      id_user: 5, title: 'Bot Listing', snapshot_data: { name: 'Bot' },
+    });
+    const limitError = () => Object.assign(new Error('Bạn đã đạt giới hạn 1 chatbot của gói dịch vụ hiện tại.'), {
+      status: 403, code: 'CHATBOT_LIMIT_EXCEEDED', used: 1, limit: 1,
+    });
+
+    it('mua chatbot: kiểm suất qua CHÍNH client transaction + vai người mua, TRƯỚC khi trừ credit', async () => {
+      mockFindByIdTx.mockResolvedValue(chatbotListing(100));
+      mockFindByUserAndListingTx.mockResolvedValue(null);
+      mockAiDeductCredits.mockResolvedValue({ success: true });
+      const order = [];
+      mockAssertChatbotSlotAvailable.mockImplementation(async () => { order.push('slot'); });
+      mockAiDeductCredits.mockImplementation(async () => { order.push('deduct'); return { success: true }; });
+
+      await marketplacePurchaseService.purchase(1, 10, { roleCode: 'user' });
+
+      expect(mockAssertChatbotSlotAvailable).toHaveBeenCalledWith(10, { client: mockClient, roleCode: 'user' });
+      expect(order).toEqual(['slot', 'deduct']);
+    });
+
+    it('hết suất chatbot → ROLLBACK, KHÔNG trừ credit, KHÔNG cộng seller, KHÔNG clone, KHÔNG ghi đơn mua', async () => {
+      mockFindByIdTx.mockResolvedValue(chatbotListing(100));
+      mockFindByUserAndListingTx.mockResolvedValue(null);
+      mockAssertChatbotSlotAvailable.mockRejectedValue(limitError());
+
+      await expect(marketplacePurchaseService.purchase(1, 10)).rejects.toMatchObject({
+        code: 'CHATBOT_LIMIT_EXCEEDED',
+      });
+
+      expect(mockAiDeductCredits).not.toHaveBeenCalled();
+      expect(mockCloneFromSnapshot).not.toHaveBeenCalled();
+      expect(mockCreateTx).not.toHaveBeenCalled();
+      expect(mockClient.query).not.toHaveBeenCalledWith(
+        expect.stringContaining('marketplace_seller_stats'), expect.anything()
+      );
+      expect(mockClient.query).toHaveBeenCalledWith('ROLLBACK');
+      expect(mockClient.query).not.toHaveBeenCalledWith('COMMIT');
+      expect(mockClient.release).toHaveBeenCalled();
+    });
+
+    it('listing campaign KHÔNG bị kiểm suất chatbot', async () => {
+      mockFindByIdTx.mockResolvedValue({
+        id: 1, status: 'published', price_credits: 0, resource_type: 'campaign',
+        id_user: 5, title: 'Camp', snapshot_data: {},
+      });
+      mockFindByUserAndListingTx.mockResolvedValue(null);
+      mockClient.query.mockImplementation((sql) => {
+        if (typeof sql === 'string' && sql.includes('INSERT INTO campaigns')) return Promise.resolve({ rows: [{ id: 100 }] });
+        return Promise.resolve({ rows: [] });
+      });
+
+      await marketplacePurchaseService.purchase(1, 10);
+
+      expect(mockAssertChatbotSlotAvailable).not.toHaveBeenCalled();
+    });
   });
 });

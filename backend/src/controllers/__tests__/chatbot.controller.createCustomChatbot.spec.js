@@ -165,4 +165,24 @@ describe('chatbotController.createCustomChatbot — nghĩa số 0 của max_chat
     await chatbotController.createCustomChatbot(buildReq({ name: 'Bot E' }), res);
     expect(res.statusCode).toBe(403);
   });
+
+  it('403 giữ NGUYÊN hình dạng lỗi FE đang hiểu: message, code, used, limit, upgradeRequired (cổng dùng chung chatbotSlot.service)', async () => {
+    mockGetPlanByUserId.mockResolvedValue({ max_chatbots: 2 });
+    mockSumActiveTopupGrants.mockResolvedValue(1); // trần hiệu lực 2 + 1 = 3
+    mockCountActiveChatbotsByUser.mockResolvedValue(3);
+
+    const res = mockRes();
+    await chatbotController.createCustomChatbot(buildReq({ name: 'Bot H' }), res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.body).toEqual({
+      success: false,
+      message: 'Bạn đã đạt giới hạn 3 chatbot của gói dịch vụ hiện tại.',
+      code: 'CHATBOT_LIMIT_EXCEEDED',
+      used: 3,
+      limit: 3,
+      upgradeRequired: true,
+    });
+    expect(mockCreateChatbot).not.toHaveBeenCalled();
+  });
 });

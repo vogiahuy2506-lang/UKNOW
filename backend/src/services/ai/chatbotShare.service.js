@@ -4,7 +4,7 @@ import chatbotRepository from '../../repositories/ai/chatbot.repository.js';
 import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
 import { sendSystemEmail } from '../../utils/systemEmail.util.js';
 import { buildChatbotSharedEmail } from '../../utils/systemEmailShare.util.js';
-import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
+import { assertChatbotSlotAvailable, CHATBOT_LIMIT_EXCEEDED_CODE } from './chatbotSlot.service.js';
 
 /**
  * PR-3: Chia sẻ chatbot với email.
@@ -16,14 +16,11 @@ import { enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
  *   - Email NGOÀI hệ thống → share pending (id_recipient=NULL). Server gửi mail mời đăng ký.
  *     Khi user đăng ký, auth.controller tự claim và clone cho họ.
  *
- * Resource limit: clone tốn 1 quota chatbot trong gói → enforce limit ở cả nhánh active
- * (clone ngay) và nhánh claim (khi đăng ký).
+ * Resource limit: clone tốn 1 suất chatbot trong gói của NGƯỜI NHẬN → kiểm ở cả nhánh active
+ * (clone ngay) và nhánh claim (khi đăng ký) bằng assertChatbotSlotAvailable (chatbotSlot.service.js), trong
+ * CÙNG transaction với lần clone.
  */
 class ChatbotShareService {
-  constructor() {
-    this._resourceKey = 'chatbots';
-  }
-
   /**
    * Share chatbot với email — hỗ trợ cả email đã có user (active) và email ngoài (pending).
    *
@@ -73,9 +70,9 @@ class ChatbotShareService {
 
       // Nhánh active: clone ngay (giữ nguyên hành vi cũ để không phá callers hiện tại).
       if (result.isExistingUser) {
-        await enforceResourceLimitTx(client, {
-          userId: result.recipient.id,
-          resourceKey: this._resourceKey,
+        await assertChatbotSlotAvailable(result.recipient.id, {
+          client,
+          roleCode: result.recipient.role,
         });
         const cloned = await chatbotCloneRepository.cloneFromSource(client, {
           sourceChatbotId: chatbotId,
@@ -90,11 +87,13 @@ class ChatbotShareService {
       await client.query('COMMIT');
     } catch (err) {
       await client.query('ROLLBACK');
-      // Chuẩn hoá lỗi giới hạn để frontend xử lý.
-      if (err.code === 'RESOURCE_LIMIT_EXCEEDED' && err.resource === this._resourceKey) {
-        const wrapped = new Error(err.message);
-        wrapped.status = err.statusCode || 400;
-        wrapped.code = 'CHATBOT_LIMIT_EXCEEDED';
+      // Người NHẬN hết suất chatbot → lỗi 400 câu chữ hướng về người nhận (người chia sẻ là người đọc thông báo).
+      if (err.code === CHATBOT_LIMIT_EXCEEDED_CODE) {
+        const wrapped = new Error(`Người nhận đã đạt giới hạn ${err.limit} chatbot của gói dịch vụ hiện tại.`);
+        wrapped.status = 400;
+        wrapped.code = CHATBOT_LIMIT_EXCEEDED_CODE;
+        wrapped.used = err.used;
+        wrapped.limit = err.limit;
         throw wrapped;
       }
       throw err;
@@ -151,16 +150,13 @@ class ChatbotShareService {
    *   error: string | null,
    * }>>}
    */
-  async claimPendingAndClone(client, { userId, email }) {
+  async claimPendingAndClone(client, { userId, email, roleCode }) {
     const claimedRows = await chatbotShareRepository.claimPendingByUserId(client, { userId, email });
     const results = [];
     for (const row of claimedRows) {
       try {
-        // enforceResourceLimitTx có thể throw RESOURCE_LIMIT_EXCEEDED — cô lập từng share.
-        await enforceResourceLimitTx(client, {
-          userId,
-          resourceKey: this._resourceKey,
-        });
+        // assertChatbotSlotAvailable có thể throw CHATBOT_LIMIT_EXCEEDED — cô lập từng share.
+        await assertChatbotSlotAvailable(userId, { client, roleCode });
         const cloned = await chatbotCloneRepository.cloneFromSource(client, {
           sourceChatbotId: row.id_chatbot,
           targetUserId: userId,

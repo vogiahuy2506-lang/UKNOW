@@ -28,10 +28,7 @@ import { resolveAllowedModel } from '../services/ai/aiModelPolicy.service.js';
 import sseService from '../services/sse.service.js';
 import uploadController from './upload.controller.js';
 import chatAttachmentService from '../services/chatbot/chatAttachment.service.js';
-import { getPlanByUserId } from '../repositories/payment/plan.repository.js';
-import { sumActiveTopupGrants } from '../repositories/payment/topup.repository.js';
-import { normalizeCeiling } from '../services/payment/topupLock.service.js';
-import { isSuperAdmin } from '../utils/roleScope.util.js';
+import { assertChatbotSlotAvailable, CHATBOT_LIMIT_EXCEEDED_CODE } from '../services/ai/chatbotSlot.service.js';
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import { normalizeChatbotReplyLimitConfig } from '../utils/chatbotReplyLimit.util.js';
 import { normalizeChatbotActiveHours } from '../utils/chatbotActiveHours.util.js';
@@ -1379,33 +1376,11 @@ class ChatbotController {
   async createCustomChatbot(req, res) {
     try {
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
-      const plan = await getPlanByUserId(ownerUserId);
-      // "Nợ nhỏ" 26/09 — trước đây `Number(plan?.max_chatbots || 0)` coi 0 là KHÔNG giới hạn (vì
-      // maxChatbots<=0 thì bỏ qua hẳn việc kiểm), ngược với mọi nơi khác (topupLock.service.js
-      // normalizeCeiling, userResourceLimit.util.js): NULL/-1 = không giới hạn, 0 = không được tạo.
-      // Gói Tùy chọn khách tự dựng chọn 0 chatbot (customPlanPricing.util.js mapQuantitiesToPlanColumns
-      // ghi 0) đang bị tạo chatbot KHÔNG giới hạn do lệch nghĩa này. Dùng lại normalizeCeiling cho
-      // đúng một hợp đồng duy nhất trong toàn repo.
-      // Không có gói (plan = null) → normalizeCeiling(undefined) = 0. Khách thường không tới được
-      // đây (chatbot.routes.js router.use(requireActivePlan)); chỉ super admin bỏ qua cổng đó, nên
-      // super admin cũng bỏ qua trần như mọi tài nguyên khác (userResourceLimit.util.js
-      // enforceResourceLimitTx) — nếu không, tài khoản admin không gói mất quyền tạo chatbot.
-      const planCeiling = isSuperAdmin(req.user?.role) ? Infinity : normalizeCeiling(plan?.max_chatbots);
-      const topupSlots = await sumActiveTopupGrants(ownerUserId, 'chatbots');
-      const maxChatbots = planCeiling + Math.max(0, Number(topupSlots) || 0);
-      if (Number.isFinite(maxChatbots)) {
-        const currentChatbots = await chatbotRepository.countActiveChatbotsByUser(ownerUserId);
-        if (currentChatbots >= maxChatbots) {
-          return res.status(403).json({
-            success: false,
-            message: `Bạn đã đạt giới hạn ${maxChatbots} chatbot của gói dịch vụ hiện tại.`,
-            code: 'CHATBOT_LIMIT_EXCEEDED',
-            used: currentChatbots,
-            limit: maxChatbots,
-            upgradeRequired: true,
-          });
-        }
-      }
+      // Trần chatbot của gói (+ slot mua thêm còn hạn) — MỘT hàm dùng chung với clone khi chia sẻ và mua Marketplace
+      // (services/ai/chatbotSlot.service.js). Nghĩa số 0/NULL/-1 theo normalizeCeiling (topupLock.service.js): NULL/-1 =
+      // không giới hạn, 0 = không được tạo (gói Tùy chọn khách chọn 0 chatbot), không có gói = 0 (khách thường không tới
+      // được đây: chatbot.routes.js router.use(requireActivePlan)). Super admin bỏ qua trần như mọi tài nguyên khác.
+      await assertChatbotSlotAvailable(ownerUserId, { roleCode: req.user?.role });
 
       const crypto = await import('crypto');
       const widgetKey = crypto.randomUUID().split('-')[0];
@@ -1416,6 +1391,16 @@ class ChatbotController {
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.CHATBOT_CREATED, AUDIT_ENTITY_TYPES.CHATBOT, chatbot.id, { name: chatbot.name });
       return res.status(201).json({ success: true, data: chatbot });
     } catch (err) {
+      if (err?.code === CHATBOT_LIMIT_EXCEEDED_CODE) {
+        return res.status(403).json({
+          success: false,
+          message: err.message,
+          code: CHATBOT_LIMIT_EXCEEDED_CODE,
+          used: err.used,
+          limit: err.limit,
+          upgradeRequired: true,
+        });
+      }
       return res.status(500).json({ success: false, message: err.message });
     }
   }
@@ -2460,6 +2445,16 @@ class ChatbotController {
         data: result,
       });
     } catch (err) {
+      // Người NHẬN hết suất chatbot: trả kèm `code` để ShareChatbotModal hiện đúng câu "Người nhận đã đạt giới hạn…"
+      // (handler lỗi toàn cục app.js chỉ trả `message`, làm rơi `code`). Không gắn limitReached/upgradeRequired:
+      // toast "nâng gói" toàn app của api.js sẽ chỉ nhầm sang NGƯỜI CHIA SẺ — người bị chặn là người nhận.
+      if (err?.code === CHATBOT_LIMIT_EXCEEDED_CODE) {
+        return res.status(err.status || 400).json({
+          success: false,
+          code: CHATBOT_LIMIT_EXCEEDED_CODE,
+          message: err.message,
+        });
+      }
       next(err);
     }
   }

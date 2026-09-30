@@ -6,6 +6,7 @@ import db from '../../config/database.js';
 import { checkUserResourceLimit } from '../../utils/userResourceLimit.util.js';
 import { getWalletBalance } from '../../repositories/payment/topup.repository.js';
 import chatbotCloneRepository from '../../repositories/ai/chatbotClone.repository.js';
+import { assertChatbotSlotAvailable } from '../ai/chatbotSlot.service.js';
 
 class MarketplacePurchaseService {
   /**
@@ -40,9 +41,10 @@ class MarketplacePurchaseService {
    * Purchase a listing
    * @param {number} listingId
    * @param {number} buyerId
+   * @param {{ roleCode?: string|null }} [options] roleCode: vai của người mua (super admin bỏ qua trần chatbot)
    * @returns {Promise<object>}
    */
-  async purchase(listingId, buyerId) {
+  async purchase(listingId, buyerId, { roleCode } = {}) {
     const client = await db.getClient();
 
     try {
@@ -87,18 +89,11 @@ class MarketplacePurchaseService {
         }
       }
 
-      // 4b. Check chatbot limit BEFORE cloning (chỉ kiểm tra nếu listing là chatbot)
+      // 4b. Check chatbot limit BEFORE trừ credit + cloning (chỉ kiểm tra nếu listing là chatbot). Dùng chung hàm với
+      // cổng tạo chatbot (đếm chatbot đang hoạt động vs trần gói + slot mua thêm), trong CÙNG transaction + khoá tư vấn
+      // để hai lượt mua song song của một người không cùng lọt qua "còn 1 suất". Ném CHATBOT_LIMIT_EXCEEDED.
       if (listing.resource_type === 'chatbot') {
-        const limitCheck = await checkUserResourceLimit({
-          userId: buyerId,
-          resourceKey: 'chatbots',
-        });
-        if (!limitCheck.allowed) {
-          const error = new Error(limitCheck.message);
-          error.status = 400;
-          error.code = 'CHATBOT_LIMIT_EXCEEDED';
-          throw error;
-        }
+        await assertChatbotSlotAvailable(buyerId, { client, roleCode });
       }
 
       // 5. Process credits if price > 0 (sau khi check limit)

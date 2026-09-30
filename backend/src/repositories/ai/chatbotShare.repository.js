@@ -41,7 +41,7 @@ class ChatbotShareRepository {
 
     // 2) Tìm user theo email (LOWER để dedup chữ hoa/thường).
     const userRows = await run({
-      text: `SELECT id, full_name, username, email
+      text: `SELECT id, full_name, username, email, role
              FROM users
              WHERE LOWER(email) = $1
              LIMIT 1`,

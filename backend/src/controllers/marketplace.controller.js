@@ -321,7 +321,7 @@ class MarketplaceController {
       const { id } = req.params;
       const userId = resolveWorkspaceOwnerId(req.user);
 
-      const result = await marketplacePurchaseService.purchase(parseInt(id, 10), userId);
+      const result = await marketplacePurchaseService.purchase(parseInt(id, 10), userId, { roleCode: req.user?.role });
 
       res.json({
         success: true,

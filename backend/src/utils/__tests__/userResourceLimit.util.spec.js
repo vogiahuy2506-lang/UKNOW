@@ -51,6 +51,18 @@ describe('userResourceLimit.util', () => {
       await expect(checkUserResourceLimit(null)).rejects.toThrow(/Resource key không hợp lệ/);
     });
 
+    it('`chatbots` KHÔNG còn trong bản đồ (30/09/2026): gọi nhầm khoá này phải ném, không được im lặng ra "không giới hạn"', async () => {
+      // Mục cũ đọc `users.max_chatbots` (cột không tồn tại → trần null) nên clone/mua Marketplace lọt trần gói.
+      // Trần chatbot đi qua services/ai/chatbotSlot.service.js.
+      await expect(
+        checkUserResourceLimit({ userId: 1, roleCode: 'user', resourceKey: 'chatbots' })
+      ).rejects.toThrow(/Resource key không hợp lệ/);
+      await expect(
+        enforceResourceLimitTx({ query: mockQuery }, { userId: 1, resourceKey: 'chatbots' })
+      ).rejects.toThrow(/Resource key không hợp lệ/);
+      expect(mockQuery).not.toHaveBeenCalled();
+    });
+
     it('user thường: limit null trong DB → cho phép (không giới hạn)', async () => {
       mockQuery.mockResolvedValueOnce({
         rows: [{ max_campaigns: null, max_zalo_accounts: null }],
