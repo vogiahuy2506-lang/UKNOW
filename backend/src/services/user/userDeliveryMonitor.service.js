@@ -5,6 +5,15 @@ import {
   buildZaloSilentDropHourlySql,
   buildZaloSilentDropSignals,
 } from '../../utils/deliveryMonitorSignals.util.js';
+import {
+  getVnToday,
+  resolvePlanned,
+  resolveWaiting,
+  toIso,
+} from '../../utils/runDisplay.util.js';
+
+// Giữ export cũ: spec và nơi khác import `getVnToday` từ service này.
+export { getVnToday };
 
 /**
  * PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-4b — trang "Giám sát gửi tin" trả lời MỘT câu: hôm nay gửi tới đâu rồi,
@@ -15,28 +24,12 @@ import {
  * bộ đếm campaign_runs hay nhật ký node campaign_executions — ba nguồn đó đã làm màn cũ đếm đôi và báo "tụt" giả.
  */
 
-const VN_TIME_ZONE = 'Asia/Ho_Chi_Minh';
 const RECENT_RUNS_LIMIT = 10;
 const HOURLY_WINDOW_HOURS = 24;
 const FAILURES_LIMIT = 200;
 
 // Lời mời kết bạn Zalo là một kênh riêng của module đếm (plan mục 2): không cộng vào "tin" đã gửi / chưa gửi được.
 const FRIEND_REQUEST_CHANNEL = 'zalo_friend_request';
-
-// Chiến dịch one-shot chờ tới bước kế / chờ SMTP nhả đều ghi cùng mã lý do này; dấu hiệu thật để biết là SMTP chặn
-// là run_metadata.emailRateLimitAt trong khung 12 giờ (+1 giờ dư). KHỚP frontend/src/features/campaigns/utils/
-// campaignQuotaPause.helpers.js (danh sách chiến dịch) — hai màn phải nói cùng một câu về cùng một lượt chạy.
-const ALL_RECIPIENTS_WAITING_REASON = 'all_recipients_waiting_next_due';
-const SMTP_RATE_LIMITED_REASON = 'smtp_rate_limited';
-const SMTP_RATE_LIMIT_PAUSE_WINDOW_MS = 13 * 60 * 60 * 1000;
-
-const toNumber = (value) => Number(value || 0);
-
-const toIso = (value) => {
-  if (value == null) return null;
-  const date = value instanceof Date ? value : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date.toISOString();
-};
 
 function toPositiveInt(value) {
   if (typeof value === 'number' && Number.isSafeInteger(value) && value > 0) return value;
@@ -48,50 +41,6 @@ function httpError(status, message) {
   const err = new Error(message);
   err.status = status;
   return err;
-}
-
-/**
- * Ngày hôm nay theo giờ VN dạng 'YYYY-MM-DD' — đúng bất kể múi giờ của tiến trình (production chạy UTC: 00:30 giờ VN
- * vẫn còn là ngày hôm trước theo UTC).
- *
- * @param {Date} [now]
- * @returns {string}
- */
-export function getVnToday(now = new Date()) {
-  return now.toLocaleDateString('sv-SE', { timeZone: VN_TIME_ZONE });
-}
-
-/**
- * Bảng lượt chạy "Đang chờ": mốc chờ còn ở tương lai (mốc đã qua là dấu vết chưa dọn, lượt sẽ được đánh thức) và mã
- * lý do. `nonContinuous…` cùng mã cho hai chuyện khác nhau nên tách SMTP chặn ra bằng emailRateLimitAt.
- *
- * @param {{ deferred_until: string|null, deferred_reason: string|null, email_rate_limit_at: string|null }} row
- * @param {number} nowMs
- * @returns {{ until: string, reason: string|null }|null}
- */
-function resolveWaiting(row, nowMs) {
-  const untilMs = Date.parse(String(row.deferred_until || ''));
-  if (!Number.isFinite(untilMs) || untilMs <= nowMs) return null;
-
-  let reason = String(row.deferred_reason || '').trim() || null;
-  if (reason === ALL_RECIPIENTS_WAITING_REASON) {
-    const limitedAtMs = Date.parse(String(row.email_rate_limit_at || ''));
-    if (Number.isFinite(limitedAtMs) && untilMs > limitedAtMs && untilMs - limitedAtMs <= SMTP_RATE_LIMIT_PAUSE_WINDOW_MS) {
-      reason = SMTP_RATE_LIMITED_REASON;
-    }
-  }
-  return { until: new Date(untilMs).toISOString(), reason };
-}
-
-/**
- * "Cần gửi" của lượt = total_recipients CHỈ khi bộ đếm đáng tin: lượt tạo sau bản sửa 26/09 20:36 (lượt cũ phình / về
- * 0) VÀ total_recipients ≥ số đã gửi thật (nhỏ hơn thì bộ đếm sai). total_recipients = 0 nghĩa là "chưa biết", không
- * phải "cần gửi 0 tin" → null. Không tin được thì null và màn chỉ hiện số đã gửi.
- */
-function resolvePlanned(row, sent) {
-  if (!row.counters_reliable) return null;
-  const total = toNumber(row.total_recipients);
-  return total > 0 && total >= sent ? total : null;
 }
 
 /** Tổng hôm nay: kênh "tin" cộng lại, lời mời kết bạn tách riêng. */

@@ -1,50 +1,61 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import {
   HiOutlineCheckCircle,
   HiOutlineClock,
   HiOutlineExclamationCircle,
   HiOutlineRefresh,
-  HiOutlineTrendingUp,
+  HiOutlineServer,
 } from 'react-icons/hi';
 import {
+  Bar,
+  BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
+  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts';
 import adminDeliveryMonitorApiService from '../../features/admin/services/adminDeliveryMonitorApi.service';
+import {
+  DELIVERY_WINDOWS,
+  buildDailySlots,
+  countHoursToday,
+  formatIsoDayMonth,
+  pickTopWaitReason,
+} from '../../features/admin/utils/adminDeliveryMonitor.helpers';
+import {
+  HOURLY_CHART_CHANNELS,
+  buildHourlySlots,
+  formatVnDayMonthTime,
+  formatVnResumeTime,
+  formatVnTime,
+  getWaitReasonI18nKey,
+} from '../../features/campaigns/utils/deliveryMonitor.helpers';
 import { useI18n } from '../../i18n';
+import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
+
+// PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-6 — cùng khuôn với trang Giám sát của người dùng, phạm vi toàn hệ thống:
+// 4 thẻ, biểu đồ, bảng nguyên nhân chưa gửi được, bảng khách gửi nhiều nhất, bảng lượt chạy. Mọi số đến từ MỘT nguồn (bảng
+// tin) ở BE; trang này chỉ hiển thị.
 
 const fmt = (value) => Number(value || 0).toLocaleString('vi-VN');
-const fmtPct = (value) => `${Number(value || 0).toFixed(1)}%`;
-const fmtDateTime = (value) => (value ? new Date(value).toLocaleString('vi-VN') : '-');
-const fmtRate = (value) => `${Number(value || 0).toFixed(1)}/min`;
-const fmtDrift = (value) => {
-  const ms = Math.max(0, Number(value || 0));
-  if (!ms) return '0s';
-  const totalSeconds = Math.round(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
-  if (minutes <= 0) return `${seconds}s`;
-  return `${minutes}m ${seconds}s`;
-};
 
-const windowOptions = [7, 30, 90];
+// Khoá cửa sổ 'today' | '7d' | '30d'. Giữ tên biến `windowOptions` / `windowDays` của trang cũ để khối tiêu đề bên dưới
+// không phải đổi (một phiên khác đang sửa khối đó).
+const windowOptions = DELIVERY_WINDOWS;
+
+// Tự làm mới mỗi phút và CHỈ khi tab đang hiển thị: mỗi lượt là một truy vấn đọc bảng tin toàn hệ thống.
+const REFRESH_INTERVAL_MS = 60_000;
+const isTabHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
 
 const channelColor = {
   email: '#f97316',
-  zalo: '#2563eb',
+  zalo_personal: '#2563eb',
   zalo_group: '#10b981',
   telegram: '#0ea5e9',
   whatsapp: '#22c55e',
-};
-
-const severityClass = {
-  critical: 'border-red-100 bg-red-50 text-red-700',
-  warning: 'border-amber-100 bg-amber-50 text-amber-700',
 };
 
 const categoryClass = {
@@ -59,318 +70,163 @@ const categoryClass = {
   unknown: 'badge-gray',
 };
 
-const runStatusBadgeClass = (status) => {
-  const normalized = String(status || '').toLowerCase();
-  if (normalized === 'failed') return 'badge-error';
-  if (normalized === 'running') return 'badge-warning';
-  if (normalized === 'completed') return 'badge-success';
-  if (normalized === 'stopped') return 'badge-gray';
+const severityClass = {
+  critical: 'border-red-100 bg-red-50 text-red-700',
+  warning: 'border-amber-100 bg-amber-50 text-amber-700',
+};
+
+const KNOWN_RUN_STATUSES = ['running', 'completed', 'stopped', 'failed'];
+
+// Đang chờ KHÔNG đỏ / vàng: chờ hạn mức, giờ yên lặng, SMTP nhả... là vận hành bình thường, không phải sự cố.
+const runStatusBadgeClass = (run) => {
+  if (run.waitingUntil) return 'badge-gray';
+  const status = String(run.status || '').toLowerCase();
+  if (status === 'failed') return 'badge-error';
+  if (status === 'running') return 'badge-info';
+  if (status === 'completed') return 'badge-success';
   return 'badge-gray';
 };
 
-const runRowClass = (run) => {
-  if (run.failedSends > 0) return run.failureRate >= 10 ? 'bg-red-50' : 'bg-orange-50';
-  if (run.hasRunError && String(run.status || '').toLowerCase() === 'failed') return 'bg-orange-50';
-  if (run.successfulSends > 0) return 'bg-emerald-50/40';
-  return '';
+const toneMap = {
+  green: 'bg-emerald-50 text-emerald-600',
+  red: 'bg-red-50 text-red-600',
+  neutral: 'bg-gray-100 text-gray-600',
 };
 
-const KpiCard = ({ icon: Icon, label, value, sub, tone = 'orange' }) => {
-  const toneMap = {
-    orange: 'bg-orange-50 text-orange-600',
-    green: 'bg-emerald-50 text-emerald-600',
-    blue: 'bg-blue-50 text-blue-600',
-    red: 'bg-red-50 text-red-600',
-  };
-  return (
-    <div className="card p-5">
-      <div className="flex items-start justify-between gap-4">
-        <div className="min-w-0">
-          <p className="truncate text-sm text-gray-500">{label}</p>
-          <p className="mt-1 text-2xl font-bold text-gray-900">{value}</p>
-          {sub && <p className="mt-1 text-xs text-gray-400">{sub}</p>}
-        </div>
-        <div className={`rounded-xl p-3 ${toneMap[tone] || toneMap.orange}`}>
-          <Icon className="h-6 w-6" />
-        </div>
+const SummaryCard = ({ testId, icon: Icon, label, value, tone = 'green', children }) => (
+  <div className="card p-5" data-testid={testId}>
+    <div className="flex items-start justify-between gap-4">
+      <div className="min-w-0">
+        <p className="truncate text-sm text-gray-500">{label}</p>
+        <p className="mt-1 text-2xl font-bold text-gray-900" data-testid={`${testId}-value`}>{value}</p>
+        <div className="mt-1 space-y-1 text-xs text-gray-500">{children}</div>
+      </div>
+      <div className={`rounded-xl p-3 ${toneMap[tone] || toneMap.green}`}>
+        <Icon className="h-6 w-6" />
       </div>
     </div>
-  );
-};
+  </div>
+);
 
-const CustomTooltip = ({ active, payload, label, t }) => {
+const ChartTooltip = ({ active, payload, label, t }) => {
   if (!active || !payload?.length) return null;
+  const rows = payload.filter((item) => Number(item.value) > 0);
   return (
     <div className="rounded-xl border border-gray-200 bg-white p-3 text-sm shadow-lg">
       <p className="mb-1 font-semibold text-gray-700">{label}</p>
-      {payload.map((item) => (
+      {rows.length === 0 ? (
+        <p className="text-gray-400">{t('adminDeliveryMonitor.chart.none')}</p>
+      ) : rows.map((item) => (
         <p key={item.dataKey} style={{ color: item.color }}>
-          {t(`adminDeliveryMonitor.chart.${item.dataKey}`)}: <strong>{fmt(item.value)}</strong>
+          {t(`adminDeliveryMonitor.channel.${item.dataKey}`)}: <strong>{fmt(item.value)}</strong>
         </p>
       ))}
     </div>
   );
 };
 
-const ChannelPanel = ({ channels, t }) => (
-  <div className="card p-5">
-    <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.channels')}</h2>
-    <div className="space-y-4">
-      {channels.map((channel) => {
-        const width = Math.min(100, Math.max(0, channel.successRate || 0));
-        return (
-          <div key={channel.channel} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <p className="font-semibold text-gray-900">{t(`adminDeliveryMonitor.channel.${channel.channel}`)}</p>
-                <p className="text-xs text-gray-500">
-                  {t('adminDeliveryMonitor.channelSub', {
-                    sent: fmt(channel.sent),
-                    failed: fmt(channel.failed),
-                    clicked: fmt(channel.clicked),
-                  })}
-                </p>
-              </div>
-              <span className={`badge text-xs ${channel.failed > 0 ? 'badge-warning' : 'badge-success'}`}>
-                {fmtPct(channel.successRate)}
-              </span>
-            </div>
-            <div className="mt-3 h-2 overflow-hidden rounded-full bg-white">
-              <div
-                className="h-full rounded-full"
-                style={{ width: `${width}%`, backgroundColor: channelColor[channel.channel] || '#f97316' }}
-              />
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  </div>
-);
-
-const QueuePanel = ({ queue, redis, t }) => {
-  const stats = queue?.available === false ? null : queue;
-  const items = ['waiting', 'active', 'delayed', 'failed', 'completed'];
+const SignalsBanner = ({ signals, t }) => {
+  if (!signals?.length) return null;
   return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.queue')}</h2>
-        <span className={`badge text-xs ${stats ? 'badge-success' : 'badge-gray'}`}>
-          {stats ? t('adminDeliveryMonitor.queueConnected') : t('adminDeliveryMonitor.queueUnavailable')}
-        </span>
-      </div>
-      {stats ? (
-        <div className="grid grid-cols-5 gap-2">
-          {items.map((key) => (
-            <div key={key} className="rounded-xl bg-gray-50 px-3 py-2 text-center">
-              <p className="text-lg font-bold text-gray-900">{fmt(stats[key])}</p>
-              <p className="text-[10px] font-medium text-gray-500">{t(`adminDeliveryMonitor.queueMetric.${key}`)}</p>
-            </div>
-          ))}
+    <div className="space-y-2" data-testid="signals">
+      {signals.map((signal, index) => (
+        <div key={`${signal.code}-${signal.accountId ?? index}`} className={`rounded-xl border px-4 py-3 text-sm ${severityClass[signal.level] || severityClass.warning}`}>
+          <p className="font-semibold">{t(`adminDeliveryMonitor.signal.${signal.code}`)}</p>
+          {signal.accountName && (
+            <p className="mt-0.5 text-xs opacity-80">{t('adminDeliveryMonitor.signalAccount', { name: signal.accountName })}</p>
+          )}
+          {signal.silentDrops != null && signal.attempts != null && (
+            <p className="mt-0.5 text-xs opacity-80">{t('adminDeliveryMonitor.signalSilentDropDetail', { drops: fmt(signal.silentDrops), attempts: fmt(signal.attempts) })}</p>
+          )}
+          {signal.value !== null && signal.value !== undefined && (
+            <p className="mt-0.5 text-xs opacity-80">
+              {signal.code === 'zalo_silent_drop_high'
+                ? t('adminDeliveryMonitor.signalRate', { value: fmt(signal.value) })
+                : t('adminDeliveryMonitor.signalValue', { value: fmt(signal.value) })}
+            </p>
+          )}
         </div>
-      ) : (
-        <p className="text-sm text-gray-500">{t('adminDeliveryMonitor.queueHint')}</p>
-      )}
-      <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-xs text-gray-500">
-        {redis?.available
-          ? t('adminDeliveryMonitor.redisOk', { policy: redis.evictionPolicy || '-' })
-          : t('adminDeliveryMonitor.redisUnavailable')}
-      </div>
+      ))}
     </div>
   );
 };
 
-const AdminHealthPanel = ({ health, t }) => {
-  if (!health) return null;
-  const { hardBounceCount, zaloDisconnectedCount, pendingRetryCount, zaloSkipCount, zaloQuietHours } = health;
-  const items = [
-    { label: t('adminDeliveryMonitor.health.hardBounce'), value: fmt(hardBounceCount), warn: hardBounceCount > 0, hint: t('adminDeliveryMonitor.health.hardBounceHint') },
-    { label: t('adminDeliveryMonitor.health.zaloDisconnected'), value: fmt(zaloDisconnectedCount), warn: zaloDisconnectedCount > 0, hint: t('adminDeliveryMonitor.health.zaloDisconnectedHint') },
-    { label: t('adminDeliveryMonitor.health.pendingRetry'), value: fmt(pendingRetryCount), warn: pendingRetryCount > 0, hint: t('adminDeliveryMonitor.health.pendingRetryHint') },
-    { label: t('adminDeliveryMonitor.health.zaloSkip'), value: fmt(zaloSkipCount), warn: zaloSkipCount > 0, hint: t('adminDeliveryMonitor.health.zaloSkipHint') },
-  ];
-  return (
-    <div className="card p-5">
-      <div className="mb-4 flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.healthTitle')}</h2>
-        {zaloQuietHours?.inQuietHours && (
-          <span className="badge badge-warning text-xs">{t('adminDeliveryMonitor.health.quietHoursActive', { start: zaloQuietHours.start, end: zaloQuietHours.end })}</span>
-        )}
-      </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {items.map((item) => (
-          <div key={item.label} className={`rounded-xl border px-4 py-3 text-center ${item.warn ? 'border-amber-100 bg-amber-50' : 'border-gray-100 bg-gray-50'}`}>
-            <p className={`text-xl font-bold ${item.warn ? 'text-amber-700' : 'text-gray-900'}`}>{item.value}</p>
-            <p className="mt-0.5 text-[11px] font-medium text-gray-600">{item.label}</p>
-            <p className="mt-1 text-[10px] text-gray-400 leading-tight">{item.hint}</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-};
-
-const UnreachableReasonPanel = ({ unreachableByReason, t }) => (
-  <div className="card p-5">
-    <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.unreachableTitle')}</h2>
-    {!unreachableByReason?.length ? (
-      <p className="text-sm text-gray-400">{t('adminDeliveryMonitor.unreachableEmpty')}</p>
-    ) : (
-      <div className="space-y-2">
-        {unreachableByReason.map((row) => {
-          const isStrangerBlocked = row.reason === 'stranger_blocked';
-          return (
-            <div
-              key={row.reason}
-              className={`flex items-center justify-between gap-3 rounded-xl border px-4 py-3 ${
-                isStrangerBlocked ? 'border-red-200 bg-red-50' : 'border-gray-100 bg-gray-50'
-              }`}
-            >
-              <div className="min-w-0">
-                <p className={`font-semibold ${isStrangerBlocked ? 'text-red-700' : 'text-gray-900'}`}>
-                  {t(`adminDeliveryMonitor.unreachableReason.${row.reason}`)}
-                </p>
-                <p className={`text-xs ${isStrangerBlocked ? 'text-red-600' : 'text-gray-400'}`}>
-                  {t(`adminDeliveryMonitor.unreachableReason.${row.reason}Hint`)}
-                </p>
-              </div>
-              <span className={`shrink-0 text-lg font-bold ${isStrangerBlocked ? 'text-red-700' : 'text-gray-900'}`}>
-                {fmt(row.count)}
-              </span>
-            </div>
-          );
-        })}
-      </div>
-    )}
-  </div>
-);
-
-const SignalsPanel = ({ signals, t }) => (
-  <div className="card p-5">
-    <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.signals')}</h2>
-    {!signals?.length ? (
-      <p className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm font-semibold text-emerald-700">
-        {t('adminDeliveryMonitor.noSignals')}
-      </p>
-    ) : (
-      <div className="space-y-2">
-        {signals.map((signal, index) => (
-          <div key={`${signal.code}-${signal.accountId ?? index}`} className={`rounded-xl border px-4 py-3 text-sm ${severityClass[signal.level] || severityClass.warning}`}>
-            <p className="font-semibold">{t(`adminDeliveryMonitor.signal.${signal.code}`)}</p>
-            {signal.accountName && (
-              <p className="mt-0.5 text-xs opacity-80">{t('adminDeliveryMonitor.signalAccount', { name: signal.accountName })}</p>
-            )}
-            {signal.silentDrops != null && signal.attempts != null && (
-              <p className="mt-0.5 text-xs opacity-80">{t('adminDeliveryMonitor.signalSilentDropDetail', { drops: fmt(signal.silentDrops), attempts: fmt(signal.attempts) })}</p>
-            )}
-            {signal.value !== null && signal.value !== undefined && (
-              <p className="mt-0.5 text-xs opacity-80">
-                {signal.code === 'zalo_silent_drop_high'
-                  ? t('adminDeliveryMonitor.signalRate', { value: fmt(signal.value) })
-                  : t('adminDeliveryMonitor.signalValue', { value: fmt(signal.value) })}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
-    )}
-  </div>
-);
-
-const TopRunsTable = ({ runs, t }) => (
-  <div className="card overflow-hidden">
+const ReasonsTable = ({ reasons, t }) => (
+  <div className="card overflow-hidden" data-testid="reasons-table">
     <div className="border-b border-gray-100 px-5 py-4">
-      <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.recentRuns')}</h2>
-      <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.recentRunsDesc')}</p>
+      <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.reasons.title')}</h2>
+      <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.reasons.desc')}</p>
     </div>
     <div className="overflow-x-auto">
       <table className="min-w-full text-sm">
         <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
           <tr>
-            <th className="px-5 py-3">{t('adminDeliveryMonitor.campaign')}</th>
-            <th className="px-5 py-3">{t('adminDeliveryMonitor.status')}</th>
-            <th className="px-5 py-3">{t('adminDeliveryMonitor.sentFailed')}</th>
-            <th className="px-5 py-3">{t('adminDeliveryMonitor.speed')}</th>
-            <th className="px-5 py-3">{t('adminDeliveryMonitor.scheduleDrift')}</th>
-            <th className="px-5 py-3">{t('adminDeliveryMonitor.failRate')}</th>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.reasons.col.reason')}</th>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.reasons.col.channel')}</th>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.reasons.col.count')}</th>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.reasons.col.lastAt')}</th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-100">
-          {runs.length === 0 ? (
-            <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.noData')}</td></tr>
-          ) : runs.map((run) => (
-            <tr key={run.id} className={runRowClass(run)}>
+          {reasons.length === 0 ? (
+            <tr><td colSpan={4} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.reasons.empty')}</td></tr>
+          ) : reasons.map((item, index) => (
+            <tr key={`${item.channel}-${item.reason ?? 'none'}-${index}`} data-testid="reason-row">
               <td className="px-5 py-3">
-                <p className="font-semibold text-gray-900">{run.campaignName || run.runName || `#${run.id}`}</p>
-                <p className="text-xs text-gray-400">{fmtDateTime(run.startedAt)}</p>
-                {run.hasRunError && run.errorMessage && (
-                  <p className="mt-1 line-clamp-1 text-xs text-orange-600" title={run.errorMessage}>{run.errorMessage}</p>
-                )}
-              </td>
-              <td className="px-5 py-3">
-                <span className={`badge text-xs ${runStatusBadgeClass(run.status)}`}>
-                  {run.status}
+                <span className={`badge mr-2 text-xs ${categoryClass[item.category] || 'badge-gray'}`}>
+                  {t(`adminDeliveryMonitor.failureCategory.${item.category}`)}
+                </span>
+                <span className="text-gray-700" title={item.reason || ''}>
+                  {item.reason || t('adminDeliveryMonitor.reasons.unknown')}
                 </span>
               </td>
-              <td className="px-5 py-3 text-gray-700">
-                {(() => {
-                  const notAttempted = run.totalRecipients > 0
-                    ? Math.max(0, run.totalRecipients - run.successfulSends - run.failedSends - run.skippedSends)
-                    : 0;
-                  const hasActivity = run.successfulSends > 0 || run.totalRecipients > 0;
-                  return (
-                    <>
-                      {hasActivity ? (
-                        <p>
-                          <span className={run.successfulSends > 0 ? 'text-emerald-700 font-medium' : 'text-gray-500'}>
-                            {fmt(run.successfulSends)}
-                          </span>
-                          {run.totalRecipients > 0
-                            ? <span className="text-gray-400"> / {fmt(run.totalRecipients)}</span>
-                            : <span className="text-gray-300 text-xs"> / ?</span>
-                          }
-                        </p>
-                      ) : (
-                        <p className="text-gray-400">—</p>
-                      )}
-                      {(run.failedSends > 0 || run.skippedSends > 0 || notAttempted > 0) && (
-                        <p className="mt-0.5 text-xs space-x-1">
-                          {run.failedSends > 0 && <span className="text-red-500">· {fmt(run.failedSends)} lỗi</span>}
-                          {run.skippedSends > 0 && <span className="text-amber-500">· {fmt(run.skippedSends)} bỏ qua</span>}
-                          {notAttempted > 0 && <span className="text-gray-400">· {fmt(notAttempted)} chưa gửi</span>}
-                        </p>
-                      )}
-                    </>
-                  );
-                })()}
+              <td className="whitespace-nowrap px-5 py-3 text-gray-700">{t(`adminDeliveryMonitor.channel.${item.channel}`)}</td>
+              <td className="whitespace-nowrap px-5 py-3 font-medium text-red-600" data-testid="reason-count">{fmt(item.count)}</td>
+              <td className="whitespace-nowrap px-5 py-3 text-gray-500">{formatVnDayMonthTime(item.lastAt)}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  </div>
+);
+
+const OwnersTable = ({ owners, onSelectOwner, t }) => (
+  <div className="card overflow-hidden" data-testid="owners-table">
+    <div className="border-b border-gray-100 px-5 py-4">
+      <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.owners.title')}</h2>
+      <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.owners.desc')}</p>
+    </div>
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+          <tr>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.owners.col.owner')}</th>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.owners.col.sent')}</th>
+            <th className="px-5 py-3">{t('adminDeliveryMonitor.owners.col.failed')}</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-100">
+          {owners.length === 0 ? (
+            <tr><td colSpan={3} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.owners.empty')}</td></tr>
+          ) : owners.map((owner) => (
+            <tr key={owner.ownerId} data-testid={`owner-row-${owner.ownerId}`}>
+              <td className="px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => onSelectOwner(owner)}
+                  title={t('adminDeliveryMonitor.owners.filterTitle')}
+                  className="text-left hover:underline focus:outline-none"
+                >
+                  <span className="font-semibold text-gray-900">{owner.name || `#${owner.ownerId}`}</span>
+                  {owner.username && owner.username !== owner.name && (
+                    <span className="ml-1.5 text-xs text-gray-400">@{owner.username}</span>
+                  )}
+                </button>
               </td>
-              <td className="px-5 py-3 text-gray-700">{fmtRate(run.throughputPerMinute)}</td>
-              <td className="px-5 py-3 text-gray-700">
-                {run.lastResumeDriftMs !== null && run.lastResumeDriftMs !== undefined ? (
-                  <div className="space-y-1">
-                    <span className={`badge text-xs ${run.lastResumeDriftMs >= 60000 ? 'badge-warning' : 'badge-success'}`}>
-                      +{fmtDrift(run.lastResumeDriftMs)}
-                    </span>
-                    <p className="text-xs text-gray-400">
-                      {run.lastResumeResumedBy || '-'}
-                      {run.lastResumeReason ? ` · ${run.lastResumeReason}` : ''}
-                    </p>
-                    {run.lastResumeExpectedAt && (
-                      <p className="text-[11px] text-gray-400">{t('adminDeliveryMonitor.expectedAt', { time: fmtDateTime(run.lastResumeExpectedAt) })}</p>
-                    )}
-                  </div>
-                ) : run.deferredUntil ? (
-                  <div className="space-y-1">
-                    <span className="badge badge-gray text-xs">{t('adminDeliveryMonitor.deferred')}</span>
-                    <p className="text-xs text-gray-400">{fmtDateTime(run.deferredUntil)}</p>
-                    {run.deferredReason && <p className="text-[11px] text-gray-400">{run.deferredReason}</p>}
-                  </div>
-                ) : (
-                  <span className="text-gray-400">—</span>
-                )}
-              </td>
-              <td className="px-5 py-3 text-gray-700">
-                <span className={run.failureRate >= 10 ? 'font-semibold text-red-600' : ''}>{fmtPct(run.failureRate)}</span>
+              <td className="whitespace-nowrap px-5 py-3 font-medium text-gray-900" data-testid="owner-sent">{fmt(owner.sent)}</td>
+              <td className={`whitespace-nowrap px-5 py-3 ${owner.failed > 0 ? 'font-medium text-red-600' : 'text-gray-400'}`} data-testid="owner-failed">
+                {fmt(owner.failed)}
               </td>
             </tr>
           ))}
@@ -380,84 +236,163 @@ const TopRunsTable = ({ runs, t }) => (
   </div>
 );
 
-const FailurePanel = ({ failureGroups, recentErrors, t }) => (
-  <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-    <div className="card p-5">
-      <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.failureGroups')}</h2>
-      {failureGroups.length === 0 ? (
-        <p className="text-sm text-gray-400">{t('adminDeliveryMonitor.noFailures')}</p>
-      ) : (
-        <div className="space-y-3">
-          {failureGroups.map((item, index) => (
-            <div key={`${item.message}-${index}`} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <span className={`badge text-xs ${categoryClass[item.category] || 'badge-gray'}`}>
-                  {t(`adminDeliveryMonitor.failureCategory.${item.category}`)}
-                </span>
-                <span className="text-sm font-bold text-gray-900">{fmt(item.count)}</span>
-              </div>
-              <p className="line-clamp-2 text-sm text-gray-700">{item.message}</p>
-              <p className="mt-1 text-xs text-gray-400">{t(`adminDeliveryMonitor.channel.${item.channel}`)} · {fmtDateTime(item.lastSeenAt)}</p>
-            </div>
-          ))}
-        </div>
-      )}
+const RunsTable = ({ runs, now, t }) => {
+  const statusLabel = (run) => {
+    if (run.waitingUntil) {
+      return t('adminDeliveryMonitor.runs.status.waiting', {
+        reason: t(getWaitReasonI18nKey(run.waitingReason)),
+        time: formatVnResumeTime(run.waitingUntil, now),
+      });
+    }
+    const status = String(run.status || '').toLowerCase();
+    // Trạng thái lạ (dữ liệu cũ) in nguyên chuỗi gốc — in khoá dịch thô còn tệ hơn.
+    return KNOWN_RUN_STATUSES.includes(status) ? t(`adminDeliveryMonitor.runs.status.${status}`) : (run.status || '-');
+  };
+
+  return (
+    <div className="card overflow-hidden" data-testid="runs-table">
+      <div className="border-b border-gray-100 px-5 py-4">
+        <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.runs.title')}</h2>
+        <p className="mt-0.5 text-xs text-gray-400">{t('adminDeliveryMonitor.runs.desc')}</p>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="min-w-full text-sm">
+          <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
+            <tr>
+              <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.campaign')}</th>
+              <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.owner')}</th>
+              <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.startedAt')}</th>
+              <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.status')}</th>
+              <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.sent')}</th>
+              <th className="px-5 py-3">{t('adminDeliveryMonitor.runs.col.failed')}</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100">
+            {runs.length === 0 ? (
+              <tr><td colSpan={6} className="px-5 py-8 text-center text-gray-400">{t('adminDeliveryMonitor.runs.empty')}</td></tr>
+            ) : runs.map((run) => {
+              const typeMeta = getCampaignTypeMeta(run.campaignType);
+              return (
+                <tr key={run.runId} data-testid={`run-row-${run.runId}`}>
+                  <td className="px-5 py-3">
+                    <p className="font-semibold text-gray-900">{run.campaignName || `#${run.runId}`}</p>
+                    <span className={`mt-1 inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${typeMeta.className}`}>
+                      {typeMeta.label}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3 text-gray-700" data-testid="run-owner">
+                    <p>{run.ownerName || `#${run.ownerId}`}</p>
+                    {run.ownerUsername && run.ownerUsername !== run.ownerName && (
+                      <p className="text-xs text-gray-400">@{run.ownerUsername}</p>
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-5 py-3 text-gray-700">{formatVnDayMonthTime(run.startedAt)}</td>
+                  <td className="px-5 py-3">
+                    <span className={`badge text-xs ${runStatusBadgeClass(run)}`} data-testid="run-status">
+                      {statusLabel(run)}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-5 py-3">
+                    <span className="font-medium text-gray-900" data-testid="run-sent">
+                      {run.planned != null ? `${fmt(run.sent)} / ${fmt(run.planned)}` : fmt(run.sent)}
+                    </span>
+                  </td>
+                  <td className="whitespace-nowrap px-5 py-3" data-testid="run-failed">
+                    {run.failed > 0 ? <span className="font-medium text-red-600">{fmt(run.failed)}</span> : <span className="text-gray-400">0</span>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
-    <div className="card p-5">
-      <h2 className="mb-4 text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.recentErrors')}</h2>
-      {recentErrors.length === 0 ? (
-        <p className="text-sm text-gray-400">{t('adminDeliveryMonitor.noRecentErrors')}</p>
-      ) : (
-        <div className="space-y-3">
-          {recentErrors.map((item) => (
-            <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate font-semibold text-gray-900">{item.campaignName || `Run #${item.runId}`}</p>
-                  <p className="text-xs text-gray-400">{item.nodeName || item.nodeSubtype || t(`adminDeliveryMonitor.channel.${item.channel}`)}</p>
-                </div>
-                <span className={`badge shrink-0 text-xs ${categoryClass[item.category] || 'badge-gray'}`}>
-                  {t(`adminDeliveryMonitor.failureCategory.${item.category}`)}
-                </span>
-              </div>
-              <p className="mt-2 line-clamp-2 text-sm text-gray-700">{item.errorMessage}</p>
-              <p className="mt-1 text-xs text-gray-400">{fmtDateTime(item.updatedAt)}</p>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  </div>
-);
+  );
+};
 
 export default function AdminDeliveryMonitorPage() {
   const { t } = useI18n();
-  const [windowDays, setWindowDays] = useState(7);
+  const [windowDays, setWindowDays] = useState('today');
+  const [includeInternal, setIncludeInternal] = useState(false);
+  const [ownerFilter, setOwnerFilter] = useState(null);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const lastFetchAtRef = useRef(0);
+  // Chỉ lượt gọi MỚI NHẤT được ghi vào state: đổi cửa sổ / bộ lọc lúc lượt trước còn chạy thì kết quả cũ phải bị bỏ.
+  const requestSeqRef = useRef(0);
+
+  const ownerFilterId = ownerFilter?.id ?? null;
 
   const fetchData = useCallback(async () => {
+    lastFetchAtRef.current = Date.now();
+    requestSeqRef.current += 1;
+    const seq = requestSeqRef.current;
     setError('');
     setLoading(true);
     try {
-      const res = await adminDeliveryMonitorApiService.getOverview(windowDays);
+      const res = await adminDeliveryMonitorApiService.getOverview({
+        window: windowDays,
+        includeInternal,
+        ownerId: ownerFilterId,
+      });
+      if (seq !== requestSeqRef.current) return;
       setData(res.data.data);
+      setLoading(false);
     } catch (err) {
+      if (seq !== requestSeqRef.current) return;
       setError(err?.response?.data?.message || t('adminDeliveryMonitor.loadFailed'));
-    } finally {
       setLoading(false);
     }
-  }, [t, windowDays]);
+  }, [t, windowDays, includeInternal, ownerFilterId]);
 
   useEffect(() => {
     fetchData();
-    const id = setInterval(fetchData, 15000);
-    return () => clearInterval(id);
+    // Chỉ làm mới khi tab đang hiển thị; quay lại tab sau khi dữ liệu đã cũ hơn một chu kỳ thì làm mới ngay.
+    const timerId = setInterval(() => {
+      if (!isTabHidden()) fetchData();
+    }, REFRESH_INTERVAL_MS);
+    const onVisibilityChange = () => {
+      if (!isTabHidden() && Date.now() - lastFetchAtRef.current >= REFRESH_INTERVAL_MS) fetchData();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(timerId);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [fetchData]);
 
-  const summary = data?.summary || {};
-  const timeline = useMemo(() => data?.timeline || [], [data]);
+  const now = useMemo(() => (data?.generatedAt ? new Date(data.generatedAt) : new Date()), [data?.generatedAt]);
+  const totals = data?.totals;
+  const runs = data?.runs;
+  const queue = data?.queue;
+  const sentChannels = (totals?.byChannel || []).filter((row) => row.sent > 0);
+  const topWaitReason = pickTopWaitReason(runs?.waiting?.reasons);
+
+  const chartSlots = useMemo(() => {
+    if (!data) return [];
+    if (data.series?.unit === 'hour') {
+      return buildHourlySlots(data.series.rows, data.generatedAt, countHoursToday(data.generatedAt));
+    }
+    return buildDailySlots(data.series?.rows, data.window?.fromDate, data.window?.toDate);
+  }, [data]);
+  const hasChartData = chartSlots.some((slot) => slot.total > 0);
+  const chartTitle = data?.series?.unit === 'hour'
+    ? t('adminDeliveryMonitor.chart.hourlyTitle')
+    : t('adminDeliveryMonitor.chart.dailyTitle', { days: chartSlots.length });
+
+  const rangeInfo = data?.window
+    ? (data.window.fromDate === data.window.toDate
+      ? t('adminDeliveryMonitor.rangeToday', { date: formatIsoDayMonth(data.window.toDate) })
+      : t('adminDeliveryMonitor.rangeSpan', {
+        from: formatIsoDayMonth(data.window.fromDate),
+        to: formatIsoDayMonth(data.window.toDate),
+      }))
+    : '';
+
+  const selectOwner = useCallback((owner) => {
+    setOwnerFilter({ id: owner.ownerId, name: owner.name || owner.username || `#${owner.ownerId}` });
+  }, []);
 
   if (loading && !data) {
     return (
@@ -487,7 +422,7 @@ export default function AdminDeliveryMonitorPage() {
                 onClick={() => setWindowDays(days)}
                 className={`rounded-lg px-3 py-2 text-sm font-semibold ${windowDays === days ? 'bg-orange-50 text-orange-700' : 'text-gray-500 hover:bg-gray-50'}`}
               >
-                {t('adminDeliveryMonitor.days', { days })}
+                {t(`adminDeliveryMonitor.window.${days}`)}
               </button>
             ))}
           </div>
@@ -498,79 +433,188 @@ export default function AdminDeliveryMonitorPage() {
         </div>
       </div>
 
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm" data-testid="toolbar">
+        <label className={`inline-flex items-center gap-2 text-gray-700 ${ownerFilter ? 'opacity-50' : 'cursor-pointer'}`}>
+          <input
+            type="checkbox"
+            data-testid="include-internal"
+            className="h-4 w-4 rounded border-gray-300"
+            checked={includeInternal}
+            disabled={Boolean(ownerFilter)}
+            onChange={(event) => setIncludeInternal(event.target.checked)}
+          />
+          {t('adminDeliveryMonitor.includeInternal')}
+        </label>
+        {data && !ownerFilter && (
+          <span className="text-xs text-gray-500" data-testid="internal-hint">
+            {data.filter?.excludedOwnerIds?.length > 0
+              ? t('adminDeliveryMonitor.internalExcluded', { ids: data.filter.excludedOwnerIds.join(', ') })
+              : t('adminDeliveryMonitor.internalIncluded')}
+          </span>
+        )}
+        {ownerFilter && (
+          <span className="inline-flex items-center gap-2 rounded-full bg-orange-50 px-3 py-1 text-xs font-medium text-orange-700" data-testid="owner-filter">
+            {t('adminDeliveryMonitor.ownerFilter', { name: ownerFilter.name })}
+            <button
+              type="button"
+              data-testid="owner-filter-clear"
+              onClick={() => setOwnerFilter(null)}
+              className="rounded-full px-1.5 text-orange-700 hover:bg-orange-100 focus:outline-none"
+              aria-label={t('adminDeliveryMonitor.ownerFilterClear')}
+              title={t('adminDeliveryMonitor.ownerFilterClear')}
+            >
+              ✕
+            </button>
+          </span>
+        )}
+        <span className="ml-auto flex flex-wrap items-center gap-x-3 text-xs text-gray-400">
+          {rangeInfo && <span data-testid="range-info">{rangeInfo}</span>}
+          {data?.generatedAt && (
+            <span data-testid="updated-at">{t('adminDeliveryMonitor.updatedAt', { time: formatVnTime(data.generatedAt) })}</span>
+          )}
+        </span>
+      </div>
+
       {error && (
         <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
-        <KpiCard
-          icon={HiOutlineCheckCircle}
-          label={t('adminDeliveryMonitor.kpi.sent')}
-          value={fmt(summary.sent)}
-          sub={summary.totalIntended > 0
-            ? t('adminDeliveryMonitor.kpi.reachRate', { rate: fmtPct(summary.reachRate), total: fmt(summary.totalIntended) })
-            : t('adminDeliveryMonitor.kpi.attempts', { attempts: fmt(summary.attempts) })}
-          tone={summary.reachRate !== null && summary.reachRate < 70 ? 'red' : 'green'}
-        />
-        <KpiCard
-          icon={HiOutlineExclamationCircle}
-          label={t('adminDeliveryMonitor.kpi.failed')}
-          value={fmt(summary.failed)}
-          sub={t('adminDeliveryMonitor.kpi.successRate', { rate: fmtPct(summary.successRate) })}
-          tone={summary.failed > 0 ? 'red' : 'green'}
-        />
-        <KpiCard icon={HiOutlineTrendingUp} label={t('adminDeliveryMonitor.kpi.clicked')} value={fmt(summary.clicked)} sub={t('adminDeliveryMonitor.kpi.opened', { opened: fmt(summary.opened) })} tone="blue" />
-        <KpiCard
-          icon={HiOutlineClock}
-          label={t('adminDeliveryMonitor.kpi.runningRuns')}
-          value={fmt(summary.runningRuns)}
-          sub={t('adminDeliveryMonitor.kpi.runBreakdown', {
-            total: fmt(summary.totalRuns),
-            failed: fmt(summary.failedRuns),
-            completed: fmt(summary.completedRuns),
-          })}
-          tone={summary.failedRuns > 0 ? 'red' : 'orange'}
-        />
-      </div>
+      {data && (
+        <>
+          <SignalsBanner signals={data.signals || []} t={t} />
 
-      <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(340px,1fr)]">
-        <div className="card p-5">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <h2 className="text-sm font-semibold text-gray-700">{t('adminDeliveryMonitor.throughput')}</h2>
-            <span className="badge badge-gray text-xs">{t('adminDeliveryMonitor.autoRefresh')}</span>
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <SummaryCard
+              testId="card-sent"
+              icon={HiOutlineCheckCircle}
+              label={t('adminDeliveryMonitor.cards.sent')}
+              value={fmt(totals?.sent)}
+              tone="green"
+            >
+              {sentChannels.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {sentChannels.map((row) => (
+                    <span
+                      key={row.channel}
+                      data-testid="sent-channel-chip"
+                      className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600"
+                    >
+                      <span className="inline-block h-1.5 w-1.5 rounded-full" style={{ backgroundColor: channelColor[row.channel] }} />
+                      {t(`adminDeliveryMonitor.channel.${row.channel}`)} {fmt(row.sent)}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {totals?.friendRequests?.sent > 0 && (
+                <p data-testid="friend-requests-sent">{t('adminDeliveryMonitor.cards.friendRequests', { count: fmt(totals.friendRequests.sent) })}</p>
+              )}
+            </SummaryCard>
+
+            <SummaryCard
+              testId="card-failed"
+              icon={HiOutlineExclamationCircle}
+              label={t('adminDeliveryMonitor.cards.failed')}
+              value={fmt(totals?.failed)}
+              tone={totals?.failed > 0 ? 'red' : 'green'}
+            >
+              {totals?.failedPercent != null && (
+                <p data-testid="failed-percent">{t('adminDeliveryMonitor.cards.failedPercent', { percent: totals.failedPercent.toLocaleString('vi-VN') })}</p>
+              )}
+              <p>{t('adminDeliveryMonitor.cards.failedHint')}</p>
+              {totals?.friendRequests?.failed > 0 && (
+                <p data-testid="friend-requests-failed">{t('adminDeliveryMonitor.cards.friendRequestsFailed', { count: fmt(totals.friendRequests.failed) })}</p>
+              )}
+            </SummaryCard>
+
+            <SummaryCard
+              testId="card-runs"
+              icon={HiOutlineClock}
+              label={t('adminDeliveryMonitor.cards.sending')}
+              value={fmt(runs?.sending)}
+              tone="neutral"
+            >
+              {runs?.waiting?.count > 0 ? (
+                <>
+                  <p data-testid="runs-waiting">{t('adminDeliveryMonitor.cards.waiting', { count: fmt(runs.waiting.count) })}</p>
+                  {topWaitReason && (
+                    <p data-testid="runs-waiting-reason">
+                      {t('adminDeliveryMonitor.cards.waitingReason', { reason: t(topWaitReason.i18nKey), count: fmt(topWaitReason.count) })}
+                    </p>
+                  )}
+                </>
+              ) : (
+                <p data-testid="runs-waiting">{t('adminDeliveryMonitor.cards.waitingNone')}</p>
+              )}
+              {runs?.failed > 0 ? (
+                <p className="font-medium text-red-600" data-testid="runs-failed">{t('adminDeliveryMonitor.cards.runsFailed', { count: fmt(runs.failed) })}</p>
+              ) : (
+                <p data-testid="runs-failed">{t('adminDeliveryMonitor.cards.runsFailedNone')}</p>
+              )}
+            </SummaryCard>
+
+            <SummaryCard
+              testId="card-system"
+              icon={HiOutlineServer}
+              label={t('adminDeliveryMonitor.cards.system')}
+              value={queue?.available ? fmt((queue.waiting || 0) + (queue.active || 0)) : '—'}
+              tone="neutral"
+            >
+              {queue?.available ? (
+                <>
+                  <p data-testid="queue-processing">{t('adminDeliveryMonitor.cards.queueProcessing', { count: fmt((queue.waiting || 0) + (queue.active || 0)) })}</p>
+                  {queue.delayed > 0 && (
+                    <p data-testid="queue-delayed">{t('adminDeliveryMonitor.cards.queueDelayed', { count: fmt(queue.delayed) })}</p>
+                  )}
+                </>
+              ) : (
+                <p data-testid="queue-processing">{t('adminDeliveryMonitor.cards.queueUnavailable')}</p>
+              )}
+              {data.alerts?.open > 0 ? (
+                <p data-testid="alerts-open">
+                  <Link to="/admin/alerts" className="font-medium text-amber-700 hover:underline">
+                    {t('adminDeliveryMonitor.cards.alertsOpen', { count: fmt(data.alerts.open) })}
+                  </Link>
+                </p>
+              ) : (
+                <p data-testid="alerts-open">{t('adminDeliveryMonitor.cards.alertsNone')}</p>
+              )}
+            </SummaryCard>
           </div>
-          {timeline.length === 0 ? (
-            <p className="py-16 text-center text-sm text-gray-400">{t('adminDeliveryMonitor.noData')}</p>
-          ) : (
-            <ResponsiveContainer width="100%" height={320}>
-              <LineChart data={timeline} margin={{ top: 8, right: 18, left: -12, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
-                <XAxis dataKey="bucket" tick={{ fontSize: 11 }} minTickGap={24} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip content={<CustomTooltip t={t} />} />
-                <Line type="monotone" dataKey="email" stroke={channelColor.email} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="zalo" stroke={channelColor.zalo} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="zaloGroup" stroke={channelColor.zalo_group} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="telegram" stroke={channelColor.telegram} strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="whatsapp" stroke={channelColor.whatsapp} strokeWidth={2} dot={false} />
-              </LineChart>
-            </ResponsiveContainer>
-          )}
-        </div>
-        <ChannelPanel channels={data?.channels || []} t={t} />
-      </div>
 
-      <AdminHealthPanel health={data?.health} t={t} />
+          <div className="card p-5" data-testid="chart-card">
+            <h2 className="mb-4 text-sm font-semibold text-gray-700" data-testid="chart-title">{chartTitle}</h2>
+            {hasChartData ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={chartSlots} margin={{ top: 8, right: 12, left: -12, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" />
+                  <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" minTickGap={16} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip content={<ChartTooltip t={t} />} />
+                  <Legend />
+                  {HOURLY_CHART_CHANNELS.map((channel) => (
+                    <Bar
+                      key={channel}
+                      dataKey={channel}
+                      name={t(`adminDeliveryMonitor.channel.${channel}`)}
+                      stackId="sent"
+                      fill={channelColor[channel]}
+                    />
+                  ))}
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <p className="py-16 text-center text-sm text-gray-400" data-testid="chart-empty">{t('adminDeliveryMonitor.chart.empty')}</p>
+            )}
+          </div>
 
-      <UnreachableReasonPanel unreachableByReason={data?.health?.unreachableByReason} t={t} />
+          <div className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+            <ReasonsTable reasons={data.failureReasons || []} t={t} />
+            <OwnersTable owners={data.topOwners || []} onSelectOwner={selectOwner} t={t} />
+          </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <QueuePanel queue={data?.queue} redis={data?.redis} t={t} />
-        <SignalsPanel signals={data?.signals || []} t={t} />
-      </div>
-
-      <TopRunsTable runs={data?.topRuns || []} t={t} />
-      <FailurePanel failureGroups={data?.failureGroups || []} recentErrors={data?.recentErrors || []} t={t} />
+          <RunsTable runs={data.recentRuns || []} now={now} t={t} />
+        </>
+      )}
     </div>
   );
 }

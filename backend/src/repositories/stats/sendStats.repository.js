@@ -165,7 +165,7 @@ const DETAIL_COLUMNS = {
 function emailBranch({ channelRef, scope, window, filter, detail }) {
   return `
     SELECT ${channelRef}::text AS channel,
-           m.id AS row_id, m.id_run, m.id_campaign, m.id_node,
+           m.id AS row_id, m.id_run, m.id_campaign, m.id_node, m.workspace_owner_id AS owner_id,
            NULLIF(lower(btrim(m.recipient_email)), '') AS recipient_key,
            m.email_step AS step,
            m.actor_user_id,
@@ -187,7 +187,7 @@ function emailBranch({ channelRef, scope, window, filter, detail }) {
 function zaloBranch({ channelsRef, scope, window, filter, detail }) {
   return `
     SELECT m.channel::text AS channel,
-           m.id AS row_id, m.id_run, m.id_campaign, m.id_node,
+           m.id AS row_id, m.id_run, m.id_campaign, m.id_node, m.workspace_owner_id AS owner_id,
            NULLIF(lower(btrim(${ZALO_RECIPIENT_RAW_SQL})), '') AS recipient_key,
            ${ZALO_STEP_SQL} AS step,
            m.actor_user_id,
@@ -213,7 +213,7 @@ function adapterBranch({ channelsRef, scope, window, filter, detail }) {
   const at = 'COALESCE(m.sent_at, m.created_at)';
   return `
     SELECT m.channel::text AS channel,
-           m.id AS row_id, m.id_run, m.id_campaign, m.id_node,
+           m.id AS row_id, m.id_run, m.id_campaign, m.id_node, m.workspace_owner_id AS owner_id,
            NULLIF(lower(btrim(m.recipient_key)), '') AS recipient_key,
            m.step_index AS step,
            m.actor_user_id,
@@ -291,6 +291,7 @@ function buildSourceCtes({ scope, window, channels, filters = {}, detail = false
       SELECT channel, id_run, id_node, recipient_key, step, solo_id,
              MAX(id_campaign)   AS id_campaign,
              MAX(actor_user_id) AS actor_user_id,
+             MAX(owner_id)      AS owner_id,
              COUNT(*) FILTER (WHERE is_sent)    AS n_sent,
              COUNT(*) FILTER (WHERE is_bounced) AS n_bounced,
              COUNT(*) FILTER (WHERE is_opened)  AS n_opened,
@@ -305,6 +306,15 @@ function buildSourceCtes({ scope, window, channels, filters = {}, detail = false
 
 // Đích "chưa gửi được": có ít nhất một dòng lỗi và KHÔNG có dòng đã-gửi nào cùng đích.
 const FINAL_FAILED_DEST_SQL = '(n_failed > 0 AND n_sent = 0)';
+
+// Khoá gom LÝ DO chưa gửi được: bỏ địa chỉ email và dãy số dài (SĐT, mã) khỏi lý do để các đích cùng nguyên nhân về
+// một nhóm — lý do SMTP / Zalo hay kèm chính người nhận ("550 5.1.1 <a@x.vn>: Recipient address rejected"), gom nguyên
+// văn thì mỗi đích một nhóm. Giữ mã ngắn (550, 5.1.1) vì đó là thứ phân biệt nguyên nhân. NULL = đích lỗi không ghi lý do.
+// Chỉ dùng lớp ký tự POSIX ([[:space:]]) để không phụ thuộc cách JS / Postgres xử lý dấu gạch chéo ngược.
+const REASON_KEY_SQL = `NULLIF(btrim(regexp_replace(regexp_replace(regexp_replace(reason,
+                '[^[:space:]]+@[^[:space:]]+', '<email>', 'g'),
+                '[0-9]{7,}', '<số>', 'g'),
+                '[[:space:]]+', ' ', 'g')), '')`;
 
 class SendStatsRepository {
   /**
@@ -467,6 +477,58 @@ class SendStatsRepository {
        FROM dest
        WHERE ${FINAL_FAILED_DEST_SQL}
        ORDER BY last_failed_at DESC, channel, recipient_key, id_run, solo_id
+       LIMIT ${limitRef}::int`,
+      bag.values
+    );
+    return rows;
+  }
+
+  /**
+   * Tổng theo CHỦ tài khoản (workspace_owner_id), chỉ chủ CÓ id (dòng tin thiếu chủ không phải "khách"). Sắp theo đã gửi
+   * giảm dần rồi chưa gửi được giảm dần, chủ nhỏ hơn trước khi bằng nhau; `LIMIT` ở SQL.
+   *
+   * @returns {Promise<Array<{owner_id: string, sent: string, failed: string}>>}
+   */
+  async ownerTotals({ scope, window, channels, limit }) {
+    const { sql, bag } = buildSourceCtes({ scope, window, channels });
+    const limitRef = bag.add(limit);
+    const { rows } = await db.query(
+      `${sql}
+       SELECT owner_id,
+              COALESCE(SUM(n_sent), 0) AS sent,
+              COUNT(*) FILTER (WHERE ${FINAL_FAILED_DEST_SQL}) AS failed
+       FROM dest
+       WHERE owner_id IS NOT NULL
+       GROUP BY owner_id
+       ORDER BY COALESCE(SUM(n_sent), 0) DESC, COUNT(*) FILTER (WHERE ${FINAL_FAILED_DEST_SQL}) DESC, owner_id
+       LIMIT ${limitRef}::int`,
+      bag.values
+    );
+    return rows;
+  }
+
+  /**
+   * Nguyên nhân chưa gửi được, GOM TRONG SQL trên cùng `dest` (mỗi đích lỗi đúng một lần): (kênh, khoá lý do) → số đích,
+   * lần lỗi mới nhất. Nhiều nhóm nhất trước. Lý do lấy từ lần thử lỗi CUỐI của đích (cùng quy ước finalFailures).
+   *
+   * @returns {Promise<Array<{channel: string, reason: string|null, failed: string, last_at: Date}>>}
+   */
+  async failureReasons({ scope, window, channels, limit }) {
+    const { sql, bag } = buildSourceCtes({ scope, window, channels, detail: true });
+    const limitRef = bag.add(limit);
+    const { rows } = await db.query(
+      `${sql}
+       SELECT channel,
+              reason_key AS reason,
+              COUNT(*) AS failed,
+              (MAX(last_failed_at) AT TIME ZONE '${VN_TZ}') AS last_at
+       FROM (
+         SELECT channel, last_failed_at, ${REASON_KEY_SQL} AS reason_key
+         FROM dest
+         WHERE ${FINAL_FAILED_DEST_SQL}
+       ) failed_dest
+       GROUP BY channel, reason_key
+       ORDER BY COUNT(*) DESC, MAX(last_failed_at) DESC, channel, reason_key
        LIMIT ${limitRef}::int`,
       bag.values
     );

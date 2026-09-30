@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { runDeferredReasonSql, runDeferredUntilSql } from '../../utils/runDeferMetadataSql.util.js';
+import { runCountersReliableSql } from '../../utils/runDisplay.util.js';
 
 /**
  * PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-4b — SQL của trang "Giám sát gửi tin" phía người dùng, phần KHÔNG phải đếm
@@ -14,12 +15,6 @@ import { runDeferredReasonSql, runDeferredUntilSql } from '../../utils/runDeferM
  * node-pg đọc thô sẽ hiểu theo múi giờ của tiến trình (UTC) nên lượt bắt đầu sau 17:00 hiện sang ngày hôm sau
  * (audit C-35). Mọi mốc trả ra ngoài phải đi qua `::timestamptz` (phiên DB đặt Asia/Ho_Chi_Minh).
  */
-
-// Bộ đếm campaign_runs (total_recipients, successful_sends…) phình / về 0 ở lượt TẠO trước bản sửa 26/09/2026
-// 20:36 giờ VN (plan mục 1: 230 lượt, 14 lượt vỡ bất biến ok+failed+skipped ≤ total, chưa backfill). Chỉ lượt tạo sau
-// mốc này mới được dùng total_recipients làm "cần gửi". So `created_at` với literal `timestamp`: đúng cho cả cột naive
-// (production) lẫn timestamptz (bootstrap.sql của test).
-const COUNTER_TRUSTED_FROM_VN = '2026-09-26 20:36:00';
 
 class UserDeliveryMonitorRepository {
   /**
@@ -42,7 +37,7 @@ class UserDeliveryMonitorRepository {
               cr.status,
               cr.started_at::timestamptz AS started_at,
               cr.total_recipients,
-              (cr.created_at >= TIMESTAMP '${COUNTER_TRUSTED_FROM_VN}') AS counters_reliable,
+              ${runCountersReliableSql('cr')} AS counters_reliable,
               ${runDeferredUntilSql('cr')} AS deferred_until,
               ${runDeferredReasonSql('cr')} AS deferred_reason,
               cr.run_metadata->>'emailRateLimitAt' AS email_rate_limit_at

@@ -48,6 +48,8 @@ const MAX_HOURLY_HOURS = 24 * 31;
 const MAX_ID_LIST_SIZE = 1000;
 const MAX_FAILURE_LIMIT = 500;
 const DEFAULT_FAILURE_LIMIT = 50;
+const MAX_RANKING_LIMIT = 100;
+const DEFAULT_RANKING_LIMIT = 10;
 const ISO_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const toCount = (value) => Number(value) || 0;
@@ -428,6 +430,74 @@ export async function listFinalFailures(scope, { runId, window, limit } = {}) {
   }));
 }
 
+function normalizeRankingLimit(limit) {
+  const normalized = limit == null ? DEFAULT_RANKING_LIMIT : limit;
+  if (!Number.isInteger(normalized) || normalized < 1 || normalized > MAX_RANKING_LIMIT) {
+    throw new RangeError(`sendStats: limit phải là số nguyên từ 1 đến ${MAX_RANKING_LIMIT}`);
+  }
+  return normalized;
+}
+
+/**
+ * Tổng theo CHỦ tài khoản (workspace_owner_id) — "khách nào gửi nhiều nhất". Chỉ chủ có id: dòng tin thiếu chủ không
+ * phải khách nên không xuất hiện (khác getActorTotals giữ dòng null để tổng khớp). Sắp theo `sent` giảm dần, rồi `failed`
+ * giảm dần, rồi `ownerId` tăng dần; cắt ở SQL (`limit`, mặc định 10, tối đa 100) — không lấy hết rồi cắt ở JS.
+ * `options.excludeChannels` loại kênh khỏi phép đếm (Giám sát gửi bỏ 'zalo_friend_request' để cùng đơn vị "tin" với thẻ tổng).
+ *
+ * @param {{ ownerId: number|null, excludeOwnerIds?: number[] }} scope
+ * @param {{ days: number }|{ fromDate: string, toDate: string }} window
+ * @param {{ limit?: number, excludeChannels?: string[] }} [options]
+ * @returns {Promise<Array<{ ownerId: number, sent: number, failed: number }>>}
+ */
+export async function getOwnerTotals(scope, window, options) {
+  const normalizedScope = normalizeScope(scope);
+  const normalizedWindow = normalizeWindow(window, { required: true });
+  const limit = normalizeRankingLimit(options?.limit);
+  const channels = resolveChannels(options);
+  const rows = await sendStatsRepository.ownerTotals({
+    scope: normalizedScope,
+    window: normalizedWindow,
+    channels: forRepository(channels),
+    limit,
+  });
+  return rows.map((row) => ({
+    ownerId: Number(row.owner_id),
+    sent: toCount(row.sent),
+    failed: toCount(row.failed),
+  }));
+}
+
+/**
+ * Nguyên nhân CHƯA GỬI ĐƯỢC hàng đầu: gom trong SQL theo (kênh, lý do) trên các đích chưa gửi được (mỗi đích một lần —
+ * người thử 3 lần rồi gửi được không có mặt). Lý do là lý do của lần thử lỗi cuối, đã bỏ địa chỉ email và dãy số dài để
+ * các đích cùng nguyên nhân về một nhóm (địa chỉ email → `<email>`, dãy ≥ 7 chữ số → `<số>`); `reason: null` = đích lỗi
+ * không ghi lý do. Nhiều đích nhất trước; cắt ở SQL (`limit`, mặc định 10, tối đa 100). Tổng `count` của MỌI nhóm
+ * (khi `limit` đủ lớn) đúng bằng `failed` của getChannelTotals cùng phạm vi / cửa sổ / `excludeChannels`.
+ *
+ * @param {{ ownerId: number|null, excludeOwnerIds?: number[] }} scope
+ * @param {{ days: number }|{ fromDate: string, toDate: string }} window
+ * @param {{ limit?: number, excludeChannels?: string[] }} [options]
+ * @returns {Promise<Array<{ channel: string, reason: string|null, count: number, lastAt: Date }>>}
+ */
+export async function getFailureReasons(scope, window, options) {
+  const normalizedScope = normalizeScope(scope);
+  const normalizedWindow = normalizeWindow(window, { required: true });
+  const limit = normalizeRankingLimit(options?.limit);
+  const channels = resolveChannels(options);
+  const rows = await sendStatsRepository.failureReasons({
+    scope: normalizedScope,
+    window: normalizedWindow,
+    channels: forRepository(channels),
+    limit,
+  });
+  return rows.map((row) => ({
+    channel: row.channel,
+    reason: row.reason ?? null,
+    count: toCount(row.failed),
+    lastAt: row.last_at,
+  }));
+}
+
 export default {
   getChannelTotals,
   getDailySeries,
@@ -436,4 +506,6 @@ export default {
   getCampaignTotals,
   getActorTotals,
   listFinalFailures,
+  getOwnerTotals,
+  getFailureReasons,
 };

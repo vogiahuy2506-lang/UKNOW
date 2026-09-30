@@ -119,12 +119,15 @@ describe('W7b — giám sát gửi của admin', () => {
       .get('/api/admin/delivery-monitor/overview')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    const { summary, channels, timeline } = res.body.data;
+    // PR-6: trang admin cùng khuôn với trang người dùng — `totals` (hôm nay) + `series` (biểu đồ giờ), hết `channels` /
+    // `summary` / `timeline`.
+    const { totals, series } = res.body.data;
 
-    expect(byChannel(channels, 'telegram')).toMatchObject({ sent: 7, failed: 1 });
-    expect(byChannel(channels, 'whatsapp')).toMatchObject({ sent: 2, failed: 0 });
-    expect(summary.sent).toBe(9);
-    expect(timeline.reduce((s, r) => s + r.telegram, 0)).toBe(7);
+    expect(byChannel(totals.byChannel, 'telegram')).toMatchObject({ sent: 7, failed: 1 });
+    expect(byChannel(totals.byChannel, 'whatsapp')).toMatchObject({ sent: 2, failed: 0 });
+    expect(totals.sent).toBe(9);
+    expect(series.unit).toBe('hour');
+    expect(series.rows.filter((r) => r.channel === 'telegram').reduce((s, r) => s + r.sent, 0)).toBe(7);
   });
 });
 
