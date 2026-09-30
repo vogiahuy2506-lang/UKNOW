@@ -324,10 +324,9 @@ class CustomerController {
    */
   async trackEmailOpen(req, res) {
     const token = String(req.params.token || '').trim();
-    const clientIp =
-      String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() ||
-      req.socket?.remoteAddress ||
-      null;
+    // req.ip đã tính theo `trust proxy` (chỉ tin chặng proxy nội bộ/Cloudflare) — không đọc thẳng
+    // X-Forwarded-For vì client tự đặt được header này.
+    const clientIp = req.ip || req.socket?.remoteAddress || null;
     const userAgent = req.get('user-agent') || null;
     const referer = req.get('referer') || null;
     await customerEmailTrackingService.trackEmailOpen({ token, clientIp, userAgent, referer });

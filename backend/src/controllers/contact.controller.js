@@ -3,7 +3,9 @@ import * as contactService from '../services/contact.service.js';
 export async function submitContact(req, res) {
   try {
     const { name, email, phone, company, message } = req.body;
-    const ipAddress = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip;
+    // req.ip đã tính theo `trust proxy` (chỉ tin chặng proxy nội bộ/Cloudflare) — không đọc thẳng
+    // X-Forwarded-For vì client tự đặt được header này.
+    const ipAddress = req.ip || req.socket?.remoteAddress || null;
 
     const submission = await contactService.submitContactForm({
       name, email, phone, company, message, ipAddress,

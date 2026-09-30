@@ -79,8 +79,18 @@ describe('POST /api/contact', () => {
     });
   });
 
-  it('ip_address ưu tiên lấy từ X-Forwarded-For header (đứng sau proxy)', async () => {
-    const res = await request(app)
+  it('ip_address = req.ip: sau proxy tin cậy (trust proxy bật) lấy IP khách từ X-Forwarded-For', async () => {
+    // applyTrustProxy chỉ bật ở production hoặc TRUST_PROXY=true — dựng app riêng cho ca này.
+    const previous = process.env.TRUST_PROXY;
+    process.env.TRUST_PROXY = 'true';
+    let proxiedApp;
+    try {
+      proxiedApp = createApp();
+    } finally {
+      if (previous === undefined) delete process.env.TRUST_PROXY;
+      else process.env.TRUST_PROXY = previous;
+    }
+    const res = await request(proxiedApp)
       .post('/api/contact')
       .set('X-Forwarded-For', '203.0.113.5, 10.0.0.1')
       .send(validBody({ email: 'fwd@test.local' }));
@@ -91,6 +101,20 @@ describe('POST /api/contact', () => {
       ['fwd@test.local']
     );
     expect(rows[0].ip_address).toBe('203.0.113.5');
+  });
+
+  it('ip_address không lấy X-Forwarded-For do client tự đặt khi không có proxy tin cậy', async () => {
+    const res = await request(app)
+      .post('/api/contact')
+      .set('X-Forwarded-For', '203.0.113.99')
+      .send(validBody({ email: 'spoof@test.local' }));
+
+    expect(res.status).toBe(201);
+    const { rows } = await db.query(
+      `SELECT ip_address FROM contact_submissions WHERE email = $1`,
+      ['spoof@test.local']
+    );
+    expect(rows[0].ip_address).not.toBe('203.0.113.99');
   });
 
   // ─── Validators ─────────────────────────────────────────────────────
