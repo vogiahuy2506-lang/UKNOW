@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
 
-// Không chạm CSDL: chỉ kiểm parseDateRange/createTimelineMap — hàm thuần trên service.
+// Không chạm CSDL: chỉ kiểm parseDateRange/listDays — hàm thuần trên service.
 const { default: dashboardAnalyticsService } = await import('../dashboardAnalytics.service.js');
 
 /**
  * Sửa 30/09/2026: ngày trên biểu đồ = ngày VIỆT NAM. CSDL gộp `DATE(sent_at)` theo múi phiên Asia/Ho_Chi_Minh
  * (dashboard.repository), còn `parseDateRange` từng lấy ngày UTC → từ 00:00 đến 07:00 giờ VN, khoá "hôm nay" của
- * CSDL chưa có trong timelineMap → tin gửi hôm nay rơi mất. CI 30/09 00:13 VN đỏ `channelAdapterReportsW7b`.
+ * CSDL chưa có trong danh sách ngày → tin gửi hôm nay rơi mất. CI 30/09 00:13 VN đỏ `channelAdapterReportsW7b`.
  */
 describe('dashboardAnalytics.parseDateRange — ngày theo giờ Việt Nam', () => {
   beforeEach(() => {
@@ -33,12 +33,13 @@ describe('dashboardAnalytics.parseDateRange — ngày theo giờ Việt Nam', ()
     expect(range.startDate).toBe('2026-09-01');
   });
 
-  it('timelineMap có khoá "hôm nay VN" khi đang là rạng sáng VN', () => {
+  it('danh sách ngày (listDays) có "hôm nay VN" khi đang là rạng sáng VN', () => {
     jest.setSystemTime(new Date('2026-09-29T18:00:00.000Z')); // 01:00 VN 30/09
     const range = dashboardAnalyticsService.parseDateRange({ period: '7d' });
-    const map = dashboardAnalyticsService.createTimelineMap(range.startDate, range.endDate);
-    expect(map.has('2026-09-30')).toBe(true);
-    expect(map.size).toBe(7);
+    const days = dashboardAnalyticsService.listDays(range.startDate, range.endDate);
+    expect(days).toContain('2026-09-30');
+    expect(days).toHaveLength(7);
+    expect(days[0]).toBe('2026-09-24');
   });
 
   it('ngày tường minh giữ nguyên, mốc SQL dịch về 00:00 VN', () => {

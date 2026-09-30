@@ -429,261 +429,153 @@ function defaultCharts() {
   };
 }
 
+/** Nhãn kênh đưa vào prompt (kênh lạ trả nguyên khoá). */
+const INSIGHT_CHANNEL_LABELS = Object.freeze({
+  email: 'Email',
+  zalo_personal: 'Zalo cá nhân',
+  zalo_group: 'Zalo nhóm',
+  zalo_friend_request: 'Lời mời kết bạn Zalo',
+  telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
+  other: 'Khác (đa kênh)',
+});
+
+const insightChannelLabel = (channel) => INSIGHT_CHANNEL_LABELS[channel] || String(channel || '—');
+
 /**
- * Tóm tắt timeline để đưa vào prompt (không cần toàn bộ điểm).
+ * Tóm tắt chuỗi "đã gửi mỗi ngày" và chuỗi đơn hàng theo ngày — tính trên TOÀN BỘ chuỗi (trước khi rút gọn để đưa
+ * vào prompt), nên tổng luôn khớp thẻ; chuỗi rút gọn chỉ để model nhìn xu hướng.
  *
- * @param {Array<object>} timeline
- * @returns {object}
+ * @param {Array<object>} dailySent dòng `{ date, total, <kênh>: n }`
+ * @param {Array<object>} ordersTimeline dòng `{ date, pendingOrders, completedOrders, … }`
+ * @returns {{ dateRange: string, totalSent: number, sentByChannel: object, peakSentDay: object|null, pendingOrders: number, completedOrders: number }}
  */
+function summarizeTimelines(dailySent = [], ordersTimeline = []) {
+  const days = Array.isArray(dailySent) ? dailySent : [];
+  const orderDays = Array.isArray(ordersTimeline) ? ordersTimeline : [];
+  const sentByChannel = {};
+  let peak = null;
+  let totalSent = 0;
+  for (const day of days) {
+    for (const [key, value] of Object.entries(day)) {
+      if (key === 'date' || key === 'total') continue;
+      sentByChannel[key] = (sentByChannel[key] || 0) + Number(value || 0);
+    }
+    totalSent += Number(day.total || 0);
+    if (!peak || Number(day.total || 0) > peak.total) peak = { date: day.date, total: Number(day.total || 0) };
+  }
+  const sum = (key) => orderDays.reduce((acc, row) => acc + Number(row[key] || 0), 0);
+  return {
+    dateRange: days.length ? `${days[0].date} → ${days[days.length - 1].date}` : '—',
+    totalSent,
+    sentByChannel,
+    peakSentDay: peak && peak.total > 0 ? peak : null,
+    pendingOrders: sum('pendingOrders'),
+    completedOrders: sum('completedOrders'),
+  };
+}
+
 /**
- * Gom payload an toàn gửi Gemini (timeline + landing có thể cắt bớt để tránh MAX_TOKENS / JSON cắt đứt).
+ * Gom payload an toàn gửi Gemini từ snapshot do SERVER tính (dashboardAnalyticsService.getInsightSnapshot). Chuỗi theo
+ * ngày được rút gọn để tránh MAX_TOKENS / JSON cắt đứt, còn phần tóm tắt tính trên chuỗi đầy đủ.
  *
- * @param {object} input
+ * @param {object} snapshot `{ filters, overview, dailySent, ordersTimeline, campaigns }`
  * @param {object} [opts]
  * @param {number} [opts.timelineHead=14]
  * @param {number} [opts.timelineTail=14]
- * @param {number} [opts.landingRowCap=48] - Giới hạn số hàng landing đưa vào prompt (sắp xếp top vẫn trong buildDataMarkdownSection)
  * @returns {object}
  */
-function buildInsightSafePayload(
-  { overview, analytics, topListsData, landingPageStats, filters },
-  { timelineHead = 14, timelineTail = 14, landingRowCap = 48 } = {}
-) {
-  const rows =
-    landingPageStats && typeof landingPageStats === 'object' && Array.isArray(landingPageStats.rows)
-      ? landingPageStats.rows
-      : [];
+function buildInsightSafePayload(snapshot, { timelineHead = 14, timelineTail = 14 } = {}) {
+  const source = snapshot && typeof snapshot === 'object' ? snapshot : {};
   return {
-    filters: filters || overview?.filters || analytics?.filters || null,
-    overview: overview
-      ? {
-          headline: overview.headline || null,
-          channels: overview.channels || null,
-          journeyEvents: overview.journeyEvents || null,
-        }
-      : null,
-    analytics: analytics
-      ? {
-          timeline: shrinkTimeline(analytics.timeline || [], timelineHead, timelineTail),
-        }
-      : null,
-    topLists: topListsData
-      ? {
-          topCourses: topListsData.topCourses || [],
-          topCampaignsByOrders: topListsData.topCampaignsByOrders || [],
-          topCampaignsByClicks: topListsData.topCampaignsByClicks || [],
-        }
-      : null,
-    landingPageStats: { rows: rows.slice(0, landingRowCap) },
-  };
-}
-
-function summarizeTimeline(timeline = []) {
-  if (!Array.isArray(timeline) || timeline.length === 0) {
-    return { note: 'Không có dữ liệu timeline' };
-  }
-
-  const sum = (key) => timeline.reduce((acc, row) => acc + Number(row[key] || 0), 0);
-
-  const pendingTotal = sum('pendingOrders');
-  const completedTotal = sum('completedOrders');
-  const emailSentTotal = sum('emailSent');
-  const zaloSentTotal = sum('zaloSent');
-  const zaloGroupSentTotal = sum('zaloGroupSent');
-
-  const first = timeline[0];
-  const last = timeline[timeline.length - 1];
-
-  return {
-    dateRange: `${first?.date || '—'} → ${last?.date || '—'}`,
-    totals: {
-      pendingOrders: pendingTotal,
-      completedOrders: completedTotal,
-      emailSent: emailSentTotal,
-      zaloSent: zaloSentTotal,
-      zaloGroupSent: zaloGroupSentTotal,
-    },
-    firstDaySample: first,
-    lastDaySample: last,
+    filters: source.filters || null,
+    overview: source.overview || null,
+    campaigns: Array.isArray(source.campaigns) ? source.campaigns : [],
+    summary: summarizeTimelines(source.dailySent, source.ordersTimeline),
+    dailySent: shrinkTimeline(source.dailySent || [], timelineHead, timelineTail),
+    ordersTimeline: shrinkTimeline(source.ordersTimeline || [], timelineHead, timelineTail),
   };
 }
 
 /**
- * Tính % cơ cấu 3 kênh từ số tuyệt đối (click / đơn chờ / đã mua journey).
+ * Dựng phần mô tả số liệu dạng markdown từ snapshot của server. Mọi con số ở đây cùng nguồn với các thẻ / biểu đồ /
+ * bảng trên trang Báo cáo (module sendStats + customer_purchases) — không có số nào do trình duyệt gửi lên và
+ * không đọc bộ đếm lượt chạy (campaign_runs).
  *
- * @param {object} overview
- * @returns {object}
- */
-function buildChannelComposition(overview) {
-  const je = overview?.journeyEvents || {};
-  const ch = overview?.channels || {};
-
-  const clickEmail = Number(je.emailClicked || 0);
-  const clickZalo = Number(je.zaloClicked || 0);
-  const clickZg = Number(je.zaloGroupClicked || 0);
-  const clickSum = clickEmail + clickZalo + clickZg || 1;
-
-  const pendEmail = Number(ch.email?.pendingOrderCount || 0);
-  const pendZalo = Number(ch.zalo?.pendingOrderCount || 0);
-  const pendZg = Number(ch.zaloGroup?.pendingOrderCount || 0);
-  const pendSum = pendEmail + pendZalo + pendZg || 1;
-
-  const doneEmail = Number(ch.email?.completedOrderCount || 0);
-  const doneZalo = Number(ch.zalo?.completedOrderCount || 0);
-  const doneZg = Number(ch.zaloGroup?.completedOrderCount || 0);
-  const doneSum = doneEmail + doneZalo + doneZg || 1;
-
-  const pct = (a, s) => `${((a / s) * 100).toFixed(1)}%`;
-
-  return {
-    clickByChannel: {
-      email: { count: clickEmail, share: pct(clickEmail, clickSum) },
-      zalo: { count: clickZalo, share: pct(clickZalo, clickSum) },
-      zalo_group: { count: clickZg, share: pct(clickZg, clickSum) },
-    },
-    pendingByChannel: {
-      email: { count: pendEmail, share: pct(pendEmail, pendSum) },
-      zalo: { count: pendZalo, share: pct(pendZalo, pendSum) },
-      zalo_group: { count: pendZg, share: pct(pendZg, pendSum) },
-    },
-    completedByChannel: {
-      email: { count: doneEmail, share: pct(doneEmail, doneSum) },
-      zalo: { count: doneZalo, share: pct(doneZalo, doneSum) },
-      zalo_group: { count: doneZg, share: pct(doneZg, doneSum) },
-    },
-  };
-}
-
-/**
- * Dựng phần mô tả dữ liệu dạng markdown (giống ví dụ nghiệp vụ) từ payload thật.
- *
- * @param {object} safePayload
+ * @param {object} safePayload kết quả buildInsightSafePayload
  * @returns {string}
  */
 function buildDataMarkdownSection(safePayload) {
-  const ov = safePayload?.overview;
-  const hl = ov?.headline || {};
-  const je = ov?.journeyEvents || {};
+  const ov = safePayload?.overview || {};
   const filters = safePayload?.filters || {};
+  const sent = ov.sent || {};
+  const failed = ov.failed || {};
+  const email = ov.email || {};
+  const clicks = ov.clicks || {};
+  const orders = ov.orders || {};
+  const fmt = (n) => Number(n || 0);
+  const channelList = (rows, key) => {
+    const parts = (Array.isArray(rows) ? rows : [])
+      .filter((row) => Number(row[key] || 0) > 0)
+      .map((row) => `${insightChannelLabel(row.channel)}: ${fmt(row[key])}`);
+    return parts.length ? parts.join(' | ') : '—';
+  };
+  const orderChannelList = (Array.isArray(orders.byChannel) ? orders.byChannel : [])
+    .map((row) => `${insightChannelLabel(row.channel)}: chờ ${fmt(row.pending)}, đã mua ${fmt(row.completed)}`)
+    .join(' | ') || '—';
 
-  const totalSent =
-    Number(je.emailSent || 0) + Number(je.zaloSent || 0) + Number(je.zaloGroupSent || 0);
-  const totalClicks =
-    Number(je.emailClicked || 0) + Number(je.zaloClicked || 0) + Number(je.zaloGroupClicked || 0);
-  const openRate =
-    Number(je.emailSent || 0) > 0
-      ? `${((Number(je.emailOpened || 0) / Number(je.emailSent || 0)) * 100).toFixed(1)}%`
-      : '—';
-  const clickRateFromSent = totalSent > 0 ? `${((totalClicks / totalSent) * 100).toFixed(1)}%` : '—';
+  const emailLine = fmt(email.sent) > 0
+    ? `- Email: gửi ${fmt(email.sent)} thư; đã mở ${fmt(email.opened)} (${fmt(email.openRate)}% số thư đã gửi); đã bấm link ${fmt(email.clicked)} (${fmt(email.clickRate)}% số thư đã gửi)`
+    : '- Email: không có thư nào được gửi trong kỳ (không tính tỉ lệ mở / bấm link)';
 
-  const comp = buildChannelComposition(ov);
-
-  const topCourses = (safePayload?.topLists?.topCourses || [])
-    .slice(0, 5)
-    .map(
-      (c) =>
-        `- ${c.productName || '(không tên)'}: ${c.pendingCount || 0} đơn chờ, ${c.completedCount || 0} đã mua`
-    )
-    .join('\n');
-
-  const topCampOrders = (safePayload?.topLists?.topCampaignsByOrders || [])
-    .slice(0, 5)
-    .map(
-      (c) =>
-        `- ${c.campaignName || '(không tên)'} (${c.campaignType || '—'}): ${c.pendingCount || 0} chờ, ${c.completedCount || 0} đã mua`
-    )
-    .join('\n');
-
-  const topCampClicks = (safePayload?.topLists?.topCampaignsByClicks || [])
-    .slice(0, 5)
-    .map((c) => {
-      const sent = Number(c.sentCount || 0);
-      const clk = Number(c.clickCount || 0);
-      const rate = sent > 0 ? `${Math.round((clk / sent) * 100)}%` : '—';
-      return `- ${c.campaignName || '(không tên)'} (${c.campaignType || '—'}): ${clk} click · ${sent} gửi · ${rate} click/gửi`;
-    })
-    .join('\n');
-
-  /** Top landing theo tổng tương tác (giống logic sort biểu đồ dashboard) */
-  const lpRows = Array.isArray(safePayload?.landingPageStats?.rows) ? safePayload.landingPageStats.rows : [];
-  const topLandingSorted = [...lpRows].sort((a, b) => {
-    const score = (x) =>
-      Number(x.viewCount || 0) + Number(x.clickCount || 0) + Number(x.submitCount || 0);
-    return score(b) - score(a);
-  });
-  // Mỗi dòng kèm CTR và form/xem để Gemini bắt buộc phân tích đủ 3 trục (xem — click — form) thay vì chỉ tóm tắt một chiều.
-  const topLandingLines = topLandingSorted.slice(0, 10).length
-    ? topLandingSorted
-        .slice(0, 10)
-        .map((r) => {
-          const title = String(r.title || '').trim() || r.slug || '—';
-          const ctr = r.clickThroughRatePct != null ? `${r.clickThroughRatePct}%` : '—';
-          const fv = r.submitRateVsViewsPct != null ? `${r.submitRateVsViewsPct}%` : '—';
-          return `- ${title} (slug: ${r.slug || '—'}): xem ${r.viewCount ?? 0} · click ${r.clickCount ?? 0} · form ${r.submitCount ?? 0} · CTR click/xem ${ctr} · form/xem ${fv}`;
-        })
-        .join('\n')
+  const campaignLines = (safePayload?.campaigns || []).length
+    ? safePayload.campaigns
+      .map((c) => {
+        const name = c.campaignName || (c.campaignId == null ? '(chiến dịch đã xoá)' : `Chiến dịch #${c.campaignId}`);
+        return `- ${name}${c.campaignType ? ` (${c.campaignType})` : ''}: đã gửi ${fmt(c.sent)} · chưa gửi được ${fmt(c.failed)} · mở ${fmt(c.opened)} · nhấp ${fmt(c.clicked)} · đã mua ${fmt(c.purchased)}`;
+      })
+      .join('\n')
     : '- (không có)';
 
-  const tlSummary = summarizeTimeline(safePayload?.analytics?.timeline || []);
+  const summary = safePayload?.summary || {};
 
   return [
-    `## Phạm vi bộ lọc`,
-    `- Từ ${filters.startDate || '—'} đến ${filters.endDate || '—'}`,
-    `- Loại chiến dịch: ${filters.campaignType || 'all'}`,
+    '## Phạm vi bộ lọc',
+    `- Từ ${filters.startDate || '—'} đến ${filters.endDate || '—'} (ngày giờ Việt Nam)`,
+    `- Loại kênh: ${filters.campaignType || 'all'}`,
     `- CampaignIds: ${Array.isArray(filters.campaignIds) && filters.campaignIds.length ? filters.campaignIds.join(', ') : 'tất cả trong phạm vi quyền'}`,
     '',
-    '## DỮ LIỆU TỔNG QUAN (dashboard API)',
-    `- Tổng chiến dịch (trong phạm vi): ${hl.totalCampaigns ?? '—'}`,
-    `- Lượt chạy: ${hl.totalRuns ?? '—'} (đang chạy: ${hl.runningRuns ?? '—'}, hoàn thành: ${hl.completedRuns ?? '—'})`,
-    `- Người nhận / gửi thành công / lỗi: ${hl.totalRecipients ?? '—'} / ${hl.successfulSends ?? '—'} / ${hl.failedSends ?? '—'}`,
-    `- Tổng gửi (hành trình email_sent + zalo_sent): ${totalSent} (Email: ${je.emailSent ?? 0} | Zalo: ${je.zaloSent ?? 0} | Zalo Group: ${je.zaloGroupSent ?? 0})`,
-    `- Email Open (ước lượng từ journey email_sent → email_opened): ${openRate} (${je.emailOpened ?? 0} mở / ${je.emailSent ?? 0} gửi email)`,
-    `- Click (tổng journey email_clicked + zalo_clicked): ${totalClicks} — tỷ lệ click/gửi (tổng): ${clickRateFromSent}`,
-    `- Đơn chờ / đã mua (customer_journey order_pending / theo purchases trong dashboard channels): chờ ${je.orderPending ?? '—'}; kênh: Email ${ov?.channels?.email?.pendingOrderCount ?? 0} | Zalo ${ov?.channels?.zalo?.pendingOrderCount ?? 0} | Zalo Group ${ov?.channels?.zaloGroup?.pendingOrderCount ?? 0}; đã mua: Email ${ov?.channels?.email?.completedOrderCount ?? 0} | Zalo ${ov?.channels?.zalo?.completedOrderCount ?? 0} | Zalo Group ${ov?.channels?.zaloGroup?.completedOrderCount ?? 0}`,
+    '## SỐ LIỆU TỔNG QUAN (đếm từ bảng tin nhắn — trùng các thẻ trên trang Báo cáo)',
+    `- Đã gửi (số tin, không gồm lời mời kết bạn Zalo): ${fmt(sent.total)} — theo kênh: ${channelList(sent.byChannel, 'sent')}`,
+    `- Lời mời kết bạn Zalo đã gửi (dòng riêng, không cộng vào Đã gửi): ${fmt(sent.friendRequests)}`,
+    `- Chưa gửi được (số người nhận chưa nhận được tin sau khi đã thử lại): ${fmt(failed.total)}`,
+    emailLine,
+    `- Lượt nhấp link ở mọi kênh (số tin có người bấm): ${fmt(clicks.total)} — theo kênh: ${channelList(clicks.byChannel, 'clicked')}`,
+    `- Khách để lại thông tin (đơn chờ): ${fmt(orders.pending)}; Đã mua: ${fmt(orders.completed)} — theo kênh: ${orderChannelList}`,
     '',
-    '## CƠ CẤU THEO KÊNH (từ số liệu trên)',
-    '### Click theo kênh (journey)',
-    `- Email: ${comp.clickByChannel.email.share} (${comp.clickByChannel.email.count} clicks)`,
-    `- Zalo: ${comp.clickByChannel.zalo.share} (${comp.clickByChannel.zalo.count} clicks)`,
-    `- Zalo Group: ${comp.clickByChannel.zalo_group.share} (${comp.clickByChannel.zalo_group.count} clicks)`,
-    '### Đơn chờ theo kênh (purchases / dashboard channels)',
-    `- Email: ${comp.pendingByChannel.email.share} (${comp.pendingByChannel.email.count} đơn)`,
-    `- Zalo: ${comp.pendingByChannel.zalo.share} (${comp.pendingByChannel.zalo.count} đơn)`,
-    `- Zalo Group: ${comp.pendingByChannel.zalo_group.share} (${comp.pendingByChannel.zalo_group.count} đơn)`,
-    '### Đã mua theo kênh',
-    `- Email: ${comp.completedByChannel.email.share} (${comp.completedByChannel.email.count} đơn)`,
-    `- Zalo: ${comp.completedByChannel.zalo.share} (${comp.completedByChannel.zalo.count} đơn)`,
-    `- Zalo Group: ${comp.completedByChannel.zalo_group.share} (${comp.completedByChannel.zalo_group.count} đơn)`,
+    '## CHIẾN DỊCH TRONG KỲ (tối đa 10, sắp theo số đã gửi)',
+    campaignLines,
     '',
-    '## TOP KHÓA HỌC CÓ NHIỀU ĐƠN',
-    topCourses || '- (không có)',
+    '## XU HƯỚNG THEO THỜI GIAN (tóm tắt trên toàn bộ khoảng)',
+    JSON.stringify(summary, null, 2),
     '',
-    '## TOP CHIẾN DỊCH THEO ĐƠN',
-    topCampOrders || '- (không có)',
+    '## ĐÃ GỬI MỖI NGÀY (đã rút gọn nếu dài; total = cộng các kênh, không gồm lời mời kết bạn)',
+    JSON.stringify(safePayload?.dailySent || [], null, 2),
     '',
-    '## TOP CHIẾN DỊCH THEO CLICK (kèm gửi + tỷ lệ click/gửi nếu có sentCount)',
-    topCampClicks || '- (không có)',
-    '',
-    '## TOP LANDING (xem / click tracking / gửi form — top 10 theo tổng tương tác)',
-    topLandingLines,
-    '',
-    '## XU HƯỚNG THEO THỜI GIAN (tóm tắt timeline)',
-    JSON.stringify(tlSummary, null, 2),
-    '',
-    '## TIMELINE (đã rút gọn nếu dài)',
-    JSON.stringify(safePayload?.analytics?.timeline || [], null, 2),
+    '## ĐƠN HÀNG THEO NGÀY (đã rút gọn nếu dài; chỉ nhìn xu hướng)',
+    JSON.stringify(safePayload?.ordersTimeline || [], null, 2),
   ].join('\n');
 }
 
 /**
  * Prompt phân tích chuyên sâu — yêu cầu JSON đúng schema (kèm khối charts cho UI).
  *
- * Luồng hoạt động (bổ sung chiến lược đa kênh):
- * 1. Ép model đọc timeline theo ngày (gửi Email / Zalo / Zalo Group và đơn).
- * 2. Yêu cầu so khớp timeline với tổng quan để phát hiện mâu thuẫn dữ liệu khi có.
- * 3. Tách insight tab «Tất cả» vs từng kênh thành góc nhìn marketing khác nhau.
+ * Luồng hoạt động:
+ * 1. Ép model đọc đúng số liệu server đã tính (không bịa số mới) và đúng nghĩa từng số.
+ * 2. Yêu cầu so khớp chuỗi theo ngày với số tổng quan để nêu mâu thuẫn dữ liệu khi có.
+ * 3. Chỉ hỏi những khối còn hiện trên trang: tổng quan, biểu đồ «Đã gửi mỗi ngày», biểu đồ đơn hàng (của chủ).
  *
- * @param {string} dataMarkdown - Khối markdown dữ liệu dashboard đã chuẩn hóa
+ * @param {string} dataMarkdown - Khối markdown số liệu đã chuẩn hóa
  * @param {string} [locale='vi'] - Ngôn ngữ ('vi' hoặc 'en')
  * @returns {string} Prompt đầy đủ gửi Gemini
  */
@@ -692,7 +584,8 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
     return [
       'You are a senior marketing analytics expert with 10+ years of experience in email marketing, Zalo marketing, and sales campaign optimization.',
       '',
-      'Task: Read the DASHBOARD DATA below (strictly following the filters), analyze the metrics closely, and do not invent new numbers.',
+      'Task: Read the REPORT DATA below (strictly following the filters), analyze the metrics closely, and do not invent new numbers.',
+      'Meaning of each number (use exactly): "Đã gửi" = number of MESSAGES sent (Zalo friend requests are a separate line and NOT included); "Chưa gửi được" = number of RECIPIENTS who still did not receive the message after retries; "Email opened / clicked" = % of the emails sent in the period (each email counted once); "Khách để lại thông tin" = pending orders, "Đã mua" = completed orders.',
       '',
       '=== DATA ===',
       dataMarkdown,
@@ -702,61 +595,43 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
       'Language: English. All text in the response (overview, key metrics, insights, channel analysis, recommendations, chart analyses, notes) MUST be written in professional English.',
       'CRITICAL — JSON syntax: in all string fields (overview, charts.*, …) do NOT insert raw double quotes ("); use **bold** or single quotes within text. If the JSON schema deviates, the client will fail to render insights.',
       '',
-      'DASHBOARD CHARTS MAPPING → JSON (every `charts.*` field MUST contain actual markdown content, do not leave empty if relevant data exists):',
-      '- "Orders Over Time" / trend chart (pending & completed orders): `charts.ordersTrend.summary` (Summary tab) and `charts.ordersTrend.compare` (Channel comparison on timeline).',
-      '- "Channel Engagement" chart (daily Sent/Opened/Clicked lines for Email, Zalo, Zalo Group): `charts.channelEngagement.all` + separate `email`, `zalo`, `zalo_group` — explain peaks/anomalies (e.g. high email volume vs high Zalo Group engagement if data shows).',
-      '- Donut / channel breakdown charts (Clicks, Pending Orders, Completed Orders): `charts.channelBreakdown.click`, `.pending`, `.completed`.',
-      '- Top Courses, Top Campaigns by Orders / Clicks: `charts.topLists.topCourses`, `.topCampaignsByOrders`, `.topCampaignsByClicks`.',
-      '- Top Landing Pages block (views / clicks / forms): `charts.landingTopPages`.',
+      'REPORT BLOCKS MAPPING → JSON (every `charts.*` field MUST contain actual markdown content, do not leave empty if relevant data exists):',
+      '- "Đơn hàng theo thời gian" chart (pending & completed orders over time): `charts.ordersTrend.summary` (Summary tab) and `charts.ordersTrend.compare` (Channel comparison on the orders timeline).',
+      '- "Đã gửi mỗi ngày" chart (messages sent per day, stacked by channel): `charts.channelEngagement.all` — explain peaks/anomalies and the channel mix.',
       '',
       'JSON Schema (all keys required; use empty string "" if no information):',
       '{',
       '  "overview": "Overall summary of campaign performance in 1-3 sentences",',
       '  "key_metrics_analysis": {',
-      '    "open_rate": { "value": "29.5% or —", "benchmark": "Compare with industry benchmark (~20-25%)", "assessment": "good|average|poor", "comment": "brief comment" },',
-      '    "click_rate": { "value": "click/sent rate or —", "benchmark": "Brief benchmark comparison", "assessment": "good|average|poor", "comment": "brief comment" },',
-      '    "conversion_rate": { "value": "click to completed orders rate (or —)", "comment": "comment on bottom of the funnel" }',
+      '    "open_rate": { "value": "share of emails opened or —", "benchmark": "Compare with industry benchmark (~20-25%)", "assessment": "good|average|poor", "comment": "brief comment" },',
+      '    "click_rate": { "value": "share of emails with a clicked link or —", "benchmark": "Brief benchmark comparison", "assessment": "good|average|poor", "comment": "brief comment" },',
+      '    "conversion_rate": { "value": "completed orders vs messages sent / clicks (or —)", "comment": "comment on bottom of the funnel" }',
       '  },',
       '  "insights": [',
       '    { "title": "...", "type": "opportunity|problem|warning|trend", "priority": "high|medium|low", "detail": "...", "impact": "..." }',
       '  ],',
       '  "channel_analysis": {',
-      '    "best_channel": "Most effective channel (Email | Zalo | Zalo Group) + brief data-backed rationale",',
-      '    "underperforming_channel": "Weakest channel / needs improvement + signs from clicks/orders/sends",',
-      '    "recommendation": "Coordinated 3-channel strategy: prioritization, timing, distinct roles (broadcast vs 1-on-1 vs community)"',
+      '    "best_channel": "Most effective channel + brief data-backed rationale",',
+      '    "underperforming_channel": "Weakest channel / needs improvement + signs from sends, failures, clicks and orders",',
+      '    "recommendation": "Coordinated multi-channel strategy: prioritization, timing, distinct roles of each channel in use"',
       '  },',
       '  "funnel_analysis": {',
       '    "bottleneck": "...",',
       '    "drop_off_stage": "...",',
       '    "suggestion": "..."',
       '  },',
-      '  "top_product_insight": { "observation": "...", "action": "..." },',
       '  "action_plan": [',
       '    { "priority": 1, "action": "...", "expected_result": "...", "timeline": "..." }',
       '  ],',
       '  "risk_warning": "Risk warning if metrics are not improved (1-2 sentences)",',
       '  "charts": {',
       '    "ordersTrend": {',
-      '      "summary": "markdown: «Summary» tab (total pendingOrders + completedOrders); 4-8 bullets; **Trend**, **Data Discrepancies** or **Data Synchronization**, **Multi-channel Sending Activity**, **Conclusion**.",',
-      '      "compare": "markdown: «Compare Channels» tab (email/zalo/zalo_group × pending/completed on TIMELINE); compare channels, temporal hotspots, **Conclusion**."',
+      '      "summary": "markdown: «Summary» tab (total pending + completed orders over time); 4-8 bullets; **Trend**, **Data Discrepancies** if the timeline diverges from the overview, **Conclusion**.",',
+      '      "compare": "markdown: «Compare Channels» tab (email/zalo/zalo group × pending/completed on the ORDERS TIMELINE); compare channels, temporal hotspots, **Conclusion**."',
       '    },',
       '    "channelEngagement": {',
-      '      "all": "markdown: compare 3-channel strategy on same timeline — role of Email vs Zalo 1-on-1 vs Zalo Group (funnel, cadence, reliability); recommendation for coordination / marketing effort distribution.",',
-      '      "email": "markdown: Email-specific strategy (subject lines, segmentation, open/click, follow-up) linked to emailSent / interaction timeline if present.",',
-      '      "zalo": "markdown: Zalo OA strategy (messaging, timing, personalization, conversion) tied to zaloSent and related clicks/orders.",',
-      '      "zalo_group": "markdown: Zalo Group strategy (community, social proof, group content) tied to zaloGroupSent and interactions/orders."',
-      '    },',
-      '    "channelBreakdown": {',
-      '      "click": "markdown 2-4 points (bulleted + **bold**) for Click breakdown donut",',
-      '      "completed": "markdown for Completed Orders donut",',
-      '      "pending": "markdown for Pending Orders donut"',
-      '    },',
-      '    "topLists": {',
-      '      "topCourses": "markdown 2-5 points for Top Courses",',
-      '      "topCampaignsByOrders": "markdown for Top Campaigns by Orders",',
-      '      "topCampaignsByClicks": "markdown for Top Clicks (mention clicks/sends if available)"',
-      '    },',
-      '    "landingTopPages": "markdown: 5-10 bullet lines; MUST cover (1) views (2) tracking clicks (3) form submissions; **bold** key figures/pages; CTR and form/view ratios if available"',
+      '      "all": "markdown: «Sent per day» chart — sending cadence, peak days, channel mix, share of recipients not reached; recommendation for coordination / distribution of effort."',
+      '    }',
       '  },',
       '  "notes": [ "data limitation warnings if any (e.g., abbreviated timeline)" ]',
       '}',
@@ -766,22 +641,21 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
       '- Use **labels or key numbers** in bold; avoid long unbroken paragraphs.',
       'Analysis rules:',
       '- For charts.ordersTrend.summary: only use combined pendingOrders + completedOrders.',
-      '- For charts.ordersTrend.compare: inspect emailPendingOrders, emailCompletedOrders, zalo*, zaloGroup* on TIMELINE; compare channels and seasonal patterns; note discrepancies if timeline diverges from overview.',
+      '- For charts.ordersTrend.compare: inspect emailPendingOrders, emailCompletedOrders, zalo*, zaloGroup* on the ORDERS TIMELINE; compare channels and seasonal patterns; note discrepancies if the timeline diverges from the overview.',
       '- Legacy: if model returns ordersTrend as a single string, system attaches to summary; compare may be empty.',
-      '- For charts.channelEngagement: all/email/zalo/zalo_group must present distinct perspectives; «All» tab is overarching strategy; individual tabs focus specifically on that channel (Email / Zalo / Zalo Group) and its correlation with orders.',
-      '- For channel_analysis.recommendation: always address all three channels: Email, Zalo, Zalo Group (even if a channel has 0 sends — explain strategic implications).',
-      '- For charts.landingTopPages: be specific; analyze across views / clicks / forms and conversion rates.',
+      '- For charts.channelEngagement.all: use the SENT PER DAY series and the channel mix; do not talk about opens / clicks per day (not in that chart).',
+      '- For channel_analysis: only discuss channels that appear in the data (do not invent channels with no messages), and say plainly when a channel is unused.',
       '- Prioritize actionable insights that can be executed within 7-30 days.',
       '- Keep benchmark comparisons qualitative and balanced when data is sparse.',
       '- If completed orders are disproportionately low compared to clicks/sends, diagnose funnel bottleneck with testable hypothesis.',
-      '- action_plan and insights[] should have at least one multi-channel coordination item when data permits.',
     ].join('\n');
   }
 
   return [
     'Bạn là chuyên gia phân tích marketing với 10+ năm kinh nghiệm về email marketing, Zalo marketing và tối ưu hóa chiến dịch bán hàng.',
     '',
-    'Nhiệm vụ: đọc DỮ LIỆU DASHBOARD dưới đây (theo đúng bộ lọc), phân tích sát số liệu, không bịa số mới.',
+    'Nhiệm vụ: đọc SỐ LIỆU BÁO CÁO dưới đây (theo đúng bộ lọc), phân tích sát số liệu, không bịa số mới.',
+    'Nghĩa từng số (dùng đúng): "Đã gửi" = số TIN đã gửi (KHÔNG gồm lời mời kết bạn Zalo — dòng riêng); "Chưa gửi được" = số NGƯỜI NHẬN vẫn chưa nhận được tin sau khi đã thử lại; "Email đã mở / đã bấm link" = % số thư đã gửi trong kỳ (mỗi thư đếm một lần); "Khách để lại thông tin" = đơn chờ, "Đã mua" = đơn hoàn tất.',
     '',
     '=== DỮ LIỆU ===',
     dataMarkdown,
@@ -791,63 +665,45 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
     'Ngôn ngữ: tiếng Việt đầy đủ dấu.',
     'QUAN TRỌNG — cú pháp JSON: trong mọi chuỗi (overview, charts.*, …) KHÔNG được chèn ký tự dấu ngoặc kép nháy đôi (") thô; dùng **in đậm** hoặc dấu nháy đơn trong văn bản. Nếu lệch schema JSON, client sẽ không hiển thị insight.',
     '',
-    'ÁNH XẠ BIỂU ĐỒ DASHBOARD → JSON (bắt buộc mỗi mục `charts.*` có nội dung markdown thực sự, không để trống nếu DỮ LIỆU có liên quan):',
-    '- Biểu đồ «Đơn hàng theo thời gian» / xu hướng đơn chờ & đã đặt: `charts.ordersTrend.summary` (tab Tổng hợp) và `charts.ordersTrend.compare` (tab So sánh kênh theo timeline).',
-    '- Biểu đồ «Tương tác tổng hợp theo kênh» (đường Gửi/Mở/Click Email, Zalo, Zalo Group theo ngày): `charts.channelEngagement.all` + riêng `email`, `zalo`, `zalo_group` — giải thích đỉnh/lệch tỷ lệ (vd email gửi cao nhưng Zalo Group click/gửi tốt nếu số liệu có).',
-    '- Biểu đồ donut / cơ cấu theo kênh (Click, Đơn chờ, Đã mua): `charts.channelBreakdown.click`, `.pending`, `.completed`.',
-    '- Các bảng Top khóa học, Top chiến dịch theo đơn / theo click: `charts.topLists.topCourses`, `.topCampaignsByOrders`, `.topCampaignsByClicks`.',
-    '- Khối Top landing (xem / click / form): `charts.landingTopPages`.',
+    'ÁNH XẠ KHỐI TRÊN TRANG BÁO CÁO → JSON (bắt buộc mỗi mục `charts.*` có nội dung markdown thực sự, không để trống nếu DỮ LIỆU có liên quan):',
+    '- Biểu đồ «Đơn hàng theo thời gian» / xu hướng đơn chờ & đã đặt: `charts.ordersTrend.summary` (tab Tổng hợp) và `charts.ordersTrend.compare` (tab So sánh kênh theo chuỗi ĐƠN HÀNG THEO NGÀY).',
+    '- Biểu đồ «Đã gửi mỗi ngày» (số tin gửi theo ngày, xếp chồng theo kênh): `charts.channelEngagement.all` — giải thích đỉnh/lệch và cơ cấu kênh.',
     '',
     'Schema JSON (bắt buộc đủ key; chuỗi rỗng "" nếu không có thông tin):',
     '{',
     '  "overview": "Tóm tắt tổng thể hiệu suất chiến dịch trong 1-3 câu",',
     '  "key_metrics_analysis": {',
-    '    "open_rate": { "value": "29.5% hoặc —", "benchmark": "So sánh với chuẩn ngành (email ~20-25%)", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
-    '    "click_rate": { "value": "tỷ lệ click/gửi hoặc —", "benchmark": "Chuẩn tham chiếu ngắn", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
-    '    "conversion_rate": { "value": "từ click → đơn đã mua (hoặc —)", "comment": "nhận xét về phễu cuối" }',
+    '    "open_rate": { "value": "% thư đã mở hoặc —", "benchmark": "So sánh với chuẩn ngành (email ~20-25%)", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
+    '    "click_rate": { "value": "% thư có người bấm link hoặc —", "benchmark": "Chuẩn tham chiếu ngắn", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
+    '    "conversion_rate": { "value": "đơn đã mua so với số tin đã gửi / lượt nhấp (hoặc —)", "comment": "nhận xét về phễu cuối" }',
     '  },',
     '  "insights": [',
     '    { "title": "...", "type": "opportunity|problem|warning|trend", "priority": "high|medium|low", "detail": "...", "impact": "..." }',
     '  ],',
     '  "channel_analysis": {',
-    '    "best_channel": "Kênh hiệu quả nhất (Email | Zalo | Zalo Group) + lý do ngắn theo số liệu",',
-    '    "underperforming_channel": "Kênh yếu / cần cải thiện + dấu hiệu từ click/đơn/gửi",',
-    '    "recommendation": "Chiến lược phối hợp 3 kênh: phân bổ ưu tiên, thời điểm, vai trò (broadcast vs cá nhân vs cộng đồng nhóm)"',
+    '    "best_channel": "Kênh hiệu quả nhất + lý do ngắn theo số liệu",',
+    '    "underperforming_channel": "Kênh yếu / cần cải thiện + dấu hiệu từ số gửi, chưa gửi được, nhấp, đơn",',
+    '    "recommendation": "Chiến lược phối hợp các kênh đang dùng: phân bổ ưu tiên, thời điểm, vai trò từng kênh"',
     '  },',
     '  "funnel_analysis": {',
     '    "bottleneck": "...",',
     '    "drop_off_stage": "...",',
     '    "suggestion": "..."',
     '  },',
-    '  "top_product_insight": { "observation": "...", "action": "..." },',
     '  "action_plan": [',
     '    { "priority": 1, "action": "...", "expected_result": "...", "timeline": "..." }',
     '  ],',
     '  "risk_warning": "Cảnh báo rủi ro nếu không cải thiện (1-2 câu)",',
     '  "charts": {',
     '    "ordersTrend": {',
-    '      "summary": "markdown: tab «Tổng hợp» (pendingOrders + completedOrders tổng); 4-8 bullet; **Xu hướng**, **Mâu thuẫn dữ liệu** hoặc **Đồng bộ dữ liệu**, **Hoạt động gửi đa kênh**, **Kết luận**.",',
-    '      "compare": "markdown: tab «So sánh kênh» (email/zalo/zalo_group × chờ/đặt trên TIMELINE); so sánh kênh, điểm nóng thời gian, **Kết luận**."',
+    '      "summary": "markdown: tab «Tổng hợp» (đơn chờ + đã đặt theo thời gian); 4-8 bullet; **Xu hướng**, **Mâu thuẫn dữ liệu** nếu chuỗi lệch tổng quan, **Kết luận**.",',
+    '      "compare": "markdown: tab «So sánh kênh» (email/zalo/zalo nhóm × chờ/đặt trên chuỗi ĐƠN HÀNG THEO NGÀY); so sánh kênh, điểm nóng thời gian, **Kết luận**."',
     '    },',
     '    "channelEngagement": {',
-    '      "all": "markdown: so sánh chiến lược 3 kênh trên cùng timeline — vai trò Email vs Zalo 1-1 vs Zalo Group (phễu, tần suất, độ tin cậy); gợi ý phối hợp / phân bổ nỗ lực marketing.",',
-    '      "email": "markdown: chiến lược riêng Email (chủ đề, phân khúc, open/click, follow-up) gắn với đường timeline emailSent/email tương tác nếu có.",',
-    '      "zalo": "markdown: chiến lược riêng Zalo OA (tin nhắn, thời điểm, cá nhân hóa, chuyển đổi) theo zaloSent và click/đơn liên quan.",',
-    '      "zalo_group": "markdown: chiến lược riêng Zalo Group (cộng đồng, social proof, nội dung nhóm) theo zaloGroupSent và tương tác/đơn liên quan."',
-    '    },',
-    '    "channelBreakdown": {',
-    '      "click": "markdown 2-4 ý (gạch đầu dòng + **đậm**) cho donut Cơ cấu Click",',
-    '      "completed": "markdown cho donut Đã mua",',
-    '      "pending": "markdown cho donut Đơn chờ"',
-    '    },',
-    '    "topLists": {',
-    '      "topCourses": "markdown 2-5 ý cho Top khóa học",',
-    '      "topCampaignsByOrders": "markdown cho Top chiến dịch theo đơn",',
-    '      "topCampaignsByClicks": "markdown cho Top click (nhắc click/gửi nếu có)"',
-    '    },',
-    '    "landingTopPages": "markdown: 5-10 dòng bullet; BẮT BUỘC có ý rõ cho (1) xem (2) click tracking (3) form; **in đậm** số/landing nổi bật; CTR và form/xem nếu có số"',
+    '      "all": "markdown: biểu đồ «Đã gửi mỗi ngày» — nhịp gửi, ngày cao điểm, cơ cấu kênh, tỉ lệ người chưa nhận được tin; gợi ý phối hợp / phân bổ nỗ lực."',
+    '    }',
     '  },',
-    '  "notes": [ "cảnh báo giới hạn dữ liệu nếu có (vd: timeline rút gọn)" ]',
+    '  "notes": [ "cảnh báo giới hạn dữ liệu nếu có (vd: chuỗi ngày rút gọn)" ]',
     '}',
     '',
     'Quy tắc định dạng insight (charts.* — chuỗi hoặc từng field trong channelEngagement):',
@@ -855,38 +711,33 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
     '- Dùng **nhãn hoặc số then chốt** để in đậm; tránh một đoạn văn dài không xuống dòng.',
     'Quy tắc phân tích:',
     '- Với charts.ordersTrend.summary: như trên nhưng chỉ dùng pendingOrders + completedOrders (tổng).',
-    '- Với charts.ordersTrend.compare: đọc emailPendingOrders, emailCompletedOrders, zalo*, zaloGroup* trên TIMELINE; so sánh kênh và mùa vụ; cùng quy tắc **Mâu thuẫn dữ liệu** nếu tổng timeline lệch tổng quan.',
+    '- Với charts.ordersTrend.compare: đọc emailPendingOrders, emailCompletedOrders, zalo*, zaloGroup* trên chuỗi ĐƠN HÀNG THEO NGÀY; so sánh kênh và mùa vụ; nêu **Mâu thuẫn dữ liệu** nếu chuỗi lệch tổng quan.',
     '- Legacy: nếu model trả ordersTrend là một chuỗi, hệ thống gắn vào summary; compare có thể rỗng.',
-    '- Với charts.channelEngagement: all/email/zalo/zalo_group phải khác nhau về góc nhìn; tab «Tất cả» là chiến lược tổng; từng tab chỉ marketing cho đúng kênh đó (Email / Zalo / Zalo Group) và mối liên hệ với đơn nếu timeline có.',
-    '- Với channel_analysis.recommendation: luôn đề cập rõ cả ba kênh Email, Zalo, Zalo Group (kể cả khi một kênh = 0 — giải thích ý nghĩa hoặc rủi ro bỏ qua).',
-    '- Với charts.landingTopPages: không chung chung; đối chiếu đủ ba trục xem / click / form và CTR, form/xem.',
+    '- Với charts.channelEngagement.all: dựa trên chuỗi ĐÃ GỬI MỖI NGÀY và cơ cấu kênh; không nói về mở / nhấp theo ngày (biểu đồ đó không có).',
+    '- Với channel_analysis: chỉ bàn các kênh có trong dữ liệu (không bịa kênh không có tin), nói thẳng khi một kênh chưa được dùng.',
     '- Ưu tiên insight hành động được (actionable), có thể làm trong 7-30 ngày.',
     '- So sánh benchmark ở mức định tính, không cứng nhắc nếu dữ liệu thiếu.',
-    '- Nếu đơn đã mua rất thấp so với click/gửi, nêu nút thắt phễu và giả thuyết kiểm chứng được.',
-    '- action_plan và insights[] nên có ít nhất một mục liên quan tối ưu gửi đa kênh (Email / Zalo / Zalo Group) khi dữ liệu cho phép.',
+    '- Nếu đơn đã mua rất thấp so với nhấp/gửi, nêu nút thắt phễu và giả thuyết kiểm chứng được.',
   ].join('\n');
 }
 
 class DashboardInsightsService {
   /**
-   * Sinh insight dashboard bằng Gemini dựa trên dữ liệu thống kê đã có.
+   * Sinh insight dashboard bằng Gemini dựa trên snapshot số liệu do SERVER tính.
    *
    * Luồng hoạt động:
-   * 1. Gom `overview`, `analytics`, `topListsData` (đã theo bộ lọc).
-   * 2. Rút gọn timeline, dựng mô tả markdown số liệu.
+   * 1. Nhận `snapshot` (dashboardAnalyticsService.getInsightSnapshot — cùng nguồn với các thẻ trên trang Báo cáo).
+   * 2. Rút gọn chuỗi theo ngày, dựng mô tả markdown số liệu.
    * 3. Gọi Gemini với JSON mode + token đủ lớn.
    * 4. Parse + chuẩn hóa schema; nếu lỗi thì trả fallback có `notes`.
    *
    * @param {object} input
-   * @param {object} input.overview
-   * @param {object} input.analytics
-   * @param {object} input.topListsData
-   * @param {object} [input.landingPageStats] - { rows?: object[] } từ API landing-pages-stats (tùy chọn)
-   * @param {object} input.filters
+   * @param {number} [input.userId] chủ workspace (chọn model + ghi token)
+   * @param {object} input.snapshot `{ filters, overview, dailySent, ordersTimeline, campaigns }`
    * @param {string} [input.locale='vi']
    * @returns {Promise<{ success: boolean, data: object }>}
    */
-  async generateInsights({ userId, overview, analytics, topListsData, landingPageStats, filters, locale = 'vi' }) {
+  async generateInsights({ userId, snapshot, locale = 'vi' }) {
     let lastText = '';
     let lastFinish = '';
     let lastBlock = '';
@@ -916,10 +767,7 @@ class DashboardInsightsService {
       return result;
     };
 
-    let safePayload = buildInsightSafePayload(
-      { overview, analytics, topListsData, landingPageStats, filters },
-      { timelineHead: 14, timelineTail: 14, landingRowCap: 48 }
-    );
+    let safePayload = buildInsightSafePayload(snapshot, { timelineHead: 14, timelineTail: 14 });
     let { text, finishReason, blockReason } = await runOnce(safePayload);
     lastText = text;
     lastFinish = finishReason;
@@ -933,10 +781,7 @@ class DashboardInsightsService {
       (finishReason === 'MAX_TOKENS' || (typeof text === 'string' && text.length > 0))
     ) {
       usedCompactRetry = true;
-      safePayload = buildInsightSafePayload(
-        { overview, analytics, topListsData, landingPageStats, filters },
-        { timelineHead: 5, timelineTail: 5, landingRowCap: 12 }
-      );
+      safePayload = buildInsightSafePayload(snapshot, { timelineHead: 5, timelineTail: 5 });
       ({ text, finishReason, blockReason } = await runOnce(safePayload));
       lastText = text;
       lastFinish = finishReason;
@@ -949,8 +794,8 @@ class DashboardInsightsService {
       if (usedCompactRetry) {
         notes.push(
           locale === 'en'
-            ? 'The system automatically compacted timeline/landing data in prompt and retried Gemini (first attempt could not be parsed or was truncated).'
-            : 'Hệ thống đã tự động thu gọn timeline/landing trong prompt và gọi Gemini lần 2 (lần 1 không parse được hoặc có nguy cơ cắt đầu ra).'
+            ? 'The system automatically compacted the per-day series in the prompt and retried Gemini (first attempt could not be parsed or was truncated).'
+            : 'Hệ thống đã tự động thu gọn chuỗi theo ngày trong prompt và gọi Gemini lần 2 (lần 1 không parse được hoặc có nguy cơ cắt đầu ra).'
         );
       }
       if (lastFinish === 'MAX_TOKENS') {
@@ -1029,5 +874,7 @@ class DashboardInsightsService {
     };
   }
 }
+
+export { buildInsightSafePayload, buildDataMarkdownSection };
 
 export default new DashboardInsightsService();

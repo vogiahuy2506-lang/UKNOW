@@ -189,18 +189,25 @@ const byOrder = (channels, key) => channels.order.get(key) ?? Number.MAX_SAFE_IN
  *
  * @param {{ ownerId: number|null, excludeOwnerIds?: number[] }} scope
  * @param {{ days: number }|{ fromDate: string, toDate: string }} window
- * @param {{ excludeChannels?: string[] }} [options] kênh loại khỏi phép đếm (kênh bị loại không có mặt trong kết quả)
+ * @param {{ excludeChannels?: string[], campaignIds?: number[]|null }} [options]
+ *   `excludeChannels`: kênh loại khỏi phép đếm (kênh bị loại không có mặt trong kết quả).
+ *   `campaignIds`: chỉ tính tin của các chiến dịch đó — lọc TRONG bộ CTE (dùng index, không lọc sau khi gom).
+ *   null / bỏ trống = mọi chiến dịch; mảng rỗng = không chiến dịch nào (mọi kênh = 0, không phải "tất cả").
  * @returns {Promise<Array<{ channel: string, sent: number, failed: number, bounced: number, opened: number, clicked: number }>>}
  */
 export async function getChannelTotals(scope, window, options) {
   const normalizedScope = normalizeScope(scope);
   const normalizedWindow = normalizeWindow(window, { required: true });
+  const normalizedCampaignIds = options?.campaignIds == null ? null : normalizeIdList(options.campaignIds, 'campaignIds');
   const channels = resolveChannels(options);
-  const rows = await sendStatsRepository.channelTotals({
-    scope: normalizedScope,
-    window: normalizedWindow,
-    channels: forRepository(channels),
-  });
+  const rows = normalizedCampaignIds && normalizedCampaignIds.length === 0
+    ? []
+    : await sendStatsRepository.channelTotals({
+      scope: normalizedScope,
+      window: normalizedWindow,
+      channels: forRepository(channels),
+      ...(normalizedCampaignIds ? { campaignIds: normalizedCampaignIds } : {}),
+    });
   const byChannel = new Map(rows.map((row) => [row.channel, row]));
   return channels.keys.map((channel) => {
     const row = byChannel.get(channel);
@@ -218,18 +225,24 @@ export async function getChannelTotals(scope, window, options) {
 /**
  * Chuỗi theo NGÀY VN: tin đã gửi theo ngày của tin; đích lỗi tính vào ngày của lần thử lỗi cuối trong cửa sổ.
  * Chỉ trả (ngày, kênh) CÓ dữ liệu, sắp theo ngày rồi thứ tự kênh; ngày trống do màn tự bù. Tổng theo ngày khớp
- * getChannelTotals cùng cửa sổ.
+ * getChannelTotals cùng cửa sổ (và cùng `campaignIds`, nếu có — ngữ nghĩa như getChannelTotals).
  *
+ * @param {{ ownerId: number|null, excludeOwnerIds?: number[] }} scope
+ * @param {{ days: number }|{ fromDate: string, toDate: string }} window
+ * @param {{ campaignIds?: number[]|null }} [options] chỉ tính tin của các chiến dịch đó (null / bỏ trống = tất cả; [] = không có gì)
  * @returns {Promise<Array<{ day: string, channel: string, sent: number, failed: number }>>}
  */
-export async function getDailySeries(scope, window) {
+export async function getDailySeries(scope, window, options) {
   const normalizedScope = normalizeScope(scope);
   const normalizedWindow = normalizeWindow(window, { required: true });
+  const normalizedCampaignIds = options?.campaignIds == null ? null : normalizeIdList(options.campaignIds, 'campaignIds');
+  if (normalizedCampaignIds && normalizedCampaignIds.length === 0) return [];
   const channels = resolveChannels();
   const rows = await sendStatsRepository.dailySeries({
     scope: normalizedScope,
     window: normalizedWindow,
     channels: forRepository(channels),
+    ...(normalizedCampaignIds ? { campaignIds: normalizedCampaignIds } : {}),
   });
   return rows
     .map((row) => ({

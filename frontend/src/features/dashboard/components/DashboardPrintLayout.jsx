@@ -1,37 +1,25 @@
 import DashboardKpiCards from './DashboardKpiCards';
 import DashboardInsightOverview from './DashboardInsightOverview';
 import DashboardOrdersChart from './DashboardOrdersChart';
-import DashboardChannelTabs from './DashboardChannelTabs';
-import DashboardChannelBreakdownCharts from './DashboardChannelBreakdownCharts';
-import { DashboardTopChartsPrintSection } from './DashboardTopCharts';
-import LandingPagesAdminStatsCharts from '../../landing-pages/components/LandingPagesAdminStatsCharts.jsx';
+import DashboardSentChart from './DashboardSentChart';
+import DashboardCampaignsTable from './DashboardCampaignsTable';
 import {
   getChannelEngagementInsightForChannel,
   getOrdersTrendInsightForMode,
 } from '../utils/dashboardInsightStorage.util';
 
-/** Thứ tự tab kênh trùng UI dashboard — mỗi mục một trang khi in PDF */
-const PRINT_CHANNEL_SEQUENCE = [
-  { id: 'all', label: 'Tất cả' },
-  { id: 'email', label: 'Email' },
-  { id: 'zalo', label: 'Zalo' },
-  { id: 'zalo_group', label: 'Zalo Group' },
-];
-
 /**
- * Bố cục chỉ dùng cho in/PDF: mỗi khối biểu đồ (+ insight) một trang; Top landing + insight là trang cuối.
+ * Bố cục chỉ dùng cho in/PDF: mỗi khối biểu đồ (+ insight) một trang; cùng số liệu với màn hình.
  *
  * Luồng trang:
- * 1. KPI + tiêu đề khoảng thời gian (trang mở giống tổng quan).
+ * 1. KPI + tiêu đề khoảng thời gian (trang mở giống màn hình).
  * 2. Tổng quan insight (Gemini).
- * 3. Đơn hàng — Tổng hợp + insight riêng.
- * 4. Đơn hàng — So sánh kênh + insight riêng.
- * 5. Bốn trang «Tương tác theo kênh» — mỗi trang một tab + insight riêng.
- * 6. Donut cơ cấu kênh (click / đã mua / chờ).
- * 7. Top lists (khóa học, chiến dịch).
- * 8. Top landing (xem, tracking, form) + insight.
+ * 3. «Đã gửi mỗi ngày» + insight riêng.
+ * 4. «Chiến dịch trong kỳ».
+ * 5. Chủ tài khoản: «Đơn hàng theo thời gian» — Tổng hợp rồi So sánh kênh, mỗi tab một trang + insight riêng.
  *
  * @param {object} props — cùng dữ liệu đang hiển thị trên Dashboard
+ * @param {boolean} [props.showOrders=true] — nhân viên không có trang đơn hàng
  */
 const DashboardPrintLayout = ({
   filters,
@@ -39,11 +27,11 @@ const DashboardPrintLayout = ({
   insights,
   isGeneratingInsights,
   insightError,
-  timeline,
+  dailySent,
+  ordersTimeline,
+  campaigns,
   isMonthlyView,
-  analytics,
-  topListsData,
-  landingPageStats,
+  showOrders = true,
 }) => {
   const fmt = (d) => {
     if (!d) return '—';
@@ -51,15 +39,12 @@ const DashboardPrintLayout = ({
     return `${day}/${m}/${y}`;
   };
 
-  /** In PDF: tab cố định theo từng trang, không đổi state */
-  const noop = () => {};
-
   return (
     <div className="bg-white text-gray-900 text-[13px] leading-normal">
-      {/* Trang 1: KPI + tiêu đề (ưu tiên giống màn hình tổng quan) */}
+      {/* Trang 1: KPI + tiêu đề (ưu tiên giống màn hình Báo cáo) */}
       <div className="pdf-print-page space-y-4">
         <p className="text-sm font-semibold text-gray-800">
-          Campaign Dashboard — in báo cáo — {fmt(filters?.startDate)} — {fmt(filters?.endDate)}
+          Báo cáo — {fmt(filters?.startDate)} — {fmt(filters?.endDate)}
         </p>
         <DashboardKpiCards overview={overview} />
       </div>
@@ -77,99 +62,52 @@ const DashboardPrintLayout = ({
       </div>
 
       <div className="pdf-print-page space-y-4">
-        <p className="text-xs text-gray-500">
-          Bản in — Đơn hàng theo thời gian:{' '}
-          <span className="font-semibold text-gray-700">Tổng hợp</span>
-        </p>
-        <DashboardOrdersChart
-          timeline={timeline}
+        <DashboardSentChart
+          dailySent={dailySent}
           isMonthlyView={isMonthlyView}
-          lockedViewMode="summary"
-          insightText={getOrdersTrendInsightForMode(insights?.charts, 'summary')}
+          insightText={getChannelEngagementInsightForChannel(insights?.charts, 'all', { forPrint: true })}
           isInsightLoading={isGeneratingInsights}
           insightError={insightError}
         />
       </div>
 
       <div className="pdf-print-page space-y-4">
-        <p className="text-xs text-gray-500">
-          Bản in — Đơn hàng theo thời gian:{' '}
-          <span className="font-semibold text-gray-700">So sánh kênh</span>
-        </p>
-        <DashboardOrdersChart
-          timeline={timeline}
-          isMonthlyView={isMonthlyView}
-          lockedViewMode="compare"
-          insightText={getOrdersTrendInsightForMode(insights?.charts, 'compare')}
-          isInsightLoading={isGeneratingInsights}
-          insightError={insightError}
-        />
+        <DashboardCampaignsTable campaigns={campaigns} />
       </div>
 
-      {PRINT_CHANNEL_SEQUENCE.map((ch) => (
-        <div key={ch.id} className="pdf-print-page space-y-4">
-          <p className="text-xs text-gray-500">
-            Bản in — biểu đồ tương tác kênh: <span className="font-semibold text-gray-700">{ch.label}</span>
-          </p>
-          <DashboardChannelTabs
-            activeChannel={ch.id}
-            onChangeChannel={noop}
-            analytics={analytics}
-            isMonthlyView={isMonthlyView}
-            insightText={getChannelEngagementInsightForChannel(insights?.charts, ch.id, { forPrint: true })}
-            isInsightLoading={isGeneratingInsights}
-            insightError={insightError}
-          />
-        </div>
-      ))}
+      {showOrders && (
+        <>
+          <div className="pdf-print-page space-y-4">
+            <p className="text-xs text-gray-500">
+              Bản in — Đơn hàng theo thời gian:{' '}
+              <span className="font-semibold text-gray-700">Tổng hợp</span>
+            </p>
+            <DashboardOrdersChart
+              timeline={ordersTimeline}
+              isMonthlyView={isMonthlyView}
+              lockedViewMode="summary"
+              insightText={getOrdersTrendInsightForMode(insights?.charts, 'summary')}
+              isInsightLoading={isGeneratingInsights}
+              insightError={insightError}
+            />
+          </div>
 
-      <div className="pdf-print-page space-y-4">
-        <DashboardChannelBreakdownCharts
-          onlyBreakdownKey="click"
-          overview={overview}
-          insights={insights}
-          isInsightLoading={isGeneratingInsights}
-          insightError={insightError}
-        />
-      </div>
-      <div className="pdf-print-page space-y-4">
-        <DashboardChannelBreakdownCharts
-          onlyBreakdownKey="completed"
-          overview={overview}
-          insights={insights}
-          isInsightLoading={isGeneratingInsights}
-          insightError={insightError}
-        />
-      </div>
-      <div className="pdf-print-page space-y-4">
-        <DashboardChannelBreakdownCharts
-          onlyBreakdownKey="pending"
-          overview={overview}
-          insights={insights}
-          isInsightLoading={isGeneratingInsights}
-          insightError={insightError}
-        />
-      </div>
-
-      <DashboardTopChartsPrintSection
-        topListsData={topListsData}
-        insights={insights}
-        isInsightLoading={isGeneratingInsights}
-        insightError={insightError}
-      />
-
-      {/* Trang cuối: Top landing + insight */}
-      <div className="pdf-print-page space-y-4">
-        <LandingPagesAdminStatsCharts
-          rows={landingPageStats?.rows}
-          topN={10}
-          scopeAllTime
-          showInsight
-          insightText={insights?.charts?.landingTopPages || ''}
-          isInsightLoading={isGeneratingInsights}
-          insightError={insightError}
-        />
-      </div>
+          <div className="pdf-print-page space-y-4">
+            <p className="text-xs text-gray-500">
+              Bản in — Đơn hàng theo thời gian:{' '}
+              <span className="font-semibold text-gray-700">So sánh kênh</span>
+            </p>
+            <DashboardOrdersChart
+              timeline={ordersTimeline}
+              isMonthlyView={isMonthlyView}
+              lockedViewMode="compare"
+              insightText={getOrdersTrendInsightForMode(insights?.charts, 'compare')}
+              isInsightLoading={isGeneratingInsights}
+              insightError={insightError}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 };

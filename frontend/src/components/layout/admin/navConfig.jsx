@@ -83,7 +83,7 @@ export const superAdminMenuItems = (t) => [
 // quyền nếu rơi mất một cổng).
 export const userMenuItems = (t) => [
   { key: 'ai_assistant', name: t('nav.aiAssistant'), defaultCategory: 'main', path: '/app', icon: HiOutlineSparkles, end: true },
-  { key: 'dashboard', name: t('nav.dashboard'), defaultCategory: 'main', path: '/app/reports', icon: HiOutlineHome, permission: ['reports_view'] },
+  { key: 'dashboard', name: t('nav.reports'), defaultCategory: 'main', path: '/app/reports', icon: HiOutlineHome, permission: ['reports_view'] },
   { key: 'products', name: t('nav.products'), defaultCategory: 'main', path: '/app/products', icon: HiOutlineCube, permission: ['courses'] },
   { key: 'chatbot_studio', name: t('nav.chatbotStudio'), defaultCategory: 'ai_chatbot', path: '/app/chatbot-studio', icon: HiOutlinePlus, permission: ['chatbots_manage'] },
   { key: 'inbox', name: t('nav.inbox'), defaultCategory: 'ai_chatbot', path: '/app/settings/inbox', icon: HiOutlineInbox, permission: ['inbox_view'] },

@@ -125,7 +125,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     // 4 mục lá "main" (không tiêu đề nhóm) LUÔN đứng trước, rồi đúng 5 nhóm theo thứ tự
     // DEFAULT_APP_MENU_CATEGORIES (cụm "Quản trị" đã được ẩn, "Sản phẩm" hiển thị thành mục độc lập).
     expect(titles).toEqual([
-      'Trợ lý AI', 'Tổng quan', 'Sản phẩm', 'Chương trình đối tác',
+      'Trợ lý AI', 'Báo cáo', 'Sản phẩm', 'Chương trình đối tác',
       'AI Chatbot', 'Chiến dịch', 'Landing page', 'Gói & Thanh toán', 'Cài đặt',
     ]);
   });
@@ -172,7 +172,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
     const titles = buttons.map((b) => b.getAttribute('title'));
 
     // Không có bất kỳ nhóm/mục nào khác rò ra — đúng 2 nút: mục main không gate (Trợ lý AI) + duy nhất 1
-    // nhóm "Chiến dịch". "Tổng quan" từng hiện ở đây dù route /app/reports đòi reports_view (nhân viên bấm
+    // nhóm "Chiến dịch". "Báo cáo" (menu /app/reports, trước 30/09 ghi "Tổng quan") từng hiện ở đây dù route /app/reports đòi reports_view (nhân viên bấm
     // vào là bị chặn) — PLAN_NHAN_VIEN PR-3 mục 5 (P2) đã gắn permission reports_view cho mục này.
     expect(titles).toEqual(['Trợ lý AI', 'Chiến dịch']);
 
@@ -188,7 +188,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
   // PLAN_NHAN_VIEN PR-3 mục 5 (P2): 3 mục AI Chatbot từng `ownerOnly` dù route + backend cho nhân viên có
   // quyền chatbots_manage / inbox_view / media_library_view → chủ tick 7 ô quyền mà nhân viên không bao giờ
-  // thấy mục menu. Ngược lại "Tổng quan" không gắn quyền nên ai cũng thấy một mục bấm vào là bị chặn.
+  // thấy mục menu. Ngược lại "Báo cáo" không gắn quyền nên ai cũng thấy một mục bấm vào là bị chặn.
   describe('nhân viên: menu theo đúng quyền (P2)', () => {
     const employeeTitles = (permissions) => {
       authState.user = { role: 'user', username: 'emp2', fullName: 'Nhân viên B' };
@@ -202,12 +202,12 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       return screen.getAllByRole('link').map((l) => l.textContent);
     };
 
-    it('không có quyền nào: chỉ còn "Trợ lý AI" — không có "Tổng quan", không nhóm nào', () => {
+    it('không có quyền nào: chỉ còn "Trợ lý AI" — không có "Báo cáo", không nhóm nào', () => {
       expect(employeeTitles({})).toEqual(['Trợ lý AI']);
     });
 
-    it('reports_view → hiện "Tổng quan"', () => {
-      expect(employeeTitles({ reports_view: true })).toEqual(['Trợ lý AI', 'Tổng quan']);
+    it('reports_view → hiện "Báo cáo" (tên menu = tiêu đề trang /app/reports)', () => {
+      expect(employeeTitles({ reports_view: true })).toEqual(['Trợ lý AI', 'Báo cáo']);
     });
 
     it('inbox_view → nhóm AI Chatbot chỉ có "Lịch sử trò chuyện"', () => {

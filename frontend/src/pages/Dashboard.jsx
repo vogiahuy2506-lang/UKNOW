@@ -5,15 +5,14 @@ import DashboardHeader from '../features/dashboard/components/DashboardHeader';
 import DashboardFilterPanel from '../features/dashboard/components/DashboardFilterPanel';
 import DashboardKpiCards from '../features/dashboard/components/DashboardKpiCards';
 import DashboardOrdersChart from '../features/dashboard/components/DashboardOrdersChart';
-import DashboardChannelTabs from '../features/dashboard/components/DashboardChannelTabs';
-import DashboardRunsTable from '../features/dashboard/components/DashboardRunsTable';
+import DashboardSentChart from '../features/dashboard/components/DashboardSentChart';
+import DashboardCampaignsTable from '../features/dashboard/components/DashboardCampaignsTable';
+import DashboardReportLinks from '../features/dashboard/components/DashboardReportLinks';
 import DashboardOrdersListTable from '../features/dashboard/components/DashboardOrdersListTable';
-import DashboardTopCharts from '../features/dashboard/components/DashboardTopCharts';
-import DashboardChannelBreakdownCharts from '../features/dashboard/components/DashboardChannelBreakdownCharts';
 import DashboardPrintLayout from '../features/dashboard/components/DashboardPrintLayout';
-import DashboardLandingPagesStats from '../features/dashboard/components/DashboardLandingPagesStats';
 import EmployeeMyContributionCard from '../components/EmployeeMyContributionCard';
-import LandingPagesAdminStatsCharts from '../features/landing-pages/components/LandingPagesAdminStatsCharts.jsx';
+import { useAuthStore } from '../stores/authStore';
+import { isEmployeeWorkspace } from '../utils/workspacePermissions.util';
 import { useDashboardAnalytics } from '../features/dashboard/hooks/useDashboardAnalytics';
 import dashboardApiService from '../features/dashboard/services/dashboardApi.service';
 import DashboardInsightOverview from '../features/dashboard/components/DashboardInsightOverview';
@@ -61,8 +60,8 @@ const DashboardSkeleton = () => (
     </div>
 
     {/* KPI cards skeleton */}
-    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-      {Array.from({ length: 6 }).map((_, i) => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+      {Array.from({ length: 4 }).map((_, i) => (
         <div key={i} className="card p-5 space-y-3">
           <div className="flex items-start justify-between">
             <Skeleton className="h-3 w-28" />
@@ -120,7 +119,8 @@ const DashboardSkeleton = () => (
 );
 
 /**
- * Dashboard page shell.
+ * Trang "Báo cáo" (`/app/reports`): 4 thẻ + biểu đồ "Đã gửi mỗi ngày" + bảng "Chiến dịch trong kỳ"; chủ tài khoản thấy
+ * thêm biểu đồ và danh sách đơn hàng. Bảng lượt chạy và thống kê landing chuyển sang trang riêng (chỉ còn đường dẫn).
  *
  * Composes all dashboard feature components.
  * Manages filter panel open/close state at page level.
@@ -139,6 +139,18 @@ const Dashboard = () => {
   /** Đồng bộ insight «Đơn hàng theo thời gian» với tab Tổng hợp / So sánh kênh */
   const [ordersChartViewMode, setOrdersChartViewMode] = useState('summary');
 
+  /**
+   * Nhân viên (ngữ cảnh công ty) không thấy khối đơn hàng — biểu đồ + danh sách có SĐT/email khách, route
+   * `/dashboard/orders` chỉ cho chủ. Ẩn hẳn khối, không hiện bảng rỗng; các thẻ và biểu đồ gửi tin vẫn là số của công ty.
+   */
+  const user = useAuthStore((state) => state.user);
+  const storeActiveContext = useAuthStore((state) => state.activeContext);
+  const activeContext = storeActiveContext || user?.activeContext;
+  const isEmployee = isEmployeeWorkspace(activeContext) || user?.role === 'employee';
+  const showOrders = !isEmployee;
+  /** Link sang trang khác chỉ hiện khi người xem có quyền mở trang đó (nhân viên: theo quyền được cấp). */
+  const canOpen = (permission) => !isEmployee || activeContext?.permissions?.[permission] === true;
+
   // Lifted from DashboardFilterPanel so state survives skeleton re-mounts during data loading
   const [dateMode, setDateMode] = useState('quick');
   const [activeQuickKey, setActiveQuickKey] = useState('3m');
@@ -146,25 +158,19 @@ const Dashboard = () => {
   const {
     overview,
     analytics,
-    runsData,
+    campaignsData,
     ordersData,
     ordersStatusFilter,
-    topListsData,
     campaignOptions,
-    activeChannel,
-    setActiveChannel,
     filters,
     draftFilters,
     setDraftFilters,
     applyFilters,
     isLoading,
-    isLoadingRuns,
     isLoadingOrders,
     errorMessage,
-    loadRunsPage,
     loadOrdersPage,
-    landingPageStats,
-  } = useDashboardAnalytics();
+  } = useDashboardAnalytics({ includeOrders: showOrders });
 
   /**
    * In qua iframe: clone giữ nguyên `absolute left:-14000px` của vùng ẩn màn hình → preview trắng.
@@ -245,15 +251,17 @@ const Dashboard = () => {
     return <DashboardSkeleton />;
   }
 
-  const timeline = analytics?.timeline || [];
+  const dailySent = analytics?.dailySent || [];
+  const ordersTimeline = analytics?.ordersTimeline || [];
   const isMonthlyView = activeQuickKey?.endsWith('m') ?? false;
 
   /**
-   * Gọi backend sinh insight bằng Gemini theo dữ liệu đang hiển thị (chiến lược Email / Zalo / Zalo Group).
+   * Gọi backend sinh insight bằng Gemini theo bộ lọc đang áp dụng.
    *
    * Luồng hoạt động:
    * 1. Khóa nút trong lúc chạy để tránh spam request.
-   * 2. Gửi `overview + analytics + topListsData + landingPageStats + filters` sang backend.
+   * 2. Chỉ gửi `filters` + `locale`: số liệu do SERVER tự tính bằng đúng các hàm của trang này, nên lời phân tích
+   *    luôn khớp các thẻ (không nhận số từ trình duyệt).
    * 3. Nhận JSON insight và render dưới từng biểu đồ (backend lưu DB nếu payload đủ dùng).
    */
   const handleGenerateInsights = async () => {
@@ -261,10 +269,6 @@ const Dashboard = () => {
     setInsightError('');
     try {
       const response = await dashboardApiService.generateInsights({
-        overview,
-        analytics,
-        topListsData,
-        landingPageStats,
         filters,
         locale,
       });
@@ -420,7 +424,7 @@ const Dashboard = () => {
         </div>
       )}
 
-      {/* KPI Cards — 6 cards, 3 columns */}
+      {/* KPI Cards — 4 thẻ theo bộ lọc */}
       <DashboardKpiCards overview={overview} />
 
       {/* Overview insight — phân tích có cấu trúc + tóm tắt */}
@@ -434,69 +438,46 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* Charts row — Orders chart + Channel engagement chart */}
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-        <DashboardOrdersChart
-          timeline={timeline}
+      {/* Biểu đồ: "Đã gửi mỗi ngày" (mọi người xem) + đơn hàng theo thời gian (chỉ chủ tài khoản) */}
+      <div className={`grid grid-cols-1 ${showOrders ? 'xl:grid-cols-2' : ''} gap-4`}>
+        <DashboardSentChart
+          dailySent={dailySent}
           isMonthlyView={isMonthlyView}
-          viewMode={ordersChartViewMode}
-          onViewModeChange={setOrdersChartViewMode}
-          insightText={getOrdersTrendInsightForMode(insights?.charts, ordersChartViewMode)}
+          insightText={getChannelEngagementInsightForChannel(insights?.charts, 'all')}
           isInsightLoading={isGeneratingInsights}
           insightError={insightError}
         />
-        <DashboardChannelTabs
-          activeChannel={activeChannel}
-          onChangeChannel={setActiveChannel}
-          analytics={analytics}
-          isMonthlyView={isMonthlyView}
-          insightText={getChannelEngagementInsightForChannel(insights?.charts, activeChannel)}
-          isInsightLoading={isGeneratingInsights}
-          insightError={insightError}
-        />
+        {showOrders && (
+          <DashboardOrdersChart
+            timeline={ordersTimeline}
+            isMonthlyView={isMonthlyView}
+            viewMode={ordersChartViewMode}
+            onViewModeChange={setOrdersChartViewMode}
+            insightText={getOrdersTrendInsightForMode(insights?.charts, ordersChartViewMode)}
+            isInsightLoading={isGeneratingInsights}
+            insightError={insightError}
+          />
+        )}
       </div>
 
-      {/* Channel breakdown donut charts — click / completed orders / pending orders by channel */}
-      <DashboardChannelBreakdownCharts
-        overview={overview}
-        insights={insights}
-        isInsightLoading={isGeneratingInsights}
-        insightError={insightError}
+      {/* Chiến dịch trong kỳ (gộp thay các bảng top) */}
+      <DashboardCampaignsTable campaigns={campaignsData} />
+
+      {/* Lượt chạy → Giám sát gửi tin; thống kê landing → trang Landing page */}
+      <DashboardReportLinks
+        showDeliveryMonitor={canOpen('campaigns_view')}
+        showLanding={canOpen('landing_pages')}
       />
 
-      {/* Top charts — top courses and campaigns by orders/clicks */}
-      <DashboardTopCharts
-        topListsData={topListsData}
-        insights={insights}
-        isInsightLoading={isGeneratingInsights}
-        insightError={insightError}
-      />
-
-      <LandingPagesAdminStatsCharts
-        rows={landingPageStats?.rows}
-        topN={10}
-        scopeAllTime
-        showInsight
-        insightText={insights?.charts?.landingTopPages || ''}
-        isInsightLoading={isGeneratingInsights}
-        insightError={insightError}
-      />
-      <DashboardLandingPagesStats data={landingPageStats} />
-
-      {/* Runs table */}
-      <DashboardRunsTable
-        runsData={runsData}
-        isLoadingRuns={isLoadingRuns}
-        onChangePage={loadRunsPage}
-      />
-
-      {/* Orders list table */}
-      <DashboardOrdersListTable
-        ordersData={ordersData}
-        isLoadingOrders={isLoadingOrders}
-        ordersStatusFilter={ordersStatusFilter}
-        onChangePage={loadOrdersPage}
-      />
+      {/* Orders list table — chỉ chủ tài khoản (có SĐT/email khách) */}
+      {showOrders && (
+        <DashboardOrdersListTable
+          ordersData={ordersData}
+          isLoadingOrders={isLoadingOrders}
+          ordersStatusFilter={ordersStatusFilter}
+          onChangePage={loadOrdersPage}
+        />
+      )}
     </div>
 
     <div
@@ -510,11 +491,11 @@ const Dashboard = () => {
         insights={insights}
         isGeneratingInsights={isGeneratingInsights}
         insightError={insightError}
-        timeline={timeline}
+        dailySent={dailySent}
+        ordersTimeline={ordersTimeline}
+        campaigns={campaignsData}
         isMonthlyView={isMonthlyView}
-        analytics={analytics}
-        topListsData={topListsData}
-        landingPageStats={landingPageStats}
+        showOrders={showOrders}
       />
     </div>
     </div>

@@ -473,42 +473,19 @@ export default {
     welcome: 'Welcome back',
     insightTooltip: 'Generate AI insights from your recent data',
     overview: 'Overview',
-    recentActivity: 'Recent Activity',
-    quickActions: 'Quick Actions',
     thisWeek: 'This Week',
     thisMonth: 'This Month',
     today: 'Today',
 
-    // KPI
-    totalCampaigns: 'Total Campaigns',
-    activeCampaigns: 'Active Campaigns',
-    totalCustomers: 'Total Customers',
-    newCustomers: 'New Customers',
-    totalRevenue: 'Total Revenue',
-    conversionRate: 'Conversion Rate',
-    totalSent: 'Total Sent',
-    emailOpenRate: 'Email Open Rate',
-    clickRate: 'Click Rate',
-    emailSent: 'Emails Sent',
-    emailOpened: 'Emails Opened',
-    zaloSent: 'Zalo Sent',
-    zaloDelivered: 'Zalo Delivered',
-    pendingOrders: 'Pending Orders',
-    completedOrders: 'Completed Orders',
+    // Orders chart legend — same names as the "Customer responses" card: Left their details / Purchased
+    pendingOrders: 'Left their details',
+    completedOrders: 'Purchased',
 
-    // Runs & Status
-    runs: 'runs',
-    running: 'running',
-    opened: 'opened',
+    // Actions
     getStarted: 'Get Started →',
 
     // Empty states
-    createFirstCampaign: 'Create your first campaign',
     runCampaignToSend: 'Run a campaign to send',
-    noEmailsOpened: 'No emails opened yet',
-    noClicks: 'No clicks yet',
-    noOrders: 'No orders yet',
-    noCompletedOrders: 'No completed orders',
 
     // Orders chart
     ordersOverTime: 'Orders Over Time',
@@ -519,37 +496,8 @@ export default {
     insightOrdersOverTime: 'Insight · Orders Over Time',
     ordersDescription: 'Track orders by time, channel and campaign',
     noOrderDataInPeriod: 'No order data in this time period',
-    pendingOrdersBadge: 'pending',
-    completedOrdersBadge: 'ordered',
-
-    // Top charts
-    topCoursesByOrders: 'Top Courses by Orders',
-    topCampaignsByOrders: 'Top Campaigns by Orders',
-    topCampaignsByClicks: 'Top Campaigns by Clicks',
-    topFive: 'Top 5',
-
-    // Channel labels
-    channel: 'Channel',
-    channelEmail: 'Email',
-    channelZaloPersonal: 'Zalo Personal',
-    channelZaloGroup: 'Zalo Group',
-    channelUnknown: 'Unknown',
-    channelEmailShort: 'Email',
-    channelZaloShort: 'Zalo',
-    channelZaloGroupShort: 'Zalo Group',
-    clickRateLabel: 'Click / Send Rate',
-    noSentYet: 'no sent yet',
-    emailOpensJourney: 'Email opens (journey)',
-    emailOpensNotApplicable: 'Email opens: not applicable — only Email campaigns have open events.',
-    orderPending: 'Pending',
-    orderCompleted: 'Completed',
-    click: 'Click',
-    sent: 'Sent',
-    clickChartSubtitle: 'Top 5 · Y-axis includes channel (Email / Zalo / Zalo Group). Top = click (solid bar), bottom = sent (striped bar); same scale; labels show % click/sent',
-    clickChartSubtitlePrint: 'Top 5 · Y-axis includes channel. Top = click, bottom = sent; labels show % click/sent',
-    clickBarDescription: 'Top bar: click — solid fill, no stripes · Bottom bar: sent — white vertical stripes inside bar. Same horizontal scale; length = count.',
-    colorByChannel: 'Color by campaign channel:',
-    noDataInPeriod: 'No data in this time period',
+    pendingOrdersBadge: 'left details',
+    completedOrdersBadge: 'purchased',
 
     // Filter panel
     closeFilter: 'Close filter',
@@ -575,7 +523,7 @@ export default {
     deselectAll: 'Deselect all',
     noMatchingCampaign: 'No matching campaigns found',
     channelType: 'Channel Type',
-    orders: 'Dashboard',
+    orders: 'Reports',
 
     // Quick range labels
     days7: '7 days',
@@ -586,7 +534,6 @@ export default {
     months12: '12 months',
 
     // Insight
-    insight: 'Insight',
     insightOverview: 'Insight Overview',
     insightTip: 'Strategic comments for Email, Zalo and Zalo Group; compare send timeline with orders; detect summary vs chart discrepancies when present — based on current data and filters.',
     analyzing: 'Analyzing…',
@@ -602,20 +549,6 @@ export default {
     printPdfTip: 'When saving PDF, uncheck "Headers and footers" to hide URL, date/time and title.',
     savedInsightTip: 'Load and display saved insight from the server',
     viewSavedInsight: 'View saved insight',
-
-    // Landing pages table
-    landingPagesTitle: 'Landing pages',
-    landingPagesEmptyDesc: 'Views, clicks (tracking links), form submissions (all time) — no data yet.',
-    landingPagesDesc: 'All time — by slug: page views, clicks via tracking links, form submissions; CTR = clicks/views; form/view rate = submits/views.',
-    slug: 'Slug',
-    views: 'Views',
-    clicks: 'Clicks',
-    form: 'Form',
-    ctrPct: 'CTR %',
-    formViewPct: 'Form/view %',
-    landingPagePagination: 'Page {page}/{totalPages} — {count} slugs',
-    prevPage: 'Previous',
-    nextPage: 'Next',
   },
 
   channel: {
@@ -5927,10 +5860,57 @@ export default {
     confirmNewPasswordPlaceholder: 'Confirm new password',
   },
 
-  // Dashboard KPI Cards
-  dashboardKpiCards: {
-    getStarted: 'Get Started →',
-    channelBreakdown: 'Email: {email} • Zalo: {zalo} • Group: {group}',
+  // Reports page (PLAN_SO_LIEU_DUNG_GON_KHOP PR-5): 4 cards + "Sent per day" chart + campaigns-in-period table.
+  dashboardReport: {
+    cards: {
+      sent: 'Sent',
+      friendRequests: '+ {count} friend requests',
+      failed: 'Not delivered',
+      failedHint: 'Counted per recipient, after successful retries.',
+      emailEngagement: 'Email · % of emails sent',
+      emailOpened: 'Emails opened',
+      emailClicked: 'Emails with a clicked link',
+      emailBase: 'Based on {count} emails sent in the period',
+      clicksAllChannels: 'Link clicks across all channels: {count}',
+      customers: 'Customer responses',
+      leftInfo: 'Left their details',
+      purchased: 'Purchased',
+      customersEmpty: 'No customers have left details or purchased yet',
+    },
+    channel: {
+      email: 'Email',
+      zalo_personal: 'Personal Zalo',
+      zalo_group: 'Zalo group',
+      telegram: 'Telegram',
+      whatsapp: 'WhatsApp',
+      other: 'Other',
+    },
+    chart: {
+      title: 'Sent per day',
+      subtitle: 'Messages sent per day (Vietnam time), stacked by channel. Zalo friend requests are not included.',
+      total: 'Total',
+      empty: 'No messages were sent in this period',
+      insightTitle: 'Insight · Sent per day',
+    },
+    campaigns: {
+      title: 'Campaigns in the period',
+      subtitle: 'Up to 10 campaigns that sent the most messages in the selected dates. "Not delivered" is counted per recipient; "Opened" applies to email only.',
+      empty: 'No campaign sent any message in this period',
+      deleted: 'Deleted campaign',
+      unnamed: 'Campaign #{id}',
+      col: {
+        campaign: 'Campaign',
+        sent: 'Sent',
+        failed: 'Not delivered',
+        opened: 'Opened',
+        clicked: 'Clicked',
+        purchased: 'Purchased',
+      },
+    },
+    links: {
+      deliveryMonitor: 'See runs in Delivery monitor',
+      landing: 'See landing stats in Landing pages',
+    },
   },
 
   // Orders Table
@@ -5985,44 +5965,6 @@ export default {
     sentAt: 'sent at',
     expressedInterest: 'Interest registered',
     purchasedCourse: 'Purchased course',
-  },
-
-  // Runs Table
-  runsTable: {
-    title: 'Runs Table',
-    runs: 'runs',
-    showingResults: '· showing {count} results',
-    searchPlaceholder: 'Search by campaign name, run...',
-    runCampaign: 'Run / Campaign',
-    channel: 'Channel',
-    startDate: 'Start Date',
-    messagesSent: 'Messages Sent',
-    emailOpened: 'Email Opened',
-    click: 'Click',
-    orders: 'Orders',
-    status: 'Status',
-    completed: 'Completed',
-    running: 'Running',
-    pending: 'Pending',
-    failed: 'Failed',
-    cancelled: 'Cancelled',
-    ordered: 'ordered',
-    pendingOrders: 'pending',
-    previousPage: 'Previous',
-    nextPage: 'Next',
-    page: 'Page',
-    noResultsFilter: 'No results matching the filter',
-    noRunsInRange: 'No runs in selected range',
-    tryClearFilter: 'Try clearing channel or status filters',
-    adjustTimeCampaign: 'Adjust time or campaign filters',
-    clearFilter: 'Clear filter',
-    selectSortType: 'Select sort type',
-    viewLess: 'Show less',
-    viewMore: 'Show more',
-    run: 'Run',
-    all: 'All',
-    purchased: 'Purchased',
-    leftInfo: 'Left info',
   },
 
   // Channel Breakdown Charts
@@ -6634,11 +6576,6 @@ export default {
     delete: 'Delete',
   },
 
-  // Channel Tabs
-  channelTabs: {
-    insightByChannel: 'Insight · Interactions by channel',
-  },
-
   // Landing Enhancements
   landingEnhancements: {
     registerFounderAI: 'Register for Founder AI',
@@ -7087,66 +7024,6 @@ export default {
     colProductUrl: 'Product link',
     colTargetAudience: 'Target audience',
     colStatus: 'Status',
-  },
-
-  // Dashboard Top Charts
-  dashboardTopCharts: {
-    channelLabel: {
-      email: 'Email',
-      zalo: 'Personal Zalo',
-      zaloGroup: 'Zalo Group',
-    },
-    channelShort: {
-      email: 'Email',
-      zalo: 'Zalo',
-      zaloGroup: 'Zalo Group',
-    },
-    unknownChannel: 'Unknown',
-    emailPendingOrders: 'Pending',
-    emailCompletedOrders: 'Completed',
-    zaloPendingOrders: 'Pending',
-    zaloCompletedOrders: 'Completed',
-    zaloGroupPendingOrders: 'Pending',
-    zaloGroupCompletedOrders: 'Completed',
-    emailSent: 'Sent',
-    emailOpened: 'Opened',
-    emailClicked: 'Clicked',
-    emailDownloads: 'Downloaded',
-    zaloSent: 'Sent',
-    zaloClicked: 'Clicked',
-    zaloGroupSent: 'Sent',
-    zaloGroupClicked: 'Clicked',
-  },
-
-  // Dashboard Channel Tabs
-  dashboardChannelTabs: {
-    all: 'All',
-    email: 'Email',
-    zalo: 'Zalo',
-    zaloGroup: 'Zalo Group',
-    // Mirrored key for namespaced access (useI18n('dashboardChannelTabs') + flat key)
-    channelTabs: {
-      insightByChannel: 'Insight · Interaction by channel',
-    },
-    sent: 'Sent',
-    opened: 'Opened',
-    clicked: 'Click',
-    downloaded: 'Download',
-    pendingOrders: 'Pending orders',
-    completedOrders: 'Completed orders',
-    sentLabel: 'Send',
-    interactionByChannel: 'Aggregated interaction by channel',
-    emailEffectivenessOrders: 'Email Effectiveness + Email Orders',
-    zaloEffectivenessOrders: 'Zalo Effectiveness + Zalo Orders',
-    zaloGroupEffectivenessOrders: 'Zalo Group Effectiveness + Zalo Group Orders',
-    telegram: 'Telegram',
-    whatsapp: 'WhatsApp',
-    telegramEffectiveness: 'Messages sent via Telegram per day',
-    whatsappEffectiveness: 'Messages sent via WhatsApp per day',
-    sentOnlyForChannel: 'This channel only tracks messages sent (no opens/clicks/orders yet)',
-    selectChannelForOrders: 'Select a specific channel to see orders by channel',
-    interactionOrdersForChannel: 'Interaction + orders for the selected channel',
-    noDataForChannel: 'No data for this channel in the selected time period',
   },
 
   // Template Gallery

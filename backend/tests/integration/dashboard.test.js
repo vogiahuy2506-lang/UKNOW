@@ -3,21 +3,18 @@
  *
  * Phạm vi:
  *   - Authorization (token bắt buộc cho mọi endpoint).
- *   - GET /overview — KPI: campaign count, run headline, email metrics,
- *     attachment download count, zalo clicks, orders by type, journey events.
- *     * Tenant isolation cho user role; admin thấy toàn bộ.
- *   - GET /analytics — timeline rỗng có rows theo date range mặc định.
- *   - GET /top-lists — topCourses + topCampaignsByOrders + topCampaignsByClicks.
+ *   - GET /overview — shape mới của trang Báo cáo (sent / failed / email / clicks / orders); tenant isolation
+ *     cho user role; admin thấy toàn bộ. Số đếm từng con số nằm ở dashboardReport.test.js.
+ *   - GET /analytics — dailySent + ordersTimeline có đủ số ngày theo bộ lọc.
+ *   - GET /campaigns — bảng chiến dịch trong kỳ (rỗng khi chưa có tin).
+ *   - Endpoint cũ /runs, /top-lists, /compare đã gỡ (PR-5) → 404.
  *   - GET /orders — pagination + filter orderStatus.
- *   - GET /runs — pagination + scope.
- *   - GET /compare — validation (400 nếu thiếu campaignIds hoặc invalid).
- *     * Trả metric kèm openRate/clickRate/conversionRate tính từ counters.
- *     * User chỉ xem campaign của mình; admin global view.
  *   - GET /landing-pages-stats — gộp events + leads + published slugs.
  *   - GET /insights/saved — trả null khi chưa có; trả payload đã lưu.
+ *   - POST /insights — chỉ kiểm phần validate bộ lọc.
  *
  * KHÔNG cover:
- *   - POST /insights (cần Gemini API thật).
+ *   - POST /insights gọi Gemini (dashboardReport.test.js chặn `fetch` để đọc prompt).
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
 import request from 'supertest';
@@ -81,10 +78,8 @@ describe('Dashboard routes — authorization', () => {
   it.each([
     'overview',
     'analytics',
-    'runs',
+    'campaigns',
     'orders',
-    'top-lists',
-    'compare',
     'insights/saved',
     'landing-pages-stats',
   ])('GET /api/dashboard/%s yêu cầu auth → 401', async (path) => {
@@ -95,99 +90,82 @@ describe('Dashboard routes — authorization', () => {
 
 // ─────────────────────────────────────────────────────────────────────────
 describe('GET /api/dashboard/overview', () => {
-  it('trả về 200 với headline/channels/journeyEvents khi user chưa có data', async () => {
+  it('trả về 200 với sent/failed/email/clicks/orders khi user chưa có data', async () => {
     const user = await createUser();
     const token = await loginAs(user);
     const res = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.data).toHaveProperty('headline');
-    expect(res.body.data).toHaveProperty('channels.email');
-    expect(res.body.data).toHaveProperty('channels.zalo');
-    expect(res.body.data).toHaveProperty('channels.zaloGroup');
-    expect(res.body.data).toHaveProperty('journeyEvents');
-    expect(res.body.data.headline.totalCampaigns).toBe(0);
-    expect(res.body.data.headline.totalRuns).toBe(0);
+    expect(res.body.data).toHaveProperty('sent.total', 0);
+    expect(res.body.data).toHaveProperty('sent.friendRequests', 0);
+    expect(res.body.data).toHaveProperty('failed.total', 0);
+    expect(res.body.data).toHaveProperty('email.sent', 0);
+    expect(res.body.data).toHaveProperty('clicks.total', 0);
+    expect(res.body.data).toHaveProperty('orders.completed', 0);
+    expect(res.body.data).toHaveProperty('orders.pending', 0);
+    expect(res.body.data).not.toHaveProperty('headline');
+    expect(res.body.data).not.toHaveProperty('journeyEvents');
   });
 
-  it('totalCampaigns chỉ đếm campaigns của user (isolation cho role=user)', async () => {
-    const userA = await createUser();
-    const userB = await createUser();
-    await createCampaign({ userId: userA.id, name: 'A1' });
-    await createCampaign({ userId: userA.id, name: 'A2' });
-    await createCampaign({ userId: userB.id, name: 'B1' });
-
-    const tokenA = await loginAs(userA);
-    const res = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${tokenA}`);
-    expect(res.body.data.headline.totalCampaigns).toBe(2);
-  });
-
-  it('admin role thấy toàn bộ campaigns', async () => {
-    const admin = await createUser({ role: 'admin' });
-    const userA = await createUser();
-    await createCampaign({ userId: userA.id });
-    await createCampaign({ userId: admin.id });
-    await createCampaign({ userId: admin.id });
-
-    const tokenAdmin = await loginAs(admin);
-    const res = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${tokenAdmin}`);
-    expect(res.body.data.headline.totalCampaigns).toBe(3);
-  });
-
-  it('run headline tổng hợp total_recipients / successful / failed từ campaign_runs', async () => {
+  it('echo bộ lọc đã chuẩn hoá (kênh không hợp lệ về "all", ngày hợp lệ được giữ)', async () => {
     const user = await createUser();
-    const camp = await createCampaign({ userId: user.id });
-    await createRun({ campaignId: camp.id, status: 'completed', stats: { totalRecipients: 200, successfulSends: 180, failedSends: 20 } });
-    await createRun({ campaignId: camp.id, status: 'running', stats: { totalRecipients: 100, successfulSends: 0, failedSends: 0 } });
-
-    const token = await loginAs(user);
-    const res = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${token}`);
-    expect(res.body.data.headline).toMatchObject({
-      totalRuns: 2,
-      runningRuns: 1,
-      completedRuns: 1,
-      totalRecipients: 300,
-      successfulSends: 180,
-      failedSends: 20,
-    });
-    expect(res.body.data.headline.successRate).toBeCloseTo(60, 1);
-  });
-
-  it('filter campaignType=email chỉ tính campaign email', async () => {
-    const user = await createUser();
-    await createCampaign({ userId: user.id, name: 'Email1', type: 'email' });
-    await createCampaign({ userId: user.id, name: 'Zalo1', type: 'zalo' });
     const token = await loginAs(user);
     const res = await request(app)
-      .get('/api/dashboard/overview?campaignType=email')
+      .get('/api/dashboard/overview?campaignType=khong-co&startDate=2025-06-01&endDate=2025-06-30')
       .set('Authorization', `Bearer ${token}`);
-    expect(res.body.data.headline.totalCampaigns).toBe(1);
+    expect(res.body.data.filters).toMatchObject({ campaignType: 'all', startDate: '2025-06-01', endDate: '2025-06-30' });
+  });
+
+  it('thư của user A không hiện ở Báo cáo của user B (isolation cho role=user)', async () => {
+    const userA = await createUser();
+    const userB = await createUser();
+    const campaign = await createCampaign({ userId: userA.id, name: 'A1' });
+    await db.query(
+      `INSERT INTO email_messages (workspace_owner_id, id_campaign, recipient_email, status, tracking_token, sent_at, created_at)
+       VALUES ($1, $2, 'r@x.test', 'sent', 'iso-token-1', NOW(), NOW())`,
+      [userA.id, campaign.id]
+    );
+
+    const resA = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${await loginAs(userA)}`);
+    const resB = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${await loginAs(userB)}`);
+    expect(resA.body.data.sent.total).toBe(1);
+    expect(resB.body.data.sent.total).toBe(0);
+  });
+
+  it('admin role thấy tin của mọi tài khoản', async () => {
+    const admin = await createUser({ role: 'admin' });
+    const userA = await createUser();
+    const campaign = await createCampaign({ userId: userA.id });
+    await db.query(
+      `INSERT INTO email_messages (workspace_owner_id, id_campaign, recipient_email, status, tracking_token, sent_at, created_at)
+       VALUES ($1, $2, 'r@x.test', 'sent', 'iso-token-2', NOW(), NOW())`,
+      [userA.id, campaign.id]
+    );
+
+    const res = await request(app).get('/api/dashboard/overview').set('Authorization', `Bearer ${await loginAs(admin)}`);
+    expect(res.body.data.sent.total).toBe(1);
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────
 describe('GET /api/dashboard/analytics', () => {
-  it('trả timeline có đủ rows theo date range mặc định (30d)', async () => {
+  it('trả dailySent + ordersTimeline có đủ rows theo date range mặc định (30d)', async () => {
     const user = await createUser();
     const token = await loginAs(user);
     const res = await request(app).get('/api/dashboard/analytics').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(Array.isArray(res.body.data.timeline)).toBe(true);
-    expect(res.body.data.timeline.length).toBe(30); // 30 ngày inclusive
-    // Mỗi item có các trường counters mặc định 0
-    expect(res.body.data.timeline[0]).toMatchObject({
-      emailSent: 0,
-      emailOpened: 0,
-      emailClicked: 0,
-      pendingOrders: 0,
-      completedOrders: 0,
-    });
+    expect(Array.isArray(res.body.data.dailySent)).toBe(true);
+    expect(res.body.data.dailySent.length).toBe(30); // 30 ngày inclusive
+    expect(res.body.data.ordersTimeline.length).toBe(30);
+    // Mỗi ngày có các trường counters mặc định 0
+    expect(res.body.data.dailySent[0]).toMatchObject({ total: 0, email: 0, zalo_personal: 0, zalo_group: 0 });
+    expect(res.body.data.ordersTimeline[0]).toMatchObject({ pendingOrders: 0, completedOrders: 0 });
   });
 
-  it('?period=7d trả timeline 7 rows', async () => {
+  it('?period=7d trả 7 rows', async () => {
     const user = await createUser();
     const token = await loginAs(user);
     const res = await request(app).get('/api/dashboard/analytics?period=7d').set('Authorization', `Bearer ${token}`);
-    expect(res.body.data.timeline.length).toBe(7);
+    expect(res.body.data.dailySent.length).toBe(7);
   });
 
   it('explicit startDate/endDate được tôn trọng', async () => {
@@ -196,31 +174,38 @@ describe('GET /api/dashboard/analytics', () => {
     const res = await request(app)
       .get('/api/dashboard/analytics?startDate=2025-06-01&endDate=2025-06-05')
       .set('Authorization', `Bearer ${token}`);
-    expect(res.body.data.timeline.length).toBe(5);
-    expect(res.body.data.timeline[0].date).toBe('2025-06-01');
-    expect(res.body.data.timeline[4].date).toBe('2025-06-05');
+    expect(res.body.data.dailySent.length).toBe(5);
+    expect(res.body.data.dailySent[0].date).toBe('2025-06-01');
+    expect(res.body.data.dailySent[4].date).toBe('2025-06-05');
   });
 });
 
 // ─────────────────────────────────────────────────────────────────────────
-describe('GET /api/dashboard/top-lists', () => {
-  it('trả 3 mảng (topCourses, topCampaignsByOrders, topCampaignsByClicks) — rỗng khi không có data', async () => {
+describe('GET /api/dashboard/campaigns', () => {
+  it('trả items=[] khi chưa có tin nào trong kỳ', async () => {
     const user = await createUser();
     const token = await loginAs(user);
-    const res = await request(app).get('/api/dashboard/top-lists').set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/api/dashboard/campaigns').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.data).toHaveProperty('topCourses');
-    expect(res.body.data).toHaveProperty('topCampaignsByOrders');
-    expect(res.body.data).toHaveProperty('topCampaignsByClicks');
-    expect(Array.isArray(res.body.data.topCourses)).toBe(true);
+    expect(res.body.data.items).toEqual([]);
   });
 
   it('limit ≤ 20 (input 50 → bị giới hạn về 20)', async () => {
     const user = await createUser();
     const token = await loginAs(user);
-    const res = await request(app).get('/api/dashboard/top-lists?limit=50').set('Authorization', `Bearer ${token}`);
+    const res = await request(app).get('/api/dashboard/campaigns?limit=50').set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.topCourses.length).toBeLessThanOrEqual(20);
+    expect(res.body.data.items.length).toBeLessThanOrEqual(20);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────
+describe('endpoint cũ đã gỡ ở PR-5', () => {
+  it.each(['runs', 'top-lists', 'compare'])('GET /api/dashboard/%s → 404 (bảng lượt chạy về Giám sát gửi tin, top-list gộp vào /campaigns)', async (path) => {
+    const user = await createUser();
+    const token = await loginAs(user);
+    const res = await request(app).get(`/api/dashboard/${path}`).set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(404);
   });
 });
 
@@ -242,80 +227,6 @@ describe('GET /api/dashboard/orders', () => {
       .get('/api/dashboard/orders?orderStatus=invalid')
       .set('Authorization', `Bearer ${token}`);
     expect(res.body.data.filters.orderStatus).toBe('all');
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────
-describe('GET /api/dashboard/runs', () => {
-  it('trả pagination + items=[] khi không có run', async () => {
-    const user = await createUser();
-    const token = await loginAs(user);
-    const res = await request(app).get('/api/dashboard/runs').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
-    expect(res.body.data.pagination).toMatchObject({ page: 1, limit: 20 });
-  });
-});
-
-// ─────────────────────────────────────────────────────────────────────────
-describe('GET /api/dashboard/compare', () => {
-  it('thiếu campaignIds → 400', async () => {
-    const user = await createUser();
-    const token = await loginAs(user);
-    const res = await request(app).get('/api/dashboard/compare').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(400);
-  });
-
-  it('campaignIds toàn ký tự không hợp lệ → 400', async () => {
-    const user = await createUser();
-    const token = await loginAs(user);
-    const res = await request(app).get('/api/dashboard/compare?campaignIds=abc,xyz').set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(400);
-  });
-
-  it('trả metrics + tính openRate/clickRate/conversionRate', async () => {
-    const user = await createUser();
-    const c1 = await createCampaign({
-      userId: user.id, name: 'C1', stats: {
-        totalSent: 100, totalDelivered: 100, totalOpened: 50, totalClicked: 20, totalConverted: 5,
-      },
-    });
-
-    const token = await loginAs(user);
-    const res = await request(app).get(`/api/dashboard/compare?campaignIds=${c1.id}`).set('Authorization', `Bearer ${token}`);
-    expect(res.status).toBe(200);
-    expect(res.body.data).toHaveLength(1);
-    expect(res.body.data[0]).toMatchObject({
-      campaignName: 'C1',
-      totalOpened: 50,
-      totalClicked: 20,
-      totalConverted: 5,
-    });
-    expect(parseFloat(res.body.data[0].openRate)).toBeCloseTo(50.0, 1);
-    expect(parseFloat(res.body.data[0].clickRate)).toBeCloseTo(40.0, 1);
-    expect(parseFloat(res.body.data[0].conversionRate)).toBeCloseTo(25.0, 1);
-  });
-
-  it('isolation — user thường không thấy campaign user khác', async () => {
-    const userA = await createUser();
-    const userB = await createUser();
-    const cA = await createCampaign({ userId: userA.id, name: 'A' });
-    const cB = await createCampaign({ userId: userB.id, name: 'B' });
-
-    const tokenA = await loginAs(userA);
-    const res = await request(app).get(`/api/dashboard/compare?campaignIds=${cA.id},${cB.id}`).set('Authorization', `Bearer ${tokenA}`);
-    expect(res.body.data).toHaveLength(1);
-    expect(res.body.data[0].campaignName).toBe('A');
-  });
-
-  it('admin thấy hết campaigns trong compare', async () => {
-    const admin = await createUser({ role: 'admin' });
-    const userA = await createUser();
-    const cA = await createCampaign({ userId: userA.id, name: 'UserA' });
-    const cAdmin = await createCampaign({ userId: admin.id, name: 'AdminC' });
-
-    const tokenAdmin = await loginAs(admin);
-    const res = await request(app).get(`/api/dashboard/compare?campaignIds=${cA.id},${cAdmin.id}`).set('Authorization', `Bearer ${tokenAdmin}`);
-    expect(res.body.data).toHaveLength(2);
   });
 });
 
@@ -508,11 +419,14 @@ describe('GET /api/dashboard/insights/saved', () => {
 
 // ─────────────────────────────────────────────────────────────────────────
 describe('POST /api/dashboard/insights', () => {
-  it('thiếu overview/analytics/topListsData → 400', async () => {
+  it('filters sai kiểu → 400 (trước khi kiểm credit / gọi Gemini)', async () => {
     const user = await createUser();
     const token = await loginAs(user);
-    const res = await request(app).post('/api/dashboard/insights').set('Authorization', `Bearer ${token}`).send({});
+    const res = await request(app)
+      .post('/api/dashboard/insights')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ filters: ['khong', 'phai', 'doi-tuong'] });
     expect(res.status).toBe(400);
-    expect(res.body.message).toMatch(/Thiếu dữ liệu/);
+    expect(res.body.message).toMatch(/Bộ lọc/);
   });
 });

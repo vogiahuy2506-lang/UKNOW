@@ -929,6 +929,35 @@ describe('sendStats — getCampaignTotals và getActorTotals', () => {
     await expect(getCampaignTotals({ ownerId: owner }, null, null)).rejects.toThrow(TypeError);
   });
 
+  it('getChannelTotals / getDailySeries nhận campaignIds (PR-5): lọc trong CTE ở cả ba bảng; [] = không chiến dịch nào, không phải tất cả', async () => {
+    const sum = (rows, key) => rows.reduce((total, row) => total + row[key], 0);
+
+    // Chỉ chiến dịch A (email): Zalo và Telegram của chiến dịch B không lọt vào.
+    expect(await getChannelTotals({ ownerId: owner }, DAYS_7, { campaignIds: [campaignA] })).toEqual(
+      expectedTotals({ email: { sent: 3, failed: 1, opened: 2, clicked: 1 } })
+    );
+    // Chỉ chiến dịch B: cả ba bảng (email, Zalo, adapter) cùng bị lọc.
+    expect(await getChannelTotals({ ownerId: owner }, DAYS_7, { campaignIds: [campaignB] })).toEqual(
+      expectedTotals({
+        email: { sent: 1, opened: 1 },
+        zalo_personal: { sent: 2, failed: 1, clicked: 1 },
+        telegram: { sent: 1 },
+      })
+    );
+    // Không truyền = mọi chiến dịch (kể cả thư của chiến dịch đã xoá): 3 + 1 + 1 email.
+    expect((await getChannelTotals({ ownerId: owner }, DAYS_7)).find((row) => row.channel === 'email').sent).toBe(5);
+    expect(await getChannelTotals({ ownerId: owner }, DAYS_7, { campaignIds: [] })).toEqual(expectedTotals());
+
+    // Chuỗi theo ngày cùng bộ lọc: tổng các ngày = tổng theo kênh cùng bộ lọc.
+    const dailyA = await getDailySeries({ ownerId: owner }, DAYS_7, { campaignIds: [campaignA] });
+    expect({ sent: sum(dailyA, 'sent'), failed: sum(dailyA, 'failed') }).toEqual({ sent: 3, failed: 1 });
+    expect(dailyA.every((row) => row.channel === 'email')).toBe(true);
+    const dailyB = await getDailySeries({ ownerId: owner }, DAYS_7, { campaignIds: [campaignB] });
+    expect({ sent: sum(dailyB, 'sent'), failed: sum(dailyB, 'failed') }).toEqual({ sent: 4, failed: 1 });
+    expect(await getDailySeries({ ownerId: owner }, DAYS_7, { campaignIds: [] })).toEqual([]);
+    await expect(getChannelTotals({ ownerId: owner }, DAYS_7, { campaignIds: ['x'] })).rejects.toThrow(TypeError);
+  });
+
   it('getActorTotals: người tạo chiến dịch (chủ, nhân viên) và dòng chưa gắn người', async () => {
     expect(await getActorTotals({ ownerId: owner }, DAYS_7)).toEqual([
       { actorUserId: owner, sent: 3, failed: 1 }, // A: 2 gửi được (a1, a2) + thư chiến dịch đã xoá; lỗi a3

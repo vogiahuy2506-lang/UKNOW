@@ -21,7 +21,7 @@ jest.unstable_mockModule('nodemailer', () => ({
 let db;
 let emailSettingsSmtpService;
 let emailSettingsRepository;
-let dashboardRepository;
+let sendStatsService;
 let adminFunnelRepository;
 let customerReadRepository;
 let customerCampaignJourneyDetailRepository;
@@ -42,8 +42,7 @@ beforeAll(async () => {
   emailSettingsSmtpService = smtpModule.default;
   const repoModule = await import('../../src/repositories/email/emailSettings.repository.js');
   emailSettingsRepository = repoModule.default;
-  const dashModule = await import('../../src/repositories/dashboard/dashboard.repository.js');
-  dashboardRepository = dashModule.default;
+  sendStatsService = await import('../../src/services/stats/sendStats.service.js');
   const funnelModule = await import('../../src/repositories/admin/adminFunnel.repository.js');
   adminFunnelRepository = funnelModule.default;
   const custReadModule = await import('../../src/repositories/customer/customerRead.repository.js');
@@ -215,14 +214,19 @@ describe('Preview Messages Flag & Isolation (Plan 172)', () => {
   });
 
   it('3. Thống kê Dashboard & Admin Funnel hoàn toàn loại trừ bản ghi preview', async () => {
-    // Dashboard metrics
-    const metrics = await dashboardRepository.getEmailMetrics({
-      userId: ownerUser.id,
-      roleCode: 'user',
-    });
+    // Báo cáo (dashboard) đếm qua module sendStats. Ca 1 ghi thư gửi thử (is_preview = true) đã 'sent'; gắn chủ workspace
+    // cho dòng đó để phép lọc is_preview thật sự có việc phải làm (thiếu chủ thì dòng nằm ngoài phạm vi và ca xanh vì lý do sai).
+    await db.query('UPDATE email_messages SET workspace_owner_id = $1 WHERE id_campaign = $2', [ownerUser.id, testCampaign.id]);
+    const { rows: previewRows } = await db.query(
+      'SELECT COUNT(*)::int AS n FROM email_messages WHERE id_campaign = $1 AND workspace_owner_id = $2 AND is_preview',
+      [testCampaign.id, ownerUser.id]
+    );
+    expect(previewRows[0].n).toBeGreaterThan(0);
 
-    expect(metrics.sent_count || 0).toBe(0);
-    expect(metrics.opened_unique_count || 0).toBe(0);
+    const totals = await sendStatsService.getChannelTotals({ ownerId: ownerUser.id }, { days: 2 });
+    const emailTotals = totals.find((row) => row.channel === 'email');
+    expect(emailTotals.sent).toBe(0);
+    expect(emailTotals.opened).toBe(0);
 
     // Admin funnel first send
     const firstSendQuery = `

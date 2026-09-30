@@ -311,8 +311,8 @@ class SendStatsRepository {
    * @returns {Promise<Array<{channel: string, sent: string, failed: string, bounced: string, opened: string, clicked: string}>>}
    *   theo từng kênh CÓ dữ liệu (số ở dạng chuỗi của pg — service đổi sang số và bù kênh trống)
    */
-  async channelTotals({ scope, window, channels }) {
-    const { sql, bag } = buildSourceCtes({ scope, window, channels });
+  async channelTotals({ scope, window, channels, campaignIds = null }) {
+    const { sql, bag } = buildSourceCtes({ scope, window, channels, filters: { campaignIds } });
     const { rows } = await db.query(
       `${sql}
        SELECT channel,
@@ -334,8 +334,8 @@ class SendStatsRepository {
    *
    * @returns {Promise<Array<{day: string, channel: string, sent: string, failed: string}>>}
    */
-  async dailySeries({ scope, window, channels }) {
-    const { sql, bag } = buildSourceCtes({ scope, window, channels });
+  async dailySeries({ scope, window, channels, campaignIds = null }) {
+    const { sql, bag } = buildSourceCtes({ scope, window, channels, filters: { campaignIds } });
     const { rows } = await db.query(
       `${sql}
        SELECT day, channel, SUM(sent) AS sent, SUM(failed) AS failed

@@ -1,19 +1,30 @@
 import api from '../../../services/api';
 
 /**
- * Dashboard analytics API wrappers.
+ * Dashboard ("Báo cáo") API wrappers.
  */
 export const dashboardApiService = {
+  /**
+   * 4 thẻ: đã gửi, chưa gửi được, email mở / bấm link, đơn hàng (`sent`, `failed`, `email`, `clicks`, `orders`).
+   */
   getOverview(params = {}) {
     return api.get('/dashboard/overview', { params });
   },
 
+  /**
+   * Chuỗi theo ngày: `dailySent` (đã gửi mỗi ngày theo kênh) và `ordersTimeline` (đơn hàng theo ngày).
+   */
   getAnalytics(params = {}) {
     return api.get('/dashboard/analytics', { params });
   },
 
-  getRuns(params = {}) {
-    return api.get('/dashboard/runs', { params });
+  /**
+   * Bảng "Chiến dịch trong kỳ": đã gửi / chưa gửi được / mở / nhấp / đã mua theo chiến dịch.
+   *
+   * @param {object} params bộ lọc như getOverview, thêm `limit` (mặc định 10)
+   */
+  getCampaigns(params = {}) {
+    return api.get('/dashboard/campaigns', { params });
   },
 
   /**
@@ -28,34 +39,12 @@ export const dashboardApiService = {
   },
 
   /**
-   * Get top lists: top courses by orders, top campaigns by orders, top campaigns by clicks.
-   *
-   * @param {object} params
-   * @param {number} [params.limit=10] - max items per list
-   * @returns {Promise}
-   */
-  getTopLists(params = {}) {
-    return api.get('/dashboard/top-lists', { params });
-  },
-
-  /**
-   * Thống kê landing: view, click, submit theo slug.
-   *
-   * @param {object} params startDate, endDate, period — hoặc allTime: 1 / period: 'all' (toàn thời gian)
-   */
-  getLandingPageStats(params = {}) {
-    return api.get('/dashboard/landing-pages-stats', { params });
-  },
-
-  /**
-   * Sinh insight dashboard bằng Gemini (backend gọi Gemini bằng API key server-side).
+   * Sinh nhận xét AI (Gemini, backend gọi bằng API key server-side). Chỉ gửi BỘ LỌC — số liệu do server tự tính bằng
+   * đúng các hàm của trang Báo cáo, nên lời phân tích luôn khớp các thẻ.
    *
    * @param {object} payload
-   * @param {object} payload.overview - dữ liệu từ getOverview
-   * @param {object} payload.analytics - dữ liệu từ getAnalytics
-   * @param {object} payload.topListsData - dữ liệu từ getTopLists
-   * @param {object} [payload.landingPageStats] - dữ liệu từ getLandingPageStats (tùy chọn, khuyến nghị gửi kèm)
-   * @param {object} [payload.filters] - bộ lọc đang áp dụng (tùy chọn)
+   * @param {object} [payload.filters] - bộ lọc đang áp dụng { startDate, endDate, campaignType, campaignIds }
+   * @param {string} [payload.locale]
    * @returns {Promise}
    */
   generateInsights(payload) {

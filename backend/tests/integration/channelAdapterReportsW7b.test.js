@@ -9,7 +9,7 @@
  *   - Giám sát gửi (user): tổng gửi +5, theo kênh telegram 3 / whatsapp 2, failed +1, preview KHÔNG tính,
  *     không thấy dữ liệu của user khác; biểu đồ giờ có dòng telegram/whatsapp
  *   - Giám sát gửi (admin): toàn hệ thống (5 + 4), preview không tính
- *   - Dashboard: journeyEvents.telegramSent/whatsappSent, bộ lọc campaignType=telegram/whatsapp/email
+ *   - Dashboard: sent.byChannel telegram/whatsapp + dailySent, bộ lọc campaignType=telegram/whatsapp/email
  *   - Hồ sơ: telegramSentCycle/whatsappSentCycle theo KỲ gói (P10: hạn mức riêng; messagingSent* chỉ còn Zalo, không cộng tin adapter)
  */
 import { describe, it, expect, beforeAll, beforeEach } from '@jest/globals';
@@ -129,37 +129,41 @@ describe('W7b — giám sát gửi của admin', () => {
 });
 
 describe('W7b — dashboard', () => {
-  it('journeyEvents.telegramSent/whatsappSent + bộ lọc kênh', async () => {
+  it('sent.byChannel telegram/whatsapp + bộ lọc kênh (PR-5: đọc campaign_channel_messages qua sendStats)', async () => {
     const { a } = await seed();
     const token = await loginAs(a);
     const get = (qs) =>
       request(app).get(`/api/dashboard/overview${qs}`).set('Authorization', `Bearer ${token}`);
+    const sentOf = (res, channel) => res.body.data.sent.byChannel.find((row) => row.channel === channel)?.sent;
 
     const all = await get('');
     expect(all.status).toBe(200);
-    expect(all.body.data.journeyEvents).toMatchObject({ telegramSent: 3, whatsappSent: 2 });
+    expect(sentOf(all, 'telegram')).toBe(3);
+    expect(sentOf(all, 'whatsapp')).toBe(2);
+    expect(all.body.data.sent.total).toBe(5);
+    expect(all.body.data.failed.total).toBe(1);
 
     const tg = await get('?campaignType=telegram');
     expect(tg.body.data.filters.campaignType).toBe('telegram');
-    expect(tg.body.data.journeyEvents).toMatchObject({ telegramSent: 3, whatsappSent: 0 });
+    expect(tg.body.data.sent.byChannel).toEqual([{ channel: 'telegram', sent: 3 }]);
 
     const wa = await get('?campaignType=whatsapp');
-    expect(wa.body.data.journeyEvents).toMatchObject({ telegramSent: 0, whatsappSent: 2 });
+    expect(wa.body.data.sent.byChannel).toEqual([{ channel: 'whatsapp', sent: 2 }]);
 
     const email = await get('?campaignType=email');
-    expect(email.body.data.journeyEvents).toMatchObject({ telegramSent: 0, whatsappSent: 0 });
+    expect(email.body.data.sent.total).toBe(0);
   });
 
-  it('analytics: timeline có telegramSent/whatsappSent theo ngày', async () => {
+  it('analytics: dailySent có cột telegram/whatsapp theo ngày', async () => {
     const { a } = await seed();
     const token = await loginAs(a);
     const res = await request(app)
       .get('/api/dashboard/analytics?period=7d')
       .set('Authorization', `Bearer ${token}`);
     expect(res.status).toBe(200);
-    const tl = res.body.data.timeline;
-    expect(tl.reduce((s, r) => s + r.telegramSent, 0)).toBe(3);
-    expect(tl.reduce((s, r) => s + r.whatsappSent, 0)).toBe(2);
+    const days = res.body.data.dailySent;
+    expect(days.reduce((s, r) => s + r.telegram, 0)).toBe(3);
+    expect(days.reduce((s, r) => s + r.whatsapp, 0)).toBe(2);
   });
 });
 

@@ -1,25 +1,26 @@
 import dashboardAnalyticsService from '../services/dashboard/dashboardAnalytics.service.js';
 import dashboardInsightsService from '../services/dashboard/dashboardInsights.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
-import dashboardRepository from '../repositories/dashboard/dashboard.repository.js';
 import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 
-const INSIGHTS_MISSING_DATA_MESSAGE =
-  'Thiếu dữ liệu dashboard để phân tích (overview/analytics/topListsData)';
+const INSIGHTS_INVALID_FILTERS_MESSAGE = 'Bộ lọc phân tích không hợp lệ (filters phải là đối tượng)';
 
 /**
  * Validate POST /dashboard/insights body before credit pre-flight.
+ *
+ * Số liệu để viết nhận xét do SERVER tự tính (cùng hàm với các thẻ trên trang Báo cáo), nên body chỉ mang bộ lọc.
+ * Trình duyệt bản cũ còn gửi kèm overview / analytics / topListsData — bỏ qua, không dùng để viết lời.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
  * @param {import('express').NextFunction} next
  */
 export function validateDashboardInsightsPayload(req, res, next) {
-  const { overview, analytics, topListsData } = req.body || {};
-  if (!overview || !analytics || !topListsData) {
+  const filters = req.body?.filters;
+  if (filters != null && (typeof filters !== 'object' || Array.isArray(filters))) {
     return res.status(400).json({
       success: false,
-      message: INSIGHTS_MISSING_DATA_MESSAGE,
+      message: INSIGHTS_INVALID_FILTERS_MESSAGE,
     });
   }
   return next();
@@ -39,13 +40,13 @@ class DashboardController {
   }
 
   /**
-   * Lấy thống kê tổng quan dashboard theo bộ lọc.
+   * Lấy thống kê tổng quan trang Báo cáo theo bộ lọc: `sent`, `failed`, `email`, `clicks`, `orders`.
    *
    * Query:
-   * - startDate: YYYY-MM-DD
-   * - endDate: YYYY-MM-DD
+   * - startDate: YYYY-MM-DD (ngày VN)
+   * - endDate: YYYY-MM-DD (ngày VN, tính trọn ngày)
    * - campaignIds: danh sách id phân tách dấu phẩy
-   * - campaignType: all|email|zalo|zalo_group
+   * - campaignType: all|email|zalo|zalo_group|telegram|whatsapp (lọc theo KÊNH của từng tin)
    * - period: 7d|30d|90d (fallback khi chưa truyền startDate/endDate)
    *
    * @param {import('express').Request} req
@@ -92,14 +93,9 @@ class DashboardController {
   }
 
   /**
-   * Lấy dữ liệu timeline cho dashboard theo bộ lọc.
+   * Lấy chuỗi theo ngày cho trang Báo cáo: `dailySent` (đã gửi mỗi ngày theo kênh) và `ordersTimeline` (đơn hàng).
    *
-   * Query:
-   * - startDate: YYYY-MM-DD
-   * - endDate: YYYY-MM-DD
-   * - campaignIds: danh sách id phân tách dấu phẩy
-   * - campaignType: all|email|zalo|zalo_group
-   * - period: 7d|30d|90d (fallback khi chưa truyền startDate/endDate)
+   * Query: như GET /overview.
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res
@@ -117,40 +113,6 @@ class DashboardController {
       });
     } catch (error) {
       console.error('Get analytics error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server'
-      });
-    }
-  }
-
-  /**
-   * Lấy danh sách run-level metrics cho dashboard.
-   *
-   * Query:
-   * - startDate: YYYY-MM-DD
-   * - endDate: YYYY-MM-DD
-   * - campaignIds: danh sách id phân tách dấu phẩy
-   * - campaignType: all|email|zalo|zalo_group
-   * - page, limit
-   * - period: 7d|30d|90d (fallback khi chưa truyền startDate/endDate)
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async getRuns(req, res) {
-    try {
-      const userId = resolveWorkspaceOwnerId(req.user);
-      const roleCode = req.user.role;
-      const data = await dashboardAnalyticsService.getRuns(userId, roleCode, req.query);
-      this.setNoCacheHeaders(res);
-
-      res.json({
-        success: true,
-        data,
-      });
-    } catch (error) {
-      console.error('Get dashboard runs error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi server'
@@ -196,28 +158,22 @@ class DashboardController {
   }
 
   /**
-   * Lấy top danh sách: top khóa học theo đơn, top chiến dịch theo đơn, top chiến dịch theo click.
+   * Bảng "Chiến dịch trong kỳ": các chiến dịch có tin trong khoảng ngày, sắp theo số đã gửi.
    *
-   * Query:
-   * - startDate: YYYY-MM-DD
-   * - endDate: YYYY-MM-DD
-   * - campaignIds: danh sách id phân tách dấu phẩy
-   * - campaignType: all|email|zalo|zalo_group
-   * - limit: số lượng item mỗi danh sách (mặc định 10, tối đa 20)
+   * Query: như GET /overview, thêm
+   * - limit: số dòng (mặc định 10, tối đa 20)
    *
-   * Response:
-   * - topCourses: [{ productName, pendingCount, completedCount, total }]
-   * - topCampaignsByOrders: [{ campaignId, campaignName, campaignType, pendingCount, completedCount, total }]
-   * - topCampaignsByClicks: [{ campaignId, campaignName, campaignType, clickCount, sentCount, openCount }]
+   * Response.items: [{ campaignId, campaignName, campaignType, sent, failed, opened, clicked, purchased }]
+   * (`campaignId: null` = tin của chiến dịch đã xoá).
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res
    */
-  async getTopLists(req, res) {
+  async getCampaigns(req, res) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const roleCode = req.user.role;
-      const data = await dashboardAnalyticsService.getTopLists(userId, roleCode, req.query);
+      const data = await dashboardAnalyticsService.getCampaignsTable(userId, roleCode, req.query);
       this.setNoCacheHeaders(res);
 
       res.json({
@@ -225,55 +181,10 @@ class DashboardController {
         data,
       });
     } catch (error) {
-      console.error('Get dashboard top lists error:', error);
+      console.error('Get dashboard campaigns error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi server',
-      });
-    }
-  }
-
-  /**
-   * So sánh chiến dịch theo bộ lọc campaignIds.
-   *
-   * @param {import('express').Request} req
-   * @param {import('express').Response} res
-   */
-  async compareCampaigns(req, res) {
-    try {
-      const userId = resolveWorkspaceOwnerId(req.user);
-      const roleCode = req.user.role;
-      const { campaignIds } = req.query;
-
-      if (!campaignIds) {
-        return res.status(400).json({
-          success: false,
-          message: 'Vui lòng chọn chiến dịch để so sánh'
-        });
-      }
-
-      const ids = String(campaignIds)
-        .split(',')
-        .map((id) => Number.parseInt(String(id).trim(), 10))
-        .filter(Number.isFinite);
-      if (ids.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: 'Danh sách chiến dịch không hợp lệ',
-        });
-      }
-
-      const data = await dashboardRepository.compareCampaigns({ campaignIds: ids, userId, roleCode });
-
-      res.json({
-        success: true,
-        data,
-      });
-    } catch (error) {
-      console.error('Compare campaigns error:', error);
-      res.status(500).json({
-        success: false,
-        message: 'Lỗi server'
       });
     }
   }
@@ -309,48 +220,37 @@ class DashboardController {
    * Sinh insight dashboard bằng Gemini để hiển thị dưới các biểu đồ + tổng quan.
    *
    * Luồng hoạt động:
-   * 1. Frontend gửi kèm dữ liệu thống kê đang hiển thị (đã theo bộ lọc).
-   * 2. Backend gọi Gemini bằng API key trong env và ép response dạng JSON theo schema.
-   * 3. Trả về insight; nếu payload đủ dùng thì ghi DB (xóa insight cũ của user, chèn bản mới).
+   * 1. Frontend chỉ gửi BỘ LỌC đang áp dụng (và locale) — KHÔNG gửi số liệu.
+   * 2. Server tự tính số liệu bằng đúng các hàm của trang Báo cáo (sendStats + customer_purchases) theo quyền của người
+   *    gọi, nên lời phân tích luôn khớp các thẻ; không đọc bộ đếm campaign_runs hay số do trình duyệt gửi lên.
+   * 3. Backend gọi Gemini bằng API key trong env và ép response dạng JSON theo schema.
+   * 4. Trả về insight; nếu payload đủ dùng thì ghi DB (xóa insight cũ của user, chèn bản mới).
    *
    * Body:
-   * - overview: payload từ GET /api/dashboard/overview
-   * - analytics: payload từ GET /api/dashboard/analytics
-   * - topListsData: payload từ GET /api/dashboard/top-lists
-   * - landingPageStats: (tùy chọn) payload từ GET /api/dashboard/landing-pages-stats — dùng cho insight biểu đồ landing
-   * - filters: (tùy chọn) { startDate, endDate, campaignType, campaignIds }
+   * - filters: (tùy chọn) { startDate, endDate, campaignType, campaignIds } — thiếu thì dùng khoảng mặc định của server
+   * - locale: (tùy chọn) 'vi' | 'en'
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res
    */
   async generateInsights(req, res) {
     try {
-      const { overview, analytics, topListsData, landingPageStats, filters } = req.body || {};
+      const { filters } = req.body || {};
       const locale =
         req.body?.locale ||
         req.query?.locale ||
         (req.headers['accept-language']?.startsWith('en') ? 'en' : 'vi');
 
-      if (!overview || !analytics || !topListsData) {
-        return res.status(400).json({
-          success: false,
-          message: INSIGHTS_MISSING_DATA_MESSAGE,
-        });
-      }
-
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      const snapshot = await dashboardAnalyticsService.getInsightSnapshot(ownerUserId, req.user.role, filters);
       const result = await dashboardInsightsService.generateInsights({
         userId: ownerUserId,
-        overview,
-        analytics,
-        topListsData,
-        landingPageStats,
-        filters,
+        snapshot,
         locale,
       });
 
       try {
-        await dashboardInsightsService.persistInsightIfUsable(ownerUserId, result.data, filters);
+        await dashboardInsightsService.persistInsightIfUsable(ownerUserId, result.data, snapshot.filters);
       } catch (persistErr) {
         console.error('Persist dashboard insight error:', persistErr);
       }

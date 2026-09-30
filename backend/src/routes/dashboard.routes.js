@@ -18,20 +18,14 @@ router.get(
 // Get overview
 router.get('/overview', requirePermission('reports_view'), dashboardController.getOverview.bind(dashboardController));
 
-// Get analytics
+// Get analytics (đã gửi mỗi ngày + đơn hàng theo ngày)
 router.get('/analytics', requirePermission('reports_view'), dashboardController.getAnalytics.bind(dashboardController));
-
-// Get run-level analytics
-router.get('/runs', requirePermission('reports_view'), dashboardController.getRuns.bind(dashboardController));
 
 // Get orders list
 router.get('/orders', requireSelfContext, dashboardController.getOrdersList.bind(dashboardController));
 
-// Get top lists (top courses by orders, top campaigns by orders/clicks)
-router.get('/top-lists', requirePermission('reports_view'), dashboardController.getTopLists.bind(dashboardController));
-
-// Compare campaigns
-router.get('/compare', requirePermission('reports_view'), dashboardController.compareCampaigns.bind(dashboardController));
+// Bảng "Chiến dịch trong kỳ" (đã gửi / chưa gửi được / mở / nhấp / đã mua theo chiến dịch)
+router.get('/campaigns', requirePermission('reports_view'), dashboardController.getCampaigns.bind(dashboardController));
 
 // Insight đã lưu (JSON trên DB) — đặt trước route POST /insights để không nhầm path
 router.get('/insights/saved', requirePermission('reports_view'), dashboardController.getSavedInsights.bind(dashboardController));

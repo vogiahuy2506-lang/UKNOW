@@ -38,12 +38,12 @@ const SUMMARY_LINES = (t) => [
  * Grouped by channel for clear visual separation.
  */
 const COMPARE_LINES = (t) => [
-  { key: 'emailPendingOrders',      name: `${t('channel.email')} – ${t('status.pending')}`,      color: '#f97316', dash: false },
-  { key: 'emailCompletedOrders',   name: `${t('channel.email')} – ${t('status.completed')}`,     color: '#fb923c', dash: true  },
-  { key: 'zaloPendingOrders',      name: `${t('channel.zalo')} – ${t('status.pending')}`,       color: '#2563eb', dash: false },
-  { key: 'zaloCompletedOrders',    name: `${t('channel.zalo')} – ${t('status.completed')}`,      color: '#60a5fa', dash: true  },
-  { key: 'zaloGroupPendingOrders', name: `${t('channel.zaloGroup')} – ${t('status.pending')}`,  color: '#7c3aed', dash: false },
-  { key: 'zaloGroupCompletedOrders',name:`${t('channel.zaloGroup')} – ${t('status.completed')}`, color: '#c084fc', dash: true  },
+  { key: 'emailPendingOrders',      name: `${t('channel.email')} – ${t('dashboard.pendingOrders')}`,      color: '#f97316', dash: false },
+  { key: 'emailCompletedOrders',   name: `${t('channel.email')} – ${t('dashboard.completedOrders')}`,     color: '#fb923c', dash: true  },
+  { key: 'zaloPendingOrders',      name: `${t('channel.zalo')} – ${t('dashboard.pendingOrders')}`,       color: '#2563eb', dash: false },
+  { key: 'zaloCompletedOrders',    name: `${t('channel.zalo')} – ${t('dashboard.completedOrders')}`,      color: '#60a5fa', dash: true  },
+  { key: 'zaloGroupPendingOrders', name: `${t('channel.zaloGroup')} – ${t('dashboard.pendingOrders')}`,  color: '#7c3aed', dash: false },
+  { key: 'zaloGroupCompletedOrders',name:`${t('channel.zaloGroup')} – ${t('dashboard.completedOrders')}`, color: '#c084fc', dash: true  },
 ];
 
 const VIEW_TABS = (t) => [
@@ -72,18 +72,18 @@ const OrdersTooltip = ({ active, payload, label, isMonthlyView, viewMode, t, loc
     const COLS = [
       {
         label: t('channel.email'),
-        pending:   { key: 'emailPendingOrders',       label: t('status.pending') },
-        completed: { key: 'emailCompletedOrders',      label: t('status.completed') },
+        pending:   { key: 'emailPendingOrders',       label: t('dashboard.pendingOrders') },
+        completed: { key: 'emailCompletedOrders',      label: t('dashboard.completedOrders') },
       },
       {
         label: t('channel.zalo'),
-        pending:   { key: 'zaloPendingOrders',         label: t('status.pending') },
-        completed: { key: 'zaloCompletedOrders',        label: t('status.completed') },
+        pending:   { key: 'zaloPendingOrders',         label: t('dashboard.pendingOrders') },
+        completed: { key: 'zaloCompletedOrders',        label: t('dashboard.completedOrders') },
       },
       {
         label: t('channel.zaloGroup'),
-        pending:   { key: 'zaloGroupPendingOrders',    label: t('status.pending') },
-        completed: { key: 'zaloGroupCompletedOrders',  label: t('status.completed') },
+        pending:   { key: 'zaloGroupPendingOrders',    label: t('dashboard.pendingOrders') },
+        completed: { key: 'zaloGroupCompletedOrders',  label: t('dashboard.completedOrders') },
       },
     ];
 

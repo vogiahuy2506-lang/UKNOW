@@ -7,13 +7,10 @@ const EMPTY_ORDERS_DATA = {
   pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
 };
 
-const EMPTY_TOP_LISTS = {
-  topCourses: [],
-  topCampaignsByOrders: [],
-  topCampaignsByClicks: [],
-};
-
-const DEFAULT_CHANNEL = 'all';
+/**
+ * Chuỗi theo ngày rỗng — chỉ dùng cho tới khi có dữ liệu thật hoặc khi API lỗi; các khối biểu đồ tự hiện trạng thái trống.
+ */
+const EMPTY_ANALYTICS = { dailySent: [], ordersTimeline: [] };
 
 /**
  * Chuyển Date thành chuỗi YYYY-MM-DD theo giờ local.
@@ -61,15 +58,17 @@ const buildDashboardQueryParams = (filters) => ({
 });
 
 /**
- * Dashboard analytics state and data loader.
+ * Dashboard ("Báo cáo") state and data loader.
  *
+ * @param {object} [options]
+ * @param {boolean} [options.includeOrders=true] Danh sách đơn (có SĐT/email khách) chỉ chủ xem được: route
+ *   `/dashboard/orders` có requireSelfContext. Nhân viên truyền `false` để khỏi gọi (và khỏi nhận 403).
  * @returns {object}
  */
-export const useDashboardAnalytics = () => {
+export const useDashboardAnalytics = ({ includeOrders = true } = {}) => {
   const defaultRange = useMemo(() => buildDefaultDateRange(), []);
 
   const [campaignOptions, setCampaignOptions] = useState([]);
-  const [activeChannel, setActiveChannel] = useState(DEFAULT_CHANNEL);
 
   const [filters, setFilters] = useState({
     startDate: defaultRange.startDate,
@@ -80,18 +79,12 @@ export const useDashboardAnalytics = () => {
   const [draftFilters, setDraftFilters] = useState(filters);
 
   const [overview, setOverview] = useState(null);
-  const [analytics, setAnalytics] = useState(null);
-  const [runsData, setRunsData] = useState({
-    items: [],
-    pagination: { page: 1, limit: 20, total: 0, totalPages: 1 },
-  });
+  const [analytics, setAnalytics] = useState(EMPTY_ANALYTICS);
+  const [campaignsData, setCampaignsData] = useState([]);
   const [ordersData, setOrdersData] = useState(EMPTY_ORDERS_DATA);
   const [ordersStatusFilter, setOrdersStatusFilter] = useState('all');
-  const [topListsData, setTopListsData] = useState(EMPTY_TOP_LISTS);
-  const [landingPageStats, setLandingPageStats] = useState({ filters: null, rows: [] });
 
   const [isLoading, setIsLoading] = useState(true);
-  const [isLoadingRuns, setIsLoadingRuns] = useState(false);
   const [isLoadingOrders, setIsLoadingOrders] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
 
@@ -119,51 +112,29 @@ export const useDashboardAnalytics = () => {
     setErrorMessage('');
     try {
       const params = buildDashboardQueryParams(nextFilters);
-      const [overviewRes, analyticsRes, runsRes, ordersRes, topListsRes, lpStatsRes] = await Promise.all([
+      const [overviewRes, analyticsRes, campaignsRes, ordersRes] = await Promise.all([
         dashboardApiService.getOverview(params),
         dashboardApiService.getAnalytics(params),
-        dashboardApiService.getRuns({ ...params, page: 1, limit: 20 }),
-        // Danh sách đơn (có SĐT/email khách) chỉ chủ xem được: route `/dashboard/orders` có
-        // requireSelfContext nên nhân viên có quyền reports_view nhận 403. Để 403 đó rơi vào
-        // Promise.all thì CẢ trang Báo cáo về 0 với nhân viên (khách thật 233 có 2 nhân viên
-        // như vậy, đo 30/09) — nên lỗi riêng lời gọi này chỉ làm trống bảng đơn.
-        dashboardApiService
-          .getOrders({ ...params, orderStatus: 'all', page: 1, limit: 20 })
-          .catch(() => null),
-        dashboardApiService.getTopLists({ ...params, limit: 5 }),
-        /** Thống kê landing: toàn thời gian, không phụ thuộc bộ lọc ngày dashboard. */
-        dashboardApiService.getLandingPageStats({ allTime: 1 }),
+        dashboardApiService.getCampaigns({ ...params, limit: 10 }),
+        // Lỗi riêng của danh sách đơn (vd 403 với nhân viên có reports_view, khách thật 233 có 2 nhân viên như vậy,
+        // đo 30/09) KHÔNG được kéo cả trang Báo cáo về 0 — nên chỉ làm trống bảng đơn.
+        includeOrders
+          ? dashboardApiService
+            .getOrders({ ...params, orderStatus: 'all', page: 1, limit: 20 })
+            .catch(() => null)
+          : Promise.resolve(null),
       ]);
       setOverview(overviewRes?.data?.data || null);
-      setAnalytics(analyticsRes?.data?.data || null);
-      setRunsData(runsRes?.data?.data || { items: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } });
+      setAnalytics(analyticsRes?.data?.data || EMPTY_ANALYTICS);
+      setCampaignsData(campaignsRes?.data?.data?.items || []);
       setOrdersData(ordersRes?.data?.data || EMPTY_ORDERS_DATA);
-      setTopListsData(topListsRes?.data?.data || EMPTY_TOP_LISTS);
-      setLandingPageStats(lpStatsRes?.data?.data || { filters: null, rows: [] });
     } catch (error) {
       console.error('Load dashboard data error:', error);
       setErrorMessage('Không thể tải dữ liệu dashboard. Vui lòng thử lại.');
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  const loadRunsPage = useCallback(async (page) => {
-    setIsLoadingRuns(true);
-    try {
-      const params = buildDashboardQueryParams(filters);
-      const runsRes = await dashboardApiService.getRuns({
-        ...params,
-        page,
-        limit: runsData?.pagination?.limit || 20,
-      });
-      setRunsData(runsRes?.data?.data || { items: [], pagination: { page: 1, limit: 20, total: 0, totalPages: 1 } });
-    } catch (error) {
-      console.error('Load dashboard runs page error:', error);
-    } finally {
-      setIsLoadingRuns(false);
-    }
-  }, [filters, runsData?.pagination?.limit]);
+  }, [includeOrders]);
 
   /**
    * Load a specific page of orders, optionally changing the status filter.
@@ -206,23 +177,17 @@ export const useDashboardAnalytics = () => {
   return {
     overview,
     analytics,
-    runsData,
+    campaignsData,
     ordersData,
     ordersStatusFilter,
-    topListsData,
-    landingPageStats,
     campaignOptions,
-    activeChannel,
-    setActiveChannel,
     filters,
     draftFilters,
     setDraftFilters,
     applyFilters,
     isLoading,
-    isLoadingRuns,
     isLoadingOrders,
     errorMessage,
-    loadRunsPage,
     loadOrdersPage,
   };
 };

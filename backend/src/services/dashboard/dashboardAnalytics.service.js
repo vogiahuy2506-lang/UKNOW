@@ -5,10 +5,47 @@ import leadRepository from '../../repositories/lead.repository.js';
 import formRepository from '../../repositories/form.repository.js';
 import customerHelperService from '../customer/customerHelper.service.js';
 import { getWorkspaceScope } from '../../utils/workspaceContext.util.js';
+import sendStats from '../stats/sendStats.service.js';
+import campaignChannelRegistry from '../campaign/campaignChannelRegistry.service.js';
+import { isAdminRole } from '../../utils/roleScope.util.js';
 
 
 /** Múi giờ Việt Nam cố định (+07:00), không phụ thuộc TZ của máy chủ. */
 const VN_OFFSET_MS = 7 * 60 * 60 * 1000;
+
+/** Lời mời kết bạn Zalo là một dòng riêng của module đếm tin: không cộng vào "tin" đã gửi / chưa gửi được. */
+const FRIEND_REQUEST_CHANNEL = 'zalo_friend_request';
+const EMAIL_CHANNEL = 'email';
+/** Đơn của chiến dịch loại lạ (đa kênh…) — vẫn cộng vào tổng đơn, không mất khỏi số thẻ. */
+const OTHER_ORDER_CHANNEL = 'other';
+/** Số chiến dịch đưa vào "Nhận xét AI". */
+const INSIGHT_CAMPAIGN_LIMIT = 10;
+
+/**
+ * Bộ lọc "Loại kênh" của trang → kênh của TỪNG TIN (khoá của module đếm tin). Áp lên tin chứ không áp lên loại chiến
+ * dịch: chiến dịch đa kênh (`mixed`) vẫn có tin email / Zalo và phải hiện đúng ở bộ lọc kênh tương ứng.
+ */
+const CHANNELS_BY_TYPE_FILTER = Object.freeze({
+  email: ['email'],
+  zalo: ['zalo_personal', 'zalo_friend_request'],
+  zalo_group: ['zalo_group'],
+  telegram: ['telegram'],
+  whatsapp: ['whatsapp'],
+});
+
+/** Loại chiến dịch (`campaigns.campaign_type`) → khoá kênh, cho đơn hàng (customer_purchases chỉ biết chiến dịch). */
+const ORDER_CHANNEL_BY_CAMPAIGN_TYPE = Object.freeze({
+  email: 'email',
+  zalo: 'zalo_personal',
+  zalo_group: 'zalo_group',
+  telegram: 'telegram',
+  telegram_group: 'telegram',
+  whatsapp: 'whatsapp',
+});
+
+/** Phần trăm làm tròn 1 chữ số; mẫu số 0 → 0 (thẻ tự ẩn khi kỳ không có thư). Không cắt trần: số > 100% là lỗi cần lộ ra. */
+const toPercent = (part, whole) => (whole > 0 ? Number(((part / whole) * 100).toFixed(1)) : 0);
+
 class DashboardAnalyticsService {
   /**
    * Parse and normalize dashboard filters from query params.
@@ -117,131 +154,152 @@ class DashboardAnalyticsService {
   }
 
   /**
-   * Ensure timeline has rows for each day.
+   * Phạm vi đếm tin theo quyền: siêu quản trị xem toàn hệ thống (`ownerId: null` TƯỜNG MINH — sendStats từ chối
+   * `undefined` để không bao giờ rơi âm thầm sang toàn hệ thống), còn lại chỉ dữ liệu của chủ workspace (nhân viên
+   * đã được controller đổi thành id chủ). Khớp phạm vi của truy vấn đơn hàng (buildCampaignScopeClause).
    *
-   * @param {string} startDate
-   * @param {string} endDate
-   * @returns {Map<string, object>}
+   * @param {number} userId
+   * @param {string} roleCode
+   * @returns {{ ownerId: number|null }}
    */
-  createTimelineMap(startDate, endDate) {
-    const map = new Map();
-    const start = new Date(`${startDate}T00:00:00.000Z`);
-    const end = new Date(`${endDate}T00:00:00.000Z`);
-
-    for (let cursor = start; cursor.getTime() <= end.getTime(); cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000)) {
-      const key = cursor.toISOString().slice(0, 10);
-      map.set(key, {
-        date: key,
-        // Sent counts per channel
-        emailSent: 0,
-        zaloSent: 0,
-        zaloGroupSent: 0,
-        telegramSent: 0,
-        whatsappSent: 0,
-        // Engagement metrics
-        emailOpened: 0,
-        emailClicked: 0,
-        emailDownloads: 0,
-        zaloClicks: 0,
-        zaloGroupClicks: 0,
-        // Combined orders (all channels)
-        pendingOrders: 0,
-        completedOrders: 0,
-        // Per-channel orders for segmented chart
-        emailPendingOrders: 0,
-        emailCompletedOrders: 0,
-        zaloPendingOrders: 0,
-        zaloCompletedOrders: 0,
-        zaloGroupPendingOrders: 0,
-        zaloGroupCompletedOrders: 0,
-      });
-    }
-    return map;
+  resolveSendScope(userId, roleCode) {
+    return isAdminRole(roleCode) ? { ownerId: null } : { ownerId: Number(userId) };
   }
 
   /**
-   * Build dashboard overview payload.
+   * Bộ lọc ngày VN của trang → `window` của sendStats. `startDate` / `endDate` đã là ngày VN 'YYYY-MM-DD'
+   * (parseDateRange) và `endDate` được tính trọn ngày — mốc thời gian tính trong SQL, không đi qua `Date` của JS.
+   *
+   * @param {{ startDate: string, endDate: string }} filters
+   * @returns {{ fromDate: string, toDate: string }}
+   */
+  resolveSendWindow(filters) {
+    return { fromDate: filters.startDate, toDate: filters.endDate };
+  }
+
+  /**
+   * Chiến dịch được chọn ở bộ lọc → tham số `campaignIds` của sendStats (null = không lọc; sendStats lọc TRONG CTE).
+   *
+   * @param {{ campaignIds: number[] }} filters
+   * @returns {number[]|null}
+   */
+  resolveSendCampaignIds(filters) {
+    return Array.isArray(filters.campaignIds) && filters.campaignIds.length > 0 ? filters.campaignIds : null;
+  }
+
+  /**
+   * Giữ các dòng thuộc kênh mà bộ lọc "Loại kênh" cho phép. Bộ lọc áp lên KÊNH CỦA TỪNG TIN (không phải loại
+   * chiến dịch): chiến dịch đa kênh (`mixed`) vẫn có tin email / Zalo. Dòng sendStats đã gom theo kênh nên lọc ở đây
+   * chính xác như lọc trong SQL.
+   *
+   * @template {{ channel: string }} T
+   * @param {T[]} rows
+   * @param {string} campaignType
+   * @returns {T[]}
+   */
+  filterRowsByChannelType(rows, campaignType) {
+    const allowed = CHANNELS_BY_TYPE_FILTER[campaignType];
+    return allowed ? rows.filter((row) => allowed.includes(row.channel)) : rows;
+  }
+
+  /**
+   * Kênh "tin" hiển thị (thứ tự registry): mọi kênh trừ lời mời kết bạn Zalo (một dòng riêng, không cộng vào tin),
+   * theo bộ lọc "Loại kênh".
+   *
+   * @param {string} campaignType
+   * @returns {string[]}
+   */
+  listMessageChannels(campaignType) {
+    const keys = campaignChannelRegistry.listChannelsForStats().map((channel) => channel.key);
+    return this.filterRowsByChannelType(keys.map((channel) => ({ channel })), campaignType)
+      .map((row) => row.channel)
+      .filter((channel) => channel !== FRIEND_REQUEST_CHANNEL);
+  }
+
+  /**
+   * Gom một loại chiến dịch của đơn hàng về khoá kênh của module đếm tin; loại lạ (đa kênh…) vào 'other'.
+   *
+   * @param {string} campaignType
+   * @returns {string}
+   */
+  resolveOrderChannel(campaignType) {
+    return ORDER_CHANNEL_BY_CAMPAIGN_TYPE[String(campaignType || '').trim()] || OTHER_ORDER_CHANNEL;
+  }
+
+  /**
+   * Mọi ngày lịch từ `startDate` đến `endDate` (gồm cả hai đầu) dạng 'YYYY-MM-DD'. Tính thuần trên chuỗi ngày —
+   * không phụ thuộc múi giờ tiến trình.
+   *
+   * @param {string} startDate
+   * @param {string} endDate
+   * @returns {string[]}
+   */
+  listDays(startDate, endDate) {
+    const days = [];
+    const end = new Date(`${endDate}T00:00:00.000Z`);
+    for (let cursor = new Date(`${startDate}T00:00:00.000Z`); cursor.getTime() <= end.getTime(); cursor = new Date(cursor.getTime() + 24 * 60 * 60 * 1000)) {
+      days.push(cursor.toISOString().slice(0, 10));
+    }
+    return days;
+  }
+
+  /**
+   * Build dashboard overview payload — "Báo cáo" trang: 4 thẻ.
+   *
+   * Số đếm tin đọc từ MỘT nguồn: module sendStats (bảng tin email_messages / zalo_messages / campaign_channel_messages)
+   * theo cửa sổ ngày VN, chiến dịch, kênh của bộ lọc. Đơn hàng đọc từ MỘT nguồn: customer_purchases, cho cả số tổng lẫn
+   * số theo kênh (tổng = cộng các dòng theo kênh). KHÔNG đọc customer_journey, bộ đếm campaign_runs hay nhật ký node.
    *
    * @param {number} userId
    * @param {string} roleCode
    * @param {object} query
-   * @returns {Promise<object>}
+   * @returns {Promise<{
+   *   filters: object,
+   *   sent: { total: number, byChannel: Array<{ channel: string, sent: number }>, friendRequests: number },
+   *   failed: { total: number },
+   *   email: { sent: number, opened: number, clicked: number, openRate: number, clickRate: number },
+   *   clicks: { total: number, byChannel: Array<{ channel: string, clicked: number }> },
+   *   orders: { completed: number, pending: number, byChannel: Array<{ channel: string, completed: number, pending: number }> }
+   * }>}
    */
   async getOverview(userId, roleCode, query) {
     const filters = this.parseFilters(query);
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
-    const [campaignCount, runHeadline, emailMetrics, attachmentDownloads, zaloRows, orderRows, journeyEventRows, adapterSentRows] = await Promise.all([
-      dashboardRepository.countCampaigns(scopedFilters),
-      dashboardRepository.getRunHeadline(scopedFilters),
-      dashboardRepository.getEmailMetrics(scopedFilters),
-      dashboardRepository.getAttachmentDownloadCount(scopedFilters),
-      dashboardRepository.getZaloClickMetrics(scopedFilters),
+    const [channelRows, orderRows] = await Promise.all([
+      sendStats.getChannelTotals(
+        this.resolveSendScope(userId, roleCode),
+        this.resolveSendWindow(filters),
+        { campaignIds: this.resolveSendCampaignIds(filters) }
+      ),
       dashboardRepository.getOrderMetricsByType(scopedFilters, purchaseOrderStatusExpr),
-      dashboardRepository.getJourneyEventStats(scopedFilters),
-      dashboardRepository.getAdapterSentByChannel(scopedFilters),
     ]);
 
-    const clicksByType = { zalo: 0, zalo_group: 0 };
-    for (const row of zaloRows) {
-      const key = String(row.campaign_type || '').trim();
-      if (key in clicksByType) {
-        clicksByType[key] = Number(row.click_count || 0);
-      }
-    }
+    const visibleRows = this.filterRowsByChannelType(channelRows, filters.campaignType);
+    const messageRows = visibleRows.filter((row) => row.channel !== FRIEND_REQUEST_CHANNEL);
+    const friendRequestRow = visibleRows.find((row) => row.channel === FRIEND_REQUEST_CHANNEL);
+    const emailRow = visibleRows.find((row) => row.channel === EMAIL_CHANNEL);
+    const sumBy = (rows, key) => rows.reduce((sum, row) => sum + row[key], 0);
 
-    const ordersByType = {
-      email: { pending: 0, completed: 0 },
-      zalo: { pending: 0, completed: 0 },
-      zalo_group: { pending: 0, completed: 0 },
-    };
+    // Tỉ lệ mở / nhấp tính trên CÙNG nhóm thư đã gửi trong kỳ: mỗi thư đếm một lần (mở / nhấp nhiều lần hay bấm
+    // nhiều link vẫn là một thư), nên không bao giờ vượt 100%.
+    const emailSent = emailRow?.sent ?? 0;
+    const emailOpened = emailRow?.opened ?? 0;
+    const emailClicked = emailRow?.clicked ?? 0;
+
+    const orderBuckets = new Map();
     for (const row of orderRows) {
-      const key = String(row.campaign_type || '').trim();
-      if (!ordersByType[key]) continue;
-      ordersByType[key] = {
-        pending: Number(row.pending_orders || 0),
-        completed: Number(row.completed_orders || 0),
-      };
+      const channel = this.resolveOrderChannel(row.campaign_type);
+      const bucket = orderBuckets.get(channel) || { channel, completed: 0, pending: 0 };
+      bucket.completed += Number(row.completed_orders || 0);
+      bucket.pending += Number(row.pending_orders || 0);
+      orderBuckets.set(channel, bucket);
     }
-
-    // Build journey event counts map (event_type → { event_channel → count })
-    // Grouping by channel allows separating Zalo vs Zalo Group contributions.
-    const journeyEventMap = {};
-    for (const row of journeyEventRows) {
-      const type = row.event_type;
-      const channel = row.event_channel || '';
-      if (!journeyEventMap[type]) journeyEventMap[type] = {};
-      journeyEventMap[type][channel] = Number(row.count || 0);
-    }
-
-    const getJourneyCount = (type, channel = null) => {
-      const channelMap = journeyEventMap[type];
-      if (!channelMap) return 0;
-      if (channel !== null) return channelMap[channel] || 0;
-      return Object.values(channelMap).reduce((sum, v) => sum + v, 0);
-    };
-
-    /**
-     * KPI + donut dùng đúng tổng số dòng sự kiện trên customer_journey (không dùng unique từ email_messages)
-     * để khớp biểu đồ Top chiến dịch và bảng lượt chạy.
-     */
-    const journeyEvents = {
-      emailSent: getJourneyCount('email_sent'),
-      emailOpened: getJourneyCount('email_opened'),
-      emailClicked: getJourneyCount('email_clicked'),
-      zaloSent: getJourneyCount('zalo_sent', 'zalo'),
-      zaloGroupSent: getJourneyCount('zalo_sent', 'zalo_group'),
-      zaloClicked: getJourneyCount('zalo_clicked', 'zalo'),
-      zaloGroupClicked: getJourneyCount('zalo_clicked', 'zalo_group'),
-      orderPending: getJourneyCount('order_pending'),
-      // W7b — Telegram/WhatsApp không ghi customer_journey; số gửi lấy từ campaign_channel_messages.
-      telegramSent: adapterSentRows.find((row) => row.channel === 'telegram')?.sent_count || 0,
-      whatsappSent: adapterSentRows.find((row) => row.channel === 'whatsapp')?.sent_count || 0,
-    };
-
-    const totalRecipients = Number(runHeadline.total_recipients || 0);
-    const successfulSends = Number(runHeadline.successful_sends || 0);
-    const failedSends = Number(runHeadline.failed_sends || 0);
+    // Tổng = cộng các dòng theo kênh — không có nguồn thứ hai để lệch.
+    const orderChannelOrder = [...campaignChannelRegistry.listChannelsForStats().map((channel) => channel.key), OTHER_ORDER_CHANNEL];
+    const orderByChannel = [...orderBuckets.values()]
+      .filter((bucket) => bucket.completed + bucket.pending > 0)
+      .sort((a, b) => orderChannelOrder.indexOf(a.channel) - orderChannelOrder.indexOf(b.channel));
 
     return {
       filters: {
@@ -250,64 +308,79 @@ class DashboardAnalyticsService {
         startDate: filters.startDate,
         endDate: filters.endDate,
       },
-      headline: {
-        totalCampaigns: campaignCount,
-        totalRuns: Number(runHeadline.total_runs || 0),
-        runningRuns: Number(runHeadline.running_runs || 0),
-        completedRuns: Number(runHeadline.completed_runs || 0),
-        totalRecipients,
-        successfulSends,
-        failedSends,
-        successRate: totalRecipients > 0 ? Number(((successfulSends / totalRecipients) * 100).toFixed(2)) : 0,
+      sent: {
+        total: sumBy(messageRows, 'sent'),
+        byChannel: messageRows.map(({ channel, sent }) => ({ channel, sent })),
+        friendRequests: friendRequestRow?.sent ?? 0,
       },
-      channels: {
-        email: {
-          sentCount: Number(emailMetrics.sent_count || 0),
-          openedUniqueCount: Number(emailMetrics.opened_unique_count || 0),
-          clickedUniqueCount: Number(emailMetrics.clicked_unique_count || 0),
-          openedTotalCount: Number(emailMetrics.opened_total_count || 0),
-          clickedTotalCount: Number(emailMetrics.clicked_total_count || 0),
-          attachmentDownloadCount: attachmentDownloads,
-          pendingOrderCount: ordersByType.email.pending,
-          completedOrderCount: ordersByType.email.completed,
-        },
-        zalo: {
-          clickCount: clicksByType.zalo,
-          pendingOrderCount: ordersByType.zalo.pending,
-          completedOrderCount: ordersByType.zalo.completed,
-        },
-        zaloGroup: {
-          clickCount: clicksByType.zalo_group,
-          pendingOrderCount: ordersByType.zalo_group.pending,
-          completedOrderCount: ordersByType.zalo_group.completed,
-        },
+      failed: { total: sumBy(messageRows, 'failed') },
+      email: {
+        sent: emailSent,
+        opened: emailOpened,
+        clicked: emailClicked,
+        openRate: toPercent(emailOpened, emailSent),
+        clickRate: toPercent(emailClicked, emailSent),
       },
-      // Tổng sự kiện customer_journey — thẻ KPI + donut click (đồng bộ với Top / bảng run)
-      journeyEvents,
+      clicks: {
+        total: sumBy(messageRows, 'clicked'),
+        byChannel: messageRows.map(({ channel, clicked }) => ({ channel, clicked })),
+      },
+      orders: {
+        completed: sumBy(orderByChannel, 'completed'),
+        pending: sumBy(orderByChannel, 'pending'),
+        byChannel: orderByChannel,
+      },
     };
   }
 
   /**
-   * Get top lists for dashboard: top courses by orders, top campaigns by orders,
-   * top campaigns by clicks. All respect the current filter scope.
+   * Bảng "Chiến dịch trong kỳ": các chiến dịch CÓ tin trong cửa sổ ngày, sắp theo số đã gửi (mặc định 10 dòng).
+   * Đã gửi / chưa gửi được / mở / nhấp đọc từ sendStats.getCampaignTotals (cùng nguồn với các thẻ), đã mua từ
+   * customer_purchases. Lời mời kết bạn Zalo không nằm trong dòng nào (dòng riêng, không phải "tin"). Chiến dịch đã
+   * xoá gộp thành một dòng `campaignId: null` để bảng vẫn cộng khớp với thẻ.
    *
    * @param {number} userId
    * @param {string} roleCode
    * @param {object} query
-   * @param {number} [query.limit=10] - number of items per list
-   * @returns {Promise<object>}
+   * @param {number} [query.limit=10]
+   * @returns {Promise<{ filters: object, items: Array<{ campaignId: number|null, campaignName: string|null,
+   *   campaignType: string|null, sent: number, failed: number, opened: number, clicked: number, purchased: number }> }>}
    */
-  async getTopLists(userId, roleCode, query) {
+  async getCampaignsTable(userId, roleCode, query) {
     const filters = this.parseFilters(query);
-    const limit = Math.min(20, Math.max(1, Number.parseInt(query.limit, 10) || 10));
+    const limit = Math.min(20, Math.max(1, Number.parseInt(query?.limit, 10) || 10));
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
 
-    const [topCourses, topCampaignsByOrders, topCampaignsByClicks] = await Promise.all([
-      dashboardRepository.getTopCoursesByOrders(scopedFilters, purchaseOrderStatusExpr, limit),
-      dashboardRepository.getTopCampaignsByOrders(scopedFilters, purchaseOrderStatusExpr, limit),
-      dashboardRepository.getTopCampaignsByClicks(scopedFilters, limit),
+    const rows = await sendStats.getCampaignTotals(
+      this.resolveSendScope(userId, roleCode),
+      this.resolveSendWindow(filters),
+      this.resolveSendCampaignIds(filters)
+    );
+
+    const byCampaign = new Map();
+    for (const row of this.filterRowsByChannelType(rows, filters.campaignType)) {
+      if (row.channel === FRIEND_REQUEST_CHANNEL) continue;
+      const acc = byCampaign.get(row.campaignId) || { campaignId: row.campaignId, sent: 0, failed: 0, opened: 0, clicked: 0 };
+      acc.sent += row.sent;
+      acc.failed += row.failed;
+      acc.opened += row.opened;
+      acc.clicked += row.clicked;
+      byCampaign.set(row.campaignId, acc);
+    }
+
+    const ranked = [...byCampaign.values()]
+      .filter((item) => item.sent + item.failed > 0)
+      .sort((a, b) => b.sent - a.sent || b.failed - a.failed || (a.campaignId ?? Infinity) - (b.campaignId ?? Infinity))
+      .slice(0, limit);
+
+    const campaignIds = ranked.map((item) => item.campaignId).filter((id) => id != null);
+    const [nameRows, orderRows] = await Promise.all([
+      dashboardRepository.getCampaignNames(scopedFilters, campaignIds),
+      dashboardRepository.getCompletedOrdersByCampaign(scopedFilters, purchaseOrderStatusExpr, campaignIds),
     ]);
+    const nameById = new Map(nameRows.map((row) => [Number(row.id), row]));
+    const purchasedById = new Map(orderRows.map((row) => [Number(row.campaign_id), Number(row.completed_orders || 0)]));
 
     return {
       filters: {
@@ -316,84 +389,94 @@ class DashboardAnalyticsService {
         startDate: filters.startDate,
         endDate: filters.endDate,
       },
-      topCourses,
-      topCampaignsByOrders,
-      topCampaignsByClicks,
+      items: ranked.map((item) => {
+        const campaign = item.campaignId == null ? null : nameById.get(item.campaignId);
+        return {
+          campaignId: item.campaignId,
+          campaignName: campaign?.campaign_name ?? null,
+          campaignType: campaign?.campaign_type ?? null,
+          sent: item.sent,
+          failed: item.failed,
+          opened: item.opened,
+          clicked: item.clicked,
+          purchased: item.campaignId == null ? 0 : (purchasedById.get(item.campaignId) ?? 0),
+        };
+      }),
     };
   }
 
   /**
    * Build timeline analytics payload.
    *
+   * - `dailySent`: MỘT chuỗi "đã gửi mỗi ngày" theo NGÀY VN (chuỗi 'YYYY-MM-DD'), mỗi ngày một dòng phẳng
+   *   `{ date, total, <kênh>: n }` (đủ mọi ngày trong khoảng, ngày trống = 0), từ sendStats.getDailySeries — tổng các
+   *   ngày bằng `sent.total` của getOverview cùng bộ lọc. Lời mời kết bạn Zalo không nằm trong chuỗi.
+   * - `ordersTimeline`: đơn hàng theo ngày (customer_purchases), cho biểu đồ đơn hàng của chủ tài khoản.
+   *
    * @param {number} userId
    * @param {string} roleCode
    * @param {object} query
-   * @returns {Promise<object>}
+   * @returns {Promise<{ filters: object, dailySent: Array<object>, ordersTimeline: Array<object> }>}
    */
   async getAnalytics(userId, roleCode, query) {
     const filters = this.parseFilters(query);
     const scopedFilters = { ...filters, userId, roleCode };
     const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
-    const rows = await dashboardRepository.getTimeline(scopedFilters, purchaseOrderStatusExpr);
-    const adapterSentDaily = await dashboardRepository.getAdapterSentDaily(scopedFilters);
-    const timelineMap = this.createTimelineMap(filters.startDate, filters.endDate);
+    const [sentRows, orderRows] = await Promise.all([
+      sendStats.getDailySeries(
+        this.resolveSendScope(userId, roleCode),
+        this.resolveSendWindow(filters),
+        { campaignIds: this.resolveSendCampaignIds(filters) }
+      ),
+      dashboardRepository.getOrdersDaily(scopedFilters, purchaseOrderStatusExpr),
+    ]);
 
-    for (const row of rows.journeyEngagementRows || []) {
-      const key = String(row.date).slice(0, 10);
-      if (!timelineMap.has(key)) continue;
-      const item = timelineMap.get(key);
-      item.emailOpened = Number(row.email_opened || 0);
-      item.emailClicked = Number(row.email_clicked || 0);
-      item.emailDownloads = Number(row.email_downloaded || 0);
-      item.zaloClicks = Number(row.zalo_clicks || 0);
-      item.zaloGroupClicks = Number(row.zalo_group_clicks || 0);
+    const days = this.listDays(filters.startDate, filters.endDate);
+    const messageChannels = this.listMessageChannels(filters.campaignType);
+
+    const dailySentMap = new Map(days.map((date) => [
+      date,
+      { date, total: 0, ...Object.fromEntries(messageChannels.map((channel) => [channel, 0])) },
+    ]));
+    for (const row of sentRows) {
+      const item = dailySentMap.get(row.day);
+      if (!item || !messageChannels.includes(row.channel)) continue;
+      item[row.channel] += row.sent;
+      item.total += row.sent;
     }
 
-    for (const row of rows.purchaseRows) {
-      const key = String(row.date).slice(0, 10);
-      if (!timelineMap.has(key)) continue;
-      const item = timelineMap.get(key);
-      const type = String(row.campaign_type || '').trim();
+    const ordersMap = new Map(days.map((date) => [
+      date,
+      {
+        date,
+        pendingOrders: 0,
+        completedOrders: 0,
+        emailPendingOrders: 0,
+        emailCompletedOrders: 0,
+        zaloPendingOrders: 0,
+        zaloCompletedOrders: 0,
+        zaloGroupPendingOrders: 0,
+        zaloGroupCompletedOrders: 0,
+      },
+    ]));
+    for (const row of orderRows) {
+      const item = ordersMap.get(String(row.date).slice(0, 10));
+      if (!item) continue;
       const pending = Number(row.pending_orders || 0);
       const completed = Number(row.completed_orders || 0);
-      // Accumulate combined totals
       item.pendingOrders += pending;
       item.completedOrders += completed;
-      // Store per-channel breakdown
-      if (type === 'email') {
-        item.emailPendingOrders = pending;
-        item.emailCompletedOrders = completed;
-      } else if (type === 'zalo') {
-        item.zaloPendingOrders = pending;
-        item.zaloCompletedOrders = completed;
-      } else if (type === 'zalo_group') {
-        item.zaloGroupPendingOrders = pending;
-        item.zaloGroupCompletedOrders = completed;
+      const channel = this.resolveOrderChannel(row.campaign_type);
+      if (channel === 'email') {
+        item.emailPendingOrders += pending;
+        item.emailCompletedOrders += completed;
+      } else if (channel === 'zalo_personal') {
+        item.zaloPendingOrders += pending;
+        item.zaloCompletedOrders += completed;
+      } else if (channel === 'zalo_group') {
+        item.zaloGroupPendingOrders += pending;
+        item.zaloGroupCompletedOrders += completed;
       }
-    }
-
-    for (const row of rows.emailSentRows || []) {
-      const key = String(row.date).slice(0, 10);
-      if (!timelineMap.has(key)) continue;
-      timelineMap.get(key).emailSent = Number(row.email_sent || 0);
-    }
-
-    for (const row of adapterSentDaily) {
-      const key = String(row.date).slice(0, 10);
-      if (!timelineMap.has(key)) continue;
-      const item = timelineMap.get(key);
-      if (row.channel === 'telegram') item.telegramSent = Number(row.sent_count || 0);
-      else if (row.channel === 'whatsapp') item.whatsappSent = Number(row.sent_count || 0);
-    }
-
-    for (const row of rows.zaloSentRows || []) {
-      const key = String(row.date).slice(0, 10);
-      if (!timelineMap.has(key)) continue;
-      const item = timelineMap.get(key);
-      const type = String(row.campaign_type || '').trim();
-      const sent = Number(row.sent_count || 0);
-      if (type === 'zalo') item.zaloSent = sent;
-      else if (type === 'zalo_group') item.zaloGroupSent = sent;
     }
 
     return {
@@ -403,7 +486,40 @@ class DashboardAnalyticsService {
         startDate: filters.startDate,
         endDate: filters.endDate,
       },
-      timeline: Array.from(timelineMap.values()),
+      dailySent: Array.from(dailySentMap.values()),
+      ordersTimeline: Array.from(ordersMap.values()),
+    };
+  }
+
+  /**
+   * Snapshot số liệu cho "Nhận xét AI": server TỰ tính bằng đúng các hàm của trang Báo cáo (getOverview / getAnalytics /
+   * getCampaignsTable) theo bộ lọc — KHÔNG nhận số do trình duyệt gửi lên để viết lời, nên lời AI luôn khớp các thẻ.
+   *
+   * @param {number} userId chủ workspace
+   * @param {string} roleCode
+   * @param {{ startDate?: string, endDate?: string, period?: string, campaignType?: string, campaignIds?: unknown }} [input]
+   * @returns {Promise<{ filters: object, overview: object, dailySent: Array<object>, ordersTimeline: Array<object>, campaigns: Array<object> }>}
+   */
+  async getInsightSnapshot(userId, roleCode, input) {
+    const source = input && typeof input === 'object' ? input : {};
+    const query = {
+      startDate: source.startDate,
+      endDate: source.endDate,
+      period: source.period,
+      campaignType: source.campaignType,
+      campaignIds: source.campaignIds,
+    };
+    const [overview, analytics, campaigns] = await Promise.all([
+      this.getOverview(userId, roleCode, query),
+      this.getAnalytics(userId, roleCode, query),
+      this.getCampaignsTable(userId, roleCode, { ...query, limit: INSIGHT_CAMPAIGN_LIMIT }),
+    ]);
+    return {
+      filters: overview.filters,
+      overview,
+      dailySent: analytics.dailySent,
+      ordersTimeline: analytics.ordersTimeline,
+      campaigns: campaigns.items,
     };
   }
 
@@ -432,38 +548,6 @@ class DashboardAnalyticsService {
         startDate: filters.startDate,
         endDate: filters.endDate,
         orderStatus,
-      },
-      items: result.items,
-      pagination: {
-        page: filters.page,
-        limit: filters.limit,
-        total: result.total,
-        totalPages: Math.max(1, Math.ceil(result.total / filters.limit)),
-      },
-    };
-  }
-
-  /**
-   * Get paginated run-level metrics.
-   *
-   * @param {number} userId
-   * @param {string} roleCode
-   * @param {object} query
-   * @returns {Promise<object>}
-   */
-  async getRuns(userId, roleCode, query) {
-    const filters = this.parseFilters(query);
-    const scopedFilters = { ...filters, userId, roleCode };
-    const purchaseOrderStatusExpr = await customerHelperService.resolvePurchaseOrderStatusExpr('cp');
-
-    const result = await dashboardRepository.getRuns(scopedFilters, purchaseOrderStatusExpr);
-
-    return {
-      filters: {
-        campaignType: filters.campaignType,
-        campaignIds: filters.campaignIds,
-        startDate: filters.startDate,
-        endDate: filters.endDate,
       },
       items: result.items,
       pagination: {

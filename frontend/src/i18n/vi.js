@@ -473,42 +473,19 @@ export default {
     welcome: 'Chào mừng trở lại',
     insightTooltip: 'Tạo insight AI từ dữ liệu gần đây của bạn',
     overview: 'Tổng quan',
-    recentActivity: 'Hoạt động gần đây',
-    quickActions: 'Thao tác nhanh',
     thisWeek: 'Tuần này',
     thisMonth: 'Tháng này',
     today: 'Hôm nay',
 
-    // KPI
-    totalCampaigns: 'Tổng chiến dịch',
-    activeCampaigns: 'Chiến dịch đang chạy',
-    totalCustomers: 'Tổng khách hàng',
-    newCustomers: 'Khách hàng mới',
-    totalRevenue: 'Doanh thu',
-    conversionRate: 'Tỷ lệ chuyển đổi',
-    totalSent: 'Tổng gửi',
-    emailOpenRate: 'Tỷ lệ mở Email',
-    clickRate: 'Tỷ lệ click',
-    emailSent: 'Email đã gửi',
-    emailOpened: 'Email đã mở',
-    zaloSent: 'Zalo đã gửi',
-    zaloDelivered: 'Zalo đã nhận',
-    pendingOrders: 'Đơn chờ',
-    completedOrders: 'Đơn đã mua',
+    // Orders chart legend — cùng tên với thẻ "Khách phản hồi": Để lại thông tin / Đã mua
+    pendingOrders: 'Để lại thông tin',
+    completedOrders: 'Đã mua',
 
-    // Runs & Status
-    runs: 'lượt chạy',
-    running: 'đang chạy',
-    opened: 'lượt mở',
+    // Actions
     getStarted: 'Bắt đầu →',
 
     // Empty states
-    createFirstCampaign: 'Tạo chiến dịch đầu tiên',
     runCampaignToSend: 'Chạy chiến dịch để gửi',
-    noEmailsOpened: 'Chưa có email nào được mở',
-    noClicks: 'Chưa có click nào',
-    noOrders: 'Chưa có đơn nào',
-    noCompletedOrders: 'Chưa có đơn hoàn thành',
 
     // Orders chart
     ordersOverTime: 'Đơn hàng theo thời gian',
@@ -519,37 +496,8 @@ export default {
     insightOrdersOverTime: 'Insight · Đơn hàng theo thời gian',
     ordersDescription: 'Theo dõi đơn hàng theo thời gian, kênh và chiến dịch',
     noOrderDataInPeriod: 'Chưa có dữ liệu đơn hàng trong khoảng thời gian này',
-    pendingOrdersBadge: 'chờ',
-    completedOrdersBadge: 'đã đặt',
-
-    // Top charts
-    topCoursesByOrders: 'Top khóa học có nhiều đơn',
-    topCampaignsByOrders: 'Top chiến dịch có nhiều đơn',
-    topCampaignsByClicks: 'Top chiến dịch có nhiều click',
-    topFive: 'Top 5',
-
-    // Channel labels
-    channel: 'Kênh',
-    channelEmail: 'Email',
-    channelZaloPersonal: 'Zalo cá nhân',
-    channelZaloGroup: 'Zalo nhóm',
-    channelUnknown: 'Không xác định',
-    channelEmailShort: 'Email',
-    channelZaloShort: 'Zalo',
-    channelZaloGroupShort: 'Zalo nhóm',
-    clickRateLabel: 'Tỷ lệ click / gửi',
-    noSentYet: 'chưa có tin gửi',
-    emailOpensJourney: 'Mở email (hành trình)',
-    emailOpensNotApplicable: 'Mở email: không áp dụng — chỉ chiến dịch Email mới có sự kiện mở.',
-    orderPending: 'Đơn chờ',
-    orderCompleted: 'Đã mua',
-    click: 'Click',
-    sent: 'Đã gửi',
-    clickChartSubtitle: 'Top 5 · Trục dọc kèm kênh (Email / Zalo / Zalo nhóm). Trên = click (thanh trơn), dưới = đã gửi (có vạch trắng); cùng thang; nhãn có % click/gửi',
-    clickChartSubtitlePrint: 'Top 5 · Trục dọc kèm kênh (Email / Zalo / Zalo nhóm). Trên = click, dưới = đã gửi; nhãn có % click/gửi',
-    clickBarDescription: 'Thanh trên: click — nền trơn, không vạch trắng · Thanh dưới: đã gửi — có vạch trắng dọc trong thanh. Cùng thang ngang; độ dài = số lượng.',
-    colorByChannel: 'Màu theo kênh chiến dịch',
-    noDataInPeriod: 'Không có dữ liệu trong khoảng thời gian này',
+    pendingOrdersBadge: 'để lại thông tin',
+    completedOrdersBadge: 'đã mua',
 
     // Filter panel
     closeFilter: 'Đóng bộ lọc',
@@ -586,7 +534,6 @@ export default {
     months12: '12 tháng',
 
     // Insight
-    insight: 'Insight',
     insightOverview: 'Tổng quan insight',
     insightTip: 'Nhận xét chiến lược gửi Email, Zalo và Zalo Group; đối chiếu timeline gửi với đơn; phát hiện mâu thuẫn tổng quan vs biểu đồ khi có — theo số liệu và bộ lọc hiện tại.',
     analyzing: 'Đang phân tích…',
@@ -602,20 +549,6 @@ export default {
     printPdfTip: 'Khi lưu PDF, bỏ chọn "Đầu trang và chân trang" để ẩn URL, ngày/giờ và tiêu đề.',
     savedInsightTip: 'Tải và hiển thị bản insight đã lưu trên máy chủ',
     viewSavedInsight: 'Xem insight đã lưu',
-
-    // Landing pages table
-    landingPagesTitle: 'Landing pages',
-    landingPagesEmptyDesc: 'Lượt xem, click (link tracking), gửi form (toàn thời gian) — chưa có dữ liệu.',
-    landingPagesDesc: 'Toàn thời gian — theo slug: lượt xem, click qua link trung gian, form submit; CTR = click/view; tỷ lệ form/view = submit/view.',
-    slug: 'Slug',
-    views: 'Xem',
-    clicks: 'Click',
-    form: 'Form',
-    ctrPct: 'CTR %',
-    formViewPct: 'Form/view %',
-    landingPagePagination: 'Trang {page}/{totalPages} — {count} slug',
-    prevPage: 'Trước',
-    nextPage: 'Sau',
   },
 
   channel: {
@@ -5935,10 +5868,57 @@ export default {
     confirmNewPasswordPlaceholder: 'Nhập lại mật khẩu mới',
   },
 
-  // Dashboard KPI Cards
-  dashboardKpiCards: {
-    getStarted: 'Bắt đầu →',
-    channelBreakdown: 'Email: {email} • Zalo: {zalo} • Group: {group}',
+  // Trang Báo cáo (PLAN_SO_LIEU_DUNG_GON_KHOP PR-5): 4 thẻ + biểu đồ "Đã gửi mỗi ngày" + bảng chiến dịch trong kỳ.
+  dashboardReport: {
+    cards: {
+      sent: 'Đã gửi',
+      friendRequests: '+ {count} lời mời kết bạn',
+      failed: 'Chưa gửi được',
+      failedHint: 'Tính theo người nhận, đã trừ lần gửi lại thành công.',
+      emailEngagement: 'Email · % trên thư đã gửi',
+      emailOpened: 'Email đã mở',
+      emailClicked: 'Email đã bấm link',
+      emailBase: 'Tính trên {count} thư đã gửi trong kỳ',
+      clicksAllChannels: 'Lượt nhấp link ở mọi kênh: {count}',
+      customers: 'Khách phản hồi',
+      leftInfo: 'Để lại thông tin',
+      purchased: 'Đã mua',
+      customersEmpty: 'Chưa có khách để lại thông tin hoặc mua hàng',
+    },
+    channel: {
+      email: 'Email',
+      zalo_personal: 'Zalo cá nhân',
+      zalo_group: 'Zalo nhóm',
+      telegram: 'Telegram',
+      whatsapp: 'WhatsApp',
+      other: 'Khác',
+    },
+    chart: {
+      title: 'Đã gửi mỗi ngày',
+      subtitle: 'Số tin đã gửi theo ngày (giờ Việt Nam), xếp chồng theo kênh. Không gồm lời mời kết bạn Zalo.',
+      total: 'Tổng',
+      empty: 'Chưa có tin nào được gửi trong khoảng thời gian này',
+      insightTitle: 'Insight · Đã gửi mỗi ngày',
+    },
+    campaigns: {
+      title: 'Chiến dịch trong kỳ',
+      subtitle: 'Tối đa 10 chiến dịch gửi nhiều tin nhất trong khoảng ngày đã chọn. "Chưa gửi được" tính theo người nhận; "Mở" chỉ có ở email.',
+      empty: 'Chưa có chiến dịch nào gửi tin trong khoảng thời gian này',
+      deleted: 'Chiến dịch đã xóa',
+      unnamed: 'Chiến dịch #{id}',
+      col: {
+        campaign: 'Chiến dịch',
+        sent: 'Đã gửi',
+        failed: 'Chưa gửi được',
+        opened: 'Mở',
+        clicked: 'Nhấp',
+        purchased: 'Đã mua',
+      },
+    },
+    links: {
+      deliveryMonitor: 'Xem lượt chạy ở Giám sát gửi tin',
+      landing: 'Xem thống kê landing ở mục Landing page',
+    },
   },
 
   // Orders Table
@@ -5993,44 +5973,6 @@ export default {
     sentAt: 'gửi lúc',
     expressedInterest: 'Đã để lại thông tin',
     purchasedCourse: 'Đã mua khóa học',
-  },
-
-  // Runs Table
-  runsTable: {
-    title: 'Bảng lượt chạy',
-    runs: 'lượt chạy',
-    showingResults: '· đang hiện {count} kết quả',
-    searchPlaceholder: 'Tìm theo tên chiến dịch, run...',
-    runCampaign: 'Run / Chiến dịch',
-    channel: 'Kênh',
-    startDate: 'Ngày chạy',
-    messagesSent: 'Tin đã gửi',
-    emailOpened: 'Email mở',
-    click: 'Click',
-    orders: 'Đơn đặt',
-    status: 'Trạng thái',
-    completed: 'Hoàn thành',
-    running: 'Đang chạy',
-    pending: 'Chờ chạy',
-    failed: 'Lỗi',
-    cancelled: 'Đã hủy',
-    ordered: 'đặt',
-    pendingOrders: 'chờ',
-    previousPage: 'Trang trước',
-    nextPage: 'Trang sau',
-    page: 'Trang',
-    noResultsFilter: 'Không có kết quả khớp với bộ lọc',
-    noRunsInRange: 'Chưa có lượt chạy trong phạm vi đã chọn',
-    tryClearFilter: 'Thử xóa bộ lọc kênh hoặc trạng thái',
-    adjustTimeCampaign: 'Điều chỉnh bộ lọc thời gian hoặc chiến dịch',
-    clearFilter: 'Xóa bộ lọc',
-    selectSortType: 'Chọn loại sắp xếp',
-    viewLess: 'Thu gọn',
-    viewMore: 'Xem thêm',
-    run: 'Lượt chạy',
-    all: 'Tất cả',
-    purchased: 'Đã mua',
-    leftInfo: 'Để lại thông tin',
   },
 
   // Channel Breakdown Charts
@@ -6640,11 +6582,6 @@ export default {
     delete: 'Xóa',
   },
 
-  // Channel Tabs
-  channelTabs: {
-    insightByChannel: 'Insight · Tương tác theo kênh',
-  },
-
   // Landing Enhancements
   landingEnhancements: {
     registerFounderAI: 'Đăng ký Founder AI',
@@ -7093,66 +7030,6 @@ export default {
     colProductUrl: 'Link sản phẩm',
     colTargetAudience: 'Đối tượng khách hàng',
     colStatus: 'Trạng thái',
-  },
-
-  // Dashboard Top Charts
-  dashboardTopCharts: {
-    channelLabel: {
-      email: 'Email',
-      zalo: 'Zalo cá nhân',
-      zaloGroup: 'Zalo nhóm',
-    },
-    channelShort: {
-      email: 'Email',
-      zalo: 'Zalo',
-      zaloGroup: 'Zalo nhóm',
-    },
-    unknownChannel: 'Không xác định',
-    emailPendingOrders: 'Đơn chờ',
-    emailCompletedOrders: 'Đã hoàn thành',
-    zaloPendingOrders: 'Đơn chờ',
-    zaloCompletedOrders: 'Đã hoàn thành',
-    zaloGroupPendingOrders: 'Đơn chờ',
-    zaloGroupCompletedOrders: 'Đã hoàn thành',
-    emailSent: 'Đã gửi',
-    emailOpened: 'Đã mở',
-    emailClicked: 'Đã click',
-    emailDownloads: 'Đã tải',
-    zaloSent: 'Đã gửi',
-    zaloClicked: 'Đã click',
-    zaloGroupSent: 'Đã gửi',
-    zaloGroupClicked: 'Đã click',
-  },
-
-  // Dashboard Channel Tabs
-  dashboardChannelTabs: {
-    all: 'Tất cả',
-    email: 'Email',
-    zalo: 'Zalo',
-    zaloGroup: 'Zalo Group',
-    // Mirrored key for namespaced access
-    channelTabs: {
-      insightByChannel: 'Insight · Tương tác theo kênh',
-    },
-    sent: 'Gửi',
-    opened: 'Mở',
-    clicked: 'Click',
-    downloaded: 'Tải tệp',
-    pendingOrders: 'Đơn chờ',
-    completedOrders: 'Đơn đặt',
-    sentLabel: 'Gửi',
-    interactionByChannel: 'Tương tác tổng hợp theo kênh',
-    emailEffectivenessOrders: 'Hiệu quả Email + Đơn hàng Email',
-    zaloEffectivenessOrders: 'Hiệu quả Zalo + Đơn hàng Zalo',
-    zaloGroupEffectivenessOrders: 'Hiệu quả Zalo Group + Đơn hàng Zalo Group',
-    telegram: 'Telegram',
-    whatsapp: 'WhatsApp',
-    telegramEffectiveness: 'Tin đã gửi qua Telegram theo ngày',
-    whatsappEffectiveness: 'Tin đã gửi qua WhatsApp theo ngày',
-    sentOnlyForChannel: 'Kênh này chỉ theo dõi số tin đã gửi (chưa có mở/click/đơn hàng)',
-    selectChannelForOrders: 'Chọn một kênh cụ thể để xem thêm đơn hàng phân theo kênh',
-    interactionOrdersForChannel: 'Tương tác + đơn hàng riêng cho kênh đã chọn',
-    noDataForChannel: 'Chưa có dữ liệu cho kênh này trong khoảng thời gian đã chọn',
   },
 
   // Template Gallery

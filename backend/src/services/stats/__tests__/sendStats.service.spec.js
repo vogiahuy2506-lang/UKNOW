@@ -136,6 +136,31 @@ describe('getChannelTotals', () => {
     expect(repository.channelTotals).not.toHaveBeenCalled();
   });
 
+  it('campaignIds (tuỳ chọn): chuẩn hoá và chuyển xuống repository; không truyền thì KHÔNG thêm khoá; [] = mọi kênh 0, không truy vấn', async () => {
+    repository.channelTotals.mockResolvedValue([{ channel: 'email', sent: '3', failed: '0', bounced: '0', opened: '1', clicked: '0' }]);
+    const totals = await service.getChannelTotals({ ownerId: 1 }, { days: 7 }, { campaignIds: ['5', 6, 5] });
+    expect(totals.find((row) => row.channel === 'email').sent).toBe(3);
+    expect(repository.channelTotals).toHaveBeenCalledWith({
+      scope: { ownerId: 1, excludeOwnerIds: [] },
+      window: { kind: 'days', days: 7 },
+      channels: KENH_CHO_REPOSITORY,
+      campaignIds: [5, 6],
+    });
+
+    repository.channelTotals.mockClear();
+    await service.getChannelTotals({ ownerId: 1 }, { days: 7 });
+    expect(repository.channelTotals.mock.calls[0][0]).not.toHaveProperty('campaignIds');
+
+    repository.channelTotals.mockClear();
+    const none = await service.getChannelTotals({ ownerId: 1 }, { days: 7 }, { campaignIds: [] });
+    expect(none.every((row) => row.sent === 0 && row.failed === 0)).toBe(true);
+    expect(none).toHaveLength(SAU_KENH.length);
+    expect(repository.channelTotals).not.toHaveBeenCalled();
+
+    await expect(service.getChannelTotals({ ownerId: 1 }, { days: 7 }, { campaignIds: ['x'] })).rejects.toThrow(TypeError);
+    await expect(service.getChannelTotals({ ownerId: 1 }, { days: 7 }, { campaignIds: 'nope' })).rejects.toThrow(TypeError);
+  });
+
   it('registry khai hai kênh email thì báo lỗi cấu hình', async () => {
     registryChannels = [...SAU_KENH, { key: 'email_2', table: 'email_messages' }];
     await expect(service.getChannelTotals({ ownerId: 1 }, { days: 7 })).rejects.toThrow(/kênh email/);
@@ -164,6 +189,25 @@ describe('getDailySeries', () => {
       { day: '2026-03-11', channel: 'email', sent: 2, failed: 0 },
       { day: '2026-03-11', channel: 'telegram', sent: 2, failed: 1 },
     ]);
+  });
+});
+
+describe('getDailySeries — campaignIds', () => {
+  it('chuyển xuống repository khi có; [] → mảng rỗng, không truy vấn', async () => {
+    repository.dailySeries.mockResolvedValue([{ day: '2026-03-10', channel: 'email', sent: '1', failed: '0' }]);
+    const window = { fromDate: '2026-03-10', toDate: '2026-03-10' };
+    expect(await service.getDailySeries({ ownerId: 1 }, window, { campaignIds: [7] })).toEqual([
+      { day: '2026-03-10', channel: 'email', sent: 1, failed: 0 },
+    ]);
+    expect(repository.dailySeries.mock.calls[0][0].campaignIds).toEqual([7]);
+
+    repository.dailySeries.mockClear();
+    await service.getDailySeries({ ownerId: 1 }, window);
+    expect(repository.dailySeries.mock.calls[0][0]).not.toHaveProperty('campaignIds');
+
+    repository.dailySeries.mockClear();
+    expect(await service.getDailySeries({ ownerId: 1 }, window, { campaignIds: [] })).toEqual([]);
+    expect(repository.dailySeries).not.toHaveBeenCalled();
   });
 });
 

@@ -506,17 +506,13 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       currentTestUser = createEmployee({ reports_view: false });
       const overview = await request(app).get('/api/dashboard/overview');
       const analytics = await request(app).get('/api/dashboard/analytics');
-      const runs = await request(app).get('/api/dashboard/runs');
-      const topLists = await request(app).get('/api/dashboard/top-lists');
-      const compare = await request(app).get('/api/dashboard/compare');
+      const campaigns = await request(app).get('/api/dashboard/campaigns');
       const insights = await request(app).get('/api/dashboard/insights/saved');
 
       expect(overview.status).toBe(403);
       expect(overview.body.code).toBe('PERMISSION_DENIED');
       expect(analytics.status).toBe(403);
-      expect(runs.status).toBe(403);
-      expect(topLists.status).toBe(403);
-      expect(compare.status).toBe(403);
+      expect(campaigns.status).toBe(403);
       expect(insights.status).toBe(403);
     });
 
@@ -524,16 +520,12 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
       currentTestUser = createEmployee({ reports_view: true });
       const overview = await request(app).get('/api/dashboard/overview');
       const analytics = await request(app).get('/api/dashboard/analytics');
-      const runs = await request(app).get('/api/dashboard/runs');
-      const topLists = await request(app).get('/api/dashboard/top-lists');
-      const compare = await request(app).get('/api/dashboard/compare');
+      const campaigns = await request(app).get('/api/dashboard/campaigns');
       const insights = await request(app).get('/api/dashboard/insights/saved');
 
       expect(overview.status).toBe(200);
       expect(analytics.status).toBe(200);
-      expect(runs.status).toBe(200);
-      expect(topLists.status).toBe(200);
-      expect(compare.status).toBe(200);
+      expect(campaigns.status).toBe(200);
       expect(insights.status).toBe(200);
     });
 
