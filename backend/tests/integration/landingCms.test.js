@@ -842,9 +842,11 @@ describe('GET /api/public/landing-track/go', () => {
     expect(res.status).toBe(404);
   });
 
-  it('slug đã publish → 302 với utm_source/utm_medium được append, ghi click event', async () => {
+  it('slug đã publish + đích có trong HTML → 302 với utm_source/utm_medium được append, ghi click event', async () => {
     const me = await createUser({ username: 'lp-g2' });
-    await insertLandingPage({ idUser: me.id, slug: 'pub-go', isPublished: true });
+    await insertLandingPage({
+      idUser: me.id, slug: 'pub-go', isPublished: true, html: '<a href="https://uknow.vn/dest">Đi</a>',
+    });
     const url = encodeURIComponent('https://uknow.vn/dest');
     const res = await request(app).get(`/api/public/landing-track/go?slug=pub-go&u=${url}`);
     expect(res.status).toBe(302);
@@ -858,15 +860,36 @@ describe('GET /api/public/landing-track/go', () => {
     expect(evt.rows[0].id_user).toBe(String(me.id));
   });
 
-  it('slug=l (cố định) → 302 không cần bản ghi DB', async () => {
+  it('slug=l (cố định) → 302 không cần bản ghi DB; đích ngoài frontend bị đổi về frontend', async () => {
     const url = encodeURIComponent('https://example.com/x?a=1');
     const res = await request(app).get(`/api/public/landing-track/go?slug=l&u=${url}`);
     expect(res.status).toBe(302);
+    expect(new URL(res.headers.location).hostname).not.toBe('example.com');
+  });
+
+  it('đích KHÔNG có trong HTML landing → 302 về trang landing, không ghi click (chặn open redirect)', async () => {
+    const me = await createUser({ username: 'lp-g4' });
+    await insertLandingPage({
+      idUser: me.id, slug: 'pub-go3', isPublished: true, html: '<a href="https://uknow.vn/dest">Đi</a>',
+    });
+    const url = encodeURIComponent('https://evil.example.net/login');
+    const res = await request(app).get(`/api/public/landing-track/go?slug=pub-go3&u=${url}`);
+    expect(res.status).toBe(302);
+    const loc = new URL(res.headers.location);
+    expect(loc.hostname).not.toBe('evil.example.net');
+    expect(loc.hostname.startsWith('pub-go3.')).toBe(true);
+    const evt = await db.query(`SELECT 1 FROM landing_page_events WHERE landing_page_slug = 'pub-go3'`);
+    expect(evt.rows).toHaveLength(0);
   });
 
   it('URL đích đã có utm_source → giữ nguyên (không bị ghi đè)', async () => {
     const me = await createUser({ username: 'lp-g3' });
-    await insertLandingPage({ idUser: me.id, slug: 'pub-go2', isPublished: true });
+    await insertLandingPage({
+      idUser: me.id,
+      slug: 'pub-go2',
+      isPublished: true,
+      html: '<a href="https://uknow.vn/dest?utm_source=existing&amp;foo=bar">Đi</a>',
+    });
     const url = encodeURIComponent('https://uknow.vn/dest?utm_source=existing&foo=bar');
     const res = await request(app).get(`/api/public/landing-track/go?slug=pub-go2&u=${url}`);
     expect(res.status).toBe(302);

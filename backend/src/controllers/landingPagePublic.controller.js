@@ -171,8 +171,10 @@ class LandingPagePublicController {
   /**
    * GET /api/public/landing-track/go
    *
-   * Query: slug (bắt buộc), u hoặc url = URL đích (encode), utm_* tùy chọn.
-   * Ghi `click` rồi 302 sang đích (URL đích phải là http/https hợp lệ; không giới hạn host).
+   * Query: slug (thiếu = landing cố định `l`), u hoặc url = URL đích (encode), utm_* tùy chọn.
+   * Đích http/https VÀ thuộc chính landing (link có trong HTML đã lưu / host của landing / host
+   * frontend) → ghi `click` rồi 302 sang đích. Đích ngoài landing → 302 về trang landing, không
+   * ghi click (chặn open redirect). Xem landingPagePublic.service.buildRedirectUrlForClick.
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res

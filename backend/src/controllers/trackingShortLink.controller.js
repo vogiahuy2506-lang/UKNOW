@@ -1,5 +1,23 @@
 import trackingShortLinkService from '../services/tracking/trackingShortLink.service.js';
 
+/**
+ * URL đích lưu trong DB chỉ được chuyển hướng khi là URL tuyệt đối http/https có hostname —
+ * chặn `javascript:`, `data:`, URL tương đối kiểu `//host` hay giá trị hỏng.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isSafeRedirectDestination(value) {
+  if (typeof value !== 'string' || !value.trim()) return false;
+  let u;
+  try {
+    u = new URL(value.trim());
+  } catch {
+    return false;
+  }
+  return (u.protocol === 'http:' || u.protocol === 'https:') && Boolean(u.hostname);
+}
+
 class TrackingShortLinkController {
   /**
    * Redirect từ mã ngắn `/t/:code` sang URL tracking đầy đủ đã map trong DB.
@@ -26,7 +44,15 @@ class TrackingShortLinkController {
         });
       }
 
-      return res.redirect(302, result.destinationUrl);
+      if (!isSafeRedirectDestination(result.destinationUrl)) {
+        console.warn('[TrackingShortLink] Bỏ qua đích không phải http/https cho mã ngắn');
+        return res.status(404).json({
+          success: false,
+          message: 'Không tìm thấy link rút gọn hoặc link đã hết hạn.',
+        });
+      }
+
+      return res.redirect(302, result.destinationUrl.trim());
     } catch (error) {
       console.error('Resolve tracking short code error:', error);
       return res.status(500).json({

@@ -1,8 +1,36 @@
 import landingPageRepository from '../../repositories/landingPage.repository.js';
 import landingPageEventRepository from '../../repositories/landingPageEvent.repository.js';
-import { isValidPublicLandingRedirectUrl } from '../../utils/landingRedirectTarget.util.js';
+import {
+  hostnameOf,
+  isAllowedLandingRedirectTarget,
+  isValidPublicLandingRedirectUrl,
+} from '../../utils/landingRedirectTarget.util.js';
+import { resolveFrontendOriginFromEnv } from '../../utils/landingHtmlInjection.util.js';
 import { toPublicLeadFormConfig } from '../../utils/landingLeadFormConfig.util.js';
 import landingPageDomainService from './landingPageDomain.service.js';
+
+/** Tên miền gốc của subdomain landing (`<slug>.<base>`), cùng nguồn với landingPageDomain.service. */
+function landingSubdomainBase() {
+  return String(process.env.LP_SUBDOMAIN_BASE || 'founderai.biz').trim().toLowerCase();
+}
+
+/**
+ * Giá trị tham số `u`/`url` (Express đã giải mã một lần). Link cũ lỡ mã hoá hai lần
+ * (`https%3A%2F%2F...`) thì giải mã thêm đúng một lần.
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+function readRedirectTargetParam(raw) {
+  const value = String(Array.isArray(raw) ? raw[0] ?? '' : raw ?? '').trim();
+  if (!value || isValidPublicLandingRedirectUrl(value)) return value;
+  try {
+    const decoded = decodeURIComponent(value).trim();
+    return isValidPublicLandingRedirectUrl(decoded) ? decoded : value;
+  } catch {
+    return value;
+  }
+}
 
 /**
  * API công khai: HTML landing đã publish, analytics view, redirect click có ghi log.
@@ -132,30 +160,37 @@ class LandingPagePublicService {
   /**
    * Redirect có log click; bổ sung UTM landing nếu URL đích chưa có.
    *
+   * Chỉ chuyển hướng tới đích thuộc chính landing (xem utils/landingRedirectTarget.util.js):
+   *   - slug thường: landing phải đã publish; đích phải là một link có trong HTML đã lưu, hoặc nằm
+   *     trên host của chính landing (`<slug>.<LP_SUBDOMAIN_BASE>`, tên miền riêng đã trỏ về landing)
+   *     hoặc host frontend;
+   *   - slug `l` (landing React cố định, không có HTML trong DB): chỉ host frontend.
+   * Đích không thuộc landing → trả URL trang landing (không ghi click), KHÔNG chuyển hướng ra ngoài.
+   *
    * @param {object} query
    * @param {import('express').Request} req
-   * @returns {Promise<string>} URL đích sau khi gắn UTM
+   * @returns {Promise<string>} URL đích sau khi gắn UTM, hoặc URL trang landing nếu đích bị chặn
    */
   async buildRedirectUrlForClick(query, req) {
-    const slug = String(query.slug || '').trim().toLowerCase();
+    // Thiếu slug = landing cố định `l` (giữ hành vi route cũ).
+    const slug = String(query.slug || '').trim().toLowerCase() || 'l';
     let workspaceOwnerId = null;
-    const rawU = String(query.u || query.url || '').trim();
     if (!landingPageRepository.isValidSlug(slug)) {
       const err = new Error('Tham số slug không hợp lệ');
       err.statusCode = 400;
       throw err;
     }
-    let dest;
-    try {
-      dest = decodeURIComponent(rawU);
-    } catch {
-      dest = rawU;
-    }
+    const dest = readRedirectTargetParam(query.u ?? query.url);
     if (!dest || !isValidPublicLandingRedirectUrl(dest)) {
       const err = new Error('URL đích không được phép hoặc không hợp lệ');
       err.statusCode = 400;
       throw err;
     }
+
+    const frontendOrigin = resolveFrontendOriginFromEnv();
+    const frontendHost = hostnameOf(frontendOrigin);
+    let allowed = false;
+    let landingUrl;
 
     if (slug !== 'l') {
       const published = await landingPageRepository.findPublishedBySlug(slug);
@@ -172,11 +207,33 @@ class LandingPagePublicService {
         throw err;
       }
       workspaceOwnerId = published.workspaceOwnerId || published.idUser || null;
+      const ownSubdomain = `${slug}.${landingSubdomainBase()}`;
+      landingUrl = `https://${ownSubdomain}/`;
+      allowed = isAllowedLandingRedirectTarget(dest, {
+        html: published.htmlContent,
+        allowedHosts: [ownSubdomain, frontendHost],
+      });
+      if (!allowed) {
+        // Tên miền riêng đã xác minh của chính landing này (tra DB chỉ khi cần).
+        const targetHost = hostnameOf(dest);
+        const hostSlug = targetHost
+          ? await landingPageDomainService.getPublishedSlugForHost(targetHost).catch(() => null)
+          : null;
+        allowed = hostSlug === slug;
+      }
+    } else {
+      landingUrl = `${frontendOrigin}/`;
+      allowed = isAllowedLandingRedirectTarget(dest, { allowedHosts: [frontendHost] });
+    }
+
+    if (!allowed) {
+      console.warn(`[LandingTrack] Đích không thuộc landing slug=${slug} — chuyển về trang landing`);
+      return landingUrl;
     }
 
     const u = new URL(dest);
     if (!u.searchParams.has('utm_source')) u.searchParams.set('utm_source', 'landing_page');
-    if (!u.searchParams.has('utm_medium')) u.searchParams.set('utm_medium', slug);
+    if (!u.searchParams.has('utm_medium')) u.searchParams.set('utm_medium', slug === 'l' ? 'fixed' : slug);
     if (query.utm_campaign && !u.searchParams.has('utm_campaign')) {
       u.searchParams.set('utm_campaign', String(query.utm_campaign));
     }

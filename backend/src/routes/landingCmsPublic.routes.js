@@ -144,76 +144,9 @@ router.post('/landing-analytics/click', publicLandingAnalyticsLimiter, async (re
   }
 });
 
-router.get('/landing-track/go', async (req, res) => {
-  try {
-    const { slug, u } = req.query;
-
-    if (!u || typeof u !== 'string') {
-      return res.status(400).json({ success: false, message: 'Thiếu URL đích' });
-    }
-
-    let targetUrl;
-    try {
-      targetUrl = new URL(u);
-    } catch {
-      return res.status(400).json({ success: false, message: 'URL không hợp lệ' });
-    }
-
-    if (targetUrl.protocol !== 'http:' && targetUrl.protocol !== 'https:') {
-      return res.status(400).json({ success: false, message: 'URL chỉ hỗ trợ http/https' });
-    }
-
-    const normalizedSlug = slug || 'l';
-
-    if (normalizedSlug === 'l') {
-      if (!targetUrl.searchParams.has('utm_source')) {
-        targetUrl.searchParams.set('utm_source', 'landing_page');
-      }
-      if (!targetUrl.searchParams.has('utm_medium')) {
-        targetUrl.searchParams.set('utm_medium', 'fixed');
-      }
-      await db.query(
-        `INSERT INTO landing_page_events (landing_page_slug, event_type, utm_source, utm_medium)
-         VALUES ($1, 'click', 'landing_page', 'fixed')`,
-        [normalizedSlug]
-      );
-      return res.redirect(302, targetUrl.toString());
-    }
-
-    const { rows } = await db.query(
-      `SELECT id, COALESCE(workspace_owner_id, id_user) AS "workspaceOwnerId"
-       FROM landing_pages
-       WHERE slug = $1 AND is_published = true`,
-      [normalizedSlug]
-    );
-    if (!rows[0]) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy landing page' });
-    }
-    const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
-    if (await resourceIsLocked('landing_pages', rows[0].id)) {
-      return res.status(503).json({ success: false, message: 'Landing page tạm ngừng', code: 'RESOURCE_LOCKED' });
-    }
-
-    if (!targetUrl.searchParams.has('utm_source')) {
-      targetUrl.searchParams.set('utm_source', 'landing_page');
-    }
-    if (!targetUrl.searchParams.has('utm_medium')) {
-      targetUrl.searchParams.set('utm_medium', normalizedSlug);
-    }
-
-    await db.query(
-      `INSERT INTO landing_page_events
-         (landing_page_slug, event_type, utm_source, utm_medium, target_url, id_user)
-       VALUES ($1, 'click', 'landing_page', $2, $3, $4)`,
-      [normalizedSlug, normalizedSlug, targetUrl.toString(), rows[0].workspaceOwnerId]
-    );
-
-    return res.redirect(302, targetUrl.toString());
-  } catch (error) {
-    console.error('Landing track go error:', error);
-    return res.status(500).json({ success: false, message: 'Lỗi server' });
-  }
-});
+// Link tracking của landing: chỉ chuyển hướng tới link thuộc chính landing đó (chặn open redirect)
+// — kiểm và ghi click ở landingPagePublic.service.buildRedirectUrlForClick.
+router.get('/landing-track/go', (req, res) => landingPagePublicController.getTrackGo(req, res));
 
 router.get('/landing-featured-courses', async (req, res) => {
   try {
