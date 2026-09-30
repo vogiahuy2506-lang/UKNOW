@@ -8,6 +8,7 @@
  */
 import bcrypt from 'bcryptjs';
 import { DEMO_PLANS } from './demo-plans.js';
+import { seedSendActivity } from './seed-send-activity.js';
 
 /** Gói mà tài khoản mẫu đang dùng — ở giữa bậc thang để thấy cả nâng lẫn hạ gói. */
 const DEFAULT_ACTIVE_PLAN_CODE = 'basic';
@@ -1537,6 +1538,14 @@ export async function seedDemoData(client, { userId }) {
     await seedEmployees(client, { userId });
   }
 
+  // 11. Hoạt động gửi tin (Giám sát gửi tin / Báo cáo / Hoạt động nhóm / Tổng quan gói). Chạy SAU chiến dịch, khách, nhân viên
+  //     và đơn vì dùng lại chúng; đổi kỳ gói của tài khoản mẫu nên KHÔNG bật khi chụp bài đổi gói (doi-goi) — chỉ có trong
+  //     E2E_SEED_ALL hoặc E2E_SEED_ACTIVITY riêng.
+  let activity = null;
+  if (isFlagOn('E2E_SEED_ACTIVITY')) {
+    activity = await seedSendActivity(client, { userId });
+  }
+
   // Lệnh hẹn hạ gói (bật riêng vì nó khoá luồng nâng gói)
   const withPending = ['1', 'true', 'yes'].includes(
     String(process.env.E2E_SEED_PENDING_CHANGE || '').toLowerCase(),
@@ -1564,6 +1573,7 @@ export async function seedDemoData(client, { userId }) {
     + (isFlagOn('E2E_SEED_ORDERS') ? ' | Orders: ON' : '')
     + (isFlagOn('E2E_SEED_VOUCHERS') ? ' | Vouchers: ON' : '')
     + (isFlagOn('E2E_SEED_EMPLOYEES') ? ' | Employees: ON' : '')
+    + (activity ? ` | Activity: ON (${activity.campaigns} chiến dịch, ${activity.runs} lượt chạy)` : '')
     + (withPending ? ' | Pending Downgrade: ON' : '')
     + (overage ? ` | Overage: ${overageMode}` : ''),
   );

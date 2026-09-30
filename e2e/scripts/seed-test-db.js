@@ -43,6 +43,7 @@ function isDemoSeedEnabled() {
     'E2E_SEED_LANDING',
     'E2E_SEED_ORDERS',
     'E2E_SEED_EMPLOYEES',
+    'E2E_SEED_ACTIVITY',
     'E2E_SEED_PENDING_CHANGE',
     'E2E_SEED_OVERAGE',
   ];

@@ -7,10 +7,13 @@
  *
  * Cần `E2E_SEED_ORDERS=1` (nằm trong `E2E_SEED_ALL=1`) cho ô "Lịch sử đơn":
  * 5 đơn các trạng thái, trong đó 2 đơn có hoá đơn điện tử đã phát hành.
+ *
+ * Ảnh `dong-ho-da-dung` (các đồng hồ Tin nhắn trong kỳ + Lượt AI trong kỳ) cần `E2E_SEED_ACTIVITY=1` (cũng nằm trong
+ * `E2E_SEED_ALL=1`): tin đã gửi và lượt AI trong kỳ của gói. Chụp riêng bằng `HELP_SHOT_ONLY=dong-ho-da-dung`.
  */
 import {
   sidebarShot, regionShot, highlight, hideVolatileChrome, settle, contentShot,
-  tallViewportShot,
+  tallViewportShot, bandShot,
 } from '../lib/shotHelpers.js';
 
 const BILLING_PATH = '/app/billing';
@@ -107,6 +110,33 @@ export default {
         if (await limits.isVisible().catch(() => false)) await highlight(limits);
         await page.waitForTimeout(200);
         return contentShot(page, section);
+      },
+    },
+    {
+      name: 'dong-ho-da-dung',
+      caption: 'tab Tổng quan của trang Tổng quan gói, khoanh đỏ khối Tin nhắn trong kỳ và khối Lượt AI trong kỳ',
+      localOnly: true,
+      async take(page) {
+        await page.goto(BILLING_PATH);
+        const messages = page.getByTestId('messages-usage');
+        const ai = page.getByTestId('ai-usage');
+        await messages.waitFor({ state: 'visible', timeout: 30_000 });
+        await ai.waitFor({ state: 'visible', timeout: 30_000 });
+
+        // Đồng hồ hỏng hiện "—" — báo lỗi thay vì chụp một khối không có số.
+        if (await messages.getByText('—', { exact: true }).count()) {
+          throw new Error('Có đồng hồ trong khối Tin nhắn trong kỳ hiện "—" (chưa đọc được số) — không chụp được.');
+        }
+        await settle(page);
+        await hideVolatileChrome(page);
+        // Hai khối liền nhau (cao ~450px): đặt khối đầu giữa vùng nhìn để cả hai nằm trọn trong khung nhìn và viền khoanh
+        // không chui dưới thanh ngang cố định ở đỉnh trang.
+        await messages.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+        await page.waitForTimeout(300);
+        await highlight(messages);
+        await highlight(ai);
+        await page.waitForTimeout(200);
+        return bandShot(page, messages, ai, { pad: 14, padTop: 14 });
       },
     },
     {

@@ -32,6 +32,10 @@ const SHEETS = [
   'quick-send',
 ];
 
+// HELP_SHOT_ONLY=ten-anh-1,ten-anh-2 — chỉ chụp đúng những ảnh đó (tên trong shots/<slug>.js), bỏ qua phần còn lại của bài.
+// Dùng khi bài chỉ có 1–2 ô mới: chụp lại cả bài là chụp đè cả những ảnh đã chèn và đã ưng.
+const ONLY = new Set(String(process.env.HELP_SHOT_ONLY || '').split(',').map((name) => name.trim()).filter(Boolean));
+
 for (const slugToCapture of SHEETS) {
   test.describe(`ảnh minh hoạ — ${slugToCapture}`, () => {
     let sheet;
@@ -78,6 +82,7 @@ for (const slugToCapture of SHEETS) {
       const isLocal = /^https?:\/\/(localhost|127\.0\.0\.1)/i.test(String(baseURL || ''));
 
       for (const shot of sheetDef.shots) {
+        if (ONLY.size > 0 && !ONLY.has(shot.name)) continue;
         if (shot.localOnly && !isLocal) {
           console.log(`  – ${shot.name} (bỏ qua: chỉ chạy ở máy mình)`);
           continue;

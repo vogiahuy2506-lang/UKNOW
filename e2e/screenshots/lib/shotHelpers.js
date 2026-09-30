@@ -332,13 +332,115 @@ export async function highlightCell(locator) {
 }
 
 /**
+ * Đo khung ôm sát một nhóm phần tử, theo toạ độ TƯƠNG ĐỐI với `container` — dùng cho `drawBoxes`.
+ *
+ * Cần khi phải khoanh MỘT CỘT của bảng (th + mọi td cùng cột) hoặc một khoảng của biểu đồ: các phần tử đó không có một
+ * hộp chung để `highlight` (outline) bám vào. Đo và vẽ phải làm cùng lúc, trước khi trang cuộn thêm.
+ *
+ * @param {import('@playwright/test').Locator} container khối sẽ chứa lớp phủ
+ * @param {import('@playwright/test').Locator[]} targets các phần tử cần ôm
+ * @param {{ pad?: number }} [options]
+ * @returns {Promise<{x: number, y: number, width: number, height: number}>}
+ */
+export async function boxAround(container, targets, { pad = 4 } = {}) {
+  const parent = await container.first().boundingBox();
+  const border = await container.first().evaluate((el) => ({ left: el.clientLeft, top: el.clientTop }));
+  const rects = [];
+  for (const target of targets) {
+    const rect = await target.boundingBox();
+    if (rect) rects.push(rect);
+  }
+  if (!parent || rects.length === 0) throw new Error('boxAround: không đo được phần tử cần khoanh');
+  const left = Math.min(...rects.map((r) => r.x));
+  const top = Math.min(...rects.map((r) => r.y));
+  const right = Math.max(...rects.map((r) => r.x + r.width));
+  const bottom = Math.max(...rects.map((r) => r.y + r.height));
+  return {
+    x: left - parent.x - border.left - pad,
+    y: top - parent.y - border.top - pad,
+    width: right - left + pad * 2,
+    height: bottom - top + pad * 2,
+  };
+}
+
+/**
+ * Vẽ khung đỏ (lớp phủ tuyệt đối) trong `container` theo toạ độ của `boxAround`. Khung dùng border VẼ VÀO TRONG kích thước
+ * đã đo nên không tràn ra ngoài khối chứa (khối chứa thường `overflow-hidden`). Không bắt chuột.
+ *
+ * @param {import('@playwright/test').Locator} container
+ * @param {Array<{x: number, y: number, width: number, height: number}>} boxes
+ * @param {{ fill?: string|null }} [options] `fill`: màu nền mờ phủ trong khung (vd khoảng trống trên biểu đồ)
+ */
+export async function drawBoxes(container, boxes, { fill = null } = {}) {
+  await container.first().evaluate((el, [list, color, background]) => {
+    if (window.getComputedStyle(el).position === 'static') el.style.position = 'relative';
+    for (const box of list) {
+      const frame = document.createElement('div');
+      frame.setAttribute('data-help-shot-box', '1');
+      Object.assign(frame.style, {
+        position: 'absolute',
+        left: `${box.x}px`,
+        top: `${box.y}px`,
+        width: `${box.width}px`,
+        height: `${box.height}px`,
+        border: `3px solid ${color}`,
+        borderRadius: '8px',
+        boxSizing: 'border-box',
+        pointerEvents: 'none',
+        zIndex: '30',
+        ...(background ? { background } : {}),
+      });
+      el.appendChild(frame);
+    }
+  }, [boxes, HIGHLIGHT_COLOR, fill]);
+}
+
+/**
+ * Chụp một dải ngang từ đầu phần tử `from` tới hết phần tử `to` (cả hai phải nằm trong khung nhìn), kèm lề — cho ảnh "đầu
+ * trang, khoanh đỏ mấy thẻ" mà các thẻ không nằm chung một khối. Chiều ngang theo `from`.
+ *
+ * @param {import('@playwright/test').Page} page
+ * @param {import('@playwright/test').Locator} from
+ * @param {import('@playwright/test').Locator} to
+ * @param {{ pad?: number, padTop?: number, scrollToTop?: boolean }} [options] `padTop`: lề phía trên (mặc định bằng `pad`; đặt nhỏ khi
+ *        dải bắt đầu ngay dưới thanh ngang, kẻo dính mép thanh đó); `scrollToTop`: kéo cột nội dung về đầu trang trước khi đo
+ */
+export async function bandShot(page, from, to, { pad = 16, padTop = pad, scrollToTop = false } = {}) {
+  return {
+    screenshot: async (options = {}) => {
+      if (scrollToTop) {
+        await page.evaluate(() => {
+          window.scrollTo(0, 0);
+          document.querySelectorAll('main').forEach((el) => { el.scrollTop = 0; });
+        });
+      } else {
+        await from.first().scrollIntoViewIfNeeded().catch(() => {});
+      }
+      await page.waitForTimeout(200);
+      const a = await from.first().boundingBox();
+      const b = await to.first().boundingBox();
+      if (!a || !b) throw new Error('bandShot: không đo được phần tử đầu / cuối dải');
+      const viewport = page.viewportSize();
+      const x = Math.max(0, a.x - pad);
+      const y = Math.max(0, a.y - padTop);
+      const width = Math.min(viewport.width - x, a.width + (a.x - x) + pad);
+      const height = Math.min(viewport.height - y, b.y + b.height + pad - y);
+      return page.screenshot({ ...options, clip: { x, y, width, height } });
+    },
+  };
+}
+
+/**
  * Chụp ảnh thanh menu trái với một nhóm đang mở và một mục được khoanh đỏ.
  *
  * Đây là mẫu chú thích lặp nhiều nhất trong bộ bài hướng dẫn (hơn 20 chỗ), nên
  * gói lại thành một hàm thay vì chép đi chép lại.
  *
+ * Bỏ `groupName` khi mục nằm NGOÀI nhóm nào (Trợ lý AI, Báo cáo, Sản phẩm…): mục lá ở đầu menu là <button>, không phải
+ * <a> như mục con trong nhóm, và không có nhóm nào cần mở.
+ *
  * @param {import('@playwright/test').Page} page
- * @param {{groupName: string, itemName: string, baseURL: string}} options
+ * @param {{groupName?: string, itemName: string, baseURL: string}} options
  */
 export async function sidebarShot(page, { groupName, itemName, baseURL }) {
   await forceSidebarExpanded(page, baseURL);
@@ -350,8 +452,10 @@ export async function sidebarShot(page, { groupName, itemName, baseURL }) {
   await hideVolatileChrome(page);
 
   // Mở nhóm nếu mục con chưa hiện. Bấm lại khi đang mở sẽ đóng nhóm lại.
-  const item = sidebar.getByRole('link', { name: itemName, exact: true });
-  if (!(await item.isVisible().catch(() => false))) {
+  const item = groupName
+    ? sidebar.getByRole('link', { name: itemName, exact: true })
+    : sidebar.getByRole('button', { name: itemName, exact: true });
+  if (groupName && !(await item.isVisible().catch(() => false))) {
     await sidebar.getByRole('button', { name: new RegExp(escapeRegExp(groupName)) }).first().click();
     await item.waitFor({ state: 'visible' });
   }

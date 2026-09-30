@@ -3,9 +3,13 @@
  *
  * Cần `E2E_SEED_EMPLOYEES=1` (đã nằm trong `E2E_SEED_ALL=1`) để có nhân viên
  * trong danh sách; trang rỗng thì ba trong bốn ảnh vô nghĩa.
+ *
+ * Ảnh `hoat-dong-nhom` (khối "Hoạt động nhóm", PR-7 số liệu) cần thêm `E2E_SEED_ACTIVITY=1` (cũng nằm trong
+ * `E2E_SEED_ALL=1`): chiến dịch, tin đã gửi và lượt AI của từng người. Chụp riêng bằng `HELP_SHOT_ONLY=hoat-dong-nhom`.
  */
 import {
   sidebarShot, regionShot, highlight, hideVolatileChrome, settle, contentShot, paddedShot,
+  boxAround, drawBoxes, bandShot,
 } from '../lib/shotHelpers.js';
 import { ensureLinkedEmployeeDemo, loginAs, LINKED_EMPLOYEE } from '../lib/shotFixtures.js';
 
@@ -71,6 +75,30 @@ export default {
           await page.setViewportSize(viewport);
           throw error;
         }
+      },
+    },
+    {
+      name: 'hoat-dong-nhom',
+      caption: 'khối Hoạt động nhóm ở cuối trang Nhân viên, khoanh đỏ dòng Cả công ty',
+      localOnly: true,
+      async take(page) {
+        await page.goto('/app/settings/employees');
+        const company = page.getByTestId('team-row-company');
+        await company.waitFor({ state: 'visible', timeout: 30_000 });
+        const card = page.locator('main .card').filter({ has: page.getByRole('heading', { name: 'Hoạt động nhóm' }) }).first();
+        await card.scrollIntoViewIfNeeded();
+        await settle(page);
+        await hideVolatileChrome(page);
+        // Đủ 5 dòng: Bạn, ba nhân viên, Cả công ty. Không có dòng "Khác" — mọi tin đều ghi người thực hiện.
+        const rows = await card.locator('tbody tr').count();
+        if (rows < 5) throw new Error(`Khối Hoạt động nhóm chỉ có ${rows} dòng — cần seed E2E_SEED_ACTIVITY=1 cùng E2E_SEED_EMPLOYEES=1`);
+        await card.scrollIntoViewIfNeeded();
+        await page.waitForTimeout(300);
+        // Khoanh cả dòng "Cả công ty" (in đậm, cuối bảng) bằng khung phủ vì <tr> không nhận outline gọn.
+        await drawBoxes(card, [await boxAround(card, [company], { pad: 1 })]);
+        await page.waitForTimeout(200);
+        // Chụp kèm lề quanh thẻ: thẻ này không có đệm trong nên chữ tiêu đề dính mép ảnh nếu cắt sát khung.
+        return bandShot(page, card, card, { pad: 14 });
       },
     },
     {

@@ -122,6 +122,26 @@ Các cờ seed:
 | `E2E_SEED_PENDING_CHANGE=1` | một lệnh hẹn hạ xuống Starter — **khoá luồng nâng gói** |
 | `E2E_SEED_OVERAGE=grace` | 4 landing page, trần 1, còn ân hạn 5 ngày |
 | `E2E_SEED_OVERAGE=locked` | như trên nhưng đã hết ân hạn, 3 trang bị khoá |
+| `E2E_SEED_ACTIVITY=1` (nằm trong `E2E_SEED_ALL`) | hoạt động gửi tin THẬT cho Giám sát gửi tin / Báo cáo / Hoạt động nhóm / Tổng quan gói — xem dưới |
+
+### Số liệu gửi tin (`E2E_SEED_ACTIVITY`)
+
+`scripts/seed-send-activity.js` ghi thẳng vào bảng tin (`email_messages`, `zalo_messages`) — nơi các màn số liệu đọc — nên
+không phải bịa số ở tầng giao diện:
+
+- tin rải trong 24 giờ qua tính từ `NOW()` giờ VN, **có khoảng trống 23:00–06:00** (không dựng tin trong giờ yên lặng của Zalo);
+- 10 lượt chạy đủ năm trạng thái (Đang gửi, Đang chờ, Xong, Đã dừng, Lỗi), 5 người chưa gửi được kèm lý do, 1 người lỗi rồi gửi lại được;
+- 60 ngày lịch sử (email + Zalo cá nhân + nhóm, có mở / nhấp, khách để lại thông tin / đã mua) cho trang Báo cáo;
+- nhân viên mẫu có chiến dịch, tin và lượt AI riêng (khối Hoạt động nhóm); kỳ gói lùi về 20 ngày trước để các đồng hồ
+  Tin nhắn trong kỳ / Lượt AI trong kỳ có số đã dùng.
+
+Số lượng theo công thức cố định (không `random()`), nên nạp lại cho ra cùng con số — trừ mốc giờ, luôn tính từ lúc nạp.
+**Chụp ảnh thì chạy backend với `SCHEDULER_ENABLED=false`**: worker nền quét lượt `running`, mà chiến dịch mẫu không có node
+nên nó đánh lượt "Đang gửi" / "Đang chờ" thành lỗi. Nạp xong nên chụp ngay trong buổi — mốc "hôm nay" và "24 giờ qua" trôi
+theo đồng hồ.
+
+Chỉ chụp lại đúng vài ảnh của một bài (đỡ đè lên ảnh đã chèn): `HELP_SHOT_ONLY=ten-anh-1,ten-anh-2 npx playwright test ...`
+(tên ảnh là `name` trong `shots/<slug>.js`).
 
 ## Thêm một bài mới
 

@@ -1,62 +1,86 @@
 /**
- * Hai ô còn thiếu của bài "Vì sao Zalo gửi chậm hoặc đang dừng"
- * (/huong-dan/zalo-gui-cham).
+ * Ba ô của bài "Vì sao Zalo gửi chậm hoặc đang dừng" (/huong-dan/zalo-gui-cham), theo giao diện số liệu mới
+ * (PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30): mục menu là "Giám sát gửi tin", bảng "Lượt chạy gần đây" có cột
+ * "Đã gửi / Cần gửi".
  *
- * Lưu ý tên gọi: mục menu là "Hiệu quả chiến dịch" nhưng tiêu đề trang là
- * "Giám sát gửi tin" — giống bài campaign-theo-doi.
+ * Cần `E2E_SEED_ALL=1` (kênh Zalo mẫu + `E2E_SEED_ACTIVITY`: chiến dịch Zalo "Gửi ưu đãi Zalo Khách hàng thân thiết" đang
+ * gửi 85 / 500). Backend chạy với `SCHEDULER_ENABLED=false`, kẻo worker nền đánh lượt đang gửi thành lỗi.
  */
 import {
-  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, enclosingSection,
+  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, bandShot, boxAround, drawBoxes,
 } from '../lib/shotHelpers.js';
 
 const MONITOR_PATH = '/app/delivery-monitor';
+const CHANNELS_PATH = '/app/settings/channels';
 
 export default {
   slug: 'zalo-gui-cham',
   shots: [
     {
-      name: 'menu-hieu-qua-chien-dich',
-      caption: 'menu bên trái, nhóm Chiến dịch đang mở, khoanh đỏ mục "Hiệu quả chiến dịch"',
+      name: 'the-zalo-trang-thai',
+      caption: 'thẻ Zalo trong trang Quản lý kênh gửi, khoanh đỏ dòng trạng thái của tài khoản',
+      localOnly: true,
+      async take(page) {
+        await page.goto(CHANNELS_PATH);
+        const tab = page.getByRole('button', { name: 'Zalo', exact: true }).first();
+        await tab.waitFor({ state: 'visible', timeout: 30_000 });
+        await tab.click();
+        // Khối "Tài khoản" liệt kê mỗi tài khoản một thẻ; dòng trạng thái là dòng có tên + nhãn (Đã kết nối / Cần kết nối lại…).
+        const list = page.locator('main .card').filter({ has: page.getByRole('heading', { name: 'Tài khoản', exact: true }) }).first();
+        await list.waitFor({ state: 'visible', timeout: 30_000 });
+        const accountCard = list.locator('div.rounded-lg.border').first();
+        await accountCard.waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        await hideVolatileChrome(page);
+        // Dòng có tên tài khoản và nhãn trạng thái ngay cạnh.
+        const statusLine = accountCard.locator('h3').first().locator('xpath=..');
+        await highlight(statusLine);
+        await page.waitForTimeout(200);
+        return contentShot(page, list);
+      },
+    },
+    {
+      name: 'menu-giam-sat-gui-tin',
+      caption: 'menu bên trái, nhóm Chiến dịch đang mở, khoanh đỏ mục "Giám sát gửi tin"',
       async take(page, { baseURL }) {
-        return sidebarShot(page, {
-          groupName: 'Chiến dịch',
-          itemName: 'Hiệu quả chiến dịch',
-          baseURL,
-        });
+        return sidebarShot(page, { groupName: 'Chiến dịch', itemName: 'Giám sát gửi tin', baseURL });
       },
     },
     {
       name: 'dong-chien-dich-zalo',
-      caption: 'mục Chiến dịch gần đây, khoanh đỏ dòng của một chiến dịch Zalo đang chạy với cột Thành công / tổng',
-      localOnly: true,
+      caption: 'mục Lượt chạy gần đây, khoanh đỏ dòng của một chiến dịch Zalo đang chạy với cột Đã gửi / Cần gửi',
       async take(page) {
         await page.goto(MONITOR_PATH);
-        const title = page.getByRole('heading', { name: /Chiến dịch gần đây/ }).first();
-        await title.waitFor({ state: 'visible', timeout: 30_000 });
+        await page.getByTestId('card-sent').waitFor({ state: 'visible', timeout: 30_000 });
         await settle(page);
         await hideVolatileChrome(page);
 
-        const section = await enclosingSection(page, title);
-
-        // Chú thích chỉ đích danh chiến dịch ZALO đang chạy, không phải dòng đầu
-        // tiên bất kỳ — mục này xếp lẫn cả chiến dịch email.
-        //
-        // Khớp 'running' chứ không phải 'Đang chạy': cột TRẠNG THÁI ở mục này in
-        // thẳng giá trị tiếng Anh trong DB (running / failed / completed), không
-        // qua i18n. Đó là lỗi dịch thiếu của sản phẩm, không phải của bộ chụp.
-        const row = section.locator('tr, li, div').filter({ hasText: /Zalo/ })
-          .filter({ hasText: /running/ }).last();
+        const card = page.locator('main .card').filter({ has: page.getByRole('heading', { name: /Lượt chạy gần đây/ }) }).first();
+        await card.waitFor({ state: 'visible', timeout: 30_000 });
+        // Chú thích chỉ đích danh chiến dịch ZALO đang chạy — bảng xếp lẫn cả chiến dịch email. Chọn theo nhãn kênh và trạng thái
+        // "Đang gửi" (không phải "Đang chờ": lượt đó nghỉ chứ không chạy).
+        const row = card.locator('tbody tr[data-testid^="run-row-"]')
+          .filter({ hasText: 'Zalo cá nhân' })
+          .filter({ has: page.locator('[data-testid="run-status"]', { hasText: /^Đang gửi$/ }) })
+          .first();
         if (!(await row.isVisible({ timeout: 10_000 }).catch(() => false))) {
           throw new Error(
-            'Không thấy chiến dịch Zalo nào đang chạy trong mục "Chiến dịch gần đây".\n'
-            + 'Hai nguyên nhân:\n'
-            + '  1. Worker nền đã đánh hỏng lượt chạy mẫu — chạy backend với SCHEDULER_ENABLED=false\n'
-            + '  2. Chưa seed: E2E_SEED_DEMO=1 E2E_SEED_CAMPAIGNS=1 node scripts/seed-test-db.js',
+            'Không thấy chiến dịch Zalo nào ở trạng thái "Đang gửi" trong "Lượt chạy gần đây".\n'
+            + 'Hai nguyên nhân: worker nền đã đánh lượt mẫu thành lỗi (chạy backend với SCHEDULER_ENABLED=false), hoặc chưa seed:\n'
+            + '  E2E_SEED_ALL=1 node e2e/scripts/seed-test-db.js',
           );
         }
-        await highlight(row);
+        await card.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+        await page.waitForTimeout(300);
+        // Khoanh cả dòng, và riêng ô "Đã gửi / Cần gửi" của dòng đó (cột thứ 4).
+        const sentCell = row.locator('td:nth-child(4)');
+        await drawBoxes(card, [
+          await boxAround(card, [row], { pad: 0 }),
+          await boxAround(card, [sentCell], { pad: -4 }),
+        ]);
         await page.waitForTimeout(200);
-        return contentShot(page, section);
+        // Từ đầu thẻ (tiêu đề + hàng tiêu đề cột) tới hết dòng được khoanh.
+        return bandShot(page, card, row, { pad: 10, padTop: 0 });
       },
     },
   ],
