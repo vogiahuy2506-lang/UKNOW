@@ -31,6 +31,7 @@ import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.j
 import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { assertChannelEntitled } from '../services/campaign/channelEntitlement.service.js';
 import zaloMessageRepository from '../repositories/campaign/zaloMessage.repository.js';
 import { resolveSendSpeedFromRow, ZALO_SEND_SPEED_PRESETS } from '../utils/zaloSendSpeed.util.js';
 import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
@@ -59,7 +60,22 @@ class ZaloSettingsController {
     this.defaultZaloLanguage = 'vi';
   }
 
+  /**
+   * P12 — gói của chủ workspace không có kênh Zalo (trần tài khoản = 0) -> 403 CHANNEL_NOT_IN_PLAN.
+   * Chạy TRƯỚC `assertPreviewSendQuota` (hàm đó thoát sớm ở chế độ enforce) và cho cả 3 đường gửi preview
+   * (cá nhân, nhóm, kết bạn) mà Gửi nhanh dùng. `checkSendQuota` vẫn là chốt chính; đây là cổng thông điệp rõ ràng.
+   */
+  async assertZaloChannelEntitled(req) {
+    const { workspaceOwnerId, contextType, roleCode } = getWorkspaceContext(req.user);
+    await assertChannelEntitled({
+      channel: 'zalo',
+      ownerUserId: workspaceOwnerId,
+      roleCode: contextType === 'self' ? roleCode : undefined,
+    });
+  }
+
   async assertPreviewSendQuota(req, recipientCount) {
+    await this.assertZaloChannelEntitled(req);
     const mode = process.env.SEND_QUOTA_RESERVATION_MODE || 'off';
     if (mode === 'enforce' || mode === 'test_enforce') {
       return { allowed: true, mode };

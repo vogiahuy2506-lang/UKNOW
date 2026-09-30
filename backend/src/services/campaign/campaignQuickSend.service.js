@@ -22,6 +22,7 @@ import {
   resolveRequestIdempotencyKey,
 } from '../quota/sendQuotaKey.service.js';
 import { recordDirectSendUsage } from '../../utils/userSendLimit.util.js';
+import { assertChannelEntitled } from './channelEntitlement.service.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
 
 class CampaignQuickSendService {
@@ -98,6 +99,9 @@ class CampaignQuickSendService {
         formatUtc7: () => emailSettingsController.formatUtc7(),
       });
     }
+
+    // P12 — gói của chủ workspace không có kênh Zalo -> 403 CHANNEL_NOT_IN_PLAN (trước giờ yên lặng/tài khoản/hạn mức).
+    await assertChannelEntitled({ channel: 'zalo', ownerUserId: workspaceOwnerId });
 
     // 1. Check quiet hours before outbound Zalo send
     const limiter = campaignRunService.zaloRateLimiter;
