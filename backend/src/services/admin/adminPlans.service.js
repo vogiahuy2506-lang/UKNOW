@@ -24,6 +24,7 @@ import { resolveOrderAmountWithInvoice } from '../../utils/invoiceVat.util.js';
 import { isPlaceholderPlan } from '../../utils/placeholderPlan.util.js';
 import db from '../../config/database.js';
 import payosClient from '../../utils/payos.util.js';
+import { generatePayosOrderCode } from '../../utils/payosOrderCode.util.js';
 
 const assertPaymentEnv = () => {
   const missing = ['PAYOS_CLIENT_ID', 'PAYOS_API_KEY', 'PAYOS_CHECKSUM_KEY', 'FRONTEND_URL']
@@ -394,7 +395,8 @@ export async function createCustomPlanWithPayment(userEmail, planData) {
       maxKbExtractedChars,
     });
 
-    orderCode = Date.now();
+    // Bộ sinh mã dùng chung — Date.now() trần đoán được và trùng khi hai đơn cùng mili-giây.
+    orderCode = generatePayosOrderCode();
     const amount = Math.round(Number(plan.price));
     // PR-5 Việc 5.2 — đơn tạo qua đường admin trước đây KHÔNG kèm invoiceInfo nên cổng ý định
     // (hasInvoiceIntent, matbaoInvoice.service.js) coi là "không có ý định" và không bao giờ
@@ -472,7 +474,7 @@ export async function assignPlan(planId, userEmail, {
   const qty = Math.max(1, Math.min(36, Math.floor(Number(quantity) || 1)));
   const result = await assignPlanToUser(user.id, planId, billingPeriod, qty);
 
-  const orderCode = Date.now();
+  const orderCode = generatePayosOrderCode();
   const planPrice = billingPeriod === 'yearly' && plan.price_yearly
     ? Number(plan.price_yearly)
     : Number(plan.price);

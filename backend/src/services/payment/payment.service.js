@@ -1,5 +1,5 @@
-import crypto from 'crypto';
 import { findPlanByCode, getPlanByUserId } from '../../repositories/payment/plan.repository.js';
+import { generatePayosOrderCode } from '../../utils/payosOrderCode.util.js';
 import payosClient from '../../utils/payos.util.js';
 import db from '../../config/database.js';
 import { resolveCheckoutDiscount } from '../voucher.service.js';
@@ -114,12 +114,11 @@ const validatePlanChange = async ({ targetPlan, targetBillingPeriod = 'monthly',
 };
 
 /**
- * PayOS orderCode: positive integer ≤ 9007199254740991.
- * Keep millisecond-based form close to the previous Date.now() shape to avoid
- * sandbox/production surprises; *100 + 0..99 only reduces same-ms collision.
+ * PayOS orderCode: positive integer ≤ 9007199254740991 — sinh bởi bộ sinh dùng chung
+ * (utils/payosOrderCode.util.js: 16 chữ số, 48 bit ngẫu nhiên).
  * MUST create a sandbox payment link before production deploy when changing this.
  */
-const generateOrderCode = () => Date.now() * 100 + crypto.randomInt(0, 100);
+const generateOrderCode = generatePayosOrderCode;
 
 export const createPaymentLink = async ({
     planCode,

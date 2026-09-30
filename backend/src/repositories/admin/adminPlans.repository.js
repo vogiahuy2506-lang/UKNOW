@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { generatePayosOrderCode } from '../../utils/payosOrderCode.util.js';
 
 /** Chuẩn hoá giá trị BIGINT nullable — tránh lỗi `invalid input syntax for type bigint: ""`. */
 const toNullableBigint = (v) => (v === '' || v === null || v === undefined ? null : v);
@@ -351,7 +352,7 @@ export async function createAndAssignCustomPlan(userId, { code, name, price, pri
     );
     const assignedUser = userResult.rows[0];
 
-    const orderCode = Date.now();
+    const orderCode = generatePayosOrderCode();
     await client.query(
       `INSERT INTO orders (order_code, plan_id, amount, user_email, user_id, status, created_at)
        VALUES ($1, $2, $3, $4, $5, 'success', NOW())`,

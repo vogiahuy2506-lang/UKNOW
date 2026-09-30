@@ -31,9 +31,10 @@ import { bestEffortCancelPayosLinks } from '../../utils/payosLink.util.js';
 import { resolveOrderAmountWithInvoice, normalizeBuyerInvoiceProfile } from '../../utils/invoiceVat.util.js';
 import { lockUserForPlanActivation, saveInvoiceProfile } from '../../repositories/user/user.repository.js';
 import { _clearQuotaCache } from '../../utils/userSendLimit.util.js';
-import crypto from 'crypto';
+import { generatePayosOrderCode } from '../../utils/payosOrderCode.util.js';
 
-const generateOrderCode = () => Date.now() * 100 + crypto.randomInt(0, 100);
+// Bộ sinh mã đơn PayOS dùng chung (utils/payosOrderCode.util.js).
+const generateOrderCode = generatePayosOrderCode;
 
 function ownerContextFromReqUser(user) {
   if (user?.activeContext?.type === 'employee' && user.activeContext.ownerId != null) {
