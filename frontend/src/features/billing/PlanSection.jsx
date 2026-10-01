@@ -138,31 +138,37 @@ export default function PlanSection({ data, t }) {
   return (
     <div className="space-y-5">
       {/* Plan name + price */}
-      <div className="flex items-start justify-between gap-3 rounded-xl border border-primary-100 bg-primary-50 px-5 py-4">
+      <div className="flex items-start justify-between gap-4 rounded-2xl border border-amber-200/80 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-white px-6 py-5 shadow-xs">
         <div className="min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="px-2.5 py-0.5 text-xs font-bold bg-primary-500 text-white rounded-full">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 text-xs font-bold bg-primary-600 text-white rounded-full shadow-xs">
+              <HiOutlineSparkles className="w-3.5 h-3.5 text-amber-200" />
               {planLabel}
             </span>
             {data.activePlanCode && (
-              <span className="text-xs text-primary-600 font-mono">{data.activePlanCode}</span>
+              <span className="text-xs text-primary-700 bg-primary-50 px-2 py-0.5 rounded-md border border-primary-200/50 font-mono">
+                {data.activePlanCode}
+              </span>
             )}
+            <span className="inline-flex px-2.5 py-0.5 text-[11px] font-medium rounded-full bg-white text-primary-700 border border-primary-200/60 shadow-2xs">
+              {isYearly ? t('accountProfileModal.billingYearly') : t('accountProfileModal.billingMonthly')}
+            </span>
           </div>
-          <p className="text-lg font-bold text-gray-900 mt-1">{formatPrice(displayPrice, t, isPlaceholder)}</p>
+          <p className="text-2xl font-extrabold text-gray-900 mt-2 tracking-tight">
+            {formatPrice(displayPrice, t, isPlaceholder)}
+          </p>
           {!isPlaceholder && displayPrice > 0 && (
-            <p className="text-xs text-gray-400">{isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth')}</p>
+            <p className="text-xs text-gray-500 mt-0.5 flex items-center gap-1">
+              <span>{isYearly ? t('accountProfileModal.perYear') : t('accountProfileModal.perMonth')}</span>
+              <span>·</span>
+              <span>{t('pricing.taxNoteKct')}</span>
+            </p>
           )}
-          {!isPlaceholder && displayPrice > 0 && (
-            <p className="text-xs text-gray-400">{t('pricing.taxNoteKct')}</p>
-          )}
-          <span className="inline-flex mt-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-white/70 text-primary-700 border border-primary-100">
-            {isYearly ? t('accountProfileModal.billingYearly') : t('accountProfileModal.billingMonthly')}
-          </span>
         </div>
         {data.planMaxEmployees !== null && (
-          <div className="text-right shrink-0">
-            <p className="text-xs text-gray-500">{t('accountProfileModal.maxEmployees')}</p>
-            <p className="text-sm font-bold text-gray-800">
+          <div className="text-right shrink-0 bg-white/90 backdrop-blur-xs px-4 py-2.5 rounded-xl border border-amber-100 shadow-2xs">
+            <p className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">{t('accountProfileModal.maxEmployees')}</p>
+            <p className="text-sm font-bold text-gray-900 mt-0.5">
               {data.planMaxEmployees === -1 ? t('accountProfileModal.unlimited') : t('accountProfileModal.people', { count: data.planMaxEmployees })}
             </p>
           </div>
@@ -186,8 +192,8 @@ export default function PlanSection({ data, t }) {
 
         if (isFullyExpired) {
           return (
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm bg-red-50 border border-red-200 text-red-700">
-              <HiOutlineExclamation className="w-4 h-4 shrink-0" />
+            <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm bg-red-50 border border-red-200 text-red-700 shadow-2xs">
+              <HiOutlineExclamation className="w-5 h-5 shrink-0" />
               <span className="font-semibold">
                 {t('accountProfileModal.fullyExpired')}
               </span>
@@ -197,8 +203,8 @@ export default function PlanSection({ data, t }) {
 
         if (isInGrace) {
           return (
-            <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm bg-amber-50 border border-amber-200 text-amber-800">
-              <HiOutlineExclamation className="w-4 h-4 shrink-0" />
+            <div className="flex items-center gap-2.5 rounded-xl px-4 py-3 text-sm bg-amber-50 border border-amber-200 text-amber-800 shadow-2xs">
+              <HiOutlineExclamation className="w-5 h-5 shrink-0" />
               <span>
                 {t('accountProfileModal.inGracePeriod', { days: graceDaysLeft })}
               </span>
@@ -207,19 +213,19 @@ export default function PlanSection({ data, t }) {
         }
 
         return (
-          <div className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm ${
+          <div className={`flex items-center gap-2.5 rounded-xl px-4 py-2.5 text-sm shadow-2xs ${
             isDanger ? 'bg-red-50 border border-red-200 text-red-700'
-            : isWarning ? 'bg-amber-50 border border-amber-200 text-amber-700'
-            : 'bg-gray-50 border border-gray-200 text-gray-600'
+            : isWarning ? 'bg-amber-50 border border-amber-200 text-amber-800'
+            : 'bg-white border border-gray-200 text-gray-700'
           }`}>
             {isWarning
-              ? <HiOutlineExclamation className="w-4 h-4 shrink-0" />
-              : <HiOutlineClock className="w-4 h-4 shrink-0" />
+              ? <HiOutlineExclamation className="w-4 h-4 shrink-0 text-amber-600" />
+              : <HiOutlineClock className="w-4 h-4 shrink-0 text-gray-500" />
             }
-            <span>
+            <span className="font-medium">
               {t('accountProfileModal.expiresOn', { date: expiresAt.toLocaleDateString('vi-VN') })}
               {isWarning && daysLeft > 0 && (
-                <span className="ml-1 font-semibold">{t('accountProfileModal.daysLeft', { days: daysLeft })}</span>
+                <span className="ml-1.5 font-bold text-amber-700">{t('accountProfileModal.daysLeft', { days: daysLeft })}</span>
               )}
             </span>
           </div>
@@ -228,13 +234,13 @@ export default function PlanSection({ data, t }) {
 
       {/* Features */}
       {features.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+        <div className="flex flex-wrap gap-2">
           {features.map((feat, i) => (
             <span
               key={i}
-              className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs bg-white text-gray-700 rounded-lg border border-gray-200/70 shadow-2xs"
             >
-              <HiOutlineBadgeCheck className="w-3 h-3 text-green-500" />
+              <HiOutlineBadgeCheck className="w-3.5 h-3.5 text-emerald-500" />
               {unwrapFeature(feat, locale)}
             </span>
           ))}
@@ -242,12 +248,17 @@ export default function PlanSection({ data, t }) {
       )}
 
       {/* Tin nhắn trong kỳ — mọi số lấy từ ĐÚNG hàm của cổng chặn gửi tin, cùng kỳ 30 ngày từ ngày kích hoạt gói */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3" data-testid="messages-usage">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-          {sendCycleEnd
-            ? t('accountProfileModal.messagesInCycleUntil', { date: sendCycleEnd })
-            : t('accountProfileModal.messagesInCycle')}
-        </p>
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs" data-testid="messages-usage">
+        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">
+            {sendCycleEnd
+              ? t('accountProfileModal.messagesInCycleUntil', { date: sendCycleEnd })
+              : t('accountProfileModal.messagesInCycle')}
+          </p>
+          <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+            Đã dùng · Hạn mức
+          </span>
+        </div>
         <UsageBar
           icon={HiOutlineMail}
           label={t('accountProfileModal.email')}
@@ -320,12 +331,17 @@ export default function PlanSection({ data, t }) {
             serviceSuspended={serviceSuspended}
           />
         )}
-        <p className="text-[11px] text-gray-400">{t('accountProfileModal.includesQuickSend')}</p>
+        <p className="text-[11px] text-gray-400 pt-0.5">{t('accountProfileModal.includesQuickSend')}</p>
       </div>
 
       {/* Lượt AI — đã dùng / hạn mức kỳ, còn lại, ngày làm mới; ví mua thêm không hết hạn */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3" data-testid="ai-usage">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.aiUsageTitle')}</p>
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs" data-testid="ai-usage">
+        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">{t('accountProfileModal.aiUsageTitle')}</p>
+          <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+            Đã dùng · Hạn mức
+          </span>
+        </div>
         <UsageBar
           icon={HiOutlineSparkles}
           label={t('accountProfileModal.aiUsed')}
@@ -336,22 +352,27 @@ export default function PlanSection({ data, t }) {
           usingAddons={aiWalletRemaining > 0}
         />
         {!serviceSuspended && aiRemaining !== null && (
-          <p className="text-xs text-gray-500" data-testid="ai-usage-remaining">
+          <p className="text-xs text-gray-500 font-medium" data-testid="ai-usage-remaining">
             {aiRefreshDate
               ? t('accountProfileModal.aiRemainingRefresh', { remaining: formatNumber(aiRemaining), date: aiRefreshDate })
               : t('accountProfileModal.aiRemaining', { remaining: formatNumber(aiRemaining) })}
           </p>
         )}
         {!serviceSuspended && aiWalletRemaining > 0 && (
-          <p className="text-xs text-amber-700" data-testid="ai-usage-wallet">
+          <p className="text-xs text-amber-700 font-medium bg-amber-50/80 p-2.5 rounded-xl border border-amber-200/60" data-testid="ai-usage-wallet">
             {t('accountProfileModal.aiWalletExtra', { n: formatNumber(aiWalletRemaining) })}
           </p>
         )}
       </div>
 
       {/* Tài nguyên — cùng hàm đếm và cùng trần với cổng tạo mới (trần đã gồm slot mua thêm còn hạn) */}
-      <div className="rounded-xl border border-gray-200 bg-white p-4 space-y-3" data-testid="resources-usage">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{t('accountProfileModal.resourcesTitle')}</p>
+      <div className="rounded-2xl border border-gray-200/80 bg-white p-5 space-y-3.5 shadow-xs" data-testid="resources-usage">
+        <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+          <p className="text-xs font-bold text-gray-600 uppercase tracking-wider">{t('accountProfileModal.resourcesTitle')}</p>
+          <span className="text-[11px] font-medium text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md border border-gray-100">
+            Đang dùng · Hạn mức
+          </span>
+        </div>
         {RESOURCE_ROWS.map(({ key, icon, labelKey, optional }) => {
           const entry = data.resourceUsage?.[key] ?? null;
           // W5: WhatsApp/Telegram chỉ hiện khi gói có đặt trần (NULL = không giới hạn) hoặc đã có tài khoản.

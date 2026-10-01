@@ -19,12 +19,12 @@ export default function UsageBar({
 }) {
   if (serviceSuspended) {
     return (
-      <div className="flex items-center justify-between py-1">
-        <span className="flex items-center gap-1.5 text-sm text-gray-600">
-          {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
-          {label}
+      <div className="flex items-center justify-between py-2 px-1">
+        <span className="flex items-center gap-2 text-sm text-gray-600">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+          <span className="font-medium">{label}</span>
         </span>
-        <span className="text-xs font-semibold text-red-600">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold text-red-700 bg-red-50 border border-red-200">
           {t('accountProfileModal.suspended')}
         </span>
       </div>
@@ -34,13 +34,13 @@ export default function UsageBar({
   const usedNumber = used === null || used === undefined || used === '' ? NaN : Number(used);
   if (!Number.isFinite(usedNumber)) {
     return (
-      <div className="flex items-center justify-between py-1" data-testid="usage-bar-unavailable">
-        <span className="flex items-center gap-1.5 text-sm text-gray-600">
-          {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
-          {label}
+      <div className="flex items-center justify-between py-2 px-1" data-testid="usage-bar-unavailable">
+        <span className="flex items-center gap-2 text-sm text-gray-600">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+          <span className="font-medium">{label}</span>
         </span>
         <span
-          className="text-xs font-medium text-gray-400"
+          className="text-xs font-medium text-gray-400 bg-gray-50 px-2.5 py-0.5 rounded-full border border-gray-100"
           title={t('accountProfileModal.meterUnavailable')}
         >
           —
@@ -51,12 +51,19 @@ export default function UsageBar({
 
   if (isUnlimitedPlanLimit(limit)) {
     return (
-      <div className="flex items-center justify-between py-1">
-        <span className="flex items-center gap-1.5 text-sm text-gray-600">
-          {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
-          {label}
+      <div className="flex items-center justify-between py-2 px-1.5 hover:bg-gray-50/70 rounded-lg transition-colors">
+        <span className="flex items-center gap-2 text-sm text-gray-700">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+          <span className="font-medium">{label}</span>
         </span>
-        <span className="text-xs font-medium text-gray-400">
+        <span
+          className="inline-flex items-center text-xs font-medium text-gray-600 bg-gray-100/90 hover:bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200/70 transition-colors cursor-default"
+          title={
+            usedNumber > 0
+              ? `Đang sử dụng: ${formatNumber(usedNumber)} · Hạn mức: ${t('accountProfileModal.unlimited')}`
+              : `Hạn mức: ${t('accountProfileModal.unlimited')}`
+          }
+        >
           {usedNumber > 0
             ? `${formatNumber(usedNumber)} · ${t('accountProfileModal.unlimited')}`
             : t('accountProfileModal.unlimited')}
@@ -74,22 +81,22 @@ export default function UsageBar({
   const showAddonsHint = usingAddons && usedNumber > limitNumber;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-1">
-        <span className="flex items-center gap-1.5 text-sm text-gray-600">
-          {Icon && <Icon className="w-3.5 h-3.5 text-gray-400" />}
-          {label}
+    <div className="py-1 px-1">
+      <div className="flex items-center justify-between mb-1.5">
+        <span className="flex items-center gap-2 text-sm text-gray-700">
+          {Icon && <Icon className="w-4 h-4 text-gray-400 shrink-0" />}
+          <span className="font-medium">{label}</span>
         </span>
         <span className={`text-xs font-semibold tabular-nums ${textColor}`}>
           {formatNumber(usedNumber)} / {formatNumber(limitNumber)}
         </span>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-gray-100 overflow-hidden">
+      <div className="h-2 w-full rounded-full bg-gray-100 overflow-hidden shadow-inner">
         <div className={`h-full rounded-full transition-all duration-300 ${barColor}`} style={{ width: `${pct}%` }} />
       </div>
       {showAddonsHint && (
-        <p className="mt-0.5 text-[11px] text-amber-700">
-          {t('accountProfileModal.usingAddonsHint')}
+        <p className="mt-1 text-[11px] text-amber-700 flex items-center gap-1 font-medium">
+          <span>•</span> {t('accountProfileModal.usingAddonsHint')}
         </p>
       )}
     </div>

@@ -44,7 +44,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   // mới thay vì cập nhật đúng section.
   const [expandedSections, setExpandedSections] = useState({
     page: true,
-    images: false,
+    images: true,
     domain: true,
     'lead-form': false,
   });
@@ -355,7 +355,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             expanded={expandedSections.images}
             onToggle={() => toggleSection('images')}
             icon={<HiOutlinePhotograph className="w-5 h-5" />}
-            title="Kho ảnh & Tệp tải lên"
+            title={tc('sections.images.title')}
             badge={inPageImages.length > 0 ? `${inPageImages.length} ảnh trong trang` : null}
             badgeClass="bg-blue-50 text-blue-700 border border-blue-200/60"
           >
@@ -388,7 +388,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                   className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition border border-gray-200/80"
                 >
                   <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
-                  {isUploadingImage ? tc('sections.images.uploading') : 'Tải thêm ảnh vào kho'}
+                  {isUploadingImage ? tc('sections.images.uploading') : tc('sections.images.upload')}
                 </button>
               </div>
 
