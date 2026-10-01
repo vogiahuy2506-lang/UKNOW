@@ -1353,6 +1353,8 @@ export default {
     creating: 'Creating...',
     createAndDesign: 'Create & Design',
     createModalTitle: 'Create New Campaign',
+    createModalSubtitle: 'Select a channel and set a name to start building your workflow',
+    selectOneChannel: 'Select 1 channel',
     campaignNamePlaceholder: 'Enter campaign name...',
     duplicateModalTitle: 'Duplicate Campaign',
     newCampaignName: 'New campaign name',

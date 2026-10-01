@@ -22,6 +22,10 @@ import {
   HiOutlineEye,
   HiOutlineRefresh,
   HiOutlineViewList,
+  HiOutlineUserGroup,
+  HiOutlineSparkles,
+  HiOutlineX,
+  HiCheck,
 } from 'react-icons/hi';
 import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { getCampaignTypeMeta } from '../../utils/campaignTypeDisplay';
@@ -99,15 +103,57 @@ const Campaigns = () => {
   const [whatsappChannelEnabled, setWhatsappChannelEnabled] = useState(false);
   // P12 — gói không có kênh Zalo: modal tạo chiến dịch bỏ 2 lựa chọn Zalo (bộ lọc loại vẫn giữ để tìm chiến dịch cũ).
   const { zalo: zaloEntitled } = useChannelEntitlements();
-  const createTypeColumnCount = 1 + (zaloEntitled ? 2 : 0) + (telegramChannelEnabled ? 2 : 0) + (whatsappChannelEnabled ? 1 : 0);
-  const CREATE_TYPE_GRID_CLASSES = {
-    1: 'grid-cols-1',
-    2: 'grid-cols-2',
-    3: 'grid-cols-3',
-    4: 'grid-cols-2 sm:grid-cols-4',
-    5: 'grid-cols-2 sm:grid-cols-5',
-    6: 'grid-cols-2 sm:grid-cols-6',
-  };
+
+  const createCampaignChannels = [
+    {
+      id: 'email',
+      name: t('campaigns.email'),
+      icon: HiOutlineMail,
+      iconBg: 'bg-blue-50 text-blue-600 border border-blue-100/80',
+      selectedIconBg: 'bg-blue-600 text-white',
+      visible: true,
+    },
+    {
+      id: 'zalo',
+      name: t('campaigns.zaloPersonal'),
+      icon: HiOutlineChat,
+      iconBg: 'bg-sky-50 text-sky-600 border border-sky-100/80',
+      selectedIconBg: 'bg-sky-600 text-white',
+      visible: zaloEntitled,
+    },
+    {
+      id: 'zalo_group',
+      name: t('campaigns.zaloGroup'),
+      icon: HiOutlineUserGroup,
+      iconBg: 'bg-violet-50 text-violet-600 border border-violet-100/80',
+      selectedIconBg: 'bg-violet-600 text-white',
+      visible: zaloEntitled,
+    },
+    {
+      id: 'telegram',
+      name: t('campaigns.telegram'),
+      icon: FaTelegramPlane,
+      iconBg: 'bg-sky-50 text-sky-500 border border-sky-100/80',
+      selectedIconBg: 'bg-sky-500 text-white',
+      visible: telegramChannelEnabled,
+    },
+    {
+      id: 'telegram_group',
+      name: t('campaigns.telegramGroup'),
+      icon: FaTelegramPlane,
+      iconBg: 'bg-indigo-50 text-indigo-600 border border-indigo-100/80',
+      selectedIconBg: 'bg-indigo-600 text-white',
+      visible: telegramChannelEnabled,
+    },
+    {
+      id: 'whatsapp',
+      name: t('campaigns.whatsapp'),
+      icon: FaWhatsapp,
+      iconBg: 'bg-emerald-50 text-emerald-600 border border-emerald-100/80',
+      selectedIconBg: 'bg-emerald-600 text-white',
+      visible: whatsappChannelEnabled,
+    },
+  ].filter((c) => Boolean(c.visible));
 
   const runController = useCampaignRunController({
     onCampaignsChanged: () => fetchCampaigns(),
@@ -1033,123 +1079,139 @@ const Campaigns = () => {
       />
 
       {showCreateModal && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-black/50" onClick={closeCreateModal} />
-          <div className="relative bg-white rounded-lg shadow-xl max-w-md w-full">
-            <div className="px-6 py-4 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">{t('campaigns.createModalTitle')}</h3>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200"
+          onKeyDown={(e) => {
+            if (e.key === 'Escape' && !isCreatingCampaign) closeCreateModal();
+          }}
+        >
+          <div className="absolute inset-0" onClick={closeCreateModal} />
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden transform transition-all duration-200">
+            {/* Header */}
+            <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between bg-gradient-to-b from-slate-50/70 to-white">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200/80 flex items-center justify-center text-orange-600 shadow-xs shrink-0">
+                  <HiOutlineSparkles className="w-5 h-5" aria-hidden="true" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900 leading-snug">{t('campaigns.createModalTitle')}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    {t('campaigns.createModalSubtitle') || 'Thiết lập tên và kênh tương tác để khởi tạo kịch bản'}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={closeCreateModal}
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors"
+                aria-label={t('common.close') || 'Đóng'}
+              >
+                <HiOutlineX className="w-5 h-5" />
+              </button>
             </div>
-            <div className="px-6 py-4 space-y-4">
+
+            {/* Body */}
+            <div className="p-6 space-y-5">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('campaigns.campaignName')}
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    {t('campaigns.campaignName')}
+                  </label>
+                  <span className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">
+                    {t('common.required') || 'Bắt buộc'}
+                  </span>
+                </div>
                 <input
                   type="text"
                   value={createCampaignForm.campaignName}
                   onChange={(e) => setCreateCampaignForm((prev) => ({ ...prev, campaignName: e.target.value }))}
-                  className="input w-full"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !isCreatingCampaign && createCampaignForm.campaignName.trim()) {
+                      e.preventDefault();
+                      handleCreateCampaign();
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 text-sm bg-slate-50/60 hover:bg-white focus:bg-white border border-slate-200 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-orange-500 focus:ring-4 focus:ring-orange-500/10 transition-all shadow-xs"
                   placeholder={t('campaigns.campaignNamePlaceholder')}
                   autoFocus
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  {t('campaigns.campaignType')}
-                </label>
-                <div className={`grid gap-3 ${CREATE_TYPE_GRID_CLASSES[createTypeColumnCount] || 'grid-cols-3'}`}>
-                  <button
-                    type="button"
-                    onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'email' }))}
-                    className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
-                      createCampaignForm.campaignType === 'email'
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                    }`}
-                  >
-                    <HiOutlineMail className="w-4 h-4" />
-                    {t('campaigns.email')}
-                  </button>
-                  {zaloEntitled && (
-                  <>
-                  <button
-                    type="button"
-                    onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'zalo' }))}
-                    className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
-                      createCampaignForm.campaignType === 'zalo'
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                    }`}
-                  >
-                    <HiOutlineChat className="w-4 h-4" />
-                    {t('campaigns.zaloPersonal')}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'zalo_group' }))}
-                    className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
-                      createCampaignForm.campaignType === 'zalo_group'
-                        ? 'border-primary-500 bg-primary-50 text-primary-700'
-                        : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                    }`}
-                  >
-                    <HiOutlineChat className="w-4 h-4" />
-                    {t('campaigns.zaloGroup')}
-                  </button>
-                  </>
-                  )}
-                  {telegramChannelEnabled && (
-                    <button
-                      type="button"
-                      onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'telegram' }))}
-                      className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
-                        createCampaignForm.campaignType === 'telegram'
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      <FaTelegramPlane className="w-4 h-4" />
-                      {t('campaigns.telegram')}
-                    </button>
-                  )}
-                  {telegramChannelEnabled && (
-                    <button
-                      type="button"
-                      onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'telegram_group' }))}
-                      className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
-                        createCampaignForm.campaignType === 'telegram_group'
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      <FaTelegramPlane className="w-4 h-4" />
-                      {t('campaigns.telegramGroup')}
-                    </button>
-                  )}
-                  {whatsappChannelEnabled && (
-                    <button
-                      type="button"
-                      onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: 'whatsapp' }))}
-                      className={`border rounded-lg px-3 py-2 flex items-center justify-center gap-2 transition-colors ${
-                        createCampaignForm.campaignType === 'whatsapp'
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-gray-300 text-gray-600 hover:border-gray-400'
-                      }`}
-                    >
-                      <FaWhatsapp className="w-4 h-4" />
-                      {t('campaigns.whatsapp')}
-                    </button>
-                  )}
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    {t('campaigns.campaignType')}
+                  </label>
+                  <span className="text-xs text-slate-400 font-normal">
+                    {t('campaigns.selectOneChannel') || 'Chọn 1 kênh'}
+                  </span>
+                </div>
+
+                <div className={`grid gap-2.5 ${createCampaignChannels.length <= 2 ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-3'}`}>
+                  {createCampaignChannels.map((ch) => {
+                    const isSelected = createCampaignForm.campaignType === ch.id;
+                    const Icon = ch.icon;
+                    return (
+                      <button
+                        key={ch.id}
+                        type="button"
+                        onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: ch.id }))}
+                        className={`group relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                          isSelected
+                            ? 'border-orange-500 bg-orange-50/70 shadow-sm shadow-orange-500/10 ring-1 ring-orange-500/30 text-orange-950 font-semibold'
+                            : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80 text-slate-700 hover:text-slate-900 shadow-xs'
+                        }`}
+                      >
+                        <span
+                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
+                            isSelected ? ch.selectedIconBg : ch.iconBg
+                          }`}
+                          aria-hidden="true"
+                        >
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <span className="text-sm font-medium leading-snug truncate">
+                          {ch.name}
+                        </span>
+                        {isSelected && (
+                          <span
+                            className="absolute top-2 right-2 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs"
+                            aria-hidden="true"
+                          >
+                            <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end space-x-3">
-              <button onClick={closeCreateModal} className="btn btn-secondary" disabled={isCreatingCampaign}>
+
+            {/* Footer */}
+            <div className="px-6 py-4 bg-slate-50/80 border-t border-slate-100 flex items-center justify-end gap-3 rounded-b-2xl">
+              <button
+                type="button"
+                onClick={closeCreateModal}
+                className="btn btn-secondary px-4 py-2.5 rounded-xl text-sm font-medium hover:bg-slate-100 transition-colors"
+                disabled={isCreatingCampaign}
+              >
                 {t('common.cancel')}
               </button>
-              <button onClick={handleCreateCampaign} className="btn btn-primary" disabled={isCreatingCampaign}>
-                {isCreatingCampaign ? t('campaigns.creating') : t('campaigns.createAndDesign')}
+              <button
+                type="button"
+                onClick={handleCreateCampaign}
+                className="btn btn-primary px-5 py-2.5 rounded-xl text-sm font-semibold shadow-md shadow-orange-500/20 hover:shadow-orange-500/30 transition-all flex items-center gap-2"
+                disabled={isCreatingCampaign}
+              >
+                {isCreatingCampaign ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" aria-hidden="true" />
+                    <span>{t('campaigns.creating')}</span>
+                  </>
+                ) : (
+                  t('campaigns.createAndDesign')
+                )}
               </button>
             </div>
           </div>

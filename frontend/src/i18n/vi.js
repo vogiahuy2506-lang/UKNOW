@@ -1357,6 +1357,8 @@ export default {
     creating: 'Đang tạo...',
     createAndDesign: 'Tạo và thiết kế',
     createModalTitle: 'Tạo chiến dịch mới',
+    createModalSubtitle: 'Thiết lập tên và kênh tương tác để khởi tạo kịch bản',
+    selectOneChannel: 'Chọn 1 kênh tương tác',
     campaignNamePlaceholder: 'Nhập tên chiến dịch...',
     duplicateModalTitle: 'Nhân bản chiến dịch',
     newCampaignName: 'Tên chiến dịch mới',
