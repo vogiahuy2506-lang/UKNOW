@@ -44,9 +44,9 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   // mới thay vì cập nhật đúng section.
   const [expandedSections, setExpandedSections] = useState({
     page: true,
-    images: true,
+    images: false,
     domain: true,
-    'lead-form': true,
+    'lead-form': false,
   });
 
   const [uploadedAssets, setUploadedAssets] = useState([]);
@@ -306,30 +306,15 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             badgeClass={form?.isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}
           >
             <div className="space-y-4">
-              {/* Tiêu đề */}
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                  {tc('sections.page.titleLabel')}
-                </label>
-                <input
-                  type="text"
-                  value={form?.title || ''}
-                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                  onBlur={handleSaveTitle}
-                  placeholder={tc('sections.page.titlePlaceholder')}
-                  className="w-full rounded-lg border border-gray-200 px-4 py-2.5 text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-                />
-              </div>
-
               {/* Publish toggle */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-gray-50/90 border border-gray-200/60 rounded-xl">
                 <div>
-                  <p className="font-medium text-gray-900">{tc('sections.page.publishLabel')}</p>
-                  <p className="text-sm text-gray-500 mt-0.5">
+                  <p className="font-semibold text-gray-900">{tc('sections.page.publishLabel')}</p>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
                     {form?.isPublished ? tc('sections.page.publishOnDesc') : tc('sections.page.publishOffDesc')}
                   </p>
                 </div>
-                <label className="relative inline-flex items-center cursor-pointer">
+                <label className="relative inline-flex items-center cursor-pointer shrink-0">
                   <input
                     type="checkbox"
                     checked={Boolean(form?.isPublished)}
@@ -342,6 +327,26 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                   <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-orange-200 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-orange-500"></div>
                 </label>
               </div>
+
+              {/* Tiêu đề */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-sm font-medium text-gray-700">
+                    {tc('sections.page.titleLabel')}
+                  </label>
+                  <span className="text-[11px] text-gray-400 font-normal">
+                    (Tự động đồng bộ với thanh tiêu đề trên cùng)
+                  </span>
+                </div>
+                <input
+                  type="text"
+                  value={form?.title || ''}
+                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+                  onBlur={handleSaveTitle}
+                  placeholder={tc('sections.page.titlePlaceholder')}
+                  className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
+                />
+              </div>
             </div>
           </SectionCard>
 
@@ -350,13 +355,21 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             expanded={expandedSections.images}
             onToggle={() => toggleSection('images')}
             icon={<HiOutlinePhotograph className="w-5 h-5" />}
-            title={tc('sections.images.title')}
+            title="Kho ảnh & Tệp tải lên"
+            badge={inPageImages.length > 0 ? `${inPageImages.length} ảnh trong trang` : null}
+            badgeClass="bg-blue-50 text-blue-700 border border-blue-200/60"
           >
             <div className="space-y-4">
-              {/* Dòng gợi ý */}
-              <p className="text-xs text-gray-500 italic bg-amber-50/60 border border-amber-200/60 rounded-lg p-2.5">
-                {tc('sections.images.hint')}
-              </p>
+              {/* Dòng gợi ý thông minh */}
+              <div className="p-3 rounded-xl bg-amber-50/90 border border-amber-200/70 text-xs text-amber-900 flex items-start gap-2.5">
+                <span className="text-base leading-none shrink-0 mt-0.5">💡</span>
+                <div className="space-y-0.5">
+                  <div className="font-semibold text-amber-950">Mẹo chèn ảnh vào trang:</div>
+                  <div className="text-amber-900/90 leading-relaxed">
+                    Để ảnh nằm đúng vị trí đẹp nhất (Logo, Banner chính, Khối sản phẩm...), bạn chỉ cần đính kèm ảnh trực tiếp trong <strong>Khung Chat AI</strong> và nhắn vị trí mong muốn. Mục này dùng để bạn xem lại và lấy link các ảnh đã tải lên.
+                  </div>
+                </div>
+              </div>
 
               {/* Nút Tải ảnh lên */}
               <div>
@@ -372,10 +385,10 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                   type="button"
                   disabled={isUploadingImage}
                   onClick={() => imageInputRef.current?.click()}
-                  className="inline-flex items-center gap-2 px-3.5 py-2 text-sm font-medium rounded-lg text-white bg-orange-500 hover:bg-orange-600 disabled:opacity-50 transition"
+                  className="inline-flex items-center gap-2 px-3.5 py-2 text-xs sm:text-sm font-medium rounded-xl text-gray-700 bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition border border-gray-200/80"
                 >
-                  <HiOutlinePhotograph className="w-4 h-4" />
-                  {isUploadingImage ? tc('sections.images.uploading') : tc('sections.images.upload')}
+                  <HiOutlinePhotograph className="w-4 h-4 text-gray-500" />
+                  {isUploadingImage ? tc('sections.images.uploading') : 'Tải thêm ảnh vào kho'}
                 </button>
               </div>
 

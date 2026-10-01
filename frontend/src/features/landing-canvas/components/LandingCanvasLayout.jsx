@@ -1,4 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
+import { HiOutlineSparkles } from 'react-icons/hi';
 import LandingCanvasTopbar from './LandingCanvasTopbar.jsx';
 import CanvasPreviewArea from './CanvasPreviewArea.jsx';
 import CanvasChatPanel from './CanvasChatPanel.jsx';
@@ -6,13 +7,13 @@ import CanvasChatPanel from './CanvasChatPanel.jsx';
 /**
  * Layout 2-panel bên trong main area của MainLayout:
  *   ┌────────────────────────────────────────────┐
- *   │ LandingCanvasTopbar (44px, border-b)       │
+ *   │ LandingCanvasTopbar (56px, border-b)       │
  *   ├──────────────┬─────────────────────────────┤
  *   │ Chat Panel   │ Preview Area                │
  *   │ (380px)      │ (flex)                      │
  *   └──────────────┴─────────────────────────────┘
  *
- * Khi chat collapsed → aside width = 0, chat panel render floating restore button.
+ * Khi chat collapsed → aside width = 0, hiển thị nút khôi phục ở mép trái và toolbar Preview.
  */
 export default function LandingCanvasLayout({
   form,
@@ -61,7 +62,7 @@ export default function LandingCanvasLayout({
   );
 
   return (
-    <div className="flex flex-col h-full min-h-0">
+    <div className="flex flex-col h-full min-h-0 relative">
       <LandingCanvasTopbar
         form={form}
         setForm={setForm}
@@ -78,7 +79,20 @@ export default function LandingCanvasLayout({
         onOpenImportHtml={onOpenImportHtml}
       />
 
-      <div className="flex-1 min-h-0 flex">
+      <div className="flex-1 min-h-0 flex relative">
+        {/* Nút dock tab mép trái khi chat panel đang thu gọn (độc lập ngoài aside) */}
+        {chatCollapsed && (
+          <button
+            type="button"
+            onClick={handleToggleChat}
+            className="fixed left-0 top-20 z-30 group inline-flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-r-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl hover:pr-5 transition-all select-none cursor-pointer"
+            title="Mở lại Trợ lý AI"
+          >
+            <HiOutlineSparkles className="w-4.5 h-4.5 animate-pulse" />
+            <span>Mở Trợ lý AI</span>
+          </button>
+        )}
+
         {/* Chat Panel (left, 380px) */}
         <aside
           className={`shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0 transition-[width] duration-200 ${
@@ -108,6 +122,8 @@ export default function LandingCanvasLayout({
               onOpenImportHtml={onOpenImportHtml}
               onOpenTemplateGallery={onOpenTemplateGallery}
               onFocusChat={handleFocusChat}
+              isChatCollapsed={chatCollapsed}
+              onToggleChat={handleToggleChat}
             />
           )}
         </section>

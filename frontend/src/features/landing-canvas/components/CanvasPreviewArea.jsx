@@ -19,7 +19,15 @@ import { useI18n } from '../../../i18n';
  *  - onFocusChat: focus ô nhập chat (nút "Nhờ AI tạo")
  *    (PLAN_LANDING_DAN_HTML_CO_SAN_2026-09-13.md, Việc 2)
  */
-export default function CanvasPreviewArea({ form, setForm, onOpenImportHtml, onOpenTemplateGallery, onFocusChat }) {
+export default function CanvasPreviewArea({
+  form,
+  setForm,
+  onOpenImportHtml,
+  onOpenTemplateGallery,
+  onFocusChat,
+  isChatCollapsed = false,
+  onToggleChat,
+}) {
   const tc = useI18n('landingCanvas.canvasPreview');
   const [mode, setMode] = useState('view');
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
@@ -42,31 +50,45 @@ export default function CanvasPreviewArea({ form, setForm, onOpenImportHtml, onO
   return (
     <div className="flex flex-col h-full min-h-0">
       <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
-          <button
-            type="button"
-            onClick={() => setMode('view')}
-            className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-              mode === 'view'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            <HiOutlineEye className="w-4 h-4" />
-            {tc('view')}
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode('code')}
-            className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-              mode === 'code'
-                ? 'bg-white text-orange-600 shadow-sm'
-                : 'text-gray-500 hover:text-gray-900'
-            }`}
-          >
-            <HiOutlineCode className="w-3.5 h-3.5" />
-            {tc('code')}
-          </button>
+        <div className="flex items-center gap-2">
+          {isChatCollapsed && (
+            <button
+              type="button"
+              onClick={onToggleChat}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800 border border-orange-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs mr-1"
+              title="Mở lại khung chat Trợ lý AI"
+            >
+              <HiOutlineSparkles className="w-4 h-4 text-orange-500 animate-pulse" />
+              <span>Mở Trợ lý AI</span>
+            </button>
+          )}
+
+          <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+            <button
+              type="button"
+              onClick={() => setMode('view')}
+              className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                mode === 'view'
+                  ? 'bg-white text-orange-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <HiOutlineEye className="w-4 h-4" />
+              {tc('view')}
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('code')}
+              className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                mode === 'code'
+                  ? 'bg-white text-orange-600 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-900'
+              }`}
+            >
+              <HiOutlineCode className="w-3.5 h-3.5" />
+              {tc('code')}
+            </button>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
