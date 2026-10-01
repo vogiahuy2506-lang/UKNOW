@@ -42,6 +42,7 @@ import {
   HiOutlineRefresh,
   HiOutlinePaperClip,
   HiOutlineX,
+  HiCheck,
 } from 'react-icons/hi';
 import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 
@@ -1509,65 +1510,134 @@ const QuickSend = () => {
               <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[1 + (zaloEntitled ? 2 : 0) + adapterChannels.length] || 'grid-cols-3'}`}>
                 <button
                   onClick={() => handleChannelChange(CHANNEL_TYPES.EMAIL)}
-                  className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
+                  className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                     selectedChannel === CHANNEL_TYPES.EMAIL
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
                   }`}
                 >
-                  <HiOutlineMail className={`w-8 h-8 ${selectedChannel === CHANNEL_TYPES.EMAIL ? 'text-orange-500' : 'text-gray-400'}`} />
-                  <span className={`font-medium ${selectedChannel === CHANNEL_TYPES.EMAIL ? 'text-orange-700' : 'text-gray-700'}`}>
+                  <span
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
+                      selectedChannel === CHANNEL_TYPES.EMAIL
+                        ? 'bg-blue-600 text-white'
+                        : 'bg-blue-50 text-blue-600 border border-blue-100/80'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <HiOutlineMail className="w-6 h-6" />
+                  </span>
+                  <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.EMAIL ? 'text-orange-950' : 'text-gray-700'}`}>
                     Email
                   </span>
+                  {selectedChannel === CHANNEL_TYPES.EMAIL && (
+                    <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
+                      <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </span>
+                  )}
                 </button>
                 {zaloEntitled && (
                 <>
                 <button
                   data-testid="quick-send-channel-zalo"
                   onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO)}
-                  className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
+                  className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                     selectedChannel === CHANNEL_TYPES.ZALO
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
                   }`}
                 >
-                  <HiOutlineChat className={`w-8 h-8 ${selectedChannel === CHANNEL_TYPES.ZALO ? 'text-orange-500' : 'text-gray-400'}`} />
-                  <span className={`font-medium ${selectedChannel === CHANNEL_TYPES.ZALO ? 'text-orange-700' : 'text-gray-700'}`}>
+                  <span
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
+                      selectedChannel === CHANNEL_TYPES.ZALO
+                        ? 'bg-sky-600 text-white'
+                        : 'bg-sky-50 text-sky-600 border border-sky-100/80'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <HiOutlineChat className="w-6 h-6" />
+                  </span>
+                  <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.ZALO ? 'text-orange-950' : 'text-gray-700'}`}>
                     Zalo
                   </span>
+                  {selectedChannel === CHANNEL_TYPES.ZALO && (
+                    <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
+                      <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </span>
+                  )}
                 </button>
                 <button
                   data-testid="quick-send-channel-zalo_group"
                   onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO_GROUP)}
-                  className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
+                  className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
                     selectedChannel === CHANNEL_TYPES.ZALO_GROUP
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-gray-200 hover:border-gray-300'
+                      ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
+                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
                   }`}
                 >
-                  <HiOutlineUserGroup className={`w-8 h-8 ${selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? 'text-orange-500' : 'text-gray-400'}`} />
-                  <span className={`font-medium ${selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? 'text-orange-700' : 'text-gray-700'}`}>
+                  <span
+                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
+                      selectedChannel === CHANNEL_TYPES.ZALO_GROUP
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-violet-50 text-violet-600 border border-violet-100/80'
+                    }`}
+                    aria-hidden="true"
+                  >
+                    <HiOutlineUserGroup className="w-6 h-6" />
+                  </span>
+                  <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? 'text-orange-950' : 'text-gray-700'}`}>
                     {t('quickSend.channelZaloGroup')}
                   </span>
+                  {selectedChannel === CHANNEL_TYPES.ZALO_GROUP && (
+                    <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
+                      <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
+                    </span>
+                  )}
                 </button>
                 </>
                 )}
                 {adapterChannels.map((adapter) => {
                   const AdapterIcon = ADAPTER_CHANNEL_ICONS[adapter.key];
                   const isActive = selectedChannel === adapter.key;
+                  const isTelegram = adapter.key === 'telegram';
+                  const isWhatsApp = adapter.key === 'whatsapp';
+                  const iconBg = isTelegram
+                    ? 'bg-sky-50 text-sky-500 border border-sky-100/80'
+                    : isWhatsApp
+                    ? 'bg-emerald-50 text-emerald-600 border border-emerald-100/80'
+                    : 'bg-gray-50 text-gray-600 border border-gray-100/80';
+                  const activeIconBg = isTelegram
+                    ? 'bg-sky-500 text-white'
+                    : isWhatsApp
+                    ? 'bg-emerald-600 text-white'
+                    : 'bg-orange-500 text-white';
+
                   return (
                     <button
                       key={adapter.key}
                       data-testid={`quick-send-channel-${adapter.key}`}
                       onClick={() => handleChannelChange(adapter.key)}
-                      className={`p-4 rounded-xl border-2 transition flex flex-col items-center gap-2 ${
-                        isActive ? 'border-orange-500 bg-orange-50' : 'border-gray-200 hover:border-gray-300'
+                      className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
+                        isActive
+                          ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
+                          : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
                       }`}
                     >
-                      <AdapterIcon className={`w-8 h-8 ${isActive ? 'text-orange-500' : 'text-gray-400'}`} />
-                      <span className={`font-medium ${isActive ? 'text-orange-700' : 'text-gray-700'}`}>
+                      <span
+                        className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
+                          isActive ? activeIconBg : iconBg
+                        }`}
+                        aria-hidden="true"
+                      >
+                        <AdapterIcon className="w-6 h-6" />
+                      </span>
+                      <span className={`font-semibold text-sm ${isActive ? 'text-orange-950' : 'text-gray-700'}`}>
                         {adapter.label}
                       </span>
+                      {isActive && (
+                        <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
+                          <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
+                        </span>
+                      )}
                     </button>
                   );
                 })}

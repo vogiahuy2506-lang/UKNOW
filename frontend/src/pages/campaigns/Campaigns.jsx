@@ -439,24 +439,26 @@ const Campaigns = () => {
         <button
           type="button"
           onClick={() => handleTabChange('campaigns')}
-          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px ${
+          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${
             activeTab === 'campaigns'
-              ? 'border-primary-500 text-primary-600 font-semibold'
+              ? 'border-orange-500 text-orange-600 font-semibold'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          {t('campaigns.tabCampaigns')}
+          <HiOutlineViewList className="w-4 h-4" aria-hidden="true" />
+          <span>{t('campaigns.tabCampaigns')}</span>
         </button>
         <button
           type="button"
           onClick={() => handleTabChange('schedules')}
-          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px ${
+          className={`pb-3 font-medium text-sm transition-colors border-b-2 -mb-px flex items-center gap-2 ${
             activeTab === 'schedules'
-              ? 'border-primary-500 text-primary-600 font-semibold'
+              ? 'border-orange-500 text-orange-600 font-semibold'
               : 'border-transparent text-gray-500 hover:text-gray-700'
           }`}
         >
-          {t('campaigns.tabSchedules')}
+          <HiOutlineClock className="w-4 h-4" aria-hidden="true" />
+          <span>{t('campaigns.tabSchedules')}</span>
         </button>
       </div>
 
@@ -480,127 +482,144 @@ const Campaigns = () => {
         />
       ) : (
         <>
-          {/* Origin Tabs - Self Created vs Purchased */}
-          <div className="flex gap-2 border-b border-gray-200">
-            <button
-              onClick={() => {
-                setOriginTab('self_created');
-                setPagination((prev) => ({ ...prev, page: 1 }));
-              }}
-              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
-                originTab === 'self_created'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t('campaigns.selfCreated') || 'Tự tạo'}
-            </button>
-            <button
-              onClick={() => {
-                setOriginTab('marketplace_purchased');
-                setPagination((prev) => ({ ...prev, page: 1 }));
-              }}
-              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
-                originTab === 'marketplace_purchased'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t('campaigns.purchased') || 'Đã mua từ Marketplace'}
-            </button>
-            <button
-              onClick={() => {
-                setOriginTab('shared_with_me');
-                setPagination((prev) => ({ ...prev, page: 1 }));
-              }}
-              className={`px-4 py-2 font-medium text-sm transition-colors border-b-2 -mb-px ${
-                originTab === 'shared_with_me'
-                  ? 'border-primary-500 text-primary-600'
-                  : 'border-transparent text-gray-500 hover:text-gray-700'
-              }`}
-            >
-              {t('campaigns.sharedWithMe') || 'Được chia sẻ'}
-            </button>
-          </div>
-
-          {/* Thanh trục vận hành (?state=) */}
-          <div className="flex flex-wrap items-center gap-2">
-            {[
-              { key: 'all', label: t('campaigns.operationAll') },
-              { key: 'running', label: t('campaigns.operationRunning') },
-              { key: 'scheduled', label: t('campaigns.operationScheduled') },
-              { key: 'inactive', label: t('campaigns.operationInactive') },
-              { key: 'draft', label: t('campaigns.operationDraft') },
-            ].map((item) => (
+          {/* Subheader Toolbar: Origin Selector + Operational State Pills */}
+          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+            {/* Origin Tabs */}
+            <div className="inline-flex items-center p-1 bg-gray-100/90 rounded-xl border border-gray-200/60 w-fit">
               <button
-                key={item.key}
                 type="button"
-                onClick={() => handleStateChange(item.key)}
-                className={`px-3 py-1.5 rounded-full text-xs font-medium transition-colors ${
-                  stateFilter === item.key
-                    ? 'bg-primary-600 text-white shadow-sm'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200 hover:text-gray-900'
+                onClick={() => {
+                  setOriginTab('self_created');
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                  originTab === 'self_created'
+                    ? 'bg-white text-gray-900 font-semibold shadow-xs ring-1 ring-gray-200/80'
+                    : 'text-gray-600 hover:text-gray-900'
                 }`}
               >
-                {item.label}
+                {t('campaigns.selfCreated') || 'Tự tạo'}
               </button>
-            ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setOriginTab('marketplace_purchased');
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                  originTab === 'marketplace_purchased'
+                    ? 'bg-white text-gray-900 font-semibold shadow-xs ring-1 ring-gray-200/80'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {t('campaigns.purchased') || 'Đã mua từ Marketplace'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setOriginTab('shared_with_me');
+                  setPagination((prev) => ({ ...prev, page: 1 }));
+                }}
+                className={`px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium transition-all ${
+                  originTab === 'shared_with_me'
+                    ? 'bg-white text-gray-900 font-semibold shadow-xs ring-1 ring-gray-200/80'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {t('campaigns.sharedWithMe') || 'Được chia sẻ'}
+              </button>
+            </div>
+
+            {/* Operational State Filter Pills (?state=) */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {[
+                { key: 'all', label: t('campaigns.operationAll') },
+                { key: 'running', label: t('campaigns.operationRunning'), dot: 'bg-emerald-500' },
+                { key: 'scheduled', label: t('campaigns.operationScheduled'), dot: 'bg-blue-500' },
+                { key: 'inactive', label: t('campaigns.operationInactive'), dot: 'bg-amber-500' },
+                { key: 'draft', label: t('campaigns.operationDraft'), dot: 'bg-gray-400' },
+              ].map((item) => {
+                const isSelected = stateFilter === item.key;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => handleStateChange(item.key)}
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                      isSelected
+                        ? 'bg-orange-500 text-white shadow-xs font-semibold'
+                        : 'bg-gray-100 hover:bg-gray-200/80 text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    {item.dot && !isSelected && (
+                      <span className={`w-1.5 h-1.5 rounded-full ${item.dot}`} aria-hidden="true" />
+                    )}
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          {/* Filters */}
-          <div className="card p-4">
-            <div className="flex flex-wrap gap-4">
-              {/* Search */}
-              <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
-                <div className="flex items-center rounded-lg border border-gray-300 bg-white text-sm transition-base focus-within:border-primary-500 focus-within:ring-1 focus-within:ring-primary-500">
-                  <span className="pl-3 flex items-center shrink-0 text-gray-400" aria-hidden>
-                    <HiOutlineSearch className="w-5 h-5" />
-                  </span>
-                  <input
-                    type="text"
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder={t('campaigns.searchPlaceholder')}
-                    className="flex-1 min-w-0 py-2 pr-3 border-0 bg-white focus:ring-0 focus:outline-none"
-                  />
-                </div>
-              </form>
+          {/* Filters Bar: Search + Status + Type in a single neat row */}
+          <div className="bg-white rounded-xl border border-gray-200 p-2.5 sm:p-3 shadow-xs flex flex-col md:flex-row items-stretch md:items-center gap-2.5">
+            {/* Search */}
+            <form onSubmit={handleSearch} className="flex-1 min-w-[200px]">
+              <div className="relative flex items-center">
+                <span className="absolute left-3 flex items-center text-gray-400 pointer-events-none" aria-hidden="true">
+                  <HiOutlineSearch className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  placeholder={t('campaigns.searchPlaceholder')}
+                  className="w-full pl-9 pr-3.5 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all"
+                />
+              </div>
+            </form>
 
+            {/* Status & Type Dropdowns */}
+            <div className="flex items-center gap-2 shrink-0">
               {/* Status filter */}
-              <select
-                value={statusFilter}
-                onChange={(e) => {
-                  setStatusFilter(e.target.value);
-                  setPagination((prev) => ({ ...prev, page: 1 }));
-                }}
-                className="input w-auto"
-              >
-                <option value="">{t('campaigns.allStatuses')}</option>
-                <option value="pending_owner_approval">{t('campaigns.pendingOwnerApproval')}</option>
-                <option value="draft">{t('campaigns.draft')}</option>
-                <option value="active">{t('campaigns.active')}</option>
-                <option value="paused">{t('campaigns.paused')}</option>
-              </select>
+              <div className="w-full sm:w-44">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setPagination((prev) => ({ ...prev, page: 1 }));
+                  }}
+                  className="w-full px-3 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all cursor-pointer"
+                >
+                  <option value="">{t('campaigns.allStatuses')}</option>
+                  <option value="pending_owner_approval">{t('campaigns.pendingOwnerApproval')}</option>
+                  <option value="draft">{t('campaigns.draft')}</option>
+                  <option value="active">{t('campaigns.active')}</option>
+                  <option value="paused">{t('campaigns.paused')}</option>
+                </select>
+              </div>
 
               {/* Type filter */}
-              <select
-                value={typeFilter}
-                onChange={(e) => {
-                  setTypeFilter(e.target.value);
-                  setPagination((prev) => ({ ...prev, page: 1 }));
-                }}
-                className="input w-auto"
-              >
-                <option value="">{t('campaigns.allTypes')}</option>
-                <option value="email">{t('campaigns.email')}</option>
-                <option value="zalo">{t('campaigns.zaloPersonal')}</option>
-                <option value="zalo_group">{t('campaigns.zaloGroup')}</option>
-                {telegramChannelEnabled && <option value="telegram">{t('campaigns.telegram')}</option>}
-                {telegramChannelEnabled && <option value="telegram_group">{t('campaigns.telegramGroup')}</option>}
-                {whatsappChannelEnabled && <option value="whatsapp">{t('campaigns.whatsapp')}</option>}
-                {/* Chiến dịch đa kênh do AI tạo (+ Telegram cũ 28–29/09) có loại 'mixed' và nhãn "Đa kênh" ở cột Loại — phải lọc được (C-10). */}
-                <option value="mixed">{t('campaigns.multiChannel')}</option>
-              </select>
+              <div className="w-full sm:w-40">
+                <select
+                  value={typeFilter}
+                  onChange={(e) => {
+                    setTypeFilter(e.target.value);
+                    setPagination((prev) => ({ ...prev, page: 1 }));
+                  }}
+                  className="w-full px-3 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all cursor-pointer"
+                >
+                  <option value="">{t('campaigns.allTypes')}</option>
+                  <option value="email">{t('campaigns.email')}</option>
+                  <option value="zalo">{t('campaigns.zaloPersonal')}</option>
+                  <option value="zalo_group">{t('campaigns.zaloGroup')}</option>
+                  {telegramChannelEnabled && <option value="telegram">{t('campaigns.telegram')}</option>}
+                  {telegramChannelEnabled && <option value="telegram_group">{t('campaigns.telegramGroup')}</option>}
+                  {whatsappChannelEnabled && <option value="whatsapp">{t('campaigns.whatsapp')}</option>}
+                  {/* Chiến dịch đa kênh do AI tạo (+ Telegram cũ 28–29/09) có loại 'mixed' và nhãn "Đa kênh" ở cột Loại — phải lọc được (C-10). */}
+                  <option value="mixed">{t('campaigns.multiChannel')}</option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -1086,7 +1105,7 @@ const Campaigns = () => {
           }}
         >
           <div className="absolute inset-0" onClick={closeCreateModal} />
-          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-xl w-full overflow-hidden transform transition-all duration-200">
+          <div className="relative bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-2xl w-full overflow-hidden transform transition-all duration-200">
             {/* Header */}
             <div className="px-6 py-5 border-b border-slate-100 flex items-start justify-between bg-gradient-to-b from-slate-50/70 to-white">
               <div className="flex items-center gap-3">
@@ -1156,21 +1175,21 @@ const Campaigns = () => {
                         key={ch.id}
                         type="button"
                         onClick={() => setCreateCampaignForm((prev) => ({ ...prev, campaignType: ch.id }))}
-                        className={`group relative flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                        className={`group relative flex items-center gap-2.5 px-3.5 py-2.5 rounded-xl border text-left transition-all ${
                           isSelected
                             ? 'border-orange-500 bg-orange-50/70 shadow-sm shadow-orange-500/10 ring-1 ring-orange-500/30 text-orange-950 font-semibold'
                             : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80 text-slate-700 hover:text-slate-900 shadow-xs'
                         }`}
                       >
                         <span
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
+                          className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-colors shadow-xs ${
                             isSelected ? ch.selectedIconBg : ch.iconBg
                           }`}
                           aria-hidden="true"
                         >
                           <Icon className="w-4 h-4" />
                         </span>
-                        <span className="text-sm font-medium leading-snug truncate">
+                        <span className="text-sm font-medium leading-snug whitespace-nowrap">
                           {ch.name}
                         </span>
                         {isSelected && (
