@@ -110,7 +110,7 @@ export default function CanvasPreviewArea({ form, setForm, onOpenImportHtml, onO
 }
 
 /**
- * Trang mới (html rỗng): thay khung "Xem trước" bằng 3 lựa chọn thay vì khung trắng câm
+ * Trang mới (html rỗng): thay khung "Xem trước" bằng 3 lựa chọn trực quan
  * (PLAN_LANDING_DAN_HTML_CO_SAN_2026-09-13.md, Việc 2). Chỉ hiện ở mode 'view' — mode 'code'
  * người dùng đã chủ động mở Monaco, không cần gợi ý lại.
  */
@@ -118,33 +118,93 @@ function EmptyPreviewCard({ heading, onPasteHtml, onAskAi, onPickTemplate }) {
   const te = useI18n('landingCanvas.emptyState');
 
   return (
-    <div className="flex flex-col items-center justify-center gap-5 max-w-sm w-full py-20 text-center">
-      <p className="text-[14px] text-gray-500">{heading}</p>
-      <div className="flex flex-col gap-2.5 w-full">
-        <button
-          type="button"
-          onClick={onPasteHtml}
-          className="w-full inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg bg-orange-500 text-white text-[14px] font-semibold hover:bg-orange-600 transition-colors"
-        >
-          <HiOutlineCode className="w-4.5 h-4.5" />
-          {te('pasteHtml')}
-        </button>
-        <button
-          type="button"
-          onClick={onAskAi}
-          className="w-full inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg bg-white border border-gray-300 text-gray-700 text-[14px] font-semibold hover:bg-gray-50 transition-colors"
-        >
-          <HiOutlineSparkles className="w-4.5 h-4.5 text-orange-500" />
-          {te('askAi')}
-        </button>
-        <button
-          type="button"
-          onClick={onPickTemplate}
-          className="w-full inline-flex items-center justify-center gap-2 h-11 px-4 rounded-lg bg-white border border-gray-300 text-gray-700 text-[14px] font-semibold hover:bg-gray-50 transition-colors"
-        >
-          <HiOutlineTemplate className="w-4.5 h-4.5 text-orange-500" />
-          {te('pickTemplate')}
-        </button>
+    <div className="flex flex-col items-center justify-center max-w-3xl w-full my-auto py-10 px-4">
+      {/* Welcome Header */}
+      <div className="text-center mb-8 space-y-2">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-gradient-to-tr from-orange-500 to-amber-400 text-white shadow-lg shadow-orange-500/20 mb-2">
+          <HiOutlineSparkles className="w-7 h-7" />
+        </div>
+        <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+          Bắt đầu tạo Landing Page của bạn
+        </h2>
+        <p className="text-sm text-gray-500 max-w-md mx-auto">
+          {heading || 'Chọn một phương thức bên dưới hoặc nhập yêu cầu trực tiếp với AI bên trái để lên ý tưởng'}
+        </p>
+      </div>
+
+      {/* 3 Action Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
+        {/* Card 1: Ask AI (Recommended) */}
+        <div className="relative group flex flex-col justify-between p-5 rounded-2xl border-2 border-orange-400/80 bg-gradient-to-b from-orange-50/70 via-white to-white shadow-xs hover:shadow-xl hover:border-orange-500 hover:-translate-y-1 transition-all duration-200">
+          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-500 text-white shadow-xs">
+              Khuyên dùng
+            </span>
+          </div>
+
+          <div>
+            <div className="w-11 h-11 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <HiOutlineSparkles className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1.5">{te('askAi')}</h3>
+            <p className="text-xs text-gray-500 leading-relaxed mb-4">
+              Mô tả ý tưởng trang, AI sẽ tự động viết nội dung và tạo giao diện trong vài giây.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onAskAi}
+            className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold shadow-xs hover:shadow-md hover:from-orange-600 hover:to-amber-600 transition-all active:scale-[0.98]"
+          >
+            <HiOutlineSparkles className="w-4 h-4" />
+            <span>{te('askAi')}</span>
+          </button>
+        </div>
+
+        {/* Card 2: Pick Template */}
+        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-xl hover:border-blue-400 hover:-translate-y-1 transition-all duration-200">
+          <div>
+            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <HiOutlineTemplate className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1.5">{te('pickTemplate')}</h3>
+            <p className="text-xs text-gray-500 leading-relaxed mb-4">
+              Kho mẫu đa dạng tối ưu cho chuyển đổi: khóa học, SaaS, bán hàng, dịch vụ...
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onPickTemplate}
+            className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 border border-gray-200 hover:border-blue-300 text-xs font-bold transition-all active:scale-[0.98]"
+          >
+            <HiOutlineTemplate className="w-4 h-4" />
+            <span>{te('pickTemplate')}</span>
+          </button>
+        </div>
+
+        {/* Card 3: Paste HTML */}
+        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-xl hover:border-gray-400 hover:-translate-y-1 transition-all duration-200">
+          <div>
+            <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+              <HiOutlineCode className="w-6 h-6" />
+            </div>
+            <h3 className="text-base font-bold text-gray-900 mb-1.5">{te('pasteHtml')}</h3>
+            <p className="text-xs text-gray-500 leading-relaxed mb-4">
+              Đã có sẵn mã HTML từ trước? Dán mã nguồn để nhập và chỉnh sửa tức thì.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onPasteHtml}
+            className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-xs font-bold transition-all active:scale-[0.98]"
+          >
+            <HiOutlineCode className="w-4 h-4" />
+            <span>{te('pasteHtml')}</span>
+          </button>
+        </div>
       </div>
     </div>
   );

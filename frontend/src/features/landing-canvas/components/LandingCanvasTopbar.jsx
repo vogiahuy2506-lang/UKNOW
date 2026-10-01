@@ -58,45 +58,49 @@ export default function LandingCanvasTopbar({
   }, [form.title, onSave, tc]);
 
   return (
-    <div className="h-11 bg-white border-b border-gray-200 flex items-center px-3 shrink-0 text-[13px]">
+    <div className="h-12 bg-white border-b border-gray-200 flex items-center px-3 shrink-0 text-[13px]">
       {/* Left: Back + Title */}
       <button
         type="button"
         onClick={onClose}
-        className="p-1.5 rounded-lg hover:bg-gray-100 transition-colors mr-1.5 shrink-0"
+        className="p-1.5 rounded-lg text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors mr-2 shrink-0"
         title={tc('backTooltip')}
         ref={closeBtnRef}
       >
-        <HiOutlineChevronLeft className="w-5 h-5 text-gray-500" />
+        <HiOutlineChevronLeft className="w-5 h-5" />
       </button>
 
       <div className="flex items-center gap-2 min-w-0 flex-1">
-        <HiOutlineDocumentText className="w-5 h-5 text-gray-400 shrink-0" />
-        <input
-          type="text"
-          value={form.title || ''}
-          onChange={handleTitleChange}
-          placeholder={tc('titlePlaceholder')}
-          className="text-[15px] font-semibold text-gray-900 bg-transparent border-none focus:outline-none focus:ring-2 focus:ring-orange-200 px-2 py-1.5 rounded min-w-0 flex-1 max-w-md"
-        />
-        {!form.title?.trim() && (
-          <span className="text-[12px] text-red-500 shrink-0 hidden md:inline">{tc('titleRequired')}</span>
-        )}
+        <div className="flex items-center gap-2 bg-gray-50 hover:bg-gray-100/70 focus-within:bg-white border border-gray-200/80 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/15 rounded-lg px-2.5 py-1 transition-all max-w-md w-full">
+          <HiOutlineDocumentText className="w-4 h-4 text-orange-500 shrink-0" />
+          <input
+            type="text"
+            value={form.title || ''}
+            onChange={handleTitleChange}
+            placeholder={tc('titlePlaceholder')}
+            className="text-sm font-semibold text-gray-900 bg-transparent border-none focus:outline-none min-w-0 flex-1 placeholder:text-gray-400 placeholder:font-normal"
+          />
+          {!form.title?.trim() && (
+            <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200/60 px-1.5 py-0.2 rounded shrink-0 hidden sm:inline">
+              {tc('titleRequired')}
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Spacer */}
       <div className="flex-1 min-w-[8px]" />
 
       {/* Right: Actions */}
-      <div className="flex items-center gap-0.5">
+      <div className="flex items-center gap-1">
         {/* Settings button */}
         <button
           type="button"
           onClick={() => onOpenSettingTab?.('page')}
-          className={`px-3 py-1.5 rounded-lg text-[13px] font-medium transition-all flex items-center gap-1.5 ${
+          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 shadow-2xs ${
             activeModalTab
               ? 'bg-orange-500 text-white'
-              : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              : 'bg-gray-100/80 text-gray-700 hover:bg-gray-200 hover:text-gray-900'
           }`}
         >
           <HiOutlineCog className="w-4 h-4" />
@@ -137,31 +141,33 @@ export default function LandingCanvasTopbar({
             target="_blank"
             rel="noopener noreferrer"
             title={tc('openLinkedForm')}
-            className="p-3 rounded-lg transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+            className="p-2 rounded-lg transition-colors text-gray-500 hover:text-gray-900 hover:bg-gray-100"
           >
-            <HiOutlineClipboardList className="w-6 h-6" />
+            <HiOutlineClipboardList className="w-4.5 h-4.5" />
           </a>
         ) : null}
       </div>
 
-      <div className="w-px h-6 bg-gray-200 mx-2" />
+      <div className="w-px h-5 bg-gray-200 mx-2" />
 
-      <button
-        type="button"
-        onClick={onClose}
-        className="inline-flex items-center justify-center h-9 px-3.5 rounded-lg bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100 text-[14px] font-semibold transition-colors"
-      >
-        <HiOutlineX className="w-4 h-4 mr-1.5" />
-        {tc('close')}
-      </button>
-      <button
-        type="button"
-        onClick={handleSave}
-        disabled={Boolean(saving)}
-        className="inline-flex items-center justify-center h-9 px-3.5 rounded-lg bg-orange-500 text-white hover:bg-orange-600 active:bg-orange-700 disabled:opacity-60 disabled:cursor-not-allowed text-[14px] font-semibold transition-colors ml-2"
-      >
-        {saving ? tc('saving') : tc('save')}
-      </button>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onClose}
+          className="inline-flex items-center justify-center h-8.5 px-3 rounded-lg bg-white text-gray-700 border border-gray-300 hover:bg-gray-50 active:bg-gray-100 text-xs font-semibold transition-colors shadow-2xs"
+        >
+          <HiOutlineX className="w-3.5 h-3.5 mr-1 text-gray-500" />
+          {tc('close')}
+        </button>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={Boolean(saving)}
+          className="inline-flex items-center justify-center h-8.5 px-4 rounded-lg bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-xs font-bold transition-all shadow-xs"
+        >
+          {saving ? tc('saving') : tc('save')}
+        </button>
+      </div>
     </div>
   );
 }
@@ -172,13 +178,13 @@ function IconButton({ icon: Icon, onClick, title, active = false }) {
       type="button"
       onClick={onClick}
       title={title}
-      className={`p-3 rounded-lg transition-colors ${
+      className={`p-2 rounded-lg transition-colors ${
         active
           ? 'bg-orange-50 text-orange-600'
           : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
       }`}
     >
-      <Icon className="w-6 h-6" />
+      <Icon className="w-4.5 h-4.5" />
     </button>
   );
 }

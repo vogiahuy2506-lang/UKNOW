@@ -92,19 +92,19 @@ export default CanvasChatPanel;
 function ModernHeader({ onToggleCollapsed }) {
   const tc = useI18n('landingCanvas.chat');
   return (
-    <div className="relative h-16 px-4 flex items-center justify-between border-b border-gray-100/80 shrink-0 bg-white/80 backdrop-blur-md">
-      <div className="flex items-center gap-3 min-w-0">
+    <div className="h-14 px-4 flex items-center justify-between border-b border-gray-100 shrink-0 bg-white/95 backdrop-blur-md">
+      <div className="flex items-center gap-2.5 min-w-0">
         <div className="relative shrink-0">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-orange-500 to-red-500 flex items-center justify-center shadow-lg shadow-orange-500/25">
-            <HiOutlineSparkles className="w-5 h-5 text-white" />
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-orange-500 to-amber-500 flex items-center justify-center shadow-xs">
+            <HiOutlineSparkles className="w-4.5 h-4.5 text-white" />
           </div>
-          <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
+          <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-500 border-2 border-white" />
         </div>
         <div className="flex flex-col min-w-0">
-          <span className="text-[15px] font-semibold text-gray-900 truncate leading-tight tracking-tight">
+          <span className="text-sm font-bold text-gray-900 truncate leading-tight">
             {tc('title')}
           </span>
-          <span className="text-[12px] text-gray-500 truncate leading-tight mt-0.5">
+          <span className="text-[11px] text-gray-500 truncate leading-tight mt-0.5">
             {tc('headerSubtitle')}
           </span>
         </div>
@@ -114,9 +114,9 @@ function ModernHeader({ onToggleCollapsed }) {
         onClick={onToggleCollapsed}
         title={tc('collapseTooltip')}
         aria-label={tc('collapseTooltip')}
-        className="p-2 rounded-lg text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+        className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors"
       >
-        <HiOutlineX className="w-5 h-5" />
+        <HiOutlineX className="w-4 h-4" />
       </button>
     </div>
   );
@@ -140,18 +140,18 @@ function ModernEmptyState({ onPick, disabled }) {
   const quickPicks = CHAT_QUICK_PICKS.slice(0, 6);
 
   return (
-    <div className="px-1 pt-2 space-y-6">
+    <div className="px-1 pt-1 space-y-5">
       {/* Greeting */}
-      <div className="space-y-2.5">
+      <div className="space-y-1.5">
         <div className="flex items-center gap-2">
-          <h2 className="text-[22px] font-bold text-gray-900 tracking-tight">
+          <h2 className="text-lg font-bold text-gray-900 tracking-tight">
             {tc('welcomeGreeting')}
           </h2>
-          <span className="text-2xl leading-none animate-[wave_1.8s_ease-in-out_infinite] origin-[70%_70%] inline-block">
+          <span className="text-lg leading-none animate-[wave_1.8s_ease-in-out_infinite] origin-[70%_70%] inline-block">
             👋
           </span>
         </div>
-        <p className="text-[14px] text-gray-600 leading-relaxed">
+        <p className="text-xs text-gray-500 leading-relaxed">
           {tc('welcomeIntro').split(new RegExp(`(${tc('welcomeIntroBold')}|${tc('welcomeIntroItalic')})`)).map((part, idx) => {
             if (part === tc('welcomeIntroBold')) return <strong key={idx} className="text-gray-800 font-semibold">{part}</strong>;
             if (part === tc('welcomeIntroItalic')) return <em key={idx} className="not-italic text-orange-600 font-medium">{part}</em>;
@@ -170,8 +170,8 @@ function ModernEmptyState({ onPick, disabled }) {
 
       {/* Quick picks */}
       <div>
-        <div className="flex items-center justify-between mb-3">
-          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-[0.08em]">
+        <div className="flex items-center justify-between mb-2.5">
+          <p className="text-[11px] font-semibold text-gray-500 uppercase tracking-wider">
             {tc('quickPicksTitle')}
           </p>
           <span className="text-[11px] text-gray-400">{tc('quickPicksCount', { n: quickPicks.length })}</span>
@@ -185,16 +185,16 @@ function ModernEmptyState({ onPick, disabled }) {
                 type="button"
                 onClick={() => onPick?.(pick)}
                 disabled={disabled}
-                className="group w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border border-gray-200/80 bg-white hover:border-orange-300 hover:shadow-md hover:shadow-orange-500/5 text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="group w-full flex items-center gap-2.5 px-3 py-2 rounded-xl border border-gray-200/80 bg-white hover:border-orange-300 hover:shadow-xs text-left transition-all disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <span className="w-9 h-9 rounded-lg bg-gradient-to-br from-orange-50 to-red-50 flex items-center justify-center shrink-0 group-hover:scale-110 transition-transform">
-                  <Icon className="w-4.5 h-4.5 text-orange-600" />
+                <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-600 flex items-center justify-center shrink-0 group-hover:scale-105 transition-transform">
+                  <Icon className="w-4 h-4" />
                 </span>
                 <div className="flex-1 min-w-0">
-                  <div className="text-[13px] font-semibold text-gray-800 truncate">{pick.name}</div>
-                  <div className="text-[12px] text-gray-500 truncate">{pick.shortDesc}</div>
+                  <div className="text-xs font-semibold text-gray-800 truncate">{pick.name}</div>
+                  <div className="text-[11px] text-gray-500 truncate">{pick.shortDesc}</div>
                 </div>
-                <span className="text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all">
+                <span className="text-gray-400 group-hover:text-orange-500 group-hover:translate-x-0.5 transition-all text-xs">
                   →
                 </span>
               </button>
@@ -216,11 +216,11 @@ const TONE_STYLES = {
 function CapCard({ icon: Icon, label, tone }) {
   const style = TONE_STYLES[tone] || TONE_STYLES.orange;
   return (
-    <div className="flex items-center gap-2 px-2.5 py-2 rounded-lg border border-gray-100 bg-white/60">
-      <span className={`w-7 h-7 rounded-md ${style.bg} flex items-center justify-center`}>
+    <div className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200/70 bg-white shadow-2xs hover:shadow-xs transition-all">
+      <span className={`w-6 h-6 rounded-md ${style.bg} flex items-center justify-center shrink-0`}>
         <Icon className={`w-3.5 h-3.5 ${style.text}`} />
       </span>
-      <span className="text-[12px] font-medium text-gray-700">{label}</span>
+      <span className="text-xs font-semibold text-gray-700 truncate">{label}</span>
     </div>
   );
 }
