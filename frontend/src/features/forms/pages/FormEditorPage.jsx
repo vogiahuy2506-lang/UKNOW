@@ -13,6 +13,8 @@ import {
   HiOutlineShare,
   HiOutlineInbox,
   HiOutlineQrcode,
+  HiOutlineDocumentText,
+  HiOutlineViewList,
 } from 'react-icons/hi';
 import QRCode from 'qrcode';
 import { buildVietQrString, decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
@@ -1105,11 +1107,11 @@ export default function FormEditorPage() {
   return (
     <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto overflow-x-hidden box-border">
       {/* Thanh thao tác dính (PR-1) */}
-      <div className="sticky top-0 z-20 bg-white/95 backdrop-blur-sm -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 px-4 sm:px-6 lg:px-8 py-4 mb-6 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 px-4 sm:px-6 lg:px-8 py-4 mb-8 border-b border-gray-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/app/forms')}
-            className="p-2 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-colors"
+            className="p-2.5 rounded-xl border border-gray-200 bg-white hover:bg-gray-50 text-gray-600 hover:text-gray-900 shadow-2xs transition-all"
             title={t('forms.submissionsPage.backToForms')}
           >
             <HiOutlineArrowLeft className="w-5 h-5" />
@@ -1144,7 +1146,7 @@ export default function FormEditorPage() {
             type="button"
             onClick={() => handleSave()}
             disabled={isSaving || isTogglingPublish}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white text-sm font-medium rounded-xl shadow-sm transition-all disabled:opacity-50"
+            className="inline-flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-600 to-amber-600 hover:from-orange-700 hover:to-amber-700 active:scale-[0.98] text-white text-sm font-semibold rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
           >
             <HiOutlineCheck className="w-4 h-4" />
             <span>{isSaving ? t('forms.editorPage.saving') : t('forms.editorPage.saveForm')}</span>
@@ -1156,10 +1158,10 @@ export default function FormEditorPage() {
             onClick={handleTogglePublish}
             disabled={isSaving || isTogglingPublish}
             title={!isEditMode ? t('forms.editorPage.saveAndPublishTooltip') : undefined}
-            className={`inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl border transition-all disabled:opacity-50 ${
+            className={`inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-semibold rounded-xl border shadow-2xs transition-all disabled:opacity-50 ${
               isPublished
-                ? 'border-gray-300 text-gray-700 bg-white hover:bg-gray-50'
-                : 'border-green-600 text-green-700 bg-green-50 hover:bg-green-100'
+                ? 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
+                : 'border-emerald-600 text-emerald-700 bg-emerald-50/80 hover:bg-emerald-100'
             }`}
           >
             {isPublished ? (
@@ -1169,7 +1171,7 @@ export default function FormEditorPage() {
               </>
             ) : (
               <>
-                <HiOutlineEye className="w-4 h-4 text-green-600" />
+                <HiOutlineEye className="w-4 h-4 text-emerald-600" />
                 <span>{t('forms.publish')}</span>
               </>
             )}
@@ -1181,7 +1183,7 @@ export default function FormEditorPage() {
             onClick={() => setIsShareModalOpen(true)}
             disabled={!isEditMode}
             title={!isEditMode ? t('forms.editorPage.saveFirstTooltip') : undefined}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <HiOutlineShare className="w-4 h-4 text-gray-500" />
             <span>{t('forms.share')}</span>
@@ -1193,7 +1195,7 @@ export default function FormEditorPage() {
             onClick={() => navigate(`/app/forms/${id}/submissions`)}
             disabled={!isEditMode}
             title={!isEditMode ? t('forms.editorPage.saveFirstTooltip') : undefined}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <HiOutlineInbox className="w-4 h-4 text-gray-500" />
             <span>
@@ -1207,11 +1209,19 @@ export default function FormEditorPage() {
 
       <div className="space-y-6">
         {/* Khối 1: Thông tin chung */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-4">
-          <h2 className="text-base font-semibold text-gray-900">{t('forms.editorPage.generalInfo')}</h2>
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-5 hover:border-gray-300/80 transition-all">
+          <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
+            <div className="p-2 rounded-xl bg-orange-50 text-orange-600">
+              <HiOutlineDocumentText className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-gray-900">{t('forms.editorPage.generalInfo')}</h2>
+              <p className="text-xs text-gray-500">Tên biểu mẫu và lời chào / hướng dẫn dành cho người điền</p>
+            </div>
+          </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
               {t('forms.formTitle')} <span className="text-red-500">*</span>
             </label>
             <input
@@ -1220,18 +1230,18 @@ export default function FormEditorPage() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder={t('forms.editorPage.titlePlaceholder')}
-              className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+              className={`w-full px-4 py-2.5 rounded-xl border text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-4 transition shadow-2xs ${
                 errors.title
-                  ? 'border-red-300 focus:ring-red-200'
-                  : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                  ? 'border-red-300 focus:ring-red-100'
+                  : 'border-gray-200 focus:border-orange-500 focus:ring-orange-500/10'
               }`}
             />
             {errors.title && <p className="text-xs text-red-600 mt-1">{errors.title}</p>}
-            <p className="text-xs text-gray-400 mt-1 text-right">{title.length}/200</p>
+            <p className="text-xs text-gray-400 mt-1.5 text-right">{title.length}/200</p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-semibold text-gray-700 mb-1.5">
               {t('forms.formDescription')}
             </label>
             <textarea
@@ -1240,33 +1250,43 @@ export default function FormEditorPage() {
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder={t('forms.editorPage.descPlaceholder')}
-              className={`w-full px-3.5 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 resize-y ${
+              className={`w-full px-4 py-2.5 rounded-xl border text-sm text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-4 transition shadow-2xs resize-y ${
                 errors.description
-                  ? 'border-red-300 focus:ring-red-200'
-                  : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                  ? 'border-red-300 focus:ring-red-100'
+                  : 'border-gray-200 focus:border-orange-500 focus:ring-orange-500/10'
               }`}
             />
             {errors.description && (
               <p className="text-xs text-red-600 mt-1">{errors.description}</p>
             )}
-            <p className="text-xs text-gray-400 mt-1 text-right">{description.length}/5000</p>
+            <p className="text-xs text-gray-400 mt-1.5 text-right">{description.length}/5000</p>
           </div>
         </div>
 
         {/* Khối 2: Danh sách trường */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-semibold text-gray-900">{t('forms.fields')}</h2>
-              <p className="text-xs text-gray-500">{t('forms.editorPage.maxFieldsHelp')}</p>
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                <HiOutlineViewList className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-base font-bold text-gray-900">{t('forms.fields')}</h2>
+                  <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-gray-100 text-gray-700">
+                    {fields.length}/30
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500">{t('forms.editorPage.maxFieldsHelp')}</p>
+              </div>
             </div>
             <button
               type="button"
               onClick={handleAddField}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-primary-50 text-primary-700 hover:bg-primary-100 rounded-xl text-xs font-medium transition-colors"
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-xl text-xs font-bold shadow-2xs hover:shadow-xs transition active:scale-[0.98] self-start sm:self-auto"
             >
               <HiOutlinePlus className="w-4 h-4" />
-              {t('forms.addField')}
+              <span>{t('forms.addField')}</span>
             </button>
           </div>
 
@@ -1283,18 +1303,28 @@ export default function FormEditorPage() {
               return (
                 <div
                   key={field.key || idx}
-                  className="p-4 rounded-xl border border-gray-200/90 bg-gray-50/50 space-y-4 relative"
+                  className="p-5 rounded-2xl border border-gray-200/90 bg-gradient-to-b from-white to-gray-50/40 space-y-4 relative shadow-2xs hover:border-gray-300 transition-all"
                 >
-                  <div className="flex items-center justify-between border-b border-gray-200 pb-3">
-                    <span className="text-xs font-semibold uppercase text-gray-500">
-                      {t('forms.editorPage.fieldIndex', { index: idx + 1 })}
-                    </span>
+                  <div className="flex items-center justify-between border-b border-gray-200/80 pb-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold uppercase tracking-wider bg-gray-100 text-gray-700 border border-gray-200/70">
+                        {t('forms.editorPage.fieldIndex', { index: idx + 1 })}
+                      </span>
+                      <span className="text-xs font-medium px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                        {t(FIELD_TYPES.find((ft) => ft.value === field.type)?.labelKey || 'forms.types.short_text')}
+                      </span>
+                      {field.required && (
+                        <span className="text-[11px] font-semibold text-rose-600 bg-rose-50 border border-rose-200/70 px-1.5 py-0.5 rounded">
+                          {t('forms.required')}
+                        </span>
+                      )}
+                    </div>
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
                         disabled={idx === 0}
                         onClick={() => handleMoveField(idx, -1)}
-                        className="p-1.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 rounded"
+                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 rounded-lg transition"
                         title={t('forms.editorPage.moveUp')}
                       >
                         <HiOutlineArrowUp className="w-4 h-4" />
@@ -1303,7 +1333,7 @@ export default function FormEditorPage() {
                         type="button"
                         disabled={idx === fields.length - 1}
                         onClick={() => handleMoveField(idx, 1)}
-                        className="p-1.5 text-gray-400 hover:text-gray-700 disabled:opacity-30 rounded"
+                        className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 disabled:opacity-30 rounded-lg transition"
                         title={t('forms.editorPage.moveDown')}
                       >
                         <HiOutlineArrowDown className="w-4 h-4" />
@@ -1311,7 +1341,7 @@ export default function FormEditorPage() {
                       <button
                         type="button"
                         onClick={() => handleRemoveField(idx)}
-                        className="p-1.5 text-red-400 hover:text-red-600 rounded"
+                        className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition ml-1"
                         title={t('forms.editorPage.removeField')}
                       >
                         <HiOutlineTrash className="w-4 h-4" />
@@ -1322,7 +1352,7 @@ export default function FormEditorPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Nhãn trường */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
                         {t('forms.fieldLabel')} <span className="text-red-500">*</span>
                       </label>
                       <input
@@ -1331,10 +1361,10 @@ export default function FormEditorPage() {
                         value={field.label}
                         onChange={(e) => handleUpdateField(idx, 'label', e.target.value)}
                         placeholder={t('forms.editorPage.fieldLabelPlaceholder')}
-                        className={`w-full px-3 py-2 bg-white rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                        className={`w-full px-3.5 py-2.5 bg-white rounded-xl border text-sm font-medium focus:outline-none focus:ring-4 transition shadow-2xs ${
                           labelError
-                            ? 'border-red-300 focus:ring-red-200'
-                            : 'border-gray-300 focus:border-primary-500 focus:ring-primary-100'
+                            ? 'border-red-300 focus:ring-red-100'
+                            : 'border-gray-200 focus:border-orange-500 focus:ring-orange-500/10'
                         }`}
                       />
                       {labelError && <p className="text-xs text-red-600 mt-1">{labelError}</p>}
@@ -1342,13 +1372,13 @@ export default function FormEditorPage() {
 
                     {/* Kiểu dữ liệu */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
                         {t('forms.fieldType')}
                       </label>
                       <select
                         value={field.type}
                         onChange={(e) => handleUpdateField(idx, 'type', e.target.value)}
-                        className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                        className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-gray-200 text-sm font-medium focus:outline-none focus:ring-4 focus:border-orange-500 focus:ring-orange-500/10 shadow-2xs"
                       >
                         {FIELD_TYPES.map((ft) => (
                           <option key={ft.value} value={ft.value}>
@@ -1360,13 +1390,13 @@ export default function FormEditorPage() {
 
                     {/* Vai trò role */}
                     <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                      <label className="block text-xs font-semibold text-gray-700 mb-1">
                         {t('forms.role')}
                       </label>
                       <select
                         value={field.role || ''}
                         onChange={(e) => handleUpdateField(idx, 'role', e.target.value)}
-                        className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100"
+                        className="w-full px-3.5 py-2.5 bg-white rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-4 focus:border-orange-500 focus:ring-orange-500/10 shadow-2xs"
                       >
                         <option value="">{t('forms.roleNone')}</option>
                         <option value="name">{t('forms.roleName')}</option>
@@ -1377,53 +1407,57 @@ export default function FormEditorPage() {
 
                     {/* Bắt buộc check */}
                     <div className="flex items-center pt-5">
-                      <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700">
+                      <label className="inline-flex items-center gap-2 cursor-pointer select-none text-sm text-gray-700 px-3 py-2 rounded-xl hover:bg-gray-100/80 transition">
                         <input
                           type="checkbox"
                           checked={field.required}
                           onChange={(e) => handleUpdateField(idx, 'required', e.target.checked)}
-                          className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300"
+                          className="h-4 w-4 rounded text-orange-600 focus:ring-orange-500 border-gray-300"
                         />
-                        <span>{t('forms.required')}</span>
+                        <span className="font-medium">{t('forms.required')}</span>
                       </label>
                     </div>
                   </div>
 
                   {/* Danh sách lựa chọn options (nếu là select, radio, checkbox) */}
                   {hasOptions && (
-                    <div className="pt-2 border-t border-gray-200/60 space-y-2">
+                    <div className="pt-3 border-t border-gray-200/80 space-y-3">
                       <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-gray-700">
+                        <label className="text-xs font-semibold text-gray-700">
                           {t('forms.options')}
                         </label>
                         <button
                           type="button"
                           onClick={() => handleAddOption(idx)}
-                          className="text-xs text-primary-600 hover:text-primary-700 font-medium"
+                          className="inline-flex items-center gap-1 text-xs text-orange-600 hover:text-orange-700 font-semibold px-2 py-1 rounded-md hover:bg-orange-50 transition"
                         >
                           + {t('forms.addOption')}
                         </button>
                       </div>
 
                       {optionsError && (
-                        <p className="text-xs text-red-600">{optionsError}</p>
+                        <p className="text-xs text-red-600 bg-red-50 p-2.5 rounded-xl">{optionsError}</p>
                       )}
 
                       <div className="space-y-2">
                         {field.options.map((opt, optIdx) => (
                           <div key={optIdx} className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-gray-400 w-4 text-center shrink-0">
+                              {optIdx + 1}.
+                            </span>
                             <input
                               type="text"
                               maxLength={100}
                               value={opt}
                               onChange={(e) => handleUpdateOption(idx, optIdx, e.target.value)}
                               placeholder={t('forms.optionPlaceholder')}
-                              className="w-full px-3 py-1.5 bg-white rounded-lg border border-gray-300 text-xs focus:outline-none focus:ring-1 focus:ring-primary-500"
+                              className="w-full px-3 py-2 bg-white rounded-xl border border-gray-200 text-xs font-medium focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 shadow-2xs"
                             />
                             <button
                               type="button"
                               onClick={() => handleRemoveOption(idx, optIdx)}
-                              className="p-1.5 text-gray-400 hover:text-red-500 rounded"
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                              title={t('forms.editorPage.removeOption')}
                             >
                               <HiOutlineTrash className="w-3.5 h-3.5" />
                             </button>
@@ -1439,8 +1473,8 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 3: Cài đặt nâng cao */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
-          <h2 className="text-base font-semibold text-gray-900">{t('forms.settings')}</h2>
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
+          <h2 className="text-base font-bold text-gray-900">{t('forms.settings')}</h2>
 
           <div className="space-y-4 divide-y divide-gray-100">
             {/* notifyOwner */}
@@ -1562,10 +1596,10 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 4: Đặt lịch hẹn */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">
+              <h2 className="text-base font-bold text-gray-900">
                 {t('forms.editorPage.booking.title')}
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -1772,10 +1806,10 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 5: Thanh toán giữ chỗ */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-base font-semibold text-gray-900">
+              <h2 className="text-base font-bold text-gray-900">
                 {t('forms.editorPage.payment.title')}
               </h2>
               <p className="text-xs text-gray-500 mt-0.5">
@@ -2189,9 +2223,9 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 6: Giao diện (PR-4b) */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5 sm:p-6 space-y-5">
+        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div>
-            <h2 className="text-base font-semibold text-gray-900">
+            <h2 className="text-base font-bold text-gray-900">
               {t('forms.editorPage.theme.title')}
             </h2>
             <p className="text-xs text-gray-500 mt-0.5">
