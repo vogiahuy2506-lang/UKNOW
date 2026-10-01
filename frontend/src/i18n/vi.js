@@ -9670,6 +9670,7 @@ export default {
       moveUp: 'Di chuyển lên',
       moveDown: 'Di chuyển xuống',
       removeField: 'Xoá trường',
+      removeOption: 'Xoá lựa chọn',
       fieldLabelPlaceholder: 'Ví dụ: Họ và tên',
       notifyOwnerHelp: 'Gửi thư thông báo kèm thông tin người nộp về email của chủ tài khoản',
       consentEnabledHelp: 'Hiển thị ô đánh dấu đồng ý tiếp thị trên form để khách hàng xác nhận nhận tin',
