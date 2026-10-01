@@ -7,6 +7,9 @@ import {
   HiOutlineChevronDown,
   HiOutlineChevronDown as HiOutlineExpand,
   HiOutlineExclamation,
+  HiOutlineExternalLink,
+  HiOutlineSparkles,
+  HiOutlineClipboardList,
 } from 'react-icons/hi';
 import { FounderLeadFormCard } from '../../landing/components/FounderLeadFormCard.jsx';
 import { editLandingHtmlWithAi } from '../../landing-pages/services/landingPagesAdminApi.service.js';
@@ -172,6 +175,79 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
 
   return (
     <div className="space-y-6">
+      {/* Khối tích hợp Biểu mẫu hệ thống (Forms Module) */}
+      {form?.linkedFormId ? (
+        <div className="rounded-xl border border-blue-200 bg-blue-50/80 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+          <div className="flex items-start gap-3">
+            <div className="p-2 rounded-lg bg-blue-100 text-blue-700 shrink-0 mt-0.5">
+              <HiOutlineClipboardList className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h4 className="text-sm font-semibold text-blue-950">
+                  Trang đang liên kết với Biểu mẫu chuyên nghiệp (#{form.linkedFormId})
+                </h4>
+                <span className="text-[11px] font-medium bg-blue-200/70 text-blue-800 px-2 py-0.5 rounded-full">
+                  Đang hoạt động
+                </span>
+              </div>
+              <p className="text-xs text-blue-900/80 mt-1 leading-relaxed">
+                Biểu mẫu này được quản lý tập trung trong module Biểu mẫu: hỗ trợ kéo thả câu hỏi, tải file, điều kiện logic và quản lý bài nộp nâng cao.
+              </p>
+            </div>
+          </div>
+          <a
+            href={`/app/forms/${form.linkedFormId}/edit`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-xs shrink-0 transition"
+          >
+            <span>Mở sửa Biểu mẫu</span>
+            <HiOutlineExternalLink className="w-4 h-4" />
+          </a>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-indigo-100 bg-gradient-to-r from-indigo-50/70 via-purple-50/40 to-white p-4 shadow-2xs">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2 rounded-lg bg-indigo-100 text-indigo-700 shrink-0 mt-0.5">
+                <HiOutlineSparkles className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-semibold text-gray-900">
+                    Bạn muốn dùng Biểu mẫu chuyên nghiệp từ module Forms?
+                  </h4>
+                  <span className="text-[11px] font-medium text-indigo-700 bg-indigo-100 px-2 py-0.5 rounded-full">
+                    Gợi ý
+                  </span>
+                </div>
+                <p className="text-xs text-gray-600 leading-relaxed">
+                  Module <strong>Biểu mẫu</strong> có đầy đủ tính năng: tải tệp, đánh giá sao, câu hỏi trắc nghiệm, đặt lịch hẹn... Bạn chỉ cần nhắn với Trợ lý AI: <em>"Hãy nhúng biểu mẫu đăng ký vào trang này"</em>, hoặc nhúng mã từ form có sẵn.
+                </p>
+              </div>
+            </div>
+            <a
+              href="/app/forms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-700 bg-white hover:bg-indigo-50 border border-indigo-200/80 rounded-lg shadow-2xs shrink-0 transition"
+            >
+              <span>Kho Biểu mẫu</span>
+              <HiOutlineExternalLink className="w-3.5 h-3.5" />
+            </a>
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-3 pt-1">
+        <div className="h-px bg-gray-200 flex-1" />
+        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+          Cấu hình trường Form HTML nội tuyến
+        </span>
+        <div className="h-px bg-gray-200 flex-1" />
+      </div>
+
       <p className="text-[13px] text-gray-500 leading-relaxed">
         {t('leadFormConfig.help')}
       </p>
