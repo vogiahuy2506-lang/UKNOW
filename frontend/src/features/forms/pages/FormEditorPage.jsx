@@ -15,6 +15,19 @@ import {
   HiOutlineQrcode,
   HiOutlineDocumentText,
   HiOutlineViewList,
+  HiOutlineUser,
+  HiOutlineMail,
+  HiOutlinePhone,
+  HiOutlineAnnotation,
+  HiOutlineCheckCircle,
+  HiOutlineClipboardCheck,
+  HiOutlineCalendar,
+  HiOutlineLightningBolt,
+  HiOutlineCog,
+  HiOutlineCreditCard,
+  HiOutlineColorSwatch,
+  HiOutlineClock,
+  HiOutlineSparkles,
 } from 'react-icons/hi';
 import QRCode from 'qrcode';
 import { buildVietQrString, decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
@@ -52,6 +65,93 @@ const FIELD_TYPES = [
   { value: 'radio', labelKey: 'forms.types.radio' },
   { value: 'checkbox', labelKey: 'forms.types.checkbox' },
   { value: 'date', labelKey: 'forms.types.date' },
+];
+
+const QUICK_FIELD_PRESETS = [
+  {
+    title: 'Họ và tên',
+    desc: 'Định danh tên khách hàng',
+    type: 'short_text',
+    role: 'name',
+    required: true,
+    icon: HiOutlineUser,
+    colorClass: 'text-blue-600 bg-blue-50 border-blue-200/80 hover:bg-blue-100 hover:border-blue-300',
+  },
+  {
+    title: 'Địa chỉ Email',
+    desc: 'Gửi thư xác nhận tự động',
+    type: 'email',
+    role: 'email',
+    required: true,
+    icon: HiOutlineMail,
+    colorClass: 'text-purple-600 bg-purple-50 border-purple-200/80 hover:bg-purple-100 hover:border-purple-300',
+  },
+  {
+    title: 'Số điện thoại',
+    desc: 'Liên hệ tư vấn / Zalo',
+    type: 'phone',
+    role: 'phone',
+    required: true,
+    icon: HiOutlinePhone,
+    colorClass: 'text-emerald-600 bg-emerald-50 border-emerald-200/80 hover:bg-emerald-100 hover:border-emerald-300',
+  },
+  {
+    title: 'Văn bản ngắn',
+    desc: 'Câu trả lời 1 dòng',
+    type: 'short_text',
+    role: '',
+    required: false,
+    icon: HiOutlineAnnotation,
+    colorClass: 'text-amber-600 bg-amber-50 border-amber-200/80 hover:bg-amber-100 hover:border-amber-300',
+  },
+  {
+    title: 'Đoạn văn dài',
+    desc: 'Góp ý hoặc mô tả chi tiết',
+    type: 'long_text',
+    role: '',
+    required: false,
+    icon: HiOutlineDocumentText,
+    colorClass: 'text-indigo-600 bg-indigo-50 border-indigo-200/80 hover:bg-indigo-100 hover:border-indigo-300',
+  },
+  {
+    title: 'Trắc nghiệm đơn',
+    desc: 'Chọn 1 trong nhiều lựa chọn',
+    type: 'radio',
+    role: '',
+    required: false,
+    options: ['Lựa chọn 1', 'Lựa chọn 2'],
+    icon: HiOutlineCheckCircle,
+    colorClass: 'text-rose-600 bg-rose-50 border-rose-200/80 hover:bg-rose-100 hover:border-rose-300',
+  },
+  {
+    title: 'Hộp kiểm',
+    desc: 'Cho phép tích chọn nhiều mục',
+    type: 'checkbox',
+    role: '',
+    required: false,
+    options: ['Mục 1', 'Mục 2'],
+    icon: HiOutlineClipboardCheck,
+    colorClass: 'text-teal-600 bg-teal-50 border-teal-200/80 hover:bg-teal-100 hover:border-teal-300',
+  },
+  {
+    title: 'Menu thả xuống',
+    desc: 'Danh sách lựa chọn gọn gàng',
+    type: 'select',
+    role: '',
+    required: false,
+    options: ['Lựa chọn 1', 'Lựa chọn 2'],
+    icon: HiOutlineViewList,
+    colorClass: 'text-sky-600 bg-sky-50 border-sky-200/80 hover:bg-sky-100 hover:border-sky-300',
+  },
+  {
+    title: 'Ngày / Thời gian',
+    desc: 'Chọn ngày hẹn hoặc ngày sinh',
+    type: 'date',
+    role: '',
+    required: false,
+    icon: HiOutlineCalendar,
+    colorClass: 'text-orange-600 bg-orange-50 border-orange-200/80 hover:bg-orange-100 hover:border-orange-300',
+  },
 ];
 
 const DEFAULT_SETTINGS = {
@@ -440,6 +540,33 @@ export default function FormEditorPage() {
         options: [],
       },
     ]);
+  };
+
+  // Thêm trường thông dụng 1-chạm từ thư viện mẫu
+  const handleAddQuickField = (preset) => {
+    if (fields.length >= 30) {
+      toast.error(t('forms.editorPage.maxFields'));
+      return;
+    }
+    setFields((prev) => [
+      ...prev,
+      {
+        key: '',
+        label: preset.title,
+        type: preset.type,
+        required: Boolean(preset.required),
+        role: preset.role || '',
+        options: preset.options ? [...preset.options] : [],
+      },
+    ]);
+    toast.success(`Đã thêm trường "${preset.title}"!`);
+  };
+
+  const scrollToSection = (sectionId) => {
+    const el = document.getElementById(sectionId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
   };
 
   // Xoá trường
@@ -1105,7 +1232,7 @@ export default function FormEditorPage() {
   }
 
   return (
-    <div className="p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto overflow-x-hidden box-border">
+    <div className="p-4 sm:p-6 lg:p-8 max-w-7xl 2xl:max-w-[1520px] mx-auto overflow-x-hidden box-border">
       {/* Thanh thao tác dính (PR-1) */}
       <div className="sticky top-0 z-20 bg-white/90 backdrop-blur-md -mx-4 -mt-4 sm:-mx-6 sm:-mt-6 lg:-mx-8 lg:-mt-8 px-4 sm:px-6 lg:px-8 py-4 mb-8 border-b border-gray-200/80 shadow-2xs flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 transition-all">
         <div className="flex items-center gap-3">
@@ -1207,9 +1334,12 @@ export default function FormEditorPage() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        {/* Khối 1: Thông tin chung */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-5 hover:border-gray-300/80 transition-all">
+      {/* Bố cục Studio 2 cột: Khối Canvas biểu mẫu bên trái (8/12) & Bảng công cụ / Tổng quan bên phải (4/12) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        {/* Cột Canvas chính */}
+        <div className="xl:col-span-8 space-y-6">
+          {/* Khối 1: Thông tin chung */}
+          <div id="section-general" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-5 hover:border-gray-300/80 transition-all">
           <div className="flex items-center gap-2.5 pb-2 border-b border-gray-100">
             <div className="p-2 rounded-xl bg-orange-50 text-orange-600">
               <HiOutlineDocumentText className="w-5 h-5" />
@@ -1264,7 +1394,7 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 2: Danh sách trường */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
+        <div id="section-fields" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-gray-100">
             <div className="flex items-center gap-2.5">
               <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
@@ -1288,6 +1418,30 @@ export default function FormEditorPage() {
               <HiOutlinePlus className="w-4 h-4" />
               <span>{t('forms.addField')}</span>
             </button>
+          </div>
+
+          {/* Dải nút thêm nhanh 1-chạm tích hợp trong khối */}
+          <div className="bg-gradient-to-r from-orange-50/60 via-amber-50/40 to-transparent p-3.5 rounded-xl border border-dashed border-orange-200/80">
+            <div className="text-[11px] font-bold text-orange-950 uppercase tracking-wider mb-2.5 flex items-center gap-1.5">
+              <HiOutlineLightningBolt className="w-3.5 h-3.5 text-orange-600" />
+              <span>Thêm nhanh loại trường thông dụng:</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {QUICK_FIELD_PRESETS.map((preset) => {
+                const Icon = preset.icon;
+                return (
+                  <button
+                    key={preset.title}
+                    type="button"
+                    onClick={() => handleAddQuickField(preset)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 bg-white hover:bg-orange-50 text-gray-700 hover:text-orange-700 border border-gray-200 hover:border-orange-300 rounded-lg text-xs font-medium transition shadow-2xs hover:shadow-xs active:scale-95 group"
+                  >
+                    <Icon className="w-3.5 h-3.5 text-gray-500 group-hover:text-orange-600 transition" />
+                    <span>{preset.title}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {errors.fields && (
@@ -1473,7 +1627,7 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 3: Cài đặt nâng cao */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
+        <div id="section-settings" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <h2 className="text-base font-bold text-gray-900">{t('forms.settings')}</h2>
 
           <div className="space-y-4 divide-y divide-gray-100">
@@ -1596,7 +1750,7 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 4: Đặt lịch hẹn */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
+        <div id="section-booking" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-gray-900">
@@ -1806,7 +1960,7 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 5: Thanh toán giữ chỗ */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
+        <div id="section-payment" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div className="flex items-start justify-between gap-4">
             <div>
               <h2 className="text-base font-bold text-gray-900">
@@ -2223,7 +2377,7 @@ export default function FormEditorPage() {
         </div>
 
         {/* Khối 6: Giao diện (PR-4b) */}
-        <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
+        <div id="section-theme" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div>
             <h2 className="text-base font-bold text-gray-900">
               {t('forms.editorPage.theme.title')}
@@ -2466,6 +2620,183 @@ export default function FormEditorPage() {
             >
               <FormRenderer form={previewForm} onSubmit={() => {}} previewMode />
             </div>
+          </div>
+        </div>
+      </div>
+
+        {/* Cột Công cụ & Điều hướng Sticky bên phải (4/12) */}
+        <div className="xl:col-span-4 space-y-5 sticky top-24">
+          {/* Card 1: Thư viện trường dữ liệu 1-chạm */}
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-5 space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-orange-50 text-orange-600">
+                  <HiOutlineLightningBolt className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">Thư viện trường 1-chạm</h3>
+                  <p className="text-[11px] text-gray-500">Nhấn để thêm ngay loại câu hỏi</p>
+                </div>
+              </div>
+              <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-gray-100 text-gray-600">
+                {fields.length}/30
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 gap-2">
+              {QUICK_FIELD_PRESETS.map((preset) => {
+                const Icon = preset.icon;
+                return (
+                  <button
+                    key={preset.title}
+                    type="button"
+                    onClick={() => handleAddQuickField(preset)}
+                    className="flex items-center gap-3 p-2.5 rounded-xl border border-gray-100 hover:border-orange-200 bg-gray-50/50 hover:bg-orange-50/40 text-left transition group shadow-2xs hover:shadow-xs active:scale-[0.98]"
+                  >
+                    <div className="p-2 rounded-lg bg-white border border-gray-200/80 text-gray-600 group-hover:text-orange-600 group-hover:border-orange-300 transition shadow-2xs shrink-0">
+                      <Icon className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-xs font-bold text-gray-800 group-hover:text-orange-700 truncate">
+                        {preset.title}
+                      </div>
+                      <div className="text-[11px] text-gray-400 group-hover:text-gray-500 truncate">
+                        {preset.desc}
+                      </div>
+                    </div>
+                    <HiOutlinePlus className="w-3.5 h-3.5 text-gray-300 group-hover:text-orange-600 shrink-0" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Card 2: Tổng quan & Trạng thái */}
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-5 space-y-4">
+            <div className="flex items-center gap-2 pb-3 border-b border-gray-100">
+              <div className="p-1.5 rounded-lg bg-indigo-50 text-indigo-600">
+                <HiOutlineSparkles className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Tổng quan biểu mẫu</h3>
+                <p className="text-[11px] text-gray-500">Tình trạng và cấu hình hiện tại</p>
+              </div>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <div className="flex justify-between text-xs font-semibold text-gray-700 mb-1">
+                  <span>Số lượng câu hỏi</span>
+                  <span className={fields.length >= 25 ? 'text-amber-600 font-bold' : 'text-gray-500'}>
+                    {fields.length} / 30 trường
+                  </span>
+                </div>
+                <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                  <div
+                    className={`h-2 rounded-full transition-all duration-300 ${
+                      fields.length >= 25
+                        ? 'bg-amber-500'
+                        : fields.length >= 10
+                        ? 'bg-orange-500'
+                        : 'bg-emerald-500'
+                    }`}
+                    style={{ width: `${Math.min(100, (fields.length / 30) * 100)}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-1 text-xs">
+                <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                  <span className="text-[11px] text-gray-400">Trạng thái</span>
+                  <span className={`font-semibold ${isPublished ? 'text-emerald-700' : 'text-amber-700'}`}>
+                    {isPublished ? '● Đang xuất bản' : '○ Bản nháp'}
+                  </span>
+                </div>
+                <div className="p-2.5 rounded-xl bg-gray-50 border border-gray-100 flex flex-col gap-1">
+                  <span className="text-[11px] text-gray-400">Thời gian điền</span>
+                  <span className="font-semibold text-gray-800 flex items-center gap-1">
+                    <HiOutlineClock className="w-3.5 h-3.5 text-gray-500" />
+                    ~{Math.max(1, Math.ceil(fields.length * 0.5))} phút
+                  </span>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-gray-100 space-y-2">
+                <div className="text-[11px] font-bold text-gray-500 uppercase tracking-wider">Tiện ích tích hợp</div>
+                <div className="flex items-center justify-between text-xs py-1">
+                  <span className="text-gray-600 flex items-center gap-1.5">
+                    <HiOutlineCalendar className="w-4 h-4 text-gray-400" />
+                    Đặt lịch hẹn
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                    booking.enabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {booking.enabled ? 'Đã bật' : 'Tắt'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs py-1">
+                  <span className="text-gray-600 flex items-center gap-1.5">
+                    <HiOutlineCreditCard className="w-4 h-4 text-gray-400" />
+                    Thanh toán giữ chỗ
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                    payment.enabled ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {payment.enabled ? 'Đã bật' : 'Tắt'}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between text-xs py-1">
+                  <span className="text-gray-600 flex items-center gap-1.5">
+                    <HiOutlineMail className="w-4 h-4 text-gray-400" />
+                    Email xác nhận
+                  </span>
+                  <span className={`px-2 py-0.5 rounded-full text-[11px] font-semibold ${
+                    settings.sendConfirmation ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-gray-100 text-gray-500'
+                  }`}>
+                    {settings.sendConfirmation ? 'Đã bật' : 'Tắt'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Card 3: Điều hướng nhanh các phần */}
+          <div className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-5 space-y-3">
+            <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Cuộn nhanh đến mục</h3>
+            <div className="space-y-1">
+              {[
+                { id: 'section-general', label: '1. Thông tin chung', icon: HiOutlineDocumentText },
+                { id: 'section-fields', label: `2. Danh sách trường (${fields.length})`, icon: HiOutlineViewList },
+                { id: 'section-settings', label: '3. Cài đặt nâng cao', icon: HiOutlineCog },
+                { id: 'section-booking', label: '4. Đặt lịch hẹn', icon: HiOutlineCalendar },
+                { id: 'section-payment', label: '5. Thanh toán giữ chỗ', icon: HiOutlineCreditCard },
+                { id: 'section-theme', label: '6. Giao diện & Xem trước', icon: HiOutlineColorSwatch },
+              ].map((item) => {
+                const ItemIcon = item.icon;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => scrollToSection(item.id)}
+                    className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs font-medium text-gray-700 hover:text-orange-700 hover:bg-orange-50/60 transition text-left group"
+                  >
+                    <ItemIcon className="w-4 h-4 text-gray-400 group-hover:text-orange-600 transition" />
+                    <span>{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Card 4: Gợi ý tối ưu tỷ lệ chuyển đổi */}
+          <div className="rounded-2xl p-4.5 bg-gradient-to-br from-amber-500/10 via-orange-500/5 to-transparent border border-amber-200/60 text-xs text-amber-950 space-y-2">
+            <div className="flex items-center gap-2 font-bold text-amber-900">
+              <HiOutlineSparkles className="w-4 h-4 text-amber-600" />
+              <span>Mẹo tăng tỷ lệ điền form</span>
+            </div>
+            <p className="text-gray-600 leading-relaxed text-[11px]">
+              Biểu mẫu thu gọn từ 3 đến 5 câu hỏi thường có tỷ lệ hoàn tất cao hơn 40%. Đặt các câu hỏi quan trọng nhất (Họ tên, SĐT) ở đầu biểu mẫu.
+            </p>
           </div>
         </div>
       </div>
