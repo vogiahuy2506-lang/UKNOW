@@ -303,4 +303,24 @@ describe('PlanSection — P10 hạn mức tin Telegram/WhatsApp', () => {
     expect(limitOf('accountProfileModal.telegramMessages')).toBe('null');
     expect(screen.queryByTestId('usage-accountProfileModal.whatsappMessages')).not.toBeInTheDocument();
   });
+
+  it('gói NULL và chưa gửi tin (sent=0), nhưng đã có tài khoản Telegram kết nối -> vẫn hiện dòng Telegram', () => {
+    renderPlan({
+      monthlyTelegramLimit: null,
+      telegramSentCycle: 0,
+      resourceUsage: { telegramAccounts: { used: 1, limit: null } },
+    });
+    expect(limitOf('accountProfileModal.telegramMessages')).toBe('null');
+    expect(usedOf('accountProfileModal.telegramMessages')).toBe('0');
+  });
+
+  it('gói NULL và chưa gửi tin (sent=0), nhưng đã có tài khoản WhatsApp kết nối -> vẫn hiện dòng WhatsApp', () => {
+    renderPlan({
+      monthlyWhatsappLimit: null,
+      whatsappSentCycle: 0,
+      resourceUsage: { whatsappAccounts: { used: 1, limit: null } },
+    });
+    expect(limitOf('accountProfileModal.whatsappMessages')).toBe('null');
+    expect(usedOf('accountProfileModal.whatsappMessages')).toBe('0');
+  });
 });

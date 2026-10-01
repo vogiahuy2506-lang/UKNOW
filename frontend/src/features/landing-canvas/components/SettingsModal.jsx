@@ -44,7 +44,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   // mới thay vì cập nhật đúng section.
   const [expandedSections, setExpandedSections] = useState({
     page: true,
-    images: true,
+    images: false,
     domain: true,
     'lead-form': false,
   });
@@ -355,7 +355,12 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             expanded={expandedSections.images}
             onToggle={() => toggleSection('images')}
             icon={<HiOutlinePhotograph className="w-5 h-5" />}
-            title={tc('sections.images.title')}
+            title={
+              <span className="flex items-center gap-1.5 flex-wrap">
+                <span>{tc('sections.images.title')}</span>
+                <span className="text-xs font-normal text-gray-500">· Kho ảnh & Tệp tải lên</span>
+              </span>
+            }
             badge={inPageImages.length > 0 ? `${inPageImages.length} ảnh trong trang` : null}
             badgeClass="bg-blue-50 text-blue-700 border border-blue-200/60"
           >
@@ -808,7 +813,7 @@ function SectionCard({ expanded, onToggle, icon, title, badge, badgeClass, child
       </button>
 
       {/* Content */}
-      {expanded && <div className="px-4 py-4">{children}</div>}
+      <div className={expanded ? 'px-4 py-4' : 'hidden'}>{children}</div>
     </div>
   );
 }

@@ -277,9 +277,9 @@ export default function PlanSection({ data, t }) {
           serviceSuspended={serviceSuspended}
           usingAddons={usingMessagingWallet}
         />
-        {/* P10: Telegram/WhatsApp có hạn mức tin/tháng RIÊNG (không còn dùng chung Zalo). Chỉ hiện khi gói có đặt trần
-            (NULL = không giới hạn) hoặc đã gửi; số đã dùng là số của backend (cùng hàm + cùng kỳ với cổng chặn). */}
-        {(!isUnlimitedPlanLimit(data.monthlyTelegramLimit) || data.telegramSentCycle > 0) && (
+        {/* P10: Telegram/WhatsApp có hạn mức tin/tháng RIÊNG (không còn dùng chung Zalo). Hiện khi gói có đặt trần,
+            đã có tin gửi, HOẶC người dùng đã kết nối tài khoản kênh tương ứng (resourceUsage.used > 0). */}
+        {(!isUnlimitedPlanLimit(data.monthlyTelegramLimit) || data.telegramSentCycle > 0 || (Number(data.resourceUsage?.telegramAccounts?.used) > 0)) && (
           <UsageBar
             icon={HiOutlineChatAlt2}
             label={t('accountProfileModal.telegramMessages')}
@@ -290,7 +290,7 @@ export default function PlanSection({ data, t }) {
             usingAddons={usingTelegramWallet}
           />
         )}
-        {(!isUnlimitedPlanLimit(data.monthlyWhatsappLimit) || data.whatsappSentCycle > 0) && (
+        {(!isUnlimitedPlanLimit(data.monthlyWhatsappLimit) || data.whatsappSentCycle > 0 || (Number(data.resourceUsage?.whatsappAccounts?.used) > 0)) && (
           <UsageBar
             icon={HiOutlineChatAlt2}
             label={t('accountProfileModal.whatsappMessages')}
