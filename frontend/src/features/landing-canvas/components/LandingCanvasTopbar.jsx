@@ -95,7 +95,7 @@ export default function LandingCanvasTopbar({
           <HiOutlineChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2 bg-gray-50/90 hover:bg-gray-100/80 focus-within:bg-white border border-gray-200/90 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/15 rounded-xl px-3 py-1.5 transition-all w-full">
+        <div className="flex items-center gap-2 bg-gray-50/90 hover:bg-gray-100/80 focus-within:bg-white border border-gray-200/90 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/15 rounded-xl px-3 h-[38px] transition-all w-full box-border">
           <HiOutlineDocumentText className="w-4.5 h-4.5 text-orange-500 shrink-0" />
           <input
             type="text"
@@ -121,9 +121,9 @@ export default function LandingCanvasTopbar({
         <button
           type="button"
           onClick={() => onOpenSettingTab?.('page')}
-          className={`h-9.5 px-3.5 rounded-xl text-xs sm:text-sm font-semibold transition-all flex items-center gap-2 shadow-2xs ${
+          className={`h-[38px] px-3.5 rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 shadow-2xs box-border ${
             activeModalTab
-              ? 'bg-orange-500 text-white shadow-xs'
+              ? 'bg-orange-500 text-white shadow-xs border border-transparent'
               : 'bg-gray-100/90 text-gray-700 hover:bg-gray-200 hover:text-gray-900 border border-gray-200/60'
           }`}
         >
@@ -136,7 +136,7 @@ export default function LandingCanvasTopbar({
           <button
             type="button"
             onClick={() => setToolsOpen((prev) => !prev)}
-            className={`h-9.5 px-3 rounded-xl text-xs sm:text-sm font-medium transition-all flex items-center gap-1.5 border shadow-2xs ${
+            className={`h-[38px] px-3.5 rounded-xl text-sm font-medium transition-all inline-flex items-center justify-center gap-1.5 border shadow-2xs box-border ${
               toolsOpen
                 ? 'bg-orange-50 text-orange-700 border-orange-200 ring-2 ring-orange-500/15'
                 : 'bg-white text-gray-700 border-gray-200/90 hover:bg-gray-50 hover:text-gray-900'
@@ -257,7 +257,7 @@ export default function LandingCanvasTopbar({
             target="_blank"
             rel="noopener noreferrer"
             title={tc('openLinkedForm')}
-            className="h-9.5 px-3 rounded-xl transition-colors text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 flex items-center gap-1.5 text-xs font-semibold"
+            className="h-[38px] px-3 rounded-xl transition-colors text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 inline-flex items-center justify-center gap-1.5 text-xs font-semibold box-border"
           >
             <HiOutlineClipboardList className="w-4.5 h-4.5" />
             <span className="hidden lg:inline">{tc('openLinkedForm')}</span>
@@ -266,12 +266,12 @@ export default function LandingCanvasTopbar({
 
         <div className="w-px h-6 bg-gray-200 mx-1.5" />
 
-        {/* 2 Nút hành động chính: Đóng & Lưu — To rõ ràng, cân đối và nổi bật */}
-        <div className="flex items-center gap-2.5">
+        {/* 2 Nút hành động chính: Đóng & Lưu — To rõ ràng, cân đối và hoàn toàn thẳng hàng */}
+        <div className="inline-flex items-center gap-2.5">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center justify-center h-9.5 px-4.5 rounded-xl bg-white text-gray-700 border border-gray-300/90 hover:bg-gray-100 hover:border-gray-400 active:bg-gray-200 text-sm font-semibold transition-all shadow-2xs gap-1.5"
+            className="inline-flex items-center justify-center h-[38px] px-4 rounded-xl bg-white text-gray-700 border border-gray-300/90 hover:bg-gray-50 hover:border-gray-400 active:bg-gray-100 text-sm font-semibold transition-all shadow-2xs gap-1.5 box-border"
           >
             <HiOutlineX className="w-4 h-4 text-gray-500" />
             <span>{tc('close')}</span>
@@ -281,7 +281,7 @@ export default function LandingCanvasTopbar({
             type="button"
             onClick={handleSave}
             disabled={Boolean(saving)}
-            className="inline-flex items-center justify-center h-9.5 px-6 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-sm font-bold transition-all shadow-sm hover:shadow gap-2"
+            className="inline-flex items-center justify-center h-[38px] px-5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white border border-transparent hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-sm font-bold transition-all shadow-sm hover:shadow gap-1.5 box-border"
           >
             {saving ? (
               <HiOutlineRefresh className="w-4 h-4 animate-spin" />
