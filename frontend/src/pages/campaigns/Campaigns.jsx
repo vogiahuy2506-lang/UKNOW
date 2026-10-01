@@ -574,8 +574,20 @@ const Campaigns = () => {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder={t('campaigns.searchPlaceholder')}
-                  className="w-full pl-9 pr-3.5 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all"
+                  className="w-full pl-9 pr-8 py-2 text-sm bg-gray-50/50 hover:bg-white focus:bg-white border border-gray-200 rounded-lg text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/10 transition-all"
                 />
+                {search && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch('');
+                      fetchCampaigns(1, statusFilter, '', typeFilter, stateFilter);
+                    }}
+                    className="absolute right-2.5 text-gray-400 hover:text-gray-600 p-0.5 rounded-full hover:bg-gray-200/60 transition-colors"
+                  >
+                    <HiOutlineX className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             </form>
 
@@ -691,66 +703,72 @@ const Campaigns = () => {
                       const isStopping = Number.isFinite(runId) && runController.stoppingRunIds.has(runId);
 
                       return (
-                        <tr key={campaign.id}>
+                        <tr key={campaign.id} className="hover:bg-orange-50/20 transition-colors">
                           <td>
-                            <Link
-                              to={`/app/campaigns/${campaign.id}/builder`}
-                              className="text-primary-600 hover:text-primary-700 font-medium"
-                            >
-                              {campaign.campaignName}
-                              {campaign.origin === 'marketplace_purchased' && (
-                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
-                                  {t('campaigns.marketplace') || 'Marketplace'}
-                                </span>
+                            <div className="flex flex-col py-0.5">
+                              <Link
+                                to={`/app/campaigns/${campaign.id}/builder`}
+                                className="font-semibold text-gray-900 hover:text-orange-600 transition-colors inline-flex items-center gap-1.5 flex-wrap group"
+                              >
+                                <span className="group-hover:underline">{campaign.campaignName}</span>
+                                {campaign.origin === 'marketplace_purchased' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-purple-50 text-purple-700 border border-purple-200">
+                                    {t('campaigns.marketplace') || 'Marketplace'}
+                                  </span>
+                                )}
+                                {campaign.origin === 'shared_received' && (
+                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200">
+                                    {t('campaigns.shared') || 'Được chia sẻ'}
+                                  </span>
+                                )}
+                              </Link>
+                              {Number(campaign.failedCount || 0) > 0 && campaign.lastFailedRun && (
+                                <p className="mt-1 text-xs text-red-500 flex items-center gap-1">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                                  <span>
+                                    {t('campaigns.lastRunFailed', {
+                                      label: campaign.lastFailedRun.label || campaign.lastFailedRun.errorMessage || '',
+                                    })}
+                                  </span>
+                                </p>
                               )}
-                              {campaign.origin === 'shared_received' && (
-                                <span className="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                                  {t('campaigns.shared') || 'Được chia sẻ'}
-                                </span>
-                              )}
-                            </Link>
-                            {Number(campaign.failedCount || 0) > 0 && campaign.lastFailedRun && (
-                              <p className="mt-1 text-xs text-red-600">
-                                {t('campaigns.lastRunFailed', {
-                                  label: campaign.lastFailedRun.label || campaign.lastFailedRun.errorMessage || '',
-                                })}
-                              </p>
-                            )}
+                            </div>
                           </td>
                           <td>
-                            <span
-                              className={`badge ${
-                                campaign.status === 'active'
-                                  ? 'badge-success'
-                                  : campaign.status === 'draft'
-                                  ? 'badge-gray'
-                                  : campaign.status === 'paused'
-                                  ? 'badge-warning'
-                                  : campaign.status === 'pending_owner_approval'
-                                  ? 'bg-amber-100 text-amber-800 border border-amber-200'
-                                  : 'badge-info'
-                              }`}
-                            >
-                              {campaign.status === 'active'
-                                ? t('campaigns.active')
-                                : campaign.status === 'draft'
-                                ? t('campaigns.draft')
-                                : campaign.status === 'paused'
-                                ? t('campaigns.paused')
-                                : campaign.status === 'pending_owner_approval'
-                                ? t('campaigns.pendingOwnerApproval')
-                                : campaign.status}
-                            </span>
+                            {campaign.status === 'active' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                <span>{t('campaigns.active')}</span>
+                              </span>
+                            ) : campaign.status === 'draft' ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-400/20">
+                                <span>{t('campaigns.draft')}</span>
+                              </span>
+                            ) : campaign.status === 'paused' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700 ring-1 ring-amber-600/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                                <span>{t('campaigns.paused')}</span>
+                              </span>
+                            ) : campaign.status === 'pending_owner_approval' ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 text-blue-700 ring-1 ring-blue-600/20">
+                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                <span>{t('campaigns.pendingOwnerApproval')}</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                {campaign.status}
+                              </span>
+                            )}
                           </td>
                           <td>
                             {isRunning ? (
                               <div className="flex flex-col items-start gap-1">
-                                <span className="badge badge-success flex items-center gap-1">
-                                  <HiOutlineRefresh className="w-3 h-3 animate-spin" />
-                                  {t('campaigns.operationRunning')}
+                                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 ring-1 ring-emerald-600/25 shadow-2xs">
+                                  <HiOutlineRefresh className="w-3 h-3 animate-spin text-emerald-600" />
+                                  <span>{t('campaigns.operationRunning')}</span>
                                 </span>
                                 {isContinuous && (
-                                  <span className="text-xs text-emerald-600 font-medium">
+                                  <span className="text-[11px] text-emerald-600 font-medium pl-1">
                                     {pollIntervalMinutes
                                       ? t('campaignRun.continuousRunningEvery', { interval: pollIntervalMinutes })
                                       : t('campaignRun.continuousRunning')}
@@ -758,8 +776,7 @@ const Campaigns = () => {
                                 )}
                                 {activePause && (
                                   <>
-                                    {/* Đang CHỜ (hết hạn mức / giờ yên lặng / SMTP tạm dừng) — không phải lỗi. `badge-danger` không tồn tại trong index.css nên trước đây không có màu; dùng badge-warning, không tô đỏ (C-15). */}
-                                    <span className="badge badge-warning text-xs font-normal">
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-normal bg-amber-50 text-amber-800 border border-amber-200">
                                       {t(getRunPauseI18nKey(activePause), {
                                         until: formatCampaignDateTime(activePause.untilIso),
                                         account: activePause.accountName || t('campaignRun.zaloAccountFallback'),
@@ -768,7 +785,7 @@ const Campaigns = () => {
                                     {activePause.kind === 'plan_quota' && (
                                       <Link
                                         to="/app/topup"
-                                        className="text-xs font-medium text-primary-600 hover:text-primary-800 hover:underline"
+                                        className="text-xs font-medium text-orange-600 hover:text-orange-800 hover:underline pl-1"
                                       >
                                         {t('campaignRun.buyTopup')}
                                       </Link>
@@ -780,43 +797,53 @@ const Campaigns = () => {
                               <button
                                 type="button"
                                 onClick={() => runController.openCampaignSchedulesSummaryModal(campaign)}
-                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 transition-colors"
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200/80 hover:bg-blue-100 transition-colors shadow-2xs"
                                 title={t('campaignRun.viewSchedules')}
                               >
-                                <span>📅</span>
+                                <HiOutlineClock className="w-3.5 h-3.5 text-blue-600" />
                                 <span>
                                   {t('campaigns.operationScheduledCount', { count: campaign.enabledScheduleCount })}
                                 </span>
                               </button>
                             ) : (
-                              <span className="text-sm text-gray-500 flex items-center gap-1">
-                                <span className="text-gray-400">—</span>
-                                {t('campaigns.inactive')}
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs text-gray-500 bg-gray-50/80 border border-gray-200/60">
+                                <span className="w-1.5 h-1.5 rounded-full bg-gray-300" />
+                                <span>{t('campaigns.inactive')}</span>
                               </span>
                             )}
                           </td>
                           <td>
                             {(() => {
                               const typeMeta = getCampaignTypeMeta(campaign.campaignType);
+                              const typeKey = String(campaign.campaignType || '').trim().toLowerCase();
+                              let Icon = null;
+                              if (typeKey === 'email') Icon = HiOutlineMail;
+                              else if (typeKey === 'zalo') Icon = HiOutlineChat;
+                              else if (typeKey === 'zalo_group') Icon = HiOutlineUserGroup;
+                              else if (typeKey.includes('telegram')) Icon = FaTelegramPlane;
+                              else if (typeKey === 'whatsapp') Icon = FaWhatsapp;
+                              else if (typeKey === 'mixed') Icon = HiOutlineSparkles;
+
                               return (
-                                <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${typeMeta.className}`}>
-                                  {typeMeta.label}
+                                <span className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium ${typeMeta.className}`}>
+                                  {Icon && <Icon className="w-3 h-3 shrink-0" aria-hidden="true" />}
+                                  <span>{typeMeta.label}</span>
                                 </span>
                               );
                             })()}
                           </td>
                           <td>
-                            <div className="flex items-center">
-                              <div className="w-6 h-6 bg-primary-500 rounded-full flex items-center justify-center mr-2">
-                                <span className="text-white text-xs font-medium">{(campaign.createdBy?.name || 'A')[0]?.toUpperCase()}</span>
+                            <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 bg-gradient-to-tr from-orange-500 to-amber-500 rounded-full flex items-center justify-center shrink-0 shadow-2xs">
+                                <span className="text-white text-[11px] font-bold">{(campaign.createdBy?.name || 'A')[0]?.toUpperCase()}</span>
                               </div>
-                              <span className="text-sm">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
+                              <span className="text-sm font-medium text-gray-700 truncate max-w-[120px]">{campaign.createdBy?.name || campaign.createdBy || 'Unknown'}</span>
                             </div>
                           </td>
-                          <td className="text-sm text-gray-500">
+                          <td className="text-xs text-gray-500 whitespace-nowrap">
                             {formatCampaignDateTime(campaign.createdAt)}
                           </td>
-                          <td className="text-sm text-gray-500">
+                          <td className="text-xs text-gray-500 whitespace-nowrap">
                             {formatCampaignDateTime(campaign.updatedAt)}
                           </td>
                           <td className="text-center">{campaign.completedCount ?? 0}</td>
