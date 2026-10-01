@@ -108,16 +108,6 @@ const EmailTemplateListSection = ({
         }
         actions={
           <div className="flex items-center gap-2">
-            {onManageLabels && (
-              <button
-                type="button"
-                onClick={onManageLabels}
-                className="border border-gray-300 hover:border-gray-400 bg-white hover:bg-gray-50 text-gray-700 px-3.5 py-2 rounded-lg transition-all duration-200 flex items-center gap-1.5 text-sm font-medium shadow-xs"
-              >
-                <HiOutlineTag className="w-4 h-4 text-gray-500" />
-                <span>Tạo nhãn mới</span>
-              </button>
-            )}
             <button
               type="button"
               onClick={onCreateTemplate}
@@ -132,7 +122,7 @@ const EmailTemplateListSection = ({
     </div>
 
     <div className="bg-white p-3 sm:p-4 rounded-xl shadow-xs border border-gray-200/80 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 mb-6">
-      <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+      <div className="flex items-center space-x-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none flex-1">
         {tabs.map((tab) => {
           const isSelected = filterCategory === tab.id;
           return (
@@ -156,9 +146,22 @@ const EmailTemplateListSection = ({
             </button>
           );
         })}
+
+        {/* Nút Tạo / Quản lý nhãn đặt cạnh trực tiếp các nhãn */}
+        {onManageLabels && (
+          <button
+            type="button"
+            onClick={onManageLabels}
+            className="px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium border border-dashed border-gray-300 hover:border-orange-400 text-gray-500 hover:text-orange-600 hover:bg-orange-50/50 transition-all duration-150 whitespace-nowrap flex items-center gap-1.5 shrink-0"
+            title="Tạo nhãn mới hoặc quản lý danh sách nhãn"
+          >
+            <HiOutlineTag className="w-3.5 h-3.5 text-gray-400 group-hover:text-orange-500" />
+            <span>Tạo nhãn mới</span>
+          </button>
+        )}
       </div>
 
-      <div className="relative w-full md:w-80 group">
+      <div className="relative w-full md:w-80 group shrink-0">
         <HiOutlineSearch className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-orange-500 transition-colors pointer-events-none" />
         <input
           type="text"
