@@ -170,17 +170,6 @@ export default function AffiliatePage() {
         icon={HiOutlineCurrencyDollar}
         title={t('affiliate.title')}
         subtitle={t('affiliate.subtitle')}
-        actions={
-          referralLink && (
-            <button
-              type="button"
-              onClick={() => handleCopy(referralLink, 'affiliate.copiedSuccess')}
-              className="btn btn-primary"
-            >
-              {t('affiliate.copyLink')}
-            </button>
-          )
-        }
       />
 
       {/* Hàng 3 thẻ */}
