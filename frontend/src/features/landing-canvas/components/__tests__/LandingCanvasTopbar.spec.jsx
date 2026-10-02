@@ -56,4 +56,30 @@ describe('LandingCanvasTopbar — link Biểu mẫu gắn landing (PR-5b-2b mụ
     renderTopbar({ title: 'Landing mới' });
     expect(screen.queryByTitle('landingCanvas.topbar.openLinkedForm')).toBeNull();
   });
+
+  it('showPreviewControls=true → render bộ điều khiển Xem trước, Mã HTML, Zoom, và nút Toàn cảnh', () => {
+    render(
+      <LandingCanvasTopbar
+        form={{ title: 'Landing test' }}
+        setForm={vi.fn()}
+        showPreviewControls={true}
+        previewMode="view"
+        onPreviewModeChange={vi.fn()}
+        viewport="desktop"
+        onViewportChange={vi.fn()}
+        zoom={1}
+        onZoomChange={vi.fn()}
+        isFitToScreen={false}
+        onToggleFitToScreen={vi.fn()}
+        isChatCollapsed={false}
+        onToggleChat={vi.fn()}
+      />
+    );
+
+    expect(screen.getByTitle('landingCanvas.canvasPreview.view')).toBeDefined();
+    expect(screen.getByTitle('landingCanvas.canvasPreview.code')).toBeDefined();
+    expect(screen.getByText('Fit')).toBeDefined();
+    expect(screen.getByText('100%')).toBeDefined();
+    expect(screen.getByTitle('Thu gọn chat để xem toàn cảnh')).toBeDefined();
+  });
 });

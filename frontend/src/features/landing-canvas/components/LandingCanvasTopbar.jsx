@@ -15,12 +15,19 @@ import {
   HiOutlineCheck,
   HiOutlineRefresh,
   HiOutlineAdjustments,
+  HiOutlineEye,
+  HiOutlineArrowsExpand,
+  HiOutlineSparkles,
 } from 'react-icons/hi';
+import DeviceFrameToggle from './DeviceFrameToggle.jsx';
+import ZoomControl from './ZoomControl.jsx';
 import { useI18n } from '../../../i18n';
 
 /**
- * Topbar 56px (h-14) bên trong main area của MainLayout.
- * Style chuẩn, thoáng đãng, các nút chính rõ ràng và dễ tương tác.
+ * Topbar 52px (h-[52px]) studio chuyên nghiệp, giải phóng tối đa chiều cao.
+ *
+ * Gộp các điều khiển xem trước (Preview controls: Xem trước/Code, Desktop/Tablet/Mobile, Zoom, Fit)
+ * lên chính giữa thanh Topbar, giúp loại bỏ hoàn toàn thanh Preview Toolbar riêng biệt (tiết kiệm ~56px).
  */
 export default function LandingCanvasTopbar({
   form,
@@ -36,9 +43,23 @@ export default function LandingCanvasTopbar({
   onOpenVersionHistory,
   onOpenSaveTemplate,
   onOpenImportHtml,
+  // Preview controls (gộp lên Topbar)
+  previewMode = 'view',
+  onPreviewModeChange,
+  viewport = 'desktop',
+  onViewportChange,
+  zoom = 1,
+  onZoomChange,
+  isFitToScreen = false,
+  onToggleFitToScreen,
+  fitPercent = null,
+  isChatCollapsed = false,
+  onToggleChat,
+  showPreviewControls = false,
 }) {
   const tc = useI18n('landingCanvas.topbar');
   const ti = useI18n('landingCanvas.importHtml');
+  const tp = useI18n('landingCanvas.canvasPreview');
   const closeBtnRef = useRef(null);
 
   const [toolsOpen, setToolsOpen] = useState(false);
@@ -82,70 +103,143 @@ export default function LandingCanvasTopbar({
   }, [form.title, onSave, tc]);
 
   return (
-    <div className="h-14 bg-white border-b border-gray-200/90 flex items-center justify-between px-3.5 sm:px-5 shrink-0 select-none shadow-2xs z-20">
-      {/* Left: Back + Title */}
-      <div className="flex items-center gap-2.5 min-w-0 flex-1 max-w-xl">
+    <div className="h-[52px] bg-white border-b border-gray-200/90 flex items-center justify-between px-3 sm:px-4 shrink-0 select-none shadow-2xs z-20 gap-2">
+      {/* Cụm Trái: Nút Quay lại + Ô nhập Tên trang */}
+      <div className="flex items-center gap-2 min-w-0 flex-1 max-w-[280px] lg:max-w-xs shrink-0">
         <button
           type="button"
           onClick={onClose}
-          className="p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors shrink-0"
+          className="p-1.5 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 transition-colors shrink-0"
           title={tc('backTooltip')}
           ref={closeBtnRef}
         >
           <HiOutlineChevronLeft className="w-5 h-5" />
         </button>
 
-        <div className="flex items-center gap-2 bg-gray-50/90 hover:bg-gray-100/80 focus-within:bg-white border border-gray-200/90 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/15 rounded-xl px-3 h-[38px] transition-all w-full box-border">
-          <HiOutlineDocumentText className="w-4.5 h-4.5 text-orange-500 shrink-0" />
+        <div className="flex items-center gap-2 bg-gray-50/90 hover:bg-gray-100/80 focus-within:bg-white border border-gray-200/90 focus-within:border-orange-500 focus-within:ring-2 focus-within:ring-orange-500/15 rounded-xl px-2.5 h-[36px] transition-all w-full box-border">
+          <HiOutlineDocumentText className="w-4 h-4 text-orange-500 shrink-0" />
           <input
             type="text"
             value={form.title || ''}
             onChange={handleTitleChange}
             placeholder={tc('titlePlaceholder')}
-            className="text-sm font-semibold text-gray-900 bg-transparent border-none focus:outline-none min-w-0 flex-1 placeholder:text-gray-400 placeholder:font-normal"
+            className="text-xs sm:text-sm font-semibold text-gray-900 bg-transparent border-none focus:outline-none min-w-0 flex-1 placeholder:text-gray-400 placeholder:font-normal"
           />
           {!form.title?.trim() && (
-            <span className="text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200/70 px-2 py-0.5 rounded-md shrink-0 hidden sm:inline">
+            <span className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-200/70 px-1.5 py-0.5 rounded shrink-0 hidden sm:inline">
               {tc('titleRequired')}
             </span>
           )}
         </div>
       </div>
 
-      {/* Spacer */}
-      <div className="w-4 shrink-0" />
+      {/* Cụm Giữa: Preview Controls (Gộp lên Topbar khi ở chế độ docked) */}
+      {showPreviewControls && (
+        <div className="hidden md:flex items-center gap-2 min-w-0 shrink">
+          {/* Mode Switcher: Xem trước / Mã HTML */}
+          <div className="flex items-center gap-0.5 p-1 bg-gray-100/90 rounded-xl">
+            <button
+              type="button"
+              onClick={() => onPreviewModeChange?.('view')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                previewMode === 'view'
+                  ? 'bg-white text-orange-600 shadow-xs ring-1 ring-orange-500/20'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+              }`}
+              title={tp('view')}
+            >
+              <HiOutlineEye className="w-3.5 h-3.5" />
+              <span>{tp('view')}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => onPreviewModeChange?.('code')}
+              className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all flex items-center gap-1.5 ${
+                previewMode === 'code'
+                  ? 'bg-white text-orange-600 shadow-xs ring-1 ring-orange-500/20'
+                  : 'text-gray-600 hover:text-gray-900 hover:bg-white/60'
+              }`}
+              title={tp('code')}
+            >
+              <HiOutlineCode className="w-3.5 h-3.5" />
+              <span>{tp('code')}</span>
+            </button>
+          </div>
 
-      {/* Right: Actions */}
-      <div className="flex items-center gap-2 shrink-0">
+          {/* Device & Zoom & Fullscreen (chỉ hiện ở mode view) */}
+          {previewMode === 'view' && (
+            <>
+              <DeviceFrameToggle value={viewport} onChange={onViewportChange} />
+
+              <ZoomControl
+                value={zoom}
+                onChange={onZoomChange}
+                isFit={isFitToScreen}
+                onToggleFit={onToggleFitToScreen}
+                fitPercent={fitPercent}
+              />
+
+              {/* Nút Xem toàn cảnh / Thu gọn chat để mở rộng tối đa màn hình */}
+              {onToggleChat && (
+                <button
+                  type="button"
+                  onClick={onToggleChat}
+                  className={`h-[34px] px-2.5 rounded-xl border text-xs font-semibold transition-all inline-flex items-center gap-1.5 ${
+                    isChatCollapsed
+                      ? 'bg-orange-50 text-orange-700 border-orange-200 ring-2 ring-orange-500/15'
+                      : 'bg-white text-gray-600 border-gray-200/90 hover:bg-gray-50 hover:text-gray-900'
+                  }`}
+                  title={isChatCollapsed ? 'Mở lại khung chat AI' : 'Thu gọn chat để xem toàn cảnh'}
+                >
+                  {isChatCollapsed ? (
+                    <>
+                      <HiOutlineSparkles className="w-3.5 h-3.5 text-orange-600 animate-pulse" />
+                      <span className="hidden xl:inline">Mở chat</span>
+                    </>
+                  ) : (
+                    <>
+                      <HiOutlineArrowsExpand className="w-3.5 h-3.5 text-gray-500" />
+                      <span className="hidden xl:inline">Toàn cảnh</span>
+                    </>
+                  )}
+                </button>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Cụm Phải: Cài đặt, Công cụ, Đóng, Lưu */}
+      <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
         {/* Settings button */}
         <button
           type="button"
           onClick={() => onOpenSettingTab?.('page')}
-          className={`h-[38px] px-3.5 rounded-xl text-sm font-semibold transition-all inline-flex items-center justify-center gap-2 shadow-2xs box-border ${
+          className={`h-[36px] px-3 rounded-xl text-xs sm:text-sm font-semibold transition-all inline-flex items-center justify-center gap-1.5 shadow-2xs box-border ${
             activeModalTab
               ? 'bg-orange-500 text-white shadow-xs border border-transparent'
               : 'bg-gray-100/90 text-gray-700 hover:bg-gray-200 hover:text-gray-900 border border-gray-200/60'
           }`}
         >
-          <HiOutlineCog className="w-4.5 h-4.5 shrink-0" />
-          <span>{tc('settings')}</span>
+          <HiOutlineCog className="w-4 h-4 shrink-0" />
+          <span className="hidden sm:inline">{tc('settings')}</span>
         </button>
 
-        {/* Tools Dropdown Menu (Gom 4 nút chức năng bổ trợ vào 1 dropdown gọn gàng, tránh lặp lại) */}
+        {/* Tools Dropdown Menu */}
         <div className="relative" ref={toolsMenuRef}>
           <button
             type="button"
             onClick={() => setToolsOpen((prev) => !prev)}
-            className={`h-[38px] px-3.5 rounded-xl text-sm font-medium transition-all inline-flex items-center justify-center gap-1.5 border shadow-2xs box-border ${
+            className={`h-[36px] px-2.5 sm:px-3 rounded-xl text-xs sm:text-sm font-medium transition-all inline-flex items-center justify-center gap-1 border shadow-2xs box-border ${
               toolsOpen
                 ? 'bg-orange-50 text-orange-700 border-orange-200 ring-2 ring-orange-500/15'
                 : 'bg-white text-gray-700 border-gray-200/90 hover:bg-gray-50 hover:text-gray-900'
             }`}
             title="Công cụ bổ trợ & Mẫu"
           >
-            <HiOutlineAdjustments className="w-4 h-4 text-gray-500" />
+            <HiOutlineAdjustments className="w-3.5 h-3.5 text-gray-500" />
             <span className="hidden md:inline">Công cụ</span>
-            <HiOutlineChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform duration-150 ${toolsOpen ? 'rotate-180 text-orange-600' : ''}`} />
+            <HiOutlineChevronDown className={`w-3 h-3 text-gray-400 transition-transform duration-150 ${toolsOpen ? 'rotate-180 text-orange-600' : ''}`} />
           </button>
 
           {toolsOpen && (
@@ -251,29 +345,29 @@ export default function LandingCanvasTopbar({
         </div>
 
         {/* PR-5b-2b mục 7 — chỉ hiện khi landing này có Biểu mẫu gắn */}
-        {form.linkedFormId ? (
+        {form?.linkedFormId ? (
           <a
             href={`/app/forms/${form.linkedFormId}/edit`}
             target="_blank"
             rel="noopener noreferrer"
             title={tc('openLinkedForm')}
-            className="h-[38px] px-3 rounded-xl transition-colors text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 inline-flex items-center justify-center gap-1.5 text-xs font-semibold box-border"
+            className="h-[36px] px-2.5 rounded-xl transition-colors text-blue-700 bg-blue-50/80 hover:bg-blue-100 border border-blue-200/80 inline-flex items-center justify-center gap-1.5 text-xs font-semibold box-border"
           >
-            <HiOutlineClipboardList className="w-4.5 h-4.5" />
+            <HiOutlineClipboardList className="w-4 h-4" />
             <span className="hidden lg:inline">{tc('openLinkedForm')}</span>
           </a>
         ) : null}
 
-        <div className="w-px h-6 bg-gray-200 mx-1.5" />
+        <div className="w-px h-5 bg-gray-200 mx-0.5 sm:mx-1" />
 
-        {/* 2 Nút hành động chính: Đóng & Lưu — To rõ ràng, cân đối và hoàn toàn thẳng hàng */}
-        <div className="inline-flex items-center gap-2.5">
+        {/* 2 Nút hành động chính: Đóng & Lưu */}
+        <div className="inline-flex items-center gap-1.5 sm:gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex items-center justify-center h-[38px] px-4 rounded-xl bg-white text-gray-700 border border-gray-300/90 hover:bg-gray-50 hover:border-gray-400 active:bg-gray-100 text-sm font-semibold transition-all shadow-2xs gap-1.5 box-border"
+            className="inline-flex items-center justify-center h-[36px] px-3 sm:px-3.5 rounded-xl bg-white text-gray-700 border border-gray-300/90 hover:bg-gray-50 hover:border-gray-400 active:bg-gray-100 text-xs sm:text-sm font-semibold transition-all shadow-2xs gap-1 box-border"
           >
-            <HiOutlineX className="w-4 h-4 text-gray-500" />
+            <HiOutlineX className="w-3.5 h-3.5 text-gray-500" />
             <span>{tc('close')}</span>
           </button>
 
@@ -281,12 +375,12 @@ export default function LandingCanvasTopbar({
             type="button"
             onClick={handleSave}
             disabled={Boolean(saving)}
-            className="inline-flex items-center justify-center h-[38px] px-5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white border border-transparent hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-sm font-bold transition-all shadow-sm hover:shadow gap-1.5 box-border"
+            className="inline-flex items-center justify-center h-[36px] px-3.5 sm:px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white border border-transparent hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed text-xs sm:text-sm font-bold transition-all shadow-sm hover:shadow gap-1.5 box-border"
           >
             {saving ? (
-              <HiOutlineRefresh className="w-4 h-4 animate-spin" />
+              <HiOutlineRefresh className="w-3.5 h-3.5 animate-spin" />
             ) : (
-              <HiOutlineCheck className="w-4 h-4" />
+              <HiOutlineCheck className="w-3.5 h-3.5" />
             )}
             <span>{saving ? tc('saving') : tc('save')}</span>
           </button>

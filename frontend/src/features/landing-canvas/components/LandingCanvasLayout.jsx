@@ -16,9 +16,13 @@ const MAX_CHAT_WIDTH_RATIO = 0.65;
  *    - Khung Chat Studio AI hiển thị ở GIỮA trang rộng rãi, thoáng đãng.
  * 2. Khi người dùng nhập lệnh Enter / chọn gợi ý / dán HTML:
  *    - Khung chat lùi về bên trái (aside), mở preview area bên phải.
+ *    - Tự động thu nhỏ sidebar chính của app về icon-only để mở rộng không gian.
  *    - Cho phép kéo thanh resizer giữa aside và preview để thay đổi kích thước khung chat.
- * 3. Khi chat collapsed:
- *    - aside width = 0, hiển thị nút khôi phục ở mép trái.
+ * 3. Tối ưu không gian dọc:
+ *    - Toàn bộ điều khiển Xem trước / Mã HTML, Desktop / Tablet / Mobile, Zoom và Fit-to-screen
+ *      được gộp trực tiếp lên Topbar, loại bỏ thanh preview toolbar thứ hai (tiết kiệm ~56px).
+ *    - Hỗ trợ chế độ "Vừa màn hình" (Fit to Screen) để xem toàn bộ landing page.
+ *    - Hỗ trợ chế độ "Toàn cảnh" để xem preview tràn màn hình.
  */
 export default function LandingCanvasLayout({
   form,
@@ -41,6 +45,13 @@ export default function LandingCanvasLayout({
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const chatPanelRef = useRef(null);
   const containerRef = useRef(null);
+
+  // Điều khiển chế độ xem trước (Gộp lên Topbar)
+  const [previewMode, setPreviewMode] = useState('view'); // 'view' | 'code'
+  const [viewport, setViewport] = useState('desktop'); // 'desktop' | 'tablet' | 'mobile'
+  const [zoom, setZoom] = useState(1);
+  const [isFitToScreen, setIsFitToScreen] = useState(false);
+  const [fitPercent, setFitPercent] = useState(null);
 
   // Kích thước khung chat (lưu localStorage, mặc định 460px)
   const [chatWidth, setChatWidth] = useState(() => {
@@ -159,6 +170,19 @@ export default function LandingCanvasLayout({
         onOpenVersionHistory={onOpenVersionHistory}
         onOpenSaveTemplate={onOpenSaveTemplate}
         onOpenImportHtml={onOpenImportHtml}
+        // Gộp cụm điều khiển Preview lên Topbar khi ở chế độ 2 cột
+        showPreviewControls={!isCentered}
+        previewMode={previewMode}
+        onPreviewModeChange={setPreviewMode}
+        viewport={viewport}
+        onViewportChange={setViewport}
+        zoom={zoom}
+        onZoomChange={setZoom}
+        isFitToScreen={isFitToScreen}
+        onToggleFitToScreen={() => setIsFitToScreen((prev) => !prev)}
+        fitPercent={fitPercent}
+        isChatCollapsed={chatCollapsed}
+        onToggleChat={handleToggleChat}
       />
 
       <div
@@ -195,7 +219,7 @@ export default function LandingCanvasLayout({
               <button
                 type="button"
                 onClick={handleToggleChat}
-                className="fixed left-0 top-20 z-30 group inline-flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-r-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl hover:pr-5 transition-all select-none cursor-pointer"
+                className="fixed left-0 top-16 z-30 group inline-flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-r-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl hover:pr-5 transition-all select-none cursor-pointer"
                 title="Mở lại Trợ lý AI"
               >
                 <HiOutlineSparkles className="w-4.5 h-4.5 animate-pulse" />
@@ -264,6 +288,15 @@ export default function LandingCanvasLayout({
                   onFocusChat={handleFocusChat}
                   isChatCollapsed={chatCollapsed}
                   onToggleChat={handleToggleChat}
+                  mode={previewMode}
+                  onModeChange={setPreviewMode}
+                  viewport={viewport}
+                  onViewportChange={setViewport}
+                  zoom={zoom}
+                  onZoomChange={setZoom}
+                  isFitToScreen={isFitToScreen}
+                  onToggleFitToScreen={() => setIsFitToScreen((prev) => !prev)}
+                  onFitPercentChange={setFitPercent}
                 />
               )}
             </section>

@@ -292,23 +292,25 @@ const MainLayout = ({ children = null }) => {
   // Desktop layout
   return (
     <div className="h-screen overflow-hidden bg-[#f9fafb] flex flex-col" style={{ zoom: 1 }}>
-      {/* Topbar: full-width, fixed top */}
-      <div
-        className="fixed top-0 left-0 right-0 z-40 bg-white flex items-center transition-all duration-300"
-        style={{
-          height: HEADER_HEIGHT,
-          paddingRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
-        }}
-      >
-        <Header />
-      </div>
+      {/* Topbar: full-width, fixed top (ẩn khi ở Studio Landing Canvas để giải phóng không gian dọc) */}
+      {!isLandingCanvas && (
+        <div
+          className="fixed top-0 left-0 right-0 z-40 bg-white flex items-center transition-all duration-300"
+          style={{
+            height: HEADER_HEIGHT,
+            paddingRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
+          }}
+        >
+          <Header />
+        </div>
+      )}
 
-      {/* Sidebar: starts below topbar */}
+      {/* Sidebar: starts below topbar (hoặc top 0 khi ở Landing Canvas) */}
       <Sidebar
         isOpen={sidebarOpen}
         width={sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED}
         onToggle={() => setSidebarOpen(!sidebarOpen)}
-        topOffset={HEADER_HEIGHT}
+        topOffset={isLandingCanvas ? 0 : HEADER_HEIGHT}
       />
 
       <div
@@ -316,7 +318,7 @@ const MainLayout = ({ children = null }) => {
         style={{
           marginLeft: sidebarOpen ? SIDEBAR_WIDTH_EXPANDED : SIDEBAR_WIDTH_COLLAPSED,
           marginRight: showAiSidePanel && !isMobile ? aiPanelWidth : 0,
-          padding: `${HEADER_HEIGHT + 6}px 6px 6px ${SIDEBAR_GAP}px`,
+          padding: isLandingCanvas ? 0 : `${HEADER_HEIGHT + 6}px 6px 6px ${SIDEBAR_GAP}px`,
         }}
       >
         {!isBuilderPage && <CreditWarningBanner />}
@@ -326,7 +328,9 @@ const MainLayout = ({ children = null }) => {
 
         <main
           ref={mainContentRef}
-          className={`flex-1 min-w-0 overflow-auto bg-white rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70 relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
+          className={`flex-1 min-w-0 overflow-auto bg-white ${
+            isLandingCanvas ? 'rounded-none border-0 shadow-none' : 'rounded-2xl shadow-[0_1px_2px_rgba(15,23,42,0.04),0_4px_12px_rgba(15,23,42,0.04)] border border-gray-200/70'
+          } relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className="relative h-full flex flex-col min-h-0">
             {children ?? <Outlet />}

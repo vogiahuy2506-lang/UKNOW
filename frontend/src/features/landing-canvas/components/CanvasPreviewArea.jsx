@@ -1,23 +1,18 @@
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useRef, useEffect } from 'react';
 import { HiOutlineEye, HiOutlineCode, HiOutlineSparkles, HiOutlineTemplate } from 'react-icons/hi';
 import DeviceFrameToggle from './DeviceFrameToggle.jsx';
 import ZoomControl from './ZoomControl.jsx';
 import CanvasPreviewView from './CanvasPreviewView.jsx';
 import CanvasPreviewCode from './CanvasPreviewCode.jsx';
-import { DEFAULT_VIEWPORT, DEFAULT_ZOOM } from '../utils/deviceFrameConfig.js';
+import { DEFAULT_VIEWPORT, DEFAULT_ZOOM, DEVICES } from '../utils/deviceFrameConfig.js';
 import { useCanvasSrcDoc, getPublicUrlFromSlug } from '../utils/buildCanvasSrcDoc.js';
 import { useI18n } from '../../../i18n';
 
 /**
- * Preview area: toolbar + iframe/code editor.
+ * Preview area: iframe / code editor.
  *
- * Props:
- *  - form: { htmlContent, title, slug, ... }
- *  - setForm: cập nhật htmlContent khi user edit code mode
- *  - onOpenImportHtml: mở modal "Nhập HTML" (nút "Dán HTML có sẵn" ở thẻ trang mới)
- *  - onOpenTemplateGallery: mở thư viện template (nút "Chọn mẫu")
- *  - onFocusChat: focus ô nhập chat (nút "Nhờ AI tạo")
- *    (PLAN_LANDING_DAN_HTML_CO_SAN_2026-09-13.md, Việc 2)
+ * Khi được LandingCanvasLayout truyền controls (mode, viewport, zoom...), thanh toolbar h-14
+ * bên trong sẽ được ẩn đi (vì đã gộp lên LandingCanvasTopbar) để giải phóng tối đa chiều cao hiển thị.
  */
 export default function CanvasPreviewArea({
   form,
@@ -27,11 +22,31 @@ export default function CanvasPreviewArea({
   onFocusChat,
   isChatCollapsed = false,
   onToggleChat,
+  // Props điều khiển từ ngoài (Topbar)
+  mode: propMode,
+  onModeChange: propOnModeChange,
+  viewport: propViewport,
+  onViewportChange: propOnViewportChange,
+  zoom: propZoom,
+  onZoomChange: propOnZoomChange,
+  isFitToScreen: propIsFitToScreen = false,
+  onToggleFitToScreen: _propOnToggleFitToScreen,
+  onFitPercentChange,
 }) {
   const tc = useI18n('landingCanvas.canvasPreview');
-  const [mode, setMode] = useState('view');
-  const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+
+  // Fallback state nội bộ khi không truyền từ ngoài (đảm bảo 100% backwards-compatibility cho unit tests)
+  const [internalMode, setInternalMode] = useState('view');
+  const [internalViewport, setInternalViewport] = useState(DEFAULT_VIEWPORT);
+  const [internalZoom, setInternalZoom] = useState(DEFAULT_ZOOM);
+
+  const hasExternalControls = propMode !== undefined;
+  const mode = hasExternalControls ? propMode : internalMode;
+  const setMode = hasExternalControls ? propOnModeChange : setInternalMode;
+  const viewport = hasExternalControls ? (propViewport || DEFAULT_VIEWPORT) : internalViewport;
+  const setViewport = hasExternalControls ? propOnViewportChange : setInternalViewport;
+  const zoom = hasExternalControls ? (propZoom || DEFAULT_ZOOM) : internalZoom;
+  const setZoom = hasExternalControls ? propOnZoomChange : setInternalZoom;
 
   const html = form?.htmlContent || '';
   const title = form?.title || '';
@@ -47,57 +62,103 @@ export default function CanvasPreviewArea({
     [setForm]
   );
 
+  // Đo kích thước vùng chứa preview để tính toán "Vừa màn hình" (Fit to Screen)
+  const containerRef = useRef(null);
+  const [containerSize, setContainerSize] = useState({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const updateSize = () => {
+      if (containerRef.current) {
+        setContainerSize({
+          width: containerRef.current.clientWidth,
+          height: containerRef.current.clientHeight,
+        });
+      }
+    };
+    updateSize();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateSize());
+    observer.observe(containerRef.current);
+    return () => observer.disconnect();
+  }, []);
+
+  const currentDevice = DEVICES[viewport] || DEVICES.desktop;
+
+  // Tính toán zoom hiệu dụng khi ở chế độ "Vừa màn hình" (Fit to Screen)
+  const effectiveZoom = useMemo(() => {
+    if (!propIsFitToScreen) return zoom;
+    if (!containerSize.width || !containerSize.height) return zoom;
+    const paddingX = 24;
+    const paddingY = 28;
+    const availableW = Math.max(150, containerSize.width - paddingX);
+    const availableH = Math.max(150, containerSize.height - paddingY);
+    const scaleX = availableW / currentDevice.width;
+    const scaleY = availableH / currentDevice.height;
+    const fitScale = Math.min(scaleX, scaleY);
+    const clampedScale = Math.round(Math.min(1.2, Math.max(0.25, fitScale)) * 100) / 100;
+    onFitPercentChange?.(Math.round(clampedScale * 100));
+    return clampedScale;
+  }, [propIsFitToScreen, zoom, containerSize.width, containerSize.height, currentDevice.width, currentDevice.height, onFitPercentChange]);
+
   return (
     <div className="flex flex-col h-full min-h-0">
-      <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200 bg-white shrink-0">
-        <div className="flex items-center gap-2">
-          {isChatCollapsed && (
-            <button
-              type="button"
-              onClick={onToggleChat}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800 border border-orange-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs mr-1"
-              title="Mở lại khung chat Trợ lý AI"
-            >
-              <HiOutlineSparkles className="w-4 h-4 text-orange-500 animate-pulse" />
-              <span>Mở Trợ lý AI</span>
-            </button>
-          )}
+      {/* Chỉ render toolbar nội bộ khi KHÔNG có điều khiển từ Topbar (backward-compat) */}
+      {!hasExternalControls && (
+        <div className="h-14 px-4 flex items-center justify-between border-b border-gray-200 bg-white shrink-0">
+          <div className="flex items-center gap-2">
+            {isChatCollapsed && onToggleChat && (
+              <button
+                type="button"
+                onClick={onToggleChat}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 hover:text-orange-800 border border-orange-200 text-xs sm:text-sm font-semibold transition-all shadow-2xs mr-1"
+                title="Mở lại khung chat Trợ lý AI"
+              >
+                <HiOutlineSparkles className="w-4 h-4 text-orange-500 animate-pulse" />
+                <span>Mở Trợ lý AI</span>
+              </button>
+            )}
 
-          <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
-            <button
-              type="button"
-              onClick={() => setMode('view')}
-              className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                mode === 'view'
-                  ? 'bg-white text-orange-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              <HiOutlineEye className="w-4 h-4" />
-              {tc('view')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode('code')}
-              className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
-                mode === 'code'
-                  ? 'bg-white text-orange-600 shadow-sm'
-                  : 'text-gray-500 hover:text-gray-900'
-              }`}
-            >
-              <HiOutlineCode className="w-3.5 h-3.5" />
-              {tc('code')}
-            </button>
+            <div className="flex items-center gap-1 p-1 bg-gray-100 rounded-lg">
+              <button
+                type="button"
+                onClick={() => setMode('view')}
+                className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                  mode === 'view'
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                <HiOutlineEye className="w-4 h-4" />
+                {tc('view')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode('code')}
+                className={`px-3 py-1.5 text-[14px] font-semibold rounded-md transition-colors flex items-center gap-1.5 ${
+                  mode === 'code'
+                    ? 'bg-white text-orange-600 shadow-sm'
+                    : 'text-gray-500 hover:text-gray-900'
+                }`}
+              >
+                <HiOutlineCode className="w-3.5 h-3.5" />
+                {tc('code')}
+              </button>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <DeviceFrameToggle value={viewport} onChange={setViewport} />
+            <ZoomControl value={zoom} onChange={setZoom} />
           </div>
         </div>
+      )}
 
-        <div className="flex items-center gap-2">
-          <DeviceFrameToggle value={viewport} onChange={setViewport} />
-          <ZoomControl value={zoom} onChange={setZoom} />
-        </div>
-      </div>
-
-      <div className="flex-1 min-h-0 overflow-auto bg-[#f8fafc] p-3 sm:p-4 flex justify-center">
+      {/* Vùng xem trước: Padding tinh gọn p-2 sm:p-3, chiếm trọn vẹn không gian */}
+      <div
+        ref={containerRef}
+        className="flex-1 min-h-0 overflow-auto bg-[#f8fafc] p-2 sm:p-3 flex justify-center items-start"
+      >
         {mode === 'view' ? (
           html ? (
             <CanvasPreviewView
@@ -105,14 +166,12 @@ export default function CanvasPreviewArea({
               viewport={
                 {
                   key: viewport,
-                  width:
-                    viewport === 'desktop' ? 1280 : viewport === 'tablet' ? 768 : 375,
-                  height:
-                    viewport === 'desktop' ? 800 : viewport === 'tablet' ? 1024 : 667,
+                  width: currentDevice.width,
+                  height: currentDevice.height,
                   label: viewport,
                 }
               }
-              zoom={zoom}
+              zoom={effectiveZoom}
               publicUrl={publicUrl}
             />
           ) : (
@@ -133,8 +192,6 @@ export default function CanvasPreviewArea({
 
 /**
  * Trang mới (html rỗng): thay khung "Xem trước" bằng 3 lựa chọn trực quan
- * (PLAN_LANDING_DAN_HTML_CO_SAN_2026-09-13.md, Việc 2). Chỉ hiện ở mode 'view' — mode 'code'
- * người dùng đã chủ động mở Monaco, không cần gợi ý lại.
  */
 function EmptyPreviewCard({ heading, onPasteHtml, onAskAi, onPickTemplate }) {
   const te = useI18n('landingCanvas.emptyState');
@@ -156,75 +213,66 @@ function EmptyPreviewCard({ heading, onPasteHtml, onAskAi, onPickTemplate }) {
 
       {/* 3 Action Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full">
-        {/* Card 1: Ask AI (Recommended) */}
+        {/* Card 1: Ask AI */}
         <div className="relative group flex flex-col justify-between p-5 rounded-2xl border-2 border-orange-400/80 bg-gradient-to-b from-orange-50/70 via-white to-white shadow-xs hover:shadow-xl hover:border-orange-500 hover:-translate-y-1 transition-all duration-200">
-          <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-500 text-white shadow-xs">
-              Khuyên dùng
-            </span>
-          </div>
-
-          <div>
-            <div className="w-11 h-11 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+          <span className="absolute -top-3 right-4 px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase tracking-wider bg-gradient-to-r from-orange-500 to-amber-500 text-white shadow-xs">
+            {te('cardAiBadge')}
+          </span>
+          <div className="space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-orange-100/80 text-orange-600 flex items-center justify-center">
               <HiOutlineSparkles className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1.5">{te('askAi')}</h3>
-            <p className="text-xs text-gray-500 leading-relaxed mb-4">
-              Mô tả ý tưởng trang, AI sẽ tự động viết nội dung và tạo giao diện trong vài giây.
-            </p>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">{te('cardAiTitle')}</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{te('cardAiDesc')}</p>
+            </div>
           </div>
-
           <button
             type="button"
             onClick={onAskAi}
-            className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs font-bold shadow-xs hover:shadow-md hover:from-orange-600 hover:to-amber-600 transition-all active:scale-[0.98]"
+            className="mt-5 w-full py-2.5 px-3 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] text-white text-xs font-bold shadow-xs hover:shadow transition-all text-center cursor-pointer"
           >
-            <HiOutlineSparkles className="w-4 h-4" />
-            <span>{te('askAi')}</span>
+            {te('cardAiAction')}
           </button>
         </div>
 
         {/* Card 2: Pick Template */}
-        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-xl hover:border-blue-400 hover:-translate-y-1 transition-all duration-200">
-          <div>
-            <div className="w-11 h-11 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-lg hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-200">
+          <div className="space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <HiOutlineTemplate className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1.5">{te('pickTemplate')}</h3>
-            <p className="text-xs text-gray-500 leading-relaxed mb-4">
-              Kho mẫu đa dạng tối ưu cho chuyển đổi: khóa học, SaaS, bán hàng, dịch vụ...
-            </p>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">{te('cardTemplateTitle')}</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{te('cardTemplateDesc')}</p>
+            </div>
           </div>
-
           <button
             type="button"
             onClick={onPickTemplate}
-            className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-gray-50 hover:bg-blue-50 text-gray-700 hover:text-blue-700 border border-gray-200 hover:border-blue-300 text-xs font-bold transition-all active:scale-[0.98]"
+            className="mt-5 w-full py-2.5 px-3 rounded-xl border border-gray-300/90 hover:bg-gray-50 active:bg-gray-100 text-gray-700 text-xs font-semibold shadow-2xs transition-all text-center cursor-pointer"
           >
-            <HiOutlineTemplate className="w-4 h-4" />
-            <span>{te('pickTemplate')}</span>
+            {te('cardTemplateAction')}
           </button>
         </div>
 
         {/* Card 3: Paste HTML */}
-        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-xl hover:border-gray-400 hover:-translate-y-1 transition-all duration-200">
-          <div>
-            <div className="w-11 h-11 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+        <div className="group flex flex-col justify-between p-5 rounded-2xl border border-gray-200/90 bg-white shadow-xs hover:shadow-lg hover:border-gray-300 hover:-translate-y-0.5 transition-all duration-200">
+          <div className="space-y-3">
+            <div className="w-10 h-10 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
               <HiOutlineCode className="w-6 h-6" />
             </div>
-            <h3 className="text-base font-bold text-gray-900 mb-1.5">{te('pasteHtml')}</h3>
-            <p className="text-xs text-gray-500 leading-relaxed mb-4">
-              Đã có sẵn mã HTML từ trước? Dán mã nguồn để nhập và chỉnh sửa tức thì.
-            </p>
+            <div>
+              <h3 className="font-bold text-gray-900 text-base">{te('cardPasteTitle')}</h3>
+              <p className="text-xs text-gray-500 mt-1 leading-relaxed">{te('cardPasteDesc')}</p>
+            </div>
           </div>
-
           <button
             type="button"
             onClick={onPasteHtml}
-            className="w-full inline-flex items-center justify-center gap-2 h-10 px-4 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 border border-gray-200 text-xs font-bold transition-all active:scale-[0.98]"
+            className="mt-5 w-full py-2.5 px-3 rounded-xl border border-gray-300/90 hover:bg-gray-50 active:bg-gray-100 text-gray-700 text-xs font-semibold shadow-2xs transition-all text-center cursor-pointer"
           >
-            <HiOutlineCode className="w-4 h-4" />
-            <span>{te('pasteHtml')}</span>
+            {te('cardPasteAction')}
           </button>
         </div>
       </div>
