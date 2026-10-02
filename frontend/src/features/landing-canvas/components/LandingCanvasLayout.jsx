@@ -1,19 +1,24 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { HiOutlineSparkles } from 'react-icons/hi';
 import LandingCanvasTopbar from './LandingCanvasTopbar.jsx';
 import CanvasPreviewArea from './CanvasPreviewArea.jsx';
 import CanvasChatPanel from './CanvasChatPanel.jsx';
+import useCanvasConversation from '../hooks/useCanvasConversation.js';
+
+const DEFAULT_CHAT_WIDTH = 460;
+const MIN_CHAT_WIDTH = 340;
+const MAX_CHAT_WIDTH_RATIO = 0.65;
 
 /**
  * Layout 2-panel bên trong main area của MainLayout:
- *   ┌────────────────────────────────────────────┐
- *   │ LandingCanvasTopbar (56px, border-b)       │
- *   ├──────────────┬─────────────────────────────┤
- *   │ Chat Panel   │ Preview Area                │
- *   │ (380px)      │ (flex)                      │
- *   └──────────────┴─────────────────────────────┘
  *
- * Khi chat collapsed → aside width = 0, hiển thị nút khôi phục ở mép trái và toolbar Preview.
+ * 1. Khi mới bắt đầu tạo trang (chưa có htmlContent và chưa có tin nhắn chat):
+ *    - Khung Chat Studio AI hiển thị ở GIỮA trang rộng rãi, thoáng đãng.
+ * 2. Khi người dùng nhập lệnh Enter / chọn gợi ý / dán HTML:
+ *    - Khung chat lùi về bên trái (aside), mở preview area bên phải.
+ *    - Cho phép kéo thanh resizer giữa aside và preview để thay đổi kích thước khung chat.
+ * 3. Khi chat collapsed:
+ *    - aside width = 0, hiển thị nút khôi phục ở mép trái.
  */
 export default function LandingCanvasLayout({
   form,
@@ -35,12 +40,27 @@ export default function LandingCanvasLayout({
 }) {
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const chatPanelRef = useRef(null);
+  const containerRef = useRef(null);
+
+  // Kích thước khung chat (lưu localStorage, mặc định 460px)
+  const [chatWidth, setChatWidth] = useState(() => {
+    try {
+      const saved = localStorage.getItem('founder_ai_landing_canvas_chat_width');
+      const parsed = saved ? parseInt(saved, 10) : DEFAULT_CHAT_WIDTH;
+      return Number.isFinite(parsed) && parsed >= MIN_CHAT_WIDTH ? parsed : DEFAULT_CHAT_WIDTH;
+    } catch {
+      return DEFAULT_CHAT_WIDTH;
+    }
+  });
+
+  const [isResizing, setIsResizing] = useState(false);
+  const chatWidthRef = useRef(chatWidth);
+  chatWidthRef.current = chatWidth;
+
   const handleToggleChat = useCallback(() => {
     setChatCollapsed((cur) => !cur);
   }, []);
 
-  // "Nhờ AI tạo" ở thẻ empty-state (Việc 2): mở panel chat nếu đang thu gọn rồi focus ô nhập —
-  // panel thu gọn không render ChatComposer nên phải đợi 1 nhịp render trước khi ref có giá trị.
   const handleFocusChat = useCallback(() => {
     setChatCollapsed(false);
     requestAnimationFrame(() => chatPanelRef.current?.focus());
@@ -48,8 +68,6 @@ export default function LandingCanvasLayout({
 
   /**
    * openTab: yêu cầu SettingsModal mở 1 tab cụ thể.
-   * Vì chat có thể gọi khi modal đang đóng, ta dispatch event để LandingCanvasEditor bắt,
-   * đồng thời fallback gọi onOpenSettingTab nếu đã mở modal.
    */
   const openTab = useCallback(
     (tab) => {
@@ -60,6 +78,63 @@ export default function LandingCanvasLayout({
     },
     [activeModalTab, onOpenSettingTab]
   );
+
+  // Khởi tạo conversation ở Layout để state không bị reset khi chuyển từ centered sang docked
+  const hasExistingHtml = Boolean(String(form?.htmlContent || '').trim());
+  const conversation = useCanvasConversation({
+    form,
+    setForm,
+    hasExistingHtml,
+    openTab,
+    editingId,
+  });
+
+  // Khi chưa có HTML và chưa có tin nhắn hay streaming AI -> Hiển thị khung chat ở giữa
+  const hasChatActivity = (conversation?.messages?.length ?? 0) > 0 || conversation?.isStreaming;
+  const isCentered = !hasExistingHtml && !hasChatActivity;
+
+  // Xử lý kéo thanh resizer thay đổi độ rộng chat panel
+  const handleMouseDownResize = useCallback((e) => {
+    e.preventDefault();
+    setIsResizing(true);
+  }, []);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e) => {
+      if (!containerRef.current) return;
+      const rect = containerRef.current.getBoundingClientRect();
+      const rawWidth = e.clientX - rect.left;
+      const maxWidth = Math.max(MIN_CHAT_WIDTH, rect.width * MAX_CHAT_WIDTH_RATIO);
+      const newWidth = Math.round(Math.max(MIN_CHAT_WIDTH, Math.min(rawWidth, maxWidth)));
+      chatWidthRef.current = newWidth;
+      setChatWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      try {
+        localStorage.setItem('founder_ai_landing_canvas_chat_width', String(chatWidthRef.current));
+      } catch {}
+    };
+
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  // Nhấp đúp chuột để reset kích thước về mặc định (460px)
+  const handleResetChatWidth = useCallback(() => {
+    setChatWidth(DEFAULT_CHAT_WIDTH);
+    chatWidthRef.current = DEFAULT_CHAT_WIDTH;
+    try {
+      localStorage.setItem('founder_ai_landing_canvas_chat_width', String(DEFAULT_CHAT_WIDTH));
+    } catch {}
+  }, []);
 
   return (
     <div className="flex flex-col h-full min-h-0 relative">
@@ -79,54 +154,114 @@ export default function LandingCanvasLayout({
         onOpenImportHtml={onOpenImportHtml}
       />
 
-      <div className="flex-1 min-h-0 flex relative">
-        {/* Nút dock tab mép trái khi chat panel đang thu gọn (độc lập ngoài aside) */}
-        {chatCollapsed && (
-          <button
-            type="button"
-            onClick={handleToggleChat}
-            className="fixed left-0 top-20 z-30 group inline-flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-r-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl hover:pr-5 transition-all select-none cursor-pointer"
-            title="Mở lại Trợ lý AI"
-          >
-            <HiOutlineSparkles className="w-4.5 h-4.5 animate-pulse" />
-            <span>Mở Trợ lý AI</span>
-          </button>
+      <div
+        ref={containerRef}
+        className={`flex-1 min-h-0 flex relative ${
+          isResizing ? 'cursor-col-resize select-none' : ''
+        }`}
+      >
+        {isCentered ? (
+          /* Giao diện Studio AI ở giữa trang khi chưa có nội dung / tương tác */
+          <div className="flex-1 min-h-0 overflow-y-auto bg-gradient-to-b from-gray-50/70 via-white to-orange-50/20 flex flex-col items-center justify-center p-4 sm:p-6 lg:p-8">
+            <div className="w-full max-w-3xl my-auto py-6">
+              {chatPanel ?? (
+                <CanvasChatPanel
+                  ref={chatPanelRef}
+                  conversation={conversation}
+                  form={form}
+                  setForm={setForm}
+                  openTab={openTab}
+                  collapsed={false}
+                  editingId={editingId}
+                  isCentered={true}
+                  onOpenImportHtml={onOpenImportHtml}
+                  onOpenTemplateGallery={onOpenTemplateGallery}
+                />
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Giao diện 2 cột chuẩn: Chat bên trái + Preview bên phải kèm thanh kéo thay đổi kích thước */
+          <>
+            {/* Nút dock tab mép trái khi chat panel đang thu gọn */}
+            {chatCollapsed && (
+              <button
+                type="button"
+                onClick={handleToggleChat}
+                className="fixed left-0 top-20 z-30 group inline-flex items-center gap-2 pl-3 pr-4 py-2.5 rounded-r-2xl bg-gradient-to-r from-orange-500 to-amber-500 text-white text-xs sm:text-sm font-bold shadow-lg hover:shadow-xl hover:pr-5 transition-all select-none cursor-pointer"
+                title="Mở lại Trợ lý AI"
+              >
+                <HiOutlineSparkles className="w-4.5 h-4.5 animate-pulse" />
+                <span>Mở Trợ lý AI</span>
+              </button>
+            )}
+
+            {/* Chat Panel (left, resizable) */}
+            <aside
+              style={{ width: chatCollapsed ? 0 : `${chatWidth}px` }}
+              className={`shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0 transition-[width] ${
+                isResizing ? 'transition-none select-none' : 'duration-150'
+              } ${chatCollapsed ? 'border-r-0 overflow-hidden' : ''}`}
+            >
+              {chatPanel ?? (
+                <CanvasChatPanel
+                  ref={chatPanelRef}
+                  conversation={conversation}
+                  form={form}
+                  setForm={setForm}
+                  openTab={openTab}
+                  collapsed={chatCollapsed}
+                  onToggleCollapsed={handleToggleChat}
+                  editingId={editingId}
+                  isCentered={false}
+                  onOpenImportHtml={onOpenImportHtml}
+                  onOpenTemplateGallery={onOpenTemplateGallery}
+                />
+              )}
+            </aside>
+
+            {/* Thanh kéo phân cách thay đổi kích thước (Resizer Handle) */}
+            {!chatCollapsed && (
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                tabIndex={0}
+                onMouseDown={handleMouseDownResize}
+                onDoubleClick={handleResetChatWidth}
+                title="Kéo để thay đổi kích thước khung chat (Nhấp đúp để đặt lại)"
+                className={`relative group w-2 -ml-1 z-20 cursor-col-resize select-none shrink-0 transition-colors flex items-center justify-center ${
+                  isResizing ? 'bg-orange-500' : 'bg-transparent hover:bg-orange-400'
+                }`}
+              >
+                <div
+                  className={`w-0.5 h-7 rounded-full transition-colors ${
+                    isResizing ? 'bg-white' : 'bg-gray-300 group-hover:bg-white'
+                  }`}
+                />
+              </div>
+            )}
+
+            {/* Preview Area (right, flex) */}
+            <section
+              className={`flex-1 min-w-0 bg-[#f8fafc] flex flex-col min-h-0 ${
+                isResizing ? 'pointer-events-none select-none' : ''
+              }`}
+            >
+              {previewPanel ?? (
+                <CanvasPreviewArea
+                  key={previewResetKey}
+                  form={form}
+                  setForm={setForm}
+                  onOpenImportHtml={onOpenImportHtml}
+                  onOpenTemplateGallery={onOpenTemplateGallery}
+                  onFocusChat={handleFocusChat}
+                  isChatCollapsed={chatCollapsed}
+                  onToggleChat={handleToggleChat}
+                />
+              )}
+            </section>
+          </>
         )}
-
-        {/* Chat Panel (left, 380px) */}
-        <aside
-          className={`shrink-0 border-r border-gray-200 bg-white flex flex-col min-h-0 transition-[width] duration-200 ${
-            chatCollapsed ? 'w-0 border-r-0 overflow-hidden' : 'w-[380px]'
-          }`}
-        >
-          {chatPanel ?? (
-            <CanvasChatPanel
-              ref={chatPanelRef}
-              form={form}
-              setForm={setForm}
-              openTab={openTab}
-              collapsed={chatCollapsed}
-              onToggleCollapsed={handleToggleChat}
-              editingId={editingId}
-            />
-          )}
-        </aside>
-
-        {/* Preview Area (right, flex) */}
-        <section className="flex-1 min-w-0 bg-[#f8fafc] flex flex-col min-h-0">
-          {previewPanel ?? (
-            <CanvasPreviewArea
-              key={previewResetKey}
-              form={form}
-              setForm={setForm}
-              onOpenImportHtml={onOpenImportHtml}
-              onOpenTemplateGallery={onOpenTemplateGallery}
-              onFocusChat={handleFocusChat}
-              isChatCollapsed={chatCollapsed}
-              onToggleChat={handleToggleChat}
-            />
-          )}
-        </section>
       </div>
     </div>
   );

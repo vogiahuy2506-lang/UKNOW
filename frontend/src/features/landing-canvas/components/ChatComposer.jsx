@@ -15,7 +15,7 @@ import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
  * - Nếu chỉ có file mà không có prompt, tự điền filesOnlyPrompt
  * - Disabled khi isStreaming hoặc isUploading
  */
-const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false }, ref) {
+const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false, isCentered = false }, ref) {
   const tc = useI18n('landingCanvas.chat');
   const { t, locale } = useI18n();
   const { usage: storageQuota } = useStorageQuota();
@@ -127,14 +127,14 @@ const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false
       <div className="flex items-end gap-2">
         <textarea
           ref={textareaRef}
-          rows={2}
+          rows={isCentered ? 3 : 2}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={tc('placeholder')}
+          placeholder={isCentered ? (tc('placeholder') || 'Mô tả ý tưởng trang bạn muốn tạo (sản phẩm, đối tượng, phong cách thiết kế, các khối nội dung mong muốn...)') : tc('placeholder')}
           disabled={disabled || isUploading}
-          className="flex-1 resize-none bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-orange-500 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/15 disabled:bg-gray-50 disabled:cursor-not-allowed transition-all"
-          style={{ maxHeight: 140 }}
+          className="flex-1 resize-none bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-orange-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/15 disabled:bg-gray-50 disabled:cursor-not-allowed transition-all"
+          style={{ maxHeight: isCentered ? 180 : 140 }}
         />
 
         <input
@@ -164,12 +164,22 @@ const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false
           type="button"
           onClick={handleSend}
           disabled={!canSend}
-          className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 shadow-xs"
+          className={`inline-flex items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 active:scale-[0.98] disabled:opacity-40 disabled:cursor-not-allowed transition-all shrink-0 shadow-xs ${
+            isCentered ? 'h-10 px-4 text-xs font-bold' : 'w-10 h-10'
+          }`}
           title={tc('send')}
         >
+          {isCentered && <span>Tạo trang</span>}
           <HiOutlinePaperAirplane className="w-4.5 h-4.5 -rotate-45" />
         </button>
       </div>
+
+      {isCentered && (
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 mt-2 px-1 select-none">
+          <span>💡 Nhấn <strong>Enter</strong> để gửi lệnh • <strong>Shift + Enter</strong> để xuống dòng</span>
+          <span>Đính kèm hình ảnh hoặc file văn bản tham khảo nếu có</span>
+        </div>
+      )}
     </div>
   );
 });
