@@ -4,20 +4,68 @@ import { UNSAFE_NavigationContext, useLocation } from 'react-router-dom';
 const getCurrentPath = () =>
   `${window.location.pathname}${window.location.search}${window.location.hash}`;
 
+/** `to` của navigator.push/replace (chuỗi hoặc object Path) → "/path?search#hash"; null nếu không rõ. */
+const toPathString = (to) => {
+  if (typeof to === 'string') return to;
+  if (to && typeof to === 'object') {
+    return `${to.pathname || ''}${to.search || ''}${to.hash || ''}`;
+  }
+  return null;
+};
+
+/** Thời gian tối đa một lần "cho qua" còn hiệu lực nếu không có điều hướng nào dùng tới nó. */
+const ALLOW_NEXT_TTL_MS = 1500;
+
 /**
  * Block browser-router navigation when a condition is active.
  *
  * This helper keeps a `useBlocker`-like API for apps using `BrowserRouter`
  * (non data-router), so existing confirm/proceed/reset flow can stay unchanged.
  *
+ * Chặn cả: thẻ `<a>` nội bộ, nút Back/Forward (popstate) VÀ `navigate()` gọi bằng code
+ * (bọc `navigator.push`/`navigator.replace`) — menu trái dùng `navigate()` nên trước đây lọt qua.
+ *
+ * `allowNext()` cho qua đúng MỘT lần điều hướng kế tiếp (dùng ngay trước `navigate` sau khi lưu xong:
+ * `when` còn `true` vì setState bất đồng bộ).
+ *
  * @param {boolean} when whether navigation should be blocked
- * @returns {{state: 'blocked'|'unblocked', proceed: () => void, reset: () => void}}
+ * @returns {{state: 'blocked'|'unblocked', proceed: () => void, reset: () => void, allowNext: () => void}}
  */
 export const useBrowserRouterBlocker = (when) => {
   const { navigator } = useContext(UNSAFE_NavigationContext);
   const location = useLocation();
   const [blockedTransition, setBlockedTransition] = useState(null);
   const historyIndexRef = useRef(Number.isFinite(window.history.state?.idx) ? window.history.state.idx : 0);
+  const locationPathRef = useRef('');
+  locationPathRef.current = `${location.pathname}${location.search}${location.hash}`;
+  const allowNextRef = useRef(false);
+  const allowNextTimerRef = useRef(null);
+
+  const consumeAllowNext = useCallback(() => {
+    if (!allowNextRef.current) return false;
+    allowNextRef.current = false;
+    if (allowNextTimerRef.current) {
+      clearTimeout(allowNextTimerRef.current);
+      allowNextTimerRef.current = null;
+    }
+    return true;
+  }, []);
+
+  const allowNext = useCallback(() => {
+    allowNextRef.current = true;
+    if (allowNextTimerRef.current) clearTimeout(allowNextTimerRef.current);
+    allowNextTimerRef.current = setTimeout(() => {
+      allowNextRef.current = false;
+      allowNextTimerRef.current = null;
+    }, ALLOW_NEXT_TTL_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (allowNextTimerRef.current) clearTimeout(allowNextTimerRef.current);
+    },
+    []
+  );
 
   useEffect(() => {
     historyIndexRef.current = Number.isFinite(window.history.state?.idx)
@@ -47,8 +95,34 @@ export const useBrowserRouterBlocker = (when) => {
       return unblock;
     }
 
+    // Bọc navigate() bằng code: cùng đích hiện tại / đang được "cho qua" thì đi thẳng.
+    const originalPush = navigator.push;
+    const originalReplace = navigator.replace;
+    const wrapNavigation = (original) => {
+      if (typeof original !== 'function') return null;
+      return (to, ...rest) => {
+        if (consumeAllowNext()) return original.call(navigator, to, ...rest);
+        const target = toPathString(to);
+        if (target !== null && target.startsWith('/') && target === locationPathRef.current) {
+          return original.call(navigator, to, ...rest);
+        }
+        setBlockedTransition({
+          retry() {
+            setBlockedTransition(null);
+            original.call(navigator, to, ...rest);
+          },
+        });
+        return undefined;
+      };
+    };
+    const wrappedPush = wrapNavigation(originalPush);
+    const wrappedReplace = wrapNavigation(originalReplace);
+    if (wrappedPush) navigator.push = wrappedPush;
+    if (wrappedReplace) navigator.replace = wrappedReplace;
+
     const handleAnchorClickCapture = (event) => {
       if (event.defaultPrevented) return;
+      if (consumeAllowNext()) return;
       if (event.button !== 0) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
 
@@ -76,8 +150,8 @@ export const useBrowserRouterBlocker = (when) => {
       setBlockedTransition({
         retry() {
           setBlockedTransition(null);
-          if (typeof navigator.push === 'function') {
-            navigator.push(nextPath);
+          if (typeof originalPush === 'function') {
+            originalPush.call(navigator, nextPath);
             return;
           }
           window.location.assign(nextPath);
@@ -112,10 +186,13 @@ export const useBrowserRouterBlocker = (when) => {
     window.addEventListener('popstate', handlePopState);
 
     return () => {
+      // Chỉ gỡ bọc nếu hàm hiện tại vẫn là bọc của mình (tránh đè lên hàm do nơi khác gắn sau).
+      if (wrappedPush && navigator.push === wrappedPush) navigator.push = originalPush;
+      if (wrappedReplace && navigator.replace === wrappedReplace) navigator.replace = originalReplace;
       document.removeEventListener('click', handleAnchorClickCapture, true);
       window.removeEventListener('popstate', handlePopState);
     };
-  }, [navigator, when]);
+  }, [consumeAllowNext, navigator, when]);
 
   const proceed = useCallback(() => {
     if (!blockedTransition) return;
@@ -133,8 +210,9 @@ export const useBrowserRouterBlocker = (when) => {
       state: blockedTransition ? 'blocked' : 'unblocked',
       proceed,
       reset,
+      allowNext,
     }),
-    [blockedTransition, proceed, reset]
+    [blockedTransition, proceed, reset, allowNext]
   );
 };
 
