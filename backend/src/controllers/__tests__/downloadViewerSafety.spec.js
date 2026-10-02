@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
+// fileDownloadToken không còn fallback secret — test phải tự đặt.
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-download-viewer';
+
 /**
  * Trang xem tệp GET /file/:token trả HTML từ origin ứng dụng: tên tệp/MIME lấy từ DB (người dùng
  * đặt được) phải được escape. IP ghi sự kiện lấy từ req.ip (trust proxy), không từ header thô.
