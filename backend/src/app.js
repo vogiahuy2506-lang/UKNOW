@@ -322,38 +322,7 @@ export function createApp() {
     next();
   });
 
-  app.use((err, req, res, _next) => {
-    // Lỗi multer (tệp quá lớn / quá nhiều) là lỗi phía client → 4xx có thông báo,
-    // không phải 500 trơ trụi. multer đặt err.name = 'MulterError'.
-    if (err && err.name === 'MulterError') {
-      if (err.code === 'LIMIT_FILE_SIZE') {
-        return res.status(413).json({
-          success: false,
-          message: 'Tệp vượt dung lượng tối đa cho phép',
-          code: 'FILE_TOO_LARGE',
-        });
-      }
-      return res.status(400).json({
-        success: false,
-        message: 'Tải tệp lên không hợp lệ',
-        code: err.code || 'UPLOAD_ERROR',
-      });
-    }
-    // Body vượt trần của body-parser (vd chat công khai 64kb): 413 có câu tiếng Việt thay vì câu tiếng Anh của thư viện.
-    if (err && err.type === 'entity.too.large') {
-      return res.status(413).json({
-        success: false,
-        message: 'Nội dung gửi lên quá lớn. Bạn vui lòng rút gọn rồi gửi lại nhé.',
-        code: 'PAYLOAD_TOO_LARGE',
-      });
-    }
-    console.error(err.stack);
-    res.status(err.status || 500).json({
-      success: false,
-      message: err.message || 'Internal Server Error',
-      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
-    });
-  });
+  app.use(globalErrorHandler);
 
   app.use((req, res) => {
     res.status(404).json({
@@ -363,6 +332,82 @@ export function createApp() {
   });
 
   return app;
+}
+
+/** Thông báo chung cho lỗi 5xx ở production — chi tiết chỉ ghi log phía server. */
+export const GENERIC_SERVER_ERROR_MESSAGE = 'Đã xảy ra lỗi hệ thống. Vui lòng thử lại sau.';
+
+/**
+ * Mã lỗi nghiệp vụ (vd `RESOURCE_LOCKED`) được giữ lại trong phản hồi 5xx; mã hệ thống của Node
+ * (ECONNREFUSED...) hay SQLSTATE của Postgres (23505...) thì không — chúng lộ chi tiết hạ tầng.
+ *
+ * @param {any} err
+ * @returns {string|null}
+ */
+function publicErrorCode(err) {
+  const code = err?.code;
+  if (typeof code !== 'string' || !/^[A-Z][A-Z0-9_]{2,63}$/.test(code)) return null;
+  if (err.syscall || err.errno !== undefined || err.severity || err.routine) return null;
+  return code;
+}
+
+/**
+ * Bộ xử lý lỗi cuối cùng của app.
+ *   - Lỗi multer → 413/400 có thông báo (lỗi phía client).
+ *   - 4xx: giữ nguyên thông báo của lỗi.
+ *   - 5xx ở production: thông báo chung tiếng Việt (giữ `code` nghiệp vụ và `requestId` nếu có),
+ *     chi tiết + stack chỉ ghi log server. Môi trường khác giữ thông báo gốc để dễ gỡ lỗi.
+ */
+export function globalErrorHandler(err, req, res, next) {
+  // Lỗi multer (tệp quá lớn / quá nhiều) là lỗi phía client → 4xx có thông báo,
+  // không phải 500 trơ trụi. multer đặt err.name = 'MulterError'.
+  if (err && err.name === 'MulterError') {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(413).json({
+        success: false,
+        message: 'Tệp vượt dung lượng tối đa cho phép',
+        code: 'FILE_TOO_LARGE',
+      });
+    }
+    return res.status(400).json({
+      success: false,
+      message: 'Tải tệp lên không hợp lệ',
+      code: err.code || 'UPLOAD_ERROR',
+    });
+  }
+  // Body vượt trần của body-parser (vd chat công khai 64kb): 413 có câu tiếng Việt thay vì câu tiếng Anh của thư viện.
+  if (err && err.type === 'entity.too.large') {
+    return res.status(413).json({
+      success: false,
+      message: 'Nội dung gửi lên quá lớn. Bạn vui lòng rút gọn rồi gửi lại nhé.',
+      code: 'PAYLOAD_TOO_LARGE',
+    });
+  }
+
+  const rawStatus = Number(err?.status ?? err?.statusCode);
+  const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
+  if (status >= 500) {
+    console.error(`[ErrorHandler] ${req?.method} ${req?.originalUrl || req?.url} → ${status}:`, err?.stack || err);
+  } else {
+    console.error(err?.stack || err);
+  }
+
+  // Đã gửi một phần phản hồi thì để Express tự đóng kết nối.
+  if (res.headersSent) return next(err);
+
+  const hideDetails = status >= 500 && process.env.NODE_ENV === 'production';
+  const body = {
+    success: false,
+    message: hideDetails ? GENERIC_SERVER_ERROR_MESSAGE : (err?.message || 'Internal Server Error'),
+  };
+  if (hideDetails) {
+    const code = publicErrorCode(err);
+    if (code) body.code = code;
+    const requestId = req?.id ?? err?.requestId;
+    if (requestId) body.requestId = requestId;
+  }
+  if (process.env.NODE_ENV === 'development' && err?.stack) body.stack = err.stack;
+  return res.status(status).json(body);
 }
 
 export default createApp;
