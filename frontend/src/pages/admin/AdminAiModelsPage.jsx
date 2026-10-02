@@ -13,6 +13,12 @@ const fmtUsd = (n) => {
   return `$${v.toFixed(2)}`;
 };
 
+// 'YYYY-MM-DD' (ngày VN từ backend) → 'DD/MM/YYYY'
+const fmtDay = (ymd) => {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(ymd || ''));
+  return match ? `${match[3]}/${match[2]}/${match[1]}` : String(ymd || '');
+};
+
 export default function AdminAiModelsPage() {
   const { t } = useI18n();
   const [models, setModels] = useState([]);
@@ -359,6 +365,15 @@ export default function AdminAiModelsPage() {
                               {fmtUsd(pricing.inputUsdPerM)} / {fmtUsd(pricing.outputUsdPerM)}{' '}
                               {t('adminAiModels.perMillionTokens')}
                             </p>
+                            {pricing.upcoming && (
+                              <p className="mt-0.5 text-xs font-medium text-amber-700" data-testid={`upcoming-price-${modelId}`}>
+                                {t('adminAiModels.upcomingPrice', {
+                                  date: fmtDay(pricing.upcoming.from),
+                                  input: fmtUsd(pricing.upcoming.inputUsdPerM),
+                                  output: fmtUsd(pricing.upcoming.outputUsdPerM),
+                                })}
+                              </p>
+                            )}
                           </div>
                         ) : (
                           <div>

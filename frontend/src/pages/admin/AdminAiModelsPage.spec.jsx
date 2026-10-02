@@ -348,4 +348,37 @@ describe('AdminAiModelsPage - chi phi moi luot goi (thuc do 30 ngay)', () => {
     expect(within(row).getByText(/Chưa có giá/)).toBeInTheDocument();
     expect(within(row).queryByText(/~\d/)).not.toBeInTheDocument();
   });
+
+  // PLAN_GOP_MAU_TIN_MEDIA_VA_VIEC_LE_2026-10-03, PR-L / L1: giá một model đổi theo ngày (3.8-flash hết khuyến mãi 31/12/2026).
+  it('model co muc gia sap toi: hien gia DANG ap dung + dong "Tu 01/01/2027: $1.50 / $7.50 moi 1tr token"', async () => {
+    mockList.mockResolvedValueOnce(listResponse([
+      {
+        modelId: 'model-d', displayName: 'D', isEnabled: true, isFallback: false, supportsGenerateContent: true,
+        pricing: priced({
+          inputUsdPerM: 0.75,
+          outputUsdPerM: 3.75,
+          costPerAnswerVnd: 225,
+          upcoming: { from: '2027-01-01', inputUsdPerM: 1.5, outputUsdPerM: 7.5 },
+        }),
+      },
+    ]));
+    renderPage();
+    const row = (await screen.findByText('model-d', {}, { timeout: 5000 })).closest('tr');
+    expect(within(row).getByText(/\$0\.75 \/ \$3\.75/)).toBeInTheDocument();
+    expect(within(row).getByTestId('upcoming-price-model-d')).toHaveTextContent('Từ 01/01/2027: $1.50 / $7.50 mỗi 1tr token');
+  });
+
+  it('model gia khong doi (khong co muc sap toi): khong co dong "Tu ..."', async () => {
+    mockList.mockResolvedValueOnce(listResponse([
+      {
+        modelId: 'model-e', displayName: 'E', isEnabled: true, isFallback: false, supportsGenerateContent: true,
+        pricing: priced({ upcoming: null }),
+      },
+    ]));
+    renderPage();
+    const row = (await screen.findByText('model-e', {}, { timeout: 5000 })).closest('tr');
+    expect(within(row).getByText(/\$1\.50 \/ \$9\.00/)).toBeInTheDocument();
+    expect(within(row).queryByTestId('upcoming-price-model-e')).not.toBeInTheDocument();
+    expect(within(row).queryByText(/^Từ /)).not.toBeInTheDocument();
+  });
 });

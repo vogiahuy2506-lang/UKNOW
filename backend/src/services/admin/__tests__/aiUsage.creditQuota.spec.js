@@ -17,7 +17,7 @@ jest.unstable_mockModule('../../../utils/billingCycle.util.js', () => ({
 
 const { getAiUsageOverview, summarizeCreditUsage } = await import('../aiUsage.service.js');
 
-const isPlanQuery = (sql) => sql.includes('COUNT(DISTINCT ul.id_user)::int AS user_count');
+const isPlanQuery = (sql) => sql.includes('p.price AS plan_price');
 const isP90TokenQuery = (sql) => sql.includes('p90_user_tokens');
 
 const PLAN_BASIC = {
@@ -224,7 +224,7 @@ describe('getAiUsageOverview - luot AI da dung trong KY HIEN TAI cua tung khach'
     mockDb({
       planRows: [{
         plan_id: 3, plan_code: 'starter', plan_name: 'Starter', ai_credits_per_period: 300,
-        model: 'm', user_count: 1, total_tokens: 1000, prompt_tokens: 600, output_tokens: 400,
+        model: 'm', total_tokens: 1000, prompt_tokens: 600, output_tokens: 400,
       }],
     });
     const { byPlan } = await getAiUsageOverview();
@@ -258,7 +258,7 @@ describe('getAiUsageOverview - luot AI da dung trong KY HIEN TAI cua tung khach'
     mockDb({
       planRows: [{
         plan_id: 1, plan_code: 'basic', plan_name: 'Basic', ai_credits_per_period: 100,
-        model: 'gemini-2.5-flash', user_count: 10, total_tokens: 5000000, prompt_tokens: 4000000, output_tokens: 1000000,
+        model: 'gemini-2.5-flash', total_tokens: 5000000, prompt_tokens: 4000000, output_tokens: 1000000,
       }],
       p90Rows: [{ plan_id: 1, plan_code: 'basic', user_count: 10, p90_user_tokens: 900000 }],
       customers: [customer(71)],
@@ -267,7 +267,7 @@ describe('getAiUsageOverview - luot AI da dung trong KY HIEN TAI cua tung khach'
     const { byPlan } = await getAiUsageOverview();
     expect(byPlan).toHaveLength(1);
     expect(byPlan[0]).toMatchObject({
-      userCount: 10, // token
+      userCount: 10, // token (so khach cua truy van p90, khong con tu truy van chi phi - truy van do gom theo ngay)
       creditUserCount: 1, // lượt AI
       totalTokens: 5000000,
       p90UserTokens: 900000,

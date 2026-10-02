@@ -8665,6 +8665,7 @@ export default {
     estimatedTag: 'ước tính',
     noCallsHint: 'Chưa có lượt gọi trong 30 ngày — ước tính theo token trung bình',
     perMillionTokens: 'mỗi 1tr token',
+    upcomingPrice: 'Từ {date}: {input} / {output} mỗi 1tr token',
     priceMissing: 'Chưa có giá',
     priceMissingHint: 'Chi phí trong trang Chi phí AI sẽ tạm tính theo giá Flash',
     systemModelUnpricedBanner: 'Model hệ thống đang dùng ({model}) chưa có giá cấu hình — báo cáo Chi phí AI đang tạm tính theo giá Flash và có thể sai.',

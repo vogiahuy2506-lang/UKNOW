@@ -32,7 +32,7 @@ const {
 const isMetaQuery = (sql) => sql.includes('AS start_day');
 const isFeatureModelQuery = (sql) => sql.includes('AS call_count');
 const isUserFeatureQuery = (sql) => sql.includes('SELECT DISTINCT');
-const isPlanQuery = (sql) => sql.includes('COUNT(DISTINCT ul.id_user)::int AS user_count');
+const isPlanQuery = (sql) => sql.includes('p.price AS plan_price');
 const isP90Query = (sql) => sql.includes('p90_user_tokens');
 const isTopUserQuery = (sql) => sql.includes('AS email');
 const isTimelineQuery = (sql) => sql.includes('AS bucket');
@@ -42,6 +42,8 @@ const mockDb = ({
   featureModelRows = [],
   userFeatureRows = [],
   planRows = [],
+  p90Rows = [],
+  topUserRows = [],
   timelineRows = [],
   customers = [],
   usedByUser = {},
@@ -50,9 +52,9 @@ const mockDb = ({
     if (isMetaQuery(sql)) return [meta];
     if (isFeatureModelQuery(sql)) return featureModelRows;
     if (isUserFeatureQuery(sql)) return userFeatureRows;
-    if (isP90Query(sql)) return [];
+    if (isP90Query(sql)) return p90Rows;
     if (isPlanQuery(sql)) return planRows;
-    if (isTopUserQuery(sql)) return [];
+    if (isTopUserQuery(sql)) return topUserRows;
     if (isTimelineQuery(sql)) return timelineRows;
     return [];
   });
@@ -66,10 +68,13 @@ const mockDb = ({
   mockGetUsageInRange.mockImplementation(async (userId) => usedByUser[Number(userId)] ?? 0);
 };
 
-const row = (feature, model, calls, prompt, output, total, kind = '') => ({
+// `price_day` = ngay VN cua dong (SQL gom theo ngay de ap gia cua dung ngay). Ghim mot ngay co dinh de cac so tay o day khong
+// doi khi bang gia doi (vd 3.8-flash het khuyen mai 01/01/2027); ca co ngay khac truyen vao `day`.
+const row = (feature, model, calls, prompt, output, total, kind = '', day = '2026-09-30') => ({
   feature,
   kind,
   model,
+  price_day: day,
   call_count: calls,
   prompt_tokens: prompt,
   output_tokens: output,
@@ -360,7 +365,7 @@ describe('getAiUsageOverview - cot "neu dung het han muc" theo goi', () => {
       featureModelRows: DATA_ROWS,
       planRows: [{
         plan_id: 1, plan_code: 'a', plan_name: 'Goi A', ai_credits_per_period: 100, plan_price: '900000',
-        model: 'test-model', user_count: 1, total_tokens: 3_000_000, prompt_tokens: 2_000_000, output_tokens: 1_000_000,
+        model: 'test-model', total_tokens: 3_000_000, prompt_tokens: 2_000_000, output_tokens: 1_000_000,
       }],
       customers: [planCustomer(11, PLAN_A), planCustomer(12, PLAN_U), planCustomer(13, PLAN_FREE)],
       usedByUser: { 11: 30, 12: 500, 13: 4 },
@@ -501,5 +506,167 @@ describe('getMeasuredCostByModel - chi phi thuc do moi luot goi (trang Quan ly m
     const [sql, params] = mockSafeQuery.mock.calls[0];
     expect(sql).toContain(`created_at >= ${USAGE_RANGE_START_SQL['30d']}`);
     expect(params).toEqual([]);
+  });
+});
+
+/**
+ * PLAN_GOP_MAU_TIN_MEDIA_VA_VIEC_LE_2026-10-03, PR-L / L1 - gia theo NGAY: gemini-3.8-flash khuyen mai 0,75 / 3,75 toi het
+ * 31/12/2026 (gio VN), tu 01/01/2027 la 1,50 / 7,50. Ky 25/12/2026 - 05/01/2027 co token o ca hai phia cua moc: moi dong tinh theo
+ * gia cua NGAY dong do (SQL gom them theo ngay VN -> `price_day`), khong tinh het bang gia hom nay.
+ *
+ * Moi dong (1 dong = tong token cua nhieu luot trong ngay do), cong tay:
+ *   25/12  2 luot  vao 1tr / ra 0,1tr / tong 1,2tr (0,1tr suy nghi -> dau ra tinh tien 0,2tr)
+ *                  gia KM  : 1 x 0,75 + 0,2 x 3,75 = 0,75 + 0,75 = 1,5 USD
+ *   31/12  1 luot  vao 2tr / ra 0 / tong 2tr           gia KM  : 2 x 0,75                   = 1,5 USD
+ *   01/01  3 luot  vao 1tr / ra 0,1tr / tong 1,2tr     gia moi : 1 x 1,5 + 0,2 x 7,5 = 1,5 + 1,5 = 3,0 USD
+ *   05/01  1 luot  vao 2tr / ra 0 / tong 2tr           gia moi : 2 x 1,5                    = 3,0 USD
+ * Tong = 1,5 + 1,5 + 3,0 + 3,0 = 9,0 USD = 216.000d (1 USD = 24.000d), 7 luot.
+ * Tinh het bang gia moi se ra 12,0 USD, het bang gia KM ra 6,0 USD - ca hai deu SAI.
+ */
+describe('gia theo ngay: ky 25/12/2026 - 05/01/2027 vat qua moc het khuyen mai gemini-3.8-flash', () => {
+  const MODEL = 'gemini-3.8-flash';
+  const originalRate = process.env.USD_VND_RATE;
+  const originalPricing = process.env.AI_PRICING_JSON;
+
+  beforeEach(() => {
+    mockSafeQuery.mockReset();
+    mockListCreditCustomers.mockReset();
+    mockGetUsageInRange.mockReset();
+    mockGetBillingCycle.mockReset();
+    process.env.USD_VND_RATE = '24000';
+    delete process.env.AI_PRICING_JSON;
+  });
+
+  afterEach(() => {
+    if (originalRate === undefined) delete process.env.USD_VND_RATE;
+    else process.env.USD_VND_RATE = originalRate;
+    if (originalPricing === undefined) delete process.env.AI_PRICING_JSON;
+    else process.env.AI_PRICING_JSON = originalPricing;
+  });
+
+  const featureRows = () => [
+    row('smart_chat', MODEL, 2, 1_000_000, 100_000, 1_200_000, '', '2026-12-25'),
+    row('smart_chat', MODEL, 1, 2_000_000, 0, 2_000_000, '', '2026-12-31'),
+    row('smart_chat', MODEL, 3, 1_000_000, 100_000, 1_200_000, '', '2027-01-01'),
+    row('smart_chat', MODEL, 1, 2_000_000, 0, 2_000_000, '', '2027-01-05'),
+  ];
+  const timelineRows = () => [
+    { bucket: '2026-12-25', model: MODEL, prompt_tokens: 1_000_000, output_tokens: 100_000, total_tokens: 1_200_000 },
+    { bucket: '2026-12-31', model: MODEL, prompt_tokens: 2_000_000, output_tokens: 0, total_tokens: 2_000_000 },
+    { bucket: '2027-01-01', model: MODEL, prompt_tokens: 1_000_000, output_tokens: 100_000, total_tokens: 1_200_000 },
+    { bucket: '2027-01-05', model: MODEL, prompt_tokens: 2_000_000, output_tokens: 0, total_tokens: 2_000_000 },
+  ];
+  const dayRow = (extra, day, prompt, output, total) => ({
+    ...extra, model: MODEL, price_day: day, prompt_tokens: prompt, output_tokens: output, total_tokens: total,
+  });
+  const PLAN = {
+    plan_id: 1, plan_code: 'a', plan_name: 'Goi A', ai_credits_per_period: 100, plan_price: '900000',
+  };
+  const USER = {
+    id_user: '7', email: 'u7@example.com', plan_code: 'a', plan_name: 'Goi A',
+  };
+  const split = (extra) => [
+    dayRow(extra, '2026-12-25', 1_000_000, 100_000, 1_200_000),
+    dayRow(extra, '2026-12-31', 2_000_000, 0, 2_000_000),
+    dayRow(extra, '2027-01-01', 1_000_000, 100_000, 1_200_000),
+    dayRow(extra, '2027-01-05', 2_000_000, 0, 2_000_000),
+  ];
+  const mockPeriod = () => mockDb({
+    meta: { start_day: '2026-12-25', end_day: '2027-01-05' },
+    featureModelRows: featureRows(),
+    planRows: split(PLAN),
+    p90Rows: [{
+      plan_id: 1, plan_code: 'a', user_count: 1, p90_user_tokens: 6_400_000,
+    }],
+    topUserRows: split(USER),
+    timelineRows: timelineRows(),
+  });
+
+  it('bon so tren cung: 3,0 USD (truoc moc, gia KM) + 6,0 USD (sau moc, gia moi) = 9,0 USD = 216.000d, 7 luot', async () => {
+    mockPeriod();
+    const { summary } = await getAiUsageOverview({ range: 'month' });
+    expect(summary.estimatedCostUsd).toBe(9);
+    expect(summary.estimatedCostVnd).toBe(216000);
+    expect(summary.calls).toBe(7);
+    expect(summary.costPerCallUsd).toBeCloseTo(9 / 7, 4);
+  });
+
+  it('theo model + theo tinh nang: cung 9,0 USD (khop bon so tren cung)', async () => {
+    mockPeriod();
+    const { byModel, byFeature } = await getAiUsageOverview({ range: 'month' });
+    expect(byModel).toHaveLength(1);
+    expect(byModel[0]).toMatchObject({
+      model: MODEL, calls: 7, estimatedCostUsd: 9, estimatedCostVnd: 216000, priceConfigured: true,
+    });
+    expect(byFeature).toHaveLength(1);
+    expect(byFeature[0]).toMatchObject({
+      group: 'assistant', calls: 7, estimatedCostUsd: 9, estimatedCostVnd: 216000,
+    });
+  });
+
+  it('theo goi + top user: cung 9,0 USD; so khach cua goi lay tu truy van p90 (khong bi dem lech vi gom theo ngay)', async () => {
+    mockPeriod();
+    const { byPlan, topUsers } = await getAiUsageOverview({ range: 'month' });
+    const planA = byPlan.find((plan) => plan.planCode === 'a');
+    expect(planA).toMatchObject({
+      estimatedCostUsd: 9, estimatedCostVnd: 216000, totalTokens: 6_400_000, userCount: 1,
+    });
+    expect(topUsers).toHaveLength(1);
+    expect(topUsers[0]).toMatchObject({ userId: 7, estimatedCostUsd: 9, estimatedCostVnd: 216000 });
+  });
+
+  it('bieu do tung ngay: 25/12 = 36.000d, 31/12 = 36.000d (KM), 01/01 = 72.000d, 05/01 = 72.000d (gia moi); tong = KPI', async () => {
+    mockPeriod();
+    const { timeline, summary } = await getAiUsageOverview({ range: 'month' });
+    const byDay = Object.fromEntries(timeline.map((day) => [day.bucket, day.estimatedCostVnd]));
+    expect(byDay).toMatchObject({
+      '2026-12-25': 36000, '2026-12-31': 36000, '2027-01-01': 72000, '2027-01-05': 72000, '2026-12-28': 0,
+    });
+    expect(timeline.reduce((sum, day) => sum + day.estimatedCostVnd, 0)).toBe(summary.estimatedCostVnd);
+  });
+
+  it('chi phi thuc do moi luot goi (trang Quan ly model AI): 9,0 USD / 7 luot = 1,2857 USD = 30.857d', async () => {
+    mockSafeQuery.mockResolvedValue(featureRows());
+    const { byModel } = await getMeasuredCostByModel({ range: '30d' });
+    expect(byModel[MODEL]).toEqual({
+      calls: 7, costUsd: 9, costPerCallUsd: 1.2857, costPerCallVnd: 30857,
+    });
+  });
+
+  it('AI_PRICING_JSON gia PHANG ghi de CA HAI phia cua moc: 1 / 2 USD moi ngay -> 1,4 + 2,0 + 1,4 + 2,0 = 6,8 USD = 163.200d', async () => {
+    process.env.AI_PRICING_JSON = JSON.stringify({ [MODEL]: { input: 1, output: 2 } });
+    mockPeriod();
+    const { summary, byModel, timeline } = await getAiUsageOverview({ range: 'month' });
+    expect(summary.estimatedCostUsd).toBe(6.8);
+    expect(summary.estimatedCostVnd).toBe(163200);
+    expect(byModel[0].estimatedCostUsd).toBe(6.8);
+    // 31/12 (2tr vao x 1 = 2,0 USD = 48.000d) va 05/01 (cung 2tr vao) PHAI bang nhau: khong con moc gia
+    const byDay = Object.fromEntries(timeline.map((day) => [day.bucket, day.estimatedCostVnd]));
+    expect(byDay['2026-12-31']).toBe(48000);
+    expect(byDay['2027-01-05']).toBe(48000);
+    expect(byDay['2026-12-25']).toBe(byDay['2027-01-01']); // cung 1,4 USD = 33.600d
+    expect(byDay['2026-12-25']).toBe(33600);
+  });
+
+  it('AI_PRICING_JSON dat moc rieng (until 30/12): 25/12 gia 1/1; 31/12, 01/01, 05/01 gia 4/4 -> 1,2 + 8,0 + 4,8 + 8,0 = 22,0 USD', async () => {
+    process.env.AI_PRICING_JSON = JSON.stringify({
+      [MODEL]: [{ input: 1, output: 1, until: '2026-12-30' }, { input: 4, output: 4 }],
+    });
+    mockPeriod();
+    const { summary } = await getAiUsageOverview({ range: 'month' });
+    expect(summary.estimatedCostUsd).toBe(22);
+  });
+
+  it('moi truy van tinh chi phi gom them theo NGAY VN (price_day): SQL that duoc kiem trong integration/aiUsageCost.test.js', async () => {
+    mockDb();
+    await getAiUsageOverview({ range: '30d' });
+    const costSqls = mockSafeQuery.mock.calls.map(([sql]) => sql).filter(
+      (sql) => sql.includes('AS call_count') || sql.includes('AS plan_price') || sql.includes('AS email')
+    );
+    expect(costSqls).toHaveLength(3); // bang goc (tinh nang/model), theo goi, top user
+    for (const sql of costSqls) {
+      expect(sql).toMatch(/to_char\((ul\.)?created_at AT TIME ZONE 'Asia\/Ho_Chi_Minh', 'YYYY-MM-DD'\) AS price_day/);
+      expect(sql).toMatch(/GROUP BY[^`]*(price_day|, 4)\s*$/);
+    }
   });
 });

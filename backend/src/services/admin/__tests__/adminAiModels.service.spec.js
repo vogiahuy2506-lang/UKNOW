@@ -103,4 +103,46 @@ describe('adminAiModels.listModels - chi phi thuc do moi luot goi', () => {
     // 0,7 x 1,5 + 0,143333 x 9 = 1,05 + 1,29 = 2,34 USD -> 56.160d
     expect(result.models[0].pricing.costPerAnswerVnd).toBe(56160);
   });
+
+  // PLAN_GOP_MAU_TIN_MEDIA_VA_VIEC_LE_2026-10-03, PR-L / L1: 3.8-flash khuyen mai 0,75 / 3,75 toi het 31/12/2026, tu 01/01/2027 1,50 / 7,50.
+  describe('gia theo ngay: hien gia DANG ap dung + muc sap toi', () => {
+    const model38 = async (at) => {
+      mockGetCatalog.mockResolvedValue([catalogModel('gemini-3.8-flash')]);
+      mockGetMeasuredCostByModel.mockResolvedValue({ range: '30d', byModel: {} });
+      return (await listModels({ at })).models[0].pricing;
+    };
+
+    it('truoc 01/01/2027: gia KM 0,75 / 3,75 (uoc tinh 225d) kem muc sap toi tu 2027-01-01 la 1,50 / 7,50', async () => {
+      const pricing = await model38('2026-10-03');
+      expect(pricing).toMatchObject({
+        configured: true,
+        inputUsdPerM: 0.75,
+        outputUsdPerM: 3.75,
+        costPerAnswerVnd: 225,
+        upcoming: { from: '2027-01-01', inputUsdPerM: 1.5, outputUsdPerM: 7.5 },
+      });
+    });
+
+    it('ngay cuoi cua khuyen mai (31/12/2026, gio VN) van la gia KM + van bao muc sap toi', async () => {
+      const pricing = await model38(new Date('2026-12-31T16:30:00Z')); // 23:30 VN
+      expect(pricing).toMatchObject({ inputUsdPerM: 0.75, outputUsdPerM: 3.75, upcoming: { from: '2027-01-01' } });
+    });
+
+    it('tu 01/01/2027: gia moi 1,50 / 7,50 (uoc tinh 10k/500 = 450d), het muc sap toi (upcoming = null)', async () => {
+      const pricing = await model38('2027-01-01');
+      expect(pricing).toMatchObject({
+        inputUsdPerM: 1.5, outputUsdPerM: 7.5, costPerAnswerVnd: 450, upcoming: null,
+      });
+    });
+
+    it('model gia phang (3.5-flash) khong co muc sap toi; AI_PRICING_JSON gia phang cho 3.8-flash cung khong co', async () => {
+      mockGetCatalog.mockResolvedValue([catalogModel('gemini-3.5-flash')]);
+      mockGetMeasuredCostByModel.mockResolvedValue({ range: '30d', byModel: {} });
+      expect((await listModels({ at: '2026-10-03' })).models[0].pricing.upcoming).toBeNull();
+
+      process.env.AI_PRICING_JSON = JSON.stringify({ 'gemini-3.8-flash': { input: 2, output: 4 } });
+      const flat = await model38('2026-10-03');
+      expect(flat).toMatchObject({ inputUsdPerM: 2, outputUsdPerM: 4, upcoming: null });
+    });
+  });
 });

@@ -67,7 +67,10 @@ beforeEach(async () => {
   originalRate = process.env.USD_VND_RATE;
   originalPricing = process.env.AI_PRICING_JSON;
   process.env.USD_VND_RATE = '24000';
-  delete process.env.AI_PRICING_JSON;
+  // gemini-3.8-flash doi gia theo ngay (khuyen mai 0,75 / 3,75 het 31/12/2026, tu 01/01/2027 la 1,50 / 7,50) va cac dong test duoc
+  // ghi luc "bay gio": ghim MOT muc phang (= gia KM) de so cong tay ben duoi khong doi theo ngay chay test. Bang gia mac dinh
+  // va moc ngay duoc kiem rieng (aiPricing.util.spec.js + ca "gia theo ngay" cuoi file nay).
+  process.env.AI_PRICING_JSON = JSON.stringify({ 'gemini-3.8-flash': { input: 0.75, output: 3.75 } });
 });
 
 afterEach(() => {
@@ -284,5 +287,61 @@ describe('bon so + bang theo tinh nang + co gia tren du lieu that', () => {
     expect(avg.calls).toBe(3);
     expect(avg.avgPromptTokens).toBeCloseTo(700_000, 3);
     expect(avg.avgOutputTokens).toBeCloseTo(143_333.333, 2);
+  });
+});
+
+describe('gia theo ngay (SQL that): moc doi gia tinh theo NGAY VN cua dong usage', () => {
+  /**
+   * Moc doi gia dat theo ngay hom nay (JS thuan tu UTC+7, nhu cac ca tren) de ca chay duoc o bat ky ngay nao:
+   *   gemini-3.5-flash: 1 / 1 USD den het "hom qua (VN)", 2 / 2 USD tu "hom nay (VN)".
+   *   dong A 23:30 VN hom qua (= 16:30 UTC cung ngay) : vao 1tr, ra 0, tong 1tr -> 1 x 1 = 1,0 USD =  24.000d
+   *   dong B 00:30 VN hom nay (= 17:30 UTC HOM QUA)   : vao 1tr, ra 0, tong 1tr -> 1 x 2 = 2,0 USD =  48.000d
+   * Tong = 3,0 USD = 72.000d. Gom/so ngay theo UTC thi dong B roi vao "hom qua" -> 1 + 1 = 2,0 USD (sai).
+   */
+  const callAt = (idUser, createdAt) => insertToken({
+    idUser, feature: 'chatbot_reply', model: 'gemini-3.5-flash', prompt: 1_000_000, output: 0, total: 1_000_000, createdAt,
+  });
+
+  async function seedAroundMidnight() {
+    const { todayStart, todayVn } = vietnamBoundaries();
+    const yesterdayVn = new Date(todayStart.getTime() - 30 * MINUTE + 7 * HOUR).toISOString().slice(0, 10);
+    process.env.AI_PRICING_JSON = JSON.stringify({
+      'gemini-3.5-flash': [{ input: 1, output: 1, until: yesterdayVn }, { input: 2, output: 2 }],
+    });
+    const plan = await createPlan({
+      code: 'plan_day', name: 'Goi ngay', price: 900000, aiCreditsPerPeriod: 100,
+    });
+    const user = await createUser({ username: 'dayuser', planId: plan.id, phone: '0900000201' });
+    await callAt(user.id, new Date(todayStart.getTime() - 30 * MINUTE)); // 23:30 VN hom qua
+    await callAt(user.id, new Date(todayStart.getTime() + 30 * MINUTE)); // 00:30 VN hom nay
+    return { user, yesterdayVn, todayVn };
+  }
+
+  it('bon so tren cung + theo model + bieu do: 23:30 VN hom qua gia 1 USD, 00:30 VN hom nay gia 2 USD -> 3,0 USD = 72.000d', async () => {
+    const { yesterdayVn, todayVn } = await seedAroundMidnight();
+    const { summary, byModel, timeline } = await getAiUsageOverview({ range: '30d' });
+    expect(summary).toMatchObject({ calls: 2, estimatedCostUsd: 3, estimatedCostVnd: 72000 });
+    expect(byModel.find((item) => item.model === 'gemini-3.5-flash')).toMatchObject({ calls: 2, estimatedCostUsd: 3 });
+    const byDay = Object.fromEntries(timeline.map((day) => [day.bucket, day.estimatedCostVnd]));
+    expect(byDay[yesterdayVn]).toBe(24000);
+    expect(byDay[todayVn]).toBe(48000);
+    expect(timeline.reduce((sum, day) => sum + day.estimatedCostVnd, 0)).toBe(summary.estimatedCostVnd);
+  });
+
+  it('theo goi + top user (hai truy van gom theo ngay): cung 3,0 USD; so khach cua goi van la 1 du khach dung 2 ngay khac nhau', async () => {
+    const { user } = await seedAroundMidnight();
+    const { byPlan, topUsers } = await getAiUsageOverview({ range: '30d' });
+    const plan = byPlan.find((item) => item.planCode === 'plan_day');
+    expect(plan).toMatchObject({ estimatedCostUsd: 3, estimatedCostVnd: 72000, userCount: 1 });
+    expect(topUsers).toHaveLength(1);
+    expect(topUsers[0]).toMatchObject({ userId: Number(user.id), estimatedCostUsd: 3, estimatedCostVnd: 72000 });
+  });
+
+  it('chi phi thuc do moi luot goi (trang Quan ly model AI): 3,0 USD / 2 luot = 1,5 USD = 36.000d', async () => {
+    await seedAroundMidnight();
+    const { byModel } = await getMeasuredCostByModel({ range: '30d' });
+    expect(byModel['gemini-3.5-flash']).toEqual({
+      calls: 2, costUsd: 3, costPerCallUsd: 1.5, costPerCallVnd: 36000,
+    });
   });
 });

@@ -39,6 +39,13 @@ const UL_TOKEN_SQL = {
 // khung ngày bằng `new Date()` (UTC) còn bucket ngày lại tính theo giờ VN nên từ 00:00 đến 07:00 giờ VN cột "hôm nay"
 // biến mất và tổng biểu đồ ≠ tổng KPI. Không dùng múi giờ của phiên/Node — ghi rõ 'Asia/Ho_Chi_Minh' ở từng biểu thức.
 const VN_TZ = 'Asia/Ho_Chi_Minh';
+
+// Ngày (giờ VN, chuỗi YYYY-MM-DD) của dòng usage. Mọi truy vấn có TÍNH CHI PHÍ gom thêm theo ngày này để áp giá của đúng ngày
+// (giá một model có thể đổi theo ngày — xem aiPricing.util.js, vd gemini-3.8-flash hết khuyến mãi 31/12/2026). Chọn gom theo
+// ngày thay vì tách theo mốc đổi giá: một cách duy nhất cho mọi bảng giá (kể cả AI_PRICING_JSON tự đặt mốc), không cần dựng
+// biểu thức mốc trong SQL; số dòng nhân tối đa 31 (khoảng lọc dài nhất là 30 ngày) trên bảng chỉ vài nghìn dòng / tháng.
+const PRICE_DAY_SQL = `to_char(created_at AT TIME ZONE '${VN_TZ}', 'YYYY-MM-DD')`;
+const UL_PRICE_DAY_SQL = `to_char(ul.created_at AT TIME ZONE '${VN_TZ}', 'YYYY-MM-DD')`;
 export const USAGE_RANGES = Object.freeze({ MONTH: 'month', LAST_30_DAYS: '30d' });
 export const USAGE_RANGE_START_SQL = Object.freeze({
   // 00:00 ngày 1 của tháng hiện tại (giờ VN)
@@ -158,8 +165,9 @@ const thoughtsOf = ({ totalTokens, promptTokens, outputTokens }) => (
 const toVnd = (usd, usdVndRate) => Math.round(toNumber(usd) * toNumber(usdVndRate));
 
 /**
- * Cộng dồn các dòng token theo khoá. Chi phí tính theo model GHI TRÊN DÒNG (không theo model hiện tại) và gồm token
- * suy nghĩ (xem estimateCost). Chi phí làm tròn ở bước cuối (USD 4 chữ số, VND nguyên) — không cộng số đã tròn.
+ * Cộng dồn các dòng token theo khoá. Chi phí tính theo model GHI TRÊN DÒNG (không theo model hiện tại), theo giá của NGÀY
+ * ghi trên dòng (`price_day`, giờ VN — giá đổi theo ngày thì kỳ vắt qua mốc đổi giá vẫn đúng) và gồm token suy nghĩ (xem
+ * estimateCost). Chi phí làm tròn ở bước cuối (USD 4 chữ số, VND nguyên) — không cộng số đã tròn.
  * Khi các dòng có `call_count`: thêm `calls` và chi phí mỗi lượt gọi (tính từ số chưa tròn).
  */
 const aggregateRows = (rows, keyFn, seedFn, pricing, usdVndRate = getUsdVndRate()) => {
@@ -179,9 +187,9 @@ const aggregateRows = (rows, keyFn, seedFn, pricing, usdVndRate = getUsdVndRate(
       promptTokens,
       outputTokens,
       totalTokens,
+      at: row.price_day,
     });
     if (row.call_count !== undefined) item.calls = (item.calls || 0) + toNumber(row.call_count);
-    if (row.user_count !== undefined) item.userCount = Math.max(item.userCount || 0, toNumber(row.user_count));
   });
   return Array.from(map.values()).map((item) => ({
     ...item,
@@ -225,7 +233,7 @@ const buildTimeline = (rows, days, pricing, usdVndRate) => {
     item.outputTokens += outputTokens;
     item.totalTokens += totalTokens;
     item.estimatedCostUsd += estimateCost(pricing, {
-      model: row.model, promptTokens, outputTokens, totalTokens,
+      model: row.model, promptTokens, outputTokens, totalTokens, at: bucket,
     });
     byDay.set(bucket, item);
   });
@@ -241,13 +249,14 @@ const buildTimeline = (rows, days, pricing, usdVndRate) => {
 };
 
 /**
- * Bảng gốc của chi phí: một dòng cho mỗi (tính năng, loại, model) trong khoảng đã chọn. Mọi số "chi phí" của trang
+ * Bảng gốc của chi phí: một dòng cho mỗi (tính năng, loại, model, ngày VN) trong khoảng đã chọn. Mọi số "chi phí" của trang
  * (KPI, theo tính năng, theo model) cùng cộng từ đây nên khớp nhau tuyệt đối; `created_at >= mốc` tính trong SQL.
  */
 const featureModelSql = (startSql) => `SELECT
      ${TOKEN_SQL.feature} AS feature,
      ${TOKEN_SQL.kind} AS kind,
      ${TOKEN_SQL.model} AS model,
+     ${PRICE_DAY_SQL} AS price_day,
      COUNT(*)::int AS call_count,
      COALESCE(SUM(delta), 0)::bigint AS total_tokens,
      COALESCE(SUM(${TOKEN_SQL.prompt}), 0)::bigint AS prompt_tokens,
@@ -255,7 +264,7 @@ const featureModelSql = (startSql) => `SELECT
    FROM usage_logs
    WHERE resource_type = 'ai_token'
      AND created_at >= ${startSql}
-   GROUP BY 1, 2, 3`;
+   GROUP BY 1, 2, 3, 4`;
 
 /**
  * Chi phí thực đo theo từng model (cho trang Quản lý model AI — cùng nguồn với trang Chi phí AI).
@@ -281,6 +290,7 @@ export async function getMeasuredCostByModel({ range } = {}) {
       promptTokens: toNumber(row.prompt_tokens),
       outputTokens: toNumber(row.output_tokens),
       totalTokens: toNumber(row.total_tokens),
+      at: row.price_day,
     });
     acc.set(model, item);
   });
@@ -350,7 +360,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
          p.ai_credits_per_period,
          p.price AS plan_price,
          ${UL_TOKEN_SQL.model} AS model,
-         COUNT(DISTINCT ul.id_user)::int AS user_count,
+         ${UL_PRICE_DAY_SQL} AS price_day,
          COALESCE(SUM(ul.delta), 0)::bigint AS total_tokens,
          COALESCE(SUM(${UL_TOKEN_SQL.prompt}), 0)::bigint AS prompt_tokens,
          COALESCE(SUM(${UL_TOKEN_SQL.output}), 0)::bigint AS output_tokens
@@ -360,7 +370,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
        WHERE ul.resource_type = 'ai_token'
          AND ul.id_user IS NOT NULL
          AND ul.created_at >= ${startSql}
-       GROUP BY p.id, p.code, p.name, p.ai_credits_per_period, p.price, model`,
+       GROUP BY p.id, p.code, p.name, p.ai_credits_per_period, p.price, model, price_day`,
       noParams
     ),
     aiUsageRepository.safeQuery(
@@ -370,6 +380,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
          COALESCE(p.code, 'unknown') AS plan_code,
          COALESCE(p.name, p.code, 'Unknown plan') AS plan_name,
          ${UL_TOKEN_SQL.model} AS model,
+         ${UL_PRICE_DAY_SQL} AS price_day,
          COALESCE(SUM(ul.delta), 0)::bigint AS total_tokens,
          COALESCE(SUM(${UL_TOKEN_SQL.prompt}), 0)::bigint AS prompt_tokens,
          COALESCE(SUM(${UL_TOKEN_SQL.output}), 0)::bigint AS output_tokens
@@ -379,7 +390,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
        WHERE ul.resource_type = 'ai_token'
          AND ul.id_user IS NOT NULL
          AND ul.created_at >= ${startSql}
-       GROUP BY ul.id_user, u.email, u.username, p.code, p.name, model`,
+       GROUP BY ul.id_user, u.email, u.username, p.code, p.name, model, price_day`,
       noParams
     ),
     aiUsageRepository.safeQuery(
@@ -475,6 +486,7 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
     promptTokens: toNumber(row.prompt_tokens),
     outputTokens: toNumber(row.output_tokens),
     totalTokens: toNumber(row.total_tokens),
+    at: row.price_day,
   }), 0);
   const calls = featureModelRows.reduce(
     (sum, row) => sum + (groupCountsAsCall(groupOfRow(row)) ? toNumber(row.call_count) : 0),
@@ -543,7 +555,13 @@ export async function getAiUsageOverview({ range: rawRange } = {}) {
     usdVndRate
   );
   const p90TokensByPlan = new Map(p90Rows.map((row) => [planKey(row), toNumber(row.p90_user_tokens)]));
-  const planItems = new Map(tokenPlans.map((item) => [String(item.planId || item.planCode || 'unknown'), item]));
+  // Số khách có dòng token của gói = `user_count` của truy vấn p90 (một dòng / gói, COUNT(*) trên từng khách). Truy vấn chi
+  // phí theo gói gom thêm theo ngày nên không tự đếm khách được nữa (khách dùng nhiều ngày sẽ bị đếm lệch).
+  const tokenUsersByPlan = new Map(p90Rows.map((row) => [planKey(row), toNumber(row.user_count)]));
+  const planItems = new Map(tokenPlans.map((item) => {
+    const key = String(item.planId || item.planCode || 'unknown');
+    return [key, { ...item, userCount: tokenUsersByPlan.get(key) || 0 }];
+  }));
   // Gói chỉ có lượt AI (chưa có dòng token) vẫn phải hiện — nhưng chỉ khi có khách đã dùng > 0 trong kỳ hiện tại;
   // gói mà mọi khách đều đã dùng 0 trong kỳ này không thêm dòng trống.
   creditPlans.forEach((plan, key) => {
