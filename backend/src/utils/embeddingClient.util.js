@@ -32,12 +32,18 @@ export function extractEmbeddingUsage(data, textLength = 0) {
   return { promptTokens: estimated, outputTokens: 0, totalTokens: estimated };
 }
 
+/**
+ * Ghi token của MỘT lời gọi embedding (chỉ chạy khi thật sự gọi Google — cache trúng thì không tới đây).
+ *
+ * `userId` rỗng = lời gọi KHÔNG CÓ CHỦ (câu hỏi trợ giúp của khách chưa đăng nhập, cron nạp lại bài hướng dẫn…): vẫn ghi,
+ * `id_user = NULL` (migration 273), vì Google tính tiền các lượt này. Bản cũ `return` sớm ở đây nên trang Chi phí AI thấp hơn
+ * hoá đơn. Không trừ credit (`aiUsageMeter.record` chỉ ghi `ai_token`; chính sách: embedding/RAG không trừ credit).
+ */
 async function recordEmbeddingUsage(userId, data, text, { feature, model } = {}) {
-  if (!userId) return;
   const usage = extractEmbeddingUsage(data, String(text || '').length);
   if (usage.totalTokens <= 0) return;
 
-  await aiUsageMeter.record(userId, usage, {
+  await aiUsageMeter.record(userId || null, usage, {
     feature: feature || 'embedding',
     model: model || process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL,
     kind: 'embedding',

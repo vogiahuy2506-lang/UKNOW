@@ -16,6 +16,7 @@ import usageTrackingService from '../../src/services/payment/usageTracking.servi
 import customChatService from '../../src/services/ai/customChat.service.js';
 import chatRouterService from '../../src/services/chatbot/chatRouter.service.js';
 import heroConsultationService from '../../src/services/heroConsultation.service.js';
+import { searchHelpChunks } from '../../src/services/help/helpCenter.service.js';
 import { fillContentSlots } from '../../src/services/ai/campaignSlotFiller.service.js';
 import { compileCampaign } from '../../src/services/ai/campaignCompiler.service.js';
 import { getAiUsageOverview } from '../../src/services/admin/aiUsage.service.js';
@@ -462,5 +463,55 @@ describe('trang Chi phi AI admin voi dong id_user NULL', () => {
     expect(after.used).toBe(2);
     await expect(aiCreditMeter.assertAvailable(owner.id)).resolves.toMatchObject({ skip: false });
     expect(plan.ai_credits_per_period).toBe(100);
+  });
+});
+
+// ---------------------------------------------------------------------------------------------------------------------
+// PLAN_GOP_MAU_TIN_MEDIA_VA_VIEC_LE_2026-10-03, PR-L / L2: embedding cau hoi de tra bai huong dan (RAG) cua khach chua dang nhap.
+// Truoc day embeddingClient.util.js `if (!userId) return` truoc khi ghi nen Google tinh tien ma so khong co dong nao.
+describe('tro giup cho khach chua dang nhap: embedding cau hoi (RAG) ghi id_user NULL, khong tru credit', () => {
+  const embeddingModelInUrl = (url) => decodeURIComponent(String(url).match(/models\/([^:]+):embedContent/)?.[1] || '');
+  // Bo nho dem embedding gom theo van ban: moi ca dung cau hoi rieng de lan goi thu hai khong trung cache.
+  const uniqueQuestion = (label) => `${label} ${Date.now()}-${Math.floor(Math.random() * 1e6)}`;
+
+  it('searchHelpChunks khong co userId: dung 1 dong embedding_help, id_user NULL, token that, model that, kind embedding, khong co dong credit', async () => {
+    const urls = installGemini();
+    await searchHelpChunks(uniqueQuestion('lam sao gui zalo cho khach'), { userId: null, locale: 'vi' });
+
+    const embedUrls = urls.filter((url) => String(url).includes(':embedContent'));
+    expect(embedUrls).toHaveLength(1);
+    const rows = await tokenRows('embedding_help');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].id_user).toBeNull();
+    expect(rows[0].actor_user_id).toBeNull();
+    expect(rows[0].delta).toBe(30);
+    expect(rows[0].metadata).toMatchObject({
+      feature: 'embedding_help', kind: 'embedding', promptTokens: 30, outputTokens: 0, totalTokens: 30,
+    });
+    // model that = model trong URL goi Google (khong ghi cung ten)
+    expect(rows[0].metadata.model).toBe(embeddingModelInUrl(embedUrls[0]));
+    expect(rows[0].metadata.model).toBeTruthy();
+    expect(await creditRows()).toEqual([]);
+  });
+
+  it('CO userId (khach da dang nhap): giu nguyen hanh vi cu - dong ghi cho user do, khong co dong NULL', async () => {
+    const user = await createUser({ username: 'pr12helpuser', phone: '0900000301' });
+    installGemini();
+    await searchHelpChunks(uniqueQuestion('gia goi'), { userId: user.id, locale: 'vi' });
+
+    const rows = await tokenRows('embedding_help');
+    expect(rows).toHaveLength(1);
+    expect(String(rows[0].id_user)).toBe(String(user.id));
+    expect(await creditRows()).toEqual([]);
+  });
+
+  it('cung cau hoi hoi lai (trung cache embedding): khong goi Google lan hai nen khong ghi them dong', async () => {
+    const urls = installGemini();
+    const question = uniqueQuestion('lam sao ket noi telegram');
+    await searchHelpChunks(question, { userId: null, locale: 'vi' });
+    await searchHelpChunks(question, { userId: null, locale: 'vi' });
+
+    expect(urls.filter((url) => String(url).includes(':embedContent'))).toHaveLength(1);
+    expect(await tokenRows('embedding_help')).toHaveLength(1);
   });
 });
