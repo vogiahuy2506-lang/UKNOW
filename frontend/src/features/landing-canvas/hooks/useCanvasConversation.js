@@ -172,12 +172,22 @@ export function detectIntent(prompt, { setForm, openTab, intents }) {
   return { matched: false };
 }
 
-export default function useCanvasConversation({ form, setForm, hasExistingHtml, openTab, editingId = null }) {
+export default function useCanvasConversation({
+  form,
+  setForm,
+  hasExistingHtml,
+  openTab,
+  editingId = null,
+  // Hội thoại khôi phục từ nháp (F5) — chỉ dùng làm giá trị khởi tạo.
+  initialMessages = null,
+}) {
   // Hook dùng riêng namespace 'landingCanvas.canvasConversation' cho intent + AI messages
   // (CanvasChatPanel truyền tc của namespace 'landingCanvas.chat' — không trùng key với intent).
   const tc = useI18n('landingCanvas.canvasConversation');
   const { locale } = useI18n();
-  const [messages, setMessages] = useState([]);
+  const [messages, setMessages] = useState(() =>
+    Array.isArray(initialMessages) ? initialMessages : []
+  );
   const [isStreaming, setIsStreaming] = useState(false);
   const idCounterRef = useRef(0);
 
@@ -241,6 +251,7 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
 
       try {
         let result;
+        let isGenerate = false;
         const currentHtml = String(form.htmlContent || '').trim();
         if (hasExistingHtml && currentHtml) {
           result = await editLandingHtmlWithAi({
@@ -251,6 +262,7 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
             landingPageId: editingId,
           });
         } else {
+          isGenerate = true;
           result = await generateLandingHtmlWithAi({
             prompt: trimmedPrompt,
             locale,
@@ -270,7 +282,16 @@ export default function useCanvasConversation({ form, setForm, hasExistingHtml, 
         // Auto-apply
         if (suggestedHtml) {
           const previousHtml = currentHtml;
-          setForm((p) => ({ ...p, htmlContent: suggestedHtml }));
+          // AI tạo mới trả kèm `title` (ai.controller.js) — điền vào ô tên nếu người dùng chưa đặt,
+          // vì Lưu bắt buộc tên. Không đè tên người dùng đã gõ.
+          const aiTitle = String(result?.title || result?.data?.title || result?.data?.data?.title || '')
+            .trim()
+            .slice(0, 200);
+          setForm((p) => ({
+            ...p,
+            htmlContent: suggestedHtml,
+            ...(isGenerate && aiTitle && !String(p.title || '').trim() ? { title: aiTitle } : {}),
+          }));
           toast.success(tc('aiAppliedDirect'));
           setMessages((prev) =>
             prev.map((m) =>
