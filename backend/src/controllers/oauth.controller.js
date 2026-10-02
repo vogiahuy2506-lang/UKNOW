@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import whatsappOAuthService, {
+  signState,
   stashPendingOAuth,
   verifyState,
 } from '../services/chatbot/whatsappOAuth.service.js';
@@ -9,6 +10,28 @@ import facebookAdapter from '../services/chatbot/channelAdapters/facebook.adapte
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 const FB_OAUTH_BASE = 'https://www.facebook.com/v18.0/dialog/oauth';
 const ZALO_OAUTH_URL = 'https://oauth.zaloapp.com/v4/authorize';
+
+// Giá trị `flow` trong state đã ký — mỗi callback chỉ nhận state của đúng luồng mình.
+const FACEBOOK_STATE_FLOW = 'facebook_oauth';
+const ZALO_OA_STATE_FLOW = 'zalo_oa_oauth';
+
+/**
+ * Đọc state OAuth ĐÃ KÝ ở init (signState: HMAC + hạn 10 phút) và kiểm đúng luồng.
+ * State sai chữ ký / hết hạn / khác luồng / thiếu khoá ký → null (callback trả lỗi invalid_state).
+ * @param {unknown} state giá trị `state` nhà cung cấp gửi lại
+ * @param {string} flow
+ * @returns {object|null}
+ */
+function readSignedState(state, flow) {
+  try {
+    const payload = verifyState(String(state || ''));
+    if (!payload || payload.flow !== flow) return null;
+    return payload;
+  } catch (err) {
+    console.error('[OAuth] Không kiểm được state OAuth:', err.message);
+    return null;
+  }
+}
 
 class OAuthController {
   // ── Facebook OAuth ─────────────────────────────────────────────
@@ -34,16 +57,15 @@ class OAuthController {
         });
       }
       
-      // Generate state token for CSRF protection
-      const state = crypto.randomBytes(32).toString('hex');
-      
-      // Store state in session or temporary storage
-      // For simplicity, we'll encode user_id in state (in production, use Redis/session)
-      const stateData = Buffer.from(JSON.stringify({ user_id, chatbot_id, redirect_to: normalizedRedirect, timestamp: Date.now() })).toString('base64');
-      const hashedState = crypto.createHmac('sha256', process.env.OAUTH_STATE_SECRET || 'default-secret')
-        .update(stateData)
-        .digest('hex');
-      
+      // State ký HMAC (signState) — callback chỉ tin user_id/chatbot_id sau khi kiểm chữ ký + hạn.
+      const state = signState({
+        flow: FACEBOOK_STATE_FLOW,
+        user_id,
+        chatbot_id,
+        redirect_to: normalizedRedirect,
+        nonce: crypto.randomBytes(8).toString('hex'),
+      });
+
       const appId = process.env.FACEBOOK_APP_ID;
       // OAUTH_CALLBACK_URL is the base for /whatsapp and /zalo-oa callbacks.
       // Facebook uses its own callback path (see webhook.routes.js), so use
@@ -63,12 +85,12 @@ class OAuthController {
       // Keep them here but note they won't work until your app passes Facebook App Review.
       // For MVP testing, remove them from the scope string below.
       const scopes = 'pages_manage_metadata,pages_messaging';
-      const facebookAuthUrl = `${FB_OAUTH_BASE}?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(stateData)}&scope=${scopes}`;
+      const facebookAuthUrl = `${FB_OAUTH_BASE}?client_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${scopes}`;
 
       return res.json({
         success: true,
         auth_url: facebookAuthUrl,
-        state: hashedState,
+        state,
         message: 'Vui lòng mở link để ủy quyền Facebook Page',
       });
     } catch (err) {
@@ -96,10 +118,9 @@ class OAuthController {
         return res.status(400).json({ success: false, message: 'Missing authorization code' });
       }
 
-      let stateData = {};
-      try {
-        stateData = JSON.parse(Buffer.from(decodeURIComponent(state), 'base64').toString());
-      } catch {
+      // Chỉ tin user_id/chatbot_id trong state đã ký ở initFacebookOAuth.
+      const stateData = readSignedState(state, FACEBOOK_STATE_FLOW);
+      if (!stateData) {
         return res.redirect(`${frontendUrl}/app/chatbot-studio?error=invalid_state`);
       }
 
@@ -260,10 +281,15 @@ class OAuthController {
         });
       }
 
-      // Generate state
-      const stateData = { user_id, chatbot_id, redirect_to, timestamp: Date.now() };
-      const state = Buffer.from(JSON.stringify(stateData)).toString('base64');
-      
+      // State ký HMAC (signState) — callback kiểm chữ ký + hạn trước khi tin chatbot_id.
+      const state = signState({
+        flow: ZALO_OA_STATE_FLOW,
+        user_id,
+        chatbot_id,
+        redirect_to,
+        nonce: crypto.randomBytes(8).toString('hex'),
+      });
+
       // Build Zalo OAuth URL
       const redirectUri = `${process.env.OAUTH_CALLBACK_URL}/zalo-oa`;
       const zaloAuthUrl = `${ZALO_OAUTH_URL}?app_id=${appId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
@@ -299,11 +325,9 @@ class OAuthController {
         return res.status(400).json({ success: false, message: 'Missing authorization code' });
       }
 
-      // Decode state
-      let stateData;
-      try {
-        stateData = JSON.parse(Buffer.from(state, 'base64').toString());
-      } catch {
+      // Chỉ tin chatbot_id trong state đã ký ở initZaloOAuth.
+      const stateData = readSignedState(state, ZALO_OA_STATE_FLOW);
+      if (!stateData) {
         return res.redirect(`${frontendUrl}/app/chatbot-studio?error=invalid_state`);
       }
 

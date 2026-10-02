@@ -38,14 +38,39 @@ class VerificationRepository {
     return { blocked: false };
   }
 
-  async findValidCode({ email, code, type }) {
-    const result = await db.query(
-      `SELECT * FROM verification_codes
-       WHERE LOWER(email) = LOWER($1) AND code = $2 AND type = $3 AND is_used = FALSE AND expires_at > NOW()
-       ORDER BY created_at DESC LIMIT 1`,
-      [email, code, type]
+  /**
+   * Kiểm mã theo email và đếm lượt sai trong MỘT câu UPDATE (khoá hàng): chỉ so với mã còn hiệu lực
+   * mới nhất của (email, type); sai thì attempts + 1, chạm maxAttempts thì mã chết (is_used = TRUE).
+   * Request song song xếp hàng trên khoá hàng và kiểm lại attempts < maxAttempts, nên không ai thử
+   * quá trần được. Đúng mã thì không đổi gì (nơi gọi tự markAsUsed sau khi dùng xong).
+   * Dùng lại cột attempts của OTP SĐT (migration 204).
+   * @param {{ email: string, code: string, type: string, maxAttempts: number }} input
+   * @returns {Promise<object|null>} bản ghi nếu đúng mã; null nếu sai/hết hạn/đã dùng/hết lượt
+   */
+  async verifyCodeWithAttemptLimit({ email, code, type, maxAttempts }) {
+    const { rows } = await db.query(
+      `UPDATE verification_codes AS vc
+       SET attempts = CASE WHEN vc.code = $2::text THEN vc.attempts ELSE vc.attempts + 1 END,
+           is_used = CASE
+             WHEN vc.code <> $2::text AND vc.attempts + 1 >= $4::int THEN TRUE
+             ELSE vc.is_used
+           END
+       WHERE vc.id = (
+           SELECT id FROM verification_codes
+           WHERE LOWER(email) = LOWER($1::text) AND type = $3::text AND is_used = FALSE AND expires_at > NOW()
+           ORDER BY created_at DESC
+           LIMIT 1
+         )
+         AND vc.is_used = FALSE
+         AND vc.expires_at > NOW()
+         AND vc.attempts < $4::int
+       RETURNING vc.*, (vc.code = $2::text) AS code_matched`,
+      [email, code, type, maxAttempts]
     );
-    return result.rows[0] || null;
+    const row = rows[0];
+    if (!row || row.code_matched !== true) return null;
+    const { code_matched: _codeMatched, ...record } = row;
+    return record;
   }
 
   async markAsUsed(id) {

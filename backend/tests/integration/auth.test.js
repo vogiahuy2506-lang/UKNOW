@@ -7,13 +7,14 @@
  * Mỗi test gọi HTTP thật qua supertest và kiểm tra cả response + DB state.
  * Mỗi test phải tự reset DB qua `truncateAll()` để không bị nhiễm chéo.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import crypto from 'crypto';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createVerificationCode, createPlan } from './helpers/db.js';
+import { googleTokenInfoFields, useGoogleTestClientId } from './helpers/googleAuth.js';
 
 let app;
 
@@ -167,6 +168,58 @@ describe('POST /api/auth/register', () => {
 
     expect(res.status).toBe(400);
     expect(await countUsersByEmail(email)).toBe(0);
+  });
+
+  it('nhập sai OTP 5 lần → mã chết, lần 6 nhập ĐÚNG vẫn 400', async () => {
+    const email = 'brute5@test.local';
+    await createVerificationCode({ email, code: '123456' });
+
+    for (let i = 0; i < 5; i += 1) {
+      const wrong = await registerWithCode(email, `00000${i}`, 'brute5', '0916000006');
+      expect(wrong.status).toBe(400);
+    }
+    const { rows } = await db.query(
+      'SELECT attempts, is_used FROM verification_codes WHERE email = $1',
+      [email]
+    );
+    expect(rows[0].attempts).toBe(5);
+    expect(rows[0].is_used).toBe(true);
+
+    const res = await registerWithCode(email, '123456', 'brute5', '0916000006');
+    expect(res.status).toBe(400);
+    expect(await countUsersByEmail(email)).toBe(0);
+  });
+
+  it('nhập sai OTP 4 lần rồi đúng → 201, tạo tài khoản', async () => {
+    const email = 'brute4@test.local';
+    await createVerificationCode({ email, code: '123456' });
+
+    for (let i = 0; i < 4; i += 1) {
+      const wrong = await registerWithCode(email, `00000${i}`, 'brute4', '0916000007');
+      expect(wrong.status).toBe(400);
+    }
+
+    const res = await registerWithCode(email, '123456', 'brute4', '0916000007');
+    expect(res.status).toBe(201);
+    expect(await countUsersByEmail(email)).toBe(1);
+  });
+
+  it('nhập sai song song nhiều lần → attempts không vượt trần, mã chết', async () => {
+    const email = 'parallel@test.local';
+    await createVerificationCode({ email, code: '123456' });
+
+    const wrongCodes = Array.from({ length: 8 }, (_, i) => String(100000 + i));
+    const results = await Promise.all(
+      wrongCodes.map((code) => registerWithCode(email, code, 'parallelotp', '0916000008'))
+    );
+    expect(results.every((r) => r.status === 400)).toBe(true);
+
+    const { rows } = await db.query(
+      'SELECT attempts, is_used FROM verification_codes WHERE email = $1',
+      [email]
+    );
+    expect(rows[0].attempts).toBe(5);
+    expect(rows[0].is_used).toBe(true);
   });
 
   it('email đã tồn tại → 400', async () => {
@@ -445,6 +498,15 @@ describe('POST /api/auth/register — chiếm lại tài khoản pending do ch�
 
 describe('POST /api/auth/google-login', () => {
   let fetchSpy;
+  let restoreGoogleClientId;
+
+  beforeAll(() => {
+    restoreGoogleClientId = useGoogleTestClientId();
+  });
+
+  afterAll(() => {
+    restoreGoogleClientId();
+  });
 
   afterEach(() => {
     fetchSpy?.mockRestore?.();
@@ -466,6 +528,7 @@ describe('POST /api/auth/google-login', () => {
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
+        ...googleTokenInfoFields(),
         email: googleEmail,
         email_verified: true,
         name: 'Google User',
@@ -527,6 +590,7 @@ describe('POST /api/auth/google-login', () => {
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
+        ...googleTokenInfoFields(),
         email: googleEmail,
         email_verified: true,
         name: 'Existing Google User',
@@ -577,6 +641,7 @@ describe('POST /api/auth/google-login', () => {
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
+        ...googleTokenInfoFields(),
         email: 'unverified@test.local',
         email_verified: false,
       }),
@@ -611,6 +676,7 @@ describe('POST /api/auth/google-login', () => {
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
+        ...googleTokenInfoFields(),
         email: pendingEmail,
         email_verified: true,
         name: 'Invited Google Name',
@@ -667,6 +733,7 @@ describe('POST /api/auth/google-login', () => {
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
+        ...googleTokenInfoFields(),
         email,
         email_verified: true,
         name: 'Nguoi That Google',
@@ -711,6 +778,7 @@ describe('POST /api/auth/google-login', () => {
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
       json: async () => ({
+        ...googleTokenInfoFields(),
         email: inactiveEmail,
         email_verified: true,
         name: 'Inactive User',
@@ -724,6 +792,94 @@ describe('POST /api/auth/google-login', () => {
     expect(res.status).toBe(403);
     expect(res.body.success).toBe(false);
     expect(res.body.message).toMatch(/Tài khoản đã bị vô hiệu hóa/i);
+  });
+
+  it('access token cấp cho client Google KHÁC (tokeninfo aud/azp lệch) → 401, không tạo tài khoản', async () => {
+    const email = 'foreign_client@test.local';
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        aud: 'another-app.apps.googleusercontent.com',
+        azp: 'another-app.apps.googleusercontent.com',
+        expires_in: '3599',
+        email,
+        email_verified: true,
+        name: 'Foreign Client',
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'token_from_another_app' });
+
+    expect(res.status).toBe(401);
+    const { rows } = await db.query('SELECT COUNT(*)::int AS n FROM users WHERE LOWER(email) = LOWER($1)', [email]);
+    expect(rows[0].n).toBe(0);
+    // Chỉ gọi tokeninfo, không đọc userinfo
+    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    expect(String(fetchSpy.mock.calls[0][0])).toContain('https://oauth2.googleapis.com/tokeninfo?access_token=');
+  });
+
+  it('tài khoản đang khoá tạm (sai mật khẩu nhiều lần) → Google cũng 403, khoá giữ nguyên', async () => {
+    const lockedEmail = 'locked_google@test.local';
+    const user = await createUser({ username: 'lockedgoogle', email: lockedEmail });
+    await db.query(
+      `UPDATE users SET failed_login_attempts = 5, locked_until = NOW() + INTERVAL '20 minutes' WHERE id = $1`,
+      [user.id]
+    );
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...googleTokenInfoFields(),
+        email: lockedEmail,
+        email_verified: true,
+        name: 'Locked User',
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'google_token_locked' });
+
+    expect(res.status).toBe(403);
+    expect(res.body.message).toMatch(/khóa tạm thời/i);
+    const { rows } = await db.query(
+      'SELECT failed_login_attempts, locked_until FROM users WHERE id = $1',
+      [user.id]
+    );
+    expect(rows[0].failed_login_attempts).toBe(5);
+    expect(rows[0].locked_until).not.toBeNull();
+    expect(new Date(rows[0].locked_until).getTime()).toBeGreaterThan(Date.now());
+  });
+
+  it('khoá tạm đã hết hạn → Google đăng nhập được, bộ đếm sai được xoá', async () => {
+    const email = 'expired_lock_google@test.local';
+    const user = await createUser({ username: 'expiredlockgoogle', email });
+    await db.query(
+      `UPDATE users SET failed_login_attempts = 5, locked_until = NOW() - INTERVAL '1 minute' WHERE id = $1`,
+      [user.id]
+    );
+    fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        ...googleTokenInfoFields(),
+        email,
+        email_verified: true,
+        name: 'Expired Lock',
+      }),
+    });
+
+    const res = await request(app)
+      .post('/api/auth/google-login')
+      .send({ access_token: 'google_token_expired_lock' });
+
+    expect(res.status).toBe(200);
+    const { rows } = await db.query(
+      'SELECT failed_login_attempts, locked_until FROM users WHERE id = $1',
+      [user.id]
+    );
+    expect(rows[0].failed_login_attempts).toBe(0);
+    expect(rows[0].locked_until).toBeNull();
   });
 });
 
@@ -1173,6 +1329,81 @@ describe('POST /api/auth/refresh-token — reuse detection', () => {
       [user.id]
     );
     expect(reuseRows.rows[0].n).toBe(0);
+  });
+
+  it('Origin là subdomain landing → 403, token KHÔNG bị xoay, không cấp access token', async () => {
+    const user = await createUser({ username: 'rlanding', email: 'rlanding@test.local' });
+    const { refreshToken } = await loginForRefresh(user);
+
+    const res = await request(app)
+      .post('/api/auth/refresh-token')
+      .set('Origin', 'https://some-landing.founderai.biz')
+      .set('Sec-Fetch-Site', 'same-site')
+      .set('Cookie', `refreshToken=${refreshToken}`);
+
+    expect(res.status).toBe(403);
+    expect(res.body.code).toBe('UNTRUSTED_ORIGIN');
+    expect(res.body.data).toBeUndefined();
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+
+    const row = await db.query(
+      `SELECT is_revoked FROM refresh_tokens WHERE token_hash = $1`,
+      [hashToken(refreshToken)]
+    );
+    expect(row.rows[0].is_revoked).toBe(false);
+  });
+
+  it('Sec-Fetch-Site cross-site (không Origin) → 403', async () => {
+    const user = await createUser({ username: 'rcross', email: 'rcross@test.local' });
+    const { refreshToken } = await loginForRefresh(user);
+
+    const res = await request(app)
+      .post('/api/auth/refresh-token')
+      .set('Sec-Fetch-Site', 'cross-site')
+      .set('Cookie', `refreshToken=${refreshToken}`);
+
+    expect(res.status).toBe(403);
+  });
+
+  it('app tin cậy (Origin founderai.biz, same-origin) → 200 như cũ', async () => {
+    const user = await createUser({ username: 'rapp', email: 'rapp@test.local' });
+    const { refreshToken } = await loginForRefresh(user);
+
+    const res = await request(app)
+      .post('/api/auth/refresh-token')
+      .set('Origin', 'https://founderai.biz')
+      .set('Sec-Fetch-Site', 'same-origin')
+      .set('Cookie', `refreshToken=${refreshToken}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.accessToken).toEqual(expect.any(String));
+    expect(res.headers['access-control-allow-origin']).toBe('https://founderai.biz');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+  });
+
+  it('logout từ Origin landing → 403, token vẫn sống', async () => {
+    const user = await createUser({ username: 'rlogout', email: 'rlogout@test.local' });
+    const { loginRes, refreshToken } = await loginForRefresh(user);
+
+    const res = await request(app)
+      .post('/api/auth/logout')
+      .set('Origin', 'https://some-landing.founderai.biz')
+      .set('Authorization', `Bearer ${loginRes.body.data.accessToken}`)
+      .set('Cookie', `refreshToken=${refreshToken}`);
+
+    expect(res.status).toBe(403);
+    expect(await countLiveRefreshTokens(user.id)).toBe(1);
+  });
+
+  it('preflight từ subdomain landing → 204 có ACAO nhưng KHÔNG Allow-Credentials', async () => {
+    const res = await request(app)
+      .options('/api/auth/refresh-token')
+      .set('Origin', 'https://some-landing.founderai.biz')
+      .set('Access-Control-Request-Method', 'POST');
+
+    expect(res.status).toBe(204);
+    expect(res.headers['access-control-allow-origin']).toBe('https://some-landing.founderai.biz');
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
   });
 
   it('token xoay đã quá expires_at → 401, không quét reuse', async () => {

@@ -4,7 +4,19 @@ import whatsappCredentialsService from './whatsappCredentials.service.js';
 
 const FB_GRAPH_BASE = 'https://graph.facebook.com/v18.0';
 const STATE_TTL_SECONDS = 10 * 60; // 10 minutes — covers a popup OAuth round-trip
-const STATE_SECRET = process.env.OAUTH_STATE_SECRET || process.env.JWT_SECRET || 'uknow-oauth-state';
+
+/**
+ * Khoá HMAC ký state OAuth: OAUTH_STATE_SECRET, thiếu thì JWT_SECRET. Thiếu cả hai thì ném lỗi
+ * lúc dùng — không ký bằng một chuỗi cố định nằm trong mã nguồn.
+ * @returns {string}
+ */
+export function getOAuthStateSecret() {
+  const secret = process.env.OAUTH_STATE_SECRET || process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('Chưa cấu hình OAUTH_STATE_SECRET (hoặc JWT_SECRET) để ký state OAuth');
+  }
+  return secret;
+}
 
 // Shared pending OAuth store. Keyed by the state token (which has already
 // been HMAC-verified at this point). Cleared after one read or after TTL.
@@ -69,18 +81,25 @@ async function resolveCredentialsForUser(userId, appId) {
 
 /**
  * Sign a state payload so the public callback can verify identity without
- * JWT middleware. Encodes `userId`, `nonce` and `exp` then signs with HMAC.
+ * JWT middleware. Encodes the payload plus `exp` then signs with HMAC.
+ * Dùng chung cho callback WhatsApp, Facebook và Zalo OA (oauth.controller.js) — mỗi luồng
+ * đặt `flow` riêng trong payload và callback kiểm đúng `flow` của mình.
+ * @throws {Error} khi thiếu cả OAUTH_STATE_SECRET lẫn JWT_SECRET
  */
-function signState(payload) {
+export function signState(payload) {
   const body = { ...payload, exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS };
   const encoded = Buffer.from(JSON.stringify(body), 'utf8').toString('base64url');
   const signature = crypto
-    .createHmac('sha256', STATE_SECRET)
+    .createHmac('sha256', getOAuthStateSecret())
     .update(encoded)
     .digest('base64url');
   return `${encoded}.${signature}`;
 }
 
+/**
+ * Kiểm chữ ký + hạn của state do signState tạo. Sai chữ ký/hết hạn/hỏng → null.
+ * @throws {Error} khi thiếu cả OAUTH_STATE_SECRET lẫn JWT_SECRET
+ */
 export function verifyState(stateToken) {
   if (!stateToken || typeof stateToken !== 'string') return null;
   const dotIndex = stateToken.lastIndexOf('.');
@@ -88,7 +107,7 @@ export function verifyState(stateToken) {
   const encoded = stateToken.slice(0, dotIndex);
   const signature = stateToken.slice(dotIndex + 1);
   const expected = crypto
-    .createHmac('sha256', STATE_SECRET)
+    .createHmac('sha256', getOAuthStateSecret())
     .update(encoded)
     .digest('base64url');
   try {
@@ -104,7 +123,8 @@ export function verifyState(stateToken) {
   try {
     const payload = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8'));
     if (!payload || typeof payload !== 'object') return null;
-    if (Number(payload.exp) * 1000 < Date.now()) return null;
+    const exp = Number(payload.exp);
+    if (!Number.isFinite(exp) || exp * 1000 < Date.now()) return null;
     return payload;
   } catch {
     return null;

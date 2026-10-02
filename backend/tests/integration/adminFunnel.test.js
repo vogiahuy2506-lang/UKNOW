@@ -5,11 +5,12 @@
  * Bảng chân lý (đếm tay) ở `seedFunnel()`. Người KHÔNG phải khách nhưng có đủ kênh + tin + đơn (nội bộ, nhân viên thuần,
  * đã xoá, khách đăng ký trước cửa sổ) nằm trong dữ liệu để đột biến "bước sau không giao với bước trước" đỏ.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createPlan, createVerificationCode } from './helpers/db.js';
+import { googleTokenInfoFields, useGoogleTestClientId } from './helpers/googleAuth.js';
 import { insertOrder, addMembership, setCreatedAt, vnMonthStart } from './helpers/adminCustomers.js';
 
 let app;
@@ -250,6 +251,13 @@ describe('phễu dựng từ users', () => {
 
 describe('ghi USER_REGISTERED có id_user (email và Google)', () => {
   let fetchSpy;
+  let restoreGoogleClientId;
+  beforeAll(() => {
+    restoreGoogleClientId = useGoogleTestClientId();
+  });
+  afterAll(() => {
+    restoreGoogleClientId();
+  });
   afterEach(() => {
     fetchSpy?.mockRestore?.();
   });
@@ -280,7 +288,12 @@ describe('ghi USER_REGISTERED có id_user (email và Google)', () => {
     await createPlan({ code: 'trial', name: 'Gói dùng thử', price: 0, durationDays: 10, isActive: true });
     fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ email: 'audit_google@test.local', email_verified: true, name: 'Audit Google' }),
+      json: async () => ({
+        ...googleTokenInfoFields(),
+        email: 'audit_google@test.local',
+        email_verified: true,
+        name: 'Audit Google',
+      }),
     });
     const body = { access_token: 'fake_google_access_token', consents: { terms: true, privacy: true, dpa: true } };
     const first = await request(app).post('/api/auth/google-login').send(body);

@@ -4,6 +4,9 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { generateFileToken } from '../../../utils/fileDownloadToken.js';
 
+// File token ký bằng JWT_SECRET (không còn chuỗi dự phòng) — đọc lúc ký/kiểm nên gán ở đây là đủ.
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-storage-reference-secret';
+
 const query = jest.fn();
 
 jest.unstable_mockModule('../../../config/database.js', () => ({

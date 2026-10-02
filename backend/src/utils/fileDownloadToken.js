@@ -1,6 +1,16 @@
 import crypto from 'crypto';
 
-const getSecret = () => process.env.JWT_SECRET || 'changeme-set-JWT_SECRET';
+/**
+ * Khoá HMAC ký file token = JWT_SECRET. Thiếu thì ném lỗi lúc ký/kiểm — không dùng chuỗi cố định
+ * (ai đọc mã nguồn cũng tự ký được token).
+ */
+const getSecret = () => {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('Chưa cấu hình JWT_SECRET — không ký/kiểm được file token');
+  }
+  return secret;
+};
 
 const b64url = (str) => Buffer.from(str).toString('base64url');
 const fromB64url = (str) => Buffer.from(str, 'base64url').toString('utf8');

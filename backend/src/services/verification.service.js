@@ -22,6 +22,9 @@ const PHONE_OTP_MAX_ATTEMPTS = 5;
 const PHONE_OTP_EXPIRES_MINUTES = 5;
 const PHONE_OTP_DAILY_CAP_DEFAULT = 300;
 
+// Mã xác minh email (6 số): sai 5 lần thì mã chết, phải xin mã mới — cùng trần với OTP SĐT.
+const EMAIL_CODE_MAX_ATTEMPTS = 5;
+
 function resolvePhoneOtpDailyCap() {
   const raw = Number.parseInt(process.env.PHONE_OTP_DAILY_CAP, 10);
   return Number.isFinite(raw) && raw > 0 ? raw : PHONE_OTP_DAILY_CAP_DEFAULT;
@@ -288,8 +291,12 @@ function buildResetEmailHtml({ resetUrl, expiryMinutes = 60 }) {
 // ─── Service ─────────────────────────────────────────────────────────────────
 
 class VerificationService {
+  /**
+   * Mã 6 số cho email/SĐT — sinh bằng CSPRNG (crypto.randomInt), không dùng Math.random.
+   * @returns {string}
+   */
   generateCode() {
-    return Math.floor(100000 + Math.random() * 900000).toString();
+    return crypto.randomInt(100000, 1000000).toString();
   }
 
   async saveVerificationCode(email, code, type = 'email_verification', expiresInMinutes = 10) {
@@ -297,8 +304,25 @@ class VerificationService {
     return verificationRepository.createCode({ email, code, type, expiresInMinutes });
   }
 
+  /**
+   * Kiểm mã xác minh email. Chỉ so với mã còn hiệu lực MỚI NHẤT của (email, type); mỗi lần sai
+   * cộng attempts, sai đủ EMAIL_CODE_MAX_ATTEMPTS lần thì mã chết (kể cả lần sau nhập đúng).
+   * Đúng mã KHÔNG đánh dấu đã dùng — nơi gọi (đăng ký) tự markCodeAsUsed sau khi xong việc.
+   * @param {string} email
+   * @param {string|number} code
+   * @param {string} [type='email_verification']
+   * @returns {Promise<object|null>} bản ghi verification_codes nếu đúng, ngược lại null
+   */
   async verifyCode(email, code, type = 'email_verification') {
-    return verificationRepository.findValidCode({ email, code, type });
+    if (typeof code !== 'string' && typeof code !== 'number') return null;
+    const normalizedCode = String(code);
+    if (!email || !normalizedCode) return null;
+    return verificationRepository.verifyCodeWithAttemptLimit({
+      email,
+      code: normalizedCode,
+      type,
+      maxAttempts: EMAIL_CODE_MAX_ATTEMPTS,
+    });
   }
 
   // ─── OTP theo SĐT ────────────────────────────────────────────────────────────

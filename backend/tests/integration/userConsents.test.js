@@ -11,11 +11,12 @@
  * 7. Xoá cứng user có consent → Bị chặn bởi findPurgeBlockers và FK ON DELETE RESTRICT.
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createVerificationCode, createUser } from './helpers/db.js';
+import { googleTokenInfoFields, useGoogleTestClientId } from './helpers/googleAuth.js';
 import { LEGAL_DOCUMENTS } from '../../src/config/legalDocuments.config.js';
 import { findPurgeBlockers } from '../../src/repositories/admin/adminMembers.repository.js';
 import userConsentRepository from '../../src/repositories/user/userConsent.repository.js';
@@ -140,6 +141,15 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
 
   describe('Đăng ký & Đăng nhập bằng Google qua POST /api/auth/google-login', () => {
     let fetchSpy;
+    let restoreGoogleClientId;
+
+    beforeAll(() => {
+      restoreGoogleClientId = useGoogleTestClientId();
+    });
+
+    afterAll(() => {
+      restoreGoogleClientId();
+    });
 
     afterEach(() => {
       fetchSpy?.mockRestore?.();
@@ -152,6 +162,7 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: googleEmail,
           email_verified: true,
           name: 'Google Newbie',
@@ -223,6 +234,7 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: googleEmail,
           email_verified: true,
           name: 'No Consent User',
@@ -252,6 +264,7 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: googleEmail,
           email_verified: true,
           name: 'Reconsent Flow User',
@@ -297,6 +310,7 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: googleEmail,
           email_verified: true,
           name: 'False DPA User',
@@ -329,6 +343,7 @@ describe('PR-N2: Bảng user_consents & Bốn chốt danh tính', () => {
       fetchSpy = jest.spyOn(global, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: googleEmail,
           email_verified: true,
           name: 'Rollback User',

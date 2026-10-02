@@ -32,6 +32,12 @@ import chatbotShareRepository from '../repositories/ai/chatbotShare.repository.j
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
+const GOOGLE_TOKENINFO_URL = 'https://oauth2.googleapis.com/tokeninfo';
+const GOOGLE_USERINFO_URL = 'https://www.googleapis.com/oauth2/v3/userinfo';
+
+/** Thuật toán ký JWT của hệ thống (jwt.sign ở dưới ký HS256) — verify chỉ nhận đúng thuật toán này. */
+const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] };
+
 const REFRESH_TOKEN_COOKIE = 'refreshToken';
 const REFRESH_TOKEN_PATH = '/api/auth';
 const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
@@ -43,6 +49,27 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'https://founderai.vn';
  * So sánh grace diễn ra trong SQL (`INTERVAL '1 second' * $2`) — một nguồn duy nhất.
  */
 const REFRESH_REUSE_GRACE_SECONDS = 10;
+
+/**
+ * Tài khoản đang trong thời gian khoá tạm (sai mật khẩu nhiều lần) hay không.
+ * @param {{ locked_until?: string|Date|null }} user
+ * @returns {boolean}
+ */
+function isLoginLocked(user) {
+  return Boolean(user?.locked_until) && new Date(user.locked_until) > new Date();
+}
+
+/**
+ * Hỏi Google thông tin một access token (aud/azp, expires_in...).
+ * @param {string} accessToken
+ * @returns {Promise<object|null>} null nếu Google báo token không hợp lệ/hết hạn
+ */
+async function fetchGoogleAccessTokenInfo(accessToken) {
+  const resp = await fetch(`${GOOGLE_TOKENINFO_URL}?access_token=${encodeURIComponent(accessToken)}`);
+  if (!resp.ok) return null;
+  const info = await resp.json();
+  return info && typeof info === 'object' ? info : null;
+}
 
 class AuthController {
   setRefreshTokenCookie(res, token, rememberMe = true) {
@@ -545,12 +572,20 @@ class AuthController {
         return res.status(400).json({ success: false, message: 'Thiếu Google credential' });
       }
 
+      // Token Google chỉ được tin khi được cấp cho CHÍNH OAuth client của app. Thiếu GOOGLE_CLIENT_ID
+      // thì không kiểm được điều đó (verifyIdToken bỏ qua audience rỗng) → từ chối thay vì tin mù.
+      const googleClientId = process.env.GOOGLE_CLIENT_ID;
+      if (!googleClientId) {
+        console.error('[Auth] GOOGLE_CLIENT_ID chưa cấu hình — từ chối đăng nhập Google.');
+        return res.status(503).json({ success: false, message: 'Đăng nhập Google tạm thời chưa khả dụng' });
+      }
+
       // 1. Verify Google token (ID token or access token)
       let email, name, picture;
       if (credential) {
         const ticket = await googleClient.verifyIdToken({
           idToken: credential,
-          audience: process.env.GOOGLE_CLIENT_ID,
+          audience: googleClientId,
         });
         const payload = ticket.getPayload();
         // Cùng luật với nhánh access_token bên dưới — email chưa xác thực thì bất kỳ
@@ -562,7 +597,17 @@ class AuthController {
         name = payload.name;
         picture = payload.picture;
       } else {
-        const resp = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        // Access token (luồng implicit của frontend): chỉ nhận token cấp cho app (aud/azp =
+        // GOOGLE_CLIENT_ID) và còn hạn — kiểm qua tokeninfo TRƯỚC khi đọc email từ userinfo.
+        const tokenInfo = await fetchGoogleAccessTokenInfo(access_token);
+        const issuedForApp = Boolean(tokenInfo)
+          && (tokenInfo.aud === googleClientId || tokenInfo.azp === googleClientId);
+        const expiresIn = Number(tokenInfo?.expires_in);
+        if (!issuedForApp || !Number.isFinite(expiresIn) || expiresIn <= 0) {
+          return res.status(401).json({ success: false, message: 'Google access token không hợp lệ' });
+        }
+
+        const resp = await fetch(GOOGLE_USERINFO_URL, {
           headers: { Authorization: `Bearer ${access_token}` },
         });
         if (!resp.ok) {
@@ -732,6 +777,14 @@ class AuthController {
       } else {
         user = result.rows[0];
 
+        // Cùng luật với đăng nhập mật khẩu: tài khoản đang bị khoá tạm thì Google cũng không mở được.
+        if (isLoginLocked(user)) {
+          return res.status(403).json({
+            success: false,
+            message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
+          });
+        }
+
         // Nếu status không active
         if (user.status === 'pending_activation') {
           // A4: Nhân viên được mời nhưng chọn đăng nhập bằng Google thay vì bấm link kích hoạt
@@ -766,13 +819,6 @@ class AuthController {
         } else if (user.status !== 'active') {
           return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
         }
-        // TEMPORARILY DISABLED: login lockout check (Google OAuth)
-        // if (user.locked_until && new Date(user.locked_until) > new Date()) {
-        //   return res.status(403).json({
-        //     success: false,
-        //     message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.',
-        //   });
-        // }
         // Cập nhật thông tin profile nếu có thay đổi từ Google
         if (user.full_name !== name || user.avatar_url !== picture || !user.is_verified) {
           await client.query(
@@ -784,10 +830,13 @@ class AuthController {
         }
       }
 
-      // 4. Update login status
+      // 4. Update login status — KHÔNG xoá khoá tạm còn hiệu lực (có thể vừa được đặt bởi một lượt
+      // sai mật khẩu chạy song song sau khi đã kiểm isLoginLocked ở trên).
       await client.query(
-        `UPDATE users SET failed_login_attempts = 0, locked_until = NULL,
-          last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1
+        `UPDATE users
+         SET failed_login_attempts = CASE WHEN locked_until > NOW() THEN failed_login_attempts ELSE 0 END,
+             locked_until = CASE WHEN locked_until > NOW() THEN locked_until ELSE NULL END,
+             last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1
          WHERE id = $2`,
         [ipAddress, user.id]
       );
@@ -869,7 +918,7 @@ class AuthController {
       }
 
       try {
-        jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+        jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET, JWT_VERIFY_OPTIONS);
       } catch {
         this.clearRefreshTokenCookie(res);
         return res.status(401).json({
@@ -1262,7 +1311,7 @@ class AuthController {
     return jwt.sign(
       { userId: user.id, email: user.email, role: user.role || 'user' },
       process.env.JWT_SECRET,
-      { expiresIn: process.env.JWT_EXPIRES_IN || '3h' }
+      { expiresIn: process.env.JWT_EXPIRES_IN || '3h', algorithm: 'HS256' }
     );
   }
 
@@ -1270,7 +1319,7 @@ class AuthController {
     const token = jwt.sign(
       { userId: user.id, tokenId: uuidv4() },
       process.env.JWT_REFRESH_SECRET,
-      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+      { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d', algorithm: 'HS256' }
     );
 
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);

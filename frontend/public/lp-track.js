@@ -72,7 +72,11 @@
     try {
       var payload = JSON.stringify({ slug: slug, targetUrl: targetUrl });
       if (navigator.sendBeacon) {
-        var blob = new Blob([payload], { type: 'application/json' });
+        // Beacon luôn gửi kèm credentials; body form-urlencoded (Content-Type được CORS cho phép sẵn)
+        // nên không cần preflight — API không cấp CORS kèm credentials cho origin landing.
+        // Backend đọc body này qua express.urlencoded (app.js).
+        var form = 'slug=' + encodeURIComponent(slug) + '&targetUrl=' + encodeURIComponent(targetUrl);
+        var blob = new Blob([form], { type: 'application/x-www-form-urlencoded' });
         navigator.sendBeacon(apiBase + '/public/landing-analytics/click', blob);
       } else if (window.fetch) {
         fetch(apiBase + '/public/landing-analytics/click', {

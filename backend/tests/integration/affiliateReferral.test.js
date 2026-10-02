@@ -14,11 +14,12 @@
  *    - GET /api/auth/me trả về referralCode.
  *    - GET /api/users/profile trả về referralCode.
  */
-import { describe, it, expect, beforeAll, beforeEach, afterEach, jest } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
 import { truncateAll, createUser, createVerificationCode, createPlan, assignPlanToUser } from './helpers/db.js';
+import { googleTokenInfoFields, useGoogleTestClientId } from './helpers/googleAuth.js';
 import { isValidReferralCodeFormat } from '../../src/utils/affiliateReferral.util.js';
 
 let app;
@@ -160,6 +161,16 @@ describe('Affiliate PR-A1 — Mã giới thiệu & Gán người giới thiệu'
   });
 
   describe('Đường Google Login (Đăng ký mới & Đăng nhập cũ)', () => {
+    let restoreGoogleClientId;
+
+    beforeAll(() => {
+      restoreGoogleClientId = useGoogleTestClientId();
+    });
+
+    afterAll(() => {
+      restoreGoogleClientId();
+    });
+
     it('Google user mới đăng ký kèm referralCode: gán người giới thiệu và sinh mã', async () => {
       const referrer = await createUser({
         username: 'google_referrer',
@@ -172,6 +183,7 @@ describe('Affiliate PR-A1 — Mã giới thiệu & Gán người giới thiệu'
       fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: googleEmail,
           email_verified: true,
           name: 'Google Buyer',
@@ -233,6 +245,7 @@ describe('Affiliate PR-A1 — Mã giới thiệu & Gán người giới thiệu'
       fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: 'buyer_existing@test.local',
           email_verified: true,
           name: 'Existing Buyer',
@@ -270,6 +283,7 @@ describe('Affiliate PR-A1 — Mã giới thiệu & Gán người giới thiệu'
       fetchSpy = jest.spyOn(globalThis, 'fetch').mockResolvedValue({
         ok: true,
         json: async () => ({
+          ...googleTokenInfoFields(),
           email: 'SAME_EMAIL@test.local', // Cùng email (khác case)
           email_verified: true,
           name: 'Same Email',

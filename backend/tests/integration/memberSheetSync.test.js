@@ -11,6 +11,7 @@ import http from 'http';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { truncateAll, createUser, createVerificationCode } from './helpers/db.js';
+import { googleTokenInfoFields, useGoogleTestClientId } from './helpers/googleAuth.js';
 import db from '../../src/config/database.js';
 
 let app;
@@ -165,12 +166,22 @@ describe('Đăng ký → đẩy sang Google Sheet', () => {
 });
 
 describe('Đăng ký Google → đẩy sang Google Sheet (PR-A 15/09)', () => {
-  // Chỉ giả fetch tới Google userinfo; pushMemberToSheet đi bằng axios (adapter http của
-  // Node) nên vẫn tới server giả thật, không bị spy này chặn.
+  let restoreGoogleClientId;
+
+  beforeAll(() => {
+    restoreGoogleClientId = useGoogleTestClientId();
+  });
+
+  afterAll(() => {
+    restoreGoogleClientId();
+  });
+
+  // Chỉ giả fetch tới Google tokeninfo + userinfo; pushMemberToSheet đi bằng axios (adapter http
+  // của Node) nên vẫn tới server giả thật, không bị spy này chặn.
   function mockGoogleUserinfo(email, name) {
     return jest.spyOn(global, 'fetch').mockResolvedValue({
       ok: true,
-      json: async () => ({ email, email_verified: true, name }),
+      json: async () => ({ ...googleTokenInfoFields(), email, email_verified: true, name }),
     });
   }
 

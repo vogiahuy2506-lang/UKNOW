@@ -1,5 +1,8 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
+// Ref đính kèm chat ký bằng JWT_SECRET (không còn chuỗi dự phòng) — đọc lúc ký/kiểm nên gán ở đây là đủ.
+process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-chat-attachment-catalog-secret';
+
 const mockQuery = jest.fn();
 const mockBuildUrl = jest.fn((key, opts = {}) => `/file/token-for-${key}${opts.preview ? '?p=1' : ''}`);
 const mockSanitize = jest.fn((name) => String(name || 'file').replace(/\.[^.]+$/, '').replace(/[^\w.-]/g, '_') || 'file');

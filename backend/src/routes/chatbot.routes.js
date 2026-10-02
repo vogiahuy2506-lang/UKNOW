@@ -54,7 +54,7 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 
   let decoded;
   try {
-    decoded = jwt.verify(String(token), process.env.JWT_SECRET);
+    decoded = jwt.verify(String(token), process.env.JWT_SECRET, { algorithms: ['HS256'] });
   } catch (err) {
     console.error('[SSE] JWT verify failed:', err.message);
     return res.status(401).json({ success: false, message: 'Invalid token' });

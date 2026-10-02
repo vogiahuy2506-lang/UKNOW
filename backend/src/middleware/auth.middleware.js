@@ -1,6 +1,9 @@
 import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
 
+/** Access token do auth.controller ký HS256 — verify chỉ nhận đúng thuật toán này. */
+const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] };
+
 /**
  * Load user + activeContext (self / employee) for a known userId.
  * Shared by authMiddleware and SSE (query-token) so plan checks stay in one place.
@@ -181,7 +184,7 @@ const authMiddleware = async (req, res, next) => {
 
     let decoded;
     try {
-      decoded = jwt.verify(token, process.env.JWT_SECRET);
+      decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
     } catch (jwtError) {
       if (jwtError.name === 'TokenExpiredError') {
         return res.status(401).json({
@@ -232,7 +235,7 @@ export function attachUserIdForRateLimit(req, _res, next) {
     const authHeader = req.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
       const token = authHeader.slice(7);
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const decoded = jwt.verify(token, process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
       if (decoded?.userId != null) {
         req.rateLimitUserId = decoded.userId;
       }
@@ -250,7 +253,7 @@ export function attachSseUserIdForRateLimit(req, _res, next) {
   try {
     const token = req.query?.token;
     if (token) {
-      const decoded = jwt.verify(String(token), process.env.JWT_SECRET);
+      const decoded = jwt.verify(String(token), process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);
       if (decoded?.userId != null) {
         req.rateLimitUserId = decoded.userId;
       }

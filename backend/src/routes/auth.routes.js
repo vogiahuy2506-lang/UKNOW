@@ -4,6 +4,7 @@ import authController from '../controllers/auth.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
 import { loginAccountLimiter, loginIpLimiter, authCredentialLimiter } from '../middleware/rateLimiter.middleware.js';
+import { requireTrustedAppOrigin } from '../middleware/dynamicCors.middleware.js';
 
 const router = express.Router();
 const USERNAME_REGEX = /^[A-Za-z0-9]+$/;
@@ -99,11 +100,12 @@ router.post('/google-login',
   authController.googleLogin.bind(authController)
 );
 
-// Refresh token — đọc từ cookie, không cần body
-router.post('/refresh-token', authController.refreshToken.bind(authController));
+// Refresh token — đọc từ cookie, không cần body. Hai route đọc cookie refresh token chỉ nhận request
+// từ app tin cậy (requireTrustedAppOrigin: Origin + Sec-Fetch-Site), không nhận từ landing/trang khác.
+router.post('/refresh-token', requireTrustedAppOrigin, authController.refreshToken.bind(authController));
 
 // Đăng xuất
-router.post('/logout', authMiddleware, authController.logout.bind(authController));
+router.post('/logout', requireTrustedAppOrigin, authMiddleware, authController.logout.bind(authController));
 
 // Lấy thông tin user hiện tại
 router.get('/me', authMiddleware, authController.getMe.bind(authController));
