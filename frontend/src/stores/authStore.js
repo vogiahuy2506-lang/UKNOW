@@ -3,6 +3,7 @@ import api, { setAuthStore } from '../services/api';
 import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
 import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 import { clearQueryCache, queryClient } from '../lib/queryClient';
+import { clearAllDrafts as clearLandingCanvasDrafts } from '../features/landing-canvas/utils/landingCanvasDraft.js';
 
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
 
@@ -480,6 +481,8 @@ export const useAuthStore = create((set, get) => ({
       removeToken('accessToken');
       safeRemoveItem(window.sessionStorage, CONTEXT_STORAGE_KEY);
       notifyStorageQuotaClear();
+      // Máy dùng chung: nháp landing của người trước không được lộ cho người sau.
+      clearLandingCanvasDrafts();
       await clearQueryCache();
       set({
         user: null,
