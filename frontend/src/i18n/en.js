@@ -4099,6 +4099,7 @@ export default {
   // Email Template Editor Modal
   emailTemplateEditor: {
     editTemplate: 'Edit Template',
+    saveChanges: 'Save changes',
     createTemplate: 'Create Template',
     fillInfoAndDesign: 'Fill in information and design content',
     templateName: 'Template name',

@@ -4111,6 +4111,7 @@ export default {
   // Email Template Editor Modal
   emailTemplateEditor: {
     editTemplate: 'Chỉnh sửa template',
+    saveChanges: 'Lưu thay đổi',
     createTemplate: 'Tạo template mới',
     fillInfoAndDesign: 'Điền thông tin và thiết kế nội dung',
     templateName: 'Tên template',

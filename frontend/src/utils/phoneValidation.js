@@ -60,7 +60,9 @@ export function normalizeAccountPhone(raw) {
   if (digits.startsWith('84') && digits.length >= 10) {
     return `0${digits.slice(2)}`.slice(0, 20);
   }
-  if (digits.length === 9 && /^[35789]/.test(digits)) {
+  // Luật SĐT tài khoản (15/09) chỉ bù 0 cho số 9 chữ số đầu 9 — PHẢI khớp backend
+  // `accountPhone.util.js`. Bù 0 cho đầu 3/5/7/8 là luật gửi Zalo, nằm ở normalizePhoneForZalo bên dưới.
+  if (digits.length === 9 && digits.startsWith('9')) {
     return `0${digits}`.slice(0, 20);
   }
   return digits.slice(0, 20);
