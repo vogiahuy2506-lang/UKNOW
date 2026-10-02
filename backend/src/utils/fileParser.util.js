@@ -1,11 +1,11 @@
 import module from 'module';
 import path from 'path';
+import { parseLegacySpreadsheet } from './legacySpreadsheetParser.util.js';
 
 const require = module.createRequire(import.meta.url);
 const mammoth = require('mammoth');
 const pdfParse = require('pdf-parse');
 const ExcelJS = require('exceljs');
-const XLSX = require('xlsx');
 const Papa = require('papaparse');
 const JSZip = require('jszip');
 const WordExtractor = require('word-extractor');
@@ -130,15 +130,12 @@ export async function extractTextFromBuffer(buffer, originalName, contentType, o
     }
   }
 
-  // 3. Excel Spreadsheets (.xls legacy format via SheetJS)
+  // 3. Excel Spreadsheets (.xls legacy format via SheetJS — đọc trong worker cô lập, có timeout
+  //    và trần bộ nhớ: `xlsx@0.18.5` còn lỗ hổng khi đọc tệp lạ, xem legacySpreadsheetParser.util.js)
   if (ext === '.xls' || mime === 'application/vnd.ms-excel') {
     try {
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      const parts = workbook.SheetNames.map((sheetName) => {
-        const sheet = workbook.Sheets[sheetName];
-        const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false });
-        return `--- Sheet: ${sheetName} ---\n${csv}`;
-      });
+      const { sheets } = await parseLegacySpreadsheet(buffer, { output: 'csv' });
+      const parts = sheets.map(({ name, csv }) => `--- Sheet: ${name} ---\n${csv}`);
       return parts.join('\n\n').trim();
     } catch (err) {
       console.error('[FileParser] Excel .xls parse error:', err);

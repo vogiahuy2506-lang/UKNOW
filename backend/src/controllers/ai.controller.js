@@ -2508,7 +2508,7 @@ class AiController {
         result = await recipientExtractorService.extractRecipientsFromGoogleSheet(sheetUrl, sheetName);
       } else if (tempId) {
         const buffer = await uploadController.readTempFileBuffer(tempId, originalName);
-        result = recipientExtractorService.extractRecipientsFromBuffer(buffer, originalName, contentType);
+        result = await recipientExtractorService.extractRecipientsFromBuffer(buffer, originalName, contentType);
       } else {
         return res.status(400).json({
           success: false,

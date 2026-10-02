@@ -6,9 +6,10 @@ import {
   validateManualRecipients,
 } from '../../utils/manualRecipients.util.js';
 import { normalizeVietnamesePhone, isValidVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
+import { assertSpreadsheetSize, parseLegacySpreadsheet } from '../../utils/legacySpreadsheetParser.util.js';
 
 const require = module.createRequire(import.meta.url);
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
 const Papa = require('papaparse');
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -27,7 +28,95 @@ import {
   isNameHeader,
 } from '../../utils/columnHeaderMatch.util.js';
 
-export function extractRecipientsFromBuffer(
+/** Chữ ký tệp ZIP ("PK\x03\x04") — .xlsx là một gói ZIP OOXML. */
+function isZipBuffer(buffer) {
+  return buffer.length >= 4
+    && buffer[0] === 0x50 && buffer[1] === 0x4b && buffer[2] === 0x03 && buffer[3] === 0x04;
+}
+
+function emptySpreadsheetError() {
+  const error = new Error('Không tìm thấy trang tính trong file Excel.');
+  error.code = 'EMPTY_SPREADSHEET';
+  error.statusCode = 400;
+  return error;
+}
+
+/** Ngày của ExcelJS → số sê-ri Excel, đúng giá trị SheetJS trả về khi không bật `cellDates`. */
+function dateToExcelSerial(date, date1904) {
+  const serial = 25569 + date.getTime() / 86400000 - (date1904 ? 1462 : 0);
+  return Math.round(serial * 1e10) / 1e10;
+}
+
+/**
+ * Giá trị ô ExcelJS → giá trị thô như `XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' })`:
+ * chuỗi / số / boolean giữ nguyên, công thức lấy kết quả đã lưu, rich text / hyperlink lấy chữ,
+ * ô lỗi và ô trống thành ''.
+ */
+function excelJsValueToRaw(value, date1904) {
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') return value;
+  if (Object.prototype.toString.call(value) === '[object Date]') return dateToExcelSerial(value, date1904);
+  if (typeof value === 'object') {
+    if (Array.isArray(value.richText)) {
+      return value.richText.map((part) => String(part?.text ?? '')).join('');
+    }
+    if ('formula' in value || 'sharedFormula' in value) return excelJsValueToRaw(value.result, date1904);
+    if ('hyperlink' in value) return excelJsValueToRaw(value.text, date1904);
+  }
+  return '';
+}
+
+/**
+ * Đọc trang tính đầu tiên của tệp .xlsx bằng ExcelJS, trả về mảng dòng (mỗi dòng là mảng ô).
+ *
+ * Phần tử i là dòng i+1 trong Excel, để số dòng báo cho người dùng khớp thanh số dòng của Excel.
+ * Mảng để THƯA (dòng trống / ô trống là lỗ hổng, không lấp ''): một ô lạc ở cột XFD hay dòng
+ * 1.048.576 không được phép biến thành hàng triệu phần tử rỗng trong bộ nhớ. Phần xử lý phía sau
+ * (`forEach`, `some`, đọc theo chỉ số cột) vốn bỏ qua lỗ hổng.
+ */
+async function readFirstSheetRowsWithExcelJs(buffer) {
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.load(buffer);
+  const sheet = workbook.worksheets[0];
+  if (!sheet) throw emptySpreadsheetError();
+
+  const date1904 = Boolean(workbook.properties?.date1904);
+  const rows = [];
+  sheet.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+    const cells = [];
+    row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+      // Ô bị gộp (không phải ô đầu vùng) — SheetJS để trống, ExcelJS lại trả giá trị ô đầu.
+      cells[colNumber - 1] = cell.type === ExcelJS.ValueType.Merge ? '' : excelJsValueToRaw(cell.value, date1904);
+    });
+    rows[rowNumber - 1] = cells;
+  });
+  return rows;
+}
+
+/**
+ * Đọc trang tính đầu tiên của tệp bảng tính (không phải CSV).
+ *
+ * - Gói ZIP (.xlsx) → ExcelJS, chạy ngay trong tiến trình.
+ * - Còn lại (.xls BIFF, HTML/XML đội lốt .xls…) → SheetJS trong worker cô lập
+ *   (`legacySpreadsheetParser.util.js`): `xlsx@0.18.5` còn lỗ hổng khi đọc tệp lạ.
+ * - Gói ZIP mà ExcelJS không đọc được cũng thử lại bằng worker, để tệp trước đây đọc được
+ *   không bỗng dưng bị từ chối.
+ */
+async function readFirstSheetRows(buffer) {
+  if (isZipBuffer(buffer)) {
+    try {
+      return await readFirstSheetRowsWithExcelJs(buffer);
+    } catch (err) {
+      if (err.statusCode) throw err;
+      console.warn(`[RecipientExtractor] ExcelJS không đọc được tệp, thử bộ đọc dự phòng: ${err.message}`);
+    }
+  }
+  const { sheetName, rows } = await parseLegacySpreadsheet(buffer, { output: 'rows' });
+  if (!sheetName) throw emptySpreadsheetError();
+  return rows;
+}
+
+export async function extractRecipientsFromBuffer(
   buffer,
   originalName = '',
   contentType = '',
@@ -51,16 +140,8 @@ export function extractRecipientsFromBuffer(
       const parsed = Papa.parse(csvStr, { skipEmptyLines: true });
       rawRows = Array.isArray(parsed.data) ? parsed.data : [];
     } else {
-      const workbook = XLSX.read(buffer, { type: 'buffer' });
-      const firstSheetName = workbook.SheetNames[0];
-      if (!firstSheetName) {
-        const error = new Error('Không tìm thấy trang tính trong file Excel.');
-        error.code = 'EMPTY_SPREADSHEET';
-        error.statusCode = 400;
-        throw error;
-      }
-      const sheet = workbook.Sheets[firstSheetName];
-      rawRows = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+      assertSpreadsheetSize(buffer);
+      rawRows = await readFirstSheetRows(buffer);
     }
   } catch (err) {
     if (err.statusCode) throw err;

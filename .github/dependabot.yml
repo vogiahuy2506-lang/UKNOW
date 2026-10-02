@@ -1,0 +1,115 @@
+# Dependabot — cập nhật phụ thuộc hằng tuần, sáng thứ Hai 02:00 giờ Việt Nam (ngoài giờ cao điểm).
+#
+# - Bản minor + patch của mỗi thư mục gom vào MỘT PR để đỡ nhiễu; bản major vẫn tách PR riêng
+#   vì thường phải đọc changelog / sửa code.
+# - Mỗi mục tối đa 5 PR mở cùng lúc.
+# - PR cảnh báo bảo mật (security updates) của GitHub vẫn chạy riêng, không bị lịch này chặn.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      backend-minor-patch:
+        update-types: [minor, patch]
+        # sanitize-html >= 2.17.6 cần htmlparser2 12 (chỉ có bản ESM) nên Jest 29 của backend không
+        # require() được → cả suite unit đỏ. Tách PR riêng để nó không chặn các bản vá khác trong
+        # nhóm; gỡ dòng này khi test runner đã hỗ trợ require(esm).
+        exclude-patterns:
+          - sanitize-html
+
+  - package-ecosystem: npm
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      frontend-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: npm
+    directory: /e2e
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      e2e-minor-patch:
+        update-types: [minor, patch]
+
+  # package.json ở gốc repo chỉ để cài husky (git hooks).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      root-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+    groups:
+      github-actions-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /backend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      backend-docker-minor-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: docker
+    directory: /frontend
+    schedule:
+      interval: weekly
+      day: monday
+      time: "02:00"
+      timezone: Asia/Ho_Chi_Minh
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(docker)"
+    groups:
+      frontend-docker-minor-patch:
+        update-types: [minor, patch]

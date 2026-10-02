@@ -53,22 +53,21 @@ const mockPapa = {
   })
 };
 
-const mockXLSX = {
-  read: jest.fn().mockImplementation((buffer) => {
-    if (buffer.toString() === 'error') {
-      throw new Error('XLS mock error');
-    }
-    return {
-      SheetNames: ['Sheet1'],
-      Sheets: {
-        Sheet1: {}
-      }
-    };
-  }),
-  utils: {
-    sheet_to_csv: jest.fn().mockReturnValue('ColA,ColB\nValA,ValB')
+// .xls không còn đọc bằng SheetJS ở tiến trình chính mà qua worker cô lập
+// (legacySpreadsheetParser.util.js — có spec riêng chạy worker thật). Ở đây chỉ mock worker để
+// canh phần fileParser tự làm: định dạng văn bản trả ra và cách bọc lỗi.
+const mockParseLegacySpreadsheet = jest.fn().mockImplementation(async (buffer) => {
+  if (buffer.toString() === 'error') {
+    throw new Error('XLS mock error');
   }
-};
+  return { sheets: [{ name: 'Sheet1', csv: 'ColA,ColB\nValA,ValB' }] };
+});
+
+jest.unstable_mockModule('../legacySpreadsheetParser.util.js', () => ({
+  parseLegacySpreadsheet: mockParseLegacySpreadsheet,
+  assertSpreadsheetSize: jest.fn(),
+  default: { parseLegacySpreadsheet: mockParseLegacySpreadsheet, assertSpreadsheetSize: jest.fn() },
+}));
 
 const mockJSZip = jest.fn().mockImplementation(() => {
   return {
@@ -103,7 +102,7 @@ jest.spyOn(moduleLib, 'createRequire').mockImplementation((metaUrl) => {
     if (id === 'pdf-parse') return mockPdfParse;
     if (id === 'mammoth') return mockMammoth;
     if (id === 'exceljs') return mockExcelJS;
-    if (id === 'xlsx') return mockXLSX;
+    if (id === 'xlsx') throw new Error('fileParser không được nạp SheetJS ở tiến trình chính');
     if (id === 'papaparse') return mockPapa;
     if (id === 'jszip') return mockJSZip;
     return actualCreateRequire(metaUrl)(id);
@@ -181,17 +180,37 @@ describe('fileParser.util', () => {
       .rejects.toThrow('Không thể giải nén file CSV');
   });
 
-  it('should parse legacy Excel files (.xls) using xlsx', async () => {
+  it('should parse legacy Excel files (.xls) via the isolated SheetJS worker', async () => {
     const buffer = Buffer.from('XLS_BYTES');
     const result = await extractTextFromBuffer(buffer, 'test.xls', 'application/vnd.ms-excel');
-    expect(result).toContain('--- Sheet: Sheet1 ---');
-    expect(result).toContain('ColA,ColB\nValA,ValB');
+    expect(mockParseLegacySpreadsheet).toHaveBeenCalledWith(buffer, { output: 'csv' });
+    expect(result).toBe('--- Sheet: Sheet1 ---\nColA,ColB\nValA,ValB');
+  });
+
+  it('nối nhiều trang tính .xls bằng một dòng trống, giữ đúng định dạng cũ', async () => {
+    mockParseLegacySpreadsheet.mockResolvedValueOnce({
+      sheets: [
+        { name: 'Bang gia', csv: 'Goi,Gia\nPro,299000' },
+        { name: 'Trong', csv: '' },
+      ],
+    });
+    const result = await extractTextFromBuffer(Buffer.from('XLS_BYTES'), 'bang-gia.xls', '');
+    expect(result).toBe('--- Sheet: Bang gia ---\nGoi,Gia\nPro,299000\n\n--- Sheet: Trong ---');
   });
 
   it('should handle legacy Excel (.xls) parsing errors', async () => {
     const buffer = Buffer.from('error');
     await expect(extractTextFromBuffer(buffer, 'test.xls', 'application/vnd.ms-excel'))
       .rejects.toThrow('Không thể giải nén file Excel (.xls)');
+  });
+
+  it('.xls quá thời gian đọc trong worker → vẫn là lỗi "Không thể giải nén file Excel (.xls)"', async () => {
+    mockParseLegacySpreadsheet.mockRejectedValueOnce(Object.assign(
+      new Error('Đọc tệp bảng tính quá 15 giây nên đã dừng.'),
+      { code: 'SPREADSHEET_PARSE_TIMEOUT', statusCode: 400 }
+    ));
+    await expect(extractTextFromBuffer(Buffer.from('XLS_BYTES'), 'cham.xls', 'application/vnd.ms-excel'))
+      .rejects.toThrow('Không thể giải nén file Excel (.xls): Đọc tệp bảng tính quá 15 giây nên đã dừng.');
   });
 
   it('should handle legacy Word (.doc) parsing errors by throwing', async () => {
