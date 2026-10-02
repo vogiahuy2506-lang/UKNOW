@@ -22,6 +22,7 @@ import {
   isZaloPartialDeliveryResult,
 } from '../../utils/zaloDispatchDelivery.util.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import { normalizePhoneForZaloCampaign } from '../../utils/zaloPhoneCampaign.util.js';
 import {
   reserveSendQuota,
   markSendQuotaSending,
@@ -1828,21 +1829,21 @@ class CampaignZaloSenderService {
    * @returns {Promise<string>}
    */
   async resolveUidFromPhone(api, phone) {
-    const safePhone = String(phone || '').trim();
-    if (!safePhone) throw new Error('Thiếu số điện thoại');
+    const normalizedPhone = normalizePhoneForZaloCampaign(phone) || String(phone || '').trim();
+    if (!normalizedPhone) throw new Error('Thiếu số điện thoại');
     const userInfo = await executeWithZaloTimeoutRetry({
       operationName: 'resolve_uid_from_phone',
-      operation: () => api.findUser(safePhone),
+      operation: () => api.findUser(normalizedPhone),
       onRetry: ({ attempt, maxAttempts, delayMs }) => {
         console.warn(
           `[ZaloRetry] op=resolve_uid_from_phone attempt=${attempt}/${maxAttempts} `
-          + `next_delay_ms=${delayMs} phone=${safePhone}`
+          + `next_delay_ms=${delayMs} phone=${normalizedPhone}`
         );
       },
     });
     const uid = String(userInfo?.uid || '').trim();
     if (!uid) {
-      throw new Error(`Không tìm thấy user Zalo theo số ${safePhone}`);
+      throw new Error(`Không tìm thấy user Zalo theo số ${normalizedPhone}`);
     }
     const zaloName = String(
       userInfo?.zalo_display
@@ -1873,7 +1874,8 @@ class CampaignZaloSenderService {
     if (normalizedRecipientType === 'uid') {
       return { uid: safeRecipient, zaloName: null };
     }
-    return this.resolveUidFromPhone(api, safeRecipient);
+    const normalizedPhone = normalizePhoneForZaloCampaign(safeRecipient) || safeRecipient;
+    return this.resolveUidFromPhone(api, normalizedPhone);
   }
 
   /**
@@ -2185,7 +2187,10 @@ class CampaignZaloSenderService {
     const normalizedRecipientType = String(recipientType || 'phone').trim().toLowerCase() === 'uid'
       ? 'uid'
       : 'phone';
-    const normalizedRecipient = String(recipient || '').trim();
+    const rawRecipient = String(recipient || '').trim();
+    const normalizedRecipient = normalizedRecipientType === 'phone'
+      ? (normalizePhoneForZaloCampaign(rawRecipient) || rawRecipient)
+      : rawRecipient;
     const lookupStartedAt = Date.now();
     let resolved;
     try {
@@ -2371,19 +2376,20 @@ class CampaignZaloSenderService {
    * @returns {Promise<object>}
    */
   async sendFriendRequest({ api, phone, message }) {
-    const { uid } = await this.resolveUidFromPhone(api, phone);
+    const normalizedPhone = normalizePhoneForZaloCampaign(phone) || String(phone || '').trim();
+    const { uid } = await this.resolveUidFromPhone(api, normalizedPhone);
     const sendResponse = await executeWithZaloTimeoutRetry({
       operationName: 'send_friend_request',
       operation: () => api.sendFriendRequest(String(message || ''), uid),
       onRetry: ({ attempt, maxAttempts, delayMs }) => {
         console.warn(
           `[ZaloRetry] op=send_friend_request attempt=${attempt}/${maxAttempts} `
-          + `next_delay_ms=${delayMs} phone=${String(phone || '').trim()}`
+          + `next_delay_ms=${delayMs} phone=${normalizedPhone}`
         );
       },
     });
     return {
-      phone: String(phone || '').trim(),
+      phone: normalizedPhone,
       uid,
       status: 'success',
       response: sendResponse || null,

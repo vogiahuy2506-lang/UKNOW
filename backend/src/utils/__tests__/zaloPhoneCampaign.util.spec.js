@@ -26,8 +26,28 @@ describe('normalizePhoneForZaloCampaign', () => {
     expect(normalizePhoneForZaloCampaign('912345678')).toBe('0912345678');
   });
 
-  it('812345678 (9 số, thiếu 0, KHÔNG bắt đầu bằng 9) → giữ nguyên 9 số (Bẫy 2b, chưa vá gốc)', () => {
-    expect(normalizePhoneForZaloCampaign('812345678')).toBe('812345678');
+  it('877909606 (9 số, thiếu 0, đầu 8 Itelecom/VNPT) → khôi phục thành 0877909606', () => {
+    expect(normalizePhoneForZaloCampaign('877909606')).toBe('0877909606');
+  });
+
+  it('812345678 (9 số, thiếu 0, đầu 8 Vinaphone) → khôi phục thành 0812345678', () => {
+    expect(normalizePhoneForZaloCampaign('812345678')).toBe('0812345678');
+  });
+
+  it('312345678 (9 số, thiếu 0, đầu 3 Viettel) → khôi phục thành 0312345678', () => {
+    expect(normalizePhoneForZaloCampaign('312345678')).toBe('0312345678');
+  });
+
+  it('512345678 (9 số, thiếu 0, đầu 5 Vietnamobile/Wintel) → khôi phục thành 0512345678', () => {
+    expect(normalizePhoneForZaloCampaign('512345678')).toBe('0512345678');
+  });
+
+  it('712345678 (9 số, thiếu 0, đầu 7 Mobifone) → khôi phục thành 0712345678', () => {
+    expect(normalizePhoneForZaloCampaign('712345678')).toBe('0712345678');
+  });
+
+  it('112345678 (9 số, bắt đầu bằng 1 - không phải đầu di động VN) → giữ nguyên 9 số', () => {
+    expect(normalizePhoneForZaloCampaign('112345678')).toBe('112345678');
   });
 
   it('rỗng/null/undefined → chuỗi rỗng', () => {

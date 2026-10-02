@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import toast from 'react-hot-toast';
 import {
   HiOutlineEye,
   HiOutlinePaperClip,
@@ -9,6 +10,11 @@ import {
   HiOutlineUpload,
   HiOutlineSparkles,
   HiOutlineChevronDown,
+  HiOutlineClipboardCopy,
+  HiOutlineDocumentText,
+  HiOutlineLightBulb,
+  HiOutlineSearch,
+  HiOutlineCheck,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 
@@ -124,12 +130,36 @@ const EmailTemplateEditorModal = ({
 
   /** Danh sách biến gợi ý dùng chung cho email và zalo */
   const SUGGESTED_VARIABLES = [
+    { name: 'Họ và tên khách', key: 'tenkhach' },
+    { name: t('emailTemplateEditor.suggestedOrgUnit') || 'Đơn vị / Cơ quan', key: 'donvi' },
+    { name: t('emailTemplateEditor.suggestedPosition') || 'Chức vụ', key: 'chucvu' },
     { name: t('emailTemplateEditor.suggestedCustomerName'), key: 'ten_khach' },
-    { name: t('emailTemplateEditor.suggestedCourseLink'), key: 'link_khoa_hoc' },
-    { name: t('emailTemplateEditor.suggestedCourseName'), key: 'ten_khoa_hoc' },
     { name: t('emailTemplateEditor.suggestedCustomerEmail'), key: 'email_khach' },
     { name: t('emailTemplateEditor.suggestedPhone'), key: 'so_dien_thoai' },
+    { name: t('emailTemplateEditor.suggestedCourseName'), key: 'ten_khoa_hoc' },
+    { name: t('emailTemplateEditor.suggestedCourseLink'), key: 'link_khoa_hoc' },
   ];
+
+  const [showToolbarVariableMenu, setShowToolbarVariableMenu] = useState(false);
+  const [toolbarVariableSearch, setToolbarVariableSearch] = useState('');
+  const [copiedKey, setCopiedKey] = useState(null);
+
+  const handleCopyKey = async (key) => {
+    try {
+      await navigator.clipboard.writeText(`{{${key}}}`);
+      setCopiedKey(key);
+      toast.success(t('emailTemplateEditor.copiedVariable', { key: `{{${key}}}` }) || `Đã sao chép {{${key}}}`);
+      setTimeout(() => setCopiedKey(null), 2000);
+    } catch {
+      toast.error('Không thể sao chép');
+    }
+  };
+
+  const handleInsertAndSwitchToContent = (key) => {
+    insertVariableAtCursor(key);
+    toast.success(t('emailTemplateEditor.insertedVariable', { key: `{{${key}}}` }) || `Đã chèn {{${key}}} vào nội dung`);
+    setEditorTab('content');
+  };
 
   if (!showEditorModal) return null;
 
@@ -232,6 +262,147 @@ const EmailTemplateEditorModal = ({
               </div>
               {editorTab === 'content' && (
                 <div className="flex items-center gap-2">
+                  {/* Nút Dropdown Chèn biến */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowToolbarVariableMenu((prev) => !prev)}
+                      className="text-sm flex items-center gap-1.5 px-3 py-1.5 rounded-lg border bg-gradient-to-r from-amber-50 to-primary-50 border-primary-200 text-primary-800 hover:from-amber-100 hover:to-primary-100 font-medium transition-all shadow-sm"
+                      title={t('emailTemplateEditor.insertVariable') || 'Chèn biến'}
+                    >
+                      <HiOutlineSparkles className="w-4 h-4 text-primary-600" />
+                      <span>{t('emailTemplateEditor.insertVariable') || 'Chèn biến'}</span>
+                      <span className="text-[11px] bg-white/80 px-1 py-0.5 rounded border border-primary-200 text-primary-700 font-mono font-bold leading-none">
+                        {`{{...}}`}
+                      </span>
+                      <HiOutlineChevronDown className={`w-3.5 h-3.5 text-primary-600 transition-transform ${showToolbarVariableMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showToolbarVariableMenu && (
+                      <>
+                        <div
+                          className="fixed inset-0 z-[70]"
+                          onClick={() => {
+                            setShowToolbarVariableMenu(false);
+                            setToolbarVariableSearch('');
+                          }}
+                        />
+                        <div className="absolute right-0 top-full mt-1.5 w-80 bg-white border border-gray-200 rounded-xl shadow-2xl z-[75] overflow-hidden flex flex-col max-h-[380px]">
+                          {/* Header & Search */}
+                          <div className="p-2.5 bg-gray-50 border-b border-gray-200">
+                            <div className="relative">
+                              <HiOutlineSearch className="w-4 h-4 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" />
+                              <input
+                                type="text"
+                                value={toolbarVariableSearch}
+                                onChange={(e) => setToolbarVariableSearch(e.target.value)}
+                                placeholder={t('emailTemplateEditor.searchVariables') || 'Tìm kiếm biến...'}
+                                className="w-full pl-8 pr-3 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-1 focus:ring-primary-500 focus:border-primary-500"
+                                autoFocus
+                              />
+                            </div>
+                          </div>
+
+                          <div className="overflow-y-auto p-2 space-y-3 flex-1 text-xs">
+                            {/* Nhóm 1: Biến trong template */}
+                            {variables.length > 0 && (
+                              <div>
+                                <div className="px-2 py-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                                  {t('emailTemplateEditor.templateVariables') || 'Biến trong mẫu này'} ({variables.length})
+                                </div>
+                                <div className="space-y-1 mt-1">
+                                  {variables
+                                    .filter((v) =>
+                                      !toolbarVariableSearch ||
+                                      v.name?.toLowerCase().includes(toolbarVariableSearch.toLowerCase()) ||
+                                      v.key?.toLowerCase().includes(toolbarVariableSearch.toLowerCase())
+                                    )
+                                    .map((v, i) => (
+                                      <button
+                                        key={`tpl-var-${v.key}-${i}`}
+                                        type="button"
+                                        onClick={() => {
+                                          insertVariableAtCursor(v.key);
+                                          setShowToolbarVariableMenu(false);
+                                          setToolbarVariableSearch('');
+                                          toast.success(t('emailTemplateEditor.insertedVariable', { key: `{{${v.key}}}` }) || `Đã chèn {{${v.key}}}`);
+                                        }}
+                                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-primary-50 hover:text-primary-800 transition-colors flex items-center justify-between group"
+                                      >
+                                        <span className="font-medium text-gray-700 group-hover:text-primary-800">{v.name}</span>
+                                        <code className="bg-gray-100 group-hover:bg-primary-100 text-gray-600 group-hover:text-primary-700 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                                          {`{{${v.key}}}`}
+                                        </code>
+                                      </button>
+                                    ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Nhóm 2: Biến gợi ý / hệ thống */}
+                            <div>
+                              <div className="px-2 py-1 text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                                {t('emailTemplateEditor.suggestedAndSystemVariables') || 'Biến hệ thống & gợi ý'}
+                              </div>
+                              <div className="space-y-1 mt-1">
+                                {SUGGESTED_VARIABLES
+                                  .filter((v) =>
+                                    !toolbarVariableSearch ||
+                                    v.name?.toLowerCase().includes(toolbarVariableSearch.toLowerCase()) ||
+                                    v.key?.toLowerCase().includes(toolbarVariableSearch.toLowerCase())
+                                  )
+                                  .map((v) => {
+                                    const alreadyInTemplate = variables.some((tv) => tv.key === v.key);
+                                    return (
+                                      <button
+                                        key={`sug-var-${v.key}`}
+                                        type="button"
+                                        onClick={() => {
+                                          if (!alreadyInTemplate) {
+                                            handleAddSuggestedVariable(v);
+                                          }
+                                          insertVariableAtCursor(v.key);
+                                          setShowToolbarVariableMenu(false);
+                                          setToolbarVariableSearch('');
+                                          toast.success(t('emailTemplateEditor.insertedVariable', { key: `{{${v.key}}}` }) || `Đã chèn {{${v.key}}}`);
+                                        }}
+                                        className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-primary-50 hover:text-primary-800 transition-colors flex items-center justify-between group"
+                                      >
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="font-medium text-gray-700 group-hover:text-primary-800">{v.name}</span>
+                                          {alreadyInTemplate && (
+                                            <span className="text-[10px] text-gray-400">✓</span>
+                                          )}
+                                        </div>
+                                        <code className="bg-gray-100 group-hover:bg-primary-100 text-gray-600 group-hover:text-primary-700 px-1.5 py-0.5 rounded font-mono text-[11px]">
+                                          {`{{${v.key}}}`}
+                                        </code>
+                                      </button>
+                                    );
+                                  })}
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Footer tip */}
+                          <div className="px-3 py-2 bg-gray-50 border-t border-gray-200 text-[11px] text-gray-500 flex items-center justify-between">
+                            <span>💡 Gõ <code className="font-bold text-gray-700 font-mono">{`{{`}</code> khi soạn thảo</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowToolbarVariableMenu(false);
+                                setEditorTab('variables');
+                              }}
+                              className="text-primary-600 hover:text-primary-700 font-medium"
+                            >
+                              {t('emailTemplateEditor.setupVariables')} →
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    )}
+                  </div>
+
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
@@ -305,6 +476,23 @@ const EmailTemplateEditorModal = ({
                         className={`px-4 py-2 text-sm font-medium transition-all ${contentTab === 'text' ? 'bg-white text-gray-900 border-b-2 border-primary-500' : 'text-gray-500 hover:text-gray-700'}`}
                       >
                         {t('emailTemplateEditor.textEditor')}
+                      </button>
+                    </div>
+
+                    {/* Dải gợi ý chèn biến */}
+                    <div className="flex items-center justify-between px-3 py-1.5 bg-gradient-to-r from-amber-50/90 to-primary-50/70 border-b border-amber-200/60 text-xs text-amber-900">
+                      <div className="flex items-center gap-1.5">
+                        <HiOutlineLightBulb className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                        <span>
+                          {t('emailTemplateEditor.variableInsertionTip') || 'Gõ {{ hoặc bấm nút "Chèn biến" trên thanh công cụ để chèn biến cá nhân hóa (họ tên, đơn vị...).'}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setEditorTab('variables')}
+                        className="text-primary-700 hover:text-primary-900 font-medium underline hover:no-underline ml-2 flex-shrink-0 text-[11px]"
+                      >
+                        {t('emailTemplateEditor.setupVariables')} →
                       </button>
                     </div>
 
@@ -528,7 +716,7 @@ const EmailTemplateEditorModal = ({
                                 <tr className="text-left text-xs uppercase tracking-wide text-gray-500">
                                   <th className="px-4 py-2 font-semibold">{t('emailTemplateEditor.fieldName')}</th>
                                   <th className="px-4 py-2 font-semibold">{t('emailTemplateEditor.variableKey')}</th>
-                                  <th className="px-4 py-2 font-semibold w-24 text-right">{t('common.actions')}</th>
+                                  <th className="px-4 py-2 font-semibold w-40 text-right">{t('common.actions')}</th>
                                 </tr>
                               </thead>
                               <tbody className="divide-y divide-gray-200">
@@ -585,12 +773,38 @@ const EmailTemplateEditorModal = ({
                                       <>
                                         <td className="px-4 py-2 font-medium text-gray-900">{variable.name}</td>
                                         <td className="px-4 py-2">
-                                          <code className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                                          <code
+                                            onClick={() => handleCopyKey(variable.key)}
+                                            title={t('emailTemplateEditor.copyVariableKey') || 'Bấm để sao chép'}
+                                            className="text-xs bg-gray-100 hover:bg-primary-50 text-gray-700 hover:text-primary-800 px-2 py-1 rounded cursor-pointer border border-transparent hover:border-primary-200 transition-all inline-flex items-center gap-1 font-mono"
+                                          >
                                             {`{{${variable.key}}}`}
+                                            {copiedKey === variable.key ? (
+                                              <HiOutlineCheck className="w-3.5 h-3.5 text-emerald-600 inline" />
+                                            ) : (
+                                              <HiOutlineClipboardCopy className="w-3.5 h-3.5 opacity-40 hover:opacity-100 inline" />
+                                            )}
                                           </code>
                                         </td>
                                         <td className="px-4 py-2">
-                                          <div className="flex items-center justify-end gap-2">
+                                          <div className="flex items-center justify-end gap-1.5">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleInsertAndSwitchToContent(variable.key)}
+                                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-lg transition-colors text-xs font-medium inline-flex items-center gap-1"
+                                              title={t('emailTemplateEditor.insertIntoContent') || 'Chèn vào nội dung'}
+                                            >
+                                              <HiOutlineDocumentText className="w-3.5 h-3.5" />
+                                              <span>{t('emailTemplateEditor.insertVariable') || 'Chèn'}</span>
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => handleCopyKey(variable.key)}
+                                              className="p-1.5 text-gray-500 hover:text-primary-600 hover:bg-primary-50 rounded-lg transition-colors"
+                                              title={t('emailTemplateEditor.copyVariableKey') || 'Sao chép mã biến'}
+                                            >
+                                              <HiOutlineClipboardCopy className="w-4 h-4" />
+                                            </button>
                                             <button
                                               type="button"
                                               onClick={() => handleStartEditVariable(index)}

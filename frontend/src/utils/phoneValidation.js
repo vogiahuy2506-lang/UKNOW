@@ -60,7 +60,24 @@ export function normalizeAccountPhone(raw) {
   if (digits.startsWith('84') && digits.length >= 10) {
     return `0${digits.slice(2)}`.slice(0, 20);
   }
-  if (digits.length === 9 && digits.startsWith('9')) {
+  if (digits.length === 9 && /^[35789]/.test(digits)) {
+    return `0${digits}`.slice(0, 20);
+  }
+  return digits.slice(0, 20);
+}
+
+/**
+ * Chuẩn hóa số điện thoại phục vụ gửi Zalo (tự động bù số 0 cho số 9 chữ số đầu 3, 5, 7, 8, 9; chuyển 84... về 0...).
+ * @param {string|number|null|undefined} raw
+ * @returns {string}
+ */
+export function normalizePhoneForZalo(raw) {
+  const digits = String(raw ?? '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('84') && digits.length >= 10) {
+    return `0${digits.slice(2)}`.slice(0, 20);
+  }
+  if (digits.length === 9 && /^[35789]/.test(digits)) {
     return `0${digits}`.slice(0, 20);
   }
   return digits.slice(0, 20);

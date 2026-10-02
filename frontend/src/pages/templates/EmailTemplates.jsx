@@ -684,8 +684,12 @@ const EmailTemplates = ({
       const start = input.selectionStart || 0;
       const end = input.selectionEnd || 0;
       const before = value.slice(0, start);
+      const lastCloseIndex = before.lastIndexOf('}}');
       const triggerIndex = before.lastIndexOf('{{');
-      const insertStart = triggerIndex !== -1 ? triggerIndex : start;
+      const isUnfinishedTrigger = triggerIndex !== -1
+        && triggerIndex > lastCloseIndex
+        && /^\{\{[\w.]*$/.test(before.slice(triggerIndex));
+      const insertStart = isUnfinishedTrigger ? triggerIndex : start;
       const newValue = value.slice(0, insertStart) + `{{${variableKey}}}` + value.slice(end);
 
       setFormData((prev) => ({ ...prev, subject: newValue }));
@@ -699,15 +703,27 @@ const EmailTemplates = ({
       return;
     }
 
-    const isTextInput = activeInput === 'text';
+    const isTextInput = activeInput === 'text' || (activeInput !== 'html' && contentTab === 'text');
     const ref = isTextInput ? textTextareaRef.current : htmlTextareaRef.current;
-    if (!ref) return;
-    const value = isTextInput ? formData.bodyText : formData.bodyHtml;
-    const start = ref.selectionStart || 0;
-    const end = ref.selectionEnd || 0;
+    if (!ref) {
+      const field = contentTab === 'html' ? 'bodyHtml' : 'bodyText';
+      setFormData((prev) => ({
+        ...prev,
+        [field]: `${prev[field] || ''}{{${variableKey}}}`,
+      }));
+      setShowVariableSuggestions(false);
+      return;
+    }
+    const value = (isTextInput ? formData.bodyText : formData.bodyHtml) || '';
+    const start = ref.selectionStart ?? value.length;
+    const end = ref.selectionEnd ?? value.length;
     const before = value.slice(0, start);
+    const lastCloseIndex = before.lastIndexOf('}}');
     const triggerIndex = before.lastIndexOf('{{');
-    const insertStart = triggerIndex !== -1 ? triggerIndex : start;
+    const isUnfinishedTrigger = triggerIndex !== -1
+      && triggerIndex > lastCloseIndex
+      && /^\{\{[\w.]*$/.test(before.slice(triggerIndex));
+    const insertStart = isUnfinishedTrigger ? triggerIndex : start;
     const newValue = value.slice(0, insertStart) + `{{${variableKey}}}` + value.slice(end);
 
     // Lưu scroll position trước khi setState để khôi phục sau khi focus

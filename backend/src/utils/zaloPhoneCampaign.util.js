@@ -11,7 +11,7 @@ export function normalizePhoneForZaloCampaign(raw) {
   if (digits.startsWith('84') && digits.length >= 10) {
     return `0${digits.slice(2)}`.slice(0, 20);
   }
-  if (digits.length === 9 && digits.startsWith('9')) {
+  if (digits.length === 9 && /^[35789]/.test(digits)) {
     return `0${digits}`.slice(0, 20);
   }
   return digits.slice(0, 20);

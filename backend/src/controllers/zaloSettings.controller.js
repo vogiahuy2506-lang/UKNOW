@@ -19,7 +19,7 @@ import { addPendingAccount, unmarkAccountRegistered } from '../services/zalo/zal
 import zaloPersonalInboxService from '../services/chatbot/zaloInbox.service.js';
 import zaloPersonalAdapter from '../services/chatbot/channelAdapters/zaloPersonal.adapter.js';
 import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
-import { isZaloSenderBlockedError } from '../utils/zaloPhoneCampaign.util.js';
+import { isZaloSenderBlockedError, normalizePhoneForZaloCampaign } from '../utils/zaloPhoneCampaign.util.js';
 import { classifyZaloSendError } from '../utils/zaloSendErrorClassifier.util.js';
 import {
   describeZaloOutboundFailure,
@@ -2432,7 +2432,11 @@ class ZaloSettingsController {
       const recipients = Array.isArray(req.body?.recipients) ? req.body.recipients : [];
       const templateAttachments = Array.isArray(req.body?.attachments) ? req.body.attachments : [];
       const normalizedRecipients = Array.from(new Set(
-        recipients.map((item) => String(item || '').trim()).filter(Boolean)
+        recipients.map((item) => {
+          const str = String(item || '').trim();
+          if (!str) return '';
+          return recipientType === 'phone' ? (normalizePhoneForZaloCampaign(str) || str) : str;
+        }).filter(Boolean)
       ));
       const quota = await this.assertPreviewSendQuota(req, normalizedRecipients.length);
       const { account, api } = await this.resolvePreviewAccountAndApi({
@@ -2785,7 +2789,11 @@ class ZaloSettingsController {
       const message = String(req.body?.message || '').trim();
       const recipients = Array.isArray(req.body?.recipients) ? req.body.recipients : [];
       const normalizedRecipients = Array.from(new Set(
-        recipients.map((item) => String(item || '').trim()).filter(Boolean)
+        recipients.map((item) => {
+          const str = String(item || '').trim();
+          if (!str) return '';
+          return normalizePhoneForZaloCampaign(str) || str;
+        }).filter(Boolean)
       ));
       const quota = await this.assertPreviewSendQuota(req, normalizedRecipients.length);
       const { account, api } = await this.resolvePreviewAccountAndApi({

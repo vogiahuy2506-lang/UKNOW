@@ -16,6 +16,7 @@ import {
 import { generateIdempotencyKey } from '../../../utils/idempotency.util.js';
 import { runAdapterChannelTestSend } from './campaignBuilderAdapterTestSend.js';
 import { formatCampaignTime } from './campaignDateTime.helpers.js';
+import { normalizePhoneForZalo } from '../../../utils/phoneValidation.js';
 
 /**
  * Trần chạy thử cho 3 nút Zalo (cá nhân/kết bạn/nhóm) — PLAN_GIOI_HAN_GUI_THEO_NGAY tiếp nối
@@ -1899,7 +1900,10 @@ export const createCampaignNodeRunner = (deps) => {
         sourceNodeId: config.zaloRecipientNodeId || '',
         sourceField: config.zaloRecipientField || (recipientType === 'uid' ? 'uid' : 'phone'),
       });
-      const recipients = recipientEntries.map((entry) => String(entry?.value || '').trim()).filter(Boolean);
+      const recipients = recipientEntries.map((entry) => {
+        const val = String(entry?.value || '').trim();
+        return recipientType === 'phone' ? (normalizePhoneForZalo(val) || val) : val;
+      }).filter(Boolean);
       const uniqueRecipientsBeforeCap = Array.from(new Set(recipients.map((item) => String(item || '').trim()).filter(Boolean)));
       const uniqueRecipients = uniqueRecipientsBeforeCap.slice(0, TEST_RUN_MAX_SEND_ZALO);
       if (onProgress && uniqueRecipientsBeforeCap.length > TEST_RUN_MAX_SEND_ZALO) {
@@ -2363,7 +2367,7 @@ export const createCampaignNodeRunner = (deps) => {
           message: `Chạy thử giới hạn tối đa ${TEST_RUN_MAX_SEND_ZALO} người (danh sách có ${recipientEntriesBeforeCap.length} người) — mỗi lời mời kết bạn cách nhau tới 150 giây, tránh bắn liên tục làm khoá nick.`,
         });
       }
-      const recipientPhones = recipientEntries.map((entry) => entry.phone);
+      const recipientPhones = recipientEntries.map((entry) => normalizePhoneForZalo(entry.phone) || entry.phone);
       const contentMode = String(config.zaloFriendContentMode || 'manual').trim();
       let templateBody = String(config.zaloFriendTemplateBody || '').trim();
       if (contentMode === 'template' && !templateBody && config.zaloFriendTemplateId) {

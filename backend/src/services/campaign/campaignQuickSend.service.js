@@ -24,6 +24,7 @@ import {
 import { recordDirectSendUsage } from '../../utils/userSendLimit.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
+import { normalizePhoneForZaloCampaign } from '../../utils/zaloPhoneCampaign.util.js';
 
 class CampaignQuickSendService {
   /**
@@ -55,14 +56,17 @@ class CampaignQuickSendService {
     attachments = [],
     htmlContent = null,
   }, options = {}) {
-    const cleanRecipient = String(recipient || '').trim();
+    const isZalo = channel.startsWith('zalo');
+    const rawRecipient = String(recipient || '').trim();
+    const cleanRecipient = isZalo
+      ? (normalizePhoneForZaloCampaign(rawRecipient) || rawRecipient)
+      : rawRecipient;
     if (!cleanRecipient) {
       const err = new Error('Vui lòng nhập địa chỉ / số điện thoại người nhận thử nghiệm');
       err.status = 400;
       throw err;
     }
 
-    const isZalo = channel.startsWith('zalo');
     const resolvedIdempotencyKey = resolveRequestIdempotencyKey(options.idempotencyKey || options.clientKey || null);
 
     if (!isZalo) {
