@@ -1,9 +1,13 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
 import LandingCanvasLayout from './LandingCanvasLayout.jsx';
 import SettingsModal from './SettingsModal.jsx';
 import ImportHtmlModal from './ImportHtmlModal.jsx';
+import LeaveEditorModal from './LeaveEditorModal.jsx';
+import useLandingCanvasDraft from '../hooks/useLandingCanvasDraft.js';
+import { isDraftFormDirty, snapshotDraftForm } from '../utils/landingCanvasDraft.js';
+import { useBrowserRouterBlocker } from '../../campaigns/hooks/useBrowserRouterBlocker.js';
 import { useI18n } from '../../../i18n';
 import {
   createLandingPageAdmin,
@@ -27,11 +31,42 @@ import LandingVersionModal from '../../landing-pages/components/LandingVersionMo
  *  - Template Gallery Modal (Phase Extra)
  *  - Version History Modal (Phase Extra)
  */
-export default function LandingCanvasEditor({ editingId, form, setForm, onClose }) {
+export default function LandingCanvasEditor({
+  editingId,
+  form,
+  setForm,
+  onClose,
+  // --- Nháp (PLAN_LANDING_GIU_NHAP_KHI_F5_2026-10-03.md) ---
+  scope = null, // { userId, ownerId } — khoá nháp theo người dùng + chủ workspace
+  baseline = null, // ảnh chụp form lúc tải xong / form rỗng (trang mới) — mốc để tính "bẩn"
+  baseUpdatedAt = null, // updatedAt của bản đã lưu mà nháp dựa trên
+  initialMessages = null, // hội thoại AI khôi phục từ nháp
+  restoredAt = null, // có giá trị → hiện banner "Đã khôi phục bản nháp lúc …"
+  onResetSession, // Page dựng lại phiên mới (sau Bắt đầu trang mới / Bỏ bản nháp)
+}) {
   const { t } = useI18n();
   const tc = useI18n('landingCanvas.landingCanvasEditor');
   const ti = useI18n('landingCanvas.importHtml');
   const [saving, setSaving] = useState(false);
+  const td = useI18n('landingCanvas.draft');
+  const [baselineSnapshot, setBaselineSnapshot] = useState(baseline);
+  const [messages, setMessages] = useState(initialMessages || []);
+  const [leaveError, setLeaveError] = useState(null);
+  // Bẩn = form khác mốc (tin nhắn không làm bẩn).
+  const dirty = useMemo(
+    () => isDraftFormDirty(form, baselineSnapshot),
+    [form, baselineSnapshot]
+  );
+  const blocker = useBrowserRouterBlocker(dirty);
+  const draft = useLandingCanvasDraft({
+    scope,
+    editingId,
+    form,
+    messages,
+    dirty,
+    baseUpdatedAt,
+    interruptedText: td('interrupted'),
+  });
   const [activeModalTab, setActiveModalTab] = useState(null);
 
   // Extra modals
@@ -81,20 +116,26 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
     return config;
   }, [form.leadFormConfig, form.leadFormPersistedMeta, setForm]);
 
-  const handleSave = useCallback(async () => {
+  /**
+   * Lưu landing. `navigateAfter:false` dùng cho modal "Lưu và rời đi" (điều hướng do bộ chặn lo).
+   * `title` ghi đè tên (modal nhập tên khi trang chưa có tên).
+   * @returns {Promise<{ok: boolean, id?: number|null, updatedAt?: string|null, message?: string}>}
+   */
+  const saveLanding = useCallback(async ({ navigateAfter = true, title: titleOverride } = {}) => {
+    const effectiveTitle = titleOverride !== undefined ? titleOverride : form.title;
     const slug = String(form.slug || '').trim().toLowerCase();
-    if (!String(form.title || '').trim()) {
+    if (!String(effectiveTitle || '').trim()) {
       toast.error(tc('titleRequiredToast'));
-      return;
+      return { ok: false, message: tc('titleRequiredToast') };
     }
     const leadFormConfig = resolveLeadFormConfigForSave();
-    if (!leadFormConfig) return;
+    if (!leadFormConfig) return { ok: false };
     setSaving(true);
     try {
       if (editingId) {
         const updated = await updateLandingPageAdmin(editingId, {
           slug: slug || null,
-          title: form.title,
+          title: effectiveTitle,
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
           domainType: form.domainType,
@@ -106,11 +147,20 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
         if (updated?.warning) {
           toast(updated.warning, { icon: '⚠️', duration: 6000 });
         }
-        onClose?.();
+        const updatedAt = updated?.updatedAt ?? null;
+        const savedForm = { ...form, title: effectiveTitle };
+        if (titleOverride !== undefined) setForm((prev) => ({ ...prev, title: effectiveTitle }));
+        setBaselineSnapshot(snapshotDraftForm(savedForm));
+        draft.commitSaved({ updatedAt });
+        if (navigateAfter) {
+          blocker.allowNext();
+          onClose?.();
+        }
+        return { ok: true, id: editingId, updatedAt };
       } else {
         const created = await createLandingPageAdmin({
           slug: slug || null,
-          title: form.title,
+          title: effectiveTitle,
           htmlContent: form.htmlContent,
           isPublished: form.isPublished,
           domainType: form.domainType,
@@ -126,7 +176,17 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
           toast(created.warning, { icon: '⚠️', duration: 6000 });
         }
         const newId = created?.id ?? created?.data?.id;
-        onClose?.(newId);
+        const updatedAt = created?.updatedAt ?? created?.data?.updatedAt ?? null;
+        const savedForm = { ...form, title: effectiveTitle };
+        if (titleOverride !== undefined) setForm((prev) => ({ ...prev, title: effectiveTitle }));
+        setBaselineSnapshot(snapshotDraftForm(savedForm));
+        // Hội thoại chuyển sang khoá của trang vừa tạo (mở lại vẫn thấy cuộc trò chuyện).
+        draft.commitSaved({ newId: newId ?? null, updatedAt });
+        if (navigateAfter) {
+          blocker.allowNext();
+          onClose?.(newId);
+        }
+        return { ok: true, id: newId ?? null, updatedAt };
       }
     } catch (e) {
       const message = e?.response?.data?.message || e?.message || t('landingPagesAdmin.saveFailed');
@@ -152,10 +212,83 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
         }
       }
       toast.error(message);
+      return { ok: false, message };
     } finally {
       setSaving(false);
     }
-  }, [editingId, form, onClose, resolveLeadFormConfigForSave, setForm, t]);
+  }, [blocker, draft, editingId, form, onClose, resolveLeadFormConfigForSave, setForm, t, tc]);
+
+  const handleSave = useCallback(() => saveLanding({ navigateAfter: true }), [saveLanding]);
+
+  // onClose của topbar nhận cả sự kiện click — chỉ gọi không đối số (tránh coi event là newId).
+  const handleCloseRequest = useCallback(() => {
+    onClose?.();
+  }, [onClose]);
+
+  // --- Rời trình soạn khi còn thay đổi chưa lưu: modal Lưu / Không lưu / Ở lại ---
+  const leaveOpen = blocker.state === 'blocked';
+  useEffect(() => {
+    if (!leaveOpen) setLeaveError(null);
+  }, [leaveOpen]);
+
+  const handleLeaveSave = useCallback(
+    async (title) => {
+      setLeaveError(null);
+      const result = await saveLanding({ navigateAfter: false, title });
+      if (result.ok) {
+        blocker.proceed();
+      } else if (result.message) {
+        setLeaveError(result.message);
+      }
+    },
+    [blocker, saveLanding]
+  );
+
+  const handleLeaveDiscard = useCallback(() => {
+    draft.discard();
+    blocker.proceed();
+  }, [blocker, draft]);
+
+  const handleLeaveStay = useCallback(() => {
+    blocker.reset();
+  }, [blocker]);
+
+  // Ghi nháp thất bại (hết dung lượng) mà còn thay đổi chưa lưu → cảnh báo của trình duyệt khi F5/đóng tab.
+  const shouldWarnUnload = draft.writeFailed && dirty;
+  useEffect(() => {
+    if (!shouldWarnUnload) return undefined;
+    const handler = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [shouldWarnUnload]);
+
+  const handleDiscardRestored = useCallback(() => {
+    draft.discard();
+    onResetSession?.();
+  }, [draft, onResetSession]);
+
+  const restoredBanner = restoredAt ? (
+    <div
+      data-testid="draft-restored-banner"
+      className="shrink-0 flex items-center justify-between gap-3 px-4 py-1.5 bg-amber-50 border-b border-amber-200 text-[13px] text-amber-900"
+    >
+      <span className="min-w-0 truncate">
+        {td('restoredBanner', {
+          time: new Date(restoredAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        })}
+      </span>
+      <button
+        type="button"
+        onClick={handleDiscardRestored}
+        className="shrink-0 font-semibold text-amber-800 hover:text-amber-950 underline"
+      >
+        {editingId ? td('discardDraft') : td('startNew')}
+      </button>
+    </div>
+  ) : null;
 
   // Handlers cho topbar extras
   const handleOpenTemplateGallery = useCallback(() => {
@@ -223,7 +356,7 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
         setForm={setForm}
         editingId={editingId}
         saving={saving}
-        onClose={onClose}
+        onClose={handleCloseRequest}
         onSave={handleSave}
         activeModalTab={activeModalTab}
         onOpenSettingTab={handleOpenSettingTab}
@@ -234,6 +367,19 @@ export default function LandingCanvasEditor({ editingId, form, setForm, onClose 
         onOpenSaveTemplate={handleOpenSaveTemplate}
         onOpenImportHtml={handleOpenImportHtml}
         previewResetKey={previewResetKey}
+        initialMessages={initialMessages}
+        onMessagesChange={setMessages}
+        banner={restoredBanner}
+      />
+
+      <LeaveEditorModal
+        open={leaveOpen}
+        initialTitle={form?.title || ''}
+        saving={saving}
+        error={leaveError}
+        onSave={handleLeaveSave}
+        onDiscard={handleLeaveDiscard}
+        onStay={handleLeaveStay}
       />
 
       <ImportHtmlModal

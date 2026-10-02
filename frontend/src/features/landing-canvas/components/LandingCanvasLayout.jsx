@@ -41,6 +41,10 @@ export default function LandingCanvasLayout({
   previewResetKey,
   chatPanel,
   previewPanel,
+  // Nháp (F5): hội thoại khôi phục, báo hội thoại lên Editor để ghi nháp, banner dưới topbar.
+  initialMessages = null,
+  onMessagesChange,
+  banner = null,
 }) {
   const [chatCollapsed, setChatCollapsed] = useState(false);
   const chatPanelRef = useRef(null);
@@ -98,7 +102,13 @@ export default function LandingCanvasLayout({
     hasExistingHtml,
     openTab,
     editingId,
+    initialMessages,
   });
+
+  useEffect(() => {
+    onMessagesChange?.(conversation.messages);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [conversation.messages]);
 
   // Khi chưa có HTML và chưa có tin nhắn hay streaming AI -> Hiển thị khung chat ở giữa
   const hasChatActivity = (conversation?.messages?.length ?? 0) > 0 || conversation?.isStreaming;
@@ -184,6 +194,8 @@ export default function LandingCanvasLayout({
         isChatCollapsed={chatCollapsed}
         onToggleChat={handleToggleChat}
       />
+
+      {banner}
 
       <div
         ref={containerRef}
