@@ -1,9 +1,14 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { configure, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import AdminOrdersPage from './AdminOrdersPage';
+
+// PLAN_GOP_MAU_TIN_MEDIA_VA_VIEC_LE_2026-10-03, PR-L / L3: waitFor/findBy mặc định chỉ chờ 1 giây — máy tải nặng (nhiều phiên test
+// chạy song song, CI chậm) trang chưa kịp vẽ xong thì ca đỏ chập chờn. Nâng cho CẢ file; riêng chỗ truy vấn ngay sau khi API được
+// gọi còn ghi `{ timeout: 5000 }` tường minh (cùng kiểu đã sửa ở 1a2d1f57, AdminAiUsagePage.spec).
+configure({ asyncUtilTimeout: 5000 });
 
 const {
   mockGetOrders, mockMarkPaidAfterCancelledHandled, mockGetRefundPreview, mockRefundOrder,
@@ -265,7 +270,7 @@ describe('AdminOrdersPage — hoàn tiền', () => {
     await waitFor(() => expect(screen.getByText('MONTHLY-1')).toBeInTheDocument());
 
     await user.click(within(screen.getByText('MONTHLY-1').closest('tr')).getByRole('button', { name: 'Hoàn tiền' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 5000 });
     await waitFor(() => expect(mockGetRefundPreview).toHaveBeenCalledWith('MONTHLY-1'));
     await waitFor(() => {
       expect(within(dialog).getByText(/khách mất gói ngay/)).toBeInTheDocument();
@@ -299,7 +304,7 @@ describe('AdminOrdersPage — hoàn tiền', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('MONTHLY-1')).toBeInTheDocument());
     await user.click(within(screen.getByText('MONTHLY-1').closest('tr')).getByRole('button', { name: 'Hoàn tiền' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 5000 });
     await waitFor(() => {
       expect(within(dialog).getByText(/yêu cầu rút #13 chờ duyệt/)).toBeInTheDocument();
     });
@@ -324,7 +329,7 @@ describe('AdminOrdersPage — hoàn tiền', () => {
     renderPage();
     await waitFor(() => expect(screen.getByText('MONTHLY-1')).toBeInTheDocument());
     await user.click(within(screen.getByText('MONTHLY-1').closest('tr')).getByRole('button', { name: 'Hoàn tiền' }));
-    const dialog = await screen.findByRole('dialog');
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 5000 });
     await waitFor(() => {
       expect(within(dialog).getByText('Không hoàn được đơn này: Khách đang có lịch đổi gói chờ áp dụng (#6)')).toBeInTheDocument();
     });
@@ -383,7 +388,7 @@ describe('AdminOrdersPage — PR-9: KPI theo bộ lọc', () => {
     const user = userEvent.setup();
     renderAt();
     await waitFor(() => expect(mockGetOrders).toHaveBeenCalled());
-    await user.click(screen.getByRole('button', { name: 'Xóa lọc' }));
+    await user.click(await screen.findByRole('button', { name: 'Xóa lọc' }, { timeout: 5000 }));
     await waitFor(() => expect(screen.getByTestId('orders-kpi-period')).toHaveTextContent('Kỳ: Toàn thời gian'));
     expect(lastParams()).not.toHaveProperty('dateFrom');
     expect(lastParams()).not.toHaveProperty('dateTo');
@@ -414,7 +419,7 @@ describe('AdminOrdersPage — PR-9: KPI theo bộ lọc', () => {
     expect(mockGetOrders.mock.calls[0][0]).toMatchObject({ attention: 'paid_after_cancelled' });
     expect(mockGetOrders.mock.calls[0][0]).not.toHaveProperty('dateFrom');
     expect(mockGetOrders.mock.calls[0][0]).not.toHaveProperty('dateTo');
-    expect(screen.getByTestId('orders-attention-chip')).toHaveTextContent('tiền đã vào');
+    expect(await screen.findByTestId('orders-attention-chip', {}, { timeout: 5000 })).toHaveTextContent('tiền đã vào');
     await waitFor(() => expect(screen.getByTestId('orders-kpi-period')).toHaveTextContent('Kỳ: Toàn thời gian'));
   });
 
@@ -422,10 +427,10 @@ describe('AdminOrdersPage — PR-9: KPI theo bộ lọc', () => {
     const user = userEvent.setup();
     renderAt();
     await waitFor(() => expect(mockGetOrders).toHaveBeenCalled());
-    await user.click(screen.getByTestId('orders-kpi-needs-action'));
+    await user.click(await screen.findByTestId('orders-kpi-needs-action', {}, { timeout: 5000 }));
     await waitFor(() => expect(lastParams()).toMatchObject({ attention: 'needs_action' }));
-    expect(screen.getByTestId('orders-attention-chip')).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Bỏ lọc' }));
+    expect(await screen.findByTestId('orders-attention-chip', {}, { timeout: 5000 })).toBeInTheDocument();
+    await user.click(await screen.findByRole('button', { name: 'Bỏ lọc' }, { timeout: 5000 }));
     await waitFor(() => expect(lastParams()).not.toHaveProperty('attention'));
     expect(screen.queryByTestId('orders-attention-chip')).not.toBeInTheDocument();
   });
