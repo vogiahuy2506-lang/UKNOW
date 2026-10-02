@@ -5,12 +5,36 @@ npm-debug.log
 .gitignore
 Dockerfile
 .dockerignore
-.env
 coverage
 dist
 tmp
 uploads
 temp_uploads
+logs
+scratch
+
+# Bí mật và phiên đăng nhập KHÔNG bao giờ được vào build context: image đẩy lên Docker Hub
+# công khai và `COPY . .` chép mọi thứ còn lại. Mẫu không có `**/` chỉ khớp ở gốc context,
+# nên khai cả hai dạng. (tests/ vẫn giữ trong image: cổng nghiệm thu
+# scripts/ops/test_hot_swap_rollback.sh đọc tests/integration/sql/bootstrap.sql bên trong image.)
+.env
+.env.*
+**/.env
+**/.env.*
+secrets
+**/secrets
+whatsapp-sessions
+**/whatsapp-sessions
+.telegram-sessions
+**/.telegram-sessions
+*.session
+**/*.session
+*.session-*
+**/*.session-*
+*.pem
+**/*.pem
+*.key
+**/*.key
 .telegram-mtcute-storage
 .telegram-mtcute-storage-shm
 .telegram-mtcute-storage-wal

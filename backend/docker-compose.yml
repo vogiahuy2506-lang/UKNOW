@@ -3,8 +3,10 @@ services:
     container_name: uknow-campaign-backend
     image: nhatminh7104/uknow-backend:latest
     ports:
-      # Publish ra ngoài để máy ngoài VPS gọi được API.
-      - "0.0.0.0:${BACKEND_PORT:-5001}:5001"
+      # Mặc định publish ra mọi interface (như trước) vì traffic /api production đi thẳng
+      # Cloudflare → cổng 5001. Chỉ đặt BACKEND_BIND_ADDRESS=127.0.0.1 SAU KHI đã chuyển origin
+      # /api của Cloudflare sang cổng 443 (nginx frontend vốn đã proxy /api/ tới backend).
+      - "${BACKEND_BIND_ADDRESS:-0.0.0.0}:${BACKEND_PORT:-5001}:5001"
     restart: unless-stopped
     environment:
       NODE_ENV: production

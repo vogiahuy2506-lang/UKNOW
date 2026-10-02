@@ -24,6 +24,12 @@ concurrency:
   group: deploy-backend-production
   cancel-in-progress: false
 
+# Quyền tối thiểu cho GITHUB_TOKEN: chỉ đọc mã nguồn. Job nào cần thêm thì tự khai ở cấp job
+# (notify-failure cần issues: write). Workflow gọi qua `uses:` (test-backend.yml) nhận đúng
+# quyền này, và nó cũng chỉ cần đọc.
+permissions:
+  contents: read
+
 jobs:
   validate-production-ref:
     name: Validate production ref
@@ -95,7 +101,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
       - name: Reject newer backend-relevant revision before deploy
         shell: bash
         run: |
@@ -117,16 +123,16 @@ jobs:
           echo "A newer main commit exists (${LATEST_SHA}) but it does not change backend deploy inputs; continuing safely."
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
 
       - name: Login to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3.7.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Build and push image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
           context: ./backend
           push: true
@@ -134,13 +140,15 @@ jobs:
           # Push only an immutable tag while the workflow is still subject to
           # stale-SHA checks. `latest` is promoted after the final guard below.
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
+          # Chỉ giá trị KHÔNG bí mật được làm build-arg: image công khai trên Docker Hub, ENV
+          # trong image ai cũng đọc được. TELEGRAM_GATEWAY_SECRET / TELEGRAM_API_ID /
+          # TELEGRAM_API_HASH giao lúc chạy ở bước "Deploy to VPS" bên dưới.
+          # TRANSPORT (đường dẫn module) và TIMEOUT (số) không bí mật; LP_APEX_FIXED_IP là IP khách
+          # vẫn được hiển thị để trỏ bản ghi A, LP_CNAME_TARGET là tên miền công khai.
           build-args: |
             BUILD_SHA=${{ github.sha }}
             LP_APEX_FIXED_IP=${{ secrets.LP_APEX_FIXED_IP }}
             LP_CNAME_TARGET=${{ secrets.LP_CNAME_TARGET }}
-            TELEGRAM_GATEWAY_SECRET=${{ secrets.TELEGRAM_GATEWAY_SECRET }}
-            TELEGRAM_API_ID=${{ secrets.TELEGRAM_API_ID }}
-            TELEGRAM_API_HASH=${{ secrets.TELEGRAM_API_HASH }}
             TELEGRAM_GATEWAY_TRANSPORT=${{ secrets.TELEGRAM_GATEWAY_TRANSPORT }}
             TELEGRAM_CONNECT_TIMEOUT_MS=${{ secrets.TELEGRAM_CONNECT_TIMEOUT_MS }}
           # Không dùng cache-from: lần build trước đã "tái sử dụng" layer cũ không có
@@ -151,9 +159,11 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Verify image on registry
+        env:
+          IMAGE_REF: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
         run: |
-          echo "Verifying image on Docker Hub: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"
-          docker buildx imagetools inspect "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"
+          echo "Verifying image on Docker Hub: $IMAGE_REF"
+          docker buildx imagetools inspect "$IMAGE_REF"
 
       - name: Reject newer backend-relevant revision before VPS mutation
         shell: bash
@@ -174,7 +184,7 @@ jobs:
           echo "A newer main commit exists but backend deploy inputs are unchanged; continuing safely."
 
       - name: Upload SSL scripts to VPS
-        uses: appleboy/scp-action@v0.1.7
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634 # v0.1.7
         timeout-minutes: 5
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -203,7 +213,7 @@ jobs:
           echo "A newer main commit exists but backend deploy inputs are unchanged; continuing safely."
 
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         # Trần riêng cho bước SSH: đây là chỗ treo lâu nhất trong thực tế (kết nối tới VPS
         # không phản hồi, hoặc lệnh docker trên VPS kẹt chờ khoá). Trần cả job không đủ —
         # có trần ở bước thì log chỉ thẳng ra thủ phạm thay vì "job hết giờ".
@@ -213,6 +223,16 @@ jobs:
           DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
           BACKEND_IMAGE: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}
           EXPECTED_SHA: ${{ github.sha }}
+          # Tuỳ chọn: token Docker Hub CHỈ-ĐỌC để pull khi repo image chuyển private. Trống = pull
+          # ẩn danh như trước.
+          DOCKERHUB_PULL_TOKEN: ${{ secrets.DOCKERHUB_PULL_TOKEN }}
+          # Bí mật Telegram giao LÚC CHẠY (trước đây nướng vào image công khai). Secret nào trống
+          # thì không truyền, backend dùng giá trị trong /root/uknow/backend/.env.
+          TELEGRAM_GATEWAY_SECRET: ${{ secrets.TELEGRAM_GATEWAY_SECRET }}
+          TELEGRAM_API_ID: ${{ secrets.TELEGRAM_API_ID }}
+          TELEGRAM_API_HASH: ${{ secrets.TELEGRAM_API_HASH }}
+          # Biến repository (không phải secret). Trống = publish 5001 trên mọi interface như cũ.
+          BACKEND_BIND_ADDRESS: ${{ vars.BACKEND_BIND_ADDRESS }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -221,10 +241,23 @@ jobs:
           # thuộc vào mặc định của phiên bản action.
           timeout: 60s
           command_timeout: 13m
-          envs: DOCKERHUB_USERNAME,BACKEND_IMAGE,EXPECTED_SHA
+          # drone-ssh (bên dưới action) chèn `export TÊN='giá trị'` cho từng biến ở đây vào đầu
+          # script — kể cả khi giá trị rỗng, nên script phải coi rỗng là "không đặt".
+          envs: DOCKERHUB_USERNAME,BACKEND_IMAGE,EXPECTED_SHA,DOCKERHUB_PULL_TOKEN,TELEGRAM_GATEWAY_SECRET,TELEGRAM_API_ID,TELEGRAM_API_HASH,BACKEND_BIND_ADDRESS
           script: |
             set -e
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Deploying backend image: $BACKEND_IMAGE"
+            # Đăng nhập Docker Hub trước khi pull — chỉ khi có DOCKERHUB_PULL_TOKEN. Token đi qua
+            # stdin, không nằm trên dòng lệnh. Đăng nhập hỏng chỉ cảnh báo: repo còn công khai thì
+            # pull ẩn danh vẫn chạy; repo private thì bước pull bên dưới sẽ báo lỗi rõ ràng.
+            if [ -n "${DOCKERHUB_PULL_TOKEN:-}" ]; then
+              if printf '%s' "$DOCKERHUB_PULL_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin > /dev/null; then
+                echo "Docker Hub: đã đăng nhập bằng DOCKERHUB_PULL_TOKEN."
+              else
+                echo "::warning::docker login bằng DOCKERHUB_PULL_TOKEN thất bại — tiếp tục pull ẩn danh."
+              fi
+            fi
+            unset DOCKERHUB_PULL_TOKEN
             # Docker Hub thỉnh thoảng trả TLS handshake timeout / 5xx khi registry CDN
             # nghẽn (18/09/2026: workflow fail ở đây, image build vẫn trên registry,
             # chỉ là phiên TCP bị ngắt giữa chừng). Retry tối đa 5 lần với backoff
@@ -250,6 +283,54 @@ jobs:
             chmod +x /root/uknow/scripts/ssl-auto-provision.sh /root/uknow/scripts/ssl-provision-pending.sh
             chown -R www-data:www-data /root/uknow/certbot 2>/dev/null || true
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] SSL scripts deployed to /root/uknow/scripts"
+            # ── Proxy Docker API chỉ-đọc cho trang giám sát admin ─────────────────
+            # Backend KHÔNG còn mount /var/run/docker.sock (quyền đó tương đương root trên host).
+            # Trang giám sát chỉ cần GET /containers/json và GET /containers/<tên>/logs, nên đi qua
+            # tecnativa/docker-socket-proxy (ghim digest): chỉ cho GET, chỉ nhóm /containers
+            # (CONTAINERS=1, POST=0; EVENTS/PING/VERSION cũng tắt). Proxy nghe trên MỘT unix socket
+            # trong /root/uknow/docker-proxy (mount vào backend), chạy --network none và không
+            # publish cổng nào: không tồn tại địa chỉ HTTP nào tới nó, nên một request HTTP do người
+            # dùng điều khiển từ backend cũng không chạm được Docker API.
+            # Đặt TRƯỚC khi đổi container để không kéo dài lúc gián đoạn. Hỏng ở đây chỉ làm trang
+            # giám sát báo "chưa nối" — KHÔNG được làm hỏng deploy, nên mọi lỗi chỉ cảnh báo.
+            DOCKER_PROXY_NAME="uknow-docker-proxy"
+            DOCKER_PROXY_IMAGE="tecnativa/docker-socket-proxy:v0.5.0@sha256:1f5038b54f06c3e18422902cf00ba21803d1c97805aae032e5e6673d532d3459"
+            DOCKER_PROXY_DIR="/root/uknow/docker-proxy"
+            # Đổi cấu hình proxy bên dưới thì đổi cả chuỗi này để deploy sau tạo lại container.
+            DOCKER_PROXY_CONFIG="v1 $DOCKER_PROXY_IMAGE unix-socket CONTAINERS=1"
+            ensure_docker_proxy() {
+              mkdir -p "$DOCKER_PROXY_DIR" || return 1
+              # 755: user `node` trong backend phải đi qua được thư mục để tới socket.
+              chmod 755 "$DOCKER_PROXY_DIR" || return 1
+              CURRENT_PROXY="$(docker inspect --format '{{ index .Config.Labels "uknow.docker-proxy.config" }}|{{ .State.Running }}' "$DOCKER_PROXY_NAME" 2>/dev/null || true)"
+              if [ "$CURRENT_PROXY" = "$DOCKER_PROXY_CONFIG|true" ]; then
+                echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $DOCKER_PROXY_NAME đang chạy đúng cấu hình — giữ nguyên."
+                return 0
+              fi
+              if ! docker image inspect "$DOCKER_PROXY_IMAGE" > /dev/null 2>&1; then
+                timeout 120 docker pull "$DOCKER_PROXY_IMAGE" > /dev/null || return 1
+              fi
+              docker rm -f "$DOCKER_PROXY_NAME" > /dev/null 2>&1 || true
+              docker run -d \
+                --name "$DOCKER_PROXY_NAME" \
+                --network none \
+                --restart unless-stopped \
+                --label "uknow.docker-proxy.config=$DOCKER_PROXY_CONFIG" \
+                --log-driver json-file --log-opt max-size=10m --log-opt max-file=3 \
+                -e CONTAINERS=1 \
+                -e POST=0 \
+                -e EVENTS=0 \
+                -e PING=0 \
+                -e VERSION=0 \
+                -e BIND_CONFIG="/run/uknow-docker-proxy/docker.sock mode 666" \
+                -v /var/run/docker.sock:/var/run/docker.sock:ro \
+                -v "$DOCKER_PROXY_DIR":/run/uknow-docker-proxy \
+                "$DOCKER_PROXY_IMAGE" > /dev/null || return 1
+              echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] $DOCKER_PROXY_NAME đã khởi động lại với cấu hình mới."
+            }
+            if ! ensure_docker_proxy; then
+              echo "::warning::Không khởi động được $DOCKER_PROXY_NAME — trang giám sát admin sẽ báo Docker chưa nối; deploy vẫn tiếp tục."
+            fi
             # ── Migration chạy TRƯỚC khi hạ container cũ ──────────────────────
             # Nếu migration hỏng, `set -e` dừng deploy tại đây và container cũ vẫn
             # đang phục vụ. Hạ container trước rồi mới migrate thì migration hỏng
@@ -299,6 +380,52 @@ jobs:
               echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Bỏ qua billing audit: migration 174 đã áp dụng từ release trước."
             fi
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Migration hoàn tất — bắt đầu đổi container"
+            # ── Địa chỉ publish cổng 5001 (biến repository BACKEND_BIND_ADDRESS, tuỳ chọn) ──
+            # Trống = `-p 5001:5001` y như trước (mọi interface IPv4 lẫn IPv6): traffic /api production
+            # hiện đi thẳng Cloudflare → origin:5001. Muốn chỉ nghe nội bộ: TRƯỚC HẾT chuyển origin
+            # /api trên Cloudflare sang cổng 443 (nginx frontend vốn đã proxy /api/ tới backend),
+            # kiểm tra /api chạy ổn, RỒI mới đặt BACKEND_BIND_ADDRESS=127.0.0.1.
+            # Chỉ nhận IPv4 dạng số; sai định dạng thì cảnh báo và giữ publish như cũ.
+            BACKEND_PUBLISH="5001:5001"
+            BACKEND_HEALTH_URL="http://localhost:5001/api/health"
+            if [ -n "${BACKEND_BIND_ADDRESS:-}" ]; then
+              BIND_OK=false
+              case "$BACKEND_BIND_ADDRESS" in
+                *[!0-9.]*) ;;
+                *)
+                  if printf '%s\n' "$BACKEND_BIND_ADDRESS" | grep -Eqx '((25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])'; then
+                    BIND_OK=true
+                  fi
+                  ;;
+              esac
+              if [ "$BIND_OK" = "true" ]; then
+                BACKEND_PUBLISH="$BACKEND_BIND_ADDRESS:5001:5001"
+                if [ "$BACKEND_BIND_ADDRESS" != "0.0.0.0" ]; then
+                  BACKEND_HEALTH_URL="http://$BACKEND_BIND_ADDRESS:5001/api/health"
+                fi
+              else
+                echo "::warning::BACKEND_BIND_ADDRESS không phải địa chỉ IPv4 hợp lệ — giữ publish 5001 như cũ (mọi interface)."
+              fi
+            fi
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Backend publish: -p $BACKEND_PUBLISH (health: $BACKEND_HEALTH_URL)"
+            health_ok() {
+              curl --connect-timeout 2 --max-time 4 -sf "$1" > /dev/null 2>&1
+            }
+            # Container cũ khôi phục khi rollback publish theo cấu hình của lần deploy TRƯỚC, nên
+            # chấp nhận cả địa chỉ mới lẫn localhost.
+            standby_healthy() {
+              health_ok "$BACKEND_HEALTH_URL" || health_ok "http://localhost:5001/api/health"
+            }
+            # ── Bí mật giao lúc chạy ─────────────────────────────────────────────
+            # Chỉ thêm `-e TÊN` khi biến có giá trị: dotenv KHÔNG ghi đè biến đã có trong môi trường,
+            # nên truyền giá trị rỗng sẽ che mất giá trị trong /app/.env. Dạng `-e TÊN` (không kèm
+            # `=giá trị`): docker CLI tự đọc giá trị từ môi trường của script (drone-ssh đã export),
+            # nên giá trị không xuất hiện trên dòng lệnh. Chuỗi này chỉ chứa TÊN biến, không có giá trị.
+            BACKEND_RUNTIME_ENV_FLAGS=""
+            if [ -n "${TELEGRAM_GATEWAY_SECRET:-}" ]; then BACKEND_RUNTIME_ENV_FLAGS="$BACKEND_RUNTIME_ENV_FLAGS -e TELEGRAM_GATEWAY_SECRET"; fi
+            if [ -n "${TELEGRAM_API_ID:-}" ]; then BACKEND_RUNTIME_ENV_FLAGS="$BACKEND_RUNTIME_ENV_FLAGS -e TELEGRAM_API_ID"; fi
+            if [ -n "${TELEGRAM_API_HASH:-}" ]; then BACKEND_RUNTIME_ENV_FLAGS="$BACKEND_RUNTIME_ENV_FLAGS -e TELEGRAM_API_HASH"; fi
+            echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Biến bí mật truyền lúc chạy:${BACKEND_RUNTIME_ENV_FLAGS:- (không có — dùng /app/.env)}"
             # Đổi tên + STOP (không rm -f) container cũ thay vì xoá thẳng: STOP đã giải
             # phóng port 5001 (đủ để container mới bind), nhưng container cũ vẫn còn để
             # khôi phục tức thì nếu readiness check của container mới thất bại bên dưới.
@@ -317,7 +444,7 @@ jobs:
             if docker inspect "$CI_STANDBY_NAME" > /dev/null 2>&1; then
               echo "::error::Phát hiện $CI_STANDBY_NAME còn sót từ lượt deploy trước (có thể do step bị huỷ giữa chừng)."
               echo "Dán thẳng lệnh dưới đây trên VPS — nó tự kiểm tra health rồi mới chọn nhánh, không cần bạn tự đọc trạng thái rồi chọn tay (chọn nhầm nhánh là xoá mất bản đang chạy tốt):"
-              echo "  if curl -sf http://localhost:5001/api/health >/dev/null; then docker rm -f $CI_STANDBY_NAME; echo 'uknow-campaign-backend đang healthy — đã xoá standby thừa.'; else docker rm -f uknow-campaign-backend 2>/dev/null; docker rename $CI_STANDBY_NAME uknow-campaign-backend && docker update --restart=unless-stopped uknow-campaign-backend && docker start uknow-campaign-backend && echo 'Đã khôi phục uknow-campaign-backend từ standby.'; fi"
+              echo "  if curl -sf $BACKEND_HEALTH_URL >/dev/null || curl -sf http://localhost:5001/api/health >/dev/null; then docker rm -f $CI_STANDBY_NAME; echo 'uknow-campaign-backend đang healthy — đã xoá standby thừa.'; else docker rm -f uknow-campaign-backend 2>/dev/null; docker rename $CI_STANDBY_NAME uknow-campaign-backend && docker update --restart=unless-stopped uknow-campaign-backend && docker start uknow-campaign-backend && echo 'Đã khôi phục uknow-campaign-backend từ standby.'; fi"
               exit 1
             fi
             if docker inspect uknow-campaign-backend-standby > /dev/null 2>&1; then
@@ -389,7 +516,7 @@ jobs:
                 docker start uknow-campaign-backend || true
                 ROLLED_BACK=false
                 for i in $(seq 1 40); do
-                  if curl --connect-timeout 2 --max-time 4 -sf http://localhost:5001/api/health > /dev/null 2>&1; then
+                  if standby_healthy; then
                     ROLLED_BACK=true
                     break
                   fi
@@ -409,20 +536,23 @@ jobs:
               exit 1
             }
 
-            DOCKER_GID="$(stat -c '%g' /var/run/docker.sock 2>/dev/null || echo 0)"
             echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Starting new backend container..."
+            # Không còn mount /var/run/docker.sock hay --group-add docker: trang giám sát đọc Docker
+            # API qua socket của uknow-docker-proxy (chỉ GET /containers/*).
+            # $BACKEND_RUNTIME_ENV_FLAGS cố ý không đặt trong ngoặc kép: tách thành các cặp `-e TÊN`.
             if ! docker run -d \
               --name uknow-campaign-backend \
               --network uknow_network \
-              --group-add "$DOCKER_GID" \
               --label org.opencontainers.image.revision="$EXPECTED_SHA" \
               --restart unless-stopped \
               --init \
               --stop-timeout 45 \
               -e SKIP_MIGRATIONS=true \
-              -p 5001:5001 \
+              -e DOCKER_HOST=unix:///run/uknow-docker-proxy/docker.sock \
+              $BACKEND_RUNTIME_ENV_FLAGS \
+              -p "$BACKEND_PUBLISH" \
               -v /root/uknow/backend/.env:/app/.env \
-              -v /var/run/docker.sock:/var/run/docker.sock:ro \
+              -v /root/uknow/docker-proxy:/run/uknow-docker-proxy:ro \
               -v /root/uknow/backend/uploads:/app/uploads \
               -v /root/uknow/backend/temp_uploads:/app/temp_uploads \
               -v /root/uknow/backend/telegram-sessions:/app/.telegram-sessions \
@@ -443,7 +573,7 @@ jobs:
             READY=false
             START_TIME=$(date +%s)
             for i in $(seq 1 40); do
-              if curl --connect-timeout 2 --max-time 4 -sf http://localhost:5001/api/health > /dev/null 2>&1; then
+              if health_ok "$BACKEND_HEALTH_URL"; then
                 READY=true
                 ELAPSED=$(( $(date +%s) - START_TIME ))
                 echo "[$(date -u +'%Y-%m-%dT%H:%M:%SZ')] Smoke test passed — backend healthy after ${ELAPSED}s (attempt $i/40)"
@@ -462,7 +592,7 @@ jobs:
             # sẽ không còn đường cứu hộ.
             sleep 3
             if ! docker inspect uknow-campaign-backend --format '{{.State.Running}}' 2>/dev/null | grep -qx 'true' \
-               || ! curl --connect-timeout 2 --max-time 4 -sf http://localhost:5001/api/health > /dev/null 2>&1; then
+               || ! health_ok "$BACKEND_HEALTH_URL"; then
               rollback_to_standby "Container mất readiness ngay trong cửa sổ ổn định sau khởi động"
             fi
 
@@ -495,11 +625,14 @@ jobs:
 
       - name: Promote deployed image as latest
         shell: bash
+        env:
+          IMAGE_REPO: ${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend
+          IMAGE_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
           docker buildx imagetools create \
-            --tag "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:latest" \
-            "${{ secrets.DOCKERHUB_USERNAME }}/uknow-backend:${{ github.sha }}"
+            --tag "$IMAGE_REPO:latest" \
+            "$IMAGE_REPO:$IMAGE_SHA"
 
   # ─────────────────────────────────────────────────────────────────────────────
   # Cảnh báo khi deploy đỏ — thêm 04/09/2026.
@@ -521,7 +654,7 @@ jobs:
       issues: write
     steps:
       - name: Mở hoặc cập nhật issue cảnh báo
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const marker = '<!-- deploy-backend-failure-tracker -->';
