@@ -135,6 +135,11 @@ describe('adminAiModels.listModels - chi phi thuc do moi luot goi', () => {
       });
     });
 
+    it('00:30 VN ngay 01/01/2027 (= 17:30 UTC ngay 31/12/2026) la gia MOI - moc tinh theo gio VN, khong theo UTC', async () => {
+      const pricing = await model38(new Date('2026-12-31T17:30:00Z'));
+      expect(pricing).toMatchObject({ inputUsdPerM: 1.5, outputUsdPerM: 7.5, upcoming: null });
+    });
+
     it('model gia phang (3.5-flash) khong co muc sap toi; AI_PRICING_JSON gia phang cho 3.8-flash cung khong co', async () => {
       mockGetCatalog.mockResolvedValue([catalogModel('gemini-3.5-flash')]);
       mockGetMeasuredCostByModel.mockResolvedValue({ range: '30d', byModel: {} });
