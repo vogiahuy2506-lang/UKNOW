@@ -8,7 +8,8 @@ const ChannelTemplates = () => {
   const [active, setActive] = useState('email');
   const TABS = [
     { key: 'email', label: t('channelTemplates.email') },
-    { key: 'zalo', label: t('channelTemplates.zalo') },
+    // key 'zalo' giữ nguyên (state/aiDraft.channel nội bộ); tab hiển thị là kho mẫu tin nhắn dùng chung 3 kênh chat.
+    { key: 'zalo', label: t('channelTemplates.messages') },
   ];
   const location = useLocation();
 

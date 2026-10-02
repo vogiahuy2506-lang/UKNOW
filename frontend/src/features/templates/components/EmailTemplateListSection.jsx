@@ -255,7 +255,7 @@ const EmailTemplateListSection = ({
                     )}
                   </span>
                   <span className="text-[11px] font-medium text-gray-500 uppercase tracking-wider">
-                    {activeChannel === 'zalo' ? 'Zalo Message' : 'Email Subject'}
+                    {activeChannel === 'zalo' ? t('templates.messageKindLabel') : 'Email Subject'}
                   </span>
                 </div>
                 <p className="text-xs text-gray-700 font-medium line-clamp-2 leading-relaxed min-h-[2.5rem]">
@@ -333,7 +333,7 @@ const EmailTemplateListSection = ({
             <div className="space-y-4 text-sm text-gray-600">
               <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                 <p className="font-medium text-blue-800 mb-1">Template là gì?</p>
-                <p>Template giúp bạn lưu sẵn nội dung tin nhắn để gửi cho khách hàng qua Email hoặc Zalo một cách nhanh chóng và nhất quán.</p>
+                <p>Template giúp bạn lưu sẵn nội dung tin nhắn để gửi cho khách hàng qua Email, Zalo, Telegram hoặc WhatsApp một cách nhanh chóng và nhất quán.</p>
               </div>
               <div>
                 <p className="font-medium text-gray-800 mb-2">Cách tạo Template mới:</p>
@@ -348,7 +348,7 @@ const EmailTemplateListSection = ({
                 <p className="font-medium text-gray-800 mb-2">Cách sử dụng trong Campaign:</p>
                 <ol className="list-decimal list-inside space-y-1">
                   <li>Tạo Campaign mới</li>
-                  <li>Chọn bước gửi Email/Zalo</li>
+                  <li>Chọn bước gửi Email/Zalo/Telegram/WhatsApp</li>
                   <li>Chọn Template đã tạo từ danh sách</li>
                   <li>Hệ thống sẽ tự động thay thế biến bằng thông tin khách hàng</li>
                 </ol>

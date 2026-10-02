@@ -67,6 +67,16 @@ export const validateChannelAttachments = (attachments, channel) => {
 };
 
 /**
+ * Mẫu tin nhắn là kho DÙNG CHUNG Zalo / Telegram / WhatsApp, nhưng chỉ Telegram và WhatsApp có trần tệp mỗi tin
+ * (Zalo thì không). Trả vấn đề đầu tiên của kênh nào vượt trần (Telegram trước, rồi WhatsApp) hoặc null.
+ * Dùng để NHẮC trong trình soạn mẫu — không chặn lưu: mẫu vẫn dùng bình thường cho Zalo.
+ */
+export const findMessageTemplateChannelProblem = (attachments) => (
+  validateChannelAttachments(attachments, 'telegram')
+  || validateChannelAttachments(attachments, 'whatsapp')
+);
+
+/**
  * Áp một mẫu tin (kho mẫu Zalo: `bodyText`, `attachments`) vào bước của node: điền nội dung + sao chép đính kèm
  * (chụp tại thời điểm chọn — sửa mẫu về sau KHÔNG tự cập nhật khối đã lưu). Mẫu rỗng nội dung thì giữ nội dung đang soạn.
  */

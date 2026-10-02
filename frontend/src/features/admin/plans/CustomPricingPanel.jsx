@@ -34,7 +34,7 @@ const LABEL_MAP = {
   zalo_group_campaigns: 'Chiến dịch Zalo nhóm',
   email_campaigns: 'Chiến dịch Email',
   email_templates: 'Email template',
-  zalo_templates: 'Zalo template',
+  zalo_templates: 'Mẫu tin nhắn (Zalo, Telegram, WhatsApp)',
 };
 
 export default function CustomPricingPanel() {

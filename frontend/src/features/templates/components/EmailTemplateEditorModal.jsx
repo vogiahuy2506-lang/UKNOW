@@ -17,6 +17,7 @@ import {
   HiOutlineCheck,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
+import MessageTemplateChannelLimitNotice from './MessageTemplateChannelLimitNotice';
 
 const LabelPicker = ({ value, labels, onChange }) => {
   const [open, setOpen] = useState(false);
@@ -438,6 +439,10 @@ const EmailTemplateEditorModal = ({
                 </div>
               )}
             </div>
+
+            {templateKindLabel === 'zalo' && (
+              <MessageTemplateChannelLimitNotice attachments={formData.attachments} />
+            )}
 
             <div className="flex-1 overflow-hidden">
               {editorTab === 'content' ? (

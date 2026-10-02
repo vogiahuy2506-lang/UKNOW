@@ -5,6 +5,7 @@ import {
   applyTemplateToStep,
   classifyChannelAttachment,
   clearTemplateFromStep,
+  findMessageTemplateChannelProblem,
   getAttachmentDisplayName,
   validateChannelAttachments,
 } from '../channelAttachments';
@@ -82,5 +83,28 @@ describe('applyTemplateToStep / clearTemplateFromStep', () => {
   it('bỏ mẫu: giữ nội dung, xoá templateId + đính kèm', () => {
     expect(clearTemplateFromStep({ message: 'x', templateId: '9', attachments: [{ key: 'k' }] }))
       .toEqual({ message: 'x', templateId: '', attachments: [] });
+  });
+});
+
+describe('findMessageTemplateChannelProblem — nhắc giới hạn khi soạn mẫu dùng chung 3 kênh', () => {
+  const imgs = (n, ext = 'jpg') => Array.from({ length: n }, (_, i) => ({ name: `a${i}.${ext}`, size: 10 }));
+
+  it('mẫu 1 ảnh / không tệp -> null (không nhắc)', () => {
+    expect(findMessageTemplateChannelProblem(imgs(1))).toBeNull();
+    expect(findMessageTemplateChannelProblem([])).toBeNull();
+    expect(findMessageTemplateChannelProblem(undefined)).toBeNull();
+  });
+
+  it('mẫu 6 ảnh -> vượt trần ảnh', () => {
+    expect(findMessageTemplateChannelProblem(imgs(6))).toEqual({ code: 'images', limit: 5 });
+  });
+
+  it('chỉ một trong hai kênh vượt vẫn nhắc: 5 ảnh webp là tài liệu của Telegram (> 3) dù WhatsApp coi là ảnh', () => {
+    expect(validateChannelAttachments(imgs(5, 'webp'), 'whatsapp')).toBeNull();
+    expect(findMessageTemplateChannelProblem(imgs(5, 'webp'))).toEqual({ code: 'documents', limit: 3 });
+  });
+
+  it('quá 20 MB -> size', () => {
+    expect(findMessageTemplateChannelProblem([{ name: 'a.pdf', size: 21 * 1024 * 1024 }])).toEqual({ code: 'size', limit: 20 });
   });
 });
