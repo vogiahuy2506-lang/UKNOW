@@ -243,3 +243,50 @@ describe('useCanvasConversation — có files bỏ qua intent, gọi API với f
     expect(text).toContain('và 1 tệp khác');
   });
 });
+
+describe('useCanvasConversation — điền tên trang từ AI (PLAN_LANDING_GIU_NHAP_KHI_F5 Việc 2)', () => {
+  const run = async ({ form, hasExistingHtml, response }) => {
+    if (hasExistingHtml) editLandingHtmlWithAi.mockResolvedValueOnce(response);
+    else generateLandingHtmlWithAi.mockResolvedValueOnce(response);
+    let formState = { ...form };
+    const setForm = vi.fn((updater) => {
+      formState = typeof updater === 'function' ? updater(formState) : updater;
+    });
+    const { result } = renderHook(() =>
+      useCanvasConversation({ form: formState, setForm, hasExistingHtml, openTab: vi.fn(), editingId: null })
+    );
+    await act(async () => {
+      await result.current.handleSend({ prompt: 'Tạo trang bán khoá học AI cho người mới bắt đầu, phong cách tối giản' });
+    });
+    return formState;
+  };
+
+  it('tạo mới, ô tên trống → điền tên AI trả về (hình dạng thật { success, data: { html, title } })', async () => {
+    const state = await run({
+      form: { title: '', htmlContent: '' },
+      hasExistingHtml: false,
+      response: { success: true, data: { html: '<div>Trang</div>', title: 'Khoá học AI cho người mới' } },
+    });
+    expect(state.htmlContent).toBe('<div>Trang</div>');
+    expect(state.title).toBe('Khoá học AI cho người mới');
+  });
+
+  it('tạo mới nhưng người dùng ĐÃ đặt tên → giữ nguyên tên người dùng, không đè bằng tên AI', async () => {
+    const state = await run({
+      form: { title: 'Tên tôi tự đặt', htmlContent: '' },
+      hasExistingHtml: false,
+      response: { success: true, data: { html: '<div>Trang</div>', title: 'Tên AI gợi ý' } },
+    });
+    expect(state.title).toBe('Tên tôi tự đặt');
+  });
+
+  it('sửa trang có sẵn (không phải tạo mới) → không điền tên dù AI trả title', async () => {
+    const state = await run({
+      form: { title: '', htmlContent: '<div>Cũ</div>' },
+      hasExistingHtml: true,
+      response: { success: true, data: { html: '<div>Mới</div>', title: 'Tên AI gợi ý' } },
+    });
+    expect(state.htmlContent).toBe('<div>Mới</div>');
+    expect(state.title).toBe('');
+  });
+});
