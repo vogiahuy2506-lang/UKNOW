@@ -1,5 +1,13 @@
+import net from 'node:net';
 import { v4 as uuidv4 } from 'uuid';
 import emailSettingsRepository from '../../repositories/email/emailSettings.repository.js';
+import {
+  assertPublicHost,
+  connectToVettedAddresses,
+  isObviouslyNonPublicHost,
+  isSsrfBlockedError,
+  normalizeHostname,
+} from '../../utils/ssrfGuard.util.js';
 import {
   classifyBounceType,
   isSmtpAuthConfigError,
@@ -36,6 +44,100 @@ function createServiceError(message, statusCode, extra = {}) {
   error.status = statusCode;
   Object.assign(error, extra);
   return error;
+}
+
+// ─── Chống SSRF cho SMTP tự cấu hình ─────────────────────────────────────────
+// Host SMTP do người dùng nhập chỉ được trỏ tới địa chỉ công khai (mọi cổng vẫn được phép: 25/465/
+// 587/2525...). SMTP mặc định của hệ thống (MAIL_SERVER) do vận hành cấu hình nên không bị chặn.
+
+export const SMTP_HOST_BLOCKED_CODE = 'SMTP_HOST_BLOCKED';
+export const SMTP_HOST_INVALID_MESSAGE = 'SMTP host không hợp lệ';
+/** Khớp mặc định của nodemailer (connectionTimeout 2 phút, dnsTimeout 30 giây). */
+const SMTP_CONNECTION_TIMEOUT_MS = 2 * 60 * 1000;
+const SMTP_DNS_TIMEOUT_MS = 30 * 1000;
+
+export function createSmtpHostBlockedError() {
+  return createServiceError(SMTP_HOST_INVALID_MESSAGE, 400, { code: SMTP_HOST_BLOCKED_CODE });
+}
+
+/** Host SMTP mặc định của hệ thống (MAIL_SERVER, cấu hình bởi vận hành). */
+export function isSystemSmtpHost(host) {
+  const systemHost = normalizeHostname(process.env.MAIL_SERVER || 'mail.digiso.vn');
+  return Boolean(systemHost) && normalizeHostname(host) === systemHost;
+}
+
+/**
+ * Kiểm tra nhanh (không DNS): host SMTP người dùng nhập là IP nội bộ / tên nội bộ → lỗi 400.
+ * Kiểm tra đầy đủ (DNS) nằm ở createSafeSmtpGetSocket, chạy cho mọi lần kết nối thật.
+ */
+export function assertSmtpHostAllowed(host) {
+  if (isSystemSmtpHost(host)) return;
+  if (isObviouslyNonPublicHost(host)) throw createSmtpHostBlockedError();
+}
+
+/** Lỗi chặn từ lớp kết nối SMTP (nodemailer ghi đè `code` thành ESOCKET nên đánh dấu riêng). */
+export function isSmtpHostBlockedError(error) {
+  return Boolean(error) && (error.code === SMTP_HOST_BLOCKED_CODE || error.smtpConnectStage === 'blocked');
+}
+
+function handOverSmtpSocket(callback, socket, failure) {
+  try {
+    callback(null, { connection: socket });
+  } catch (error) {
+    socket.destroy();
+    console.error('[EmailSettingsSmtp] getSocket callback lỗi:', error?.message || error);
+    return;
+  }
+  // nodemailer đã gắn listener 'error' đồng bộ trong callback; destroy(err) phát lỗi ở tick sau.
+  if (failure) socket.destroy(failure);
+}
+
+/**
+ * `getSocket` cho nodemailer: phân giải host SMTP, chặn nếu có địa chỉ không công khai, rồi tự mở TCP
+ * tới đúng IP đã kiểm (không phân giải lại). nodemailer nhận socket đã kết nối và tự nâng TLS
+ * (cổng 465 / STARTTLS) với SNI là tên host gốc.
+ *
+ * Lỗi được trả qua một socket hỏng thay vì `callback(err)`: pool của nodemailer chỉ gỡ kết nối lỗi
+ * khỏi pool khi lỗi đi qua SMTPConnection — `callback(err)` từ getSocket làm kẹt slot của pool.
+ * `smtpConnectStage` ('blocked' | 'dns' | 'connect') cho biết lỗi xảy ra trước khi gửi được gì.
+ */
+export function createSafeSmtpGetSocket() {
+  return function safeSmtpGetSocket(options, callback) {
+    const host = options?.host;
+    const port = Number(options?.port) || (options?.secure ? 465 : 587);
+    let stage = 'dns';
+    assertPublicHost(host, { timeoutMs: Number(options?.dnsTimeout) || SMTP_DNS_TIMEOUT_MS })
+      .then(({ addresses }) => {
+        stage = 'connect';
+        return connectToVettedAddresses(addresses, port, {
+          connectTimeoutMs: Number(options?.connectionTimeout) || SMTP_CONNECTION_TIMEOUT_MS,
+        });
+      })
+      .then(
+        (socket) => {
+          socket.setKeepAlive(true);
+          handOverSmtpSocket(callback, socket, null);
+        },
+        (error) => {
+          const blocked = isSsrfBlockedError(error);
+          const failure = blocked ? createSmtpHostBlockedError() : error;
+          failure.smtpConnectStage = blocked ? 'blocked' : stage;
+          if (blocked) console.warn(`[EmailSettingsSmtp] Chặn kết nối SMTP tới host không công khai: ${host}`);
+          handOverSmtpSocket(callback, new net.Socket(), failure);
+        }
+      );
+  };
+}
+
+/**
+ * nodemailer đổi `code` của mọi lỗi socket thành ESOCKET. Với lỗi của lớp chặn SSRF xảy ra TRƯỚC khi
+ * kết nối (host bị chặn / DNS lỗi) trả lại mã gốc để luồng xử lý quota bên dưới coi là chắc chắn chưa
+ * gửi, giống hệt lỗi DNS (EDNS) của nodemailer trước đây.
+ */
+function restoreSmtpGuardErrorCode(error) {
+  if (!error || typeof error !== 'object') return;
+  if (error.smtpConnectStage === 'blocked') error.code = SMTP_HOST_BLOCKED_CODE;
+  else if (error.smtpConnectStage === 'dns') error.code = 'EDNS';
 }
 
 class EmailSettingsSmtpService {
@@ -110,13 +212,21 @@ class EmailSettingsSmtpService {
 
   async testConnection(body = {}, deps) {
     const rawPort = Number.parseInt(body.smtp_port ?? body.smtpPort, 10);
+    const host = body.smtp_host ?? body.smtpHost;
+    // Host trống → dùng SMTP mặc định của hệ thống (normalizeSmtpConfig), không cần kiểm.
+    if (String(host ?? '').trim()) assertSmtpHostAllowed(String(host).trim());
     const transporter = deps.createSmtpTransporter({
-      host: body.smtp_host ?? body.smtpHost,
+      host,
       port: Number.isFinite(rawPort) ? rawPort : 465,
       username: body.smtp_username ?? body.smtpUsername,
       password: body.smtp_password ?? body.smtpPassword,
     });
-    await transporter.verify();
+    try {
+      await transporter.verify();
+    } catch (error) {
+      restoreSmtpGuardErrorCode(error);
+      throw error;
+    }
     return {
       message: 'Kết nối SMTP thành công',
     };
@@ -362,6 +472,7 @@ class EmailSettingsSmtpService {
         html: htmlContent || `<p>${content || 'Đây là email test từ hệ thống Founder AI'}</p>`,
       });
     } catch (smtpError) {
+      restoreSmtpGuardErrorCode(smtpError);
       if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
         try {
           const bounceType = classifyBounceType(smtpError);
@@ -373,7 +484,14 @@ class EmailSettingsSmtpService {
             || smtpError.code === 'ECONNRESET'
             || String(smtpError?.message || '').toLowerCase().includes('timeout');
 
-          if (isTimeout) {
+          if (isSmtpHostBlockedError(smtpError)) {
+            // Bị chặn trước khi kết nối — chắc chắn chưa gửi.
+            await releaseSendQuota({
+              reservationId: reservation.id,
+              failureCode: SMTP_HOST_BLOCKED_CODE,
+              reason: 'smtp_host_blocked',
+            });
+          } else if (isTimeout) {
             await markSendQuotaUncertain({
               reservationId: reservation.id,
               failureCode: 'SMTP_NETWORK_TIMEOUT',
@@ -699,6 +817,7 @@ class EmailSettingsSmtpService {
         attachments: realMailAttachments,
       });
     } catch (smtpError) {
+      restoreSmtpGuardErrorCode(smtpError);
       const isRateLimit = isSmtpProviderRateLimitError(smtpError);
       const isRecipientNotFound = isRecipientAddressNotFoundError(smtpError);
       const bounceType = classifyBounceType(smtpError);
@@ -713,9 +832,18 @@ class EmailSettingsSmtpService {
         console.warn(`[sendCustomEmail] SMTP ${bounceType} bounce cho ${to}: ${bounceReason}`);
       }
 
+      const smtpHostBlocked = isSmtpHostBlockedError(smtpError);
+
       if (reservation?.id && (reservation.mode === 'enforce' || reservation.mode === 'test_enforce')) {
         try {
-          if (smtpConfigError) {
+          if (smtpHostBlocked) {
+            // Bị chặn trước khi kết nối — chắc chắn chưa gửi.
+            await releaseFn({
+              reservationId: reservation.id,
+              failureCode: SMTP_HOST_BLOCKED_CODE,
+              reason: 'smtp_host_blocked',
+            }, ...optArg);
+          } else if (smtpConfigError) {
             await releaseFn({
               reservationId: reservation.id,
               failureCode: 'SMTP_CONFIG_ERROR',
@@ -800,6 +928,11 @@ class EmailSettingsSmtpService {
         } catch (e) {
           console.warn('[sendCustomEmail] release/uncertain error:', e.message);
         }
+      }
+
+      // Host SMTP trỏ vào địa chỉ nội bộ: chưa gửi gì — báo lỗi cấu hình rõ ràng, không tính là bounce.
+      if (smtpHostBlocked) {
+        throw createSmtpHostBlockedError();
       }
 
       if (!shouldForcePreviewOnly && !isHardBounce) {

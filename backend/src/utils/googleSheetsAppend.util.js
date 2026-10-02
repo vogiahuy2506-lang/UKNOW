@@ -12,11 +12,21 @@
  * Lưu ý vận hành:
  * - Best-effort: nếu sync thất bại, KHÔNG chặn flow đăng ký lead (tránh ảnh hưởng UX).
  * - Lỗi sync được log để admin debug.
+ *
+ * Chống SSRF (webhook bắn ra từ lượt gửi lead công khai): chỉ https tới host có IP công khai, kết nối
+ * ghim IP đã kiểm, redirect kiểm lại từng chặng. Ngoại lệ http://localhost / 127.0.0.1 chỉ tồn tại
+ * khi NODE_ENV khác 'production' (dev test với GAS giả lập).
  */
 
-import axios from 'axios';
+import { isSsrfBlockedError, safeHttpRequest } from './ssrfGuard.util.js';
 
 const TIMEOUT_MS = 10_000;
+/** Phản hồi của GAS không được dùng — chỉ đọc tối đa chừng này rồi bỏ. */
+const MAX_RESPONSE_BYTES = 1024 * 1024;
+
+function isLocalDevWebhookHost(hostname) {
+  return process.env.NODE_ENV !== 'production' && (hostname === 'localhost' || hostname === '127.0.0.1');
+}
 
 /**
  * Lấy cấu hình Google Sheets sync từ customConfig của landing page.
@@ -36,9 +46,10 @@ export function extractGoogleSheetsSyncConfig(customConfig) {
   let safeUrl = webhookUrl;
   try {
     const u = new URL(webhookUrl);
-    // Chỉ chấp nhận HTTPS (Google Apps Script luôn HTTPS) hoặc localhost dev
-    const isLocal = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-    if (u.protocol !== 'https:' && !isLocal) return null;
+    // Chỉ chấp nhận HTTPS (Google Apps Script luôn HTTPS); localhost chỉ cho môi trường dev/test.
+    const isLocal = isLocalDevWebhookHost(u.hostname);
+    if (u.protocol !== 'https:' && !(isLocal && u.protocol === 'http:')) return null;
+    if (u.username || u.password) return null;
     safeUrl = u.toString();
   } catch {
     return null;
@@ -92,13 +103,25 @@ export async function appendLeadToGoogleSheet(cfg, payload) {
     return { ok: false, error: 'missing webhookUrl' };
   }
   try {
+    // Kiểm lại lúc gửi (URL có thể đã được lưu trước khi có kiểm tra, hoặc qua đường ghi khác).
+    const safeCfg = extractGoogleSheetsSyncConfig({
+      googleSheetsSync: { enabled: true, webhookUrl: cfg.webhookUrl },
+    });
+    if (!safeCfg) {
+      return { ok: false, error: 'Webhook URL không hợp lệ (chỉ chấp nhận https)' };
+    }
+    const target = new URL(safeCfg.webhookUrl);
     const body = { ...payload };
     if (cfg.sheetName) body.sheetName = cfg.sheetName;
-    const response = await axios.post(cfg.webhookUrl, body, {
-      timeout: TIMEOUT_MS,
+    // GAS trả 302 sang script.googleusercontent.com sau khi doPost chạy → theo redirect (POST→GET).
+    const response = await safeHttpRequest(target, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      timeoutMs: TIMEOUT_MS,
+      maxBytes: MAX_RESPONSE_BYTES,
       headers: { 'Content-Type': 'application/json' },
-      validateStatus: () => true,
       maxRedirects: 3,
+      allowLoopback: isLocalDevWebhookHost(target.hostname),
     });
     if (response.status >= 200 && response.status < 300) {
       return { ok: true, status: response.status };
@@ -109,6 +132,9 @@ export async function appendLeadToGoogleSheet(cfg, payload) {
       error: `GAS webhook trả về ${response.status}`,
     };
   } catch (err) {
+    if (isSsrfBlockedError(err)) {
+      return { ok: false, error: 'Webhook URL trỏ tới địa chỉ nội bộ — không được phép' };
+    }
     return {
       ok: false,
       error: err?.message || 'Network error khi gọi GAS webhook',

@@ -349,24 +349,26 @@ class ChatbotController {
       // Scrape URL content with realistic browser headers
       let content = '';
       let scrapeStatus = 'failed';
+      const { isSsrfBlockedError, safeHttpRequest } = await import('../utils/ssrfGuard.util.js');
       try {
-        const axios = (await import('axios')).default;
-        const response = await axios.get(url, {
-          timeout: 20000,
+        // safeHttpRequest: chặn host nội bộ, ghim IP đã kiểm, tự theo redirect (kiểm lại từng chặng),
+        // giới hạn thời gian và kích thước phản hồi.
+        const response = await safeHttpRequest(url, {
+          timeoutMs: 20000,
           maxRedirects: 5,
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.5',
             'Accept-Encoding': 'gzip, deflate, br',
-            'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
           },
-          // Handle compressed responses
-          decompress: true,
         });
+        if (response.status < 200 || response.status >= 300) {
+          throw new Error(`Request failed with status code ${response.status}`);
+        }
 
-        const html = String(response.data || '');
+        const html = response.body.toString('utf8');
 
         // Extract content from HTML
         content = extractTextFromHtml(html);
@@ -379,6 +381,11 @@ class ChatbotController {
           content = `⚠️ This page may require JavaScript to render content. Extracted text:\n\n${content}`;
         }
       } catch (e) {
+        // URL (hoặc redirect của nó) trỏ vào địa chỉ nội bộ → từ chối, không lưu tài liệu.
+        if (isSsrfBlockedError(e)) {
+          console.warn(`[KB] Chặn URL không công khai (${e.reason || 'blocked'}): ${url}`);
+          return res.status(400).json({ success: false, message: e.message, code: e.code });
+        }
         console.warn(`[KB] Failed to scrape URL ${url}:`, e.message);
         scrapeStatus = `error: ${e.message}`;
       }

@@ -4,7 +4,11 @@ import uploadController from './upload.controller.js';
 import { generateFileToken } from '../utils/fileDownloadToken.js';
 import trackingShortLinkService from '../services/tracking/trackingShortLink.service.js';
 import emailSettingsCrudService from '../services/email/emailSettingsCrud.service.js';
-import emailSettingsSmtpService from '../services/email/emailSettingsSmtp.service.js';
+import emailSettingsSmtpService, {
+  assertSmtpHostAllowed,
+  createSafeSmtpGetSocket,
+  isSystemSmtpHost,
+} from '../services/email/emailSettingsSmtp.service.js';
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import { resolveRequestIdempotencyKey } from '../services/quota/sendQuotaKey.service.js';
@@ -66,24 +70,39 @@ class EmailSettingsController {
   }
 
   resolveTrackingBaseUrl(req) {
-    const fromEnv = String(process.env.TRACKING_BASE_URL || '').trim();
-    if (fromEnv) {
+    // URL public cấu hình sẵn (cùng thứ tự với upload.controller getPublicBaseUrlFromEnv):
+    // TRACKING_BASE_URL → BACKEND_PUBLIC_URL. Không suy ra từ header của request khi đã có cấu hình —
+    // Host/X-Forwarded-Host do client tự đặt được khi gọi thẳng vào backend.
+    for (const envName of ['TRACKING_BASE_URL', 'BACKEND_PUBLIC_URL']) {
+      const fromEnv = String(process.env[envName] || '').trim();
+      if (!fromEnv) continue;
       try {
         const parsed = new URL(fromEnv);
+        if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') continue;
+        // BACKEND_PUBLIC_URL có nơi khai báo kèm `/api`; link tracking tự thêm `/api/...`, `/track/...`.
+        const pathname = envName === 'BACKEND_PUBLIC_URL'
+          ? parsed.pathname.replace(/\/+$/, '').replace(/\/api$/i, '')
+          : parsed.pathname;
         return {
-          baseUrl: `${parsed.protocol}//${parsed.host}${parsed.pathname}`.replace(/\/+$/, ''),
+          baseUrl: `${parsed.protocol}//${parsed.host}${pathname}`.replace(/\/+$/, ''),
           isPublic: !this.isPrivateTrackingHost(parsed.hostname),
           source: 'env',
         };
       } catch {
-        // fallback to request-derived URL when TRACKING_BASE_URL is invalid
+        // env không hợp lệ → thử nguồn kế tiếp
       }
     }
 
-    const forwardedProto = String(req.get('x-forwarded-proto') || '').split(',')[0].trim();
-    const forwardedHost = String(req.get('x-forwarded-host') || '').split(',')[0].trim();
+    // Phương án cuối (chưa cấu hình env): suy ra từ request. X-Forwarded-* chỉ được tin khi request
+    // đi qua proxy tin cậy (cấu hình `trust proxy` của Express); không thì dùng Host.
+    const trustProxy = typeof req.app?.get === 'function' ? req.app.get('trust proxy fn') : null;
+    const peerAddress = req.socket?.remoteAddress || req.connection?.remoteAddress || '';
+    const fromTrustedProxy = typeof trustProxy === 'function' && Boolean(peerAddress) && trustProxy(peerAddress, 0);
+    const forwardedHost = fromTrustedProxy
+      ? String(req.get('x-forwarded-host') || '').split(',')[0].trim()
+      : '';
     const requestHost = forwardedHost || req.get('host') || '';
-    const protocol = forwardedProto || req.protocol || 'http';
+    const protocol = req.protocol || 'http';
     const fallbackBaseUrl = requestHost ? `${protocol}://${requestHost}` : 'http://localhost:5000';
     const hostname = requestHost.split(':')[0];
 
@@ -95,6 +114,10 @@ class EmailSettingsController {
   }
   createSmtpTransporter({ host, port, username, password }) {
     const normalized = this.normalizeSmtpConfig({ host, port, username, password });
+    // Host SMTP do người dùng nhập: chặn địa chỉ nội bộ (kiểm nhanh ở đây, kiểm DNS + ghim IP ở
+    // getSocket cho mỗi lần kết nối). SMTP mặc định của hệ thống (MAIL_SERVER) giữ đường kết nối cũ.
+    const isUserSuppliedHost = !isSystemSmtpHost(normalized.host);
+    if (isUserSuppliedHost) assertSmtpHostAllowed(normalized.host);
     return nodemailer.createTransport({
       host: normalized.host,
       port: normalized.port,
@@ -105,6 +128,10 @@ class EmailSettingsController {
       pool: true,
       maxConnections: 5,
       maxMessages: Infinity,
+      // Nội dung thư luôn là Buffer/chuỗi — không cho nodemailer tự đọc file cục bộ hay tải URL.
+      disableFileAccess: true,
+      disableUrlAccess: true,
+      ...(isUserSuppliedHost ? { getSocket: createSafeSmtpGetSocket() } : {}),
     });
   }
 

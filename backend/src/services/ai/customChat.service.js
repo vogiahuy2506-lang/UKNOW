@@ -3,6 +3,7 @@ import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
 import { scrapeUrlWithJs } from '../../utils/puppeteerScraper.util.js';
+import { assertPublicUrl, isSsrfBlockedError, safeFetch } from '../../utils/ssrfGuard.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
@@ -483,6 +484,20 @@ QUY TẮC TRẢ LỜI:
       throw err;
     }
 
+    // Chống SSRF: host phải công khai (chặn localhost, mạng nội bộ, metadata cloud, tên container...)
+    // TRƯỚC khi mở trình duyệt hay gửi request.
+    try {
+      await assertPublicUrl(url);
+    } catch (guardErr) {
+      if (isSsrfBlockedError(guardErr)) {
+        console.warn(`[KB] Chặn URL không công khai (${guardErr.reason || 'blocked'}): ${url}`);
+        throw guardErr;
+      }
+      const error = new Error(`Không thể truy cập URL: ${guardErr.message}`);
+      error.status = 503;
+      throw error;
+    }
+
     let text;
     let title;
     let pages = 1;
@@ -500,21 +515,23 @@ QUY TẮC TRẢ LỜI:
       usedPuppeteer = true;
       console.log(`[KB] Puppeteer extracted ${text?.length || 0} chars`);
     } catch (puppeteerErr) {
+      // Trang (hoặc redirect của nó) trỏ vào địa chỉ nội bộ → dừng, không thử lại bằng fetch.
+      if (isSsrfBlockedError(puppeteerErr)) {
+        console.warn(`[KB] Chặn điều hướng tới địa chỉ không công khai khi cào: ${url}`);
+        throw puppeteerErr;
+      }
       console.warn(`[KB] Puppeteer failed for ${url}: ${puppeteerErr.message}, falling back to simple fetch`);
       usedPuppeteer = false;
 
-      // Fallback to simple fetch
+      // Fallback to simple fetch — safeFetch kiểm lại host ở mọi chặng redirect và ghim IP đã kiểm.
       try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
-        const response = await fetch(url, {
-          signal: controller.signal,
+        const response = await safeFetch(url, {
+          timeoutMs: 15000,
           headers: {
             'User-Agent': 'Mozilla/5.0 (compatible; UKnowBot/1.0; +https://uknow.vn)',
             'Accept': 'text/html,application/xhtml+xml',
           },
         });
-        clearTimeout(timeoutId);
 
         if (!response.ok) {
           const err = new Error(`Không thể truy cập URL: HTTP ${response.status}`);
@@ -526,7 +543,8 @@ QUY TẮC TRẢ LỜI:
         text = this.extractTextFromHtml(html);
         title = normalizedUrl.hostname.replace(/^www\./, '');
       } catch (fetchErr) {
-        if (fetchErr.name === 'AbortError') {
+        if (isSsrfBlockedError(fetchErr)) throw fetchErr;
+        if (fetchErr.code === 'ETIMEDOUT') {
           const error = new Error('Yêu cầu hết thời gian (15 giây)');
           error.status = 503;
           throw error;
