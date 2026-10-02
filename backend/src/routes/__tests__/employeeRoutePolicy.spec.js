@@ -126,7 +126,6 @@ jest.unstable_mockModule('../../controllers/zaloPersonalSync.controller.js', () 
 jest.unstable_mockModule('../../controllers/mediaLibrary.controller.js', () => {
   const controller = makeMockController('mediaLibrary');
   return {
-    listMediaLibrary: controller.listMediaLibrary,
     listChannelMedia: controller.listChannelMedia,
     listStorageObjects: controller.listStorageObjects,
     deleteStorageObject: controller.deleteStorageObject,

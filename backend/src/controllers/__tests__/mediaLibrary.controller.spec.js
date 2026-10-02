@@ -9,7 +9,6 @@ const mockResolveAbsolutePathFromKey = jest.fn();
 const mockLogWorkspace = jest.fn();
 
 jest.unstable_mockModule('../../repositories/mediaLibrary.repository.js', () => ({
-  listOwnedAttachments: jest.fn(),
   listChannelAttachments: jest.fn(),
   listWorkspaceStorageObjects: mockListWorkspaceStorageObjects,
 }));

@@ -11,45 +11,33 @@ import MessageAttachments, { FileTypeIcon } from '../../components/MessageAttach
 import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import { formatBytes } from '../../features/storage/storageUtils';
+import { STORAGE_CATEGORIES, resolveStorageCategory } from '../../features/storage/storageCategories';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import { useAuthStore } from '../../stores/authStore';
 
-function daysRemaining(expiresAt) {
-  if (!expiresAt) return null;
-  const ms = new Date(expiresAt).getTime() - Date.now();
-  if (!Number.isFinite(ms)) return null;
-  return Math.max(0, Math.ceil(ms / (24 * 60 * 60 * 1000)));
-}
+// Nhãn nền tảng của tệp khách gửi. `zalo_personal` hiển thị là "Zalo"; dòng `facebook` cũ vẫn hiện "Facebook".
+const PLATFORM_LABEL_KEYS = {
+  zalo_personal: 'mediaLibrary.platformZalo',
+  zalo_oa: 'mediaLibrary.platformZaloOa',
+  telegram: 'mediaLibrary.platformTelegram',
+  whatsapp: 'mediaLibrary.platformWhatsapp',
+  facebook: 'mediaLibrary.platformFacebook',
+};
 
-function SourceBadge({ source, t }) {
-  const label = {
-    chatbot_web: t('mediaLibrary.sourceWeb'),
-    chatbot_studio: t('mediaLibrary.sourceStudio'),
-    ai_assistant: t('mediaLibrary.sourceAssistant'),
-    inbox_outbound: t('mediaLibrary.sourceInbox'),
-  }[source] || source;
+function PlatformBadge({ platform, t }) {
+  const key = PLATFORM_LABEL_KEYS[platform];
   return (
-    <span className="text-[10px] font-semibold uppercase tracking-wide text-slate-500 bg-slate-100 px-2 py-0.5 rounded">
-      {label}
+    <span
+      data-testid="platform-badge"
+      className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 bg-slate-100 px-2 py-0.5 rounded"
+    >
+      {key ? t(key) : platform}
     </span>
   );
 }
 
 function CategoryBadge({ category, t }) {
-  const categoryMap = {
-    zalo_template: { label: t('mediaLibrary.categoryZaloTemplate'), color: 'bg-blue-50 text-blue-700 border-blue-100' },
-    email_template: { label: t('mediaLibrary.categoryEmailTemplate'), color: 'bg-indigo-50 text-indigo-700 border-indigo-100' },
-    chat: { label: t('mediaLibrary.categoryChat'), color: 'bg-emerald-50 text-emerald-700 border-emerald-100' },
-    landing: { label: t('mediaLibrary.categoryLanding'), color: 'bg-purple-50 text-purple-700 border-purple-100' },
-    landing_version: { label: t('mediaLibrary.categoryLandingVersion'), color: 'bg-purple-50 text-purple-700 border-purple-100' },
-    logo: { label: t('mediaLibrary.categoryLogo'), color: 'bg-pink-50 text-pink-700 border-pink-100' },
-    campaign: { label: t('mediaLibrary.categoryCampaign'), color: 'bg-amber-50 text-amber-700 border-amber-100' },
-    quick_send: { label: t('mediaLibrary.categoryQuickSend'), color: 'bg-amber-50 text-amber-700 border-amber-100' },
-    help: { label: t('mediaLibrary.categoryHelp'), color: 'bg-teal-50 text-teal-700 border-teal-100' },
-    temp: { label: t('mediaLibrary.categoryTemp'), color: 'bg-slate-100 text-slate-700 border-slate-200' },
-  };
-
-  const item = categoryMap[category] || { label: category || t('mediaLibrary.categoryOther'), color: 'bg-slate-100 text-slate-700 border-slate-200' };
+  const item = resolveStorageCategory(category, t);
   return (
     <span className={`text-[11px] font-medium border px-2 py-0.5 rounded-md ${item.color}`}>
       {item.label}
@@ -140,42 +128,29 @@ function StorageObjectCard({ item, onDeleteClick, t, locale = 'vi' }) {
   );
 }
 
-function LibraryCard({ item, t }) {
-  const days = daysRemaining(item.expiresAt);
-  return (
-    <div className="border border-slate-200 rounded-xl p-3 bg-white flex flex-col gap-2 min-h-[140px]">
-      <div className="flex items-center justify-between gap-2">
-        <SourceBadge source={item.source} t={t} />
-        {days != null && (
-          <span className="text-[11px] text-slate-500">
-            {t('mediaLibrary.daysLeft', { days })}
-          </span>
-        )}
-      </div>
-      <MessageAttachments
-        attachments={[{
-          type: item.type,
-          url: item.url,
-          name: item.displayName || item.name,
-          size: item.sizeBytes || item.size,
-        }]}
-      />
-      <div className="text-xs text-slate-600 truncate" title={item.displayName || item.name}>
-        {item.displayName || item.name || '—'}
-      </div>
-    </div>
-  );
-}
-
 function ChannelCard({ item, t }) {
   const [broken, setBroken] = useState(false);
   const isImage = item.type === 'image' || item.type === 'photo';
 
+  const header = (
+    <div className="flex items-center justify-between gap-2">
+      <PlatformBadge platform={item.platform} t={t} />
+      <span className="text-[10px] text-slate-400 text-right">
+        {item.stored
+          ? `${t('mediaLibrary.storedOnSystem')}${item.size ? ` (${formatBytes(item.size)})` : ''}`
+          : t('mediaLibrary.platformLink')}
+      </span>
+    </div>
+  );
+
   if (broken || !item.url) {
     return (
-      <div className="border border-amber-100 bg-amber-50 rounded-xl p-3 text-sm text-amber-800 flex gap-2 items-start">
-        <HiOutlineExclamation className="w-4 h-4 mt-0.5 shrink-0" />
-        <span>{t('mediaLibrary.platformFallback')}</span>
+      <div className="border border-amber-100 bg-amber-50 rounded-xl p-3 space-y-2">
+        {header}
+        <div className="text-sm text-amber-800 flex gap-2 items-start">
+          <HiOutlineExclamation className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{t('mediaLibrary.platformFallback')}</span>
+        </div>
       </div>
     );
   }
@@ -183,7 +158,7 @@ function ChannelCard({ item, t }) {
   if (isImage) {
     return (
       <div className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
-        <span className="text-[10px] font-semibold uppercase text-slate-500">{item.platform}</span>
+        {header}
         <a href={item.url} target="_blank" rel="noopener noreferrer" className="block">
           <img
             src={item.url}
@@ -198,7 +173,8 @@ function ChannelCard({ item, t }) {
   }
 
   return (
-    <div className="border border-slate-200 rounded-xl p-3 bg-white">
+    <div className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
+      {header}
       <MessageAttachments attachments={[item]} />
     </div>
   );
@@ -209,9 +185,8 @@ export default function MediaLibraryPage() {
   const activeContext = useAuthStore((state) => state.activeContext);
   const canManage = activeContext?.type !== 'employee'
     || activeContext?.permissions?.media_library_manage === true;
-  const [tab, setTab] = useState('all'); // all | owned | channels
+  const [tab, setTab] = useState('all'); // all | channels
   const [category, setCategory] = useState('');
-  const [source, setSource] = useState('');
   const [search, setSearch] = useState('');
   const [items, setItems] = useState([]);
   const [categorySummary, setCategorySummary] = useState([]);
@@ -237,10 +212,6 @@ export default function MediaLibraryPage() {
         path = '/media-library/objects';
         if (category) params.category = category;
         if (search) params.search = search;
-      } else if (tab === 'owned') {
-        path = '/media-library';
-        if (source) params.source = source;
-        if (search) params.search = search;
       } else if (tab === 'channels') {
         path = '/media-library/channels';
       }
@@ -255,7 +226,7 @@ export default function MediaLibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, category, search, source, page, t]);
+  }, [tab, category, search, page, t]);
 
   useEffect(() => {
     load();
@@ -288,24 +259,7 @@ export default function MediaLibraryPage() {
 
   const categoryOptions = useMemo(() => ([
     { value: '', label: t('mediaLibrary.allCategories') },
-    { value: 'zalo_template', label: t('mediaLibrary.categoryZaloTemplate') },
-    { value: 'email_template', label: t('mediaLibrary.categoryEmailTemplate') },
-    { value: 'chat', label: t('mediaLibrary.categoryChat') },
-    { value: 'landing', label: t('mediaLibrary.categoryLanding') },
-    { value: 'landing_version', label: t('mediaLibrary.categoryLandingVersion') },
-    { value: 'logo', label: t('mediaLibrary.categoryLogo') },
-    { value: 'campaign', label: t('mediaLibrary.categoryCampaign') },
-    { value: 'quick_send', label: t('mediaLibrary.categoryQuickSend') },
-    { value: 'help', label: t('mediaLibrary.categoryHelp') },
-    { value: 'temp', label: t('mediaLibrary.categoryTemp') },
-  ]), [t]);
-
-  const sourceOptions = useMemo(() => ([
-    { value: '', label: t('mediaLibrary.allSources') },
-    { value: 'chatbot_web', label: t('mediaLibrary.sourceWeb') },
-    { value: 'chatbot_studio', label: t('mediaLibrary.sourceStudio') },
-    { value: 'ai_assistant', label: t('mediaLibrary.sourceAssistant') },
-    { value: 'inbox_outbound', label: t('mediaLibrary.sourceInbox') },
+    ...STORAGE_CATEGORIES.map((item) => ({ value: item.value, label: t(item.labelKey) })),
   ]), [t]);
 
   return (
@@ -326,15 +280,6 @@ export default function MediaLibraryPage() {
           }`}
         >
           {t('mediaLibrary.tabAll')}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setTab('owned'); setPage(1); }}
-          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'owned' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          {t('mediaLibrary.tabOwned')}
         </button>
         <button
           type="button"
@@ -386,8 +331,8 @@ export default function MediaLibraryPage() {
         </div>
       )}
 
-      {/* Filters bar — search bên trái + bộ lọc theo tab bên phải, đồng nhất giữa 2 tab có dữ liệu nội bộ. */}
-      {tab !== 'channels' && (
+      {/* Filters bar — chỉ ở tab Tất cả tệp (lọc theo danh mục = lọc theo việc dùng tệp). */}
+      {tab === 'all' && (
         <div className="flex flex-wrap gap-2.5 items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -403,32 +348,18 @@ export default function MediaLibraryPage() {
             />
           </div>
 
-          {tab === 'all' && (
-            <select
-              value={category}
-              onChange={(e) => {
-                setCategory(e.target.value);
-                setPage(1);
-              }}
-              className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 bg-white text-slate-700"
-            >
-              {categoryOptions.map((opt) => (
-                <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          )}
-
-          {tab === 'owned' && (
-            <select
-              value={source}
-              onChange={(e) => { setSource(e.target.value); setPage(1); }}
-              className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 bg-white text-slate-700"
-            >
-              {sourceOptions.map((opt) => (
-                <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-          )}
+          <select
+            value={category}
+            onChange={(e) => {
+              setCategory(e.target.value);
+              setPage(1);
+            }}
+            className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 bg-white text-slate-700"
+          >
+            {categoryOptions.map((opt) => (
+              <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
         </div>
       )}
 
@@ -486,11 +417,9 @@ export default function MediaLibraryPage() {
                 locale={locale}
               />
             ))
-            : tab === 'owned'
-              ? items.map((item) => <LibraryCard key={item.id} item={item} t={t} />)
-              : items.map((item, idx) => (
-                <ChannelCard key={`${item.messageId || idx}-${item.url}`} item={item} t={t} />
-              ))}
+            : items.map((item, idx) => (
+              <ChannelCard key={`${item.messageId || idx}-${item.url}`} item={item} t={t} />
+            ))}
         </div>
       )}
 
