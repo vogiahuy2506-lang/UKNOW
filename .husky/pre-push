@@ -1,14 +1,17 @@
 #!/usr/bin/env sh
 # UKNOW pre-push hook
 # --------------------
-# Chay unit test backend truoc khi push de catch regression nhanh (5-10s)
-# thay vi doi CI 60s+.
+# Chay test truoc khi push de catch regression nhanh thay vi doi CI:
+#   - Push co thay doi backend/  → unit test backend (Jest, ~35s).
+#   - Push co thay doi frontend/ → Vitest tron bo (~80s; khong dung --changed
+#     vi se bo sot cac guard doc file bang fs, vd noAbsoluteAdClaims.spec.js).
+#   - Cham ca hai → chay ca hai, backend truoc.
 #
 # Skip khi:
-#   - Push khong co file backend nao thay doi.
-#   - Push toi branch khong phai feature (vd. main/develop — CI tu gate).
+#   - Push khong co file backend/ hay frontend/ nao thay doi.
 #   - Dev can khuan cuong:  `git push --no-verify`
 #
+# Moi lan chay test nang deu di qua khoa test toan may (scripts/test-lock.mjs).
 # Integration test KHONG chay o day vi can Postgres local.
 # CI se luon chay integration tren service container.
 
@@ -22,27 +25,70 @@ if [ -z "$REPO_ROOT" ]; then
   exit 0
 fi
 
-# Neu khong co thay doi backend → bo qua hook hoan toan
-if ! git diff --name-only @{push}..HEAD 2>/dev/null | grep -q '^backend/'; then
+# Danh sach file thay doi: so voi @{push}; khong co thi so voi merge-base origin/main.
+CHANGED="$(git diff --name-only @{push}..HEAD 2>/dev/null)"
+if ! printf '%s\n' "$CHANGED" | grep -q '^\(backend\|frontend\)/'; then
   base_ref=$(git merge-base HEAD origin/main 2>/dev/null)
-  if [ -z "$base_ref" ] || ! git diff --name-only "$base_ref"..HEAD | grep -q '^backend/'; then
-    echo "[pre-push] Khong co thay doi backend — skip unit test."
-    exit 0
+  if [ -n "$base_ref" ]; then
+    CHANGED="$(git diff --name-only "$base_ref"..HEAD 2>/dev/null)"
   fi
 fi
 
-echo "[pre-push] Chay backend lint + unit test truoc khi push..."
+HAS_BACKEND=0
+HAS_FRONTEND=0
+if printf '%s\n' "$CHANGED" | grep -q '^backend/'; then HAS_BACKEND=1; fi
+if printf '%s\n' "$CHANGED" | grep -q '^frontend/'; then HAS_FRONTEND=1; fi
+
+if [ "$HAS_BACKEND" = 0 ] && [ "$HAS_FRONTEND" = 0 ]; then
+  echo "[pre-push] Khong co thay doi backend/frontend — skip test."
+  exit 0
+fi
+
 echo "[pre-push] Bo qua nhanh:  git push --no-verify"
 echo ""
 
-cd "$REPO_ROOT/backend" || exit 1
+if [ "$HAS_BACKEND" = 1 ]; then
+  if [ ! -f "$REPO_ROOT/backend/node_modules/jest/bin/jest.js" ]; then
+    echo "[pre-push] Thieu backend/node_modules — day tu cay chinh, hoac da chay jest o cay chinh thi dung --no-verify."
+    exit 1
+  fi
 
-# Goi node truc tiep (khong qua `npm run`) de tranh loi
-# `NODE_ENV=test` inline trong package.json khong hoat dong tren Windows PowerShell.
-# Dung `env` prefix de set bien moi truong cross-platform.
-node "$REPO_ROOT/scripts/test-lock.mjs" env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50% --ci --silent && echo "[pre-push] Unit test OK" || {
-  echo "[pre-push] Unit test FAIL — fix truoc hoac dung --no-verify de bypass."
-  exit 1
-}
+  echo "[pre-push] Chay backend lint + unit test truoc khi push..."
+  echo ""
 
-echo "[pre-push] Unit test pass — tien hanh push."
+  cd "$REPO_ROOT/backend" || exit 1
+
+  # Goi node truc tiep (khong qua `npm run`) de tranh loi
+  # `NODE_ENV=test` inline trong package.json khong hoat dong tren Windows PowerShell.
+  # Dung `env` prefix de set bien moi truong cross-platform.
+  node "$REPO_ROOT/scripts/test-lock.mjs" env NODE_ENV=test node --experimental-vm-modules node_modules/jest/bin/jest.js --selectProjects=unit --maxWorkers=50% --ci --silent && echo "[pre-push] Unit test OK" || {
+    echo "[pre-push] Unit test FAIL — fix truoc hoac dung --no-verify de bypass."
+    exit 1
+  }
+fi
+
+if [ "$HAS_FRONTEND" = 1 ]; then
+  if [ ! -f "$REPO_ROOT/frontend/node_modules/vitest/vitest.mjs" ]; then
+    echo "[pre-push] Thieu frontend/node_modules — day tu cay chinh, hoac da chay vitest o cay chinh thi dung --no-verify."
+    exit 1
+  fi
+
+  echo "[pre-push] Chay frontend Vitest (tron bo) truoc khi push..."
+  echo ""
+
+  cd "$REPO_ROOT/frontend" || exit 1
+
+  # Goi vitest.mjs truc tiep (khong npx) — cung ly do Windows nhu tren.
+  node "$REPO_ROOT/scripts/test-lock.mjs" node node_modules/vitest/vitest.mjs run --reporter=dot && echo "[pre-push] Vitest OK" || {
+    echo "[pre-push] Vitest FAIL — fix truoc hoac dung --no-verify de bypass."
+    exit 1
+  }
+fi
+
+if [ "$HAS_BACKEND" = 1 ] && [ "$HAS_FRONTEND" = 1 ]; then
+  echo "[pre-push] Unit backend + Vitest frontend pass — tien hanh push."
+elif [ "$HAS_BACKEND" = 1 ]; then
+  echo "[pre-push] Unit test backend pass — tien hanh push."
+else
+  echo "[pre-push] Vitest frontend pass — tien hanh push."
+fi

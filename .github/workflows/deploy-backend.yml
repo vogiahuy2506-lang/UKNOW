@@ -38,8 +38,48 @@ jobs:
             exit 1
           fi
 
-  test:
+  # Bỏ qua sớm lượt đã bị vượt: nếu main đã có commit mới hơn chạm đường deploy
+  # backend thì lượt này SKIP (không fail) — khỏi chạy ~15 phút test vô ích và
+  # khỏi kích notify-failure vì chuyện không phải sự cố. Vẫn giữ nguyên các bước
+  # kiểm trong job `deploy`: commit mới có thể tới giữa lúc đang chạy test.
+  # (concurrency cancel-in-progress vẫn false — huỷ giữa lúc đổi container là mất production.)
+  freshness:
+    name: Commit còn mới nhất?
     needs: validate-production-ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stale: ${{ steps.check.outputs.stale }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check for newer backend-relevant revision
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF_NAME="${GITHUB_REF_NAME}"
+          git fetch --no-tags origin "refs/heads/${REF_NAME}"
+          LATEST_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            echo "Commit guard passed: ${GITHUB_SHA} is current ${REF_NAME} head."
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$LATEST_SHA" -- \
+            backend/ server/scripts/ \
+            .github/workflows/test-backend.yml \
+            .github/workflows/deploy-backend.yml; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Bỏ qua lượt này: ${LATEST_SHA} mới hơn và có đổi đường backend — lượt của commit đó sẽ deploy."
+            exit 0
+          fi
+          echo "A newer main commit exists (${LATEST_SHA}) but it does not change backend deploy inputs; continuing safely."
+          echo "stale=false" >> "$GITHUB_OUTPUT"
+
+  test:
+    needs: [validate-production-ref, freshness]
+    if: needs.freshness.outputs.stale != 'true'
     uses: ./.github/workflows/test-backend.yml
     with:
       skip_integration: ${{ github.event_name == 'workflow_dispatch' && inputs.skip_integration || false }}
@@ -474,7 +514,7 @@ jobs:
   # Gom vào MỘT issue duy nhất: đỏ liên tiếp thì thêm comment chứ không đẻ issue mới.
   notify-failure:
     name: Báo động khi deploy hỏng
-    needs: [validate-production-ref, test, deploy]
+    needs: [validate-production-ref, freshness, test, deploy]
     if: failure()
     runs-on: ubuntu-latest
     permissions:

@@ -30,12 +30,53 @@ jobs:
             exit 1
           fi
 
-  lint:
+  # Bỏ qua sớm lượt đã bị vượt: nếu main đã có commit mới hơn chạm đường deploy
+  # frontend thì lượt này SKIP (không fail) — khỏi chạy lint + test vô ích và
+  # khỏi kích notify-failure vì chuyện không phải sự cố. Vẫn giữ nguyên các bước
+  # kiểm trong job `deploy`: commit mới có thể tới giữa lúc đang chạy test.
+  freshness:
+    name: Commit còn mới nhất?
     needs: validate-production-ref
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      stale: ${{ steps.check.outputs.stale }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Check for newer frontend-relevant revision
+        id: check
+        shell: bash
+        run: |
+          set -euo pipefail
+          REF_NAME="${GITHUB_REF_NAME}"
+          git fetch --no-tags origin "refs/heads/${REF_NAME}"
+          LATEST_SHA=$(git rev-parse FETCH_HEAD)
+          if [ "$LATEST_SHA" = "$GITHUB_SHA" ]; then
+            echo "Commit guard passed: ${GITHUB_SHA} is current ${REF_NAME} head."
+            echo "stale=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if ! git diff --quiet "$GITHUB_SHA" "$LATEST_SHA" -- \
+            frontend/ \
+            .github/workflows/lint.yml \
+            .github/workflows/test-frontend.yml \
+            .github/workflows/deploy-frontend.yml; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::Bỏ qua lượt này: ${LATEST_SHA} mới hơn và có đổi đường frontend — lượt của commit đó sẽ deploy."
+            exit 0
+          fi
+          echo "A newer main commit exists (${LATEST_SHA}) but it does not change frontend deploy inputs; continuing safely."
+          echo "stale=false" >> "$GITHUB_OUTPUT"
+
+  lint:
+    needs: [validate-production-ref, freshness]
+    if: needs.freshness.outputs.stale != 'true'
     uses: ./.github/workflows/lint.yml
 
   test:
-    needs: validate-production-ref
+    needs: [validate-production-ref, freshness]
+    if: needs.freshness.outputs.stale != 'true'
     uses: ./.github/workflows/test-frontend.yml
 
   deploy:
@@ -255,7 +296,7 @@ jobs:
   # Cùng lý do như deploy-backend.yml — xem ghi chú đầy đủ ở đó.
   notify-failure:
     name: Báo động khi deploy hỏng
-    needs: [validate-production-ref, lint, test, deploy]
+    needs: [validate-production-ref, freshness, lint, test, deploy]
     if: failure()
     runs-on: ubuntu-latest
     permissions:
