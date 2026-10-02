@@ -150,4 +150,36 @@ describe('LandingCanvasLayout — Centered Chat & Resizable Panel', () => {
     fireEvent.doubleClick(resizer);
     expect(localStorage.getItem('founder_ai_landing_canvas_chat_width')).toBe('460');
   });
+
+  it('khi lùi vào bên trái (form đã có nội dung) → tự động dispatch app:collapse-sidebar', () => {
+    const collapseSpy = vi.fn();
+    window.addEventListener('app:collapse-sidebar', collapseSpy);
+
+    const form = {
+      title: 'Trang có sẵn nội dung',
+      htmlContent: '<div>Nội dung</div>',
+      slug: 'trang-co-san',
+    };
+
+    render(
+      <LandingCanvasLayout
+        form={form}
+        setForm={vi.fn()}
+        editingId="lp-888"
+        saving={false}
+        onClose={vi.fn()}
+        onSave={vi.fn()}
+        activeModalTab={null}
+        onOpenSettingTab={vi.fn()}
+        onOpenTemplateGallery={vi.fn()}
+        onOpenVisualEditor={vi.fn()}
+        onOpenVersionHistory={vi.fn()}
+        onOpenSaveTemplate={vi.fn()}
+        onOpenImportHtml={vi.fn()}
+      />
+    );
+
+    expect(collapseSpy).toHaveBeenCalled();
+    window.removeEventListener('app:collapse-sidebar', collapseSpy);
+  });
 });

@@ -93,6 +93,13 @@ export default function LandingCanvasLayout({
   const hasChatActivity = (conversation?.messages?.length ?? 0) > 0 || conversation?.isStreaming;
   const isCentered = !hasExistingHtml && !hasChatActivity;
 
+  // Khi lùi vào bên trái -> tự động thu nhỏ sidebar chính của ứng dụng để tối đa không gian
+  useEffect(() => {
+    if (!isCentered) {
+      window.dispatchEvent(new CustomEvent('app:collapse-sidebar'));
+    }
+  }, [isCentered]);
+
   // Xử lý kéo thanh resizer thay đổi độ rộng chat panel
   const handleMouseDownResize = useCallback((e) => {
     e.preventDefault();

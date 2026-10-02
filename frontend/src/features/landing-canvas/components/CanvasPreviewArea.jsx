@@ -97,7 +97,7 @@ export default function CanvasPreviewArea({
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-auto bg-[#f8fafc] p-6 flex justify-center">
+      <div className="flex-1 min-h-0 overflow-auto bg-[#f8fafc] p-3 sm:p-4 flex justify-center">
         {mode === 'view' ? (
           html ? (
             <CanvasPreviewView

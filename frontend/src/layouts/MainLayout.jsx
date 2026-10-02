@@ -209,8 +209,15 @@ const MainLayout = ({ children = null }) => {
     return () => clearTimeout(tid);
   }, [showAiSidePanel]);
 
-  const isBuilderPage = isFullLayout;
-  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio;
+  // Lắng nghe yêu cầu thu nhỏ sidebar từ các editor (ví dụ Landing Canvas lùi vào bên trái)
+  useEffect(() => {
+    const handleCollapseSidebar = () => setSidebarOpen(false);
+    window.addEventListener('app:collapse-sidebar', handleCollapseSidebar);
+    return () => window.removeEventListener('app:collapse-sidebar', handleCollapseSidebar);
+  }, [setSidebarOpen]);
+
+  const isBuilderPage = isFullLayout || isLandingCanvas;
+  const isSpecialPage = isFullLayout || isInboxPage || isAiHomePage || isChatbotStudio || isLandingCanvas;
 
   // Persist sidebar width for full-screen editors
   useEffect(() => {
