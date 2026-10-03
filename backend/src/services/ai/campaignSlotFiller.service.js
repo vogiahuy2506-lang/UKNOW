@@ -190,8 +190,15 @@ export function buildSlotFillingPrompt({
 } = {}) {
   const slotBrief = resolveSlotBrief({ campaignIntent, brief });
   const { targetAudience, tone, locale } = slotBrief;
+  // Sản phẩm catalog (brief chỉ giữ productIds, tên nằm ở resolvedProducts) cũng là "chủ đề" — đừng báo "chưa có chủ đề" khi khối
+  // THÔNG TIN NỘI DUNG bên dưới đang liệt kê đúng sản phẩm đó.
+  const catalogNames = (Array.isArray(resolvedProducts) ? resolvedProducts : [])
+    .map((product) => sanitizeForPrompt(product?.course_name ?? product?.name ?? product?.productName ?? '', SLOT_PROMPT_LIMITS.productName))
+    .filter(Boolean)
+    .slice(0, 3);
   const topicLine = slotBrief.topic
     || slotBrief.productName
+    || (catalogNames.length > 0 ? catalogNames.join(', ') : '')
     || '(chưa có chủ đề cụ thể — chỉ dựa vào yêu cầu của người dùng và thông tin bên dưới, KHÔNG tự nghĩ ra chủ đề hay ưu đãi)';
 
   // Yêu cầu thật của người dùng: tham số tường minh trước, rồi mới tới tin user cuối trong history.

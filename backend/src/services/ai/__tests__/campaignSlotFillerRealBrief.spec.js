@@ -133,6 +133,9 @@ describe('F2.1 — buildSlotFillingPrompt với brief THẬT', () => {
     expect(userPrompt).toContain('Học AI viết nội dung bán hàng');
     expect(userPrompt).toContain('giá: 1990000');
     expect(userPrompt).toContain('giá gốc: 2990000');
+    // Tên sản phẩm catalog cũng là chủ đề — không được báo "chưa có chủ đề" ngay trên khối liệt kê đúng sản phẩm đó.
+    expect(userPrompt).toContain('- Chủ đề chính: Khoá Marketing AI cơ bản');
+    expect(userPrompt).not.toMatch(/chưa có chủ đề cụ thể/);
   });
 
   it('locale en (qua intent): prompt yêu cầu tiếng Anh; locale vi: yêu cầu tiếng Việt có dấu', () => {
