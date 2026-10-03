@@ -84,7 +84,13 @@ function extractTextFromHtml(html) {
 async function extractTextFromPdf(buffer, { userId = null } = {}) {
   try {
     const pdfParse = (await import('pdf-parse')).default;
-    const data = await pdfParse(buffer);
+    // pdf.js 1.10/2.0 (đi kèm pdf-parse) đọc SAI khi nhận Node Buffer: báo "bad XRef entry" ở 2 lượt gọi đầu của mỗi tiến
+    // trình (đo 20/09/2026), PDF có chữ bị đẩy sang OCR Gemini cả tệp (tốn tiền, đầu ra cắt ở 16.384 token). Đưa VIEW
+    // Uint8Array (không sao chép) như `fileParser.util.js`; đừng đổi lại thành Buffer.
+    const bytes = Buffer.isBuffer(buffer)
+      ? new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
+      : buffer;
+    const data = await pdfParse(bytes);
     if (data.text && data.text.trim().length > 50) {
       return data.text.trim();
     }
@@ -132,6 +138,56 @@ async function extractTextFromPdf(buffer, { userId = null } = {}) {
   }
 }
 
+/** Giải mã thực thể XML (`&amp;`, `&#7879;`, `&#x1EC7;`…) — đi SAU khi đã gỡ thẻ, để `&lt;b&gt;` không bị coi là thẻ. */
+function decodeXmlEntities(text) {
+  const fromCodePoint = (code) => {
+    try {
+      return String.fromCodePoint(code);
+    } catch {
+      return ' ';
+    }
+  };
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_, dec) => fromCodePoint(parseInt(dec, 10)))
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, '&');
+}
+
+/**
+ * Trích chữ từ `word/document.xml` của DOCX, GIỮ ranh giới đoạn.
+ *
+ * Bản cũ dùng chung `extractTextFromHtml` (`.replace(/\s+/g, ' ')`) nên MỌI xuống dòng bị xoá — cả tệp DOCX thành một dòng,
+ * một đoạn văn khổng lồ (A P0-3). Và thay mỗi thẻ bằng khoảng trắng nên từ bị chia nhiều "run" (`<w:r>` Xin ch</w:r><w:r>ào`)
+ * thành "Xin ch ào". Nay: kết thúc đoạn `</w:p>`/`<w:br/>` → xuống dòng, mỗi hàng bảng → một dòng (ô cách nhau " | "), `<w:tab/>`
+ * → khoảng trắng, gỡ thẻ KHÔNG chèn khoảng trắng; bỏ mã trường (`instrText`), chữ đã xoá (`delText`) và bản dự phòng `mc:Fallback`
+ * (trùng nội dung hộp chữ).
+ */
+export function extractTextFromDocxXml(xml) {
+  const text = String(xml || '')
+    .replace(/<mc:Fallback[\s\S]*?<\/mc:Fallback>/g, '')
+    .replace(/<w:(instrText|delText)\b[^>]*>[\s\S]*?<\/w:\1>/g, '')
+    // Bảng giá/danh mục: MỘT hàng bảng = MỘT dòng, các ô cách nhau " | " (không để mỗi ô một dòng làm mất quan hệ tên – giá).
+    .replace(/<w:tr\b[\s\S]*?<\/w:tr>/g, (row) => row
+      .replace(/<w:(?:br|cr)\b[^>]*\/>/g, ' ')
+      .replace(/<\/w:p>/g, ' ')
+      .replace(/<\/w:tc>/g, ' | ')
+      .replace(/<\/w:tr>/g, '\n'))
+    .replace(/<w:tab\s*\/>/g, '\t')
+    .replace(/<w:(?:br|cr)\b[^>]*\/>/g, '\n')
+    .replace(/<\/w:p>/g, '\n')
+    .replace(/<[^>]+>/g, '');
+  return decodeXmlEntities(text)
+    .split('\n')
+    .map((line) => line.replace(/[^\S\n]+/g, ' ').trim().replace(/\s*\|$/, ''))
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
 async function extractTextFromDocx(buffer) {
   // Basic DOCX extraction using JSZip
   try {
@@ -142,21 +198,25 @@ async function extractTextFromDocx(buffer) {
     const content = await zip.file('word/document.xml')?.async('string');
     if (!content) return '';
 
-    return extractTextFromHtml(content);
+    return extractTextFromDocxXml(content);
   } catch (e) {
     console.error('[FileExtractor] DOCX error:', e.message);
     return '';
   }
 }
 
+/** Số hàng Excel gộp thành một khối (cách nhau dòng trống) để chunker có ranh giới tự nhiên (A P0-3: bản cũ nối `\n` đơn → cả sổ 1 đoạn). */
+export const XLSX_ROWS_PER_BLOCK = 25;
+
 async function extractTextFromExcel(buffer) {
   try {
     const ExcelJS = (await import('exceljs')).default;
     const workbook = new ExcelJS.Workbook();
     await workbook.xlsx.load(buffer);
-    let text = '';
+    const blocks = [];
     workbook.eachSheet((sheet) => {
-      text += `--- Sheet: ${sheet.name} ---\n`;
+      let lines = [`--- Sheet: ${sheet.name} ---`];
+      let rowsInBlock = 0;
       sheet.eachRow((row, rowNumber) => {
         const values = Array.isArray(row.values) ? row.values : Object.values(row);
         const rowText = values
@@ -164,12 +224,18 @@ async function extractTextFromExcel(buffer) {
           .map(v => (v != null ? String(v) : ''))
           .filter(v => v.trim())
           .join(' | ');
-        if (rowText.trim()) {
-          text += `Row ${rowNumber}: ${rowText}\n`;
+        if (!rowText.trim()) return;
+        lines.push(`Row ${rowNumber}: ${rowText}`);
+        rowsInBlock += 1;
+        if (rowsInBlock >= XLSX_ROWS_PER_BLOCK) {
+          blocks.push(lines.join('\n'));
+          lines = [];
+          rowsInBlock = 0;
         }
       });
+      if (lines.length > 0) blocks.push(lines.join('\n'));
     });
-    return text.trim();
+    return blocks.join('\n\n').trim();
   } catch (e) {
     console.error('[FileExtractor] Excel error:', e.message);
     return '';
