@@ -1,4 +1,5 @@
 import founderaiLogo from '../../../assets/icons/founderai-logo.png';
+import { useI18n } from '../../../i18n';
 
 // ── Sparkline SVG ────────────────────────────────────────────────────────────
 
@@ -115,6 +116,9 @@ function MockSidebar() {
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
+// Mọi số trong khung giao diện này là SỐ MẪU (không phải kết quả của khách nào): khung luôn gắn nhãn "Số liệu minh hoạ"
+// ở thanh trình duyệt — dùng chung khoá với màn mô phỏng chiến dịch (heroPage.campaignFlow.sampleData).
+
 const EMAIL_DATA = [
   { label: 'T3', value: 420 }, { label: 'T4', value: 680 }, { label: 'T5', value: 540 },
   { label: 'T6', value: 810 }, { label: 'T7', value: 720 }, { label: 'T8', value: 950 },
@@ -143,6 +147,7 @@ function StatusBadge({ status }) {
 }
 
 export default function HeroDashboardMock() {
+  const { t } = useI18n();
   return (
     /* Browser frame */
     <div className="w-full max-w-[860px] mx-auto px-3 sm:px-4">
@@ -158,6 +163,12 @@ export default function HeroDashboardMock() {
           <div className="flex-1 bg-neutral-700 rounded-md px-3 py-1 text-[9px] text-neutral-400 mx-2">
             founderai.biz/app/dashboard
           </div>
+          <span
+            data-testid="hero-dashboard-mock-sample-badge"
+            className="shrink-0 px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-semibold"
+          >
+            {t('heroPage.campaignFlow.sampleData')}
+          </span>
         </div>
 
         {/* App content */}
