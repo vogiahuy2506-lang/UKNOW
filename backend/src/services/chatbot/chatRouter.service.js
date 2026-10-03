@@ -34,6 +34,14 @@ const ADAPTERS = {
 
 const MAX_HISTORY_MESSAGES = 20;
 
+/**
+ * Kênh được `_logMessage` ghi vào `channel_messages` (conversationId = id `channel_conversations`).
+ * Danh sách TƯỜNG MINH, kênh nào không có trong đây thì BỎ QUA — không còn nhánh `else` ghi bừa.
+ * Hiện không có đường sống nào đi qua nhánh này: Zalo OA / Facebook / WhatsApp Cloud gọi `routeChatbotMessage`
+ * (không gọi `_logMessage`, controller tự ghi `chatbot_messages`), Telegram và WhatsApp Baileys tự ghi tin.
+ */
+const CHANNEL_CONVERSATION_LOG_CHANNELS = new Set(['zalo_oa', 'facebook']);
+
 class ChatRouterService {
   /**
    * Route message with pre-fetched chatbot settings (for Zalo per-account settings).
@@ -475,8 +483,8 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         // and zaloPersonalAdapter.sendReply() -> insertAgentMessage()
         // So we skip logging here to avoid duplicate entries
         console.log(`[ChatRouter] Skipping _logMessage for zalo_personal (already logged by zaloInbox)`);
-      } else {
-        // For other channels (zalo_oa, facebook), use channel_messages
+      } else if (CHANNEL_CONVERSATION_LOG_CHANNELS.has(channel)) {
+        // Chỉ kênh mà `conversationId` THẬT SỰ là id của `channel_conversations` mới ghi `channel_messages` ở đây.
         const channelId = await chatbotRepository.getChannelIdFromConversation(conversationId);
         if (channelId) {
           await chatbotRepository.addChannelMessage(conversationId, userId, channelId, {
@@ -485,6 +493,12 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
             message_type: 'text',
           });
         }
+      } else {
+        // telegram_personal / whatsapp (Baileys) / kênh lạ: đường của chúng đã tự ghi tin đúng bảng
+        // (internal.routes.js recordTelegramMessage, whatsappBaileysInbox.persistMessage). `conversationId` ở đây
+        // là id của bảng KHÁC (vd telegram_personal_conversations) — dùng nó tra `channel_conversations`
+        // sẽ ghi tin của khách shop này vào hội thoại WhatsApp/Telegram cùng số id của shop khác (A P0-1).
+        console.log(`[ChatRouter] Skipping _logMessage for ${channel} (đã tự ghi ở nơi khác)`);
       }
     } catch (e) {
       console.warn('[ChatRouter] Failed to log message:', e.message);

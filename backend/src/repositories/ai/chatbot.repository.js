@@ -450,6 +450,19 @@ class ChatbotRepository {
   }
 
   async addChannelMessage(conversationId, userId, channelId, { role, content, message_type, external_id, external_ts, attachments, metadata, raw_data }) {
+    // Người ghi phải là chủ hội thoại (và đúng kênh). Hội thoại là id tuần tự của bảng khác nhau trùng số rất dễ —
+    // thiếu kiểm này thì một id nhầm ghi tin của khách shop A vào hội thoại shop B (A P0-1, 03/10/2026).
+    const owned = await db.query(
+      `SELECT 1 FROM channel_conversations WHERE id = $1 AND id_user = $2 AND id_channel = $3`,
+      [conversationId, userId, channelId]
+    );
+    if (!owned.rows[0]) {
+      console.error(
+        `[ChatbotRepository] addChannelMessage bị từ chối: hội thoại ${conversationId} không thuộc user ${userId} / kênh ${channelId}`
+      );
+      return null;
+    }
+
     const { rows } = await db.query(
       `INSERT INTO channel_messages
          (id_conversation, id_user, id_channel, role, content, message_type, external_id, external_ts, attachments, metadata, raw_data)
