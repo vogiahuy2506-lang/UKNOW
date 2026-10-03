@@ -19,6 +19,7 @@ import aiUsageMeter from './ai/aiUsageMeter.service.js';
 import { extractGeminiUsage } from '../utils/geminiClient.util.js';
 import { DEFAULT_AI_MODEL } from '../utils/aiModelTier.util.js';
 import { toPublicPlanAdviceDto } from './help/planAdvisor.service.js';
+import { isPlaceholderPlan } from '../utils/placeholderPlan.util.js';
 
 const MAX_FREE_CHATS = 5;
 // Tin nhắn vào thẳng prompt, không đăng nhập → trần cứng (D-01). Dài hơn → 400, không tốn lượt/không gọi AI.
@@ -157,6 +158,12 @@ const fmtInt = (n) => String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d)
 function formatPlanLimits(plan) {
   const lim = toPublicPlanAdviceDto(plan)?.limits;
   if (!lim) return '';
+  // Hạn mức reset theo chu kỳ của gói (billingCycle: duration_days, mặc định 30). Gói NGẮN hơn 30 ngày (vd dùng thử 14 ngày)
+  // thì "300 email/tháng" là sai — chỉ được dùng 300 email trong CẢ 14 ngày. Gói ≥ 30 ngày giữ "/tháng".
+  const days = planDurationDays(plan);
+  const shortPlan = days > 0 && days < 30;
+  const per = shortPlan ? ` trong ${days} ngày` : '/tháng';
+  const perPeriod = shortPlan ? ` trong ${days} ngày` : ' mỗi kỳ';
   const part = (limit, { limited, unlimited, none }) => {
     if (limit?.kind === 'limited') return limited(fmtInt(limit.value));
     if (limit?.kind === 'unlimited') return unlimited;
@@ -164,12 +171,17 @@ function formatPlanLimits(plan) {
     return null;
   };
   const parts = [
-    part(lim.emailPerMonth, { limited: (n) => `${n} email/tháng`, unlimited: 'email không giới hạn', none: 'không gửi email' }),
-    part(lim.zaloPerMonth, { limited: (n) => `${n} tin Zalo/tháng`, unlimited: 'tin Zalo không giới hạn', none: 'không gửi Zalo' }),
+    part(lim.emailPerMonth, { limited: (n) => `${n} email${per}`, unlimited: 'email không giới hạn', none: 'không gửi email' }),
+    part(lim.zaloPerMonth, { limited: (n) => `${n} tin Zalo${per}`, unlimited: 'tin Zalo không giới hạn', none: 'không gửi Zalo' }),
     part(lim.landingPages, { limited: (n) => `${n} landing page`, unlimited: 'landing page không giới hạn', none: 'không có landing page' }),
-    part(lim.aiCreditsPerPeriod, { limited: (n) => `${n} lượt AI mỗi kỳ`, unlimited: 'lượt AI không giới hạn', none: 'không có lượt AI' }),
+    part(lim.aiCreditsPerPeriod, { limited: (n) => `${n} lượt AI${perPeriod}`, unlimited: 'lượt AI không giới hạn', none: 'không có lượt AI' }),
   ].filter(Boolean);
   return parts.length > 0 ? `Hạn mức: ${parts.join('; ')}.` : '';
+}
+
+/** Độ dài kỳ của gói theo ngày — NULL/không đọc được = 30 như billing (`COALESCE(duration_days, 30)`). */
+function planDurationDays(plan) {
+  return Math.trunc(Number(plan?.duration_days)) || 30;
 }
 
 /**
@@ -178,7 +190,7 @@ function formatPlanLimits(plan) {
  * 365 ngày hay gói dùng thử 10 ngày đều bị bot báo là giá theo tháng (D-16). 30 → /tháng, 365 → /năm, khác → /N ngày.
  */
 export function formatPlanPeriodSuffix(durationDays) {
-  const days = Math.trunc(Number(durationDays)) || 30;
+  const days = planDurationDays({ duration_days: durationDays });
   if (days <= 0 || days === 30) return '/tháng';
   if (days === 365) return '/năm';
   return `/${days} ngày`;
@@ -229,8 +241,27 @@ export function planFeatureLabels(rawFeatures) {
   return out;
 }
 
-/** Giá gói in kèm ĐÚNG kỳ tính giá; gói tính theo tháng có giá năm thì nêu thêm giá năm. `plans.price` là BIGINT → pg trả chuỗi. */
+/**
+ * "Gói Tùy chọn" / "Liên hệ" trên bảng giá là gói GIỮ CHỖ: price 0 và mọi hạn mức NULL — NULL nghĩa là "không giới hạn" ở mọi
+ * chốt chặn, nên in ra thì bot báo khách có gói 0đ không giới hạn (đã thấy trên production: plans id 18, code 'custom',
+ * is_custom=false). Dùng ĐÚNG luật của backend/frontend (placeholderPlan.util.isPlaceholderPlan ↔ planTranslation.util
+ * isContactPlan): không in giá, không in hạn mức, không in tính năng — chỉ dẫn khách tới bảng giá / liên hệ.
+ */
+const PLACEHOLDER_PLAN_TEXT = Object.freeze({
+  custom: {
+    price: `giá tính theo lựa chọn, xem tại ${HERO_PRICING_URL}`,
+    line: (name) => `- ${name}: tự chọn số lượng email, tin Zalo, lượt AI… theo nhu cầu; giá tính theo lựa chọn, xem tại ${HERO_PRICING_URL}.`,
+  },
+  contact: {
+    price: 'liên hệ để được báo giá (xem phần THÔNG TIN LIÊN HỆ HỖ TRỢ)',
+    line: (name) => `- ${name}: liên hệ để được báo giá (xem phần THÔNG TIN LIÊN HỆ HỖ TRỢ).`,
+  },
+});
+const placeholderText = (plan) => PLACEHOLDER_PLAN_TEXT[String(plan?.code || '').trim().toLowerCase()];
+
+/** Giá gói in kèm ĐÚNG kỳ tính giá; gói tính theo tháng có giá năm thì nêu thêm giá năm. `plans.price` là NUMERIC/BIGINT → pg trả chuỗi. */
 export function formatPlanPriceInfo(plan) {
+  if (isPlaceholderPlan(plan)) return placeholderText(plan).price;
   const price = Number(plan?.price) || 0;
   let priceInfo = `${fmtInt(price)} VND${formatPlanPeriodSuffix(plan?.duration_days)}`;
   const priceYearly = Number(plan?.price_yearly) || 0;
@@ -250,6 +281,7 @@ export function formatPlansForContext(plans) {
   }
 
   return plans.map((plan) => {
+    if (isPlaceholderPlan(plan)) return placeholderText(plan).line(plan.name);
     const features = planFeatureLabels(plan.features);
     const limitsStr = formatPlanLimits(plan);
     return `- ${plan.name}: ${formatPlanPriceInfo(plan)}. ${limitsStr ? `${limitsStr} ` : ''}${features.length > 0 ? `Tính năng: ${features.join(', ')}.` : ''}`.trimEnd();

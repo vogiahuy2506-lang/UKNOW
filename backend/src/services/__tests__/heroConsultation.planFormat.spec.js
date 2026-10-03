@@ -14,6 +14,7 @@ const {
   formatPlanPeriodSuffix,
   formatPlanPriceInfo,
   planFeatureLabels,
+  buildHeroSystemPrompt,
 } = await import('../heroConsultation.service.js');
 
 /** Hàng `plans` đúng hình dạng pg trả: BIGINT (price, price_yearly) là chuỗi. */
@@ -119,5 +120,116 @@ describe('formatPlansForContext — một dòng cho mỗi gói', () => {
     const text = formatPlansForContext([plan({ name: 'A', features: [] }), plan({ name: 'B', features: null })]);
     expect(text.split('\n\n')).toHaveLength(2);
     expect(text).not.toMatch(/Khong co|Tính năng:/);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// Gói GIỮ CHỖ ("Gói Tùy chọn" / "Liên hệ") và gói ngắn ngày (dùng thử). Dữ liệu dựng theo HÌNH DẠNG THẬT của hàng `plans` trên
+// production (đọc 03/10/2026): price là NUMERIC → pg trả CHUỖI '0.00'; gói giữ chỗ có is_custom=false, giá 0, MỌI hạn mức NULL.
+// Bản trước in "Gói Tùy chọn: 0 VND/tháng. Hạn mức: email không giới hạn; …" → bot báo khách có gói 0đ không giới hạn.
+
+const NULL_LIMITS = {
+  daily_email_limit: null, monthly_email_limit: null, daily_zalo_limit: null, monthly_zalo_limit: null,
+  max_landing_pages: null, ai_credits_per_period: null, ai_tokens_per_period: null, max_chatbots: null, messages_per_period: null,
+};
+const PROD_CUSTOM = {
+  id: 18, code: 'custom', name: 'Gói Tùy chọn', description: null, is_custom: false, is_active: true,
+  price: '0.00', price_yearly: null, duration_days: 30, features: [], ...NULL_LIMITS,
+};
+const PROD_CONTACT = { ...PROD_CUSTOM, id: 19, code: 'contact', name: 'Liên hệ' };
+const PROD_TRIAL = {
+  id: 1, code: 'trial', name: 'Dùng thử', is_custom: false, is_active: true, price: '0.00', price_yearly: null,
+  duration_days: 14, features: [], ...NULL_LIMITS,
+  monthly_email_limit: 300, monthly_zalo_limit: 50, max_landing_pages: 1, ai_credits_per_period: 30,
+};
+const PROD_MONTHLY = {
+  id: 3, code: 'starter', name: 'Starter', is_custom: false, is_active: true, price: '990000.00', price_yearly: null,
+  duration_days: 30, features: [], ...NULL_LIMITS, monthly_email_limit: 5000, monthly_zalo_limit: 1000, max_landing_pages: 5, ai_credits_per_period: 300,
+};
+const planLine = (text, name) => text.split('\n\n').find((l) => l.startsWith(`- ${name}:`));
+
+describe('gói giữ chỗ "Gói Tùy chọn" / "Liên hệ" — KHÔNG in giá 0 và KHÔNG in hạn mức', () => {
+  it('"Gói Tùy chọn" (code custom, is_custom=false, giá "0.00", mọi hạn mức NULL): chỉ dẫn tự chọn + xem bảng giá', () => {
+    const text = formatPlansForContext([PROD_CUSTOM]);
+
+    expect(text).toBe('- Gói Tùy chọn: tự chọn số lượng email, tin Zalo, lượt AI… theo nhu cầu; giá tính theo lựa chọn, xem tại founderai.biz/pricing.');
+    expect(text).not.toMatch(/0 VND/);
+    expect(text).not.toMatch(/không giới hạn/);
+    expect(text).not.toMatch(/Hạn mức/);
+  });
+
+  it('"Liên hệ" (code contact): liên hệ để được báo giá, hướng tới phần liên hệ; không giá, không hạn mức', () => {
+    const text = formatPlansForContext([PROD_CONTACT]);
+
+    expect(text).toBe('- Liên hệ: liên hệ để được báo giá (xem phần THÔNG TIN LIÊN HỆ HỖ TRỢ).');
+    expect(text).not.toMatch(/0 VND|không giới hạn|Hạn mức/);
+  });
+
+  it('formatPlanPriceInfo cũng không in giá 0 cho gói giữ chỗ', () => {
+    expect(formatPlanPriceInfo(PROD_CUSTOM)).toBe('giá tính theo lựa chọn, xem tại founderai.biz/pricing');
+    expect(formatPlanPriceInfo(PROD_CONTACT)).toBe('liên hệ để được báo giá (xem phần THÔNG TIN LIÊN HỆ HỖ TRỢ)');
+    expect(formatPlanPriceInfo(PROD_CUSTOM)).not.toMatch(/\bVND\b/);
+  });
+
+  it('mã viết hoa/khoảng trắng vẫn là gói giữ chỗ (cùng luật isPlaceholderPlan)', () => {
+    const text = formatPlansForContext([{ ...PROD_CUSTOM, code: ' Custom ' }]);
+    expect(text).not.toMatch(/0 VND|không giới hạn/);
+  });
+
+  it('gói custom THẬT của khách (is_custom=true, dù code "custom") KHÔNG phải gói giữ chỗ: vẫn in giá + hạn mức như gói thường', () => {
+    const real = { ...PROD_CUSTOM, is_custom: true, price: '1500000.00', monthly_email_limit: 8000 };
+    const text = formatPlansForContext([real]);
+    expect(text).toContain('1.500.000 VND/tháng');
+    expect(text).toContain('8.000 email/tháng');
+  });
+
+  it('gói thường có giá 0 + hạn mức NULL (không phải giữ chỗ) vẫn in như trước — luật chỉ áp cho code custom/contact', () => {
+    const text = formatPlansForContext([{ ...PROD_CUSTOM, code: 'free', name: 'Free' }]);
+    expect(text).toContain('0 VND/tháng');
+    expect(text).toContain('email không giới hạn');
+  });
+
+  it('prompt THẬT dựng từ dữ liệu production: phần "CÁC GÓI DỊCH VỤ" không có "0 VND" / "không giới hạn" cho hai gói giữ chỗ', () => {
+    const prompt = buildHeroSystemPrompt({
+      plansText: formatPlansForContext([PROD_TRIAL, PROD_MONTHLY, PROD_CUSTOM, PROD_CONTACT]),
+      coursesText: '',
+      message: 'Gói nào hợp với shop mình?',
+    });
+    const section = prompt.slice(prompt.indexOf('CÁC GÓI DỊCH VỤ:'), prompt.indexOf('CÁC KHÓA HỌC:'));
+
+    for (const name of ['Gói Tùy chọn', 'Liên hệ']) {
+      const line = planLine(section.replace('CÁC GÓI DỊCH VỤ:\n', ''), name);
+      expect(line).toBeDefined();
+      expect(line).not.toMatch(/0 VND/);
+      expect(line).not.toMatch(/không giới hạn/);
+    }
+    // Gói thật vẫn đủ giá + hạn mức.
+    expect(section).toContain('- Starter: 990.000 VND/tháng. Hạn mức: 5.000 email/tháng; 1.000 tin Zalo/tháng; 5 landing page; 300 lượt AI mỗi kỳ.');
+  });
+});
+
+describe('gói ngắn hơn 30 ngày — hạn mức "trong N ngày", không phải "/tháng"', () => {
+  it('"Dùng thử" 14 ngày, email 300: "300 email trong 14 ngày"; giá "0 VND/14 ngày"', () => {
+    const text = formatPlansForContext([PROD_TRIAL]);
+
+    expect(text).toBe('- Dùng thử: 0 VND/14 ngày. Hạn mức: 300 email trong 14 ngày; 50 tin Zalo trong 14 ngày; 1 landing page; 30 lượt AI trong 14 ngày.');
+    expect(text).not.toMatch(/email\/tháng|Zalo\/tháng|mỗi kỳ/);
+  });
+
+  it('ranh giới: 29 ngày là gói ngắn; đúng 30 ngày, 90 ngày, 365 ngày, NULL giữ "/tháng"', () => {
+    const limits = (days) => formatPlansForContext([{ ...PROD_MONTHLY, duration_days: days }]);
+    expect(limits(29)).toContain('5.000 email trong 29 ngày');
+    expect(limits(30)).toContain('5.000 email/tháng');
+    expect(limits(90)).toContain('5.000 email/tháng');
+    expect(limits(365)).toContain('5.000 email/tháng');
+    expect(limits(null)).toContain('5.000 email/tháng');
+    expect(limits('14')).toContain('5.000 email trong 14 ngày'); // chuỗi từ pg
+  });
+
+  it('hạn mức KHÔNG giới hạn / số landing page không gắn thời hạn dù gói ngắn', () => {
+    const text = formatPlansForContext([{ ...PROD_TRIAL, name: 'Thử X', monthly_email_limit: null, max_landing_pages: 2 }]);
+    expect(text).toContain('email không giới hạn');
+    expect(text).toContain('2 landing page;');
+    expect(text).not.toMatch(/2 landing page trong/);
   });
 });
