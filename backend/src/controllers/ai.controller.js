@@ -1063,8 +1063,11 @@ class AiController {
         }
       }
 
-      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, req.user.id, createdTemplates);
-      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, req.user.id, createdTemplates);
+      // Mẫu tin tự tạo từ nội dung nháp thuộc CHỦ workspace (như mẫu tạo ở trang Mẫu tin: emailTemplate/zaloTemplate.controller
+      // dùng workspaceOwnerId) — dưới id nhân viên thì mẫu không hiện trong thư viện của chủ và nhân viên không sửa lại được.
+      const draftOwnerUserId = resolveOwnerUserId(req.user);
+      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, draftOwnerUserId, createdTemplates);
+      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, draftOwnerUserId, createdTemplates);
 
       const createReq = {
         ...req,
@@ -1090,7 +1093,7 @@ class AiController {
       });
 
       if (createRes.status >= 400) {
-        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user.id);
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, draftOwnerUserId);
         return res.status(createRes.status).json(createRes.data);
       }
       campaignCreated = true;
@@ -1103,7 +1106,8 @@ class AiController {
       });
     } catch (error) {
       if (!campaignCreated) {
-        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user?.id);
+        // Dọn theo đúng id đã dùng để tạo mẫu (chủ workspace) — repo xoá có lọc id_user.
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, resolveOwnerUserId(req.user));
       }
       console.error('AI create from draft error:', error);
       return res.status(error.statusCode || 500).json({
@@ -1363,9 +1367,11 @@ class AiController {
       // Normalize AI nodes trước khi tạo campaign
       const normalizedNodes = aiCampaignDraftService.normalizeNodes(script.nodes);
 
-      // Auto-fill fromEmailId với SMTP channel đầu tiên của user
-      await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, req.user.id);
-      await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, req.user.id);
+      // Auto-fill fromEmailId / zaloAccountId với tài khoản mặc định của CHỦ workspace (nhân viên dùng chung tài khoản của
+      // chủ — thẻ xác nhận ngay dưới tra tài khoản theo chủ, nên mặc định cũng phải lấy theo chủ cho khớp).
+      const draftOwnerUserId = resolveOwnerUserId(req.user);
+      await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, draftOwnerUserId);
+      await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, draftOwnerUserId);
 
       // Sender/template ownership and inline content are read-only checks.
       // Run them before materializing any persistent template rows.
@@ -1395,8 +1401,8 @@ class AiController {
         }
       }
 
-      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, req.user.id, createdTemplates);
-      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, req.user.id, createdTemplates);
+      await aiCampaignDraftService.autoCreateEmailTemplates(normalizedNodes, draftOwnerUserId, createdTemplates);
+      await aiCampaignDraftService.autoCreateZaloTemplates(normalizedNodes, draftOwnerUserId, createdTemplates);
 
       // Bước 1: Tạo campaign
       const createReq = {
@@ -1423,7 +1429,7 @@ class AiController {
       });
 
       if (createRes.status >= 400) {
-        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user.id);
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, draftOwnerUserId);
         return res.status(createRes.status).json(createRes.data);
       }
 
@@ -1517,7 +1523,7 @@ class AiController {
       });
     } catch (error) {
       if (!campaignCreated) {
-        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, req.user?.id);
+        await aiCampaignDraftService.cleanupAutoCreatedTemplates(createdTemplates, resolveOwnerUserId(req.user));
       }
       console.error('AI create and run campaign error:', error);
       return res.status(500).json({

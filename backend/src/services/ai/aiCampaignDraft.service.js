@@ -880,6 +880,10 @@ class AiCampaignDraftService {
   }
 
   async prepareScript(script, userId, context = {}) {
+    // `userId` = id người đang thao tác (có thể là nhân viên); `ownerUserId` = id CHỦ workspace (context.ownerUserId đến từ
+    // resolveOwnerUserId(req.user) ở ai.controller.js; rơi về userId khi không truyền — gọi nội bộ không qua controller /
+    // không có khái niệm nhân viên — để không đổi hành vi cũ ở đó). Tài khoản gửi, mẫu tin, Biểu mẫu đều thuộc CHỦ.
+    const ownerUserId = context.ownerUserId != null ? context.ownerUserId : userId;
     let patched;
     // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: script.compilerApplied === true
     // nghĩa là graph đến từ compileCampaign() (aiCampaign.service.js:~1738), không phải LLM —
@@ -891,25 +895,24 @@ class AiCampaignDraftService {
       console.log('[AI Patch] skip: compilerApplied');
       patched = script;
     } else {
-      const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(userId).catch(() => null);
+      const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(ownerUserId).catch(() => null);
       patched = this.patchDeterministicCampaignScript(script, {
         defaultZaloAccountId: defaultAccountId,
         ...context,
       });
     }
     // PR-6c review 15/09 — sanitizeFormOwnership phải kiểm theo id CHỦ workspace, không phải
-    // userId (id người đang thao tác — có thể là nhân viên). context.ownerUserId đến từ
-    // resolveOwnerUserId(req.user) ở ai.controller.js; rơi về userId khi không truyền (gọi nội
-    // bộ không qua controller/không có khái niệm nhân viên) để không đổi hành vi cũ ở đó.
-    const ownerUserId = context.ownerUserId != null ? context.ownerUserId : userId;
+    // userId (id người đang thao tác — có thể là nhân viên).
     // PR-5b-2b — trước sanitizeFormOwnership (mẫu chú thích ngay dưới): landing có Biểu mẫu gắn
     // thì đổi node read_landing_leads LLM tự viết sang read_form_submissions.
     patched = await this.resolveLandingAudienceForDraft(patched, ownerUserId);
     patched = await this.sanitizeFormOwnership(patched, ownerUserId);
     const canonical = this.canonicalizeScript(patched);
     const nodes = this.normalizeNodes(canonical.nodes);
-    await this.autoFillEmailChannels(nodes, userId);
-    await this.autoFillZaloAccounts(nodes, userId);
+    // G3a.3: tài khoản Email/Zalo mặc định lấy theo CHỦ (như tài khoản Telegram/WhatsApp ngay dưới) — thẻ xác nhận tra tài
+    // khoản theo chủ, nên mặc định điền theo nhân viên sẽ để zaloAccountId trống trong khi thẻ báo "sẵn sàng".
+    await this.autoFillEmailChannels(nodes, ownerUserId);
+    await this.autoFillZaloAccounts(nodes, ownerUserId);
     await this.autoFillAdapterChannelAccounts(nodes, ownerUserId);
     return { ...canonical, nodes };
   }

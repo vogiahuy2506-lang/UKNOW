@@ -398,6 +398,77 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
     });
   });
 
+  /**
+   * G3a.3 (C P1-7) — tài khoản gửi + mẫu tin thuộc CHỦ workspace. Thẻ xác nhận tra theo chủ (campaignConfirmation.service),
+   * nên các bước ngay trước/sau nó cũng phải theo chủ: mặc định tài khoản điền theo chủ (không thì zaloAccountId trống trong
+   * khi thẻ báo sẵn sàng), mẫu tự tạo từ nội dung nháp thuộc chủ (hiện trong thư viện của chủ), dọn mẫu theo đúng id đã tạo.
+   */
+  describe('nhân viên (id 9) thao tác trong workspace của chủ (id 3)', () => {
+    const EMPLOYEE = 9;
+    const OWNER = 3;
+    const employeeReq = (script) => ({
+      body: { script, resourceVersions: [] },
+      user: {
+        id: EMPLOYEE,
+        role: 'employee',
+        activeContext: { type: 'employee', ownerId: OWNER, permissions: { campaigns_create: true, campaigns_run: true } },
+      },
+    });
+    const emailScript = () => ({
+      campaignName: 'Email của nhân viên',
+      connections: [],
+      nodes: [{ id: 'node-1', node_type: 'action', node_subtype: 'send_email', config: { fromEmailId: 1, emailSubject: 'Hi', emailBody: 'Body' } }],
+    });
+
+    it('createAndRunCampaign: mặc định tài khoản + mẫu tự tạo + buildConfirmationView đều theo id CHỦ', async () => {
+      mockCreateCampaign.mockImplementation(async (_req, res) => res.json({ success: true, data: { id: 101 } }));
+      mockRunCampaign.mockImplementation(async (_req, res) => res.json({ success: true, data: { runId: 501, status: 'running' } }));
+      const res = makeRes();
+
+      await aiController.createAndRunCampaign(employeeReq(emailScript()), res);
+
+      expect(mockAutoFillEmailChannels).toHaveBeenCalledWith(expect.any(Array), OWNER);
+      expect(mockAutoFillZaloAccounts).toHaveBeenCalledWith(expect.any(Array), OWNER);
+      expect(mockBuildConfirmationView).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
+      expect(mockAutoCreateEmailTemplates).toHaveBeenCalledWith(expect.any(Array), OWNER, expect.any(Object));
+      expect(mockAutoCreateZaloTemplates).toHaveBeenCalledWith(expect.any(Array), OWNER, expect.any(Object));
+      expect(mockAutoFillEmailChannels).not.toHaveBeenCalledWith(expect.anything(), EMPLOYEE);
+      expect(mockAutoCreateEmailTemplates).not.toHaveBeenCalledWith(expect.anything(), EMPLOYEE, expect.anything());
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    });
+
+    it('createAndRunCampaign: tạo chiến dịch hỏng → dọn mẫu tự tạo theo id CHỦ (đúng id đã tạo mẫu)', async () => {
+      mockAutoCreateEmailTemplates.mockImplementationOnce(async (_nodes, _userId, created) => { created.emailTemplateIds.push(701); });
+      mockCreateCampaign.mockImplementation(async (_req, res) => res.status(409).json({ success: false, message: 'Trùng tên' }));
+      const res = makeRes();
+
+      await aiController.createAndRunCampaign(employeeReq(emailScript()), res);
+
+      expect(mockCleanupAutoCreatedTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({ emailTemplateIds: [701] }),
+        OWNER
+      );
+      expect(res.status).toHaveBeenCalledWith(409);
+    });
+
+    it('createCampaignFromDraft: mẫu tự tạo + dọn mẫu theo id CHỦ; assertResourceVersionsCurrent nhận ownerUserId', async () => {
+      mockPrepareScript.mockResolvedValueOnce(emailScript());
+      mockAutoCreateEmailTemplates.mockImplementationOnce(async (_nodes, _userId, created) => { created.emailTemplateIds.push(702); });
+      mockCreateCampaign.mockImplementation(async (_req, res) => res.status(409).json({ success: false, message: 'Trùng tên' }));
+      const res = makeRes();
+
+      await aiController.createCampaignFromDraft(employeeReq(emailScript()), res);
+
+      expect(mockAssertResourceVersionsCurrent).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
+      expect(mockAutoCreateEmailTemplates).toHaveBeenCalledWith(expect.any(Array), OWNER, expect.any(Object));
+      expect(mockAutoCreateZaloTemplates).toHaveBeenCalledWith(expect.any(Array), OWNER, expect.any(Object));
+      expect(mockCleanupAutoCreatedTemplates).toHaveBeenCalledWith(
+        expect.objectContaining({ emailTemplateIds: [702] }),
+        OWNER
+      );
+    });
+  });
+
   describe('pushToCampaign', () => {
     it('blocks push when autoRun=true and node config fails validation', async () => {
       const invalidScript = {
