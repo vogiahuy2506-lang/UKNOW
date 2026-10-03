@@ -9,6 +9,7 @@ import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
+import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
 
 function isImageUnsupportedError(err) {
   const msg = String(err?.message || '').toLowerCase();
@@ -608,7 +609,7 @@ QUY TẮC TRẢ LỜI:
         return { document, previous };
       });
 
-      const chunks = this.chunkText(text, 500);
+      const chunks = this.chunkText(text);
       const embeddings = await this.generateEmbeddings(chunks, ownerUserId);
       await withKbQuotaLock(ownerUserId, async ({ client }) => {
         const current = await customChatDocumentRepository.findDocumentById(
@@ -644,22 +645,12 @@ QUY TẮC TRẢ LỜI:
     }
   }
 
-  chunkText(text, chunkSize = 500) {
-    const paragraphs = text.split(/\n{2,}/).map((item) => item.trim()).filter(Boolean);
-    const chunks = [];
-    let buffer = '';
-
-    for (const paragraph of paragraphs) {
-      if (buffer.length + paragraph.length + 1 <= chunkSize) {
-        buffer += (buffer ? '\n\n' : '') + paragraph;
-      } else {
-        if (buffer) chunks.push(buffer);
-        buffer = paragraph;
-      }
-    }
-    if (buffer) chunks.push(buffer);
-
-    return chunks;
+  /**
+   * Chia văn bản thành các đoạn ≤ 1.500 ký tự (mục tiêu ~1.100, chồng lấn ~150) — xem `utils/kbChunker.util.js`.
+   * Bản cũ chỉ tách ở dòng trống và giữ nguyên đoạn văn dài: tài liệu không có dòng trống thành MỘT đoạn hàng trăm nghìn ký tự.
+   */
+  chunkText(text, options = {}) {
+    return splitIntoChunks(text, options);
   }
 }
 
