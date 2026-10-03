@@ -5,9 +5,14 @@
  * Seed chung không có biểu mẫu nào, nên các ảnh trong trang tự dựng một biểu mẫu
  * mẫu + bốn bài nộp qua API (`lib/shotFixtures.js`). Vì vậy chúng chỉ chạy ở máy
  * mình.
+ *
+ * Giao diện trình soạn từ 03/10/2026 (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU PR-2): biểu mẫu MỚI bắt đầu bằng bước chọn mẫu;
+ * "Sau khi gửi" / Đặt lịch / Thanh toán / Giao diện là thẻ thu gọn (khối đang có dữ liệu thì mở sẵn); hàng "Thêm nhanh" chỉ
+ * có 4 loại + "Loại khác…"; Chia sẻ & QR / Bài nộp chỉ hiện sau khi đã lưu. Mọi ảnh ở đây mở biểu mẫu mẫu ĐÃ LƯU (/edit)
+ * nên không đi qua bước chọn mẫu; ảnh bước chọn mẫu của biểu mẫu mới nằm ở shots/dat-lich-giu-cho.js.
  */
 import {
-  sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
+  sidebarShot, highlight, highlightCell, hideVolatileChrome, settle, contentShot,
   enclosingSection, tallViewportShot, maskLocalOrigin,
 } from '../lib/shotHelpers.js';
 import { ensureDemoForm, ensureDemoSubmissions } from '../lib/shotFixtures.js';
@@ -46,14 +51,22 @@ export default {
       localOnly: true,
       async take(page) {
         await openEditor(page);
-        const heading = page.getByRole('heading', { name: 'Danh sách trường thông tin' });
-        const card = await enclosingSection(page, heading);
-        await highlight(card.getByRole('button', { name: 'Thêm trường' }));
-        // Ô "Kiểu dữ liệu" của trường đầu tiên — chính chỗ người dùng đổi kiểu.
-        await highlight(card.locator('select').first());
-        await page.waitForTimeout(200);
-        // Cả khối cao hơn 1.100px (bốn trường); hai trường đầu là đủ thấy cấu trúc.
-        return contentShot(page, card, { maxHeight: 470 });
+        // Khung nhìn nới cao để thẻ nằm trọn dưới thanh thao tác dính: ở khung thường, cuộn tới thẻ làm thanh dính
+        // (Lưu / Xuất bản…) đè lên đầu thẻ, che mất nút "Thêm trường".
+        return tallViewportShot(page, 2600, async () => {
+          await page.evaluate(() => {
+            window.scrollTo(0, 0);
+            document.querySelectorAll('main').forEach((el) => { el.scrollTop = 0; });
+          });
+          const heading = page.getByRole('heading', { name: 'Danh sách trường thông tin' });
+          const card = await enclosingSection(page, heading);
+          await highlight(card.getByRole('button', { name: 'Thêm trường' }));
+          // Ô "Kiểu dữ liệu" của trường đầu tiên — chính chỗ người dùng đổi kiểu.
+          await highlight(card.locator('select').first());
+          await page.waitForTimeout(200);
+          // Đầu thẻ + hàng "Thêm nhanh" (4 loại + "Loại khác…") + trường đầu tiên; bốn trường thì cao hơn 1.100px.
+          return contentShot(page, card, { maxHeight: 640 });
+        });
       },
     },
     {
@@ -62,6 +75,9 @@ export default {
       localOnly: true,
       async take(page) {
         await openEditor(page);
+        // Biểu mẫu mẫu đã chỉnh giao diện nên mục này mở sẵn; nếu thu gọn thì bấm thẻ "Giao diện" để mở.
+        const themeCard = page.locator('button#section-theme');
+        if (await themeCard.isVisible().catch(() => false)) await themeCard.click();
         return tallViewportShot(page, 2400, async () => {
           const heading = page.getByRole('heading', { name: 'Giao diện', exact: true });
           await heading.scrollIntoViewIfNeeded();
@@ -114,7 +130,8 @@ export default {
         await page.locator('main table tbody tr').first().waitFor({ state: 'visible', timeout: 30_000 });
         await settle(page);
         await hideVolatileChrome(page);
-        await highlight(page.locator('main table thead th').filter({ hasText: 'Đồng ý tiếp thị' }));
+        // Viền vẽ vào trong ô: outline của <th> bị khung bảng cắt mất cạnh trên.
+        await highlightCell(page.locator('main table thead th').filter({ hasText: 'Đồng ý tiếp thị' }));
         await page.waitForTimeout(200);
         return contentShot(page, page.locator('main').first(), { maxHeight: 560 });
       },

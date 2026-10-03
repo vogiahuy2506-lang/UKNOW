@@ -7,7 +7,7 @@
  * toán". Chỉ chạy ở máy mình.
  */
 import {
-  highlight, hideVolatileChrome, settle, contentShot, enclosingSection, tallViewportShot,
+  highlight, highlightCell, hideVolatileChrome, settle, contentShot, enclosingSection, tallViewportShot, bandShot,
 } from '../lib/shotHelpers.js';
 import { ensureDemoForm, ensureDemoSubmissions, withDb } from '../lib/shotFixtures.js';
 
@@ -44,37 +44,29 @@ export default {
   shots: [
     {
       name: 'hai-muc-dat-lich-thanh-toan',
+      // Chú thích gọi theo tên MỤC khi đã mở ("Đặt lịch hẹn", "Thanh toán giữ chỗ"); trên màn hình, ở biểu mẫu mới, hai mục
+      // này là hai thẻ thu gọn tên "Thêm đặt lịch hẹn" / "Thu tiền khi gửi" (đúng như đoạn văn ngay trên ô ảnh mô tả).
       caption: 'trang soạn biểu mẫu kéo xuống giữa trang, khoanh đỏ hai mục "Đặt lịch hẹn" và "Thanh toán giữ chỗ"',
       localOnly: true,
       async take(page) {
-        // Biểu mẫu MỚI: cả hai mục đang tắt nên hai thẻ nằm sát nhau, một khung
-        // hình là thấy cả hai. Ở biểu mẫu đã bật đặt lịch, thẻ thứ nhất cao cả
-        // nghìn pixel, không cách nào chụp chung.
+        // Đường thật của người dùng: Tạo biểu mẫu mới -> chọn mẫu "Đăng ký tư vấn" (không bật sẵn đặt lịch / thu tiền)
+        // -> kéo xuống dưới phần câu hỏi. Chưa lưu gì nên không để lại biểu mẫu nào trong DB.
         await page.goto('/app/forms/new');
-        const booking = page.getByRole('heading', { name: 'Đặt lịch hẹn', exact: true });
-        const payment = page.getByRole('heading', { name: 'Thanh toán giữ chỗ', exact: true });
-        await booking.waitFor({ state: 'visible', timeout: 30_000 });
+        const consult = page.getByTestId('form-template-consult');
+        await consult.waitFor({ state: 'visible', timeout: 30_000 });
+        await consult.click();
+        const bookingCard = page.locator('button#section-booking');
+        const paymentCard = page.locator('button#section-payment');
+        await bookingCard.waitFor({ state: 'visible', timeout: 30_000 });
         await settle(page);
         await hideVolatileChrome(page);
-        return tallViewportShot(page, 2200, async () => {
-          const bookingCard = await enclosingSection(page, booking);
-          const paymentCard = await enclosingSection(page, payment);
+        return tallViewportShot(page, 2600, async () => {
           await highlight(bookingCard);
           await highlight(paymentCard);
-          await bookingCard.scrollIntoViewIfNeeded();
-          await page.waitForTimeout(300);
-
-          // Khung chụp = từ đỉnh thẻ Đặt lịch tới đáy thẻ Thanh toán.
-          const a = await bookingCard.boundingBox();
-          const b = await paymentCard.boundingBox();
-          const pad = 16;
-          const clip = {
-            x: Math.max(0, Math.min(a.x, b.x) - pad),
-            y: Math.max(0, a.y - pad),
-            width: Math.max(a.width, b.width) + pad * 2,
-            height: (b.y + b.height) - a.y + pad * 2,
-          };
-          return { screenshot: (options = {}) => page.screenshot({ ...options, clip }) };
+          await page.waitForTimeout(200);
+          // Dải từ thẻ "Sau khi gửi" (thu gọn, ngay trên) tới thẻ "Giao diện" (ngay dưới): thấy hai thẻ cần khoanh nằm
+          // giữa các khối khác của trang.
+          return bandShot(page, page.locator('#section-settings'), page.locator('button#section-theme'));
         });
       },
     },
@@ -162,7 +154,7 @@ export default {
         await row.waitFor({ state: 'visible', timeout: 30_000 });
         await settle(page);
         await hideVolatileChrome(page);
-        await highlight(page.locator('main table thead th').filter({ hasText: /Mã & số tiền/i }));
+        await highlightCell(page.locator('main table thead th').filter({ hasText: /Mã & số tiền/i }));
         await highlight(row.getByRole('button', { name: 'Đã nhận tiền' }));
         await page.waitForTimeout(200);
         return contentShot(page, page.locator('main').first(), { maxHeight: 360 });
