@@ -146,6 +146,9 @@ describe('POST /api/ai/prepare-campaign — nhân viên dùng tài khoản + m�
     expect(byDefault.body.data.confirmationView.readyToCreate).toBe(true);
     const sendNode = findNode(byDefault.body.data.preparedScript, 'send_zalo_personal');
     expect(Number(sendNode.config.zaloAccountId)).toBe(Number(r.zaloId));
+    // Node select_zalo_account do patchDeterministicCampaignScript chèn cũng mang tài khoản mặc định của CHỦ.
+    const selectNode = findNode(byDefault.body.data.preparedScript, 'select_zalo_account');
+    expect(Number(selectNode.config.zaloAccountId)).toBe(Number(r.zaloId));
   });
 
   it('fail-closed: người ngoài (workspace khác) dùng id tài khoản + mẫu của chủ → bị chặn missing_sender + template_not_found', async () => {
