@@ -163,6 +163,25 @@ const UI_LABELS_IN_ARTICLES = [
   ['dung-luong-luu-tru', 'mediaLibrary.platformLink', 'Link nền tảng · không tính dung lượng'],
   ['dung-luong-luu-tru', 'mediaLibrary.storedOnSystem', 'Lưu trên hệ thống · tính dung lượng'],
   ['dung-luong-luu-tru', 'mediaLibrary.goToManageScreen', 'Đi đến màn hình quản lý'],
+  // Trình soạn biểu mẫu (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU PR-2): bước chọn mẫu, khối thu gọn, hàng Thêm nhanh.
+  ['bieu-mau', 'forms.createNew', 'Tạo biểu mẫu mới'],
+  ['bieu-mau', 'forms.editorPage.templates.consult.name', 'Đăng ký tư vấn'],
+  ['bieu-mau', 'forms.editorPage.templates.booking.name', 'Đặt lịch hẹn'],
+  ['bieu-mau', 'forms.editorPage.templates.payment.name', 'Thu tiền / đặt cọc'],
+  ['bieu-mau', 'forms.editorPage.templates.survey.name', 'Khảo sát'],
+  ['bieu-mau', 'forms.editorPage.templates.blank.name', 'Trống'],
+  ['bieu-mau', 'forms.editorPage.quickAdd.moreTypes', 'Loại khác…'],
+  ['bieu-mau', 'forms.editorPage.afterSubmit.title', 'Sau khi gửi'],
+  ['bieu-mau', 'forms.editorPage.theme.title', 'Giao diện'],
+  ['bieu-mau', 'forms.share', 'Chia sẻ & QR'],
+  ['dat-lich-giu-cho', 'forms.editorPage.addBlock.booking', 'Thêm đặt lịch hẹn'],
+  ['dat-lich-giu-cho', 'forms.editorPage.addBlock.payment', 'Thu tiền khi gửi'],
+  ['dat-lich-giu-cho', 'forms.editorPage.booking.title', 'Đặt lịch hẹn'],
+  ['dat-lich-giu-cho', 'forms.editorPage.payment.title', 'Thanh toán giữ chỗ'],
+  ['dat-lich-giu-cho', 'forms.editorPage.booking.enableLabel', 'Bật đặt lịch hẹn'],
+  ['dat-lich-giu-cho', 'forms.editorPage.payment.enableLabel', 'Bật thanh toán'],
+  ['dat-lich-giu-cho', 'forms.sendConfirmation', 'Gửi email xác nhận cho người điền sau khi nộp'],
+  ['dat-lich-giu-cho', 'forms.editorPage.afterSubmit.title', 'Sau khi gửi'],
 ];
 
 /** Bắt cả hai lối viết: `**Nhóm → Mục**` và `**Nhóm** → **Mục**`. */
