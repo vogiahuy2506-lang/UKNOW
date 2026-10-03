@@ -12,6 +12,7 @@ import chatAttachmentService from '../chatbot/chatAttachment.service.js';
 import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
 import { CUSTOM_CHATBOT_MIN_SIMILARITY, MAX_KB_CHUNKS, capChunkTexts } from '../../utils/ragLimits.util.js';
 import { decodeUploadFilename } from '../../utils/uploadFilename.util.js';
+import businessProfileService from './businessProfile.service.js';
 
 function isImageUnsupportedError(err) {
   const msg = String(err?.message || '').toLowerCase();
@@ -118,6 +119,18 @@ class CustomChatService {
       throw error;
     }
 
+    // Hồ sơ doanh nghiệp + sản phẩm ĐANG BÁN của chủ chatbot (cùng khối đường kênh Zalo/Telegram/WhatsApp đưa vào prompt,
+    // chatRouter.service.js). Thiếu khối này thì widget nhúng và trang /chat không biết tên, giá, link sản phẩm.
+    // Chạy song song với tra tài liệu; lỗi hồ sơ không được làm hỏng câu trả lời → rơi về ''.
+    const profilePromise = userId != null
+      ? Promise.resolve()
+        .then(() => businessProfileService.getFormattedProfileForPrompt(userId))
+        .catch((e) => {
+          console.warn('[CustomChat] business profile failed:', e?.message || e);
+          return '';
+        })
+      : Promise.resolve('');
+
     let ragContext = '';
     try {
       const lastUserMessage = [...history].reverse().find((message) => message.role === 'user')?.content || '';
@@ -154,7 +167,9 @@ QUY TẮC TRẢ LỜI:
     const systemPrompt = extraSystemNote?.trim()
       ? `${baseSystem}\n\n${extraSystemNote.trim()}`
       : baseSystem;
-    const prompt = `Hệ thống: ${systemPrompt}${ragContext}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
+    const profileContext = String((await profilePromise) || '').trim();
+    const profileBlock = profileContext ? `\n\n${profileContext}` : '';
+    const prompt = `Hệ thống: ${systemPrompt}${ragContext}${profileBlock}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
 
     const resolveBind = attachmentBind || (userId != null && chatbotId
       ? { chatbotId, uid: userId }

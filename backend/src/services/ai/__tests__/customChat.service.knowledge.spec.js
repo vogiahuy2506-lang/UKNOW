@@ -20,7 +20,10 @@ const mockEmbedText = jest.fn();
 const mockEmbedTexts = jest.fn();
 const resolveAllowedModel = jest.fn();
 
+// customChat.service đọc hồ sơ + sản phẩm của chủ (widget/trang /chat) — mock ở ranh giới, mặc định không có hồ sơ.
+const mockFormattedProfile = jest.fn(async () => '');
 jest.unstable_mockModule('../../../repositories/ai/customChatDocument.repository.js', () => ({ default: mockRepo }));
+jest.unstable_mockModule('../businessProfile.service.js', () => ({ default: { getFormattedProfileForPrompt: (...args) => mockFormattedProfile(...args) } }));
 jest.unstable_mockModule('../../../utils/fileExtractor.util.js', () => ({ extractTextFromBuffer: (...args) => mockExtract(...args) }));
 jest.unstable_mockModule('../../storage/kbQuota.service.js', () => ({
   countExtractedChars: (text) => String(text).length,
@@ -171,6 +174,29 @@ describe('customChat.searchChunks — widget/trang công khai/Chat thử tìm b�
 
     expect(prompt).toContain('- Giờ mở cửa 8h-21h');
     expect(mockRepo.findChunkTexts).not.toHaveBeenCalled();
+  });
+});
+
+describe('customChat.chat — hồ sơ doanh nghiệp + sản phẩm của chủ vào prompt (widget nhúng, trang /chat)', () => {
+  it('prompt chứa khối hồ sơ có tên + giá sản phẩm đang bán, lấy theo chủ chatbot (userId)', async () => {
+    mockFormattedProfile.mockResolvedValue(
+      '=== HỒ SƠ DOANH NGHIỆP (đầy đủ) ===\n- Sản phẩm / dịch vụ:\n1. Khoá học AI thực chiến — 500k\n=== HẾT HỒ SƠ ==='
+    );
+
+    const prompt = await runChat({ chunks: ['Giờ mở cửa 8h-21h'] });
+
+    expect(mockFormattedProfile).toHaveBeenCalledWith(90);
+    expect(prompt).toContain('Khoá học AI thực chiến — 500k');
+    expect(prompt).toContain('- Giờ mở cửa 8h-21h');
+  });
+
+  it('đọc hồ sơ ném lỗi → vẫn trả lời, prompt không có khối hồ sơ', async () => {
+    mockFormattedProfile.mockRejectedValue(new Error('DB down'));
+
+    const prompt = await runChat({ chunks: ['Giờ mở cửa 8h-21h'] });
+
+    expect(prompt).toContain('- Giờ mở cửa 8h-21h');
+    expect(prompt).not.toContain('HỒ SƠ DOANH NGHIỆP');
   });
 });
 

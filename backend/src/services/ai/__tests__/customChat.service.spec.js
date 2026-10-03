@@ -8,7 +8,10 @@ const record = jest.fn();
 const resolveFallbackModel = jest.fn();
 const buildAiPartsFromHistory = jest.fn();
 
+// customChat.service đọc hồ sơ + sản phẩm của chủ (widget/trang /chat) — mock ở ranh giới, mặc định không có hồ sơ.
+const mockFormattedProfile = jest.fn(async () => '');
 jest.unstable_mockModule('../../../repositories/ai/customChatDocument.repository.js', () => ({ default: {} }));
+jest.unstable_mockModule('../businessProfile.service.js', () => ({ default: { getFormattedProfileForPrompt: (...args) => mockFormattedProfile(...args) } }));
 jest.unstable_mockModule('../../../utils/fileExtractor.util.js', () => ({ extractTextFromBuffer: jest.fn() }));
 jest.unstable_mockModule('../../../utils/aiResponseFormatter.util.js', () => ({ stripMarkdown: (t) => t }));
 // geminiClient.util.js KHÔNG mock: lõi thật chạy, chỉ `fetch` (ranh giới với Google) được giả bằng `Response` thật.
