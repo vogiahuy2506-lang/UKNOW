@@ -3543,7 +3543,7 @@ export default {
     checkingTransaction: 'Checking transaction...',
     autoRedirect: 'System will redirect automatically when payment is received',
     needHelp: 'Need help?',
-    contactSupport: 'Contact 24/7 support',
+    contactSupport: 'Contact support',
     yearlyBilling: 'Annual billing',
     step1: 'Open your banking app and select Scan QR',
     step2: 'Scan the QR code or enter the order code',
@@ -3559,7 +3559,7 @@ export default {
     discount: 'Discount',
     trustBadge1: 'Secure payment via PayOS, 256-bit SSL encryption',
     trustBadge2: 'Plan activates instantly after payment',
-    trustBadge3: '24/7 support team ready to help',
+    trustBadge3: 'Support via hotline, email and AI assistant',
     // Terms consent (required by Ministry of Industry and Trade)
     termsRequired: 'Please read and agree to the terms before continuing',
     termsConsentLabel: 'I have read and agree to the',
@@ -3928,7 +3928,7 @@ export default {
     planLabel: 'Service plan',
     amountPaid: 'Amount paid',
     feature1: 'All features unlocked',
-    feature2: '24/7 technical support is ready',
+    feature2: 'Technical support via hotline, email and AI assistant',
     feature3: 'Invoice sent to your email',
     invoicePending: 'Your invoice is being processed and will be sent to your account email',
     invoiceSent: 'Invoice PDF has been sent to your account email',
@@ -7898,7 +7898,7 @@ export default {
     features: [
       'All-in-one platform, no need to chain multiple tools',
       'AI-powered automation that learns your business',
-      '24/7 expert support whenever you need help',
+      'Support via hotline, email and AI assistant',
     ],
     footer: {
       privacy: 'Privacy',
@@ -8046,8 +8046,8 @@ export default {
     b2Desc: 'Nurture prospects with the right content, at the right time, on the right channel.',
     b3Title: 'Cut operating costs by 60%',
     b3Desc: 'One platform replaces dozens of disconnected tools — no hidden fees, no long contracts.',
-    b4Title: 'Secure, internationally compliant',
-    b4Desc: 'End-to-end encryption, automatic backups, unlimited enterprise scalability.',
+    b4Title: 'Data protected under our privacy policy',
+    b4Desc: 'HTTPS/TLS access, automatic daily backups, role-based permissions for account owners and employees.',
     // Section 4 — DIGISO
     section4Badge: 'Developed by',
     section4Desc: 'Founder AI is a product owned by',
@@ -8071,7 +8071,7 @@ export default {
       zaloGroupTitle: 'Zalo Group',
       zaloGroupDesc: 'Send messages to Zalo groups you have already joined',
       tipTitle: 'Tip:',
-      tipContent: 'You can run all 3 campaign types simultaneously to reach customers across multiple channels, increasing conversion rates up to 3x.',
+      tipContent: 'You can combine all 3 campaign types to reach customers across multiple channels.',
     },
     // Campaign Flow Modal
     campaignFlow: {

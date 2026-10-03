@@ -3554,7 +3554,7 @@ export default {
     checkingTransaction: 'Đang kiểm tra giao dịch...',
     autoRedirect: 'Hệ thống sẽ tự động chuyển hướng khi nhận được tiền',
     needHelp: 'Gặp khó khăn?',
-    contactSupport: 'Liên hệ hỗ trợ 24/7',
+    contactSupport: 'Liên hệ hỗ trợ',
     yearlyBilling: 'Thanh toán theo năm',
     step1: 'Mở app ngân hàng và chọn Quét QR',
     step2: 'Quét mã QR hoặc nhập mã đơn hàng',
@@ -3570,7 +3570,7 @@ export default {
     discount: 'Giảm giá',
     trustBadge1: 'Thanh toán an toàn qua PayOS, mã hoá SSL 256-bit',
     trustBadge2: 'Kích hoạt gói ngay khi thanh toán thành công',
-    trustBadge3: 'Đội ngũ hỗ trợ sẵn sàng 24/7',
+    trustBadge3: 'Hỗ trợ qua hotline, email và trợ lý AI',
     // QR section
     qrHintTitle: 'Mở app ngân hàng để quét',
     qrHintSubtitle: 'Camera không khả dụng? Cuộn xuống và nhập tay.',
@@ -3939,7 +3939,7 @@ export default {
     planLabel: 'Gói dịch vụ',
     amountPaid: 'Số tiền đã thanh toán',
     feature1: 'Tất cả tính năng đã được mở khóa',
-    feature2: 'Hỗ trợ kỹ thuật 24/7 đã sẵn sàng',
+    feature2: 'Hỗ trợ kỹ thuật qua hotline, email và trợ lý AI',
     feature3: 'Hoá đơn đã được gửi đến email của bạn',
     invoicePending: 'Hoá đơn đang được xử lý và sẽ được gửi tới email tài khoản của bạn',
     invoiceSent: 'Đã gửi hoá đơn PDF tới email tài khoản của bạn',
@@ -7907,7 +7907,7 @@ export default {
     features: [
       'Nền tảng all-in-one, không cần ghép nhiều công cụ',
       'AI tự động hóa thông minh, học từ dữ liệu của bạn',
-      'Hỗ trợ 24/7 bất cứ khi nào bạn cần',
+      'Hỗ trợ qua hotline, email và trợ lý AI',
     ],
     footer: {
       privacy: 'Bảo mật',
@@ -8055,8 +8055,8 @@ export default {
     b2Desc: 'Nuôi dưỡng khách hàng tiềm năng bằng nội dung phù hợp, đúng thời điểm, đúng kênh.',
     b3Title: 'Giảm 60% chi phí vận hành',
     b3Desc: 'Một nền tảng thay thế cho hàng chục công cụ rời rạc — không phí ẩn, không hợp đồng dài hạn.',
-    b4Title: 'Dữ liệu an toàn, tuân thủ chuẩn quốc tế',
-    b4Desc: 'Mã hóa đầu cuối, sao lưu tự động, khả năng mở rộng không giới hạn theo doanh nghiệp.',
+    b4Title: 'Dữ liệu được bảo vệ theo chính sách bảo mật',
+    b4Desc: 'Truy cập qua HTTPS/TLS, sao lưu tự động mỗi ngày, phân quyền theo vai trò chủ tài khoản và nhân viên.',
     // Section 4 — DIGISO
     section4Badge: 'Đơn vị phát triển',
     section4Desc: 'Founder AI là sản phẩm thuộc sở hữu của',
@@ -8080,7 +8080,7 @@ export default {
       zaloGroupTitle: 'Zalo nhóm',
       zaloGroupDesc: 'Gửi tin nhắn vào các nhóm Zalo đã tham gia',
       tipTitle: 'Mẹo:',
-      tipContent: 'Bạn có thể chạy đồng thời cả 3 loại chiến dịch để tiếp cận khách hàng đa kênh, tăng hiệu quả chuyển đổi lên đến 3 lần.',
+      tipContent: 'Bạn có thể kết hợp cả 3 loại chiến dịch để tiếp cận khách hàng qua nhiều kênh.',
     },
     // Campaign Flow Modal (mô phỏng node chạy từng bước)
     campaignFlow: {

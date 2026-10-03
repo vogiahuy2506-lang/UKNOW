@@ -43,8 +43,8 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'user',
-          content: 'Kết nối Zalo OA',
-          displayed: 'Kết nối Zalo OA',
+          content: 'Kết nối Zalo',
+          displayed: 'Kết nối Zalo',
         },
         {
           role: 'bot',
@@ -357,8 +357,8 @@ export const MOCK_CONVERSATIONS = {
         },
         {
           role: 'user',
-          content: 'Connect Zalo OA',
-          displayed: 'Connect Zalo OA',
+          content: 'Connect Zalo',
+          displayed: 'Connect Zalo',
         },
         {
           role: 'bot',

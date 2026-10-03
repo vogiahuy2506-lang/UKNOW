@@ -356,7 +356,7 @@ export default function HeroPage() {
             <div className="bg-gradient-to-br from-orange-50 to-amber-50 border border-orange-200 rounded-xl p-4">
               <p className="text-xs text-orange-900 leading-relaxed">
                 <span className="font-semibold">💡 {t('heroPage.campaignDemo.tipTitle') || 'Mẹo:'}</span>{' '}
-                {t('heroPage.campaignDemo.tipContent') || 'Bạn có thể chạy đồng thời cả 3 loại chiến dịch để tiếp cận khách hàng đa kênh, tăng hiệu quả chuyển đổi lên đến 3 lần.'}
+                {t('heroPage.campaignDemo.tipContent') || 'Bạn có thể kết hợp cả 3 loại chiến dịch để tiếp cận khách hàng qua nhiều kênh.'}
               </p>
             </div>
           </div>
