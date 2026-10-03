@@ -134,6 +134,10 @@ export default function LandingCanvasEditor({
     setSaving(true);
     try {
       if (editingId) {
+        // KHÔNG gửi domainType / customDomain* khi cập nhật trang đã lưu: tên miền đổi qua API tên miền riêng
+        // (Cài đặt trang → CustomDomainPanel) chứ không qua lần lưu nội dung. `form.domainType` có thể CŨ (tên miền vừa
+        // kết nối / gỡ trong modal, hoặc ở tab khác) và backend đổi hàng domain theo nó: gửi 'system' lên trang vừa kết
+        // nối tên miền riêng sẽ thay tên miền của khách bằng link miễn phí. Giống AiChatbot.jsx — đường UPDATE không gửi.
         // "Dùng biểu mẫu đã tạo" (PR-F): lựa chọn chờ lưu → gửi `linkedFormId` + đưa HTML về dạng có ĐÚNG MỘT chỗ trống
         // chờ biểu mẫu (backend thay bằng khối nhúng). Không có lựa chọn thì body và HTML y nguyên như trước.
         const linkChoice = form.linkedFormChoice || null;
@@ -145,9 +149,6 @@ export default function LandingCanvasEditor({
           title: effectiveTitle,
           htmlContent: htmlToSave,
           isPublished: form.isPublished,
-          domainType: form.domainType,
-          customDomainHostname: form.customDomainHostname,
-          customDomainIsApex: form.customDomainIsApex,
           leadFormConfig,
           ...buildLinkedFormPayload(linkChoice),
         });

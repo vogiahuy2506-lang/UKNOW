@@ -202,42 +202,86 @@ export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, 
   return data;
 }
 
+// ── Tên miền riêng của landing (PLAN_TEN_MIEN_RIENG, PR-D) ─────────────────────────────────────────────────────
+// Backend kiểm DNS thật (dns.resolve) nên mất vài giây — nới timeout mặc định 10 giây của api.js. Mọi hàm trả `data.data`
+// (thân phản hồi `{ success, data }` đã bóc); lỗi HTTP ném AxiosError, `error.response.data.message` là câu tiếng Việt
+// của server, riêng 422 của PUT còn mang `error.response.data.data` (bảng bản ghi DNS cần thêm).
+const CUSTOM_DOMAIN_TIMEOUT_MS = 30000;
+
 /**
+ * Thông tin hàng tên miền của landing: `{ configured, hostname, status, cfManaged, dnsRecords, cnameTarget, apexFixedIp,
+ * isApexDomain, ... }`. `cfManaged=true` là link miễn phí `<slug>.founderai.biz`; `false` là tên miền riêng của khách.
+ *
  * @param {number} landingPageId
  * @returns {Promise<object>}
  */
 export async function fetchLandingCustomDomain(landingPageId) {
   const { data } = await api.get(`/admin/landing-pages/${landingPageId}/custom-domain`);
-  return data;
+  return data?.data ?? null;
 }
 
 /**
+ * Xem trước DNS — KHÔNG ghi gì. `{ verified, reason, dnsRecords: [{type, host, value, ttl}], message, ... }`.
+ * `verified=false` vẫn là 200 (chưa cài DNS không phải lỗi của request).
+ *
+ * @param {number} landingPageId
+ * @param {string} hostname
+ * @param {boolean} [isApexDomain]
+ * @returns {Promise<object>}
+ */
+export async function postLandingCustomDomainCheck(landingPageId, hostname, isApexDomain = false) {
+  const { data } = await api.post(
+    `/admin/landing-pages/${landingPageId}/custom-domain/check`,
+    { hostname, isApexDomain },
+    { timeout: CUSTOM_DOMAIN_TIMEOUT_MS }
+  );
+  return data?.data ?? null;
+}
+
+/**
+ * Kết nối tên miền riêng — backend chỉ ghi khi DNS đã đúng (chưa đúng → 422, không đổi gì).
+ *
  * @param {number} landingPageId
  * @param {string} hostname
  * @param {boolean} [isApexDomain]
  * @returns {Promise<object>}
  */
 export async function putLandingCustomDomain(landingPageId, hostname, isApexDomain = false) {
-  const { data } = await api.put(`/admin/landing-pages/${landingPageId}/custom-domain`, { hostname, isApexDomain });
-  return data;
+  const { data } = await api.put(
+    `/admin/landing-pages/${landingPageId}/custom-domain`,
+    { hostname, isApexDomain },
+    { timeout: CUSTOM_DOMAIN_TIMEOUT_MS }
+  );
+  return data?.data ?? null;
 }
 
 /**
+ * Xác minh lại hàng tên miền riêng đang `pending_verification` (hàng cũ). Qua `api` nên có Bearer tự động.
+ *
  * @param {number} landingPageId
  * @returns {Promise<object>}
  */
 export async function postLandingCustomDomainVerify(landingPageId) {
-  const { data } = await api.post(`/admin/landing-pages/${landingPageId}/custom-domain/verify`);
-  return data;
+  const { data } = await api.post(
+    `/admin/landing-pages/${landingPageId}/custom-domain/verify`,
+    undefined,
+    { timeout: CUSTOM_DOMAIN_TIMEOUT_MS }
+  );
+  return data?.data ?? null;
 }
 
 /**
+ * Gỡ tên miền riêng — backend cấp lại link miễn phí `<slug>.founderai.biz` rồi mới gỡ (không có slug / cấp lỗi thì
+ * giữ nguyên tên miền riêng và báo lỗi).
+ *
  * @param {number} landingPageId
  * @returns {Promise<object>}
  */
 export async function deleteLandingCustomDomain(landingPageId) {
-  const { data } = await api.delete(`/admin/landing-pages/${landingPageId}/custom-domain`);
-  return data;
+  const { data } = await api.delete(`/admin/landing-pages/${landingPageId}/custom-domain`, {
+    timeout: CUSTOM_DOMAIN_TIMEOUT_MS,
+  });
+  return data?.data ?? null;
 }
 
 /**

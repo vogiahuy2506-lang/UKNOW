@@ -376,6 +376,27 @@ describe('LandingCanvasPage — nháp F5 + modal rời trang', () => {
       expect(d.baseUpdatedAt).toBe('T2');
     });
 
+    // PLAN_TEN_MIEN_RIENG PR-D: tên miền đổi qua API tên miền riêng (Cài đặt trang), không qua lần lưu nội dung. Form có thể
+    // mang domainType CŨ (vừa kết nối / gỡ tên miền trong modal, hoặc ở tab khác) và backend đổi hàng domain theo nó:
+    // gửi 'system' lên trang vừa kết nối tên miền riêng sẽ thay tên miền của khách bằng link miễn phí.
+    it('lưu trang đã có: KHÔNG gửi domainType / customDomain* (kể cả khi form còn giữ giá trị cũ)', async () => {
+      window.history.replaceState(null, '', '/app/settings/landing-pages/5/edit');
+      fetchLandingPageAdminById.mockResolvedValue(
+        serverPage({ domainType: 'system', customDomainHostname: 'abc.founderai.biz', customDomainIsApex: false })
+      );
+      updateLandingPageAdmin.mockResolvedValue({ id: 5, updatedAt: 'T2' });
+      renderApp();
+      fireEvent.click(await screen.findByText('save'));
+      await waitFor(() => expect(updateLandingPageAdmin).toHaveBeenCalledTimes(1));
+
+      const [id, body] = updateLandingPageAdmin.mock.calls[0];
+      expect(id).toBe(5);
+      expect(body).toEqual(expect.objectContaining({ slug: 'abc', title: 'Trang đã lưu', htmlContent: '<p>server</p>', isPublished: false }));
+      expect(body).not.toHaveProperty('domainType');
+      expect(body).not.toHaveProperty('customDomainHostname');
+      expect(body).not.toHaveProperty('customDomainIsApex');
+    });
+
     it('không bẩn → Đóng đi thẳng, không modal', async () => {
       renderApp();
       fireEvent.click(await screen.findByText('close'));

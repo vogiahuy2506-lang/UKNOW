@@ -18,7 +18,9 @@ import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../.
 import { notifyStorageQuotaRefresh } from '../../storage/storageEvents.js';
 import { uploadLandingAsset } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
-import { SYSTEM_BASE_DOMAIN, getCustomHostname } from '../utils/landingDomain.js';
+import CustomDomainPanel from './CustomDomainPanel.jsx';
+import useLandingDomainInfo from '../hooks/useLandingDomainInfo.js';
+import { SYSTEM_BASE_DOMAIN } from '../utils/landingDomain.js';
 
 const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
 
@@ -26,8 +28,8 @@ const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
  * Settings Modal - Modal nhỏ gọn để chỉnh sửa landing page.
  *
  * PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU 03/10/2026 — mở ra thấy ngay hai việc chính, thứ ít dùng thu gọn:
- *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí;
- *      trang ĐÃ có tên miền riêng thì chỉ HIỂN THỊ tên miền + trạng thái (chỉ đọc — xem chú thích ở `customHostname`).
+ *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí, và
+ *      tên miền riêng (CustomDomainPanel: kiểm DNS → kết nối, gỡ, kiểm tra lại — PLAN_TEN_MIEN_RIENG PR-D).
  *      Tiêu đề trang KHÔNG còn ở đây — sửa ở thanh trên cùng của trình soạn.
  *   2. "Form thu khách": chọn Form cơ bản hoặc Dùng biểu mẫu đã tạo (LeadFormConfigPanel; lựa chọn lưu cùng lần bấm Lưu trang).
  *   3. "Ảnh đã tải lên (N)": cuối modal, mặc định thu gọn.
@@ -152,15 +154,14 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
     toast.success(tc('sections.images.inserted') || 'Đã chèn vào trang');
   };
 
-  // Tên miền RIÊNG (nếu có) — CHỈ ĐỌC. Trang dùng tên miền miễn phí cũng có `customDomainHostname` =
-  // `<slug>.founderai.biz` (landing_page_domains lưu cả hai loại) nên phải lọc, xem utils/landingDomain.js.
-  //
-  // GỠ MỌI THAO TÁC GHI tên miền riêng khỏi modal (03/10/2026): "Lưu tên miền" chỉ đổi state form rồi lúc lưu trang
-  // backend gỡ subdomain miễn phí (landingPageAdmin.service.js `removeSubdomain`) mà không đăng ký hostname nào →
-  // trang mất link (production: landing 50, 76, 88, 105); "Kiểm tra kết nối" dùng fetch thô không Bearer → luôn 401.
-  // Modal KHÔNG được đổi `domainType`. Khi có PR nối `putLandingCustomDomain` / `postLandingCustomDomainVerify`
-  // thật thì mới đưa phần ghi trở lại (helper getCustomHostname ở utils/landingDomain.js dùng lại được).
-  const customHostname = getCustomHostname(form);
+  // Tình trạng tên miền đọc từ SERVER (hook), không từ `form`: modal KHÔNG được đổi `form.domainType` (chốt PR-1 —
+  // 03/10/2026 "Lưu tên miền" chỉ đổi state form rồi lúc lưu trang backend gỡ subdomain miễn phí mà không đăng ký hostname
+  // nào → production mất link 4 trang: 50, 76, 88, 105). Kết nối / gỡ tên miền đi thẳng qua API tên miền riêng
+  // (CustomDomainPanel, không nhận `setForm`), xong thì nạp lại từ server. `form` chỉ là dữ liệu dự phòng lúc server chưa trả lời.
+  const { domain, reload: reloadDomain } = useLandingDomainInfo({ open, editingId, form });
+  const hasCustomDomain = domain.kind === 'custom-active' || domain.kind === 'custom-pending';
+  // domain_type='custom' mà không còn hàng tên miền nào (trang hỏng ở production): link miễn phí đã chết.
+  const isBrokenCustom = domain.kind === 'none' && form?.domainType === 'custom';
 
   // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 2: prop `tab` được LandingCanvasEditor.jsx
   // truyền xuống (openTab('lead-form') từ ý định chat) — đảm bảo section đích luôn mở mỗi khi tab đích đổi lúc
@@ -210,14 +211,12 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
 
   // Link trang đang dùng: tên miền riêng ĐÃ chạy (nếu có), không thì <slug>.founderai.biz (chỉ khi trang đã lưu).
   const slug = String(form?.slug || '').trim();
-  const customStatus = customHostname ? form?.customDomainStatus || 'pending_verification' : null;
   let publicHost = '';
   let linkHint = '';
-  if (customHostname) {
-    if (customStatus === 'active') publicHost = customHostname;
+  if (hasCustomDomain) {
+    if (domain.kind === 'custom-active') publicHost = domain.hostname;
     else linkHint = tc('sections.publish.linkPendingHint');
-  } else if (form?.domainType === 'custom') {
-    // domain_type='custom' nhưng không còn hàng tên miền nào: subdomain miễn phí đã bị gỡ → link miễn phí đã chết.
+  } else if (isBrokenCustom) {
     linkHint = tc('sections.publish.linkNoDomainHint');
   } else if (!editingId) {
     linkHint = tc('sections.publish.linkUnsavedHint');
@@ -237,19 +236,6 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
       toast.error(tc('sections.publish.linkCopyFailed'));
     }
   };
-
-  const customStatusLabel =
-    customStatus === 'active'
-      ? tc('sections.customDomain.statusActive')
-      : customStatus === 'disabled'
-      ? tc('sections.customDomain.statusDisabled')
-      : tc('sections.customDomain.statusPending');
-  const customStatusClass =
-    customStatus === 'active'
-      ? 'bg-green-100 text-green-700'
-      : customStatus === 'disabled'
-      ? 'bg-gray-100 text-gray-600'
-      : 'bg-amber-100 text-amber-800';
 
   const uploadedImagesCount = inPageImages.length + pendingUploadedAssets.length;
   const customFieldCount = (form?.leadFormConfig?.customFields || []).length;
@@ -360,7 +346,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
               </div>
 
               {/* Đường dẫn miễn phí (slug) — chỉ khi không dùng tên miền riêng */}
-              {!customHostname && form?.domainType !== 'custom' && (
+              {!hasCustomDomain && !isBrokenCustom && (
                 <div>
                   <label htmlFor="landing-slug-input" className="block text-sm font-medium text-gray-700 mb-1.5">
                     {tc('sections.publish.slugLabel')}
@@ -392,23 +378,13 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                 </div>
               )}
 
-              {/* Tên miền riêng đã gắn: CHỈ ĐỌC (xem chú thích ở đầu component) */}
-              {customHostname ? (
-                <div className="space-y-2 rounded-xl border border-purple-100 bg-white p-4" data-testid="custom-domain-readonly">
-                  <p className="text-sm font-semibold text-gray-900">{tc('sections.customDomain.hostnameLabel')}</p>
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="font-mono text-gray-800">{customHostname}</span>
-                    <span className="font-medium text-gray-700">{tc('sections.customDomain.statusLabel')}:</span>
-                    <span
-                      data-testid="custom-domain-status"
-                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${customStatusClass}`}
-                    >
-                      {customStatusLabel}
-                    </span>
-                  </div>
-                  <p className="text-xs text-gray-500">{tc('sections.customDomain.readOnlyHint')}</p>
-                </div>
-              ) : null}
+              {/* Tên miền riêng: kết nối (kiểm DNS trước) / gỡ / kiểm tra lại — xem CustomDomainPanel */}
+              <CustomDomainPanel
+                editingId={editingId}
+                domain={domain}
+                slug={form?.slug}
+                onChanged={reloadDomain}
+              />
             </div>
           </SectionCard>
 
