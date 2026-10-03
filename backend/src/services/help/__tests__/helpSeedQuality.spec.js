@@ -183,7 +183,8 @@ const UI_LABELS_IN_ARTICLES = [
   ['dat-lich-giu-cho', 'forms.sendConfirmation', 'Gửi email xác nhận cho người điền sau khi nộp'],
   ['dat-lich-giu-cho', 'forms.editorPage.afterSubmit.title', 'Sau khi gửi'],
   // PLAN_DON_GIAN_CAI_DAT_LANDING (03/10/2026): Cài đặt trang còn 3 mục (Xuất bản & đường dẫn / Form thu khách / Ảnh đã tải
-  // lên). Tên miền riêng trong modal chỉ HIỂN THỊ (gỡ thao tác ghi) và "Dùng biểu mẫu đã tạo" đã gỡ — bài không tả hai việc này.
+  // lên). Tên miền riêng trong modal chỉ HIỂN THỊ (gỡ thao tác ghi). "Dùng biểu mẫu đã tạo" đã lưu được thật từ PR-F
+  // (PLAN_TEN_MIEN_RIENG_VA_BIEU_MAU_LIEN_KET_LANDING_2026-10-03.md) nên bài tả lại lựa chọn này.
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.title', 'Xuất bản & đường dẫn'],
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkCopy', 'Sao chép'],
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkOpen', 'Mở trang'],
@@ -191,6 +192,13 @@ const UI_LABELS_IN_ARTICLES = [
   ['landing-page', 'landingCanvas.settingsModal.sections.images.title', 'Ảnh đã tải lên'],
   ['landing-page', 'leadFormConfig.addField', 'Thêm câu hỏi'],
   ['landing-page', 'leadFormConfig.askAiAdd', 'Nhờ AI thêm ô này'],
+  // PR-F: hai cách thu thông tin + chọn biểu mẫu có sẵn (LeadFormConfigPanel).
+  ['landing-page', 'leadFormConfig.modeBasic', 'Form cơ bản'],
+  ['landing-page', 'leadFormConfig.modeLinked', 'Dùng biểu mẫu đã tạo'],
+  ['landing-page', 'leadFormConfig.pickerCreate', '+ Tạo biểu mẫu mới'],
+  ['landing-page', 'leadFormConfig.pickerRefresh', 'Làm mới'],
+  ['landing-page', 'forms.submissions', 'Bài nộp'],
+  ['landing-page', 'campaignNodes.readFormSubmissions', 'Dữ liệu Biểu mẫu'],
 ];
 
 /** Bắt cả hai lối viết: `**Nhóm → Mục**` và `**Nhóm** → **Mục**`. */
@@ -311,11 +319,10 @@ describe('chất lượng bài trợ giúp seed', () => {
       'Ảnh của trang',
       'Bốn mục',
       // 03/10/2026: hai việc tự làm trong Cài đặt trang đã GỠ vì không lưu được thật. Tên miền riêng chỉ còn hiển thị (nút
-      // "Lưu tên miền" làm backend xoá subdomain miễn phí mà không gắn gì; nút kiểm tra kết nối luôn 401); "Dùng biểu mẫu đã
-      // tạo" không ghi được `linkedFormId`. Bài không được hướng dẫn người đọc đi tìm hai thứ này.
+      // "Lưu tên miền" làm backend xoá subdomain miễn phí mà không gắn gì; nút kiểm tra kết nối luôn 401). Bài không được
+      // hướng dẫn người đọc đi tìm các nhãn tên miền này. ("Dùng biểu mẫu đã tạo" / "Form cơ bản" đã trở lại hợp lệ từ PR-F
+      // vì phía backend nhận `linkedFormId` — bài tả chúng, được pin ở bảng nhãn giao diện phía trên.)
       'Dùng tên miền riêng của bạn',
-      'Dùng biểu mẫu đã tạo',
-      'Form cơ bản',
       'Lưu tên miền',
     ];
     const offenders = [];
