@@ -187,3 +187,17 @@ backend/test-email.js
 backend/nodemon.json
 frontend/test-output.log
 frontend/public/test-sheets-sync.html
+####################
+# BÍ MẬT — bổ sung 03/10/2026 (đợt bảo mật sau bundle cloud)
+####################
+# Mọi biến thể .env (.env.local, .env.production, .env.test…) — chỉ giữ file mẫu *.example
+.env.*
+!.env.example
+!.env.*.example
+# Khoá riêng / chứng chỉ / kho khoá
+*.pem
+*.key
+*.p12
+*.pfx
+# git bundle (mang theo commit chưa công bố, vd uknow-security.bundle)
+*.bundle
