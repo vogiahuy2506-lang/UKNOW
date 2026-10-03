@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from '../components/layout/admin/Sidebar';
 import Header from '../components/layout/admin/Header';
@@ -24,6 +24,13 @@ const SIDEBAR_WIDTH_COLLAPSED = 44; // icon-only desktop width
 const SIDEBAR_WIDTH_EXPANDED = 220; // expanded desktop width
 const SIDEBAR_GAP = 6; // gap between sidebar and main content
 const HEADER_HEIGHT = 44; // topbar height — matches h-[44px] in Header.jsx
+
+// Trang con được tải lười (lazy trong App.jsx): chờ ngay trong khung, giữ nguyên sidebar/header.
+const MainContentFallback = () => (
+  <div className="flex-1 flex items-center justify-center py-16">
+    <div className="spinner w-8 h-8" />
+  </div>
+);
 
 /**
  * @param {object} props
@@ -256,7 +263,7 @@ const MainLayout = ({ children = null }) => {
           {!isSpecialPage && <WorkspaceInviteBanner />}
           <main ref={mainContentRef} className={`flex-1 min-h-0 min-w-0 relative ${mobileContentClass} ${isSpecialPage ? '' : 'p-4'}`}>
             <div className="relative h-full flex flex-col min-h-0">
-              {children ?? <Outlet />}
+              <Suspense fallback={<MainContentFallback />}>{children ?? <Outlet />}</Suspense>
             </div>
           </main>
         </div>
@@ -333,7 +340,7 @@ const MainLayout = ({ children = null }) => {
           } relative ${isSpecialPage ? '' : 'p-2 md:p-3'}`}
         >
           <div className="relative h-full flex flex-col min-h-0">
-            {children ?? <Outlet />}
+            <Suspense fallback={<MainContentFallback />}>{children ?? <Outlet />}</Suspense>
           </div>
         </main>
       </div>

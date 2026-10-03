@@ -1,10 +1,11 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuthStore } from './stores/authStore';
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 
 import { isPrimaryAppHostname } from './utils/isPrimaryAppHost.js';
+import { lazyWithRetry } from './utils/lazyWithRetry.js';
 import { useI18n, I18nProvider } from './i18n';
 import RouteAnalytics from './components/RouteAnalytics';
 import ReferralCapture from './components/ReferralCapture';
@@ -21,111 +22,111 @@ import HelpDocsRoute from './layouts/HelpDocsRoute';
 // Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
-import AiHomePage from './pages/AiHomePage';
-import Dashboard from './pages/Dashboard';
-import Campaigns from './pages/campaigns/Campaigns';
-import CampaignBuilder from './pages/campaigns/CampaignBuilder';
-import QuickSend from './pages/campaigns/QuickSend';
-import Customers from './pages/customers/Customers';
-import CampaignCustomers from './pages/customers/CampaignCustomers';
-import ChannelSettings from './pages/settings/ChannelSettings';
-import EmployeeManagement from './pages/settings/EmployeeManagement';
-import LandingFeaturedCoursesPage from './pages/settings/LandingFeaturedCoursesPage';
-import LandingTestimonialsPage from './pages/settings/LandingTestimonialsPage';
-import LandingPagesAdminPage from './pages/settings/LandingPagesAdminPage';
-import LandingCanvasPage from './features/landing-canvas/pages/LandingCanvasPage.jsx';
-import BusinessProfilePage from './pages/settings/BusinessProfilePage';
-import InboxOutboxPage from './pages/settings/InboxOutboxPage';
-import MediaLibraryPage from './pages/settings/MediaLibraryPage';
-import ChatbotStudioPage from './pages/studio/ChatbotStudioPage';
-import ChannelTemplates from './pages/templates/ChannelTemplates';
-import Courses from './pages/courses/Courses';
-import Products from './pages/products/Products';
-import Orders from './pages/orders/Orders';
-import TopupPage from './pages/billing/TopupPage';
-import BillingHubPage from './pages/billing/BillingHubPage';
-import LandingLeadsListPage from './pages/landing-leads/LandingLeadsListPage';
-import PublicDataPolicyPage from './pages/public/PublicDataPolicyPage';
-import PublicDPA from './pages/public/PublicDPA';
-import TermsOfService from './pages/public/TermsOfService';
-import PricingPolicy from './pages/public/PricingPolicy';
-import PaymentPolicy from './pages/public/PaymentPolicy';
-import ComplaintPolicy from './pages/public/ComplaintPolicy';
-import RefundPolicy from './pages/public/RefundPolicy';
-import ServiceTerms from './pages/public/ServiceTerms';
-import ServiceDeliveryPolicy from './pages/public/ServiceDeliveryPolicy';
-import Support from './pages/public/Support';
-import RightsAndDuties from './pages/public/RightsAndDuties';
+const AiHomePage = lazyWithRetry(() => import('./pages/AiHomePage'));
+const Dashboard = lazyWithRetry(() => import('./pages/Dashboard'));
+const Campaigns = lazyWithRetry(() => import('./pages/campaigns/Campaigns'));
+const CampaignBuilder = lazyWithRetry(() => import('./pages/campaigns/CampaignBuilder'));
+const QuickSend = lazyWithRetry(() => import('./pages/campaigns/QuickSend'));
+const Customers = lazyWithRetry(() => import('./pages/customers/Customers'));
+const CampaignCustomers = lazyWithRetry(() => import('./pages/customers/CampaignCustomers'));
+const ChannelSettings = lazyWithRetry(() => import('./pages/settings/ChannelSettings'));
+const EmployeeManagement = lazyWithRetry(() => import('./pages/settings/EmployeeManagement'));
+const LandingFeaturedCoursesPage = lazyWithRetry(() => import('./pages/settings/LandingFeaturedCoursesPage'));
+const LandingTestimonialsPage = lazyWithRetry(() => import('./pages/settings/LandingTestimonialsPage'));
+const LandingPagesAdminPage = lazyWithRetry(() => import('./pages/settings/LandingPagesAdminPage'));
+const LandingCanvasPage = lazyWithRetry(() => import('./features/landing-canvas/pages/LandingCanvasPage.jsx'));
+const BusinessProfilePage = lazyWithRetry(() => import('./pages/settings/BusinessProfilePage'));
+const InboxOutboxPage = lazyWithRetry(() => import('./pages/settings/InboxOutboxPage'));
+const MediaLibraryPage = lazyWithRetry(() => import('./pages/settings/MediaLibraryPage'));
+const ChatbotStudioPage = lazyWithRetry(() => import('./pages/studio/ChatbotStudioPage'));
+const ChannelTemplates = lazyWithRetry(() => import('./pages/templates/ChannelTemplates'));
+const Courses = lazyWithRetry(() => import('./pages/courses/Courses'));
+const Products = lazyWithRetry(() => import('./pages/products/Products'));
+const Orders = lazyWithRetry(() => import('./pages/orders/Orders'));
+const TopupPage = lazyWithRetry(() => import('./pages/billing/TopupPage'));
+const BillingHubPage = lazyWithRetry(() => import('./pages/billing/BillingHubPage'));
+const LandingLeadsListPage = lazyWithRetry(() => import('./pages/landing-leads/LandingLeadsListPage'));
+const PublicDataPolicyPage = lazyWithRetry(() => import('./pages/public/PublicDataPolicyPage'));
+const PublicDPA = lazyWithRetry(() => import('./pages/public/PublicDPA'));
+const TermsOfService = lazyWithRetry(() => import('./pages/public/TermsOfService'));
+const PricingPolicy = lazyWithRetry(() => import('./pages/public/PricingPolicy'));
+const PaymentPolicy = lazyWithRetry(() => import('./pages/public/PaymentPolicy'));
+const ComplaintPolicy = lazyWithRetry(() => import('./pages/public/ComplaintPolicy'));
+const RefundPolicy = lazyWithRetry(() => import('./pages/public/RefundPolicy'));
+const ServiceTerms = lazyWithRetry(() => import('./pages/public/ServiceTerms'));
+const ServiceDeliveryPolicy = lazyWithRetry(() => import('./pages/public/ServiceDeliveryPolicy'));
+const Support = lazyWithRetry(() => import('./pages/public/Support'));
+const RightsAndDuties = lazyWithRetry(() => import('./pages/public/RightsAndDuties'));
 import PolicyArchivedVersionPage from './pages/public/PolicyArchivedVersionPage';
-import TrialDemoPage from './pages/public/TrialDemoPage';
-import HeroPage from './pages/public/HeroPage';
-import PricingPage from './pages/public/PricingPage';
-import ContactPage from './pages/public/ContactPage';
-import HelpIndexPage from './pages/docs/HelpIndexPage';
-import HelpArticlePage from './pages/docs/HelpArticlePage';
+const TrialDemoPage = lazyWithRetry(() => import('./pages/public/TrialDemoPage'));
+const HeroPage = lazyWithRetry(() => import('./pages/public/HeroPage'));
+const PricingPage = lazyWithRetry(() => import('./pages/public/PricingPage'));
+const ContactPage = lazyWithRetry(() => import('./pages/public/ContactPage'));
+const HelpIndexPage = lazyWithRetry(() => import('./pages/docs/HelpIndexPage'));
+const HelpArticlePage = lazyWithRetry(() => import('./pages/docs/HelpArticlePage'));
 import LandingHtmlModeGate from './features/landing-customizer/components/LandingHtmlModeGate.jsx';
-import LpRendererPage from './pages/public/LpRendererPage';
-import LpRendererByHost from './pages/public/LpRendererByHost.jsx';
+const LpRendererPage = lazyWithRetry(() => import('./pages/public/LpRendererPage'));
+const LpRendererByHost = lazyWithRetry(() => import('./pages/public/LpRendererByHost.jsx'));
 // @deprecated Lớp tương thích cho landing page CŨ còn <iframe src="/embed/lead-form?...">
 // (khôi phục từ 50c05cd2 sau khi 3c514bc8 xoá — trang mới dùng founderai-capture.js). Gỡ
 // sau khi các trang cũ được lưu lại.
-import EmbedLeadFormPage from './pages/public/EmbedLeadFormPage';
-import PublicChatbotPage from './pages/public/PublicChatbotPage';
-import PublicFormPage from './features/forms/pages/PublicFormPage';
-import FormSubmissionStatusPage from './features/forms/pages/FormSubmissionStatusPage';
-import FormsListPage from './features/forms/pages/FormsListPage';
-import FormEditorPage from './features/forms/pages/FormEditorPage';
-import FormSubmissionsPage from './features/forms/pages/FormSubmissionsPage';
-import LearningPage from './pages/learning/LearningPage';
-import CheckoutPage from './pages/checkout/CheckoutPage';
-import PaymentSuccessPage from './pages/checkout/PaymentSuccess';
-import InvoicePage from './pages/invoices/InvoicePage';
-import AdminDashboard from './pages/admin/AdminDashboard';
-import AdminMembersPage from './pages/admin/AdminMembersPage';
-import AdminPlansPage from './pages/admin/AdminPlansPage';
-import AdminOrdersPage from './pages/admin/AdminOrdersPage';
-import AdminFormsPage from './pages/admin/AdminFormsPage';
-import AdminEinvoicesPage from './pages/admin/AdminEinvoicesPage';
-import AdminVouchersPage from './pages/admin/AdminVouchersPage';
-import AdminSystemPage from './pages/admin/AdminSystemPage';
-import AdminDeliveryMonitorPage from './pages/admin/AdminDeliveryMonitorPage';
-import AdminAiUsagePage from './pages/admin/AdminAiUsagePage';
-import AdminAiModelsPage from './pages/admin/AdminAiModelsPage';
-import AdminHelpArticlesPage from './pages/admin/AdminHelpArticlesPage';
-import AdminHelpArticleEditPage from './pages/admin/AdminHelpArticleEditPage';
-import AdminHelpUnansweredPage from './pages/admin/AdminHelpUnansweredPage';
-import AdminMenuCategoriesPage from './pages/admin/AdminMenuCategoriesPage';
-import AdminWelcomeEmailPage from './pages/admin/AdminWelcomeEmailPage';
-import AdminAlertsPage from './pages/admin/AdminAlertsPage';
-import AdminFunnelPage from './pages/admin/AdminFunnelPage';
-import AdminSystemHealthPage from './pages/admin/AdminSystemHealthPage';
-import AdminCronStatusPanel from './pages/admin/AdminCronStatusPanel';
-import AdminAiOpsPage from './pages/admin/AdminAiOpsPage';
-import DiagnosticPage from './pages/admin/DiagnosticPage';
-import NotificationCenter from './pages/admin/NotificationCenter';
-import AdminAuditLogsPage from './pages/admin/AdminAuditLogsPage';
-import LandingPageCustomizer from './pages/superadmin/LandingPageCustomizer';
-import AuditLogsPage from './pages/settings/AuditLogsPage';
-import UserDeliveryMonitorPage from './pages/campaigns/UserDeliveryMonitorPage';
+const EmbedLeadFormPage = lazyWithRetry(() => import('./pages/public/EmbedLeadFormPage'));
+const PublicChatbotPage = lazyWithRetry(() => import('./pages/public/PublicChatbotPage'));
+const PublicFormPage = lazyWithRetry(() => import('./features/forms/pages/PublicFormPage'));
+const FormSubmissionStatusPage = lazyWithRetry(() => import('./features/forms/pages/FormSubmissionStatusPage'));
+const FormsListPage = lazyWithRetry(() => import('./features/forms/pages/FormsListPage'));
+const FormEditorPage = lazyWithRetry(() => import('./features/forms/pages/FormEditorPage'));
+const FormSubmissionsPage = lazyWithRetry(() => import('./features/forms/pages/FormSubmissionsPage'));
+const LearningPage = lazyWithRetry(() => import('./pages/learning/LearningPage'));
+const CheckoutPage = lazyWithRetry(() => import('./pages/checkout/CheckoutPage'));
+const PaymentSuccessPage = lazyWithRetry(() => import('./pages/checkout/PaymentSuccess'));
+const InvoicePage = lazyWithRetry(() => import('./pages/invoices/InvoicePage'));
+const AdminDashboard = lazyWithRetry(() => import('./pages/admin/AdminDashboard'));
+const AdminMembersPage = lazyWithRetry(() => import('./pages/admin/AdminMembersPage'));
+const AdminPlansPage = lazyWithRetry(() => import('./pages/admin/AdminPlansPage'));
+const AdminOrdersPage = lazyWithRetry(() => import('./pages/admin/AdminOrdersPage'));
+const AdminFormsPage = lazyWithRetry(() => import('./pages/admin/AdminFormsPage'));
+const AdminEinvoicesPage = lazyWithRetry(() => import('./pages/admin/AdminEinvoicesPage'));
+const AdminVouchersPage = lazyWithRetry(() => import('./pages/admin/AdminVouchersPage'));
+const AdminSystemPage = lazyWithRetry(() => import('./pages/admin/AdminSystemPage'));
+const AdminDeliveryMonitorPage = lazyWithRetry(() => import('./pages/admin/AdminDeliveryMonitorPage'));
+const AdminAiUsagePage = lazyWithRetry(() => import('./pages/admin/AdminAiUsagePage'));
+const AdminAiModelsPage = lazyWithRetry(() => import('./pages/admin/AdminAiModelsPage'));
+const AdminHelpArticlesPage = lazyWithRetry(() => import('./pages/admin/AdminHelpArticlesPage'));
+const AdminHelpArticleEditPage = lazyWithRetry(() => import('./pages/admin/AdminHelpArticleEditPage'));
+const AdminHelpUnansweredPage = lazyWithRetry(() => import('./pages/admin/AdminHelpUnansweredPage'));
+const AdminMenuCategoriesPage = lazyWithRetry(() => import('./pages/admin/AdminMenuCategoriesPage'));
+const AdminWelcomeEmailPage = lazyWithRetry(() => import('./pages/admin/AdminWelcomeEmailPage'));
+const AdminAlertsPage = lazyWithRetry(() => import('./pages/admin/AdminAlertsPage'));
+const AdminFunnelPage = lazyWithRetry(() => import('./pages/admin/AdminFunnelPage'));
+const AdminSystemHealthPage = lazyWithRetry(() => import('./pages/admin/AdminSystemHealthPage'));
+const AdminCronStatusPanel = lazyWithRetry(() => import('./pages/admin/AdminCronStatusPanel'));
+const AdminAiOpsPage = lazyWithRetry(() => import('./pages/admin/AdminAiOpsPage'));
+const DiagnosticPage = lazyWithRetry(() => import('./pages/admin/DiagnosticPage'));
+const NotificationCenter = lazyWithRetry(() => import('./pages/admin/NotificationCenter'));
+const AdminAuditLogsPage = lazyWithRetry(() => import('./pages/admin/AdminAuditLogsPage'));
+const LandingPageCustomizer = lazyWithRetry(() => import('./pages/superadmin/LandingPageCustomizer'));
+const AuditLogsPage = lazyWithRetry(() => import('./pages/settings/AuditLogsPage'));
+const UserDeliveryMonitorPage = lazyWithRetry(() => import('./pages/campaigns/UserDeliveryMonitorPage'));
 import UnauthorizedScreen from './pages/auth/UnauthorizedScreen';
 import LoadingScreen from './components/LoadingScreen';
 import ProtectedRoute from './components/routes/ProtectedRoute';
 import PermissionRoute from './components/routes/PermissionRoute';
-import ActivatePage from './pages/auth/ActivatePage';
-import ForgotPasswordPage from './pages/auth/ForgotPasswordPage';
-import ResetPasswordPage from './pages/auth/ResetPasswordPage';
-import Marketplace from './pages/marketplace/Marketplace';
+const ActivatePage = lazyWithRetry(() => import('./pages/auth/ActivatePage'));
+const ForgotPasswordPage = lazyWithRetry(() => import('./pages/auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazyWithRetry(() => import('./pages/auth/ResetPasswordPage'));
+const Marketplace = lazyWithRetry(() => import('./pages/marketplace/Marketplace'));
 import { MarketplaceModalProvider } from './contexts/MarketplaceModalProvider';
 import { useMarketplaceModal } from './contexts/useMarketplaceModal';
 import MarketplaceModal from './components/marketplace/MarketplaceModal';
-import MarketplaceListingRedirect from './pages/marketplace/MarketplaceListingRedirect';
-import MarketplaceCreateRedirect from './pages/marketplace/MarketplaceCreateRedirect';
-import AdminMarketplace from './pages/marketplace/AdminMarketplace';
-import MarketplaceAnalytics from './pages/marketplace/MarketplaceAnalytics';
-import ListingSettings from './pages/marketplace/ListingSettings';
-import SellerDashboard from './pages/marketplace/SellerDashboard';
-import AffiliatePage from './pages/affiliate/AffiliatePage';
-import AdminAffiliatePage from './pages/admin/AdminAffiliatePage';
+const MarketplaceListingRedirect = lazyWithRetry(() => import('./pages/marketplace/MarketplaceListingRedirect'));
+const MarketplaceCreateRedirect = lazyWithRetry(() => import('./pages/marketplace/MarketplaceCreateRedirect'));
+const AdminMarketplace = lazyWithRetry(() => import('./pages/marketplace/AdminMarketplace'));
+const MarketplaceAnalytics = lazyWithRetry(() => import('./pages/marketplace/MarketplaceAnalytics'));
+const ListingSettings = lazyWithRetry(() => import('./pages/marketplace/ListingSettings'));
+const SellerDashboard = lazyWithRetry(() => import('./pages/marketplace/SellerDashboard'));
+const AffiliatePage = lazyWithRetry(() => import('./pages/affiliate/AffiliatePage'));
+const AdminAffiliatePage = lazyWithRetry(() => import('./pages/admin/AdminAffiliatePage'));
 import { getPostAuthPath } from './utils/authRedirect';
 
 // Chỉ self context (user_admin) được vào — employee context thấy màn hình unauthorized
@@ -229,7 +230,9 @@ function AppContent() {
     return (
       <>
         {toaster}
-        <LpRendererByHost />
+        <Suspense fallback={<LoadingScreen />}>
+          <LpRendererByHost />
+        </Suspense>
         {createPortal(<div id="modal-root"></div>, document.body)}
       </>
     );
@@ -243,6 +246,9 @@ function AppContent() {
           <ReferralCapture />
           <PostAuthGateModals />
           {toaster}
+          {/* Một Suspense bọc toàn bộ route lazy; trong khung app MainLayout có Suspense riêng ở chỗ
+              <Outlet /> để đổi trang không nháy mất sidebar/header. */}
+          <Suspense fallback={<LoadingScreen />}>
           <Routes>
           {/* Auth Routes */}
           <Route path="/login" element={
@@ -486,6 +492,7 @@ function AppContent() {
           {/* 404 - Nếu gõ sai thì quay về trang chủ Landing */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+          </Suspense>
         <MarketplaceModalRoot />
         </Router>
       </MarketplaceModalProvider>
