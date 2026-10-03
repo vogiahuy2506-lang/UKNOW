@@ -76,10 +76,23 @@ export async function fetchGoogleUrlContent({ type, id }) {
  * @param {Array} parts  - Gemini parts array (mutated in-place)
  * @param {string} content - message text to scan
  * @param {Map} cache - per-request Map<id, content|null> to avoid duplicate fetches
+ * @param {object} [options]
+ * @param {string[]} [options.excludeUrls] - URL Google ĐÃ chọn làm nguồn người nhận (C P1-6): KHÔNG tải, KHÔNG đưa nội dung bảng
+ *   (tên/SĐT/email khách cuối) cho Gemini — chỉ chèn một dòng báo để model không đoán nội dung. So khớp theo id tài liệu, nên
+ *   `/edit#gid=0` hay `/gviz/…` của cùng một sheet đều bị loại.
  */
-export async function attachGoogleUrlParts(parts, content, cache) {
+export async function attachGoogleUrlParts(parts, content, cache, { excludeUrls = [] } = {}) {
+  const excludedIds = new Set(
+    extractGoogleUrls((Array.isArray(excludeUrls) ? excludeUrls : []).join('\n')).map((u) => u.id),
+  );
   const urls = extractGoogleUrls(content);
   for (const info of urls) {
+    if (excludedIds.has(info.id)) {
+      parts.push({
+        text: `[Google Sheet "${info.url}" là danh sách người nhận đã chọn cho chiến dịch: nội dung bảng chứa dữ liệu cá nhân của khách nên KHÔNG gửi cho AI. Số người nhận và tên cột (nếu có) nằm ở khối WIZARD ĐÃ CHỐT (sheetRecipients) — không tự đếm, không đoán nội dung]`,
+      });
+      continue;
+    }
     if (!cache.has(info.id)) {
       cache.set(info.id, await fetchGoogleUrlContent(info));
     }

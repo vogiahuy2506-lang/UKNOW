@@ -19,6 +19,22 @@ import { resolveAllowedModel } from './aiModelPolicy.service.js';
  */
 const ASSISTANT_TIMEOUT_MS = 120000;
 
+// Tin "marker" của wizard: `[wizard]{"gate":"dataSource","value":"sheet","sheetUrl":"…"}\n<câu đọc được>`. Cùng khuôn
+// WIZARD_MARKER_RE ở aiCampaignWizard.service.js (không import: kéo cả module wizard vào transport, và nhiều spec mock từng phần).
+// Marker mang `sheetUrl` để model dùng URL cho node read_sheet — KHÔNG phải yêu cầu "hãy đọc nội dung sheet".
+const WIZARD_MARKER_FIRST_LINE_RE = /^\[wizard\]\{/;
+const isWizardMarkerContent = (content) => WIZARD_MARKER_FIRST_LINE_RE.test(String(content || '').split('\n')[0].trim());
+// Không import extractGoogleUrls từ googleUrlFetch.util.js: nhiều spec mock util đó chỉ với `attachGoogleUrlParts`.
+const GOOGLE_DOC_OR_SHEET_URL_RE = /https:\/\/docs\.google\.com\/(?:spreadsheets|document)\/d\//;
+const isImageFile = (file) => String(file?.contentType || '').toLowerCase().startsWith('image/');
+
+const droppedFilesNote = (names) => ({
+  text: `[Tệp đính kèm ở tin này (${names.map((n) => `"${n}"`).join(', ')}) đã được xử lý ở lượt trước và KHÔNG được gửi lại nội dung — có thể chứa dữ liệu cá nhân của khách. Chỉ dựa vào thông tin đã có trong hội thoại và khối CAMPAIGN_BRIEF; không đoán nội dung tệp. Cần xem lại thì đề nghị người dùng đính kèm lại ở tin mới]`,
+});
+const droppedGoogleUrlNote = () => ({
+  text: '[Liên kết Google Sheet/Docs trong tin này chỉ còn là đường dẫn: nội dung đã được đọc ở lượt trước và KHÔNG gửi lại (có thể chứa dữ liệu cá nhân của khách). Vẫn dùng đường dẫn khi cần (vd node read_sheet); không đoán nội dung, cần xem lại thì nhờ người dùng dán lại ở tin mới]',
+});
+
 /**
  * Shared Gemini chat transport — builds history, attaches files, calls API.
  * Moved out of aiCampaign.service.js (god-object split PR4).
@@ -40,6 +56,16 @@ const ASSISTANT_TIMEOUT_MS = 120000;
  *   Thiếu thì rơi về `userId` (đúng với chủ; nhân viên gọi mà quên truyền sẽ KHÔNG đọc được tệp của chủ — hỏng theo
  *   hướng an toàn, không phải hướng lộ tệp).
  * @param {string|null} [params.requestedModel]
+ * @param {'current'|'images'|'all'} [params.historyAttachments] — tệp/liên kết Google của các tin user CŨ có được đính lại cho
+ *   Gemini không (C P1-6, 03/10/2026). Mặc định `'current'`: chỉ tin user CUỐI (lượt hiện tại) được đính tệp + tải nội dung URL
+ *   Google. Trước đây MỌI tin user trong lịch sử đều bị đính lại ở mọi lượt: danh sách người nhận (Sheet ≤300 dòng, tệp Excel/CSV
+ *   nguyên văn) — tên/SĐT/email khách cuối — đi sang Google ở mọi lượt LLM còn lại của phiên (bên XỬ LÝ dữ liệu theo NĐ 13 không
+ *   được gửi nhiều hơn mức cần), và tốn token lặp. Tin cũ chỉ còn một dòng báo "đã xử lý, không gửi lại" để model không tưởng
+ *   là không có tệp. `'images'`: như `'current'` nhưng ẢNH ở tin cũ vẫn đính lại — dành cho brief `attached_file` + ảnh, nơi ảnh
+ *   là nguồn nội dung DUY NHẤT và chỉ có bytes (brief chỉ ghi "AI đọc trực tiếp từ dữ liệu ảnh", không có chữ để lưu).
+ *   `'all'`: hành vi cũ (đính lại tất cả) — chỉ trợ lý super admin dùng, vì hỏi-đáp nhiều lượt trên một tài liệu cần lại tệp cũ
+ *   mà nhánh đó không có brief để lưu bản trích.
+ * @param {string[]} [params.excludeGoogleUrls] — URL Google Sheet ĐÃ chọn làm nguồn người nhận: không bao giờ tải nội dung vào prompt.
  */
 export async function runChat({
   systemPrompt,
@@ -48,11 +74,13 @@ export async function runChat({
   userId = null,
   ownerUserId = null,
   requestedModel = null,
+  historyAttachments = 'current',
+  excludeGoogleUrls = [],
 } = {}) {
   const fileOwnerId = ownerUserId ?? userId;
   const googleUrlCache = new Map();
-  // Ngân sách inline PDF dạng ảnh (scan) cho cả lịch sử lẫn tin hiện tại của một request
-  // Ghi chú: lịch sử duyệt cũ → mới nên ngân sách có thể cạn trước tệp mới nhất; chấp nhận ở bản này (mỗi tệp scan thường 1–3 MB), ưu tiên tệp lượt hiện tại là việc sau.
+  // Ngân sách inline PDF dạng ảnh (scan) cho cả lịch sử lẫn tin hiện tại của một request. Từ khi tin cũ không còn đính lại
+  // (`historyAttachments` mặc định 'current') chỉ tin hiện tại tiêu ngân sách này, nên tệp mới nhất luôn được ưu tiên.
   let inlinePdfBudget = PDF_INLINE_BUDGET_BYTES;
 
   // Hàm đọc và đính kèm một file vào parts array
@@ -113,17 +141,44 @@ export async function runChat({
     }
   };
 
-  // Build Gemini history — re-attach files + Google URLs từ TẤT CẢ tin nhắn trong lịch sử
-  const geminiHistory = await Promise.all(history.map(async (msg) => {
+  // Tin user CUỐI = lượt hiện tại. Chỉ tin này được đính tệp + tải nội dung URL Google (xem `historyAttachments` ở đầu hàm).
+  let currentUserIdx = -1;
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    if (history[i]?.role === 'user') {
+      currentUserIdx = i;
+      break;
+    }
+  }
+
+  // Build Gemini history
+  const geminiHistory = await Promise.all(history.map(async (msg, idx) => {
     const parts = [{ text: msg.content || '(no text)' }];
     if (msg.role === 'user') {
-      if (Array.isArray(msg.files) && msg.files.length > 0) {
-        for (const file of msg.files) {
+      const msgFiles = Array.isArray(msg.files) ? msg.files : [];
+      // Tin marker wizard KHÔNG bao giờ kéo nội dung Sheet vào prompt, kể cả khi là tin hiện tại: sheetUrl trong marker là
+      // nguồn người nhận đã chọn — model chỉ cần URL (read_sheet) + tên cột/số dòng do hệ thống kiểm tất định.
+      const isMarker = isWizardMarkerContent(msg.content);
+      if (idx === currentUserIdx || historyAttachments === 'all') {
+        for (const file of msgFiles) {
           // eslint-disable-next-line no-await-in-loop
           await attachFileToParts(parts, file);
         }
+        if (!isMarker) {
+          await attachGoogleUrlParts(parts, msg.content, googleUrlCache, { excludeUrls: excludeGoogleUrls });
+        }
+      } else {
+        const droppedNames = [];
+        for (const file of msgFiles) {
+          if (historyAttachments === 'images' && isImageFile(file)) {
+            // eslint-disable-next-line no-await-in-loop
+            await attachFileToParts(parts, file);
+          } else {
+            droppedNames.push(file?.originalName || 'tệp');
+          }
+        }
+        if (droppedNames.length > 0) parts.push(droppedFilesNote(droppedNames));
+        if (!isMarker && GOOGLE_DOC_OR_SHEET_URL_RE.test(String(msg.content || ''))) parts.push(droppedGoogleUrlNote());
       }
-      await attachGoogleUrlParts(parts, msg.content, googleUrlCache);
     }
     return { role: msg.role === 'assistant' ? 'model' : 'user', parts };
   }));
