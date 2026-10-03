@@ -199,6 +199,7 @@ const UI_LABELS_IN_ARTICLES = [
   ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsType', 'Loại'],
   ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsHost', 'Tên (Host)'],
   ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsValue', 'Giá trị (Value)'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.freeLink.button', 'Dùng lại link miễn phí'],
   ['landing-page', 'leadFormConfig.addField', 'Thêm câu hỏi'],
   ['landing-page', 'leadFormConfig.askAiAdd', 'Nhờ AI thêm ô này'],
   // PR-F: hai cách thu thông tin + chọn biểu mẫu có sẵn (LeadFormConfigPanel).
