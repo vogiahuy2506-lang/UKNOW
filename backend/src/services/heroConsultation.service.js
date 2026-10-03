@@ -11,6 +11,7 @@
  */
 
 import IORedis from 'ioredis';
+import { ipKeyGenerator } from 'express-rate-limit';
 import db from '../config/database.js';
 import { vnDayKey } from '../utils/vnTimeFormat.util.js';
 import { resolveAllowedModel } from './ai/aiModelPolicy.service.js';
@@ -19,6 +20,10 @@ import { extractGeminiUsage } from '../utils/geminiClient.util.js';
 import { DEFAULT_AI_MODEL } from '../utils/aiModelTier.util.js';
 
 const MAX_FREE_CHATS = 5;
+// Tin nhắn vào thẳng prompt, không đăng nhập → trần cứng (D-01). Dài hơn → 400, không tốn lượt/không gọi AI.
+export const HERO_MAX_MESSAGE_CHARS = 1000;
+export const HERO_BUSY_MESSAGE =
+  'Tư vấn viên đang bận, bạn vui lòng để lại số điện thoại hoặc email, đội ngũ Founder AI sẽ liên hệ lại với bạn sớm nhất nhé.';
 const VISITOR_QUOTA_TTL_SEC = 24 * 60 * 60; // 24 hours
 const DAY_COUNTER_TTL_SEC = 172800; // 48 hours for calendar day cleanup
 
@@ -257,6 +262,14 @@ class HeroConsultationService {
     return envInt('HERO_IP_DAILY_CAP', 30);
   }
 
+  /**
+   * Trần ngân sách TOÀN tính năng mỗi ngày VN (mọi IP/visitor cộng lại). Tất cả lượt tư vấn dùng chung GEMINI_API_KEY
+   * với chatbot của khách — nếu bị đốt tới hết hạn mức Google thì chatbot của mọi khách trả 429 (D-01).
+   */
+  get heroDailyCap() {
+    return envInt('HERO_CONSULTATION_DAILY_CAP', 2000);
+  }
+
   async fetchFounderaiData() {
     if (this._skipDb) {
       return { plans: [], courses: [], lastUpdated: Date.now() };
@@ -345,7 +358,14 @@ class HeroConsultationService {
   }
 
   ipDayKey(ip) {
-    return `herochat:ip:${String(ip || '').trim()}:d:${vnDayKey()}`;
+    // Gom IPv6 theo khối /56 (cùng cách limiter express-rate-limit gom) — một người có cả khối /56 thì mỗi địa chỉ
+    // trong đó từng được 30 lượt/ngày riêng. IPv4 và IPv4-mapped (::ffff:a.b.c.d) giữ nguyên dạng IPv4.
+    const raw = String(ip || '').trim();
+    return `herochat:ip:${raw ? ipKeyGenerator(raw) : raw}:d:${vnDayKey()}`;
+  }
+
+  globalDayKey() {
+    return `herochat:global:d:${vnDayKey()}`;
   }
 
   /**
@@ -353,18 +373,36 @@ class HeroConsultationService {
    *
    * @param {Object} params
    * @param {string} params.visitorId - Unique visitor identifier
-   * @param {string} params.message - User's message
-   * @param {Array} [params.history] - Previous messages [{role, content}]
+   * @param {string} params.message - User's message (<= HERO_MAX_MESSAGE_CHARS)
    * @param {string} [params.ip] - Visitor client IP
+   *
+   * Không nhận `history` từ client (D-01/D-14): giao diện không gửi, và nhận vào chỉ mở đường nhồi prompt để đốt
+   * tiền Gemini hoặc chèn lượt "Trợ lý" giả để bot "xác nhận" khuyến mãi.
    * @returns {Promise<{success: boolean, reply?: string, chatsUsed?: number, code?: string, message?: string}>}
    */
-  async processChat({ visitorId, message, history = [], ip = '' }) {
-    if (!visitorId || !message?.trim()) {
+  async processChat({ visitorId, message, ip = '' }) {
+    if (!visitorId || typeof message !== 'string' || !message.trim()) {
       return { success: false, code: 'INVALID_INPUT', message: 'visitorId and message are required' };
+    }
+
+    // Trước mọi bộ đếm: tin quá dài không được tiêu lượt của khách, và tuyệt đối không tới được Gemini.
+    if (message.trim().length > HERO_MAX_MESSAGE_CHARS) {
+      return {
+        success: false,
+        code: 'MESSAGE_TOO_LONG',
+        message: `Tin nhắn quá dài (tối đa ${HERO_MAX_MESSAGE_CHARS.toLocaleString('vi-VN')} ký tự). Bạn vui lòng rút gọn rồi gửi lại nhé.`,
+      };
     }
 
     const cleanVisitorId = String(visitorId).trim();
     const cleanIp = String(ip || '').trim();
+
+    // 0. Trần ngân sách toàn tính năng/ngày: kiểm bằng ĐỌC trước để lượt bị từ chối vì "bận" không tiêu hạn mức
+    //    của khách (visitor 5 lượt / IP 30 lượt). Bước 2b bên dưới mới là phép tăng nguyên tử.
+    const globalKey = this.globalDayKey();
+    if ((await this.getCounter(globalKey)) >= this.heroDailyCap) {
+      return { success: false, code: 'BUSY', message: HERO_BUSY_MESSAGE };
+    }
 
     // 1. INCR Visitor Quota (5 chats) — atomic check
     const visitorKey = this.visitorKey(cleanVisitorId);
@@ -389,6 +427,16 @@ class HeroConsultationService {
           message: 'Ban da het luot chat mien phi trong ngay',
         };
       }
+    }
+
+    // 2b. Tăng bộ đếm ngân sách toàn tính năng — chỉ các lượt SẮP gọi Gemini mới được đếm. Phép tăng nguyên tử
+    //     chặn cả đợt đồng thời cùng vượt qua bước 0 (nếu vượt trần thì lượt này không gọi AI).
+    const globalCount = await this.incrWithTtl(globalKey, DAY_COUNTER_TTL_SEC);
+    if (globalCount > this.heroDailyCap) {
+      if (globalCount === this.heroDailyCap + 1) {
+        console.warn(`[HeroConsultation] Chạm trần ngân sách ngày (${this.heroDailyCap} lượt) — từ chối tới hết ngày VN, không gọi AI.`);
+      }
+      return { success: false, code: 'BUSY', message: HERO_BUSY_MESSAGE };
     }
 
     // Fetch real data from database
@@ -506,14 +554,8 @@ Người dùng hỏi: ${message}
 
 Trả lời (tiếng Việt có dấu, không markdown):`;
 
-    const historyText = history.length > 0
-      ? history.slice(-4).map(m => `${m.role === 'user' ? 'Nguoi dung' : 'Tro ly'}: ${m.content}`).join('\n') + '\n'
-      : '';
-
-    const fullPrompt = `${systemPrompt}\n\n${historyText}`;
-
     try {
-      const reply = await callGemini(fullPrompt);
+      const reply = await callGemini(systemPrompt);
 
       return {
         success: true,

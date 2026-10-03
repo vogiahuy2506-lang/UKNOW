@@ -139,6 +139,12 @@ export function createApp() {
   if (process.env.NODE_ENV !== 'test') {
     app.use(morgan('dev'));
   }
+  // Chat CÔNG KHAI (widget, trang chatbot công khai, tư vấn trang chủ): không đăng nhập, ai cũng gọi được →
+  // body tối đa 64kb. Parser này PHẢI đứng TRƯỚC parser 5mb bên dưới: body-parser đánh dấu `req._body` khi đã
+  // đọc xong nên parser toàn cục bỏ qua; đứng sau thì 5mb đã bị nuốt rồi (A P0-4/D-01: body 5 MB = ~1,3 USD/lượt Gemini).
+  // Tin tối đa 2.000 ký tự + 10 tin lịch sử × 1.000 ký tự + vài đính kèm ≈ chục KB nên 64kb dư. Không phải webhook,
+  // không cần rawBody. Body vượt trần → 413 (xử lý ở error handler bên dưới).
+  app.use(['/api/chatbot-public', '/api/public/hero'], express.json({ limit: '64kb' }));
   // Ghi lại raw body để xác thực chữ ký HMAC-SHA256 của webhook
   app.use(
     express.json({
@@ -331,6 +337,14 @@ export function createApp() {
         success: false,
         message: 'Tải tệp lên không hợp lệ',
         code: err.code || 'UPLOAD_ERROR',
+      });
+    }
+    // Body vượt trần của body-parser (vd chat công khai 64kb): 413 có câu tiếng Việt thay vì câu tiếng Anh của thư viện.
+    if (err && err.type === 'entity.too.large') {
+      return res.status(413).json({
+        success: false,
+        message: 'Nội dung gửi lên quá lớn. Bạn vui lòng rút gọn rồi gửi lại nhé.',
+        code: 'PAYLOAD_TOO_LARGE',
       });
     }
     console.error(err.stack);

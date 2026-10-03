@@ -5,6 +5,8 @@ import { publicChatLimiter } from '../middleware/rateLimiter.middleware.js';
 
 const router = express.Router();
 
+const MAX_VISITOR_ID_CHARS = 128;
+
 // Apply allow-all CORS for public access
 router.use(allowAllCorsMiddleware);
 
@@ -16,9 +18,10 @@ router.use(allowAllCorsMiddleware);
  * Different from /app chatbot which uses RAG and credit system
  *
  * Request body:
- *   - visitorId: string - Unique visitor identifier
- *   - message: string - User's message
- *   - history?: Array<{role: 'user'|'assistant', content: string}> - Previous messages
+ *   - visitorId: string - Unique visitor identifier (<= 128 chars)
+ *   - message: string - User's message (<= 1.000 chars, longer -> 400 MESSAGE_TOO_LONG)
+ *   - history: BỎ QUA. Giao diện không gửi; nhận từ client chỉ là bề mặt tấn công (chèn lượt "Trợ lý" giả để
+ *     bot "xác nhận" khuyến mãi, hoặc nhồi prompt để đốt tiền Gemini) — D-01/D-14, 03/10/2026.
  *
  * Response:
  *   - success: boolean
@@ -29,10 +32,15 @@ router.use(allowAllCorsMiddleware);
  */
 router.post('/consultation', publicChatLimiter, async (req, res) => {
   try {
-    const { visitorId, message, history } = req.body;
+    const { visitorId, message } = req.body || {};
     const clientIp = (req.ip || req.socket?.remoteAddress || '').trim();
 
-    if (!visitorId?.trim() || !message?.trim()) {
+    // Kiểu + độ dài: visitorId làm khoá Redis, message vào thẳng prompt. Phải là chuỗi (trước đây
+    // `visitorId?.trim()` ném TypeError → 500 khi client gửi số/đối tượng).
+    if (
+      typeof visitorId !== 'string' || !visitorId.trim() || visitorId.length > MAX_VISITOR_ID_CHARS
+      || typeof message !== 'string' || !message.trim()
+    ) {
       return res.status(400).json({
         success: false,
         code: 'INVALID_INPUT',
@@ -43,12 +51,12 @@ router.post('/consultation', publicChatLimiter, async (req, res) => {
     const result = await heroConsultationService.processChat({
       visitorId: visitorId.trim(),
       message: message.trim(),
-      history: Array.isArray(history) ? history : [],
       ip: clientIp,
     });
 
     if (!result.success) {
-      const statusCode = result.code === 'QUOTA_EXCEEDED' ? 200 : 400;
+      // QUOTA_EXCEEDED / BUSY là từ chối "mềm": giao diện đọc `code`/`message` để hiện câu cho khách, nên trả 200.
+      const statusCode = result.code === 'QUOTA_EXCEEDED' || result.code === 'BUSY' ? 200 : 400;
       return res.status(statusCode).json(result);
     }
 

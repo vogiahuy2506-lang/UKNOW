@@ -44,6 +44,7 @@ import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { extractContacts } from '../utils/contactDetect.util.js';
 import { buildContactAck } from '../utils/contactAck.util.js';
 import chatbotContactAlertRepository from '../repositories/chatbot/chatbotContactAlert.repository.js';
+import { sanitizePublicChatHistory, validatePublicChatMessage } from '../utils/publicChatInput.util.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
@@ -1104,13 +1105,10 @@ class ChatbotController {
           allow_attachments: chatbot.allow_attachments === true,
           // Tuy chinh trang /chat/:id (iFrame + Public Link): an/hien thanh header.
           embed_show_header: chatbot.embed_show_header !== false,
-          // AI settings - public endpoint can doc de iframe render dung
-          // model/temperature/max_tokens user da set trong ChatbotConfigModal.
+          // CHỈ giữ response_style (kiểu trả lời, không nhạy cảm). KHÔNG trả system_instruction / temperature /
+          // max_tokens / ai_model ở API công khai: id chatbot là số tuần tự, ai lặp /chatbot/1..N cũng gom được chỉ
+          // dẫn hệ thống (giá sỉ, quy trình nội bộ…) của mọi khách. FE công khai không đọc các trường này (A P1-5).
           response_style: chatbot.response_style || 'friendly',
-          temperature: chatbot.temperature ?? 0.7,
-          max_tokens: chatbot.max_tokens || 2048,
-          ai_model: chatbot.ai_model || 'gemini-2.5-flash',
-          system_instruction: chatbot.system_instruction || '',
         },
       });
     } catch (err) {
@@ -1167,12 +1165,9 @@ class ChatbotController {
           allowAttachments: chatbot.allow_attachments === true,
           // Tu dong mo khung chat sau 2s (widget.js quyet dinh 1 lan/phien).
           autoOpen: chatbot.widget_auto_open === true,
-          // AI settings - widget.js co the dung de tuy bien prompt neu sau nay can
+          // Không trả systemInstruction / temperature / maxTokens / aiModel ở config công khai (A P1-5) —
+          // widget.js chỉ đọc màu/giao diện, không dùng các trường này.
           responseStyle: chatbot.response_style || 'friendly',
-          temperature: chatbot.temperature ?? 0.7,
-          maxTokens: chatbot.max_tokens || 2048,
-          aiModel: chatbot.ai_model || 'gemini-2.5-flash',
-          systemInstruction: chatbot.system_instruction || '',
         },
       });
     } catch (err) {
@@ -1577,6 +1572,12 @@ class ChatbotController {
       const { widgetKey } = req.params;
       const { message, history, sessionId, attachments } = req.body;
 
+      // Chặn trước mọi việc tốn DB/AI: tin quá dài là đường đốt tiền Gemini (A P0-4).
+      const messageError = validatePublicChatMessage(message);
+      if (messageError) {
+        return res.status(messageError.status).json(messageError.body);
+      }
+
       if (!message?.trim() && !(Array.isArray(attachments) && attachments.length)) {
         return res.status(400).json({ success: false, message: 'message is required' });
       }
@@ -1768,8 +1769,9 @@ class ChatbotController {
         contactAck = buildContactAck(extractedContacts, ownerContact);
       }
 
+      // `history` do client tự khai → làm sạch (≤ 10 tin × ≤ 1.000 ký tự, chỉ user/assistant, bỏ tin cuối trùng tin hiện tại).
       const fullHistory = [
-        ...(history || []),
+        ...sanitizePublicChatHistory(history, userContent),
         { role: 'user', content: userContent, attachments: currentAttachments },
       ];
 
@@ -1846,6 +1848,13 @@ class ChatbotController {
     let chatbotUserId = null;
     try {
       const { chatbotId } = req.params;
+
+      // Chặn trước mọi việc tốn DB/AI (A P0-4) — xem chatWithCustomChatbot.
+      const messageError = validatePublicChatMessage(req.body?.message);
+      if (messageError) {
+        return res.status(messageError.status).json(messageError.body);
+      }
+
       const chatbot = await resolvePublicChatbotParam(chatbotId);
 
       if (!chatbot) {
@@ -2040,8 +2049,9 @@ class ChatbotController {
         contactAck = buildContactAck(extractedContacts, ownerContact);
       }
 
+      // `history` do client tự khai → làm sạch (≤ 10 tin × ≤ 1.000 ký tự, chỉ user/assistant, bỏ tin cuối trùng tin hiện tại).
       const fullHistory = [
-        ...(history || []),
+        ...sanitizePublicChatHistory(history, userContent),
         { role: 'user', content: userContent, attachments: currentAttachments },
       ];
 
