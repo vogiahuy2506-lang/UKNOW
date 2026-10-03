@@ -106,13 +106,30 @@ describe('LeadFormConfigPanel', () => {
   /**
    * 03/10/2026: bản xem trước viết cứng formCopy thiếu firstName/lastName (FounderLeadFormCard dùng khi
    * nameMode='split') → hai ô Họ / Tên ra không nhãn; và có câu "Bảo mật tuyệt đối" (NĐ 248). Nay lấy
-   * chữ từ LANDING_COPY — cùng nguồn với form công khai (EmbedLeadFormPage).
+   * chữ từ LANDING_COPY — cùng nguồn với form công khai (EmbedLeadFormPage). Xem trước thu vào nút,
+   * mặc định đóng — các ca dưới mở nó trước.
    */
   describe('xem trước form lấy chữ từ cùng nguồn với form công khai', () => {
     const copy = LANDING_COPY.vi.form;
+    const openPreview = () => fireEvent.click(screen.getByRole('button', { name: 'Xem trước form' }));
+
+    it('mặc định ĐÓNG: chưa render khung form; bấm "Xem trước form" mở, "Ẩn xem trước" đóng lại', () => {
+      render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+
+      expect(screen.queryByText(copy.secureNote)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Xem trước form' })).toHaveAttribute('aria-expanded', 'false');
+
+      openPreview();
+      expect(screen.getByText(copy.secureNote)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Ẩn xem trước' })).toHaveAttribute('aria-expanded', 'true');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ẩn xem trước' }));
+      expect(screen.queryByText(copy.secureNote)).not.toBeInTheDocument();
+    });
 
     it('nameMode mặc định (split) → có nhãn ô Họ và ô Tên, không ô nào thiếu nhãn', () => {
       render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+      openPreview();
 
       // Ghim chữ thật (không suy từ copy): copy mất khoá thì nhãn rỗng, test vẫn phải đỏ vì lý do đúng.
       expect(screen.getByLabelText(/^Họ\s/)).toBeInTheDocument();
@@ -123,6 +140,7 @@ describe('LeadFormConfigPanel', () => {
 
     it('dòng dưới nút gửi đúng bằng LANDING_COPY.vi.form.secureNote và không chứa "tuyệt đối"', () => {
       const { container } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+      openPreview();
 
       expect(screen.getByText(copy.secureNote)).toBeInTheDocument();
       expect(container.textContent).not.toMatch(/tuyệt đối/i);
@@ -130,11 +148,97 @@ describe('LeadFormConfigPanel', () => {
 
     it('tiêu đề / nhãn Email / SĐT / nút gửi cũng là chữ của form công khai', () => {
       render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+      openPreview();
 
       expect(screen.getByText(copy.embedTitle)).toBeInTheDocument();
       expect(screen.getByLabelText(new RegExp(`^${copy.email}`))).toBeInTheDocument();
       expect(screen.getByLabelText(new RegExp(`^${copy.phone}`))).toBeInTheDocument();
       expect(screen.getByRole('button', { name: new RegExp(`^${copy.submit}`) })).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * 03/10/2026 PR-1: chọn 1 trong 2 cách thu thông tin khách — chỉ hiện chi tiết của lựa chọn đang chọn
+   * (trước đây gộp cả hai hệ thống trong một màn).
+   */
+  describe('chọn 1 trong 2: Form cơ bản / Dùng biểu mẫu đã tạo', () => {
+    const BASIC_MARK = 'Các trường mặc định';
+    const LINKED_PICKER_MARK = 'Chọn biểu mẫu để liên kết vào trang:';
+
+    it('mặc định (chưa có biểu mẫu gắn) → "Form cơ bản" được chọn, chỉ hiện cấu hình form cơ bản', () => {
+      render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+
+      expect(screen.getByRole('radio', { name: 'Form cơ bản' })).toBeChecked();
+      expect(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' })).not.toBeChecked();
+      expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
+      expect(screen.getByText('Luôn có: Họ tên, Email, Số điện thoại.')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Thêm câu hỏi' })).toBeInTheDocument();
+      expect(screen.queryByText(LINKED_PICKER_MARK)).not.toBeInTheDocument();
+    });
+
+    it('chọn "Dùng biểu mẫu đã tạo" → ẨN cấu hình form cơ bản, hiện bộ chọn biểu mẫu; chọn lại "Form cơ bản" thì ngược lại', () => {
+      render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' }));
+
+      expect(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' })).toBeChecked();
+      expect(screen.queryByText(BASIC_MARK)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Thêm câu hỏi' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Xem trước form' })).not.toBeInTheDocument();
+      expect(screen.getByText(LINKED_PICKER_MARK)).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Tạo biểu mẫu mới/ })).toHaveAttribute('href', '/app/forms/new');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Form cơ bản' }));
+
+      expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
+      expect(screen.queryByText(LINKED_PICKER_MARK)).not.toBeInTheDocument();
+    });
+
+    it('trang ĐANG có biểu mẫu gắn (linkedFormId) → mở sẵn ở "Dùng biểu mẫu đã tạo", không hiện cấu hình form cơ bản', () => {
+      render(<LeadFormConfigPanel form={makeForm({ linkedFormId: 42 })} setForm={vi.fn()} t={t} />);
+
+      expect(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' })).toBeChecked();
+      expect(screen.getByText('Trang đang liên kết với biểu mẫu')).toBeInTheDocument();
+      expect(screen.getByText('Biểu mẫu #42')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: /Mở sửa biểu mẫu/ })).toHaveAttribute('href', '/app/forms/42/edit');
+      expect(screen.queryByText(BASIC_MARK)).not.toBeInTheDocument();
+    });
+
+    it('đổi lựa chọn chỉ đổi phần hiển thị, KHÔNG đổi dữ liệu (setForm không được gọi)', () => {
+      const setForm = vi.fn();
+      render(<LeadFormConfigPanel form={makeForm({ linkedFormId: 42 })} setForm={setForm} t={t} />);
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Form cơ bản' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' }));
+
+      expect(setForm).not.toHaveBeenCalled();
+    });
+
+    it('không còn nhãn "Khuyên dùng" (0/69 trang dùng) và không lộ khoá i18n thô ở cả hai lựa chọn', () => {
+      const { container } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+      expect(container.textContent).not.toContain('Khuyên dùng');
+      expect(container.textContent).not.toContain('leadFormConfig.');
+
+      fireEvent.click(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' }));
+      expect(container.textContent).not.toContain('Khuyên dùng');
+      expect(container.textContent).not.toContain('leadFormConfig.');
+    });
+
+    it('danh sách câu hỏi thêm chỉ hiện khi có; chưa có thì hiện dòng gợi ý', () => {
+      const { unmount } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+      expect(screen.getByText(/Chưa có câu hỏi thêm/)).toBeInTheDocument();
+      unmount();
+
+      render(
+        <LeadFormConfigPanel
+          form={makeForm({ leadFormConfig: { ...defaultLeadFormConfig(), customFields: [makeCustomField()] } })}
+          setForm={vi.fn()}
+          t={t}
+        />
+      );
+      expect(screen.getByRole('combobox')).toBeInTheDocument();
+      expect(screen.queryByText(/Chưa có câu hỏi thêm/)).not.toBeInTheDocument();
     });
   });
 

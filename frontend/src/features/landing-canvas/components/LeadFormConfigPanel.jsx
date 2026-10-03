@@ -8,13 +8,14 @@ import {
   HiOutlineChevronDown as HiOutlineExpand,
   HiOutlineExclamation,
   HiOutlineExternalLink,
-  HiOutlineSparkles,
   HiOutlineClipboardList,
   HiOutlineCheck,
   HiOutlineRefresh,
   HiOutlineDocumentDuplicate,
   HiOutlineX,
   HiOutlineCheckCircle,
+  HiOutlineEye,
+  HiOutlineEyeOff,
 } from 'react-icons/hi';
 import { FounderLeadFormCard } from '../../landing/components/FounderLeadFormCard.jsx';
 // Cùng nguồn chữ với form công khai (EmbedLeadFormPage) — không viết cứng lại: bản viết cứng trước
@@ -49,6 +50,16 @@ const emptyCustomField = () => ({
 });
 
 /**
+ * Điền `{tham_số}` vào chuỗi i18n. `t` của panel là prop (test truyền bản không nhận tham số), nên tự
+ * thay ở đây thay vì trông vào `t(key, params)`.
+ */
+function fmt(template, params = {}) {
+  return String(template ?? '').replace(/\{(\w+)\}/g, (match, name) =>
+    params[name] === undefined ? match : String(params[name])
+  );
+}
+
+/**
  * PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-3 việc 3: form.htmlContent có thật sự chứa
  * ô name="<khoá>" của trường này chưa — cảnh báo "trang chưa có ô này" + nút "Nhờ AI thêm ô
  * này". Sửa 09/09: thêm mức 2 — ô có nhưng mã lựa chọn không khớp cấu hình (sự cố slug-test,
@@ -64,10 +75,12 @@ function fieldHtmlIssue(html, key, optionValues) {
 }
 
 /**
- * Cấu hình field form lead — Phase 6+ UI gọn:
- *  - Toggle occupation/interest dạng inline-card.
- *  - Custom fields dạng **inline-card** mặc định (1 hàng ngang), bấm caret để mở rộng.
- *  - Xem trước form ở cuối (nameMode đến từ LeadFormSettingsPanel).
+ * Cấu hình form thu khách của landing — CHỌN 1 TRONG 2 (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU 03/10/2026):
+ *  - "Form cơ bản" (mặc định): Họ tên / Email / SĐT cố định + 2 ô tích Nghề nghiệp / Lĩnh vực + câu hỏi thêm
+ *    (trường tuỳ chỉnh). Xem trước form thu vào nút, mặc định đóng.
+ *  - "Dùng biểu mẫu đã tạo" (= `linkedFormId`): chọn biểu mẫu trong module Forms. Trang đang có
+ *    `linkedFormId` thì mở sẵn ở lựa chọn này.
+ * Chỉ hiện chi tiết của lựa chọn đang chọn; đổi lựa chọn KHÔNG đổi dữ liệu (chỉ đổi phần hiển thị).
  */
 export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'split' }) {
   const config = normalizeLeadFormConfig(form.leadFormConfig || defaultLeadFormConfig());
@@ -76,7 +89,11 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
   const fieldErrors = form.leadFormFieldErrors || {};
   const htmlContent = form.htmlContent || '';
   const hasHtml = Boolean(htmlContent.trim());
+  const tf = (key, params) => fmt(t(key), params);
 
+  // 'basic' | 'linked' — trang đang có biểu mẫu gắn thì mở sẵn ở "linked".
+  const [mode, setMode] = useState(() => (form?.linkedFormId ? 'linked' : 'basic'));
+  const [previewOpen, setPreviewOpen] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set());
   // Khoá đang chờ AI thêm ô (Nhờ AI thêm ô này) — theo dõi riêng từng field để chỉ khoá đúng
   // nút đang gọi, không khoá cả panel.
@@ -106,13 +123,15 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
     }
   };
 
+  // Danh sách biểu mẫu chỉ cần khi người dùng ở lựa chọn "Dùng biểu mẫu đã tạo" — Form cơ bản không gọi API này.
   useEffect(() => {
-    loadForms();
-  }, []);
+    if (mode === 'linked') loadForms();
+  }, [mode]);
 
   useEffect(() => {
     if (form?.linkedFormId) {
       setSelectedFormId(String(form.linkedFormId));
+      setMode('linked');
     }
   }, [form?.linkedFormId]);
 
@@ -132,7 +151,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
   const handleApplyLinkedForm = (formItem) => {
     const target = formItem || currentlySelectedForm;
     if (!target) {
-      toast.error('Vui lòng chọn một biểu mẫu trước khi áp dụng.');
+      toast.error(t('leadFormConfig.toastPickFirst'));
       return;
     }
 
@@ -152,7 +171,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
       htmlContent: updatedHtml,
     }));
     setIsDropdownOpen(false);
-    toast.success(`Đã áp dụng biểu mẫu "${target.title}" vào trang!`);
+    toast.success(tf('leadFormConfig.toastApplied', { title: target.title }));
   };
 
   const handleUnlinkForm = () => {
@@ -160,22 +179,22 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
       ...prev,
       linkedFormId: null,
     }));
-    toast.success('Đã huỷ liên kết biểu mẫu. Trang sẽ dùng form HTML nội tuyến.');
+    toast.success(t('leadFormConfig.toastUnlinked'));
   };
 
   const handleCopyEmbedCode = (targetForm) => {
     const target = targetForm || currentlySelectedForm || activeLinkedForm;
     if (!target || !target.publicKey) {
-      toast.error('Biểu mẫu này chưa có mã công khai hoặc chưa được lưu.');
+      toast.error(t('leadFormConfig.toastNoPublicKey'));
       return;
     }
     const origin = typeof window !== 'undefined' ? window.location.origin : '';
     const embedHtml = `<div data-founderai-form="${target.publicKey}">\n  <iframe src="${origin}/f/${target.publicKey}?embed=1" style="width:100%;border:0;min-height:500px" title="${target.title}"></iframe>\n</div>\n<script src="${origin}/form-embed.js" defer></script>`;
     if (navigator?.clipboard?.writeText) {
       navigator.clipboard.writeText(embedHtml);
-      toast.success('Đã sao chép mã nhúng HTML vào bộ nhớ tạm!');
+      toast.success(t('leadFormConfig.toastEmbedCopied'));
     } else {
-      toast.success('Đã tạo mã nhúng!');
+      toast.success(t('leadFormConfig.toastEmbedCreated'));
     }
   };
 
@@ -199,21 +218,21 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
       });
       const nextHtml = result?.data?.html || result?.html;
       if (!nextHtml) {
-        throw new Error(result?.message || 'AI không trả về HTML hợp lệ.');
+        throw new Error(result?.message || t('leadFormConfig.aiNoHtml'));
       }
       setForm((prev) => ({ ...prev, htmlContent: nextHtml }));
       // Vẫn nhận HTML (admin có Hoàn tác) nhưng báo đúng sự thật: AI có thể thêm ô mà ghi sai mã
       // lựa chọn — khi đó cảnh báo "không khớp mã" sẽ còn nguyên trên panel.
       const issue = fieldHtmlIssue(nextHtml, key, optionValues);
       if (issue === 'missing') {
-        toast.error('AI trả HTML nhưng vẫn chưa có ô này. Hãy thử lại.');
+        toast.error(t('leadFormConfig.aiStillMissing'));
       } else if (issue === 'mismatch') {
-        toast.error('AI đã thêm ô nhưng mã lựa chọn chưa đúng. Hãy bấm "Nhờ AI sửa ô này" lần nữa.');
+        toast.error(t('leadFormConfig.aiMismatch'));
       } else {
-        toast.success('AI đã thêm ô vào form.');
+        toast.success(t('leadFormConfig.aiAdded'));
       }
     } catch (e) {
-      toast.error(e?.response?.data?.message || e?.message || 'Không nhờ được AI thêm ô này.');
+      toast.error(e?.response?.data?.message || e?.message || t('leadFormConfig.aiFailed'));
     } finally {
       setAskingKeys((prev) => {
         const next = new Set(prev);
@@ -279,424 +298,455 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
     customFields: {},
   };
 
+  const fixedFieldRows = [
+    { key: 'occupation', label: t('leadFormConfig.occupationLabel'), visible: config.fixedFields.occupation.visible },
+    { key: 'interestArea', label: t('leadFormConfig.interestLabel'), visible: config.fixedFields.interestArea.visible },
+  ];
+
   return (
-    <div className="space-y-6">
-      {/* Khối tích hợp Biểu mẫu hệ thống (Forms Module) */}
-      {form?.linkedFormId ? (
-        <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/90 to-indigo-50/40 p-5 space-y-4 shadow-2xs">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 shrink-0 mt-0.5 shadow-2xs">
-                <HiOutlineClipboardList className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h4 className="text-sm font-bold text-blue-950">
-                    Trang đang liên kết với Biểu mẫu chuyên nghiệp
-                  </h4>
-                  <span className="text-[11px] font-semibold bg-blue-200/80 text-blue-800 px-2.5 py-0.5 rounded-full">
-                    #{form.linkedFormId}
-                  </span>
-                  {activeLinkedForm?.isPublished !== undefined && (
-                    <span
-                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                        activeLinkedForm.isPublished
-                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                          : 'bg-amber-100 text-amber-800 border border-amber-200'
-                      }`}
-                    >
-                      {activeLinkedForm.isPublished ? 'Đã xuất bản' : 'Bản nháp'}
-                    </span>
-                  )}
+    <div className="space-y-5">
+      {/* Chọn 1 trong 2 cách thu thông tin khách */}
+      <div
+        role="radiogroup"
+        aria-label={t('leadFormConfig.modeLabel')}
+        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
+      >
+        <ModeOption
+          value="basic"
+          checked={mode === 'basic'}
+          onSelect={() => setMode('basic')}
+          title={t('leadFormConfig.modeBasic')}
+          description={t('leadFormConfig.modeBasicDesc')}
+        />
+        <ModeOption
+          value="linked"
+          checked={mode === 'linked'}
+          onSelect={() => setMode('linked')}
+          title={t('leadFormConfig.modeLinked')}
+          description={t('leadFormConfig.modeLinkedDesc')}
+        />
+      </div>
+
+      {mode === 'linked' ? (
+        /* Khối tích hợp Biểu mẫu hệ thống (Forms Module) */
+        form?.linkedFormId ? (
+          <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/90 to-indigo-50/40 p-5 space-y-4 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 shrink-0 mt-0.5 shadow-2xs">
+                  <HiOutlineClipboardList className="w-5 h-5" />
                 </div>
-                <p className="text-xs font-medium text-blue-900">
-                  {activeLinkedForm?.title || `Biểu mẫu #${form.linkedFormId}`}
-                  {activeLinkedForm?.fields?.length ? ` (${activeLinkedForm.fields.length} trường thông tin)` : ''}
-                </p>
-                <p className="text-xs text-blue-800/80 leading-relaxed">
-                  Biểu mẫu này được quản lý tập trung: hỗ trợ tải tệp, logic phân nhánh, đặt lịch hẹn và bài nộp nâng cao.
-                </p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h4 className="text-sm font-bold text-blue-950">{t('leadFormConfig.linkedTitle')}</h4>
+                    <span className="text-[11px] font-semibold bg-blue-200/80 text-blue-800 px-2.5 py-0.5 rounded-full">
+                      #{form.linkedFormId}
+                    </span>
+                    {activeLinkedForm?.isPublished !== undefined && (
+                      <span
+                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                          activeLinkedForm.isPublished
+                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                            : 'bg-amber-100 text-amber-800 border border-amber-200'
+                        }`}
+                      >
+                        {activeLinkedForm.isPublished
+                          ? t('leadFormConfig.linkedPublished')
+                          : t('leadFormConfig.linkedDraft')}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs font-medium text-blue-900">
+                    {activeLinkedForm?.fields?.length
+                      ? tf('leadFormConfig.linkedTitleWithFields', {
+                          title:
+                            activeLinkedForm?.title ||
+                            tf('leadFormConfig.linkedFallbackTitle', { id: form.linkedFormId }),
+                          count: activeLinkedForm.fields.length,
+                        })
+                      : activeLinkedForm?.title ||
+                        tf('leadFormConfig.linkedFallbackTitle', { id: form.linkedFormId })}
+                  </p>
+                  <p className="text-xs text-blue-800/80 leading-relaxed">{t('leadFormConfig.linkedDesc')}</p>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
-              <a
-                href={`/app/forms/${form.linkedFormId}/edit`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
-              >
-                <span>Mở sửa Biểu mẫu</span>
-                <HiOutlineExternalLink className="w-3.5 h-3.5" />
-              </a>
-              <button
-                type="button"
-                onClick={handleUnlinkForm}
-                className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 hover:text-red-600 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl transition"
-                title="Huỷ liên kết với biểu mẫu này để quay lại form nội tuyến"
-              >
-                <HiOutlineX className="w-3.5 h-3.5" />
-                <span>Huỷ liên kết</span>
-              </button>
-            </div>
-          </div>
-
-          {/* Trạng thái vị trí hiển thị trong HTML */}
-          <div className="pt-3 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-            {htmlContent.includes('data-founderai-form-slot') || htmlContent.includes('data-founderai-form') ? (
-              <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
-                <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                <span>Đã có vị trí hiển thị (slot) của biểu mẫu này trong HTML trang.</span>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-amber-800 bg-amber-50/90 border border-amber-200 px-3 py-1.5 rounded-lg flex-1 justify-between flex-wrap">
-                <span className="font-medium">
-                  ⚠️ Trang chưa có thẻ vị trí (slot) để hiển thị biểu mẫu.
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleApplyLinkedForm(activeLinkedForm)}
-                  className="px-2.5 py-1 text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300 rounded-md transition"
-                >
-                  Chèn vị trí form vào trang ngay
-                </button>
-              </div>
-            )}
-
-            <button
-              type="button"
-              onClick={() => handleCopyEmbedCode(activeLinkedForm)}
-              className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-medium self-end sm:self-auto py-1"
-            >
-              <HiOutlineDocumentDuplicate className="w-3.5 h-3.5" />
-              <span>Sao chép mã nhúng HTML</span>
-            </button>
-          </div>
-        </div>
-      ) : (
-        <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 via-purple-50/30 to-white p-5 space-y-4 shadow-2xs">
-          <div className="flex items-start gap-3">
-            <div className="p-2.5 rounded-xl bg-indigo-100 text-indigo-700 shrink-0 mt-0.5 shadow-2xs">
-              <HiOutlineSparkles className="w-5 h-5" />
-            </div>
-            <div className="space-y-1 flex-1">
-              <div className="flex items-center gap-2 flex-wrap">
-                <h4 className="text-sm font-bold text-gray-900">
-                  Sử dụng Biểu mẫu có sẵn từ module Forms
-                </h4>
-                <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-100 px-2.5 py-0.5 rounded-full">
-                  Khuyên dùng
-                </span>
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Tận dụng các biểu mẫu chuyên nghiệp bạn đã tạo với đầy đủ tính năng: tải tệp, đánh giá sao, câu hỏi trắc nghiệm, đặt lịch hẹn, thanh toán MoMo/Bank...
-              </p>
-            </div>
-          </div>
-
-          {/* Bộ chọn Biểu mẫu có sẵn */}
-          <div className="pt-2 border-t border-indigo-100/70 space-y-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-semibold text-gray-700">Chọn biểu mẫu để liên kết vào trang:</span>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={loadForms}
-                  disabled={loadingForms}
-                  className="inline-flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition"
-                  title="Làm mới danh sách biểu mẫu"
-                >
-                  <HiOutlineRefresh className={`w-3.5 h-3.5 ${loadingForms ? 'animate-spin' : ''}`} />
-                  <span>Làm mới</span>
-                </button>
+              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
                 <a
-                  href="/app/forms/new"
+                  href={`/app/forms/${form.linkedFormId}/edit`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold"
+                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
                 >
-                  <span>+ Tạo biểu mẫu mới</span>
-                  <HiOutlineExternalLink className="w-3 h-3" />
+                  <span>{t('leadFormConfig.linkedOpenEdit')}</span>
+                  <HiOutlineExternalLink className="w-3.5 h-3.5" />
                 </a>
+                <button
+                  type="button"
+                  onClick={handleUnlinkForm}
+                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 hover:text-red-600 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl transition"
+                  title={t('leadFormConfig.linkedUnlinkTitle')}
+                >
+                  <HiOutlineX className="w-3.5 h-3.5" />
+                  <span>{t('leadFormConfig.linkedUnlink')}</span>
+                </button>
               </div>
             </div>
 
-            {/* Custom Dropdown Selector (tránh dùng thẻ select role="combobox" để không xung đột test) */}
-            <div className="relative" ref={dropdownRef}>
-              <button
-                type="button"
-                onClick={() => setIsDropdownOpen((prev) => !prev)}
-                className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white border border-gray-300 hover:border-indigo-400 rounded-xl text-left text-xs font-medium text-gray-800 shadow-2xs transition"
-              >
-                <div className="truncate">
-                  {currentlySelectedForm ? (
-                    <span className="flex items-center gap-2">
-                      <span className="font-semibold text-gray-900">{currentlySelectedForm.title}</span>
-                      <span className="text-gray-400">({currentlySelectedForm.fields?.length || 0} trường)</span>
-                      <span
-                        className={`text-[10px] px-1.5 py-0.5 rounded ${
-                          currentlySelectedForm.isPublished
-                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            : 'bg-gray-100 text-gray-600'
-                        }`}
-                      >
-                        {currentlySelectedForm.isPublished ? 'Đã xuất bản' : 'Bản nháp'}
-                      </span>
-                    </span>
-                  ) : (
-                    <span className="text-gray-500">
-                      {formsList.length > 0
-                        ? `-- Nhấn để chọn một biểu mẫu (${formsList.length} biểu mẫu khả dụng) --`
-                        : loadingForms
-                        ? 'Đang tải danh sách biểu mẫu...'
-                        : '-- Chưa có biểu mẫu nào trong tài khoản --'}
-                    </span>
-                  )}
+            {/* Trạng thái vị trí hiển thị trong HTML */}
+            <div className="pt-3 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+              {htmlContent.includes('data-founderai-form-slot') || htmlContent.includes('data-founderai-form') ? (
+                <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                  <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                  <span>{t('leadFormConfig.slotOk')}</span>
                 </div>
-                <HiOutlineChevronDown className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
-              </button>
-
-              {isDropdownOpen && (
-                <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 max-h-60 overflow-y-auto">
-                  {formsList.length === 0 ? (
-                    <div className="p-3 text-center text-xs text-gray-500">
-                      {loadingForms ? 'Đang tải danh sách...' : 'Chưa có biểu mẫu nào. Hãy nhấn "+ Tạo biểu mẫu mới".'}
-                    </div>
-                  ) : (
-                    formsList.map((f) => (
-                      <button
-                        key={f.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedFormId(String(f.id));
-                          setIsDropdownOpen(false);
-                        }}
-                        className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs hover:bg-indigo-50/70 transition ${
-                          String(selectedFormId) === String(f.id)
-                            ? 'bg-indigo-50 font-semibold text-indigo-900'
-                            : 'text-gray-700'
-                        }`}
-                      >
-                        <div className="truncate">
-                          <span className="block font-medium">{f.title || 'Biểu mẫu chưa đặt tên'}</span>
-                          <span className="text-[11px] text-gray-400">
-                            ID: #{f.id} · {f.fields?.length || 0} trường thông tin
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 shrink-0 ml-2">
-                          <span
-                            className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                              f.isPublished
-                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                : 'bg-gray-100 text-gray-600 border border-gray-200'
-                            }`}
-                          >
-                            {f.isPublished ? 'Xuất bản' : 'Nháp'}
-                          </span>
-                          {String(selectedFormId) === String(f.id) && (
-                            <HiOutlineCheck className="w-4 h-4 text-indigo-600" />
-                          )}
-                        </div>
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Chi tiết & Nút hành động khi đã chọn form */}
-            {currentlySelectedForm && (
-              <div className="p-3 bg-white/90 border border-indigo-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                <div className="text-xs space-y-0.5">
-                  <div className="font-semibold text-indigo-950 flex items-center gap-2">
-                    <span>{currentlySelectedForm.title}</span>
-                    <span className="text-gray-400 font-normal">
-                      ({currentlySelectedForm.fields?.length || 0} trường)
-                    </span>
-                  </div>
-                  <p className="text-[11px] text-gray-500">
-                    Bấm &quot;Áp dụng vào trang&quot; để tự động gắn thẻ hiển thị form vào HTML trang.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
+              ) : (
+                <div className="flex items-center gap-2 text-amber-800 bg-amber-50/90 border border-amber-200 px-3 py-1.5 rounded-lg flex-1 justify-between flex-wrap">
+                  <span className="font-medium">⚠️ {t('leadFormConfig.slotMissing')}</span>
                   <button
                     type="button"
-                    onClick={() => handleApplyLinkedForm(currentlySelectedForm)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition"
+                    onClick={() => handleApplyLinkedForm(activeLinkedForm)}
+                    className="px-2.5 py-1 text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300 rounded-md transition"
                   >
-                    <HiOutlineCheck className="w-3.5 h-3.5" />
-                    <span>Áp dụng vào trang</span>
+                    {t('leadFormConfig.slotInsert')}
+                  </button>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={() => handleCopyEmbedCode(activeLinkedForm)}
+                className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-medium self-end sm:self-auto py-1"
+              >
+                <HiOutlineDocumentDuplicate className="w-3.5 h-3.5" />
+                <span>{t('leadFormConfig.copyEmbed')}</span>
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 via-purple-50/30 to-white p-5 shadow-2xs">
+            {/* Bộ chọn Biểu mẫu có sẵn */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-semibold text-gray-700">{t('leadFormConfig.pickerTitle')}</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={loadForms}
+                    disabled={loadingForms}
+                    className="inline-flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition"
+                    title={t('leadFormConfig.pickerRefreshTitle')}
+                  >
+                    <HiOutlineRefresh className={`w-3.5 h-3.5 ${loadingForms ? 'animate-spin' : ''}`} />
+                    <span>{t('leadFormConfig.pickerRefresh')}</span>
                   </button>
                   <a
-                    href={`/app/forms/${currentlySelectedForm.id}/edit`}
+                    href="/app/forms/new"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition"
-                    title="Mở sửa biểu mẫu này ở tab mới"
+                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold"
                   >
-                    <HiOutlineExternalLink className="w-4 h-4" />
+                    <span>{t('leadFormConfig.pickerCreate')}</span>
+                    <HiOutlineExternalLink className="w-3 h-3" />
                   </a>
                 </div>
               </div>
-            )}
+
+              {/* Custom Dropdown Selector (tránh dùng thẻ select role="combobox" để không xung đột test) */}
+              <div className="relative" ref={dropdownRef}>
+                <button
+                  type="button"
+                  onClick={() => setIsDropdownOpen((prev) => !prev)}
+                  className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white border border-gray-300 hover:border-indigo-400 rounded-xl text-left text-xs font-medium text-gray-800 shadow-2xs transition"
+                >
+                  <div className="truncate">
+                    {currentlySelectedForm ? (
+                      <span className="flex items-center gap-2">
+                        <span className="font-semibold text-gray-900">{currentlySelectedForm.title}</span>
+                        <span className="text-gray-400">
+                          {tf('leadFormConfig.fieldsInline', { count: currentlySelectedForm.fields?.length || 0 })}
+                        </span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.5 rounded ${
+                            currentlySelectedForm.isPublished
+                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              : 'bg-gray-100 text-gray-600'
+                          }`}
+                        >
+                          {currentlySelectedForm.isPublished
+                            ? t('leadFormConfig.linkedPublished')
+                            : t('leadFormConfig.linkedDraft')}
+                        </span>
+                      </span>
+                    ) : (
+                      <span className="text-gray-500">
+                        {formsList.length > 0
+                          ? tf('leadFormConfig.pickerPlaceholderCount', { count: formsList.length })
+                          : loadingForms
+                          ? t('leadFormConfig.pickerLoading')
+                          : t('leadFormConfig.pickerNone')}
+                      </span>
+                    )}
+                  </div>
+                  <HiOutlineChevronDown className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
+                </button>
+
+                {isDropdownOpen && (
+                  <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 max-h-60 overflow-y-auto">
+                    {formsList.length === 0 ? (
+                      <div className="p-3 text-center text-xs text-gray-500">
+                        {loadingForms ? t('leadFormConfig.pickerListLoading') : t('leadFormConfig.pickerListEmpty')}
+                      </div>
+                    ) : (
+                      formsList.map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedFormId(String(f.id));
+                            setIsDropdownOpen(false);
+                          }}
+                          className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs hover:bg-indigo-50/70 transition ${
+                            String(selectedFormId) === String(f.id)
+                              ? 'bg-indigo-50 font-semibold text-indigo-900'
+                              : 'text-gray-700'
+                          }`}
+                        >
+                          <div className="truncate">
+                            <span className="block font-medium">{f.title || t('leadFormConfig.untitledForm')}</span>
+                            <span className="text-[11px] text-gray-400">
+                              {tf('leadFormConfig.idAndFields', { id: f.id, count: f.fields?.length || 0 })}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 ml-2">
+                            <span
+                              className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
+                                f.isPublished
+                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                  : 'bg-gray-100 text-gray-600 border border-gray-200'
+                              }`}
+                            >
+                              {f.isPublished ? t('leadFormConfig.stateLive') : t('leadFormConfig.stateDraft')}
+                            </span>
+                            {String(selectedFormId) === String(f.id) && (
+                              <HiOutlineCheck className="w-4 h-4 text-indigo-600" />
+                            )}
+                          </div>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Chi tiết & Nút hành động khi đã chọn form */}
+              {currentlySelectedForm && (
+                <div className="p-3 bg-white/90 border border-indigo-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
+                  <div className="text-xs space-y-0.5">
+                    <div className="font-semibold text-indigo-950 flex items-center gap-2">
+                      <span>{currentlySelectedForm.title}</span>
+                      <span className="text-gray-400 font-normal">
+                        {tf('leadFormConfig.fieldsInline', { count: currentlySelectedForm.fields?.length || 0 })}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-gray-500">{t('leadFormConfig.applyHint')}</p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleApplyLinkedForm(currentlySelectedForm)}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition"
+                    >
+                      <HiOutlineCheck className="w-3.5 h-3.5" />
+                      <span>{t('leadFormConfig.apply')}</span>
+                    </button>
+                    <a
+                      href={`/app/forms/${currentlySelectedForm.id}/edit`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition"
+                      title={t('leadFormConfig.openThisForm')}
+                    >
+                      <HiOutlineExternalLink className="w-4 h-4" />
+                    </a>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      )}
+        )
+      ) : (
+        <>
+          <p className="text-[13px] text-gray-500 leading-relaxed">{t('leadFormConfig.help')}</p>
 
-      <div className="flex items-center gap-3 pt-1">
-        <div className="h-px bg-gray-200 flex-1" />
-        <span className="text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-          Cấu hình trường Form HTML nội tuyến
-        </span>
-        <div className="h-px bg-gray-200 flex-1" />
-      </div>
-
-      <p className="text-[13px] text-gray-500 leading-relaxed">
-        {t('leadFormConfig.help')}
-      </p>
-
-      {/* Fixed fields toggle — inline card */}
-      <section className="rounded-xl border border-gray-200 bg-white p-5">
-        <p className="text-[14px] font-semibold text-gray-900 mb-1">Các trường mặc định</p>
-        <p className="text-[12px] text-gray-500 mb-3">
-          Bật/tắt các trường bạn muốn hiển thị trên form.
-        </p>
-        <div className="flex flex-wrap gap-2">
-        <InlineChip
-          checked={config.fixedFields.occupation.visible}
-          onChange={(v) => setFixedVisible('occupation', v)}
-          label={t('leadFormConfig.showOccupation')}
-        />
-        <InlineChip
-          checked={config.fixedFields.interestArea.visible}
-          onChange={(v) => setFixedVisible('interestArea', v)}
-          label={t('leadFormConfig.showInterest')}
-        />
-        </div>
-        {[
-          { key: 'occupation', label: 'Nghề nghiệp', visible: config.fixedFields.occupation.visible },
-          { key: 'interestArea', label: 'Lĩnh vực quan tâm', visible: config.fixedFields.interestArea.visible },
-        ].map(({ key, label, visible }) => {
-          if (!hasHtml || !visible) return null;
-          const optionValues = fixedFieldOptionValues(key);
-          const issue = fieldHtmlIssue(htmlContent, key, optionValues);
-          if (!issue) return null;
-          return (
-            <MissingFieldWarning
-              key={key}
-              fieldLabel={label}
-              issue={issue}
-              asking={askingKeys.has(key)}
-              onAskAi={() => handleAskAiToAddField(key, buildAddFixedFieldInstruction(key), optionValues)}
-            />
-          );
-        })}
-      </section>
-
-      {/* Custom fields card */}
-      <section className="rounded-xl border border-gray-200 bg-white p-5">
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-[14px] font-semibold text-gray-900">
-              {t('leadFormConfig.customFields')}
-              <span className="ml-2 text-[12px] font-normal text-gray-500">
-                ({config.customFields.length}/20)
-              </span>
-            </p>
-            <p className="text-[12px] text-gray-500 mt-0.5">
-              Thêm các trường tuỳ chỉnh cho form lead.
-            </p>
-          </div>
-          <button
-            type="button"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-[13px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            onClick={() => {
-              if (config.customFields.length >= 20) return;
-              const next = [...config.customFields, emptyCustomField()];
-              patch({ ...config, customFields: next });
-              // auto-expand field mới để user điền label ngay
-              setExpanded((prev) => new Set(prev).add(next[next.length - 1].key));
-            }}
-            disabled={config.customFields.length >= 20}
-          >
-            <HiOutlinePlus className="h-4 w-4" />
-            {t('leadFormConfig.addField')}
-          </button>
-        </div>
-
-        {/* Custom fields list — inline cards */}
-        {config.customFields.length === 0 ? (
-          <div className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-6 text-center">
-            <p className="text-[13px] text-gray-500">
-              Chưa có trường tuỳ chỉnh. Bấm <b>+ Thêm trường</b> để tạo trường email, họ tên, SĐT hoặc tuỳ ý.
-            </p>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {config.customFields.map((field, index) => {
-              const isPersisted = persistedKeys.has(field.key);
-              const persistedOptionValues = new Set(persistedOptionValuesByKey[field.key] || []);
-              const labelError = fieldErrors[field.key];
-              const isExpanded = expanded.has(field.key);
+          {/* Fixed fields toggle — inline card */}
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
+            <p className="text-[14px] font-semibold text-gray-900 mb-1">{t('leadFormConfig.fixedFieldsTitle')}</p>
+            <p className="text-[12px] text-gray-500">{t('leadFormConfig.fixedFieldsAlways')}</p>
+            <p className="text-[12px] text-gray-500 mb-3">{t('leadFormConfig.fixedFieldsHint')}</p>
+            <div className="flex flex-wrap gap-2">
+              <InlineChip
+                checked={config.fixedFields.occupation.visible}
+                onChange={(v) => setFixedVisible('occupation', v)}
+                label={t('leadFormConfig.showOccupation')}
+              />
+              <InlineChip
+                checked={config.fixedFields.interestArea.visible}
+                onChange={(v) => setFixedVisible('interestArea', v)}
+                label={t('leadFormConfig.showInterest')}
+              />
+            </div>
+            {fixedFieldRows.map(({ key, label, visible }) => {
+              if (!hasHtml || !visible) return null;
+              const optionValues = fixedFieldOptionValues(key);
+              const issue = fieldHtmlIssue(htmlContent, key, optionValues);
+              if (!issue) return null;
               return (
-                <CustomFieldRow
-                  key={field.key}
-                  index={index}
-                  field={field}
-                  isPersisted={isPersisted}
-                  persistedOptionValues={persistedOptionValues}
-                  persistedOptionValuesByKey={persistedOptionValuesByKey}
-                  labelError={labelError}
-                  isExpanded={isExpanded}
-                  onToggleExpand={() => toggleExpand(field.key)}
-                  onUpdate={(partial) => updateField(index, partial)}
-                  onMoveUp={() => moveField(index, -1)}
-                  onMoveDown={() => moveField(index, 1)}
-                  onRemove={() => removeField(index)}
+                <MissingFieldWarning
+                  key={key}
+                  fieldLabel={label}
+                  issue={issue}
+                  asking={askingKeys.has(key)}
+                  onAskAi={() => handleAskAiToAddField(key, buildAddFixedFieldInstruction(key), optionValues)}
                   t={t}
-                  htmlIssue={hasHtml ? fieldHtmlIssue(htmlContent, field.key, customFieldOptionValues(field)) : null}
-                  asking={askingKeys.has(field.key)}
-                  onAskAiToAdd={() =>
-                    handleAskAiToAddField(field.key, buildAddCustomFieldInstruction(field), customFieldOptionValues(field))
-                  }
                 />
               );
             })}
-          </div>
-        )}
-      </section>
+          </section>
 
-      {/* Xem trước form */}
-      <section className="rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between bg-gray-50/60">
+          {/* Custom fields card — danh sách chỉ hiện khi có câu hỏi thêm */}
+          <section className="rounded-xl border border-gray-200 bg-white p-5">
+            <div className="flex items-center justify-between mb-3 gap-3">
+              <div>
+                <p className="text-[14px] font-semibold text-gray-900">
+                  {t('leadFormConfig.customFields')}
+                  <span className="ml-2 text-[12px] font-normal text-gray-500">
+                    ({config.customFields.length}/20)
+                  </span>
+                </p>
+                <p className="text-[12px] text-gray-500 mt-0.5">{t('leadFormConfig.customFieldsHint')}</p>
+              </div>
+              <button
+                type="button"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-[13px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+                onClick={() => {
+                  if (config.customFields.length >= 20) return;
+                  const next = [...config.customFields, emptyCustomField()];
+                  patch({ ...config, customFields: next });
+                  // auto-expand field mới để user điền label ngay
+                  setExpanded((prev) => new Set(prev).add(next[next.length - 1].key));
+                }}
+                disabled={config.customFields.length >= 20}
+              >
+                <HiOutlinePlus className="h-4 w-4" />
+                {t('leadFormConfig.addField')}
+              </button>
+            </div>
+
+            {config.customFields.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3 text-[13px] text-gray-500">
+                {t('leadFormConfig.customFieldsEmpty')}
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {config.customFields.map((field, index) => {
+                  const isPersisted = persistedKeys.has(field.key);
+                  const persistedOptionValues = new Set(persistedOptionValuesByKey[field.key] || []);
+                  const labelError = fieldErrors[field.key];
+                  const isExpanded = expanded.has(field.key);
+                  return (
+                    <CustomFieldRow
+                      key={field.key}
+                      index={index}
+                      field={field}
+                      isPersisted={isPersisted}
+                      persistedOptionValues={persistedOptionValues}
+                      persistedOptionValuesByKey={persistedOptionValuesByKey}
+                      labelError={labelError}
+                      isExpanded={isExpanded}
+                      onToggleExpand={() => toggleExpand(field.key)}
+                      onUpdate={(partial) => updateField(index, partial)}
+                      onMoveUp={() => moveField(index, -1)}
+                      onMoveDown={() => moveField(index, 1)}
+                      onRemove={() => removeField(index)}
+                      t={t}
+                      htmlIssue={hasHtml ? fieldHtmlIssue(htmlContent, field.key, customFieldOptionValues(field)) : null}
+                      asking={askingKeys.has(field.key)}
+                      onAskAiToAdd={() =>
+                        handleAskAiToAddField(field.key, buildAddCustomFieldInstruction(field), customFieldOptionValues(field))
+                      }
+                    />
+                  );
+                })}
+              </div>
+            )}
+          </section>
+
+          {/* Xem trước form — thu vào nút, mặc định đóng */}
           <div>
-            <p className="text-[14px] font-semibold text-gray-900">
-              {t('leadFormConfig.localPreview') || 'Xem trước'}
-            </p>
-            <p className="text-[12px] text-gray-500 mt-0.5">
-              Form sẽ hiển thị như thế này trên landing page của bạn.
-            </p>
+            <button
+              type="button"
+              aria-expanded={previewOpen}
+              onClick={() => setPreviewOpen((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              {previewOpen ? <HiOutlineEyeOff className="h-4 w-4" /> : <HiOutlineEye className="h-4 w-4" />}
+              {previewOpen ? t('leadFormConfig.previewHide') : t('leadFormConfig.previewShow')}
+            </button>
+            {previewOpen ? (
+              <section className="mt-3 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+                  <p className="text-[12px] text-gray-500">{t('leadFormConfig.previewHint')}</p>
+                </div>
+                <div className="px-5 py-5 bg-gray-50/40 max-h-[520px] overflow-auto">
+                  <FounderLeadFormCard
+                    variant="embed"
+                    locale="vi"
+                    theme={config.theme}
+                    nameMode={nameMode}
+                    formCopy={LANDING_COPY.vi.form}
+                    form={previewForm}
+                    setField={() => {}}
+                    submitting={false}
+                    error=""
+                    success={false}
+                    onSubmit={(e) => e?.preventDefault?.()}
+                    leadFormConfig={config}
+                    previewMode
+                  />
+                </div>
+              </section>
+            ) : null}
           </div>
-        </div>
-        <div className="px-5 py-5 bg-gray-50/40 max-h-[520px] overflow-auto">
-          <FounderLeadFormCard
-            variant="embed"
-            locale="vi"
-            theme={config.theme}
-            nameMode={nameMode}
-            formCopy={LANDING_COPY.vi.form}
-            form={previewForm}
-            setField={() => {}}
-            submitting={false}
-            error=""
-            success={false}
-            onSubmit={(e) => e?.preventDefault?.()}
-            leadFormConfig={config}
-            previewMode
-          />
-        </div>
-      </section>
+        </>
+      )}
     </div>
+  );
+}
+
+/* ─────────────── Lựa chọn cách thu thông tin (radio dạng thẻ) ─────────────── */
+
+function ModeOption({ value, checked, onSelect, title, description }) {
+  return (
+    <label
+      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors ${
+        checked ? 'border-orange-300 bg-orange-50/70' : 'border-gray-200 bg-white hover:border-gray-300'
+      }`}
+    >
+      <input
+        type="radio"
+        name="lead-form-mode"
+        value={value}
+        checked={checked}
+        onChange={onSelect}
+        aria-label={title}
+        className="mt-1 h-4 w-4 shrink-0 text-orange-600 focus:ring-orange-500"
+      />
+      <span className="min-w-0">
+        <span className="block text-[14px] font-semibold text-gray-900">{title}</span>
+        <span className="mt-0.5 block text-[12px] leading-relaxed text-gray-500">{description}</span>
+      </span>
+    </label>
   );
 }
 
@@ -708,21 +758,15 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
  * không khớp cấu hình. KHÔNG chặn lưu — chỉ cảnh báo + nút gọi đường sửa AI (editHtml rule 2b,
  * việc 2). Cùng một câu lệnh cho cả hai: câu lệnh đã dặn THAY ô cũ nếu trang có sẵn.
  *
- * @param {{ fieldLabel: string, issue?: 'missing'|'mismatch', asking: boolean, onAskAi: () => void }} props
+ * @param {{ fieldLabel: string, issue?: 'missing'|'mismatch', asking: boolean, onAskAi: () => void, t: (key: string) => string }} props
  */
-function MissingFieldWarning({ fieldLabel, issue = 'missing', asking, onAskAi }) {
+function MissingFieldWarning({ fieldLabel, issue = 'missing', asking, onAskAi, t }) {
   const isMismatch = issue === 'mismatch';
   return (
     <div className="mt-2 flex items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2">
       <div className="flex items-center gap-1.5 text-[12px] text-amber-800">
         <HiOutlineExclamation className="h-4 w-4 flex-shrink-0" />
-        {isMismatch ? (
-          <span>
-            Ô &quot;{fieldLabel}&quot; có trên trang nhưng lựa chọn không khớp mã đã lưu — khách gửi sẽ bị từ chối.
-          </span>
-        ) : (
-          <span>Trang chưa có ô &quot;{fieldLabel}&quot;.</span>
-        )}
+        <span>{fmt(t(isMismatch ? 'leadFormConfig.mismatchField' : 'leadFormConfig.missingField'), { label: fieldLabel })}</span>
       </div>
       <button
         type="button"
@@ -730,7 +774,7 @@ function MissingFieldWarning({ fieldLabel, issue = 'missing', asking, onAskAi })
         onClick={onAskAi}
         disabled={asking}
       >
-        {asking ? 'Đang nhờ AI…' : isMismatch ? 'Nhờ AI sửa ô này' : 'Nhờ AI thêm ô này'}
+        {asking ? t('leadFormConfig.askingAi') : isMismatch ? t('leadFormConfig.askAiFix') : t('leadFormConfig.askAiAdd')}
       </button>
     </div>
   );
@@ -778,7 +822,9 @@ function CustomFieldRow({
   asking,
   onAskAiToAdd,
 }) {
-  const summary = String(field.labelVi || '').trim() || <span className="italic text-gray-400">(chưa có nhãn)</span>;
+  const summary = String(field.labelVi || '').trim() || (
+    <span className="italic text-gray-400">{t('leadFormConfig.noLabel')}</span>
+  );
   return (
     <div
       className={`rounded-lg border bg-white transition-colors ${
@@ -791,7 +837,7 @@ function CustomFieldRow({
           type="button"
           onClick={onToggleExpand}
           className={`p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
-          title={isExpanded ? 'Thu gọn' : 'Mở rộng'}
+          title={isExpanded ? t('leadFormConfig.collapse') : t('leadFormConfig.expand')}
         >
           <HiOutlineExpand className="h-4 w-4" />
         </button>
@@ -838,13 +884,13 @@ function CustomFieldRow({
               onChange={(e) => onUpdate({ required: e.target.checked })}
               className="w-3.5 h-3.5"
             />
-            Bắt buộc
+            {t('leadFormConfig.required')}
           </label>
 
           <div className="flex items-center gap-1">
             <button
               type="button"
-              aria-label="Di chuyển lên"
+              aria-label={t('leadFormConfig.moveUp')}
               className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-30"
               onClick={onMoveUp}
               disabled={index === 0}
@@ -853,7 +899,7 @@ function CustomFieldRow({
             </button>
             <button
               type="button"
-              aria-label="Di chuyển xuống"
+              aria-label={t('leadFormConfig.moveDown')}
               className="p-1.5 text-gray-400 hover:text-gray-700 hover:bg-gray-100 rounded disabled:opacity-30"
               onClick={onMoveDown}
             >
@@ -861,7 +907,7 @@ function CustomFieldRow({
             </button>
             <button
               type="button"
-              aria-label="Xoá trường"
+              aria-label={t('leadFormConfig.removeField')}
               className="p-1.5 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
               onClick={onRemove}
             >
@@ -878,6 +924,7 @@ function CustomFieldRow({
             issue={htmlIssue}
             asking={asking}
             onAskAi={onAskAiToAdd}
+            t={t}
           />
         </div>
       ) : null}
@@ -989,7 +1036,7 @@ function CustomFieldRow({
                   })
                 }
               >
-                + Thêm lựa chọn
+                + {t('leadFormConfig.addOption')}
               </button>
             </div>
           ) : null}

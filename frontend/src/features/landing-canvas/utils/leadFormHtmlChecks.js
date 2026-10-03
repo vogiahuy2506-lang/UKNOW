@@ -1,6 +1,6 @@
 /**
  * Kiểm tra form.htmlContent (HTML trang landing) có khớp cấu hình form đăng ký hay chưa —
- * dùng cho cảnh báo trong LeadFormConfigPanel (section "Form đăng ký" của Cài đặt trang).
+ * dùng cho cảnh báo trong LeadFormConfigPanel (section "Form thu khách" của Cài đặt trang).
  *
  * Hai mức kiểm, đều KHÔNG chặn lưu (chỉ cảnh báo + nút nhờ AI):
  *   1. htmlHasFieldName   — trang có ô name="<khoá>" chưa (PR-2d-3 việc 3).
