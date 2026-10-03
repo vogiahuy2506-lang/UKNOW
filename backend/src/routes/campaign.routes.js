@@ -68,6 +68,9 @@ router.post(
 // khớp trước); kênh lạ -> 404 ở service.
 router.post('/quick-send/:channel', requirePermission('campaigns_create'), campaignController.quickSendAdapter.bind(campaignController));
 
+// Ước tính thời gian gửi xong (PLAN_UOC_TINH_THOI_GIAN 3.3) — hai đoạn đường dẫn nên `/:id` không nuốt được; vẫn đặt trước cho rõ.
+router.get('/:id/estimate', requirePermission('campaigns_view'), campaignController.getEstimate.bind(campaignController));
+
 // Get by id — chỉ cần quyền xem
 router.get('/:id', requirePermission('campaigns_view'), campaignController.getById.bind(campaignController));
 

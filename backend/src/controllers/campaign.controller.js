@@ -11,6 +11,7 @@ import campaignNodeDataService from '../services/campaign/campaignNodeData.servi
 import campaignExecutionLogService from '../services/campaign/campaignExecutionLog.service.js';
 import campaignEmailSenderService from '../services/campaign/campaignEmailSender.service.js';
 import campaignCrudService from '../services/campaign/campaignCrud.service.js';
+import campaignEstimateService from '../services/campaign/campaignEstimate.service.js';
 import { evaluateApprovalThreshold, markPendingOwnerApproval } from '../services/campaign/campaignApproval.service.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
@@ -1115,6 +1116,48 @@ class CampaignController {
       }
       console.error('[QuickSend] quickSendAdapter error:', error);
       res.status(500).json({ success: false, message: 'Lỗi server khi gửi nhanh' });
+    }
+  }
+
+  /**
+   * GET /api/campaigns/:id/estimate?startAt=<ISO>&continuous=true|false
+   * Ước tính thời điểm gửi XONG của một chiến dịch đã lưu (PLAN_UOC_TINH_THOI_GIAN_CHIEN_DICH 3.3): mô phỏng nhịp
+   * nick, giờ nghỉ, trần giờ/ngày, nhiều nick, chuỗi nhiều bước (xem utils/campaignSendEstimate.util.js).
+   * `startAt` thiếu/quá khứ → bây giờ. Không đếm được người nhận / không tải được nick → vẫn 200, kèm `warnings`.
+   * Quyền xem chiến dịch kiểm bằng đúng `getCampaignById` của trang chi tiết (nhân viên/chia sẻ).
+   */
+  async getEstimate(req, res) {
+    try {
+      const campaignId = Number.parseInt(req.params.id, 10);
+      if (!Number.isInteger(campaignId) || campaignId <= 0) {
+        return res.status(400).json({ success: false, message: 'ID chiến dịch không hợp lệ' });
+      }
+      let startAt = null;
+      const rawStartAt = String(req.query.startAt || '').trim();
+      if (rawStartAt) {
+        startAt = new Date(rawStartAt);
+        if (Number.isNaN(startAt.getTime())) {
+          return res.status(400).json({ success: false, message: 'startAt không hợp lệ (cần ISO 8601)' });
+        }
+        if (startAt.getTime() < Date.now()) startAt = null;
+      }
+      const visible = await campaignCrudService.getCampaignById({ authUser: req.user, campaignId });
+      if (!visible) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy chiến dịch' });
+      }
+      const data = await campaignEstimateService.estimateForCampaign({
+        campaignId,
+        ownerUserId: resolveWorkspaceOwnerId(req.user),
+        startAt,
+        continuous: String(req.query.continuous || '').trim().toLowerCase() === 'true',
+      });
+      if (!data) {
+        return res.status(404).json({ success: false, message: 'Không tìm thấy chiến dịch' });
+      }
+      return res.json({ success: true, data });
+    } catch (error) {
+      console.error('Campaign estimate error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server khi ước tính thời gian gửi' });
     }
   }
 

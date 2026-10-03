@@ -8,7 +8,7 @@
  * Phụ thuộc truyền qua `deps` (mặc định nạp lười từ module thật) để spec mock đúng RANH GIỚI và không kéo cả
  * engine campaignRun (≈9.000 dòng) vào bộ test.
  */
-import { estimateCampaignSend } from '../../utils/campaignSendEstimate.util.js';
+import { estimateCampaignSend, vnDayKey } from '../../utils/campaignSendEstimate.util.js';
 import { getNodeOwnZaloAccountSpec } from '../../utils/campaignZaloAccountResolve.util.js';
 import { normalizeVietnamesePhone } from '../../utils/vietnamesePhone.util.js';
 import { computeScheduleNextRunAt } from '../../utils/campaignScheduleCron.util.js';
@@ -589,7 +589,7 @@ async function sharedAccountWarnings({ excludeCampaignId, ownerUserId, accountRe
       keys.forEach((key) => {
         if (!wanted.has(key)) return;
         if (!hits.has(key)) hits.set(key, []);
-        hits.get(key).push({ id: campaign.id, name: campaign.campaign_name, reason });
+        hits.get(key).push({ id: Number(campaign.id), name: campaign.campaign_name, reason });
       });
     }
     return [...hits.entries()].map(([accountKey, campaigns]) => ({
@@ -605,9 +605,15 @@ async function sharedAccountWarnings({ excludeCampaignId, ownerUserId, accountRe
 async function estimateFromNodes({ rawNodes, rawConnections, flowJson, ownerUserId, startAt, continuous, excludeCampaignId, deps: injected }) {
   const deps = injected || await loadDefaultDeps();
   const { nodes, connections } = normalizeEstimateNodes(rawNodes, rawConnections);
-  const startAtDate = startAt ? new Date(startAt) : deps.now();
-  const effectiveStart = Number.isNaN(startAtDate.getTime()) ? deps.now() : startAtDate;
+  const nowDate = deps.now();
+  const startAtDate = startAt ? new Date(startAt) : nowDate;
+  // Thiếu / sai / quá khứ → bây giờ.
+  const effectiveStart = Number.isNaN(startAtDate.getTime()) || startAtDate.getTime() < nowDate.getTime() ? nowDate : startAtDate;
   const built = await buildSimulationInput({ nodes, connections, flowJson, ownerUserId, deps });
+  // "Đã gửi hôm nay" chỉ trừ vào trần của NGÀY HÔM NAY: hẹn bắt đầu ngày khác thì ngày đầu tính từ 0.
+  if (vnDayKey(effectiveStart.getTime()) !== vnDayKey(nowDate.getTime())) {
+    built.groups.forEach((group) => group.accounts.forEach((acc) => { acc.sentToday = 0; }));
+  }
 
   const simulation = estimateCampaignSend({
     startAt: effectiveStart,

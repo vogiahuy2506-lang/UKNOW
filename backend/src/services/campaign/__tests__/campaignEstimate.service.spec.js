@@ -337,6 +337,39 @@ describe('estimateForCampaign — cảnh báo từ dữ kiện ngoài', () => {
   });
 });
 
+describe('estimateForCampaign — startAt', () => {
+  const sentTodayCampaign = () => {
+    const nodes = [
+      node(1, 'start', {}, 'trigger'),
+      node(2, 'send_zalo_personal', {
+        zaloAccountId: '101', zaloRecipientSource: 'manual',
+        zaloRecipientPhones: Array.from({ length: 150 }, (_, i) => `0903${String(100000 + i)}`).join('\n'),
+      }),
+    ];
+    return {
+      nodes, connections: [connect(1, 2)],
+      zaloRows: { 101: zaloRow(101, { zalo_personal_outbound_delay_min_ms: 100000, zalo_personal_outbound_delay_max_ms: 100000, user_daily_send_limit: 100 }) },
+      sentToday: { 101: 40 },
+    };
+  };
+
+  it('hẹn bắt đầu NGÀY KHÁC: số đã gửi hôm nay không trừ vào ngày đầu → 100 + 50 tin, xong 07/10 07:23:20', async () => {
+    // Bắt đầu 06/10 06:00 (hôm nay là 05/10): ngày đầu đủ 100 tin (k = 0..99), ngày sau 50 tin: 06:01:40 + 49*100s
+    // = 06:01:40 + 1h21m40s = 07:23:20 (07/10).
+    const { deps } = makeDeps({ state: sentTodayCampaign() });
+    const result = await estimateForCampaign({ campaignId: 1, ownerUserId: 39, startAt: vn('2026-10-06T06:00:00'), deps });
+    expect(result.perDay.map((d) => [d.date, d.actions])).toEqual([['2026-10-06', 100], ['2026-10-07', 50]]);
+    expect(result.finishAtLatest).toBe(vn('2026-10-07T07:23:20').toISOString());
+  });
+
+  it('startAt trong quá khứ → tính từ bây giờ (không ước tính về quá khứ)', async () => {
+    const { deps } = makeDeps({ state: sentTodayCampaign() });
+    const result = await estimateForCampaign({ campaignId: 1, ownerUserId: 39, startAt: vn('2026-10-01T06:00:00'), deps });
+    expect(result.startAt).toBe(NOW.toISOString());
+    expect(result.perDay.map((d) => d.actions)).toEqual([60, 90]); // vẫn trừ 40 đã gửi hôm nay
+  });
+});
+
 describe('estimateForScript — chiến dịch chưa lưu (camelCase)', () => {
   it('nodeSubtype/sourceNodeId camelCase cho cùng kết quả đường với chiến dịch đã lưu', async () => {
     const script = {
