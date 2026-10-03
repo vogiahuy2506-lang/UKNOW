@@ -35,21 +35,21 @@ function cosineSimilarity(a, b) {
 }
 
 class CustomChatDocumentRepository {
-  async findChunkTexts({ chatbotId, userId }, queryable = db) {
+  /**
+   * Văn bản các đoạn của chatbot (tài liệu `ready`). `onlyWithoutEmbedding`: chỉ đoạn CHƯA có vector — dành cho tìm từ khoá
+   * dự phòng khi cosine không có đoạn nào (tài liệu có vector đã được cosine xét rồi, không đưa lại vào chấm từ khoá).
+   */
+  async findChunkTexts({ chatbotId, userId, onlyWithoutEmbedding = false }, queryable = db) {
     const result = await queryable.query(
       `SELECT c.chunk_text
          FROM custom_chatbot_chunks c
          JOIN custom_chatbot_documents d ON d.id = c.document_id
         WHERE c.chatbot_id = $1 AND d.owner_user_id = $2 AND d.status = 'ready'
+          ${onlyWithoutEmbedding ? 'AND c.embedding IS NULL' : ''}
         ORDER BY c.document_id, c.chunk_index`,
       [chatbotId, userId]
     );
     return result.rows.map((row) => row.chunk_text);
-  }
-
-  async searchByEmbedding() {
-    console.warn('[CustomChatDocument] JSONB embedding search not supported, using keyword fallback');
-    return [];
   }
 
   /**

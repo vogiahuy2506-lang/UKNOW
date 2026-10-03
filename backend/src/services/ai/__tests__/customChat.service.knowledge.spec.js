@@ -84,3 +84,64 @@ describe('customChat.chat — trần prompt (A P0-3: đoạn 219.902 ký tự �
     for (const line of docLines) expect(line.length - 2).toBeLessThanOrEqual(1500);
   });
 });
+
+describe('customChat.searchChunks — widget/trang công khai/Chat thử tìm bằng cosine như đường kênh (A P1-3, D-17)', () => {
+  const hit = (text, similarity = 0.7) => ({ chunk_text: text, chunk_index: 0, source: 'a.docx', similarity });
+
+  it('embed câu hỏi bằng RETRIEVAL_QUERY rồi gọi searchChunksByChatbot (đoạn cosine cao nhất), KHÔNG chấm từ khoá', async () => {
+    mockRepo.searchChunksByChatbot.mockResolvedValue([hit('Chính sách đổi trả 7 ngày'), hit('Bảo hành 12 tháng', 0.5)]);
+
+    const out = await svc.searchChunks({ chatbotId: 17, userId: 90, query: 'đổi trả thế nào' });
+
+    expect(out).toEqual(['Chính sách đổi trả 7 ngày', 'Bảo hành 12 tháng']);
+    expect(mockEmbedText).toHaveBeenCalledWith('đổi trả thế nào', expect.objectContaining({
+      userId: 90,
+      feature: 'embedding_rag_query',
+      taskType: 'RETRIEVAL_QUERY',
+    }));
+    expect(mockRepo.searchChunksByChatbot).toHaveBeenCalledWith(
+      17, 90, QUERY_VECTOR, { limit: 5, minSimilarity: 0.3 },
+    );
+    expect(mockRepo.findChunkTexts).not.toHaveBeenCalled();
+  });
+
+  it('đoạn khổng lồ chứa mọi từ khoá KHÔNG còn thắng: kết quả là đoạn cosine chọn, không phải đoạn từ-khoá-nhiều-nhất', async () => {
+    mockRepo.searchChunksByChatbot.mockResolvedValue([hit('Giờ mở cửa 8h-21h')]);
+    // Nếu code còn rơi về từ khoá thì đoạn này (chứa đủ từ) sẽ thắng.
+    mockRepo.findChunkTexts.mockResolvedValue([`mở cửa giờ bao nhiêu ${'x '.repeat(50000)}`]);
+
+    const out = await svc.searchChunks({ chatbotId: 17, userId: 90, query: 'giờ mở cửa bao nhiêu' });
+
+    expect(out).toEqual(['Giờ mở cửa 8h-21h']);
+  });
+
+  it('cosine không có đoạn nào đủ giống → CHỈ tìm từ khoá trong đoạn chưa có embedding (onlyWithoutEmbedding)', async () => {
+    mockRepo.searchChunksByChatbot.mockResolvedValue([]);
+    mockRepo.findChunkTexts.mockResolvedValue(['Địa chỉ cửa hàng: 12 Lê Lợi', 'Số điện thoại 0909']);
+
+    const out = await svc.searchChunks({ chatbotId: 17, userId: 90, query: 'địa chỉ cửa hàng ở đâu' });
+
+    expect(out).toEqual(['Địa chỉ cửa hàng: 12 Lê Lợi']);
+    expect(mockRepo.findChunkTexts).toHaveBeenCalledWith({ chatbotId: 17, userId: 90, onlyWithoutEmbedding: true });
+  });
+
+  it('embed câu hỏi lỗi (Google 503/hết khoá) → dự phòng từ khoá trên MỌI đoạn, không ném lỗi, không gọi cosine', async () => {
+    mockEmbedText.mockRejectedValue(new Error('Embedding API lỗi (503)'));
+    mockRepo.findChunkTexts.mockResolvedValue(['Giá gói Pro 499.000đ', 'Chính sách bảo hành']);
+
+    const out = await svc.searchChunks({ chatbotId: 17, userId: 90, query: 'giá gói pro' });
+
+    expect(out).toEqual(['Giá gói Pro 499.000đ']);
+    expect(mockRepo.searchChunksByChatbot).not.toHaveBeenCalled();
+    expect(mockRepo.findChunkTexts).toHaveBeenCalledWith({ chatbotId: 17, userId: 90 });
+  });
+
+  it('chạy trọn đường chat(): đoạn cosine được đưa vào prompt (không rơi về từ khoá)', async () => {
+    mockRepo.searchChunksByChatbot.mockResolvedValue([hit('Giờ mở cửa 8h-21h')]);
+
+    const prompt = await runChat();
+
+    expect(prompt).toContain('- Giờ mở cửa 8h-21h');
+    expect(mockRepo.findChunkTexts).not.toHaveBeenCalled();
+  });
+});

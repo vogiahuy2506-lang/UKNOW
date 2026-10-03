@@ -10,7 +10,7 @@ import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
 import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
-import { capChunkTexts } from '../../utils/ragLimits.util.js';
+import { CUSTOM_CHATBOT_MIN_SIMILARITY, MAX_KB_CHUNKS, capChunkTexts } from '../../utils/ragLimits.util.js';
 
 function isImageUnsupportedError(err) {
   const msg = String(err?.message || '').toLowerCase();
@@ -230,46 +230,63 @@ QUY TẮC TRẢ LỜI:
     }
   }
 
+  /**
+   * Tìm các đoạn tài liệu liên quan tới câu hỏi của khách.
+   *
+   * Đường widget/trang công khai/"Chat thử" Studio dùng CHÍNH hàm tìm của đường kênh Zalo/Telegram/WhatsApp
+   * (`searchChunksByChatbot`: cosine trên embedding của đoạn, cùng ngưỡng) — cùng một bot trả lời giống nhau ở mọi kênh.
+   * Bản cũ gọi `searchByEmbedding()`, một hàm rỗng luôn trả [] (A P1-3, D-17): lời gọi embed câu hỏi tốn tiền vô ích rồi mọi
+   * lượt rơi về chấm điểm từ khoá, nơi đoạn khổng lồ chứa gần như mọi từ nên LUÔN thắng.
+   *
+   * Từ khoá chỉ còn là dự phòng khi KHÔNG có embedding để so: (a) embed câu hỏi lỗi → tìm từ khoá trên mọi đoạn;
+   * (b) cosine không có đoạn nào đủ giống → chỉ tìm từ khoá trong các đoạn CHƯA có embedding (tài liệu nạp lúc embedding hỏng).
+   */
   async searchChunks({ chatbotId, userId, query }) {
+    let queryEmbedding = null;
     try {
-      // Try embedding-based search first
       const { embedText } = await import('../../utils/embeddingClient.util.js');
-      const queryEmbedding = await embedText(query, {
+      queryEmbedding = await embedText(query, {
         userId,
         feature: 'embedding_rag_query',
+        taskType: 'RETRIEVAL_QUERY',
       });
-      const results = await customChatDocumentRepository.searchByEmbedding({
+    } catch (embedError) {
+      console.warn('[CustomChat] Embed câu hỏi lỗi, dùng tìm kiếm từ khoá:', embedError.message);
+    }
+
+    if (Array.isArray(queryEmbedding) && queryEmbedding.length > 0) {
+      const results = await customChatDocumentRepository.searchChunksByChatbot(
         chatbotId,
         userId,
         queryEmbedding,
-        minSimilarity: 0.35, // Lower threshold for better recall
-        limit: 5,
-      });
-      if (results.length > 0) {
-        console.log(`[RAG] Found ${results.length} relevant chunks for query: "${query.substring(0, 50)}..."`);
-        return results.map(r => r.chunk_text);
-      }
-    } catch (embedError) {
-      console.warn('[CustomChat] Embedding search failed, falling back to keyword search:', embedError.message);
+        { limit: MAX_KB_CHUNKS, minSimilarity: CUSTOM_CHATBOT_MIN_SIMILARITY },
+      );
+      if (results.length > 0) return results.map((row) => row.chunk_text);
+      return this._keywordSearchChunks({ chatbotId, userId, query, onlyWithoutEmbedding: true });
     }
 
-    // Fallback: keyword matching
-    const words = query.toLowerCase().split(/\s+/).filter((word) => word.length > 2);
+    return this._keywordSearchChunks({ chatbotId, userId, query, onlyWithoutEmbedding: false });
+  }
+
+  async _keywordSearchChunks({ chatbotId, userId, query, onlyWithoutEmbedding }) {
+    const words = String(query || '').toLowerCase().split(/\s+/).filter((word) => word.length > 2);
     if (words.length === 0) return [];
 
-    const chunkTexts = await customChatDocumentRepository.findChunkTexts({ chatbotId, userId });
+    const chunkTexts = await customChatDocumentRepository.findChunkTexts({
+      chatbotId,
+      userId,
+      ...(onlyWithoutEmbedding ? { onlyWithoutEmbedding: true } : {}),
+    });
     if (!chunkTexts.length) return [];
 
-    const scored = chunkTexts.map((text) => {
-      const lowerText = text.toLowerCase();
-      const score = words.filter((word) => lowerText.includes(word)).length;
-      return { text, score };
-    });
-
-    return scored
+    return chunkTexts
+      .map((text) => {
+        const lowerText = text.toLowerCase();
+        return { text, score: words.filter((word) => lowerText.includes(word)).length };
+      })
       .filter((chunk) => chunk.score > 0)
       .sort((a, b) => b.score - a.score)
-      .slice(0, 5)
+      .slice(0, MAX_KB_CHUNKS)
       .map((chunk) => chunk.text);
   }
 
