@@ -5246,7 +5246,7 @@ export default {
     titleHighlight: 'hỗ trợ bạn',
     subtitle: 'Để lại thông tin, đội ngũ tư vấn sẽ liên hệ lại trong 24 giờ.',
     statusOpenDetail: 'Mở đến 17:00 — hiện tại {time} (giờ Việt Nam)',
-    statusClosedDetail: 'Mở lại 08:30 thứ 2 nếu hôm nay là cuối tuần',
+    statusClosedDetail: 'Mở lại lúc 08:30 vào ngày làm việc kế tiếp (Thứ 2 – Thứ 6, giờ Việt Nam)',
   },
 
   trialDemo: {

@@ -216,6 +216,14 @@ describe.each(LOCALES)('H1 — giờ làm việc thống nhất Thứ 2 – Th�
     expect(open).toMatch(name === 'vi' ? /giờ Việt Nam/ : /Vietnam time/);
   });
 
+  it('statusClosedDetail đúng cho CẢ tối ngày thường lẫn cuối tuần (không còn "nếu hôm nay là cuối tuần")', () => {
+    const closed = dict.contact.statusClosedDetail;
+    expect(closed).not.toMatch(/cuối tuần|weekend|if today/i);
+    expect(closed).toMatch(name === 'vi' ? /ngày làm việc kế tiếp/ : /next working day/);
+    expect(closed).toMatch(name === 'vi' ? /Thứ 2 – Thứ 6/ : /Mon – Fri/);
+    expect(closed).toContain('08:30');
+  });
+
   it('chữ tiếng Việt dùng "Thứ 2 – Thứ 6", tiếng Anh dùng "Mon – Fri" (không còn thứ Bảy)', () => {
     const expected = name === 'vi' ? /Thứ 2 – Thứ 6|T2 – T6/ : /Mon – Fri/;
     expect(dict.contact.workHours).toMatch(expected);
