@@ -37,6 +37,10 @@ vi.mock('../../../stores/authStore', () => ({
   useAuthStore: (selector) => selector(mockAuthState),
 }));
 
+// Biểu mẫu MỚI bắt đầu bằng bước chọn mẫu — mẫu "Trống" cho trình soạn giống hệt trước khi có bước đó
+// (1 ô Họ và tên, cài đặt mặc định), nên các ca không liên quan tới mẫu chỉ cần bấm qua nó.
+const startBlankForm = () => fireEvent.click(screen.getByTestId('form-template-blank'));
+
 describe('FormEditorPage component', () => {
   const existingForm = {
     id: 'form-existing-456',
@@ -222,6 +226,8 @@ describe('FormEditorPage component', () => {
       </MemoryRouter>
     );
 
+    startBlankForm();
+
     // Tiêu đề ban đầu trống (hoặc xoá nếu có)
     const titleInput = screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i);
     fireEvent.change(titleInput, { target: { value: '' } });
@@ -247,6 +253,8 @@ describe('FormEditorPage component', () => {
           </I18nProvider>
         </MemoryRouter>
       );
+
+      startBlankForm();
 
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form đặt lịch mới' },
@@ -301,6 +309,8 @@ describe('FormEditorPage component', () => {
           </I18nProvider>
         </MemoryRouter>
       );
+
+      startBlankForm();
 
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form không đặt lịch' },
@@ -396,6 +406,8 @@ describe('FormEditorPage component', () => {
         </MemoryRouter>
       );
 
+      startBlankForm();
+
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form thu tiền giữ chỗ' },
       });
@@ -436,6 +448,8 @@ describe('FormEditorPage component', () => {
           </I18nProvider>
         </MemoryRouter>
       );
+
+      startBlankForm();
 
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form không thu tiền' },
@@ -544,6 +558,8 @@ describe('FormEditorPage component', () => {
         </MemoryRouter>
       );
 
+      startBlankForm();
+
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form thiếu thông tin thanh toán' },
       });
@@ -570,6 +586,8 @@ describe('FormEditorPage component', () => {
           </I18nProvider>
         </MemoryRouter>
       );
+
+      startBlankForm();
 
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form thu tiền MoMo' },
@@ -630,6 +648,8 @@ describe('FormEditorPage component', () => {
         </MemoryRouter>
       );
 
+      startBlankForm();
+
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form MoMo không QR' },
       });
@@ -666,6 +686,8 @@ describe('FormEditorPage component', () => {
         </MemoryRouter>
       );
 
+      startBlankForm();
+
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form MoMo thiếu số' },
       });
@@ -696,6 +718,8 @@ describe('FormEditorPage component', () => {
           </I18nProvider>
         </MemoryRouter>
       );
+
+      startBlankForm();
 
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form nhận cả 2 kênh' },
@@ -748,6 +772,8 @@ describe('FormEditorPage component', () => {
           </I18nProvider>
         </MemoryRouter>
       );
+
+      startBlankForm();
 
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form không chọn kênh nào' },
@@ -890,6 +916,8 @@ describe('FormEditorPage component', () => {
         </MemoryRouter>
       );
 
+      startBlankForm();
+
       const bannerFileInput = container.querySelectorAll('input[type="file"]')[0];
       const file = new File(['fake'], 'banner.png', { type: 'image/png' });
       fireEvent.change(bannerFileInput, { target: { files: [file] } });
@@ -958,6 +986,8 @@ describe('FormEditorPage component', () => {
         </MemoryRouter>
       );
 
+      startBlankForm();
+
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form không tuỳ chỉnh giao diện' },
       });
@@ -967,6 +997,210 @@ describe('FormEditorPage component', () => {
       await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
       const [payload] = formAdminApi.createForm.mock.calls[0];
       expect(payload.theme).toEqual({});
+    });
+  });
+
+  describe('Bước chọn mẫu khi tạo biểu mẫu mới', () => {
+    const renderNewForm = () =>
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+    const typeTitleAndSave = async (title) => {
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: title },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      return formAdminApi.createForm.mock.calls[0][0];
+    };
+
+    it('biểu mẫu MỚI hiện bước chọn mẫu đủ 5 mẫu, chưa có trình soạn (không có nút Lưu biểu mẫu)', () => {
+      renderNewForm();
+
+      for (const id of ['consult', 'booking', 'payment', 'survey', 'blank']) {
+        expect(screen.getByTestId(`form-template-${id}`)).toBeInTheDocument();
+      }
+      expect(screen.getByRole('button', { name: /Đăng ký tư vấn/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Đặt lịch hẹn/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Thu tiền \/ đặt cọc/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Khảo sát/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Trống/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Lưu biểu mẫu/i })).not.toBeInTheDocument();
+    });
+
+    it('SỬA biểu mẫu cũ thì KHÔNG hiện bước chọn mẫu', async () => {
+      formAdminApi.fetchFormById.mockResolvedValue(existingForm);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('form-template-picker')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('form-template-blank')).not.toBeInTheDocument();
+    });
+
+    it('"Trống": giống hệt biểu mẫu mới cũ — 1 ô Họ và tên (role name, bắt buộc), không đặt lịch, không thu tiền', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-blank' });
+      renderNewForm();
+      startBlankForm();
+
+      const payload = await typeTitleAndSave('Biểu mẫu trống');
+      expect(payload.fields).toEqual([{ label: 'Họ và tên', type: 'short_text', required: true, role: 'name' }]);
+      expect(payload.bookingConfig).toBeNull();
+      expect(payload.paymentConfig).toBeNull();
+      expect(payload.settings.notifyOwner).toBe(true);
+      expect(payload.settings.sendConfirmation).toBe(false);
+    });
+
+    it('"Đăng ký tư vấn": Họ tên + SĐT bắt buộc, Email + Lời nhắn tuỳ chọn, đúng role; không đặt lịch, không thu tiền', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-consult' });
+      renderNewForm();
+      fireEvent.click(screen.getByTestId('form-template-consult'));
+
+      const payload = await typeTitleAndSave('Đăng ký tư vấn 1-1');
+      expect(payload.fields).toEqual([
+        { label: 'Họ và tên', type: 'short_text', required: true, role: 'name' },
+        { label: 'Số điện thoại', type: 'phone', required: true, role: 'phone' },
+        { label: 'Địa chỉ Email', type: 'email', required: false, role: 'email' },
+        { label: 'Lời nhắn', type: 'long_text', required: false },
+      ]);
+      expect(payload.bookingConfig).toBeNull();
+      expect(payload.paymentConfig).toBeNull();
+      // Đủ 6 khoá settings; mẫu KHÔNG tự bật ô đồng ý tiếp thị.
+      expect(payload.settings).toEqual({
+        notifyOwner: true,
+        consentEnabled: false,
+        sendConfirmation: false,
+        submitButtonText: 'Gửi đăng ký',
+        successMessage: 'Cảm ơn bạn đã đăng ký. Chúng tôi sẽ liên hệ lại với bạn sớm.',
+        redirectUrl: null,
+      });
+    });
+
+    it('"Đặt lịch hẹn": bật sẵn Đặt lịch với khung giờ mẫu T2–T6 (lưu ngay được), Email bắt buộc + bật gửi xác nhận', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-booking' });
+      renderNewForm();
+      fireEvent.click(screen.getByTestId('form-template-booking'));
+
+      // Khối Đặt lịch hẹn đã mở và đã bật.
+      expect(screen.getByRole('checkbox', { name: /Bật đặt lịch hẹn/i })).toBeChecked();
+
+      const payload = await typeTitleAndSave('Đặt lịch tư vấn');
+      expect(payload.bookingConfig).toEqual({
+        enabled: true,
+        weeklySlots: {
+          0: [],
+          1: ['09:00', '14:00'],
+          2: ['09:00', '14:00'],
+          3: ['09:00', '14:00'],
+          4: ['09:00', '14:00'],
+          5: ['09:00', '14:00'],
+          6: [],
+        },
+        slotCapacity: null,
+        daysAhead: 30,
+        minNoticeMinutes: 60,
+        closedDates: [],
+      });
+      expect(payload.paymentConfig).toBeNull();
+      expect(payload.fields.map((f) => [f.type, f.role, f.required])).toEqual([
+        ['short_text', 'name', true],
+        ['phone', 'phone', true],
+        ['email', 'email', true],
+        ['long_text', undefined, false],
+      ]);
+      expect(payload.settings.sendConfirmation).toBe(true);
+      expect(payload.settings.submitButtonText).toBe('Đặt lịch');
+    });
+
+    it('"Thu tiền / đặt cọc": bật sẵn Thanh toán, chưa có số tiền nên lưu bị chặn tới khi khai đủ rồi lưu đúng đường cũ', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-payment' });
+      renderNewForm();
+      fireEvent.click(screen.getByTestId('form-template-payment'));
+
+      expect(screen.getByRole('checkbox', { name: /Bật thanh toán/i })).toBeChecked();
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Đặt cọc khoá học' },
+      });
+      // Chưa khai số tiền / ngân hàng -> validate cũ chặn, không gọi API.
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+      expect(formAdminApi.createForm).not.toHaveBeenCalled();
+      expect(screen.getByText('Số tiền phải từ 1.000 đến 100.000.000 VND')).toBeInTheDocument();
+
+      fireEvent.change(screen.getByPlaceholderText('Vd: 150.000'), { target: { value: '500000' } });
+      const bankSelect = screen.getByText('Ngân hàng').closest('div').querySelector('select');
+      fireEvent.change(bankSelect, { target: { value: '970436' } });
+      fireEvent.change(
+        screen.getByText('Số tài khoản').closest('div').querySelector('input'),
+        { target: { value: '0123456789' } }
+      );
+      fireEvent.change(screen.getByPlaceholderText(/NGUYEN VAN A/i), { target: { value: 'Nguyen Van A' } });
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+      expect(payload.paymentConfig).toEqual({
+        enabled: true,
+        methods: ['bank'],
+        method: 'bank',
+        amount: 500000,
+        bankBin: '970436',
+        accountNumber: '0123456789',
+        accountName: 'Nguyen Van A',
+        holdMinutes: 30,
+      });
+      expect(payload.bookingConfig).toBeNull();
+      expect(payload.settings.sendConfirmation).toBe(true);
+    });
+
+    it('"Thu tiền / đặt cọc": nhân viên không chọn được (nút bị khoá, có câu giải thích) vì không gửi được paymentConfig', () => {
+      mockAuthState = { user: { id: 1 }, activeContext: { type: 'employee' } };
+      renderNewForm();
+
+      const card = screen.getByTestId('form-template-payment');
+      expect(card).toBeDisabled();
+      expect(screen.getByText(/Chỉ chủ tài khoản đổi được thông tin nhận tiền/i)).toBeInTheDocument();
+      fireEvent.click(card);
+      // Vẫn ở bước chọn mẫu.
+      expect(screen.getByTestId('form-template-picker')).toBeInTheDocument();
+      // Các mẫu còn lại vẫn dùng được.
+      expect(screen.getByTestId('form-template-booking')).not.toBeDisabled();
+    });
+
+    it('"Khảo sát": vài câu trắc nghiệm — radio/checkbox có đủ lựa chọn, câu 1-2 bắt buộc, không có role', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-survey' });
+      renderNewForm();
+      fireEvent.click(screen.getByTestId('form-template-survey'));
+
+      const payload = await typeTitleAndSave('Khảo sát hài lòng');
+      expect(payload.fields.map((f) => [f.type, f.required])).toEqual([
+        ['radio', true],
+        ['radio', true],
+        ['checkbox', false],
+        ['long_text', false],
+      ]);
+      expect(payload.fields[0].options).toEqual(['Facebook', 'Zalo', 'Bạn bè giới thiệu', 'Khác']);
+      expect(payload.fields[2].options).toHaveLength(4);
+      expect(payload.fields.every((f) => f.role === undefined)).toBe(true);
+      expect(payload.bookingConfig).toBeNull();
+      expect(payload.paymentConfig).toBeNull();
     });
   });
 });

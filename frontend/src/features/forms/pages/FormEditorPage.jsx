@@ -40,6 +40,8 @@ import {
 import ShareModal from '../components/ShareModal';
 import FormRenderer from '../components/FormRenderer';
 import BankSearchSelect from '../components/BankSearchSelect';
+import FormTemplatePicker from '../components/FormTemplatePicker';
+import { FORM_TEMPLATES, buildFormFromTemplate } from '../constants/formTemplates';
 import useStorageQuota from '../../storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
@@ -279,6 +281,8 @@ export default function FormEditorPage() {
 
   const [isLoading, setIsLoading] = useState(isEditMode);
   const [isSaving, setIsSaving] = useState(false);
+  // Chỉ có nghĩa ở chế độ tạo mới: false = đang ở bước chọn mẫu, true = đã vào trình soạn.
+  const [templateChosen, setTemplateChosen] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -400,20 +404,10 @@ export default function FormEditorPage() {
   ]);
 
   useEffect(() => {
-    if (!isEditMode) {
-      // Form mới mặc định cho sẵn 1 trường Họ tên
-      setFields([
-        {
-          key: '',
-          label: t('forms.editorPage.defaultFieldName'),
-          type: 'short_text',
-          required: true,
-          role: 'name',
-          options: [],
-        },
-      ]);
-      return;
-    }
+    // Form mới: các trường / cài đặt do bước chọn mẫu điền (handleSelectTemplate) — mẫu "Trống" cho
+    // sẵn 1 trường Họ tên. Effect này không đụng state ở chế độ tạo, nên đổi ngôn ngữ giữa chừng
+    // cũng không xoá các trường người dùng đã soạn.
+    if (!isEditMode) return;
 
     setIsLoading(true);
     fetchFormById(id)
@@ -517,6 +511,30 @@ export default function FormEditorPage() {
       })
       .finally(() => setIsLoading(false));
   }, [id, isEditMode, navigate, t]);
+
+  // Bước chọn mẫu (chỉ ở chế độ tạo mới): điền sẵn trường + cài đặt (+ bật đặt lịch / thanh toán) vào
+  // ĐÚNG các state trình soạn đang dùng, rồi vào trình soạn. Lưu đi đường lưu cũ, không có API riêng.
+  const handleSelectTemplate = (templateId) => {
+    const template = FORM_TEMPLATES.find((tpl) => tpl.id === templateId);
+    if (!template) return;
+    // Nhân viên không gửi được paymentConfig (backend chặn 403) — mẫu thu tiền chỉ dành cho chủ tài khoản.
+    if (template.ownerOnly && isEmployee) return;
+
+    const built = buildFormFromTemplate(template, t);
+    setFields(built.fields);
+    // Gộp lên state hiện có: consentEnabled / redirectUrl giữ mặc định, mẫu chỉ ghi đè khoá nó khai.
+    setSettings((prev) => ({ ...prev, ...built.settings }));
+    if (built.bookingWeeklySlots) {
+      setBooking({
+        ...DEFAULT_BOOKING,
+        enabled: true,
+        weeklySlots: { ...DEFAULT_WEEKLY_SLOTS, ...built.bookingWeeklySlots },
+      });
+    }
+    // Gộp (không ghi đè) để giữ tài khoản nhận tiền đã lưu từ lần trước (effect nạp preset ở trên).
+    if (built.enablePayment) setPayment((prev) => ({ ...prev, enabled: true }));
+    setTemplateChosen(true);
+  };
 
   // Thêm trường mới
   const handleAddField = () => {
@@ -1216,6 +1234,17 @@ export default function FormEditorPage() {
         <div className="inline-block animate-spin rounded-full h-8 w-8 border-4 border-gray-200 border-t-primary-600 mb-3" />
         <p className="text-sm">{t('forms.editorPage.loading')}</p>
       </div>
+    );
+  }
+
+  // Biểu mẫu MỚI bắt đầu bằng chọn mẫu; sửa biểu mẫu cũ thì không có bước này.
+  if (!isEditMode && !templateChosen) {
+    return (
+      <FormTemplatePicker
+        onSelect={handleSelectTemplate}
+        onBack={() => navigate('/app/forms')}
+        isEmployee={isEmployee}
+      />
     );
   }
 

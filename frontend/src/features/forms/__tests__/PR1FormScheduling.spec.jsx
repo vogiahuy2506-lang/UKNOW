@@ -268,6 +268,9 @@ describe('PR-1: Biểu mẫu đặt lịch sửa theo góp ý sếp 24/09', () =
         </I18nProvider>
       );
 
+      // Biểu mẫu mới bắt đầu bằng bước chọn mẫu — bấm "Trống" để vào trình soạn.
+      fireEvent.click(screen.getByTestId('form-template-blank'));
+
       await waitFor(() => {
         expect(screen.getByText('Lưu biểu mẫu')).toBeInTheDocument();
       });
