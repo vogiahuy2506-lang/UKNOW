@@ -148,6 +148,27 @@ describe('AiChatbot — create_and_run đi qua thẻ xác nhận, không chạy 
     expect(aiApi.createAndRunCampaign).not.toHaveBeenCalled();
   });
 
+  it('bản xem trước có lỗi chặn (readyToCreate=false) → nút "Tạo và chạy" bị khoá, bấm cũng KHÔNG gọi createAndRunCampaign', async () => {
+    aiApi.prepareCampaign.mockResolvedValue({
+      success: true,
+      data: {
+        confirmationView: { ...READY_VIEW, readyToCreate: false, blockingIssues: [{ code: 'missing_sender', message: 'Chưa có tài khoản gửi' }] },
+        preparedScript: { ...SCRIPT, prepared: true },
+      },
+    });
+    aiApi.chat.mockResolvedValue({
+      success: true,
+      data: { type: 'create_and_run', content: 'Mình sẽ tạo và chạy chiến dịch.', data: SCRIPT, sessionId: 's1', sessionTitle: 'Email' },
+    });
+
+    await sendMessage('Tạo và chạy ngay chiến dịch email cho khách quen');
+    const runButton = await screen.findByRole('button', { name: 'aiChatbot.createAndRunBtn' });
+    expect(runButton).toBeDisabled();
+    fireEvent.click(runButton);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(aiApi.createAndRunCampaign).not.toHaveBeenCalled();
+  });
+
   it('lỗi từ server khi chạy → thẻ còn nguyên để thử lại (không mất bản xem trước)', async () => {
     aiApi.createAndRunCampaign.mockResolvedValue({ success: false, message: 'Hết hạn mức gửi hôm nay' });
     aiApi.chat.mockResolvedValue({
