@@ -311,6 +311,9 @@ describe('SettingsModal — tên miền riêng: kiểm DNS rồi mới kết n�
 
     expect(await screen.findByRole('button', { name: 'Kết nối tên miền' })).toBeInTheDocument();
     expect(screen.getByText('DNS đã trỏ đúng. Bấm Kết nối tên miền để hoàn tất.')).toBeInTheDocument();
+    // Kiểm tra dù DNS đã đúng vẫn KHÔNG ghi gì — chỉ bấm "Kết nối tên miền" mới gọi PUT.
+    expect(domainApi.putLandingCustomDomain).not.toHaveBeenCalled();
+    expect(domainApi.deleteLandingCustomDomain).not.toHaveBeenCalled();
 
     fireEvent.change(input, { target: { value: 'khac.example.com' } });
     expect(screen.queryByRole('button', { name: 'Kết nối tên miền' })).toBeNull();
