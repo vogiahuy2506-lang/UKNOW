@@ -182,6 +182,17 @@ const UI_LABELS_IN_ARTICLES = [
   ['dat-lich-giu-cho', 'forms.editorPage.payment.enableLabel', 'Bật thanh toán'],
   ['dat-lich-giu-cho', 'forms.sendConfirmation', 'Gửi email xác nhận cho người điền sau khi nộp'],
   ['dat-lich-giu-cho', 'forms.editorPage.afterSubmit.title', 'Sau khi gửi'],
+  // PLAN_DON_GIAN_CAI_DAT_LANDING (03/10/2026): Cài đặt trang còn 3 mục (Xuất bản & đường dẫn / Form thu khách / Ảnh đã tải
+  // lên); tên miền riêng là một công tắc trong mục đầu; form thu khách chọn "Form cơ bản".
+  ['landing-page', 'landingCanvas.settingsModal.sections.publish.title', 'Xuất bản & đường dẫn'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkCopy', 'Sao chép'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkOpen', 'Mở trang'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.toggle', 'Dùng tên miền riêng của bạn'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.leadForm.title', 'Form thu khách'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.images.title', 'Ảnh đã tải lên'],
+  ['landing-page', 'leadFormConfig.modeBasic', 'Form cơ bản'],
+  ['landing-page', 'leadFormConfig.addField', 'Thêm câu hỏi'],
+  ['landing-page', 'leadFormConfig.askAiAdd', 'Nhờ AI thêm ô này'],
 ];
 
 /** Bắt cả hai lối viết: `**Nhóm → Mục**` và `**Nhóm** → **Mục**`. */
@@ -294,6 +305,13 @@ describe('chất lượng bài trợ giúp seed', () => {
       'mẫu Zalo',
       'mẫu Email và mẫu Zalo tách riêng',
       '(dùng chung với Zalo)',
+      // PLAN_DON_GIAN_CAI_DAT_LANDING (03/10/2026): Cài đặt trang gộp "Thông tin trang" + "Tên miền & URL" thành "Xuất bản
+      // & đường dẫn", mục "Form đăng ký" đổi thành "Form thu khách", "Ảnh của trang" thành "Ảnh đã tải lên" (còn 3 mục, không
+      // còn "Bốn mục").
+      'Tên miền & URL',
+      '**Form đăng ký**',
+      'Ảnh của trang',
+      'Bốn mục',
     ];
     const offenders = [];
     for (const article of HELP_SEED_ARTICLES) {
