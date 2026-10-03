@@ -12,6 +12,7 @@ import campaignRunService from '../services/campaign/campaignRun.service.js';
 import campaignRunRepository from '../repositories/campaign/campaignRun.repository.js';
 import campaignShutdownGate from '../services/campaign/campaignShutdownGate.js';
 import { notifyCampaignRunFailed, notifyCampaignApprovalRequired } from './campaignQuotaPauseNotify.util.js';
+import { notifyCampaignScheduleSkipped } from './campaignScheduleSkipNotify.util.js';
 import { evaluateApprovalThreshold, markPendingOwnerApproval } from '../services/campaign/campaignApproval.service.js';
 import { logWorkspace, AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 // Luật thời gian của lịch chạy (khoá ngày Hà Nội, cron runtime, N ngày) dời sang util để
@@ -131,6 +132,78 @@ const recordFailedScheduleTrigger = async (schedule, runName, error) => {
   }
 };
 
+/** "HH:mm dd/MM" theo giờ Hà Nội — ghép từ parts để không phụ thuộc định dạng locale của ICU. */
+const formatHanoiHourMinuteDayMonth = (value) => {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: HANOI_TIME_ZONE,
+      hourCycle: 'h23',
+      hour: '2-digit',
+      minute: '2-digit',
+      day: '2-digit',
+      month: '2-digit',
+    }).formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.hour}:${parts.minute} ${parts.day}/${parts.month}`;
+};
+
+/**
+ * Lịch nổ khi lượt chạy trước của CHÍNH chiến dịch còn `running` → KHÔNG chạy chồng (giữ nguyên hành vi: gửi tin
+ * không thu hồi được, chạy bù = gửi trễ nhiều ngày), nhưng không còn im lặng (PLAN_UOC_TINH_THOI_GIAN_CHIEN_DICH 3.4).
+ * Production đo 03/10: 5 lần bỏ qua, 3 là khách thật — họ không hề biết. Ghi một dòng `campaign_runs` `failed` có
+ * `run_metadata.skippedBecauseRunning` (hiện trong cửa sổ lịch) và email chủ (best-effort, đúng một lần mỗi dòng).
+ *
+ * Dòng này PHẢI bị loại khỏi bộ đếm "tự tắt sau N lần hỏng liên tiếp" (xem truy vấn recentRunsCheck) — nếu không,
+ * lịch hằng ngày của chiến dịch chạy 3 ngày sẽ tự tắt chỉ vì bị bỏ qua.
+ * Mọi lỗi bị nuốt: ghi vết không được che hành vi gốc của scheduler.
+ */
+const recordSkippedScheduleTrigger = async (schedule, blockingRun, { scheduleDisabled }) => {
+  const campaignId = schedule?.id_campaign;
+  if (!campaignId || !schedule?.id) return;
+  const workspaceOwnerId = Number.parseInt(schedule?.workspace_owner_id ?? schedule?.id_user, 10);
+  try {
+    const startedAtText = blockingRun?.started_at ? formatHanoiHourMinuteDayMonth(blockingRun.started_at) : '';
+    // pg trả BIGINT dạng chuỗi — chuẩn hoá về số cho metadata/email.
+    const blockingId = blockingRun?.id != null ? Number(blockingRun.id) : null;
+    const message = `Bỏ qua lượt theo lịch vì lượt chạy trước${blockingId ? ` (#${blockingId}${startedAtText ? `, bắt đầu ${startedAtText}` : ''})` : ''} chưa xong`;
+    const runName = `${schedule.schedule_name || 'Lich chay'} - ${new Date().toLocaleString('vi-VN', {
+      timeZone: HANOI_TIME_ZONE,
+      hourCycle: 'h23',
+    })}`;
+    const skippedRun = await campaignRunRepository.insertFailedScheduledRun({
+      campaignId,
+      workspaceOwnerId: Number.isFinite(workspaceOwnerId) ? workspaceOwnerId : null,
+      scheduleId: schedule.id,
+      runName,
+      errorMessage: message,
+      extraMetadata: { skippedBecauseRunning: true, blockingRunId: blockingId },
+    });
+    if (skippedRun?.id && Number.isFinite(workspaceOwnerId)) {
+      notifyCampaignScheduleSkipped({
+        runId: skippedRun.id,
+        campaignId,
+        ownerId: workspaceOwnerId,
+        scheduleName: schedule.schedule_name || '',
+        blockingRunId: blockingId,
+        blockingStartedAt: startedAtText,
+        scheduleDisabled,
+      }).catch((notifyErr) => {
+        console.error(
+          `[Scheduler] Không báo được chủ chiến dịch việc bỏ qua schedule #${schedule.id}:`,
+          notifyErr.message
+        );
+      });
+    }
+  } catch (recordErr) {
+    console.error(
+      `[Scheduler] Không ghi được dòng "bỏ qua" của schedule #${schedule.id}:`,
+      recordErr.message
+    );
+  }
+};
+
 const triggerCampaignSchedule = async (schedule) => {
   // Hoist: catch cần biết đã tạo được lượt chạy thật chưa (đã có thì KHÔNG ghi thêm dòng `failed`).
   let runName = null;
@@ -168,9 +241,10 @@ const triggerCampaignSchedule = async (schedule) => {
     );
 
     const runningCheck = await db.query(
-      `SELECT id
+      `SELECT id, started_at
        FROM campaign_runs
        WHERE id_campaign = $1 AND status = 'running'
+       ORDER BY started_at DESC, id DESC
        LIMIT 1`,
       [schedule.id_campaign]
     );
@@ -205,6 +279,7 @@ const triggerCampaignSchedule = async (schedule) => {
           );
         }
       }
+      await recordSkippedScheduleTrigger(schedule, runningCheck.rows[0], { scheduleDisabled: isOnce });
       return;
     }
 
@@ -225,6 +300,7 @@ const triggerCampaignSchedule = async (schedule) => {
       `SELECT status, error_message, run_metadata
        FROM campaign_runs
        WHERE id_schedule = $1
+         AND COALESCE(run_metadata->>'skippedBecauseRunning', 'false') <> 'true'
        ORDER BY started_at DESC, id DESC
        LIMIT $2`,
       [schedule.id, maxConsecutiveFailures]

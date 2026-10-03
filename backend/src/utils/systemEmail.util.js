@@ -826,6 +826,77 @@ export function buildCampaignApprovalRequiredEmail({ fullName, campaignName, tot
   };
 }
 
+/**
+ * Email báo chủ: lịch nổ nhưng lượt chạy trước của CHÍNH chiến dịch còn chạy → lượt theo lịch bị bỏ qua
+ * (PLAN_UOC_TINH_THOI_GIAN_CHIEN_DICH 3.4 — trước đây chỉ console.log, không ai biết).
+ *
+ * @param {{ fullName?: string, campaignName?: string, scheduleName?: string, blockingRunId?: number|string,
+ *   blockingStartedAt?: string, scheduleDisabled?: boolean, appUrl: string }} input
+ */
+export function buildCampaignScheduleSkippedEmail({
+  fullName, campaignName, scheduleName, blockingRunId, blockingStartedAt, scheduleDisabled = false, appUrl,
+}) {
+  const name = campaignName || 'Chiến dịch';
+  const safeName = escapeSystemEmailHtml(name);
+  const safeSchedule = escapeSystemEmailHtml(scheduleName || 'Lịch chạy');
+  const blocking = blockingRunId
+    ? `lượt chạy #${escapeSystemEmailHtml(blockingRunId)}${blockingStartedAt ? ` (bắt đầu ${escapeSystemEmailHtml(blockingStartedAt)})` : ''}`
+    : 'lượt chạy trước';
+
+  const content = `
+    <p style="margin:0 0 6px;font-size:16px;color:#374151;line-height:1.6">
+      Xin chào <strong style="color:#f97316">${escapeSystemEmailHtml(fullName || 'bạn')}</strong>,
+    </p>
+    <p style="margin:0 0 24px;font-size:15px;color:#6b7280;line-height:1.6">
+      Lịch <strong>«${safeSchedule}»</strong> của chiến dịch <strong>«${safeName}»</strong> đã đến giờ chạy, nhưng ${blocking}
+      <strong>vẫn chưa xong</strong>. Hệ thống <strong>bỏ qua lượt này</strong> để không chạy chồng
+      (chạy chồng sẽ gửi trùng và vượt nhịp gửi an toàn của tài khoản).
+      ${scheduleDisabled ? 'Vì đây là lịch chạy một lần nên lịch đã được tắt.' : 'Lịch vẫn bật — lượt kế tiếp sẽ chạy bình thường nếu lúc đó chiến dịch đã xong.'}
+    </p>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff7ed;border-left:4px solid #ea580c;border-radius:0 8px 8px 0;margin-bottom:28px">
+      <tr>
+        <td style="padding:14px 16px">
+          <p style="margin:0 0 4px;font-size:12px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.5px">
+            Cần làm gì
+          </p>
+          <p style="margin:0;font-size:13px;color:#92400e;line-height:1.6">
+            Danh sách đủ lớn thì một lượt chạy kéo dài nhiều ngày. Hãy dùng <strong>chuỗi tin nhiều bước</strong> trong
+            một node gửi (thay vì nhiều lịch), <strong>thêm tài khoản gửi</strong> để chia việc, hoặc <strong>giãn lịch</strong>
+            cho lượt sau bắt đầu khi lượt trước đã xong.
+          </p>
+        </td>
+      </tr>
+    </table>
+
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:20px">
+      <tr>
+        <td style="text-align:center">
+          <a href="${appUrl}"
+             style="display:inline-block;background:linear-gradient(135deg,#f97316,#ea580c);color:#fff;font-size:15px;font-weight:600;
+                    padding:14px 36px;border-radius:10px;text-decoration:none;box-shadow:0 4px 12px rgba(249,115,22,.35)">
+            Xem chiến dịch →
+          </a>
+        </td>
+      </tr>
+    </table>
+
+    <p style="margin:0;font-size:13px;color:#9ca3af;line-height:1.6;text-align:center">
+      Cần hỗ trợ? Liên hệ
+      <a href="mailto:info@digiso.vn" style="color:#f97316;text-decoration:none">info@digiso.vn</a>.
+    </p>
+  `;
+
+  return {
+    subject: `[${SENDER_NAME}] Lịch của chiến dịch «${name}» bị bỏ qua vì lượt trước chưa xong`,
+    html: buildBaseTemplate({
+      subtitle: 'Lịch chạy bị bỏ qua',
+      content,
+      footerNote: 'Đây là email tự động từ hệ thống. Vui lòng không reply.',
+    }),
+  };
+}
+
 // ─── Welcome Email ────────────────────────────────────────────────────────────
 
 function buildWelcomePlanSection(planName) {
