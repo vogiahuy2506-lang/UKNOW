@@ -117,6 +117,20 @@ describe('kbChunker.chunkText — chồng lấn ~150 ký tự giữa đoạn li�
     expect(Math.max(...chunks.map((c) => c.length))).toBeLessThanOrEqual(CHUNK_MAX_CHARS);
   });
 
+  it('đoạn văn 1.403 ký tự nhiều câu (vừa lọt trần 1.500 nhưng KHÔNG đủ chỗ cho chồng lấn) → tách theo câu, mọi đoạn kết thúc ở cuối câu', () => {
+    // Review G1 (03/10): bỏ phần chừa chỗ cho chồng lấn (unitMax = maxSize) thì đoạn văn này thành MỘT đơn vị, đuôi chồng lấn
+    // đẩy đoạn lên ~1.555 ký tự, lưới an toàn cắt cứng GIỮA câu + để lại mẩu vụn — mọi ca khác vẫn xanh.
+    const sentence = (i) => `Câu số ${String(i).padStart(3, '0')} nói về chính sách bảo hành sản phẩm và đổi trả trong ba mươi ngày.`;
+    const paragraph = (p) => Array.from({ length: 18 }, (_, i) => sentence(p * 18 + i)).join(' ');
+    expect(paragraph(0).length).toBeGreaterThan(CHUNK_MAX_CHARS - CHUNK_OVERLAP_CHARS);
+    expect(paragraph(0).length).toBeLessThan(CHUNK_MAX_CHARS);
+    const chunks = chunkText(Array.from({ length: 4 }, (_, p) => paragraph(p)).join('\n\n'));
+    for (const chunk of chunks) {
+      expect(chunk.length).toBeLessThanOrEqual(CHUNK_MAX_CHARS);
+      expect(chunk.trimEnd().endsWith('ngày.')).toBe(true);
+    }
+  });
+
   it('tuỳ chọn overlap = 0 → các đoạn không trùng nhau', () => {
     const text = Array.from({ length: 200 }, (_, i) => sentence(i)).join(' ');
     const chunks = chunkText(text, { overlap: 0 });
