@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import SettingsModal from '../SettingsModal.jsx';
 
@@ -33,9 +33,6 @@ vi.mock('../LeadFormConfigPanel.jsx', () => ({
   default: () => <div data-testid="lead-form-config-panel" />,
 }));
 
-const HOSTNAME_PLACEHOLDER = 'lp.example.com';
-const CUSTOM_TOGGLE = 'Dùng tên miền riêng của bạn';
-
 function baseForm(patch = {}) {
   return {
     title: 'Trang thử',
@@ -65,13 +62,30 @@ function renderModal(formPatch = {}, props = {}) {
   return { setForm, ...utils };
 }
 
+/** Mọi bản cập nhật form mà modal đã gửi, áp lần lượt lên `initial`. */
+function appliedForms(setForm, initial) {
+  return setForm.mock.calls.map(([update]) => (typeof update === 'function' ? update(initial) : { ...initial, ...update }));
+}
+
+/** Bấm / gõ vào MỌI nút, ô tích, radio, ô nhập đang có trong modal (hai lượt: lượt 2 bấm các nút sau khi đã gõ). */
+function interactWithEverything() {
+  const clickAll = () => {
+    for (const el of screen.queryAllByRole('button')) fireEvent.click(el);
+    for (const el of screen.queryAllByRole('checkbox')) fireEvent.click(el);
+    for (const el of screen.queryAllByRole('radio')) fireEvent.click(el);
+  };
+  clickAll();
+  for (const el of screen.queryAllByRole('textbox')) fireEvent.change(el, { target: { value: 'lp.Example.com' } });
+  clickAll();
+}
+
 /**
  * Bug 03/10/2026: `landing_page_domains` lưu CẢ tên miền miễn phí `<slug>.founderai.biz` (cf_managed)
  * lẫn tên miền riêng, nên API trả `customDomainHostname = 'abc.founderai.biz'` cho trang miễn phí.
  * Modal suy "chế độ tên miền riêng" từ việc hostname có giá trị → mở nhầm tab + hướng dẫn CNAME vô nghĩa.
  */
-describe('SettingsModal — chế độ tên miền', () => {
-  it('trang dùng tên miền MIỄN PHÍ (hostname = <slug>.founderai.biz) → KHÔNG ở chế độ tên miền riêng, link là <slug>.founderai.biz', () => {
+describe('SettingsModal — tên miền', () => {
+  it('trang dùng tên miền MIỄN PHÍ (hostname = <slug>.founderai.biz) → không có khối tên miền riêng, link là <slug>.founderai.biz', () => {
     renderModal({
       slug: 'abc',
       domainType: 'system',
@@ -79,27 +93,17 @@ describe('SettingsModal — chế độ tên miền', () => {
       customDomainStatus: 'active',
     });
 
-    expect(screen.getByRole('checkbox', { name: CUSTOM_TOGGLE })).not.toBeChecked();
-    expect(screen.queryByTestId('custom-domain-panel')).toBeNull();
-    expect(screen.queryByPlaceholderText(HOSTNAME_PLACEHOLDER)).toBeNull();
-    expect(screen.queryByTestId('custom-domain-guide')).toBeNull();
+    expect(screen.queryByTestId('custom-domain-readonly')).toBeNull();
     expect(screen.getByTestId('landing-public-url')).toHaveTextContent('https://abc.founderai.biz');
     expect(screen.getByLabelText(/Đường dẫn miễn phí/)).toHaveValue('abc');
   });
 
   it('hostname dưới founderai.biz (www./subdomain khác) cũng không phải tên miền riêng', () => {
     renderModal({ slug: 'abc', customDomainHostname: 'www.founderai.biz', customDomainStatus: 'active' });
-    expect(screen.getByRole('checkbox', { name: CUSTOM_TOGGLE })).not.toBeChecked();
-    expect(screen.queryByTestId('custom-domain-panel')).toBeNull();
+    expect(screen.queryByTestId('custom-domain-readonly')).toBeNull();
   });
 
-  it('trang chưa có hostname nào → chế độ miễn phí', () => {
-    renderModal({ customDomainHostname: null });
-    expect(screen.getByRole('checkbox', { name: CUSTOM_TOGGLE })).not.toBeChecked();
-    expect(screen.queryByPlaceholderText(HOSTNAME_PLACEHOLDER)).toBeNull();
-  });
-
-  it('trang có tên miền RIÊNG đang chạy → mở sẵn, hiện trạng thái "Đang chạy", link là tên miền riêng, còn nút Kiểm tra kết nối', () => {
+  it('trang có tên miền RIÊNG đang chạy → CHỈ HIỂN THỊ: tên miền + "Đang chạy"; link là tên miền riêng; ẩn ô slug', () => {
     renderModal({
       slug: 'abc',
       domainType: 'custom',
@@ -107,17 +111,15 @@ describe('SettingsModal — chế độ tên miền', () => {
       customDomainStatus: 'active',
     });
 
-    expect(screen.getByRole('checkbox', { name: CUSTOM_TOGGLE })).toBeChecked();
-    expect(screen.getByPlaceholderText(HOSTNAME_PLACEHOLDER)).toHaveValue('lp.example.com');
+    const block = screen.getByTestId('custom-domain-readonly');
+    expect(block).toHaveTextContent('lp.example.com');
     expect(screen.getByTestId('custom-domain-status')).toHaveTextContent('Đang chạy');
     expect(screen.getByTestId('landing-public-url')).toHaveTextContent('https://lp.example.com');
-    expect(screen.getByRole('button', { name: /Kiểm tra kết nối/ })).toBeInTheDocument();
-    // Đã nhập tên miền → có hướng dẫn DNS; slug miễn phí ẩn đi.
-    expect(screen.getByTestId('custom-domain-guide')).toBeInTheDocument();
+    // Đổi slug làm backend gỡ hàng tên miền riêng → không cho sửa slug khi trang có tên miền riêng.
     expect(screen.queryByLabelText(/Đường dẫn miễn phí/)).toBeNull();
   });
 
-  it('tên miền riêng đang chờ xác minh → hiện "Chờ xác minh", KHÔNG hiện link (tên miền chưa chạy)', () => {
+  it('tên miền riêng đang chờ xác minh → "Chờ xác minh", KHÔNG hiện link (tên miền chưa chạy)', () => {
     renderModal({
       domainType: 'custom',
       customDomainHostname: 'lp.example.com',
@@ -129,44 +131,87 @@ describe('SettingsModal — chế độ tên miền', () => {
     expect(screen.getByText(/đang chờ xác minh/)).toBeInTheDocument();
   });
 
-  it('bật "Dùng tên miền riêng của bạn" trên trang miễn phí → mở ô nhập; hướng dẫn DNS chỉ hiện sau khi nhập tên miền', () => {
-    renderModal({ slug: 'abc', customDomainHostname: 'abc.founderai.biz', customDomainStatus: 'active' });
+  it('trang domain_type=custom mà KHÔNG còn hàng tên miền nào (4 trang hỏng ở production) → không hiện link miễn phí đã chết, không cho sửa slug', () => {
+    renderModal({ slug: 'abc', domainType: 'custom', customDomainHostname: null });
 
-    fireEvent.click(screen.getByRole('checkbox', { name: CUSTOM_TOGGLE }));
-
-    const input = screen.getByPlaceholderText(HOSTNAME_PLACEHOLDER);
-    expect(input).toHaveValue('');
-    expect(screen.queryByTestId('custom-domain-guide')).toBeNull();
-    expect(screen.queryByRole('button', { name: /Kiểm tra kết nối/ })).toBeNull();
-
-    fireEvent.change(input, { target: { value: 'LP.Example.com' } });
-
-    expect(input).toHaveValue('lp.example.com');
-    expect(screen.getByTestId('custom-domain-guide')).toHaveTextContent('CNAME');
-    expect(screen.getByRole('button', { name: /Kiểm tra kết nối/ })).toBeInTheDocument();
+    expect(screen.queryByTestId('landing-public-url')).toBeNull();
+    expect(screen.queryByLabelText(/Đường dẫn miễn phí/)).toBeNull();
+    expect(screen.getByText(/chưa có tên miền nào được gắn/)).toBeInTheDocument();
   });
 
-  it('"Lưu tên miền" giữ nguyên logic cũ: setForm domainType=custom + hostname + loại (subdomain/apex)', () => {
-    const { setForm } = renderModal({ customDomainHostname: null });
+  it('trang chưa có hostname nào → link miễn phí + ô slug', () => {
+    renderModal({ customDomainHostname: null });
+    expect(screen.getByTestId('landing-public-url')).toHaveTextContent('https://abc.founderai.biz');
+    expect(screen.getByLabelText(/Đường dẫn miễn phí/)).toBeInTheDocument();
+  });
+});
 
-    fireEvent.click(screen.getByRole('checkbox', { name: CUSTOM_TOGGLE }));
-    fireEvent.change(screen.getByPlaceholderText(HOSTNAME_PLACEHOLDER), { target: { value: 'example.com' } });
-    fireEvent.click(screen.getByRole('radio', { name: /Apex/ }));
-    fireEvent.click(screen.getByRole('button', { name: 'Lưu tên miền' }));
+/**
+ * 03/10/2026: production có 4 trang domain_type='custom' MÀ KHÔNG còn hàng landing_page_domains (id 50, 76, 88, 105):
+ * "Lưu tên miền" chỉ đổi state form → lúc lưu trang backend gỡ subdomain miễn phí mà không đăng ký hostname nào;
+ * "Kiểm tra kết nối" dùng fetch thô không Bearer. Modal gỡ HẾT thao tác ghi tên miền riêng cho tới khi có PR nối
+ * putLandingCustomDomain / postLandingCustomDomainVerify.
+ */
+describe('SettingsModal — không còn thao tác ghi tên miền riêng', () => {
+  const FORMS = {
+    'trang miễn phí': { slug: 'abc', domainType: 'system', customDomainHostname: 'abc.founderai.biz', customDomainStatus: 'active' },
+    'trang chưa có hostname': { slug: 'abc', domainType: 'system', customDomainHostname: null },
+    'trang có tên miền riêng đang chạy': { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'active' },
+    'trang có tên miền riêng chờ xác minh': { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'pending_verification' },
+    'trang custom không còn hàng tên miền (hỏng)': { slug: 'abc', domainType: 'custom', customDomainHostname: null },
+  };
+
+  beforeEach(() => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    vi.stubGlobal('fetch', vi.fn());
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each(Object.entries(FORMS))('%s: không có công tắc / ô nhập / nút Lưu tên miền / Kiểm tra kết nối / hướng dẫn DNS', (_name, patch) => {
+    renderModal(patch);
+
+    expect(screen.queryByRole('checkbox', { name: /tên miền riêng/i })).toBeNull();
+    expect(screen.queryByPlaceholderText('lp.example.com')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Lưu tên miền/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Kiểm tra kết nối/ })).toBeNull();
+    expect(screen.queryByTestId('custom-domain-guide')).toBeNull();
+    expect(screen.queryByText(/CNAME/)).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+  });
+
+  it.each(Object.entries(FORMS))('%s: bấm/gõ vào mọi thứ trong modal KHÔNG làm đổi domainType / tên miền, và không gọi fetch', (_name, patch) => {
+    const initial = baseForm(patch);
+    const { setForm } = renderModal(patch);
+
+    interactWithEverything();
+
+    const forms = appliedForms(setForm, initial);
+    expect(forms.length).toBeGreaterThan(0); // có tương tác thật (đổi slug / xuất bản...), không phải test rỗng
+    for (const next of forms) {
+      expect(next.domainType).toBe(initial.domainType);
+      expect(next.customDomainHostname).toBe(initial.customDomainHostname);
+      expect(next.customDomainIsApex).toBe(initial.customDomainIsApex);
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('bấm "Lưu" ở ô đường dẫn miễn phí chỉ làm sạch slug, không đụng domainType', () => {
+    const initial = baseForm({ slug: 'Abc_Test', domainType: 'system' });
+    const { setForm } = renderModal({ slug: 'Abc_Test', domainType: 'system' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
 
     expect(setForm).toHaveBeenCalledTimes(1);
-    const next = setForm.mock.calls[0][0](baseForm());
-    expect(next).toMatchObject({
-      domainType: 'custom',
-      customDomainHostname: 'example.com',
-      customDomainIsApex: true,
-    });
+    expect(setForm.mock.calls[0][0](initial)).toEqual({ ...initial, slug: 'abctest' });
   });
 
-  it('tab "domain" (ý định chat "đặt tên miền riêng") mở sẵn phần tên miền riêng', () => {
+  it('tab "domain" (ý định chat "đặt tên miền riêng") không mở ra thao tác ghi nào', () => {
     renderModal({ customDomainHostname: null }, { tab: 'domain' });
-    expect(screen.getByRole('checkbox', { name: CUSTOM_TOGGLE })).toBeChecked();
-    expect(screen.getByPlaceholderText(HOSTNAME_PLACEHOLDER)).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText('lp.example.com')).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /tên miền riêng/i })).toBeNull();
   });
 });
 

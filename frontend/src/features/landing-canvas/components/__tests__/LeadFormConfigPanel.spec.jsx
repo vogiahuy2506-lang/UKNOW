@@ -158,70 +158,66 @@ describe('LeadFormConfigPanel', () => {
   });
 
   /**
-   * 03/10/2026 PR-1: chọn 1 trong 2 cách thu thông tin khách — chỉ hiện chi tiết của lựa chọn đang chọn
-   * (trước đây gộp cả hai hệ thống trong một màn).
+   * 03/10/2026: GỠ lựa chọn "Dùng biểu mẫu đã tạo" — `linkedFormId` là trường chỉ-đọc (forms.landing_page_id), editor
+   * không có đường lưu nó nên chọn biểu mẫu khác chỉ đổi state cục bộ, lúc lưu backend vẫn tạo / dùng form của chính
+   * landing (landingPageAdmin.service.js). Chỉ còn Form cơ bản; trang ĐÃ có biểu mẫu gắn thì hiện thông tin, chỉ đọc.
    */
-  describe('chọn 1 trong 2: Form cơ bản / Dùng biểu mẫu đã tạo', () => {
+  describe('chỉ còn Form cơ bản; biểu mẫu đã gắn chỉ để xem', () => {
     const BASIC_MARK = 'Các trường mặc định';
-    const LINKED_PICKER_MARK = 'Chọn biểu mẫu để liên kết vào trang:';
+    // Chữ của mọi thứ liên quan tới chọn / gắn / huỷ gắn biểu mẫu từ module Forms.
+    const LINK_UI = /Dùng biểu mẫu đã tạo|Chọn biểu mẫu để liên kết|Áp dụng vào trang|Huỷ liên kết|Chèn vị trí form|Tạo biểu mẫu mới|Khuyên dùng/;
 
-    it('mặc định (chưa có biểu mẫu gắn) → "Form cơ bản" được chọn, chỉ hiện cấu hình form cơ bản', () => {
-      render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+    it('trang chưa có biểu mẫu gắn → chỉ có cấu hình Form cơ bản: không radio, không bộ chọn / liên kết biểu mẫu', () => {
+      const { container } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
 
-      expect(screen.getByRole('radio', { name: 'Form cơ bản' })).toBeChecked();
-      expect(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' })).not.toBeChecked();
       expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
       expect(screen.getByText('Luôn có: Họ tên, Email, Số điện thoại.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Thêm câu hỏi' })).toBeInTheDocument();
-      expect(screen.queryByText(LINKED_PICKER_MARK)).not.toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('linked-form-readonly')).not.toBeInTheDocument();
+      expect(container.textContent).not.toMatch(LINK_UI);
+      expect(container.querySelector('a[href^="/app/forms"]')).toBeNull();
+      expect(container.textContent).not.toContain('leadFormConfig.');
     });
 
-    it('chọn "Dùng biểu mẫu đã tạo" → ẨN cấu hình form cơ bản, hiện bộ chọn biểu mẫu; chọn lại "Form cơ bản" thì ngược lại', () => {
-      render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
-
-      fireEvent.click(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' }));
-
-      expect(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' })).toBeChecked();
-      expect(screen.queryByText(BASIC_MARK)).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Thêm câu hỏi' })).not.toBeInTheDocument();
-      expect(screen.queryByRole('button', { name: 'Xem trước form' })).not.toBeInTheDocument();
-      expect(screen.getByText(LINKED_PICKER_MARK)).toBeInTheDocument();
-      expect(screen.getByRole('link', { name: /Tạo biểu mẫu mới/ })).toHaveAttribute('href', '/app/forms/new');
-
-      fireEvent.click(screen.getByRole('radio', { name: 'Form cơ bản' }));
-
-      expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
-      expect(screen.queryByText(LINKED_PICKER_MARK)).not.toBeInTheDocument();
-    });
-
-    it('trang ĐANG có biểu mẫu gắn (linkedFormId) → mở sẵn ở "Dùng biểu mẫu đã tạo", không hiện cấu hình form cơ bản', () => {
+    it('trang ĐANG có biểu mẫu gắn (linkedFormId) → hiện thông tin chỉ đọc + link mở sửa; vẫn có cấu hình Form cơ bản', () => {
       render(<LeadFormConfigPanel form={makeForm({ linkedFormId: 42 })} setForm={vi.fn()} t={t} />);
 
-      expect(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' })).toBeChecked();
-      expect(screen.getByText('Trang đang liên kết với biểu mẫu')).toBeInTheDocument();
-      expect(screen.getByText('Biểu mẫu #42')).toBeInTheDocument();
+      const card = screen.getByTestId('linked-form-readonly');
+      expect(card).toHaveTextContent('Trang đang liên kết với biểu mẫu');
+      expect(card).toHaveTextContent('#42');
+      expect(card).toHaveTextContent('Biểu mẫu #42');
       expect(screen.getByRole('link', { name: /Mở sửa biểu mẫu/ })).toHaveAttribute('href', '/app/forms/42/edit');
-      expect(screen.queryByText(BASIC_MARK)).not.toBeInTheDocument();
+      expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
+      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     });
 
-    it('đổi lựa chọn chỉ đổi phần hiển thị, KHÔNG đổi dữ liệu (setForm không được gọi)', () => {
+    it('trang có biểu mẫu gắn: không có nút Huỷ liên kết / Chèn vị trí form / bộ chọn biểu mẫu', () => {
+      const { container } = render(
+        <LeadFormConfigPanel form={makeForm({ linkedFormId: 42, htmlContent: '<p>chưa có slot</p>' })} setForm={vi.fn()} t={t} />
+      );
+
+      expect(container.textContent).not.toMatch(LINK_UI);
+      expect(screen.queryByRole('button', { name: /Huỷ liên kết|Chèn vị trí|Áp dụng/ })).not.toBeInTheDocument();
+      // vẫn báo thiếu chỗ đặt form (chỉ báo, không có nút ghi)
+      expect(screen.getByText(/Trang chưa có thẻ vị trí/)).toBeInTheDocument();
+    });
+
+    it('bấm/gõ mọi thứ trong panel KHÔNG làm đổi linkedFormId, và không có đường nào ghi linkedFormId', () => {
       const setForm = vi.fn();
-      render(<LeadFormConfigPanel form={makeForm({ linkedFormId: 42 })} setForm={setForm} t={t} />);
+      const initial = makeForm({ linkedFormId: 42 });
+      render(<LeadFormConfigPanel form={initial} setForm={setForm} t={t} />);
 
-      fireEvent.click(screen.getByRole('radio', { name: 'Form cơ bản' }));
-      fireEvent.click(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' }));
+      for (const el of screen.queryAllByRole('button')) fireEvent.click(el);
+      for (const el of screen.queryAllByRole('checkbox')) fireEvent.click(el);
 
-      expect(setForm).not.toHaveBeenCalled();
-    });
-
-    it('không còn nhãn "Khuyên dùng" (0/69 trang dùng) và không lộ khoá i18n thô ở cả hai lựa chọn', () => {
-      const { container } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
-      expect(container.textContent).not.toContain('Khuyên dùng');
-      expect(container.textContent).not.toContain('leadFormConfig.');
-
-      fireEvent.click(screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' }));
-      expect(container.textContent).not.toContain('Khuyên dùng');
-      expect(container.textContent).not.toContain('leadFormConfig.');
+      expect(setForm).toHaveBeenCalled(); // có tương tác thật (bật Nghề nghiệp, Thêm câu hỏi...)
+      for (const [update] of setForm.mock.calls) {
+        const next = typeof update === 'function' ? update(initial) : { ...initial, ...update };
+        expect(next.linkedFormId).toBe(42);
+        expect(next.htmlContent).toBe(initial.htmlContent);
+      }
     });
 
     it('danh sách câu hỏi thêm chỉ hiện khi có; chưa có thì hiện dòng gợi ý', () => {

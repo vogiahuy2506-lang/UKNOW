@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlinePlus,
@@ -9,10 +9,7 @@ import {
   HiOutlineExclamation,
   HiOutlineExternalLink,
   HiOutlineClipboardList,
-  HiOutlineCheck,
-  HiOutlineRefresh,
   HiOutlineDocumentDuplicate,
-  HiOutlineX,
   HiOutlineCheckCircle,
   HiOutlineEye,
   HiOutlineEyeOff,
@@ -75,12 +72,14 @@ function fieldHtmlIssue(html, key, optionValues) {
 }
 
 /**
- * Cấu hình form thu khách của landing — CHỌN 1 TRONG 2 (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU 03/10/2026):
- *  - "Form cơ bản" (mặc định): Họ tên / Email / SĐT cố định + 2 ô tích Nghề nghiệp / Lĩnh vực + câu hỏi thêm
- *    (trường tuỳ chỉnh). Xem trước form thu vào nút, mặc định đóng.
- *  - "Dùng biểu mẫu đã tạo" (= `linkedFormId`): chọn biểu mẫu trong module Forms. Trang đang có
- *    `linkedFormId` thì mở sẵn ở lựa chọn này.
- * Chỉ hiện chi tiết của lựa chọn đang chọn; đổi lựa chọn KHÔNG đổi dữ liệu (chỉ đổi phần hiển thị).
+ * Cấu hình form thu khách của landing (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU 03/10/2026):
+ * "Form cơ bản" — Họ tên / Email / SĐT cố định + 2 ô tích Nghề nghiệp / Lĩnh vực + câu hỏi thêm (trường tuỳ
+ * chỉnh); xem trước form thu vào nút, mặc định đóng.
+ *
+ * KHÔNG còn lựa chọn "Dùng biểu mẫu đã tạo" (gỡ 03/10/2026): `linkedFormId` là trường chỉ-đọc suy từ
+ * `forms.landing_page_id` — editor không có đường lưu nó (landingPageAdmin.service.js: lúc lưu, chỗ trống
+ * `data-founderai-form-slot` luôn dùng form đã gắn hoặc TẠO form mới từ leadFormConfig, bỏ qua biểu mẫu khách
+ * chọn). Trang ĐÃ có biểu mẫu gắn (`linkedFormId`) vẫn hiện thông tin biểu mẫu đó, chỉ đọc.
  */
 export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'split' }) {
   const config = normalizeLeadFormConfig(form.leadFormConfig || defaultLeadFormConfig());
@@ -91,99 +90,36 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
   const hasHtml = Boolean(htmlContent.trim());
   const tf = (key, params) => fmt(t(key), params);
 
-  // 'basic' | 'linked' — trang đang có biểu mẫu gắn thì mở sẵn ở "linked".
-  const [mode, setMode] = useState(() => (form?.linkedFormId ? 'linked' : 'basic'));
   const [previewOpen, setPreviewOpen] = useState(false);
   const [expanded, setExpanded] = useState(() => new Set());
   // Khoá đang chờ AI thêm ô (Nhờ AI thêm ô này) — theo dõi riêng từng field để chỉ khoá đúng
   // nút đang gọi, không khoá cả panel.
   const [askingKeys, setAskingKeys] = useState(() => new Set());
 
-  // Quản lý tích hợp module Biểu mẫu (Forms)
+  // Biểu mẫu (module Forms) đã gắn vào trang — chỉ để HIỂN THỊ tên / trạng thái / mã nhúng.
   const [formsList, setFormsList] = useState([]);
-  const [loadingForms, setLoadingForms] = useState(false);
-  const [selectedFormId, setSelectedFormId] = useState(form?.linkedFormId ? String(form.linkedFormId) : '');
-  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const dropdownRef = useRef(null);
 
-  const loadForms = async () => {
-    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') {
-      return;
-    }
-    setLoadingForms(true);
-    try {
-      const list = await fetchForms();
-      if (Array.isArray(list)) {
-        setFormsList(list);
+  // Danh sách biểu mẫu chỉ cần khi trang ĐÃ có biểu mẫu gắn (hiện 0/69 trang): trang khác không gọi API này.
+  useEffect(() => {
+    if (!form?.linkedFormId) return;
+    if (typeof process !== 'undefined' && process.env?.NODE_ENV === 'test') return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await fetchForms();
+        if (!cancelled && Array.isArray(list)) setFormsList(list);
+      } catch {
+        // chỉ là thông tin phụ: lỗi thì card vẫn hiện "Biểu mẫu #id"
       }
-    } catch {
-      // an toàn trong môi trường test hoặc khi API chưa sẵn sàng
-    } finally {
-      setLoadingForms(false);
-    }
-  };
-
-  // Danh sách biểu mẫu chỉ cần khi người dùng ở lựa chọn "Dùng biểu mẫu đã tạo" — Form cơ bản không gọi API này.
-  useEffect(() => {
-    if (mode === 'linked') loadForms();
-  }, [mode]);
-
-  useEffect(() => {
-    if (form?.linkedFormId) {
-      setSelectedFormId(String(form.linkedFormId));
-      setMode('linked');
-    }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [form?.linkedFormId]);
 
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setIsDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
   const activeLinkedForm = formsList.find((f) => String(f.id) === String(form?.linkedFormId));
-  const currentlySelectedForm = formsList.find((f) => String(f.id) === String(selectedFormId));
 
-  const handleApplyLinkedForm = (formItem) => {
-    const target = formItem || currentlySelectedForm;
-    if (!target) {
-      toast.error(t('leadFormConfig.toastPickFirst'));
-      return;
-    }
-
-    let updatedHtml = htmlContent;
-    if (!updatedHtml.includes('data-founderai-form-slot') && !updatedHtml.includes('data-founderai-form')) {
-      const formSlotHtml = '\n<!-- Biểu mẫu đăng ký được liên kết -->\n<div data-founderai-form-slot class="my-8 max-w-2xl mx-auto px-4"></div>\n';
-      if (updatedHtml.includes('</body>')) {
-        updatedHtml = updatedHtml.replace('</body>', `${formSlotHtml}</body>`);
-      } else {
-        updatedHtml += formSlotHtml;
-      }
-    }
-
-    setForm((prev) => ({
-      ...prev,
-      linkedFormId: target.id,
-      htmlContent: updatedHtml,
-    }));
-    setIsDropdownOpen(false);
-    toast.success(tf('leadFormConfig.toastApplied', { title: target.title }));
-  };
-
-  const handleUnlinkForm = () => {
-    setForm((prev) => ({
-      ...prev,
-      linkedFormId: null,
-    }));
-    toast.success(t('leadFormConfig.toastUnlinked'));
-  };
-
-  const handleCopyEmbedCode = (targetForm) => {
-    const target = targetForm || currentlySelectedForm || activeLinkedForm;
+  const handleCopyEmbedCode = (target) => {
     if (!target || !target.publicKey) {
       toast.error(t('leadFormConfig.toastNoPublicKey'));
       return;
@@ -305,448 +241,231 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
 
   return (
     <div className="space-y-5">
-      {/* Chọn 1 trong 2 cách thu thông tin khách */}
-      <div
-        role="radiogroup"
-        aria-label={t('leadFormConfig.modeLabel')}
-        className="grid grid-cols-1 gap-2 sm:grid-cols-2"
-      >
-        <ModeOption
-          value="basic"
-          checked={mode === 'basic'}
-          onSelect={() => setMode('basic')}
-          title={t('leadFormConfig.modeBasic')}
-          description={t('leadFormConfig.modeBasicDesc')}
-        />
-        <ModeOption
-          value="linked"
-          checked={mode === 'linked'}
-          onSelect={() => setMode('linked')}
-          title={t('leadFormConfig.modeLinked')}
-          description={t('leadFormConfig.modeLinkedDesc')}
-        />
-      </div>
-
-      {mode === 'linked' ? (
-        /* Khối tích hợp Biểu mẫu hệ thống (Forms Module) */
-        form?.linkedFormId ? (
-          <div className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/90 to-indigo-50/40 p-5 space-y-4 shadow-2xs">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-start gap-3">
-                <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 shrink-0 mt-0.5 shadow-2xs">
-                  <HiOutlineClipboardList className="w-5 h-5" />
-                </div>
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h4 className="text-sm font-bold text-blue-950">{t('leadFormConfig.linkedTitle')}</h4>
-                    <span className="text-[11px] font-semibold bg-blue-200/80 text-blue-800 px-2.5 py-0.5 rounded-full">
-                      #{form.linkedFormId}
+      {/* Biểu mẫu (module Forms) ĐÃ gắn vào trang — CHỈ ĐỌC (xem chú thích đầu component) */}
+      {form?.linkedFormId ? (
+        <div
+          data-testid="linked-form-readonly"
+          className="rounded-2xl border border-blue-200 bg-gradient-to-br from-blue-50/90 to-indigo-50/40 p-5 space-y-4 shadow-2xs"
+        >
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <div className="p-2.5 rounded-xl bg-blue-100 text-blue-700 shrink-0 mt-0.5 shadow-2xs">
+                <HiOutlineClipboardList className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h4 className="text-sm font-bold text-blue-950">{t('leadFormConfig.linkedTitle')}</h4>
+                  <span className="text-[11px] font-semibold bg-blue-200/80 text-blue-800 px-2.5 py-0.5 rounded-full">
+                    #{form.linkedFormId}
+                  </span>
+                  {activeLinkedForm?.isPublished !== undefined && (
+                    <span
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                        activeLinkedForm.isPublished
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : 'bg-amber-100 text-amber-800 border border-amber-200'
+                      }`}
+                    >
+                      {activeLinkedForm.isPublished
+                        ? t('leadFormConfig.linkedPublished')
+                        : t('leadFormConfig.linkedDraft')}
                     </span>
-                    {activeLinkedForm?.isPublished !== undefined && (
-                      <span
-                        className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
-                          activeLinkedForm.isPublished
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : 'bg-amber-100 text-amber-800 border border-amber-200'
-                        }`}
-                      >
-                        {activeLinkedForm.isPublished
-                          ? t('leadFormConfig.linkedPublished')
-                          : t('leadFormConfig.linkedDraft')}
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs font-medium text-blue-900">
-                    {activeLinkedForm?.fields?.length
-                      ? tf('leadFormConfig.linkedTitleWithFields', {
-                          title:
-                            activeLinkedForm?.title ||
-                            tf('leadFormConfig.linkedFallbackTitle', { id: form.linkedFormId }),
-                          count: activeLinkedForm.fields.length,
-                        })
-                      : activeLinkedForm?.title ||
-                        tf('leadFormConfig.linkedFallbackTitle', { id: form.linkedFormId })}
-                  </p>
-                  <p className="text-xs text-blue-800/80 leading-relaxed">{t('leadFormConfig.linkedDesc')}</p>
+                  )}
                 </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
-                <a
-                  href={`/app/forms/${form.linkedFormId}/edit`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
-                >
-                  <span>{t('leadFormConfig.linkedOpenEdit')}</span>
-                  <HiOutlineExternalLink className="w-3.5 h-3.5" />
-                </a>
-                <button
-                  type="button"
-                  onClick={handleUnlinkForm}
-                  className="inline-flex items-center gap-1 px-3 py-2 text-xs font-medium text-gray-600 hover:text-red-600 bg-white hover:bg-red-50 border border-gray-200 hover:border-red-200 rounded-xl transition"
-                  title={t('leadFormConfig.linkedUnlinkTitle')}
-                >
-                  <HiOutlineX className="w-3.5 h-3.5" />
-                  <span>{t('leadFormConfig.linkedUnlink')}</span>
-                </button>
+                <p className="text-xs font-medium text-blue-900">
+                  {activeLinkedForm?.fields?.length
+                    ? tf('leadFormConfig.linkedTitleWithFields', {
+                        title:
+                          activeLinkedForm?.title ||
+                          tf('leadFormConfig.linkedFallbackTitle', { id: form.linkedFormId }),
+                        count: activeLinkedForm.fields.length,
+                      })
+                    : activeLinkedForm?.title || tf('leadFormConfig.linkedFallbackTitle', { id: form.linkedFormId })}
+                </p>
+                <p className="text-xs text-blue-800/80 leading-relaxed">{t('leadFormConfig.linkedDesc')}</p>
               </div>
             </div>
 
-            {/* Trạng thái vị trí hiển thị trong HTML */}
-            <div className="pt-3 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-              {htmlContent.includes('data-founderai-form-slot') || htmlContent.includes('data-founderai-form') ? (
-                <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
-                  <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span>{t('leadFormConfig.slotOk')}</span>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 text-amber-800 bg-amber-50/90 border border-amber-200 px-3 py-1.5 rounded-lg flex-1 justify-between flex-wrap">
-                  <span className="font-medium">⚠️ {t('leadFormConfig.slotMissing')}</span>
-                  <button
-                    type="button"
-                    onClick={() => handleApplyLinkedForm(activeLinkedForm)}
-                    className="px-2.5 py-1 text-xs font-bold text-amber-900 bg-amber-200/80 hover:bg-amber-300 rounded-md transition"
-                  >
-                    {t('leadFormConfig.slotInsert')}
-                  </button>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => handleCopyEmbedCode(activeLinkedForm)}
-                className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-medium self-end sm:self-auto py-1"
+            <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto flex-wrap">
+              <a
+                href={`/app/forms/${form.linkedFormId}/edit`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-xs transition"
               >
-                <HiOutlineDocumentDuplicate className="w-3.5 h-3.5" />
-                <span>{t('leadFormConfig.copyEmbed')}</span>
-              </button>
+                <span>{t('leadFormConfig.linkedOpenEdit')}</span>
+                <HiOutlineExternalLink className="w-3.5 h-3.5" />
+              </a>
             </div>
           </div>
+
+          {/* Trạng thái vị trí hiển thị trong HTML (chỉ báo, không có nút ghi) */}
+          <div className="pt-3 border-t border-blue-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            {htmlContent.includes('data-founderai-form-slot') || htmlContent.includes('data-founderai-form') ? (
+              <div className="flex items-center gap-1.5 text-emerald-700 font-medium">
+                <HiOutlineCheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>{t('leadFormConfig.slotOk')}</span>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 text-amber-800 bg-amber-50/90 border border-amber-200 px-3 py-1.5 rounded-lg flex-1">
+                <span className="font-medium">⚠️ {t('leadFormConfig.slotMissing')}</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={() => handleCopyEmbedCode(activeLinkedForm)}
+              className="inline-flex items-center gap-1 text-blue-700 hover:text-blue-900 font-medium self-end sm:self-auto py-1"
+            >
+              <HiOutlineDocumentDuplicate className="w-3.5 h-3.5" />
+              <span>{t('leadFormConfig.copyEmbed')}</span>
+            </button>
+          </div>
+        </div>
+      ) : null}
+
+      <p className="text-[13px] text-gray-500 leading-relaxed">{t('leadFormConfig.help')}</p>
+
+      {/* Fixed fields toggle — inline card */}
+      <section className="rounded-xl border border-gray-200 bg-white p-5">
+        <p className="text-[14px] font-semibold text-gray-900 mb-1">{t('leadFormConfig.fixedFieldsTitle')}</p>
+        <p className="text-[12px] text-gray-500">{t('leadFormConfig.fixedFieldsAlways')}</p>
+        <p className="text-[12px] text-gray-500 mb-3">{t('leadFormConfig.fixedFieldsHint')}</p>
+        <div className="flex flex-wrap gap-2">
+          <InlineChip
+            checked={config.fixedFields.occupation.visible}
+            onChange={(v) => setFixedVisible('occupation', v)}
+            label={t('leadFormConfig.showOccupation')}
+          />
+          <InlineChip
+            checked={config.fixedFields.interestArea.visible}
+            onChange={(v) => setFixedVisible('interestArea', v)}
+            label={t('leadFormConfig.showInterest')}
+          />
+        </div>
+        {fixedFieldRows.map(({ key, label, visible }) => {
+          if (!hasHtml || !visible) return null;
+          const optionValues = fixedFieldOptionValues(key);
+          const issue = fieldHtmlIssue(htmlContent, key, optionValues);
+          if (!issue) return null;
+          return (
+            <MissingFieldWarning
+              key={key}
+              fieldLabel={label}
+              issue={issue}
+              asking={askingKeys.has(key)}
+              onAskAi={() => handleAskAiToAddField(key, buildAddFixedFieldInstruction(key), optionValues)}
+              t={t}
+            />
+          );
+        })}
+      </section>
+
+      {/* Custom fields card — danh sách chỉ hiện khi có câu hỏi thêm */}
+      <section className="rounded-xl border border-gray-200 bg-white p-5">
+        <div className="flex items-center justify-between mb-3 gap-3">
+          <div>
+            <p className="text-[14px] font-semibold text-gray-900">
+              {t('leadFormConfig.customFields')}
+              <span className="ml-2 text-[12px] font-normal text-gray-500">
+                ({config.customFields.length}/20)
+              </span>
+            </p>
+            <p className="text-[12px] text-gray-500 mt-0.5">{t('leadFormConfig.customFieldsHint')}</p>
+          </div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-[13px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
+            onClick={() => {
+              if (config.customFields.length >= 20) return;
+              const next = [...config.customFields, emptyCustomField()];
+              patch({ ...config, customFields: next });
+              // auto-expand field mới để user điền label ngay
+              setExpanded((prev) => new Set(prev).add(next[next.length - 1].key));
+            }}
+            disabled={config.customFields.length >= 20}
+          >
+            <HiOutlinePlus className="h-4 w-4" />
+            {t('leadFormConfig.addField')}
+          </button>
+        </div>
+
+        {config.customFields.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3 text-[13px] text-gray-500">
+            {t('leadFormConfig.customFieldsEmpty')}
+          </p>
         ) : (
-          <div className="rounded-2xl border border-indigo-100 bg-gradient-to-br from-indigo-50/80 via-purple-50/30 to-white p-5 shadow-2xs">
-            {/* Bộ chọn Biểu mẫu có sẵn */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between text-xs">
-                <span className="font-semibold text-gray-700">{t('leadFormConfig.pickerTitle')}</span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={loadForms}
-                    disabled={loadingForms}
-                    className="inline-flex items-center gap-1 text-gray-500 hover:text-indigo-600 transition"
-                    title={t('leadFormConfig.pickerRefreshTitle')}
-                  >
-                    <HiOutlineRefresh className={`w-3.5 h-3.5 ${loadingForms ? 'animate-spin' : ''}`} />
-                    <span>{t('leadFormConfig.pickerRefresh')}</span>
-                  </button>
-                  <a
-                    href="/app/forms/new"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-indigo-600 hover:text-indigo-800 font-semibold"
-                  >
-                    <span>{t('leadFormConfig.pickerCreate')}</span>
-                    <HiOutlineExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-
-              {/* Custom Dropdown Selector (tránh dùng thẻ select role="combobox" để không xung đột test) */}
-              <div className="relative" ref={dropdownRef}>
-                <button
-                  type="button"
-                  onClick={() => setIsDropdownOpen((prev) => !prev)}
-                  className="w-full flex items-center justify-between px-3.5 py-2.5 bg-white border border-gray-300 hover:border-indigo-400 rounded-xl text-left text-xs font-medium text-gray-800 shadow-2xs transition"
-                >
-                  <div className="truncate">
-                    {currentlySelectedForm ? (
-                      <span className="flex items-center gap-2">
-                        <span className="font-semibold text-gray-900">{currentlySelectedForm.title}</span>
-                        <span className="text-gray-400">
-                          {tf('leadFormConfig.fieldsInline', { count: currentlySelectedForm.fields?.length || 0 })}
-                        </span>
-                        <span
-                          className={`text-[10px] px-1.5 py-0.5 rounded ${
-                            currentlySelectedForm.isPublished
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-gray-100 text-gray-600'
-                          }`}
-                        >
-                          {currentlySelectedForm.isPublished
-                            ? t('leadFormConfig.linkedPublished')
-                            : t('leadFormConfig.linkedDraft')}
-                        </span>
-                      </span>
-                    ) : (
-                      <span className="text-gray-500">
-                        {formsList.length > 0
-                          ? tf('leadFormConfig.pickerPlaceholderCount', { count: formsList.length })
-                          : loadingForms
-                          ? t('leadFormConfig.pickerLoading')
-                          : t('leadFormConfig.pickerNone')}
-                      </span>
-                    )}
-                  </div>
-                  <HiOutlineChevronDown className="w-4 h-4 text-gray-400 shrink-0 ml-2" />
-                </button>
-
-                {isDropdownOpen && (
-                  <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl shadow-lg border border-gray-200 py-1.5 max-h-60 overflow-y-auto">
-                    {formsList.length === 0 ? (
-                      <div className="p-3 text-center text-xs text-gray-500">
-                        {loadingForms ? t('leadFormConfig.pickerListLoading') : t('leadFormConfig.pickerListEmpty')}
-                      </div>
-                    ) : (
-                      formsList.map((f) => (
-                        <button
-                          key={f.id}
-                          type="button"
-                          onClick={() => {
-                            setSelectedFormId(String(f.id));
-                            setIsDropdownOpen(false);
-                          }}
-                          className={`w-full flex items-center justify-between px-3.5 py-2.5 text-left text-xs hover:bg-indigo-50/70 transition ${
-                            String(selectedFormId) === String(f.id)
-                              ? 'bg-indigo-50 font-semibold text-indigo-900'
-                              : 'text-gray-700'
-                          }`}
-                        >
-                          <div className="truncate">
-                            <span className="block font-medium">{f.title || t('leadFormConfig.untitledForm')}</span>
-                            <span className="text-[11px] text-gray-400">
-                              {tf('leadFormConfig.idAndFields', { id: f.id, count: f.fields?.length || 0 })}
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-2 shrink-0 ml-2">
-                            <span
-                              className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                                f.isPublished
-                                  ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                  : 'bg-gray-100 text-gray-600 border border-gray-200'
-                              }`}
-                            >
-                              {f.isPublished ? t('leadFormConfig.stateLive') : t('leadFormConfig.stateDraft')}
-                            </span>
-                            {String(selectedFormId) === String(f.id) && (
-                              <HiOutlineCheck className="w-4 h-4 text-indigo-600" />
-                            )}
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Chi tiết & Nút hành động khi đã chọn form */}
-              {currentlySelectedForm && (
-                <div className="p-3 bg-white/90 border border-indigo-200/90 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-2xs">
-                  <div className="text-xs space-y-0.5">
-                    <div className="font-semibold text-indigo-950 flex items-center gap-2">
-                      <span>{currentlySelectedForm.title}</span>
-                      <span className="text-gray-400 font-normal">
-                        {tf('leadFormConfig.fieldsInline', { count: currentlySelectedForm.fields?.length || 0 })}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-gray-500">{t('leadFormConfig.applyHint')}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <button
-                      type="button"
-                      onClick={() => handleApplyLinkedForm(currentlySelectedForm)}
-                      className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg shadow-xs transition"
-                    >
-                      <HiOutlineCheck className="w-3.5 h-3.5" />
-                      <span>{t('leadFormConfig.apply')}</span>
-                    </button>
-                    <a
-                      href={`/app/forms/${currentlySelectedForm.id}/edit`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 border border-gray-200 rounded-lg transition"
-                      title={t('leadFormConfig.openThisForm')}
-                    >
-                      <HiOutlineExternalLink className="w-4 h-4" />
-                    </a>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )
-      ) : (
-        <>
-          <p className="text-[13px] text-gray-500 leading-relaxed">{t('leadFormConfig.help')}</p>
-
-          {/* Fixed fields toggle — inline card */}
-          <section className="rounded-xl border border-gray-200 bg-white p-5">
-            <p className="text-[14px] font-semibold text-gray-900 mb-1">{t('leadFormConfig.fixedFieldsTitle')}</p>
-            <p className="text-[12px] text-gray-500">{t('leadFormConfig.fixedFieldsAlways')}</p>
-            <p className="text-[12px] text-gray-500 mb-3">{t('leadFormConfig.fixedFieldsHint')}</p>
-            <div className="flex flex-wrap gap-2">
-              <InlineChip
-                checked={config.fixedFields.occupation.visible}
-                onChange={(v) => setFixedVisible('occupation', v)}
-                label={t('leadFormConfig.showOccupation')}
-              />
-              <InlineChip
-                checked={config.fixedFields.interestArea.visible}
-                onChange={(v) => setFixedVisible('interestArea', v)}
-                label={t('leadFormConfig.showInterest')}
-              />
-            </div>
-            {fixedFieldRows.map(({ key, label, visible }) => {
-              if (!hasHtml || !visible) return null;
-              const optionValues = fixedFieldOptionValues(key);
-              const issue = fieldHtmlIssue(htmlContent, key, optionValues);
-              if (!issue) return null;
+          <div className="space-y-2">
+            {config.customFields.map((field, index) => {
+              const isPersisted = persistedKeys.has(field.key);
+              const persistedOptionValues = new Set(persistedOptionValuesByKey[field.key] || []);
+              const labelError = fieldErrors[field.key];
+              const isExpanded = expanded.has(field.key);
               return (
-                <MissingFieldWarning
-                  key={key}
-                  fieldLabel={label}
-                  issue={issue}
-                  asking={askingKeys.has(key)}
-                  onAskAi={() => handleAskAiToAddField(key, buildAddFixedFieldInstruction(key), optionValues)}
+                <CustomFieldRow
+                  key={field.key}
+                  index={index}
+                  field={field}
+                  isPersisted={isPersisted}
+                  persistedOptionValues={persistedOptionValues}
+                  persistedOptionValuesByKey={persistedOptionValuesByKey}
+                  labelError={labelError}
+                  isExpanded={isExpanded}
+                  onToggleExpand={() => toggleExpand(field.key)}
+                  onUpdate={(partial) => updateField(index, partial)}
+                  onMoveUp={() => moveField(index, -1)}
+                  onMoveDown={() => moveField(index, 1)}
+                  onRemove={() => removeField(index)}
                   t={t}
+                  htmlIssue={hasHtml ? fieldHtmlIssue(htmlContent, field.key, customFieldOptionValues(field)) : null}
+                  asking={askingKeys.has(field.key)}
+                  onAskAiToAdd={() =>
+                    handleAskAiToAddField(field.key, buildAddCustomFieldInstruction(field), customFieldOptionValues(field))
+                  }
                 />
               );
             })}
-          </section>
-
-          {/* Custom fields card — danh sách chỉ hiện khi có câu hỏi thêm */}
-          <section className="rounded-xl border border-gray-200 bg-white p-5">
-            <div className="flex items-center justify-between mb-3 gap-3">
-              <div>
-                <p className="text-[14px] font-semibold text-gray-900">
-                  {t('leadFormConfig.customFields')}
-                  <span className="ml-2 text-[12px] font-normal text-gray-500">
-                    ({config.customFields.length}/20)
-                  </span>
-                </p>
-                <p className="text-[12px] text-gray-500 mt-0.5">{t('leadFormConfig.customFieldsHint')}</p>
-              </div>
-              <button
-                type="button"
-                className="inline-flex items-center gap-1.5 rounded-lg border border-orange-300 bg-orange-50 px-3 py-1.5 text-[13px] font-semibold text-orange-700 hover:bg-orange-100 transition-colors disabled:opacity-40 disabled:cursor-not-allowed shrink-0"
-                onClick={() => {
-                  if (config.customFields.length >= 20) return;
-                  const next = [...config.customFields, emptyCustomField()];
-                  patch({ ...config, customFields: next });
-                  // auto-expand field mới để user điền label ngay
-                  setExpanded((prev) => new Set(prev).add(next[next.length - 1].key));
-                }}
-                disabled={config.customFields.length >= 20}
-              >
-                <HiOutlinePlus className="h-4 w-4" />
-                {t('leadFormConfig.addField')}
-              </button>
-            </div>
-
-            {config.customFields.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-gray-200 bg-gray-50/50 px-4 py-3 text-[13px] text-gray-500">
-                {t('leadFormConfig.customFieldsEmpty')}
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {config.customFields.map((field, index) => {
-                  const isPersisted = persistedKeys.has(field.key);
-                  const persistedOptionValues = new Set(persistedOptionValuesByKey[field.key] || []);
-                  const labelError = fieldErrors[field.key];
-                  const isExpanded = expanded.has(field.key);
-                  return (
-                    <CustomFieldRow
-                      key={field.key}
-                      index={index}
-                      field={field}
-                      isPersisted={isPersisted}
-                      persistedOptionValues={persistedOptionValues}
-                      persistedOptionValuesByKey={persistedOptionValuesByKey}
-                      labelError={labelError}
-                      isExpanded={isExpanded}
-                      onToggleExpand={() => toggleExpand(field.key)}
-                      onUpdate={(partial) => updateField(index, partial)}
-                      onMoveUp={() => moveField(index, -1)}
-                      onMoveDown={() => moveField(index, 1)}
-                      onRemove={() => removeField(index)}
-                      t={t}
-                      htmlIssue={hasHtml ? fieldHtmlIssue(htmlContent, field.key, customFieldOptionValues(field)) : null}
-                      asking={askingKeys.has(field.key)}
-                      onAskAiToAdd={() =>
-                        handleAskAiToAddField(field.key, buildAddCustomFieldInstruction(field), customFieldOptionValues(field))
-                      }
-                    />
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          {/* Xem trước form — thu vào nút, mặc định đóng */}
-          <div>
-            <button
-              type="button"
-              aria-expanded={previewOpen}
-              onClick={() => setPreviewOpen((prev) => !prev)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
-            >
-              {previewOpen ? <HiOutlineEyeOff className="h-4 w-4" /> : <HiOutlineEye className="h-4 w-4" />}
-              {previewOpen ? t('leadFormConfig.previewHide') : t('leadFormConfig.previewShow')}
-            </button>
-            {previewOpen ? (
-              <section className="mt-3 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
-                <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
-                  <p className="text-[12px] text-gray-500">{t('leadFormConfig.previewHint')}</p>
-                </div>
-                <div className="px-5 py-5 bg-gray-50/40 max-h-[520px] overflow-auto">
-                  <FounderLeadFormCard
-                    variant="embed"
-                    locale="vi"
-                    theme={config.theme}
-                    nameMode={nameMode}
-                    formCopy={LANDING_COPY.vi.form}
-                    form={previewForm}
-                    setField={() => {}}
-                    submitting={false}
-                    error=""
-                    success={false}
-                    onSubmit={(e) => e?.preventDefault?.()}
-                    leadFormConfig={config}
-                    previewMode
-                  />
-                </div>
-              </section>
-            ) : null}
           </div>
-        </>
-      )}
+        )}
+      </section>
+
+      {/* Xem trước form — thu vào nút, mặc định đóng */}
+      <div>
+        <button
+          type="button"
+          aria-expanded={previewOpen}
+          onClick={() => setPreviewOpen((prev) => !prev)}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          {previewOpen ? <HiOutlineEyeOff className="h-4 w-4" /> : <HiOutlineEye className="h-4 w-4" />}
+          {previewOpen ? t('leadFormConfig.previewHide') : t('leadFormConfig.previewShow')}
+        </button>
+        {previewOpen ? (
+          <section className="mt-3 rounded-xl border border-gray-200 bg-white overflow-hidden shadow-sm">
+            <div className="px-5 py-3 border-b border-gray-100 bg-gray-50/60">
+              <p className="text-[12px] text-gray-500">{t('leadFormConfig.previewHint')}</p>
+            </div>
+            <div className="px-5 py-5 bg-gray-50/40 max-h-[520px] overflow-auto">
+              <FounderLeadFormCard
+                variant="embed"
+                locale="vi"
+                theme={config.theme}
+                nameMode={nameMode}
+                formCopy={LANDING_COPY.vi.form}
+                form={previewForm}
+                setField={() => {}}
+                submitting={false}
+                error=""
+                success={false}
+                onSubmit={(e) => e?.preventDefault?.()}
+                leadFormConfig={config}
+                previewMode
+              />
+            </div>
+          </section>
+        ) : null}
+      </div>
     </div>
-  );
-}
-
-/* ─────────────── Lựa chọn cách thu thông tin (radio dạng thẻ) ─────────────── */
-
-function ModeOption({ value, checked, onSelect, title, description }) {
-  return (
-    <label
-      className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3.5 transition-colors ${
-        checked ? 'border-orange-300 bg-orange-50/70' : 'border-gray-200 bg-white hover:border-gray-300'
-      }`}
-    >
-      <input
-        type="radio"
-        name="lead-form-mode"
-        value={value}
-        checked={checked}
-        onChange={onSelect}
-        aria-label={title}
-        className="mt-1 h-4 w-4 shrink-0 text-orange-600 focus:ring-orange-500"
-      />
-      <span className="min-w-0">
-        <span className="block text-[14px] font-semibold text-gray-900">{title}</span>
-        <span className="mt-0.5 block text-[12px] leading-relaxed text-gray-500">{description}</span>
-      </span>
-    </label>
   );
 }
 

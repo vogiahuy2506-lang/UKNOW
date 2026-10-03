@@ -4,14 +4,10 @@ import {
   HiOutlineX,
   HiOutlineGlobeAlt,
   HiOutlinePhotograph,
-  HiOutlineCheckCircle,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineExternalLink,
   HiOutlineClipboardCopy,
-  HiOutlineClock,
-  HiOutlineInformationCircle,
-  HiOutlineRefresh,
   HiOutlineClipboardList,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
@@ -30,8 +26,9 @@ const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
  * Settings Modal - Modal nhỏ gọn để chỉnh sửa landing page.
  *
  * PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU 03/10/2026 — mở ra thấy ngay hai việc chính, thứ ít dùng thu gọn:
- *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí,
- *      "Dùng tên miền riêng của bạn". Tiêu đề trang KHÔNG còn ở đây — sửa ở thanh trên cùng của trình soạn.
+ *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí;
+ *      trang ĐÃ có tên miền riêng thì chỉ HIỂN THỊ tên miền + trạng thái (chỉ đọc — xem chú thích ở `customHostname`).
+ *      Tiêu đề trang KHÔNG còn ở đây — sửa ở thanh trên cùng của trình soạn.
  *   2. "Form thu khách": chọn Form cơ bản hoặc Dùng biểu mẫu đã tạo (LeadFormConfigPanel).
  *   3. "Ảnh đã tải lên (N)": cuối modal, mặc định thu gọn.
  */
@@ -155,71 +152,23 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
     toast.success(tc('sections.images.inserted') || 'Đã chèn vào trang');
   };
 
-  // Domain state. CHỈ hostname tên miền RIÊNG mới đưa modal sang chế độ 'custom': trang dùng tên
-  // miền miễn phí cũng có `customDomainHostname` = `<slug>.founderai.biz` (landing_page_domains lưu
-  // cả hai loại) — xem utils/landingDomain.js.
+  // Tên miền RIÊNG (nếu có) — CHỈ ĐỌC. Trang dùng tên miền miễn phí cũng có `customDomainHostname` =
+  // `<slug>.founderai.biz` (landing_page_domains lưu cả hai loại) nên phải lọc, xem utils/landingDomain.js.
+  //
+  // GỠ MỌI THAO TÁC GHI tên miền riêng khỏi modal (03/10/2026): "Lưu tên miền" chỉ đổi state form rồi lúc lưu trang
+  // backend gỡ subdomain miễn phí (landingPageAdmin.service.js `removeSubdomain`) mà không đăng ký hostname nào →
+  // trang mất link (production: landing 50, 76, 88, 105); "Kiểm tra kết nối" dùng fetch thô không Bearer → luôn 401.
+  // Modal KHÔNG được đổi `domainType`. Khi có PR nối `putLandingCustomDomain` / `postLandingCustomDomainVerify`
+  // thật thì mới đưa phần ghi trở lại (helper getCustomHostname ở utils/landingDomain.js dùng lại được).
   const customHostname = getCustomHostname(form);
-  const [domainMode, setDomainMode] = useState(customHostname ? 'custom' : 'system');
-  const [hostname, setHostname] = useState(customHostname);
-  const [isApex, setIsApex] = useState(form?.customDomainIsApex || false);
-
-  // Domain verification
-  const [checkingDomain, setCheckingDomain] = useState(false);
-  const [domainCheckResult, setDomainCheckResult] = useState(null); // 'ok' | 'error' | 'pending'
-
-  useEffect(() => {
-    if (customHostname) {
-      setDomainMode('custom');
-      setHostname(customHostname);
-    } else {
-      setDomainMode('system');
-      setHostname('');
-    }
-  }, [customHostname, form?.customDomainIsApex]);
 
   // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 2: prop `tab` được LandingCanvasEditor.jsx
   // truyền xuống (openTab('lead-form') từ ý định chat) — đảm bảo section đích luôn mở mỗi khi tab đích đổi lúc
-  // modal mở. Tab 'domain' (ý định "đặt tên miền riêng") mở sẵn phần tên miền riêng trong khối đầu. Đặt SAU
-  // effect đồng bộ hostname ở trên để lúc mount nó thắng.
+  // modal mở.
   useEffect(() => {
     if (!open || !tab) return;
     setExpandedSections((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
-    if (tab === 'domain') setDomainMode('custom');
   }, [open, tab]);
-
-  const handleCheckDomainConnection = async () => {
-    if (!hostname) {
-      toast.error('Vui lòng nhập tên miền trước');
-      return;
-    }
-    setCheckingDomain(true);
-    setDomainCheckResult('pending');
-    try {
-      // Gọi API verify DNS
-      const res = await fetch(`/api/admin/landing-pages/${editingId}/custom-domain/verify`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-      });
-      const data = await res.json();
-      if (data.success) {
-        const isOk = data.data?.status === 'active';
-        setDomainCheckResult(isOk ? 'ok' : 'error');
-        if (isOk) {
-          toast.success('Kết nối domain thành công!');
-        } else {
-          toast.error('DNS chưa đúng. Vui lòng kiểm tra lại DNS records.');
-        }
-      } else {
-        setDomainCheckResult('error');
-        toast.error(data.message || 'Không thể kiểm tra domain');
-      }
-    } catch (e) {
-      setDomainCheckResult('error');
-      toast.error('Lỗi kết nối');
-    } finally {
-      setCheckingDomain(false);
-    }
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -254,14 +203,8 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
 
   const handleSaveSlug = () => {
     const cleaned = String(form?.slug || '').trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
-    setForm((prev) => ({
-      ...prev,
-      slug: cleaned,
-      domainType: 'system',
-      customDomainHostname: null,
-      customDomainIsApex: false,
-    }));
-    setDomainMode('system');
+    // Chỉ làm sạch slug. KHÔNG đổi domainType / hostname: đổi domainType làm backend gỡ hàng landing_page_domains.
+    setForm((prev) => ({ ...prev, slug: cleaned }));
     toast.success(tcDomain('topbar.freeSlugSuccess'));
   };
 
@@ -273,6 +216,9 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   if (customHostname) {
     if (customStatus === 'active') publicHost = customHostname;
     else linkHint = tc('sections.publish.linkPendingHint');
+  } else if (form?.domainType === 'custom') {
+    // domain_type='custom' nhưng không còn hàng tên miền nào: subdomain miễn phí đã bị gỡ → link miễn phí đã chết.
+    linkHint = tc('sections.publish.linkNoDomainHint');
   } else if (!editingId) {
     linkHint = tc('sections.publish.linkUnsavedHint');
   } else if (slug) {
@@ -410,7 +356,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
               </div>
 
               {/* Đường dẫn miễn phí (slug) — chỉ khi không dùng tên miền riêng */}
-              {domainMode === 'system' && (
+              {!customHostname && form?.domainType !== 'custom' && (
                 <div>
                   <label htmlFor="landing-slug-input" className="block text-sm font-medium text-gray-700 mb-1.5">
                     {tc('sections.publish.slugLabel')}
@@ -442,223 +388,23 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                 </div>
               )}
 
-              {/* Tên miền riêng: một dòng, bấm mới mở ô nhập */}
-              <div className="space-y-3">
-                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3.5">
-                  <span className="text-sm font-medium text-gray-800">{tc('sections.customDomain.toggle')}</span>
-                  <span className="relative inline-flex shrink-0 items-center">
-                    <input
-                      type="checkbox"
-                      checked={domainMode === 'custom'}
-                      onChange={(e) => setDomainMode(e.target.checked ? 'custom' : 'system')}
-                      className="sr-only peer"
-                    />
-                    <span className="block h-6 w-11 rounded-full bg-gray-200 peer-focus:ring-2 peer-focus:ring-purple-200 peer-checked:bg-purple-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white" />
-                  </span>
-                </label>
-
-                {domainMode === 'custom' && (
-                  <div className="space-y-4 rounded-xl border border-purple-100 bg-white p-4" data-testid="custom-domain-panel">
-                    {/* Trạng thái tên miền riêng đang gắn */}
-                    {customHostname ? (
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
-                        <span className="font-medium text-gray-700">{tc('sections.customDomain.statusLabel')}:</span>
-                        <span
-                          data-testid="custom-domain-status"
-                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${customStatusClass}`}
-                        >
-                          {customStatusLabel}
-                        </span>
-                        <span className="font-mono text-gray-600">{customHostname}</span>
-                      </div>
-                    ) : null}
-
-                    {/* Domain input */}
-                    <div>
-                      <label htmlFor="landing-custom-hostname" className="block text-sm font-medium text-gray-700 mb-1.5">
-                        {tc('sections.customDomain.hostnameLabel')}
-                      </label>
-                      <input
-                        id="landing-custom-hostname"
-                        type="text"
-                        value={hostname}
-                        onChange={(e) => setHostname(e.target.value.toLowerCase())}
-                        placeholder={tc('sections.customDomain.hostnamePlaceholder')}
-                        className="w-full rounded-lg border border-gray-200 px-4 py-2.5 font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
-                      />
-                    </div>
-
-                    {/* Domain type */}
-                    <div>
-                      <p className="block text-sm font-medium text-gray-700 mb-2">
-                        {tc('sections.customDomain.typeLabel')}
-                      </p>
-                      <div className="flex flex-wrap gap-4">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="domain-type"
-                            checked={!isApex}
-                            onChange={() => setIsApex(false)}
-                            className="text-purple-600 focus:ring-purple-500"
-                          />
-                          <span className="text-sm text-gray-700">
-                            <strong>{tc('sections.customDomain.typeSubdomain')}</strong>{' '}
-                            {tc('sections.customDomain.typeSubdomainExample')}
-                          </span>
-                        </label>
-                        <label className="flex items-center gap-2 cursor-pointer">
-                          <input
-                            type="radio"
-                            name="domain-type"
-                            checked={isApex}
-                            onChange={() => setIsApex(true)}
-                            className="text-purple-600 focus:ring-purple-500"
-                          />
-                          <span className="text-sm text-gray-700">
-                            <strong>{tc('sections.customDomain.typeApex')}</strong>{' '}
-                            {tc('sections.customDomain.typeApexExample')}
-                          </span>
-                        </label>
-                      </div>
-                    </div>
-
-                    {/* Guide — chỉ hiện khi đã nhập tên miền */}
-                    {hostname.trim() ? (
-                      <div className="rounded-lg bg-purple-50 border border-purple-100 p-4 space-y-3" data-testid="custom-domain-guide">
-                        <div className="flex items-center gap-2 text-purple-800">
-                          <HiOutlineInformationCircle className="w-5 h-5" />
-                          <span className="font-semibold text-sm">{tc('sections.customDomain.guideTitle')}</span>
-                        </div>
-
-                        <ol className="text-sm text-gray-700 space-y-2 ml-2">
-                          <li className="flex gap-2">
-                            <span className="font-semibold text-purple-600">1.</span>
-                            <span>{tc('sections.customDomain.guideStep1')}</span>
-                          </li>
-                          <li className="flex gap-2">
-                            <span className="font-semibold text-purple-600">2.</span>
-                            <span>{tc('sections.customDomain.guideStep2')}</span>
-                          </li>
-                          <li className="flex gap-2">
-                            <span className="font-semibold text-purple-600">3.</span>
-                            <span>{tc('sections.customDomain.guideStep3')}</span>
-                          </li>
-                        </ol>
-
-                        {/* DNS Record display */}
-                        <div className="bg-white rounded-lg border border-purple-200 p-3 font-mono text-sm">
-                          {isApex ? (
-                            <div className="space-y-1">
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsType')}</span>
-                                <span>A</span>
-                              </div>
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsHost')}</span>
-                                <span>@</span>
-                              </div>
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsValue')}</span>
-                                <span className="text-amber-600">{tc('sections.customDomain.apexValuePending')}</span>
-                              </div>
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsTtl')}</span>
-                                <span>3600</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="space-y-1">
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsType')}</span>
-                                <span>CNAME</span>
-                              </div>
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsHost')}</span>
-                                <span>{hostname.split('.')[0] || 'lp'}</span>
-                              </div>
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsValue')}</span>
-                                <span>{BASE_DOMAIN}.</span>
-                              </div>
-                              <div className="flex gap-2 text-gray-600">
-                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsTtl')}</span>
-                                <span>3600</span>
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <p className="text-xs text-gray-500">
-                          <HiOutlineClock className="w-3.5 h-3.5 inline mr-1" />
-                          {tc('sections.customDomain.dnsPropagation')}
-                        </p>
-                      </div>
-                    ) : null}
-
-                    {/* Action buttons */}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={() => {
-                          if (!hostname) {
-                            toast.error('Vui lòng nhập tên miền');
-                            return;
-                          }
-                          setForm((prev) => ({
-                            ...prev,
-                            domainType: 'custom',
-                            customDomainHostname: hostname,
-                            customDomainIsApex: isApex,
-                          }));
-                          toast.success('Đã lưu tên miền! Vui lòng đợi DNS propagate.');
-                        }}
-                        className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition"
-                      >
-                        {tc('sections.customDomain.save')}
-                      </button>
-                    </div>
-
-                    {/* Kiểm tra kết nối */}
-                    {hostname && (
-                      <div>
-                        <button
-                          onClick={handleCheckDomainConnection}
-                          disabled={checkingDomain}
-                          className={`w-full py-2.5 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
-                            domainCheckResult === 'ok'
-                              ? 'bg-green-100 text-green-700 border border-green-200'
-                              : domainCheckResult === 'error'
-                              ? 'bg-red-100 text-red-700 border border-red-200'
-                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                          }`}
-                        >
-                          {checkingDomain ? (
-                            <>
-                              <div className="w-4 h-4 border-2 border-gray-400 border-t-green-600 rounded-full animate-spin" />
-                              {tc('sections.customDomain.checking')}
-                            </>
-                          ) : domainCheckResult === 'ok' ? (
-                            <>
-                              <HiOutlineCheckCircle className="w-5 h-5" />
-                              {tc('sections.customDomain.checkOk')}
-                            </>
-                          ) : domainCheckResult === 'error' ? (
-                            <>
-                              <HiOutlineX className="w-5 h-5" />
-                              {tc('sections.customDomain.checkFailed')}
-                            </>
-                          ) : (
-                            <>
-                              <HiOutlineRefresh className="w-5 h-5" />
-                              {tc('sections.customDomain.check')}
-                            </>
-                          )}
-                        </button>
-                      </div>
-                    )}
+              {/* Tên miền riêng đã gắn: CHỈ ĐỌC (xem chú thích ở đầu component) */}
+              {customHostname ? (
+                <div className="space-y-2 rounded-xl border border-purple-100 bg-white p-4" data-testid="custom-domain-readonly">
+                  <p className="text-sm font-semibold text-gray-900">{tc('sections.customDomain.hostnameLabel')}</p>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="font-mono text-gray-800">{customHostname}</span>
+                    <span className="font-medium text-gray-700">{tc('sections.customDomain.statusLabel')}:</span>
+                    <span
+                      data-testid="custom-domain-status"
+                      className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${customStatusClass}`}
+                    >
+                      {customStatusLabel}
+                    </span>
                   </div>
-                )}
-              </div>
+                  <p className="text-xs text-gray-500">{tc('sections.customDomain.readOnlyHint')}</p>
+                </div>
+              ) : null}
             </div>
           </SectionCard>
 
