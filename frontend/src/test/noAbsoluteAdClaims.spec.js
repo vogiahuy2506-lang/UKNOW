@@ -74,6 +74,10 @@ const PUBLIC_FILES = [
   '../features/landing-canvas/components/LeadFormConfigPanel.jsx',
   '../pages/learning/LearningPage.jsx',
   '../pages/public/components/MockChatbot.jsx',
+  // Màn mô phỏng chiến dịch trang chủ (G3c 03/10/2026): chữ nằm ở file dữ liệu + modal + thẻ launcher.
+  '../features/hero/campaignFlowData.js',
+  '../features/hero/components/CampaignFlowModal.jsx',
+  '../pages/public/components/CampaignFlowLauncher.jsx',
   '../features/landing-pages/components/VisualBlockEditor.jsx',
   '../features/admin/utils/notificationTemplates.util.js',
   '../i18n/vi.js',
