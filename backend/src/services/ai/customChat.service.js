@@ -1,23 +1,14 @@
 import customChatDocumentRepository from '../../repositories/ai/customChatDocument.repository.js';
 import { extractTextFromBuffer } from '../../utils/fileExtractor.util.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
-import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
+import { generateGeminiContent } from '../../utils/geminiClient.util.js';
+import { CHAT_REPLY_BUDGET } from '../../utils/aiReplyBudget.util.js';
 import { scrapeUrlWithJs } from '../../utils/puppeteerScraper.util.js';
 import { assertPublicUrl, isSsrfBlockedError, safeFetch } from '../../utils/ssrfGuard.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
-
-/** Timeout for Gemini API calls (30 seconds) */
-const GEMINI_TIMEOUT_MS = 30000;
-
-/** Retry configuration for transient errors */
-const RETRY_CONFIG = {
-  maxRetries: 2,
-  retryDelayMs: 1000,
-  retryableErrors: ['ETIMEDOUT', 'ECONNRESET', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN'],
-};
 
 function isImageUnsupportedError(err) {
   const msg = String(err?.message || '').toLowerCase();
@@ -46,19 +37,20 @@ function stripInlineDataParts(parts) {
 
 class CustomChatService {
   /**
-   * Call Gemini API with timeout and retry logic.
+   * Gọi Gemini qua lõi dùng chung (`generateGeminiContent`).
    * Accepts either legacy `prompt` (string) or multimodal `parts` (array).
+   *
+   * G2.2 (03/10/2026). Bản cũ gọi `fetch` thô: thử lại 5xx + lỗi mạng nhưng KHÔNG thử lại 429, không có model dự phòng,
+   * và 3 lượt × 30 giây chạm trần 100 giây của Cloudflare (widget quay vòng vòng). Giờ: thử lại 429/5xx/lỗi mạng, chuyển
+   * model dự phòng do super admin chọn, và cả lượt (kể cả lượt bỏ ảnh) gói trong ngân sách 25 giây có huỷ fetch thật.
+   * Phần thinkingBudget 0 → nới trần khi model chỉ-thinking từ chối do lõi gánh.
+   *
+   * @returns {Promise<{ text: string, usage: object, modelUsed: string }>}
    */
   async callGeminiWithRetry(promptOrParts, options = {}) {
     const { temperature = 0.7, maxTokens = 2048, userId = null } = options;
-    const apiKey = process.env.GEMINI_API_KEY;
     const model = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
-
-    if (!apiKey) {
-      const error = new Error('GEMINI_API_KEY not configured');
-      error.status = 500;
-      throw error;
-    }
+    const fallbackModel = await aiUsageMeter.resolveFallbackModel();
 
     let parts;
     if (Array.isArray(promptOrParts)) {
@@ -67,106 +59,42 @@ class CustomChatService {
       parts = [{ text: String(promptOrParts ?? '') }];
     }
 
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-    const doFetch = async (requestParts, { disableThinking = false } = {}) => {
-      const maxOut = Math.min(maxTokens, 65536);
-      const generationConfig = {
+    const startedAt = Date.now();
+    const callOnce = async (requestParts) => {
+      // Lượt thứ hai (bỏ ảnh) dùng PHẦN CÒN LẠI của ngân sách, không phải 25 giây mới.
+      const budgetLeftMs = Math.max(CHAT_REPLY_BUDGET.totalTimeoutMs - (Date.now() - startedAt), 1);
+      const result = await generateGeminiContent({
+        parts: requestParts,
+        model,
+        fallbackModel,
         temperature,
-        maxOutputTokens: disableThinking ? Math.max(maxOut, 3072) : maxOut,
-      };
-      if (!disableThinking) {
-        generationConfig.thinkingConfig = { thinkingBudget: 0 };
-      }
-
-      const body = JSON.stringify({
-        contents: [{ parts: requestParts }],
-        generationConfig,
+        topP: null, // đường này chưa bao giờ gửi topP — giữ nguyên
+        maxOutputTokens: Math.min(maxTokens, 65536),
+        thinkingBudget: 0,
+        ...CHAT_REPLY_BUDGET,
+        timeoutMs: budgetLeftMs,
+        totalTimeoutMs: budgetLeftMs,
       });
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), GEMINI_TIMEOUT_MS);
-      try {
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body,
-          signal: controller.signal,
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}));
-          const error = new Error(errorData?.error?.message || `Gemini API error: ${response.status}`);
-          // Keep client-facing status as before this feature: 5xx→503, else→500.
-          // Preserve raw Gemini status only for internal fallback decisions.
-          error.geminiStatus = response.status;
-          error.status = response.status >= 500 ? 503 : 500;
-          throw error;
-        }
-
-        const data = await response.json();
-        if (data.error) {
-          const error = new Error(data.error.message);
-          error.status = 500;
-          throw error;
-        }
-
-        return {
-          text: joinGeminiTextParts(data.candidates?.[0]?.content?.parts),
-          usage: extractGeminiUsage(data),
-        };
-      } catch (err) {
-        // Thinking-fallback: one shot inside doFetch — does not consume RETRY_CONFIG slots.
-        if (!disableThinking && isThinkingBudgetRejection(err)) {
-          return doFetch(requestParts, { disableThinking: true });
-        }
-        throw err;
-      } finally {
-        clearTimeout(timeoutId);
-      }
+      return { text: result.text, usage: result.usage, modelUsed: result.modelUsed };
     };
 
-    let lastError;
-    let imageFallbackDone = false;
-    let currentParts = parts;
-
-    for (let attempt = 0; attempt <= RETRY_CONFIG.maxRetries; attempt++) {
-      try {
-        return await doFetch(currentParts);
-      } catch (err) {
-        lastError = err;
-
-        // Vision fallback: drop images once on 400 related to inline_data/image
-        const hasInline = currentParts.some((p) => p?.inline_data);
-        if (!imageFallbackDone && hasInline && isImageUnsupportedError(err)) {
-          console.warn('[Gemini] Image not supported by model, retrying text-only:', err.message);
-          currentParts = stripInlineDataParts(currentParts);
-          imageFallbackDone = true;
-          attempt -= 1; // don't consume a network retry slot
-          continue;
+    try {
+      return await callOnce(parts);
+    } catch (err) {
+      // Vision fallback: drop images once on 400 related to inline_data/image
+      const hasInline = parts.some((p) => p?.inline_data);
+      if (hasInline && isImageUnsupportedError(err)) {
+        console.warn('[Gemini] Image not supported by model, retrying text-only:', err.message);
+        try {
+          return await callOnce(stripInlineDataParts(parts));
+        } catch (retryErr) {
+          if (retryErr.status == null) retryErr.status = 500;
+          throw retryErr;
         }
-
-        const isRetryable =
-          err.name === 'AbortError' ||
-          (err.geminiStatus >= 500) ||
-          RETRY_CONFIG.retryableErrors.some((e) => err.message?.includes(e) || err.code === e);
-
-        if (isRetryable && attempt < RETRY_CONFIG.maxRetries) {
-          console.warn(`[Gemini] Attempt ${attempt + 1} failed (${err.message}), retrying...`);
-          await sleep(RETRY_CONFIG.retryDelayMs * (attempt + 1));
-          continue;
-        }
-
-        if (err.geminiStatus >= 500) {
-          err.status = 503;
-        } else if (err.status == null) {
-          err.status = 500;
-        }
-        throw err;
       }
+      if (err.status == null) err.status = 500;
+      throw err;
     }
-
-    throw lastError;
   }
 
   async chat({
@@ -268,7 +196,8 @@ QUY TẮC TRẢ LỜI:
       const content = stripMarkdown(rawContent?.text || 'Xin lỗi, tôi không có câu trả lời.');
       await aiUsageMeter.record(userId, rawContent?.usage, {
         feature: 'kb_chat',
-        model,
+        // Model THẬT đã trả lời (có thể là model dự phòng), không phải model hệ thống.
+        model: rawContent?.modelUsed || model,
       });
 
       return {
@@ -276,7 +205,8 @@ QUY TẮC TRẢ LỜI:
         type: 'text',
       };
     } catch (err) {
-      console.error('[CustomChat] Gemini call failed:', err.message);
+      // providerMessage = câu gốc của Google khi lõi đã đổi `message` sang câu tiếng Việt cho khách.
+      console.error('[CustomChat] Gemini call failed:', err.providerMessage || err.message);
 
       // Return user-friendly error
       if (err.name === 'AbortError' || err.message.includes('timeout')) {
@@ -731,11 +661,6 @@ QUY TẮC TRẢ LỜI:
 
     return chunks;
   }
-}
-
-/** Helper function for sleep/delay */
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export default new CustomChatService();
