@@ -45,7 +45,21 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
       data: {
         data: {
           filters: {},
-          rows: [{ productId: 11, submitted: 3, registered: 2, paid: 1, revenue: 2000, formIds: [7] }],
+          rows: [
+            {
+              productId: 11,
+              submitted: 3,
+              registered: 2,
+              paid: 1,
+              revenue: 2000,
+              formIds: [7],
+              landingViews: 5,
+              leads: 2,
+              campaignClicks: 4,
+              interested: 9,
+              leftContact: 5,
+            },
+          ],
         },
       },
     });
@@ -57,6 +71,13 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     await waitFor(() => expect(screen.getByTestId('funnel-registered')).toHaveTextContent('2'));
 
     expect(productApiService.getFunnel).toHaveBeenCalledWith({ period: '30d' });
+    expect(screen.getByTestId('funnel-interested')).toHaveTextContent('9');
+    expect(screen.getByTestId('funnel-left-contact')).toHaveTextContent('5');
+    expect(screen.getByRole('columnheader', { name: 'Quan tâm' })).toHaveAttribute(
+      'title',
+      expect.stringContaining('Telegram/WhatsApp')
+    );
+    expect(screen.getByRole('columnheader', { name: 'Để lại thông tin' })).toBeInTheDocument();
     expect(screen.getByTestId('funnel-paid')).toHaveTextContent('1');
     expect(screen.getByTestId('funnel-revenue').textContent.replace(/\s/g, '')).toMatch(/^2\.000đ$/);
     // Một biểu mẫu → số Đăng ký dẫn sang trang bài nộp của biểu mẫu đó
@@ -73,6 +94,8 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
 
     expect(productApiService.getFunnel).not.toHaveBeenCalled();
     expect(screen.queryByTestId('funnel-registered')).toBeNull();
+    expect(screen.queryByTestId('funnel-interested')).toBeNull();
+    expect(screen.queryByTestId('funnel-left-contact')).toBeNull();
     expect(screen.queryByTestId('products-funnel-period')).toBeNull();
   });
 

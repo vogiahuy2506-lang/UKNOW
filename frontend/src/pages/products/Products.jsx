@@ -60,7 +60,7 @@ const formatDate = (v) => {
   return isNaN(d.getTime()) ? '--' : d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN');
 };
 
-// 3 ô Đăng ký / Đã trả / Doanh thu của một sản phẩm. Số Đăng ký là liên kết sang bài nộp: 1 biểu mẫu → trang bài nộp
+// 5 ô Quan tâm / Để lại thông tin / Đăng ký / Đã trả / Doanh thu của một sản phẩm. Số Đăng ký là liên kết sang bài nộp: 1 biểu mẫu → trang bài nộp
 // của biểu mẫu đó; nhiều biểu mẫu → danh sách biểu mẫu (PR-1).
 const FunnelCells = ({ funnel }) => {
   const registered = funnel?.registered ?? 0;
@@ -69,6 +69,12 @@ const FunnelCells = ({ funnel }) => {
     formIds.length === 1 ? `/app/forms/${formIds[0]}/submissions` : formIds.length > 1 ? '/app/forms' : null;
   return (
     <>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-interested">
+        {funnel?.interested ?? 0}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-left-contact">
+        {funnel?.leftContact ?? 0}
+      </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-registered">
         {target ? (
           <Link to={target} className="text-primary-600 hover:underline">
@@ -352,6 +358,12 @@ const Products = () => {
                     </th>
                     {canViewFunnel && (
                       <>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.interestedHint')}>
+                          {t('products.funnel.interested')}
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
+                          {t('products.funnel.leftContact')}
+                        </th>
                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
                           {t('products.funnel.registered')}
                         </th>

@@ -62,6 +62,106 @@ class ProductFunnelRepository {
       formIds: (r.formIds || []).map(Number),
     }));
   }
+
+  /**
+   * PR-2: landing "thuộc" sản phẩm = landing có biểu mẫu gắn sản phẩm (`forms.landing_page_id` + `forms.product_id`),
+   * cùng workspace. Trả mỗi sản phẩm: `productUrl`, danh sách landing (slug + tên miền đang `active`) để PR-3 dựng địa chỉ
+   * công khai, và hai số theo slug trong khoảng `created_at`: `landingViews` (landing_page_events `view` — LƯỢT XEM, `lp-track.js`
+   * chỉ gửi `{slug}`) và `leads` (bảng `leads`, cùng workspace).
+   *
+   * @param {{ workspaceOwnerId: number, startAt?: string|null, endExclusive?: string|null }} params
+   * @returns {Promise<Array<{ productId: number, productUrl: string|null, landings: Array<{ id: number, slug: string, hostnames: string[] }>, landingViews: number, leads: number }>>}
+   */
+  async aggregateLandingFunnelByProduct({ workspaceOwnerId, startAt = null, endExclusive = null }) {
+    const products = await db.query(
+      `SELECT p.id AS "productId", p.product_url AS "productUrl"
+       FROM products p
+       WHERE COALESCE(p.workspace_owner_id, p.id_user) = $1
+       ORDER BY p.id`,
+      [workspaceOwnerId]
+    );
+    const links = await db.query(
+      `SELECT DISTINCT f.product_id AS "productId", lp.id AS "landingId", lp.slug,
+              ARRAY(
+                SELECT d.hostname FROM landing_page_domains d
+                WHERE d.landing_page_id = lp.id AND d.status = 'active'
+                ORDER BY d.id
+              ) AS hostnames
+       FROM forms f
+       JOIN landing_pages lp ON lp.id = f.landing_page_id
+       WHERE f.workspace_owner_id = $1
+         AND f.product_id IS NOT NULL
+         AND COALESCE(lp.workspace_owner_id, lp.id_user) = $1`,
+      [workspaceOwnerId]
+    );
+    const slugs = [...new Set(links.rows.map((r) => r.slug).filter(Boolean))];
+    const viewsBySlug = new Map();
+    const leadsBySlug = new Map();
+    if (slugs.length > 0) {
+      const views = await db.query(
+        `SELECT lpe.landing_page_slug AS slug, COUNT(*)::int AS n
+         FROM landing_page_events lpe
+         WHERE lpe.event_type = 'view'
+           AND lpe.landing_page_slug = ANY($1::text[])
+           AND ($2::timestamptz IS NULL OR lpe.created_at >= $2::timestamptz)
+           AND ($3::timestamptz IS NULL OR lpe.created_at < $3::timestamptz)
+         GROUP BY lpe.landing_page_slug`,
+        [slugs, startAt, endExclusive]
+      );
+      for (const r of views.rows) viewsBySlug.set(r.slug, Number(r.n));
+      const leads = await db.query(
+        `SELECT l.landing_page_slug AS slug, COUNT(*)::int AS n
+         FROM leads l
+         WHERE l.landing_page_slug = ANY($1::text[])
+           AND COALESCE(l.workspace_owner_id, l.id_user) = $4
+           AND ($2::timestamptz IS NULL OR l.created_at >= $2::timestamptz)
+           AND ($3::timestamptz IS NULL OR l.created_at < $3::timestamptz)
+         GROUP BY l.landing_page_slug`,
+        [slugs, startAt, endExclusive, workspaceOwnerId]
+      );
+      for (const r of leads.rows) leadsBySlug.set(r.slug, Number(r.n));
+    }
+    return products.rows.map((p) => {
+      const landings = links.rows
+        .filter((l) => Number(l.productId) === Number(p.productId))
+        .map((l) => ({ id: Number(l.landingId), slug: l.slug, hostnames: l.hostnames || [] }));
+      const uniqueSlugs = [...new Set(landings.map((l) => l.slug))];
+      return {
+        productId: Number(p.productId),
+        productUrl: p.productUrl || null,
+        landings,
+        landingViews: uniqueSlugs.reduce((sum, s) => sum + (viewsBySlug.get(s) || 0), 0),
+        leads: uniqueSlugs.reduce((sum, s) => sum + (leadsBySlug.get(s) || 0), 0),
+      };
+    });
+  }
+
+  /**
+   * PR-3: các lượt bấm link trong chiến dịch (email/Zalo) của workspace, lọc thô theo SQL. So khớp URL làm trong JS.
+   * Cả hai đường ghi khi khách bấm (`customerEmailTracking` / `customerZaloTracking`) ghi `customer_journey.id_campaign`
+   * (không phải `campaign_id`), nên chủ = `COALESCE(c.workspace_owner_id, c.id_user)` của chiến dịch đó.
+   * `event_at` là TIMESTAMP không múi giờ, ghi bằng CURRENT_TIMESTAMP theo múi giờ phiên (VN) → so với mốc timestamptz đúng.
+   *
+   * @returns {Promise<Array<{ id: number, customerId: number|null, targetUrl: string }>>}
+   */
+  async listCampaignClicks({ workspaceOwnerId, startAt = null, endExclusive = null }) {
+    const result = await db.query(
+      `SELECT cj.id, cj.id_customer AS "customerId", cj.event_data->>'targetUrl' AS "targetUrl"
+       FROM customer_journey cj
+       JOIN campaigns c ON c.id = cj.id_campaign
+       WHERE cj.event_type IN ('email_clicked', 'zalo_clicked')
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $1
+         AND COALESCE(cj.event_data->>'targetUrl', '') <> ''
+         AND ($2::timestamptz IS NULL OR cj.event_at >= $2::timestamptz)
+         AND ($3::timestamptz IS NULL OR cj.event_at < $3::timestamptz)`,
+      [workspaceOwnerId, startAt, endExclusive]
+    );
+    return result.rows.map((r) => ({
+      id: Number(r.id),
+      customerId: r.customerId === null || r.customerId === undefined ? null : Number(r.customerId),
+      targetUrl: r.targetUrl,
+    }));
+  }
 }
 
 export default new ProductFunnelRepository();

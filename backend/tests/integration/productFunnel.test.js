@@ -113,7 +113,19 @@ describe('GET /api/products/funnel (PR-1)', () => {
     expect(rows[p1].paid).toBe(2);
     expect(rows[p1].revenue).toBe(7000);
     // Sản phẩm không có bài nộp vẫn có dòng 0
-    expect(rows[p2]).toEqual({ productId: p2, submitted: 0, registered: 0, paid: 0, revenue: 0, formIds: [] });
+    expect(rows[p2]).toEqual({
+      productId: p2,
+      submitted: 0,
+      registered: 0,
+      paid: 0,
+      revenue: 0,
+      formIds: [],
+      landingViews: 0,
+      leads: 0,
+      campaignClicks: 0,
+      interested: 0,
+      leftContact: 0,
+    });
     // formIds: các biểu mẫu gắn sản phẩm (để giao diện dẫn sang trang bài nộp)
     expect(rows[p1].formIds).toEqual([f1, f1b]);
     // Sản phẩm workspace khác không lộ ra
@@ -145,6 +157,153 @@ describe('GET /api/products/funnel (PR-1)', () => {
     );
     const allowed = await request(app).get('/api/products/funnel').set(headers);
     expect(allowed.status).toBe(200);
+  });
+});
+
+async function insertLanding(ownerId, slug) {
+  const { rows } = await db.query(
+    `INSERT INTO landing_pages (id_user, workspace_owner_id, slug, is_published) VALUES ($1, $1, $2, TRUE) RETURNING id`,
+    [ownerId, slug]
+  );
+  return Number(rows[0].id);
+}
+
+async function attachFormToLanding(formId, landingId) {
+  await db.query('UPDATE forms SET landing_page_id = $1 WHERE id = $2', [landingId, formId]);
+}
+
+async function insertView(slug, daysAgo = 1) {
+  await db.query(
+    `INSERT INTO landing_page_events (event_type, landing_page_slug, created_at)
+     VALUES ('view', $1, NOW() - ($2::int * INTERVAL '1 day'))`,
+    [slug, daysAgo]
+  );
+}
+
+async function insertLead(ownerId, slug, daysAgo = 1) {
+  await db.query(
+    `INSERT INTO leads (id_user, workspace_owner_id, email, landing_page_slug, created_at)
+     VALUES ($1, $1, $2, $3, NOW() - ($4::int * INTERVAL '1 day'))`,
+    [ownerId, `l${tokenSeq++}@x.vn`, slug, daysAgo]
+  );
+}
+
+async function insertCustomer(ownerId, name) {
+  const { rows } = await db.query(
+    `INSERT INTO customers (id_user, workspace_owner_id, full_name, email) VALUES ($1, $1, $2, $3) RETURNING id`,
+    [ownerId, name, `${name}${tokenSeq++}@x.vn`]
+  );
+  return Number(rows[0].id);
+}
+
+async function insertCampaign(ownerId) {
+  const { rows } = await db.query(
+    `INSERT INTO campaigns (id_user, workspace_owner_id, campaign_name) VALUES ($1, $1, $2) RETURNING id`,
+    [ownerId, `C${tokenSeq++}`]
+  );
+  return Number(rows[0].id);
+}
+
+async function insertClick(campaignId, customerId, targetUrl, { type = 'email_clicked', daysAgo = 1 } = {}) {
+  await db.query(
+    `INSERT INTO customer_journey (id_customer, id_campaign, event_type, event_channel, event_data, event_at)
+     VALUES ($1, $2, $3, 'email', $4::jsonb, NOW() - ($5::int * INTERVAL '1 day'))`,
+    [customerId, campaignId, type, JSON.stringify({ targetUrl }), daysAgo]
+  );
+}
+
+describe('Phễu: Quan tâm / Để lại thông tin (PR-2 + PR-3)', () => {
+  it('đếm lượt xem + lead của landing gắn form của sản phẩm, và người bấm link chiến dịch khớp sản phẩm', async () => {
+    const owner = await createUser({ username: 'funnel23_owner' });
+    const other = await createUser({ username: 'funnel23_other' });
+    const p1 = await insertProduct(owner.id, 'Khoá AI');
+    const p2 = await insertProduct(owner.id, 'Sản phẩm khác');
+    await db.query(`UPDATE products SET product_url = $1 WHERE id = $2`, ['https://shop.vn/khoa-ai/', p1]);
+
+    const lpMine = await insertLanding(owner.id, 'khoa-ai');
+    const lpOther = await insertLanding(owner.id, 'trang-khac'); // landing của chủ nhưng form gắn p2
+    await insertLanding(other.id, 'cua-nguoi-khac');
+    const f1 = await insertForm(owner.id, 'F1', p1);
+    const f2 = await insertForm(owner.id, 'F2', p2);
+    await attachFormToLanding(f1, lpMine);
+    await attachFormToLanding(f2, lpOther);
+    await insertSubmission(owner.id, f1, { status: 'submitted' });
+
+    // Landing của P1: 3 lượt xem trong khoảng, 1 ngoài khoảng; 1 lead trong khoảng, 1 lead ngoài khoảng
+    await insertView('khoa-ai', 1);
+    await insertView('khoa-ai', 2);
+    await insertView('khoa-ai', 3);
+    await insertView('khoa-ai', 60);
+    await insertLead(owner.id, 'khoa-ai', 1);
+    await insertLead(owner.id, 'khoa-ai', 60);
+    // Landing khác không tính vào P1
+    await insertView('trang-khac', 1);
+    await insertLead(owner.id, 'trang-khac', 1);
+    await insertView('cua-nguoi-khac', 1);
+
+    // Lượt bấm link chiến dịch
+    const camp = await insertCampaign(owner.id);
+    const campOther = await insertCampaign(other.id);
+    const a = await insertCustomer(owner.id, 'a');
+    const b = await insertCustomer(owner.id, 'b');
+    const c = await insertCustomer(owner.id, 'c');
+    const d = await insertCustomer(other.id, 'd');
+    await insertClick(camp, a, 'https://www.shop.vn/khoa-ai?utm_source=email_campaign&utm_customer=1'); // khớp product_url
+    await insertClick(camp, a, 'https://shop.vn/khoa-ai/'); // a bấm lần 2 -> vẫn 1 người
+    await insertClick(camp, b, 'https://founderai.biz/lp/khoa-ai.', { type: 'zalo_clicked' }); // địa chỉ landing + dấu chấm cuối
+    await insertClick(camp, c, 'https://shop.vn/khoa-hoc-khac'); // khác path
+    await insertClick(camp, c, 'https://shop.vn/khoa-ai', { daysAgo: 60 }); // ngoài khoảng
+    await insertClick(campOther, d, 'https://shop.vn/khoa-ai'); // chiến dịch workspace khác
+
+    const token = await loginAs(owner);
+    const res = await request(app).get('/api/products/funnel?period=30d').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const rows = byProduct(res);
+    expect(rows[p1]).toMatchObject({
+      landingViews: 3,
+      leads: 1,
+      submitted: 1,
+      campaignClicks: 2,
+      interested: 5,
+      leftContact: 2,
+    });
+    // P2: landing khác có 1 view + 1 lead; không có link khớp
+    expect(rows[p2]).toMatchObject({ landingViews: 1, leads: 1, campaignClicks: 0 });
+
+    // Workspace khác không thấy gì của owner
+    const tokenOther = await loginAs(other);
+    const resOther = await request(app).get('/api/products/funnel?period=30d').set('Authorization', `Bearer ${tokenOther}`);
+    expect(resOther.body.data.rows).toHaveLength(0);
+
+    // period=all: lượt bấm cũ của c cũng tính (khớp product_url) -> 3 người; view 4
+    const resAll = await request(app).get('/api/products/funnel?period=all').set('Authorization', `Bearer ${token}`);
+    expect(byProduct(resAll)[p1].campaignClicks).toBe(3);
+    expect(byProduct(resAll)[p1].landingViews).toBe(4);
+  });
+
+  it('địa chỉ công khai của landing qua tên miền active khớp; tên miền chưa active thì không', async () => {
+    const owner = await createUser({ username: 'funnel23_domain' });
+    const p1 = await insertProduct(owner.id, 'SP');
+    const lp = await insertLanding(owner.id, 'sp-lp');
+    const f1 = await insertForm(owner.id, 'F', p1);
+    await attachFormToLanding(f1, lp);
+    await db.query(
+      `INSERT INTO landing_page_domains (landing_page_id, hostname, verification_token, status)
+       VALUES ($1, 'sp-lp.founderai.biz', 'tok', 'active')`,
+      [lp]
+    );
+    const camp = await insertCampaign(owner.id);
+    const a = await insertCustomer(owner.id, 'a');
+    const b = await insertCustomer(owner.id, 'b');
+    await insertClick(camp, a, 'https://sp-lp.founderai.biz/?utm_source=email_campaign');
+    await insertClick(camp, b, 'https://khac.founderai.biz/');
+    const token = await loginAs(owner);
+    const res = await request(app).get('/api/products/funnel?period=30d').set('Authorization', `Bearer ${token}`);
+    expect(byProduct(res)[p1].campaignClicks).toBe(1);
+
+    await db.query(`UPDATE landing_page_domains SET status = 'disabled'`);
+    const res2 = await request(app).get('/api/products/funnel?period=30d').set('Authorization', `Bearer ${token}`);
+    expect(byProduct(res2)[p1].campaignClicks).toBe(0);
   });
 });
 
