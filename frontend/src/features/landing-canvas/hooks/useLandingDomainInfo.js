@@ -21,7 +21,7 @@ import { getCustomHostname, isSystemHostname } from '../utils/landingDomain.js';
 export default function useLandingDomainInfo({ open, editingId, form }) {
   const [server, setServer] = useState(null);
   const [loaded, setLoaded] = useState(false);
-  // Chỉ nhận kết quả của lần nạp MỚI NHẤT (đóng/mở nhanh, hoặc nạp lại sau thao tác trong khi lần trước còn bay).
+  // Chỉ nhận kết quả của lần nạp GỌI SAU CÙNG (đóng/mở nhanh, hoặc nạp lại sau thao tác trong khi lần trước còn bay).
   const seqRef = useRef(0);
   const idRef = useRef(editingId);
   idRef.current = editingId;
