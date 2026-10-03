@@ -517,14 +517,23 @@ class AiController {
           if (saved?.assistantMessageId) {
             savedAssistantMessageId = saved.assistantMessageId;
           }
+          // Repo trả null khi phiên không thuộc người này (INSERT gác bằng WHERE EXISTS) — trước đây không ai kiểm nên tin mất
+          // im lặng mà credit vẫn bị trừ (C P1-7). Phiên của actor thì không thể mất ở đây; nếu vẫn xảy ra (client gửi sessionId
+          // của người khác/đã xoá) thì ít nhất log để thấy được.
+          if (saved === null) {
+            console.warn(`[AI] Không lưu được tin vào phiên ${finalSessionId}: phiên không tồn tại hoặc không thuộc user ${req.user.id}`);
+          }
         } else {
-          await aiSessionRepo.saveMessages(
+          const savedOk = await aiSessionRepo.saveMessages(
             finalSessionId,
             req.user.id,
             userContent,
             publicResponse,
             safeFiles
           );
+          if (savedOk === false) {
+            console.warn(`[AI] Không lưu được tin vào phiên ${finalSessionId}: phiên không tồn tại hoặc không thuộc user ${req.user.id}`);
+          }
         }
 
         if (safeFiles.length > 0) {
@@ -660,9 +669,14 @@ class AiController {
     }
   }
 
+  // QUY ƯỚC PHIÊN CHAT TRỢ LÝ (G3a.2, C P1-7): phiên + tin nhắn + wizard_state thuộc NGƯỜI THAO TÁC (actor, `req.user.id`),
+  // không thuộc chủ workspace — `chat()` ghi bằng `req.user.id`, và `ai_chat_sessions.id_user`/mọi truy vấn của repo
+  // đều khoá theo cột đó. Bốn endpoint dưới (list/đọc/PATCH wizard/xoá) từng dùng id CHỦ (`resolveWorkspaceOwnerId`,
+  // từ f15fb05f 22/08) nên nhân viên thấy + mở + xoá được 30 phiên chat của chủ, còn phiên của chính họ thì 404 sau
+  // F5 và PATCH ranh giới wizard không lưu. Chat riêng tư của từng người; tài nguyên (tệp, mẫu, tài khoản) mới theo chủ.
   async getSessions(req, res) {
     try {
-      const userId = resolveWorkspaceOwnerId(req.user);
+      const userId = req.user.id;
       const sessions = await aiSessionRepo.getUserSessions(userId);
       return res.json({ success: true, data: sessions });
     } catch (error) {
@@ -673,7 +687,7 @@ class AiController {
 
   async getSessionMessages(req, res) {
     try {
-      const userId = resolveWorkspaceOwnerId(req.user);
+      const userId = req.user.id;
       const result = await aiSessionRepo.getSessionMessages(Number(req.params.id), userId);
       if (result === null) {
         return res.status(404).json({ success: false, message: 'Session không tồn tại' });
@@ -698,7 +712,7 @@ class AiController {
         return res.status(400).json({ success: false, message: 'Session id không hợp lệ' });
       }
       const { action, payload } = req.body || {};
-      const userId = resolveWorkspaceOwnerId(req.user);
+      const userId = req.user.id;
 
       const row = await aiSessionRepo.getSessionWizardState(sessionId, userId);
       if (!row) {
@@ -750,7 +764,7 @@ class AiController {
 
   async deleteSession(req, res) {
     try {
-      const userId = resolveWorkspaceOwnerId(req.user);
+      const userId = req.user.id;
       const deleted = await aiSessionRepo.deleteSession(Number(req.params.id), userId);
       if (!deleted) return res.status(404).json({ success: false, message: 'Session không tồn tại' });
       return res.json({ success: true });
@@ -768,6 +782,7 @@ class AiController {
    * generateLandingHtml():1371 (người tạo landing_page message gần nhất trong cùng luồng này),
    * để Việc 1.2 (patchLandingMessage) tìm đúng session vừa tạo ở đây khi người dùng đang ở
    * context nhân viên (resolveWorkspaceOwnerId sẽ trả ID khác req.user.id trong trường hợp đó).
+   * Từ G3a.2 (03/10/2026) đây là quy ước CHUNG của mọi endpoint phiên (xem chú thích trên getSessions), không riêng luồng này.
    */
   async landingFromHtml(req, res) {
     try {

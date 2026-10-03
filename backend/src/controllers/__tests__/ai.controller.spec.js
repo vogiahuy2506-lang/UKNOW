@@ -24,10 +24,18 @@ const validateNodeConfig = jest.fn(() => ({ valid: true, errors: [] }));
 const campaignControllerCreate = jest.fn();
 const fillReadSheetFirstTabNames = jest.fn(async () => {});
 
+// G3a: hai endpoint sinh kịch bản đọc tệp theo storage_key — controller phải truyền id CHỦ để dịch vụ kiểm chủ tệp.
+const generateCampaignScript = jest.fn();
+const generateCampaignWithRegistry = jest.fn();
+const validateCampaignScript = jest.fn(() => ({ valid: true, errors: [], warnings: [] }));
+
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
   default: {
     processSmartChat,
     processSmartChatV2,
+    generateCampaignScript,
+    generateCampaignWithRegistry,
+    validateCampaignScript,
   },
 }));
 
@@ -119,6 +127,11 @@ const getLandingPageMessage = jest.fn();
 const updateLandingPageMessage = jest.fn();
 const saveMessagesReturningIds = jest.fn();
 const saveAssistantMessage = jest.fn();
+// G3a.2: bốn endpoint phiên (list/đọc/PATCH wizard/xoá) — spec cuối file khẳng định chúng tra theo id NGƯỜI THAO TÁC.
+const getUserSessions = jest.fn();
+const getSessionMessages = jest.fn();
+const writeWizardState = jest.fn();
+const deleteSession = jest.fn();
 jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   createSession,
   saveMessages,
@@ -128,6 +141,10 @@ jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   updateLandingPageMessage,
   saveMessagesReturningIds,
   saveAssistantMessage,
+  getUserSessions,
+  getSessionMessages,
+  writeWizardState,
+  deleteSession,
   listUserFilesSinceLastLanding: jest.fn(async () => []),
 }));
 
@@ -1544,6 +1561,170 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
 
       const files = saveMessagesReturningIds.mock.calls[0][4];
       expect(files).toEqual([expect.objectContaining({ originalName: 'HD45.pdf' })]);
+    });
+  });
+});
+
+/**
+ * G3a — nhân viên: id người thao tác (actor) khác id chủ workspace. Mock repo ở ranh giới repository nên khẳng định được
+ * "repo được gọi với id nào"; SQL thật của bốn endpoint phiên nằm ở tests/integration/aiSessionsEmployee.test.js.
+ */
+describe('ai.controller — nhân viên (G3a)', () => {
+  const EMPLOYEE = 55;
+  const OWNER = 101;
+  const employeeUser = () => ({
+    id: EMPLOYEE,
+    role: 'employee',
+    activeContext: { type: 'employee', ownerId: OWNER, membershipId: 9, permissions: { ai_assistant_use: true, campaigns_create: true } },
+  });
+
+  beforeEach(() => {
+    getUserSessions.mockReset();
+    getSessionMessages.mockReset();
+    writeWizardState.mockReset();
+    deleteSession.mockReset();
+    saveMessages.mockReset();
+    saveMessagesReturningIds.mockReset();
+    saveAssistantMessage.mockReset();
+    getSessionWizardState.mockReset();
+    createSession.mockReset();
+    processSmartChat.mockReset();
+    tryHandleHelpChat.mockReset();
+    tryHandleHelpChat.mockResolvedValue(null);
+    generateCampaignScript.mockReset();
+    generateCampaignWithRegistry.mockReset();
+    validateCampaignScript.mockReset();
+    validateCampaignScript.mockReturnValue({ valid: true, errors: [], warnings: [] });
+    chargeAiCredit.mockReset();
+  });
+
+  describe('G3a.2 — phiên chat theo NGƯỜI THAO TÁC, không theo chủ', () => {
+    it('GET /ai/sessions: tra theo id nhân viên', async () => {
+      getUserSessions.mockResolvedValue([{ id: 1, title: 'Chat của tôi' }]);
+      const res = makeRes();
+
+      await aiController.getSessions({ user: employeeUser() }, res);
+
+      expect(getUserSessions).toHaveBeenCalledWith(EMPLOYEE);
+      expect(getUserSessions).not.toHaveBeenCalledWith(OWNER);
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: [{ id: 1, title: 'Chat của tôi' }] });
+    });
+
+    it('GET /ai/sessions/:id/messages: tra theo id nhân viên', async () => {
+      getSessionMessages.mockResolvedValue({ messages: [], wizardState: null });
+      const res = makeRes();
+
+      await aiController.getSessionMessages({ user: employeeUser(), params: { id: '7' } }, res);
+
+      expect(getSessionMessages).toHaveBeenCalledWith(7, EMPLOYEE);
+      expect(getSessionMessages).not.toHaveBeenCalledWith(7, OWNER);
+    });
+
+    it('PATCH /ai/sessions/:id/wizard-state: đọc, ghi trạng thái và ghi tin ranh giới đều theo id nhân viên', async () => {
+      getSessionWizardState.mockResolvedValue({ id: 7, wizard_state: null });
+      writeWizardState.mockResolvedValue({ plan: { status: 'completed' } });
+      saveAssistantMessage.mockResolvedValue(true);
+      const res = makeRes();
+
+      await aiController.patchWizardState({
+        user: employeeUser(),
+        params: { id: '7' },
+        body: { action: 'mark_campaign_created', payload: { campaignId: 5, content: 'Đã tạo.' } },
+      }, res);
+
+      expect(getSessionWizardState).toHaveBeenCalledWith(7, EMPLOYEE);
+      expect(writeWizardState).toHaveBeenCalledWith(7, EMPLOYEE, expect.any(Object));
+      expect(saveAssistantMessage).toHaveBeenCalledWith(7, EMPLOYEE, expect.objectContaining({ type: 'campaign_created' }));
+      expect(getSessionWizardState).not.toHaveBeenCalledWith(7, OWNER);
+      expect(writeWizardState).not.toHaveBeenCalledWith(7, OWNER, expect.anything());
+    });
+
+    it('DELETE /ai/sessions/:id: xoá theo id nhân viên', async () => {
+      deleteSession.mockResolvedValue(true);
+      const res = makeRes();
+
+      await aiController.deleteSession({ user: employeeUser(), params: { id: '7' } }, res);
+
+      expect(deleteSession).toHaveBeenCalledWith(7, EMPLOYEE);
+      expect(deleteSession).not.toHaveBeenCalledWith(7, OWNER);
+    });
+
+    it('chat(): ghi phiên + tin nhắn cũng theo id nhân viên (cùng khuôn với bốn endpoint đọc)', async () => {
+      processSmartChat.mockResolvedValue({ type: 'text', content: 'Chào', data: null });
+      createSession.mockResolvedValue({ id: 77, title: 'Chat mới' });
+      saveMessages.mockResolvedValue(true);
+
+      await aiController.chat({
+        body: { history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi' },
+        user: employeeUser(),
+      }, makeRes());
+
+      expect(createSession).toHaveBeenCalledWith(EMPLOYEE, expect.any(String));
+      expect(saveMessages).toHaveBeenCalledWith(77, EMPLOYEE, expect.any(String), expect.any(Object), []);
+    });
+
+    it('chat(): repo báo không lưu được tin (saveMessages=false) → log cảnh báo, lượt chat vẫn trả lời', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      processSmartChat.mockResolvedValue({ type: 'text', content: 'Chào', data: null });
+      getSessionWizardState.mockResolvedValue({ id: 9, wizard_state: null });
+      saveMessages.mockResolvedValue(false);
+      const res = makeRes();
+
+      await aiController.chat({
+        body: { history: [{ role: 'user', content: 'Xin chào trợ lý' }], sessionId: 9, locale: 'vi' },
+        user: employeeUser(),
+      }, res);
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Không lưu được tin vào phiên 9'));
+      expect(res.json).toHaveBeenCalledWith({ success: true, data: expect.objectContaining({ content: 'Chào' }) });
+      warn.mockRestore();
+    });
+  });
+
+  describe('G3a.1 — controller truyền id CHỦ cho dịch vụ đọc tệp (nhân viên đọc được tệp chủ, không đọc tệp workspace khác)', () => {
+    it('POST /ai/chat: processSmartChat nhận resourceOwnerUserId = chủ, userId = nhân viên', async () => {
+      processSmartChat.mockResolvedValue({ type: 'text', content: 'ok', data: null });
+      createSession.mockResolvedValue({ id: 1, title: 't' });
+
+      await aiController.chat({
+        body: { history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi' },
+        user: employeeUser(),
+      }, makeRes());
+
+      expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, resourceOwnerUserId: OWNER }));
+    });
+
+    it('POST /ai/generate-campaign: generateCampaignScript nhận ownerUserId = chủ', async () => {
+      generateCampaignScript.mockResolvedValue({ campaignName: 'x' });
+
+      await aiController.generateCampaign({
+        body: { prompt: 'tạo chiến dịch', files: [{ storage_key: `uploads/${OWNER}/chat/a.pdf` }] },
+        user: employeeUser(),
+      }, makeRes());
+
+      expect(generateCampaignScript).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
+    });
+
+    it('POST /ai/generate-campaign-v2: generateCampaignWithRegistry nhận ownerUserId = chủ', async () => {
+      generateCampaignWithRegistry.mockResolvedValue({ campaignName: 'x' });
+
+      await aiController.generateCampaignV2({
+        body: { prompt: 'tạo chiến dịch', files: [{ storage_key: `uploads/${OWNER}/chat/a.pdf` }] },
+        user: employeeUser(),
+      }, makeRes());
+
+      expect(generateCampaignWithRegistry).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
+    });
+
+    it('chủ (không phải nhân viên): ownerUserId = chính id mình', async () => {
+      generateCampaignScript.mockResolvedValue({ campaignName: 'x' });
+
+      await aiController.generateCampaign({
+        body: { prompt: 'tạo chiến dịch', files: [] },
+        user: { id: OWNER, role: 'user' },
+      }, makeRes());
+
+      expect(generateCampaignScript).toHaveBeenCalledWith(expect.objectContaining({ userId: OWNER, ownerUserId: OWNER }));
     });
   });
 });
