@@ -9,6 +9,9 @@ import AdminOrdersPage from './AdminOrdersPage';
 // chạy song song, CI chậm) trang chưa kịp vẽ xong thì ca đỏ chập chờn. Nâng cho CẢ file; riêng chỗ truy vấn ngay sau khi API được
 // gọi còn ghi `{ timeout: 5000 }` tường minh (cùng kiểu đã sửa ở 1a2d1f57, AdminAiUsagePage.spec).
 configure({ asyncUtilTimeout: 5000 });
+// Mỗi bước chờ được tới 5s mà cả ca test mặc định cũng chỉ 5s: máy tải nặng (load > 20) thì ca có vài bước chờ vượt giờ
+// dù trang chạy đúng (đỏ giả 04/10 ở ca 'yêu cầu rút chờ duyệt'). Nới riêng file này, không đổi cấu hình chung.
+vi.setConfig({ testTimeout: 20000 });
 
 const {
   mockGetOrders, mockMarkPaidAfterCancelledHandled, mockGetRefundPreview, mockRefundOrder,
