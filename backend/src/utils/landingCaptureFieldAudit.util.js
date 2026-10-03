@@ -1,6 +1,6 @@
 /**
  * Soi form `<form data-founderai-capture>` trong HTML landing, đối chiếu tên các ô (`name=`)
- * với `leadFormConfig.customFields` đã khai báo ở Cài đặt trang → Form đăng ký.
+ * với `leadFormConfig.customFields` đã khai báo ở Cài đặt trang → Form thu khách.
  *
  * Câu hỏi sếp 14/09 ("dữ liệu điền vào form sẽ lưu về chỗ nào?"): đo thật trên
  * `checkform.founderai.biz` cho thấy 5/8 ô (Chức vụ, Đơn vị công tác, Phương án họp, Khung giờ
@@ -97,7 +97,7 @@ export function buildCaptureFieldAuditWarning({ unknownNames = [], declaredMissi
     const label = unknownNames.length === 1 ? 'ô' : `${unknownNames.length} ô`;
     parts.push(
       `Form đăng ký có ${label} chưa khai báo (${unknownNames.join(', ')}) — dữ liệu khách điền vào ` +
-      `SẼ KHÔNG được lưu. Hãy khai báo trong Cài đặt trang → Form đăng ký rồi nhờ AI đặt lại tên ô.`
+      `SẼ KHÔNG được lưu. Hãy khai báo trong Cài đặt trang → Form thu khách rồi nhờ AI đặt lại tên ô.`
     );
   }
   if (declaredMissing.length > 0) {

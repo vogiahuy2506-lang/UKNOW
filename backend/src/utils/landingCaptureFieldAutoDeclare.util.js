@@ -3,7 +3,7 @@
  *
  * Nối tiếp `landingCaptureFieldAudit.util.js` (chỉ CẢNH BÁO ô chưa khai báo): người dùng nói
  * "thêm ô Chức vụ" thì trang phải ra đủ trường VÀ dữ liệu phải được lưu — không có lý gì bắt họ tự
- * vào Cài đặt trang → Form đăng ký khai báo trước rồi mới nhờ AI sửa form. Hàm ở đây soi form
+ * vào Cài đặt trang → Form thu khách khai báo trước rồi mới nhờ AI sửa form. Hàm ở đây soi form
  * `data-founderai-capture`, DỰNG khai báo `customFields` từ chính HTML rồi ĐỔI TÊN `name=` thành
  * khoá `cf_*` hợp lệ — chạy lúc lưu (`landingPageAdmin.service.js` `create()`/`update()`), không
  * làm trong prompt AI (phải chạy được cả khi người dùng dán HTML tay; AI không đáng tin để tự sinh
