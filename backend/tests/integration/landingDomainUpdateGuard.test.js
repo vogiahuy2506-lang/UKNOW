@@ -10,10 +10,11 @@
  * Cloudflare không cấu hình trong môi trường test → cấp subdomain miễn phí ghi hàng `pending_verification`
  * `cf_managed=true` (không gọi mạng) — đủ để kiểm hàng miễn phí được cấp lại.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach } from '@jest/globals';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, jest } from '@jest/globals';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import db from '../../src/config/database.js';
+import cloudflareService from '../../src/services/cloudflare.service.js';
 import { truncateAll, createUser, createPlan, assignPlanToUser } from './helpers/db.js';
 
 let app;
@@ -25,6 +26,23 @@ beforeAll(() => {
 beforeEach(async () => {
   await truncateAll();
 });
+
+afterEach(() => {
+  jest.restoreAllMocks();
+});
+
+/** Cloudflare giả: cấp subdomain thành công (`ok`) hoặc lỗi. Không gọi mạng thật. */
+function mockCloudflare({ ok }) {
+  jest.spyOn(cloudflareService, 'isConfigured').mockReturnValue(true);
+  jest.spyOn(cloudflareService, 'setupLandingPageDNS').mockResolvedValue(
+    ok
+      ? { success: true, zoneId: 'zone-guard', recordId: 'rec-guard', message: 'ok' }
+      : { success: false, message: 'Cloudflare giả lập lỗi' }
+  );
+  jest.spyOn(cloudflareService, 'deleteDnsRecord').mockResolvedValue({ success: true });
+  jest.spyOn(cloudflareService, 'purgeLandingCache').mockResolvedValue({ success: true });
+  jest.spyOn(cloudflareService, 'purgeUrls').mockResolvedValue({ success: true });
+}
 
 const BASE = process.env.LP_SUBDOMAIN_BASE || 'founderai.biz';
 const HTML = '<!DOCTYPE html><html><head></head><body><h1>Trang thử</h1></body></html>';
@@ -178,14 +196,30 @@ describe('PUT /api/admin/landing-pages/:id — custom → system (không còn gi
     const { token } = await setup('guard-iv');
     const id = await createLanding(token, 'guard-iv-slug');
     await convertToCustomDomain(id, { hostname: 'guard-iv.example.com' });
+    mockCloudflare({ ok: true });
 
     const res = await putLanding(token, id, { slug: 'guard-iv-slug', domainType: 'system' });
 
     expect(res.status).toBe(200);
     expect(await domainRows(id)).toEqual([
-      expect.objectContaining({ hostname: `guard-iv-slug.${BASE}`, cfManaged: true }),
+      expect.objectContaining({ hostname: `guard-iv-slug.${BASE}`, cfManaged: true, status: 'active' }),
     ]);
     expect(await landingRow(id)).toMatchObject({ domainType: 'system', domainSubtype: null });
+  });
+
+  it('(iv-c) có slug nhưng CLOUDFLARE LỖI khi cấp subdomain miễn phí: KHÔNG ghi hàng pending đè tên miền riêng, giữ domain_type="custom"', async () => {
+    const { token } = await setup('guard-ivc');
+    const id = await createLanding(token, 'guard-ivc-slug');
+    await convertToCustomDomain(id, { hostname: 'guard-ivc.example.com' });
+    mockCloudflare({ ok: false });
+
+    const res = await putLanding(token, id, { slug: 'guard-ivc-slug', domainType: 'system' });
+
+    expect(res.status).toBe(200);
+    expect(await domainRows(id)).toEqual([
+      expect.objectContaining({ hostname: 'guard-ivc.example.com', cfManaged: false, status: 'active' }),
+    ]);
+    expect(await landingRow(id)).toMatchObject({ domainType: 'custom', domainSubtype: 'subdomain' });
   });
 
   it('(iv-b) có slug nhưng CẤP subdomain miễn phí THẤT BẠI: giữ tên miền riêng và domain_type="custom" (không để trang rơi về system mà không còn link miễn phí)', async () => {

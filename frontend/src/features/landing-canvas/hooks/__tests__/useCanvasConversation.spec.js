@@ -139,8 +139,9 @@ describe('useCanvasConversation — intent set-custom-domain KHÔNG đổi domai
   it('câu trả lời đi qua i18n (khoá có trong vi.js và en.js, không còn khoá intentSetDomain cũ)', async () => {
     const { default: vi_ } = await import('../../../../i18n/vi.js');
     const { default: en_ } = await import('../../../../i18n/en.js');
-    expect(vi_.landingCanvas.canvasConversation.intentSetDomainUnsupported).toMatch(/liên hệ hỗ trợ/);
-    expect(en_.landingCanvas.canvasConversation.intentSetDomainUnsupported).toMatch(/contact support/i);
+    // Đã có giao diện thật (PR-D): câu trả lời chỉ đường tới đúng nhãn trong Cài đặt trang, không bảo liên hệ hỗ trợ nữa.
+    expect(vi_.landingCanvas.canvasConversation.intentSetDomainUnsupported).toContain(vi_.landingCanvas.settingsModal.sections.customDomain.useOwn);
+    expect(en_.landingCanvas.canvasConversation.intentSetDomainUnsupported).toContain(en_.landingCanvas.settingsModal.sections.customDomain.useOwn);
     expect(vi_.landingCanvas.canvasConversation.intentSetDomain).toBeUndefined();
     expect(en_.landingCanvas.canvasConversation.intentSetDomain).toBeUndefined();
   });

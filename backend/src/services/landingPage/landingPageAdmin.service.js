@@ -574,7 +574,9 @@ class LandingPageAdminService {
     let domainTypeToWrite = null; // null = không đổi domain_type / domain_subtype (kể cả subdomain/apex của trang custom)
     if (requestedDomainType === 'system' && currentDomainType === 'custom') {
       if (slug) {
-        await landingPageDomainService.autoProvisionSubdomain(id, slug).catch((e) =>
+        // persistPendingOnFailure:false — cấp thất bại (Cloudflare lỗi) KHÔNG được upsert hàng pending đè hàng tên miền
+        // riêng đang chạy (giống remove()); rowAfter bên dưới vẫn là hàng riêng → giữ 'custom'.
+        await landingPageDomainService.autoProvisionSubdomain(id, slug, { persistPendingOnFailure: false }).catch((e) =>
           console.warn('[LandingPageAdmin.update] autoProvisionSubdomain on switch→system failed:', e.message)
         );
         const rowAfter = await landingPageDomainRepository.findByLandingPageId(id).catch(() => null);
