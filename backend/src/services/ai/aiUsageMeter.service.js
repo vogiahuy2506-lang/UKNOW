@@ -16,6 +16,22 @@ class AiUsageMeterService {
   }
 
   /**
+   * Model dự phòng do super admin chọn (hoặc null). KHÔNG BAO GIỜ ném lỗi: tra danh mục model là việc phụ,
+   * hỏng (CSDL chập chờn) thì chỉ mất dự phòng chứ không được làm hỏng câu trả lời của khách.
+   * Kiểm typeof vì nhiều unit test spec mock policyService mà không khai báo hàm getFallbackModel.
+   * @returns {Promise<string|null>}
+   */
+  async resolveFallbackModel() {
+    if (typeof policyService.getFallbackModel !== 'function') return null;
+    try {
+      return (await policyService.getFallbackModel()) || null;
+    } catch (error) {
+      console.warn(`[aiUsageMeter] không tra được model dự phòng, gọi không dự phòng: ${error?.message || error}`);
+      return null;
+    }
+  }
+
+  /**
    * Resolve model + output cap. Token quota gate removed — credit meter gates user actions.
    */
   async reserve(userId, {
@@ -86,10 +102,7 @@ class AiUsageMeterService {
       requestedMaxOutputTokens: maxOutputTokens,
     });
     const resolvedModel = reserved.model;
-    // Kiểm tra typeof vì 15 unit test spec mock policyService mà không khai báo hàm getFallbackModel
-    const fallbackModel = typeof policyService.getFallbackModel === 'function'
-      ? await policyService.getFallbackModel()
-      : null;
+    const fallbackModel = await this.resolveFallbackModel();
 
     const result = await generateGeminiContent({
       parts,

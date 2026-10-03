@@ -2,6 +2,9 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 import {
   AI_PROVIDER_BUSY_CODE,
   AI_PROVIDER_BUSY_MESSAGE,
+  AI_TIMEOUT_CODE,
+  AI_TIMEOUT_MESSAGE,
+  countGeminiTokens,
   extractGeminiUsage,
   GEMINI_TRANSIENT_STATUSES,
   generateGeminiContent,
@@ -223,12 +226,20 @@ describe('geminiClient.util', () => {
       expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
     });
 
-    it('hết giờ chờ (AbortError) → KHÔNG thử lại', async () => {
+    it('hết giờ chờ (AbortError) → KHÔNG thử lại, câu TIẾNG VIỆT thay cho "This operation was aborted"', async () => {
       const abort = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
       global.fetch.mockRejectedValue(abort);
 
-      await expect(generateGeminiContent({ parts: [{ text: 'hi' }], ...NHANH })).rejects.toBe(abort);
+      const err = await generateGeminiContent({ parts: [{ text: 'hi' }], ...NHANH }).catch((e) => e);
+
       expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.message).toBe(AI_TIMEOUT_MESSAGE);
+      expect(err.message).not.toMatch(/aborted/i);
+      expect(err.code).toBe(AI_TIMEOUT_CODE);
+      // aiLandingPage.service nhận ra hết giờ bằng đúng tên này — đổi tên là gãy nhánh 'timeout' của nó.
+      expect(err.name).toBe('AbortError');
+      expect(err.status).toBe(503);
+      expect(err.providerMessage).toBe('This operation was aborted');
     });
 
     it('model từ chối thinkingBudget rồi quá tải → lượt thử lại KHÔNG gửi lại thinkingBudget', async () => {
@@ -340,6 +351,191 @@ describe('geminiClient.util', () => {
         expect(global.fetch).toHaveBeenCalledTimes(3);
         expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
       });
+    });
+  });
+
+  /**
+   * G2 (03/10/2026): lõi này giờ gánh luôn chatbot + trợ lý, nên cần: hội thoại nhiều lượt, ngân sách TỔNG có huỷ
+   * fetch thật, khoá API ra khỏi URL, lỗi mạng được thử lại. Mock ở RANH GIỚI fetch bằng `Response` THẬT (có
+   * status/headers/body như Google trả), không dùng object `{ ok, json }` tự chế.
+   */
+  describe('generateGeminiContent — G2: contents, ngân sách tổng, khoá API', () => {
+    const originalFetch = global.fetch;
+    const originalKey = process.env.GEMINI_API_KEY;
+    const NHANH = { retryDelaysMs: [0, 0], retryBudgetMs: 60_000 };
+
+    const phanHoiThat = (status, body) => new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json; charset=UTF-8' },
+    });
+    const duocThat = (text = 'ok') => phanHoiThat(200, {
+      candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0 }],
+      usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 3, totalTokenCount: 14 },
+      modelVersion: 'gemini-2.5-flash',
+    });
+    const quaTaiThat = () => phanHoiThat(503, {
+      error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' },
+    });
+
+    /** fetch treo cho tới khi bị huỷ — đúng hành vi của một lượt Google không chịu trả lời. */
+    const fetchTreo = () => jest.fn((_url, init) => new Promise((_resolve, reject) => {
+      init.signal.addEventListener('abort', () => {
+        reject(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }));
+      });
+    }));
+
+    let warn;
+    beforeEach(() => {
+      process.env.GEMINI_API_KEY = 'AIza-khoa-bi-mat-123';
+      global.fetch = jest.fn();
+      warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      global.fetch = originalFetch;
+      warn.mockRestore();
+      if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalKey;
+    });
+
+    it('khoá API đi bằng header x-goog-api-key, KHÔNG nằm trong URL', async () => {
+      global.fetch.mockResolvedValue(duocThat());
+
+      await generateGeminiContent({ parts: [{ text: 'hi' }] });
+
+      const [url, init] = global.fetch.mock.calls[0];
+      expect(url).not.toContain('key=');
+      expect(url).not.toContain('AIza-khoa-bi-mat-123');
+      expect(init.headers['x-goog-api-key']).toBe('AIza-khoa-bi-mat-123');
+    });
+
+    it('lỗi 4xx mà Google lỡ trích lại khoá → câu lỗi KHÔNG chứa khoá', async () => {
+      global.fetch.mockResolvedValue(phanHoiThat(400, {
+        error: { code: 400, message: 'API key not valid: AIza-khoa-bi-mat-123', status: 'INVALID_ARGUMENT' },
+      }));
+
+      const err = await generateGeminiContent({ parts: [{ text: 'hi' }] }).catch((e) => e);
+
+      expect(err.geminiStatus).toBe(400);
+      expect(err.message).not.toContain('AIza-khoa-bi-mat-123');
+    });
+
+    it('countGeminiTokens cũng gửi khoá bằng header, không đưa vào URL', async () => {
+      global.fetch.mockResolvedValue(phanHoiThat(200, { totalTokens: 42 }));
+
+      const total = await countGeminiTokens({ model: 'gemini-chinh', contents: [{ role: 'user', parts: [{ text: 'hi' }] }] });
+
+      expect(total).toBe(42);
+      const [url, init] = global.fetch.mock.calls[0];
+      expect(url).not.toContain('key=');
+      expect(init.headers['x-goog-api-key']).toBe('AIza-khoa-bi-mat-123');
+    });
+
+    it('`contents` (hội thoại nhiều lượt) được gửi nguyên văn, không bị bọc lại thành 1 lượt user', async () => {
+      global.fetch.mockResolvedValue(duocThat());
+      const contents = [
+        { role: 'user', parts: [{ text: 'Xin chào' }] },
+        { role: 'model', parts: [{ text: 'Chào bạn' }] },
+        { role: 'user', parts: [{ text: 'Giá bao nhiêu?' }] },
+      ];
+
+      await generateGeminiContent({ contents, systemInstruction: { parts: [{ text: 'sp' }] } });
+
+      const body = JSON.parse(global.fetch.mock.calls[0][1].body);
+      expect(body.contents).toEqual(contents);
+      expect(body.systemInstruction).toEqual({ parts: [{ text: 'sp' }] });
+    });
+
+    it('topP mặc định 0.9; truyền null thì KHÔNG gửi topP (giữ đúng hành vi cũ của chatbot/trợ lý)', async () => {
+      global.fetch.mockImplementation(async () => duocThat());
+
+      await generateGeminiContent({ parts: [{ text: 'hi' }] });
+      await generateGeminiContent({ parts: [{ text: 'hi' }], topP: null });
+
+      expect(JSON.parse(global.fetch.mock.calls[0][1].body).generationConfig.topP).toBe(0.9);
+      expect(JSON.parse(global.fetch.mock.calls[1][1].body).generationConfig).not.toHaveProperty('topP');
+    });
+
+    it('kết quả mang theo `raw` (thân Google) cho nơi cần finishReason/usageMetadata nguyên bản', async () => {
+      global.fetch.mockResolvedValue(duocThat('xin chào'));
+
+      const kq = await generateGeminiContent({ parts: [{ text: 'hi' }] });
+
+      expect(kq.text).toBe('xin chào');
+      expect(kq.raw.usageMetadata.totalTokenCount).toBe(14);
+      expect(kq.raw.candidates[0].finishReason).toBe('STOP');
+    });
+
+    it('ngân sách TỔNG hết → fetch đang bay bị HUỶ THẬT (signal.aborted) và lỗi là câu tiếng Việt', async () => {
+      global.fetch = fetchTreo();
+
+      const bat = Date.now();
+      const err = await generateGeminiContent({
+        parts: [{ text: 'hi' }], timeoutMs: 60_000, totalTimeoutMs: 60,
+      }).catch((e) => e);
+
+      expect(Date.now() - bat).toBeLessThan(2000);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(true);
+      expect(err.code).toBe(AI_TIMEOUT_CODE);
+      expect(err.message).toBe(AI_TIMEOUT_MESSAGE);
+    });
+
+    it('ngân sách tổng còn quá ít (< 3 giây) → thôi thử lại và thôi dự phòng, trả lỗi quá tải ngay', async () => {
+      global.fetch.mockImplementation(async () => quaTaiThat());
+
+      const err = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-du-phong',
+        totalTimeoutMs: 2000, ...NHANH,
+      }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+    });
+
+    it('ngân sách tổng đủ rộng: chính 503 ×3 → dự phòng 200 vẫn cứu được (bảng PR-1 không đổi)', async () => {
+      global.fetch
+        .mockResolvedValueOnce(quaTaiThat())
+        .mockResolvedValueOnce(quaTaiThat())
+        .mockResolvedValueOnce(quaTaiThat())
+        .mockResolvedValueOnce(duocThat('dự phòng cứu'));
+
+      const kq = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-du-phong',
+        totalTimeoutMs: 25_000, ...NHANH,
+      });
+
+      expect(kq.text).toBe('dự phòng cứu');
+      expect(kq.modelUsed).toBe('gemini-du-phong');
+      expect(global.fetch.mock.calls[3][0]).toContain('models/gemini-du-phong:generateContent');
+    });
+
+    it('lỗi mạng (fetch failed / ECONNRESET) → được thử lại như 503', async () => {
+      const mang = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } });
+      global.fetch.mockRejectedValueOnce(mang).mockResolvedValueOnce(duocThat('qua rồi'));
+
+      const kq = await generateGeminiContent({ parts: [{ text: 'hi' }], ...NHANH });
+
+      expect(kq.text).toBe('qua rồi');
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('lỗi mạng cả 3 lượt → câu quá tải TIẾNG VIỆT (không lộ "fetch failed")', async () => {
+      const mang = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } });
+      global.fetch.mockRejectedValue(mang);
+
+      const err = await generateGeminiContent({ parts: [{ text: 'hi' }], ...NHANH }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(err.message).toBe(AI_PROVIDER_BUSY_MESSAGE);
+      expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+    });
+
+    it('lỗi lập trình thường (TypeError khác "fetch failed") KHÔNG bị coi là lỗi mạng để thử lại', async () => {
+      global.fetch.mockRejectedValue(new TypeError('Cannot read properties of undefined'));
+
+      await expect(generateGeminiContent({ parts: [{ text: 'hi' }], ...NHANH })).rejects.toThrow('Cannot read properties');
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
 });

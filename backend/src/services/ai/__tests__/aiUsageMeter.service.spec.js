@@ -108,6 +108,29 @@ describe('aiUsageMeter.service', () => {
     }));
   });
 
+  // G2 (03/10/2026): chatbot trả lời khách cũng dùng model dự phòng; tra danh mục model là việc PHỤ — hỏng thì mất dự phòng,
+  // KHÔNG được làm hỏng câu trả lời.
+  describe('resolveFallbackModel — không bao giờ ném lỗi', () => {
+    it('trả model dự phòng do super admin chọn', async () => {
+      getFallbackModel.mockResolvedValueOnce('gemini-du-phong');
+      await expect(aiUsageMeter.resolveFallbackModel()).resolves.toBe('gemini-du-phong');
+    });
+
+    it('chưa chọn dự phòng → null', async () => {
+      getFallbackModel.mockResolvedValueOnce(null);
+      await expect(aiUsageMeter.resolveFallbackModel()).resolves.toBeNull();
+    });
+
+    it('tra danh mục model lỗi (CSDL chập chờn) → null, không ném', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      getFallbackModel.mockRejectedValueOnce(new Error('connection terminated'));
+
+      await expect(aiUsageMeter.resolveFallbackModel()).resolves.toBeNull();
+      expect(warn).toHaveBeenCalled();
+      warn.mockRestore();
+    });
+  });
+
   // PR-12 (audit_ai.md C-4): loi goi Gemini KHONG co chu tai khoan (khach vang lai) van ghi, id_user = NULL.
   describe('record — loi goi khong co chu tai khoan (id_user NULL)', () => {
     it.each([[null], [undefined], [0], ['']])('userId = %p -> van ghi, id_user NULL, actorUserId null', async (userId) => {

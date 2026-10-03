@@ -42,7 +42,51 @@ export function isTransientGeminiError(err) {
   return GEMINI_TRANSIENT_STATUSES.includes(err?.geminiStatus);
 }
 
+/**
+ * Hết giờ chờ Google (đồng hồ từng lượt hoặc ngân sách tổng `totalTimeoutMs`). Trước đây ném nguyên
+ * `This operation was aborted` — tiếng Anh, và khách thấy đúng câu đó ở Dashboard/Tóm tắt Hộp thư.
+ * `name` giữ 'AbortError' vì `aiLandingPage.service.js` nhận ra hết giờ bằng đúng tên đó.
+ */
+export const AI_TIMEOUT_CODE = 'AI_TIMEOUT';
+export const AI_TIMEOUT_MESSAGE = 'AI phản hồi quá lâu. Bạn vui lòng thử lại sau ít phút.';
+
+/**
+ * Mã lỗi mạng (đứt kết nối, DNS…) — gọi lại thường qua. `customChat.service.js` từng tự thử lại các mã này
+ * trước khi chuyển sang lõi dùng chung; bỏ chúng đi là lùi một bước so với trước.
+ */
+const GEMINI_NETWORK_ERROR_CODES = Object.freeze([
+  'ETIMEDOUT', 'ECONNRESET', 'ECONNREFUSED', 'ENOTFOUND', 'ENETUNREACH', 'EAI_AGAIN',
+  'UND_ERR_SOCKET', 'UND_ERR_CONNECT_TIMEOUT',
+]);
+
+export function isNetworkGeminiError(err) {
+  if (!err || err.name === 'AbortError') return false;
+  const code = err.code || err.cause?.code;
+  if (GEMINI_NETWORK_ERROR_CODES.includes(code)) return true;
+  return err.name === 'TypeError' && /fetch failed/i.test(String(err.message || ''));
+}
+
+const isRetryableGeminiError = (err) => isTransientGeminiError(err) || isNetworkGeminiError(err);
+
+/** Còn dưới mốc này thì không bắt đầu thêm một lượt gọi nào nữa (một lượt Gemini không thể xong nhanh hơn). */
+const MIN_ATTEMPT_WINDOW_MS = 3000;
+
 const sleep = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+
+function toTimeoutError(err) {
+  const timeoutError = new Error(AI_TIMEOUT_MESSAGE);
+  timeoutError.name = 'AbortError';
+  timeoutError.code = AI_TIMEOUT_CODE;
+  timeoutError.status = 503;
+  timeoutError.providerMessage = err?.message;
+  return timeoutError;
+}
+
+/** Khoá API không bao giờ được nằm trong thông báo lỗi/log, kể cả khi Google (hay proxy) lỡ trích lại. */
+function redactSecret(text, secret) {
+  const raw = String(text ?? '');
+  return secret ? raw.split(secret).join('[khoá API đã ẩn]') : raw;
+}
 
 /**
  * Hết lượt thử mà vẫn quá tải: đổi câu lỗi sang tiếng Việt cho khách, giữ câu gốc của Google ở
@@ -87,26 +131,32 @@ function shouldAttachThinkingBudget(thinkingBudget) {
  * Gọi Gemini để sinh nội dung từ danh sách các parts (hỗ trợ multimodal).
  *
  * @param {object} input
- * @param {Array<{text?: string, inlineData?: {mimeType: string, data: string}}>} input.parts
- * @param {number} [input.timeoutMs=180000]
+ * @param {Array<{text?: string, inlineData?: {mimeType: string, data: string}}>} [input.parts] — một lượt `user`
+ * @param {Array<{role: string, parts: Array}>} [input.contents] — hội thoại nhiều lượt; có thì thay cho `parts`
+ * @param {number} [input.timeoutMs=180000] — đồng hồ MỖI lượt gọi
+ * @param {number|null} [input.totalTimeoutMs=null] — ngân sách TỔNG (thử lại + dự phòng cộng lại); hết thì huỷ fetch đang chạy
  * @param {boolean} [input.jsonMode=false]
  * @param {number} [input.maxOutputTokens=16384]
  * @param {number} [input.temperature=0.35]
+ * @param {number|null} [input.topP=0.9] — null = không gửi (để Google dùng mặc định)
  * @param {string} [input.model]
  * @param {string|null} [input.fallbackModel]
  * @param {object} [input.systemInstruction]
  * @param {number|null} [input.thinkingBudget=0] — 0 tắt thinking; null/âm = để model tự quyết
  * @param {number[]} [input.retryDelaysMs] — nghỉ trước mỗi lần thử lại khi Google quá tải
  * @param {number} [input.retryBudgetMs] — quá mốc này (tính từ lượt đầu) thì thôi thử lại
- * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object, modelUsed: string }>}
+ * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object, modelUsed: string, raw: object }>}
  */
 export async function generateGeminiContent({
   parts,
+  contents = null,
   timeoutMs = 180000,
+  totalTimeoutMs = null,
   jsonMode = false,
   responseSchema = null,
   maxOutputTokens = 16384,
   temperature = 0.35,
+  topP = 0.9,
   model,
   fallbackModel = null,
   systemInstruction,
@@ -123,15 +173,23 @@ export async function generateGeminiContent({
 
   const modelName = String(model || process.env.GEMINI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
 
+  const startedAt = Date.now();
+  const deadline = Number.isFinite(totalTimeoutMs) && totalTimeoutMs > 0 ? startedAt + totalTimeoutMs : Infinity;
+  const msLeft = () => deadline - Date.now();
+
   const runOnce = async ({ targetModel, useThinkingBudget, tokenCap }) => {
+    const remaining = msLeft();
+    if (remaining <= 0) throw toTimeoutError(new Error('Hết ngân sách thời gian tổng'));
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    // Đồng hồ mỗi lượt không bao giờ dài hơn phần ngân sách tổng còn lại: lượt cuối cùng cũng bị huỷ ĐÚNG hạn,
+    // không để `fetch` chạy tiếp sau khi người dùng đã nhận câu xin lỗi (Google vẫn tính tiền lượt đó).
+    const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, remaining));
     try {
       const generationConfig = {
         temperature,
-        topP: 0.9,
         maxOutputTokens: tokenCap,
       };
+      if (topP != null) generationConfig.topP = topP;
       if (responseSchema) {
         generationConfig.responseMimeType = 'application/json';
         generationConfig.responseSchema = responseSchema;
@@ -143,23 +201,24 @@ export async function generateGeminiContent({
       }
 
       const body = {
-        contents: [{ role: 'user', parts }],
+        contents: Array.isArray(contents) && contents.length > 0 ? contents : [{ role: 'user', parts }],
         generationConfig,
       };
       if (systemInstruction) {
         body.systemInstruction = systemInstruction;
       }
 
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+      // Khoá gửi bằng header, KHÔNG nằm trong URL: URL hay bị in ra log (AxiosError.config.url, lỗi fetch của proxy…).
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(targetModel)}:generateContent`;
       const response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         signal: controller.signal,
         body: JSON.stringify(body),
       });
 
       if (!response.ok) {
-        const bodyText = await response.text().catch(() => '');
+        const bodyText = redactSecret(await response.text().catch(() => ''), apiKey);
         // Câu gốc GIỮ NGUYÊN: isThinkingBudgetRejection() (ở đây và ở 3 service help/*) soi đúng
         // câu này để nhận lỗi 400 "budget 0 is invalid". Chỉ lỗi quá tải mới được đổi câu, và chỉ
         // sau khi hết lượt thử — xem toProviderBusyError().
@@ -179,7 +238,11 @@ export async function generateGeminiContent({
         blockReason: data.promptFeedback?.blockReason,
         usage: extractGeminiUsage(data),
         modelUsed: targetModel,
+        raw: data,
       };
+    } catch (error) {
+      if (error?.name === 'AbortError' || controller.signal.aborted) throw toTimeoutError(error);
+      throw error;
     } finally {
       clearTimeout(timer);
     }
@@ -212,21 +275,23 @@ export async function generateGeminiContent({
     }
   };
 
-  const startedAt = Date.now();
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await callWithThinkingFallback(modelName);
     } catch (error) {
-      if (!isTransientGeminiError(error)) throw error;
+      if (!isRetryableGeminiError(error)) throw error;
 
       const delayMs = retryDelaysMs[attempt];
-      const withinBudget = Date.now() - startedAt < retryBudgetMs;
+      const withinBudget =
+        Date.now() - startedAt < retryBudgetMs &&
+        msLeft() > (delayMs ?? 0) + MIN_ATTEMPT_WINDOW_MS;
       if (delayMs === undefined || !withinBudget) {
         const cleanFallback = String(fallbackModel || '').trim();
         const canTryFallback =
           Boolean(cleanFallback) &&
           cleanFallback !== modelName &&
-          Date.now() - startedAt < retryBudgetMs;
+          Date.now() - startedAt < retryBudgetMs &&
+          msLeft() > MIN_ATTEMPT_WINDOW_MS;
 
         if (canTryFallback) {
           console.warn(
@@ -235,7 +300,7 @@ export async function generateGeminiContent({
           try {
             return await callWithThinkingFallback(cleanFallback);
           } catch (fallbackError) {
-            if (isTransientGeminiError(fallbackError)) {
+            if (isRetryableGeminiError(fallbackError)) {
               throw toProviderBusyError(fallbackError, attempt + 2);
             }
             const primaryBusyError = toProviderBusyError(error, attempt + 1);
@@ -248,7 +313,7 @@ export async function generateGeminiContent({
       }
       // Log để đo được tần suất về sau — trước sự cố 24/09 lỗi này không để lại dấu vết bền nào.
       console.warn(
-        `[Gemini] ${modelName} trả ${error.geminiStatus} ở lượt ${attempt + 1}, thử lại sau ${delayMs}ms`,
+        `[Gemini] ${modelName} trả ${error.geminiStatus ?? error.cause?.code ?? error.code ?? error.name} ở lượt ${attempt + 1}, thử lại sau ${delayMs}ms`,
       );
       await sleep(delayMs);
     }
@@ -304,13 +369,13 @@ export async function countGeminiTokens({
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:countTokens?key=${encodeURIComponent(apiKey)}`;
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:countTokens`;
     const body = { contents };
     if (systemInstruction) body.systemInstruction = systemInstruction;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
       signal: controller.signal,
       body: JSON.stringify(body),
     });
