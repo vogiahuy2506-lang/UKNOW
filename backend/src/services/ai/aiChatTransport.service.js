@@ -9,6 +9,7 @@ import {
   formatMb,
 } from '../../utils/pdfInline.util.js';
 import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
+import { assertOwnedStorageKey } from '../../utils/storageKey.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 
@@ -33,7 +34,11 @@ const ASSISTANT_TIMEOUT_MS = 120000;
  * @param {string} params.systemPrompt
  * @param {Array}  params.history  — [{role, content}]
  * @param {Array}  params.files    — [{tempId, originalName, contentType}]
- * @param {number|null} [params.userId]
+ * @param {number|null} [params.userId] — người thao tác (actor): tính credit/token, chọn model
+ * @param {number|null} [params.ownerUserId] — CHỦ workspace: tệp theo `storage_key` chỉ được đọc khi nằm dưới
+ *   `uploads/<ownerUserId>/` (C P1-1: khoá do client gửi mà không kiểm chủ thì đọc được tệp của workspace khác).
+ *   Thiếu thì rơi về `userId` (đúng với chủ; nhân viên gọi mà quên truyền sẽ KHÔNG đọc được tệp của chủ — hỏng theo
+ *   hướng an toàn, không phải hướng lộ tệp).
  * @param {string|null} [params.requestedModel]
  */
 export async function runChat({
@@ -41,8 +46,10 @@ export async function runChat({
   history = [],
   files = [],
   userId = null,
+  ownerUserId = null,
   requestedModel = null,
 } = {}) {
+  const fileOwnerId = ownerUserId ?? userId;
   const googleUrlCache = new Map();
   // Ngân sách inline PDF dạng ảnh (scan) cho cả lịch sử lẫn tin hiện tại của một request
   // Ghi chú: lịch sử duyệt cũ → mới nên ngân sách có thể cạn trước tệp mới nhất; chấp nhận ở bản này (mỗi tệp scan thường 1–3 MB), ưu tiên tệp lượt hiện tại là việc sau.
@@ -56,7 +63,9 @@ export async function runChat({
       if (file.tempId) {
         buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
       } else if (file.storage_key || file.storageKey) {
-        const key = String(file.storage_key || file.storageKey).trim();
+        // Khoá do CLIENT gửi (history[].files[].storage_key) — chỉ đọc tệp của chính workspace này. Khoá lạ ném 403 và
+        // rơi xuống catch bên dưới (log + câu "không đọc được", y hệt tệp không tồn tại nên không lộ tệp có thật hay không).
+        const key = assertOwnedStorageKey(file.storage_key || file.storageKey, fileOwnerId);
         buffer = await uploadController.readFileBufferByKey(key);
       }
       if (!buffer || buffer.length === 0) return;

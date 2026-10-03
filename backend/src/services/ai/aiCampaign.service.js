@@ -5,6 +5,7 @@ import aiLandingPageService from './aiLandingPage.service.js';
 import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import { assertOwnedStorageKey } from '../../utils/storageKey.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import aiPromptResources from './aiPromptResources.service.js';
 import { runChat } from './aiChatTransport.service.js';
@@ -105,9 +106,13 @@ export function lastHandTypedUserText(history = []) {
 class AiCampaignService {
   /**
    * Generate campaign JSON structure from prompt and files.
+   *
+   * `ownerUserId` = CHỦ workspace: tệp theo `storage_key` (do client gửi) chỉ đọc khi nằm dưới `uploads/<chủ>/`
+   * (C P1-1). Thiếu thì rơi về `userId` — đúng với chủ; nhân viên mà controller quên truyền sẽ không đọc được tệp chủ.
    */
-  async generateCampaignScript({ prompt, files = [], userId = null, brief = null }) {
+  async generateCampaignScript({ prompt, files = [], userId = null, ownerUserId = null, brief = null }) {
     const parts = [];
+    const fileOwnerId = ownerUserId ?? userId;
 
     // RAG: bơm context doanh nghiệp nếu user đã thiết lập hồ sơ
     let ragContext = '';
@@ -370,7 +375,9 @@ D. ZALO NHÓM:
         if (file.tempId) {
           buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
         } else if (file.storage_key || file.storageKey) {
-          buffer = await uploadController.readFileBufferByKey(file.storage_key || file.storageKey);
+          buffer = await uploadController.readFileBufferByKey(
+            assertOwnedStorageKey(file.storage_key || file.storageKey, fileOwnerId),
+          );
         }
         if (!buffer) continue;
         const mimeType = String(file.contentType || '').toLowerCase();
@@ -681,7 +688,7 @@ QUY TẮC:
   "data": null
 }`;
 
-      return runChat({ systemPrompt: adminSystemPrompt, history, files, userId, requestedModel: model });
+      return runChat({ systemPrompt: adminSystemPrompt, history, files, userId, ownerUserId: ownerId, requestedModel: model });
     }
 
     const wizardResources = await this._getWizardResources(ownerId);
@@ -839,8 +846,11 @@ QUY TẮC:
             // eslint-disable-next-line no-await-in-loop
             buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
           } else if (file.storage_key || file.storageKey) {
+            // Khoá do CLIENT gửi: chỉ đọc tệp của chủ workspace (C P1-1); khoá lạ ném 403 → catch bên dưới log + bỏ qua tệp.
             // eslint-disable-next-line no-await-in-loop
-            buffer = await uploadController.readFileBufferByKey(file.storage_key || file.storageKey);
+            buffer = await uploadController.readFileBufferByKey(
+              assertOwnedStorageKey(file.storage_key || file.storageKey, ownerId),
+            );
           }
           if (buffer) {
             // eslint-disable-next-line no-await-in-loop
@@ -1763,7 +1773,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.
 - Khi ra confirm_create cho yêu cầu gửi 1 lần, câu phản hồi giải thích rõ: Bấm "Tạo chiến dịch" nếu muốn lưu lại để theo dõi sau, hoặc "Gửi nhanh" nếu chỉ cần gửi một lần (Gửi nhanh không chiếm suất chiến dịch trong gói).`;
 
-    const response = await runChat({ systemPrompt, history, files, userId, requestedModel: model });
+    const response = await runChat({ systemPrompt, history, files, userId, ownerUserId: ownerId, requestedModel: model });
     const guarded = this._guardWizardGates(
       this._guardManualRecipientsNoAutoRun(
         this._guardQuickSendResponse(
@@ -2279,7 +2289,7 @@ Khi muốn tạo Landing Page. Yêu cầu thiết kế / tạo / làm landing pa
 - Nếu thiếu thông tin cơ bản → vẫn tạo nhưng dùng placeholder có ý nghĩa
 `;
 
-    return runChat({ systemPrompt, history, files, userId, requestedModel: model });
+    return runChat({ systemPrompt, history, files, userId, ownerUserId: ownerId, requestedModel: model });
   }
 
   /**
@@ -2299,8 +2309,10 @@ Khi muốn tạo Landing Page. Yêu cầu thiết kế / tạo / làm landing pa
    * Generate campaign using Node Registry for multi-step support.
    * Sử dụng campaignNodeRegistryService để AI hiểu rõ về các node types và multi-step.
    */
-  async generateCampaignWithRegistry({ prompt, files = [], userId = null, brief = null }) {
+  async generateCampaignWithRegistry({ prompt, files = [], userId = null, ownerUserId = null, brief = null }) {
     const parts = [];
+    // `ownerUserId` = CHỦ workspace (xem generateCampaignScript): tệp theo storage_key chỉ đọc dưới `uploads/<chủ>/`.
+    const fileOwnerId = ownerUserId ?? userId;
 
     // Get business context
     let ragContext = '';
@@ -2376,7 +2388,9 @@ Trả về JSON hoàn chỉnh theo cấu trúc campaign.`;
         if (file.tempId) {
           buffer = await uploadController.readTempFileBuffer(file.tempId, file.originalName);
         } else if (file.storage_key || file.storageKey) {
-          buffer = await uploadController.readFileBufferByKey(file.storage_key || file.storageKey);
+          buffer = await uploadController.readFileBufferByKey(
+            assertOwnedStorageKey(file.storage_key || file.storageKey, fileOwnerId),
+          );
         }
         if (!buffer) continue;
         const mimeType = String(file.contentType || '').toLowerCase();

@@ -198,6 +198,7 @@ class AiController {
         prompt,
         files: files || [],
         userId: req.user.id,
+        ownerUserId: resolveOwnerUserId(req.user),
       });
 
       const validation = aiCampaignService.validateCampaignScript(script);
@@ -242,6 +243,7 @@ class AiController {
         prompt,
         files: files || [],
         userId: req.user.id,
+        ownerUserId: resolveOwnerUserId(req.user),
       });
 
       await chargeAiCredit(req);

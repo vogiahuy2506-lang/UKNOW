@@ -29,6 +29,50 @@ export function normalizeStorageKey(input) {
   return key;
 }
 
+/**
+ * Khoá đã chuẩn hoá nếu nó nằm dưới `uploads/<ownerId>/`, ngược lại chuỗi rỗng.
+ *
+ * Tệp tải lên luôn lưu theo CHỦ workspace (`uploads/<chủ>/...`, cả khi nhân viên tải — xem
+ * `uploadController.uploadTemp`/`promoteTemp` và `chatAttachment.persistChatBlob`), nên `ownerId` phải là id chủ
+ * workspace (`resolveWorkspaceOwnerId`/`resolveOwnerUserId`), KHÔNG phải id người đang thao tác: nhân viên đọc tệp
+ * chính mình vừa tải thì khoá nằm dưới id chủ.
+ *
+ * Kiểm trên khoá ĐÃ chuẩn hoá (cùng bộ chuẩn hoá mà bước đọc dùng) chứ không trên chuỗi client gửi: URL
+ * `https://…/uploads/8/…`, `%2e%2e`, dấu `\` đều bị bộ chuẩn hoá đưa về dạng thật trước khi so tiền tố. Tiền tố có
+ * dấu `/` ở cuối để chủ 7 không đọc được `uploads/70/…`.
+ *
+ * @param {unknown} input khoá/URL/object do client hoặc DB đưa vào
+ * @param {number|string|null} ownerId id chủ workspace
+ * @returns {string}
+ */
+export function resolveOwnedStorageKey(input, ownerId) {
+  const owner = Number(ownerId);
+  if (!Number.isSafeInteger(owner) || owner <= 0) return '';
+  const key = normalizeStorageKey(input);
+  if (!key) return '';
+  return key.startsWith(`uploads/${owner}/`) ? key : '';
+}
+
+/**
+ * Như `resolveOwnedStorageKey` nhưng ném lỗi 403 (`STORAGE_KEY_NOT_OWNED`) khi khoá không hợp lệ hoặc không thuộc
+ * chủ — dùng ở mọi chỗ AI đọc tệp theo khoá do CLIENT gửi (`history[].files[].storage_key`). Trả khoá đã chuẩn hoá
+ * để truyền thẳng cho bước đọc (không chuẩn hoá lại hai kiểu).
+ *
+ * @param {unknown} input
+ * @param {number|string|null} ownerId
+ * @returns {string}
+ */
+export function assertOwnedStorageKey(input, ownerId) {
+  const key = resolveOwnedStorageKey(input, ownerId);
+  if (!key) {
+    const error = new Error(`Khoá tệp không hợp lệ hoặc không thuộc workspace ${ownerId ?? '(không rõ)'}`);
+    error.status = 403;
+    error.code = 'STORAGE_KEY_NOT_OWNED';
+    throw error;
+  }
+  return key;
+}
+
 export function extractStorageKey(input) {
   const direct = normalizeStorageKey(input);
   if (direct) return direct;
@@ -78,6 +122,8 @@ export function collectStorageKeys(value, output = new Set()) {
 
 export default {
   normalizeStorageKey,
+  resolveOwnedStorageKey,
+  assertOwnedStorageKey,
   extractStorageKey,
   collectStorageKeys,
 };
