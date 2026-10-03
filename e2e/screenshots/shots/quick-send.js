@@ -5,7 +5,7 @@
  * "Mẫu tin" (chỉ chọn mẫu) sang "Nội dung" (chọn mẫu có sẵn HOẶC soạn nội dung mới) nên ảnh cũ bị bỏ
  * ở lô vá 28/09/2026.
  *
- * Cần `E2E_SEED_ALL=1` (có tài khoản Zalo + mẫu Zalo). CHỈ bấm "Tiếp theo" để sang bước 2 — không
+ * Cần `E2E_SEED_ALL=1` (có tài khoản Zalo + mẫu tin nhắn). CHỈ bấm "Tiếp theo" để sang bước 2 — không
  * sang bước 3, không bấm gửi.
  */
 import { hideVolatileChrome, settle, contentShot } from '../lib/shotHelpers.js';
@@ -15,7 +15,7 @@ export default {
   shots: [
     {
       name: 'buoc-noi-dung',
-      caption: 'bước Nội dung, hai lựa chọn "Chọn mẫu có sẵn" và "Soạn nội dung mới" ở đầu, danh sách mẫu Zalo đang hiện bên dưới',
+      caption: 'bước Nội dung, hai lựa chọn "Chọn mẫu có sẵn" và "Soạn nội dung mới" ở đầu, danh sách mẫu tin nhắn đang hiện bên dưới',
       localOnly: true,
       async take(page) {
         await page.goto('/app/quick-send');

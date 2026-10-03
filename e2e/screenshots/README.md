@@ -88,6 +88,26 @@ Frontend không cần mở tay — trỏ vào localhost thì Playwright tự d�
 Cờ `E2E_SEED_DEMO` là tuỳ chọn vì bộ test e2e dựa vào trạng thái rỗng — bật mặc
 định sẽ làm đỏ hàng loạt test không liên quan.
 
+### Màn hình thanh toán QR — PayOS GIẢ
+
+Ô "màn hình thanh toán đang hiện mã QR PayOS" của bài `plan-and-billing` (ảnh `man-hinh-thanh-toan-qr`) cần backend tạo
+được link thanh toán. Đừng dùng khoá PayOS thật: SDK `@payos/node` đọc `PAYOS_BASE_URL`, nên dựng máy chủ giả và trỏ
+backend e2e vào đó (biến đặt trên dòng lệnh, không ghi vào `.env.test`):
+
+```bash
+node e2e/screenshots/tools/fake-payos.mjs        # cổng 5099, đổi bằng FAKE_PAYOS_PORT
+
+cd backend && DOTENV_CONFIG_PATH=../e2e/.env.test SCHEDULER_ENABLED=false \
+  PAYOS_BASE_URL=http://127.0.0.1:5099 PAYOS_CLIENT_ID=fake PAYOS_API_KEY=fake PAYOS_CHECKSUM_KEY=fake \
+  node -r dotenv/config src/index.js
+
+HELP_SHOT_ONLY=man-hinh-thanh-toan-qr npx playwright test --config=screenshots/playwright.config.js -g plan-and-billing
+```
+
+Mã QR trong ảnh là giả và **không thanh toán được** (số tài khoản toàn số 0, mã kiểm tra CRC cố ý sai). Ảnh này bấm
+"Đồng ý nâng cấp" / "Tiếp tục thanh toán" nên tạo một đơn đang chờ trong DB e2e — nó đứng cuối bài để không chen vào ảnh
+"Lịch sử đơn"; muốn chụp lại cả bài thì nạp lại DB trước.
+
 ### Có những trạng thái loại trừ nhau
 
 Một tài khoản không thể vừa "chưa có lệnh hẹn" vừa "đang có lệnh hẹn", cũng không

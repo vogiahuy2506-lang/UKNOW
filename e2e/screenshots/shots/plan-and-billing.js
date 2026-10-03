@@ -1,9 +1,11 @@
 /**
  * Ảnh minh hoạ cho bài "Gói dịch vụ & thanh toán" (/huong-dan/plan-and-billing).
  *
- * Bài có 8 ô, ở đây làm 7. Ô còn lại — "màn hình thanh toán đang hiện mã QR
- * PayOS" — CỐ Ý không tự động hoá: muốn có mã QR thật thì phải tạo một đơn hàng
- * thật ở cổng thanh toán. Ô đó phải chụp tay.
+ * Bài có 9 ô, ở đây làm cả 9. Ô "màn hình thanh toán đang hiện mã QR PayOS" (`man-hinh-thanh-toan-qr`) KHÔNG dùng
+ * PayOS thật: phải chạy máy chủ PayOS GIẢ `tools/fake-payos.mjs` và backend e2e với
+ * `PAYOS_BASE_URL=http://127.0.0.1:5099 PAYOS_CLIENT_ID=fake PAYOS_API_KEY=fake PAYOS_CHECKSUM_KEY=fake` (đặt trên dòng
+ * lệnh). Mã QR trong ảnh là giả và không thanh toán được (xem docstring của tools/fake-payos.mjs). Chỉ chạy ở máy mình:
+ * ảnh này BẤM "Đồng ý nâng cấp" / "Tiếp tục thanh toán" — tạo đơn trong DB e2e.
  *
  * Cần `E2E_SEED_ORDERS=1` (nằm trong `E2E_SEED_ALL=1`) cho ô "Lịch sử đơn":
  * 5 đơn các trạng thái, trong đó 2 đơn có hoá đơn điện tử đã phát hành.
@@ -196,6 +198,41 @@ export default {
         await page.waitForTimeout(200);
         // Cắt ngay dưới đơn thứ hai — để nguyên thì đơn thứ ba bị xén ngang.
         return contentShot(page, page.locator('main').first(), { maxHeight: 620 });
+      },
+    },
+    {
+      name: 'man-hinh-thanh-toan-qr',
+      caption: 'màn hình thanh toán đang hiện mã QR PayOS',
+      localOnly: true,
+      // Đặt CUỐI bài: bước này tạo một đơn đang chờ thanh toán, đứng trước sẽ chen vào ảnh "Lịch sử đơn".
+      async take(page) {
+        await page.goto('/pricing');
+        await page.locator('#pricing').waitFor({ state: 'visible', timeout: 30_000 });
+        await settle(page);
+        const proCard = page.locator('#pricing .grid > *').filter({ hasText: 'Gói Pro' }).first();
+        await proCard.getByRole('button', { name: /Nâng cấp ngay|Đăng ký gói/ }).first().click();
+        // Hộp xác nhận nâng gói (có mặt khi tài khoản đang ở một gói trả phí).
+        const confirm = page.getByRole('button', { name: 'Đồng ý nâng cấp' });
+        // `isVisible` KHÔNG chờ (tham số timeout bị bỏ qua) nên phải dùng waitFor.
+        if (await confirm.waitFor({ state: 'visible', timeout: 8_000 }).then(() => true).catch(() => false)) await confirm.click();
+        await page.waitForURL(/\/checkout/, { timeout: 30_000 });
+
+        await page.getByRole('checkbox').first().check();
+        await page.getByRole('button', { name: /Tiếp tục thanh toán/ }).click();
+
+        // Bước QR: ảnh QR dựng từ chuỗi `qrCode` do PayOS trả (`qrcode.toDataURL` -> ảnh data:).
+        const qrImage = page.locator('img[src^="data:image/png"]').first();
+        if (!(await qrImage.waitFor({ state: 'visible', timeout: 30_000 }).then(() => true).catch(() => false))) {
+          throw new Error(
+            'Không thấy mã QR. Backend e2e phải chạy với PAYOS_BASE_URL trỏ máy chủ PayOS GIẢ:\n'
+            + '  node e2e/screenshots/tools/fake-payos.mjs\n'
+            + '  PAYOS_BASE_URL=http://127.0.0.1:5099 PAYOS_CLIENT_ID=fake PAYOS_API_KEY=fake PAYOS_CHECKSUM_KEY=fake <lệnh chạy backend e2e>',
+          );
+        }
+        await settle(page);
+        await hideVolatileChrome(page);
+        await page.waitForTimeout(300);
+        return { screenshot: (options = {}) => page.screenshot(options) };
       },
     },
   ],
