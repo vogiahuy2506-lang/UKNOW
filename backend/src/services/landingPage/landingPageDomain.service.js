@@ -287,6 +287,55 @@ export function buildDnsVerificationErrorMessage(status, hostname, target) {
   return `Đang chờ xác minh DNS cho ${hostname}. ${note}${detail}`;
 }
 
+/**
+ * Bản ghi DNS khách cần thêm để tên miền trỏ về hệ thống: tên miền chính (apex) → A tới IP cố định; subdomain →
+ * CNAME tới `cnameTarget()`. Cùng dạng `{ type, host, value, ttl }` với `dnsRecords` của buildDomainResponse.
+ * Apex mà hệ thống chưa cấu hình IP cố định thì không có bản ghi nào để hướng dẫn (trả mảng rỗng, câu giải thích
+ * nằm ở buildDnsVerificationErrorMessage).
+ *
+ * @param {string} hostname
+ * @param {boolean} isApex
+ * @returns {Array<{ type: string, host: string, value: string, ttl: number }>}
+ */
+function buildExpectedDnsRecords(hostname, isApex) {
+  if (isApex) {
+    const platformIp = apexFixedIp();
+    return platformIp ? [{ type: 'A', host: '@', value: platformIp, ttl: 3600 }] : [];
+  }
+  return [{
+    type: 'CNAME',
+    host: String(hostname || '').split('.')[0] || 'lp',
+    value: cnameTarget(),
+    ttl: 3600,
+  }];
+}
+
+/**
+ * Kết quả "xem trước DNS" — dùng cho checkHostname (200) và làm `data` của lỗi 422 do setHostname ném khi DNS chưa đúng.
+ *
+ * @param {{ verified?: boolean, reason?: string, found?: string[], currentIp?: string|null }} dnsStatus
+ * @param {string} hostname
+ * @param {boolean} isApex
+ */
+function buildDnsCheckResult(dnsStatus, hostname, isApex) {
+  const target = cnameTarget();
+  const verified = Boolean(dnsStatus?.verified);
+  return {
+    hostname,
+    isApexDomain: isApex,
+    verified,
+    reason: dnsStatus?.reason || 'transient',
+    found: Array.isArray(dnsStatus?.found) ? dnsStatus.found : [],
+    currentIp: dnsStatus?.currentIp || null,
+    dnsRecords: buildExpectedDnsRecords(hostname, isApex),
+    cnameTarget: target,
+    apexFixedIp: apexFixedIp(),
+    message: verified
+      ? `DNS của ${hostname} đã trỏ đúng về hệ thống.`
+      : buildDnsVerificationErrorMessage(dnsStatus, hostname, target),
+  };
+}
+
 function subdomainBase() {
   return String(process.env.LP_SUBDOMAIN_BASE || 'founderai.biz').trim();
 }
@@ -411,18 +460,31 @@ class LandingPageDomainService {
     return { hostname, cfManaged: true, ok: false, message };
   }
 
-  async provisionCloudflareSubdomain(landingPageId, hostname) {
+  /**
+   * @param {number} landingPageId
+   * @param {string} hostname
+   * @param {{ persistPendingOnFailure?: boolean }} [options] `persistPendingOnFailure` mặc định true: cấp không được
+   *   thì ghi hàng `pending_verification` (trang MỚI tạo — thử lại bằng nút «Thử lại»). Đặt false khi trang đang có
+   *   hàng khác phải giữ nguyên nếu cấp thất bại (gỡ tên miền riêng, xem remove()): upsert theo landing_page_id sẽ
+   *   thay luôn hàng tên miền riêng bằng hàng pending, và khách mất tên miền đang chạy.
+   */
+  async provisionCloudflareSubdomain(landingPageId, hostname, options = {}) {
+    const persistPendingOnFailure = options.persistPendingOnFailure !== false;
+    const onFailure = (message) => (persistPendingOnFailure
+      ? this.persistPendingAutoProvision(landingPageId, hostname, message)
+      : { hostname, cfManaged: true, ok: false, message });
+
     if (!cloudflareService.isConfigured()) {
       const message = 'Cloudflare API chưa được cấu hình trên backend (thiếu CLOUDFLARE_API_TOKEN)';
       console.log(`[LandingPageDomainService] CF not configured, skipping auto-provision for ${hostname}`);
-      return this.persistPendingAutoProvision(landingPageId, hostname, message);
+      return onFailure(message);
     }
 
     const cfResult = await cloudflareService.setupLandingPageDNS(hostname, cnameTarget());
     if (!cfResult.success) {
       const message = cfResult.message || 'Cloudflare API không tạo được DNS record';
       console.warn(`[LandingPageDomainService] CF auto-provision failed for ${hostname}: ${message}`);
-      return this.persistPendingAutoProvision(landingPageId, hostname, message);
+      return onFailure(message);
     }
 
     const token = crypto.randomBytes(18).toString('hex');
@@ -513,23 +575,13 @@ class LandingPageDomainService {
   }
 
   /**
-   * Gắn hostname cho landing page.
-   * 
-   * Flow:
-   * 1. User nhập hostname (subdomain hoặc apex)
-   * 2. Backend verify DNS (CNAME/A record)
-   * 3. Nếu DNS OK → status = active, trigger SSL provisioning
-   * 4. Nếu DNS chưa OK → status = pending_verification
+   * Điều kiện chung để một landing kết nối tên miền riêng — setHostname (ghi) và checkHostname (xem trước, không ghi)
+   * dùng CHUNG nên "Kiểm tra" báo trước đúng những gì "Kết nối" sẽ từ chối (trang chưa xuất bản, hết hạn mức,
+   * hostname đã gắn trang khác) thay vì để khách cài DNS xong mới bị chặn.
    *
-   * Nếu trước đó landing đang dùng CF-managed subdomain (slug.founderai.biz),
-   * ta cần xóa DNS record cũ trên Cloudflare để tránh orphan record.
-   *
-   * @param {number} landingPageId
-   * @param {string} hostname
-   * @param {boolean} isApexDomain - user-chosen apex vs subdomain flag
-   * @param {object} authUser
+   * @returns {Promise<{ h: string, lp: object, scope: object, resourceOwnerId: number, existing: object|null }>}
    */
-  async setHostname(landingPageId, hostname, isApexDomain, authUser) {
+  async _prepareConnect(landingPageId, hostname, authUser) {
     const context = getWorkspaceContext(authUser);
     const scope = getWorkspaceScope(authUser);
     const h = assertValidHostname(hostname);
@@ -540,7 +592,7 @@ class LandingPageDomainService {
       throw err;
     }
     if (!lp.isPublished) {
-      const err = new Error('Landing cần được công bố trước khi gắn tên miền.');
+      const err = new Error('Landing cần được công bố trước khi gắn tên miền. Bật Xuất bản và bấm Lưu trang trước.');
       err.statusCode = 400;
       throw err;
     }
@@ -575,72 +627,80 @@ class LandingPageDomainService {
       throw err;
     }
 
-    // Nếu trước đó là CF-managed subdomain, dọn DNS cũ trước khi tạo row custom.
-    // removeSubdomain() gọi cloudflareService.deleteDnsRecord() nếu có cfZoneId/cfRecordId,
-    // sau đó xóa row landing_page_domains.
-    if (existing && existing.cfManaged) {
-      try {
-        await this.removeSubdomain(landingPageId);
-      } catch (e) {
-        console.warn(`[LandingPageDomainService.setHostname] removeSubdomain failed: ${e.message}`);
-      }
+    return { h, lp, scope, resourceOwnerId, existing };
+  }
+
+  /**
+   * Xem trước DNS cho một tên miền riêng — KHÔNG ghi gì (không đụng hàng landing_page_domains, domain_type,
+   * Cloudflare). Trả `{ verified, dnsRecords, message, ... }`: bảng bản ghi khách cần thêm + DNS hiện tại đã đúng chưa.
+   * Gọi bao nhiêu lần cũng được; giao diện dùng nó cho nút "Kiểm tra" trước khi "Kết nối tên miền".
+   *
+   * @param {number} landingPageId
+   * @param {string} hostname
+   * @param {boolean} isApexDomain tên miền chính (apex) hay subdomain — khách chọn
+   * @param {object} authUser
+   */
+  async checkHostname(landingPageId, hostname, isApexDomain, authUser) {
+    const { h } = await this._prepareConnect(landingPageId, hostname, authUser);
+    const isApex = isApexDomain === true;
+    const dnsStatus = await checkCnameStatus(h, cnameTarget(), isApex);
+    return buildDnsCheckResult(dnsStatus, h, isApex);
+  }
+
+  /**
+   * Gắn tên miền riêng cho landing page — CHỈ KHI DNS ĐÃ TRỎ ĐÚNG.
+   *
+   * Flow:
+   * 1. Khách nhập hostname (subdomain hoặc apex) và cài bản ghi CNAME/A ở nhà cung cấp tên miền của họ.
+   * 2. Backend kiểm DNS (checkCnameStatus) TRƯỚC khi ghi bất cứ thứ gì.
+   * 3. DNS chưa đúng → ném lỗi 422 (`error.data` = bảng bản ghi cần thêm + lý do). KHÔNG ghi gì, KHÔNG đụng
+   *    subdomain miễn phí: link miễn phí vẫn chạy cho tới khi tên miền riêng kết nối xong. (Trước đây hàm này xoá
+   *    subdomain miễn phí NGAY rồi ghi hàng `pending_verification` — khách không cài DNS thì trang mất link vô thời hạn.)
+   * 4. DNS đúng → upsert hàng tên miền riêng `active` thay luôn hàng miễn phí (một câu lệnh, theo landing_page_id —
+   *    không có cửa sổ "mất cả hai"), đặt domain_type='custom', dọn bản ghi DNS Cloudflare của subdomain cũ, kích
+   *    hoạt SSL (cron trên host lo, xem provisionSsl).
+   *
+   * Không còn cờ ghi `pending_verification`: không client nào cần (giao diện duy nhất gọi hàm này là modal Cài đặt
+   * trang, và nó kiểm trước bằng checkHostname). Hàng `pending_verification` cũ vẫn do verifyDns / scheduler xử lý.
+   *
+   * @param {number} landingPageId
+   * @param {string} hostname
+   * @param {boolean} isApexDomain - user-chosen apex vs subdomain flag
+   * @param {object} authUser
+   */
+  async setHostname(landingPageId, hostname, isApexDomain, authUser) {
+    const { h, lp, scope, resourceOwnerId, existing } = await this._prepareConnect(
+      landingPageId,
+      hostname,
+      authUser
+    );
+
+    const isApex = isApexDomain === true;
+    const target = cnameTarget();
+
+    // Verify DNS: kiểm tra CNAME/A record đã được thêm chưa
+    // (Customer tự thêm CNAME/A record ở DNS provider của họ, ta chỉ verify)
+    const dnsStatus = await checkCnameStatus(h, target, isApex);
+    if (!dnsStatus.verified) {
+      const err = new Error(buildDnsVerificationErrorMessage(dnsStatus, h, target));
+      err.statusCode = 422;
+      err.data = buildDnsCheckResult(dnsStatus, h, isApex);
+      throw err;
     }
 
     const token = crypto.randomBytes(18).toString('hex');
-    const target = cnameTarget();
-
-    // Determine domain type from user choice or auto-detect
-    const isApex = isApexDomain === true;
-
-    // All domains use Certbot for SSL provisioning
-    // Verify DNS: kiểm tra CNAME/A record đã được thêm chưa
-    // (Customer tự thêm CNAME/A record ở DNS provider của họ, ta chỉ verify)
-    const dnsStatus = await checkCnameStatus(h, target, isApexDomain);
-    const isVerified = dnsStatus.verified;
-
-    const status = isVerified ? 'active' : 'pending_verification';
     try {
       await landingPageDomainRepository.upsertForLanding({
         landingPageId,
         hostname: h,
         verificationToken: token,
-        status,
+        status: 'active',
         cfManaged: false,
         cfZoneId: null,
         cfRecordId: null,
         cfHostnameId: null,
         isApexDomain: isApex,
       });
-      await getClearCacheFn({
-        hostname: h,
-        hostnames: [existing?.hostname, h].filter(Boolean),
-        slug: lp?.slug,
-      });
-
-      // Đồng bộ landing_pages.domain_type = custom để query nhanh.
-
-      try {
-        await landingPageRepository.updateByIdInScope(landingPageId, {
-          slug: lp.slug,
-          title: lp.title,
-          htmlContent: lp.htmlContent,
-          isPublished: lp.isPublished,
-          idUser: resourceOwnerId,
-          domainType: 'custom',
-          domainSubtype: isApex ? 'apex' : 'subdomain',
-        }, scope);
-      } catch (e) {
-        console.warn(`[LandingPageDomainService.setHostname] update domain_type failed: ${e.message}`);
-      }
-
-      // If verified, trigger SSL provisioning via Certbot
-      if (isVerified) {
-        this.provisionSsl(h).catch((err) => {
-          console.error(`[LandingPageDomainService] SSL provisioning failed for ${h}:`, err.message);
-        });
-      }
-
-      return this.getForLanding(landingPageId, authUser);
     } catch (e) {
       if (e?.code === '23505') {
         const err = new Error('Hostname đã tồn tại trên hệ thống');
@@ -649,6 +709,47 @@ class LandingPageDomainService {
       }
       throw e;
     }
+
+    // Hàng miễn phí cũ đã bị upsert thay thế; chỉ còn dọn bản ghi DNS của nó trên Cloudflare (lỗi CF không làm
+    // hỏng việc kết nối — bản ghi mồ côi vô hại hơn một tên miền khách đã cài DNS xong mà không chạy).
+    if (existing?.cfManaged && existing.cfZoneId && existing.cfRecordId) {
+      try {
+        const cfResult = await cloudflareService.deleteDnsRecord(existing.cfZoneId, existing.cfRecordId);
+        if (!cfResult?.success) {
+          console.warn(`[LandingPageDomainService.setHostname] CF cleanup failed for ${existing.hostname}: ${cfResult?.message}`);
+        }
+      } catch (e) {
+        console.warn(`[LandingPageDomainService.setHostname] CF cleanup failed for ${existing.hostname}: ${e.message}`);
+      }
+    }
+
+    await getClearCacheFn({
+      hostname: h,
+      hostnames: [existing?.hostname, h].filter(Boolean),
+      slug: lp?.slug,
+    });
+
+    // Đồng bộ landing_pages.domain_type = custom để query nhanh.
+    try {
+      await landingPageRepository.updateByIdInScope(landingPageId, {
+        slug: lp.slug,
+        title: lp.title,
+        htmlContent: lp.htmlContent,
+        isPublished: lp.isPublished,
+        idUser: resourceOwnerId,
+        domainType: 'custom',
+        domainSubtype: isApex ? 'apex' : 'subdomain',
+      }, scope);
+    } catch (e) {
+      console.error(`[LandingPageDomainService.setHostname] update domain_type failed: ${e.message}`);
+    }
+
+    // DNS đã đúng → kích hoạt SSL qua Certbot
+    this.provisionSsl(h).catch((err) => {
+      console.error(`[LandingPageDomainService] SSL provisioning failed for ${h}:`, err.message);
+    });
+
+    return this.getForLanding(landingPageId, authUser);
   }
 
   /**
@@ -842,8 +943,18 @@ class LandingPageDomainService {
   }
 
   /**
-   * Xóa custom domain.
-   * DNS record được quản lý bởi khách hàng (không phải platform).
+   * Gỡ tên miền riêng và TRẢ trang về link miễn phí `<slug>.founderai.biz`.
+   * DNS của tên miền riêng do khách quản lý (không phải hệ thống) nên không có gì để dọn ở phía DNS.
+   *
+   * Thứ tự an toàn (giống update() custom → system): cấp subdomain miễn phí TRƯỚC. upsertForLanding là
+   * ON CONFLICT (landing_page_id) nên hàng miễn phí THAY hàng tên miền riêng trong một câu lệnh — không có cửa sổ
+   * "mất cả hai". Cấp thất bại thì giữ nguyên tên miền riêng (`persistPendingOnFailure:false`, nếu không hàng
+   * pending sẽ ghi đè hàng tên miền đang chạy) và báo lỗi, khách thử lại sau.
+   *
+   * - Trang không có slug: không có link miễn phí để quay về → lỗi 400, KHÔNG xoá gì.
+   * - Trang đang dùng link miễn phí (không có tên miền riêng): 400 — hàng đó là link miễn phí, không phải tên miền
+   *   riêng. Ngoại lệ: domain_type còn 'custom' (lần gỡ trước dừng giữa chừng, hàng đã thành miễn phí) thì chỉ sửa nốt
+   *   domain_type — gỡ chạy lại được.
    *
    * @param {number} landingPageId
    * @param {object} authUser
@@ -867,31 +978,52 @@ class LandingPageDomainService {
       throw err;
     }
 
-    // Xóa domain khỏi database
-    // SSL certificate sẽ được cleanup bởi certbot renewal hooks hoặc manual
-    await landingPageDomainRepository.deleteByLandingPageId(landingPageId);
-    await getClearCacheFn({ hostname: row.hostname });
+    const setDomainTypeSystem = () => landingPageRepository.updateByIdInScope(landingPageId, {
+      slug: landingPage.slug,
+      title: landingPage.title,
+      htmlContent: landingPage.htmlContent,
+      isPublished: landingPage.isPublished,
+      idUser: resourceOwnerId,
+      domainType: 'system',
+      domainSubtype: null,
+    }, scope);
 
-    // Reset landing_pages về system nếu trước đó là custom (chỉ set khi row không phải CF-managed).
-    if (!row.cfManaged) {
-      try {
-        if (landingPage.domainType === 'custom') {
-          await landingPageRepository.updateByIdInScope(landingPageId, {
-            slug: landingPage.slug,
-            title: landingPage.title,
-            htmlContent: landingPage.htmlContent,
-            isPublished: landingPage.isPublished,
-            idUser: resourceOwnerId,
-            domainType: 'system',
-            domainSubtype: null,
-          }, scope);
-        }
-      } catch (e) {
-        console.warn(`[LandingPageDomainService.remove] reset domain_type failed: ${e.message}`);
+    if (row.cfManaged) {
+      if (landingPage.domainType === 'custom') {
+        await setDomainTypeSystem();
+        return { ok: true, ...buildDomainResponse(row) };
       }
+      const err = new Error('Trang đang dùng link miễn phí, không có tên miền riêng để gỡ.');
+      err.statusCode = 400;
+      throw err;
     }
 
-    return { ok: true };
+    const slug = String(landingPage.slug || '').trim().toLowerCase();
+    if (!slug) {
+      const err = new Error(
+        'Trang cần đường dẫn (slug) trước khi gỡ tên miền riêng — để có link miễn phí thay thế. Đặt slug rồi lưu trang, sau đó gỡ lại.'
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const provision = await this.autoProvisionSubdomain(landingPageId, slug, { persistPendingOnFailure: false });
+    if (!provision.ok) {
+      const err = new Error(
+        `Chưa cấp được link miễn phí ${provision.hostname} nên tên miền riêng được giữ nguyên. ${provision.message || ''}`.trim()
+      );
+      err.statusCode = 502;
+      throw err;
+    }
+
+    // Hàng miễn phí đã thay hàng tên miền riêng. Lỗi từ đây trở xuống KHÔNG được nuốt: nuốt thì trang để lại hàng
+    // miễn phí + domain_type='custom' (lệch) mà người dùng tưởng đã gỡ xong; ném lỗi thì gỡ lại là chạy tiếp (nhánh
+    // cfManaged phía trên sửa nốt domain_type).
+    await getClearCacheFn({ hostname: row.hostname, slug: landingPage.slug });
+    await setDomainTypeSystem();
+
+    const freeRow = await landingPageDomainRepository.findByLandingPageId(landingPageId);
+    return { ok: true, ...buildDomainResponse(freeRow) };
   }
 
   /**
@@ -901,11 +1033,12 @@ class LandingPageDomainService {
    *
    * @param {number} landingPageId
    * @param {string} slug
+   * @param {{ persistPendingOnFailure?: boolean }} [options] xem provisionCloudflareSubdomain
    * @returns {Promise<{hostname:string, cfManaged:boolean, ok:boolean, message?:string}>}
    */
-  async autoProvisionSubdomain(landingPageId, slug) {
+  async autoProvisionSubdomain(landingPageId, slug, options = {}) {
     const hostname = buildAutoHostname(slug);
-    return this.provisionCloudflareSubdomain(landingPageId, hostname);
+    return this.provisionCloudflareSubdomain(landingPageId, hostname, options);
   }
 
   /**

@@ -161,8 +161,32 @@ class LandingPageAdminController {
   }
 
   /**
+   * POST /api/admin/landing-pages/:id/custom-domain/check
+   * Body: { hostname: "lp.example.com", isApexDomain: false }
+   * Xem trước DNS — KHÔNG ghi gì. 200 { verified, dnsRecords, message, ... }; verified=false vẫn là 200 (chưa đúng
+   * không phải lỗi của request). Lỗi điều kiện (404 trang, 400 chưa xuất bản/hết hạn mức, 409 hostname trùng) như PUT.
+   */
+  async postCustomDomainCheck(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const hostname = String(req.body?.hostname || '').trim();
+      const isApexDomain = Boolean(req.body?.isApexDomain);
+      const data = await landingPageDomainService.checkHostname(id, hostname, isApexDomain, req.user);
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.postCustomDomainCheck]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không kiểm tra được' });
+    }
+  }
+
+  /**
    * PUT /api/admin/landing-pages/:id/custom-domain
    * Body: { hostname: "www.example.com", isApexDomain: false }
+   * Chỉ kết nối khi DNS đã trỏ đúng; chưa đúng → 422 kèm `data` (bảng bản ghi cần thêm), không ghi gì.
    */
   async putCustomDomain(req, res) {
     try {
@@ -184,7 +208,11 @@ class LandingPageAdminController {
     } catch (error) {
       const status = error.statusCode || 500;
       if (status >= 500) console.error('[LandingPageAdminController.putCustomDomain]', error);
-      return res.status(status).json({ success: false, message: error.message || 'Không thể lưu' });
+      return res.status(status).json({
+        success: false,
+        message: error.message || 'Không thể lưu',
+        ...(error.data ? { data: error.data } : {}),
+      });
     }
   }
 

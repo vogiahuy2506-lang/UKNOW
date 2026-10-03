@@ -18,6 +18,8 @@ router.use(requirePermission('landing_pages'));
 router.get('/', landingPageAdminController.list.bind(landingPageAdminController));
 router.get('/:id/custom-domain', landingPageAdminController.getCustomDomain.bind(landingPageAdminController));
 router.put('/:id/custom-domain', landingPageAdminController.putCustomDomain.bind(landingPageAdminController));
+router.delete('/:id/custom-domain', landingPageAdminController.deleteCustomDomain.bind(landingPageAdminController));
+router.post('/:id/custom-domain/check', landingPageAdminController.postCustomDomainCheck.bind(landingPageAdminController));
 router.post('/:id/custom-domain/verify', landingPageAdminController.postCustomDomainVerify.bind(landingPageAdminController));
 router.get('/:id/versions', landingPageAdminController.listVersions.bind(landingPageAdminController));
 router.get('/:id/versions/:versionId/preview', landingPageAdminController.previewVersion.bind(landingPageAdminController));

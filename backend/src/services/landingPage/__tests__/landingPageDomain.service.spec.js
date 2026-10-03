@@ -8,6 +8,7 @@ const mockDomainRepo = {
   findByHostnameLower: jest.fn(),
   countPendingOrActiveInScope: jest.fn(),
   findAllActive: jest.fn(),
+  deleteByLandingPageId: jest.fn(),
 };
 
 const mockLandingPageRepo = {
@@ -221,5 +222,238 @@ describe('landingPageDomain.service SSL provisioning calls', () => {
     expect(landingPageDomainService.provisionSsl).not.toHaveBeenCalled();
     expect(result.status).toBe('active');
     expect(result.cfManaged).toBe(true);
+  });
+});
+
+/**
+ * PLAN_TEN_MIEN_RIENG (03/10/2026) — kết nối tên miền riêng CHỈ KHI DNS đã đúng; checkHostname không ghi gì;
+ * remove() trả trang về link miễn phí.
+ */
+describe('landingPageDomain.service — tên miền riêng chỉ kết nối khi DNS đúng', () => {
+  const freeRow = {
+    id: 5,
+    landingPageId,
+    hostname: 'launch.founderai.biz',
+    status: 'active',
+    cfManaged: true,
+    cfZoneId: 'zone-1',
+    cfRecordId: 'rec-1',
+    cfHostnameId: null,
+    isApexDomain: false,
+  };
+  const customRow = { ...activeDomainRow, status: 'active', cfManaged: false, isApexDomain: false };
+  const landing = {
+    id: landingPageId,
+    slug: 'launch',
+    title: 'Test',
+    htmlContent: '<p>x</p>',
+    isPublished: true,
+    idUser: 1,
+    workspaceOwnerId: 1,
+    domainType: 'system',
+  };
+
+  const dnsNotFound = () => Object.assign(new Error('queryCname ENOTFOUND'), { code: 'ENOTFOUND' });
+
+  function expectNoDomainWrites() {
+    expect(mockDomainRepo.upsertForLanding).not.toHaveBeenCalled();
+    expect(mockDomainRepo.deleteByLandingPageId).not.toHaveBeenCalled();
+    expect(mockDomainRepo.updateStatusById).not.toHaveBeenCalled();
+    expect(mockLandingPageRepo.updateByIdInScope).not.toHaveBeenCalled();
+    expect(mockCloudflareService.deleteDnsRecord).not.toHaveBeenCalled();
+    expect(mockCloudflareService.setupLandingPageDNS).not.toHaveBeenCalled();
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    process.env.LP_CNAME_TARGET = 'founderai.biz';
+    delete process.env.LP_APEX_FIXED_IP;
+    delete process.env.SSL_PROVISION_SCRIPT;
+
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue(landing);
+    mockLandingPageRepo.updateByIdInScope.mockResolvedValue({});
+    mockDomainRepo.findByLandingPageId.mockResolvedValue(freeRow);
+    mockDomainRepo.findByLandingPageIdInScope.mockResolvedValue(freeRow);
+    mockDomainRepo.findByHostnameLower.mockResolvedValue(null);
+    mockDomainRepo.countPendingOrActiveInScope.mockResolvedValue(1);
+    mockDomainRepo.upsertForLanding.mockResolvedValue(undefined);
+    mockDomainRepo.deleteByLandingPageId.mockResolvedValue(true);
+    mockCloudflareService.isConfigured.mockReturnValue(true);
+    mockCloudflareService.setupLandingPageDNS.mockResolvedValue({
+      success: true,
+      zoneId: 'zone-2',
+      recordId: 'rec-2',
+      message: 'ok',
+    });
+    mockCloudflareService.deleteDnsRecord.mockResolvedValue({ success: true });
+    dns.resolve.mockRejectedValue(dnsNotFound());
+    dns.resolve4.mockRejectedValue(dnsNotFound());
+
+    jest.spyOn(landingPageDomainService, 'provisionSsl').mockResolvedValue(undefined);
+  });
+
+  it('setHostname khi DNS CHƯA đúng → 422 kèm bảng DNS cần thêm; KHÔNG ghi gì, KHÔNG đụng subdomain miễn phí', async () => {
+    const err = await landingPageDomainService
+      .setHostname(landingPageId, 'lp.example.com', false, authUser)
+      .then(() => null, (e) => e);
+
+    expect(err).not.toBeNull();
+    expect(err.statusCode).toBe(422);
+    expect(err.message).toMatch(/lp\.example\.com/);
+    expect(err.data).toEqual(expect.objectContaining({
+      verified: false,
+      reason: 'not_found',
+      hostname: 'lp.example.com',
+      isApexDomain: false,
+      dnsRecords: [{ type: 'CNAME', host: 'lp', value: 'founderai.biz', ttl: 3600 }],
+      cnameTarget: 'founderai.biz',
+    }));
+    expectNoDomainWrites();
+    expect(landingPageDomainService.provisionSsl).not.toHaveBeenCalled();
+  });
+
+  it('setHostname khi DNS đúng, trang đang dùng link miễn phí → upsert hàng riêng active THAY hàng miễn phí, dọn DNS Cloudflare cũ, domain_type=custom, không xoá hàng', async () => {
+    dns.resolve.mockResolvedValue(['founderai.biz']);
+
+    const result = await landingPageDomainService.setHostname(landingPageId, 'lp.example.com', false, authUser);
+
+    expect(mockDomainRepo.upsertForLanding).toHaveBeenCalledTimes(1);
+    expect(mockDomainRepo.upsertForLanding).toHaveBeenCalledWith(expect.objectContaining({
+      landingPageId,
+      hostname: 'lp.example.com',
+      status: 'active',
+      cfManaged: false,
+      cfZoneId: null,
+      cfRecordId: null,
+      isApexDomain: false,
+    }));
+    // Hàng miễn phí bị upsert thay thế trong MỘT câu lệnh — không xoá hàng trước.
+    expect(mockDomainRepo.deleteByLandingPageId).not.toHaveBeenCalled();
+    expect(mockCloudflareService.deleteDnsRecord).toHaveBeenCalledWith('zone-1', 'rec-1');
+    expect(mockLandingPageRepo.updateByIdInScope).toHaveBeenCalledWith(
+      landingPageId,
+      expect.objectContaining({ domainType: 'custom', domainSubtype: 'subdomain' }),
+      expect.anything()
+    );
+    expect(landingPageDomainService.provisionSsl).toHaveBeenCalledWith('lp.example.com');
+    expect(result.configured).toBe(true);
+  });
+
+  it('checkHostname KHÔNG ghi gì dù DNS đúng hay sai; trả verified + bảng bản ghi + câu hướng dẫn', async () => {
+    const wrong = await landingPageDomainService.checkHostname(landingPageId, 'lp.example.com', false, authUser);
+    expect(wrong).toEqual(expect.objectContaining({
+      verified: false,
+      dnsRecords: [expect.objectContaining({ type: 'CNAME', host: 'lp', value: 'founderai.biz' })],
+    }));
+    expect(wrong.message).toMatch(/lp\.example\.com/);
+
+    dns.resolve.mockResolvedValue(['founderai.biz']);
+    const right = await landingPageDomainService.checkHostname(landingPageId, 'lp.example.com', false, authUser);
+    expect(right.verified).toBe(true);
+
+    expectNoDomainWrites();
+    expect(landingPageDomainService.provisionSsl).not.toHaveBeenCalled();
+  });
+
+  it('checkHostname tên miền chính (apex) → bản ghi A tới IP cố định của hệ thống', async () => {
+    process.env.LP_APEX_FIXED_IP = '203.0.113.9';
+    dns.resolve4.mockResolvedValue(['203.0.113.9']);
+
+    const result = await landingPageDomainService.checkHostname(landingPageId, 'example.com', true, authUser);
+
+    expect(result).toEqual(expect.objectContaining({
+      verified: true,
+      isApexDomain: true,
+      apexFixedIp: '203.0.113.9',
+      dnsRecords: [{ type: 'A', host: '@', value: '203.0.113.9', ttl: 3600 }],
+    }));
+    expectNoDomainWrites();
+  });
+
+  it('checkHostname báo trước các điều kiện của "Kết nối": trang chưa xuất bản → 400; hostname trang khác → 409', async () => {
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue({ ...landing, isPublished: false });
+    await expect(landingPageDomainService.checkHostname(landingPageId, 'lp.example.com', false, authUser))
+      .rejects.toMatchObject({ statusCode: 400 });
+
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue(landing);
+    mockDomainRepo.findByHostnameLower.mockResolvedValue({ id: 99, landingPageId: 12345, hostname: 'lp.example.com' });
+    await expect(landingPageDomainService.checkHostname(landingPageId, 'lp.example.com', false, authUser))
+      .rejects.toMatchObject({ statusCode: 409 });
+    expectNoDomainWrites();
+  });
+
+  it('remove: tên miền riêng + có slug → cấp subdomain miễn phí THAY hàng riêng (upsert), domain_type=system, không xoá hàng trước', async () => {
+    mockDomainRepo.findByLandingPageIdInScope.mockResolvedValue(customRow);
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue({ ...landing, domainType: 'custom' });
+    mockDomainRepo.findByLandingPageId.mockResolvedValue({ ...freeRow, cfZoneId: 'zone-2', cfRecordId: 'rec-2' });
+
+    const result = await landingPageDomainService.remove(landingPageId, authUser);
+
+    expect(mockCloudflareService.setupLandingPageDNS).toHaveBeenCalledWith('launch.founderai.biz', 'founderai.biz');
+    expect(mockDomainRepo.upsertForLanding).toHaveBeenCalledWith(expect.objectContaining({
+      landingPageId,
+      hostname: 'launch.founderai.biz',
+      status: 'active',
+      cfManaged: true,
+    }));
+    expect(mockDomainRepo.deleteByLandingPageId).not.toHaveBeenCalled();
+    expect(mockLandingPageRepo.updateByIdInScope).toHaveBeenCalledWith(
+      landingPageId,
+      expect.objectContaining({ domainType: 'system', domainSubtype: null }),
+      expect.anything()
+    );
+    expect(result).toEqual(expect.objectContaining({ ok: true, configured: true, hostname: 'launch.founderai.biz', cfManaged: true }));
+  });
+
+  it('remove: trang KHÔNG có slug → 400, không xoá, không cấp, không đổi domain_type', async () => {
+    mockDomainRepo.findByLandingPageIdInScope.mockResolvedValue(customRow);
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue({ ...landing, slug: null, domainType: 'custom' });
+
+    await expect(landingPageDomainService.remove(landingPageId, authUser))
+      .rejects.toMatchObject({ statusCode: 400, message: expect.stringMatching(/slug/) });
+    expectNoDomainWrites();
+  });
+
+  it('remove: cấp subdomain miễn phí THẤT BẠI → báo lỗi và GIỮ tên miền riêng (không ghi hàng pending đè lên)', async () => {
+    mockDomainRepo.findByLandingPageIdInScope.mockResolvedValue(customRow);
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue({ ...landing, domainType: 'custom' });
+    mockCloudflareService.setupLandingPageDNS.mockResolvedValue({ success: false, message: 'CF từ chối' });
+
+    await expect(landingPageDomainService.remove(landingPageId, authUser))
+      .rejects.toMatchObject({ statusCode: 502, message: expect.stringContaining('giữ nguyên') });
+
+    expect(mockDomainRepo.upsertForLanding).not.toHaveBeenCalled();
+    expect(mockDomainRepo.deleteByLandingPageId).not.toHaveBeenCalled();
+    expect(mockLandingPageRepo.updateByIdInScope).not.toHaveBeenCalled();
+  });
+
+  it('remove: Cloudflare chưa cấu hình → cũng giữ tên miền riêng (không ghi pending đè)', async () => {
+    mockDomainRepo.findByLandingPageIdInScope.mockResolvedValue(customRow);
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue({ ...landing, domainType: 'custom' });
+    mockCloudflareService.isConfigured.mockReturnValue(false);
+
+    await expect(landingPageDomainService.remove(landingPageId, authUser)).rejects.toMatchObject({ statusCode: 502 });
+    expect(mockDomainRepo.upsertForLanding).not.toHaveBeenCalled();
+  });
+
+  it('remove: trang đang dùng link miễn phí (không có tên miền riêng) → 400, KHÔNG xoá link miễn phí', async () => {
+    await expect(landingPageDomainService.remove(landingPageId, authUser))
+      .rejects.toMatchObject({ statusCode: 400 });
+    expectNoDomainWrites();
+  });
+
+  it('remove chạy lại được: hàng đã là miễn phí nhưng domain_type còn custom → chỉ sửa nốt domain_type', async () => {
+    mockLandingPageRepo.findByIdInScope.mockResolvedValue({ ...landing, domainType: 'custom' });
+
+    const result = await landingPageDomainService.remove(landingPageId, authUser);
+
+    expect(mockLandingPageRepo.updateByIdInScope).toHaveBeenCalledWith(
+      landingPageId,
+      expect.objectContaining({ domainType: 'system' }),
+      expect.anything()
+    );
+    expect(mockDomainRepo.upsertForLanding).not.toHaveBeenCalled();
+    expect(mockDomainRepo.deleteByLandingPageId).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
   });
 });
