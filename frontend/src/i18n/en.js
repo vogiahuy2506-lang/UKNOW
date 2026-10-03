@@ -8080,7 +8080,9 @@ export default {
       nodes: 'Nodes',
       executing: 'Executing',
       results: 'Campaign Results',
-      autoLoop: 'Auto restart',
+      sampleData: 'Sample figures',
+      sampleDataNote: 'These are sample figures for illustration, not real results. The real results of the campaigns you run are on the Reports and Delivery monitor pages.',
+      footerNote: 'Illustrative simulation; real setups may differ',
       close: 'Close',
     },
     // Hero Chatbot Widget - Contact Form

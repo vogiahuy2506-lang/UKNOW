@@ -166,6 +166,12 @@ function FlowAnimation({ flowKey, onClose: _onClose }) {
             <h4 className={`text-xs font-bold ${flow.textClass}`}>
               {t('heroPage.campaignFlow.results') || 'Kết quả chiến dịch'}
             </h4>
+            <span
+              data-testid="campaign-flow-sample-badge"
+              className="ml-auto px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200 text-[10px] font-semibold"
+            >
+              {t('heroPage.campaignFlow.sampleData') || 'Số liệu minh hoạ'}
+            </span>
           </div>
           <div
             className="grid gap-2"
@@ -183,6 +189,9 @@ function FlowAnimation({ flowKey, onClose: _onClose }) {
               </div>
             ))}
           </div>
+          <p data-testid="campaign-flow-sample-note" className="mt-2 text-[10px] leading-snug text-slate-500">
+            {t('heroPage.campaignFlow.sampleDataNote')}
+          </p>
         </div>
       )}
     </div>
@@ -263,7 +272,7 @@ export default function CampaignFlowModal({ open, flowKey, onClose }) {
         <div className="px-5 py-3 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
           <div className="flex items-center gap-1.5 text-[10px] text-slate-500">
             <HiOutlineLightningBolt className="w-3 h-3 text-orange-500" />
-            <span>{t('heroPage.campaignFlow.autoLoop') || 'Tự động chạy lại'}</span>
+            <span>{t('heroPage.campaignFlow.footerNote') || 'Mô phỏng minh hoạ, có thể khác cấu hình thật'}</span>
           </div>
           <button
             onClick={onClose}

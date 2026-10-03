@@ -8089,7 +8089,9 @@ export default {
       nodes: 'Số node',
       executing: 'Đang thực thi',
       results: 'Kết quả chiến dịch',
-      autoLoop: 'Tự động chạy lại',
+      sampleData: 'Số liệu minh hoạ',
+      sampleDataNote: 'Đây là số liệu mẫu để minh hoạ, không phải kết quả thật. Kết quả thật của chiến dịch bạn chạy xem ở trang Báo cáo và Giám sát gửi tin.',
+      footerNote: 'Mô phỏng minh hoạ, có thể khác cấu hình thật',
       close: 'Đóng',
     },
     // Hero Chatbot Widget - Contact Form for customer consultation
