@@ -43,6 +43,11 @@ const REAL_MENU = {
  * Khi so, bỏ dấu chấm cuối câu và đuôi ": {count}" của từ điển (số liệu chèn vào lúc chạy).
  */
 const UI_LABELS_IN_ARTICLES = [
+  ['quick-send', 'quickSendAdapter.modeConversations', 'Người đã nhắn tới tài khoản'],
+  ['quick-send', 'quickSendAdapter.modeManualTelegram', 'Nhập chat id'],
+  ['quick-send', 'quickSendAdapter.modeManualWhatsApp', 'Nhập số điện thoại'],
+  ['quick-send', 'quickSendAdapter.modeGroups', 'Nhóm'],
+  ['quick-send', 'quickSendAdapter.groupsLoad', 'Tải danh sách nhóm'],
   ['campaign-theo-doi', 'userDeliveryMonitor.title', 'Giám sát gửi tin'],
   ['campaign-theo-doi', 'userDeliveryMonitor.refresh', 'Làm mới'],
   ['campaign-theo-doi', 'userDeliveryMonitor.cards.sent', 'Đã gửi hôm nay'],
