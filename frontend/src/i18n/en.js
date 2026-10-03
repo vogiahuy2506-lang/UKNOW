@@ -4139,7 +4139,6 @@ export default {
     noVariables: 'No variables created yet',
     addVariableTip: 'Add variables to use in template',
     fieldName: 'Field name',
-    saveChanges: 'Save changes',
     suggestedCustomerName: 'Customer name',
     suggestedCourseLink: 'Course link',
     suggestedCourseName: 'Course name',

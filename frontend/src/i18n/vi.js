@@ -4151,7 +4151,6 @@ export default {
     noVariables: 'Chưa có biến nào được tạo',
     addVariableTip: 'Thêm biến để sử dụng trong template',
     fieldName: 'Tên trường',
-    saveChanges: 'Lưu thay đổi',
     suggestedCustomerName: 'Tên khách hàng',
     suggestedCourseLink: 'Link khóa học',
     suggestedCourseName: 'Tên khóa học',
