@@ -163,6 +163,9 @@ export default async function globalSetup() {
 
   // Cấp JWT secret mặc định để khỏi yêu cầu .env trong CI.
   process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-for-integration-only';
+  // Mã hoá session kênh/cookie Zalo/mật khẩu SMTP fail-closed (10/2026): thiếu key là ném lỗi thay vì lưu
+  // plaintext → test ghi session Telegram/WhatsApp cần key. Giá trị test, CI đặt riêng ở test-backend.yml.
+  process.env.SMTP_SECRET_KEY = process.env.SMTP_SECRET_KEY || 'test-smtp-secret-key-for-integration-only';
   process.env.JWT_REFRESH_SECRET =
     process.env.JWT_REFRESH_SECRET || 'test-jwt-refresh-secret-for-integration-only';
   process.env.JWT_EXPIRES_IN = process.env.JWT_EXPIRES_IN || '15m';

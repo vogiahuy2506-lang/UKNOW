@@ -109,10 +109,12 @@ describe('public chatbot config — không lộ system_instruction', () => {
     await chatbotController.getPublicChatbotById({ params: { chatbotId: '12' } }, res);
     const payload = res.json.mock.calls[0][0];
     expect(payload.success).toBe(true);
-    // Các trường widget/trang /chat/:id đang dùng vẫn còn.
+    // Các trường widget/trang /chat/:id đang dùng vẫn còn. `ai_model` KHÔNG còn ở API công khai
+    // (main bỏ từ 09/2026: model do hệ thống chọn, id chatbot tuần tự nên lộ model = gom được cấu hình).
     expect(payload.data).toEqual(expect.objectContaining({
-      id: 12, name: 'Bot bán hàng', welcome_message: 'Xin chào!', ai_model: 'gemini-2.5-flash',
+      id: 12, name: 'Bot bán hàng', welcome_message: 'Xin chào!',
     }));
+    expect(payload.data).not.toHaveProperty('ai_model');
     expectNoSystemInstruction(payload);
   });
 

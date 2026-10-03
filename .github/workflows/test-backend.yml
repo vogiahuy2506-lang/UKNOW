@@ -336,6 +336,9 @@ jobs:
       DB_PASSWORD: postgres
       JWT_SECRET: ci-jwt-secret
       JWT_REFRESH_SECRET: ci-jwt-refresh-secret
+      # Mã hoá session kênh/cookie Zalo/mật khẩu SMTP fail-closed từ 10/2026 (thiếu key là ném lỗi, không còn
+      # rơi về plaintext) → test ghi session Telegram/WhatsApp cần key. Giá trị test, không phải bí mật.
+      SMTP_SECRET_KEY: ci-smtp-secret-key
       JWT_EXPIRES_IN: 15m
       JWT_REFRESH_EXPIRES_IN: 7d
       BULLMQ_ENABLED: 'false'
