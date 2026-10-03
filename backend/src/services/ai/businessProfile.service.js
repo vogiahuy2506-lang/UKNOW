@@ -10,8 +10,18 @@ function parseArrayField(value) {
 }
 
 /** Serialize products array thành text đọc được cho AI. */
+// Trần an toàn: shop nhiều sản phẩm/mô tả dài không được làm phình prompt chatbot (mỗi tin khách đều gửi cả khối này).
+// Áp cho MỌI nơi dùng serializeProductList (prompt chatbot, chunk RAG, landing, trợ lý chiến dịch).
+export const MAX_PRODUCTS_IN_PROMPT = 30;
+export const MAX_PRODUCT_TEXT_CHARS = 300;
+
+function clipText(value) {
+  const s = String(value);
+  return s.length > MAX_PRODUCT_TEXT_CHARS ? `${s.slice(0, MAX_PRODUCT_TEXT_CHARS)}…` : s;
+}
+
 export function serializeProductList(products) {
-  const arr = parseArrayField(products);
+  const arr = parseArrayField(products).slice(0, MAX_PRODUCTS_IN_PROMPT);
   if (!arr.length) return '';
   return arr.map((p, i) => {
     const name = p.product_name || p.productName || p.name || 'Sản phẩm';
@@ -24,8 +34,8 @@ export function serializeProductList(products) {
     if (originalPrice && String(originalPrice).trim() && String(originalPrice).trim() !== String(price || '').trim()) {
       parts.push(`Giá gốc: ${originalPrice}`);
     }
-    if (p.description) parts.push(p.description);
-    if (p.usp) parts.push(`Điểm nổi bật: ${p.usp}`);
+    if (p.description) parts.push(clipText(p.description));
+    if (p.usp) parts.push(`Điểm nổi bật: ${clipText(p.usp)}`);
     const targetAudience = p.target_audience || p.targetAudience;
     if (targetAudience) parts.push(`Đối tượng: ${targetAudience}`);
     const productUrl = p.product_url || p.productUrl;

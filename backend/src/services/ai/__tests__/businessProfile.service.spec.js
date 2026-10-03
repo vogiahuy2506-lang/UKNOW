@@ -48,4 +48,25 @@ describe('serializeProductList', () => {
     const text = serializeProductList([{ product_name: 'A', price: '100k', original_price: '100k' }]);
     expect(text).not.toContain('Giá gốc');
   });
+
+  it('trần an toàn: tối đa 30 sản phẩm', () => {
+    const rows = Array.from({ length: 45 }, (_, i) => ({ product_name: `SP${i + 1}` }));
+    const lines = serializeProductList(rows).split('\n');
+    expect(lines).toHaveLength(30);
+    expect(lines[29]).toContain('SP30');
+    expect(serializeProductList(rows)).not.toContain('SP31');
+  });
+
+  it('trần an toàn: mô tả và điểm nổi bật cắt 300 ký tự + "…"; đúng 300 giữ nguyên', () => {
+    const text = serializeProductList([
+      { product_name: 'A', description: 'd'.repeat(500), usp: 'u'.repeat(500) },
+      { product_name: 'B', description: 'd'.repeat(300), usp: 'ngắn' },
+    ]);
+    const [a, b] = text.split('\n');
+    expect(a).toContain(`${'d'.repeat(300)}…`);
+    expect(a).not.toContain('d'.repeat(301));
+    expect(a).toContain(`Điểm nổi bật: ${'u'.repeat(300)}…`);
+    expect(b).toContain('d'.repeat(300));
+    expect(b).not.toContain('…');
+  });
 });

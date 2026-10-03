@@ -864,3 +864,38 @@ describe('routeChatbotMessage — response_style của chatbot đi vào prompt (
     expect(prompt).toContain('Than thien, gan gui, dung emoji phu hop.');
   });
 });
+
+describe('routeChatbotMessage — hồ sơ + sản phẩm đang bán của chủ đi vào prompt (web/Studio, PR-4)', () => {
+  const run = async () => {
+    findChatbotById.mockResolvedValue({ id: 9, id_user: 3, name: 'Bot', welcome_message: 'Chao', system_instruction: '' });
+    getConversationHistory.mockResolvedValue([]);
+    buildContext.mockResolvedValue('');
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
+    const prep = jest.spyOn(chatRouterService, '_prepareChatCredit').mockResolvedValue({ creditContext: {} });
+    const charge_ = jest.spyOn(chatRouterService, '_chargeChatCredit').mockResolvedValue(undefined);
+    const callAI = jest.spyOn(chatRouterService, '_callAI').mockResolvedValue({ text: 'ok' });
+    const result = await chatRouterService.routeChatbotMessage({ chatbotId: 9, message: 'giá khoá Python?', conversationId: 1 });
+    const prompt = callAI.mock.calls[0]?.[0]?.systemPrompt;
+    prep.mockRestore();
+    charge_.mockRestore();
+    callAI.mockRestore();
+    return { result, prompt };
+  };
+
+  it('prompt chứa tên + giá sản phẩm đang bán, lấy theo chủ chatbot', async () => {
+    getFormattedProfileForPrompt.mockReset();
+    getFormattedProfileForPrompt.mockResolvedValue('=== HỒ SƠ ===\n- Sản phẩm / dịch vụ:\n1. Khóa Python — Giá: 2.9tr\n=== HẾT HỒ SƠ ===');
+    const { prompt } = await run();
+    expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(3);
+    expect(prompt).toContain('Khóa Python');
+    expect(prompt).toContain('2.9tr');
+  });
+
+  it('getFormattedProfileForPrompt ném lỗi -> vẫn trả lời, prompt không có hồ sơ', async () => {
+    getFormattedProfileForPrompt.mockReset();
+    getFormattedProfileForPrompt.mockRejectedValue(new Error('db down'));
+    const { result, prompt } = await run();
+    expect(result.content).toBe('ok');
+    expect(prompt).not.toContain('HỒ SƠ');
+  });
+});

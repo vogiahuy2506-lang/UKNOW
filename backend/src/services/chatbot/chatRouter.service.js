@@ -594,12 +594,19 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       // RAG queries that KB directly via chatbot_id. We no longer traverse
       // sub_assistant → knowledge_bases for the Studio path — the sub_assistant
       // indirection was removed (migration 166 dropped custom_chatbots.id_sub_assistant).
-      const ragContext = await ragEngineService.buildContext(ownerId, message, {
-        customChatbotId: chatbot.id,
-      }).catch((err) => {
-        console.warn('[ChatRouter] routeChatbotMessage: RAG buildContext failed:', err.message);
-        return '';
-      });
+      // Hồ sơ + sản phẩm ĐANG BÁN của chủ (giống đường kênh :89-95) chạy song song với RAG — thiếu thì chatbot web/Studio
+      // không biết tên/giá sản phẩm. Lỗi hồ sơ không được làm hỏng câu trả lời → rơi về ''.
+      const [ragContext, profileContext] = await Promise.all([
+        ragEngineService.buildContext(ownerId, message, {
+          customChatbotId: chatbot.id,
+        }).catch((err) => {
+          console.warn('[ChatRouter] routeChatbotMessage: RAG buildContext failed:', err.message);
+          return '';
+        }),
+        Promise.resolve()
+          .then(() => businessProfileService.getFormattedProfileForPrompt(ownerId))
+          .catch(() => ''),
+      ]);
 
       // Build system prompt qua chatRouter.buildSystemPrompt chung để đảm bảo
       // đồng bộ rule anti-hallucination ('KHONG tu nhan la WhatsApp/Zalo/...') +
@@ -626,7 +633,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         settings: ownSettings,
         chatbot: { name: chatbot.name },
         ragContext,
-        profileContext: '',
+        profileContext,
         isFirstMessage: chatHistory.length === 0,
       });
 
