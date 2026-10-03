@@ -4,6 +4,7 @@ import PageHeader from '../../components/common/PageHeader';
 import auditLogsApiService from '../../features/settings/services/auditLogsApi.service';
 import { useI18n } from '../../i18n';
 import { WORKSPACE_AUDIT_ACTIONS, WORKSPACE_AUDIT_ENTITIES, auditLabel } from './auditLogLabels';
+import { formatAuditDetails } from '../../utils/auditLogDetails';
 
 function fmtDate(d, locale) {
   if (!d) return '—';
@@ -147,7 +148,9 @@ export default function AuditLogsPage() {
                 <tr key={log.id} className="hover:bg-gray-50/60 transition-colors">
                   <td className="py-3 pr-4 text-gray-500 whitespace-nowrap">{fmtDate(log.created_at, locale)}</td>
                   <td className="py-3 pr-4">
-                    <div className="font-medium text-gray-900">{log.actor_name || log.actor_username || '—'}</div>
+                    <div className="font-medium text-gray-900">
+                      {log.actor_name || log.actor_username || t('auditLogs.systemActor')}
+                    </div>
                     {log.actor_username && log.actor_name && (
                       <div className="text-xs text-gray-400">@{log.actor_username}</div>
                     )}
@@ -157,10 +160,8 @@ export default function AuditLogsPage() {
                     {auditLabel(t, 'entities', log.entity_type)}
                     {log.entity_id ? <span className="text-gray-400 ml-1">#{log.entity_id}</span> : null}
                   </td>
-                  <td className="py-3 text-gray-500 text-xs max-w-xs truncate">
-                    {log.details && Object.keys(log.details).length > 0
-                      ? Object.entries(log.details).map(([k, v]) => `${k}: ${JSON.stringify(v)}`).join(', ')
-                      : '—'}
+                  <td className="py-3 text-gray-600 text-xs max-w-md break-words">
+                    {formatAuditDetails(log.action, log.details, t, locale)}
                   </td>
                 </tr>
               ))}
