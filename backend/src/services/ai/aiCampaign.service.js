@@ -752,6 +752,8 @@ QUY TẮC:
     const sourcePrompt = findOriginalCampaignPrompt(history);
     const extracted = extractCampaignBriefFromHistory(history);
     let resolvedBriefContext = '';
+    // Sản phẩm catalog đã giải từ brief (tên/giá/mô tả) — slot filling Zalo nhóm cần để viết đúng sản phẩm khách chọn.
+    let resolvedBriefProducts = [];
     let briefStale = false;
     let briefForState;
     let contentLocaleNeedsPlanReset = false;
@@ -925,6 +927,7 @@ QUY TẮC:
         briefForState = resolved.brief;
         if (quickSendActive) briefForState.flowMode = 'quick_send';
         resolvedBriefContext = resolved.briefContext;
+        resolvedBriefProducts = Array.isArray(resolved.resolvedProducts) ? resolved.resolvedProducts : [];
       } catch (e) {
         if (
           e.code === 'CAMPAIGN_PRODUCT_NOT_FOUND'
@@ -1899,7 +1902,11 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
                   compiledGraph,
                   campaignIntent,
                   brief: briefForState || null,
+                  // Câu yêu cầu THẬT + sản phẩm đã giải + hồ sơ DN: trước đây `userPrompt` bị fillContentSlots bỏ qua và
+                  // brief thật không có `topic` nên tin Zalo nhóm bị viết "mù" (sự cố 20–26/09/2026).
                   userPrompt: intentPrompt || lastUserText || '',
+                  resolvedProducts: resolvedBriefProducts,
+                  businessProfileText: contextBlock,
                   // `userId` / `requestedModel` là tham số Ở MỨC NGOÀI của fillContentSlots. Bản cũ lồng chúng trong `options: {…}`
                   // mà hàm không đọc → luôn null: chọn model không theo người dùng và token `campaign_slots` không có chủ.
                   userId,

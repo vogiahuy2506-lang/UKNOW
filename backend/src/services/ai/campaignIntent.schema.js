@@ -52,6 +52,10 @@ export const CAMPAIGN_INTENT_V1_SCHEMA = {
         productIds: { type: 'array', items: { type: 'integer' } },
         locale: { type: 'string', enum: ['vi', 'en'] },
         tone: { type: 'string' },
+        // Trường của CampaignBrief thật mà `deriveIntent` ánh xạ sang (xem chú thích ở đó).
+        contentMode: { type: 'string' },
+        productName: { type: 'string' },
+        productDescription: { type: 'string' },
       },
     },
     fileUsage: {
@@ -244,17 +248,38 @@ export function deriveIntent(gates = {}, brief = null, options = {}) {
     };
   }
 
-  // Content brief
+  // Content brief.
+  //
+  // CampaignBrief THẬT (campaignBrief.service.js `createEmptyCampaignBrief`) đặt tên trường là
+  // `topicText` / `contentLocale` / `contentMode` / `productName` / `productDescription`. Bản cũ chỉ đọc
+  // `brief.topic` / `brief.locale` / `brief.mode` nên với brief thật cho ra `contentBrief = undefined` —
+  // bước slot filling Zalo nhóm không thấy chủ đề lẫn sản phẩm khách đã nhập và bịa tin "chiến dịch đặc
+  // biệt, ưu đãi đặc quyền" (9 chiến dịch, 23 tin thật gửi 20–26/09/2026). Giữ cả tên cũ (`topic`/`locale`/
+  // `mode`/`tone`) để các nơi dựng brief bằng tay (test, shadow compare) vẫn chạy.
+  const pickString = (...candidates) => {
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim()) return value.trim();
+    }
+    return null;
+  };
   let contentBrief = null;
   if (brief && typeof brief === 'object') {
+    const topic = pickString(brief.topic, brief.topicText, brief.productName);
+    const locale = pickString(brief.locale, brief.contentLocale);
+    const productName = pickString(brief.productName);
+    const productDescription = pickString(brief.productDescription);
+    const contentMode = pickString(brief.contentMode);
     contentBrief = {
-      ...(brief.topic ? { topic: brief.topic } : {}),
-      ...(brief.locale ? { locale: brief.locale } : {}),
+      ...(topic ? { topic } : {}),
+      ...(locale ? { locale } : {}),
       ...(Array.isArray(brief.productIds) && brief.productIds.length > 0
         ? { productIds: brief.productIds }
         : {}),
       ...(brief.mode ? { mode: brief.mode } : {}),
       ...(brief.tone ? { tone: brief.tone } : {}),
+      ...(contentMode ? { contentMode } : {}),
+      ...(productName ? { productName } : {}),
+      ...(productDescription ? { productDescription } : {}),
     };
   }
 
