@@ -1,9 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { HiOutlineX, HiOutlineSparkles } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
-import { generatePaymentQr } from '../services/paymentAccountApi';
 import { escapeHtml } from '../../../utils/miniMarkdownToHtml';
-import VietQrMessage from './VietQrMessage';
 
 // Custom SVG Icons
 const BotAvatarIcon = ({ className = "w-5 h-5" }) => (
@@ -63,14 +61,6 @@ export default function HeroChatWidget() {
   const [contactForm, setContactForm] = useState(null);
   const [contactData, setContactData] = useState({ name: '', email: '', phone: '', message: '' });
   const [isMinimized, setIsMinimized] = useState(true);
-  // Payment flow state (vietqr-chat-hero-landing) — khi user nhập "thanh toán X đồng"
-  // → tự generate VietQR trong chat.
-  //   paymentStep:
-  //     null: không active
-  //     'ask_account': đã nhận amount, hỏi STK + tên NH
-  //     'generating': đang gọi BE
-  //     'done': đã render QR (qrData được lưu vào messages)
-  const [paymentFlow, setPaymentFlow] = useState(null); // { amount, step, error }
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -90,10 +80,6 @@ export default function HeroChatWidget() {
   const openChatText = i18nKey('heroConsultation.openChat') || 'Chat tư vấn';
   const _closeText = i18nKey('heroConsultation.close') || 'Đóng';
   const suggestionsTitle = i18nKey('heroConsultation.suggestionsTitle') || 'Gợi ý:';
-  // Payment flow (vietqr-chat-hero-landing)
-  const paymentAskAmountText = i18nKey('heroConsultation.paymentAskAmount') || 'Bạn muốn thanh toán';
-  const paymentAskAccountText = i18nKey('heroConsultation.paymentAskAccount') || 'Hãy cho tôi biết STK và tên ngân hàng của bạn để generate QR.';
-  const paymentUnavailableText = i18nKey('heroConsultation.paymentUnavailable') || 'Hiện tại chưa hỗ trợ thanh toán tự động.';
 
   useEffect(() => {
     if (isOpen && !isMinimized) {
@@ -148,131 +134,6 @@ export default function HeroChatWidget() {
     sendMessage(reply.text);
   };
 
-  // ------------------------------------------------------------------------
-  // Payment flow (vietqr-chat-hero-landing)
-  // ------------------------------------------------------------------------
-
-  /**
-   * Parse số tiền từ text.
-   * Trả số VND (integer) nếu parse được, null nếu không.
-   */
-  function parseAmountFromText(text) {
-    const t = String(text || '').toLowerCase();
-
-    // 1tr = 1.000.000 ; 500k = 500.000
-    const vnUnitMatch = t.match(/(\d+(?:[.,]\d+)?)\s*(tr|triệu|k|ngàn|nghin|n)/i);
-    if (vnUnitMatch) {
-      const num = parseFloat(vnUnitMatch[1].replace(',', '.'));
-      const unit = vnUnitMatch[2].toLowerCase();
-      const mult =
-        unit === 'tr' || unit === 'triệu' ? 1_000_000 :
-        unit === 'k' || unit === 'ngàn' || unit === 'nghin' || unit === 'n' ? 1_000 : 1;
-      return Math.round(num * mult);
-    }
-
-    // 1.000.000 / 1,000,000 / 1000000 — lấy số lớn nhất (≥ 10.000)
-    const numericMatches = [...t.matchAll(/(\d{1,3}(?:[.,]\d{3})+|\d{4,})/g)];
-    let maxAmount = 0;
-    for (const m of numericMatches) {
-      const cleaned = m[1].replace(/[.,]/g, '');
-      const amount = parseInt(cleaned, 10);
-      if (Number.isFinite(amount) && amount >= 10_000 && amount > maxAmount) {
-        maxAmount = amount;
-      }
-    }
-    return maxAmount > 0 ? maxAmount : null;
-  }
-
-  /**
-   * Detect "thanh toán X đồng" / "pay X VND" / "cho STK" trong user message.
-   * Trả { amount } nếu match có amount, { amount: null } nếu match keyword nhưng chưa có amount.
-   * Pattern: từ khoá thanh toán + số tiền (1.000, 1000000, 1tr, 500k).
-   */
-  function detectPaymentIntent(text) {
-    const t = String(text || '').toLowerCase();
-    const paymentKeywords = /\b(thanh toán|pay|chuyển khoản|ck|qr|vietqr|stk|số tk|số tài khoản|tài khoản ngân hàng|tài khoản|ngân hàng)\b/;
-    const hasPayKeyword = paymentKeywords.test(t);
-    if (!hasPayKeyword) return null;
-
-    // 1tr = 1.000.000 ; 500k = 500.000
-    const vnUnitMatch = t.match(/(\d+(?:[.,]\d+)?)\s*(tr|triệu|k|ngàn|nghin|n)/i);
-    if (vnUnitMatch) {
-      const num = parseFloat(vnUnitMatch[1].replace(',', '.'));
-      const unit = vnUnitMatch[2].toLowerCase();
-      const mult =
-        unit === 'tr' || unit === 'triệu' ? 1_000_000 :
-        unit === 'k' || unit === 'ngàn' || unit === 'nghin' || unit === 'n' ? 1_000 : 1;
-      const amount = Math.round(num * mult);
-      if (amount > 0) return { amount };
-    }
-
-    // 1.000.000 / 1,000,000 / 1000000 — lấy số lớn nhất (≥ 10.000) để tránh match "1 cái"
-    const numericMatches = [...t.matchAll(/(\d{1,3}(?:[.,]\d{3})+|\d{4,})/g)];
-    for (const m of numericMatches) {
-      const cleaned = m[1].replace(/[.,]/g, '');
-      const amount = parseInt(cleaned, 10);
-      if (Number.isFinite(amount) && amount >= 10_000) {
-        return { amount };
-      }
-    }
-
-    // Có keyword nhưng chưa có số tiền → hỏi amount
-    return { amount: null };
-  }
-
-  /**
-   * Gọi BE generate VietQR và push message chứa QR.
-   */
-  async function executePaymentGeneration(amount, userExtraNote) {
-    setPaymentFlow({ amount, step: 'generating', error: null });
-    setIsLoading(true);
-    try {
-      const description = userExtraNote
-        ? userExtraNote.replace(/\D+/g, '').slice(0, 8).toUpperCase() || 'THANHTOAN'
-        : 'THANHTOAN';
-      const data = await generatePaymentQr({ amount, description });
-      setMessages(prev => [
-        ...prev,
-        {
-          role: 'assistant',
-          content: 'qr-card', // marker để render VietQrMessage bên dưới
-          qrData: data,
-        },
-      ]);
-      setPaymentFlow(null);
-    } catch (err) {
-      const msg =
-        err.code === 'NO_PAYMENT_ACCOUNT'
-          ? paymentUnavailableText
-          : err.message || 'Không tạo được mã QR';
-      setMessages(prev => [...prev, { role: 'assistant', content: msg }]);
-      setPaymentFlow(null);
-    } finally {
-      setIsLoading(false);
-    }
-  }
-
-  /**
-   * Generate VietQR và push vào messages.
-   */
-  async function runPaymentFlow(amount) {
-    setIsLoading(true);
-    const messageContent = amount && amount > 0
-      ? `${paymentAskAmountText} ${Number(amount).toLocaleString('vi-VN')} đ. Đang tạo mã QR...`
-      : 'Bạn muốn thanh toán bao nhiêu tiền? (ví dụ: 100.000 đồng)';
-    setMessages(prev => [
-      ...prev,
-      { role: 'assistant', content: messageContent },
-    ]);
-    setPaymentFlow({ amount, step: 'ask_account', error: null });
-    setIsLoading(false);
-
-    // Nếu đã có amount → tự động trigger generate QR (không cần chờ user nhập lại)
-    if (amount && amount > 0) {
-      setTimeout(() => executePaymentGeneration(amount, null), 500);
-    }
-  }
-
   const handleSubmit = (e) => {
     e.preventDefault();
     return sendMessage(input);
@@ -288,36 +149,6 @@ export default function HeroChatWidget() {
     setShowSuggestions(false);
 
     setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
-
-    // PAYMENT-FLOW: nếu user đang trong flow ask_account → parse amount hoặc trigger generate QR
-    if (paymentFlow?.step === 'ask_account') {
-      setIsLoading(false);
-      // Thử parse số tiền từ message
-      const parsedAmount = parseAmountFromText(userMessage);
-      if (parsedAmount && parsedAmount > 0) {
-        await executePaymentGeneration(parsedAmount, userMessage);
-      } else {
-        // Không parse được → hỏi lại
-        setMessages(prev => [
-          ...prev,
-          { role: 'assistant', content: 'Mình chưa hiểu số tiền. Bạn nhập số tiền cần thanh toán nhé, ví dụ: 100.000 đồng' },
-        ]);
-        setPaymentFlow({ ...paymentFlow, step: 'ask_account' });
-      }
-      return;
-    }
-
-    // PAYMENT-FLOW: detect "thanh toán X đồng" / "cho STK" → mở flow
-    const intent = detectPaymentIntent(userMessage);
-    if (intent) {
-      if (intent.amount && intent.amount > 0) {
-        await runPaymentFlow(intent.amount);
-      } else {
-        // Có keyword nhưng chưa có số tiền → hỏi user nhập số tiền
-        await runPaymentFlow(null);
-      }
-      return;
-    }
 
     try {
       const visitorId = getVisitorId();
@@ -471,20 +302,10 @@ export default function HeroChatWidget() {
                     <span className="text-xs font-medium text-gray-500">Foundy</span>
                   </div>
                 )}
-                {msg.content === 'qr-card' && msg.qrData ? (
-                  <VietQrMessage
-                    vietqrString={msg.qrData.vietqr_string}
-                    account={msg.qrData.account}
-                    amount={msg.qrData.amount}
-                    description={msg.qrData.description}
-                    t={t}
-                  />
-                ) : (
-                  <p
-                    className={`text-sm leading-relaxed ${msg.role === 'user' ? '' : 'text-gray-700'}`}
-                    dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
-                  />
-                )}
+                <p
+                  className={`text-sm leading-relaxed ${msg.role === 'user' ? '' : 'text-gray-700'}`}
+                  dangerouslySetInnerHTML={{ __html: formatMarkdown(msg.content) }}
+                />
               </div>
             </div>
           ))}

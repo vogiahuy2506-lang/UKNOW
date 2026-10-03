@@ -78,7 +78,6 @@ import chatbotRoutes from './routes/chatbot.routes.js';
 import chatbotPublicRoutes from './routes/chatbotPublic.routes.js';
 import internalRoutes from './routes/internal.routes.js';
 import heroConsultationRoutes from './routes/heroConsultation.routes.js';
-import systemPaymentAccountRoutes from './routes/systemPaymentAccount.routes.js';
 import landingTemplateRoutes from './routes/landingTemplate.routes.js';
 import landingAssetRoutes from './routes/landingAsset.routes.js';
 import auditRoutes from './routes/audit.routes.js';
@@ -239,7 +238,6 @@ export function createApp() {
   app.use('/api/ai', aiRoutes);
   app.use('/api/chatbot-public', publicCorsMiddleware, chatbotPublicRoutes);
   app.use('/api/public/hero', heroConsultationRoutes);
-  app.use('/api/system', systemPaymentAccountRoutes);
   app.use('/api/landing-templates', landingTemplateRoutes);
   app.use('/api/audit-logs', auditRoutes);
   app.use('/api/media-library', mediaLibraryRoutes);

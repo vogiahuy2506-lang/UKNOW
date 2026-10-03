@@ -9,8 +9,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import HeroChatWidget from '../components/HeroChatWidget';
 import { I18nProvider } from '../../../i18n';
 
-vi.mock('../services/paymentAccountApi', () => ({ generatePaymentQr: vi.fn() }));
-
 const BUSY_BODY = {
   success: false,
   code: 'BUSY',

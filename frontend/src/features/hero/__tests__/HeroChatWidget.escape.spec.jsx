@@ -7,8 +7,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import HeroChatWidget from '../components/HeroChatWidget';
 import { I18nProvider } from '../../../i18n';
 
-vi.mock('../services/paymentAccountApi', () => ({ generatePaymentQr: vi.fn() }));
-
 const AI_REPLY = '<b id="ai-injected">x</b> **Gợi ý** cho bạn\ndòng hai';
 const USER_TEXT = '<img src="x" onerror="window.__heroXss = 1"> xin tư vấn';
 

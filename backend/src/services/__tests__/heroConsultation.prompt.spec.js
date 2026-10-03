@@ -130,12 +130,22 @@ describe('buildHeroSystemPrompt — đăng ký, hỗ trợ, liên hệ, thanh to
     expect(p).toContain('- Fanpage Facebook: facebook.com/digiso.vn');
   });
 
-  it('phần thanh toán/VietQR (D-02 chờ sếp) KHÔNG đụng: quy tắc 7 còn nguyên văn', () => {
-    expect(prompt()).toContain(
-      '7. TUYỆT ĐỐI KHÔNG tự ý cung cấp thông tin thanh toán, mã QR, số tài khoản, hay bất kỳ thông tin tài chính nào. '
-      + 'Hệ thống sẽ tự động hiển thị mã QR thanh toán khi khách nhập số tiền — bạn KHÔNG cần và KHÔNG ĐƯỢC tự tạo hoặc mô tả mã QR.'
-    );
-    expect(prompt()).toContain('- "Thanh toán như thế nào?": Hỗ trợ thanh toán theo tháng hoặc theo năm (tiết kiệm hơn). Liên hệ bộ phận kinh doanh để được hướng dẫn.');
+  it('thanh toán (H1 mục 1): khung chat KHÔNG còn tự hiện mã QR — prompt không hứa "hệ thống tự hiện QR", hướng khách tới /pricing + thanh toán trong ứng dụng', () => {
+    const p = prompt();
+    // Luật cấm tự cung cấp thông tin thanh toán GIỮ NGUYÊN (quy tắc 7), nhưng câu cũ "Hệ thống sẽ tự động hiển thị mã QR thanh toán
+    // khi khách nhập số tiền" là sai từ khi luồng VietQR trong widget bị gỡ: khách không nhập số tiền ở khung chat nữa.
+    expect(p).toContain('7. TUYỆT ĐỐI KHÔNG tự ý cung cấp thông tin thanh toán, mã QR, số tài khoản ngân hàng, hay bất kỳ thông tin tài chính nào');
+    expect(p).not.toMatch(/tự động hiển thị mã QR/);
+    expect(p).not.toMatch(/khi khách nhập số tiền/);
+    const rule7 = p.split('\n').find((l) => l.startsWith('7. TUYỆT ĐỐI KHÔNG'));
+    expect(rule7).toContain(HERO_PRICING_URL);
+    expect(rule7).toContain('thanh toán trực tuyến ngay trong ứng dụng');
+    expect(rule7).toContain('Khung chat này không nhận thanh toán');
+    const faq = p.split('\n').find((l) => l.startsWith('- "Thanh toán như thế nào?"'));
+    expect(faq).toContain('Hỗ trợ thanh toán theo tháng hoặc theo năm (tiết kiệm hơn)');
+    expect(faq).toContain(HERO_PRICING_URL);
+    expect(faq).toContain('thanh toán trực tuyến');
+    expect(faq).not.toMatch(/Liên hệ bộ phận kinh doanh/);
   });
 
   it('câu hỏi của khách nằm cuối prompt, đúng chỗ như cũ', () => {

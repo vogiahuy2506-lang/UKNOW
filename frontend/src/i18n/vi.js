@@ -8062,19 +8062,6 @@ export default {
       busyTitle: 'Tư vấn viên đang bận',
       busyMessage: 'Tư vấn viên đang bận trả lời nhiều bạn cùng lúc. Bạn để lại thông tin ở form bên dưới, đội ngũ Founder AI sẽ liên hệ lại với bạn sớm nhất nhé!',
       loginToContinue: 'Đăng nhập để tiếp tục',
-      // VietQR payment (vietqr-chat-hero-landing)
-      paymentAskAmount: 'Bạn muốn thanh toán bao nhiêu?',
-      paymentAskAccount: 'Bạn hãy nhập số tài khoản và tên ngân hàng để tôi generate mã QR thanh toán nhé',
-      paymentAccountMissing: 'Chưa nhận được số tài khoản. Vui lòng nhập lại (vd: 0123456789 Vietcombank).',
-      paymentQrTitle: 'Thông tin thanh toán',
-      paymentScanQr: 'Quét mã QR để thanh toán',
-      paymentBankLabel: 'Ngân hàng',
-      paymentAccountLabel: 'Số tài khoản',
-      paymentNameLabel: 'Tên tài khoản',
-      paymentAmountLabel: 'Số tiền',
-      paymentDescLabel: 'Nội dung CK',
-      paymentCancel: 'Huỷ',
-      paymentUnavailable: 'Hiện tại chưa hỗ trợ thanh toán tự động. Liên hệ admin để được hỗ trợ.',
       // Chip hỏi SỰ KIỆN (giá, gói, dùng thử, tính năng, hỗ trợ…) KHÔNG có `response` ghi cứng: bấm chip = gửi `text` qua đường
       // chat AI của widget (BE dựng prompt từ bảng plans). Bản cũ ghi cứng giá/gói/tính năng sai so với production.
       // Chỉ chip minh hoạ `campaign_demo` (isAction) còn câu ghi sẵn — mỗi câu đã đối chiếu với node thật của trình tạo chiến dịch.

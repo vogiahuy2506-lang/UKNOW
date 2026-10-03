@@ -8,8 +8,6 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import HeroChatWidget from '../components/HeroChatWidget';
 import { I18nProvider } from '../../../i18n';
 
-vi.mock('../services/paymentAccountApi', () => ({ generatePaymentQr: vi.fn() }));
-
 const AI_REPLY = 'Dạ gói Starter hiện có giá theo bảng giá trên hệ thống ạ.';
 
 let originalScrollIntoView;

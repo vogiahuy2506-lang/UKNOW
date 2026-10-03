@@ -8054,19 +8054,6 @@ Feel free to ask me anything!`,
       busyTitle: 'Our advisor is busy',
       busyMessage: 'Our advisor is helping many visitors right now. Leave your details in the form below and the Founder AI team will get back to you as soon as possible!',
       loginToContinue: 'Log in to continue',
-      // VietQR payment (vietqr-chat-hero-landing)
-      paymentAskAmount: 'How much would you like to pay?',
-      paymentAskAccount: 'Please enter your account number and bank name, and I will generate a payment QR code for you',
-      paymentAccountMissing: 'No account number received. Please re-enter (e.g. 0123456789 Vietcombank).',
-      paymentQrTitle: 'Payment Information',
-      paymentScanQr: 'Scan QR to pay',
-      paymentBankLabel: 'Bank',
-      paymentAccountLabel: 'Account Number',
-      paymentNameLabel: 'Account Name',
-      paymentAmountLabel: 'Amount',
-      paymentDescLabel: 'Transfer Note',
-      paymentCancel: 'Cancel',
-      paymentUnavailable: 'Auto-payment is currently unavailable. Please contact admin for support.',
       // Fact chips (pricing, plans, trial, features, support…) have NO hard-coded `response`: clicking one sends its `text` through
       // the widget's AI chat path (the BE builds the prompt from the plans table). The old copy hard-coded prices/plans/features
       // that did not match production. Only the `campaign_demo` illustration chip (isAction) keeps a canned answer — every line
