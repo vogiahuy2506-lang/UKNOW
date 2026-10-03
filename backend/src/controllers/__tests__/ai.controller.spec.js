@@ -1679,6 +1679,23 @@ describe('ai.controller — nhân viên (G3a)', () => {
       expect(res.json).toHaveBeenCalledWith({ success: true, data: expect.objectContaining({ content: 'Chào' }) });
       warn.mockRestore();
     });
+
+    it('chat() sinh landing: saveMessagesReturningIds=null (phiên không thuộc người này) → cũng log cảnh báo, không có messageId', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      processSmartChat.mockResolvedValue({ type: 'landing_page', content: 'Trang đây', data: { title: 'T', html: '<div>Trang</div>' } });
+      getSessionWizardState.mockResolvedValue({ id: 9, wizard_state: null });
+      saveMessagesReturningIds.mockResolvedValue(null);
+      const res = makeRes();
+
+      await aiController.chat({
+        body: { history: [{ role: 'user', content: 'Tạo landing page' }], sessionId: 9, locale: 'vi' },
+        user: employeeUser(),
+      }, res);
+
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('Không lưu được tin vào phiên 9'));
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+      warn.mockRestore();
+    });
   });
 
   describe('G3a.3 — tạo chiến dịch từ bản nháp AI: tài khoản + mẫu tin tra theo CHỦ', () => {
