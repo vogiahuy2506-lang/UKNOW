@@ -201,11 +201,22 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
             <div className="spinner w-8 h-8" />
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4">
-            <p className="text-sm text-gray-600">{t('twoFactor.scanHint')}</p>
-            <div className="flex justify-center">
-              <img src={setup.qrDataUrl} alt={t('twoFactor.qrAlt')} className="w-44 h-44 border border-gray-200 rounded-lg" />
-            </div>
+          <form onSubmit={handleSubmit} className="px-6 py-5 space-y-4 max-h-[80vh] overflow-y-auto">
+            <section>
+              <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.setupStep1Title')}</h3>
+              <p className="text-sm text-gray-600 mt-1">{t('twoFactor.setupStep1Body')}</p>
+            </section>
+            <section>
+              <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.setupStep2Title')}</h3>
+              <div className="flex justify-center my-3">
+                <img src={setup.qrDataUrl} alt={t('twoFactor.qrAlt')} className="w-44 h-44 border border-gray-200 rounded-lg" />
+              </div>
+              <ul className="text-sm text-gray-600 space-y-1.5 list-disc pl-5">
+                <li>{t('twoFactor.setupStep2Authenticator')}</li>
+                <li>{t('twoFactor.setupStep2Iphone')}</li>
+                <li>{t('twoFactor.setupStep2Manual')}</li>
+              </ul>
+            </section>
             <div>
               <p className="text-xs text-gray-500 mb-1">{t('twoFactor.manualKey')}</p>
               <div className="flex items-center gap-2">
@@ -226,6 +237,8 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
               </div>
             </div>
             <div>
+              <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.setupStep3Title')}</h3>
+              <p className="text-sm text-gray-600 mt-1 mb-2">{t('twoFactor.setupStep3Body')}</p>
               <label htmlFor="two-factor-setup-code" className="block text-sm font-medium text-gray-700 mb-1">
                 {t('twoFactor.enterCodeToConfirm')}
               </label>
@@ -249,7 +262,15 @@ const TwoFactorSetupModal = ({ isOpen, onClose, onEnabled }) => {
                 {error}
               </p>
             )}
-            <div className="flex justify-end gap-3 pt-1">
+            <div className="flex items-center justify-end gap-3 pt-1">
+              <a
+                href="/huong-dan/xac-thuc-hai-lop"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mr-auto text-sm text-primary-600 hover:underline underline-offset-4"
+              >
+                {t('twoFactor.setupHelpLink')}
+              </a>
               <button type="button" onClick={handleClose} className="btn btn-secondary">
                 {t('twoFactor.cancel')}
               </button>

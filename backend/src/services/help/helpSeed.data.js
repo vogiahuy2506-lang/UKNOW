@@ -2679,6 +2679,85 @@ Nhật ký chỉ để xem, không sửa và không xoá được từng dòng.
 - [Tạo chiến dịch](campaign-create)`,
     body_html: `<h2>Nhật ký hoạt động: ai đã làm gì, lúc nào</h2><p>Khi tài khoản có nhiều nhân viên cùng làm, sớm muộn bạn sẽ cần trả lời câu &quot;ai đã sửa cái này&quot;. Nhật ký hoạt động ghi lại các thao tác quan trọng để bạn tra.</p><h3>Tìm trang này trên màn hình</h3><p>Ở <strong>thanh menu bên trái</strong>, mở nhóm <strong>Cài đặt</strong>, chọn mục <strong>Nhật ký hoạt động</strong>. Chỉ <strong>chủ tài khoản</strong> thấy mục này.</p><p>[ẢNH: menu bên trái đang mở nhóm Cài đặt, khoanh đỏ mục &quot;Nhật ký hoạt động&quot;]</p><h3>Đọc bảng nhật ký</h3><p>Mỗi dòng là một thao tác, gồm năm cột: <strong>Thời gian</strong>, <strong>Người thực hiện</strong>, <strong>Hành động</strong>, <strong>Đối tượng</strong> và <strong>Chi tiết</strong>.</p><p>[ẢNH: bảng Nhật ký hoạt động với vài dòng, khoanh đỏ cột Người thực hiện và cột Hành động]</p><p>Những việc được ghi lại gồm:</p><ul><li><strong>Nhân viên</strong>: thêm, xoá, đổi quyền hạn, đổi giới hạn gửi, đổi trạng thái tài khoản, đặt lại mật khẩu.</li><li><strong>Chiến dịch</strong>: tạo, cập nhật, xoá, bắt đầu chạy, tạm dừng.</li><li><strong>Mẫu email và mẫu tin nhắn</strong>: tạo, cập nhật, xoá.</li></ul><h3>Lọc cho nhanh</h3><p>Phía trên bảng có ô <strong>Tìm theo chi tiết</strong>, hai ô lọc <strong>Tất cả hành động</strong> và <strong>Tất cả đối tượng</strong>, cùng khoảng ngày <strong>Từ ngày</strong> — <strong>Đến ngày</strong>. Bấm <strong>Xóa lọc</strong> để xem lại tất cả.</p><p>[ẢNH: hàng bộ lọc phía trên bảng, khoanh đỏ ô lọc hành động và hai ô chọn ngày]</p><p>Nhật ký chỉ để xem, không sửa và không xoá được từng dòng.</p><h3>Liên quan</h3><ul><li><a href="/huong-dan/nhan-vien">Nhân viên &amp; phân quyền</a></li><li><a href="/huong-dan/campaign-create">Tạo chiến dịch</a></li></ul>`,
   },
+  {
+    slug: 'xac-thuc-hai-lop',
+    feature_key: 'khac',
+    primary_route: '/app',
+    sort_order: 145,
+    title: 'Xác thực hai lớp (2FA): bật, đăng nhập và khi mất điện thoại',
+    summary: 'Thêm mã 6 số từ điện thoại vào mỗi lần đăng nhập. Hướng dẫn quét mã bằng iPhone (app Mật khẩu) hoặc Google Authenticator, cất mã khôi phục, và cách vào lại khi mất máy.',
+    body_md: `Xác thực hai lớp (2FA) thêm một lớp khoá cho tài khoản: ngoài mật khẩu, mỗi lần đăng nhập bạn nhập thêm **mã 6 số** từ ứng dụng trên điện thoại. Mã đổi sau mỗi 30 giây. Kẻ gian có lộ mật khẩu mà không cầm điện thoại của bạn thì vẫn không vào được.
+
+**Ai dùng được:** mọi tài khoản, gồm chủ tài khoản, nhân viên và tài khoản đăng nhập bằng Google. 2FA là **tuỳ chọn**, không bật thì đăng nhập như cũ.
+
+# Chuẩn bị: một ứng dụng xác thực
+Chọn **một** trong các cách sau:
+- **iPhone (iOS 18 trở lên):** dùng luôn app **Mật khẩu** có sẵn, không cần cài gì.
+- **Mọi điện thoại:** tải **Google Authenticator** hoặc **Microsoft Authenticator** (miễn phí).
+
+Nên làm trên **máy tính** và quét bằng **điện thoại**. Làm ngay trên điện thoại vẫn được, xem mục "Đang mở trang trên điện thoại" bên dưới.
+
+# Bật xác thực hai lớp
+1. Bấm vào **tên của bạn ở góc phải trên cùng**, chọn **Thông tin tài khoản**.
+2. Chọn thẻ **Bảo mật**, bấm **Bật xác thực hai lớp**.
+3. Cửa sổ hiện một mã QR. **Đừng đóng cửa sổ này** cho tới khi xong bước 5.
+4. Quét mã QR bằng điện thoại (cách quét ở mục ngay dưới).
+5. Ứng dụng trên điện thoại hiện một mã 6 số. Gõ mã đó vào ô bên dưới mã QR rồi bấm **Xác nhận**.
+6. Cửa sổ hiện **8 mã khôi phục**. Bấm **Tải file .txt** (hoặc chép ra giấy), tick ô **Tôi đã lưu mã khôi phục ở nơi an toàn** rồi bấm **Xong**.
+
+[ẢNH: thẻ Bảo mật trong hộp thoại Thông tin tài khoản, khoanh đỏ nút "Bật xác thực hai lớp"]
+
+[ẢNH: cửa sổ bật 2FA với 3 bước, mã QR ở giữa và ô nhập mã 6 số bên dưới]
+
+Xong bước 6, thẻ **Bảo mật** ghi "Đã bật từ" kèm ngày bật và số mã khôi phục còn lại.
+
+# Cách quét mã QR
+**Dùng iPhone, quét bằng Camera:**
+1. Mở app **Camera**, hướng vào mã QR trên màn hình máy tính.
+2. Bấm vào dòng chữ màu vàng hiện ra trên màn camera.
+3. iPhone **tự chuyển sang app Mật khẩu**. Đây là đúng, không phải lỗi.
+4. Chọn mục **founderai.biz** nếu đã có, chưa có thì tạo mục mới. Mục đó sẽ có thêm một mã 6 số đổi liên tục (dòng **Mã xác minh**).
+5. Quay lại máy tính, gõ mã đang hiện vào ô xác nhận.
+
+**Dùng Google Authenticator hoặc Microsoft Authenticator:**
+1. Mở app, bấm dấu **+**, chọn **Quét mã QR**.
+2. Hướng camera vào mã. App thêm một dòng "Founder AI" kèm mã 6 số.
+3. Gõ mã đang hiện vào ô xác nhận trên máy tính.
+
+Lưu ý: với Google Authenticator, hãy quét **từ trong app**. Quét bằng Camera của iPhone sẽ mở app Mật khẩu chứ không mở Google Authenticator.
+
+[ẢNH: app Mật khẩu trên iPhone, mục founderai.biz đang hiện mã 6 số]
+
+**Đang mở trang trên điện thoại** (không quét được màn hình của chính nó): bấm nút sao chép cạnh ô **Khoá nhập tay**, rồi trong ứng dụng xác thực chọn nhập khoá thủ công và dán vào. Với app Mật khẩu của iPhone: mở mục founderai.biz, chọn thêm mã xác minh, rồi dán khoá.
+
+# Đăng nhập khi đã bật 2FA
+1. Nhập tên đăng nhập và mật khẩu như thường (hoặc bấm đăng nhập bằng Google).
+2. Màn hình chuyển sang **Nhập mã xác thực**. Mở ứng dụng trên điện thoại, gõ mã 6 số đang hiện rồi bấm **Xác nhận**.
+
+Trên iPhone dùng Safari, bàn phím thường tự gợi ý sẵn mã từ app Mật khẩu, chỉ cần bấm vào.
+
+# Mất điện thoại thì làm sao
+Ở màn **Nhập mã xác thực**, bấm **Dùng mã khôi phục** rồi gõ một trong 8 mã đã lưu (dạng XXXXX-XXXXX). **Mỗi mã chỉ dùng được một lần.**
+
+Vào được rồi thì nên tắt rồi bật lại 2FA với điện thoại mới. Mã khôi phục sắp hết thì vào thẻ **Bảo mật**, bấm **Tạo bộ mã khôi phục mới**. Bộ mới thay toàn bộ bộ cũ.
+
+Mất cả điện thoại lẫn mã khôi phục: liên hệ bộ phận hỗ trợ Founder AI để được xác minh và đặt lại.
+
+# Tắt xác thực hai lớp
+Vào thẻ **Bảo mật**, bấm **Tắt xác thực hai lớp**. Hệ thống hỏi mã 6 số (hoặc một mã khôi phục), và hỏi thêm mật khẩu nếu bạn đăng nhập bằng tên đăng nhập + mật khẩu. Tài khoản đăng nhập bằng Google chỉ cần mã.
+
+# Lỗi thường gặp
+- **Quét xong máy chuyển sang app Mật khẩu** → Bình thường trên iPhone. Lưu mã vào mục founderai.biz rồi lấy mã 6 số ở đó.
+- **Báo "Mã không đúng" khi bật** → Mã đổi mỗi 30 giây, hãy gõ mã đang hiện. Nếu vẫn sai, kiểm tra giờ trên điện thoại đang để tự động.
+- **Đã quét nhưng lỡ đóng cửa sổ trước khi bấm Xác nhận** → 2FA **chưa** được bật. Bấm **Bật xác thực hai lớp** lại sẽ ra mã QR **mới**. Xoá mã cũ trong ứng dụng rồi quét mã mới, mã cũ không dùng được nữa.
+- **Sai mã 5 lần liên tiếp** → Tạm khoá nhập mã 15 phút. Đợi hết thời gian rồi thử lại.
+- **Đổi sang điện thoại mới** → Đăng nhập, tắt 2FA, rồi bật lại và quét bằng điện thoại mới. Dùng app Mật khẩu của iPhone thì mã tự đồng bộ qua iCloud sang máy mới cùng tài khoản Apple.
+
+# Liên quan
+- [Nhân viên](nhan-vien)
+- [Bắt đầu với Founder AI — 4 bước](getting-started)`,
+    body_html: `<p>Xác thực hai lớp (2FA) thêm một lớp khoá cho tài khoản: ngoài mật khẩu, mỗi lần đăng nhập bạn nhập thêm <strong>mã 6 số</strong> từ ứng dụng trên điện thoại. Mã đổi sau mỗi 30 giây. Kẻ gian có lộ mật khẩu mà không cầm điện thoại của bạn thì vẫn không vào được.</p><p><strong>Ai dùng được:</strong> mọi tài khoản, gồm chủ tài khoản, nhân viên và tài khoản đăng nhập bằng Google. 2FA là <strong>tuỳ chọn</strong>, không bật thì đăng nhập như cũ.</p><h2>Chuẩn bị: một ứng dụng xác thực</h2><p>Chọn <strong>một</strong> trong các cách sau:</p><ul><li><strong>iPhone (iOS 18 trở lên):</strong> dùng luôn app <strong>Mật khẩu</strong> có sẵn, không cần cài gì.</li><li><strong>Mọi điện thoại:</strong> tải <strong>Google Authenticator</strong> hoặc <strong>Microsoft Authenticator</strong> (miễn phí).</li></ul><p>Nên làm trên <strong>máy tính</strong> và quét bằng <strong>điện thoại</strong>. Làm ngay trên điện thoại vẫn được, xem mục &quot;Đang mở trang trên điện thoại&quot; bên dưới.</p><h2>Bật xác thực hai lớp</h2><ol><li>Bấm vào <strong>tên của bạn ở góc phải trên cùng</strong>, chọn <strong>Thông tin tài khoản</strong>.</li><li>Chọn thẻ <strong>Bảo mật</strong>, bấm <strong>Bật xác thực hai lớp</strong>.</li><li>Cửa sổ hiện một mã QR. <strong>Đừng đóng cửa sổ này</strong> cho tới khi xong bước 5.</li><li>Quét mã QR bằng điện thoại (cách quét ở mục ngay dưới).</li><li>Ứng dụng trên điện thoại hiện một mã 6 số. Gõ mã đó vào ô bên dưới mã QR rồi bấm <strong>Xác nhận</strong>.</li><li>Cửa sổ hiện <strong>8 mã khôi phục</strong>. Bấm <strong>Tải file .txt</strong> (hoặc chép ra giấy), tick ô <strong>Tôi đã lưu mã khôi phục ở nơi an toàn</strong> rồi bấm <strong>Xong</strong>.</li></ol><p>[ẢNH: thẻ Bảo mật trong hộp thoại Thông tin tài khoản, khoanh đỏ nút &quot;Bật xác thực hai lớp&quot;]</p><p>[ẢNH: cửa sổ bật 2FA với 3 bước, mã QR ở giữa và ô nhập mã 6 số bên dưới]</p><p>Xong bước 6, thẻ <strong>Bảo mật</strong> ghi &quot;Đã bật từ&quot; kèm ngày bật và số mã khôi phục còn lại.</p><h2>Cách quét mã QR</h2><p><strong>Dùng iPhone, quét bằng Camera:</strong></p><ol><li>Mở app <strong>Camera</strong>, hướng vào mã QR trên màn hình máy tính.</li><li>Bấm vào dòng chữ màu vàng hiện ra trên màn camera.</li><li>iPhone <strong>tự chuyển sang app Mật khẩu</strong>. Đây là đúng, không phải lỗi.</li><li>Chọn mục <strong>founderai.biz</strong> nếu đã có, chưa có thì tạo mục mới. Mục đó sẽ có thêm một mã 6 số đổi liên tục (dòng <strong>Mã xác minh</strong>).</li><li>Quay lại máy tính, gõ mã đang hiện vào ô xác nhận.</li></ol><p><strong>Dùng Google Authenticator hoặc Microsoft Authenticator:</strong></p><ol><li>Mở app, bấm dấu <strong>+</strong>, chọn <strong>Quét mã QR</strong>.</li><li>Hướng camera vào mã. App thêm một dòng &quot;Founder AI&quot; kèm mã 6 số.</li><li>Gõ mã đang hiện vào ô xác nhận trên máy tính.</li></ol><p>Lưu ý: với Google Authenticator, hãy quét <strong>từ trong app</strong>. Quét bằng Camera của iPhone sẽ mở app Mật khẩu chứ không mở Google Authenticator.</p><p>[ẢNH: app Mật khẩu trên iPhone, mục founderai.biz đang hiện mã 6 số]</p><p><strong>Đang mở trang trên điện thoại</strong> (không quét được màn hình của chính nó): bấm nút sao chép cạnh ô <strong>Khoá nhập tay</strong>, rồi trong ứng dụng xác thực chọn nhập khoá thủ công và dán vào. Với app Mật khẩu của iPhone: mở mục founderai.biz, chọn thêm mã xác minh, rồi dán khoá.</p><h2>Đăng nhập khi đã bật 2FA</h2><ol><li>Nhập tên đăng nhập và mật khẩu như thường (hoặc bấm đăng nhập bằng Google).</li><li>Màn hình chuyển sang <strong>Nhập mã xác thực</strong>. Mở ứng dụng trên điện thoại, gõ mã 6 số đang hiện rồi bấm <strong>Xác nhận</strong>.</li></ol><p>Trên iPhone dùng Safari, bàn phím thường tự gợi ý sẵn mã từ app Mật khẩu, chỉ cần bấm vào.</p><h2>Mất điện thoại thì làm sao</h2><p>Ở màn <strong>Nhập mã xác thực</strong>, bấm <strong>Dùng mã khôi phục</strong> rồi gõ một trong 8 mã đã lưu (dạng XXXXX-XXXXX). <strong>Mỗi mã chỉ dùng được một lần.</strong></p><p>Vào được rồi thì nên tắt rồi bật lại 2FA với điện thoại mới. Mã khôi phục sắp hết thì vào thẻ <strong>Bảo mật</strong>, bấm <strong>Tạo bộ mã khôi phục mới</strong>. Bộ mới thay toàn bộ bộ cũ.</p><p>Mất cả điện thoại lẫn mã khôi phục: liên hệ bộ phận hỗ trợ Founder AI để được xác minh và đặt lại.</p><h2>Tắt xác thực hai lớp</h2><p>Vào thẻ <strong>Bảo mật</strong>, bấm <strong>Tắt xác thực hai lớp</strong>. Hệ thống hỏi mã 6 số (hoặc một mã khôi phục), và hỏi thêm mật khẩu nếu bạn đăng nhập bằng tên đăng nhập + mật khẩu. Tài khoản đăng nhập bằng Google chỉ cần mã.</p><h2>Lỗi thường gặp</h2><ul><li><strong>Quét xong máy chuyển sang app Mật khẩu</strong> → Bình thường trên iPhone. Lưu mã vào mục founderai.biz rồi lấy mã 6 số ở đó.</li><li><strong>Báo &quot;Mã không đúng&quot; khi bật</strong> → Mã đổi mỗi 30 giây, hãy gõ mã đang hiện. Nếu vẫn sai, kiểm tra giờ trên điện thoại đang để tự động.</li><li><strong>Đã quét nhưng lỡ đóng cửa sổ trước khi bấm Xác nhận</strong> → 2FA <strong>chưa</strong> được bật. Bấm <strong>Bật xác thực hai lớp</strong> lại sẽ ra mã QR <strong>mới</strong>. Xoá mã cũ trong ứng dụng rồi quét mã mới, mã cũ không dùng được nữa.</li><li><strong>Sai mã 5 lần liên tiếp</strong> → Tạm khoá nhập mã 15 phút. Đợi hết thời gian rồi thử lại.</li><li><strong>Đổi sang điện thoại mới</strong> → Đăng nhập, tắt 2FA, rồi bật lại và quét bằng điện thoại mới. Dùng app Mật khẩu của iPhone thì mã tự đồng bộ qua iCloud sang máy mới cùng tài khoản Apple.</li></ul><h2>Liên quan</h2><ul><li><a href="/huong-dan/nhan-vien">Nhân viên</a></li><li><a href="/huong-dan/getting-started">Bắt đầu với Founder AI — 4 bước</a></li></ul>`,
+  },
 ];
 
 export default HELP_SEED_ARTICLES;

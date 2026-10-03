@@ -179,7 +179,17 @@ const TwoFactorSecurityTab = () => {
         </div>
         <div>
           <h3 className="text-sm font-semibold text-gray-900">{t('twoFactor.sectionTitle')}</h3>
-          <p className="text-sm text-gray-600 mt-1">{t('twoFactor.sectionDescription')}</p>
+          <p className="text-sm text-gray-600 mt-1">
+            {t('twoFactor.sectionDescription')}{' '}
+            <a
+              href="/huong-dan/xac-thuc-hai-lop"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary-600 hover:underline underline-offset-4"
+            >
+              {t('twoFactor.setupHelpLink')}
+            </a>
+          </p>
         </div>
       </div>
 

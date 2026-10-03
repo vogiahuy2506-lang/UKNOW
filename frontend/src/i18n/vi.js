@@ -10235,7 +10235,7 @@ export default {
   twoFactor: {
     // Đăng nhập bước 2
     loginTitle: 'Nhập mã xác thực',
-    loginSubtitle: 'Mở ứng dụng xác thực trên điện thoại và nhập mã 6 số.',
+    loginSubtitle: 'Mở ứng dụng xác thực trên điện thoại và nhập mã 6 số đang hiện. Dùng iPhone: mở app Mật khẩu, tìm mục founderai.biz.',
     loginSubtitleRecovery: 'Nhập một mã khôi phục chưa dùng (dạng XXXXX-XXXXX).',
     codeLabel: 'Mã 6 số',
     recoveryCodeLabel: 'Mã khôi phục',
@@ -10267,7 +10267,15 @@ export default {
     actionFailed: 'Thao tác không thành công. Vui lòng thử lại.',
     // Modal cài đặt
     setupTitle: 'Bật xác thực hai lớp',
-    scanHint: 'Quét mã QR bằng ứng dụng xác thực, hoặc nhập khoá bên dưới vào ứng dụng.',
+    setupStep1Title: 'Bước 1. Chuẩn bị ứng dụng xác thực trên điện thoại',
+    setupStep1Body: 'Dùng Google Authenticator hoặc Microsoft Authenticator (tải miễn phí). iPhone chạy iOS 18 trở lên dùng luôn app Mật khẩu có sẵn, không cần cài thêm.',
+    setupStep2Title: 'Bước 2. Quét mã QR này',
+    setupStep2Authenticator: 'Google/Microsoft Authenticator: mở app, bấm dấu +, chọn Quét mã QR rồi hướng camera vào mã.',
+    setupStep2Iphone: 'iPhone: mở Camera, hướng vào mã, bấm dòng chữ vàng hiện ra. Máy sẽ chuyển sang app Mật khẩu: chọn mục founderai.biz (chưa có thì tạo mục mới) để lưu mã. Chuyển sang app Mật khẩu là đúng, không phải lỗi.',
+    setupStep2Manual: 'Đang mở trang này ngay trên điện thoại nên không quét được? Bấm sao chép khoá bên dưới, rồi trong ứng dụng xác thực chọn nhập khoá thủ công và dán vào.',
+    setupStep3Title: 'Bước 3. Nhập mã 6 số ứng dụng đang hiện',
+    setupStep3Body: 'Mã đổi sau mỗi 30 giây, cứ nhập mã đang hiện rồi bấm Xác nhận. Đừng đóng cửa sổ này trước khi xác nhận: đóng là phải quét lại mã mới.',
+    setupHelpLink: 'Xem hướng dẫn chi tiết',
     qrAlt: 'Mã QR xác thực hai lớp',
     manualKey: 'Khoá nhập tay',
     copySecret: 'Sao chép khoá',
@@ -10276,7 +10284,7 @@ export default {
     enableFailed: 'Không thể bật xác thực hai lớp',
     // Mã khôi phục
     recoveryCodesTitle: 'Mã khôi phục',
-    recoveryCodesHint: 'Lưu các mã này ở nơi an toàn. Mỗi mã dùng được một lần khi bạn mất thiết bị. Mã chỉ hiện một lần duy nhất.',
+    recoveryCodesHint: 'Bước cuối: cất 8 mã này ở nơi KHÁC chiếc điện thoại vừa quét (tải file .txt, in ra giấy, hoặc lưu vào trình quản lý mật khẩu). Mất điện thoại thì mỗi mã dùng thay mã 6 số được một lần. Mã chỉ hiện một lần duy nhất.',
     copyAll: 'Sao chép tất cả',
     downloadTxt: 'Tải file .txt',
     copied: 'Đã sao chép',

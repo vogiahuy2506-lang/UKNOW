@@ -220,6 +220,19 @@ const UI_LABELS_IN_ARTICLES = [
   ['landing-page', 'landingCanvas.importHtml.button', 'Nhập HTML'],
   ['landing-page', 'landingCanvas.topbar.saveAsTemplate', 'Lưu làm template'],
   ['landing-page', 'landingCanvas.topbar.history', 'Lịch sử'],
+  // Xác thực hai lớp (03/10/2026): bài xac-thuc-hai-lop tả đúng chữ trên thẻ Bảo mật, cửa sổ bật 2FA và màn nhập mã.
+  ['xac-thuc-hai-lop', 'sidebar.accountInfo', 'Thông tin tài khoản'],
+  ['xac-thuc-hai-lop', 'accountProfileModal.tabSecurity', 'Bảo mật'],
+  ['xac-thuc-hai-lop', 'twoFactor.enable', 'Bật xác thực hai lớp'],
+  ['xac-thuc-hai-lop', 'twoFactor.confirm', 'Xác nhận'],
+  ['xac-thuc-hai-lop', 'twoFactor.downloadTxt', 'Tải file .txt'],
+  ['xac-thuc-hai-lop', 'twoFactor.savedCodesCheckbox', 'Tôi đã lưu mã khôi phục ở nơi an toàn'],
+  ['xac-thuc-hai-lop', 'twoFactor.done', 'Xong'],
+  ['xac-thuc-hai-lop', 'twoFactor.manualKey', 'Khoá nhập tay'],
+  ['xac-thuc-hai-lop', 'twoFactor.loginTitle', 'Nhập mã xác thực'],
+  ['xac-thuc-hai-lop', 'twoFactor.useRecovery', 'Dùng mã khôi phục'],
+  ['xac-thuc-hai-lop', 'twoFactor.regenerateCodes', 'Tạo bộ mã khôi phục mới'],
+  ['xac-thuc-hai-lop', 'twoFactor.disable', 'Tắt xác thực hai lớp'],
 ];
 
 /**
