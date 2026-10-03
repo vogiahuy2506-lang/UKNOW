@@ -13,6 +13,7 @@ import { resourceIsLocked } from '../../utils/topupLockGate.util.js';
 import campaignChannelRegistry from './campaignChannelRegistry.service.js';
 import { validateChannelSteps } from '../../utils/channelSteps.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
+import { resolveZaloAccountEntries } from '../../utils/campaignZaloAccountResolve.util.js';
 
 // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. `send_zalo` (chuỗi
 // cũ) đã BỎ: 0 node trên production, engine không còn xử lý (xem fallback bên dưới ~dòng 177 và
@@ -139,28 +140,8 @@ export async function validateCampaignPreflight({
   let hasZaloSendNode = false;
   let hasEmailSendNode = false;
 
-  const hasSelectZaloAccountNode = nodes.some(
-    (node) => String(node.node_subtype || '').trim() === 'select_zalo_account'
-  );
-
-  // campaignRun.service.js:2950 `isTruthyConfigFlag` là closure cục bộ trong `_doExecuteCampaign`
-  // (~7.300 dòng), không export được — chép lại đúng luật ở đây (tránh lỗi `Boolean("false") === true`
-  // khi giá trị lưu dạng chuỗi không chuẩn).
-  const isTruthyConfigFlag = (cfg, key) => {
-    if (!cfg || typeof cfg !== 'object') return false;
-    const v = cfg[key];
-    if (v === true || v === 1) return true;
-    if (v === false || v === 0 || v == null) return false;
-    const s = String(v).trim().toLowerCase();
-    return s === 'true' || s === '1';
-  };
-
-  const uniqueNonEmptyIds = (arr) => [...new Set(
-    (Array.isArray(arr) ? arr : [])
-      .map((id) => String(id || '').trim())
-      .filter(Boolean)
-  )];
-
+  // Luật "node nào dùng tài khoản Zalo nào" nằm ở utils/campaignZaloAccountResolve.util.js — DÙNG CHUNG với
+  // bộ ước tính thời gian chiến dịch (PLAN_UOC_TINH_THOI_GIAN 3.2); đừng chép lại ở đây.
   const addZaloAccountId = (rawId) => {
     const parsedId = parseInt(rawId, 10);
     if (Number.isFinite(parsedId) && parsedId > 0) {
@@ -179,91 +160,19 @@ export async function validateCampaignPreflight({
 
   for (const node of nodes) {
     const subtype = String(node.node_subtype || '').trim();
-    const config = node.config || {};
-
     if (subtype.startsWith('send_zalo') || subtype === 'send_zalo') {
       hasZaloSendNode = true;
     }
     if (subtype === 'send_email') {
       hasEmailSendNode = true;
     }
+  }
 
-    // select_zalo_account (R:3595) — pool bật + có id: đạt nếu ÍT NHẤT MỘT id trong pool đạt
-    // (PR-9 Việc 1 — engine thử từng id theo thứ tự, không còn cứng poolIds[0]); bỏ qua
-    // zaloAccountId còn sót trên node.
-    if (subtype === 'select_zalo_account') {
-      const poolEnabled = isTruthyConfigFlag(config, 'zaloPoolMultiAccountEnabled');
-      const poolIds = uniqueNonEmptyIds(config.zaloPoolAccountIds);
-      if (poolEnabled && poolIds.length > 0) {
-        addZaloAccountIdGroup(poolIds);
-      } else {
-        addZaloAccountId(config.zaloAccountId);
-      }
-      continue;
-    }
-
-    // send_zalo_personal / send_zalo_friend_request / send_zalo_group / get_all_friends /
-    // get_all_groups đều ưu tiên `selectedZaloAccount` của node select_zalo_account đứng trước
-    // (R:4685, 6651, 7557, 4519, 4617) — khi flow CÓ node đó, id riêng của các node dưới đây
-    // không phải id engine dùng, đã được kiểm ở nhánh select_zalo_account phía trên.
-    if (subtype === 'send_zalo_personal') {
-      if (!hasSelectZaloAccountNode) {
-        const multiIds = uniqueNonEmptyIds(config.zaloPersonalAccountIds);
-        const multiEnabled = multiIds.length > 0 && isTruthyConfigFlag(config, 'zaloPersonalMultiAccountEnabled');
-        if (multiEnabled) {
-          addZaloAccountIdGroup(multiIds);
-        } else {
-          addZaloAccountId(config.zaloAccountId);
-        }
-      }
-      continue;
-    }
-
-    if (subtype === 'send_zalo_friend_request') {
-      if (!hasSelectZaloAccountNode) {
-        const multiIds = uniqueNonEmptyIds(config.zaloFriendAccountIds);
-        const multiEnabled = multiIds.length > 0 && isTruthyConfigFlag(config, 'zaloFriendMultiAccountEnabled');
-        if (multiEnabled) {
-          addZaloAccountIdGroup(multiIds);
-        } else {
-          addZaloAccountId(config.zaloAccountId);
-        }
-      }
-      continue;
-    }
-
-    if (subtype === 'send_zalo_group') {
-      if (!hasSelectZaloAccountNode) {
-        addZaloAccountId(config.zaloAccountId);
-      }
-      continue;
-    }
-
-    // get_all_friends/get_all_groups (R:4485/4605): nguồn tài khoản riêng qua
-    // zaloFriendAccountNodeId/zaloGroupAccountNodeId trỏ tới output của một node khác (thường là
-    // select_zalo_account) — không thể giải tĩnh nội dung node đó sẽ xuất ra lúc chạy, nên bỏ qua
-    // (nếu đúng flow, id thật đã được kiểm ở nhánh select_zalo_account).
-    if (subtype === 'get_all_friends') {
-      const accountSourceNodeId = String(config.zaloFriendAccountNodeId || '').trim();
-      if (!accountSourceNodeId && !hasSelectZaloAccountNode) {
-        addZaloAccountId(config.zaloAccountId);
-      }
-      continue;
-    }
-
-    if (subtype === 'get_all_groups') {
-      const accountSourceNodeId = String(config.zaloGroupAccountNodeId || '').trim();
-      if (!accountSourceNodeId && !hasSelectZaloAccountNode) {
-        addZaloAccountId(config.zaloAccountId);
-      }
-      continue;
-    }
-
-    // Fallback: subtype zalo khác chưa được mô hình hoá riêng ở trên (vd `send_zalo` cũ, không
-    // còn được _doExecuteCampaign xử lý nhưng có thể còn tồn tại trên dữ liệu cũ) — giữ hành vi
-    // gom id như trước đây để không bỏ lọt kiểm tra.
-    if (subtype.startsWith('send_zalo') || subtype === 'send_zalo') {
-      addZaloAccountId(config.zaloAccountId ?? config.accountId);
+  for (const entry of resolveZaloAccountEntries(nodes)) {
+    if (entry.kind === 'group') {
+      addZaloAccountIdGroup(entry.ids);
+    } else {
+      entry.ids.forEach(addZaloAccountId);
     }
   }
 
