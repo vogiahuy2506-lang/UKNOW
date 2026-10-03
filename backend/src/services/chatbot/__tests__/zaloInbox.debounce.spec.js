@@ -192,11 +192,16 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
     it('khách đã nhận câu xin lỗi trong 6 giờ (content null) → KHÔNG gửi gì, KHÔNG phát SSE trả lời', async () => {
       mockRouteMessageWithSettings.mockResolvedValue({ type: 'suppressed', content: null, source: 'ai_unavailable', reason: 'credit_exhausted' });
 
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
       await sendOneMessage('apology_2');
 
       expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
       expect(mockSendReply).not.toHaveBeenCalled();
       expect(mockBroadcast).toHaveBeenCalledTimes(1); // chỉ SSE tin khách vào
+      // Log nói ĐÚNG lý do không gửi (không phải "failed" — vận hành sẽ đi tìm lỗi gửi Zalo không có thật).
+      expect(logSpy.mock.calls.some(([line]) => String(line).includes('result=apology_suppressed'))).toBe(true);
+      expect(logSpy.mock.calls.some(([line]) => String(line).includes('result=failed'))).toBe(false);
+      logSpy.mockRestore();
     });
 
     it('câu trả lời thật (không source) vẫn mang nhãn ai_auto_reply và KHÔNG có metadata tự chế', async () => {

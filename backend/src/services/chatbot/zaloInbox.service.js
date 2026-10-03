@@ -907,7 +907,7 @@ class ZaloPersonalInboxService {
           timestamp: new Date().toISOString(),
         });
       } else {
-        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=${result?.type === 'suppressed' ? 'apology_suppressed' : 'failed'}`);
         return;
       }
 
