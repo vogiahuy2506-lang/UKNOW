@@ -1,110 +1,18 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
-  HiOutlineX, HiOutlinePlay, HiOutlineMail, HiOutlineChatAlt2, HiOutlineUserGroup,
-  HiOutlineTable,
-  HiOutlineUserAdd, HiOutlineClock, HiOutlineCheckCircle, HiOutlineLightningBolt,
-  HiOutlineSparkles, HiOutlineGlobe, HiOutlineUsers,
+  HiOutlineX, HiOutlineMail, HiOutlineChatAlt2, HiOutlineUserGroup,
+  HiOutlineCheckCircle, HiOutlineLightningBolt,
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
+import { FLOWS } from '../campaignFlowData';
 
 /**
  * Modal mô phỏng flow campaign chạy trong hệ thống Founder AI.
- * Hiển thị các node theo schema thật của campaign builder:
- * - Trigger (manual_trigger)
- * - Data nodes (read_sheet, read_courses_db, read_products_db, read_landing_leads, read_interested_customers, save_customer)
- * - Action nodes (send_email | send_zalo_personal | send_zalo_group | send_zalo_friend_request)
- * - Logic (delay, wait, condition, branch)
- *
- * Source: campaignBuilderFlow.js + CampaignBuilderFlowNodes.jsx
+ * Các bước (FLOWS) nằm ở ../campaignFlowData.js và CHỈ gồm node có thật ở trình tạo chiến dịch
+ * (CampaignBuilderFlowNodes.jsx). Không có node chờ / điều kiện / rẽ nhánh theo hành vi mở email: độ trễ giữa các tin
+ * nằm trong cấu hình node gửi.
  */
-
-// Định nghĩa flow cho 3 loại campaign theo schema thật
-const FLOWS = {
-  email: {
-    type: 'email',
-    title: 'Chiến dịch Email Marketing',
-    subtitle: 'Gửi email hàng loạt, theo dõi mở/click/chuyển đổi',
-    color: 'blue',
-    bgClass: 'bg-blue-50',
-    borderClass: 'border-blue-200',
-    textClass: 'text-blue-700',
-    barClass: 'bg-blue-500',
-    iconBg: 'bg-blue-100',
-    iconColor: 'text-blue-600',
-    nodes: [
-      { id: 'trigger', type: 'trigger', label: 'Kích hoạt thủ công', icon: HiOutlinePlay, desc: 'Bắt đầu chiến dịch khi nhấn nút chạy', color: 'indigo' },
-      { id: 'data1', type: 'data', label: 'Đọc danh sách khách hàng', icon: HiOutlineTable, desc: 'Lấy từ CRM hoặc Landing Page leads', color: 'amber' },
-      { id: 'filter', type: 'logic', label: 'Lọc theo điều kiện', icon: HiOutlineSparkles, desc: 'VD: Khách VIP, đã mua > 1 lần', color: 'pink' },
-      { id: 'action', type: 'action', label: 'Gửi Email', icon: HiOutlineMail, desc: 'Template email cá nhân hóa với {{ten_khach}}', color: 'orange' },
-      { id: 'wait', type: 'logic', label: 'Chờ 24 giờ', icon: HiOutlineClock, desc: 'Đợi khách hàng mở email', color: 'gray' },
-      { id: 'check', type: 'logic', label: 'Kiểm tra đã mở?', icon: HiOutlineCheckCircle, desc: 'Rẽ nhánh: đã mở / chưa mở', color: 'pink' },
-      { id: 'follow', type: 'action', label: 'Gửi Email nhắc', icon: HiOutlineMail, desc: 'Email thứ 2 cho khách chưa mở', color: 'orange' },
-      { id: 'end', type: 'end', label: 'Kết thúc', icon: HiOutlineCheckCircle, desc: 'Tổng kết kết quả chiến dịch', color: 'green' },
-    ],
-    stats: [
-      { label: 'Khách nhận', value: '1.250' },
-      { label: 'Đã mở', value: '687', rate: '55%' },
-      { label: 'Click', value: '156', rate: '23%' },
-      { label: 'Chuyển đổi', value: '19', rate: '12%' },
-    ],
-  },
-  zalo: {
-    type: 'zalo',
-    title: 'Chiến dịch Zalo cá nhân',
-    subtitle: 'Gửi tin nhắn Zalo OA đến từng khách hàng',
-    color: 'emerald',
-    bgClass: 'bg-emerald-50',
-    borderClass: 'border-emerald-200',
-    textClass: 'text-emerald-700',
-    barClass: 'bg-emerald-500',
-    iconBg: 'bg-emerald-100',
-    iconColor: 'text-emerald-600',
-    nodes: [
-      { id: 'trigger', type: 'trigger', label: 'Kích hoạt thủ công', icon: HiOutlinePlay, desc: 'Bắt đầu chiến dịch', color: 'indigo' },
-      { id: 'account', type: 'data', label: 'Chọn tài khoản Zalo OA', icon: HiOutlineUserAdd, desc: 'Chọn 1 hoặc nhiều tài khoản Zalo', color: 'blue' },
-      { id: 'friends', type: 'data', label: 'Lấy danh sách bạn bè', icon: HiOutlineUsers, desc: 'Lấy danh sách friend từ tài khoản Zalo', color: 'amber' },
-      { id: 'data', type: 'data', label: 'Đọc danh sách khách từ CRM', icon: HiOutlineTable, desc: 'Khách hàng mục tiêu từ hệ thống', color: 'amber' },
-      { id: 'merge', type: 'logic', label: 'Đối chiếu & Lọc', icon: HiOutlineSparkles, desc: 'Chỉ gửi cho khách đã kết bạn Zalo OA', color: 'pink' },
-      { id: 'delay', type: 'logic', label: 'Delay chống spam', icon: HiOutlineClock, desc: '30-60s giữa mỗi tin nhắn (an toàn Zalo)', color: 'gray' },
-      { id: 'action', type: 'action', label: 'Gửi tin nhắn cá nhân', icon: HiOutlineChatAlt2, desc: 'Template Zalo OA với tên khách', color: 'blue' },
-      { id: 'end', type: 'end', label: 'Kết thúc', icon: HiOutlineCheckCircle, desc: 'Lưu lịch sử chat vào CRM', color: 'green' },
-    ],
-    stats: [
-      { label: 'Khách nhận', value: '480' },
-      { label: 'Gửi thành công', value: '451', rate: '94%' },
-      { label: 'Đã đọc', value: '352', rate: '78%' },
-      { label: 'Phản hồi', value: '77', rate: '22%' },
-    ],
-  },
-  zalo_group: {
-    type: 'zalo_group',
-    title: 'Chiến dịch Zalo nhóm',
-    subtitle: 'Đăng bài vào các nhóm Zalo đã tham gia',
-    color: 'violet',
-    bgClass: 'bg-violet-50',
-    borderClass: 'border-violet-200',
-    textClass: 'text-violet-700',
-    barClass: 'bg-violet-500',
-    iconBg: 'bg-violet-100',
-    iconColor: 'text-violet-600',
-    nodes: [
-      { id: 'trigger', type: 'trigger', label: 'Kích hoạt thủ công', icon: HiOutlinePlay, desc: 'Bắt đầu chiến dịch', color: 'indigo' },
-      { id: 'account', type: 'data', label: 'Chọn tài khoản Zalo', icon: HiOutlineUserAdd, desc: 'Tài khoản đã tham gia nhóm', color: 'blue' },
-      { id: 'groups', type: 'data', label: 'Lấy danh sách nhóm', icon: HiOutlineUserGroup, desc: 'Các nhóm Zalo đang tham gia', color: 'amber' },
-      { id: 'filter', type: 'logic', label: 'Lọc nhóm mục tiêu', icon: HiOutlineSparkles, desc: 'VD: Nhóm > 100 thành viên, chủ đề phù hợp', color: 'pink' },
-      { id: 'delay', type: 'logic', label: 'Delay 5-10 phút', icon: HiOutlineClock, desc: 'Tránh spam giữa các nhóm', color: 'gray' },
-      { id: 'action', type: 'action', label: 'Đăng bài vào nhóm', icon: HiOutlineGlobe, desc: 'Nội dung + hình ảnh + link', color: 'violet' },
-      { id: 'end', type: 'end', label: 'Kết thúc', icon: HiOutlineCheckCircle, desc: 'Tổng kết reactions và comments', color: 'green' },
-    ],
-    stats: [
-      { label: 'Số nhóm', value: '25' },
-      { label: 'Đăng thành công', value: '25', rate: '100%' },
-      { label: 'Tổng thành viên', value: '8.450' },
-      { label: 'Reactions', value: '342', rate: '4%' },
-    ],
-  },
-};
 
 // Màu sắc cho từng loại node (theo CampaignBuilderFlowNodes.jsx)
 const NODE_COLORS = {
@@ -259,7 +167,10 @@ function FlowAnimation({ flowKey, onClose: _onClose }) {
               {t('heroPage.campaignFlow.results') || 'Kết quả chiến dịch'}
             </h4>
           </div>
-          <div className="grid grid-cols-4 gap-2">
+          <div
+            className="grid gap-2"
+            style={{ gridTemplateColumns: `repeat(${flow.stats.length}, minmax(0, 1fr))` }}
+          >
             {flow.stats.map((stat) => (
               <div key={stat.label} className="bg-white/70 rounded-lg p-2 text-center">
                 <div className="text-[9px] text-slate-500 leading-tight">{stat.label}</div>

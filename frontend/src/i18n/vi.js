@@ -8074,18 +8074,18 @@ export default {
     campaignDemoSubtitle: 'Xem chi tiết các bước (node) mà mỗi chiến dịch sẽ chạy trong hệ thống Founder AI. Bấm vào từng loại để xem mô phỏng trực quan.',
     campaignDemo: {
       emailTitle: 'Email Marketing',
-      emailDesc: 'Gửi email hàng loạt, theo dõi mở/click/chuyển đổi',
+      emailDesc: 'Gửi email hàng loạt theo mẫu, theo dõi lượt mở và lượt bấm link',
       zaloPersonalTitle: 'Zalo cá nhân',
-      zaloPersonalDesc: 'Gửi tin nhắn qua Zalo OA đến từng khách hàng',
+      zaloPersonalDesc: 'Gửi tin nhắn Zalo cá nhân đến từng khách hàng',
       zaloGroupTitle: 'Zalo nhóm',
-      zaloGroupDesc: 'Đăng bài vào các nhóm Zalo đã tham gia',
+      zaloGroupDesc: 'Gửi tin nhắn vào các nhóm Zalo đã tham gia',
       tipTitle: 'Mẹo:',
       tipContent: 'Bạn có thể chạy đồng thời cả 3 loại chiến dịch để tiếp cận khách hàng đa kênh, tăng hiệu quả chuyển đổi lên đến 3 lần.',
     },
     // Campaign Flow Modal (mô phỏng node chạy từng bước)
     campaignFlow: {
       title: 'Mô phỏng chiến dịch',
-      subtitle: 'Các node chạy theo flow thật trong hệ thống',
+      subtitle: 'Các bước dùng đúng node có trong trình tạo chiến dịch',
       nodes: 'Số node',
       executing: 'Đang thực thi',
       results: 'Kết quả chiến dịch',

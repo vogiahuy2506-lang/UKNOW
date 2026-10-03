@@ -8065,18 +8065,18 @@ export default {
     campaignDemoSubtitle: 'See the detailed steps (nodes) that each campaign runs in Founder AI. Click any type to view the live simulation.',
     campaignDemo: {
       emailTitle: 'Email Marketing',
-      emailDesc: 'Send bulk emails and track open rates, clicks, and conversions',
+      emailDesc: 'Send bulk emails from templates and track opens and link clicks',
       zaloPersonalTitle: 'Zalo Personal',
-      zaloPersonalDesc: 'Send Zalo OA messages to each customer individually',
+      zaloPersonalDesc: 'Send personal Zalo messages to each customer individually',
       zaloGroupTitle: 'Zalo Group',
-      zaloGroupDesc: 'Post to Zalo groups you have already joined',
+      zaloGroupDesc: 'Send messages to Zalo groups you have already joined',
       tipTitle: 'Tip:',
       tipContent: 'You can run all 3 campaign types simultaneously to reach customers across multiple channels, increasing conversion rates up to 3x.',
     },
     // Campaign Flow Modal
     campaignFlow: {
       title: 'Campaign Simulation',
-      subtitle: 'Nodes run according to the real system flow',
+      subtitle: 'Steps use the real nodes of the campaign builder',
       nodes: 'Nodes',
       executing: 'Executing',
       results: 'Campaign Results',

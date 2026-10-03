@@ -6,6 +6,7 @@ import {
   HiOutlinePlay,
   HiOutlineSparkles,
 } from 'react-icons/hi';
+import { getFlowNodeCount } from '../../../features/hero/campaignFlowData';
 
 /**
  * 3-up grid of "campaign preview" buttons that dispatch a window event to
@@ -14,6 +15,9 @@ import {
  *
  * Kept in its own file because HeroPage already carries 4 other sections
  * and the data + UI here is independent of them.
+ *
+ * Chip dưới mỗi thẻ chỉ nêu điều CÓ THẬT: số node lấy từ luồng mô phỏng (campaignFlowData.js) và đặc điểm của node gửi.
+ * Bản cũ ghi cứng "1.250 khách / 480 khách / 25 nhóm" và "~12 / ~14 / ~16 phút" — số bịa, không đo từ sản phẩm.
  */
 export default function CampaignFlowLauncher({ t }) {
   const [hovered, setHovered] = useState(null);
@@ -22,7 +26,7 @@ export default function CampaignFlowLauncher({ t }) {
     {
       key: 'email',
       title: t('heroPage.campaignDemo.emailTitle') || 'Email Marketing',
-      desc: t('heroPage.campaignDemo.emailDesc') || 'Gửi email hàng loạt, theo dõi mở/click/chuyển đổi',
+      desc: t('heroPage.campaignDemo.emailDesc') || 'Gửi email hàng loạt theo mẫu, theo dõi lượt mở và lượt bấm link',
       icon: HiOutlineMail,
       gradient: 'from-orange-400 via-orange-500 to-amber-500',
       border: 'border-orange-200',
@@ -31,12 +35,12 @@ export default function CampaignFlowLauncher({ t }) {
       iconColor: 'text-orange-600',
       btnBg: 'bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-600 hover:to-amber-600',
       chipBg: 'bg-orange-50 text-orange-700',
-      stats: ['1.250 khách', '8 node', '~12 phút'],
+      chips: [`${getFlowNodeCount('email')} node`, 'Nhiều email nối tiếp', 'Đo lượt mở, bấm link'],
     },
     {
       key: 'zalo',
       title: t('heroPage.campaignDemo.zaloPersonalTitle') || 'Zalo cá nhân',
-      desc: t('heroPage.campaignDemo.zaloPersonalDesc') || 'Gửi tin nhắn qua Zalo OA đến từng khách hàng',
+      desc: t('heroPage.campaignDemo.zaloPersonalDesc') || 'Gửi tin nhắn Zalo cá nhân đến từng khách hàng',
       icon: HiOutlineChatAlt2,
       gradient: 'from-orange-500 to-red-500',
       border: 'border-orange-200',
@@ -45,12 +49,12 @@ export default function CampaignFlowLauncher({ t }) {
       iconColor: 'text-red-500',
       btnBg: 'bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600',
       chipBg: 'bg-orange-50 text-orange-700',
-      stats: ['480 khách', '8 node', '~14 phút'],
+      chips: [`${getFlowNodeCount('zalo')} node`, 'Tự giãn cách tin', 'Theo dõi gửi, lỗi'],
     },
     {
       key: 'zalo_group',
       title: t('heroPage.campaignDemo.zaloGroupTitle') || 'Zalo nhóm',
-      desc: t('heroPage.campaignDemo.zaloGroupDesc') || 'Đăng bài vào các nhóm Zalo đã tham gia',
+      desc: t('heroPage.campaignDemo.zaloGroupDesc') || 'Gửi tin nhắn vào các nhóm Zalo đã tham gia',
       icon: HiOutlineUserGroup,
       gradient: 'from-red-500 to-rose-600',
       border: 'border-red-200',
@@ -59,7 +63,7 @@ export default function CampaignFlowLauncher({ t }) {
       iconColor: 'text-red-600',
       btnBg: 'bg-gradient-to-r from-red-500 to-rose-600 hover:from-red-600 hover:to-rose-700',
       chipBg: 'bg-red-50 text-red-700',
-      stats: ['25 nhóm', '7 node', '~16 phút'],
+      chips: [`${getFlowNodeCount('zalo_group')} node`, 'Chọn nhóm cần gửi', 'Theo dõi gửi, lỗi'],
     },
   ];
 
@@ -107,10 +111,10 @@ export default function CampaignFlowLauncher({ t }) {
                 {c.desc}
               </p>
 
-              <div className="flex items-center gap-2 text-[10px] text-slate-500 mb-4">
-                {c.stats.map((s, i) => (
-                  <span key={i} className={`px-2 py-0.5 ${c.chipBg} rounded-md font-medium`}>
-                    {s}
+              <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500 mb-4">
+                {c.chips.map((chip) => (
+                  <span key={chip} className={`px-2 py-0.5 ${c.chipBg} rounded-md font-medium`}>
+                    {chip}
                   </span>
                 ))}
               </div>
