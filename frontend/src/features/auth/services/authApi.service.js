@@ -175,3 +175,37 @@ export async function declineWorkspaceInvite(ownerId) {
   const response = await api.post(`/users/me/memberships/${ownerId}/decline`);
   return response.data;
 }
+
+// ── Xác thực hai lớp (2FA, TOTP) ────────────────────────────────────────────
+
+/** @returns {Promise<{ success: boolean, data: { enabled: boolean, enabledAt: string|null, recoveryCodesLeft: number, requiresPasswordToDisable: boolean } }>} */
+export async function getTwoFactorStatus() {
+  const response = await api.get('/auth/2fa/status');
+  return response.data;
+}
+
+/** @returns {Promise<{ success: boolean, data: { secret: string, otpauthUrl: string, qrDataUrl: string } }>} */
+export async function beginTwoFactorSetup() {
+  const response = await api.post('/auth/2fa/setup');
+  return response.data;
+}
+
+/** @returns {Promise<{ success: boolean, data: { recoveryCodes: string[] } }>} */
+export async function enableTwoFactor(code) {
+  const response = await api.post('/auth/2fa/enable', { code });
+  return response.data;
+}
+
+/** @param {{ code: string, password?: string }} payload */
+export async function disableTwoFactor({ code, password }) {
+  const body = { code };
+  if (password) body.password = password;
+  const response = await api.post('/auth/2fa/disable', body);
+  return response.data;
+}
+
+/** @returns {Promise<{ success: boolean, data: { recoveryCodes: string[] } }>} */
+export async function regenerateRecoveryCodes(code) {
+  const response = await api.post('/auth/2fa/recovery-codes', { code });
+  return response.data;
+}

@@ -21,6 +21,7 @@ import { isValidAccountPhone } from '../../../utils/phoneValidation';
 import PhoneRequiredModal from './PhoneRequiredModal';
 import PlanSection from '../../billing/PlanSection';
 import OrderHistoryTab from '../../billing/OrderHistoryTab';
+import TwoFactorSecurityTab from './TwoFactorSecurityTab';
 
 const PROFILE_FORM_INITIAL_STATE = { fullName: '', email: '', phone: '' };
 
@@ -168,17 +169,21 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
   const { user, updateUser, activeContext, fetchAiCredits, syncBillingFromProfile, phoneOtpEnabled } = useAuthStore();
   const isEmployeeCtx = activeContext?.type === 'employee';
 
+  // Tab "Bảo mật" (2FA) là của tài khoản đăng nhập — có ở cả ba nhánh, không phụ thuộc ngữ cảnh.
+  const SECURITY_TAB = { key: 'security', label: t('accountProfileModal.tabSecurity') };
   const TABS = isEmployeeCtx
     ? [
         { key: 'profile', label: t('accountProfileModal.tabProfile') },
         { key: 'permissions', label: t('accountProfileModal.tabPermissions') },
+        SECURITY_TAB,
       ]
     : user?.role === 'user'
       ? [
           { key: 'profile', label: t('accountProfileModal.tabProfile') },
           { key: 'orders',  label: t('accountProfileModal.tabOrderHistory') },
+          SECURITY_TAB,
         ]
-      : [{ key: 'profile', label: t('accountProfileModal.tabProfile') }];
+      : [{ key: 'profile', label: t('accountProfileModal.tabProfile') }, SECURITY_TAB];
 
   const [activeTab, setActiveTab] = useState('profile');
   const [formValues, setFormValues] = useState(PROFILE_FORM_INITIAL_STATE);
@@ -381,6 +386,10 @@ const AccountProfileModal = ({ isOpen, onClose }) => {
         {isLoadingProfile ? (
           <div className="py-14 flex justify-center">
             <div className="spinner w-8 h-8" />
+          </div>
+        ) : activeTab === 'security' ? (
+          <div className="overflow-y-auto px-6 py-5">
+            <TwoFactorSecurityTab />
           </div>
         ) : activeTab === 'orders' ? (
           <div className="overflow-y-auto px-6 py-5">

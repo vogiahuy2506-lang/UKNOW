@@ -20,6 +20,10 @@ const adminMembersApiService = {
   detachEmail(id, confirmEmail, releaseTrialHistory = false) {
     return api.patch(`/admin/members/${id}/detach-email`, { confirmEmail, releaseTrialHistory: Boolean(releaseTrialHistory) });
   },
+  // Super admin xoá cấu hình 2FA của một tài khoản (mất máy + mất mã khôi phục).
+  resetTwoFactor(id, confirmEmail) {
+    return api.patch(`/admin/members/${id}/two-factor/reset`, { confirmEmail });
+  },
   purge(id, confirmEmail) {
     return api.delete(`/admin/members/${id}/purge`, { data: { confirmEmail } });
   },

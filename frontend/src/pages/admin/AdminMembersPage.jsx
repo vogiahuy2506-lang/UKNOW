@@ -16,7 +16,7 @@ const Tooltip = ({ label, children }) => (
 import {
   HiOutlineRefresh, HiOutlineSearch,
   HiOutlineLockClosed, HiOutlineLockOpen, HiOutlineShieldCheck, HiOutlineShieldExclamation,
-  HiOutlineCurrencyDollar, HiOutlineXCircle, HiOutlineMailOpen, HiOutlineTrash, HiOutlineUsers,
+  HiOutlineCurrencyDollar, HiOutlineXCircle, HiOutlineMailOpen, HiOutlineTrash, HiOutlineUsers, HiOutlineKey,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
 import adminMembersApiService from '../../features/admin/services/adminMembersApi.service';
@@ -342,6 +342,8 @@ const AdminMembersPage = () => {
   const [demoteConfirm, setDemoteConfirm] = useState(null);
   const [unassignConfirm, setUnassignConfirm] = useState(null);
   const [detachEmailConfirm, setDetachEmailConfirm] = useState(null);
+  const [resetTwoFactorConfirm, setResetTwoFactorConfirm] = useState(null);
+  const [isResettingTwoFactor, setIsResettingTwoFactor] = useState(false);
   const [purgeConfirm, setPurgeConfirm]   = useState(null);
   const [isPromoting, setIsPromoting]     = useState(false);
   const [isDemoting, setIsDemoting]       = useState(false);
@@ -472,6 +474,20 @@ const AdminMembersPage = () => {
       toast.error(err?.response?.data?.message || t('adminMembers.detachEmailFailed'));
     } finally {
       setIsDetaching(false);
+    }
+  };
+
+  const handleResetTwoFactor = async (typedEmail) => {
+    try {
+      setIsResettingTwoFactor(true);
+      const res = await adminMembersApiService.resetTwoFactor(resetTwoFactorConfirm.id, typedEmail);
+      toast.success(res.data.message || t('adminMembers.resetTwoFactorSuccess'));
+      setResetTwoFactorConfirm(null);
+      fetchMembers();
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('adminMembers.resetTwoFactorFailed'));
+    } finally {
+      setIsResettingTwoFactor(false);
     }
   };
 
@@ -737,6 +753,11 @@ const AdminMembersPage = () => {
                             {isActive ? t('adminMembers.statusActive') : t('adminMembers.statusLocked')}
                           </span>
                         )}
+                        {m.twoFactorEnabled && (
+                          <p className="mt-1">
+                            <span className="badge badge-success">{t('adminMembers.twoFactorBadge')}</span>
+                          </p>
+                        )}
                       </td>
                       <td>
                         <ExpiryBadge expiresAt={m.subscriptionExpiresAt} hasPlan={!!m.activePlanId} />
@@ -802,6 +823,18 @@ const AdminMembersPage = () => {
                                 className="p-2 rounded hover:bg-orange-50 transition-colors text-gray-400 hover:text-orange-600"
                               >
                                 <HiOutlineShieldExclamation className="w-5 h-5" />
+                              </button>
+                            </Tooltip>
+                          )}
+
+                          {/* Đặt lại 2FA — chỉ hiện khi tài khoản đang bật 2FA */}
+                          {m.twoFactorEnabled && (
+                            <Tooltip label={t('adminMembers.resetTwoFactor')}>
+                              <button
+                                onClick={() => setResetTwoFactorConfirm(m)}
+                                className="p-2 rounded hover:bg-amber-50 transition-colors text-gray-400 hover:text-amber-600"
+                              >
+                                <HiOutlineKey className="w-5 h-5" />
                               </button>
                             </Tooltip>
                           )}
@@ -954,6 +987,20 @@ const AdminMembersPage = () => {
           showReleaseTrialOption
           onConfirm={handleDetachEmail}
           onClose={() => setDetachEmailConfirm(null)}
+        />
+      )}
+
+      {/* Modal đặt lại 2FA — gõ lại email để xác nhận */}
+      {resetTwoFactorConfirm && (
+        <TypeToConfirmModal
+          member={resetTwoFactorConfirm}
+          titleKey="adminMembers.resetTwoFactorConfirmTitle"
+          warningKey="adminMembers.resetTwoFactorWarning"
+          confirmBtnKey="adminMembers.resetTwoFactorConfirmBtn"
+          danger={false}
+          isBusy={isResettingTwoFactor}
+          onConfirm={handleResetTwoFactor}
+          onClose={() => setResetTwoFactorConfirm(null)}
         />
       )}
 

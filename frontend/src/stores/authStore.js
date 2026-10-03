@@ -249,6 +249,27 @@ const billingSliceFromProfile = (profile = {}) => ({
   billingStatus: buildBillingStatusFromProfile(profile),
 });
 
+/**
+ * Hoàn tất đăng nhập: lưu token, chuẩn hoá user, chọn ngữ cảnh và set state.
+ * Dùng chung cho login, googleLogin và verifyTwoFactor.
+ * @returns {object} user đã chuẩn hoá
+ */
+function completeLogin(data, rememberMe) {
+  const { user, accessToken } = data;
+  storeToken('accessToken', accessToken, rememberMe);
+  const normalizedUser = normalizeUser(user);
+  const activeContext = pickDefaultContext(normalizedUser);
+  saveContext(activeContext);
+  useAuthStore.setState({
+    user: normalizedUser,
+    isAuthenticated: true,
+    activeContext,
+    phoneReminderDismissed: false,
+    referralPromptDismissed: false,
+  });
+  return normalizedUser;
+}
+
 export const useAuthStore = create((set, get) => ({
   user: null,
   isAuthenticated: false,
@@ -407,15 +428,9 @@ export const useAuthStore = create((set, get) => ({
    */
   login: async (username, password, rememberMe = true) => {
     const response = await api.post('/auth/login', { username, password, rememberMe });
-    const { user, accessToken } = response.data.data;
-
-    storeToken('accessToken', accessToken, rememberMe);
-    const normalizedUser = normalizeUser(user);
-    const activeContext = pickDefaultContext(normalizedUser);
-    saveContext(activeContext);
-
-    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false, referralPromptDismissed: false });
-
+    // Đã bật 2FA: chưa có token — tuyệt đối không lưu gì, chờ bước /auth/2fa/verify.
+    if (response.data.data?.requiresTwoFactor) return response.data;
+    completeLogin(response.data.data, rememberMe);
     return response.data;
   },
 
@@ -424,12 +439,9 @@ export const useAuthStore = create((set, get) => ({
    */
   googleLogin: async (tokenData, rememberMe = true) => {
     const response = await api.post('/auth/google-login', tokenData);
-    const { user, accessToken, trial } = response.data.data;
-
-    storeToken('accessToken', accessToken, rememberMe);
-    const normalizedUser = normalizeUser(user);
-    const activeContext = pickDefaultContext(normalizedUser);
-    saveContext(activeContext);
+    if (response.data.data?.requiresTwoFactor) return response.data;
+    const { trial } = response.data.data;
+    const normalizedUser = completeLogin(response.data.data, rememberMe);
 
     if (trial && normalizedUser?.id) {
       try {
@@ -439,8 +451,15 @@ export const useAuthStore = create((set, get) => ({
       }
     }
 
-    set({ user: normalizedUser, isAuthenticated: true, activeContext, phoneReminderDismissed: false, referralPromptDismissed: false });
+    return response.data;
+  },
 
+  /**
+   * Bước 2 đăng nhập khi tài khoản bật 2FA: đổi challengeToken + mã lấy phiên thật.
+   */
+  verifyTwoFactor: async ({ challengeToken, code, rememberMe = true }) => {
+    const response = await api.post('/auth/2fa/verify', { challengeToken, code });
+    completeLogin(response.data.data, rememberMe);
     return response.data;
   },
 

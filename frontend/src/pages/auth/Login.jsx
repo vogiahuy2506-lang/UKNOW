@@ -9,6 +9,7 @@ import { useI18n } from '../../i18n';
 import { HiOutlineUser, HiOutlineLockClosed, HiOutlineEye, HiOutlineEyeOff, HiOutlineShieldCheck, HiOutlineInformationCircle } from 'react-icons/hi';
 import GoogleAuthButton from '../../components/GoogleAuthButton';
 import { getPostAuthPath } from '../../utils/authRedirect';
+import TwoFactorLoginStep from '../../features/auth/components/TwoFactorLoginStep';
 
 /**
  * Login Page - Refactored với Impeccable design principles:
@@ -25,6 +26,8 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [focusedField, setFocusedField] = useState(null);
+  // null | { challengeToken, rememberMe, method } — bước 2 khi tài khoản đã bật 2FA.
+  const [twoFactor, setTwoFactor] = useState(null);
 
   const loginSchema = z.object({
     username: z.string().min(1, t('auth.emailRequired')),
@@ -32,17 +35,34 @@ const Login = () => {
     rememberMe: z.boolean().optional(),
   });
 
+  const goAfterAuth = (result) => {
+    const redirect = searchParams.get('redirect');
+    if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
+      navigate(redirect);
+    } else {
+      navigate(getPostAuthPath(result?.data?.user));
+    }
+  };
+
+  const enterTwoFactorStep = (result) => {
+    const d = result.data;
+    setTwoFactor({
+      challengeToken: d.challengeToken,
+      rememberMe: d.rememberMe ?? true,
+      method: d.method,
+    });
+  };
+
   const handleGoogleSuccess = async (tokenResponse) => {
     setIsLoading(true);
     try {
       const result = await googleLogin({ access_token: tokenResponse.access_token });
-      toast.success(t('auth.googleLoginSuccess'));
-      const redirect = searchParams.get('redirect');
-      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
-        navigate(redirect);
-      } else {
-        navigate(getPostAuthPath(result?.data?.user));
+      if (result?.data?.requiresTwoFactor) {
+        enterTwoFactorStep(result);
+        return;
       }
+      toast.success(t('auth.googleLoginSuccess'));
+      goAfterAuth(result);
     } catch (error) {
       const message = error.response?.data?.message || t('auth.googleLoginFailed');
       toast.error(message);
@@ -76,13 +96,12 @@ const Login = () => {
     setIsLoading(true);
     try {
       const result = await login(data.username, data.password, data.rememberMe ?? true);
-      toast.success(t('common.success'));
-      const redirect = searchParams.get('redirect');
-      if (redirect && redirect.startsWith('/') && !redirect.startsWith('//')) {
-        navigate(redirect);
-      } else {
-        navigate(getPostAuthPath(result?.data?.user));
+      if (result?.data?.requiresTwoFactor) {
+        enterTwoFactorStep(result);
+        return;
       }
+      toast.success(t('common.success'));
+      goAfterAuth(result);
     } catch (error) {
       const message = error.response?.data?.message || t('auth.invalidCredentials');
       toast.error(message);
@@ -90,6 +109,22 @@ const Login = () => {
       setIsLoading(false);
     }
   };
+
+  if (twoFactor) {
+    return (
+      <div className="w-full max-w-md mx-auto">
+        <TwoFactorLoginStep
+          challengeToken={twoFactor.challengeToken}
+          rememberMe={twoFactor.rememberMe}
+          onSuccess={(result) => {
+            toast.success(t('common.success'));
+            goAfterAuth(result);
+          }}
+          onBack={() => setTwoFactor(null)}
+        />
+      </div>
+    );
+  }
 
   return (
     <div className="w-full max-w-md mx-auto opacity-0 animate-fadeIn" style={{ animation: 'fadeIn 0.5s ease forwards' }}>

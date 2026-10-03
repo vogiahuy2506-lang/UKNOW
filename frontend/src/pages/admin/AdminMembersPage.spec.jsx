@@ -10,7 +10,8 @@ import AdminMembersPage from './AdminMembersPage';
  * (trang này cần currentUser/phoneOtpEnabled, hai file kia không dùng authStore nên không
  * có tiền lệ để soi — mock ở đây theo đúng khuôn PR-2 (selector lẫn no-arg đều gọi được).
  */
-const { mockGetMembers, mockGetPlans, mockGetSummary } = vi.hoisted(() => ({
+const { mockGetMembers, mockGetPlans, mockGetSummary, mockResetTwoFactor } = vi.hoisted(() => ({
+  mockResetTwoFactor: vi.fn(),
   mockGetMembers: vi.fn(),
   mockGetPlans: vi.fn(),
   mockGetSummary: vi.fn(),
@@ -24,6 +25,7 @@ vi.mock('../../features/admin/services/adminMembersApi.service', () => ({
     promote: vi.fn(),
     demote: vi.fn(),
     detachEmail: vi.fn(),
+    resetTwoFactor: mockResetTwoFactor,
     purge: vi.fn(),
   },
 }));
@@ -297,5 +299,56 @@ describe('AdminMembersPage — PR-9: đầu trang, nhóm, cột, lý do nguy cơ
     expect(mockGetMembers.mock.calls[mockGetMembers.mock.calls.length - 1][0]).not.toHaveProperty('segment');
     expect(screen.queryByTestId('members-summary-customers')).not.toBeInTheDocument();
     expect(screen.queryByRole('option', { name: 'Nhân viên (2)' })).not.toBeInTheDocument();
+  });
+});
+
+describe('AdminMembersPage — đặt lại 2FA', () => {
+  const memberWith2fa = {
+    id: 20,
+    username: 'co_2fa',
+    fullName: 'Có Hai Lớp',
+    email: 'tf@test.local',
+    status: 'active',
+    employeeCount: 0,
+    twoFactorEnabled: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+  const memberWithout2fa = { ...memberWith2fa, id: 21, username: 'khong_2fa', email: 'no@test.local', twoFactorEnabled: false };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPlans.mockResolvedValue({ data: { data: [] } });
+    mockGetSummary.mockResolvedValue({ data: { data: null } });
+    mockGetMembers.mockResolvedValue(membersResponse([memberWith2fa, memberWithout2fa]));
+    mockResetTwoFactor.mockResolvedValue({ data: { message: 'Đã đặt lại' } });
+  });
+
+  it('chỉ dòng có twoFactorEnabled mới có huy hiệu 2FA và nút "Đặt lại"', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('tf@test.local')).toBeInTheDocument());
+
+    const onRow = screen.getByText('tf@test.local').closest('tr');
+    const offRow = screen.getByText('no@test.local').closest('tr');
+    expect(within(onRow).getByText('2FA')).toBeInTheDocument();
+    expect(within(onRow).getByText('Đặt lại xác thực hai lớp')).toBeInTheDocument();
+    expect(within(offRow).queryByText('2FA')).not.toBeInTheDocument();
+    expect(within(offRow).queryByText('Đặt lại xác thực hai lớp')).not.toBeInTheDocument();
+  });
+
+  it('bấm Đặt lại → phải gõ lại email mới bật nút → gọi resetTwoFactor(id, email)', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByText('tf@test.local')).toBeInTheDocument());
+
+    const onRow = screen.getByText('tf@test.local').closest('tr');
+    fireEvent.click(within(onRow).getByText('Đặt lại xác thực hai lớp').parentElement.querySelector('button'));
+
+    const confirmBtn = await screen.findByRole('button', { name: 'Xác nhận đặt lại' });
+    expect(confirmBtn).toBeDisabled();
+
+    fireEvent.change(screen.getByPlaceholderText('tf@test.local'), { target: { value: 'tf@test.local' } });
+    expect(confirmBtn).toBeEnabled();
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => expect(mockResetTwoFactor).toHaveBeenCalledWith(20, 'tf@test.local'));
   });
 });

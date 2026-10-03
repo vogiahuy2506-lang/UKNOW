@@ -51,7 +51,14 @@ const api = axios.create({
 // Add delete method
 api.delete = (url, config) => api({ method: 'DELETE', url, ...config });
 
-const AUTH_ENDPOINTS = ['/auth/login', '/auth/register', '/auth/refresh-token', '/auth/logout'];
+const AUTH_ENDPOINTS = [
+  '/auth/login',
+  '/auth/google-login',
+  '/auth/2fa/verify',
+  '/auth/register',
+  '/auth/refresh-token',
+  '/auth/logout',
+];
 let isForcingLogout = false;
 let refreshPromise = null;
 
