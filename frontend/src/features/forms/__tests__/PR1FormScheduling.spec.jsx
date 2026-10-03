@@ -257,7 +257,7 @@ describe('PR-1: Biểu mẫu đặt lịch sửa theo góp ý sếp 24/09', () =
       });
     });
 
-    it('form mới chưa lưu: Chia sẻ và Bài nộp bị vô hiệu hoá', async () => {
+    it('form mới chưa lưu: KHÔNG có nút Chia sẻ & QR và Bài nộp (không để nút mờ); vẫn có Lưu + Xuất bản', async () => {
       render(
         <I18nProvider>
           <MemoryRouter initialEntries={['/app/forms/new']}>
@@ -275,11 +275,9 @@ describe('PR-1: Biểu mẫu đặt lịch sửa theo góp ý sếp 24/09', () =
         expect(screen.getByText('Lưu biểu mẫu')).toBeInTheDocument();
       });
 
-      const shareBtn = screen.getByText(/Chia sẻ/).closest('button');
-      const submissionsBtn = screen.getByText('Bài nộp').closest('button');
-
-      expect(shareBtn).toBeDisabled();
-      expect(submissionsBtn).toBeDisabled();
+      expect(screen.queryByText(/Chia sẻ/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Bài nộp')).not.toBeInTheDocument();
+      expect(screen.getByText('Xuất bản')).toBeInTheDocument();
     });
 
     it('form ẩn -> bấm Chia sẻ -> Modal mở, có cảnh báo "Biểu mẫu đang ẩn, người khác chưa mở được link" + nút Xuất bản', async () => {

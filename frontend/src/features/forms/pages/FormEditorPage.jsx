@@ -1283,7 +1283,7 @@ export default function FormEditorPage() {
           </div>
         </div>
 
-        {/* Cụm thao tác: Lưu -> Công khai / Ẩn -> Chia sẻ -> Bài nộp (N) */}
+        {/* Cụm thao tác: Lưu -> Xuất bản / Gỡ xuất bản -> (đã lưu) Chia sẻ & QR -> Bài nộp (N) */}
         <div className="flex flex-wrap items-center gap-2 self-end sm:self-auto">
           {/* Nút 1: Lưu */}
           <button
@@ -1321,33 +1321,35 @@ export default function FormEditorPage() {
             )}
           </button>
 
-          {/* Nút 3: Chia sẻ */}
-          <button
-            type="button"
-            onClick={() => setIsShareModalOpen(true)}
-            disabled={!isEditMode}
-            title={!isEditMode ? t('forms.editorPage.saveFirstTooltip') : undefined}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <HiOutlineShare className="w-4 h-4 text-gray-500" />
-            <span>{t('forms.share')}</span>
-          </button>
+          {/* Nút 3 + 4 chỉ hiện khi biểu mẫu đã lưu (có id) — chưa lưu thì không có gì để chia sẻ / xem bài nộp,
+              không để nút mờ gây thắc mắc. */}
+          {isEditMode && (
+            <>
+              {/* Nút 3: Chia sẻ */}
+              <button
+                type="button"
+                onClick={() => setIsShareModalOpen(true)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all"
+              >
+                <HiOutlineShare className="w-4 h-4 text-gray-500" />
+                <span>{t('forms.share')}</span>
+              </button>
 
-          {/* Nút 4: Bài nộp (N) */}
-          <button
-            type="button"
-            onClick={() => navigate(`/app/forms/${id}/submissions`)}
-            disabled={!isEditMode}
-            title={!isEditMode ? t('forms.editorPage.saveFirstTooltip') : undefined}
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-          >
-            <HiOutlineInbox className="w-4 h-4 text-gray-500" />
-            <span>
-              {submissionCount !== null && submissionCount !== undefined
-                ? `${t('forms.editorPage.submissions')} (${submissionCount})`
-                : t('forms.editorPage.submissions')}
-            </span>
-          </button>
+              {/* Nút 4: Bài nộp (N) */}
+              <button
+                type="button"
+                onClick={() => navigate(`/app/forms/${id}/submissions`)}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium rounded-xl border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 shadow-2xs transition-all"
+              >
+                <HiOutlineInbox className="w-4 h-4 text-gray-500" />
+                <span>
+                  {submissionCount !== null && submissionCount !== undefined
+                    ? `${t('forms.editorPage.submissions')} (${submissionCount})`
+                    : t('forms.editorPage.submissions')}
+                </span>
+              </button>
+            </>
+          )}
         </div>
       </div>
 

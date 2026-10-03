@@ -9710,7 +9710,6 @@ export default {
       saving: 'Đang lưu...',
       saveForm: 'Lưu biểu mẫu',
       submissions: 'Bài nộp',
-      saveFirstTooltip: 'Lưu biểu mẫu trước',
       saveAndPublishTooltip: 'Lưu và công khai biểu mẫu',
       unpublishSuccess: 'Đã ẩn biểu mẫu',
       togglePublishError: 'Không thể cập nhật trạng thái xuất bản',
