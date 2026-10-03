@@ -427,15 +427,50 @@ class LandingPageAdminService {
       auditLandingCaptureFields(htmlContent, nextCustomConfig.leadForm)
     );
 
-    // domainType / domainSubtype chỉ thay đổi khi user gửi lên rõ ràng.
-    const incomingType = body?.domainType;
-    const nextDomainType = incomingType === 'custom' || incomingType === 'system'
-      ? incomingType
-      : (current.domainType || 'system');
-    const nextDomainSubtype = nextDomainType === 'custom'
-      ? (body?.domainSubtype === 'apex' ? 'apex' : 'subdomain')
-      : null;
-    const typeChanged = nextDomainType !== (current.domainType || 'system');
+    // ── Tên miền ──────────────────────────────────────────────────────────────────────────────
+    // update() là đường LƯU NỘI DUNG trang, KHÔNG phải đường đăng ký tên miền riêng. Đường thật là
+    // PUT /:id/custom-domain → landingPageDomainService.setHostname, tự đặt domain_type='custom' qua repository
+    // (không đi qua đây) và dọn subdomain miễn phí đúng lúc; remove() tự đặt lại 'system'.
+    // Trước đây body.domainType='custom' ở đây làm backend gỡ subdomain miễn phí mà KHÔNG đăng ký hostname nào →
+    // trang mất link (production 03/10/2026: landing 50, 76, 88, 105). Nay: yêu cầu đổi sang 'custom' qua đường
+    // này bị BỎ QUA (giữ domain_type hiện tại).
+    const currentDomainType = current.domainType || 'system';
+    const requestedDomainType = body?.domainType;
+    if (requestedDomainType === 'custom' && currentDomainType !== 'custom') {
+      console.warn(
+        `[LandingPageAdmin.update] landing ${id}: bỏ qua domainType='custom' trong body — tên miền riêng chỉ đăng ký qua PUT /:id/custom-domain`
+      );
+    }
+    // Hàng domain hiện có: quyết định theo LOẠI HÀNG (cf_managed), không theo body hay domain_type.
+    const currentDomainRow = await landingPageDomainRepository.findByLandingPageId(id).catch(() => null);
+    const hasCustomDomainRow = Boolean(currentDomainRow) && !currentDomainRow.cfManaged;
+    const slugChanged = Boolean(slug) && slug !== current.slug;
+
+    // custom → system (không còn giao diện nào gửi; giữ cho client API): cấp subdomain miễn phí TRƯỚC khi đổi
+    // domain_type. upsertForLanding là ON CONFLICT (landing_page_id) nên hàng miễn phí THAY hàng tên miền riêng
+    // trong MỘT câu lệnh — không có cửa sổ "mất cả hai", không cần removeSubdomain trước. Không có slug thì không
+    // cấp được subdomain → bỏ qua yêu cầu, giữ nguyên 'custom' (đổi sang system lúc này sẽ để trang không còn link).
+    let nextDomainType = currentDomainType;
+    let domainTypeToWrite = null; // null = không đổi domain_type / domain_subtype (kể cả subdomain/apex của trang custom)
+    if (requestedDomainType === 'system' && currentDomainType === 'custom') {
+      if (slug) {
+        await landingPageDomainService.autoProvisionSubdomain(id, slug).catch((e) =>
+          console.warn('[LandingPageAdmin.update] autoProvisionSubdomain on switch→system failed:', e.message)
+        );
+        const rowAfter = await landingPageDomainRepository.findByLandingPageId(id).catch(() => null);
+        if (rowAfter?.cfManaged) {
+          nextDomainType = 'system';
+          domainTypeToWrite = 'system';
+          if (currentDomainRow?.hostname) invalidateDomainResolverHost(currentDomainRow.hostname);
+        } else {
+          console.warn(
+            `[LandingPageAdmin.update] landing ${id}: chưa cấp được subdomain miễn phí — giữ domain_type='custom'`
+          );
+        }
+      } else {
+        console.warn(`[LandingPageAdmin.update] landing ${id}: bỏ qua domainType='system' — trang chưa có slug để cấp subdomain`);
+      }
+    }
 
     const updated = await landingPageRepository.updateByIdInScope(id, {
       slug,
@@ -443,8 +478,8 @@ class LandingPageAdminService {
       htmlContent,
       isPublished: body?.isPublished !== undefined ? Boolean(body.isPublished) : current.isPublished,
       idUser: resourceOwnerId,
-      domainType: nextDomainType,
-      domainSubtype: nextDomainSubtype,
+      domainType: domainTypeToWrite,
+      domainSubtype: null,
       customConfig: nextCustomConfig,
     }, scope);
     if (!updated) {
@@ -478,32 +513,19 @@ class LandingPageAdminService {
       }
     }
 
-    // Đồng bộ DNS:
-    //  - system → custom : xóa CF subdomain cũ (nếu có) để giải phóng DNS, user sẽ tự cấu hình hostname mới.
-    //  - custom → system : xóa custom hostname (nếu có), cấp lại slug.founderai.biz qua CF (nếu slug có).
-    //  - system → system (slug đổi): giữ behavior cũ (removeSubdomain + autoProvision) — chỉ khi slug có.
-    if (typeChanged) {
-      if (nextDomainType === 'custom') {
-        // Chuyển sang custom: gỡ CF subdomain miễn phí, để user nhập hostname riêng.
+    // Đồng bộ DNS — CHỈ động tới hàng subdomain MIỄN PHÍ; hàng tên miền riêng (cf_managed=false) KHÔNG BAO GIỜ bị
+    // xoá hay ghi đè ở đây (removeSubdomain xoá hàng bất kể loại, autoProvisionSubdomain upsert đè hàng theo
+    // landing_page_id — gọi với trang có tên miền riêng là mất tên miền của khách):
+    //  - custom → system: đã cấp subdomain miễn phí ở trên (domainTypeToWrite === 'system').
+    //  - đổi slug, trang dùng tên miền miễn phí và KHÔNG có hàng tên miền riêng: gỡ hàng miễn phí cũ (nếu có) rồi cấp lại
+    //    theo slug mới — hành vi cũ.
+    //  - đổi slug, trang 'custom' hoặc có hàng tên miền riêng: không đụng domain (slug chỉ là đường dẫn nội bộ).
+    if (slugChanged && domainTypeToWrite === null && nextDomainType === 'system' && !hasCustomDomainRow) {
+      if (currentDomainRow?.cfManaged) {
         await landingPageDomainService.removeSubdomain(id).catch((e) =>
-          console.warn('[LandingPageAdmin.update] removeSubdomain on switch→custom failed:', e.message)
+          console.warn('[LandingPageAdmin.update] removeSubdomain failed:', e.message)
         );
-      } else {
-        // Chuyển về system: gỡ custom hostname (nếu có) rồi cấp slug.founderai.biz (nếu slug).
-        await landingPageDomainService.removeSubdomain(id).catch((e) =>
-          console.warn('[LandingPageAdmin.update] removeSubdomain on switch→system failed:', e.message)
-        );
-        if (slug) {
-          await landingPageDomainService.autoProvisionSubdomain(id, slug).catch((e) =>
-            console.warn('[LandingPageAdmin.update] autoProvisionSubdomain on switch→system failed:', e.message)
-          );
-        }
       }
-    } else if (slug && slug !== current.slug) {
-      // System → system mà slug đổi: giữ behavior cũ.
-      await landingPageDomainService.removeSubdomain(id).catch((e) =>
-        console.warn('[LandingPageAdmin.update] removeSubdomain failed:', e.message)
-      );
       await landingPageDomainService.autoProvisionSubdomain(id, slug).catch((e) =>
         console.warn('[LandingPageAdmin.update] autoProvisionSubdomain failed:', e.message)
       );
