@@ -183,13 +183,21 @@ const UI_LABELS_IN_ARTICLES = [
   ['dat-lich-giu-cho', 'forms.sendConfirmation', 'Gửi email xác nhận cho người điền sau khi nộp'],
   ['dat-lich-giu-cho', 'forms.editorPage.afterSubmit.title', 'Sau khi gửi'],
   // PLAN_DON_GIAN_CAI_DAT_LANDING (03/10/2026): Cài đặt trang còn 3 mục (Xuất bản & đường dẫn / Form thu khách / Ảnh đã tải
-  // lên). Tên miền riêng trong modal chỉ HIỂN THỊ (gỡ thao tác ghi). "Dùng biểu mẫu đã tạo" đã lưu được thật từ PR-F
-  // (PLAN_TEN_MIEN_RIENG_VA_BIEU_MAU_LIEN_KET_LANDING_2026-10-03.md) nên bài tả lại lựa chọn này.
+  // lên). Tên miền riêng đã NỐI LẠI (PR-D: Kiểm tra DNS -> Kết nối tên miền, Gỡ tên miền riêng) và "Dùng biểu mẫu đã tạo"
+  // lưu được thật (PR-F) — PLAN_TEN_MIEN_RIENG_VA_BIEU_MAU_LIEN_KET_LANDING_2026-10-03.md; bài tả đúng các nhãn đó.
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.title', 'Xuất bản & đường dẫn'],
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkCopy', 'Sao chép'],
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkOpen', 'Mở trang'],
   ['landing-page', 'landingCanvas.settingsModal.sections.leadForm.title', 'Form thu khách'],
   ['landing-page', 'landingCanvas.settingsModal.sections.images.title', 'Ảnh đã tải lên'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.useOwn', 'Dùng tên miền riêng của bạn'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.check', 'Kiểm tra'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.recheck', 'Kiểm tra lại'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.connect', 'Kết nối tên miền'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.remove', 'Gỡ tên miền riêng'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsType', 'Loại'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsHost', 'Tên (Host)'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsValue', 'Giá trị (Value)'],
   ['landing-page', 'leadFormConfig.addField', 'Thêm câu hỏi'],
   ['landing-page', 'leadFormConfig.askAiAdd', 'Nhờ AI thêm ô này'],
   // PR-F: hai cách thu thông tin + chọn biểu mẫu có sẵn (LeadFormConfigPanel).
@@ -318,11 +326,9 @@ describe('chất lượng bài trợ giúp seed', () => {
       '**Form đăng ký**',
       'Ảnh của trang',
       'Bốn mục',
-      // 03/10/2026: hai việc tự làm trong Cài đặt trang đã GỠ vì không lưu được thật. Tên miền riêng chỉ còn hiển thị (nút
-      // "Lưu tên miền" làm backend xoá subdomain miễn phí mà không gắn gì; nút kiểm tra kết nối luôn 401). Bài không được
-      // hướng dẫn người đọc đi tìm các nhãn tên miền này. ("Dùng biểu mẫu đã tạo" / "Form cơ bản" đã trở lại hợp lệ từ PR-F
-      // vì phía backend nhận `linkedFormId` — bài tả chúng, được pin ở bảng nhãn giao diện phía trên.)
-      'Dùng tên miền riêng của bạn',
+      // 03/10/2026: tên miền riêng (PR-D) và "Dùng biểu mẫu đã tạo" / "Form cơ bản" (PR-F) đã chạy thật nên KHÔNG còn bị
+      // cấm — được pin ở bảng nhãn giao diện phía trên. Chỉ còn cấm nhãn CŨ "Lưu tên miền" (nút từng làm backend xoá
+      // subdomain miễn phí mà không gắn gì; không còn trong giao diện mới).
       'Lưu tên miền',
     ];
     const offenders = [];
