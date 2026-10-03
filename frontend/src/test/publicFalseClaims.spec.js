@@ -166,3 +166,62 @@ describe('vòng 2 — HeroDashboardMock (số mẫu) luôn có nhãn minh hoạ'
     expect(badge.textContent).toBe('Số liệu minh hoạ');
   });
 });
+
+// ── Vòng 3 (H1, PLAN_SUA_AI_DOT3, 03/10/2026) ────────────────────────────────────────────────────────────────
+
+/**
+ * Giờ làm việc hotline sếp chốt 03/10/2026: Thứ 2 – Thứ 6, 8:30 – 17:00. Trước đó mỗi nơi ghi một kiểu: trang Liên hệ "9h-18h" /
+ * "08:00 – 17:00", prompt tư vấn "8h-17h", ba trang chính sách "8:00 - 22:00, Thứ 2 - Thứ 7" — khách hỏi bot và hỏi trang nhận hai đáp án.
+ * Phần chữ của ba trang chính sách (Support / PaymentPolicy / ComplaintPolicy) KHÔNG nằm trong spec này: đó là văn bản có phiên bản theo
+ * NĐ 248 (pages/public/policyVersions.js — báo trước >= 15 ngày, lưu bản cũ), sửa chữ phải qua quy trình đó.
+ */
+const collectStrings = (node, out = []) => {
+  if (typeof node === 'string') out.push(node);
+  else if (Array.isArray(node)) node.forEach((n) => collectStrings(n, out));
+  else if (node && typeof node === 'object') Object.values(node).forEach((n) => collectStrings(n, out));
+  return out;
+};
+
+const OLD_HOURS = [
+  [/22:00|10:00 PM|10 PM/i, '22:00 / 10 PM (giờ hotline cũ 8:00-22:00)'],
+  [/Thứ 2\s*[-–]\s*Thứ 7|Mon(day)?\s*[-–]\s*Sat/i, 'Thứ 2 - Thứ 7'],
+  [/9h\s*-\s*18h|9\s?am\s*-\s*6\s?pm/i, '9h-18h'],
+  [/8h\s*-\s*17h/i, '8h-17h'],
+  [/08:00\s*[–-]\s*17:00/, '08:00 – 17:00'],
+  [/Mở lại 08:00|Reopens Monday 08:00/, 'mở lại 08:00'],
+];
+
+describe.each(LOCALES)('H1 — giờ làm việc thống nhất Thứ 2 – Thứ 6, 8:30 – 17:00 (%s)', (name, dict) => {
+  it('các mục công khai (liên hệ, bảng giá, trang chủ, thanh toán, dùng thử, đăng nhập) không còn giờ cũ', () => {
+    const blob = ['contact', 'pricingPage', 'heroPage', 'checkout', 'paymentSuccess', 'trialDemo', 'authLayout']
+      .flatMap((k) => collectStrings(dict[k]))
+      .join('\n');
+    for (const [re, label] of OLD_HOURS) expect(blob, label).not.toMatch(re);
+  });
+
+  it('trang Liên hệ ghi 8:30 – 17:00 ở workHours / officeDesc / hotlineDesc và "08:30" ở câu mở lại', () => {
+    expect(dict.contact.workHours).toContain('08:30 – 17:00');
+    const [from, to] = name === 'vi' ? ['8:30', '17:00'] : ['8:30 AM', '5:00 PM'];
+    for (const key of ['officeDesc', 'hotlineDesc']) {
+      expect(dict.contact[key], key).toContain(from);
+      expect(dict.contact[key], key).toContain(to);
+    }
+    expect(dict.contact.statusClosedDetail).toContain('08:30');
+    expect(dict.contact.statusOpenDetail).toContain('17:00');
+  });
+
+  it('chữ tiếng Việt dùng "Thứ 2 – Thứ 6", tiếng Anh dùng "Mon – Fri" (không còn thứ Bảy)', () => {
+    const expected = name === 'vi' ? /Thứ 2 – Thứ 6|T2 – T6/ : /Mon – Fri/;
+    expect(dict.contact.workHours).toMatch(expected);
+    expect(dict.contact.officeDesc).toMatch(expected);
+    expect(dict.contact.hotlineDesc).toMatch(expected);
+  });
+});
+
+describe('H1 — trang Liên hệ tính mở/đóng cửa bằng businessHours.js, không còn so giờ ghi cứng', () => {
+  it('ContactPage dùng isWithinBusinessHours, không còn "hour >= 8"', () => {
+    const src = sourceOf('../pages/public/ContactPage.jsx');
+    expect(src).toMatch(/isWithinBusinessHours/);
+    expect(src).not.toMatch(/hour\s*>=\s*8\b/);
+  });
+});

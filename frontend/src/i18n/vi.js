@@ -5188,13 +5188,13 @@ export default {
     emailDesc: 'Liên hệ qua email',
     hotline: 'Hotline',
     hotlineValue: '1900 xxxx',
-    hotlineDesc: 'Gọi hotline trong giờ hành chính',
+    hotlineDesc: 'Gọi hotline trong giờ làm việc (Thứ 2 – Thứ 6, 8:30 – 17:00)',
     zalo: 'Zalo',
     zaloValue: '@founderai',
     zaloDesc: 'Nhắn tin qua Zalo',
     office: 'Văn phòng',
     officeValue: 'TP. Hồ Chí Minh, Việt Nam',
-    officeDesc: 'Làm việc từ 9h-18h, Thứ 2 - Thứ 6',
+    officeDesc: 'Làm việc Thứ 2 – Thứ 6, 8:30 – 17:00',
     validationRequired: 'Vui lòng điền đầy đủ thông tin bắt buộc',
     validationMinLength: 'Tối thiểu {n} ký tự',
     validationEmail: 'Email không hợp lệ',
@@ -5225,7 +5225,7 @@ export default {
     // Contact page left panel — status bar + hub
     statusOpen: 'Đang mở cửa',
     statusClosed: 'Đã đóng cửa',
-    workHours: 'T2 – T6 · 08:00 – 17:00',
+    workHours: 'T2 – T6 · 08:30 – 17:00',
     connectWithTitle: 'Kết nối với',
     connectWithBrand: 'Founder AI',
     formPanelTitle: 'Gửi yêu cầu,',
@@ -5246,7 +5246,7 @@ export default {
     titleHighlight: 'hỗ trợ bạn',
     subtitle: 'Để lại thông tin, đội ngũ tư vấn sẽ liên hệ lại trong 24 giờ.',
     statusOpenDetail: 'Mở đến 17:00 — hiện tại {time}',
-    statusClosedDetail: 'Mở lại 08:00 thứ 2 nếu hôm nay là cuối tuần',
+    statusClosedDetail: 'Mở lại 08:30 thứ 2 nếu hôm nay là cuối tuần',
   },
 
   trialDemo: {

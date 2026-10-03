@@ -18,6 +18,7 @@ const {
   formatPlansForContext,
   HERO_PRICING_URL,
   HERO_REGISTER_URL,
+  HERO_SUPPORT_HOURS,
   HERO_PLANS_UNAVAILABLE_TEXT,
 } = await import('../heroConsultation.service.js');
 
@@ -126,8 +127,19 @@ describe('buildHeroSystemPrompt — đăng ký, hỗ trợ, liên hệ, thanh to
   it('liên hệ email / hotline / fanpage GIỮ NGUYÊN', () => {
     const p = prompt();
     expect(p).toContain('- Email: info@digiso.vn');
-    expect(p).toContain('- Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)');
+    expect(p).toContain('- Hotline: (+84) 877 909 606 (Thứ 2-6, 8h30-17h)');
     expect(p).toContain('- Fanpage Facebook: facebook.com/digiso.vn');
+  });
+
+  it('giờ làm việc hotline (H1 mục 2): Thứ 2 – Thứ 6, 8h30–17h ở CẢ HAI chỗ (mục liên hệ + câu trả lời ngoài phạm vi), không còn giờ cũ', () => {
+    const p = prompt();
+    expect(HERO_SUPPORT_HOURS).toBe('Thứ 2-6, 8h30-17h');
+    const hotlineLines = p.split('\n').filter((l) => /Hotline: \(\+84\) 877 909 606/.test(l));
+    expect(hotlineLines).toHaveLength(2);
+    for (const line of hotlineLines) expect(line).toContain('(Thứ 2-6, 8h30-17h)');
+    // Bản cũ: "8h-17h" (và các trang khác 9h-18h, 8:00-22:00 Thứ 2-Thứ 7). Prompt không được mang giờ nào khác ngoài 8h30-17h.
+    expect(p).not.toMatch(/8h-17h|9h-18h|22:00|22h|Thứ 7/);
+    expect([...p.matchAll(/\b\d{1,2}h(?:\d{2})?\s*-\s*\d{1,2}h(?:\d{2})?\b/g)].map((m) => m[0])).toEqual(['8h30-17h', '8h30-17h']);
   });
 
   it('thanh toán (H1 mục 1): khung chat KHÔNG còn tự hiện mã QR — prompt không hứa "hệ thống tự hiện QR", hướng khách tới /pricing + thanh toán trong ứng dụng', () => {

@@ -5175,13 +5175,13 @@ export default {
     emailDesc: 'Contact via email',
     hotline: 'Hotline',
     hotlineValue: '1900 xxxx',
-    hotlineDesc: 'Call hotline during business hours',
+    hotlineDesc: 'Call hotline during business hours (Mon – Fri, 8:30 AM – 5:00 PM)',
     zalo: 'Zalo',
     zaloValue: '@founderai',
     zaloDesc: 'Message via Zalo',
     office: 'Office',
     officeValue: 'Ho Chi Minh City, Vietnam',
-    officeDesc: 'Working hours 9am-6pm, Mon-Fri',
+    officeDesc: 'Working hours Mon – Fri, 8:30 AM – 5:00 PM',
     validationRequired: 'Please fill in all required information',
     validationMinLength: 'Minimum {n} characters',
     validationEmail: 'Invalid email address',
@@ -5211,7 +5211,7 @@ export default {
     // Contact page left panel — status bar + hub
     statusOpen: 'Open now',
     statusClosed: 'Closed',
-    workHours: 'Mon – Fri · 08:00 – 17:00',
+    workHours: 'Mon – Fri · 08:30 – 17:00',
     connectWithTitle: 'Get in touch with',
     connectWithBrand: 'Founder AI',
     formPanelTitle: 'Send a request,',
@@ -5232,7 +5232,7 @@ export default {
     titleHighlight: 'support you',
     subtitle: 'Leave your details and our team will get back to you within 24 hours.',
     statusOpenDetail: 'Open until 17:00 — current time {time}',
-    statusClosedDetail: 'Reopens Monday 08:00 if today is the weekend',
+    statusClosedDetail: 'Reopens Monday 08:30 if today is the weekend',
   },
 
   trialDemo: {

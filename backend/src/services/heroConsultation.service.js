@@ -141,6 +141,12 @@ async function fetchFounderaiData() {
 export const HERO_PRICING_URL = 'founderai.biz/pricing';
 /** Trang đăng ký thật (route `/register` ở frontend/src/App.jsx) — KHÔNG phải digiso.vn. */
 export const HERO_REGISTER_URL = 'founderai.biz/register';
+/**
+ * Giờ làm việc của hotline, sếp chốt 03/10/2026: Thứ 2 – Thứ 6, 8:30 – 17:00. Bản cũ ghi giờ ở hai chỗ trong prompt, còn trang Liên hệ và
+ * các trang chính sách ghi những kiểu khác nhau — khách hỏi bot và hỏi trang nhận hai đáp án. Một hằng số cho cả hai dòng của prompt;
+ * i18n `contact.workHours` + frontend/src/pages/public/businessHours.js phải khớp.
+ */
+export const HERO_SUPPORT_HOURS = 'Thứ 2-6, 8h30-17h';
 
 /**
  * Khi không có dữ liệu gói (DB lỗi, chưa nạp được): TUYỆT ĐỐI không dùng giá ghi cứng — bản cũ có bảng gói dự phòng với
@@ -447,7 +453,7 @@ ${coursesText || 'Chưa có khóa học nào'}
 
 THÔNG TIN LIÊN HỆ HỖ TRỢ:
 - Email: info@digiso.vn
-- Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
+- Hotline: (+84) 877 909 606 (${HERO_SUPPORT_HOURS})
 - Địa chỉ văn phòng: Phòng I101B, Khu Công nghệ phần mềm ĐHQG HCM, TP.HCM
 - Website: digiso.vn
 - Fanpage Facebook: facebook.com/digiso.vn
@@ -466,7 +472,7 @@ HƯỚNG DẪN TRẢ LỜI
 3. Khách hỏi thông tin NGOÀI phạm vi (hướng dẫn kỹ thuật chi tiết, tích hợp API, báo giá riêng cho doanh nghiệp lớn, hợp đồng dài hạn,...):
    → Trả lời: "Mình chưa có thông tin chính xác về vấn đề này. Bạn vui lòng liên hệ đội hỗ trợ để được tư vấn chi tiết:
    - Email: info@digiso.vn
-   - Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
+   - Hotline: (+84) 877 909 606 (${HERO_SUPPORT_HOURS})
    - Website: digiso.vn"
 4. Khách chào hỏi/xã giao: Chào lại thân thiện, giới thiệu là trợ lý ảo của Founder AI, hỏi khách cần hỗ trợ gì.
 5. TUYỆT ĐỐI KHÔNG dùng markdown, không bullet points, không in đậm.
