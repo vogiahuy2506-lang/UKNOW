@@ -247,6 +247,9 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
       expect(readFileBufferByKey).toHaveBeenCalledWith(OWN_KEY);
       expect(readFileBufferByKey).not.toHaveBeenCalledWith(FOREIGN_KEY);
       expect(geminiTexts()).not.toContain(SECRET);
+      // Chỗ trích brief cũng đọc OWN_KEY nên spy một mình không chứng minh `runChat` nhận đúng id chủ: nội dung tệp phải VÀO
+      // prompt gửi Gemini (qua attachFileToParts của runChat) — thiếu ownerUserId ở lời gọi runChat thì tệp của chính nhân viên bị bỏ.
+      expect(geminiTexts()).toContain('noi dung tep cua minh');
     });
 
     it('super admin (nhánh trợ lý admin) cũng chỉ đọc tệp dưới id của mình', async () => {
@@ -254,6 +257,20 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
 
       expect(readFileBufferByKey).toHaveBeenCalledTimes(1);
       expect(readFileBufferByKey).toHaveBeenCalledWith(OWN_KEY);
+    });
+
+    it('nhánh trợ lý admin truyền id CHỦ (resourceOwnerUserId) cho runChat, không dùng id người thao tác', async () => {
+      await chat({
+        userId: EMPLOYEE,
+        resourceOwnerUserId: OWNER,
+        userRole: 'admin',
+        files: [fileOf(FOREIGN_KEY), fileOf(OWN_KEY)],
+      });
+
+      expect(readFileBufferByKey).toHaveBeenCalledTimes(1);
+      expect(readFileBufferByKey).toHaveBeenCalledWith(OWN_KEY);
+      expect(geminiTexts()).toContain('noi dung tep cua minh');
+      expect(geminiTexts()).not.toContain(SECRET);
     });
   });
 
@@ -276,7 +293,7 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
   describe('3. generateCampaignScript (POST /ai/generate-campaign)', () => {
     const partsSentToGemini = () => generateWithBudget.mock.calls.flatMap(([, args]) => args.parts.map((p) => p.text || '')).join('\n');
 
-    it('tệp của workspace khác: không đọc, vẫn sinh kịch bản', async () => {
+    it('generateCampaignScript — tệp của workspace khác: không đọc, vẫn sinh kịch bản', async () => {
       const script = await aiCampaignService.generateCampaignScript({
         prompt: 'tạo chiến dịch',
         files: [fileOf(FOREIGN_KEY)],
@@ -288,7 +305,7 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
       expect(partsSentToGemini()).not.toContain(SECRET);
     });
 
-    it('nhân viên (ownerUserId=chủ) đọc được tệp dưới id chủ, không đọc tệp workspace khác', async () => {
+    it('generateCampaignScript — nhân viên (ownerUserId=chủ) đọc được tệp dưới id chủ, không đọc tệp workspace khác', async () => {
       await aiCampaignService.generateCampaignScript({
         prompt: 'tạo chiến dịch',
         files: [fileOf(FOREIGN_KEY), fileOf(OWN_KEY)],
@@ -306,7 +323,7 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
   describe('4. generateCampaignWithRegistry (POST /ai/generate-campaign-v2)', () => {
     const partsSentToGemini = () => generateWithBudget.mock.calls.flatMap(([, args]) => args.parts.map((p) => p.text || '')).join('\n');
 
-    it('tệp của workspace khác: không đọc, vẫn sinh kịch bản', async () => {
+    it('generateCampaignWithRegistry — tệp của workspace khác: không đọc, vẫn sinh kịch bản', async () => {
       const script = await aiCampaignService.generateCampaignWithRegistry({
         prompt: 'tạo chiến dịch',
         files: [fileOf(FOREIGN_KEY)],
@@ -318,7 +335,7 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
       expect(partsSentToGemini()).not.toContain(SECRET);
     });
 
-    it('nhân viên (ownerUserId=chủ) đọc được tệp dưới id chủ, không đọc tệp workspace khác', async () => {
+    it('generateCampaignWithRegistry — nhân viên (ownerUserId=chủ) đọc được tệp dưới id chủ, không đọc tệp workspace khác', async () => {
       await aiCampaignService.generateCampaignWithRegistry({
         prompt: 'tạo chiến dịch',
         files: [fileOf(FOREIGN_KEY), fileOf(OWN_KEY)],
