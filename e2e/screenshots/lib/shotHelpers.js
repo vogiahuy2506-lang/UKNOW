@@ -379,6 +379,8 @@ export async function drawBoxes(container, boxes, { fill = null } = {}) {
       frame.setAttribute('data-help-shot-box', '1');
       Object.assign(frame.style, {
         position: 'absolute',
+        // Khối chứa dùng `space-y-*` (Tailwind) thì anh em đứng sau bị cộng margin-top — khung lệch xuống 12px so với số đo.
+        margin: '0',
         left: `${box.x}px`,
         top: `${box.y}px`,
         width: `${box.width}px`,
