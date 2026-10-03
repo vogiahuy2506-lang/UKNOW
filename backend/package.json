@@ -102,7 +102,7 @@
     "@whiskeysockets/baileys": "^6.7.24",
     "axios": "^1.20.0",
     "bcryptjs": "^2.4.3",
-    "bullmq": "^5.81.5",
+    "bullmq": "^6.3.10",
     "cloudinary": "^2.10.0",
     "cookie-parser": "^1.4.7",
     "cron-parser": "^4.9.0",
