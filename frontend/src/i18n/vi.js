@@ -7980,7 +7980,7 @@ export default {
     f5Desc: 'Biết chính xác chiến dịch nào mang lại đơn hàng. Tối ưu ngân sách marketing dựa trên số liệu thật.',
     f5Highlight: 'ROI rõ ràng',
     f6Title: 'Dữ liệu được bảo mật',
-    f6Desc: 'Hạ tầng cloud với backup tự động. Khách hàng của bạn là khách hàng của bạn, không ai khác được đọc.',
+    f6Desc: 'Hạ tầng cloud với backup tự động. Dữ liệu của mỗi tài khoản được tách riêng khỏi tài khoản khác, phân quyền theo vai trò (chủ tài khoản, nhân viên).',
     f6Highlight: 'Sao lưu tự động mỗi ngày',
     // Section 1 copy
     section1Badge: 'GIẢI PHÁP',

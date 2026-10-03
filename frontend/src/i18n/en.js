@@ -7971,7 +7971,7 @@ export default {
     f5Desc: 'Know exactly which campaigns bring in orders. Optimize marketing budget based on real data.',
     f5Highlight: 'Transparent ROI',
     f6Title: 'Your data is secure',
-    f6Desc: 'Cloud infrastructure with automatic backups. Your customers are yours — no one else can read them.',
+    f6Desc: 'Cloud infrastructure with automatic backups. Each account’s data is separated from other accounts, with role-based permissions (account owner, employee).',
     f6Highlight: 'Automatic daily backups',
     // Section 1 copy
     section1Badge: 'SOLUTION',
