@@ -837,9 +837,18 @@ export default {
           linkUnsavedHint: 'Bấm Lưu để trang có link.',
           linkNoSlugHint: 'Đặt đường dẫn ở bên dưới để trang có link.',
           linkPendingHint: 'Tên miền riêng đang chờ xác minh. Link sẽ hiện khi kết nối xong.',
-          linkNoDomainHint: 'Trang đang ở chế độ tên miền riêng nhưng chưa có tên miền nào được gắn nên chưa có link. Hãy kết nối một tên miền riêng ở bên dưới.',
+          linkNoDomainHint: 'Trang chưa có link vì tên miền riêng trước đó không còn được gắn. Có 2 cách: dùng lại link miễn phí ở khung bên dưới, hoặc kết nối một tên miền riêng.',
           slugLabel: 'Đường dẫn miễn phí (slug)',
           slugSave: 'Lưu',
+        },
+        // Dùng lại link miễn phí (PLAN_DUNG_LAI_LINK_MIEN_PHI): trang mất link (domain_type='custom' mà không còn tên miền).
+        freeLink: {
+          slugLabel: 'Đường dẫn (slug) cho link miễn phí',
+          button: 'Dùng lại link miễn phí',
+          busy: 'Đang cấp link...',
+          success: 'Đã dùng lại link miễn phí {link}',
+          pendingWarn: 'Đã đặt lại link {link} nhưng chưa kích hoạt xong. Thử lại sau ít phút hoặc liên hệ hỗ trợ.',
+          genericError: 'Không cấp lại được link miễn phí, thử lại sau.',
         },
         // Tên miền riêng (PLAN_TEN_MIEN_RIENG, PR-D): kiểm DNS trước, chỉ kết nối khi DNS đã đúng; gỡ trả trang về link miễn phí.
         customDomain: {

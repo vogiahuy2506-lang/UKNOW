@@ -19,6 +19,7 @@ import { notifyStorageQuotaRefresh } from '../../storage/storageEvents.js';
 import { uploadLandingAsset } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
 import CustomDomainPanel from './CustomDomainPanel.jsx';
+import RestoreFreeLinkPanel from './RestoreFreeLinkPanel.jsx';
 import useLandingDomainInfo from '../hooks/useLandingDomainInfo.js';
 import { SYSTEM_BASE_DOMAIN } from '../utils/landingDomain.js';
 
@@ -29,7 +30,8 @@ const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
  *
  * PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU 03/10/2026 — mở ra thấy ngay hai việc chính, thứ ít dùng thu gọn:
  *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí, và
- *      tên miền riêng (CustomDomainPanel: kiểm DNS → kết nối, gỡ, kiểm tra lại — PLAN_TEN_MIEN_RIENG PR-D).
+ *      tên miền riêng (CustomDomainPanel: kiểm DNS → kết nối, gỡ, kiểm tra lại — PLAN_TEN_MIEN_RIENG PR-D). Trang
+ *      mất link (domain_type='custom' mà không còn tên miền) có thêm RestoreFreeLinkPanel: "Dùng lại link miễn phí".
  *      Tiêu đề trang KHÔNG còn ở đây — sửa ở thanh trên cùng của trình soạn.
  *   2. "Form thu khách": chọn Form cơ bản hoặc Dùng biểu mẫu đã tạo (LeadFormConfigPanel; lựa chọn lưu cùng lần bấm Lưu trang).
  *   3. "Ảnh đã tải lên (N)": cuối modal, mặc định thu gọn.
@@ -162,6 +164,15 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   const hasCustomDomain = domain.kind === 'custom-active' || domain.kind === 'custom-pending';
   // domain_type='custom' mà không còn hàng tên miền nào (trang hỏng ở production): link miễn phí đã chết.
   const isBrokenCustom = domain.kind === 'none' && form?.domainType === 'custom';
+
+  // "Dùng lại link miễn phí" xong: slug do SERVER ghi (đã chuẩn hoá) phải về `form.slug` của trình soạn. Không đồng bộ thì
+  // lần "Lưu trang" sau gửi slug CŨ (hoặc rỗng → backend ghi NULL) đè mất slug vừa ghi và làm backend đổi lại subdomain.
+  // Chỉ đụng `slug` — KHÔNG đụng domainType (chốt PR-1; trang trở lại link miễn phí do server nạp lại bên dưới).
+  const handleFreeLinkRestored = async (data) => {
+    const serverSlug = typeof data?.slug === 'string' ? data.slug.trim() : '';
+    if (serverSlug) setForm((prev) => ({ ...prev, slug: serverSlug }));
+    await reloadDomain();
+  };
 
   // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 2: prop `tab` được LandingCanvasEditor.jsx
   // truyền xuống (openTab('lead-form') từ ý định chat) — đảm bảo section đích luôn mở mỗi khi tab đích đổi lúc
@@ -344,6 +355,11 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                   <p className="text-xs text-amber-700">{tc('sections.publish.linkDraftHint')}</p>
                 ) : null}
               </div>
+
+              {/* Trang mất link (domain_type='custom' mà không còn tên miền nào): đặt đường dẫn rồi dùng lại link miễn phí */}
+              {isBrokenCustom && editingId ? (
+                <RestoreFreeLinkPanel editingId={editingId} slug={form?.slug} onRestored={handleFreeLinkRestored} />
+              ) : null}
 
               {/* Đường dẫn miễn phí (slug) — chỉ khi không dùng tên miền riêng */}
               {!hasCustomDomain && !isBrokenCustom && (

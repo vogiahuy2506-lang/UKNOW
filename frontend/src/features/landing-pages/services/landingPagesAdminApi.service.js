@@ -285,6 +285,24 @@ export async function deleteLandingCustomDomain(landingPageId) {
 }
 
 /**
+ * Cấp lại link miễn phí `<slug>.founderai.biz` cho trang mất link (domain_type='custom' mà không còn tên miền nào).
+ * Không gửi `slug` thì backend dùng slug hiện có của trang. Lỗi 400 / 409 ném AxiosError, `error.response.data.message`
+ * là câu tiếng Việt của server (409: slug trùng trang khác, hoặc trang đang dùng tên miền riêng).
+ * Trả `{ id, slug, domainType, restored, provisioned, message, domain }` — `slug` là giá trị server đã ghi (đã chuẩn hoá).
+ *
+ * @param {number} landingPageId
+ * @param {string} [slug]
+ * @returns {Promise<{ slug: string|null, restored: boolean, provisioned: boolean, message: string|null, domain: object }|null>}
+ */
+export async function postLandingFreeLink(landingPageId, slug) {
+  const body = typeof slug === 'string' && slug.trim() ? { slug: slug.trim() } : {};
+  const { data } = await api.post(`/admin/landing-pages/${landingPageId}/free-link`, body, {
+    timeout: CUSTOM_DOMAIN_TIMEOUT_MS,
+  });
+  return data?.data ?? null;
+}
+
+/**
  * Tạo template landing page mới.
  *
  * @param {object} body - { name, description, category, htmlContent, thumbnailUrl, isPublic }

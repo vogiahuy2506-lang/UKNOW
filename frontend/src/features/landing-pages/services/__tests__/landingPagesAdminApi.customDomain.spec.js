@@ -6,6 +6,7 @@ import {
   putLandingCustomDomain,
   postLandingCustomDomainVerify,
   deleteLandingCustomDomain,
+  postLandingFreeLink,
 } from '../landingPagesAdminApi.service.js';
 
 // Mọi gọi tên miền riêng phải đi qua instance `api` (interceptor gắn Bearer + X-Owner-Context) — KHÔNG fetch thô
@@ -63,6 +64,24 @@ describe('landingPagesAdminApi — tên miền riêng', () => {
     expect(api.delete).toHaveBeenCalledWith('/admin/landing-pages/7/custom-domain', { timeout: 30000 });
   });
 
+  it('postLandingFreeLink: POST .../free-link { slug } qua api (có Bearer), timeout nới, trả data.data', async () => {
+    const payload = { slug: 'abc', restored: true, provisioned: true, domain: { hostname: 'abc.founderai.biz' } };
+    api.post.mockResolvedValue({ data: { success: true, data: payload } });
+
+    await expect(postLandingFreeLink(7, '  abc ')).resolves.toEqual(payload);
+    expect(api.post).toHaveBeenCalledWith('/admin/landing-pages/7/free-link', { slug: 'abc' }, { timeout: 30000 });
+  });
+
+  it('postLandingFreeLink: không có slug (rỗng / bỏ trống) → gửi thân {} để backend dùng slug đang có', async () => {
+    api.post.mockResolvedValue({ data: { success: true, data: { slug: 'abc' } } });
+
+    await postLandingFreeLink(7, '   ');
+    await postLandingFreeLink(7);
+
+    expect(api.post).toHaveBeenNthCalledWith(1, '/admin/landing-pages/7/free-link', {}, { timeout: 30000 });
+    expect(api.post).toHaveBeenNthCalledWith(2, '/admin/landing-pages/7/free-link', {}, { timeout: 30000 });
+  });
+
   it('không hàm nào dùng fetch thô', async () => {
     api.get.mockResolvedValue({ data: {} });
     api.post.mockResolvedValue({ data: {} });
@@ -74,6 +93,7 @@ describe('landingPagesAdminApi — tên miền riêng', () => {
     await putLandingCustomDomain(1, 'a.example.com');
     await postLandingCustomDomainVerify(1);
     await deleteLandingCustomDomain(1);
+    await postLandingFreeLink(1, 'a');
 
     expect(fetch).not.toHaveBeenCalled();
   });

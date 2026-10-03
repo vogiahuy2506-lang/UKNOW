@@ -13,6 +13,7 @@ vi.mock('../../../landing-pages/services/landingPagesAdminApi.service.js', () =>
   putLandingCustomDomain: vi.fn(),
   postLandingCustomDomainVerify: vi.fn(),
   deleteLandingCustomDomain: vi.fn(),
+  postLandingFreeLink: vi.fn(),
 }));
 
 // Từ điển vi.js THẬT (không mock chuỗi): thiếu khoá dịch thì test thấy khoá thô.
@@ -185,12 +186,12 @@ describe('SettingsModal — tên miền', () => {
     expect(screen.getByText(/đang chờ xác minh/)).toBeInTheDocument();
   });
 
-  it('trang domain_type=custom mà KHÔNG còn hàng tên miền nào (4 trang hỏng ở production) → không hiện link miễn phí đã chết, không cho sửa slug', () => {
+  it('trang domain_type=custom mà KHÔNG còn hàng tên miền nào (4 trang hỏng ở production) → không hiện link miễn phí đã chết, không hiện ô slug thường (chỉ ô của khối dùng lại link miễn phí)', () => {
     renderModal({ slug: 'abc', domainType: 'custom', customDomainHostname: null });
 
     expect(screen.queryByTestId('landing-public-url')).toBeNull();
     expect(screen.queryByLabelText(/Đường dẫn miễn phí/)).toBeNull();
-    expect(screen.getByText(/chưa có tên miền nào được gắn/)).toBeInTheDocument();
+    expect(screen.getByText(/Trang chưa có link vì tên miền riêng trước đó không còn được gắn/)).toBeInTheDocument();
   });
 
   it('trang chưa có hostname nào → link miễn phí + ô slug', () => {
@@ -484,7 +485,7 @@ describe('SettingsModal — tên miền riêng: kiểm DNS rồi mới kết n�
     renderModal({ slug: 'abc', domainType: 'custom', customDomainHostname: null });
 
     expect(await screen.findByRole('button', { name: 'Dùng tên miền riêng của bạn' })).toBeInTheDocument();
-    expect(screen.getByText(/chưa có tên miền nào được gắn/)).toBeInTheDocument();
+    expect(screen.getByText(/Trang chưa có link vì tên miền riêng trước đó không còn được gắn/)).toBeInTheDocument();
     expect(screen.queryByTestId('landing-public-url')).toBeNull();
   });
 });
@@ -628,5 +629,153 @@ describe('SettingsModal — bố cục 3 khối', () => {
     const imagesToggle = screen.getByRole('button', { name: /Ảnh đã tải lên/ });
     expect(imagesToggle).toHaveAttribute('aria-expanded', 'false');
     expect(imagesToggle).toHaveTextContent('(2)');
+  });
+});
+
+/**
+ * PLAN_DUNG_LAI_LINK_MIEN_PHI_2026-10-03: trang domain_type='custom' mà không còn hàng tên miền (landing 50, 76, 88, 105)
+ * chỉ kết nối được tên miền riêng, không lấy lại được link miễn phí. Nay có ô đường dẫn + nút "Dùng lại link miễn phí"
+ * (POST /admin/landing-pages/:id/free-link qua api có Bearer). GIỮ chốt PR-1: modal không đổi form.domainType; slug do
+ * server ghi phải về form.slug để lần "Lưu trang" sau không gửi slug cũ đè lên.
+ */
+describe('SettingsModal — dùng lại link miễn phí (trang mất link)', () => {
+  const NONE_SERVER = { configured: false, instructions: null, record: null, dnsRecords: [] };
+  const RESTORED = { id: 10, slug: 'abc', domainType: 'system', restored: true, provisioned: true, message: null, domain: FREE_SERVER };
+  const BROKEN = { slug: 'abc', domainType: 'custom', customDomainHostname: null };
+
+  beforeEach(() => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    vi.stubGlobal('fetch', vi.fn());
+    domainApi.fetchLandingCustomDomain.mockResolvedValue(NONE_SERVER);
+    domainApi.postLandingFreeLink.mockResolvedValue(RESTORED);
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const slugInput = () => screen.getByLabelText('Đường dẫn (slug) cho link miễn phí');
+  const restoreButton = () => screen.getByRole('button', { name: 'Dùng lại link miễn phí' });
+
+  it('trang hỏng: hiện câu gợi ý 2 cách, ô slug điền sẵn slug hiện tại + nút "Dùng lại link miễn phí"; vẫn còn khối kết nối tên miền riêng', async () => {
+    renderModal(BROKEN);
+
+    expect(screen.getByText(/Có 2 cách: dùng lại link miễn phí/)).toBeInTheDocument();
+    expect(screen.getByTestId('restore-free-link')).toBeInTheDocument();
+    expect(slugInput()).toHaveValue('abc');
+    expect(restoreButton()).toBeEnabled();
+    expect(await screen.findByRole('button', { name: 'Dùng tên miền riêng của bạn' })).toBeInTheDocument();
+    // Ô "Đường dẫn miễn phí (slug)" + nút "Lưu" thường vẫn ẩn (đổi slug thường làm backend đụng hàng domain).
+    expect(screen.queryByLabelText(/Đường dẫn miễn phí/)).toBeNull();
+  });
+
+  it('trang hỏng KHÔNG có slug (như landing 76): ô slug rỗng, nhập được', async () => {
+    renderModal({ ...BROKEN, slug: '' });
+    await screen.findByRole('button', { name: 'Dùng tên miền riêng của bạn' }); // chờ server trả lời xong
+
+    expect(slugInput()).toHaveValue('');
+    fireEvent.change(slugInput(), { target: { value: 'Trang Moi!' } });
+    expect(slugInput()).toHaveValue('trangmoi'); // cùng cách làm sạch với ô slug thường
+  });
+
+  it('bấm nút: gọi API qua hàm của service với đúng id + slug đang nhập, rồi NẠP LẠI tên miền từ server', async () => {
+    domainApi.fetchLandingCustomDomain.mockResolvedValueOnce(NONE_SERVER).mockResolvedValue(FREE_SERVER);
+    renderModal({ ...BROKEN, slug: '' });
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(slugInput(), { target: { value: 'abc' } });
+    fireEvent.click(restoreButton());
+
+    await waitFor(() => expect(domainApi.postLandingFreeLink).toHaveBeenCalledWith(10, 'abc'));
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(2));
+    // Server trả hàng miễn phí → hết là "trang hỏng": khối dùng lại biến mất, ô slug thường + link hiện ra.
+    await waitFor(() => expect(screen.queryByTestId('restore-free-link')).toBeNull());
+    expect(screen.getByLabelText(/Đường dẫn miễn phí/)).toBeInTheDocument();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('thành công: slug SERVER đã ghi (đã chuẩn hoá) về form.slug của trình soạn — không đụng domainType / hostname (chốt PR-1)', async () => {
+    domainApi.postLandingFreeLink.mockResolvedValue({ ...RESTORED, slug: 'trang-moi' });
+    const initial = baseForm({ ...BROKEN, slug: '' });
+    const { setForm } = renderModal({ ...BROKEN, slug: '' });
+
+    fireEvent.change(slugInput(), { target: { value: 'Trang-Moi' } });
+    fireEvent.click(restoreButton());
+
+    await waitFor(() => expect(setForm).toHaveBeenCalled());
+    const forms = appliedForms(setForm, initial);
+    expect(forms.at(-1).slug).toBe('trang-moi');
+    for (const next of forms) {
+      expect(next.domainType).toBe('custom');
+      expect(next.customDomainHostname).toBe(null);
+      expect(next.customDomainIsApex).toBe(false);
+    }
+  });
+
+  it('không nhập slug (ô rỗng) vẫn gọi API — để backend dùng slug đang có hoặc trả 400', async () => {
+    renderModal({ ...BROKEN, slug: '' });
+
+    fireEvent.click(restoreButton());
+
+    await waitFor(() => expect(domainApi.postLandingFreeLink).toHaveBeenCalledWith(10, ''));
+  });
+
+  it.each([
+    ['409 slug trùng trang khác', 'Slug đã được dùng cho landing khác'],
+    ['409 trang đang dùng tên miền riêng', 'Trang đang dùng tên miền riêng — hãy gỡ tên miền riêng trước, trang sẽ tự quay về link miễn phí.'],
+    ['400 chưa có slug', 'Cần đặt đường dẫn (slug) trước khi dùng lại link miễn phí.'],
+  ])('lỗi %s → hiện ĐÚNG câu của backend, không đổi form, không nạp lại', async (_name, message) => {
+    domainApi.postLandingFreeLink.mockRejectedValue({ response: { status: 409, data: { success: false, message } } });
+    const { setForm } = renderModal(BROKEN);
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(restoreButton());
+
+    expect(await screen.findByTestId('restore-free-link-error')).toHaveTextContent(message);
+    expect(setForm).not.toHaveBeenCalled();
+    expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId('restore-free-link')).toBeInTheDocument(); // vẫn là trang hỏng, bấm lại được
+    expect(restoreButton()).toBeEnabled();
+  });
+
+  it('lỗi không có câu của server (mạng) → hiện thông điệp lỗi, không để trống', async () => {
+    domainApi.postLandingFreeLink.mockRejectedValue(new Error('Network Error'));
+    renderModal(BROKEN);
+
+    fireEvent.click(restoreButton());
+
+    expect(await screen.findByTestId('restore-free-link-error')).toHaveTextContent('Network Error');
+  });
+
+  it('server báo chưa kích hoạt xong (provisioned=false, vd Cloudflare lỗi): không hiện lỗi đỏ, vẫn đồng bộ slug + nạp lại', async () => {
+    domainApi.postLandingFreeLink.mockResolvedValue({ ...RESTORED, provisioned: false, message: 'Cloudflare giả lập lỗi' });
+    const initial = baseForm(BROKEN);
+    const { setForm } = renderModal(BROKEN);
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(restoreButton());
+
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(2));
+    expect(screen.queryByTestId('restore-free-link-error')).toBeNull();
+    expect(appliedForms(setForm, initial).at(-1).slug).toBe('abc');
+  });
+
+  it.each([
+    ['trang dùng link miễn phí', { slug: 'abc', domainType: 'system', customDomainHostname: 'abc.founderai.biz', customDomainStatus: 'active' }, FREE_SERVER],
+    ['trang chưa có hostname (system)', { slug: 'abc', domainType: 'system', customDomainHostname: null }, NONE_SERVER],
+    ['trang có tên miền riêng đang chạy', { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'active' }, CUSTOM_ACTIVE_SERVER],
+    ['trang có tên miền riêng chờ xác minh', { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'pending_verification' }, CUSTOM_PENDING_SERVER],
+  ])('%s: KHÔNG hiện khối / nút "Dùng lại link miễn phí"', async (_name, patch, server) => {
+    domainApi.fetchLandingCustomDomain.mockResolvedValue(server);
+    renderModal(patch);
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalled());
+
+    expect(screen.queryByTestId('restore-free-link')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Dùng lại link miễn phí' })).toBeNull();
+  });
+
+  it('trang chưa lưu (không có editingId): không có nút (chưa có trang để cấp link)', () => {
+    renderModal(BROKEN, { editingId: null });
+    expect(screen.queryByTestId('restore-free-link')).toBeNull();
   });
 });

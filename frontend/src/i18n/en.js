@@ -835,9 +835,18 @@ export default {
           linkUnsavedHint: 'Press Save to give the page a link.',
           linkNoSlugHint: 'Set a URL path below to give the page a link.',
           linkPendingHint: 'Your custom domain is awaiting verification. The link will show once it is connected.',
-          linkNoDomainHint: 'This page is set to a custom domain but none is attached, so it has no link yet. Connect a custom domain below.',
+          linkNoDomainHint: 'This page has no link because its custom domain is no longer attached. You have two options: use the free link again in the box below, or connect a custom domain.',
           slugLabel: 'Free URL path (slug)',
           slugSave: 'Save',
+        },
+        // Use the free link again (PLAN_DUNG_LAI_LINK_MIEN_PHI): a page that lost its link (domain_type='custom' with no domain row).
+        freeLink: {
+          slugLabel: 'URL path (slug) for the free link',
+          button: 'Use the free link again',
+          busy: 'Setting up the link...',
+          success: 'Free link restored: {link}',
+          pendingWarn: 'The link {link} was set but is not active yet. Try again in a few minutes or contact support.',
+          genericError: 'Could not restore the free link, please try again.',
         },
         // Custom domain (PLAN_TEN_MIEN_RIENG, PR-D): DNS is checked first and the domain connects only once DNS is correct;
         // removing it puts the page back on its free link.
