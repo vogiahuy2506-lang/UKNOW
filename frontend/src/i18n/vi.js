@@ -1674,7 +1674,7 @@ export default {
     confirmDeleteTitle: 'Xác nhận xóa nhân viên',
     confirmDeleteMessage: 'Xóa khỏi nhóm',
     deleteWarning: 'Tài khoản của họ vẫn còn nhưng sẽ không còn là nhân viên của bạn.',
-    exceedsMaxLimit: 'Vượt quá giới hạn tối đa của gói ({max.toLocaleString()})',
+    exceedsMaxLimit: 'Vượt quá giới hạn tối đa của gói ({max})',
     enterQuantity: 'Nhập số lượng...',
     emailPlaceholder: 'email@example.com',
     permissions: {

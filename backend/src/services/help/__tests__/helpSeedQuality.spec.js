@@ -126,6 +126,7 @@ const UI_LABELS_IN_ARTICLES = [
   ['nhan-vien', 'employee.teamRowCompany', 'Cả công ty'],
   ['nhan-vien', 'employee.myContribution.title', 'Tiến độ của bạn'],
   ['nhan-vien', 'employee.limitPerPeriod', 'Giới hạn / kỳ'],
+  ['nhan-vien', 'employee.saveLimits', 'Lưu giới hạn'],
   ['nhan-vien', 'nav.reports', 'Báo cáo'],
   ['plan-and-billing', 'billingHub.tabOverview', 'Tổng quan'],
   ['plan-and-billing', 'billingHub.tabLocks', 'Tài nguyên khoá'],

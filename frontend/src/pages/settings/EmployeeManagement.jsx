@@ -19,6 +19,8 @@ import {
 import userManagementApiService from '../../features/users/services/userManagementApi.service';
 import TeamActivityCard from '../../features/users/components/TeamActivityCard';
 import { getMyProfile } from '../../features/auth/services/authApi.service';
+import NumberInput from '../../components/common/NumberInput';
+import { formatIntVi } from '../../utils/formatNumber.util';
 import {
   buildPermissionPreset,
   countGrantedPermissions,
@@ -59,7 +61,7 @@ const MODAL_SM = 'relative z-10 w-full max-w-md  max-h-[85vh] rounded-xl bg-whit
 const MODAL_MD = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl overflow-hidden flex flex-col';
 const MODAL_CREATE = 'relative z-10 w-full max-w-2xl max-h-[85vh] rounded-xl bg-white shadow-xl p-6 overflow-y-auto';
 
-const limitLabel = (val) => (val === null || val === undefined ? '∞' : String(val));
+const limitLabel = (val) => (val === null || val === undefined ? '∞' : formatIntVi(val));
 
 // ── LimitField ───────────────────────────────────────────────────────────────
 const LimitField = ({ label, value, onChange, max, t }) => {
@@ -81,11 +83,10 @@ const LimitField = ({ label, value, onChange, max, t }) => {
     }
   };
 
-  const handleChange = (e) => {
-    const digits = e.target.value.replace(/\D/g, '');
-    const normalized = digits === '' ? '' : String(parseInt(digits, 10));
-    setText(normalized);
-    onChange(normalized === '' ? 0 : parseInt(normalized, 10));
+  // NumberInput đã lo dấu chấm hàng nghìn; ở đây luôn nhận số nguyên (hoặc '') nên API vẫn nhận số thuần.
+  const handleChange = (num) => {
+    setText(num === '' ? '' : String(num));
+    onChange(num === '' ? 0 : num);
   };
 
   const handleBlur = () => {
@@ -110,10 +111,7 @@ const LimitField = ({ label, value, onChange, max, t }) => {
         />
         <span className="text-sm text-gray-600">{t('employee.unlimited')}</span>
       </label>
-      <input
-        type="text"
-        inputMode="numeric"
-        pattern="[0-9]*"
+      <NumberInput
         className={`input w-full ${exceedsMax ? 'border-red-400 focus:ring-red-400' : ''}`}
         disabled={isUnlimited}
         value={text}
@@ -122,7 +120,7 @@ const LimitField = ({ label, value, onChange, max, t }) => {
         onBlur={handleBlur}
       />
       {exceedsMax && (
-        <p className="text-xs text-red-500">{t('employee.exceedsMaxLimit', { max: max.toLocaleString() })}</p>
+        <p className="text-xs text-red-500">{t('employee.exceedsMaxLimit', { max: formatIntVi(max) })}</p>
       )}
     </div>
   );

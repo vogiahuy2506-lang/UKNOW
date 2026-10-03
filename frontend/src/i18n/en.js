@@ -1671,7 +1671,7 @@ export default {
     confirmDeleteTitle: 'Confirm Delete Employee',
     confirmDeleteMessage: 'Remove from team',
     deleteWarning: 'Their account will still exist but they will no longer be your employee.',
-    exceedsMaxLimit: 'Exceeds maximum limit of plan ({max.toLocaleString()})',
+    exceedsMaxLimit: 'Exceeds maximum limit of plan ({max})',
     enterQuantity: 'Enter quantity...',
     emailPlaceholder: 'email@example.com',
     permissions: {
