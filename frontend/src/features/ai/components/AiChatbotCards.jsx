@@ -2010,7 +2010,7 @@ const previewChannelLabel = (channel, locale) => {
 };
 
 // The server supplies this semantic view. Model-provided summary.steps is intentionally never rendered here.
-export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, canCreateCampaign = true, canRunCampaign = true, t, locale = 'vi' }) => {
+export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun, showCreateAndRun = false, onQuickSend, onEdit, onCancel, onRetry, isPreparing, prepareError, isActive = true, canCreateCampaign = true, canRunCampaign = true, t, locale = 'vi' }) => {
   const [expandedSteps, setExpandedSteps] = useState(new Set());
   const steps = confirmationView?.steps || [];
   const blockingIssues = confirmationView?.blockingIssues || [];
@@ -2099,6 +2099,21 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onQuickSend, on
 
       <div className="p-4 bg-white/50 border-t border-emerald-100">
         {isActive && <div className="space-y-2">
+          {/* "Tạo và chạy": chỉ hiện khi người dùng ĐÃ nói rõ muốn chạy ngay (cổng BE) và có quyền chạy. Chiến dịch chỉ chạy khi bấm nút này. */}
+          {showCreateAndRun && canCreateCampaign && canRunCampaign && onConfirmAndRun && (
+            <>
+              <button
+                type="button"
+                onClick={onConfirmAndRun}
+                disabled={!canCreate}
+                className="w-full py-3 bg-orange-500 text-white font-black text-sm uppercase tracking-widest rounded-xl hover:bg-orange-600 disabled:cursor-not-allowed disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-orange-500/30"
+              >
+                <HiOutlinePlay className="w-5 h-5" />
+                {t('aiChatbot.createAndRunBtn')}
+              </button>
+              <p className="text-[11px] leading-snug text-slate-500 text-center">{t('aiChatbot.createAndRunNotice')}</p>
+            </>
+          )}
           {canCreateCampaign ? (
             <button
               onClick={onConfirm}

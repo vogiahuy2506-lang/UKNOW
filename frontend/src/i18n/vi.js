@@ -4793,6 +4793,13 @@ export default {
     enterEmailTemplateName: 'Nhập tên mẫu email...',
     // Confirm create / campaign buttons
     createCampaignBtn: 'Tạo chiến dịch',
+    // "Tạo và chạy" — chỉ hiện trên thẻ xác nhận khi người dùng đã GÕ rõ muốn chạy ngay; chạy khi bấm nút
+    createAndRunBtn: 'Tạo và chạy',
+    createAndRunNotice: 'Chiến dịch chỉ chạy sau khi bạn bấm nút này. Muốn xem lại trước thì bấm "Tạo chiến dịch".',
+    createAndRunPreviewNotReady: 'Hãy sửa các mục trong bản xem trước trước khi tạo và chạy chiến dịch.',
+    creatingAndRunningToast: 'Đang tạo và chạy chiến dịch...',
+    createAndRunSuccess: '🎉 Chiến dịch "{name}" đã được tạo và đang chạy!\n\nRun ID: {runId}\n\nBạn có thể theo dõi tiến trình tại trang Chiến dịch.',
+    createAndRunFailed: 'Không thể tạo và chạy chiến dịch. Vui lòng thử lại.',
     noPermissionCreateCampaign: 'Tài khoản nhân viên của bạn chưa được cấp quyền tạo chiến dịch. Nhờ chủ nhóm vào Cài đặt › Nhân viên bật quyền này nhé.',
     stepsLabel: 'Các bước:',
     // Category names

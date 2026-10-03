@@ -79,11 +79,16 @@ const aiApi = {
   },
 
   /**
-   * Create AND RUN campaign automatically (no confirmation).
-   * @param {object} script The campaign script from AI
+   * Create AND RUN a campaign. CHỈ gọi sau khi người dùng bấm "Tạo và chạy" trên thẻ xác nhận (rà soát C P1-4) —
+   * không bao giờ gọi thẳng từ câu trả lời của model.
+   * @param {object} script The campaign script (bản đã qua bước xem trước)
+   * @param {object|null} [directRecipients] Danh sách người nhận nhập tay (lớp phủ riêng tư), nếu có
    */
-  createAndRunCampaign: async (script) => {
-    const response = await api.post('/ai/create-and-run-campaign', { script }, {
+  createAndRunCampaign: async (script, directRecipients = null) => {
+    const response = await api.post('/ai/create-and-run-campaign', {
+      script,
+      ...(directRecipients ? { directRecipients } : {}),
+    }, {
       timeout: 120000
     });
     return response.data;

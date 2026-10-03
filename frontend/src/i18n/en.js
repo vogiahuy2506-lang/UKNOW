@@ -4777,6 +4777,13 @@ export default {
     enterEmailTemplateName: 'Enter email template name...',
     // Confirm create / campaign buttons
     createCampaignBtn: 'Create campaign',
+    // "Create and run" — only shown on the confirmation card when the user TYPED that they want to run right away; runs on click
+    createAndRunBtn: 'Create and run',
+    createAndRunNotice: 'The campaign only runs after you press this button. To review first, press "Create campaign".',
+    createAndRunPreviewNotReady: 'Fix the items in the preview before creating and running the campaign.',
+    creatingAndRunningToast: 'Creating and running the campaign...',
+    createAndRunSuccess: '🎉 Campaign "{name}" has been created and is running!\n\nRun ID: {runId}\n\nYou can follow its progress on the Campaigns page.',
+    createAndRunFailed: 'Could not create and run the campaign. Please try again.',
     noPermissionCreateCampaign: "Your employee account doesn't have permission to create campaigns yet. Ask your team owner to enable it in Settings › Employees.",
     stepsLabel: 'Steps:',
     // Category names

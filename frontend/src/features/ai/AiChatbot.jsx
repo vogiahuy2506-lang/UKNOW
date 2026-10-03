@@ -387,6 +387,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [editingLandingPageIndex, setEditingLandingPageIndex] = useState(null);
   const [_creatingCampaign, setCreatingCampaign] = useState(false);
   const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
+  const createAndRunInFlightRef = useRef(false);
   const [generatingDay, setGeneratingDay] = useState(null);
   const [contentPlanWorkflow, setContentPlanWorkflow] = useState(null);
   const [wizardContext, setWizardContext] = useState(() => deriveWizardContext([]));
@@ -588,14 +589,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   // Every confirm_create path flows through this one read-only preview request.
   // The response is deliberately held only in component state, never appended to chat history.
-  const prepareAndShowCampaignConfirmation = async (rawScript, { sessionId = currentSessionIdRef.current, update, content, appendMessage = true, recipients = directRecipientsRef.current } = {}) => {
+  // `runAfterCreate`: model trả `create_and_run` (BE đã kiểm người dùng GÕ rõ "tạo và chạy") — thẻ hiện thêm nút "Tạo và chạy".
+  // Vẫn là thẻ xác nhận: chiến dịch chỉ được tạo/chạy khi người dùng bấm.
+  const prepareAndShowCampaignConfirmation = async (rawScript, { sessionId = currentSessionIdRef.current, update, content, appendMessage = true, recipients = directRecipientsRef.current, runAfterCreate = false } = {}) => {
     const requestId = ++campaignConfirmationRequestRef.current;
     const confirmationId = `campaign-confirmation-${requestId}`;
     const message = { role: 'assistant', content, type: 'confirm_create', data: rawScript, confirmationId };
     if (appendMessage && update) update((previous) => [...previous, message]);
     setCurrentScript(rawScript);
     setIsEditingDraft(false);
-    setCampaignConfirmation({ confirmationId, rawScript, status: 'loading', confirmationView: null, error: null });
+    setCampaignConfirmation({ confirmationId, rawScript, status: 'loading', confirmationView: null, error: null, runAfterCreate });
     try {
       const response = await aiApi.prepareCampaign(rawScript, recipients);
       if (requestId !== campaignConfirmationRequestRef.current) return;
@@ -603,10 +606,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       if (!response.success || !response.data?.confirmationView || !response.data?.preparedScript) throw new Error(response.message || 'Không thể chuẩn bị bản xem trước');
       const preparedScript = response.data.preparedScript;
       setCurrentScript(preparedScript);
-      setCampaignConfirmation({ confirmationId, rawScript: preparedScript, status: 'ready', confirmationView: response.data.confirmationView, error: null });
+      setCampaignConfirmation({ confirmationId, rawScript: preparedScript, status: 'ready', confirmationView: response.data.confirmationView, error: null, runAfterCreate });
     } catch (error) {
       if (requestId !== campaignConfirmationRequestRef.current) return;
-      setCampaignConfirmation({ confirmationId, rawScript, status: 'error', confirmationView: null, error: error.response?.data?.message || error.message || 'Không thể chuẩn bị bản xem trước' });
+      setCampaignConfirmation({ confirmationId, rawScript, status: 'error', confirmationView: null, error: error.response?.data?.message || error.message || 'Không thể chuẩn bị bản xem trước', runAfterCreate });
     }
   };
 
@@ -1682,46 +1685,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         }
 
         if (type === 'create_and_run' && data) {
-          setCreatingCampaign(true);
-          const scriptData = {
-            ...applyWizardSelectionsToScript(data, deriveWizardContext(newHistory)),
-            isAiDraft: false,
-            autoRun: true,
-          };
-          update(prev => [...prev, {
-            role: 'assistant',
-            content: content || 'Đang tạo và chạy chiến dịch cho bạn...',
-            type: 'auto_creating',
-            data: { campaignName: data.campaignName },
-          }]);
-
-          try {
-            const createResult = await aiApi.createAndRunCampaign(scriptData);
-            setCreatingCampaign(false);
-            if (createResult.success) {
-              setAutoCreatedCampaign(createResult.data);
-              closeWizardAfterCreate({
-                campaignId: createResult.data.campaignId,
-                content: `🎉 Chiến dịch "${createResult.data.campaignName}" đã được tạo và đang chạy!\n\nRun ID: ${createResult.data.runId || 'N/A'}\n\nBạn có thể theo dõi tiến trình tại trang Chiến dịch.`,
-                type: 'auto_created_success',
-                data: createResult.data,
-                appendMessage: update,
-              });
-            } else {
-              update(prev => [...prev, {
-                role: 'assistant',
-                content: `⚠️ ${createResult.message || 'Có lỗi khi tạo chiến dịch. Vui lòng thử lại.'}`,
-                type: 'error',
-              }]);
-            }
-          } catch (createErr) {
-            setCreatingCampaign(false);
-            update(prev => [...prev, {
-              role: 'assistant',
-              content: `⚠️ Lỗi: ${getAiRequestErrorMessage(createErr)}`,
-              type: 'error',
-            }]);
-          }
+          // Rà soát C P1-4: KHÔNG tạo + chạy thẳng từ câu trả lời của model nữa. BE chỉ giữ `create_and_run` khi người dùng GÕ rõ
+          // "tạo và chạy"; dù vậy vẫn đi qua thẻ xác nhận (xem trước nội dung, người nhận, tài khoản gửi) và chỉ chạy khi họ bấm
+          // nút "Tạo và chạy" (handleConfirmCreateAndRun).
+          const mergedScript = applyWizardSelectionsToScript(data, deriveWizardContext(newHistory));
+          await prepareAndShowCampaignConfirmation(mergedScript, { sessionId: mySessionId, update, content, runAfterCreate: true });
           return;
         }
 
@@ -3103,6 +3071,52 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   /**
+   * "Tạo và chạy" trên thẻ xác nhận — NƠI DUY NHẤT gọi createAndRunCampaign. Chỉ chạy sau khi người dùng đã thấy bản xem trước
+   * (bắt buộc `readyToCreate`) và bấm nút (rà soát C P1-4). Lỗi thì giữ thẻ để thử lại.
+   */
+  const handleConfirmCreateAndRun = async () => {
+    if (!currentScript || createAndRunInFlightRef.current) return;
+    if (campaignConfirmation?.status !== 'ready' || !campaignConfirmation.confirmationView?.readyToCreate) {
+      toast.error(t('aiChatbot.createAndRunPreviewNotReady'));
+      return;
+    }
+    createAndRunInFlightRef.current = true;
+    setCreatingCampaign(true);
+    const toastId = toast.loading(t('aiChatbot.creatingAndRunningToast'));
+    try {
+      const createResult = await aiApi.createAndRunCampaign(
+        { ...currentScript, isAiDraft: false, autoRun: true },
+        directRecipients || directRecipientsRef.current,
+      );
+      if (createResult.success) {
+        toast.dismiss(toastId);
+        campaignConfirmationRequestRef.current += 1;
+        setCampaignConfirmation(null);
+        setCurrentScript(null);
+        directRecipientsRef.current = null;
+        setDirectRecipients(null);
+        setAutoCreatedCampaign(createResult.data);
+        closeWizardAfterCreate({
+          campaignId: createResult.data.campaignId,
+          content: t('aiChatbot.createAndRunSuccess', {
+            name: createResult.data.campaignName,
+            runId: createResult.data.runId || 'N/A',
+          }),
+          type: 'auto_created_success',
+          data: createResult.data,
+        });
+      } else {
+        toast.error(createResult.message || t('aiChatbot.createAndRunFailed'), { id: toastId });
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || t('aiChatbot.createAndRunFailed'), { id: toastId });
+    } finally {
+      createAndRunInFlightRef.current = false;
+      setCreatingCampaign(false);
+    }
+  };
+
+  /**
    * Xử lý khi user hủy tạo chiến dịch
    */
   const handleCancelCreate = () => {
@@ -4013,6 +4027,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   prepareError={idx === latestInteractiveIndex && campaignConfirmation?.status === 'error' ? campaignConfirmation.error : null}
                   isActive={idx === latestInteractiveIndex && Boolean(currentScript)}
                   onConfirm={handleConfirmCreate}
+                  onConfirmAndRun={handleConfirmCreateAndRun}
+                  showCreateAndRun={idx === latestInteractiveIndex && Boolean(campaignConfirmation?.runAfterCreate)}
                   onQuickSend={handleQuickSendDraft}
                   onEdit={() => setIsEditingDraft(true)}
                   onCancel={handleCancelCreate}
