@@ -839,7 +839,7 @@ describe('SettingsModal — link miễn phí kẹt chờ cấp: nút "Thử lạ
   });
 
   it.each([
-    ['canRetryAutoProvision=true', { ...FREE_PENDING_SERVER, status: 'pending_verification', canRetryAutoProvision: true }],
+    ['canRetryAutoProvision=true dù status không phải pending_verification (hook phải chuyển cờ này từ server)', { ...FREE_PENDING_SERVER, status: 'disabled', canRetryAutoProvision: true }],
     ['pending_verification dù canRetryAutoProvision=false (hàng đã có cfHostnameId)', { ...FREE_PENDING_SERVER, cfHostnameId: 'cfh-1', canRetryAutoProvision: false }],
   ])('hiện nút khi %s', async (_name, server) => {
     domainApi.fetchLandingCustomDomain.mockResolvedValue(server);
