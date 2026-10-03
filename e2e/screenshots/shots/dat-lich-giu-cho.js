@@ -44,9 +44,9 @@ export default {
   shots: [
     {
       name: 'hai-muc-dat-lich-thanh-toan',
-      // Chú thích gọi theo tên MỤC khi đã mở ("Đặt lịch hẹn", "Thanh toán giữ chỗ"); trên màn hình, ở biểu mẫu mới, hai mục
-      // này là hai thẻ thu gọn tên "Thêm đặt lịch hẹn" / "Thu tiền khi gửi" (đúng như đoạn văn ngay trên ô ảnh mô tả).
-      caption: 'trang soạn biểu mẫu kéo xuống giữa trang, khoanh đỏ hai mục "Đặt lịch hẹn" và "Thanh toán giữ chỗ"',
+      // Ở biểu mẫu mới, hai mục này là hai thẻ thu gọn tên "Thêm đặt lịch hẹn" / "Thu tiền khi gửi" (đúng nhãn vi.js
+      // `forms.editorPage.addBlock.*`, và đúng đoạn văn ngay trên ô ảnh).
+      caption: 'trang soạn biểu mẫu kéo xuống giữa trang, khoanh đỏ hai thẻ thu gọn "Thêm đặt lịch hẹn" và "Thu tiền khi gửi"',
       localOnly: true,
       async take(page) {
         // Đường thật của người dùng: Tạo biểu mẫu mới -> chọn mẫu "Đăng ký tư vấn" (không bật sẵn đặt lịch / thu tiền)

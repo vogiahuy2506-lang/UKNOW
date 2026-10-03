@@ -5,23 +5,18 @@
  * 1 trang có HTML thật kèm mốc form, 1 trang có tên miền riêng đang chờ DNS,
  * và 3 mẫu công khai trong thư viện template.
  *
- * Bài viết bản 03/10/2026 có 13 ô chú thích; mỗi `shots[].caption` dưới đây khớp ĐÚNG MỘT ô. Từ bản này file chỉ còn
- * những ảnh có ô tương ứng — ảnh "ten-mien-rieng" của giao diện cũ (tab Subdomain / Tên miền riêng) đã bỏ vì ô đó không còn.
+ * Bài viết bản 03/10/2026 (sau lượt sửa seed theo giao diện thật) có 14 ô chú thích; mỗi `shots[].caption` dưới đây khớp ĐÚNG
+ * MỘT ô. File chỉ còn những ảnh có ô tương ứng — ảnh "ten-mien-rieng" của giao diện cũ (tab Subdomain / Tên miền riêng) đã bỏ.
  *
  * Màn hình Cài đặt trang (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU + PLAN_TEN_MIEN_RIENG, 03/10/2026) là một hộp thoại
- * ba khối: "Xuất bản & đường dẫn" → "Form thu khách" → "Ảnh đã tải lên". Ảnh tên miền riêng đi qua đường THẬT (bấm nút,
- * gõ tên miền, bấm Kiểm tra) nhưng bước "Kiểm tra" bị chặn bằng page.route: backend sẽ gọi DNS thật của một tên miền
- * không có thật, nên phản hồi giả có đúng hình dạng của `buildDnsCheckResult` (landingPageDomain.service.js). Không có
- * cuộc gọi nào tới Cloudflare / DNS, và KHÔNG bấm "Kết nối tên miền" (PUT sẽ ghi DB).
+ * ba khối: "Xuất bản & đường dẫn" → "Form thu khách" → "Ảnh đã tải lên". Hai ảnh tên miền riêng (bảng DNS khi chưa trỏ đúng,
+ * và nút "Kết nối tên miền" khi DNS đã đúng) đi qua đường THẬT (bấm nút, gõ tên miền, bấm Kiểm tra) nhưng bước "Kiểm tra"
+ * bị chặn bằng page.route: backend sẽ gọi DNS thật của một tên miền không có thật, nên phản hồi giả có đúng hình dạng của
+ * `buildDnsCheckResult` (landingPageDomain.service.js). Không có cuộc gọi nào tới Cloudflare / DNS, và KHÔNG bấm
+ * "Kết nối tên miền" (PUT sẽ ghi DB).
  *
- * LỆCH GIỮA BÀI VIẾT VÀ GIAO DIỆN (chụp đúng thứ có thật; câu chữ bài nên sửa — xem báo cáo cuối lượt):
- *  - Ô 3: bài gọi ba lựa chọn "Dán HTML có sẵn / Nhờ AI tạo / Chọn mẫu" (khoá i18n `emptyState.*` không còn component nào
- *    dùng); màn hình thật là ô nhập mô tả kèm nút "Tạo trang" (AI), nút "Dán mã HTML" và nút "Thư viện mẫu". Khi trang còn
- *    trống màn này chiếm cả khung, chưa có cột chat bên trái / xem trước bên phải như bài tả.
- *  - Ô 5: "Nhập HTML / Template / Trình chỉnh sửa khối / Lịch sử" nằm trong menu "Công cụ" chứ không phải nút riêng trên
- *    thanh; chỉ "Cài đặt" và "Lưu" là nút nằm sẵn trên thanh.
- *  - Ô 11: bảng DNS (chỉ hiện khi DNS CHƯA đúng) và nút "Kết nối tên miền" (chỉ hiện khi DNS ĐÃ đúng) không bao giờ cùng
- *    xuất hiện — ảnh ghép hai trạng thái thật theo chiều dọc.
+ * Ảnh "khung-chat-ai-dinh-kem-va-hoan-tac" cần AI THẬT (hoặc bản dự phòng) nên chỉ chụp lại khi cần: chạy với
+ * HELP_SHOT_ONLY liệt kê các ảnh khác để giữ PNG cũ và khỏi tốn một lượt AI.
  */
 import {
   sidebarShot, highlight, hideVolatileChrome, settle, contentShot,
@@ -136,25 +131,28 @@ function dnsCheckResponse({ verified }) {
   };
 }
 
-/** Xếp các ảnh PNG theo chiều dọc thành một ảnh (đặt hai ảnh THẬT cạnh nhau, không sửa gì bên trong). */
-async function stackVertically(page, buffers, { gap = 20 } = {}) {
-  const composer = await page.context().newPage();
-  try {
-    // deviceScaleFactor của context là 2: ảnh chụp rộng N pixel ứng với N/2 pixel CSS.
-    const imgs = buffers.map((buffer, index) => {
-      const cssWidth = buffer.readUInt32BE(16) / 2;
-      const src = `data:image/png;base64,${buffer.toString('base64')}`;
-      return `<img src="${src}" style="display:block;width:${cssWidth}px;${index ? `margin-top:${gap}px;` : ''}">`;
-    }).join('');
-    await composer.setContent(
-      `<body style="margin:0;background:#fff"><div id="stack" style="display:inline-block;background:#fff">${imgs}</div></body>`,
-    );
-    await composer.waitForFunction(() => [...document.images].every((img) => img.complete && img.naturalWidth > 0));
-    return composer;
-  } catch (error) {
-    await composer.close();
-    throw error;
-  }
+/**
+ * Dựng tới bước đã bấm "Kiểm tra" ở khối tên miền riêng, trả về khung `custom-domain-connect`.
+ * `verified` chọn phản hồi của bước kiểm tra (đã chặn bằng page.route): false → bảng bản ghi cần thêm, true → DNS đã đúng.
+ */
+async function checkCustomDomain(page, { verified }) {
+  await ensureFreeDomainRow();
+  await page.route('**/api/admin/landing-pages/*/custom-domain/check', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify(dnsCheckResponse({ verified })),
+  }));
+
+  await openEditor(page, { pageTitle: MARKETING_TITLE });
+  const modal = await openSettings(page);
+  await hideVolatileChrome(page);
+  const card = settingsCard(modal, 'Xuất bản & đường dẫn');
+  await card.getByRole('button', { name: 'Dùng tên miền riêng của bạn', exact: true }).click();
+  const panel = card.getByTestId('custom-domain-connect');
+  await panel.waitFor({ state: 'visible', timeout: 15_000 });
+  await panel.getByLabel('Tên miền của bạn').fill('lp.tenmien.com');
+  await panel.getByRole('button', { name: 'Kiểm tra', exact: true }).click();
+  return panel;
 }
 
 export default {
@@ -189,7 +187,7 @@ export default {
     },
     {
       name: 'ba-lua-chon-trinh-soan-trong',
-      caption: 'trình soạn trang còn trống, khoanh đỏ ba lựa chọn Dán HTML có sẵn / Nhờ AI tạo / Chọn mẫu',
+      caption: 'trình soạn trang còn trống, khoanh đỏ ô mô tả cùng nút Tạo trang, nút Dán mã HTML và nút Thư viện mẫu',
       async take(page) {
         await page.goto(`${LANDING_PATH}/new`);
         const pasteHtml = page.getByRole('button', { name: 'Dán mã HTML', exact: true }).first();
@@ -197,7 +195,7 @@ export default {
         await pasteHtml.waitFor({ state: 'visible', timeout: 30_000 });
         await settle(page);
         await hideVolatileChrome(page);
-        // Lựa chọn "Nhờ AI tạo" = ô mô tả lớn ở giữa kèm nút "Tạo trang".
+        // Cách 1 = ô mô tả lớn ở giữa kèm nút "Tạo trang" (AI dựng cả trang); cách 2 = "Thư viện mẫu"; cách 3 = "Dán mã HTML".
         const composer = page.locator('main textarea').first()
           .locator('xpath=ancestor::div[contains(@class,"rounded-2xl")][1]');
         await highlight(composer);
@@ -264,7 +262,7 @@ export default {
     },
     {
       name: 'thanh-cong-cu-trinh-soan',
-      caption: 'thanh công cụ của trình soạn, khoanh đỏ các nút Nhập HTML, Template, Trình chỉnh sửa khối, Lịch sử, Cài đặt, Lưu',
+      caption: 'thanh trên cùng của trình soạn, khoanh đỏ nút Cài đặt, nút Lưu và menu Công cụ đang mở với các mục Template, Trình chỉnh sửa khối, Nhập HTML, Lịch sử',
       localOnly: true,
       async take(page) {
         // Mở một trang ĐÃ LƯU: mục "Lịch sử" chỉ có khi trang đã có phiên bản.
@@ -275,7 +273,7 @@ export default {
         const main = page.locator('main');
         const save = main.getByRole('button', { name: 'Lưu', exact: true }).first();
         const settings = main.getByRole('button', { name: 'Cài đặt', exact: true }).first();
-        // Nhập HTML / Template / Trình chỉnh sửa khối / Lịch sử là bốn mục của menu "Công cụ", không phải nút riêng.
+        // Template / Trình chỉnh sửa khối / Nhập HTML / Lịch sử là mục của menu "Công cụ", không phải nút riêng; Cài đặt và Lưu nằm sẵn trên thanh.
         await main.getByRole('button', { name: 'Công cụ' }).first().click();
         const menu = page.locator('div.absolute.right-0').filter({ hasText: 'Mẫu & Trình dựng' }).first();
         await menu.waitFor({ state: 'visible', timeout: 10_000 });
@@ -442,30 +440,11 @@ export default {
     },
     {
       name: 'bang-dns-ten-mien-rieng',
-      caption: 'bảng bản ghi DNS sau khi bấm Kiểm tra, khoanh đỏ cột Tên (Host) và Giá trị (Value) cùng nút Kết nối tên miền',
+      caption: 'bảng bản ghi DNS sau khi bấm Kiểm tra lúc tên miền chưa trỏ đúng, khoanh đỏ cột Tên (Host) và Giá trị (Value)',
       localOnly: true,
       async take(page) {
-        await ensureFreeDomainRow();
-        // Chặn bước "Kiểm tra" (backend sẽ tra DNS thật của tên miền không có thật). Phản hồi đổi theo `state.verified`.
-        const state = { verified: false };
-        await page.route('**/api/admin/landing-pages/*/custom-domain/check', (route) => route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify(dnsCheckResponse(state)),
-        }));
-
-        await openEditor(page, { pageTitle: MARKETING_TITLE });
         return tallViewportShot(page, 1700, async () => {
-          const modal = await openSettings(page);
-          await hideVolatileChrome(page);
-          const card = settingsCard(modal, 'Xuất bản & đường dẫn');
-          await card.getByRole('button', { name: 'Dùng tên miền riêng của bạn', exact: true }).click();
-          const panel = card.getByTestId('custom-domain-connect');
-          await panel.waitFor({ state: 'visible', timeout: 15_000 });
-          await panel.getByLabel('Tên miền của bạn').fill('lp.tenmien.com');
-          await panel.getByRole('button', { name: 'Kiểm tra', exact: true }).click();
-
-          // Trạng thái 1: DNS chưa đúng → bảng bản ghi cần thêm.
+          const panel = await checkCustomDomain(page, { verified: false });
           const table = panel.getByTestId('custom-domain-dns-table');
           await table.waitFor({ state: 'visible', timeout: 15_000 });
           await page.waitForTimeout(400);
@@ -481,28 +460,24 @@ export default {
           ].map((frame) => ({ ...frame, x: frame.x + 3, width: frame.width - 6 }));
           await drawBoxes(panel, frames);
           await page.waitForTimeout(250);
-          const unverified = await panel.screenshot({ animations: 'disabled' });
-
-          // Trạng thái 2: DNS đã đúng → hiện nút "Kết nối tên miền" (KHÔNG bấm: bấm là PUT ghi DB).
-          await panel.evaluate((el) => el.querySelectorAll('[data-help-shot-box]').forEach((node) => node.remove()));
-          state.verified = true;
-          await panel.getByRole('button', { name: 'Kiểm tra lại', exact: true }).click();
+          return { screenshot: (options = {}) => panel.screenshot({ animations: 'disabled', ...options }) };
+        });
+      },
+    },
+    {
+      name: 'ket-noi-ten-mien-khi-dns-dung',
+      caption: 'sau khi tên miền đã trỏ đúng và bấm Kiểm tra lại, khoanh đỏ nút Kết nối tên miền',
+      localOnly: true,
+      async take(page) {
+        return tallViewportShot(page, 1700, async () => {
+          // DNS đúng ngay từ lần Kiểm tra đầu cho ra đúng màn của bước 4: thông báo xanh + nút "Kết nối tên miền"
+          // (KHÔNG bấm: bấm là PUT ghi DB).
+          const panel = await checkCustomDomain(page, { verified: true });
           const connect = panel.getByRole('button', { name: 'Kết nối tên miền', exact: true });
           await connect.waitFor({ state: 'visible', timeout: 15_000 });
           await highlight(connect);
           await page.waitForTimeout(250);
-          const verified = await panel.screenshot({ animations: 'disabled' });
-
-          const composer = await stackVertically(page, [unverified, verified]);
-          return {
-            screenshot: async (options = {}) => {
-              try {
-                return await composer.locator('#stack').screenshot(options);
-              } finally {
-                await composer.close();
-              }
-            },
-          };
+          return { screenshot: (options = {}) => panel.screenshot({ animations: 'disabled', ...options }) };
         });
       },
     },
