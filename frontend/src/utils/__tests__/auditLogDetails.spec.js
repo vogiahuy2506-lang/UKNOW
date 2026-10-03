@@ -151,7 +151,7 @@ const NOTHING_TO_SHOW = [
   ['CUSTOMER_CREATED', null],
 ];
 
-const TECHNICAL_LEAK = /nodesSau|nodesTruoc|slug:|runId|scheduleId|sessionKey|chatbotId|isPublished|continuousMode|campaign_run|signup_auto_trial|"forms"|\{|\}|\[object|undefined|null|auditLogs\.|JSON/;
+const TECHNICAL_LEAK = /nodesSau|nodesTruoc|slug:|runId|scheduleId|sessionKey|chatbotId|isPublished|continuousMode|campaign_run|signup_auto_trial|"forms"|\{|\}|\[object|undefined|null|auditLogs\.|JSON|(chatbot|run|schedule|session|landing page|reclaimed by user) id\b|session key/i;
 
 describe('formatAuditDetails — câu đọc được cho dòng nhật ký thật', () => {
   it.each(REAL_ROWS)('%s %j → %s', (action, details, expected) => {
