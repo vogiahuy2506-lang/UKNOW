@@ -12,6 +12,6 @@
   },
   "devDependencies": {
     "husky": "^9.1.7",
-    "puppeteer": "^25.2.1"
+    "puppeteer": "^25.12.0"
   }
 }
