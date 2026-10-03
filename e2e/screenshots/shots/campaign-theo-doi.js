@@ -9,7 +9,7 @@
  * `SCHEDULER_ENABLED=false` — worker nền sẽ đánh các lượt "Đang gửi" / "Đang chờ" của dữ liệu mẫu thành lỗi.
  */
 import {
-  sidebarShot, highlight, hideVolatileChrome, settle, contentShot, bandShot, boxAround, drawBoxes, tallViewportShot,
+  paddedShot, sidebarShot, highlight, hideVolatileChrome, settle, contentShot, bandShot, boxAround, drawBoxes, tallViewportShot,
 } from '../lib/shotHelpers.js';
 
 const MONITOR_PATH = '/app/delivery-monitor';
@@ -43,6 +43,55 @@ async function openReportsLast30Days(page) {
   await page.waitForTimeout(800);
   await page.getByTestId('dashboard-kpi-cards').first().waitFor({ state: 'visible', timeout: 30_000 });
   await page.getByTestId('dashboard-sent-chart').first().waitFor({ state: 'visible', timeout: 30_000 });
+  await settle(page);
+  await hideVolatileChrome(page);
+}
+
+/**
+ * Bản phân tích AI mẫu cho thẻ "Phân tích AI" — dựng đúng hình dạng backend trả về (`getSavedInsightForUser`:
+ * `{ savedAt, filtersSnapshot, insights }`, `insights` theo schema của `dashboardInsights.service.js`). Chặn đúng
+ * một cú GET đọc bản đã lưu nên KHÔNG gọi AI thật, không ghi gì vào dữ liệu. `filtersSnapshot` lấy đúng bộ lọc mặc định
+ * của trang (3 tháng, mọi kênh, mọi chiến dịch) để thẻ không bị ẩn vì "phân tích cho bộ lọc khác".
+ */
+async function openReportsWithAiInsight(page) {
+  const filtersSnapshot = await page.evaluate(() => {
+    const pad = (n) => String(n).padStart(2, '0');
+    const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    const now = new Date();
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const start = new Date(end.getFullYear(), end.getMonth() - 2, 1);
+    return { startDate: fmt(start), endDate: fmt(end), campaignType: 'all', campaignIds: [] };
+  });
+  const insights = {
+    overview: 'Trong 3 tháng qua, **Email** là kênh gửi nhiều tin và có tỉ lệ mở ổn định, còn Zalo cá nhân gửi ít hơn nhưng '
+      + 'khách phản hồi nhanh hơn. Khoảng 8% người nhận chưa gửi được, chủ yếu do địa chỉ email không còn dùng. '
+      + 'Số đơn đặt tập trung ở hai chiến dịch gần đây.',
+    key_metrics_analysis: {
+      summary: 'Số liệu gửi tin ổn định; tỉ lệ chưa gửi được ở mức cần xử lý.',
+    },
+    action_plan: [
+      { priority: 1, action: 'Rà lại danh sách email, loại các địa chỉ **không còn dùng** để giảm tỉ lệ chưa gửi được.', expected_result: 'Tỉ lệ chưa gửi được giảm', timeline: '1 tuần' },
+      { priority: 2, action: 'Gửi lại ưu đãi cho nhóm khách đã mở email nhưng chưa nhấp vào liên kết.', expected_result: 'Thêm lượt nhấp', timeline: '2 tuần' },
+      { priority: 3, action: 'Dùng Zalo cá nhân để nhắc khách đã để lại thông tin nhưng chưa đặt mua.', expected_result: 'Thêm đơn đặt', timeline: '2 tuần' },
+    ],
+    risk_warning: 'Nếu tỉ lệ chưa gửi được không giảm, uy tín tên miền gửi email có thể bị ảnh hưởng.',
+    charts: {
+      ordersTrend: { summary: '', compare: '' },
+      channelEngagement: { all: '' },
+      landingTopPages: '',
+      channelBreakdown: { click: '', completed: '', pending: '' },
+      topLists: { topCourses: '', topCampaignsByOrders: '', topCampaignsByClicks: '' },
+    },
+    notes: [],
+  };
+  await page.route('**/api/dashboard/insights/saved*', (route) => route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ success: true, data: { savedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(), filtersSnapshot, insights } }),
+  }));
+  await page.reload();
+  await page.getByTestId('dashboard-kpi-cards').first().waitFor({ state: 'visible', timeout: 30_000 });
+  await page.getByTestId('ai-insight-saved-at').waitFor({ state: 'visible', timeout: 30_000 });
   await settle(page);
   await hideVolatileChrome(page);
 }
@@ -203,6 +252,20 @@ export default {
         }
         await page.waitForTimeout(200);
         return bandShot(page, page.locator('main').first(), page.getByTestId('dashboard-kpi-cards').first(), { scrollToTop: true, padTop: 2 });
+      },
+    },
+    {
+      name: 'the-phan-tich-ai',
+      caption: 'thẻ Phân tích AI với phần tổng quan và mục Nên làm gì',
+      async take(page) {
+        await page.goto(REPORTS_PATH);
+        await page.getByTestId('dashboard-kpi-cards').first().waitFor({ state: 'visible', timeout: 30_000 });
+        await openReportsWithAiInsight(page);
+        const card = page.getByTestId('ai-insight-card').first();
+        await card.scrollIntoViewIfNeeded();
+        await highlight(card);
+        await page.waitForTimeout(200);
+        return paddedShot(page, card, { pad: 14 });
       },
     },
     {
