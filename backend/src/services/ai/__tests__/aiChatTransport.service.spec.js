@@ -1,20 +1,13 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
-const axiosPost = jest.fn();
-const extractGeminiUsage = jest.fn(() => ({ promptTokens: 10, outputTokens: 8192, totalTokens: 8202 }));
+const originalFetch = global.fetch;
+const originalApiKey = process.env.GEMINI_API_KEY;
+const API_KEY = 'AIza-khoa-bi-mat-tro-ly';
+
 const parseAiJson = jest.fn((text) => JSON.parse(text));
 const reserve = jest.fn(async () => ({ maxOutputTokens: 8192 }));
 const record = jest.fn(async () => {});
-
-jest.unstable_mockModule('axios', () => ({
-  default: {
-    post: axiosPost,
-  },
-}));
-
-jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
-  extractGeminiUsage,
-}));
+const resolveFallbackModel = jest.fn(async () => null);
 
 jest.unstable_mockModule('../../../utils/aiJsonParse.util.js', () => ({
   parseAiJson,
@@ -41,8 +34,9 @@ jest.unstable_mockModule('../../../utils/googleUrlFetch.util.js', () => ({
 
 jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
   default: {
-    reserve,
-    record,
+    reserve: (...args) => reserve(...args),
+    record: (...args) => record(...args),
+    resolveFallbackModel: (...args) => resolveFallbackModel(...args),
   },
 }));
 
@@ -50,31 +44,74 @@ jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
   resolveAllowedModel: jest.fn(async () => 'gemini-2.5-flash'),
 }));
 
+// geminiClient.util.js KHÔNG mock: lõi thật chạy, chỉ `fetch` (ranh giới với Google) được giả bằng `Response` thật.
 const { runChat } = await import('../aiChatTransport.service.js');
 
+/** Phản hồi HTTP THẬT như Google trả (status, header, thân JSON). */
+const googleReply = (status, body) => new Response(JSON.stringify(body), {
+  status,
+  headers: { 'content-type': 'application/json; charset=UTF-8' },
+});
+const USAGE = { promptTokenCount: 10, candidatesTokenCount: 8192, totalTokenCount: 8202 };
+const googleOk = (text, { finishReason = 'STOP', usage = USAGE } = {}) => googleReply(200, {
+  candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason, index: 0 }],
+  usageMetadata: usage,
+});
+const googleOverloaded = () => googleReply(503, {
+  error: { code: 503, message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary.', status: 'UNAVAILABLE' },
+});
+const hangingFetch = () => jest.fn((_url, init) => new Promise((_resolve, reject) => {
+  init.signal.addEventListener('abort', () => {
+    reject(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }));
+  });
+}));
+const urlModel = (url) => decodeURIComponent(String(url).match(/models\/([^:]+):generateContent/)?.[1] || '');
+const requestBody = (callIndex = 0) => JSON.parse(global.fetch.mock.calls[callIndex][1].body);
+
+/** Chạy hết đồng hồ giả (nghỉ giữa các lượt thử lại, hạn 120 giây) rồi trả kết quả, KHÔNG để lời hứa treo. */
+async function settle(promise, advanceMs = 130_000) {
+  let settled = false;
+  const guarded = promise.then(
+    (value) => { settled = true; return value; },
+    (error) => { settled = true; throw error; },
+  );
+  guarded.catch(() => {});
+  await jest.advanceTimersByTimeAsync(advanceMs);
+  expect(settled).toBe(true);
+  return guarded;
+}
+
 describe('aiChatTransport.service', () => {
+  let consoleSpies;
+
   beforeEach(() => {
-    axiosPost.mockReset();
-    extractGeminiUsage.mockClear();
+    jest.useFakeTimers();
     parseAiJson.mockClear();
     reserve.mockClear();
     record.mockClear();
-    process.env.GEMINI_API_KEY = 'test-key';
+    resolveFallbackModel.mockReset();
+    resolveFallbackModel.mockResolvedValue(null);
+    readTempFileBuffer.mockReset();
+    readFileBufferByKey.mockReset();
+    extractTextFromBuffer.mockReset();
+    global.fetch = jest.fn();
+    process.env.GEMINI_API_KEY = API_KEY;
+    consoleSpies = ['log', 'warn', 'error'].map((m) => jest.spyOn(console, m).mockImplementation(() => {}));
   });
 
-  it('khi finishReason là MAX_TOKENS: ném lỗi thông điệp rõ ràng và không gọi parseAiJson', async () => {
-    axiosPost.mockResolvedValueOnce({
-      data: {
-        candidates: [
-          {
-            finishReason: 'MAX_TOKENS',
-            content: {
-              parts: [{ text: '{"type":"landing_page","content":"Đang tạo","data":{"html":"<div' }],
-            },
-          },
-        ],
-      },
-    });
+  afterEach(() => {
+    jest.useRealTimers();
+    consoleSpies.forEach((spy) => spy.mockRestore());
+    global.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalApiKey;
+  });
+
+  it('khi finishReason là MAX_TOKENS: ném lỗi thông điệp rõ ràng, không gọi parseAiJson, VẪN ghi token', async () => {
+    global.fetch.mockResolvedValueOnce(googleOk(
+      '{"type":"landing_page","content":"Đang tạo","data":{"html":"<div',
+      { finishReason: 'MAX_TOKENS' },
+    ));
 
     await expect(
       runChat({
@@ -85,21 +122,11 @@ describe('aiChatTransport.service', () => {
     ).rejects.toThrow('AI trả lời quá dài bị cắt, hãy rút ngắn yêu cầu.');
 
     expect(parseAiJson).not.toHaveBeenCalled();
+    expect(record).toHaveBeenCalledWith(101, expect.objectContaining({ totalTokens: 8202 }), expect.objectContaining({ feature: 'smart_chat' }));
   });
 
   it('khi response bình thường: gọi parseAiJson và ghi nhận usage', async () => {
-    axiosPost.mockResolvedValueOnce({
-      data: {
-        candidates: [
-          {
-            finishReason: 'STOP',
-            content: {
-              parts: [{ text: '{"type":"text","content":"Chào bạn"}' }],
-            },
-          },
-        ],
-      },
-    });
+    global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"Chào bạn"}'));
 
     const res = await runChat({
       systemPrompt: 'sys prompt',
@@ -112,26 +139,183 @@ describe('aiChatTransport.service', () => {
     expect(record).toHaveBeenCalledWith(
       101,
       expect.objectContaining({ totalTokens: 8202 }),
-      expect.objectContaining({ feature: 'smart_chat' })
+      { feature: 'smart_chat', model: 'gemini-2.5-flash' }
     );
+  });
+
+  describe('giữ nguyên cách gọi Google của trợ lý (JSON mode, thinking mặc định, timeout)', () => {
+    it('JSON mode + nhiệt độ 0.7 + KHÔNG gửi thinkingConfig/topP; hội thoại nhiều lượt giữ nguyên, assistant → model', async () => {
+      global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"ok"}'));
+
+      await runChat({
+        systemPrompt: 'sys prompt',
+        history: [
+          { role: 'user', content: 'Xin chào' },
+          { role: 'assistant', content: 'Chào bạn' },
+          { role: 'user', content: 'Tạo chiến dịch' },
+        ],
+        userId: 101,
+      });
+
+      const body = requestBody();
+      expect(body.generationConfig).toEqual({
+        responseMimeType: 'application/json',
+        temperature: 0.7,
+        maxOutputTokens: 8192,
+      });
+      expect(body.systemInstruction).toEqual({ parts: [{ text: 'sys prompt' }] });
+      expect(body.contents.map((c) => `${c.role}:${c.parts[0].text}`)).toEqual([
+        'user:Xin chào', 'model:Chào bạn', 'user:Tạo chiến dịch',
+      ]);
+    });
+
+    it('khoá API đi bằng header x-goog-api-key, KHÔNG nằm trong URL', async () => {
+      global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"ok"}'));
+
+      await runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 });
+
+      const [url, init] = global.fetch.mock.calls[0];
+      expect(url).not.toContain('key=');
+      expect(url).not.toContain(API_KEY);
+      expect(init.headers['x-goog-api-key']).toBe(API_KEY);
+    });
+
+    it('lọc thought parts khỏi câu trả lời trước khi parse JSON', async () => {
+      global.fetch.mockResolvedValueOnce(googleReply(200, {
+        candidates: [{
+          content: { parts: [{ text: 'tôi đang suy nghĩ…', thought: true }, { text: '{"type":"text","content":"Xong"}' }] },
+          finishReason: 'STOP',
+        }],
+        usageMetadata: USAGE,
+      }));
+
+      const res = await runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 });
+
+      expect(res).toEqual({ type: 'text', content: 'Xong' });
+      expect(parseAiJson).toHaveBeenCalledWith('{"type":"text","content":"Xong"}');
+    });
+  });
+
+  describe('Google quá tải / lỗi (G2.3) — thử lại, model dự phòng, câu lỗi tiếng Việt', () => {
+    it('503 một lần rồi được → người dùng nhận kết quả, không thấy lỗi', async () => {
+      global.fetch
+        .mockResolvedValueOnce(googleOverloaded())
+        .mockResolvedValueOnce(googleOk('{"type":"text","content":"qua rồi"}'));
+
+      const res = await settle(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }));
+
+      expect(res).toEqual({ type: 'text', content: 'qua rồi' });
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+    });
+
+    it('model chính 503 ×3 → model DỰ PHÒNG trả lời; token ghi theo model dự phòng', async () => {
+      resolveFallbackModel.mockResolvedValue('gemini-du-phong');
+      global.fetch
+        .mockResolvedValueOnce(googleOverloaded())
+        .mockResolvedValueOnce(googleOverloaded())
+        .mockResolvedValueOnce(googleOverloaded())
+        .mockResolvedValueOnce(googleOk('{"type":"text","content":"dự phòng"}'));
+
+      const res = await settle(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }));
+
+      expect(res).toEqual({ type: 'text', content: 'dự phòng' });
+      expect(global.fetch.mock.calls.map(([url]) => urlModel(url))).toEqual([
+        'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-du-phong',
+      ]);
+      expect(record).toHaveBeenCalledWith(101, expect.anything(), { feature: 'smart_chat', model: 'gemini-du-phong' });
+    });
+
+    it('503 mãi (sự cố 24/09) → lỗi CÓ geminiStatus + câu tiếng Việt, KHÔNG còn chuỗi "Gemini API Error (" hay JSON Google', async () => {
+      global.fetch.mockImplementation(async () => googleOverloaded());
+
+      const err = await settle(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }).catch((e) => e));
+
+      expect(global.fetch).toHaveBeenCalledTimes(3);
+      expect(err.geminiStatus).toBe(503);
+      expect(err.code).toBe('AI_PROVIDER_BUSY');
+      expect(err.message).not.toContain('Gemini API Error (');
+      expect(err.message).not.toMatch(/[{}]|UNAVAILABLE|high demand/);
+      expect(record).not.toHaveBeenCalled();
+    });
+
+    it('400 của Google → KHÔNG thử lại, lỗi mang geminiStatus (controller đổi sang câu tiếng Việt), không còn "Gemini API Error ("', async () => {
+      global.fetch.mockResolvedValue(googleReply(400, {
+        error: { code: 400, message: 'Request payload size exceeds the limit', status: 'INVALID_ARGUMENT' },
+      }));
+
+      const err = await runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.geminiStatus).toBe(400);
+      expect(err.message).not.toContain('Gemini API Error (');
+    });
+
+    it('Google treo 120 giây → huỷ fetch THẬT, câu tiếng Việt (không còn "timeout of 120000ms exceeded"), không lộ khoá API', async () => {
+      global.fetch = hangingFetch();
+
+      const err = await settle(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }).catch((e) => e));
+
+      expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(true);
+      expect(err.code).toBe('AI_TIMEOUT');
+      expect(err.message).not.toMatch(/timeout of|aborted/i);
+      // Bản axios cũ ném nguyên AxiosError (config.url có `?key=<khoá>`) rồi controller console.error ra log.
+      expect(err.config).toBeUndefined();
+      expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toContain(API_KEY);
+    });
+
+    it('tra model dự phòng lỗi → vẫn trả lời bằng model chính (resolveFallbackModel không bao giờ làm hỏng lượt)', async () => {
+      resolveFallbackModel.mockResolvedValue(null);
+      global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"ổn"}'));
+
+      await expect(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }))
+        .resolves.toEqual({ type: 'text', content: 'ổn' });
+    });
+  });
+
+  describe('ghi token khi kết quả hỏng (D-07): Google đã tính tiền thì sổ phải có', () => {
+    it('trả về chữ RỖNG (chỉ có thought) → ném "AI trả về kết quả rỗng." NHƯNG đã ghi token smart_chat', async () => {
+      const order = [];
+      record.mockImplementation(async () => { order.push('record'); });
+      global.fetch.mockResolvedValueOnce(googleReply(200, {
+        candidates: [{ content: { parts: [{ text: 'suy nghĩ', thought: true }] }, finishReason: 'STOP' }],
+        usageMetadata: USAGE,
+      }));
+
+      await expect(
+        runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 })
+          .catch((error) => { order.push('throw'); throw error; })
+      ).rejects.toThrow('AI trả về kết quả rỗng.');
+
+      expect(record).toHaveBeenCalledTimes(1);
+      expect(record).toHaveBeenCalledWith(101, expect.objectContaining({ totalTokens: 8202 }), { feature: 'smart_chat', model: 'gemini-2.5-flash' });
+      expect(order).toEqual(['record', 'throw']);
+    });
+
+    it('prompt bị chặn (không có candidate, có blockReason) → "Yêu cầu bị chặn: SAFETY", không parseAiJson', async () => {
+      global.fetch.mockResolvedValueOnce(googleReply(200, {
+        promptFeedback: { blockReason: 'SAFETY' },
+        usageMetadata: { promptTokenCount: 30, totalTokenCount: 30 },
+      }));
+
+      await expect(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }))
+        .rejects.toThrow('Yêu cầu bị chặn: SAFETY');
+      expect(parseAiJson).not.toHaveBeenCalled();
+    });
+
+    it('không có candidate và không rõ lý do → "AI không phản hồi, vui lòng thử lại."', async () => {
+      global.fetch.mockResolvedValueOnce(googleReply(200, { usageMetadata: {} }));
+
+      await expect(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }))
+        .rejects.toThrow('AI không phản hồi, vui lòng thử lại.');
+      // Google không báo token nào → usage toàn 0; aiUsageMeter.record thật tự bỏ qua totalTokens <= 0 (xem aiUsageMeter.service.spec).
+      expect(record).toHaveBeenCalledWith(101, { promptTokens: 0, outputTokens: 0, totalTokens: 0 }, expect.anything());
+    });
   });
 
   it('đính kèm tệp từ storage_key trong lịch sử hội thoại khi không còn tempId', async () => {
     readFileBufferByKey.mockResolvedValueOnce(Buffer.from('doc-content'));
     extractTextFromBuffer.mockResolvedValueOnce('Nội dung file Word từ storage');
-
-    axiosPost.mockResolvedValueOnce({
-      data: {
-        candidates: [
-          {
-            finishReason: 'STOP',
-            content: {
-              parts: [{ text: '{"type":"text","content":"Đã đọc file"}' }],
-            },
-          },
-        ],
-      },
-    });
+    global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"Đã đọc file"}', { usage: USAGE }));
 
     const res = await runChat({
       systemPrompt: 'sys prompt',
@@ -158,26 +342,14 @@ describe('aiChatTransport.service', () => {
       'yeu_cau.docx',
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
     );
-    const postBody = axiosPost.mock.calls[0][1];
-    const userParts = postBody.contents[0].parts;
+    const userParts = requestBody().contents[0].parts;
     const docPart = userParts.find((p) => p.text && p.text.includes('Nội dung file Word từ storage'));
     expect(docPart).toBeDefined();
   });
 
   describe('PR scan PDF in chat transport', () => {
     const fakeGeminiSuccess = () => {
-      axiosPost.mockResolvedValueOnce({
-        data: {
-          candidates: [
-            {
-              finishReason: 'STOP',
-              content: {
-                parts: [{ text: '{"type":"text","content":"OK"}' }],
-              },
-            },
-          ],
-        },
-      });
+      global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"OK"}'));
     };
 
     it('C1: PDF 1 KB, extractTextFromBuffer -> \'\' -> gửi inlineData PDF kèm text scan', async () => {
@@ -193,8 +365,7 @@ describe('aiChatTransport.service', () => {
         userId: 101,
       });
 
-      const postBody = axiosPost.mock.calls[0][1];
-      const parts = postBody.contents[0].parts;
+      const parts = requestBody().contents[0].parts;
       const textScanPart = parts.find((p) => p.text && p.text.includes('scan_doc.pdf') && p.text.includes('scan'));
       expect(textScanPart).toBeDefined();
 
@@ -217,8 +388,7 @@ describe('aiChatTransport.service', () => {
         userId: 101,
       });
 
-      const postBody = axiosPost.mock.calls[0][1];
-      const parts = postBody.contents[0].parts;
+      const parts = requestBody().contents[0].parts;
       const hasInline = parts.some((p) => p.inlineData);
       expect(hasInline).toBe(false);
 
@@ -239,8 +409,7 @@ describe('aiChatTransport.service', () => {
         userId: 101,
       });
 
-      const postBody = axiosPost.mock.calls[0][1];
-      const parts = postBody.contents[0].parts;
+      const parts = requestBody().contents[0].parts;
       const hasInline = parts.some((p) => p.inlineData);
       expect(hasInline).toBe(false);
 
@@ -265,8 +434,7 @@ describe('aiChatTransport.service', () => {
         userId: 101,
       });
 
-      const postBody = axiosPost.mock.calls[0][1];
-      const parts = postBody.contents[0].parts;
+      const parts = requestBody().contents[0].parts;
       const inlineParts = parts.filter((p) => p.inlineData);
       expect(inlineParts).toHaveLength(1);
       expect(inlineParts[0].inlineData.mimeType).toBe('application/pdf');
@@ -277,7 +445,7 @@ describe('aiChatTransport.service', () => {
       expect(budgetPart.text).toContain('scan2.pdf');
     });
 
-    it('C5: readTempFileBuffer ném lỗi fs có /app/ -> part text \'đã hết hạn hoặc không đọc được\', không chứa /app/, axiosPost vẫn được gọi', async () => {
+    it('C5: readTempFileBuffer ném lỗi fs có /app/ -> part text \'đã hết hạn hoặc không đọc được\', không chứa /app/, Gemini vẫn được gọi', async () => {
       fakeGeminiSuccess();
       readTempFileBuffer.mockRejectedValueOnce(new Error("ENOENT: open '/app/temp_uploads/x.pdf'"));
 
@@ -288,9 +456,8 @@ describe('aiChatTransport.service', () => {
         userId: 101,
       });
 
-      expect(axiosPost).toHaveBeenCalled();
-      const postBody = axiosPost.mock.calls[0][1];
-      const parts = postBody.contents[0].parts;
+      expect(global.fetch).toHaveBeenCalled();
+      const parts = requestBody().contents[0].parts;
       const errorPart = parts.find((p) => p.text && p.text.includes('đã hết hạn hoặc không đọc được'));
       expect(errorPart).toBeDefined();
       expect(errorPart.text).not.toContain('/app/');

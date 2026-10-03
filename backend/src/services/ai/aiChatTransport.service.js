@@ -1,7 +1,6 @@
-import { extractGeminiUsage } from '../../utils/geminiClient.util.js';
+import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import { parseAiJson } from '../../utils/aiJsonParse.util.js';
 import uploadController from '../../controllers/upload.controller.js';
-import axios from 'axios';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import {
   PDF_INLINE_MAX_BYTES,
@@ -14,8 +13,21 @@ import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 
 /**
+ * Một lượt trợ lý được chờ tối đa bằng đúng timeout axios cũ (120 giây) — GỒM cả thử lại và model dự phòng.
+ * Số này vẫn vượt trần 100 giây của Cloudflare (báo cáo D mục 1c); G2 không đổi nó, chỉ thêm thử lại + dự phòng.
+ */
+const ASSISTANT_TIMEOUT_MS = 120000;
+
+/**
  * Shared Gemini chat transport — builds history, attaches files, calls API.
  * Moved out of aiCampaign.service.js (god-object split PR4).
+ *
+ * G2.3 (03/10/2026): gọi qua `generateGeminiContent` (lõi dùng chung) thay vì axios trần. Axios ném
+ * `Gemini API Error (503): {json}` KHÔNG có `geminiStatus` nên `buildAiErrorPayload` không nhận ra lỗi của Google và
+ * trả nguyên JSON tiếng Anh cho người dùng (sự cố 24/09); và khi hết giờ/đứt mạng, `AxiosError` nguyên bản mang
+ * `config.url` (có khoá API trong query) bị controller `console.error` ra log. Lõi đã có thử lại 429/5xx/lỗi mạng,
+ * model dự phòng, `geminiStatus`, khoá API ở header. Giữ nguyên: JSON mode, nhiệt độ 0.7, KHÔNG gửi thinkingConfig
+ * (thinkingBudget null — model tự quyết như trước), không gửi topP, timeout 120 giây.
  *
  * @param {object} params
  * @param {string} params.systemPrompt
@@ -122,59 +134,61 @@ export async function runChat({
     }
   }
 
-  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   const modelName = await resolveAllowedModel(userId, requestedModel);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const systemInstruction = { parts: [{ text: systemPrompt }] };
 
   try {
     const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
       contents: geminiHistory,
-      systemInstruction: { parts: [{ text: systemPrompt }] },
+      systemInstruction,
       model: modelName,
       requestedMaxOutputTokens: 8192,
     });
+    const fallbackModel = await aiUsageMeter.resolveFallbackModel();
 
-    const { data: result } = await axios.post(url, {
-      systemInstruction: { parts: [{ text: systemPrompt }] },
+    const result = await generateGeminiContent({
       contents: geminiHistory,
-      generationConfig: { responseMimeType: 'application/json', temperature: 0.7, maxOutputTokens },
-    }, { headers: { 'Content-Type': 'application/json' }, timeout: 120000 });
+      systemInstruction,
+      model: modelName,
+      fallbackModel,
+      jsonMode: true,
+      temperature: 0.7,
+      topP: null,
+      maxOutputTokens,
+      thinkingBudget: null,
+      timeoutMs: ASSISTANT_TIMEOUT_MS,
+      totalTimeoutMs: ASSISTANT_TIMEOUT_MS,
+    });
 
-    if (!result.candidates || result.candidates.length === 0) {
-      if (result.promptFeedback?.blockReason) {
-        throw new Error(`Yêu cầu bị chặn: ${result.promptFeedback.blockReason}`);
+    // Ghi token NGAY sau khi Google trả lời, TRƯỚC mọi kiểm tra kết quả (D-07): Google tính tiền cả lượt bị cắt
+    // (MAX_TOKENS), bị lọc hay trả rỗng. Bản cũ chỉ ghi ở nhánh thành công và nhánh MAX_TOKENS nên lượt rỗng tốn tiền mà sổ
+    // không có (record tự bỏ qua khi Google không báo token). Ghi theo model THẬT đã trả lời (có thể là model dự phòng).
+    await aiUsageMeter.record(userId, result.usage, {
+      feature: 'smart_chat',
+      model: result.modelUsed || modelName,
+    }).catch(() => {});
+
+    if (!result.raw?.candidates || result.raw.candidates.length === 0) {
+      if (result.blockReason) {
+        throw new Error(`Yêu cầu bị chặn: ${result.blockReason}`);
       }
       throw new Error('AI không phản hồi, vui lòng thử lại.');
     }
 
-    const candidate = result.candidates[0];
-    const finishReason = candidate?.finishReason;
-
-    if (finishReason === 'MAX_TOKENS') {
+    if (result.finishReason === 'MAX_TOKENS') {
       console.warn('[AI Chat] Gemini response truncated (finishReason=MAX_TOKENS)');
-      await aiUsageMeter.record(userId, extractGeminiUsage(result), {
-        feature: 'smart_chat',
-        model: modelName,
-      }).catch(() => {});
       throw new Error('AI trả lời quá dài bị cắt, hãy rút ngắn yêu cầu.');
     }
 
-    const text = (candidate.content?.parts || [])
-      .filter((p) => p.text && !p.thought)
-      .map((p) => p.text)
-      .join('');
+    const text = result.text;
     if (!text) throw new Error('AI trả về kết quả rỗng.');
 
-    console.log(`[AI Chat] Gemini response (first 500 chars, finishReason=${finishReason || 'STOP'}):`, text.substring(0, 500));
-    await aiUsageMeter.record(userId, extractGeminiUsage(result), {
-      feature: 'smart_chat',
-      model: modelName,
-    });
+    console.log(`[AI Chat] Gemini response (first 500 chars, finishReason=${result.finishReason || 'STOP'}):`, text.substring(0, 500));
     return parseAiJson(text);
   } catch (err) {
-    if (err.response) {
-      console.error('Gemini API Error Detail:', JSON.stringify(err.response.data, null, 2));
-      throw new Error(`Gemini API Error (${err.response.status}): ${JSON.stringify(err.response.data)}`);
+    if (err.geminiStatus != null) {
+      // Câu gốc của Google chỉ ở log máy chủ (đã lọc khoá API); người dùng nhận câu tiếng Việt qua buildAiErrorPayload.
+      console.error(`[AI Chat] Gemini lỗi ${err.geminiStatus}:`, String(err.providerMessage || err.message).slice(0, 500));
     }
     throw err;
   }
