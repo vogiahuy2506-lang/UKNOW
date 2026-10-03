@@ -11,6 +11,7 @@ import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.ut
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
 import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
 import { CUSTOM_CHATBOT_MIN_SIMILARITY, MAX_KB_CHUNKS, capChunkTexts } from '../../utils/ragLimits.util.js';
+import { decodeUploadFilename } from '../../utils/uploadFilename.util.js';
 
 function isImageUnsupportedError(err) {
   const msg = String(err?.message || '').toLowerCase();
@@ -297,8 +298,8 @@ QUY TẮC TRẢ LỜI:
       throw error;
     }
 
-    const rawName = file.originalname;
-    const cleanName = rawName
+    // multer giải mã tên tệp bằng latin1 → tên có dấu thành "chuyÃªn" (A P3-1): khôi phục UTF-8 trước khi lưu/hiển thị.
+    const cleanName = decodeUploadFilename(file.originalname)
       .trim()
       .normalize('NFC');
 

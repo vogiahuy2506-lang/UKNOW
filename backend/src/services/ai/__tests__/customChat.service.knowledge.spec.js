@@ -235,6 +235,26 @@ describe('customChat — nạp tài liệu: chia đoạn ≤ 1.500 + embedding h
     expect(result.chunks).toBe(saved.chunks.length);
   });
 
+  it('tên tệp tải lên bị multer đọc thành mojibake → lưu đúng tên UTF-8 ở source_key, title và source của đoạn (A P3-1)', async () => {
+    mockExtract.mockResolvedValue('Nội dung hồ sơ chuyên gia, đủ dài để tạo đoạn tài liệu.');
+    mockEmbedTexts.mockImplementation(async (texts) => texts.map(() => [0.5, 0.5]));
+    const proper = 'Profile chuyên gia Nguyễn.pdf';
+
+    await svc.uploadDocument({
+      chatbotId: 17,
+      userId: 90,
+      file: { originalname: Buffer.from(proper, 'utf8').toString('latin1'), buffer: Buffer.from('%PDF-1.4') },
+    });
+
+    expect(mockExtract.mock.calls[0][1]).toBe(proper);
+    expect(mockRepo.findDocumentBySource).toHaveBeenCalledWith(17, 90, proper, expect.anything(), { forUpdate: true });
+    expect(mockRepo.upsertProcessingDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ sourceKey: proper, title: proper }),
+      expect.anything(),
+    );
+    expect(mockRepo.replaceChunks.mock.calls[0][0].source).toBe(proper);
+  });
+
   it('embedding hỏng + tài liệu MỚI → markError với lý do tiếng Việt, KHÔNG replaceChunks, KHÔNG markReady, lỗi 503 đến người gọi', async () => {
     mockEmbedTexts.mockRejectedValue(new Error('Embedding API lỗi (429)'));
 
