@@ -188,6 +188,26 @@ describe('PUT /api/admin/landing-pages/:id — custom → system (không còn gi
     expect(await landingRow(id)).toMatchObject({ domainType: 'system', domainSubtype: null });
   });
 
+  it('(iv-b) có slug nhưng CẤP subdomain miễn phí THẤT BẠI: giữ tên miền riêng và domain_type="custom" (không để trang rơi về system mà không còn link miễn phí)', async () => {
+    const { token } = await setup('guard-ivb');
+    const otherId = await createLanding(token, 'guard-ivb-other');
+    const id = await createLanding(token, 'guard-ivb-slug');
+    await convertToCustomDomain(id, { hostname: 'guard-ivb.example.com' });
+    // Trang khác đã giữ đúng hostname miễn phí mà trang này cần → cấp subdomain không thể thành công.
+    await db.query('UPDATE landing_page_domains SET hostname = $2 WHERE landing_page_id = $1', [
+      otherId,
+      `guard-ivb-slug.${BASE}`,
+    ]);
+
+    const res = await putLanding(token, id, { slug: 'guard-ivb-slug', domainType: 'system' });
+
+    expect(res.status).toBe(200);
+    expect(await domainRows(id)).toEqual([
+      expect.objectContaining({ hostname: 'guard-ivb.example.com', cfManaged: false }),
+    ]);
+    expect(await landingRow(id)).toMatchObject({ domainType: 'custom', domainSubtype: 'subdomain' });
+  });
+
 });
 
 /**
