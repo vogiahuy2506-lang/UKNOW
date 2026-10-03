@@ -7,6 +7,7 @@ import {
   logWorkspace,
 } from '../../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../../utils/auditContext.util.js';
+import { buildAiErrorPayload } from '../../utils/aiErrorPayload.util.js';
 
 class AiActivityController {
   /**
@@ -75,11 +76,9 @@ class AiActivityController {
 
       return res.json({ success: true, data });
     } catch (err) {
-      console.error('[AiActivityController] summarizeActivity error:', err);
-      return res.status(err.status || 500).json({
-        success: false,
-        message: err.message || 'Không thể tóm tắt hội thoại bằng AI',
-      });
+      console.error('[AiActivityController] summarizeActivity error:', err, err?.providerMessage ? `| Google: ${err.providerMessage}` : '');
+      // Lỗi từ Google mang nguyên câu JSON tiếng Anh — không đưa ra khách (D-19).
+      return res.status(err.status || 500).json(buildAiErrorPayload(err, 'Không thể tóm tắt hội thoại bằng AI'));
     }
   }
 }

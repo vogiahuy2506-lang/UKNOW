@@ -55,6 +55,30 @@ function isAiTokenLimitError(error) {
   return error?.code === 'RESOURCE_LIMIT_EXCEEDED' && error?.resource === 'ai_token';
 }
 
+/**
+ * Mã lỗi mà CHÍNH mình ném kèm câu tiếng Việt viết sẵn cho khách cuối (customChat.chat: TIMEOUT/UPSTREAM_ERROR; lõi Gemini:
+ * AI_PROVIDER_BUSY/AI_TIMEOUT). Mọi lỗi 5xx khác có thể mang câu Postgres/Google tiếng Anh nên không được đưa ra.
+ */
+const PUBLIC_CHAT_SAFE_ERROR_CODES = new Set(['TIMEOUT', 'UPSTREAM_ERROR', 'AI_PROVIDER_BUSY', 'AI_TIMEOUT']);
+
+/**
+ * Thân lỗi trả cho KHÁCH CUỐI của widget / trang chatbot công khai (A P3-3, 03/10/2026). Bản cũ trả thẳng `err.message`
+ * và widget.js in nguyên `data.message` vào khung chat — khách thấy câu lỗi Postgres/Google bằng tiếng Anh.
+ *  - lỗi 4xx do chính mình ném (tệp đính kèm sai, nội dung không hợp lệ…) có câu tiếng Việt cho khách → giữ nguyên;
+ *  - lỗi có mã trong PUBLIC_CHAT_SAFE_ERROR_CODES → giữ câu tiếng Việt đã viết sẵn (kèm `code`);
+ *  - còn lại (5xx/không rõ) → câu chung; lỗi gốc nằm trong log máy chủ (nơi gọi đã console.error).
+ */
+function buildPublicChatErrorBody(err) {
+  const status = Number(err?.status);
+  const isClientError = Number.isInteger(status) && status >= 400 && status < 500;
+  const hasSafeCode = PUBLIC_CHAT_SAFE_ERROR_CODES.has(err?.code);
+  return {
+    success: false,
+    message: (isClientError || hasSafeCode) && err?.message ? err.message : PUBLIC_CHATBOT_FALLBACK_CONTENT,
+    ...(hasSafeCode ? { code: err.code } : {}),
+  };
+}
+
 function kbErrorStatus(error) {
   if (error?.status) return error.status;
   return String(error?.message || '').includes('not found') ? 404 : 500;
@@ -1847,8 +1871,8 @@ class ChatbotController {
         console.warn('[CustomChatbot] Public widget AI token quota exhausted');
         return res.json(publicChatbotFallback());
       }
-      console.error('[CustomChatbot] Chat error:', err);
-      return res.status(err.status || 500).json({ success: false, message: err.message });
+      console.error('[CustomChatbot] Chat error:', err, err?.providerMessage ? `| Google: ${err.providerMessage}` : '');
+      return res.status(err.status || 500).json(buildPublicChatErrorBody(err));
     }
   }
 
@@ -2134,8 +2158,8 @@ class ChatbotController {
         }
         return res.json(publicChatbotFallback({ sessionId: visitorSessionId }));
       }
-      console.error('[CustomChatbot] Chat by ID error:', err);
-      return res.status(500).json({ success: false, message: err.message });
+      console.error('[CustomChatbot] Chat by ID error:', err, err?.providerMessage ? `| Google: ${err.providerMessage}` : '');
+      return res.status(500).json(buildPublicChatErrorBody(err));
     }
   }
 

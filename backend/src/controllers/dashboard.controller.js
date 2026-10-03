@@ -2,6 +2,7 @@ import dashboardAnalyticsService from '../services/dashboard/dashboardAnalytics.
 import dashboardInsightsService from '../services/dashboard/dashboardInsights.service.js';
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
+import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
 
 const INSIGHTS_INVALID_FILTERS_MESSAGE = 'Bộ lọc phân tích không hợp lệ (filters phải là đối tượng)';
 
@@ -260,11 +261,9 @@ class DashboardController {
       this.setNoCacheHeaders(res);
       return res.json(result);
     } catch (error) {
-      console.error('Generate dashboard insights error:', error);
-      return res.status(error?.status || 500).json({
-        success: false,
-        message: error?.message || 'Lỗi server',
-      });
+      console.error('Generate dashboard insights error:', error, error?.providerMessage ? `| Google: ${error.providerMessage}` : '');
+      // Lỗi từ Google (400/403/404 khi model bị khai tử, 503 quá tải) mang nguyên câu JSON tiếng Anh — không đưa ra khách (D-19).
+      return res.status(error?.status || 500).json(buildAiErrorPayload(error || {}, 'Không thể tạo nhận xét báo cáo bằng AI. Vui lòng thử lại sau.'));
     }
   }
 }

@@ -1,7 +1,12 @@
 import { describe, expect, it } from '@jest/globals';
 
 import { buildAiErrorPayload } from '../ai.controller.js';
-import { AI_PROVIDER_BUSY_CODE, AI_PROVIDER_BUSY_MESSAGE } from '../../utils/geminiClient.util.js';
+import {
+  AI_PROVIDER_BUSY_CODE,
+  AI_PROVIDER_BUSY_MESSAGE,
+  AI_TIMEOUT_CODE,
+  AI_TIMEOUT_MESSAGE,
+} from '../../utils/geminiClient.util.js';
 
 /**
  * Sự cố 24/09/2026: khách sinh landing thấy nguyên cục
@@ -50,6 +55,22 @@ describe('buildAiErrorPayload — không để câu thô của Google lọt ra k
       limit: 100,
       upgradeRequired: true,
     });
+  });
+
+  it('hết giờ chờ Google (AI_TIMEOUT từ lõi) → giữ câu tiếng Việt + mã, không phải "This operation was aborted"', () => {
+    const err = Object.assign(new Error(AI_TIMEOUT_MESSAGE), {
+      name: 'AbortError', code: AI_TIMEOUT_CODE, status: 503, providerMessage: 'This operation was aborted',
+    });
+
+    const payload = buildAiErrorPayload(err, 'Lỗi khi xử lý yêu cầu AI');
+
+    expect(payload).toEqual({ success: false, message: AI_TIMEOUT_MESSAGE, code: AI_TIMEOUT_CODE });
+    expect(JSON.stringify(payload)).not.toContain('aborted');
+  });
+
+  it('buildAiErrorPayload vẫn import được từ ai.controller.js (re-export) VÀ từ utils/aiErrorPayload.util.js — cùng một hàm', async () => {
+    const util = await import('../../utils/aiErrorPayload.util.js');
+    expect(util.buildAiErrorPayload).toBe(buildAiErrorPayload);
   });
 
   it('lỗi đã được lớp Gemini đổi câu sẵn (hết lượt thử) → giữ câu tiếng Việt đó', () => {

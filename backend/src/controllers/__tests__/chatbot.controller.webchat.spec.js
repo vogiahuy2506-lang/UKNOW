@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const findChatbotById = jest.fn();
 const findChatbotByWidgetKey = jest.fn();
@@ -788,5 +788,100 @@ describe('F1.4 — payload công khai không có system_instruction / temperatur
     for (const key of FORBIDDEN) expect(data).not.toHaveProperty(key);
     expect(JSON.stringify(data)).not.toContain('BÍ MẬT');
     expect(data).toEqual(expect.objectContaining({ widgetKey: 'wk_abc', responseStyle: 'professional' }));
+  });
+});
+
+// G2.4 (A P3-3, 03/10/2026): widget công khai + trang chatbot công khai trả thẳng `err.message`, widget.js in nguyên
+// `data.message` vào khung chat → khách thấy câu lỗi Postgres/Google bằng tiếng Anh.
+describe('G2.4 — widget và trang chatbot công khai không trả câu lỗi thô cho khách', () => {
+  const CAU_CHUNG = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
+  let errorSpy;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(chatbot);
+    findChatbotByWidgetKey.mockResolvedValue(chatbot);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    isAiPaused.mockResolvedValue(false);
+    consume.mockResolvedValue(undefined);
+    broadcast.mockReturnValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    errorSpy.mockRestore();
+  });
+
+  const HANDLERS = [
+    ['chatWithCustomChatbot (widget)', async (res) => chatbotController.chatWithCustomChatbot(
+      { params: { widgetKey: 'wk_abc' }, body: { message: 'xin chào', sessionId: 'sess_w', history: [] } }, res,
+    )],
+    ['chatWithCustomChatbotById (trang công khai)', async (res) => chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '12' }, body: { message: 'xin chào', sessionId: 'sess_p', history: [] } }, res,
+    )],
+  ];
+
+  describe.each(HANDLERS)('%s', (_name, invoke) => {
+    const bodyOf = (res) => res.json.mock.calls[0][0];
+
+    it('lỗi Postgres tiếng Anh (không có status) → câu chung tiếng Việt, KHÔNG lộ câu thô, không trừ credit', async () => {
+      chat.mockRejectedValue(new Error('relation "webchat_messages" does not exist'));
+      const res = makeRes();
+
+      await invoke(res);
+
+      expect(bodyOf(res)).toEqual({ success: false, message: CAU_CHUNG });
+      expect(JSON.stringify(bodyOf(res))).not.toMatch(/relation|does not exist/);
+      expect(consume).not.toHaveBeenCalled();
+    });
+
+    it('lỗi Google tiếng Anh gắn status 503 nhưng KHÔNG có mã an toàn → câu chung (không lộ "Gemini API error")', async () => {
+      chat.mockRejectedValue(Object.assign(new Error('Gemini API error: 500 Internal error encountered.'), { status: 503 }));
+      const res = makeRes();
+
+      await invoke(res);
+
+      expect(bodyOf(res).message).toBe(CAU_CHUNG);
+    });
+
+    it.each([
+      ['UPSTREAM_ERROR', 'AI gặp sự cố tạm thời, vui lòng thử lại.'],
+      ['TIMEOUT', 'AI đang bận, vui lòng thử lại sau vài giây.'],
+      ['AI_PROVIDER_BUSY', 'Máy chủ AI đang quá tải tạm thời. Bạn vui lòng thử lại sau ít phút.'],
+      ['AI_TIMEOUT', 'AI phản hồi quá lâu. Bạn vui lòng thử lại sau ít phút.'],
+    ])('mã %s đã mang sẵn câu tiếng Việt cho khách → giữ nguyên câu và mã', async (code, message) => {
+      chat.mockRejectedValue(Object.assign(new Error(message), { status: 503, code }));
+      const res = makeRes();
+
+      await invoke(res);
+
+      expect(bodyOf(res)).toEqual({ success: false, message, code });
+    });
+
+    it('lỗi 4xx do chính mình ném (tệp đính kèm sai…) có câu tiếng Việt → giữ nguyên', async () => {
+      chat.mockRejectedValue(Object.assign(new Error('Tệp đính kèm không hợp lệ.'), { status: 400 }));
+      const res = makeRes();
+
+      await invoke(res);
+
+      expect(bodyOf(res)).toEqual({ success: false, message: 'Tệp đính kèm không hợp lệ.' });
+    });
+  });
+
+  it('widget giữ nguyên mã HTTP của lỗi (503 vẫn là 503); trang công khai theo cũ luôn 500', async () => {
+    chat.mockRejectedValue(Object.assign(new Error('x'), { status: 503, code: 'UPSTREAM_ERROR' }));
+    const widgetRes = makeRes();
+    await HANDLERS[0][1](widgetRes);
+    const pageRes = makeRes();
+    await HANDLERS[1][1](pageRes);
+
+    expect(widgetRes.status).toHaveBeenCalledWith(503);
+    expect(pageRes.status).toHaveBeenCalledWith(500);
   });
 });
