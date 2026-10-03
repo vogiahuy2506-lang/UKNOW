@@ -8868,7 +8868,7 @@ export default {
     phonePlaceholder: 'Nhập số điện thoại liên hệ...',
     processing: 'Đang xử lý...',
     confirmRegister: 'Xác nhận đăng ký ngay',
-    privacyNote: 'Thông tin của bạn được bảo mật tuyệt đối.',
+    privacyNote: 'Thông tin của bạn được bảo vệ theo chính sách bảo mật.',
   },
 
   bulkNotification: {

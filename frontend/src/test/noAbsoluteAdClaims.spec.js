@@ -48,6 +48,10 @@ const FORBIDDEN = new RegExp(
     // Đợt 4 (29/09/2026): điểm đánh giá / số lượng doanh nghiệp-khoá học cứng trên trang công khai.
     '\\d\\.\\d\\s*/\\s*5(\\.0)?\\s*(đánh giá|rating)',
     '\\d+\\s*\\+\\s*(doanh nghiệp|hội thảo|khóa học|khoá học|workshops?|courses|businesses|enterprises)',
+    // 03/10/2026: dòng dưới nút gửi của form đăng ký ("Thông tin của bạn được bảo mật tuyệt đối") là
+    // cam kết tuyệt đối về an toàn dữ liệu — dùng "được bảo vệ theo chính sách bảo mật".
+    'bảo mật tuyệt đối',
+    'strictly confidential',
   ].join('|'),
   'i'
 );
@@ -60,6 +64,8 @@ const read = (rel) => readFileSync(fileURLToPath(new URL(rel, import.meta.url)),
 // Từng file public đã rà (đường dẫn tính từ src/test/).
 const PUBLIC_FILES = [
   '../features/landing/constants/landingCopy.js',
+  // Bản xem trước form trong Cài đặt trang từng viết cứng lại chữ của form công khai (có "tuyệt đối").
+  '../features/landing-canvas/components/LeadFormConfigPanel.jsx',
   '../pages/learning/LearningPage.jsx',
   '../pages/public/components/MockChatbot.jsx',
   '../features/landing-pages/components/VisualBlockEditor.jsx',

@@ -3,6 +3,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import LeadFormConfigPanel from '../LeadFormConfigPanel.jsx';
 import { defaultLeadFormConfig } from '../../../landing-pages/utils/landingLeadFormConfig.js';
 import viDict from '../../../../i18n/vi.js';
+import { LANDING_COPY } from '../../../landing/constants/landingCopy.js';
 import { editLandingHtmlWithAi } from '../../../landing-pages/services/landingPagesAdminApi.service.js';
 
 vi.mock('../../../landing-pages/services/landingPagesAdminApi.service.js', () => ({
@@ -100,6 +101,41 @@ describe('LeadFormConfigPanel', () => {
     render(<LeadFormConfigPanel form={form} setForm={setForm} t={t} />);
 
     expect(screen.getByRole('combobox')).not.toBeDisabled();
+  });
+
+  /**
+   * 03/10/2026: bản xem trước viết cứng formCopy thiếu firstName/lastName (FounderLeadFormCard dùng khi
+   * nameMode='split') → hai ô Họ / Tên ra không nhãn; và có câu "Bảo mật tuyệt đối" (NĐ 248). Nay lấy
+   * chữ từ LANDING_COPY — cùng nguồn với form công khai (EmbedLeadFormPage).
+   */
+  describe('xem trước form lấy chữ từ cùng nguồn với form công khai', () => {
+    const copy = LANDING_COPY.vi.form;
+
+    it('nameMode mặc định (split) → có nhãn ô Họ và ô Tên, không ô nào thiếu nhãn', () => {
+      render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+
+      // Ghim chữ thật (không suy từ copy): copy mất khoá thì nhãn rỗng, test vẫn phải đỏ vì lý do đúng.
+      expect(screen.getByLabelText(/^Họ\s/)).toBeInTheDocument();
+      expect(screen.getByLabelText(/^Tên\s/)).toBeInTheDocument();
+      expect(copy.lastName).toBe('Họ');
+      expect(copy.firstName).toBe('Tên');
+    });
+
+    it('dòng dưới nút gửi đúng bằng LANDING_COPY.vi.form.secureNote và không chứa "tuyệt đối"', () => {
+      const { container } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+
+      expect(screen.getByText(copy.secureNote)).toBeInTheDocument();
+      expect(container.textContent).not.toMatch(/tuyệt đối/i);
+    });
+
+    it('tiêu đề / nhãn Email / SĐT / nút gửi cũng là chữ của form công khai', () => {
+      render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+
+      expect(screen.getByText(copy.embedTitle)).toBeInTheDocument();
+      expect(screen.getByLabelText(new RegExp(`^${copy.email}`))).toBeInTheDocument();
+      expect(screen.getByLabelText(new RegExp(`^${copy.phone}`))).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: new RegExp(`^${copy.submit}`) })).toBeInTheDocument();
+    });
   });
 
   it('render không lộ chuỗi khoá i18n thô kiểu "leadFormConfig."', () => {

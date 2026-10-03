@@ -8854,7 +8854,7 @@ Feel free to ask me anything!`,
     phonePlaceholder: 'Enter contact phone...',
     processing: 'Processing...',
     confirmRegister: 'Confirm Registration',
-    privacyNote: 'Your information is kept strictly confidential.',
+    privacyNote: 'Your information is protected under our privacy policy.',
   },
 
   bulkNotification: {

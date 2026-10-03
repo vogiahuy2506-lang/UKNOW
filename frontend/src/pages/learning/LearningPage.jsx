@@ -282,7 +282,7 @@ const EnrollmentModal = ({ course, isOpen, onClose }) => {
               {isSubmitting ? 'Đang xử lý...' : 'Xác nhận đăng ký ngay'}
             </button>
             <p className="text-center text-xs text-gray-500">
-              Thông tin của bạn được bảo mật tuyệt đối.
+              Thông tin của bạn được bảo vệ theo chính sách bảo mật.
             </p>
           </form>
         )}

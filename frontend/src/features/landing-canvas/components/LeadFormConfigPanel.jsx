@@ -17,6 +17,9 @@ import {
   HiOutlineCheckCircle,
 } from 'react-icons/hi';
 import { FounderLeadFormCard } from '../../landing/components/FounderLeadFormCard.jsx';
+// Cùng nguồn chữ với form công khai (EmbedLeadFormPage) — không viết cứng lại: bản viết cứng trước
+// đây thiếu firstName/lastName nên xem trước "Họ / Tên" ra ô không nhãn, và có câu "tuyệt đối" (NĐ 248).
+import { LANDING_COPY } from '../../landing/constants/landingCopy.js';
 import { editLandingHtmlWithAi } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import { fetchForms } from '../../forms/services/formAdminApi.service.js';
 import {
@@ -681,23 +684,7 @@ export default function LeadFormConfigPanel({ form, setForm, t, nameMode = 'spli
             locale="vi"
             theme={config.theme}
             nameMode={nameMode}
-            formCopy={{
-              embedTitle: 'Đăng ký nhận thông tin',
-              fullName: 'Họ và tên',
-              email: 'Email',
-              phone: 'Số điện thoại',
-              occupation: 'Nghề nghiệp',
-              interest: 'Lĩnh vực quan tâm',
-              selectOccupation: '-- Chọn nghề --',
-              selectInterest: '-- Chọn lĩnh vực --',
-              consentPrefix: 'Tôi đồng ý nhận thông tin',
-              privacyLink: 'chính sách bảo mật',
-              submit: 'Gửi',
-              submitting: 'Đang gửi',
-              secureNote: 'Bảo mật tuyệt đối',
-              successTitle: 'Thành công!',
-              placeholders: { fullName: 'Nguyễn Văn A', email: 'email@gmail.com', phone: '0901 234 567' },
-            }}
+            formCopy={LANDING_COPY.vi.form}
             form={previewForm}
             setField={() => {}}
             submitting={false}

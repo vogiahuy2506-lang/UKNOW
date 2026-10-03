@@ -28,7 +28,7 @@ export const LANDING_COPY = {
       privacyLink: 'Chính sách bảo mật',
       submit: 'Nhận tư vấn & ưu đãi miễn phí',
       submitting: 'Đang gửi...',
-      secureNote: 'Thông tin của bạn được bảo mật tuyệt đối',
+      secureNote: 'Thông tin của bạn được bảo vệ theo chính sách bảo mật',
       successTitle: 'Đăng ký thành công!',
       successBody:
         'Cảm ơn bạn đã quan tâm đến Founder AI! Đội ngũ tư vấn sẽ liên hệ với bạn trong 24 giờ làm việc. Hãy kiểm tra email để nhận tài liệu AI miễn phí từ ThS. Ngô Hữu Thống.',
@@ -72,7 +72,7 @@ export const LANDING_COPY = {
       privacyLink: 'Privacy policy',
       submit: 'Get consultation & offer',
       submitting: 'Sending...',
-      secureNote: 'Your information is kept strictly confidential',
+      secureNote: 'Your information is protected under our privacy policy',
       successTitle: 'Registration successful!',
       successBody:
         'Thank you for your interest in Founder AI! Our team will contact you within 24 business hours. Check your email for free AI materials from M.Sc. Ngo Huu Thong.',
