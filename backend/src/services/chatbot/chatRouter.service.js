@@ -390,22 +390,27 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
         : [];
       if (excludedIds.length > 0) {
         params.push(excludedIds);
-        query += ` AND id NOT IN ($${params.length})`;
+        // `id NOT IN ($n)` với $n là MẢNG làm Postgres ném "invalid input syntax for type integer"
+        // ở mọi lượt (Telegram luôn truyền excludeMessageIds), rồi catch trả [] → bot mất trí nhớ và
+        // chào lại ở mọi câu (03/10/2026, lỗi từ 22/09). Khuôn đúng: `<> ALL($n::integer[])`.
+        query += ` AND id <> ALL($${params.length}::integer[])`;
       }
 
+      // 20 tin MỚI nhất (DESC + LIMIT) rồi đảo về cũ → mới; `created_at ASC LIMIT` lấy 20 tin CŨ nhất.
       params.push(limit);
-      query += ` ORDER BY created_at ASC LIMIT $${params.length}`;
+      query += ` ORDER BY id DESC LIMIT $${params.length}`;
 
       const { rows } = await db.query(query, params);
       // Map role: visitor → user, bot/agent → model (matches Gemini mapping).
-      return rows.map((row) => ({
+      return rows.reverse().map((row) => ({
         role: row.role,
         content: row.content || '',
         id: row.id,
         createdAt: row.created_at,
       }));
     } catch (err) {
-      console.warn('[ChatRouter] _getTelegramPersonalHistory failed:', err.message);
+      // error (không phải warn): trả [] làm bot mất trí nhớ im lặng — lỗi này phải lộ ra trong log.
+      console.error('[ChatRouter] _getTelegramPersonalHistory failed:', err.message);
       return [];
     }
   }

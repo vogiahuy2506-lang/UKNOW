@@ -438,7 +438,8 @@ class ChatbotRepository {
       : [];
     if (excludedIds.length > 0) {
       params.push(excludedIds);
-      query += ` AND id NOT IN ($${params.length})`;
+      // Cùng lỗi `NOT IN ($n)` với mảng như chatRouter/WhatsApp (03/10/2026): mảng JS đi lên Postgres thành chuỗi '{1,2}'.
+      query += ` AND id <> ALL($${params.length}::bigint[])`;
     }
 
     params.push(limit);

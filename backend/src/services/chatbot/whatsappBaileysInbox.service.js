@@ -467,7 +467,7 @@ async function handleOwnerOutgoing({ sessionKey, msg, type }) {
  * @param {number[]} [options.excludeMessageIds] - loại trừ các message IDs này
  * @param {number} [options.limit=20]
  */
-async function getHistory(conversationId, options = {}) {
+export async function getHistory(conversationId, options = {}) {
   const { throughMessageId = null, excludeMessageIds = [], limit = MAX_HISTORY_MESSAGES } = options;
   let query = `SELECT id, role, content FROM channel_messages
      WHERE id_conversation = $1`;
@@ -482,14 +482,18 @@ async function getHistory(conversationId, options = {}) {
     : [];
   if (excluded.length > 0) {
     params.push(excluded);
-    query += ` AND id NOT IN ($${params.length})`;
+    // `id NOT IN ($n)` với $n là MẢNG: node-pg gửi chuỗi '{1,2}' → Postgres ném "invalid input
+    // syntax for type integer" ở MỌI lượt có tin vừa lưu (03/10/2026, lỗi từ 22/09). Phải là
+    // `<> ALL($n::bigint[])` (channel_messages.id là BIGSERIAL).
+    query += ` AND id <> ALL($${params.length}::bigint[])`;
   }
 
+  // 20 tin MỚI nhất (DESC + LIMIT) rồi đảo về thứ tự cũ → mới; `ASC LIMIT` lấy 20 tin CŨ nhất của hội thoại.
   params.push(limit);
-  query += ` ORDER BY id ASC LIMIT $${params.length}`;
+  query += ` ORDER BY id DESC LIMIT $${params.length}`;
 
   const { rows } = await db.query(query, params);
-  return rows;
+  return rows.reverse();
 }
 
 /**
