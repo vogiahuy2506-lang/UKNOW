@@ -252,6 +252,14 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
       expect(geminiTexts()).toContain('noi dung tep cua minh');
     });
 
+    it('nhân viên: CHỖ TRÍCH BRIEF (không chỉ runChat) đọc tệp dưới id chủ — brief.attachedFile mang nội dung tệp', async () => {
+      // Review G3a (03/10): kiểm ở chỗ trích brief theo id NHÂN VIÊN thay vì chủ vẫn xanh mọi ca khác — runChat đọc lại
+      // đúng OWN_KEY nên spy thấy khoá, còn brief âm thầm mất tệp (403 bị catch).
+      const response = await chat({ userId: EMPLOYEE, resourceOwnerUserId: OWNER, files: [fileOf(OWN_KEY)] });
+
+      expect(response?._wizard?.brief?.attachedFile).toMatchObject({ text: 'noi dung tep cua minh', hasProductData: expect.anything() });
+    });
+
     it('super admin (nhánh trợ lý admin) cũng chỉ đọc tệp dưới id của mình', async () => {
       await chat({ userId: OWNER, userRole: 'admin', files: [fileOf(FOREIGN_KEY), fileOf(OWN_KEY)] });
 
