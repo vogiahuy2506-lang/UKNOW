@@ -18,6 +18,7 @@ import { resolveAllowedModel } from './ai/aiModelPolicy.service.js';
 import aiUsageMeter from './ai/aiUsageMeter.service.js';
 import { extractGeminiUsage } from '../utils/geminiClient.util.js';
 import { DEFAULT_AI_MODEL } from '../utils/aiModelTier.util.js';
+import { toPublicPlanAdviceDto } from './help/planAdvisor.service.js';
 
 const MAX_FREE_CHATS = 5;
 // Tin nhắn vào thẳng prompt, không đăng nhập → trần cứng (D-01). Dài hơn → 400, không tốn lượt/không gọi AI.
@@ -72,13 +73,6 @@ function memoryGetCount(key) {
   if (!existing || existing.expiresAt <= Date.now()) return 0;
   return Number(existing.count) || 0;
 }
-
-// Fallback data khi DB chua co du lieu
-const DEFAULT_PLANS = [
-  { name: 'Starter', billing_period: 'thang', price: 99000, original_price: 199000, features: ['3 Landing Page', '500 Email/thang', 'Auto Zalo', '100 Leads', 'Email Support'] },
-  { name: 'Pro', billing_period: 'thang', price: 299000, original_price: 499000, features: ['10 Landing Page', '2000 Email/thang', 'Auto Zalo', '1000 Leads', 'Chatbot AI', 'Priority Support'] },
-  { name: 'Business', billing_period: 'thang', price: 699000, original_price: 999000, features: ['Unlimited Landing', '5000 Email/thang', 'Auto Zalo', 'Unlimited Leads', 'Chatbot AI', 'CRM', 'A/B Testing', 'Dedicated Support'] },
-];
 
 // In-memory cache for founderAI data (refreshed periodically)
 // IMPORTANT: Start with null to force fetch from DB on first request
@@ -142,12 +136,48 @@ async function fetchFounderaiData() {
   }
 }
 
+/** Trang bảng giá thật (route `/pricing` ở frontend/src/App.jsx). */
+export const HERO_PRICING_URL = 'founderai.biz/pricing';
+/** Trang đăng ký thật (route `/register` ở frontend/src/App.jsx) — KHÔNG phải digiso.vn. */
+export const HERO_REGISTER_URL = 'founderai.biz/register';
+
+/**
+ * Khi không có dữ liệu gói (DB lỗi, chưa nạp được): TUYỆT ĐỐI không dùng giá ghi cứng — bản cũ có bảng gói dự phòng với
+ * giá + "A/B Testing", "CRM" không có thật. Chỉ dẫn khách tới bảng giá thật.
+ */
+export const HERO_PLANS_UNAVAILABLE_TEXT =
+  `Hiện chưa tải được danh sách gói. KHÔNG tự nêu giá hay hạn mức; khi khách hỏi về giá, hãy mời khách xem bảng giá tại ${HERO_PRICING_URL}.`;
+
+const fmtInt = (n) => String(Math.round(Number(n))).replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+
+/**
+ * Hạn mức của gói, lấy từ ĐÚNG các cột `plans` qua toPublicPlanAdviceDto (cùng ngữ nghĩa trợ lý tư vấn gói: null = không giới
+ * hạn, 0 = gói không có). Cột không rõ thì bỏ qua — không đoán.
+ */
+function formatPlanLimits(plan) {
+  const lim = toPublicPlanAdviceDto(plan)?.limits;
+  if (!lim) return '';
+  const part = (limit, { limited, unlimited, none }) => {
+    if (limit?.kind === 'limited') return limited(fmtInt(limit.value));
+    if (limit?.kind === 'unlimited') return unlimited;
+    if (limit?.kind === 'unsupported') return none;
+    return null;
+  };
+  const parts = [
+    part(lim.emailPerMonth, { limited: (n) => `${n} email/tháng`, unlimited: 'email không giới hạn', none: 'không gửi email' }),
+    part(lim.zaloPerMonth, { limited: (n) => `${n} tin Zalo/tháng`, unlimited: 'tin Zalo không giới hạn', none: 'không gửi Zalo' }),
+    part(lim.landingPages, { limited: (n) => `${n} landing page`, unlimited: 'landing page không giới hạn', none: 'không có landing page' }),
+    part(lim.aiCreditsPerPeriod, { limited: (n) => `${n} lượt AI mỗi kỳ`, unlimited: 'lượt AI không giới hạn', none: 'không có lượt AI' }),
+  ].filter(Boolean);
+  return parts.length > 0 ? `Hạn mức: ${parts.join('; ')}.` : '';
+}
+
 /**
  * Format plans for AI context (safe public data only)
  */
-function formatPlansForContext(plans) {
+export function formatPlansForContext(plans) {
   if (!plans || plans.length === 0) {
-    return 'Chua co thong tin goi dich vu.';
+    return HERO_PLANS_UNAVAILABLE_TEXT;
   }
 
   return plans.map(plan => {
@@ -171,14 +201,16 @@ function formatPlansForContext(plans) {
       priceInfo += ` (${yearlyPerMonth.toLocaleString('vi-VN')} VND/thang neu thanh toan nam)`;
     }
 
-    return `- ${plan.name}: ${priceInfo}. Tinh nang: ${featuresStr}`;
+    const limitsStr = formatPlanLimits(plan);
+
+    return `- ${plan.name}: ${priceInfo}. ${limitsStr ? `${limitsStr} ` : ''}Tinh nang: ${featuresStr}`;
   }).join('\n\n');
 }
 
 /**
  * Format courses for AI context (safe public data only)
  */
-function formatCoursesForContext(courses) {
+export function formatCoursesForContext(courses) {
   if (!courses || courses.length === 0) {
     return '';
   }
@@ -249,6 +281,120 @@ async function callGemini(prompt) {
   } finally {
     clearTimeout(timeoutId);
   }
+}
+
+/**
+ * Prompt tư vấn trang chủ — hàm THUẦN (không DB, không mạng) để spec dựng prompt thật và quét nội dung.
+ *
+ * Khối "GIẢI PHÁP TỔNG HỢP" CHỈ gồm tính năng đang có thật (đối chiếu từng mục với route ở frontend/src/App.jsx và dịch vụ ở
+ * backend/src). Bản cũ (D-03, 03/10/2026) khẳng định A/B testing, ZNS, chấm điểm lead, báo cáo Excel/PDF, "chatbot theo kịch
+ * bản", đăng ký ở digiso.vn và "đội ngũ DIGISO hỗ trợ thiết lập" — không có thật / không đúng trang / là cam kết dịch vụ, và
+ * vô hiệu luôn quy tắc 1 của chính prompt ("chỉ trả lời theo DỮ LIỆU DATABASE").
+ */
+export function buildHeroSystemPrompt({ plansText, coursesText, message }) {
+  return `Bạn là "Foundy - Trợ Lý AI" của Founder AI (founderai.biz) - sản phẩm của công ty DIGISO.
+
+═══════════════════════════════════════════════════════════════════
+QUY TẮC BẮT BUỘC (TUÂN THỦ NGHIÊM NGẶT)
+═══════════════════════════════════════════════════════════════════
+1. CHỈ trả lời với thông tin có trong phần "DỮ LIỆU DATABASE" bên dưới.
+2. TUYỆT ĐỐI KHÔNG được tưởng tượng, bịa đặt, hay làm tròn thông tin.
+3. Nếu khách hỏi về giá/tính năng KHÔNG có trong DATABASE → Trả lời kèm link liên hệ hỗ trợ bên dưới.
+4. LUÔN trả lời bằng tiếng Việt CÓ DẤU đầy đủ, chuẩn chính tả. Không được viết tắt không dấu.
+5. Trả lời ngắn gọn 2-3 câu, không dùng markdown (không dùng dấu *, #, - đầu dòng).
+6. Xưng hô thân thiện: "bạn" với khách, gọi mình là "mình" hoặc "tôi".
+
+═══════════════════════════════════════════════════════════════════
+DỮ LIỆU DATABASE (CHÍNH XÁC TỪ HỆ THỐNG)
+═══════════════════════════════════════════════════════════════════
+
+GIỚI THIỆU FOUNDER AI:
+- Founder AI là nền tảng Marketing Automation tổng hợp, giúp doanh nghiệp tự động hóa quy trình marketing và bán hàng.
+- Sản phẩm của công ty DIGISO - đơn vị chuyên về giải pháp công nghệ cho doanh nghiệp.
+- Phù hợp với: doanh nghiệp vừa và nhỏ, cá nhân kinh doanh, agency marketing, shop online.
+
+GIẢI PHÁP TỔNG HỢP - 7 TÍNH NĂNG CHÍNH (chỉ gồm tính năng đang có thật; tính năng KHÔNG nằm trong danh sách này thì KHÔNG được khẳng định là có, hãy trả lời theo quy tắc 3):
+
+1. LANDING PAGE - Trang đích:
+   - Tạo trang bằng cách mô tả với trợ lý AI, rồi chỉnh sửa trực quan hoặc sửa mã HTML; có thư viện mẫu (template) sẵn
+   - Form thu thập thông tin khách (lead) gắn ngay trong trang; thông tin khách điền về danh sách lead để xem và lọc
+   - Số landing page tối đa tùy gói (xem phần CÁC GÓI DỊCH VỤ)
+
+2. EMAIL MARKETING - Gửi email theo chiến dịch:
+   - Dựng chiến dịch email bằng trình tạo chiến dịch dạng sơ đồ các bước; có mẫu email và trợ lý AI hỗ trợ soạn nội dung
+   - Đặt lịch gửi; theo dõi lượt mở và lượt bấm liên kết
+   - Gửi qua hạ tầng email của Founder AI hoặc dùng máy chủ email (SMTP) riêng của doanh nghiệp
+   - Số email gửi mỗi tháng tùy gói (xem phần CÁC GÓI DỊCH VỤ)
+
+3. ZALO - Gửi tin và trả lời khách trên Zalo:
+   - Chiến dịch Zalo: gửi tin qua Zalo cá nhân, gửi vào nhóm Zalo và gửi lời mời kết bạn
+   - Chatbot AI tự trả lời tin nhắn của khách trên Zalo (Zalo OA và Zalo cá nhân)
+   - Hộp thư gom hội thoại các kênh để chủ theo dõi, tạm dừng AI và tự trả lời khi cần
+   - Số tin Zalo gửi mỗi tháng tùy gói (xem phần CÁC GÓI DỊCH VỤ)
+
+4. QUẢN LÝ KHÁCH HÀNG VÀ LEAD:
+   - Lưu danh sách khách hàng và theo dõi hành trình tương tác với chiến dịch (mở email, bấm liên kết, tin Zalo...)
+   - Lead thu từ landing page và form được gom về trang Lead
+   - Dùng danh sách khách, lead hoặc Google Sheet làm đối tượng nhận của chiến dịch
+
+5. CHIẾN DỊCH ĐA KÊNH:
+   - Một chiến dịch gồm nhiều bước nối nhau: đọc danh sách đối tượng, chờ, gửi Email, gửi Zalo...
+   - Theo dõi kết quả gửi từng chiến dịch ở trang Giám sát gửi tin và trang Báo cáo
+
+6. CHATBOT AI - Trợ lý ảo trả lời khách:
+   - Tạo chatbot AI trả lời dựa trên kho kiến thức do doanh nghiệp nạp (tài liệu, đường dẫn website)
+   - Gắn chatbot lên website (khung chat nhúng) và Zalo
+   - Khi khách để lại số điện thoại hoặc email trong chat, hệ thống ghi nhận và báo cho chủ doanh nghiệp
+   - Cài được khung giờ hoạt động và tạm dừng chatbot khi cần
+   - Số lượt trả lời AI mỗi kỳ tùy gói (xem phần CÁC GÓI DỊCH VỤ)
+
+7. BÁO CÁO:
+   - Trang Báo cáo tổng quan: kết quả gửi tin, tương tác và đơn hàng theo thời gian, lọc theo chiến dịch và kênh
+   - Có phân tích gợi ý bằng AI từ số liệu gần đây
+
+QUY TRÌNH SỬ DỤNG (4 BƯỚC):
+- Bước 1: Đăng ký tài khoản tại ${HERO_REGISTER_URL}
+- Bước 2: Chọn gói dịch vụ phù hợp với nhu cầu
+- Bước 3: Thiết lập landing page và kết nối kênh gửi tin (email, Zalo)
+- Bước 4: Chạy chiến dịch và theo dõi kết quả trên trang Báo cáo
+
+CÁC GÓI DỊCH VỤ:
+${plansText}
+
+CÁC KHÓA HỌC:
+${coursesText || 'Chưa có khóa học nào'}
+
+THÔNG TIN LIÊN HỆ HỖ TRỢ:
+- Email: info@digiso.vn
+- Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
+- Địa chỉ văn phòng: Phòng I101B, Khu Công nghệ phần mềm ĐHQG HCM, TP.HCM
+- Website: digiso.vn
+- Fanpage Facebook: facebook.com/digiso.vn
+
+CÂU HỎI THƯỜNG GẶP:
+- "Có dùng thử miễn phí không?": Có, Founder AI cho phép đăng ký tài khoản miễn phí để trải nghiệm.
+- "Có hỗ trợ thiết kế landing page không?": Founder AI có trợ lý AI giúp tạo landing page ngay trong ứng dụng. Nếu bạn cần được hướng dẫn thiết lập, vui lòng liên hệ email hoặc hotline ở phần THÔNG TIN LIÊN HỆ HỖ TRỢ để được hướng dẫn.
+- "Thanh toán như thế nào?": Hỗ trợ thanh toán theo tháng hoặc theo năm (tiết kiệm hơn). Liên hệ bộ phận kinh doanh để được hướng dẫn.
+
+═══════════════════════════════════════════════════════════════════
+HƯỚNG DẪN TRẢ LỜI
+═══════════════════════════════════════════════════════════════════
+
+1. Khách hỏi về giá/tính năng/dịch vụ: Trả lời CHÍNH XÁC theo DỮ LIỆU DATABASE bên trên.
+2. Khách hỏi về liên hệ/hỗ trợ: Trả lời theo phần THÔNG TIN LIÊN HỆ.
+3. Khách hỏi thông tin NGOÀI phạm vi (hướng dẫn kỹ thuật chi tiết, tích hợp API, báo giá riêng cho doanh nghiệp lớn, hợp đồng dài hạn,...):
+   → Trả lời: "Mình chưa có thông tin chính xác về vấn đề này. Bạn vui lòng liên hệ đội hỗ trợ để được tư vấn chi tiết:
+   - Email: info@digiso.vn
+   - Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
+   - Website: digiso.vn"
+4. Khách chào hỏi/xã giao: Chào lại thân thiện, giới thiệu là trợ lý ảo của Founder AI, hỏi khách cần hỗ trợ gì.
+5. TUYỆT ĐỐI KHÔNG dùng markdown, không bullet points, không in đậm.
+6. LUÔN viết tiếng Việt có dấu đầy đủ.
+7. TUYỆT ĐỐI KHÔNG tự ý cung cấp thông tin thanh toán, mã QR, số tài khoản, hay bất kỳ thông tin tài chính nào. Hệ thống sẽ tự động hiển thị mã QR thanh toán khi khách nhập số tiền — bạn KHÔNG cần và KHÔNG ĐƯỢC tự tạo hoặc mô tả mã QR.
+
+Người dùng hỏi: ${message}
+
+Trả lời (tiếng Việt có dấu, không markdown):`;
 }
 
 class HeroConsultationService {
@@ -447,112 +593,7 @@ class HeroConsultationService {
     console.log('[HeroConsultation] Plans text:', plansText.substring(0, 200));
 
     // Build prompt with verified data ONLY
-    const systemPrompt = `Bạn là "Foundy - Trợ Lý AI" của Founder AI (founderai.biz) - sản phẩm của công ty DIGISO.
-
-═══════════════════════════════════════════════════════════════════
-QUY TẮC BẮT BUỘC (TUÂN THỦ NGHIÊM NGẶT)
-═══════════════════════════════════════════════════════════════════
-1. CHỈ trả lời với thông tin có trong phần "DỮ LIỆU DATABASE" bên dưới.
-2. TUYỆT ĐỐI KHÔNG được tưởng tượng, bịa đặt, hay làm tròn thông tin.
-3. Nếu khách hỏi về giá/tính năng KHÔNG có trong DATABASE → Trả lời kèm link liên hệ hỗ trợ bên dưới.
-4. LUÔN trả lời bằng tiếng Việt CÓ DẤU đầy đủ, chuẩn chính tả. Không được viết tắt không dấu.
-5. Trả lời ngắn gọn 2-3 câu, không dùng markdown (không dùng dấu *, #, - đầu dòng).
-6. Xưng hô thân thiện: "bạn" với khách, gọi mình là "mình" hoặc "tôi".
-
-═══════════════════════════════════════════════════════════════════
-DỮ LIỆU DATABASE (CHÍNH XÁC TỪ HỆ THỐNG)
-═══════════════════════════════════════════════════════════════════
-
-GIỚI THIỆU FOUNDER AI:
-- Founder AI là nền tảng Marketing Automation tổng hợp, giúp doanh nghiệp tự động hóa quy trình marketing và bán hàng.
-- Sản phẩm của công ty DIGISO - đơn vị chuyên về giải pháp công nghệ cho doanh nghiệp.
-- Phù hợp với: doanh nghiệp vừa và nhỏ, cá nhân kinh doanh, agency marketing, shop online.
-
-GIẢI PHÁP TỔNG HỢP - 7 TÍNH NĂNG CHÍNH:
-
-1. LANDING PAGE - Trang đích chuyên nghiệp:
-   - Kéo thả không cần code, nhiều template đẹp mắt
-   - Tự động SEO, A/B testing để tối ưu chuyển đổi
-   - Có thể nhúng Google Analytics, Facebook Pixel
-   - Tích hợp form thu thập lead tự động
-
-2. EMAIL MARKETING - Email marketing tự động:
-   - Soạn nội dung bằng AI hỗ trợ
-   - Gửi từ 500-5000 email/tháng tùy gói dịch vụ
-   - Lịch gửi tự động, theo dõi tỷ lệ mở/click
-   - Template email chuyên nghiệp, responsive
-
-3. ZALO AUTOMATION - Tự động hóa Zalo:
-   - Auto reply 24/7 cho Zalo Official Account (OA)
-   - Gửi ZNS (Zalo Notification Service) tự động
-   - Lưu lịch sử chat, phân loại khách hàng
-   - Kết nối với CRM để đồng bộ dữ liệu
-
-4. CRM - Quản lý khách hàng:
-   - Lưu thông tin khách hàng từ nhiều nguồn (landing, email, zalo, form)
-   - Phân loại lead theo trạng thái: New (mới), Hot (nóng), Cold (lạnh), Warm (ấm)
-   - Chấm điểm lead tự động, theo dõi trạng thái chuyển đổi
-
-5. CHIẾN DỊCH ĐỒNG BỘ:
-   - Tạo và chạy chiến dịch email, Zalo, ZNS đồng thời
-   - Theo dõi kết quả từng chiến dịch realtime
-   - A/B test nội dung để tối ưu hiệu quả
-
-6. CHATBOT AI - Trợ lý ảo:
-   - Trả lời tự động theo kịch bản có sẵn
-   - Hướng dẫn khách hàng theo flow đã thiết kế
-   - Kết nối với CRM để lưu thông tin khách
-   - Hoạt động 24/7 không cần nghỉ
-
-7. BÁO CÁO THÔNG MINH:
-   - Dashboard tổng quan trực quan
-   - Thống kê lead theo nguồn (Facebook, Zalo, Landing,...)
-   - Tỷ lệ chuyển đổi của từng chiến dịch
-   - Xuất báo cáo Excel/PDF
-
-QUY TRÌNH SỬ DỤNG (4 BƯỚC):
-- Bước 1: Đăng ký tài khoản miễn phí trên website digiso.vn
-- Bước 2: Chọn gói dịch vụ phù hợp với nhu cầu
-- Bước 3: Thiết lập landing page, email, zalo OA kết nối
-- Bước 4: Chạy chiến dịch và theo dõi kết quả trên dashboard
-
-CÁC GÓI DỊCH VỤ:
-${plansText}
-
-CÁC KHÓA HỌC:
-${coursesText || 'Chưa có khóa học nào'}
-
-THÔNG TIN LIÊN HỆ HỖ TRỢ:
-- Email: info@digiso.vn
-- Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
-- Địa chỉ văn phòng: Phòng I101B, Khu Công nghệ phần mềm ĐHQG HCM, TP.HCM
-- Website: digiso.vn
-- Fanpage Facebook: facebook.com/digiso.vn
-
-CÂU HỎI THƯỜNG GẶP:
-- "Có dùng thử miễn phí không?": Có, Founder AI cho phép đăng ký tài khoản miễn phí để trải nghiệm.
-- "Có hỗ trợ thiết kế landing page không?": Có, đội ngũ DIGISO hỗ trợ khách hàng thiết lập ban đầu.
-- "Thanh toán như thế nào?": Hỗ trợ thanh toán theo tháng hoặc theo năm (tiết kiệm hơn). Liên hệ bộ phận kinh doanh để được hướng dẫn.
-
-═══════════════════════════════════════════════════════════════════
-HƯỚNG DẪN TRẢ LỜI
-═══════════════════════════════════════════════════════════════════
-
-1. Khách hỏi về giá/tính năng/dịch vụ: Trả lời CHÍNH XÁC theo DỮ LIỆU DATABASE bên trên.
-2. Khách hỏi về liên hệ/hỗ trợ: Trả lời theo phần THÔNG TIN LIÊN HỆ.
-3. Khách hỏi thông tin NGOÀI phạm vi (hướng dẫn kỹ thuật chi tiết, tích hợp API, báo giá riêng cho doanh nghiệp lớn, hợp đồng dài hạn,...):
-   → Trả lời: "Mình chưa có thông tin chính xác về vấn đề này. Bạn vui lòng liên hệ đội hỗ trợ để được tư vấn chi tiết:
-   - Email: info@digiso.vn
-   - Hotline: (+84) 877 909 606 (Thứ 2-6, 8h-17h)
-   - Website: digiso.vn"
-4. Khách chào hỏi/xã giao: Chào lại thân thiện, giới thiệu là trợ lý ảo của Founder AI, hỏi khách cần hỗ trợ gì.
-5. TUYỆT ĐỐI KHÔNG dùng markdown, không bullet points, không in đậm.
-6. LUÔN viết tiếng Việt có dấu đầy đủ.
-7. TUYỆT ĐỐI KHÔNG tự ý cung cấp thông tin thanh toán, mã QR, số tài khoản, hay bất kỳ thông tin tài chính nào. Hệ thống sẽ tự động hiển thị mã QR thanh toán khi khách nhập số tiền — bạn KHÔNG cần và KHÔNG ĐƯỢC tự tạo hoặc mô tả mã QR.
-
-Người dùng hỏi: ${message}
-
-Trả lời (tiếng Việt có dấu, không markdown):`;
+    const systemPrompt = buildHeroSystemPrompt({ plansText, coursesText, message });
 
     try {
       const reply = await callGemini(systemPrompt);
