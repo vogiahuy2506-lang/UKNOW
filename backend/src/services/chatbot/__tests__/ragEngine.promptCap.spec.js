@@ -75,6 +75,17 @@ describe('ragEngine — trần prompt (đường Studio custom chatbot)', () => 
     expect(context).toContain('Sources: kb-doc');
   });
 
+  it('câu hỏi của khách embed bằng RETRIEVAL_QUERY (tài liệu giữ RETRIEVAL_DOCUMENT) — D-24', async () => {
+    mockSearchChunksByChatbot.mockResolvedValue([]);
+
+    await ragEngine.buildContext(7, 'câu hỏi', { customChatbotId: 17 });
+
+    expect(mockEmbedText).toHaveBeenCalledWith('câu hỏi', expect.objectContaining({
+      feature: 'embedding_rag_query',
+      taskType: 'RETRIEVAL_QUERY',
+    }));
+  });
+
   it('đoạn đã đúng cỡ không bị đụng tới', async () => {
     const text = 'Chính sách đổi trả trong 7 ngày. '.repeat(30).trim();
     mockSearchChunksByChatbot.mockResolvedValue([{ chunk_text: text, similarity: 0.6, source: 'policy.txt' }]);

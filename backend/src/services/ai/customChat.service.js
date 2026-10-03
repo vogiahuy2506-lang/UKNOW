@@ -327,18 +327,39 @@ QUY TẮC TRẢ LỜI:
     };
   }
 
+  /**
+   * Embed các đoạn của MỘT tài liệu. Hỏng thì NÉM LỖI (tài liệu → `status='error'` kèm lý do tiếng Việt, hoặc khôi phục bản
+   * cũ khi nạp lại) thay vì trả [] cho tài liệu vẫn `ready` (A P2-8, D-12): bản cũ `return embedTexts(...)` không `await` nên
+   * `catch` là mã chết, và một đoạn lỗi khiến cả tài liệu không có vector — Zalo/Telegram/WhatsApp (lọc `embedding IS NOT NULL`)
+   * KHÔNG BAO GIỜ dùng tài liệu đó mà chủ không hay biết.
+   *
+   * Không đặt tiền tố `[chỉ số]` trước văn bản: nó làm vector dính số thứ tự (chèn một đoạn là mọi đoạn sau đổi) và làm bộ
+   * nhớ đệm vô dụng (D-24).
+   */
   async generateEmbeddings(chunks, userId) {
+    // Môi trường không có khoá Gemini (máy dev): chạy chế độ từ khoá, không có vector.
     if (!process.env.GEMINI_API_KEY) return [];
 
     try {
       const { embedTexts } = await import('../../utils/embeddingClient.util.js');
-      return embedTexts(chunks.map((chunk, index) => `[${index}] ${chunk}`), {
+      const vectors = await embedTexts(chunks, {
         userId,
         feature: 'embedding_custom_chat_doc',
       });
+      const complete = Array.isArray(vectors)
+        && vectors.length === chunks.length
+        && vectors.every((vector) => Array.isArray(vector) && vector.length > 0);
+      if (!complete) throw new Error('Số vector trả về không khớp số đoạn');
+      return vectors;
     } catch (e) {
-      console.warn('[CustomChat] Embedding failed, using text only:', e.message);
-      return [];
+      console.error('[CustomChat] Embedding tài liệu lỗi:', e.message);
+      const error = new Error(
+        'Không tạo được chỉ mục tìm kiếm cho tài liệu (dịch vụ AI đang bận hoặc quá tải). Vui lòng thử tải lại tài liệu sau ít phút.'
+      );
+      error.status = 503;
+      error.code = 'EMBEDDING_FAILED';
+      error.cause = e;
+      throw error;
     }
   }
 

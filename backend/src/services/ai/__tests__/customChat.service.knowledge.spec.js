@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterAll, afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 /**
  * G1 — tài liệu kiến thức chatbot Studio (customChat.service): trần prompt, tìm bằng cosine, embedding, tên tệp.
@@ -7,13 +7,25 @@ import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals
 const mockRepo = {
   searchChunksByChatbot: jest.fn(),
   findChunkTexts: jest.fn(),
+  findDocumentBySource: jest.fn(),
+  findDocumentById: jest.fn(),
+  upsertProcessingDocument: jest.fn(),
+  replaceChunks: jest.fn(),
+  markReady: jest.fn(),
+  markError: jest.fn(),
+  restoreDocument: jest.fn(),
 };
+const mockExtract = jest.fn();
 const mockEmbedText = jest.fn();
 const mockEmbedTexts = jest.fn();
 const resolveAllowedModel = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/ai/customChatDocument.repository.js', () => ({ default: mockRepo }));
-jest.unstable_mockModule('../../../utils/fileExtractor.util.js', () => ({ extractTextFromBuffer: jest.fn() }));
+jest.unstable_mockModule('../../../utils/fileExtractor.util.js', () => ({ extractTextFromBuffer: (...args) => mockExtract(...args) }));
+jest.unstable_mockModule('../../storage/kbQuota.service.js', () => ({
+  countExtractedChars: (text) => String(text).length,
+  withKbQuotaLock: async (_ownerId, fn) => fn({ client: { tag: 'tx' }, assertDelta: jest.fn() }),
+}));
 jest.unstable_mockModule('../../../utils/aiResponseFormatter.util.js', () => ({ stripMarkdown: (t) => t }));
 jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
   extractGeminiUsage: () => ({}),
@@ -58,7 +70,21 @@ beforeEach(() => {
   mockRepo.findChunkTexts.mockReset().mockResolvedValue([]);
   mockEmbedText.mockReset().mockResolvedValue(QUERY_VECTOR);
   mockEmbedTexts.mockReset();
+  mockExtract.mockReset();
+  for (const fn of [
+    mockRepo.findDocumentBySource, mockRepo.findDocumentById, mockRepo.upsertProcessingDocument,
+    mockRepo.replaceChunks, mockRepo.markReady, mockRepo.markError, mockRepo.restoreDocument,
+  ]) fn.mockReset();
+  mockRepo.findDocumentBySource.mockResolvedValue(null);
+  mockRepo.upsertProcessingDocument.mockResolvedValue({ id: 501 });
+  mockRepo.findDocumentById.mockResolvedValue({ id: 501 });
+  mockRepo.replaceChunks.mockResolvedValue(undefined);
+  mockRepo.markReady.mockResolvedValue({ id: 501 });
+  mockRepo.markError.mockResolvedValue(undefined);
+  mockRepo.restoreDocument.mockResolvedValue(undefined);
+  process.env.GEMINI_API_KEY = 'test-key';
   jest.spyOn(console, 'warn').mockImplementation(() => {});
+  jest.spyOn(console, 'error').mockImplementation(() => {});
 });
 
 afterEach(() => {
@@ -143,5 +169,95 @@ describe('customChat.searchChunks — widget/trang công khai/Chat thử tìm b�
 
     expect(prompt).toContain('- Giờ mở cửa 8h-21h');
     expect(mockRepo.findChunkTexts).not.toHaveBeenCalled();
+  });
+});
+
+const originalApiKey = process.env.GEMINI_API_KEY;
+afterAll(() => {
+  if (originalApiKey === undefined) delete process.env.GEMINI_API_KEY;
+  else process.env.GEMINI_API_KEY = originalApiKey;
+});
+
+describe('customChat.generateEmbeddings — hỏng thì ném lỗi, không âm thầm "ready" không vector (A P2-8, D-12, D-24)', () => {
+  const chunks = ['Đoạn một về giá.', 'Đoạn hai về bảo hành.'];
+  const vectors = [[0.1, 0.2], [0.3, 0.4]];
+
+  it('embed THẲNG văn bản đoạn — không còn tiền tố "[chỉ số] " — kèm userId và feature đúng', async () => {
+    mockEmbedTexts.mockResolvedValue(vectors);
+
+    const out = await svc.generateEmbeddings(chunks, 90);
+
+    expect(out).toEqual(vectors);
+    expect(mockEmbedTexts).toHaveBeenCalledWith(chunks, { userId: 90, feature: 'embedding_custom_chat_doc' });
+    for (const text of mockEmbedTexts.mock.calls[0][0]) expect(text).not.toMatch(/^\[\d+\] /);
+  });
+
+  it('embedTexts bị từ chối (429 hết lần thử) → generateEmbeddings NÉM lỗi tiếng Việt mã EMBEDDING_FAILED/503 (đã await, catch không còn chết)', async () => {
+    mockEmbedTexts.mockRejectedValue(Object.assign(new Error('Embedding API lỗi (429): {"error":"quota"}'), { status: 503 }));
+
+    const error = await svc.generateEmbeddings(chunks, 90).catch((e) => e);
+
+    expect(error.status).toBe(503);
+    expect(error.code).toBe('EMBEDDING_FAILED');
+    expect(error.message).toMatch(/^Không tạo được chỉ mục tìm kiếm cho tài liệu/);
+    // Lỗi gốc bằng tiếng Anh/JSON của Google KHÔNG lộ ra thông điệp người dùng thấy.
+    expect(error.message).not.toMatch(/429|quota|Embedding API/);
+    expect(error.cause.message).toMatch(/429/);
+  });
+
+  it('thiếu vector (số vector ≠ số đoạn, hoặc có vector rỗng) → coi là lỗi, không trả nửa vời', async () => {
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2]]);
+    await expect(svc.generateEmbeddings(chunks, 90)).rejects.toMatchObject({ code: 'EMBEDDING_FAILED' });
+
+    mockEmbedTexts.mockResolvedValue([[0.1, 0.2], []]);
+    await expect(svc.generateEmbeddings(chunks, 90)).rejects.toMatchObject({ code: 'EMBEDDING_FAILED' });
+  });
+
+  it('môi trường không có GEMINI_API_KEY (dev) → [] (chế độ từ khoá), không gọi embed', async () => {
+    delete process.env.GEMINI_API_KEY;
+    await expect(svc.generateEmbeddings(chunks, 90)).resolves.toEqual([]);
+    expect(mockEmbedTexts).not.toHaveBeenCalled();
+  });
+});
+
+describe('customChat — nạp tài liệu: chia đoạn ≤ 1.500 + embedding hỏng → status error', () => {
+  it('văn bản 200k ký tự KHÔNG xuống dòng → mọi đoạn lưu vào DB ≤ 1.500, mỗi đoạn có vector tương ứng, markReady với đúng số đoạn', async () => {
+    mockEmbedTexts.mockImplementation(async (texts) => texts.map(() => [0.5, 0.5]));
+    const text = Array.from({ length: 3000 }, (_, i) => `Câu số ${i} nói về sản phẩm Trà Sen Tây Hồ, giá ${i * 1000} đồng một hộp.`).join(' ');
+
+    const result = await svc.addTextDocument({ chatbotId: 17, userId: 90, title: 'Bảng giá', content: text });
+
+    const saved = mockRepo.replaceChunks.mock.calls[0][0];
+    expect(saved.chunks.length).toBeGreaterThan(100);
+    expect(Math.max(...saved.chunks.map((c) => c.length))).toBeLessThanOrEqual(1500);
+    expect(saved.embeddings).toHaveLength(saved.chunks.length);
+    expect(mockRepo.markReady).toHaveBeenCalledWith(501, saved.chunks.length, expect.anything());
+    expect(result.chunks).toBe(saved.chunks.length);
+  });
+
+  it('embedding hỏng + tài liệu MỚI → markError với lý do tiếng Việt, KHÔNG replaceChunks, KHÔNG markReady, lỗi 503 đến người gọi', async () => {
+    mockEmbedTexts.mockRejectedValue(new Error('Embedding API lỗi (429)'));
+
+    const error = await svc.addTextDocument({ chatbotId: 17, userId: 90, title: 'Tài liệu', content: 'Nội dung đủ dài để tạo đoạn.' }).catch((e) => e);
+
+    expect(error.status).toBe(503);
+    expect(mockRepo.markError).toHaveBeenCalledTimes(1);
+    expect(mockRepo.markError.mock.calls[0][0]).toBe(501);
+    expect(mockRepo.markError.mock.calls[0][1]).toMatch(/^Không tạo được chỉ mục tìm kiếm cho tài liệu/);
+    expect(mockRepo.replaceChunks).not.toHaveBeenCalled();
+    expect(mockRepo.markReady).not.toHaveBeenCalled();
+  });
+
+  it('embedding hỏng khi NẠP LẠI tài liệu đã có → khôi phục bản cũ (còn dùng được), không để tài liệu hỏng', async () => {
+    const previous = { id: 501, status: 'ready', chunk_count: 3, extracted_chars: 100 };
+    mockRepo.findDocumentBySource.mockResolvedValue(previous);
+    mockEmbedTexts.mockRejectedValue(new Error('Embedding API lỗi (503)'));
+
+    await expect(svc.addTextDocument({ chatbotId: 17, userId: 90, title: 'Tài liệu', content: 'Nội dung mới đủ dài.' }))
+      .rejects.toMatchObject({ code: 'EMBEDDING_FAILED' });
+
+    expect(mockRepo.restoreDocument).toHaveBeenCalledWith(previous, expect.anything());
+    expect(mockRepo.markError).not.toHaveBeenCalled();
+    expect(mockRepo.replaceChunks).not.toHaveBeenCalled();
   });
 });

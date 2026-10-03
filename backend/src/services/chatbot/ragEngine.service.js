@@ -38,6 +38,7 @@ class RagEngineService {
       const queryEmbedding = await embedText(userQuery, {
         userId,
         feature: 'embedding_rag_query',
+        taskType: 'RETRIEVAL_QUERY',
       });
 
       return await this._buildContextInternal(userId, queryEmbedding, {
@@ -155,6 +156,7 @@ class RagEngineService {
       const queryEmbedding = await embedText(userQuery, {
         userId,
         feature: 'embedding_rag_query',
+        taskType: 'RETRIEVAL_QUERY',
       });
       const chunks = await knowledgeBaseRepository.searchChunks(
         userId, queryEmbedding,
