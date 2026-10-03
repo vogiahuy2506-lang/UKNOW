@@ -8067,7 +8067,7 @@ export default {
     heroTrust2: 'No credit card required',
     heroTrust3: 'Cancel anytime',
     // Campaign Demo section
-    campaignDemoBadge: 'Live Demo',
+    campaignDemoBadge: 'Simulation',
     campaignDemoTitle: 'How does a campaign run?',
     campaignDemoSubtitle: 'See the detailed steps (nodes) that each campaign runs in Founder AI. Click any type to view the live simulation.',
     campaignDemo: {

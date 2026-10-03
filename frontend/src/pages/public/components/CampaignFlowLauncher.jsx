@@ -77,7 +77,7 @@ export default function CampaignFlowLauncher({ t }) {
       <div className="text-center mb-10">
         <span className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-orange-100 text-orange-700 rounded-full text-xs font-bold uppercase tracking-wider mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-orange-500 animate-pulse" />
-          {t('heroPage.campaignDemoBadge') || 'Live Demo'}
+          {t('heroPage.campaignDemoBadge') || 'Mô phỏng'}
         </span>
         <h2 className="text-3xl md:text-4xl font-semibold text-slate-900 mb-4">
           {t('heroPage.campaignDemoTitle') || 'Chiến dịch chạy như thế nào?'}

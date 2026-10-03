@@ -8076,7 +8076,7 @@ export default {
     heroTrust2: 'Không cần thẻ tín dụng',
     heroTrust3: 'Hủy bất kỳ lúc nào',
     // Campaign Demo section (3 loại chiến dịch flow)
-    campaignDemoBadge: 'Live Demo',
+    campaignDemoBadge: 'Mô phỏng',
     campaignDemoTitle: 'Chiến dịch chạy như thế nào?',
     campaignDemoSubtitle: 'Xem chi tiết các bước (node) mà mỗi chiến dịch sẽ chạy trong hệ thống Founder AI. Bấm vào từng loại để xem mô phỏng trực quan.',
     campaignDemo: {
