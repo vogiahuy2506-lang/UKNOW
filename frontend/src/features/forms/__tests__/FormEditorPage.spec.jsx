@@ -41,6 +41,13 @@ vi.mock('../../../stores/authStore', () => ({
 // (1 ô Họ và tên, cài đặt mặc định), nên các ca không liên quan tới mẫu chỉ cần bấm qua nó.
 const startBlankForm = () => fireEvent.click(screen.getByTestId('form-template-blank'));
 
+// Các khối tuỳ chọn thu gọn mặc định (biểu mẫu chưa có dữ liệu ở đó): bấm thẻ mới mở. Biểu mẫu đang
+// bật tính năng nào thì khối đó mở sẵn nên ca sửa biểu mẫu có cấu hình không cần các hàm này.
+const openBookingBlock = () => fireEvent.click(screen.getByRole('button', { name: /Thêm đặt lịch hẹn/ }));
+const openPaymentBlock = () => fireEvent.click(screen.getByRole('button', { name: /Thu tiền khi gửi/ }));
+const openThemeBlock = () => fireEvent.click(screen.getByRole('button', { name: /^Giao diện/ }));
+const openAfterSubmitBlock = () => fireEvent.click(screen.getByRole('button', { name: 'Sau khi gửi' }));
+
 describe('FormEditorPage component', () => {
   const existingForm = {
     id: 'form-existing-456',
@@ -147,7 +154,8 @@ describe('FormEditorPage component', () => {
       expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument();
     });
 
-    // Chỉ đổi 1 trường trong Cài đặt: Chữ nút gửi
+    // Chỉ đổi 1 trường trong "Sau khi gửi" (thu gọn mặc định, bấm mở): Chữ nút gửi
+    openAfterSubmitBlock();
     const submitTextInput = screen.getByDisplayValue('Gửi khảo sát');
     fireEvent.change(submitTextInput, { target: { value: 'Gửi phản hồi ngay' } });
 
@@ -260,6 +268,7 @@ describe('FormEditorPage component', () => {
         target: { value: 'Form đặt lịch mới' },
       });
 
+      openBookingBlock();
       const enableCheckbox = screen.getByRole('checkbox', { name: /Bật đặt lịch hẹn/i });
       fireEvent.click(enableCheckbox);
 
@@ -412,6 +421,7 @@ describe('FormEditorPage component', () => {
         target: { value: 'Form thu tiền giữ chỗ' },
       });
 
+      openPaymentBlock();
       const enableCheckbox = screen.getByRole('checkbox', { name: /Bật thanh toán/i });
       fireEvent.click(enableCheckbox);
 
@@ -564,6 +574,7 @@ describe('FormEditorPage component', () => {
         target: { value: 'Form thiếu thông tin thanh toán' },
       });
 
+      openPaymentBlock();
       fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
       fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
 
@@ -593,6 +604,7 @@ describe('FormEditorPage component', () => {
         target: { value: 'Form thu tiền MoMo' },
       });
 
+      openPaymentBlock();
       const enableCheckbox = screen.getByRole('checkbox', { name: /Bật thanh toán/i });
       fireEvent.click(enableCheckbox);
 
@@ -653,6 +665,7 @@ describe('FormEditorPage component', () => {
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form MoMo không QR' },
       });
+      openPaymentBlock();
       fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
       fireEvent.click(screen.getByRole('checkbox', { name: /Chuyển khoản ngân hàng/i }));
       fireEvent.click(screen.getByRole('checkbox', { name: /Ví MoMo/i }));
@@ -692,6 +705,7 @@ describe('FormEditorPage component', () => {
         target: { value: 'Form MoMo thiếu số' },
       });
 
+      openPaymentBlock();
       fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
       fireEvent.click(screen.getByRole('checkbox', { name: /Chuyển khoản ngân hàng/i }));
       fireEvent.click(screen.getByRole('checkbox', { name: /Ví MoMo/i }));
@@ -724,6 +738,7 @@ describe('FormEditorPage component', () => {
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form nhận cả 2 kênh' },
       });
+      openPaymentBlock();
       fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
       // Điền thông tin Bank trước khi bật MoMo (để không trùng placeholder)
       fillPaymentFields(container);
@@ -778,6 +793,7 @@ describe('FormEditorPage component', () => {
       fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
         target: { value: 'Form không chọn kênh nào' },
       });
+      openPaymentBlock();
       fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
       // Bỏ tick Bank
       fireEvent.click(screen.getByRole('checkbox', { name: /Chuyển khoản ngân hàng/i }));
@@ -917,6 +933,7 @@ describe('FormEditorPage component', () => {
       );
 
       startBlankForm();
+      openThemeBlock();
 
       const bannerFileInput = container.querySelectorAll('input[type="file"]')[0];
       const file = new File(['fake'], 'banner.png', { type: 'image/png' });
@@ -1201,6 +1218,165 @@ describe('FormEditorPage component', () => {
       expect(payload.fields.every((f) => f.role === undefined)).toBe(true);
       expect(payload.bookingConfig).toBeNull();
       expect(payload.paymentConfig).toBeNull();
+    });
+  });
+
+  describe('Thu gọn mặc định các khối tuỳ chọn', () => {
+    const renderEdit = (form) => {
+      formAdminApi.fetchFormById.mockResolvedValue(form);
+      return render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+    };
+    const waitLoaded = () =>
+      waitFor(() => {
+        expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument();
+      });
+
+    it('biểu mẫu chưa có gì ở Đặt lịch / Thanh toán / Giao diện: chỉ hiện thẻ thu gọn, chưa có ô nhập nào của các khối đó', () => {
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+      startBlankForm();
+
+      expect(screen.getByRole('button', { name: /Thêm đặt lịch hẹn/ })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('button', { name: /Thu tiền khi gửi/ })).toHaveAttribute('aria-expanded', 'false');
+      expect(screen.getByRole('button', { name: /^Giao diện/ })).toHaveAttribute('aria-expanded', 'false');
+
+      expect(screen.queryByRole('checkbox', { name: /Bật đặt lịch hẹn/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox', { name: /Bật thanh toán/i })).not.toBeInTheDocument();
+      expect(screen.queryByText('Mẫu dựng sẵn')).not.toBeInTheDocument();
+    });
+
+    it('bấm thẻ "Thêm đặt lịch hẹn" mở khối (chưa tự bật), thẻ thu gọn biến mất', () => {
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+      startBlankForm();
+
+      openBookingBlock();
+
+      expect(screen.getByRole('checkbox', { name: /Bật đặt lịch hẹn/i })).not.toBeChecked();
+      expect(screen.queryByRole('button', { name: /Thêm đặt lịch hẹn/ })).not.toBeInTheDocument();
+      // Các khối khác vẫn thu gọn.
+      expect(screen.getByRole('button', { name: /Thu tiền khi gửi/ })).toBeInTheDocument();
+    });
+
+    it('sửa biểu mẫu CÓ thanh toán: khối Thanh toán mở sẵn; Đặt lịch + Giao diện (không dữ liệu) vẫn thu gọn', async () => {
+      renderEdit({
+        ...existingForm,
+        paymentConfig: {
+          amount: 200000,
+          bankBin: '970415',
+          accountNumber: '9999999999',
+          accountName: 'NGUYEN VAN B',
+          holdMinutes: 45,
+        },
+      });
+      await waitLoaded();
+
+      expect(screen.getByRole('checkbox', { name: /Bật thanh toán/i })).toBeChecked();
+      expect(screen.queryByRole('button', { name: /Thu tiền khi gửi/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Thêm đặt lịch hẹn/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Giao diện/ })).toBeInTheDocument();
+    });
+
+    it('sửa biểu mẫu CÓ đặt lịch: khối Đặt lịch mở sẵn, Thanh toán thu gọn', async () => {
+      renderEdit({
+        ...existingForm,
+        bookingConfig: {
+          enabled: true,
+          weeklySlots: { 1: ['09:00'] },
+          slotCapacity: null,
+          daysAhead: 30,
+          minNoticeMinutes: 60,
+          closedDates: [],
+        },
+      });
+      await waitLoaded();
+
+      expect(screen.getByRole('checkbox', { name: /Bật đặt lịch hẹn/i })).toBeChecked();
+      expect(screen.queryByRole('button', { name: /Thêm đặt lịch hẹn/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Thu tiền khi gửi/ })).toBeInTheDocument();
+    });
+
+    it('sửa biểu mẫu ĐÃ tuỳ chỉnh giao diện: khối Giao diện mở sẵn (thấy "Mẫu dựng sẵn")', async () => {
+      renderEdit({ ...existingForm, theme: { primaryColor: '#112233' } });
+      await waitLoaded();
+
+      expect(screen.getByText('Mẫu dựng sẵn')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Giao diện/ })).not.toBeInTheDocument();
+    });
+
+    it('"Sau khi gửi" thu gọn mặc định kèm dòng tóm tắt; bấm mở thấy các ô cài đặt, bấm lại thì thu gọn', async () => {
+      renderEdit(existingForm);
+      await waitLoaded();
+
+      const toggle = screen.getByRole('button', { name: 'Sau khi gửi' });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      // existingForm: có redirectUrl + notifyOwner + consentEnabled, không gửi xác nhận.
+      expect(screen.getByTestId('after-submit-summary')).toHaveTextContent(
+        'Chuyển khách sang trang khác · báo email cho bạn · có ô đồng ý nhận tin'
+      );
+      expect(screen.queryByDisplayValue('Gửi khảo sát')).not.toBeInTheDocument();
+
+      fireEvent.click(toggle);
+      expect(toggle).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByDisplayValue('Gửi khảo sát')).toBeInTheDocument();
+      expect(screen.queryByTestId('after-submit-summary')).not.toBeInTheDocument();
+
+      fireEvent.click(toggle);
+      expect(screen.queryByDisplayValue('Gửi khảo sát')).not.toBeInTheDocument();
+    });
+
+    it('biểu mẫu mới: dòng tóm tắt mặc định "Hiện lời cảm ơn · báo email cho bạn"', () => {
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+      startBlankForm();
+
+      expect(screen.getByTestId('after-submit-summary')).toHaveTextContent('Hiện lời cảm ơn · báo email cho bạn');
+    });
+
+    it('lưu lỗi vì ô nằm trong "Sau khi gửi" đang thu gọn: khối tự mở ra để thấy ô lỗi, không gọi API', async () => {
+      renderEdit(existingForm);
+      await waitLoaded();
+
+      // Nhập đường dẫn sai rồi thu gọn khối lại.
+      openAfterSubmitBlock();
+      fireEvent.change(screen.getByDisplayValue('https://example.com/thanks'), { target: { value: 'khong-phai-url' } });
+      openAfterSubmitBlock(); // thu gọn
+      expect(screen.queryByDisplayValue('khong-phai-url')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      expect(formAdminApi.updateForm).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Sau khi gửi' })).toHaveAttribute('aria-expanded', 'true');
+      expect(screen.getByText('Đường dẫn không hợp lệ')).toBeInTheDocument();
     });
   });
 });

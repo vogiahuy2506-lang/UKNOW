@@ -23,6 +23,8 @@ import {
   HiOutlineClipboardCheck,
   HiOutlineCalendar,
   HiOutlineLightningBolt,
+  HiOutlineChevronDown,
+  HiOutlineColorSwatch,
 } from 'react-icons/hi';
 import QRCode from 'qrcode';
 import { buildVietQrString, decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
@@ -41,6 +43,7 @@ import ShareModal from '../components/ShareModal';
 import FormRenderer from '../components/FormRenderer';
 import BankSearchSelect from '../components/BankSearchSelect';
 import FormTemplatePicker from '../components/FormTemplatePicker';
+import AddSectionCard from '../components/AddSectionCard';
 import { FORM_TEMPLATES, buildFormFromTemplate } from '../constants/formTemplates';
 import useStorageQuota from '../../storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../storage/validateUpload';
@@ -266,6 +269,46 @@ const DEFAULT_THEME = {
   logoUrl: '',
 };
 
+// Khối thu gọn trong trình soạn: "Sau khi gửi" (cài đặt), Đặt lịch hẹn, Thanh toán, Giao diện.
+// Khối đang có dữ liệu thì mở sẵn; khối trống hiện thẻ thu gọn, bấm mới mở.
+// Khoá lỗi validateForm thuộc khối nào — lưu thất bại thì mở các khối đó ra để người dùng thấy ô lỗi
+// (nếu không, lỗi redirectUrl trong khối "Sau khi gửi" đang thu gọn chỉ hiện ở toast).
+const BLOCK_ERROR_KEYS = {
+  afterSubmit: ['submitButtonText', 'successMessage', 'redirectUrl'],
+  booking: [
+    'bookingSlots',
+    'bookingCapacity',
+    'bookingDaysAhead',
+    'bookingMinNotice',
+    'bookingClosedDates',
+    'bookingDisableConfirm',
+  ],
+  payment: [
+    'paymentMethods',
+    'paymentAmount',
+    'paymentBank',
+    'paymentAccountNumber',
+    'paymentAccountName',
+    'paymentMomoPhone',
+    'paymentMomoName',
+    'paymentMomoQrAccount',
+    'paymentHoldMinutes',
+  ],
+};
+
+// Giao diện "đã tuỳ chỉnh" = có ít nhất một khoá sẽ được gửi lên (xem payloadTheme trong handleSave).
+const hasThemeCustomization = (th) =>
+  Boolean(
+    th.preset ||
+      th.primaryColor ||
+      th.backgroundColor ||
+      th.fontFamily ||
+      th.layout ||
+      th.bannerHeight ||
+      th.bannerKey ||
+      th.logoKey
+  );
+
 export default function FormEditorPage() {
   const { t } = useI18n();
   const navigate = useNavigate();
@@ -283,6 +326,14 @@ export default function FormEditorPage() {
   const [isSaving, setIsSaving] = useState(false);
   // Chỉ có nghĩa ở chế độ tạo mới: false = đang ở bước chọn mẫu, true = đã vào trình soạn.
   const [templateChosen, setTemplateChosen] = useState(false);
+  // Khối nào đang mở. Mặc định thu gọn hết; nạp biểu mẫu / chọn mẫu / lưu lỗi sẽ mở khối cần thấy.
+  const [openBlocks, setOpenBlocks] = useState({
+    afterSubmit: false,
+    booking: false,
+    payment: false,
+    theme: false,
+  });
+  const openBlock = (name) => setOpenBlocks((prev) => (prev[name] ? prev : { ...prev, [name]: true }));
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -504,6 +555,23 @@ export default function FormEditorPage() {
           logoKey: loadedTheme.logoKey || '',
           logoUrl: loadedTheme.logoUrl || '',
         });
+
+        // Biểu mẫu đang bật tính năng nào thì khối đó mở sẵn (khối trống vẫn thu gọn).
+        setOpenBlocks((prev) => ({
+          ...prev,
+          booking: Boolean(data.bookingConfig),
+          payment: Boolean(data.paymentConfig),
+          theme: hasThemeCustomization({
+            preset: loadedTheme.preset,
+            primaryColor: loadedTheme.primaryColor,
+            backgroundColor: loadedTheme.backgroundColor,
+            fontFamily: loadedTheme.fontFamily,
+            layout: loadedTheme.layout,
+            bannerHeight: loadedTheme.bannerHeight,
+            bannerKey: loadedTheme.bannerKey,
+            logoKey: loadedTheme.logoKey,
+          }),
+        }));
       })
       .catch((err) => {
         toast.error(err.response?.data?.message || t('forms.editorPage.loadError'));
@@ -533,6 +601,12 @@ export default function FormEditorPage() {
     }
     // Gộp (không ghi đè) để giữ tài khoản nhận tiền đã lưu từ lần trước (effect nạp preset ở trên).
     if (built.enablePayment) setPayment((prev) => ({ ...prev, enabled: true }));
+    // Mẫu bật tính năng nào thì khối đó mở sẵn để người dùng khai tiếp (khung giờ / tài khoản nhận tiền).
+    setOpenBlocks((prev) => ({
+      ...prev,
+      booking: prev.booking || Boolean(built.bookingWeeklySlots),
+      payment: prev.payment || built.enablePayment,
+    }));
     setTemplateChosen(true);
   };
 
@@ -1007,6 +1081,14 @@ export default function FormEditorPage() {
     const validationErrors = validateForm();
     if (Object.keys(validationErrors).length > 0) {
       setErrors(validationErrors);
+      // Mở các khối thu gọn đang chứa ô lỗi để người dùng thấy ngay chỗ cần sửa.
+      setOpenBlocks((prev) => {
+        const next = { ...prev };
+        for (const [block, keys] of Object.entries(BLOCK_ERROR_KEYS)) {
+          if (keys.some((k) => validationErrors[k])) next[block] = true;
+        }
+        return next;
+      });
       const firstError = Object.values(validationErrors)[0];
       toast.error(firstError);
       return false;
@@ -1247,6 +1329,18 @@ export default function FormEditorPage() {
       />
     );
   }
+
+  // Dòng tóm tắt của khối "Sau khi gửi" lúc thu gọn, vd "Hiện lời cảm ơn · báo email cho bạn".
+  const afterSubmitSummary = [
+    settings.redirectUrl?.trim()
+      ? t('forms.editorPage.afterSubmit.summaryRedirect')
+      : t('forms.editorPage.afterSubmit.summaryThanks'),
+    settings.notifyOwner && t('forms.editorPage.afterSubmit.summaryNotifyOwner'),
+    settings.sendConfirmation && t('forms.editorPage.afterSubmit.summaryConfirmation'),
+    settings.consentEnabled && t('forms.editorPage.afterSubmit.summaryConsent'),
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   return (
     <div className="space-y-6">
@@ -1641,11 +1735,32 @@ export default function FormEditorPage() {
           </div>
         </div>
 
-        {/* Khối 3: Cài đặt nâng cao */}
+        {/* Khối 3: Sau khi gửi (trước đây "Cài đặt") — thu gọn mặc định, kèm dòng tóm tắt */}
         <div id="section-settings" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
-          <h2 className="text-base font-bold text-gray-900">{t('forms.settings')}</h2>
+          <div>
+            <h2 className="text-base font-bold text-gray-900">
+              <button
+                type="button"
+                aria-expanded={openBlocks.afterSubmit}
+                aria-controls="section-settings-body"
+                onClick={() => setOpenBlocks((prev) => ({ ...prev, afterSubmit: !prev.afterSubmit }))}
+                className="w-full flex items-center justify-between gap-3 text-left"
+              >
+                <span>{t('forms.editorPage.afterSubmit.title')}</span>
+                <HiOutlineChevronDown
+                  className={`w-5 h-5 text-gray-400 shrink-0 transition-transform ${openBlocks.afterSubmit ? 'rotate-180' : ''}`}
+                />
+              </button>
+            </h2>
+            {!openBlocks.afterSubmit && (
+              <p className="text-xs text-gray-500 mt-0.5" data-testid="after-submit-summary">
+                {afterSubmitSummary}
+              </p>
+            )}
+          </div>
 
-          <div className="space-y-4 divide-y divide-gray-100">
+          {openBlocks.afterSubmit && (
+          <div id="section-settings-body" className="space-y-4 divide-y divide-gray-100">
             {/* notifyOwner */}
             <div className="flex items-start justify-between gap-4 pt-4 first:pt-0">
               <div>
@@ -1762,9 +1877,11 @@ export default function FormEditorPage() {
               )}
             </div>
           </div>
+          )}
         </div>
 
-        {/* Khối 4: Đặt lịch hẹn */}
+        {/* Khối 4: Đặt lịch hẹn — thẻ thu gọn "Thêm đặt lịch hẹn" cho tới khi có dữ liệu / người dùng bấm mở */}
+        {openBlocks.booking ? (
         <div id="section-booking" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -1973,8 +2090,18 @@ export default function FormEditorPage() {
             </div>
           )}
         </div>
+        ) : (
+          <AddSectionCard
+            id="section-booking"
+            icon={HiOutlinePlus}
+            title={t('forms.editorPage.addBlock.booking')}
+            hint={t('forms.editorPage.booking.enableHelp')}
+            onOpen={() => openBlock('booking')}
+          />
+        )}
 
-        {/* Khối 5: Thanh toán giữ chỗ */}
+        {/* Khối 5: Thanh toán giữ chỗ — thẻ thu gọn "Thu tiền khi gửi" cho tới khi có dữ liệu / người dùng bấm mở */}
+        {openBlocks.payment ? (
         <div id="section-payment" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div className="flex items-start justify-between gap-4">
             <div>
@@ -2390,8 +2517,18 @@ export default function FormEditorPage() {
             </div>
           )}
         </div>
+        ) : (
+          <AddSectionCard
+            id="section-payment"
+            icon={HiOutlinePlus}
+            title={t('forms.editorPage.addBlock.payment')}
+            hint={t('forms.editorPage.payment.enableHelp')}
+            onOpen={() => openBlock('payment')}
+          />
+        )}
 
-        {/* Khối 6: Giao diện (PR-4b) */}
+        {/* Khối 6: Giao diện (PR-4b) — thẻ thu gọn "Giao diện" cho tới khi đã tuỳ chỉnh / người dùng bấm mở */}
+        {openBlocks.theme ? (
         <div id="section-theme" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-6 hover:border-gray-300/80 transition-all">
           <div>
             <h2 className="text-base font-bold text-gray-900">
@@ -2637,6 +2774,15 @@ export default function FormEditorPage() {
             </div>
           </div>
         </div>
+        ) : (
+          <AddSectionCard
+            id="section-theme"
+            icon={HiOutlineColorSwatch}
+            title={t('forms.editorPage.theme.title')}
+            hint={t('forms.editorPage.theme.subtitle')}
+            onOpen={() => openBlock('theme')}
+          />
+        )}
 
       {/* Modal chia sẻ (PR-1) */}
       {isEditMode && (
