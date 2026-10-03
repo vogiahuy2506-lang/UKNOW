@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import { useAuthStore } from '../../stores/authStore';
 import productApiService from '../../features/products/services/productApi.service';
 import PageHeader from '../../components/common/PageHeader';
 import useStorageQuota from '../../features/storage/useStorageQuota';
@@ -48,15 +50,52 @@ const StatusBadge = ({ status }) => {
   );
 };
 
+const FUNNEL_PERIODS = ['7d', '30d', '90d'];
+
+const formatMoney = (n) => `${Number(n || 0).toLocaleString('vi-VN')} đ`;
+
 const formatDate = (v) => {
   if (!v) return '--';
   const d = new Date(v);
   return isNaN(d.getTime()) ? '--' : d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN');
 };
 
+// 3 ô Đăng ký / Đã trả / Doanh thu của một sản phẩm. Số Đăng ký là liên kết sang bài nộp: 1 biểu mẫu → trang bài nộp
+// của biểu mẫu đó; nhiều biểu mẫu → danh sách biểu mẫu (PR-1).
+const FunnelCells = ({ funnel }) => {
+  const registered = funnel?.registered ?? 0;
+  const formIds = funnel?.formIds || [];
+  const target =
+    formIds.length === 1 ? `/app/forms/${formIds[0]}/submissions` : formIds.length > 1 ? '/app/forms' : null;
+  return (
+    <>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-registered">
+        {target ? (
+          <Link to={target} className="text-primary-600 hover:underline">
+            {registered}
+          </Link>
+        ) : (
+          registered
+        )}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-paid">
+        {funnel?.paid ?? 0}
+      </td>
+      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900" data-testid="funnel-revenue">
+        {formatMoney(funnel?.revenue)}
+      </td>
+    </>
+  );
+};
+
 const Products = () => {
   const { t } = useI18n();
   const { usage: storageQuota } = useStorageQuota();
+  const activeContext = useAuthStore((state) => state.activeContext);
+  // Số tiền là dữ liệu báo cáo: nhân viên chỉ thấy khi có `reports_view` (không có thì cũng không gọi API phễu).
+  const canViewFunnel = activeContext?.type !== 'employee' || activeContext?.permissions?.reports_view === true;
+  const [funnelPeriod, setFunnelPeriod] = useState('30d');
+  const [funnelByProduct, setFunnelByProduct] = useState({});
   const [products, setProducts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -83,6 +122,29 @@ const Products = () => {
     fetchProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pagination.page, search]);
+
+  useEffect(() => {
+    if (!canViewFunnel) return undefined;
+    let active = true;
+    productApiService
+      .getFunnel({ period: funnelPeriod })
+      .then((res) => {
+        if (!active) return;
+        const map = {};
+        for (const row of res?.data?.data?.rows || []) map[row.productId] = row;
+        setFunnelByProduct(map);
+      })
+      .catch(() => {
+        if (active) {
+          setFunnelByProduct({});
+          toast.error(t('products.funnel.loadFailed'));
+        }
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [canViewFunnel, funnelPeriod]);
 
   const fetchProducts = async () => {
     setIsLoading(true);
@@ -245,6 +307,21 @@ const Products = () => {
           <button type="submit" className="btn btn-secondary shrink-0">
             {t('common.search')}
           </button>
+          {canViewFunnel && (
+            <select
+              data-testid="products-funnel-period"
+              aria-label={t('products.funnel.periodLabel')}
+              value={funnelPeriod}
+              onChange={(e) => setFunnelPeriod(e.target.value)}
+              className="shrink-0 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+            >
+              {FUNNEL_PERIODS.map((p) => (
+                <option key={p} value={p}>
+                  {t(`products.funnel.period${p}`)}
+                </option>
+              ))}
+            </select>
+          )}
         </form>
       </div>
 
@@ -273,6 +350,19 @@ const Products = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('products.price')}
                     </th>
+                    {canViewFunnel && (
+                      <>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
+                          {t('products.funnel.registered')}
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {t('products.funnel.paid')}
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                          {t('products.funnel.revenue')}
+                        </th>
+                      </>
+                    )}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.status')}
                     </th>
@@ -308,6 +398,9 @@ const Products = () => {
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
                         {product.price || '—'}
                       </td>
+                      {canViewFunnel && (
+                        <FunnelCells funnel={funnelByProduct[product.id]} />
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap">
                         <StatusBadge status={product.status} />
                       </td>

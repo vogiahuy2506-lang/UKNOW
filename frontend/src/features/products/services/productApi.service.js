@@ -5,6 +5,11 @@ const productApiService = {
     return api.get('/products', { params });
   },
 
+  /** Phễu theo sản phẩm (cần quyền reports_view): { filters, rows: [{ productId, submitted, registered, paid, revenue, formIds }] }. */
+  getFunnel(params = {}) {
+    return api.get('/products/funnel', { params });
+  },
+
   getCategories() {
     return api.get('/products/categories');
   },

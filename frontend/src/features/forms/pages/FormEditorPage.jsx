@@ -30,6 +30,7 @@ import QRCode from 'qrcode';
 import { buildVietQrString, decodeQrFromImageFile, parseAndValidateMoMoQr } from '../../../utils/vietqrParser';
 import { useI18n } from '../../../i18n';
 import { useAuthStore } from '../../../stores/authStore';
+import productApiService from '../../products/services/productApi.service';
 import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
 import {
   fetchFormById,
@@ -400,6 +401,11 @@ export default function FormEditorPage() {
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);
   const [errors, setErrors] = useState({});
+  // Biểu mẫu dành cho sản phẩm nào (phễu bán hàng theo sản phẩm). '' = không gắn.
+  const [productId, setProductId] = useState('');
+  const [initialProductId, setInitialProductId] = useState('');
+  const [productOptions, setProductOptions] = useState([]);
+  const selectedProduct = productOptions.find((p) => String(p.id) === productId) || null;
   const { usage: storageQuota } = useStorageQuota();
   const bannerInputRef = useRef(null);
   const logoInputRef = useRef(null);
@@ -461,6 +467,25 @@ export default function FormEditorPage() {
     payment.momoName,
   ]);
 
+  // Danh sách sản phẩm đang bán để chọn. Nhân viên chỉ có quyền `forms` (không có `courses`) bị 403 → danh sách rỗng,
+  // ô chọn vẫn giữ nguyên sản phẩm đã gắn (không làm mất khi lưu).
+  useEffect(() => {
+    let active = true;
+    productApiService
+      .getProducts({ status: 'active', limit: 100 })
+      .then((res) => {
+        if (!active) return;
+        const list = res?.data?.data?.products;
+        setProductOptions(Array.isArray(list) ? list : []);
+      })
+      .catch(() => {
+        if (active) setProductOptions([]);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
   useEffect(() => {
     // Form mới: các trường / cài đặt do bước chọn mẫu điền (handleSelectTemplate) — mẫu "Trống" cho
     // sẵn 1 trường Họ tên. Effect này không đụng state ở chế độ tạo, nên đổi ngôn ngữ giữa chừng
@@ -478,6 +503,8 @@ export default function FormEditorPage() {
         setTitle(data.title || '');
         setDescription(data.description || '');
         setIsPublished(Boolean(data.isPublished));
+        setProductId(data.productId ? String(data.productId) : '');
+        setInitialProductId(data.productId ? String(data.productId) : '');
         setPublicKey(data.publicKey || '');
         setSubmissionCount(data.submissionCount ?? null);
         setFields(
@@ -1180,6 +1207,11 @@ export default function FormEditorPage() {
         theme: payloadTheme,
       };
 
+      // Chỉ gửi productId khi đang gắn hoặc vừa bỏ gắn — biểu mẫu chưa từng gắn sản phẩm giữ nguyên payload cũ.
+      if (productId !== '' || initialProductId !== '') {
+        payload.productId = productId === '' ? null : Number(productId);
+      }
+
       // PR-3b mục 1: payload LUÔN gửi paymentConfig cho chủ tài khoản (đủ khoá khi bật, null khi
       // tắt) — nhân viên KHÔNG được gửi khoá này dù giá trị gì (backend chặn 403
       // PAYMENT_CONFIG_OWNER_ONLY chỉ cần THẤY khoá `paymentConfig` trong body, không xét giá
@@ -1234,6 +1266,7 @@ export default function FormEditorPage() {
         }
         toast.success(t('forms.saveSuccess'));
         setInitialBookingHadConfig(Boolean(payloadBooking));
+        setInitialProductId(productId);
         setConfirmDisableBooking(false);
         return id;
       } else {
@@ -2114,6 +2147,36 @@ export default function FormEditorPage() {
             onOpen={() => openBlock('booking')}
           />
         )}
+
+        {/* Khối "Dành cho sản phẩm": gắn biểu mẫu với sản phẩm để trang Sản phẩm đếm Đăng ký / Đã trả / Doanh thu */}
+        <div id="section-product" className="bg-white rounded-2xl shadow-xs border border-gray-200/80 p-6 sm:p-7 space-y-3">
+          <div>
+            <h2 className="text-base font-bold text-gray-900">{t('forms.editorPage.product.title')}</h2>
+            <p className="text-xs text-gray-500 mt-0.5">{t('forms.editorPage.product.help')}</p>
+          </div>
+          <select
+            data-testid="form-product-select"
+            aria-label={t('forms.editorPage.product.title')}
+            value={productId}
+            onChange={(e) => setProductId(e.target.value)}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
+          >
+            <option value="">{t('forms.editorPage.product.none')}</option>
+            {productId !== '' && !productOptions.some((p) => String(p.id) === productId) && (
+              <option value={productId}>{t('forms.editorPage.product.currentOption', { id: productId })}</option>
+            )}
+            {productOptions.map((p) => (
+              <option key={p.id} value={String(p.id)}>
+                {p.productName}
+              </option>
+            ))}
+          </select>
+          {payment.enabled && selectedProduct?.price ? (
+            <p data-testid="form-product-price-hint" className="text-xs text-gray-600">
+              {t('forms.editorPage.product.priceHint', { price: selectedProduct.price })}
+            </p>
+          ) : null}
+        </div>
 
         {/* Khối 5: Thanh toán giữ chỗ — thẻ thu gọn "Thu tiền khi gửi" cho tới khi có dữ liệu / người dùng bấm mở */}
         {openBlocks.payment ? (
