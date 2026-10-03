@@ -123,20 +123,29 @@ export default function HeroChatWidget() {
   };
 
   const handleQuickReply = (reply) => {
-    // Show user's question
-    setMessages(prev => [...prev, { role: 'user', content: reply.text }]);
+    // Chip CÓ `response` ghi sẵn (chỉ còn chip minh hoạ chiến dịch `campaign_demo`): hiện ngay, không gọi AI.
+    if (typeof reply.response === 'string' && reply.response) {
+      // Show user's question
+      setMessages(prev => [...prev, { role: 'user', content: reply.text }]);
 
-    // Show pre-written response immediately (no AI call)
-    setTimeout(() => {
-      setMessages(prev => [...prev, { role: 'assistant', content: reply.response }]);
-    }, 300);
-
-    // Handle special action: open campaign flow modal
-    if (reply.isAction === 'open_campaign_demo') {
+      // Show pre-written response immediately (no AI call)
       setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('open-campaign-flow', { detail: { flowKey: 'email' } }));
-      }, 400);
+        setMessages(prev => [...prev, { role: 'assistant', content: reply.response }]);
+      }, 300);
+
+      // Handle special action: open campaign flow modal
+      if (reply.isAction === 'open_campaign_demo') {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('open-campaign-flow', { detail: { flowKey: 'email' } }));
+        }, 400);
+      }
+      return;
     }
+
+    // Chip hỏi SỰ KIỆN (giá, gói, dùng thử, tính năng, hỗ trợ…): KHÔNG có câu trả lời ghi cứng — bản cũ ghi cứng giá/gói/tính năng
+    // sai so với production (3 gói "990K/2.490K", "dùng thử 7 ngày", "A/B testing", "CRM"...). Bấm chip = gửi đúng câu hỏi đó
+    // qua đường gửi tin AI của widget (BE dùng prompt đã kiểm + giá/hạn mức đọc từ bảng plans) — cùng đường, cùng giới hạn lượt.
+    sendMessage(reply.text);
   };
 
   // ------------------------------------------------------------------------
@@ -264,11 +273,16 @@ export default function HeroChatWidget() {
     }
   }
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || quotaExceeded) return;
+    return sendMessage(input);
+  };
 
-    const userMessage = input.trim();
+  // Đường gửi tin DUY NHẤT tới AI: ô nhập (handleSubmit) và chip câu hỏi (handleQuickReply) đều đi qua đây.
+  const sendMessage = async (rawText) => {
+    const userMessage = String(rawText || '').trim();
+    if (!userMessage || isLoading || quotaExceeded) return;
+
     setInput('');
     setIsLoading(true);
     setShowSuggestions(false);
