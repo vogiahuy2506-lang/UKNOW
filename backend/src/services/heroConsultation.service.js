@@ -173,6 +173,75 @@ function formatPlanLimits(plan) {
 }
 
 /**
+ * Hậu tố kỳ tính giá theo `plans.duration_days`: `price` là giá của MỘT kỳ dài `duration_days` ngày (billing đọc
+ * `COALESCE(duration_days, 30)` — billingCycle.util.js, payment.repository.js). Bản cũ in "VND/thang" bất kể độ dài kỳ nên gói
+ * 365 ngày hay gói dùng thử 10 ngày đều bị bot báo là giá theo tháng (D-16). 30 → /tháng, 365 → /năm, khác → /N ngày.
+ */
+export function formatPlanPeriodSuffix(durationDays) {
+  const days = Math.trunc(Number(durationDays)) || 30;
+  if (days <= 0 || days === 30) return '/tháng';
+  if (days === 365) return '/năm';
+  return `/${days} ngày`;
+}
+
+/**
+ * Mã tính năng NỘI BỘ trong `plans.features` (dùng bật/tắt tính năng — usageTracking.canUseFeature, migration 033) → nhãn tiếng
+ * Việt. Mã không có nhãn bị BỎ: bản cũ in thẳng "unified_inbox, multi_language" cho khách (D-16). Mỗi nhãn kèm bằng chứng:
+ *  - unified_inbox : Hộp thư hợp nhất (services/chatbot/unifiedInbox.service.js, trang /app/settings/inbox)
+ *  - multi_language: "Đa ngôn ngữ" — cùng nhãn frontend/src/utils/planTranslation.util.js (multi_language → multiLanguage)
+ */
+const PLAN_FEATURE_CODE_LABELS = Object.freeze({
+  unified_inbox: 'Hộp thư hợp nhất cho các kênh chat',
+  multi_language: 'Đa ngôn ngữ',
+});
+const PLAN_FEATURE_CODE_RE = /^[a-z][a-z0-9]*(?:_[a-z0-9]+)+$/;
+const PLAN_FEATURE_MAX = 8;
+const PLAN_FEATURE_MAX_LEN = 120;
+
+/**
+ * `plans.features` là JSONB do admin nhập: mảng chuỗi tiếng Việt, mảng `{vi, en}`, chuỗi JSON, hoặc mã nội bộ. Trả về nhãn
+ * tiếng Việt đọc được cho khách (tối đa PLAN_FEATURE_MAX).
+ */
+export function planFeatureLabels(rawFeatures) {
+  let raw = rawFeatures;
+  if (typeof raw === 'string') {
+    try { raw = JSON.parse(raw); } catch { raw = [raw]; }
+  }
+  let list = [];
+  if (Array.isArray(raw)) list = raw;
+  else if (raw && typeof raw === 'object') list = Object.keys(raw).filter((k) => raw[k]);
+
+  const out = [];
+  for (const item of list) {
+    let value = item;
+    if (typeof value === 'string' && value.trim().startsWith('{')) {
+      try { value = JSON.parse(value); } catch { /* chuỗi thường bắt đầu bằng { */ }
+    }
+    if (value && typeof value === 'object') value = value.vi || value.en || '';
+    let text = String(value ?? '').trim();
+    if (!text) continue;
+    if (PLAN_FEATURE_CODE_RE.test(text)) text = PLAN_FEATURE_CODE_LABELS[text] || '';
+    if (!text) continue;
+    text = text.slice(0, PLAN_FEATURE_MAX_LEN);
+    if (!out.includes(text)) out.push(text);
+    if (out.length >= PLAN_FEATURE_MAX) break;
+  }
+  return out;
+}
+
+/** Giá gói in kèm ĐÚNG kỳ tính giá; gói tính theo tháng có giá năm thì nêu thêm giá năm. `plans.price` là BIGINT → pg trả chuỗi. */
+export function formatPlanPriceInfo(plan) {
+  const price = Number(plan?.price) || 0;
+  let priceInfo = `${fmtInt(price)} VND${formatPlanPeriodSuffix(plan?.duration_days)}`;
+  const priceYearly = Number(plan?.price_yearly) || 0;
+  // Giá năm chỉ có nghĩa khi giá gốc là giá THÁNG (kỳ 30 ngày) — gói 365 ngày đã là giá năm rồi.
+  if (priceYearly > 0 && formatPlanPeriodSuffix(plan?.duration_days) === '/tháng') {
+    priceInfo += `; hoặc ${fmtInt(priceYearly)} VND/năm nếu thanh toán cả năm (khoảng ${fmtInt(priceYearly / 12)} VND/tháng)`;
+  }
+  return priceInfo;
+}
+
+/**
  * Format plans for AI context (safe public data only)
  */
 export function formatPlansForContext(plans) {
@@ -180,30 +249,10 @@ export function formatPlansForContext(plans) {
     return HERO_PLANS_UNAVAILABLE_TEXT;
   }
 
-  return plans.map(plan => {
-    const features = plan.features 
-      ? (Array.isArray(plan.features) 
-          ? plan.features 
-          : typeof plan.features === 'object' 
-            ? Object.keys(plan.features).filter(k => plan.features[k])
-            : [])
-      : [];
-    
-    const price = plan.price || 0;
-    const priceYearly = plan.price_yearly || null;
-    const featuresStr = features.length > 0 
-      ? features.slice(0, 5).join(', ') 
-      : 'Khong co thong tin tinh nang';
-    
-    let priceInfo = `${price.toLocaleString('vi-VN')} VND/thang`;
-    if (priceYearly && priceYearly > 0) {
-      const yearlyPerMonth = Math.round(priceYearly / 12);
-      priceInfo += ` (${yearlyPerMonth.toLocaleString('vi-VN')} VND/thang neu thanh toan nam)`;
-    }
-
+  return plans.map((plan) => {
+    const features = planFeatureLabels(plan.features);
     const limitsStr = formatPlanLimits(plan);
-
-    return `- ${plan.name}: ${priceInfo}. ${limitsStr ? `${limitsStr} ` : ''}Tinh nang: ${featuresStr}`;
+    return `- ${plan.name}: ${formatPlanPriceInfo(plan)}. ${limitsStr ? `${limitsStr} ` : ''}${features.length > 0 ? `Tính năng: ${features.join(', ')}.` : ''}`.trimEnd();
   }).join('\n\n');
 }
 
