@@ -8,7 +8,7 @@ import {
   postLandingCustomDomainVerify,
   deleteLandingCustomDomain,
 } from '../../landing-pages/services/landingPagesAdminApi.service.js';
-import { SYSTEM_BASE_DOMAIN } from '../utils/landingDomain.js';
+import { SYSTEM_BASE_DOMAIN, isFreeLinkPending } from '../utils/landingDomain.js';
 
 /** Khách hay dán nguyên URL: bỏ giao thức, đường dẫn, dấu chấm cuối; chữ thường. */
 function normalizeHostInput(raw) {
@@ -125,6 +125,8 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
   const cleanSlug = String(slug || '').trim();
   const freeLink = cleanSlug ? `${cleanSlug}.${SYSTEM_BASE_DOMAIN}` : '';
   const isCustom = domain.kind === 'custom-active' || domain.kind === 'custom-pending';
+  // Link miễn phí kẹt pending_verification (SettingsModal hiện nút "Thử lại" ở khung link): câu "Link miễn phí vẫn chạy" sai sự thật.
+  const freePending = isFreeLinkPending(domain);
 
   const resetConnectForm = () => {
     setExpanded(false);
@@ -340,7 +342,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
         >
           {tc('sections.customDomain.useOwn')}
         </button>
-        {domain.kind === 'free' ? (
+        {domain.kind === 'free' && !freePending ? (
           <p className="text-xs text-gray-500">{tc('sections.customDomain.freeKeepsRunning')}</p>
         ) : null}
         {error ? (
@@ -456,7 +458,7 @@ export default function CustomDomainPanel({ editingId, domain, slug, onChanged }
         </p>
       ) : null}
 
-      <p className="text-xs text-gray-500">{tc('sections.customDomain.freeKeepsRunning')}</p>
+      {freePending ? null : <p className="text-xs text-gray-500">{tc('sections.customDomain.freeKeepsRunning')}</p>}
     </div>
   );
 }

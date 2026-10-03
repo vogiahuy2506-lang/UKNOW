@@ -20,8 +20,9 @@ import { uploadLandingAsset } from '../../landing-pages/services/landingPagesAdm
 import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
 import CustomDomainPanel from './CustomDomainPanel.jsx';
 import RestoreFreeLinkPanel from './RestoreFreeLinkPanel.jsx';
+import RetryFreeLinkPanel from './RetryFreeLinkPanel.jsx';
 import useLandingDomainInfo from '../hooks/useLandingDomainInfo.js';
-import { SYSTEM_BASE_DOMAIN } from '../utils/landingDomain.js';
+import { SYSTEM_BASE_DOMAIN, isFreeLinkPending } from '../utils/landingDomain.js';
 
 const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
 
@@ -32,6 +33,7 @@ const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
  *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí, và
  *      tên miền riêng (CustomDomainPanel: kiểm DNS → kết nối, gỡ, kiểm tra lại — PLAN_TEN_MIEN_RIENG PR-D). Trang
  *      mất link (domain_type='custom' mà không còn tên miền) có thêm RestoreFreeLinkPanel: "Dùng lại link miễn phí".
+ *      Link miễn phí kẹt pending_verification (Cloudflare lỗi lúc cấp) có RetryFreeLinkPanel: "Đang chờ cấp link" + "Thử lại".
  *      Tiêu đề trang KHÔNG còn ở đây — sửa ở thanh trên cùng của trình soạn.
  *   2. "Form thu khách": chọn Form cơ bản hoặc Dùng biểu mẫu đã tạo (LeadFormConfigPanel; lựa chọn lưu cùng lần bấm Lưu trang).
  *   3. "Ảnh đã tải lên (N)": cuối modal, mặc định thu gọn.
@@ -164,6 +166,9 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   const hasCustomDomain = domain.kind === 'custom-active' || domain.kind === 'custom-pending';
   // domain_type='custom' mà không còn hàng tên miền nào (trang hỏng ở production): link miễn phí đã chết.
   const isBrokenCustom = domain.kind === 'none' && form?.domainType === 'custom';
+  // Link miễn phí có hàng nhưng chưa chạy (Cloudflare lỗi lúc cấp, hàng `cf_managed` ở pending_verification): hiện trạng thái
+  // + nút "Thử lại" (POST .../custom-domain/verify). Không đụng form (chốt PR-1) — xong thì nạp lại tên miền từ server.
+  const freeLinkPending = Boolean(editingId) && isFreeLinkPending(domain);
 
   // "Dùng lại link miễn phí" xong: slug do SERVER ghi (đã chuẩn hoá) phải về `form.slug` của trình soạn. Không đồng bộ thì
   // lần "Lưu trang" sau gửi slug CŨ (hoặc rỗng → backend ghi NULL) đè mất slug vừa ghi và làm backend đổi lại subdomain.
@@ -351,6 +356,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                   </div>
                 ) : null}
                 {linkHint ? <p className="text-xs text-gray-500">{linkHint}</p> : null}
+                {freeLinkPending ? <RetryFreeLinkPanel editingId={editingId} onRetried={reloadDomain} /> : null}
                 {publicUrl && !form?.isPublished ? (
                   <p className="text-xs text-amber-700">{tc('sections.publish.linkDraftHint')}</p>
                 ) : null}

@@ -32,3 +32,15 @@ export function getCustomHostname(form) {
   if (!h || isSystemHostname(h)) return '';
   return h;
 }
+
+/**
+ * Link miễn phí CHƯA chạy: hàng `<slug>.founderai.biz` còn `pending_verification` (Cloudflare lỗi lúc cấp) hoặc backend báo
+ * `canRetryAutoProvision`. Chỉ áp cho `domain` của hook useLandingDomainInfo với `kind === 'free'`; tên miền riêng chờ xác
+ * minh (hàng cũ) có đường riêng ở CustomDomainPanel ("Kiểm tra lại" + bảng DNS), không dùng hàm này.
+ * @param {{ kind?: string, status?: string|null, canRetryAutoProvision?: boolean }|null|undefined} domain
+ * @returns {boolean}
+ */
+export function isFreeLinkPending(domain) {
+  if (!domain || domain.kind !== 'free') return false;
+  return Boolean(domain.canRetryAutoProvision) || domain.status === 'pending_verification';
+}

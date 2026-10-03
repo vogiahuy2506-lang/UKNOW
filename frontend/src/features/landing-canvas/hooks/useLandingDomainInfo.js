@@ -11,7 +11,8 @@ import { getCustomHostname, isSystemHostname } from '../utils/landingDomain.js';
  *
  * `kind`:
  *  - 'none'           : chưa có hàng tên miền nào (trang mới chưa lưu, hoặc trang hỏng domain_type='custom' mất hàng).
- *  - 'free'           : link miễn phí `<slug>.founderai.biz`.
+ *  - 'free'           : link miễn phí `<slug>.founderai.biz` (`status` 'active', hoặc 'pending_verification' khi Cloudflare
+ *                       chưa cấp xong — kèm `canRetryAutoProvision`).
  *  - 'custom-active'  : tên miền riêng đang chạy.
  *  - 'custom-pending' : tên miền riêng chưa xác minh (hàng cũ) — kèm `dnsRecords` để hiện bảng DNS.
  *
@@ -67,6 +68,10 @@ export default function useLandingDomainInfo({ open, editingId, form }) {
         apexFixedIp: server.apexFixedIp || null,
         isApex: Boolean(server.isApexDomain),
         instructions: server.instructions || '',
+        // Link miễn phí kẹt `pending_verification` (Cloudflare lỗi lúc cấp): backend báo `canRetryAutoProvision` — nút
+        // "Thử lại" ở modal Cài đặt dựa vào đây (xem RetryFreeLinkPanel). Hai cờ chỉ có ở dữ liệu SERVER, không có ở dự phòng form.
+        cfManaged: Boolean(server.cfManaged),
+        canRetryAutoProvision: Boolean(server.canRetryAutoProvision),
       };
       if (server.cfManaged || isSystemHostname(server.hostname)) return { kind: 'free', ...common };
       return { kind: server.status === 'active' ? 'custom-active' : 'custom-pending', ...common };

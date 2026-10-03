@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import toast from 'react-hot-toast';
 import SettingsModal from '../SettingsModal.jsx';
 import * as domainApi from '../../../landing-pages/services/landingPagesAdminApi.service.js';
 
@@ -497,6 +498,7 @@ describe('SettingsModal — chốt PR-1: modal không đổi domainType / hostna
     'trang có tên miền riêng đang chạy': { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'active' },
     'trang có tên miền riêng chờ xác minh': { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'pending_verification' },
     'trang custom không còn hàng tên miền (hỏng)': { slug: 'abc', domainType: 'custom', customDomainHostname: null },
+    'trang có link miễn phí kẹt chờ cấp (nút Thử lại)': { slug: 'abc', domainType: 'system', customDomainHostname: 'abc.founderai.biz', customDomainStatus: 'pending_verification' },
   };
 
   beforeEach(() => {
@@ -777,5 +779,169 @@ describe('SettingsModal — dùng lại link miễn phí (trang mất link)', ()
   it('trang chưa lưu (không có editingId): không có nút (chưa có trang để cấp link)', () => {
     renderModal(BROKEN, { editingId: null });
     expect(screen.queryByTestId('restore-free-link')).toBeNull();
+  });
+});
+
+/**
+ * PLAN_DUNG_LAI_LINK_MIEN_PHI_2026-10-03, PR-2: khi Cloudflare lỗi lúc cấp, hàng link miễn phí (cf_managed=true) nằm ở
+ * pending_verification nhưng Cài đặt trang KHÔNG có nút thử lại (nút cũ ở trình soạn đã bị thay). Nay có dòng trạng thái
+ * "Đang chờ cấp link" + nút "Thử lại" gọi POST /:id/custom-domain/verify (api.js, có Bearer) rồi nạp lại tên miền từ server.
+ * GIỮ chốt PR-1: không setForm domainType, không gọi PUT / DELETE.
+ */
+describe('SettingsModal — link miễn phí kẹt chờ cấp: nút "Thử lại"', () => {
+  const FREE_PENDING_SERVER = {
+    ...FREE_SERVER,
+    status: 'pending_verification',
+    cfHostnameId: null,
+    canRetryAutoProvision: true,
+    instructions: 'Subdomain abc.founderai.biz đang chờ hệ thống cấp DNS qua Cloudflare. Vui lòng bấm «Thử lại» hoặc liên hệ admin nếu lỗi tiếp diễn.',
+  };
+  const FREE_ACTIVE_SERVER = { ...FREE_SERVER, cfHostnameId: null, canRetryAutoProvision: false };
+  const PENDING_FORM = { slug: 'abc', domainType: 'system', customDomainHostname: 'abc.founderai.biz', customDomainStatus: 'pending_verification' };
+
+  let toastSuccess;
+
+  beforeEach(() => {
+    Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
+    vi.stubGlobal('fetch', vi.fn());
+    toastSuccess = vi.spyOn(toast, 'success').mockImplementation(() => 'toast-id');
+    domainApi.fetchLandingCustomDomain.mockResolvedValue(FREE_PENDING_SERVER);
+    domainApi.postLandingCustomDomainVerify.mockResolvedValue(FREE_ACTIVE_SERVER);
+  });
+
+  afterEach(() => {
+    toastSuccess.mockRestore();
+    vi.unstubAllGlobals();
+  });
+
+  const retryButton = () => screen.getByRole('button', { name: 'Thử lại' });
+  const noWrites = () => {
+    expect(domainApi.putLandingCustomDomain).not.toHaveBeenCalled();
+    expect(domainApi.deleteLandingCustomDomain).not.toHaveBeenCalled();
+    expect(domainApi.postLandingCustomDomainCheck).not.toHaveBeenCalled();
+    expect(domainApi.postLandingFreeLink).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  };
+
+  it('hàng miễn phí pending_verification: link kèm "Đang chờ cấp link" + câu giải thích + nút "Thử lại"; không còn câu "Link miễn phí vẫn chạy"', async () => {
+    renderModal(PENDING_FORM);
+
+    expect(await screen.findByTestId('retry-free-link')).toBeInTheDocument();
+    expect(screen.getByTestId('retry-free-link-status')).toHaveTextContent('Đang chờ cấp link');
+    expect(screen.getByTestId('retry-free-link')).toHaveTextContent('Hệ thống chưa cấp xong link này');
+    expect(retryButton()).toBeEnabled();
+    expect(screen.getByTestId('landing-public-url')).toHaveTextContent('https://abc.founderai.biz');
+    // Link chưa chạy thì không được nói "vẫn chạy" ở khối tên miền riêng ngay bên dưới.
+    expect(screen.queryByText('Link miễn phí vẫn chạy cho tới khi kết nối xong.')).toBeNull();
+    // Chỉ hiện chứ không tự gọi gì.
+    expect(domainApi.postLandingCustomDomainVerify).not.toHaveBeenCalled();
+    noWrites();
+  });
+
+  it.each([
+    ['canRetryAutoProvision=true', { ...FREE_PENDING_SERVER, status: 'pending_verification', canRetryAutoProvision: true }],
+    ['pending_verification dù canRetryAutoProvision=false (hàng đã có cfHostnameId)', { ...FREE_PENDING_SERVER, cfHostnameId: 'cfh-1', canRetryAutoProvision: false }],
+  ])('hiện nút khi %s', async (_name, server) => {
+    domainApi.fetchLandingCustomDomain.mockResolvedValue(server);
+    renderModal({ ...PENDING_FORM, customDomainStatus: null, customDomainHostname: null });
+
+    expect(await screen.findByRole('button', { name: 'Thử lại' })).toBeInTheDocument();
+  });
+
+  it('link miễn phí ĐANG CHẠY (active) → không có nút "Thử lại" / dòng "Đang chờ cấp link"; câu "Link miễn phí vẫn chạy" còn', async () => {
+    domainApi.fetchLandingCustomDomain.mockResolvedValue(FREE_ACTIVE_SERVER);
+    renderModal({ ...PENDING_FORM, customDomainStatus: 'active' });
+
+    expect(await screen.findByText('Link miễn phí vẫn chạy cho tới khi kết nối xong.')).toBeInTheDocument();
+    expect(screen.queryByTestId('retry-free-link')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
+    expect(screen.queryByText('Đang chờ cấp link')).toBeNull();
+  });
+
+  it.each([
+    ['tên miền riêng chờ xác minh (hàng cũ — có nút "Kiểm tra lại" riêng)', { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'pending_verification' }, CUSTOM_PENDING_SERVER],
+    ['tên miền riêng đang chạy', { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainStatus: 'active' }, CUSTOM_ACTIVE_SERVER],
+    ['trang mất link (không còn hàng nào)', { slug: 'abc', domainType: 'custom', customDomainHostname: null }, { configured: false, instructions: null, record: null, dnsRecords: [] }],
+  ])('%s: KHÔNG có nút "Thử lại" của link miễn phí', async (_name, patch, server) => {
+    domainApi.fetchLandingCustomDomain.mockResolvedValue(server);
+    renderModal(patch);
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalled());
+
+    expect(screen.queryByTestId('retry-free-link')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Thử lại' })).toBeNull();
+  });
+
+  it('trang chưa lưu (không có editingId): không có nút', () => {
+    renderModal(PENDING_FORM, { editingId: null });
+    expect(screen.queryByTestId('retry-free-link')).toBeNull();
+  });
+
+  it('bấm "Thử lại": gọi verify đúng 1 lần với id trang, rồi NẠP LẠI tên miền từ server — link chạy, dòng chờ + nút biến mất, toast báo xong', async () => {
+    domainApi.fetchLandingCustomDomain.mockReset();
+    domainApi.fetchLandingCustomDomain.mockResolvedValueOnce(FREE_PENDING_SERVER).mockResolvedValue(FREE_ACTIVE_SERVER);
+    const initial = baseForm(PENDING_FORM);
+    const { setForm } = renderModal(PENDING_FORM);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Thử lại' }));
+
+    await waitFor(() => expect(screen.queryByTestId('retry-free-link')).toBeNull());
+    expect(domainApi.postLandingCustomDomainVerify).toHaveBeenCalledTimes(1);
+    expect(domainApi.postLandingCustomDomainVerify).toHaveBeenCalledWith(10);
+    expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(2);
+    expect(toastSuccess).toHaveBeenCalledWith('Đã cấp xong link miễn phí');
+    expect(screen.getByTestId('landing-public-url')).toHaveTextContent('https://abc.founderai.biz');
+    expect(screen.getByText('Link miễn phí vẫn chạy cho tới khi kết nối xong.')).toBeInTheDocument();
+    // Chốt PR-1 + chỉ gọi verify: không PUT / DELETE / free-link, không đụng form.
+    noWrites();
+    for (const next of appliedForms(setForm, initial)) {
+      expect(next.domainType).toBe('system');
+      expect(next.customDomainHostname).toBe('abc.founderai.biz');
+    }
+  });
+
+  it('đang gọi: nút chuyển "Đang thử lại..." và tắt, bấm tiếp KHÔNG gọi thêm lần nữa', async () => {
+    let resolveVerify;
+    domainApi.postLandingCustomDomainVerify.mockReturnValue(new Promise((resolve) => { resolveVerify = resolve; }));
+    renderModal(PENDING_FORM);
+
+    const button = await screen.findByRole('button', { name: 'Thử lại' });
+    fireEvent.click(button);
+
+    const busyButton = await screen.findByRole('button', { name: 'Đang thử lại...' });
+    expect(busyButton).toBeDisabled();
+    fireEvent.click(busyButton);
+    fireEvent.click(busyButton);
+    expect(domainApi.postLandingCustomDomainVerify).toHaveBeenCalledTimes(1);
+
+    resolveVerify(FREE_ACTIVE_SERVER);
+    await waitFor(() => expect(domainApi.postLandingCustomDomainVerify).toHaveBeenCalledTimes(1));
+  });
+
+  it('server từ chối (400 Cloudflare vẫn lỗi) → hiện ĐÚNG câu backend, vẫn đang chờ, KHÔNG nạp lại, bấm lại được', async () => {
+    const message = 'Cloudflare API không tạo được DNS record';
+    domainApi.postLandingCustomDomainVerify.mockRejectedValue({ response: { status: 400, data: { success: false, message } } });
+    renderModal(PENDING_FORM);
+    await waitFor(() => expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(1));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Thử lại' }));
+
+    expect(await screen.findByTestId('retry-free-link-error')).toHaveTextContent(message);
+    expect(domainApi.fetchLandingCustomDomain).toHaveBeenCalledTimes(1);
+    expect(toastSuccess).not.toHaveBeenCalled();
+    expect(screen.getByTestId('retry-free-link-status')).toHaveTextContent('Đang chờ cấp link');
+    expect(retryButton()).toBeEnabled();
+    noWrites();
+  });
+
+  it('lỗi không có câu của server (mạng) → hiện thông điệp lỗi, không để trống; bấm lại thì xoá lỗi cũ', async () => {
+    domainApi.postLandingCustomDomainVerify.mockRejectedValueOnce(new Error('Network Error'));
+    renderModal(PENDING_FORM);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Thử lại' }));
+    expect(await screen.findByTestId('retry-free-link-error')).toHaveTextContent('Network Error');
+
+    fireEvent.click(retryButton());
+    await waitFor(() => expect(domainApi.postLandingCustomDomainVerify).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByTestId('retry-free-link-error')).toBeNull());
   });
 });

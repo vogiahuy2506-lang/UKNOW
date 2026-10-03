@@ -849,6 +849,13 @@ export default {
           success: 'Đã dùng lại link miễn phí {link}',
           pendingWarn: 'Đã đặt lại link {link} nhưng chưa kích hoạt xong. Thử lại sau ít phút hoặc liên hệ hỗ trợ.',
           genericError: 'Không cấp lại được link miễn phí, thử lại sau.',
+          // Link miễn phí kẹt pending_verification (Cloudflare lỗi lúc cấp) — PR-2: dòng trạng thái + nút "Thử lại".
+          pendingBadge: 'Đang chờ cấp link',
+          pendingNote: 'Hệ thống chưa cấp xong link này nên khách chưa mở được. Bấm Thử lại để cấp lại.',
+          retry: 'Thử lại',
+          retrying: 'Đang thử lại...',
+          retrySuccess: 'Đã cấp xong link miễn phí',
+          retryError: 'Chưa cấp được link, thử lại sau ít phút hoặc liên hệ hỗ trợ.',
         },
         // Tên miền riêng (PLAN_TEN_MIEN_RIENG, PR-D): kiểm DNS trước, chỉ kết nối khi DNS đã đúng; gỡ trả trang về link miễn phí.
         customDomain: {

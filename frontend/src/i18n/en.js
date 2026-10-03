@@ -847,6 +847,13 @@ export default {
           success: 'Free link restored: {link}',
           pendingWarn: 'The link {link} was set but is not active yet. Try again in a few minutes or contact support.',
           genericError: 'Could not restore the free link, please try again.',
+          // Free link stuck at pending_verification (Cloudflare failed while provisioning) — PR-2: status line + "Try again" button.
+          pendingBadge: 'Waiting for the link to be set up',
+          pendingNote: 'The system has not finished setting up this link, so visitors cannot open it yet. Click Try again to set it up again.',
+          retry: 'Try again',
+          retrying: 'Trying again...',
+          retrySuccess: 'The free link is ready',
+          retryError: 'Could not set up the link. Try again in a few minutes or contact support.',
         },
         // Custom domain (PLAN_TEN_MIEN_RIENG, PR-D): DNS is checked first and the domain connects only once DNS is correct;
         // removing it puts the page back on its free link.
