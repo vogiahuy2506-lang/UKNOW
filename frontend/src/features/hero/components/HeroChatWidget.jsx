@@ -57,6 +57,8 @@ export default function HeroChatWidget() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [quotaExceeded, setQuotaExceeded] = useState(false);
+  // Vì sao form liên hệ đang mở: 'quota' = khách hết lượt miễn phí; 'busy' = trần ngân sách ngày của trợ lý (BE trả code BUSY).
+  const [contactReason, setContactReason] = useState('quota');
   const [showSuggestions, setShowSuggestions] = useState(true);
   const [contactForm, setContactForm] = useState(null);
   const [contactData, setContactData] = useState({ name: '', email: '', phone: '', message: '' });
@@ -82,6 +84,8 @@ export default function HeroChatWidget() {
   const freeChatsText = i18nKey('heroConsultation.freeChats') || 'Tư vấn miễn phí';
   const quotaTitle = i18nKey('heroConsultation.quotaTitle') || 'Hết lượt tư vấn';
   const quotaExceededText = i18nKey('heroConsultation.quotaExceeded') || 'Bạn đã hết lượt tư vấn miễn phí. Điền form bên dưới, đội ngũ tư vấn sẽ gọi lại cho bạn trong 24 giờ!';
+  const busyTitle = i18nKey('heroConsultation.busyTitle');
+  const busyText = i18nKey('heroConsultation.busyMessage');
   const placeholderText = i18nKey('heroConsultation.placeholder') || 'Nhập câu hỏi...';
   const openChatText = i18nKey('heroConsultation.openChat') || 'Chat tư vấn';
   const _closeText = i18nKey('heroConsultation.close') || 'Đóng';
@@ -314,8 +318,16 @@ export default function HeroChatWidget() {
 
       if (!response.ok || !data.success) {
         if (data.code === 'QUOTA_EXCEEDED') {
+          setContactReason('quota');
           setQuotaExceeded(true);
           setMessages(prev => [...prev, { role: 'assistant', content: quotaExceededText }]);
+        } else if (data.code === 'BUSY') {
+          // Trần ngân sách ngày (HERO_CONSULTATION_DAILY_CAP): BE trả 200 + success=false + code BUSY. Hiện câu tiếng Việt (i18n,
+          // theo ngôn ngữ trang) và MỞ form để lại thông tin — dùng lại đúng form của QUOTA_EXCEEDED (đã có tên/email/SĐT/nội dung).
+          // Bản cũ rơi vào nhánh lỗi chung: chỉ hiện câu "để lại số điện thoại hoặc email" mà không có chỗ nào để lại.
+          setContactReason('busy');
+          setQuotaExceeded(true);
+          setMessages(prev => [...prev, { role: 'assistant', content: busyText }]);
         } else {
           setMessages(prev => [...prev, { 
             role: 'assistant', 
@@ -481,7 +493,7 @@ export default function HeroChatWidget() {
 
           {quotaExceeded && !contactForm && (
             <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
-              <p className="text-amber-800 text-sm font-medium mb-3">{quotaTitle}</p>
+              <p className="text-amber-800 text-sm font-medium mb-3">{contactReason === 'busy' ? busyTitle : quotaTitle}</p>
               <form onSubmit={handleContactSubmit} className="space-y-3">
                 <input
                   type="text"

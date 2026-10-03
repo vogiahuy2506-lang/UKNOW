@@ -8086,6 +8086,9 @@ Feel free to ask me anything!`,
       freeChats: 'Free Consultation',
       quotaTitle: 'Limit Reached',
       quotaExceeded: 'You have reached your free consultation limit. Fill out the form below, our team will call you back within 24 hours!',
+      // Daily budget cap of the assistant (BE returns code 'BUSY'): not an error, and the visitor has not run out of chats.
+      busyTitle: 'Our advisor is busy',
+      busyMessage: 'Our advisor is helping many visitors right now. Leave your details in the form below and the Founder AI team will get back to you as soon as possible!',
       loginToContinue: 'Log in to continue',
       // VietQR payment (vietqr-chat-hero-landing)
       paymentAskAmount: 'How much would you like to pay?',

@@ -8094,6 +8094,9 @@ export default {
       freeChats: 'Tư vấn miễn phí',
       quotaTitle: 'Hết lượt tư vấn',
       quotaExceeded: 'Bạn đã hết lượt tư vấn miễn phí. Điền form bên dưới, đội ngũ tư vấn sẽ gọi lại trong 24 giờ!',
+      // Trần ngân sách ngày của trợ lý (BE trả code 'BUSY'): không phải lỗi, cũng không phải khách hết lượt.
+      busyTitle: 'Tư vấn viên đang bận',
+      busyMessage: 'Tư vấn viên đang bận trả lời nhiều bạn cùng lúc. Bạn để lại thông tin ở form bên dưới, đội ngũ Founder AI sẽ liên hệ lại với bạn sớm nhất nhé!',
       loginToContinue: 'Đăng nhập để tiếp tục',
       // VietQR payment (vietqr-chat-hero-landing)
       paymentAskAmount: 'Bạn muốn thanh toán bao nhiêu?',
