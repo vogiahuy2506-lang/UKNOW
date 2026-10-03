@@ -22,8 +22,9 @@ import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../.
 import { notifyStorageQuotaRefresh } from '../../storage/storageEvents.js';
 import { uploadLandingAsset } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import LeadFormConfigPanel from './LeadFormConfigPanel.jsx';
+import { SYSTEM_BASE_DOMAIN, getCustomHostname } from '../utils/landingDomain.js';
 
-const BASE_DOMAIN = 'founderai.biz';
+const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
 
 /**
  * Settings Modal - Modal nhỏ gọn để chỉnh sửa landing page.
@@ -160,11 +161,12 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
     setExpandedSections((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
   }, [open, tab]);
 
-  // Domain state
-  const [domainMode, setDomainMode] = useState(
-    form?.customDomainHostname ? 'custom' : 'system'
-  );
-  const [hostname, setHostname] = useState(form?.customDomainHostname || '');
+  // Domain state. CHỈ hostname tên miền RIÊNG mới đưa modal sang chế độ 'custom': trang dùng tên
+  // miền miễn phí cũng có `customDomainHostname` = `<slug>.founderai.biz` (landing_page_domains lưu
+  // cả hai loại) — xem utils/landingDomain.js.
+  const customHostname = getCustomHostname(form);
+  const [domainMode, setDomainMode] = useState(customHostname ? 'custom' : 'system');
+  const [hostname, setHostname] = useState(customHostname);
   const [isApex, setIsApex] = useState(form?.customDomainIsApex || false);
   const [_savingDomain, _setSavingDomain] = useState(false);
   const [domainStatus, _setDomainStatus] = useState('NONE');
@@ -177,14 +179,14 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   const [domainCheckResult, setDomainCheckResult] = useState(null); // 'ok' | 'error' | 'pending'
 
   useEffect(() => {
-    if (form?.customDomainHostname) {
+    if (customHostname) {
       setDomainMode('custom');
-      setHostname(form.customDomainHostname);
+      setHostname(customHostname);
     } else {
       setDomainMode('system');
       setHostname('');
     }
-  }, [form?.customDomainHostname, form?.customDomainIsApex]);
+  }, [customHostname, form?.customDomainIsApex]);
 
   const handleCheckDomainConnection = async () => {
     if (!hostname) {
