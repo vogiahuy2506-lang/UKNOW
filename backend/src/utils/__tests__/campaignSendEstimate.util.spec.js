@@ -125,6 +125,23 @@ describe('estimateCampaignSend — trần', () => {
     expect(result.finishAtLatest).toBe(vn('2026-10-06T08:30:00').toISOString());
   });
 
+  it('trần ngày CHUNG mọi kênh của cùng một nick: kết bạn 60 + nhắn 60, trần 100 → ngày 1 đủ 100 (60 + 40), ngày 2 còn 20', () => {
+    // Node A (kết bạn): k = 0..59 → tin cuối 06:00 + 59*100s = 07:38:20, đếm 60/100.
+    // Node B (cá nhân) bắt đầu 07:38:20, trạng thái nhịp riêng nên tin đầu gửi ngay; còn 40 suất → 40 tin (k = 0..39),
+    // tin thứ 41 chạm trần → 00:00 06/10 → giờ nghỉ → 06:00; trạng thái có lastAttempt → ngủ 100s → 06:01:40.
+    // 20 tin còn lại: k = 0..19 → tin cuối 06:01:40 + 19*100s = 06:01:40 + 31m40s = 06:33:20 (06/10).
+    const account = zaloAccount({ dailyLimit: 100 });
+    const result = estimateCampaignSend({
+      startAt: vn('2026-10-05T06:00:00'),
+      groups: [
+        group({ nodeId: 'A', channel: 'zalo_friend_request', recipients: 60, accounts: [account] }),
+        group({ nodeId: 'B', channel: 'zalo_personal', recipients: 60, accounts: [account] }),
+      ],
+    });
+    expect(result.perDay.map((d) => [d.date, d.actions])).toEqual([['2026-10-05', 100], ['2026-10-06', 20]]);
+    expect(result.finishAtLatest).toBe(vn('2026-10-06T06:33:20').toISOString());
+  });
+
   it('trần ngày bằng 0 → chặn hẳn: không có giờ xong, cảnh báo account_daily_limit limit 0', () => {
     const result = estimateCampaignSend({
       startAt: vn('2026-10-05T06:00:00'),

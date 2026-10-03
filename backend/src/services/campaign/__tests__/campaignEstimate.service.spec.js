@@ -285,7 +285,7 @@ describe('estimateForCampaign — cảnh báo từ dữ kiện ngoài', () => {
     expect(codes(failed)).not.toContain('plan_quota_insufficient');
   });
 
-  it('nick đang được chiến dịch KHÁC dùng: run đang chạy và lịch bật trong 7 ngày được liệt kê; lịch 30 ngày nữa thì KHÔNG; không cộng vào số', async () => {
+  it('nick đang được chiến dịch KHÁC dùng: run đang chạy và lịch bật trong 7 ngày được liệt kê; lịch hơn 7 ngày nữa (2 tháng) thì KHÔNG; không cộng vào số', async () => {
     const zaloNode = (campaignId, accountId) => ({ id_campaign: campaignId, id: campaignId * 10, node_type: 'action', node_subtype: 'send_zalo_personal', config: { zaloAccountId: String(accountId) } });
     const { deps } = makeDeps({ state: oneZaloNode() });
     deps.estimateRepo.findOtherCampaignsInUse.mockResolvedValueOnce({
