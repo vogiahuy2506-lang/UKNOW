@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { BrowserRouter, UNSAFE_NavigationContext, useLocation, useNavigate } from 'react-router-dom';
 import { useContext } from 'react';
@@ -145,5 +145,63 @@ describe('useBrowserRouterBlocker', () => {
       window.history.back();
     });
     await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('blocked'));
+  });
+
+  // Review 03/10 (Chromium thật): listener popstate gắn TRƯỚC (như BrowserRouter) chạy trước và làm trang bị gỡ
+  // → Back đi thẳng không hỏi. Hook phải nghe ở capture và chặn mọi listener khác khi đang chặn; proceed thì cho đi.
+  it('popstate khi when: listener gắn TRƯỚC (vai router) KHÔNG nhận sự kiện; URL được trả về; proceed → router nhận và đi', async () => {
+    renderHarness({ initialWhen: false });
+    fireEvent.click(screen.getByText('go-x'));
+    expect(window.location.pathname).toBe('/x');
+    cleanup();
+    const earlier = vi.fn();
+    window.addEventListener('popstate', earlier);
+    try {
+      renderHarness();
+      act(() => {
+        window.history.back();
+      });
+      await waitFor(() => expect(screen.getByTestId('state').textContent).toBe('blocked'));
+      // URL được trả về /x (lần popstate trả về cũng bị nuốt), listener gắn trước chưa từng chạy.
+      await waitFor(() => expect(window.location.pathname).toBe('/x'));
+      await new Promise((r) => setTimeout(r, 30));
+      expect(earlier).not.toHaveBeenCalled();
+      expect(screen.getByTestId('loc').textContent).toBe('/x');
+
+      act(() => latestBlocker.proceed());
+      await waitFor(() => expect(window.location.pathname).toBe('/start'));
+      await waitFor(() => expect(earlier).toHaveBeenCalledTimes(1));
+      await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/start'));
+    } finally {
+      window.removeEventListener('popstate', earlier);
+    }
+  });
+
+  it('bộ gác popstate gắn NGAY lúc nạp module (để đứng trước listener của BrowserRouter gắn lúc mount)', async () => {
+    vi.resetModules();
+    const spy = vi.spyOn(window, 'addEventListener');
+    try {
+      await import('../useBrowserRouterBlocker.js');
+      expect(spy.mock.calls.some(([type, , options]) => type === 'popstate' && options === true)).toBe(true);
+    } finally {
+      spy.mockRestore();
+    }
+  });
+
+  it('popstate khi when=false: không chặn, listener khác nhận bình thường', async () => {
+    renderHarness({ initialWhen: false });
+    fireEvent.click(screen.getByText('go-x'));
+    const earlier = vi.fn();
+    window.addEventListener('popstate', earlier);
+    try {
+      act(() => {
+        window.history.back();
+      });
+      await waitFor(() => expect(earlier).toHaveBeenCalledTimes(1));
+      expect(screen.getByTestId('state').textContent).toBe('unblocked');
+      await waitFor(() => expect(screen.getByTestId('loc').textContent).toBe('/start'));
+    } finally {
+      window.removeEventListener('popstate', earlier);
+    }
   });
 });

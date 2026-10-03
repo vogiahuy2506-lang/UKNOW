@@ -13,6 +13,31 @@ const toPathString = (to) => {
   return null;
 };
 
+/**
+ * Bộ gác popstate DUY NHẤT, gắn ngay lúc nạp module. Lý do (đo bằng Chromium thật 03/10/2026): listener popstate của
+ * BrowserRouter gắn lúc mount và chạy TRƯỚC mọi listener gắn sau — kể cả listener capture; React render đồng bộ ngay
+ * sau nó (có microtask checkpoint giữa các listener) → trang đang chặn bị gỡ, cleanup gỡ luôn listener chặn trước khi
+ * nó kịp chạy → nút Back đi thẳng, không hỏi. jsdom không tái hiện. Module này được App import TĨNH (qua
+ * LandingCanvasPage/CampaignBuilder) nên bộ gác luôn gắn trước router; mỗi hook đang chặn đăng ký handler vào đây,
+ * handler gọi `event.stopImmediatePropagation()` để router không thấy sự kiện.
+ */
+const popstateGuards = new Set();
+let popstateGuardInstalled = false;
+const installPopstateGuard = () => {
+  if (popstateGuardInstalled || typeof window === 'undefined') return;
+  popstateGuardInstalled = true;
+  window.addEventListener(
+    'popstate',
+    (event) => {
+      for (const guard of Array.from(popstateGuards)) {
+        if (guard(event) === true) return;
+      }
+    },
+    true
+  );
+};
+installPopstateGuard();
+
 /** Thời gian tối đa một lần "cho qua" còn hiệu lực nếu không có điều hướng nào dùng tới nó. */
 const ALLOW_NEXT_TTL_MS = 1500;
 
@@ -159,38 +184,51 @@ export const useBrowserRouterBlocker = (when) => {
       });
     };
 
+    // Nút Back/Forward — chạy qua bộ gác toàn cục (xem `popstateGuards` đầu file) để đứng TRƯỚC router và chặn
+    // router thấy sự kiện. URL đã lùi nhưng location của app chưa đổi → `history.go(-delta)` trả URL về, lần popstate
+    // đó cũng nuốt luôn. Trả `true` = đã nuốt.
+    let restoring = false;
+    let passThrough = false;
     const handlePopState = (event) => {
+      if (passThrough) {
+        // proceed(): để router xử lý bình thường.
+        passThrough = false;
+        return false;
+      }
+      event.stopImmediatePropagation();
+      if (restoring) {
+        // Popstate do chính ta trả URL về: router vẫn đang ở trang này, không cần làm gì.
+        restoring = false;
+        return true;
+      }
       const nextIndex = Number.isFinite(event.state?.idx) ? event.state.idx : null;
       const currentIndex = historyIndexRef.current;
-      const shouldGoBack = nextIndex === null || nextIndex < currentIndex;
+      const delta = nextIndex === null ? -1 : nextIndex - currentIndex;
+      if (delta === 0) return true;
 
       setBlockedTransition({
         retry() {
           setBlockedTransition(null);
-          if (shouldGoBack) {
-            window.history.back();
-          } else {
-            window.history.forward();
-          }
+          passThrough = true;
+          window.history.go(delta);
         },
       });
 
-      if (shouldGoBack) {
-        window.history.forward();
-      } else {
-        window.history.back();
-      }
+      restoring = true;
+      window.history.go(-delta);
+      return true;
     };
 
     document.addEventListener('click', handleAnchorClickCapture, true);
-    window.addEventListener('popstate', handlePopState);
+    installPopstateGuard();
+    popstateGuards.add(handlePopState);
 
     return () => {
       // Chỉ gỡ bọc nếu hàm hiện tại vẫn là bọc của mình (tránh đè lên hàm do nơi khác gắn sau).
       if (wrappedPush && navigator.push === wrappedPush) navigator.push = originalPush;
       if (wrappedReplace && navigator.replace === wrappedReplace) navigator.replace = originalReplace;
       document.removeEventListener('click', handleAnchorClickCapture, true);
-      window.removeEventListener('popstate', handlePopState);
+      popstateGuards.delete(handlePopState);
     };
   }, [consumeAllowNext, navigator, when]);
 
