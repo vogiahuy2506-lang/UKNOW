@@ -23,6 +23,8 @@ import { extractContacts } from '../../utils/contactDetect.util.js';
 import { buildContactAck } from '../../utils/contactAck.util.js';
 import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
 import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
+import { handleAiUnavailable } from './aiUnavailableNotice.service.js';
+import { classifyAiFailure } from '../../utils/aiUnavailable.util.js';
 
 const ADAPTERS = {
   web: webChatAdapter,
@@ -71,7 +73,16 @@ class ChatRouterService {
     const creditFeature = `chatbot_${channel}`;
     const creditPrep = await this._prepareChatCredit(userId, creditFeature);
     if (creditPrep.visitorMessage) {
-      return { type: 'text', content: creditPrep.visitorMessage };
+      // Hết credit / hết gói: câu xin lỗi mang NHÃN `ai_unavailable` (không tính là AI trả lời), báo chủ qua email, và tối
+      // đa 1 lần / khách / 6 giờ (G3b, A P1-6). Bị chặn do khách đã nhận rồi → content null, caller không gửi gì.
+      const unavailable = await this._unavailableReply({
+        ownerUserId: userId,
+        channel,
+        conversationId,
+        reason: creditPrep.unavailableReason,
+        content: creditPrep.visitorMessage,
+      });
+      return { type: unavailable.content ? 'text' : 'suppressed', ...unavailable };
     }
 
     // PARALLEL: Get history, subAssistant, and profileContext (all independent)
@@ -119,6 +130,7 @@ class ChatRouterService {
 
     let aiResponse;
     let shouldChargeCredit = false;
+    let unavailableReason = null;
     try {
       aiResponse = await this._callAI({
         userId,
@@ -137,7 +149,29 @@ class ChatRouterService {
       } else {
         console.warn(`[ChatRouter] AI limit reached (channel=${channel}, userId=${userId}): ${error.message}`);
       }
-      aiResponse = { text: VISITOR_CHAT_ERROR_MESSAGE };
+      unavailableReason = classifyAiFailure(error);
+    }
+
+    if (unavailableReason) {
+      // AI lỗi / chạm hạn mức giữa chừng: cùng cách xử lý như hết credit. Lời xác nhận liên hệ (nếu khách để lại SĐT/email)
+      // vẫn phải đến được khách dù câu xin lỗi bị chặn vì đã gửi trong 6 giờ qua.
+      const unavailable = await this._unavailableReply({
+        ownerUserId: userId,
+        channel,
+        conversationId,
+        reason: unavailableReason,
+        content: VISITOR_CHAT_ERROR_MESSAGE,
+        footer: contactAck?.footer || null,
+      });
+      await this._logMessage(channel, conversationId, userId, { role: 'visitor', content: message });
+      if (unavailable.content) {
+        await this._logMessage(channel, conversationId, userId, {
+          role: 'bot',
+          content: unavailable.content,
+          metadata: { source: unavailable.source, reason: unavailable.reason },
+        });
+      }
+      return { type: unavailable.content ? 'text' : 'suppressed', ...unavailable };
     }
 
     if (shouldChargeCredit) {
@@ -164,10 +198,26 @@ class ChatRouterService {
     } catch (error) {
       if (aiCreditMeter.isLimitError(error)) {
         console.warn(`[ChatRouter] Owner ${userId} out of AI credits (feature=${feature})`);
-        return { visitorMessage: VISITOR_CHAT_UNAVAILABLE_MESSAGE };
+        return { visitorMessage: VISITOR_CHAT_UNAVAILABLE_MESSAGE, unavailableReason: classifyAiFailure(error) };
       }
       throw error;
     }
+  }
+
+  /**
+   * Câu xin lỗi gửi cho khách khi bot không trả lời được (hết credit / hết gói / chạm hạn mức / AI lỗi) — G3b, A P1-6.
+   * Một chỗ duy nhất quyết: có gửi không (tối đa 1 lần / khách / 6 giờ), nhãn gì (`source: 'ai_unavailable'`), và có báo
+   * chủ không (email, nguội 24 giờ). Không bao giờ ném lỗi — DB/SMTP hỏng thì vẫn gửi câu xin lỗi như cũ.
+   *
+   * @param {{ ownerUserId: number, channel: string, conversationId: string|number|null, reason: string, content: string, footer?: string|null }} p
+   * @returns {Promise<{ content: string|null, source: string, reason: string }>} content null = đã xin lỗi khách này trong 6 giờ, KHÔNG gửi nữa
+   */
+  async _unavailableReply({ ownerUserId, channel, conversationId, reason, content, footer = null }) {
+    const notice = await handleAiUnavailable({ ownerUserId, reason, channel, conversationId });
+    const text = [notice.send ? String(content || '').trim() : '', footer ? String(footer).trim() : '']
+      .filter(Boolean)
+      .join('\n\n');
+    return { content: text || null, source: notice.source, reason: notice.reason };
   }
 
   async _chargeChatCredit(userId, feature, creditContext) {
@@ -451,11 +501,11 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     }
   }
 
-  async _logMessage(channel, conversationId, userId, { role, content }) {
+  async _logMessage(channel, conversationId, userId, { role, content, metadata = undefined }) {
     if (!conversationId || !content) return;
     try {
       if (channel === 'web') {
-        await chatbotRepository.addWebChatMessage(conversationId, userId, { role, content });
+        await chatbotRepository.addWebChatMessage(conversationId, userId, { role, content, ...(metadata ? { metadata } : {}) });
       } else if (channel === 'zalo_personal') {
         // For Zalo Personal, messages are already logged by zaloInbox.service
         // and zaloPersonalAdapter.sendReply() -> insertAgentMessage()
@@ -469,6 +519,7 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
             role,
             content,
             message_type: 'text',
+            ...(metadata ? { metadata } : {}),
           });
         }
       } else {
@@ -497,14 +548,20 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     }
   }
 
+  /**
+   * Zalo OA / Facebook / WhatsApp Cloud (Studio). Trả `{ content }`; khi là câu xin lỗi (hết credit / AI lỗi) thêm
+   * `source: 'ai_unavailable'` + `reason` để caller GẮN NHÃN vào tin bot nó ghi (G3b), và `content: null` nếu khách này đã
+   * nhận câu xin lỗi trong 6 giờ qua (caller không gửi gì).
+   */
   async routeChatbotMessage({ chatbotId, message, conversationId, beforeMessageId = null, throughMessageId = null, excludeMessageIds = [] }) {
+    let ownerId = null;
     try {
       const chatbot = await chatbotRepository.findChatbotById(chatbotId);
       if (!chatbot) {
         throw new Error('Chatbot not found');
       }
 
-      const ownerId = chatbot.id_user;
+      ownerId = chatbot.id_user;
 
       if (conversationId && await unifiedInboxRepository.isAiPaused(conversationId, 'channel')) {
         console.log(`[ChatRouter] AI paused for channel conversation ${conversationId}`);
@@ -513,7 +570,13 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
 
       const creditPrep = await this._prepareChatCredit(ownerId, 'chatbot_widget');
       if (creditPrep.visitorMessage) {
-        return { content: creditPrep.visitorMessage };
+        return this._unavailableReply({
+          ownerUserId: ownerId,
+          channel: 'studio_channel',
+          conversationId,
+          reason: creditPrep.unavailableReason,
+          content: creditPrep.visitorMessage,
+        });
       }
 
       const historyRows = await chatbotRepository.getConversationHistory(conversationId, MAX_HISTORY_MESSAGES, {
@@ -582,7 +645,15 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       return { content: stripMarkdown(response.text) };
     } catch (err) {
       console.error('[ChatRouter] routeChatbotMessage error:', err);
-      return { content: VISITOR_CHAT_ERROR_MESSAGE };
+      // Chưa biết chủ (không tìm thấy chatbot) thì không có gì để báo/giới hạn — giữ câu lỗi như cũ.
+      if (ownerId == null) return { content: VISITOR_CHAT_ERROR_MESSAGE };
+      return this._unavailableReply({
+        ownerUserId: ownerId,
+        channel: 'studio_channel',
+        conversationId,
+        reason: classifyAiFailure(err),
+        content: VISITOR_CHAT_ERROR_MESSAGE,
+      });
     }
   }
 }

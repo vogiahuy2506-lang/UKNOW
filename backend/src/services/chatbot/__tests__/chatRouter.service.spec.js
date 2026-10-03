@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { createFakeNoticeRepo, NOTICE_KIND_OWNER_EMAIL, NOTICE_KIND_VISITOR_APOLOGY } from './fakeAiUnavailableNoticeRepo.js';
 
 const originalFetch = global.fetch;
 const originalApiKey = process.env.GEMINI_API_KEY;
@@ -42,6 +43,15 @@ jest.unstable_mockModule('../../../repositories/ai/unifiedInbox.repository.js', 
   default: {
     isAiPaused: jest.fn(async () => false),
   },
+}));
+
+// Mốc "AI không trả lời được" (G3b) ở DB → mock ở RANH GIỚI repository bằng kho giả phản chiếu đúng ngữ nghĩa SQL;
+// logic thật của aiUnavailableNotice.service (lý do, cooldown 6h/24h, email) chạy nguyên. SQL thật: tests/integration.
+const noticeRepo = createFakeNoticeRepo();
+jest.unstable_mockModule('../../../repositories/chatbot/aiUnavailableNotice.repository.js', () => ({
+  default: noticeRepo,
+  NOTICE_KIND_OWNER_EMAIL,
+  NOTICE_KIND_VISITOR_APOLOGY,
 }));
 
 jest.unstable_mockModule('../../../repositories/ai/knowledgeBase.repository.js', () => ({
@@ -148,6 +158,8 @@ describe('chatRouter.service AI fallback', () => {
     isUsageLimitError.mockReturnValue(false);
     resolveFallbackModel.mockReset();
     resolveFallbackModel.mockResolvedValue(null);
+    noticeRepo.rows.clear();
+    noticeRepo.ownerContact = { email: 'chu@example.com', full_name: 'Chủ Shop' };
   });
 
   it('returns static visitor message (does not throw) when AI call fails transiently', async () => {
@@ -172,13 +184,17 @@ describe('chatRouter.service AI fallback', () => {
     expect(result).toEqual({
       type: 'text',
       content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.',
+      source: 'ai_unavailable',
+      reason: 'ai_error',
     });
     expect(charge).not.toHaveBeenCalled();
     // _chargeChatCredit thật gọi aiCreditMeter.consume (không phải charge).
     expect(consume).not.toHaveBeenCalled();
+    // Câu xin lỗi được ghi kèm NHÃN (G3b) để bản tin tuần không đếm nó là "AI trả lời".
     expect(addWebChatMessage).toHaveBeenCalledWith(99, 7, {
       role: 'bot',
       content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.',
+      metadata: { source: 'ai_unavailable', reason: 'ai_error' },
     });
 
     callAI.mockRestore();
@@ -206,7 +222,12 @@ describe('chatRouter.service AI fallback', () => {
       await jest.advanceTimersByTimeAsync(40_000);
       const result = await pending;
 
-      expect(result).toEqual({ type: 'text', content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' });
+      expect(result).toEqual({
+        type: 'text',
+        content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.',
+        source: 'ai_unavailable',
+        reason: 'ai_error',
+      });
       expect(global.fetch).toHaveBeenCalledTimes(3); // thử lại 3 lượt rồi dừng (không có dự phòng)
       expect(consume).not.toHaveBeenCalled();
       expect(record).not.toHaveBeenCalled();
@@ -243,6 +264,226 @@ describe('chatRouter.service AI fallback', () => {
     expect(charge).not.toHaveBeenCalled();
     expect(consume).not.toHaveBeenCalled();
 
+    callAI.mockRestore();
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────
+// G3b (A P1-6) — chatbot KHÔNG trả lời được khách: nhãn riêng, báo chủ một lần, câu xin lỗi không lặp.
+
+const HOURS = 60 * 60 * 1000;
+const settingsG3b = { is_enabled: true, id_sub_assistant: null, ai_model: 'gemini-2.5-flash', temperature: 0.7, max_tokens: 512 };
+const limitError = (resource, extra = {}) => Object.assign(new Error('hết hạn mức'), {
+  code: 'RESOURCE_LIMIT_EXCEEDED', resource, status: 402, ...extra,
+});
+const flushMicrotasks = async () => { for (let i = 0; i < 40; i += 1) await Promise.resolve(); };
+/** Số lần email chủ THẬT SỰ được dựng: chỉ chạy sau khi chiếm được mốc owner_email. */
+const ownerEmailRuns = () => noticeRepo.findOwnerContact.mock.calls.length;
+
+describe('chatRouter — chatbot không trả lời được khách (G3b, A P1-6)', () => {
+  // Ca đã QUA kiểm credit dùng kênh 'web' (lịch sử đọc qua chatbotRepository đã mock); kênh 'zalo_personal' đọc lịch sử
+  // bằng SQL trực tiếp nên chỉ dùng cho ca dừng ngay ở bước hết credit (chưa chạm lịch sử).
+  const route = (over = {}) => chatRouterService.routeMessageWithSettings({
+    channel: 'zalo_personal', userId: 7, message: 'xin chào', conversationId: 501, chatbotSettings: settingsG3b, ...over,
+  });
+  const routeWeb = (over = {}) => route({ channel: 'web', ...over });
+
+  beforeEach(() => {
+    noticeRepo.rows.clear();
+    noticeRepo.claim.mockClear();
+    noticeRepo.findOwnerContact.mockClear();
+    isCreditLimitError.mockImplementation((e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_credit');
+    isUsageLimitError.mockImplementation((e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_token');
+    getFormattedProfileForPrompt.mockResolvedValue('');
+    buildContext.mockResolvedValue('');
+    getWebChatMessages.mockResolvedValue([]);
+    silenceConsole('log', 'warn', 'error');
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+    restoreConsole();
+  });
+
+  it('hết credit: câu xin lỗi mang nhãn ai_unavailable + lý do, KHÔNG gọi AI, KHÔNG trừ credit, và email chủ được chạy', async () => {
+    assertAvailable.mockRejectedValue(limitError('ai_credit'));
+    const callAI = jest.spyOn(chatRouterService, '_callAI');
+
+    const result = await route();
+    await flushMicrotasks();
+
+    expect(result).toEqual({ type: 'text', content: 'unavailable', source: 'ai_unavailable', reason: 'credit_exhausted' });
+    expect(callAI).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+    expect(ownerEmailRuns()).toBe(1);
+    // Mốc nằm ở kho (DB), không ở bộ nhớ tiến trình.
+    expect([...noticeRepo.rows.keys()]).toEqual(expect.arrayContaining(['7|owner_email|', '7|visitor_apology|zalo_personal:501']));
+    callAI.mockRestore();
+  });
+
+  it('khách nhắn lần 2 trong 6 giờ: KHÔNG nhận thêm câu xin lỗi (content null); khách KHÁC trên cùng kênh vẫn nhận', async () => {
+    assertAvailable.mockRejectedValue(limitError('ai_credit'));
+
+    const first = await route();
+    const second = await route();
+    const tenth = await Promise.all(Array.from({ length: 8 }, () => route()));
+    const other = await route({ conversationId: 777 });
+
+    expect(first.content).toBe('unavailable');
+    expect(second).toEqual({ type: 'suppressed', content: null, source: 'ai_unavailable', reason: 'credit_exhausted' });
+    expect(tenth.every((r) => r.content === null)).toBe(true);
+    expect(other.content).toBe('unavailable');
+  });
+
+  it('qua đúng 6 giờ: khách lại nhận câu xin lỗi (chưa đủ 6 giờ thì chưa)', async () => {
+    assertAvailable.mockRejectedValue(limitError('ai_credit'));
+    const t0 = Date.now();
+    jest.useFakeTimers({ now: t0 });
+
+    expect((await route()).content).toBe('unavailable');
+    jest.setSystemTime(t0 + 6 * HOURS - 1000);
+    expect((await route()).content).toBeNull();
+    jest.setSystemTime(t0 + 6 * HOURS + 1000);
+    expect((await route()).content).toBe('unavailable');
+  });
+
+  it('nhiều khách hết credit cùng lúc: email chủ chạy ĐÚNG MỘT lần trong 24 giờ, lần thứ hai sau 24 giờ', async () => {
+    assertAvailable.mockRejectedValue(limitError('ai_credit'));
+    const t0 = Date.now();
+    jest.useFakeTimers({ now: t0 });
+
+    await Promise.all([501, 502, 503, 504, 505].map((conversationId) => route({ conversationId })));
+    await flushMicrotasks();
+    expect(ownerEmailRuns()).toBe(1);
+
+    jest.setSystemTime(t0 + 23 * HOURS);
+    await route({ conversationId: 506 });
+    await flushMicrotasks();
+    expect(ownerEmailRuns()).toBe(1);
+
+    jest.setSystemTime(t0 + 25 * HOURS);
+    await route({ conversationId: 507 });
+    await flushMicrotasks();
+    expect(ownerEmailRuns()).toBe(2);
+  });
+
+  it('gói hết hạn: lý do subscription_expired (báo chủ), không lẫn với hết credit', async () => {
+    assertAvailable.mockRejectedValue(limitError('ai_credit', { subscriptionExpired: true }));
+    const result = await route();
+    expect(result.reason).toBe('subscription_expired');
+  });
+
+  it('AI lỗi thường (Google 503): câu xin lỗi có nhãn ai_error nhưng KHÔNG báo chủ — sự cố tạm thời không phải việc chủ xử lý', async () => {
+    assertAvailable.mockResolvedValue({ skip: false });
+    const callAI = jest.spyOn(chatRouterService, '_callAI').mockRejectedValue(new Error('Google 503'));
+
+    const result = await routeWeb();
+    await flushMicrotasks();
+
+    expect(result).toMatchObject({ type: 'text', source: 'ai_unavailable', reason: 'ai_error' });
+    expect(ownerEmailRuns()).toBe(0);
+    expect([...noticeRepo.rows.keys()]).toEqual(['7|visitor_apology|web:501']);
+    callAI.mockRestore();
+  });
+
+  it('AI chạm hạn mức token giữa chừng: báo chủ với lý do ai_token_limit', async () => {
+    assertAvailable.mockResolvedValue({ skip: false });
+    const callAI = jest.spyOn(chatRouterService, '_callAI').mockRejectedValue(limitError('ai_token'));
+
+    const result = await routeWeb();
+    await flushMicrotasks();
+
+    expect(result.reason).toBe('ai_token_limit');
+    expect(ownerEmailRuns()).toBe(1);
+    callAI.mockRestore();
+  });
+
+  it('khách để lại SĐT khi câu xin lỗi đã bị chặn: vẫn nhận lời xác nhận liên hệ, KHÔNG nhận lại câu xin lỗi', async () => {
+    assertAvailable.mockResolvedValue({ skip: false });
+    getOwnerContact.mockResolvedValue({ email: null, phone: null });
+    const callAI = jest.spyOn(chatRouterService, '_callAI').mockRejectedValue(new Error('Google 503'));
+
+    const first = await routeWeb({ message: 'cho mình hỏi giá' });
+    const second = await routeWeb({ message: 'mình để lại số 0912345678 nhé' });
+
+    expect(first.content).toContain('Xin lỗi');
+    expect(second.type).toBe('text');
+    expect(second.content).not.toContain('Xin lỗi');
+    expect(second.content).toMatch(/Đã ghi nhận số điện thoại/);
+    expect(second.source).toBe('ai_unavailable');
+    callAI.mockRestore();
+  });
+
+  it('trả lời bình thường: KHÔNG gắn nhãn, KHÔNG chiếm mốc nào', async () => {
+    assertAvailable.mockResolvedValue({ skip: false });
+    const callAI = jest.spyOn(chatRouterService, '_callAI').mockResolvedValue({ text: 'Dạ có ạ' });
+
+    const result = await routeWeb();
+    await flushMicrotasks();
+
+    expect(result).toEqual({ type: 'text', content: 'Dạ có ạ' });
+    expect(noticeRepo.claim).not.toHaveBeenCalled();
+    callAI.mockRestore();
+  });
+
+  it('kho mốc hỏng (DB lỗi): khách VẪN nhận câu xin lỗi như cũ, không ném lỗi', async () => {
+    assertAvailable.mockRejectedValue(limitError('ai_credit'));
+    const healthy = noticeRepo.claim.getMockImplementation();
+    noticeRepo.claim.mockRejectedValue(new Error('connect ECONNREFUSED'));
+
+    try {
+      const result = await route();
+      await flushMicrotasks();
+      expect(result).toMatchObject({ type: 'text', content: 'unavailable', source: 'ai_unavailable' });
+    } finally {
+      noticeRepo.claim.mockImplementation(healthy);
+    }
+  });
+});
+
+describe('chatRouter.routeChatbotMessage (Zalo OA / Facebook / WhatsApp Cloud) — G3b', () => {
+  const routeStudio = (over = {}) => chatRouterService.routeChatbotMessage({ chatbotId: 31, message: 'xin chào', conversationId: 900, ...over });
+
+  beforeEach(() => {
+    noticeRepo.rows.clear();
+    noticeRepo.claim.mockClear();
+    findChatbotById.mockReset();
+    findChatbotById.mockResolvedValue({ id: 31, id_user: 7, name: 'Bot', temperature: 0.7, max_tokens: 512 });
+    getConversationHistory.mockReset();
+    getConversationHistory.mockResolvedValue([]);
+    isCreditLimitError.mockImplementation((e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_credit');
+    isUsageLimitError.mockImplementation((e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_token');
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
+    silenceConsole('log', 'warn', 'error');
+  });
+
+  afterEach(() => restoreConsole());
+
+  it('hết credit: trả {content, source, reason} để caller gắn nhãn; lần 2 trong 6 giờ → content null', async () => {
+    assertAvailable.mockRejectedValue(limitError('ai_credit'));
+
+    const first = await routeStudio();
+    const second = await routeStudio();
+    const other = await routeStudio({ conversationId: 901 });
+
+    expect(first).toEqual({ content: 'unavailable', source: 'ai_unavailable', reason: 'credit_exhausted' });
+    expect(second).toEqual({ content: null, source: 'ai_unavailable', reason: 'credit_exhausted' });
+    expect(other.content).toBe('unavailable');
+    expect([...noticeRepo.rows.keys()]).toContain('7|visitor_apology|studio_channel:900');
+  });
+
+  it('AI lỗi: câu lỗi chung có nhãn ai_error; không tìm thấy chatbot (chưa biết chủ): câu lỗi cũ, không nhãn, không chiếm mốc', async () => {
+    assertAvailable.mockResolvedValue({ skip: false });
+    const callAI = jest.spyOn(chatRouterService, '_callAI').mockRejectedValue(new Error('Google 503'));
+
+    const failed = await routeStudio();
+    expect(failed).toEqual({ content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.', source: 'ai_unavailable', reason: 'ai_error' });
+
+    findChatbotById.mockResolvedValue(null);
+    noticeRepo.claim.mockClear();
+    const missing = await routeStudio({ conversationId: 902 });
+    expect(missing).toEqual({ content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' });
+    expect(noticeRepo.claim).not.toHaveBeenCalled();
     callAI.mockRestore();
   });
 });

@@ -9,6 +9,7 @@ import chatbotWhatsAppAccountRepository from '../repositories/chatbot/chatbotWha
 import unifiedInboxRepository from '../repositories/ai/unifiedInbox.repository.js';
 import inboundReplyDebounceService from '../services/chatbot/inboundReplyDebounce.service.js';
 import { formatBatchedContent } from '../utils/chatbotReplyBatch.util.js';
+import { unavailableMetadata } from '../utils/aiUnavailable.util.js';
 import {
   FACEBOOK_VERIFY_TOKEN_ENV_NAMES,
   ZALO_OA_VERIFY_TOKEN_ENV_NAMES,
@@ -353,6 +354,8 @@ class ChatbotChannelWebhookController {
           role: 'bot',
           content: result.content,
           message_type: 'text',
+          // Câu xin lỗi (hết credit / AI lỗi) mang nhãn `source: 'ai_unavailable'`, không phải câu trả lời của AI (G3b, A P1-6).
+          metadata: unavailableMetadata(result),
         });
       } else {
         console.log(`[ChatbotDebounce] channel=zalo_oa account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
@@ -648,6 +651,7 @@ class ChatbotChannelWebhookController {
         role: 'bot',
         content: result.content,
         message_type: 'text',
+        metadata: unavailableMetadata(result),
       });
 
       console.log(`[ChatbotDebounce] channel=facebook account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=sent`);
@@ -942,6 +946,7 @@ class ChatbotChannelWebhookController {
         role: 'bot',
         content: result.content,
         message_type: 'text',
+        metadata: unavailableMetadata(result),
       });
 
       console.log(`[ChatbotDebounce] channel=whatsapp account=${channel.id} conversation=${conv.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=sent`);

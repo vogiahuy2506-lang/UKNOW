@@ -45,6 +45,12 @@ jest.unstable_mockModule('../../services/ai/aiCreditMeter.service.js', () => ({
 jest.unstable_mockModule('../../services/ai/customChat.service.js', () => ({
   default: { chat },
 }));
+// Báo chủ khi hết credit / chạm hạn mức (G3b) — service thật chạm DB + SMTP; spec này chỉ kiểm HỢP ĐỒNG controller ↔ service.
+const handleAiUnavailable = jest.fn();
+jest.unstable_mockModule('../../services/chatbot/aiUnavailableNotice.service.js', () => ({
+  handleAiUnavailable,
+  default: { handleAiUnavailable },
+}));
 jest.unstable_mockModule('../../services/chatbot/chatbotRateLimit.service.js', () => ({
   default: { checkBeforeAi, markRateLimitNotified: jest.fn() },
 }));
@@ -883,5 +889,105 @@ describe('G2.4 — widget và trang chatbot công khai không trả câu lỗi t
 
     expect(widgetRes.status).toHaveBeenCalledWith(503);
     expect(pageRes.status).toHaveBeenCalledWith(500);
+  });
+});
+
+// G3b (A P1-6) — widget / trang chatbot công khai: chủ hết credit / chạm hạn mức AI → khách nhận câu xin lỗi NGAY (đồng bộ),
+// còn CHỦ được báo qua email (service báo chủ chạy nền, không chặn phản hồi, không làm hỏng phản hồi khi lỗi).
+describe('G3b — chủ hết credit / chạm hạn mức AI ở widget công khai', () => {
+  const limitErr = (resource, extra = {}) => Object.assign(new Error('hết hạn mức'), {
+    code: 'RESOURCE_LIMIT_EXCEEDED', resource, status: 402, ...extra,
+  });
+  const byIdReq = { params: { chatbotId: '12' }, body: { message: 'hi', sessionId: 'sess_g3b', history: [] } };
+  const byKeyReq = { params: { widgetKey: 'wk_abc' }, body: { message: 'hi', sessionId: 'sess_g3b', history: [] } };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(chatbot);
+    findChatbotByWidgetKey.mockResolvedValue(chatbot);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockImplementation((e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_credit');
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'Dạ em chào anh chị ạ.' });
+    consume.mockResolvedValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    isAiPaused.mockResolvedValue(false);
+    handleAiUnavailable.mockResolvedValue({ send: true, ownerNotice: Promise.resolve({ sent: true }) });
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => jest.restoreAllMocks());
+
+  it('hết credit (trang /chat/:id): khách nhận câu xin lỗi, KHÔNG gọi AI/trừ credit, chủ được báo với lý do credit_exhausted', async () => {
+    assertAvailable.mockRejectedValue(limitErr('ai_credit'));
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbotById(byIdReq, res);
+
+    expect(chat).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      success: true, data: expect.objectContaining({ role: 'assistant', content: 'unavail' }),
+    }));
+    expect(handleAiUnavailable).toHaveBeenCalledTimes(1);
+    expect(handleAiUnavailable).toHaveBeenCalledWith({ ownerUserId: 7, reason: 'credit_exhausted' });
+  });
+
+  it('gói hết hạn (widget nhúng /widget/:key): lý do subscription_expired', async () => {
+    assertAvailable.mockRejectedValue(limitErr('ai_credit', { subscriptionExpired: true }));
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbot(byKeyReq, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ content: 'unavail' }) }));
+    expect(handleAiUnavailable).toHaveBeenCalledWith({ ownerUserId: 7, reason: 'subscription_expired' });
+  });
+
+  it('báo chủ LỖI (service ném): khách VẪN nhận câu xin lỗi, không 500', async () => {
+    assertAvailable.mockRejectedValue(limitErr('ai_credit'));
+    handleAiUnavailable.mockRejectedValue(new Error('db down'));
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbotById(byIdReq, res);
+    await new Promise((r) => setImmediate(r));
+
+    expect(res.status).not.toHaveBeenCalledWith(500);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ data: expect.objectContaining({ content: 'unavail' }) }));
+  });
+
+  it('còn credit: KHÔNG báo chủ', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(byIdReq, res);
+    expect(handleAiUnavailable).not.toHaveBeenCalled();
+  });
+
+  it('chạm hạn mức token giữa chừng (trang /chat/:id): câu xin lỗi lưu hội thoại mang NHÃN ai_unavailable, chủ được báo ai_token_limit', async () => {
+    chat.mockRejectedValue(limitErr('ai_token'));
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbotById(byIdReq, res);
+
+    const apologyRow = addWebChatMessage.mock.calls.map((c) => c[2]).find((row) => row.role === 'assistant');
+    expect(apologyRow).toEqual(expect.objectContaining({
+      content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.',
+      metadata: { source: 'ai_unavailable', reason: 'ai_token_limit' },
+    }));
+    expect(handleAiUnavailable).toHaveBeenCalledWith({ ownerUserId: 7, reason: 'ai_token_limit' });
+  });
+
+  it('chạm hạn mức token giữa chừng (widget nhúng): chủ được báo ai_token_limit, khách nhận câu xin lỗi', async () => {
+    chat.mockRejectedValue(limitErr('ai_token'));
+    const res = makeRes();
+
+    await chatbotController.chatWithCustomChatbot(byKeyReq, res);
+
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({ content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' }),
+    }));
+    expect(handleAiUnavailable).toHaveBeenCalledWith({ ownerUserId: 7, reason: 'ai_token_limit' });
   });
 });

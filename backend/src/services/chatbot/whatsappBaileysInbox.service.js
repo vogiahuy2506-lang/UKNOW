@@ -24,6 +24,8 @@ import subAssistantService from './subAssistant.service.js';
 import ragEngineService from './ragEngine.service.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import chatRouterService from './chatRouter.service.js';
+import { handleAiUnavailable } from './aiUnavailableNotice.service.js';
+import { classifyAiFailure } from '../../utils/aiUnavailable.util.js';
 import { detectOffTopicReply, buildOffTopicFallback } from '../../utils/aiOffTopicReply.util.js';
 import inboundReplyDebounceService from './inboundReplyDebounce.service.js';
 import { formatBatchedContent } from '../../utils/chatbotReplyBatch.util.js';
@@ -367,6 +369,46 @@ async function bindBotExternalId(rowId, messageId) {
   } catch (err) {
     log('bindBotExternalId failed:', err.message);
   }
+}
+
+/**
+ * Gửi câu xin lỗi cho khách khi bot không trả lời được (hết credit / chạm hạn mức / AI lỗi) — G3b, A P1-6.
+ * Một chỗ quyết: có gửi không (tối đa 1 lần / khách / 6 giờ), gắn nhãn `source: 'ai_unavailable'` vào dòng bot ghi ra
+ * (bản tin tuần không đếm là "AI trả lời"), và báo chủ qua email (nguội 24 giờ). Không bao giờ ném lỗi.
+ *
+ * @returns {Promise<boolean>} true = đã gửi; false = khách này vừa nhận câu xin lỗi trong 6 giờ qua nên bỏ qua
+ */
+async function sendAiUnavailableReply({ ownerUserId, sessionKey, conversationId, idChannelConnection, externalId, reason, content }) {
+  const notice = await handleAiUnavailable({
+    ownerUserId,
+    reason,
+    channel: 'whatsapp_baileys',
+    conversationId,
+  });
+  if (!notice.send) {
+    log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=apology_suppressed reason=${notice.reason}`);
+    return false;
+  }
+  let row = null;
+  try {
+    row = await persistMessage({
+      conversationId,
+      channelId: idChannelConnection,
+      userId: ownerUserId,
+      role: 'bot',
+      content,
+      metadata: notice.metadata,
+    });
+  } catch (err) {
+    log('sendAiUnavailableReply: lưu câu xin lỗi thất bại (vẫn gửi cho khách):', err.message);
+  }
+  const sent = await whatsappAdapter.sendReply({
+    channelId: sessionKey,
+    externalId,
+    message: content,
+  });
+  await bindBotExternalId(row?.id, sent?.messageId);
+  return true;
 }
 
 /**
@@ -855,19 +897,15 @@ async function _processWhatsAppBaileysBatch({ batch }) {
     // Hạn mức credit AI của chủ: hết credit thì gửi câu báo cho khách, KHÔNG gọi AI.
     const creditPrep = await chatRouterService._prepareChatCredit(ownerUserId, CREDIT_FEATURE);
     if (creditPrep.visitorMessage) {
-      const creditRow = await persistMessage({
+      await sendAiUnavailableReply({
+        ownerUserId,
+        sessionKey,
         conversationId,
-        channelId: idChannelConnection,
-        userId: ownerUserId,
-        role: 'bot',
+        idChannelConnection,
+        externalId,
+        reason: creditPrep.unavailableReason,
         content: creditPrep.visitorMessage,
       });
-      const creditSent = await whatsappAdapter.sendReply({
-        channelId: sessionKey,
-        externalId,
-        message: creditPrep.visitorMessage,
-      });
-      await bindBotExternalId(creditRow?.id, creditSent?.messageId);
       log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=out_of_credit`);
       return;
     }
@@ -922,19 +960,15 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       if (aiUsageMeter.isLimitError(aiError) || aiCreditMeter.isLimitError(aiError)) {
         // Chạm giới hạn giữa chừng: báo khách, KHÔNG trừ credit.
         log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=ai_limit error=${aiError.message}`);
-        const limitRow = await persistMessage({
+        await sendAiUnavailableReply({
+          ownerUserId,
+          sessionKey,
           conversationId,
-          channelId: idChannelConnection,
-          userId: ownerUserId,
-          role: 'bot',
+          idChannelConnection,
+          externalId,
+          reason: classifyAiFailure(aiError),
           content: VISITOR_CHAT_ERROR_MESSAGE,
         });
-        const limitSent = await whatsappAdapter.sendReply({
-          channelId: sessionKey,
-          externalId,
-          message: VISITOR_CHAT_ERROR_MESSAGE,
-        });
-        await bindBotExternalId(limitRow?.id, limitSent?.messageId);
         return;
       }
       throw aiError;
@@ -983,10 +1017,14 @@ async function _processWhatsAppBaileysBatch({ batch }) {
   } catch (err) {
     log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} result=failed error=${err.message}`);
     try {
-      await whatsappAdapter.sendReply({
-        channelId: sessionKey,
+      await sendAiUnavailableReply({
+        ownerUserId,
+        sessionKey,
+        conversationId,
+        idChannelConnection,
         externalId,
-        message: VISITOR_CHAT_ERROR_MESSAGE,
+        reason: classifyAiFailure(err),
+        content: VISITOR_CHAT_ERROR_MESSAGE,
       });
     } catch (_) { /* noop */ }
   }

@@ -228,6 +228,34 @@ describe('aiActivity.service', () => {
       );
     });
 
+    // G3b (A P1-6): tin xin lỗi tự động KHÔNG phải "Người trực chat" — gắn nhầm thì bản tóm tắt tưởng khách đã có người xử lý.
+    it('tin xin lỗi tự động (source ai_unavailable) được nhãn "Hệ thống", KHÔNG bị gọi là "Người trực chat" hay "AI"', async () => {
+      mockZaloPersonalRepository.getAiActivityReport.mockResolvedValue([
+        { id: 1, visitor_name: 'Nguyễn Văn A', tin_cuoi: '2026-08-19T10:00:00.000Z' },
+      ]);
+      mockAiActivitySummaryRepository.findByUserAndDay.mockResolvedValue(null);
+      mockZaloPersonalRepository.getMessagesForSummary.mockResolvedValue([
+        { id_conversation: 1, role: 'visitor', content: 'Cho em hỏi giá', source: null, created_at: '2026-08-19T09:50:00.000Z' },
+        { id_conversation: 1, role: 'agent', content: 'Xin lỗi, hiện chưa thể trả lời tin nhắn của bạn.', source: 'ai_unavailable', created_at: '2026-08-19T09:51:00.000Z' },
+        { id_conversation: 1, role: 'agent', content: 'Dạ giá 100k ạ', source: 'ai_auto_reply', created_at: '2026-08-19T09:52:00.000Z' },
+        { id_conversation: 1, role: 'agent', content: 'Em gọi anh ngay', source: 'manual_inbox', created_at: '2026-08-19T09:53:00.000Z' },
+      ]);
+      mockGenerateGeminiText.mockResolvedValue({
+        text: JSON.stringify([{ conversationId: 1, y_chinh: 'Khách hỏi giá', khach_muon_gi: 'Giá', can_nguoi_that_khong: true, ly_do_can_nguoi: 'x' }]),
+        usage: { promptTokens: 10, completionTokens: 5 },
+      });
+      mockAiActivitySummaryRepository.upsertSummary.mockResolvedValue({ id: 1 });
+
+      await aiActivityService.summarizeDailyActivity({ userId: 100, date: '2026-08-19' });
+
+      const prompt = mockGenerateGeminiText.mock.calls[0][0].prompt;
+      expect(prompt).toContain('[Hệ thống (xin lỗi tự động, AI chưa trả lời được)]: Xin lỗi, hiện chưa thể trả lời tin nhắn của bạn.');
+      expect(prompt).toContain('[AI]: Dạ giá 100k ạ');
+      expect(prompt).toContain('[Người trực chat]: Em gọi anh ngay');
+      expect(prompt).not.toContain('[Người trực chat]: Xin lỗi');
+      expect(prompt).not.toContain('[AI]: Xin lỗi');
+    });
+
     it('ném lỗi 422 khi Gemini trả JSON hỏng', async () => {
       mockZaloPersonalRepository.getAiActivityReport.mockResolvedValue([
         {

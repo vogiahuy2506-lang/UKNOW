@@ -313,6 +313,58 @@ describe('ChatbotChannelWebhookController - Zalo OA Debounce', () => {
 
     expect(mockAddMessage).toHaveBeenCalledTimes(1);
   });
+
+  // G3b (A P1-6): câu xin lỗi (hết credit / AI lỗi) ghi vào chatbot_messages kèm NHÃN, không như câu AI trả lời thật.
+  describe('G3b — câu xin lỗi do chatbot không trả lời được', () => {
+    const arrange = (routeResult) => {
+      const channel = { id: 10, id_chatbot: 5, channel_type: 'zalo_oa' };
+      mockFindByWebhookToken.mockResolvedValue(channel);
+      mockFindChatbotById.mockResolvedValue({ id: 5, id_user: 1, is_active: true });
+      mockGetOrCreateConversation.mockResolvedValue({ id: 100 });
+      mockAddMessage.mockResolvedValue({ id: 1 });
+      mockUpdateLastActivity.mockResolvedValue();
+      mockFindActiveChannelById.mockResolvedValue(channel);
+      mockGetLatestMessageId.mockResolvedValue(1);
+      mockIsAiPaused.mockResolvedValue(false);
+      mockCheckBeforeAi.mockResolvedValue({ allowed: true });
+      mockRouteChatbotMessage.mockResolvedValue(routeResult);
+      mockSendReply.mockResolvedValue({ success: true });
+      mockParseWebhookEvent.mockReturnValue({ message: 'Alo', senderId: 'user_123', messageId: 'oa_msg_1' });
+    };
+    const botRows = () => mockAddMessage.mock.calls.filter(([, row]) => row.role === 'bot').map(([, row]) => row);
+
+    it('kết quả mang source ai_unavailable → dòng bot ghi metadata {source, reason}', async () => {
+      arrange({ content: 'Xin lỗi, hiện chưa thể trả lời.', source: 'ai_unavailable', reason: 'credit_exhausted' });
+
+      await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, { send: jest.fn() });
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      expect(botRows()).toEqual([expect.objectContaining({
+        content: 'Xin lỗi, hiện chưa thể trả lời.',
+        metadata: { source: 'ai_unavailable', reason: 'credit_exhausted' },
+      })]);
+    });
+
+    it('khách đã nhận câu xin lỗi trong 6 giờ (content null) → không gửi, không ghi dòng bot', async () => {
+      arrange({ content: null, source: 'ai_unavailable', reason: 'credit_exhausted' });
+
+      await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, { send: jest.fn() });
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockSendReply).not.toHaveBeenCalled();
+      expect(botRows()).toHaveLength(0);
+    });
+
+    it('câu trả lời thật: metadata rỗng (không nhãn xin lỗi)', async () => {
+      arrange({ content: 'Dạ còn hàng ạ' });
+
+      await chatbotChannelWebhookController.handleZaloOA({ params: { token: 'tok_1' }, body: {} }, { send: jest.fn() });
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(botRows()).toEqual([expect.objectContaining({ content: 'Dạ còn hàng ạ', metadata: {} })]);
+    });
+  });
 });
 
 describe('ChatbotChannelWebhookController - Facebook: AI tạm dừng kiểm trước khung giờ', () => {

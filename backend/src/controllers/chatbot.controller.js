@@ -45,6 +45,8 @@ import { extractContacts } from '../utils/contactDetect.util.js';
 import { buildContactAck } from '../utils/contactAck.util.js';
 import chatbotContactAlertRepository from '../repositories/chatbot/chatbotContactAlert.repository.js';
 import { sanitizePublicChatHistory, validatePublicChatMessage } from '../utils/publicChatInput.util.js';
+import { handleAiUnavailable } from '../services/chatbot/aiUnavailableNotice.service.js';
+import { AI_UNAVAILABLE_SOURCE, AI_UNAVAILABLE_REASON, classifyAiFailure } from '../utils/aiUnavailable.util.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
@@ -95,6 +97,17 @@ function kbErrorPayload(error) {
   };
 }
 
+/**
+ * Widget / trang chatbot công khai phải trả câu xin lỗi vì CHỦ hết credit / hết gói / chạm hạn mức AI: báo chủ qua email
+ * (tối đa 1 email / chủ / 24 giờ, mốc ở DB). Không chờ, không ném lỗi — khách vẫn nhận câu xin lỗi ngay (G3b, A P1-6).
+ * Không đặt `channel`/`conversationId` nên không giới hạn câu xin lỗi theo khách: widget trả lời ĐỒNG BỘ, khách đang nhìn khung chat.
+ */
+function notifyOwnerPublicChatUnavailable(ownerUserId, reason) {
+  handleAiUnavailable({ ownerUserId, reason }).catch((err) => {
+    console.warn('[CustomChatbot] Không báo được chủ về chatbot hết hạn mức:', err?.message || err);
+  });
+}
+
 async function preparePublicChatCredit(ownerUserId) {
   try {
     const creditContext = await aiCreditMeter.assertAvailable(ownerUserId);
@@ -102,6 +115,7 @@ async function preparePublicChatCredit(ownerUserId) {
   } catch (error) {
     if (aiCreditMeter.isLimitError(error)) {
       console.warn(`[CustomChatbot] Owner ${ownerUserId} out of AI credits (public chat)`);
+      notifyOwnerPublicChatUnavailable(ownerUserId, classifyAiFailure(error));
       return { blocked: true };
     }
     throw error;
@@ -1603,6 +1617,7 @@ class ChatbotController {
   }
 
   async chatWithCustomChatbot(req, res) {
+    let ownerUserIdForNotice = null;
     try {
       const { widgetKey } = req.params;
       const { message, history, sessionId, attachments } = req.body;
@@ -1623,6 +1638,7 @@ class ChatbotController {
       if (!chatbot) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
+      ownerUserIdForNotice = chatbot.id_user;
 
       {
         const { resourceIsLocked } = await import('../utils/topupLockGate.util.js');
@@ -1869,6 +1885,7 @@ class ChatbotController {
     } catch (err) {
       if (isAiTokenLimitError(err)) {
         console.warn('[CustomChatbot] Public widget AI token quota exhausted');
+        notifyOwnerPublicChatUnavailable(ownerUserIdForNotice, AI_UNAVAILABLE_REASON.TOKEN_LIMIT);
         return res.json(publicChatbotFallback());
       }
       console.error('[CustomChatbot] Chat error:', err, err?.providerMessage ? `| Google: ${err.providerMessage}` : '');
@@ -2148,10 +2165,13 @@ class ChatbotController {
     } catch (err) {
       if (isAiTokenLimitError(err)) {
         console.warn('[CustomChatbot] Public chatbot AI token quota exhausted');
+        notifyOwnerPublicChatUnavailable(chatbotUserId, AI_UNAVAILABLE_REASON.TOKEN_LIMIT);
         if (conversation && chatbotUserId) {
           await chatbotRepository.addWebChatMessage(conversation.id, chatbotUserId, {
             role: 'assistant',
             content: PUBLIC_CHATBOT_FALLBACK_CONTENT,
+            // Câu xin lỗi, không phải câu trả lời của AI — bản tin tuần không đếm là "AI trả lời" (G3b, A P1-6).
+            metadata: { source: AI_UNAVAILABLE_SOURCE, reason: AI_UNAVAILABLE_REASON.TOKEN_LIMIT },
           }).catch(saveErr => {
             console.warn('[CustomChatbot] Failed to save quota fallback message:', saveErr?.message || saveErr);
           });

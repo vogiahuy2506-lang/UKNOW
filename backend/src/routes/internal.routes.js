@@ -30,6 +30,7 @@ import {
 } from '../services/chatbot/telegramInbox.service.js';
 import { buildAiPausePayload } from '../utils/aiHandoffResume.util.js';
 import { isOwnerOutgoingEcho } from '../utils/ownerOutgoingEcho.util.js';
+import { unavailableMetadata } from '../utils/aiUnavailable.util.js';
 import {
   isStubOnly,
 } from '../services/chatbot/inProcChannelGateway/index.js';
@@ -834,6 +835,8 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     const botRowId = await recordTelegramMessage(conversation, 'bot', replyText, {
       model:
         mergedSettings.ai_model || 'gemini-2.5-flash',
+      // Câu xin lỗi (hết credit / AI lỗi) mang nhãn `source: 'ai_unavailable'` → bản tin tuần không đếm là "AI trả lời" (G3b, A P1-6).
+      ...unavailableMetadata(result),
     });
     console.log(`[Telegram] bot message logged, now sendReply → peer=${peer}`);
     try {

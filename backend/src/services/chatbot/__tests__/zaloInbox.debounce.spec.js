@@ -164,6 +164,50 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
     }));
   });
 
+  // G3b (A P1-6): câu xin lỗi (hết credit / AI lỗi) KHÔNG được ghi nhãn 'ai_auto_reply' — bản tin tuần đếm theo nhãn đó.
+  describe('G3b — câu xin lỗi do chatbot không trả lời được', () => {
+    const sendOneMessage = async (msgId = 'apology_1') => {
+      const handler = zaloInboxService.createMessageHandler(1, 10, 10);
+      await handler(
+        { msgId, fromUid: 'visitor_99', content: 'Alo shop', type: 0 },
+        { conversationId: 200, messageId: 601 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+    };
+
+    it('kết quả mang source ai_unavailable → sendReply ghi nhãn ai_unavailable + lý do, KHÔNG phải ai_auto_reply', async () => {
+      mockRouteMessageWithSettings.mockResolvedValue({
+        type: 'text', content: 'Xin lỗi, hiện chưa thể trả lời tin nhắn của bạn.', source: 'ai_unavailable', reason: 'credit_exhausted',
+      });
+
+      await sendOneMessage();
+
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+      const arg = mockSendReply.mock.calls[0][0];
+      expect(arg.replySource).toBe('ai_unavailable');
+      expect(arg.metadata).toEqual({ source: 'ai_unavailable', reason: 'credit_exhausted' });
+      expect(arg.message).toBe('Xin lỗi, hiện chưa thể trả lời tin nhắn của bạn.');
+    });
+
+    it('khách đã nhận câu xin lỗi trong 6 giờ (content null) → KHÔNG gửi gì, KHÔNG phát SSE trả lời', async () => {
+      mockRouteMessageWithSettings.mockResolvedValue({ type: 'suppressed', content: null, source: 'ai_unavailable', reason: 'credit_exhausted' });
+
+      await sendOneMessage('apology_2');
+
+      expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
+      expect(mockSendReply).not.toHaveBeenCalled();
+      expect(mockBroadcast).toHaveBeenCalledTimes(1); // chỉ SSE tin khách vào
+    });
+
+    it('câu trả lời thật (không source) vẫn mang nhãn ai_auto_reply và KHÔNG có metadata tự chế', async () => {
+      await sendOneMessage('real_reply_1');
+
+      const arg = mockSendReply.mock.calls[0][0];
+      expect(arg.replySource).toBe('ai_auto_reply');
+      expect(arg).not.toHaveProperty('metadata');
+    });
+  });
+
   it('skips AI routing for group messages without enqueuing into debounce', async () => {
     const handler = zaloInboxService.createMessageHandler(1, 10, 10);
 

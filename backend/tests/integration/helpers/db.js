@@ -51,6 +51,7 @@ const TRUNCATE_ALL_SQL = `
       user_two_factor,
       send_quota_shadow_daily,
       send_quota_shadow_mismatches,
+      ai_unavailable_notices,
       send_quota_reservations,
       usage_logs,
       dashboard_insights,

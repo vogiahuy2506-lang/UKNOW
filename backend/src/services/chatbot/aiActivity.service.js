@@ -4,6 +4,7 @@ import { getVietnamDayRange } from '../../utils/vnTimeFormat.util.js';
 import { generateGeminiText } from '../../utils/geminiClient.util.js';
 import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
 import aiUsageMeter from '../ai/aiUsageMeter.service.js';
+import { AI_UNAVAILABLE_SOURCE } from '../../utils/aiUnavailable.util.js';
 
 function stripCodeFences(text) {
   let t = String(text || '').replace(/^\uFEFF/, '').trim();
@@ -198,7 +199,10 @@ class AiActivityService {
       const formattedMsgs = recentMsgs.map((m) => {
         let senderLabel = 'Khách';
         if (m.role === 'agent') {
-          senderLabel = m.source === 'ai_auto_reply' ? 'AI' : 'Người trực chat';
+          // Câu xin lỗi tự động (AI hết credit / lỗi) KHÔNG phải người trực chat và cũng không phải AI trả lời được:
+          // gắn nhầm "Người trực chat" thì bản tóm tắt tưởng khách đã có người xử lý (G3b, A P1-6).
+          if (m.source === AI_UNAVAILABLE_SOURCE) senderLabel = 'Hệ thống (xin lỗi tự động, AI chưa trả lời được)';
+          else senderLabel = m.source === 'ai_auto_reply' ? 'AI' : 'Người trực chat';
         }
         return `[${senderLabel}]: ${String(m.content || '').trim()}`;
       }).join('\n');

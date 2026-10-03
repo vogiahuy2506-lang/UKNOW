@@ -133,6 +133,8 @@ beforeEach(async () => {
     // override khi cần giả lập user đổi chatbot.
     _scenarioEnabledChatbots: [{ id_chatbot: 55 }],
     _lastRouterCall: null,
+    // Ca nào cần chatRouter trả kết quả khác (câu xin lỗi G3b…) gán trước khi POST; mặc định = câu trả lời thường.
+    _routerResult: null,
     _sendReplyCalls: [],
     _sendReplyResult: { success: true },
     _echoRows: [],
@@ -320,7 +322,7 @@ beforeEach(async () => {
       default: {
         routeMessageWithSettings: jest.fn(async (payload) => {
           mocks._lastRouterCall = payload;
-          return { type: 'text', content: 'fake-bot-reply' };
+          return mocks._routerResult || { type: 'text', content: 'fake-bot-reply' };
         }),
       },
     })
@@ -1174,6 +1176,31 @@ describe('P1 — tin khách luôn vào Hộp thư (channel_messages) + SSE, kể
     const aiSse = sseFor('agent');
     expect(aiSse).toHaveLength(1);
     expect(aiSse[0][2]).toMatchObject({ senderName: 'AI', message: 'fake-bot-reply', conversationId: 501 });
+  });
+
+  // G3b (A P1-6): bản tin tuần đếm tin bot ở channel_messages theo role='bot' TRỪ nhãn ai_unavailable.
+  it('G3b — câu xin lỗi (hết credit / AI lỗi): dòng Hộp thư mang metadata.source = ai_unavailable, vẫn gửi cho khách', async () => {
+    mocks._routerResult = { type: 'text', content: 'Xin lỗi, hiện chưa thể trả lời.', source: 'ai_unavailable', reason: 'credit_exhausted' };
+    await postWebhook(inboundPayload);
+    const bot = channelRows('bot');
+    expect(bot).toHaveLength(1);
+    expect(bot[0].content).toBe('Xin lỗi, hiện chưa thể trả lời.');
+    expect(JSON.parse(bot[0].metadata)).toMatchObject({ source: 'ai_unavailable' });
+    expect(mocks.sendReplyCalls()).toHaveLength(1);
+  });
+
+  it('G3b — khách đã nhận câu xin lỗi trong 6 giờ (content null): KHÔNG ghi dòng bot, KHÔNG gửi', async () => {
+    mocks._routerResult = { type: 'suppressed', content: null, source: 'ai_unavailable', reason: 'credit_exhausted' };
+    await postWebhook(inboundPayload);
+    expect(channelRows('bot')).toHaveLength(0);
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+  });
+
+  it('G3b — câu trả lời thường: dòng Hộp thư KHÔNG có nhãn ai_unavailable', async () => {
+    await postWebhook(inboundPayload);
+    const bot = channelRows('bot');
+    expect(bot).toHaveLength(1);
+    expect(JSON.parse(bot[0].metadata).source ?? null).toBeNull();
   });
 
   it('hội thoại Hộp thư dùng external_id ghép telegram:<tài khoản>:<chatId> (chatId đầy đủ)', async () => {

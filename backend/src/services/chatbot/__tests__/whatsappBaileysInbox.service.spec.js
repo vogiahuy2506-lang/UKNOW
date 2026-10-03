@@ -11,6 +11,7 @@ import { describe, expect, it, beforeEach, afterEach, jest } from '@jest/globals
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { EventEmitter } from 'node:events';
+import { createFakeNoticeRepo, NOTICE_KIND_OWNER_EMAIL, NOTICE_KIND_VISITOR_APOLOGY } from './fakeAiUnavailableNoticeRepo.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const resolveUrl = (rel) => path.resolve(__dirname, '..', '..', '..', rel).replace(/\\/g, '/');
@@ -81,6 +82,13 @@ beforeEach(async () => {
     promote: jest.fn(async () => {}),
   };
 
+  // Mốc "AI không trả lời được" (G3b): mock ở RANH GIỚI repository bằng kho giả phản chiếu ngữ nghĩa SQL; service thật chạy nguyên.
+  m.noticeRepo = createFakeNoticeRepo();
+  jest.unstable_mockModule(resolveUrl('repositories/chatbot/aiUnavailableNotice.repository.js'), () => ({
+    default: m.noticeRepo,
+    NOTICE_KIND_OWNER_EMAIL,
+    NOTICE_KIND_VISITOR_APOLOGY,
+  }));
   jest.unstable_mockModule(resolveUrl('config/database.js'), () => ({
     default: {
       query: jest.fn(async (sql, params) => {
@@ -143,10 +151,10 @@ beforeEach(async () => {
   }));
   jest.unstable_mockModule(resolveUrl('services/ai/aiCreditMeter.service.js'), () => ({
     VISITOR_CHAT_ERROR_MESSAGE: 'loi-chung',
-    default: { isLimitError: (e) => e?.code === 'CREDIT_LIMIT' },
+    default: { isLimitError: (e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_credit' },
   }));
   jest.unstable_mockModule(resolveUrl('services/ai/aiUsageMeter.service.js'), () => ({
-    default: { isLimitError: (e) => e?.code === 'USAGE_LIMIT' },
+    default: { isLimitError: (e) => e?.code === 'RESOURCE_LIMIT_EXCEEDED' && e?.resource === 'ai_token' },
   }));
   jest.unstable_mockModule(resolveUrl('repositories/chatbot/chatbotContactAlert.repository.js'), () => ({
     default: { getOwnerContact: (...a) => m.getOwnerContact(...a) },
@@ -314,8 +322,13 @@ describe('WhatsApp Baileys — credit AI + xác nhận liên hệ', () => {
     expect(m.chargeCredit).toHaveBeenCalledWith(42, 'chatbot_whatsapp_baileys', { ctx: 1 });
   });
 
-  it('hết credit (visitorMessage): gửi đúng câu đó, KHÔNG gọi AI, KHÔNG trừ', async () => {
-    m.prepareCredit = jest.fn(async () => ({ visitorMessage: 'het-credit' }));
+  /** Metadata JSON của dòng bot đã ghi vào channel_messages (tham số $7 của INSERT). */
+  const botMetadata = () => m.inserts.filter((p) => p[3] === 'bot').map((p) => JSON.parse(p[6]));
+  const limitErr = (resource) => Object.assign(new Error('limit'), { code: 'RESOURCE_LIMIT_EXCEEDED', resource });
+  const ownerEmailRuns = () => m.noticeRepo.findOwnerContact.mock.calls.length;
+
+  it('hết credit (visitorMessage): gửi đúng câu đó, KHÔNG gọi AI, KHÔNG trừ — dòng bot mang nhãn ai_unavailable', async () => {
+    m.prepareCredit = jest.fn(async () => ({ visitorMessage: 'het-credit', unavailableReason: 'credit_exhausted' }));
     await sendTexts(['Cho mình hỏi giá áo thun size L']);
     await flush();
     expect(m.callAi).not.toHaveBeenCalled();
@@ -323,23 +336,54 @@ describe('WhatsApp Baileys — credit AI + xác nhận liên hệ', () => {
     expect(m.sendReply).toHaveBeenCalledTimes(1);
     expect(m.sendReply).toHaveBeenCalledWith({ channelId: SESSION_KEY, externalId: '84901234567', message: 'het-credit' });
     expect(m.botInserts).toEqual(['het-credit']);
+    // G3b: bản tin tuần đếm channel_messages theo role='bot' trừ nhãn này — thiếu nhãn là xin lỗi bị đếm là "AI trả lời".
+    expect(botMetadata()).toEqual([{ source: 'ai_unavailable', reason: 'credit_exhausted' }]);
   });
 
-  it('AI ném lỗi giới hạn: gửi câu lỗi chung cho khách, KHÔNG trừ credit', async () => {
-    m.callAi = jest.fn(async () => { const e = new Error('limit'); e.code = 'CREDIT_LIMIT'; throw e; });
+  it('hết credit: báo CHỦ (email, chiếm mốc owner_email) và khách nhắn tiếp trong 6 giờ KHÔNG nhận thêm câu xin lỗi', async () => {
+    m.prepareCredit = jest.fn(async () => ({ visitorMessage: 'het-credit', unavailableReason: 'credit_exhausted' }));
     await sendTexts(['Cho mình hỏi giá áo thun size L']);
     await flush();
+    await sendTexts(['Alo shop ơi']);
+    await flush();
+    await sendTexts(['Có ai không']);
+    await flush();
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+
+    expect(m.sendReply).toHaveBeenCalledTimes(1); // một câu cho cả ba đợt tin
+    expect(m.botInserts).toEqual(['het-credit']);
+    expect(ownerEmailRuns()).toBe(1);
+    expect(m.callAi).not.toHaveBeenCalled();
+  });
+
+  it('AI ném lỗi giới hạn credit: câu lỗi chung có nhãn credit_exhausted, KHÔNG trừ credit, báo chủ', async () => {
+    m.callAi = jest.fn(async () => { throw limitErr('ai_credit'); });
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
     expect(m.chargeCredit).not.toHaveBeenCalled();
     expect(m.sendReply).toHaveBeenCalledTimes(1);
     expect(m.sendReply.mock.calls[0][0].message).toBe('loi-chung');
+    expect(botMetadata()).toEqual([{ source: 'ai_unavailable', reason: 'credit_exhausted' }]);
+    expect(ownerEmailRuns()).toBe(1);
   });
 
-  it('AI ném lỗi thường: KHÔNG trừ credit (khách nhận câu lỗi chung như cũ)', async () => {
+  it('AI ném lỗi thường: KHÔNG trừ credit, khách nhận câu lỗi chung có nhãn ai_error, KHÔNG báo chủ', async () => {
     m.callAi = jest.fn(async () => { throw new Error('gemini 500'); });
     await sendTexts(['Cho mình hỏi giá áo thun size L']);
     await flush();
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
     expect(m.chargeCredit).not.toHaveBeenCalled();
     expect(m.sendReply.mock.calls.map((c) => c[0].message)).toEqual(['loi-chung']);
+    expect(botMetadata()).toEqual([{ source: 'ai_unavailable', reason: 'ai_error' }]);
+    expect(ownerEmailRuns()).toBe(0);
+  });
+
+  it('trả lời bình thường: dòng bot KHÔNG có nhãn xin lỗi và không chiếm mốc nào', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(botMetadata()).toEqual([{}]);
+    expect(m.noticeRepo.claim).not.toHaveBeenCalled();
   });
 
   it('khách để lại SĐT: contactNote đi vào prompt và footer xác nhận nối sau câu trả lời', async () => {

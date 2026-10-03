@@ -1,4 +1,11 @@
 import db from '../../config/database.js';
+import { AI_UNAVAILABLE_SOURCE, LEGACY_APOLOGY_PREFIX } from '../../utils/aiUnavailable.util.js';
+
+// Câu xin lỗi (hết credit / AI lỗi) KHÔNG phải "AI trả lời" (G3b, A P1-6). Loại theo nhãn `metadata.source = 'ai_unavailable'`
+// (tin mới) VÀ theo đầu câu cố định (tin cũ ghi trước khi có nhãn — vẫn nằm trong kỳ 7 ngày của bản tin đầu tiên).
+// $4 = nhãn, $5 = mẫu LIKE của đầu câu. Hai điều kiện độc lập nhau: bỏ một trong hai thì có ca spec đỏ.
+const NOT_APOLOGY_SQL = `COALESCE(m.metadata->>'source', '') <> $4 AND COALESCE(m.content, '') NOT LIKE $5`;
+const APOLOGY_LIKE_PATTERN = `${LEGACY_APOLOGY_PREFIX.replace(/[\\%_]/g, '\\$&')}%`;
 
 class ChatbotDigestRepository {
   /**
@@ -115,11 +122,11 @@ class ChatbotDigestRepository {
       `SELECT
          COUNT(DISTINCT m.id_conversation)::int AS conversations,
          COUNT(CASE WHEN m.role = 'visitor' THEN 1 END)::int AS visitor_messages,
-         COUNT(CASE WHEN m.role IN ('assistant', 'bot') THEN 1 END)::int AS ai_replies,
+         COUNT(CASE WHEN m.role IN ('assistant', 'bot') AND ${NOT_APOLOGY_SQL} THEN 1 END)::int AS ai_replies,
          COUNT(CASE WHEN m.role = 'agent' THEN 1 END)::int AS human_replies
        FROM webchat_messages m
        WHERE m.id_user = $1 AND m.created_at >= $2 AND m.created_at < $3`,
-      [idUser, startIso, endIso]
+      [idUser, startIso, endIso, AI_UNAVAILABLE_SOURCE, APOLOGY_LIKE_PATTERN]
     );
 
     // 2. Thống kê Zalo cá nhân
@@ -127,11 +134,11 @@ class ChatbotDigestRepository {
       `SELECT
          COUNT(DISTINCT m.id_conversation)::int AS conversations,
          COUNT(CASE WHEN m.role = 'visitor' THEN 1 END)::int AS visitor_messages,
-         COUNT(CASE WHEN m.metadata->>'source' = 'ai_auto_reply' THEN 1 END)::int AS ai_replies,
+         COUNT(CASE WHEN m.metadata->>'source' = 'ai_auto_reply' AND ${NOT_APOLOGY_SQL} THEN 1 END)::int AS ai_replies,
          COUNT(CASE WHEN m.role = 'agent' THEN 1 END)::int AS human_replies
        FROM zalo_personal_messages m
        WHERE m.id_user = $1 AND m.created_at >= $2 AND m.created_at < $3`,
-      [idUser, startIso, endIso]
+      [idUser, startIso, endIso, AI_UNAVAILABLE_SOURCE, APOLOGY_LIKE_PATTERN]
     );
 
     // 3. Thống kê theo từng channel
@@ -140,14 +147,14 @@ class ChatbotDigestRepository {
          COALESCE(cc.channel, c.channel, 'channel') AS channel,
          COUNT(DISTINCT m.id_conversation)::int AS conversations,
          COUNT(CASE WHEN m.role = 'visitor' THEN 1 END)::int AS visitor_messages,
-         COUNT(CASE WHEN m.role = 'bot' THEN 1 END)::int AS ai_replies,
+         COUNT(CASE WHEN m.role = 'bot' AND ${NOT_APOLOGY_SQL} THEN 1 END)::int AS ai_replies,
          COUNT(CASE WHEN m.role = 'agent' THEN 1 END)::int AS human_replies
        FROM channel_messages m
        JOIN channel_conversations c ON c.id = m.id_conversation
        LEFT JOIN channel_connections cc ON cc.id = c.id_channel
        WHERE m.id_user = $1 AND m.created_at >= $2 AND m.created_at < $3
        GROUP BY COALESCE(cc.channel, c.channel, 'channel')`,
-      [idUser, startIso, endIso]
+      [idUser, startIso, endIso, AI_UNAVAILABLE_SOURCE, APOLOGY_LIKE_PATTERN]
     );
 
     // 4. Top 5 hội thoại có nhiều tin khách nhất trong kỳ

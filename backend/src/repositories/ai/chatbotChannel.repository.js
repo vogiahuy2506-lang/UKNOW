@@ -133,13 +133,13 @@ class ChatbotChannelRepository {
     return created.rows[0];
   }
 
-  async addMessage(conversationId, { role, content, message_type, external_id }) {
+  async addMessage(conversationId, { role, content, message_type, external_id, metadata }) {
     const { rows } = await db.query(
-      `INSERT INTO chatbot_messages (id_conversation, role, content, message_type, external_id)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO chatbot_messages (id_conversation, role, content, message_type, external_id, metadata)
+       VALUES ($1, $2, $3, $4, $5, $6::jsonb)
        ON CONFLICT (id_conversation, external_id) WHERE external_id IS NOT NULL DO NOTHING
        RETURNING *`,
-      [conversationId, role, content, message_type || 'text', external_id || null]
+      [conversationId, role, content, message_type || 'text', external_id || null, JSON.stringify(metadata || {})]
     );
 
     if (!rows[0] && external_id) {

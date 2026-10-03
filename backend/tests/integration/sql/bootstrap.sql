@@ -3983,3 +3983,14 @@ CREATE TABLE IF NOT EXISTS send_quota_shadow_mismatches (
 );
 
 CREATE INDEX IF NOT EXISTS idx_sqsm_created_at ON send_quota_shadow_mismatches (created_at);
+
+-- --- Migration 276: ai_unavailable_notices (G3b PLAN_SUA_AI_DOT2: moc email bao chu + cau xin loi cho khach khi AI khong tra loi duoc) ---
+CREATE TABLE IF NOT EXISTS ai_unavailable_notices (
+  id_user      BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind         VARCHAR(20)  NOT NULL CHECK (kind IN ('owner_email', 'visitor_apology')),
+  notice_key   VARCHAR(200) NOT NULL DEFAULT '',
+  last_sent_at TIMESTAMPTZ  NOT NULL,
+  send_count   INTEGER      NOT NULL DEFAULT 1,
+  PRIMARY KEY (id_user, kind, notice_key)
+);
+CREATE INDEX IF NOT EXISTS idx_ai_unavailable_notices_sent ON ai_unavailable_notices (last_sent_at);

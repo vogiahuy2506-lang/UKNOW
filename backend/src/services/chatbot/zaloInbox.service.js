@@ -41,6 +41,7 @@ import { resolveConversationExternalId, isInboxSendEcho } from '../../utils/zalo
 import { LRUCache } from '../../utils/lruCache.util.js';
 import { buildAiPausePayload } from '../../utils/aiHandoffResume.util.js';
 import db from '../../config/database.js';
+import { AI_UNAVAILABLE_SOURCE, unavailableMetadata } from '../../utils/aiUnavailable.util.js';
 
 /** Giá trị đầu tiên "có cấu hình": không null/undefined và (nếu là chuỗi) không rỗng. */
 function pickConfigured(...values) {
@@ -880,13 +881,17 @@ class ZaloPersonalInboxService {
           return;
         }
         // Single persist path: sendReply(persist=true) inserts agent message once.
+        // Câu xin lỗi (hết credit / AI lỗi) KHÔNG phải câu trả lời của AI: gắn nhãn riêng để bản tin tuần và tóm tắt hoạt
+        // động không đếm nó là "AI trả lời" (G3b, A P1-6). Câu trả lời thật giữ nhãn cũ.
+        const isUnavailableNotice = result.source === AI_UNAVAILABLE_SOURCE;
         const sent = await zaloPersonalAdapter.sendReply({
           externalId: String(senderId),
           message: result.content,
           userId,
           accountId: zaloSettingId,
           persist: true,
-          replySource: 'ai_auto_reply',
+          replySource: isUnavailableNotice ? AI_UNAVAILABLE_SOURCE : 'ai_auto_reply',
+          ...(isUnavailableNotice ? { metadata: unavailableMetadata(result) } : {}),
         });
         if (sent?.success === false) {
           console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=failed`);
