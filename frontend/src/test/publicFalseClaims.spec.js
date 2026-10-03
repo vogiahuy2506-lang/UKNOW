@@ -257,6 +257,16 @@ describe.each(LOCALES)('H1 — câu hứa chưa kiểm chứng đã viết lại
     expect(dict.heroPage.f4Highlight).toMatch(vi18n ? /gom về/ : /collected/);
     expect(dict.heroPage.section2Title).toMatch(/\b4\b/);
   });
+
+  it('f5Highlight không hứa "ROI rõ ràng"; f4Desc không hứa "không để khách rơi vào quên lãng" / phân loại theo mức độ quan tâm (không có chấm điểm lead)', () => {
+    expect(dict.heroPage.f5Highlight).not.toMatch(/\bROI\b|lợi nhuận|return on/i);
+    expect(dict.heroPage.f5Highlight).toMatch(_name === 'vi' ? /chiến dịch/ : /campaign/);
+    expect(dict.heroPage.f5Highlight).toMatch(_name === 'vi' ? /kênh/ : /channel/);
+    expect(dict.heroPage.f4Desc).not.toMatch(/quên lãng|rơi vào|fall through|never let|không để/i);
+    expect(dict.heroPage.f4Desc).not.toMatch(/mức độ quan tâm|interest level/i);
+    expect(dict.heroPage.f4Desc).toMatch(/lead/i);
+    expect(dict.heroPage.f4Desc).toMatch(_name === 'vi' ? /landing page, form/ : /landing pages and forms/);
+  });
 });
 
 describe('H1 — trang Liên hệ tính mở/đóng cửa bằng businessHours.js, không còn so giờ ghi cứng', () => {
