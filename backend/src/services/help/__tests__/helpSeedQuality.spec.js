@@ -200,6 +200,9 @@ const UI_LABELS_IN_ARTICLES = [
   ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsHost', 'Tên (Host)'],
   ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.dnsValue', 'Giá trị (Value)'],
   ['landing-page', 'landingCanvas.settingsModal.sections.freeLink.button', 'Dùng lại link miễn phí'],
+  // PR-2 (03/10/2026): link miễn phí kẹt pending_verification hiện dòng trạng thái + nút "Thử lại" ngay dưới link.
+  ['landing-page', 'landingCanvas.settingsModal.sections.freeLink.pendingBadge', 'Đang chờ cấp link'],
+  ['landing-page', 'landingCanvas.settingsModal.sections.freeLink.retry', 'Thử lại'],
   ['landing-page', 'leadFormConfig.addField', 'Thêm câu hỏi'],
   ['landing-page', 'leadFormConfig.askAiAdd', 'Nhờ AI thêm ô này'],
   // PR-F: hai cách thu thông tin + chọn biểu mẫu có sẵn (LeadFormConfigPanel).
