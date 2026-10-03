@@ -10,6 +10,7 @@
  * `contentBrief`; chụp prompt thật gửi cho Gemini (mock) và kiểm trong đó.
  */
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { createBrainGeminiAdapter } from './fixtures/brainGeminiAdapter.js';
 
 const axiosPost = jest.fn();
 const extractGeminiUsage = jest.fn();
@@ -25,9 +26,12 @@ const findByIdsAndUser = jest.fn();
 
 jest.unstable_mockModule('axios', () => ({ default: { post: axiosPost } }));
 
+// Hai đường cùng gọi generateGeminiContent: não chính (runChat, G2.3) gửi `contents` nhiều lượt; slot filler gửi `parts`.
+// Tách theo đó để mock cũ của slot filler (đếm lượt gọi, đọc prompt) không đổi.
+const brainGenerateGeminiContent = createBrainGeminiAdapter({ axiosPost, extractGeminiUsage });
 jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
   extractGeminiUsage,
-  generateGeminiContent,
+  generateGeminiContent: (args) => (Array.isArray(args?.contents) ? brainGenerateGeminiContent(args) : generateGeminiContent(args)),
 }));
 
 jest.unstable_mockModule('../businessProfile.service.js', () => ({
@@ -71,7 +75,9 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({ default: { reserve, record } }));
+jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
+  default: { reserve, record, resolveFallbackModel: jest.fn(async () => null) },
+}));
 jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
   resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.5-flash'),
 }));

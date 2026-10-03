@@ -163,10 +163,14 @@ export async function runChat({
     // Ghi token NGAY sau khi Google trả lời, TRƯỚC mọi kiểm tra kết quả (D-07): Google tính tiền cả lượt bị cắt
     // (MAX_TOKENS), bị lọc hay trả rỗng. Bản cũ chỉ ghi ở nhánh thành công và nhánh MAX_TOKENS nên lượt rỗng tốn tiền mà sổ
     // không có (record tự bỏ qua khi Google không báo token). Ghi theo model THẬT đã trả lời (có thể là model dự phòng).
-    await aiUsageMeter.record(userId, result.usage, {
-      feature: 'smart_chat',
-      model: result.modelUsed || modelName,
-    }).catch(() => {});
+    try {
+      await aiUsageMeter.record(userId, result.usage, {
+        feature: 'smart_chat',
+        model: result.modelUsed || modelName,
+      });
+    } catch {
+      // record() thật tự nuốt lỗi ghi sổ; chặn thêm ở đây để một lần ghi hụt không bao giờ làm hỏng câu trả lời của trợ lý.
+    }
 
     if (!result.raw?.candidates || result.raw.candidates.length === 0) {
       if (result.blockReason) {

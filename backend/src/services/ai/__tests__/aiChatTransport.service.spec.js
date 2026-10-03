@@ -291,6 +291,14 @@ describe('aiChatTransport.service', () => {
       expect(order).toEqual(['record', 'throw']);
     });
 
+    it('ghi sổ token hỏng (record ném) → trợ lý VẪN trả lời, không làm hỏng lượt', async () => {
+      record.mockRejectedValueOnce(new Error('usage_logs insert failed'));
+      global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"vẫn trả lời"}'));
+
+      await expect(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }))
+        .resolves.toEqual({ type: 'text', content: 'vẫn trả lời' });
+    });
+
     it('prompt bị chặn (không có candidate, có blockReason) → "Yêu cầu bị chặn: SAFETY", không parseAiJson', async () => {
       global.fetch.mockResolvedValueOnce(googleReply(200, {
         promptFeedback: { blockReason: 'SAFETY' },

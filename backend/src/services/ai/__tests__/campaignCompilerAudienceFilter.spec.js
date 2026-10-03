@@ -9,6 +9,7 @@
  * như cũ. Test chạy qua processSmartChat (marker wizard thật + script LLM thật hình dạng), không dựng riêng hàm quyết định.
  */
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { createBrainGeminiAdapter } from './fixtures/brainGeminiAdapter.js';
 
 const axiosPost = jest.fn();
 const extractGeminiUsage = jest.fn();
@@ -19,7 +20,12 @@ const getZaloAccountsFull = jest.fn();
 const getActiveEmailSenders = jest.fn();
 
 jest.unstable_mockModule('axios', () => ({ default: { post: axiosPost } }));
-jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({ extractGeminiUsage, generateGeminiContent }));
+// Hai đường cùng gọi generateGeminiContent: não chính (runChat, G2.3) gửi `contents` nhiều lượt; slot filler gửi `parts`.
+const brainGenerateGeminiContent = createBrainGeminiAdapter({ axiosPost, extractGeminiUsage });
+jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
+  extractGeminiUsage,
+  generateGeminiContent: (args) => (Array.isArray(args?.contents) ? brainGenerateGeminiContent(args) : generateGeminiContent(args)),
+}));
 jest.unstable_mockModule('../businessProfile.service.js', () => ({
   default: {
     getProfile: jest.fn(),
@@ -58,7 +64,9 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
     getBlockedZaloPromptNotice: () => '',
   },
 }));
-jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({ default: { reserve, record } }));
+jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
+  default: { reserve, record, resolveFallbackModel: jest.fn(async () => null) },
+}));
 jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
   resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.5-flash'),
 }));

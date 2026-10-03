@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { createBrainGeminiAdapter } from './fixtures/brainGeminiAdapter.js';
 
 const axiosPost = jest.fn();
 const extractGeminiUsage = jest.fn();
@@ -25,9 +26,10 @@ jest.unstable_mockModule('axios', () => ({
   },
 }));
 
+// runChat đi qua generateGeminiContent (G2.3): ranh giới Google giả nằm ở đó nhưng trả đúng hình dạng kết quả của lõi.
 jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
   extractGeminiUsage,
-  generateGeminiContent: jest.fn(),
+  generateGeminiContent: createBrainGeminiAdapter({ axiosPost, extractGeminiUsage }),
 }));
 
 jest.unstable_mockModule('../businessProfile.service.js', () => ({
@@ -100,6 +102,7 @@ jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
   default: {
     reserve,
     record,
+    resolveFallbackModel: jest.fn(async () => null),
   },
 }));
 
