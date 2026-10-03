@@ -39,17 +39,37 @@ describe('landingCanvasDraft — khoá', () => {
 });
 
 describe('landingCanvasDraft — form', () => {
-  it('chỉ giữ trường lưu được, không có leadFormFieldErrors/persistedMeta/linkedFormId', () => {
+  it('chỉ giữ trường lưu được, không có leadFormFieldErrors/persistedMeta/linkedFormId (trường chỉ-server)', () => {
     const picked = pickDraftForm({
       title: 'a',
       htmlContent: '<p/>',
       leadFormFieldErrors: { x: 1 },
       leadFormPersistedMeta: { keys: [] },
       linkedFormId: 3,
+      linkedFormSource: 'chosen',
     });
-    expect(Object.keys(picked).sort()).toEqual(
-      ['customDomainHostname', 'customDomainIsApex', 'domainType', 'htmlContent', 'isPublished', 'leadFormConfig', 'slug', 'title']
-    );
+    expect(Object.keys(picked).sort()).toEqual([
+      'customDomainHostname',
+      'customDomainIsApex',
+      'domainType',
+      'htmlContent',
+      'isPublished',
+      'leadFormConfig',
+      'linkedFormChoice',
+      'slug',
+      'title',
+    ]);
+  });
+  it('lựa chọn "Dùng biểu mẫu đã tạo" chờ lưu (linkedFormChoice) vào nháp và làm bẩn; null = không đổi', () => {
+    const base = { title: 't', htmlContent: 'h', linkedFormChoice: null };
+    const snap = snapshotDraftForm(base);
+    expect(isDraftFormDirty({ ...base }, snap)).toBe(false);
+    expect(isDraftFormDirty({ ...base, linkedFormChoice: { mode: 'linked', formId: 7 } }, snap)).toBe(true);
+    expect(isDraftFormDirty({ ...base, linkedFormChoice: { mode: 'basic' } }, snap)).toBe(true);
+    expect(pickDraftForm({ ...base, linkedFormChoice: { mode: 'linked', formId: 7 } }).linkedFormChoice).toEqual({
+      mode: 'linked',
+      formId: 7,
+    });
   });
   it('bẩn: đổi htmlContent / title / leadFormConfig đều bẩn; thứ tự khoá leadFormConfig thì không', () => {
     const base = { title: 't', htmlContent: 'h', leadFormConfig: { a: 1, b: { c: 2, d: 3 } } };

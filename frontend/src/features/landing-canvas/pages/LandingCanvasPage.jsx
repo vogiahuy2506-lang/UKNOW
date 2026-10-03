@@ -12,6 +12,7 @@ import {
   snapshotLeadFormPersistedMeta,
 } from '../../landing-pages/utils/landingLeadFormConfig.js';
 import { restoreOriginalHttpAnchors } from '../../landing-pages/utils/injectLandingEnhancements.js';
+import { pickLinkedFormFields } from '../utils/landingFormLink.js';
 import { useI18n } from '../../../i18n';
 import { useAuthStore } from '../../../stores/authStore';
 import {
@@ -51,7 +52,10 @@ function buildServerForm(full) {
     leadFormFieldErrors: {},
     // PR-5b-2b mục 7 — Biểu mẫu gắn landing này (PR-5b-2a forms.landing_page_id), null nếu
     // chưa có. Dùng để hiện link "Mở Biểu mẫu của trang này" trong trình soạn.
-    linkedFormId: full.linkedFormId ?? null,
+    // PR-F: kèm tên / khoá công khai / nguồn ('chosen' = biểu mẫu khách chọn, 'basic' = form tự sinh) — chỉ-server.
+    ...pickLinkedFormFields(full),
+    // Lựa chọn "Dùng biểu mẫu đã tạo" chờ bấm Lưu (landingFormLink.js); null = không đổi gì.
+    linkedFormChoice: null,
   };
 }
 
@@ -128,6 +132,10 @@ export default function LandingCanvasPage() {
       leadFormPersistedMeta: { keys: [], optionValuesByKey: {} },
       leadFormFieldErrors: {},
       linkedFormId: null,
+      linkedFormTitle: null,
+      linkedFormPublicKey: null,
+      linkedFormSource: null,
+      linkedFormChoice: null,
     };
   }, []);
 

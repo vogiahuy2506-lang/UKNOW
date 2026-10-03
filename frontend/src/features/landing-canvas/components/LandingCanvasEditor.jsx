@@ -14,6 +14,7 @@ import {
   updateLandingPageAdmin,
 } from '../../landing-pages/services/landingPagesAdminApi.service.js';
 import { prepareLeadFormConfigForSave } from '../../landing-pages/utils/landingLeadFormConfig.js';
+import { applyLinkedFormChoiceToHtml, buildLinkedFormPayload } from '../utils/landingFormLink.js';
 // Import components từ GitHub (landing-pages)
 import TemplateGallery from '../../landing-pages/components/TemplateGallery.jsx';
 import SaveTemplateModal from '../../landing-pages/components/SaveTemplateModal.jsx';
@@ -133,21 +134,30 @@ export default function LandingCanvasEditor({
     setSaving(true);
     try {
       if (editingId) {
+        // "Dùng biểu mẫu đã tạo" (PR-F): lựa chọn chờ lưu → gửi `linkedFormId` + đưa HTML về dạng có ĐÚNG MỘT chỗ trống
+        // chờ biểu mẫu (backend thay bằng khối nhúng). Không có lựa chọn thì body và HTML y nguyên như trước.
+        const linkChoice = form.linkedFormChoice || null;
+        const htmlToSave = linkChoice
+          ? applyLinkedFormChoiceToHtml(form.htmlContent, linkChoice, form.linkedFormPublicKey)
+          : form.htmlContent;
         const updated = await updateLandingPageAdmin(editingId, {
           slug: slug || null,
           title: effectiveTitle,
-          htmlContent: form.htmlContent,
+          htmlContent: htmlToSave,
           isPublished: form.isPublished,
           domainType: form.domainType,
           customDomainHostname: form.customDomainHostname,
           customDomainIsApex: form.customDomainIsApex,
           leadFormConfig,
+          ...buildLinkedFormPayload(linkChoice),
         });
         toast.success(t('landingPagesAdmin.updated'));
         if (updated?.warning) {
           toast(updated.warning, { icon: '⚠️', duration: 6000 });
         }
         const updatedAt = updated?.updatedAt ?? null;
+        // Lưu xong trình soạn đóng (onClose bên dưới) nên không cần đồng bộ lại biểu mẫu đang gắn vào state: mở lại thì tải
+        // từ server (GET trả linkedFormId / Source / PublicKey).
         const savedForm = { ...form, title: effectiveTitle };
         if (titleOverride !== undefined) setForm((prev) => ({ ...prev, title: effectiveTitle }));
         setBaselineSnapshot(snapshotDraftForm(savedForm));

@@ -11,7 +11,11 @@ export const DRAFT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 /** Số tin `applied` gần nhất còn giữ HTML lịch sử cho nút Hoàn tác. */
 export const KEEP_UNDO_HTML_COUNT = 3;
 
-/** Các trường form lưu được vào nháp. KHÔNG gồm leadFormFieldErrors / leadFormPersistedMeta / linkedFormId. */
+/**
+ * Các trường form lưu được vào nháp. KHÔNG gồm leadFormFieldErrors / leadFormPersistedMeta / linkedFormId (trường chỉ-server).
+ * `linkedFormChoice` (lựa chọn "Dùng biểu mẫu đã tạo" chờ bấm Lưu — landingFormLink.js) CÓ trong nháp: đó là thay đổi người dùng
+ * đã làm, mất khi F5 thì họ tưởng đã chọn mà thực ra chưa.
+ */
 export const DRAFT_FORM_FIELDS = [
   'title',
   'slug',
@@ -21,6 +25,7 @@ export const DRAFT_FORM_FIELDS = [
   'customDomainHostname',
   'customDomainIsApex',
   'leadFormConfig',
+  'linkedFormChoice',
 ];
 
 function getStorage() {
@@ -72,6 +77,7 @@ export function snapshotDraftForm(form) {
     customDomainHostname: picked.customDomainHostname || null,
     customDomainIsApex: Boolean(picked.customDomainIsApex),
     leadFormConfig: stableStringify(picked.leadFormConfig),
+    linkedFormChoice: stableStringify(picked.linkedFormChoice),
   };
 }
 

@@ -29,7 +29,7 @@ const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
  *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí;
  *      trang ĐÃ có tên miền riêng thì chỉ HIỂN THỊ tên miền + trạng thái (chỉ đọc — xem chú thích ở `customHostname`).
  *      Tiêu đề trang KHÔNG còn ở đây — sửa ở thanh trên cùng của trình soạn.
- *   2. "Form thu khách": chọn Form cơ bản hoặc Dùng biểu mẫu đã tạo (LeadFormConfigPanel).
+ *   2. "Form thu khách": chọn Form cơ bản hoặc Dùng biểu mẫu đã tạo (LeadFormConfigPanel; lựa chọn lưu cùng lần bấm Lưu trang).
  *   3. "Ảnh đã tải lên (N)": cuối modal, mặc định thu gọn.
  */
 export default function SettingsModal({ open, onClose, form, setForm, editingId, tab }) {
@@ -253,7 +253,11 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
 
   const uploadedImagesCount = inPageImages.length + pendingUploadedAssets.length;
   const customFieldCount = (form?.leadFormConfig?.customFields || []).length;
-  const leadFormBadge = form?.linkedFormId
+  // Huy hiệu "Dùng biểu mẫu": biểu mẫu KHÁCH CHỌN (đang gắn hoặc đang chờ lưu), không phải form tự sinh của Form cơ bản.
+  const usesChosenForm = form?.linkedFormChoice
+    ? form.linkedFormChoice.mode === 'linked'
+    : form?.linkedFormSource === 'chosen';
+  const leadFormBadge = usesChosenForm
     ? tc('sections.leadForm.badgeLinked')
     : customFieldCount > 0
     ? tc('sections.leadForm.badgeCustom', { count: customFieldCount })
@@ -417,7 +421,7 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             badge={leadFormBadge}
             badgeClass="bg-blue-100 text-blue-700"
           >
-            <LeadFormConfigPanel form={form} setForm={setForm} t={t} />
+            <LeadFormConfigPanel form={form} setForm={setForm} t={t} editingId={editingId} />
           </SectionCard>
 
           {/* ═══ KHỐI 3: Ảnh đã tải lên (cuối modal, mặc định thu gọn) ═══ */}

@@ -1,13 +1,23 @@
+import { useState } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import LeadFormConfigPanel from '../LeadFormConfigPanel.jsx';
 import { defaultLeadFormConfig } from '../../../landing-pages/utils/landingLeadFormConfig.js';
 import viDict from '../../../../i18n/vi.js';
 import { LANDING_COPY } from '../../../landing/constants/landingCopy.js';
-import { editLandingHtmlWithAi } from '../../../landing-pages/services/landingPagesAdminApi.service.js';
+import {
+  editLandingHtmlWithAi,
+  fetchLandingPagesAdminList,
+} from '../../../landing-pages/services/landingPagesAdminApi.service.js';
+import { fetchForms } from '../../../forms/services/formAdminApi.service.js';
 
 vi.mock('../../../landing-pages/services/landingPagesAdminApi.service.js', () => ({
   editLandingHtmlWithAi: vi.fn(),
+  fetchLandingPagesAdminList: vi.fn(),
+}));
+
+vi.mock('../../../forms/services/formAdminApi.service.js', () => ({
+  fetchForms: vi.fn(),
 }));
 
 /**
@@ -158,84 +168,232 @@ describe('LeadFormConfigPanel', () => {
   });
 
   /**
-   * 03/10/2026: GỠ lựa chọn "Dùng biểu mẫu đã tạo" — `linkedFormId` là trường chỉ-đọc (forms.landing_page_id), editor
-   * không có đường lưu nó nên chọn biểu mẫu khác chỉ đổi state cục bộ, lúc lưu backend vẫn tạo / dùng form của chính
-   * landing (landingPageAdmin.service.js). Chỉ còn Form cơ bản; trang ĐÃ có biểu mẫu gắn thì hiện thông tin, chỉ đọc.
+   * PR-F (PLAN_TEN_MIEN_RIENG_VA_BIEU_MAU_LIEN_KET_LANDING_2026-10-03.md): "Dùng biểu mẫu đã tạo" lưu được thật.
+   * Panel CHỈ ghi `form.linkedFormChoice` (lựa chọn chờ bấm Lưu trang); không bao giờ đổi `linkedFormId` / `htmlContent`
+   * (đó là việc của editor sau khi backend lưu).
    */
-  describe('chỉ còn Form cơ bản; biểu mẫu đã gắn chỉ để xem', () => {
+  describe('chọn Form cơ bản / Dùng biểu mẫu đã tạo', () => {
     const BASIC_MARK = 'Các trường mặc định';
-    // Chữ của mọi thứ liên quan tới chọn / gắn / huỷ gắn biểu mẫu từ module Forms.
-    const LINK_UI = /Dùng biểu mẫu đã tạo|Chọn biểu mẫu để liên kết|Áp dụng vào trang|Huỷ liên kết|Chèn vị trí form|Tạo biểu mẫu mới|Khuyên dùng/;
+    const FORMS = [
+      { id: 3, title: 'Đăng ký khoá IELTS', publicKey: 'KEY3', isPublished: true, landingPageId: null, fields: [{}, {}] },
+      { id: 4, title: 'Biểu mẫu nháp', publicKey: 'KEY4', isPublished: false, landingPageId: null, fields: [] },
+      { id: 5, title: 'Form trang Beta', publicKey: 'KEY5', isPublished: true, landingPageId: 200, fields: [] },
+      { id: 6, title: 'Form bị khoá', publicKey: 'KEY6', isPublished: true, landingPageId: null, adminDisabledAt: '2026-10-01T00:00:00Z', fields: [] },
+      { id: 7, title: 'Form cơ bản tự sinh', publicKey: 'KEY7', isPublished: true, landingPageId: 100, fields: [] },
+      { id: 9, title: 'Biểu mẫu đang dùng', publicKey: 'KEY9', isPublished: true, landingPageId: 100, fields: [] },
+    ];
 
-    it('trang chưa có biểu mẫu gắn → chỉ có cấu hình Form cơ bản: không radio, không bộ chọn / liên kết biểu mẫu', () => {
-      const { container } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+    let latestForm;
+    function Harness({ initial, editingId = 100 }) {
+      const [form, setForm] = useState(initial);
+      latestForm = form;
+      return <LeadFormConfigPanel form={form} setForm={setForm} t={t} editingId={editingId} />;
+    }
+    const renderPanel = (overrides = {}, editingId = 100) => {
+      const initial = makeForm(overrides);
+      latestForm = initial;
+      return { initial, ...render(<Harness initial={initial} editingId={editingId} />) };
+    };
 
+    beforeEach(() => {
+      fetchForms.mockReset();
+      fetchLandingPagesAdminList.mockReset();
+      fetchForms.mockResolvedValue(FORMS);
+      fetchLandingPagesAdminList.mockResolvedValue([
+        { id: 100, title: 'Trang Alpha' },
+        { id: 200, title: 'Trang Beta' },
+      ]);
+    });
+
+    const radioBasic = () => screen.getByRole('radio', { name: 'Form cơ bản' });
+    const radioLinked = () => screen.getByRole('radio', { name: 'Dùng biểu mẫu đã tạo' });
+
+    it('trang chưa gắn biểu mẫu → mở ở "Form cơ bản": có cấu hình Form cơ bản, KHÔNG có bộ chọn, KHÔNG gọi API biểu mẫu', () => {
+      const { container } = renderPanel();
+
+      expect(radioBasic()).toBeChecked();
+      expect(radioLinked()).not.toBeChecked();
+      expect(radioLinked()).toBeEnabled();
       expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
-      expect(screen.getByText('Luôn có: Họ tên, Email, Số điện thoại.')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Thêm câu hỏi' })).toBeInTheDocument();
-      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
-      expect(screen.queryByRole('radiogroup')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('linked-form-picker')).not.toBeInTheDocument();
       expect(screen.queryByTestId('linked-form-readonly')).not.toBeInTheDocument();
-      expect(container.textContent).not.toMatch(LINK_UI);
-      expect(container.querySelector('a[href^="/app/forms"]')).toBeNull();
+      expect(fetchForms).not.toHaveBeenCalled();
       expect(container.textContent).not.toContain('leadFormConfig.');
     });
 
-    it('trang ĐANG có biểu mẫu gắn (linkedFormId) → hiện thông tin chỉ đọc + link mở sửa; vẫn có cấu hình Form cơ bản', () => {
-      render(<LeadFormConfigPanel form={makeForm({ linkedFormId: 42 })} setForm={vi.fn()} t={t} />);
+    it('trang CHƯA lưu lần nào (không có editingId) → "Dùng biểu mẫu đã tạo" bị khoá + nhắc lưu trang trước; bấm vào không đổi gì', () => {
+      renderPanel({}, null);
 
+      expect(radioLinked()).toBeDisabled();
+      expect(screen.getByText('Lưu trang trước, rồi mới chọn được biểu mẫu.')).toBeInTheDocument();
+      fireEvent.click(radioLinked());
+      expect(radioBasic()).toBeChecked();
+      expect(screen.queryByTestId('linked-form-picker')).not.toBeInTheDocument();
+      expect(fetchForms).not.toHaveBeenCalled();
+      expect(latestForm.linkedFormChoice ?? null).toBeNull();
+    });
+
+    it('form TỰ SINH (linkedFormSource=basic) vẫn là "Form cơ bản": thẻ biểu mẫu chỉ-đọc + cấu hình Form cơ bản, không tải danh sách', () => {
+      renderPanel({ linkedFormId: 7, linkedFormTitle: 'Form cơ bản tự sinh', linkedFormSource: 'basic' });
+
+      expect(radioBasic()).toBeChecked();
       const card = screen.getByTestId('linked-form-readonly');
-      expect(card).toHaveTextContent('Trang đang liên kết với biểu mẫu');
-      expect(card).toHaveTextContent('#42');
-      expect(card).toHaveTextContent('Biểu mẫu #42');
-      expect(screen.getByRole('link', { name: /Mở sửa biểu mẫu/ })).toHaveAttribute('href', '/app/forms/42/edit');
+      expect(card).toHaveTextContent('Form cơ bản tự sinh');
+      expect(screen.getByRole('link', { name: /Mở sửa biểu mẫu/ })).toHaveAttribute('href', '/app/forms/7/edit');
       expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
-      expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+      expect(fetchForms).not.toHaveBeenCalled();
     });
 
-    it('trang có biểu mẫu gắn: không có nút Huỷ liên kết / Chèn vị trí form / bộ chọn biểu mẫu', () => {
-      const { container } = render(
-        <LeadFormConfigPanel form={makeForm({ linkedFormId: 42, htmlContent: '<p>chưa có slot</p>' })} setForm={vi.fn()} t={t} />
-      );
+    it('biểu mẫu KHÁCH CHỌN (linkedFormSource=chosen) → mở ở "Dùng biểu mẫu đã tạo", chọn sẵn đúng biểu mẫu, ẩn cấu hình Form cơ bản', async () => {
+      renderPanel({ linkedFormId: 9, linkedFormTitle: 'Biểu mẫu đang dùng', linkedFormSource: 'chosen' });
 
-      expect(container.textContent).not.toMatch(LINK_UI);
-      expect(screen.queryByRole('button', { name: /Huỷ liên kết|Chèn vị trí|Áp dụng/ })).not.toBeInTheDocument();
-      // vẫn báo thiếu chỗ đặt form (chỉ báo, không có nút ghi)
-      expect(screen.getByText(/Trang chưa có thẻ vị trí/)).toBeInTheDocument();
+      expect(radioLinked()).toBeChecked();
+      expect(screen.queryByText(BASIC_MARK)).not.toBeInTheDocument();
+      expect(screen.getByTestId('linked-form-readonly')).toHaveTextContent('Biểu mẫu đang dùng');
+      await waitFor(() => expect(fetchForms).toHaveBeenCalledTimes(1));
+      const select = await screen.findByRole('combobox');
+      await waitFor(() => expect(select).toHaveValue('9'));
     });
 
-    it('bấm/gõ mọi thứ trong panel KHÔNG làm đổi linkedFormId, và không có đường nào ghi linkedFormId', () => {
-      const setForm = vi.fn();
-      const initial = makeForm({ linkedFormId: 42 });
-      render(<LeadFormConfigPanel form={initial} setForm={setForm} t={t} />);
+    it('chọn "Dùng biểu mẫu đã tạo" → danh sách: loại form tự sinh của trang này; form đang gắn trang KHÁC / bị khoá bị làm mờ kèm lý do; có link Tạo biểu mẫu mới', async () => {
+      renderPanel({ linkedFormId: 7, linkedFormSource: 'basic' });
 
-      for (const el of screen.queryAllByRole('button')) fireEvent.click(el);
-      for (const el of screen.queryAllByRole('checkbox')) fireEvent.click(el);
+      fireEvent.click(radioLinked());
+      const select = await screen.findByRole('combobox');
+      await waitFor(() => expect(within(select).getByRole('option', { name: /Đăng ký khoá IELTS/ })).toBeInTheDocument());
 
-      expect(setForm).toHaveBeenCalled(); // có tương tác thật (bật Nghề nghiệp, Thêm câu hỏi...)
-      for (const [update] of setForm.mock.calls) {
-        const next = typeof update === 'function' ? update(initial) : { ...initial, ...update };
-        expect(next.linkedFormId).toBe(42);
-        expect(next.htmlContent).toBe(initial.htmlContent);
-      }
+      // form tự sinh (id 7) của chính trang này không có trong danh sách chọn
+      expect(within(select).queryByRole('option', { name: /Form cơ bản tự sinh/ })).not.toBeInTheDocument();
+      // form đang dùng ở trang khác: mờ + tên trang
+      const taken = within(select).getByRole('option', { name: /Form trang Beta/ });
+      expect(taken).toBeDisabled();
+      expect(taken).toHaveTextContent('đang dùng ở trang Trang Beta');
+      // form bị quản trị khoá: mờ
+      expect(within(select).getByRole('option', { name: /Form bị khoá/ })).toBeDisabled();
+      // form nháp: chọn được, ghi chú sẽ được xuất bản
+      const draft = within(select).getByRole('option', { name: /Biểu mẫu nháp/ });
+      expect(draft).toBeEnabled();
+      expect(draft).toHaveTextContent('bản nháp');
+      // form của chính trang (đã chọn trước đó) và form tự do chọn được
+      expect(within(select).getByRole('option', { name: 'Biểu mẫu đang dùng' })).toBeEnabled();
+      expect(within(select).getByRole('option', { name: 'Đăng ký khoá IELTS' })).toBeEnabled();
+
+      const createLink = screen.getByRole('link', { name: /Tạo biểu mẫu mới/ });
+      expect(createLink).toHaveAttribute('href', '/app/forms/new');
+      expect(createLink).toHaveAttribute('target', '_blank');
     });
 
-    it('danh sách câu hỏi thêm chỉ hiện khi có; chưa có thì hiện dòng gợi ý', () => {
-      const { unmount } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
-      expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-      expect(screen.getByText(/Chưa có câu hỏi thêm/)).toBeInTheDocument();
-      unmount();
+    it('chọn một biểu mẫu → CHỈ ghi linkedFormChoice (formId/publicKey/title); linkedFormId, htmlContent giữ nguyên; hiện câu "sẽ dùng khi Lưu"', async () => {
+      const { initial } = renderPanel({ linkedFormId: 7, linkedFormSource: 'basic', htmlContent: '<p>trang</p>' });
 
-      render(
-        <LeadFormConfigPanel
-          form={makeForm({ leadFormConfig: { ...defaultLeadFormConfig(), customFields: [makeCustomField()] } })}
-          setForm={vi.fn()}
-          t={t}
-        />
-      );
-      expect(screen.getByRole('combobox')).toBeInTheDocument();
-      expect(screen.queryByText(/Chưa có câu hỏi thêm/)).not.toBeInTheDocument();
+      fireEvent.click(radioLinked());
+      const select = await screen.findByRole('combobox');
+      await waitFor(() => expect(within(select).getByRole('option', { name: 'Đăng ký khoá IELTS' })).toBeInTheDocument());
+      fireEvent.change(select, { target: { value: '3' } });
+
+      expect(latestForm.linkedFormChoice).toEqual({ mode: 'linked', formId: 3, publicKey: 'KEY3', title: 'Đăng ký khoá IELTS' });
+      expect(latestForm.linkedFormId).toBe(initial.linkedFormId);
+      expect(latestForm.htmlContent).toBe('<p>trang</p>');
+      expect(screen.getByTestId('linked-form-pending')).toHaveTextContent('Sẽ dùng biểu mẫu "Đăng ký khoá IELTS" khi bạn bấm Lưu trang.');
+      // có thay đổi chờ lưu thì không còn thẻ "đang liên kết" cũ gây hiểu nhầm
+      expect(screen.queryByTestId('linked-form-readonly')).not.toBeInTheDocument();
+      // cấu hình Form cơ bản vẫn còn nguyên trong form (chỉ ẩn phần hiển thị)
+      expect(latestForm.leadFormConfig).toEqual(initial.leadFormConfig);
     });
+
+    it('đang dùng biểu mẫu khách chọn → bấm "Form cơ bản" ghi {mode:basic}; bấm lại "Dùng biểu mẫu đã tạo" (cùng biểu mẫu) thì bỏ lựa chọn chờ lưu', async () => {
+      renderPanel({ linkedFormId: 9, linkedFormSource: 'chosen' });
+      await screen.findByRole('combobox');
+
+      fireEvent.click(radioBasic());
+      expect(latestForm.linkedFormChoice).toEqual({ mode: 'basic' });
+      expect(screen.getByTestId('linked-form-pending')).toHaveTextContent('Sẽ quay về Form cơ bản khi bạn bấm Lưu trang.');
+      expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
+
+      fireEvent.click(radioLinked());
+      expect(latestForm.linkedFormChoice).toBeNull();
+      expect(radioLinked()).toBeChecked();
+    });
+
+    it('chọn lại ĐÚNG biểu mẫu đang gắn → không có thay đổi chờ lưu', async () => {
+      renderPanel({ linkedFormId: 9, linkedFormSource: 'chosen' });
+      const select = await screen.findByRole('combobox');
+      await waitFor(() => expect(within(select).getByRole('option', { name: 'Đăng ký khoá IELTS' })).toBeInTheDocument());
+
+      fireEvent.change(select, { target: { value: '3' } });
+      expect(latestForm.linkedFormChoice).toMatchObject({ mode: 'linked', formId: 3 });
+      fireEvent.change(select, { target: { value: '9' } });
+      expect(latestForm.linkedFormChoice).toBeNull();
+    });
+
+    it('trang đang Form cơ bản: bấm "Dùng biểu mẫu đã tạo" mà CHƯA chọn biểu mẫu → chưa đổi gì; bấm lại "Form cơ bản" cũng không có gì chờ lưu', async () => {
+      renderPanel();
+
+      fireEvent.click(radioLinked());
+      await screen.findByRole('combobox');
+      expect(latestForm.linkedFormChoice ?? null).toBeNull();
+      expect(screen.getByText('Chọn một biểu mẫu rồi bấm Lưu trang để áp dụng.')).toBeInTheDocument();
+
+      fireEvent.click(radioBasic());
+      expect(latestForm.linkedFormChoice ?? null).toBeNull();
+      expect(screen.getByText(BASIC_MARK)).toBeInTheDocument();
+    });
+
+    it('chữ ghi chú nói rõ bài nộp nằm ở mục Biểu mẫu (không ở Khách hàng từ Landing page) và không dùng cụm quảng cáo cấm', async () => {
+      const { container } = renderPanel();
+      fireEvent.click(radioLinked());
+      await screen.findByRole('combobox');
+
+      expect(container.textContent).toContain('Bài nộp');
+      expect(container.textContent).toContain('Khách hàng từ Landing page');
+      expect(container.textContent).toContain('Dữ liệu Biểu mẫu');
+      expect(container.textContent).not.toMatch(/nhất|hàng đầu|tuyệt đối/i);
+    });
+
+    it('không tải được danh sách biểu mẫu → báo lỗi, vẫn bấm Làm mới thử lại được', async () => {
+      fetchForms.mockRejectedValueOnce(new Error('boom'));
+      renderPanel();
+      fireEvent.click(radioLinked());
+
+      expect(await screen.findByText(/Không tải được danh sách biểu mẫu/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: /Làm mới/ }));
+      await waitFor(() => expect(fetchForms).toHaveBeenCalledTimes(2));
+      await waitFor(() => expect(screen.queryByText(/Không tải được danh sách biểu mẫu/)).not.toBeInTheDocument());
+    });
+  });
+
+  it('bấm/gõ mọi thứ trong phần Form cơ bản KHÔNG làm đổi linkedFormId / linkedFormChoice / htmlContent', () => {
+    const setForm = vi.fn();
+    const initial = makeForm({ linkedFormId: 42, linkedFormSource: 'basic' });
+    render(<LeadFormConfigPanel form={initial} setForm={setForm} t={t} editingId={null} />);
+
+    for (const el of screen.queryAllByRole('button')) fireEvent.click(el);
+    for (const el of screen.queryAllByRole('checkbox')) fireEvent.click(el);
+
+    expect(setForm).toHaveBeenCalled(); // có tương tác thật (bật Nghề nghiệp, Thêm câu hỏi...)
+    for (const [update] of setForm.mock.calls) {
+      const next = typeof update === 'function' ? update(initial) : { ...initial, ...update };
+      expect(next.linkedFormId).toBe(42);
+      expect(next.linkedFormChoice ?? null).toBeNull();
+      expect(next.htmlContent).toBe(initial.htmlContent);
+    }
+  });
+
+  it('danh sách câu hỏi thêm chỉ hiện khi có; chưa có thì hiện dòng gợi ý', () => {
+    const { unmount } = render(<LeadFormConfigPanel form={makeForm()} setForm={vi.fn()} t={t} />);
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByText(/Chưa có câu hỏi thêm/)).toBeInTheDocument();
+    unmount();
+
+    render(
+      <LeadFormConfigPanel
+        form={makeForm({ leadFormConfig: { ...defaultLeadFormConfig(), customFields: [makeCustomField()] } })}
+        setForm={vi.fn()}
+        t={t}
+      />
+    );
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+    expect(screen.queryByText(/Chưa có câu hỏi thêm/)).not.toBeInTheDocument();
   });
 
   it('render không lộ chuỗi khoá i18n thô kiểu "leadFormConfig."', () => {
