@@ -5231,7 +5231,7 @@ export default {
     title: 'We are always ready to',
     titleHighlight: 'support you',
     subtitle: 'Leave your details and our team will get back to you within 24 hours.',
-    statusOpenDetail: 'Open until 17:00 — current time {time}',
+    statusOpenDetail: 'Open until 17:00 — current time {time} (Vietnam time)',
     statusClosedDetail: 'Reopens Monday 08:30 if today is the weekend',
   },
 

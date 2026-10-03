@@ -13,7 +13,7 @@ import AnimatedSection from '../../components/AnimatedSection';
 import { useI18n } from '../../i18n';
 import { usePublicLandingOverrides } from '../../features/landing-customizer';
 import HeroChatWidget from '../../features/hero/components/HeroChatWidget';
-import { isWithinBusinessHours } from './businessHours';
+import { getVietnamClock, isWithinBusinessHours } from './businessHours';
 
 const getChannels = (t) => [
   {
@@ -60,12 +60,9 @@ function useBusinessStatus(t) {
   useEffect(() => {
     const update = () => {
       const now = new Date();
-      // Thứ 2 – Thứ 6, 8:30 – 17:00 (businessHours.js). Bản cũ chỉ so theo giờ tròn nên 8:00–8:29 vẫn hiện "Đang mở cửa".
+      // Thứ 2 – Thứ 6, 8:30 – 17:00 GIỜ VIỆT NAM (businessHours.js), không theo múi giờ trình duyệt — kể cả giờ hiện ở {time}.
       const isOpen = isWithinBusinessHours(now);
-
-      const hh = String(now.getHours()).padStart(2, '0');
-      const mm = String(now.getMinutes()).padStart(2, '0');
-      const timeStr = `${hh}:${mm}`;
+      const timeStr = getVietnamClock(now).timeStr;
 
       setStatus({
         isOpen,

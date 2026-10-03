@@ -210,6 +210,12 @@ describe.each(LOCALES)('H1 — giờ làm việc thống nhất Thứ 2 – Th�
     expect(dict.contact.statusOpenDetail).toContain('17:00');
   });
 
+  it('statusOpenDetail: {time} là giờ Việt Nam và nói rõ "giờ Việt Nam" (không còn giờ trình duyệt)', () => {
+    const open = dict.contact.statusOpenDetail;
+    expect(open).toContain('{time}');
+    expect(open).toMatch(name === 'vi' ? /giờ Việt Nam/ : /Vietnam time/);
+  });
+
   it('chữ tiếng Việt dùng "Thứ 2 – Thứ 6", tiếng Anh dùng "Mon – Fri" (không còn thứ Bảy)', () => {
     const expected = name === 'vi' ? /Thứ 2 – Thứ 6|T2 – T6/ : /Mon – Fri/;
     expect(dict.contact.workHours).toMatch(expected);
@@ -269,10 +275,19 @@ describe.each(LOCALES)('H1 — câu hứa chưa kiểm chứng đã viết lại
   });
 });
 
-describe('H1 — trang Liên hệ tính mở/đóng cửa bằng businessHours.js, không còn so giờ ghi cứng', () => {
-  it('ContactPage dùng isWithinBusinessHours, không còn "hour >= 8"', () => {
+describe('H1 — trang Liên hệ tính mở/đóng cửa bằng businessHours.js theo giờ Việt Nam, không còn đọc giờ trình duyệt', () => {
+  it('ContactPage dùng isWithinBusinessHours + getVietnamClock; không còn getHours/getMinutes/getDay/getTimezoneOffset và "hour >= 8"', () => {
     const src = sourceOf('../pages/public/ContactPage.jsx');
     expect(src).toMatch(/isWithinBusinessHours/);
+    expect(src).toMatch(/getVietnamClock\(now\)\.timeStr/);
+    expect(src).not.toMatch(/\bgetHours\b|\bgetMinutes\b|\bgetDay\b|getTimezoneOffset|toLocaleTimeString/);
     expect(src).not.toMatch(/hour\s*>=\s*8\b/);
+  });
+
+  it('businessHours.js đọc giờ qua getter UTC sau khi cộng +7, không dùng getter giờ địa phương', () => {
+    const src = sourceOf('../pages/public/businessHours.js');
+    expect(src).toMatch(/getUTCHours/);
+    expect(src).toMatch(/getUTCDay/);
+    expect(src).not.toMatch(/\.getHours\(|\.getMinutes\(|\.getDay\(/);
   });
 });
