@@ -3937,3 +3937,35 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_cm_quota_reservation_id
 
 -- --- Migration 273: usage_logs.id_user nullable (PR-12: dong usage cua khach vang lai / he thong khong co chu) ---
 ALTER TABLE usage_logs ALTER COLUMN id_user DROP NOT NULL;
+
+-- --- Migration 274: send_quota_shadow_daily + send_quota_shadow_mismatches (dau vet shadow han muc) ---
+CREATE TABLE IF NOT EXISTS send_quota_shadow_daily (
+  vn_day DATE NOT NULL,
+  channel VARCHAR(20) NOT NULL,
+  total INTEGER NOT NULL DEFAULT 0,
+  both_allowed INTEGER NOT NULL DEFAULT 0,
+  both_denied INTEGER NOT NULL DEFAULT 0,
+  legacy_allow_atomic_deny INTEGER NOT NULL DEFAULT 0,
+  legacy_deny_atomic_allow INTEGER NOT NULL DEFAULT 0,
+  atomic_candidate_error INTEGER NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (vn_day, channel)
+);
+
+CREATE TABLE IF NOT EXISTS send_quota_shadow_mismatches (
+  id BIGSERIAL PRIMARY KEY,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  vn_day DATE NOT NULL,
+  channel VARCHAR(20) NOT NULL,
+  user_id BIGINT,
+  ctx_billing_user_id BIGINT,
+  atomic_billing_user_id BIGINT,
+  legacy_allowed BOOLEAN NOT NULL,
+  atomic_allowed BOOLEAN NOT NULL,
+  legacy_detail TEXT,
+  atomic_diag JSONB,
+  atomic_error TEXT,
+  source_type VARCHAR(50)
+);
+
+CREATE INDEX IF NOT EXISTS idx_sqsm_created_at ON send_quota_shadow_mismatches (created_at);

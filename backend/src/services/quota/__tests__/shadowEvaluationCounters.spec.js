@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, jest } from '@jest/globals';
+import db from '../../../config/database.js';
 import {
   buildLegacyDetail,
   getShadowMismatchMetrics,
@@ -252,6 +253,23 @@ describe('buildLegacyDetail — nhánh CHO PHÉP không được in số đếm 
       expect(line).toContain('dailyCount=2');
       expect(line).toContain('dailyLimit=1');
     } finally {
+      warnSpy.mockRestore();
+    }
+  });
+});
+
+describe('recordShadowEvaluation — giữ THUẦN (dấu vết bền nằm ở persistShadowEvaluation)', () => {
+  it('KHÔNG gọi db.query', () => {
+    const orig = db.query;
+    const spy = jest.fn();
+    db.query = spy;
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      recordShadowEvaluation({ legacyAllowed: true, atomicAllowed: true });
+      recordShadowEvaluation({ legacyAllowed: true, atomicAllowed: false });
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      db.query = orig;
       warnSpy.mockRestore();
     }
   });

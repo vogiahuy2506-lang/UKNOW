@@ -736,7 +736,10 @@ describe('sendQuota State Machine & Transition Rules (PR-Q1)', () => {
 
       // Case A: Candidate encounters DB error -> atomic_candidate_error is incremented
       const origGetClient = db.getClient;
+      const origDbQueryA = db.query;
       db.getClient = jest.fn().mockRejectedValueOnce(new Error('PostgreSQL candidate connection failed'));
+      // persistShadowEvaluation (không await) cũng gọi db.query; admin bypass nên legacy không chạm DB.
+      db.query = jest.fn().mockResolvedValue({ rows: [] });
 
       try {
         const validKey = buildDirectReservationKey({
@@ -769,6 +772,7 @@ describe('sendQuota State Machine & Transition Rules (PR-Q1)', () => {
         expect(metricsAfter.legacy_allow_atomic_deny).toBe(1);
       } finally {
         db.getClient = origGetClient;
+        db.query = origDbQueryA;
       }
 
       // Case B: Candidate evaluates 403 quota exhaustion (status = 403) -> legacy_allow_atomic_deny++ but atomic_candidate_error remains 0

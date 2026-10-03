@@ -116,21 +116,38 @@ export function buildLegacyDetail(legacyResult, legacyError) {
   return 'allowed, count/limit KHONG do duoc o nhanh cho phep (okResult tra hang so)';
 }
 
+/**
+ * Phân loại THUẦN một lượt đánh giá shadow thành các cờ 0/1. Dùng chung cho bộ đếm RAM
+ * (`recordShadowEvaluation`) và câu UPSERT bền (`persistShadowEvaluation`) để hai nơi không lệch nhau.
+ */
+export function classifyShadowEvaluation({ legacyAllowed, atomicAllowed, atomicError }) {
+  const isMismatch = legacyAllowed !== atomicAllowed;
+  return {
+    isMismatch,
+    // Distinguish true infrastructure/system errors from legitimate business limit denials (status 403)
+    atomicCandidateError: Boolean(atomicError && (!atomicError.status || atomicError.status >= 500)),
+    legacyAllowAtomicDeny: Boolean(isMismatch && legacyAllowed && !atomicAllowed),
+    legacyDenyAtomicAllow: Boolean(isMismatch && !legacyAllowed && atomicAllowed),
+    bothAllowed: Boolean(!isMismatch && legacyAllowed),
+    bothDenied: Boolean(!isMismatch && !legacyAllowed),
+  };
+}
+
 export function recordShadowEvaluation({
   legacyAllowed, atomicAllowed, atomicError, billingUserId, userId, channel,
   atomicBillingUserId = null, atomicDiag = null, legacyDetail = null,
 }) {
   _shadowMetrics.total++;
-  // Distinguish true infrastructure/system errors from legitimate business limit denials (status 403)
-  if (atomicError && (!atomicError.status || atomicError.status >= 500)) {
+  const cls = classifyShadowEvaluation({ legacyAllowed, atomicAllowed, atomicError });
+  if (cls.atomicCandidateError) {
     _shadowMetrics.atomic_candidate_error++;
   }
-  const isMismatch = legacyAllowed !== atomicAllowed;
+  const isMismatch = cls.isMismatch;
   if (isMismatch) {
     _shadowMetrics.mismatches++;
-    if (legacyAllowed && !atomicAllowed) {
+    if (cls.legacyAllowAtomicDeny) {
       _shadowMetrics.legacy_allow_atomic_deny++;
-    } else if (!legacyAllowed && atomicAllowed) {
+    } else if (cls.legacyDenyAtomicAllow) {
       _shadowMetrics.legacy_deny_atomic_allow++;
     }
     // Dòng này là bằng chứng duy nhất còn lại sau khi tiến trình chết, nên phải mang đủ số để
@@ -152,6 +169,82 @@ export function recordShadowEvaluation({
     // thật sự bị chạm. Không có bộ đếm này thì lượt đó lẫn vào total và biến mất.
     _shadowMetrics.both_denied++;
   }
+}
+
+let _lastPersistWarnAt = 0;
+
+function formatVnDay(date) {
+  // en-CA cho ra YYYY-MM-DD
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Ho_Chi_Minh', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(date);
+}
+
+/**
+ * Ghi dấu vết bền cho một lượt đánh giá shadow (tổng hợp theo ngày VN + chi tiết lượt lệch).
+ * Đo đạc thuần: KHÔNG ném, lỗi chỉ cảnh báo tối đa một lần mỗi 60 giây. Caller không `await`.
+ * `recordShadowEvaluation` vẫn thuần (không DB) — hàm này tách riêng cho đúng lý do đó.
+ */
+export async function persistShadowEvaluation({
+  legacyAllowed, atomicAllowed, atomicError = null, billingUserId = null, userId = null, channel,
+  atomicBillingUserId = null, atomicDiag = null, legacyDetail = null, sourceType = null,
+  vnDayStart = null,
+}) {
+  try {
+    if (typeof db?.query !== 'function') return;
+    const runQuery = db.query.bind(db);
+    const cls = classifyShadowEvaluation({ legacyAllowed, atomicAllowed, atomicError });
+    const start = vnDayStart ?? getVnDayBoundaries(new Date(Date.now())).vnDayStart;
+    const vnDay = formatVnDay(start);
+    const ch = channel == null ? 'unknown' : String(channel).slice(0, 20);
+    await runQuery(
+      `INSERT INTO send_quota_shadow_daily
+         (vn_day, channel, total, both_allowed, both_denied,
+          legacy_allow_atomic_deny, legacy_deny_atomic_allow, atomic_candidate_error)
+       VALUES ($1::date, $2, 1, $3, $4, $5, $6, $7)
+       ON CONFLICT (vn_day, channel) DO UPDATE SET
+         total = send_quota_shadow_daily.total + 1,
+         both_allowed = send_quota_shadow_daily.both_allowed + EXCLUDED.both_allowed,
+         both_denied = send_quota_shadow_daily.both_denied + EXCLUDED.both_denied,
+         legacy_allow_atomic_deny = send_quota_shadow_daily.legacy_allow_atomic_deny + EXCLUDED.legacy_allow_atomic_deny,
+         legacy_deny_atomic_allow = send_quota_shadow_daily.legacy_deny_atomic_allow + EXCLUDED.legacy_deny_atomic_allow,
+         atomic_candidate_error = send_quota_shadow_daily.atomic_candidate_error + EXCLUDED.atomic_candidate_error,
+         updated_at = NOW()`,
+      [
+        vnDay, ch,
+        cls.bothAllowed ? 1 : 0,
+        cls.bothDenied ? 1 : 0,
+        cls.legacyAllowAtomicDeny ? 1 : 0,
+        cls.legacyDenyAtomicAllow ? 1 : 0,
+        cls.atomicCandidateError ? 1 : 0,
+      ],
+    );
+    if (cls.isMismatch) {
+      await runQuery(
+        `INSERT INTO send_quota_shadow_mismatches
+           (vn_day, channel, user_id, ctx_billing_user_id, atomic_billing_user_id,
+            legacy_allowed, atomic_allowed, legacy_detail, atomic_diag, atomic_error, source_type)
+         VALUES ($1::date, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)`,
+        [
+          vnDay, ch, userId ?? null, billingUserId ?? null, atomicBillingUserId ?? null,
+          Boolean(legacyAllowed), Boolean(atomicAllowed), legacyDetail ?? null,
+          JSON.stringify(atomicDiag ?? null), atomicError?.message ?? null,
+          sourceType == null ? null : String(sourceType).slice(0, 50),
+        ],
+      );
+    }
+  } catch (err) {
+    const t = Date.now();
+    if (t - _lastPersistWarnAt >= 60_000) {
+      _lastPersistWarnAt = t;
+      console.warn(`[SendQuota] Không ghi được dấu vết shadow: ${err?.message || err}`);
+    }
+  }
+}
+
+/** Chỉ dùng trong test: đặt lại mốc throttle cảnh báo. */
+export function _resetPersistShadowWarnThrottle() {
+  _lastPersistWarnAt = 0;
 }
 
 /**
@@ -767,6 +860,21 @@ export async function reserveSendQuota(params, options = {}) {
       atomicDiag,
       legacyDetail: buildLegacyDetail(legacyResult, legacyError),
     });
+
+    // Dấu vết bền: KHÔNG await — đường gửi không được chậm/hỏng vì câu ghi đo đạc.
+    void persistShadowEvaluation({
+      legacyAllowed,
+      atomicAllowed,
+      atomicError,
+      billingUserId: ownerContextId || userId,
+      userId,
+      channel,
+      atomicBillingUserId,
+      atomicDiag,
+      legacyDetail: buildLegacyDetail(legacyResult, legacyError),
+      sourceType,
+      vnDayStart: getVnDayBoundaries(new Date()).vnDayStart,
+    }).catch(() => {});
 
     const isMismatch = legacyAllowed !== atomicAllowed;
 
