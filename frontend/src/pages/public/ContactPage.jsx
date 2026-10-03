@@ -53,12 +53,6 @@ const getChannels = (t) => [
 },
 ];
 
-const getTrustStats = (t) => [
-  { value: '< 24h', label: t('contact.trustStat1Label') },
-  { value: '500+', label: t('contact.trustStat2Label') },
-  { value: '4.9★', label: t('contact.trustStat3Label') },
-];
-
 function useBusinessStatus(t) {
   const [status, setStatus] = useState({ isOpen: false, label: '', detail: '' });
 
@@ -97,7 +91,6 @@ export default function ContactPage() {
   const { getOverride } = usePublicLandingOverrides('contact');
   const businessStatus = useBusinessStatus(t);
   const contactChannels = getChannels(t);
-  const trustStats = getTrustStats(t);
 
   const getValue = (key, fallback) => {
     const override = getOverride(key);
