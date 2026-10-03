@@ -183,14 +183,12 @@ const UI_LABELS_IN_ARTICLES = [
   ['dat-lich-giu-cho', 'forms.sendConfirmation', 'Gửi email xác nhận cho người điền sau khi nộp'],
   ['dat-lich-giu-cho', 'forms.editorPage.afterSubmit.title', 'Sau khi gửi'],
   // PLAN_DON_GIAN_CAI_DAT_LANDING (03/10/2026): Cài đặt trang còn 3 mục (Xuất bản & đường dẫn / Form thu khách / Ảnh đã tải
-  // lên); tên miền riêng là một công tắc trong mục đầu; form thu khách chọn "Form cơ bản".
+  // lên). Tên miền riêng trong modal chỉ HIỂN THỊ (gỡ thao tác ghi) và "Dùng biểu mẫu đã tạo" đã gỡ — bài không tả hai việc này.
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.title', 'Xuất bản & đường dẫn'],
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkCopy', 'Sao chép'],
   ['landing-page', 'landingCanvas.settingsModal.sections.publish.linkOpen', 'Mở trang'],
-  ['landing-page', 'landingCanvas.settingsModal.sections.customDomain.toggle', 'Dùng tên miền riêng của bạn'],
   ['landing-page', 'landingCanvas.settingsModal.sections.leadForm.title', 'Form thu khách'],
   ['landing-page', 'landingCanvas.settingsModal.sections.images.title', 'Ảnh đã tải lên'],
-  ['landing-page', 'leadFormConfig.modeBasic', 'Form cơ bản'],
   ['landing-page', 'leadFormConfig.addField', 'Thêm câu hỏi'],
   ['landing-page', 'leadFormConfig.askAiAdd', 'Nhờ AI thêm ô này'],
 ];
@@ -312,6 +310,13 @@ describe('chất lượng bài trợ giúp seed', () => {
       '**Form đăng ký**',
       'Ảnh của trang',
       'Bốn mục',
+      // 03/10/2026: hai việc tự làm trong Cài đặt trang đã GỠ vì không lưu được thật. Tên miền riêng chỉ còn hiển thị (nút
+      // "Lưu tên miền" làm backend xoá subdomain miễn phí mà không gắn gì; nút kiểm tra kết nối luôn 401); "Dùng biểu mẫu đã
+      // tạo" không ghi được `linkedFormId`. Bài không được hướng dẫn người đọc đi tìm hai thứ này.
+      'Dùng tên miền riêng của bạn',
+      'Dùng biểu mẫu đã tạo',
+      'Form cơ bản',
+      'Lưu tên miền',
     ];
     const offenders = [];
     for (const article of HELP_SEED_ARTICLES) {
