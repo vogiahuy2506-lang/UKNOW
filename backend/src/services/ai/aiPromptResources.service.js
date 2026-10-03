@@ -301,7 +301,7 @@ class AiPromptResourcesService {
       if (!profile) return 'mixed';
 
       const industry = String(profile.industry || '').toLowerCase();
-      const productRows = await productRepository.findAllByUser(userId);
+      const productRows = await productRepository.findAllByUser(userId, { activeOnly: true });
       const products = serializeProductList(productRows).toLowerCase();
       const targetAudience = String(profile.target_audience || '').toLowerCase();
 

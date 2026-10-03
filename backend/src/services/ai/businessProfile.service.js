@@ -68,7 +68,8 @@ async function buildChunksFromProfile(profile, userId) {
 
   let productsText = '';
   if (userId) {
-    const productRows = await productRepository.findAllByUser(userId);
+    // Chỉ sản phẩm đang bán vào embedding RAG (D-06). Đổi trạng thái/xoá sản phẩm đã gọi reembedChunks (product.service.js).
+    const productRows = await productRepository.findAllByUser(userId, { activeOnly: true });
     productsText = serializeProductList(productRows);
   }
   if (productsText) {
@@ -192,7 +193,8 @@ class BusinessProfileService {
   async getFormattedProfileForPrompt(userId) {
     const [profile, productRows] = await Promise.all([
       this.getProfile(userId).catch(() => null),
-      productRepository.findAllByUser(userId).catch(() => []),
+      // Sản phẩm ngừng bán không được vào prompt (D-06) — chatbot sẽ giới thiệu + báo giá cũ cho khách thật.
+      productRepository.findAllByUser(userId, { activeOnly: true }).catch(() => []),
     ]);
     return this.formatProfileForPrompt(profile, productRows);
   }
@@ -234,7 +236,7 @@ class BusinessProfileService {
     }
     if (String(rag || '').trim()) return rag;
     const profile = await this.getProfile(userId);
-    const productRows = await productRepository.findAllByUser(userId);
+    const productRows = await productRepository.findAllByUser(userId, { activeOnly: true });
     return this.formatProfileForPrompt(profile, productRows);
   }
 }

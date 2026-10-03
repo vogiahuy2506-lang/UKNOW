@@ -91,11 +91,26 @@ class ProductRepository {
     return result.rows[0] || null;
   }
 
-  async findAllByUser(userId) {
+  /**
+   * Mọi sản phẩm của workspace.
+   *
+   * `activeOnly: true` CHỈ lấy sản phẩm đang bán — dùng cho MỌI đường đưa sản phẩm cho AI (prompt chatbot kênh, chỉ dẫn
+   * AI viết, embedding RAG, landing, trợ lý chiến dịch). Trang quản lý sản phẩm không đi qua hàm này (dùng `list`) nên
+   * vẫn thấy cả sản phẩm ngừng bán. Không có `activeOnly` thì giữ nguyên hành vi cũ (lấy tất cả).
+   *
+   * "Đang bán" khớp đúng cách trang quản lý hiểu trạng thái (Products.jsx `StatusBadge`): NULL/rỗng coi là `active`,
+   * so sánh không phân biệt hoa thường — trạng thái là chuỗi tự do (VARCHAR(50), `normalizeStatus` chỉ hạ chữ thường).
+   * Sự cố D-06 (03/10/2026): chủ shop chuyển sản phẩm sang "không hoạt động" nhưng chatbot vẫn giới thiệu + báo giá cũ.
+   */
+  async findAllByUser(userId, { activeOnly = false } = {}) {
+    const activeClause = activeOnly
+      ? `AND COALESCE(NULLIF(LOWER(BTRIM(status)), ''), 'active') = 'active'`
+      : '';
     const result = await db.query(
       `SELECT id, product_code, product_name, price, original_price, description, usp, category, thumbnail_url, product_url, target_audience, status
        FROM products
        WHERE COALESCE(workspace_owner_id, id_user) = $1
+       ${activeClause}
        ORDER BY updated_at DESC, id DESC`,
       [userId]
     );
