@@ -104,4 +104,23 @@ describe('Tab Giới hạn — dấu chấm hàng nghìn', () => {
     expect(screen.queryByText(/toLocaleString/)).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Lưu giới hạn' })).toBeDisabled();
   });
+
+  it('bằng đúng trần gói (2.000) hoặc gói không có trần: không báo đỏ, nút Lưu bật', async () => {
+    const user = await openLimitsTab(makeEmployee({ dailyEmailLimit: 100 }), { dailyEmailLimit: 2000 });
+    const box = numberBoxes()[0];
+    await user.clear(box);
+    await user.type(box, '2000');
+    expect(box).toHaveValue('2.000');
+    expect(screen.queryByText(/Vượt quá giới hạn tối đa của gói/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lưu giới hạn' })).toBeEnabled();
+  });
+
+  it('gói không đặt trần: nhập số lớn vẫn không báo đỏ', async () => {
+    const user = await openLimitsTab(makeEmployee({ dailyEmailLimit: 100 }), { dailyEmailLimit: null });
+    const box = numberBoxes()[0];
+    await user.clear(box);
+    await user.type(box, '99999999');
+    expect(screen.queryByText(/Vượt quá giới hạn tối đa của gói/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Lưu giới hạn' })).toBeEnabled();
+  });
 });
