@@ -56,7 +56,10 @@ export default function CanvasPreviewView({ srcDoc, viewport, zoom, publicUrl })
       >
         <iframe
           title="Landing preview"
-          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox allow-same-origin"
+          // KHÔNG allow-same-origin: srcDoc mà có nó thì thừa hưởng origin của app (founderai.biz) và script trong HTML
+          // landing (nhân viên sửa, landing Marketplace, tài liệu đính kèm chèn lệnh vào HTML AI sinh) đọc được
+          // localStorage chứa access token + gọi API với quyền người đang xem. Trang thật chạy origin "null" như thế này.
+          sandbox="allow-scripts allow-forms allow-popups allow-popups-to-escape-sandbox"
           srcDoc={srcDoc}
           className="w-full h-full border-0 block bg-white"
         />

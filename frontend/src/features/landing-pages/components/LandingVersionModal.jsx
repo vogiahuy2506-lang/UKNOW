@@ -226,7 +226,8 @@ export default function LandingVersionModal({
                   title="Landing Version Preview"
                   srcDoc={previewData.htmlContent}
                   className="w-full h-full border-0"
-                  sandbox="allow-scripts allow-same-origin"
+                  // KHÔNG allow-same-origin (xem CanvasPreviewView.jsx): bản cũ của trang có thể chứa script độc.
+                  sandbox="allow-scripts"
                 />
               </div>
             </div>
