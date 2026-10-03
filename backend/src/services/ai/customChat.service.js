@@ -10,6 +10,7 @@ import { resolveAllowedModel } from './aiModelPolicy.service.js';
 import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
 import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
+import { capChunkTexts } from '../../utils/ragLimits.util.js';
 
 function isImageUnsupportedError(err) {
   const msg = String(err?.message || '').toLowerCase();
@@ -120,7 +121,8 @@ class CustomChatService {
     try {
       const lastUserMessage = [...history].reverse().find((message) => message.role === 'user')?.content || '';
       if (lastUserMessage) {
-        const chunks = await this.searchChunks({ chatbotId, userId, query: lastUserMessage });
+        // Trần khi dựng prompt (A P0-3): mỗi đoạn ≤ 1.500 ký tự, tổng ≤ 6.000 — đoạn cũ chưa nạp lại vẫn bị cắt.
+        const chunks = capChunkTexts(await this.searchChunks({ chatbotId, userId, query: lastUserMessage }));
         if (chunks.length > 0) {
           ragContext = `\n\nTài liệu tham khảo từ Knowledge Base:\n${chunks.map((chunk) => `- ${chunk}`).join('\n')}`;
         }

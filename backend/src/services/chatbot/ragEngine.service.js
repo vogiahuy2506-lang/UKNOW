@@ -2,11 +2,10 @@ import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.reposit
 import businessProfileRepository from '../../repositories/ai/businessProfile.repository.js';
 import customChatDocumentRepository from '../../repositories/ai/customChatDocument.repository.js';
 import { embedText } from '../../utils/embeddingClient.util.js';
+import { CUSTOM_CHATBOT_MIN_SIMILARITY, MAX_KB_CHUNKS, capChunkRows } from '../../utils/ragLimits.util.js';
 
-const MAX_KB_CHUNKS = 5;
 const MAX_PROFILE_CHUNKS = 3;
 const MIN_SIMILARITY = 0.45;
-const CUSTOM_CHATBOT_MIN_SIMILARITY = 0.3;
 
 class RagEngineService {
   /**
@@ -112,7 +111,11 @@ class RagEngineService {
       userId, queryEmbedding, maxProfileChunks
     );
 
-    const [kbChunks, profileChunks] = await Promise.all([kbPromise, profilePromise]);
+    const [rawKbChunks, profileChunks] = await Promise.all([kbPromise, profilePromise]);
+    // Trần khi dựng prompt (A P0-3): mỗi đoạn ≤ 1.500 ký tự, tổng các đoạn tài liệu ≤ 6.000. Đoạn CŨ chưa nạp lại (có đoạn tới
+    // 219.902 ký tự trên production) vẫn bị cắt ở đây; đoạn xếp hạng thấp bị bỏ khi hết ngân sách. Hồ sơ doanh nghiệp (bên dưới)
+    // là dữ liệu có cấu trúc do chủ nhập nên không đi qua trần này.
+    const kbChunks = capChunkRows(rawKbChunks);
 
     let kbContext = '';
     if (kbChunks.length > 0) {
