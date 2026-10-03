@@ -10,6 +10,7 @@
  *    giao diện ghi "Tạo AI Chatbot" và "Lịch sử trò chuyện" — người dùng đi tìm
  *    thứ không tồn tại.
  */
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from '@jest/globals';
 import { HELP_SEED_ARTICLES } from '../helpSeed.data.js';
 import { miniMarkdownToHtml } from '../../../../../frontend/src/utils/miniMarkdownToHtml.js';
@@ -207,6 +208,30 @@ const UI_LABELS_IN_ARTICLES = [
   ['landing-page', 'leadFormConfig.pickerRefresh', 'Làm mới'],
   ['landing-page', 'forms.submissions', 'Bài nộp'],
   ['landing-page', 'campaignNodes.readFormSubmissions', 'Dữ liệu Biểu mẫu'],
+  // Sửa bài theo màn thật (03/10/2026): nút tạo ở danh sách, khung chat sau khi trang có nội dung, thanh trên cùng
+  // (Cài đặt / Lưu nằm sẵn trên thanh) và menu "Công cụ" (Template / Trình chỉnh sửa khối / Nhập HTML / Lưu làm template / Lịch sử).
+  ['landing-page', 'landingPagesAdmin.createNew', 'Tạo mới'],
+  ['landing-page', 'landingCanvas.chat.title', 'AI Assistant'],
+  ['landing-page', 'landingCanvas.topbar.settings', 'Cài đặt'],
+  ['landing-page', 'landingCanvas.topbar.save', 'Lưu'],
+  ['landing-page', 'landingCanvas.topbar.templates', 'Template'],
+  ['landing-page', 'landingCanvas.topbar.visualEditor', 'Trình chỉnh sửa khối'],
+  ['landing-page', 'landingCanvas.importHtml.button', 'Nhập HTML'],
+  ['landing-page', 'landingCanvas.topbar.saveAsTemplate', 'Lưu làm template'],
+  ['landing-page', 'landingCanvas.topbar.history', 'Lịch sử'],
+];
+
+/**
+ * Nhãn mà bài nhắc tới nhưng giao diện VIẾT CỨNG trong component (không có khoá trong vi.js nên không ghim được ở bảng trên).
+ * Mỗi dòng: [bài, file trong `frontend/src`, chữ hiện trên màn]. Test đọc thẳng mã nguồn component: đổi chữ trên màn mà
+ * không sửa bài thì đỏ.
+ */
+const HARDCODED_UI_LABELS_IN_ARTICLES = [
+  ['landing-page', 'features/landing-canvas/components/CanvasChatPanel.jsx', 'Bạn muốn tạo Landing Page gì hôm nay?'],
+  ['landing-page', 'features/landing-canvas/components/CanvasChatPanel.jsx', 'Dán mã HTML'],
+  ['landing-page', 'features/landing-canvas/components/CanvasChatPanel.jsx', 'Thư viện mẫu'],
+  ['landing-page', 'features/landing-canvas/components/ChatComposer.jsx', 'Tạo trang'],
+  ['landing-page', 'features/landing-canvas/components/LandingCanvasTopbar.jsx', 'Công cụ'],
 ];
 
 /** Bắt cả hai lối viết: `**Nhóm → Mục**` và `**Nhóm** → **Mục**`. */
@@ -362,6 +387,18 @@ describe('chất lượng bài trợ giúp seed', () => {
       .filter(([slug, , label]) => !mentioned(bySlug.get(slug) || '', label))
       .map(([slug, key, label]) => `${slug}: không còn nhắc "${label}" (${key})`);
     expect(missing).toEqual([]);
+  });
+
+  it('nhãn viết cứng trong component mà bài nhắc tới còn đúng chữ trong mã nguồn và còn được bài nhắc', () => {
+    const bySlug = new Map(HELP_SEED_ARTICLES.map((a) => [a.slug, a.body_md || '']));
+    const mentioned = (body, label) => body.includes(`*${label}`) || body.includes(`| ${label} |`);
+    const offenders = [];
+    for (const [slug, file, label] of HARDCODED_UI_LABELS_IN_ARTICLES) {
+      const source = readFileSync(new URL(`../../../../../frontend/src/${file}`, import.meta.url), 'utf8');
+      if (!source.includes(label)) offenders.push(`${slug}: ${file} không còn chữ "${label}"`);
+      if (!mentioned(bySlug.get(slug) || '', label)) offenders.push(`${slug}: bài không còn nhắc "${label}"`);
+    }
+    expect(offenders).toEqual([]);
   });
 
   it('bài mau-tin-nhan trích đúng từng chữ dòng nhắc giới hạn tệp Telegram/WhatsApp của trình soạn mẫu', () => {
