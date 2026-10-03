@@ -402,6 +402,20 @@ describe('GET /api/dashboard/insights/saved', () => {
     expect(res.body.data).not.toBeNull();
     expect(res.body.data.insights).toMatchObject({ overviewInsight: 'ok' });
     expect(res.body.data.savedAt).toBeTruthy();
+    expect(res.body.data.filtersSnapshot).toEqual({ startDate: '2025-01-01', endDate: '2025-01-31' });
+  });
+
+  it('bản lưu trước mốc đổi cách tính (05/04/2026) → data=null', async () => {
+    const user = await createUser();
+    await db.query(
+      `INSERT INTO dashboard_insights (id_user, payload, filters_snapshot, created_at)
+       VALUES ($1, $2::jsonb, $3::jsonb, '2026-04-05T03:00:00Z')`,
+      [user.id, JSON.stringify({ overview: 'cũ' }), JSON.stringify({ startDate: '2026-03-01', endDate: '2026-04-05' })]
+    );
+    const token = await loginAs(user);
+    const res = await request(app).get('/api/dashboard/insights/saved').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.data).toBeNull();
   });
 
   it('isolation — không trả insight của user khác', async () => {

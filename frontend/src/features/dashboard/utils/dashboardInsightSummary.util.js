@@ -19,7 +19,8 @@ export function summarizeOverview(overview, maxSentences = COMPACT_OVERVIEW_MAX_
   if (typeof overview !== 'string') return '';
   const flat = overview.replace(/\s*\n+\s*/g, ' ').trim();
   if (!flat) return '';
-  const sentences = flat.match(/[^.!?]+(?:[.!?]+(?=\s|$)|$)/g) || [flat];
+  // Cắt ở dấu kết câu theo sau bởi khoảng trắng (số thập phân như 37.5 không bị cắt giữa chừng).
+  const sentences = flat.split(/(?<=[.!?])\s+/);
   return sentences
     .slice(0, maxSentences)
     .map((s) => s.trim())

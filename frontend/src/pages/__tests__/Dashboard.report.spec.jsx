@@ -4,7 +4,7 @@
  * Store thật (activeContext), chỉ giả hook dữ liệu và các khối nặng không thuộc điều kiện kiểm.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../i18n', async () => (await import('../../test/realI18n.js')).realI18nModule());
@@ -202,6 +202,50 @@ describe('Dashboard (Báo cáo) — chủ tài khoản', () => {
     expect(screen.getByText('Điểm đáng chú ý X')).toBeInTheDocument();
     expect(screen.getByText('Việc D')).toBeInTheDocument();
     expect(screen.getByText('Cảnh báo Y')).toBeInTheDocument();
+  });
+
+  it('bản đã lưu KHÁC bộ lọc đang xem → không hiện, thẻ ở trạng thái mời phân tích', async () => {
+    api.getSavedInsight.mockResolvedValue(savedResponse({ filtersSnapshot: { ...FILTERS, campaignType: 'zalo_group' } }));
+    renderPage();
+    await waitFor(() => expect(api.getSavedInsight).toHaveBeenCalled());
+    await screen.findByTestId('ai-insight-card');
+    expect(screen.getByTestId('ai-insight-card')).toHaveTextContent('Bấm "Phân tích bằng AI"');
+    expect(screen.queryByTestId('ai-insight-compact')).not.toBeInTheDocument();
+  });
+
+  it('bản đã lưu không ghi bộ lọc → không hiện', async () => {
+    api.getSavedInsight.mockResolvedValue(savedResponse({ filtersSnapshot: null }));
+    renderPage();
+    await waitFor(() => expect(api.getSavedInsight).toHaveBeenCalled());
+    expect(screen.queryByTestId('ai-insight-compact')).not.toBeInTheDocument();
+  });
+
+  it('bản đã lưu TRÙNG bộ lọc → hiện kèm "Phân tích lúc"; đổi bộ lọc → ẩn', async () => {
+    api.getSavedInsight.mockResolvedValue(savedResponse());
+    const { rerender } = renderPage();
+    expect(await screen.findByTestId('ai-insight-compact')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-insight-saved-at')).toHaveTextContent('Phân tích lúc');
+
+    const changed = data();
+    changed.filters = { ...FILTERS, endDate: '2026-10-03' };
+    hook.useDashboardAnalytics.mockReturnValue(changed);
+    rerender(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(screen.queryByTestId('ai-insight-compact')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ai-insight-card')).toHaveTextContent('Bấm "Phân tích bằng AI"');
+  });
+
+  it('phân tích vừa tạo gắn với bộ lọc lúc bấm: giữ khi đúng bộ lọc, ẩn khi đổi', async () => {
+    api.generateInsights.mockResolvedValue({ data: { success: true, data: INSIGHT } });
+    const { rerender } = renderPage();
+    fireEvent.click(screen.getByRole('button', { name: 'Phân tích bằng AI' }));
+    expect(await screen.findByTestId('ai-insight-compact')).toBeInTheDocument();
+    expect(api.generateInsights).toHaveBeenCalledWith(expect.objectContaining({ filters: FILTERS }));
+
+    const changed = data();
+    changed.filters = { ...FILTERS, campaignType: 'email' };
+    hook.useDashboardAnalytics.mockReturnValue(changed);
+    rerender(<MemoryRouter><Dashboard /></MemoryRouter>);
+    expect(screen.queryByTestId('ai-insight-compact')).not.toBeInTheDocument();
   });
 });
 

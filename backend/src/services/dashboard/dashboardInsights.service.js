@@ -721,6 +721,13 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
   ].join('\n');
 }
 
+/**
+ * Mốc đổi cách tính của trang Báo cáo (PR-5 `31608616`, 30/09/2026 19:21 giờ VN = 12:21 UTC).
+ * Bản phân tích lưu TRƯỚC mốc này dựng từ số liệu và prompt cũ (có thể chứa câu cảnh báo "không nhất quán" đã sai
+ * thời đó) nên không trả cho UI nữa — người dùng bấm "Phân tích bằng AI" để có bản mới. Mọi client dùng chung luật này.
+ */
+export const SAVED_INSIGHT_MIN_CREATED_AT = new Date('2026-09-30T12:21:00.000Z');
+
 class DashboardInsightsService {
   /**
    * Sinh insight dashboard bằng Gemini dựa trên snapshot số liệu do SERVER tính.
@@ -861,15 +868,21 @@ class DashboardInsightsService {
    * Đọc insight đã lưu gần nhất của user (payload JSON đầy đủ cho UI).
    *
    * @param {number} userId
-   * @returns {Promise<{ savedAt: string, insights: object } | null>}
+   * Trả null khi chưa có bản lưu HOẶC bản lưu tạo trước `SAVED_INSIGHT_MIN_CREATED_AT`.
+   * `filtersSnapshot` là bộ lọc lúc phân tích (client so với bộ lọc đang xem trước khi hiện).
+   *
+   * @returns {Promise<{ savedAt: string, filtersSnapshot: object|null, insights: object } | null>}
    */
   async getSavedInsightForUser(userId) {
     const uid = Number(userId);
     if (!Number.isFinite(uid)) return null;
     const row = await dashboardInsightRepository.findLatestByUser(uid);
     if (!row) return null;
+    const createdAt = row.created_at ? new Date(row.created_at) : null;
+    if (!createdAt || Number.isNaN(createdAt.getTime()) || createdAt < SAVED_INSIGHT_MIN_CREATED_AT) return null;
     return {
-      savedAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+      savedAt: createdAt.toISOString(),
+      filtersSnapshot: row.filters_snapshot ?? null,
       insights: row.payload,
     };
   }

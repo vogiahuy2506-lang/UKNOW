@@ -194,7 +194,7 @@ class DashboardController {
    * Lấy insight dashboard đã lưu trên DB (jsonb) cho user hiện tại.
    *
    * Response:
-   * - `data`: `{ savedAt, insights }` hoặc `null` nếu chưa có bản lưu.
+   * - `data`: `{ savedAt, filtersSnapshot, insights }`; `null` nếu chưa có bản lưu hoặc bản lưu trước mốc đổi cách tính.
    *
    * @param {import('express').Request} req
    * @param {import('express').Response} res

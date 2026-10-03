@@ -21,6 +21,7 @@ import {
   extractInsightFromDashboardInsightsResponse,
   isInsightPayloadUsable,
 } from '../features/dashboard/utils/dashboardInsightStorage.util';
+import { dashboardFiltersMatch } from '../features/dashboard/utils/dashboardInsightSummary.util';
 
 /** Skeleton placeholder block */
 const Skeleton = ({ className = '' }) => (
@@ -209,6 +210,11 @@ const Dashboard = () => {
   const [insightError, setInsightError] = useState('');
   /** Thời điểm phân tích hiển thị ở dòng "Phân tích lúc …" (ISO; bản lưu lấy từ DB, bản vừa tạo lấy giờ máy). */
   const [storedInsightSavedAt, setStoredInsightSavedAt] = useState('');
+  /**
+   * Bộ lọc mà bản phân tích đang giữ được tạo ra với (bản lưu: `filtersSnapshot` từ server; bản vừa tạo: bộ lọc lúc bấm).
+   * Chỉ hiện phân tích khi TRÙNG bộ lọc đang xem — đổi bộ lọc thì phân tích cũ ẩn, thẻ quay về lời mời phân tích.
+   */
+  const [insightFilters, setInsightFilters] = useState(null);
 
   /** Chỉ tải insight đã lưu từ API một lần sau khi dữ liệu dashboard sẵn sàng. */
   const insightHydratedRef = useRef(false);
@@ -226,6 +232,7 @@ const Dashboard = () => {
           const normalized = normalizeDashboardInsightForUi(payload.insights);
           if (normalized && isInsightPayloadUsable(normalized)) {
             setInsights(normalized);
+            setInsightFilters(payload.filtersSnapshot || null);
             setStoredInsightSavedAt(payload.savedAt || '');
           }
         }
@@ -248,6 +255,8 @@ const Dashboard = () => {
     ordersTimeline.some((d) => Number(d?.completedOrders || 0) + Number(d?.pendingOrders || 0) > 0);
   /** Biểu đồ + danh sách đơn: chỉ chủ tài khoản VÀ có đơn trong kỳ — không để khối rỗng chiếm chỗ. */
   const showOrdersBlock = showOrders && hasOrdersInRange;
+  /** Phân tích chỉ hiện khi tạo ra với đúng bộ lọc đang xem (xem `insightFilters`). */
+  const visibleInsights = insights && dashboardFiltersMatch(insightFilters, filters) ? insights : null;
 
   /**
    * Gọi backend sinh insight bằng Gemini theo bộ lọc đang áp dụng.
@@ -269,6 +278,7 @@ const Dashboard = () => {
       const data = extractInsightFromDashboardInsightsResponse(response);
       const normalized = normalizeDashboardInsightForUi(data);
       setInsights(normalized);
+      setInsightFilters(filters);
       setStoredInsightSavedAt(normalized ? new Date().toISOString() : '');
     } catch (error) {
       console.error('Generate dashboard insights error:', error);
@@ -367,10 +377,10 @@ const Dashboard = () => {
 
       {/* Phân tích AI gọn: tổng quan + tối đa 3 việc nên làm; "Xem chi tiết" mở phần đầy đủ */}
       <DashboardAiInsightCard
-        insights={insights}
+        insights={visibleInsights}
         isLoading={isGeneratingInsights}
         error={insightError}
-        savedAtLabel={storedInsightSavedAt ? formatInsightSavedAt(storedInsightSavedAt, locale) : ''}
+        savedAtLabel={visibleInsights && storedInsightSavedAt ? formatInsightSavedAt(storedInsightSavedAt, locale) : ''}
         showOrders={showOrdersBlock}
       />
 
@@ -408,7 +418,7 @@ const Dashboard = () => {
       <DashboardPrintLayout
         filters={filters}
         overview={overview}
-        insights={insights}
+        insights={visibleInsights}
         isGeneratingInsights={isGeneratingInsights}
         insightError={insightError}
         dailySent={dailySent}
