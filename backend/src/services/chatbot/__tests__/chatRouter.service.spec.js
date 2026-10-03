@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const originalFetch = global.fetch;
-const isThinkingBudgetRejection = jest.fn(() => false);
+const originalApiKey = process.env.GEMINI_API_KEY;
 
 const getSettings = jest.fn();
 const getWebChatMessages = jest.fn();
@@ -18,6 +18,7 @@ const isCreditLimitError = jest.fn(() => false);
 const isUsageLimitError = jest.fn(() => false);
 const reserve = jest.fn();
 const record = jest.fn();
+const resolveFallbackModel = jest.fn();
 
 const buildContext = jest.fn();
 const getById = jest.fn();
@@ -84,20 +85,14 @@ jest.unstable_mockModule('../../../utils/aiResponseFormatter.util.js', () => ({
   stripMarkdown: (text) => text,
 }));
 
-jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
-  extractGeminiUsage: () => ({}),
-  isThinkingBudgetRejection: (...args) => isThinkingBudgetRejection(...args),
-  joinGeminiTextParts: (parts) => (Array.isArray(parts)
-    ? parts.filter((p) => p?.text && !p.thought).map((p) => p.text).join('')
-    : ''),
-  THINKING_BUDGET_RETRY_RE: /budget 0 is invalid|thinking mode|thinking_?budget/i,
-}));
+// geminiClient.util.js KHÔNG mock: lõi thật chạy, chỉ `fetch` (ranh giới với Google) được giả bằng `Response` thật.
 
 jest.unstable_mockModule('../../ai/aiUsageMeter.service.js', () => ({
   default: {
     isLimitError: (...args) => isUsageLimitError(...args),
     reserve,
     record,
+    resolveFallbackModel: (...args) => resolveFallbackModel(...args),
   },
 }));
 
@@ -151,6 +146,8 @@ describe('chatRouter.service AI fallback', () => {
     sendReply.mockResolvedValue(undefined);
     isCreditLimitError.mockReturnValue(false);
     isUsageLimitError.mockReturnValue(false);
+    resolveFallbackModel.mockReset();
+    resolveFallbackModel.mockResolvedValue(null);
   });
 
   it('returns static visitor message (does not throw) when AI call fails transiently', async () => {
@@ -187,6 +184,41 @@ describe('chatRouter.service AI fallback', () => {
     callAI.mockRestore();
   });
 
+  it('Google quá tải kiểu 24/09 (503 mãi, chưa chọn dự phòng) → khách nhận câu xin lỗi cố định, KHÔNG trừ credit, KHÔNG ghi token', async () => {
+    jest.useFakeTimers();
+    silenceConsole('log', 'warn', 'error');
+    process.env.GEMINI_API_KEY = 'AIza-khoa-bi-mat-chatrouter';
+    resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
+    reserve.mockResolvedValue({ maxOutputTokens: 512 });
+    resolveFallbackModel.mockResolvedValue(null);
+    global.fetch = jest.fn().mockImplementation(async () => googleReply(503, {
+      error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' },
+    }));
+
+    try {
+      const pending = chatRouterService.routeMessageWithSettings({
+        channel: 'web',
+        userId: 7,
+        message: 'xin chào',
+        conversationId: 99,
+        chatbotSettings: { is_enabled: true, id_sub_assistant: null, ai_model: 'gemini-2.5-flash', temperature: 0.7, max_tokens: 512 },
+      });
+      await jest.advanceTimersByTimeAsync(40_000);
+      const result = await pending;
+
+      expect(result).toEqual({ type: 'text', content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' });
+      expect(global.fetch).toHaveBeenCalledTimes(3); // thử lại 3 lượt rồi dừng (không có dự phòng)
+      expect(consume).not.toHaveBeenCalled();
+      expect(record).not.toHaveBeenCalled();
+    } finally {
+      jest.useRealTimers();
+      restoreConsole();
+      global.fetch = originalFetch;
+      if (originalApiKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalApiKey;
+    }
+  });
+
   it('returns static visitor message for quota errors without charging', async () => {
     const quotaError = Object.assign(new Error('quota'), { code: 'AI_USAGE_LIMIT' });
     isUsageLimitError.mockReturnValue(true);
@@ -215,25 +247,70 @@ describe('chatRouter.service AI fallback', () => {
   });
 });
 
-describe('chatRouter._callAI thinking config', () => {
-  // _callAI dùng Promise.race với setTimeout(30s) KHÔNG được clear → fake timers
-  // để timer đó không treo teardown.
+const consoleSpies = [];
+const silenceConsole = (...methods) => {
+  for (const method of methods) consoleSpies.push(jest.spyOn(console, method).mockImplementation(() => {}));
+};
+const restoreConsole = () => {
+  while (consoleSpies.length) consoleSpies.pop().mockRestore();
+};
+
+/** Phản hồi HTTP THẬT như Google trả (status, header, thân JSON) — không dùng object `{ ok, json }` tự chế. */
+const googleReply = (status, body) => new Response(JSON.stringify(body), {
+  status,
+  headers: { 'content-type': 'application/json; charset=UTF-8' },
+});
+const googleOk = (text, usage = { promptTokenCount: 120, candidatesTokenCount: 15, totalTokenCount: 135 }) => googleReply(200, {
+  candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0 }],
+  usageMetadata: usage,
+  modelVersion: 'gemini-2.5-flash',
+});
+const googleOverloaded = () => googleReply(503, {
+  error: { code: 503, message: 'This model is currently experiencing high demand. Spikes in demand are usually temporary.', status: 'UNAVAILABLE' },
+});
+/** fetch treo tới khi bị huỷ — một lượt Google không chịu trả lời. */
+const hangingFetch = () => jest.fn((_url, init) => new Promise((_resolve, reject) => {
+  init.signal.addEventListener('abort', () => {
+    reject(Object.assign(new Error('This operation was aborted'), { name: 'AbortError' }));
+  });
+}));
+const urlModel = (url) => decodeURIComponent(String(url).match(/models\/([^:]+):generateContent/)?.[1] || '');
+
+/** Chạy hết đồng hồ giả (nghỉ giữa các lượt thử lại, hạn 25 giây) rồi trả kết quả, KHÔNG để lời hứa treo. */
+async function settle(promise) {
+  let settled = false;
+  const guarded = promise.then(
+    (value) => { settled = true; return value; },
+    (error) => { settled = true; throw error; },
+  );
+  guarded.catch(() => {});
+  await jest.advanceTimersByTimeAsync(40_000);
+  expect(settled).toBe(true);
+  return guarded;
+}
+
+describe('chatRouter._callAI — đi qua lõi Gemini dùng chung (G2.1)', () => {
   beforeEach(() => {
     jest.useFakeTimers();
     resolveAllowedModel.mockReset();
     reserve.mockReset();
     record.mockReset();
-    isThinkingBudgetRejection.mockReset();
-    isThinkingBudgetRejection.mockReturnValue(false);
+    resolveFallbackModel.mockReset();
+    process.env.GEMINI_API_KEY = 'AIza-khoa-bi-mat-chatrouter';
 
     resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
     reserve.mockResolvedValue({ maxOutputTokens: 512 });
     record.mockResolvedValue(undefined);
+    resolveFallbackModel.mockResolvedValue(null);
+    silenceConsole('log', 'warn');
   });
 
   afterEach(() => {
     jest.useRealTimers();
+    restoreConsole();
     global.fetch = originalFetch;
+    if (originalApiKey === undefined) delete process.env.GEMINI_API_KEY;
+    else process.env.GEMINI_API_KEY = originalApiKey;
   });
 
   const callArgs = {
@@ -246,43 +323,54 @@ describe('chatRouter._callAI thinking config', () => {
     maxTokens: 512,
   };
 
-  it('gửi thinkingConfig budget 0 và lọc thought parts', async () => {
-    const fetchMock = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        candidates: [{ content: { parts: [{ text: 'suy nghĩ', thought: true }, { text: 'Xin chào bạn' }] } }],
-      }),
-    });
-    global.fetch = fetchMock;
+  it('gửi thinkingConfig budget 0, lọc thought parts, giữ NGUYÊN hội thoại nhiều lượt, khoá API ở header (không ở URL)', async () => {
+    global.fetch = jest.fn().mockResolvedValue(googleReply(200, {
+      candidates: [{ content: { parts: [{ text: 'suy nghĩ', thought: true }, { text: 'Xin chào bạn' }] }, finishReason: 'STOP' }],
+      usageMetadata: { promptTokenCount: 10, candidatesTokenCount: 4, totalTokenCount: 14 },
+    }));
 
-    const res = await chatRouterService._callAI(callArgs);
+    const res = await settle(chatRouterService._callAI({
+      ...callArgs,
+      history: [
+        { role: 'visitor', content: 'Giá bao nhiêu?' },
+        { role: 'bot', content: 'Dạ 100k ạ' },
+        { role: 'agent', content: 'Nhân viên đây ạ' },
+      ],
+    }));
 
     expect(res).toEqual({ text: 'Xin chào bạn' });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = global.fetch.mock.calls[0];
+    const body = JSON.parse(init.body);
     expect(body.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
+    expect(body.generationConfig.maxOutputTokens).toBe(512);
+    // Đường này chưa bao giờ gửi topP — giữ nguyên.
+    expect(body.generationConfig).not.toHaveProperty('topP');
+    expect(body.systemInstruction).toEqual({ parts: [{ text: 'sp' }] });
+    expect(body.contents.map((c) => `${c.role}:${c.parts[0].text}`)).toEqual([
+      'user:Giá bao nhiêu?',
+      'model:Dạ 100k ạ',
+      'model:Nhân viên đây ạ',
+      'user:xin chào',
+    ]);
+    expect(url).not.toContain('key=');
+    expect(url).not.toContain('AIza-khoa-bi-mat-chatrouter');
+    expect(init.headers['x-goog-api-key']).toBe('AIza-khoa-bi-mat-chatrouter');
   });
 
   it('model chỉ-thinking từ chối budget 0 → retry bỏ thinkingConfig, nới cap ≥3072', async () => {
-    isThinkingBudgetRejection.mockReturnValueOnce(true);
-    const fetchMock = jest.fn()
-      .mockResolvedValueOnce({
-        ok: false,
-        status: 400,
-        json: async () => ({ error: { message: 'Budget 0 is invalid. This model only works in thinking mode.' } }),
-      })
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ candidates: [{ content: { parts: [{ text: 'rescued' }] } }] }),
-      });
-    global.fetch = fetchMock;
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(googleReply(400, {
+        error: { code: 400, message: 'Budget 0 is invalid. This model only works in thinking mode.', status: 'INVALID_ARGUMENT' },
+      }))
+      .mockResolvedValueOnce(googleOk('rescued'));
 
-    const res = await chatRouterService._callAI(callArgs);
+    const res = await settle(chatRouterService._callAI(callArgs));
 
     expect(res).toEqual({ text: 'rescued' });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const first = JSON.parse(fetchMock.mock.calls[0][1].body);
-    const second = JSON.parse(fetchMock.mock.calls[1][1].body);
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const first = JSON.parse(global.fetch.mock.calls[0][1].body);
+    const second = JSON.parse(global.fetch.mock.calls[1][1].body);
     expect(first.generationConfig.thinkingConfig).toEqual({ thinkingBudget: 0 });
     expect(second.generationConfig.thinkingConfig).toBeUndefined();
     expect(second.generationConfig.maxOutputTokens).toBe(3072);
@@ -292,17 +380,79 @@ describe('chatRouter._callAI thinking config', () => {
   it('câu trả lời RỖNG: vẫn ghi token `chatbot_reply` TRƯỚC khi ném lỗi', async () => {
     const order = [];
     record.mockImplementation(async () => { order.push('record'); });
-    global.fetch = jest.fn().mockResolvedValue({
-      ok: true,
-      json: async () => ({ candidates: [{ content: { parts: [{ text: 'suy nghĩ', thought: true }] } }] }),
-    });
+    global.fetch = jest.fn().mockResolvedValue(googleReply(200, {
+      candidates: [{ content: { parts: [{ text: 'suy nghĩ', thought: true }] }, finishReason: 'MAX_TOKENS' }],
+      usageMetadata: { promptTokenCount: 800, candidatesTokenCount: 0, totalTokenCount: 830 },
+    }));
 
-    await expect(chatRouterService._callAI(callArgs).catch((error) => { order.push('throw'); throw error; }))
+    await expect(settle(chatRouterService._callAI(callArgs).catch((error) => { order.push('throw'); throw error; })))
       .rejects.toThrow('AI returned empty response');
 
     expect(record).toHaveBeenCalledTimes(1);
-    expect(record).toHaveBeenCalledWith(7, expect.anything(), { feature: 'chatbot_reply', model: 'gemini-2.5-flash' });
+    expect(record).toHaveBeenCalledWith(
+      7,
+      { promptTokens: 800, outputTokens: 0, totalTokens: 830 },
+      { feature: 'chatbot_reply', model: 'gemini-2.5-flash' },
+    );
     expect(order).toEqual(['record', 'throw']); // ghi TRƯỚC khi ném
+  });
+
+  it('429 (hết hạn mức tạm thời) → được THỬ LẠI rồi trả lời; khách không thấy câu xin lỗi', async () => {
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(googleReply(429, { error: { code: 429, message: 'Resource has been exhausted', status: 'RESOURCE_EXHAUSTED' } }))
+      .mockResolvedValueOnce(googleOk('Dạ có ạ'));
+
+    const res = await settle(chatRouterService._callAI(callArgs));
+
+    expect(res).toEqual({ text: 'Dạ có ạ' });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    expect(record).toHaveBeenCalledTimes(1);
+  });
+
+  it('model chính 503 liên tục (sự cố 24/09) → chuyển MODEL DỰ PHÒNG và trả lời; token ghi theo model dự phòng', async () => {
+    resolveFallbackModel.mockResolvedValue('gemini-du-phong');
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce(googleOverloaded())
+      .mockResolvedValueOnce(googleOverloaded())
+      .mockResolvedValueOnce(googleOverloaded())
+      .mockResolvedValueOnce(googleOk('Dạ dự phòng đây ạ'));
+
+    const res = await settle(chatRouterService._callAI(callArgs));
+
+    expect(res).toEqual({ text: 'Dạ dự phòng đây ạ' });
+    expect(global.fetch.mock.calls.map(([url]) => urlModel(url))).toEqual([
+      'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-2.5-flash', 'gemini-du-phong',
+    ]);
+    expect(record).toHaveBeenCalledWith(7, expect.anything(), { feature: 'chatbot_reply', model: 'gemini-du-phong' });
+  });
+
+  it('chính 503 + dự phòng cũng 503 → ném lỗi (log đọc được câu gốc Google), KHÔNG ghi token', async () => {
+    resolveFallbackModel.mockResolvedValue('gemini-du-phong');
+    global.fetch = jest.fn().mockImplementation(async () => googleOverloaded());
+
+    const err = await settle(chatRouterService._callAI(callArgs).catch((e) => e));
+
+    expect(err.code).toBe('AI_PROVIDER_BUSY');
+    expect(err.providerMessage).toContain('high demand');
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('Google treo không trả lời → hết ngân sách 25 giây thì fetch bị HUỶ THẬT (không để chạy ngầm tính tiền)', async () => {
+    global.fetch = hangingFetch();
+
+    const err = await settle(chatRouterService._callAI(callArgs).catch((e) => e));
+
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(true);
+    expect(err.code).toBe('AI_TIMEOUT');
+    expect(record).not.toHaveBeenCalled();
+  });
+
+  it('tra model dự phòng lỗi (resolveFallbackModel → null) KHÔNG làm hỏng câu trả lời', async () => {
+    resolveFallbackModel.mockResolvedValue(null);
+    global.fetch = jest.fn().mockResolvedValue(googleOk('ổn'));
+
+    await expect(settle(chatRouterService._callAI(callArgs))).resolves.toEqual({ text: 'ổn' });
   });
 });
 

@@ -11,7 +11,8 @@ import whatsappAdapter from './channelAdapters/whatsapp.adapter.js';
 import telegramAdapter from './channelAdapters/telegram.adapter.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
-import { extractGeminiUsage, isThinkingBudgetRejection, joinGeminiTextParts } from '../../utils/geminiClient.util.js';
+import { generateGeminiContent } from '../../utils/geminiClient.util.js';
+import { CHAT_REPLY_BUDGET } from '../../utils/aiReplyBudget.util.js';
 import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 import aiCreditMeter, {
   VISITOR_CHAT_UNAVAILABLE_MESSAGE,
@@ -131,7 +132,8 @@ class ChatRouterService {
       shouldChargeCredit = true;
     } catch (error) {
       if (!aiUsageMeter.isLimitError(error) && !aiCreditMeter.isLimitError(error)) {
-        console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}, chatbotId=${chatbotId ?? 'null'}, conversationId=${conversationId}):`, error.message);
+        // providerMessage = câu gốc của Google khi lõi đã đổi `message` sang câu tiếng Việt — log vẫn phải đọc được nguyên nhân thật.
+        console.error(`[ChatRouter] AI generation failed (channel=${channel}, userId=${userId}, chatbotId=${chatbotId ?? 'null'}, conversationId=${conversationId}):`, error.providerMessage || error.message);
       } else {
         console.warn(`[ChatRouter] AI limit reached (channel=${channel}, userId=${userId}): ${error.message}`);
       }
@@ -285,8 +287,6 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
     console.log(`[ChatRouter] _callAI: sending ${chatHistory.length} messages (${chatHistory.filter(m => m.role === 'model').length} from model, ${chatHistory.filter(m => m.role === 'user').length} from user)`);
 
     const modelName = await resolveAllowedModel(userId, model);
-    const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
 
     const systemInstruction = { parts: [{ text: systemPrompt }] };
     const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
@@ -295,58 +295,36 @@ ${ragContext ? ragContext + '\n\n' : ''}${profileContext ? profileContext + '\n\
       model: modelName,
       requestedMaxOutputTokens: maxTokens,
     });
+    const fallbackModel = await aiUsageMeter.resolveFallbackModel();
 
-    const fetchOnce = async (generationConfig) => {
-      console.log(`[ChatRouter] fetchOnce: posting to Gemini (model=${modelName}, history=${chatHistory.length})`);
-      const t0 = Date.now();
-      const response = await Promise.race([
-        fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            systemInstruction,
-            contents: chatHistory,
-            generationConfig,
-          }),
-        }),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('AI call timeout (30s)')), 30000)),
-      ]);
-      console.log(`[ChatRouter] fetchOnce: response arrived after ${Date.now() - t0}ms, status=${response.status}`);
-
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data?.error?.message || `Gemini API error: ${response.status}`);
-      }
-      return data;
-    };
-
-    const baseConfig = {
+    // Đi qua lõi dùng chung (G2.1, 03/10/2026): thử lại 429/5xx/lỗi mạng, model dự phòng do super admin chọn, huỷ fetch
+    // THẬT khi hết ngân sách 25 giây. Bản cũ gọi `fetch` thô — chỉ thử lại khi model từ chối thinkingBudget, và
+    // `Promise.race` 30 giây không huỷ fetch nên Google trả lời muộn vẫn tính tiền mà sổ không có. Sự cố 24/09 (503 sau
+    // 1,4 giây) làm MỌI khách Zalo/Telegram nhận ngay câu xin lỗi dù model dự phòng đã được chọn.
+    // thinkingBudget 0 + nới trần khi model chỉ-thinking từ chối: lõi đã gánh (cùng hành vi cũ). topP null = giữ
+    // nguyên cấu hình cũ của đường này (không gửi topP).
+    console.log(`[ChatRouter] _callAI: posting to Gemini (model=${modelName}, fallback=${fallbackModel || 'none'}, history=${chatHistory.length})`);
+    const t0 = Date.now();
+    const result = await generateGeminiContent({
+      contents: chatHistory,
+      systemInstruction,
+      model: modelName,
+      fallbackModel,
       temperature,
+      topP: null,
       maxOutputTokens,
-      thinkingConfig: { thinkingBudget: 0 },
-    };
-
-    let data;
-    try {
-      data = await fetchOnce(baseConfig);
-    } catch (err) {
-      console.warn(`[ChatRouter] fetchOnce baseConfig failed: ${err.message} — retrying without thinkingBudget`);
-      if (!isThinkingBudgetRejection(err)) throw err;
-      data = await fetchOnce({
-        temperature,
-        maxOutputTokens: Math.max(maxOutputTokens, 3072),
-      });
-    }
-
-    console.log(`[ChatRouter] fetchOnce resolved; candidates=${data?.candidates?.length || 0}, text-len=${(joinGeminiTextParts(data?.candidates?.[0]?.content?.parts) || '').length}`);
-    const textResponse = joinGeminiTextParts(data?.candidates?.[0]?.content?.parts);
+      thinkingBudget: 0,
+      ...CHAT_REPLY_BUDGET,
+    });
+    const textResponse = result.text;
+    console.log(`[ChatRouter] _callAI: response after ${Date.now() - t0}ms (model=${result.modelUsed}), candidates=${result.raw?.candidates?.length || 0}, text-len=${textResponse.length}`);
 
     // Ghi token TRƯỚC khi kiểm câu trả lời rỗng: Google đã tính tiền lượt này dù model trả về không có chữ (chặn MAX_TOKENS,
     // bộ lọc an toàn…). Bản cũ ném lỗi trước `record` nên lượt rỗng tốn tiền mà sổ không có. Lượt rỗng vẫn KHÔNG trừ credit
-    // (caller chỉ đặt shouldChargeCredit sau khi _callAI trả về bình thường).
-    await aiUsageMeter.record(userId, extractGeminiUsage(data), {
+    // (caller chỉ đặt shouldChargeCredit sau khi _callAI trả về bình thường). Ghi theo model THẬT đã trả lời (có thể là dự phòng).
+    await aiUsageMeter.record(userId, result.usage, {
       feature: 'chatbot_reply',
-      model: modelName,
+      model: result.modelUsed || modelName,
     });
     if (!textResponse) throw new Error('AI returned empty response');
     return { text: textResponse };
