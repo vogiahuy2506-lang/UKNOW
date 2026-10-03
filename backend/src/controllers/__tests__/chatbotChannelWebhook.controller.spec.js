@@ -531,3 +531,103 @@ describe('ChatbotChannelWebhookController - replies_enabled=false', () => {
     expect(mockSendReply).toHaveBeenCalledTimes(1);
   });
 });
+
+// G3b (A P1-6): câu xin lỗi (hết credit / AI lỗi) trên Facebook và WhatsApp Cloud cũng ghi vào chatbot_messages kèm NHÃN
+// `source: 'ai_unavailable'` — thiếu nhãn là xin lỗi bị tính như câu trả lời thật của AI. (Zalo OA: describe "G3b" phía trên.)
+describe('ChatbotChannelWebhookController - G3b: câu xin lỗi trên Facebook / WhatsApp Cloud', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-09-15T12:00:00+07:00'));
+    inboundReplyDebounceService._resetForTests();
+    mockAddMessage.mockResolvedValue({ id: 1 });
+    mockIsAiPaused.mockResolvedValue(false);
+    mockCheckBeforeAi.mockResolvedValue({ allowed: true });
+    mockGetLatestMessageId.mockResolvedValue(1);
+    mockFbSendReply.mockResolvedValue({ success: true });
+    mockWaSendReply.mockResolvedValue({ success: true });
+    mockWaIsEnabledForChatbot.mockResolvedValue(true);
+  });
+
+  afterEach(() => {
+    inboundReplyDebounceService._resetForTests();
+    jest.useRealTimers();
+  });
+
+  const flushDebounce = () => jest.advanceTimersByTimeAsync(10_000);
+  const botRows = () => mockAddMessage.mock.calls.filter(([, row]) => row.role === 'bot').map(([, row]) => row);
+
+  const arrangeFacebook = (routeResult) => {
+    mockFindByWebhookToken.mockResolvedValue({ id: 20, id_chatbot: 8, channel_type: 'facebook' });
+    mockFindActiveChannelById.mockResolvedValue({ id: 20, id_chatbot: 8 });
+    mockFindChatbotById.mockResolvedValue({ id: 8, id_user: 1, is_active: true });
+    mockGetOrCreateConversation.mockResolvedValue({ id: 300 });
+    mockFbParseWebhookEvent.mockReturnValue([{ message: 'Alo', senderId: 'fb_user_1', messageId: 'fb_m1' }]);
+    mockRouteChatbotMessage.mockResolvedValue(routeResult);
+  };
+
+  const runWhatsApp = () => chatbotChannelWebhookController._processWhatsAppBatch({
+    channel: { id: 30, id_chatbot: 9 },
+    chatbotId: 9,
+    conv: { id: 400 },
+    senderId: '8490000',
+    batch: { messages: [{ content: 'Alo', persistedMessageId: 1 }], waitMs: 0, reason: 'test' },
+  });
+
+  it('Facebook: câu xin lỗi → gửi cho khách + dòng bot mang metadata {source, reason}', async () => {
+    arrangeFacebook({ content: 'Xin lỗi, hiện chưa thể trả lời.', source: 'ai_unavailable', reason: 'credit_exhausted' });
+
+    await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb' }, body: {} }, { send: jest.fn() });
+    await flushDebounce();
+
+    expect(mockFbSendReply).toHaveBeenCalledTimes(1);
+    expect(botRows()).toEqual([expect.objectContaining({
+      content: 'Xin lỗi, hiện chưa thể trả lời.',
+      metadata: { source: 'ai_unavailable', reason: 'credit_exhausted' },
+    })]);
+  });
+
+  it('Facebook: khách đã nhận câu xin lỗi trong 6 giờ (content null) → không gửi, không ghi dòng bot', async () => {
+    arrangeFacebook({ content: null, source: 'ai_unavailable', reason: 'credit_exhausted' });
+
+    await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb' }, body: {} }, { send: jest.fn() });
+    await flushDebounce();
+
+    expect(mockFbSendReply).not.toHaveBeenCalled();
+    expect(botRows()).toHaveLength(0);
+  });
+
+  it('Facebook: câu trả lời thật → metadata rỗng', async () => {
+    arrangeFacebook({ content: 'Dạ còn hàng ạ' });
+
+    await chatbotChannelWebhookController.handleFacebook({ params: { token: 'fb' }, body: {} }, { send: jest.fn() });
+    await flushDebounce();
+
+    expect(botRows()).toEqual([expect.objectContaining({ content: 'Dạ còn hàng ạ', metadata: {} })]);
+  });
+
+  it('WhatsApp Cloud: câu xin lỗi → gửi cho khách + dòng bot mang metadata {source, reason}', async () => {
+    mockFindActiveChannelById.mockResolvedValue({ id: 30, id_chatbot: 9, channel_type: 'whatsapp' });
+    mockFindChatbotById.mockResolvedValue({ id: 9, id_user: 1, is_active: true });
+    mockRouteChatbotMessage.mockResolvedValue({ content: 'Xin lỗi, hiện chưa thể trả lời.', source: 'ai_unavailable', reason: 'ai_error' });
+
+    await runWhatsApp();
+
+    expect(mockWaSendReply).toHaveBeenCalledTimes(1);
+    expect(botRows()).toEqual([expect.objectContaining({
+      content: 'Xin lỗi, hiện chưa thể trả lời.',
+      metadata: { source: 'ai_unavailable', reason: 'ai_error' },
+    })]);
+  });
+
+  it('WhatsApp Cloud: khách đã nhận câu xin lỗi trong 6 giờ (content null) → không gửi, không ghi dòng bot', async () => {
+    mockFindActiveChannelById.mockResolvedValue({ id: 30, id_chatbot: 9, channel_type: 'whatsapp' });
+    mockFindChatbotById.mockResolvedValue({ id: 9, id_user: 1, is_active: true });
+    mockRouteChatbotMessage.mockResolvedValue({ content: null, source: 'ai_unavailable', reason: 'credit_exhausted' });
+
+    await runWhatsApp();
+
+    expect(mockWaSendReply).not.toHaveBeenCalled();
+    expect(botRows()).toHaveLength(0);
+  });
+});
