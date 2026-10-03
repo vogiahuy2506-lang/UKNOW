@@ -27,7 +27,8 @@ fi
 
 # Danh sach file thay doi: so voi @{push}; khong co thi so voi merge-base origin/main.
 CHANGED="$(git diff --name-only @{push}..HEAD 2>/dev/null)"
-if ! printf '%s\n' "$CHANGED" | grep -q '^\(backend\|frontend\)/'; then
+# grep -E: `\|` trong BRE la mo rong GNU, BSD grep goc cua macOS khong chac hieu.
+if ! printf '%s\n' "$CHANGED" | grep -qE '^(backend|frontend)/'; then
   base_ref=$(git merge-base HEAD origin/main 2>/dev/null)
   if [ -n "$base_ref" ]; then
     CHANGED="$(git diff --name-only "$base_ref"..HEAD 2>/dev/null)"
