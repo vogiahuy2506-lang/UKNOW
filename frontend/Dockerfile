@@ -52,6 +52,8 @@ RUN printf '{"sha":"%s"}\n' "$BUILD_SHA" > /app/dist/version.json
 FROM nginx:1.27-alpine AS runner
 
 COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Header bảo mật cho SPA — include theo từng location trong nginx.conf.
+COPY nginx-security-headers.conf /etc/nginx/snippets/uknow-security-headers.conf
 COPY --from=builder /app/dist /usr/share/nginx/html
 
 EXPOSE 80

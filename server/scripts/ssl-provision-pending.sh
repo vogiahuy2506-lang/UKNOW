@@ -85,10 +85,18 @@ DOMAINS_RAW="$(
 
 mapfile -t DOMAINS <<< "$DOMAINS_RAW"
 
+# Cùng luật với ssl-auto-provision.sh: chỉ tên miền chữ thường dạng RFC 1123. Dòng DB không
+# hợp lệ thì ghi log và bỏ qua, không đưa vào tham số script con.
+DOMAIN_LABEL='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
 PENDING_DOMAINS=()
 for domain in "${DOMAINS[@]}"; do
     domain="$(echo "$domain" | tr -d '[:space:]')"
-    [[ -n "$domain" ]] && PENDING_DOMAINS+=("$domain")
+    [[ -n "$domain" ]] || continue
+    if [[ ${#domain} -gt 253 || ! "$domain" =~ ^${DOMAIN_LABEL}(\.${DOMAIN_LABEL})+$ ]]; then
+        log "Skipping invalid hostname from DB: '$domain'"
+        continue
+    fi
+    PENDING_DOMAINS+=("$domain")
 done
 
 if [[ ${#PENDING_DOMAINS[@]} -eq 0 ]]; then

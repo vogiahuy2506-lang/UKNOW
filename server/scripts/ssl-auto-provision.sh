@@ -25,18 +25,31 @@ error() {
     exit 1
 }
 
-# Check root
-if [[ $EUID -ne 0 ]]; then
-   error "Script này cần chạy với quyền root"
-fi
-
 # Get domain from argument
-DOMAIN="$1"
+DOMAIN="${1:-}"
 
 if [[ -z "$DOMAIN" ]]; then
     echo "Usage: $0 <domain>"
     echo "Example: $0 digibook.com.vn"
     exit 1
+fi
+
+# Kiểm hostname TRƯỚC mọi việc khác (kể cả kiểm root, để test chạy được không cần root).
+# $DOMAIN đi thẳng vào heredoc cấu hình nginx (`server_name $DOMAIN;`), vào đường dẫn file
+# (`ssl-$DOMAIN.conf`, `/etc/letsencrypt/live/$DOMAIN`) và vào tham số certbot. Giá trị lấy từ
+# cột landing_page_domains.hostname trong DB; nếu có `;`, `}`, khoảng trắng, `../` thì một dòng
+# DB xấu biến thành chỉ thị nginx lạ hoặc ghi file ra ngoài thư mục. Chỉ nhận tên miền chữ
+# thường dạng nhãn.nhãn (RFC 1123: nhãn 1–63 ký tự [a-z0-9-], không bắt đầu/kết thúc bằng '-'),
+# tổng ≤ 253 ký tự, tối thiểu 2 nhãn.
+DOMAIN="$(printf '%s' "$DOMAIN" | tr '[:upper:]' '[:lower:]')"
+DOMAIN_LABEL='[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?'
+if [[ ${#DOMAIN} -gt 253 || ! "$DOMAIN" =~ ^${DOMAIN_LABEL}(\.${DOMAIN_LABEL})+$ ]]; then
+    error "Invalid domain name (expected lowercase RFC 1123 hostname): '$DOMAIN'"
+fi
+
+# Check root
+if [[ $EUID -ne 0 ]]; then
+   error "Script này cần chạy với quyền root"
 fi
 
 log "Starting SSL provision for: $DOMAIN"
@@ -209,18 +222,27 @@ server {
         try_files \$uri =404;
     }
 
+    # Header bảo mật tối thiểu cho SPA trên tên miền khách. Ghi thẳng (không include snippet,
+    # không dùng biến map của default.conf) để file sinh ra vẫn hợp lệ với image frontend cũ.
+    # Không HSTS: tên miền của khách, họ có thể đem đi nơi khác không có HTTPS.
     location = /version.json {
         add_header Cache-Control "no-store";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         try_files \$uri =404;
     }
 
     location = /index.html {
         add_header Cache-Control "no-store";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         try_files \$uri =404;
     }
 
     location /assets/ {
         add_header Cache-Control "public, max-age=31536000, immutable";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         try_files \$uri =404;
     }
 
@@ -250,6 +272,8 @@ server {
 
     location / {
         add_header Cache-Control "no-store";
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "strict-origin-when-cross-origin" always;
         try_files \$uri /index.html;
     }
 }
