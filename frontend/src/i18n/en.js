@@ -534,21 +534,13 @@ export default {
     months12: '12 months',
 
     // Insight
-    insightOverview: 'Insight Overview',
-    insightTip: 'Strategic comments for Email, Zalo and Zalo Group; compare send timeline with orders; detect summary vs chart discrepancies when present — based on current data and filters.',
     analyzing: 'Analyzing…',
-    analyzeInsight: 'Analyze Insight',
-    storedInsight: 'Showing saved insight from the system',
-    storedInsightSuffix: 'Click "Analyze Insight" to generate a new one based on current data and filters.',
-    insightAnalysisFailed: 'Cannot analyze insight right now. Please try again.',
-    insightLive: 'just called API',
-    insightStored: 'viewing saved version',
+    analyzeInsight: 'Analyze with AI',
+    insightAnalysisFailed: 'Cannot analyze right now. Please try again.',
 
     // PDF
     printPdf: 'Print / PDF',
     printPdfTip: 'When saving PDF, uncheck "Headers and footers" to hide URL, date/time and title.',
-    savedInsightTip: 'Load and display saved insight from the server',
-    viewSavedInsight: 'View saved insight',
   },
 
   channel: {
@@ -6178,6 +6170,14 @@ export default {
       total: 'Total',
       empty: 'No messages were sent in this period',
       insightTitle: 'Insight · Sent per day',
+    },
+    ai: {
+      title: 'AI analysis',
+      empty: 'Click "Analyze with AI" to get comments and next steps.',
+      todo: 'What to do',
+      analyzedAt: 'Analyzed at {time}',
+      showDetail: 'Show details',
+      hideDetail: 'Collapse',
     },
     campaigns: {
       title: 'Campaigns in the period',

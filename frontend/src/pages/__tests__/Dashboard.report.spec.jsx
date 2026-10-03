@@ -4,7 +4,7 @@
  * Store thật (activeContext), chỉ giả hook dữ liệu và các khối nặng không thuộc điều kiện kiểm.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../i18n', async () => (await import('../../test/realI18n.js')).realI18nModule());
@@ -15,12 +15,8 @@ vi.mock('../../services/api', () => ({
 
 const hook = vi.hoisted(() => ({ useDashboardAnalytics: vi.fn() }));
 vi.mock('../../features/dashboard/hooks/useDashboardAnalytics', () => hook);
-vi.mock('../../features/dashboard/services/dashboardApi.service', () => ({
-  default: {
-    getSavedInsight: vi.fn().mockResolvedValue({ data: { data: null } }),
-    generateInsights: vi.fn(),
-  },
-}));
+const api = vi.hoisted(() => ({ getSavedInsight: vi.fn(), generateInsights: vi.fn() }));
+vi.mock('../../features/dashboard/services/dashboardApi.service', () => ({ default: api }));
 
 // Khối nặng / có dữ liệu riêng: thay bằng dấu hiệu để kiểm "có / không có mặt".
 vi.mock('../../features/dashboard/components/DashboardOrdersChart', () => ({ default: () => <div data-testid="orders-chart" /> }));
@@ -78,10 +74,30 @@ const seed = (activeContext) => {
 };
 const renderPage = () => render(<MemoryRouter><Dashboard /></MemoryRouter>);
 
+const FILTERS = { startDate: '2026-09-01', endDate: '2026-09-30', campaignType: 'all', campaignIds: [] };
+const INSIGHT = {
+  overview: 'Câu một. Câu hai. Câu ba. Câu bốn.',
+  key_metrics_analysis: { open_rate: { value: '37,5%' } },
+  insights: [{ title: 'Điểm đáng chú ý X', detail: 'chi tiết X' }],
+  action_plan: [{ action: 'Việc A' }, { action: 'Việc B' }, { action: 'Việc C' }, { action: 'Việc D' }],
+  risk_warning: 'Cảnh báo Y',
+};
+const savedResponse = (over = {}) => ({
+  data: { data: { savedAt: new Date().toISOString(), filtersSnapshot: FILTERS, insights: INSIGHT, ...over } },
+});
+/** Có đơn trong kỳ (chờ hoặc đã mua) → khối đơn hàng hiện cho chủ tài khoản. */
+const withNoOrders = () => {
+  const d = data();
+  d.overview.orders = { completed: 0, pending: 0, byChannel: [] };
+  d.analytics.ordersTimeline = [];
+  hook.useDashboardAnalytics.mockReturnValue(d);
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.sessionStorage.clear();
   hook.useDashboardAnalytics.mockReturnValue(data());
+  api.getSavedInsight.mockResolvedValue({ data: { data: null } });
 });
 
 describe('Dashboard (Báo cáo) — chủ tài khoản', () => {
@@ -127,10 +143,65 @@ describe('Dashboard (Báo cáo) — chủ tài khoản', () => {
     expect(screen.getByRole('link', { name: /Xem thống kê landing/ })).toBeInTheDocument();
   });
 
-  it('giữ nút "In / PDF" và "Phân tích insight"', () => {
+  it('đầu trang: một nút chính "Phân tích bằng AI" + nút in; không còn "Xem insight đã lưu"', () => {
     renderPage();
+    expect(screen.getByRole('button', { name: 'Phân tích bằng AI' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /In \/ PDF/ })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Phân tích insight/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /insight đã lưu/i })).not.toBeInTheDocument();
+    expect(document.body.textContent).not.toContain('Đang hiển thị insight đã lưu');
+  });
+
+  it('không có đơn trong kỳ → KHÔNG có biểu đồ đơn hàng và KHÔNG có danh sách đơn', () => {
+    withNoOrders();
+    renderPage();
+    expect(screen.queryByTestId('orders-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('orders-list')).not.toBeInTheDocument();
+    expect(screen.getAllByTestId('sent-bar-chart')).toHaveLength(1);
+  });
+
+  it('chỉ có đơn ở chuỗi thời gian (overview 0) vẫn tính là có đơn', () => {
+    const d = data();
+    d.overview.orders = { completed: 0, pending: 0, byChannel: [] };
+    d.analytics.ordersTimeline = [{ date: '2026-09-30', pendingOrders: 1, completedOrders: 0 }];
+    hook.useDashboardAnalytics.mockReturnValue(d);
+    renderPage();
+    expect(screen.getByTestId('orders-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('orders-list')).toBeInTheDocument();
+  });
+
+  it('bản in nằm trong khung fixed cao 0 (không kéo dài trang), không còn absolute -14000px', () => {
+    renderPage();
+    const frame = screen.getByTestId('dashboard-print-frame');
+    expect(frame.className).toMatch(/\bfixed\b/);
+    expect(frame.className).toMatch(/\bh-0\b/);
+    expect(frame.className).toMatch(/overflow-hidden/);
+    expect(frame.className).not.toMatch(/absolute/);
+    expect(within(frame).getByTestId('print-layout')).toBeInTheDocument();
+    expect(frame.innerHTML).not.toContain('-14000px');
+  });
+
+  it('chưa có phân tích → một dòng mời bấm nút, không có khối chữ AI dưới biểu đồ', () => {
+    renderPage();
+    expect(screen.getByTestId('ai-insight-card')).toHaveTextContent('Bấm "Phân tích bằng AI"');
+    expect(screen.queryByText(/Insight · Đã gửi mỗi ngày/)).not.toBeInTheDocument();
+  });
+
+  it('thẻ AI mặc định: tổng quan tối đa 3 câu + tối đa 3 việc nên làm; "Xem chi tiết" mở phần đầy đủ', async () => {
+    api.getSavedInsight.mockResolvedValue(savedResponse());
+    renderPage();
+    const card = await screen.findByTestId('ai-insight-compact');
+    expect(card).toHaveTextContent('Câu một. Câu hai. Câu ba.');
+    expect(card).not.toHaveTextContent('Câu bốn');
+    expect(within(card).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Việc A', 'Việc B', 'Việc C']);
+    expect(screen.queryByText('Điểm đáng chú ý X')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cảnh báo Y')).not.toBeInTheDocument();
+    expect(screen.getByTestId('ai-insight-saved-at')).toHaveTextContent('Phân tích lúc');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết' }));
+    expect(screen.getByTestId('ai-insight-detail')).toBeInTheDocument();
+    expect(screen.getByText('Điểm đáng chú ý X')).toBeInTheDocument();
+    expect(screen.getByText('Việc D')).toBeInTheDocument();
+    expect(screen.getByText('Cảnh báo Y')).toBeInTheDocument();
   });
 });
 
@@ -138,6 +209,8 @@ describe('Dashboard (Báo cáo) — nhân viên', () => {
   it('KHÔNG có khối đơn hàng (ẩn hẳn, không bảng rỗng), hook không xin danh sách đơn; số công ty vẫn hiện', () => {
     seed({ type: 'employee', ownerId: 10, permissions: { reports_view: true } });
     renderPage();
+    // Dữ liệu CÓ đơn, nhưng nhân viên không quyền xem đơn → vẫn ẩn.
+    expect(data().overview.orders.completed + data().overview.orders.pending).toBeGreaterThan(0);
     expect(screen.queryByTestId('orders-chart')).not.toBeInTheDocument();
     expect(screen.queryByTestId('orders-list')).not.toBeInTheDocument();
     expect(hook.useDashboardAnalytics).toHaveBeenCalledWith({ includeOrders: false });

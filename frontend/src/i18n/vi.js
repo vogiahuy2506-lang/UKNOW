@@ -534,21 +534,13 @@ export default {
     months12: '12 tháng',
 
     // Insight
-    insightOverview: 'Tổng quan insight',
-    insightTip: 'Nhận xét chiến lược gửi Email, Zalo và Zalo Group; đối chiếu timeline gửi với đơn; phát hiện mâu thuẫn tổng quan vs biểu đồ khi có — theo số liệu và bộ lọc hiện tại.',
     analyzing: 'Đang phân tích…',
-    analyzeInsight: 'Phân tích insight',
-    storedInsight: 'Đang hiển thị insight đã lưu trong hệ thống',
-    storedInsightSuffix: 'Bấm "Phân tích insight" để tạo bản mới theo dữ liệu và bộ lọc hiện tại.',
-    insightAnalysisFailed: 'Không thể phân tích insight lúc này. Vui lòng thử lại.',
-    insightLive: 'vừa gọi API',
-    insightStored: 'đang xem bản đã lưu',
+    analyzeInsight: 'Phân tích bằng AI',
+    insightAnalysisFailed: 'Không thể phân tích lúc này. Vui lòng thử lại.',
 
     // PDF
     printPdf: 'In / PDF',
     printPdfTip: 'Khi lưu PDF, bỏ chọn "Đầu trang và chân trang" để ẩn URL, ngày/giờ và tiêu đề.',
-    savedInsightTip: 'Tải và hiển thị bản insight đã lưu trên máy chủ',
-    viewSavedInsight: 'Xem insight đã lưu',
   },
 
   channel: {
@@ -6187,6 +6179,14 @@ export default {
       total: 'Tổng',
       empty: 'Chưa có tin nào được gửi trong khoảng thời gian này',
       insightTitle: 'Insight · Đã gửi mỗi ngày',
+    },
+    ai: {
+      title: 'Phân tích AI',
+      empty: 'Bấm "Phân tích bằng AI" để xem nhận xét và việc nên làm.',
+      todo: 'Nên làm gì',
+      analyzedAt: 'Phân tích lúc {time}',
+      showDetail: 'Xem chi tiết',
+      hideDetail: 'Thu gọn',
     },
     campaigns: {
       title: 'Chiến dịch trong kỳ',

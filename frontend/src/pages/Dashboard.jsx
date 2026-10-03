@@ -15,13 +15,11 @@ import { useAuthStore } from '../stores/authStore';
 import { isEmployeeWorkspace } from '../utils/workspacePermissions.util';
 import { useDashboardAnalytics } from '../features/dashboard/hooks/useDashboardAnalytics';
 import dashboardApiService from '../features/dashboard/services/dashboardApi.service';
-import DashboardInsightOverview from '../features/dashboard/components/DashboardInsightOverview';
+import DashboardAiInsightCard from '../features/dashboard/components/DashboardAiInsightCard';
 import {
   normalizeDashboardInsightForUi,
   extractInsightFromDashboardInsightsResponse,
   isInsightPayloadUsable,
-  getChannelEngagementInsightForChannel,
-  getOrdersTrendInsightForMode,
 } from '../features/dashboard/utils/dashboardInsightStorage.util';
 
 /** Skeleton placeholder block */
@@ -136,8 +134,6 @@ const Dashboard = () => {
     typeof document !== 'undefined' ? document.title : ''
   );
   const [isFilterPanelOpen, setIsFilterPanelOpen] = useState(false);
-  /** Đồng bộ insight «Đơn hàng theo thời gian» với tab Tổng hợp / So sánh kênh */
-  const [ordersChartViewMode, setOrdersChartViewMode] = useState('summary');
 
   /**
    * Nhân viên (ngữ cảnh công ty) không thấy khối đơn hàng — biểu đồ + danh sách có SĐT/email khách, route
@@ -211,10 +207,7 @@ const Dashboard = () => {
   const [insights, setInsights] = useState(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
   const [insightError, setInsightError] = useState('');
-  /** Có ít nhất một bản insight đã lưu trên DB (mỗi lần phân tích hợp lệ ghi đè). */
-  const [hasStoredInsight, setHasStoredInsight] = useState(false);
-  /** 'none' | 'live' | 'stored'. */
-  const [insightViewSource, setInsightViewSource] = useState('none');
+  /** Thời điểm phân tích hiển thị ở dòng "Phân tích lúc …" (ISO; bản lưu lấy từ DB, bản vừa tạo lấy giờ máy). */
   const [storedInsightSavedAt, setStoredInsightSavedAt] = useState('');
 
   /** Chỉ tải insight đã lưu từ API một lần sau khi dữ liệu dashboard sẵn sàng. */
@@ -233,16 +226,11 @@ const Dashboard = () => {
           const normalized = normalizeDashboardInsightForUi(payload.insights);
           if (normalized && isInsightPayloadUsable(normalized)) {
             setInsights(normalized);
-            setInsightViewSource('stored');
             setStoredInsightSavedAt(payload.savedAt || '');
-            setHasStoredInsight(true);
-            return;
           }
         }
-        setHasStoredInsight(false);
       } catch (e) {
         console.error('Load saved dashboard insight error:', e);
-        setHasStoredInsight(false);
       }
     })();
   }, [isLoading]);
@@ -254,6 +242,12 @@ const Dashboard = () => {
   const dailySent = analytics?.dailySent || [];
   const ordersTimeline = analytics?.ordersTimeline || [];
   const isMonthlyView = activeQuickKey?.endsWith('m') ?? false;
+  /** Kỳ đang lọc có ít nhất một đơn (chờ hoặc đã mua): tổng ở overview hoặc ngày nào đó trong chuỗi thời gian. */
+  const hasOrdersInRange =
+    Number(overview?.orders?.completed || 0) + Number(overview?.orders?.pending || 0) > 0 ||
+    ordersTimeline.some((d) => Number(d?.completedOrders || 0) + Number(d?.pendingOrders || 0) > 0);
+  /** Biểu đồ + danh sách đơn: chỉ chủ tài khoản VÀ có đơn trong kỳ — không để khối rỗng chiếm chỗ. */
+  const showOrdersBlock = showOrders && hasOrdersInRange;
 
   /**
    * Gọi backend sinh insight bằng Gemini theo bộ lọc đang áp dụng.
@@ -275,42 +269,12 @@ const Dashboard = () => {
       const data = extractInsightFromDashboardInsightsResponse(response);
       const normalized = normalizeDashboardInsightForUi(data);
       setInsights(normalized);
-      if (normalized && isInsightPayloadUsable(normalized)) {
-        setHasStoredInsight(true);
-      }
-      setInsightViewSource('live');
-      setStoredInsightSavedAt('');
+      setStoredInsightSavedAt(normalized ? new Date().toISOString() : '');
     } catch (error) {
       console.error('Generate dashboard insights error:', error);
       setInsightError(t('dashboard.insightAnalysisFailed'));
     } finally {
       setIsGeneratingInsights(false);
-    }
-  };
-
-  /**
-   * Tải lại insight đã lưu từ DB (đồng bộ với server).
-   */
-  const handleLoadStoredInsight = async () => {
-    try {
-      const res = await dashboardApiService.getSavedInsight();
-      const payload = res?.data?.data;
-      if (!payload?.insights) {
-        setHasStoredInsight(false);
-        return;
-      }
-      const normalized = normalizeDashboardInsightForUi(payload.insights);
-      if (!normalized || !isInsightPayloadUsable(normalized)) {
-        setHasStoredInsight(false);
-        return;
-      }
-      setInsights(normalized);
-      setInsightError('');
-      setInsightViewSource('stored');
-      setStoredInsightSavedAt(payload.savedAt || '');
-    } catch (e) {
-      console.error('Load saved dashboard insight error:', e);
-      setHasStoredInsight(false);
     }
   };
 
@@ -343,12 +307,13 @@ const Dashboard = () => {
             </button>
             <button
               type="button"
-              className="btn btn-secondary flex items-center gap-2 shadow-sm"
+              className="btn btn-secondary flex items-center justify-center shadow-sm"
               onClick={() => handlePrintDashboard()}
               disabled={isLoading}
               title={t('dashboard.printPdfTip')}
+              aria-label={t('dashboard.printPdf')}
             >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                 <path
                   strokeLinecap="round"
                   strokeLinejoin="round"
@@ -356,24 +321,6 @@ const Dashboard = () => {
                   d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z"
                 />
               </svg>
-              {t('dashboard.printPdf')}
-            </button>
-            <button
-              type="button"
-              className="btn btn-secondary flex items-center gap-2 shadow-sm"
-              onClick={handleLoadStoredInsight}
-              disabled={isLoading || !hasStoredInsight}
-              title={t('dashboard.savedInsightTip')}
-            >
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"
-                />
-              </svg>
-              {t('dashboard.viewSavedInsight')}
             </button>
           </>
         }
@@ -406,71 +353,29 @@ const Dashboard = () => {
 
       <EmployeeMyContributionCard />
 
-      {/* Nhắc khi đang xem bản insight đã lưu (có thể lệch với bộ lọc hiện tại) */}
-      {insightViewSource === 'stored' && insights && (
-        <div className="flex items-start gap-3 px-4 py-3 rounded-xl bg-sky-50 border border-sky-100 text-sm text-sky-900">
-          <svg className="w-4 h-4 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-            />
-          </svg>
-          <span>
-            {t('dashboard.storedInsight')}
-            {storedInsightSavedAt ? ` (${locale === 'en' ? 'at' : 'lúc'} ${formatInsightSavedAt(storedInsightSavedAt, locale)})` : ''}. {t('dashboard.storedInsightSuffix')}
-          </span>
-        </div>
-      )}
-
       {/* KPI Cards — 4 thẻ theo bộ lọc */}
       <DashboardKpiCards overview={overview} />
 
-      {/* Overview insight — phân tích có cấu trúc + tóm tắt */}
-      <div className="card p-5 md:p-6">
-        <h3 className="text-base font-semibold text-gray-900">{t('dashboard.insightOverview')}</h3>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {t('dashboard.insightTip')}
-        </p>
-        <div className="mt-4">
-          <DashboardInsightOverview insights={insights} isLoading={isGeneratingInsights} error={insightError} />
-        </div>
-      </div>
-
-      {/* Biểu đồ: "Đã gửi mỗi ngày" (mọi người xem) + đơn hàng theo thời gian (chỉ chủ tài khoản) */}
-      <div className={`grid grid-cols-1 ${showOrders ? 'xl:grid-cols-2' : ''} gap-4`}>
-        <DashboardSentChart
-          dailySent={dailySent}
-          isMonthlyView={isMonthlyView}
-          insightText={getChannelEngagementInsightForChannel(insights?.charts, 'all')}
-          isInsightLoading={isGeneratingInsights}
-          insightError={insightError}
-        />
-        {showOrders && (
-          <DashboardOrdersChart
-            timeline={ordersTimeline}
-            isMonthlyView={isMonthlyView}
-            viewMode={ordersChartViewMode}
-            onViewModeChange={setOrdersChartViewMode}
-            insightText={getOrdersTrendInsightForMode(insights?.charts, ordersChartViewMode)}
-            isInsightLoading={isGeneratingInsights}
-            insightError={insightError}
-          />
-        )}
+      {/* Biểu đồ "Đã gửi mỗi ngày" (mọi người xem) + đơn hàng theo thời gian (chỉ chủ tài khoản VÀ kỳ đang lọc có đơn) */}
+      <div className={`grid grid-cols-1 ${showOrdersBlock ? 'xl:grid-cols-2' : ''} gap-4`}>
+        <DashboardSentChart dailySent={dailySent} isMonthlyView={isMonthlyView} />
+        {showOrdersBlock && <DashboardOrdersChart timeline={ordersTimeline} isMonthlyView={isMonthlyView} />}
       </div>
 
       {/* Chiến dịch trong kỳ (gộp thay các bảng top) */}
       <DashboardCampaignsTable campaigns={campaignsData} />
 
-      {/* Lượt chạy → Giám sát gửi tin; thống kê landing → trang Landing page */}
-      <DashboardReportLinks
-        showDeliveryMonitor={canOpen('campaigns_view')}
-        showLanding={canOpen('landing_pages')}
+      {/* Phân tích AI gọn: tổng quan + tối đa 3 việc nên làm; "Xem chi tiết" mở phần đầy đủ */}
+      <DashboardAiInsightCard
+        insights={insights}
+        isLoading={isGeneratingInsights}
+        error={insightError}
+        savedAtLabel={storedInsightSavedAt ? formatInsightSavedAt(storedInsightSavedAt, locale) : ''}
+        showOrders={showOrdersBlock}
       />
 
-      {/* Orders list table — chỉ chủ tài khoản (có SĐT/email khách) */}
-      {showOrders && (
+      {/* Danh sách đơn hàng: chỉ chủ tài khoản (có SĐT/email khách) và chỉ khi kỳ đang lọc có đơn */}
+      {showOrdersBlock && (
         <DashboardOrdersListTable
           ordersData={ordersData}
           isLoadingOrders={isLoadingOrders}
@@ -478,12 +383,27 @@ const Dashboard = () => {
           onChangePage={loadOrdersPage}
         />
       )}
+
+      {/* Lượt chạy → Giám sát gửi tin; thống kê landing → trang Landing page */}
+      <DashboardReportLinks
+        showDeliveryMonitor={canOpen('campaigns_view')}
+        showLanding={canOpen('landing_pages')}
+      />
     </div>
 
+    {/*
+      Bản in ẩn: khung `fixed` cao 0 + overflow hidden nên KHÔNG nằm trong luồng bố cục (trước đây `absolute top-0`
+      kéo dài vùng cuộn → khoảng trắng cuối trang). Nội dung vẫn được dựng đủ rộng 1180px; react-to-print chỉ
+      clone node có `ref` (bỏ khung ngoài), nên bản in PDF vẫn đầy đủ.
+    */}
+    <div
+      data-testid="dashboard-print-frame"
+      className="pointer-events-none fixed left-0 top-0 h-0 w-0 overflow-hidden"
+      aria-hidden
+    >
     <div
       ref={printRef}
-      className="dashboard-print-root absolute left-[-14000px] top-0 w-[1180px] bg-white"
-      aria-hidden
+      className="dashboard-print-root w-[1180px] bg-white"
     >
       <DashboardPrintLayout
         filters={filters}
@@ -497,6 +417,7 @@ const Dashboard = () => {
         isMonthlyView={isMonthlyView}
         showOrders={showOrders}
       />
+    </div>
     </div>
     </div>
   );
