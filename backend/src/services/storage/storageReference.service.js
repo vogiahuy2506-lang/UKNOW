@@ -362,31 +362,34 @@ export async function resolveWorkspaceOwner(rawUserId, queryable = db) {
   return { ownerUserId: userId, source: 'self', ambiguous: false };
 }
 
-const REFERENCE_CONFIGS = {
+// `url` là đường dẫn THẬT của frontend (App.jsx) cho nút "Đi đến màn hình quản lý" ở Thư viện media — trang dùng nguyên
+// văn làm href. Trước 03/10 hầu hết thiếu tiền tố /app nên rơi vào route `*` và về trang chủ. Spec
+// storageReferenceUrls.spec.js đối chiếu từng url với App.jsx.
+export const REFERENCE_CONFIGS = {
   business_profile: {
     sql: `SELECT id, company_name AS name FROM business_profiles WHERE id = $1 LIMIT 1`,
     label: 'Hồ sơ doanh nghiệp',
-    url: '/settings/business-profile',
+    url: '/app/settings/ai-profile',
   },
   campaign_node: {
     sql: `SELECT cn.id, c.campaign_name AS name FROM campaign_nodes cn JOIN campaigns c ON c.id = cn.id_campaign WHERE cn.id = $1 LIMIT 1`,
     label: 'Chiến dịch',
-    url: '/campaigns',
+    url: '/app/campaigns',
   },
   chat_attachment: {
     sql: `SELECT id, display_name AS name FROM chat_attachments WHERE id = $1 LIMIT 1`,
     label: 'Hộp thư chat',
-    url: '/inbox',
+    url: '/app/settings/inbox',
   },
   custom_chatbot: {
     sql: `SELECT id, name FROM custom_chatbots WHERE id = $1 LIMIT 1`,
     label: 'Chatbot',
-    url: '/studio',
+    url: '/app/chatbot-studio',
   },
   email_template: {
     sql: `SELECT id, template_name AS name FROM email_templates WHERE id = $1 LIMIT 1`,
     label: 'Mẫu Email',
-    url: '/templates',
+    url: '/app/settings/templates',
   },
   form_payment_receipt: {
     sql: `SELECT fs.id, COALESCE(f.title, 'Biểu mẫu') AS name
@@ -399,62 +402,62 @@ const REFERENCE_CONFIGS = {
   help_article: {
     sql: `SELECT id, title AS name FROM help_articles WHERE id = $1 LIMIT 1`,
     label: 'Bài viết hướng dẫn',
-    url: '/help',
+    url: '/admin/help-articles',
   },
   landing: {
     sql: `SELECT id, title AS name FROM landing_pages WHERE id = $1 LIMIT 1`,
     label: 'Landing Page',
-    url: '/landing-pages',
+    url: '/app/settings/landing-pages',
   },
   landing_page: {
     sql: `SELECT id, title AS name FROM landing_pages WHERE id = $1 LIMIT 1`,
     label: 'Landing Page',
-    url: '/landing-pages',
+    url: '/app/settings/landing-pages',
   },
   landing_page_version: {
     sql: `SELECT id, title AS name FROM landing_page_versions WHERE id = $1 LIMIT 1`,
     label: 'Phiên bản Landing Page',
-    url: '/landing-pages',
+    url: '/app/settings/landing-pages',
   },
   landing_featured_course: {
     sql: `SELECT id, COALESCE(title_vi, title_en) AS name FROM landing_featured_courses WHERE id = $1 LIMIT 1`,
     label: 'Khóa học nổi bật',
-    url: '/settings/landing-featured-courses',
+    url: '/app/settings/landing-featured-courses',
   },
   landing_page_section: {
     sql: `SELECT id, section AS name FROM landing_page_sections WHERE id = $1 LIMIT 1`,
     label: 'Section Landing Page',
-    url: '/landing-pages',
+    url: '/app/settings/landing-pages',
   },
   landing_page_template: {
     sql: `SELECT id, name FROM landing_page_templates WHERE id = $1 LIMIT 1`,
     label: 'Mẫu Landing Page',
-    url: '/landing-pages',
+    url: '/app/settings/landing-pages',
   },
   landing_testimonial: {
     sql: `SELECT id, COALESCE(name_vi, name_en) AS name FROM landing_testimonials WHERE id = $1 LIMIT 1`,
     label: 'Đánh giá Landing Page',
-    url: '/settings/landing-testimonials',
+    url: '/app/settings/landing-testimonials',
   },
   sub_assistant: {
     sql: `SELECT id, name FROM sub_assistants WHERE id = $1 LIMIT 1`,
     label: 'Trợ lý AI',
-    url: '/studio',
+    url: '/app/settings/sub-assistants',
   },
   template_file: {
     sql: `SELECT id, original_name AS name FROM template_files WHERE id = $1 LIMIT 1`,
     label: 'Tệp đính kèm mẫu',
-    url: '/templates',
+    url: '/app/settings/templates',
   },
   web_widget_config: {
     sql: `SELECT id, display_name AS name FROM web_widget_configs WHERE id = $1 LIMIT 1`,
     label: 'Cấu hình Livechat',
-    url: '/studio',
+    url: '/app/settings/chatbot-widget',
   },
   zalo_template: {
     sql: `SELECT id, template_name AS name FROM zalo_templates WHERE id = $1 LIMIT 1`,
-    label: 'Mẫu Zalo',
-    url: '/templates',
+    label: 'Mẫu tin nhắn',
+    url: '/app/settings/templates',
   },
 };
 

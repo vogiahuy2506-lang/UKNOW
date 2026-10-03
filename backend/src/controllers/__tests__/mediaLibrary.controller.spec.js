@@ -140,9 +140,9 @@ describe('mediaLibrary.controller storage_objects', () => {
     });
     mockIsReferenceAlive.mockResolvedValueOnce({
       alive: true,
-      label: 'Mẫu Zalo',
+      label: 'Mẫu tin nhắn',
       name: 'Khuyến mãi T8',
-      url: '/templates',
+      url: '/app/settings/templates',
     });
 
     const req = {

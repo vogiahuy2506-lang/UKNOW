@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { generateFileToken } from '../../../utils/fileDownloadToken.js';
 
 const query = jest.fn();
@@ -8,6 +11,7 @@ jest.unstable_mockModule('../../../config/database.js', () => ({
 }));
 
 const {
+  REFERENCE_CONFIGS,
   buildStorageReferenceIndex,
   getIndexedStorageReferences,
   isReferenceAlive,
@@ -85,9 +89,9 @@ describe('storageReference.service', () => {
     query.mockResolvedValueOnce({ rows: [{ id: 10, name: 'Khuyến mãi T8' }] });
     await expect(isReferenceAlive('zalo_template', 10)).resolves.toEqual({
       alive: true,
-      label: 'Mẫu Zalo',
+      label: 'Mẫu tin nhắn',
       name: 'Khuyến mãi T8',
-      url: '/templates',
+      url: '/app/settings/templates',
     });
 
     // 3. dead reference
@@ -108,7 +112,7 @@ describe('storageReference.service', () => {
       alive: true,
       label: 'Chiến dịch',
       name: 'Chiến dịch #5',
-      url: '/campaigns',
+      url: '/app/campaigns',
     });
   });
 
@@ -144,5 +148,36 @@ describe('storageReference.service', () => {
       const referenced = await isStorageKeyReferencedByMessage('uploads/42/chat/orphan.pdf');
       expect(referenced).toBe(false);
     });
+  });
+});
+
+// Nút "Đi đến màn hình quản lý" ở Thư viện media dùng nguyên văn `url` làm href. Trước 03/10 hầu hết url thiếu tiền tố /app
+// ('/templates', '/studio', '/landing-pages'…) nên rơi vào route `*` của App.jsx và về TRANG CHỦ. Đọc chữ App.jsx
+// (không import JSX vào jest backend) và đòi mỗi url là một route thật nằm dưới /app hoặc /admin.
+describe('REFERENCE_CONFIGS: url là route thật của frontend', () => {
+  const __dirname = path.dirname(fileURLToPath(import.meta.url));
+  const appSource = fs.readFileSync(path.resolve(__dirname, '../../../../../frontend/src/App.jsx'), 'utf8');
+  const sectionOf = (marker) => {
+    const start = appSource.indexOf(`<Route path="${marker}"`);
+    const next = appSource.indexOf('<Route path="/', start + 1);
+    return start >= 0 ? appSource.slice(start, next > start ? next : undefined) : '';
+  };
+  const sections = { app: sectionOf('/app'), admin: sectionOf('/admin') };
+
+  it('đọc được hai nhánh route /app và /admin', () => {
+    expect(sections.app).toContain('path="settings/templates"');
+    expect(sections.admin).toContain('path="help-articles"');
+  });
+
+  Object.entries(REFERENCE_CONFIGS).forEach(([type, config]) => {
+    it(`${type}: ${config.url}`, () => {
+      const match = /^\/(app|admin)\/(.+)$/.exec(config.url);
+      expect(match).not.toBeNull();
+      expect(sections[match[1]]).toContain(`path="${match[2]}"`);
+    });
+  });
+
+  it('mẫu tin nhắn dùng chung 3 kênh: nhãn không còn "Mẫu Zalo"', () => {
+    expect(REFERENCE_CONFIGS.zalo_template.label).toBe('Mẫu tin nhắn');
   });
 });

@@ -114,7 +114,7 @@ class ZaloTemplateController {
       console.error('Get zalo templates error:', error);
       res.status(500).json({
         success: false,
-        message: 'Không thể tải danh sách template Zalo',
+        message: 'Không thể tải danh sách mẫu tin nhắn',
       });
     }
   }
@@ -136,7 +136,7 @@ class ZaloTemplateController {
       if (!template) {
         res.status(404).json({
           success: false,
-          message: 'Không tìm thấy mẫu Zalo',
+          message: 'Không tìm thấy mẫu tin nhắn',
         });
         return;
       }
@@ -162,7 +162,7 @@ class ZaloTemplateController {
       console.error('Get zalo template error:', error);
       res.status(500).json({
         success: false,
-        message: 'Không thể tải chi tiết template Zalo',
+        message: 'Không thể tải chi tiết mẫu tin nhắn',
       });
     }
   }
@@ -264,7 +264,7 @@ class ZaloTemplateController {
       await this.logMutation(req, AUDIT_ACTIONS.ZALO_TEMPLATE_CREATED, template);
       res.status(201).json({
         success: true,
-        message: 'Tạo mẫu Zalo thành công',
+        message: 'Tạo mẫu tin nhắn thành công',
         data: this.mapTemplateRow(template),
       });
     } catch (error) {
@@ -283,7 +283,7 @@ class ZaloTemplateController {
       console.error('Create zalo template error:', error);
       res.status(500).json({
         success: false,
-        message: 'Không thể tạo template Zalo',
+        message: 'Không thể tạo mẫu tin nhắn',
       });
     }
   }
@@ -320,7 +320,7 @@ class ZaloTemplateController {
       if (!existing) {
         res.status(404).json({
           success: false,
-          message: 'Không tìm thấy mẫu Zalo',
+          message: 'Không tìm thấy mẫu tin nhắn',
         });
         return;
       }
@@ -401,7 +401,7 @@ class ZaloTemplateController {
                 category,
                 isActive,
               }, client);
-              if (!template) throw Object.assign(new Error('Không tìm thấy mẫu Zalo'), { statusCode: 404 });
+              if (!template) throw Object.assign(new Error('Không tìm thấy mẫu tin nhắn'), { statusCode: 404 });
               return { referenceId: template.id };
             },
           });
@@ -439,7 +439,7 @@ class ZaloTemplateController {
       await this.logMutation(req, AUDIT_ACTIONS.ZALO_TEMPLATE_UPDATED, template);
       res.json({
         success: true,
-        message: 'Cập nhật mẫu Zalo thành công',
+        message: 'Cập nhật mẫu tin nhắn thành công',
         data: this.mapTemplateRow(template),
       });
     } catch (error) {
@@ -450,7 +450,7 @@ class ZaloTemplateController {
       console.error('Update zalo template error:', error);
       res.status(500).json({
         success: false,
-        message: 'Không thể cập nhật template Zalo',
+        message: 'Không thể cập nhật mẫu tin nhắn',
       });
     }
   }
@@ -472,7 +472,7 @@ class ZaloTemplateController {
       if (!template) {
         res.status(404).json({
           success: false,
-          message: 'Không tìm thấy mẫu Zalo',
+          message: 'Không tìm thấy mẫu tin nhắn',
         });
         return;
       }
@@ -492,7 +492,7 @@ class ZaloTemplateController {
 
       res.json({
         success: true,
-        message: 'Xóa mẫu Zalo thành công',
+        message: 'Xóa mẫu tin nhắn thành công',
       });
     } catch (error) {
       if (error?.code === '42P01') {
@@ -502,7 +502,7 @@ class ZaloTemplateController {
       console.error('Delete zalo template error:', error);
       res.status(500).json({
         success: false,
-        message: 'Không thể xóa template Zalo',
+        message: 'Không thể xóa mẫu tin nhắn',
       });
     }
   }
