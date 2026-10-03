@@ -1197,7 +1197,7 @@ export default {
     feature1Title: 'Nhanh chóng',
     feature1Desc: 'Triển khai trong vài phút',
     feature2Title: 'An toàn',
-    feature2Desc: 'Bảo mật dữ liệu tuyệt đối',
+    feature2Desc: 'Dữ liệu được bảo vệ theo chính sách bảo mật',
     feature3Title: 'Hỗ trợ 24/7',
     feature3Desc: 'Đội ngũ chuyên môn luôn sẵn sàng',
     formBlockTitle: 'Đăng ký tư vấn miễn phí',
@@ -7951,7 +7951,7 @@ export default {
     f5Highlight: 'ROI rõ ràng',
     f6Title: 'Dữ liệu được bảo mật',
     f6Desc: 'Hạ tầng cloud với backup tự động. Khách hàng của bạn là khách hàng của bạn, không ai khác được đọc.',
-    f6Highlight: 'An toàn tuyệt đối',
+    f6Highlight: 'Sao lưu tự động mỗi ngày',
     // Section 1 copy
     section1Badge: 'GIẢI PHÁP',
     section1Title: 'Thay đổi cách bạn bán hàng',

@@ -1195,7 +1195,7 @@ export default {
     feature1Title: 'Fast',
     feature1Desc: 'Deploy in minutes',
     feature2Title: 'Secure',
-    feature2Desc: 'Absolute data security',
+    feature2Desc: 'Data protected under our privacy policy',
     feature3Title: '24/7 Support',
     feature3Desc: 'Professional team always ready',
     formBlockTitle: 'Free consultation signup',
@@ -7941,7 +7941,7 @@ export default {
     f5Highlight: 'Transparent ROI',
     f6Title: 'Your data is secure',
     f6Desc: 'Cloud infrastructure with automatic backups. Your customers are yours — no one else can read them.',
-    f6Highlight: 'Bank-grade security',
+    f6Highlight: 'Automatic daily backups',
     // Section 1 copy
     section1Badge: 'SOLUTION',
     section1Title: 'Change the way you sell',

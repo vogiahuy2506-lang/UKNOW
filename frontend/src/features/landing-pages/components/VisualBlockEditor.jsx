@@ -218,7 +218,7 @@ function getBlockDefaultData(blockType, t) {
       feature_1_title: 'Nhanh chóng',
       feature_1_desc: 'Triển khai trong vài phút với công nghệ hiện đại nhất.',
       feature_2_title: 'Bảo mật',
-      feature_2_desc: 'Dữ liệu được mã hóa và bảo vệ an toàn tuyệt đối.',
+      feature_2_desc: 'Dữ liệu được mã hóa khi truyền đi và bảo vệ theo chính sách bảo mật.',
       feature_3_title: 'Hỗ trợ 24/7',
       feature_3_desc: 'Đội ngũ chuyên gia luôn sẵn sàng hỗ trợ bạn mọi lúc.',
       primary_color: '#f97316',

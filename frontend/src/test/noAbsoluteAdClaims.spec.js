@@ -52,6 +52,12 @@ const FORBIDDEN = new RegExp(
     // cam kết tuyệt đối về an toàn dữ liệu — dùng "được bảo vệ theo chính sách bảo mật".
     'bảo mật tuyệt đối',
     'strictly confidential',
+    // 03/10/2026: trang chủ còn "An toàn tuyệt đối" / "Bảo mật dữ liệu tuyệt đối" / "Absolute data security" /
+    // "Bank-grade security" — cam kết an toàn tuyệt đối hoặc so sánh chuẩn ngân hàng chưa có chứng cứ.
+    'an toàn tuyệt đối',
+    'dữ liệu tuyệt đối',
+    'absolute (data )?security',
+    'bank-grade',
   ].join('|'),
   'i'
 );
