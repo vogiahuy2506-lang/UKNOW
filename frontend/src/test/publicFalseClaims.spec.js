@@ -218,6 +218,47 @@ describe.each(LOCALES)('H1 — giờ làm việc thống nhất Thứ 2 – Th�
   });
 });
 
+/**
+ * Câu hứa chưa kiểm chứng (thợ G3c để lại, H1 mục 3): "setup miễn phí 30 phút đầu tiên" (faq4A — không có quy trình/hợp đồng nào ghi),
+ * "Chỉ mất 10 phút" / "Chỉ cần 15 phút" / "Mất khoảng 5 phút" (không có số đo thời gian thiết lập), "Tỷ lệ vào inbox cao" (không đo tỷ lệ vào
+ * hộp thư đến), "Mọi lead đều được chăm sóc" (hệ thống gom lead, không tự chăm sóc mọi lead). Viết lại theo đúng điều có thật:
+ * trợ lý AI + mẫu có sẵn, hạ tầng email Founder AI hoặc SMTP riêng, lead gom về trang Lead, bài hướng dẫn + hotline/email trong giờ làm việc.
+ */
+describe.each(LOCALES)('H1 — câu hứa chưa kiểm chứng đã viết lại (%s)', (_name, dict) => {
+  it('pricingPage.faq4A không hứa thời lượng / miễn phí setup; nói hỗ trợ có thật + giờ làm việc', () => {
+    const a = dict.pricingPage.faq4A;
+    expect(a).not.toMatch(/\d+\s*(phút|minutes?)/i);
+    expect(a).not.toMatch(/miễn phí|free/i);
+    expect(a).not.toMatch(/Professional|Enterprise/);
+    expect(a).toMatch(/hotline/i);
+    expect(a).toMatch(/email/i);
+    expect(a).toContain('8:30');
+  });
+
+  it('mọi chuỗi cấp 1 của heroPage không hứa thời gian bằng con số (10 phút, 15 phút, 5 phút…)', () => {
+    const offenders = Object.entries(dict.heroPage)
+      .filter(([, v]) => typeof v === 'string')
+      .filter(([, v]) => /\d+\s*(phút|minutes?)\b/i.test(v))
+      .map(([k, v]) => `${k}: ${v}`);
+    expect(offenders).toEqual([]);
+  });
+
+  it('f2Highlight / f4Highlight không hứa kết quả chưa đo (tỷ lệ vào inbox, mọi lead đều được chăm sóc)', () => {
+    expect(dict.heroPage.f2Highlight).not.toMatch(/inbox|deliverab|tỷ lệ|rate/i);
+    expect(dict.heroPage.f4Highlight).not.toMatch(/mọi lead|every lead|chăm sóc|cared/i);
+    expect(dict.heroPage.f1Highlight).not.toMatch(/chỉ mất|only takes|done in/i);
+    expect(dict.heroPage.section2Title).not.toMatch(/chỉ cần|only need|in \d+ minutes/i);
+  });
+
+  it('bốn câu mới nói điều có thật: mẫu + trợ lý AI, hạ tầng email hoặc SMTP riêng, lead gom về một nơi, 4 bước', () => {
+    const vi18n = _name === 'vi';
+    expect(dict.heroPage.f1Highlight).toMatch(vi18n ? /trợ lý AI/ : /AI assistant/);
+    expect(dict.heroPage.f2Highlight).toMatch(/SMTP/);
+    expect(dict.heroPage.f4Highlight).toMatch(vi18n ? /gom về/ : /collected/);
+    expect(dict.heroPage.section2Title).toMatch(/\b4\b/);
+  });
+});
+
 describe('H1 — trang Liên hệ tính mở/đóng cửa bằng businessHours.js, không còn so giờ ghi cứng', () => {
   it('ContactPage dùng isWithinBusinessHours, không còn "hour >= 8"', () => {
     const src = sourceOf('../pages/public/ContactPage.jsx');
