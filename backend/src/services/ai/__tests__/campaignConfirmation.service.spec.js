@@ -8,12 +8,15 @@ const emailTemplates = { findById: jest.fn() };
 const zaloTemplates = { findById: jest.fn() };
 const emailSenders = { findEmailSettingsById: jest.fn() };
 const zaloSenders = { findCampaignZaloAccount: jest.fn() };
+const aiResources = { getCourses: jest.fn() };
 
 jest.unstable_mockModule('../../../repositories/ai/aiCampaignDraft.repository.js', () => ({ default: draftRepo }));
 jest.unstable_mockModule('../../../repositories/email/emailTemplate.repository.js', () => ({ default: emailTemplates }));
 jest.unstable_mockModule('../../../repositories/zalo/zaloTemplate.repository.js', () => ({ default: zaloTemplates }));
 jest.unstable_mockModule('../../../repositories/campaign/campaignEmailSender.repository.js', () => ({ default: emailSenders }));
 jest.unstable_mockModule('../../../repositories/campaign/campaignZaloSender.repository.js', () => ({ default: zaloSenders }));
+// Tra TÊN khoá học của bộ lọc người nhận (F2.2): service import động aiPromptResources — mock đúng ranh giới DB.
+jest.unstable_mockModule('../aiPromptResources.service.js', () => ({ default: aiResources }));
 
 const service = await import('../campaignConfirmation.service.js');
 
@@ -203,5 +206,105 @@ describe('campaignConfirmation.service', () => {
     expect(result.blockingIssues).toEqual(expect.arrayContaining([
       expect.objectContaining({ code: 'invalid_template_step', nodeId: 'zalo-2', stepIndex: 0 }),
     ]));
+  });
+
+  /**
+   * F2.2 (rà soát C P1-3): thẻ xác nhận chỉ ghi "Lấy dữ liệu khách hàng" nên người dùng không thể thấy email sắp đi tới ai.
+   * Nay `recipients.filters` mang bộ lọc của node nguồn "khách trong DB" (kèm TÊN khoá học) để FE hiện lên thẻ.
+   */
+  describe('recipients.filters — bộ lọc người nhận của node khách DB', () => {
+    const emailScript = (audienceConfig) => ({
+      campaignName: 'Email khách đã mua',
+      nodes: [
+        { tempId: 'aud-1', nodeType: 'data', nodeSubtype: 'interested_customers', nodeName: 'Lấy dữ liệu khách hàng', config: audienceConfig },
+        {
+          tempId: 'email-1', nodeType: 'action', nodeSubtype: 'send_email', nodeName: 'Gửi email',
+          config: {
+            recipientSource: 'node', recipientNodeId: 'aud-1', recipientField: 'email',
+            emailSteps: [{ emailSubject: 'Mời học tiếp', emailBody: '<p>Xin chào</p>', delayValue: 0, delayUnit: 'days' }],
+          },
+        },
+      ],
+    });
+
+    beforeEach(() => {
+      aiResources.getCourses.mockResolvedValue([
+        { id: 3, name: 'Khoá Excel nâng cao' },
+        { id: 4, name: 'Khoá Photoshop & Thiết kế' },
+      ]);
+    });
+
+    it('"đã mua khoá 3 nhưng chưa mua khoá 4, tối đa 50 khách" → filters có loại khách, tên khoá, khoá trừ, giới hạn', async () => {
+      const result = await service.default.buildConfirmationView({
+        userId: 1,
+        ownerUserId: 1,
+        script: emailScript({ interestedCustomerType: 'purchased', interestedCourseIds: [3], notPurchasedCourseIds: [4], interestedLimit: 50 }),
+      });
+
+      expect(result.steps[0].recipients.sourceLabel).toBe('Lấy dữ liệu khách hàng');
+      expect(result.steps[0].recipients.filters).toEqual({
+        customerType: 'purchased',
+        limit: 50,
+        courses: [{ id: 3, name: 'Khoá Excel nâng cao' }],
+        excludedCourses: [{ id: 4, name: 'Khoá Photoshop & Thiết kế' }],
+      });
+      expect(aiResources.getCourses).toHaveBeenCalledWith(1);
+    });
+
+    it('khoá không có trong danh sách của chủ (id lạ) → vẫn hiện bộ lọc theo id, name = null', async () => {
+      const result = await service.default.buildConfirmationView({
+        userId: 1,
+        script: emailScript({ interestedCustomerType: 'both', interestedCourseIds: [999] }),
+      });
+
+      expect(result.steps[0].recipients.filters).toMatchObject({ customerType: null, courses: [{ id: 999, name: null }] });
+    });
+
+    it('tra tên khoá lỗi (DB sập) → thẻ KHÔNG vỡ, vẫn hiện bộ lọc bằng id', async () => {
+      aiResources.getCourses.mockRejectedValue(new Error('db down'));
+      const result = await service.default.buildConfirmationView({
+        userId: 1,
+        script: emailScript({ interestedCourseIds: [3] }),
+      });
+
+      expect(result.readyToCreate).toBe(true);
+      expect(result.steps[0].recipients.filters.courses).toEqual([{ id: 3, name: null }]);
+    });
+
+    it('KHÔNG có bộ lọc ("both"/1000, mảng rỗng) → không có trường filters, không tra DB', async () => {
+      const result = await service.default.buildConfirmationView({
+        userId: 1,
+        script: emailScript({ interestedCustomerType: 'both', interestedLimit: 1000, interestedCourseIds: [], notPurchasedCourseIds: [] }),
+      });
+
+      expect(result.steps[0].recipients).not.toHaveProperty('filters');
+      expect(aiResources.getCourses).not.toHaveBeenCalled();
+    });
+
+    it('chuỗi nhiều bước cùng một node nguồn → chỉ tra tên khoá MỘT lần', async () => {
+      const script = emailScript({ interestedCustomerType: 'purchased', interestedCourseIds: [3] });
+      script.nodes[1].config.emailSteps.push({ emailSubject: 'Nhắc lại', emailBody: '<p>Nhắc</p>', delayValue: 2, delayUnit: 'days' });
+      const result = await service.default.buildConfirmationView({ userId: 1, script });
+
+      expect(result.steps).toHaveLength(2);
+      expect(result.steps[1].recipients.filters.courses[0].name).toBe('Khoá Excel nâng cao');
+      expect(aiResources.getCourses).toHaveBeenCalledTimes(1);
+    });
+
+    it('người nhận nhập tay → không có filters', async () => {
+      const result = await service.default.buildConfirmationView({
+        userId: 1,
+        script: {
+          campaignName: 'Nhập tay',
+          nodes: [{
+            tempId: 'email-1', nodeType: 'action', nodeSubtype: 'send_email',
+            config: { recipientSource: 'manual', recipientEmails: 'a@x.vn', emailSteps: [{ emailSubject: 'S', emailBody: '<p>B</p>' }] },
+          }],
+        },
+      });
+
+      expect(result.steps[0].recipients).toMatchObject({ mode: 'manual' });
+      expect(result.steps[0].recipients).not.toHaveProperty('filters');
+    });
   });
 });

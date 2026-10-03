@@ -62,12 +62,39 @@ const extractText = (val) => {
   return String(val);
 };
 
-const sourceLabel = (config, nodes, channel) => {
+const findSourceNode = (config, nodes, channel) => {
   const sourceId = channel === 'email'
     ? config?.recipientNodeId
     : config?.zaloRecipientNodeId || config?.zaloGroupNodeId;
-  const source = nodes.find((node) => String(node?.id || node?.tempId || '') === String(sourceId || ''));
+  return nodes.find((node) => String(node?.id || node?.tempId || '') === String(sourceId || '')) || null;
+};
+
+const sourceLabel = (config, nodes, channel) => {
+  const source = findSourceNode(config, nodes, channel);
   return extractText(source?.nodeName || source?.node_name || source?.name || null);
+};
+
+// Giới hạn mặc định của node "khách trong DB" mà compiler dựng (campaignCompiler.service.js).
+const DEFAULT_DB_AUDIENCE_LIMIT = 1000;
+
+/**
+ * Bộ lọc người nhận trên node nguồn "khách trong DB" (`interested_customers`): đã mua / quan tâm-chưa mua, theo khoá học, trừ
+ * khoá đã mua, giới hạn số khách. Thẻ xác nhận trước đây chỉ ghi tên node ("Lấy dữ liệu khách hàng") nên người dùng không thể
+ * thấy email sắp đi tới ai (rà soát C P1-3, 03/10/2026). null = không có bộ lọc nào (mọi khách có địa chỉ, ≤ mặc định).
+ */
+const audienceFilterOf = (sourceNode) => {
+  const subtype = String(sourceNode?.nodeSubtype || sourceNode?.node_subtype || sourceNode?.subtype || '').toLowerCase();
+  if (subtype !== 'interested_customers' && subtype !== 'read_interested_customers') return null;
+  const config = sourceNode?.config || sourceNode?.nodeConfig || {};
+  const ids = (value) => [...new Set((Array.isArray(value) ? value : []).map(asNumber).filter((id) => id != null && id > 0))];
+  const courseIds = ids(config.interestedCourseIds);
+  const excludedCourseIds = ids(config.notPurchasedCourseIds);
+  const rawType = String(config.interestedCustomerType ?? '').trim().toLowerCase();
+  const customerType = rawType === 'purchased' || rawType === 'interested' ? rawType : null;
+  const rawLimit = Number(config.interestedLimit);
+  const limit = Number.isFinite(rawLimit) && rawLimit > 0 && rawLimit !== DEFAULT_DB_AUDIENCE_LIMIT ? rawLimit : null;
+  if (!courseIds.length && !excludedCourseIds.length && !customerType && limit == null) return null;
+  return { customerType, limit, courseIds, excludedCourseIds };
 };
 
 const manualRecipientCount = (value) => String(value || '')
@@ -126,6 +153,39 @@ class CampaignConfirmationService {
 
     const addIssue = ({ code, nodeId: issueNodeId, stepIndex = null }) => {
       issues.push({ code, nodeId: issueNodeId, stepIndex, messageKey: `aiChatbot.confirmation.${code}` });
+    };
+
+    // Bộ lọc người nhận kèm TÊN khoá học (tra theo chủ workspace — cùng danh sách trợ lý đưa cho LLM). Tra tên lỗi thì vẫn
+    // hiện bộ lọc bằng id: thẻ xác nhận không được vỡ vì một lần tra tên.
+    const audienceFilterCache = new Map();
+    const resolveAudienceFilter = async (sourceNode) => {
+      const raw = audienceFilterOf(sourceNode);
+      if (!raw) return null;
+      const cacheKey = JSON.stringify(raw);
+      if (audienceFilterCache.has(cacheKey)) return audienceFilterCache.get(cacheKey);
+
+      const nameById = new Map();
+      const allIds = [...new Set([...raw.courseIds, ...raw.excludedCourseIds])];
+      if (allIds.length > 0) {
+        try {
+          const { default: aiPromptResources } = await import('./aiPromptResources.service.js');
+          const courses = await aiPromptResources.getCourses(channelOwnerId);
+          for (const course of courses || []) {
+            if (course?.id != null && course.name) nameById.set(Number(course.id), String(course.name));
+          }
+        } catch (error) {
+          console.warn('[CampaignConfirmation] Không tra được tên khoá học của bộ lọc người nhận:', error?.message || error);
+        }
+      }
+      const named = (courseIds) => courseIds.map((id) => ({ id, name: nameById.get(id) || null }));
+      const view = {
+        customerType: raw.customerType,
+        limit: raw.limit,
+        courses: named(raw.courseIds),
+        excludedCourses: named(raw.excludedCourseIds),
+      };
+      audienceFilterCache.set(cacheKey, view);
+      return view;
     };
 
     const resolveSender = async (channel, config, issueNodeId) => {
@@ -296,6 +356,10 @@ class CampaignConfirmationService {
         if (manual && manualRecipientCount(recipientList) === 0) {
           addIssue({ code: 'manual_recipients_required', nodeId: currentNodeId, stepIndex });
         }
+        // Bộ lọc người nhận của node nguồn "khách trong DB" (không có khi nhập tay / không có bộ lọc).
+        const audienceFilters = manual
+          ? null
+          : await resolveAudienceFilter(findSourceNode(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo'));
         steps.push({
           key: `${currentNodeId}:${stepIndex}`,
           nodeId: currentNodeId,
@@ -314,6 +378,7 @@ class CampaignConfirmationService {
             type: channel === 'zalo_personal' ? (config.zaloRecipientType || 'phone') : null,
             count: manual ? manualRecipientCount(recipientList) : null,
             sourceLabel: manual ? null : sourceLabel(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo'),
+            ...(audienceFilters ? { filters: audienceFilters } : {}),
           },
         });
       }

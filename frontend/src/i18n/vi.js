@@ -4837,6 +4837,13 @@ export default {
       manual_recipients_required: 'Chưa có người nhận. Bạn hãy nhập số điện thoại hoặc email trước khi tạo.',
       no_send_steps: 'Chiến dịch chưa có bước gửi tin nào.',
       unknown_issue: 'Một bước gửi chưa đủ nội dung, mẫu tin hoặc tài khoản gửi.',
+      // Bộ lọc người nhận (node "khách trong DB") hiện trên thẻ xác nhận
+      audienceFilterLabel: 'Bộ lọc người nhận',
+      filterPurchased: 'Đã mua',
+      filterInterested: 'Quan tâm (chưa mua)',
+      filterCourses: 'khoá: {names}',
+      filterExcluded: 'trừ người đã mua: {names}',
+      filterLimit: 'tối đa {count} khách',
     },
     // Auto creating card
     creatingCampaign: 'Đang tạo và chạy chiến dịch...',

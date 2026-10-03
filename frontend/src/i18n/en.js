@@ -4821,6 +4821,13 @@ export default {
       manual_recipients_required: 'No recipients provided. Please enter phone numbers or emails before creating.',
       no_send_steps: 'Campaign does not have any send steps.',
       unknown_issue: 'A send step is incomplete or unavailable.',
+      // Recipient filter (database-customers node) shown on the confirmation card
+      audienceFilterLabel: 'Recipient filter',
+      filterPurchased: 'Purchased',
+      filterInterested: 'Interested (not purchased)',
+      filterCourses: 'courses: {names}',
+      filterExcluded: 'excluding buyers of: {names}',
+      filterLimit: 'up to {count} customers',
     },
     // Auto creating card
     creatingCampaign: 'Creating and running campaign...',
