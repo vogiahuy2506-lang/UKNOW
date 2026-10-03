@@ -10,6 +10,7 @@ import {
   normalizeBookingConfig,
   normalizePaymentConfig,
   normalizeFormTheme,
+  normalizeProductId,
   MAX_TITLE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
 } from '../utils/formDefinition.util.js';
@@ -35,6 +36,7 @@ import { STORAGE_POOL_TYPES } from '../utils/storageCapacity.util.js';
 import { getStorageBackend } from './storage/storageBackend.js';
 import { StorageQuotaExceededError } from './storage/storageQuota.service.js';
 import { buildFormAssetUrl } from './formAsset.service.js';
+import productRepository from '../repositories/products/product.repository.js';
 import landingPageRepository from '../repositories/landingPage.repository.js';
 import { canonicalLandingPageSlug } from '../utils/landingPageSlugCanonical.util.js';
 import { buildFormUnsubscribeFooterHtml } from '../utils/formUnsubscribeFooter.util.js';
@@ -151,6 +153,24 @@ export function isPaymentReceiptEnabled() {
   return process.env.FORM_PAYMENT_RECEIPT_ENABLED === 'true';
 }
 const FRONTEND_URL = String(process.env.FRONTEND_URL || 'http://localhost:5174').replace(/\/+$/, '');
+
+/**
+ * Chuẩn hoá `productId` và kiểm sản phẩm thuộc ĐÚNG workspace (`COALESCE(workspace_owner_id, id_user)`) —
+ * không cho gắn sản phẩm của workspace khác. null = không gắn.
+ *
+ * @param {unknown} rawProductId
+ * @param {number} workspaceOwnerId
+ * @returns {Promise<number|null>}
+ */
+async function resolveFormProductId(rawProductId, workspaceOwnerId) {
+  const productId = normalizeProductId(rawProductId);
+  if (productId === null) return null;
+  const product = await productRepository.findById(productId, { workspaceOwnerId });
+  if (!product) {
+    throw createHttpError('Sản phẩm không thuộc tài khoản này', 400, 'PRODUCT_NOT_IN_WORKSPACE');
+  }
+  return productId;
+}
 
 function createHttpError(message, statusCode = 400, code = 'BAD_REQUEST') {
   const err = new Error(message);
@@ -412,7 +432,7 @@ class FormService {
    * @param {object} params
    * @returns {Promise<object>}
    */
-  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, theme, bookingConfig, paymentConfig, landingPageId = null }) {
+  async createForm({ workspaceOwnerId, createdByUserId, title, description, fields, settings, theme, bookingConfig, paymentConfig, landingPageId = null, productId }) {
     const trimmedTitle = String(title || '').trim();
     if (!trimmedTitle) {
       throw createHttpError('Tiêu đề biểu mẫu không được để trống', 400, 'INVALID_FORM_TITLE');
@@ -435,6 +455,7 @@ class FormService {
     await assertFormThemeAssetKeysOwned(safeTheme, workspaceOwnerId);
     const safeBookingConfig = normalizeBookingConfig(bookingConfig);
     const safePaymentConfig = normalizePaymentConfig(paymentConfig);
+    const safeProductId = await resolveFormProductId(productId, workspaceOwnerId);
 
     // 12 bytes ngẫu nhiên -> 16 ký tự base64url
     const publicKey = crypto.randomBytes(12).toString('base64url');
@@ -451,6 +472,7 @@ class FormService {
       bookingConfig: safeBookingConfig,
       paymentConfig: safePaymentConfig,
       landingPageId,
+      productId: safeProductId,
     });
 
     // PR-4a mục 3: kích hoạt khoá ảnh (nếu có) SAU khi đã ghi forms.theme thành công — form mới
@@ -528,6 +550,10 @@ class FormService {
 
     if (payload.paymentConfig !== undefined) {
       updateData.paymentConfig = normalizePaymentConfig(payload.paymentConfig);
+    }
+
+    if (payload.productId !== undefined) {
+      updateData.productId = await resolveFormProductId(payload.productId, workspaceOwnerId);
     }
 
     const updated = await formRepository.updateForm(id, workspaceOwnerId, updateData);

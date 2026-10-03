@@ -28,6 +28,26 @@ function createValidationError(message, code = 'INVALID_FORM_DEFINITION') {
 }
 
 /**
+ * Chuẩn hoá `productId` (biểu mẫu dành cho sản phẩm nào): số nguyên dương hoặc null (không gắn).
+ * Việc sản phẩm có thuộc cùng workspace hay không do service kiểm (cần DB).
+ *
+ * @param {unknown} raw
+ * @returns {number|null}
+ */
+export function normalizeProductId(raw) {
+  if (raw === undefined || raw === null || raw === '') return null;
+  const text = String(raw).trim();
+  if (!/^\d+$/.test(text)) {
+    throw createValidationError('Sản phẩm không hợp lệ', 'INVALID_PRODUCT_ID');
+  }
+  const n = Number(text);
+  if (!Number.isSafeInteger(n) || n < 1 || n > 2147483647) {
+    throw createValidationError('Sản phẩm không hợp lệ', 'INVALID_PRODUCT_ID');
+  }
+  return n;
+}
+
+/**
  * Sinh key ngẫu nhiên dạng f_<8 ký tự hex> không trùng trong danh sách đã có.
  *
  * @param {Set<string>} existingKeys

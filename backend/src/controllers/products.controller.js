@@ -1,5 +1,6 @@
 import { serverError } from '../helpers.js';
 import productService from '../services/products/product.service.js';
+import productFunnelService from '../services/products/productFunnel.service.js';
 
 class ProductsController {
   async getAll(req, res) {
@@ -11,6 +12,15 @@ class ProductsController {
       return res.json({ success: true, data });
     } catch (error) {
       return serverError(res, 'getAll products', error);
+    }
+  }
+
+  async getFunnel(req, res) {
+    try {
+      const data = await productFunnelService.getFunnel(req.user, req.query);
+      return res.json({ success: true, data });
+    } catch (error) {
+      return serverError(res, 'getFunnel products', error);
     }
   }
 

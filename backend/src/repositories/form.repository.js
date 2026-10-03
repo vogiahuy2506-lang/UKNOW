@@ -57,6 +57,7 @@ class FormRepository {
          f.is_published AS "isPublished",
          f.admin_disabled_at AS "adminDisabledAt",
          f.landing_page_id AS "landingPageId",
+         f.product_id AS "productId",
          f.created_at AS "createdAt",
          f.updated_at AS "updatedAt",
          COUNT(s.id)::int AS "submissionCount"
@@ -94,6 +95,7 @@ class FormRepository {
          f.is_published AS "isPublished",
          f.admin_disabled_at AS "adminDisabledAt",
          f.landing_page_id AS "landingPageId",
+         f.product_id AS "productId",
          f.created_at AS "createdAt",
          f.updated_at AS "updatedAt",
          COUNT(s.id)::int AS "submissionCount"
@@ -167,6 +169,7 @@ class FormRepository {
     // (id landing CHƯA có lúc form được tạo) để mặc định null, gắn sau bằng setLandingPageId
     // trong CÙNG transaction với INSERT landing (landingPageAdmin.service.js).
     landingPageId = null,
+    productId = null,
   }) {
     const result = await db.query(
       `INSERT INTO forms (
@@ -181,8 +184,9 @@ class FormRepository {
          booking_config,
          payment_config,
          landing_page_id,
+         product_id,
          is_published
-       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, false)
+       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, false)
        RETURNING
          id,
          workspace_owner_id AS "workspaceOwnerId",
@@ -198,6 +202,7 @@ class FormRepository {
          is_published AS "isPublished",
          admin_disabled_at AS "adminDisabledAt",
          landing_page_id AS "landingPageId",
+         product_id AS "productId",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       [
@@ -212,6 +217,7 @@ class FormRepository {
         bookingConfig ? JSON.stringify(bookingConfig) : null,
         paymentConfig ? JSON.stringify(paymentConfig) : null,
         landingPageId,
+        productId,
       ]
     );
     return result.rows[0];
@@ -336,7 +342,7 @@ class FormRepository {
    * @param {object} params
    * @returns {Promise<object|null>}
    */
-  async updateForm(id, workspaceOwnerId, { title, description, fields, settings, theme, bookingConfig, paymentConfig }) {
+  async updateForm(id, workspaceOwnerId, { title, description, fields, settings, theme, bookingConfig, paymentConfig, productId }) {
     const fieldsToSet = [];
     const values = [id, workspaceOwnerId];
     let idx = 3;
@@ -376,6 +382,11 @@ class FormRepository {
       values.push(paymentConfig ? JSON.stringify(paymentConfig) : null);
       idx += 1;
     }
+    if (productId !== undefined) {
+      fieldsToSet.push(`product_id = $${idx}`);
+      values.push(productId);
+      idx += 1;
+    }
 
     fieldsToSet.push('updated_at = NOW()');
 
@@ -397,6 +408,7 @@ class FormRepository {
          payment_config AS "paymentConfig",
          is_published AS "isPublished",
          admin_disabled_at AS "adminDisabledAt",
+         product_id AS "productId",
          created_at AS "createdAt",
          updated_at AS "updatedAt"`,
       values

@@ -82,7 +82,7 @@ class FormController {
       const workspaceContext = getWorkspaceContext(req.user);
       if (rejectPaymentConfigFromEmployee(req, res, workspaceContext)) return;
 
-      const { title, description, fields, settings, theme, bookingConfig, paymentConfig } = req.body || {};
+      const { title, description, fields, settings, theme, bookingConfig, paymentConfig, productId } = req.body || {};
 
       const form = await formService.createForm({
         workspaceOwnerId: workspaceContext.workspaceOwnerId,
@@ -94,6 +94,7 @@ class FormController {
         theme,
         bookingConfig,
         paymentConfig,
+        productId,
       });
 
       if (paymentConfig !== undefined) {

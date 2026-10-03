@@ -14,6 +14,9 @@ router.use(requireActivePlan);
 
 router.get('/', requirePermission('courses'), productsController.getAll.bind(productsController));
 
+// Phễu theo sản phẩm: số tiền là dữ liệu báo cáo → `reports_view`, KHÔNG phải `courses`. Phải đứng TRƯỚC `/:id`.
+router.get('/funnel', requirePermission('reports_view'), productsController.getFunnel.bind(productsController));
+
 router.get('/categories', requirePermission('courses'), productsController.getCategories.bind(productsController));
 
 router.get(

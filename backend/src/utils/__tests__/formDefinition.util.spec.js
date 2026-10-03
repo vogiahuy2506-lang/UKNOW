@@ -5,6 +5,7 @@ import {
   normalizeBookingConfig,
   normalizePaymentConfig,
   normalizeFormTheme,
+  normalizeProductId,
   buildFormAssetKeyRegex,
   ALLOWED_FIELD_TYPES,
   ALLOWED_ROLES,
@@ -664,5 +665,31 @@ describe('normalizeFormTheme (PR-4a, PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md
       expect(re.test(`uploads/${OWNER_ID}/forms/a.gif`)).toBe(false);
       expect(re.test(`uploads/${OWNER_ID}/forms/a.svg`)).toBe(false);
     });
+  });
+});
+
+describe('normalizeProductId (phễu theo sản phẩm PR-1)', () => {
+  it('rỗng / null / undefined → null (không gắn sản phẩm)', () => {
+    expect(normalizeProductId(undefined)).toBeNull();
+    expect(normalizeProductId(null)).toBeNull();
+    expect(normalizeProductId('')).toBeNull();
+  });
+
+  it('số nguyên dương (số hoặc chuỗi số) → số', () => {
+    expect(normalizeProductId(7)).toBe(7);
+    expect(normalizeProductId(' 12 ')).toBe(12);
+  });
+
+  it('không phải số nguyên dương → lỗi 400 INVALID_PRODUCT_ID', () => {
+    for (const bad of ['abc', '1.5', '-3', 0, '0', {}, 99999999999]) {
+      let err;
+      try {
+        normalizeProductId(bad);
+      } catch (e) {
+        err = e;
+      }
+      expect(err?.statusCode).toBe(400);
+      expect(err?.code).toBe('INVALID_PRODUCT_ID');
+    }
   });
 });
