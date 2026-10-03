@@ -308,3 +308,151 @@ describe('campaignConfirmation.service', () => {
     });
   });
 });
+
+/**
+ * G3a.3 (C P1-7) — thẻ xác nhận của NHÂN VIÊN. Tài khoản Email/Zalo và mẫu tin thuộc CHỦ workspace (nhân viên dùng chung):
+ * các repo chỉ lọc `id_user = $x` nên phải được hỏi bằng id CHỦ. Bản cũ hỏi bằng id nhân viên → mọi tài khoản/mẫu của chủ
+ * "không tồn tại" → `missing_sender` / `template_not_found` → INVALID_DRAFT_RESOURCES, nhân viên không tạo được chiến dịch
+ * Email/Zalo qua trợ lý (Telegram/WhatsApp vốn đã dùng id chủ).
+ *
+ * Mock giữ ĐÚNG hành vi lọc chủ của repo thật (trả hàng khi hỏi bằng id chủ, null khi hỏi bằng id khác) để ca đỏ khi service
+ * hỏi nhầm id — không chỉ so tham số gọi.
+ */
+describe('G3a.3 — nhân viên: tài khoản gửi + mẫu tin tra theo CHỦ workspace', () => {
+  const EMPLOYEE = 55;
+  const OWNER = 101;
+  const UPDATED_AT = '2026-10-01T00:00:00.000Z';
+
+  beforeEach(() => {
+    // Mọi tài khoản/mẫu đều của OWNER: hỏi bằng id nào khác OWNER thì repo thật cũng trả rỗng.
+    draftRepo.findDefaultEmailSettingId.mockImplementation(async (uid) => (uid === OWNER ? 7 : null));
+    draftRepo.findDefaultZaloSettingId.mockImplementation(async (uid) => (uid === OWNER ? 9 : null));
+    emailSenders.findEmailSettingsById.mockImplementation(async (id, uid) => (uid === OWNER && id === 7 ? { id: 7, email: 'chu@example.test' } : null));
+    zaloSenders.findCampaignZaloAccount.mockImplementation(async (id, uid) => (
+      uid === OWNER && id === 9 ? { id: 9, display_name: 'Zalo của chủ', is_active: true } : null
+    ));
+    emailTemplates.findById.mockImplementation(async ({ id, userId }) => (
+      userId === OWNER && id === 11 ? { id: 11, template_name: 'Mẫu của chủ', subject: 'Chào', body_html: '<p>Nội dung</p>', updated_at: UPDATED_AT, attachments: '[]' } : null
+    ));
+    zaloTemplates.findById.mockImplementation(async ({ id, userId }) => (
+      userId === OWNER && id === 21 ? { id: 21, template_name: 'Zalo của chủ', body_text: 'Chào bạn', updated_at: UPDATED_AT, attachments: '[]' } : null
+    ));
+  });
+
+  const emailScript = (config = {}) => ({
+    campaignName: 'Email của nhân viên',
+    nodes: [{
+      tempId: 'email-1', nodeType: 'action', nodeSubtype: 'send_email', nodeName: 'Gửi email',
+      config: { emailSteps: [{ templateId: 11 }], ...config },
+    }],
+  });
+  const zaloScript = (config = {}) => ({
+    campaignName: 'Zalo của nhân viên',
+    nodes: [{
+      tempId: 'zalo-1', nodeType: 'action', nodeSubtype: 'send_zalo_personal', nodeName: 'Gửi Zalo',
+      config: { zaloPersonalTemplateSteps: [{ templateId: 21 }], ...config },
+    }],
+  });
+
+  it('Email: tài khoản gửi + mẫu của chủ được nhận ra khi nhân viên thao tác (không còn missing_sender / template_not_found)', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: EMPLOYEE,
+      ownerUserId: OWNER,
+      script: emailScript({ fromEmailId: 7 }),
+    });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(result.blockingIssues).toHaveLength(0);
+    expect(emailSenders.findEmailSettingsById).toHaveBeenCalledWith(7, OWNER);
+    expect(emailTemplates.findById).toHaveBeenCalledWith({ id: 11, userId: OWNER, isAdmin: false });
+  });
+
+  it('Email: node chưa chọn tài khoản → mặc định lấy của CHỦ (findDefaultEmailSettingId(chủ))', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: EMPLOYEE,
+      ownerUserId: OWNER,
+      script: emailScript(),
+    });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(draftRepo.findDefaultEmailSettingId).toHaveBeenCalledWith(OWNER);
+    expect(draftRepo.findDefaultEmailSettingId).not.toHaveBeenCalledWith(EMPLOYEE);
+    expect(emailSenders.findEmailSettingsById).toHaveBeenCalledWith(7, OWNER);
+  });
+
+  it('Zalo cá nhân: tài khoản + mẫu của chủ được nhận ra (explicit và mặc định)', async () => {
+    const explicit = await service.default.buildConfirmationView({
+      userId: EMPLOYEE,
+      ownerUserId: OWNER,
+      script: zaloScript({ zaloAccountId: 9 }),
+    });
+    expect(explicit.readyToCreate).toBe(true);
+    expect(zaloSenders.findCampaignZaloAccount).toHaveBeenCalledWith(9, OWNER, false);
+    expect(zaloTemplates.findById).toHaveBeenCalledWith({ id: 21, userId: OWNER, isAdmin: false });
+
+    const byDefault = await service.default.buildConfirmationView({
+      userId: EMPLOYEE,
+      ownerUserId: OWNER,
+      script: zaloScript(),
+    });
+    expect(byDefault.readyToCreate).toBe(true);
+    expect(draftRepo.findDefaultZaloSettingId).toHaveBeenCalledWith(OWNER);
+    expect(draftRepo.findDefaultZaloSettingId).not.toHaveBeenCalledWith(EMPLOYEE);
+  });
+
+  it('fail-closed: tài khoản/mẫu của workspace KHÁC vẫn bị chặn (missing_sender / template_not_found)', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: EMPLOYEE,
+      ownerUserId: OWNER,
+      script: emailScript({ fromEmailId: 8, emailSteps: [{ templateId: 99 }] }),
+    });
+
+    expect(result.readyToCreate).toBe(false);
+    expect(result.blockingIssues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'missing_sender', nodeId: 'email-1' }),
+      expect.objectContaining({ code: 'template_not_found', nodeId: 'email-1' }),
+    ]));
+  });
+
+  it('chủ tự thao tác (không truyền ownerUserId): vẫn tra theo id của mình — hành vi cũ giữ nguyên', async () => {
+    const result = await service.default.buildConfirmationView({
+      userId: OWNER,
+      script: emailScript({ fromEmailId: 7 }),
+    });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(emailSenders.findEmailSettingsById).toHaveBeenCalledWith(7, OWNER);
+    expect(emailTemplates.findById).toHaveBeenCalledWith({ id: 11, userId: OWNER, isAdmin: false });
+  });
+
+  describe('assertResourceVersionsCurrent', () => {
+    it('nhân viên: tra mẫu theo CHỦ — mẫu còn nguyên thì không ném PREPARE_STALE oan', async () => {
+      await expect(service.default.assertResourceVersionsCurrent({
+        userId: EMPLOYEE,
+        ownerUserId: OWNER,
+        resourceVersions: [
+          { kind: 'email_template', id: 11, updatedAt: UPDATED_AT },
+          { kind: 'zalo_template', id: 21, updatedAt: UPDATED_AT },
+        ],
+      })).resolves.toBeUndefined();
+
+      expect(emailTemplates.findById).toHaveBeenCalledWith({ id: 11, userId: OWNER, isAdmin: false });
+      expect(zaloTemplates.findById).toHaveBeenCalledWith({ id: 21, userId: OWNER, isAdmin: false });
+    });
+
+    it('mẫu đã đổi sau khi chụp phiên bản → vẫn ném 409 PREPARE_STALE (kiểm hạn không bị nới)', async () => {
+      await expect(service.default.assertResourceVersionsCurrent({
+        userId: EMPLOYEE,
+        ownerUserId: OWNER,
+        resourceVersions: [{ kind: 'email_template', id: 11, updatedAt: '2026-09-01T00:00:00.000Z' }],
+      })).rejects.toMatchObject({ code: 'PREPARE_STALE', statusCode: 409 });
+    });
+
+    it('không truyền ownerUserId: tra theo userId như cũ', async () => {
+      await expect(service.default.assertResourceVersionsCurrent({
+        userId: OWNER,
+        resourceVersions: [{ kind: 'email_template', id: 11, updatedAt: UPDATED_AT }],
+      })).resolves.toBeUndefined();
+    });
+  });
+});

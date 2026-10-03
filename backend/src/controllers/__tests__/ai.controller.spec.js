@@ -1681,6 +1681,40 @@ describe('ai.controller — nhân viên (G3a)', () => {
     });
   });
 
+  describe('G3a.3 — tạo chiến dịch từ bản nháp AI: tài khoản + mẫu tin tra theo CHỦ', () => {
+    const draftBody = () => ({
+      script: {
+        campaignName: 'Chiến dịch của nhân viên',
+        nodes: [{ id: 'n1', nodeSubtype: 'send_email', config: { fromEmailId: 7 } }],
+        connections: [],
+      },
+      resourceVersions: [{ kind: 'email_template', id: 11, updatedAt: '2026-10-01T00:00:00.000Z' }],
+    });
+
+    beforeEach(() => {
+      prepareScript.mockReset();
+      prepareScript.mockImplementation(async (script) => script);
+      assertResourceVersionsCurrent.mockReset();
+      assertResourceVersionsCurrent.mockResolvedValue(undefined);
+      buildConfirmationView.mockReset();
+      buildConfirmationView.mockResolvedValue({ readyToCreate: true });
+      campaignControllerCreate.mockReset();
+      campaignControllerCreate.mockImplementation(async (_req, res) => {
+        res.json({ success: true, data: { id: 999 } });
+      });
+    });
+
+    it('createCampaignFromDraft: assertResourceVersionsCurrent + buildConfirmationView nhận ownerUserId = chủ khi nhân viên thao tác', async () => {
+      const res = makeRes();
+
+      await aiController.createCampaignFromDraft({ body: draftBody(), user: employeeUser() }, res);
+
+      expect(assertResourceVersionsCurrent).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
+      expect(buildConfirmationView).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
+      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true, campaignId: 999 }));
+    });
+  });
+
   describe('G3a.1 — controller truyền id CHỦ cho dịch vụ đọc tệp (nhân viên đọc được tệp chủ, không đọc tệp workspace khác)', () => {
     it('POST /ai/chat: processSmartChat nhận resourceOwnerUserId = chủ, userId = nhân viên', async () => {
       processSmartChat.mockResolvedValue({ type: 'text', content: 'ok', data: null });

@@ -1032,7 +1032,12 @@ class AiController {
         error.statusCode = 400;
         throw error;
       }
-      await campaignConfirmationService.assertResourceVersionsCurrent({ resourceVersions, userId: req.user.id });
+      await campaignConfirmationService.assertResourceVersionsCurrent({
+        resourceVersions,
+        userId: req.user.id,
+        // Mẫu tin thuộc CHỦ workspace — cùng id mà buildConfirmationView dùng khi chụp resourceVersions.
+        ownerUserId: resolveOwnerUserId(req.user),
+      });
       const normalizedNodes = preparedScript.nodes;
       const normalizedConnections = preparedScript.connections;
       const ownershipPreview = await campaignConfirmationService.buildConfirmationView({

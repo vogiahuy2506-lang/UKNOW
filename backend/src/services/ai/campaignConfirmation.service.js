@@ -122,15 +122,18 @@ const selectedGroupIdsOnNode = (config) => {
 };
 
 class CampaignConfirmationService {
-  async assertResourceVersionsCurrent({ resourceVersions, userId }) {
+  async assertResourceVersionsCurrent({ resourceVersions, userId, ownerUserId = null }) {
     if (!Array.isArray(resourceVersions)) return;
+    // Mẫu tin thuộc CHỦ workspace (xem buildConfirmationView) — tra theo chủ, cùng id mà buildConfirmationView đã dùng khi
+    // chụp `resourceVersions`; tra theo nhân viên thì mọi mẫu của chủ "biến mất" → PREPARE_STALE 409 oan.
+    const templateOwnerId = ownerUserId != null ? ownerUserId : userId;
     for (const resource of resourceVersions) {
       const id = asNumber(resource?.id);
       if (!id || !resource?.updatedAt) continue;
       const template = resource.kind === 'email_template'
-        ? await emailTemplateRepository.findById({ id, userId, isAdmin: false })
+        ? await emailTemplateRepository.findById({ id, userId: templateOwnerId, isAdmin: false })
         : resource.kind === 'zalo_template'
-          ? await zaloTemplateRepository.findById({ id, userId, isAdmin: false })
+          ? await zaloTemplateRepository.findById({ id, userId: templateOwnerId, isAdmin: false })
           : null;
       const expected = new Date(resource.updatedAt).getTime();
       const current = new Date(template?.updated_at || template?.updatedAt || 0).getTime();
@@ -144,7 +147,15 @@ class CampaignConfirmationService {
   }
 
   async buildConfirmationView({ script, userId, ownerUserId = null }) {
-    // Tài khoản Telegram/WhatsApp thuộc CHỦ workspace (nhân viên dùng chung) — khác userId thao tác.
+    // MỌI tài khoản gửi (Email, Zalo, Telegram, WhatsApp) và mẫu tin (Email/Zalo) thuộc CHỦ workspace — nhân viên dùng chung,
+    // khác userId thao tác. Bằng chứng quy ước: các endpoint thường của nhân viên đều tra theo `workspaceOwnerId`
+    // (emailSettings/emailTemplate/zaloSettings/zaloTemplate.controller: `getWorkspaceContext(req.user).workspaceOwnerId`),
+    // chiến dịch lưu `id_user = workspace_owner_id = chủ` (campaignCrud.repository.insertCampaignTx) nên lúc chạy tra tài khoản
+    // theo chủ (campaignEmailSender: `campaign.id_user`; campaignRun → getCampaignZaloAccount), và wizard liệt kê tài khoản
+    // cho model theo chủ (aiCampaign._getWizardResources(ownerId)).
+    // Các repo (findEmailSettingsById, findCampaignZaloAccount, emailTemplate/zaloTemplate.findById) chỉ lọc `id_user = $x`
+    // chứ không tự đổi nhân viên → chủ, nên phải truyền id chủ ở đây. Trước đây Email/Zalo/mẫu dùng `userId` (nhân viên) →
+    // luôn `missing_sender`/`template_not_found` → INVALID_DRAFT_RESOURCES (C P1-7). Telegram/WhatsApp vốn đã đúng.
     const channelOwnerId = ownerUserId != null ? ownerUserId : userId;
     const nodes = Array.isArray(script?.nodes) ? script.nodes : [];
     const issues = [];
@@ -190,8 +201,8 @@ class CampaignConfirmationService {
 
     const resolveSender = async (channel, config, issueNodeId) => {
       if (channel === 'email') {
-        const id = asNumber(config?.fromEmailId) || await aiCampaignDraftRepository.findDefaultEmailSettingId(userId);
-        const sender = id ? await campaignEmailSenderRepository.findEmailSettingsById(id, userId) : null;
+        const id = asNumber(config?.fromEmailId) || await aiCampaignDraftRepository.findDefaultEmailSettingId(channelOwnerId);
+        const sender = id ? await campaignEmailSenderRepository.findEmailSettingsById(id, channelOwnerId) : null;
         if (!sender) {
           addIssue({ code: 'missing_sender', nodeId: issueNodeId });
           return { id: null, label: null };
@@ -225,8 +236,8 @@ class CampaignConfirmationService {
         return { id: sessionKey, label };
       }
 
-      const id = asNumber(config?.zaloAccountId) || await aiCampaignDraftRepository.findDefaultZaloSettingId(userId);
-      const sender = id ? await campaignZaloSenderRepository.findCampaignZaloAccount(id, userId, false) : null;
+      const id = asNumber(config?.zaloAccountId) || await aiCampaignDraftRepository.findDefaultZaloSettingId(channelOwnerId);
+      const sender = id ? await campaignZaloSenderRepository.findCampaignZaloAccount(id, channelOwnerId, false) : null;
       if (!sender || !sender.is_active) {
         addIssue({ code: 'missing_sender', nodeId: issueNodeId });
         return { id: null, label: null };
@@ -241,8 +252,8 @@ class CampaignConfirmationService {
         return null;
       }
       const template = channel === 'email'
-        ? await emailTemplateRepository.findById({ id, userId, isAdmin: false })
-        : await zaloTemplateRepository.findById({ id, userId, isAdmin: false });
+        ? await emailTemplateRepository.findById({ id, userId: channelOwnerId, isAdmin: false })
+        : await zaloTemplateRepository.findById({ id, userId: channelOwnerId, isAdmin: false });
       if (!template) {
         addIssue({ code: 'template_not_found', nodeId: issueNodeId, stepIndex });
         return null;
