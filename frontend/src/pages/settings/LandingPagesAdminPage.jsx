@@ -23,6 +23,7 @@ import {
 import marketplaceService from '../../services/marketplace.service';
 import LandingPageShareModal from '../../components/marketplace/LandingPageShareModal';
 import LandingPageMarketplaceModal from '../../components/marketplace/LandingPageMarketplaceModal';
+import { getCustomHostname } from '../../features/landing-canvas/utils/landingDomain.js';
 
 const BASE_DOMAIN = 'founderai.biz';
 const TABS = [
@@ -146,8 +147,11 @@ export default function LandingPagesAdminPage() {
   const tableRows = useMemo(() => {
     return rows.map((r) => {
       const st = statsBySlug.get(r.slug) || {};
-      const isCustom = r.domainType === 'custom' || Boolean(r.customDomainHostname);
-      const domain = r.customDomainHostname || `${r.slug}.${BASE_DOMAIN}`;
+      // `customDomainHostname` của API quản trị cũng chứa `<slug>.founderai.biz` của trang dùng tên miền MIỄN PHÍ (cùng bảng
+      // landing_page_domains) — chỉ hostname KHÔNG thuộc hệ thống mới là tên miền riêng (nhãn "Sub"/"Apex").
+      const customHostname = getCustomHostname(r);
+      const isCustom = r.domainType === 'custom' || Boolean(customHostname);
+      const domain = customHostname || `${r.slug}.${BASE_DOMAIN}`;
       return {
         ...r,
         viewCount: Number(st.viewCount || 0),
@@ -188,8 +192,9 @@ export default function LandingPagesAdminPage() {
   };
 
   const getPublicUrl = (r) => {
-    if (r?.customDomainHostname) {
-      return `https://${r.customDomainHostname}`;
+    const customHostname = getCustomHostname(r);
+    if (customHostname) {
+      return `https://${customHostname}`;
     }
     return `https://${r?.slug || ''}.${BASE_DOMAIN}`;
   };
@@ -441,7 +446,7 @@ export default function LandingPagesAdminPage() {
                 </td>
                 <td className="p-3">
                   <code className="font-mono text-xs px-2 py-1 rounded bg-orange-50 text-orange-700">
-                    {s.customDomainHostname || `${s.slug}.${BASE_DOMAIN}`}
+                    {getCustomHostname(s) || `${s.slug}.${BASE_DOMAIN}`}
                   </code>
                 </td>
                 <td className="p-3 text-gray-700 text-xs">
