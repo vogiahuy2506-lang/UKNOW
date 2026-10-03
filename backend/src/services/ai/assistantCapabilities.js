@@ -229,8 +229,8 @@ const STATIC_CORE_CAPABILITIES = [
     {
       id: 'run_now',
       label: {
-        vi: 'tạo và chạy chiến dịch ngay',
-        en: 'create and run a campaign immediately',
+        vi: 'tạo và chạy chiến dịch ngay sau khi bạn bấm xác nhận',
+        en: 'create and run a campaign right after you confirm it',
       },
       patterns: [/chạy ngay|chay ngay|tạo và chạy|tao va chay|create and run|run (?:a )?campaign now/i],
     },

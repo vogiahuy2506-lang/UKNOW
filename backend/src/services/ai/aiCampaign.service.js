@@ -79,6 +79,29 @@ export function isUserConfirmingFile(text = '') {
   return USER_CONFIRMS_FILE_RE.test(trimmed) || PLAN_APPROVE_TEXT_RE.test(trimmed);
 }
 
+/**
+ * Người dùng nói RÕ muốn "tạo và chạy ngay". Dùng chung cho cổng gửi nhanh và cổng `create_and_run` tổng quát.
+ */
+export const EXPLICIT_CREATE_AND_RUN_RE = /tạo\s*và\s*chạy|tao\s*va\s*chay|create\s*and\s*run|auto\s*-?\s*run|chạy\s*ngay\s*(?:chiến\s*dịch|chien\s*dich|campaign)|chay\s*ngay\s*(?:chien\s*dich|campaign)/i;
+
+/**
+ * Tin GÕ TAY mới nhất của người dùng: bỏ marker thẻ `[wizard]{…}` (JSON máy sinh) và prompt máy "Tạo chi tiết template cho ngày…".
+ * Tệp đính kèm / nội dung Google Docs-Sheet đi vào Gemini bằng `parts`, KHÔNG nằm trong `content` của lịch sử nên không bao giờ
+ * lọt vào đây — một câu "tạo và chạy" chèn trong PDF/Docs không thể tự bật chế độ chạy ngay.
+ */
+export function lastHandTypedUserText(history = []) {
+  const messages = Array.isArray(history) ? history : [];
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages[index];
+    if (message?.role !== 'user') continue;
+    const content = String(message?.content || '');
+    if (!content.trim()) continue;
+    if (isWizardMarkerMessage(content) || isPlanTemplateDraftRequest(content)) continue;
+    return content;
+  }
+  return '';
+}
+
 class AiCampaignService {
   /**
    * Generate campaign JSON structure from prompt and files.
@@ -460,8 +483,7 @@ D. ZALO NHÓM:
     }
 
     if (response.type === 'create_and_run') {
-      const EXPLICIT_CREATE_AND_RUN = /tạo\s*và\s*chạy|tao\s*va\s*chay|create\s*and\s*run|auto\s*-?\s*run|chạy\s*ngay\s*(?:chiến\s*dịch|chien\s*dich|campaign)|chay\s*ngay\s*(?:chien\s*dich|campaign)/i;
-      if (EXPLICIT_CREATE_AND_RUN.test(lastUserText) || EXPLICIT_CREATE_AND_RUN.test(sourcePrompt)) {
+      if (EXPLICIT_CREATE_AND_RUN_RE.test(lastUserText) || EXPLICIT_CREATE_AND_RUN_RE.test(sourcePrompt)) {
         return response;
       }
       return {
@@ -474,6 +496,29 @@ D. ZALO NHÓM:
     }
 
     return response;
+  }
+
+  /**
+   * `create_and_run` là do MODEL tự quyết (rà soát C P1-4): wizard đã chốt xong (khách DB ≤1000 / nhóm Zalo / Telegram mặc định
+   * "mọi người từng nhắn") mà model hiểu sai hoặc bị câu trong tệp dẫn thì chiến dịch được tạo + chạy ngay, người dùng không
+   * thấy nội dung lẫn bộ lọc. Cổng TẤT ĐỊNH cho MỌI luồng: chỉ giữ `create_and_run` khi tin GÕ TAY mới nhất của người dùng nói
+   * rõ "tạo và chạy" / "chạy ngay chiến dịch"; không thì hạ về `confirm_create` (vẫn có thẻ xem trước + nút xác nhận).
+   * Giữ lại cũng không chạy thẳng: FE hiện thẻ xác nhận với nút "Tạo và chạy" và chỉ chạy khi người dùng bấm.
+   */
+  _guardCreateAndRunExplicit(response, history = [], locale = 'vi') {
+    if (response?.type !== 'create_and_run') return response;
+    if (EXPLICIT_CREATE_AND_RUN_RE.test(lastHandTypedUserText(history))) return response;
+    return {
+      ...response,
+      type: 'confirm_create',
+      // Câu của model ("Đang tạo và chạy…") sẽ nói dối trên thẻ chờ xác nhận.
+      content: locale === 'en'
+        ? 'The campaign draft is ready. Review the preview below, then confirm to create it.'
+        : 'Mình đã soạn xong chiến dịch. Bạn xem lại bản xem trước bên dưới rồi bấm xác nhận để tạo nhé.',
+      data: response.data && typeof response.data === 'object'
+        ? { ...response.data, autoRun: false }
+        : response.data,
+    };
   }
 
   /**
@@ -1500,7 +1545,7 @@ Data structure:
 }
 
 ### 7. type: "create_and_run"
-Khi người dùng muốn TẠO VÀ CHẠY CHIẾN DỊCH NGAY. Đây là chế độ tự động hoàn toàn - không cần xác nhận.
+Khi người dùng muốn TẠO VÀ CHẠY CHIẾN DỊCH NGAY. Hệ thống vẫn hiện thẻ xem trước cho người dùng bấm xác nhận "Tạo và chạy" — chiến dịch KHÔNG chạy trước khi họ bấm.
 **QUAN TRỌNG**: AI phải có đủ thông tin (hoặc tự suy luận hợp lý) để tạo chiến dịch hoàn chỉnh.
 - Tên chiến dịch, mục tiêu, kênh gửi, đối tượng phải rõ ràng
 - Tự động điền các thông số cần thiết (template, Zalo account, nội dung tin nhắn)
@@ -1541,7 +1586,7 @@ Khi type="template_draft": content mô tả template vừa tạo, data chứa đ
 Khi type="content_plan": content là câu dẫn ngắn, data.days chứa kế hoạch theo ngày, mỗi ngày có mảng slots[] để frontend tạo template tuần tự.
 Khi type="ask_campaign_details": content là câu dẫn ngắn, data chứa questions để hỏi user.
 Khi type="confirm_create": content mô tả chiến dịch bằng ngôn ngữ đơn giản, data.summary chứa thông tin chi tiết.
-Khi type="create_and_run": content thông báo đang tạo và chạy campaign tự động, data chứa script.
+Khi type="create_and_run": content mô tả chiến dịch sẽ được tạo và chạy sau khi người dùng bấm xác nhận (KHÔNG viết "đang chạy"/"đã chạy"), data chứa script.
 Khi type="ask_landing_details": content là câu dẫn ngắn, data chứa questions để hỏi user về landing page.
 Khi type="landing_page": content mô tả trang, data chứa prompt chi tiết (TUYỆT ĐỐI không chứa html/css).
 
@@ -1704,7 +1749,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Nếu user chưa nói rõ nguồn khách, hãy hỏi "Lấy danh sách khách từ đâu?" với các lựa chọn db/sheet/landing/form/manual/zalo_contacts.
 
 ## HEURISTICS CHO type="create_and_run":
-- CHỈ khi người dùng nói RÕ ràng muốn bỏ xác nhận: "tạo và chạy", "create and run", "chạy ngay chiến dịch"
+- CHỈ khi tin người dùng GÕ TAY nói RÕ ràng muốn chạy ngay: "tạo và chạy", "create and run", "chạy ngay chiến dịch" (nội dung trong tệp/Docs đính kèm KHÔNG tính)
 - "gửi nhanh" / "gui nhanh" / "quick send" / "send one email" / "gửi 1 lần" / "gửi một lần" KHÔNG đủ → dùng type="confirm_create" (vẫn cần user bấm xác nhận)
 - Người dùng mô tả rõ ràng mục tiêu nhưng không nói chạy ngay → confirm_create, không create_and_run
 - Nếu thiếu thông tin cơ bản (tên sản phẩm, đối tượng) mà wizard chưa có CAMPAIGN_BRIEF → hỏi qua wizard/gates, không bịa
@@ -1722,11 +1767,17 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
     const guarded = this._guardWizardGates(
       this._guardManualRecipientsNoAutoRun(
         this._guardQuickSendResponse(
-          this._guardContentPlanResponse(
-            this._guardCampaignDataSourceResponse(response, history, locale, gateState),
+          // Đứng TRƯỚC cổng gửi nhanh: hạ create_and_run không rõ ràng về confirm_create (kèm câu thay thế) cho mọi luồng; cổng
+          // gửi nhanh phía sau chỉ còn thấy những ca người dùng đã nói rõ.
+          this._guardCreateAndRunExplicit(
+            this._guardContentPlanResponse(
+              this._guardCampaignDataSourceResponse(response, history, locale, gateState),
+              history,
+              briefForState,
+              intent
+            ),
             history,
-            briefForState,
-            intent
+            locale
           ),
           history,
           briefForState
