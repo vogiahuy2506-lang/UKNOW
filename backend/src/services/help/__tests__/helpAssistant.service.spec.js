@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const mockGenerate = jest.fn();
 const mockRecord = jest.fn();
@@ -20,7 +20,7 @@ jest.unstable_mockModule('../../../repositories/help/helpArticle.repository.js',
   insertUnanswered: jest.fn(async () => {}),
 }));
 
-const { routeQuestion } = await import('../helpAssistant.service.js');
+const { routeQuestion, tryHandleHelpChat } = await import('../helpAssistant.service.js');
 
 describe('helpAssistant.service routeQuestion', () => {
   beforeEach(() => {
@@ -45,6 +45,8 @@ describe('helpAssistant.service routeQuestion', () => {
       maxOutputTokens: 256,
       temperature: 0,
     });
+    // G2.3: nhãn định tuyến phải có trần thời gian riêng (bản cũ fetch không timeout) — một nhãn ngắn mà quá 20 giây là hỏng.
+    expect(mockGenerate.mock.calls[0][0].timeoutMs).toBe(20000);
     expect(mockRecord).toHaveBeenCalledTimes(1);
   });
 
@@ -152,5 +154,48 @@ describe('helpAssistant.service routeQuestion — ghim câu chữ prompt định
     await routeQuestion('câu bất kỳ', 1);
     const systemPrompt = mockGenerate.mock.calls[0][0].systemPrompt;
     expect(systemPrompt).not.toContain(line);
+  });
+});
+
+// G2.3 (C P1-5): bộ định tuyến chỉ là bước phân loại — nó hỏng thì KHÔNG được làm hỏng cả lượt.
+describe('helpAssistant.service tryHandleHelpChat — bộ định tuyến lỗi', () => {
+  const history = [{ role: 'user', content: 'giúp mình viết nội dung quảng cáo cho khoá học tiếng Anh' }];
+  let warnSpy;
+
+  beforeEach(() => {
+    mockGenerate.mockReset();
+    mockRecord.mockReset();
+    mockRecord.mockResolvedValue(undefined);
+    warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    warnSpy.mockRestore();
+  });
+
+  it('Google quá tải (router ném lỗi) → coi như không_rõ, {handled:false} để controller đi tiếp sang não chiến dịch', async () => {
+    const busy = Object.assign(new Error('Máy chủ AI đang quá tải tạm thời. Bạn vui lòng thử lại sau ít phút.'), {
+      geminiStatus: 503, code: 'AI_PROVIDER_BUSY', providerMessage: 'high demand',
+    });
+    mockGenerate.mockRejectedValue(busy);
+
+    const result = await tryHandleHelpChat({ history, userId: 1 });
+
+    expect(result).toEqual({ handled: false, route: 'không_rõ' });
+    expect(mockGenerate).toHaveBeenCalledTimes(1); // không đi tiếp gọi AI lần nữa ở nhánh trả lời tài liệu
+    expect(String(warnSpy.mock.calls[0][0])).toContain('[help_route]');
+    expect(String(warnSpy.mock.calls[0][1])).toContain('high demand'); // log vẫn đọc được câu gốc của Google
+  });
+
+  it('lỗi KHÁC của router (thiếu khoá API…) cũng không làm hỏng lượt', async () => {
+    mockGenerate.mockRejectedValue(new Error('Thiếu GEMINI_API_KEY trong môi trường backend'));
+
+    await expect(tryHandleHelpChat({ history, userId: 1 })).resolves.toEqual({ handled: false, route: 'không_rõ' });
+  });
+
+  it('đối chứng: router chạy bình thường vẫn trả đúng nhãn làm_giúp', async () => {
+    mockGenerate.mockResolvedValue({ text: 'làm_giúp', modelName: 'm', raw: {} });
+
+    await expect(tryHandleHelpChat({ history, userId: 1 })).resolves.toEqual({ handled: false, route: 'làm_giúp' });
   });
 });

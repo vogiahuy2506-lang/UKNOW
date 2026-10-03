@@ -1,8 +1,22 @@
 import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
+import aiUsageMeter from '../ai/aiUsageMeter.service.js';
+import { generateGeminiContent } from '../../utils/geminiClient.util.js';
+
+/**
+ * Trần một lượt gọi (gồm cả thử lại + model dự phòng). Bản cũ dùng `fetch` KHÔNG có timeout: Google treo thì request treo
+ * tới khi Cloudflare cắt ở 100 giây. 90 giây đủ cho bản dịch dài (8.192 token đầu ra) mà vẫn nằm dưới trần đó;
+ * nơi cần nhanh (bộ định tuyến ý định) truyền `timeoutMs` nhỏ hơn.
+ */
+const DEFAULT_TIMEOUT_MS = 90000;
 
 /**
  * Lightweight Gemini generateContent for help-center routing / Q&A.
  * Does not touch aiCampaign prompts.
+ *
+ * G2.3 (03/10/2026): đi qua `generateGeminiContent` (lõi dùng chung) — thử lại 429/5xx/lỗi mạng, model dự phòng, khoá API ở
+ * header, hết giờ thì huỷ fetch, và lỗi mang `geminiStatus` + câu tiếng Việt (bản cũ ném nguyên câu tiếng Anh của Google).
+ * Giữ nguyên hợp đồng trả về `{ text, modelName, raw }` — `modelName` là model THẬT đã trả lời (có thể là model dự phòng),
+ * `raw` là thân phản hồi Google (nơi gọi đọc `usageMetadata` / `finishReason`).
  */
 export async function generateGeminiText({
   userId,
@@ -11,45 +25,27 @@ export async function generateGeminiText({
   temperature = 0.2,
   maxOutputTokens = 1024,
   thinkingBudget = null,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
 } = {}) {
-  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
-  if (!apiKey) {
-    throw Object.assign(new Error('Thiếu GEMINI_API_KEY'), { status: 500 });
-  }
-
   const modelName = await resolveAllowedModel(userId, null);
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelName)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const fallbackModel = await aiUsageMeter.resolveFallbackModel();
 
-  const generationConfig = {
-    temperature,
-    maxOutputTokens,
-  };
-  if (Number.isFinite(thinkingBudget) && thinkingBudget >= 0) {
-    generationConfig.thinkingConfig = { thinkingBudget };
-  }
-
-  const body = {
+  const result = await generateGeminiContent({
+    parts: [{ text: userPrompt }],
     systemInstruction: systemPrompt ? { parts: [{ text: systemPrompt }] } : undefined,
-    contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
-    generationConfig,
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    model: modelName,
+    fallbackModel,
+    temperature,
+    topP: null, // đường này chưa bao giờ gửi topP — giữ nguyên
+    maxOutputTokens,
+    thinkingBudget, // null (mặc định) = không gửi thinkingConfig; số ≥ 0 thì lõi tự gỡ khi model từ chối
+    timeoutMs,
+    totalTimeoutMs: timeoutMs,
   });
-  const data = await res.json().catch(() => ({}));
-  if (!res.ok) {
-    const msg = data?.error?.message || `Gemini HTTP ${res.status}`;
-    throw Object.assign(new Error(msg), { status: 503 });
-  }
 
-  const text = data?.candidates?.[0]?.content?.parts
-    ?.filter((p) => p?.text && !p.thought)
-    ?.map((p) => p.text)
-    .join('')
-    .trim() || '';
-
-  return { text, modelName, raw: data };
+  return {
+    text: result.text.trim(),
+    modelName: result.modelUsed || modelName,
+    raw: result.raw,
+  };
 }

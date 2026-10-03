@@ -228,6 +228,9 @@ async function recordRouteUsage(userId, modelName, raw) {
   }
 }
 
+/** Bộ định tuyến chỉ trả MỘT nhãn ngắn — quá 20 giây là hỏng, đi tiếp bằng đường không_rõ (xem tryHandleHelpChat). */
+const ROUTER_TIMEOUT_MS = 20000;
+
 async function routeQuestion(question, userId) {
   const systemPrompt = `Bạn là bộ định tuyến ý định cho trợ lý Founder AI.
 Chỉ trả về ĐÚNG MỘT trong bốn nhãn sau (không giải thích):
@@ -261,6 +264,7 @@ Ví dụ (cả hai chiều):
     systemPrompt,
     userPrompt: question,
     temperature: 0,
+    timeoutMs: ROUTER_TIMEOUT_MS,
   };
 
   let text;
@@ -550,7 +554,16 @@ export async function tryHandleHelpChat({
     return { ...reply, data: { ...reply.data, unsupportedSend: true } };
   }
 
-  const route = await routeQuestion(question, userId);
+  // G2.3 (C P1-5): bộ định tuyến chỉ là bước PHÂN LOẠI. Nó hỏng (Google quá tải, hết giờ…) thì cả lượt không được hỏng theo —
+  // coi như `không_rõ` và đi tiếp sang não chiến dịch (processSmartChat), vốn tự thử lại + có model dự phòng riêng.
+  // Bản cũ không bọc try: một cú 503 ở router làm cả lượt trả lỗi dù não chính vẫn trả lời được.
+  let route;
+  try {
+    route = await routeQuestion(question, userId);
+  } catch (error) {
+    console.warn('[help_route] bộ định tuyến lỗi, coi như không_rõ và đi tiếp:', error?.providerMessage || error?.message || error);
+    route = HELP_ROUTE_LABELS.không_rõ;
+  }
 
   if (route === HELP_ROUTE_LABELS.làm_giúp) {
     return { handled: false, route };
