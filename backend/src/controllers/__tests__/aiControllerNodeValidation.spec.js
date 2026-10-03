@@ -451,6 +451,25 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
       expect(res.status).toHaveBeenCalledWith(409);
     });
 
+    it('lỗi ném giữa chừng (nhánh catch) → vẫn dọn mẫu tự tạo theo id CHỦ, ở cả createAndRunCampaign lẫn createCampaignFromDraft', async () => {
+      const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockAutoCreateEmailTemplates.mockImplementation(async (_nodes, _userId, created) => { created.emailTemplateIds.push(703); });
+      mockCreateCampaign.mockRejectedValue(new Error('DB sập giữa chừng'));
+
+      await aiController.createAndRunCampaign(employeeReq(emailScript()), makeRes());
+      expect(mockCleanupAutoCreatedTemplates).toHaveBeenLastCalledWith(expect.objectContaining({ emailTemplateIds: [703] }), OWNER);
+
+      mockCleanupAutoCreatedTemplates.mockClear();
+      mockPrepareScript.mockResolvedValueOnce(emailScript());
+      mockAutoCreateEmailTemplates.mockImplementation(async (_nodes, _userId, created) => { created.emailTemplateIds.push(704); });
+      await aiController.createCampaignFromDraft(employeeReq(emailScript()), makeRes());
+      expect(mockCleanupAutoCreatedTemplates).toHaveBeenLastCalledWith(expect.objectContaining({ emailTemplateIds: [704] }), OWNER);
+
+      mockAutoCreateEmailTemplates.mockReset();
+      mockCreateCampaign.mockReset();
+      consoleError.mockRestore();
+    });
+
     it('createCampaignFromDraft: mẫu tự tạo + dọn mẫu theo id CHỦ; assertResourceVersionsCurrent nhận ownerUserId', async () => {
       mockPrepareScript.mockResolvedValueOnce(emailScript());
       mockAutoCreateEmailTemplates.mockImplementationOnce(async (_nodes, _userId, created) => { created.emailTemplateIds.push(702); });
