@@ -48,6 +48,8 @@ const UI_LABELS_IN_ARTICLES = [
   ['quick-send', 'quickSendAdapter.modeManualWhatsApp', 'Nhập số điện thoại'],
   ['quick-send', 'quickSendAdapter.modeGroups', 'Nhóm'],
   ['quick-send', 'quickSendAdapter.groupsLoad', 'Tải danh sách nhóm'],
+  ['quick-send', 'quickSend.zaloRecipientTypeLabel', 'Loại người nhận'],
+  ['quick-send', 'quickSend.zaloRecipientTypeGroup', 'Nhóm'],
   ['campaign-theo-doi', 'userDeliveryMonitor.title', 'Giám sát gửi tin'],
   ['campaign-theo-doi', 'userDeliveryMonitor.refresh', 'Làm mới'],
   ['campaign-theo-doi', 'userDeliveryMonitor.cards.sent', 'Đã gửi hôm nay'],

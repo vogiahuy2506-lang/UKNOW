@@ -9059,6 +9059,7 @@ export default {
     zaloRecipientTypeLabel: 'Loại người nhận',
     zaloRecipientTypePhone: 'Số điện thoại',
     zaloRecipientTypeUid: 'UID / Bạn bè trong danh bạ',
+    zaloRecipientTypeGroup: 'Nhóm',
     uidAddFromContactsLabel: 'Thêm từ danh bạ',
     uidSearchPlaceholder: 'Tìm bạn bè theo tên...',
     uidLoadingContacts: 'Đang tải danh bạ...',

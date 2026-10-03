@@ -32,7 +32,6 @@ import {
   HiOutlineMail,
   HiOutlineChat,
   HiOutlineUsers,
-  HiOutlineUserGroup,
   HiOutlineCheckCircle,
   HiOutlineXCircle,
   HiOutlineChevronRight,
@@ -245,7 +244,11 @@ const QuickSend = () => {
   // W7a — kênh adapter đang bật ([{ key, label }]); lỗi/BE cũ -> [] (không có thẻ Telegram/WhatsApp).
   const [adapterChannels, setAdapterChannels] = useState([]);
   const isAdapterChannel = adapterChannels.some((c) => c.key === selectedChannel);
-  // P12 — gói không có kênh Zalo: ẩn 2 thẻ Zalo (cá nhân, nhóm). Mặc định "có quyền" khi đang tải/lỗi (BE vẫn 403 khi gửi).
+  // Một thẻ "Zalo" duy nhất bao cả Zalo cá nhân lẫn Zalo nhóm: "Nhóm" chỉ là một cách chọn người nhận trong ô
+  // "Loại người nhận" (giống Telegram/WhatsApp). Giá trị nội bộ 'zalo_group' giữ nguyên để gửi/ước tính/giãn cách
+  // không đổi — chỉ đổi cách người dùng chọn ra nó.
+  const isZaloFamily = selectedChannel === CHANNEL_TYPES.ZALO || selectedChannel === CHANNEL_TYPES.ZALO_GROUP;
+  // P12 — gói không có kênh Zalo: ẩn thẻ Zalo (gồm cả cách chọn Nhóm). Mặc định "có quyền" khi đang tải/lỗi (BE vẫn 403 khi gửi).
   const { zalo: zaloEntitled } = useChannelEntitlements();
 
   // Manual input state
@@ -1507,7 +1510,7 @@ const QuickSend = () => {
             {/* Channel Type */}
             <div className="bg-white rounded-xl border border-gray-200 p-6">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('quickSend.selectChannel')}</h2>
-              <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[1 + (zaloEntitled ? 2 : 0) + adapterChannels.length] || 'grid-cols-3'}`}>
+              <div className={`grid gap-4 ${CHANNEL_GRID_CLASSES[1 + (zaloEntitled ? 1 : 0) + adapterChannels.length] || 'grid-cols-3'}`}>
                 <button
                   onClick={() => handleChannelChange(CHANNEL_TYPES.EMAIL)}
                   className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
@@ -1539,16 +1542,18 @@ const QuickSend = () => {
                 <>
                 <button
                   data-testid="quick-send-channel-zalo"
-                  onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO)}
+                  // Đang ở Zalo nhóm thì bấm lại thẻ Zalo giữ nguyên (không tự rơi về cá nhân) — đổi sang/ra
+                  // Nhóm là việc của ô "Loại người nhận".
+                  onClick={() => { if (!isZaloFamily) handleChannelChange(CHANNEL_TYPES.ZALO); }}
                   className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
-                    selectedChannel === CHANNEL_TYPES.ZALO
+                    isZaloFamily
                       ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
                   }`}
                 >
                   <span
                     className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
-                      selectedChannel === CHANNEL_TYPES.ZALO
+                      isZaloFamily
                         ? 'bg-sky-600 text-white'
                         : 'bg-sky-50 text-sky-600 border border-sky-100/80'
                     }`}
@@ -1556,38 +1561,10 @@ const QuickSend = () => {
                   >
                     <HiOutlineChat className="w-6 h-6" />
                   </span>
-                  <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.ZALO ? 'text-orange-950' : 'text-gray-700'}`}>
+                  <span className={`font-semibold text-sm ${isZaloFamily ? 'text-orange-950' : 'text-gray-700'}`}>
                     Zalo
                   </span>
-                  {selectedChannel === CHANNEL_TYPES.ZALO && (
-                    <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
-                      <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
-                    </span>
-                  )}
-                </button>
-                <button
-                  data-testid="quick-send-channel-zalo_group"
-                  onClick={() => handleChannelChange(CHANNEL_TYPES.ZALO_GROUP)}
-                  className={`relative p-4 rounded-xl border-2 transition flex flex-col items-center gap-2.5 ${
-                    selectedChannel === CHANNEL_TYPES.ZALO_GROUP
-                      ? 'border-orange-500 bg-orange-50/60 shadow-sm ring-1 ring-orange-500/20'
-                      : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50/70 shadow-xs'
-                  }`}
-                >
-                  <span
-                    className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors shadow-xs ${
-                      selectedChannel === CHANNEL_TYPES.ZALO_GROUP
-                        ? 'bg-violet-600 text-white'
-                        : 'bg-violet-50 text-violet-600 border border-violet-100/80'
-                    }`}
-                    aria-hidden="true"
-                  >
-                    <HiOutlineUserGroup className="w-6 h-6" />
-                  </span>
-                  <span className={`font-semibold text-sm ${selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? 'text-orange-950' : 'text-gray-700'}`}>
-                    {t('quickSend.channelZaloGroup')}
-                  </span>
-                  {selectedChannel === CHANNEL_TYPES.ZALO_GROUP && (
+                  {isZaloFamily && (
                     <span className="absolute top-2.5 right-2.5 w-4 h-4 rounded-full bg-orange-500 text-white flex items-center justify-center shadow-xs" aria-hidden="true">
                       <HiCheck className="w-2.5 h-2.5 stroke-[2.5]" />
                     </span>
@@ -1747,6 +1724,56 @@ const QuickSend = () => {
                 <h2 className="text-lg font-semibold text-gray-900">{t('quickSend.manualInput')}</h2>
               </div>
 
+              {isZaloFamily && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    {t('quickSend.zaloRecipientTypeLabel')}
+                  </label>
+                  {/* Ba cách chọn người nhận Zalo trong MỘT ô: SĐT / UID giữ kênh nội bộ 'zalo' (kèm loại người
+                      nhận), "Nhóm" là kênh nội bộ 'zalo_group'. Danh sách đã nhập của từng cách (manualPhones,
+                      uidRows, selectedGroups) là state riêng nên đổi qua lại không mất; mẫu/nội dung dùng chung
+                      (cùng danh sách mẫu Zalo) nên handleChannelChange cũng không xoá. */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-2">
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="zaloRecipientType"
+                        checked={selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.PHONE}
+                        onChange={() => {
+                          handleChannelChange(CHANNEL_TYPES.ZALO);
+                          setZaloRecipientType(ZALO_RECIPIENT_TYPES.PHONE);
+                        }}
+                        className="w-4 h-4 text-orange-500"
+                      />
+                      {t('quickSend.zaloRecipientTypePhone')}
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="zaloRecipientType"
+                        checked={selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID}
+                        onChange={() => {
+                          handleChannelChange(CHANNEL_TYPES.ZALO);
+                          setZaloRecipientType(ZALO_RECIPIENT_TYPES.UID);
+                        }}
+                        className="w-4 h-4 text-orange-500"
+                      />
+                      {t('quickSend.zaloRecipientTypeUid')}
+                    </label>
+                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                      <input
+                        type="radio"
+                        name="zaloRecipientType"
+                        checked={selectedChannel === CHANNEL_TYPES.ZALO_GROUP}
+                        onChange={() => handleChannelChange(CHANNEL_TYPES.ZALO_GROUP)}
+                        className="w-4 h-4 text-orange-500"
+                      />
+                      {t('quickSend.zaloRecipientTypeGroup')}
+                    </label>
+                  </div>
+                </div>
+              )}
+
               {selectedChannel === CHANNEL_TYPES.ZALO_GROUP ? (
                 <div className="space-y-3">
                   {!selectedZaloAccount?.id ? (
@@ -1780,36 +1807,6 @@ const QuickSend = () => {
                 </div>
               ) : (
               <>
-              {selectedChannel === CHANNEL_TYPES.ZALO && (
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    {t('quickSend.zaloRecipientTypeLabel')}
-                  </label>
-                  <div className="flex gap-4">
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="zaloRecipientType"
-                        checked={zaloRecipientType === ZALO_RECIPIENT_TYPES.PHONE}
-                        onChange={() => setZaloRecipientType(ZALO_RECIPIENT_TYPES.PHONE)}
-                        className="w-4 h-4 text-orange-500"
-                      />
-                      {t('quickSend.zaloRecipientTypePhone')}
-                    </label>
-                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="zaloRecipientType"
-                        checked={zaloRecipientType === ZALO_RECIPIENT_TYPES.UID}
-                        onChange={() => setZaloRecipientType(ZALO_RECIPIENT_TYPES.UID)}
-                        className="w-4 h-4 text-orange-500"
-                      />
-                      {t('quickSend.zaloRecipientTypeUid')}
-                    </label>
-                  </div>
-                </div>
-              )}
-
               {selectedChannel === CHANNEL_TYPES.ZALO && zaloRecipientType === ZALO_RECIPIENT_TYPES.UID ? (
                 <div className="space-y-4">
                   {!selectedZaloAccount?.id && (

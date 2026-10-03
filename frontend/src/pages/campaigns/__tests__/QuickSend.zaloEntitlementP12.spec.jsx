@@ -9,8 +9,9 @@ import campaignApiService from '../../../features/campaigns/services/campaignApi
 import campaignBuilderApiService from '../../../features/campaigns/services/campaignBuilderApi.service';
 
 /**
- * P12 (PLAN_TG_WA_DAY_DU mục 19) — Gửi nhanh: gói không có kênh Zalo thì ẩn 2 thẻ Zalo (cá nhân, nhóm) và nếu đang
- * chọn Zalo thì chuyển sang Email; gói có Zalo (kể cả limit=1) vẫn đủ 3 thẻ lõi.
+ * P12 (PLAN_TG_WA_DAY_DU mục 19) — Gửi nhanh: gói không có kênh Zalo thì ẩn thẻ Zalo (từ 03/10/2026 thẻ Zalo đã bao
+ * cả cách chọn "Nhóm", không còn thẻ Zalo nhóm riêng) và nếu đang chọn Zalo thì chuyển sang Email; gói có Zalo
+ * (kể cả limit=1) vẫn đủ 2 thẻ lõi (Email + Zalo).
  */
 const entitlementsState = { telegram: true, whatsapp: true, zalo: true, limits: {}, isLoading: false };
 vi.mock('../../../hooks/queries/useChannelEntitlements', () => ({
@@ -78,20 +79,24 @@ describe('QuickSend — P12 quyền kênh Zalo', () => {
     campaignApiService.getChannels.mockResolvedValue({ data: { data: { channels: [] } } });
   });
 
-  it('zalo:false -> không có thẻ Zalo / Zalo nhóm, còn thẻ Email', async () => {
+  it('zalo:false -> không có thẻ Zalo (cũng không có cách chọn Nhóm), còn thẻ Email', async () => {
     entitlementsState.zalo = false;
     render(<QuickSend />);
     await screen.findByText('quickSend.selectChannel');
     expect(screen.queryByTestId('quick-send-channel-zalo')).toBeNull();
     expect(screen.queryByTestId('quick-send-channel-zalo_group')).toBeNull();
+    expect(screen.queryByText('quickSend.zaloRecipientTypeLabel')).toBeNull();
+    expect(screen.queryByRole('radio', { name: 'quickSend.zaloRecipientTypeGroup' })).toBeNull();
     expect(screen.getByText('Email')).toBeInTheDocument();
   });
 
-  it('zalo:true với limit=1 -> đủ 3 thẻ lõi (Zalo không biến mất với khách trả phí)', async () => {
+  it('zalo:true với limit=1 -> đủ 2 thẻ lõi Email + Zalo, không còn thẻ Zalo nhóm (Zalo không biến mất với khách trả phí)', async () => {
     entitlementsState.limits = { zalo: 1 };
     render(<QuickSend />);
-    expect(await screen.findByTestId('quick-send-channel-zalo')).toBeInTheDocument();
-    expect(screen.getByTestId('quick-send-channel-zalo_group')).toBeInTheDocument();
+    const zaloCard = await screen.findByTestId('quick-send-channel-zalo');
+    expect(zaloCard).toBeInTheDocument();
+    expect(screen.queryByTestId('quick-send-channel-zalo_group')).toBeNull();
+    expect(zaloCard.parentElement.children).toHaveLength(2);
   });
 
   it('đang chọn Zalo rồi quyền về false (đổi gói/tải xong) -> chuyển sang Email, thẻ Zalo biến mất', async () => {
