@@ -389,6 +389,66 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
       expect(mockSendReply).not.toHaveBeenCalled();
     });
   });
+  // PLAN_SUA_AI_DOT1_2026-10-03 F1.5 (A P1-4): chủ xoá chatbot A (còn chatbot B) → dòng Zalo của A từng vẫn bật,
+  // hội thoại đã ghim A vẫn được AI trả lời + trừ credit bằng cấu hình dự phòng của kênh.
+  describe('F1.5 — chatbot đã xoá mềm không còn trả lời Zalo cá nhân', () => {
+    it('hội thoại ghim chatbot A mà findChatbotById trả null (xoá mềm) → KHÔNG rate limit, KHÔNG gọi AI, KHÔNG trả lời, log result=disabled', async () => {
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 410, id_chatbot: 10 });
+      // Dòng Zalo của A còn is_enabled = true (trạng thái cũ trước bản sửa deleteCustomChatbot).
+      mockGetAccountSettings.mockResolvedValue({ is_enabled: true, chatbot_enabled: true });
+      mockFindChatbotById.mockResolvedValue(null);
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: 'del_1', fromUid: 'visitor_del', content: 'Shop ơi còn hàng không', type: 0 },
+        { conversationId: 410, messageId: 906 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      // Batch ĐÃ chạy tới cổng đọc chatbot rồi mới dừng ở đó.
+      expect(mockFindChatbotById).toHaveBeenCalledWith(10);
+      expect(mockCheckBeforeAi).not.toHaveBeenCalled();
+      expect(mockRouteMessageWithSettings).not.toHaveBeenCalled();
+      expect(mockSendReply).not.toHaveBeenCalled();
+      expect(logSpy.mock.calls.some(([line]) => String(line).includes('result=disabled (chatbot đã xoá)'))).toBe(true);
+      logSpy.mockRestore();
+    });
+
+    it('đối chứng: cùng hội thoại, chatbot còn sống → vẫn gọi AI như cũ', async () => {
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 411, id_chatbot: 10 });
+      mockGetAccountSettings.mockResolvedValue({ is_enabled: true, chatbot_enabled: true });
+      mockFindChatbotById.mockResolvedValue({ id: 10, active_hours: null });
+
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: 'del_2', fromUid: 'visitor_alive', content: 'Shop ơi', type: 0 },
+        { conversationId: 411, messageId: 907 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
+    });
+
+    it('hội thoại KHÔNG ghim chatbot nào (id_chatbot null, chọn được chatbot khác) không bị cổng mới chặn nhầm', async () => {
+      mockPickEnabledChatbotForZalo.mockResolvedValue(null);
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 412, id_chatbot: null });
+      mockGetAccountSettings.mockResolvedValue({ is_enabled: true, chatbot_enabled: true });
+      mockFindChatbotById.mockResolvedValue(null);
+
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: 'del_3', fromUid: 'visitor_nopin', content: 'Alo', type: 0 },
+        { conversationId: 412, messageId: 908 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      // Không có idChatbot → không đọc chatbot, hành vi cũ (account bật thì vẫn đi tiếp).
+      expect(mockFindChatbotById).not.toHaveBeenCalled();
+      expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
+    });
+  });
+
   // PR-B (29/09): cấu hình AI lấy từ chatbot ĐƯỢC GÁN; dòng chatbot_settings kênh chỉ dự phòng;
   // cột AI của chatbot_zalo_account_settings (DEFAULT bảng) không được đè.
   describe('PR-B — cấu hình AI theo chatbot được gán', () => {

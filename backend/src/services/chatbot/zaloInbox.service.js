@@ -743,6 +743,13 @@ class ZaloPersonalInboxService {
       let chatbotRecord = null;
       if (idChatbot) {
         chatbotRecord = await chatbotRepository.findChatbotById(idChatbot);
+        // Hội thoại đã ghim một chatbot mà chatbot đó không còn (xoá mềm → findChatbotById lọc is_active) → coi như
+        // TẮT: không gọi AI, không trừ credit. Trước đây `repliesEnabled` undefined được cho qua, bot trả lời bằng cấu
+        // hình dự phòng của kênh + kho tài liệu của chatbot chủ tưởng đã xoá (A P1-4).
+        if (!chatbotRecord) {
+          console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} chatbot=${idChatbot} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled (chatbot đã xoá)`);
+          return;
+        }
       }
       const { default: chatbotActiveHoursService } = await import('./chatbotActiveHours.service.js');
       const activeCheck = await chatbotActiveHoursService.checkBeforeAi({

@@ -199,6 +199,22 @@ class ChatbotZaloAccountRepository {
   }
 
   /**
+   * Tắt mọi dòng cấu hình Zalo gắn với MỘT chatbot (dùng khi xoá chatbot). Phải chạy mỗi lần xoá, không chỉ khi
+   * chủ hết chatbot (`disableAllForUser`): dòng còn is_enabled = true của chatbot đã xoá mềm làm hội thoại Zalo
+   * đã ghim chatbot đó vẫn được AI trả lời (A P1-4).
+   * @returns {Promise<number>} số dòng được tắt
+   */
+  async disableForChatbot(userId, chatbotId) {
+    const { rowCount } = await db.query(
+      `UPDATE chatbot_zalo_account_settings
+       SET is_enabled = false, updated_at = NOW()
+       WHERE id_user = $1 AND id_chatbot = $2 AND is_enabled = true`,
+      [userId, chatbotId]
+    );
+    return rowCount;
+  }
+
+  /**
    * Get all enabled chatbot accounts for a user
    * @param {number} userId
    * @returns {Promise<object[]>}

@@ -1551,6 +1551,10 @@ class ChatbotController {
 
       await chatbotChannelRepository.deactivateAllForChatbot(id);
 
+      // Luôn tắt dòng Zalo của CHÍNH chatbot này (không chờ tới lúc chủ hết chatbot): hội thoại Zalo đã ghim
+      // chatbot vừa xoá không được tiếp tục gọi AI + trừ credit (A P1-4).
+      await chatbotZaloAccountRepository.disableForChatbot(userId, id);
+
       const remainingActive = await chatbotRepository.countActiveChatbotsByUser(userId);
       if (remainingActive === 0) {
         await chatbotRepository.disableAllSettingsForUser(userId);
