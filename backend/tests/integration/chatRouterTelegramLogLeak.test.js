@@ -116,6 +116,26 @@ describe('chatbotRepository.addChannelMessage đòi người ghi là chủ hội
     expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('addChannelMessage bị từ chối'));
   });
 
+  it('đúng chủ nhưng SAI kênh (kênh khác của cùng chủ) → không ghi, trả null', async () => {
+    waConnB = await seedWhatsappConversation(shopB, SHARED_ID);
+    const { rows: other } = await db.query(
+      `INSERT INTO channel_connections (id_user, channel, external_channel_id, display_name)
+       VALUES ($1, 'telegram', 'tg_other', 'TG') RETURNING id`,
+      [shopB.id]
+    );
+
+    const errSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const row = await chatbotRepository.addChannelMessage(SHARED_ID, shopB.id, other[0].id, {
+      role: 'visitor',
+      content: 'tin sai kênh',
+      message_type: 'text',
+    });
+
+    expect(row).toBeNull();
+    expect(await channelMessageCount()).toBe(0);
+    expect(errSpy).toHaveBeenCalledWith(expect.stringContaining('addChannelMessage bị từ chối'));
+  });
+
   it('đối chứng: đúng chủ + đúng kênh → ghi được và cập nhật last_message_at', async () => {
     waConnB = await seedWhatsappConversation(shopB, SHARED_ID);
 
