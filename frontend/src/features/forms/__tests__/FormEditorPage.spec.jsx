@@ -1379,4 +1379,66 @@ describe('FormEditorPage component', () => {
       expect(screen.getByText('Đường dẫn không hợp lệ')).toBeInTheDocument();
     });
   });
+
+  describe('Hàng "Thêm nhanh" trường', () => {
+    const COMMON = ['Họ và tên', 'Địa chỉ Email', 'Số điện thoại', 'Văn bản ngắn'];
+    const OTHERS = ['Đoạn văn dài', 'Trắc nghiệm đơn', 'Hộp kiểm', 'Menu thả xuống', 'Ngày / Thời gian'];
+    const quickBtn = (name) => screen.queryByRole('button', { name });
+
+    const renderBlankForm = () => {
+      render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+      startBlankForm();
+    };
+
+    it('mặc định chỉ 4 loại hay dùng + nút "Loại khác…"; 5 loại còn lại chưa hiện', () => {
+      renderBlankForm();
+
+      for (const name of COMMON) expect(quickBtn(name)).toBeInTheDocument();
+      for (const name of OTHERS) expect(quickBtn(name)).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Loại khác…' })).toHaveAttribute('aria-expanded', 'false');
+    });
+
+    it('bấm "Loại khác…" mở đủ 9 loại (không bỏ loại nào); bấm "Ẩn bớt" thì thu lại còn 4', () => {
+      renderBlankForm();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Loại khác…' }));
+      for (const name of [...COMMON, ...OTHERS]) expect(quickBtn(name)).toBeInTheDocument();
+      expect(COMMON.length + OTHERS.length).toBe(9);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Ẩn bớt' }));
+      for (const name of OTHERS) expect(quickBtn(name)).not.toBeInTheDocument();
+      for (const name of COMMON) expect(quickBtn(name)).toBeInTheDocument();
+    });
+
+    it('thêm một loại nằm sau "Loại khác…" (Trắc nghiệm đơn) vẫn ra đúng trường radio có 2 lựa chọn mẫu', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-quick-radio' });
+      renderBlankForm();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Loại khác…' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Trắc nghiệm đơn' }));
+
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form có trắc nghiệm' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+      expect(payload.fields).toHaveLength(2);
+      expect(payload.fields[1]).toEqual({
+        label: 'Trắc nghiệm đơn',
+        type: 'radio',
+        required: false,
+        options: ['Lựa chọn 1', 'Lựa chọn 2'],
+      });
+    });
+  });
 });

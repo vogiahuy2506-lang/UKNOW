@@ -9849,6 +9849,10 @@ Feel free to ask me anything!`,
         booking: 'Add appointment booking',
         payment: 'Collect payment on submit',
       },
+      quickAdd: {
+        moreTypes: 'Other types…',
+        fewerTypes: 'Show fewer',
+      },
       templates: {
         subtitle: 'Pick a template to start with ready-made fields and settings. You can still add, remove and edit everything afterwards.',
         fields: {

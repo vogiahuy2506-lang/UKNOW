@@ -67,9 +67,11 @@ const FIELD_TYPES = [
   { value: 'date', labelKey: 'forms.types.date' },
 ];
 
+// `common: true` = hiện sẵn ở hàng "Thêm nhanh"; các loại còn lại nằm sau nút "Loại khác…" (không bỏ loại nào).
 const QUICK_FIELD_PRESETS = [
   {
     title: 'Họ và tên',
+    common: true,
     desc: 'Định danh tên khách hàng',
     type: 'short_text',
     role: 'name',
@@ -79,6 +81,7 @@ const QUICK_FIELD_PRESETS = [
   },
   {
     title: 'Địa chỉ Email',
+    common: true,
     desc: 'Gửi thư xác nhận tự động',
     type: 'email',
     role: 'email',
@@ -88,6 +91,7 @@ const QUICK_FIELD_PRESETS = [
   },
   {
     title: 'Số điện thoại',
+    common: true,
     desc: 'Liên hệ tư vấn / Zalo',
     type: 'phone',
     role: 'phone',
@@ -97,6 +101,7 @@ const QUICK_FIELD_PRESETS = [
   },
   {
     title: 'Văn bản ngắn',
+    common: true,
     desc: 'Câu trả lời 1 dòng',
     type: 'short_text',
     role: '',
@@ -334,6 +339,8 @@ export default function FormEditorPage() {
     theme: false,
   });
   const openBlock = (name) => setOpenBlocks((prev) => (prev[name] ? prev : { ...prev, [name]: true }));
+  // Hàng "Thêm nhanh": mặc định chỉ 4 loại hay dùng; "Loại khác…" mở phần còn lại.
+  const [showMoreFieldTypes, setShowMoreFieldTypes] = useState(false);
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
@@ -1536,7 +1543,7 @@ export default function FormEditorPage() {
               <span>Thêm nhanh loại trường thông dụng:</span>
             </div>
             <div className="flex flex-wrap gap-2">
-              {QUICK_FIELD_PRESETS.map((preset) => {
+              {QUICK_FIELD_PRESETS.filter((preset) => preset.common || showMoreFieldTypes).map((preset) => {
                 const Icon = preset.icon;
                 return (
                   <button
@@ -1550,6 +1557,14 @@ export default function FormEditorPage() {
                   </button>
                 );
               })}
+              <button
+                type="button"
+                aria-expanded={showMoreFieldTypes}
+                onClick={() => setShowMoreFieldTypes((prev) => !prev)}
+                className="inline-flex items-center gap-1 px-2.5 py-1.5 text-orange-700 hover:bg-orange-100/70 rounded-lg text-xs font-semibold transition"
+              >
+                {showMoreFieldTypes ? t('forms.editorPage.quickAdd.fewerTypes') : t('forms.editorPage.quickAdd.moreTypes')}
+              </button>
             </div>
           </div>
 

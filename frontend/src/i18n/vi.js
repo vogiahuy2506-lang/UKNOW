@@ -9863,6 +9863,10 @@ export default {
         booking: 'Thêm đặt lịch hẹn',
         payment: 'Thu tiền khi gửi',
       },
+      quickAdd: {
+        moreTypes: 'Loại khác…',
+        fewerTypes: 'Ẩn bớt',
+      },
       templates: {
         subtitle: 'Chọn một mẫu để có sẵn các ô và cài đặt phù hợp. Sau đó bạn vẫn thêm, bớt, sửa mọi thứ được.',
         fields: {
