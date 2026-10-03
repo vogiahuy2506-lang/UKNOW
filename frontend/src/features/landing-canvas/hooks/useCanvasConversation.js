@@ -68,25 +68,15 @@ export function makeIntents(tc) {
     },
 
     // ---- Custom domain ----
+    // KHÔNG đổi form nữa (03/10/2026): trước đây ý định này đặt `domainType:'custom'` + hostname vào form; lúc lưu
+    // trang backend xoá subdomain miễn phí mà không đăng ký hostname nào → trang mất link (production: landing 50,
+    // 76, 88, 105). Tên miền riêng chỉ đăng ký được qua API riêng (PUT /:id/custom-domain), chưa có giao diện — nên
+    // chỉ trả lời, không setForm, không mở tab nào. Vẫn bắt ý định (thay vì để rơi xuống AI sửa HTML) để người dùng
+    // nhận đúng câu trả lời.
     {
       key: 'set-custom-domain',
       test: (p) => /(dùng\s*tên\s*miền|set\s*domain|tên\s*miền\s*riêng|trỏ\s*domain|domain\s*=|custom\s*domain)/i.test(p),
-      extract: (p) => {
-        const m = p.match(/([a-z0-9-]+(?:\.[a-z0-9-]+)+)/i);
-        return m ? m[1].toLowerCase() : null;
-      },
-      apply: ({ value, setForm, openTab }) => {
-        const hostname = value;
-        const isApex = hostname.split('.').length === 2;
-        setForm((prev) => ({
-          ...prev,
-          domainType: 'custom',
-          customDomainHostname: hostname,
-          customDomainIsApex: isApex,
-        }));
-        openTab?.('domain');
-        return tc('intentSetDomain', { value: hostname });
-      },
+      apply: () => tc('intentSetDomainUnsupported'),
     },
 
     // ---- Lead form: toggle a fixed field ----

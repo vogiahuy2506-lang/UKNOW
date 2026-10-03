@@ -932,7 +932,7 @@ export default {
       intentSetSlug: 'Đã đặt slug thành "{value}".',
       intentPublish: 'Đã bật xuất bản landing page.',
       intentUnpublish: 'Đã tắt xuất bản landing page.',
-      intentSetDomain: 'Đã đặt tên miền riêng thành "{value}".',
+      intentSetDomainUnsupported: 'Tên miền riêng hiện chưa đặt được qua chat — liên hệ hỗ trợ.',
       intentEnableField: 'Đã bật trường {field} trong form liên hệ.',
       intentDisableField: 'Đã tắt trường {field} trong form liên hệ.',
       intentLeadFormFieldUnsupported: 'Chưa chỉnh được trường "{field}" qua chat — vào phần Form thu khách để thêm/sửa trường này.',

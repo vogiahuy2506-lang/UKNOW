@@ -98,6 +98,54 @@ describe('useCanvasConversation — intent lead-form-toggle (PR-2d-1 việc 4)',
   });
 });
 
+/**
+ * 03/10/2026: ý định "dùng tên miền riêng …" từng đặt `domainType:'custom'` + hostname vào form → lúc lưu backend xoá
+ * subdomain miễn phí mà không đăng ký gì (production: landing 50, 76, 88, 105). Nay chỉ trả lời, KHÔNG đổi form.
+ */
+describe('useCanvasConversation — intent set-custom-domain KHÔNG đổi domainType / hostname', () => {
+  const PROMPTS = [
+    'dùng tên miền riêng lp.example.com',
+    'set domain example.com',
+    'trỏ domain shop.example.vn',
+    'custom domain lp.example.com',
+    'tên miền riêng', // không có hostname: trước đây ném TypeError (hostname.split trên null)
+  ];
+  const FORMS = {
+    'trang miễn phí': { slug: 'abc', domainType: 'system', customDomainHostname: 'abc.founderai.biz', customDomainIsApex: false },
+    'trang chưa có hostname': { slug: 'abc', domainType: 'system', customDomainHostname: null, customDomainIsApex: false },
+    'trang có tên miền riêng': { slug: 'abc', domainType: 'custom', customDomainHostname: 'lp.example.com', customDomainIsApex: true },
+  };
+
+  it.each(PROMPTS)('"%s" → có trả lời (matched), không setForm, không mở tab', (prompt) => {
+    const setForm = vi.fn();
+    const openTab = vi.fn();
+
+    const result = detectIntent(prompt, { setForm, openTab, intents: makeIntents(tc) });
+
+    expect(result.matched).toBe(true);
+    expect(result.key).toBe('set-custom-domain');
+    expect(result.message).toBe('intentSetDomainUnsupported');
+    expect(setForm).not.toHaveBeenCalled();
+    expect(openTab).not.toHaveBeenCalled();
+  });
+
+  it.each(Object.entries(FORMS))('%s: form giữ nguyên domainType / hostname / loại sau mọi câu lệnh tên miền', (_name, initial) => {
+    for (const prompt of PROMPTS) {
+      const { form } = runIntent(prompt, initial);
+      expect(form).toEqual(initial);
+    }
+  });
+
+  it('câu trả lời đi qua i18n (khoá có trong vi.js và en.js, không còn khoá intentSetDomain cũ)', async () => {
+    const { default: vi_ } = await import('../../../../i18n/vi.js');
+    const { default: en_ } = await import('../../../../i18n/en.js');
+    expect(vi_.landingCanvas.canvasConversation.intentSetDomainUnsupported).toMatch(/liên hệ hỗ trợ/);
+    expect(en_.landingCanvas.canvasConversation.intentSetDomainUnsupported).toMatch(/contact support/i);
+    expect(vi_.landingCanvas.canvasConversation.intentSetDomain).toBeUndefined();
+    expect(en_.landingCanvas.canvasConversation.intentSetDomain).toBeUndefined();
+  });
+});
+
 describe('useCanvasConversation — có files bỏ qua intent, gọi API với files và editingId', () => {
   beforeEach(() => {
     vi.clearAllMocks();

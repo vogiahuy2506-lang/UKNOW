@@ -930,7 +930,7 @@ export default {
       intentSetSlug: 'Slug set to "{value}".',
       intentPublish: 'Landing page published.',
       intentUnpublish: 'Landing page unpublished.',
-      intentSetDomain: 'Custom domain set to "{value}".',
+      intentSetDomainUnsupported: 'A custom domain cannot be set through chat yet — contact support.',
       intentEnableField: 'Enabled {field} field in contact form.',
       intentDisableField: 'Disabled {field} field in contact form.',
       intentLeadFormFieldUnsupported: 'Can\'t toggle "{field}" via chat yet — open the Lead form section to add/edit this field.',
