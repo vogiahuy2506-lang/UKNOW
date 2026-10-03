@@ -688,7 +688,17 @@ QUY TẮC:
   "data": null
 }`;
 
-      return runChat({ systemPrompt: adminSystemPrompt, history, files, userId, ownerUserId: ownerId, requestedModel: model });
+      // 'all': hỏi-đáp nhiều lượt trên một tài liệu cần lại tệp cũ, mà nhánh admin không có brief để lưu bản trích (C P1-6:
+      // tenant dùng mặc định 'current'). Super admin không xử lý danh sách người nhận của khách.
+      return runChat({
+        systemPrompt: adminSystemPrompt,
+        history,
+        files,
+        userId,
+        ownerUserId: ownerId,
+        requestedModel: model,
+        historyAttachments: 'all',
+      });
     }
 
     const wizardResources = await this._getWizardResources(ownerId);
@@ -1773,7 +1783,30 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 - Multi-day ("5 email trong 5 ngày") KHÔNG phải quick-send — dùng drip + content_plan như bình thường.
 - Khi ra confirm_create cho yêu cầu gửi 1 lần, câu phản hồi giải thích rõ: Bấm "Tạo chiến dịch" nếu muốn lưu lại để theo dõi sau, hoặc "Gửi nhanh" nếu chỉ cần gửi một lần (Gửi nhanh không chiếm suất chiến dịch trong gói).`;
 
-    const response = await runChat({ systemPrompt, history, files, userId, ownerUserId: ownerId, requestedModel: model });
+    // C P1-6 — chỉ tệp/URL của tin hiện tại đi vào Gemini. Hai ngoại lệ, đều dựa vào dữ liệu đã lưu:
+    //  - URL Google Sheet ĐÃ chốt làm nguồn người nhận (state đã lưu `persistedState.gates.sheetUrl`, hoặc `sheetUrl` trong bất kỳ
+    //    marker [wizard] nào của lịch sử) không bao giờ tải lại, kể cả khi nó nằm trong một tin thường của lượt hiện tại — vd lời
+    //    nhắc "kế hoạch nội dung" / "mẫu từng slot" do FE tự sinh mang dòng `- sheetUrl: "…"` (buildCampaignPromptWithWizardState).
+    //    Model chỉ nhận tên cột + số người nhận từ `sheetRecipients` (checkSheetForChannel). Link dán LẦN ĐẦU (chưa chốt) vẫn được
+    //    tải ở đúng tin đó để AI đọc cột lần đầu.
+    //  - Brief `attached_file` mà tệp là ẢNH: brief không có chữ nào để lưu ("AI đọc trực tiếp từ dữ liệu ảnh"), bytes ảnh là
+    //    nguồn nội dung duy nhất nên ảnh ở tin cũ vẫn đính lại (ảnh, không phải bảng khách). Tệp văn bản đã có `brief.attachedFile.text`
+    //    (buildCampaignBriefContext) nên không cần đính lại.
+    const recipientSheetUrls = [...new Set([
+      persistedState.gates?.sheetUrl,
+      ...history.map((m) => (m?.role === 'user' ? parseWizardMarker(m.content)?.sheetUrl : null)),
+    ].filter((u) => typeof u === 'string' && u.trim()))];
+    const keepHistoryImages = briefForState?.contentMode === 'attached_file' && briefForState?.attachedFile?.isImage === true;
+    const response = await runChat({
+      systemPrompt,
+      history,
+      files,
+      userId,
+      ownerUserId: ownerId,
+      requestedModel: model,
+      historyAttachments: keepHistoryImages ? 'images' : 'current',
+      excludeGoogleUrls: recipientSheetUrls,
+    });
     const guarded = this._guardWizardGates(
       this._guardManualRecipientsNoAutoRun(
         this._guardQuickSendResponse(
