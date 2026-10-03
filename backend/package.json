@@ -115,7 +115,7 @@
     "heic-convert": "^2.1.0",
     "helmet": "^7.1.0",
     "imapflow": "^1.7.6",
-    "ioredis": "^5.10.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.2",
     "jszip": "^3.10.1",
     "mailparser": "^3.9.32",
