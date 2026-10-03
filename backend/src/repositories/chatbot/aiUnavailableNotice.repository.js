@@ -1,7 +1,7 @@
 /**
  * aiUnavailableNotice.repository.js - SQL cho moc "AI khong tra loi duoc cho khach" (G3b, A P1-6).
  *
- * Bang `ai_unavailable_notices` (migration 276) giu hai loai moc, deu o DB de song qua restart:
+ * Bang `ai_unavailable_notices` (migration 277) giu hai loai moc, deu o DB de song qua restart:
  *   - 'owner_email'     : lan cuoi gui email bao CHU (notice_key = '').
  *   - 'visitor_apology' : lan cuoi gui cau xin loi cho MOT khach (notice_key = '<kenh>:<id hoi thoai>').
  *

@@ -1,6 +1,6 @@
 /**
  * G3b (A P1-6) — chatbot không trả lời được khách. Chạy trên PostgreSQL test THẬT:
- *  1. SQL của kho mốc (migration 276): claim nguyên tử, cooldown, lui mốc, dọn, chủ hợp lệ, cascade;
+ *  1. SQL của kho mốc (migration 277): claim nguyên tử, cooldown, lui mốc, dọn, chủ hợp lệ, cascade;
  *  2. mốc sống qua "restart" (bộ nhớ trống, DB có mốc) → không báo lại chủ / không xin lỗi lại khách;
  *  3. bản tin tuần KHÔNG đếm câu xin lỗi là "AI trả lời" ở cả 3 nguồn (web, Zalo cá nhân, kênh).
  */

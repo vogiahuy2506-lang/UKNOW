@@ -1,4 +1,4 @@
--- 276: dau moc "AI khong tra loi duoc cho khach" (PLAN_SUA_AI_DOT2 G3b muc 1, A P1-6).
+-- 277: dau moc "AI khong tra loi duoc cho khach" (PLAN_SUA_AI_DOT2 G3b muc 1, A P1-6).
 --
 -- Khi chu het credit / het goi / cham han muc AI, chatbot chi tra cau xin loi cho khach va chi console.warn - chu khong biet.
 -- Bang nay giu HAI loai moc, deu phai SONG QUA RESTART (nen o DB, khong o bo nho):

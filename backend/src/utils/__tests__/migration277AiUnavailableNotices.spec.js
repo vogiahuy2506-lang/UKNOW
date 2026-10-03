@@ -1,5 +1,5 @@
 /**
- * GHIM migration 276 (mốc "AI không trả lời được": email báo chủ + câu xin lỗi cho khách): 4 chỗ — migration, bootstrap,
+ * GHIM migration 277 (mốc "AI không trả lời được": email báo chủ + câu xin lỗi cho khách): 4 chỗ — migration, bootstrap,
  * inventory, TRUNCATE. Đọc thẳng file nên lệch là đỏ, không cần CSDL.
  */
 import { readFileSync } from 'node:fs';
@@ -11,7 +11,7 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const backendDir = path.resolve(here, '../../..');
 const read = (rel) => readFileSync(path.join(backendDir, rel), 'utf8');
 
-const migration = read('migrations/276_ai_unavailable_notices.sql');
+const migration = read('migrations/277_ai_unavailable_notices.sql');
 const bootstrap = read('tests/integration/sql/bootstrap.sql');
 const inventory = JSON.parse(read('tests/integration/fixtures/productionSchemaInventory.json'));
 const dbHelper = read('tests/integration/helpers/db.js');
@@ -31,7 +31,7 @@ function columnsOf(body) {
     .sort();
 }
 
-describe('migration 276', () => {
+describe('migration 277', () => {
   it('CREATE TABLE IF NOT EXISTS đúng tên, khoá chính (id_user, kind, notice_key), kind bị CHECK, xoá chủ thì mốc đi theo', () => {
     const body = tableBody(migration, 'ai_unavailable_notices');
     expect(body).toMatch(/PRIMARY KEY \(id_user, kind, notice_key\)/);
@@ -63,7 +63,7 @@ describe('migration 276', () => {
     const columns = Object.values(inventory.tables).reduce((n, v) => n + v.length, 0);
     expect(inventory._meta.tables).toBe(tables);
     expect(inventory._meta.columns).toBe(columns);
-    expect(inventory._meta.note).toContain('migration 276');
+    expect(inventory._meta.note).toContain('migration 277 (ai_unavailable_notices');
   });
 
   it('TRUNCATE_ALL_SQL trong helpers/db.js chứa bảng', () => {
