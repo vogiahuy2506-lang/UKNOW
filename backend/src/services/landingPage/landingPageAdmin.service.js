@@ -165,6 +165,39 @@ class LandingPageAdminService {
   }
 
   /**
+   * Định dạng slug khi GHI — create(), update() và restoreFreeLink() dùng CHUNG một bản: slug dành riêng "l" → 400,
+   * sai định dạng → 400. Slug rỗng/null hợp lệ (slug không bắt buộc).
+   *
+   * @param {string|null} slug đã chuẩn hoá (trim + chữ thường)
+   */
+  assertSlugFormat(slug) {
+    this.assertNotReservedSlug(slug);
+    if (!landingPageRepository.isValidSlug(slug)) {
+      const err = new Error('Slug không hợp lệ (chữ thường, số, dấu - và _; bắt đầu bằng chữ hoặc số)');
+      err.statusCode = 400;
+      throw err;
+    }
+  }
+
+  /**
+   * Slug mới đã thuộc landing KHÁC → 409. Slug trùng slug hiện tại của chính trang (hoặc rỗng) thì bỏ qua.
+   * update() và restoreFreeLink() dùng chung.
+   *
+   * @param {string|null} slug slug muốn ghi (đã chuẩn hoá)
+   * @param {string|null} currentSlug slug đang có của trang
+   */
+  async assertSlugNotTaken(slug, currentSlug) {
+    if (slug && slug !== currentSlug) {
+      const clash = await landingPageRepository.findBySlugAny(slug);
+      if (clash) {
+        const err = new Error('Slug đã được dùng cho landing khác');
+        err.statusCode = 409;
+        throw err;
+      }
+    }
+  }
+
+  /**
    * Lấy danh sách landing trong phạm vi quyền của user hiện tại.
    *
    * @param {object} authUser
@@ -240,12 +273,7 @@ class LandingPageAdminService {
     const domainSubtype = domainType === 'custom'
       ? (body?.domainSubtype === 'apex' ? 'apex' : 'subdomain')
       : null;
-    this.assertNotReservedSlug(slug);
-    if (!landingPageRepository.isValidSlug(slug)) {
-      const err = new Error('Slug không hợp lệ (chữ thường, số, dấu - và _; bắt đầu bằng chữ hoặc số)');
-      err.statusCode = 400;
-      throw err;
-    }
+    this.assertSlugFormat(slug);
     if (slug) {
       const existing = await landingPageRepository.findBySlugAny(slug);
       if (existing) {
@@ -398,12 +426,7 @@ class LandingPageAdminService {
     const scope = getWorkspaceScope(authUser);
     const slugRaw = body?.slug;
     const slug = typeof slugRaw === 'string' ? slugRaw.trim().toLowerCase() : null;
-    this.assertNotReservedSlug(slug);
-    if (!landingPageRepository.isValidSlug(slug)) {
-      const err = new Error('Slug không hợp lệ (chữ thường, số, dấu - và _; bắt đầu bằng chữ hoặc số)');
-      err.statusCode = 400;
-      throw err;
-    }
+    this.assertSlugFormat(slug);
     const current = await landingPageRepository.findByIdInScope(id, scope);
     if (!current) {
       const err = new Error('Không tìm thấy landing page');
@@ -418,14 +441,7 @@ class LandingPageAdminService {
       err.statusCode = 403;
       throw err;
     }
-    if (slug && slug !== current.slug) {
-      const clash = await landingPageRepository.findBySlugAny(slug);
-      if (clash) {
-        const err = new Error('Slug đã được dùng cho landing khác');
-        err.statusCode = 409;
-        throw err;
-      }
-    }
+    await this.assertSlugNotTaken(slug, current.slug);
 
     /** Merge `body.leadFormConfig` vào customConfig hiện tại (giữ key khác nếu có). */
     const nextCustomConfig = mergeLeadFormIntoCustomConfig(
@@ -731,6 +747,171 @@ class LandingPageAdminService {
       dto.warning = combinedWarning;
     }
     return dto;
+  }
+
+  /**
+   * Cấp lại link miễn phí `<slug>.founderai.biz` cho trang `domain_type='custom'` mà không còn hàng tên miền nào
+   * (production 03/10/2026: landing 50, 76, 88, 105 — gốc là lỗi "Lưu tên miền" cũ, đã chặn). Khách tự bấm "Dùng lại
+   * link miễn phí" trong Cài đặt trang; PLAN_DUNG_LAI_LINK_MIEN_PHI_2026-10-03.md.
+   *
+   * Quy tắc:
+   *  - Trang đang có hàng tên miền RIÊNG (`cf_managed=false`, kể cả chờ xác minh) → 409, KHÔNG xoá/ghi đè hàng đó (đường
+   *    gỡ là DELETE /:id/custom-domain, tự cấp lại link miễn phí). Endpoint này không bao giờ đụng hàng tên miền riêng.
+   *  - Trang đã có link miễn phí đang chạy và `domain_type='system'` → 200, không làm gì (gọi lại không hại).
+   *  - Slug: body có thì dùng ĐÚNG luật của update() (assertSlugFormat: định dạng + slug dành riêng "l";
+   *    assertSlugNotTaken: trùng trang khác → 409); không có thì dùng slug hiện tại; vẫn rỗng → 400.
+   *  - Thứ tự: ghi slug (nếu đổi) → cấp subdomain → đổi domain_type. Lỗi giữa chừng không làm trang tệ hơn trước
+   *    (domain_type vẫn 'custom', không hàng = như cũ). Cloudflare lỗi vẫn ghi hàng `pending_verification`
+   *    `cf_managed=true` như trang mới tạo (trang này không có hàng tên miền riêng phải giữ) rồi đổi sang 'system'.
+   *  - Slug đổi thì HTML lưu sẵn được chuẩn bị lại với slug mới (prepareLandingHtmlOnSave — script theo dõi / thu form
+   *    mang `data-slug`; trang slug rỗng trước đó chưa có script nào), như mọi lần lưu trang.
+   *
+   * @param {number} id
+   * @param {{ slug?: string }} body
+   * @param {{ id: number|string, role_code?: string }} authUser
+   * @returns {Promise<{ id: number, slug: string|null, domainType: string, restored: boolean, provisioned: boolean,
+   *   message: string|null, domain: object }>}
+   */
+  async restoreFreeLink(id, body, authUser) {
+    const context = getWorkspaceContext(authUser);
+    const scope = getWorkspaceScope(authUser);
+    const slugRaw = body?.slug;
+    const bodySlug = typeof slugRaw === 'string' ? slugRaw.trim().toLowerCase() : null;
+    this.assertSlugFormat(bodySlug);
+    const current = await landingPageRepository.findByIdInScope(id, scope);
+    if (!current) {
+      const err = new Error('Không tìm thấy landing page');
+      err.statusCode = 404;
+      throw err;
+    }
+    const currentSlug = String(current.slug || '').trim().toLowerCase();
+    if (currentSlug === RESERVED_SLUG_FIXED_LANDING) {
+      const err = new Error('Không được sửa bản ghi slug "l" — đây là landing hệ thống.');
+      err.statusCode = 403;
+      throw err;
+    }
+    const resourceOwnerId = context.isSuperAdmin
+      ? Number(current.workspaceOwnerId || current.idUser)
+      : context.workspaceOwnerId;
+
+    const row = await landingPageDomainRepository.findByLandingPageId(id);
+    if (row && !row.cfManaged) {
+      const err = new Error('Trang đang dùng tên miền riêng — hãy gỡ tên miền riêng trước, trang sẽ tự quay về link miễn phí.');
+      err.statusCode = 409;
+      throw err;
+    }
+    const currentDomainType = current.domainType || 'system';
+
+    // Đã có link miễn phí đang chạy và đã ở chế độ miễn phí → không có gì để cấp lại.
+    if (row?.status === 'active' && currentDomainType === 'system') {
+      return {
+        id: Number(id),
+        slug: currentSlug || null,
+        domainType: 'system',
+        restored: false,
+        provisioned: true,
+        message: null,
+        domain: await landingPageDomainService.getForLanding(id, authUser),
+      };
+    }
+
+    const slug = bodySlug || currentSlug;
+    if (!slug) {
+      const err = new Error('Cần đặt đường dẫn (slug) trước khi dùng lại link miễn phí.');
+      err.statusCode = 400;
+      throw err;
+    }
+    await this.assertSlugNotTaken(slug, currentSlug);
+
+    // 1) Ghi slug (nếu đổi) — cùng câu UPDATE với HTML đã chuẩn bị lại cho slug mới.
+    let page = current;
+    if (slug !== currentSlug) {
+      const written = await landingPageRepository.updateByIdInScope(id, {
+        slug,
+        title: current.title,
+        htmlContent: prepareLandingHtmlOnSave(current.htmlContent, {
+          slug,
+          frontendOrigin: resolveFrontendOriginFromEnv(),
+          apiBase: resolvePublicApiBaseFromEnv(),
+        }),
+        isPublished: current.isPublished,
+        idUser: resourceOwnerId,
+        domainType: null,
+        domainSubtype: null,
+      }, scope);
+      if (!written) {
+        const err = new Error('Không tìm thấy landing page');
+        err.statusCode = 404;
+        throw err;
+      }
+      page = written;
+    }
+
+    // 2) Cấp subdomain miễn phí. Hàng miễn phí cũ lệch hostname (slug đã đổi) thì gỡ trước như update() để không mồ côi
+    // bản ghi DNS cũ; hàng đã chạy đúng hostname thì giữ (chỉ còn thiếu domain_type — lần gọi trước dừng giữa chừng);
+    // hàng chờ (cấp lỗi lần trước) cùng hostname thì cấp lại đè lên.
+    const wantedHost = landingPageDomainService.freeHostnameFor(slug);
+    const rowHost = String(row?.hostname || '').toLowerCase();
+    const rowIsLive = row?.status === 'active' && rowHost === wantedHost;
+    let provision = null;
+    if (!rowIsLive) {
+      if (row && rowHost !== wantedHost) {
+        await landingPageDomainService.removeSubdomain(id).catch((e) =>
+          console.warn('[LandingPageAdmin.restoreFreeLink] removeSubdomain failed:', e.message)
+        );
+      }
+      provision = await landingPageDomainService.autoProvisionSubdomain(id, slug);
+    }
+    const rowAfter = await landingPageDomainRepository.findByLandingPageId(id);
+    if (!rowAfter?.cfManaged) {
+      // Cấp lỗi VÀ không ghi nổi hàng pending: không có hàng nào để trang trỏ tới → giữ nguyên domain_type, báo lỗi.
+      const err = new Error(
+        `Chưa cấp được link miễn phí ${provision?.hostname || wantedHost}. ${provision?.message || ''}`.trim()
+      );
+      err.statusCode = 502;
+      throw err;
+    }
+
+    // 3) Đổi domain_type → 'system' (domain_subtype về NULL theo repository). Chỉ sau khi đã có hàng miễn phí.
+    if (currentDomainType !== 'system') {
+      const switched = await landingPageRepository.updateByIdInScope(id, {
+        slug,
+        title: page.title,
+        htmlContent: page.htmlContent,
+        isPublished: page.isPublished,
+        idUser: resourceOwnerId,
+        domainType: 'system',
+        domainSubtype: null,
+      }, scope);
+      if (!switched) {
+        const err = new Error('Không tìm thấy landing page');
+        err.statusCode = 404;
+        throw err;
+      }
+      page = switched;
+    }
+
+    try {
+      invalidateDomainResolverPayload(id, current.slug);
+      if (slug !== currentSlug) invalidateDomainResolverPayload(id, slug);
+      if (rowAfter.hostname) invalidateDomainResolverHost(rowAfter.hostname);
+    } catch (e) {
+      console.warn('[LandingPageAdmin.restoreFreeLink] cache invalidation failed:', e.message);
+    }
+    cloudflareService.purgeLandingCache({ slug, hostname: rowAfter.hostname }).catch((e) =>
+      console.warn('[LandingPageAdmin.restoreFreeLink] Cloudflare purge failed:', e.message)
+    );
+
+    const provisioned = rowAfter.status === 'active';
+    return {
+      id: Number(id),
+      slug: page.slug || slug,
+      domainType: page.domainType || 'system',
+      restored: true,
+      provisioned,
+      message: provisioned ? null : (provision?.message || null),
+      domain: await landingPageDomainService.getForLanding(id, authUser),
+    };
   }
 
   /**

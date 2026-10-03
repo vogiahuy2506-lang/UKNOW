@@ -1042,6 +1042,17 @@ class LandingPageDomainService {
   }
 
   /**
+   * Hostname link miễn phí của một slug (`<slug>.founderai.biz`, chữ thường) — đúng chuỗi autoProvisionSubdomain ghi
+   * vào `landing_page_domains.hostname`. Để nơi khác so khớp hàng hiện có mà không dựng lại công thức.
+   *
+   * @param {string} slug
+   * @returns {string}
+   */
+  freeHostnameFor(slug) {
+    return buildAutoHostname(String(slug || '').trim().toLowerCase()).toLowerCase();
+  }
+
+  /**
    * Xóa subdomain tự động (gọi khi landing page bị xóa hoặc đổi slug).
    * Lỗi CF không throw — chỉ log warning.
    *

@@ -21,6 +21,7 @@ router.put('/:id/custom-domain', landingPageAdminController.putCustomDomain.bind
 router.delete('/:id/custom-domain', landingPageAdminController.deleteCustomDomain.bind(landingPageAdminController));
 router.post('/:id/custom-domain/check', landingPageAdminController.postCustomDomainCheck.bind(landingPageAdminController));
 router.post('/:id/custom-domain/verify', landingPageAdminController.postCustomDomainVerify.bind(landingPageAdminController));
+router.post('/:id/free-link', landingPageAdminController.postFreeLink.bind(landingPageAdminController));
 router.get('/:id/versions', landingPageAdminController.listVersions.bind(landingPageAdminController));
 router.get('/:id/versions/:versionId/preview', landingPageAdminController.previewVersion.bind(landingPageAdminController));
 router.delete('/:id/versions/:versionId', landingPageAdminController.deleteVersion.bind(landingPageAdminController));

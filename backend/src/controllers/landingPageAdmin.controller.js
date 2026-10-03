@@ -267,6 +267,36 @@ class LandingPageAdminController {
   }
 
   /**
+   * POST /api/admin/landing-pages/:id/free-link
+   * Body: { slug?: string }
+   * Cấp lại link miễn phí <slug>.founderai.biz cho trang mất link (domain_type='custom' mà không còn hàng tên miền).
+   * Trang đang có tên miền riêng → 409 (không đụng); đã có link miễn phí đang chạy → 200, không đổi gì.
+   */
+  async postFreeLink(req, res) {
+    try {
+      const id = parseInt(String(req.params.id), 10);
+      if (!Number.isFinite(id)) {
+        return res.status(400).json({ success: false, message: 'Id không hợp lệ' });
+      }
+      const data = await landingPageAdminService.restoreFreeLink(id, req.body || {}, req.user);
+      if (data.restored) {
+        await logWorkspace(
+          getWorkspaceAuditContext(req),
+          AUDIT_ACTIONS.LANDING_DOMAIN_UPDATED,
+          AUDIT_ENTITY_TYPES.LANDING_PAGE_DOMAIN,
+          id,
+          { hostname: data.domain?.hostname, status: data.domain?.status, restoredFreeLink: true }
+        );
+      }
+      return res.json({ success: true, data });
+    } catch (error) {
+      const status = error.statusCode || 500;
+      if (status >= 500) console.error('[LandingPageAdminController.postFreeLink]', error);
+      return res.status(status).json({ success: false, message: error.message || 'Không thể cấp lại link miễn phí' });
+    }
+  }
+
+  /**
    * GET /api/admin/landing-pages/:id/versions
    */
   async listVersions(req, res) {
