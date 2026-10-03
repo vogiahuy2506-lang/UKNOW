@@ -75,6 +75,18 @@ export async function demote(req, res) {
   } catch (err) { return handleError(res, err); }
 }
 
+/** PATCH /api/admin/members/:id/two-factor/reset — xoá cấu hình 2FA (audit TWO_FACTOR_RESET_BY_ADMIN do service ghi) */
+export async function resetTwoFactor(req, res) {
+  try {
+    const result = await adminMembersService.resetMemberTwoFactor(
+      Number(req.params.id),
+      req.body.confirmEmail,
+      getSystemAuditContext(req)
+    );
+    return res.json({ success: true, message: `Đã đặt lại xác thực hai lớp cho ${result.email}`, data: result });
+  } catch (err) { return handleError(res, err); }
+}
+
 /** PATCH /api/admin/members/:id/detach-email — Mức 1: giải phóng email, giữ dữ liệu */
 export async function detachEmail(req, res) {
   try {

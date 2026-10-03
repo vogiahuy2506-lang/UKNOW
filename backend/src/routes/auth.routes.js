@@ -3,7 +3,8 @@ import { body } from 'express-validator';
 import authController from '../controllers/auth.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import handleValidationErrors from '../middleware/validate.middleware.js';
-import { loginAccountLimiter, loginIpLimiter, authCredentialLimiter } from '../middleware/rateLimiter.middleware.js';
+import { loginAccountLimiter, loginIpLimiter, authCredentialLimiter, twoFactorVerifyLimiter } from '../middleware/rateLimiter.middleware.js';
+import * as twoFactorController from '../controllers/twoFactor.controller.js';
 import { requireTrustedAppOrigin } from '../middleware/dynamicCors.middleware.js';
 
 const router = express.Router();
@@ -172,6 +173,49 @@ router.post('/change-password',
   ],
   handleValidationErrors,
   authController.changePassword.bind(authController)
+);
+
+// ─── Xác thực hai lớp (2FA, TOTP) ───────────────────────────────────────────
+// Bước 2 của đăng nhập: đổi challengeToken (login/google-login trả về khi tài khoản đã bật 2FA) + mã
+// → phiên. Không cần authMiddleware (chưa có access token). Chỉ đếm lượt lỗi theo IP.
+router.post('/2fa/verify',
+  twoFactorVerifyLimiter,
+  [
+    body('challengeToken').isString().notEmpty().withMessage('Thiếu challengeToken'),
+    body('code').isString().trim().isLength({ min: 6, max: 12 }).withMessage('Mã xác thực không hợp lệ'),
+  ],
+  handleValidationErrors,
+  authController.verifyTwoFactor.bind(authController)
+);
+
+router.get('/2fa/status', authMiddleware, twoFactorController.getStatus);
+
+router.post('/2fa/setup', authCredentialLimiter, authMiddleware, twoFactorController.beginSetup);
+
+const twoFactorCodeValidator = body('code').isString().trim().isLength({ min: 6, max: 12 }).withMessage('Mã xác thực không hợp lệ');
+
+router.post('/2fa/enable',
+  authCredentialLimiter,
+  authMiddleware,
+  [twoFactorCodeValidator],
+  handleValidationErrors,
+  twoFactorController.enable
+);
+
+router.post('/2fa/disable',
+  authCredentialLimiter,
+  authMiddleware,
+  [twoFactorCodeValidator, body('password').optional({ nullable: true }).isString()],
+  handleValidationErrors,
+  twoFactorController.disable
+);
+
+router.post('/2fa/recovery-codes',
+  authCredentialLimiter,
+  authMiddleware,
+  [twoFactorCodeValidator],
+  handleValidationErrors,
+  twoFactorController.regenerateRecoveryCodes
 );
 
 export default router;

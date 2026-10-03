@@ -156,6 +156,19 @@ CREATE TABLE refresh_tokens (
 CREATE INDEX idx_refresh_tokens_hash ON refresh_tokens(token_hash);
 CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(id_user);
 
+-- Migration 276: 2FA TOTP (1 dong / user)
+CREATE TABLE user_two_factor (
+  user_id          BIGINT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  secret_enc       TEXT        NOT NULL,
+  enabled_at       TIMESTAMPTZ,
+  recovery_codes   JSONB       NOT NULL DEFAULT '[]'::jsonb,
+  last_used_step   BIGINT,
+  failed_attempts  INTEGER     NOT NULL DEFAULT 0,
+  locked_until     TIMESTAMPTZ,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE login_history (
   id             BIGSERIAL PRIMARY KEY,
   id_user        BIGINT REFERENCES users(id) ON DELETE CASCADE,

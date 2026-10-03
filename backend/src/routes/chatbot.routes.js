@@ -60,6 +60,11 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
     return res.status(401).json({ success: false, message: 'Invalid token' });
   }
 
+  // Token có `purpose` (challenge 2FA...) không phải access token — cùng luật với authMiddleware.
+  if (decoded?.purpose) {
+    return res.status(401).json({ success: false, message: 'Invalid token' });
+  }
+
   const userIdentifierClaim = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier';
   const userId = decoded.userId || decoded.userIdentifier || decoded.nameidentifier || decoded[userIdentifierClaim];
   if (!userId) {

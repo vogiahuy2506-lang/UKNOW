@@ -29,6 +29,9 @@ import { generateUsernameFromEmail } from '../utils/usernameFromEmail.util.js';
 import landingPageShareRepository from '../repositories/landingPageShare.repository.js';
 import campaignShareRepository from '../repositories/campaign/campaignShare.repository.js';
 import chatbotShareRepository from '../repositories/ai/chatbotShare.repository.js';
+import userTwoFactorRepository from '../repositories/user/userTwoFactor.repository.js';
+import twoFactorService from '../services/auth/twoFactor.service.js';
+import { sendTwoFactorError } from './twoFactor.controller.js';
 
 const googleClient = new OAuth2Client(process.env.GOOGLE_CLIENT_ID);
 
@@ -509,6 +512,18 @@ class AuthController {
         });
       }
 
+      // 2FA: mật khẩu đúng nhưng tài khoản đã bật xác thực hai lớp → KHÔNG cấp token, KHÔNG set cookie.
+      // Không ghi login_history/UPDATE last_login ở bước này — ghi khi /auth/2fa/verify thành công.
+      const twoFactorRow = await userTwoFactorRepository.findByUserId(user.id, client);
+      if (twoFactorRow?.enabled_at) {
+        const challengeToken = twoFactorService.issueChallengeToken(user, { method: 'local', rememberMe });
+        return res.json({
+          success: true,
+          message: 'Cần xác thực hai lớp',
+          data: { requiresTwoFactor: true, challengeToken, rememberMe, method: 'local' },
+        });
+      }
+
       await client.query(
         `UPDATE users SET failed_login_attempts = 0, locked_until = NULL,
           last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1
@@ -517,35 +532,7 @@ class AuthController {
       );
       await this.logLoginAttempt(client, user.id, user.email, 'success', null, ipAddress, userAgent);
 
-      const accessToken = this.generateAccessToken(user);
-      const refreshToken = await this.generateRefreshToken(user, req);
-      this.setRefreshTokenCookie(res, refreshToken, rememberMe);
-
-      const responseUser = await this.formatUser(user);
-
-      // Lấy memberships để frontend hiện Context Switcher ngay sau login
-      const membershipsResult = await client.query(
-        `SELECT um.owner_id AS "ownerId", u.full_name AS "ownerName",
-                u.username AS "ownerUsername", u.avatar_url AS "ownerAvatarUrl",
-                um.permissions, um.status,
-                um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
-                um.daily_zalo_limit AS "dailyZaloLimit", um.monthly_zalo_limit AS "monthlyZaloLimit"
-         FROM user_members um
-         JOIN users u ON u.id = um.owner_id
-         WHERE um.employee_id = $1 AND um.status = 'active'
-         ORDER BY um.created_at ASC`,
-        [user.id]
-      );
-      responseUser.memberships = membershipsResult.rows;
-
-      return res.json({
-        success: true,
-        message: 'Đăng nhập thành công',
-        data: {
-          user: responseUser,
-          accessToken,
-        },
-      });
+      return this.issueSessionResponse(client, user, req, res, { rememberMe, message: 'Đăng nhập thành công' });
     } catch (error) {
       console.error('Login error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
@@ -830,7 +817,19 @@ class AuthController {
         }
       }
 
-      // 4. Update login status — KHÔNG xoá khoá tạm còn hiệu lực (có thể vừa được đặt bởi một lượt
+      // 4. 2FA: đã bật xác thực hai lớp thì Google xác nhận email cũng chưa đủ — chưa cấp token.
+      // (User vừa tạo qua Google không bao giờ có 2FA nên nhánh này không đụng tới `trial`.)
+      const twoFactorRow = await userTwoFactorRepository.findByUserId(user.id, client);
+      if (twoFactorRow?.enabled_at) {
+        const challengeToken = twoFactorService.issueChallengeToken(user, { method: 'google', rememberMe: true });
+        return res.json({
+          success: true,
+          message: 'Cần xác thực hai lớp',
+          data: { requiresTwoFactor: true, challengeToken, rememberMe: true, method: 'google' },
+        });
+      }
+
+      // 5. Update login status — KHÔNG xoá khoá tạm còn hiệu lực (có thể vừa được đặt bởi một lượt
       // sai mật khẩu chạy song song sau khi đã kiểm isLoginLocked ở trên).
       await client.query(
         `UPDATE users
@@ -842,35 +841,10 @@ class AuthController {
       );
       await this.logLoginAttempt(client, user.id, user.email, 'success', 'google', ipAddress, userAgent);
 
-      // 5. Generate tokens
-      const accessToken = this.generateAccessToken(user);
-      const refreshToken = await this.generateRefreshToken(user, req);
-      this.setRefreshTokenCookie(res, refreshToken);
-
-      const responseUser = await this.formatUser(user);
-
-      const membershipsResult = await client.query(
-        `SELECT um.owner_id AS "ownerId", u.full_name AS "ownerName",
-                u.username AS "ownerUsername", u.avatar_url AS "ownerAvatarUrl",
-                um.permissions, um.status,
-                um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
-                um.daily_zalo_limit AS "dailyZaloLimit", um.monthly_zalo_limit AS "monthlyZaloLimit"
-         FROM user_members um
-         JOIN users u ON u.id = um.owner_id
-         WHERE um.employee_id = $1 AND um.status = 'active'
-         ORDER BY um.created_at ASC`,
-        [user.id]
-      );
-      responseUser.memberships = membershipsResult.rows;
-
-      return res.json({
-        success: true,
+      // 6. Generate tokens + trả phiên
+      return this.issueSessionResponse(client, user, req, res, {
         message: 'Đăng nhập Google thành công',
-        data: {
-          user: responseUser,
-          accessToken,
-          trial,
-        },
+        extra: { trial },
       });
     } catch (error) {
       console.error('Google Login error:', error);
@@ -1249,6 +1223,122 @@ class AuthController {
     } catch (error) {
       console.error('Get me error:', error);
       return res.status(500).json({ success: false, message: 'Lỗi server' });
+    }
+  }
+
+  /**
+   * Cấp phiên sau khi đã qua mọi cổng xác thực (mật khẩu / Google / 2FA): access token + refresh token
+   * (cookie httpOnly) + user kèm memberships. Dùng chung cho login, googleLogin và verifyTwoFactor.
+   */
+  async issueSessionResponse(client, user, req, res, { rememberMe = true, message, extra = {} } = {}) {
+    const accessToken = this.generateAccessToken(user);
+    const refreshToken = await this.generateRefreshToken(user, req);
+    this.setRefreshTokenCookie(res, refreshToken, rememberMe);
+
+    const responseUser = await this.formatUser(user);
+
+    // Lấy memberships để frontend hiện Context Switcher ngay sau login
+    const membershipsResult = await client.query(
+      `SELECT um.owner_id AS "ownerId", u.full_name AS "ownerName",
+              u.username AS "ownerUsername", u.avatar_url AS "ownerAvatarUrl",
+              um.permissions, um.status,
+              um.daily_email_limit AS "dailyEmailLimit", um.monthly_email_limit AS "monthlyEmailLimit",
+              um.daily_zalo_limit AS "dailyZaloLimit", um.monthly_zalo_limit AS "monthlyZaloLimit"
+       FROM user_members um
+       JOIN users u ON u.id = um.owner_id
+       WHERE um.employee_id = $1 AND um.status = 'active'
+       ORDER BY um.created_at ASC`,
+      [user.id]
+    );
+    responseUser.memberships = membershipsResult.rows;
+
+    return res.json({
+      success: true,
+      message,
+      data: {
+        user: responseUser,
+        accessToken,
+        ...extra,
+      },
+    });
+  }
+
+  /**
+   * Bước 2 của đăng nhập khi đã bật 2FA: đổi challengeToken + mã (TOTP hoặc mã khôi phục) lấy phiên.
+   * @param {import('express').Request} req - body: { challengeToken, code }
+   * @param {import('express').Response} res
+   */
+  async verifyTwoFactor(req, res) {
+    let client;
+    try {
+      client = await db.getClient();
+    } catch (connError) {
+      console.error('2FA verify - DB connection error:', connError.message);
+      return res.status(503).json({ success: false, message: 'Không thể kết nối database. Vui lòng thử lại.' });
+    }
+
+    try {
+      const { challengeToken, code } = req.body;
+      const ipAddress = req.ip || req.socket?.remoteAddress;
+      const userAgent = req.headers['user-agent'];
+
+      const payload = twoFactorService.verifyChallengeToken(challengeToken);
+
+      const result = await client.query(
+        `SELECT id, username, email, full_name, avatar_url, status, role,
+                active_plan_id, password_hash, failed_login_attempts, locked_until,
+                must_change_password, phone, phone_verified_at, referral_code,
+                referral_prompt_dismissed_at
+         FROM users
+         WHERE id = $1`,
+        [payload.userId]
+      );
+      const user = result.rows[0];
+      if (!user) {
+        return res.status(401).json({ success: false, code: 'TWO_FACTOR_CODE_INVALID', message: 'Mã xác thực không đúng hoặc đã hết hạn' });
+      }
+      if (isLoginLocked(user)) {
+        return res.status(403).json({ success: false, message: 'Tài khoản đã bị khóa tạm thời. Vui lòng thử lại sau.' });
+      }
+      if (user.status !== 'active') {
+        return res.status(403).json({ success: false, message: 'Tài khoản đã bị vô hiệu hóa' });
+      }
+
+      const auditContext = { ...getSystemAuditContext(req), userId: user.id };
+      try {
+        await twoFactorService.verifyCodeForUser(user.id, code, { client, auditContext });
+      } catch (err) {
+        const reason = err?.code === 'TWO_FACTOR_LOCKED' ? 'Mã 2FA bị khóa' : 'Mã 2FA sai';
+        try {
+          await this.logLoginAttempt(client, user.id, user.email, 'failed', reason, ipAddress, userAgent);
+        } catch (logErr) {
+          console.warn('[2FA] Không ghi được login_history:', logErr?.message || logErr);
+        }
+        throw err;
+      }
+
+      await client.query(
+        `UPDATE users SET failed_login_attempts = 0, locked_until = NULL,
+          last_login_at = CURRENT_TIMESTAMP, last_login_ip = $1
+         WHERE id = $2`,
+        [ipAddress, user.id]
+      );
+      await this.logLoginAttempt(
+        client, user.id, user.email, 'success',
+        payload.method === 'google' ? 'google+2fa' : '2fa',
+        ipAddress, userAgent
+      );
+
+      return this.issueSessionResponse(client, user, req, res, {
+        rememberMe: payload.rememberMe !== false,
+        message: 'Đăng nhập thành công',
+      });
+    } catch (error) {
+      if (sendTwoFactorError(res, error)) return undefined;
+      console.error('2FA verify error:', error);
+      return res.status(500).json({ success: false, message: 'Lỗi server' });
+    } finally {
+      client.release();
     }
   }
 

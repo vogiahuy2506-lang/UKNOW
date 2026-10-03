@@ -11,6 +11,7 @@ import {
   createLoginAccountLimiter,
   createLoginIpLimiter,
   createAuthCredentialLimiter,
+  createTwoFactorVerifyLimiter,
 } from '../rateLimiter.middleware.js';
 
 const NO_SKIP = { skip: () => false };
@@ -141,5 +142,32 @@ describe('authCredentialLimiter', () => {
     const res21 = await request(app).post('/register').set('X-Forwarded-For', '10.0.0.6').set('Connection', 'close').send({});
     expect(res21.status).toBe(429);
     expect(res21.body.code).toBe('AUTH_RATE_LIMIT_EXCEEDED');
+  });
+});
+
+describe('twoFactorVerifyLimiter (/auth/2fa/verify)', () => {
+  function buildVerifyApp() {
+    const app = express();
+    app.set('trust proxy', 1);
+    app.use(express.json());
+    app.post('/2fa/verify', createTwoFactorVerifyLimiter(NO_SKIP), (req, res) => {
+      if (req.body?.code === '000000') return res.status(200).json({ success: true });
+      return res.status(401).json({ success: false });
+    });
+    return listenOnce(app);
+  }
+  const verifyAs = (app, ip, code) => request(app).post('/2fa/verify').set('X-Forwarded-For', ip).set('Connection', 'close').send({ code });
+
+  it('(g) 20 lượt SAI cùng IP → lượt 21 = 429 TWO_FACTOR_RATE_LIMIT_EXCEEDED; lượt đúng không bị đếm', async () => {
+    const app = buildVerifyApp();
+    for (let i = 0; i < 5; i += 1) {
+      expect((await verifyAs(app, '10.0.0.7', '000000')).status).toBe(200);
+    }
+    for (let i = 0; i < 20; i += 1) {
+      expect((await verifyAs(app, '10.0.0.7', '111111')).status).toBe(401);
+    }
+    const res21 = await verifyAs(app, '10.0.0.7', '111111');
+    expect(res21.status).toBe(429);
+    expect(res21.body.code).toBe('TWO_FACTOR_RATE_LIMIT_EXCEEDED');
   });
 });

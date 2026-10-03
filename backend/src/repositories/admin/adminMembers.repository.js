@@ -75,6 +75,7 @@ export async function findAllMembers({ search, planId, status, expiry, role, pho
            u.last_login_at AS "lastLoginAt",
            la.at AS "lastActivityAt",
            u.phone AS "phone", u.phone_verified_at AS "phoneVerifiedAt",
+           (tf.user_id IS NOT NULL) AS "twoFactorEnabled",
            p.name AS "planName",
            p.code AS "planCode",
            ${customerSegmentSql('u')} AS "segment",
@@ -98,6 +99,7 @@ export async function findAllMembers({ search, planId, status, expiry, role, pho
             END) AS "churnRiskReason"
          FROM users u
          LEFT JOIN plans p ON p.id = u.active_plan_id
+         LEFT JOIN user_two_factor tf ON tf.user_id = u.id AND tf.enabled_at IS NOT NULL
          LEFT JOIN LATERAL (
            SELECT GREATEST(u.last_login_at, MAX(rt.created_at)) AS at
              FROM refresh_tokens rt

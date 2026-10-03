@@ -196,6 +196,12 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ success: false, message: 'Token không hợp lệ' });
     }
 
+    // Token có `purpose` (vd challenge 2FA) cùng khoá JWT_SECRET nhưng KHÔNG phải access token —
+    // nhận nó là mở toàn bộ API khi chưa qua bước xác thực hai lớp.
+    if (decoded?.purpose) {
+      return res.status(401).json({ success: false, message: 'Token không hợp lệ' });
+    }
+
     try {
       req.user = await resolveUserContext(decoded.userId, {
         ownerContextId: req.headers['x-owner-context'],

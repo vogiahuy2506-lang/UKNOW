@@ -11,6 +11,21 @@ import {
   purgeMember as purgeMemberRow,
 } from '../../repositories/admin/adminMembers.repository.js';
 import { revokeAllRefreshTokensForUser } from '../../repositories/user/user.repository.js';
+import * as twoFactorService from '../auth/twoFactor.service.js';
+
+/**
+ * Đặt lại 2FA cho một tài khoản (mất máy xác thực). Khác gỡ email/xoá cứng: ĐƯỢC áp lên cả super admin
+ * và chính mình — đây chính là đường cứu khi admin mất máy.
+ */
+export async function resetMemberTwoFactor(id, confirmEmail, auditContext) {
+  const member = await findMemberById(id);
+  if (!member) throw { status: 404, message: 'Không tìm thấy thành viên' };
+  if (String(confirmEmail || '').trim().toLowerCase() !== String(member.email || '').trim().toLowerCase()) {
+    throw { status: 400, message: 'Email xác nhận không khớp với email hiện tại của tài khoản' };
+  }
+  const { hadTwoFactor } = await twoFactorService.adminReset(member.id, { auditContext, email: member.email });
+  return { id: member.id, email: member.email, hadTwoFactor };
+}
 
 export async function listMembers(filters) {
   return findAllMembers(filters);

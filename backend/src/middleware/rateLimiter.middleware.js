@@ -140,6 +140,34 @@ export function createLoginIpLimiter({ skip = skipInTest } = {}) {
 
 export const loginIpLimiter = createLoginIpLimiter();
 
+// Bước 2 của đăng nhập 2FA (/auth/2fa/verify) — chỉ đếm lượt LỖI theo IP. Mã 6 số chỉ có 10^6
+// khả năng; lớp này bổ sung cho bộ đếm sai theo từng user (user_two_factor.failed_attempts).
+export const TWO_FACTOR_VERIFY_LIMITER_CONFIG = Object.freeze({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  code: 'TWO_FACTOR_RATE_LIMIT_EXCEEDED',
+  message: 'Bạn nhập sai mã xác thực quá nhiều lần. Vui lòng thử lại sau 15 phút.',
+});
+
+export function createTwoFactorVerifyLimiter({ skip = skipInTest } = {}) {
+  return rateLimit({
+    skip,
+    windowMs: TWO_FACTOR_VERIFY_LIMITER_CONFIG.windowMs,
+    max: TWO_FACTOR_VERIFY_LIMITER_CONFIG.max,
+    skipSuccessfulRequests: true,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `2fa:${clientIpKey(req)}`,
+    message: {
+      success: false,
+      message: TWO_FACTOR_VERIFY_LIMITER_CONFIG.message,
+      code: TWO_FACTOR_VERIFY_LIMITER_CONFIG.code,
+    },
+  });
+}
+
+export const twoFactorVerifyLimiter = createTwoFactorVerifyLimiter();
+
 // Bộ chặn nhẹ hơn cho các endpoint credential khác (đăng ký, quên/đặt lại/đổi mật khẩu, kích
 // hoạt) — đếm MỌI lượt (không chỉ lượt lỗi), khoá theo IP.
 export const AUTH_CREDENTIAL_LIMITER_CONFIG = Object.freeze({
