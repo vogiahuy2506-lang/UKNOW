@@ -19,7 +19,7 @@ vi.mock('../../../../i18n', () => ({
     const t = (key) => {
       if (namespace === 'landingCanvas.settingsModal') {
         const dict = {
-          'sections.images.title': 'Ảnh của trang',
+          'sections.images.title': 'Ảnh đã tải lên',
           'sections.images.hint': 'Muốn ảnh nằm đúng chỗ thì đính kèm trong chat',
           'sections.images.upload': 'Tải ảnh lên',
           'sections.images.uploading': 'Đang tải lên...',
@@ -53,7 +53,7 @@ vi.mock('../LeadFormConfigPanel.jsx', () => ({
   default: () => <div data-testid="lead-form-config-panel" />,
 }));
 
-describe('SettingsModal - Section Ảnh của trang (PR-4)', () => {
+describe('SettingsModal - Section Ảnh đã tải lên (PR-4)', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     Object.assign(navigator, {
@@ -90,7 +90,7 @@ describe('SettingsModal - Section Ảnh của trang (PR-4)', () => {
       />
     );
 
-    expect(screen.getByText('Ảnh của trang')).toBeDefined();
+    expect(screen.getByText('Ảnh đã tải lên')).toBeDefined();
     expect(screen.getByText('Đang có trong trang')).toBeDefined();
     expect(screen.getByText('logo.png')).toBeDefined();
     expect(screen.getByText('hero-banner.webp')).toBeDefined();

@@ -35,6 +35,10 @@ function buildServerForm(full) {
     domainType: full.domainType === 'custom' ? 'custom' : 'system',
     customDomainHostname: full.customDomainHostname || null,
     customDomainIsApex: Boolean(full.customDomainIsApex),
+    // Trạng thái hàng landing_page_domains ('active' | 'pending_verification' | 'disabled'). Trường CHỈ-SERVER
+    // (không thuộc DRAFT_FORM_FIELDS, không gửi lên khi lưu) — modal Cài đặt trang dùng nó để hiện
+    // "Đang chạy / Chờ xác minh" và chọn link trang.
+    customDomainStatus: full.customDomainStatus || null,
     // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-1 việc 3: full.leadFormConfig đến từ
     // toPublicLeadFormConfig (backend, landingPageAdmin.service.js:35-38) — đã LUÔN đầy đủ
     // fixedFields/customFields. normalizeLeadFormConfig/snapshotLeadFormPersistedMeta ở

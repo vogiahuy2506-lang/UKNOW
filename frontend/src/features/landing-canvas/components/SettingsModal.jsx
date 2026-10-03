@@ -3,12 +3,12 @@ import { createPortal } from 'react-dom';
 import {
   HiOutlineX,
   HiOutlineGlobeAlt,
-  HiOutlineDocumentText,
   HiOutlinePhotograph,
   HiOutlineCheckCircle,
   HiOutlineChevronDown,
   HiOutlineChevronRight,
   HiOutlineExternalLink,
+  HiOutlineClipboardCopy,
   HiOutlineClock,
   HiOutlineInformationCircle,
   HiOutlineRefresh,
@@ -28,26 +28,29 @@ const BASE_DOMAIN = SYSTEM_BASE_DOMAIN;
 
 /**
  * Settings Modal - Modal nhỏ gọn để chỉnh sửa landing page.
- * Dễ dùng cho người non-tech với các section có thể mở rộng.
+ *
+ * PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU 03/10/2026 — mở ra thấy ngay hai việc chính, thứ ít dùng thu gọn:
+ *   1. "Xuất bản & đường dẫn" (luôn mở): công tắc xuất bản, link trang + Sao chép / Mở trang, đường dẫn miễn phí,
+ *      "Dùng tên miền riêng của bạn". Tiêu đề trang KHÔNG còn ở đây — sửa ở thanh trên cùng của trình soạn.
+ *   2. "Form thu khách": chọn Form cơ bản hoặc Dùng biểu mẫu đã tạo (LeadFormConfigPanel).
+ *   3. "Ảnh đã tải lên (N)": cuối modal, mặc định thu gọn.
  */
 export default function SettingsModal({ open, onClose, form, setForm, editingId, tab }) {
   const modalRef = useRef(null);
   const tc = useI18n('landingCanvas.settingsModal');
   const tcDomain = useI18n('landingCanvas');
   // LeadFormConfigPanel (khôi phục nguyên vẹn từ 3c514bc8^) gọi t('leadFormConfig.xxx') với
-  // khoá ĐẦY ĐỦ — leadFormConfig là namespace GỐC (vi.js:962/en.js:961), không nằm dưới
+  // khoá ĐẦY ĐỦ — leadFormConfig là namespace GỐC (vi.js/en.js), không nằm dưới
   // landingCanvas.settingsModal, nên phải dùng t KHÔNG scope (khác tc/tcDomain ở trên).
   const { t, locale } = useI18n();
 
-  // Section expand state. Khoá 'lead-form' (không phải leadForm) khớp ĐÚNG chuỗi tab-id dùng
-  // xuyên suốt hệ thống: openTab('lead-form') ở useCanvasConversation.js, và LandingCanvasLayout.jsx
-  // extract() cũng trả về đúng chuỗi này — lệch tên khoá thì useEffect bên dưới ghi nhầm khoá
-  // mới thay vì cập nhật đúng section.
+  // Section expand state (khối "Xuất bản & đường dẫn" luôn mở nên không có khoá). Khoá 'lead-form' (không phải
+  // leadForm) khớp ĐÚNG chuỗi tab-id dùng xuyên suốt hệ thống: openTab('lead-form') ở useCanvasConversation.js,
+  // và LandingCanvasLayout.jsx extract() cũng trả về đúng chuỗi này — lệch tên khoá thì useEffect bên dưới ghi
+  // nhầm khoá mới thay vì cập nhật đúng section.
   const [expandedSections, setExpandedSections] = useState({
-    page: true,
+    'lead-form': true,
     images: false,
-    domain: true,
-    'lead-form': false,
   });
 
   const [uploadedAssets, setUploadedAssets] = useState([]);
@@ -152,15 +155,6 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
     toast.success(tc('sections.images.inserted') || 'Đã chèn vào trang');
   };
 
-  // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 2: prop `tab` được LandingCanvasEditor.jsx
-  // truyền xuống (openTab('lead-form') từ ý định chat) nhưng trước đây không được component này
-  // đọc — modal mở đúng (open=Boolean(activeModalTab)) nhưng không đảm bảo section đích đang mở.
-  // Đảm bảo section đó luôn expanded mỗi khi tab đích thay đổi lúc modal mở.
-  useEffect(() => {
-    if (!open || !tab) return;
-    setExpandedSections((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
-  }, [open, tab]);
-
   // Domain state. CHỈ hostname tên miền RIÊNG mới đưa modal sang chế độ 'custom': trang dùng tên
   // miền miễn phí cũng có `customDomainHostname` = `<slug>.founderai.biz` (landing_page_domains lưu
   // cả hai loại) — xem utils/landingDomain.js.
@@ -168,11 +162,6 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
   const [domainMode, setDomainMode] = useState(customHostname ? 'custom' : 'system');
   const [hostname, setHostname] = useState(customHostname);
   const [isApex, setIsApex] = useState(form?.customDomainIsApex || false);
-  const [_savingDomain, _setSavingDomain] = useState(false);
-  const [domainStatus, _setDomainStatus] = useState('NONE');
-
-  // Domain info from server
-  const [_cdInfo, _setCdInfo] = useState(null);
 
   // Domain verification
   const [checkingDomain, setCheckingDomain] = useState(false);
@@ -187,6 +176,16 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
       setHostname('');
     }
   }, [customHostname, form?.customDomainIsApex]);
+
+  // PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md PR-2d-2 việc 2: prop `tab` được LandingCanvasEditor.jsx
+  // truyền xuống (openTab('lead-form') từ ý định chat) — đảm bảo section đích luôn mở mỗi khi tab đích đổi lúc
+  // modal mở. Tab 'domain' (ý định "đặt tên miền riêng") mở sẵn phần tên miền riêng trong khối đầu. Đặt SAU
+  // effect đồng bộ hostname ở trên để lúc mount nó thắng.
+  useEffect(() => {
+    if (!open || !tab) return;
+    setExpandedSections((prev) => (prev[tab] ? prev : { ...prev, [tab]: true }));
+    if (tab === 'domain') setDomainMode('custom');
+  }, [open, tab]);
 
   const handleCheckDomainConnection = async () => {
     if (!hostname) {
@@ -266,13 +265,53 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
     toast.success(tcDomain('topbar.freeSlugSuccess'));
   };
 
-  const handleSaveTitle = () => {
-    toast.success('Đã lưu tiêu đề');
+  // Link trang đang dùng: tên miền riêng ĐÃ chạy (nếu có), không thì <slug>.founderai.biz (chỉ khi trang đã lưu).
+  const slug = String(form?.slug || '').trim();
+  const customStatus = customHostname ? form?.customDomainStatus || 'pending_verification' : null;
+  let publicHost = '';
+  let linkHint = '';
+  if (customHostname) {
+    if (customStatus === 'active') publicHost = customHostname;
+    else linkHint = tc('sections.publish.linkPendingHint');
+  } else if (!editingId) {
+    linkHint = tc('sections.publish.linkUnsavedHint');
+  } else if (slug) {
+    publicHost = `${slug}.${BASE_DOMAIN}`;
+  } else {
+    linkHint = tc('sections.publish.linkNoSlugHint');
+  }
+  const publicUrl = publicHost ? `https://${publicHost}` : '';
+
+  const handleCopyLink = async () => {
+    if (!publicUrl) return;
+    try {
+      await navigator.clipboard.writeText(publicUrl);
+      toast.success(tc('sections.publish.linkCopied'));
+    } catch {
+      toast.error(tc('sections.publish.linkCopyFailed'));
+    }
   };
 
-  const _handleSavePublish = () => {
-    toast.success(form?.isPublished ? 'Đã xuất bản!' : 'Đã lưu nháp');
-  };
+  const customStatusLabel =
+    customStatus === 'active'
+      ? tc('sections.customDomain.statusActive')
+      : customStatus === 'disabled'
+      ? tc('sections.customDomain.statusDisabled')
+      : tc('sections.customDomain.statusPending');
+  const customStatusClass =
+    customStatus === 'active'
+      ? 'bg-green-100 text-green-700'
+      : customStatus === 'disabled'
+      ? 'bg-gray-100 text-gray-600'
+      : 'bg-amber-100 text-amber-800';
+
+  const uploadedImagesCount = inPageImages.length + pendingUploadedAssets.length;
+  const customFieldCount = (form?.leadFormConfig?.customFields || []).length;
+  const leadFormBadge = form?.linkedFormId
+    ? tc('sections.leadForm.badgeLinked')
+    : customFieldCount > 0
+    ? tc('sections.leadForm.badgeCustom', { count: customFieldCount })
+    : null;
 
   if (!open) return null;
 
@@ -298,12 +337,11 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
 
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-6 space-y-4">
-          {/* ═══ SECTION: Thông tin trang ═══ */}
+          {/* ═══ KHỐI 1: Xuất bản & đường dẫn (luôn mở) ═══ */}
           <SectionCard
-            expanded={expandedSections.page}
-            onToggle={() => toggleSection('page')}
-            icon={<HiOutlineDocumentText className="w-5 h-5" />}
-            title={tc('sections.page.title')}
+            alwaysOpen
+            icon={<HiOutlineGlobeAlt className="w-5 h-5" />}
+            title={tc('sections.publish.title')}
             badge={form?.isPublished ? tc('published') : tc('draft')}
             badgeClass={form?.isPublished ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'}
           >
@@ -311,18 +349,21 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
               {/* Publish toggle */}
               <div className="flex items-center justify-between p-4 bg-gray-50/90 border border-gray-200/60 rounded-xl">
                 <div>
-                  <p className="font-semibold text-gray-900">{tc('sections.page.publishLabel')}</p>
+                  <p className="font-semibold text-gray-900">{tc('sections.publish.publishLabel')}</p>
                   <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
-                    {form?.isPublished ? tc('sections.page.publishOnDesc') : tc('sections.page.publishOffDesc')}
+                    {form?.isPublished ? tc('sections.publish.publishOnDesc') : tc('sections.publish.publishOffDesc')}
                   </p>
                 </div>
                 <label className="relative inline-flex items-center cursor-pointer shrink-0">
                   <input
                     type="checkbox"
+                    aria-label={tc('sections.publish.publishLabel')}
                     checked={Boolean(form?.isPublished)}
                     onChange={(e) => {
                       setForm((prev) => ({ ...prev, isPublished: e.target.checked }));
-                      toast.success(e.target.checked ? 'Đã xuất bản!' : 'Đã lưu nháp');
+                      toast.success(
+                        e.target.checked ? tc('sections.publish.toastOn') : tc('sections.publish.toastOff')
+                      );
                     }}
                     className="sr-only peer"
                   />
@@ -330,29 +371,310 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
                 </label>
               </div>
 
-              {/* Tiêu đề */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-sm font-medium text-gray-700">
-                    {tc('sections.page.titleLabel')}
+              {/* Link trang đang dùng */}
+              <div className="rounded-xl border border-gray-200/70 bg-white p-4 space-y-2">
+                <p className="text-sm font-semibold text-gray-900">{tc('sections.publish.linkLabel')}</p>
+                {publicUrl ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <code
+                      data-testid="landing-public-url"
+                      className="min-w-0 flex-1 truncate rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-sm text-gray-900"
+                    >
+                      {publicUrl}
+                    </code>
+                    <div className="flex shrink-0 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                      >
+                        <HiOutlineClipboardCopy className="w-4 h-4" />
+                        {tc('sections.publish.linkCopy')}
+                      </button>
+                      <a
+                        href={publicUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-sm font-medium text-white hover:bg-orange-600 transition"
+                      >
+                        <HiOutlineExternalLink className="w-4 h-4" />
+                        {tc('sections.publish.linkOpen')}
+                      </a>
+                    </div>
+                  </div>
+                ) : null}
+                {linkHint ? <p className="text-xs text-gray-500">{linkHint}</p> : null}
+                {publicUrl && !form?.isPublished ? (
+                  <p className="text-xs text-amber-700">{tc('sections.publish.linkDraftHint')}</p>
+                ) : null}
+              </div>
+
+              {/* Đường dẫn miễn phí (slug) — chỉ khi không dùng tên miền riêng */}
+              {domainMode === 'system' && (
+                <div>
+                  <label htmlFor="landing-slug-input" className="block text-sm font-medium text-gray-700 mb-1.5">
+                    {tc('sections.publish.slugLabel')}
                   </label>
-                  <span className="text-[11px] text-gray-400 font-normal">
-                    (Tự động đồng bộ với thanh tiêu đề trên cùng)
-                  </span>
+                  <div className="flex gap-2">
+                    <div className="flex min-w-0 flex-1 items-center rounded-lg border border-gray-200 focus-within:border-orange-400 focus-within:ring-2 focus-within:ring-orange-100">
+                      <input
+                        id="landing-slug-input"
+                        type="text"
+                        value={form?.slug || ''}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            slug: e.target.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''),
+                          }))
+                        }
+                        placeholder="ten-page"
+                        className="min-w-0 flex-1 rounded-lg bg-transparent px-4 py-2.5 font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none"
+                      />
+                      <span className="shrink-0 pr-3 font-mono text-sm text-gray-500">.{BASE_DOMAIN}</span>
+                    </div>
+                    <button
+                      onClick={handleSaveSlug}
+                      className="px-5 py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition"
+                    >
+                      {tc('sections.publish.slugSave')}
+                    </button>
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  value={form?.title || ''}
-                  onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
-                  onBlur={handleSaveTitle}
-                  placeholder={tc('sections.page.titlePlaceholder')}
-                  className="w-full rounded-xl border border-gray-200 px-4 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-100"
-                />
+              )}
+
+              {/* Tên miền riêng: một dòng, bấm mới mở ô nhập */}
+              <div className="space-y-3">
+                <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3.5">
+                  <span className="text-sm font-medium text-gray-800">{tc('sections.customDomain.toggle')}</span>
+                  <span className="relative inline-flex shrink-0 items-center">
+                    <input
+                      type="checkbox"
+                      checked={domainMode === 'custom'}
+                      onChange={(e) => setDomainMode(e.target.checked ? 'custom' : 'system')}
+                      className="sr-only peer"
+                    />
+                    <span className="block h-6 w-11 rounded-full bg-gray-200 peer-focus:ring-2 peer-focus:ring-purple-200 peer-checked:bg-purple-600 after:absolute after:left-[2px] after:top-[2px] after:h-5 after:w-5 after:rounded-full after:border after:border-gray-300 after:bg-white after:transition-all after:content-[''] peer-checked:after:translate-x-full peer-checked:after:border-white" />
+                  </span>
+                </label>
+
+                {domainMode === 'custom' && (
+                  <div className="space-y-4 rounded-xl border border-purple-100 bg-white p-4" data-testid="custom-domain-panel">
+                    {/* Trạng thái tên miền riêng đang gắn */}
+                    {customHostname ? (
+                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                        <span className="font-medium text-gray-700">{tc('sections.customDomain.statusLabel')}:</span>
+                        <span
+                          data-testid="custom-domain-status"
+                          className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${customStatusClass}`}
+                        >
+                          {customStatusLabel}
+                        </span>
+                        <span className="font-mono text-gray-600">{customHostname}</span>
+                      </div>
+                    ) : null}
+
+                    {/* Domain input */}
+                    <div>
+                      <label htmlFor="landing-custom-hostname" className="block text-sm font-medium text-gray-700 mb-1.5">
+                        {tc('sections.customDomain.hostnameLabel')}
+                      </label>
+                      <input
+                        id="landing-custom-hostname"
+                        type="text"
+                        value={hostname}
+                        onChange={(e) => setHostname(e.target.value.toLowerCase())}
+                        placeholder={tc('sections.customDomain.hostnamePlaceholder')}
+                        className="w-full rounded-lg border border-gray-200 px-4 py-2.5 font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
+                      />
+                    </div>
+
+                    {/* Domain type */}
+                    <div>
+                      <p className="block text-sm font-medium text-gray-700 mb-2">
+                        {tc('sections.customDomain.typeLabel')}
+                      </p>
+                      <div className="flex flex-wrap gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="domain-type"
+                            checked={!isApex}
+                            onChange={() => setIsApex(false)}
+                            className="text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="text-sm text-gray-700">
+                            <strong>{tc('sections.customDomain.typeSubdomain')}</strong>{' '}
+                            {tc('sections.customDomain.typeSubdomainExample')}
+                          </span>
+                        </label>
+                        <label className="flex items-center gap-2 cursor-pointer">
+                          <input
+                            type="radio"
+                            name="domain-type"
+                            checked={isApex}
+                            onChange={() => setIsApex(true)}
+                            className="text-purple-600 focus:ring-purple-500"
+                          />
+                          <span className="text-sm text-gray-700">
+                            <strong>{tc('sections.customDomain.typeApex')}</strong>{' '}
+                            {tc('sections.customDomain.typeApexExample')}
+                          </span>
+                        </label>
+                      </div>
+                    </div>
+
+                    {/* Guide — chỉ hiện khi đã nhập tên miền */}
+                    {hostname.trim() ? (
+                      <div className="rounded-lg bg-purple-50 border border-purple-100 p-4 space-y-3" data-testid="custom-domain-guide">
+                        <div className="flex items-center gap-2 text-purple-800">
+                          <HiOutlineInformationCircle className="w-5 h-5" />
+                          <span className="font-semibold text-sm">{tc('sections.customDomain.guideTitle')}</span>
+                        </div>
+
+                        <ol className="text-sm text-gray-700 space-y-2 ml-2">
+                          <li className="flex gap-2">
+                            <span className="font-semibold text-purple-600">1.</span>
+                            <span>{tc('sections.customDomain.guideStep1')}</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="font-semibold text-purple-600">2.</span>
+                            <span>{tc('sections.customDomain.guideStep2')}</span>
+                          </li>
+                          <li className="flex gap-2">
+                            <span className="font-semibold text-purple-600">3.</span>
+                            <span>{tc('sections.customDomain.guideStep3')}</span>
+                          </li>
+                        </ol>
+
+                        {/* DNS Record display */}
+                        <div className="bg-white rounded-lg border border-purple-200 p-3 font-mono text-sm">
+                          {isApex ? (
+                            <div className="space-y-1">
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsType')}</span>
+                                <span>A</span>
+                              </div>
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsHost')}</span>
+                                <span>@</span>
+                              </div>
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsValue')}</span>
+                                <span className="text-amber-600">{tc('sections.customDomain.apexValuePending')}</span>
+                              </div>
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsTtl')}</span>
+                                <span>3600</span>
+                              </div>
+                            </div>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsType')}</span>
+                                <span>CNAME</span>
+                              </div>
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsHost')}</span>
+                                <span>{hostname.split('.')[0] || 'lp'}</span>
+                              </div>
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsValue')}</span>
+                                <span>{BASE_DOMAIN}.</span>
+                              </div>
+                              <div className="flex gap-2 text-gray-600">
+                                <span className="text-purple-600 font-bold">{tc('sections.customDomain.dnsTtl')}</span>
+                                <span>3600</span>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        <p className="text-xs text-gray-500">
+                          <HiOutlineClock className="w-3.5 h-3.5 inline mr-1" />
+                          {tc('sections.customDomain.dnsPropagation')}
+                        </p>
+                      </div>
+                    ) : null}
+
+                    {/* Action buttons */}
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => {
+                          if (!hostname) {
+                            toast.error('Vui lòng nhập tên miền');
+                            return;
+                          }
+                          setForm((prev) => ({
+                            ...prev,
+                            domainType: 'custom',
+                            customDomainHostname: hostname,
+                            customDomainIsApex: isApex,
+                          }));
+                          toast.success('Đã lưu tên miền! Vui lòng đợi DNS propagate.');
+                        }}
+                        className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition"
+                      >
+                        {tc('sections.customDomain.save')}
+                      </button>
+                    </div>
+
+                    {/* Kiểm tra kết nối */}
+                    {hostname && (
+                      <div>
+                        <button
+                          onClick={handleCheckDomainConnection}
+                          disabled={checkingDomain}
+                          className={`w-full py-2.5 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
+                            domainCheckResult === 'ok'
+                              ? 'bg-green-100 text-green-700 border border-green-200'
+                              : domainCheckResult === 'error'
+                              ? 'bg-red-100 text-red-700 border border-red-200'
+                              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
+                          }`}
+                        >
+                          {checkingDomain ? (
+                            <>
+                              <div className="w-4 h-4 border-2 border-gray-400 border-t-green-600 rounded-full animate-spin" />
+                              {tc('sections.customDomain.checking')}
+                            </>
+                          ) : domainCheckResult === 'ok' ? (
+                            <>
+                              <HiOutlineCheckCircle className="w-5 h-5" />
+                              {tc('sections.customDomain.checkOk')}
+                            </>
+                          ) : domainCheckResult === 'error' ? (
+                            <>
+                              <HiOutlineX className="w-5 h-5" />
+                              {tc('sections.customDomain.checkFailed')}
+                            </>
+                          ) : (
+                            <>
+                              <HiOutlineRefresh className="w-5 h-5" />
+                              {tc('sections.customDomain.check')}
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           </SectionCard>
 
-          {/* ═══ SECTION: Ảnh của trang ═══ */}
+          {/* ═══ KHỐI 2: Form thu khách ═══ */}
+          <SectionCard
+            expanded={expandedSections['lead-form']}
+            onToggle={() => toggleSection('lead-form')}
+            icon={<HiOutlineClipboardList className="w-5 h-5" />}
+            title={tc('sections.leadForm.title')}
+            badge={leadFormBadge}
+            badgeClass="bg-blue-100 text-blue-700"
+          >
+            <LeadFormConfigPanel form={form} setForm={setForm} t={t} />
+          </SectionCard>
+
+          {/* ═══ KHỐI 3: Ảnh đã tải lên (cuối modal, mặc định thu gọn) ═══ */}
           <SectionCard
             expanded={expandedSections.images}
             onToggle={() => toggleSection('images')}
@@ -360,11 +682,9 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
             title={
               <span className="flex items-center gap-1.5 flex-wrap">
                 <span>{tc('sections.images.title')}</span>
-                <span className="text-xs font-normal text-gray-500">· Kho ảnh & Tệp tải lên</span>
+                <span className="text-sm font-normal text-gray-500">({uploadedImagesCount})</span>
               </span>
             }
-            badge={inPageImages.length > 0 ? `${inPageImages.length} ảnh trong trang` : null}
-            badgeClass="bg-blue-50 text-blue-700 border border-blue-200/60"
           >
             <div className="space-y-4">
               {/* Dòng gợi ý thông minh */}
@@ -479,288 +799,6 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
               </div>
             </div>
           </SectionCard>
-
-          {/* ═══ SECTION: Tên miền ═══ */}
-          <SectionCard
-            expanded={expandedSections.domain}
-            onToggle={() => toggleSection('domain')}
-            icon={<HiOutlineGlobeAlt className="w-5 h-5" />}
-            title={tc('sections.domain.title')}
-            badge={domainMode === 'custom' ? hostname : `${form?.slug || '...'}.${BASE_DOMAIN}`}
-            badgeClass="bg-purple-100 text-purple-700"
-          >
-            <div className="space-y-4">
-              {/* Mode toggle */}
-              <div className="flex rounded-lg border border-gray-200 p-1 bg-gray-50">
-                <button
-                  onClick={() => setDomainMode('system')}
-                  className={`flex-1 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${
-                    domainMode === 'system'
-                      ? 'bg-white text-orange-600 shadow-sm border border-orange-200'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Miễn phí
-                </button>
-                <button
-                  onClick={() => setDomainMode('custom')}
-                  className={`flex-1 py-2.5 px-4 rounded-md text-sm font-medium transition-all ${
-                    domainMode === 'custom'
-                      ? 'bg-white text-purple-600 shadow-sm border border-purple-200'
-                      : 'text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  Tên miền riêng
-                </button>
-              </div>
-
-              {/* Free subdomain */}
-              {domainMode === 'system' && (
-                <div className="space-y-3">
-                  <div className="p-4 bg-orange-50 rounded-lg border border-orange-100">
-                    <p className="text-sm text-orange-800">
-                      <strong>Miễn phí:</strong> Landing page của bạn sẽ có địa chỉ:
-                    </p>
-                    <p className="text-lg font-mono font-semibold text-orange-900 mt-1">
-                      {form?.slug || 'ten-page'}.{BASE_DOMAIN}
-                    </p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {tc('sections.domain.slugLabel')}
-                    </label>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={form?.slug || ''}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            slug: e.target.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, ''),
-                          }))
-                        }
-                        placeholder="ten-page"
-                        className="flex-1 rounded-lg border border-gray-200 px-4 py-2.5 font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
-                      />
-                      <button
-                        onClick={handleSaveSlug}
-                        className="px-5 py-2.5 bg-orange-500 text-white rounded-lg font-medium hover:bg-orange-600 transition"
-                      >
-                        Lưu
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Custom domain */}
-              {domainMode === 'custom' && (
-                <div className="space-y-4">
-                  {/* Domain input */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                      {tc('sections.domain.hostnameLabel')}
-                    </label>
-                    <input
-                      type="text"
-                      value={hostname}
-                      onChange={(e) => setHostname(e.target.value.toLowerCase())}
-                      placeholder="lp.example.com"
-                      className="w-full rounded-lg border border-gray-200 px-4 py-2.5 font-mono text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-purple-400 focus:ring-2 focus:ring-purple-100"
-                    />
-                  </div>
-
-                  {/* Domain type */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      {tc('sections.domain.typeLabel')}
-                    </label>
-                    <div className="flex gap-4">
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="domain-type"
-                          checked={!isApex}
-                          onChange={() => setIsApex(false)}
-                          className="text-purple-600 focus:ring-purple-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          <strong>Subdomain</strong> (lp.example.com)
-                        </span>
-                      </label>
-                      <label className="flex items-center gap-2 cursor-pointer">
-                        <input
-                          type="radio"
-                          name="domain-type"
-                          checked={isApex}
-                          onChange={() => setIsApex(true)}
-                          className="text-purple-600 focus:ring-purple-500"
-                        />
-                        <span className="text-sm text-gray-700">
-                          <strong>Apex</strong> (example.com)
-                        </span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Guide */}
-                  <div className="rounded-lg bg-purple-50 border border-purple-100 p-4 space-y-3">
-                    <div className="flex items-center gap-2 text-purple-800">
-                      <HiOutlineInformationCircle className="w-5 h-5" />
-                      <span className="font-semibold text-sm">{tc('sections.domain.guideTitle')}</span>
-                    </div>
-                    
-                    <ol className="text-sm text-gray-700 space-y-2 ml-2">
-                      <li className="flex gap-2">
-                        <span className="font-semibold text-purple-600">1.</span>
-                        <span>Đăng nhập vào <strong>nhà cung cấp domain</strong> của bạn (GoDaddy, Namecheap, Cloudflare...)</span>
-                      </li>
-                      <li className="flex gap-2">
-                        <span className="font-semibold text-purple-600">2.</span>
-                        <span>Tìm phần <strong>DNS Records</strong> hoặc <strong>Zone Records</strong></span>
-                      </li>
-                      <li className="flex gap-2">
-                        <span className="font-semibold text-purple-600">3.</span>
-                        <span>Thêm record sau:</span>
-                      </li>
-                    </ol>
-
-                    {/* DNS Record display */}
-                    <div className="bg-white rounded-lg border border-purple-200 p-3 font-mono text-sm">
-                      {isApex ? (
-                        <div className="space-y-1">
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">Type:</span>
-                            <span>A</span>
-                          </div>
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">Host:</span>
-                            <span>@</span>
-                          </div>
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">Value:</span>
-                            <span className="text-amber-600">[Cần IP từ FounderAI]</span>
-                          </div>
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">TTL:</span>
-                            <span>3600</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-1">
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">Type:</span>
-                            <span>CNAME</span>
-                          </div>
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">Host:</span>
-                            <span>{hostname.split('.')[0] || 'lp'}</span>
-                          </div>
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">Value:</span>
-                            <span>{BASE_DOMAIN}.</span>
-                          </div>
-                          <div className="flex gap-2 text-gray-600">
-                            <span className="text-purple-600 font-bold">TTL:</span>
-                            <span>3600</span>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-
-                    <p className="text-xs text-gray-500">
-                      <HiOutlineClock className="w-3.5 h-3.5 inline mr-1" />
-                      DNS có thể mất <strong>5-30 phút</strong> để propagate. Đôi khi đến 48 giờ.
-                    </p>
-                  </div>
-
-                  {/* Action buttons */}
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => {
-                        if (!hostname) {
-                          toast.error('Vui lòng nhập tên miền');
-                          return;
-                        }
-                        setForm((prev) => ({
-                          ...prev,
-                          domainType: 'custom',
-                          customDomainHostname: hostname,
-                          customDomainIsApex: isApex,
-                        }));
-                        toast.success('Đã lưu tên miền! Vui lòng đợi DNS propagate.');
-                      }}
-                      className="flex-1 py-2.5 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition"
-                    >
-                      Lưu tên miền
-                    </button>
-                    {domainStatus === 'ACTIVE' && (
-                      <a
-                        href={`https://${hostname}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="px-4 py-2.5 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition inline-flex items-center gap-1"
-                      >
-                        <HiOutlineExternalLink className="w-4 h-4" />
-                        Mở
-                      </a>
-                    )}
-                  </div>
-
-                  {/* Kiểm tra kết nối */}
-                  {hostname && (
-                    <div className="mt-3">
-                      <button
-                        onClick={handleCheckDomainConnection}
-                        disabled={checkingDomain}
-                        className={`w-full py-2.5 rounded-lg font-medium transition flex items-center justify-center gap-2 ${
-                          domainCheckResult === 'ok'
-                            ? 'bg-green-100 text-green-700 border border-green-200'
-                            : domainCheckResult === 'error'
-                            ? 'bg-red-100 text-red-700 border border-red-200'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
-                        }`}
-                      >
-                        {checkingDomain ? (
-                          <>
-                            <div className="w-4 h-4 border-2 border-gray-400 border-t-green-600 rounded-full animate-spin" />
-                            Đang kiểm tra...
-                          </>
-                        ) : domainCheckResult === 'ok' ? (
-                          <>
-                            <HiOutlineCheckCircle className="w-5 h-5" />
-                            Kết nối thành công
-                          </>
-                        ) : domainCheckResult === 'error' ? (
-                          <>
-                            <HiOutlineX className="w-5 h-5" />
-                            Kết nối thất bại
-                          </>
-                        ) : (
-                          <>
-                            <HiOutlineRefresh className="w-5 h-5" />
-                            Kiểm tra kết nối
-                          </>
-                        )}
-                      </button>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </SectionCard>
-
-          {/* ═══ SECTION: Form đăng ký ═══ */}
-          <SectionCard
-            expanded={expandedSections['lead-form']}
-            onToggle={() => toggleSection('lead-form')}
-            icon={<HiOutlineClipboardList className="w-5 h-5" />}
-            title={tc('sections.leadForm.title')}
-            badge={`${(form?.leadFormConfig?.customFields || []).length}/20`}
-            badgeClass="bg-blue-100 text-blue-700"
-          >
-            <LeadFormConfigPanel form={form} setForm={setForm} t={t} />
-          </SectionCard>
         </div>
 
         {/* Footer */}
@@ -787,35 +825,45 @@ export default function SettingsModal({ open, onClose, form, setForm, editingId,
 }
 
 /**
- * Section Card - Collapsible section with header
+ * Section Card - Collapsible section with header. `alwaysOpen`: khối luôn mở (không có nút thu gọn).
  */
-function SectionCard({ expanded, onToggle, icon, title, badge, badgeClass, children }) {
+function SectionCard({ expanded, onToggle, icon, title, badge, badgeClass, children, alwaysOpen = false }) {
+  const headerContent = (
+    <>
+      <div className="flex items-center gap-3">
+        <span className="text-gray-400">{icon}</span>
+        <span className="font-semibold text-gray-900">{title}</span>
+        {badge && (
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeClass}`}>
+            {badge}
+          </span>
+        )}
+      </div>
+      {alwaysOpen ? null : expanded ? (
+        <HiOutlineChevronDown className="w-5 h-5 text-gray-400" />
+      ) : (
+        <HiOutlineChevronRight className="w-5 h-5 text-gray-400" />
+      )}
+    </>
+  );
   return (
     <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
       {/* Header */}
-      <button
-        type="button"
-        onClick={onToggle}
-        className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition"
-      >
-        <div className="flex items-center gap-3">
-          <span className="text-gray-400">{icon}</span>
-          <span className="font-semibold text-gray-900">{title}</span>
-          {badge && (
-            <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeClass}`}>
-              {badge}
-            </span>
-          )}
-        </div>
-        {expanded ? (
-          <HiOutlineChevronDown className="w-5 h-5 text-gray-400" />
-        ) : (
-          <HiOutlineChevronRight className="w-5 h-5 text-gray-400" />
-        )}
-      </button>
+      {alwaysOpen ? (
+        <div className="w-full flex items-center justify-between px-4 py-3 bg-gray-50">{headerContent}</div>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={Boolean(expanded)}
+          className="w-full flex items-center justify-between px-4 py-3 bg-gray-50 hover:bg-gray-100 transition"
+        >
+          {headerContent}
+        </button>
+      )}
 
       {/* Content */}
-      <div className={expanded ? 'px-4 py-4' : 'hidden'}>{children}</div>
+      <div className={alwaysOpen || expanded ? 'px-4 py-4' : 'hidden'}>{children}</div>
     </div>
   );
 }
