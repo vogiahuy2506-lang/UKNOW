@@ -106,6 +106,12 @@ const UI_LABELS_IN_ARTICLES = [
   ['campaign-theo-doi', 'dashboardReport.links.deliveryMonitor', 'Xem lượt chạy ở Giám sát gửi tin'],
   ['campaign-theo-doi', 'dashboardReport.links.landing', 'Xem thống kê landing ở mục Landing page'],
   ['campaign-theo-doi', 'dashboard.ordersOverTime', 'Đơn hàng theo thời gian'],
+  // PLAN_LAM_GON_TRANG_BAO_CAO (04/10/2026): thẻ AI gọn, nút "Phân tích bằng AI", nút in.
+  ['campaign-theo-doi', 'dashboard.analyzeInsight', 'Phân tích bằng AI'],
+  ['campaign-theo-doi', 'dashboardReport.ai.title', 'Phân tích AI'],
+  ['campaign-theo-doi', 'dashboardReport.ai.todo', 'Nên làm gì'],
+  ['campaign-theo-doi', 'dashboardReport.ai.showDetail', 'Xem chi tiết'],
+  ['campaign-theo-doi', 'dashboard.printPdf', 'In / PDF'],
   ['campaign-theo-doi', 'ordersTable.title', 'Bảng đơn hàng'],
   ['campaign-theo-doi', 'employee.permissions.reportsView', 'Báo cáo & Thống kê'],
   ['campaign-theo-doi', 'employee.permissions.campaignView', 'Chiến dịch — xem'],
