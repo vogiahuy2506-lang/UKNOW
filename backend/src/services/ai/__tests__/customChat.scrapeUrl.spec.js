@@ -11,6 +11,8 @@ jest.unstable_mockModule('../../../utils/geminiClient.util.js', () => ({
   extractGeminiUsage: () => ({}),
   isThinkingBudgetRejection: () => false,
   joinGeminiTextParts: () => '',
+  // customChat.service gọi lõi dùng chung từ G2 (03/10/2026) — mock thiếu export này thì cả spec không nạp được.
+  generateGeminiContent: jest.fn(),
 }));
 jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({ resolveAllowedModel: jest.fn() }));
