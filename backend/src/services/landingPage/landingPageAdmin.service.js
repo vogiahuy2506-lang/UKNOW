@@ -9,6 +9,7 @@ import db from '../../config/database.js';
 import formRepository from '../../repositories/form.repository.js';
 import formService from '../form.service.js';
 import { checkUserResourceLimit, enforceResourceLimitTx } from '../../utils/userResourceLimit.util.js';
+import { extractFormEmbedKeys } from '../../utils/landingEditGuard.util.js';
 import {
   prepareLandingHtmlOnSave,
   resolveFrontendOriginFromEnv,
@@ -91,6 +92,62 @@ function toAdminLandingDto(row) {
 }
 
 /**
+ * PR-F (PLAN_TEN_MIEN_RIENG_VA_BIEU_MAU_LIEN_KET_LANDING_2026-10-03.md) — `custom_config.chosenFormId` là id biểu
+ * mẫu KHÁCH CHỌN qua "Dùng biểu mẫu đã tạo". Phân biệt với form TỰ SINH ("Form cơ bản", tạo lúc lưu trang có chỗ
+ * trống) bằng cờ ở phía LANDING, không ở `forms.settings`: `normalizeFormSettings` là whitelist (khoá lạ bị bỏ khi tạo)
+ * và trình soạn Biểu mẫu ghi đè cả khối settings mỗi lần lưu — cờ nằm trong form sẽ mất ngay lần chủ sửa form đầu tiên.
+ * Form tự sinh cũ (trước PR-F) không có cờ nên tự nhiên là "Form cơ bản". Cờ lệch (id không khớp form đang gắn) thì
+ * coi như không có — tự lành, không cần dọn.
+ *
+ * @param {object|null|undefined} customConfig
+ * @param {number|string} formId
+ * @returns {boolean}
+ */
+function isChosenFormId(customConfig, formId) {
+  const chosen = Number(customConfig?.chosenFormId);
+  return Number.isFinite(chosen) && chosen > 0 && chosen === Number(formId);
+}
+
+/**
+ * PR-F — phần DTO về biểu mẫu đang gắn landing (đọc từ `forms.landing_page_id`), dùng cho GET / list / PUT.
+ * `linkedFormSource`: 'chosen' = biểu mẫu khách chọn sẵn; 'basic' = form tự sinh ("Form cơ bản"); null = chưa gắn gì.
+ *
+ * @param {{ id: number, title?: string, publicKey?: string }|null|undefined} linkedForm
+ * @param {object|null|undefined} customConfig
+ */
+function toLinkedFormDto(linkedForm, customConfig) {
+  if (!linkedForm) {
+    return { linkedFormId: null, linkedFormTitle: null, linkedFormPublicKey: null, linkedFormSource: null };
+  }
+  return {
+    linkedFormId: linkedForm.id,
+    linkedFormTitle: linkedForm.title ?? null,
+    linkedFormPublicKey: linkedForm.publicKey ?? null,
+    linkedFormSource: isChosenFormId(customConfig, linkedForm.id) ? 'chosen' : 'basic',
+  };
+}
+
+/**
+ * PR-F — `body.linkedFormId` của PUT /:id. Thiếu = KHÔNG đổi gì (hành vi cũ y nguyên); `null` = về "Form cơ bản";
+ * số nguyên dương (hoặc chuỗi số) = dùng biểu mẫu có sẵn. Giá trị khác → 400, không đoán ý.
+ *
+ * @param {unknown} raw
+ * @returns {{ mode: 'unchanged' } | { mode: 'basic' } | { mode: 'link', formId: number }}
+ */
+function parseLinkedFormIdInput(raw) {
+  if (raw === undefined) return { mode: 'unchanged' };
+  if (raw === null) return { mode: 'basic' };
+  const text = typeof raw === 'number' || typeof raw === 'string' ? String(raw).trim() : '';
+  const formId = /^\d{1,15}$/.test(text) ? Number(text) : NaN;
+  if (!Number.isSafeInteger(formId) || formId <= 0) {
+    const err = new Error('linkedFormId không hợp lệ (cần số nguyên dương hoặc null).');
+    err.statusCode = 400;
+    throw err;
+  }
+  return { mode: 'link', formId };
+}
+
+/**
  * CRUD landing page HTML theo phạm vi quyền user.
  */
 class LandingPageAdminService {
@@ -115,9 +172,23 @@ class LandingPageAdminService {
    */
   async list(authUser) {
     const rows = await landingPageRepository.listByScope(getWorkspaceScope(authUser));
-    return rows
-      .filter((r) => String(r.slug || '').trim().toLowerCase() !== RESERVED_SLUG_FIXED_LANDING)
-      .map((r) => toAdminLandingDto(r));
+    const visible = rows.filter((r) => String(r.slug || '').trim().toLowerCase() !== RESERVED_SLUG_FIXED_LANDING);
+    // PR-F — biểu mẫu đang gắn từng landing, MỘT câu truy vấn cho cả danh sách. Lỗi ở đây chỉ làm mất phần phụ này,
+    // không được làm hỏng cả danh sách landing.
+    const linkedByLanding = new Map();
+    try {
+      const linkedRows = await formRepository.listLinkedByLandingPageIds(visible.map((r) => r.id));
+      for (const linked of linkedRows) {
+        const key = String(linked.landingPageId);
+        if (!linkedByLanding.has(key)) linkedByLanding.set(key, linked);
+      }
+    } catch (e) {
+      console.warn('[LandingPageAdmin.list] Không tra được biểu mẫu gắn landing:', e.message);
+    }
+    return visible.map((r) => ({
+      ...toAdminLandingDto(r),
+      ...toLinkedFormDto(linkedByLanding.get(String(r.id)), r.customConfig),
+    }));
   }
 
   /**
@@ -140,7 +211,7 @@ class LandingPageAdminService {
       ? Number(row.workspaceOwnerId || row.idUser)
       : context.workspaceOwnerId;
     const linkedForm = await formRepository.findByLandingPageId(id, landingOwnerId);
-    return { ...toAdminLandingDto(row), linkedFormId: linkedForm?.id ?? null };
+    return { ...toAdminLandingDto(row), ...toLinkedFormDto(linkedForm, row.customConfig) };
   }
 
   /**
@@ -381,30 +452,79 @@ class LandingPageAdminService {
       err.statusCode = 400;
       throw err;
     }
+
+    // PR-F — "Dùng biểu mẫu đã tạo": body.linkedFormId (số = gắn biểu mẫu có sẵn, null = về Form cơ bản, thiếu = không
+    // đổi). Bước này CHỈ ĐỌC + kiểm (403/404/409/400) — chưa ghi gì, nên lỗi ở đây không để lại dấu vết.
+    const linkInput = parseLinkedFormIdInput(body?.linkedFormId);
+    const linkPlan = await this.planLinkedFormChange({
+      landingId: id,
+      input: linkInput,
+      resourceOwnerId,
+      context,
+      scope,
+      customConfig: nextCustomConfig,
+    });
+    // Gắn biểu mẫu mà HTML không có chỗ trống và cũng chưa nhúng biểu mẫu đó → gắn xong khách vẫn không thấy form,
+    // còn trợ lý AI lại coi "người đăng ký landing" là bài nộp của biểu mẫu → 0 người nhận trong im lặng. Báo lỗi
+    // rõ thay vì gắn suông (giao diện luôn chèn chỗ trống trước khi gửi).
+    if (
+      linkPlan.mode === 'link'
+      && slotCount === 0
+      && !extractFormEmbedKeys(rawHtml).has(linkPlan.form.publicKey)
+    ) {
+      const err = new Error(
+        'Trang chưa có vị trí để hiển thị biểu mẫu đã chọn (thiếu chỗ trống data-founderai-form-slot trong HTML).'
+      );
+      err.statusCode = 400;
+      throw err;
+    }
+
     let htmlWithFormResolved = rawHtml;
+    let createdBasicForm = null;
     if (slotCount === 1) {
-      let form = await formRepository.findByLandingPageId(id, resourceOwnerId);
-      if (!form) {
+      let form;
+      if (linkPlan.mode === 'link') {
+        // Biểu mẫu khách chọn — được gắn + (nếu còn nháp) xuất bản ở bước ghi bên dưới, cùng lúc lưu landing.
+        form = linkPlan.form;
+      } else if (linkPlan.mode === 'basic') {
+        // Đang dùng biểu mẫu khách chọn, nay quay về "Form cơ bản": dựng form cơ bản MỚI từ leadFormConfig (CHƯA gắn
+        // landing — gắn trong cùng transaction với việc gỡ biểu mẫu khách chọn, ở applyLinkedFormTx).
         const fields = buildFormFieldsFromLeadFormConfig(nextCustomConfig.leadForm);
         const formTitle = String(body?.title || current.title || '').trim().slice(0, 200)
           || slug || current.slug || 'Biểu mẫu landing';
-        const createdForm = await formService.createForm({
+        createdBasicForm = await formService.createForm({
           workspaceOwnerId: resourceOwnerId,
           createdByUserId: context.actorUserId,
           title: formTitle,
           fields,
           settings: { consentEnabled: true, notifyOwner: true },
-          landingPageId: id,
         });
-        await formService.publishForm(createdForm.id, resourceOwnerId, true);
-        form = createdForm;
-      } else if (!form.isPublished) {
-        // Review PR-5b-2a nợ 3 — chủ đã tự tắt xuất bản form gắn landing này (qua Forms admin)
-        // rồi lưu lại landing (vẫn có chỗ trống) → khối nhúng sẽ trỏ vào form KHÔNG xuất bản,
-        // khách bấm vào thấy "không tìm thấy biểu mẫu". Xuất bản lại thay vì tạo form mới (tránh
-        // đẻ form song song, mất lịch sử bài nộp cũ của form đang dùng) hoặc báo lỗi chặn lưu
-        // (người dùng đang ở màn hình landing, không tự sửa trạng thái form từ đây được).
-        await formService.publishForm(form.id, resourceOwnerId, true);
+        await formService.publishForm(createdBasicForm.id, resourceOwnerId, true);
+        form = createdBasicForm;
+      } else {
+        form = await formRepository.findByLandingPageId(id, resourceOwnerId);
+        if (!form) {
+          const fields = buildFormFieldsFromLeadFormConfig(nextCustomConfig.leadForm);
+          const formTitle = String(body?.title || current.title || '').trim().slice(0, 200)
+            || slug || current.slug || 'Biểu mẫu landing';
+          const createdForm = await formService.createForm({
+            workspaceOwnerId: resourceOwnerId,
+            createdByUserId: context.actorUserId,
+            title: formTitle,
+            fields,
+            settings: { consentEnabled: true, notifyOwner: true },
+            landingPageId: id,
+          });
+          await formService.publishForm(createdForm.id, resourceOwnerId, true);
+          form = createdForm;
+        } else if (!form.isPublished) {
+          // Review PR-5b-2a nợ 3 — chủ đã tự tắt xuất bản form gắn landing này (qua Forms admin)
+          // rồi lưu lại landing (vẫn có chỗ trống) → khối nhúng sẽ trỏ vào form KHÔNG xuất bản,
+          // khách bấm vào thấy "không tìm thấy biểu mẫu". Xuất bản lại thay vì tạo form mới (tránh
+          // đẻ form song song, mất lịch sử bài nộp cũ của form đang dùng) hoặc báo lỗi chặn lưu
+          // (người dùng đang ở màn hình landing, không tự sửa trạng thái form từ đây được).
+          await formService.publishForm(form.id, resourceOwnerId, true);
+        }
       }
       const embedHtml = buildFormEmbedSectionHtml({
         publicKey: form.publicKey,
@@ -472,20 +592,63 @@ class LandingPageAdminService {
       }
     }
 
-    const updated = await landingPageRepository.updateByIdInScope(id, {
-      slug,
-      title: body?.title,
-      htmlContent,
-      isPublished: body?.isPublished !== undefined ? Boolean(body.isPublished) : current.isPublished,
-      idUser: resourceOwnerId,
-      domainType: domainTypeToWrite,
-      domainSubtype: null,
-      customConfig: nextCustomConfig,
-    }, scope);
-    if (!updated) {
-      const err = new Error('Không tìm thấy landing page');
-      err.statusCode = 404;
-      throw err;
+    // PR-F — cờ "biểu mẫu do khách chọn" nằm ở custom_config của landing (xem isChosenFormId), ghi cùng câu UPDATE landing.
+    if (linkPlan.mode === 'link') {
+      nextCustomConfig.chosenFormId = Number(linkPlan.form.id);
+    } else if (linkPlan.mode === 'basic' || linkPlan.clearChosen) {
+      delete nextCustomConfig.chosenFormId;
+    }
+
+    // PR-F — đổi biểu mẫu gắn landing + lưu landing: gỡ form cũ / gắn form mới chạy trong MỘT transaction riêng NGAY
+    // TRƯỚC câu UPDATE landing; UPDATE landing hỏng thì hoàn lại (không để landing trỏ biểu mẫu mới mà HTML vẫn là cũ).
+    // KHÔNG BAO GIỜ xoá biểu mẫu/bài nộp có sẵn — chỉ form cơ bản MỚI dựng dở (createdBasicForm, chưa có bài nộp nào)
+    // mới bị dọn khi lưu hỏng.
+    let linkApplied = false;
+    let updated;
+    try {
+      if (linkPlan.mode === 'link' || linkPlan.mode === 'basic') {
+        await this.applyLinkedFormTx({
+          landingId: id,
+          ownerId: resourceOwnerId,
+          targetFormId: linkPlan.mode === 'link' ? linkPlan.form.id : (createdBasicForm?.id ?? null),
+        });
+        linkApplied = true;
+        if (linkPlan.mode === 'link' && !linkPlan.form.isPublished) {
+          // Biểu mẫu khách chọn còn nháp → xuất bản (khối nhúng vào form nháp = khách bấm vào thấy "không tìm thấy").
+          await formService.publishForm(linkPlan.form.id, resourceOwnerId, true);
+        }
+      }
+      updated = await landingPageRepository.updateByIdInScope(id, {
+        slug,
+        title: body?.title,
+        htmlContent,
+        isPublished: body?.isPublished !== undefined ? Boolean(body.isPublished) : current.isPublished,
+        idUser: resourceOwnerId,
+        domainType: domainTypeToWrite,
+        domainSubtype: null,
+        customConfig: nextCustomConfig,
+      }, scope);
+      if (!updated) {
+        const err = new Error('Không tìm thấy landing page');
+        err.statusCode = 404;
+        throw err;
+      }
+    } catch (writeError) {
+      if (linkApplied) {
+        await this.applyLinkedFormTx({
+          landingId: id,
+          ownerId: resourceOwnerId,
+          targetFormId: linkPlan.previous?.id ?? null,
+        }).catch((revertErr) =>
+          console.warn('[LandingPageAdmin.update] Không hoàn lại được biểu mẫu gắn landing:', revertErr.message)
+        );
+      }
+      if (createdBasicForm) {
+        await formService.deleteForm(createdBasicForm.id, resourceOwnerId).catch((cleanupErr) =>
+          console.warn('[LandingPageAdmin.update] Không xoá được form cơ bản dựng dở:', cleanupErr.message)
+        );
+      }
+      throw writeError;
     }
 
     await linkAssetsToLandingPage({
@@ -556,6 +719,9 @@ class LandingPageAdminService {
     );
 
     const dto = toAdminLandingDto(updated);
+    // PR-F — trình soạn cần biết biểu mẫu đang gắn SAU lần lưu này (có thể vừa tự sinh / vừa đổi) để khỏi phải tải lại trang.
+    const linkedNow = await formRepository.findByLandingPageId(id, resourceOwnerId).catch(() => null);
+    Object.assign(dto, toLinkedFormDto(linkedNow, updated.customConfig));
     // Gộp — không ghi đè: cảnh báo snapshot (bản GCS trước khi ghi đè) và cảnh báo ô form lạ là
     // hai chuyện độc lập, cả hai có thể cùng xảy ra trong một lần lưu.
     const combinedWarning = [snapshotWarning, captureFieldWarning].filter(Boolean).join(' ');
@@ -563,6 +729,94 @@ class LandingPageAdminService {
       dto.warning = combinedWarning;
     }
     return dto;
+  }
+
+  /**
+   * PR-F — kiểm CHỈ ĐỌC yêu cầu đổi biểu mẫu của landing, trước khi ghi bất cứ thứ gì.
+   *
+   * - `unchanged`: không gửi `linkedFormId` → hành vi cũ y nguyên (chỗ trống dùng form đang gắn hoặc tự tạo form cơ bản).
+   * - `basic` (null): chỉ có việc làm khi landing đang dùng biểu mẫu KHÁCH CHỌN (gỡ gắn + dựng form cơ bản mới). Đang là
+   *   "Form cơ bản" (form tự sinh hoặc chưa có form) thì không có gì để gỡ → coi như `unchanged`, chỉ dọn cờ lệch.
+   * - `link` (số): biểu mẫu phải thuộc ĐÚNG chủ workspace của landing (404), chưa bị quản trị khoá (400), chưa gắn landing
+   *   KHÁC (409); nhân viên cần quyền `forms` (403) vì thao tác này đọc/gắn biểu mẫu của mục Biểu mẫu.
+   *
+   * @returns {Promise<{ mode: 'unchanged', clearChosen?: boolean } | { mode: 'basic', previous: object }
+   *   | { mode: 'link', form: object, previous: object|null }>}
+   */
+  async planLinkedFormChange({ landingId, input, resourceOwnerId, context, scope, customConfig }) {
+    if (input.mode === 'unchanged') return { mode: 'unchanged' };
+
+    const previous = await formRepository.findByLandingPageId(landingId, resourceOwnerId);
+    if (input.mode === 'basic') {
+      if (previous && isChosenFormId(customConfig, previous.id)) {
+        return { mode: 'basic', previous };
+      }
+      return { mode: 'unchanged', clearChosen: true };
+    }
+
+    if (context.contextType === 'employee' && !context.isSuperAdmin && context.permissions?.forms !== true) {
+      const err = new Error('Bạn không có quyền dùng biểu mẫu (mục Biểu mẫu) nên không gắn được biểu mẫu vào trang.');
+      err.statusCode = 403;
+      throw err;
+    }
+    const form = await formRepository.findFormByIdAndOwner(input.formId, resourceOwnerId);
+    if (!form) {
+      const err = new Error('Không tìm thấy biểu mẫu.');
+      err.statusCode = 404;
+      throw err;
+    }
+    if (form.adminDisabledAt) {
+      const err = new Error('Biểu mẫu này đang bị quản trị viên khoá nên không dùng được.');
+      err.statusCode = 400;
+      throw err;
+    }
+    if (form.landingPageId != null && Number(form.landingPageId) !== Number(landingId)) {
+      const other = await landingPageRepository.findByIdInScope(form.landingPageId, scope).catch(() => null);
+      const otherTitle = String(other?.title || other?.slug || '').trim();
+      const err = new Error(
+        otherTitle ? `Biểu mẫu đang dùng ở trang ${otherTitle}.` : 'Biểu mẫu đang dùng ở một trang khác.'
+      );
+      err.statusCode = 409;
+      throw err;
+    }
+    return { mode: 'link', form, previous };
+  }
+
+  /**
+   * PR-F — gắn biểu mẫu vào landing trong MỘT transaction: khoá hàng biểu mẫu đích, kiểm lại nó chưa gắn landing khác
+   * (hai người bấm cùng lúc), gỡ gắn mọi form khác đang gắn landing này, rồi gắn form đích. `targetFormId = null` = chỉ
+   * gỡ hết (về trạng thái chưa gắn form nào). KHÔNG xoá form, KHÔNG đụng bài nộp — form bị gỡ gắn thành form độc lập.
+   *
+   * @param {{ landingId: number, ownerId: number, targetFormId: number|null }} params
+   */
+  async applyLinkedFormTx({ landingId, ownerId, targetFormId }) {
+    const client = await db.getClient();
+    try {
+      await client.query('BEGIN');
+      if (targetFormId != null) {
+        const locked = await formRepository.lockByIdAndOwner(targetFormId, ownerId, client);
+        if (!locked) {
+          const err = new Error('Không tìm thấy biểu mẫu.');
+          err.statusCode = 404;
+          throw err;
+        }
+        if (locked.landingPageId != null && Number(locked.landingPageId) !== Number(landingId)) {
+          const err = new Error('Biểu mẫu vừa được gắn vào một trang khác. Hãy chọn lại.');
+          err.statusCode = 409;
+          throw err;
+        }
+      }
+      await formRepository.unlinkFromLanding(landingId, ownerId, targetFormId, client);
+      if (targetFormId != null) {
+        await formRepository.setLandingPageId(targetFormId, landingId, client);
+      }
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   }
 
   /**

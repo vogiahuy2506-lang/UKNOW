@@ -220,22 +220,93 @@ class FormRepository {
   /**
    * PR-5b-2a — form (nếu có) đã gắn với một landing page cụ thể, để lúc lưu landing lại (HTML lại
    * có chỗ trống) TÁI DÙNG đúng form thay vì đẻ form mồ côi. `LIMIT 1`: quy ước 1 landing tối đa 1
-   * form do luồng này tạo (chỉ code này ghi `landing_page_id`, không có đường nào khác gắn 2 form
-   * vào cùng 1 landing).
+   * form. PR-F: biểu mẫu khách chọn sẵn cũng gắn qua đây — `landingPageAdmin.service.js`
+   * `applyLinkedFormTx` gỡ gắn form cũ và gắn form mới trong CÙNG transaction nên không bao giờ có 2 form;
+   * `ORDER BY id` chỉ để kết quả ổn định nếu dữ liệu cũ vẫn lệch.
+   *
+   * PR-F: kèm `title` để trình soạn landing hiện "đang dùng biểu mẫu nào" (không phải gọi thêm API).
    *
    * @param {number} landingPageId
    * @param {number} workspaceOwnerId
-   * @returns {Promise<{id: number, publicKey: string}|null>}
+   * @returns {Promise<{id: number, publicKey: string, isPublished: boolean, title: string}|null>}
    */
   async findByLandingPageId(landingPageId, workspaceOwnerId) {
     const result = await db.query(
-      `SELECT id, public_key AS "publicKey", is_published AS "isPublished"
+      `SELECT id, public_key AS "publicKey", is_published AS "isPublished", title
        FROM forms
        WHERE landing_page_id = $1 AND workspace_owner_id = $2
+       ORDER BY id
        LIMIT 1`,
       [landingPageId, workspaceOwnerId]
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * PR-F — biểu mẫu đang gắn cho NHIỀU landing trong một câu truy vấn (danh sách landing). Chỉ tính form
+   * cùng chủ workspace với landing (quy ước giống `findByLandingPageId`).
+   *
+   * @param {Array<number|string>} landingPageIds
+   * @returns {Promise<Array<{id: number, title: string, publicKey: string, landingPageId: number}>>}
+   */
+  async listLinkedByLandingPageIds(landingPageIds) {
+    const ids = (Array.isArray(landingPageIds) ? landingPageIds : [])
+      .map((v) => Number.parseInt(v, 10))
+      .filter((v) => Number.isFinite(v));
+    if (ids.length === 0) return [];
+    const result = await db.query(
+      `SELECT f.id, f.title, f.public_key AS "publicKey", f.landing_page_id AS "landingPageId"
+       FROM forms f
+       JOIN landing_pages lp ON lp.id = f.landing_page_id
+       WHERE f.landing_page_id = ANY($1::bigint[])
+         AND f.workspace_owner_id = COALESCE(lp.workspace_owner_id, lp.id_user)
+       ORDER BY f.id`,
+      [ids]
+    );
+    return result.rows;
+  }
+
+  /**
+   * PR-F — khoá hàng biểu mẫu (FOR UPDATE) để gắn vào landing; CHỈ gọi bên trong transaction của caller
+   * (`client`). Hai landing cùng bấm gắn một biểu mẫu thì lượt sau phải đợi lượt trước rồi thấy
+   * `landingPageId` đã đổi.
+   *
+   * @param {number} formId
+   * @param {number} workspaceOwnerId
+   * @param {import('pg').PoolClient} client
+   * @returns {Promise<{id: number, publicKey: string, title: string, isPublished: boolean, adminDisabledAt: Date|null, landingPageId: number|null}|null>}
+   */
+  async lockByIdAndOwner(formId, workspaceOwnerId, client) {
+    const result = await client.query(
+      `SELECT id, public_key AS "publicKey", title, is_published AS "isPublished",
+              admin_disabled_at AS "adminDisabledAt", landing_page_id AS "landingPageId"
+       FROM forms
+       WHERE id = $1 AND workspace_owner_id = $2
+       FOR UPDATE`,
+      [formId, workspaceOwnerId]
+    );
+    return result.rows[0] || null;
+  }
+
+  /**
+   * PR-F — gỡ gắn (`landing_page_id = NULL`) mọi biểu mẫu đang gắn landing này, TRỪ `exceptFormId`.
+   * KHÔNG xoá form, KHÔNG đụng bài nộp — form thành form độc lập trong mục Biểu mẫu.
+   *
+   * @param {number} landingPageId
+   * @param {number} workspaceOwnerId
+   * @param {number|null} exceptFormId
+   * @param {import('pg').PoolClient|typeof db} [queryable]
+   * @returns {Promise<number[]>} id các form vừa được gỡ gắn
+   */
+  async unlinkFromLanding(landingPageId, workspaceOwnerId, exceptFormId = null, queryable = db) {
+    const result = await queryable.query(
+      `UPDATE forms SET landing_page_id = NULL, updated_at = NOW()
+       WHERE landing_page_id = $1 AND workspace_owner_id = $2
+         AND ($3::bigint IS NULL OR id <> $3)
+       RETURNING id`,
+      [landingPageId, workspaceOwnerId, exceptFormId]
+    );
+    return result.rows.map((row) => row.id);
   }
 
   /**
