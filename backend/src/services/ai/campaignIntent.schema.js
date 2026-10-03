@@ -1,6 +1,7 @@
 import { normalizeChannel } from './aiCampaignWizard.service.js';
 import { isAdapterCampaignChannel, isAdapterCampaignChannelEnabled, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
 import { MAX_CHANNEL_STEPS, countDripSteps } from '../../utils/channelSteps.util.js';
+import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 
 /**
  * Schema OpenAPI subset cho CampaignIntentV1, tương thích trực tiếp với responseSchema của Gemini.
@@ -310,6 +311,51 @@ export function deriveIntent(gates = {}, brief = null, options = {}) {
   };
 
   return { intent, missing };
+}
+
+// Compiler LUÔN dựng node `interested_customers` với loại "both" + giới hạn 1000 (campaignCompiler.service.js) vì
+// CampaignIntentV1 chưa có chỗ chứa bộ lọc người nhận (audience.filters).
+const COMPILER_DEFAULT_INTERESTED_LIMIT = 1000;
+const LEGACY_DB_AUDIENCE_SUBTYPES = new Set(['interested_customers', 'read_interested_customers']);
+
+/**
+ * Script LLM (graph cũ) có đặt BỘ LỌC NGƯỜI NHẬN mà compiler không biểu diễn được không?
+ *
+ * Với nguồn "khách trong DB", prompt dạy LLM đặt `interestedCourseIds` ("đã mua/quan tâm khoá X"), `notPurchasedCourseIds`
+ * ("nhưng chưa mua khoá Y"), `interestedCustomerType` ("purchased"/"interested") và `interestedLimit` khi người dùng yêu cầu.
+ * Compiler dựng lại node đó mà KHÔNG có các trường này → "đã mua khoá A mà chưa mua khoá B" thành "mọi khách có email
+ * (≤1000)", và thẻ xác nhận chỉ ghi "Lấy dữ liệu khách hàng" (rà soát C P1-3, 03/10/2026). Bộ lọc là việc của wizard/LLM
+ * chứ compiler chưa sở hữu, nên khi có bộ lọc thì GIỮ script LLM — đây là đường an toàn như trước khi có compiler.
+ *
+ * Đưa bộ lọc vào intent (kiểm id thuộc `courses` của chủ) rồi cho compiler chép sang là bước sau, chưa làm.
+ *
+ * @param {{ nodes?: object[] }|null|undefined} script
+ * @returns {{ hasFilters: boolean, reasons: string[] }}
+ */
+export function detectLegacyAudienceFilters(script) {
+  const nodes = Array.isArray(script?.nodes) ? script.nodes : [];
+  const nonEmptyList = (value) => Array.isArray(value)
+    && value.some((item) => item != null && String(item).trim() !== '');
+  const reasons = new Set();
+
+  for (const node of nodes) {
+    if (!LEGACY_DB_AUDIENCE_SUBTYPES.has(getNodeSubtype(node))) continue;
+    const config = node?.config || node?.nodeConfig || {};
+
+    if (nonEmptyList(config.interestedCourseIds)) reasons.add('interestedCourseIds');
+    if (nonEmptyList(config.notPurchasedCourseIds)) reasons.add('notPurchasedCourseIds');
+
+    const customerType = String(config.interestedCustomerType ?? '').trim().toLowerCase();
+    if (customerType && customerType !== 'both') reasons.add('interestedCustomerType');
+
+    const hasLimit = config.interestedLimit != null && String(config.interestedLimit).trim() !== '';
+    if (hasLimit && Number.isFinite(Number(config.interestedLimit))
+      && Number(config.interestedLimit) !== COMPILER_DEFAULT_INTERESTED_LIMIT) {
+      reasons.add('interestedLimit');
+    }
+  }
+
+  return { hasFilters: reasons.size > 0, reasons: [...reasons] };
 }
 
 /**

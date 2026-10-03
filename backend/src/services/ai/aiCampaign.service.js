@@ -64,7 +64,7 @@ import {
 } from '../../utils/campaignQuickSend.util.js';
 import { runCompilerShadowCompare } from './campaignCompilerShadow.service.js';
 import { applyLandingAudienceResolution } from './landingAudienceResolver.service.js';
-import { isCompilableIntent, deriveIntent } from './campaignIntent.schema.js';
+import { isCompilableIntent, deriveIntent, detectLegacyAudienceFilters } from './campaignIntent.schema.js';
 import { compileCampaign } from './campaignCompiler.service.js';
 import { mergeCompiledWithContent, assertNoEmptyContent } from './campaignScriptMerge.service.js';
 import { fillContentSlots } from './campaignSlotFiller.service.js';
@@ -1865,6 +1865,11 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           const { intent: campaignIntent } = deriveIntent(gateStateForIntent, briefForState || null, { files });
 
           const compilableCheck = isCompilableIntent(campaignIntent);
+          // Script LLM có bộ lọc người nhận (đã mua/chưa mua/quan tâm khoá, loại khách, giới hạn) mà compiler chưa biểu diễn
+          // được: compiler sẽ dựng lại thành "mọi khách ≤1000" và thẻ xác nhận không cho thấy. Chỉ xét nguồn "khách trong DB".
+          const legacyAudienceFilters = campaignIntent.audience?.type === 'db'
+            ? detectLegacyAudienceFilters(targetScript)
+            : { hasFilters: false, reasons: [] };
           const isCompilerActive =
             enabledFlows.includes(campaignIntent.channel) || slotFillingFlows.includes(campaignIntent.channel);
 
@@ -1872,6 +1877,11 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             console.log(`[CampaignCompiler] Giữ script LLM cũ — intent khuyết trường: ${compilableCheck.missing.join(', ')}`);
           } else if (!isCompilerActive) {
             // Luồng chưa bật cờ
+          } else if (legacyAudienceFilters.hasFilters) {
+            // Giữ script LLM (rà soát C P1-3): đây là đường an toàn như trước khi có compiler.
+            console.log(
+              `[CampaignCompiler] Giữ script LLM cũ — script có bộ lọc người nhận compiler chưa biểu diễn được (audience.filters): ${legacyAudienceFilters.reasons.join(', ')}`
+            );
           } else {
             // Dùng `campaignIntent` (object CampaignIntentV1 dựng ở trên), KHÔNG phải `intent`
             // — xem CẢNH BÁO TÊN BIẾN cách đây vài dòng. Truyền nhầm `intent` ở đây làm
