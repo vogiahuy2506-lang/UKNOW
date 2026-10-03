@@ -14,6 +14,7 @@ import { describe, expect, it } from '@jest/globals';
 import { HELP_SEED_ARTICLES } from '../helpSeed.data.js';
 import { miniMarkdownToHtml } from '../../../../../frontend/src/utils/miniMarkdownToHtml.js';
 import viDictionary from '../../../../../frontend/src/i18n/vi.js';
+import { CHANNEL_ATTACHMENT_LIMITS } from '../../../../../frontend/src/features/campaigns/utils/channelAttachments.js';
 
 /**
  * Cấu trúc menu THẬT, chép từ `frontend/src/components/layout/admin/Sidebar.jsx`
@@ -127,6 +128,34 @@ const UI_LABELS_IN_ARTICLES = [
   ['plan-and-billing', 'accountProfileModal.aiUsed', 'Đã dùng'],
   ['plan-and-billing', 'accountProfileModal.unlimited', 'Không giới hạn'],
   ['plan-and-billing', 'accountProfileModal.resourcesTitle', 'Tài nguyên'],
+  // PLAN_GOP_MAU_TIN_MEDIA PR-H: thư viện nội dung (hai thẻ Email / Tin nhắn) + ô chọn mẫu dùng chung 3 kênh.
+  ['mau-tin-nhan', 'channelTemplates.email', 'Email'],
+  ['mau-tin-nhan', 'channelTemplates.messages', 'Tin nhắn'],
+  ['mau-tin-nhan', 'templates.zaloLibraryTitle', 'Thư viện mẫu tin nhắn'],
+  ['mau-tin-nhan', 'channelAttachments.templateLabel', 'Mẫu tin nhắn (dùng chung Zalo, Telegram, WhatsApp)'],
+  ['mau-tin-nhan', 'emailTemplateEditor.uploadFile', 'Upload file'],
+  ['mau-tin-nhan', 'emailTemplateEditor.files', 'Files'],
+  ['campaign-create', 'channelAttachments.templateLabel', 'Mẫu tin nhắn (dùng chung Zalo, Telegram, WhatsApp)'],
+  ['nhan-vien', 'employee.permissions.messageTemplates', 'Mẫu tin nhắn'],
+  // Thư viện media (2 tab, tên nhóm tệp, nhãn nền tảng của tệp khách gửi).
+  ['dung-luong-luu-tru', 'mediaLibrary.title', 'Thư viện media'],
+  ['dung-luong-luu-tru', 'mediaLibrary.tabAll', 'Tất cả tệp (Dung lượng)'],
+  ['dung-luong-luu-tru', 'mediaLibrary.tabChannels', 'Tệp khách gửi'],
+  ['dung-luong-luu-tru', 'mediaLibrary.categorySummary', 'Dung lượng theo danh mục'],
+  ['dung-luong-luu-tru', 'mediaLibrary.allCategories', 'Tất cả danh mục'],
+  ['dung-luong-luu-tru', 'mediaLibrary.categoryZaloTemplate', 'Mẫu tin nhắn'],
+  ['dung-luong-luu-tru', 'mediaLibrary.categoryEmailTemplate', 'Mẫu Email'],
+  ['dung-luong-luu-tru', 'mediaLibrary.categoryChat', 'Tin nhắn chat'],
+  ['dung-luong-luu-tru', 'mediaLibrary.categoryLandingAsset', 'Ảnh landing page'],
+  ['dung-luong-luu-tru', 'mediaLibrary.categoryFormAsset', 'Tệp biểu mẫu'],
+  ['dung-luong-luu-tru', 'mediaLibrary.categoryFormReceipt', 'Biên lai biểu mẫu'],
+  ['dung-luong-luu-tru', 'mediaLibrary.platformZalo', 'Zalo'],
+  ['dung-luong-luu-tru', 'mediaLibrary.platformZaloOa', 'Zalo OA'],
+  ['dung-luong-luu-tru', 'mediaLibrary.platformTelegram', 'Telegram'],
+  ['dung-luong-luu-tru', 'mediaLibrary.platformWhatsapp', 'WhatsApp'],
+  ['dung-luong-luu-tru', 'mediaLibrary.platformLink', 'Link nền tảng · không tính dung lượng'],
+  ['dung-luong-luu-tru', 'mediaLibrary.storedOnSystem', 'Lưu trên hệ thống · tính dung lượng'],
+  ['dung-luong-luu-tru', 'mediaLibrary.goToManageScreen', 'Đi đến màn hình quản lý'],
 ];
 
 /** Bắt cả hai lối viết: `**Nhóm → Mục**` và `**Nhóm** → **Mục**`. */
@@ -228,6 +257,17 @@ describe('chất lượng bài trợ giúp seed', () => {
       // PR-3: hai đồng hồ theo tháng dương lịch của trang Thanh toán (nay đếm theo kỳ của gói).
       'Email tháng này',
       'Zalo tháng này',
+      // PLAN_GOP_MAU_TIN_MEDIA (03/10/2026) PR-H: kho mẫu của Zalo / Telegram / WhatsApp đã gộp thành MỘT tab
+      // "Tin nhắn" (thư viện nội dung), và Thư viện media bỏ tab "Tệp tin nhắn", đổi "Zalo / Facebook" thành
+      // "Tệp khách gửi". Bài từng gọi kho là "mẫu Zalo", "Template Zalo" và tả tab theo tên cũ.
+      'Zalo / Facebook',
+      'Tệp tin nhắn',
+      'Template Zalo',
+      'template Zalo',
+      'Mẫu Zalo',
+      'mẫu Zalo',
+      'mẫu Email và mẫu Zalo tách riêng',
+      '(dùng chung với Zalo)',
     ];
     const offenders = [];
     for (const article of HELP_SEED_ARTICLES) {
@@ -260,6 +300,19 @@ describe('chất lượng bài trợ giúp seed', () => {
       .filter(([slug, , label]) => !mentioned(bySlug.get(slug) || '', label))
       .map(([slug, key, label]) => `${slug}: không còn nhắc "${label}" (${key})`);
     expect(missing).toEqual([]);
+  });
+
+  it('bài mau-tin-nhan trích đúng từng chữ dòng nhắc giới hạn tệp Telegram/WhatsApp của trình soạn mẫu', () => {
+    // Dòng nhắc có chỗ trống {images}/{documents}/{mb} nên không đưa vào bảng nhãn ở trên được: điền số THẬT lấy từ
+    // hằng số của frontend (CHANNEL_ATTACHMENT_LIMITS) rồi so với câu bài trích.
+    const warning = viDictionary.templates.channelLimitWarning
+      .replace('{images}', String(CHANNEL_ATTACHMENT_LIMITS.maxImages))
+      .replace('{documents}', String(CHANNEL_ATTACHMENT_LIMITS.maxDocuments))
+      .replace('{mb}', String(Math.round(CHANNEL_ATTACHMENT_LIMITS.maxTotalBytes / (1024 * 1024))));
+    const body = HELP_SEED_ARTICLES.find((a) => a.slug === 'mau-tin-nhan')?.body_md || '';
+
+    expect(warning).toContain('5 ảnh, 3 tài liệu, tổng 20 MB');
+    expect(body).toContain(`*${warning}*`);
   });
 
   it('bài nào cũng chừa ít nhất 3 chỗ chèn ảnh', () => {

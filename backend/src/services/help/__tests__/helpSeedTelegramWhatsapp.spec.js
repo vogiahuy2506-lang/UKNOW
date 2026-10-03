@@ -68,15 +68,18 @@ describe('bài hướng dẫn Telegram/WhatsApp (W7c)', () => {
     expect(md).toContain('Trợ lý AI dựng hộ được');
     expect(md).toContain('một tin, gửi ngay');
     expect(md).toContain('Giới hạn & tốc độ gửi chiến dịch');
-    expect(md).toContain('Mẫu tin nhắn (dùng chung với Zalo)');
+    // 03/10/2026 (PR-T): ô đổi nhãn "…(dùng chung với Zalo)" → "…(dùng chung Zalo, Telegram, WhatsApp)".
+    expect(md).toContain('Mẫu tin nhắn (dùng chung Zalo, Telegram, WhatsApp)');
     expect(md).toContain('00:00 ngày mai');
     expect(md).toContain('5 ảnh, 3 tài liệu, tổng 20 MB');
   });
 
-  it('channels, mau-tin-nhan, doi-goi: nhắc slot/khoá vượt gói và mẫu Zalo dùng chung Telegram/WhatsApp', () => {
+  it('channels, mau-tin-nhan, doi-goi: nhắc slot/khoá vượt gói và mẫu tin nhắn dùng chung Zalo/Telegram/WhatsApp', () => {
     expect(bySlug('channels').body_md).toContain('Bị khoá (vượt gói)');
     expect(bySlug('channels').body_md).toContain('Mua thêm slot');
-    expect(bySlug('mau-tin-nhan').body_md).toContain('cũng dùng được cho **Telegram** và **WhatsApp**');
+    // 03/10/2026 (PR-T/PR-H): tab thứ hai của thư viện là "Tin nhắn" — kho chung 3 kênh, không còn gọi là "mẫu Zalo".
+    expect(bySlug('mau-tin-nhan').body_md).toContain('dùng chung cho Zalo, Telegram và WhatsApp');
+    expect(bySlug('mau-tin-nhan').body_md).toContain('**Email** và **Tin nhắn**');
     expect(bySlug('doi-goi').body_md).toContain('tài khoản Zalo/Email/Telegram/WhatsApp');
   });
 });
