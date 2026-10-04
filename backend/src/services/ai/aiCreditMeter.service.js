@@ -163,6 +163,16 @@ class AiCreditMeterService {
 
   /**
    * Charge 1 credit after a successful AI action — atomic lock + optional wallet debit.
+   *
+   * QUYẾT ĐỊNH ĐÃ CHỐT (04/10/2026, PLAN_SUA_AI_DOT4 PR-3, rà soát D-27) — CHẤP NHẬN, không đổi code:
+   * `assertAvailable` (kiểm, middleware `assertAiCreditAvailable`) và `consume` (trừ, sau khi AI trả lời) là hai bước TÁCH
+   * RỜI và bước kiểm không giữ khoá. N request chạy song song khi chỉ còn 1 lượt đều qua được cổng kiểm, rồi cùng trừ — vượt
+   * hạn mức nhẹ, ví credit có thể âm vài đơn vị (nhánh ví phía dưới đã cho phép âm nhẹ khi race in-flight). Chấp nhận vì:
+   * số lượt vượt bị chặn bởi giới hạn tần suất (`aiLimiter`: 20 request/phút/người ở các route `/ai/*`), và thiệt hại tối đa là
+   * vài credit; giữ chỗ bằng advisory lock cho mọi đường đắt đổi lấy việc giữ khoá suốt 30–90 giây gọi Gemini — đắt hơn nhiều.
+   * Lưu ý phạm vi: route Dashboard (`POST /dashboard/insights`) và Tóm tắt Hộp thư KHÔNG gắn `aiLimiter`; Hộp thư đã gộp bấm đôi
+   * (khoá `userId:dayKey` trong aiActivity.service.js), Dashboard dựa vào nút bị khoá ở FE. Nếu về sau thấy ví âm bất thường
+   * ở hai route đó, thêm `aiLimiter` vào route trước khi nghĩ tới khoá giữ chỗ.
    */
   async consume(userId, { feature, creditContext, forceBillable = false } = {}) {
     const ctx = creditContext || await this.resolveCreditContext(userId, { forceBillable });
