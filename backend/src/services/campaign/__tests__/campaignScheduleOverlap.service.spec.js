@@ -29,7 +29,10 @@ beforeEach(() => {
   savedRows = [];
   durationMs = 87 * HOUR + 25 * MIN;
   scheduleRepo.findEnabledByCampaign.mockImplementation(async () => savedRows);
+  // Hợp đồng PR-1: earliest <= typical <= latest. Chỉ 'latest' được dùng để chặn — hai mốc kia cố ý NGẮN hơn nhiều.
   estimateForCampaign.mockImplementation(async ({ startAt }) => ({
+    finishAtEarliest: new Date(startAt.getTime() + Math.round(durationMs / 2)).toISOString(),
+    finishAtTypical: new Date(startAt.getTime() + Math.round(durationMs * 0.75)).toISOString(),
     finishAtLatest: new Date(startAt.getTime() + durationMs).toISOString(),
     totalActions: 1596,
     warnings: [],
