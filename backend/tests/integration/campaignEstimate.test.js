@@ -200,4 +200,31 @@ describe('GET /api/campaigns/:id/estimate', () => {
     expect(shared.params.campaigns).toEqual([{ id: Number(otherId), name: 'Đang chiếm nick', reason: 'running' }]);
     expect(res.body.data.totalActions).toBe(7);
   });
+
+  it('tài khoản email từng bị máy chủ chặn: đếm lượt chạy 30 ngày (id lưu dạng số HOẶC chuỗi), bỏ lượt quá 30 ngày và tài khoản khác', async () => {
+    const owner = await createUser({ username: 'chuuoctinh6', role: 'user' });
+    const seeded = await seedCampaign(owner);
+    const insertRun = (settingId, startedAtSql, at) => db.query(
+      `INSERT INTO campaign_runs (id_campaign, workspace_owner_id, run_type, status, started_at, run_metadata)
+       VALUES ($1, $2, 'manual', 'completed', ${startedAtSql}, $3::jsonb)`,
+      [seeded.campaignId, owner.id, JSON.stringify({ emailRateLimitSettingId: settingId, emailRateLimitAt: at })]
+    );
+    await insertRun(seeded.emailId, `NOW() - INTERVAL '2 days'`, '2026-10-03T10:30:00.000+07:00'); // số
+    await insertRun(String(seeded.emailId), `NOW() - INTERVAL '10 days'`, '2026-09-25T09:00:00.000+07:00'); // chuỗi
+    await insertRun(seeded.emailId, `NOW() - INTERVAL '45 days'`, '2026-08-20T09:00:00.000+07:00'); // quá 30 ngày
+    await insertRun(seeded.emailId + 1000, `NOW() - INTERVAL '1 day'`, '2026-10-03T09:00:00.000+07:00'); // tài khoản khác
+    const token = await loginAs(owner);
+
+    const res = await request(app)
+      .get(`/api/campaigns/${seeded.campaignId}/estimate`)
+      .set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const warnings = res.body.data.warnings.filter((w) => w.code === 'email_provider_rate_limited');
+    expect(warnings).toHaveLength(1);
+    expect(warnings[0].params).toEqual({
+      accountKey: `email:${seeded.emailId}`,
+      events30d: 2,
+      lastAt: '2026-10-03T03:30:00.000Z',
+    });
+  });
 });

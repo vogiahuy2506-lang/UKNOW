@@ -240,6 +240,36 @@ describe('estimateForCampaign — email', () => {
     }),
   ]);
 
+  it('tài khoản email #7 từng bị máy chủ chặn 3 lần trong 30 ngày → cảnh báo email_provider_rate_limited, truy vấn đúng cửa sổ 30 ngày', async () => {
+    const { deps } = makeDeps({ state: { nodes: emailNodes(), connections: [connect(1, 2)] } });
+    deps.estimateRepo.countEmailRateLimitEvents = jest.fn(async () => ([
+      { settingId: '7', events: 3, lastAt: new Date('2026-10-03T02:00:00Z') },
+    ]));
+    const result = await estimateForCampaign({ campaignId: 437, ownerUserId: 39, startAt: NOW, deps });
+    const warning = result.warnings.find((w) => w.code === 'email_provider_rate_limited');
+    expect(warning).toEqual({
+      code: 'email_provider_rate_limited',
+      params: { accountKey: 'email:7', events30d: 3, lastAt: '2026-10-03T02:00:00.000Z' },
+    });
+    expect(deps.estimateRepo.countEmailRateLimitEvents).toHaveBeenCalledTimes(1);
+    expect(deps.estimateRepo.countEmailRateLimitEvents).toHaveBeenCalledWith({
+      ownerUserId: 39,
+      settingIds: ['7'],
+      since: new Date(NOW.getTime() - 30 * 24 * 3600 * 1000),
+    });
+  });
+
+  it('tài khoản email khác bị chặn (#8) hoặc không bị chặn → KHÔNG cảnh báo cho #7; tra lịch sử lỗi → bỏ qua, ước tính vẫn trả về', async () => {
+    const { deps } = makeDeps({ state: { nodes: emailNodes(), connections: [connect(1, 2)] } });
+    deps.estimateRepo.countEmailRateLimitEvents = jest.fn(async () => ([{ settingId: '8', events: 5, lastAt: null }]));
+    const other = await estimateForCampaign({ campaignId: 437, ownerUserId: 39, startAt: NOW, deps });
+    expect(codes(other)).not.toContain('email_provider_rate_limited');
+    deps.estimateRepo.countEmailRateLimitEvents.mockRejectedValueOnce(new Error('db down'));
+    const failed = await estimateForCampaign({ campaignId: 437, ownerUserId: 39, startAt: NOW, deps });
+    expect(codes(failed)).not.toContain('email_provider_rate_limited');
+    expect(failed.totalActions).toBe(166);
+  });
+
   it('166 thư, mặc định 60 thư/phút, 50–250ms → 122,3s / 131,5s, không cảnh báo nhiều ngày', async () => {
     // Cùng phép tính ca email của hàm thuần: nhanh nhất 122.300ms, chậm nhất 131.500ms.
     const { deps } = makeDeps({ state: { nodes: emailNodes(), connections: [connect(1, 2)] } });

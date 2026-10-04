@@ -25,6 +25,8 @@ const ZALO_SEND_SUBTYPES = new Set(['send_zalo_personal', 'send_zalo_friend_requ
 const DATA_NODE_TIMEOUT_MS = 20_000;
 /** Cửa sổ "lịch bật trong N ngày tới" để báo tài khoản đang được chiến dịch khác dùng. */
 const SHARED_ACCOUNT_HORIZON_MS = 7 * DAY_MS;
+/** Cửa sổ nhìn lại để báo "máy chủ email từng chặn tài khoản này vì gửi quá nhiều". */
+const EMAIL_RATE_LIMIT_LOOKBACK_MS = 30 * DAY_MS;
 
 const unitToMs = (unit) => {
   if (unit === 'hours') return HOUR_MS;
@@ -602,6 +604,43 @@ async function sharedAccountWarnings({ excludeCampaignId, ownerUserId, accountRe
   }
 }
 
+/**
+ * Tài khoản email của chiến dịch từng bị máy chủ email từ chối (550 "gửi quá nhiều") trong 30 ngày qua. Chỉ CẢNH BÁO,
+ * không mô phỏng thành số (`emailRateLimitAt` chỉ giữ lần chặn gần nhất → không đo được "chặn sau bao nhiêu thư").
+ */
+async function emailRateLimitWarnings({ ownerUserId, accountRefs, deps }) {
+  if (!deps.estimateRepo?.countEmailRateLimitEvents) return [];
+  const emailRefs = accountRefs.filter((a) => a.channel === 'email' && /^email:\d+$/.test(a.key));
+  if (emailRefs.length === 0) return [];
+  try {
+    const since = new Date(deps.now().getTime() - EMAIL_RATE_LIMIT_LOOKBACK_MS);
+    const rows = await deps.estimateRepo.countEmailRateLimitEvents({
+      ownerUserId,
+      settingIds: emailRefs.map((a) => a.key.slice('email:'.length)),
+      since,
+    });
+    const byId = new Map((rows || []).map((row) => [String(row.settingId), row]));
+    const warnings = [];
+    for (const ref of emailRefs) {
+      const hit = byId.get(ref.key.slice('email:'.length));
+      if (!hit || !(Number(hit.events) >= 1)) continue;
+      const lastAt = hit.lastAt ? new Date(hit.lastAt) : null;
+      warnings.push({
+        code: 'email_provider_rate_limited',
+        params: {
+          accountKey: ref.key,
+          events30d: Number(hit.events),
+          lastAt: lastAt && !Number.isNaN(lastAt.getTime()) ? lastAt.toISOString() : null,
+        },
+      });
+    }
+    return warnings;
+  } catch (error) {
+    console.warn('[CampaignEstimate] Không tra được lịch sử email bị chặn:', error?.message || error);
+    return [];
+  }
+}
+
 async function estimateFromNodes({ rawNodes, rawConnections, flowJson, ownerUserId, startAt, continuous, excludeCampaignId, deps: injected }) {
   const deps = injected || await loadDefaultDeps();
   const { nodes, connections } = normalizeEstimateNodes(rawNodes, rawConnections);
@@ -627,6 +666,7 @@ async function estimateFromNodes({ rawNodes, rawConnections, flowJson, ownerUser
     extra.push({ code: 'zalo_phone_lookup_unmodeled', params: { nodes: built.phoneLookupNodes } });
   }
   extra.push(...await planQuotaWarnings({ simulation, ownerUserId, deps }));
+  extra.push(...await emailRateLimitWarnings({ ownerUserId, accountRefs: built.accountRefs, deps }));
   if (excludeCampaignId != null) {
     extra.push(...await sharedAccountWarnings({ excludeCampaignId, ownerUserId, accountRefs: built.accountRefs, deps }));
   }

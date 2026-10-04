@@ -1,6 +1,6 @@
 /**
  * SQL cho bộ ước tính thời gian chiến dịch (campaignEstimate.service.js) — phần "chiến dịch KHÁC của cùng chủ
- * workspace đang chiếm tài khoản gửi". Chỉ ĐỌC.
+ * workspace đang chiếm tài khoản gửi" và "tài khoản email từng bị máy chủ email chặn". Chỉ ĐỌC.
  */
 import db from '../../config/database.js';
 
@@ -46,6 +46,34 @@ class CampaignEstimateRepository {
       ),
     ]);
     return { campaigns, schedules, nodes };
+  }
+
+  /**
+   * Số lượt chạy (trong cửa sổ `since`) bị máy chủ email từ chối vì gửi quá nhiều, theo từng tài khoản email.
+   * Engine ghi `run_metadata.emailRateLimitSettingId` (có thể là số hoặc chuỗi) → so bằng TEXT. Một câu SQL cho mọi
+   * tài khoản; giới hạn theo chủ workspace + `started_at >= since` để không quét cả bảng.
+   *
+   * @param {{ ownerUserId: number, settingIds: Array<number|string>, since: Date }} input
+   * @returns {Promise<Array<{ settingId: string, events: number, lastAt: Date|null }>>}
+   */
+  async countEmailRateLimitEvents({ ownerUserId, settingIds, since }) {
+    const ids = (Array.isArray(settingIds) ? settingIds : []).map((id) => String(id)).filter(Boolean);
+    if (ids.length === 0) return [];
+    const { rows } = await db.query(
+      `SELECT r.run_metadata->>'emailRateLimitSettingId' AS setting_id,
+              COUNT(*)::int AS events,
+              MAX(CASE WHEN r.run_metadata->>'emailRateLimitAt' ~ '^\\d{4}-\\d{2}-\\d{2}T'
+                       THEN (r.run_metadata->>'emailRateLimitAt')::timestamptz
+                       ELSE r.started_at END) AS last_at
+         FROM campaign_runs r
+         JOIN campaigns c ON c.id = r.id_campaign
+        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
+          AND r.started_at >= $3
+          AND r.run_metadata->>'emailRateLimitSettingId' = ANY($2::text[])
+        GROUP BY 1`,
+      [ownerUserId, ids, since]
+    );
+    return rows.map((row) => ({ settingId: String(row.setting_id), events: Number(row.events) || 0, lastAt: row.last_at || null }));
   }
 }
 
