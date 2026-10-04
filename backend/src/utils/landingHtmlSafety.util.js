@@ -428,6 +428,9 @@ function collectCodeItems(code, ctx) {
     const badUrls = [];
     for (const { value } of literals) {
       const v = value.trim();
+      // Chuỗi chỉ có scheme (`scriptURL.startsWith('https://')` — mẫu gửi Google Sheet AI hay viết, landing 9 trên production)
+      // không phải một đích gửi dữ liệu: bỏ qua, đừng coi là "host lạ".
+      if (/^(?:https?:)?\/\/$/i.test(v)) continue;
       if (ABSOLUTE_URL_LITERAL_RE.test(v)) {
         hasUrlLiteral = true;
         if (!isAllowedNetUrl(v, ctx)) badUrls.push(v);

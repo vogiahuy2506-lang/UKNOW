@@ -90,6 +90,22 @@ describe('landingHtmlSafety — MẪU THẬT từ production phải QUA (sinh m�
     expect(findUnsafeLandingHtml(page(Object.values(REAL_UI_SAMPLES).join('')))).toEqual([]);
   });
 
+  it('MẪU THẬT landing 9: khối Google Sheet có `scriptURL.startsWith(\'https://\')` — chuỗi chỉ có scheme không phải đích lạ → QUA', () => {
+    const snippet = `<script>
+      const scriptURL = 'https://script.google.com/macros/s/AKfycbwExample/exec';
+      async function send(formData) {
+        if (scriptURL.startsWith('https://')) {
+          await fetch(scriptURL, { method: 'POST', body: formData });
+        } else {
+          await new Promise((r) => setTimeout(r, 800));
+        }
+      }
+    </script>`;
+    expect(findUnsafeLandingHtml(page(snippet))).toEqual([]);
+    // Đối chứng: vẫn bắt URL lạ thật trong cùng khối.
+    expect(findUnsafeLandingHtml(page(snippet.replace('https://script.google.com', 'https://evil.example')))).not.toEqual([]);
+  });
+
   it('gửi lead về Google Sheet (fetch tới script.google.com): cả 3 tên biến, có / không mode:"no-cors" → QUA', () => {
     for (const varName of SHEET_VAR_NAMES) {
       for (const noCors of [true, false]) {
