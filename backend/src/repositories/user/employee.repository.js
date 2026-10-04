@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import { generateReferralCode } from '../../utils/affiliateReferral.util.js';
 import { buildDefaultNewEmployeePermissions } from '../../config/employeePermissionCatalog.js';
+import { deleteAssignmentsForEmployee } from './memberChannelAccount.repository.js';
 
 const EMPLOYEE_SELECT = `
   u.id, u.username, u.email, u.full_name AS "fullName", u.avatar_url AS "avatarUrl", u.status,
@@ -189,6 +190,10 @@ export async function declineMembership(employeeId, ownerId) {
      RETURNING owner_id AS "ownerId", employee_id AS "employeeId"`,
     [employeeId, ownerId]
   );
+  if (result.rows[0]) {
+    // Membership đã xoá thì việc giao (nếu chủ lỡ giao trước khi người này chấp nhận) cũng phải đi theo.
+    await deleteAssignmentsForEmployee(ownerId, employeeId);
+  }
   return result.rows[0] || null;
 }
 
@@ -297,6 +302,10 @@ export async function removeEmployee(employeeId, ownerId) {
       [employeeId, ownerId]
     );
     const origin = memberRes.rows[0]?.origin;
+
+    // Việc giao tài khoản kênh (migration 283) đi theo membership: gỡ khỏi nhóm là hết quyền dùng, và mời lại
+    // sau này không được tự lấy lại danh sách cũ.
+    await deleteAssignmentsForEmployee(ownerId, employeeId, client);
 
     const userRes = await client.query(
       `SELECT status FROM users WHERE id = $1`,

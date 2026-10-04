@@ -4022,3 +4022,19 @@ CREATE TABLE IF NOT EXISTS ai_unavailable_notices (
   PRIMARY KEY (id_user, kind, notice_key)
 );
 CREATE INDEX IF NOT EXISTS idx_ai_unavailable_notices_sent ON ai_unavailable_notices (last_sent_at);
+
+-- --- Migration 283: member_channel_accounts (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G1: giao tung tai khoan Zalo ca nhan cho nhan vien) ---
+CREATE TABLE IF NOT EXISTS member_channel_accounts (
+  id          BIGSERIAL PRIMARY KEY,
+  owner_id    BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  employee_id BIGINT       NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  channel     VARCHAR(30)  NOT NULL,
+  account_ref TEXT         NOT NULL,
+  source      VARCHAR(20)  NOT NULL DEFAULT 'assigned'
+    CONSTRAINT chk_member_channel_accounts_source CHECK (source IN ('assigned', 'self_login', 'legacy')),
+  created_by  BIGINT       REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_member_channel_accounts UNIQUE (owner_id, employee_id, channel, account_ref)
+);
+CREATE INDEX IF NOT EXISTS idx_member_channel_accounts_employee ON member_channel_accounts (owner_id, employee_id, channel);
+CREATE INDEX IF NOT EXISTS idx_member_channel_accounts_ref ON member_channel_accounts (channel, account_ref);

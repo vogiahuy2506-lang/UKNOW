@@ -255,6 +255,11 @@ export async function detachMemberEmail(id, { originalEmail = null, releaseTrial
       'DELETE FROM user_members WHERE employee_id = $1 OR owner_id = $1',
       [id]
     );
+    // Việc giao tài khoản kênh (migration 283) là phần phụ của membership: gỡ theo cả hai chiều.
+    await client.query(
+      'DELETE FROM member_channel_accounts WHERE employee_id = $1 OR owner_id = $1',
+      [id]
+    );
 
     let anonymizedTrialOrdersCount = 0;
     if (releaseTrialHistory) {
