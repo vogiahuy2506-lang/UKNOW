@@ -2,8 +2,9 @@ import axios from 'axios';
 import React from 'react';
 import toast from 'react-hot-toast';
 import { getStoredLocale } from '../utils/i18n';
-import vi from '../i18n/vi';
-import en from '../i18n/en';
+// Không import tĩnh `en.js` ở đây: nó sẽ kéo cả từ điển tiếng Anh (~470 KB) vào chunk chính dù I18nProvider đã nạp lười.
+// Tra từ điển ĐÃ NẠP; locale `en` mà `en` chưa nạp kịp thì rơi về tiếng Việt.
+import { getLoadedDictionary } from '../i18n/englishDictionary';
 import { notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 
 const API_URL = import.meta.env.VITE_API_URL || '/api';
@@ -195,8 +196,7 @@ api.interceptors.request.use(
 );
 
 const getLimitReachedLabel = () => {
-  const locale = getStoredLocale();
-  const tr = locale === 'en' ? en : vi;
+  const tr = getLoadedDictionary(getStoredLocale());
   return tr?.plans?.upgrade || 'Nâng cấp';
 };
 
@@ -217,8 +217,7 @@ api.interceptors.response.use(
 
     // Map server message và storage error codes vào Error.message để toast/UI hiện câu tiếng Việt rõ nghĩa
     const serverCode = error.response?.data?.code;
-    const locale = getStoredLocale();
-    const tr = locale === 'en' ? en : vi;
+    const tr = getLoadedDictionary(getStoredLocale());
 
     if (serverCode === 'STORAGE_QUOTA_EXCEEDED') {
       error.message = tr?.storageQuota?.quotaExceededServer || 'Workspace đã dùng hết dung lượng lưu trữ. Hãy xoá bớt tệp cũ hoặc nâng gói.';

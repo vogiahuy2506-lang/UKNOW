@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { I18nProvider } from '../../../../i18n';
+import { loadEnglishDictionary } from '../../../../i18n/englishDictionary';
 import viDict from '../../../../i18n/vi.js';
 import SystemInstructionAiWriter from '../SystemInstructionAiWriter';
 
@@ -158,6 +159,7 @@ describe('SystemInstructionAiWriter — "AI viết hộ" chỉ dẫn chatbot (PR
 
   it('giao diện tiếng Anh → gửi language: "en"', async () => {
     localStorage.setItem('uknow_locale', 'en');
+    await loadEnglishDictionary(); // từ điển en nạp lười — nạp trước khi render để I18nProvider khởi động đồng bộ
     renderWriter();
     const en = (await import('../../../../i18n/en.js')).default.systemInstructionAiWriter;
     fireEvent.click(screen.getByRole('button', { name: en.toggle }));

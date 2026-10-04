@@ -7,6 +7,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import HeroChatWidget from '../components/HeroChatWidget';
 import { I18nProvider } from '../../../i18n';
+import { loadEnglishDictionary } from '../../../i18n/englishDictionary';
 
 const AI_REPLY = 'Dạ gói Starter hiện có giá theo bảng giá trên hệ thống ạ.';
 
@@ -82,6 +83,7 @@ describe('HeroChatWidget — chip hỏi sự kiện đi qua AI', () => {
 
   it('ngôn ngữ trang tiếng Anh: chip "How much is it?" gửi đúng câu tiếng Anh cho AI', async () => {
     localStorage.setItem('uknow_locale', 'en');
+    await loadEnglishDictionary(); // từ điển en nạp lười — nạp trước khi render để I18nProvider khởi động đồng bộ
     renderOpened();
 
     fireEvent.click(screen.getByText('How much is it?'));

@@ -8,6 +8,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import HeroChatWidget from '../components/HeroChatWidget';
 import { I18nProvider } from '../../../i18n';
+import { loadEnglishDictionary } from '../../../i18n/englishDictionary';
 
 const BUSY_BODY = {
   success: false,
@@ -103,6 +104,7 @@ describe('HeroChatWidget — BUSY (trần ngân sách ngày)', () => {
 
   it('ngôn ngữ trang tiếng Anh: câu + tiêu đề BUSY bằng tiếng Anh (không hiện nguyên văn câu tiếng Việt của BE)', async () => {
     localStorage.setItem('uknow_locale', 'en');
+    await loadEnglishDictionary(); // từ điển en nạp lười — nạp trước khi render để I18nProvider khởi động đồng bộ
     const { container } = renderWidget();
     await sendQuestion(container, 'Which plan fits my shop?');
 
