@@ -56,18 +56,18 @@ describe('chatbot.repository.ensureWidgetKey — sinh key cho bot cũ thiếu ke
     query.mockReset();
   });
 
-  it('chỉ UPDATE khi key còn trống (NULL hoặc rỗng) và trả key vừa sinh', async () => {
-    query.mockResolvedValueOnce({ rows: [{ widget_key: 'deadbeef' }] });
+  it('chỉ UPDATE khi key còn trống (NULL hoặc rỗng); key sinh ra là chatbot_<id> (khoá dự phòng sẵn có của widget)', async () => {
+    query.mockResolvedValueOnce({ rows: [{ widget_key: 'chatbot_2' }] });
 
     const key = await chatbotRepository.ensureWidgetKey(2);
 
-    expect(key).toBe('deadbeef');
+    expect(key).toBe('chatbot_2');
     expect(query).toHaveBeenCalledTimes(1);
     const [sql, params] = query.mock.calls[0];
     expect(String(sql)).toMatch(/UPDATE custom_chatbots SET widget_key/i);
     expect(String(sql)).toMatch(/widget_key IS NULL OR btrim\(widget_key\) = ''/i);
-    expect(params[0]).toBe(2);
-    expect(params[1]).toMatch(KEY_RE);
+    // Đúng khoá dự phòng của resolveWidgetForChatbot: web_widget_configs + hội thoại web đã có vẫn khớp.
+    expect(params).toEqual([2, 'chatbot_2']);
   });
 
   it('bot đã có key (UPDATE không khớp dòng nào) → đọc và trả key đang có, KHÔNG ghi đè', async () => {
@@ -80,7 +80,7 @@ describe('chatbot.repository.ensureWidgetKey — sinh key cho bot cũ thiếu ke
     expect(String(query.mock.calls[1][0])).toMatch(/SELECT widget_key FROM custom_chatbots/i);
   });
 
-  it('đụng UNIQUE (23505) → thử key khác', async () => {
+  it('đụng UNIQUE (23505) → thử key ngẫu nhiên hex 8 ký tự', async () => {
     query.mockRejectedValueOnce(Object.assign(new Error('duplicate'), { code: '23505' }));
     query.mockResolvedValueOnce({ rows: [{ widget_key: 'second01' }] });
 
@@ -88,11 +88,50 @@ describe('chatbot.repository.ensureWidgetKey — sinh key cho bot cũ thiếu ke
 
     expect(key).toBe('second01');
     expect(query).toHaveBeenCalledTimes(2);
-    expect(query.mock.calls[0][1][1]).not.toBe(query.mock.calls[1][1][1]);
+    expect(query.mock.calls[0][1][1]).toBe('chatbot_4');
+    expect(query.mock.calls[1][1][1]).toMatch(KEY_RE);
   });
 
   it('lỗi khác 23505 → ném lên (controller bắt và giữ danh sách)', async () => {
     query.mockRejectedValueOnce(Object.assign(new Error('boom'), { code: '08006' }));
     await expect(chatbotRepository.ensureWidgetKey(5)).rejects.toThrow('boom');
+  });
+});
+
+describe('chatbot.repository.listChatbotsByUser — tham số khớp placeholder theo từng origin', () => {
+  beforeEach(() => {
+    query.mockReset();
+    query.mockResolvedValue({ rows: [] });
+  });
+
+  // Lỗi có thật (phát hiện 04/10/2026 trên DB thật): origin=shared không có $2 nhưng vẫn đẩy tham số thứ hai →
+  // pg báo "bind message supplies 2 parameters, but prepared statement requires 1" → lọc "Chia sẻ" luôn 500.
+  it.each([
+    ['shared', 1],
+    ['shared_with_me', 1],
+    ['self_created', 2],
+    ['marketplace_purchased', 2],
+    [null, 1],
+  ])('origin=%s → %i tham số, đúng số placeholder trong câu SQL', async (origin, expected) => {
+    await chatbotRepository.listChatbotsByUser(7, origin);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(params).toHaveLength(expected);
+    const placeholders = new Set(String(sql).match(/\$\d+/g) || []);
+    expect(placeholders.size).toBe(expected);
+  });
+
+  it('SELECT tóm tắt triển khai + đếm tài liệu sẵn sàng/lỗi cho cột trái và Triển khai (S-05, S-17)', async () => {
+    await chatbotRepository.listChatbotsByUser(7);
+
+    const sql = String(query.mock.calls[0][0]);
+    for (const col of [
+      'document_count', 'document_error_count', 'zalo_personal_count', 'telegram_count',
+      'whatsapp_count', 'web_active', 'is_locked', 'marketplace_listing_status',
+    ]) {
+      expect(sql).toMatch(new RegExp(`AS ${col}\\b`));
+    }
+    expect(sql).toMatch(/d\.status = 'ready'/);
+    expect(sql).toMatch(/d\.status = 'error'/);
   });
 });

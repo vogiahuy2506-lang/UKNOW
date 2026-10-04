@@ -506,7 +506,34 @@ class ChatbotRepository {
               (SELECT COUNT(*) FILTER (WHERE d.status = 'ready')::int
                  FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_count,
               (SELECT COUNT(*) FILTER (WHERE d.status = 'error')::int
-                 FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_error_count
+                 FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_error_count,
+              -- Tóm tắt triển khai cho cột giữa/cột phải của Studio (S-05): bot đang chạy ở đâu. Đếm tài khoản đang BẬT
+              -- chatbot này theo từng kênh nhắn tin; Web chỉ tính khi có hội thoại web trong 30 ngày (nhúng web không có
+              -- khái niệm "gán", chỉ có bằng chứng là khách đã nhắn). Mọi truy vấn con đi qua index id_chatbot / id_widget_config.
+              (SELECT COUNT(*)::int FROM chatbot_zalo_account_settings z
+                 JOIN zalo_settings zs ON zs.id = z.id_zalo_setting AND zs.is_active = true
+                WHERE z.id_chatbot = custom_chatbots.id AND z.is_enabled = true) AS zalo_personal_count,
+              (SELECT COUNT(*)::int FROM telegram_chatbot_settings t
+                WHERE t.id_chatbot = custom_chatbots.id AND t.is_enabled = true) AS telegram_count,
+              ((SELECT COUNT(*) FROM chatbot_whatsapp_baileys_settings w
+                 WHERE w.id_chatbot = custom_chatbots.id AND w.is_enabled = true)
+               + (SELECT COUNT(*) FROM chatbot_whatsapp_account_settings w2
+                   WHERE w2.id_chatbot = custom_chatbots.id AND w2.is_enabled = true))::int AS whatsapp_count,
+              EXISTS (
+                SELECT 1 FROM web_widget_configs wc
+                  JOIN webchat_conversations wcv ON wcv.id_widget_config = wc.id
+                 WHERE wc.widget_key = COALESCE(NULLIF(btrim(custom_chatbots.widget_key), ''), 'chatbot_' || custom_chatbots.id::text)
+                   AND wcv.last_message_at >= NOW() - INTERVAL '30 days'
+              ) AS web_active,
+              -- Bot đang bị khoá sau hạ gói/hết hạn slot (topup_locked_resources): cột trái hiện "Tạm khoá (vượt gói)".
+              EXISTS (
+                SELECT 1 FROM topup_locked_resources tlr
+                 WHERE tlr.resource_key = 'chatbots' AND tlr.resource_id = custom_chatbots.id
+              ) AS is_locked,
+              -- Đã có listing Marketplace chưa (mọi trạng thái): ô "Đăng bán" đổi thành "Đã đăng bán" thay vì để bấm rồi 400.
+              (SELECT ml.status FROM marketplace_listings ml
+                WHERE ml.id_user = custom_chatbots.id_user AND ml.resource_type = 'chatbot' AND ml.resource_id = custom_chatbots.id
+                LIMIT 1) AS marketplace_listing_status
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`;
     const params = [userId];
@@ -514,12 +541,16 @@ class ChatbotRepository {
     if (origin) {
       if (origin === 'self_created') {
         query += ` AND (origin = $2 OR origin IS NULL OR NOT origin IN ('shared', 'marketplace_purchased'))`;
+        params.push(origin);
       } else if (origin === 'shared' || origin === 'shared_with_me') {
+        // Nhánh này KHÔNG có $2: đẩy thêm tham số thì pg báo "bind message supplies 2 parameters, but prepared statement
+        // requires 1" và lọc origin=shared luôn lỗi 500 (phát hiện 04/10/2026 khi kiểm SQL trên DB thật; tab "Chia sẻ"
+        // của Studio từng rơi về bản đệm localStorage vì lỗi này).
         query += ` AND origin = 'shared'`;
       } else {
         query += ` AND origin = $2`;
+        params.push(origin);
       }
-      params.push(origin);
     }
 
     query += ` ORDER BY created_at DESC`;
@@ -560,19 +591,25 @@ class ChatbotRepository {
   /**
    * Bảo đảm chatbot có `widget_key` (S-03). Bản sao tạo qua "Gửi bản sao" trước 04/10/2026 có widget_key NULL nên
    * mã script nhúng của widget luôn 404. Không viết migration ghi dữ liệu: bot cũ được sinh key khi chủ mở danh sách
-   * (nguồn dữ liệu của tab Triển khai). Chỉ ghi khi key còn trống (`widget_key IS NULL OR ''`), nên chạy lại hay
-   * chạy song song đều không ghi đè key đã có. UNIQUE đụng (hiếm) → thử key khác.
+   * (nguồn dữ liệu của tab Triển khai).
+   *
+   * Key sinh ra là `chatbot_<id>` — CHÍNH khoá dự phòng mà `resolveWidgetForChatbot` đã dùng cho bot thiếu key (migration
+   * 098, mua Marketplace cũng ghi dạng này). Giữ đúng khoá đó thì `web_widget_configs` + hội thoại web đã có (qua link
+   * công khai / iFrame theo id) vẫn khớp; sinh key ngẫu nhiên ở đây sẽ tạo widget_config mới và cắt đứt phiên khách đang chat.
+   * Chỉ ghi khi key còn trống (`NULL` hoặc rỗng), nên chạy lại hay chạy song song đều không ghi đè key đã có. UNIQUE đụng
+   * (gần như không thể) → thử key ngẫu nhiên.
    * @param {number|string} chatbotId
    * @returns {Promise<string|null>} key đang có sau khi gọi
    */
   async ensureWidgetKey(chatbotId) {
-    for (let attempt = 0; attempt < 3; attempt += 1) {
+    const candidates = [`chatbot_${chatbotId}`, randomUUID().split('-')[0], randomUUID().split('-')[0]];
+    for (const candidate of candidates) {
       try {
         const { rows } = await db.query(
           `UPDATE custom_chatbots SET widget_key = $2
            WHERE id = $1 AND (widget_key IS NULL OR btrim(widget_key) = '')
            RETURNING widget_key`,
-          [chatbotId, randomUUID().split('-')[0]]
+          [chatbotId, candidate]
         );
         if (rows[0]) return rows[0].widget_key;
         const { rows: current } = await db.query(
