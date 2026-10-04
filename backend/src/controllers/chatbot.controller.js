@@ -484,15 +484,17 @@ class ChatbotController {
           console.warn(`[KB] Chặn URL không công khai (${e.reason || 'blocked'}): ${url}`);
           return res.status(400).json({ success: false, message: e.message, code: e.code });
         }
+        // Lỗi mạng/HTTP thô (`connect ECONNREFUSED 10.0.0.5:6379`, `Request failed with status code 500`…) CHỈ ở log máy chủ: bản cũ
+        // ghi nguyên `e.message` vào `content_text` — tài liệu khách đọc lại được (và còn thành đoạn RAG) (D-04).
         console.warn(`[KB] Failed to scrape URL ${url}:`, e.message);
-        scrapeStatus = `error: ${e.message}`;
+        scrapeStatus = 'error';
       }
 
       const doc = await knowledgeBaseService.addDocument(kbId, ownerUserId, {
         title: title || url,
         source_type: 'url',
         source_url: url,
-        content_text: content || `⚠️ Failed to extract content from ${url}. Status: ${scrapeStatus}`,
+        content_text: content || `⚠️ Không đọc được nội dung từ ${url}. Hãy kiểm tra trang có mở được công khai không, hoặc thêm nội dung bằng cách dán văn bản trực tiếp.`,
       });
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.KNOWLEDGE_DOCUMENT_CREATED, AUDIT_ENTITY_TYPES.KNOWLEDGE_DOCUMENT, doc.id, { knowledgeBaseId: kbId, sourceType: 'url' });
 
