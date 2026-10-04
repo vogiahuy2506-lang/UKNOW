@@ -87,16 +87,62 @@
     }
   }
 
+  // sessionId là thứ DUY NHẤT chứng minh "hội thoại này của tôi" khi widget hỏi tin nhân viên trả lời tay
+  // (GET .../messages) — nên phiên MỚI sinh bằng crypto, không dùng Date.now() + Math.random() đoán được.
+  // Phiên cũ đã lưu trong storage (dạng sess_<ms>_<ký tự>) giữ nguyên để không mất hội thoại đang dở.
+  function generateSessionId() {
+    try {
+      const cryptoObj = window.crypto || window.msCrypto;
+      if (cryptoObj && typeof cryptoObj.getRandomValues === 'function') {
+        const bytes = new Uint8Array(16);
+        cryptoObj.getRandomValues(bytes);
+        let hex = '';
+        for (let i = 0; i < bytes.length; i += 1) hex += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+        return 'sess_' + hex;
+      }
+    } catch (err) {
+      // rơi xuống nhánh dự phòng
+    }
+    return 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11) + Math.random().toString(36).slice(2, 11);
+  }
+
   let isOpen = false;
   let messages = readStoredList('uknow_msgs_' + WIDGET_KEY);
   let chatHistory = readStoredList('uknow_history_' + WIDGET_KEY);
   let pendingAttachments = [];
   let sessionId = storage.get('uknow_session_' + WIDGET_KEY);
   if (!sessionId) {
-    sessionId = 'sess_' + Date.now() + '_' + Math.random().toString(36).slice(2, 11);
+    sessionId = generateSessionId();
     storage.set('uknow_session_' + WIDGET_KEY, sessionId);
   }
   let configLoaded = false;
+
+  // ── Tin nhân viên trả lời tay (poll) ──────────────────────────────
+  // Hộp thư của chủ shop chỉ lưu tin vào hội thoại web — không có kênh ngoài để đẩy — nên widget tự hỏi tin mới khi khung chat
+  // đang mở. Dừng khi khung đóng / tab ẩn / khách chưa nhắn tin nào (chưa có hội thoại thì không có gì để nhận).
+  const POLL_INTERVAL_MS = 8000;
+  const POLL_BACKOFF_MS = [16000, 32000, 60000]; // lỗi liên tiếp: giãn dần
+  const POLL_MORE_MS = 1000; // server báo còn tin chưa lấy hết
+  const AGENT_LABEL = 'Nhân viên';
+  const AFTER_KEY = 'uknow_agentafter_' + WIDGET_KEY;
+  let pollTimer = null;
+  let pollInFlight = false;
+  let pollErrorCount = 0;
+  const seenAgentIds = {};
+  function readStoredAfterId() {
+    const raw = String(storage.get(AFTER_KEY) || '');
+    return /^\d{1,18}$/.test(raw) ? raw : '0';
+  }
+  let lastAgentId = readStoredAfterId();
+  messages.forEach(function (m) {
+    if (m && m.role === 'agent' && m.id) seenAgentIds[String(m.id)] = true;
+  });
+  // id là BIGINT dạng chuỗi số: so sánh theo độ dài rồi theo chữ để không mất chính xác ở số lớn.
+  function idGreater(a, b) {
+    const x = String(a);
+    const y = String(b);
+    return x.length !== y.length ? x.length > y.length : x > y;
+  }
 
   // ── Load Config from API ─────────────────────────────────────────
 
@@ -267,6 +313,7 @@
       w.style.height = '0';
       w.style.opacity = '0';
       w.style.padding = '0';
+      stopPolling(); // thu nhỏ = khung không còn hiển thị (isOpen vẫn true) → không hỏi tin mới nữa
       setTimeout(() => { w.style.display = 'none'; w.style.height = '560px'; w.style.opacity = '1'; w.style.padding = ''; }, 200);
     };
 
@@ -396,8 +443,14 @@
     if (messages.length === 0) {
       addMessage('bot', WELCOME_MSG);
     } else {
-      messages.forEach(m => addMessage(m.role, m.content, false));
+      messages.forEach(m => addMessage(m.role, m.content, false, { attachments: m.attachments }));
     }
+
+    // Tab ẩn → dừng hỏi tin mới; tab hiện lại (khung đang mở) → hỏi ngay một lượt rồi tiếp tục chu kỳ.
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) stopPolling();
+      else startPolling({ immediate: true });
+    });
   }
 
   function toggleChat() {
@@ -411,7 +464,9 @@
       bubble.innerHTML = `<svg width="24" height="24" fill="white" viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>`;
       bubble.style.transform = 'rotate(90deg)';
       if (launcherLabelEl) launcherLabelEl.style.display = 'none';
+      startPolling({ immediate: true });
     } else {
+      stopPolling();
       chatWindow.style.display = 'none';
       bubble.innerHTML = `<svg width="28" height="28" fill="white" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>`;
       bubble.style.transform = 'rotate(0deg)';
@@ -499,9 +554,22 @@
     }
   }
 
-  function addMessage(role, content, save = true) {
+  // Tệp nhân viên đính kèm: chỉ giữ link http(s) (URL do server dựng; vẫn lọc để không bao giờ gắn javascript:/data: vào href).
+  function safeAttachmentList(raw) {
+    const out = [];
+    (Array.isArray(raw) ? raw : []).forEach(function (a) {
+      if (!a || typeof a.url !== 'string' || !/^https?:\/\//i.test(a.url)) return;
+      out.push({ url: a.url, displayName: String(a.displayName || a.name || 'Tệp đính kèm').slice(0, 120) });
+    });
+    return out.slice(0, 5);
+  }
+
+  // role: 'user' | 'assistant' | 'bot' | 'agent' (nhân viên trả lời tay — hiện như bong bóng của bot, kèm nhãn "Nhân viên").
+  // extra (chỉ cho 'agent'): { id, attachments }.
+  function addMessage(role, content, save = true, extra) {
     const msgArea = document.getElementById('uknow-messages');
     if (!msgArea) return;
+    const attachments = role === 'agent' ? safeAttachmentList(extra && extra.attachments) : [];
 
     const msg = document.createElement('div');
     msg.style.cssText = `
@@ -516,14 +584,117 @@
         ? `background: linear-gradient(135deg, ${PRIMARY_COLOR}, ${ACCENT_COLOR}); color: white; align-self: flex-end; border-bottom-right-radius: 6px;`
         : `background: #f5f5f5; color: ${TEXT_COLOR}; align-self: flex-start; border-bottom-left-radius: 6px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);`}
     `;
+    if (role === 'agent') {
+      const label = document.createElement('div');
+      label.setAttribute('data-uknow-agent-label', '1');
+      label.style.cssText = 'font-size: 11px; font-weight: 600; opacity: 0.65; margin-bottom: 4px; white-space: normal;';
+      label.textContent = AGENT_LABEL;
+      msg.appendChild(label);
+    }
     appendTextWithLinks(msg, content);
+    attachments.forEach(function (a) {
+      const line = document.createElement('div');
+      line.style.cssText = 'margin-top: 6px; white-space: normal;';
+      const link = document.createElement('a');
+      link.href = a.url;
+      link.textContent = '📎 ' + a.displayName;
+      link.target = '_blank';
+      link.rel = 'noopener noreferrer';
+      link.style.cssText = 'text-decoration: underline; word-break: break-all; color: inherit;';
+      line.appendChild(link);
+      msg.appendChild(line);
+    });
     msgArea.appendChild(msg);
     msgArea.scrollTop = msgArea.scrollHeight;
 
     if (save) {
-      messages.push({ role, content });
+      const entry = { role, content };
+      if (role === 'agent') {
+        if (extra && extra.id) entry.id = String(extra.id);
+        if (attachments.length) entry.attachments = attachments;
+      }
+      messages.push(entry);
       storage.set('uknow_msgs_' + WIDGET_KEY, JSON.stringify(messages.slice(-50)));
     }
+  }
+
+  // ── Hỏi tin nhân viên trả lời tay ─────────────────────────────────
+
+  function hasSentMessage() {
+    return messages.some(function (m) { return m && m.role === 'user'; });
+  }
+
+  // Khung chat đang HIỂN THỊ (không chỉ cờ isOpen: nút "─" thu nhỏ ẩn khung mà không đảo isOpen), tab đang xem, và khách đã nhắn
+  // ít nhất một tin (chưa nhắn thì chưa có hội thoại nào để nhận).
+  function shouldPoll() {
+    const w = document.getElementById('uknow-window');
+    return isOpen && !!w && w.style.display !== 'none' && !document.hidden && hasSentMessage();
+  }
+
+  function stopPolling() {
+    if (pollTimer) {
+      clearTimeout(pollTimer);
+      pollTimer = null;
+    }
+  }
+
+  function schedulePoll(delayMs) {
+    stopPolling();
+    if (!shouldPoll()) return;
+    pollTimer = setTimeout(pollOnce, delayMs);
+  }
+
+  // immediate: true → hỏi ngay (vừa mở khung / tab hiện lại); mặc định chờ một chu kỳ (vừa gửi tin đầu tiên, hội thoại đang được tạo).
+  function startPolling(opts) {
+    if (pollInFlight || !shouldPoll()) return;
+    schedulePoll(opts && opts.immediate ? 0 : POLL_INTERVAL_MS);
+  }
+
+  function showAgentMessage(m) {
+    if (!m || m.id === undefined || m.id === null) return;
+    const id = String(m.id);
+    if (!/^\d{1,18}$/.test(id)) return;
+    if (idGreater(id, lastAgentId)) {
+      lastAgentId = id;
+      storage.set(AFTER_KEY, id);
+    }
+    if (seenAgentIds[id]) return; // đã hiện (theo id) — không hiện lại
+    seenAgentIds[id] = true;
+    const content = typeof m.content === 'string' ? m.content : '';
+    const hasFiles = safeAttachmentList(m.attachments).length > 0;
+    if (!content && !hasFiles) return;
+    addMessage('agent', content, true, { id: id, attachments: m.attachments });
+    if (content) {
+      // Câu của nhân viên là một phần hội thoại: nếu AI được bật lại, nó phải thấy nhân viên đã nói gì.
+      chatHistory.push({ role: 'assistant', content: content });
+      storage.set('uknow_history_' + WIDGET_KEY, JSON.stringify(chatHistory.slice(-20)));
+    }
+  }
+
+  async function pollOnce() {
+    pollTimer = null;
+    if (pollInFlight || !shouldPoll()) return;
+    pollInFlight = true;
+    let nextDelay = POLL_INTERVAL_MS;
+    try {
+      const url = API_BASE + '/api/chatbot-public/custom-chatbot/' + encodeURIComponent(WIDGET_KEY)
+        + '/messages?sessionId=' + encodeURIComponent(sessionId) + '&afterId=' + encodeURIComponent(lastAgentId);
+      const res = await fetch(url, { method: 'GET', cache: 'no-store' });
+      if (!res.ok) throw new Error('poll http ' + res.status);
+      const body = await res.json();
+      if (!body || body.success !== true || !body.data || !Array.isArray(body.data.messages)) {
+        throw new Error('poll bad body');
+      }
+      pollErrorCount = 0;
+      body.data.messages.forEach(showAgentMessage);
+      if (body.data.hasMore) nextDelay = POLL_MORE_MS;
+    } catch (err) {
+      pollErrorCount += 1;
+      nextDelay = POLL_BACKOFF_MS[Math.min(pollErrorCount, POLL_BACKOFF_MS.length) - 1];
+    } finally {
+      pollInFlight = false;
+    }
+    schedulePoll(nextDelay);
   }
 
   async function sendMessage(text) {
@@ -539,6 +710,7 @@
     const userText = text?.trim() || '';
     addMessage('user', userText || '[Đính kèm]');
     chatHistory.push({ role: 'user', content: userText || '[Đính kèm]', attachments: attachmentsToSend });
+    startPolling(); // tin đầu tiên → hội thoại được tạo; từ đây có thể có nhân viên trả lời tay
 
     // Show typing indicator
     const msgArea = document.getElementById('uknow-messages');
