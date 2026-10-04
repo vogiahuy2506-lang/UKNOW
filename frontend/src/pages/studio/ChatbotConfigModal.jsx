@@ -326,7 +326,7 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, i
                     <div className="flex items-center justify-between py-2">
                       <div>
                         <p className="text-sm font-medium text-slate-700">Trạng thái hoạt động</p>
-                        <p className="text-xs text-slate-400">Tắt thì chatbot không tự trả lời ở mọi kênh; tin khách vẫn vào Lịch sử trò chuyện để bạn trả lời tay.</p>
+                        <p className="text-xs text-slate-400">Tắt thì chatbot không tự trả lời ở mọi kênh; tin khách vẫn vào Hộp thư để bạn trả lời tay.</p>
                       </div>
                       <Toggle
                         checked={form.replies_enabled !== false}

@@ -7,7 +7,7 @@
  * 2. Dán URL trần (`/app/settings/inbox`) thay vì chỉ đường trên giao diện.
  *    Người dùng không biết `/app/...` là gì.
  * 3. Gọi sai tên mục menu. Bài từng ghi "Chatbot Studio" và "Hộp thư" trong khi
- *    giao diện ghi "Chatbot của tôi" và "Lịch sử trò chuyện" — người dùng đi tìm
+ *    giao diện ghi "Chatbot của tôi" và "Hộp thư" — người dùng đi tìm
  *    thứ không tồn tại.
  */
 import { readFileSync } from 'node:fs';
@@ -23,7 +23,7 @@ import { CHANNEL_ATTACHMENT_LIMITS } from '../../../../../frontend/src/features/
  * Đổi menu bên frontend thì cập nhật bảng này, test sẽ chỉ ra bài nào phải sửa theo.
  */
 const REAL_MENU = {
-  'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện'],
+  'AI Chatbot': ['Chatbot của tôi', 'Hộp thư'],
   'Chiến dịch': [
     'Gửi nhanh',
     'Quản lý kênh gửi',
@@ -175,6 +175,17 @@ const UI_LABELS_IN_ARTICLES = [
   ['mau-tin-nhan', 'emailTemplateEditor.files', 'Files'],
   ['campaign-create', 'channelAttachments.templateLabel', 'Mẫu tin nhắn (dùng chung Zalo, Telegram, WhatsApp)'],
   ['nhan-vien', 'employee.permissions.messageTemplates', 'Mẫu tin nhắn'],
+  // Hộp thư (04/10/2026): menu đổi tên, hàng lọc mới, nút tải tin cũ / đánh dấu tất cả đã đọc, nhãn AI trong danh sách.
+  ['inbox', 'nav.inbox', 'Hộp thư'],
+  ['inbox', 'inbox.chipUnread', 'Chưa đọc'],
+  ['inbox', 'inbox.chipPersonal', 'Cá nhân'],
+  ['inbox', 'inbox.chipGroup', 'Nhóm'],
+  ['inbox', 'inbox.date', 'Thời gian'],
+  ['inbox', 'inbox.allZaloAccounts', 'Tất cả tài khoản Zalo'],
+  ['inbox', 'inbox.loadOlderMessages', 'Tải tin cũ hơn'],
+  ['inbox', 'inbox.markAllRead', 'Đánh dấu tất cả đã đọc'],
+  ['inbox', 'inbox.badgeYouReplying', 'Bạn đang trả lời'],
+  ['inbox', 'inbox.badgeAiOff', 'AI tắt'],
   // Thư viện media (một danh sách, tên nhóm tệp). Tab "Tệp khách gửi" đã gỡ 04/10/2026.
   ['dung-luong-luu-tru', 'nav.mediaLibrary', 'Tệp & dung lượng'],
   ['dung-luong-luu-tru', 'mediaLibrary.title', 'Tệp & dung lượng'],
@@ -378,7 +389,9 @@ describe('chất lượng bài trợ giúp seed', () => {
       'chấm cam',
       'nút **Chat mới**',
       'Menu **Chatbot Studio**',
-      'Menu **Hộp thư**',
+      // 04/10/2026 (RA_SOAT_3_MAN H-23): mục menu "Lịch sử trò chuyện" đổi tên thành "Hộp thư" (khớp tiêu đề trang và quyền
+      // nhân viên "Hộp thư — xem"). Tên CŨ không còn trên giao diện nên bị cấm; "Menu **Hộp thư**" lại là cách gọi ĐÚNG.
+      'Lịch sử trò chuyện',
       'Menu **Nhân viên**',
       '**Chiến dịch → Quản lý kênh**',
       '**Gói dịch vụ →',

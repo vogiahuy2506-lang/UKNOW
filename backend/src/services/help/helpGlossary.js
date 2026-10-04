@@ -30,7 +30,7 @@ export const HELP_UI_GLOSSARY = [
   ['Gửi bản sao', 'Send a copy'],
   ['Đăng bán trên Marketplace', 'Sell on Marketplace'],
   ['Cuộc trò chuyện mới', 'New conversation'],
-  ['Lịch sử trò chuyện', 'Conversation History'],
+  ['Hộp thư', 'Inbox'],
   ['Tệp & dung lượng', 'Files & storage'],
   ['Tổng quan', 'Dashboard'],
   ['Báo cáo', 'Reports'],

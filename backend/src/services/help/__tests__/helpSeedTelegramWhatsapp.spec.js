@@ -19,7 +19,8 @@ describe('bài hướng dẫn Telegram/WhatsApp (W7c)', () => {
     // P5: Hộp thư gửi được đính kèm cho WhatsApp/Telegram — không còn câu "chỉ gửi được văn bản".
     expect(md).not.toContain('chỉ gửi được **văn bản**');
     expect(md).toContain('gửi được cả **ảnh và tệp đính kèm**');
-    expect(md).not.toContain('**Telegram** thì chưa có trong Lịch sử trò chuyện');
+    expect(md).not.toContain('**Telegram** thì chưa có trong Hộp thư');
+    expect(md).not.toContain('Lịch sử trò chuyện');
     expect(md).toContain('Cần đăng nhập lại');
     // Review W7c: W6 (chủ trả lời từ điện thoại → AI tạm dừng) ĐÃ lên main 54324797 → bài mô tả hành vi thật, không còn "khi được cập nhật".
     expect(md).toContain('Bạn tự trả lời trên điện thoại');
