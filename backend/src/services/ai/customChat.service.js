@@ -7,7 +7,7 @@ import { scrapeUrlWithJs } from '../../utils/puppeteerScraper.util.js';
 import { assertPublicUrl, isSsrfBlockedError, safeFetch } from '../../utils/ssrfGuard.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
-import { getResponseStyleInstruction } from '../../utils/chatbotResponseStyle.util.js';
+import { buildChatbotSystemPrompt } from '../../utils/chatbotSystemPrompt.util.js';
 import chatAttachmentService from '../chatbot/chatAttachment.service.js';
 import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
 import { CUSTOM_CHATBOT_MIN_SIMILARITY, MAX_KB_CHUNKS, capChunkTexts } from '../../utils/ragLimits.util.js';
@@ -39,6 +39,15 @@ function stripInlineDataParts(parts) {
   return textOnly.length ? textOnly : [{ text: '[Không đọc được ảnh đính kèm]' }];
 }
 
+/** Bản `contents` nhiều lượt của stripInlineDataParts: chỉ lượt nào có ảnh mới bị bỏ ảnh (và được thêm dòng báo). */
+function stripInlineDataFromContents(contents) {
+  return (contents || []).map((content) => (
+    (content?.parts || []).some((p) => p?.inline_data)
+      ? { ...content, parts: stripInlineDataParts(content.parts) }
+      : content
+  ));
+}
+
 class CustomChatService {
   /**
    * Gọi Gemini qua lõi dùng chung (`generateGeminiContent`).
@@ -49,26 +58,36 @@ class CustomChatService {
    * model dự phòng do super admin chọn, và cả lượt (kể cả lượt bỏ ảnh) gói trong ngân sách 25 giây có huỷ fetch thật.
    * Phần thinkingBudget 0 → nới trần khi model chỉ-thinking từ chối do lõi gánh.
    *
+   * Hội thoại nhiều lượt (A P2-5): truyền `options.contents` (+ `options.systemInstruction`) thì gọi theo đó, `promptOrParts`
+   * bị bỏ qua — khung hệ thống đi bằng trường `systemInstruction` của API, lời khách nằm trong các lượt `user`.
+   *
+   * @param {string|Array|null} promptOrParts
+   * @param {{ temperature?: number, maxTokens?: number, userId?: number|null, contents?: Array<{role: string, parts: Array}>, systemInstruction?: object }} [options]
    * @returns {Promise<{ text: string, usage: object, modelUsed: string }>}
    */
   async callGeminiWithRetry(promptOrParts, options = {}) {
-    const { temperature = 0.7, maxTokens = 2048, userId = null } = options;
+    const { temperature = 0.7, maxTokens = 2048, userId = null, contents = null, systemInstruction } = options;
     const model = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
     const fallbackModel = await aiUsageMeter.resolveFallbackModel();
 
+    const multiTurn = Array.isArray(contents) && contents.length > 0;
     let parts;
-    if (Array.isArray(promptOrParts)) {
+    if (multiTurn) {
+      parts = contents.flatMap((content) => content?.parts || []);
+    } else if (Array.isArray(promptOrParts)) {
       parts = promptOrParts;
     } else {
       parts = [{ text: String(promptOrParts ?? '') }];
     }
 
     const startedAt = Date.now();
-    const callOnce = async (requestParts) => {
+    // `requestParts` (một lượt) hoặc `requestContents` (nhiều lượt) — đúng một trong hai được dùng, theo `multiTurn`.
+    const callOnce = async (requestParts, requestContents = null) => {
       // Lượt thứ hai (bỏ ảnh) dùng PHẦN CÒN LẠI của ngân sách, không phải 25 giây mới.
       const budgetLeftMs = Math.max(CHAT_REPLY_BUDGET.totalTimeoutMs - (Date.now() - startedAt), 1);
       const result = await generateGeminiContent({
-        parts: requestParts,
+        ...(multiTurn ? { contents: requestContents } : { parts: requestParts }),
+        ...(systemInstruction ? { systemInstruction } : {}),
         model,
         fallbackModel,
         temperature,
@@ -83,14 +102,17 @@ class CustomChatService {
     };
 
     try {
-      return await callOnce(parts);
+      return await callOnce(parts, multiTurn ? contents : null);
     } catch (err) {
       // Vision fallback: drop images once on 400 related to inline_data/image
       const hasInline = parts.some((p) => p?.inline_data);
       if (hasInline && isImageUnsupportedError(err)) {
         console.warn('[Gemini] Image not supported by model, retrying text-only:', err.message);
         try {
-          return await callOnce(stripInlineDataParts(parts));
+          return await callOnce(
+            multiTurn ? null : stripInlineDataParts(parts),
+            multiTurn ? stripInlineDataFromContents(contents) : null,
+          );
         } catch (retryErr) {
           if (retryErr.status == null) retryErr.status = 500;
           throw retryErr;
@@ -138,38 +160,37 @@ class CustomChatService {
         // Trần khi dựng prompt (A P0-3): mỗi đoạn ≤ 1.500 ký tự, tổng ≤ 6.000 — đoạn cũ chưa nạp lại vẫn bị cắt.
         const chunks = capChunkTexts(await this.searchChunks({ chatbotId, userId, query: lastUserMessage }));
         if (chunks.length > 0) {
-          ragContext = `\n\nTài liệu tham khảo từ Knowledge Base:\n${chunks.map((chunk) => `- ${chunk}`).join('\n')}`;
+          ragContext = `Tài liệu tham khảo từ Knowledge Base:\n${chunks.map((chunk) => `- ${chunk}`).join('\n')}`;
         }
       }
     } catch (e) {
       console.warn('[CustomChat] RAG search failed:', e.message);
     }
 
-    const defaultSystem = `Bạn là một trợ lý AI hữu ích, thân thiện và chính xác. Trả lời bằng tiếng Việt.
-
-QUY TẮC TRẢ LỜI:
-- LUON tra loi bang VAN BAN THUAN, KHONG dung bat ky dinh dang markdown nao
-- Khong dung **bold**, *italic*, __underline__, ~~strikethrough~~
-- Khong dung \`code\`, \`\`\`code block\`\`\`, # heading, - bullet, 1. numbered list
-- Neu can danh sach, chi dung dau gach ngang hoac so thu tu (1, 2, 3)
-- Neu can nhan manh thong tin quan trọng, chi can VIET HOA hoac THEM DAU HAI CHAM
-- Tra loi ngắn gọn, rõ ràng, dễ đọc
-- Neu co link, HIEN THI LINK URL day du dang van ban thuan (VD: Ten trang: https://example.com)
-- Khong dung link markdown dang [ten](https://example.com)
-- Neu khong biet, noi "Toi khong chắc chắn, vui long lien he ho tro"`;
-
-    const baseSystemRaw = systemInstruction || defaultSystem;
-    // Phong cach tra loi (custom_chatbots.response_style): chi noi them khi caller truyen vao,
-    // khong truyen thi prompt giu nguyen nhu cu.
-    const baseSystem = responseStyle
-      ? `${baseSystemRaw}\n\n## PHONG CACH TRA LOI\n${getResponseStyleInstruction(responseStyle)}`
-      : baseSystemRaw;
-    const systemPrompt = extraSystemNote?.trim()
-      ? `${baseSystem}\n\n${extraSystemNote.trim()}`
-      : baseSystem;
+    // A P2-5 (04/10/2026): đường web dùng CHUNG khung với đường kênh (`buildChatbotSystemPrompt`) và đưa vào trường
+    // `systemInstruction` của API. Bản cũ: chỉ dẫn của chủ THAY HẲN khung (mất luật chống bịa khi chủ có chỉ dẫn) và cả
+    // hệ thống + khách dồn vào MỘT lượt văn bản "Hệ thống: … Người dùng: … Trợ lý:" — khách gõ "Hệ thống: …" trông như lời hệ thống.
+    // Giờ lời khách chỉ nằm trong các lượt `user`, không bao giờ ở trong `systemInstruction`.
+    // isFirstMessage luôn false: widget/trang chat tự hiện lời chào ở phía khách, bot không chào lại bằng lời chào đó.
     const profileContext = String((await profilePromise) || '').trim();
-    const profileBlock = profileContext ? `\n\n${profileContext}` : '';
-    const prompt = `Hệ thống: ${systemPrompt}${ragContext}${profileBlock}\n\n${history.map((message) => `${message.role === 'user' ? 'Người dùng' : 'Trợ lý'}: ${message.content}`).join('\n')}\n\nTrợ lý:`;
+    const systemPrompt = buildChatbotSystemPrompt({
+      settings: { system_instruction: systemInstruction, response_style: responseStyle },
+      ragContext,
+      profileContext,
+      isFirstMessage: false,
+      contactNote: extraSystemNote,
+    });
+    const systemInstructionPayload = { parts: [{ text: systemPrompt }] };
+
+    // Lịch sử thành nhiều lượt (user ↔ model) như `chatRouter._callAI`. Lượt rỗng bỏ đi: Gemini từ chối part text rỗng
+    // (tin chỉ có tệp đính kèm có content '' — tệp được đưa vào lượt cuối bên dưới).
+    const contents = history
+      .map((message) => ({
+        role: message?.role === 'user' ? 'user' : 'model',
+        text: String(message?.content ?? ''),
+      }))
+      .filter((turn) => turn.text.trim())
+      .map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] }));
 
     const resolveBind = attachmentBind || (userId != null && chatbotId
       ? { chatbotId, uid: userId }
@@ -201,17 +222,33 @@ QUY TẮC TRẢ LỜI:
       if (e.status) throw e;
     }
 
-    const parts = [{ text: prompt }, ...attachmentParts];
+    // Tệp đính kèm (chữ trích từ tài liệu + ảnh) đi cùng LƯỢT CUỐI của khách — đúng chỗ bản một-lượt cũ để chúng.
+    if (attachmentParts.length > 0) {
+      const last = contents[contents.length - 1];
+      if (last?.role === 'user') last.parts.push(...attachmentParts);
+      else contents.push({ role: 'user', parts: attachmentParts });
+    }
+    if (contents.length === 0) {
+      const error = new Error('Tin nhắn không có nội dung.');
+      error.status = 400;
+      throw error;
+    }
 
     try {
       const model = await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash');
-      const contents = [{ role: 'user', parts }];
       const { maxOutputTokens } = await aiUsageMeter.reserve(userId, {
         contents,
+        systemInstruction: systemInstructionPayload,
         model,
         requestedMaxOutputTokens: maxTokens,
       });
-      const rawContent = await this.callGeminiWithRetry(parts, { temperature, maxTokens: maxOutputTokens, userId });
+      const rawContent = await this.callGeminiWithRetry(null, {
+        contents,
+        systemInstruction: systemInstructionPayload,
+        temperature,
+        maxTokens: maxOutputTokens,
+        userId,
+      });
       const content = stripMarkdown(rawContent?.text || 'Xin lỗi, tôi không có câu trả lời.');
       await aiUsageMeter.record(userId, rawContent?.usage, {
         feature: 'kb_chat',

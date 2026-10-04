@@ -323,7 +323,7 @@ describe('customChat.chat — phong cách trả lời (responseStyle)', () => {
       maxTokens: 100,
       ...extra,
     });
-    const text = callSpy.mock.calls[0][0][0].text;
+    const text = callSpy.mock.calls[0][1].systemInstruction.parts[0].text;
     searchSpy.mockRestore();
     callSpy.mockRestore();
     return text;
@@ -340,8 +340,8 @@ describe('customChat.chat — phong cách trả lời (responseStyle)', () => {
     expect(text).toContain('Than thien nhung thoai mai, co the dung tieng long nhe.');
   });
 
-  it('không truyền responseStyle -> prompt giữ nguyên như cũ (không thêm mục phong cách)', async () => {
+  it('không truyền responseStyle -> khung chung dùng mặc định friendly (như đường kênh khi cột response_style trống)', async () => {
     const text = await runChat();
-    expect(text).not.toContain('PHONG CACH TRA LOI');
+    expect(text).toContain('## PHONG CACH TRA LOI\nThan thien, gan gui, dung emoji phu hop.');
   });
 });

@@ -64,7 +64,8 @@ async function runChat({ history = [{ role: 'user', content: 'mấy giờ mở c
   if (chunks) jest.spyOn(svc, 'searchChunks').mockResolvedValue(chunks);
   try {
     await svc.chat({ history, chatbotId: 17, userId: 90, systemInstruction: 'Bạn là trợ lý của shop.', temperature: 0.7, maxTokens: 100 });
-    return callSpy.mock.calls[0][0][0].text;
+    // A P2-5: khung + tài liệu + hồ sơ nằm ở systemInstruction (không còn một lượt văn bản duy nhất).
+    return callSpy.mock.calls[0][1].systemInstruction.parts[0].text;
   } finally {
     callSpy.mockRestore();
   }
@@ -97,10 +98,11 @@ afterEach(() => {
 });
 
 describe('customChat.chat — trần prompt (A P0-3: đoạn 219.902 ký tự → ~94k token/câu)', () => {
-  it('đoạn 219.902 ký tự trong tài liệu cũ → prompt gửi lên Gemini nhỏ (< 9.000 ký tự), không chứa nguyên đoạn', async () => {
+  it('đoạn 219.902 ký tự trong tài liệu cũ → prompt gửi lên Gemini nhỏ (< 14.000 ký tự gồm khung chung ~6k), không chứa nguyên đoạn', async () => {
     const prompt = await runChat({ chunks: [HUGE, 'Giờ mở cửa 8h-21h'] });
 
-    expect(prompt.length).toBeLessThan(9000);
+    // Ngưỡng cũ 9.000 tính khi web chưa dùng khung chung (A P2-5 thêm ~6k khung); 219.902 ký tự thì vẫn cách xa.
+    expect(prompt.length).toBeLessThan(14000);
     expect(prompt).toContain('Tài liệu tham khảo từ Knowledge Base:');
     expect(prompt).not.toContain('X'.repeat(1600));
     expect(prompt).toContain('Giờ mở cửa 8h-21h');
