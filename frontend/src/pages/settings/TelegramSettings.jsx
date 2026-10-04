@@ -327,7 +327,7 @@ function AccountCard({ account, onLogout, onDelete, onRelogin, canRelogin, readO
         </div>
 
         {/* Actions */}
-        <div className="flex flex-col gap-1.5 shrink-0 sm:items-end">
+        <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
           {needsRelogin && !readOnly && (
             <button
               type="button"

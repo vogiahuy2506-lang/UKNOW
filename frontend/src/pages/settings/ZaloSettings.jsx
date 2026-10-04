@@ -1,9 +1,9 @@
-/* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
+/* eslint-disable react-hooks/exhaustive-deps */
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
-import PageHeader from '../../components/common/PageHeader';
+import PageContainer from '../../components/common/PageContainer';
 import NumberInput from '../../components/common/NumberInput';
 import {
   HiOutlineChatAlt2,
@@ -13,8 +13,12 @@ import {
   HiOutlineQrcode,
   HiOutlineRefresh,
   HiOutlineTrash,
-  HiOutlineXCircle,
-  HiOutlineQuestionMarkCircle,
+  HiOutlineX,
+  HiOutlineIdentification,
+  HiOutlineDeviceMobile,
+  HiOutlineUserCircle,
+  HiOutlineClock,
+  HiOutlineInformationCircle,
 } from 'react-icons/hi';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
@@ -104,6 +108,10 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
       if (!a.isDefault && b.isDefault) return 1;
       return a.displayName.localeCompare(b.displayName, 'vi');
     });
+  }, [accounts]);
+
+  const totalActive = useMemo(() => {
+    return accounts.filter((a) => a.status === 'connected' && a.isActive).length;
   }, [accounts]);
 
   /**
@@ -450,31 +458,42 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
   }, [qrPreview.isOpen, qrPreview.sessionKey]);
 
   return (
-    <div className="space-y-6">
-      <PageHeader
-        icon={HiOutlineChatAlt2}
-        title={t('zaloSettings.title')}
-        subtitle={t('zaloSettings.description')}
-        actions={
+    <PageContainer
+      icon={HiOutlineChatAlt2}
+      title={t('zaloSettings.title')}
+      subtitle={t('zaloSettings.description')}
+      actions={
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleRefreshStatus}
-            className="btn btn-secondary"
             disabled={isRefreshing}
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
           >
-            <HiOutlineRefresh className="w-4 h-4 mr-2" />
+            <HiOutlineRefresh className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
             {isRefreshing ? t('zaloSettings.refreshing') : t('zaloSettings.refresh')}
           </button>
-        }
-      />
-
+          {!readOnly && (
+            <button
+              type="button"
+              onClick={handleConnectByQr}
+              disabled={isCreatingQr}
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <HiOutlineQrcode className="w-3.5 h-3.5" />
+              {isCreatingQr ? t('zaloSettings.creatingQr') : t('zaloSettings.createQrLogin')}
+            </button>
+          )}
+        </div>
+      }
+    >
       {!isBackendReady && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-amber-900">
           <div className="flex items-start gap-2">
-            <HiOutlineExclamationCircle className="w-5 h-5 mt-0.5" />
+            <HiOutlineExclamationCircle className="w-5 h-5 mt-0.5 text-amber-600 shrink-0" />
             <div className="text-sm">
-              <p className="font-medium">{t('zaloSettings.backendNotReadyTitle')}</p>
-              <p className="mt-1">
+              <p className="font-semibold">{t('zaloSettings.backendNotReadyTitle')}</p>
+              <p className="mt-1 text-xs text-amber-800">
                 {backendModeMessage || t('zaloSettings.backendNotReadyNote')}
               </p>
             </div>
@@ -482,300 +501,348 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
         </div>
       )}
 
-      {!readOnly && (
-      <div className="card p-6 space-y-4">
-        <div className="flex items-center gap-2 text-gray-900">
-          <HiOutlineQrcode className="w-5 h-5 text-primary-600" />
-          <h2 className="text-lg font-semibold">{t('zaloSettings.loginByQr')}</h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button
-            type="button"
-            onClick={handleConnectByQr}
-            className="btn btn-primary"
-            disabled={isCreatingQr}
-          >
-            <HiOutlineQrcode className="w-4 h-4 mr-2" />
-            {isCreatingQr ? t('zaloSettings.creatingQr') : t('zaloSettings.createQrLogin')}
-          </button>
-        </div>
-      </div>
-      )}
-
-      <div className="card p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-gray-900">{t('zaloSettings.accounts')}</h2>
-            <span className="text-sm text-gray-500">{t('zaloSettings.totalAccounts')}: {sortedAccounts.length}</span>
+      {/* ── Accounts list container (Đồng bộ với Telegram & WhatsApp) ──── */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {/* List header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-800">
+              {t('zaloSettings.accounts') || 'Tài khoản đã liên kết'}
+            </span>
+            {sortedAccounts.length > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
+                {sortedAccounts.length}
+              </span>
+            )}
           </div>
+          {totalActive > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+              {t('telegramSettings.activeCount', { count: totalActive }) || `${totalActive} đang hoạt động`}
+            </span>
+          )}
+        </div>
 
-          {isLoading ? (
-            <div className="py-12 flex items-center justify-center">
-              <div className="spinner w-8 h-8" />
+        {/* Content */}
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-14">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-slate-500">{t('telegramSettings.loadingList') || 'Đang tải danh sách…'}</p>
+          </div>
+        ) : sortedAccounts.length === 0 ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center text-center px-6 py-16 gap-3">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center">
+              <HiOutlineChatAlt2 className="w-8 h-8 text-slate-300" />
             </div>
-          ) : sortedAccounts.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <HiOutlineChatAlt2 className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-              <p>{t('zaloSettings.noAccounts')}</p>
-              {!readOnly && <p className="text-xs mt-1">{t('zaloSettings.addFirstAccount')}</p>}
+            <div>
+              <p className="text-sm font-semibold text-slate-700">{t('zaloSettings.noAccounts')}</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                {!readOnly ? t('zaloSettings.addFirstAccount') : ''}
+              </p>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {sortedAccounts.map((account) => (
-                <div key={account.id} className="rounded-lg border border-gray-200 p-4">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <div className="flex items-center flex-wrap gap-2">
-                        <h3 className="font-semibold text-gray-900">{account.displayName}</h3>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleConnectByQr}
+                disabled={isCreatingQr}
+                className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
+              >
+                <HiOutlineQrcode className="w-4 h-4" />
+                {t('zaloSettings.createQrLogin')}
+              </button>
+            )}
+          </div>
+        ) : (
+          /* Account cards */
+          <div className="p-4 sm:p-5 space-y-3">
+            {sortedAccounts.map((account) => (
+              <div
+                key={account.id}
+                className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 transition hover:border-primary-200 shadow-sm"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  {/* Left: Avatar + Title & Badges */}
+                  <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-blue-600 text-white font-bold shadow-sm text-lg">
+                      {account.displayName?.trim().charAt(0)?.toUpperCase() || 'Z'}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-slate-900 truncate text-base">{account.displayName}</h3>
                         {account.isDefault && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700">
+                          <span className="inline-flex items-center rounded-full border border-primary-200 bg-primary-50 px-2 py-0.5 text-[11px] font-medium text-primary-700">
                             {t('zaloSettings.default')}
                           </span>
                         )}
                         <span
-                          className={`text-xs px-2 py-0.5 rounded-full ${
+                          className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-medium ${
                             account.status === 'connected' && account.isActive
-                              ? 'bg-green-100 text-green-700'
+                              ? 'border-green-200 bg-green-50 text-green-700'
                               : account.status === 'needs_reauth'
-                                ? 'bg-amber-100 text-amber-800'
-                                : 'bg-red-100 text-red-700'
+                              ? 'border-amber-200 bg-amber-50 text-amber-700'
+                              : 'border-slate-200 bg-slate-50 text-slate-600'
                           }`}
                         >
+                          <span
+                            className={`h-1.5 w-1.5 rounded-full ${
+                              account.status === 'connected' && account.isActive
+                                ? 'bg-green-500'
+                                : account.status === 'needs_reauth'
+                                ? 'bg-amber-500 animate-pulse'
+                                : 'bg-slate-400'
+                            }`}
+                          />
                           {account.status === 'connected' && account.isActive
                             ? t('zaloSettings.connected')
                             : account.status === 'needs_reauth'
-                              ? t('zaloSettings.needsReauth')
-                              : t('zaloSettings.disconnected')}
+                            ? t('zaloSettings.needsReauth')
+                            : t('zaloSettings.disconnected')}
                         </span>
                         {account.phoneLookupCooldownUntil && new Date(account.phoneLookupCooldownUntil).getTime() > Date.now() && (
-                          <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
                             {t('zaloSettings.phoneLookupCooldownBadge', {
                               until: formatCampaignDateTime(account.phoneLookupCooldownUntil),
                             })}
                           </span>
                         )}
                       </div>
-                      {account.status === 'needs_reauth' && (
-                        <p className="text-sm text-amber-800 mt-2">
-                          {t('zaloSettings.needsReauthHint')}
-                          {account.lastRestoreAttemptAt
-                            ? ` ${t('zaloSettings.lastRestoreAttempt')}: ${formatCampaignDateTime(account.lastRestoreAttemptAt)}`
-                            : ''}
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-600 mt-1">
-                        {t('zaloSettings.zaloId')}: {account.zaloUserId || t('zaloSettings.notConfigured')}
+                      <p className="text-xs text-slate-500 mt-1 flex items-center gap-1.5">
+                        <HiOutlineIdentification className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                        <span>ID: {account.zaloUserId || t('zaloSettings.notConfigured')}</span>
                       </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {t('zaloSettings.zaloName')}: {account.zaloName || account.displayName || t('zaloSettings.unknown')}
-                      </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {t('zaloSettings.phone')}: {account.zaloPhone || t('zaloSettings.unknown')}
-                      </p>
-                      {/* Trước đây dòng này là "Người tạo" nhưng luôn ra tên CHỦ (JOIN users theo id_user) dù nhân viên
-                          mới là người quét QR — sai nghĩa nên thay bằng số nhân viên được giao (chỉ chủ thấy). */}
-                      {account.assignedEmployeeCount !== null && (
-                        <p className="text-sm text-gray-600 mt-1">
-                          {t('zaloSettings.assignedEmployees', { count: account.assignedEmployeeCount })}
-                        </p>
-                      )}
-                      <p className="text-xs text-gray-500 mt-1">
-                        {t('zaloSettings.lastSync')}: {account.updatedAt ? formatCampaignDateTime(account.updatedAt) : 'N/A'}
-                      </p>
-                      <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <label htmlFor={`send-limit-${account.id}`} className="text-sm text-gray-600">
-                          {t('zaloSettings.dailySendLimit')}:
-                        </label>
-                        {/* Bề rộng phải đặt Ở ĐÂY, không phải trên <input>: lớp `.input` dùng
-                            `@apply w-full` và nằm ngoài `@layer` nên nó thắng mọi utility w-* đặt
-                            trực tiếp trên ô. w-28 (112px) làm placeholder "Để trống = không giới hạn"
-                            bị cắt còn "Để trống = kh". */}
-                        <div className="w-44">
-                          <NumberInput
-                            id={`send-limit-${account.id}`}
-                            min={1}
-                            max={100000}
-                            value={getSendLimitDraft(account)}
-                            onChange={(v) => setSendLimitDrafts((prev) => ({ ...prev, [account.id]: String(v) }))}
-                            className="input py-1 text-sm"
-                            placeholder={t('zaloSettings.dailySendLimitPlaceholder')}
-                          />
-                        </div>
-                        <button
-                          type="button"
-                          className="btn btn-secondary text-xs"
-                          onClick={() => handleSaveSendLimit(account)}
-                          disabled={savingSendLimitIds.includes(account.id)}
-                        >
-                          {savingSendLimitIds.includes(account.id) ? t('common.saving') : t('common.save')}
-                        </button>
-                        {Number(getSendLimitDraft(account)) > 100 && (
-                          <span className="text-xs text-amber-600">{t('zaloSettings.dailySendLimitHighWarning')}</span>
-                        )}
-                      </div>
-                      <div className="mt-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <label htmlFor={`send-speed-${account.id}`} className="text-sm text-gray-600">
-                            {t('zaloSettings.sendSpeed')}:
-                          </label>
-                          <div className="w-64">
-                            <select
-                              id={`send-speed-${account.id}`}
-                              value={getSendSpeedDraft(account)}
-                              onChange={(e) => setSendSpeedDrafts((prev) => ({ ...prev, [account.id]: e.target.value }))}
-                              className="input py-1 text-sm"
-                            >
-                              {account.sendSpeed === 'custom' && !Object.prototype.hasOwnProperty.call(sendSpeedDrafts, account.id) && (
-                                <option value="custom" disabled>
-                                  {t('zaloSettings.sendSpeedCustom')}
-                                </option>
-                              )}
-                              <option value="safe">
-                                {t('zaloSettings.sendSpeedSafe')}
-                              </option>
-                              <option value="fast">
-                                {t('zaloSettings.sendSpeedFast')}
-                              </option>
-                              <option value="very_fast">
-                                {t('zaloSettings.sendSpeedVeryFast')}
-                              </option>
-                            </select>
-                          </div>
-                          <button
-                            type="button"
-                            className="btn btn-secondary text-xs"
-                            onClick={() => handleSaveSendSpeed(account)}
-                            disabled={
-                              savingSendSpeedIds.includes(account.id)
-                              || getSendSpeedDraft(account) === 'custom'
-                            }
-                          >
-                            {savingSendSpeedIds.includes(account.id) ? t('common.saving') : t('common.save')}
-                          </button>
-                          {getSendSpeedDraft(account) === 'fast' && (
-                            <span className="text-xs text-amber-600">
-                              {t('zaloSettings.sendSpeedFastWarning')}
-                            </span>
-                          )}
-                          {getSendSpeedDraft(account) === 'very_fast' && (
-                            <span className="text-xs text-red-600 font-medium">
-                              {t('zaloSettings.sendSpeedVeryFastWarning')}
-                            </span>
-                          )}
-                        </div>
-                        {account.sendSpeed === 'custom' && (
-                          <p className="text-xs text-gray-500 mt-1 italic">
-                            {t('zaloSettings.sendSpeedCustom')}
-                          </p>
-                        )}
-                        <p className="text-xs text-gray-400 mt-0.5">
-                          {t('zaloSettings.sendSpeedAppliedNextRunHint')}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      {!readOnly && !(account.status === 'connected' && account.isActive) && (
-                        <>
-                          {(account.status === 'needs_reauth' || account.status === 'disconnected') && (
-                            <button
-                              type="button"
-                              className="btn btn-secondary text-xs"
-                              onClick={() => handleRetryRestore(account)}
-                              disabled={retryingAccountIds.includes(account.id)}
-                            >
-                              <HiOutlineRefresh className="w-4 h-4 mr-1" />
-                              {retryingAccountIds.includes(account.id)
-                                ? t('zaloSettings.restoring')
-                                : t('zaloSettings.retryRestore')}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            className="btn btn-secondary text-xs"
-                            onClick={() => handleRestoreSession(account)}
-                            disabled={restoringAccountIds.includes(account.id)}
-                          >
-                            <HiOutlineRefresh className="w-4 h-4 mr-1" />
-                            {restoringAccountIds.includes(account.id)
-                              ? t('zaloSettings.restoring')
-                              : t('zaloSettings.restoreSession')}
-                          </button>
-                          <button
-                            type="button"
-                            className="btn btn-primary text-xs"
-                            onClick={() => handleReconnectByQr(account)}
-                            disabled={isCreatingQr}
-                          >
-                            <HiOutlineQrcode className="w-4 h-4 mr-1" />
-                            {t('zaloSettings.reconnectQr')}
-                          </button>
-                        </>
-                      )}
-                      {!account.isDefault && !isEmployeeContext && (
-                        <button
-                          type="button"
-                          className="btn btn-secondary text-xs"
-                          onClick={() => handleSetDefault(account.id)}
-                        >
-                          <HiOutlineCheckCircle className="w-4 h-4 mr-1" />
-                          {t('zaloSettings.setDefault')}
-                        </button>
-                      )}
-                      <button
-                        type="button"
-                        className="p-2 rounded-md hover:bg-red-50 text-gray-500 hover:text-red-600"
-                        onClick={() => handleDeleteAccount(account.id)}
-                        title={t('zaloSettings.delete')}
-                      >
-                        <HiOutlineTrash className="w-5 h-5" />
-                      </button>
                     </div>
                   </div>
-                  {account.notes && <p className="text-sm text-gray-700 mt-3">{account.notes}</p>}
+
+                  {/* Right: Actions */}
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                    {!readOnly && !(account.status === 'connected' && account.isActive) && (
+                      <>
+                        {(account.status === 'needs_reauth' || account.status === 'disconnected') && (
+                          <button
+                            type="button"
+                            onClick={() => handleRetryRestore(account)}
+                            disabled={retryingAccountIds.includes(account.id)}
+                            className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                          >
+                            <HiOutlineRefresh className={`w-3.5 h-3.5 ${retryingAccountIds.includes(account.id) ? 'animate-spin' : ''}`} />
+                            {retryingAccountIds.includes(account.id)
+                              ? t('zaloSettings.restoring')
+                              : t('zaloSettings.retryRestore')}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreSession(account)}
+                          disabled={restoringAccountIds.includes(account.id)}
+                          className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors disabled:opacity-50"
+                          title="Khôi phục lại phiên từ cookie đã lưu"
+                        >
+                          <HiOutlineRefresh className={`w-3.5 h-3.5 ${restoringAccountIds.includes(account.id) ? 'animate-spin' : ''}`} />
+                          {restoringAccountIds.includes(account.id) ? t('zaloSettings.restoring') : t('zaloSettings.restoreSession')}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleReconnectByQr(account)}
+                          disabled={isCreatingQr}
+                          className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 hover:bg-primary-100 transition-colors disabled:opacity-50"
+                        >
+                          <HiOutlineQrcode className="w-3.5 h-3.5" />
+                          {t('zaloSettings.reconnectQr')}
+                        </button>
+                      </>
+                    )}
+                    {!account.isDefault && !isEmployeeContext && (
+                      <button
+                        type="button"
+                        onClick={() => handleSetDefault(account.id)}
+                        className="inline-flex items-center gap-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-colors"
+                        title={t('zaloSettings.setDefault')}
+                      >
+                        <HiOutlineCheckCircle className="w-3.5 h-3.5 text-slate-400" />
+                        <span className="hidden md:inline">{t('zaloSettings.setDefault')}</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteAccount(account.id)}
+                      className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                      title={t('zaloSettings.delete')}
+                    >
+                      <HiOutlineTrash className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+
+                {/* Needs Reauth Alert Banner */}
+                {account.status === 'needs_reauth' && (
+                  <div className="mt-3 flex items-start gap-2.5 rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-800">
+                    <HiOutlineExclamationCircle className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                    <div className="flex-1">
+                      <p className="font-medium">{t('zaloSettings.needsReauthHint')}</p>
+                      {account.lastRestoreAttemptAt && (
+                        <p className="text-[11px] text-amber-600 mt-0.5">
+                          {t('zaloSettings.lastRestoreAttempt')}: {formatCampaignDateTime(account.lastRestoreAttemptAt)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Account Details Grid (2 columns) */}
+                <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 text-xs border-t border-slate-100 pt-3">
+                  <div className="flex items-center gap-2">
+                    <HiOutlineDeviceMobile className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-slate-500 shrink-0">{t('zaloSettings.phone')}:</span>
+                    <span className="font-medium text-slate-800 truncate">{account.zaloPhone || t('zaloSettings.unknown')}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <HiOutlineUserCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-slate-500 shrink-0">{t('zaloSettings.zaloName')}:</span>
+                    <span className="font-medium text-slate-800 truncate">{account.zaloName || t('zaloSettings.unknown')}</span>
+                  </div>
+                  {account.assignedEmployeeCount !== null && (
+                    <div className="flex items-center gap-2">
+                      <HiOutlineUserCircle className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                      <span className="font-medium text-slate-800 truncate">
+                        {t('zaloSettings.assignedEmployees', { count: account.assignedEmployeeCount })}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2">
+                    <HiOutlineClock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                    <span className="text-slate-500 shrink-0">{t('zaloSettings.lastSync')}:</span>
+                    <span className="font-medium text-slate-800 truncate">{account.updatedAt ? formatCampaignDateTime(account.updatedAt) : 'N/A'}</span>
+                  </div>
+                </div>
+
+                {/* Send Settings Inner Box */}
+                <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5">
+                  <p className="text-xs font-semibold text-slate-700">{t('channelSendSettings.title') || 'Giới hạn & tốc độ gửi chiến dịch'}</p>
+
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <label htmlFor={`send-limit-${account.id}`} className="text-xs text-slate-600 min-w-[110px]">
+                      {t('zaloSettings.dailySendLimit')}:
+                    </label>
+                    <div className="w-52 sm:w-56">
+                      <NumberInput
+                        id={`send-limit-${account.id}`}
+                        min={1}
+                        max={100000}
+                        value={getSendLimitDraft(account)}
+                        onChange={(v) => setSendLimitDrafts((prev) => ({ ...prev, [account.id]: String(v) }))}
+                        className="input py-1 text-sm bg-white"
+                        placeholder={t('zaloSettings.dailySendLimitPlaceholder')}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary text-xs px-3 py-1 font-medium"
+                      onClick={() => handleSaveSendLimit(account)}
+                      disabled={savingSendLimitIds.includes(account.id)}
+                    >
+                      {savingSendLimitIds.includes(account.id) ? t('common.saving') : t('common.save')}
+                    </button>
+                    {Number(getSendLimitDraft(account)) > 100 && (
+                      <span className="text-xs text-amber-600 font-medium">{t('zaloSettings.dailySendLimitHighWarning')}</span>
+                    )}
+                  </div>
+
+                  <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                    <label htmlFor={`send-speed-${account.id}`} className="text-xs text-slate-600 min-w-[110px]">
+                      {t('zaloSettings.sendSpeed')}:
+                    </label>
+                    <div className="w-56 sm:w-64">
+                      <select
+                        id={`send-speed-${account.id}`}
+                        value={getSendSpeedDraft(account)}
+                        onChange={(e) => setSendSpeedDrafts((prev) => ({ ...prev, [account.id]: e.target.value }))}
+                        className="input py-1 text-sm bg-white"
+                      >
+                        {account.sendSpeed === 'custom' && !Object.prototype.hasOwnProperty.call(sendSpeedDrafts, account.id) && (
+                          <option value="custom" disabled>
+                            {t('zaloSettings.sendSpeedCustom')}
+                          </option>
+                        )}
+                        <option value="safe">{t('zaloSettings.sendSpeedSafe')}</option>
+                        <option value="fast">{t('zaloSettings.sendSpeedFast')}</option>
+                        <option value="very_fast">{t('zaloSettings.sendSpeedVeryFast')}</option>
+                      </select>
+                    </div>
+                    <button
+                      type="button"
+                      className="btn btn-secondary text-xs px-3 py-1 font-medium"
+                      onClick={() => handleSaveSendSpeed(account)}
+                      disabled={savingSendSpeedIds.includes(account.id) || getSendSpeedDraft(account) === 'custom'}
+                    >
+                      {savingSendSpeedIds.includes(account.id) ? t('common.saving') : t('common.save')}
+                    </button>
+                    {getSendSpeedDraft(account) === 'fast' && (
+                      <span className="text-xs text-amber-600 font-medium">{t('zaloSettings.sendSpeedFastWarning')}</span>
+                    )}
+                    {getSendSpeedDraft(account) === 'very_fast' && (
+                      <span className="text-xs font-medium text-red-600">{t('zaloSettings.sendSpeedVeryFastWarning')}</span>
+                    )}
+                  </div>
+                  {account.sendSpeed === 'custom' && (
+                    <p className="text-xs text-slate-500 mt-1 italic">
+                      {t('zaloSettings.sendSpeedCustom')}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[11px] text-slate-400">{t('zaloSettings.sendSpeedAppliedNextRunHint')}</p>
+                </div>
+
+                {account.notes && <p className="text-xs text-slate-500 mt-2.5">{account.notes}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Footer tip ── */}
+      <div className="flex items-start gap-2.5 rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+        <HiOutlineInformationCircle className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />
+        <p className="text-xs text-slate-600 leading-relaxed">
+          Quét mã QR bằng ứng dụng Zalo trên điện thoại để liên kết. Hệ thống sẽ tự động duy trì phiên đăng nhập và điều phối tốc độ gửi để bảo vệ tài khoản của bạn.
+        </p>
+      </div>
 
       {qrPreview.isOpen &&
         createPortal(
-          // Render ra document.body để overlay luôn phủ full viewport,
-          // tránh bị giới hạn bởi layout cha có overflow/transform.
           <div className="fixed inset-0 z-[9999] bg-black/50 flex items-center justify-center px-4">
-            <div className="bg-white rounded-xl shadow-xl w-full max-w-sm">
-              <div className="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
-                <h3 className="font-semibold text-gray-900">{t('zaloSettings.qrModalTitle')}</h3>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between">
+                <h3 className="font-semibold text-slate-900">{t('zaloSettings.qrModalTitle')}</h3>
                 <button
                   type="button"
-                  className="p-2 rounded-md hover:bg-gray-100 text-gray-500"
+                  className="rounded-lg p-1.5 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                   onClick={closeQrPreview}
                   aria-label={t('zaloSettings.close')}
                 >
-                  <HiOutlineXCircle className="w-5 h-5" />
+                  <HiOutlineX className="w-4 h-4" />
                 </button>
               </div>
-              <div className="p-4 space-y-3">
-                <div className="rounded-lg border border-gray-200 p-3 flex items-center justify-center">
-                  <img src={qrPreview.image} alt={t('zaloSettings.qrAlt')} className="w-64 h-64 object-contain" />
+              <div className="p-5 space-y-4">
+                <div className="rounded-xl border border-slate-200 p-3 flex items-center justify-center bg-slate-50">
+                  <img src={qrPreview.image} alt={t('zaloSettings.qrAlt')} className="w-60 h-60 object-contain rounded-lg" />
                 </div>
-                <p className="text-sm text-gray-600 text-center">
+                <p className="text-xs text-slate-500 text-center leading-relaxed">
                   {t('zaloSettings.qrScanInstruction')}
                 </p>
                 {qrPreview.path && (
                   <button
                     type="button"
                     onClick={() => copyText(qrPreview.path, t('zaloSettings.copiedQrPath'))}
-                    className="btn btn-secondary w-full"
+                    className="w-full inline-flex items-center justify-center gap-1.5 py-2.5 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                   >
-                    <HiOutlineClipboardCopy className="w-4 h-4 mr-2" />
+                    <HiOutlineClipboardCopy className="w-3.5 h-3.5" />
                     {t('zaloSettings.copyQrPath')}
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={closeQrPreview}
-                  className="btn btn-primary w-full"
+                  className="w-full py-2.5 rounded-xl bg-primary-600 hover:bg-primary-700 text-xs font-bold text-white transition-colors shadow-sm"
                 >
                   {t('zaloSettings.close')}
                 </button>
@@ -954,7 +1021,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
           </div>
         </div>
       )}
-    </div>
+    </PageContainer>
   );
 };
 

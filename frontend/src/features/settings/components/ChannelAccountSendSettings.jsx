@@ -96,61 +96,63 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
   };
 
   return (
-    <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/60 p-3" data-testid={`${idPrefix}-block`}>
+    <div className="mt-3 rounded-xl border border-slate-100 bg-slate-50/70 p-3.5" data-testid={`${idPrefix}-block`}>
       <p className="text-xs font-semibold text-slate-700">{t('channelSendSettings.title')}</p>
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label htmlFor={`${idPrefix}-limit`} className="text-xs text-slate-600">
+      {/* Dòng 1: Giới hạn gửi / ngày */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <label htmlFor={`${idPrefix}-limit`} className="text-xs text-slate-600 min-w-[110px]">
           {t('channelSendSettings.dailyLimit')}:
         </label>
         {/* Bề rộng đặt ở div bọc: lớp `.input` dùng `@apply w-full` nên thắng mọi utility w-* đặt trên chính ô. */}
-        <div className="w-44">
+        <div className="w-52 sm:w-56">
           <NumberInput
             id={`${idPrefix}-limit`}
             min={1}
             max={data.dailyLimitMax}
             value={limitValue}
             onChange={(v) => setLimitDraft(String(v))}
-            className="input py-1 text-sm"
+            className="input py-1 text-sm bg-white"
             placeholder={t('channelSendSettings.dailyLimitPlaceholder')}
           />
         </div>
         <button
           type="button"
-          className="btn btn-secondary text-xs"
+          className="btn btn-secondary text-xs px-3 py-1 font-medium"
           onClick={handleSaveLimit}
           disabled={savingLimit}
         >
           {savingLimit ? t('common.saving') : t('common.save')}
         </button>
         {overWarn && (
-          <span className="text-xs text-amber-600" data-testid={`${idPrefix}-limit-warn`}>
+          <span className="text-xs text-amber-600 font-medium" data-testid={`${idPrefix}-limit-warn`}>
             {t(`channelSendSettings.dailyLimitWarn${channelKey}`, { threshold: String(warnThreshold) })}
           </span>
         )}
       </div>
 
-      <p className="mt-1 text-xs text-slate-500" data-testid={`${idPrefix}-sent-today`}>
+      <p className="mt-1 text-[11px] text-slate-500" data-testid={`${idPrefix}-sent-today`}>
         {data.userDailySendLimit != null
           ? t('channelSendSettings.sentTodayWithLimit', { sent: String(data.sentToday), limit: String(data.userDailySendLimit) })
           : t('channelSendSettings.sentTodayNoLimit', { sent: String(data.sentToday) })}
         {' '}
-        <span className="text-slate-400">{t('channelSendSettings.sentTodayNote')}</span>
+        <span className="text-slate-400">· {t('channelSendSettings.sentTodayNote')}</span>
       </p>
       {reachedLimit && (
         <p className="mt-0.5 text-xs font-medium text-amber-700">{t('channelSendSettings.limitReached')}</p>
       )}
 
-      <div className="mt-2 flex flex-wrap items-center gap-2">
-        <label htmlFor={`${idPrefix}-speed`} className="text-xs text-slate-600">
+      {/* Dòng 2: Tốc độ gửi */}
+      <div className="mt-2.5 flex flex-wrap items-center gap-2">
+        <label htmlFor={`${idPrefix}-speed`} className="text-xs text-slate-600 min-w-[110px]">
           {t('channelSendSettings.speed')}:
         </label>
-        <div className="w-64">
+        <div className="w-56 sm:w-64">
           <select
             id={`${idPrefix}-speed`}
             value={speedValue}
             onChange={(e) => setSpeedDraft(e.target.value)}
-            className="input py-1 text-sm"
+            className="input py-1 text-sm bg-white"
           >
             {data.sendSpeed === 'custom' && speedDraft == null && (
               <option value="custom" disabled>{t('channelSendSettings.speedCustom')}</option>
@@ -162,14 +164,14 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
         </div>
         <button
           type="button"
-          className="btn btn-secondary text-xs"
+          className="btn btn-secondary text-xs px-3 py-1 font-medium"
           onClick={handleSaveSpeed}
           disabled={savingSpeed || speedValue === 'custom'}
         >
           {savingSpeed ? t('common.saving') : t('common.save')}
         </button>
         {speedValue === 'fast' && (
-          <span className="text-xs text-amber-600">{t('channelSendSettings.speedFastWarning')}</span>
+          <span className="text-xs text-amber-600 font-medium">{t('channelSendSettings.speedFastWarning')}</span>
         )}
         {speedValue === 'very_fast' && (
           <span className="text-xs font-medium text-red-600">
@@ -177,7 +179,7 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
           </span>
         )}
       </div>
-      <p className="mt-0.5 text-xs text-slate-400">{t('channelSendSettings.speedAppliedNextRunHint')}</p>
+      <p className="mt-1 text-[11px] text-slate-400">{t('channelSendSettings.speedAppliedNextRunHint')}</p>
     </div>
   );
 }

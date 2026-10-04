@@ -14,7 +14,6 @@ import {
   HiOutlineIdentification,
   HiOutlineKey,
   HiOutlineUserCircle,
-  HiOutlineChat,
 } from 'react-icons/hi';
 import PageContainer from '../../components/common/PageContainer';
 import { FaWhatsapp } from 'react-icons/fa';
@@ -57,7 +56,7 @@ function StatusPill({ status, t }) {
 function PhoneAvatar({ name, phone }) {
   const letter = (name || phone || '?').trim().charAt(0).toUpperCase();
   return (
-    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary-400 to-primary-600 text-white font-semibold shadow-sm text-lg">
+    <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-600 text-white font-bold shadow-sm text-lg">
       {letter}
     </div>
   );
@@ -68,7 +67,7 @@ function InfoRow({ icon: Icon, label, value, mono = false }) {
     <div className="flex items-center gap-2 text-xs">
       <Icon className="h-3.5 w-3.5 shrink-0 text-slate-400" />
       <span className="text-slate-500 shrink-0">{label}:</span>
-      <span className={`truncate text-slate-700 ${mono ? 'font-mono' : 'font-medium'}`} title={value}>
+      <span className={`truncate text-slate-800 ${mono ? 'font-mono' : 'font-medium'}`} title={value}>
         {value}
       </span>
     </div>
@@ -207,20 +206,22 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
     }
   };
 
+  const totalActive = sessions.filter((s) => s.status === 'open').length;
+
   return (
     <PageContainer
-      icon={HiOutlineChat}
+      icon={FaWhatsapp}
       title="WhatsApp"
       subtitle={t('whatsAppSettings.subtitle')}
       actions={
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleRefresh}
             disabled={refreshing}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:border-primary-200 hover:text-primary-700 disabled:opacity-70"
+            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 hover:border-slate-300 transition-all disabled:opacity-50"
           >
-            <HiOutlineRefresh className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            <HiOutlineRefresh className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
             {t('whatsAppSettings.refresh')}
           </button>
           {!readOnly && (
@@ -228,9 +229,9 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
               type="button"
               onClick={handleOpenQr}
               disabled={connecting}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-70"
+              className="inline-flex items-center gap-1.5 rounded-xl bg-primary-600 px-4 py-2 text-xs font-bold text-white shadow-sm hover:bg-primary-700 transition-colors disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <HiOutlineQrcode className="h-4 w-4" />
+              <HiOutlineQrcode className="w-3.5 h-3.5" />
               {connecting ? t('whatsAppSettings.opening') : t('whatsAppSettings.scanQr')}
             </button>
           )}
@@ -238,67 +239,106 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
       }
     >
 
-      {/* ── Accounts list (mỗi session = 1 card riêng, giống Zalo) ──── */}
-      {loading ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-10 flex items-center justify-center">
-          <span className="h-6 w-6 rounded-full border-2 border-primary-500 border-t-transparent animate-spin" />
-        </div>
-      ) : sessions.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-2xl p-6">
-          <div className="flex flex-col items-center justify-center px-6 py-10 text-center">
-            <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-100 text-primary-600">
-              <FaWhatsapp className="h-7 w-7" />
-            </div>
-            <p className="text-sm font-semibold text-slate-900">{t('whatsAppSettings.emptyTitle')}</p>
-            <p className="mt-1 max-w-xs text-sm text-slate-500">
-              {t('whatsAppSettings.emptySubtitle', {
-                action: t('whatsAppSettings.scanQr'),
-              })}
-            </p>
+      {/* ── Accounts list container (Đồng bộ với Telegram & Zalo) ──── */}
+      <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+        {/* List header */}
+        <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50/50">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-semibold text-slate-800">
+              {t('telegramSettings.linkedAccounts') || 'Tài khoản đã liên kết'}
+            </span>
+            {sessions.length > 0 && (
+              <span className="inline-flex items-center justify-center min-w-[22px] h-5 px-1.5 rounded-full bg-slate-200 text-[11px] font-bold text-slate-600">
+                {sessions.length}
+              </span>
+            )}
           </div>
+          {totalActive > 0 && (
+            <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-600">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-500 animate-pulse" />
+              {t('telegramSettings.activeCount', { count: totalActive }) || `${totalActive} đang hoạt động`}
+            </span>
+          )}
         </div>
-      ) : (
-        <div className="space-y-3">
-          {sessions.map((s) => (
-            <div
-              key={s.sessionKey}
-              className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-primary-200"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                {/* Left: avatar + info */}
-                <div className="flex items-start gap-3 min-w-0 flex-1">
-                  <PhoneAvatar name={s.name} phone={s.phone} />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="font-semibold text-slate-900 truncate">
-                        {s.name || s.phone || `WhatsApp #${s.shortKey || '?'}`}
-                      </h3>
-                      <StatusPill status={s.status} t={t} />
-                      {s.isLocked && <ChannelAccountLockBadge />}
-                    </div>
-                    {s.isLocked && <ChannelAccountLockNotice />}
 
-                    {/* Detail grid */}
-                    <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2">
-                      <InfoRow
-                        icon={HiOutlineDeviceMobile}
-                        label={t('whatsAppSettings.phoneNumber')}
-                        value={s.phone || '—'}
-                      />
-                      {/* Tên hiển thị — có nút edit */}
-                      <div className="flex items-start gap-1.5">
-                        <HiOutlineUserCircle className="mt-px h-4 w-4 shrink-0 text-slate-400" />
-                        <div className="min-w-0 flex-1">
-                          <p className="text-[11px] text-slate-400 leading-tight">{t('whatsAppSettings.displayName')}</p>
+        {/* Content */}
+        {loading ? (
+          <div className="flex flex-col items-center justify-center gap-2 py-14">
+            <div className="w-6 h-6 border-2 border-primary-500 border-t-transparent rounded-full animate-spin" />
+            <p className="text-sm text-slate-500">{t('telegramSettings.loadingList') || 'Đang tải danh sách…'}</p>
+          </div>
+        ) : sessions.length === 0 ? (
+          /* Empty state */
+          <div className="flex flex-col items-center justify-center text-center px-6 py-16 gap-3">
+            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-slate-100 to-slate-50 flex items-center justify-center">
+              <FaWhatsapp className="w-8 h-8 text-slate-300" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-slate-700">{t('whatsAppSettings.emptyTitle')}</p>
+              <p className="text-xs text-slate-500 mt-1 max-w-xs leading-relaxed">
+                {t('whatsAppSettings.emptySubtitle', {
+                  action: t('whatsAppSettings.scanQr'),
+                })}
+              </p>
+            </div>
+            {!readOnly && (
+              <button
+                type="button"
+                onClick={handleOpenQr}
+                disabled={connecting}
+                className="mt-2 inline-flex items-center gap-2 px-5 py-2.5 bg-primary-500 hover:bg-primary-600 text-white text-sm font-bold rounded-xl transition-colors shadow-sm disabled:opacity-50"
+              >
+                <HiOutlineQrcode className="w-4 h-4" />
+                {t('whatsAppSettings.scanQr')}
+              </button>
+            )}
+          </div>
+        ) : (
+          /* Account cards */
+          <div className="p-4 sm:p-5 space-y-3">
+            {sessions.map((s) => (
+              <div
+                key={s.sessionKey}
+                className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 transition hover:border-primary-200 shadow-sm"
+              >
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                  {/* Left: avatar + info */}
+                  <div className="flex items-start gap-3.5 min-w-0 flex-1">
+                    <PhoneAvatar name={s.name} phone={s.phone} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h3 className="font-bold text-slate-900 truncate text-base">
+                          {s.name || s.phone || `WhatsApp #${s.shortKey || '?'}`}
+                        </h3>
+                        <StatusPill status={s.status} t={t} />
+                        {s.isLocked && <ChannelAccountLockBadge />}
+                      </div>
+                      {s.isLocked && <ChannelAccountLockNotice />}
+
+                      {s.status === 'unrecoverable' && (
+                        <p className="mt-2 text-xs text-amber-700">{t('whatsAppSettings.needsRescanHint')}</p>
+                      )}
+
+                      {/* Detail grid */}
+                      <div className="mt-3 grid grid-cols-1 gap-x-6 gap-y-1.5 sm:grid-cols-2 text-xs border-t border-slate-100 pt-3">
+                        <InfoRow
+                          icon={HiOutlineDeviceMobile}
+                          label={t('whatsAppSettings.phoneNumber')}
+                          value={s.phone || '—'}
+                        />
+                        {/* Tên hiển thị — có nút edit */}
+                        <div className="flex items-center gap-2">
+                          <HiOutlineUserCircle className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                          <span className="text-slate-500 shrink-0">{t('whatsAppSettings.displayName')}:</span>
                           {editingNickname === s.sessionKey ? (
-                            <div className="flex items-center gap-1.5 mt-0.5">
+                            <div className="flex items-center gap-1.5">
                               <input
                                 type="text"
                                 maxLength={255}
                                 value={nicknameInput}
                                 onChange={(e) => setNicknameInput(e.target.value)}
                                 onKeyDown={(e) => { if (e.key === 'Enter') handleSaveNickname(s.sessionKey); if (e.key === 'Escape') handleCancelEditNickname(); }}
-                                className="flex-1 rounded-md border border-slate-300 px-2 py-0.5 text-sm text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
+                                className="rounded-md border border-slate-300 px-2 py-0.5 text-xs text-slate-900 focus:border-primary-500 focus:outline-none focus:ring-1 focus:ring-primary-500"
                                 placeholder={t('whatsAppSettings.displayNamePlaceholder')}
                                 autoFocus
                               />
@@ -306,23 +346,23 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
                                 type="button"
                                 onClick={() => handleSaveNickname(s.sessionKey)}
                                 disabled={savingNickname}
-                                className="rounded-md bg-primary-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-primary-700 disabled:opacity-60"
+                                className="rounded-md bg-primary-600 px-2 py-0.5 text-[11px] font-medium text-white hover:bg-primary-700 disabled:opacity-60"
                               >
                                 {t('whatsAppSettings.save')}
                               </button>
                               <button
                                 type="button"
                                 onClick={handleCancelEditNickname}
-                                className="rounded-md border border-slate-300 px-2 py-0.5 text-xs font-medium text-slate-600 hover:bg-slate-50"
+                                className="rounded-md border border-slate-300 px-2 py-0.5 text-[11px] font-medium text-slate-600 hover:bg-slate-50"
                               >
                                 {t('whatsAppSettings.cancel')}
                               </button>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <p className="text-sm text-slate-900 truncate">
+                            <div className="flex items-center gap-1.5">
+                              <span className="font-medium text-slate-800 truncate" title={s.name}>
                                 {s.name || '—'}
-                              </p>
+                              </span>
                               <button
                                 type="button"
                                 onClick={() => handleStartEditNickname(s)}
@@ -334,64 +374,61 @@ export default function WhatsAppSettings({ readOnly = false } = {}) {
                             </div>
                           )}
                         </div>
+                        <InfoRow
+                          icon={HiOutlineIdentification}
+                          label={t('whatsAppSettings.jid')}
+                          value={s.phone ? `${s.phone}@s.whatsapp.net` : '—'}
+                          mono
+                        />
+                        <InfoRow
+                          icon={HiOutlineKey}
+                          label={t('whatsAppSettings.sessionKey')}
+                          value={s.shortKey || s.sessionKey?.split('-').pop() || '—'}
+                          mono
+                        />
                       </div>
-                      {s.status === 'unrecoverable' && (
-                        <p className="text-xs text-amber-700">{t('whatsAppSettings.needsRescanHint')}</p>
-                      )}
-                      <InfoRow
-                        icon={HiOutlineIdentification}
-                        label={t('whatsAppSettings.jid')}
-                        value={s.phone ? `${s.phone}@s.whatsapp.net` : '—'}
-                        mono
-                      />
-                      <InfoRow
-                        icon={HiOutlineKey}
-                        label={t('whatsAppSettings.sessionKey')}
-                        value={s.shortKey || s.sessionKey?.split('-').pop() || '—'}
-                        mono
-                      />
                     </div>
+                  </div>
+
+                  {/* Right: actions */}
+                  <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+                    {!readOnly && s.status !== 'open' && (
+                      <button
+                        type="button"
+                        onClick={() => handleReconnect(s)}
+                        disabled={connecting}
+                        className="inline-flex items-center gap-1.5 rounded-xl border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-semibold text-primary-700 transition hover:bg-primary-100 disabled:opacity-50"
+                      >
+                        <HiOutlineQrcode className="h-3.5 w-3.5" />
+                        {t('whatsAppSettings.rescan')}
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(s.sessionKey)}
+                      disabled={deleting === s.sessionKey}
+                      className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+                      title={t('whatsAppSettings.deleteTitle')}
+                    >
+                      {deleting === s.sessionKey ? (
+                        <span className="inline-block h-4 w-4 rounded-full border-2 border-red-300 border-t-transparent animate-spin" />
+                      ) : (
+                        <HiOutlineTrash className="h-4 w-4" />
+                      )}
+                    </button>
                   </div>
                 </div>
 
-                {/* Right: actions */}
-                <div className="flex items-center gap-2 shrink-0">
-                  {!readOnly && s.status !== 'open' && (
-                    <button
-                      type="button"
-                      onClick={() => handleReconnect(s)}
-                      disabled={connecting}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-primary-200 bg-primary-50 px-3 py-1.5 text-xs font-medium text-primary-700 transition hover:bg-primary-100 disabled:opacity-50"
-                    >
-                      <HiOutlineQrcode className="h-3.5 w-3.5" />
-                      {t('whatsAppSettings.rescan')}
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(s.sessionKey)}
-                    disabled={deleting === s.sessionKey}
-                    className="rounded-lg p-2 text-slate-400 transition hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-                    title={t('whatsAppSettings.deleteTitle')}
-                  >
-                    {deleting === s.sessionKey ? (
-                      <span className="inline-block h-4 w-4 rounded-full border-2 border-red-300 border-t-transparent animate-spin" />
-                    ) : (
-                      <HiOutlineTrash className="h-4 w-4" />
-                    )}
-                  </button>
-                </div>
+                {/* P4 — giới hạn gửi/ngày + tốc độ gửi chiến dịch */}
+                <ChannelAccountSendSettings channel="whatsapp" accountRef={s.sessionKey} />
+
+                {/* P8a — gửi thử */}
+                {s.status === 'open' && !s.isLocked && <WhatsAppTestSend sessionKey={s.sessionKey} />}
               </div>
-
-              {/* P4 — giới hạn gửi/ngày + tốc độ gửi chiến dịch của phiên này (khoá theo sessionKey) */}
-              <ChannelAccountSendSettings channel="whatsapp" accountRef={s.sessionKey} />
-
-              {/* P8a — gửi thử một tin để kiểm tra kết nối (chỉ khi số đang mở và không bị khoá vượt gói) */}
-              {s.status === 'open' && !s.isLocked && <WhatsAppTestSend sessionKey={s.sessionKey} />}
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Footer tip */}
       <div className="flex items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
