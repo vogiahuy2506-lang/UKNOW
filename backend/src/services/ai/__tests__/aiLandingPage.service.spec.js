@@ -122,7 +122,8 @@ describe('aiLandingPageService.generate — chốt form data-founderai-capture',
       expect(logSpy.mock.calls.map(([line]) => line)).toEqual([
         expect.stringMatching(/^\[LandingAI\] start mode=generate ms=\d+ finishReason=unknown promptChars=\d+ htmlChars=0$/),
         expect.stringMatching(new RegExp(
-          `^\\[LandingAI\\] done mode=generate outcome=error ms=\\d+ finishReason=STOP promptChars=\\d+ htmlChars=${html.length}$`
+          // B-15: dòng lỗi có thêm errorCode ở cuối (lỗi 422 không mã riêng → HTTP_422).
+          `^\\[LandingAI\\] done mode=generate outcome=error ms=\\d+ finishReason=STOP promptChars=\\d+ htmlChars=${html.length} errorCode=HTTP_422$`
         )),
       ]);
     } finally {

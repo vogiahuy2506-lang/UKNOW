@@ -23,6 +23,7 @@ const {
   buildModelParts,
   flattenPromptFileName,
   validateLandingImageUrls,
+  resolveLandingErrorCode,
   MAX_PROMPT_FILE_NAME_CHARS,
   EDIT_TIME_BUDGET_MS,
 } = await import('../aiLandingPage.service.js');
@@ -625,5 +626,118 @@ describe('B-17 — ảnh gom từ phiên (referenceOnly) không bị ép dùng',
     });
     await aiLandingPageService.editHtml({ userId: 1, currentHtml: GOOD_PAGE, instruction: 'đổi', assets: [screenshot] });
     expect(promptOf(0)).not.toContain('ảnh từ tin nhắn trước');
+  });
+});
+
+describe('B-15 — log `[LandingAI] done`: promptChars thật, patchFail không dính lượt sau, errorCode', () => {
+  let logSpy;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    getContextForLandingAi.mockResolvedValue('');
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    logSpy.mockRestore();
+    console.warn.mockRestore();
+  });
+
+  const field = (line, name) => (line.match(new RegExp(`(?:^| )${name}=(\\S+)`)) || [])[1];
+  const patchOk = (edits) => ({
+    text: JSON.stringify({ title: 'T', edits, changeSummary: 'Đã đổi tiêu đề' }),
+    blockReason: null,
+    finishReason: 'STOP',
+  });
+  const TITLE_EDIT = { find: '<h1>Khoá học</h1>', replace: '<h1>Khoá học mới</h1>' };
+  const withNowFrozen = async (fn) => {
+    const nowSpy = jest.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    try {
+      return await fn();
+    } finally {
+      nowSpy.mockRestore();
+    }
+  };
+
+  it('sửa ở chế độ vá: promptChars = độ dài prompt VÁ đã gửi (trước đây luôn là prompt viết-lại-cả-trang)', async () => {
+    generateWithBudget.mockResolvedValue(patchOk([TITLE_EDIT]));
+    await withNowFrozen(() => aiLandingPageService.editHtml({ userId: 1, currentHtml: GOOD_PAGE, instruction: 'đổi' }));
+    const sent = promptOf(0);
+    expect(sent).toContain('"edits"');
+    const startLine = logSpy.mock.calls.map((c) => c[0]).find((l) => l.startsWith('[LandingAI] start'));
+    expect(field(doneLogOf(logSpy), 'promptChars')).toBe(String(sent.length));
+    expect(field(startLine, 'promptChars')).toBe(String(sent.length));
+  });
+
+  it('vá hỏng rồi rơi xuống viết lại cả trang: promptChars là của prompt viết-lại đã gửi LẦN CUỐI', async () => {
+    generateWithBudget
+      .mockResolvedValueOnce({ text: 'không phải JSON', blockReason: null, finishReason: 'STOP' })
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ title: 'T', html: GOOD_PAGE.replace('Khoá học', 'Khoá học mới'), changeSummary: 'x' }),
+        blockReason: null,
+        finishReason: 'STOP',
+      });
+    await withNowFrozen(() => aiLandingPageService.editHtml({ userId: 1, currentHtml: GOOD_PAGE, instruction: 'đổi' }));
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(promptOf(1).length).not.toBe(promptOf(0).length);
+    const done = doneLogOf(logSpy);
+    expect(done).toContain('strategy=patch_fallback_full');
+    expect(field(done, 'promptChars')).toBe(String(promptOf(1).length));
+  });
+
+  it('sinh lại vì ảnh bịa: promptChars gồm cả câu dặn thử lại', async () => {
+    const fake = 'https://fake.cdn.com/x.png';
+    generateWithBudget
+      .mockResolvedValueOnce(genResponse(GOOD_PAGE.replace('<h1>', `<img src="${fake}" alt=""><h1>`)))
+      .mockResolvedValueOnce(genResponse(GOOD_PAGE));
+    await aiLandingPageService.generate({ userId: 1, prompt: 'landing' });
+    expect(promptOf(1).length).toBeGreaterThan(promptOf(0).length);
+    expect(field(doneLogOf(logSpy), 'promptChars')).toBe(String(promptOf(1).length));
+  });
+
+  it('patchFail của lượt đầu KHÔNG dính sang lượt sinh lại: lượt 1 vá hỏng + ảnh bịa, lượt 2 vá sạch → log không còn patchFail', async () => {
+    const fake = 'https://fake.cdn.com/x.png';
+    generateWithBudget
+      .mockResolvedValueOnce({ text: 'không phải JSON', blockReason: null, finishReason: 'STOP' }) // vá hỏng (parse)
+      .mockResolvedValueOnce({
+        text: JSON.stringify({ title: 'T', html: GOOD_PAGE.replace('<h1>', `<img src="${fake}" alt=""><h1>`), changeSummary: 'x' }),
+        blockReason: null,
+        finishReason: 'STOP',
+      }) // dự phòng viết lại → bịa ảnh
+      .mockResolvedValueOnce(patchOk([TITLE_EDIT])); // lượt sinh lại: vá sạch
+    await withNowFrozen(() => aiLandingPageService.editHtml({ userId: 1, currentHtml: GOOD_PAGE, instruction: 'đổi' }));
+    expect(generateWithBudget).toHaveBeenCalledTimes(3);
+    const done = doneLogOf(logSpy);
+    expect(done).toContain('fakeImageRetry=1');
+    expect(done).toContain('strategy=patch');
+    expect(done).not.toContain('strategy=patch_fallback_full');
+    expect(done).not.toContain('patchFail=');
+  });
+
+  it('lỗi: dòng done outcome=error có errorCode ở CUỐI dòng (mã riêng của lỗi, hoặc HTTP_<status>)', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE.replace('<h1>', '<script>alert(1)</script><h1>')));
+    await expect(aiLandingPageService.generate({ userId: 1, prompt: 'landing' })).rejects.toMatchObject({ code: 'LANDING_UNSAFE_OUTPUT' });
+    expect(doneLogOf(logSpy)).toMatch(/ errorCode=LANDING_UNSAFE_OUTPUT$/);
+
+    logSpy.mockClear();
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE.replace('data-founderai-capture', '')));
+    await expect(aiLandingPageService.generate({ userId: 1, prompt: 'landing' })).rejects.toMatchObject({ status: 422 });
+    expect(doneLogOf(logSpy)).toMatch(/ errorCode=HTTP_422$/);
+  });
+
+  it('thành công: dòng done KHÔNG có errorCode', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE));
+    await aiLandingPageService.generate({ userId: 1, prompt: 'landing' });
+    expect(doneLogOf(logSpy)).not.toContain('errorCode');
+  });
+
+  it('resolveLandingErrorCode: ưu tiên code → GEMINI_<status> → HTTP_<status> → tên lỗi; làm sạch ký tự lạ', () => {
+    expect(resolveLandingErrorCode({ code: 'AI_TIMEOUT', status: 504 })).toBe('AI_TIMEOUT');
+    expect(resolveLandingErrorCode({ geminiStatus: 503, status: 502 })).toBe('GEMINI_503');
+    expect(resolveLandingErrorCode({ status: 422 })).toBe('HTTP_422');
+    expect(resolveLandingErrorCode(Object.assign(new Error('x'), { name: 'AbortError' }))).toBe('AbortError');
+    expect(resolveLandingErrorCode({ code: 'có dấu & space!' })).toBe('c__d_u___space_');
+    expect(resolveLandingErrorCode(null)).toBe('UNKNOWN');
+    expect(resolveLandingErrorCode({ code: 'x'.repeat(200) })).toHaveLength(60);
   });
 });

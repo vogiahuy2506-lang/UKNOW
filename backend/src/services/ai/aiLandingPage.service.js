@@ -113,6 +113,7 @@ function logLandingAiLifecycle({
   unsafeRetry = null,
   unsafeKinds = null,
   shellFixed = null,
+  errorCode = null,
   autoLayoutFix = null,
   findings = null,
 }) {
@@ -144,7 +145,24 @@ function logLandingAiLifecycle({
     const formatted = fakeImageUrls.map((u) => String(u).slice(0, 120)).join(',');
     fields.push(`fakeImageUrls=${fakeImageUrls.length}:${formatted}`);
   }
+  // B-15: mã lỗi (chỉ ở dòng `done outcome=error`) — để phân loại lỗi bằng grep thay vì đoán từ câu chữ.
+  // Đứng CUỐI dòng: chuỗi fakeImageUrls có độ dài tuỳ ý, các trường có định dạng cố định đứng trước.
+  if (errorCode) fields.push(`errorCode=${errorCode}`);
   console.log(fields.join(' '));
+}
+
+/**
+ * B-15 — mã lỗi cho dòng log `[LandingAI] done outcome=error`: `error.code` nếu có (LANDING_FAKE_IMAGE_URL,
+ * LANDING_UNSAFE_OUTPUT, AI_TIMEOUT…), không thì `GEMINI_<status>` (lỗi từ Google), `HTTP_<status>`, tên lỗi.
+ * Chỉ giữ ký tự an toàn cho một trường log dạng `khoá=giá-trị` (không khoảng trắng).
+ */
+export function resolveLandingErrorCode(error) {
+  const raw =
+    error?.code ??
+    (error?.geminiStatus != null ? `GEMINI_${error.geminiStatus}` : null) ??
+    (error?.status != null ? `HTTP_${error.status}` : null) ??
+    error?.name;
+  return String(raw ?? 'UNKNOWN').replace(/[^A-Za-z0-9_.-]/g, '_').slice(0, 60) || 'UNKNOWN';
 }
 
 /**
@@ -580,6 +598,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 
     const runOnce = async (extraRule = '') => {
       const promptToSend = extraRule ? `${fullPrompt}\n\n${extraRule}` : fullPrompt;
+      telemetry.promptChars = promptToSend.length; // B-15: độ dài prompt THẬT gửi đi (kèm câu dặn thử lại)
       const generation = await aiUsageMeter.generateWithBudget(userId, {
         parts: buildModelParts(promptToSend, assets, documents),
         jsonMode: true,
@@ -847,7 +866,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       return generationResult;
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
-      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
+      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry, errorCode: resolveLandingErrorCode(error) });
       throw error;
     }
   }
@@ -983,7 +1002,9 @@ ${exampleLine}`;
     const telemetry = {
       mode: 'edit',
       startedAt: Date.now(),
-      promptChars: fullPrompt.length,
+      // B-15: prompt sẽ gửi ĐẦU TIÊN (chế độ vá → prompt vá, không phải prompt viết-lại-cả-trang); mỗi lượt gửi
+      // thật cập nhật lại bằng độ dài prompt thật (runPatch / runFullRewrite).
+      promptChars: (patchPrompt || fullPrompt).length,
       finishReason: null,
       htmlChars: 0,
       outputTokens: null,
@@ -1040,6 +1061,7 @@ ${exampleLine}`;
     // Đường viết-lại-cả-trang (prompt cũ nguyên byte): công tắc `full` và dự phòng khi vá hỏng.
     const runFullRewrite = async (extraRule = '') => {
       const promptToSend = extraRule ? `${fullPrompt}\n\n${extraRule}` : fullPrompt;
+      telemetry.promptChars = promptToSend.length;
       const generation = await aiUsageMeter.generateWithBudget(userId, {
         parts: buildModelParts(promptToSend, assets, documents),
         jsonMode: true,
@@ -1110,6 +1132,7 @@ ${exampleLine}`;
     // Đường vá: AI trả {title, edits, changeSummary}; backend ghép rồi chạy chốt kiểm chung.
     const runPatch = async (extraRule = '') => {
       const promptToSend = extraRule ? `${patchPrompt}\n\n${extraRule}` : patchPrompt;
+      telemetry.promptChars = promptToSend.length;
       let generation;
       try {
         generation = await aiUsageMeter.generateWithBudget(userId, {
@@ -1185,6 +1208,8 @@ ${exampleLine}`;
 
     // Một lượt thử = vá (có thể rơi xuống viết-lại-cả-trang khi vá hỏng). Công tắc `full` → chỉ viết lại.
     const attempt = async (extraRule = '') => {
+      // B-15: `patchFail` của lượt này, không dính từ lượt trước (lượt sinh lại vì ảnh bịa/chốt an toàn).
+      telemetry.patchFail = null;
       if (!patchMode) {
         telemetry.strategy = 'full';
         return runFullRewrite(extraRule);
@@ -1293,7 +1318,7 @@ ${exampleLine}`;
       return editResult;
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
-      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
+      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry, errorCode: resolveLandingErrorCode(error) });
       throw error;
     }
   }
