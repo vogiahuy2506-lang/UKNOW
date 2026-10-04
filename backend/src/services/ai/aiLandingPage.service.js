@@ -32,6 +32,8 @@ import {
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
 import { countFormSlots, hasMalformedFormSlot } from '../../utils/landingHtmlInjection.util.js';
 import { normalizeChangeSummary, MAX_AUTO_LAYOUT_FIX_HTML_CHARS } from '../../utils/landingLayoutFindings.util.js';
+import { isClientAbortError } from '../../utils/aiAbort.util.js';
+import { LANDING_TURN_TOTAL_MS, remainingTurnMs } from '../../utils/landingTurnBudget.util.js';
 
 /**
  * Phòng bệnh từ gốc (PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA mục 10.5): sự cố 20/09 do AI đặt cột ngày
@@ -45,10 +47,13 @@ export const LAYOUT_SAFETY_RULE =
   'chữ trong ô hẹp dùng break-words, không whitespace-nowrap.';
 
 /**
- * Lượt sửa landing là MỘT yêu cầu đồng bộ; /api đi thẳng Cloudflare → backend (không qua nginx),
- * Cloudflare cắt ở 100 giây. Chừa ~15 giây cho tải lên, nạp tệp đính kèm, ghi phiên. Dùng chung cho:
- * timeout lượt vá, quyết định dự phòng viết-lại-cả-trang, và việc editHtml chỉ sinh lại vì ảnh bịa
- * khi (lượt đầu × 2) còn dưới mốc này.
+ * Ngân sách thời gian MẶC ĐỊNH của một lượt sửa landing khi trả JSON MỘT LẦN (client cũ không đọc luồng): /api đi thẳng
+ * Cloudflare → backend (không qua nginx), Cloudflare cắt ở 100 giây nếu không có byte nào chạy. Chừa ~15 giây cho tải lên,
+ * nạp tệp đính kèm, ghi phiên. Dùng chung cho: timeout lượt vá, quyết định dự phòng viết-lại-cả-trang, và việc editHtml
+ * chỉ sinh lại vì ảnh bịa khi (lượt đầu × 2) còn dưới mốc này.
+ *
+ * PR-9 (B-4): route đọc luồng NDJSON có nhịp `ping` nên Cloudflare không còn cắt — controller truyền `timeBudgetMs` =
+ * LANDING_TURN_TOTAL_MS (240 giây) cho lượt đó; hằng này chỉ còn là mặc định của đường JSON cũ và của test.
  */
 export const EDIT_TIME_BUDGET_MS = 85000;
 
@@ -89,6 +94,16 @@ function stripJsonFences(raw) {
   return t.trim();
 }
 
+/**
+ * Trường `clientClosed` của dòng log `done`: 1 = người dùng đóng kết nối nên lời gọi Gemini bị huỷ. Lượt luồng luôn ghi (0/1); lượt JSON
+ * cũ chỉ ghi khi thật sự bị huỷ — giữ nguyên định dạng dòng log từ trước PR-9 cho đường đó.
+ */
+function clientClosedField({ streamed, signal, error = null }) {
+  const closed = Boolean(signal?.aborted) || isClientAbortError(error);
+  if (!streamed && !closed) return null;
+  return closed ? 1 : 0;
+}
+
 function getOutputTokens(result) {
   const value = result?.usage?.outputTokens;
   const outputTokens = Number(value);
@@ -116,6 +131,9 @@ function logLandingAiLifecycle({
   errorCode = null,
   autoLayoutFix = null,
   findings = null,
+  streamed = null,
+  clientClosed = null,
+  dedup = null,
 }) {
   const fields = [
     `[LandingAI] ${event}`,
@@ -129,6 +147,11 @@ function logLandingAiLifecycle({
     `promptChars=${promptChars}`,
     `htmlChars=${htmlChars}`,
   ];
+  // PR-9 (B-4): `streamed=1` = phản hồi dạng luồng NDJSON có nhịp (không còn 524); `clientClosed=1` = người dùng đóng kết nối nên
+  // lời gọi Gemini bị huỷ (không lưu phiên, không trừ credit); `dedup=1` = lượt bám vào kết quả theo `requestId` (log riêng ở lượt bám).
+  if (streamed != null) fields.push(`streamed=${streamed}`);
+  if (clientClosed != null) fields.push(`clientClosed=${clientClosed}`);
+  if (dedup != null) fields.push(`dedup=${dedup}`);
   if (outputTokens != null) fields.push(`outputTokens=${outputTokens}`);
   if (strategy != null) fields.push(`strategy=${strategy}`);
   if (patchEdits != null) fields.push(`patchEdits=${patchEdits}`);
@@ -477,7 +500,12 @@ class AiLandingPageService {
   /**
    * Sinh một tài liệu HTML5 đầy đủ (Tailwind CDN), JSON { title, html }.
    *
-   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null, contentLocale?: string, leadFormConfig?: object|null }} opts
+   * PR-9 (B-4 / B-20): `deadlineAtMs` = hạn chót TỔNG của cả lượt (controller tính từ lúc nhận request, gồm cả đọc tệp) — mọi lời
+   * gọi Gemini (sinh, sinh lại khi trượt chốt) nhận `totalTimeoutMs` = hạn chót − bây giờ, nên tổng không bao giờ vượt hạn dù mỗi
+   * lượt thử có `timeoutMs` riêng. Không truyền → tự đặt LANDING_TURN_TOTAL_MS từ lúc vào hàm. `signal` = người dùng đóng kết nối
+   * thì huỷ lời gọi Gemini đang chạy. `onStage('generating'|'fixing')` báo tiến độ cho luồng NDJSON.
+   *
+   * @param {{ userId: number, prompt: string, titleHint?: string, landingBriefContext?: string|null, contentLocale?: string, leadFormConfig?: object|null, signal?: AbortSignal|null, deadlineAtMs?: number|null, onStage?: ((stage: string) => void)|null, streamed?: 0|1 }} opts
    * @returns {Promise<{ title: string, html: string }>}
    */
   async generate({
@@ -490,7 +518,12 @@ class AiLandingPageService {
     leadFormConfig = null,
     assets = [],
     documents = [],
+    signal = null,
+    deadlineAtMs = null,
+    onStage = null,
+    streamed = 0,
   }) {
+    const turnDeadlineAtMs = Number.isFinite(deadlineAtMs) ? deadlineAtMs : Date.now() + LANDING_TURN_TOTAL_MS;
     const locale = normalizeAssistantLocale(contentLocale, 'vi');
     const htmlLang = locale === 'en' ? 'en' : 'vi';
     const formHeading = locale === 'en' ? 'Sign up' : 'Đăng ký';
@@ -588,6 +621,9 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       assetsCount: assets.length,
       inlineAssetsCount: assets.filter((a) => a.inlineForModel).length,
       inlinePdfCount: documents.filter((d) => d.inlinePdf).length,
+      // Chỉ lượt luồng mới có ba trường này trong log (đường JSON cũ giữ nguyên định dạng dòng log từ trước PR-9).
+      streamed: streamed ? 1 : null,
+      dedup: streamed ? 0 : null,
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
@@ -604,6 +640,10 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         jsonMode: true,
         maxOutputTokens: 16384,
         timeoutMs: 120000,
+        // B-20: ngân sách TỔNG còn lại của cả lượt — `timeoutMs` ở trên là của từng lượt thử nên hai lượt (sinh + sinh lại) cộng
+        // lại có thể vượt hạn; lõi Gemini lấy min(timeoutMs, phần còn lại) cho từng lượt và huỷ fetch đúng hạn.
+        totalTimeoutMs: remainingTurnMs(turnDeadlineAtMs),
+        signal,
         temperature: 0.4,
         feature: 'landing_page',
         metadata: {
@@ -825,6 +865,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     try {
       let generationResult;
       try {
+        onStage?.('generating');
         generationResult = await runOnce('');
       } catch (firstErr) {
         // Hai loại lỗi được sinh lại ĐÚNG MỘT lần: URL ảnh bịa, và HTML trượt chốt an toàn (B-1 (2)).
@@ -841,6 +882,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         }
         if (extraRule) {
           try {
+            onStage?.('fixing');
             generationResult = await runOnce(extraRule);
           } catch (secondErr) {
             if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
@@ -863,11 +905,17 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         }
       }
 
-      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
+      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, clientClosed: clientClosedField({ streamed, signal }) });
       return generationResult;
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
-      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry, errorCode: resolveLandingErrorCode(error) });
+      logLandingAiLifecycle({
+        event: 'done',
+        outcome: 'error',
+        ...telemetry,
+        clientClosed: clientClosedField({ streamed, signal, error }),
+        errorCode: resolveLandingErrorCode(error),
+      });
       throw error;
     }
   }
@@ -875,7 +923,11 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
   /**
    * Chỉnh sửa landing page HTML5 hiện tại theo yêu cầu, giữ nguyên cấu trúc/nội dung không đổi.
    *
-   * @param {{ userId: number, currentHtml: string, instruction: string, contentLocale?: string, actorUserId?: number|null }} opts
+   * PR-9: `deadlineAtMs` / `signal` / `onStage` / `streamed` như `generate`. `timeBudgetMs` = ngân sách dùng để QUYẾT ĐỊNH
+   * (timeout lượt vá, có còn đủ giờ cho dự phòng viết-lại-cả-trang / sinh lại vì ảnh bịa không): đường luồng truyền
+   * LANDING_TURN_TOTAL_MS (không còn bị Cloudflare cắt ở 100 giây), đường JSON cũ giữ EDIT_TIME_BUDGET_MS (85 giây).
+   *
+   * @param {{ userId: number, currentHtml: string, instruction: string, contentLocale?: string, actorUserId?: number|null, signal?: AbortSignal|null, deadlineAtMs?: number|null, timeBudgetMs?: number, onStage?: ((stage: string) => void)|null, streamed?: 0|1 }} opts
    * @returns {Promise<{ title: string, html: string }>}
    */
   async editHtml({
@@ -889,7 +941,13 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     leadFormConfig = null,
     autoLayoutFix = false,
     layoutFindingsCount = 0,
+    signal = null,
+    deadlineAtMs = null,
+    timeBudgetMs = EDIT_TIME_BUDGET_MS,
+    onStage = null,
+    streamed = 0,
   }) {
+    const turnDeadlineAtMs = Number.isFinite(deadlineAtMs) ? deadlineAtMs : Date.now() + LANDING_TURN_TOTAL_MS;
     const rawCurrent = String(currentHtml || '').trim();
     if (!rawCurrent) {
       const err = new Error('Không có mã nguồn HTML hiện tại để chỉnh sửa.');
@@ -1017,6 +1075,9 @@ ${exampleLine}`;
       assetsCount: assets.length,
       inlineAssetsCount: assets.filter((a) => a.inlineForModel).length,
       inlinePdfCount: documents.filter((d) => d.inlinePdf).length,
+      // Chỉ lượt luồng mới có ba trường này trong log (đường JSON cũ giữ nguyên định dạng dòng log từ trước PR-9).
+      streamed: streamed ? 1 : null,
+      dedup: streamed ? 0 : null,
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
@@ -1075,6 +1136,9 @@ ${exampleLine}`;
         jsonMode: true,
         maxOutputTokens: 32768,
         timeoutMs: 120000,
+        // B-20: ngân sách TỔNG còn lại của cả lượt (xem generate()).
+        totalTimeoutMs: remainingTurnMs(turnDeadlineAtMs),
+        signal,
         temperature: 0.2,
         feature: 'landing_page',
         metadata: {
@@ -1147,9 +1211,12 @@ ${exampleLine}`;
           parts: buildModelParts(promptToSend, assets, documents),
           jsonMode: true,
           maxOutputTokens: 32768,
-          // Phần ngân sách CÒN LẠI, không phải trọn 85 giây: lượt vá thứ hai (sinh lại vì ảnh bịa) mà
-          // treo trọn 85 giây thì tổng vượt trần 100 giây của Cloudflare.
-          timeoutMs: Math.max(1000, EDIT_TIME_BUDGET_MS - (Date.now() - telemetry.startedAt)),
+          // Phần ngân sách CÒN LẠI, không phải trọn ngân sách: lượt vá thứ hai (sinh lại vì ảnh bịa) mà treo trọn
+          // ngân sách thì tổng vượt trần (đường JSON cũ: 100 giây của Cloudflare).
+          timeoutMs: Math.max(1000, timeBudgetMs - (Date.now() - telemetry.startedAt)),
+          // B-20: ngân sách TỔNG còn lại của cả lượt, tính từ lúc controller nhận request (gồm cả đọc tệp đính kèm).
+          totalTimeoutMs: remainingTurnMs(turnDeadlineAtMs),
+          signal,
           temperature: 0.2,
           feature: 'landing_page',
           metadata: {
@@ -1160,6 +1227,8 @@ ${exampleLine}`;
           },
         });
       } catch (genErr) {
+        // Người dùng đóng kết nối: KHÔNG phải "vá hỏng" — ném nguyên để không rơi xuống dự phòng viết-lại-cả-trang (tốn tiền vô ích).
+        if (isClientAbortError(genErr)) throw genErr;
         // Quá giờ: fetch bị AbortController huỷ ném AbortError (không có geminiStatus → không bị thử lại).
         if (genErr?.name === 'AbortError') throw patchFailure('timeout');
         throw genErr;
@@ -1235,9 +1304,10 @@ ${exampleLine}`;
         const estFullMs = rawCurrent.length * EDIT_FULL_REWRITE_MS_PER_CHAR;
         // B-3: lượt tự sửa miễn phí KHÔNG rơi xuống viết-lại-cả-trang (đắt gấp nhiều lần lượt vá, mà khách không trả credit).
         const canFallback = !autoLayoutFix
-          && rawCurrent.length <= MAX_FULL_REWRITE_HTML_CHARS && elapsed + estFullMs <= EDIT_TIME_BUDGET_MS;
+          && rawCurrent.length <= MAX_FULL_REWRITE_HTML_CHARS && elapsed + estFullMs <= timeBudgetMs;
         if (canFallback) {
           telemetry.strategy = 'patch_fallback_full';
+          onStage?.('fixing');
           return runFullRewrite(extraRule);
         }
 
@@ -1274,15 +1344,16 @@ ${exampleLine}`;
     try {
       let editResult;
       try {
+        onStage?.('generating');
         editResult = await attempt('');
       } catch (firstErr) {
         if (firstErr.code === 'LANDING_FAKE_IMAGE_URL') {
           telemetry.fakeImageUrls = firstErr.details?.fakeImageUrls || [];
-          // Lượt sinh lại tốn xấp xỉ lượt đầu; hai lượt không vừa trần Cloudflare thì gỡ ảnh bịa
+          // Lượt sinh lại tốn xấp xỉ lượt đầu; hai lượt không vừa ngân sách (đường JSON cũ: trần Cloudflare) thì gỡ ảnh bịa
           // ngay — thử lại chỉ đổi kết quả tốt thành 524 trong khi backend vẫn sửa xong.
           const firstRunMs = Date.now() - telemetry.startedAt;
           // B-3: lượt tự sửa miễn phí chỉ gọi model MỘT lần mỗi vòng — ảnh bịa thì gỡ luôn thay vì sinh lại.
-          if (autoLayoutFix || firstRunMs * 2 > EDIT_TIME_BUDGET_MS) {
+          if (autoLayoutFix || firstRunMs * 2 > timeBudgetMs) {
             telemetry.fakeImageRetry = 0;
             editResult = stripFakeImages(firstErr);
           } else {
@@ -1290,6 +1361,7 @@ ${exampleLine}`;
             const regenerateWhat = patchMode ? 'Sinh lại kết quả sửa' : 'Sinh lại toàn bộ trang';
             const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. ${regenerateWhat}, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
             try {
+              onStage?.('fixing');
               editResult = await attempt(extraRule);
             } catch (secondErr) {
               if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
@@ -1301,17 +1373,18 @@ ${exampleLine}`;
           }
         } else if (firstErr.code === LANDING_UNSAFE_OUTPUT_CODE) {
           // B-1 (2): trượt chốt an toàn → sinh lại ĐÚNG MỘT lần kèm câu dặn; không đủ giờ cho lượt hai trong
-          // trần Cloudflare thì báo lỗi luôn (khác ảnh bịa, không có cách "gỡ" an toàn để cứu kết quả).
+          // ngân sách (đường JSON cũ: trần Cloudflare) thì báo lỗi luôn (khác ảnh bịa, không có cách "gỡ" an toàn để cứu kết quả).
           const unsafeFindings = firstErr.details?.findings || [];
           telemetry.unsafeKinds = describeUnsafeKinds(unsafeFindings);
           // B-3: lượt tự sửa miễn phí cũng không sinh lại khi trượt chốt an toàn — báo lỗi (FE im lặng).
-          if (autoLayoutFix || (Date.now() - telemetry.startedAt) * 2 > EDIT_TIME_BUDGET_MS) throw firstErr;
+          if (autoLayoutFix || (Date.now() - telemetry.startedAt) * 2 > timeBudgetMs) throw firstErr;
           telemetry.unsafeRetry = 1;
           const extraRule = buildUnsafeRetryRule(unsafeFindings, {
             regenerateWhat: patchMode ? 'Sinh lại kết quả sửa' : 'Sinh lại toàn bộ trang',
             hasExistingHtml: true,
           });
           try {
+            onStage?.('fixing');
             editResult = await attempt(extraRule);
           } catch (secondErr) {
             if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
@@ -1325,11 +1398,17 @@ ${exampleLine}`;
         }
       }
 
-      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
+      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, clientClosed: clientClosedField({ streamed, signal }) });
       return editResult;
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
-      logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry, errorCode: resolveLandingErrorCode(error) });
+      logLandingAiLifecycle({
+        event: 'done',
+        outcome: 'error',
+        ...telemetry,
+        clientClosed: clientClosedField({ streamed, signal, error }),
+        errorCode: resolveLandingErrorCode(error),
+      });
       throw error;
     }
   }

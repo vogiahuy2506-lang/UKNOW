@@ -484,6 +484,58 @@ describe('geminiClient.util', () => {
       expect(err.message).toBe(AI_TIMEOUT_MESSAGE);
     });
 
+    // PR-9 (B-4): người dùng đóng kết nối giữa lượt sinh landing → nơi gọi truyền `signal`, lời gọi Google phải bị huỷ NGAY.
+    it('signal huỷ TỪ NGOÀI → fetch đang bay bị huỷ thật, lỗi AI_CLIENT_ABORTED (không phải AI_TIMEOUT), KHÔNG thử lại', async () => {
+      global.fetch = fetchTreo();
+      const ctrl = new AbortController();
+
+      const dang = generateGeminiContent({
+        parts: [{ text: 'hi' }], timeoutMs: 60_000, totalTimeoutMs: 120_000, signal: ctrl.signal, ...NHANH,
+      }).catch((e) => e);
+      await Promise.resolve();
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      ctrl.abort();
+      const err = await dang;
+
+      expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(true);
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.code).toBe('AI_CLIENT_ABORTED');
+      expect(err.name).toBe('AbortError');
+      expect(err.code).not.toBe(AI_TIMEOUT_CODE);
+    });
+
+    it('signal ĐÃ huỷ trước khi gọi → không gọi fetch lần nào', async () => {
+      global.fetch = jest.fn();
+      const ctrl = new AbortController();
+      ctrl.abort();
+
+      const err = await generateGeminiContent({ parts: [{ text: 'hi' }], signal: ctrl.signal }).catch((e) => e);
+
+      expect(global.fetch).not.toHaveBeenCalled();
+      expect(err.code).toBe('AI_CLIENT_ABORTED');
+    });
+
+    it('signal huỷ giữa các lượt thử lại (503 rồi huỷ) → không gọi thêm lượt nào, không chuyển dự phòng', async () => {
+      const ctrl = new AbortController();
+      global.fetch.mockImplementation(async () => {
+        ctrl.abort();
+        return quaTaiThat();
+      });
+
+      const err = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-du-phong', signal: ctrl.signal, ...NHANH,
+      }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.code).toBe('AI_CLIENT_ABORTED');
+    });
+
+    it('không truyền signal → hành vi y như cũ (hết giờ vẫn là AI_TIMEOUT)', async () => {
+      global.fetch = fetchTreo();
+      const err = await generateGeminiContent({ parts: [{ text: 'hi' }], timeoutMs: 60_000, totalTimeoutMs: 60 }).catch((e) => e);
+      expect(err.code).toBe(AI_TIMEOUT_CODE);
+    });
+
     it('ngân sách tổng còn quá ít (< 3 giây) → thôi thử lại và thôi dự phòng, trả lỗi quá tải ngay', async () => {
       global.fetch.mockImplementation(async () => quaTaiThat());
 

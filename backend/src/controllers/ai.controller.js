@@ -49,6 +49,7 @@ import {
   buildLayoutFindingsContext,
 } from '../utils/landingLayoutFindings.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
+import { runLandingAiTurn } from '../services/ai/aiLandingTurn.service.js';
 import { findLandingAiInputTooLong } from '../utils/landingAiInputLimits.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import {
@@ -94,6 +95,26 @@ async function peekResourceLimit({ userId, roleCode, resourceKey }) {
 
 // Chuyển sang utils/aiErrorPayload.util.js (G2.4) để Dashboard / Tóm tắt Hộp thư dùng chung; re-export giữ import cũ.
 export { buildAiErrorPayload };
+
+/**
+ * Lỗi của lượt sinh / sửa landing → { status, body } (đúng thân + mã HTTP mà catch của hai route vẫn trả trước PR-9). Dùng cho cả
+ * lỗi TRƯỚC khi mở luồng (→ JSON 4xx/5xx) lẫn lỗi trong luồng (→ dòng `error` mang cùng status + thân).
+ */
+function mapLandingAiError(error, logLabel, fallbackMessage) {
+  console.error(logLabel, error);
+  if (error instanceof StorageQuotaExceededError) {
+    return {
+      status: error.status || 413,
+      body: {
+        success: false,
+        code: error.code || 'STORAGE_QUOTA_EXCEEDED',
+        message: error.message,
+        data: error.usage,
+      },
+    };
+  }
+  return { status: error.status || 500, body: buildAiErrorPayload(error, fallbackMessage) };
+}
 
 function employeeHasPermission(req, permission) {
   const context = req.user?.activeContext;
@@ -1318,6 +1339,7 @@ class AiController {
    * POST /ai/generate-landing-html — Sinh HTML landing đầy đủ (Tailwind CDN), có context hồ sơ DN.
    */
   async generateLandingHtml(req, res) {
+    const mapError = (error) => mapLandingAiError(error, 'AI generate landing HTML error:', 'Lỗi khi sinh landing HTML');
     try {
       const {
         prompt,
@@ -1397,123 +1419,135 @@ class AiController {
         }
       }
 
-      // Gom file từ chat session (nếu có sessionId)
       const sid = sessionId ? Number(sessionId) : null;
-      let sessionFiles = [];
-      if (sid) {
-        sessionFiles = await listUserFilesSinceLastLanding(sid, req.user.id, ownerUserId).catch(() => []);
-      }
+      const requestUserId = req.user.id;
 
-      const rawIncoming = Array.isArray(incomingFiles)
-        ? incomingFiles.slice(0, 6).map((f) => ({
-            tempId: f?.tempId,
-            storageKey: f?.storageKey || f?.storage_key,
-            originalName: f?.originalName || f?.name || f?.displayName,
-            contentType: f?.contentType || f?.mimeType || f?.type,
-            size: f?.size,
-          })).filter((f) => f.tempId || f.storageKey)
-        : [];
+      // PR-9 (B-4): phần NẶNG (đọc tệp, Gemini, ghi phiên, trừ credit) chạy dưới dạng phản hồi LUỒNG có nhịp giữ kết nối — xem
+      // aiLandingTurn.service.js. Mọi kiểm tra ở TRÊN (thiếu prompt, quá dài, hết suất landing…) đã trả JSON 4xx như cũ.
+      return await runLandingAiTurn({
+        req,
+        res,
+        kind: 'generate',
+        mapError,
+        charge: () => chargeAiCredit(req),
+        work: async (turn) => {
+          // Gom file từ chat session (nếu có sessionId)
+          let sessionFiles = [];
+          if (sid) {
+            sessionFiles = await listUserFilesSinceLastLanding(sid, requestUserId, ownerUserId).catch(() => []);
+          }
 
-      const { files: mergedFiles, skipped: mergeSkipped } = mergeAndFilterLandingFiles(rawIncoming, sessionFiles);
-      const { assets, documents, skipped: ingestSkipped } = await ingestLandingAttachments({
-        files: mergedFiles,
-        ownerUserId,
-        actorUserId: req.user.id,
-        landingPageId: resolvedLandingPageId,
-      });
-      const allSkipped = [...(mergeSkipped || []), ...(ingestSkipped || [])];
+          const rawIncoming = Array.isArray(incomingFiles)
+            ? incomingFiles.slice(0, 6).map((f) => ({
+                tempId: f?.tempId,
+                storageKey: f?.storageKey || f?.storage_key,
+                originalName: f?.originalName || f?.name || f?.displayName,
+                contentType: f?.contentType || f?.mimeType || f?.type,
+                size: f?.size,
+              })).filter((f) => f.tempId || f.storageKey)
+            : [];
 
-      // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b + PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md
-      // PR-2d-3 việc 1: dựng leadFormDraft RỒI áp dụng applyLeadFormDraftToConfig (khoá
-      // cf_sugg_NN_text TẤT ĐỊNH) TRƯỚC khi gọi generate() — không phải sau. Review 09/09 tự
-      // bắt: PR-2d-1 đã tính leadFormConfig nhưng vẫn tính SAU generate() và chỉ truyền
-      // leadFormDraft thô (không có customFields, chỉ có suggestedCustomFieldLabels) vào
-      // generate() — nghĩa là buildLeadFormExtraFieldsPromptBlock (PR-2d-3) không bao giờ thấy
-      // được customFields/khoá thật, y hệt lỗi PR-2b từng sửa cho occupation/interestArea.
-      const leadFormDraft = resolvedBrief
-        ? buildLeadFormDraftFromBrief(resolvedBrief.normalizedBrief)
-        : null;
-      const leadFormConfig = leadFormDraft ? applyLeadFormDraftToConfig(leadFormDraft) : null;
-
-      const data = await aiLandingPageService.generate({
-        userId: ownerUserId,
-        actorUserId: req.user.id,
-        prompt: enrichedPrompt,
-        titleHint: title != null ? String(title) : '',
-        landingBriefContext,
-        contentLocale,
-        leadFormConfig,
-        assets,
-        documents,
-      });
-
-      if (leadFormDraft) {
-        data.leadFormDraft = leadFormDraft;
-        data.leadFormConfig = leadFormConfig;
-      }
-
-      // Lưu vào session nếu có sessionId (actor, not owner)
-      if (sid && data?.title) {
-        const userContent = String(userSummary || prompt).trim();
-        const assistantMsg = {
-          content: `Đã tạo landing page "${data.title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
-          type: 'landing_page',
-          data: {
-            title: data.title,
-            html: data.html || '',
-            // Sinh trang đã trừ credit → cấp ngân sách 2 lượt tự sửa hiển thị miễn phí cho tin này
-            // (editLandingHtml coi tin KHÔNG có bộ đếm là hết lượt — xem chú thích ở đó).
-            autoLayoutFixCount: 0,
-            ...(leadFormDraft ? { leadFormDraft, leadFormConfig: data.leadFormConfig } : {}),
-          },
-        };
-        const saved = await aiSessionRepo
-          .saveMessagesReturningIds(sid, req.user.id, userContent, assistantMsg)
-          .catch((err) => {
-            console.warn('[AI.generateLandingHtml] Failed to save landing_page message:', err.message);
-            return null;
+          const { files: mergedFiles, skipped: mergeSkipped } = mergeAndFilterLandingFiles(rawIncoming, sessionFiles);
+          const { assets, documents, skipped: ingestSkipped } = await ingestLandingAttachments({
+            files: mergedFiles,
+            ownerUserId,
+            actorUserId: requestUserId,
+            landingPageId: resolvedLandingPageId,
           });
-        // Vòng tự sửa ở frontend cần id tin để server đếm trần lượt theo từng tin. Lưu hỏng thì
-        // không có khoá này — không chặn response.
-        if (saved?.assistantMessageId) {
-          data.messageId = saved.assistantMessageId;
-        } else {
-          // B-18: lượt này vẫn bị trừ credit (bên dưới) mà trang không vào được phiên → báo FE để nói thật với khách.
-          data.saved = false;
-        }
-      }
+          const allSkipped = [...(mergeSkipped || []), ...(ingestSkipped || [])];
 
-      await chargeAiCredit(req);
+          // PLAN_FORM_LANDING_AI_GIU_FORM_2026-09-06.md PR-2b + PLAN_LEAD_FORM_TRUONG_THEM_2026-09-08.md
+          // PR-2d-3 việc 1: dựng leadFormDraft RỒI áp dụng applyLeadFormDraftToConfig (khoá
+          // cf_sugg_NN_text TẤT ĐỊNH) TRƯỚC khi gọi generate() — không phải sau. Review 09/09 tự
+          // bắt: PR-2d-1 đã tính leadFormConfig nhưng vẫn tính SAU generate() và chỉ truyền
+          // leadFormDraft thô (không có customFields, chỉ có suggestedCustomFieldLabels) vào
+          // generate() — nghĩa là buildLeadFormExtraFieldsPromptBlock (PR-2d-3) không bao giờ thấy
+          // được customFields/khoá thật, y hệt lỗi PR-2b từng sửa cho occupation/interestArea.
+          const leadFormDraft = resolvedBrief
+            ? buildLeadFormDraftFromBrief(resolvedBrief.normalizedBrief)
+            : null;
+          const leadFormConfig = leadFormDraft ? applyLeadFormDraftToConfig(leadFormDraft) : null;
 
-      // Khuôn skippedAttachments là { originalName, reason } (mergeAndFilterLandingFiles,
-      // ingestLandingAttachments) — frontend useCanvasConversation.js đọc `originalName`;
-      // `kind` là mã máy để frontend lọc, không so chuỗi tiếng Việt.
-      if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
-        for (const url of data.strippedImageUrls) {
-          allSkipped.push({
-            originalName: url,
-            kind: 'fake_image_url',
-            reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
+          const data = await aiLandingPageService.generate({
+            userId: ownerUserId,
+            actorUserId: requestUserId,
+            prompt: enrichedPrompt,
+            titleHint: title != null ? String(title) : '',
+            landingBriefContext,
+            contentLocale,
+            leadFormConfig,
+            assets,
+            documents,
+            // B-4 / B-20: hạn chót tổng của lượt + huỷ lời gọi Gemini khi người dùng đóng kết nối + báo tiến độ cho luồng.
+            signal: turn.signal,
+            deadlineAtMs: turn.deadlineAtMs,
+            onStage: turn.setStage,
+            streamed: turn.streamed,
           });
-        }
-      }
 
-      if (allSkipped.length > 0) {
-        data.skippedAttachments = allSkipped;
-      }
+          if (leadFormDraft) {
+            data.leadFormDraft = leadFormDraft;
+            data.leadFormConfig = leadFormConfig;
+          }
 
-      return res.json({ success: true, data });
+          // Khuôn skippedAttachments là { originalName, reason } (mergeAndFilterLandingFiles,
+          // ingestLandingAttachments) — frontend useCanvasConversation.js đọc `originalName`;
+          // `kind` là mã máy để frontend lọc, không so chuỗi tiếng Việt.
+          if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
+            for (const url of data.strippedImageUrls) {
+              allSkipped.push({
+                originalName: url,
+                kind: 'fake_image_url',
+                reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
+              });
+            }
+          }
+
+          if (allSkipped.length > 0) {
+            data.skippedAttachments = allSkipped;
+          }
+
+          return {
+            data,
+            // Lưu vào session nếu có sessionId (actor, not owner). Chạy SAU khi kiểm còn kết nối và TRƯỚC khi trừ credit.
+            persist: async () => {
+              if (!(sid && data?.title)) return;
+              const userContent = String(userSummary || prompt).trim();
+              const assistantMsg = {
+                content: `Đã tạo landing page "${data.title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
+                type: 'landing_page',
+                data: {
+                  title: data.title,
+                  html: data.html || '',
+                  // Sinh trang đã trừ credit → cấp ngân sách 2 lượt tự sửa hiển thị miễn phí cho tin này
+                  // (editLandingHtml coi tin KHÔNG có bộ đếm là hết lượt — xem chú thích ở đó).
+                  autoLayoutFixCount: 0,
+                  ...(leadFormDraft ? { leadFormDraft, leadFormConfig: data.leadFormConfig } : {}),
+                },
+              };
+              const saved = await aiSessionRepo
+                .saveMessagesReturningIds(sid, requestUserId, userContent, assistantMsg)
+                .catch((err) => {
+                  console.warn('[AI.generateLandingHtml] Failed to save landing_page message:', err.message);
+                  return null;
+                });
+              // Vòng tự sửa ở frontend cần id tin để server đếm trần lượt theo từng tin. Lưu hỏng thì
+              // không có khoá này — không chặn response.
+              if (saved?.assistantMessageId) {
+                data.messageId = saved.assistantMessageId;
+              } else {
+                // B-18: lượt này vẫn bị trừ credit (ngay sau bước lưu) mà trang không vào được phiên → báo FE để nói thật với khách.
+                data.saved = false;
+              }
+            },
+          };
+        },
+      });
     } catch (error) {
-      console.error('AI generate landing HTML error:', error);
-      if (error instanceof StorageQuotaExceededError) {
-        return res.status(error.status || 413).json({
-          success: false,
-          code: error.code || 'STORAGE_QUOTA_EXCEEDED',
-          message: error.message,
-          data: error.usage,
-        });
-      }
-      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi sinh landing HTML'));
+      // Luồng đã mở rồi thì không còn gửi JSON được nữa (runLandingAiTurn tự bắt lỗi của phần nặng — tới đây chỉ là lỗi bất thường).
+      if (res.headersSent) return undefined;
+      const mapped = mapError(error);
+      return res.status(mapped.status).json(mapped.body);
     }
   }
 
@@ -1557,6 +1591,7 @@ class AiController {
    */
   async editLandingHtml(req, res) {
     let autoFixLockKey = null;
+    const mapError = (error) => mapLandingAiError(error, 'AI edit landing HTML error:', 'Lỗi khi chỉnh sửa landing page bằng AI');
     try {
       const {
         currentHtml,
@@ -1718,125 +1753,140 @@ class AiController {
         }
       }
 
-      // Đường sửa chỉ nhận files tường minh từ request body, không gom từ phiên chat. Lượt tự sửa
-      // miễn phí không nhận file nào (không có gì để đính kèm, và không mở đường nạp file miễn phí).
-      const rawIncoming = !isAutoFix && Array.isArray(incomingFiles)
-        ? incomingFiles.slice(0, 6).map((f) => ({
-            tempId: f?.tempId,
-            storageKey: f?.storageKey || f?.storage_key,
-            originalName: f?.originalName || f?.name || f?.displayName,
-            contentType: f?.contentType || f?.mimeType || f?.type,
-            size: f?.size,
-          })).filter((f) => f.tempId || f.storageKey)
-        : [];
+      // PR-9 (B-4): phần NẶNG (đọc tệp, Gemini, ghi phiên, trừ credit) chạy dưới dạng phản hồi LUỒNG có nhịp giữ kết nối — xem
+      // aiLandingTurn.service.js. Mọi kiểm tra ở TRÊN (thiếu HTML, quá dài, lượt tự sửa hết trần, 404/409…) đã trả JSON 4xx như cũ.
+      // Khoá lượt tự sửa (`autoFixLockKey`) giữ tới khi lượt kết thúc: `await` ở dưới đợi cả phần nặng rồi `finally` mới nhả.
+      return await runLandingAiTurn({
+        req,
+        res,
+        kind: 'edit',
+        mapError,
+        charge: () => chargeAiCredit(req),
+        work: async (turn) => {
+          // Đường sửa chỉ nhận files tường minh từ request body, không gom từ phiên chat. Lượt tự sửa
+          // miễn phí không nhận file nào (không có gì để đính kèm, và không mở đường nạp file miễn phí).
+          const rawIncoming = !isAutoFix && Array.isArray(incomingFiles)
+            ? incomingFiles.slice(0, 6).map((f) => ({
+                tempId: f?.tempId,
+                storageKey: f?.storageKey || f?.storage_key,
+                originalName: f?.originalName || f?.name || f?.displayName,
+                contentType: f?.contentType || f?.mimeType || f?.type,
+                size: f?.size,
+              })).filter((f) => f.tempId || f.storageKey)
+            : [];
 
-      const { files: mergedFiles, skipped: mergeSkipped } = mergeAndFilterLandingFiles(rawIncoming);
-      const { assets, documents, skipped: ingestSkipped } = await ingestLandingAttachments({
-        files: mergedFiles,
-        ownerUserId,
-        actorUserId: req.user.id,
-        landingPageId: null,
-      });
-      const allSkipped = [...(mergeSkipped || []), ...(ingestSkipped || [])];
-
-      const data = await aiLandingPageService.editHtml({
-        userId: ownerUserId,
-        actorUserId: req.user.id,
-        currentHtml: isAutoFix ? autoFixBaseHtml : String(currentHtml),
-        instruction: effectiveInstruction,
-        contentLocale,
-        assets,
-        documents,
-        leadFormConfig,
-        autoLayoutFix: isAutoFix,
-        layoutFindingsCount: layoutFindings.length,
-      });
-
-      // Lượt tự sửa của hệ thống không bao giờ trừ credit (chargeAiCredit cũng tự bỏ qua khi
-      // req.aiCreditSkipped, nhưng đây là chốt chính).
-      if (!isAutoFix) await chargeAiCredit(req);
-
-      if (hasSession) {
-        // Một UPDATE (jsonb `||`): html mới + MỘT bản trước để Hoàn tác + bộ đếm lượt tự sửa.
-        // Sửa do người dùng (đã trừ credit) đặt lại bộ đếm về 0 — mỗi hành động trả phí được 2 lượt
-        // tự sửa miễn phí; không đặt lại thì lượt sinh trang đã ăn hết trần và các lần sửa sau
-        // không bao giờ được tự sửa nữa.
-        const saved = await aiSessionRepo.updateLandingPageMessage(sid, req.user.id, {
-          title: data.title,
-          html: data.html,
-          previousHtml: isAutoFix ? autoFixBaseHtml : String(currentHtml),
-          ...(landingMessage?.data?.title ? { previousTitle: String(landingMessage.data.title) } : {}),
-          autoLayoutFixCount: isAutoFix ? autoFixUsed + 1 : 0,
-        }, landingMessage?.id ?? messageId).catch((err) => {
-          console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message);
-          return false;
-        });
-        if (saved) {
-          data.canRevert = true;
-        } else {
-          // B-18: lượt sửa trả phí đã bị trừ credit ở trên nhưng bản mới KHÔNG vào được phiên (lỗi DB, hoặc không còn tin để ghi):
-          // tải lại phiên sẽ thấy bản cũ. Response vẫn thành công (khách có kết quả trên màn hình) kèm cờ để FE báo thật.
-          data.saved = false;
-        }
-
-        if (isAutoFix) {
-          // Lệnh do server dựng đầy selector/pixel — KHÔNG được lưu thành tin của người dùng hay
-          // lặp lại trong lời xác nhận (tải lại phiên sẽ lộ ra). Chỉ ghi câu tiếng người của AI.
-          const ackContent = contentLocale === 'en'
-            ? (data.changeSummary ? `Layout adjusted: ${data.changeSummary}` : 'I adjusted the page layout.')
-            : (data.changeSummary ? `Đã chỉnh hiển thị: ${data.changeSummary}` : 'Đã chỉnh lại hiển thị của trang.');
-          await aiSessionRepo.saveAssistantMessage(sid, req.user.id, {
-            content: ackContent,
-            type: 'landing_edit_ack',
-          }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save auto-fix ack message:', err.message));
-        } else {
-          const confirmMsg = contentLocale === 'en'
-            ? `I have updated the landing page "${data.title}" according to your request: "${String(instruction).trim()}".`
-            : `Mình đã cập nhật landing page "${data.title}" theo yêu cầu: "${String(instruction).trim()}".`;
-
-          await aiSessionRepo.saveMessages(sid, req.user.id, String(instruction).trim(), {
-            content: confirmMsg,
-            type: 'landing_edit_ack',
-          }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save edit chat messages:', err.message));
-        }
-      }
-
-      // Cùng khuôn { originalName, kind, reason } như đường sinh (xem chú thích ở generateLandingHtml).
-      if (Array.isArray(data.unusedAssets) && data.unusedAssets.length > 0) {
-        for (const ua of data.unusedAssets) {
-          allSkipped.push({
-            originalName: ua.originalName || ua.url || 'Ảnh',
-            kind: 'reference_image',
-            reason: 'Không chèn vào trang — coi là ảnh tham khảo',
+          const { files: mergedFiles, skipped: mergeSkipped } = mergeAndFilterLandingFiles(rawIncoming);
+          const { assets, documents, skipped: ingestSkipped } = await ingestLandingAttachments({
+            files: mergedFiles,
+            ownerUserId,
+            actorUserId: req.user.id,
+            landingPageId: null,
           });
-        }
-      }
-      if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
-        for (const url of data.strippedImageUrls) {
-          allSkipped.push({
-            originalName: url,
-            kind: 'fake_image_url',
-            reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
+          const allSkipped = [...(mergeSkipped || []), ...(ingestSkipped || [])];
+
+          const data = await aiLandingPageService.editHtml({
+            userId: ownerUserId,
+            actorUserId: req.user.id,
+            currentHtml: isAutoFix ? autoFixBaseHtml : String(currentHtml),
+            instruction: effectiveInstruction,
+            contentLocale,
+            assets,
+            documents,
+            leadFormConfig,
+            autoLayoutFix: isAutoFix,
+            layoutFindingsCount: layoutFindings.length,
+            // B-4 / B-20: hạn chót tổng của lượt + huỷ lời gọi Gemini khi người dùng đóng kết nối + báo tiến độ cho luồng.
+            // `timeBudgetMs` chỉ có ở đường luồng (không còn Cloudflare cắt ở 100 giây); đường JSON cũ để dịch vụ dùng 85 giây.
+            signal: turn.signal,
+            deadlineAtMs: turn.deadlineAtMs,
+            ...(turn.timeBudgetMs ? { timeBudgetMs: turn.timeBudgetMs } : {}),
+            onStage: turn.setStage,
+            streamed: turn.streamed,
           });
-        }
-      }
 
-      if (allSkipped.length > 0) {
-        data.skippedAttachments = allSkipped;
-      }
+          // Cùng khuôn { originalName, kind, reason } như đường sinh (xem chú thích ở generateLandingHtml).
+          if (Array.isArray(data.unusedAssets) && data.unusedAssets.length > 0) {
+            for (const ua of data.unusedAssets) {
+              allSkipped.push({
+                originalName: ua.originalName || ua.url || 'Ảnh',
+                kind: 'reference_image',
+                reason: 'Không chèn vào trang — coi là ảnh tham khảo',
+              });
+            }
+          }
+          if (Array.isArray(data.strippedImageUrls) && data.strippedImageUrls.length > 0) {
+            for (const url of data.strippedImageUrls) {
+              allSkipped.push({
+                originalName: url,
+                kind: 'fake_image_url',
+                reason: 'AI tự bịa URL ảnh, đã gỡ khỏi trang',
+              });
+            }
+          }
 
-      return res.json({ success: true, data });
+          if (allSkipped.length > 0) {
+            data.skippedAttachments = allSkipped;
+          }
+
+          return {
+            data,
+            // Lượt tự sửa của hệ thống không bao giờ trừ credit (chargeAiCredit cũng tự bỏ qua khi req.aiCreditSkipped,
+            // nhưng đây là chốt chính).
+            free: isAutoFix,
+            // Ghi phiên: chạy SAU khi kiểm còn kết nối và TRƯỚC khi trừ credit (đúng thứ tự như đường sinh trang).
+            persist: async () => {
+              if (!hasSession) return;
+              // Một UPDATE (jsonb `||`): html mới + MỘT bản trước để Hoàn tác + bộ đếm lượt tự sửa.
+              // Sửa do người dùng (đã trừ credit) đặt lại bộ đếm về 0 — mỗi hành động trả phí được 2 lượt
+              // tự sửa miễn phí; không đặt lại thì lượt sinh trang đã ăn hết trần và các lần sửa sau
+              // không bao giờ được tự sửa nữa.
+              const saved = await aiSessionRepo.updateLandingPageMessage(sid, req.user.id, {
+                title: data.title,
+                html: data.html,
+                previousHtml: isAutoFix ? autoFixBaseHtml : String(currentHtml),
+                ...(landingMessage?.data?.title ? { previousTitle: String(landingMessage.data.title) } : {}),
+                autoLayoutFixCount: isAutoFix ? autoFixUsed + 1 : 0,
+              }, landingMessage?.id ?? messageId).catch((err) => {
+                console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message);
+                return false;
+              });
+              if (saved) {
+                data.canRevert = true;
+              } else {
+                // B-18: lượt sửa trả phí sắp bị trừ credit (ngay sau bước lưu) nhưng bản mới KHÔNG vào được phiên (lỗi DB, hoặc không
+                // còn tin để ghi): tải lại phiên sẽ thấy bản cũ. Response vẫn thành công (khách có kết quả trên màn hình) kèm cờ để FE báo thật.
+                data.saved = false;
+              }
+
+              if (isAutoFix) {
+                // Lệnh do server dựng đầy selector/pixel — KHÔNG được lưu thành tin của người dùng hay
+                // lặp lại trong lời xác nhận (tải lại phiên sẽ lộ ra). Chỉ ghi câu tiếng người của AI.
+                const ackContent = contentLocale === 'en'
+                  ? (data.changeSummary ? `Layout adjusted: ${data.changeSummary}` : 'I adjusted the page layout.')
+                  : (data.changeSummary ? `Đã chỉnh hiển thị: ${data.changeSummary}` : 'Đã chỉnh lại hiển thị của trang.');
+                await aiSessionRepo.saveAssistantMessage(sid, req.user.id, {
+                  content: ackContent,
+                  type: 'landing_edit_ack',
+                }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save auto-fix ack message:', err.message));
+              } else {
+                const confirmMsg = contentLocale === 'en'
+                  ? `I have updated the landing page "${data.title}" according to your request: "${String(instruction).trim()}".`
+                  : `Mình đã cập nhật landing page "${data.title}" theo yêu cầu: "${String(instruction).trim()}".`;
+
+                await aiSessionRepo.saveMessages(sid, req.user.id, String(instruction).trim(), {
+                  content: confirmMsg,
+                  type: 'landing_edit_ack',
+                }).catch((err) => console.warn('[AI.editLandingHtml] Failed to save edit chat messages:', err.message));
+              }
+            },
+          };
+        },
+      });
     } catch (error) {
-      console.error('AI edit landing HTML error:', error);
-      if (error instanceof StorageQuotaExceededError) {
-        return res.status(error.status || 413).json({
-          success: false,
-          code: error.code || 'STORAGE_QUOTA_EXCEEDED',
-          message: error.message,
-          data: error.usage,
-        });
-      }
-      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi chỉnh sửa landing page bằng AI'));
+      // Luồng đã mở rồi thì không còn gửi JSON được nữa (runLandingAiTurn tự bắt lỗi của phần nặng — tới đây chỉ là lỗi bất thường).
+      if (res.headersSent) return undefined;
+      const mapped = mapError(error);
+      return res.status(mapped.status).json(mapped.body);
     } finally {
       if (autoFixLockKey) autoLayoutFixInFlight.delete(autoFixLockKey);
     }

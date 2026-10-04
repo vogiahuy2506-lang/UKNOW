@@ -2,6 +2,8 @@
  * Gemini client util (Google Generative Language API).
  */
 
+import { createClientAbortError } from './aiAbort.util.js';
+
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 
 /** Model chỉ-thinking (vd gemini-2.5-pro) từ chối thinkingBudget: 0. */
@@ -185,6 +187,8 @@ function shouldAttachThinkingBudget(thinkingBudget) {
  * @param {Array<{role: string, parts: Array}>} [input.contents] — hội thoại nhiều lượt; có thì thay cho `parts`
  * @param {number} [input.timeoutMs=180000] — đồng hồ MỖI lượt gọi
  * @param {number|null} [input.totalTimeoutMs=null] — ngân sách TỔNG (thử lại + dự phòng cộng lại); hết thì huỷ fetch đang chạy
+ * @param {AbortSignal|null} [input.signal=null] — huỷ TỪ NGOÀI (vd người dùng đóng tab giữa lượt sinh landing): fetch đang chạy bị huỷ
+ *   ngay, không thử lại, không chuyển dự phòng; ném lỗi `AI_CLIENT_ABORTED` (khác `AI_TIMEOUT`: không phải lỗi của Google/hệ thống)
  * @param {boolean} [input.jsonMode=false]
  * @param {number} [input.maxOutputTokens=16384]
  * @param {number} [input.temperature=0.35]
@@ -205,6 +209,7 @@ export async function generateGeminiContent({
   contents = null,
   timeoutMs = 180000,
   totalTimeoutMs = null,
+  signal: externalSignal = null,
   jsonMode = false,
   responseSchema = null,
   maxOutputTokens = 16384,
@@ -232,12 +237,17 @@ export async function generateGeminiContent({
   const msLeft = () => deadline - Date.now();
 
   const runOnce = async ({ targetModel, useThinkingBudget, tokenCap }) => {
+    // Người dùng đã đóng kết nối thì không gọi (thêm lượt) nào nữa — kể cả lượt thử lại / dự phòng ở vòng lặp bên dưới.
+    if (externalSignal?.aborted) throw createClientAbortError();
     const remaining = msLeft();
     if (remaining <= 0) throw toTimeoutError(new Error('Hết ngân sách thời gian tổng'));
     const controller = new AbortController();
     // Đồng hồ mỗi lượt không bao giờ dài hơn phần ngân sách tổng còn lại: lượt cuối cùng cũng bị huỷ ĐÚNG hạn,
     // không để `fetch` chạy tiếp sau khi người dùng đã nhận câu xin lỗi (Google vẫn tính tiền lượt đó).
     const timer = setTimeout(() => controller.abort(), Math.min(timeoutMs, remaining));
+    // Huỷ từ ngoài nối vào controller của lượt này: fetch dừng NGAY (không chờ hết đồng hồ).
+    const onExternalAbort = () => controller.abort();
+    externalSignal?.addEventListener?.('abort', onExternalAbort, { once: true });
     try {
       const generationConfig = {
         temperature,
@@ -296,10 +306,13 @@ export async function generateGeminiContent({
         raw: data,
       };
     } catch (error) {
+      // Hỏi TRƯỚC: huỷ từ ngoài cũng làm `controller.signal.aborted = true`, không được báo nhầm thành "AI phản hồi quá lâu".
+      if (externalSignal?.aborted) throw createClientAbortError();
       if (error?.name === 'AbortError' || controller.signal.aborted) throw toTimeoutError(error);
       throw error;
     } finally {
       clearTimeout(timer);
+      externalSignal?.removeEventListener?.('abort', onExternalAbort);
     }
   };
 

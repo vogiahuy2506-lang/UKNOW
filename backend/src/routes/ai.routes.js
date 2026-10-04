@@ -3,6 +3,7 @@ import aiController from '../controllers/ai.controller.js';
 import authMiddleware from '../middleware/auth.middleware.js';
 import { aiLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
+import { attachToExistingLandingTurn } from '../services/ai/aiLandingTurn.service.js';
 import { requireActivePlan, requirePasswordChange, requirePhone, requirePermission, requireAllPermissions, requireSelfContext } from '../middleware/authorization.middleware.js';
 import multer from 'multer';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
@@ -23,13 +24,16 @@ router.use(requireActivePlan);
 router.post('/chat', aiLimiter, requirePermission('ai_assistant_use'), channelEntitlementContext, assertAiCreditAvailable('ai_assistant_chat'), aiController.chat.bind(aiController));
 
 // Generate full landing page HTML (Tailwind CDN + business context)
-router.post('/generate-landing-html', aiLimiter, requirePermission('landing_pages'), assertAiCreditAvailable('ai_generate_landing_html'), aiController.generateLandingHtml.bind(aiController));
+// PR-9 (B-4): trả phản hồi LUỒNG (NDJSON, có nhịp ping) khi client xin `Accept: application/x-ndjson`, kèm `requestId` chống trừ 2 lần.
+// `attachToExistingLandingTurn` đứng TRƯỚC bước kiểm credit: bấm lại cùng requestId thì bám vào lượt cũ / nhận kết quả đã trả tiền,
+// không bị chặn "hết credit" chỉ vì lượt đầu vừa trừ xong credit cuối cùng.
+router.post('/generate-landing-html', aiLimiter, requirePermission('landing_pages'), attachToExistingLandingTurn('generate'), assertAiCreditAvailable('ai_generate_landing_html'), aiController.generateLandingHtml.bind(aiController));
 
 // "AI viết hộ" chỉ dẫn hệ thống cho chatbot (PLAN_AI_VIET_HO_CHI_DAN_CHATBOT_2026-09-13.md)
 router.post('/generate-system-instruction', aiLimiter, requirePermission('chatbots_manage'), assertAiCreditAvailable('ai_generate_system_instruction'), aiController.generateSystemInstruction.bind(aiController));
 
-// Edit existing landing page HTML (Tailwind CDN + preserve untouched sections)
-router.post('/edit-landing-html', aiLimiter, requirePermission('landing_pages'), assertAiCreditAvailable('ai_edit_landing_html'), aiController.editLandingHtml.bind(aiController));
+// Edit existing landing page HTML (Tailwind CDN + preserve untouched sections) — cùng cơ chế luồng + requestId như route sinh trang.
+router.post('/edit-landing-html', aiLimiter, requirePermission('landing_pages'), attachToExistingLandingTurn('edit'), assertAiCreditAvailable('ai_edit_landing_html'), aiController.editLandingHtml.bind(aiController));
 
 // Create campaign from AI draft (NO auto-run)
 router.post('/create-from-draft', aiLimiter, requirePermission('campaigns_create'), channelEntitlementContext, aiController.createCampaignFromDraft.bind(aiController));
