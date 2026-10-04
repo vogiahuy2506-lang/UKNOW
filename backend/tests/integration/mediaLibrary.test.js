@@ -1,8 +1,9 @@
 /**
  * Integration: Thư viện media — cách ly theo workspace, link tải ký sẵn, và hai khẳng định làm nền cho việc
- * gỡ tab "Tệp tin nhắn" / dựng tab "Tệp khách gửi":
- *   (a) MỌI tệp chat (đủ 4 nguồn) có dòng storage_objects category 'chat', cùng storage_key → luôn hiện ở tab "Tất cả tệp";
- *   (b) tệp khách gửi qua Telegram/WhatsApp chỉ có KHOÁ lưu trữ (không url) và vẫn được liệt kê ở tab "Tệp khách gửi".
+ * gỡ tab "Tệp tin nhắn" / "Tệp khách gửi":
+ *   (a) MỌI tệp chat (đủ 4 nguồn) có dòng storage_objects category 'chat', cùng storage_key → luôn hiện ở danh sách chính;
+ *   (b) tệp khách gửi qua Telegram/WhatsApp (chỉ có KHOÁ lưu trữ, không url) cũng là tệp chat → nằm trong danh sách chính
+ *       và tính dung lượng; endpoint /channels của tab cũ không còn.
  * Ghi tệp thật qua persistChatBlob / storeInboundMedia (đường code production), không chèn tay vào chat_attachments.
  */
 import { describe, it, expect, beforeAll, beforeEach, afterAll } from '@jest/globals';
@@ -57,31 +58,6 @@ function saveChatFile(ownerUserId, { source = CHAT_ATTACHMENT_SOURCES.WEB, name 
     ownerUserId,
     source,
   });
-}
-
-/** Dựng một kênh (connection + hội thoại) rồi ghi một tin vào channel_messages — hình dạng giống Telegram/WhatsApp ghi thật. */
-async function insertChannelMessage(ownerUserId, { channel, role = 'visitor', attachments, conversationExternalId = 'c1' }) {
-  const { rows: connRows } = await db.query(
-    `INSERT INTO channel_connections (id_user, channel, display_name, external_channel_id)
-     VALUES ($1, $2, $2, $3)
-     ON CONFLICT (id_user, channel, fb_page_id) DO UPDATE SET display_name = EXCLUDED.display_name
-     RETURNING id`,
-    [ownerUserId, channel, `${channel}-conn`]
-  );
-  const { rows: convRows } = await db.query(
-    `INSERT INTO channel_conversations (id_user, id_channel, channel, external_id, visitor_name)
-     VALUES ($1, $2, $3, $4, 'Khach')
-     ON CONFLICT (id_channel, external_id) DO UPDATE SET visitor_name = EXCLUDED.visitor_name
-     RETURNING id`,
-    [ownerUserId, connRows[0].id, channel, conversationExternalId]
-  );
-  const { rows } = await db.query(
-    `INSERT INTO channel_messages (id_conversation, id_user, id_channel, role, content, message_type, attachments)
-     VALUES ($1, $2, $3, $4, 'noi dung', 'image', $5::jsonb)
-     RETURNING id`,
-    [convRows[0].id, ownerUserId, connRows[0].id, role, JSON.stringify(attachments)]
-  );
-  return rows[0].id;
 }
 
 describe('media library API', () => {
@@ -190,7 +166,7 @@ describe('media library API', () => {
     expect(response.body.data.map((item) => item.displayName)).toEqual(['owner.png']);
   });
 
-  it('(b) Tệp khách gửi: tệp Telegram/WhatsApp (chỉ có khoá lưu trữ) hiện với platform đúng và tính dung lượng', async () => {
+  it('(b) tệp khách gửi qua Telegram/WhatsApp là tệp chat: hiện ở danh sách chính, tính dung lượng; /channels không còn', async () => {
     const owner = await createUser({ email: 'owner-channel-files@test.local' });
     const stranger = await createUser({ email: 'stranger-channel-files@test.local' });
 
@@ -201,56 +177,30 @@ describe('media library API', () => {
     const wa = (await storeInboundMedia({
       ownerUserId: owner.id, buffer: PNG, fileName: 'wa.png', mimeType: 'image/png', kind: 'image',
     })).attachment;
-    const gone = (await storeInboundMedia({
-      ownerUserId: owner.id, buffer: PNG, fileName: 'da-xoa.png', mimeType: 'image/png', kind: 'image',
-    })).attachment;
-    const agentSent = (await storeInboundMedia({
-      ownerUserId: owner.id, buffer: PNG, fileName: 'chu-gui.png', mimeType: 'image/png', kind: 'image',
-    })).attachment;
+    await storeInboundMedia({
+      ownerUserId: stranger.id, buffer: PNG, fileName: 'cua-nguoi-khac.png', mimeType: 'image/png', kind: 'image',
+    });
     expect(tg).not.toHaveProperty('url');
     expect(tg.key).toMatch(new RegExp(`^uploads/${owner.id}/chat/`));
 
-    await insertChannelMessage(owner.id, { channel: 'telegram', attachments: [tg] });
-    // WhatsApp ghi cùng tệp vào hội thoại của mỗi chatbot đang bật → hai dòng, một thẻ.
-    await insertChannelMessage(owner.id, { channel: 'whatsapp_baileys', attachments: [wa], conversationExternalId: 'wa-1' });
-    await insertChannelMessage(owner.id, { channel: 'whatsapp_baileys', attachments: [wa], conversationExternalId: 'wa-2' });
-    await insertChannelMessage(owner.id, { channel: 'telegram', attachments: [gone], conversationExternalId: 'c2' });
-    await insertChannelMessage(owner.id, { channel: 'zalo_oa', attachments: [{ type: 'image', url: 'https://cdn.zalo.test/oa.jpg', name: 'oa.jpg' }] });
-    // Tệp chủ gửi đi (role agent) không thuộc "Tệp khách gửi".
-    await insertChannelMessage(owner.id, { channel: 'telegram', role: 'agent', attachments: [agentSent], conversationExternalId: 'c3' });
-    // Khoá của người khác chèn vào tin của mình thì bị bỏ.
-    await insertChannelMessage(owner.id, {
-      channel: 'telegram',
-      attachments: [{ key: `uploads/${stranger.id}/chat/bi-mat.png`, displayName: 'bi-mat.png', type: 'image' }],
-      conversationExternalId: 'c4',
-    });
-
-    // Người dùng xoá tệp ở tab "Tất cả tệp" → biến khỏi tab này (không để link chết).
-    await db.query(`UPDATE storage_objects SET state = 'deleted', deleted_at = NOW() WHERE storage_key = $1`, [gone.key]);
-
-    const res = await request(app)
-      .get('/api/media-library/channels')
-      .set(authHeader(owner))
-      .expect(200);
-
-    // 3 thẻ đúng nghĩa: tệp WhatsApp ghi ở hai hội thoại vẫn chỉ một thẻ (Object.fromEntries bên dưới sẽ che trùng).
-    expect(res.body.data).toHaveLength(3);
-    const byName = Object.fromEntries(res.body.data.map((item) => [item.name, item]));
-    expect(Object.keys(byName).sort()).toEqual(['oa.jpg', 'tele.png', 'wa.png']);
-
-    expect(byName['tele.png']).toMatchObject({ platform: 'telegram', stored: true, type: 'image' });
-    expect(byName['wa.png']).toMatchObject({ platform: 'whatsapp', stored: true, type: 'image' });
-    expect(byName['oa.jpg']).toMatchObject({ platform: 'zalo_oa', stored: false, url: 'https://cdn.zalo.test/oa.jpg' });
-    expect(byName['tele.png'].url).toMatch(/\/file\//);
-    expect(byName['tele.png'].size).toBeGreaterThan(0);
-    expect(JSON.stringify(res.body)).not.toContain('uploads/');
-
-    // Tệp đã lưu NẰM trên hệ thống và đang tính dung lượng (nhóm "Tin nhắn chat" của tab Tất cả tệp).
     const objects = await request(app)
       .get('/api/media-library/objects')
-      .query({ category: 'chat', search: 'tele' })
+      .query({ category: 'chat' })
       .set(authHeader(owner))
       .expect(200);
-    expect(objects.body.data.map((item) => item.storageKey)).toEqual([tg.key]);
+    expect(objects.body.data.map((item) => item.storageKey).sort()).toEqual([tg.key, wa.key].sort());
+    expect(objects.body.data.every((item) => item.sizeBytes > 0 && /\/file\//.test(item.url))).toBe(true);
+    expect(objects.body.categorySummary).toEqual([expect.objectContaining({ category: 'chat', count: 2 })]);
+
+    // Tìm theo tên (không còn khớp đường dẫn): "tele" ra đúng một tệp.
+    const searched = await request(app)
+      .get('/api/media-library/objects')
+      .query({ search: 'tele' })
+      .set(authHeader(owner))
+      .expect(200);
+    expect(searched.body.data.map((item) => item.storageKey)).toEqual([tg.key]);
+
+    // Tab "Tệp khách gửi" đã gỡ: endpoint không còn.
+    await request(app).get('/api/media-library/channels').set(authHeader(owner)).expect(404);
   });
 });

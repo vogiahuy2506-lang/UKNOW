@@ -7,34 +7,13 @@ import {
   HiOutlineExternalLink,
 } from 'react-icons/hi';
 import api from '../../services/api';
-import MessageAttachments, { FileTypeIcon } from '../../components/MessageAttachments';
+import { FileTypeIcon } from '../../components/MessageAttachments';
 import PageHeader from '../../components/common/PageHeader';
 import { useI18n } from '../../i18n';
 import { formatBytes } from '../../features/storage/storageUtils';
 import { STORAGE_CATEGORIES, resolveStorageCategory } from '../../features/storage/storageCategories';
 import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents';
 import { useAuthStore } from '../../stores/authStore';
-
-// Nhãn nền tảng của tệp khách gửi. `zalo_personal` hiển thị là "Zalo"; dòng `facebook` cũ vẫn hiện "Facebook".
-const PLATFORM_LABEL_KEYS = {
-  zalo_personal: 'mediaLibrary.platformZalo',
-  zalo_oa: 'mediaLibrary.platformZaloOa',
-  telegram: 'mediaLibrary.platformTelegram',
-  whatsapp: 'mediaLibrary.platformWhatsapp',
-  facebook: 'mediaLibrary.platformFacebook',
-};
-
-function PlatformBadge({ platform, t }) {
-  const key = PLATFORM_LABEL_KEYS[platform];
-  return (
-    <span
-      data-testid="platform-badge"
-      className="text-[10px] font-semibold uppercase tracking-wide text-slate-600 bg-slate-100 px-2 py-0.5 rounded"
-    >
-      {key ? t(key) : platform}
-    </span>
-  );
-}
 
 function CategoryBadge({ category, t }) {
   const item = resolveStorageCategory(category, t);
@@ -128,64 +107,11 @@ function StorageObjectCard({ item, onDeleteClick, t, locale = 'vi' }) {
   );
 }
 
-function ChannelCard({ item, t }) {
-  const [broken, setBroken] = useState(false);
-  const isImage = item.type === 'image' || item.type === 'photo';
-
-  const header = (
-    <div className="flex items-center justify-between gap-2">
-      <PlatformBadge platform={item.platform} t={t} />
-      <span className="text-[10px] text-slate-400 text-right">
-        {item.stored
-          ? `${t('mediaLibrary.storedOnSystem')}${item.size ? ` (${formatBytes(item.size)})` : ''}`
-          : t('mediaLibrary.platformLink')}
-      </span>
-    </div>
-  );
-
-  if (broken || !item.url) {
-    return (
-      <div className="border border-amber-100 bg-amber-50 rounded-xl p-3 space-y-2">
-        {header}
-        <div className="text-sm text-amber-800 flex gap-2 items-start">
-          <HiOutlineExclamation className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>{t('mediaLibrary.platformFallback')}</span>
-        </div>
-      </div>
-    );
-  }
-
-  if (isImage) {
-    return (
-      <div className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
-        {header}
-        <a href={item.url} target="_blank" rel="noopener noreferrer" className="block">
-          <img
-            src={item.url}
-            alt={item.name || ''}
-            className="max-h-40 rounded-lg object-cover w-full"
-            onError={() => setBroken(true)}
-          />
-        </a>
-        {item.name && <div className="text-xs text-slate-600 truncate">{item.name}</div>}
-      </div>
-    );
-  }
-
-  return (
-    <div className="border border-slate-200 rounded-xl p-3 bg-white space-y-2">
-      {header}
-      <MessageAttachments attachments={[item]} />
-    </div>
-  );
-}
-
 export default function MediaLibraryPage() {
   const { t, locale } = useI18n();
   const activeContext = useAuthStore((state) => state.activeContext);
   const canManage = activeContext?.type !== 'employee'
     || activeContext?.permissions?.media_library_manage === true;
-  const [tab, setTab] = useState('all'); // all | channels
   const [category, setCategory] = useState('');
   const [search, setSearch] = useState('');
   const [items, setItems] = useState([]);
@@ -205,18 +131,11 @@ export default function MediaLibraryPage() {
     setError('');
     setConflictBanner(null);
     try {
-      let path = '/media-library/objects';
       const params = { page, limit: 24 };
+      if (category) params.category = category;
+      if (search) params.search = search;
 
-      if (tab === 'all') {
-        path = '/media-library/objects';
-        if (category) params.category = category;
-        if (search) params.search = search;
-      } else if (tab === 'channels') {
-        path = '/media-library/channels';
-      }
-
-      const res = await api.get(path, { params });
+      const res = await api.get('/media-library/objects', { params });
       setItems(res.data?.data || []);
       setCategorySummary(res.data?.categorySummary || []);
       setPagination(res.data?.pagination || { total: 0, pages: 1, limit: 24 });
@@ -226,7 +145,7 @@ export default function MediaLibraryPage() {
     } finally {
       setLoading(false);
     }
-  }, [tab, category, search, page, t]);
+  }, [category, search, page, t]);
 
   useEffect(() => {
     load();
@@ -270,30 +189,12 @@ export default function MediaLibraryPage() {
         subtitle={t('mediaLibrary.subtitle')}
       />
 
-      {/* Tabs */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <button
-          type="button"
-          onClick={() => { setTab('all'); setPage(1); }}
-          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          {t('mediaLibrary.tabAll')}
-        </button>
-        <button
-          type="button"
-          onClick={() => { setTab('channels'); setPage(1); }}
-          className={`px-3.5 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-            tab === 'channels' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
-          }`}
-        >
-          {t('mediaLibrary.tabChannels')}
-        </button>
-      </div>
+      <p className="text-xs text-slate-500">
+        {t('mediaLibrary.zaloNote', { inbox: t('nav.inbox') })}
+      </p>
 
-      {/* Category summary cards in 'all' tab */}
-      {tab === 'all' && categorySummary.length > 0 && (
+      {/* Thẻ tổng theo danh mục — bấm để lọc */}
+      {categorySummary.length > 0 && (
         <div className="space-y-2">
           <div className="text-xs font-semibold uppercase tracking-wider text-slate-400">
             {t('mediaLibrary.categorySummary')}
@@ -331,43 +232,35 @@ export default function MediaLibraryPage() {
         </div>
       )}
 
-      {/* Filters bar — chỉ ở tab Tất cả tệp (lọc theo danh mục = lọc theo việc dùng tệp). */}
-      {tab === 'all' && (
-        <div className="flex flex-wrap gap-2.5 items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
-          <div className="relative flex-1 min-w-[200px] max-w-sm">
-            <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder={t('mediaLibrary.searchPlaceholder')}
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-            />
-          </div>
-
-          <select
-            value={category}
+      {/* Thanh lọc: lọc theo danh mục = lọc theo việc dùng tệp. */}
+      <div className="flex flex-wrap gap-2.5 items-center justify-between bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
+        <div className="relative flex-1 min-w-[200px] max-w-sm">
+          <HiOutlineSearch className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <input
+            type="text"
+            placeholder={t('mediaLibrary.searchPlaceholder')}
+            value={search}
             onChange={(e) => {
-              setCategory(e.target.value);
+              setSearch(e.target.value);
               setPage(1);
             }}
-            className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 bg-white text-slate-700"
-          >
-            {categoryOptions.map((opt) => (
-              <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
+            className="w-full pl-9 pr-3 py-1.5 text-sm rounded-lg border border-slate-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+          />
         </div>
-      )}
 
-      {tab === 'channels' && (
-        <div className="text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-3.5 py-2.5">
-          {t('mediaLibrary.channelsNote')}
-        </div>
-      )}
+        <select
+          value={category}
+          onChange={(e) => {
+            setCategory(e.target.value);
+            setPage(1);
+          }}
+          className="border border-slate-200 rounded-lg text-sm px-3 py-1.5 bg-white text-slate-700"
+        >
+          {categoryOptions.map((opt) => (
+            <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
+          ))}
+        </select>
+      </div>
 
       {conflictBanner && (
         <div className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl p-3 flex items-start justify-between gap-3">
@@ -407,19 +300,15 @@ export default function MediaLibraryPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
-          {tab === 'all'
-            ? items.map((item) => (
-              <StorageObjectCard
-                key={item.id}
-                item={item}
-                onDeleteClick={canManage ? (target) => setDeletingItem(target) : undefined}
-                t={t}
-                locale={locale}
-              />
-            ))
-            : items.map((item, idx) => (
-              <ChannelCard key={`${item.messageId || idx}-${item.url}`} item={item} t={t} />
-            ))}
+          {items.map((item) => (
+            <StorageObjectCard
+              key={item.id}
+              item={item}
+              onDeleteClick={canManage ? (target) => setDeletingItem(target) : undefined}
+              t={t}
+              locale={locale}
+            />
+          ))}
         </div>
       )}
 

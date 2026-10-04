@@ -175,10 +175,8 @@ const UI_LABELS_IN_ARTICLES = [
   ['mau-tin-nhan', 'emailTemplateEditor.files', 'Files'],
   ['campaign-create', 'channelAttachments.templateLabel', 'Mẫu tin nhắn (dùng chung Zalo, Telegram, WhatsApp)'],
   ['nhan-vien', 'employee.permissions.messageTemplates', 'Mẫu tin nhắn'],
-  // Thư viện media (2 tab, tên nhóm tệp, nhãn nền tảng của tệp khách gửi).
+  // Thư viện media (một danh sách, tên nhóm tệp). Tab "Tệp khách gửi" đã gỡ 04/10/2026.
   ['dung-luong-luu-tru', 'mediaLibrary.title', 'Thư viện media'],
-  ['dung-luong-luu-tru', 'mediaLibrary.tabAll', 'Tất cả tệp (Dung lượng)'],
-  ['dung-luong-luu-tru', 'mediaLibrary.tabChannels', 'Tệp khách gửi'],
   ['dung-luong-luu-tru', 'mediaLibrary.categorySummary', 'Dung lượng theo danh mục'],
   ['dung-luong-luu-tru', 'mediaLibrary.allCategories', 'Tất cả danh mục'],
   ['dung-luong-luu-tru', 'mediaLibrary.categoryZaloTemplate', 'Mẫu tin nhắn'],
@@ -187,12 +185,6 @@ const UI_LABELS_IN_ARTICLES = [
   ['dung-luong-luu-tru', 'mediaLibrary.categoryLandingAsset', 'Ảnh landing page'],
   ['dung-luong-luu-tru', 'mediaLibrary.categoryFormAsset', 'Tệp biểu mẫu'],
   ['dung-luong-luu-tru', 'mediaLibrary.categoryFormReceipt', 'Biên lai biểu mẫu'],
-  ['dung-luong-luu-tru', 'mediaLibrary.platformZalo', 'Zalo'],
-  ['dung-luong-luu-tru', 'mediaLibrary.platformZaloOa', 'Zalo OA'],
-  ['dung-luong-luu-tru', 'mediaLibrary.platformTelegram', 'Telegram'],
-  ['dung-luong-luu-tru', 'mediaLibrary.platformWhatsapp', 'WhatsApp'],
-  ['dung-luong-luu-tru', 'mediaLibrary.platformLink', 'Link nền tảng · không tính dung lượng'],
-  ['dung-luong-luu-tru', 'mediaLibrary.storedOnSystem', 'Lưu trên hệ thống · tính dung lượng'],
   ['dung-luong-luu-tru', 'mediaLibrary.goToManageScreen', 'Đi đến màn hình quản lý'],
   // Trình soạn biểu mẫu (PLAN_DON_GIAN_CAI_DAT_LANDING_VA_BIEU_MAU PR-2): bước chọn mẫu, khối thu gọn, hàng Thêm nhanh.
   ['bieu-mau', 'forms.createNew', 'Tạo biểu mẫu mới'],
@@ -425,6 +417,10 @@ describe('chất lượng bài trợ giúp seed', () => {
       // "Tệp khách gửi". Bài từng gọi kho là "mẫu Zalo", "Template Zalo" và tả tab theo tên cũ.
       'Zalo / Facebook',
       'Tệp tin nhắn',
+      // 04/10/2026: Thư viện media bỏ hẳn hai tab — "Tất cả tệp (Dung lượng)" và "Tệp khách gửi" (tab này rỗng với mọi tài
+      // khoản vì tệp Zalo không nằm trong dung lượng). Bài không được tả theo tab nữa.
+      'Tất cả tệp (Dung lượng)',
+      'Tệp khách gửi',
       'Template Zalo',
       'template Zalo',
       'Mẫu Zalo',

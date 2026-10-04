@@ -7,10 +7,10 @@
  * đường mà bộ kiểm phía trình duyệt (`validateFilesBeforeUpload`) sinh ra thông báo.
  * Không tệp nào được tải lên. Chỉ chạy ở máy mình.
  *
- * Hai ảnh Thư viện media (03/10/2026, sau khi bỏ tab "Tệp tin nhắn"): trang có 2 tab "Tất cả tệp (Dung lượng)" và
- * "Tệp khách gửi". Tài khoản mẫu chưa có tệp nào trong sổ lưu trữ, nên cũng chặn hai lời gọi
- * `GET /api/media-library/objects` và `/channels` ngay trong trình duyệt và trả dữ liệu mẫu ĐÚNG HÌNH DẠNG backend
- * (xem `mediaLibrary.repository.js`) — trang vẫn dựng bằng mã thật, chỉ nguồn dữ liệu là mẫu. Không ghi gì vào DB.
+ * Ảnh Thư viện media (04/10/2026: trang chỉ còn MỘT danh sách, tab "Tệp khách gửi" đã gỡ). Tài khoản mẫu chưa có tệp nào
+ * trong sổ lưu trữ, nên chặn lời gọi `GET /api/media-library/objects` ngay trong trình duyệt và trả dữ liệu mẫu ĐÚNG
+ * HÌNH DẠNG backend (xem `mediaLibrary.repository.js`) — trang vẫn dựng bằng mã thật, chỉ nguồn dữ liệu là mẫu.
+ * Không ghi gì vào DB.
  */
 import {
   highlight, hideVolatileChrome, settle, enclosingSection, tallViewportShot, paddedShot, contentShot,
@@ -81,40 +81,11 @@ function storageObjectsPayload() {
   };
 }
 
-/** Tệp khách gửi (tab "Tệp khách gửi"): Telegram/WhatsApp lưu trên hệ thống, Zalo/Zalo OA chỉ là link nền tảng. */
-const CHANNEL_FIXTURE = [
-  ['telegram', 'image', 'anh-chuyen-khoan.jpg', 0.42, true],
-  ['whatsapp', 'file', 'bao-gia-khoa-hoc.pdf', 1.8, true],
-  ['zalo_personal', 'image', 'anh-san-pham.jpg', null, false],
-  ['zalo_oa', 'file', 'phieu-dang-ky.docx', null, false],
-  ['telegram', 'file', 'danh-sach-hoc-vien.xlsx', 0.2, true],
-  ['whatsapp', 'image', 'anh-hoa-don.png', 0.6, true],
-  ['zalo_personal', 'file', 'cv-ung-vien.pdf', null, false],
-  ['zalo_oa', 'image', 'anh-san-pham-2.jpg', null, false],
-];
-
-function channelAttachmentsPayload() {
-  const items = CHANNEL_FIXTURE.map(([platform, type, name, mb, stored], index) => ({
-    platform,
-    conversationId: 500 + index,
-    createdAt: new Date(Date.UTC(2026, 9, 2, 10, 0, 0) - index * 3_600_000).toISOString(),
-    messageId: 7000 + index,
-    type,
-    url: type === 'image' ? picture(index) : '#',
-    name,
-    stored,
-    ...(stored ? { size: Math.round(mb * MB) } : {}),
-  }));
-  return { success: true, data: items, pagination: { total: items.length, page: 1, limit: 24, pages: 1 } };
-}
-
 /** Thay dữ liệu Thư viện media bằng bản mẫu đúng hình dạng; trả về hàm gỡ chặn. */
 async function mockMediaLibrary(page) {
   await page.route('**/api/media-library/objects*', (route) => route.fulfill({ json: storageObjectsPayload() }));
-  await page.route('**/api/media-library/channels*', (route) => route.fulfill({ json: channelAttachmentsPayload() }));
   return async () => {
     await page.unroute('**/api/media-library/objects*');
-    await page.unroute('**/api/media-library/channels*');
   };
 }
 
@@ -201,7 +172,7 @@ export default {
     },
     {
       name: 'thu-vien-media-tat-ca-tep',
-      caption: 'Thư viện media ở tab Tất cả tệp (Dung lượng), khoanh đỏ hàng thẻ Dung lượng theo danh mục',
+      caption: 'Thư viện media, khoanh đỏ hàng thẻ Dung lượng theo danh mục',
       localOnly: true,
       async take(page) {
         const unmock = await mockMediaLibrary(page);
@@ -216,27 +187,6 @@ export default {
         await page.waitForTimeout(300);
         await unmock();
         return contentShot(page, page.locator('main').first(), { maxHeight: 640 });
-      },
-    },
-    {
-      name: 'thu-vien-media-tep-khach-gui',
-      caption: 'Thư viện media ở tab Tệp khách gửi, thấy nhãn Telegram, WhatsApp, Zalo và dòng cho biết tệp lưu trên hệ thống hay chỉ là link nền tảng',
-      localOnly: true,
-      async take(page) {
-        const unmock = await mockMediaLibrary(page);
-        await page.goto('/app/settings/media-library');
-        const tab = page.getByRole('button', { name: 'Tệp khách gửi', exact: true });
-        await tab.waitFor({ state: 'visible', timeout: 30_000 });
-        await tab.click();
-        await page.getByText('Lưu trên hệ thống · tính dung lượng', { exact: false }).first()
-          .waitFor({ state: 'visible', timeout: 15_000 });
-        await settle(page);
-        await hideVolatileChrome(page);
-        // Khoanh dòng giải thích hai loại tệp (link nền tảng / lưu trên hệ thống) ở đầu tab.
-        await highlight(page.getByText(/chỉ là link tới nền tảng/).first());
-        await page.waitForTimeout(300);
-        await unmock();
-        return contentShot(page, page.locator('main').first(), { maxHeight: 760 });
       },
     },
     {

@@ -12,17 +12,6 @@ import {
 } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 
-export async function listChannelMedia(req, res) {
-  try {
-    const ownerUserId = getWorkspaceContext(req.user).workspaceOwnerId;
-    const result = await mediaLibraryRepo.listChannelAttachments(ownerUserId, req.query);
-    return res.json({ success: true, data: result.items, pagination: result.pagination });
-  } catch (err) {
-    console.error('[MediaLibrary] channels error:', err);
-    return res.status(500).json({ success: false, message: err.message || 'Lỗi tải media kênh' });
-  }
-}
-
 export async function listStorageObjects(req, res) {
   try {
     const ownerUserId = getWorkspaceContext(req.user).workspaceOwnerId;

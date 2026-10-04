@@ -128,7 +128,6 @@ jest.unstable_mockModule('../../controllers/zaloPersonalSync.controller.js', () 
 jest.unstable_mockModule('../../controllers/mediaLibrary.controller.js', () => {
   const controller = makeMockController('mediaLibrary');
   return {
-    listChannelMedia: controller.listChannelMedia,
     listStorageObjects: controller.listStorageObjects,
     deleteStorageObject: controller.deleteStorageObject,
   };
@@ -487,10 +486,13 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
         media_library_manage: false,
       });
       const list = await request(app).get('/api/media-library/objects');
+      // Tab "Tệp khách gửi" đã gỡ (04/10/2026): endpoint /channels không còn — không để lại cửa đọc tin của kênh.
+      const channelsGone = await request(app).get('/api/media-library/channels');
       const deleteBlocked = await request(app).delete('/api/media-library/objects/10');
       const promoteBlocked = await request(app).post('/api/uploads/promote').send({});
       const signedAllowed = await request(app).get('/api/uploads/signed-url/uploads%2F1%2Ffile.png');
       expect(list.status).toBe(200);
+      expect(channelsGone.status).toBe(404);
       expect(deleteBlocked.status).toBe(403);
       expect(promoteBlocked.status).toBe(403);
       expect(signedAllowed.status).toBe(200);
