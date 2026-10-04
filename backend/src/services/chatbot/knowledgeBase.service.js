@@ -1,81 +1,16 @@
 import knowledgeBaseRepository from '../../repositories/ai/knowledgeBase.repository.js';
 import { embedTexts } from '../../utils/embeddingClient.util.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
+import { chunkText as splitIntoChunks } from '../../utils/kbChunker.util.js';
 import kbDocumentQueue from '../queue/kbDocumentQueue.service.js';
 import {
   countExtractedChars,
   withKbQuotaLock,
 } from '../storage/kbQuota.service.js';
 
-const DEFAULT_CHUNK_SIZE = 500;
-const CHUNK_OVERLAP = 50;
-
-/**
- * Chunk text into overlapping segments.
- * @param {string} text
- * @param {number} chunkSize
- * @param {number} overlap
- * @returns {string[]}
- */
-function chunkText(text, chunkSize = DEFAULT_CHUNK_SIZE, overlap = CHUNK_OVERLAP) {
-  const paragraphs = text.split(/\n{2,}|\n/).map(s => s.trim()).filter(Boolean);
-  const chunks = [];
-  let buffer = '';
-
-  for (const para of paragraphs) {
-    if (buffer.length + para.length + 1 <= chunkSize) {
-      buffer += (buffer ? '\n\n' : '') + para;
-    } else {
-      if (buffer) chunks.push(buffer);
-      buffer = para;
-    }
-  }
-  if (buffer) chunks.push(buffer);
-
-  // Ensure no chunk exceeds chunkSize
-  const finalChunks = [];
-  for (const chunk of chunks) {
-    if (chunk.length <= chunkSize) {
-      finalChunks.push(chunk);
-    } else {
-      // Split long chunk further by sentences
-      const sentences = chunk.split(/(?<=[.!?])\s+/);
-      let subBuffer = '';
-      for (const sentence of sentences) {
-        if (subBuffer.length + sentence.length + 1 <= chunkSize) {
-          subBuffer += (subBuffer ? ' ' : '') + sentence;
-        } else {
-          if (subBuffer) finalChunks.push(subBuffer);
-          subBuffer = sentence;
-        }
-      }
-      if (subBuffer) finalChunks.push(subBuffer);
-    }
-  }
-
-  return finalChunks;
-}
-
-/**
- * Chunk text by sentences (for 'sentence' mode).
- */
-function chunkBySentence(text, chunkSize) {
-  const sentences = text.split(/(?<=[.!?。])\s+/).map(s => s.trim()).filter(Boolean);
-  const chunks = [];
-  let current = '';
-
-  for (const sentence of sentences) {
-    if (current.length + sentence.length + 1 <= chunkSize) {
-      current += (current ? ' ' : '') + sentence;
-    } else {
-      if (current) chunks.push(current);
-      current = sentence;
-    }
-  }
-  if (current) chunks.push(current);
-
-  return chunks;
-}
+/** Cùng câu với `customChat.generateEmbeddings` (kho tài liệu Studio): người dùng thấy MỘT câu cho mọi đường nạp tài liệu. */
+export const KB_EMBEDDING_FAILED_MESSAGE =
+  'Không tạo được chỉ mục tìm kiếm cho tài liệu (dịch vụ AI đang bận hoặc quá tải). Vui lòng thử xử lý lại tài liệu sau ít phút.';
 
 class KnowledgeBaseService {
   /**
@@ -85,9 +20,9 @@ class KnowledgeBaseService {
    * @param {number} docId
    * @param {number} kbId
    * @param {number} userId
-   * @param {object} options
+   * @param {object} [_options] giữ để khớp payload job BullMQ cũ (`chunkSize`/`chunkingMode` đã bị bỏ qua — xem `_buildChunks`)
    */
-  async processDocument(docId, kbId, userId, options = {}) {
+  async processDocument(docId, kbId, userId, _options = {}) {
     let doc;
     let previousDocument;
     try {
@@ -118,19 +53,12 @@ class KnowledgeBaseService {
         throw new Error('No readable text content found in document');
       }
 
-      const chunks = this._buildChunks(text, options.chunkSize || DEFAULT_CHUNK_SIZE, options.chunkingMode);
+      const chunks = this._buildChunks(text);
 
-      // Embed all chunks (uses cache for repeated chunks)
-      let embeddings;
-      try {
-        embeddings = await embedTexts(chunks.map(c => c.text), {
-          userId,
-          feature: 'embedding_kb_ingest',
-        });
-      } catch (e) {
-        console.warn('[KB] Embedding failed, storing without vectors:', e.message);
-        embeddings = chunks.map(() => null);
-      }
+      // Embed all chunks (uses cache for repeated chunks). Hỏng thì NÉM LỖI → khối catch bên dưới đặt tài liệu `status='error'`
+      // (hoặc khôi phục bản `ready` cũ khi xử lý lại) và job BullMQ được thử lại. Bản cũ nuốt lỗi, lưu đoạn KHÔNG có vector rồi
+      // vẫn đặt `ready`: tìm kiếm chỉ đọc đoạn có vector nên tài liệu đó KHÔNG BAO GIỜ được dùng mà chủ không hay biết (D-12).
+      const embeddings = await this._embedChunks(chunks, userId);
 
       const chunksWithMeta = chunks.map((c, i) => ({
         text: c.text,
@@ -258,11 +186,41 @@ class KnowledgeBaseService {
     return status;
   }
 
-  _buildChunks(text, chunkSize, chunkingMode) {
-    if (chunkingMode === 'sentence') {
-      return chunkBySentence(text, chunkSize).map(t => ({ text: t }));
+  /**
+   * Chia đoạn bằng `kbChunker.util.js` — CÙNG bộ chia với kho tài liệu Studio (đoạn mục tiêu ~1.100, cứng ≤ 1.500 ký tự, chồng lấn
+   * ~150, không cắt giữa ký tự). Bản cũ có bộ chia riêng 500 ký tự không chồng lấn (EXTRA-A1).
+   *
+   * Cột `knowledge_bases.chunk_size` / `chunking_mode` KHÔNG còn được dùng: giao diện chưa từng cho chọn (mặc định DB 500 / 'paragraph'
+   * cho mọi KB), và để mặc định 500 chạy tiếp sẽ giữ nguyên đoạn nhỏ hơn hẳn đường Studio. Muốn cho khách chỉnh thì truyền
+   * `targetSize` / `maxSize` của `kbChunker` — đừng khôi phục bộ chia cũ.
+   */
+  _buildChunks(text) {
+    return splitIntoChunks(text).map((t) => ({ text: t }));
+  }
+
+  /**
+   * Embed các đoạn của MỘT tài liệu; thiếu/sai bất kỳ vector nào cũng là lỗi (khuôn `customChat.generateEmbeddings`).
+   * Lỗi ném ra mang câu tiếng Việt (hiện ở `kb_documents.error_message`), câu gốc của Google chỉ ở log máy chủ + `cause`.
+   */
+  async _embedChunks(chunks, userId) {
+    try {
+      const vectors = await embedTexts(chunks.map((c) => c.text), {
+        userId,
+        feature: 'embedding_kb_ingest',
+      });
+      const complete = Array.isArray(vectors)
+        && vectors.length === chunks.length
+        && vectors.every((vector) => Array.isArray(vector) && vector.length > 0);
+      if (!complete) throw new Error('Số vector trả về không khớp số đoạn');
+      return vectors;
+    } catch (e) {
+      console.error('[KB] Embedding tài liệu lỗi:', e.message);
+      const error = new Error(KB_EMBEDDING_FAILED_MESSAGE);
+      error.status = 503;
+      error.code = 'EMBEDDING_FAILED';
+      error.cause = e;
+      throw error;
     }
-    return chunkText(text, chunkSize, CHUNK_OVERLAP).map(t => ({ text: t }));
   }
 
   // ── KB CRUD ─────────────────────────────────────────────────────
@@ -361,7 +319,7 @@ class KnowledgeBaseService {
     const doc = await knowledgeBaseRepository.findDocumentById(docId, userId);
     if (!doc) throw new Error('Document not found');
     const kb = await knowledgeBaseRepository.findById(doc.id_kb, userId);
-    return this.processDocument(docId, kb.id, userId, { chunkSize: kb.chunk_size, chunkingMode: kb.chunking_mode, ...options });
+    return this.processDocument(docId, kb.id, userId, options);
   }
 
   // ── Chunks ──────────────────────────────────────────────────────
