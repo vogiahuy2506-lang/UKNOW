@@ -172,8 +172,10 @@ describe('vòng 2 — HeroDashboardMock (số mẫu) luôn có nhãn minh hoạ'
 /**
  * Giờ làm việc hotline sếp chốt 03/10/2026: Thứ 2 – Thứ 6, 8:30 – 17:00. Trước đó mỗi nơi ghi một kiểu: trang Liên hệ "9h-18h" /
  * "08:00 – 17:00", prompt tư vấn "8h-17h", ba trang chính sách "8:00 - 22:00, Thứ 2 - Thứ 7" — khách hỏi bot và hỏi trang nhận hai đáp án.
- * Phần chữ của ba trang chính sách (Support / PaymentPolicy / ComplaintPolicy) KHÔNG nằm trong spec này: đó là văn bản có phiên bản theo
- * NĐ 248 (pages/public/policyVersions.js — báo trước >= 15 ngày, lưu bản cũ), sửa chữ phải qua quy trình đó.
+ * Ba trang chính sách (Support / PaymentPolicy / ComplaintPolicy) là văn bản có phiên bản theo NĐ 248 (pages/public/policyVersions.js —
+ * báo trước >= 15 ngày, lưu bản cũ) nên sửa chữ phải qua quy trình đó: thông báo 04/10/2026, giờ mới 8:30 - 17:00 Thứ 2 - Thứ 6 có hiệu lực
+ * 19/10/2026 (bản 29/09/2026 với 8:00 - 22:00 Thứ 2 - Thứ 7 nằm ở pages/public/policyArchive/). Từ 19/10 ba trang đó cũng bị luật giờ ở dưới
+ * khoá (describe "H1 — ba trang chính sách").
  */
 const collectStrings = (node, out = []) => {
   if (typeof node === 'string') out.push(node);
@@ -229,6 +231,30 @@ describe.each(LOCALES)('H1 — giờ làm việc thống nhất Thứ 2 – Th�
     expect(dict.contact.workHours).toMatch(expected);
     expect(dict.contact.officeDesc).toMatch(expected);
     expect(dict.contact.hotlineDesc).toMatch(expected);
+  });
+});
+
+/**
+ * Ba trang chính sách ghi giờ hotline (văn bản hiện hành từ 19/10/2026) phải cùng một đáp án với trang Liên hệ và prompt tư vấn:
+ * Thứ 2 - Thứ 6, 8:30 - 17:00. Đọc MÃ NGUỒN trang (chữ viết thẳng trong JSX, không qua từ điển i18n); luật OLD_HOURS ở trên giữ nguyên.
+ * Bản lưu trữ policyArchive/<slug>/2026-09-29 cố ý còn giờ cũ nên không nằm trong danh sách.
+ */
+describe('H1 — ba trang chính sách ghi giờ hotline mới 8:30 - 17:00, Thứ 2 - Thứ 6', () => {
+  const POLICY_SOURCES = [
+    ['Support.jsx', '8:30 - 17:00, Thứ 2 - Thứ 6', '8:30 AM - 5:00 PM, Monday - Friday'],
+    ['PaymentPolicy.jsx', '0877909606 (8:30 - 17:00, Thứ 2 - Thứ 6)', '0877909606 (8:30 AM - 5:00 PM, Monday - Friday)'],
+    ['ComplaintPolicy.jsx', '0877909606 (8:30 - 17:00, Thứ 2 - Thứ 6)', '0877909606 (8:30 AM - 5:00 PM, Monday - Friday)'],
+  ];
+
+  it.each(POLICY_SOURCES)('%s ghi giờ mới ở cả VI lẫn EN', (file, vi, en) => {
+    const src = sourceOf(`../pages/public/${file}`);
+    expect(src).toContain(vi);
+    expect(src).toContain(en);
+  });
+
+  it.each(POLICY_SOURCES)('%s không còn giờ cũ (22:00 / 10 PM / Thứ 2 - Thứ 7 / 9h-18h / 8h-17h…)', (file) => {
+    const src = sourceOf(`../pages/public/${file}`);
+    for (const [re, label] of OLD_HOURS) expect(src, label).not.toMatch(re);
   });
 });
 

@@ -13,20 +13,25 @@ import Support from '../Support.jsx';
 
 const norm = (s) => s.replace(/\s+/g, ' ').replace(/ /g, ' ').trim();
 
+// Ba trang giờ hỗ trợ (complaint / payment / support) đã sang văn bản có hiệu lực 19/10/2026 (thông báo 04/10/2026);
+// sáu trang còn lại vẫn là văn bản 29/09/2026.
+const META_0929 = 'Cập nhật ngày 29/09/2026 — Áp dụng từ 29/09/2026';
+const META_1019 = 'Cập nhật ngày 04/10/2026 — Áp dụng từ 19/10/2026';
+
 const PAGES = [
-  ['/complaint-policy', ComplaintPolicy, 'Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại'],
-  ['/pricing-policy', PricingPolicy, 'Chính sách về giá'],
-  ['/payment-policy', PaymentPolicy, 'Chính sách về thanh toán'],
-  ['/service-terms', ServiceTerms, 'Các điều kiện hoặc hạn chế trong việc cung cấp dịch vụ trên nền tảng'],
-  ['/service-delivery-policy', ServiceDeliveryPolicy, 'Chính sách về phương thức cung cấp dịch vụ'],
-  ['/refund-policy', RefundPolicy, 'Chính sách chấm dứt dịch vụ và hoàn tiền'],
-  ['/rights-and-duties', RightsAndDuties, 'Quyền và nghĩa vụ của các bên'],
-  ['/terms', TermsOfService, 'Điều khoản sử dụng dịch vụ'],
-  ['/support', Support, 'Hình thức hỗ trợ trực tuyến'],
+  ['/complaint-policy', ComplaintPolicy, 'Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại', META_1019],
+  ['/pricing-policy', PricingPolicy, 'Chính sách về giá', META_0929],
+  ['/payment-policy', PaymentPolicy, 'Chính sách về thanh toán', META_1019],
+  ['/service-terms', ServiceTerms, 'Các điều kiện hoặc hạn chế trong việc cung cấp dịch vụ trên nền tảng', META_0929],
+  ['/service-delivery-policy', ServiceDeliveryPolicy, 'Chính sách về phương thức cung cấp dịch vụ', META_0929],
+  ['/refund-policy', RefundPolicy, 'Chính sách chấm dứt dịch vụ và hoàn tiền', META_0929],
+  ['/rights-and-duties', RightsAndDuties, 'Quyền và nghĩa vụ của các bên', META_0929],
+  ['/terms', TermsOfService, 'Điều khoản sử dụng dịch vụ', META_0929],
+  ['/support', Support, 'Hình thức hỗ trợ trực tuyến', META_1019],
 ];
 
-describe.each(PAGES)('trang %s', (path, Component, h1Vi) => {
-  it('render được, h1 đúng tên, có ngày cập nhật/áp dụng 29/09/2026 và lịch sử 29/09/2026', () => {
+describe.each(PAGES)('trang %s', (path, Component, h1Vi, meta) => {
+  it('render được, h1 đúng tên, có dòng "Cập nhật ngày … — Áp dụng từ …" đúng và khối lịch sử cập nhật', () => {
     const { container } = render(
       <MemoryRouter initialEntries={[path]}>
         <Routes>
@@ -37,7 +42,7 @@ describe.each(PAGES)('trang %s', (path, Component, h1Vi) => {
     const h1 = [...container.querySelectorAll('h1')].find((h) => !h.className.includes('hidden'));
     expect(norm(h1.textContent)).toBe(h1Vi);
     const text = norm(container.textContent);
-    expect(text).toContain('Cập nhật ngày 29/09/2026 — Áp dụng từ 29/09/2026');
+    expect(text).toContain(meta);
     expect(text).toContain('Lịch sử cập nhật');
   });
 
@@ -84,7 +89,12 @@ describe('không còn nội dung cũ bị luật sư gạch bỏ', () => {
   });
 
   it('Hình thức hỗ trợ không ghi Live Chat người thật', () => {
-    const { container } = render(<Support />);
+    // Từ phiên bản lưu trữ đầu tiên PolicyHistory sinh <Link> → cần Router (xem đầu policyVersions.js).
+    const { container } = render(
+      <MemoryRouter>
+        <Support />
+      </MemoryRouter>,
+    );
     expect(norm(container.textContent)).not.toContain('Chat trực tiếp trên website founderai.biz');
   });
 });
