@@ -108,7 +108,8 @@ describe('MediaLibraryPage', () => {
     it('M-03: thanh dung lượng nằm ĐẦU trang, trước các thẻ loại tệp', async () => {
       renderPage();
       const usage = await screen.findByTestId('storage-usage');
-      const tileAll = screen.getByTestId('tile-all');
+      // Thẻ loại tệp hiện sau khi danh sách tải xong — thanh dung lượng có thể về trước (CI chậm hơn máy dev): phải CHỜ.
+      const tileAll = await screen.findByTestId('tile-all');
       expect(usage.compareDocumentPosition(tileAll) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
