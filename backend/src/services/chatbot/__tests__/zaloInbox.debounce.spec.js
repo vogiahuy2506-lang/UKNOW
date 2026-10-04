@@ -244,6 +244,65 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
     expect(mockBroadcast).toHaveBeenCalledTimes(1); // inbound visitor SSE only
   });
 
+  // PLAN_SUA_AI_DOT4 PR-7 (A P2-1): chatbot bị khoá vì hạ gói/hết slot — 4 kênh khác đã chặn, Zalo cá nhân chỉ kiểm
+  // `zalo_accounts` nên bot vẫn gọi Gemini + trừ credit. Mock KHOÁ THEO KEY: tài khoản Zalo không khoá, chỉ `chatbots`.
+  describe('A P2-1 — khoá tài nguyên chatbots chặn Zalo cá nhân', () => {
+    const lockOnly = (...lockedKeys) => mockResourceIsLocked.mockImplementation(async (key) => lockedKeys.includes(key));
+
+    it('chatbot ghim bị khoá (tài khoản Zalo không khoá) → KHÔNG rate limit, KHÔNG gọi AI, KHÔNG trả lời, log result=locked', async () => {
+      lockOnly('chatbots');
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 420, id_chatbot: 10 });
+      const logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: 'lockbot_1', fromUid: 'visitor_lock', content: 'Shop ơi còn hàng không', type: 0 },
+        { conversationId: 420, messageId: 910 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockResourceIsLocked).toHaveBeenCalledWith('zalo_accounts', 5);
+      expect(mockResourceIsLocked).toHaveBeenCalledWith('chatbots', 10);
+      expect(mockCheckBeforeAi).not.toHaveBeenCalled();
+      expect(mockRouteMessageWithSettings).not.toHaveBeenCalled();
+      expect(mockSendReply).not.toHaveBeenCalled();
+      expect(logSpy.mock.calls.some(([line]) => String(line).includes('chatbot=10') && String(line).includes('result=locked'))).toBe(true);
+      logSpy.mockRestore();
+    });
+
+    it('đối chứng: chatbot KHÔNG khoá (chỉ khoá chatbot khác) → vẫn gọi AI như cũ', async () => {
+      mockResourceIsLocked.mockImplementation(async (key, id) => key === 'chatbots' && id === 99);
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 421, id_chatbot: 10 });
+
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: 'lockbot_2', fromUid: 'visitor_ok', content: 'Shop ơi', type: 0 },
+        { conversationId: 421, messageId: 911 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockResourceIsLocked).toHaveBeenCalledWith('chatbots', 10);
+      expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
+      expect(mockSendReply).toHaveBeenCalledTimes(1);
+    });
+
+    it('hội thoại KHÔNG ghim chatbot nào → không tra khoá chatbots (hành vi cũ, không chặn nhầm)', async () => {
+      lockOnly('chatbots');
+      mockPickEnabledChatbotForZalo.mockResolvedValue(null);
+      jest.spyOn(zaloInboxService, 'getOrCreateConversation').mockResolvedValue({ id: 422, id_chatbot: null });
+
+      const handler = zaloInboxService.createMessageHandler(1, 5, 5);
+      await handler(
+        { msgId: 'lockbot_3', fromUid: 'visitor_nopin2', content: 'Alo', type: 0 },
+        { conversationId: 422, messageId: 912 }
+      );
+      await jest.advanceTimersByTimeAsync(6000);
+
+      expect(mockResourceIsLocked.mock.calls.some(([key]) => key === 'chatbots')).toBe(false);
+      expect(mockRouteMessageWithSettings).toHaveBeenCalledTimes(1);
+    });
+  });
+
     it('does not broadcast a phantom agent message when Zalo send fails', async () => {
     mockSendReply.mockResolvedValue({ success: false, error: 'No active session' });
     const handler = zaloInboxService.createMessageHandler(1, 10, 10);

@@ -728,6 +728,12 @@ class ZaloPersonalInboxService {
         console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=locked`);
         return;
       }
+      // Khoá tài nguyên `chatbots` (hạ gói / hết hạn slot): chatbot bị khoá thì không gọi AI, không trừ credit — khuôn Telegram
+      // (internal.routes.js), WhatsApp, Studio, widget. Thiếu dòng này thì chatbot đã bị khoá vẫn trả lời qua Zalo cá nhân (A P2-1).
+      if (idChatbot && await resourceIsLocked('chatbots', idChatbot)) {
+        console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} chatbot=${idChatbot} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=locked`);
+        return;
+      }
       const session = await zaloPersonalAdapter.getSessionByAccountId(zaloSettingId);
       if (!session?.api) {
         console.log(`[ChatbotDebounce] channel=zalo_personal account=${zaloSettingId} conversation=${conversation.id} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=disabled`);
