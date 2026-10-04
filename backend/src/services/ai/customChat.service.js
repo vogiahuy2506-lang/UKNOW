@@ -366,8 +366,12 @@ class CustomChatService {
     const text = await extractTextFromBuffer(file.buffer, cleanName, { userId });
 
     if (!text || text.trim().length < 10) {
-      const error = new Error('Could not extract text from file');
+      // Lỗi đọc chữ bằng AI (tệp quá dài/nặng, AI bận) đã ném sẵn câu riêng từ `extractTextFromBuffer`; tới đây là tệp không có chữ.
+      const error = new Error(
+        'Không đọc được nội dung chữ từ tệp này. Hãy kiểm tra tệp có chữ (không phải trang trống hoặc bị khoá mật khẩu) hoặc thử định dạng khác như PDF, DOCX, TXT.'
+      );
       error.status = 400;
+      error.code = 'NO_TEXT_EXTRACTED';
       throw error;
     }
 
