@@ -66,6 +66,42 @@ describe('F1.3 — chat công khai: body 64kb + message ≤ 2.000 ký tự', () 
     expect(mockChat).not.toHaveBeenCalled();
   });
 
+  // EXTRA-A7: 413 do body-parser đi thẳng tới error handler, bỏ qua middleware đứng SAU parser → CORS công khai phải đứng TRƯỚC.
+  // Origin lạ (chưa xác minh) không được dynamicCors gắn ACAO; thiếu header thì trình duyệt chỉ thấy lỗi mạng chung.
+  const STRANGER_ORIGIN = 'https://khach-la.example.com';
+
+  it.each([
+    ['widget theo key', chatByKey],
+    ['trang công khai theo id', chatById],
+    ['tư vấn trang chủ', () => request(app).post('/api/public/hero/consultation')],
+  ])('%s: body > 64kb từ origin LẠ → 413 KÈM Access-Control-Allow-Origin (widget đọc được câu "quá lớn")', async (_label, post) => {
+    const res = await post()
+      .set('Origin', STRANGER_ORIGIN)
+      .send({ visitorId: 'v_cors', message: 'xin chào', sessionId: nextSession(), history: [{ role: 'user', content: 'x'.repeat(100 * 1024) }] });
+
+    expect(res.status).toBe(413);
+    expect(res.body.code).toBe('PAYLOAD_TOO_LARGE');
+    expect(res.headers['access-control-allow-origin']).toBe(STRANGER_ORIGIN);
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+  });
+
+  it('preflight OPTIONS của chat công khai từ origin lạ → 204 kèm ACAO', async () => {
+    const res = await request(app)
+      .options('/api/chatbot-public/custom-chatbot/wk_limits/chat')
+      .set('Origin', STRANGER_ORIGIN)
+      .set('Access-Control-Request-Method', 'POST');
+    expect(res.status).toBe(204);
+    expect(res.headers['access-control-allow-origin']).toBe(STRANGER_ORIGIN);
+  });
+
+  it('đối chứng: route KHÔNG công khai vẫn không gắn ACAO cho origin lạ (không mở CORS ngoài hai tiền tố công khai)', async () => {
+    const res = await request(app)
+      .post('/api/auth/login')
+      .set('Origin', STRANGER_ORIGIN)
+      .send({ username: 'nobody', password: 'x' });
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+  });
+
   it.each([
     ['widget theo key', chatByKey],
     ['trang công khai theo id', chatById],

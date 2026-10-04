@@ -145,6 +145,12 @@ export function createApp() {
   // đọc xong nên parser toàn cục bỏ qua; đứng sau thì 5mb đã bị nuốt rồi (A P0-4/D-01: body 5 MB = ~1,3 USD/lượt Gemini).
   // Tin tối đa 2.000 ký tự + 10 tin lịch sử × 1.000 ký tự + vài đính kèm ≈ chục KB nên 64kb dư. Không phải webhook,
   // không cần rawBody. Body vượt trần → 413 (xử lý ở error handler bên dưới).
+  //
+  // CORS công khai PHẢI đứng TRƯỚC parser 64kb (EXTRA-A7, 04/10/2026): body vượt trần làm parser gọi next(err) nên 413 đi thẳng
+  // tới error handler, bỏ qua mọi middleware đứng SAU nó — `publicCorsMiddleware` ở route (bên dưới) không kịp gắn header. Widget
+  // nhúng trên site khách (origin chưa xác minh, dynamicCors không gắn ACAO) khi đó chỉ thấy lỗi mạng chung, không đọc được
+  // câu "tin quá dài" của máy chủ. Chỉ hai tiền tố công khai này; route khác vẫn theo dynamicCors (origin lạ không có ACAO).
+  app.use(['/api/chatbot-public', '/api/public/hero'], publicCorsMiddleware);
   app.use(['/api/chatbot-public', '/api/public/hero'], express.json({ limit: '64kb' }));
   // Ghi lại raw body để xác thực chữ ký HMAC-SHA256 của webhook
   app.use(
