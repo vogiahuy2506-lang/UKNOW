@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import {
   HiOutlineCalendar,
   HiOutlineExclamation,
@@ -42,6 +43,27 @@ const getScheduleNextRunUiLabel = (schedule, t) => {
   const at = resolveScheduleUiTimingDate(schedule);
   if (!at) return t('campaignRunModals.undetermined');
   return formatCampaignDateTime(at);
+};
+
+// Khối lỗi của hộp Đặt lịch: role="alert" để trình đọc màn hình đọc, và tự cuộn vào tầm nhìn trong vùng cuộn của
+// modal (người dùng bấm Lưu ở cuối form thì khối lỗi ở đầu form có thể nằm ngoài khung nhìn).
+const ScheduleFormErrorBlock = ({ message, suggestions }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    ref.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' });
+  }, [message]);
+  return (
+    <div ref={ref} role="alert" className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
+      <p>{message}</p>
+      {suggestions.length > 0 && (
+        <ul className="mt-2 list-disc pl-5 space-y-0.5" data-testid="schedule-overlap-suggestions">
+          {suggestions.map((suggestion) => (
+            <li key={suggestion}>{suggestion}</li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
 };
 
 const CampaignRunModals = ({
@@ -287,16 +309,7 @@ const CampaignRunModals = ({
               </div>
             )}
             {scheduleFormError && (
-              <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
-                <p>{scheduleFormError}</p>
-                {scheduleOverlapSuggestions.length > 0 && (
-                  <ul className="mt-2 list-disc pl-5 space-y-0.5" data-testid="schedule-overlap-suggestions">
-                    {scheduleOverlapSuggestions.map((suggestion) => (
-                      <li key={suggestion}>{suggestion}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
+              <ScheduleFormErrorBlock message={scheduleFormError} suggestions={scheduleOverlapSuggestions} />
             )}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">

@@ -123,4 +123,30 @@ describe('hộp "Đặt lịch" — ước tính + 409 SCHEDULE_OVERLAP', () => 
     renderScheduleModal({ scheduleFormError: 'Lỗi khác' });
     expect(screen.queryByTestId('schedule-overlap-suggestions')).not.toBeInTheDocument();
   });
+
+  it('khối lỗi có role="alert" và được cuộn vào tầm nhìn khi lỗi xuất hiện', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      renderScheduleModal({ scheduleFormError: 'Lượt chạy lúc 03/10 sẽ chồng lịch kế tiếp.' });
+      expect(screen.getByRole('alert')).toHaveTextContent('chồng lịch kế tiếp');
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('không có lỗi → không có khối alert và không cuộn', () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    try {
+      renderScheduleModal();
+      expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+      expect(scrollIntoView).not.toHaveBeenCalled();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
 });

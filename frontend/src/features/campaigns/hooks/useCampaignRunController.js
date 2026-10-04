@@ -11,6 +11,7 @@ import {
   getMaxExecutionLogUpdatedAt,
 } from '../utils/campaignRunExecutionLogLoader';
 import toast from 'react-hot-toast';
+import { showScheduleOverlapToast } from '../components/ScheduleOverlapToast';
 import { buildFlowOrderIndex } from '../../../utils/campaignExecutionLogs';
 import { useI18n } from '../../../i18n';
 import {
@@ -751,8 +752,8 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
       const overlap = extractScheduleOverlapError(error);
       const message = error?.response?.data?.message || t('campaigns.createScheduleFailed');
       setScheduleOverlapSuggestions(overlap ? describeOverlapSuggestions(overlap.suggestions, t) : []);
+      // Modal vẫn mở và luôn hiện khối lỗi (có role="alert" + tự cuộn tới) → KHÔNG toast thêm, tránh hiện câu hai lần.
       setScheduleFormError(message);
-      toast.error(message, { duration: 6000 });
     }
   };
 
@@ -828,6 +829,17 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
         });
       }
     } catch (error) {
+      // 409 SCHEDULE_OVERLAP: câu server + 3 gợi ý trong MỘT toast dài (dùng được ở cả 3 nơi gọi: tab Lịch chạy,
+      // modal chi tiết lịch, modal danh sách lịch — không nơi nào có khối lỗi riêng).
+      const overlap = extractScheduleOverlapError(error);
+      if (overlap) {
+        showScheduleOverlapToast({
+          message: overlap.message || t('campaigns.updateScheduleFailed'),
+          suggestions: describeOverlapSuggestions(overlap.suggestions, t),
+          t,
+        });
+        return;
+      }
       toast.error(error?.response?.data?.message || t('campaigns.updateScheduleFailed'), { duration: 6000 });
     }
   };

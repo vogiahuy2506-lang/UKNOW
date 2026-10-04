@@ -3,7 +3,7 @@
  * hiện câu server + gợi ý trong modal (không đóng modal).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
+import { renderHook, act, waitFor, render, screen } from '@testing-library/react';
 import useCampaignRunController from '../useCampaignRunController';
 import campaignRunApiService from '../../services/campaignRunApi.service';
 import { ESTIMATE_438 } from '../../utils/__tests__/campaignEstimate.fixtures';
@@ -25,7 +25,7 @@ vi.mock('../../services/campaignRunApi.service', () => ({
     updateCampaignSchedule: vi.fn(),
   },
 }));
-vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn(), custom: vi.fn(), dismiss: vi.fn() } }));
 const mockT = (key, params = {}) => {
   const val = key.split('.').reduce((acc, part) => acc?.[part], viTranslations);
   if (typeof val !== 'string') return key;
@@ -131,7 +131,9 @@ describe('useCampaignRunController — ước tính thời gian gửi', () => {
       viTranslations.campaignEstimate.suggestion.spread_schedule,
     ]);
     expect(result.current.showScheduleModal).toBe(true);
-    expect(toast.error).toHaveBeenCalledWith(serverMessage, expect.anything());
+    // Modal đã hiện khối lỗi → KHÔNG toast thêm (trước đây câu hiện hai lần).
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(toast.custom).not.toHaveBeenCalled();
   });
 
   it('409 khác (CAMPAIGN_NOT_ACTIVE) → có message, KHÔNG có gợi ý chồng lịch', async () => {
@@ -146,5 +148,64 @@ describe('useCampaignRunController — ước tính thời gian gửi', () => {
     await act(async () => { await result.current.handleSaveSchedule(); });
     expect(result.current.scheduleFormError).toBe('Chiến dịch chưa active');
     expect(result.current.scheduleOverlapSuggestions).toEqual([]);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('lỗi không có phản hồi (mạng) khi tạo lịch → khối lỗi trong modal nhận câu mặc định, không toast', async () => {
+    campaignRunApiService.createCampaignSchedule.mockRejectedValue(new Error('Network Error'));
+    const { result } = renderHook(() => useCampaignRunController());
+    act(() => { result.current.openScheduleModal({ ...campaign438, status: 'active' }); });
+    act(() => {
+      result.current.setScheduleForm((prev) => ({ ...prev, scheduleName: 'Lịch', scheduleType: 'once', scheduleDate: '2099-10-05', scheduleTime: '09:00' }));
+    });
+    await act(async () => { await result.current.handleSaveSchedule(); });
+    expect(result.current.scheduleFormError).toBe(viTranslations.campaigns.createScheduleFailed);
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  describe('bật lại lịch (handleToggleSchedule)', () => {
+    it('409 SCHEDULE_OVERLAP → toast.custom dài 12 giây có câu server + đủ 3 gợi ý + nút đóng; KHÔNG toast.error', async () => {
+      const serverMessage = 'Lượt chạy lúc 03/10 09:00 dự kiến xong khoảng 06/10 10:00, lịch kế tiếp lúc 04/10 09:00 sẽ bị bỏ qua.';
+      campaignRunApiService.updateCampaignSchedule.mockRejectedValue({
+        response: {
+          status: 409,
+          data: { success: false, code: 'SCHEDULE_OVERLAP', message: serverMessage, overlap: {}, suggestions: ['use_steps', 'add_accounts', 'spread_schedule'] },
+        },
+      });
+      const { result } = renderHook(() => useCampaignRunController());
+      await act(async () => { await result.current.handleToggleSchedule(7, false); });
+
+      expect(toast.error).not.toHaveBeenCalled();
+      expect(toast.custom).toHaveBeenCalledTimes(1);
+      const [renderFn, options] = toast.custom.mock.calls[0];
+      expect(options.duration).toBeGreaterThanOrEqual(12000);
+      render(renderFn({ visible: true, id: 'toast-1' }));
+      expect(screen.getByRole('alert')).toHaveTextContent(serverMessage);
+      expect(screen.getAllByRole('listitem').map((li) => li.textContent)).toEqual([
+        viTranslations.campaignEstimate.suggestion.use_steps,
+        viTranslations.campaignEstimate.suggestion.add_accounts,
+        viTranslations.campaignEstimate.suggestion.spread_schedule,
+      ]);
+      screen.getByRole('button', { name: viTranslations.common.close }).click();
+      expect(toast.dismiss).toHaveBeenCalledWith('toast-1');
+    });
+
+    it('lỗi khác (409 CAMPAIGN_NOT_ACTIVE) → toast.error với câu server như cũ, KHÔNG toast.custom', async () => {
+      campaignRunApiService.updateCampaignSchedule.mockRejectedValue({
+        response: { status: 409, data: { success: false, code: 'CAMPAIGN_NOT_ACTIVE', message: 'Chiến dịch chưa active' } },
+      });
+      const { result } = renderHook(() => useCampaignRunController());
+      await act(async () => { await result.current.handleToggleSchedule(7, false); });
+      expect(toast.error).toHaveBeenCalledWith('Chiến dịch chưa active', expect.anything());
+      expect(toast.custom).not.toHaveBeenCalled();
+    });
+
+    it('lỗi mạng → toast.error với câu mặc định', async () => {
+      campaignRunApiService.updateCampaignSchedule.mockRejectedValue(new Error('Network Error'));
+      const { result } = renderHook(() => useCampaignRunController());
+      await act(async () => { await result.current.handleToggleSchedule(7, false); });
+      expect(toast.error).toHaveBeenCalledWith(viTranslations.campaigns.updateScheduleFailed, expect.anything());
+      expect(toast.custom).not.toHaveBeenCalled();
+    });
   });
 });
