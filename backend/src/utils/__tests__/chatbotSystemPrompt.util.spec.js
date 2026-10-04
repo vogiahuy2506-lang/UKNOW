@@ -96,3 +96,40 @@ describe('buildChatbotSystemPrompt — chống lộ chỉ dẫn + tài liệu l�
     expect(prompt.slice(prompt.indexOf('<<<HET DU LIEU>>>')).match(/## QUY TAC QUAN TRONG/g)).toHaveLength(1);
   });
 });
+
+describe('buildChatbotSystemPrompt — định danh trung tính, không tự nhận là ứng dụng nhắn tin, không xưng tên (A P2-4)', () => {
+  it('mở đầu bằng dòng định danh trung tính, kể cả khi có khối MO TA', () => {
+    expect(buildChatbotSystemPrompt({}).startsWith('Ban la tro ly ao cua doanh nghiep nay')).toBe(true);
+    const withDesc = buildChatbotSystemPrompt({ chatbot: { description: 'Tư vấn khoá học' } });
+    expect(withDesc.startsWith('Ban la tro ly ao cua doanh nghiep nay')).toBe(true);
+    expect(withDesc.indexOf('## MO TA')).toBeGreaterThan(0);
+  });
+
+  it('luật KHONG BAO GIO tu nhan la WhatsApp/Zalo/Telegram/Facebook/Messenger/Meta + "tro ly ao do doanh nghiep cau hinh"', () => {
+    const prompt = buildChatbotSystemPrompt({});
+    const rule = prompt.split('\n').find((line) => line.includes('KHONG BAO GIO tu nhan minh la'));
+    expect(rule).toBeDefined();
+    for (const app of ['WhatsApp', 'Zalo', 'Telegram', 'Facebook', 'Messenger', 'Meta']) expect(rule).toContain(`"${app}"`);
+    expect(rule).toContain('khong phai ung dung nhan tin');
+  });
+
+  it('KHÔNG xưng tên: không còn luật bắt xưng tên, không chèn tên chatbot/sub-assistant vào khung, câu mẫu "em là ai" không nêu tên riêng', () => {
+    const prompt = buildChatbotSystemPrompt({
+      subAssistant: { name: 'Trợ lý Hà' },
+      settings: { sub_assistant_name: 'Trợ lý Hà' },
+      chatbot: { name: 'Bot Linh' },
+    });
+    expect(prompt).not.toContain('LUON xung ten');
+    expect(prompt).not.toContain('Trợ lý Hà');
+    expect(prompt).not.toContain('Bot Linh');
+    expect(prompt).not.toMatch(/giới thiệu ngắn gọn về bạn \(tên/);
+    expect(prompt).toContain('mình là trợ lý ảo của doanh nghiệp này');
+  });
+
+  it('chỉ cấm BỊA tên khi chỉ dẫn tuỳ chỉnh không đặt tên — chủ tự đặt tên trong HUONG DAN TUY CHINH thì vẫn dùng được', () => {
+    const prompt = buildChatbotSystemPrompt({ settings: { system_instruction: 'Bạn tên là Linh, tư vấn viên của shop.' } });
+    expect(prompt).toMatch(/Neu HUONG DAN TUY CHINH khong dat ten cho ban thi KHONG tu bia ten rieng/);
+    // Chỉ dẫn của chủ đứng SAU luật nên không bị luật chặn.
+    expect(prompt.indexOf('KHONG tu bia ten rieng')).toBeLessThan(prompt.indexOf('Bạn tên là Linh'));
+  });
+});

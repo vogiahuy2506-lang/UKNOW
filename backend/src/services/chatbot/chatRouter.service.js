@@ -532,12 +532,10 @@ class ChatRouterService {
           .catch(() => ''),
       ]);
 
-      // Build system prompt qua chatRouter.buildSystemPrompt chung để đảm bảo
-      // đồng bộ rule anti-hallucination ('KHONG tu nhan la WhatsApp/Zalo/...') +
-      // rule xưng tên ('LUON xung ten la ${name}') giống các kênh channel khác.
-      // Trước đó Studio path tự build prompt ở đây, dễ quên rule — sửa bằng cách
-      // refactor dùng cùng helper. Chatbot name + description + system_instruction
-      // + description_map lần lượt map vào `subAssistant` / `settings` / `chatbot`.
+      // Build system prompt qua chatRouter.buildSystemPrompt chung để đồng bộ khung với các kênh khác
+      // (anti-hallucination, luật "không tự nhận là WhatsApp/Zalo/...", chống lộ chỉ dẫn). Bản cũ chú thích ở đây nói
+      // prompt có luật 'LUON xung ten la ${name}' — luật xưng tên đã BỎ có chủ ý ở c5d7bcdf (22/09), prompt chỉ còn dòng
+      // định danh trung tính "trợ lý ảo của doanh nghiệp". `chatbot.description` hiện không được truyền vào khung.
       const ownSettings = {
         welcome_message: chatbot.welcome_message,
         // custom_chatbots.response_style có thật (migration 185) — thiếu/không hợp lệ thì
