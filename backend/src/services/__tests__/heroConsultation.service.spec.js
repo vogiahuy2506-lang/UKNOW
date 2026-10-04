@@ -55,7 +55,7 @@ describe('heroConsultation.service quota & daily cap', () => {
 
       expect(res6.success).toBe(false);
       expect(res6.code).toBe('QUOTA_EXCEEDED');
-      expect(res6.message).toContain('het luot chat mien phi');
+      expect(res6.message).toContain('hết lượt chat miễn phí');
 
       const remainingAfter = await heroConsultationService.getRemainingQuota(visitorId);
       expect(remainingAfter).toBe(0);
@@ -137,7 +137,7 @@ describe('heroConsultation.service quota & daily cap', () => {
         });
         expect(resSpam.success).toBe(false);
         expect(resSpam.code).toBe('QUOTA_EXCEEDED');
-        expect(resSpam.message).toContain('het luot chat mien phi');
+        expect(resSpam.message).toContain('hết lượt chat miễn phí');
       }
 
       // 3. Visitor B behind the same IP must still be able to chat (IP cap of 30 was only incremented 5 times)
@@ -191,7 +191,7 @@ describe('heroConsultation.service quota & daily cap', () => {
 
       expect(resBlocked.success).toBe(false);
       expect(resBlocked.code).toBe('QUOTA_EXCEEDED');
-      expect(resBlocked.message).toContain('trong ngay');
+      expect(resBlocked.message).toContain('trong ngày');
     } finally {
       global.fetch = originalFetch;
     }

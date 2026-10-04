@@ -26,6 +26,8 @@ const MAX_FREE_CHATS = 5;
 export const HERO_MAX_MESSAGE_CHARS = 1000;
 export const HERO_BUSY_MESSAGE =
   'Tư vấn viên đang bận, bạn vui lòng để lại số điện thoại hoặc email, đội ngũ Founder AI sẽ liên hệ lại với bạn sớm nhất nhé.';
+/** Câu cho khách khi thiếu visitorId / tin nhắn. Dùng chung với route (routes/heroConsultation.routes.js). */
+export const HERO_INVALID_INPUT_MESSAGE = 'Thiếu mã khách truy cập hoặc nội dung tin nhắn.';
 const VISITOR_QUOTA_TTL_SEC = 24 * 60 * 60; // 24 hours
 const DAY_COUNTER_TTL_SEC = 172800; // 48 hours for calendar day cleanup
 
@@ -58,8 +60,27 @@ function buildRedisConfig() {
  */
 const memoryCounters = new Map();
 
+/**
+ * Bản cũ không bao giờ xoá khoá hết hạn (chỉ đọc kiểm hạn) → khi không có Redis, mỗi visitor/IP mới thêm một khoá vĩnh viễn (D-26).
+ * Nay quét khoá hết hạn khi số khoá chạm ngưỡng, nhưng tối đa mỗi phút một lần: cả map toàn khoá còn sống (bị dội) không bị quét O(n)
+ * trên MỖI lượt. Cũng chạy khi Redis lỗi giữa chừng (nhánh `incr failed` rơi về RAM).
+ */
+export const MEMORY_COUNTERS_SWEEP_THRESHOLD = 2000;
+const MEMORY_COUNTERS_SWEEP_MIN_INTERVAL_MS = 60 * 1000;
+let lastMemorySweepAt = 0;
+
+function sweepExpiredMemoryCounters(now) {
+  for (const [key, entry] of memoryCounters) {
+    if (entry.expiresAt <= now) memoryCounters.delete(key);
+  }
+}
+
 function memoryIncr(key, windowSec) {
   const now = Date.now();
+  if (memoryCounters.size >= MEMORY_COUNTERS_SWEEP_THRESHOLD && now - lastMemorySweepAt >= MEMORY_COUNTERS_SWEEP_MIN_INTERVAL_MS) {
+    lastMemorySweepAt = now;
+    sweepExpiredMemoryCounters(now);
+  }
   const existing = memoryCounters.get(key);
   if (!existing || existing.expiresAt <= now) {
     memoryCounters.set(key, { count: 1, expiresAt: now + windowSec * 1000 });
@@ -112,12 +133,6 @@ async function fetchFounderaiData() {
       courses: coursesResult.rows || [],
       lastUpdated: now,
     };
-
-    console.log('[HeroConsultation] Fetched plans from DB:', plansResult.rows?.length || 0, 'rows');
-    console.log('[HeroConsultation] Fetched courses from DB:', coursesResult.rows?.length || 0, 'rows');
-    if (plansResult.rows?.length > 0) {
-      console.log('[HeroConsultation] Plans:', plansResult.rows.map(p => `${p.name}: ${p.price}`).join(', '));
-    }
 
     return founderaiDataCache;
   } catch (error) {
@@ -611,7 +626,7 @@ class HeroConsultationService {
    */
   async processChat({ visitorId, message, ip = '' }) {
     if (!visitorId || typeof message !== 'string' || !message.trim()) {
-      return { success: false, code: 'INVALID_INPUT', message: 'visitorId and message are required' };
+      return { success: false, code: 'INVALID_INPUT', message: HERO_INVALID_INPUT_MESSAGE };
     }
 
     // Trước mọi bộ đếm: tin quá dài không được tiêu lượt của khách, và tuyệt đối không tới được Gemini.
@@ -641,7 +656,7 @@ class HeroConsultationService {
       return {
         success: false,
         code: 'QUOTA_EXCEEDED',
-        message: 'Ban da het luot chat mien phi',
+        message: 'Bạn đã hết lượt chat miễn phí.',
       };
     }
 
@@ -653,7 +668,7 @@ class HeroConsultationService {
         return {
           success: false,
           code: 'QUOTA_EXCEEDED',
-          message: 'Ban da het luot chat mien phi trong ngay',
+          message: 'Bạn đã hết lượt chat miễn phí trong ngày.',
         };
       }
     }
@@ -673,8 +688,6 @@ class HeroConsultationService {
     const plansText = formatPlansForContext(founderaiData.plans);
     const coursesText = formatCoursesForContext(founderaiData.courses);
 
-    console.log('[HeroConsultation] Plans text:', plansText.substring(0, 200));
-
     // Build prompt with verified data ONLY
     const systemPrompt = buildHeroSystemPrompt({ plansText, coursesText, message });
 
@@ -693,14 +706,14 @@ class HeroConsultationService {
         return {
           success: false,
           code: 'SERVICE_UNAVAILABLE',
-          message: 'Dich vu AI tam thoi khong kha dung',
+          message: 'Dịch vụ AI tạm thời không khả dụng. Bạn vui lòng thử lại sau ít phút.',
         };
       }
 
       return {
         success: false,
         code: 'AI_ERROR',
-        message: 'Xin loi, da xay ra loi. Vui long thu lai.',
+        message: 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.',
       };
     }
   }
@@ -726,11 +739,17 @@ Hay hoi toi bat cu dieu gi ban quan tam!`,
     return Math.max(0, MAX_FREE_CHATS - count);
   }
 
+  /** Test helper — số khoá đang nằm trong bộ đếm RAM (kiểm việc dọn khoá hết hạn). */
+  _memoryCounterSize() {
+    return memoryCounters.size;
+  }
+
   /**
    * Test helper — clear memory counters + force memory path
    */
   _resetForTests() {
     memoryCounters.clear();
+    lastMemorySweepAt = 0;
     this.redisFailed = true;
     this.redis = null;
     this._skipDb = true;

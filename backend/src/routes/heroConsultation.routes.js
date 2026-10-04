@@ -1,5 +1,5 @@
 import express from 'express';
-import heroConsultationService from '../services/heroConsultation.service.js';
+import heroConsultationService, { HERO_INVALID_INPUT_MESSAGE } from '../services/heroConsultation.service.js';
 import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
 import { publicChatLimiter } from '../middleware/rateLimiter.middleware.js';
 
@@ -44,7 +44,7 @@ router.post('/consultation', publicChatLimiter, async (req, res) => {
       return res.status(400).json({
         success: false,
         code: 'INVALID_INPUT',
-        message: 'visitorId and message are required',
+        message: HERO_INVALID_INPUT_MESSAGE,
       });
     }
 
@@ -66,7 +66,7 @@ router.post('/consultation', publicChatLimiter, async (req, res) => {
     return res.status(500).json({
       success: false,
       code: 'INTERNAL_ERROR',
-      message: 'An unexpected error occurred',
+      message: 'Xin lỗi, đã xảy ra lỗi. Vui lòng thử lại.',
     });
   }
 });
@@ -92,7 +92,7 @@ router.get('/info', (req, res) => {
     console.error('[HeroConsultation Route] Error:', error);
     return res.status(500).json({
       success: false,
-      message: 'Failed to get chatbot info',
+      message: 'Không lấy được thông tin trợ lý. Vui lòng thử lại.',
     });
   }
 });
