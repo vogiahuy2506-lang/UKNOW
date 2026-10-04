@@ -181,6 +181,13 @@ describe('send quota — messages_per_period', () => {
        RETURNING id`,
       [owner.id]
     );
+    // Từ G2 (giao tài khoản Zalo cho nhân viên, 04/10/2026) nhân viên chỉ thao tác được hội thoại của tài khoản ĐƯỢC GIAO.
+    // Ca này ghim việc ghi nhận người gửi / thành viên khi gửi, không phải phân quyền → giao tài khoản cho nhân viên.
+    await db.query(
+      `INSERT INTO member_channel_accounts (owner_id, employee_id, channel, account_ref, source)
+       VALUES ($1, $2, 'zalo_personal', $3, 'assigned')`,
+      [owner.id, employee.id, String(accounts[0].id)]
+    );
     const { rows: conversations } = await db.query(
       `INSERT INTO zalo_personal_conversations (id_user, id_zalo_setting, external_id, visitor_name)
        VALUES ($1, $2, 'uid_employee_reply', 'Khách employee')
