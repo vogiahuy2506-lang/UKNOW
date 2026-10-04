@@ -122,6 +122,7 @@ jest.unstable_mockModule('../../ai/aiModelPolicy.service.js', () => ({
 }));
 
 const { default: chatRouterService } = await import('../chatRouter.service.js');
+const { buildChatbotSystemPrompt } = await import('../../../utils/chatbotSystemPrompt.util.js');
 
 describe('chatRouter.service AI fallback', () => {
   beforeEach(() => {
@@ -698,6 +699,20 @@ describe('chatRouter._callAI — đi qua lõi Gemini dùng chung (G2.1)', () => 
 });
 
 describe('ChatRouterService.buildSystemPrompt — natural pronouns + no internal note leak', () => {
+  it('buildSystemPrompt của chatRouter CHÍNH LÀ khung chung (utils/chatbotSystemPrompt) — đường web dùng cùng hàm (A P2-5)', () => {
+    const args = {
+      subAssistant: { greeting_msg: 'Chào' },
+      settings: { system_instruction: 'Chỉ bán khoá AI.', response_style: 'concise' },
+      chatbot: { description: 'Tư vấn khoá học' },
+      ragContext: 'RAG',
+      profileContext: 'PROFILE',
+      isFirstMessage: true,
+      contactNote: 'NOTE',
+    };
+    expect(chatRouterService.buildSystemPrompt(args)).toBe(buildChatbotSystemPrompt(args));
+    expect(chatRouterService._buildSystemPrompt(args)).toBe(buildChatbotSystemPrompt(args));
+  });
+
   it('does NOT force AI to introduce itself by name (user preference)', () => {
     // User requested: bỏ tự xưng tên, không bắt buộc giới thiệu tên.
     const prompt = chatRouterService.buildSystemPrompt({
