@@ -6,14 +6,16 @@
  * Store thật; từ điển thật (chữ người dùng thấy); chỉ mock ranh giới lưu trữ và điều hướng.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { fireEvent, render, screen } from '@testing-library/react';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import viDict from '../../../i18n/vi.js';
 import enDict from '../../../i18n/en.js';
 
 vi.mock('../../../i18n', async () => (await import('../../../test/realI18n.js')).realI18nModule());
+// `storage.usage` đổi theo ca (null = chưa có số dung lượng → không có cảnh báo dung lượng).
+const storage = vi.hoisted(() => ({ usage: null }));
 vi.mock('../../../features/storage/useStorageQuota', () => ({
-  default: () => ({ usage: null }),
+  default: () => ({ usage: storage.usage }),
 }));
 // Ranh giới mạng của store (authStore tự gọi API cờ OTP lúc nạp) — không cho ra mạng thật.
 vi.mock('../../../services/api', () => ({
@@ -53,6 +55,7 @@ const banner = () => screen.queryByRole('status');
 
 beforeEach(() => {
   window.sessionStorage.clear();
+  storage.usage = null;
 });
 
 describe('CreditWarningBanner — nói đúng tài nguyên', () => {
@@ -199,5 +202,58 @@ describe('creditBanner — từ điển đủ khoá cho mọi tài nguyên (ở 
     expect(viDict.creditBanner.empty).toContain('{resource}');
     expect(viDict.creditBanner.low).not.toMatch(/credit AI/i);
     expect(viDict.creditBanner.empty).not.toMatch(/credit AI/i);
+  });
+});
+
+// M-03 (04/10/2026): cảnh báo dung lượng bảo "hãy dọn bớt tệp" nhưng nút duy nhất chỉ sang trang Thanh toán — không chỉ
+// chỗ dọn. Nay có nút "Dọn tệp" tới Tệp & dung lượng.
+describe('CreditWarningBanner — nút "Dọn tệp" ở cảnh báo dung lượng', () => {
+  const GB = 1024 ** 3;
+  const NEARLY_FULL = { limitBytes: 5 * GB, usedBytes: 4.4 * GB, remainingBytes: 0.6 * GB, percent: 88 };
+
+  const renderWithRoutes = () => render(
+    <MemoryRouter initialEntries={['/app']}>
+      <Routes>
+        <Route path="/app" element={<CreditWarningBanner />} />
+        <Route path="/app/settings/media-library" element={<div>TRANG-TEP-VA-DUNG-LUONG</div>} />
+      </Routes>
+    </MemoryRouter>
+  );
+
+  it('chủ tài khoản: cảnh báo dung lượng có nút "Dọn tệp" → /app/settings/media-library (đường dẫn giữ nguyên để link cũ không gãy)', () => {
+    setState();
+    storage.usage = NEARLY_FULL;
+    renderWithRoutes();
+
+    expect(banner()).toHaveTextContent('Dung lượng lưu trữ đã dùng 88%');
+    fireEvent.click(screen.getByRole('button', { name: 'Dọn tệp' }));
+    expect(screen.getByText('TRANG-TEP-VA-DUNG-LUONG')).toBeInTheDocument();
+  });
+
+  it('cảnh báo KHÔNG phải dung lượng (email) thì không có nút "Dọn tệp"', () => {
+    setState({ sendUsage: { ...NO_SEND, email: { used: 8500, limit: 10000 } } });
+    renderWithRoutes();
+
+    expect(banner()).toHaveTextContent('Sắp hết hạn mức email');
+    expect(screen.queryByRole('button', { name: 'Dọn tệp' })).toBeNull();
+  });
+
+  it('nhân viên có quyền xem Thư viện media → có nút; không có quyền → không dẫn vào trang bị chặn', () => {
+    storage.usage = NEARLY_FULL;
+    setState({ activeContext: { type: 'employee', ownerId: 3, ownerName: 'Cty', permissions: { media_library_view: true } } });
+    const withPermission = renderWithRoutes();
+    expect(screen.getByRole('button', { name: 'Dọn tệp' })).toBeInTheDocument();
+    withPermission.unmount();
+
+    setState({ activeContext: { type: 'employee', ownerId: 3, ownerName: 'Cty', permissions: {} } });
+    renderWithRoutes();
+    expect(banner()).toHaveTextContent('báo chủ tài khoản');
+    expect(screen.queryByRole('button', { name: 'Dọn tệp' })).toBeNull();
+  });
+
+  it('có đủ chữ ở cả vi và en', () => {
+    expect(viDict.creditBanner.cleanFiles).toBe('Dọn tệp');
+    expect(typeof enDict.creditBanner.cleanFiles).toBe('string');
+    expect(enDict.creditBanner.cleanFiles.length).toBeGreaterThan(0);
   });
 });

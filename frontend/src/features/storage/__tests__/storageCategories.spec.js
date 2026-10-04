@@ -14,9 +14,9 @@ import { STORAGE_CATEGORIES, resolveStorageCategory } from '../storageCategories
 const EXPECTED = [
   ['zalo_template', 'Mẫu tin nhắn', 'Message Template'],
   ['email_template', 'Mẫu Email', 'Email Template'],
-  ['chat', 'Tin nhắn chat', 'Chat Message'],
+  ['chat', 'Tệp trong chat & Trợ lý AI', 'Chat & AI assistant files'],
   ['landing', 'Landing page', 'Landing Page'],
-  ['landing_version', 'Phiên bản Landing', 'Landing version'],
+  ['landing_version', 'Bản lưu landing (tự động)', 'Landing backups (automatic)'],
   ['landing_asset', 'Ảnh landing page', 'Landing page images'],
   ['form_asset', 'Tệp biểu mẫu', 'Form files'],
   ['form_receipt', 'Biên lai biểu mẫu', 'Form payment receipts'],
@@ -24,7 +24,7 @@ const EXPECTED = [
   ['campaign', 'Chiến dịch', 'Campaign'],
   ['quick_send', 'Gửi nhanh', 'Quick send'],
   ['help', 'Trợ giúp', 'Help'],
-  ['temp', 'Tệp tạm', 'Temp File'],
+  ['temp', 'Tệp chưa lưu (tự xoá)', 'Unsaved files (auto-deleted)'],
   ['other', 'Khác', 'Other'],
 ];
 

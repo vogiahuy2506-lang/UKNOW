@@ -62,8 +62,17 @@ function storageObjectsPayload() {
     type,
     url: type === 'image' ? picture(index) : '#',
     expiresAt: null,
+    autoDeleteAt: null,
     referenceType: null,
     referenceId: null,
+    // Hình dạng mới của backend (04/10/2026): nguồn tệp chat + "đang dùng ở đâu" (cùng hàm quyết định với nút Xoá).
+    source: category === 'chat' ? 'ai_assistant' : null,
+    inUse: category === 'zalo_template' || category === 'email_template',
+    usedBy: category === 'zalo_template'
+      ? { referenceType: 'zalo_template', referenceId: '15', label: 'Mẫu tin nhắn', name: 'Khuyến mãi khai giảng', url: '/app/settings/templates' }
+      : category === 'email_template'
+        ? { referenceType: 'email_template', referenceId: '3', label: 'Mẫu Email', name: 'Chào mừng học viên', url: '/app/settings/templates' }
+        : null,
     createdAt: new Date(Date.UTC(2026, 8, 20 - index)).toISOString(),
   }));
   const byCategory = new Map();
@@ -172,20 +181,24 @@ export default {
     },
     {
       name: 'thu-vien-media-tat-ca-tep',
-      caption: 'Thư viện media, khoanh đỏ hàng thẻ Dung lượng theo danh mục',
+      caption: 'Thư viện media, khoanh đỏ thanh dung lượng và hàng thẻ Theo loại tệp',
       localOnly: true,
       async take(page) {
+        // Thanh dung lượng ở đầu trang: tài khoản mẫu chưa tải tệp nào nên thanh luôn 0% — cho trang thấy 38%.
+        await mockStorageUsage(page, { usedRatio: 0.38 });
         const unmock = await mockMediaLibrary(page);
         await page.goto('/app/settings/media-library');
-        const summaryTitle = page.getByText('Dung lượng theo danh mục', { exact: true }).first();
+        const summaryTitle = page.getByText('Theo loại tệp', { exact: true }).first();
         await summaryTitle.waitFor({ state: 'visible', timeout: 30_000 });
         await page.getByText('Ảnh landing page', { exact: true }).first().waitFor({ state: 'visible', timeout: 15_000 });
         await settle(page);
         await hideVolatileChrome(page);
-        // Khối "Dung lượng theo danh mục" = nhãn + lưới thẻ; khoanh cả khối.
+        // Khoanh thanh dung lượng + khối "Theo loại tệp" (nhãn + lưới thẻ).
+        await highlight(page.locator('main').getByText('Dung lượng lưu trữ', { exact: true }).first().locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]'));
         await highlight(summaryTitle.locator('xpath=..'));
         await page.waitForTimeout(300);
         await unmock();
+        await page.unroute('**/api/storage/usage*');
         return contentShot(page, page.locator('main').first(), { maxHeight: 640 });
       },
     },

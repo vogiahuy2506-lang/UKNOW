@@ -246,6 +246,10 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
   };
 
   const isComposer = placement === 'composer';
+  // Cảnh báo dung lượng: dẫn thẳng tới nơi dọn tệp (trước đây nút duy nhất chỉ sang trang Thanh toán, nói "hãy dọn bớt tệp"
+  // mà không chỉ chỗ dọn). Nhân viên chỉ thấy khi có quyền xem Thư viện media — không dẫn vào trang bị chặn.
+  const canCleanFiles = alertState.metric === 'storage'
+    && (!isEmployeeCtx || activeContext?.permissions?.media_library_view === true);
   const showBuyTopup = alertState.kind !== 'expired' && alertState.metric !== 'storage' && !isEmployeeCtx;
   const primaryHref = (alertState.kind === 'expired' || isEmployeeCtx)
     ? '/pricing'
@@ -285,6 +289,15 @@ const CreditWarningBanner = ({ placement = 'page' }) => {
             }`}
           >
             {t('creditBanner.buyTopup')}
+          </button>
+        )}
+        {canCleanFiles && (
+          <button
+            type="button"
+            onClick={() => navigate('/app/settings/media-library')}
+            className="rounded border border-amber-500 bg-white px-2.5 py-1 text-xs font-semibold text-amber-800 transition-colors hover:bg-amber-50"
+          >
+            {t('creditBanner.cleanFiles')}
           </button>
         )}
         <button
