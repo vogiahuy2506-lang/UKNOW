@@ -7,9 +7,12 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import InboxOutboxPage from '../InboxOutboxPage';
 import chatbotApi from '../../../features/chatbot/services/chatbotApi.service';
 
-vi.mock('../../../i18n', () => ({
-  useI18n: () => ({ t: (key) => key }),
-}));
+// `t` PHẢI ổn định giữa các lần render như bản thật (useCallback) — nếu mỗi lần một hàm mới thì
+// effect phụ thuộc `t` (fetchMessages) chạy vô hạn khi tải tin thành công.
+vi.mock('../../../i18n', () => {
+  const t = (key) => key;
+  return { useI18n: () => ({ t }) };
+});
 
 vi.mock('../../../stores/authStore', () => ({
   useAuthStore: (selector) => {

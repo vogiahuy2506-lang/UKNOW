@@ -278,13 +278,13 @@ class UnifiedInboxService {
       throw new Error('Conversation not found');
     }
 
-    const messages = await unifiedInboxRepository.getMessages(
+    const { messages, hasMore } = await unifiedInboxRepository.getMessages(
       parseInt(conversationId),
       conversationType,
       options
     );
 
-    return messages.map(msg => {
+    const mapped = messages.map(msg => {
       // Parse metadata to extract sender info
       const metadata = msg.metadata || {};
       const senderName = metadata.sender_name || null;
@@ -310,12 +310,15 @@ class UnifiedInboxService {
         isRead: msg.isRead || false,
       };
     });
+    return { messages: mapped, hasMore };
   }
 
   /**
    * Mark conversation as read
+   * @param {{ fromMessageId?: number|null }} [options] — chỉ đánh dấu từ tin này trở về sau (phần khung đọc đã tải)
+   * @returns {Promise<{ success: true, remainingUnread: number }>}
    */
-  async markAsRead(userId, conversationId, conversationType) {
+  async markAsRead(userId, conversationId, conversationType, options = {}) {
     // Verify conversation belongs to user
     const conversation = await unifiedInboxRepository.getConversationById(
       userId,
@@ -327,36 +330,23 @@ class UnifiedInboxService {
       throw new Error('Conversation not found');
     }
 
-    await unifiedInboxRepository.markAsRead(parseInt(conversationId), conversationType);
-    return { success: true };
+    const { remainingUnread } = await unifiedInboxRepository.markAsRead(
+      parseInt(conversationId),
+      conversationType,
+      { fromMessageId: options.fromMessageId || null }
+    );
+    return { success: true, remainingUnread };
   }
 
   /**
-   * Get total unread count
+   * Số hội thoại 1-1 có tin chưa đọc trong phạm vi đang xem (H-03). Xem repository.getUnreadConversationCount
+   * về quy ước (không tính nhóm, không tính tài khoản hết phiên).
+   * @param {{ channel?: string, zaloAccountId?: string|number }} [scope]
+   * @returns {Promise<{ total: number, unit: 'conversations' }>}
    */
-  async getUnreadCount(userId) {
-    const total = await unifiedInboxRepository.getUnreadCount(userId);
-    const byChannel = await unifiedInboxRepository.getUnreadCountByChannel(userId);
-
-    const summary = {};
-    let maxUnread = 0;
-    let topChannel = null;
-
-    byChannel.forEach(item => {
-      if (item.unread > 0) {
-        summary[item.channel] = parseInt(item.unread);
-        if (item.unread > maxUnread) {
-          maxUnread = item.unread;
-          topChannel = item.channel;
-        }
-      }
-    });
-
-    return {
-      total,
-      byChannel: summary,
-      topChannel,
-    };
+  async getUnreadCount(userId, scope = {}) {
+    const total = await unifiedInboxRepository.getUnreadConversationCount(userId, scope);
+    return { total, unit: 'conversations' };
   }
 
   /**

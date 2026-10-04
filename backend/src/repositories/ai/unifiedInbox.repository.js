@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import { isPlaceholderGroupName } from '../../utils/zaloGroupName.util.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
+import { getVietnamDayRange } from '../../utils/vnTimeFormat.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -10,10 +11,17 @@ function normalizeConversationStatus(status) {
   return VALID_STATUSES.has(status) ? status : null;
 }
 
-function dateRangeStart(date) {
-  const now = new Date();
+/**
+ * Mốc bắt đầu của bộ lọc ngày. "Hôm nay" tính theo NGÀY LỊCH VIỆT NAM: container production chạy UTC
+ * (`date` → UTC, TZ rỗng), nên `new Date(y, m, d)` theo giờ tiến trình khiến "Hôm nay" bắt đầu lúc 07:00 sáng giờ VN
+ * và trước 7 giờ sáng lại kéo cả chiều hôm qua vào (RA_SOAT_3_MAN H-14). 7 ngày / 30 ngày là cửa sổ trượt từ lúc
+ * này nên không phụ thuộc múi giờ.
+ * @param {string} date
+ * @param {Date} [now]
+ */
+function dateRangeStart(date, now = new Date()) {
   if (date === 'today') {
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return getVietnamDayRange(now).startUtc;
   }
   if (date === 'week') {
     return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -128,6 +136,13 @@ function buildOutboxChannelGates(channel) {
 
 const CHANNEL_CONNECTION_TYPES = new Set(['zalo_oa', 'facebook', 'whatsapp_baileys', 'telegram']);
 
+/**
+ * Hội thoại Zalo KHÔNG phải nhóm — cùng nghĩa với `visitorInfo.is_group === true` mà danh sách dùng để gắn `isGroup`
+ * (để số chưa đọc, chip Cá nhân/Nhóm và dòng hiển thị không lệch nhau). `visitor_info` là JSONB.
+ */
+const ZALO_IS_GROUP_SQL = (alias) => `COALESCE(${alias}.visitor_info->>'is_group', 'false') = 'true'`;
+const ZALO_NOT_GROUP_SQL = (alias) => `NOT (${ZALO_IS_GROUP_SQL(alias)})`;
+
 /** Gate UNION branches when filtering inbox conversations by channel. */
 function buildConversationChannelGates(channel) {
   if (!channel) {
@@ -165,6 +180,17 @@ function aiPauseTableFor(conversationType) {
     throw err;
   }
   return table;
+}
+
+/** Bảng tin nhắn theo loại hội thoại. Loại lạ rơi về webchat như các hàm đọc/ghi tin vẫn làm; controller đã chặn trước. */
+const MESSAGE_TABLES = {
+  channel: 'channel_messages',
+  zalo_personal: 'zalo_personal_messages',
+  webchat: 'webchat_messages',
+};
+
+function messageTableFor(conversationType) {
+  return MESSAGE_TABLES[conversationType] || MESSAGE_TABLES.webchat;
 }
 
 class UnifiedInboxRepository {
@@ -581,11 +607,23 @@ class UnifiedInboxRepository {
   }
 
   /**
-   * Get messages for a conversation
+   * Get messages for a conversation (cũ → mới trong trang trả về).
+   * Phân trang bằng khoá `(created_at, id)` — khớp `ORDER BY created_at DESC` — chứ không chỉ `id`: tin kéo lịch sử
+   * về sau có id lớn nhưng created_at cũ, `id < before` sẽ bỏ sót hoặc lặp tin (H-01).
+   * Đọc `limit + 1` dòng để biết còn tin cũ hơn không (`hasMore`) mà không cần COUNT.
+   * @returns {Promise<{ messages: object[], hasMore: boolean }>}
    */
   async getMessages(conversationId, conversationType, { limit = 50, beforeId = null } = {}) {
-    let beforeFilter = beforeId ? `AND id < $3` : '';
-    let params = beforeId ? [conversationId, limit, beforeId] : [conversationId, limit];
+    const table = messageTableFor(conversationType);
+    const pageSize = Math.min(Math.max(Number(limit) || 50, 1), 200);
+    const params = [conversationId, pageSize + 1];
+    let beforeFilter = '';
+    if (beforeId) {
+      params.push(beforeId);
+      beforeFilter = `AND (created_at, id) < (
+           SELECT created_at, id FROM ${table} WHERE id = $3 AND id_conversation = $1
+         )`;
+    }
 
     // Helper to convert snake_case DB columns to camelCase for frontend
     const transformRow = (row) => ({
@@ -605,87 +643,114 @@ class UnifiedInboxRepository {
       metadata: row.metadata ? (typeof row.metadata === 'string' ? JSON.parse(row.metadata) : row.metadata) : null,
     });
 
-    if (conversationType === 'channel') {
-      const { rows } = await db.query(
-        `SELECT * FROM channel_messages
-         WHERE id_conversation = $1 ${beforeFilter}
-         ORDER BY created_at DESC
-         LIMIT $2`,
-        params
-      );
-      console.log(`[UnifiedInbox] getMessages channel: conv=${conversationId}, found=${rows.length}`);
-      return rows.reverse().map(transformRow);
-    } else if (conversationType === 'zalo_personal') {
-      const { rows } = await db.query(
-        `SELECT * FROM zalo_personal_messages
-         WHERE id_conversation = $1 ${beforeFilter}
-         ORDER BY created_at DESC
-         LIMIT $2`,
-        params
-      );
-      console.log(`[UnifiedInbox] getMessages zalo_personal: conv=${conversationId}, found=${rows.length}`);
-      return rows.reverse().map(transformRow);
-    } else {
-      const { rows } = await db.query(
-        `SELECT * FROM webchat_messages
-         WHERE id_conversation = $1 ${beforeFilter}
-         ORDER BY created_at DESC
-         LIMIT $2`,
-        params
-      );
-      return rows.reverse().map(transformRow);
-    }
+    const { rows } = await db.query(
+      `SELECT * FROM ${table}
+       WHERE id_conversation = $1 ${beforeFilter}
+       ORDER BY created_at DESC, id DESC
+       LIMIT $2`,
+      params
+    );
+    const hasMore = rows.length > pageSize;
+    const page = hasMore ? rows.slice(0, pageSize) : rows;
+    return { messages: page.reverse().map(transformRow), hasMore };
   }
 
   /**
-   * Mark messages as read
+   * Mark messages as read.
+   * Có `fromMessageId` → chỉ đánh dấu tin khách từ tin đó trở về SAU (khoá `(created_at, id)`) — tức phần khung đọc đã
+   * tải; tin cũ hơn chưa từng hiện ra thì giữ nguyên "chưa đọc" (H-01: bản cũ đánh dấu cả 67 tin không ai xem được).
+   * Không có → đánh dấu toàn bộ như trước (client cũ, nút "Đánh dấu tất cả đã đọc" của một hội thoại).
+   * @returns {Promise<{ remainingUnread: number }>} số tin khách còn chưa đọc của hội thoại sau khi đánh dấu
    */
-  async markAsRead(conversationId, conversationType) {
+  async markAsRead(conversationId, conversationType, { fromMessageId = null } = {}) {
+    const table = messageTableFor(conversationType);
     const now = new Date().toISOString();
-
-    if (conversationType === 'channel') {
-      await db.query(
-        `UPDATE channel_messages SET is_read = true, read_at = $2
-         WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false`,
-        [conversationId, now]
-      );
-    } else if (conversationType === 'zalo_personal') {
-      await db.query(
-        `UPDATE zalo_personal_messages SET is_read = true, read_at = $2
-         WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false`,
-        [conversationId, now]
-      );
-    } else {
-      await db.query(
-        `UPDATE webchat_messages SET is_read = true, read_at = $2
-         WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false`,
-        [conversationId, now]
-      );
+    const params = [conversationId, now];
+    let fromFilter = '';
+    if (fromMessageId) {
+      params.push(fromMessageId);
+      fromFilter = `AND (created_at, id) >= (
+           SELECT created_at, id FROM ${table} WHERE id = $3 AND id_conversation = $1
+         )`;
     }
+
+    await db.query(
+      `UPDATE ${table} SET is_read = true, read_at = $2
+       WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false ${fromFilter}`,
+      params
+    );
+    const { rows } = await db.query(
+      `SELECT COUNT(*)::int AS remaining FROM ${table}
+       WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false`,
+      [conversationId]
+    );
+    return { remainingUnread: rows[0]?.remaining || 0 };
   }
 
   /**
-   * Get total unread count across all channels
+   * Số HỘI THOẠI 1-1 có tin khách chưa đọc, trong phạm vi đang xem (H-03).
+   *
+   * Bản cũ đếm số TIN `role='visitor' AND is_read=false` trên cả 3 bảng: ở khách lớn ra 10–54 nghìn, 83–100% là tin trong
+   * NHÓM Zalo (AI không bao giờ trả lời) và gồm cả tài khoản đã hết phiên mà danh sách không hiện — con số không giúp
+   * hành động được. Quy ước mới:
+   *  - đếm hội thoại, không đếm tin;
+   *  - KHÔNG tính nhóm Zalo (vẫn hiện trong danh sách, đọc và trả lời tay được);
+   *  - KHÔNG tính hội thoại của tài khoản Zalo đã hết phiên (status <> 'connected') hoặc kết nối kênh đã tắt;
+   *  - theo đúng phạm vi tab/tài khoản đang chọn (`channel`, `zaloAccountId`) như danh sách.
+   * @param {number} userId
+   * @param {{ channel?: string, zaloAccountId?: string|number }} [scope]
+   * @returns {Promise<number>}
    */
-  async getUnreadCount(userId) {
+  async getUnreadConversationCount(userId, { channel, zaloAccountId } = {}) {
+    const params = [userId];
+    let paramIndex = 2;
+
+    let channelFilter = '';
+    if (channel && CHANNEL_CONNECTION_TYPES.has(channel)) {
+      channelFilter = `AND ch.channel = $${paramIndex}`;
+      params.push(channel);
+      paramIndex++;
+    }
+    let zaloAccountIdFilter = '';
+    const accountId = zaloAccountId ? Number.parseInt(zaloAccountId, 10) : NaN;
+    if (Number.isInteger(accountId)) {
+      zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
+      params.push(accountId);
+      paramIndex++;
+    }
+
+    const { channelGate, zaloGate, webGate } = buildConversationChannelGates(channel);
+
     const { rows } = await db.query(
       `SELECT
         (
-          SELECT COUNT(*) FROM channel_messages cm
-          JOIN channel_conversations cc ON cc.id = cm.id_conversation
-          WHERE cc.id_user = $1 AND cm.role = 'visitor' AND cm.is_read = false
+          SELECT COUNT(*) FROM channel_conversations cc
+          JOIN channel_connections ch ON ch.id = cc.id_channel
+          WHERE cc.id_user = $1 AND ch.is_active = true ${channelFilter} ${channelGate}
+            AND EXISTS (
+              SELECT 1 FROM channel_messages cm
+              WHERE cm.id_conversation = cc.id AND cm.role = 'visitor' AND cm.is_read = false
+            )
         ) + (
-          SELECT COUNT(*) FROM zalo_personal_messages zpm
-          JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-          WHERE zpc.id_user = $1 AND zpm.role = 'visitor' AND zpm.is_read = false
+          SELECT COUNT(*) FROM zalo_personal_conversations zp
+          JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
+          WHERE zp.id_user = $1 AND zs.status = 'connected' ${zaloAccountIdFilter} ${zaloGate}
+            AND ${ZALO_NOT_GROUP_SQL('zp')}
+            AND EXISTS (
+              SELECT 1 FROM zalo_personal_messages zpm
+              WHERE zpm.id_conversation = zp.id AND zpm.role = 'visitor' AND zpm.is_read = false
+            )
         ) + (
-          SELECT COUNT(*) FROM webchat_messages wm
-          JOIN webchat_conversations wc ON wc.id = wm.id_conversation
-          WHERE wc.id_user = $1 AND wm.role = 'visitor' AND wm.is_read = false
-        ) as total_unread`,
-      [userId]
+          SELECT COUNT(*) FROM webchat_conversations wc
+          WHERE wc.id_user = $1 ${webGate}
+            AND EXISTS (
+              SELECT 1 FROM webchat_messages wm
+              WHERE wm.id_conversation = wc.id AND wm.role = 'visitor' AND wm.is_read = false
+            )
+        ) AS total_unread`,
+      params
     );
-    return parseInt(rows[0]?.total_unread || 0);
+    return parseInt(rows[0]?.total_unread || 0, 10);
   }
 
   /**
@@ -1406,4 +1471,5 @@ class UnifiedInboxRepository {
   }
 }
 
+export { dateRangeStart };
 export default new UnifiedInboxRepository();

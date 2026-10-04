@@ -27,6 +27,26 @@ import { useAuthStore } from '../../stores/authStore';
 
 const getConversationKey = (conv) => (conv ? `${conv.type || ''}:${conv.id}` : '');
 
+/** Loại hội thoại của một sự kiện SSE. Sự kiện AI trả lời Zalo không có `type`, chỉ có `channel` → suy ra. */
+const getSseConversationType = (data) => {
+  if (data.type) return data.type;
+  if (data.conversationType) return data.conversationType;
+  if (data.channel === 'web') return 'webchat';
+  return 'zalo_personal';
+};
+const getSseConversationKey = (data) => `${getSseConversationType(data)}:${data.conversationId}`;
+
+/** Id tin lớn hơn mốc này là id đặt tạm bằng Date.now() (tin vừa gửi chưa có id server), không dùng làm mốc phân trang. */
+const MAX_SERVER_MESSAGE_ID = 1_000_000_000_000;
+/** Id tin SERVER cũ nhất đang hiện. Id BIGINT từ API là CHUỖI ('123'); bỏ tin tạm `temp-…` và id đặt tạm. */
+const getOldestLoadedMessageId = (list) => {
+  for (const message of list || []) {
+    const id = Number(message.id);
+    if (Number.isInteger(id) && id > 0 && id < MAX_SERVER_MESSAGE_ID) return id;
+  }
+  return null;
+};
+
 /** Single source of truth for "is this a Zalo group conversation" — used by both
  * the channel label and the AI auto-reply toggle so they never disagree. */
 const isGroupConversation = (conversation) => {
@@ -170,6 +190,14 @@ const InboxPage = () => {
   const selectedConversationRef = useRef(null);
   const messagesRequestSeqRef = useRef(0);
   const pendingMessagesForFetchRef = useRef(null);
+  // H-01: còn tin cũ hơn phần đã tải không (server trả hasMore) + đang tải trang cũ.
+  const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
+  const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
+  const messagesRef = useRef([]);
+  // Hội thoại vừa mở có tin chưa đọc: đánh dấu đọc SAU khi tải xong khung đọc, và chỉ phần đã tải (H-01).
+  const markReadAfterLoadRef = useRef(null);
+  const markOpenReadTimerRef = useRef(null);
+  const unreadRefreshTimerRef = useRef(null);
 
   const [filters, setFilters] = useState({
     channel: '',
@@ -203,6 +231,15 @@ const InboxPage = () => {
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
   }, [selectedConversation]);
+
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => () => {
+    clearTimeout(markOpenReadTimerRef.current);
+    clearTimeout(unreadRefreshTimerRef.current);
+  }, []);
 
   useEffect(() => {
     if (!isResizing) return;
@@ -309,16 +346,33 @@ const InboxPage = () => {
     }
   };
 
+  // H-03: số HỘI THOẠI 1-1 có tin chưa đọc, đúng phạm vi đang xem (tab kênh + tài khoản Zalo), không tính nhóm.
   const fetchUnreadCount = useCallback(async () => {
     try {
-      const response = await chatbotApi.getUnreadCount();
+      const response = await chatbotApi.getUnreadCount({
+        channel: filters.channel || undefined,
+        zaloAccountId: selectedAccountId || undefined,
+      });
       if (response.success) {
         setUnreadCount(response.data.total);
       }
     } catch (err) {
       console.error('Failed to fetch unread count:', err);
     }
-  }, []);
+  }, [filters.channel, selectedAccountId]);
+
+  // Ref để các callback đánh dấu đọc không đổi danh tính mỗi khi đổi bộ lọc (fetchMessages phụ thuộc chúng — đổi
+  // danh tính sẽ kích hoạt tải lại khung đọc đang mở).
+  const fetchUnreadCountRef = useRef(fetchUnreadCount);
+  fetchUnreadCountRef.current = fetchUnreadCount;
+
+  // Gom nhiều tin đến liên tiếp thành MỘT lần hỏi lại số chưa đọc.
+  const scheduleUnreadRefresh = useCallback(() => {
+    clearTimeout(unreadRefreshTimerRef.current);
+    unreadRefreshTimerRef.current = setTimeout(() => {
+      fetchUnreadCount();
+    }, 1000);
+  }, [fetchUnreadCount]);
 
   const fetchContactAlertsCount = useCallback(async () => {
     try {
@@ -329,6 +383,25 @@ const InboxPage = () => {
       }
     } catch {
       // Bỏ qua lỗi im lặng (không toast)
+    }
+  }, []);
+
+  // H-01: chỉ đánh dấu đọc phần khung đọc ĐÃ TẢI (từ tin cũ nhất đang hiện trở về sau). Tin cũ hơn chưa từng hiện ra
+  // giữ nguyên "chưa đọc" — bản cũ đánh dấu hết, nên mở nhóm 117 tin chưa đọc là 67 tin bị nuốt mà không ai xem được.
+  const markLoadedMessagesRead = useCallback(async (conv, loadedMessages) => {
+    const fromMessageId = getOldestLoadedMessageId(loadedMessages);
+    if (!conv || !fromMessageId) return;
+    try {
+      const response = await chatbotApi.markAsRead(conv.id, conv.type, { fromMessageId });
+      const remaining = Number(response?.data?.remainingUnread);
+      setConversations((prev) => prev.map((c) => (
+        c.id === conv.id && c.type === conv.type
+          ? { ...c, unreadCount: Number.isFinite(remaining) ? remaining : 0 }
+          : c
+      )));
+      fetchUnreadCountRef.current();
+    } catch (err) {
+      console.error('Failed to mark as read:', err);
     }
   }, []);
 
@@ -349,7 +422,14 @@ const InboxPage = () => {
           ? pendingMessagesForFetchRef.current.messages
           : [];
         pendingMessagesForFetchRef.current = null;
-        setMessages(mergeUniqueMessages(response.data || [], bufferedForTarget, true));
+        const merged = mergeUniqueMessages(response.data || [], bufferedForTarget, true);
+        setMessages(merged);
+        setHasMoreOlderMessages(response.hasMore === true);
+
+        if (markReadAfterLoadRef.current === targetKey) {
+          markReadAfterLoadRef.current = null;
+          markLoadedMessagesRead(target, merged);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch messages:', err);
@@ -359,15 +439,61 @@ const InboxPage = () => {
         setIsLoadingMessages(false);
       }
     }
-  }, [selectedConversation, t]);
+  }, [selectedConversation, t, markLoadedMessagesRead]);
+
+  // H-01: nút "Tải tin cũ hơn" — kéo trang cũ hơn tin cũ nhất đang hiện, đánh dấu đọc phần vừa tải.
+  const handleLoadOlderMessages = useCallback(async () => {
+    const target = selectedConversationRef.current;
+    const beforeId = getOldestLoadedMessageId(messagesRef.current);
+    if (!target || !beforeId || isLoadingOlderMessages) return false;
+    const targetKey = getConversationKey(target);
+    setIsLoadingOlderMessages(true);
+    try {
+      const response = await chatbotApi.getMessages(target.id, target.type, { before: beforeId });
+      if (!response.success || getConversationKey(selectedConversationRef.current) !== targetKey) return false;
+      const older = response.data || [];
+      setMessages((prev) => {
+        const known = new Set(prev.map((m) => String(m.id)));
+        return [...older.filter((m) => !known.has(String(m.id))), ...prev];
+      });
+      setHasMoreOlderMessages(response.hasMore === true);
+      if (older.length > 0) {
+        markLoadedMessagesRead(target, older);
+      }
+      return true;
+    } catch (err) {
+      console.error('Failed to fetch older messages:', err);
+      toast.error(t('errors.loadFailed'));
+      return false;
+    } finally {
+      setIsLoadingOlderMessages(false);
+    }
+  }, [isLoadingOlderMessages, markLoadedMessagesRead, t]);
+
+  // H-27: tin khách đến khi đang mở đúng hội thoại → đánh dấu đọc ở DB (chỉ phần khung đọc đã tải), gom 0,8 giây.
+  const scheduleMarkOpenConversationRead = useCallback((conv) => {
+    clearTimeout(markOpenReadTimerRef.current);
+    markOpenReadTimerRef.current = setTimeout(() => {
+      const current = selectedConversationRef.current;
+      if (!current || getConversationKey(current) !== getConversationKey(conv)) return;
+      markLoadedMessagesRead(current, messagesRef.current);
+    }, 800);
+  }, [markLoadedMessagesRead]);
 
   const handleNewMessage = useCallback((data) => {
     fetchContactAlertsCount();
     const displayMessage = getDisplayMessage(data.message, data.messageType);
+    // H-25: khớp hội thoại theo CẢ loại lẫn id — id của 3 bảng hội thoại là ba dãy số riêng.
+    const eventKey = getSseConversationKey(data);
+    const selected = selectedConversationRef.current;
+    const isThisConversation = !!selected && getConversationKey(selected) === eventKey;
+    const msgRole = data.role || 'visitor';
+    // Chỉ TIN KHÁCH mới tăng chưa đọc / bắn thông báo; tin AI hoặc chính chủ gửi từ điện thoại thì không.
+    const isVisitorMessage = msgRole === 'visitor';
 
     setConversations(prev => {
-      const existingIndex = prev.findIndex(c => Number(c.id) === Number(data.conversationId));
-      
+      const existingIndex = prev.findIndex(c => getConversationKey(c) === eventKey);
+
       if (existingIndex !== -1) {
         const existing = prev[existingIndex];
         const updated = {
@@ -375,9 +501,9 @@ const InboxPage = () => {
           lastMessage: displayMessage,
           lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
-          unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId))
+          unreadCount: isThisConversation
             ? 0
-            : (existing.unreadCount || 0) + 1,
+            : (existing.unreadCount || 0) + (isVisitorMessage ? 1 : 0),
           // isSelf: chỉ áp pause thật từ BE (aiPaused/aiPausedAt/aiResumeAt), không đoán.
           ...(data.isSelf === true ? pausePatchFromSse(data, existing) : {}),
         };
@@ -386,15 +512,16 @@ const InboxPage = () => {
       } else {
         const newConv = {
           id: data.conversationId,
-          type: data.type || 'zalo_personal',
+          type: getSseConversationType(data),
           channel: data.channel || 'zalo_personal',
-          visitorName: data.isGroup 
-            ? (data.visitorName || data.groupName || data.senderName || 'Nhóm') 
-            : (data.senderName || data.visitorName || 'Khách hàng'),
+          status: 'active',
+          visitorName: data.isGroup
+            ? (data.visitorName || data.groupName || data.senderName || t('inbox.group'))
+            : (data.senderName || data.visitorName || t('inbox.customer')),
           lastMessage: displayMessage,
           lastMessageAt: data.timestamp || new Date().toISOString(),
           last_message_at: data.timestamp || new Date().toISOString(),
-          unreadCount: (selectedConversation && Number(selectedConversation.id) === Number(data.conversationId)) ? 0 : 1,
+          unreadCount: isThisConversation || !isVisitorMessage ? 0 : 1,
           isGroup: data.isGroup || false,
           groupName: data.groupName || null,
           senderId: data.senderId,
@@ -406,20 +533,18 @@ const InboxPage = () => {
 
     if (data.isSelf === true) {
       setSelectedConversation((prev) => {
-        if (!prev || Number(prev.id) !== Number(data.conversationId)) return prev;
+        if (!prev || getConversationKey(prev) !== eventKey) return prev;
         const patch = pausePatchFromSse(data, prev);
         if (!Object.keys(patch).length) return prev;
         return { ...prev, ...patch };
       });
     }
-    if (document.hidden && displayMessage) {
+    if (isVisitorMessage && document.hidden && displayMessage) {
       showNotification(t('inbox.newMessage'), {
         body: `${data.senderName || t('inbox.customer')}: ${displayMessage.substring(0, 100)}`,
-        tag: `conv-${data.conversationId}`,
+        tag: `conv-${eventKey}`,
       });
-    } else if (!document.hidden && displayMessage && (
-      !selectedConversation || Number(data.conversationId) !== Number(selectedConversation.id)
-    )) {
+    } else if (isVisitorMessage && !document.hidden && displayMessage && !isThisConversation) {
       const sender = data.senderName || t('inbox.customer');
       const msgPreview = displayMessage.length > 50 ? displayMessage.substring(0, 50) + '...' : displayMessage;
       toast.success(`${sender}: ${msgPreview}`, {
@@ -427,28 +552,32 @@ const InboxPage = () => {
         duration: 4000,
       });
     }
-    
+
     if (data.isTyping) {
       setTypingSender(data.senderName);
       setIsTyping(true);
       setTimeout(() => setIsTyping(false), 3000);
       return;
     }
-    
-    const isThisConversation = selectedConversation
-      && Number(data.conversationId) === Number(selectedConversation.id);
-    
+
+    if (isVisitorMessage) {
+      if (isThisConversation) {
+        scheduleMarkOpenConversationRead(selected);
+      } else {
+        // H-27: tổng chưa đọc ở đầu trang cập nhật cho cả Zalo (trước chỉ Web chat có sự kiện unread_change).
+        scheduleUnreadRefresh();
+      }
+    }
+
     if (isThisConversation) {
-      const msgRole = data.role || 'visitor';
-      
       setMessages(prev => {
-        const isDuplicate = prev.some(m => 
-          m.createdAt === data.timestamp || 
+        const isDuplicate = prev.some(m =>
+          m.createdAt === data.timestamp ||
           (m.content === data.message && Math.abs(new Date(m.createdAt) - new Date(data.timestamp || Date.now())) < 5000)
         );
-        
+
         if (isDuplicate) return prev;
-        
+
         const newMsg = {
           id: data.messageId || `temp-${Date.now()}`,
           role: msgRole,
@@ -463,7 +592,7 @@ const InboxPage = () => {
         };
         return [...prev, newMsg];
       });
-      
+
       setTimeout(() => {
         const endEl = document.querySelector('[data-messages-end]');
         if (endEl) {
@@ -472,16 +601,15 @@ const InboxPage = () => {
       }, 100);
     } else {
       setPendingMessages(prev => {
-        const convMessages = prev[data.conversationId] || [];
-        const msgRole = data.role || 'visitor';
-        
-        const isDuplicate = convMessages.some(m => 
-          m.createdAt === data.timestamp || 
+        const convMessages = prev[eventKey] || [];
+
+        const isDuplicate = convMessages.some(m =>
+          m.createdAt === data.timestamp ||
           (m.content === data.message && Math.abs(new Date(m.createdAt) - new Date(data.timestamp || Date.now())) < 5000)
         );
-        
+
         if (isDuplicate) return prev;
-        
+
         const newMsg = {
           id: data.messageId || `temp-${Date.now()}`,
           role: msgRole,
@@ -494,14 +622,14 @@ const InboxPage = () => {
           attachments: Array.isArray(data.attachments) ? data.attachments : [],
           senderName: data.senderName,
         };
-        
+
         return {
           ...prev,
-          [data.conversationId]: [...convMessages, newMsg],
+          [eventKey]: [...convMessages, newMsg],
         };
       });
     }
-  }, [fetchContactAlertsCount, getDisplayMessage, selectedConversation, showNotification, t]);
+  }, [fetchContactAlertsCount, getDisplayMessage, showNotification, t, scheduleMarkOpenConversationRead, scheduleUnreadRefresh]);
 
   const handleUnreadChange = useCallback(() => {
     fetchUnreadCount();
@@ -661,7 +789,8 @@ const InboxPage = () => {
     setSelectedConversation(conv);
     setIsLoadingMessages(true);
 
-    const bufferedMessages = pendingMessages[conv.id] || [];
+    const convKey = getConversationKey(conv);
+    const bufferedMessages = pendingMessages[convKey] || [];
     pendingMessagesForFetchRef.current = bufferedMessages.length > 0
       ? { key: getConversationKey(conv), messages: bufferedMessages }
       : null;
@@ -669,29 +798,17 @@ const InboxPage = () => {
     if (bufferedMessages.length > 0) {
       setMessages(mergeUniqueMessages([], bufferedMessages, true));
       setPendingMessages(prev => {
-        const { [conv.id]: _, ...rest } = prev;
+        const { [convKey]: _, ...rest } = prev;
         return rest;
       });
     } else {
       setMessages([]);
     }
 
-    if (conv.unreadCount > 0) {
-      try {
-        await chatbotApi.markAsRead(conv.id, conv.type);
-        setConversations(prev =>
-          prev.map(c =>
-            c.id === conv.id && c.type === conv.type
-              ? { ...c, unreadCount: 0 }
-              : c
-          )
-        );
-        fetchUnreadCount();
-      } catch (err) {
-        console.error('Failed to mark as read:', err);
-      }
-    }
-  }, [fetchUnreadCount, pendingMessages]);
+    // H-01: không đánh dấu đọc ngay lúc bấm — đợi khung đọc tải xong rồi chỉ đánh dấu phần đã tải (fetchMessages).
+    markReadAfterLoadRef.current = conv.unreadCount > 0 ? getConversationKey(conv) : null;
+    setHasMoreOlderMessages(false);
+  }, [pendingMessages]);
 
   const handleOpenConversationByRef = useCallback(({ id, type, visitorName = 'Khách hàng' }) => {
     setActiveView('chat');
@@ -751,8 +868,10 @@ const InboxPage = () => {
   const handleBack = () => {
     messagesRequestSeqRef.current += 1;
     selectedConversationRef.current = null;
+    markReadAfterLoadRef.current = null;
     setSelectedConversation(null);
     setMessages([]);
+    setHasMoreOlderMessages(false);
     setIsLoadingMessages(false);
   };
 
@@ -1191,6 +1310,9 @@ const InboxPage = () => {
                 onRetry={canManage ? handleRetryMessage : undefined}
                 retryingMessageId={retryingMessageId}
                 replyingTo={replyingTo}
+                hasMoreOlder={hasMoreOlderMessages}
+                isLoadingOlder={isLoadingOlderMessages}
+                onLoadOlder={handleLoadOlderMessages}
               />
             </div>
 

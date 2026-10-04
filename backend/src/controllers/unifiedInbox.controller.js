@@ -115,14 +115,17 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      const messages = await unifiedInboxService.getMessages(resolveWorkspaceOwnerId(req.user), id, type, {
-        limit: parseInt(limit),
-        beforeId: before ? parseInt(before) : null,
+      const beforeId = Number.parseInt(before, 10);
+      const { messages, hasMore } = await unifiedInboxService.getMessages(resolveWorkspaceOwnerId(req.user), id, type, {
+        limit: Math.min(Math.max(Number.parseInt(limit, 10) || 50, 1), 200),
+        beforeId: Number.isInteger(beforeId) && beforeId > 0 ? beforeId : null,
       });
 
       return res.json({
         success: true,
         data: messages,
+        // true khi còn tin cũ hơn trang này — FE hiện nút "Tải tin cũ hơn" (H-01).
+        hasMore,
       });
     } catch (err) {
       console.error('[UnifiedInbox] Get messages error:', err);
@@ -140,7 +143,7 @@ class UnifiedInboxController {
   async markAsRead(req, res) {
     try {
       const { id } = req.params;
-      const { type = 'channel' } = req.body;
+      const { type = 'channel', fromMessageId } = req.body;
       if (!CONVERSATION_TYPES.has(type)) {
         return res.status(400).json(INVALID_CONVERSATION_TYPE_BODY);
       }
@@ -149,11 +152,16 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      await unifiedInboxService.markAsRead(resolveWorkspaceOwnerId(req.user), id, type);
+      // fromMessageId (tuỳ chọn): chỉ đánh dấu đọc phần khung đọc đã tải. Thiếu → đánh dấu hết (client cũ).
+      const fromId = Number.parseInt(fromMessageId, 10);
+      const result = await unifiedInboxService.markAsRead(resolveWorkspaceOwnerId(req.user), id, type, {
+        fromMessageId: Number.isInteger(fromId) && fromId > 0 ? fromId : null,
+      });
 
       return res.json({
         success: true,
         message: 'Conversation marked as read',
+        data: { remainingUnread: result.remainingUnread },
       });
     } catch (err) {
       console.error('[UnifiedInbox] Mark as read error:', err);
@@ -170,7 +178,11 @@ class UnifiedInboxController {
    */
   async getUnreadCount(req, res) {
     try {
-      const counts = await unifiedInboxService.getUnreadCount(resolveWorkspaceOwnerId(req.user));
+      // Cùng phạm vi với danh sách đang xem: tab kênh + tài khoản Zalo (H-03).
+      const counts = await unifiedInboxService.getUnreadCount(resolveWorkspaceOwnerId(req.user), {
+        channel: req.query.channel || undefined,
+        zaloAccountId: req.query.zaloAccountId || undefined,
+      });
 
       return res.json({
         success: true,

@@ -2999,6 +2999,7 @@ export default {
     conversations: 'Conversations',
     anonymousCustomer: 'Anonymous Customer',
     loadMore: 'Load more messages',
+    loadOlderMessages: 'Load older messages',
     loadMoreConversations: 'Load more conversations',
     selectConversation: 'Select a conversation',
     startConversation: 'Start a conversation',

@@ -3003,6 +3003,7 @@ export default {
     anonymousCustomer: 'Khách hàng ẩn danh',
     anonymousUser: 'Người dùng',
     loadMore: 'Tải thêm tin nhắn',
+    loadOlderMessages: 'Tải tin cũ hơn',
     loadMoreConversations: 'Tải thêm cuộc trò chuyện',
     selectConversation: 'Chọn một cuộc trò chuyện',
     startConversation: 'Bắt đầu cuộc trò chuyện',

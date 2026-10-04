@@ -271,8 +271,12 @@ const chatbotApi = {
     return response.data;
   },
 
-  markAsRead: async (id, type = 'channel') => {
-    const response = await api.post(`/ai/chatbot/inbox/conversations/${id}/read`, { type });
+  /**
+   * `fromMessageId` (tuỳ chọn): chỉ đánh dấu đọc từ tin đó trở về sau — phần khung đọc đã tải (H-01).
+   * Trả `{ data: { remainingUnread } }`: số tin khách còn chưa đọc (tin cũ chưa tải).
+   */
+  markAsRead: async (id, type = 'channel', { fromMessageId } = {}) => {
+    const response = await api.post(`/ai/chatbot/inbox/conversations/${id}/read`, { type, fromMessageId });
     return response.data;
   },
 
@@ -281,8 +285,11 @@ const chatbotApi = {
     return response.data;
   },
 
-  getUnreadCount: async () => {
-    const response = await api.get('/ai/chatbot/inbox/unread-count');
+  /** Số hội thoại 1-1 có tin chưa đọc trong phạm vi đang xem (tab kênh + tài khoản Zalo) — H-03. */
+  getUnreadCount: async ({ channel, zaloAccountId } = {}) => {
+    const response = await api.get('/ai/chatbot/inbox/unread-count', {
+      params: { channel, zaloAccountId },
+    });
     return response.data;
   },
 

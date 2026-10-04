@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { HiCheck, HiReply, HiX, HiSearch, HiExclamationCircle } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import MessageAttachments from '../../components/MessageAttachments';
@@ -299,7 +299,18 @@ const MessageBubble = ({
   );
 };
 
-const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, retryingMessageId, replyingTo }) => {
+const MessageThread = ({
+  messages,
+  isLoading,
+  conversation,
+  onReply,
+  onRetry,
+  retryingMessageId,
+  replyingTo,
+  hasMoreOlder = false,
+  isLoadingOlder = false,
+  onLoadOlder,
+}) => {
   const { t } = useI18n();
   const [searchQuery, setSearchQuery] = useState('');
   const [showSearch, setShowSearch] = useState(false);
@@ -348,11 +359,26 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, re
     }
   }, [searchQuery, messages, messageLabels]);
 
-  useEffect(() => {
-    if (containerRef.current) {
-      containerRef.current.scrollTop = containerRef.current.scrollHeight;
+  // H-01: tải tin cũ hơn thì chèn lên ĐẦU danh sách — giữ nguyên vị trí đang đọc thay vì nhảy xuống cuối.
+  const olderScrollSnapshotRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const snapshot = olderScrollSnapshotRef.current;
+    if (snapshot) {
+      olderScrollSnapshotRef.current = null;
+      el.scrollTop = el.scrollHeight - snapshot.height + snapshot.top;
+      return;
     }
+    el.scrollTop = el.scrollHeight;
   }, [messages]);
+
+  const handleLoadOlder = async () => {
+    const el = containerRef.current;
+    olderScrollSnapshotRef.current = el ? { height: el.scrollHeight, top: el.scrollTop } : null;
+    const loaded = await onLoadOlder?.();
+    if (!loaded) olderScrollSnapshotRef.current = null;
+  };
 
   const messagesWithDate = messages.map((msg, index) => {
     const prevMsg = messages[index - 1];
@@ -437,6 +463,18 @@ const MessageThread = ({ messages, isLoading, conversation, onReply, onRetry, re
 
       {/* Messages */}
       <div ref={containerRef} className="h-full min-h-0 min-w-0 overflow-y-scroll overscroll-contain px-5 py-4 [scrollbar-gutter:stable]">
+        {hasMoreOlder && onLoadOlder && (
+          <div className="flex justify-center pb-4">
+            <button
+              type="button"
+              onClick={handleLoadOlder}
+              disabled={isLoadingOlder}
+              className="rounded-full border border-gray-200 bg-white px-4 py-1.5 text-xs font-semibold text-primary-600 shadow-sm hover:bg-primary-50 disabled:opacity-60"
+            >
+              {isLoadingOlder ? t('common.loading') : t('inbox.loadOlderMessages')}
+            </button>
+          </div>
+        )}
         {messagesWithDate.map((msg, index) => {
           const isHighlighted = searchResults.some(r => r.index === index);
           return (
