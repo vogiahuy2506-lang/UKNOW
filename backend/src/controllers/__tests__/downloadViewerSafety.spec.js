@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 // fileDownloadToken không còn fallback secret — test phải tự đặt.
 process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret-download-viewer';
@@ -27,9 +27,10 @@ jest.unstable_mockModule('../../repositories/download.repository.js', () => ({
 const { default: downloadController } = await import('../download.controller.js');
 const { generateFileToken } = await import('../../utils/fileDownloadToken.js');
 
-function buildReq({ token, ip = '203.0.113.9', headers = {} } = {}) {
+function buildReq({ token, ip = '203.0.113.9', headers = {}, query = {} } = {}) {
   return {
     params: { token },
+    query,
     ip,
     headers,
     socket: { remoteAddress: '10.0.0.1' },
@@ -96,5 +97,53 @@ describe('downloadController — trang xem tệp & IP', () => {
     expect(insertCall).toBeDefined();
     expect(insertCall[1]).toContain('198.51.100.7');
     expect(insertCall[1]).not.toContain('6.6.6.6');
+  });
+
+  /**
+   * M-06 (Thư viện media): ảnh xem trước TRONG ỨNG DỤNG dùng link ký không gắn chiến dịch/khách/email. Mỗi ảnh từng ghi
+   * một dòng DOWNLOAD (BEGIN/COMMIT rồi mới trả byte) — mở thư viện là phồng số "lượt tải tệp". Chỉ bỏ ghi cho đúng loại
+   * link đó; link gửi khách và tải thật vẫn ghi.
+   */
+  describe('handleDownload — sự kiện DOWNLOAD', () => {
+    const downloadInserts = () => mockClientQuery.mock.calls.filter(([sql]) => String(sql).includes('INSERT INTO file_access_events'));
+    let sendLocalFile;
+
+    beforeEach(() => {
+      mockFindFileByStorageKey.mockResolvedValue({ id: 1, original_name: 'anh.png', mime_type: 'image/png' });
+      sendLocalFile = jest.spyOn(downloadController, 'sendLocalFile').mockResolvedValue(true);
+    });
+
+    afterEach(() => {
+      sendLocalFile.mockRestore();
+    });
+
+    it('xem trước trong app (preview=true, token trống chiến dịch/khách/email) → vẫn trả ảnh nhưng KHÔNG ghi sự kiện', async () => {
+      const token = generateFileToken('uploads/10/chat/1700_anh.png', null, null, null);
+
+      await downloadController.handleDownload(buildReq({ token, query: { preview: 'true' } }), buildRes());
+
+      expect(downloadInserts()).toHaveLength(0);
+      expect(sendLocalFile).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ storageKey: 'uploads/10/chat/1700_anh.png', preview: true }));
+    });
+
+    it('tải thật (không preview) vẫn ghi DOWNLOAD', async () => {
+      const token = generateFileToken('uploads/10/chat/1700_anh.png', null, null, null);
+
+      await downloadController.handleDownload(buildReq({ token }), buildRes());
+
+      expect(downloadInserts()).toHaveLength(1);
+      expect(sendLocalFile).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ preview: false }));
+    });
+
+    it.each([
+      ['gắn khách hàng', [7, 33, null]],
+      ['gắn email người nhận', [null, null, 'khach@example.com']],
+    ])('link gửi khách (%s) dù preview=true vẫn ghi — trang xem tệp trong email dùng đúng đường này', async (_label, [campaignId, customerId, email]) => {
+      const token = generateFileToken('uploads/10/email/1700_anh.png', campaignId, customerId, email);
+
+      await downloadController.handleDownload(buildReq({ token, query: { preview: 'true' } }), buildRes());
+
+      expect(downloadInserts()).toHaveLength(1);
+    });
   });
 });

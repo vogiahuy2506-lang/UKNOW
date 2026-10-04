@@ -161,16 +161,23 @@ class DownloadController {
 
       const fileRow = await this._getFileRow(storageKey);
 
-      // Ghi DOWNLOAD event
-      await this._logAccessEvent({
-        fileRow, eventType: 'DOWNLOAD', storageKey, campaignId, customerId,
-        email: email || null,
-        ip: this._getIp(req), ua: req.get('user-agent') || null,
-      });
+      const preview = req.query.preview === 'true';
+      // Xem trước ảnh TRONG ỨNG DỤNG (Thư viện media: link ký không gắn chiến dịch / khách / email) không phải một lượt
+      // tải: mỗi ảnh trên trang từng ghi một dòng DOWNLOAD (kèm BEGIN/COMMIT, chờ xong mới trả byte) và làm phồng số
+      // "lượt tải tệp" chỉ vì mở thư viện. Link gửi cho khách (có campaign/customer/email) và tải thật (không preview)
+      // vẫn ghi như cũ — thiết kế token chung của link đính kèm email không đổi.
+      const isAppPreview = preview && !campaignId && !customerId && !email;
+      if (!isAppPreview) {
+        // Ghi DOWNLOAD event
+        await this._logAccessEvent({
+          fileRow, eventType: 'DOWNLOAD', storageKey, campaignId, customerId,
+          email: email || null,
+          ip: this._getIp(req), ua: req.get('user-agent') || null,
+        });
+      }
 
       try {
         const fileName = fileRow?.original_name || storageKey.split('/').pop() || 'file';
-        const preview = req.query.preview === 'true';
         const sent = await this.sendLocalFile(res, {
           storageKey,
           fileName,
