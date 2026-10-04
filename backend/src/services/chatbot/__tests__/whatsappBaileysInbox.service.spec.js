@@ -76,6 +76,9 @@ beforeEach(async () => {
     prepareCredit: jest.fn(async () => ({ creditContext: { ctx: 1 } })),
     chargeCredit: jest.fn(async () => {}),
     getOwnerContact: jest.fn(async () => ({ phone: '0900000000' })),
+    // A P2-6: hồ sơ đầy đủ + RAG của prompt chatbot (mặc định không có hồ sơ).
+    getProfile: jest.fn(async () => ''),
+    buildRag: jest.fn(async () => ''),
     // P5 — ảnh/tệp khách gửi: tải byte (Baileys) + lưu kho chat (persistChatBlob trả đúng hình dạng thật).
     downloadMedia: jest.fn(async () => Buffer.from('imgbytes')),
     persistBlob: jest.fn(async () => ({
@@ -163,9 +166,9 @@ beforeEach(async () => {
     default: { getOwnerContact: (...a) => m.getOwnerContact(...a) },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/subAssistant.service.js'), () => ({ default: { getById: async () => null } }));
-  jest.unstable_mockModule(resolveUrl('services/chatbot/ragEngine.service.js'), () => ({ default: { buildContext: async () => '' } }));
+  jest.unstable_mockModule(resolveUrl('services/chatbot/ragEngine.service.js'), () => ({ default: { buildContext: (...a) => m.buildRag(...a) } }));
   jest.unstable_mockModule(resolveUrl('services/ai/businessProfile.service.js'), () => ({
-    default: { getFormattedProfileForPrompt: async () => '' },
+    default: { getFormattedProfileForPrompt: (...a) => m.getProfile(...a) },
   }));
   jest.unstable_mockModule(resolveUrl('services/chatbot/chatRouter.service.js'), () => ({
     default: {
@@ -422,6 +425,21 @@ describe('WhatsApp Baileys — credit AI + xác nhận liên hệ', () => {
     expect(sent.startsWith('Giá áo thun size L là 199.000đ ạ')).toBe(true);
     expect(sent.length).toBeGreaterThan('Giá áo thun size L là 199.000đ ạ'.length);
     expect(sent).toMatch(/0912\s?345\s?678/);
+  });
+
+  it('A P2-6 — prompt chatbot WhatsApp: hồ sơ đọc với includeLogo=false; có hồ sơ đầy đủ thì RAG bỏ đoạn hồ sơ, hồ sơ rỗng thì giữ', async () => {
+    m.getProfile = jest.fn(async () => '=== HỒ SƠ DOANH NGHIỆP (đầy đủ) ===\n- Tên công ty: Hoa Nắng\n=== HẾT HỒ SƠ ===');
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    await flush();
+    expect(m.getProfile).toHaveBeenCalledWith(42, { includeLogo: false });
+    expect(m.buildRag).toHaveBeenCalledWith(42, expect.any(String), { customChatbotId: CHATBOT_ID, includeProfileChunks: false });
+    expect(m.systemPromptArgs.profileContext).toContain('Hoa Nắng');
+
+    m.getProfile = jest.fn(async () => '');
+    m.buildRag.mockClear();
+    await sendTexts(['Cho mình hỏi giá áo thun size M']);
+    await flush();
+    expect(m.buildRag).toHaveBeenCalledWith(42, expect.any(String), { customChatbotId: CHATBOT_ID, includeProfileChunks: true });
   });
 
   it('khách không để lại liên hệ: không có footer, không tra liên hệ chủ', async () => {

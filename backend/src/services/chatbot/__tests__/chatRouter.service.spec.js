@@ -901,7 +901,8 @@ describe('routeChatbotMessage — hồ sơ + sản phẩm đang bán của chủ
     getFormattedProfileForPrompt.mockReset();
     getFormattedProfileForPrompt.mockResolvedValue('=== HỒ SƠ ===\n- Sản phẩm / dịch vụ:\n1. Khóa Python — Giá: 2.9tr\n=== HẾT HỒ SƠ ===');
     const { prompt } = await run();
-    expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(3);
+    // Prompt CHATBOT: không có dòng Logo URL (A P2-6).
+    expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(3, { includeLogo: false });
     expect(prompt).toContain('Khóa Python');
     expect(prompt).toContain('2.9tr');
   });
@@ -912,5 +913,76 @@ describe('routeChatbotMessage — hồ sơ + sản phẩm đang bán của chủ
     const { result, prompt } = await run();
     expect(result.content).toBe('ok');
     expect(prompt).not.toContain('HỒ SƠ');
+  });
+});
+
+describe('A P2-6 — prompt chatbot: hồ sơ không lặp (RAG bỏ đoạn hồ sơ khi đã có bản đầy đủ) và không có dòng Logo', () => {
+  const settings = { is_enabled: true, id_sub_assistant: null, ai_model: 'gemini-2.5-flash', temperature: 0.7, max_tokens: 512 };
+  let callAI;
+
+  beforeEach(() => {
+    getWebChatMessages.mockReset().mockResolvedValue([]);
+    addWebChatMessage.mockReset().mockResolvedValue({});
+    assertAvailable.mockReset().mockResolvedValue({ skip: false });
+    buildContext.mockReset().mockResolvedValue('');
+    getFormattedProfileForPrompt.mockReset().mockResolvedValue('');
+    getOwnerContact.mockReset();
+    isCreditLimitError.mockReturnValue(false);
+    isUsageLimitError.mockReturnValue(false);
+    callAI = jest.spyOn(chatRouterService, '_callAI').mockResolvedValue({ text: 'ok' });
+  });
+
+  afterEach(() => {
+    callAI.mockRestore();
+  });
+
+  const runChannel = () => chatRouterService.routeMessageWithSettings({
+    channel: 'web', userId: 7, message: 'giá khoá Python?', conversationId: 99, chatbotSettings: settings,
+  });
+
+  it('kênh (Zalo/Telegram/web): hồ sơ đầy đủ có → hỏi hồ sơ với includeLogo=false và RAG bỏ đoạn hồ sơ (includeProfileChunks=false)', async () => {
+    getFormattedProfileForPrompt.mockResolvedValue('=== HỒ SƠ ===\n- Tên công ty: Hoa Nắng\n=== HẾT HỒ SƠ ===');
+
+    await runChannel();
+
+    expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(7, { includeLogo: false });
+    expect(buildContext).toHaveBeenCalledWith(7, 'giá khoá Python?', expect.objectContaining({ includeProfileChunks: false }));
+  });
+
+  it('kênh: hồ sơ rỗng hoặc đọc lỗi → RAG VẪN lấy đoạn hồ sơ (includeProfileChunks=true) làm dự phòng', async () => {
+    getFormattedProfileForPrompt.mockResolvedValue('');
+    await runChannel();
+    expect(buildContext).toHaveBeenLastCalledWith(7, 'giá khoá Python?', expect.objectContaining({ includeProfileChunks: true }));
+
+    getFormattedProfileForPrompt.mockRejectedValue(new Error('db down'));
+    await runChannel();
+    expect(buildContext).toHaveBeenLastCalledWith(7, 'giá khoá Python?', expect.objectContaining({ includeProfileChunks: true }));
+  });
+
+  describe('routeChatbotMessage (Studio / Zalo OA / Facebook / WhatsApp Cloud)', () => {
+    const runStudio = async () => {
+      findChatbotById.mockResolvedValue({ id: 9, id_user: 3, name: 'Bot', welcome_message: 'Chao', system_instruction: '' });
+      getConversationHistory.mockResolvedValue([]);
+      resolveAllowedModel.mockResolvedValue('gemini-2.5-flash');
+      const prep = jest.spyOn(chatRouterService, '_prepareChatCredit').mockResolvedValue({ creditContext: {} });
+      const charge_ = jest.spyOn(chatRouterService, '_chargeChatCredit').mockResolvedValue(undefined);
+      try {
+        await chatRouterService.routeChatbotMessage({ chatbotId: 9, message: 'giá khoá Python?', conversationId: 1 });
+      } finally {
+        prep.mockRestore();
+        charge_.mockRestore();
+      }
+    };
+
+    it('hồ sơ có → includeLogo=false + includeProfileChunks=false; hồ sơ lỗi → includeProfileChunks=true', async () => {
+      getFormattedProfileForPrompt.mockResolvedValue('=== HỒ SƠ ===\n- Tên công ty: Hoa Nắng\n=== HẾT HỒ SƠ ===');
+      await runStudio();
+      expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(3, { includeLogo: false });
+      expect(buildContext).toHaveBeenLastCalledWith(3, 'giá khoá Python?', { customChatbotId: 9, includeProfileChunks: false });
+
+      getFormattedProfileForPrompt.mockRejectedValue(new Error('db down'));
+      await runStudio();
+      expect(buildContext).toHaveBeenLastCalledWith(3, 'giá khoá Python?', { customChatbotId: 9, includeProfileChunks: true });
+    });
   });
 });

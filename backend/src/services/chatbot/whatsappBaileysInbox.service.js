@@ -550,10 +550,10 @@ async function buildReplyForChatbot({ ownerUserId, cb, history, messageText }) {
     ? await subAssistantService.getById(cb.id_sub_assistant, ownerUserId)
     : null;
   const profileContext = await businessProfileService
-    .getFormattedProfileForPrompt(ownerUserId)
+    .getFormattedProfileForPrompt(ownerUserId, { includeLogo: false })
     .catch(() => '');
   const ragContext = await ragEngineService
-    .buildContext(ownerUserId, messageText, { customChatbotId: cb.id_chatbot })
+    .buildContext(ownerUserId, messageText, { customChatbotId: cb.id_chatbot, includeProfileChunks: !profileContext })
     .catch(() => '');
   const isFirstMessage = history.length === 0;
 
@@ -920,10 +920,10 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       ? await subAssistantService.getById(cb.id_sub_assistant, ownerUserId)
       : null;
     const profileContext = await businessProfileService
-      .getFormattedProfileForPrompt(ownerUserId)
+      .getFormattedProfileForPrompt(ownerUserId, { includeLogo: false })
       .catch(() => '');
     const ragContext = await ragEngineService
-      .buildContext(ownerUserId, prompt, { customChatbotId: cb.id_chatbot })
+      .buildContext(ownerUserId, prompt, { customChatbotId: cb.id_chatbot, includeProfileChunks: !profileContext })
       .catch(() => '');
     const isFirstMessage = history.length === 0;
 

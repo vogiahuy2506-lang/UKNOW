@@ -91,7 +91,8 @@ class ChatRouterService {
       chatbotSettings.id_sub_assistant
         ? subAssistantService.getById(chatbotSettings.id_sub_assistant, userId)
         : Promise.resolve(null),
-      businessProfileService.getFormattedProfileForPrompt(userId).catch(() => ''),
+      // Bản hồ sơ cho CHATBOT: không có dòng "Logo URL" (chỉ có nghĩa với landing / email HTML — A P2-6).
+      businessProfileService.getFormattedProfileForPrompt(userId, { includeLogo: false }).catch(() => ''),
     ]);
 
     console.log(`[ChatRouter] Got ${history.length} history messages for conversationId=${conversationId}`);
@@ -105,9 +106,11 @@ class ChatRouterService {
     // sub_assistant indirection was dropped from custom_chatbots. Fall back to
     // the channel-level KB for legacy rows that still wire through
     // sub_assistants.
+    // Đã có hồ sơ đầy đủ trong prompt → RAG không chèn thêm đoạn hồ sơ (lặp nội dung, A P2-6). Hồ sơ lỗi/rỗng → giữ đoạn RAG.
     const ragContext = await ragEngineService.buildContext(userId, message, {
       kbId: linkedKbId,
       customChatbotId: chatbotId,
+      includeProfileChunks: !profileContext,
     });
 
     const extractedContacts = extractContacts(message);
@@ -520,17 +523,17 @@ class ChatRouterService {
       // indirection was removed (migration 166 dropped custom_chatbots.id_sub_assistant).
       // Hồ sơ + sản phẩm ĐANG BÁN của chủ (giống đường kênh :89-95) chạy song song với RAG — thiếu thì chatbot web/Studio
       // không biết tên/giá sản phẩm. Lỗi hồ sơ không được làm hỏng câu trả lời → rơi về ''.
-      const [ragContext, profileContext] = await Promise.all([
-        ragEngineService.buildContext(ownerId, message, {
-          customChatbotId: chatbot.id,
-        }).catch((err) => {
-          console.warn('[ChatRouter] routeChatbotMessage: RAG buildContext failed:', err.message);
-          return '';
-        }),
-        Promise.resolve()
-          .then(() => businessProfileService.getFormattedProfileForPrompt(ownerId))
-          .catch(() => ''),
-      ]);
+      // Hồ sơ đọc TRƯỚC khi gọi RAG (không còn song song): có hồ sơ đầy đủ thì RAG bỏ đoạn hồ sơ trùng lặp (A P2-6).
+      const profileContext = await Promise.resolve()
+        .then(() => businessProfileService.getFormattedProfileForPrompt(ownerId, { includeLogo: false }))
+        .catch(() => '');
+      const ragContext = await ragEngineService.buildContext(ownerId, message, {
+        customChatbotId: chatbot.id,
+        includeProfileChunks: !profileContext,
+      }).catch((err) => {
+        console.warn('[ChatRouter] routeChatbotMessage: RAG buildContext failed:', err.message);
+        return '';
+      });
 
       // Build system prompt qua chatRouter.buildSystemPrompt chung để đồng bộ khung với các kênh khác
       // (anti-hallucination, luật "không tự nhận là WhatsApp/Zalo/...", chống lộ chỉ dẫn). Bản cũ chú thích ở đây nói

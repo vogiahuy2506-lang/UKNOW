@@ -146,7 +146,7 @@ class CustomChatService {
     // Chạy song song với tra tài liệu; lỗi hồ sơ không được làm hỏng câu trả lời → rơi về ''.
     const profilePromise = userId != null
       ? Promise.resolve()
-        .then(() => businessProfileService.getFormattedProfileForPrompt(userId))
+        .then(() => businessProfileService.getFormattedProfileForPrompt(userId, { includeLogo: false }))
         .catch((e) => {
           console.warn('[CustomChat] business profile failed:', e?.message || e);
           return '';

@@ -52,6 +52,16 @@ export function serializeProductList(products) {
   }).join('\n');
 }
 
+/**
+ * Văn bản chunk RAG `field = 'products'` cho danh sách sản phẩm ĐANG BÁN ('' nếu không có sản phẩm nào).
+ * Một nơi duy nhất định dạng chunk này: `buildChunksFromProfile` ghi nó, script `reembedBusinessProfiles.js` so với nó
+ * để phát hiện chunk lỗi thời (còn sản phẩm đã ngừng bán / đã xoá, EXTRA-C3).
+ */
+export function buildProductsChunkText(productRows) {
+  const productsText = serializeProductList(productRows);
+  return productsText ? `Sản phẩm / Dịch vụ:\n${productsText}` : '';
+}
+
 /** @deprecated Dùng serializeProductList — giữ alias cho callers cũ. */
 function serializeProducts(products) {
   return serializeProductList(products);
@@ -84,14 +94,14 @@ async function buildChunksFromProfile(profile, userId) {
     chunks.push({ text: `Ngành nghề: ${safeProfile.industry}`, metadata: { field: 'industry' } });
   }
 
-  let productsText = '';
+  let productsChunk = '';
   if (userId) {
     // Chỉ sản phẩm đang bán vào embedding RAG (D-06). Đổi trạng thái/xoá sản phẩm đã gọi reembedChunks (product.service.js).
     const productRows = await productRepository.findAllByUser(userId, { activeOnly: true });
-    productsText = serializeProductList(productRows);
+    productsChunk = buildProductsChunkText(productRows);
   }
-  if (productsText) {
-    chunks.push({ text: `Sản phẩm / Dịch vụ:\n${productsText}`, metadata: { field: 'products' } });
+  if (productsChunk) {
+    chunks.push({ text: productsChunk, metadata: { field: 'products' } });
   }
 
   const segmentsText = serializeSegments(safeProfile.target_audience) || (typeof safeProfile.target_audience === 'string' ? safeProfile.target_audience : '');
@@ -204,20 +214,21 @@ class BusinessProfileService {
 
   /**
    * Gộp toàn bộ field hồ sơ thành một khối text (khi không dùng được RAG hoặc RAG không trả chunk đủ liên quan).
-   * @param {object|null} profile
-   * @param {object[]} [productRows]
-   * @returns {string}
+   * @param {number} userId
+   * @param {{ includeLogo?: boolean }} [options] includeLogo=false cho prompt CHATBOT (A P2-6): dòng "Logo URL" chỉ có nghĩa với
+   *   landing / email HTML (trợ lý chiến dịch, sinh landing); mặc định true để các nơi đó không đổi.
+   * @returns {Promise<string>}
    */
-  async getFormattedProfileForPrompt(userId) {
+  async getFormattedProfileForPrompt(userId, { includeLogo = true } = {}) {
     const [profile, productRows] = await Promise.all([
       this.getProfile(userId).catch(() => null),
       // Sản phẩm ngừng bán không được vào prompt (D-06) — chatbot sẽ giới thiệu + báo giá cũ cho khách thật.
       productRepository.findAllByUser(userId, { activeOnly: true }).catch(() => []),
     ]);
-    return this.formatProfileForPrompt(profile, productRows);
+    return this.formatProfileForPrompt(profile, productRows, { includeLogo });
   }
 
-  formatProfileForPrompt(profile, productRows = []) {
+  formatProfileForPrompt(profile, productRows = [], { includeLogo = true } = {}) {
     if (!profile && !productRows.length) return '';
     const lines = [];
     if (profile?.company_name) lines.push(`Tên công ty: ${profile.company_name}`);
@@ -228,8 +239,10 @@ class BusinessProfileService {
     if (segmentsText) lines.push(`Khách mục tiêu:\n${segmentsText}`);
     if (profile?.tone) lines.push(`Giọng điệu: ${profile.tone}`);
     if (profile?.brand_color) lines.push(`Màu thương hiệu: ${profile.brand_color}`);
-    if (profile?.logo_url) lines.push(`Logo URL: ${profile.logo_url}`);
-    else if (profile) lines.push(`Logo URL: (chưa có — dùng text header thay thế)`);
+    if (includeLogo) {
+      if (profile?.logo_url) lines.push(`Logo URL: ${profile.logo_url}`);
+      else if (profile) lines.push(`Logo URL: (chưa có — dùng text header thay thế)`);
+    }
     if (profile?.extra_context) lines.push(`Bổ sung: ${profile.extra_context}`);
     if (!lines.length) return '';
     return [

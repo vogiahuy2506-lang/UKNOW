@@ -22,6 +22,8 @@ class RagEngineService {
    * @param {number} [options.maxKbChunks=5]
    * @param {number} [options.maxProfileChunks=3]
    * @param {number} [options.minSimilarity=0.45]
+   * @param {boolean} [options.includeProfileChunks=true] - false khi prompt ĐÃ có hồ sơ đầy đủ
+   *   (`businessProfileService.getFormattedProfileForPrompt`): đoạn hồ sơ RAG chỉ lặp lại đúng nội dung đó (A P2-6)
    * @returns {Promise<string>} context string for AI prompt
    */
   async buildContext(userId, userQuery, options = {}) {
@@ -31,6 +33,7 @@ class RagEngineService {
       maxKbChunks = MAX_KB_CHUNKS,
       maxProfileChunks = MAX_PROFILE_CHUNKS,
       minSimilarity = MIN_SIMILARITY,
+      includeProfileChunks = true,
     } = options;
 
     try {
@@ -47,6 +50,7 @@ class RagEngineService {
         maxKbChunks,
         maxProfileChunks,
         minSimilarity,
+        includeProfileChunks,
       });
     } catch (e) {
       console.warn('[RAG Engine] Failed to build context, continuing without RAG:', e.message);
@@ -70,6 +74,7 @@ class RagEngineService {
       maxKbChunks = MAX_KB_CHUNKS,
       maxProfileChunks = MAX_PROFILE_CHUNKS,
       minSimilarity = MIN_SIMILARITY,
+      includeProfileChunks = true,
     } = options;
 
     try {
@@ -79,6 +84,7 @@ class RagEngineService {
         maxKbChunks,
         maxProfileChunks,
         minSimilarity,
+        includeProfileChunks,
       });
     } catch (e) {
       console.warn('[RAG Engine] Failed to build context with embedding:', e.message);
@@ -92,6 +98,7 @@ class RagEngineService {
     maxKbChunks,
     maxProfileChunks,
     minSimilarity,
+    includeProfileChunks = true,
   }) {
     // Two KB scopes live side by side:
     //   1) channel settings path  (chatbot_settings -> knowledge_bases via sub_assistant,
@@ -108,9 +115,10 @@ class RagEngineService {
           { kbId, limit: maxKbChunks, minSimilarity }
         );
 
-    const profilePromise = businessProfileRepository.searchSimilarChunks(
-      userId, queryEmbedding, maxProfileChunks
-    );
+    // Prompt đã có hồ sơ đầy đủ → bỏ luôn truy vấn đoạn hồ sơ (vừa lặp nội dung vừa tốn một lượt DB).
+    const profilePromise = includeProfileChunks
+      ? businessProfileRepository.searchSimilarChunks(userId, queryEmbedding, maxProfileChunks)
+      : Promise.resolve([]);
 
     const [rawKbChunks, profileChunks] = await Promise.all([kbPromise, profilePromise]);
     // Trần khi dựng prompt (A P0-3): mỗi đoạn ≤ 1.500 ký tự, tổng các đoạn tài liệu ≤ 6.000. Đoạn CŨ chưa nạp lại (có đoạn tới

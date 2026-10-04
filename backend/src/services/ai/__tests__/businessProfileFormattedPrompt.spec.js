@@ -24,3 +24,37 @@ describe('getFormattedProfileForPrompt — sản phẩm vào prompt chatbot', ()
     expect(text).not.toContain('Ngừng Bán');
   });
 });
+
+describe('formatProfileForPrompt — dòng Logo chỉ dành cho landing / email, không vào prompt chatbot (A P2-6)', () => {
+  const profileNoLogo = { company_name: 'Shop A' };
+  const profileWithLogo = { company_name: 'Shop A', logo_url: 'https://cdn.example.com/logo.png' };
+
+  it('mặc định (landing, trợ lý chiến dịch): chưa có logo → dòng "(chưa có — dùng text header thay thế)"; có logo → URL', () => {
+    expect(svc.formatProfileForPrompt(profileNoLogo, [])).toContain('Logo URL: (chưa có — dùng text header thay thế)');
+    expect(svc.formatProfileForPrompt(profileWithLogo, [])).toContain('Logo URL: https://cdn.example.com/logo.png');
+  });
+
+  it('includeLogo=false (chatbot): KHÔNG có dòng Logo dù có hay chưa có logo, các dòng khác vẫn đủ', () => {
+    for (const profile of [profileNoLogo, profileWithLogo]) {
+      const text = svc.formatProfileForPrompt(profile, [{ product_name: 'Khóa Python', price: '2.9tr' }], { includeLogo: false });
+      expect(text).not.toContain('Logo');
+      expect(text).toContain('Tên công ty: Shop A');
+      expect(text).toContain('Khóa Python');
+    }
+  });
+
+  it('getFormattedProfileForPrompt: mặc định giữ dòng Logo; { includeLogo: false } bỏ dòng đó', async () => {
+    expect(await svc.getFormattedProfileForPrompt(3)).toContain('Logo URL: (chưa có');
+    expect(await svc.getFormattedProfileForPrompt(3, { includeLogo: false })).not.toContain('Logo');
+  });
+});
+
+describe('buildProductsChunkText — một nơi định dạng chunk RAG sản phẩm', () => {
+  it('có sản phẩm → "Sản phẩm / Dịch vụ:\n<danh sách>"; không có → ""', async () => {
+    const { buildProductsChunkText, serializeProductList } = await import('../businessProfile.service.js');
+    const rows = [{ product_name: 'Khóa Python', price: '2.9tr' }];
+    expect(buildProductsChunkText(rows)).toBe(`Sản phẩm / Dịch vụ:\n${serializeProductList(rows)}`);
+    expect(buildProductsChunkText([])).toBe('');
+    expect(buildProductsChunkText(null)).toBe('');
+  });
+});

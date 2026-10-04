@@ -187,7 +187,8 @@ describe('customChat.chat — hồ sơ doanh nghiệp + sản phẩm của chủ
 
     const prompt = await runChat({ chunks: ['Giờ mở cửa 8h-21h'] });
 
-    expect(mockFormattedProfile).toHaveBeenCalledWith(90);
+    // Prompt CHATBOT: không có dòng Logo URL (A P2-6).
+    expect(mockFormattedProfile).toHaveBeenCalledWith(90, { includeLogo: false });
     expect(prompt).toContain('Khoá học AI thực chiến — 500k');
     expect(prompt).toContain('- Giờ mở cửa 8h-21h');
   });

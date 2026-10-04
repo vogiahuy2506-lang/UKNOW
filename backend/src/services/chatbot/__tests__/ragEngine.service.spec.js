@@ -85,6 +85,30 @@ describe('ragEngine.service', () => {
       expect(context).not.toContain('- Profile 2');
     });
 
+    // A P2-6: prompt chatbot đã có hồ sơ đầy đủ → đoạn hồ sơ RAG chỉ lặp lại nội dung đó.
+    it('includeProfileChunks=false → KHÔNG truy vấn đoạn hồ sơ, KHÔNG có khối BUSINESS PROFILE CONTEXT, tài liệu KB vẫn có', async () => {
+      const context = await ragEngine.buildContext(1, 'test query', { includeProfileChunks: false });
+
+      expect(mockSearchSimilarChunks).not.toHaveBeenCalled();
+      expect(context).not.toContain('BUSINESS PROFILE CONTEXT');
+      expect(context).not.toContain('Profile chunk 1');
+      expect(context).toContain('KB chunk 1');
+    });
+
+    it('mặc định (không truyền) vẫn lấy đoạn hồ sơ như cũ', async () => {
+      const context = await ragEngine.buildContext(1, 'test query');
+
+      expect(mockSearchSimilarChunks).toHaveBeenCalledTimes(1);
+      expect(context).toContain('BUSINESS PROFILE CONTEXT');
+    });
+
+    it('buildContextWithEmbedding cũng tôn trọng includeProfileChunks=false', async () => {
+      const context = await ragEngine.buildContextWithEmbedding(1, [0.1, 0.2], { includeProfileChunks: false });
+
+      expect(mockSearchSimilarChunks).not.toHaveBeenCalled();
+      expect(context).not.toContain('BUSINESS PROFILE CONTEXT');
+    });
+
     it('returns empty string on error', async () => {
       mockEmbedText.mockRejectedValue(new Error('API error'));
 
