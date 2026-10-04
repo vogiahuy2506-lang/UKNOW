@@ -21,7 +21,7 @@ const base = { id: 9, name: 'Bot', widget_key: 'wk9', channels: [] };
 
 function iframeCodeFor(bot) {
   const { container, unmount } = render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
-  fireEvent.click(screen.getByText('iFrame'));
+  fireEvent.click(screen.getByText('Khung chat trong trang'));
   const text = container.ownerDocument.querySelector('pre').textContent;
   unmount();
   return text;

@@ -12,6 +12,7 @@ vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
   default: { updateChatbot: vi.fn() },
 }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 
 const chatbot = {
   id: 7,
@@ -50,7 +51,7 @@ describe('WidgetSettingsModal — tuỳ chỉnh chạy thật', () => {
   it('bật Tự động mở chat + chọn Lớn + tắt header → payload có 3 khoá mới, không còn khoá cũ', async () => {
     renderModal(chatbot, 'script');
     fireEvent.click(toggleOf('Tự động mở chat'));
-    fireEvent.click(screen.getByRole('button', { name: /iFrame/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Khung chat trong trang/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Lớn/ }));
     fireEvent.click(toggleOf('Hiển thị header'));
     fireEvent.click(screen.getByRole('button', { name: /Lưu cấu hình/ }));
@@ -68,7 +69,7 @@ describe('WidgetSettingsModal — tuỳ chỉnh chạy thật', () => {
   it('mở lại với giá trị đã lưu → toggle và kích thước đúng', () => {
     renderModal({ ...chatbot, widget_auto_open: true, embed_show_header: false, embed_size: 'small' }, 'script');
     expect(toggleOf('Tự động mở chat').getAttribute('aria-checked')).toBe('true');
-    fireEvent.click(screen.getByRole('button', { name: /iFrame/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Khung chat trong trang/ }));
     expect(toggleOf('Hiển thị header').getAttribute('aria-checked')).toBe('false');
     expect(screen.getByRole('button', { name: /^Nhỏ/ }).className).toContain('border-primary-500');
     expect(screen.getByRole('button', { name: /^Lớn/ }).className).not.toContain('border-primary-500');
@@ -79,6 +80,6 @@ describe('WidgetSettingsModal — tuỳ chỉnh chạy thật', () => {
     expect(screen.queryByText('Câu hỏi gợi ý')).toBeNull();
     expect(screen.queryByText('Yêu cầu nhập tên')).toBeNull();
     expect(screen.queryByText(/áp dụng riêng/)).toBeNull();
-    expect(screen.getByText(/áp dụng cho cả 3 dạng nhúng/)).toBeInTheDocument();
+    expect(screen.getByText(/áp dụng cho cả 3 cách nhúng/)).toBeInTheDocument();
   });
 });

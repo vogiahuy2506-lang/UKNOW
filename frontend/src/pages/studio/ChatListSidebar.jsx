@@ -7,13 +7,10 @@ import {
   HiOutlineX,
   HiOutlineChevronDoubleLeft,
   HiOutlineChevronDoubleRight,
-  HiOutlineShoppingCart,
-  HiOutlineShare,
   HiOutlineDotsHorizontal,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
-import marketplaceService from '../../services/marketplace.service';
 import { useI18n } from '../../i18n';
 import { useAuthStore } from '../../stores/authStore';
 import {
@@ -21,12 +18,6 @@ import {
   loadCachedChatbots,
   saveCachedChatbots,
 } from '../../features/chatbot/chatbotListCache';
-
-const ORIGIN_TABS = [
-  { id: 'self_created', label: 'Tự tạo', icon: HiOutlineSparkles },
-  { id: 'marketplace_purchased', label: 'Mua', icon: HiOutlineShoppingCart },
-  { id: 'shared', label: 'Chia sẻ', icon: HiOutlineShare },
-];
 
 function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchChange, collapsed = false, onToggleCollapse }) {
   const { t } = useI18n();
@@ -37,7 +28,6 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
   const [newName, setNewName] = useState('');
   const [creating, setCreating] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
-  const [originTab, setOriginTab] = useState('self_created');
   const [contextMenu, setContextMenu] = useState(null);
 
   // Bộ nhớ đệm gắn id user + id chủ không gian, không lưu system_instruction, xoá khi đăng xuất (S-14).
@@ -113,20 +103,17 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
   useEffect(() => {
     const loadChatbots = async () => {
       try {
-        // All tabs use the same API with origin filter
-        const params = { origin: originTab };
-        const res = await chatbotApi.listChatbots(params);
+        // MỘT danh sách cho mọi nguồn (S-10): bản sao nhận qua "Gửi bản sao" và bot mua Marketplace nằm chung, có nhãn
+        // "Bản sao" / "Đã mua". Bản cũ chia 3 tab (Tự tạo / Mua / Chia sẻ) cho thứ gần như không bao giờ có: 0 bot đã mua,
+        // 2 bot được chia sẻ trên toàn hệ thống.
+        const res = await chatbotApi.listChatbots();
         if (res.success && res.data) {
           setChatbots(res.data);
           saveToStorage(res.data);
-          // Reset selectedBot when changing tabs to avoid showing wrong bot
           if (res.data.length > 0) {
-            const firstBot = res.data[0];
-            // Only auto-select if current selectedBot doesn't belong to this origin tab
-            const currentBotBelongsToNewTab = selectedBot && res.data.some(b => b.id === selectedBot.id);
-            if (!currentBotBelongsToNewTab) {
-              onSelectBot(firstBot);
-            }
+            // Chỉ tự chọn bot đầu khi bot đang chọn không còn trong danh sách.
+            const currentBotStillListed = selectedBot && res.data.some(b => b.id === selectedBot.id);
+            if (!currentBotStillListed) onSelectBot(res.data[0]);
           } else if (!selectedBot || !res.data.some(b => b.id === selectedBot.id)) {
             onSelectBot(null);
           }
@@ -134,16 +121,12 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
           throw new Error('Invalid response');
         }
       } catch (apiError) {
-        console.warn('[ChatListSidebar] API load failed, using localStorage:', apiError.message);
+        console.warn('[ChatListSidebar] API load failed, using local cache:', apiError.message);
         const bots = loadFromStorage();
         setChatbots(bots);
-        // Reset to first bot or null when tab changes
         if (bots.length > 0) {
-          const firstBot = bots[0];
-          const currentBotBelongsToNewTab = selectedBot && bots.some(b => b.id === selectedBot.id);
-          if (!currentBotBelongsToNewTab) {
-            onSelectBot(firstBot);
-          }
+          const currentBotStillListed = selectedBot && bots.some(b => b.id === selectedBot.id);
+          if (!currentBotStillListed) onSelectBot(bots[0]);
         } else {
           onSelectBot(null);
         }
@@ -153,7 +136,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     };
     loadChatbots();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [originTab]);
+  }, [cacheKey]);
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -235,33 +218,13 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
             <HiOutlineChevronDoubleRight className="w-4 h-4" />
           </button>
           <div className="w-8 h-px bg-slate-200 my-1" />
-          {ORIGIN_TABS.map(tab => {
-            const Icon = tab.icon;
-            const isActive = originTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setOriginTab(tab.id)}
-                className={`relative w-10 h-10 rounded-lg flex items-center justify-center transition-colors group ${
-                  isActive ? 'bg-primary-50 text-primary-600' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-50'
-                }`}
-                title={tab.label}
-              >
-                <Icon className="w-4 h-4" />
-                {isActive && <span className="absolute left-0 top-1/2 -translate-y-1/2 w-0.5 h-5 bg-primary-500 rounded-r-full" />}
-              </button>
-            );
-          })}
-          <div className="w-8 h-px bg-slate-200 my-1" />
-          {originTab === 'self_created' && (
-            <button
-              onClick={() => setShowCreate(true)}
-              className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-500 text-white hover:bg-primary-600 transition-colors shadow-sm shadow-primary-500/30"
-              title="Tạo chatbot"
-            >
-              <HiOutlinePlus className="w-4 h-4" />
-            </button>
-          )}
+          <button
+            onClick={() => setShowCreate(true)}
+            className="w-10 h-10 rounded-lg flex items-center justify-center bg-primary-500 text-white hover:bg-primary-600 transition-colors shadow-sm shadow-primary-500/30"
+            title="Tạo chatbot"
+          >
+            <HiOutlinePlus className="w-4 h-4" />
+          </button>
         </div>
       </div>
     );
@@ -272,7 +235,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     <div className="h-full flex flex-col bg-white">
       {/* Header */}
       <div className="px-5 pt-5 pb-4 shrink-0">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="w-7 h-7 rounded-lg bg-primary-500 flex items-center justify-center">
               <HiOutlineSparkles className="w-3.5 h-3.5 text-white" />
@@ -286,26 +249,6 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
           >
             <HiOutlineChevronDoubleLeft className="w-3.5 h-3.5" />
           </button>
-        </div>
-
-        {/* Origin Tabs */}
-        <div className="flex items-center gap-1 p-0.5 bg-slate-100/80 rounded-lg">
-          {ORIGIN_TABS.map(tab => {
-            const Icon = tab.icon;
-            const isActive = originTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setOriginTab(tab.id)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  isActive ? 'bg-white text-slate-900 shadow-sm shadow-slate-200/60' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {tab.label}
-              </button>
-            );
-          })}
         </div>
       </div>
 
@@ -330,7 +273,6 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
           </div>
         ) : filteredBots.length === 0 ? (
           <EmptyState
-            originTab={originTab}
             isSearch={chatbots.length > 0 && Boolean(internalSearch.trim())}
             onCreate={() => setShowCreate(true)}
           />
@@ -356,21 +298,13 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
 
       {/* Footer */}
       <div className="px-5 py-3 border-t border-slate-100 shrink-0">
-        {originTab === 'self_created' ? (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors shadow-sm shadow-primary-500/20"
-          >
-            <HiOutlinePlus className="w-4 h-4" />
-            Chatbot mới
-          </button>
-        ) : (
-          <div className="text-[11px] text-center text-slate-400 px-2">
-            {originTab === 'marketplace_purchased'
-              ? 'Chatbot mua từ Marketplace — không thể tạo mới tại đây'
-              : 'Chatbot được chia sẻ với bạn — không thể tạo mới tại đây'}
-          </div>
-        )}
+        <button
+          onClick={() => setShowCreate(true)}
+          className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-semibold text-white bg-primary-500 hover:bg-primary-600 rounded-lg transition-colors shadow-sm shadow-primary-500/20"
+        >
+          <HiOutlinePlus className="w-4 h-4" />
+          Chatbot mới
+        </button>
       </div>
 
       {/* Context menu */}
@@ -403,8 +337,8 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
             <div className="px-6 pt-6 pb-5 border-b border-slate-100 shrink-0">
               <div className="flex items-center justify-between">
                 <div>
-                  <h3 className="text-base font-semibold text-slate-900">Tạo Chatbot</h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Thiết lập trong vài giây</p>
+                  <h3 className="text-base font-semibold text-slate-900">{t('chatbot.studio.createModalTitle')}</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">{t('chatbot.studio.createModalSubtitle')}</p>
                 </div>
                 <button
                   onClick={() => { setShowCreate(false); setNewName(''); }}
@@ -416,6 +350,8 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
             </div>
 
             <form onSubmit={handleCreate} className="px-6 py-5 space-y-5 overflow-y-auto">
+              {/* Bản cũ có "Mẫu nhanh" chỉ điền TÊN (không điền hướng dẫn AI hay câu hỏi gợi ý): 23/63 bot mang đúng tên mẫu,
+                  6 bot tên "Tùy chỉnh", khách tưởng đã chọn mẫu dựng sẵn mà bot vẫn rỗng (S-07). Bỏ hẳn. */}
               <div>
                 <label className="text-xs font-medium text-slate-700 mb-1.5 block">
                   Tên Chatbot
@@ -428,32 +364,6 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
                   autoFocus
                   className="w-full border border-slate-200 rounded-lg px-3 py-2.5 text-sm text-slate-900 placeholder-slate-400 outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/10 transition-all"
                 />
-              </div>
-
-              <div>
-                <label className="text-xs font-medium text-slate-700 mb-2 block">
-                  Mẫu nhanh
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { label: 'Hỗ trợ khách hàng', emoji: '💬' },
-                    { label: 'Tư vấn bán hàng', emoji: '🛒' },
-                    { label: 'Giáo dục', emoji: '📚' },
-                    { label: 'Tùy chỉnh', emoji: '✨' },
-                  ].map(tpl => (
-                    <button
-                      key={tpl.label}
-                      type="button"
-                      onClick={() => setNewName(tpl.label)}
-                      className={`text-left p-3 rounded-lg border transition-colors ${
-                        newName === tpl.label ? 'border-primary-500 bg-primary-50' : 'border-slate-200 hover:border-slate-300'
-                      }`}
-                    >
-                      <span className="text-base mr-2">{tpl.emoji}</span>
-                      <span className="text-xs font-medium text-slate-700">{tpl.label}</span>
-                    </button>
-                  ))}
-                </div>
               </div>
 
               <div className="flex justify-end gap-2 pt-2">
@@ -480,46 +390,26 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
   );
 }
 
-function EmptyState({ originTab, isSearch = false, onCreate }) {
+function EmptyState({ isSearch = false, onCreate }) {
   const { t } = useI18n();
-  const config = (() => {
-    if (isSearch) {
-      return {
-        icon: HiOutlineSparkles,
-        title: t('chatbot.studio.searchNotFoundTitle'),
-        desc: t('chatbot.studio.searchNotFoundDesc'),
-      };
+  const config = isSearch
+    ? {
+      title: t('chatbot.studio.searchNotFoundTitle'),
+      desc: t('chatbot.studio.searchNotFoundDesc'),
     }
-    if (originTab === 'marketplace_purchased') {
-      return {
-        icon: HiOutlineShoppingCart,
-        title: 'Chưa mua chatbot nào',
-        desc: 'Khám phá Marketplace để mua chatbot mẫu và dùng ngay.',
-      };
-    }
-    if (originTab === 'shared') {
-      return {
-        icon: HiOutlineShare,
-        title: 'Chưa được chia sẻ chatbot',
-        desc: 'Khi có ai đó chia sẻ chatbot cho bạn, nó sẽ hiện ở đây.',
-      };
-    }
-    return {
-      icon: HiOutlineSparkles,
+    : {
       title: 'Chưa có chatbot',
       desc: 'Tạo chatbot đầu tiên của bạn',
     };
-  })();
-  const Icon = config.icon;
 
   return (
     <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
       <div className="w-12 h-12 rounded-full bg-slate-100 flex items-center justify-center mb-3">
-        <Icon className="w-5 h-5 text-slate-400" />
+        <HiOutlineSparkles className="w-5 h-5 text-slate-400" />
       </div>
       <p className="text-sm font-medium text-slate-700 mb-1">{config.title}</p>
       <p className="text-xs text-slate-400 mb-4">{config.desc}</p>
-      {originTab === 'self_created' && !isSearch && (
+      {!isSearch && (
         <button
           onClick={onCreate}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-primary-500 hover:bg-primary-600 px-3.5 py-2 rounded-lg transition-colors"
@@ -532,12 +422,26 @@ function EmptyState({ originTab, isSearch = false, onCreate }) {
   );
 }
 
+// Nhãn nguồn của bot không phải tự tạo (thay huy hiệu "MP" khó hiểu — S-10).
+const ORIGIN_LABEL_KEYS = {
+  shared: 'chatbot.studio.originShared',
+  marketplace_purchased: 'chatbot.studio.originPurchased',
+};
+
+const DOT_STATES = {
+  on: { dot: 'bg-emerald-500', labelKey: 'chatbot.studio.statusOn' },
+  off: { dot: 'bg-slate-300', labelKey: 'chatbot.studio.statusOff' },
+  locked: { dot: 'bg-amber-500', labelKey: 'chatbot.studio.statusLocked' },
+};
+
 function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu, deletingId }) {
   const { t } = useI18n();
-  const isMarketplaceBot = bot.widget_key?.startsWith('chatbot_');
+  const originLabelKey = ORIGIN_LABEL_KEYS[bot.origin];
   // document_count = số tài liệu SẴN SÀNG; tài liệu lỗi đếm riêng (S-17).
   const docCount = Number(bot.document_count ?? bot.documents?.length ?? 0) || 0;
   const docErrorCount = Number(bot.document_error_count ?? 0) || 0;
+  // Chấm theo công tắc "Trạng thái hoạt động" (replies_enabled), nói rõ bằng chú thích khi rê chuột (S-05).
+  const dot = DOT_STATES[bot.is_locked ? 'locked' : bot.replies_enabled !== false ? 'on' : 'off'];
 
   return (
     <div
@@ -566,14 +470,14 @@ function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu
             <p className={`text-sm font-medium truncate ${isSelected ? 'text-slate-900' : 'text-slate-700'}`}>
               {bot.name}
             </p>
-            {isMarketplaceBot && (
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-primary-600 bg-primary-50 px-1 rounded">
-                MP
+            {originLabelKey && (
+              <span className="text-[10px] font-medium text-primary-600 bg-primary-50 px-1.5 rounded whitespace-nowrap shrink-0">
+                {t(originLabelKey)}
               </span>
             )}
           </div>
           <div className="flex items-center gap-1.5 mt-0.5">
-            <span className={`w-1.5 h-1.5 rounded-full ${bot.replies_enabled !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
+            <span title={t(dot.labelKey)} className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot.dot}`} />
             <span className="text-[11px] text-slate-400">
               {docCount > 0 ? t('chatbot.studio.docsReady', { count: docCount }) : t('chatbot.studio.docsNone')}
             </span>

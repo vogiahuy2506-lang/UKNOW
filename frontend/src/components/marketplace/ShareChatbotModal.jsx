@@ -145,10 +145,10 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
             </div>
             <div>
               <h3 id="share-chatbot-title" className="text-lg font-semibold text-gray-900">
-                {t('chatbot.cloneTitle') || 'Chia sẻ Chatbot'}
+                {t('chatbot.cloneTitle')}
               </h3>
               <p className="text-sm text-gray-500">
-                Mời đồng đội cùng sử dụng chatbot
+                {t('chatbot.cloneSubtitle')}
               </p>
             </div>
           </div>
@@ -252,24 +252,24 @@ const ShareChatbotModal = ({ open, chatbot, onClose, onSuccess }) => {
             {submitting ? (
               <>
                 <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                Đang chia sẻ...
+                {t('chatbot.studio.copySending')}
               </>
             ) : success ? (
               <>
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
-                Đã chia sẻ
+                {t('chatbot.studio.copySent')}
               </>
             ) : emails.length > 1 ? (
               <>
                 <HiOutlineShare className="w-4 h-4" />
-                Chia sẻ ({emails.length})
+                {t('chatbot.studio.copySendBtnMulti', { count: emails.length })}
               </>
             ) : (
               <>
                 <HiOutlineShare className="w-4 h-4" />
-                Chia sẻ ngay
+                {t('chatbot.studio.copySendBtn')}
               </>
             )}
           </button>

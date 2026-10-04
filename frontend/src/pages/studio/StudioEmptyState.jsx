@@ -1,17 +1,19 @@
 /**
- * Empty state for the playground: greets the user, links to chatbot list,
- * and shows suggested questions as clickable chips.
+ * Empty state for the playground when no chatbot is selected.
  *
  * Kept separate from studio.util.js so Fast Refresh can reload this
  * component without re-running the pure helpers.
+ *
+ * 04/10/2026 (S-20): bản cũ chào "Chào bạn, tôi có thể giúp gì?" như thể một bot đang nói, kèm khối câu hỏi gợi ý là
+ * code chết (không có chatbot nào được chọn ở đây nên danh sách luôn rỗng, và các chip không bấm được). Nay chỉ hướng dẫn.
  */
 import { HiOutlineSparkles } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
 import { getChatbotTheme } from './studio.util';
 
 export function StudioEmptyState({ chatbot }) {
+  const { t } = useI18n();
   const { primaryColor, gradientStyle } = getChatbotTheme(chatbot);
-  const suggestedQuestions =
-    chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-8 bg-white relative overflow-hidden">
@@ -31,24 +33,9 @@ export function StudioEmptyState({ chatbot }) {
         >
           <HiOutlineSparkles className="w-8 h-8 text-white" />
         </div>
-        <h2 className="text-lg font-semibold text-slate-900 mb-2 tracking-tight">
-          Chào bạn, tôi có thể giúp gì?
-        </h2>
-        <p className="text-sm text-slate-500 mb-8 leading-relaxed">
-          Chọn một chatbot từ danh sách bên trái hoặc tạo chatbot mới để bắt đầu trò chuyện thử nghiệm.
+        <p className="text-base font-medium text-slate-700 leading-relaxed">
+          {t('chatbot.studio.emptySelectBot')}
         </p>
-        {suggestedQuestions.length > 0 && (
-          <div className="flex flex-wrap gap-2 justify-center">
-            {suggestedQuestions.map((q, i) => (
-              <span
-                key={i}
-                className="px-3 py-1.5 rounded-full text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 transition-colors cursor-pointer"
-              >
-                {q}
-              </span>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   );

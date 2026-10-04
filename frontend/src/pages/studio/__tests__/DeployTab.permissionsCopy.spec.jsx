@@ -32,40 +32,40 @@ describe('DeployTab — nhân viên chỉ thấy phần đủ quyền (S-15)', (
     useAuthStore.setState({ user: { id: 8 }, activeContext: { type: 'self' } });
   });
 
-  it('chủ tài khoản: thấy đủ Kênh + Chia sẻ thành viên + Marketplace', () => {
+  it('chủ tài khoản: thấy đủ Kênh + Gửi bản sao + Đăng bán trên Marketplace', () => {
     render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
     expect(screen.getByText('Zalo cá nhân')).toBeTruthy();
-    expect(screen.getByText('Chia sẻ thành viên')).toBeTruthy();
-    expect(screen.getByText('Đăng Marketplace')).toBeTruthy();
+    expect(screen.getByText('Gửi bản sao')).toBeTruthy();
+    expect(screen.getByText('Đăng bán trên Marketplace')).toBeTruthy();
   });
 
-  it('nhân viên chỉ có chatbots_manage → KHÔNG thấy nhóm Kênh, Chia sẻ thành viên, Marketplace (còn khối nhúng website)', () => {
+  it('nhân viên chỉ có chatbots_manage → KHÔNG thấy nhóm Kênh, Gửi bản sao, Marketplace (còn khối nhúng website)', () => {
     useAuthStore.setState({ activeContext: employee({ chatbots_manage: true }) });
     render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
 
-    expect(screen.queryByText('Kênh hội thoại')).toBeNull();
+    expect(screen.queryByText('Trên ứng dụng nhắn tin')).toBeNull();
     expect(screen.queryByText('Zalo cá nhân')).toBeNull();
     expect(screen.queryByText('Telegram')).toBeNull();
-    expect(screen.queryByText('Chia sẻ')).toBeNull();
-    expect(screen.queryByText('Chia sẻ thành viên')).toBeNull();
-    expect(screen.queryByText('Đăng Marketplace')).toBeNull();
-    expect(screen.getByText('Chat Widget')).toBeTruthy();
+    expect(screen.queryByText('Sao chép & bán')).toBeNull();
+    expect(screen.queryByText('Gửi bản sao')).toBeNull();
+    expect(screen.queryByText('Đăng bán trên Marketplace')).toBeNull();
+    expect(screen.getByText('Nút chat nổi')).toBeTruthy();
   });
 
-  it('nhân viên có chatbot_channels_manage → thấy Kênh; vẫn không thấy Chia sẻ thành viên', () => {
+  it('nhân viên có chatbot_channels_manage → thấy Kênh; vẫn không thấy Gửi bản sao', () => {
     useAuthStore.setState({ activeContext: employee({ chatbots_manage: true, chatbot_channels_manage: true }) });
     render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
 
     expect(screen.getByText('Zalo cá nhân')).toBeTruthy();
-    expect(screen.queryByText('Chia sẻ thành viên')).toBeNull();
+    expect(screen.queryByText('Gửi bản sao')).toBeNull();
   });
 
-  it('nhân viên có marketplace_manage → thấy Marketplace nhưng KHÔNG thấy Chia sẻ thành viên (chỉ chủ tài khoản)', () => {
+  it('nhân viên có marketplace_manage → thấy Marketplace nhưng KHÔNG thấy Gửi bản sao (chỉ chủ tài khoản)', () => {
     useAuthStore.setState({ activeContext: employee({ chatbots_manage: true, marketplace_manage: true }) });
     render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
 
-    expect(screen.getByText('Đăng Marketplace')).toBeTruthy();
-    expect(screen.queryByText('Chia sẻ thành viên')).toBeNull();
+    expect(screen.getByText('Đăng bán trên Marketplace')).toBeTruthy();
+    expect(screen.queryByText('Gửi bản sao')).toBeNull();
   });
 });
 
@@ -86,7 +86,7 @@ describe('DeployTab — nút Copy chờ clipboard (S-23)', () => {
 
   const openScriptModal = () => {
     render(<DeployTab chatbot={bot} onOpenWidgetSettings={() => {}} />);
-    fireEvent.click(screen.getByText('Chat Widget'));
+    fireEvent.click(screen.getByText('Nút chat nổi'));
     return screen.getByRole('button', { name: /Copy mã/ });
   };
 

@@ -25,6 +25,7 @@ vi.mock('react-hot-toast', () => ({
     error: vi.fn(),
   },
 }));
+vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 
 const baseChatbot = {
   id: 42,

@@ -40,3 +40,21 @@ export function getChatbotTheme(chatbot) {
   const gradientStyle = `linear-gradient(135deg, ${primaryColor}, ${accentColor})`;
   return { primaryColor, accentColor, bgColor, textColor, gradientStyle };
 }
+
+/**
+ * Tóm tắt "chatbot đang chạy ở đâu" từ các số đếm của API danh sách (S-05): Web chỉ khi có hội thoại web gần đây,
+ * các kênh nhắn tin theo số tài khoản đang BẬT chatbot này. Thiếu trường (bot vừa tạo) = 0 = chưa chạy ở đâu.
+ *
+ * @returns {Array<{ channel: 'web'|'zalo_personal'|'telegram'|'whatsapp', count: number }>}
+ */
+export function summarizeDeployment(bot) {
+  const parts = [];
+  if (bot?.web_active) parts.push({ channel: 'web', count: 1 });
+  const zalo = Number(bot?.zalo_personal_count) || 0;
+  const telegram = Number(bot?.telegram_count) || 0;
+  const whatsapp = Number(bot?.whatsapp_count) || 0;
+  if (zalo > 0) parts.push({ channel: 'zalo_personal', count: zalo });
+  if (telegram > 0) parts.push({ channel: 'telegram', count: telegram });
+  if (whatsapp > 0) parts.push({ channel: 'whatsapp', count: whatsapp });
+  return parts;
+}

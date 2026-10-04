@@ -1,32 +1,14 @@
-import { useState, useEffect } from 'react';
-import { HiOutlineGlobeAlt } from 'react-icons/hi';
 import DeployTab from './DeployTab';
 
-const TABS = [
-  { id: 'deploy', label: 'Triển khai', icon: HiOutlineGlobeAlt },
-];
-
+/**
+ * Cột phải "Triển khai". Bản cũ vẽ thêm một thanh tab chỉ có MỘT tab (chữ "Triển khai" lặp hai lần) cùng
+ * `defaultTab='knowledge'` trỏ vào tab không tồn tại (S-09). Nay chỉ còn một tiêu đề do DeployTab vẽ.
+ */
 export default function RightPanel({
   chatbot,
   onOpenWidgetSettings,
-  defaultTab = 'knowledge',
-  onTabChange,
+  onUpdate,
 }) {
-  const [tab, setTab] = useState(defaultTab);
-
-  // Switch to deploy tab when bot changes (default)
-  useEffect(() => {
-    if (chatbot?.id) {
-      handleTabChange('deploy');
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatbot?.id]);
-
-  const handleTabChange = (next) => {
-    setTab(next);
-    onTabChange?.(next);
-  };
-
   // Guard: không render gì khi không có chatbot
   if (!chatbot) {
     return (
@@ -38,37 +20,12 @@ export default function RightPanel({
 
   return (
     <div className="h-full bg-white flex flex-col">
-      {/* Tab switcher (segmented) */}
-      <div className="px-5 pt-5 pb-4 shrink-0">
-        <div className="inline-flex items-center gap-0.5 p-0.5 bg-slate-100/80 rounded-lg">
-          {TABS.map(t => {
-            const Icon = t.icon;
-            const isActive = tab === t.id;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                onClick={() => handleTabChange(t.id)}
-                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ${
-                  isActive ? 'bg-white text-slate-900 shadow-sm shadow-slate-200/60' : 'text-slate-500 hover:text-slate-700'
-                }`}
-              >
-                <Icon className="w-3.5 h-3.5" />
-                {t.label}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Tab content */}
       <div className="flex-1 min-h-0 overflow-hidden">
-        {tab === 'deploy' && (
-          <DeployTab
-            chatbot={chatbot}
-            onOpenWidgetSettings={onOpenWidgetSettings}
-          />
-        )}
+        <DeployTab
+          chatbot={chatbot}
+          onOpenWidgetSettings={onOpenWidgetSettings}
+          onUpdate={onUpdate}
+        />
       </div>
     </div>
   );

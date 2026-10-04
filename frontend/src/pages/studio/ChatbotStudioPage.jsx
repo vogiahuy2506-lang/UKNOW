@@ -4,10 +4,10 @@ import {
   HiOutlineTrash,
   HiOutlineRefresh,
   HiOutlineChatAlt2,
-  HiOutlinePlus,
   HiOutlinePaperClip,
   HiOutlineX,
   HiOutlineCog,
+  HiOutlineGlobeAlt,
   HiOutlineArrowSmRight,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
@@ -28,13 +28,16 @@ import { notifyStorageQuotaRefresh } from '../../features/storage/storageEvents'
 import useMediaQuery from '../../hooks/useMediaQuery';
 import { useAuthStore } from '../../stores/authStore';
 
+const RECENT_CONVERSATIONS_LIMIT = 5;
 const ACCEPTED_EXTENSIONS = '.pdf,.docx,.pptx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACHMENTS = 3;
 
+// Tab thứ ba của điện thoại/máy tính bảng thực chất mở cột Triển khai, không phải hộp Cấu hình — nhãn cũ "Cấu hình" làm
+// khách tìm mãi không thấy chỗ đổi tên/hướng dẫn AI (S-02). Hộp Cấu hình nay mở bằng nút ở đầu khung chat.
 const MOBILE_PANELS = [
   { id: 'list',     label: 'Danh sách',  icon: HiOutlineViewBoards },
   { id: 'chat',     label: 'Trò chuyện', icon: HiOutlineChatAlt2 },
-  { id: 'settings', label: 'Cấu hình',   icon: HiOutlineCog },
+  { id: 'settings', labelKey: 'chatbot.studio.tabDeploy', icon: HiOutlineGlobeAlt },
 ];
 
 // ── Conversation Card (recent) ───────────────────────────────────────────────
@@ -67,9 +70,14 @@ function ConversationCard({ conv, onSelect, onDelete }) {
 }
 
 // ── Chat Message Area ────────────────────────────────────────────────────────
-function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
+function ChatMessageArea({ chatbot, onOpenConfig, canUseAi = true }) {
   const { t } = useI18n();
   const { usage: storageQuota } = useStorageQuota();
+  // Gói có giới hạn credit thì chat thử bị trừ 1 credit mỗi câu trả lời: nói rõ dưới ô nhập. Gói không giới hạn (hoặc
+  // chưa tải xong) thì không hứa "1 credit" — chỉ nói điều luôn đúng (chat thử bỏ qua khung giờ và giới hạn lượt).
+  const aiCreditLimit = useAuthStore((state) => state.aiCredits?.limit);
+  const hasCreditLimit = Number(aiCreditLimit) > 0;
+  const [showAllConversations, setShowAllConversations] = useState(false);
   const [conversations, setConversations] = useState([]);
   const [activeConversation, setActiveConversation] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -90,6 +98,8 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
 
   const { primaryColor: _primaryColor, bgColor: _bgColor, textColor: _textColor, gradientStyle } = getChatbotTheme(chatbot);
   const suggestedQuestions = chatbot?.suggested_questions || chatbot?.widget_settings?.suggested_questions || [];
+  // document_count (API danh sách) = số tài liệu SẴN SÀNG; thiếu trường (bot vừa tạo) = chưa có tài liệu.
+  const hasNoDocuments = !chatbot?._offlineCache && (Number(chatbot?.document_count ?? chatbot?.documents?.length ?? 0) || 0) === 0;
 
   useEffect(() => {
     if (chatbot?.id) loadConversations();
@@ -168,23 +178,6 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
     setActiveConversation(conv);
     setPendingAttachments([]);
     await loadMessages(conv.id);
-  };
-
-  const handleNewChat = async () => {
-    try {
-      const res = await chatbotApi.createChatbotStudioConversation(chatbot.id);
-      if (res.data?.data) {
-        const newConv = res.data.data;
-        setConversations(prev => [newConv, ...prev]);
-        setActiveConversation(newConv);
-        setMessages([]);
-        setHasOlderMessages(false);
-        setNextBeforeId(null);
-        setPendingAttachments([]);
-      }
-    } catch (err) {
-      toast.error('Không thể tạo cuộc trò chuyện mới');
-    }
   };
 
   const handleDeleteConversation = async (convId) => {
@@ -417,30 +410,42 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
           </div>
         )}
 
-        {/* Conversations recent list as cards */}
-        {messages.length === 0 && conversations.length > 0 && (
-          <div className="mb-4">
-            <div className="flex items-center justify-between mb-2.5 px-1">
-              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cuộc trò chuyện gần đây</p>
-              <button onClick={handleNewChat} className="text-xs font-semibold text-primary-600 hover:text-primary-700 flex items-center gap-1">
-                <HiOutlinePlus className="w-3 h-3" />
-                Mới
-              </button>
+        {/* Khung trống: lời chào của bot, dải báo thiếu tài liệu, câu hỏi gợi ý, cuộc trò chuyện gần đây (S-06) */}
+        {messages.length === 0 && !loadingMessages && (
+          <div className="flex gap-2.5">
+            <div
+              className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0 text-white text-xs font-semibold"
+              style={{ background: gradientStyle }}
+            >
+              {chatbot?.avatar_url ? (
+                <img src={chatbot.avatar_url} alt="" className="w-full h-full rounded-lg object-cover" />
+              ) : (
+                chatbot?.name?.[0]?.toUpperCase()
+              )}
             </div>
-            <div className="space-y-1">
-              {conversations.slice(0, 5).map(conv => (
-                <ConversationCard
-                  key={conv.id}
-                  conv={conv}
-                  onSelect={handleSelectConversation}
-                  onDelete={handleDeleteConversation}
-                />
-              ))}
+            <div className="max-w-[85%] md:max-w-[75%]">
+              <div data-testid="welcome-bubble" className="px-3.5 py-2.5 rounded-2xl rounded-tl-md bg-slate-100 text-sm leading-relaxed text-slate-900">
+                <p className="whitespace-pre-wrap">
+                  {chatbot?.greeting_msg || chatbot?.welcome_message || t('chatbot.studio.defaultGreeting')}
+                </p>
+              </div>
             </div>
           </div>
         )}
 
-        {/* Suggested questions as clean cards */}
+        {messages.length === 0 && !loadingMessages && hasNoDocuments && (
+          <div data-testid="no-documents-strip" className="flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
+            <p className="text-xs text-amber-900 leading-relaxed">{t('chatbot.studio.noDocumentsStrip')}</p>
+            <button
+              type="button"
+              onClick={() => onOpenConfig?.('knowledge')}
+              className="shrink-0 px-2.5 py-1.5 rounded-md bg-white border border-amber-200 text-xs font-semibold text-amber-800 hover:bg-amber-100 transition-colors whitespace-nowrap"
+            >
+              {t('chatbot.studio.addDocuments')}
+            </button>
+          </div>
+        )}
+
         {messages.length === 0 && suggestedQuestions.length > 0 && (
           <div className="mb-2">
             <p className="text-xs font-semibold text-slate-500 mb-2.5 px-1">Câu hỏi gợi ý</p>
@@ -455,6 +460,35 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
                 </button>
               ))}
             </div>
+          </div>
+        )}
+
+        {messages.length === 0 && conversations.length > 0 && (
+          <div className="mb-4">
+            <div className="flex items-center justify-between mb-2.5 px-1">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Cuộc trò chuyện gần đây</p>
+            </div>
+            <div className="space-y-1">
+              {(showAllConversations ? conversations : conversations.slice(0, RECENT_CONVERSATIONS_LIMIT)).map(conv => (
+                <ConversationCard
+                  key={conv.id}
+                  conv={conv}
+                  onSelect={handleSelectConversation}
+                  onDelete={handleDeleteConversation}
+                />
+              ))}
+            </div>
+            {conversations.length > RECENT_CONVERSATIONS_LIMIT && (
+              <button
+                type="button"
+                onClick={() => setShowAllConversations(v => !v)}
+                className="mt-1.5 px-1 text-xs font-semibold text-primary-600 hover:text-primary-700"
+              >
+                {showAllConversations
+                  ? t('chatbot.studio.recentsShowLess')
+                  : t('chatbot.studio.recentsShowMore', { count: conversations.length - RECENT_CONVERSATIONS_LIMIT })}
+              </button>
+            )}
           </div>
         )}
 
@@ -613,6 +647,9 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
               )}
             </button>
           </div>
+          <p data-testid="test-chat-note" className="mt-1.5 px-1 text-[11px] text-slate-400">
+            {hasCreditLimit ? t('chatbot.studio.testChatNoteCredit') : t('chatbot.studio.testChatNoteFree')}
+          </p>
           </> : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">
               {t('chatbot.studio.employeeNoTestChat')}
@@ -626,19 +663,28 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
 
 // ── Page ─────────────────────────────────────────────────────────────────────
 function ChatbotStudioPage() {
+  const { t } = useI18n();
   const activeContext = useAuthStore((state) => state.activeContext);
   const isEmployeeContext = activeContext?.type === 'employee';
   const [selectedBot, setSelectedBot] = useState(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
   const [activePanel, setActivePanel] = useState('list');
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [configSection, setConfigSection] = useState(null);
   const [widgetModalKind, setWidgetModalKind] = useState(null);
+  const [deployDrawerOpen, setDeployDrawerOpen] = useState(false);
+  // Đổi số này = dựng lại khung chat thử từ đầu (cuộc trò chuyện mới) mà không cần tạo phiên rỗng trong DB.
+  const [chatResetKey, setChatResetKey] = useState(0);
 
   const isCompact = useMediaQuery('(max-width: 1023.99px)');
   const isLargeScreen = useMediaQuery('(min-width: 1024px)');
+  // Từ 1280px mới đủ chỗ cho 3 cột (menu 220 + danh sách 288 + cột Triển khai 360 → khung chat còn ≥ 400px). Từ 1024 đến
+  // 1279 khung chat chỉ còn ~150px, nên cột Triển khai thành ngăn kéo mở bằng nút "Triển khai" (S-19).
+  const isWide = useMediaQuery('(min-width: 1280px)');
 
   const handleSelectBot = useCallback((bot) => {
     setSelectedBot(bot);
+    setDeployDrawerOpen(false);
     if (bot) setActivePanel('chat');
   }, []);
 
@@ -650,10 +696,43 @@ function ChatbotStudioPage() {
     }
   }, []);
 
+  // KnowledgeTab báo số tài liệu mới: bot đang chọn cập nhật theo để dải "chưa có tài liệu" tự biến mất khi vừa thêm.
+  useEffect(() => {
+    const handler = (e) => {
+      const { chatbotId, count, errorCount } = e.detail || {};
+      if (chatbotId == null || !Number.isFinite(Number(count))) return;
+      setSelectedBot((prev) => (
+        prev && String(prev.id) === String(chatbotId)
+          ? { ...prev, document_count: Number(count), document_error_count: Number(errorCount) || 0 }
+          : prev
+      ));
+    };
+    document.addEventListener('studio:knowledge-changed', handler);
+    return () => document.removeEventListener('studio:knowledge-changed', handler);
+  }, []);
+
   const handleCreateNew = useCallback(() => {
     if (isCompact) setActivePanel('list');
     document.dispatchEvent(new CustomEvent('studio:create-new'));
   }, [isCompact]);
+
+  const openConfig = useCallback((section) => {
+    setConfigSection(typeof section === 'string' ? section : null);
+    setShowConfigModal(true);
+  }, []);
+
+  const handleNewChat = useCallback(() => setChatResetKey((k) => k + 1), []);
+
+  const openWidgetSettings = (kind) => setWidgetModalKind(kind || 'script');
+
+  const renderChat = () => (
+    <ChatMessageArea
+      key={`chat-${selectedBot.id}-${chatResetKey}`}
+      chatbot={selectedBot}
+      onOpenConfig={openConfig}
+      canUseAi={!isEmployeeContext}
+    />
+  );
 
   return (
     <div className="h-[calc(100dvh-1.5rem)] min-h-[600px] flex flex-col">
@@ -676,7 +755,7 @@ function ChatbotStudioPage() {
                   } ${disabled ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Icon className="w-4 h-4" />
-                  <span className="text-xs font-medium">{panel.label}</span>
+                  <span className="text-xs font-medium">{panel.labelKey ? t(panel.labelKey) : panel.label}</span>
                   {isActive && (
                     <span className="absolute bottom-0 left-1/4 right-1/4 h-0.5 bg-primary-500 rounded-t-full" />
                   )}
@@ -687,9 +766,9 @@ function ChatbotStudioPage() {
         </div>
       )}
 
-      {/* Desktop 3-column layout - flexbox linh hoạt, không border thô */}
+      {/* Desktop: 3 cột từ 1280px; 1024–1279px: 2 cột + ngăn kéo Triển khai */}
       {isLargeScreen ? (
-        <div className="flex-1 flex gap-0 bg-white rounded-xl shadow-sm shadow-slate-200/60 overflow-hidden">
+        <div className="flex-1 flex gap-0 bg-white rounded-xl shadow-sm shadow-slate-200/60 overflow-hidden relative">
           {/* Left */}
           <div className={`${leftCollapsed ? 'w-14' : 'w-72'} shrink-0 transition-[width] duration-200 border-r border-slate-100`}>
             <div className="h-full">
@@ -710,15 +789,12 @@ function ChatbotStudioPage() {
                 <div className="border-b border-slate-100">
                   <PlaygroundHeader
                     bot={selectedBot}
-                    onConfig={() => setShowConfigModal(true)}
+                    onConfig={openConfig}
+                    onNewChat={handleNewChat}
+                    onOpenDeploy={isWide ? undefined : () => setDeployDrawerOpen(true)}
                   />
                 </div>
-                <ChatMessageArea
-                  key={`chat-${selectedBot.id}`}
-                  chatbot={selectedBot}
-                  onUpdate={handleUpdateBot}
-                  canUseAi={!isEmployeeContext}
-                />
+                {renderChat()}
               </>
             ) : (
               <StudioEmptyState chatbot={selectedBot} />
@@ -726,15 +802,49 @@ function ChatbotStudioPage() {
           </div>
 
           {/* Right */}
-          <div className="w-[360px] shrink-0 border-l border-slate-100">
-            <div className="h-full">
-              <RightPanel
-                chatbot={selectedBot}
-                onOpenWidgetSettings={(kind) => setWidgetModalKind(kind || 'script')}
-                onUpdate={handleUpdateBot}
-              />
+          {isWide && (
+            <div className="w-[360px] shrink-0 border-l border-slate-100">
+              <div className="h-full">
+                <RightPanel
+                  chatbot={selectedBot}
+                  onOpenWidgetSettings={openWidgetSettings}
+                  onUpdate={handleUpdateBot}
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {/* Ngăn kéo Triển khai (< 1280px) */}
+          {!isWide && deployDrawerOpen && selectedBot && (
+            <>
+              <div
+                data-testid="deploy-drawer-backdrop"
+                className="absolute inset-0 z-20 bg-slate-900/20"
+                onClick={() => setDeployDrawerOpen(false)}
+              />
+              <div
+                data-testid="deploy-drawer"
+                className="absolute inset-y-0 right-0 z-30 w-[360px] max-w-full bg-white border-l border-slate-100 shadow-xl"
+              >
+                <button
+                  type="button"
+                  onClick={() => setDeployDrawerOpen(false)}
+                  className="absolute top-3 right-3 z-10 w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+                  aria-label="Đóng"
+                >
+                  <HiOutlineX className="w-4 h-4" />
+                </button>
+                <RightPanel
+                  chatbot={selectedBot}
+                  onOpenWidgetSettings={(kind) => {
+                    setDeployDrawerOpen(false);
+                    openWidgetSettings(kind);
+                  }}
+                  onUpdate={handleUpdateBot}
+                />
+              </div>
+            </>
+          )}
         </div>
       ) : (
         <div className="flex-1 flex flex-col md:flex-row gap-3 items-stretch">
@@ -750,12 +860,18 @@ function ChatbotStudioPage() {
           <div className={`${isCompact ? (activePanel === 'chat' ? 'flex' : 'hidden') : 'flex'} flex-1 min-w-0`}>
             <div className={`bg-white rounded-xl shadow-sm shadow-slate-200/60 flex-1 min-h-0 flex flex-col overflow-hidden w-full`}>
               {selectedBot ? (
-                <ChatMessageArea
-                  key={`chat-${selectedBot.id}`}
-                  chatbot={selectedBot}
-                  onUpdate={handleUpdateBot}
-                  canUseAi={!isEmployeeContext}
-                />
+                <>
+                  {/* S-02: trên điện thoại/máy tính bảng, đầu khung chat có tên bot, trạng thái và nút Cấu hình — trước đây
+                      chỉ nhánh màn lớn vẽ PlaygroundHeader nên không có đường nào mở hộp Cấu hình. */}
+                  <div className="border-b border-slate-100">
+                    <PlaygroundHeader
+                      bot={selectedBot}
+                      onConfig={openConfig}
+                      onNewChat={handleNewChat}
+                    />
+                  </div>
+                  {renderChat()}
+                </>
               ) : (
                 <StudioEmptyState chatbot={selectedBot} />
               )}
@@ -766,7 +882,7 @@ function ChatbotStudioPage() {
               {selectedBot ? (
                 <RightPanel
                   chatbot={selectedBot}
-                  onOpenWidgetSettings={(kind) => setWidgetModalKind(kind || 'script')}
+                  onOpenWidgetSettings={openWidgetSettings}
                   onUpdate={handleUpdateBot}
                 />
               ) : (
@@ -787,7 +903,11 @@ function ChatbotStudioPage() {
       <ChatbotConfigModal
         open={showConfigModal}
         chatbot={selectedBot}
-        onClose={() => setShowConfigModal(false)}
+        initialSection={configSection}
+        onClose={() => {
+          setShowConfigModal(false);
+          setConfigSection(null);
+        }}
         onUpdate={handleUpdateBot}
       />
       <WidgetSettingsModal

@@ -10,11 +10,13 @@ import {
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
+import { useI18n } from '../../i18n';
 
+// Tên 3 cách nhúng trùng với 3 ô ở cột Triển khai (DeployTab).
 const TABS = [
-  { id: 'script', label: 'Chat Widget', icon: HiOutlineChat, desc: 'Widget nổi góc màn hình' },
-  { id: 'iframe', label: 'iFrame', icon: HiOutlineCode, desc: 'Nhúng trang chat vào website' },
-  { id: 'public_link', label: 'Public Link', icon: HiOutlineLink, desc: 'Trang chat công khai' },
+  { id: 'script', labelKey: 'chatbot.studio.embedScriptTitle', icon: HiOutlineChat, desc: 'Widget nổi góc màn hình' },
+  { id: 'iframe', labelKey: 'chatbot.studio.embedIframeTitle', icon: HiOutlineCode, desc: 'Nhúng trang chat vào website' },
+  { id: 'public_link', labelKey: 'chatbot.studio.embedLinkTitle', icon: HiOutlineLink, desc: 'Trang chat công khai' },
 ];
 
 const POSITIONS = [
@@ -69,6 +71,7 @@ function ColorRow({ label, value, onChange }) {
 }
 
 export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose, onUpdate }) {
+  const { t } = useI18n();
   const [activeTab, setActiveTab] = useState(embedKind || 'script');
   const [saving, setSaving] = useState(false);
 
@@ -164,7 +167,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
   };
 
   const gradientStyle = `linear-gradient(135deg, ${cfg.primary_color}, ${cfg.accent_color})`;
-  const activeTabMeta = TABS.find((t) => t.id === activeTab);
+  const activeTabMeta = TABS.find((tab) => tab.id === activeTab);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-2 md:p-4">
@@ -205,14 +208,14 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
               Dạng nhúng
             </p>
             <div className="space-y-1">
-              {TABS.map((t) => {
-                const Icon = t.icon;
-                const isActive = activeTab === t.id;
+              {TABS.map((tab) => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
                 return (
                   <button
-                    key={t.id}
+                    key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab(t.id)}
+                    onClick={() => setActiveTab(tab.id)}
                     className={`w-full flex items-start gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors text-left ${
                       isActive
                         ? 'bg-white text-primary-700 shadow-sm border border-slate-200'
@@ -225,8 +228,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate">{t.label}</p>
-                      <p className="text-[11px] text-slate-400 font-normal truncate">{t.desc}</p>
+                      <p className="truncate">{t(tab.labelKey)}</p>
+                      <p className="text-[11px] text-slate-400 font-normal truncate">{tab.desc}</p>
                     </div>
                   </button>
                 );
@@ -255,7 +258,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
             <div className="p-6 md:p-8 space-y-5 max-w-2xl">
               <div className="flex items-center gap-2">
                 <activeTabMeta.icon className="w-5 h-5 text-primary-600" />
-                <h3 className="text-base font-semibold text-slate-900">{activeTabMeta.label}</h3>
+                <h3 className="text-base font-semibold text-slate-900">{t(activeTabMeta.labelKey)}</h3>
               </div>
 
               {/* ── Common to all tabs: color palette + logo preview + border radius ── */}
@@ -284,7 +287,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-slate-500 truncate">{chatbot.avatar_url}</p>
                       <p className="text-xs text-slate-400 mt-1">
-                        Logo lấy từ <strong>Setting Chatbot</strong>. Đổi logo trong Setting Chatbot để áp dụng cho cả 3 dạng deploy.
+                        {t('chatbot.studio.widgetLogoHint')}
                       </p>
                     </div>
                   </div>
@@ -294,7 +297,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
                       No logo
                     </div>
                     <p className="text-xs text-slate-500">
-                      Chưa có logo. Upload logo trong <strong>Setting Chatbot</strong> để hiển thị trên widget, iframe và public link.
+                      {t('chatbot.studio.widgetLogoEmptyHint')}
                     </p>
                   </div>
                 )}
@@ -457,7 +460,7 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         {/* Footer */}
         <div className="flex items-center justify-between gap-3 px-6 py-4 border-t border-slate-200 bg-slate-50 shrink-0">
           <p className="text-xs text-slate-500 hidden md:block">
-            Cấu hình áp dụng cho cả 3 dạng nhúng: Chat Widget, iFrame và Public Link
+            {t('chatbot.studio.widgetApplyAllHint')}
           </p>
           <div className="flex items-center gap-2 ml-auto">
             <button

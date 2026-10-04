@@ -7,6 +7,7 @@ import {
 import { FaTelegramPlane } from 'react-icons/fa';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../chatbot/services/chatbotApi.service';
+import { useI18n } from '../../../i18n';
 
 /**
  * TelegramChannelModal — bật/tắt chatbot cho từng tài khoản Telegram cá nhân
@@ -16,6 +17,7 @@ import chatbotApi from '../../chatbot/services/chatbotApi.service';
  * không tab, chỉ là 1 danh sách các dòng account + toggle on/off.
  */
 export default function TelegramChannelModal({ open, onClose, chatbotId }) {
+  const { t } = useI18n();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
@@ -175,7 +177,7 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                     rel="noreferrer"
                     className="text-sky-600 hover:text-sky-700 font-medium underline underline-offset-2"
                   >
-                    Cài đặt → Kênh liên kết → Telegram
+                    {t('chatbot.studio.channelsPathTelegram')}
                   </a>
                   {' '}và bấm <strong>“Kết nối tài khoản Telegram”</strong> để quét QR bằng Telegram trên điện thoại. Sau khi xong, quay lại đây để bật AI cho từng tài khoản.
                 </p>
@@ -248,7 +250,7 @@ export default function TelegramChannelModal({ open, onClose, chatbotId }) {
                       disabled={busy || !acc.isActive}
                       title={
                         !acc.isActive
-                          ? 'Kích hoạt tài khoản trong Cài đặt → Kênh liên kết trước'
+                          ? t('chatbot.studio.channelsActivateFirst')
                           : acc.linkedToOtherChatbot
                             ? `Bật sẽ tạo thêm 1 cấu hình AI cho chatbot hiện tại (không ảnh hưởng ${acc.linkedChatbotName})`
                             : undefined

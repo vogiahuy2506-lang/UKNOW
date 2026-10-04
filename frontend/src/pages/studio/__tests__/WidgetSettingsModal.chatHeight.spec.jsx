@@ -9,6 +9,7 @@ import chatbotApi from '../../../features/chatbot/services/chatbotApi.service';
 
 vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({ default: { updateChatbot: vi.fn() } }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
+vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 
 const chatbot = { id: 42, name: 'Bot', widget_key: 'wk', chat_height: '800px' };
 

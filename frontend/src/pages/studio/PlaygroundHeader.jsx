@@ -1,9 +1,10 @@
 import {
   HiOutlineCog,
-  HiOutlineShare,
   HiOutlinePlus,
-  HiOutlineDotsHorizontal,
+  HiOutlineGlobeAlt,
 } from 'react-icons/hi';
+import { useI18n } from '../../i18n';
+import { summarizeDeployment } from './studio.util';
 
 function getGradient(chatbot) {
   const primary = chatbot?.primary_color || chatbot?.widget_settings?.primary_color || '#ee7518';
@@ -11,14 +12,40 @@ function getGradient(chatbot) {
   return `linear-gradient(135deg, ${primary}, ${accent})`;
 }
 
-export default function PlaygroundHeader({ bot, onConfig, onShare, onNewChat, onMenu }) {
+const STATUS_STYLES = {
+  on: { badge: 'bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500', labelKey: 'chatbot.studio.statusOn' },
+  off: { badge: 'bg-slate-100 text-slate-500', dot: 'bg-slate-400', labelKey: 'chatbot.studio.statusOff' },
+  locked: { badge: 'bg-amber-50 text-amber-700', dot: 'bg-amber-500', labelKey: 'chatbot.studio.statusLocked' },
+};
+
+/**
+ * Đầu khung chat thử: tên bot, trạng thái, tóm tắt triển khai và các nút Cuộc trò chuyện mới / Triển khai / Cấu hình.
+ * Vẽ ở MỌI cỡ màn hình (S-02: trước đây chỉ có ở nhánh màn lớn nên điện thoại/máy tính bảng không có đường mở Cấu hình).
+ *
+ * Huy hiệu nói đúng điều nó đo — công tắc "Trạng thái hoạt động" (`replies_enabled`), không phải "bot đang trực khách"
+ * (S-05: 63/63 bot hiện "Online" dù 45/63 chưa từng ra khách). Bot bị khoá sau hạ gói hiện "Tạm khoá (vượt gói)".
+ */
+export default function PlaygroundHeader({ bot, onConfig, onNewChat, onOpenDeploy }) {
+  const { t } = useI18n();
   if (!bot) return null;
 
   const gradientStyle = getGradient(bot);
   const initial = bot.name?.[0]?.toUpperCase() || '?';
+  const status = bot.is_locked ? 'locked' : bot.replies_enabled !== false ? 'on' : 'off';
+  const style = STATUS_STYLES[status];
+
+  const channelLabel = (part) => {
+    if (part.channel === 'web') return t('chatbot.studio.channelWeb');
+    const brand = { zalo_personal: t('chatbot.studio.channelZaloPersonal'), telegram: 'Telegram', whatsapp: 'WhatsApp' }[part.channel];
+    return part.count > 1 ? `${brand} (${part.count})` : brand;
+  };
+  const parts = summarizeDeployment(bot);
+  const summary = parts.length === 0
+    ? t('chatbot.studio.channelsNone')
+    : t('chatbot.studio.channelsRunning', { list: parts.map(channelLabel).join(' · ') });
 
   return (
-    <div className="flex items-center justify-between gap-3 px-5 py-3 bg-white shrink-0">
+    <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 bg-white shrink-0">
       {/* Left: Avatar + Name */}
       <div className="flex items-center gap-3 min-w-0 flex-1">
         {bot.logo_url ? (
@@ -36,13 +63,15 @@ export default function PlaygroundHeader({ bot, onConfig, onShare, onNewChat, on
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <h2 className="text-sm font-semibold text-slate-900 truncate tracking-tight">{bot.name}</h2>
-            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${
-              bot.replies_enabled !== false ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-500'
-            }`}>
-              <span className={`w-1 h-1 rounded-full ${bot.replies_enabled !== false ? 'bg-emerald-500' : 'bg-slate-400'}`} />
-              {bot.replies_enabled !== false ? 'Online' : 'Offline'}
+            <span
+              data-testid="bot-status-badge"
+              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-medium whitespace-nowrap shrink-0 ${style.badge}`}
+            >
+              <span className={`w-1 h-1 rounded-full ${style.dot}`} />
+              {t(style.labelKey)}
             </span>
           </div>
+          <p data-testid="bot-deploy-summary" className="text-[11px] text-slate-400 truncate mt-0.5">{summary}</p>
         </div>
       </div>
 
@@ -52,43 +81,33 @@ export default function PlaygroundHeader({ bot, onConfig, onShare, onNewChat, on
           <button
             type="button"
             onClick={onNewChat}
-            className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-            title="Bắt đầu cuộc trò chuyện mới"
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+            title={t('chatbot.studio.newChatTitle')}
           >
             <HiOutlinePlus className="w-3.5 h-3.5" />
-            <span>Chat mới</span>
+            <span className="hidden sm:inline">{t('chatbot.studio.newChat')}</span>
           </button>
         )}
-        {onShare && (
+        {onOpenDeploy && (
           <button
             type="button"
-            onClick={onShare}
+            onClick={onOpenDeploy}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
-            title="Chia sẻ chatbot"
+            title={t('chatbot.studio.tabDeploy')}
           >
-            <HiOutlineShare className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">Chia sẻ</span>
+            <HiOutlineGlobeAlt className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">{t('chatbot.studio.tabDeploy')}</span>
           </button>
         )}
         {onConfig && (
           <button
             type="button"
-            onClick={onConfig}
+            onClick={() => onConfig()}
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-semibold bg-primary-500 hover:bg-primary-600 text-white transition-colors"
             title="Mở cấu hình chatbot"
           >
             <HiOutlineCog className="w-3.5 h-3.5" />
             <span className="hidden sm:inline">Cấu hình</span>
-          </button>
-        )}
-        {onMenu && (
-          <button
-            type="button"
-            onClick={onMenu}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
-            title="Tùy chọn"
-          >
-            <HiOutlineDotsHorizontal className="w-4 h-4" />
           </button>
         )}
       </div>

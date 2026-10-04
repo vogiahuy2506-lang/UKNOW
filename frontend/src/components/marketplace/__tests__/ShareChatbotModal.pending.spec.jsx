@@ -59,7 +59,7 @@ describe('ShareChatbotModal — PR-3 share toast branches', () => {
     fireEvent.keyDown(input, { key: 'Enter' });
 
     // click submit
-    const submitBtn = screen.getByText(/chia sẻ ngay/i);
+    const submitBtn = screen.getByRole('button', { name: /^gửi bản sao$/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -89,7 +89,7 @@ describe('ShareChatbotModal — PR-3 share toast branches', () => {
     fireEvent.change(input, { target: { value: 'newuser@external.com' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    const submitBtn = screen.getByText(/chia sẻ ngay/i);
+    const submitBtn = screen.getByRole('button', { name: /^gửi bản sao$/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {
@@ -111,7 +111,7 @@ describe('ShareChatbotModal — PR-3 share toast branches', () => {
     fireEvent.change(input, { target: { value: 'b@x.com' } });
     fireEvent.keyDown(input, { key: 'Enter' });
 
-    const submitBtn = screen.getByText(/chia sẻ ngay/i);
+    const submitBtn = screen.getByRole('button', { name: /^gửi bản sao$/i });
     fireEvent.click(submitBtn);
 
     await waitFor(() => {

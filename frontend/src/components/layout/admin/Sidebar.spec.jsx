@@ -142,7 +142,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     // Nhãn lấy nguyên văn từ vi.js (nav.*) — đừng gõ tay, sai chính tả là đỏ giả.
     const expected = {
-      'AI Chatbot': ['Tạo AI Chatbot', 'Lịch sử trò chuyện', 'Thư viện media'],
+      'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện', 'Thư viện media'],
       'Chiến dịch': [
         'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
         'Giám sát gửi tin', 'Khách hàng từ chiến dịch',
@@ -215,9 +215,9 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       expect(openGroupLinks('AI Chatbot')).toEqual(['Lịch sử trò chuyện']);
     });
 
-    it('chatbots_manage → chỉ "Tạo AI Chatbot"', () => {
+    it('chatbots_manage → chỉ "Chatbot của tôi"', () => {
       employeeTitles({ chatbots_manage: true });
-      expect(openGroupLinks('AI Chatbot')).toEqual(['Tạo AI Chatbot']);
+      expect(openGroupLinks('AI Chatbot')).toEqual(['Chatbot của tôi']);
     });
 
     it('media_library_view → chỉ "Thư viện media"', () => {

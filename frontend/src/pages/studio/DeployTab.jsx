@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   HiOutlineCode,
   HiOutlineLink,
@@ -8,8 +8,9 @@ import {
   HiOutlineColorSwatch,
   HiOutlineExternalLink,
   HiOutlineCheckCircle,
-  HiOutlineShare,
+  HiOutlineDuplicate,
   HiOutlineShoppingBag,
+  HiOutlineChevronRight,
 } from 'react-icons/hi';
 import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
@@ -20,51 +21,41 @@ import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlemen
 import { useAuthStore } from '../../stores/authStore';
 import { useI18n } from '../../i18n';
 
+// Tên 3 cách đưa chatbot lên website (04/10/2026, S-04/phần b): dùng chữ thường ngày thay cho thuật ngữ kỹ thuật.
 const EMBED_OPTIONS = [
   {
     id: 'script',
-    title: 'Chat Widget',
-    tooltip: 'Widget chat nổi',
+    titleKey: 'chatbot.studio.embedScriptTitle',
+    tooltipKey: 'chatbot.studio.embedScriptTip',
     icon: HiOutlineChat,
     iconClass: 'bg-emerald-50 text-emerald-600',
   },
   {
     id: 'iframe',
-    title: 'iFrame',
-    tooltip: 'Nhúng khung chat',
+    titleKey: 'chatbot.studio.embedIframeTitle',
+    tooltipKey: 'chatbot.studio.embedIframeTip',
     icon: HiOutlineCode,
     iconClass: 'bg-blue-50 text-blue-600',
   },
   {
     id: 'public_link',
-    title: 'Public Link',
-    tooltip: 'Trang chat công khai',
+    titleKey: 'chatbot.studio.embedLinkTitle',
+    tooltipKey: 'chatbot.studio.embedLinkTip',
     icon: HiOutlineLink,
     iconClass: 'bg-primary-50 text-primary-600',
   },
 ];
 
+// Kênh nhắn tin còn dùng được. Facebook đã chốt bỏ (21/09/2026) và Zalo OA chưa từng có một lần nối nào (trang Kênh tự
+// ghi "chưa khả dụng") nên gỡ khỏi Studio (S-04); `countField` đọc số tài khoản đang bật từ API danh sách chatbot.
 const CHANNEL_TILES = [
-  {
-    key: 'zalo',
-    title: 'Zalo OA',
-    tooltip: 'Zalo OA — Tự động hồi đáp',
-    icon: 'Z',
-    iconClass: 'bg-blue-50 text-blue-600',
-  },
-  {
-    key: 'facebook',
-    title: 'Facebook',
-    tooltip: 'Facebook Messenger — Trả lời Fanpage',
-    icon: 'f',
-    iconClass: 'bg-indigo-50 text-indigo-600',
-  },
   {
     key: 'zalo_personal',
     title: 'Zalo cá nhân',
     tooltip: 'Zalo cá nhân — Bật chatbot cho từng tài khoản',
     icon: 'Z',
     iconClass: 'bg-orange-50 text-orange-600',
+    countField: 'zalo_personal_count',
   },
   {
     key: 'whatsapp',
@@ -72,6 +63,7 @@ const CHANNEL_TILES = [
     tooltip: 'WhatsApp Business — Gán AI reply cho từng tài khoản',
     icon: 'W',
     iconClass: 'bg-emerald-50 text-emerald-600',
+    countField: 'whatsapp_count',
   },
   {
     key: 'telegram_personal',
@@ -79,46 +71,31 @@ const CHANNEL_TILES = [
     tooltip: 'Telegram cá nhân — Quét QR để liên kết, bật chatbot cho từng tài khoản',
     icon: 'T',
     iconClass: 'bg-sky-50 text-sky-600',
+    countField: 'telegram_count',
   },
 ];
 
-const SHARE_OPTIONS = [
-  {
-    id: 'member',
-    title: 'Chia sẻ thành viên',
-    tooltip: 'Mời đồng đội cùng sử dụng chatbot',
-    icon: HiOutlineShare,
-    iconClass: 'bg-orange-50 text-orange-600',
-  },
-  {
-    id: 'marketplace',
-    title: 'Đăng Marketplace',
-    tooltip: 'Đăng bán chatbot lên marketplace',
-    icon: HiOutlineShoppingBag,
-    iconClass: 'bg-violet-50 text-violet-600',
-  },
-];
-
-function SquareTile({ onClick, iconBg, children, badge, tooltip, connected, label }) {
+function SquareTile({ onClick, iconBg, children, tooltip, label, sublabel, sublabelOn = false, disabled = false }) {
   return (
     <button
       type="button"
       onClick={onClick}
       title={tooltip}
-      className="group relative w-full min-h-[78px] bg-white rounded-xl border border-slate-200 hover:border-primary-300 hover:bg-primary-50/30 transition-all flex flex-col items-center justify-center gap-1.5 px-1.5 py-2"
+      disabled={disabled}
+      className={`group relative w-full min-h-[78px] bg-white rounded-xl border border-slate-200 transition-all flex flex-col items-center justify-center gap-1 px-1.5 py-2 ${
+        disabled ? 'opacity-70 cursor-default' : 'hover:border-primary-300 hover:bg-primary-50/30'
+      }`}
     >
-      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold transition-transform group-hover:scale-110 ${iconBg}`}>
+      <div className={`w-9 h-9 rounded-lg flex items-center justify-center font-bold transition-transform ${disabled ? '' : 'group-hover:scale-110'} ${iconBg}`}>
         {children}
       </div>
       <span className="text-[11px] font-medium text-slate-600 group-hover:text-primary-700 text-center leading-tight px-1 truncate w-full">
         {label}
       </span>
-      {/* Status dot */}
-      {badge && (
-        <span className={`absolute top-1.5 right-1.5 w-2 h-2 rounded-full ring-2 ring-white ${badge}`} />
-      )}
-      {connected === false && (
-        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white" />
+      {sublabel && (
+        <span className={`text-[10px] leading-tight text-center truncate w-full px-1 ${sublabelOn ? 'text-emerald-600' : 'text-slate-400'}`}>
+          {sublabel}
+        </span>
       )}
     </button>
   );
@@ -127,39 +104,36 @@ function SquareTile({ onClick, iconBg, children, badge, tooltip, connected, labe
 export default function DeployTab({
   chatbot,
   onOpenWidgetSettings,
+  onUpdate,
 }) {
-  const [channels, setChannels] = useState([]);
+  const { t } = useI18n();
   // P9 — gói không có Telegram/WhatsApp (trần 0) thì ẩn ô kênh đó (không còn tài khoản nào dùng được để gán chatbot).
   const entitlements = useChannelEntitlements();
   const [embedModal, setEmbedModal] = useState(null); // 'script' | 'iframe' | 'public_link' | null
-  const [channelModal, setChannelModal] = useState(null); // 'zalo' | 'facebook' | 'zalo_personal' | 'whatsapp' | 'telegram_personal' | null
+  const [channelModal, setChannelModal] = useState(null); // 'zalo_personal' | 'whatsapp' | 'telegram_personal' | null
   const [shareModal, setShareModal] = useState(false);
   const [marketplaceModal, setMarketplaceModal] = useState(false);
 
   // Nhân viên chỉ thấy phần mình đủ quyền dùng (S-15): Kênh cần `chatbot_channels_manage`, Marketplace cần
-  // `marketplace_manage`, "Chia sẻ thành viên" (gửi bản sao) chỉ chủ tài khoản (route requireSelfContext).
+  // `marketplace_manage`, "Gửi bản sao" chỉ chủ tài khoản (route requireSelfContext).
   // Trước đây các ô vẫn hiện rồi báo lỗi chung chung khi bấm.
   const activeContext = useAuthStore((state) => state.activeContext);
   const isEmployee = activeContext?.type === 'employee';
   const hasPermission = (key) => !isEmployee || activeContext?.permissions?.[key] === true;
   const canManageChannels = hasPermission('chatbot_channels_manage');
-  const visibleShareOptions = SHARE_OPTIONS.filter((opt) => (
-    opt.id === 'member' ? !isEmployee : hasPermission('marketplace_manage')
-  ));
+  const canSendCopy = !isEmployee;
+  const canSell = hasPermission('marketplace_manage');
 
-  useEffect(() => {
-    if (chatbot?.id) loadChannels();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chatbot?.id]);
-
-  const loadChannels = async () => {
-    if (!chatbot?.id) return;
+  // Sau khi đóng hộp kênh / đăng bán: lấy lại số tài khoản đang bật + trạng thái listing để chữ dưới ô và dòng
+  // "Đang chạy: …" ở đầu khung chat đúng ngay, không phải F5. Lỗi thì giữ nguyên số cũ.
+  const refreshBot = async () => {
+    if (!onUpdate || !chatbot?.id) return;
     try {
-      const res = await chatbotApi.getChatbotChannels(chatbot.id);
-      const list = res?.data || res || [];
-      setChannels(Array.isArray(list) ? list : []);
+      const res = await chatbotApi.listChatbots();
+      const fresh = (Array.isArray(res?.data) ? res.data : []).find((b) => String(b.id) === String(chatbot.id));
+      if (fresh) onUpdate({ ...chatbot, ...fresh });
     } catch {
-      setChannels(chatbot.channels || []);
+      // giữ nguyên
     }
   };
 
@@ -171,30 +145,25 @@ export default function DeployTab({
     );
   }
 
-  const zaloChannel = channels.find(c => c.channel_type === 'zalo');
-  const facebookChannel = channels.find(c => c.channel_type === 'facebook');
+  const listingStatus = chatbot.marketplace_listing_status || null;
+  const channelTiles = CHANNEL_TILES.filter((tile) => (
+    !(tile.key === 'whatsapp' && !entitlements.whatsapp)
+    && !(tile.key === 'telegram_personal' && !entitlements.telegram)
+    && !(tile.key === 'zalo_personal' && !entitlements.zalo)
+  ));
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="px-5 pb-3 shrink-0 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-slate-900">Triển khai</h3>
-        <button
-          type="button"
-          onClick={() => onOpenWidgetSettings?.()}
-          className="w-8 h-8 rounded-lg flex items-center justify-center text-primary-600 hover:bg-primary-50 transition-colors"
-          title="Tuỳ chỉnh giao diện widget"
-        >
-          <HiOutlineColorSwatch className="w-4 h-4" />
-        </button>
+      {/* Header: MỘT tiêu đề (bản cũ lặp chữ "Triển khai" hai lần + một biểu tượng bảng màu không nhãn — S-09) */}
+      <div className="px-5 pt-5 pb-3 shrink-0">
+        <h3 className="text-sm font-semibold text-slate-900">{t('chatbot.studio.deployTitle')}</h3>
       </div>
 
-      {/* Content - 6 ô vuông, 2 nhóm */}
       <div className="flex-1 overflow-y-auto px-5 pb-5 space-y-5">
-        {/* Nhúng lên website */}
+        {/* Trên website */}
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
-            Nhúng lên website
+            {t('chatbot.studio.deployWebTitle')}
           </p>
           <div className="grid grid-cols-3 gap-2">
             {EMBED_OPTIONS.map((opt) => {
@@ -204,84 +173,88 @@ export default function DeployTab({
                   key={opt.id}
                   onClick={() => setEmbedModal(opt.id)}
                   iconBg={opt.iconClass}
-                  tooltip={opt.tooltip}
-                  label={opt.title}
+                  tooltip={t(opt.tooltipKey)}
+                  label={t(opt.titleKey)}
                 >
                   <Icon className="w-5 h-5" />
                 </SquareTile>
               );
             })}
           </div>
+          {/* Đổi màu/vị trí/lời mời: một dòng CÓ CHỮ ngay dưới 3 ô (trước là biểu tượng bảng màu chỉ hiện chữ khi rê chuột) */}
+          <button
+            type="button"
+            onClick={() => onOpenWidgetSettings?.()}
+            className="mt-2 w-full inline-flex items-center justify-between gap-2 px-3 py-2 rounded-lg text-xs font-medium text-primary-700 bg-primary-50/60 hover:bg-primary-50 transition-colors"
+          >
+            <span className="inline-flex items-center gap-2">
+              <HiOutlineColorSwatch className="w-4 h-4 shrink-0" />
+              {t('chatbot.studio.deployAppearanceLink')}
+            </span>
+            <HiOutlineChevronRight className="w-3.5 h-3.5 shrink-0" />
+          </button>
         </div>
 
-        {/* Kênh hội thoại */}
-        {canManageChannels && <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
-            Kênh hội thoại
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {CHANNEL_TILES.filter((tile) => (
-              !(tile.key === 'whatsapp' && !entitlements.whatsapp)
-              && !(tile.key === 'telegram_personal' && !entitlements.telegram)
-              && !(tile.key === 'zalo_personal' && !entitlements.zalo)
-            )).map((tile) => {
-              const isConnected = tile.key === 'zalo'
-                ? !!zaloChannel
-                : tile.key === 'facebook'
-                ? !!facebookChannel
-                : null;
-              // Multi-account channels (WhatsApp, Zalo Personal, Telegram personal)
-              // surface their state inside the modal — we don't draw a static
-              // status dot here so we don't mislead users when only some of
-              // their accounts are linked/enabled.
-              const isMultiAccountTile = tile.key === 'whatsapp'
-                || tile.key === 'zalo_personal'
-                || tile.key === 'telegram_personal';
-              return (
-                <SquareTile
-                  key={tile.key}
-                  onClick={() => setChannelModal(tile.key)}
-                  iconBg={tile.iconClass}
-                  tooltip={tile.tooltip}
-                  label={tile.title}
-                  connected={isMultiAccountTile ? null : isConnected}
-                >
-                  <span className="text-base">{tile.icon}</span>
-                </SquareTile>
-              );
-            })}
+        {/* Trên ứng dụng nhắn tin */}
+        {canManageChannels && channelTiles.length > 0 && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
+              {t('chatbot.studio.deployMessengerTitle')}
+            </p>
+            <div className="grid grid-cols-3 gap-2">
+              {channelTiles.map((tile) => {
+                const count = Number(chatbot[tile.countField]) || 0;
+                return (
+                  <SquareTile
+                    key={tile.key}
+                    onClick={() => setChannelModal(tile.key)}
+                    iconBg={tile.iconClass}
+                    tooltip={tile.tooltip}
+                    label={tile.title}
+                    sublabel={count > 0 ? t('chatbot.studio.tileOn', { count }) : t('chatbot.studio.tileOff')}
+                    sublabelOn={count > 0}
+                  >
+                    <span className="text-base">{tile.icon}</span>
+                  </SquareTile>
+                );
+              })}
+            </div>
           </div>
-        </div>}
+        )}
 
-        {/* Chia sẻ */}
-        {visibleShareOptions.length > 0 && <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
-            Chia sẻ
-          </p>
-          <div className="grid grid-cols-2 gap-2">
-            {visibleShareOptions.map((opt) => {
-              const Icon = opt.icon;
-              const handleClick = () => {
-                if (opt.id === 'member') {
-                  setShareModal(true);
-                } else if (opt.id === 'marketplace') {
-                  setMarketplaceModal(true);
-                }
-              };
-              return (
+        {/* Sao chép & bán */}
+        {(canSendCopy || canSell) && (
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
+              {t('chatbot.studio.deployCopySellTitle')}
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {canSendCopy && (
                 <SquareTile
-                  key={opt.id}
-                  onClick={handleClick}
-                  iconBg={opt.iconClass}
-                  tooltip={opt.tooltip}
-                  label={opt.title}
+                  onClick={() => setShareModal(true)}
+                  iconBg="bg-orange-50 text-orange-600"
+                  tooltip={t('chatbot.studio.shareCopyTip')}
+                  label={t('chatbot.studio.shareCopyTitle')}
                 >
-                  <Icon className="w-5 h-5" />
+                  <HiOutlineDuplicate className="w-5 h-5" />
                 </SquareTile>
-              );
-            })}
+              )}
+              {canSell && (
+                <SquareTile
+                  onClick={() => setMarketplaceModal(true)}
+                  iconBg="bg-violet-50 text-violet-600"
+                  tooltip={listingStatus ? t('chatbot.studio.marketplaceListedTip') : t('chatbot.studio.marketplaceSellTip')}
+                  label={listingStatus
+                    ? t(listingStatus === 'published' ? 'chatbot.studio.marketplaceSoldTitle' : 'chatbot.studio.marketplaceListedTitle')
+                    : t('chatbot.studio.marketplaceSellTitle')}
+                  disabled={Boolean(listingStatus)}
+                >
+                  <HiOutlineShoppingBag className="w-5 h-5" />
+                </SquareTile>
+              )}
+            </div>
           </div>
-        </div>}
+        )}
       </div>
 
       {/* Embed modal */}
@@ -305,11 +278,14 @@ export default function DeployTab({
           open
           channel={channelModal}
           chatbot={chatbot}
-          onClose={() => setChannelModal(null)}
+          onClose={() => {
+            setChannelModal(null);
+            refreshBot();
+          }}
         />
       )}
 
-      {/* Share chatbot modal */}
+      {/* Gửi bản sao */}
       {shareModal && (
         <ShareChatbotModal
           open={shareModal}
@@ -319,13 +295,16 @@ export default function DeployTab({
         />
       )}
 
-      {/* Marketplace listing modal */}
+      {/* Đăng bán trên Marketplace */}
       {marketplaceModal && (
         <MarketplaceListingModal
           open={marketplaceModal}
           chatbot={chatbot}
           onClose={() => setMarketplaceModal(false)}
-          onSuccess={() => setMarketplaceModal(false)}
+          onSuccess={() => {
+            setMarketplaceModal(false);
+            refreshBot();
+          }}
         />
       )}
     </div>
@@ -342,7 +321,9 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
   const [copied, setCopied] = useState(false);
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const widgetKey = chatbot.widget_key || chatbot.id;
-  const publicUrl = `https://founderai.biz/chat/${widgetKey}`;
+  // Link công khai và iFrame cùng dùng origin hiện tại + widget_key (S-24). Bản cũ: link ghi cứng https://founderai.biz, iFrame
+  // dùng id số tuần tự (/chat/<id>, dễ dò). Mọi bot đều có widget_key (bản sao được sinh key từ S-03).
+  const publicUrl = `${baseUrl}/chat/${widgetKey}`;
 
   const scriptCode = `<script>
   window.customChatbotConfig = {
@@ -354,7 +335,7 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
 
   const iframeHeight = EMBED_HEIGHTS[chatbot.embed_size] || EMBED_HEIGHTS.medium;
   const iframeCode = `<iframe
-  src="${baseUrl}/chat/${chatbot.id}"
+  src="${publicUrl}"
   width="100%"
   height="${iframeHeight}"
   style="border:none;border-radius:12px;"
@@ -362,9 +343,9 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
 ></iframe>`;
 
   const titles = {
-    script: 'Chat Widget — Script nhúng',
-    iframe: 'iFrame — Nhúng khung chat',
-    public_link: 'Public Link — Trang chat công khai',
+    script: t('chatbot.studio.embedScriptModalTitle'),
+    iframe: t('chatbot.studio.embedIframeModalTitle'),
+    public_link: t('chatbot.studio.embedLinkModalTitle'),
   };
   const descs = {
     script: 'Dán đoạn script dưới đây vào trước thẻ đóng </body> của website.',

@@ -37,7 +37,7 @@ const ANCHOR_SECTIONS = [
   { id: 'limits',    label: 'Giới hạn',          icon: HiOutlineShieldCheck },
 ];
 
-export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate }) {
+export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate, initialSection = null }) {
   const { t } = useI18n();
   const [activeAnchor, setActiveAnchor] = useState('basic');
   const [saving, setSaving] = useState(false);
@@ -104,6 +104,17 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
     setInitialSnapshot(loadedForm);
     setHydrated(true);
   }, [open, chatbot]);
+
+  // Mở thẳng một mục (vd. nút "Thêm tài liệu" ở khung chat thử mở mục Kiến thức — S-06).
+  useEffect(() => {
+    if (!open || !initialSection) return undefined;
+    setActiveAnchor(initialSection);
+    const frame = requestAnimationFrame(() => {
+      const el = document.getElementById(`config-anchor-${initialSection}`);
+      if (el && contentRef.current) contentRef.current.scrollTo?.({ top: el.offsetTop - 16 });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open, initialSection]);
 
   if (!open || !chatbot) return null;
 
