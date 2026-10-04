@@ -20,7 +20,11 @@ jest.unstable_mockModule('../../services/dashboard/dashboardInsights.service.js'
   default: { generateInsights, persistInsightIfUsable },
 }));
 jest.unstable_mockModule('../../middleware/aiCredit.middleware.js', () => ({ chargeAiCredit }));
-jest.unstable_mockModule('../../utils/workspaceContext.util.js', () => ({ resolveWorkspaceOwnerId: () => 7 }));
+jest.unstable_mockModule('../../utils/workspaceContext.util.js', () => ({
+  resolveWorkspaceOwnerId: () => 7,
+  // aiActivity.controller (G2 giao tài khoản Zalo) đọc ngữ cảnh để lọc theo tài khoản được giao — chủ: thấy hết.
+  getWorkspaceContext: () => ({ workspaceOwnerId: 7, actorUserId: 7, contextType: 'owner' }),
+}));
 jest.unstable_mockModule('../../services/chatbot/aiActivity.service.js', () => ({
   default: { summarizeDailyActivity },
 }));
