@@ -3,16 +3,22 @@
  */
 
 /**
- * Đọc chữ bằng Gemini (OCR) cho ảnh và PDF quét — các trần dưới đây có lý do, đừng nới mà không đo lại (D-11).
+ * Đọc chữ bằng Gemini (OCR) cho ảnh và PDF quét — các trần dưới đây có lý do, đừng nới mà không đo lại (D-11, D-09).
  *
  *  - `OCR_MAX_OUTPUT_TOKENS`: bản cũ không đặt, rơi về mặc định 16.384 của lõi nên PDF dài bị cắt IM LẶNG tại đó mà tài liệu vẫn
  *    `ready` với nội dung cụt. Nay đặt tường minh và coi `finishReason === 'MAX_TOKENS'` là LỖI. Không nâng lên 32k/64k: sinh
- *    chừng đó token mất > 2 phút, vượt xa trần 100 giây của Cloudflare cho request upload.
+ *    chừng đó token mất > 2 phút, vượt hạn chót 75 giây bên dưới.
+ *  - `OCR_TOTAL_TIMEOUT_MS` (D-09): upload tài liệu là MỘT request đồng bộ (đọc chữ → chia đoạn → embed → ghi) còn Cloudflare
+ *    cắt ở 100 giây. Bản cũ cho OCR 180 giây nên khách thấy 524 trong khi máy chủ vẫn chạy tiếp và ghi tài liệu — khách tưởng
+ *    hỏng, bấm lại thì tốn thêm lượt OCR. 75 giây chừa ~25 giây cho phần chia đoạn + embed + ghi CSDL phía sau.
+ *    Đường này KHÔNG có hàng đợi nền (chỉ KB cũ `kbDocumentQueue` có, và nó không đọc bằng Gemini) nên chọn trần cứng thay vì
+ *    đổi hợp đồng API sang bất đồng bộ (FE phải thăm dò trạng thái).
  *  - `OCR_MAX_INPUT_BYTES`: tệp gửi kiểu inlineData (base64 phình thêm 1/3) nằm trong trần 20 MB cho cả yêu cầu của Gemini;
  *    quá mốc này Google trả 400 sau khi ta đã đọc cả tệp vào RAM và mã hoá.
  *  - `OCR_MAX_PDF_PAGES`: đầu ra 16k token chứa vừa chừng 15–30 trang chữ dày; PDF dài hơn nhiều chắc chắn bị cắt.
  */
 export const OCR_MAX_OUTPUT_TOKENS = 16384;
+export const OCR_TOTAL_TIMEOUT_MS = 75000;
 export const OCR_MAX_INPUT_BYTES = 12 * 1024 * 1024;
 export const OCR_MAX_PDF_PAGES = 40;
 
@@ -91,6 +97,9 @@ async function runGeminiOcr(parts, { userId = null } = {}) {
       model,
       temperature: 0.1,
       maxOutputTokens: OCR_MAX_OUTPUT_TOKENS,
+      // Đồng hồ MỖI lượt và ngân sách TỔNG (kể cả thử lại + model dự phòng) cùng là 75 giây: lõi huỷ fetch đang chạy ĐÚNG hạn.
+      timeoutMs: OCR_TOTAL_TIMEOUT_MS,
+      totalTimeoutMs: OCR_TOTAL_TIMEOUT_MS,
     });
   } catch (err) {
     console.error('[FileExtractor] OCR Gemini lỗi:', err?.message || err);

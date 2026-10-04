@@ -23,6 +23,7 @@ const {
   OcrExtractionError,
   OCR_ERROR_CODES,
   OCR_MAX_OUTPUT_TOKENS,
+  OCR_TOTAL_TIMEOUT_MS,
   OCR_MAX_INPUT_BYTES,
   OCR_MAX_PDF_PAGES,
 } = await import('../fileExtractor.util.js');
@@ -97,6 +98,30 @@ describe('fileExtractor OCR — đầu ra bị cắt không được lưu thành
     mockGenerate.mockResolvedValue(geminiResult({ text: 'NO_RELEVANT_TEXT_FOUND' }));
 
     await expect(extractTextFromBuffer(scannedPdf(), 'trang-tri.pdf')).resolves.toBe('');
+  });
+});
+
+describe('fileExtractor OCR — hạn chót tổng dưới trần 100 giây của Cloudflare (D-09)', () => {
+  beforeEach(() => {
+    mockPdfParse.mockReset().mockResolvedValue({ text: '', numpages: 3 });
+    mockGenerate.mockReset().mockResolvedValue(geminiResult());
+    mockRecord.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('hằng số hạn chót < 85 giây (chừa chỗ cho chia đoạn + embed + ghi trong cùng một request upload)', () => {
+    expect(OCR_TOTAL_TIMEOUT_MS).toBeGreaterThan(0);
+    expect(OCR_TOTAL_TIMEOUT_MS).toBeLessThan(85000);
+  });
+
+  it.each([
+    ['PDF quét', () => extractTextFromBuffer(scannedPdf(), 'quet.pdf')],
+    ['ảnh', () => extractTextFromBuffer(png(), 'anh.png')],
+  ])('%s: lời gọi Gemini mang ngân sách TỔNG (không rơi về 180 giây mặc định của lõi) và đồng hồ mỗi lượt không dài hơn nó', async (_name, run) => {
+    await run();
+
+    const call = mockGenerate.mock.calls[0][0];
+    expect(call.totalTimeoutMs).toBe(OCR_TOTAL_TIMEOUT_MS);
+    expect(call.timeoutMs).toBeLessThanOrEqual(call.totalTimeoutMs);
   });
 });
 
