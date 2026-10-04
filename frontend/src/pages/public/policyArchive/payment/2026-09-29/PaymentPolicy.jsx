@@ -1,11 +1,11 @@
 import { useState } from 'react';
-import PolicyHistory from './components/PolicyHistory.jsx';
+import PolicyChangeNotice from '../../../components/PolicyChangeNotice.jsx';
 
 function getLangClass(activeLang, itemLang) {
   return activeLang === itemLang ? '' : 'hidden';
 }
 
-function ComplaintPolicy() {
+function PaymentPolicy() {
   const [language, setLanguage] = useState('vi');
   const lc = getLangClass;
 
@@ -54,10 +54,10 @@ function ComplaintPolicy() {
             </div>
 
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'vi')}`}>
-              Phương thức tiếp nhận và giải quyết <span className="text-orange-400">phản ánh, yêu cầu, khiếu nại</span>
+              Chính sách về <span className="text-orange-400">thanh toán</span>
             </h1>
             <h1 className={`text-center text-[clamp(1.5rem,4.5vw,2.35rem)] font-bold leading-tight tracking-tight text-white ${lc(language, 'en')}`}>
-              Procedure for Receiving and Resolving <span className="text-orange-400">Feedback, Requests and Complaints</span>
+              Payment <span className="text-orange-400">Policy</span>
             </h1>
 
             <p className={`mt-3 text-center text-sm text-slate-400 ${lc(language, 'vi')}`}>
@@ -104,68 +104,87 @@ function ComplaintPolicy() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật ngày <strong>04/10/2026</strong> — Áp dụng từ <strong>19/10/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated on <strong>October 4, 2026</strong> — Effective from <strong>October 19, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
             </p>
           </div>
+          <PolicyChangeNotice language={language} lc={lc} />
 
           {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              1. Phạm vi áp dụng
+              1. Phương thức Thanh toán
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              1. Scope
+              1. Payment Methods
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Chính sách này quy định phương thức, quy trình tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại của khách hàng đối với các dịch vụ cung cấp trên nền tảng founderai.biz do Công ty TNHH Giải pháp số DIGISO (DIGISO) là chủ quản, theo Điều 7 Nghị định 248/2026/NĐ-CP.
+              DIGISO áp dụng hai phương thức thanh toán sau. Hai phương thức này đều được thực hiện trên trang thanh toán của đơn hàng:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              This policy sets out the methods and procedure for receiving and resolving feedback, requests and complaints from customers about the services provided on the founderai.biz platform operated by DIGISO Digital Solutions Co., Ltd. (DIGISO), in accordance with Article 7 of Decree 248/2026/NĐ-CP.
+              DIGISO applies the following two payment methods. Both are carried out on the order's payment page:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                <strong>Thanh toán qua mã QR (cổng PayOS):</strong> Hệ thống hiển thị mã QR của đơn hàng; bạn mở ứng dụng ngân hàng (hoặc ứng dụng khác có hỗ trợ quét mã VietQR), quét mã và xác nhận thanh toán. Số tiền và nội dung chuyển khoản được điền sẵn theo đơn hàng; hệ thống tự động ghi nhận khi giao dịch thành công.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Payment via QR code (PayOS gateway):</strong> The system displays the order's QR code; you open a banking application (or another application that supports VietQR scanning), scan the code and confirm the payment. The amount and transfer content are pre-filled from the order; the system records the payment automatically once it succeeds.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Chuyển khoản ngân hàng:</strong> Thông tin tài khoản nhận (ngân hàng, số tài khoản, chủ tài khoản), số tiền và nội dung chuyển khoản được hiển thị ngay trên trang thanh toán trong quá trình thanh toán. Bạn chuyển khoản đúng số tiền và đúng nội dung chuyển khoản do hệ thống hiển thị để đơn hàng được nhận diện và kích hoạt tự động.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Bank transfer:</strong> The receiving account information (bank, account number, account holder), the amount and the transfer content are displayed on the payment page during checkout. Please transfer the exact amount with the exact transfer content shown so that the order is identified and activated automatically.
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Bạn có thể chọn phương thức thuận tiện nhất cho mình; mỗi đơn hàng chỉ cần thanh toán một lần theo một trong hai cách trên.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              You may choose whichever method is most convenient; each order only needs to be paid once, using one of the two methods above.
             </p>
           </section>
 
           {/* Section 2 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              2. Cách thức tiếp nhận
+              2. Bảo mật Thanh toán
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              2. How to Submit
+              2. Payment Security
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO tiếp nhận phản ánh, yêu cầu, khiếu nại qua các kênh sau (trong đó có phương thức liên hệ trực tuyến là email và trang liên hệ):
+              DIGISO cam kết đảm bảo an toàn cho mọi giao dịch thanh toán:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO receives feedback, requests and complaints through the following channels (including online contact by email and the contact page):
+              DIGISO is committed to the safety of every payment transaction:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>Mã hóa SSL/TLS:</strong> Thông tin trao đổi giữa bạn và nền tảng được mã hóa trên đường truyền.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
+                <strong>SSL/TLS encryption:</strong> Information exchanged between you and the platform is encrypted in transit.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Điện thoại:</strong> 0877909606 (8:30 - 17:00, Thứ 2 - Thứ 6)
+                <strong>PayOS:</strong> Giao dịch QR được xử lý qua cổng thanh toán PayOS.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Phone:</strong> 0877909606 (8:30 AM - 5:00 PM, Monday - Friday)
+                <strong>PayOS:</strong> QR transactions are processed through the PayOS payment gateway.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Trang liên hệ:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
+                <strong>Kích hoạt tự động:</strong> Dịch vụ được kích hoạt ngay khi xác nhận thanh toán thành công.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Contact page:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
+                <strong>Automatic activation:</strong> The service is activated as soon as the payment is successfully confirmed.
               </li>
             </ul>
           </section>
@@ -173,53 +192,53 @@ function ComplaintPolicy() {
           {/* Section 3 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              3. Trình tự, thủ tục tiếp nhận và xử lý
+              3. Quy trình Thanh toán
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              3. Receiving and Handling Procedure
+              3. Payment Process
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO giải quyết phản ánh, yêu cầu, khiếu nại theo các bước sau:
+              Quy trình thanh toán trên founderai.biz:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO handles feedback, requests and complaints through the following steps:
+              The payment process on founderai.biz:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Bước 1 — Tiếp nhận:</strong> DIGISO tiếp nhận phản ánh, yêu cầu, khiếu nại qua các kênh được công bố tại mục 2.
+                <strong>Bước 1:</strong> Chọn gói dịch vụ phù hợp với nhu cầu.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Step 1 — Receipt:</strong> DIGISO receives the feedback, request or complaint through the channels published in section 2.
+                <strong>Step 1:</strong> Choose the service package that suits your needs.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Bước 2 — Xác nhận:</strong> Sau khi tiếp nhận đầy đủ thông tin, DIGISO xác nhận đã nhận trong vòng 24 giờ làm việc và có thể liên hệ để xác minh thêm thông tin.
+                <strong>Bước 2:</strong> Điền thông tin xuất hóa đơn (nếu cần).
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Step 2 — Acknowledgement:</strong> After receiving complete information, DIGISO confirms receipt within 24 business hours and may contact you to verify further information.
+                <strong>Step 2:</strong> Enter invoicing information (if needed).
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Bước 3 — Kiểm tra và xác minh:</strong> DIGISO kiểm tra, xác minh dựa trên thông tin đơn hàng, lịch sử giao dịch, thanh toán và tài liệu khách hàng cung cấp; phối hợp bộ phận, đơn vị liên quan khi cần. Việc xác minh và thu thập bằng chứng được thực hiện trong vòng 3 ngày làm việc.
+                <strong>Bước 3:</strong> Kiểm tra thông tin đơn hàng gồm tên gói, số lượng (nếu có), giá bán, tổng giá trị, mã giảm giá (voucher) và thông tin thanh toán trước khi giao dịch.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Step 3 — Review and verification:</strong> DIGISO reviews and verifies based on order information, transaction and payment history, and the documents you provide, coordinating with relevant departments or units where needed. Verification and evidence collection are completed within 3 business days.
+                <strong>Step 3:</strong> Review the order information — package name, quantity (if any), price, total value, discount code (voucher) and payment details — before making the transaction.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Bước 4 — Đánh giá và đưa ra phương án xử lý:</strong> DIGISO đánh giá nguyên nhân, trách nhiệm của các bên và đưa ra phương án xử lý phù hợp với chính sách của nền tảng, thỏa thuận giao dịch và quy định pháp luật; phản hồi trong vòng 7 ngày làm việc.
+                <strong>Bước 4:</strong> Xác nhận và đồng ý với các điều khoản thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Step 4 — Assessment and resolution proposal:</strong> DIGISO assesses the cause and the responsibilities of the parties and proposes a resolution consistent with the platform policies, the transaction agreement and applicable law; DIGISO responds within 7 business days.
+                <strong>Step 4:</strong> Confirm and agree to the payment terms.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Bước 5 — Thông báo kết quả:</strong> DIGISO thông báo kết quả xử lý qua email, điện thoại hoặc phương thức khác đã thỏa thuận.
+                <strong>Bước 5:</strong> Thực hiện thanh toán qua mã QR hoặc chuyển khoản.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Step 5 — Notification of result:</strong> DIGISO notifies the outcome by email, phone or another agreed method.
+                <strong>Step 5:</strong> Make the payment by QR code or bank transfer.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Bước 6 — Theo dõi và hoàn tất:</strong> DIGISO theo dõi việc thực hiện phương án xử lý và bảo đảm khiếu nại được giải quyết triệt để.
+                <strong>Bước 6:</strong> Hệ thống tự động kích hoạt dịch vụ sau khi xác nhận thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Step 6 — Follow-up and closure:</strong> DIGISO follows up on the implementation of the resolution and ensures the complaint is fully resolved.
+                <strong>Step 6:</strong> The system activates the service automatically after the payment is confirmed.
               </li>
             </ul>
           </section>
@@ -227,193 +246,125 @@ function ComplaintPolicy() {
           {/* Section 4 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              4. Các loại khiếu nại được tiếp nhận và thông tin cần cung cấp
+              4. Xác nhận Thanh toán
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              4. Types of Complaints Received and Information Required
+              4. Payment Confirmation
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO tiếp nhận các loại phản ánh, yêu cầu, khiếu nại sau:
+              Sau khi thanh toán thành công, bạn sẽ nhận được:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO receives the following types of feedback, requests and complaints:
+              After a successful payment, you will receive:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Chất lượng dịch vụ không đúng như công bố.
+                Email xác nhận thanh toán từ DIGISO.
               </li>
               <li className={lc(language, 'en')}>
-                Service quality not as advertised.
+                A payment confirmation email from DIGISO.
               </li>
               <li className={lc(language, 'vi')}>
-                Lỗi kỹ thuật ảnh hưởng đến việc sử dụng dịch vụ.
+                Thông báo kích hoạt dịch vụ trên nền tảng.
               </li>
               <li className={lc(language, 'en')}>
-                Technical errors affecting the use of the service.
+                A service activation notice on the platform.
               </li>
               <li className={lc(language, 'vi')}>
-                Thanh toán và hoàn tiền.
+                Hóa đơn điện tử (nếu đã yêu cầu xuất hóa đơn).
               </li>
               <li className={lc(language, 'en')}>
-                Payment and refunds.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Bảo mật và quyền riêng tư.
-              </li>
-              <li className={lc(language, 'en')}>
-                Security and privacy.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Hành vi của nhân viên hoặc đại lý.
-              </li>
-              <li className={lc(language, 'en')}>
-                Conduct of employees or agents.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Các quyền, lợi ích hợp pháp khác của khách hàng hoặc theo quy định của pháp luật.
-              </li>
-              <li className={lc(language, 'en')}>
-                Other lawful rights and interests of the customer or as provided by law.
+                An e-invoice (if invoicing was requested).
               </li>
             </ul>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Để việc xử lý nhanh chóng, khi gửi phản ánh, yêu cầu, khiếu nại, vui lòng cung cấp:
+              <strong>Lưu ý:</strong> Thời gian xử lý thanh toán thông thường là vài giây đến vài phút. Trong một số trường hợp đặc biệt (ngân hàng bảo trì, lỗi mạng), thời gian có thể kéo dài hơn.
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              For prompt handling, please provide the following when submitting:
-            </p>
-            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
-              <li className={lc(language, 'vi')}>
-                Tên công ty, mã số thuế (đối với doanh nghiệp, tổ chức); họ và tên (đối với cá nhân).
-              </li>
-              <li className={lc(language, 'en')}>
-                Company name and tax code (for businesses and organisations); full name (for individuals).
-              </li>
-              <li className={lc(language, 'vi')}>
-                Số điện thoại hoặc email liên hệ chính xác.
-              </li>
-              <li className={lc(language, 'en')}>
-                An accurate contact phone number or email.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Thông tin gói dịch vụ hoặc tài khoản liên quan.
-              </li>
-              <li className={lc(language, 'en')}>
-                Information on the relevant service package or account.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Nội dung cụ thể của phản ánh, yêu cầu, khiếu nại.
-              </li>
-              <li className={lc(language, 'en')}>
-                The specific content of the feedback, request or complaint.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Thời gian, địa điểm phát sinh vấn đề.
-              </li>
-              <li className={lc(language, 'en')}>
-                When and where the issue arose.
-              </li>
-              <li className={lc(language, 'vi')}>
-                Tài liệu, hình ảnh, hóa đơn, chứng từ liên quan (nếu có).
-              </li>
-              <li className={lc(language, 'en')}>
-                Related documents, images, invoices and vouchers (if any).
-              </li>
-              <li className={lc(language, 'vi')}>
-                Phương án giải quyết mong muốn.
-              </li>
-              <li className={lc(language, 'en')}>
-                Your desired resolution.
-              </li>
-            </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết bảo mật thông tin của người gửi và chỉ sử dụng thông tin đó để xác minh, xử lý vụ việc.
-            </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO undertakes to keep the sender's information confidential and to use it only to verify and handle the matter.
+              <strong>Note:</strong> Payment processing normally takes a few seconds to a few minutes. In special cases (bank maintenance, network errors) it may take longer.
             </p>
           </section>
 
           {/* Section 5 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              5. Thời hạn phản hồi
+              5. Hóa đơn điện tử
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              5. Response Timeframes
+              5. E-invoice
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              DIGISO cam kết các thời hạn phản hồi ban đầu và thời hạn dự kiến giải quyết như sau:
+              DIGISO thực hiện xuất hóa đơn theo đúng quy định của pháp luật:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              DIGISO commits to the following initial response and expected resolution timeframes:
+              DIGISO issues invoices in accordance with the law:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                <strong>Xác nhận tiếp nhận (phản hồi ban đầu):</strong> trong vòng 24 giờ làm việc.
+                Hóa đơn được xuất ngay khi thanh toán thành công.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Acknowledgement (initial response):</strong> within 24 business hours.
+                The invoice is issued as soon as the payment succeeds.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Khiếu nại đơn giản:</strong> giải quyết trong vòng 3 ngày làm việc.
+                Thông tin xuất hóa đơn được cung cấp trước khi thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Simple complaints:</strong> resolved within 3 business days.
+                Invoicing information is provided before payment.
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Khiếu nại phức tạp:</strong> giải quyết trong vòng 7 ngày làm việc.
+                Bạn có thể tải hóa đơn từ tài khoản của mình sau khi thanh toán.
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Complex complaints:</strong> resolved within 7 business days.
+                You can download the invoice from your account after payment.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Hóa đơn ghi thuế suất KCT (không chịu thuế GTGT), đúng bản chất dịch vụ phần mềm.
+              </li>
+              <li className={lc(language, 'en')}>
+                The invoice shows the tax rate as KCT (not subject to VAT), in line with the nature of a software service.
               </li>
             </ul>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Thời hạn được tính từ ngày DIGISO nhận đủ thông tin và tài liệu cần thiết. Trường hợp cần kéo dài thời hạn, DIGISO thông báo cho khách hàng lý do và thời gian dự kiến giải quyết.
-            </p>
-            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              Timeframes are counted from the date DIGISO receives the complete information and documents required. If more time is needed, DIGISO will notify you of the reason and the expected resolution time.
-            </p>
           </section>
 
           {/* Section 6 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              6. Biện pháp và công cụ hỗ trợ giải quyết
+              6. Xử lý sự cố Thanh toán
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              6. Measures and Tools Used to Support Resolution
+              6. Handling Payment Issues
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Để hỗ trợ giải quyết, DIGISO áp dụng các biện pháp, công cụ sau:
+              Nếu gặp sự cố trong quá trình thanh toán:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              To support resolution, DIGISO applies the following measures and tools:
+              If you encounter a problem during payment:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Đối soát đơn hàng, lịch sử thanh toán và hóa đơn của tài khoản liên quan trên hệ thống.
+                Kiểm tra kết nối internet và thử lại.
               </li>
               <li className={lc(language, 'en')}>
-                Reconciling the orders, payment history and invoices of the relevant account on the system.
+                Check your internet connection and try again.
               </li>
               <li className={lc(language, 'vi')}>
-                Kiểm tra nhật ký hoạt động và nhật ký gửi (nếu có) của tài khoản liên quan để xác minh sự việc.
+                Liên hệ ngân hàng nếu tài khoản bị giữ hoặc từ chối giao dịch.
               </li>
               <li className={lc(language, 'en')}>
-                Checking the activity logs and sending logs (if any) of the relevant account to verify the matter.
+                Contact your bank if your account is held or the transaction is declined.
               </li>
               <li className={lc(language, 'vi')}>
-                Trao đổi trực tiếp với khách hàng qua email hoặc điện thoại để thu thập thêm thông tin, hướng dẫn xử lý.
+                Liên hệ bộ phận hỗ trợ DIGISO qua email hoặc điện thoại.
               </li>
               <li className={lc(language, 'en')}>
-                Communicating directly with the customer by email or phone to collect further information and guide resolution.
+                Contact DIGISO support by email or phone.
               </li>
               <li className={lc(language, 'vi')}>
-                Phối hợp với đơn vị thanh toán, ngân hàng hoặc đơn vị cung cấp dịch vụ liên quan khi cần đối soát.
+                <strong>Hotline hỗ trợ:</strong> 0877909606 (8:00 - 22:00, Thứ 2 - Thứ 7).
               </li>
               <li className={lc(language, 'en')}>
-                Coordinating with payment providers, banks or relevant service providers when reconciliation is needed.
+                <strong>Support hotline:</strong> 0877909606 (8:00 AM - 10:00 PM, Monday - Saturday).
               </li>
             </ul>
           </section>
@@ -421,35 +372,47 @@ function ComplaintPolicy() {
           {/* Section 7 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              7. Trường hợp không đạt được thỏa thuận
+              7. Trường hợp thanh toán sai số tiền hoặc sai thông tin chuyển khoản
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              7. Where No Agreement Is Reached
+              7. Incorrect Payment Amount or Transfer Information
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Nếu không hài lòng với phương án giải quyết của DIGISO, khách hàng có thể yêu cầu DIGISO xem xét lại và cung cấp thêm tài liệu, thông tin. Trường hợp không giải quyết được bằng thương lượng, khách hàng có quyền:
+              Với chuyển khoản ngân hàng, khách hàng có trách nhiệm thanh toán đúng số tiền và đúng thông tin do founderai.biz hiển thị. Trường hợp Người dùng chuyển khoản sai số tiền, sai nội dung, sai tài khoản thụ hưởng hoặc gửi nhầm giao dịch, DIGISO xử lý như sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              If you are not satisfied with DIGISO's resolution, you may ask DIGISO to reconsider and provide additional documents and information. If the matter cannot be resolved by negotiation, you have the right to:
+              For bank transfers, the customer is responsible for paying the exact amount and using the exact information displayed by founderai.biz. If the User transfers the wrong amount, uses wrong content, uses a wrong beneficiary account or sends a transaction by mistake, DIGISO handles it as follows:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
-                Yêu cầu chuyển lên cấp quản lý cao hơn của DIGISO qua email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>.
+                Người dùng thông báo ngay cho DIGISO qua email info@digiso.vn hoặc hotline 0877909606, cung cấp thông tin giao dịch, kèm ảnh chụp sao kê giao dịch, để DIGISO kiểm tra, đối soát và hướng dẫn xử lý.
               </li>
               <li className={lc(language, 'en')}>
-                Request escalation to a higher level of DIGISO management via email <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>.
+                The User notifies DIGISO immediately by email at info@digiso.vn or by hotline 0877909606, providing the transaction details and a screenshot of the transaction statement, so that DIGISO can check, reconcile and advise on handling.
               </li>
               <li className={lc(language, 'vi')}>
-                Đề nghị cơ quan quản lý nhà nước có thẩm quyền, tổ chức bảo vệ quyền lợi người tiêu dùng hoặc Tòa án có thẩm quyền tại Việt Nam giải quyết theo quy định pháp luật, trong đó có Sở Công Thương nơi DIGISO đặt trụ sở (Thành phố Hồ Chí Minh).
+                DIGISO đối chiếu và phản hồi trong vòng 24 giờ làm việc kể từ khi nhận thông báo đầy đủ.
               </li>
               <li className={lc(language, 'en')}>
-                Petition the competent state management authority, a consumer protection organisation or the competent court in Vietnam to resolve the matter under the law, including the Department of Industry and Trade of the locality where DIGISO is headquartered (Ho Chi Minh City).
+                DIGISO reconciles and responds within 24 business hours of receiving the complete notice.
               </li>
               <li className={lc(language, 'vi')}>
-                Gọi Tổng đài hỗ trợ khách hàng và tiếp nhận phản ánh về hoạt động thương mại điện tử: <strong>1800-6838</strong> (Sở Công Thương TP.HCM / Cục Thương mại điện tử & Kinh tế số).
+                Giao dịch chuyển nhầm sang tài khoản hệ thống: DIGISO hoàn trả đúng số tiền đã nhận sau khi xác minh và trừ phí ngân hàng phát sinh (nếu có) trong vòng 3–7 ngày làm việc.
               </li>
               <li className={lc(language, 'en')}>
-                Call the customer support hotline for e-commerce complaints: <strong>1800-6838</strong> (Ho Chi Minh City Department of Industry and Trade / Department of E-commerce and Digital Economy).
+                Transactions mistakenly sent to the system account: DIGISO refunds the exact amount received after verification, less any bank fees incurred, within 3–7 business days.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Giao dịch chuyển nhầm sang tài khoản bên thứ ba không thuộc DIGISO: DIGISO hỗ trợ cung cấp thông tin giao dịch để Người dùng tự liên hệ ngân hàng hoặc đơn vị liên quan yêu cầu tra soát và hoàn tiền. Lỗi do khách hàng dẫn đến việc DIGISO không nhận được phí thì DIGISO không chịu trách nhiệm đối với khoản tiền đã chuyển đi.
+              </li>
+              <li className={lc(language, 'en')}>
+                Transactions mistakenly sent to a third-party account not belonging to DIGISO: DIGISO helps provide transaction information so the User can contact the bank or the relevant party to request a trace and refund. Where the customer's error results in DIGISO not receiving the fee, DIGISO is not responsible for the amount already transferred.
+              </li>
+              <li className={lc(language, 'vi')}>
+                Việc xử lý căn cứ kết quả kiểm tra giao dịch thực tế và xác nhận từ ngân hàng hoặc đơn vị liên quan.
+              </li>
+              <li className={lc(language, 'en')}>
+                Handling is based on the actual transaction check and confirmation from the bank or the relevant party.
               </li>
             </ul>
           </section>
@@ -457,16 +420,74 @@ function ComplaintPolicy() {
           {/* Section 8 */}
           <section className="mb-6 pp-section p-6">
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
-              8. Liên hệ
+              8. Phương thức hoàn tiền trong trường hợp chấm dứt dịch vụ hoặc đổi trả
             </h2>
             <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
-              8. Contact
+              8. Refund Method upon Service Termination or Return
             </h2>
             <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
-              Nếu bạn có câu hỏi hoặc cần hỗ trợ, vui lòng liên hệ:
+              Nếu đủ điều kiện hoàn tiền theo <a href="/refund-policy" className="text-orange-600 hover:underline">Chính sách chấm dứt dịch vụ và hoàn tiền</a>, khoản hoàn được thực hiện như sau:
             </p>
             <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
-              If you have questions or need assistance, please contact:
+              If the conditions for a refund under the <a href="/refund-policy" className="text-orange-600 hover:underline">Service Termination and Refund Policy</a> are met, the refund is made as follows:
+            </p>
+            <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
+              <li className={lc(language, 'vi')}>
+                <strong>Hình thức hoàn tiền:</strong> chuyển khoản ngân hàng về tài khoản đã dùng để thanh toán ban đầu hoặc tài khoản do Người dùng cung cấp (hoặc phương thức khác theo thỏa thuận).
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Refund method:</strong> bank transfer to the account originally used for payment or to an account provided by the User (or another method as agreed).
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Thời hạn hoàn tiền:</strong> theo thời hạn quy định tại Chính sách chấm dứt dịch vụ và hoàn tiền; thời gian nhận tiền thực tế có thể phụ thuộc vào đơn vị thanh toán, ngân hàng và phương thức thanh toán.
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Refund timeframe:</strong> as specified in the Service Termination and Refund Policy; the actual time to receive the money may depend on the payment provider, the bank and the payment method.
+              </li>
+              <li className={lc(language, 'vi')}>
+                <strong>Phí giao dịch ngân hàng</strong> phát sinh khi hoàn tiền do Người dùng chịu (nếu có).
+              </li>
+              <li className={lc(language, 'en')}>
+                <strong>Bank transaction fees</strong> arising from the refund are borne by the User (if any).
+              </li>
+            </ul>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Toàn bộ điều kiện, phạm vi và mức hoàn tiền được quy định tại Chính sách chấm dứt dịch vụ và hoàn tiền công khai tại founderai.biz.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              All conditions, scope and amounts of refunds are set out in the Service Termination and Refund Policy published at founderai.biz.
+            </p>
+          </section>
+
+          {/* Section 9 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              9. Cơ chế điểm thưởng, ưu đãi quy đổi
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              9. Reward Points and Redeemable Offers
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Founder AI hiện không áp dụng cơ chế tích điểm, hoàn điểm hoặc ưu đãi quy đổi điểm khi thanh toán. Nếu áp dụng trong tương lai, DIGISO sẽ công khai cách hình thành và sử dụng điểm, phạm vi, điều kiện, tỷ lệ, giới hạn quy đổi và trách nhiệm của các bên; điểm không được quy đổi để rút tiền mặt.
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              Founder AI does not currently apply any points accrual, points refund or points-redemption offers for payments. If introduced in the future, DIGISO will publish how points are earned and used, their scope, conditions, rates, redemption limits and the parties' responsibilities; points cannot be exchanged for cash.
+            </p>
+          </section>
+
+          {/* Section 10 */}
+          <section className="mb-6 pp-section p-6">
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'vi')}`}>
+              10. Liên hệ
+            </h2>
+            <h2 className={`text-xl font-bold text-slate-900 mb-4 ${lc(language, 'en')}`}>
+              10. Contact
+            </h2>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'vi')}`}>
+              Nếu bạn có câu hỏi về Chính sách về thanh toán, vui lòng liên hệ:
+            </p>
+            <p className={`text-slate-700 mb-4 ${lc(language, 'en')}`}>
+              If you have questions about the Payment Policy, please contact:
             </p>
             <ul className="list-disc pl-6 text-slate-700 space-y-2 mb-4">
               <li className={lc(language, 'vi')}>
@@ -523,16 +544,15 @@ function ComplaintPolicy() {
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 19/10/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from October 19, 2026.
+            This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory slug="complaint" language={language} lc={lc} />
       </div>
     </div>
   );
 }
 
-export default ComplaintPolicy;
+export default PaymentPolicy;

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import PolicyHistory from './components/PolicyHistory.jsx';
+import PolicyChangeNotice from '../../../components/PolicyChangeNotice.jsx';
 
 function getLangClass(activeLang, itemLang) {
   return activeLang === itemLang ? '' : 'hidden';
@@ -104,19 +104,18 @@ function ComplaintPolicy() {
             />
             <p className="min-w-0 flex-1 text-[13px] leading-relaxed text-slate-600">
               <span className={lc(language, 'vi')}>
-                Cập nhật ngày <strong>04/10/2026</strong> — Áp dụng từ <strong>19/10/2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Các phiên bản đã lưu trữ</a>
+                Cập nhật ngày <strong>29/09/2026</strong> — Áp dụng từ <strong>29/09/2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Áp dụng cho: founderai.biz
               </span>
               <span className={lc(language, 'en')}>
-                Last updated on <strong>October 4, 2026</strong> — Effective from <strong>October 19, 2026</strong>
-                {' · '}<a href="#lich-su-cap-nhat" className="font-medium text-orange-600 hover:underline">Archived versions</a>
+                Last updated on <strong>September 29, 2026</strong> — Effective from <strong>September 29, 2026</strong>
                 {'\u00a0'}|{'\u00a0'}
                 Applies to: founderai.biz
               </span>
             </p>
           </div>
+          <PolicyChangeNotice language={language} lc={lc} />
 
           {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
@@ -156,10 +155,10 @@ function ComplaintPolicy() {
                 <strong>Email:</strong> <a href="mailto:info@digiso.vn" className="text-orange-600 hover:underline">info@digiso.vn</a>
               </li>
               <li className={lc(language, 'vi')}>
-                <strong>Điện thoại:</strong> 0877909606 (8:30 - 17:00, Thứ 2 - Thứ 6)
+                <strong>Điện thoại:</strong> 0877909606 (8:00 - 22:00, Thứ 2 - Thứ 7)
               </li>
               <li className={lc(language, 'en')}>
-                <strong>Phone:</strong> 0877909606 (8:30 AM - 5:00 PM, Monday - Friday)
+                <strong>Phone:</strong> 0877909606 (8:00 AM - 10:00 PM, Monday - Saturday)
               </li>
               <li className={lc(language, 'vi')}>
                 <strong>Trang liên hệ:</strong> <a href="/contact" className="text-orange-600 hover:underline">founderai.biz/contact</a>
@@ -523,13 +522,12 @@ function ComplaintPolicy() {
             © 2026 DIGISO Digital Solutions Co., Ltd. All rights reserved.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'vi')}`}>
-            Chính sách này được cập nhật và có hiệu lực từ ngày 19/10/2026.
+            Chính sách này được cập nhật và có hiệu lực từ ngày 29/09/2026.
           </p>
           <p className={`mt-2 text-slate-400 ${lc(language, 'en')}`}>
-            This policy was last updated and effective from October 19, 2026.
+            This policy was last updated and effective from September 29, 2026.
           </p>
         </footer>
-        <PolicyHistory slug="complaint" language={language} lc={lc} />
       </div>
     </div>
   );
