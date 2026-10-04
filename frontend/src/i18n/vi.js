@@ -3321,6 +3321,7 @@ export default {
       EMPLOYEE_INFO_UPDATED: 'Cập nhật thông tin nhân viên',
       EMPLOYEE_INVITE_ACCEPTED: 'Chấp nhận lời mời vào nhóm',
       EMPLOYEE_INVITE_DECLINED: 'Từ chối lời mời vào nhóm',
+      EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED: 'Cập nhật tài khoản Zalo được giao',
       CAMPAIGN_CREATED: 'Tạo chiến dịch',
       CAMPAIGN_UPDATED: 'Cập nhật chiến dịch',
       CAMPAIGN_DELETED: 'Xóa chiến dịch',
@@ -3613,6 +3614,7 @@ export default {
         noPermission: 'Không được phép quyền nào',
         allowed: 'Được phép: {list}',
         allowedMore: 'Được phép: {list} … và {n} quyền khác',
+        channelAccounts: 'Được giao {after} tài khoản (trước đó {before})',
       },
       limits: {
         email: 'Email: ngày {daily}, tháng {period}',

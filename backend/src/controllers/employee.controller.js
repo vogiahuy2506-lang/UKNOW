@@ -238,6 +238,47 @@ export async function updateLimits(req, res) {
 }
 
 /**
+ * GET /api/employees/:id/channel-accounts
+ * Danh sách tài khoản Zalo cá nhân của chủ + cờ đã giao cho nhân viên này (chỉ chủ gọi được — requireSelfContext).
+ */
+export async function getChannelAccounts(req, res) {
+  try {
+    const ownerId = req.user.id;
+    const data = await employeeService.getEmployeeChannelAccounts(ownerId, Number(req.params.id));
+    return res.json({ success: true, data });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
+ * PUT /api/employees/:id/channel-accounts
+ * Thay TOÀN BỘ việc giao tài khoản Zalo cá nhân cho nhân viên.
+ * Body: { zaloAccountIds: number[] } — id không thuộc chủ bị loại.
+ */
+export async function updateChannelAccounts(req, res) {
+  try {
+    const ownerId = req.user.id;
+    const employeeId = Number(req.params.id);
+    const { zaloAccountIds } = req.body;
+    const { zaloAccounts, before, after } = await employeeService.setEmployeeChannelAccounts(
+      ownerId,
+      employeeId,
+      zaloAccountIds,
+      req.user.id
+    );
+    await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED, AUDIT_ENTITY_TYPES.EMPLOYEE, employeeId, {
+      channel: 'zalo_personal',
+      before,
+      after,
+    });
+    return res.json({ success: true, message: 'Đã cập nhật tài khoản Zalo được giao', data: { zaloAccounts } });
+  } catch (err) {
+    return handleServiceError(res, err);
+  }
+}
+
+/**
  * PATCH /api/employees/:id/permissions
  * Cập nhật permissions của employee.
  * Body: { permissions: { key: boolean, ... } }

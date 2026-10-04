@@ -19,6 +19,7 @@ jest.unstable_mockModule('../../middleware/auth.middleware.js', () => ({
 }));
 
 const mockUpdatePermissions = jest.fn((req, res) => res.json({ success: true, received: req.body.permissions }));
+const mockUpdateChannelAccounts = jest.fn((req, res) => res.json({ success: true, received: req.body.zaloAccountIds }));
 const noop = (_req, res) => res.json({ success: true });
 jest.unstable_mockModule('../../controllers/employee.controller.js', () => ({
   myContribution: noop,
@@ -36,6 +37,8 @@ jest.unstable_mockModule('../../controllers/employee.controller.js', () => ({
   updateInfo: noop,
   updateLimits: noop,
   updatePermissions: mockUpdatePermissions,
+  getChannelAccounts: noop,
+  updateChannelAccounts: mockUpdateChannelAccounts,
   updateStatus: noop,
   resetEmployeePassword: noop,
   deleteEmployee: noop,
@@ -86,5 +89,41 @@ describe('PATCH /api/employees/:id/permissions — validator', () => {
     const res = await request(app).patch('/api/employees/42/permissions').send({});
     expect(res.status).toBe(400);
     expect(mockUpdatePermissions).not.toHaveBeenCalled();
+  });
+});
+
+describe('PUT /api/employees/:id/channel-accounts — validator (giao tài khoản Zalo, PR-G1)', () => {
+  const put = (body, id = 42) => request(app).put(`/api/employees/${id}/channel-accounts`).send(body);
+
+  beforeEach(() => mockUpdateChannelAccounts.mockClear());
+
+  it('mảng id hợp lệ → tới controller', async () => {
+    const res = await put({ zaloAccountIds: [5, 6] });
+    expect(res.status).toBe(200);
+    expect(mockUpdateChannelAccounts).toHaveBeenCalledTimes(1);
+  });
+
+  it('mảng RỖNG → tới controller (gỡ hết tài khoản được giao)', async () => {
+    const res = await put({ zaloAccountIds: [] });
+    expect(res.status).toBe(200);
+  });
+
+  it.each([
+    ['thiếu zaloAccountIds', {}],
+    ['không phải mảng', { zaloAccountIds: 5 }],
+    ['chuỗi', { zaloAccountIds: 'all' }],
+    ['phần tử không phải số', { zaloAccountIds: [5, 'abc'] }],
+    ['phần tử <= 0', { zaloAccountIds: [0] }],
+    ['phần tử âm', { zaloAccountIds: [-1] }],
+  ])('%s → 400, không tới controller', async (_label, body) => {
+    const res = await put(body);
+    expect(res.status).toBe(400);
+    expect(mockUpdateChannelAccounts).not.toHaveBeenCalled();
+  });
+
+  it('id nhân viên không hợp lệ → 400', async () => {
+    const res = await put({ zaloAccountIds: [] }, 0);
+    expect(res.status).toBe(400);
+    expect(mockUpdateChannelAccounts).not.toHaveBeenCalled();
   });
 });

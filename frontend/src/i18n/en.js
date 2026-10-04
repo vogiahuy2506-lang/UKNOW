@@ -3310,6 +3310,7 @@ export default {
       EMPLOYEE_INFO_UPDATED: 'Employee Info Updated',
       EMPLOYEE_INVITE_ACCEPTED: 'Team Invite Accepted',
       EMPLOYEE_INVITE_DECLINED: 'Team Invite Declined',
+      EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED: 'Assigned Zalo Accounts Updated',
       CAMPAIGN_CREATED: 'Campaign Created',
       CAMPAIGN_UPDATED: 'Campaign Updated',
       CAMPAIGN_DELETED: 'Campaign Deleted',
@@ -3602,6 +3603,7 @@ export default {
         noPermission: 'No permissions granted',
         allowed: 'Allowed: {list}',
         allowedMore: 'Allowed: {list} … and {n} more',
+        channelAccounts: 'Assigned {after} accounts (previously {before})',
       },
       limits: {
         email: 'Email: {daily} per day, {period} per month',

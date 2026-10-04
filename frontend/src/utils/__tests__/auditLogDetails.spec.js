@@ -64,6 +64,8 @@ const REAL_ROWS = [
     { dailyEmailLimit: 200, monthlyEmailLimit: null, dailyZaloLimit: 100, monthlyZaloLimit: 3000, dailyAiCreditLimit: null, periodAiCreditLimit: 50 },
     'Email: ngày 200, tháng không giới hạn · Zalo: ngày 100, tháng 3.000 · Lượt AI: ngày không giới hạn, kỳ gói 50',
   ],
+  ['EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED', { channel: 'zalo_personal', before: [5], after: [5, 6, 7] }, 'Zalo cá nhân · Được giao 3 tài khoản (trước đó 1)'],
+  ['EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED', { channel: 'zalo_personal', before: [5, 6], after: [] }, 'Zalo cá nhân · Được giao 0 tài khoản (trước đó 2)'],
   ['EMPLOYEE_ADDED', { email: 'n@x.vn', fullName: 'Nam', method: 'invited', invitationSent: true }, 'Nam (n@x.vn) · Đã gửi lời mời'],
   ['EMPLOYEE_ADDED', { username: 'nv01', email: 'nv@x.vn', fullName: 'Hoa', invitationSent: false }, 'Hoa (nv@x.vn) · Chưa gửi được lời mời'],
   ['EMPLOYEE_INFO_UPDATED', { before: { fullName: 'A', email: 'a@x.vn' }, after: { fullName: 'B', email: 'a@x.vn' } }, 'Họ tên: A → B'],

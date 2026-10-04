@@ -353,6 +353,18 @@ register(['EMPLOYEE_LIMITS_UPDATED'], (t, d, locale) => {
   ]);
 });
 
+// employee.controller.js updateChannelAccounts → { channel: 'zalo_personal', before: number[], after: number[] } (id tài khoản — chỉ đếm)
+register(['EMPLOYEE_CHANNEL_ACCOUNTS_UPDATED'], (t, d, locale) => {
+  if (!Array.isArray(d.after)) return '';
+  return joinParts([
+    channelName(t, d.channel || 'zalo_personal'),
+    tr(t, 'employee.channelAccounts', {
+      after: fmtNumber(d.after.length, locale),
+      before: fmtNumber(Array.isArray(d.before) ? d.before.length : 0, locale),
+    }),
+  ]);
+});
+
 /**
  * Khoá quyền nhân viên (lưu trong DB, snake_case) → khoá nhãn trong `employee.permissions.*`.
  * Khớp PERMISSION_FIELDS của EmployeeManagement.jsx; email_settings + zalo_settings (và hai mẫu tin) cùng

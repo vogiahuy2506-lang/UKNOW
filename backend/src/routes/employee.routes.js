@@ -146,6 +146,26 @@ router.patch(
   employeeController.updateLimits
 );
 
+// GET /api/employees/:id/channel-accounts — tài khoản Zalo của chủ + cờ đã giao cho nhân viên (chỉ chủ)
+router.get(
+  '/:id/channel-accounts',
+  [param('id').isInt({ min: 1 }).withMessage('ID nhân viên không hợp lệ')],
+  handleValidationErrors,
+  employeeController.getChannelAccounts
+);
+
+// PUT /api/employees/:id/channel-accounts — thay toàn bộ việc giao tài khoản Zalo cá nhân (chỉ chủ)
+router.put(
+  '/:id/channel-accounts',
+  [
+    param('id').isInt({ min: 1 }).withMessage('ID nhân viên không hợp lệ'),
+    body('zaloAccountIds').isArray({ max: 500 }).withMessage('zaloAccountIds phải là mảng'),
+    body('zaloAccountIds.*').isInt({ min: 1 }).withMessage('ID tài khoản Zalo không hợp lệ'),
+  ],
+  handleValidationErrors,
+  employeeController.updateChannelAccounts
+);
+
 // PATCH /api/employees/:id/permissions
 router.patch(
   '/:id/permissions',

@@ -21,6 +21,10 @@ import {
   findCampaignApprovalThreshold,
   updateCampaignApprovalThreshold as updateCampaignApprovalThresholdInDb,
 } from '../../repositories/user/employee.repository.js';
+import {
+  listZaloAssignmentsForOwner,
+  setZaloAssignmentsForEmployee,
+} from './memberChannelAccess.service.js';
 import verificationService from '../verification.service.js';
 import { sumActiveTopupGrants, findTopupPricingByKey } from '../../repositories/payment/topup.repository.js';
 import { countValidLocks } from '../../repositories/payment/topupLock.repository.js';
@@ -406,6 +410,40 @@ export async function setEmployeeSendLimits(ownerId, employeeId, limits) {
     dailyAiCreditLimit:  parse(limits.dailyAiCreditLimit),
     periodAiCreditLimit: parse(limits.periodAiCreditLimit),
   });
+}
+
+/**
+ * Danh sách tài khoản Zalo cá nhân của chủ + cờ đã giao cho nhân viên này (tab "Tài khoản Zalo").
+ */
+export async function getEmployeeChannelAccounts(ownerId, employeeId) {
+  const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
+  if (!employee) {
+    throw { status: 404, message: 'Không tìm thấy nhân viên' };
+  }
+  return { zaloAccounts: await listZaloAssignmentsForOwner(ownerId, employeeId) };
+}
+
+/**
+ * Thay toàn bộ việc giao Zalo cá nhân cho nhân viên. Id không thuộc chủ bị loại.
+ *
+ * @returns {Promise<{ zaloAccounts: object[], before: number[], after: number[] }>}
+ */
+export async function setEmployeeChannelAccounts(ownerId, employeeId, zaloAccountIds, actorUserId) {
+  const employee = await findEmployeeByIdAndOwner(employeeId, ownerId);
+  if (!employee) {
+    throw { status: 404, message: 'Không tìm thấy nhân viên' };
+  }
+  const { before, after } = await setZaloAssignmentsForEmployee({
+    ownerId,
+    employeeId,
+    accountIds: zaloAccountIds,
+    actorUserId,
+  });
+  return {
+    zaloAccounts: await listZaloAssignmentsForOwner(ownerId, employeeId),
+    before,
+    after,
+  };
 }
 
 export async function deleteEmployee(ownerId, employeeId) {
