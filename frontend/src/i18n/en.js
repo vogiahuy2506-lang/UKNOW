@@ -9173,7 +9173,7 @@ Feel free to ask me anything!`,
     hourlyEmpty: 'No messages were sent in the last 24 hours.',
     hourlyNone: 'No messages',
     runsTitle: 'Recent runs',
-    runsDesc: 'The 10 most recent runs, newest first.',
+    runsDesc: 'Runs still sending come first, then the 10 most recent runs.',
     runsEmpty: 'No runs yet.',
     col: {
       campaign: 'Campaign',

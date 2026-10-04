@@ -9185,7 +9185,7 @@ export default {
     hourlyEmpty: 'Chưa có tin nào được gửi trong 24 giờ qua.',
     hourlyNone: 'Không có tin nào',
     runsTitle: 'Lượt chạy gần đây',
-    runsDesc: '10 lượt chạy mới nhất, mới nhất trước.',
+    runsDesc: 'Lượt đang gửi ở trên cùng, sau đó là 10 lượt mới nhất.',
     runsEmpty: 'Chưa có lượt chạy nào.',
     col: {
       campaign: 'Chiến dịch',
