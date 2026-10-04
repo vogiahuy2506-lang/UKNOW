@@ -50,7 +50,7 @@ function SparkleDot({ delay }) {
  * Phase 6: AI tự auto-apply HTML lên form. Không còn nút Áp dụng/Bỏ qua — chỉ còn
  * nút "Hoàn tác" để user khôi phục bản trước khi AI can thiệp.
  */
-export default function ChatMessage({ msg, onUndo }) {
+export default function ChatMessage({ msg, onUndo, onRelayout }) {
   const tc = useI18n('landingCanvas.chat');
   const { role, content, status, previousHtml, files, stage } = msg;
   // PR-9 (B-4): chữ tiến độ do server báo trên luồng sinh / sửa landing; stage lạ → giữ "Thinking…".
@@ -101,6 +101,20 @@ export default function ChatMessage({ msg, onUndo }) {
             {content}
           </div>
         )}
+
+        {/* B-9: bộ đo hiển thị thấy lỗi ở trang AI vừa dựng → câu tiếng người + nút "Trình bày lại" (trả phí 1 lượt AI). */}
+        {status === 'applied' && Array.isArray(msg.layoutFindings) && msg.layoutFindings.length > 0 && onRelayout ? (
+          <div className="mt-2.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5" data-testid="canvas-layout-note">
+            <p className="text-[13px] text-amber-800">{msg.layoutNote}</p>
+            <button
+              type="button"
+              onClick={() => onRelayout(msg.id)}
+              className="mt-2 inline-flex items-center px-3 h-9 rounded-lg bg-white text-amber-800 border border-amber-300 text-[14px] font-semibold hover:bg-amber-100 transition-colors"
+            >
+              {tc('relayoutSection')}
+            </button>
+          </div>
+        ) : null}
 
         {status === 'applied' && previousHtml != null ? (
           <div className="flex items-center gap-2 mt-2.5">

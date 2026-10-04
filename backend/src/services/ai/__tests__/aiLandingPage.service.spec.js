@@ -1450,7 +1450,8 @@ describe('aiLandingPageService.editHtml — sửa theo đoạn (bản vá)', () 
   it.each([
     ['not_found', () => patchResponse([{ find: '<h1>Không có</h1>', replace: 'x' }])],
     ['ambiguous', () => patchResponse([{ find: 'input', replace: 'x' }])],
-    ['empty', () => patchResponse([])],
+    // `edits` không phải mảng và không có html: vẫn là vá hỏng 'empty' (còn `edits: []` là "không cần sửa", xem khối B-13 bên dưới).
+    ['empty', () => ({ text: JSON.stringify({ title: 'T', changeSummary: 'x' }), blockReason: null, finishReason: 'STOP' })],
     ['invalid', () => patchResponse([{ replace: 'x' }])],
     ['parse', () => ({ text: 'không phải JSON', blockReason: null, finishReason: 'STOP' })],
   ])('vá hỏng: %s → dự phòng viết lại cả trang, log patchFail tương ứng', async (reason, makeResponse) => {
@@ -1460,6 +1461,44 @@ describe('aiLandingPageService.editHtml — sửa theo đoạn (bản vá)', () 
     expect(result.html).toBe(patchedHtml);
     expect(doneLogOf(logSpy)).toContain(`strategy=patch_fallback_full patchFail=${reason}`);
     expect(doneLogOf(logSpy)).not.toContain('patchEdits=');
+  });
+
+  // B-13: `edits: []` = AI xem trang rồi thấy không cần sửa — không phải "vá hỏng", không được tốn thêm lượt viết lại cả trang.
+  describe('B-13 — edits: [] nghĩa là "không cần sửa"', () => {
+    it('1 lần gọi (KHÔNG dự phòng viết lại cả trang), trả NGUYÊN trang + changeSummary của AI + cờ noChange, log patchEdits=0 không patchFail', async () => {
+      generateWithBudget.mockResolvedValue({
+        text: JSON.stringify({ title: 'T', edits: [], changeSummary: 'Trang đã đúng yêu cầu của bạn' }),
+        blockReason: null,
+        finishReason: 'STOP',
+      });
+      const result = await edit();
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(result.html).toBe(baseHtml);
+      expect(result.noChange).toBe(true);
+      expect(result.changeSummary).toBe('Trang đã đúng yêu cầu của bạn');
+      expect(doneLogOf(logSpy)).toMatch(/ strategy=patch patchEdits=0$/);
+      expect(doneLogOf(logSpy)).not.toContain('patchFail');
+    });
+
+    it('AI không kèm changeSummary → câu mặc định "Không cần thay đổi" (en: "No changes were needed")', async () => {
+      generateWithBudget.mockResolvedValue({ text: JSON.stringify({ title: 'T', edits: [] }), blockReason: null, finishReason: 'STOP' });
+      expect((await edit()).changeSummary).toBe('Không cần thay đổi');
+      generateWithBudget.mockResolvedValue({ text: JSON.stringify({ title: 'T', edits: [] }), blockReason: null, finishReason: 'STOP' });
+      expect((await edit({ contentLocale: 'en' })).changeSummary).toBe('No changes were needed');
+    });
+
+    it('lượt tự sửa hiển thị (miễn phí) cũng không bị buộc viết lại: 1 lần gọi, trang giữ nguyên', async () => {
+      generateWithBudget.mockResolvedValue({ text: JSON.stringify({ title: 'T', edits: [] }), blockReason: null, finishReason: 'STOP' });
+      const result = await edit({ autoLayoutFix: true, layoutFindingsCount: 1 });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(result.html).toBe(baseHtml);
+      expect(result.noChange).toBe(true);
+    });
+
+    it('vá bình thường (có edit) KHÔNG mang cờ noChange', async () => {
+      generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+      expect(await edit()).not.toHaveProperty('noChange');
+    });
   });
 
   it('vá hỏng, trang 80.001 ký tự → 1 lần gọi, 422 LANDING_PATCH_FAILED câu "mô tả cụ thể hơn"', async () => {

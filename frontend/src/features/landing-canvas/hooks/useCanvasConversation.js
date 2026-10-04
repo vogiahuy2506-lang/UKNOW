@@ -1,5 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
+import { runLayoutAudit, buildFullLandingHtml, describeFindingsForUser } from '../../ai/utils/layoutAudit.js';
+import { pickSectionTitle } from '../../ai/utils/landingLayoutFlow.js';
 import {
   generateLandingHtmlWithAi,
   editLandingHtmlWithAi,
@@ -180,6 +182,9 @@ export default function useCanvasConversation({
   );
   const [isStreaming, setIsStreaming] = useState(false);
   const idCounterRef = useRef(0);
+  // HTML đang hiện trên canvas (cập nhật mỗi lần render): lượt đo hiển thị chạy nền chỉ ghi kết quả khi trang chưa bị đổi từ lúc đo.
+  const latestHtmlRef = useRef('');
+  latestHtmlRef.current = String(form.htmlContent || '');
 
   // Build intents with current language
   const intents = useMemo(() => makeIntents(tc), [tc]);
@@ -193,8 +198,29 @@ export default function useCanvasConversation({
     setMessages((prev) => [...prev, msg]);
   }, []);
 
+  /**
+   * B-9: đo hiển thị trang AI vừa dựng (CHỈ ĐO, không tự sửa — canvas không có phiên nên không có đường tự sửa miễn phí). Có lỗi thật
+   * (chữ bị che / cắt / tràn) thì ghi câu tiếng người + số đo vào tin AI để hiện nút "Trình bày lại"; chưa đo được / trang sạch → im lặng.
+   */
+  const measureLayout = useCallback(
+    async (msgId, html) => {
+      try {
+        const audit = await runLayoutAudit(buildFullLandingHtml({ html }));
+        if (audit.timedOut || audit.errors.length > 0 || audit.findings.length === 0) return;
+        if (latestHtmlRef.current.trim() !== String(html).trim()) return; // trang đã đổi (người dùng sửa tay / lượt AI khác)
+        const layoutNote = describeFindingsForUser(audit.findings, tc);
+        setMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, layoutFindings: audit.findings, layoutNote } : m))
+        );
+      } catch {
+        // chưa đo được: im lặng
+      }
+    },
+    [tc]
+  );
+
   const handleSend = useCallback(
-    async ({ prompt, files = [] }) => {
+    async ({ prompt, files = [], layoutFindings = null }) => {
       const hasFiles = Array.isArray(files) && files.length > 0;
       if (!prompt?.trim() && !hasFiles) return;
       const trimmedPrompt = prompt?.trim() || '';
@@ -256,6 +282,7 @@ export default function useCanvasConversation({
             files,
             landingPageId: editingId,
             onStage,
+            ...(Array.isArray(layoutFindings) && layoutFindings.length > 0 ? { layoutFindings } : {}),
           });
         } else {
           isGenerate = true;
@@ -274,10 +301,18 @@ export default function useCanvasConversation({
           result?.data?.data?.html ||
           (typeof result === 'string' ? result : '');
 
-        const summary = result?.summary || result?.message || tc('aiGeneratedContent');
+        // B-9: câu AI nói đã đổi gì (server trả `data.changeSummary`, tiếng người); thiếu thì mới dùng câu chung.
+        const changeSummary = String(result?.data?.changeSummary || result?.changeSummary || '').trim();
+        const summary = changeSummary || result?.summary || result?.message || tc('aiGeneratedContent');
+        // B-13: AI xem trang rồi thấy không cần sửa (`noChange`) → không đụng trang, không hiện nút Hoàn tác.
+        const noChange = result?.data?.noChange === true || result?.noChange === true;
 
-        // Auto-apply
-        if (suggestedHtml) {
+        if (noChange) {
+          setMessages((prev) =>
+            prev.map((m) => (m.id === aiMsgId ? { ...m, content: summary || tc('aiNoChange'), status: 'done' } : m))
+          );
+        } else if (suggestedHtml) {
+          // Auto-apply
           const previousHtml = currentHtml;
           // AI tạo mới trả kèm `title` (ai.controller.js) — điền vào ô tên nếu người dùng chưa đặt,
           // vì Lưu bắt buộc tên. Không đè tên người dùng đã gõ.
@@ -303,6 +338,8 @@ export default function useCanvasConversation({
                 : m
             )
           );
+          // Không await: tin hiện ngay, đo hiển thị chạy nền rồi (nếu có lỗi) thêm nút "Trình bày lại" vào tin.
+          measureLayout(aiMsgId, suggestedHtml);
         } else {
           setMessages((prev) =>
             prev.map((m) =>
@@ -338,7 +375,23 @@ export default function useCanvasConversation({
         setIsStreaming(false);
       }
     },
-    [appendMessage, editingId, form.htmlContent, hasExistingHtml, intents, locale, nextId, openTab, setForm, tc]
+    [appendMessage, editingId, form.htmlContent, hasExistingHtml, intents, locale, measureLayout, nextId, openTab, setForm, tc]
+  );
+
+  /**
+   * Nút "Trình bày lại phần này" trên tin AI có lỗi hiển thị: một lượt sửa THƯỜNG (trả phí 1 lượt AI như mọi lượt sửa — canvas không có
+   * phiên nên không có đường tự sửa miễn phí) mang số đo `layoutFindings` để AI biết đúng chỗ. Lệnh là câu tiếng người (không selector/pixel).
+   */
+  const handleRelayout = useCallback(
+    (msgId) => {
+      const target = messages.find((m) => m.id === msgId);
+      if (!target?.layoutFindings?.length || isStreaming) return undefined;
+      setMessages((prev) => prev.map((m) => (m.id === msgId ? { ...m, layoutFindings: null, layoutNote: null } : m)));
+      const section = pickSectionTitle(target.layoutFindings);
+      const prompt = section ? tc('relayoutInstruction', { section }) : tc('relayoutInstructionPlain');
+      return handleSend({ prompt, layoutFindings: target.layoutFindings });
+    },
+    [handleSend, isStreaming, messages, tc]
   );
 
   /**
@@ -369,5 +422,6 @@ export default function useCanvasConversation({
     handleApply,
     handleReject,
     handleUndo,
+    handleRelayout,
   };
 }

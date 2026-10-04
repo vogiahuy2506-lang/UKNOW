@@ -48,6 +48,7 @@ const CanvasChatPanelContent = forwardRef(function CanvasChatPanelContent(
     isStreaming = false,
     handleSend,
     handleUndo,
+    handleRelayout,
   } = conversation || {};
 
   useImperativeHandle(ref, () => ({
@@ -96,6 +97,7 @@ const CanvasChatPanelContent = forwardRef(function CanvasChatPanelContent(
                 key={msg.id}
                 msg={msg}
                 onUndo={handleUndo}
+                onRelayout={handleRelayout}
               />
             ))}
           </div>

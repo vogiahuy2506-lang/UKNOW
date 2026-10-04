@@ -1257,7 +1257,16 @@ ${exampleLine}`;
       const changeSummary = normalizeChangeSummary(parsed.changeSummary);
 
       let html;
-      if (Array.isArray(parsed.edits)) {
+      let noChange = false;
+      if (Array.isArray(parsed.edits) && parsed.edits.length === 0) {
+        // B-13: `edits: []` = AI xem trang rồi thấy KHÔNG cần sửa gì. Trước đây bị coi là "vá hỏng" (LANDING_PATCH_EMPTY) → rơi xuống viết
+        // lại cả trang (~22k token đầu ra, tốn tiền, và miễn phí ở lượt tự sửa). Nay trả nguyên trang kèm changeSummary. Lượt AI đã chạy
+        // thật nên lượt sửa trả phí vẫn trừ credit như mọi lượt (chính sách "1 credit / lượt AI tạo câu trả lời").
+        html = rawCurrent;
+        noChange = true;
+        telemetry.strategy = 'patch';
+        telemetry.patchEdits = 0;
+      } else if (Array.isArray(parsed.edits)) {
         try {
           const patched = applyHtmlEdits(rawCurrent, parsed.edits);
           html = patched.html;
@@ -1280,6 +1289,10 @@ ${exampleLine}`;
         || (html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] || '').trim()
         || 'Landing';
 
+      if (noChange) {
+        const summary = changeSummary || (locale === 'en' ? 'No changes were needed' : 'Không cần thay đổi');
+        return { ...finalizeEdit({ title, html, changeSummary: summary, finishReason }), noChange: true };
+      }
       return finalizeEdit({ title, html, changeSummary, finishReason });
     };
 

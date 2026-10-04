@@ -153,3 +153,59 @@ describe('AiChatbot — đính kèm tệp khi sửa landing page (PR-2)', () => 
     expect(screen.queryByText(/aiChatbot\.landingAttachHint/)).not.toBeInTheDocument();
   });
 });
+
+// B-13: AI xem trang rồi thấy không cần sửa (server trả `data.noChange`) → trợ lý nói thẳng thay vì "Đã sửa: Không cần thay đổi".
+describe('AiChatbot — lượt sửa landing mà AI thấy không cần sửa (B-13)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    global.URL.createObjectURL = vi.fn(() => 'blob:http://localhost/preview');
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    aiApi.getBusinessProfile = vi.fn().mockResolvedValue({ data: null });
+    api.get.mockResolvedValue({ data: {} });
+    api.post.mockResolvedValue({ data: {} });
+  });
+
+  const openLandingSession = async () => {
+    aiApi.getSessions.mockResolvedValue({ data: [{ id: 'sess_1', title: 'Phiên landing' }] });
+    aiApi.getSessionMessages.mockResolvedValue({
+      data: [
+        { role: 'user', content: 'Tạo landing page' },
+        { role: 'assistant', type: 'landing_page', data: { title: 'Trang landing test', html: '<div>Trang landing</div>' } },
+      ],
+    });
+    render(
+      <MemoryRouter>
+        <AiChatbot isOpen={true} />
+      </MemoryRouter>
+    );
+    fireEvent.mouseUp(await screen.findByText('Phiên landing'));
+    await screen.findByText('Trang landing test');
+  };
+  const sendEdit = async (text) => {
+    const textarea = screen.getByPlaceholderText('aiChatbot.inputPlaceholder');
+    fireEvent.change(textarea, { target: { value: text } });
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+  };
+
+  it('data.noChange=true → tin xác nhận là câu "không cần thay đổi", KHÔNG phải "Đã sửa: …"', async () => {
+    aiApi.editLandingHtml.mockResolvedValue({
+      success: true,
+      data: { title: 'Trang landing test', html: '<div>Trang landing</div>', changeSummary: 'Không cần thay đổi', noChange: true },
+    });
+    await openLandingSession();
+    await sendEdit('Đổi màu nền header sang màu cam');
+    expect(await screen.findByText('aiChatbot.landingEditNoChange')).toBeInTheDocument();
+    expect(screen.queryByText(/aiChatbot\.editedSummary/)).toBeNull();
+  });
+
+  it('có thay đổi thật → vẫn dùng câu tóm tắt như cũ', async () => {
+    aiApi.editLandingHtml.mockResolvedValue({
+      success: true,
+      data: { title: 'Trang landing test', html: '<div>Mới</div>', changeSummary: 'Đã đổi màu nền' },
+    });
+    await openLandingSession();
+    await sendEdit('Đổi màu nền header sang màu cam');
+    expect(await screen.findByText('aiChatbot.editedSummary')).toBeInTheDocument();
+    expect(screen.queryByText('aiChatbot.landingEditNoChange')).toBeNull();
+  });
+});

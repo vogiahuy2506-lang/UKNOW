@@ -1,11 +1,18 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
+import { renderHook, act, waitFor } from '@testing-library/react';
 import toast from 'react-hot-toast';
 import useCanvasConversation, { makeIntents, detectIntent } from '../useCanvasConversation.js';
+import { runLayoutAudit } from '../../../ai/utils/layoutAudit.js';
 import {
   generateLandingHtmlWithAi,
   editLandingHtmlWithAi,
 } from '../../../landing-pages/services/landingPagesAdminApi.service.js';
+
+// B-9: jsdom không có layout nên iframe đo không bao giờ trả lời — mock bộ đo (buildFullLandingHtml / describeFindingsForUser vẫn thật).
+vi.mock('../../../ai/utils/layoutAudit.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  runLayoutAudit: vi.fn().mockResolvedValue({ findings: [], timedOut: false, errors: [] }),
+}));
 
 vi.mock('../../../landing-pages/services/landingPagesAdminApi.service.js', () => ({
   generateLandingHtmlWithAi: vi.fn(),
@@ -388,5 +395,129 @@ describe('useCanvasConversation — tiến độ (stage) từ luồng của serv
     });
     expect(streaming()).toBeUndefined();
     expect(result.current.messages.some((m) => m.role === 'ai' && m.status === 'applied')).toBe(true);
+  });
+});
+
+/**
+ * B-9 / B-13 ở canvas: hiện câu AI nói đã đổi gì (`data.changeSummary`) thay câu chung; chạy bộ đo hiển thị CHỈ ĐO sau lượt AI (không có
+ * phiên nên không tự sửa miễn phí) và, nếu có lỗi thật, thêm nút "Trình bày lại" = một lượt sửa THƯỜNG kèm `layoutFindings`;
+ * `noChange` → không đụng trang.
+ */
+describe('useCanvasConversation — changeSummary, đo hiển thị, Trình bày lại, noChange (B-9 / B-13)', () => {
+  const FINDING = {
+    kind: 'text_covered', width: 1280, text: '03/02/2026', selector: 'span.a', coveredBy: { text: '1', selector: 'div.b' },
+    overlapPx: 12, side: 'right', sectionTitle: 'Dòng thời gian',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    runLayoutAudit.mockReset();
+    runLayoutAudit.mockResolvedValue({ findings: [], timedOut: false, errors: [] });
+  });
+
+  /** Hook với form "sống": setForm cập nhật formState và hook được render lại với form mới (như React thật). */
+  const setup = ({ html = '<div>Cũ</div>' } = {}) => {
+    const formRef = { current: { title: 't', htmlContent: html } };
+    const hook = renderHook(() =>
+      useCanvasConversation({
+        form: formRef.current,
+        setForm: (u) => { formRef.current = typeof u === 'function' ? u(formRef.current) : u; },
+        hasExistingHtml: Boolean(html),
+        openTab: vi.fn(),
+        editingId: null,
+      })
+    );
+    return { ...hook, formRef };
+  };
+
+  const aiMsg = (result) => result.current.messages.find((m) => m.role === 'ai');
+
+  it('hiện data.changeSummary của AI thay câu chung "aiGeneratedContent"', async () => {
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Mới</div>', changeSummary: 'Đã đổi màu nút Đăng ký sang cam' } });
+    const { result } = setup();
+    await act(async () => { await result.current.handleSend({ prompt: 'Đổi màu nút đăng ký sang cam cho nổi bật hơn nhé' }); });
+    expect(aiMsg(result).content).toBe('Đã đổi màu nút Đăng ký sang cam');
+    expect(aiMsg(result).status).toBe('applied');
+  });
+
+  it('không có changeSummary → giữ câu chung như cũ', async () => {
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Mới</div>' } });
+    const { result } = setup();
+    await act(async () => { await result.current.handleSend({ prompt: 'Đổi màu nút đăng ký sang cam cho nổi bật hơn nhé' }); });
+    expect(aiMsg(result).content).toBe('landingCanvas.canvasConversation.aiGeneratedContent');
+  });
+
+  it('B-13 noChange → KHÔNG đổi trang, không có nút Hoàn tác (status done), nội dung là câu AI', async () => {
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Cũ</div>', changeSummary: 'Không cần thay đổi', noChange: true } });
+    const { result, formRef } = setup();
+    await act(async () => { await result.current.handleSend({ prompt: 'Đổi màu nút đăng ký sang cam cho nổi bật hơn nhé' }); });
+    expect(formRef.current.htmlContent).toBe('<div>Cũ</div>');
+    expect(aiMsg(result)).toMatchObject({ status: 'done', content: 'Không cần thay đổi' });
+    expect(runLayoutAudit).not.toHaveBeenCalled();
+  });
+
+  it('có lỗi hiển thị thật → tin AI mang layoutFindings + câu tiếng người (không selector/pixel)', async () => {
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Mới</div>' } });
+    runLayoutAudit.mockResolvedValue({ findings: [FINDING], timedOut: false, errors: [] });
+    const { result } = setup();
+    await act(async () => { await result.current.handleSend({ prompt: 'Đổi màu nút đăng ký sang cam cho nổi bật hơn nhé' }); });
+    await waitFor(() => expect(aiMsg(result).layoutFindings).toEqual([FINDING]));
+    expect(runLayoutAudit).toHaveBeenCalledTimes(1);
+    expect(runLayoutAudit.mock.calls[0][0]).toContain('<div>Mới</div>');
+    // i18n mock trả khoá: câu "chữ bị che ở phần …" (khoá layoutStillCovered), không phải số đo / selector
+    expect(aiMsg(result).layoutNote).toContain('layoutStillCovered');
+    expect(aiMsg(result).layoutNote).not.toMatch(/span\.a|overlapPx/);
+  });
+
+  it.each([
+    ['trang sạch', { findings: [], timedOut: false, errors: [] }],
+    ['chưa đo được (hết giờ)', { findings: [FINDING], timedOut: true, errors: [] }],
+    ['script đo báo lỗi', { findings: [FINDING], timedOut: false, errors: ['scan_incomplete'] }],
+  ])('%s → IM LẶNG: không thêm layoutFindings, không nút', async (_name, audit) => {
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Mới</div>' } });
+    runLayoutAudit.mockResolvedValue(audit);
+    const { result } = setup();
+    await act(async () => { await result.current.handleSend({ prompt: 'Đổi màu nút đăng ký sang cam cho nổi bật hơn nhé' }); });
+    await waitFor(() => expect(runLayoutAudit).toHaveBeenCalled());
+    await act(async () => { await Promise.resolve(); });
+    expect(aiMsg(result).layoutFindings).toBeUndefined();
+  });
+
+  it('trang đã bị đổi trong lúc đo (người dùng sửa tay) → bỏ kết quả đo cũ', async () => {
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Mới</div>' } });
+    let finishAudit;
+    runLayoutAudit.mockReturnValue(new Promise((resolve) => { finishAudit = resolve; }));
+    const { result, rerender, formRef } = setup();
+    await act(async () => { await result.current.handleSend({ prompt: 'Đổi màu nút đăng ký sang cam cho nổi bật hơn nhé' }); });
+    // người dùng sửa tay → canvas render lại với HTML khác
+    formRef.current = { ...formRef.current, htmlContent: '<div>Sửa tay</div>' };
+    rerender();
+    await act(async () => { finishAudit({ findings: [FINDING], timedOut: false, errors: [] }); await Promise.resolve(); });
+    expect(aiMsg(result).layoutFindings).toBeUndefined();
+  });
+
+  it('Trình bày lại: lượt sửa THƯỜNG kèm layoutFindings, lệnh là câu tiếng người nêu đúng phần; nút ẩn đi; KHÔNG gửi autoLayoutFix', async () => {
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Mới</div>' } });
+    runLayoutAudit.mockResolvedValue({ findings: [FINDING], timedOut: false, errors: [] });
+    const { result } = setup();
+    await act(async () => { await result.current.handleSend({ prompt: 'Đổi màu nút đăng ký sang cam cho nổi bật hơn nhé' }); });
+    await waitFor(() => expect(aiMsg(result).layoutFindings).toBeTruthy());
+    const msgId = aiMsg(result).id;
+
+    editLandingHtmlWithAi.mockResolvedValueOnce({ success: true, data: { html: '<div>Đã trình bày lại</div>', changeSummary: 'Dựng lại phần Dòng thời gian' } });
+    await act(async () => { await result.current.handleRelayout(msgId); });
+
+    expect(editLandingHtmlWithAi).toHaveBeenCalledTimes(2);
+    const call = editLandingHtmlWithAi.mock.calls[1][0];
+    expect(call.layoutFindings).toEqual([FINDING]);
+    expect(call.instruction).toContain('landingCanvas.canvasConversation.relayoutInstruction');
+    expect(call).not.toHaveProperty('autoLayoutFix');
+    expect(result.current.messages.find((m) => m.id === msgId).layoutFindings).toBeNull();
+  });
+
+  it('handleRelayout với tin không có lỗi đo → không làm gì', async () => {
+    const { result } = setup();
+    await act(async () => { await result.current.handleRelayout('khong-co'); });
+    expect(editLandingHtmlWithAi).not.toHaveBeenCalled();
   });
 });

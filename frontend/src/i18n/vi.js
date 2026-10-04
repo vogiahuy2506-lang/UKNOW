@@ -774,6 +774,7 @@ export default {
       stageGenerating: 'Đang viết trang…',
       stageFixing: 'Đang sửa lại trang…',
       stageChecking: 'Đang kiểm tra hiển thị…',
+      relayoutSection: 'Trình bày lại phần này · dùng 1 lượt AI',
       undo: 'Hoàn tác',
       undoTooltip: 'Khôi phục lại HTML trước khi AI sửa',
       clear: 'Xóa cuộc trò chuyện',
@@ -987,6 +988,14 @@ export default {
       aiGeneratedContent: 'AI đã tạo nội dung mới.',
       aiAppliedDirect: 'AI đã sửa landing page trực tiếp.',
       aiConnectionError: 'Không thể kết nối AI. Vui lòng thử lại.',
+      aiNoChange: 'AI xem lại và thấy trang đã đúng yêu cầu của bạn nên không cần thay đổi gì.',
+      // B-9: câu tiếng người khi bộ đo hiển thị thấy lỗi ở trang AI vừa dựng (KHÔNG class/pixel/CSS) + lệnh cho nút "Trình bày lại".
+      layoutStillCovered: 'Còn {count} chỗ chữ bị che ở phần "{section}".',
+      layoutStillCoveredPlain: 'Còn {count} chỗ chữ bị che.',
+      layoutStillClipped: 'Còn {count} chỗ chữ bị cắt.',
+      layoutStillOffscreen: 'Còn {count} chỗ chữ tràn ra ngoài màn hình.',
+      relayoutInstruction: 'Dựng lại riêng phần "{section}" bằng bố cục lưới đơn giản để chữ không bị che hay cắt, giữ nguyên toàn bộ chữ và các phần khác.',
+      relayoutInstructionPlain: 'Dựng lại phần đang bị lỗi hiển thị bằng bố cục lưới đơn giản để chữ không bị che hay cắt, giữ nguyên toàn bộ chữ và các phần khác.',
       aiUndoSuccess: 'Đã hoàn tác thay đổi của AI.',
     },
     landingCanvasEditor: {
@@ -5158,6 +5167,7 @@ export default {
     layoutAutoFixed: 'Đã chỉnh hiển thị: {summary}',
     layoutAutoFixedPlain: 'Mình đã chỉnh lại phần hiển thị của trang để chữ không bị che hay cắt.',
     editedSummary: 'Đã sửa: {summary}',
+    landingEditNoChange: 'Mình xem lại rồi: trang đã đúng yêu cầu của bạn nên không cần thay đổi gì. Bạn mô tả cụ thể hơn phần muốn đổi nếu cần nhé.',
     // Quick actions
     quickActions: 'Thao tác nhanh',
     createCampaign: 'Tạo Campaign',

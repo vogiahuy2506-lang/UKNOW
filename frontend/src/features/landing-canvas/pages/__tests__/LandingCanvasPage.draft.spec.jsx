@@ -32,6 +32,11 @@ vi.mock('react-hot-toast', () => {
 });
 
 // Bỏ các modal nặng của Editor (không liên quan nháp).
+// B-9: sau lượt AI canvas chạy bộ đo hiển thị (iframe thật) — jsdom không có layout và iframe đòi tải Tailwind CDN; mock để spec không rò mạng.
+vi.mock('../../../ai/utils/layoutAudit.js', async (importOriginal) => ({
+  ...(await importOriginal()),
+  runLayoutAudit: vi.fn().mockResolvedValue({ findings: [], timedOut: false, errors: [] }),
+}));
 vi.mock('../../components/SettingsModal.jsx', () => ({ default: () => null }));
 vi.mock('../../components/ImportHtmlModal.jsx', () => ({ default: () => null }));
 vi.mock('../../../landing-pages/components/TemplateGallery.jsx', () => ({ default: () => null }));

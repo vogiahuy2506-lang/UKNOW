@@ -1,5 +1,6 @@
 import api from './api';
 import { postAiTurn } from './aiTurnStream';
+import { slimChatHistory } from './chatHistoryPayload';
 
 function formatLandingFiles(files) {
   if (!Array.isArray(files) || files.length === 0) return undefined;
@@ -66,7 +67,9 @@ const aiApi = {
   chat: async (history, files = [], sessionId = null, locale = 'vi', intent = null, planSlotKey = null) => {
     // PR-9 (B-4 / B-5): báo cho backend biết client này TỰ gọi route sinh landing khi trợ lý trả ý định `landing_page` — lượt chat
     // không còn sinh trang trong cùng request (trước đây chat + sinh nối tiếp → 524, tệp khách vừa gửi không tới được trang).
-    const payload = { history, files, sessionId, locale, clientGeneratesLanding: true };
+    // B-19: bỏ html/previousHtml/css của các thẻ landing khỏi lịch sử gửi lên — backend không đọc chúng, mà phiên có vài trang lớn thì
+    // mỗi tin chat nặng vài trăm KB tới vài MB (chạm trần 5 MB → chat của phiên đó hỏng 413).
+    const payload = { history: slimChatHistory(history), files, sessionId, locale, clientGeneratesLanding: true };
     if (intent) payload.intent = intent;
     if (planSlotKey) payload.planSlotKey = planSlotKey;
     const response = await api.post('/ai/chat', payload, {

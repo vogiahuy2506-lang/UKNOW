@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import ChatMessage from '../ChatMessage.jsx';
 
 vi.mock('../../../../i18n', () => ({
@@ -38,5 +38,30 @@ describe('ChatMessage — chữ tiến độ lượt sinh / sửa landing (PR-9)
     render(<ChatMessage msg={aiMsg({ status: 'applied', stage: 'generating', content: 'Đã tạo xong', previousHtml: '' })} />);
     expect(screen.getByText('Đã tạo xong')).toBeTruthy();
     expect(screen.queryByText('landingCanvas.chat.stageGenerating')).toBeNull();
+  });
+});
+
+/** B-9: tin AI ở canvas có lỗi hiển thị do bộ đo thấy → câu tiếng người + nút "Trình bày lại" (trả phí 1 lượt AI). */
+describe('ChatMessage — nút Trình bày lại khi bộ đo thấy lỗi hiển thị (B-9)', () => {
+  const FINDING = { kind: 'text_covered', width: 1280, text: 'a', selector: 'p', overlapPx: 3 };
+  const applied = (extra = {}) => ({ id: 'm9', role: 'ai', content: 'Đã đổi', status: 'applied', previousHtml: '<p>cũ</p>', suggestedHtml: '<p>mới</p>', ...extra });
+
+  it('có layoutFindings → hiện câu đo + nút; bấm nút gọi onRelayout(msg.id)', () => {
+    const onRelayout = vi.fn();
+    render(<ChatMessage msg={applied({ layoutFindings: [FINDING], layoutNote: 'Còn 1 chỗ chữ bị che.' })} onRelayout={onRelayout} />);
+    expect(screen.getByTestId('canvas-layout-note')).toBeTruthy();
+    expect(screen.getByText('Còn 1 chỗ chữ bị che.')).toBeTruthy();
+    fireEvent.click(screen.getByText('landingCanvas.chat.relayoutSection'));
+    expect(onRelayout).toHaveBeenCalledWith('m9');
+  });
+
+  it('không có layoutFindings (sạch / chưa đo được / đã bấm) → không có khối này', () => {
+    render(<ChatMessage msg={applied()} onRelayout={vi.fn()} />);
+    expect(screen.queryByTestId('canvas-layout-note')).toBeNull();
+  });
+
+  it('không truyền onRelayout (nơi dùng khác) → không hiện nút dù có findings', () => {
+    render(<ChatMessage msg={applied({ layoutFindings: [FINDING], layoutNote: 'x' })} />);
+    expect(screen.queryByTestId('canvas-layout-note')).toBeNull();
   });
 });

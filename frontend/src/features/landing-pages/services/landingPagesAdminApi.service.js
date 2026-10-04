@@ -167,10 +167,10 @@ export async function generateLandingHtmlWithAi({ prompt, title, locale, files =
  *
  * PR-9 (B-4): như generateLandingHtmlWithAi — đọc phản hồi luồng, `requestId` chống trừ 2 lần.
  *
- * @param {{ instruction: string, currentHtml: string, locale?: string, files?: Array, landingPageId?: number|null, onStage?: (stage: string) => void, signal?: AbortSignal }} params
+ * @param {{ instruction: string, currentHtml: string, locale?: string, files?: Array, landingPageId?: number|null, layoutFindings?: Array|null, onStage?: (stage: string) => void, signal?: AbortSignal }} params
  * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
  */
-export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, files = [], landingPageId = null, onStage, signal } = {}) {
+export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, files = [], landingPageId = null, layoutFindings = null, onStage, signal } = {}) {
   const formattedFiles = formatLandingFiles(files);
   const payload = {
     instruction,
@@ -178,6 +178,8 @@ export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, 
     locale,
     ...(formattedFiles ? { files: formattedFiles } : {}),
     ...(landingPageId != null ? { landingPageId: Number(landingPageId) } : {}),
+    // B-9: số đo hiển thị (từ bộ đo ở trình duyệt) cho lượt "Trình bày lại" — server nối vào lệnh ĐƯA CHO AI, không lưu vào tin người dùng.
+    ...(Array.isArray(layoutFindings) && layoutFindings.length > 0 ? { layoutFindings } : {}),
   };
   return postAiTurn('/ai/edit-landing-html', payload, { onStage, signal });
 }

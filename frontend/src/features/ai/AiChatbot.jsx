@@ -3246,7 +3246,10 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         // AI trả câu tiếng người (changeSummary) thì dùng nó; không có thì giữ câu cũ.
         const editedSummary = String(changeSummary || '').trim();
-        let confirmMsg = editedSummary
+        // B-13: AI xem trang rồi thấy không cần sửa (`noChange`) → nói thẳng thay vì "Đã sửa: Không cần thay đổi".
+        let confirmMsg = response.data.noChange === true
+          ? t('aiChatbot.landingEditNoChange')
+          : editedSummary
           ? t('aiChatbot.editedSummary', { summary: editedSummary })
           : (locale === 'en'
             ? `I have updated the landing page "${title || pageData.title}" according to your request: "${trimmedInstr}". Check the preview above!`

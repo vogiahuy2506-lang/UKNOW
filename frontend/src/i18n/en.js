@@ -772,6 +772,7 @@ export default {
       stageGenerating: 'Writing the page…',
       stageFixing: 'Fixing the page…',
       stageChecking: 'Checking the layout…',
+      relayoutSection: 'Re-layout this section · uses 1 AI turn',
       undo: 'Undo',
       undoTooltip: 'Restore the HTML before the AI edited it',
       clear: 'Clear conversation',
@@ -986,6 +987,14 @@ export default {
       aiGeneratedContent: 'AI generated new content.',
       aiAppliedDirect: 'AI updated the landing page directly.',
       aiConnectionError: 'Could not connect to AI. Please try again.',
+      aiNoChange: 'The AI reviewed the page and found it already matches your request, so nothing was changed.',
+      // B-9: plain-language sentences when the layout check finds problems on the page the AI just built + the "Re-layout" instruction.
+      layoutStillCovered: '{count} piece(s) of text are still covered in the "{section}" section.',
+      layoutStillCoveredPlain: '{count} piece(s) of text are still covered.',
+      layoutStillClipped: '{count} piece(s) of text are still cut off.',
+      layoutStillOffscreen: '{count} piece(s) of text still run off the screen.',
+      relayoutInstruction: 'Rebuild only the "{section}" section with a simple grid layout so no text is covered or cut off; keep all text and the other sections unchanged.',
+      relayoutInstructionPlain: 'Rebuild the section with the display problem using a simple grid layout so no text is covered or cut off; keep all text and the other sections unchanged.',
       aiUndoSuccess: 'AI changes undone.',
     },
     landingCanvasEditor: {
@@ -5143,6 +5152,7 @@ export default {
     layoutAutoFixed: 'Layout adjusted: {summary}',
     layoutAutoFixedPlain: 'I adjusted the page layout so text is no longer covered or cut off.',
     editedSummary: 'Updated: {summary}',
+    landingEditNoChange: 'I reviewed the page: it already matches your request, so nothing was changed. Describe the part you want to change more specifically if needed.',
     // Quick actions
     quickActions: 'Quick actions',
     createCampaign: 'Create Campaign',
