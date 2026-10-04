@@ -3778,6 +3778,8 @@ export default {
     imageRequired: 'Vui lòng chọn file ảnh (PNG, JPG, WebP...)',
     statusActive: 'Đang bán',
     statusInactive: 'Ngừng bán',
+    statusEventActive: 'Đang mở đăng ký',
+    statusEventInactive: 'Đã đóng đăng ký',
     lastUpdated: 'Cập nhật lần cuối',
     funnel: {
       periodLabel: 'Khoảng thời gian',

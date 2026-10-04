@@ -3767,6 +3767,8 @@ export default {
     imageRequired: 'Please choose an image file (PNG, JPG, WebP...)',
     statusActive: 'Active',
     statusInactive: 'Inactive',
+    statusEventActive: 'Registration open',
+    statusEventInactive: 'Registration closed',
     lastUpdated: 'Last updated',
     funnel: {
       periodLabel: 'Time range',

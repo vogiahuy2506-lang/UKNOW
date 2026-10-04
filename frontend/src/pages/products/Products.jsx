@@ -42,13 +42,20 @@ const EMPTY_FORM = {
 
 const PRODUCT_KIND_OPTIONS = ['sale', 'event'];
 
-const StatusBadge = ({ status }) => {
+// Sự kiện không "bán": chữ trạng thái nói về đăng ký (Đang mở / Đã đóng đăng ký) thay vì Đang bán / Ngừng bán.
+const STATUS_KEYS = {
+  sale: { active: 'products.statusActive', inactive: 'products.statusInactive' },
+  event: { active: 'products.statusEventActive', inactive: 'products.statusEventInactive' },
+};
+
+const StatusBadge = ({ status, kind }) => {
   const { t } = useI18n();
   const normalized = String(status || 'active').toLowerCase();
   const isActive = normalized === 'active';
+  const keys = STATUS_KEYS[kind === 'event' ? 'event' : 'sale'];
   return (
     <span className={`badge ${isActive ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}`}>
-      {isActive ? t('products.statusActive') : t('products.statusInactive')}
+      {isActive ? t(keys.active) : t(keys.inactive)}
     </span>
   );
 };
@@ -404,9 +411,12 @@ const Products = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.status')}
                     </th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('products.lastUpdated')}
-                    </th>
+                    {/* Khi có các cột phễu, bỏ cột ngày cập nhật để cột Hành động (sửa/xoá) không bị đẩy ra ngoài màn hình laptop. */}
+                    {!canViewFunnel && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('products.lastUpdated')}
+                      </th>
+                    )}
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('common.actions')}
                     </th>
@@ -448,11 +458,13 @@ const Products = () => {
                         <FunnelCells funnel={funnelByProduct[product.id]} />
                       )}
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <StatusBadge status={product.status} />
+                        <StatusBadge status={product.status} kind={product.kind} />
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {formatDate(product.updatedAt)}
-                      </td>
+                      {!canViewFunnel && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {formatDate(product.updatedAt)}
+                        </td>
+                      )}
                       <td className="px-6 py-4 whitespace-nowrap text-right text-sm">
                         <div className="flex items-center justify-end gap-2">
                           <button

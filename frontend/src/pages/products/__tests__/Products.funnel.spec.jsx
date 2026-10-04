@@ -135,6 +135,23 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     expect(screen.getByTestId('funnel-awaiting')).toHaveTextContent('—');
     expect(screen.getByTestId('funnel-paid')).toHaveTextContent('—');
     expect(screen.getByTestId('funnel-revenue')).toHaveTextContent('—');
+    // Sự kiện không "bán": trạng thái nói về đăng ký.
+    expect(screen.getByText('Đang mở đăng ký')).toBeInTheDocument();
+    expect(screen.queryByText('Đang bán')).toBeNull();
+  });
+
+  it('có cột phễu thì bỏ cột "Cập nhật lần cuối" để cột Hành động không bị đẩy ra ngoài màn hình', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('funnel-registered')).toHaveTextContent('2'));
+    expect(screen.queryByText('Cập nhật lần cuối')).toBeNull();
+    expect(screen.getByText('Đang bán')).toBeInTheDocument();
+  });
+
+  it('không có cột phễu (nhân viên không có reports_view) thì vẫn có cột "Cập nhật lần cuối"', async () => {
+    mockAuthState = { activeContext: { type: 'employee', permissions: { courses: true } } };
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khoá AI thực chiến')).toBeInTheDocument());
+    expect(screen.getByText('Cập nhật lần cuối')).toBeInTheDocument();
   });
 
   it('sản phẩm bán không có huy hiệu Sự kiện', async () => {
