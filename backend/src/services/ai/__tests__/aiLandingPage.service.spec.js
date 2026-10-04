@@ -47,7 +47,7 @@ const withEditMode = async (mode, fn) => {
  * có form không hoạt động.
  */
 const validFormHtml =
-  '<!DOCTYPE html><html lang="vi"><head><script src="https://cdn.tailwindcss.com"></script></head><body>' +
+  '<!DOCTYPE html><html lang="vi"><head><meta name="viewport" content="width=device-width, initial-scale=1"/><script src="https://cdn.tailwindcss.com"></script></head><body>' +
   '<form data-founderai-capture>' +
   '<input type="text" name="name" /><input type="email" name="email" /><input type="tel" name="phone" />' +
   '<label><input type="checkbox" name="marketingConsent" /> Đồng ý nhận thông tin</label>' +
@@ -677,7 +677,7 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
  */
 describe('aiLandingPageService.generate — AI_LANDING_FORM_MODE=form (PR-5b-2a)', () => {
   const validSlotHtml =
-    '<!DOCTYPE html><html lang="vi"><head><script src="https://cdn.tailwindcss.com"></script></head><body>' +
+    '<!DOCTYPE html><html lang="vi"><head><meta name="viewport" content="width=device-width, initial-scale=1"/><script src="https://cdn.tailwindcss.com"></script></head><body>' +
     '<section><div data-founderai-form-slot></div></section>' +
     '</body></html>';
 
@@ -742,7 +742,7 @@ describe('aiLandingPageService.generate — AI_LANDING_FORM_MODE=form (PR-5b-2a)
   it('công tắc BẬT: HTML có chỗ trống sai dạng (có nội dung con) → 422 báo đúng nguyên nhân, không nhầm "thiếu chỗ trống"', async () => {
     process.env.AI_LANDING_FORM_MODE = 'form';
     const htmlMalformed =
-      '<!DOCTYPE html><html lang="vi"><head><script src="https://cdn.tailwindcss.com"></script></head><body>' +
+      '<!DOCTYPE html><html lang="vi"><head><meta name="viewport" content="width=device-width, initial-scale=1"/><script src="https://cdn.tailwindcss.com"></script></head><body>' +
       '<section><div data-founderai-form-slot><p>x</p></div></section></body></html>';
     mockGenerateReturns(htmlMalformed);
     await expect(

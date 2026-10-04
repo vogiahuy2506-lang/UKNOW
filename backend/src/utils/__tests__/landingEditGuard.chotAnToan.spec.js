@@ -1,9 +1,10 @@
 import { describe, expect, it } from '@jest/globals';
-import { inspectCaptureForm, validateEditHtmlOutput } from '../landingEditGuard.util.js';
+import { ensureLandingDocumentShell, inspectCaptureForm, validateEditHtmlOutput } from '../landingEditGuard.util.js';
 
 /**
  * PR-8 (rà soát AI 03/10, plan đợt 4) — chốt thêm ở landingEditGuard.util.js:
  *   B-12: ô đồng ý marketingConsent (và name/email/phone) của form bắt lead;
+ *   B-16: trang AI sinh có viewport và </html>;
  * Tách khỏi landingEditGuard.util.spec.js để file đó không đụng độ với PR khác.
  */
 
@@ -106,5 +107,64 @@ describe('B-12 — validateEditHtmlOutput giữ ô của form bắt lead', () =>
     const cur = '<!DOCTYPE html><html><body><h1>A</h1><iframe src="/embed/lead-form?slug=a"></iframe></body></html>';
     const next = '<!DOCTYPE html><html><body><h1>A</h1><p>b</p><iframe src="/embed/lead-form?slug=a"></iframe></body></html>';
     expect(check(next, cur)).toBe(true);
+  });
+});
+
+describe('B-16 — ensureLandingDocumentShell: viewport + </html> cho trang AI sinh', () => {
+  const VP = '<meta name="viewport" content="width=device-width, initial-scale=1"/>';
+  const full = `<!DOCTYPE html><html lang="vi"><head><meta charset="utf-8"/>${VP}<title>T</title></head><body><p>x</p></body></html>`;
+
+  it('trang đủ viewport và </html> → trả nguyên văn, không vá gì', () => {
+    expect(ensureLandingDocumentShell(full)).toEqual({ html: full, fixed: [] });
+  });
+
+  it('nhận viewport viết hoa / nháy đơn / thuộc tính khác thứ tự', () => {
+    for (const meta of [
+      '<META NAME="Viewport" CONTENT="width=device-width">',
+      "<meta name='viewport' content='width=device-width'>",
+      '<meta content="width=device-width" name="viewport"/>',
+    ]) {
+      const html = full.replace(VP, meta);
+      expect(ensureLandingDocumentShell(html).fixed).toEqual([]);
+    }
+  });
+
+  it('thiếu viewport → thêm ngay sau <head> (kể cả <head> có thuộc tính / viết hoa)', () => {
+    const noVp = full.replace(VP, '');
+    const out = ensureLandingDocumentShell(noVp);
+    expect(out.fixed).toEqual(['viewport']);
+    expect(out.html).toBe(noVp.replace('<head>', `<head>${VP}`));
+    const upper = noVp.replace('<head>', '<HEAD profile="x">');
+    expect(ensureLandingDocumentShell(upper).html).toContain(`<HEAD profile="x">${VP}`);
+  });
+
+  it('viewport chỉ nằm trong chú thích thì KHÔNG tính → vẫn thêm', () => {
+    const html = full.replace(VP, `<!-- ${VP} -->`);
+    expect(ensureLandingDocumentShell(html).fixed).toEqual(['viewport']);
+  });
+
+  it('chưa có <head> nhưng có <html> → bọc <head> mới; không có cả hai → 422', () => {
+    const noHead = '<!DOCTYPE html><html lang="vi"><body><p>x</p></body></html>';
+    const out = ensureLandingDocumentShell(noHead);
+    expect(out.html).toBe(`<!DOCTYPE html><html lang="vi"><head>${VP}</head><body><p>x</p></body></html>`);
+    expect(() => ensureLandingDocumentShell('<!DOCTYPE html><body><p>x</p></body></html>')).toThrow(
+      expect.objectContaining({ status: 422, message: expect.stringMatching(/cấu trúc HTML bất thường/) })
+    );
+  });
+
+  it('thiếu </html> nhưng còn </body> → thêm </html>; thiếu cả hai → 422 "bị cắt dở"', () => {
+    const noClose = full.replace('</html>', '');
+    const out = ensureLandingDocumentShell(noClose);
+    expect(out.fixed).toEqual(['htmlClose']);
+    expect(out.html.endsWith('</body>\n</html>')).toBe(true);
+    const cut = full.replace('</body></html>', '<p>đang viết dở');
+    expect(() => ensureLandingDocumentShell(cut)).toThrow(
+      expect.objectContaining({ status: 422, message: expect.stringMatching(/cắt dở/) })
+    );
+  });
+
+  it('thiếu cả hai điều kiện → vá cả hai, báo cả hai', () => {
+    const out = ensureLandingDocumentShell(full.replace(VP, '').replace('</html>', ''));
+    expect(out.fixed).toEqual(['viewport', 'htmlClose']);
   });
 });

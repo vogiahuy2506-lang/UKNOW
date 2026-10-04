@@ -5,6 +5,7 @@ import {
   extractHtmlFromModelText,
   validateEditHtmlOutput,
   inspectCaptureForm,
+  ensureLandingDocumentShell,
   CAPTURE_FORM_FIELDS,
   CAPTURE_FIELD_LABELS,
   LANDING_FORM_PLACEHOLDER,
@@ -111,6 +112,7 @@ function logLandingAiLifecycle({
   strippedImages = null,
   unsafeRetry = null,
   unsafeKinds = null,
+  shellFixed = null,
   autoLayoutFix = null,
   findings = null,
 }) {
@@ -136,6 +138,8 @@ function logLandingAiLifecycle({
   // đây là số để biết chốt có chặn nhầm trang hợp lệ nhiều không.
   if (unsafeRetry != null) fields.push(`unsafeRetry=${unsafeRetry}`);
   if (unsafeKinds) fields.push(`unsafeKinds=${unsafeKinds}`);
+  // B-16: trang AI sinh bị tự vá viewport / </html> (viewport,htmlClose) — đo tần suất AI quên.
+  if (shellFixed) fields.push(`shellFixed=${shellFixed}`);
   if (Array.isArray(fakeImageUrls) && fakeImageUrls.length > 0) {
     const formatted = fakeImageUrls.map((u) => String(u).slice(0, 120)).join(',');
     fields.push(`fakeImageUrls=${fakeImageUrls.length}:${formatted}`);
@@ -632,6 +636,14 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         const err = new Error('Thiếu Tailwind CDN trong HTML do AI sinh.');
         err.status = 422;
         throw err;
+      }
+      // B-16 — viewport + </html>: thiếu viewport thì trang vỡ trên điện thoại. Lỗi xác định → tự vá (không 422,
+      // không tốn thêm lượt Gemini); trang cụt (thiếu cả </body></html>) thì 422.
+      const shell = ensureLandingDocumentShell(html);
+      if (shell.fixed.length > 0) {
+        html = shell.html;
+        telemetry.htmlChars = html.length;
+        telemetry.shellFixed = shell.fixed.join(',');
       }
       if (/\{\{[^}]+\}\}/.test(html)) {
         const err = new Error('AI trả về template chưa điền nội dung ({{...}}). Vui lòng thử lại hoặc bổ sung hồ sơ doanh nghiệp để AI có đủ context.');

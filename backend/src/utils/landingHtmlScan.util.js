@@ -126,7 +126,7 @@ function scanInto(s, out, depth) {
       if (isAlpha(s[lt + 2])) {
         const tag = parseTag(s, lt, true);
         if (!tag) return;
-        out.push({ type: 'end', name: tag.name, index: lt });
+        out.push({ type: 'end', name: tag.name, index: lt, end: tag.end, depth });
         i = tag.end;
       } else {
         const gt = s.indexOf('>', lt + 2);
@@ -142,7 +142,7 @@ function scanInto(s, out, depth) {
 
     const tag = parseTag(s, lt, false);
     if (!tag) return;
-    const token = { type: 'start', name: tag.name, attrs: tag.attrs, selfClosing: tag.selfClosing, index: lt };
+    const token = { type: 'start', name: tag.name, attrs: tag.attrs, selfClosing: tag.selfClosing, index: lt, end: tag.end, depth };
     out.push(token);
     i = tag.end;
 
@@ -163,9 +163,11 @@ function scanInto(s, out, depth) {
 
 /**
  * Quét HTML thành dãy token thẻ theo thứ tự xuất hiện.
- * - `{ type: 'start', name, attrs: [[tên, giá trị], …], selfClosing, index, content? }` — `content` chỉ có ở thẻ
- *   chữ thô (script/style/…): đoạn chữ tới `</tên`; token của thẻ nằm TRONG đoạn đó được nối ngay sau.
- * - `{ type: 'end', name, index }`
+ * - `{ type: 'start', name, attrs: [[tên, giá trị], …], selfClosing, index, end, depth, content? }` — `content` chỉ
+ *   có ở thẻ chữ thô (script/style/…): đoạn chữ tới `</tên`; token của thẻ nằm TRONG đoạn đó được nối ngay sau.
+ *   `index`/`end` là vị trí `<` và vị trí ngay sau `>`; chỉ đáng tin khi `depth === 0` (token ở nội dung quét lại
+ *   của thẻ chữ thô có vị trí tính từ đầu đoạn đó).
+ * - `{ type: 'end', name, index, end, depth }`
  * - `{ type: 'overflow', index }` — thẻ chữ thô lồng quá sâu (hình dạng bất thường).
  *
  * Tên thẻ và tên thuộc tính viết thường; giá trị thuộc tính CHƯA giải mã thực thể (dùng `decodeHtmlEntities`).

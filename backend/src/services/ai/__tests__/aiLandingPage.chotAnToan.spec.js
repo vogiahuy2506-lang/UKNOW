@@ -512,3 +512,48 @@ describe('B-12 — generate: form bắt lead phải đủ name/email/phone/marke
     await expect(run()).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/marketingConsent/) });
   });
 });
+
+describe('B-16 — generate: tự vá viewport / </html> cho trang AI quên', () => {
+  let logSpy;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    getContextForLandingAi.mockResolvedValue('');
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => logSpy.mockRestore());
+
+  const VP = '<meta name="viewport" content="width=device-width, initial-scale=1"/>';
+  const run = () => aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+
+  it('thiếu viewport → trả trang đã có viewport sau <head>, 1 lần gọi AI, log shellFixed=viewport, htmlChars là độ dài SAU vá', async () => {
+    const noVp = GOOD_PAGE.replace(VP, '');
+    generateWithBudget.mockResolvedValue(genResponse(noVp));
+    const res = await run();
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(res.html).toContain(`<head>${VP}`);
+    expect(res.html).toBe(noVp.replace('<head>', `<head>${VP}`));
+    const done = doneLogOf(logSpy);
+    expect(done).toContain('shellFixed=viewport');
+    expect(done).toContain(`htmlChars=${res.html.length}`);
+  });
+
+  it('thiếu </html> (còn </body>) → thêm </html>', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE.replace('</html>', '')));
+    const res = await run();
+    expect(res.html.endsWith('</html>')).toBe(true);
+    expect(doneLogOf(logSpy)).toContain('shellFixed=htmlClose');
+  });
+
+  it('trang cụt (thiếu cả </body></html>) → 422, không phát hành', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE.replace('</body></html>', '<p>dở')));
+    await expect(run()).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/cắt dở/) });
+  });
+
+  it('trang đủ → không vá, log không có shellFixed', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE));
+    const res = await run();
+    expect(res.html).toBe(GOOD_PAGE);
+    expect(doneLogOf(logSpy)).not.toContain('shellFixed');
+  });
+});

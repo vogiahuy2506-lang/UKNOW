@@ -13,6 +13,58 @@ export const CAPTURE_FIELD_LABELS = {
   marketingConsent: 'ô đồng ý nhận thông tin',
 };
 
+const VIEWPORT_META = '<meta name="viewport" content="width=device-width, initial-scale=1"/>';
+
+/**
+ * B-16 — trang AI SINH phải có `<meta name="viewport">` (thiếu thì điện thoại vẽ trang như màn hình máy tính
+ * 980px rồi thu nhỏ — trang "vỡ") và kết thúc bằng `</html>`.
+ *   - thiếu viewport → TỰ THÊM ngay sau `<head>` (lỗi xác định, sửa không đổi nội dung, khỏi tốn một lượt Gemini
+ *     và khỏi thêm một lần 422 "vui lòng thử lại"; trang chưa có `<head>` thì bọc một `<head>` mới sau `<html>`);
+ *   - thiếu `</html>` nhưng còn `</body>` → thêm `</html>`;
+ *   - thiếu cả `</body>` lẫn `</html>` → trang bị cắt dở: 422 (không tự vá để khỏi phát hành trang cụt);
+ *   - không có cả `<head>` lẫn `<html>` → 422 (hình dạng bất thường).
+ * CHỈ dùng cho đường sinh mới. Trang đã lưu của khách không bị đụng (viewport tự thêm lúc phục vụ sẽ đổi cách
+ * hiển thị trên điện thoại của trang thiết kế cố định chiều rộng).
+ *
+ * @param {string} html
+ * @returns {{ html: string, fixed: string[] }} `fixed` ⊆ ['viewport', 'htmlClose']
+ * @throws {Error & { status: 422 }}
+ */
+export function ensureLandingDocumentShell(html) {
+  let out = String(html ?? '');
+  const fixed = [];
+  const tokens = scanHtmlTags(out);
+
+  const hasViewport = tokens.some(
+    (t) => t.type === 'start' && t.name === 'meta' && String(getAttr(t, 'name') || '').trim().toLowerCase() === 'viewport'
+  );
+  if (!hasViewport) {
+    const head = tokens.find((t) => t.type === 'start' && t.name === 'head' && t.depth === 0);
+    const htmlTag = tokens.find((t) => t.type === 'start' && t.name === 'html' && t.depth === 0);
+    if (head) {
+      out = out.slice(0, head.end) + VIEWPORT_META + out.slice(head.end);
+    } else if (htmlTag) {
+      out = out.slice(0, htmlTag.end) + `<head>${VIEWPORT_META}</head>` + out.slice(htmlTag.end);
+    } else {
+      const err = new Error('AI sinh trang có cấu trúc HTML bất thường (thiếu <head>, thiếu thẻ viewport). Vui lòng thử lại.');
+      err.status = 422;
+      throw err;
+    }
+    fixed.push('viewport');
+  }
+
+  if (!/<\/html\s*>/i.test(out)) {
+    if (!/<\/body\s*>/i.test(out)) {
+      const err = new Error('AI sinh trang bị cắt dở (thiếu thẻ đóng </body></html>). Hãy thử lại hoặc rút ngắn yêu cầu.');
+      err.status = 422;
+      throw err;
+    }
+    out = `${out.replace(/\s+$/, '')}\n</html>`;
+    fixed.push('htmlClose');
+  }
+  return { html: out, fixed };
+}
+
 /**
  * Đọc form bắt lead `data-founderai-capture` trong html: tên các ô input/textarea/select nằm TRONG form, và tình
  * trạng ô `marketingConsent` (tick sẵn? không phải hộp tick?).
