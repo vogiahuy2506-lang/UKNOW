@@ -139,6 +139,29 @@ class ChatbotRateLimitService {
     return envInt('CHATBOT_RATE_LIMIT_PER_CHATBOT_PER_HOUR', 500);
   }
 
+  // ── Trần chat CÔNG KHAI không phụ thuộc client (A P0-4, PLAN_SUA_AI_DOT4_PR5) — xem checkPublicVisitor ──
+
+  /**
+   * Tin / 10 phút / (IP + chatbot). Cùng cỡ trần theo người gửi (8/phút, 20/giờ, 50/ngày) nhưng cho phép vài khách chung
+   * một IP (văn phòng NAT, 4G): một khách thật hiếm khi quá ~2 tin/phút liên tục, nên 20 tin/10 phút chạm là dấu hiệu script.
+   */
+  get publicPerIpPer10Min() {
+    return envInt('PUBLIC_CHAT_PER_IP_PER_10MIN', 20);
+  }
+
+  /** Tin / ngày / (IP + chatbot): gấp đôi trần ngày theo người gửi (50) để hai khách cùng IP không chặn nhau. */
+  get publicPerIpPerDay() {
+    return envInt('PUBLIC_CHAT_PER_IP_PER_DAY', 100);
+  }
+
+  /**
+   * Tin khách / ngày / chatbot, TỔNG mọi IP ẩn danh. Đo production 04/10 (60 ngày): cao nhất 16 tin khách/ngày/widget
+   * → 300 rộng gần 20 lần cho khách thật, mà chặn được đợt đốt credit dàn nhiều IP / đổi sessionId.
+   */
+  get publicDailyCapPerChatbot() {
+    return envInt('PUBLIC_CHAT_DAILY_CAP_PER_CHATBOT', 300);
+  }
+
   /** Live system limits (from env) — for owner-facing UI. */
   get systemLimits() {
     return {
@@ -534,6 +557,52 @@ class ChatbotRateLimitService {
     }
 
     return { allowed: true, shouldNotify: false, staticReply };
+  }
+
+  /**
+   * Trần chat CÔNG KHAI không phụ thuộc client (A P0-4). Gọi TRƯỚC `checkBeforeAi` ở hai đường chat công khai (widget theo key,
+   * trang /chat theo id) và TRƯỚC mọi việc tốn tiền: bị chặn thì không gọi Gemini, không kiểm/trừ credit, không lưu tin.
+   *
+   * Vì sao cần ngoài `checkBeforeAi`: bộ đếm theo người gửi khoá bằng `sessionId` do client tự đặt → script đổi sessionId mỗi
+   * request né hết. Ở đây khoá theo thứ client KHÔNG giả được: IP (nhóm IPv6 theo khối) + chatbot, và tổng theo chatbot.
+   *
+   * Thứ tự: IP+chatbot 10 phút → IP+chatbot ngày → chatbot ngày. Chặn sớm KHÔNG cộng bộ đếm sau, nên một IP bị chặn không
+   * ăn dần trần chung của chatbot (khách thật khỏi bị kẻ lạ làm cạn trần ngày).
+   *
+   * @param {{ chatbotId: number|string, ipKey: string }} scope
+   * @returns {Promise<{ allowed: true } | { allowed: false, reason: 'public_ip_burst'|'public_ip_day'|'public_chatbot_day', count: number, limit: number }>}
+   */
+  async checkPublicVisitor({ chatbotId, ipKey }) {
+    const bot = String(chatbotId ?? '').trim() || 'unknown';
+    const ip = String(ipKey ?? '').trim() || 'unknown';
+
+    const burstLimit = this.publicPerIpPer10Min;
+    const burst = await this.incrWithTtl(`cbrl:pub:ip:${bot}:${ip}:10m`, 600);
+    if (burst > burstLimit) {
+      return this._publicBlocked('public_ip_burst', { bot, count: burst, limit: burstLimit, ip });
+    }
+
+    const dayLimit = this.publicPerIpPerDay;
+    const ipDay = await this.incrWithTtl(`cbrl:pub:ip:${bot}:${ip}:d:${vnDayKey()}`, DAY_COUNTER_TTL_SEC);
+    if (ipDay > dayLimit) {
+      return this._publicBlocked('public_ip_day', { bot, count: ipDay, limit: dayLimit, ip });
+    }
+
+    const capLimit = this.publicDailyCapPerChatbot;
+    const botDay = await this.incrWithTtl(`cbrl:pub:bot:${bot}:d:${vnDayKey()}`, DAY_COUNTER_TTL_SEC);
+    if (botDay > capLimit) {
+      return this._publicBlocked('public_chatbot_day', { bot, count: botDay, limit: capLimit, ip });
+    }
+
+    return { allowed: true };
+  }
+
+  /** Một dòng log MỖI lần vượt trần đầu tiên của từng thùng (không spam): dấu vết để vận hành đo trần có chạm thật không. */
+  _publicBlocked(reason, { bot, count, limit, ip }) {
+    if (count === limit + 1) {
+      console.warn(`[PublicChatCap] ${reason} chatbot=${bot} limit=${limit}${reason === 'public_chatbot_day' ? '' : ` ip=${ip}`}`);
+    }
+    return { allowed: false, reason, count, limit };
   }
 
   /** Test helper — clear memory counters + force memory path (no Redis/DB). */

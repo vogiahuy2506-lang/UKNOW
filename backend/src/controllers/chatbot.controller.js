@@ -48,6 +48,12 @@ import { extractContacts } from '../utils/contactDetect.util.js';
 import { buildContactAck } from '../utils/contactAck.util.js';
 import chatbotContactAlertRepository from '../repositories/chatbot/chatbotContactAlert.repository.js';
 import { sanitizePublicChatHistory, validatePublicChatMessage } from '../utils/publicChatInput.util.js';
+import {
+  PUBLIC_CHAT_LIMITED_CODE,
+  buildPublicChatLimitedError,
+  buildPublicVisitorSenderKey,
+  getPublicChatIpKey,
+} from '../utils/publicChatCaps.util.js';
 import { handleAiUnavailable } from '../services/chatbot/aiUnavailableNotice.service.js';
 import { AI_UNAVAILABLE_SOURCE, AI_UNAVAILABLE_REASON, AI_OUTSIDE_HOURS_SOURCE, classifyAiFailure } from '../utils/aiUnavailable.util.js';
 
@@ -70,7 +76,7 @@ function isAiTokenLimitError(error) {
  * Mã lỗi mà CHÍNH mình ném kèm câu tiếng Việt viết sẵn cho khách cuối (customChat.chat: TIMEOUT/UPSTREAM_ERROR; lõi Gemini:
  * AI_PROVIDER_BUSY/AI_TIMEOUT). Mọi lỗi 5xx khác có thể mang câu Postgres/Google tiếng Anh nên không được đưa ra.
  */
-const PUBLIC_CHAT_SAFE_ERROR_CODES = new Set(['TIMEOUT', 'UPSTREAM_ERROR', 'AI_PROVIDER_BUSY', 'AI_TIMEOUT']);
+const PUBLIC_CHAT_SAFE_ERROR_CODES = new Set(['TIMEOUT', 'UPSTREAM_ERROR', 'AI_PROVIDER_BUSY', 'AI_TIMEOUT', PUBLIC_CHAT_LIMITED_CODE]);
 
 /**
  * Thân lỗi trả cho KHÁCH CUỐI của widget / trang chatbot công khai (A P3-3, 03/10/2026). Bản cũ trả thẳng `err.message`
@@ -88,6 +94,21 @@ function buildPublicChatErrorBody(err) {
     message: (isClientError || hasSafeCode) && err?.message ? err.message : PUBLIC_CHATBOT_FALLBACK_CONTENT,
     ...(hasSafeCode ? { code: err.code } : {}),
   };
+}
+
+/**
+ * Trần chat công khai KHÔNG phụ thuộc client (A P0-4): IP + chatbot (10 phút, ngày) và tổng ngày theo chatbot — xem
+ * chatbotRateLimit.service.checkPublicVisitor. Gọi sau khi biết chatbot, TRƯỚC checkBeforeAi / kiểm credit / lưu tin / gọi
+ * Gemini. Trả `null` nếu được đi tiếp, ngược lại `{ status: 429, body }` (cùng khuôn buildPublicChatErrorBody) để trả thẳng.
+ */
+async function checkPublicVisitorCaps(req, chatbot) {
+  const check = await chatbotRateLimitService.checkPublicVisitor({
+    chatbotId: chatbot.id,
+    ipKey: getPublicChatIpKey(req),
+  });
+  if (check.allowed) return null;
+  const err = buildPublicChatLimitedError(check.reason);
+  return { status: err.status, body: buildPublicChatErrorBody(err) };
 }
 
 function kbErrorStatus(error) {
@@ -1714,6 +1735,10 @@ class ChatbotController {
       });
 
       if (activeHoursCheck.allowed) {
+        // Trần theo IP + chatbot và tổng ngày/chatbot — client đổi sessionId mỗi request cũng không né được (A P0-4).
+        const capped = await checkPublicVisitorCaps(req, chatbot);
+        if (capped) return res.status(capped.status).json(capped.body);
+
         const rate = await chatbotRateLimitService.checkBeforeAi({
           channel: 'web',
           ownerUserId: chatbot.id_user,
@@ -2013,11 +2038,22 @@ class ChatbotController {
       });
 
       if (activeHoursCheck.allowed) {
+        // Trần theo IP + chatbot và tổng ngày/chatbot — client đổi sessionId mỗi request cũng không né được (A P0-4).
+        const capped = await checkPublicVisitorCaps(req, chatbot);
+        if (capped) return res.status(capped.status).json(capped.body);
+
+        // Không có sessionId thì khoá người gửi theo IP + chatbot (trước: `visitorSessionId` ngẫu nhiên mỗi request → trần
+        // 8/phút - 50/ngày không bao giờ chạm). `visitorSessionId` vẫn ngẫu nhiên: nó định danh hội thoại, không phải bộ đếm.
+        const limitSenderKey = buildPublicVisitorSenderKey({
+          clientSessionId,
+          chatbotId: chatbot.id,
+          ipKey: getPublicChatIpKey(req),
+        });
         const rate = await chatbotRateLimitService.checkBeforeAi({
           channel: 'web',
           ownerUserId: chatbotUserId,
           chatbotId: chatbot.id,
-          senderKey: visitorSessionId,
+          senderKey: limitSenderKey,
         });
         if (!rate.allowed) {
           const content = rate.shouldNotify ? rate.staticReply : null;
@@ -2026,7 +2062,7 @@ class ChatbotController {
               channel: 'web',
               ownerUserId: chatbotUserId,
               chatbotId: chatbot.id,
-              senderKey: visitorSessionId,
+              senderKey: limitSenderKey,
               reason: rate.reason,
             });
           }

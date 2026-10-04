@@ -9,6 +9,7 @@ const maybeSetWebChatVisitorNameFromMessage = jest.fn();
 const getAgentWebChatMessagesForSession = jest.fn();
 
 const checkBeforeAi = jest.fn();
+const checkPublicVisitor = jest.fn();
 const isAiPaused = jest.fn();
 const chat = jest.fn();
 const assertAvailable = jest.fn();
@@ -51,7 +52,7 @@ jest.unstable_mockModule('../../services/chatbot/aiUnavailableNotice.service.js'
 }));
 jest.unstable_mockModule('../../services/chatbot/chatbotRateLimit.service.js', () => ({
   // hasKey/setKeyWithTtl: kho khoá có TTL mà chatbotActiveHours.service (thật) dùng để nhớ "đã gửi câu ngoài giờ".
-  default: { checkBeforeAi, markRateLimitNotified: jest.fn(), hasKey: jest.fn(async () => false), setKeyWithTtl: jest.fn(async () => {}) },
+  default: { checkBeforeAi, checkPublicVisitor, markRateLimitNotified: jest.fn(), hasKey: jest.fn(async () => false), setKeyWithTtl: jest.fn(async () => {}) },
 }));
 jest.unstable_mockModule('../../repositories/ai/unifiedInbox.repository.js', () => ({
   default: { isAiPaused },
@@ -111,6 +112,11 @@ const makeRes = () => {
   };
   return res;
 };
+
+// Trần công khai theo IP + chatbot (A P0-4): mặc định cho đi; ca riêng ở describe "A P0-4" bên dưới.
+beforeEach(() => {
+  checkPublicVisitor.mockResolvedValue({ allowed: true });
+});
 
 describe('chatbot.controller webchat widget resolve', () => {
   beforeEach(() => {
@@ -332,6 +338,118 @@ describe('A P1-5 — id số chỉ khớp chatbot có allow_public_numeric_id = 
     const res = makeRes();
     await chatbotController.getPublicChatbotById({ params: { chatbotId: '73' } }, res);
     expect(res.status).toHaveBeenCalledWith(404);
+  });
+});
+
+// A P0-4 (04/10/2026): trần theo người gửi khoá bằng sessionId do CLIENT tự đặt nên đổi sessionId mỗi request là né hết, và trang
+// theo id không gửi sessionId thì khoá ngẫu nhiên mỗi request. Thêm trần IP + chatbot / tổng ngày chatbot (không có sessionId).
+describe('A P0-4 — trần chat công khai không phụ thuộc client', () => {
+  const bot = { id: 12, id_user: 7, name: 'Bot', widget_key: 'wk_abc', allow_public_numeric_id: true };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(bot);
+    findChatbotByWidgetKey.mockResolvedValue(bot);
+    checkPublicVisitor.mockResolvedValue({ allowed: true });
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    isAiPaused.mockResolvedValue(false);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'xin chào' });
+    consume.mockResolvedValue(undefined);
+  });
+
+  const blockedBy = (reason) => ({ allowed: false, reason, count: 21, limit: 20 });
+  const byId = (over = {}) => ({
+    ip: '203.0.113.7',
+    params: { chatbotId: '12' },
+    body: { message: 'hi', sessionId: 'sess_a', history: [] },
+    ...over,
+  });
+  const byKey = (over = {}) => ({
+    ip: '203.0.113.7',
+    params: { widgetKey: 'wk_abc' },
+    body: { message: 'hi', sessionId: 'sess_a', history: [] },
+    ...over,
+  });
+
+  it.each([
+    ['trang theo id', (req, res) => chatbotController.chatWithCustomChatbotById(req, res), byId],
+    ['widget theo key', (req, res) => chatbotController.chatWithCustomChatbot(req, res), byKey],
+  ])('%s: chạm trần → 429 + câu tiếng Việt + code, KHÔNG gọi AI, KHÔNG kiểm/trừ credit, KHÔNG lưu tin, KHÔNG đếm bộ đếm người gửi', async (_label, call, makeReq) => {
+    checkPublicVisitor.mockResolvedValue(blockedBy('public_chatbot_day'));
+    const res = makeRes();
+    await call(makeReq(), res);
+
+    expect(res.status).toHaveBeenCalledWith(429);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toEqual({
+      success: false,
+      message: expect.stringContaining('Hôm nay'),
+      code: 'PUBLIC_CHAT_LIMITED',
+    });
+    expect(chat).not.toHaveBeenCalled();
+    expect(assertAvailable).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+    expect(addWebChatMessage).not.toHaveBeenCalled();
+    expect(getOrCreateWebChatConversation).not.toHaveBeenCalled();
+    expect(checkBeforeAi).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['public_ip_burst', 'chờ vài phút'],
+    ['public_ip_day', 'ngày mai'],
+    ['public_chatbot_day', 'liên hệ trực tiếp'],
+  ])('lý do %s → câu riêng cho khách (có "%s")', async (reason, fragment) => {
+    checkPublicVisitor.mockResolvedValue(blockedBy(reason));
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(byId(), res);
+    expect(res.json.mock.calls[0][0].message).toContain(fragment);
+  });
+
+  it('kiểm trần theo (chatbot, IP của request): hai IP → hai khoá khác nhau; cùng IP + đổi sessionId → CÙNG khoá', async () => {
+    await chatbotController.chatWithCustomChatbotById(byId({ ip: '203.0.113.7', body: { message: 'a', sessionId: 'sess_1', history: [] } }), makeRes());
+    await chatbotController.chatWithCustomChatbotById(byId({ ip: '203.0.113.7', body: { message: 'b', sessionId: 'sess_2', history: [] } }), makeRes());
+    await chatbotController.chatWithCustomChatbotById(byId({ ip: '198.51.100.9' }), makeRes());
+    await chatbotController.chatWithCustomChatbot(byKey({ ip: '203.0.113.7', body: { message: 'c', sessionId: 'sess_3', history: [] } }), makeRes());
+
+    const scopes = checkPublicVisitor.mock.calls.map(([scope]) => scope);
+    expect(scopes).toEqual([
+      { chatbotId: 12, ipKey: '203.0.113.7' },
+      { chatbotId: 12, ipKey: '203.0.113.7' },
+      { chatbotId: 12, ipKey: '198.51.100.9' },
+      { chatbotId: 12, ipKey: '203.0.113.7' },
+    ]);
+  });
+
+  it('trang theo id KHÔNG gửi sessionId: khoá người gửi theo IP + chatbot, ỔN ĐỊNH giữa các request (trước: ngẫu nhiên mỗi lần)', async () => {
+    const noSession = (ip) => byId({ ip, body: { message: 'hi', history: [] } });
+    await chatbotController.chatWithCustomChatbotById(noSession('203.0.113.7'), makeRes());
+    await chatbotController.chatWithCustomChatbotById(noSession('203.0.113.7'), makeRes());
+    await chatbotController.chatWithCustomChatbotById(noSession('198.51.100.9'), makeRes());
+
+    const keys = checkBeforeAi.mock.calls.map(([arg]) => arg.senderKey);
+    expect(keys).toHaveLength(3);
+    expect(keys[0]).toBe(keys[1]);
+    expect(keys[0]).not.toBe(keys[2]);
+    expect(keys[0]).toContain('203.0.113.7');
+    expect(keys[0]).not.toMatch(/^pub_\d+_/); // không còn dạng ngẫu nhiên pub_<timestamp>_<random>
+  });
+
+  it('trang theo id CÓ sessionId: khoá người gửi vẫn là sessionId (khách thật không bị gộp theo IP)', async () => {
+    await chatbotController.chatWithCustomChatbotById(byId({ body: { message: 'hi', sessionId: 'sess_real', history: [] } }), makeRes());
+    expect(checkBeforeAi.mock.calls[0][0].senderKey).toBe('sess_real');
+  });
+
+  it('ngoài khung giờ hoạt động: không đếm trần công khai (câu tĩnh không gọi Gemini)', async () => {
+    findChatbotById.mockResolvedValue({ ...bot, replies_enabled: false });
+    await chatbotController.chatWithCustomChatbotById(byId(), makeRes());
+    expect(checkPublicVisitor).not.toHaveBeenCalled();
+    expect(chat).not.toHaveBeenCalled();
   });
 });
 
