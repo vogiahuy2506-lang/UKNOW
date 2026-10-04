@@ -58,7 +58,7 @@ function buildToday(channelTotals, date) {
   };
 }
 
-/** 10 lượt mới nhất + số đã gửi / chưa gửi được của từng lượt (cộng mọi kênh của lượt, đọc từ bảng tin). */
+/** Lượt đang chạy (ghim lên đầu) + 10 lượt mới nhất, kèm số đã gửi / chưa gửi được của từng lượt (cộng mọi kênh của lượt, đọc từ bảng tin). */
 async function loadRecentRuns(scope, ownerId) {
   const rows = await userDeliveryMonitorRepository.listRecentRuns({ ownerId, limit: RECENT_RUNS_LIMIT });
   const totals = await sendStats.getRunTotals(scope, rows.map((row) => Number(row.id)));

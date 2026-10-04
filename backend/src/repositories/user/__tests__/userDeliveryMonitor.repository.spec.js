@@ -25,11 +25,13 @@ describe('listRecentRuns', () => {
     expect(flat(mockQuery.mock.calls[0][0])).toContain('cr.started_at::timestamptz AS started_at');
   });
 
-  it('phạm vi COALESCE(workspace_owner_id, id_user) = chủ; mới nhất trước; tham số [chủ, giới hạn]', async () => {
+  it('phạm vi COALESCE(workspace_owner_id, id_user) = chủ; lượt đang chạy ghim đầu rồi mới nhất trước; tham số [chủ, giới hạn]', async () => {
     await repository.listRecentRuns({ ownerId: 39, limit: 10 });
     const [sql, params] = mockQuery.mock.calls[0];
     expect(flat(sql)).toContain('WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1');
-    expect(flat(sql)).toContain('ORDER BY cr.started_at DESC, cr.id DESC LIMIT $2');
+    expect(flat(sql)).toContain("ORDER BY (cr.status = 'running') DESC, cr.started_at DESC, cr.id DESC LIMIT $2::int + (");
+    expect(flat(sql)).toContain("SELECT LEAST(50, COUNT(*))::int FROM campaign_runs r2");
+    expect(flat(sql)).toContain("WHERE COALESCE(c2.workspace_owner_id, c2.id_user) = $1 AND r2.status = 'running'");
     expect(params).toEqual([39, 10]);
   });
 

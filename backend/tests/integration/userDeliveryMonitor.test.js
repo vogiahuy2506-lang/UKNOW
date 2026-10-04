@@ -371,12 +371,14 @@ describe('GET /api/delivery-monitor/overview — lượt đang chờ, đang gử
       await createContext(owner.id, { campaign: { name: `Xong ${i}` }, run: { status: 'completed', startedAt: `NOW() - interval '${i + 1} hours'` } });
     }
     const { data } = (await getOverview(owner)).body;
-    expect(data.runs).toHaveLength(10);
-    expect(data.runs.some((run) => run.campaignName === 'Liên tục cũ')).toBe(false); // ngoài 10 lượt mới nhất
+    // Lượt đang chạy được GHIM lên đầu bảng (dòng "Dự kiến xong" chỉ hiện cho lượt running) + 10 lượt mới nhất còn lại.
+    // Bản cũ chỉ lấy 10 lượt mới nhất → lượt chạy nhiều ngày bị đẩy khỏi bảng (prod 04/10: user 39, 4 lượt running vắng mặt).
+    expect(data.runs).toHaveLength(11);
+    expect(data.runs[0]).toMatchObject({ campaignName: 'Liên tục cũ', status: 'running' });
     expect(data.waiting).toEqual({ count: 1, first: { campaignName: 'Liên tục cũ', waitingReason: 'quiet_hours', waitingUntil: until } });
     expect(data.running).toBe(0);
-    // Mới nhất trước.
-    expect(data.runs.map((run) => run.campaignName)).toEqual(Array.from({ length: 10 }, (_, i) => `Xong ${i}`));
+    // Sau lượt ghim: mới nhất trước.
+    expect(data.runs.slice(1).map((run) => run.campaignName)).toEqual(Array.from({ length: 10 }, (_, i) => `Xong ${i}`));
   });
 });
 

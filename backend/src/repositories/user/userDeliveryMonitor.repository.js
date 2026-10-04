@@ -18,7 +18,9 @@ import { runCountersReliableSql } from '../../utils/runDisplay.util.js';
 
 class UserDeliveryMonitorRepository {
   /**
-   * `limit` lượt chạy mới nhất của chủ, kèm mốc/lý do chờ. `deferred_*` là giá trị THÔ trong run_metadata; người
+   * Mọi lượt ĐANG CHẠY của chủ (ghim lên đầu, tối đa 50) + `limit` lượt mới nhất còn lại, kèm mốc/lý do chờ. Lượt đang chạy
+   * là thứ cần theo dõi (dòng "Dự kiến xong" chỉ hiện cho lượt running); bản cũ chỉ lấy `limit` lượt mới nhất nên lượt chạy
+   * nhiều ngày bị các lượt ngắn mới hơn đẩy khỏi bảng (prod 04/10: user 39 có 4 lượt running từ 01/10, không lượt nào hiện). `deferred_*` là giá trị THÔ trong run_metadata; người
    * gọi tự kiểm mốc còn ở tương lai và trạng thái `running`.
    *
    * @param {{ ownerId: number, limit: number }} input
@@ -44,8 +46,14 @@ class UserDeliveryMonitorRepository {
        FROM campaign_runs cr
        JOIN campaigns c ON c.id = cr.id_campaign
        WHERE COALESCE(c.workspace_owner_id, c.id_user) = $1
-       ORDER BY cr.started_at DESC, cr.id DESC
-       LIMIT $2`,
+       ORDER BY (cr.status = 'running') DESC, cr.started_at DESC, cr.id DESC
+       LIMIT $2::int + (
+         SELECT LEAST(50, COUNT(*))::int
+           FROM campaign_runs r2
+           JOIN campaigns c2 ON c2.id = r2.id_campaign
+          WHERE COALESCE(c2.workspace_owner_id, c2.id_user) = $1
+            AND r2.status = 'running'
+       )`,
       [ownerId, limit]
     );
     return rows;
