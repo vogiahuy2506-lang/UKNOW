@@ -2494,13 +2494,22 @@ class ZaloSettingsController {
    *
    * @param {number} userId
    * @param {string|number} accountId
+   * @param {object} [workspaceContext] `getWorkspaceContext(req.user)` — người gọi PHẢI truyền (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_
+   *   NHAN_VIEN PR-G3): nhân viên chỉ dùng được tài khoản được giao. Thiếu ngữ cảnh → `getAccessibleZaloAccountIds` trả [] =
+   *   chặn hết (hỏng thì chặn); chỉ chủ / super admin mới ra `null` = không lọc.
+   * @param {number[]|null} [accessibleAccountIds] đã tính sẵn bằng `getAccessibleZaloAccountIds` (thắng `workspaceContext`
+   *   khi truyền) — tránh đọc việc giao hai lần khi người gọi đã kiểm trước.
    * @returns {Promise<{account: object, api: any}>}
    */
-  async resolvePreviewAccountAndApi({ userId, roleCode, accountId }) {
+  async resolvePreviewAccountAndApi({ userId, roleCode, accountId, workspaceContext, accessibleAccountIds }) {
+    const accessibleIds = accessibleAccountIds !== undefined
+      ? accessibleAccountIds
+      : await getAccessibleZaloAccountIds(workspaceContext);
     const account = await campaignZaloSenderService.getCampaignZaloAccount({
       userId,
       accountId,
       roleCode,
+      accessibleAccountIds: accessibleIds,
     });
     const api = await campaignZaloSenderService.getConnectedApiOrSyncStatus({
       accountId: account.id,
@@ -2520,7 +2529,8 @@ class ZaloSettingsController {
    */
   async previewSendPersonalMessage(req, res) {
     try {
-      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const previewCtx = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId: userId } = previewCtx;
       const accountId = req.body?.accountId;
       const message = String(req.body?.message || '').trim();
       const recipientType = String(req.body?.recipientType || 'phone').trim().toLowerCase() === 'uid'
@@ -2540,6 +2550,7 @@ class ZaloSettingsController {
         userId,
         roleCode: req.user?.role,
         accountId,
+        workspaceContext: previewCtx,
       });
       const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(
         templateAttachments,
@@ -2881,7 +2892,8 @@ class ZaloSettingsController {
    */
   async previewSendFriendRequest(req, res) {
     try {
-      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const previewCtx = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId: userId } = previewCtx;
       const accountId = req.body?.accountId;
       const message = String(req.body?.message || '').trim();
       const recipients = Array.isArray(req.body?.recipients) ? req.body.recipients : [];
@@ -2897,6 +2909,7 @@ class ZaloSettingsController {
         userId,
         roleCode: req.user?.role,
         accountId,
+        workspaceContext: previewCtx,
       });
 
       const items = [];
@@ -3171,7 +3184,8 @@ class ZaloSettingsController {
    */
   async previewSendGroupMessage(req, res) {
     try {
-      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const previewCtx = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId: userId } = previewCtx;
       const accountId = req.body?.accountId;
       const message = String(req.body?.message || '').trim();
       const groupIds = Array.isArray(req.body?.groupIds) ? req.body.groupIds : [];
@@ -3184,6 +3198,7 @@ class ZaloSettingsController {
         userId,
         roleCode: req.user?.role,
         accountId,
+        workspaceContext: previewCtx,
       });
       const groupIdSet = await campaignZaloSenderService.getAllGroupIdSet(api);
       /**
@@ -3504,7 +3519,8 @@ class ZaloSettingsController {
    */
   async previewGetAllFriends(req, res) {
     try {
-      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const previewCtx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = previewCtx;
       const accountId = req.query?.accountId;
       const count = Number.isFinite(parseInt(req.query?.count, 10))
         ? parseInt(req.query.count, 10)
@@ -3516,6 +3532,7 @@ class ZaloSettingsController {
         userId,
         roleCode: req.user?.role,
         accountId,
+        workspaceContext: previewCtx,
       });
       const friendItems = await campaignZaloSenderService.getAllFriendsWithRetry(api, count, page);
       const items = await campaignZaloSenderService.normalizeFriendsWithProfileLookup(api, friendItems);
@@ -3531,6 +3548,9 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewGetAllFriends error:', error);
+      if (isZaloAccountNotAssignedError(error)) {
+        return res.status(403).json({ success: false, message: error.message, code: error.code });
+      }
       return res.status(400).json({
         success: false,
         message: error?.message || 'Không thể tải danh sách bạn bè Zalo',
@@ -3549,12 +3569,14 @@ class ZaloSettingsController {
    */
   async previewGetAllGroups(req, res) {
     try {
-      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const previewCtx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = previewCtx;
       const accountId = req.query?.accountId;
       const { account, api } = await this.resolvePreviewAccountAndApi({
         userId,
         roleCode: req.user?.role,
         accountId,
+        workspaceContext: previewCtx,
       });
       const groupResp = await campaignZaloSenderService.getAllGroupsWithRetry(api);
       const baseItems = campaignZaloSenderService.extractGroupsFromResponse(groupResp);
@@ -3572,6 +3594,9 @@ class ZaloSettingsController {
       });
     } catch (error) {
       console.error('previewGetAllGroups error:', error);
+      if (isZaloAccountNotAssignedError(error)) {
+        return res.status(403).json({ success: false, message: error.message, code: error.code });
+      }
       return res.status(400).json({
         success: false,
         message: error?.message || 'Không thể tải danh sách nhóm Zalo',

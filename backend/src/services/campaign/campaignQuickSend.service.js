@@ -23,6 +23,11 @@ import {
 } from '../quota/sendQuotaKey.service.js';
 import { recordDirectSendUsage } from '../../utils/userSendLimit.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
+import {
+  getAccessibleZaloAccountIds,
+  isZaloAccountAccessible,
+} from '../user/memberChannelAccess.service.js';
+import { createZaloNotAssignedError } from './campaignZaloAccess.service.js';
 import { classifyZaloSendError } from '../../utils/zaloSendErrorClassifier.util.js';
 import { normalizePhoneForZaloCampaign } from '../../utils/zaloPhoneCampaign.util.js';
 
@@ -41,12 +46,14 @@ class CampaignQuickSendService {
    * @param {string|number} [params.accountId]
    * @param {Array} [params.attachments]
    * @param {string} [params.htmlContent]
+   * @param {object} [params.workspaceContext] `getWorkspaceContext(req.user)` — bắt buộc cho kênh Zalo (kiểm tài khoản được giao)
    * @param {object} [options]
    * @returns {Promise<object>}
    */
   async sendQuickTestMessage({
     actorUserId,
     workspaceOwnerId,
+    workspaceContext,
     roleCode,
     channel,
     recipient,
@@ -107,6 +114,14 @@ class CampaignQuickSendService {
     // P12 — gói của chủ workspace không có kênh Zalo -> 403 CHANNEL_NOT_IN_PLAN (trước giờ yên lặng/tài khoản/hạn mức).
     await assertChannelEntitled({ channel: 'zalo', ownerUserId: workspaceOwnerId });
 
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ gửi thử bằng tài khoản được giao (null = chủ / super
+    // admin). Thiếu `workspaceContext` thì `getAccessibleZaloAccountIds` trả [] (hỏng thì chặn): gọi nội bộ phải truyền
+    // ngữ cảnh. Kiểm TRƯỚC giờ yên lặng để nhân viên không biết giờ yên lặng thay vì lý do thật.
+    const accessibleAccountIds = await getAccessibleZaloAccountIds(workspaceContext);
+    if (!isZaloAccountAccessible(accountId, accessibleAccountIds)) {
+      throw createZaloNotAssignedError();
+    }
+
     // 1. Check quiet hours before outbound Zalo send
     const limiter = campaignRunService.zaloRateLimiter;
     const nextAllowedSendAt = limiter?.computeNextAllowedSendAtByQuietHours
@@ -127,6 +142,7 @@ class CampaignQuickSendService {
       userId: workspaceOwnerId,
       roleCode,
       accountId,
+      accessibleAccountIds,
     });
 
     const preparedAttachments = await campaignZaloSenderService.prepareZaloAttachmentSources(

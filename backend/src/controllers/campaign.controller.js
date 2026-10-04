@@ -1304,7 +1304,8 @@ class CampaignController {
    */
   async testSendQuickCampaign(req, res) {
     try {
-      const { actorUserId, workspaceOwnerId } = getWorkspaceContext(req.user);
+      const workspaceContext = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId } = workspaceContext;
       const channel = String(req.body.channel || 'email').trim().toLowerCase();
       const recipient = String(req.body.recipient || '').trim();
       const message = String(req.body.message || '').trim();
@@ -1321,6 +1322,8 @@ class CampaignController {
       const result = await campaignQuickSendService.sendQuickTestMessage({
         actorUserId,
         workspaceOwnerId,
+        // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3: kênh Zalo chỉ gửi thử bằng tài khoản được giao cho người bấm.
+        workspaceContext,
         roleCode: req.user?.role,
         channel,
         recipient,

@@ -7,6 +7,8 @@ import { ThreadType, Zalo } from 'zca-js';
 import zaloAccountSessionService from '../zalo/zaloAccountSession.service.js';
 import { executeWithZaloTimeoutRetry } from '../../utils/zaloTimeoutRetry.util.js';
 import { isAdminRole } from '../../utils/roleScope.util.js';
+import { isZaloAccountAccessible } from '../user/memberChannelAccess.service.js';
+import { createZaloNotAssignedError } from './campaignZaloAccess.service.js';
 import outboundMessageQueueService, {
   OUTBOUND_MESSAGE_JOB_TYPES,
 } from '../queue/outboundMessageQueue.service.js';
@@ -1678,16 +1680,30 @@ class CampaignZaloSenderService {
   /**
    * Validate and load one Zalo account row for campaign owner.
    *
+   * `accessibleAccountIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): danh sách tài khoản người thao tác ĐƯỢC GIAO
+   * — `getAccessibleZaloAccountIds` / `resolveZaloAccessScope`. Mảng → tài khoản ngoài danh sách bị chặn bằng 403
+   * `ZALO_ACCOUNT_NOT_ASSIGNED` TRƯỚC khi đụng DB (id không tồn tại và id chưa giao cùng một lỗi, không lộ id nào có thật).
+   * `null` / bỏ trống = không lọc (chủ, super admin, luồng hệ thống). Giá trị khác mảng và khác null → coi là chặn.
+   * Đây là điểm nghẽn chung của preview, gửi thử Gửi nhanh và MỌI bước gửi lúc chạy chiến dịch — người gọi phải TRUYỀN
+   * giá trị đã tính (campaignRun giữ một bản cho cả lượt chạy), hàm này không tự đoán người thao tác.
+   *
    * @param {object} input
    * @returns {Promise<object>}
    */
-  async getCampaignZaloAccount({ userId, accountId, roleCode }) {
+  async getCampaignZaloAccount({ userId, accountId, roleCode, accessibleAccountIds }) {
     const normalizedId = Number.isFinite(parseInt(accountId, 10))
       ? parseInt(accountId, 10)
       : null;
     const isAdmin = isAdminRole(roleCode);
     if (!normalizedId) {
       throw new Error('Chưa chọn tài khoản Zalo gửi');
+    }
+    if (
+      accessibleAccountIds !== undefined
+      && accessibleAccountIds !== null
+      && !isZaloAccountAccessible(normalizedId, accessibleAccountIds)
+    ) {
+      throw createZaloNotAssignedError();
     }
 
     const account = await campaignZaloSenderRepository.findCampaignZaloAccount(normalizedId, userId, isAdmin);

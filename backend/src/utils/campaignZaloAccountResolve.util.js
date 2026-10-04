@@ -121,4 +121,47 @@ export function resolveZaloAccountEntries(nodes) {
   return entries;
 }
 
-export default { getNodeOwnZaloAccountSpec, resolveZaloAccountEntries, isTruthyConfigFlag, uniqueNonEmptyIds };
+/**
+ * Mọi id tài khoản Zalo mà cấu hình các node Zalo CÓ NHẮC TỚI — bất kể engine có dùng thật hay không (bỏ cờ pool, id
+ * sót lại, `get_all_friends` / `get_all_groups` kèm `zaloAccountId` riêng…). Dùng cho kiểm quyền LÚC LƯU chiến dịch của
+ * nhân viên (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): ở đó phải bảo thủ — không để nhân viên cài sẵn một id chưa
+ * được giao rồi bật cờ sau. Khác `resolveZaloAccountEntries` (mô phỏng đúng thứ tự ưu tiên của engine, dùng cho preflight
+ * / ước tính kết nối) — hai hàm trả lời hai câu hỏi khác nhau, đừng gộp.
+ *
+ * Thuần: không DB.
+ *
+ * @param {Array<{ node_subtype?: string, nodeSubtype?: string, config?: object }>} nodes
+ * @returns {number[]} id số nguyên dương, không trùng, theo thứ tự xuất hiện
+ */
+export function collectReferencedZaloAccountIds(nodes) {
+  const found = new Set();
+  const add = (raw) => {
+    // Cùng phép đọc với engine (`getCampaignZaloAccount` dùng parseInt): "5abc" / "05" / 5.9 cũng thành 5 ở lúc gửi, nên phải
+    // bị tính ở đây — đọc chặt hơn engine là mở lối lách. Chỉ giá trị parseInt không ra số dương (chữ trần, rỗng) mới bị bỏ.
+    const id = Number.parseInt(raw, 10);
+    if (Number.isSafeInteger(id) && id > 0) found.add(id);
+  };
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    const subtype = String(node?.node_subtype ?? node?.nodeSubtype ?? '').trim();
+    const isZaloAccountNode = subtype.startsWith('send_zalo')
+      || subtype === 'select_zalo_account'
+      || subtype === 'get_all_friends'
+      || subtype === 'get_all_groups';
+    if (!isZaloAccountNode) continue;
+    const config = node?.config && typeof node.config === 'object' ? node.config : {};
+    add(config.zaloAccountId);
+    add(config.accountId);
+    for (const key of ['zaloPoolAccountIds', 'zaloPersonalAccountIds', 'zaloFriendAccountIds']) {
+      (Array.isArray(config[key]) ? config[key] : []).forEach(add);
+    }
+  }
+  return [...found];
+}
+
+export default {
+  getNodeOwnZaloAccountSpec,
+  resolveZaloAccountEntries,
+  collectReferencedZaloAccountIds,
+  isTruthyConfigFlag,
+  uniqueNonEmptyIds,
+};
