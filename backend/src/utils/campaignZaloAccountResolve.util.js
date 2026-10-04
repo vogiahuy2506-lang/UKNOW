@@ -148,7 +148,12 @@ export function collectReferencedZaloAccountIds(nodes) {
       || subtype === 'get_all_friends'
       || subtype === 'get_all_groups';
     if (!isZaloAccountNode) continue;
-    const config = node?.config && typeof node.config === 'object' ? node.config : {};
+    let rawConfig = node?.config;
+    if (typeof rawConfig === 'string') {
+      // Cột JSON đôi khi đọc ra chuỗi (hoặc client gửi chuỗi JSON): đọc thử thay vì bỏ qua — bỏ qua là mở lối lách.
+      try { rawConfig = JSON.parse(rawConfig); } catch { rawConfig = null; }
+    }
+    const config = rawConfig && typeof rawConfig === 'object' ? rawConfig : {};
     add(config.zaloAccountId);
     add(config.accountId);
     for (const key of ['zaloPoolAccountIds', 'zaloPersonalAccountIds', 'zaloFriendAccountIds']) {

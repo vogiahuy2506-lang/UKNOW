@@ -7,6 +7,7 @@ import { countCampaignRecipientsEstimate } from './campaignApproval.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 import { labelCampaignRunFailure } from '../../utils/campaignRunFailureLabel.util.js';
+import { assertCampaignNodesZaloAccountsAccessible } from './campaignZaloAccess.service.js';
 
 /**
  * PR-8a (UI nói thật) Việc 3 — DTO lượt failed mới nhất trong 7 ngày cho dòng đỏ ở FE. Nhãn Việt
@@ -234,6 +235,9 @@ class CampaignCrudService {
     connections,
   }) {
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ lưu được chiến dịch dùng tài khoản Zalo được giao (kể cả
+    // node get_all_*). Kiểm TRƯỚC khi mở giao dịch; chủ / super admin qua. Trợ lý AI cũng tạo chiến dịch qua đây.
+    await assertCampaignNodesZaloAccountsAccessible(context, nodes);
     // 'mixed', 'telegram', 'telegram_group' và 'whatsapp': không có hạn mức số chiến dịch riêng theo loại → null (chỉ chịu trần 'campaigns' chung).
     const typeResourceKey = campaignType === 'email'
       ? 'emailCampaigns'
@@ -389,6 +393,10 @@ class CampaignCrudService {
   }) {
     const context = resolveCampaignContext({ authUser, userId, roleCode, workspaceOwnerId });
     const isAdmin = context.isSuperAdmin;
+    // PR-G3 — chỉ khi body THAY node: nhân viên không được cài tài khoản Zalo chưa giao (xem createCampaign).
+    if (nodes !== undefined) {
+      await assertCampaignNodesZaloAccountsAccessible(context, nodes);
+    }
     const client = await db.getClient();
     try {
       await client.query('BEGIN');
@@ -671,6 +679,11 @@ class CampaignCrudService {
         throw error;
       }
 
+      // PR-G3 — bản sao mang nguyên id tài khoản Zalo của bản gốc: nhân viên chỉ nhân bản được khi MỌI tài khoản trong
+      // chiến dịch gốc đã giao cho họ (không thì bản sao là đường vòng cài tài khoản chưa giao). Chủ / super admin qua.
+      const originalNodesRows = await campaignCrudRepository.findNodesByCampaignIdTx(client, campaignId);
+      await assertCampaignNodesZaloAccountsAccessible(context, originalNodesRows);
+
       await enforceResourceLimitTx(client, {
         userId: context.workspaceOwnerId,
         roleCode: context.roleCode,
@@ -691,7 +704,7 @@ class CampaignCrudService {
         flowJson: originalCampaign.flow_json,
       });
 
-      const nodesRows = await campaignCrudRepository.findNodesByCampaignIdTx(client, campaignId);
+      const nodesRows = originalNodesRows;
       const nodeIdMap = {};
       for (const node of nodesRows) {
         const newNodeId = await campaignCrudRepository.insertNodeTx(client, {

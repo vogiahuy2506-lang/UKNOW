@@ -78,6 +78,13 @@ describe('collectReferencedZaloAccountIds', () => {
     expect(collectReferencedZaloAccountIds([null, undefined, 'x'])).toEqual([]);
   });
 
+  it('config là CHUỖI JSON → vẫn đọc được (bỏ qua chuỗi là mở lối lách); chuỗi hỏng → bỏ, không ném', () => {
+    expect(collectReferencedZaloAccountIds([
+      { node_subtype: 'send_zalo_personal', config: JSON.stringify({ zaloAccountId: 9 }) },
+      { node_subtype: 'send_zalo_group', config: '{not json' },
+    ])).toEqual([9]);
+  });
+
   it('config thiếu / không phải object → không ném', () => {
     expect(collectReferencedZaloAccountIds([
       { node_subtype: 'send_zalo_personal' },

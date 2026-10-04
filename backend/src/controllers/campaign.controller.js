@@ -328,6 +328,15 @@ class CampaignController {
       });
     } catch (error) {
       console.error('Create campaign error:', error);
+      // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3: nhân viên dùng tài khoản Zalo chưa được giao (cả đường trợ lý AI,
+      // `ai.controller.executeCampaign` gọi lại hàm này và chuyển nguyên status/body).
+      if (error?.code === 'ZALO_ACCOUNT_NOT_ASSIGNED') {
+        return res.status(403).json({
+          success: false,
+          code: error.code,
+          message: error.message,
+        });
+      }
       if (error?.code === 'RESOURCE_LIMIT_EXCEEDED' || error?.limitReached) {
         return res.status(error.statusCode || 403).json({
           success: false,
@@ -920,6 +929,7 @@ class CampaignController {
       res.status(statusCode).json({
         success: false,
         message: statusCode === 500 ? 'Lỗi server' : (error?.message || 'Không thể nhân bản chiến dịch'),
+        ...(error?.code === 'ZALO_ACCOUNT_NOT_ASSIGNED' && { code: error.code }),
         ...(error?.limitReached && { limitReached: true }),
       });
     }
