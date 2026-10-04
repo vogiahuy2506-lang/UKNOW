@@ -1693,6 +1693,9 @@ CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_quota_count
   ON zalo_personal_messages (id_user, created_at)
   WHERE role = 'agent' AND (metadata->>'source') = 'manual_inbox';
 CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_user_created ON zalo_personal_messages (id_user, created_at);
+-- Migration 282: index cho Hop thu (tin cuoi + dem chua doc).
+CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_conv_created ON zalo_personal_messages (id_conversation, created_at DESC, id DESC);
+CREATE INDEX IF NOT EXISTS idx_zalo_personal_msg_conv_unread ON zalo_personal_messages (id_conversation) WHERE role = 'visitor' AND is_read = false;
 -- Migration 101: prevent duplicate inbound / sync rows (and bot echo after restart)
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_zalo_personal_msg_external
   ON zalo_personal_messages (id_zalo_setting, external_id)

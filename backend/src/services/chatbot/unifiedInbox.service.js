@@ -123,12 +123,10 @@ class UnifiedInboxService {
    * Get all conversations with pagination and filters
    */
   async getConversations(userId, filters = {}) {
-    console.log('[UnifiedInboxService] getConversations called:', { userId, filters });
-
-    const [conversations, total, unreadByChannel, zaloEnabledMap, autoResumeMinutes] = await Promise.all([
+    // H-06: không còn tính số chưa đọc theo kênh cho mỗi lần gọi (FE không dùng) — chỉ danh sách, tổng và cờ chatbot.
+    const [conversations, total, zaloEnabledMap, autoResumeMinutes] = await Promise.all([
       unifiedInboxRepository.getConversations(userId, filters),
       unifiedInboxRepository.getConversationsCount(userId, filters),
-      unifiedInboxRepository.getUnreadCountByChannel(userId),
       this._loadZaloAccountChatbotEnabledMap(userId),
       getCachedAutoResumeMinutes(userId),
     ]);
@@ -148,6 +146,10 @@ class UnifiedInboxService {
         groupId: conv.groupId || null,
         groupName: conv.groupName || null,
         lastMessage: conv.lastMessage,
+        lastMessageAttachmentType: conv.lastMessageAttachmentType || null,
+        lastMessageRawType: conv.lastMessageRawType || null,
+        lastMessageSender: conv.lastMessageSender || null,
+        lastMessageRole: conv.lastMessageRole || null,
         unreadCount: parseInt(conv.unreadCount || 0),
         startedAt: conv.startedAt,
         lastMessageAt: conv.lastMessageAt,
@@ -166,18 +168,9 @@ class UnifiedInboxService {
       };
     });
 
-    // Build unread summary
-    const unreadSummary = {};
-    unreadByChannel.forEach(item => {
-      if (item.unread > 0) {
-        unreadSummary[item.channel] = parseInt(item.unread);
-      }
-    });
-
     return {
       conversations: formattedConversations,
       total,
-      unreadByChannel: unreadSummary,
       page: Math.floor((filters.offset || 0) / (filters.limit || 20)) + 1,
       pageSize: filters.limit || 20,
     };
@@ -1305,27 +1298,16 @@ class UnifiedInboxService {
    * Delete a conversation by ID
    */
   async deleteConversation(userId, conversationId, type = 'zalo_personal') {
-    console.log('[UnifiedInboxService] deleteConversation:', { userId, conversationId, type });
-
     // Delegate to the appropriate adapter
     switch (type) {
-      case 'zalo_personal': {
-        const result = await zaloPersonalAdapter.deleteConversation(userId, conversationId);
-        console.log('[UnifiedInboxService] zalo_personal delete result:', result);
-        return result;
-      }
-      case 'webchat': {
-        const result = await chatbotRepository.deleteWebChatConversation(conversationId, userId);
-        console.log('[UnifiedInboxService] webchat delete result:', result);
-        return result;
-      }
-      case 'channel': {
+      case 'zalo_personal':
+        return zaloPersonalAdapter.deleteConversation(userId, conversationId);
+      case 'webchat':
+        return chatbotRepository.deleteWebChatConversation(conversationId, userId);
+      case 'channel':
         // Covers Zalo OA, Facebook, WhatsApp (whatsapp_baileys) — all use
         // channel_conversations table via channel_connections join.
-        const result = await chatbotChannelRepository.deleteChannelConversation(conversationId, userId);
-        console.log('[UnifiedInboxService] channel delete result:', result);
-        return result;
-      }
+        return chatbotChannelRepository.deleteChannelConversation(conversationId, userId);
       default:
         throw new Error('Unsupported conversation type');
     }

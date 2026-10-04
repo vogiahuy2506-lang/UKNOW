@@ -27,6 +27,26 @@ import { useAuthStore } from '../../stores/authStore';
 
 const getConversationKey = (conv) => (conv ? `${conv.type || ''}:${conv.id}` : '');
 
+/** Lựa chọn tài khoản Zalo đã nhớ theo user (cùng khoá ô chọn tài khoản dùng trước đây). 'all' / không có = mọi tài khoản. */
+const accountPreferenceKey = (userId) => `uknow.inbox.zaloAccountId.${userId || 'anon'}`;
+const readSavedAccountId = (userId) => {
+  try {
+    const value = localStorage.getItem(accountPreferenceKey(userId));
+    return value && value !== 'all' ? value : null;
+  } catch {
+    return null;
+  }
+};
+const saveAccountPreference = (userId, accountId) => {
+  try {
+    localStorage.setItem(accountPreferenceKey(userId), accountId == null ? 'all' : String(accountId));
+  } catch {
+    // ignore quota / private mode
+  }
+};
+
+const SEARCH_DEBOUNCE_MS = 300;
+
 /** Loại hội thoại của một sự kiện SSE. Sự kiện AI trả lời Zalo không có `type`, chỉ có `channel` → suy ra. */
 const getSseConversationType = (data) => {
   if (data.type) return data.type;
@@ -149,6 +169,7 @@ const mergeUniqueMessages = (baseMessages, nextMessages, markAsRead = false) => 
 const InboxPage = () => {
   const { t } = useI18n();
   const activeContext = useAuthStore((state) => state.activeContext);
+  const currentUserId = useAuthStore((state) => state.user?.id);
   const isEmployeeContext = activeContext?.type === 'employee';
   const permissions = activeContext?.permissions || {};
   const canReply = !isEmployeeContext || permissions.inbox_reply === true;
@@ -194,6 +215,7 @@ const InboxPage = () => {
   const [hasMoreOlderMessages, setHasMoreOlderMessages] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const messagesRef = useRef([]);
+  const listRequestSeqRef = useRef(0);
   // Hội thoại vừa mở có tin chưa đọc: đánh dấu đọc SAU khi tải xong khung đọc, và chỉ phần đã tải (H-01).
   const markReadAfterLoadRef = useRef(null);
   const markOpenReadTimerRef = useRef(null);
@@ -205,7 +227,11 @@ const InboxPage = () => {
     sort: 'latest',
     status: 'all',
     date: 'all',
+    kind: '',
+    unreadOnly: false,
   });
+  // Ô tìm gõ tới đâu hiện tới đó (searchInput); chỉ SAU 300 ms yên lặng mới đưa vào bộ lọc để tải danh sách (H-07).
+  const [searchInput, setSearchInput] = useState('');
 
   const isMobile = useIsMobile();
   const [sidebarWidth, setSidebarWidth] = useLocalStorageState('uknow_inbox_sidebar_width', 360);
@@ -273,15 +299,30 @@ const InboxPage = () => {
       const payload = response.data;
       if (payload?.success) {
         setSessionStatus(payload.data);
+        // H-07: chọn luôn tài khoản (đã nhớ, hoặc "tất cả") CÙNG LÚC với việc có trạng thái, để danh sách chỉ tải một lần
+        // thay vì tải khi chưa biết tài khoản rồi tải lại khi ô chọn tự chọn.
+        const accounts = Array.isArray(payload.data?.accounts) ? payload.data.accounts : [];
+        setSelectedAccountId((prev) => {
+          const wanted = prev ?? readSavedAccountId(currentUserId);
+          return wanted != null && accounts.some((a) => String(a.id) === String(wanted)) ? wanted : null;
+        });
       }
     } catch (err) {
       console.error('Failed to fetch session status:', err);
     } finally {
       setSessionLoaded(true);
     }
-  }, []);
+  }, [currentUserId]);
+
+  const handleAccountChange = useCallback((accountId) => {
+    setSelectedAccountId(accountId);
+    saveAccountPreference(currentUserId, accountId);
+  }, [currentUserId]);
 
   const fetchConversations = useCallback(async (reset = false) => {
+    // H-07: số thứ tự yêu cầu — kết quả của yêu cầu cũ (chậm hơn) về sau KHÔNG được đè kết quả mới.
+    const requestSeq = listRequestSeqRef.current + 1;
+    listRequestSeqRef.current = requestSeq;
     try {
       if (reset) {
         setIsLoadingConversations(true);
@@ -294,30 +335,44 @@ const InboxPage = () => {
         search: filters.search || undefined,
         status: filters.status === 'all' ? undefined : filters.status,
         date: filters.date === 'all' ? undefined : filters.date,
+        kind: filters.kind || undefined,
+        unreadOnly: filters.unreadOnly ? true : undefined,
         offset: currentPage * 20,
         limit: 20,
       };
-      
+
       if (selectedAccountId) {
         requestParams.zaloAccountId = selectedAccountId;
       }
-      
+
       const response = await chatbotApi.getConversations(requestParams);
+      if (requestSeq !== listRequestSeqRef.current) return;
 
       if (response.success) {
-        const newConversations = reset
-          ? response.data.conversations
-          : [...conversations, ...response.data.conversations];
+        let newConversations;
+        if (reset) {
+          newConversations = response.data.conversations;
+        } else {
+          // Trang kế: hội thoại có tin mới có thể đã nhảy lên đầu/xuống trang này → bỏ trùng theo loại + id.
+          const known = new Set(conversations.map(getConversationKey));
+          newConversations = [
+            ...conversations,
+            ...response.data.conversations.filter((c) => !known.has(getConversationKey(c))),
+          ];
+        }
 
         setConversations(newConversations);
-        setHasMore(newConversations.length < response.data.total);
+        setHasMore(response.data.conversations.length > 0 && newConversations.length < response.data.total);
         setPage(currentPage + 1);
       }
     } catch (err) {
+      if (requestSeq !== listRequestSeqRef.current) return;
       console.error('Failed to fetch conversations:', err);
       toast.error(t('errors.loadFailed'));
     } finally {
-      setIsLoadingConversations(false);
+      if (requestSeq === listRequestSeqRef.current) {
+        setIsLoadingConversations(false);
+      }
     }
   }, [filters, page, conversations, selectedAccountId, t]);
 
@@ -781,8 +836,20 @@ const InboxPage = () => {
   }, [isLoadingConversations, hasMore, fetchConversations]);
 
   const handleSearch = useCallback((value) => {
-    setFilters(prev => ({ ...prev, search: value }));
+    setSearchInput(value);
   }, []);
+
+  useEffect(() => {
+    const trimmed = searchInput.trim();
+    if (trimmed === filters.search) return undefined;
+    // Xoá sạch ô tìm thì áp ngay; còn lại đợi người dùng ngừng gõ.
+    const delay = trimmed === '' ? 0 : SEARCH_DEBOUNCE_MS;
+    const timer = setTimeout(() => {
+      setFilters((prev) => ({ ...prev, search: trimmed }));
+      setPage(0);
+    }, delay);
+    return () => clearTimeout(timer);
+  }, [searchInput, filters.search]);
 
   const handleSelectConversation = useCallback(async (conv) => {
     selectedConversationRef.current = conv;
@@ -853,11 +920,13 @@ const InboxPage = () => {
     fetchSessionStatus();
   }, [fetchSessionStatus]);
 
+  // Đợi có trạng thái tài khoản (đã chọn tài khoản) rồi mới tải danh sách — chỉ MỘT lần khi mở trang (H-07).
   useEffect(() => {
+    if (!sessionLoaded) return;
     fetchConversations(true);
     fetchUnreadCount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filters.channel, filters.search, filters.status, filters.date, selectedAccountId]);
+  }, [sessionLoaded, filters.channel, filters.search, filters.status, filters.date, filters.kind, filters.unreadOnly, selectedAccountId]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -1017,11 +1086,11 @@ const InboxPage = () => {
                 ref={searchInputRef}
                 type="text"
                 placeholder={t('inbox.searchConversations')}
-                value={filters.search}
+                value={searchInput}
                 onChange={(e) => handleSearch(e.target.value)}
                 className="w-full pl-8 pr-8 py-1.5 bg-gray-50 border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500/20"
               />
-              {filters.search && (
+              {searchInput && (
                 <button
                   type="button"
                   onClick={() => handleSearch('')}
@@ -1042,9 +1111,10 @@ const InboxPage = () => {
             {(!filters.channel || filters.channel === 'zalo_personal') && (
               <ZaloAccountSelector
                 selectedAccountId={selectedAccountId}
-                onAccountChange={setSelectedAccountId}
+                onAccountChange={handleAccountChange}
                 statusAccounts={sessionStatus.accounts}
                 isLoading={!sessionLoaded}
+                showEmptyCta={filters.channel === 'zalo_personal'}
                 canSync={canManage}
                 canManageChannels={canManageChannels}
                 onSyncComplete={() => {

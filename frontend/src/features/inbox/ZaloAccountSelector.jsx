@@ -1,25 +1,20 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { HiChevronDown, HiRefresh, HiCheck, HiExclamationCircle, HiUser, HiExternalLink, HiInformationCircle } from 'react-icons/hi';
+import { HiChevronDown, HiRefresh, HiCheck, HiExclamationCircle, HiUser, HiExternalLink } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../i18n';
-import { useAuthStore } from '../../stores/authStore';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import toast from 'react-hot-toast';
 
-const storageKey = (userId) => `uknow.inbox.zaloAccountId.${userId || 'anon'}`;
-
-function pickDefaultAccount(accounts, savedId) {
-  if (savedId && accounts.some((a) => String(a.id) === String(savedId))) {
-    return savedId;
-  }
-  const active = accounts.find((a) => a.isActive);
-  if (active) return active.id;
-  return accounts[0]?.id ?? null;
-}
-
 /**
+ * Ô chọn tài khoản Zalo + nút đồng bộ.
+ *
  * `statusAccounts` do trang Hộp thư nạp MỘT lần từ `GET /zalo-personal/sync/status` (chỉ đọc, H-05) rồi truyền
- * xuống — ô này không tự gọi API nữa, nên mở trang không còn bắn 3 lần cùng một yêu cầu.
+ * xuống — ô này không tự gọi API lấy trạng thái. Trang cũng giữ việc chọn tài khoản (đã nhớ / "tất cả"):
+ * `selectedAccountId = null` nghĩa là MỌI tài khoản Zalo (H-20, H-07).
+ *
+ * H-20 — ô chọn chỉ hiện khi có từ 2 tài khoản (một tài khoản thì không có gì để chọn); mục đầu là "Tất cả tài khoản
+ * Zalo" nên tab "Tất cả" không còn lọc ngầm một tài khoản; tài khoản hết phiên ghi mờ "cần đăng nhập lại" thay cho
+ * nền vàng; dòng gợi ý đồng bộ đã chuyển vào tooltip của nút đồng bộ.
  */
 const ZaloAccountSelector = ({
   selectedAccountId,
@@ -29,13 +24,13 @@ const ZaloAccountSelector = ({
   isLoading = false,
   canSync = true,
   canManageChannels = true,
+  /** Hiện lời mời kết nối khi chưa có tài khoản nào — chỉ nên bật ở tab Zalo, không bật ở tab "Tất cả". */
+  showEmptyCta = false,
 }) => {
   const navigate = useNavigate();
   const { t } = useI18n();
-  const userId = useAuthStore((s) => s.user?.id);
   const [isOpen, setIsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [showSyncTip, setShowSyncTip] = useState(false);
   const dropdownRef = useRef(null);
 
   const accounts = useMemo(() => (statusAccounts || []).map((account) => {
@@ -43,28 +38,10 @@ const ZaloAccountSelector = ({
     const connected = account.isConnected ?? account.hasActiveSession;
     return {
       id: account.id,
-      displayName: account.displayName || account.display_name || t('inbox.zaloPersonal') || 'Zalo Cá nhân',
-      isActive: connected,
-      hasSession: connected,
-      conversationCount: account.conversationCount,
+      displayName: account.displayName || account.display_name || t('inbox.zaloPersonal'),
+      hasSession: connected === true,
     };
   }), [statusAccounts, t]);
-
-  useEffect(() => {
-    if (accounts.length === 0) return;
-    let savedId = null;
-    try {
-      savedId = localStorage.getItem(storageKey(userId));
-    } catch {
-      savedId = null;
-    }
-
-    if (!selectedAccountId || !accounts.some((a) => String(a.id) === String(selectedAccountId))) {
-      const nextId = pickDefaultAccount(accounts, savedId);
-      if (nextId != null) onAccountChange?.(nextId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accounts, userId]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -80,12 +57,16 @@ const ZaloAccountSelector = ({
     };
   }, [isOpen]);
 
+  const selectedAccount = accounts.find((a) => String(a.id) === String(selectedAccountId)) || null;
+  // Đồng bộ cần một tài khoản cụ thể: đang chọn "tất cả" thì dùng tài khoản đang kết nối đầu tiên.
+  const syncAccountId = selectedAccount?.id ?? accounts.find((a) => a.hasSession)?.id ?? null;
+
   const handleSync = async (e) => {
     e?.stopPropagation();
     setIsSyncing(true);
     setIsOpen(false);
     try {
-      const response = await chatbotApi.syncZaloAll(selectedAccountId);
+      const response = await chatbotApi.syncZaloAll(syncAccountId);
       const payload = response.data || response;
       const errors = payload?.data?.errors || [];
       if (payload?.success) {
@@ -95,22 +76,13 @@ const ZaloAccountSelector = ({
         const historyErrors = payload?.data?.groupHistory?.errors?.length || 0;
         const historyNotFound = payload?.data?.groupHistory?.notFound || 0;
         if (historySynced > 0) {
-          toast.success(
-            t('inbox.syncSuccessWithHistory', { count: historySynced })
-            || `Đã đồng bộ. Kéo thêm ${historySynced} tin nhóm từ Zalo.`
-          );
+          toast.success(t('inbox.syncSuccessWithHistory', { count: historySynced }));
         } else if (historyErrors > 0 || historyNotFound > 0) {
-          toast.success(
-            t('inbox.syncSuccessHistoryPartial')
-            || 'Đã đồng bộ danh bạ & nhóm. Một số nhóm không kéo được lịch sử (đã rời/Zalo giới hạn).'
-          );
+          toast.success(t('inbox.syncSuccessHistoryPartial'));
         } else if (totalGroups != null && synced != null && Number(synced) < Number(totalGroups)) {
-          toast.success(
-            t('inbox.syncPartialGroups', { synced, total: totalGroups })
-            || `Đã đồng bộ ${synced}/${totalGroups} nhóm. Hệ thống lấy tối đa 200 nhóm mỗi lần.`
-          );
+          toast.success(t('inbox.syncPartialGroups', { synced, total: totalGroups }));
         } else {
-          toast.success(t('inbox.syncSuccess') || 'Đồng bộ thành công');
+          toast.success(t('inbox.syncSuccess'));
         }
         onSyncComplete?.();
       } else {
@@ -135,16 +107,8 @@ const ZaloAccountSelector = ({
 
   const handleSelectAccount = (accountId) => {
     onAccountChange?.(accountId);
-    try {
-      localStorage.setItem(storageKey(userId), String(accountId));
-    } catch {
-      // ignore quota / private mode
-    }
     setIsOpen(false);
   };
-
-  const selectedAccount = accounts.find((a) => String(a.id) === String(selectedAccountId)) || accounts[0];
-  const hasExpiredAccounts = accounts.some((a) => !a.hasSession);
 
   if (isLoading) {
     return (
@@ -156,6 +120,7 @@ const ZaloAccountSelector = ({
   }
 
   if (accounts.length === 0) {
+    if (!showEmptyCta) return null;
     if (!canManageChannels) {
       return (
         <div className="w-full flex items-center gap-2 px-2 py-1.5 bg-gray-50 rounded-lg border border-gray-200 text-left">
@@ -177,125 +142,91 @@ const ZaloAccountSelector = ({
     );
   }
 
+  const showPicker = accounts.length >= 2;
+  const showSync = canSync && syncAccountId != null;
+  if (!showPicker && !showSync) return null;
+
   return (
-    <div className="space-y-1.5" ref={dropdownRef}>
-      <div className="relative">
-        <div
-          className={`flex items-center gap-1 rounded-lg border ${
-            hasExpiredAccounts
-              ? 'bg-amber-50 border-amber-200'
-              : 'bg-gray-50 border-gray-200'
-          }`}
-        >
+    <div className="flex items-center gap-1.5" ref={dropdownRef}>
+      {showPicker && (
+        <div className="relative flex-1 min-w-0">
           <button
             type="button"
             onClick={() => setIsOpen(!isOpen)}
-            className="flex flex-1 min-w-0 items-center gap-2 px-2 py-1.5 text-left hover:bg-black/5 rounded-l-lg transition-colors"
+            className="flex w-full min-w-0 items-center gap-2 rounded-lg border border-gray-200 bg-white px-2 py-1.5 text-left hover:bg-gray-50 transition-colors"
           >
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-semibold shrink-0 ${
-              hasExpiredAccounts ? 'bg-amber-500' : 'bg-gray-500'
-            }`}>
-              {selectedAccount?.displayName?.[0]?.toUpperCase() || <HiUser className="w-3 h-3" />}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-800 truncate">
-                {selectedAccount?.displayName || 'Zalo'}
-              </p>
-              <p className="text-[10px] text-gray-500 truncate">
-                {selectedAccount?.hasSession
-                  ? `${selectedAccount.conversationCount || 0} ${t('inbox.zaloConversations') || t('inbox.conversations')}`
-                  : t('inbox.sessionExpired')}
-              </p>
-            </div>
+            <HiUser className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+            <span className="flex-1 min-w-0 truncate text-xs font-medium text-gray-800">
+              {selectedAccount ? selectedAccount.displayName : t('inbox.allZaloAccounts')}
+            </span>
             <HiChevronDown className={`w-3.5 h-3.5 text-gray-400 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {canSync && <button
-            type="button"
-            onClick={handleSync}
-            disabled={isSyncing || !selectedAccountId}
-            title={t('inbox.syncNow')}
-            className="shrink-0 p-2 border-l border-gray-200/80 text-gray-500 hover:text-primary-600 hover:bg-white/60 rounded-r-lg transition-colors disabled:opacity-50"
-          >
-            {isSyncing ? (
-              <div className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
-            ) : (
-              <HiRefresh className="w-3.5 h-3.5" />
-            )}
-          </button>}
-        </div>
-
-        {isOpen && (
-          <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-30 overflow-hidden">
-            <div className="px-2.5 py-1.5 border-b border-gray-100 flex items-center justify-between">
-              <p className="text-[10px] font-medium text-gray-500 uppercase tracking-wide">
-                {t('inbox.zaloAccounts')} ({accounts.length})
-              </p>
-              {hasExpiredAccounts && (
-                <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 text-[10px] font-medium rounded">
-                  {t('inbox.sessionExpired')}
-                </span>
-              )}
-            </div>
-            <div className="py-0.5 max-h-40 overflow-y-auto">
-              {accounts.map((account) => (
+          {isOpen && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-white rounded-lg shadow-lg border border-gray-200 z-30 overflow-hidden">
+              <div className="py-0.5 max-h-56 overflow-y-auto">
                 <button
-                  key={account.id}
                   type="button"
-                  onClick={() => handleSelectAccount(account.id)}
+                  onClick={() => handleSelectAccount(null)}
                   className={`w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 transition-colors ${
-                    String(account.id) === String(selectedAccountId) ? 'bg-primary-50' : ''
+                    selectedAccount == null ? 'bg-primary-50' : ''
                   }`}
                 >
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-[10px] font-medium ${
-                    account.hasSession ? 'bg-gray-500' : 'bg-gray-300'
-                  }`}>
-                    {account.displayName?.[0]?.toUpperCase() || '?'}
-                  </div>
-                  <div className="flex-1 text-left min-w-0">
-                    <p className="text-xs font-medium text-gray-700 truncate">{account.displayName}</p>
-                    <p className="text-[10px] text-gray-400">
-                      {account.hasSession
-                        ? `${account.conversationCount || 0} ${t('inbox.zaloConversations') || t('inbox.conversations')}`
-                        : t('inbox.sessionExpired')}
-                    </p>
-                  </div>
-                  {String(account.id) === String(selectedAccountId) && (
-                    <HiCheck className="w-3.5 h-3.5 text-primary-500 shrink-0" />
-                  )}
+                  <span className="flex-1 text-left text-xs font-medium text-gray-700">{t('inbox.allZaloAccounts')}</span>
+                  {selectedAccount == null && <HiCheck className="w-3.5 h-3.5 text-primary-500 shrink-0" />}
                 </button>
-              ))}
+                {accounts.map((account) => (
+                  <button
+                    key={account.id}
+                    type="button"
+                    onClick={() => handleSelectAccount(account.id)}
+                    className={`w-full flex items-center gap-2 px-2.5 py-1.5 hover:bg-gray-50 transition-colors ${
+                      String(account.id) === String(selectedAccountId) ? 'bg-primary-50' : ''
+                    }`}
+                  >
+                    <span className={`flex-1 min-w-0 truncate text-left text-xs ${
+                      account.hasSession ? 'font-medium text-gray-700' : 'text-gray-400'
+                    }`}>
+                      {account.displayName}
+                      {!account.hasSession && ` — ${t('inbox.accountNeedsRelogin')}`}
+                    </span>
+                    {String(account.id) === String(selectedAccountId) && (
+                      <HiCheck className="w-3.5 h-3.5 text-primary-500 shrink-0" />
+                    )}
+                  </button>
+                ))}
+              </div>
+              {canManageChannels && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/app/settings/channels')}
+                  className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-primary-700 border-t border-gray-100 hover:bg-primary-50"
+                >
+                  <HiExternalLink className="w-3.5 h-3.5" />
+                  {t('inbox.manageZaloAccounts')}
+                </button>
+              )}
             </div>
-            {canManageChannels && <button
-              type="button"
-              onClick={() => navigate('/app/settings/channels')}
-              className="w-full flex items-center gap-2 px-2.5 py-2 text-[11px] text-primary-700 border-t border-gray-100 hover:bg-primary-50"
-            >
-              <HiExternalLink className="w-3.5 h-3.5" />
-              {t('inbox.manageZaloAccounts') || 'Quản lý tài khoản Zalo'}
-            </button>}
-          </div>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
-      {canSync && <div className="flex items-start gap-1 text-[10px] text-gray-500 px-0.5">
+      {showSync && (
         <button
           type="button"
-          className="mt-px text-gray-400 hover:text-gray-600 shrink-0"
-          onClick={() => setShowSyncTip((v) => !v)}
-          aria-label="Sync tip"
+          onClick={handleSync}
+          disabled={isSyncing}
+          title={t('inbox.syncTooltip')}
+          aria-label={t('inbox.syncTooltip')}
+          className="shrink-0 rounded-lg border border-gray-200 bg-white p-2 text-gray-500 hover:text-primary-600 hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
-          <HiInformationCircle className="w-3.5 h-3.5" />
-        </button>
-        <p className="leading-relaxed">
-          {t('inbox.syncTipShort')}
-          {showSyncTip && (
-            <span className="block mt-1 text-gray-600 whitespace-pre-line text-[10px]">
-              {t('inbox.syncTip')}
-            </span>
+          {isSyncing ? (
+            <div className="w-3.5 h-3.5 border-2 border-gray-400 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <HiRefresh className="w-3.5 h-3.5" />
           )}
-        </p>
-      </div>}
+        </button>
+      )}
     </div>
   );
 };

@@ -43,9 +43,15 @@ function normalizeInboxQueryFilters(query = {}) {
     status,
     date,
     search: query.search || undefined,
-    limit: parseInt(query.limit, 10) || 20,
-    offset: parseInt(query.offset, 10) || 0,
+    // Trần 100: mỗi bảng lấy `limit + offset` hội thoại mới nhất trước khi cắt trang (H-06).
+    limit: Math.min(Math.max(parseInt(query.limit, 10) || 20, 1), 100),
+    offset: Math.max(parseInt(query.offset, 10) || 0, 0),
     zaloAccountId: query.zaloAccountId || undefined,
+    // Chip lọc phía server (H-13, C1): Cá nhân / Nhóm, và chỉ hội thoại có tin chưa đọc.
+    kind: ['personal', 'group'].includes(String(query.kind || '').trim().toLowerCase())
+      ? String(query.kind).trim().toLowerCase()
+      : undefined,
+    unreadOnly: ['1', 'true'].includes(String(query.unreadOnly || '').trim().toLowerCase()),
   };
 }
 

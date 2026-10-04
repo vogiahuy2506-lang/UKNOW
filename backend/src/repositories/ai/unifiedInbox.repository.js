@@ -2,6 +2,7 @@ import db from '../../config/database.js';
 import { isPlaceholderGroupName } from '../../utils/zaloGroupName.util.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 import { getVietnamDayRange } from '../../utils/vnTimeFormat.util.js';
+import { buildFoldedLikePattern, sqlFoldVietnamese } from '../../utils/vietnameseSearchFold.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -61,22 +62,46 @@ function withTableAlias(sql, tableAlias) {
   return sql.replaceAll('__TABLE__', tableAlias);
 }
 
-/** @returns {{ sql: string, nextIndex: number, params: string[] }} */
+/**
+ * Tìm hội thoại theo tên khách / tên nhóm, KHÔNG phân biệt dấu (H-33: "nguyen" khớp "Nguyễn"). Gấp dấu cả cột lẫn
+ * từ khoá bằng cùng một bảng ký tự (utils/vietnameseSearchFold.util.js). Không khớp nội dung tin nhắn — placeholder
+ * ô tìm đã nói rõ "tên khách hoặc tên nhóm".
+ * @returns {{ sql: string, nextIndex: number, params: string[] }}
+ */
 function buildSearchFilter(search, startIndex) {
   if (!search) {
     return { sql: '', nextIndex: startIndex, params: [] };
   }
 
   const sql = `AND (
-        __TABLE__.visitor_name ILIKE $${startIndex} OR
-        __TABLE__.visitor_info::text ILIKE $${startIndex}
+        ${sqlFoldVietnamese('__TABLE__.visitor_name')} LIKE $${startIndex} OR
+        ${sqlFoldVietnamese('__TABLE__.visitor_info::text')} LIKE $${startIndex}
       )`;
 
   return {
     sql,
     nextIndex: startIndex + 1,
-    params: [`%${search}%`],
+    params: [buildFoldedLikePattern(search)],
   };
+}
+
+const CONVERSATION_KINDS = new Set(['personal', 'group']);
+
+/**
+ * Bộ lọc "Cá nhân / Nhóm" và "Chưa đọc" (chip ở danh sách) — chạy phía SERVER để áp lên toàn bộ danh sách, không chỉ
+ * 20 hội thoại đã tải (H-13). `msgTable` là tên bảng tin của nhánh; alias do server viết, không phải input.
+ */
+function buildKindUnreadFilters({ kind, unreadOnly }, alias, msgTable) {
+  let sql = '';
+  if (kind === 'group') sql += ` AND ${ZALO_IS_GROUP_SQL(alias)}`;
+  else if (kind === 'personal') sql += ` AND ${ZALO_NOT_GROUP_SQL(alias)}`;
+  if (unreadOnly) {
+    sql += ` AND EXISTS (
+          SELECT 1 FROM ${msgTable} um
+          WHERE um.id_conversation = ${alias}.id AND um.role = 'visitor' AND um.is_read = false
+        )`;
+  }
+  return sql;
 }
 
 function withOutboxAliases(sql, convAlias, msgAlias) {
@@ -197,10 +222,17 @@ class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
    * @param {number} userId
-   * @param {object} filters - { channel, status, search, limit, offset, zaloAccountId }
+   * @param {object} filters - { channel, status, date, search, kind, unreadOnly, limit, offset, zaloAccountId }
+   *
+   * H-06: bản cũ tính 4–5 subquery tương quan (tin cuối, số chưa đọc, giờ tin cuối, tên nhóm, LATERAL zalo_groups)
+   * cho MỌI hội thoại rồi mới `ORDER BY ... LIMIT 20` — user 90 (672 hội thoại) mất 2,5 giây. Nay chọn TRANG trước:
+   * mỗi bảng lấy `limit + offset` hội thoại mới nhất theo cột `last_message_at` (khớp 100% giờ tin cuối trên production,
+   * `q14.sql`), gộp lại cắt đúng trang, rồi mới tính phần xem trước / số chưa đọc / tên nhóm cho ~20 dòng đó.
    */
   async getConversations(userId, filters = {}) {
     const { channel, status, date, search, limit = 20, offset = 0, zaloAccountId } = filters;
+    const kind = CONVERSATION_KINDS.has(filters.kind) ? filters.kind : null;
+    const unreadOnly = filters.unreadOnly === true;
 
     // Build channel filter (Zalo OA / Facebook live in channel_connections branch only)
     let channelFilter = '';
@@ -239,11 +271,68 @@ class UnifiedInboxRepository {
     const zpStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'zp');
     const wcStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'wc');
 
-    // Unified query for all conversations
+    const ccKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'cc', 'channel_messages');
+    const zpKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'zp', 'zalo_personal_messages');
+    const wcKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'wc', 'webchat_messages');
+
+    // Tin cuối: nội dung thô + loại đính kèm + loại tin gốc của Zalo + người gửi (nhóm). FE tự đặt nhãn "[Hình ảnh]"…
+    // (trước đây backend viết cứng tiếng Việt và bỏ sót ảnh Zalo lưu dạng JSON trong `content` — H-08, H-30).
+    const lastMessageLateral = (table, alias) => `
+        LEFT JOIN LATERAL (
+          SELECT m.content,
+                 m.attachments->0->>'type' AS attachment_type,
+                 m.metadata->>'msg_type_raw' AS raw_type,
+                 m.metadata->>'sender_name' AS sender_name,
+                 m.role
+          FROM ${table} m
+          WHERE m.id_conversation = ${alias}.id
+          ORDER BY m.created_at DESC, m.id DESC
+          LIMIT 1
+        ) lm ON true`;
+
     const query = `
-      WITH all_conversations AS (
-        -- Channel conversations (Zalo OA, Facebook)
+      WITH candidates AS (
+        (
+          SELECT 'channel'::text AS conversation_type, cc.id,
+                 COALESCE(cc.last_message_at, cc.started_at) AS sort_at
+          FROM channel_conversations cc
+          JOIN channel_connections ch ON ch.id = cc.id_channel
+          WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccSearch}
+          ${ccStatusDate} ${ccKindUnread}
+          ORDER BY COALESCE(cc.last_message_at, cc.started_at) DESC NULLS LAST, cc.id DESC
+          LIMIT ($2::int + $3::int)
+        )
+        UNION ALL
+        (
+          SELECT 'zalo_personal'::text, zp.id,
+                 COALESCE(zp.last_message_at, zp.started_at)
+          FROM zalo_personal_conversations zp
+          WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpSearch}
+          ${zpStatusDate} ${zaloGate} ${zpKindUnread}
+          ORDER BY COALESCE(zp.last_message_at, zp.started_at) DESC NULLS LAST, zp.id DESC
+          LIMIT ($2::int + $3::int)
+        )
+        UNION ALL
+        (
+          SELECT 'webchat'::text, wc.id,
+                 COALESCE(wc.last_message_at, wc.started_at)
+          FROM webchat_conversations wc
+          WHERE wc.id_user = $1 ${wcSearch}
+          ${wcStatusDate} ${webGate} ${wcKindUnread}
+          ORDER BY COALESCE(wc.last_message_at, wc.started_at) DESC NULLS LAST, wc.id DESC
+          LIMIT ($2::int + $3::int)
+        )
+      ),
+      page AS (
+        SELECT conversation_type, id, sort_at
+        FROM candidates
+        ORDER BY sort_at DESC NULLS LAST, id DESC, conversation_type
+        LIMIT $2 OFFSET $3
+      )
+      SELECT * FROM (
+        -- Channel conversations (Zalo OA, Facebook, Telegram, WhatsApp)
         SELECT
+          p.sort_at,
           cc.id,
           cc.id_user,
           cc.external_id,
@@ -261,42 +350,29 @@ class UnifiedInboxRepository {
           ch.display_name as channel_display_name,
           ch.is_active as channel_is_active,
           NULL::TEXT as group_name_override,
-          (
-            SELECT CASE
-              WHEN NULLIF(TRIM(content), '') IS NOT NULL THEN content
-              WHEN jsonb_array_length(COALESCE(attachments, '[]'::jsonb)) > 0 THEN
-                CASE
-                  WHEN attachments->0->>'type' IN ('image', 'photo') THEN 'Hình ảnh'
-                  WHEN attachments->0->>'type' = 'sticker' THEN 'Sticker'
-                  ELSE 'Tệp đính kèm'
-                END
-              ELSE content
-            END
-            FROM channel_messages
-            WHERE id_conversation = cc.id
-            ORDER BY created_at DESC LIMIT 1
-          ) as last_message,
+          lm.content as last_message,
+          lm.attachment_type as last_attachment_type,
+          lm.raw_type as last_raw_type,
+          lm.sender_name as last_sender_name,
+          lm.role as last_role,
           (
             SELECT COUNT(*) FROM channel_messages
             WHERE id_conversation = cc.id AND role = 'visitor' AND is_read = false
           ) as unread_count,
-          (
-            SELECT created_at FROM channel_messages
-            WHERE id_conversation = cc.id
-            ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override,
           COALESCE(cc.ai_paused, false) as ai_paused,
           cc.ai_paused_at as ai_paused_at,
           NULL::TEXT as first_visitor_message
-        FROM channel_conversations cc
+        FROM page p
+        JOIN channel_conversations cc ON cc.id = p.id
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccSearch}
-        ${ccStatusDate}
+        ${lastMessageLateral('channel_messages', 'cc')}
+        WHERE p.conversation_type = 'channel'
 
         UNION ALL
 
         -- Zalo Personal conversations
         SELECT
+          p.sort_at,
           zp.id,
           zp.id_user,
           zp.external_id,
@@ -331,34 +407,20 @@ class UnifiedInboxRepository {
               LIMIT 1
             )
           ) as group_name_override,
-          (
-            SELECT CASE
-              WHEN NULLIF(TRIM(content), '') IS NOT NULL THEN content
-              WHEN jsonb_array_length(COALESCE(attachments, '[]'::jsonb)) > 0 THEN
-                CASE
-                  WHEN attachments->0->>'type' IN ('image', 'photo') THEN 'Hình ảnh'
-                  WHEN attachments->0->>'type' = 'sticker' THEN 'Sticker'
-                  ELSE 'Tệp đính kèm'
-                END
-              ELSE content
-            END
-            FROM zalo_personal_messages
-            WHERE id_conversation = zp.id
-            ORDER BY created_at DESC LIMIT 1
-          ) as last_message,
+          lm.content as last_message,
+          lm.attachment_type as last_attachment_type,
+          lm.raw_type as last_raw_type,
+          lm.sender_name as last_sender_name,
+          lm.role as last_role,
           (
             SELECT COUNT(*) FROM zalo_personal_messages
             WHERE id_conversation = zp.id AND role = 'visitor' AND is_read = false
           ) as unread_count,
-          (
-            SELECT created_at FROM zalo_personal_messages
-            WHERE id_conversation = zp.id
-            ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override,
           COALESCE(zp.ai_paused, false) as ai_paused,
           zp.ai_paused_at as ai_paused_at,
           NULL::TEXT as first_visitor_message
-        FROM zalo_personal_conversations zp
+        FROM page p
+        JOIN zalo_personal_conversations zp ON zp.id = p.id
         LEFT JOIN zalo_settings zs ON zs.id = zp.id_zalo_setting
         LEFT JOIN LATERAL (
           SELECT group_name
@@ -376,13 +438,14 @@ class UnifiedInboxRepository {
           ORDER BY updated_at DESC NULLS LAST, id DESC
           LIMIT 1
         ) zg ON true
-        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpSearch}
-        ${zpStatusDate} ${zaloGate}
+        ${lastMessageLateral('zalo_personal_messages', 'zp')}
+        WHERE p.conversation_type = 'zalo_personal'
 
         UNION ALL
 
         -- Web chat conversations
         SELECT
+          p.sort_at,
           wc.id,
           wc.id_user,
           wc.session_id as external_id,
@@ -400,30 +463,15 @@ class UnifiedInboxRepository {
           ww.display_name as channel_display_name,
           ww.is_active as channel_is_active,
           NULL::TEXT as group_name_override,
-          (
-            SELECT CASE
-              WHEN NULLIF(TRIM(content), '') IS NOT NULL THEN content
-              WHEN jsonb_array_length(COALESCE(attachments, '[]'::jsonb)) > 0 THEN
-                CASE
-                  WHEN attachments->0->>'type' IN ('image', 'photo') THEN 'Hình ảnh'
-                  WHEN attachments->0->>'type' = 'sticker' THEN 'Sticker'
-                  ELSE 'Tệp đính kèm'
-                END
-              ELSE content
-            END
-            FROM webchat_messages
-            WHERE id_conversation = wc.id
-            ORDER BY created_at DESC LIMIT 1
-          ) as last_message,
+          lm.content as last_message,
+          lm.attachment_type as last_attachment_type,
+          lm.raw_type as last_raw_type,
+          lm.sender_name as last_sender_name,
+          lm.role as last_role,
           (
             SELECT COUNT(*) FROM webchat_messages
             WHERE id_conversation = wc.id AND role = 'visitor' AND is_read = false
           ) as unread_count,
-          (
-            SELECT created_at FROM webchat_messages
-            WHERE id_conversation = wc.id
-            ORDER BY created_at DESC LIMIT 1
-          ) as last_message_at_override,
           COALESCE(wc.ai_paused, false) as ai_paused,
           wc.ai_paused_at as ai_paused_at,
           (
@@ -431,14 +479,13 @@ class UnifiedInboxRepository {
             WHERE id_conversation = wc.id AND role = 'visitor'
             ORDER BY created_at ASC LIMIT 1
           ) as first_visitor_message
-        FROM webchat_conversations wc
+        FROM page p
+        JOIN webchat_conversations wc ON wc.id = p.id
         JOIN web_widget_configs ww ON ww.id = wc.id_widget_config
-        WHERE wc.id_user = $1 ${wcSearch}
-        ${wcStatusDate} ${webGate}
-      )
-      SELECT * FROM all_conversations
-      ORDER BY COALESCE(last_message_at_override, last_message_at) DESC
-      LIMIT $2 OFFSET $3
+        ${lastMessageLateral('webchat_messages', 'wc')}
+        WHERE p.conversation_type = 'webchat'
+      ) page_rows
+      ORDER BY sort_at DESC NULLS LAST, id DESC, conversation_type
     `;
 
     const { rows } = await db.query(query, params);
@@ -446,10 +493,10 @@ class UnifiedInboxRepository {
     // Transform snake_case to camelCase for frontend compatibility
     return rows.map(row => {
       // Parse visitor_info to extract is_group flag
-      const visitorInfo = typeof row.visitor_info === 'string' 
-        ? JSON.parse(row.visitor_info) 
+      const visitorInfo = typeof row.visitor_info === 'string'
+        ? JSON.parse(row.visitor_info)
         : (row.visitor_info || {});
-      
+
       // Determine display name - for groups, show group name prominently
       let displayName = row.visitor_name;
       const isGroup = visitorInfo.is_group === true;
@@ -470,7 +517,7 @@ class UnifiedInboxRepository {
         displayName = groupNameOverride;
         visitorInfo.group_name = visitorInfo.group_name || groupNameOverride;
       }
-      
+
       // Transform snake_case to camelCase for frontend compatibility
       return {
         id: row.id,
@@ -490,8 +537,13 @@ class UnifiedInboxRepository {
         externalId: row.external_id,
         status: row.status,
         startedAt: row.started_at,
-        lastMessageAt: row.last_message_at_override || row.last_message_at,
+        lastMessageAt: row.last_message_at || row.started_at,
         lastMessage: row.last_message,
+        // Mã loại thay cho nhãn tiếng Việt viết cứng: FE dịch (image|photo|sticker|... / msg_type_raw của Zalo).
+        lastMessageAttachmentType: row.last_attachment_type || null,
+        lastMessageRawType: row.last_raw_type || null,
+        lastMessageSender: row.last_sender_name || null,
+        lastMessageRole: row.last_role || null,
         unreadCount: parseInt(row.unread_count || 0),
         aiPaused: row.ai_paused === true,
         aiPausedAt: row.ai_paused_at
@@ -506,6 +558,8 @@ class UnifiedInboxRepository {
    */
   async getConversationsCount(userId, filters = {}) {
     const { channel, status, date, search, zaloAccountId } = filters;
+    const kind = CONVERSATION_KINDS.has(filters.kind) ? filters.kind : null;
+    const unreadOnly = filters.unreadOnly === true;
 
     let channelFilter = '';
     const params = [userId];
@@ -540,21 +594,25 @@ class UnifiedInboxRepository {
     const zpStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'zp');
     const wcStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'wc');
 
+    const ccKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'cc', 'channel_messages');
+    const zpKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'zp', 'zalo_personal_messages');
+    const wcKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'wc', 'webchat_messages');
+
     const query = `
       SELECT COUNT(*) as total FROM (
         SELECT cc.id FROM channel_conversations cc
         JOIN channel_connections ch ON ch.id = cc.id_channel
-        WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccStatusDate} ${ccSearch}
+        WHERE cc.id_user = $1 ${channelFilter} ${channelGate} ${ccStatusDate} ${ccSearch} ${ccKindUnread}
 
         UNION ALL
 
         SELECT zp.id FROM zalo_personal_conversations zp
-        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${zpSearch} ${zaloGate}
+        WHERE zp.id_user = $1 ${zaloAccountIdFilter} ${zpStatusDate} ${zpSearch} ${zaloGate} ${zpKindUnread}
 
         UNION ALL
 
         SELECT wc.id FROM webchat_conversations wc
-        WHERE wc.id_user = $1 ${wcStatusDate} ${wcSearch} ${webGate}
+        WHERE wc.id_user = $1 ${wcStatusDate} ${wcSearch} ${webGate} ${wcKindUnread}
       ) as combined
     `;
 
@@ -751,38 +809,6 @@ class UnifiedInboxRepository {
       params
     );
     return parseInt(rows[0]?.total_unread || 0, 10);
-  }
-
-  /**
-   * Get unread count by channel
-   */
-  async getUnreadCountByChannel(userId) {
-    const { rows } = await db.query(
-      `SELECT
-        'web' as channel, (
-          SELECT COUNT(*) FROM webchat_messages wm
-          JOIN webchat_conversations wc ON wc.id = wm.id_conversation
-          WHERE wc.id_user = $1 AND wm.role = 'visitor' AND wm.is_read = false
-        ) as unread
-      UNION ALL
-      SELECT
-        'zalo_personal' as channel, (
-          SELECT COUNT(*) FROM zalo_personal_messages zpm
-          JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-          WHERE zpc.id_user = $1 AND zpm.role = 'visitor' AND zpm.is_read = false
-        ) as unread
-      UNION ALL
-      SELECT
-        cc.channel, (
-          SELECT COUNT(*) FROM channel_messages cm
-          JOIN channel_conversations conv ON conv.id = cm.id_conversation
-          WHERE conv.id_channel = cc.id AND cm.role = 'visitor' AND cm.is_read = false
-        ) as unread
-      FROM channel_connections cc
-      WHERE cc.id_user = $1 AND cc.is_active = true`,
-      [userId]
-    );
-    return rows;
   }
 
   /**

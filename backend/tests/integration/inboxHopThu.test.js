@@ -251,3 +251,126 @@ describe('H-14 — lọc "Hôm nay" theo ngày lịch Việt Nam', () => {
     expect(total).toBe(1);
   });
 });
+
+describe('H-06 / H-13 / H-33 — danh sách: chọn trang trước, chip lọc phía server, tìm không dấu', () => {
+  /** 3 Zalo (1 nhóm) + 2 Web chat xen kẽ thời gian: web1 > zaloA > nhóm > web2 > zaloB. */
+  async function seedMixed() {
+    const user = await createUser({ username: `own${Date.now()}` });
+    const zs = await seedZaloAccount(user.id, { status: 'connected', name: 'TK' });
+    const t = Date.now();
+    const at = (minutesAgo) => new Date(t - minutesAgo * 60_000).toISOString();
+
+    const web1 = await seedWebchatConversation(user.id, { name: 'Khách web 1', unread: 0 });
+    const zaloA = await seedZaloConversation(user.id, zs, { externalId: 'ua', name: 'Nguyễn Văn Đức', lastMessageAt: at(20) });
+    const group = await seedZaloConversation(user.id, zs, { externalId: 'group_9', name: 'PHÒNG RD 2', isGroup: true, lastMessageAt: at(30) });
+    const web2 = await seedWebchatConversation(user.id, { name: 'Khách web 2', unread: 2 });
+    const zaloB = await seedZaloConversation(user.id, zs, { externalId: 'ub', name: 'Trần Lan', lastMessageAt: at(50) });
+    // Ép last_message_at của web theo kịch bản.
+    await db.query(`UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`, [web1, at(10)]);
+    await db.query(`UPDATE webchat_conversations SET last_message_at = $2 WHERE id = $1`, [web2, at(40)]);
+
+    // Tin cuối: ảnh Zalo lưu dạng JSON trong content + msg_type_raw; nhóm có người gửi.
+    await db.query(
+      `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, is_read, metadata, created_at)
+       VALUES ($1, $2, $3, 'visitor', $4, false, $5::jsonb, $6)`,
+      [zaloA, user.id, zs, JSON.stringify({ title: '', href: 'https://photo.zdn.vn/x.jpg' }),
+        JSON.stringify({ msg_type_raw: 'chat.photo' }), at(20)]
+    );
+    await db.query(
+      `INSERT INTO zalo_personal_messages (id_conversation, id_user, id_zalo_setting, role, content, is_read, metadata, created_at)
+       VALUES ($1, $2, $3, 'visitor', 'Dạ chạy được', false, $4::jsonb, $5)`,
+      [group, user.id, zs, JSON.stringify({ sender_name: 'Hải' }), at(30)]
+    );
+    await seedZaloMessage(user.id, zs, zaloB, { isRead: true, createdAt: at(50) });
+    return { user, ids: { web1, zaloA, group, web2, zaloB } };
+  }
+
+  const idsOf = (rows) => rows.map((r) => `${r.type}:${Number(r.id)}`);
+
+  it('trộn 3 bảng đúng thứ tự thời gian và phân trang liền mạch (không trùng, không sót)', async () => {
+    const { user, ids } = await seedMixed();
+    const expected = [
+      `webchat:${ids.web1}`, `zalo_personal:${ids.zaloA}`, `zalo_personal:${ids.group}`,
+      `webchat:${ids.web2}`, `zalo_personal:${ids.zaloB}`,
+    ];
+
+    const all = await repo.getConversations(user.id, { limit: 20, offset: 0 });
+    const p1 = await repo.getConversations(user.id, { limit: 2, offset: 0 });
+    const p2 = await repo.getConversations(user.id, { limit: 2, offset: 2 });
+    const p3 = await repo.getConversations(user.id, { limit: 2, offset: 4 });
+
+    expect(idsOf(all)).toEqual(expected);
+    expect([...idsOf(p1), ...idsOf(p2), ...idsOf(p3)]).toEqual(expected);
+    expect(await repo.getConversationsCount(user.id, {})).toBe(5);
+  });
+
+  it('tin cuối trả mã loại + người gửi + số chưa đọc đúng cho từng dòng của trang', async () => {
+    const { user, ids } = await seedMixed();
+
+    const rows = await repo.getConversations(user.id, { limit: 20, offset: 0 });
+    const byId = new Map(rows.map((r) => [`${r.type}:${Number(r.id)}`, r]));
+
+    const photo = byId.get(`zalo_personal:${ids.zaloA}`);
+    expect(photo.lastMessageRawType).toBe('chat.photo');
+    expect(JSON.parse(photo.lastMessage).href).toBe('https://photo.zdn.vn/x.jpg');
+    expect(photo.unreadCount).toBe(1);
+
+    const grp = byId.get(`zalo_personal:${ids.group}`);
+    expect(grp.isGroup).toBe(true);
+    expect(grp.lastMessage).toBe('Dạ chạy được');
+    expect(grp.lastMessageSender).toBe('Hải');
+
+    expect(byId.get(`webchat:${ids.web2}`).unreadCount).toBe(2);
+    expect(byId.get(`zalo_personal:${ids.zaloB}`).unreadCount).toBe(0);
+  });
+
+  it('chip lọc phía server: Cá nhân / Nhóm / Chưa đọc, tổng khớp danh sách', async () => {
+    const { user, ids } = await seedMixed();
+
+    const group = await repo.getConversations(user.id, { kind: 'group', limit: 20, offset: 0 });
+    expect(idsOf(group)).toEqual([`zalo_personal:${ids.group}`]);
+    expect(await repo.getConversationsCount(user.id, { kind: 'group' })).toBe(1);
+
+    const personal = await repo.getConversations(user.id, { kind: 'personal', limit: 20, offset: 0 });
+    expect(idsOf(personal)).toEqual([
+      `webchat:${ids.web1}`, `zalo_personal:${ids.zaloA}`, `webchat:${ids.web2}`, `zalo_personal:${ids.zaloB}`,
+    ]);
+
+    const unread = await repo.getConversations(user.id, { unreadOnly: true, limit: 20, offset: 0 });
+    expect(idsOf(unread)).toEqual([`zalo_personal:${ids.zaloA}`, `zalo_personal:${ids.group}`, `webchat:${ids.web2}`]);
+    expect(await repo.getConversationsCount(user.id, { unreadOnly: true })).toBe(3);
+
+    const personalUnread = await repo.getConversations(user.id, { kind: 'personal', unreadOnly: true, limit: 20, offset: 0 });
+    expect(idsOf(personalUnread)).toEqual([`zalo_personal:${ids.zaloA}`, `webchat:${ids.web2}`]);
+  });
+
+  it('tìm không dấu, không phân biệt hoa thường: "nguyen" và "NGUYỄN" ra Nguyễn Văn Đức; "duc" ra cả tên có Đ', async () => {
+    const { user, ids } = await seedMixed();
+
+    for (const term of ['nguyen', 'NGUYỄN', 'Nguyễn Văn', 'duc']) {
+      const rows = await repo.getConversations(user.id, { search: term, limit: 20, offset: 0 });
+      expect(idsOf(rows)).toEqual([`zalo_personal:${ids.zaloA}`]);
+      expect(await repo.getConversationsCount(user.id, { search: term })).toBe(1);
+    }
+    expect(idsOf(await repo.getConversations(user.id, { search: 'phong rd', limit: 20, offset: 0 })))
+      .toEqual([`zalo_personal:${ids.group}`]);
+    expect(await repo.getConversationsCount(user.id, { search: 'khong co ten nay' })).toBe(0);
+  });
+
+  it('API: GET /inbox/conversations nhận kind + unreadOnly và trả các trường xem trước mới', async () => {
+    const { user, ids } = await seedMixed();
+    const token = await loginAs(user);
+
+    const res = await request(app)
+      .get('/api/ai/chatbot/inbox/conversations')
+      .query({ kind: 'personal', unreadOnly: 'true', search: 'nguyen' })
+      .set('Authorization', `Bearer ${token}`);
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.total).toBe(1);
+    expect(res.body.data.conversations).toHaveLength(1);
+    expect(Number(res.body.data.conversations[0].id)).toBe(ids.zaloA);
+    expect(res.body.data.conversations[0].lastMessageRawType).toBe('chat.photo');
+    expect(res.body.data.unreadByChannel).toBeUndefined();
+  });
+});

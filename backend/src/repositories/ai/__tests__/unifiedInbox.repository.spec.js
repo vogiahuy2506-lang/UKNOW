@@ -67,15 +67,16 @@ describe('unifiedInbox.repository conversation filters', () => {
     expect(params[2]).toBeInstanceOf(Date);
   });
 
-  it('binds search on visitor_name and visitor_info per table alias', async () => {
+  it('binds search on visitor_name and visitor_info per table alias (gấp dấu tiếng Việt, H-33)', async () => {
     await unifiedInboxRepository.getConversations(1, { search: 'nguyen', limit: 20, offset: 0 });
 
     const [sql, params] = db.query.mock.calls[0];
-    expect(sql).toMatch(/cc\.visitor_name ILIKE \$4/);
-    expect(sql).toMatch(/cc\.visitor_info::text ILIKE \$4/);
-    expect(sql).toMatch(/zp\.visitor_name ILIKE \$4/);
-    expect(sql).toMatch(/wc\.visitor_info::text ILIKE \$4/);
+    expect(sql).toMatch(/translate\(lower\(cc\.visitor_name\), '[^']+', '[^']+'\) LIKE \$4/);
+    expect(sql).toMatch(/translate\(lower\(cc\.visitor_info::text\), '[^']+', '[^']+'\) LIKE \$4/);
+    expect(sql).toMatch(/translate\(lower\(zp\.visitor_name\), '[^']+', '[^']+'\) LIKE \$4/);
+    expect(sql).toMatch(/translate\(lower\(wc\.visitor_info::text\), '[^']+', '[^']+'\) LIKE \$4/);
     expect(sql).not.toMatch(/\bcw\./);
+    expect(sql).not.toMatch(/ILIKE/);
     expect(params).toEqual([1, 20, 0, '%nguyen%']);
   });
 
