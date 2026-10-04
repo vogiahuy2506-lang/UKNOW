@@ -102,8 +102,10 @@ router.post('/chatbot-studio/conversations', requirePermission('chatbots_manage'
 router.post('/chatbot-studio/conversations/:id/messages', requirePermission('chatbots_manage'), aiController.addChatbotStudioMessage.bind(aiController));
 router.delete('/chatbot-studio/conversations/:id', requirePermission('chatbots_manage'), aiController.deleteChatbotStudioConversation.bind(aiController));
 
-// Custom AI - Document upload (extract, chunk, embed)
-router.post('/custom-chat/upload', requirePermission('chatbots_manage'), upload.single('file'), aiController.customChatUpload.bind(aiController));
+// Custom AI - Document upload (extract, chunk, embed). Có `uploadLimiter` (D-11): ảnh/PDF quét đi qua OCR Gemini (tốn tiền)
+// và cả tệp nằm trong RAM (multer memoryStorage, trần 100 MB); bản cũ không có limiter nào nên một tài khoản bắn liên tục được.
+// Đặt TRƯỚC multer để lượt vượt trần bị từ chối khi chưa đọc thân tệp.
+router.post('/custom-chat/upload', requirePermission('chatbots_manage'), uploadLimiter, upload.single('file'), aiController.customChatUpload.bind(aiController));
 
 // Custom AI - Get documents
 router.get('/custom-chat/documents/:chatbotId', requirePermission('chatbots_manage'), aiController.getCustomChatbotDocuments.bind(aiController));

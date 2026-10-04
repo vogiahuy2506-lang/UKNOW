@@ -312,3 +312,34 @@ describe('customChat — nạp tài liệu: chia đoạn ≤ 1.500 + embedding h
     expect(mockRepo.replaceChunks).not.toHaveBeenCalled();
   });
 });
+
+describe('customChat.uploadDocument — lỗi đọc tệp ra câu tiếng Việt (D-11)', () => {
+  const file = () => ({ originalname: 'tai-lieu.pdf', buffer: Buffer.from('%PDF-1.4') });
+
+  it('tệp không có chữ → 400, mã NO_TEXT_EXTRACTED, câu tiếng Việt (không còn "Could not extract text from file")', async () => {
+    mockExtract.mockResolvedValue('');
+
+    const error = await svc.uploadDocument({ chatbotId: 17, userId: 90, file: file() }).catch((e) => e);
+
+    expect(error.status).toBe(400);
+    expect(error.code).toBe('NO_TEXT_EXTRACTED');
+    expect(error.message).toMatch(/^Không đọc được nội dung chữ từ tệp này/);
+    expect(error.message).not.toMatch(/Could not extract/);
+    expect(mockRepo.upsertProcessingDocument).not.toHaveBeenCalled();
+  });
+
+  it('OCR báo tài liệu quá dài → lỗi đó đến người gọi NGUYÊN VẸN (status + mã + câu) và KHÔNG tạo tài liệu "ready" với nội dung cụt', async () => {
+    mockExtract.mockRejectedValue(Object.assign(
+      new Error('Tài liệu quá dài: AI chỉ đọc hết được phần đầu. Hãy tách tài liệu thành các tệp nhỏ hơn.'),
+      { status: 422, code: 'OCR_TOO_LONG' },
+    ));
+
+    const error = await svc.uploadDocument({ chatbotId: 17, userId: 90, file: file() }).catch((e) => e);
+
+    expect(error).toMatchObject({ status: 422, code: 'OCR_TOO_LONG' });
+    expect(error.message).toMatch(/quá dài/);
+    expect(mockRepo.upsertProcessingDocument).not.toHaveBeenCalled();
+    expect(mockRepo.replaceChunks).not.toHaveBeenCalled();
+    expect(mockRepo.markReady).not.toHaveBeenCalled();
+  });
+});
