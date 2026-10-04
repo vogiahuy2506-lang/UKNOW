@@ -88,3 +88,30 @@ describe('ai.routes — nạp tài liệu qua tệp có uploadLimiter (D-11)', (
     expect(controllerCalls).toEqual([]);
   });
 });
+
+describe('ai.routes — cào URL vào kho tài liệu có uploadLimiter (D-18)', () => {
+  const scrape = () => request(app).post('/api/ai/custom-chat/scrape/17').send({ url: 'https://example.com/bai-viet' });
+
+  beforeEach(() => {
+    limiterBlocks = false;
+    controllerCalls.length = 0;
+    uploadLimiter.mockClear();
+  });
+
+  it('POST /custom-chat/scrape/:chatbotId đi qua uploadLimiter rồi tới controller', async () => {
+    const res = await scrape();
+
+    expect(res.status).toBe(200);
+    expect(uploadLimiter).toHaveBeenCalledTimes(1);
+    expect(controllerCalls).toEqual(['scrapeCustomChatbotUrl']);
+  });
+
+  it('vượt trần lượt → 429 và controller (mở Chrome, embed cả trang) KHÔNG được chạy', async () => {
+    limiterBlocks = true;
+
+    const res = await scrape();
+
+    expect(res.status).toBe(429);
+    expect(controllerCalls).toEqual([]);
+  });
+});

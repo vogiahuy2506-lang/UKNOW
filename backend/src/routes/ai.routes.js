@@ -112,6 +112,7 @@ router.get('/custom-chat/documents/:chatbotId', requirePermission('chatbots_mana
 router.get('/custom-chat/documents/:chatbotId/:docId', requirePermission('chatbots_manage'), aiController.getCustomChatbotDocument.bind(aiController));
 router.delete('/custom-chat/documents/:chatbotId/:docId', requirePermission('chatbots_manage'), aiController.deleteCustomChatbotDocument.bind(aiController));
 router.post('/custom-chat/text/:chatbotId', requirePermission('chatbots_manage'), aiController.addCustomChatTextDocument.bind(aiController));
-router.post('/custom-chat/scrape/:chatbotId', requirePermission('chatbots_manage'), aiController.scrapeCustomChatbotUrl.bind(aiController));
+// Cào URL (D-18): mở Chrome + embed cả trang — có `uploadLimiter` (cùng nhóm "nạp tài liệu" với tệp); bản cũ không limiter nào.
+router.post('/custom-chat/scrape/:chatbotId', requirePermission('chatbots_manage'), uploadLimiter, aiController.scrapeCustomChatbotUrl.bind(aiController));
 
 export default router;

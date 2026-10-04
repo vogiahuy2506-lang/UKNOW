@@ -17,7 +17,7 @@ import {
   requireSelfContext,
 } from '../middleware/authorization.middleware.js';
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
-import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
+import { sseLimiter, uploadLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
 import { consumeSseTicket } from '../services/sseTicket.service.js';
 import multer from 'multer';
@@ -173,7 +173,8 @@ router.delete('/kb/:id', requirePermission('chatbots_manage'), chatbotController
 router.get('/kb/:kbId/documents', requirePermission('chatbots_manage'), chatbotController.listDocuments.bind(chatbotController));
 router.post('/kb/:kbId/documents/upload', requirePermission('chatbots_manage'), upload.single('file'), chatbotController.uploadDocument.bind(chatbotController));
 router.post('/kb/:kbId/documents/text', requirePermission('chatbots_manage'), chatbotController.addTextDocument.bind(chatbotController));
-router.post('/kb/:kbId/documents/url', requirePermission('chatbots_manage'), chatbotController.addUrlDocument.bind(chatbotController));
+// Nạp URL vào KB (D-18): tải trang từ máy chủ ta tới host ngoài + chia đoạn + embed — có `uploadLimiter`; bản cũ không limiter nào.
+router.post('/kb/:kbId/documents/url', requirePermission('chatbots_manage'), uploadLimiter, chatbotController.addUrlDocument.bind(chatbotController));
 router.delete('/kb/:kbId/documents/:docId', requirePermission('chatbots_manage'), chatbotController.deleteDocument.bind(chatbotController));
 router.post('/kb/:kbId/documents/:docId/reprocess', requirePermission('chatbots_manage'), chatbotController.reprocessDocument.bind(chatbotController));
 router.get('/kb/:kbId/chunks', requirePermission('chatbots_manage'), chatbotController.getChunks.bind(chatbotController));
