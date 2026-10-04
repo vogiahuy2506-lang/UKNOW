@@ -54,17 +54,17 @@ async function insertForm(ownerId, title, productId = null) {
 }
 
 /** daysAgo: created_at lùi N ngày; paidDaysAgo: paid_confirmed_at lùi N ngày (null = chưa xác nhận). */
-async function insertSubmission(ownerId, formId, { status, amount = null, daysAgo = 1, paidDaysAgo = null, reportedDaysAgo = null, receiptKey = null }) {
+async function insertSubmission(ownerId, formId, { status, amount = null, daysAgo = 1, paidDaysAgo = null, reportedDaysAgo = null, receiptKey = null, phone = null, email = null }) {
   await db.query(
     `INSERT INTO form_submissions
        (form_id, workspace_owner_id, access_token, status, payment_amount, created_at, paid_confirmed_at,
-        payer_reported_paid_at, payment_receipt_key)
+        payer_reported_paid_at, payment_receipt_key, respondent_phone, respondent_email)
      VALUES ($1, $2, $3, $4, $5,
              NOW() - ($6::int * INTERVAL '1 day'),
              CASE WHEN $7::int IS NULL THEN NULL ELSE NOW() - ($7::int * INTERVAL '1 day') END,
              CASE WHEN $8::int IS NULL THEN NULL ELSE NOW() - ($8::int * INTERVAL '1 day') END,
-             $9)`,
-    [formId, ownerId, `t${Date.now()}${tokenSeq++}`, status, amount, daysAgo, paidDaysAgo, reportedDaysAgo, receiptKey]
+             $9, $10, $11)`,
+    [formId, ownerId, `t${Date.now()}${tokenSeq++}`, status, amount, daysAgo, paidDaysAgo, reportedDaysAgo, receiptKey, phone, email]
   );
 }
 
@@ -120,7 +120,9 @@ describe('GET /api/products/funnel (PR-1)', () => {
       productId: p2,
       submitted: 0,
       registered: 0,
+      registeredSubmissions: 0,
       paid: 0,
+      paidOrders: 0,
       revenue: 0,
       awaitingConfirm: 0,
       awaitingAmount: 0,
@@ -132,6 +134,7 @@ describe('GET /api/products/funnel (PR-1)', () => {
       campaignClicks: 0,
       interested: 0,
       leftContact: 0,
+      leftContactRows: 0,
     });
     // formIds: các biểu mẫu gắn sản phẩm (để giao diện dẫn sang trang bài nộp)
     expect(rows[p1].formIds).toEqual([f1, f1b]);
@@ -265,11 +268,11 @@ async function insertView(slug, daysAgo = 1) {
   );
 }
 
-async function insertLead(ownerId, slug, daysAgo = 1) {
+async function insertLead(ownerId, slug, daysAgo = 1, { phone = null, email } = {}) {
   await db.query(
-    `INSERT INTO leads (id_user, workspace_owner_id, email, landing_page_slug, created_at)
-     VALUES ($1, $1, $2, $3, NOW() - ($4::int * INTERVAL '1 day'))`,
-    [ownerId, `l${tokenSeq++}@x.vn`, slug, daysAgo]
+    `INSERT INTO leads (id_user, workspace_owner_id, email, phone, landing_page_slug, created_at)
+     VALUES ($1, $1, $2, $3, $4, NOW() - ($5::int * INTERVAL '1 day'))`,
+    [ownerId, email === undefined ? `l${tokenSeq++}@x.vn` : email, phone, slug, daysAgo]
   );
 }
 
@@ -364,6 +367,41 @@ describe('Phễu: Quan tâm / Để lại thông tin (PR-2 + PR-3)', () => {
     const resAll = await request(app).get('/api/products/funnel?period=all').set('Authorization', `Bearer ${token}`);
     expect(byProduct(resAll)[p1].campaignClicks).toBe(3);
     expect(byProduct(resAll)[p1].landingViews).toBe(4);
+  });
+
+  it('đếm NGƯỜI: cùng SĐT viết khác dạng (landing rồi nộp biểu mẫu) = 1 người; người không SĐT/email đếm theo dòng; doanh thu & chờ xác nhận không gộp', async () => {
+    const owner = await createUser({ username: 'funnel_people' });
+    const p1 = await insertProduct(owner.id, 'Khoá người');
+    const lp = await insertLanding(owner.id, 'khoa-nguoi');
+    const f1 = await insertForm(owner.id, 'F', p1);
+    await attachFormToLanding(f1, lp);
+
+    // Người A: để số trên landing rồi nộp biểu mẫu 2 lần (hai cách viết số), mua 2 đơn, chủ xác nhận cả hai
+    await insertLead(owner.id, 'khoa-nguoi', 2, { phone: '0901 234 567', email: null });
+    await insertSubmission(owner.id, f1, { status: 'confirmed', amount: 1000, phone: '+84901234567', paidDaysAgo: 1 });
+    await insertSubmission(owner.id, f1, { status: 'confirmed', amount: 2500, phone: '0901234567', paidDaysAgo: 1 });
+    // Người B: chỉ nộp biểu mẫu, đã báo chuyển khoản chờ xác nhận
+    await insertSubmission(owner.id, f1, { status: 'pending_payment', amount: 4000, phone: '0912345678', reportedDaysAgo: 1 });
+    // Hai bài không có SĐT lẫn email: mỗi dòng một người
+    await insertSubmission(owner.id, f1, { status: 'submitted' });
+    await insertSubmission(owner.id, f1, { status: 'submitted' });
+
+    const token = await loginAs(owner);
+    const res = await request(app).get('/api/products/funnel?period=30d').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const row = byProduct(res)[p1];
+    // #1: Để lại thông tin = A, B, 2 người vô danh = 4 người (không phải 1 lead + 5 bài = 6 lượt)
+    expect(row.leftContact).toBe(4);
+    expect(row.leftContactRows).toBe(6);
+    // Đăng ký (sale = pending_payment + confirmed): A, B = 2 người / 3 bài
+    expect(row.registered).toBe(2);
+    expect(row.registeredSubmissions).toBe(3);
+    // #2: Đã trả 1 người / 2 đơn; Doanh thu = tổng 2 đơn; Chờ xác nhận vẫn đếm bài
+    expect(row.paid).toBe(1);
+    expect(row.paidOrders).toBe(2);
+    expect(row.revenue).toBe(3500);
+    expect(row.awaitingConfirm).toBe(1);
+    expect(row.awaitingAmount).toBe(4000);
   });
 
   it('địa chỉ công khai của landing qua tên miền active khớp; tên miền chưa active thì không', async () => {

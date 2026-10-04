@@ -81,7 +81,7 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
       'title',
       expect.stringContaining('Telegram/WhatsApp')
     );
-    expect(screen.getByRole('columnheader', { name: 'Để lại thông tin' })).toBeInTheDocument();
+    expect(screen.getByRole('columnheader', { name: /Để lại thông tin/ })).toBeInTheDocument();
     expect(screen.getByTestId('funnel-paid')).toHaveTextContent('1');
     expect(screen.getByTestId('funnel-revenue').textContent.replace(/\s/g, '')).toMatch(/^2\.000đ$/);
     // Một biểu mẫu → số Đăng ký dẫn sang trang bài nộp của biểu mẫu đó
@@ -101,6 +101,22 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     expect(within(cell).getByRole('link')).toHaveAttribute('href', '/app/forms/7/submissions');
     expect(screen.getByRole('columnheader', { name: 'Chờ xác nhận' })).toBeInTheDocument();
     expect(cell.nextElementSibling).toBe(screen.getByTestId('funnel-paid'));
+  });
+
+  it('Đã trả đếm NGƯỜI: một người trả 2 đơn → tooltip "1 người · 2 đơn"; một đơn một người → không tooltip', async () => {
+    productApiService.getFunnel.mockResolvedValue({
+      data: { data: { filters: {}, rows: [{ productId: 11, registered: 1, paid: 1, paidOrders: 2, revenue: 4000, awaitingConfirm: 0, awaitingAmount: 0, formIds: [7] }] } },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('funnel-paid')).toHaveTextContent('1'));
+    expect(screen.getByTestId('funnel-paid')).toHaveAttribute('title', '1 người · 2 đơn');
+
+    productApiService.getFunnel.mockResolvedValue({
+      data: { data: { filters: {}, rows: [{ productId: 11, registered: 1, paid: 2, paidOrders: 2, revenue: 4000, awaitingConfirm: 0, awaitingAmount: 0, formIds: [7] }] } },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getAllByTestId('funnel-paid').some((n) => n.textContent === '2')).toBe(true));
+    expect(screen.getAllByTestId('funnel-paid').find((n) => n.textContent === '2').getAttribute('title')).toBeNull();
   });
 
   it('Chờ xác nhận = 0: không tô cảnh báo, không tooltip, không liên kết', async () => {

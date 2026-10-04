@@ -1,5 +1,13 @@
 import db from '../../config/database.js';
 
+// Hai điều kiện khoảng ngày dùng CHUNG cho đếm lượt (aggregateFormFunnelByProduct) và danh sách thô để gộp người
+// (listFormSubmissionsForPeople) — một luật ngày duy nhất. $2/$3 = mốc nửa mở [startAt, endExclusive).
+const IN_CREATED = `($2::timestamptz IS NULL OR fs.created_at >= $2::timestamptz)
+          AND ($3::timestamptz IS NULL OR fs.created_at < $3::timestamptz)`;
+const IN_PAID = `fs.paid_confirmed_at IS NOT NULL
+          AND ($2::timestamptz IS NULL OR fs.paid_confirmed_at >= $2::timestamptz)
+          AND ($3::timestamptz IS NULL OR fs.paid_confirmed_at < $3::timestamptz)`;
+
 class ProductFunnelRepository {
   /**
    * Phễu theo sản phẩm — PR-1: phần biểu mẫu (bài nộp của biểu mẫu gắn `forms.product_id`).
@@ -21,11 +29,8 @@ class ProductFunnelRepository {
    * @returns {Promise<Array<{ productId: number, submitted: number, registered: number, paid: number, revenue: number, awaitingConfirm: number, awaitingAmount: number, kind: 'sale'|'event', hasPaidForm: boolean, formIds: number[] }>>}
    */
   async aggregateFormFunnelByProduct({ workspaceOwnerId, startAt = null, endExclusive = null }) {
-    const inCreated = `($2::timestamptz IS NULL OR fs.created_at >= $2::timestamptz)
-          AND ($3::timestamptz IS NULL OR fs.created_at < $3::timestamptz)`;
-    const inPaid = `fs.paid_confirmed_at IS NOT NULL
-          AND ($2::timestamptz IS NULL OR fs.paid_confirmed_at >= $2::timestamptz)
-          AND ($3::timestamptz IS NULL OR fs.paid_confirmed_at < $3::timestamptz)`;
+    const inCreated = IN_CREATED;
+    const inPaid = IN_PAID;
     const awaiting = `fs.status = 'pending_payment'
           AND (fs.payer_reported_paid_at IS NOT NULL OR fs.payment_receipt_key IS NOT NULL)`;
     // Đăng ký theo loại: sale = chờ thanh toán / đã xác nhận; event (miễn phí, không đặt lịch) = mọi bài nộp chưa huỷ —
@@ -85,6 +90,64 @@ class ProductFunnelRepository {
       kind: r.kind === 'event' ? 'event' : 'sale',
       hasPaidForm: Boolean(r.hasPaidForm),
       formIds: (r.formIds || []).map(Number),
+    }));
+  }
+
+  /**
+   * Đợt 3 (đếm NGƯỜI): các bài nộp thô của biểu mẫu gắn sản phẩm để service gộp người trong JS (khối lượng nhỏ).
+   * Chỉ lấy bài có liên quan tới khoảng: tạo trong khoảng (`inCreated`) HOẶC được xác nhận đã trả trong khoảng (`inPaid`) —
+   * hai cờ này dùng ĐÚNG điều kiện của `aggregateFormFunnelByProduct`. Không lọc `status` ở đây (service quyết theo loại sản phẩm).
+   *
+   * @returns {Promise<Array<{ id: number, productId: number, phone: string|null, email: string|null, status: string, inCreated: boolean, inPaid: boolean }>>}
+   */
+  async listFormSubmissionsForPeople({ workspaceOwnerId, startAt = null, endExclusive = null }) {
+    const result = await db.query(
+      `SELECT fs.id, f.product_id AS "productId", fs.respondent_phone AS phone, fs.respondent_email AS email,
+              fs.status, (${IN_CREATED}) AS "inCreated", (${IN_PAID}) AS "inPaid"
+       FROM form_submissions fs
+       JOIN forms f ON f.id = fs.form_id
+       WHERE f.workspace_owner_id = $1
+         AND fs.workspace_owner_id = $1
+         AND f.product_id IS NOT NULL
+         AND ((${IN_CREATED}) OR (${IN_PAID}))
+       ORDER BY fs.id`,
+      [workspaceOwnerId, startAt, endExclusive]
+    );
+    return result.rows.map((r) => ({
+      id: Number(r.id),
+      productId: Number(r.productId),
+      phone: r.phone || null,
+      email: r.email || null,
+      status: r.status,
+      inCreated: Boolean(r.inCreated),
+      inPaid: Boolean(r.inPaid),
+    }));
+  }
+
+  /**
+   * Đợt 3 (đếm NGƯỜI): các lead thô (landing_page_slug nằm trong `slugs`, cùng workspace, trong khoảng `created_at`).
+   * Service gắn lead vào sản phẩm theo slug rồi gộp người cùng bài nộp.
+   *
+   * @param {{ workspaceOwnerId: number, slugs: string[], startAt?: string|null, endExclusive?: string|null }} params
+   * @returns {Promise<Array<{ id: number, slug: string, phone: string|null, email: string|null }>>}
+   */
+  async listLeadsForPeople({ workspaceOwnerId, slugs, startAt = null, endExclusive = null }) {
+    if (!Array.isArray(slugs) || slugs.length === 0) return [];
+    const result = await db.query(
+      `SELECT l.id, l.landing_page_slug AS slug, l.phone, l.email
+       FROM leads l
+       WHERE l.landing_page_slug = ANY($1::text[])
+         AND COALESCE(l.workspace_owner_id, l.id_user) = $4
+         AND ($2::timestamptz IS NULL OR l.created_at >= $2::timestamptz)
+         AND ($3::timestamptz IS NULL OR l.created_at < $3::timestamptz)
+       ORDER BY l.id`,
+      [slugs, startAt, endExclusive, workspaceOwnerId]
+    );
+    return result.rows.map((r) => ({
+      id: Number(r.id),
+      slug: r.slug,
+      phone: r.phone || null,
+      email: r.email || null,
     }));
   }
 

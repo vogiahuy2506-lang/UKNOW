@@ -78,6 +78,9 @@ const FunnelCells = ({ funnel }) => {
   const noMoney = funnel?.paid === null && funnel?.revenue === null;
   const awaiting = funnel?.awaitingConfirm ?? 0;
   const registered = funnel?.registered ?? 0;
+  // Đã trả đếm NGƯỜI; số đơn thô chỉ hiện ở tooltip khi một người trả nhiều đơn.
+  const paidPeople = funnel?.paid ?? 0;
+  const paidOrders = funnel?.paidOrders ?? paidPeople;
   const formIds = funnel?.formIds || [];
   const target =
     formIds.length === 1 ? `/app/forms/${formIds[0]}/submissions` : formIds.length > 1 ? '/app/forms' : null;
@@ -113,7 +116,15 @@ const FunnelCells = ({ funnel }) => {
           awaiting
         )}
       </td>
-      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-paid">
+      <td
+        className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900"
+        data-testid="funnel-paid"
+        title={
+          !noMoney && paidOrders > paidPeople
+            ? t('products.funnel.paidPeopleOrdersTooltip', { people: paidPeople, orders: paidOrders })
+            : undefined
+        }
+      >
         {noMoney ? '—' : funnel?.paid ?? 0}
       </td>
       <td className="px-3 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900" data-testid="funnel-revenue">
@@ -396,15 +407,18 @@ const Products = () => {
                         </th>
                         <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
                           {t('products.funnel.leftContact')}
+                          <span className="block normal-case font-normal">({t('products.funnel.peopleUnit')})</span>
                         </th>
                         <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
                           {t('products.funnel.registered')}
+                          <span className="block normal-case font-normal">({t('products.funnel.peopleUnit')})</span>
                         </th>
                         <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
                           {t('products.funnel.awaitingConfirm')}
                         </th>
-                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.paidHint')}>
                           {t('products.funnel.paid')}
+                          <span className="block normal-case font-normal">({t('products.funnel.peopleUnit')})</span>
                         </th>
                         <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           {t('products.funnel.revenue')}
