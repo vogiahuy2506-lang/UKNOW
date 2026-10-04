@@ -174,7 +174,8 @@ class CustomChatService {
     // isFirstMessage luôn false: widget/trang chat tự hiện lời chào ở phía khách, bot không chào lại bằng lời chào đó.
     const profileContext = String((await profilePromise) || '').trim();
     const systemPrompt = buildChatbotSystemPrompt({
-      settings: { system_instruction: systemInstruction, response_style: responseStyle },
+      // `system_instruction` của "Chat thử" Studio do client gửi, không kiểm kiểu — kiểu lạ coi như không có (khung không .trim() được).
+      settings: { system_instruction: typeof systemInstruction === 'string' ? systemInstruction : undefined, response_style: responseStyle },
       ragContext,
       profileContext,
       isFirstMessage: false,
