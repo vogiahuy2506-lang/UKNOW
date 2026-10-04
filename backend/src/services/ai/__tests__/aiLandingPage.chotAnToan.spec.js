@@ -22,6 +22,7 @@ const {
   buildAttachmentPromptBlock,
   buildModelParts,
   flattenPromptFileName,
+  validateLandingImageUrls,
   MAX_PROMPT_FILE_NAME_CHARS,
   EDIT_TIME_BUDGET_MS,
 } = await import('../aiLandingPage.service.js');
@@ -334,5 +335,126 @@ describe('B-1 (2) — editHtml: chốt an toàn so với bản hiện tại', ()
     } finally {
       nowSpy.mockRestore();
     }
+  });
+});
+
+describe('B-6 — ảnh bịa bất kể đuôi (Unsplash / picsum / placehold không có .jpg)', () => {
+  let logSpy;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    getContextForLandingAi.mockResolvedValue('');
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    logSpy.mockRestore();
+    console.warn.mockRestore();
+  });
+
+  const UNSPLASH = 'https://images.unsplash.com/photo-1511?w=800';
+  const PICSUM = 'https://picsum.photos/800/600';
+  const withBody = (extra) => GOOD_PAGE.replace('<h1>', `${extra}<h1>`);
+  const run = (over = {}) => aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học', ...over });
+
+  it('validateLandingImageUrls: ảnh không đuôi ngoài allowlist → LANDING_FAKE_IMAGE_URL kèm URL (trước đây lọt)', () => {
+    expect(() => validateLandingImageUrls({ html: withBody(`<img src="${UNSPLASH}" alt="">`), assets: [] })).toThrow(
+      expect.objectContaining({ code: 'LANDING_FAKE_IMAGE_URL', details: { fakeImageUrls: [UNSPLASH] } })
+    );
+    expect(() => validateLandingImageUrls({ html: withBody(`<img src="${PICSUM}" alt="">`), assets: [] })).toThrow(
+      expect.objectContaining({ code: 'LANDING_FAKE_IMAGE_URL' })
+    );
+  });
+
+  it('generate: lượt 1 có ảnh Unsplash không đuôi → sinh lại 1 lần kèm URL cần tránh; lượt 2 sạch → thành công', async () => {
+    generateWithBudget
+      .mockResolvedValueOnce(genResponse(withBody(`<img src="${UNSPLASH}" alt="">`)))
+      .mockResolvedValueOnce(genResponse(GOOD_PAGE));
+    const res = await run();
+    expect(res.html).toBe(GOOD_PAGE);
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(promptOf(1)).toContain(`URL ẢNH KHÔNG ĐƯỢC PHÉP: ${UNSPLASH}`);
+    expect(doneLogOf(logSpy)).toContain('fakeImageRetry=1');
+  });
+
+  it('generate: cả hai lượt đều bịa (img + srcset + poster + url() + class bg-[url()]) → gỡ HẾT, giữ phông/stylesheet/liên kết', async () => {
+    const fontLink = '<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter">';
+    const css =
+      '<style>@import url("https://fonts.googleapis.com/css2?family=Roboto");' +
+      '@font-face{font-family:F;src:url(https://fonts.gstatic.com/s/f/v1/abc) format("woff2")}' +
+      `.hero{background:url("${UNSPLASH}")}</style>`;
+    const bad = withBody(
+      fontLink +
+        css +
+        `<img src="${UNSPLASH}" alt="">` +
+        `<picture><source srcset="${PICSUM} 1x"><img src="/lp-assets/uploads/1/landing/ok.png" alt=""></picture>` +
+        `<video poster="${PICSUM}" controls><source src="https://cdn.x.test/v.mp4" type="video/mp4"></video>` +
+        `<div style="background-image:url('${UNSPLASH}')"></div>` +
+        `<section class="bg-cover bg-[url('${PICSUM}')]"></section>` +
+        '<a href="https://example.com/trang-khac">Xem thêm</a>'
+    );
+    generateWithBudget.mockResolvedValue(genResponse(bad));
+    const res = await run();
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(res.html).not.toContain('unsplash');
+    expect(res.html).not.toContain('picsum');
+    expect(res.strippedImageUrls.sort()).toEqual([PICSUM, UNSPLASH].sort());
+    // Không bị đụng:
+    expect(res.html).toContain(fontLink);
+    expect(res.html).toContain('@import url("https://fonts.googleapis.com/css2?family=Roboto")');
+    expect(res.html).toContain('src:url(https://fonts.gstatic.com/s/f/v1/abc)');
+    expect(res.html).toContain('/lp-assets/uploads/1/landing/ok.png');
+    expect(res.html).toContain('<source src="https://cdn.x.test/v.mp4" type="video/mp4">');
+    expect(res.html).toContain('<a href="https://example.com/trang-khac">Xem thêm</a>');
+    expect(res.html).toContain('<video controls>'); // thẻ video còn nguyên, chỉ mất poster
+    expect(res.html).not.toContain('poster=');
+    expect(doneLogOf(logSpy)).toContain('strippedImages=2');
+  });
+
+  it('logo KHÔNG đuôi trong hồ sơ doanh nghiệp, hoặc URL người dùng dán trong yêu cầu → không bị coi là ảnh bịa', async () => {
+    getContextForLandingAi.mockResolvedValue('Tên: A\nLogo URL: https://cdn.brand.test/logo?id=3\n');
+    const html = withBody('<img src="https://cdn.brand.test/logo?id=3" alt=""><img src="https://my.site.test/banner-khong-duoi" alt="">');
+    generateWithBudget.mockResolvedValue(genResponse(html));
+    const res = await run({ prompt: 'Landing khoá học, dùng banner tại https://my.site.test/banner-khong-duoi.' });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(res.html).toBe(html);
+  });
+
+  it('editHtml: ảnh không đuôi ĐÃ CÓ trong trang (Shopify/Cloudinary) được giữ; AI thêm ảnh Unsplash không đuôi → bị bắt và gỡ', async () => {
+    const existing = 'https://cdn.shopify.test/s/files/1/0001/image?v=123';
+    const page = GOOD_PAGE.replace('<h1>', `<img src="${existing}" alt="sp"><h1>`);
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({
+        title: 'T',
+        edits: [{ find: '<h1>Khoá học</h1>', replace: `<img src="${UNSPLASH}" alt=""><h1>Khoá học</h1>` }],
+        changeSummary: 'Đã thêm ảnh',
+      }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    const res = await aiLandingPageService.editHtml({ userId: 1, currentHtml: page, instruction: 'thêm ảnh đẹp' });
+    expect(res.strippedImageUrls).toEqual([UNSPLASH]);
+    expect(res.html).toContain(existing);
+    expect(res.html).not.toContain('unsplash');
+  });
+
+  it('editHtml: người dùng dán URL ảnh vào yêu cầu sửa → được phép dùng', async () => {
+    const mine = 'https://my.site.test/anh-moi';
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({
+        title: 'T',
+        edits: [{ find: '<h1>Khoá học</h1>', replace: `<img src="${mine}" alt=""><h1>Khoá học</h1>` }],
+        changeSummary: 'Đã thêm ảnh',
+      }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    const res = await aiLandingPageService.editHtml({
+      userId: 1,
+      currentHtml: GOOD_PAGE,
+      instruction: `Thêm ảnh ${mine} lên đầu trang`,
+    });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(res.html).toContain(mine);
   });
 });

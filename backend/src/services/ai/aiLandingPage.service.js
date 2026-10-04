@@ -9,6 +9,16 @@ import {
   MAX_FULL_REWRITE_HTML_CHARS,
 } from '../../utils/landingEditGuard.util.js';
 import { applyHtmlEdits } from '../../utils/landingHtmlPatch.util.js';
+import { scanHtmlTags, getAttr } from '../../utils/landingHtmlScan.util.js';
+import {
+  IMAGE_URL_REGEX,
+  buildImageUrlAllowlist,
+  findDisallowedImageUrls,
+  imageUrlsOfToken,
+  isExternalUrl,
+  normalizeImageUrl,
+  toNormalizedAllowlist,
+} from '../../utils/landingHtmlImageRefs.util.js';
 import {
   assertLandingHtmlSafe,
   buildUnsafeRetryRule,
@@ -229,7 +239,8 @@ function htmlHasOptionValue(html, value) {
   return new RegExp(`\\bvalue\\s*=\\s*["'](?:${escapeRegExp(v)}|${escapeRegExp(escapeHtmlAttr(v))})["']`, 'i').test(html);
 }
 
-export const IMAGE_URL_REGEX = /https?:\/\/[^"'()\s<>]+\.(?:png|jpe?g|webp|gif|svg)(?:\?[^"'()\s<>]*)?/gi;
+// Giữ tên xuất cũ; định nghĩa nằm ở landingHtmlImageRefs.util.js cùng bộ nhận diện ảnh bất kể đuôi (B-6).
+export { IMAGE_URL_REGEX };
 
 /**
  * B-22 (rà soát AI 03/10) — tên tệp do CLIENT khai (`originalName`) được chèn vào prompt trong
@@ -328,27 +339,64 @@ export function buildModelParts(fullPrompt, assets = [], documents = []) {
 }
 
 /**
- * Gỡ thẻ <img>/<source> mang URL ảnh KHÔNG thuộc allowlist — chỉ chạy sau khi AI đã bịa URL hai lần
- * liên tiếp (xem vòng thử lại trong generate/editHtml).
+ * Gỡ ảnh mang URL KHÔNG thuộc allowlist — chỉ chạy sau khi AI đã bịa URL hai lần liên tiếp (xem vòng thử
+ * lại trong generate/editHtml).
  *
- * Tiêu chí gỡ phải TRÙNG với tiêu chí chốt 2 của validateLandingImageUrls (URL http(s) có đuôi ảnh,
- * IMAGE_URL_REGEX). Bản đầu (review 20/09) gỡ cả thẻ có src tương đối hay `data:image/svg+xml…` vì
- * chúng "không nằm trong allowlist" — nhưng chốt 2 chưa bao giờ coi đó là bịa, gỡ chúng là mất icon
- * SVG inline mà model rất hay sinh. Chỉ gỡ đúng thứ chốt 2 sẽ từ chối.
+ * Tiêu chí gỡ phải TRÙNG với tiêu chí chốt 2 của validateLandingImageUrls (URL http(s) ở ngữ cảnh ảnh bất kể
+ * đuôi — B-6 — hoặc có đuôi ảnh ở bất kỳ đâu). Bản đầu (review 20/09) gỡ cả thẻ có src tương đối hay
+ * `data:image/svg+xml…` vì chúng "không nằm trong allowlist" — nhưng chốt 2 chưa bao giờ coi đó là bịa, gỡ
+ * chúng là mất icon SVG inline mà model rất hay sinh. Chỉ gỡ đúng thứ chốt 2 sẽ từ chối:
+ *   - thẻ <img>/<source>/<image> mang URL lạ → gỡ cả thẻ;
+ *   - <video poster="lạ"> → bỏ thuộc tính poster (giữ video);
+ *   - `url(lạ)` trong style/class/<style> → `none` (giữ bố cục; `@import`/`@font-face` không bị đụng).
  */
 export function stripDisallowedImages(html = '', allowlistUrls = new Set()) {
-  const allowlist = allowlistUrls instanceof Set ? allowlistUrls : new Set(allowlistUrls || []);
+  const allowlist = toNormalizedAllowlist(allowlistUrls);
+  const isDisallowed = (url) => !allowlist.has(url);
   const stripped = new Set();
+
+  const firstStartToken = (tagHtml) => scanHtmlTags(tagHtml).find((t) => t.type === 'start');
   const stripIfDisallowed = (tag) => {
-    const disallowed = (tag.match(IMAGE_URL_REGEX) || []).filter((u) => !allowlist.has(u));
+    const urls = new Set((tag.match(IMAGE_URL_REGEX) || []).map(normalizeImageUrl));
+    const token = firstStartToken(tag);
+    if (token) imageUrlsOfToken(token).forEach((u) => urls.add(u));
+    const disallowed = [...urls].filter(isDisallowed);
     if (disallowed.length === 0) return tag;
     disallowed.forEach((u) => stripped.add(u));
     return '';
   };
-  const cleanedHtml = String(html || '')
+
+  let cleanedHtml = String(html || '')
     .replace(/<source\b[^>]*>/gi, stripIfDisallowed)
-    .replace(/<img\b[^>]*>/gi, stripIfDisallowed);
-  return { html: cleanedHtml, stripped: Array.from(stripped) };
+    .replace(/<img\b[^>]*>/gi, stripIfDisallowed)
+    .replace(/<image\b[^>]*>/gi, stripIfDisallowed);
+
+  cleanedHtml = cleanedHtml.replace(/<video\b[^>]*>/gi, (tag) => {
+    const token = firstStartToken(tag);
+    const poster = token ? getAttr(token, 'poster') : null;
+    if (poster == null) return tag;
+    const url = normalizeImageUrl(poster);
+    if (!isExternalUrl(url) || !isDisallowed(url)) return tag;
+    stripped.add(url);
+    return tag.replace(/\sposter\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>]+)/i, '');
+  });
+
+  // url(lạ) → none. @import/@font-face được che tạm: đó là stylesheet/phông, chốt 2 không coi là ảnh.
+  const keep = [];
+  const masked = cleanedHtml.replace(/@import\b[^;{}]*;?|@font-face\s*\{[^}]*\}/gi, (chunk) => {
+    keep.push(chunk);
+    return `@@KEEP-${keep.length - 1}@@`;
+  });
+  const unmasked = masked
+    .replace(/url\(\s*(?:"([^"]*)"|'([^']*)'|([^)"'\s]+))\s*\)/gi, (whole, dq, sq, bare) => {
+      const url = normalizeImageUrl(dq ?? sq ?? bare).replace(/^["']+|["']+$/g, '');
+      if (!isExternalUrl(url) || !isDisallowed(url)) return whole;
+      stripped.add(url);
+      return 'none';
+    })
+    .replace(/@@KEEP-(\d+)@@/g, (_, index) => keep[Number(index)]);
+
+  return { html: unmasked, stripped: Array.from(stripped) };
 }
 
 /**
@@ -373,20 +421,10 @@ export function validateLandingImageUrls({ html, assets = [], allowedSourceText 
     }
   }
 
-  // Chốt 2: mọi URL http(s) có đuôi ảnh phải thuộc allowlist
-  const allowlistUrls = new Set(assets.map((a) => a.url).filter(Boolean));
-  if (allowedSourceText) {
-    const sourceMatches = String(allowedSourceText).match(IMAGE_URL_REGEX) || [];
-    sourceMatches.forEach((u) => allowlistUrls.add(u));
-  }
-
-  const foundMatches = html.match(IMAGE_URL_REGEX) || [];
-  const fakeImageUrls = [];
-  for (const u of foundMatches) {
-    if (!allowlistUrls.has(u)) {
-      fakeImageUrls.push(u);
-    }
-  }
+  // Chốt 2: mọi URL ảnh ngoài phải thuộc allowlist — URL có đuôi ảnh ở bất kỳ đâu (như cũ) VÀ (B-6) URL ở
+  // ngữ cảnh ảnh (img/srcset/source/poster/url(...)) BẤT KỂ ĐUÔI: Unsplash/picsum/placehold không đuôi không còn lọt.
+  const allowlistUrls = buildImageUrlAllowlist({ assets, allowedSourceText });
+  const fakeImageUrls = findDisallowedImageUrls(html, allowlistUrls);
   if (fakeImageUrls.length > 0) {
     const err = new Error('AI bịa URL ảnh ngoài hệ thống. Vui lòng thử lại.');
     err.status = 422;
@@ -513,11 +551,10 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
-    const allowlistUrls = new Set(assets.map((a) => a.url).filter(Boolean));
-    if (businessCtx) {
-      const sourceMatches = String(businessCtx).match(IMAGE_URL_REGEX) || [];
-      sourceMatches.forEach((u) => allowlistUrls.add(u));
-    }
+    // Nguồn URL ảnh hợp lệ cho chốt 2: ảnh đính kèm + hồ sơ doanh nghiệp + CHÍNH CÂU CHỮ của người dùng (họ dán
+    // URL ảnh của họ vào yêu cầu thì không phải "ảnh bịa"). KHÔNG gồm nội dung tài liệu đính kèm.
+    const imageSourceText = `${businessCtx || ''}\n${prompt || ''}`;
+    const allowlistUrls = buildImageUrlAllowlist({ assets, allowedSourceText: imageSourceText });
 
     const runOnce = async (extraRule = '') => {
       const promptToSend = extraRule ? `${fullPrompt}\n\n${extraRule}` : fullPrompt;
@@ -701,7 +738,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       }
 
       try {
-        validateLandingImageUrls({ html, assets, allowedSourceText: businessCtx, requireAssetsUsed: true });
+        validateLandingImageUrls({ html, assets, allowedSourceText: imageSourceText, requireAssetsUsed: true });
       } catch (valErr) {
         valErr.generatedTitle = title;
         valErr.generatedHtml = html;
@@ -737,7 +774,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
               const { html: strippedHtml, stripped } = stripDisallowedImages(rawHtml, allowlistUrls);
               telemetry.strippedImages = stripped.length;
               telemetry.htmlChars = strippedHtml.length;
-              validateLandingImageUrls({ html: strippedHtml, assets, allowedSourceText: businessCtx, requireAssetsUsed: true });
+              validateLandingImageUrls({ html: strippedHtml, assets, allowedSourceText: imageSourceText, requireAssetsUsed: true });
               generationResult = {
                 title: secondErr.generatedTitle || 'Landing',
                 html: strippedHtml,
@@ -903,11 +940,9 @@ ${exampleLine}`;
     };
     logLandingAiLifecycle({ event: 'start', ...telemetry });
 
-    const allowlistUrls = new Set(assets.map((a) => a.url).filter(Boolean));
-    if (rawCurrent) {
-      const sourceMatches = String(rawCurrent).match(IMAGE_URL_REGEX) || [];
-      sourceMatches.forEach((u) => allowlistUrls.add(u));
-    }
+    // Nguồn URL ảnh hợp lệ cho chốt 2: ảnh đính kèm + HTML hiện tại của trang + yêu cầu sửa của chính người dùng.
+    const imageSourceText = `${rawCurrent}\n${instr}`;
+    const allowlistUrls = buildImageUrlAllowlist({ assets, allowedSourceText: imageSourceText });
 
     // Chốt kiểm chất lượng + ảnh bịa — DÙNG CHUNG cho đường vá và đường viết-lại-cả-trang. Lỗi của các
     // chốt này KHÔNG kích hoạt dự phòng (AI làm hỏng form thì viết lại cả trang cũng có thể hỏng tiếp).
@@ -930,7 +965,7 @@ ${exampleLine}`;
         valRes = validateLandingImageUrls({
           html,
           assets,
-          allowedSourceText: rawCurrent,
+          allowedSourceText: imageSourceText,
           requireAssetsUsed: false,
         });
       } catch (valErr) {
@@ -1136,7 +1171,7 @@ ${exampleLine}`;
       const valRes = validateLandingImageUrls({
         html: strippedHtml,
         assets,
-        allowedSourceText: rawCurrent,
+        allowedSourceText: imageSourceText,
         requireAssetsUsed: false,
       });
       return {
