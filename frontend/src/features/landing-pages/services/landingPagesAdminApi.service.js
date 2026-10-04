@@ -1,4 +1,5 @@
 import api from '../../../services/api.js';
+import { postAiTurn } from '../../../services/aiTurnStream.js';
 
 /**
  * Lấy danh sách template landing page.
@@ -143,10 +144,13 @@ function formatLandingFiles(files) {
 /**
  * Sinh HTML landing page mới bằng AI (Tailwind CDN, nội dung thật).
  *
- * @param {{ prompt: string, title?: string, locale?: string, files?: Array, landingPageId?: number|null }} params
+ * PR-9 (B-4): đọc phản hồi LUỒNG của backend (postAiTurn) — lượt sinh dài 60–150 giây không còn bị Cloudflare cắt ở 100 giây (524);
+ * `requestId` chống trừ credit hai lần. Giá trị trả về giữ nguyên `{ success, data }` như cũ.
+ *
+ * @param {{ prompt: string, title?: string, locale?: string, files?: Array, landingPageId?: number|null, onStage?: (stage: string) => void, signal?: AbortSignal }} params
  * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
  */
-export async function generateLandingHtmlWithAi({ prompt, title, locale, files = [], landingPageId = null } = {}) {
+export async function generateLandingHtmlWithAi({ prompt, title, locale, files = [], landingPageId = null, onStage, signal } = {}) {
   const formattedFiles = formatLandingFiles(files);
   const payload = {
     prompt,
@@ -155,21 +159,18 @@ export async function generateLandingHtmlWithAi({ prompt, title, locale, files =
     ...(formattedFiles ? { files: formattedFiles } : {}),
     ...(landingPageId != null ? { landingPageId: Number(landingPageId) } : {}),
   };
-  const { data } = await api.post(
-    '/ai/generate-landing-html',
-    payload,
-    { timeout: 120000 }
-  );
-  return data;
+  return postAiTurn('/ai/generate-landing-html', payload, { onStage, signal });
 }
 
 /**
  * Chỉnh sửa HTML landing hiện tại (Tailwind + Gemini + giữ nguyên cấu trúc/nội dung).
  *
- * @param {{ instruction: string, currentHtml: string, locale?: string, files?: Array, landingPageId?: number|null }} params
+ * PR-9 (B-4): như generateLandingHtmlWithAi — đọc phản hồi luồng, `requestId` chống trừ 2 lần.
+ *
+ * @param {{ instruction: string, currentHtml: string, locale?: string, files?: Array, landingPageId?: number|null, onStage?: (stage: string) => void, signal?: AbortSignal }} params
  * @returns {Promise<{ success?: boolean, data?: { title: string, html: string }, message?: string }>}
  */
-export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, files = [], landingPageId = null } = {}) {
+export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, files = [], landingPageId = null, onStage, signal } = {}) {
   const formattedFiles = formatLandingFiles(files);
   const payload = {
     instruction,
@@ -178,12 +179,7 @@ export async function editLandingHtmlWithAi({ instruction, currentHtml, locale, 
     ...(formattedFiles ? { files: formattedFiles } : {}),
     ...(landingPageId != null ? { landingPageId: Number(landingPageId) } : {}),
   };
-  const { data } = await api.post(
-    '/ai/edit-landing-html',
-    payload,
-    { timeout: 120000 }
-  );
-  return data;
+  return postAiTurn('/ai/edit-landing-html', payload, { onStage, signal });
 }
 
 // ── Tên miền riêng của landing (PLAN_TEN_MIEN_RIENG, PR-D) ─────────────────────────────────────────────────────

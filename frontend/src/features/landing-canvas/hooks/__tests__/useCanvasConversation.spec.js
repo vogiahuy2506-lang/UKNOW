@@ -339,3 +339,54 @@ describe('useCanvasConversation — điền tên trang từ AI (PLAN_LANDING_GIU
     expect(state.title).toBe('');
   });
 });
+
+/**
+ * PR-9 (B-4): server báo tiến độ trên luồng sinh / sửa ('generating' | 'fixing') → hook ghi `stage` vào tin AI đang chờ
+ * để ChatMessage hiện chữ thay cho "Thinking…"; xong thì tin chuyển sang trạng thái thường.
+ */
+describe('useCanvasConversation — tiến độ (stage) từ luồng của server (PR-9)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const setup = (hasExistingHtml) => {
+    let formState = { title: '', htmlContent: hasExistingHtml ? '<div>Cũ</div>' : '' };
+    const setForm = vi.fn((updater) => {
+      formState = typeof updater === 'function' ? updater(formState) : updater;
+    });
+    return renderHook(() => useCanvasConversation({ form: formState, setForm, hasExistingHtml, openTab: vi.fn(), editingId: null }));
+  };
+
+  it.each([
+    ['sinh mới', false, () => generateLandingHtmlWithAi],
+    ['sửa trang có sẵn', true, () => editLandingHtmlWithAi],
+  ])('%s: truyền onStage cho dịch vụ; stage ghi vào tin streaming; xong thì tin hết streaming', async (_name, hasExistingHtml, pick) => {
+    let release;
+    const gate = new Promise((resolve) => { release = resolve; });
+    let received = null;
+    pick().mockImplementationOnce(async ({ onStage }) => {
+      received = onStage;
+      onStage('generating');
+      await gate;
+      onStage('fixing');
+      return { success: true, data: { html: '<div>Mới</div>', title: 'T', changeSummary: 'Đã đổi' } };
+    });
+
+    const { result } = setup(hasExistingHtml);
+    let sending;
+    await act(async () => {
+      sending = result.current.handleSend({ prompt: 'Tạo landing page cho khoá học tiếng Anh giao tiếp' });
+    });
+
+    expect(typeof received).toBe('function');
+    const streaming = () => result.current.messages.find((m) => m.role === 'ai' && m.status === 'streaming');
+    expect(streaming().stage).toBe('generating');
+
+    await act(async () => {
+      release();
+      await sending;
+    });
+    expect(streaming()).toBeUndefined();
+    expect(result.current.messages.some((m) => m.role === 'ai' && m.status === 'applied')).toBe(true);
+  });
+});

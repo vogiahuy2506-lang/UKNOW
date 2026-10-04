@@ -3,7 +3,7 @@ import { useI18n } from '../../../i18n';
 
 /* ───────── Thinking Dots Animation (Gemini-style) ───────── */
 
-function ThinkingDots() {
+function ThinkingDots({ label = null }) {
   return (
     <div className="flex items-center gap-1.5 py-1">
       <div className="flex items-center gap-1">
@@ -18,7 +18,7 @@ function ThinkingDots() {
           />
         ))}
       </div>
-      <span className="text-[13px] text-gray-500 animate-pulse ml-1">Thinking...</span>
+      <span className="text-[13px] text-gray-500 animate-pulse ml-1">{label || 'Thinking...'}</span>
       {/* Sparkle accents */}
       <div className="flex items-center gap-0.5 ml-2">
         <SparkleDot delay={0} />
@@ -52,7 +52,9 @@ function SparkleDot({ delay }) {
  */
 export default function ChatMessage({ msg, onUndo }) {
   const tc = useI18n('landingCanvas.chat');
-  const { role, content, status, previousHtml, files } = msg;
+  const { role, content, status, previousHtml, files, stage } = msg;
+  // PR-9 (B-4): chữ tiến độ do server báo trên luồng sinh / sửa landing; stage lạ → giữ "Thinking…".
+  const stageLabel = { generating: tc('stageGenerating'), fixing: tc('stageFixing'), checking: tc('stageChecking') }[stage] || null;
 
   if (role === 'user') {
     return (
@@ -92,7 +94,7 @@ export default function ChatMessage({ msg, onUndo }) {
         {/* Streaming state: show thinking animation */}
         {status === 'streaming' ? (
           <div className="bg-gray-50 rounded-2xl px-4 py-3">
-            <ThinkingDots />
+            <ThinkingDots label={stageLabel} />
           </div>
         ) : (
           <div className="bg-gray-50 rounded-2xl px-4 py-2.5 text-[15px] text-gray-900 break-words leading-relaxed">

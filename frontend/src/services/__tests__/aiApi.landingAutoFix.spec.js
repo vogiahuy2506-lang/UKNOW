@@ -27,7 +27,11 @@ describe('aiApi — landing tự kiểm hiển thị (PR-3)', () => {
     expect(payload.autoLayoutFix).toBe(true);
     expect(payload.layoutFindings).toEqual(layoutFindings);
     expect(payload.instruction).toBeUndefined();
-    expect(config).toMatchObject({ timeout: 120000 });
+    // PR-9 (B-4): đọc phản hồi luồng của backend — client chờ lâu hơn trần tổng 240 giây của server (trước đây 120 giây, vô nghĩa vì
+    // Cloudflare cắt ở 100 giây), xin NDJSON và gắn requestId chống trừ credit hai lần.
+    expect(config.timeout).toBeGreaterThanOrEqual(240000);
+    expect(String(config.headers.Accept)).toContain('application/x-ndjson');
+    expect(payload.requestId).toMatch(/^[A-Za-z0-9_-]{8,80}$/);
   });
 
   // Review PR-3: số đo cho lượt sửa THƯỜNG đi bằng trường riêng (server không lưu vào tin người dùng),

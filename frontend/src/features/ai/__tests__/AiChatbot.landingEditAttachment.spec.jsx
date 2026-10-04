@@ -134,6 +134,8 @@ describe('AiChatbot — đính kèm tệp khi sửa landing page (PR-2)', () => 
       originalName: 'logo.png',
       contentType: 'image/png',
     });
+    // PR-9 (B-4): lượt sửa đọc luồng của server → nhận `onStage` để hiện chữ "Đang viết trang…".
+    expect(typeof callArgs.onStage).toBe('function');
   });
 
   it('AskLandingDetailsCard hiện landingAttachHint khi isActive = true và ẩn khi false', async () => {

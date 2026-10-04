@@ -84,6 +84,8 @@ import {
 } from '../landing-pages/services/landingPagesAdminApi.service.js';
 
 const PLAN_SUPPORTED_CHANNELS = new Set(['email', 'zalo', 'zalo_group']);
+// Các `stage` server báo trên luồng sinh / sửa landing (khoá i18n aiChatbot.landingStage_<stage>); stage lạ thì không hiện chữ.
+const LANDING_STAGES = ['generating', 'fixing', 'checking'];
 const DAY_CONFIRM_REGEX = /^(co|có|ok|oke|yes|y|dong y|đồng ý)$/i;
 const PLAN_APPROVE_REGEX =
   /^\s*(đồng ý|dong y|duyệt|duyet|ok|okay|oke|tạo đi|tao di|tạo luôn|tao luon|chốt|chot|yes|approve|go)\s*$/i;
@@ -384,6 +386,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   }]);
   const [inputText, setInputText] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  // PR-9 (B-4): tiến độ lượt sinh / sửa landing do server báo trên luồng ('generating' | 'fixing' | 'checking') — chỉ để hiện chữ
+  // dưới dấu chấm "đang gõ"; null = không có lượt landing nào đang chạy.
+  const [landingStage, setLandingStage] = useState(null);
   const [uploadedFiles, setUploadedFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -2944,6 +2949,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         currentSessionId,
         summaryText,
         landingBrief,
+        { onStage: setLandingStage },
       );
       if (response.success) {
         refreshAiCredits();
@@ -2976,6 +2982,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       // Keep pendingLandingPrompt/Data for retry on any generate error (validation or model/network).
     } finally {
       setIsTyping(false);
+      setLandingStage(null);
       clearTabPending(mySessionId);
     }
   };
@@ -3166,6 +3173,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         sessionId: mySessionId,
         messageId: targetMessageId,
         files,
+        onStage: setLandingStage,
       });
 
       if (response?.success && response?.data) {
@@ -3249,6 +3257,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     } finally {
       manualLandingEditsInFlightRef.current = Math.max(0, manualLandingEditsInFlightRef.current - 1);
       setIsTyping(false);
+      setLandingStage(null);
       setEditingLandingPageIndex(null);
       if (mySessionId) clearTabPending(mySessionId);
     }
@@ -4112,10 +4121,13 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
         {isTyping && (
           <div className="flex justify-start">
-            <div className="flex gap-1.5 px-4 py-3 bg-slate-50 rounded-2xl">
+            <div className="flex items-center gap-1.5 px-4 py-3 bg-slate-50 rounded-2xl">
               <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce" />
               <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.2s]" />
               <span className="w-1.5 h-1.5 bg-slate-300 rounded-full animate-bounce [animation-delay:0.4s]" />
+              {LANDING_STAGES.includes(landingStage) ? (
+                <span className="ml-2 text-xs text-slate-500" data-testid="landing-stage">{t(`aiChatbot.landingStage_${landingStage}`)}</span>
+              ) : null}
             </div>
           </div>
         )}

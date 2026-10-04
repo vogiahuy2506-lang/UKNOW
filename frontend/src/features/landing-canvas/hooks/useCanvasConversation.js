@@ -239,6 +239,11 @@ export default function useCanvasConversation({
       appendMessage(aiPlaceholder);
       setIsStreaming(true);
 
+      // PR-9 (B-4): server báo tiến độ trên luồng ('generating' | 'fixing') → ghi vào tin AI đang chờ để hiện chữ thay cho "Thinking…".
+      const onStage = (stage) => {
+        setMessages((prev) => prev.map((m) => (m.id === aiMsgId ? { ...m, stage } : m)));
+      };
+
       try {
         let result;
         let isGenerate = false;
@@ -250,6 +255,7 @@ export default function useCanvasConversation({
             locale,
             files,
             landingPageId: editingId,
+            onStage,
           });
         } else {
           isGenerate = true;
@@ -258,6 +264,7 @@ export default function useCanvasConversation({
             locale,
             files,
             landingPageId: editingId,
+            onStage,
           });
         }
 

@@ -1,4 +1,5 @@
 import api from './api';
+import { postAiTurn } from './aiTurnStream';
 
 function formatLandingFiles(files) {
   if (!Array.isArray(files) || files.length === 0) return undefined;
@@ -165,8 +166,13 @@ const aiApi = {
 
   /**
    * Sinh landing page HTML đầy đủ (Tailwind + nội dung thật, không {{placeholder}}).
+   *
+   * PR-9 (B-4): đọc phản hồi LUỒNG của backend (postAiTurn) — một lượt sinh dài 60–150 giây không còn bị Cloudflare cắt ở 100 giây
+   * (524), và `requestId` (một mã cho mỗi lần gọi) chống trừ credit hai lần. Giá trị trả về giữ nguyên `{ success, data }` như cũ.
+   * @param {{ onStage?: (stage: string) => void, signal?: AbortSignal, requestId?: string }} [options]
+   *   `onStage('generating'|'fixing')` báo tiến độ để hiện chữ "Đang viết trang…".
    */
-  generateLandingPage: async (prompt, _templateId = null, files = [], sessionId = null, userSummary = null, landingBrief = null) => {
+  generateLandingPage: async (prompt, _templateId = null, files = [], sessionId = null, userSummary = null, landingBrief = null, options = {}) => {
     const payload = { prompt, sessionId, userSummary };
     if (landingBrief) {
       payload.landingBrief = landingBrief;
@@ -176,8 +182,7 @@ const aiApi = {
     if (formattedFiles) {
       payload.files = formattedFiles;
     }
-    const response = await api.post('/ai/generate-landing-html', payload, { timeout: 120000 });
-    return response.data;
+    return postAiTurn('/ai/generate-landing-html', payload, options);
   },
 
   /**
@@ -186,9 +191,10 @@ const aiApi = {
    * `autoLayoutFix: true` + `layoutFindings` = lượt SỬA TỰ ĐỘNG do bộ đo hiển thị (không trừ credit):
    * server bỏ qua `instruction`, tự viết lệnh từ findings, và BẮT BUỘC có `sessionId`. Hai trường
    * này chỉ được gửi khi có — lượt sửa thường không mang chúng.
-   * @param {{ instruction?: string, currentHtml: string, locale?: string, sessionId?: string|null, messageId?: string|null, files?: Array, autoLayoutFix?: boolean, layoutFindings?: Array }} params
+   * PR-9 (B-4): như generateLandingPage — đọc phản hồi luồng, `requestId` chống trừ 2 lần; `onStage`/`signal` tuỳ chọn.
+   * @param {{ instruction?: string, currentHtml: string, locale?: string, sessionId?: string|null, messageId?: string|null, files?: Array, autoLayoutFix?: boolean, layoutFindings?: Array, onStage?: (stage: string) => void, signal?: AbortSignal }} params
    */
-  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi', sessionId = null, messageId = null, files = [], autoLayoutFix = false, layoutFindings = null }) => {
+  editLandingHtml: async ({ instruction, currentHtml, locale = 'vi', sessionId = null, messageId = null, files = [], autoLayoutFix = false, layoutFindings = null, onStage, signal }) => {
     const formattedFiles = formatLandingFiles(files);
     const payload = {
       instruction,
@@ -204,10 +210,7 @@ const aiApi = {
         ? { autoLayoutFix: true, layoutFindings: Array.isArray(layoutFindings) ? layoutFindings : [] }
         : (Array.isArray(layoutFindings) && layoutFindings.length > 0 ? { layoutFindings } : {})),
     };
-    const response = await api.post('/ai/edit-landing-html', payload, {
-      timeout: 120000
-    });
-    return response.data;
+    return postAiTurn('/ai/edit-landing-html', payload, { onStage, signal });
   },
 
   /**

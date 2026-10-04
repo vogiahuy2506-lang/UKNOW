@@ -1,4 +1,5 @@
 import api from '../../../services/api';
+import { postAiTurn } from '../../../services/aiTurnStream';
 
 const landingCustomizerApiService = {
   getAllOverrides() {
@@ -75,18 +76,16 @@ const landingCustomizerApiService = {
    *
    * @param {{ prompt: string, title?: string, homepagePage?: string, locale?: string }} params
    */
-  generateHomepageHtmlWithAi({ prompt, title, homepagePage, locale } = {}) {
-    return api.post(
-      '/ai/generate-landing-html',
-      {
-        prompt,
-        title,
-        homepagePage,
-        locale,
-        forceBillable: true,
-      },
-      { timeout: 120000 },
-    );
+  async generateHomepageHtmlWithAi({ prompt, title, homepagePage, locale } = {}) {
+    // PR-9 (B-4): đọc phản hồi LUỒNG (không còn 524 sau 100 giây). Giữ hình dạng cũ `{ data: <thân JSON> }` (nơi gọi đọc `res.data`).
+    const data = await postAiTurn('/ai/generate-landing-html', {
+      prompt,
+      title,
+      homepagePage,
+      locale,
+      forceBillable: true,
+    });
+    return { data };
   },
 };
 
