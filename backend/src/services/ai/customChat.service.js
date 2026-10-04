@@ -185,13 +185,19 @@ class CustomChatService {
 
     // Lịch sử thành nhiều lượt (user ↔ model) như `chatRouter._callAI`. Lượt rỗng bỏ đi: Gemini từ chối part text rỗng
     // (tin chỉ có tệp đính kèm có content '' — tệp được đưa vào lượt cuối bên dưới).
-    const contents = history
-      .map((message) => ({
-        role: message?.role === 'user' ? 'user' : 'model',
-        text: String(message?.content ?? ''),
-      }))
-      .filter((turn) => turn.text.trim())
-      .map((turn) => ({ role: turn.role, parts: [{ text: turn.text }] }));
+    // Chuẩn hoá cho đúng hình dạng hội thoại Gemini chấp nhận chắc chắn: lượt ĐẦU phải là khách (widget có thể gửi kèm lời
+    // chào của bot làm tin đầu — bỏ đi, khung hệ thống đã có ngữ cảnh), và hai lượt cùng vai liền nhau (vd khách nhắn hai tin
+    // khi lượt AI trước lỗi) được gộp thành một lượt.
+    const contents = [];
+    for (const message of history) {
+      const text = String(message?.content ?? '');
+      if (!text.trim()) continue;
+      const role = message?.role === 'user' ? 'user' : 'model';
+      if (contents.length === 0 && role === 'model') continue;
+      const prev = contents[contents.length - 1];
+      if (prev?.role === role) prev.parts.push({ text });
+      else contents.push({ role, parts: [{ text }] });
+    }
 
     const resolveBind = attachmentBind || (userId != null && chatbotId
       ? { chatbotId, uid: userId }
