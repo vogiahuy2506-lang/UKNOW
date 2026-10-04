@@ -4,6 +4,9 @@ import { normalizeAssistantLocale } from '../../utils/assistantLocale.util.js';
 import {
   extractHtmlFromModelText,
   validateEditHtmlOutput,
+  inspectCaptureForm,
+  CAPTURE_FORM_FIELDS,
+  CAPTURE_FIELD_LABELS,
   LANDING_FORM_PLACEHOLDER,
   MAX_EDIT_HTML_INPUT_CHARS,
   MAX_FULL_REWRITE_HTML_CHARS,
@@ -685,6 +688,30 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         }
         if (!/\bname\s*=\s*["']email["']/i.test(html)) {
           const err = new Error('AI tạo form đăng ký lead nhưng thiếu trường email (name="email"). Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        // B-12 — form capture phải có đủ 4 ô name/email/phone/marketingConsent (quy tắc 6 của prompt) và ô đồng ý
+        // phải là hộp tick CHƯA tick. Thiếu ô đồng ý → lead bị coi "chưa hỏi"; tick sẵn / ô ẩn → bị coi "đã đồng ý"
+        // dù khách không chọn. Lời dặn trong prompt không đủ làm chốt (Nghị định 330, đồng ý dữ liệu).
+        const capture = inspectCaptureForm(html);
+        const missingCaptureField = CAPTURE_FORM_FIELDS.find((field) => !capture.names.has(field));
+        if (missingCaptureField) {
+          const err = new Error(
+            missingCaptureField === 'marketingConsent'
+              ? 'AI tạo form đăng ký nhưng thiếu ô đồng ý nhận thông tin (name="marketingConsent"). Vui lòng thử lại.'
+              : `AI tạo form đăng ký nhưng thiếu ${CAPTURE_FIELD_LABELS[missingCaptureField]} (name="${missingCaptureField}"). Vui lòng thử lại.`
+          );
+          err.status = 422;
+          throw err;
+        }
+        if (capture.consentNotCheckbox) {
+          const err = new Error('AI tạo ô đồng ý nhận thông tin không phải hộp tick (checkbox). Ô này phải là hộp tick để khách tự chọn. Vui lòng thử lại.');
+          err.status = 422;
+          throw err;
+        }
+        if (capture.consentChecked) {
+          const err = new Error('AI đã tick sẵn ô đồng ý nhận thông tin trong form đăng ký. Ô này phải để trống để khách tự chọn. Vui lòng thử lại.');
           err.status = 422;
           throw err;
         }

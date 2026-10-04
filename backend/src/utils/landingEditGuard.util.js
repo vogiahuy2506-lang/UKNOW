@@ -1,4 +1,60 @@
 import { countFormSlots, hasMalformedFormSlot } from './landingHtmlInjection.util.js';
+import { scanHtmlTags, getAttr } from './landingHtmlScan.util.js';
+
+/**
+ * B-12 — các ô BẮT BUỘC trong `<form data-founderai-capture>` (hợp đồng prompt sinh landing, quy tắc 6):
+ * name / email / phone và hộp tick `marketingConsent`. Chữ hiển thị cho câu báo lỗi tiếng Việt.
+ */
+export const CAPTURE_FORM_FIELDS = ['name', 'email', 'phone', 'marketingConsent'];
+export const CAPTURE_FIELD_LABELS = {
+  name: 'ô Họ tên',
+  email: 'ô Email',
+  phone: 'ô Số điện thoại',
+  marketingConsent: 'ô đồng ý nhận thông tin',
+};
+
+/**
+ * Đọc form bắt lead `data-founderai-capture` trong html: tên các ô input/textarea/select nằm TRONG form, và tình
+ * trạng ô `marketingConsent` (tick sẵn? không phải hộp tick?).
+ *
+ * Vì sao chốt riêng ô đồng ý: `lead.service.js` coi "không gửi marketingConsent" = khách CHƯA được hỏi, còn
+ * tick sẵn / ô ẩn mang giá trị = "đã đồng ý" dù khách không chọn (Nghị định 330 — đồng ý dữ liệu). Chỉ có lời dặn
+ * trong prompt thì AI quên/làm sai là trang xuất bản mang lỗi pháp lý mãi mãi.
+ *
+ * @param {string} html
+ * @returns {{ found: boolean, names: Set<string>, consentChecked: boolean, consentNotCheckbox: boolean }}
+ */
+export function inspectCaptureForm(html) {
+  const names = new Set();
+  let found = false;
+  let inForm = false;
+  let consentChecked = false;
+  let consentNotCheckbox = false;
+  for (const token of scanHtmlTags(html)) {
+    if (token.type === 'start' && token.name === 'form' && getAttr(token, 'data-founderai-capture') !== null) {
+      inForm = true;
+      found = true;
+      continue;
+    }
+    if (token.type === 'end' && token.name === 'form') {
+      inForm = false;
+      continue;
+    }
+    if (!inForm || token.type !== 'start') continue;
+    if (token.name !== 'input' && token.name !== 'textarea' && token.name !== 'select') continue;
+    const name = getAttr(token, 'name');
+    if (!name) continue;
+    names.add(name);
+    if (name === 'marketingConsent') {
+      // `checked` có mặt (kể cả checked="false") là tick sẵn theo HTML.
+      if (getAttr(token, 'checked') !== null) consentChecked = true;
+      if (token.name !== 'input' || String(getAttr(token, 'type') || '').trim().toLowerCase() !== 'checkbox') {
+        consentNotCheckbox = true;
+      }
+    }
+  }
+  return { found, names, consentChecked, consentNotCheckbox };
+}
 
 /**
  * Marker comment dùng cho vị trí nhúng form đăng ký.
@@ -174,6 +230,37 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
     const err = new Error('AI đã làm mất form đăng ký. Vui lòng thử lại.');
     err.status = 422;
     throw err;
+  }
+
+  // B-12 — chốt đến TỪNG Ô của form bắt lead: ô nào bản cũ có thì bản mới phải còn (name/email/phone/
+  // marketingConsent); ô đồng ý không được bị tick sẵn hay đổi thành ô ẩn/ô thường. Chỉ xét khi bản cũ có form
+  // capture; ô bản cũ KHÔNG có (trang đời cũ) không bị đòi thêm — việc đó thuộc yêu cầu của người dùng.
+  const oldCapture = inspectCaptureForm(current);
+  if (oldCapture.found) {
+    const newCapture = inspectCaptureForm(next);
+    const lostField = CAPTURE_FORM_FIELDS.find((field) => oldCapture.names.has(field) && !newCapture.names.has(field));
+    if (lostField) {
+      const err = new Error(
+        lostField === 'marketingConsent'
+          ? 'AI đã xoá ô đồng ý nhận thông tin (marketingConsent) khỏi form đăng ký. Ô này bắt buộc phải giữ để ghi nhận sự đồng ý của khách. Vui lòng thử lại.'
+          : `AI đã xoá ${CAPTURE_FIELD_LABELS[lostField]} (name="${lostField}") khỏi form đăng ký. Vui lòng thử lại với yêu cầu không động tới các ô của form.`
+      );
+      err.status = 422;
+      err.code = 'LANDING_CAPTURE_FIELD_LOST';
+      throw err;
+    }
+    if (newCapture.consentChecked && !oldCapture.consentChecked) {
+      const err = new Error('AI đã tick sẵn ô đồng ý nhận thông tin trong form đăng ký. Ô này phải để trống để khách tự chọn. Vui lòng thử lại.');
+      err.status = 422;
+      err.code = 'LANDING_CONSENT_PRECHECKED';
+      throw err;
+    }
+    if (newCapture.consentNotCheckbox && !oldCapture.consentNotCheckbox) {
+      const err = new Error('AI đã đổi ô đồng ý nhận thông tin thành loại không phải hộp tick. Ô này phải là hộp tick để khách tự chọn. Vui lòng thử lại.');
+      err.status = 422;
+      err.code = 'LANDING_CONSENT_NOT_CHECKBOX';
+      throw err;
+    }
   }
 
   // PR-5b-1: khối nhúng Biểu mẫu (`<section data-founderai-form-section>`, hợp đồng cố định

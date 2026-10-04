@@ -458,3 +458,57 @@ describe('B-6 — ảnh bịa bất kể đuôi (Unsplash / picsum / placehold k
     expect(res.html).toContain(mine);
   });
 });
+
+describe('B-12 — generate: form bắt lead phải đủ name/email/phone/marketingConsent, ô đồng ý là hộp tick chưa tick', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    getContextForLandingAi.mockResolvedValue('');
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => console.log.mockRestore());
+
+  const run = () => aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+  const consentRe = /<label><input type="checkbox" name="marketingConsent" \/> Đồng ý nhận thông tin<\/label>/;
+
+  it('form đủ 4 ô → qua', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE));
+    await expect(run()).resolves.toMatchObject({ html: GOOD_PAGE });
+  });
+
+  it('thiếu ô đồng ý → 422 nói rõ marketingConsent (trước đây lead bị coi "chưa hỏi" trong im lặng)', async () => {
+    const html = GOOD_PAGE.replace(consentRe, '');
+    expect(html).not.toBe(GOOD_PAGE);
+    generateWithBudget.mockResolvedValue(genResponse(html));
+    await expect(run()).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/ô đồng ý nhận thông tin.*marketingConsent/) });
+  });
+
+  it.each([
+    ['name', /<input type="text" name="name" \/>/],
+    ['phone', /<input type="tel" name="phone" \/>/],
+  ])('thiếu ô %s → 422', async (field, re) => {
+    const html = GOOD_PAGE.replace(re, '');
+    expect(html).not.toBe(GOOD_PAGE);
+    generateWithBudget.mockResolvedValue(genResponse(html));
+    await expect(run()).rejects.toMatchObject({ status: 422, message: expect.stringContaining(`name="${field}"`) });
+  });
+
+  it('ô đồng ý bị tick sẵn → 422 (trước đây lead bị coi "đã đồng ý" dù khách không chọn)', async () => {
+    const html = GOOD_PAGE.replace('name="marketingConsent" />', 'name="marketingConsent" checked />');
+    expect(html).not.toBe(GOOD_PAGE);
+    generateWithBudget.mockResolvedValue(genResponse(html));
+    await expect(run()).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/tick sẵn/) });
+  });
+
+  it('ô đồng ý là input ẩn mang giá trị → 422', async () => {
+    const html = GOOD_PAGE.replace(consentRe, '<input type="hidden" name="marketingConsent" value="true" />');
+    generateWithBudget.mockResolvedValue(genResponse(html));
+    await expect(run()).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/hộp tick/) });
+  });
+
+  it('ô đồng ý nằm NGOÀI form → coi như thiếu', async () => {
+    const html = GOOD_PAGE.replace(consentRe, '').replace('</body>', '<label><input type="checkbox" name="marketingConsent" /> ĐK</label></body>');
+    generateWithBudget.mockResolvedValue(genResponse(html));
+    await expect(run()).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/marketingConsent/) });
+  });
+});
