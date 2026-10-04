@@ -408,6 +408,30 @@ describe('WhatsApp Baileys — credit AI + xác nhận liên hệ', () => {
   });
 });
 
+// PLAN_SUA_AI_DOT4 PR-7 (A P3-6): dòng log `[incoming] parsed` từng ghi 80 ký tự đầu mọi tin khách → SĐT/email vào docker logs.
+describe('WhatsApp Baileys — log không chứa nội dung tin khách', () => {
+  const allLogLines = () => console.log.mock.calls.map((args) => args.map(String).join(' '));
+
+  it('tin có SĐT + email: không dòng log nào chứa nội dung; dòng parsed chỉ ghi độ dài (text_len)', async () => {
+    const text = 'Mình để lại số 0912345678 và email khachhang@example.com nhé shop';
+    await sendTexts([text]);
+    await flush();
+    const lines = allLogLines();
+    expect(lines.some((l) => l.includes('0912345678'))).toBe(false);
+    expect(lines.some((l) => l.includes('khachhang@example.com'))).toBe(false);
+    expect(lines.some((l) => l.includes('text="'))).toBe(false);
+    const parsed = lines.find((l) => l.includes('[incoming] parsed'));
+    expect(parsed).toBeDefined();
+    expect(parsed).toContain(`text_len=${text.length}`);
+    expect(parsed).toContain('media=none');
+  });
+
+  it('tin ảnh không chữ: text_len=0, vẫn không lộ gì', async () => {
+    await sendRaw(inboundMedia('img-log', { imageMessage: { mimetype: 'image/jpeg', fileLength: { toNumber: () => 10 } } }));
+    expect(allLogLines().find((l) => l.includes('[incoming] parsed'))).toContain('text_len=0');
+  });
+});
+
 describe('WhatsApp Baileys — hội thoại đang tạm dừng AI', () => {
   it('ai_paused=true: tin khách VẪN được lưu vào Hộp thư, AI không được gọi', async () => {
     m.paused = true;

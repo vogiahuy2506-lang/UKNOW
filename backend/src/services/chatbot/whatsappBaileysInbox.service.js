@@ -627,7 +627,8 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
     const messageId = extractMessageId(msg);
     // P5: anh/tai lieu khong caption truoc day bi bo o day (messageText rong) — gio di tiep neu la anh/tai lieu.
     const media = extractMediaInfo(msg);
-    log(`[incoming] parsed session=${sessionKey} jid=${senderJid} text="${(messageText || '').slice(0, 80)}" media=${media?.kind || 'none'} msgId=${messageId}`);
+    // Chỉ ghi ĐỘ DÀI, không ghi nội dung: tin khách có thể chứa SĐT/email và docker logs không có chỗ xoá riêng (A P3-6).
+    log(`[incoming] parsed session=${sessionKey} jid=${senderJid} text_len=${(messageText || '').length} media=${media?.kind || 'none'} msgId=${messageId}`);
     if ((!messageText && !media) || !senderJid) {
       log(`[incoming] skipped session=${sessionKey} reason=emptyTextOrJid`);
       return;
