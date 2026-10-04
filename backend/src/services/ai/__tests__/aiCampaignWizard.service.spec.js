@@ -113,6 +113,26 @@ describe('aiCampaignWizard.service', () => {
     expect(state.channel).toBe('email');
   });
 
+  describe('C P2-3: "gửi nhóm" trần không cướp câu nói về email', () => {
+    const channelOf = (content) => extractWizardState([{ role: 'user', content }]).channel;
+
+    it('"email gửi nhóm học viên cũ" là EMAIL (trước đây ra zalo_group → wizard hỏi tài khoản Zalo + nhóm)', () => {
+      expect(channelOf('tạo chiến dịch email gửi nhóm học viên cũ')).toBe('email');
+      expect(channelOf('tạo chiến dịch gửi mail cho nhóm học viên cũ, gửi nhóm A')).toBe('email');
+      expect(channelOf('Gửi nhanh email gửi nhóm khách VIP')).toBe('email');
+    });
+
+    it('"zalo nhóm" / "nhóm zalo" / "gửi nhóm" có chữ zalo vẫn là Zalo nhóm', () => {
+      expect(channelOf('tạo chiến dịch gửi zalo nhóm học viên')).toBe('zalo_group');
+      expect(channelOf('tạo chiến dịch gửi nhóm zalo học viên cũ')).toBe('zalo_group');
+      expect(channelOf('tạo chiến dịch zalo gửi nhóm học viên cũ')).toBe('zalo_group');
+    });
+
+    it('"gửi nhóm" không nhắc email lẫn zalo vẫn ra Zalo nhóm như trước (hành vi cũ giữ nguyên)', () => {
+      expect(channelOf('tạo chiến dịch gửi nhóm học viên cũ')).toBe('zalo_group');
+    });
+  });
+
   it('quick-send restores once schedule after channel switch clears it', () => {
     const state = extractWizardState([
       { role: 'user', content: 'Gửi nhanh 1 email cảm ơn đơn hàng' },

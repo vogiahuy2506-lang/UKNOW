@@ -137,9 +137,26 @@ export function pickChannelByExplicitSignal(normalized, emailRe) {
   return null;
 }
 
+/**
+ * Câu nói về Zalo NHÓM? Hai cách nói:
+ *  - có chữ "zalo" đi kèm "nhóm" ("zalo nhóm", "nhóm zalo", "zalo group") — luôn là Zalo nhóm;
+ *  - "gửi nhóm" TRẦN — mơ hồ: "email gửi nhóm học viên cũ" là email gửi cho NHÓM KHÁCH, không phải Zalo nhóm (rà soát
+ *    C P2-3, 04/10/2026; trước đó regex "gửi nhóm" xét TRƯỚC email nên wizard bỏ thẻ chọn kênh và hỏi tài khoản Zalo + nhóm).
+ *    Chỉ tính là Zalo nhóm khi câu có chữ "zalo" hoặc không hề nhắc email/mail/địa chỉ email.
+ *
+ * @param {string} normalized Câu đã lowercase.
+ * @returns {boolean}
+ */
+export function isZaloGroupWording(normalized) {
+  if (/zalo\s*group|zalo\s*nh[oó]m|nh[oó]m\s*zalo/.test(normalized)) return true;
+  if (!/gửi\s*nh[oó]m|gui\s*nhom/.test(normalized)) return false;
+  const mentionsEmail = /\bemail\b|\bmail\b|thư điện tử|thu dien tu/.test(normalized) || EMAIL_ADDRESS_RE.test(normalized);
+  return /\bzalo\b/.test(normalized) || !mentionsEmail;
+}
+
 export function inferQuickSendChannel(text = '') {
   const normalized = String(text || '').toLowerCase();
-  if (/zalo\s*group|zalo\s*nh[oó]m|nh[oó]m\s*zalo|gửi\s*nh[oó]m|gui\s*nhom/.test(normalized)) {
+  if (isZaloGroupWording(normalized)) {
     return 'zalo_group';
   }
   return pickChannelByExplicitSignal(normalized, /\bemail\b|gửi mail|gui mail|thư|thu\b|mail\b/);

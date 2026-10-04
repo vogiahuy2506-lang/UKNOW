@@ -15,6 +15,7 @@ import {
   isQuickSendRequest,
   inferQuickSendChannel,
   isMultiDaySeriesRequestLocal,
+  isZaloGroupWording,
   pickChannelByExplicitSignal,
 } from '../../utils/campaignQuickSend.util.js';
 
@@ -123,7 +124,8 @@ const inferChannelFromTextBase = (text = '') => {
   const normalized = String(text || '').toLowerCase();
   const adapterChannel = inferAdapterChannelFromText(normalized);
   if (adapterChannel) return adapterChannel;
-  if (/zalo\s*group|zalo\s*nh[oó]m|nh[oó]m\s*zalo|gửi\s*nh[oó]m|gui\s*nhom/.test(normalized)) {
+  // "zalo nhóm" / "nhóm zalo" luôn là Zalo nhóm; "gửi nhóm" trần thì chỉ khi câu không nhắc email (rà soát C P2-3).
+  if (isZaloGroupWording(normalized)) {
     return 'zalo_group';
   }
   return pickChannelByExplicitSignal(normalized, /\bemail\b|gửi mail|gui mail|thư điện tử|thu dien tu/);

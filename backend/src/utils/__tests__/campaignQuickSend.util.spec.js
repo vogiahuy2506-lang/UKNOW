@@ -63,6 +63,14 @@ describe('campaignQuickSend.util', () => {
       expect(inferQuickSendChannel('gửi nhanh tin nhắn cho mtruong909@gmail.com')).toBe('email');
     });
 
+    it('C P2-3: "email gửi nhóm …" là EMAIL; "gửi nhóm" có zalo hoặc không nhắc email vẫn là Zalo nhóm', () => {
+      expect(inferQuickSendChannel('gửi nhanh email gửi nhóm học viên cũ')).toBe('email');
+      expect(inferQuickSendChannel('gửi nhanh gửi nhóm học viên gửi tới abc@gmail.com')).toBe('email');
+      expect(inferQuickSendChannel('gửi nhanh gửi nhóm zalo học viên')).toBe('zalo_group');
+      expect(inferQuickSendChannel('gửi nhanh zalo gửi nhóm học viên')).toBe('zalo_group');
+      expect(inferQuickSendChannel('gửi nhanh gửi nhóm học viên')).toBe('zalo_group');
+    });
+
     it('"tin nhắn" đứng một mình vẫn là Zalo như cũ', () => {
       expect(inferQuickSendChannel('gửi nhanh 1 tin nhắn cảm ơn')).toBeNull();
     });
