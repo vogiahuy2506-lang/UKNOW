@@ -20,6 +20,8 @@ import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
 import { consumeSseTicket } from '../services/sseTicket.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import { getAccessibleZaloAccountIds } from '../services/user/memberChannelAccess.service.js';
 import multer from 'multer';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
@@ -120,6 +122,23 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
     ? req.user.activeContext.ownerId
     : req.user.id;
 
+  // Phạm vi tài khoản Zalo cá nhân của kết nối này, tính MỘT lần lúc nối (PLAN_GIAO_TAI_KHOAN_ZALO G2): chủ / super admin →
+  // `null` (nhận hết); nhân viên → mảng id được giao (lỗi đọc bảng giao → [] = không nhận sự kiện Zalo nào). Đổi việc giao
+  // sau đó không tự áp vào kết nối đang mở — `employee.service` gọi `sseService.disconnectActor` để nhân viên nối lại.
+  let sseScope;
+  try {
+    const sseCtx = getWorkspaceContext(req.user);
+    sseScope = {
+      actorUserId: sseCtx.actorUserId,
+      accessibleZaloAccountIds: await getAccessibleZaloAccountIds(sseCtx),
+    };
+  } catch (err) {
+    console.error('[SSE] Không tính được phạm vi tài khoản Zalo — nối nhưng không nhận sự kiện Zalo cá nhân:', err.message);
+    sseScope = { actorUserId: req.user?.id ?? null, accessibleZaloAccountIds: [] };
+  }
+  // Khách đã bỏ kết nối trong lúc chờ đọc bảng giao: chưa đăng ký `close` nên đừng thêm vào bảng client (sẽ mồ côi).
+  if (res.destroyed || req.socket?.destroyed) return;
+
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -127,7 +146,7 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 
   res.write(`event: connected\ndata: ${JSON.stringify({ status: 'connected' })}\n\n`);
 
-  sseService.addClient(workspaceOwnerId, res);
+  sseService.addClient(workspaceOwnerId, res, sseScope);
 
   const heartbeat = setInterval(() => {
     try {

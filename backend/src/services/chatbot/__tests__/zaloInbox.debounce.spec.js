@@ -3,6 +3,8 @@ import { beforeEach, afterEach, describe, expect, it, jest } from '@jest/globals
 const mockFindConversation = jest.fn();
 const mockIsAiPaused = jest.fn();
 const mockGetLatestMessageId = jest.fn();
+const mockSetAiPaused = jest.fn();
+const mockListRecentAgentEchoCandidates = jest.fn();
 const mockGetChatbotSettings = jest.fn();
 const mockGetAccountSettings = jest.fn();
 const mockPickEnabledChatbotForZalo = jest.fn();
@@ -20,6 +22,8 @@ jest.unstable_mockModule('../../../repositories/chatbot/zaloPersonal.repository.
     findConversation: mockFindConversation,
     isAiPaused: mockIsAiPaused,
     getLatestMessageId: mockGetLatestMessageId,
+    setAiPaused: mockSetAiPaused,
+    listRecentAgentEchoCandidates: mockListRecentAgentEchoCandidates,
   },
 }));
 
@@ -161,7 +165,44 @@ describe('zaloInbox.service - Debounced Auto Reply', () => {
       channel: 'zalo_personal',
       message: 'Chào bạn, áo này còn size M ạ!',
       role: 'agent',
+      // G2: SSE lọc theo tài khoản được giao cho nhân viên — payload phải mang id tài khoản Zalo (zalo_settings.id).
+      zaloAccountId: 10,
     }));
+  });
+
+  // PLAN_GIAO_TAI_KHOAN_ZALO G2: MỌI sự kiện Zalo cá nhân phát qua SSE đều mang id tài khoản, nếu không bộ lọc theo
+  // nhân viên (sse.service.js clientMayReceive) sẽ chặn luôn cả với tài khoản được giao.
+  describe('G2 — payload SSE mang zaloAccountId', () => {
+    it('tin khách đến: sự kiện inbox:new_message có zaloAccountId của tài khoản nhận tin', async () => {
+      const handler = zaloInboxService.createMessageHandler(1, 10, 77);
+
+      await handler(
+        { msgId: 'zmsg_sse_1', fromUid: 'visitor_99', content: 'Shop ơi', type: 0 },
+        { conversationId: 200, messageId: 701 }
+      );
+
+      const visitorEvent = mockBroadcast.mock.calls
+        .map(([, , data]) => data)
+        .find((data) => data.message === 'Shop ơi');
+      expect(visitorEvent).toMatchObject({ channel: 'zalo_personal', type: 'zalo_personal', conversationId: 200, zaloAccountId: 77 });
+    });
+
+    it('chủ nhắn từ app Zalo (isSelf): sự kiện bàn giao có zaloAccountId', async () => {
+      mockFindConversation.mockResolvedValue({ id: 200, visitor_info: {}, visitor_name: 'Khách' });
+      mockListRecentAgentEchoCandidates.mockResolvedValue([]);
+      mockSetAiPaused.mockResolvedValue({ aiPaused: false, aiPausedAt: null });
+      const handler = zaloInboxService.createMessageHandler(1, 10, 77);
+
+      await handler(
+        { msgId: 'zmsg_self_1', fromUid: 'visitor_99', threadId: 'visitor_99', content: 'Chủ trả lời tay', type: 0, isSelf: true },
+        { conversationId: 200, messageId: 702 }
+      );
+
+      const selfEvent = mockBroadcast.mock.calls
+        .map(([, , data]) => data)
+        .find((data) => data.isSelf === true);
+      expect(selfEvent).toMatchObject({ channel: 'zalo_personal', role: 'agent', conversationId: 200, zaloAccountId: 77 });
+    });
   });
 
   // G3b (A P1-6): câu xin lỗi (hết credit / AI lỗi) KHÔNG được ghi nhãn 'ai_auto_reply' — bản tin tuần đếm theo nhãn đó.

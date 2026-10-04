@@ -7,11 +7,15 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 const mockFindEmployeeByIdAndOwner = jest.fn();
 const mockList = jest.fn();
 const mockSet = jest.fn();
+const mockDisconnectActor = jest.fn();
 
 const realEmployeeRepo = await import('../../../repositories/user/employee.repository.js');
 jest.unstable_mockModule('../../../repositories/user/employee.repository.js', () => ({
   ...realEmployeeRepo,
   findEmployeeByIdAndOwner: mockFindEmployeeByIdAndOwner,
+}));
+jest.unstable_mockModule('../../sse.service.js', () => ({
+  default: { disconnectActor: mockDisconnectActor },
 }));
 jest.unstable_mockModule('../memberChannelAccess.service.js', () => ({
   listZaloAssignmentsForOwner: mockList,
@@ -67,5 +71,33 @@ describe('setEmployeeChannelAccounts', () => {
     const err = await catchError(setEmployeeChannelAccounts(10, 99, [5], 10));
     expect(err).toMatchObject({ status: 404 });
     expect(mockSet).not.toHaveBeenCalled();
+    expect(mockDisconnectActor).not.toHaveBeenCalled();
+  });
+
+  it('G2: việc giao ĐỔI (gỡ hoặc thêm) → đóng luồng SSE đang mở của đúng nhân viên đó để nối lại với danh sách mới', async () => {
+    mockFindEmployeeByIdAndOwner.mockResolvedValue({ id: 20 });
+    mockList.mockResolvedValue([]);
+
+    mockSet.mockResolvedValue({ before: [5, 6], after: [5] });
+    await setEmployeeChannelAccounts(10, 20, [5], 10);
+    expect(mockDisconnectActor).toHaveBeenCalledTimes(1);
+    expect(mockDisconnectActor).toHaveBeenCalledWith(10, 20);
+
+    mockSet.mockResolvedValue({ before: [5], after: [5, 7] });
+    await setEmployeeChannelAccounts(10, 20, [5, 7], 10);
+    expect(mockDisconnectActor).toHaveBeenCalledTimes(2);
+  });
+
+  it('G2: việc giao KHÔNG đổi → không đụng tới luồng SSE; lỗi đóng SSE không làm hỏng việc giao đã lưu', async () => {
+    mockFindEmployeeByIdAndOwner.mockResolvedValue({ id: 20 });
+    mockList.mockResolvedValue([]);
+
+    mockSet.mockResolvedValue({ before: [5, 6], after: [5, 6] });
+    await setEmployeeChannelAccounts(10, 20, [5, 6], 10);
+    expect(mockDisconnectActor).not.toHaveBeenCalled();
+
+    mockSet.mockResolvedValue({ before: [], after: [8] });
+    mockDisconnectActor.mockImplementation(() => { throw new Error('res.end hỏng'); });
+    await expect(setEmployeeChannelAccounts(10, 20, [8], 10)).resolves.toMatchObject({ after: [8] });
   });
 });

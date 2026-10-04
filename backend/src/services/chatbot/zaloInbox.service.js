@@ -414,6 +414,8 @@ class ZaloPersonalInboxService {
             });
             sseService.broadcast(String(userId), 'inbox:new_message', {
               conversationId: conv.id,
+              // Id tài khoản Zalo: SSE lọc theo việc giao tài khoản cho nhân viên (sse.service.js clientMayReceive).
+              zaloAccountId: zaloSettingId,
               channel: 'zalo_personal',
               type: 'zalo_personal',
               message: content,
@@ -583,6 +585,8 @@ class ZaloPersonalInboxService {
       // Broadcast SSE
       sseService.broadcast(String(userId), 'inbox:new_message', {
         conversationId: conversation.id,
+        // Id tài khoản Zalo: SSE lọc theo việc giao tài khoản cho nhân viên (sse.service.js clientMayReceive).
+        zaloAccountId: zaloSettingId,
         channel: 'zalo_personal',
         type: 'zalo_personal',
         message: content,
@@ -905,6 +909,7 @@ class ZaloPersonalInboxService {
         }
         sseService.broadcast(String(userId), 'inbox:new_message', {
           conversationId: conversation.id,
+          zaloAccountId: zaloSettingId,
           channel: 'zalo_personal',
           message: result.content,
           messageType: 'text',

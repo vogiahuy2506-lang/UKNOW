@@ -26,6 +26,7 @@ import {
   setZaloAssignmentsForEmployee,
 } from './memberChannelAccess.service.js';
 import verificationService from '../verification.service.js';
+import sseService from '../sse.service.js';
 import { sumActiveTopupGrants, findTopupPricingByKey } from '../../repositories/payment/topup.repository.js';
 import { countValidLocks } from '../../repositories/payment/topupLock.repository.js';
 import {
@@ -439,6 +440,16 @@ export async function setEmployeeChannelAccounts(ownerId, employeeId, zaloAccoun
     accountIds: zaloAccountIds,
     actorUserId,
   });
+  // Luồng SSE Hộp thư tính danh sách tài khoản Zalo được giao LÚC NỐI. Việc giao vừa đổi (gỡ HOẶC thêm) thì đóng các
+  // kết nối đang mở của nhân viên này để họ nối lại với danh sách mới — không thì nhân viên vừa bị gỡ tài khoản vẫn nhận
+  // tin của tài khoản đó đến lần nối lại kế tiếp. Lỗi ở đây không được làm hỏng việc giao đã lưu.
+  if (before.length !== after.length || before.some((id, index) => id !== after[index])) {
+    try {
+      sseService.disconnectActor(ownerId, employeeId);
+    } catch (error) {
+      console.warn('[employee] Không đóng được luồng SSE sau khi đổi việc giao tài khoản Zalo:', error?.message || error);
+    }
+  }
   return {
     zaloAccounts: await listZaloAssignmentsForOwner(ownerId, employeeId),
     before,
