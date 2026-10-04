@@ -35,11 +35,11 @@ async function addEmployeeMembership(ownerId, employeeId, permissions = {}) {
   );
 }
 
-async function insertProduct(ownerId, name) {
+async function insertProduct(ownerId, name, kind = 'sale') {
   const { rows } = await db.query(
-    `INSERT INTO products (id_user, workspace_owner_id, product_name, status)
-     VALUES ($1, $2, $3, 'active') RETURNING id`,
-    [ownerId, ownerId, name]
+    `INSERT INTO products (id_user, workspace_owner_id, product_name, status, kind)
+     VALUES ($1, $2, $3, 'active', $4) RETURNING id`,
+    [ownerId, ownerId, name, kind]
   );
   return Number(rows[0].id);
 }
@@ -124,6 +124,8 @@ describe('GET /api/products/funnel (PR-1)', () => {
       revenue: 0,
       awaitingConfirm: 0,
       awaitingAmount: 0,
+      kind: 'sale',
+      hasPaidForm: false,
       formIds: [],
       landingViews: 0,
       leads: 0,
@@ -170,6 +172,58 @@ describe('GET /api/products/funnel (PR-1)', () => {
 
     const resAll = await request(app).get('/api/products/funnel?period=all').set('Authorization', `Bearer ${token}`);
     expect(byProduct(resAll)[p1]).toMatchObject({ awaitingConfirm: 3, awaitingAmount: 10000 });
+  });
+
+  it('sản phẩm event: Đăng ký = mọi bài nộp chưa huỷ, Để lại thông tin = chỉ lead landing; tiền null nếu không có biểu mẫu thu phí, số thật nếu có; sale giữ nguyên', async () => {
+    const owner = await createUser({ username: 'funnel_event' });
+    const ev = await insertProduct(owner.id, 'Hội thảo', 'event');
+    const evPaid = await insertProduct(owner.id, 'Workshop thu phí', 'event');
+    const sale = await insertProduct(owner.id, 'Khoá bán');
+    const lp = await insertLanding(owner.id, 'hoi-thao');
+    const fFree = await insertForm(owner.id, 'Đăng ký hội thảo', ev);
+    await attachFormToLanding(fFree, lp);
+    const fPaid = await insertForm(owner.id, 'Workshop', evPaid);
+    await db.query(`UPDATE forms SET payment_config = '{"enabled": true}'::jsonb WHERE id = $1`, [fPaid]);
+    const fSale = await insertForm(owner.id, 'Mua khoá', sale);
+    await db.query(`UPDATE forms SET payment_config = '{"enabled": true}'::jsonb WHERE id = $1`, [fSale]);
+
+    // event miễn phí: 3 bài nộp (1 huỷ) + 2 lead landing
+    await insertSubmission(owner.id, fFree, { status: 'submitted' });
+    await insertSubmission(owner.id, fFree, { status: 'submitted' });
+    await insertSubmission(owner.id, fFree, { status: 'cancelled' });
+    await insertLead(owner.id, 'hoi-thao', 1);
+    await insertLead(owner.id, 'hoi-thao', 2);
+    // event thu phí: 1 bài đã xác nhận 3.000, 1 bài chờ xác nhận 2.000
+    await insertSubmission(owner.id, fPaid, { status: 'confirmed', amount: 3000, paidDaysAgo: 1 });
+    await insertSubmission(owner.id, fPaid, { status: 'pending_payment', amount: 2000, reportedDaysAgo: 1 });
+    // sale: giữ định nghĩa cũ — bài 'submitted' KHÔNG phải Đăng ký
+    await insertSubmission(owner.id, fSale, { status: 'submitted' });
+    await insertSubmission(owner.id, fSale, { status: 'pending_payment', amount: 1000 });
+
+    const token = await loginAs(owner);
+    const res = await request(app).get('/api/products/funnel?period=30d').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    const rows = byProduct(res);
+    expect(rows[ev]).toMatchObject({
+      kind: 'event',
+      hasPaidForm: false,
+      registered: 2,
+      leads: 2,
+      leftContact: 2,
+      paid: null,
+      revenue: null,
+      awaitingConfirm: null,
+    });
+    expect(rows[evPaid]).toMatchObject({
+      kind: 'event',
+      hasPaidForm: true,
+      registered: 2,
+      paid: 1,
+      revenue: 3000,
+      awaitingConfirm: 1,
+      awaitingAmount: 2000,
+    });
+    expect(rows[sale]).toMatchObject({ kind: 'sale', hasPaidForm: true, registered: 1, submitted: 2, leftContact: 2, paid: 0, revenue: 0 });
   });
 
   it('nhân viên chỉ có quyền courses → 403; có reports_view → 200', async () => {

@@ -1044,6 +1044,7 @@ CREATE TABLE products (
   product_url     TEXT,
   target_audience TEXT,
   status          VARCHAR(50) DEFAULT 'active',
+  kind            VARCHAR(20) NOT NULL DEFAULT 'sale' CONSTRAINT products_kind_check CHECK (kind IN ('sale', 'event')),
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );

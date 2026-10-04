@@ -11,7 +11,7 @@ class ProductFunnelService {
    *
    * @param {object} authUser
    * @param {{ period?: string, startDate?: string, endDate?: string, allTime?: string }} query
-   * @returns {Promise<{ filters: object, rows: Array<{ productId: number, submitted: number, registered: number, paid: number, revenue: number, landingViews: number, leads: number, campaignClicks: number, interested: number, leftContact: number }> }>}
+   * @returns {Promise<{ filters: object, rows: Array<{ productId: number, submitted: number, registered: number, paid: number, revenue: number, awaitingConfirm: number, awaitingAmount: number, kind: string, hasPaidForm: boolean, landingViews: number, leads: number, campaignClicks: number, interested: number, leftContact: number }> }>}
    */
   async getFunnel(authUser, query = {}) {
     const scope = getWorkspaceScope(authUser);
@@ -59,13 +59,20 @@ class ProductFunnelService {
       const landingViews = landing?.landingViews || 0;
       const leads = landing?.leads || 0;
       const campaignClicks = people.size;
+      const isEvent = row.kind === 'event';
+      // Sự kiện miễn phí: không có biểu mẫu thu tiền (và chưa từng có số tiền) → các cột tiền là null, giao diện hiện "—".
+      const noMoney =
+        isEvent && !row.hasPaidForm && !row.paid && !row.revenue && !row.awaitingConfirm && !row.awaitingAmount;
+      const moneyCols = noMoney ? { paid: null, revenue: null, awaitingConfirm: null, awaitingAmount: null } : {};
       return {
         ...row,
+        ...moneyCols,
         landingViews,
         leads,
         campaignClicks,
         interested: landingViews + campaignClicks,
-        leftContact: leads + row.submitted,
+        // event: bài nộp đã là Đăng ký → không đếm lần hai ở Để lại thông tin (chỉ lead landing).
+        leftContact: isEvent ? leads : leads + row.submitted,
       };
     });
     return { filters, rows };

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within, fireEvent } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { I18nProvider } from '../../../i18n';
@@ -10,6 +10,8 @@ vi.mock('../../../features/products/services/productApi.service', () => ({
     getProducts: vi.fn(),
     getFunnel: vi.fn(),
     getCategories: vi.fn(),
+    createProduct: vi.fn(),
+    updateProduct: vi.fn(),
   },
 }));
 vi.mock('../../../features/storage/useStorageQuota', () => ({ default: () => ({ usage: null }) }));
@@ -112,6 +114,50 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     expect(cell.className).not.toContain('text-amber-600');
     expect(cell.getAttribute('title')).toBeNull();
     expect(within(cell).queryByRole('link')).toBeNull();
+  });
+
+  it('sự kiện không thu tiền: huy hiệu Sự kiện, giá trống hiện Miễn phí, Chờ xác nhận / Đã trả / Doanh thu hiện "—" (không phải 0)', async () => {
+    productApiService.getProducts.mockResolvedValue({
+      data: { data: { products: [{ id: 12, productName: 'Hội thảo AI', kind: 'event', price: '', status: 'active' }], pagination: { total: 1, totalPages: 1 } } },
+    });
+    productApiService.getFunnel.mockResolvedValue({
+      data: {
+        data: {
+          filters: {},
+          rows: [{ productId: 12, kind: 'event', registered: 3, leftContact: 2, interested: 5, paid: null, revenue: null, awaitingConfirm: null, awaitingAmount: null, formIds: [8] }],
+        },
+      },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('funnel-registered')).toHaveTextContent('3'));
+    expect(screen.getByTestId('product-kind-badge')).toHaveTextContent('Sự kiện');
+    expect(screen.getByText('Miễn phí')).toBeInTheDocument();
+    expect(screen.getByTestId('funnel-awaiting')).toHaveTextContent('—');
+    expect(screen.getByTestId('funnel-paid')).toHaveTextContent('—');
+    expect(screen.getByTestId('funnel-revenue')).toHaveTextContent('—');
+  });
+
+  it('sản phẩm bán không có huy hiệu Sự kiện', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('funnel-registered')).toHaveTextContent('2'));
+    expect(screen.queryByTestId('product-kind-badge')).toBeNull();
+  });
+
+  it('modal thêm: có ô Loại (mặc định sản phẩm bán), chọn Sự kiện thì gửi kind=event và ô Giá có placeholder Miễn phí', async () => {
+    productApiService.getCategories.mockResolvedValue({ data: { data: { categories: [] } } });
+    productApiService.createProduct.mockResolvedValue({});
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khoá AI thực chiến')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Thêm sản phẩm/ }));
+    const select = await screen.findByTestId('product-kind-select');
+    expect(select.value).toBe('sale');
+    fireEvent.change(select, { target: { value: 'event' } });
+    expect(screen.getByPlaceholderText('Miễn phí')).toBeInTheDocument();
+    const nameInput = document.querySelector('input[required]');
+    fireEvent.change(nameInput, { target: { value: 'Buổi tư vấn' } });
+    fireEvent.submit(nameInput.closest('form'));
+    await waitFor(() => expect(productApiService.createProduct).toHaveBeenCalled());
+    expect(productApiService.createProduct.mock.calls[0][0]).toMatchObject({ productName: 'Buổi tư vấn', kind: 'event' });
   });
 
   it('nhân viên không có reports_view: không gọi API phễu, không có cột', async () => {

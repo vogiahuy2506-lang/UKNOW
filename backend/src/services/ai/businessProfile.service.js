@@ -25,8 +25,10 @@ export function serializeProductList(products) {
   if (!arr.length) return '';
   return arr.map((p, i) => {
     const name = p.product_name || p.productName || p.name || 'Sản phẩm';
-    const parts = [`${i + 1}. ${name}`];
-    const price = p.price;
+    const isEvent = String(p.kind || '').toLowerCase() === 'event';
+    const parts = [`${i + 1}. ${name}${isEvent ? ' (sự kiện)' : ''}`];
+    // Sự kiện không ghi giá = miễn phí; sản phẩm bán không ghi giá thì để trống (không được nói "miễn phí" bừa).
+    const price = p.price || (isEvent ? 'Miễn phí' : p.price);
     const originalPrice = p.original_price || p.originalPrice;
     const category = p.category;
     if (category) parts.push(`Danh mục: ${category}`);

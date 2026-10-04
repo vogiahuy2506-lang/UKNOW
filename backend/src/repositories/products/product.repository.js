@@ -44,6 +44,7 @@ class ProductRepository {
         thumbnail_url,
         product_url,
         target_audience,
+        kind,
         created_at,
         updated_at
       FROM products AS products
@@ -81,6 +82,7 @@ class ProductRepository {
         thumbnail_url,
         product_url,
         target_audience,
+        kind,
         created_at,
         updated_at
       FROM products
@@ -107,7 +109,7 @@ class ProductRepository {
       ? `AND COALESCE(NULLIF(LOWER(BTRIM(status)), ''), 'active') = 'active'`
       : '';
     const result = await db.query(
-      `SELECT id, product_code, product_name, price, original_price, description, usp, category, thumbnail_url, product_url, target_audience, status
+      `SELECT id, product_code, product_name, price, original_price, description, usp, category, thumbnail_url, product_url, target_audience, status, kind
        FROM products
        WHERE COALESCE(workspace_owner_id, id_user) = $1
        ${activeClause}
@@ -131,14 +133,15 @@ class ProductRepository {
     productUrl,
     targetAudience,
     status,
+    kind = 'sale',
   }) {
     const { rows } = await db.query(
       `INSERT INTO products (
         id_user, workspace_owner_id, created_by, product_code, product_name, description, usp,
-        price, original_price, category, thumbnail_url, product_url, target_audience, status
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+        price, original_price, category, thumbnail_url, product_url, target_audience, status, kind
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
       RETURNING id`,
-      [workspaceOwnerId, workspaceOwnerId, createdBy, productCode, productName, description, usp, price, originalPrice, category, thumbnailUrl, productUrl, targetAudience, status]
+      [workspaceOwnerId, workspaceOwnerId, createdBy, productCode, productName, description, usp, price, originalPrice, category, thumbnailUrl, productUrl, targetAudience, status, kind]
     );
     return rows[0]?.id || null;
   }
@@ -155,6 +158,7 @@ class ProductRepository {
     productUrl,
     targetAudience,
     status,
+    kind = 'sale',
   }) {
     const { rows } = await db.query(
       `UPDATE products
@@ -170,11 +174,12 @@ class ProductRepository {
          product_url = $9,
          target_audience = $10,
          status = $11,
+         kind = $12,
          updated_at = CURRENT_TIMESTAMP
-       WHERE id = $12
-         AND COALESCE(workspace_owner_id, id_user) = $13
+       WHERE id = $13
+         AND COALESCE(workspace_owner_id, id_user) = $14
        RETURNING id`,
-      [productCode, productName, price, originalPrice, description, usp, category, thumbnailUrl, productUrl, targetAudience, status, id, workspaceOwnerId]
+      [productCode, productName, price, originalPrice, description, usp, category, thumbnailUrl, productUrl, targetAudience, status, kind, id, workspaceOwnerId]
     );
     return rows[0] || null;
   }

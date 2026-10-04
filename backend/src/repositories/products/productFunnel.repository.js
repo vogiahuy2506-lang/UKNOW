@@ -9,6 +9,7 @@ class ProductFunnelRepository {
    * - `paid`       : đã được chủ xác nhận — `paid_confirmed_at IS NOT NULL`, lọc theo `paid_confirmed_at`
    *                  (KHÔNG dùng `status='confirmed'`: đặt lịch không thu tiền cũng là confirmed).
    * - `revenue`    : SUM(`payment_amount`) của chính các dòng `paid`.
+   * - `registered` của sản phẩm `kind='event'`: mọi bài nộp chưa huỷ (xem `registeredStatus`).
    * - `awaitingConfirm` / `awaitingAmount`: "Chờ xác nhận" — bài `pending_payment` mà khách ĐÃ BÁO chuyển khoản
    *                  (`payer_reported_paid_at` hoặc `payment_receipt_key` có giá trị): việc chủ còn phải làm. Là trạng thái HIỆN TẠI,
    *                  KHÔNG lọc theo khoảng ngày (khách báo từ 60 ngày trước mà chủ chưa bấm vẫn phải hiện). `awaitingAmount` = SUM(`payment_amount`).
@@ -17,7 +18,7 @@ class ProductFunnelRepository {
    * Mọi sản phẩm của workspace đều có dòng (không có bài nộp thì 0).
    *
    * @param {{ workspaceOwnerId: number, startAt?: string|null, endExclusive?: string|null }} params
-   * @returns {Promise<Array<{ productId: number, submitted: number, registered: number, paid: number, revenue: number, awaitingConfirm: number, awaitingAmount: number, formIds: number[] }>>}
+   * @returns {Promise<Array<{ productId: number, submitted: number, registered: number, paid: number, revenue: number, awaitingConfirm: number, awaitingAmount: number, kind: 'sale'|'event', hasPaidForm: boolean, formIds: number[] }>>}
    */
   async aggregateFormFunnelByProduct({ workspaceOwnerId, startAt = null, endExclusive = null }) {
     const inCreated = `($2::timestamptz IS NULL OR fs.created_at >= $2::timestamptz)
@@ -27,6 +28,10 @@ class ProductFunnelRepository {
           AND ($3::timestamptz IS NULL OR fs.paid_confirmed_at < $3::timestamptz)`;
     const awaiting = `fs.status = 'pending_payment'
           AND (fs.payer_reported_paid_at IS NOT NULL OR fs.payment_receipt_key IS NOT NULL)`;
+    // Đăng ký theo loại: sale = chờ thanh toán / đã xác nhận; event (miễn phí, không đặt lịch) = mọi bài nộp chưa huỷ —
+    // bài nộp CHÍNH LÀ lượt đăng ký. Chỉ `registered` đổi theo loại; `submitted` giữ nguyên (service quyết "Để lại thông tin").
+    const registeredStatus = `(CASE WHEN pk.kind = 'event' THEN fs.status <> 'cancelled'
+                                ELSE fs.status IN ('pending_payment', 'confirmed') END)`;
     const result = await db.query(
       `SELECT
          p.id AS "productId",
@@ -34,6 +39,12 @@ class ProductFunnelRepository {
          COALESCE(s.registered, 0)::int AS registered,
          COALESCE(s.paid, 0)::int AS paid,
          COALESCE(s.revenue, 0)::bigint AS revenue,
+         p.kind AS kind,
+         EXISTS (
+           SELECT 1 FROM forms f3
+           WHERE f3.product_id = p.id AND f3.workspace_owner_id = $1
+             AND f3.payment_config->>'enabled' = 'true'
+         ) AS "hasPaidForm",
          COALESCE(s.awaiting_confirm, 0)::int AS "awaitingConfirm",
          COALESCE(s.awaiting_amount, 0)::bigint AS "awaitingAmount",
          ARRAY(
@@ -46,13 +57,14 @@ class ProductFunnelRepository {
          SELECT
            f.product_id,
            COUNT(*) FILTER (WHERE fs.status <> 'cancelled' AND ${inCreated}) AS submitted,
-           COUNT(*) FILTER (WHERE fs.status IN ('pending_payment', 'confirmed') AND ${inCreated}) AS registered,
+           COUNT(*) FILTER (WHERE ${registeredStatus} AND ${inCreated}) AS registered,
            COUNT(*) FILTER (WHERE ${inPaid}) AS paid,
            SUM(fs.payment_amount) FILTER (WHERE ${inPaid}) AS revenue,
            COUNT(*) FILTER (WHERE ${awaiting}) AS awaiting_confirm,
            SUM(fs.payment_amount) FILTER (WHERE ${awaiting}) AS awaiting_amount
          FROM form_submissions fs
          JOIN forms f ON f.id = fs.form_id
+         JOIN products pk ON pk.id = f.product_id
          WHERE f.workspace_owner_id = $1
            AND fs.workspace_owner_id = $1
            AND f.product_id IS NOT NULL
@@ -70,6 +82,8 @@ class ProductFunnelRepository {
       revenue: Number(r.revenue || 0),
       awaitingConfirm: Number(r.awaitingConfirm || 0),
       awaitingAmount: Number(r.awaitingAmount || 0),
+      kind: r.kind === 'event' ? 'event' : 'sale',
+      hasPaidForm: Boolean(r.hasPaidForm),
       formIds: (r.formIds || []).map(Number),
     }));
   }

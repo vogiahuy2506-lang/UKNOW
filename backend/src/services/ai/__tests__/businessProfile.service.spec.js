@@ -44,6 +44,23 @@ describe('serializeProductList', () => {
     expect(text).toContain('Link: https://example.com/pro');
   });
 
+  it('sự kiện: thêm "(sự kiện)" sau tên; không ghi giá thì là "Miễn phí"; có giá thì giữ giá; sản phẩm bán không giá KHÔNG bị ghi miễn phí', () => {
+    const [free, paidEvent, sale, saleNoKind] = serializeProductList([
+      { product_name: 'Hội thảo AI', kind: 'event' },
+      { product_name: 'Workshop', kind: 'event', price: '200k' },
+      { product_name: 'Khoá học', kind: 'sale' },
+      { product_name: 'Cũ' },
+    ]).split('\n');
+    expect(free).toContain('1. Hội thảo AI (sự kiện)');
+    expect(free).toContain('Giá: Miễn phí');
+    expect(paidEvent).toContain('Workshop (sự kiện)');
+    expect(paidEvent).toContain('Giá: 200k');
+    expect(paidEvent).not.toContain('Miễn phí');
+    expect(sale).not.toContain('sự kiện');
+    expect(sale).not.toContain('Miễn phí');
+    expect(saleNoKind).not.toContain('Miễn phí');
+  });
+
   it('omits original price when same as price', () => {
     const text = serializeProductList([{ product_name: 'A', price: '100k', original_price: '100k' }]);
     expect(text).not.toContain('Giá gốc');

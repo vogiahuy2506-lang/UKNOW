@@ -42,6 +42,7 @@ router.post(
     body('productUrl').optional({ nullable: true }).trim(),
     body('targetAudience').optional({ nullable: true }).trim(),
     body('status').optional({ nullable: true }).trim(),
+    body('kind').optional().isIn(['sale', 'event']).withMessage('Loại sản phẩm không hợp lệ'),
   ],
   handleValidationErrors,
   productsController.create.bind(productsController)
@@ -63,6 +64,7 @@ router.put(
     body('productUrl').optional({ nullable: true }).trim(),
     body('targetAudience').optional({ nullable: true }).trim(),
     body('status').optional({ nullable: true }).trim(),
+    body('kind').optional().isIn(['sale', 'event']).withMessage('Loại sản phẩm không hợp lệ'),
   ],
   handleValidationErrors,
   productsController.update.bind(productsController)

@@ -37,7 +37,10 @@ const EMPTY_FORM = {
   productUrl: '',
   targetAudience: '',
   status: 'active',
+  kind: 'sale',
 };
+
+const PRODUCT_KIND_OPTIONS = ['sale', 'event'];
 
 const StatusBadge = ({ status }) => {
   const { t } = useI18n();
@@ -64,6 +67,8 @@ const formatDate = (v) => {
 // của biểu mẫu đó; nhiều biểu mẫu → danh sách biểu mẫu (PR-1).
 const FunnelCells = ({ funnel }) => {
   const { t } = useI18n();
+  // Sự kiện miễn phí không thu tiền: API trả null cho các cột tiền → hiện "—" (khác 0 đồng).
+  const noMoney = funnel?.paid === null && funnel?.revenue === null;
   const awaiting = funnel?.awaitingConfirm ?? 0;
   const registered = funnel?.registered ?? 0;
   const formIds = funnel?.formIds || [];
@@ -91,7 +96,9 @@ const FunnelCells = ({ funnel }) => {
         data-testid="funnel-awaiting"
         title={awaiting > 0 ? t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) }) : undefined}
       >
-        {target && awaiting > 0 ? (
+        {noMoney ? (
+          '—'
+        ) : target && awaiting > 0 ? (
           <Link to={target} className="hover:underline">
             {awaiting}
           </Link>
@@ -100,10 +107,10 @@ const FunnelCells = ({ funnel }) => {
         )}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-paid">
-        {funnel?.paid ?? 0}
+        {noMoney ? '—' : funnel?.paid ?? 0}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900" data-testid="funnel-revenue">
-        {formatMoney(funnel?.revenue)}
+        {noMoney ? '—' : formatMoney(funnel?.revenue)}
       </td>
     </>
   );
@@ -216,6 +223,7 @@ const Products = () => {
       productUrl: product.productUrl || '',
       targetAudience: product.targetAudience || '',
       status: product.status || 'active',
+      kind: product.kind === 'event' ? 'event' : 'sale',
     });
     setFormModal({ mode: 'edit', id: product.id });
     loadCategories();
@@ -418,6 +426,14 @@ const Products = () => {
                           <div className="min-w-0">
                             <div className="text-sm font-medium text-gray-900 truncate">
                               {product.productName}
+                              {product.kind === 'event' && (
+                                <span
+                                  data-testid="product-kind-badge"
+                                  className="badge ml-2 bg-purple-100 text-purple-700 align-middle"
+                                >
+                                  {t('products.kindEventBadge')}
+                                </span>
+                              )}
                             </div>
                             {product.category && (
                               <div className="text-xs text-gray-500 mt-1">{product.category}</div>
@@ -426,7 +442,7 @@ const Products = () => {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                        {product.price || '—'}
+                        {product.price || (product.kind === 'event' ? t('products.priceFreePlaceholder') : '—')}
                       </td>
                       {canViewFunnel && (
                         <FunnelCells funnel={funnelByProduct[product.id]} />
@@ -528,12 +544,28 @@ const Products = () => {
                 </div>
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="product-kind-select">{t('products.kindLabel')}</label>
+                <select
+                  id="product-kind-select"
+                  data-testid="product-kind-select"
+                  value={formData.kind}
+                  onChange={(e) => setField('kind', e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                >
+                  {PRODUCT_KIND_OPTIONS.map((kind) => (
+                    <option key={kind} value={kind}>
+                      {kind === 'event' ? t('products.kindEvent') : t('products.kindSale')}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.price')}</label>
                 <input
                   type="text"
                   value={formData.price}
                   onChange={(e) => setField('price', e.target.value)}
-                  placeholder={t('products.pricePlaceholder')}
+                  placeholder={formData.kind === 'event' ? t('products.priceFreePlaceholder') : t('products.pricePlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
               </div>

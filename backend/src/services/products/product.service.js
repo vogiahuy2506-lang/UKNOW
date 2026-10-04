@@ -3,7 +3,15 @@ import productRepository from '../../repositories/products/product.repository.js
 import businessProfileService from '../ai/businessProfile.service.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
 
+export const PRODUCT_KINDS = ['sale', 'event'];
+
 class ProductService {
+  /** Thiếu / sai → 'sale' (khớp DEFAULT của cột): đường tạo cũ (AI, import) không bao giờ ghi null. */
+  normalizeKind(rawKind) {
+    const kind = typeof rawKind === 'string' ? rawKind.trim().toLowerCase() : '';
+    return PRODUCT_KINDS.includes(kind) ? kind : 'sale';
+  }
+
   normalizeStatus(rawStatus) {
     const status = typeof rawStatus === 'string' ? rawStatus.trim().toLowerCase() : '';
     return status || 'active';
@@ -17,6 +25,7 @@ class ProductService {
       price: row.price || '',
       originalPrice: row.original_price || '',
       status: this.normalizeStatus(row.status),
+      kind: this.normalizeKind(row.kind),
       description: row.description,
       usp: row.usp,
       category: row.category,
@@ -108,6 +117,7 @@ class ProductService {
       productUrl: payload.productUrl?.trim() || null,
       targetAudience: payload.targetAudience?.trim() || null,
       status: this.normalizeStatus(payload.status),
+      kind: this.normalizeKind(payload.kind),
     });
 
     await businessProfileService.reembedChunks(workspaceOwnerId).catch((e) => {
@@ -145,6 +155,7 @@ class ProductService {
       productUrl: payload.productUrl !== undefined ? (payload.productUrl?.trim() || null) : row.product_url,
       targetAudience: payload.targetAudience !== undefined ? (payload.targetAudience?.trim() || null) : row.target_audience,
       status: payload.status !== undefined ? this.normalizeStatus(payload.status) : this.normalizeStatus(row.status),
+      kind: payload.kind !== undefined ? this.normalizeKind(payload.kind) : this.normalizeKind(row.kind),
     });
 
     await businessProfileService.reembedChunks(resourceOwnerId).catch((e) => {

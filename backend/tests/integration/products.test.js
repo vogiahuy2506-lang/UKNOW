@@ -77,6 +77,15 @@ describe('Products employee workspace ownership', () => {
     expect(Number(rows[0].workspace_owner_id)).toBe(Number(ownerA.id));
     expect(Number(rows[0].created_by)).toBe(Number(employee.id));
     expect(reembedChunks).toHaveBeenCalledWith(Number(ownerA.id));
+    // Không gửi kind -> DEFAULT 'sale'; kind=event ghi/đọc được; kind lạ bị validator chặn
+    expect(createRes.body.data.kind).toBe('sale');
+    const evRes = await request(app).post('/api/products').set(headers).send({ productName: 'Hội thảo', kind: 'event' });
+    expect(evRes.status).toBe(201);
+    expect(evRes.body.data.kind).toBe('event');
+    const badRes = await request(app).post('/api/products').set(headers).send({ productName: 'X', kind: 'zzz' });
+    expect(badRes.status).toBe(400);
+    const putRes = await request(app).put(`/api/products/${evRes.body.data.id}`).set(headers).send({ productName: 'Hội thảo 2' });
+    expect(putRes.body.data.kind).toBe('event');
 
     const crossTenantRes = await request(app).get(`/api/products/${productB.id}`).set(headers);
     expect(crossTenantRes.status).toBe(404);

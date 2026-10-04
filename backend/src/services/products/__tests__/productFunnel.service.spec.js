@@ -66,6 +66,39 @@ describe('productFunnel.service getFunnel', () => {
   });
 });
 
+describe('productFunnel.service — loại sản phẩm (sale / event)', () => {
+  const base = { submitted: 3, registered: 2, paid: 0, revenue: 0, awaitingConfirm: 0, awaitingAmount: 0, formIds: [7] };
+  it('event: Để lại thông tin chỉ là lead landing (không cộng bài nộp); sale vẫn lead + bài nộp', async () => {
+    aggregateFormFunnelByProduct.mockResolvedValue([
+      { ...base, productId: 1, kind: 'event', hasPaidForm: false },
+      { ...base, productId: 2, kind: 'sale', hasPaidForm: false },
+    ]);
+    aggregateLandingFunnelByProduct.mockResolvedValue([
+      { productId: 1, productUrl: null, landings: [], landingViews: 0, leads: 4 },
+      { productId: 2, productUrl: null, landings: [], landingViews: 0, leads: 4 },
+    ]);
+    const out = await productFunnelService.getFunnel(owner, { period: 'all' });
+    expect(out.rows[0].leftContact).toBe(4);
+    expect(out.rows[1].leftContact).toBe(7);
+    expect(out.rows[0].kind).toBe('event');
+    expect(out.rows[1].kind).toBe('sale');
+  });
+
+  it('event không có biểu mẫu thu tiền: các cột tiền null; có biểu mẫu thu tiền hoặc đã có số tiền thì giữ số thật; sale không bao giờ null', async () => {
+    aggregateFormFunnelByProduct.mockResolvedValue([
+      { ...base, productId: 1, kind: 'event', hasPaidForm: false },
+      { ...base, productId: 2, kind: 'event', hasPaidForm: true, paid: 2, revenue: 4000, awaitingConfirm: 1, awaitingAmount: 2000 },
+      { ...base, productId: 3, kind: 'event', hasPaidForm: false, paid: 1, revenue: 500 },
+      { ...base, productId: 4, kind: 'sale', hasPaidForm: false },
+    ]);
+    const out = await productFunnelService.getFunnel(owner, { period: 'all' });
+    expect(out.rows[0]).toMatchObject({ paid: null, revenue: null, awaitingConfirm: null, awaitingAmount: null });
+    expect(out.rows[1]).toMatchObject({ paid: 2, revenue: 4000, awaitingConfirm: 1, awaitingAmount: 2000 });
+    expect(out.rows[2]).toMatchObject({ paid: 1, revenue: 500 });
+    expect(out.rows[3]).toMatchObject({ paid: 0, revenue: 0, awaitingConfirm: 0 });
+  });
+});
+
 describe('productFunnel.service — Quan tâm / Để lại thông tin (PR-2/PR-3)', () => {
   it('gộp landingViews, leads, campaignClicks (khử trùng người) và hai trường tiện cho giao diện', async () => {
     aggregateFormFunnelByProduct.mockResolvedValue([
