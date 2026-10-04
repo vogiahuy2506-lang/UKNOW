@@ -1360,5 +1360,80 @@ describe('aiCampaign.service', () => {
         html: expect.stringContaining('<!DOCTYPE html>'),
       });
     });
+
+    // PR-9 (C P2-5 / B-5): client mới tự gọi route sinh landing → lượt chat chỉ trả Ý ĐỊNH, không gọi Gemini lần hai trong cùng request.
+    describe('deferLandingGeneration — chat không tự sinh landing', () => {
+      const landingModelReply = (data) => ({
+        data: {
+          candidates: [{
+            finishReason: 'STOP',
+            content: {
+              parts: [{ text: JSON.stringify({ type: 'landing_page', content: 'Mình sẽ tạo trang cho bạn', missing_fields: [], data }) }],
+            },
+          }],
+        },
+      });
+
+      it('KHÔNG gọi aiLandingPageService.generate; trả prompt đã chuẩn bị + tên gợi ý + ngôn ngữ + needsGeneration, không có html', async () => {
+        generateLandingPageMock.mockClear();
+        axiosPost.mockResolvedValueOnce(landingModelReply({
+          title: 'Khoá Học AI Pro',
+          prompt: 'Trang landing giới thiệu khoá học AI chuyên sâu',
+        }));
+
+        const res = await aiCampaignService.processSmartChat({
+          history: [{ role: 'user', content: 'Tạo trang giới thiệu khoá học AI' }],
+          userId: 1,
+          resourceOwnerUserId: 10,
+          deferLandingGeneration: true,
+        });
+
+        expect(generateLandingPageMock).not.toHaveBeenCalled();
+        expect(res.type).toBe('landing_page');
+        expect(res.data).toMatchObject({
+          prompt: 'Trang landing giới thiệu khoá học AI chuyên sâu',
+          title: 'Khoá Học AI Pro',
+          contentLocale: expect.any(String),
+          needsGeneration: true,
+        });
+        expect(res.data).not.toHaveProperty('html');
+      });
+
+      it('model lỡ tự viết html/css trong data → bị bỏ (trang chỉ do route sinh tạo, có chốt an toàn)', async () => {
+        axiosPost.mockResolvedValueOnce(landingModelReply({
+          title: 'T', prompt: 'Trang X', html: '<script>alert(1)</script>', css: 'body{}',
+        }));
+        const res = await aiCampaignService.processSmartChat({
+          history: [{ role: 'user', content: 'Tạo trang X' }],
+          userId: 1,
+          deferLandingGeneration: true,
+        });
+        expect(res.data).not.toHaveProperty('html');
+        expect(res.data).not.toHaveProperty('css');
+        expect(res.data.needsGeneration).toBe(true);
+      });
+
+      it('thiếu data.prompt → dùng nội dung câu trả lời của model rồi tới câu cuối của khách làm prompt', async () => {
+        axiosPost.mockResolvedValueOnce(landingModelReply({ title: '' }));
+        const res = await aiCampaignService.processSmartChat({
+          history: [{ role: 'user', content: 'Tạo trang bán khoá học' }],
+          userId: 1,
+          deferLandingGeneration: true,
+        });
+        expect(res.data.prompt).toBe('Mình sẽ tạo trang cho bạn');
+      });
+
+      it('không bật cờ (client cũ) → giữ cách cũ: vẫn sinh trang trong lượt chat', async () => {
+        generateLandingPageMock.mockClear();
+        axiosPost.mockResolvedValueOnce(landingModelReply({ title: 'T', prompt: 'Trang X' }));
+        const res = await aiCampaignService.processSmartChat({
+          history: [{ role: 'user', content: 'Tạo trang X' }],
+          userId: 1,
+        });
+        expect(generateLandingPageMock).toHaveBeenCalledTimes(1);
+        expect(res.data.html).toEqual(expect.stringContaining('<!DOCTYPE html>'));
+        expect(res.data).not.toHaveProperty('needsGeneration');
+      });
+    });
   });
 });

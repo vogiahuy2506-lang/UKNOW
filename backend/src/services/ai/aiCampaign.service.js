@@ -341,6 +341,12 @@ class AiCampaignService {
     // C P3-3 — hàm async do controller truyền (trả kết quả checkUserResourceLimit cho tài nguyên `campaigns` hoặc null); không
     // truyền = không kiểm (spec, đường gọi khác). Service không tự chạm DB để cổng này không kéo theo hạ tầng vào mọi test.
     campaignSlotCheck = null,
+    // PR-9 (B-4 / B-5 / C P2-5) — true = client MỚI tự gọi route sinh landing (luồng NDJSON, có tự kiểm hiển thị, nhận tệp của lượt)
+    // nên lượt chat chỉ trả ý định `landing_page` + prompt đã chuẩn bị, KHÔNG sinh trang trong cùng request (trước đây runChat
+    // ≤120 s + sinh ≤120 s nối tiếp → 524 Cloudflare, trừ credit khi khách không nhận được trang, logo/ảnh khách vừa gửi không
+    // tới được trang). false = client cũ (tab chưa tải lại sau deploy) chưa biết gọi route sinh → giữ cách sinh trong lượt chat cũ
+    // để không làm gãy; xoá nhánh này khi không còn client cũ.
+    deferLandingGeneration = false,
   }) {
     let contextBlock = '';
     // Tenant resources (courses, templates, profile) belong to workspace owner;
@@ -1928,21 +1934,38 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       const landingPrompt = String(
         finalResponse.data.prompt || finalResponse.content || lastUserText || ''
       ).trim();
-      const generated = await aiLandingPageService.generate({
-        userId: ownerId,
-        actorUserId: userId,
-        prompt: landingPrompt,
-        titleHint: String(finalResponse.data.title || '').trim(),
-        contentLocale: resolvedLocaleContext?.contentLocale || locale || 'vi',
-      });
-      finalResponse = {
-        ...finalResponse,
-        data: {
-          ...finalResponse.data,
-          title: generated.title,
-          html: generated.html,
-        },
-      };
+      const landingContentLocale = resolvedLocaleContext?.contentLocale || locale || 'vi';
+      if (deferLandingGeneration) {
+        // Chỉ trả Ý ĐỊNH: prompt đã chuẩn bị + tên gợi ý + ngôn ngữ. Model không được viết html (prompt đã cấm), nếu lỡ có thì bỏ — trang
+        // chỉ do route sinh (có chốt an toàn / tự kiểm) tạo ra. Controller gắn thêm danh sách tệp của lượt (đã promote) trước khi trả.
+        const { html: _modelHtml, css: _modelCss, ...intentData } = finalResponse.data;
+        finalResponse = {
+          ...finalResponse,
+          data: {
+            ...intentData,
+            prompt: landingPrompt,
+            title: String(finalResponse.data.title || '').trim(),
+            contentLocale: landingContentLocale,
+            needsGeneration: true,
+          },
+        };
+      } else {
+        const generated = await aiLandingPageService.generate({
+          userId: ownerId,
+          actorUserId: userId,
+          prompt: landingPrompt,
+          titleHint: String(finalResponse.data.title || '').trim(),
+          contentLocale: landingContentLocale,
+        });
+        finalResponse = {
+          ...finalResponse,
+          data: {
+            ...finalResponse.data,
+            title: generated.title,
+            html: generated.html,
+          },
+        };
+      }
     }
 
     const _wizard = buildWizard(gateAskedFinal, planChange);

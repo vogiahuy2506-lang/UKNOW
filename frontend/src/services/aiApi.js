@@ -64,7 +64,9 @@ const aiApi = {
    *   aiCampaign.service.js chỗ gắn planSlotKey.
    */
   chat: async (history, files = [], sessionId = null, locale = 'vi', intent = null, planSlotKey = null) => {
-    const payload = { history, files, sessionId, locale };
+    // PR-9 (B-4 / B-5): báo cho backend biết client này TỰ gọi route sinh landing khi trợ lý trả ý định `landing_page` — lượt chat
+    // không còn sinh trang trong cùng request (trước đây chat + sinh nối tiếp → 524, tệp khách vừa gửi không tới được trang).
+    const payload = { history, files, sessionId, locale, clientGeneratesLanding: true };
     if (intent) payload.intent = intent;
     if (planSlotKey) payload.planSlotKey = planSlotKey;
     const response = await api.post('/ai/chat', payload, {
@@ -169,20 +171,24 @@ const aiApi = {
    *
    * PR-9 (B-4): đọc phản hồi LUỒNG của backend (postAiTurn) — một lượt sinh dài 60–150 giây không còn bị Cloudflare cắt ở 100 giây
    * (524), và `requestId` (một mã cho mỗi lần gọi) chống trừ credit hai lần. Giá trị trả về giữ nguyên `{ success, data }` như cũ.
-   * @param {{ onStage?: (stage: string) => void, signal?: AbortSignal, requestId?: string }} [options]
-   *   `onStage('generating'|'fixing')` báo tiến độ để hiện chữ "Đang viết trang…".
+   * @param {{ onStage?: (stage: string) => void, signal?: AbortSignal, requestId?: string, locale?: string, skipUserMessage?: boolean }} [options]
+   *   `onStage('generating'|'fixing')` báo tiến độ để hiện chữ "Đang viết trang…". `locale`: ngôn ngữ nội dung trang khi không có
+   *   landingBrief (ý định từ lượt chat). `skipUserMessage`: lượt chat đã lưu tin user (kèm tệp) → server chỉ thêm thẻ landing_page.
    */
   generateLandingPage: async (prompt, _templateId = null, files = [], sessionId = null, userSummary = null, landingBrief = null, options = {}) => {
+    const { locale, skipUserMessage, ...streamOptions } = options || {};
     const payload = { prompt, sessionId, userSummary };
+    if (locale) payload.locale = locale;
     if (landingBrief) {
       payload.landingBrief = landingBrief;
       if (landingBrief.contentLocale) payload.locale = landingBrief.contentLocale;
     }
+    if (skipUserMessage === true) payload.skipUserMessage = true;
     const formattedFiles = formatLandingFiles(files);
     if (formattedFiles) {
       payload.files = formattedFiles;
     }
-    return postAiTurn('/ai/generate-landing-html', payload, options);
+    return postAiTurn('/ai/generate-landing-html', payload, streamOptions);
   },
 
   /**

@@ -1721,6 +1721,14 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
+        // PR-9 (C P2-5 / B-5): backend mới chỉ trả Ý ĐỊNH sinh trang (prompt đã chuẩn bị + tệp của lượt), KHÔNG sinh trong lượt chat nữa
+        // (trước đây chat + sinh nối tiếp trong một request → 524, và logo/ảnh khách vừa gửi không tới được trang). Tự gọi route sinh
+        // (luồng NDJSON, có tự kiểm hiển thị) ngay trong lượt này: ô nhập vẫn khoá và chấm "đang gõ" vẫn hiện tới khi trang về.
+        if (type === 'landing_page' && data?.needsGeneration === true && typeof data.prompt === 'string' && data.prompt.trim()) {
+          await generateLandingFromChatIntent({ data, content, sessionId: mySessionId, update });
+          return;
+        }
+
         update(prev => [...prev, {
           role: 'assistant', content, type, data,
           missing_fields: missing_fields || [],
@@ -1733,8 +1741,62 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       }]);
     } finally {
       setIsTyping(false);
+      setLandingStage(null);
       isSendingRef.current = false;
       clearTabPending(mySessionId);
+    }
+  };
+
+  /**
+   * Hiện thẻ landing vừa sinh (chung cho đường bảng hỏi và đường ý định từ chat): cập nhật credit, báo nếu chưa lưu được vào phiên
+   * (B-18), thêm thẻ mang id tin server đã lưu, rồi đo + tự sửa hiển thị chạy nền.
+   */
+  const showGeneratedLandingCard = (resData, { update, sessionId }) => {
+    refreshAiCredits();
+    const { title, html, css, leadFormDraft, leadFormConfig, messageId: newMessageId = null } = resData;
+    // B-18: sinh xong (đã trừ credit) mà không ghi được vào phiên → báo thật, và không tự sửa (không có tin để sửa).
+    const savedToSession = resData.saved !== false;
+    if (!savedToSession) toast(t('aiChatbot.landingNotSavedToSession'), { icon: '⚠️', duration: 8000 });
+    update(prev => [...prev, {
+      role: 'assistant',
+      content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
+      type: 'landing_page',
+      // id tin đã lưu ở server (data.messageId): vòng tự sửa cần nó để server đếm trần lượt theo tin.
+      ...(newMessageId ? { id: newMessageId } : {}),
+      data: {
+        title, html, css,
+        ...(leadFormDraft ? { leadFormDraft, leadFormConfig } : {}),
+        layoutStatus: 'checking',
+      },
+    }]);
+    // Không await: thẻ hiện ngay, đo + tự sửa chạy nền rồi ghi kết quả vào thẻ.
+    runLandingLayoutCheck({ sessionId, messageId: newMessageId, page: { title, html, css }, allowAutoFix: savedToSession });
+  };
+
+  /**
+   * Lượt chat trả ý định `landing_page` (PR-9): hiện câu dẫn của trợ lý rồi gọi route sinh với `sessionId` + tệp của lượt. Server đã lưu tin
+   * user (kèm tệp) ở lượt chat nên truyền `skipUserMessage` để chỉ thêm thẻ landing_page; route sinh trừ 1 credit khi khách nhận được trang.
+   */
+  const generateLandingFromChatIntent = async ({ data, content, sessionId, update }) => {
+    if (content) update(prev => [...prev, { role: 'assistant', content }]);
+    try {
+      const response = await aiApi.generateLandingPage(
+        data.prompt,
+        null,
+        Array.isArray(data.files) ? data.files : [],
+        sessionId,
+        null,
+        null,
+        { onStage: setLandingStage, locale: data.contentLocale, skipUserMessage: true },
+      );
+      if (response?.success && response.data) {
+        showGeneratedLandingCard(response.data, { update, sessionId });
+      }
+    } catch (err) {
+      update(prev => [...prev, {
+        role: 'assistant',
+        content: `Có lỗi khi tạo landing page: ${getAiRequestErrorMessage(err)}`,
+      }]);
     }
   };
 
@@ -2902,6 +2964,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         const { type, content, data } = response.data;
         if (type === 'confirm_create' && data) {
           await prepareAndShowCampaignConfirmation({ ...data, ...answers }, { sessionId: currentSessionIdRef.current, update, content });
+        } else if (type === 'landing_page' && data?.needsGeneration === true) {
+          // Ý định sinh landing trong luồng chiến dịch: không có thẻ trang để hiện (trang chưa được sinh) — chỉ hiện câu của trợ lý.
+          update(prev => [...prev, { role: 'assistant', content }]);
         } else {
           update(prev => [...prev, { role: 'assistant', content, type, data }]);
           if (type === 'campaign_script' && data) setCurrentScript({ ...data, ...answers });
@@ -2952,27 +3017,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { onStage: setLandingStage },
       );
       if (response.success) {
-        refreshAiCredits();
-        const { title, html, css, leadFormDraft, leadFormConfig, messageId: newMessageId = null } = response.data;
-        // B-18: sinh xong (đã trừ credit) mà không ghi được vào phiên → báo thật, và không tự sửa (không có tin để sửa).
-        const savedToSession = response.data.saved !== false;
-        if (!savedToSession) toast(t('aiChatbot.landingNotSavedToSession'), { icon: '⚠️', duration: 8000 });
-        update(prev => [...prev, {
-          role: 'assistant',
-          content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
-          type: 'landing_page',
-          // id tin đã lưu ở server (data.messageId): vòng tự sửa cần nó để server đếm trần lượt theo tin.
-          ...(newMessageId ? { id: newMessageId } : {}),
-          data: {
-            title, html, css,
-            ...(leadFormDraft ? { leadFormDraft, leadFormConfig } : {}),
-            layoutStatus: 'checking',
-          },
-        }]);
+        showGeneratedLandingCard(response.data, { update, sessionId: mySessionId });
         setPendingLandingPrompt(null);
         setPendingLandingData(null);
-        // Không await: thẻ hiện ngay, đo + tự sửa chạy nền rồi ghi kết quả vào thẻ.
-        runLandingLayoutCheck({ sessionId: mySessionId, messageId: newMessageId, page: { title, html, css }, allowAutoFix: savedToSession });
       }
     } catch (err) {
       update(prev => [...prev, {

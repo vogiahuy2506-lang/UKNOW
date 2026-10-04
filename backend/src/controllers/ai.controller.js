@@ -232,6 +232,8 @@ class AiController {
   async chat(req, res) {
     try {
       const { history, files, sessionId, locale, model, intent, planSlotKey } = req.body;
+      // PR-9 (B-4 / B-5): client mới tự gọi route sinh landing → lượt chat chỉ trả ý định `landing_page`, không sinh trang trong request.
+      const deferLandingGeneration = req.body?.clientGeneratesLanding === true;
       const sanitizedIntent = (typeof intent === 'string' && intent === 'content_plan_request') ? intent : null;
       // Định danh slot kế hoạch nội dung, dạng "d<ngày>-s<slot>". Chỉ nhận đúng khuôn —
       // giá trị này được lưu xuống ai_chat_messages.data và dùng để dựng lại luồng sau
@@ -368,6 +370,7 @@ class AiController {
             roleCode: req.user?.role,
             resourceKey: 'campaigns',
           }),
+          deferLandingGeneration,
         });
         ({ wizardShortCircuit, _wizard, parseFailed = false, ...publicResponse } = response || {});
       }
@@ -422,6 +425,9 @@ class AiController {
           console.warn('[AI] Lưới an toàn RAG (PR-2 mục 2) lỗi, giữ câu trả lời gốc:', safetyNetErr.message);
         }
       }
+
+      // PR-9: lượt này chỉ trả Ý ĐỊNH sinh landing (client sẽ gọi route sinh, route đó mới trừ credit của việc sinh trang).
+      const isLandingIntent = publicResponse?.type === 'landing_page' && publicResponse?.data?.needsGeneration === true;
 
       // Persist session + messages + wizard state (bỏ qua lỗi DB để không block chat)
       let finalSessionId = sessionId || null;
@@ -482,6 +488,24 @@ class AiController {
           typeof publicResponse.data?.html === 'string' &&
           publicResponse.data.html.trim().length > 0;
 
+        // PR-9 (C P2-5 / B-5): ý định sinh landing (chưa có html) — trang sẽ do route sinh tạo và tự lưu tin `landing_page` của nó.
+        // Tin ý định lưu như tin CHỮ thường: nếu lưu `type='landing_page'` thì (1) listUserFilesSinceLastLanding coi nó là mốc "landing gần
+        // nhất" và bỏ qua tệp khách vừa gửi ở chính lượt này, (2) getLandingPageMessage / sửa tự động nhặt nhầm tin không có html.
+        // Tệp của lượt đi kèm ý định (đã promote vào uploads/<chủ>/chat/) để client chuyển thẳng cho route sinh: logo / ảnh / PDF khách vừa
+        // gửi tới được trang (B-5) và được coi là tệp CỦA LƯỢT, không phải ảnh tham khảo gom từ phiên.
+        if (isLandingIntent) {
+          const intentFiles = safeFiles
+            .map((f) => (f.storage_key
+              ? { storageKey: f.storage_key, originalName: f.originalName, contentType: f.contentType, size: f.size }
+              : { tempId: f.tempId, originalName: f.originalName, contentType: f.contentType, size: f.size }))
+            .filter((f) => f.storageKey || f.tempId);
+          publicResponse = {
+            ...publicResponse,
+            data: { ...publicResponse.data, ...(intentFiles.length > 0 ? { files: intentFiles } : {}) },
+          };
+        }
+        const responseToPersist = isLandingIntent ? { ...publicResponse, type: 'text', data: null } : publicResponse;
+
         if (isLandingWithHtml) {
           // Sinh trang qua lượt chat đã trừ credit (dòng 516-518) → cấp ngân sách 2 lượt tự sửa hiển thị miễn phí
           // cho tin này (editLandingHtml coi tin KHÔNG có bộ đếm là hết lượt — xem chú thích ở đó).
@@ -510,7 +534,7 @@ class AiController {
             finalSessionId,
             req.user.id,
             userContent,
-            publicResponse,
+            responseToPersist,
             safeFiles
           );
           if (savedOk === false) {
@@ -579,7 +603,10 @@ class AiController {
 
       // Trừ 1 credit khi AI TẠO RA câu trả lời. Không trừ: câu server soạn sẵn (wizardShortCircuit — gồm câu cố định của nhánh
       // help, C P3-1) và lượt JSON hỏng (parseFailed, C P3-1) — trừ khi lưới RAG đã thay lời xin lỗi bằng câu trả lời thật.
-      if (!wizardShortCircuit && (!parseFailed || answeredByDocsNet)) {
+      // PR-9: lượt chỉ trả ý định sinh landing cũng KHÔNG trừ — việc tạo trang do route sinh (`/ai/generate-landing-html`) trừ đúng 1
+      // credit khi khách nhận được trang. Trước PR-9 cả lượt (chat + sinh trang cùng request) cũng chỉ tốn 1 credit; trừ ở cả hai
+      // nơi sẽ thành 2 credit cho cùng một trang.
+      if (!wizardShortCircuit && !isLandingIntent && (!parseFailed || answeredByDocsNet)) {
         await chargeAiCredit(req);
       }
 
@@ -1352,6 +1379,9 @@ class AiController {
         files: incomingFiles = [],
         landingPageId = null,
       } = req.body;
+      // PR-9: lượt chat đã lưu tin user (kèm tệp) và trả ý định sinh landing → client gọi route này với skipUserMessage để KHÔNG lưu trùng
+      // tin user; chỉ thêm thẻ landing_page. Chỉ nhận đúng boolean true.
+      const skipUserMessage = req.body?.skipUserMessage === true;
       if (!String(prompt || '').trim()) {
         return res.status(400).json({
           success: false,
@@ -1525,8 +1555,11 @@ class AiController {
                   ...(leadFormDraft ? { leadFormDraft, leadFormConfig: data.leadFormConfig } : {}),
                 },
               };
-              const saved = await aiSessionRepo
-                .saveMessagesReturningIds(sid, requestUserId, userContent, assistantMsg)
+              const saveCard = skipUserMessage
+                ? () => aiSessionRepo.saveAssistantMessageReturningId(sid, requestUserId, assistantMsg)
+                : () => aiSessionRepo.saveMessagesReturningIds(sid, requestUserId, userContent, assistantMsg);
+              const saved = await Promise.resolve()
+                .then(saveCard)
                 .catch((err) => {
                   console.warn('[AI.generateLandingHtml] Failed to save landing_page message:', err.message);
                   return null;

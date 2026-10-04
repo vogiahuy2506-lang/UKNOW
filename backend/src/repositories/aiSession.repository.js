@@ -258,6 +258,30 @@ export async function saveAssistantMessage(sessionId, userId, assistantMsg) {
   return true;
 }
 
+// Như saveAssistantMessage nhưng trả id tin vừa lưu ({ assistantMessageId } hoặc null nếu phiên không thuộc người này). Dùng khi tin
+// user của lượt ĐÃ được lưu ở request trước (lượt chat trả ý định sinh landing, PR-9) nên route sinh chỉ cần thêm thẻ landing_page.
+export async function saveAssistantMessageReturningId(sessionId, userId, assistantMsg) {
+  const { rowCount, rows } = await db.query(
+    `INSERT INTO ai_chat_messages (session_id, role, content, type, data, missing_fields)
+     SELECT $1::bigint, 'assistant', $3::text, $4::varchar, $5::jsonb, NULL::jsonb
+     WHERE EXISTS (SELECT 1 FROM ai_chat_sessions WHERE id = $1 AND id_user = $2)
+     RETURNING id`,
+    [
+      sessionId,
+      userId,
+      assistantMsg.content ?? '',
+      assistantMsg.type ?? null,
+      assistantMsg.data != null ? JSON.stringify(assistantMsg.data) : null,
+    ]
+  );
+  if (!rowCount) return null;
+  await db.query(
+    `UPDATE ai_chat_sessions SET updated_at = NOW() WHERE id = $1 AND id_user = $2`,
+    [sessionId, userId]
+  );
+  return { assistantMessageId: rows?.[0]?.id != null ? Number(rows[0].id) : null };
+}
+
 export async function deleteSession(sessionId, userId) {
   const { rowCount } = await db.query(
     `DELETE FROM ai_chat_sessions WHERE id = $1 AND id_user = $2`,

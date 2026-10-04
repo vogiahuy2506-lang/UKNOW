@@ -73,6 +73,12 @@ jest.unstable_mockModule('../../services/campaign/campaignNodeRegistry.service.j
 jest.unstable_mockModule('../../services/campaign/readSheetAutoName.service.js', () => ({
   fillReadSheetFirstTabNames,
 }));
+// PR-9: lượt chat trả ý định sinh landing promote tệp của lượt (đọc bởi ai.controller.chat).
+const promoteAssistantTempFile = jest.fn();
+const promoteChatAttachments = jest.fn(async () => {});
+jest.unstable_mockModule('../../services/chatbot/chatAttachment.service.js', () => ({
+  default: { promoteAssistantTempFile, promoteChatAttachments },
+}));
 jest.unstable_mockModule('../../services/ai/businessProfile.service.js', () => ({
   default: {},
   serializeProductList: jest.fn(() => ''),
@@ -127,6 +133,7 @@ const getLandingPageMessage = jest.fn();
 const updateLandingPageMessage = jest.fn();
 const saveMessagesReturningIds = jest.fn();
 const saveAssistantMessage = jest.fn();
+const saveAssistantMessageReturningId = jest.fn();
 // G3a.2: bốn endpoint phiên (list/đọc/PATCH wizard/xoá) — spec cuối file khẳng định chúng tra theo id NGƯỜI THAO TÁC.
 const getUserSessions = jest.fn();
 const getSessionMessages = jest.fn();
@@ -141,6 +148,7 @@ jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   updateLandingPageMessage,
   saveMessagesReturningIds,
   saveAssistantMessage,
+  saveAssistantMessageReturningId,
   getUserSessions,
   getSessionMessages,
   writeWizardState,
@@ -156,6 +164,11 @@ const { StorageQuotaExceededError } = await import('../../services/storage/stora
 const { NDJSON, until, deferred, openNdjsonClient } = await import('../../services/ai/__tests__/helpers/ndjsonTestClient.js');
 
 const REQUEST_ID = 'req-00000001-aaaa';
+
+const makeRes = () => {
+  const res = { status: jest.fn(() => res), json: jest.fn(() => res) };
+  return res;
+};
 
 /**
  * PR-9 (B-4) — hai route landing trả phản hồi LUỒNG NDJSON khi client xin, đúng hình dạng JSON cũ ở dòng `result`; lỗi trước khi
@@ -449,5 +462,157 @@ describe('ai.controller — luồng NDJSON của sinh / sửa landing (PR-9)', (
       expect(updateLandingPageMessage).not.toHaveBeenCalled();
       expect(chargeAiCredit).not.toHaveBeenCalled();
     });
+  });
+});
+
+/**
+ * PR-9 (C P2-5 / B-5) — lượt `/ai/chat` KHÔNG tự sinh landing nữa: client mới (cờ `clientGeneratesLanding`) nhận Ý ĐỊNH + prompt + tệp
+ * của lượt rồi tự gọi route sinh (luồng NDJSON). Tin ý định lưu như tin chữ thường, lượt chat không trừ credit (route sinh trừ 1 lần).
+ */
+describe('ai.controller.chat — ý định sinh landing, không sinh trang trong lượt chat (PR-9)', () => {
+  const INTENT = {
+    type: 'landing_page',
+    content: 'Mình sẽ tạo trang giới thiệu khoá học AI cho bạn.',
+    data: { title: 'Khoá Học AI Pro', prompt: 'Trang landing giới thiệu khoá học AI', contentLocale: 'vi', needsGeneration: true },
+  };
+  const chatReq = (extraBody = {}) => ({
+    user: { id: 42, role: 'user' },
+    body: { history: [{ role: 'user', content: 'Tạo trang giới thiệu khoá học AI' }], locale: 'vi', ...extraBody },
+  });
+
+  beforeEach(() => {
+    for (const m of [processSmartChat, chargeAiCredit, createSession, saveMessages, saveMessagesReturningIds, promoteAssistantTempFile,
+      promoteChatAttachments, updateWizardStateSections, getSessionWizardState]) {
+      m.mockReset();
+    }
+    createSession.mockResolvedValue({ id: 123, title: 'Chat' });
+    saveMessages.mockResolvedValue(true);
+    getSessionWizardState.mockResolvedValue(null);
+    updateWizardStateSections.mockResolvedValue(undefined);
+    promoteChatAttachments.mockResolvedValue(undefined);
+    tryHandleHelpChat.mockResolvedValue(null);
+    processSmartChat.mockResolvedValue({ ...INTENT });
+  });
+
+  it('cờ clientGeneratesLanding=true → processSmartChat nhận deferLandingGeneration=true; không cờ → false (client cũ giữ cách cũ)', async () => {
+    await aiController.chat(chatReq({ clientGeneratesLanding: true }), makeRes());
+    expect(processSmartChat.mock.calls[0][0].deferLandingGeneration).toBe(true);
+    await aiController.chat(chatReq(), makeRes());
+    expect(processSmartChat.mock.calls[1][0].deferLandingGeneration).toBe(false);
+    // chỉ boolean true mới bật (không nhận 'true' / 1)
+    await aiController.chat(chatReq({ clientGeneratesLanding: 'true' }), makeRes());
+    expect(processSmartChat.mock.calls[2][0].deferLandingGeneration).toBe(false);
+  });
+
+  it('trả ý định cho client: type landing_page + data.prompt/title/needsGeneration, KHÔNG có html', async () => {
+    const res = makeRes();
+    await aiController.chat(chatReq({ clientGeneratesLanding: true }), res);
+    const body = res.json.mock.calls[0][0];
+    expect(body.success).toBe(true);
+    expect(body.data).toMatchObject({
+      type: 'landing_page',
+      sessionId: 123,
+      data: { prompt: 'Trang landing giới thiệu khoá học AI', title: 'Khoá Học AI Pro', needsGeneration: true },
+    });
+    expect(body.data.data).not.toHaveProperty('html');
+  });
+
+  it('tin ý định lưu như tin CHỮ (type text, data null) — KHÔNG phải landing_page; không dùng đường lưu tin có html', async () => {
+    await aiController.chat(chatReq({ clientGeneratesLanding: true }), makeRes());
+    expect(saveMessagesReturningIds).not.toHaveBeenCalled();
+    expect(saveMessages).toHaveBeenCalledTimes(1);
+    const [sessionId, userId, userContent, assistantMsg] = saveMessages.mock.calls[0];
+    expect([sessionId, userId, userContent]).toEqual([123, 42, 'Tạo trang giới thiệu khoá học AI']);
+    expect(assistantMsg).toMatchObject({ type: 'text', data: null, content: INTENT.content });
+  });
+
+  it('lượt chat chỉ trả ý định KHÔNG trừ credit (route sinh trừ 1 lần); lượt landing_page cũ có html thì vẫn trừ như thường', async () => {
+    await aiController.chat(chatReq({ clientGeneratesLanding: true }), makeRes());
+    expect(chargeAiCredit).not.toHaveBeenCalled();
+
+    // client cũ: dịch vụ trả trang đã sinh (có html, không needsGeneration) → trừ 1 credit cho cả lượt
+    processSmartChat.mockResolvedValue({ type: 'landing_page', content: 'Đã tạo', data: { title: 'T', html: '<div>x</div>' } });
+    saveMessagesReturningIds.mockResolvedValue({ userMessageId: 1, assistantMessageId: 2 });
+    await aiController.chat(chatReq(), makeRes());
+    expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+  });
+
+  it('B-5: tệp của lượt (đã promote) đi kèm ý định để client chuyển cho route sinh; tin user vẫn lưu kèm tệp', async () => {
+    promoteAssistantTempFile.mockResolvedValue({
+      storage_key: 'uploads/42/chat/logo-abc.png', originalName: 'logo.png', contentType: 'image/png', size: 2048, url: 'https://x/logo.png', type: 'image',
+    });
+    const res = makeRes();
+    await aiController.chat(chatReq({
+      clientGeneratesLanding: true,
+      files: [{ tempId: 'tmp_logo', originalName: 'logo.png', contentType: 'image/png', size: 2048 }],
+    }), res);
+
+    expect(res.json.mock.calls[0][0].data.data.files).toEqual([
+      { storageKey: 'uploads/42/chat/logo-abc.png', originalName: 'logo.png', contentType: 'image/png', size: 2048 },
+    ]);
+    // tin user lưu kèm tệp đã promote (route sinh còn gom thêm từ phiên theo listUserFilesSinceLastLanding)
+    expect(saveMessages.mock.calls[0][4]).toEqual([expect.objectContaining({ storage_key: 'uploads/42/chat/logo-abc.png' })]);
+  });
+
+  it('promote tệp hỏng → vẫn chuyển tempId cho route sinh (tệp tạm còn đó), không mất tệp của khách', async () => {
+    promoteAssistantTempFile.mockRejectedValue(new Error('storage down'));
+    const res = makeRes();
+    await aiController.chat(chatReq({
+      clientGeneratesLanding: true,
+      files: [{ tempId: 'tmp_logo', originalName: 'logo.png', contentType: 'image/png', size: 2048 }],
+    }), res);
+    expect(res.json.mock.calls[0][0].data.data.files).toEqual([
+      { tempId: 'tmp_logo', originalName: 'logo.png', contentType: 'image/png', size: 2048 },
+    ]);
+  });
+
+  it('không có tệp → data không có trường files', async () => {
+    const res = makeRes();
+    await aiController.chat(chatReq({ clientGeneratesLanding: true }), res);
+    expect(res.json.mock.calls[0][0].data.data).not.toHaveProperty('files');
+  });
+
+  it('lượt chat thường (không phải landing) không bị ảnh hưởng: lưu nguyên type, vẫn trừ credit', async () => {
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'Xin chào', data: null });
+    await aiController.chat(chatReq({ clientGeneratesLanding: true }), makeRes());
+    expect(saveMessages.mock.calls[0][3]).toMatchObject({ type: 'text', content: 'Xin chào' });
+    expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ai.controller.generateLandingHtml — skipUserMessage (lượt chat đã lưu tin user, PR-9)', () => {
+  const genReq = (body = {}) => ({ user: { id: 1, role: 'user' }, body: { prompt: 'Landing khoá học', sessionId: 55, ...body } });
+  beforeEach(() => {
+    for (const m of [generateLanding, chargeAiCredit, saveMessagesReturningIds, saveAssistantMessageReturningId, ingestLandingAttachments]) m.mockReset();
+    ingestLandingAttachments.mockResolvedValue({ assets: [], documents: [], skipped: [] });
+    generateLanding.mockResolvedValue({ title: 'Trang khoá học', html: '<div>Nội dung</div>' });
+    checkUserResourceLimit.mockResolvedValue(ALLOWED_SLOT);
+  });
+
+  it('skipUserMessage=true → chỉ thêm thẻ landing_page (không lưu trùng tin user), vẫn gán messageId và trừ credit 1 lần', async () => {
+    saveAssistantMessageReturningId.mockResolvedValue({ assistantMessageId: 777 });
+    const res = makeRes();
+    await aiController.generateLandingHtml(genReq({ skipUserMessage: true }), res);
+    expect(saveMessagesReturningIds).not.toHaveBeenCalled();
+    expect(saveAssistantMessageReturningId).toHaveBeenCalledTimes(1);
+    expect(saveAssistantMessageReturningId.mock.calls[0].slice(0, 2)).toEqual([55, 1]);
+    expect(saveAssistantMessageReturningId.mock.calls[0][2]).toMatchObject({ type: 'landing_page', data: { title: 'Trang khoá học', autoLayoutFixCount: 0 } });
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: expect.objectContaining({ messageId: 777 }) });
+    expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+  });
+
+  it('skipUserMessage=true mà lưu hỏng → data.saved=false (B-18), credit vẫn trừ', async () => {
+    saveAssistantMessageReturningId.mockResolvedValue(null);
+    const res = makeRes();
+    await aiController.generateLandingHtml(genReq({ skipUserMessage: true }), res);
+    expect(res.json.mock.calls[0][0].data.saved).toBe(false);
+    expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+  });
+
+  it('không có cờ (hoặc không phải boolean true) → đường cũ: lưu cặp user + landing_page', async () => {
+    saveMessagesReturningIds.mockResolvedValue({ userMessageId: 1, assistantMessageId: 2 });
+    await aiController.generateLandingHtml(genReq({ skipUserMessage: 'true' }), makeRes());
+    expect(saveAssistantMessageReturningId).not.toHaveBeenCalled();
+    expect(saveMessagesReturningIds).toHaveBeenCalledTimes(1);
   });
 });
