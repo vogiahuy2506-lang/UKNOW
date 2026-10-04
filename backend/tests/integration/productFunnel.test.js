@@ -54,14 +54,17 @@ async function insertForm(ownerId, title, productId = null) {
 }
 
 /** daysAgo: created_at lùi N ngày; paidDaysAgo: paid_confirmed_at lùi N ngày (null = chưa xác nhận). */
-async function insertSubmission(ownerId, formId, { status, amount = null, daysAgo = 1, paidDaysAgo = null }) {
+async function insertSubmission(ownerId, formId, { status, amount = null, daysAgo = 1, paidDaysAgo = null, reportedDaysAgo = null, receiptKey = null }) {
   await db.query(
     `INSERT INTO form_submissions
-       (form_id, workspace_owner_id, access_token, status, payment_amount, created_at, paid_confirmed_at)
+       (form_id, workspace_owner_id, access_token, status, payment_amount, created_at, paid_confirmed_at,
+        payer_reported_paid_at, payment_receipt_key)
      VALUES ($1, $2, $3, $4, $5,
              NOW() - ($6::int * INTERVAL '1 day'),
-             CASE WHEN $7::int IS NULL THEN NULL ELSE NOW() - ($7::int * INTERVAL '1 day') END)`,
-    [formId, ownerId, `t${Date.now()}${tokenSeq++}`, status, amount, daysAgo, paidDaysAgo]
+             CASE WHEN $7::int IS NULL THEN NULL ELSE NOW() - ($7::int * INTERVAL '1 day') END,
+             CASE WHEN $8::int IS NULL THEN NULL ELSE NOW() - ($8::int * INTERVAL '1 day') END,
+             $9)`,
+    [formId, ownerId, `t${Date.now()}${tokenSeq++}`, status, amount, daysAgo, paidDaysAgo, reportedDaysAgo, receiptKey]
   );
 }
 
@@ -119,6 +122,8 @@ describe('GET /api/products/funnel (PR-1)', () => {
       registered: 0,
       paid: 0,
       revenue: 0,
+      awaitingConfirm: 0,
+      awaitingAmount: 0,
       formIds: [],
       landingViews: 0,
       leads: 0,
@@ -139,6 +144,32 @@ describe('GET /api/products/funnel (PR-1)', () => {
     expect(resAll.status).toBe(200);
     expect(byProduct(resAll)[p1].paid).toBe(3);
     expect(byProduct(resAll)[p1].revenue).toBe(14000);
+  });
+
+  it('Chờ xác nhận: pending_payment đã báo/có biên lai, KHÔNG theo khoảng ngày; pending chưa báo = 0; đã xác nhận không còn', async () => {
+    const owner = await createUser({ username: 'funnel_await' });
+    const p1 = await insertProduct(owner.id, 'SP chờ');
+    const f1 = await insertForm(owner.id, 'F chờ', p1);
+    // Đã báo chuyển khoản hôm qua (2.000)
+    await insertSubmission(owner.id, f1, { status: 'pending_payment', amount: 2000, reportedDaysAgo: 1 });
+    // Chỉ có biên lai, chưa bấm báo (3.000)
+    await insertSubmission(owner.id, f1, { status: 'pending_payment', amount: 3000, receiptKey: 'receipts/x.jpg' });
+    // Tạo + báo từ 60 ngày trước, chủ chưa xác nhận: vẫn tính dù chọn 7 ngày (5.000)
+    await insertSubmission(owner.id, f1, { status: 'pending_payment', amount: 5000, daysAgo: 60, reportedDaysAgo: 60 });
+    // Pending nhưng khách CHƯA báo, chưa biên lai: không tính
+    await insertSubmission(owner.id, f1, { status: 'pending_payment', amount: 9000 });
+    // Đã xác nhận (dù từng báo): không còn chờ
+    await insertSubmission(owner.id, f1, { status: 'confirmed', amount: 4000, reportedDaysAgo: 2, paidDaysAgo: 1 });
+    // Huỷ dù từng báo: không tính
+    await insertSubmission(owner.id, f1, { status: 'cancelled', amount: 6000, reportedDaysAgo: 2 });
+
+    const token = await loginAs(owner);
+    const res = await request(app).get('/api/products/funnel?period=7d').set('Authorization', `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(byProduct(res)[p1]).toMatchObject({ awaitingConfirm: 3, awaitingAmount: 10000, paid: 1, revenue: 4000 });
+
+    const resAll = await request(app).get('/api/products/funnel?period=all').set('Authorization', `Bearer ${token}`);
+    expect(byProduct(resAll)[p1]).toMatchObject({ awaitingConfirm: 3, awaitingAmount: 10000 });
   });
 
   it('nhân viên chỉ có quyền courses → 403; có reports_view → 200', async () => {

@@ -52,6 +52,8 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
               registered: 2,
               paid: 1,
               revenue: 2000,
+              awaitingConfirm: 2,
+              awaitingAmount: 4000,
               formIds: [7],
               landingViews: 5,
               leads: 2,
@@ -85,6 +87,31 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
       'href',
       '/app/forms/7/submissions'
     );
+  });
+
+  it('cột Chờ xác nhận đứng trước Đã trả: > 0 tô cảnh báo, tooltip có số tiền, bấm số dẫn sang bài nộp', async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('funnel-awaiting')).toHaveTextContent('2'));
+    const cell = screen.getByTestId('funnel-awaiting');
+    expect(cell.className).toContain('text-amber-600');
+    expect(cell.getAttribute('title').replace(/\s/g, '')).toContain('4.000đ');
+    expect(cell.getAttribute('title')).toContain('Đã nhận tiền');
+    expect(within(cell).getByRole('link')).toHaveAttribute('href', '/app/forms/7/submissions');
+    expect(screen.getByRole('columnheader', { name: 'Chờ xác nhận' })).toBeInTheDocument();
+    expect(cell.nextElementSibling).toBe(screen.getByTestId('funnel-paid'));
+  });
+
+  it('Chờ xác nhận = 0: không tô cảnh báo, không tooltip, không liên kết', async () => {
+    productApiService.getFunnel.mockResolvedValue({
+      data: { data: { filters: {}, rows: [{ productId: 11, registered: 1, paid: 0, revenue: 0, awaitingConfirm: 0, awaitingAmount: 0, formIds: [7] }] } },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId('funnel-registered')).toHaveTextContent('1'));
+    const cell = screen.getByTestId('funnel-awaiting');
+    expect(cell).toHaveTextContent('0');
+    expect(cell.className).not.toContain('text-amber-600');
+    expect(cell.getAttribute('title')).toBeNull();
+    expect(within(cell).queryByRole('link')).toBeNull();
   });
 
   it('nhân viên không có reports_view: không gọi API phễu, không có cột', async () => {

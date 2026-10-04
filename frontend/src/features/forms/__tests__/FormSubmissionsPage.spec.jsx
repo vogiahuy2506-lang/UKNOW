@@ -671,7 +671,7 @@ describe('FormSubmissionsPage component', () => {
       );
     }
 
-    it('hiện cột "Mã & số tiền" và cột Trạng thái tính "Chờ thanh toán"/"Hết hạn giữ chỗ" theo hold_expires_at, không phải cột DB', async () => {
+    it('hiện cột "Mã & số tiền" và cột Trạng thái tính "Chờ thanh toán"/"Hết hạn thanh toán" theo hold_expires_at, không phải cột DB', async () => {
       formAdminApi.fetchFormById.mockResolvedValue(paymentForm);
       formAdminApi.fetchFormSubmissions.mockResolvedValue(paymentSubmissionsPage1);
 
@@ -688,9 +688,9 @@ describe('FormSubmissionsPage component', () => {
       expect(screen.getAllByText('150.000 đ')).toHaveLength(3);
 
       // sub-pay-1 (còn hạn) -> "Chờ thanh toán"; sub-pay-2 (status DB vẫn pending_payment nhưng
-      // holdExpiresAt đã qua) -> tính lại thành "Hết hạn giữ chỗ"; sub-pay-3 -> "Đã xác nhận"
+      // holdExpiresAt đã qua) -> tính lại thành "Hết hạn thanh toán"; sub-pay-3 -> "Đã xác nhận"
       expect(screen.getByText('Chờ thanh toán')).toBeInTheDocument();
-      expect(screen.getByText('Hết hạn giữ chỗ')).toBeInTheDocument();
+      expect(screen.getByText('Hết hạn thanh toán')).toBeInTheDocument();
       expect(screen.getByText('Đã xác nhận')).toBeInTheDocument();
     });
 

@@ -3784,6 +3784,9 @@ export default {
       leftContact: 'Để lại thông tin',
       leftContactHint: 'Lượt khách để lại thông tin: lead từ trang landing của sản phẩm + bài nộp biểu mẫu gắn sản phẩm (đếm lượt, một người có thể được đếm hai lần).',
       registered: 'Đăng ký',
+      awaitingConfirm: 'Chờ xác nhận',
+      awaitingConfirmHint: 'Số bài nộp mà khách đã báo chuyển khoản (hoặc gửi biên lai) nhưng bạn chưa bấm Đã nhận tiền. Là tình trạng hiện tại, không theo khoảng thời gian đã chọn.',
+      awaitingConfirmTooltip: 'Khách đã báo chuyển khoản {amount} — vào bài nộp bấm Đã nhận tiền',
       paid: 'Đã trả',
       revenue: 'Doanh thu',
       registeredHint: 'Số lượt đăng ký / đặt qua biểu mẫu gắn với sản phẩm (đếm lượt, chưa khử trùng người).',
@@ -10319,7 +10322,7 @@ export default {
         },
         payment: {
           name: 'Thu tiền / đặt cọc',
-          desc: 'Khách điền thông tin rồi chuyển khoản để giữ chỗ. Bạn khai số tiền và tài khoản nhận tiền ở bước sau.',
+          desc: 'Khách điền thông tin rồi chuyển khoản (giữ chỗ, đặt cọc hoặc thanh toán đơn hàng). Bạn khai số tiền và tài khoản nhận tiền ở bước sau.',
           submit: 'Đăng ký và thanh toán',
         },
         survey: {
@@ -10382,7 +10385,7 @@ export default {
         confirmed: 'Đã xác nhận',
         cancelled: 'Đã huỷ',
         pending_payment: 'Chờ thanh toán',
-        hold_expired: 'Hết hạn giữ chỗ',
+        hold_expired: 'Hết hạn thanh toán',
       },
       dateFilterLabel: 'Lọc theo ngày hẹn:',
       today: 'Hôm nay',

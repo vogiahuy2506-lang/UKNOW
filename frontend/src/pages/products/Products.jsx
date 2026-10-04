@@ -60,9 +60,11 @@ const formatDate = (v) => {
   return isNaN(d.getTime()) ? '--' : d.toLocaleDateString('vi-VN') + ' ' + d.toLocaleTimeString('vi-VN');
 };
 
-// 5 ô Quan tâm / Để lại thông tin / Đăng ký / Đã trả / Doanh thu của một sản phẩm. Số Đăng ký là liên kết sang bài nộp: 1 biểu mẫu → trang bài nộp
+// 6 ô Quan tâm / Để lại thông tin / Đăng ký / Chờ xác nhận / Đã trả / Doanh thu của một sản phẩm. Số Đăng ký là liên kết sang bài nộp: 1 biểu mẫu → trang bài nộp
 // của biểu mẫu đó; nhiều biểu mẫu → danh sách biểu mẫu (PR-1).
 const FunnelCells = ({ funnel }) => {
+  const { t } = useI18n();
+  const awaiting = funnel?.awaitingConfirm ?? 0;
   const registered = funnel?.registered ?? 0;
   const formIds = funnel?.formIds || [];
   const target =
@@ -82,6 +84,19 @@ const FunnelCells = ({ funnel }) => {
           </Link>
         ) : (
           registered
+        )}
+      </td>
+      <td
+        className={`px-6 py-4 whitespace-nowrap text-sm text-right ${awaiting > 0 ? 'font-semibold text-amber-600' : 'text-gray-900'}`}
+        data-testid="funnel-awaiting"
+        title={awaiting > 0 ? t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) }) : undefined}
+      >
+        {target && awaiting > 0 ? (
+          <Link to={target} className="hover:underline">
+            {awaiting}
+          </Link>
+        ) : (
+          awaiting
         )}
       </td>
       <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-paid">
@@ -366,6 +381,9 @@ const Products = () => {
                         </th>
                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
                           {t('products.funnel.registered')}
+                        </th>
+                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
+                          {t('products.funnel.awaitingConfirm')}
                         </th>
                         <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           {t('products.funnel.paid')}

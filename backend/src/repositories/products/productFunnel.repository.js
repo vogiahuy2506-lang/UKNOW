@@ -9,12 +9,15 @@ class ProductFunnelRepository {
    * - `paid`       : đã được chủ xác nhận — `paid_confirmed_at IS NOT NULL`, lọc theo `paid_confirmed_at`
    *                  (KHÔNG dùng `status='confirmed'`: đặt lịch không thu tiền cũng là confirmed).
    * - `revenue`    : SUM(`payment_amount`) của chính các dòng `paid`.
+   * - `awaitingConfirm` / `awaitingAmount`: "Chờ xác nhận" — bài `pending_payment` mà khách ĐÃ BÁO chuyển khoản
+   *                  (`payer_reported_paid_at` hoặc `payment_receipt_key` có giá trị): việc chủ còn phải làm. Là trạng thái HIỆN TẠI,
+   *                  KHÔNG lọc theo khoảng ngày (khách báo từ 60 ngày trước mà chủ chưa bấm vẫn phải hiện). `awaitingAmount` = SUM(`payment_amount`).
    *
    * Mốc là nửa mở `[startAt, endExclusive)` (00:00 giờ VN) do `dashboardAnalytics.parseDateRange` tính; null = không chặn.
    * Mọi sản phẩm của workspace đều có dòng (không có bài nộp thì 0).
    *
    * @param {{ workspaceOwnerId: number, startAt?: string|null, endExclusive?: string|null }} params
-   * @returns {Promise<Array<{ productId: number, submitted: number, registered: number, paid: number, revenue: number, formIds: number[] }>>}
+   * @returns {Promise<Array<{ productId: number, submitted: number, registered: number, paid: number, revenue: number, awaitingConfirm: number, awaitingAmount: number, formIds: number[] }>>}
    */
   async aggregateFormFunnelByProduct({ workspaceOwnerId, startAt = null, endExclusive = null }) {
     const inCreated = `($2::timestamptz IS NULL OR fs.created_at >= $2::timestamptz)
@@ -22,6 +25,8 @@ class ProductFunnelRepository {
     const inPaid = `fs.paid_confirmed_at IS NOT NULL
           AND ($2::timestamptz IS NULL OR fs.paid_confirmed_at >= $2::timestamptz)
           AND ($3::timestamptz IS NULL OR fs.paid_confirmed_at < $3::timestamptz)`;
+    const awaiting = `fs.status = 'pending_payment'
+          AND (fs.payer_reported_paid_at IS NOT NULL OR fs.payment_receipt_key IS NOT NULL)`;
     const result = await db.query(
       `SELECT
          p.id AS "productId",
@@ -29,6 +34,8 @@ class ProductFunnelRepository {
          COALESCE(s.registered, 0)::int AS registered,
          COALESCE(s.paid, 0)::int AS paid,
          COALESCE(s.revenue, 0)::bigint AS revenue,
+         COALESCE(s.awaiting_confirm, 0)::int AS "awaitingConfirm",
+         COALESCE(s.awaiting_amount, 0)::bigint AS "awaitingAmount",
          ARRAY(
            SELECT f2.id FROM forms f2
            WHERE f2.product_id = p.id AND f2.workspace_owner_id = $1
@@ -41,7 +48,9 @@ class ProductFunnelRepository {
            COUNT(*) FILTER (WHERE fs.status <> 'cancelled' AND ${inCreated}) AS submitted,
            COUNT(*) FILTER (WHERE fs.status IN ('pending_payment', 'confirmed') AND ${inCreated}) AS registered,
            COUNT(*) FILTER (WHERE ${inPaid}) AS paid,
-           SUM(fs.payment_amount) FILTER (WHERE ${inPaid}) AS revenue
+           SUM(fs.payment_amount) FILTER (WHERE ${inPaid}) AS revenue,
+           COUNT(*) FILTER (WHERE ${awaiting}) AS awaiting_confirm,
+           SUM(fs.payment_amount) FILTER (WHERE ${awaiting}) AS awaiting_amount
          FROM form_submissions fs
          JOIN forms f ON f.id = fs.form_id
          WHERE f.workspace_owner_id = $1
@@ -59,6 +68,8 @@ class ProductFunnelRepository {
       registered: Number(r.registered || 0),
       paid: Number(r.paid || 0),
       revenue: Number(r.revenue || 0),
+      awaitingConfirm: Number(r.awaitingConfirm || 0),
+      awaitingAmount: Number(r.awaitingAmount || 0),
       formIds: (r.formIds || []).map(Number),
     }));
   }
