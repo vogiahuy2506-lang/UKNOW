@@ -63,7 +63,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Chính sách về thanh toán',
     titleEn: 'Payment Policy',
     files: ['PaymentPolicy.jsx'],
-    currentHash: 'c3bba7958e50596fcaa0b625f2796e23de64d8351f0b1aa9b79909794609c6cd',
+    currentHash: 'a8b4076589335402ad034859eaf0ef77f14abc558cc365232bebaab0f57eed56',
     versions: ['2026-09-29'],
   },
   complaint: {
@@ -71,7 +71,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Phương thức tiếp nhận và giải quyết phản ánh, yêu cầu, khiếu nại',
     titleEn: 'Procedure for Receiving and Resolving Feedback, Requests and Complaints',
     files: ['ComplaintPolicy.jsx'],
-    currentHash: 'c9d9798469a424021682c2e7cad4e60dc0c5e307081c93286373f3750c9ba0d1',
+    currentHash: '669add601d2a72a18097c7ea8589eff3b0b76689d5a516bb5f7b25b1301d57d4',
     versions: ['2026-09-29'],
   },
   serviceTerms: {
@@ -111,7 +111,7 @@ export const POLICY_VERSIONS = {
     titleVi: 'Hình thức hỗ trợ trực tuyến',
     titleEn: 'Online Support',
     files: ['Support.jsx'],
-    currentHash: 'a25ad5789084846fdb2809754356da88833cc5b2694f25713ab3d2d5e9cf893c',
+    currentHash: '1551a36162dc4d989a3a1f554012ec16663a28aba05ab96c4b5403b3039d4b8d',
     versions: ['2026-09-29'],
   },
 };

@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import PolicyHistory from './components/PolicyHistory.jsx';
+import PolicyChangeNotice from './components/PolicyChangeNotice.jsx';
 
 function getLangClass(activeLang, itemLang) {
   return activeLang === itemLang ? '' : 'hidden';
@@ -117,6 +118,7 @@ function PaymentPolicy() {
               </span>
             </p>
           </div>
+          <PolicyChangeNotice language={language} lc={lc} />
 
           {/* Section 1 */}
           <section className="mb-6 pp-section p-6">
