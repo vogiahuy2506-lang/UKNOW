@@ -3,7 +3,7 @@ import * as mediaLibraryRepo from '../repositories/mediaLibrary.repository.js';
 import uploadController from './upload.controller.js';
 import { findStorageObjectById, markStorageObjectDeleted } from '../repositories/storage.repository.js';
 import { markDeletedAfterUnlink } from '../services/storage/storageObject.service.js';
-import { isReferenceAlive } from '../services/storage/storageReference.service.js';
+import { resolveStorageObjectsUsage } from '../services/storage/storageReference.service.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
 import {
   AUDIT_ACTIONS,
@@ -45,25 +45,30 @@ export async function deleteStorageObject(req, res) {
       return res.json({ success: true, message: 'Tệp đã được xóa' });
     }
 
-    // Check if temp file is already expired
-    const isExpiredTemp = object.category === 'temp' && object.expires_at && new Date(object.expires_at) < new Date();
-
-    if (!isExpiredTemp && object.reference_type && object.reference_id) {
-      const refStatus = await isReferenceAlive(object.reference_type, object.reference_id);
-      if (refStatus?.alive) {
-        const entityName = refStatus.name ? `"${refStatus.name}"` : refStatus.label;
-        return res.status(409).json({
-          success: false,
-          code: 'STORAGE_REFERENCE_ALIVE',
-          message: `Không thể xóa vì tệp đang được sử dụng bởi ${refStatus.label} ${entityName}`,
-          data: {
-            referenceType: object.reference_type,
-            referenceId: object.reference_id,
-            referenceName: refStatus.name,
-            url: refStatus.url,
-          },
-        });
-      }
+    // Một quyết định chung với danh sách (`resolveStorageObjectsUsage`): tệp tạm quá hạn, tệp chat, ảnh landing đã bị gỡ
+    // khỏi trang đều xoá được; tệp còn nằm trong mẫu/landing/biểu mẫu… thì chặn 409.
+    const usage = (await resolveStorageObjectsUsage([{
+      id: object.id,
+      category: object.category,
+      storageKey: object.storage_key,
+      expiresAt: object.expires_at,
+      referenceType: object.reference_type,
+      referenceId: object.reference_id,
+    }], ownerUserId)).get(String(object.id));
+    if (usage?.inUse) {
+      const entityName = usage.name ? `"${usage.name}"` : usage.label;
+      return res.status(409).json({
+        success: false,
+        code: 'STORAGE_REFERENCE_ALIVE',
+        message: `Tệp đang dùng ở ${usage.label} ${entityName}. Gỡ tệp khỏi đó trước rồi xóa.`,
+        data: {
+          referenceType: usage.referenceType,
+          referenceId: usage.referenceId,
+          referenceLabel: usage.label,
+          referenceName: usage.name,
+          url: usage.url,
+        },
+      });
     }
 
     // Delete storage object and update ledger
@@ -86,6 +91,12 @@ export async function deleteStorageObject(req, res) {
       });
     } else {
       await markStorageObjectDeleted(object.id);
+    }
+
+    // Tệp chat: xoá luôn dòng danh mục `chat_attachments` (không để dòng mồ côi trỏ tới tệp đã mất).
+    if (object.category === 'chat' || object.reference_type === 'chat_attachment') {
+      await mediaLibraryRepo.deleteChatCatalogRows({ storageObjectId: object.id, storageKey: object.storage_key })
+        .catch((catalogErr) => console.warn('[MediaLibrary] Không xoá được dòng danh mục chat_attachments:', catalogErr?.message));
     }
 
     await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.MEDIA_DELETED, AUDIT_ENTITY_TYPES.MEDIA_OBJECT, object.id, { category: object.category, referenceType: object.reference_type || null });

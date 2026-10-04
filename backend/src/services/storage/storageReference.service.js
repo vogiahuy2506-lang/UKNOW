@@ -391,6 +391,13 @@ export const REFERENCE_CONFIGS = {
     label: 'Mẫu Email',
     url: '/app/settings/templates',
   },
+  // Ảnh banner/logo của biểu mẫu (`activateFormAssetStorageObjects` ghi reference_type 'form', reference_id = id form).
+  // Thiếu dòng này thì tệp rơi vào nhánh fail-safe "kiểu lạ" của isReferenceAlive và câu báo lộ mã thô `form #2`, không link.
+  form: {
+    sql: `SELECT id, title AS name FROM forms WHERE id = $1 LIMIT 1`,
+    label: 'Biểu mẫu',
+    url: '/app/forms',
+  },
   form_payment_receipt: {
     sql: `SELECT fs.id, COALESCE(f.title, 'Biểu mẫu') AS name
             FROM form_submissions fs
@@ -510,10 +517,143 @@ export async function isReferenceAlive(referenceType, referenceId, queryable = d
   }
 }
 
+/**
+ * Loại tham chiếu mà "bản ghi cha còn sống" KHÔNG có nghĩa là tệp đang được dùng ở đâu đó.
+ * `chat_attachment`: bản ghi cha chính là dòng danh mục `chat_attachments` của CHÍNH tệp này (mỗi tệp chat có một dòng) —
+ * nên nó luôn "sống" và trước đây chặn xoá vĩnh viễn bằng câu "đang được sử dụng bởi Hộp thư chat", trong khi Hộp thư
+ * không có nút xoá tệp (production 04/10: 10 tệp / 28 MB kẹt vì thế). Tệp chat xoá được; xoá xong phải xoá luôn dòng
+ * danh mục (mediaLibrary.repository.js `deleteChatCatalogRows`).
+ */
+const NON_BLOCKING_REFERENCE_TYPES = new Set(['chat_attachment']);
+const FREE_USAGE = Object.freeze({ inUse: false });
+const USAGE_LOOKUP_CHUNK = 8;
+
+function isExpiredTempObject(object, now = new Date()) {
+  return object.category === 'temp' && Boolean(object.expiresAt) && new Date(object.expiresAt) < now;
+}
+
+/**
+ * Ảnh `landing_asset` được kích hoạt (reference_type 'landing_page') khi HTML trang có `/lp-assets/<khoá>`
+ * (`landingAsset.service.js` `linkAssetsToLandingPage`) — khoá nằm TRẦN trong html_content nên tìm được bằng
+ * position(). Chỉ kiểu này được kiểm "khoá còn nằm trong trang không": các tệp landing khác (category 'landing')
+ * có thể nhúng bằng link ký `/file/<token>` mà khoá không hiện nguyên văn, nên vẫn chặn theo "trang còn sống".
+ */
+function needsLandingContentCheck(object) {
+  return object.category === 'landing_asset' && object.referenceType === 'landing_page' && Boolean(object.storageKey);
+}
+
+/** Trang landing của workspace mà html_content/custom_config còn chứa từng khoá. Trang đầu tiên (id nhỏ nhất) thắng. */
+async function findLandingPagesUsingKeys(ownerUserId, storageKeys, queryable = db) {
+  const { rows } = await queryable.query(
+    `SELECT k.sk AS storage_key, lp.id, lp.title
+       FROM unnest($2::text[]) AS k(sk)
+       JOIN landing_pages lp
+         ON COALESCE(lp.workspace_owner_id, lp.id_user) = $1
+        AND (position(k.sk IN COALESCE(lp.html_content, '')) > 0
+             OR position(k.sk IN COALESCE(lp.custom_config::text, '')) > 0)
+      ORDER BY lp.id`,
+    [ownerUserId, storageKeys]
+  );
+  const byKey = new Map();
+  for (const row of rows) {
+    if (!byKey.has(row.storage_key)) byKey.set(row.storage_key, { id: row.id, name: row.title || null });
+  }
+  return byKey;
+}
+
+/**
+ * Một quyết định DUY NHẤT "tệp này có đang được dùng không" cho cả hai nơi: nút Xoá (chặn 409) và danh sách (hiện
+ * "Đang dùng ở …", khoá nút xoá) — để màn hình không bao giờ nói một đằng rồi chặn một nẻo.
+ *
+ * Quy tắc, theo thứ tự:
+ *  1. Không có tham chiếu (reference_type/reference_id trống), hoặc tệp tạm đã quá hạn → không dùng.
+ *  2. `chat_attachment` → không dùng (xem NON_BLOCKING_REFERENCE_TYPES).
+ *  3. Ảnh landing_asset gắn với một landing page → chỉ "đang dùng" khi khoá còn nằm trong html_content/custom_config của
+ *     MỘT landing page nào của workspace (ảnh bị thay/gỡ khỏi trang thì xoá tay được). Trang trả về là trang thật sự chứa
+ *     khoá — không nhất thiết là trang trong reference_id (ảnh có thể được dùng lại ở trang khác).
+ *  4. Còn lại → bản ghi cha còn sống (`isReferenceAlive`) thì đang dùng. Mọi lỗi → coi là đang dùng (fail-safe, đừng xoá
+ *     nhầm tệp khách đang dùng).
+ *
+ * @param {Array<{ id: string|number, category?: string, storageKey?: string|null, expiresAt?: Date|string|null,
+ *   referenceType?: string|null, referenceId?: string|number|null }>} objects
+ * @param {number|string} ownerUserId chủ workspace (phạm vi tìm landing page)
+ * @returns {Promise<Map<string, { inUse: boolean, referenceType?: string, referenceId?: string, label?: string,
+ *   name?: string, url?: string|null }>>} khoá là String(id)
+ */
+export async function resolveStorageObjectsUsage(objects, ownerUserId, queryable = db) {
+  const usage = new Map();
+  const needReference = [];
+  for (const object of objects) {
+    const hasReference = Boolean(object.referenceType) && object.referenceId != null && object.referenceId !== '';
+    if (!hasReference || NON_BLOCKING_REFERENCE_TYPES.has(object.referenceType) || isExpiredTempObject(object)) {
+      usage.set(String(object.id), FREE_USAGE);
+    } else {
+      needReference.push(object);
+    }
+  }
+
+  const landingKeys = [...new Set(needReference.filter(needsLandingContentCheck).map((object) => object.storageKey))];
+  let landingByKey = null;
+  if (landingKeys.length > 0) {
+    try {
+      landingByKey = await findLandingPagesUsingKeys(ownerUserId, landingKeys, queryable);
+    } catch (error) {
+      // Không kiểm được nội dung trang → rơi về "bản ghi cha còn sống" (nhánh 4), không bao giờ coi là rảnh.
+      console.warn('[StorageReference] landing content lookup failed:', error?.message);
+    }
+  }
+
+  const parentLookups = new Map();
+  for (const object of needReference) {
+    if (landingByKey && needsLandingContentCheck(object)) continue;
+    const key = `${object.referenceType}#${object.referenceId}`;
+    if (!parentLookups.has(key)) parentLookups.set(key, { referenceType: object.referenceType, referenceId: object.referenceId });
+  }
+  const parentResults = new Map();
+  const lookups = [...parentLookups.entries()];
+  for (let i = 0; i < lookups.length; i += USAGE_LOOKUP_CHUNK) {
+    await Promise.all(lookups.slice(i, i + USAGE_LOOKUP_CHUNK).map(async ([key, { referenceType, referenceId }]) => {
+      parentResults.set(key, await isReferenceAlive(referenceType, referenceId, queryable));
+    }));
+  }
+
+  for (const object of needReference) {
+    const id = String(object.id);
+    if (landingByKey && needsLandingContentCheck(object)) {
+      const page = landingByKey.get(object.storageKey);
+      const config = REFERENCE_CONFIGS.landing_page;
+      usage.set(id, page
+        ? {
+          inUse: true,
+          referenceType: 'landing_page',
+          referenceId: String(page.id),
+          label: config.label,
+          name: page.name || `${config.label} #${page.id}`,
+          url: config.url,
+        }
+        : FREE_USAGE);
+      continue;
+    }
+    const alive = parentResults.get(`${object.referenceType}#${object.referenceId}`);
+    usage.set(id, alive?.alive
+      ? {
+        inUse: true,
+        referenceType: object.referenceType,
+        referenceId: String(object.referenceId),
+        label: alive.label,
+        name: alive.name,
+        url: alive.url ?? null,
+      }
+      : FREE_USAGE);
+  }
+  return usage;
+}
+
 export default {
   buildStorageReferenceIndex,
   getIndexedStorageReferences,
   isReferenceAlive,
+  resolveStorageObjectsUsage,
   isStorageKeyReferencedByMessage,
   resolveWorkspaceOwner,
 };

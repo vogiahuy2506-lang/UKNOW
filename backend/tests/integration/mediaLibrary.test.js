@@ -19,7 +19,8 @@ const {
   createUser,
 } = await import('./helpers/db.js');
 const db = (await import('../../src/config/database.js')).default;
-const { setStorageBackendInstance, resetStorageBackendForTest } = await import('../../src/services/storage/storageBackend.js');
+const { setStorageBackendInstance, resetStorageBackendForTest, getStorageBackend } = await import('../../src/services/storage/storageBackend.js');
+const { registerWrittenStorageObject } = await import('../../src/services/storage/storageObject.service.js');
 const { LocalStorageBackend } = await import('../../src/services/storage/localStorageBackend.js');
 const { persistChatBlob, CHAT_ATTACHMENT_SOURCES } = await import('../../src/services/chatbot/chatAttachment.service.js');
 const { storeInboundMedia } = await import('../../src/services/chatbot/channelInboundMedia.service.js');
@@ -202,5 +203,109 @@ describe('media library API', () => {
 
     // Tab "Tệp khách gửi" đã gỡ: endpoint không còn.
     await request(app).get('/api/media-library/channels').set(authHeader(owner)).expect(404);
+  });
+
+  describe('xoá tệp (M-04): ba chỗ từng kẹt', () => {
+    /** Ghi một tệp thật vào kho + sổ lưu trữ với tham chiếu cho trước (đúng đường production: put + registerWrittenStorageObject). */
+    async function putStored(ownerUserId, { dir, name, category, referenceType, referenceId }) {
+      const key = `uploads/${ownerUserId}/${dir}/${Date.now()}_${name}`;
+      await getStorageBackend().put(key, PNG, { contentType: 'image/png' });
+      const object = await registerWrittenStorageObject({
+        ownerUserId,
+        actorUserId: ownerUserId,
+        storageKey: key,
+        category,
+        state: 'active',
+        sizeBytes: PNG.length,
+        referenceType,
+        referenceId,
+      });
+      return { key, id: Number(object.id) };
+    }
+
+    const stateOf = async (id) => (await db.query('SELECT state FROM storage_objects WHERE id = $1', [id])).rows[0].state;
+
+    it('(a) tệp chat có tham chiếu chat_attachment xoá được và dòng chat_attachments biến mất (trước đây 409 vô nghĩa)', async () => {
+      const owner = await createUser({ email: 'owner-delete-chat@test.local' });
+      const saved = await saveChatFile(owner.id, { name: 'cu.png' });
+      // Dựng đúng tình trạng của 8 tệp kẹt trên production: tham chiếu có id của dòng danh mục.
+      await db.query(
+        `UPDATE storage_objects so SET reference_id = ca.id::text
+           FROM chat_attachments ca WHERE ca.storage_key = so.storage_key AND so.storage_key = $1`,
+        [saved._key]
+      );
+
+      const res = await request(app)
+        .delete(`/api/media-library/objects/${saved._storageObjectId}`)
+        .set(authHeader(owner))
+        .expect(200);
+
+      expect(res.body.success).toBe(true);
+      expect(await stateOf(saved._storageObjectId)).toBe('deleted');
+      const catalog = await db.query('SELECT 1 FROM chat_attachments WHERE storage_key = $1', [saved._key]);
+      expect(catalog.rows).toHaveLength(0);
+      const listed = await request(app).get('/api/media-library/objects').set(authHeader(owner)).expect(200);
+      expect(listed.body.data).toHaveLength(0);
+    });
+
+    it('(b) ảnh landing: còn nằm trong HTML của trang thì 409 kèm tên trang; thay ảnh khác xong thì xoá được', async () => {
+      const owner = await createUser({ email: 'owner-delete-landing@test.local' });
+      const stored = await putStored(owner.id, { dir: 'landing', name: 'hero.png', category: 'landing_asset', referenceType: 'landing_page', referenceId: '1' });
+      const { rows: [page] } = await db.query(
+        `INSERT INTO landing_pages (id_user, workspace_owner_id, slug, title, html_content)
+         VALUES ($1, $1, 'khai-giang', 'Khai giảng tháng 10', $2) RETURNING id`,
+        [owner.id, `<img src="https://app.test/lp-assets/${stored.key}">`]
+      );
+      await db.query(`UPDATE storage_objects SET reference_id = $2 WHERE id = $1`, [stored.id, String(page.id)]);
+
+      const blocked = await request(app)
+        .delete(`/api/media-library/objects/${stored.id}`)
+        .set(authHeader(owner))
+        .expect(409);
+      expect(blocked.body).toMatchObject({
+        code: 'STORAGE_REFERENCE_ALIVE',
+        data: { referenceType: 'landing_page', referenceName: 'Khai giảng tháng 10', url: '/app/settings/landing-pages' },
+      });
+      expect(await stateOf(stored.id)).toBe('active');
+
+      // Người dùng thay ảnh trong trang: trang cha còn, nhưng HTML không còn khoá.
+      await db.query(`UPDATE landing_pages SET html_content = $2 WHERE id = $1`, [page.id, '<img src="https://app.test/lp-assets/uploads/x/landing/anh-moi.png">']);
+
+      await request(app)
+        .delete(`/api/media-library/objects/${stored.id}`)
+        .set(authHeader(owner))
+        .expect(200);
+      expect(await stateOf(stored.id)).toBe('deleted');
+    });
+
+    it('(c) ảnh biểu mẫu: 409 báo đúng tên biểu mẫu + link, không lộ mã thô', async () => {
+      const owner = await createUser({ email: 'owner-delete-form@test.local' });
+      const { rows: [form] } = await db.query(
+        `INSERT INTO forms (workspace_owner_id, public_key, title) VALUES ($1, 'pk-media-1', 'Đăng ký tư vấn') RETURNING id`,
+        [owner.id]
+      );
+      const stored = await putStored(owner.id, { dir: 'forms', name: 'banner.png', category: 'form_asset', referenceType: 'form', referenceId: String(form.id) });
+
+      const res = await request(app)
+        .delete(`/api/media-library/objects/${stored.id}`)
+        .set(authHeader(owner))
+        .expect(409);
+
+      expect(res.body.data).toMatchObject({ referenceType: 'form', referenceLabel: 'Biểu mẫu', referenceName: 'Đăng ký tư vấn', url: '/app/forms' });
+      expect(res.body.message).toContain('Đăng ký tư vấn');
+      expect(res.body.message).not.toContain(`form #${form.id}`);
+    });
+
+    it('không xoá được tệp của workspace khác (404)', async () => {
+      const alice = await createUser({ email: 'alice-delete@test.local' });
+      const bob = await createUser({ email: 'bob-delete@test.local' });
+      const saved = await saveChatFile(alice.id, { name: 'cua-alice.png' });
+
+      await request(app)
+        .delete(`/api/media-library/objects/${saved._storageObjectId}`)
+        .set(authHeader(bob))
+        .expect(404);
+      expect(await stateOf(saved._storageObjectId)).not.toBe('deleted');
+    });
   });
 });

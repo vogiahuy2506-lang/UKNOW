@@ -19,7 +19,7 @@ jest.unstable_mockModule('../../controllers/upload.controller.js', () => ({
 }));
 
 const db = (await import('../../config/database.js')).default;
-const { listWorkspaceStorageObjects } = await import('../mediaLibrary.repository.js');
+const { listWorkspaceStorageObjects, deleteChatCatalogRows } = await import('../mediaLibrary.repository.js');
 
 const OWNER = 7;
 
@@ -96,3 +96,27 @@ describe('listWorkspaceStorageObjects', () => {
     expect(listCall[0]).not.toContain('banner');
   });
 });
+
+describe('deleteChatCatalogRows', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('xoá dòng danh mục chat_attachments theo khoá HOẶC storage_object_id (tệp chat cũ có storage_object_id NULL), trả tên hiển thị', async () => {
+    db.query.mockResolvedValueOnce({ rows: [{ display_name: 'BaoCao.docx' }, { display_name: null }] });
+
+    const names = await deleteChatCatalogRows({ storageObjectId: '31', storageKey: 'uploads/7/chat/1754800000000_BaoCao.docx' });
+
+    expect(names).toEqual(['BaoCao.docx']);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(sql).toMatch(/DELETE FROM chat_attachments/);
+    expect(sql).toMatch(/storage_key = \$1 OR storage_object_id = \$2/);
+    expect(params).toEqual(['uploads/7/chat/1754800000000_BaoCao.docx', '31']);
+  });
+
+  it('thiếu cả hai định danh thì không xoá gì (tránh DELETE không điều kiện)', async () => {
+    expect(await deleteChatCatalogRows({})).toEqual([]);
+    expect(db.query).not.toHaveBeenCalled();
+  });
+});
+

@@ -145,6 +145,22 @@ export async function listWorkspaceStorageObjects(ownerUserId, query = {}) {
   };
 }
 
+/**
+ * Xoá dòng danh mục `chat_attachments` của một tệp chat vừa xoá khỏi kho. Khớp theo khoá lưu trữ (duy nhất) HOẶC theo
+ * storage_object_id — tệp chat cũ có `storage_object_id` NULL nhưng luôn có khoá. Trả về tên hiển thị của các dòng đã xoá.
+ */
+export async function deleteChatCatalogRows({ storageObjectId = null, storageKey = null } = {}) {
+  if (storageObjectId == null && !storageKey) return [];
+  const { rows } = await db.query(
+    `DELETE FROM chat_attachments
+      WHERE storage_key = $1 OR storage_object_id = $2
+      RETURNING display_name`,
+    [storageKey || null, storageObjectId ?? null]
+  );
+  return rows.map((row) => row.display_name).filter(Boolean);
+}
+
 export default {
   listWorkspaceStorageObjects,
+  deleteChatCatalogRows,
 };
