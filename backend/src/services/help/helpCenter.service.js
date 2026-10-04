@@ -316,9 +316,14 @@ export async function searchHelpChunks(question, {
 } = {}) {
   let embedding = null;
   try {
+    // CÂU HỎI của khách → RETRIEVAL_QUERY (đoạn bài hướng dẫn lưu bằng RETRIEVAL_DOCUMENT, xem reindexArticle). Bản cũ để mặc
+    // định DOCUMENT (D-24 / EXTRA-A3). Điểm tụt ~0,08–0,12 so với kiểu cũ trong khi các ngưỡng hạ nguồn (mặc định 0,35 ở đây,
+    // 0,5 ở lưới an toàn của ai.controller, 0,6 ở backlog `help_unanswered` của helpAssistant) hiệu chỉnh theo kiểu cũ và CHƯA
+    // đo lại — xem scripts/measureQueryEmbeddingThresholds.js. Đo trên production trước khi đẩy.
     embedding = await embedText(question, {
       userId,
       feature: 'embedding_help',
+      taskType: 'RETRIEVAL_QUERY',
     });
   } catch (err) {
     console.warn('[help] query embed failed — falling back to keyword:', err?.message || err);
