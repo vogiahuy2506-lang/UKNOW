@@ -88,6 +88,9 @@ export async function listUserFilesSinceLastLanding(sessionId, userId, ownerUser
           originalName: f.originalName || f.displayName || 'file',
           contentType: f.contentType || '',
           size: f.size ?? 0,
+          // B-17: tệp gom từ các tin TRƯỚC (không phải lượt đang gửi) — có thể chỉ là ảnh chụp màn hình tham khảo.
+          // `mergeAndFilterLandingFiles` ưu tiên tệp của lượt hiện tại khi trùng khoá nên cờ này không dính sang đó.
+          fromSession: true,
         });
       }
     }

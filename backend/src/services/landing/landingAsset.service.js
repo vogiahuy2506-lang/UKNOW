@@ -208,6 +208,9 @@ export async function ingestLandingAttachments({
           sizeBytes: buffer.length,
           inlineForModel,
           base64: inlineForModel ? buffer.toString('base64') : null,
+          // B-17: ảnh gom từ tin nhắn TRƯỚC trong phiên → chỉ là ảnh tham khảo, AI không bị ép dùng
+          // (xem validateLandingImageUrls / buildAttachmentPromptBlock ở aiLandingPage.service.js).
+          ...(file.fromSession ? { referenceOnly: true } : {}),
         });
       } else if (validation.kind === 'doc') {
         if (imagesOnly) {

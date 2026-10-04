@@ -557,3 +557,73 @@ describe('B-16 — generate: tự vá viewport / </html> cho trang AI quên', ()
     expect(doneLogOf(logSpy)).not.toContain('shellFixed');
   });
 });
+
+describe('B-17 — ảnh gom từ phiên (referenceOnly) không bị ép dùng', () => {
+  let logSpy;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    getContextForLandingAi.mockResolvedValue('');
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => logSpy.mockRestore());
+
+  const current = { url: 'https://api.test/lp-assets/uploads/1/landing/logo.png', originalName: 'logo.png', contentType: 'image/png' };
+  const screenshot = {
+    url: 'https://api.test/lp-assets/uploads/1/landing/chup-man-hinh.png',
+    originalName: 'chup-man-hinh.png',
+    contentType: 'image/png',
+    referenceOnly: true,
+  };
+  const useOnly = (...assets) => GOOD_PAGE.replace('<h1>', `${assets.map((a) => `<img src="${a.url}" alt="">`).join('')}<h1>`);
+
+  it('validateLandingImageUrls requireAssetsUsed=true: ảnh referenceOnly không dùng → KHÔNG ném, vào unusedAssets', () => {
+    const html = useOnly(current);
+    const res = validateLandingImageUrls({ html, assets: [current, screenshot], requireAssetsUsed: true });
+    expect(res.unusedAssets).toEqual([screenshot]);
+  });
+
+  it('ảnh của lượt hiện tại (không referenceOnly) không dùng → vẫn 422 như cũ', () => {
+    const html = useOnly(screenshot);
+    expect(() => validateLandingImageUrls({ html, assets: [current, screenshot], requireAssetsUsed: true })).toThrow(
+      expect.objectContaining({ status: 422, message: expect.stringContaining('logo.png') })
+    );
+  });
+
+  it('generate: prompt đánh dấu ảnh từ phiên là "tham khảo, không bắt buộc" và nới quy tắc 8; AI chỉ dùng logo → thành công', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(useOnly(current)));
+    const res = await aiLandingPageService.generate({ userId: 1, prompt: 'landing', assets: [current, screenshot] });
+    expect(res.html).toBe(useOnly(current));
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    const prompt = promptOf(0);
+    const lines = prompt.split('\n');
+    expect(lines.find((l) => l.startsWith('ASSET_1:'))).not.toContain('ảnh từ tin nhắn trước');
+    expect(lines.find((l) => l.startsWith('ASSET_2:'))).toContain('KHÔNG bắt buộc dùng');
+    expect(prompt).toContain('mỗi URL ít nhất một lần (TRỪ ảnh có ghi "ảnh từ tin nhắn trước"');
+  });
+
+  it('không có ảnh referenceOnly → prompt và quy tắc 8 giữ NGUYÊN VĂN như trước', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(useOnly(current)));
+    await aiLandingPageService.generate({ userId: 1, prompt: 'landing', assets: [current] });
+    const prompt = promptOf(0);
+    expect(prompt).not.toContain('ảnh từ tin nhắn trước');
+    expect(prompt).toContain('mỗi URL ít nhất một lần, bằng <img src="..."');
+  });
+
+  it('generate: ảnh referenceOnly KHÔNG dùng và ảnh hiện tại KHÔNG dùng → vẫn 422 (chỉ ảnh hiện tại bị đòi)', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE));
+    await expect(
+      aiLandingPageService.generate({ userId: 1, prompt: 'landing', assets: [current, screenshot] })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringContaining('logo.png') });
+  });
+
+  it('editHtml: không thêm ghi chú (đường sửa vốn coi ảnh là tham khảo)', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', edits: [{ find: '<h1>Khoá học</h1>', replace: '<h1>Khoá học mới</h1>' }], changeSummary: 'x' }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await aiLandingPageService.editHtml({ userId: 1, currentHtml: GOOD_PAGE, instruction: 'đổi', assets: [screenshot] });
+    expect(promptOf(0)).not.toContain('ảnh từ tin nhắn trước');
+  });
+});

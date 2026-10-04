@@ -259,6 +259,14 @@ export { IMAGE_URL_REGEX };
 export const MAX_PROMPT_FILE_NAME_CHARS = 100;
 
 /**
+ * B-17 — ghi chú trên dòng ASSET của ảnh gom từ tin nhắn trước trong phiên chat. Trước đây mọi ảnh gom được đều
+ * bị ép "dùng ít nhất một lần": ảnh chụp màn hình tham khảo bị nhét vào trang, hoặc AI không dùng thì lỗi 422
+ * "AI không dùng ảnh … đã đính kèm" mà không có lượt thử lại.
+ */
+export const REFERENCE_ONLY_ASSET_NOTE =
+  '[ảnh từ tin nhắn trước — có thể chỉ là ảnh tham khảo, KHÔNG bắt buộc dùng; chỉ chèn vào trang nếu yêu cầu hiện tại nói rõ dùng ảnh này]';
+
+/**
  * B-1 (3) — tài liệu khách đính kèm (PDF/Word/Excel/trang web...) có thể do người khác viết và chứa
  * câu "chỉ thị" nhằm điều khiển AI (chèn script, đổi form, lộ prompt). Trước đây prompt dặn "BẮT BUỘC
  * tuân thủ" yêu cầu trong tài liệu. Giờ: tài liệu là DỮ LIỆU để lấy nội dung/cấu trúc, không phải lệnh;
@@ -294,7 +302,9 @@ export function buildAttachmentPromptBlock(assets = [], documents = [], mode = '
         : (mode === 'edit'
           ? ' (model không xem được ảnh này; chỉ chèn nếu người dùng yêu cầu chèn/thay ảnh)'
           : ' (model không xem được ảnh này — dùng làm ảnh nền hero hoặc minh họa)');
-      lines.push(`ASSET_${num}: url="${asset.url}" tên="${flattenPromptFileName(asset.originalName, `asset_${num}`)}"${note}`);
+      // B-17: ảnh gom từ tin nhắn TRƯỚC (đường sinh) có thể chỉ là ảnh chụp màn hình tham khảo — không ép dùng.
+      const referenceNote = asset.referenceOnly && mode !== 'edit' ? ` ${REFERENCE_ONLY_ASSET_NOTE}` : '';
+      lines.push(`ASSET_${num}: url="${asset.url}" tên="${flattenPromptFileName(asset.originalName, `asset_${num}`)}"${note}${referenceNote}`);
     });
   }
   if (documents.length > 0) {
@@ -410,6 +420,7 @@ export function stripDisallowedImages(html = '', allowlistUrls = new Set()) {
  * @param {{ html: string, assets?: Array, allowedSourceText?: string, requireAssetsUsed?: boolean }} opts
  *   requireAssetsUsed=false (đường SỬA): ảnh đính kèm không xuất hiện trong html chỉ được gom vào
  *   `unusedAssets` — người dùng gắn ảnh chụp màn hình để chỉ chỗ sửa là chuyện bình thường.
+ *   Ảnh có `referenceOnly` (B-17: gom từ tin nhắn trước trong phiên) được đối xử như vậy kể cả khi requireAssetsUsed=true.
  * @returns {{ unusedAssets: Array, allowlistUrls: Set<string> }}
  * @throws 422 — chốt 1 (khi requireAssetsUsed) hoặc chốt 2 với `code='LANDING_FAKE_IMAGE_URL'`,
  *   `details.fakeImageUrls` liệt kê MỌI URL bịa (để log + đưa vào prompt thử lại).
@@ -420,7 +431,8 @@ export function validateLandingImageUrls({ html, assets = [], allowedSourceText 
   for (const asset of assets) {
     if (asset.url && !html.includes(asset.url)) {
       unusedAssets.push(asset);
-      if (requireAssetsUsed) {
+      // B-17: ảnh `referenceOnly` (gom từ tin nhắn trước) không bị ép phải xuất hiện trong trang.
+      if (requireAssetsUsed && !asset.referenceOnly) {
         const err = new Error(`AI không dùng ảnh "${asset.originalName || asset.url}" đã đính kèm. Vui lòng thử lại.`);
         err.status = 422;
         throw err;
@@ -485,8 +497,11 @@ class AiLandingPageService {
         : '');
 
     const dataPromptBlock = buildAttachmentPromptBlock(assets, documents);
+    const referenceOnlyException = assets.some((a) => a.referenceOnly)
+      ? ' (TRỪ ảnh có ghi "ảnh từ tin nhắn trước": chỉ là ảnh tham khảo, không bắt buộc dùng)'
+      : '';
     const imageRule = assets.length > 0
-      ? '8) Ảnh: CHỈ dùng các URL trong ẢNH ĐÃ TẢI LÊN, mỗi URL ít nhất một lần, bằng <img src="..." alt="..." class="..."> (logo ở header, banner làm hero...). Không có ảnh nào được cấp thì không dùng <img>, không bịa URL, không dùng ảnh placeholder.'
+      ? `8) Ảnh: CHỈ dùng các URL trong ẢNH ĐÃ TẢI LÊN, mỗi URL ít nhất một lần${referenceOnlyException}, bằng <img src="..." alt="..." class="..."> (logo ở header, banner làm hero...). Không có ảnh nào được cấp thì không dùng <img>, không bịa URL, không dùng ảnh placeholder.`
       : '8) Tránh ảnh placeholder URL giả; nếu cần hình minh họa, chỉ được dùng Logo URL của hồ sơ doanh nghiệp nếu có, không dùng ảnh nào khác; nếu không có logo thì dùng gradient/icon Unicode hoặc bỏ ảnh.';
 
     // PR-5b-2a — AI_LANDING_FORM_MODE=form: AI KHÔNG còn tự viết <form>, chỉ đặt một chỗ trống;
