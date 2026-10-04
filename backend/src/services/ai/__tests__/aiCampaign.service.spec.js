@@ -57,11 +57,6 @@ jest.unstable_mockModule('../aiLandingPage.service.js', () => ({
   },
 }));
 
-jest.unstable_mockModule('../../landingTemplate/landingTemplate.service.js', () => ({
-  default: {
-    generateLandingPage: jest.fn(),
-  },
-}));
 
 jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
   default: {

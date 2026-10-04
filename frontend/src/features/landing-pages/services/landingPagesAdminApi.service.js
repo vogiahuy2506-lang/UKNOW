@@ -56,22 +56,6 @@ export async function fetchLandingTemplateHtml(id) {
 }
 
 /**
- * Sinh HTML landing page với template (AI).
- * 
- * @param {{ prompt: string, templateId?: number, title?: string }} params
- * @returns {Promise<object>}
- */
-export async function generateLandingWithTemplate({ prompt, templateId, title } = {}) {
-  const { data } = await api.post(
-    '/landing-templates/generate',
-    { prompt, templateId, title },
-    { timeout: 120000 }
-  );
-  if (!data?.success) throw new Error(data?.message || 'Không sinh được');
-  return data.data;
-}
-
-/**
  * Lấy danh sách landing page (admin) — dùng CMS và node Builder (lọc slug).
  *
  * @returns {Promise<object[]>}

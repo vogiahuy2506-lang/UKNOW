@@ -1,6 +1,5 @@
 import { Router } from 'express';
 import authMiddleware from '../middleware/auth.middleware.js';
-import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import landingTemplateController from '../controllers/landingTemplate.controller.js';
 import { requirePermission, requireActivePlan, requirePasswordChange, requirePhone } from '../middleware/authorization.middleware.js';
 
@@ -33,8 +32,5 @@ router.put('/:id', requirePermission('landing_pages'), landingTemplateController
 
 // DELETE /api/landing-templates/:id - Delete template
 router.delete('/:id', requirePermission('landing_pages'), landingTemplateController.delete.bind(landingTemplateController));
-
-// POST /api/landing-templates/generate - Generate landing page from prompt
-router.post('/generate', requirePermission('landing_pages'), assertAiCreditAvailable('landing_template_generate'), landingTemplateController.generate.bind(landingTemplateController));
 
 export default router;

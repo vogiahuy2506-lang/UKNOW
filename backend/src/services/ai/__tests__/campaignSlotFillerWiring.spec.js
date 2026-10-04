@@ -46,9 +46,6 @@ jest.unstable_mockModule('../businessProfile.service.js', () => ({
 
 jest.unstable_mockModule('../adminContext.service.js', () => ({ buildAdminContext: jest.fn() }));
 jest.unstable_mockModule('../aiLandingPage.service.js', () => ({ default: { generate: jest.fn() } }));
-jest.unstable_mockModule('../../landingTemplate/landingTemplate.service.js', () => ({
-  default: { generateLandingPage: jest.fn() },
-}));
 jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
   default: { readTempFileBuffer: jest.fn() },
 }));

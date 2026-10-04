@@ -60,9 +60,6 @@ jest.unstable_mockModule('../adminContext.service.js', () => ({
 jest.unstable_mockModule('../aiLandingPage.service.js', () => ({
   default: { generate: jest.fn() },
 }));
-jest.unstable_mockModule('../../landingTemplate/landingTemplate.service.js', () => ({
-  default: { generateLandingPage: jest.fn() },
-}));
 jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
   default: {
     getZaloAccountsFull: jest.fn(async () => []),

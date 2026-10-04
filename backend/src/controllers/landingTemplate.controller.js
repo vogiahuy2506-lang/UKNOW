@@ -1,11 +1,4 @@
 import landingTemplateService from '../services/landingTemplate/landingTemplate.service.js';
-import { saveMessages, saveAssistantMessage } from '../repositories/aiSession.repository.js';
-import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
-import {
-  resolveLandingBrief,
-  buildLandingBriefContext,
-} from '../services/ai/landingBrief.service.js';
-import { normalizeAssistantLocale } from '../utils/assistantLocale.util.js';
 
 /**
  * Controller for landing page templates.
@@ -260,80 +253,6 @@ class LandingTemplateController {
       res.status(500).json({
         success: false,
         message: 'Failed to fetch template HTML',
-      });
-    }
-  }
-
-  /**
-   * POST /api/landing-templates/generate
-   * Generate landing page from prompt using AI.
-   */
-  async generate(req, res) {
-    try {
-      const { prompt, templateId, files, sessionId, userSummary, landingBrief, locale } = req.body;
-
-      if (!prompt || typeof prompt !== 'string' || prompt.trim().length < 10) {
-        return res.status(400).json({
-          success: false,
-          message: 'Prompt must be at least 10 characters',
-        });
-      }
-
-      const actorUserId = req.user.id;
-      const resolvedBrief = await resolveLandingBrief({ landingBrief, user: req.user });
-      const ownerUserId = resolvedBrief?.ownerUserId
-        ?? (req.user?.activeContext?.type === 'employee'
-          ? req.user.activeContext.ownerId
-          : actorUserId);
-      const landingBriefContext = resolvedBrief
-        ? buildLandingBriefContext(resolvedBrief)
-        : null;
-      const contentLocale = normalizeAssistantLocale(
-        resolvedBrief?.normalizedBrief?.contentLocale || locale,
-        'vi',
-      );
-
-      const result = await landingTemplateService.generateLandingPage({
-        prompt: prompt.trim(),
-        templateId: templateId ? Number.parseInt(templateId, 10) : null,
-        userId: ownerUserId,
-        actorUserId,
-        files: files || [],
-        landingBriefContext,
-        contentLocale,
-      });
-
-      // Lưu cả user message + assistant (landing page) vào session (actor)
-      if (sessionId) {
-        try {
-          const userContent = String(userSummary || prompt).trim();
-          const assistantMsg = {
-            content: `Đã tạo landing page "${result.title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
-            type: 'landing_page',
-            data: { title: result.title, html: result.html, css: result.css },
-          };
-          await saveMessages(sessionId, actorUserId, userContent, assistantMsg);
-        } catch (saveErr) {
-          console.warn('[LandingTemplate] Could not save message to session:', saveErr.message);
-        }
-      }
-
-      await chargeAiCredit(req);
-
-      res.json({
-        success: true,
-        data: result,
-      });
-    } catch (error) {
-      console.error('[LandingTemplate] Generate error:', error);
-      res.status(error.status || 500).json({
-        success: false,
-        message: error.message || 'Failed to generate landing page',
-        ...(error.code ? { code: error.code } : {}),
-        ...(error.resource ? { resource: error.resource } : {}),
-        ...(error.used !== undefined ? { used: error.used } : {}),
-        ...(error.limit !== undefined ? { limit: error.limit } : {}),
-        ...(error.upgradeRequired ? { upgradeRequired: true } : {}),
       });
     }
   }

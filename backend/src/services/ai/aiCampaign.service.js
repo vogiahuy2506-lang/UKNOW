@@ -2,7 +2,6 @@ import businessProfileService from './businessProfile.service.js';
 import { formatAssistantCapabilities } from './assistantCapabilities.js';
 import { buildAdminContext } from './adminContext.service.js';
 import aiLandingPageService from './aiLandingPage.service.js';
-import landingTemplateService from '../landingTemplate/landingTemplate.service.js';
 import uploadController from '../../controllers/upload.controller.js';
 import { extractTextFromBuffer } from '../../utils/fileParser.util.js';
 import { assertOwnedStorageKey } from '../../utils/storageKey.util.js';
@@ -2449,19 +2448,6 @@ Khi muốn tạo Landing Page. Yêu cầu thiết kế / tạo / làm landing pa
 `;
 
     return runChat({ systemPrompt, history, files, userId, ownerUserId: ownerId, requestedModel: model });
-  }
-
-  /**
-   * Generate landing page using AI with optional template.
-   * @param {object} params
-   * @param {string} params.prompt - User's request
-   * @param {number} [params.templateId] - Optional template ID
-   * @param {number} [params.userId] - User ID for RAG context
-   * @param {Array} [params.files] - Attached files
-   * @returns {Promise<object>}
-   */
-  async generateLandingPage({ prompt, templateId = null, userId = null, files = [] }) {
-    return landingTemplateService.generateLandingPage({ prompt, templateId, userId, files });
   }
 
   /**

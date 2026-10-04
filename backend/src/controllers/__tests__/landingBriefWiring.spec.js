@@ -2,7 +2,6 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 import { buildLeadFormDraftFromBrief, applyLeadFormDraftToConfig } from '../../utils/landingLeadFormConfig.util.js';
 
 const mockGenerate = jest.fn();
-const mockGenerateLandingPage = jest.fn();
 const mockResolveLandingBrief = jest.fn();
 const mockBuildLandingBriefContext = jest.fn();
 const mockChargeAiCredit = jest.fn();
@@ -11,9 +10,6 @@ const mockSaveMessagesReturningIds = jest.fn();
 
 jest.unstable_mockModule('../../services/ai/aiLandingPage.service.js', () => ({
   default: { generate: mockGenerate },
-}));
-jest.unstable_mockModule('../../services/landingTemplate/landingTemplate.service.js', () => ({
-  default: { generateLandingPage: mockGenerateLandingPage },
 }));
 jest.unstable_mockModule('../../services/ai/landingBrief.service.js', () => ({
   resolveLandingBrief: mockResolveLandingBrief,
@@ -99,7 +95,6 @@ jest.unstable_mockModule('../../services/ai/aiCampaignWizard.service.js', () => 
 }));
 
 const { default: aiController } = await import('../ai.controller.js');
-const { default: landingTemplateController } = await import('../landingTemplate.controller.js');
 
 const makeRes = () => {
   const res = {
@@ -114,7 +109,6 @@ describe('LandingBrief endpoint wiring', () => {
     jest.clearAllMocks();
     mockBuildLandingBriefContext.mockReturnValue('BRIEF_CTX');
     mockGenerate.mockResolvedValue({ title: 'T', html: '<!DOCTYPE html><html></html>' });
-    mockGenerateLandingPage.mockResolvedValue({ title: 'T', html: '<div/>', css: '' });
     mockChargeAiCredit.mockResolvedValue(undefined);
     mockSaveMessages.mockResolvedValue(undefined);
     mockSaveMessagesReturningIds.mockResolvedValue({ userMessageId: 1, assistantMessageId: 2 });
@@ -264,51 +258,5 @@ describe('LandingBrief endpoint wiring', () => {
       success: true,
       data: expect.objectContaining({ leadFormConfig: expectedConfig }),
     }));
-  });
-
-  it('POST /landing-templates/generate: invalid brief blocks before Gemini', async () => {
-    const err = new Error('not found');
-    err.status = 404;
-    err.code = 'LANDING_PRODUCT_NOT_FOUND';
-    mockResolveLandingBrief.mockRejectedValue(err);
-
-    const req = {
-      body: {
-        prompt: 'Tạo landing page với tệp đính kèm đủ dài',
-        landingBrief: { version: 1, source: 'assistant_wizard', productMode: 'catalog', productId: 1 },
-      },
-      user: { id: 4 },
-    };
-    const res = makeRes();
-    await landingTemplateController.generate(req, res);
-
-    expect(mockGenerateLandingPage).not.toHaveBeenCalled();
-    expect(mockChargeAiCredit).not.toHaveBeenCalled();
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  it('POST /landing-templates/generate: passes owner + actor to service', async () => {
-    mockResolveLandingBrief.mockResolvedValue({
-      ownerUserId: 11,
-      normalizedBrief: { productMode: 'other', productName: 'X' },
-      resolvedProduct: null,
-    });
-    const req = {
-      body: {
-        prompt: 'Tạo landing page từ template và brief',
-        files: [{ tempId: 't1' }],
-        landingBrief: { version: 1, source: 'assistant_wizard', productMode: 'other', productName: 'X' },
-      },
-      user: { id: 22, activeContext: { type: 'employee', ownerId: 11 } },
-    };
-    const res = makeRes();
-    await landingTemplateController.generate(req, res);
-
-    expect(mockGenerateLandingPage).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 11,
-      actorUserId: 22,
-      landingBriefContext: 'BRIEF_CTX',
-    }));
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
   });
 });

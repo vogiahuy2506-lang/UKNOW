@@ -83,7 +83,7 @@ describe('assertAiCreditAvailable — lượt sửa tự động (plan landing t
   it.each([
     'ai_assistant_chat', 'ai_assistant_chat_v2', 'ai_generate_campaign', 'ai_generate_campaign_v2',
     'ai_generate_landing_html', 'ai_generate_system_instruction', 'ai_custom_chat',
-    'landing_template_generate', 'dashboard_insights', 'inbox_ai_summary',
+    'dashboard_insights', 'inbox_ai_summary',
   ])('feature KHÁC (%s) + autoLayoutFix:true → VẪN kiểm credit và VẪN bị trừ', async (feature) => {
     const req = makeReq({ autoLayoutFix: true });
     const next = jest.fn();
