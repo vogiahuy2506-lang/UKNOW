@@ -9208,6 +9208,12 @@ export default {
       smtpRateLimited: 'máy chủ email tạm chặn gửi',
       smtpUnstable: 'máy chủ email đang lỗi kết nối',
     },
+    // PLAN_UOC_TINH 5c / PR-5 — thời gian CÒN LẠI của lượt đang chạy (cụm "khoảng N ngày" lấy từ campaignEstimate.duration).
+    estimate: {
+      finish: 'Dự kiến xong: {time} (còn {duration})',
+      continuous: 'Chạy liên tục',
+      mayBeLonger: 'Có thể lâu hơn nếu Zalo khoá tra số hoặc máy chủ email chặn gửi.',
+    },
     failures: {
       viewDetails: 'Xem chi tiết lỗi',
       hideDetails: 'Ẩn chi tiết lỗi',

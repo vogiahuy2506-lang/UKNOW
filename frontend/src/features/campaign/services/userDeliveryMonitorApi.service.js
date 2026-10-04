@@ -8,6 +8,10 @@ const userDeliveryMonitorApiService = {
   getRunFailures(runId) {
     return api.get(`/delivery-monitor/runs/${runId}/failures`);
   },
+  // Thời gian CÒN LẠI của một lượt đang chạy — gọi lười theo từng lượt (có thể đọc Google Sheet ở backend).
+  getRunEstimate(runId) {
+    return api.get(`/delivery-monitor/runs/${runId}/estimate`);
+  },
 };
 
 export default userDeliveryMonitorApiService;

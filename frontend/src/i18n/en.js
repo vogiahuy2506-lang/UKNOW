@@ -9196,6 +9196,12 @@ Feel free to ask me anything!`,
       smtpRateLimited: 'the email server is temporarily limiting sending',
       smtpUnstable: 'the email server has connection errors',
     },
+    // PLAN_UOC_TINH 5c / PR-5 — time REMAINING for a running run (the "about N days" phrase comes from campaignEstimate.duration).
+    estimate: {
+      finish: 'Expected to finish: {time} ({duration} left)',
+      continuous: 'Runs continuously',
+      mayBeLonger: 'May take longer if Zalo blocks phone lookups or the email server throttles sending.',
+    },
     failures: {
       viewDetails: 'View failure details',
       hideDetails: 'Hide failure details',

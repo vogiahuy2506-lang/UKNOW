@@ -4,6 +4,7 @@ import {
   HiOutlineCheckCircle,
   HiOutlineClock,
   HiOutlineExclamationCircle,
+  HiOutlineInformationCircle,
   HiOutlineRefresh,
   HiOutlineServer,
 } from 'react-icons/hi';
@@ -30,6 +31,11 @@ import {
   formatVnTime,
   getWaitReasonI18nKey,
 } from '../../features/campaigns/utils/deliveryMonitor.helpers';
+import {
+  buildEstimateView,
+  describeEstimateDuration,
+  formatEstimateDateTime,
+} from '../../features/campaigns/utils/campaignEstimate.helpers';
 
 // PLAN_SO_LIEU_DUNG_GON_KHOP_2026-09-30, PR-4b — trang trả lời MỘT câu: hôm nay gửi tới đâu rồi, có gì đang kẹt.
 // Số theo khoảng thời gian dài thuộc trang Báo cáo; ở đây không có bộ chọn 7/30/90 ngày.
@@ -39,6 +45,11 @@ const fmt = (value) => Number(value || 0).toLocaleString('vi-VN');
 // Tự làm mới mỗi phút và CHỈ khi tab đang hiển thị (mỗi lượt đọc tin của chủ lớn tốn hàng trăm ms).
 const REFRESH_INTERVAL_MS = 60_000;
 const isTabHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+
+// Ước tính thời gian còn lại: mỗi lượt gọi tối đa 1 lần / 5 phút (backend cũng đệm 5 phút), dù trang tự làm mới mỗi phút.
+const RUN_ESTIMATE_MIN_INTERVAL_MS = 5 * 60 * 1000;
+// Mã cảnh báo cho biết con số có thể thấp hơn thực tế (không mô hình được) → hiện dấu "có thể lâu hơn".
+const MAY_BE_LONGER_CODES = ['zalo_phone_lookup_unmodeled', 'email_provider_rate_limited'];
 
 const channelColor = {
   email: '#f97316',
@@ -248,7 +259,63 @@ const FailuresDetail = ({ state, failedCount, t }) => {
   );
 };
 
-const RunsTable = ({ runs, now, t }) => {
+/**
+ * "Dự kiến xong: dd/MM HH:mm (còn khoảng N giờ)" của một lượt ĐANG CHẠY, dưới số "Đã gửi". `finishAtLatest` là số chính
+ * (như hộp ước tính khi chạy / đặt lịch). Lỗi / không có ước tính → không hiện gì. `refreshKey` đổi mỗi lần overview làm
+ * mới; hiệu ứng chỉ gọi lại API khi đã quá 5 phút kể từ lần gọi trước CỦA LƯỢT NÀY.
+ */
+const RunEstimateLine = ({ runId, refreshKey, t }) => {
+  const [state, setState] = useState({ continuous: false, view: null });
+  const lastCallAtRef = useRef(0);
+  const aliveRef = useRef(true);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => { aliveRef.current = false; };
+  }, []);
+
+  useEffect(() => {
+    const nowMs = Date.now();
+    if (lastCallAtRef.current && nowMs - lastCallAtRef.current < RUN_ESTIMATE_MIN_INTERVAL_MS) return;
+    lastCallAtRef.current = nowMs;
+    (async () => {
+      let next = { continuous: false, view: null };
+      try {
+        const res = await userDeliveryMonitorApiService.getRunEstimate(runId);
+        const body = res?.data?.data;
+        next = { continuous: body?.continuous === true, view: buildEstimateView(body?.estimate) };
+      } catch {
+        // Ước tính chỉ là thông tin thêm: lỗi mạng / 500 thì không hiện gì, không làm vỡ bảng.
+      }
+      if (aliveRef.current) setState(next);
+    })();
+  }, [runId, refreshKey]);
+
+  if (state.continuous) {
+    return <p className="mt-0.5 text-xs text-gray-500" data-testid="run-estimate-continuous">{t('userDeliveryMonitor.estimate.continuous')}</p>;
+  }
+  const { view } = state;
+  if (!view || !view.finishAtLatest) return null;
+  const duration = describeEstimateDuration(new Date(), view.finishAtLatest);
+  const mayBeLonger = view.warnings.some((w) => MAY_BE_LONGER_CODES.includes(w.code));
+  return (
+    <p className="mt-0.5 flex items-center gap-1 text-xs text-gray-500" data-testid="run-estimate">
+      <span>
+        {t('userDeliveryMonitor.estimate.finish', {
+          time: formatEstimateDateTime(view.finishAtLatest),
+          duration: duration ? t(`campaignEstimate.duration.${duration.unit}`, { value: duration.value }) : '',
+        })}
+      </span>
+      {mayBeLonger && (
+        <span title={t('userDeliveryMonitor.estimate.mayBeLonger')} aria-label={t('userDeliveryMonitor.estimate.mayBeLonger')} data-testid="run-estimate-longer">
+          <HiOutlineInformationCircle className="h-3.5 w-3.5 text-amber-500" />
+        </span>
+      )}
+    </p>
+  );
+};
+
+const RunsTable = ({ runs, now, generatedAt, t }) => {
   const [expandedRunId, setExpandedRunId] = useState(null);
   const [failuresMap, setFailuresMap] = useState({});
 
@@ -325,6 +392,9 @@ const RunsTable = ({ runs, now, t }) => {
                       <span className="font-medium text-gray-900" data-testid="run-sent">
                         {run.planned != null ? `${fmt(run.sent)} / ${fmt(run.planned)}` : fmt(run.sent)}
                       </span>
+                      {String(run.status || '').toLowerCase() === 'running' && (
+                        <RunEstimateLine runId={run.runId} refreshKey={generatedAt} t={t} />
+                      )}
                     </td>
                     <td className="px-5 py-3">
                       {run.failed > 0 ? (
@@ -538,7 +608,7 @@ export default function UserDeliveryMonitorPage() {
             )}
           </div>
 
-          <RunsTable runs={data.runs || []} now={now} t={t} />
+          <RunsTable runs={data.runs || []} now={now} generatedAt={data.generatedAt} t={t} />
         </>
       )}
     </div>
