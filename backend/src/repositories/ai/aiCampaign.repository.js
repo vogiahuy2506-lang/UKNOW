@@ -31,33 +31,38 @@ class AiCampaignRepository {
     return result.rows;
   }
 
-  async getZaloAccounts(userId) {
+  // `accessibleIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): null = chủ / không lọc; mảng = chỉ các tài khoản nhân viên
+  // ĐƯỢC GIAO (mảng rỗng = không tài khoản nào). Lọc NGAY TRONG SQL, trước LIMIT — lọc sau LIMIT 5 sẽ làm nhân viên được giao
+  // tài khoản cũ không thấy gì vì 5 dòng đầu thuộc tài khoản khác.
+  async getZaloAccounts(userId, accessibleIds = null) {
     const result = await db.query(
       `SELECT id, display_name, zalo_name, status
        FROM zalo_settings
        WHERE id_user = $1 AND status = 'connected'
+         AND ($2::bigint[] IS NULL OR id = ANY($2::bigint[]))
          AND NOT EXISTS (
            SELECT 1 FROM topup_locked_resources tlr
            WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
          )
        ORDER BY is_default DESC, created_at DESC
        LIMIT 5`,
-      [userId]
+      [userId, accessibleIds]
     );
     return result.rows;
   }
 
-  async getZaloAccountsFull(userId) {
+  async getZaloAccountsFull(userId, accessibleIds = null) {
     const result = await db.query(
       `SELECT id, display_name, zalo_name, status, is_active, is_default
        FROM zalo_settings
        WHERE id_user = $1
+         AND ($2::bigint[] IS NULL OR id = ANY($2::bigint[]))
          AND NOT EXISTS (
            SELECT 1 FROM topup_locked_resources tlr
            WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
          )
        ORDER BY is_default DESC, created_at DESC`,
-      [userId]
+      [userId, accessibleIds]
     );
     return result.rows;
   }
@@ -89,16 +94,18 @@ class AiCampaignRepository {
     return result.rows;
   }
 
-  async getDefaultZaloAccountId(userId) {
+  // `accessibleIds`: xem getZaloAccounts. "Mặc định" của nhân viên = tài khoản mặc định / đầu tiên TRONG danh sách được giao.
+  async getDefaultZaloAccountId(userId, accessibleIds = null) {
     const result = await db.query(
       `SELECT id FROM zalo_settings
        WHERE id_user = $1 AND status = 'connected'
+         AND ($2::bigint[] IS NULL OR id = ANY($2::bigint[]))
          AND NOT EXISTS (
            SELECT 1 FROM topup_locked_resources tlr
            WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
          )
        ORDER BY is_default DESC LIMIT 1`,
-      [userId]
+      [userId, accessibleIds]
     );
     return result.rows[0]?.id ?? null;
   }

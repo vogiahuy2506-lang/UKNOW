@@ -83,6 +83,15 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({
   },
 }));
 
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ thấy tài khoản Zalo được giao; bảng giao được mock (spec này chỉ
+// kiểm đọc tệp theo chủ, không phải việc giao).
+const mockFindAssigned = jest.fn(async () => []);
+const realMemberRepo = await import('../../../repositories/user/memberChannelAccount.repository.js');
+jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
+  ...realMemberRepo,
+  findAssignedZaloAccountIds: mockFindAssigned,
+}));
+
 const { runChat } = await import('../aiChatTransport.service.js');
 const { default: aiCampaignService } = await import('../aiCampaign.service.js');
 

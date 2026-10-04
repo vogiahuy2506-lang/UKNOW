@@ -5,6 +5,7 @@ import campaignEmailSenderRepository from '../../repositories/campaign/campaignE
 import campaignZaloSenderRepository from '../../repositories/campaign/campaignZaloSender.repository.js';
 import chatbotTelegramRepository from '../../repositories/chatbot/chatbotTelegram.repository.js';
 import { isAdapterCampaignChannelEnabled } from '../campaign/campaignChannelFlags.util.js';
+import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
 
 const EMAIL_TYPES = new Set(['send_email', 'email', 'email_send']);
 const ZALO_PERSONAL_TYPES = new Set(['send_zalo_personal', 'zalo_personal', 'zalo']);
@@ -159,6 +160,14 @@ class CampaignConfirmationService {
     // chứ không tự đổi nhân viên → chủ, nên phải truyền id chủ ở đây. Trước đây Email/Zalo/mẫu dùng `userId` (nhân viên) →
     // luôn `missing_sender`/`template_not_found` → INVALID_DRAFT_RESOURCES (C P1-7). Telegram/WhatsApp vốn đã đúng.
     const channelOwnerId = ownerUserId != null ? ownerUserId : userId;
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ gửi bằng tài khoản Zalo ĐƯỢC GIAO: tài khoản Zalo
+    // trong bản nháp (hoặc mặc định) chưa giao → `missing_sender`, chặn tạo. Chủ → null = không lọc. Tính LƯỜI (chỉ khi có node
+    // Zalo) và một lần cho cả thẻ.
+    let zaloAccessiblePromise = null;
+    const getZaloAccessibleIds = () => {
+      zaloAccessiblePromise ||= resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId: channelOwnerId });
+      return zaloAccessiblePromise;
+    };
     const nodes = Array.isArray(script?.nodes) ? script.nodes : [];
     const issues = [];
     const resourceVersions = [];
@@ -316,8 +325,12 @@ class CampaignConfirmationService {
         return { id: sessionKey, label };
       }
 
-      const id = asNumber(config?.zaloAccountId) || await aiCampaignDraftRepository.findDefaultZaloSettingId(channelOwnerId);
-      const sender = id ? await campaignZaloSenderRepository.findCampaignZaloAccount(id, channelOwnerId, false) : null;
+      const zaloAccessibleIds = await getZaloAccessibleIds();
+      const id = asNumber(config?.zaloAccountId)
+        || await aiCampaignDraftRepository.findDefaultZaloSettingId(channelOwnerId, zaloAccessibleIds);
+      // Tài khoản chưa giao cho nhân viên: không tra DB (không lộ tồn tại / tên), báo thiếu tài khoản gửi như chưa chọn.
+      const isAssigned = !Array.isArray(zaloAccessibleIds) || (id != null && zaloAccessibleIds.includes(Number(id)));
+      const sender = id && isAssigned ? await campaignZaloSenderRepository.findCampaignZaloAccount(id, channelOwnerId, false) : null;
       if (!sender || !sender.is_active) {
         addIssue({ code: 'missing_sender', nodeId: issueNodeId });
         return { id: null, label: null };

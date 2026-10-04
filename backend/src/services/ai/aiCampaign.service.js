@@ -74,6 +74,7 @@ import { fillContentSlots } from './campaignSlotFiller.service.js';
 import campaignNodeRegistryService, { isZaloPlanNodeSubtype } from '../campaign/campaignNodeRegistry.service.js';
 import { isAdapterCampaignChannel, isChannelBlockedByPlan, buildChannelNotInPlanMessage } from '../campaign/campaignChannelFlags.util.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
+import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
 import { resolveLandingAudienceChoice } from '../../utils/campaignLandingAudience.util.js';
 import { UNTRUSTED_CONTENT_RULE } from '../../utils/untrustedContent.util.js';
 
@@ -134,13 +135,17 @@ class AiCampaignService {
     let existingResources = '';
     if (userId) {
       try {
+        // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — tài khoản Zalo thuộc CHỦ (không phải id nhân viên, vốn không có hàng
+        // zalo_settings nào) và nhân viên chỉ thấy tài khoản ĐƯỢC GIAO. Chủ (actor === owner) → null = không lọc.
+        const zaloOwnerId = fileOwnerId;
+        const zaloAccessibleIds = await resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId: zaloOwnerId });
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType] =
           await Promise.all([
             aiPromptResources.getEmailTemplates(userId),
-            aiPromptResources.getZaloAccounts(userId),
-            aiPromptResources.getZaloGroups(userId),
+            aiPromptResources.getZaloAccounts(zaloOwnerId, zaloAccessibleIds),
+            aiPromptResources.getZaloGroups(zaloOwnerId, zaloAccessibleIds),
             aiPromptResources.getZaloTemplates(userId),
-            aiPromptResources.getRecommendedCampaignType(userId),
+            aiPromptResources.getRecommendedCampaignType(userId, zaloAccessibleIds),
           ]);
 
         const connectedZaloAccount = zaloAccounts.find(
@@ -555,10 +560,16 @@ D. ZALO NHÓM:
     };
   }
 
-  async _getWizardResources(userId) {
-    if (!userId) return { zaloAccounts: [], emailSenders: [], courses: [], telegramAccounts: [], whatsappAccounts: [] };
+  /**
+   * @param {number} userId chủ không gian
+   * @param {number[]|null} [zaloAccessibleIds] tài khoản Zalo nhân viên ĐƯỢC GIAO (null = chủ, không lọc). `zaloAccessRestricted`
+   *   báo cho cổng wizard biết danh sách đã bị lọc: id sender đã chọn mà không nằm trong danh sách này là KHÔNG hợp lệ (cổng
+   *   không được coi "danh sách rỗng" là "id nào cũng hợp lệ" như với chủ chưa kết nối tài khoản nào).
+   */
+  async _getWizardResources(userId, zaloAccessibleIds = null) {
+    if (!userId) return { zaloAccounts: [], emailSenders: [], courses: [], telegramAccounts: [], whatsappAccounts: [], zaloAccessRestricted: false };
     const [zaloAccounts, emailSenders, courses, adapterAccounts] = await Promise.all([
-      aiPromptResources.getZaloAccountsFull(userId),
+      aiPromptResources.getZaloAccountsFull(userId, zaloAccessibleIds),
       aiPromptResources.getActiveEmailSenders(userId),
       aiPromptResources.getCourses(userId),
       // P8a — rỗng khi cờ Telegram/WhatsApp tắt (không chạm DB/Baileys).
@@ -570,6 +581,7 @@ D. ZALO NHÓM:
       courses,
       telegramAccounts: adapterAccounts.telegram,
       whatsappAccounts: adapterAccounts.whatsapp,
+      zaloAccessRestricted: Array.isArray(zaloAccessibleIds),
     };
   }
 
@@ -705,7 +717,10 @@ QUY TẮC:
       });
     }
 
-    const wizardResources = await this._getWizardResources(ownerId);
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ thấy / được gợi ý tài khoản Zalo ĐƯỢC GIAO;
+    // chủ → null. Một lần cho cả lượt: danh sách cho wizard, ngữ cảnh prompt và tài khoản mặc định đều theo đúng danh sách này.
+    const zaloAccessibleIds = await resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId: ownerId });
+    const wizardResources = await this._getWizardResources(ownerId, zaloAccessibleIds);
     const lastUserText = lastUserMessageContent(history);
 
     // Wizard state: merge bản persist trong DB (sống sót qua reload) với bản derive
@@ -1156,10 +1171,10 @@ QUY TẮC:
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, courses, _landingPages, _forms] =
           await Promise.all([
             aiPromptResources.getEmailTemplates(ownerId),
-            aiPromptResources.getZaloAccounts(ownerId),
-            aiPromptResources.getZaloGroups(ownerId),
+            aiPromptResources.getZaloAccounts(ownerId, zaloAccessibleIds),
+            aiPromptResources.getZaloGroups(ownerId, zaloAccessibleIds),
             aiPromptResources.getZaloTemplates(ownerId),
-            aiPromptResources.getRecommendedCampaignType(ownerId),
+            aiPromptResources.getRecommendedCampaignType(ownerId, zaloAccessibleIds),
             aiPromptResources.getCustomerStats(ownerId),
             aiPromptResources.getCourses(ownerId),
             aiPromptResources.getLandingPages(ownerId),
@@ -2247,13 +2262,15 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
     if (ownerId) {
       try {
+        // PR-G3 — nhân viên chỉ thấy tài khoản Zalo được giao (xem processSmartChat).
+        const zaloAccessibleIds = await resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId: ownerId });
         const [emailTemplates, zaloAccounts, zaloGroups, zaloTemplates, recommendedType, customerStats, landingPages, forms] =
           await Promise.all([
             aiPromptResources.getEmailTemplates(ownerId),
-            aiPromptResources.getZaloAccounts(ownerId),
-            aiPromptResources.getZaloGroups(ownerId),
+            aiPromptResources.getZaloAccounts(ownerId, zaloAccessibleIds),
+            aiPromptResources.getZaloGroups(ownerId, zaloAccessibleIds),
             aiPromptResources.getZaloTemplates(ownerId),
-            aiPromptResources.getRecommendedCampaignType(ownerId),
+            aiPromptResources.getRecommendedCampaignType(ownerId, zaloAccessibleIds),
             aiPromptResources.getCustomerStats(ownerId),
             aiPromptResources.getLandingPages(ownerId),
             aiPromptResources.getForms(ownerId),
@@ -2425,12 +2442,14 @@ Khi muốn tạo Landing Page. Yêu cầu thiết kế / tạo / làm landing pa
     let existingResources = '';
     if (userId) {
       try {
+        // PR-G3 — tài khoản Zalo theo CHỦ + chỉ phần được giao cho nhân viên (xem generateCampaignScript).
+        const zaloAccessibleIds = await resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId: fileOwnerId });
         const [emailTemplates, zaloAccounts, zaloTemplates, recommendedType, customerStats] =
           await Promise.all([
             aiPromptResources.getEmailTemplates(userId),
-            aiPromptResources.getZaloAccounts(userId),
+            aiPromptResources.getZaloAccounts(fileOwnerId, zaloAccessibleIds),
             aiPromptResources.getZaloTemplates(userId),
-            aiPromptResources.getRecommendedCampaignType(userId),
+            aiPromptResources.getRecommendedCampaignType(userId, zaloAccessibleIds),
             aiPromptResources.getCustomerStats(userId),
           ]);
 

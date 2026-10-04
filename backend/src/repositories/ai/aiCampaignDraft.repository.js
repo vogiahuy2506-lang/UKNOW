@@ -76,16 +76,19 @@ class AiCampaignDraftRepository {
     return rows[0]?.id || null;
   }
 
-  async findDefaultZaloSettingId(userId) {
+  // `accessibleIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): null = chủ / không lọc; mảng = tài khoản nhân viên ĐƯỢC GIAO
+  // (rỗng → không có mặc định). Mặc định của nhân viên không bao giờ là tài khoản chưa giao.
+  async findDefaultZaloSettingId(userId, accessibleIds = null) {
     const { rows } = await db.query(
       `SELECT id FROM zalo_settings
        WHERE id_user = $1 AND is_active = true AND status = 'connected'
+         AND ($2::bigint[] IS NULL OR id = ANY($2::bigint[]))
          AND NOT EXISTS (
            SELECT 1 FROM topup_locked_resources tlr
            WHERE tlr.resource_key = 'zalo_accounts' AND tlr.resource_id = zalo_settings.id
          )
        ORDER BY id ASC LIMIT 1`,
-      [userId]
+      [userId, accessibleIds]
     );
     return rows[0]?.id || null;
   }

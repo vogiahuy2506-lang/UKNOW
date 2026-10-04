@@ -1196,17 +1196,41 @@ export function buildSheetProblemMessage(state, locale = 'vi') {
   };
 }
 
+/**
+ * PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chưa được giao tài khoản Zalo nào: nói thẳng cần nhờ chủ giao (không
+ * phải thẻ "mất kết nối" / quét QR như chủ chưa kết nối tài khoản nào).
+ */
+export function buildZaloNotAssignedGuide(locale = 'vi') {
+  const isEnglish = locale === 'en';
+  return {
+    type: 'text',
+    content: isEnglish
+      ? 'You have not been assigned any Zalo account to send campaigns from. Ask the account owner to assign one in Settings › Employees › Zalo accounts, then come back and tell me to continue.'
+      : 'Bạn chưa được giao tài khoản Zalo nào để gửi chiến dịch. Bạn nhờ chủ tài khoản vào Cài đặt › Nhân viên › Tài khoản Zalo để giao cho bạn, rồi quay lại nói mình tiếp tục nhé.',
+    missing_fields: [],
+    data: { zaloNotAssigned: true },
+  };
+}
+
 function evaluateEmailZaloSenderAndSourceGates(state, resources, locale) {
   const accountsForChannel = state.channel === 'email' ? resources.emailSenders : resources.zaloAccounts;
   const accounts = Array.isArray(accountsForChannel) ? accountsForChannel : [];
+  // `resources.zaloAccessRestricted`: danh sách Zalo đã bị lọc theo việc giao (nhân viên). Khi đó "danh sách rỗng" nghĩa là "chưa
+  // được giao gì", KHÔNG phải "chưa kết nối nên id nào cũng coi là hợp lệ" như với chủ — và một id sender đã chọn mà không có trong
+  // danh sách (marker giả / giữ từ lượt trước / chủ vừa gỡ giao) là CHƯA CHỌN, không được qua cổng.
+  const zaloAccessRestricted = state.channel !== 'email' && resources?.zaloAccessRestricted === true;
+  if (zaloAccessRestricted && accounts.length === 0 && isZaloChannel(state.channel)) {
+    return { gate: 'senderAccount', response: buildZaloNotAssignedGuide(locale) };
+  }
   const selectedAccount = state.senderAccountId
     ? accounts.find((account) => String(account.id) === String(state.senderAccountId))
     : null;
-  const selectedUsable = !state.senderAccountId
+  const senderAccountId = zaloAccessRestricted && state.senderAccountId && !selectedAccount ? null : state.senderAccountId;
+  const selectedUsable = !senderAccountId
     || accounts.length === 0
     || (state.channel === 'email' ? selectedAccount?.status === 'active' : isUsableZaloAccount(selectedAccount));
 
-  if (!state.senderAccountId) {
+  if (!senderAccountId) {
     if (state.channel === 'email' && state.senderOtherRequested) {
       return { gate: 'senderAccount', response: buildEmailSetupGuide(locale) };
     }
@@ -1236,7 +1260,7 @@ function evaluateEmailZaloSenderAndSourceGates(state, resources, locale) {
   }
 
   if (state.channel === 'zalo_group' && state.zaloGroupIds.length === 0) {
-    return { gate: 'zaloGroups', response: buildGroupPickerCard(state.senderAccountId, locale) };
+    return { gate: 'zaloGroups', response: buildGroupPickerCard(senderAccountId, locale) };
   }
 
   if (state.channel !== 'zalo_group' && !state.dataSource) {

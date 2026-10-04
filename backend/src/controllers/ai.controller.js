@@ -1460,7 +1460,8 @@ class AiController {
       // chủ — thẻ xác nhận ngay dưới tra tài khoản theo chủ, nên mặc định cũng phải lấy theo chủ cho khớp).
       const draftOwnerUserId = resolveOwnerUserId(req.user);
       await aiCampaignDraftService.autoFillEmailChannels(normalizedNodes, draftOwnerUserId);
-      await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, draftOwnerUserId);
+      // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3: nhân viên chỉ được điền tài khoản Zalo mặc định trong danh sách được giao.
+      await aiCampaignDraftService.autoFillZaloAccounts(normalizedNodes, draftOwnerUserId, { actorUserId: req.user.id });
 
       // Sender/template ownership and inline content are read-only checks.
       // Run them before materializing any persistent template rows.

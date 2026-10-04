@@ -236,8 +236,11 @@ export async function assertCampaignNodesZaloAccountsAccessible(ctx, nodes) {
 }
 
 /**
- * Giao của nhân viên đang thao tác khi trợ lý AI / trình dựng chỉ có `actor` + `owner` (không có ngữ cảnh HTTP).
- * Chủ (actor === owner) hoặc không có người thao tác → null (không lọc).
+ * Giao của nhân viên đang thao tác khi trợ lý AI chỉ có `actor` + `owner` (không có ngữ cảnh HTTP): actor khác chủ ⇔ đang ở
+ * ngữ cảnh nhân viên (`resolveOwnerUserId` chỉ đổi sang id chủ khi `activeContext.type === 'employee'`).
+ * Chủ (actor === owner) hoặc không có người thao tác → null (không lọc). KHÔNG tra vai super admin như
+ * `getAccessibleZaloAccountIdsForUser`: super admin đứng ở ngữ cảnh nhân viên của một chủ (hiếm) bị lọc như nhân viên — chặt
+ * hơn các đường HTTP, an toàn hơn, và bớt một truy vấn ở mỗi lượt chat.
  *
  * @param {{ actorUserId?: number|string|null, ownerUserId?: number|string|null }} input
  * @returns {Promise<number[]|null>}
@@ -248,7 +251,12 @@ export async function resolveActorZaloAccessibleIds({ actorUserId = null, ownerU
   if (!actor) return null; // không có người thao tác (gọi nội bộ) → không có ai để lọc
   if (!owner) return []; // có người thao tác mà không biết chủ → không xác định được → chặn
   if (actor === owner) return null;
-  return getAccessibleZaloAccountIdsForUser({ ownerId: owner, userId: actor });
+  return getAccessibleZaloAccountIds({
+    actorUserId: actor,
+    workspaceOwnerId: owner,
+    contextType: 'employee',
+    isSuperAdmin: false,
+  });
 }
 
 export default {

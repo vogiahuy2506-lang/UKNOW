@@ -110,6 +110,14 @@ jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
   resolveAllowedModel: jest.fn(async (_userId, model) => model || 'gemini-2.5-flash'),
 }));
 
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ thấy tài khoản Zalo ĐƯỢC GIAO; bảng giao được mock.
+const mockFindAssigned = jest.fn();
+const realMemberRepo = await import('../../../repositories/user/memberChannelAccount.repository.js');
+jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
+  ...realMemberRepo,
+  findAssignedZaloAccountIds: mockFindAssigned,
+}));
+
 const { default: aiCampaignService, isUserConfirmingFile } = await import('../aiCampaign.service.js');
 const { runChat } = await import('../aiChatTransport.service.js');
 
@@ -120,6 +128,8 @@ describe('aiCampaign.service', () => {
     attachGoogleUrlParts.mockReset();
     reserve.mockReset();
     record.mockReset();
+    mockFindAssigned.mockReset();
+    mockFindAssigned.mockResolvedValue([5]);
     getZaloAccountsFull.mockReset();
     getActiveEmailSenders.mockReset();
     getEmailTemplates.mockReset();
@@ -562,8 +572,76 @@ describe('aiCampaign.service', () => {
     expect(getLandingPages).toHaveBeenCalledWith(3);
     expect(getFormattedProfileForPrompt).toHaveBeenCalledWith(3);
     expect(getCourses).not.toHaveBeenCalledWith(9);
+    // PR-G3: tài khoản Zalo theo CHỦ nhưng chỉ phần được giao cho nhân viên (danh sách wizard, prompt, nhóm, gợi ý kênh).
+    expect(mockFindAssigned).toHaveBeenCalledWith(3, 9);
+    expect(getZaloAccountsFull).toHaveBeenCalledWith(3, [5]);
+    expect(getZaloAccounts).toHaveBeenCalledWith(3, [5]);
+    expect(getZaloGroups).toHaveBeenCalledWith(3, [5]);
+    expect(getRecommendedCampaignType).toHaveBeenCalledWith(3, [5]);
     expect(reserve).toHaveBeenCalledWith(9, expect.any(Object));
     expect(record).toHaveBeenCalledWith(9, expect.any(Object), expect.objectContaining({ feature: 'smart_chat' }));
+  });
+
+  // PR-G3 — mọi đường lấy danh sách / mặc định Zalo của trợ lý đều theo việc giao; chủ không bị lọc.
+  describe('tài khoản Zalo được giao cho nhân viên (G3)', () => {
+    const textReply = () => {
+      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+      axiosPost.mockResolvedValue({
+        data: { candidates: [{ content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] } }] },
+      });
+    };
+
+    it('CHỦ chat: danh sách Zalo KHÔNG bị lọc (accessibleIds = null), không đọc bảng giao', async () => {
+      textReply();
+      await aiCampaignService.processSmartChat({
+        userId: 3, resourceOwnerUserId: 3, history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi',
+      });
+      expect(mockFindAssigned).not.toHaveBeenCalled();
+      expect(getZaloAccountsFull).toHaveBeenCalledWith(3, null);
+      expect(getZaloAccounts).toHaveBeenCalledWith(3, null);
+      expect(getZaloGroups).toHaveBeenCalledWith(3, null);
+    });
+
+    it('nhân viên chưa được giao gì: mọi danh sách lọc bằng [] (không phải null)', async () => {
+      textReply();
+      mockFindAssigned.mockResolvedValue([]);
+      await aiCampaignService.processSmartChat({
+        userId: 9, resourceOwnerUserId: 3, history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi',
+      });
+      expect(getZaloAccountsFull).toHaveBeenCalledWith(3, []);
+      expect(getZaloAccounts).toHaveBeenCalledWith(3, []);
+    });
+
+    it('FAIL-CLOSED: đọc bảng giao lỗi → danh sách lọc bằng [] (không bao giờ null)', async () => {
+      textReply();
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockFindAssigned.mockRejectedValue(new Error('db down'));
+      await aiCampaignService.processSmartChat({
+        userId: 9, resourceOwnerUserId: 3, history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi',
+      });
+      expect(getZaloAccountsFull).toHaveBeenCalledWith(3, []);
+      expect(getZaloAccounts).toHaveBeenCalledWith(3, []);
+    });
+
+    it('_getWizardResources đánh dấu zaloAccessRestricted đúng theo có lọc hay không', async () => {
+      expect((await aiCampaignService._getWizardResources(3, [5])).zaloAccessRestricted).toBe(true);
+      expect((await aiCampaignService._getWizardResources(3, [])).zaloAccessRestricted).toBe(true);
+      expect((await aiCampaignService._getWizardResources(3, null)).zaloAccessRestricted).toBe(false);
+      expect((await aiCampaignService._getWizardResources(3)).zaloAccessRestricted).toBe(false);
+    });
+
+    it('generateCampaignScript (nhân viên): tài khoản Zalo tra theo CHỦ, lọc theo việc giao', async () => {
+      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+      axiosPost.mockResolvedValue({
+        data: { candidates: [{ content: { parts: [{ text: '{"campaignName":"c","nodes":[],"connections":[]}' }] } }] },
+      });
+      await aiCampaignService.generateCampaignScript({ prompt: 'gửi tin', userId: 9, ownerUserId: 3 }).catch(() => {});
+      expect(getZaloAccounts).toHaveBeenCalledWith(3, [5]);
+      expect(getZaloGroups).toHaveBeenCalledWith(3, [5]);
+      expect(getZaloAccounts).not.toHaveBeenCalledWith(9, expect.anything());
+    });
   });
 
   // C P3-1 (PLAN_SUA_AI_DOT4 PR-3): lượt mà JSON của model hỏng không được tính credit. Cờ `parseFailed` (do parseAiJson gắn) phải
@@ -945,7 +1023,7 @@ describe('aiCampaign.service', () => {
     });
 
     expect(getEmailTemplates).toHaveBeenCalledWith(3);
-    expect(getZaloAccounts).toHaveBeenCalledWith(3);
+    expect(getZaloAccounts).toHaveBeenCalledWith(3, [5]); // PR-G3: chỉ tài khoản được giao cho nhân viên
     expect(getCustomerStats).toHaveBeenCalledWith(3);
     expect(getContextForPrompt).toHaveBeenCalledWith(3, 'Xin chào trợ lý');
     expect(getEmailTemplates).not.toHaveBeenCalledWith(9);

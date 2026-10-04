@@ -151,12 +151,14 @@ class AiPromptResourcesService {
 
   /**
    * Lấy danh sách tài khoản Zalo đã kết nối của user.
-   * @param {number} userId
+   * @param {number} userId chủ không gian
+   * @param {number[]|null} [accessibleIds] PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3: null = chủ (không lọc); mảng = chỉ các
+   *   tài khoản nhân viên ĐƯỢC GIAO (`resolveActorZaloAccessibleIds`). Lỗi tra → [] nên không bao giờ lộ nhầm.
    * @returns {Promise<Array>}
    */
-  async getZaloAccounts(userId) {
+  async getZaloAccounts(userId, accessibleIds = null) {
     try {
-      const rows = await aiCampaignRepository.getZaloAccounts(userId);
+      const rows = await aiCampaignRepository.getZaloAccounts(userId, accessibleIds);
       return rows.map((r) => ({
         id: r.id,
         displayName: r.display_name,
@@ -169,9 +171,9 @@ class AiPromptResourcesService {
     }
   }
 
-  async getZaloAccountsFull(userId) {
+  async getZaloAccountsFull(userId, accessibleIds = null) {
     try {
-      const rows = await aiCampaignRepository.getZaloAccountsFull(userId);
+      const rows = await aiCampaignRepository.getZaloAccountsFull(userId, accessibleIds);
       return rows.map((r) => ({
         id: r.id,
         displayName: r.display_name,
@@ -224,13 +226,14 @@ class AiPromptResourcesService {
   }
 
   /**
-   * Lấy danh sách nhóm Zalo từ tài khoản đầu tiên của user.
+   * Lấy danh sách nhóm Zalo từ tài khoản đầu tiên của user (nhân viên: tài khoản đầu tiên TRONG danh sách được giao).
    * @param {number} userId
+   * @param {number[]|null} [accessibleIds] xem getZaloAccounts
    * @returns {Promise<Array>}
    */
-  async getZaloGroups(userId) {
+  async getZaloGroups(userId, accessibleIds = null) {
     try {
-      const accountId = await aiCampaignRepository.getDefaultZaloAccountId(userId);
+      const accountId = await aiCampaignRepository.getDefaultZaloAccountId(userId, accessibleIds);
       if (!accountId) return [];
 
       const rows = await aiCampaignRepository.getZaloGroupsByAccountId(accountId);
@@ -346,9 +349,10 @@ class AiPromptResourcesService {
   /**
    * Lấy thông tin khuyến nghị campaign type dựa trên profile doanh nghiệp.
    * @param {number} userId
+   * @param {number[]|null} [accessibleIds] xem getZaloAccounts — nhân viên chưa được giao tài khoản nào thì không được gợi ý Zalo
    * @returns {Promise<string>}
    */
-  async getRecommendedCampaignType(userId) {
+  async getRecommendedCampaignType(userId, accessibleIds = null) {
     try {
       const profile = await businessProfileService.getProfile(userId);
       if (!profile) return 'mixed';
@@ -370,7 +374,7 @@ class AiPromptResourcesService {
           || industry.includes('fmcg') || industry.includes('thực phẩm')
           || industry.includes('giáo dục') || industry.includes('sức khỏe')) {
         // Check nếu có Zalo accounts thì gợi Zalo
-        const zaloAccounts = await this.getZaloAccounts(userId);
+        const zaloAccounts = await this.getZaloAccounts(userId, accessibleIds);
         if (zaloAccounts.length > 0) {
           return 'zalo';
         }

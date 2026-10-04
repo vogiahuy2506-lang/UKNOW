@@ -1,6 +1,20 @@
-import { describe, expect, it, jest } from '@jest/globals';
-import aiCampaignDraftService from '../aiCampaignDraft.service.js';
-import campaignNodeRegistryService from '../../campaign/campaignNodeRegistry.service.js';
+import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ dùng tài khoản Zalo ĐƯỢC GIAO; bảng giao được mock.
+const mockFindAssigned = jest.fn();
+const realMemberRepo = await import('../../../repositories/user/memberChannelAccount.repository.js');
+jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
+  ...realMemberRepo,
+  findAssignedZaloAccountIds: mockFindAssigned,
+}));
+
+const { default: aiCampaignDraftService } = await import('../aiCampaignDraft.service.js');
+const { default: campaignNodeRegistryService } = await import('../../campaign/campaignNodeRegistry.service.js');
+
+beforeEach(() => {
+  mockFindAssigned.mockReset();
+  mockFindAssigned.mockResolvedValue([33]);
+});
 
 describe('aiCampaignDraftService.canonicalizeScript', () => {
   it('is idempotent and normalizes legacy Zalo account references by subtype', () => {
@@ -631,11 +645,13 @@ describe('aiCampaignDraftService.prepareScript — compilerApplied skip-guard (P
       ],
     });
 
-    // Nhân viên id=9 thao tác thay chủ id=3: mặc định phải là tài khoản của chủ (33 / 77).
+    // Nhân viên id=9 thao tác thay chủ id=3: mặc định phải là tài khoản của chủ (33 / 77). Zalo: tra theo chủ VÀ trong danh sách
+    // được giao cho nhân viên ([33] — PR-G3); email không đổi.
     const prepared = await aiCampaignDraftService.prepareScript(withZaloAndEmail(), 9, { ownerUserId: 3 });
-    expect(zaloSpy).toHaveBeenCalledWith(3);
+    expect(mockFindAssigned).toHaveBeenCalledWith(3, 9);
+    expect(zaloSpy).toHaveBeenCalledWith(3, [33]);
     expect(emailSpy).toHaveBeenCalledWith(3);
-    expect(zaloSpy).not.toHaveBeenCalledWith(9);
+    expect(zaloSpy.mock.calls.every(([uid]) => uid !== 9)).toBe(true);
     expect(emailSpy).not.toHaveBeenCalledWith(9);
     expect(prepared.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBe(33);
     expect(prepared.nodes.find((n) => n.id === 'n3').config.fromEmailId).toBe(77);
@@ -644,17 +660,19 @@ describe('aiCampaignDraftService.prepareScript — compilerApplied skip-guard (P
     zaloSpy.mockClear();
     emailSpy.mockClear();
     await aiCampaignDraftService.prepareScript({ ...withZaloAndEmail(), compilerApplied: true }, 9, { ownerUserId: 3 });
-    expect(zaloSpy).toHaveBeenCalledWith(3);
+    expect(zaloSpy).toHaveBeenCalledWith(3, [33]);
     expect(emailSpy).toHaveBeenCalledWith(3);
-    expect(zaloSpy).not.toHaveBeenCalledWith(9);
+    expect(zaloSpy.mock.calls.every(([uid]) => uid !== 9)).toBe(true);
     expect(emailSpy).not.toHaveBeenCalledWith(9);
 
-    // Không truyền ownerUserId (gọi nội bộ không qua controller) → rơi về userId, hành vi cũ.
+    // Không truyền ownerUserId (gọi nội bộ không qua controller) → rơi về userId, hành vi cũ (chủ: không lọc, null).
     zaloSpy.mockClear();
     emailSpy.mockClear();
+    mockFindAssigned.mockClear();
     await aiCampaignDraftService.prepareScript(withZaloAndEmail(), 9);
-    expect(zaloSpy).toHaveBeenCalledWith(9);
+    expect(zaloSpy).toHaveBeenCalledWith(9, null);
     expect(emailSpy).toHaveBeenCalledWith(9);
+    expect(mockFindAssigned).not.toHaveBeenCalled();
 
     zaloSpy.mockRestore();
     emailSpy.mockRestore();
@@ -850,5 +868,94 @@ describe('aiCampaignDraftService.sanitizeFormOwnership (PR-6c)', () => {
     expect(spy).not.toHaveBeenCalled();
 
     spy.mockRestore();
+  });
+});
+
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — bản nháp do trợ lý AI dựng cho NHÂN VIÊN chỉ mang tài khoản Zalo ĐƯỢC GIAO.
+describe('aiCampaignDraftService.prepareScript — tài khoản Zalo được giao (G3)', () => {
+  const zaloScript = (config) => ({
+    nodes: [
+      { id: 'n1', tempId: 'n1', nodeType: 'trigger', nodeSubtype: 'manual', config: {} },
+      { id: 'n2', tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_zalo_personal', config },
+      { id: 'n3', tempId: 'n3', nodeType: 'end', nodeSubtype: 'end', config: {} },
+    ],
+    connections: [
+      { sourceNodeId: 'n1', targetNodeId: 'n2' },
+      { sourceNodeId: 'n2', targetNodeId: 'n3' },
+    ],
+  });
+  let zaloSpy;
+  beforeEach(async () => {
+    const repo = (await import('../../../repositories/ai/aiCampaignDraft.repository.js')).default;
+    zaloSpy = jest.spyOn(repo, 'findDefaultZaloSettingId').mockImplementation(async (uid, ids) => {
+      const all = [5, 6, 9];
+      const usable = ids === null || ids === undefined ? all : all.filter((id) => ids.includes(id));
+      return usable[0] ?? null;
+    });
+    jest.spyOn(repo, 'findDefaultEmailSettingId').mockResolvedValue(null);
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+
+  it('nhân viên được giao [6]: mặc định là 6 (không phải tài khoản đầu tiên 5 của chủ)', async () => {
+    mockFindAssigned.mockResolvedValue([6]);
+    const prepared = await aiCampaignDraftService.prepareScript(zaloScript({}), 9, { ownerUserId: 3 });
+    expect(prepared.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBe(6);
+  });
+
+  it('nhân viên CHƯA được giao gì: không có mặc định, node không mang tài khoản nào (thẻ xác nhận sẽ báo thiếu tài khoản gửi)', async () => {
+    mockFindAssigned.mockResolvedValue([]);
+    const prepared = await aiCampaignDraftService.prepareScript(zaloScript({}), 9, { ownerUserId: 3 });
+    expect(prepared.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBeUndefined();
+  });
+
+  it('id chưa giao còn sót trong bản nháp (marker giả / mô hình bịa) bị GỠ, không bị thay bằng tài khoản khác', async () => {
+    mockFindAssigned.mockResolvedValue([6]);
+    const prepared = await aiCampaignDraftService.prepareScript(zaloScript({ zaloAccountId: 5 }), 9, { ownerUserId: 3 });
+    expect(prepared.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBeUndefined();
+  });
+
+  it('id được giao giữ nguyên', async () => {
+    mockFindAssigned.mockResolvedValue([6]);
+    const prepared = await aiCampaignDraftService.prepareScript(zaloScript({ zaloAccountId: 6 }), 9, { ownerUserId: 3 });
+    expect(prepared.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBe(6);
+  });
+
+  it('senderAccountId do ngữ cảnh ép (patch) mà chưa giao → gỡ khỏi node', async () => {
+    mockFindAssigned.mockResolvedValue([6]);
+    const patched = await aiCampaignDraftService.prepareScript(zaloScript({}), 9, { ownerUserId: 3, senderAccountId: 5 });
+    expect(patched.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBeUndefined();
+  });
+
+  it('FAIL-CLOSED: đọc bảng giao lỗi → không điền mặc định, gỡ mọi id Zalo', async () => {
+    mockFindAssigned.mockRejectedValue(new Error('db down'));
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+    const prepared = await aiCampaignDraftService.prepareScript(zaloScript({ zaloAccountId: 5 }), 9, { ownerUserId: 3 });
+    expect(prepared.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBeUndefined();
+  });
+
+  it('CHỦ (userId === ownerUserId): không lọc — giữ id bất kỳ, mặc định là tài khoản đầu tiên, KHÔNG đọc bảng giao', async () => {
+    const prepared = await aiCampaignDraftService.prepareScript(zaloScript({ zaloAccountId: 9 }), 3, { ownerUserId: 3 });
+    expect(prepared.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBe(9);
+    const filled = await aiCampaignDraftService.prepareScript(zaloScript({}), 3, { ownerUserId: 3 });
+    expect(filled.nodes.find((n) => n.id === 'n2').config.zaloAccountId).toBe(5);
+    expect(mockFindAssigned).not.toHaveBeenCalled();
+  });
+
+  it('autoFillZaloAccounts (đường createAndRunCampaign): actorUserId nhân viên → mặc định trong danh sách được giao', async () => {
+    mockFindAssigned.mockResolvedValue([9]);
+    const nodes = [{ nodeType: 'send_zalo_personal', config: {} }];
+    await aiCampaignDraftService.autoFillZaloAccounts(nodes, 3, { actorUserId: 9 });
+    expect(nodes[0].config.zaloAccountId).toBe(9);
+    mockFindAssigned.mockResolvedValue([]);
+    const none = [{ nodeType: 'send_zalo_personal', config: {} }];
+    await aiCampaignDraftService.autoFillZaloAccounts(none, 3, { actorUserId: 9 });
+    expect(none[0].config.zaloAccountId).toBeUndefined();
+  });
+
+  it('autoFillZaloAccounts: không truyền actor / danh sách (gọi nội bộ) → không lọc như cũ', async () => {
+    const nodes = [{ nodeType: 'send_zalo_personal', config: {} }];
+    await aiCampaignDraftService.autoFillZaloAccounts(nodes, 3);
+    expect(nodes[0].config.zaloAccountId).toBe(5);
   });
 });

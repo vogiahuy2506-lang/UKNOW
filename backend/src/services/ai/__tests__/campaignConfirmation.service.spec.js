@@ -21,6 +21,14 @@ jest.unstable_mockModule('../aiPromptResources.service.js', () => ({ default: ai
 // Ước tính thời gian gửi (PLAN_UOC_TINH 4.2): mock đúng ranh giới — service ước tính, hình dạng đầu ra theo hợp đồng PR-1.
 jest.unstable_mockModule('../../campaign/campaignEstimate.service.js', () => ({ estimateForScript }));
 
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ gửi bằng tài khoản Zalo ĐƯỢC GIAO; bảng giao được mock.
+const mockFindAssigned = jest.fn();
+const realMemberRepo = await import('../../../repositories/user/memberChannelAccount.repository.js');
+jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.repository.js', () => ({
+  ...realMemberRepo,
+  findAssignedZaloAccountIds: mockFindAssigned,
+}));
+
 const service = await import('../campaignConfirmation.service.js');
 
 describe('campaignConfirmation.service', () => {
@@ -439,6 +447,8 @@ describe('G3a.3 — nhân viên: tài khoản gửi + mẫu tin tra theo CHỦ w
   const UPDATED_AT = '2026-10-01T00:00:00.000Z';
 
   beforeEach(() => {
+    mockFindAssigned.mockReset();
+    mockFindAssigned.mockResolvedValue([9]);
     // Mọi tài khoản/mẫu đều của OWNER: hỏi bằng id nào khác OWNER thì repo thật cũng trả rỗng.
     draftRepo.findDefaultEmailSettingId.mockImplementation(async (uid) => (uid === OWNER ? 7 : null));
     draftRepo.findDefaultZaloSettingId.mockImplementation(async (uid) => (uid === OWNER ? 9 : null));
@@ -511,8 +521,66 @@ describe('G3a.3 — nhân viên: tài khoản gửi + mẫu tin tra theo CHỦ w
       script: zaloScript(),
     });
     expect(byDefault.readyToCreate).toBe(true);
-    expect(draftRepo.findDefaultZaloSettingId).toHaveBeenCalledWith(OWNER);
-    expect(draftRepo.findDefaultZaloSettingId).not.toHaveBeenCalledWith(EMPLOYEE);
+    // Tra theo CHỦ, trong danh sách được giao cho nhân viên (PR-G3).
+    expect(draftRepo.findDefaultZaloSettingId).toHaveBeenCalledWith(OWNER, [9]);
+    expect(draftRepo.findDefaultZaloSettingId.mock.calls.every(([uid]) => uid !== EMPLOYEE)).toBe(true);
+  });
+
+  // PR-G3 — nhân viên chỉ gửi Zalo bằng tài khoản ĐƯỢC GIAO.
+  describe('tài khoản Zalo được giao (G3)', () => {
+    it('nhân viên được giao tài khoản 9 → tài khoản tường minh qua', async () => {
+      const result = await service.default.buildConfirmationView({
+        userId: EMPLOYEE, ownerUserId: OWNER, script: zaloScript({ zaloAccountId: 9 }),
+      });
+      expect(result.readyToCreate).toBe(true);
+      expect(mockFindAssigned).toHaveBeenCalledWith(OWNER, EMPLOYEE);
+    });
+
+    it('nhân viên CHƯA được giao tài khoản 9 → missing_sender, KHÔNG tra tài khoản (không lộ tồn tại / tên)', async () => {
+      mockFindAssigned.mockResolvedValue([10]);
+      const result = await service.default.buildConfirmationView({
+        userId: EMPLOYEE, ownerUserId: OWNER, script: zaloScript({ zaloAccountId: 9 }),
+      });
+      expect(result.readyToCreate).toBe(false);
+      expect(result.blockingIssues).toEqual(expect.arrayContaining([
+        expect.objectContaining({ code: 'missing_sender', nodeId: 'zalo-1' }),
+      ]));
+      expect(zaloSenders.findCampaignZaloAccount).not.toHaveBeenCalled();
+    });
+
+    it('nhân viên chưa được giao gì + node không có tài khoản → mặc định rỗng → missing_sender', async () => {
+      mockFindAssigned.mockResolvedValue([]);
+      draftRepo.findDefaultZaloSettingId.mockImplementation(async (uid, ids) => (Array.isArray(ids) && ids.length === 0 ? null : 9));
+      const result = await service.default.buildConfirmationView({
+        userId: EMPLOYEE, ownerUserId: OWNER, script: zaloScript(),
+      });
+      expect(result.readyToCreate).toBe(false);
+      expect(result.blockingIssues).toEqual(expect.arrayContaining([expect.objectContaining({ code: 'missing_sender' })]));
+    });
+
+    it('FAIL-CLOSED: đọc bảng giao lỗi → missing_sender', async () => {
+      mockFindAssigned.mockRejectedValue(new Error('db down'));
+      jest.spyOn(console, 'error').mockImplementation(() => {});
+      const result = await service.default.buildConfirmationView({
+        userId: EMPLOYEE, ownerUserId: OWNER, script: zaloScript({ zaloAccountId: 9 }),
+      });
+      expect(result.readyToCreate).toBe(false);
+    });
+
+    it('CHỦ: tài khoản bất kỳ qua, KHÔNG đọc bảng giao', async () => {
+      const result = await service.default.buildConfirmationView({
+        userId: OWNER, ownerUserId: OWNER, script: zaloScript({ zaloAccountId: 9 }),
+      });
+      expect(result.readyToCreate).toBe(true);
+      expect(mockFindAssigned).not.toHaveBeenCalled();
+    });
+
+    it('chiến dịch chỉ email: nhân viên KHÔNG kích hoạt đọc bảng giao (tính lười)', async () => {
+      await service.default.buildConfirmationView({
+        userId: EMPLOYEE, ownerUserId: OWNER, script: emailScript({ fromEmailId: 7 }),
+      });
+      expect(mockFindAssigned).not.toHaveBeenCalled();
+    });
   });
 
   it('fail-closed: tài khoản/mẫu của workspace KHÁC vẫn bị chặn (missing_sender / template_not_found)', async () => {

@@ -3,6 +3,8 @@ import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js
 import campaignNodeRegistryService from '../campaign/campaignNodeRegistry.service.js';
 import { getNodeSubtype } from '../../utils/nodeSubtype.util.js';
 import { resolveLandingAudienceToForm } from './landingAudienceResolver.service.js';
+import { resolveActorZaloAccessibleIds } from '../campaign/campaignZaloAccess.service.js';
+import { stripZaloAccountIdsNotAccessible } from '../../utils/campaignZaloAccountResolve.util.js';
 
 const NODE_REFERENCE_KEYS = [
   'saveCustomerNodeId', 'recipientNodeId', 'ccNodeId', 'bccNodeId',
@@ -184,9 +186,21 @@ class AiCampaignDraftService {
     }
   }
 
-  async autoFillZaloAccounts(nodes, userId) {
+  /**
+   * Điền tài khoản Zalo mặc định vào node Zalo chưa có tài khoản. Mặc định của NHÂN VIÊN là tài khoản ĐƯỢC GIAO đầu tiên
+   * (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3), không bao giờ là tài khoản chưa giao của chủ.
+   *
+   * @param {Array<object>} nodes
+   * @param {number} userId CHỦ không gian
+   * @param {{ accessibleIds?: number[]|null, actorUserId?: number|null }} [options] `accessibleIds` đã tính sẵn (thắng); không
+   *   có thì tính từ `actorUserId` (khác chủ → danh sách được giao); không có cả hai (gọi nội bộ) → không lọc
+   */
+  async autoFillZaloAccounts(nodes, userId, { accessibleIds, actorUserId = null } = {}) {
     try {
-      const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(userId);
+      const scopedIds = accessibleIds !== undefined
+        ? accessibleIds
+        : await resolveActorZaloAccessibleIds({ actorUserId, ownerUserId: userId });
+      const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(userId, scopedIds);
       if (!defaultAccountId) return;
 
       const zaloNodeTypes = ['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request', 'select_zalo_account'];
@@ -884,6 +898,9 @@ class AiCampaignDraftService {
     // resolveOwnerUserId(req.user) ở ai.controller.js; rơi về userId khi không truyền — gọi nội bộ không qua controller /
     // không có khái niệm nhân viên — để không đổi hành vi cũ ở đó). Tài khoản gửi, mẫu tin, Biểu mẫu đều thuộc CHỦ.
     const ownerUserId = context.ownerUserId != null ? context.ownerUserId : userId;
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (userId ≠ chủ) chỉ dùng tài khoản Zalo ĐƯỢC GIAO: mặc định lấy trong
+    // danh sách đó, và id chưa giao còn sót trong bản nháp (marker wizard giả / giữ từ lượt trước / mô hình bịa) bị gỡ ở cuối.
+    const zaloAccessibleIds = await resolveActorZaloAccessibleIds({ actorUserId: userId, ownerUserId });
     let patched;
     // PLAN_COMPILER_GD5_DON_DEP_2026-09-08 PR-1 mục 1.1: script.compilerApplied === true
     // nghĩa là graph đến từ compileCampaign() (aiCampaign.service.js:~1738), không phải LLM —
@@ -895,7 +912,7 @@ class AiCampaignDraftService {
       console.log('[AI Patch] skip: compilerApplied');
       patched = script;
     } else {
-      const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(ownerUserId).catch(() => null);
+      const defaultAccountId = await aiCampaignDraftRepository.findDefaultZaloSettingId(ownerUserId, zaloAccessibleIds).catch(() => null);
       patched = this.patchDeterministicCampaignScript(script, {
         defaultZaloAccountId: defaultAccountId,
         ...context,
@@ -912,7 +929,13 @@ class AiCampaignDraftService {
     // G3a.3: tài khoản Email/Zalo mặc định lấy theo CHỦ (như tài khoản Telegram/WhatsApp ngay dưới) — thẻ xác nhận tra tài
     // khoản theo chủ, nên mặc định điền theo nhân viên sẽ để zaloAccountId trống trong khi thẻ báo "sẵn sàng".
     await this.autoFillEmailChannels(nodes, ownerUserId);
-    await this.autoFillZaloAccounts(nodes, ownerUserId);
+    await this.autoFillZaloAccounts(nodes, ownerUserId, { accessibleIds: zaloAccessibleIds });
+    // Gỡ SAU khi điền mặc định: id chưa giao do người dùng/mô hình đặt đã làm node "có tài khoản" nên mặc định không đè lên; gỡ ở
+    // đây để thẻ xác nhận báo thiếu tài khoản gửi (chặn tạo) thay vì âm thầm gửi bằng tài khoản khác.
+    const removedZaloAccountIds = stripZaloAccountIdsNotAccessible(nodes, zaloAccessibleIds);
+    if (removedZaloAccountIds.length > 0) {
+      console.warn(`[AI] Gỡ ${removedZaloAccountIds.length} tài khoản Zalo chưa giao cho nhân viên ${userId} khỏi bản nháp (workspace ${ownerUserId}):`, removedZaloAccountIds.join(','));
+    }
     await this.autoFillAdapterChannelAccounts(nodes, ownerUserId);
     return { ...canonical, nodes };
   }

@@ -318,8 +318,10 @@ describe('resolveActorZaloAccessibleIds (trợ lý AI)', () => {
     expect(mockFindAssigned).not.toHaveBeenCalled();
   });
 
-  it('nhân viên → mảng được giao', async () => {
+  it('nhân viên → mảng được giao, KHÔNG tra vai (không thêm truy vấn mỗi lượt chat)', async () => {
     expect(await access.resolveActorZaloAccessibleIds({ actorUserId: EMP_A, ownerUserId: OWNER })).toEqual([5]);
+    expect(mockFindAssigned).toHaveBeenCalledWith(OWNER, EMP_A);
+    expect(mockDbQuery).not.toHaveBeenCalled();
   });
 
   it('không có người thao tác (gọi nội bộ) → null; có người mà thiếu chủ → [] (không xác định được → chặn)', async () => {

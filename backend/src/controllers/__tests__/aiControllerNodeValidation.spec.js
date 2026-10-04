@@ -428,7 +428,8 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
       await aiController.createAndRunCampaign(employeeReq(emailScript()), res);
 
       expect(mockAutoFillEmailChannels).toHaveBeenCalledWith(expect.any(Array), OWNER);
-      expect(mockAutoFillZaloAccounts).toHaveBeenCalledWith(expect.any(Array), OWNER);
+      // PR-G3: tài khoản theo CHỦ, kèm người thao tác để chỉ điền mặc định trong danh sách ĐƯỢC GIAO cho nhân viên.
+      expect(mockAutoFillZaloAccounts).toHaveBeenCalledWith(expect.any(Array), OWNER, { actorUserId: EMPLOYEE });
       expect(mockBuildConfirmationView).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
       expect(mockAutoCreateEmailTemplates).toHaveBeenCalledWith(expect.any(Array), OWNER, expect.any(Object));
       expect(mockAutoCreateZaloTemplates).toHaveBeenCalledWith(expect.any(Array), OWNER, expect.any(Object));

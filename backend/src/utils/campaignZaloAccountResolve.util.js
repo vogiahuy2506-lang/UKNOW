@@ -163,10 +163,50 @@ export function collectReferencedZaloAccountIds(nodes) {
   return [...found];
 }
 
+/**
+ * Gỡ khỏi config các node Zalo MỌI id tài khoản không nằm trong `accessibleIds` (sửa tại chỗ). Dùng cho bản nháp do trợ lý
+ * AI dựng cho NHÂN VIÊN: id chưa được giao (wizard giữ sót / marker giả / mô hình bịa) bị bỏ để thẻ xác nhận báo "thiếu tài
+ * khoản gửi", thay vì âm thầm thay bằng tài khoản khác. `null` = chủ → không đụng gì. Cùng phép đọc parseInt và cùng tập khoá
+ * với `collectReferencedZaloAccountIds`.
+ *
+ * @param {Array<{ node_subtype?: string, nodeSubtype?: string, config?: object }>} nodes
+ * @param {number[]|null} accessibleIds
+ * @returns {number[]} các id đã bị gỡ (không trùng)
+ */
+export function stripZaloAccountIdsNotAccessible(nodes, accessibleIds) {
+  if (accessibleIds === null || accessibleIds === undefined) return [];
+  const allowed = new Set(Array.isArray(accessibleIds) ? accessibleIds.map(Number) : []);
+  const removed = new Set();
+  const isAllowed = (raw) => {
+    const id = Number.parseInt(raw, 10);
+    if (Number.isSafeInteger(id) && id > 0 && allowed.has(id)) return true;
+    if (Number.isSafeInteger(id) && id > 0) removed.add(id);
+    return false; // rác không phải id tài khoản cũng bị gỡ khỏi danh sách
+  };
+  for (const node of Array.isArray(nodes) ? nodes : []) {
+    const subtype = String(node?.node_subtype ?? node?.nodeSubtype ?? '').trim();
+    const isZaloAccountNode = subtype.startsWith('send_zalo')
+      || subtype === 'select_zalo_account'
+      || subtype === 'get_all_friends'
+      || subtype === 'get_all_groups';
+    const config = node?.config;
+    if (!isZaloAccountNode || !config || typeof config !== 'object') continue;
+    for (const key of ['zaloAccountId', 'accountId']) {
+      if (config[key] === undefined || config[key] === null || config[key] === '') continue;
+      if (!isAllowed(config[key])) delete config[key];
+    }
+    for (const key of ['zaloPoolAccountIds', 'zaloPersonalAccountIds', 'zaloFriendAccountIds']) {
+      if (Array.isArray(config[key])) config[key] = config[key].filter(isAllowed);
+    }
+  }
+  return [...removed];
+}
+
 export default {
   getNodeOwnZaloAccountSpec,
   resolveZaloAccountEntries,
   collectReferencedZaloAccountIds,
+  stripZaloAccountIdsNotAccessible,
   isTruthyConfigFlag,
   uniqueNonEmptyIds,
 };
