@@ -192,6 +192,25 @@ describe('autoFixLandingLayout', () => {
       expect(mockToast.error).not.toHaveBeenCalled();
     });
 
+    // B-18: server không ghi được bản vừa sửa vào phiên (`data.saved === false`) → bản server lưu cũ hơn trang đang hiện, vòng sau
+    // sẽ bị server từ chối đối chiếu HTML. Dừng ngay, không gọi thêm request vô ích; trang đã sửa vẫn hiện.
+    it('vòng 1 báo saved:false mà vẫn còn lỗi → dừng ở vòng 1 (KHÔNG vòng 2), still_broken, giữ trang đã sửa', async () => {
+      runLayoutAudit.mockResolvedValueOnce(BROKEN(3)).mockResolvedValueOnce(BROKEN(1));
+      aiApi.editLandingHtml.mockResolvedValueOnce(editOk('<div>v1</div>', { saved: false }));
+      const result = await run();
+      expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(1);
+      expect(result).toMatchObject({ status: 'still_broken', changed: true });
+      expect(result.page.html).toBe('<div>v1</div>');
+    });
+
+    it('vòng 1 saved:false nhưng đo lại SẠCH → vẫn là fixed (không đổi kết quả hiển thị)', async () => {
+      runLayoutAudit.mockResolvedValueOnce(BROKEN(1)).mockResolvedValueOnce(CLEAN);
+      aiApi.editLandingHtml.mockResolvedValueOnce(editOk('<div>v1</div>', { saved: false }));
+      const result = await run();
+      expect(result.status).toBe('fixed');
+      expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(1);
+    });
+
     it('server trả success:false / html rỗng / html không đổi → dừng, không vòng thừa', async () => {
       runLayoutAudit.mockResolvedValue(BROKEN(1));
       for (const response of [{ success: false, message: 'x' }, editOk('   '), editOk('<div>v0</div>'), undefined]) {

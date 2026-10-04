@@ -331,6 +331,49 @@ describe('AiChatbot — vòng tự kiểm → tự sửa hiển thị landing (P
     });
   });
 
+  // B-18 (rà soát AI 03/10): lượt sinh/sửa đã bị trừ credit nhưng server không ghi được vào phiên (`data.saved === false`) →
+  // bản trả tiền mất sau F5 mà khách không biết. FE phải báo thật, và không chạy vòng tự sửa (server sẽ đọc bản cũ hơn).
+  describe('server báo saved:false (không ghi được vào phiên)', () => {
+    const NOT_SAVED = /chưa lưu được vào phiên chat/;
+    const warnToastCalls = () => mockToast.mock.calls.filter(([message]) => NOT_SAVED.test(String(message)));
+
+    it('SINH trang: toast cảnh báo + KHÔNG tự sửa dù trang lỗi hiển thị (trang vẫn hiện, báo lỗi đã đo)', async () => {
+      runLayoutAudit.mockResolvedValue(BROKEN);
+      aiApi.generateLandingPage.mockResolvedValue({ success: true, data: { ...generatedPage, messageId: undefined, saved: false } });
+
+      await submitLandingDetails();
+
+      await waitFor(() => expect(warnToastCalls()).toHaveLength(1));
+      expect(await screen.findByText('Trình bày lại phần này · dùng 1 lượt AI')).toBeInTheDocument();
+      expect(aiApi.editLandingHtml).not.toHaveBeenCalled();
+    });
+
+    it('SINH trang lưu bình thường (không có cờ) → KHÔNG toast cảnh báo', async () => {
+      runLayoutAudit.mockResolvedValue(CLEAN);
+      await submitLandingDetails();
+      await screen.findByText('Đã kiểm tra hiển thị ✓');
+      expect(warnToastCalls()).toHaveLength(0);
+    });
+
+    it('SỬA tay: toast cảnh báo + chỉ ĐÚNG 1 request edit (lượt tay), không có lượt tự sửa dù đo ra lỗi', async () => {
+      runLayoutAudit.mockResolvedValue(BROKEN);
+      aiApi.editLandingHtml.mockResolvedValue({ success: true, data: { title: 'Trang cũ', html: '<div>Mới</div>', saved: false } });
+      await openSession([
+        { id: 10, role: 'user', content: 'Tạo landing page' },
+        { id: 77, role: 'assistant', type: 'landing_page', content: 'Đã tạo', data: { title: 'Trang cũ', html: '<div>Trang gốc</div>' } },
+      ]);
+      await screen.findByText('Trang cũ');
+      const textarea = await screen.findByPlaceholderText('Nhập yêu cầu...');
+      fireEvent.change(textarea, { target: { value: 'Đổi tiêu đề thành Xin chào' } });
+      fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+
+      await waitFor(() => expect(warnToastCalls()).toHaveLength(1));
+      await waitFor(() => expect(runLayoutAudit).toHaveBeenCalled());
+      expect(aiApi.editLandingHtml).toHaveBeenCalledTimes(1);
+      expect(aiApi.editLandingHtml.mock.calls[0][0].autoLayoutFix).toBeUndefined();
+    });
+  });
+
   // Review PR-3 — chạm tiền: api.js huỷ request CŨ HƠN khi trùng METHOD:url, mà lượt tự sửa nền và lượt
   // sửa tay đều là POST /ai/edit-landing-html. Lượt nền của thẻ B bắn đúng lúc người dùng đang sửa tay
   // thẻ A sẽ huỷ mất lượt sửa ĐÃ TRẢ CREDIT của thẻ A (server vẫn chạy và vẫn trừ, client mất kết quả).

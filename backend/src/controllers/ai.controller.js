@@ -1773,10 +1773,18 @@ class AiController {
         };
         const saved = await aiSessionRepo
           .saveMessagesReturningIds(sid, req.user.id, userContent, assistantMsg)
-          .catch(() => null);
+          .catch((err) => {
+            console.warn('[AI.generateLandingHtml] Failed to save landing_page message:', err.message);
+            return null;
+          });
         // Vòng tự sửa ở frontend cần id tin để server đếm trần lượt theo từng tin. Lưu hỏng thì
         // không có khoá này — không chặn response.
-        if (saved?.assistantMessageId) data.messageId = saved.assistantMessageId;
+        if (saved?.assistantMessageId) {
+          data.messageId = saved.assistantMessageId;
+        } else {
+          // B-18: lượt này vẫn bị trừ credit (bên dưới) mà trang không vào được phiên → báo FE để nói thật với khách.
+          data.saved = false;
+        }
       }
 
       await chargeAiCredit(req);
@@ -2067,7 +2075,13 @@ class AiController {
           console.warn('[AI.editLandingHtml] Failed to update landing_page message:', err.message);
           return false;
         });
-        if (saved) data.canRevert = true;
+        if (saved) {
+          data.canRevert = true;
+        } else {
+          // B-18: lượt sửa trả phí đã bị trừ credit ở trên nhưng bản mới KHÔNG vào được phiên (lỗi DB, hoặc không còn tin để ghi):
+          // tải lại phiên sẽ thấy bản cũ. Response vẫn thành công (khách có kết quả trên màn hình) kèm cờ để FE báo thật.
+          data.saved = false;
+        }
 
         if (isAutoFix) {
           // Lệnh do server dựng đầy selector/pixel — KHÔNG được lưu thành tin của người dùng hay

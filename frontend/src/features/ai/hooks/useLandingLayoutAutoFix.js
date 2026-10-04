@@ -108,6 +108,9 @@ export async function autoFixLandingLayout({
 
       current = { ...current, title: data.title || current.title, html: data.html };
       changed = true;
+      // B-18: server không ghi được bản vừa sửa vào phiên → bản server lưu cũ hơn trang đang hiện; vòng sau sẽ bị server từ chối
+      // (đối chiếu HTML) nên dừng ở đây thay vì gọi thêm một request vô ích.
+      const stopAfterThisRound = data.saved === false;
       if (data.changeSummary) changeSummary = String(data.changeSummary);
       if (data.canRevert != null) canRevert = Boolean(data.canRevert);
 
@@ -120,6 +123,7 @@ export async function autoFixLandingLayout({
       }
       if (measured.findings.length === 0) return result('fixed');
       findings = measured.findings;
+      if (stopAfterThisRound) break;
     }
     return result('still_broken', findings);
   } catch (error) {

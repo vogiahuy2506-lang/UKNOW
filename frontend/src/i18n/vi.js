@@ -5146,6 +5146,7 @@ export default {
     wizardDismiss: 'Không phải, tôi chỉ hỏi thôi',
     missingLandingSourceOrInstruction: 'Thiếu mã nguồn trang hoặc yêu cầu chỉnh sửa.',
     landingUpdateSuccess: 'Đã cập nhật landing page theo yêu cầu!',
+    landingNotSavedToSession: 'Kết quả đã hiện ở trên nhưng chưa lưu được vào phiên chat — tải lại trang sẽ không còn. Hãy bấm Lưu vào thư viện để giữ lại.',
     landingEditReferenceImages: '({count} ảnh đính kèm được dùng làm tài liệu tham khảo, không chèn vào trang)',
     layoutAutoFixed: 'Đã chỉnh hiển thị: {summary}',
     layoutAutoFixedPlain: 'Mình đã chỉnh lại phần hiển thị của trang để chữ không bị che hay cắt.',

@@ -5131,6 +5131,7 @@ export default {
     wizardDismiss: 'No, I am just asking',
     missingLandingSourceOrInstruction: 'Missing landing page source or edit instructions.',
     landingUpdateSuccess: 'Landing page updated successfully!',
+    landingNotSavedToSession: 'The result is shown above but could not be saved to this chat session — it will be gone after a reload. Click Save to library to keep it.',
     landingEditReferenceImages: '({count} attached image(s) used as reference, not inserted into page)',
     layoutAutoFixed: 'Layout adjusted: {summary}',
     layoutAutoFixedPlain: 'I adjusted the page layout so text is no longer covered or cut off.',

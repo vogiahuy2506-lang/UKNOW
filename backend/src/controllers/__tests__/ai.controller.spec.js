@@ -1187,6 +1187,7 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       await aiController.editLandingHtml(autoReq(), res);
       const { data } = res.json.mock.calls[0][0];
       expect(data).not.toHaveProperty('canRevert');
+      expect(data.saved).toBe(false); // B-18: bản vừa sửa không vào được phiên → FE biết
       expect(updateLandingPageMessage.mock.calls[0][2]).not.toHaveProperty('previousTitle');
     });
 
@@ -1344,8 +1345,26 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
         autoLayoutFixCount: 0,
       });
       expect(res.json.mock.calls[0][0].data.canRevert).toBe(true);
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('saved'); // lưu được → không có cờ saved:false
       expect(saveMessages).toHaveBeenCalledWith(55, 1, 'Đổi tiêu đề thành Xin chào', expect.objectContaining({ type: 'landing_edit_ack' }));
       expect(saveAssistantMessage).not.toHaveBeenCalled();
+    });
+
+    // B-18 (rà soát AI 03/10): lượt sửa trả phí trừ credit TRƯỚC khi ghi phiên; ghi lỗi trước đây chỉ console.warn, response vẫn
+    // `success` không dấu hiệu gì → bản đã trả tiền mất sau F5. Giờ response mang `data.saved === false` để FE báo thật.
+    it.each([
+      ['updateLandingPageMessage ném lỗi (DB)', () => updateLandingPageMessage.mockRejectedValue(new Error('db down'))],
+      ['updateLandingPageMessage trả false (không còn tin để ghi)', () => updateLandingPageMessage.mockResolvedValue(false)],
+    ])('B-18: %s → vẫn trả kết quả thành công + data.saved=false, KHÔNG canRevert, credit vẫn trừ đúng 1 lần', async (_label, arrange) => {
+      arrange();
+      const res = makeRes();
+      await aiController.editLandingHtml(manualReq(), res);
+      expect(res.status).not.toHaveBeenCalled();
+      const { success, data } = res.json.mock.calls[0][0];
+      expect(success).toBe(true);
+      expect(data).toMatchObject({ html: '<div>Đã sửa</div>', saved: false });
+      expect(data).not.toHaveProperty('canRevert');
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1);
     });
 
     // Review PR-3 (21/09): frontend từng tự nối findings vào `instruction` → server lưu cả selector/
@@ -1500,6 +1519,7 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       saveMessagesReturningIds.mockResolvedValue({ userMessageId: 4241, assistantMessageId: 4242 });
       const res = makeRes();
       await aiController.generateLandingHtml(genReq(), res);
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('saved'); // lưu được → không có cờ
       expect(saveMessagesReturningIds).toHaveBeenCalledTimes(1);
       expect(saveMessagesReturningIds.mock.calls[0][4]).toBeUndefined();
       expect(saveMessagesReturningIds.mock.calls[0][3]).toMatchObject({ type: 'landing_page', data: { title: 'Trang khoá học' } });
@@ -1516,12 +1536,15 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       const res = makeRes();
       await aiController.generateLandingHtml(genReq(), res);
       expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+      expect(res.json.mock.calls[0][0].data.saved).toBe(false); // B-18: credit vẫn trừ nhưng trang không vào phiên
 
       saveMessagesReturningIds.mockRejectedValue(new Error('db down'));
       const res2 = makeRes();
       await aiController.generateLandingHtml(genReq(), res2);
       expect(res2.json.mock.calls[0][0]).toMatchObject({ success: true });
       expect(res2.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+      expect(res2.json.mock.calls[0][0].data.saved).toBe(false);
+      expect(chargeAiCredit).toHaveBeenCalledTimes(2);
     });
 
     it('không có sessionId → không lưu, không messageId', async () => {
@@ -1529,6 +1552,8 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       await aiController.generateLandingHtml(genReq({ sessionId: undefined }), res);
       expect(saveMessagesReturningIds).not.toHaveBeenCalled();
       expect(res.json.mock.calls[0][0].data).not.toHaveProperty('messageId');
+      expect(res.json.mock.calls[0][0].data).not.toHaveProperty('saved'); // không có phiên thì không có chuyện "chưa lưu được"
+
     });
   });
 

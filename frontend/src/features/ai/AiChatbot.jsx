@@ -2970,6 +2970,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       if (response.success) {
         refreshAiCredits();
         const { title, html, css, leadFormDraft, leadFormConfig, messageId: newMessageId = null } = response.data;
+        // B-18: sinh xong (đã trừ credit) mà không ghi được vào phiên → báo thật, và không tự sửa (không có tin để sửa).
+        const savedToSession = response.data.saved !== false;
+        if (!savedToSession) toast(t('aiChatbot.landingNotSavedToSession'), { icon: '⚠️', duration: 8000 });
         update(prev => [...prev, {
           role: 'assistant',
           content: `Đã tạo landing page "${title}" cho bạn! Bạn có thể xem trước và lưu vào thư viện.`,
@@ -2985,7 +2988,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setPendingLandingPrompt(null);
         setPendingLandingData(null);
         // Không await: thẻ hiện ngay, đo + tự sửa chạy nền rồi ghi kết quả vào thẻ.
-        runLandingLayoutCheck({ sessionId: mySessionId, messageId: newMessageId, page: { title, html, css } });
+        runLandingLayoutCheck({ sessionId: mySessionId, messageId: newMessageId, page: { title, html, css }, allowAutoFix: savedToSession });
       }
     } catch (err) {
       update(prev => [...prev, {
@@ -3330,6 +3333,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       if (response?.success && response?.data) {
         refreshAiCredits();
         const { title, html, changeSummary } = response.data;
+        // B-18: server đã trừ credit nhưng KHÔNG ghi được bản mới vào phiên → báo thật; và không tự sửa hiển thị (server sẽ đọc
+        // bản cũ hơn bản đang hiện).
+        const savedToSession = response.data.saved !== false;
         const updatedPage = {
           ...pageData,
           title: title || pageData.title,
@@ -3378,8 +3384,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         });
 
         toast.success(t('aiChatbot.landingUpdateSuccess'));
+        if (!savedToSession) toast(t('aiChatbot.landingNotSavedToSession'), { icon: '⚠️', duration: 8000 });
         // Trang mới → đo lại + tự sửa nếu lỗi (server đã đặt lại bộ đếm sau lượt sửa trả phí). Không await.
-        runLandingLayoutCheck({ sessionId: mySessionId, messageId: targetMessageId, page: updatedPage });
+        runLandingLayoutCheck({ sessionId: mySessionId, messageId: targetMessageId, page: updatedPage, allowAutoFix: savedToSession });
         return true;
       } else {
         throw new Error(response?.message || 'Không nhận được kết quả chỉnh sửa từ AI');
