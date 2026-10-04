@@ -116,6 +116,8 @@ class AiUsageMeterService {
       ...(metadata && typeof metadata === 'object' ? metadata : {}),
       feature,
       model: result.modelUsed || resolvedModel,
+      // Chỉ ghi khi dự phòng THẬT đã trả lời (model ghi ở trên là model dự phòng): lọc được "bao nhiêu lượt phải nhờ dự phòng".
+      ...(result.fallbackUsed ? { fallbackUsed: true } : {}),
     });
     return result;
   }

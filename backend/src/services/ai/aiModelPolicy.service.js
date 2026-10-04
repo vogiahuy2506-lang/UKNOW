@@ -1,6 +1,9 @@
 import { DEFAULT_AI_MODEL, normalizeModelId } from '../../utils/aiModelTier.util.js';
 import { capabilityScore } from '../../utils/aiModelMetadata.util.js';
 import { getCatalog } from './aiModelCatalog.service.js';
+// Namespace import (không phải `import { setGeminiFallbackModelResolver }`): nhiều spec mock geminiClient.util với vài export — import tên thiếu
+// thì cả module nổ SyntaxError, còn đọc qua namespace chỉ ra undefined và bị `typeof` ở dưới chặn.
+import * as geminiClient from '../../utils/geminiClient.util.js';
 
 /**
  * Chính sách model AI: TOÀN HỆ THỐNG dùng đúng 1 model do super admin chọn
@@ -72,6 +75,16 @@ export async function getFallbackModel() {
   }
 
   return fallback.modelId;
+}
+
+/**
+ * Gắn model dự phòng hệ thống vào lõi Gemini (D-05): mọi nơi gọi `generateGeminiContent`/`generateGeminiText` KHÔNG truyền
+ * `fallbackModel` (Dashboard, tóm tắt Hộp thư, dịch gói, OCR, slot filler, tư vấn trang chủ…) tự có dự phòng khi model chính quá
+ * tải hoặc bị khai tử (404), không phải sửa từng nơi. Lõi chỉ gọi hàm này LÚC model chính vừa lỗi; lỗi tra danh mục không bao giờ
+ * làm hỏng câu trả lời (lõi tự nuốt, coi như không có dự phòng).
+ */
+if (typeof geminiClient.setGeminiFallbackModelResolver === 'function') {
+  geminiClient.setGeminiFallbackModelResolver(getFallbackModel);
 }
 
 async function getSystemModelRow() {

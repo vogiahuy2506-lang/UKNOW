@@ -68,6 +68,51 @@ export function isNetworkGeminiError(err) {
 
 const isRetryableGeminiError = (err) => isTransientGeminiError(err) || isNetworkGeminiError(err);
 
+/**
+ * Google trả 404 khi TÊN MODEL không còn (bị khai tử / đổi tên / không hỗ trợ generateContent), vd
+ * "models/gemini-x is not found for API version v1beta, or is not supported for generateContent" (status NOT_FOUND).
+ * Gọi lại y hệt chỉ nhận y hệt lỗi nên KHÔNG thử lại — nhưng đây đúng là lúc phải chuyển model dự phòng. Bản trước chỉ
+ * chuyển khi 429/5xx: model bị khai tử lúc 10:00 làm cả hệ thống lỗi tới cron đồng bộ catalog 02:15 hôm sau (D-05).
+ */
+const MODEL_UNAVAILABLE_RE = /NOT_FOUND|not found|not supported|no longer available/i;
+
+export function isModelUnavailableError(err) {
+  return err?.geminiStatus === 404 && MODEL_UNAVAILABLE_RE.test(String(err?.message || ''));
+}
+
+/**
+ * Hàm tra model dự phòng của HỆ THỐNG, do lớp trên gắn vào (aiModelPolicy.service.js tự đăng ký khi nạp). Lõi này là util nên không
+ * import service/CSDL; nhờ cổng này mọi nơi gọi KHÔNG truyền `fallbackModel` đều tự có dự phòng mà không phải sửa từng nơi.
+ * Chỉ được gọi LÚC CẦN (khi model chính vừa lỗi) → đường thành công không tốn thêm lượt tra nào.
+ */
+let fallbackModelResolver = null;
+
+export function setGeminiFallbackModelResolver(resolver) {
+  fallbackModelResolver = typeof resolver === 'function' ? resolver : null;
+}
+
+/** Tra danh mục model là việc phụ: treo quá mốc này thì coi như không có dự phòng, không kéo dài lỗi của khách. */
+const FALLBACK_LOOKUP_TIMEOUT_MS = 3000;
+
+async function resolveSystemFallbackModel() {
+  if (!fallbackModelResolver) return '';
+  let timer;
+  try {
+    const found = await Promise.race([
+      Promise.resolve().then(() => fallbackModelResolver()),
+      new Promise((resolve) => {
+        timer = setTimeout(() => resolve(null), FALLBACK_LOOKUP_TIMEOUT_MS);
+      }),
+    ]);
+    return String(found || '').trim();
+  } catch (error) {
+    console.warn(`[Gemini] không tra được model dự phòng hệ thống, gọi không dự phòng: ${error?.message || error}`);
+    return '';
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Còn dưới mốc này thì không bắt đầu thêm một lượt gọi nào nữa (một lượt Gemini không thể xong nhanh hơn). */
 const MIN_ATTEMPT_WINDOW_MS = 3000;
 
@@ -140,12 +185,15 @@ function shouldAttachThinkingBudget(thinkingBudget) {
  * @param {number} [input.temperature=0.35]
  * @param {number|null} [input.topP=0.9] — null = không gửi (để Google dùng mặc định)
  * @param {string} [input.model]
- * @param {string|null} [input.fallbackModel]
+ * @param {string|null} [input.fallbackModel] — model dự phòng khi model chính quá tải (429/5xx/mạng) HOẶC không còn (404).
+ *   KHÔNG truyền (undefined) → lõi tự tra model dự phòng hệ thống (xem setGeminiFallbackModelResolver), chỉ lúc model chính lỗi.
+ *   `null` / '' = nơi gọi đã tra và KHÔNG có dự phòng → không tra lại. Trùng model chính thì không gọi lại.
+ * @param {string|null} [input.apiKey] — khoá Gemini riêng cho lời gọi này (vd tư vấn trang chủ); trống = GEMINI_API_KEY chung
  * @param {object} [input.systemInstruction]
  * @param {number|null} [input.thinkingBudget=0] — 0 tắt thinking; null/âm = để model tự quyết
  * @param {number[]} [input.retryDelaysMs] — nghỉ trước mỗi lần thử lại khi Google quá tải
  * @param {number} [input.retryBudgetMs] — quá mốc này (tính từ lượt đầu) thì thôi thử lại
- * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object, modelUsed: string, raw: object }>}
+ * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object, modelUsed: string, fallbackUsed: boolean, raw: object }>}
  */
 export async function generateGeminiContent({
   parts,
@@ -158,13 +206,14 @@ export async function generateGeminiContent({
   temperature = 0.35,
   topP = 0.9,
   model,
-  fallbackModel = null,
+  fallbackModel,
+  apiKey: apiKeyOverride = null,
   systemInstruction,
   thinkingBudget = 0,
   retryDelaysMs = DEFAULT_RETRY_DELAYS_MS,
   retryBudgetMs = DEFAULT_RETRY_BUDGET_MS,
 } = {}) {
-  const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
+  const apiKey = String(apiKeyOverride ?? '').trim() || String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) {
     const err = new Error('Thiếu GEMINI_API_KEY trong môi trường backend');
     err.status = 500;
@@ -238,6 +287,7 @@ export async function generateGeminiContent({
         blockReason: data.promptFeedback?.blockReason,
         usage: extractGeminiUsage(data),
         modelUsed: targetModel,
+        fallbackUsed: false,
         raw: data,
       };
     } catch (error) {
@@ -275,10 +325,42 @@ export async function generateGeminiContent({
     }
   };
 
+  // `undefined` = nơi gọi không nói gì → tra model dự phòng hệ thống (một lần, đúng lúc cần); null/'' = nơi gọi đã tra và không có.
+  let systemFallbackPromise = null;
+  const lookupFallbackModel = async () => {
+    if (fallbackModel !== undefined) return String(fallbackModel || '').trim();
+    if (!systemFallbackPromise) systemFallbackPromise = resolveSystemFallbackModel();
+    return systemFallbackPromise;
+  };
+
+  const canTryFallback = (cleanFallback) =>
+    Boolean(cleanFallback) &&
+    cleanFallback !== modelName &&
+    Date.now() - startedAt < retryBudgetMs &&
+    msLeft() > MIN_ATTEMPT_WINDOW_MS;
+
+  const callFallback = async (cleanFallback) => ({
+    ...(await callWithThinkingFallback(cleanFallback)),
+    fallbackUsed: true,
+  });
+
   for (let attempt = 0; ; attempt += 1) {
     try {
       return await callWithThinkingFallback(modelName);
     } catch (error) {
+      if (isModelUnavailableError(error)) {
+        // Model chính không còn (404): thử lại vô ích, chuyển dự phòng NGAY. Không có dự phòng thì trả đúng lỗi 404 gốc.
+        const cleanFallback = await lookupFallbackModel();
+        if (!canTryFallback(cleanFallback)) throw error;
+        console.warn(`[Gemini] ${modelName} không còn / không hỗ trợ (404), chuyển sang model dự phòng ${cleanFallback}`);
+        try {
+          return await callFallback(cleanFallback);
+        } catch (fallbackError) {
+          if (isRetryableGeminiError(fallbackError)) throw toProviderBusyError(fallbackError, 2);
+          error.fallbackError = fallbackError;
+          throw error;
+        }
+      }
       if (!isRetryableGeminiError(error)) throw error;
 
       const delayMs = retryDelaysMs[attempt];
@@ -286,19 +368,14 @@ export async function generateGeminiContent({
         Date.now() - startedAt < retryBudgetMs &&
         msLeft() > (delayMs ?? 0) + MIN_ATTEMPT_WINDOW_MS;
       if (delayMs === undefined || !withinBudget) {
-        const cleanFallback = String(fallbackModel || '').trim();
-        const canTryFallback =
-          Boolean(cleanFallback) &&
-          cleanFallback !== modelName &&
-          Date.now() - startedAt < retryBudgetMs &&
-          msLeft() > MIN_ATTEMPT_WINDOW_MS;
+        const cleanFallback = await lookupFallbackModel();
 
-        if (canTryFallback) {
+        if (canTryFallback(cleanFallback)) {
           console.warn(
             `[Gemini] ${modelName} quá tải sau ${attempt + 1} lượt, chuyển sang model dự phòng ${cleanFallback}`,
           );
           try {
-            return await callWithThinkingFallback(cleanFallback);
+            return await callFallback(cleanFallback);
           } catch (fallbackError) {
             if (isRetryableGeminiError(fallbackError)) {
               throw toProviderBusyError(fallbackError, attempt + 2);
@@ -330,7 +407,7 @@ export async function generateGeminiContent({
  * @param {number} [input.maxOutputTokens=8192]
  * @param {number} [input.temperature=0.35]
  * @param {string} [input.model]
- * @param {string|null} [input.fallbackModel]
+ * @param {string|null} [input.fallbackModel] — như `generateGeminiContent`: không truyền = lõi tự tra dự phòng hệ thống
  * @param {number|null} [input.thinkingBudget=0]
  */
 export async function generateGeminiText({
@@ -340,7 +417,7 @@ export async function generateGeminiText({
   maxOutputTokens = 8192,
   temperature = 0.35,
   model,
-  fallbackModel = null,
+  fallbackModel,
   thinkingBudget = 0,
 } = {}) {
   return generateGeminiContent({

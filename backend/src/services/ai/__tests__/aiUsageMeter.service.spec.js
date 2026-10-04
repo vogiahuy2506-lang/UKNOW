@@ -108,6 +108,29 @@ describe('aiUsageMeter.service', () => {
     }));
   });
 
+  it('generateWithBudget ghi fallbackUsed=true vào metadata CHỈ khi dự phòng thật đã trả lời (lọc được "bao nhiêu lượt phải nhờ dự phòng")', async () => {
+    resolveAllowedModel.mockResolvedValue('gemini-chinh');
+    getFallbackModel.mockResolvedValue('gemini-du-phong');
+
+    generateGeminiContent.mockResolvedValueOnce({
+      text: 'từ dự phòng',
+      usage: { promptTokens: 1, outputTokens: 2, totalTokens: 3 },
+      modelUsed: 'gemini-du-phong',
+      fallbackUsed: true,
+    });
+    await aiUsageMeter.generateWithBudget(5, { parts: [{ text: 'a' }], feature: 'landing_builder' });
+    expect(trackUsage).toHaveBeenLastCalledWith(5, 'ai_token', 3, expect.objectContaining({ fallbackUsed: true }));
+
+    generateGeminiContent.mockResolvedValueOnce({
+      text: 'từ model chính',
+      usage: { promptTokens: 1, outputTokens: 2, totalTokens: 3 },
+      modelUsed: 'gemini-chinh',
+      fallbackUsed: false,
+    });
+    await aiUsageMeter.generateWithBudget(5, { parts: [{ text: 'b' }], feature: 'landing_builder' });
+    expect(trackUsage.mock.calls.at(-1)[3]).not.toHaveProperty('fallbackUsed');
+  });
+
   // G2 (03/10/2026): chatbot trả lời khách cũng dùng model dự phòng; tra danh mục model là việc PHỤ — hỏng thì mất dự phòng,
   // KHÔNG được làm hỏng câu trả lời.
   describe('resolveFallbackModel — không bao giờ ném lỗi', () => {

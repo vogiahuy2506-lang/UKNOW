@@ -8,8 +8,11 @@ import {
   extractGeminiUsage,
   GEMINI_TRANSIENT_STATUSES,
   generateGeminiContent,
+  generateGeminiText,
+  isModelUnavailableError,
   isThinkingBudgetRejection,
   joinGeminiTextParts,
+  setGeminiFallbackModelResolver,
   THINKING_BUDGET_RETRY_RE,
 } from '../geminiClient.util.js';
 
@@ -536,6 +539,266 @@ describe('geminiClient.util', () => {
 
       await expect(generateGeminiContent({ parts: [{ text: 'hi' }], ...NHANH })).rejects.toThrow('Cannot read properties');
       expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  /**
+   * D-05 (04/10/2026): (1) 404 "model không còn" phải chuyển dự phòng — bản cũ chỉ chuyển khi 429/5xx nên model bị Google khai tử
+   * làm cả hệ thống lỗi tới cron 02:15; (2) nơi gọi KHÔNG truyền `fallbackModel` thì lõi tự tra dự phòng hệ thống (6 đường:
+   * Dashboard, Hộp thư, dịch gói, OCR, slot filler, hero). Mock ở ranh giới fetch bằng `Response` thật, thân 404 đúng như Google trả.
+   */
+  describe('generateGeminiContent — D-05: 404 model không còn + dự phòng hệ thống tự tra', () => {
+    const originalFetch = global.fetch;
+    const originalKey = process.env.GEMINI_API_KEY;
+    const NHANH = { retryDelaysMs: [0, 0], retryBudgetMs: 60_000 };
+
+    const phanHoiThat = (status, body) => new Response(JSON.stringify(body), {
+      status,
+      headers: { 'content-type': 'application/json; charset=UTF-8' },
+    });
+    const duocThat = (text = 'ok') => phanHoiThat(200, {
+      candidates: [{ content: { role: 'model', parts: [{ text }] }, finishReason: 'STOP', index: 0 }],
+      usageMetadata: { promptTokenCount: 11, candidatesTokenCount: 3, totalTokenCount: 14 },
+    });
+    const quaTaiThat = () => phanHoiThat(503, {
+      error: { code: 503, message: 'This model is currently experiencing high demand.', status: 'UNAVAILABLE' },
+    });
+    // Nguyên văn câu Google trả khi tên model không còn.
+    const modelKhongCon = (model = 'gemini-chinh') => phanHoiThat(404, {
+      error: {
+        code: 404,
+        message: `models/${model} is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.`,
+        status: 'NOT_FOUND',
+      },
+    });
+    const urlGoi = (n) => String(global.fetch.mock.calls[n][0]);
+
+    let warn;
+    beforeEach(() => {
+      process.env.GEMINI_API_KEY = 'AIza-khoa-bi-mat-123';
+      global.fetch = jest.fn();
+      warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    });
+
+    afterEach(() => {
+      setGeminiFallbackModelResolver(null);
+      global.fetch = originalFetch;
+      warn.mockRestore();
+      if (originalKey === undefined) delete process.env.GEMINI_API_KEY;
+      else process.env.GEMINI_API_KEY = originalKey;
+    });
+
+    it('isModelUnavailableError: chỉ 404 mang câu "không còn / không hỗ trợ" của Google', () => {
+      expect(isModelUnavailableError({ geminiStatus: 404, message: 'Gemini API lỗi (404): models/x is not found for API version v1beta' })).toBe(true);
+      expect(isModelUnavailableError({ geminiStatus: 404, message: 'Gemini API lỗi (404): {"error":{"status":"NOT_FOUND"}}' })).toBe(true);
+      expect(isModelUnavailableError({ geminiStatus: 404, message: 'Gemini API lỗi (404): This model is no longer available to new users.' })).toBe(true);
+      expect(isModelUnavailableError({ geminiStatus: 404, message: 'Gemini API lỗi (404): trang khác hẳn' })).toBe(false);
+      expect(isModelUnavailableError({ geminiStatus: 400, message: 'models/x is not found' })).toBe(false);
+      expect(isModelUnavailableError({ geminiStatus: 503, message: 'NOT_FOUND' })).toBe(false);
+      expect(isModelUnavailableError(null)).toBe(false);
+    });
+
+    it('model chính 404 + có dự phòng → chuyển NGAY (không thử lại model chết), fetch 2 lần, modelUsed + fallbackUsed', async () => {
+      global.fetch
+        .mockResolvedValueOnce(modelKhongCon())
+        .mockResolvedValueOnce(duocThat('dự phòng cứu'));
+
+      const kq = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-du-phong', ...NHANH,
+      });
+
+      expect(kq.text).toBe('dự phòng cứu');
+      expect(kq.modelUsed).toBe('gemini-du-phong');
+      expect(kq.fallbackUsed).toBe(true);
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(urlGoi(0)).toContain('models/gemini-chinh:generateContent');
+      expect(urlGoi(1)).toContain('models/gemini-du-phong:generateContent');
+    });
+
+    it('model chính trả lời bình thường → fallbackUsed = false', async () => {
+      global.fetch.mockResolvedValueOnce(duocThat());
+
+      const kq = await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-du-phong' });
+
+      expect(kq.fallbackUsed).toBe(false);
+      expect(kq.modelUsed).toBe('gemini-chinh');
+    });
+
+    it('model chính 404, chưa chọn dự phòng (null) → ném đúng lỗi 404 gốc, KHÔNG bọc thành "quá tải", fetch 1 lần', async () => {
+      global.fetch.mockResolvedValue(modelKhongCon());
+
+      const err = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: null, ...NHANH,
+      }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.geminiStatus).toBe(404);
+      expect(err.code).toBeUndefined();
+      expect(err.message).toContain('is not found');
+    });
+
+    it('model chính 404, dự phòng TRÙNG model chính → không gọi lại', async () => {
+      global.fetch.mockResolvedValue(modelKhongCon());
+
+      const err = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-chinh', ...NHANH,
+      }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.geminiStatus).toBe(404);
+    });
+
+    it('cả model chính lẫn dự phòng đều 404 → ném lỗi 404 của model chính, kèm fallbackError', async () => {
+      global.fetch.mockImplementation(async () => modelKhongCon());
+
+      const err = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-du-phong', ...NHANH,
+      }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(2);
+      expect(err.geminiStatus).toBe(404);
+      expect(err.fallbackError?.geminiStatus).toBe(404);
+    });
+
+    it('404 mang thân lạ (không phải câu "model không còn") → KHÔNG chuyển dự phòng', async () => {
+      global.fetch.mockResolvedValue(phanHoiThat(404, { error: { message: 'trang khác hẳn' } }));
+
+      const err = await generateGeminiContent({
+        parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-du-phong', ...NHANH,
+      }).catch((e) => e);
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+      expect(err.geminiStatus).toBe(404);
+    });
+
+    describe('không truyền fallbackModel → lõi tự tra dự phòng hệ thống', () => {
+      it('404 + resolver trả dự phòng → chuyển dự phòng, resolver gọi đúng 1 lần', async () => {
+        const resolver = jest.fn().mockResolvedValue('gemini-du-phong');
+        setGeminiFallbackModelResolver(resolver);
+        global.fetch.mockResolvedValueOnce(modelKhongCon()).mockResolvedValueOnce(duocThat('tự tra cứu được'));
+
+        const kq = await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', ...NHANH });
+
+        expect(kq.text).toBe('tự tra cứu được');
+        expect(kq.modelUsed).toBe('gemini-du-phong');
+        expect(urlGoi(1)).toContain('models/gemini-du-phong:generateContent');
+        expect(resolver).toHaveBeenCalledTimes(1);
+      });
+
+      it('quá tải 503 ×3 + resolver trả dự phòng → dự phòng cứu (đường Dashboard/Hộp thư/dịch gói/OCR/slot filler)', async () => {
+        setGeminiFallbackModelResolver(async () => 'gemini-du-phong');
+        global.fetch
+          .mockResolvedValueOnce(quaTaiThat())
+          .mockResolvedValueOnce(quaTaiThat())
+          .mockResolvedValueOnce(quaTaiThat())
+          .mockResolvedValueOnce(duocThat('dự phòng cứu'));
+
+        const kq = await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', ...NHANH });
+
+        expect(kq.text).toBe('dự phòng cứu');
+        expect(global.fetch).toHaveBeenCalledTimes(4);
+        expect(urlGoi(3)).toContain('models/gemini-du-phong:generateContent');
+      });
+
+      it('generateGeminiText (bản bọc) cũng không truyền → cũng tự tra', async () => {
+        setGeminiFallbackModelResolver(async () => 'gemini-du-phong');
+        global.fetch.mockResolvedValueOnce(modelKhongCon()).mockResolvedValueOnce(duocThat('qua bản text'));
+
+        const kq = await generateGeminiText({ prompt: 'hi', model: 'gemini-chinh' });
+
+        expect(kq.text).toBe('qua bản text');
+        expect(kq.modelUsed).toBe('gemini-du-phong');
+      });
+
+      it('đường THÀNH CÔNG không tốn lượt tra nào (tra lười, chỉ khi model chính vừa lỗi)', async () => {
+        const resolver = jest.fn().mockResolvedValue('gemini-du-phong');
+        setGeminiFallbackModelResolver(resolver);
+        global.fetch.mockResolvedValueOnce(duocThat());
+
+        await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh' });
+
+        expect(resolver).not.toHaveBeenCalled();
+      });
+
+      it('resolver trả đúng model chính → không thử lại bằng chính nó (fetch 3 lần, không phải 4)', async () => {
+        setGeminiFallbackModelResolver(async () => 'gemini-chinh');
+        global.fetch.mockImplementation(async () => quaTaiThat());
+
+        const err = await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', ...NHANH }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+        expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+      });
+
+      it('resolver trả null (chưa chọn dự phòng) → hành vi cũ: quá tải ×3 → AI_PROVIDER_BUSY', async () => {
+        setGeminiFallbackModelResolver(async () => null);
+        global.fetch.mockImplementation(async () => quaTaiThat());
+
+        const err = await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', ...NHANH }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+        expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+      });
+
+      it('resolver NÉM lỗi (CSDL chập chờn) → coi như không có dự phòng, lỗi của khách vẫn là câu quá tải, không nổ lỗi khác', async () => {
+        setGeminiFallbackModelResolver(async () => { throw new Error('connect ECONNREFUSED 127.0.0.1:5433'); });
+        global.fetch.mockImplementation(async () => quaTaiThat());
+
+        const err = await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', ...NHANH }).catch((e) => e);
+
+        expect(global.fetch).toHaveBeenCalledTimes(3);
+        expect(err.code).toBe(AI_PROVIDER_BUSY_CODE);
+        expect(err.message).toBe(AI_PROVIDER_BUSY_MESSAGE);
+      });
+
+      it('resolver TREO → quá 3 giây thì bỏ, không kéo dài lỗi của khách', async () => {
+        jest.useFakeTimers();
+        try {
+          setGeminiFallbackModelResolver(() => new Promise(() => {}));
+          global.fetch.mockImplementation(async () => modelKhongCon());
+
+          const pending = generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', ...NHANH }).catch((e) => e);
+          await jest.advanceTimersByTimeAsync(3500);
+          const err = await pending;
+
+          expect(global.fetch).toHaveBeenCalledTimes(1);
+          expect(err.geminiStatus).toBe(404);
+        } finally {
+          jest.useRealTimers();
+        }
+      });
+
+      it('nơi gọi đã truyền `null` (đã tra, không có) → lõi KHÔNG tra lại; truyền chuỗi → cũng không tra', async () => {
+        const resolver = jest.fn().mockResolvedValue('gemini-resolver');
+        setGeminiFallbackModelResolver(resolver);
+        global.fetch.mockImplementation(async () => modelKhongCon());
+
+        await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: null, ...NHANH }).catch(() => {});
+        await generateGeminiContent({ parts: [{ text: 'hi' }], model: 'gemini-chinh', fallbackModel: 'gemini-nha-goi', ...NHANH }).catch(() => {});
+
+        expect(resolver).not.toHaveBeenCalled();
+        expect(urlGoi(0)).toContain('models/gemini-chinh:generateContent');
+        expect(global.fetch).toHaveBeenCalledTimes(3); // 1 (null) + 2 (chuỗi: chính rồi dự phòng của nơi gọi)
+        expect(urlGoi(2)).toContain('models/gemini-nha-goi:generateContent');
+      });
+    });
+
+    it('`apiKey` truyền vào thắng GEMINI_API_KEY chung và vẫn đi bằng header (khoá riêng của tư vấn trang chủ)', async () => {
+      global.fetch.mockResolvedValueOnce(duocThat());
+
+      await generateGeminiContent({ parts: [{ text: 'hi' }], apiKey: 'AIza-khoa-rieng-hero' });
+
+      const [url, init] = global.fetch.mock.calls[0];
+      expect(init.headers['x-goog-api-key']).toBe('AIza-khoa-rieng-hero');
+      expect(url).not.toContain('key=');
+    });
+
+    it('`apiKey` trống → rơi về GEMINI_API_KEY chung', async () => {
+      global.fetch.mockResolvedValueOnce(duocThat());
+
+      await generateGeminiContent({ parts: [{ text: 'hi' }], apiKey: '   ' });
+
+      expect(global.fetch.mock.calls[0][1].headers['x-goog-api-key']).toBe('AIza-khoa-bi-mat-123');
     });
   });
 });
