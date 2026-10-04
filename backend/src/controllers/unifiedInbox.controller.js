@@ -13,6 +13,11 @@ import {
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { resolveRequestIdempotencyKey } from '../services/quota/sendQuotaKey.service.js';
 import { issueSseTicket } from '../services/sseTicket.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import {
+  getAccessibleZaloAccountIds,
+  isZaloAccountNotAssignedError,
+} from '../services/user/memberChannelAccess.service.js';
 
 /**
  * `type` của hội thoại quyết định BẢNG nào được kiểm quyền và bảng nào được ghi. Các hàm repository không
@@ -26,6 +31,26 @@ const INVALID_CONVERSATION_TYPE_BODY = {
   message: 'type phải là channel, zalo_personal hoặc webchat',
   code: 'INVALID_CONVERSATION_TYPE',
 };
+
+/**
+ * Phạm vi tài khoản Zalo cá nhân của người thao tác (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN G2): `null` = chủ / super
+ * admin thấy hết; mảng = nhân viên, chỉ các tài khoản được giao (lỗi đọc bảng giao → [] = không thấy gì). Mọi handler
+ * Hộp thư đụng tới hội thoại / tin Zalo cá nhân phải truyền giá trị này xuống service.
+ */
+async function resolveZaloScope(req) {
+  return getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+}
+
+/**
+ * Nhân viên đụng vào hội thoại / tin của tài khoản Zalo chưa được giao → 403 `ZALO_ACCOUNT_NOT_ASSIGNED`. PHẢI đứng trước
+ * các nhánh `status === 403` khác (sendMessage / retryMessage coi 403 là hết hạn mức gói và đòi nâng cấp).
+ * @returns {boolean} true = đã trả lời, handler phải dừng
+ */
+function respondIfZaloNotAssigned(res, err) {
+  if (!isZaloAccountNotAssignedError(err)) return false;
+  res.status(403).json({ success: false, message: err.message, code: err.code });
+  return true;
+}
 
 function normalizeInboxQueryFilters(query = {}) {
   const rawStatus = String(query.status || '').trim().toLowerCase();
@@ -62,7 +87,11 @@ class UnifiedInboxController {
    */
   async getConversations(req, res) {
     try {
-      const result = await unifiedInboxService.getConversations(resolveWorkspaceOwnerId(req.user), normalizeInboxQueryFilters(req.query));
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
+      const result = await unifiedInboxService.getConversations(resolveWorkspaceOwnerId(req.user), {
+        ...normalizeInboxQueryFilters(req.query),
+        accessibleZaloAccountIds,
+      });
 
       return res.json({
         success: true,
@@ -80,7 +109,8 @@ class UnifiedInboxController {
    */
   async getAvailableChannels(req, res) {
     try {
-      const channels = await unifiedInboxService.getAvailableChannels(resolveWorkspaceOwnerId(req.user));
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
+      const channels = await unifiedInboxService.getAvailableChannels(resolveWorkspaceOwnerId(req.user), { accessibleZaloAccountIds });
       return res.json({ success: true, data: { channels } });
     } catch (err) {
       console.error('[UnifiedInbox] Get available channels error:', err);
@@ -104,13 +134,15 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      const conversation = await unifiedInboxService.getConversation(resolveWorkspaceOwnerId(req.user), id, type);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
+      const conversation = await unifiedInboxService.getConversation(resolveWorkspaceOwnerId(req.user), id, type, { accessibleZaloAccountIds });
 
       return res.json({
         success: true,
         data: conversation,
       });
     } catch (err) {
+      if (respondIfZaloNotAssigned(res, err)) return;
       console.error('[UnifiedInbox] Get conversation error:', err);
       if (err.message === 'Conversation not found') {
         return res.status(404).json({ success: false, message: err.message });
@@ -136,9 +168,11 @@ class UnifiedInboxController {
       }
 
       const beforeId = Number.parseInt(before, 10);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
       const { messages, hasMore } = await unifiedInboxService.getMessages(resolveWorkspaceOwnerId(req.user), id, type, {
         limit: Math.min(Math.max(Number.parseInt(limit, 10) || 50, 1), 200),
         beforeId: Number.isInteger(beforeId) && beforeId > 0 ? beforeId : null,
+        accessibleZaloAccountIds,
       });
 
       return res.json({
@@ -148,6 +182,7 @@ class UnifiedInboxController {
         hasMore,
       });
     } catch (err) {
+      if (respondIfZaloNotAssigned(res, err)) return;
       console.error('[UnifiedInbox] Get messages error:', err);
       if (err.message === 'Conversation not found') {
         return res.status(404).json({ success: false, message: err.message });
@@ -174,8 +209,10 @@ class UnifiedInboxController {
 
       // fromMessageId (tuỳ chọn): chỉ đánh dấu đọc phần khung đọc đã tải. Thiếu → đánh dấu hết (client cũ).
       const fromId = Number.parseInt(fromMessageId, 10);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
       const result = await unifiedInboxService.markAsRead(resolveWorkspaceOwnerId(req.user), id, type, {
         fromMessageId: Number.isInteger(fromId) && fromId > 0 ? fromId : null,
+        accessibleZaloAccountIds,
       });
 
       return res.json({
@@ -184,6 +221,7 @@ class UnifiedInboxController {
         data: { remainingUnread: result.remainingUnread },
       });
     } catch (err) {
+      if (respondIfZaloNotAssigned(res, err)) return;
       console.error('[UnifiedInbox] Mark as read error:', err);
       if (err.message === 'Conversation not found') {
         return res.status(404).json({ success: false, message: err.message });
@@ -200,6 +238,7 @@ class UnifiedInboxController {
     try {
       // Cùng chuẩn hoá với danh sách để "đang xem" và "đánh dấu" là MỘT tập; bộ lọc đọc từ body.
       const filters = normalizeInboxQueryFilters(req.body || {});
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
       const result = await unifiedInboxService.markAllAsRead(resolveWorkspaceOwnerId(req.user), {
         channel: filters.channel,
         zaloAccountId: filters.zaloAccountId,
@@ -207,6 +246,7 @@ class UnifiedInboxController {
         status: filters.status,
         date: filters.date,
         kind: filters.kind,
+        accessibleZaloAccountIds,
       });
       return res.json({ success: true, data: { updatedMessages: result.updatedMessages } });
     } catch (err) {
@@ -222,9 +262,11 @@ class UnifiedInboxController {
   async getUnreadCount(req, res) {
     try {
       // Cùng phạm vi với danh sách đang xem: tab kênh + tài khoản Zalo (H-03).
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
       const counts = await unifiedInboxService.getUnreadCount(resolveWorkspaceOwnerId(req.user), {
         channel: req.query.channel || undefined,
         zaloAccountId: req.query.zaloAccountId || undefined,
+        accessibleZaloAccountIds,
       });
 
       return res.json({
@@ -321,6 +363,7 @@ class UnifiedInboxController {
         || req.body?.clientKey
         || null;
       const idempotencyKey = resolveRequestIdempotencyKey(rawKey);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
 
       const result = await unifiedInboxService.sendMessage(
         resolveWorkspaceOwnerId(req.user),
@@ -336,6 +379,7 @@ class UnifiedInboxController {
           roleCode: req.user.role,
           membershipId: req.user.activeContext?.membershipId || null,
           idempotencyKey,
+          accessibleZaloAccountIds,
         }
       );
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_REPLY_SENT, AUDIT_ENTITY_TYPES.INBOX_MESSAGE, result.messageId, { conversationId: Number(id), conversationType: type, attachmentCount: Array.isArray(attachments) ? attachments.length : 0 });
@@ -352,6 +396,7 @@ class UnifiedInboxController {
         isReplay: result.isReplay || false,
       });
     } catch (err) {
+      if (respondIfZaloNotAssigned(res, err)) return;
       console.error('[UnifiedInbox] Send message error:', err);
       if (err.status === 403 || err.statusCode === 403 || err.code === 'RESOURCE_LIMIT_EXCEEDED' || err.code === 'SEND_QUOTA_EXCEEDED') {
         return res.status(403).json({
@@ -414,6 +459,7 @@ class UnifiedInboxController {
         || req.body?.clientKey
         || null;
       const idempotencyKey = resolveRequestIdempotencyKey(rawKey);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
 
       const result = await unifiedInboxService.retryMessage({
         userId: resolveWorkspaceOwnerId(req.user),
@@ -427,6 +473,7 @@ class UnifiedInboxController {
         roleCode: req.user.role,
         membershipId: req.user.activeContext?.membershipId || null,
         idempotencyKey,
+        accessibleZaloAccountIds,
       });
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_REPLY_RETRIED, AUDIT_ENTITY_TYPES.INBOX_MESSAGE, Number(messageId), { conversationType: type, sendStatus: result.sendStatus });
       return res.json({
@@ -437,6 +484,7 @@ class UnifiedInboxController {
         metadata: result.metadata,
       });
     } catch (err) {
+      if (respondIfZaloNotAssigned(res, err)) return;
       console.error('[UnifiedInbox] Retry message error:', err);
       if (err.status === 403 || err.statusCode === 403 || err.code === 'RESOURCE_LIMIT_EXCEEDED' || err.code === 'SEND_QUOTA_EXCEEDED') {
         return res.status(403).json({
@@ -485,10 +533,12 @@ class UnifiedInboxController {
       if (typeof paused !== 'boolean') {
         return res.status(400).json({ success: false, message: 'paused (boolean) is required' });
       }
-      const result = await unifiedInboxService.setConversationAiPaused(resolveWorkspaceOwnerId(req.user), id, type, paused);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
+      const result = await unifiedInboxService.setConversationAiPaused(resolveWorkspaceOwnerId(req.user), id, type, paused, { accessibleZaloAccountIds });
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_AI_PAUSE_UPDATED, AUDIT_ENTITY_TYPES.INBOX_CONVERSATION, Number(id), { conversationType: type, paused });
       return res.json({ success: true, data: result });
     } catch (err) {
+      if (respondIfZaloNotAssigned(res, err)) return;
       console.error('[UnifiedInbox] setAiPaused error:', err);
       if (err.message === 'Conversation not found') {
         return res.status(404).json({ success: false, message: err.message });
@@ -505,6 +555,7 @@ class UnifiedInboxController {
     try {
       const { channel, search, startDate, endDate, limit = 20, offset = 0 } = req.query;
 
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
       const result = await unifiedInboxService.getOutboxMessages(resolveWorkspaceOwnerId(req.user), {
         channel,
         search,
@@ -512,6 +563,7 @@ class UnifiedInboxController {
         endDate,
         limit: parseInt(limit),
         offset: parseInt(offset),
+        accessibleZaloAccountIds,
       });
 
       return res.json({
@@ -536,7 +588,8 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Message ID is required' });
       }
 
-      const message = await unifiedInboxService.getOutboxMessage(resolveWorkspaceOwnerId(req.user), id);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
+      const message = await unifiedInboxService.getOutboxMessage(resolveWorkspaceOwnerId(req.user), id, { accessibleZaloAccountIds });
 
       return res.json({
         success: true,
@@ -567,7 +620,8 @@ class UnifiedInboxController {
         return res.status(400).json({ success: false, message: 'Conversation ID is required' });
       }
 
-      await unifiedInboxService.deleteConversation(resolveWorkspaceOwnerId(req.user), id, type);
+      const accessibleZaloAccountIds = await resolveZaloScope(req);
+      await unifiedInboxService.deleteConversation(resolveWorkspaceOwnerId(req.user), id, type, { accessibleZaloAccountIds });
       await logWorkspace(getWorkspaceAuditContext(req), AUDIT_ACTIONS.INBOX_CONVERSATION_DELETED, AUDIT_ENTITY_TYPES.INBOX_CONVERSATION, Number(id), { conversationType: type });
 
       return res.json({
@@ -575,6 +629,7 @@ class UnifiedInboxController {
         message: 'Conversation deleted',
       });
     } catch (err) {
+      if (respondIfZaloNotAssigned(res, err)) return;
       console.error('[UnifiedInbox] Delete conversation error:', err);
       if (err.message === 'Conversation not found') {
         return res.status(404).json({ success: false, message: err.message });

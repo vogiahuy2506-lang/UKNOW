@@ -18,7 +18,7 @@ beforeEach(() => {
 });
 
 const sqlOf = async (filters = {}) => {
-  await repo.getConversations(1, { limit: 20, offset: 0, ...filters });
+  await repo.getConversations(1, { accessibleZaloAccountIds: null, limit: 20, offset: 0, ...filters });
   return db.query.mock.calls[0];
 };
 
@@ -68,7 +68,7 @@ describe('getConversations — chọn trang trước (H-06)', () => {
       }],
     });
 
-    const [row] = await repo.getConversations(1, { limit: 20, offset: 0 });
+    const [row] = await repo.getConversations(1, { accessibleZaloAccountIds: null, limit: 20, offset: 0 });
 
     expect(row).toMatchObject({
       lastMessageRawType: 'chat.photo',
@@ -111,7 +111,7 @@ describe('getConversations — chip lọc phía server (H-13, C1)', () => {
   it('getConversationsCount áp cùng bộ lọc (tổng khớp danh sách)', async () => {
     db.query.mockResolvedValue({ rows: [{ total: '7' }] });
 
-    const total = await repo.getConversationsCount(1, { kind: 'personal', unreadOnly: true });
+    const total = await repo.getConversationsCount(1, { accessibleZaloAccountIds: null, kind: 'personal', unreadOnly: true });
 
     expect(total).toBe(7);
     const [sql] = db.query.mock.calls[0];
@@ -143,7 +143,7 @@ describe('getAvailableChannels (H-12)', () => {
       rows: [{ channel: 'telegram' }, { channel: 'facebook' }, { channel: 'zalo_personal' }, { channel: 'web' }, { channel: 'x' }],
     });
 
-    const channels = await repo.getAvailableChannels(1);
+    const channels = await repo.getAvailableChannels(1, { accessibleZaloAccountIds: null });
 
     expect(channels).toEqual(['web', 'zalo_personal', 'telegram']);
     const [sql, params] = db.query.mock.calls[0];

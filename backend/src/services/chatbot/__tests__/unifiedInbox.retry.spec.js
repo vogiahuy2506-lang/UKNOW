@@ -12,6 +12,9 @@ const mockDebit = jest.fn();
 const mockResolveBilling = jest.fn();
 const mockSendReply = jest.fn();
 const mockBindChannelMessageExternalId = jest.fn().mockResolvedValue(undefined);
+const mockGetMessages = jest.fn();
+const mockMarkAsRead = jest.fn();
+const mockDeleteZaloConversation = jest.fn();
 
 const mockFindReservationById = jest.fn().mockResolvedValue(null);
 const mockReserveSendQuota = jest.fn().mockResolvedValue({ mode: 'off', status: 'reserved', id: 99 });
@@ -76,6 +79,8 @@ jest.unstable_mockModule('../../../repositories/ai/unifiedInbox.repository.js', 
     bindZaloPersonalOutboundMsgIds: jest.fn().mockResolvedValue(undefined),
     bindChannelMessageExternalId: mockBindChannelMessageExternalId,
     getAllSettingsForUser: jest.fn(),
+    getMessages: mockGetMessages,
+    markAsRead: mockMarkAsRead,
   },
 }));
 
@@ -84,7 +89,10 @@ jest.unstable_mockModule('../../../repositories/ai/chatbot.repository.js', () =>
 }));
 
 jest.unstable_mockModule('../../../repositories/chatbot/chatbotZaloAccount.repository.js', () => ({
-  default: { getAllSettingsForUser: jest.fn().mockResolvedValue([]) },
+  default: {
+    getAllSettingsForUser: jest.fn().mockResolvedValue([]),
+    getSettings: jest.fn().mockResolvedValue({ is_enabled: true }),
+  },
 }));
 
 // Production gọi registerAccountListener() (không phải ensureRegistered) sau khi gửi
@@ -143,7 +151,7 @@ jest.unstable_mockModule('../channelAdapters/facebook.adapter.js', () => ({
 }));
 
 jest.unstable_mockModule('../channelAdapters/zaloPersonal.adapter.js', () => ({
-  default: { sendReply: mockSendReply },
+  default: { sendReply: mockSendReply, deleteConversation: mockDeleteZaloConversation },
 }));
 
 // WhatsApp QR (Baileys): adapter Hộp thư THẬT chạy, chỉ giả tra session key + adapter gửi chatbot.
@@ -196,6 +204,10 @@ jest.unstable_mockModule('../../../utils/aiHandoffResume.util.js', () => ({
 
 const unifiedInboxService = (await import('../unifiedInbox.service.js')).default;
 
+// G2: phạm vi tài khoản Zalo của người thao tác. Các ca gốc của file này đều là CHỦ → null = thấy hết. Ca nhân viên /
+// thiếu phạm vi nằm ở describe 'G2 — việc giao tài khoản Zalo' cuối file.
+const ZALO_OWNER = { accessibleZaloAccountIds: null };
+
 describe('UnifiedInbox send status + retry', () => {
   beforeEach(() => {
     jest.clearAllMocks();
@@ -220,7 +232,7 @@ describe('UnifiedInbox send status + retry', () => {
     mockInsertZalo.mockResolvedValue(42);
     mockSendReply.mockResolvedValue({ success: false, error: 'No active Zalo personal session' });
 
-    const result = await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello');
+    const result = await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], ZALO_OWNER);
 
     expect(result.success).toBe(true);
     expect(result.messageId).toBe(42);
@@ -272,7 +284,7 @@ describe('UnifiedInbox send status + retry', () => {
     mockInsertZalo.mockResolvedValue(42);
     mockSendReply.mockResolvedValue({ success: true });
 
-    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'nội dung thật');
+    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'nội dung thật', [], ZALO_OWNER);
 
     expect(mockSendReply).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -304,7 +316,7 @@ describe('UnifiedInbox send status + retry', () => {
       legacyDecision: { allowed: true, billingUserId: 1 },
     });
 
-    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello');
+    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], ZALO_OWNER);
 
     expect(mockDebit).toHaveBeenCalledWith(
       {},
@@ -333,7 +345,7 @@ describe('UnifiedInbox send status + retry', () => {
       legacyDecision: { allowed: true, billingUserId: null, bypass: true },
     });
 
-    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello');
+    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], ZALO_OWNER);
 
     expect(mockDebit).not.toHaveBeenCalled();
   });
@@ -349,7 +361,7 @@ describe('UnifiedInbox send status + retry', () => {
     mockSendReply.mockResolvedValue({ success: true });
     mockReserveSendQuota.mockResolvedValueOnce({ mode: 'enforce', status: 'reserved', id: 99 });
 
-    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello');
+    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], ZALO_OWNER);
 
     expect(mockDebit).not.toHaveBeenCalled();
   });
@@ -368,7 +380,7 @@ describe('UnifiedInbox send status + retry', () => {
     mockReserveSendQuota.mockResolvedValueOnce({ mode: 'enforce', status: 'reserved', id: 99 });
     mockConsumeSendQuota.mockRejectedValueOnce(new Error('db down'));
 
-    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello');
+    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], ZALO_OWNER);
 
     expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
       expect.objectContaining({ reservationId: 99, failureCode: 'CONSUME_DB_FAILED' }),
@@ -399,7 +411,7 @@ describe('UnifiedInbox send status + retry', () => {
       msgIds: ['msg1'],
     });
 
-    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello');
+    await unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], ZALO_OWNER);
 
     expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
       expect.objectContaining({ reservationId: 99, failureCode: 'PARTIAL_DELIVERY' }),
@@ -435,7 +447,7 @@ describe('UnifiedInbox send status + retry', () => {
       msgIds: ['msg1'],
     });
 
-    await unifiedInboxService.retryMessage(1, 42, 'zalo_personal');
+    await unifiedInboxService.retryMessage(1, 42, 'zalo_personal', ZALO_OWNER);
 
     expect(mockMarkSendQuotaUncertain).toHaveBeenCalledWith(
       expect.objectContaining({ reservationId: 100, failureCode: 'PARTIAL_DELIVERY' }),
@@ -460,7 +472,7 @@ describe('UnifiedInbox send status + retry', () => {
       throw new Error('insert violates constraint');
     });
 
-    await expect(unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello'))
+    await expect(unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], ZALO_OWNER))
       .rejects.toThrow('insert violates constraint');
 
     expect(mockReleaseSendQuota).toHaveBeenCalledWith(
@@ -481,7 +493,7 @@ describe('UnifiedInbox send status + retry', () => {
     });
     mockClaimRetry.mockResolvedValue(null);
 
-    await expect(unifiedInboxService.retryMessage(1, 42, 'zalo_personal'))
+    await expect(unifiedInboxService.retryMessage(1, 42, 'zalo_personal', ZALO_OWNER))
       .rejects.toMatchObject({ status: 409, code: 'RETRY_NOT_AVAILABLE' });
     expect(mockSendReply).not.toHaveBeenCalled();
   });
@@ -509,7 +521,7 @@ describe('UnifiedInbox send status + retry', () => {
       metadata: { source: 'manual_inbox', send: { status: 'sent' } },
     });
 
-    const result = await unifiedInboxService.retryMessage(1, 42, 'zalo_personal');
+    const result = await unifiedInboxService.retryMessage(1, 42, 'zalo_personal', ZALO_OWNER);
     expect(result.sendStatus).toBe('sent');
     expect(mockUpdateSendStatus).toHaveBeenCalledWith(
       'zalo_personal',
@@ -528,7 +540,7 @@ describe('UnifiedInbox send status + retry', () => {
       metadata: { send: { status: 'sent' } },
     });
 
-    const result = await unifiedInboxService.retryMessage(1, 42, 'zalo_personal');
+    const result = await unifiedInboxService.retryMessage(1, 42, 'zalo_personal', ZALO_OWNER);
     expect(result.isReplay).toBe(true);
     expect(result.sendStatus).toBe('sent');
     expect(mockClaimRetry).not.toHaveBeenCalled();
@@ -547,7 +559,7 @@ describe('UnifiedInbox send status + retry', () => {
     });
     mockFindReservationById.mockResolvedValue({ id: 100, status: 'uncertain' });
 
-    await expect(unifiedInboxService.retryMessage(1, 42, 'zalo_personal'))
+    await expect(unifiedInboxService.retryMessage(1, 42, 'zalo_personal', ZALO_OWNER))
       .rejects.toMatchObject({ status: 409, code: 'RESERVATION_UNCERTAIN' });
     expect(mockClaimRetry).not.toHaveBeenCalled();
   });
@@ -564,7 +576,7 @@ describe('UnifiedInbox send status + retry', () => {
     });
     mockFindReservationById.mockResolvedValue({ id: 101, status: 'sending' });
 
-    await expect(unifiedInboxService.retryMessage(1, 42, 'zalo_personal'))
+    await expect(unifiedInboxService.retryMessage(1, 42, 'zalo_personal', ZALO_OWNER))
       .rejects.toMatchObject({ status: 409, code: 'CONCURRENT_SEND_IN_PROGRESS' });
     expect(mockClaimRetry).not.toHaveBeenCalled();
   });
@@ -596,7 +608,7 @@ describe('UnifiedInbox send status + retry', () => {
     const employeeActorId = 7;
     await unifiedInboxService.retryMessage(
       { userId: ownerId, messageId: 42, type: 'zalo_personal' },
-      { actorUserId: employeeActorId, roleCode: 'employee' }
+      { actorUserId: employeeActorId, roleCode: 'employee', ...ZALO_OWNER }
     );
 
     expect(mockReserveSendQuota).toHaveBeenCalledWith(
@@ -1036,6 +1048,185 @@ describe('UnifiedInbox send status + retry', () => {
         expect(mockReserveSendQuota).not.toHaveBeenCalled();
         expect(mockDebitInbox).not.toHaveBeenCalled();
       });
+    });
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G2 — mọi đường theo id hội thoại / tin Zalo cá nhân đều kiểm việc giao tài khoản
+// TRƯỚC khi làm bất cứ gì (đọc tin, đánh dấu đọc, tạm dừng AI, đặt chỗ hạn mức, ghi tin, gửi, giành quyền gửi lại, xoá).
+// ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+describe('G2 — việc giao tài khoản Zalo cho nhân viên (đường theo id)', () => {
+  const ACCOUNT = 9; // tài khoản Zalo của hội thoại / tin dưới test
+
+  const zaloConversation = () => ({
+    id: 5,
+    channel: 'zalo_personal',
+    external_id: 'u1',
+    id_zalo_setting: ACCOUNT,
+    channel_is_active: true,
+    visitor_name: 'Khách',
+    visitor_info: {},
+    _parsedVisitorInfo: {},
+  });
+  const failedZaloMessage = (overrides = {}) => ({
+    id: 42,
+    id_conversation: 5,
+    content: 'hello',
+    role: 'agent',
+    channel: 'zalo_personal',
+    external_id: 'u1',
+    id_zalo_setting: ACCOUNT,
+    conversation_id_zalo_setting: ACCOUNT,
+    metadata: { send: { status: 'failed' } },
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetConversationById.mockResolvedValue(zaloConversation());
+    mockFindForRetry.mockResolvedValue(failedZaloMessage());
+    mockClaimRetry.mockResolvedValue({ id: 42 });
+    mockInsertZalo.mockResolvedValue(77);
+    mockSendReply.mockResolvedValue({ success: true });
+    mockSetAiPaused.mockResolvedValue({ aiPaused: true, aiPausedAt: new Date().toISOString() });
+    mockUpdateSendStatus.mockResolvedValue({ id: 42, metadata: { send: { status: 'sent' } } });
+    mockResolveBilling.mockResolvedValue(1);
+    mockWithTransaction.mockImplementation(async (fn) => fn({}));
+    mockGetMessages.mockResolvedValue({ messages: [], hasMore: false });
+    mockMarkAsRead.mockResolvedValue({ remainingUnread: 0 });
+    mockDeleteZaloConversation.mockResolvedValue(true);
+  });
+
+  /** Mỗi thao tác theo id + các hàm KHÔNG ĐƯỢC chạm khi bị chặn. */
+  const OPERATIONS = {
+    getConversation: (scope) => unifiedInboxService.getConversation(1, 5, 'zalo_personal', { accessibleZaloAccountIds: scope }),
+    getMessages: (scope) => unifiedInboxService.getMessages(1, 5, 'zalo_personal', { limit: 50, accessibleZaloAccountIds: scope }),
+    markAsRead: (scope) => unifiedInboxService.markAsRead(1, 5, 'zalo_personal', { accessibleZaloAccountIds: scope }),
+    setConversationAiPaused: (scope) => unifiedInboxService.setConversationAiPaused(1, 5, 'zalo_personal', true, { accessibleZaloAccountIds: scope }),
+    sendMessage: (scope) => unifiedInboxService.sendMessage(1, 5, 'zalo_personal', 'hello', [], { accessibleZaloAccountIds: scope }),
+    retryMessage: (scope) => unifiedInboxService.retryMessage(1, 42, 'zalo_personal', { accessibleZaloAccountIds: scope }),
+    deleteConversation: (scope) => unifiedInboxService.deleteConversation(1, 5, 'zalo_personal', { accessibleZaloAccountIds: scope }),
+  };
+  const expectNoSideEffects = () => {
+    expect(mockGetMessages).not.toHaveBeenCalled();
+    expect(mockMarkAsRead).not.toHaveBeenCalled();
+    expect(mockSetAiPaused).not.toHaveBeenCalled();
+    expect(mockReserveSendQuota).not.toHaveBeenCalled();
+    expect(mockInsertZalo).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+    expect(mockSendReply).not.toHaveBeenCalled();
+    expect(mockClaimRetry).not.toHaveBeenCalled();
+    expect(mockUpdateSendStatus).not.toHaveBeenCalled();
+    expect(mockDeleteZaloConversation).not.toHaveBeenCalled();
+  };
+
+  for (const [name, run] of Object.entries(OPERATIONS)) {
+    describe(name, () => {
+      it('nhân viên CHƯA được giao tài khoản của hội thoại → 403 ZALO_ACCOUNT_NOT_ASSIGNED, không chạm gì', async () => {
+        await expect(run([5, 6])).rejects.toMatchObject({ status: 403, code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+        expectNoSideEffects();
+      });
+
+      it('nhân viên chưa được giao gì ([]) → chặn', async () => {
+        await expect(run([])).rejects.toMatchObject({ status: 403, code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+        expectNoSideEffects();
+      });
+
+      it('HỎNG THÌ CHẶN: thiếu phạm vi (undefined) hoặc sai kiểu → chặn, không coi là chủ', async () => {
+        await expect(run(undefined)).rejects.toMatchObject({ code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+        await expect(run('all')).rejects.toMatchObject({ code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+        expectNoSideEffects();
+      });
+
+      it('nhân viên ĐƯỢC giao tài khoản → làm được như thường', async () => {
+        await expect(run([5, ACCOUNT])).resolves.toBeDefined();
+      });
+
+      it('CHỦ / super admin (null) → làm được như thường', async () => {
+        await expect(run(null)).resolves.toBeDefined();
+      });
+    });
+  }
+
+  it('hội thoại không có tài khoản Zalo (id_zalo_setting NULL) → nhân viên bị chặn, chủ vẫn thấy', async () => {
+    mockGetConversationById.mockResolvedValue({ ...zaloConversation(), id_zalo_setting: null });
+
+    await expect(OPERATIONS.getConversation([5])).rejects.toMatchObject({ code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+    await expect(OPERATIONS.getConversation(null)).resolves.toBeDefined();
+  });
+
+  it('hội thoại không tồn tại / không thuộc chủ vẫn là "Conversation not found" (chưa tới bước kiểm tài khoản)', async () => {
+    mockGetConversationById.mockResolvedValue(null);
+
+    await expect(OPERATIONS.getConversation([5])).rejects.toThrow('Conversation not found');
+    await expect(OPERATIONS.getConversation(null)).rejects.toThrow('Conversation not found');
+  });
+
+  it('kênh KHÔNG phải Zalo cá nhân (channel / webchat) không bị phạm vi Zalo chặn, kể cả nhân viên chưa được giao gì', async () => {
+    mockGetConversationById.mockResolvedValue({ id: 21, channel: 'telegram', id_channel: 31, external_id: 'x', channel_display_name: 'TG' });
+    await expect(unifiedInboxService.getConversation(1, 21, 'channel', { accessibleZaloAccountIds: [] })).resolves.toMatchObject({ id: 21 });
+
+    mockGetConversationById.mockResolvedValue({ id: 8, channel: 'web', channel_display_name: 'Widget' });
+    await expect(unifiedInboxService.getMessages(1, 8, 'webchat', { accessibleZaloAccountIds: [] })).resolves.toBeDefined();
+    await expect(unifiedInboxService.markAsRead(1, 8, 'webchat', { accessibleZaloAccountIds: [] })).resolves.toBeDefined();
+    await expect(unifiedInboxService.setConversationAiPaused(1, 8, 'webchat', true, { accessibleZaloAccountIds: [] })).resolves.toBeDefined();
+  });
+
+  describe('retryMessage — kiểm cả tài khoản của TIN lẫn của HỘI THOẠI, trước khi giành quyền gửi lại', () => {
+    it('tin thuộc tài khoản được giao nhưng hội thoại thuộc tài khoản KHÁC (dữ liệu lệch) → chặn', async () => {
+      mockFindForRetry.mockResolvedValue(failedZaloMessage({ id_zalo_setting: 5, conversation_id_zalo_setting: ACCOUNT }));
+
+      await expect(OPERATIONS.retryMessage([5])).rejects.toMatchObject({ code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+      expectNoSideEffects();
+    });
+
+    it('tin của tài khoản chưa giao → chặn trước khi claim; tài khoản gửi thật là của tin, không phải cái nhân viên chọn', async () => {
+      mockFindForRetry.mockResolvedValue(failedZaloMessage({ id_zalo_setting: ACCOUNT, conversation_id_zalo_setting: 5 }));
+
+      await expect(OPERATIONS.retryMessage([5])).rejects.toMatchObject({ code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+      expectNoSideEffects();
+    });
+
+    it('không áp cho tin kênh Telegram/WhatsApp (type channel) dù nhân viên chưa được giao Zalo nào', async () => {
+      mockFindReservationById.mockResolvedValue(null);
+      mockFindForRetry.mockResolvedValue({ id: 88, id_conversation: 21, content: 'hi', role: 'agent', channel: 'zalo_oa', id_channel: 31, external_id: 'x', metadata: { send: { status: 'failed' } } });
+      mockClaimRetry.mockResolvedValue({ id: 88 });
+      mockGetConversationById.mockResolvedValue({ id: 21, channel: 'zalo_oa', id_channel: 31, external_id: 'x' });
+
+      await expect(unifiedInboxService.retryMessage(1, 88, 'channel', { accessibleZaloAccountIds: [] })).resolves.toMatchObject({ success: true });
+    });
+  });
+
+  describe('sendMessage — chặn TRƯỚC đặt chỗ hạn mức, ghi tin, gọi Zalo', () => {
+    it('nhân viên bị chặn: reserveSendQuota / insert / adapter / setAiPaused đều không được gọi', async () => {
+      await expect(OPERATIONS.sendMessage([5])).rejects.toMatchObject({ code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+      expect(mockReserveSendQuota).not.toHaveBeenCalled();
+      expect(mockInsertZalo).not.toHaveBeenCalled();
+      expect(mockSendReply).not.toHaveBeenCalled();
+      expect(mockSetAiPaused).not.toHaveBeenCalled();
+    });
+
+    it('phạm vi không rò xuống hàm đặt chỗ hạn mức (options chuyển cho reserveSendQuota không mang accessibleZaloAccountIds)', async () => {
+      await OPERATIONS.sendMessage([ACCOUNT]);
+
+      expect(mockReserveSendQuota).toHaveBeenCalledTimes(1);
+      const [, quotaOptions] = mockReserveSendQuota.mock.calls[0];
+      expect(quotaOptions).not.toHaveProperty('accessibleZaloAccountIds');
+    });
+  });
+
+  describe('deleteConversation', () => {
+    it('chuyển phạm vi xuống adapter / repository (kiểm lần hai ngay trong giao dịch xoá)', async () => {
+      await OPERATIONS.deleteConversation([ACCOUNT]);
+
+      expect(mockDeleteZaloConversation).toHaveBeenCalledWith(1, 5, { accessibleZaloAccountIds: [ACCOUNT] });
+    });
+
+    it('repository báo không xoá được (false: hết quyền giữa chừng / đã xoá) → "Conversation not found", không báo xoá thành công', async () => {
+      mockDeleteZaloConversation.mockResolvedValue(false);
+
+      await expect(OPERATIONS.deleteConversation(null)).rejects.toThrow('Conversation not found');
     });
   });
 });

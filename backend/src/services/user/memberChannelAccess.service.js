@@ -65,6 +65,24 @@ export function isZaloAccountAccessible(accountId, accessibleIds) {
 }
 
 /**
+ * Bản ĐỒNG BỘ của `assertZaloAccountAccess` cho chỗ đã có sẵn `accessibleIds` (kết quả `getAccessibleZaloAccountIds`):
+ * ném 403 `ZALO_ACCOUNT_NOT_ASSIGNED` nếu tài khoản không nằm trong phạm vi. `null` (chủ / super admin) luôn qua; mọi giá trị
+ * khác mảng (kể cả `undefined` — chỗ gọi quên truyền) bị chặn.
+ *
+ * @param {number|string|null|undefined} accountId
+ * @param {number[]|null|undefined} accessibleIds
+ * @returns {void}
+ */
+export function assertZaloAccountInScope(accountId, accessibleIds) {
+  if (isZaloAccountAccessible(accountId, accessibleIds)) return;
+  const error = new Error(ZALO_ACCOUNT_NOT_ASSIGNED_MESSAGE);
+  error.status = 403;
+  error.statusCode = 403;
+  error.code = ZALO_ACCOUNT_NOT_ASSIGNED_CODE;
+  throw error;
+}
+
+/**
  * Ném 403 `ZALO_ACCOUNT_NOT_ASSIGNED` nếu nhân viên không được giao tài khoản này.
  * Chủ / super admin luôn qua.
  *
@@ -73,13 +91,7 @@ export function isZaloAccountAccessible(accountId, accessibleIds) {
  * @returns {Promise<void>}
  */
 export async function assertZaloAccountAccess(ctx, accountId) {
-  const accessibleIds = await getAccessibleZaloAccountIds(ctx);
-  if (isZaloAccountAccessible(accountId, accessibleIds)) return;
-  const error = new Error(ZALO_ACCOUNT_NOT_ASSIGNED_MESSAGE);
-  error.status = 403;
-  error.statusCode = 403;
-  error.code = ZALO_ACCOUNT_NOT_ASSIGNED_CODE;
-  throw error;
+  assertZaloAccountInScope(accountId, await getAccessibleZaloAccountIds(ctx));
 }
 
 /**

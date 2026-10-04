@@ -13,6 +13,7 @@ jest.unstable_mockModule('../../../repositories/user/memberChannelAccount.reposi
 const {
   getAccessibleZaloAccountIds,
   assertZaloAccountAccess,
+  assertZaloAccountInScope,
   isAssignmentScopedContext,
   isZaloAccountAccessible,
   listZaloAssignmentsForOwner,
@@ -150,5 +151,29 @@ describe('listZaloAssignmentsForOwner / setZaloAssignmentsForEmployee', () => {
     const result = await setZaloAssignmentsForEmployee({ ownerId: 10, employeeId: 20, accountIds: [6], actorUserId: 10 });
     expect(mockReplace).toHaveBeenCalledWith({ ownerId: 10, employeeId: 20, accountIds: [6], actorUserId: 10 });
     expect(result).toEqual({ before: [5], after: [6] });
+  });
+});
+
+// G2: bản đồng bộ cho chỗ đã có sẵn kết quả getAccessibleZaloAccountIds (service Hộp thư kiểm theo id hội thoại).
+describe('assertZaloAccountInScope', () => {
+  it('null (chủ / super admin) luôn qua, kể cả id không có thật', () => {
+    expect(() => assertZaloAccountInScope(5, null)).not.toThrow();
+    expect(() => assertZaloAccountInScope(null, null)).not.toThrow();
+  });
+
+  it('mảng: id có trong mảng qua (kể cả dạng chuỗi số); id khác / rỗng / NULL bị 403 ZALO_ACCOUNT_NOT_ASSIGNED', () => {
+    expect(() => assertZaloAccountInScope(5, [5, 6])).not.toThrow();
+    expect(() => assertZaloAccountInScope('6', [5, 6])).not.toThrow();
+    for (const [id, scope] of [[7, [5, 6]], [5, []], [null, [5]], [undefined, [5]], ['abc', [5]]]) {
+      let error;
+      try { assertZaloAccountInScope(id, scope); } catch (e) { error = e; }
+      expect(error).toMatchObject({ status: 403, statusCode: 403, code: ZALO_ACCOUNT_NOT_ASSIGNED_CODE, message: ZALO_ACCOUNT_NOT_ASSIGNED_MESSAGE });
+    }
+  });
+
+  it('HỎNG THÌ CHẶN: phạm vi thiếu (undefined) hoặc sai kiểu → 403, không bao giờ coi là chủ', () => {
+    for (const scope of [undefined, 'null', 5, {}]) {
+      expect(() => assertZaloAccountInScope(5, scope)).toThrow(expect.objectContaining({ code: ZALO_ACCOUNT_NOT_ASSIGNED_CODE }));
+    }
   });
 });

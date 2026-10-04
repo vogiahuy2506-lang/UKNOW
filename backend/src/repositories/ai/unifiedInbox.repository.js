@@ -3,6 +3,7 @@ import { isPlaceholderGroupName } from '../../utils/zaloGroupName.util.js';
 import { formatWebchatDisplayName } from '../../utils/webchatDisplayName.util.js';
 import { getVietnamDayRange } from '../../utils/vnTimeFormat.util.js';
 import { buildFoldedLikePattern, sqlFoldVietnamese } from '../../utils/vietnameseSearchFold.util.js';
+import { normalizeZaloAccessScope, pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
 
 const VALID_STATUSES = new Set(['active', 'closed']);
 const VALID_DATE_RANGES = new Set(['today', 'week', 'month']);
@@ -252,6 +253,15 @@ function buildConversationFilterParts(filters, params, { branch = 'all' } = {}) 
     params.push(parseInt(zaloAccountId, 10));
     paramIndex++;
   }
+  // Việc giao tài khoản (G2): nhân viên chỉ thấy hội thoại của tài khoản được giao. `null` (chủ / super admin) → không lọc;
+  // thiếu / sai kiểu → coi như không có tài khoản nào. Luôn là AND với `zaloAccountId` ở trên: nhân viên gửi id tài khoản
+  // không được giao chỉ nhận danh sách rỗng, không lộ gì.
+  const zaloScope = normalizeZaloAccessScope(filters.accessibleZaloAccountIds);
+  if (useAccountParam && zaloScope !== null) {
+    zaloAccountIdFilter += ` AND zp.id_zalo_setting = ANY($${paramIndex}::bigint[])`;
+    params.push(zaloScope);
+    paramIndex++;
+  }
 
   const searchBuilt = buildSearchFilter(search, paramIndex);
   if (searchBuilt.params.length) {
@@ -284,7 +294,8 @@ class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
    * @param {number} userId
-   * @param {object} filters - { channel, status, date, search, kind, unreadOnly, limit, offset, zaloAccountId }
+   * @param {object} filters - { channel, status, date, search, kind, unreadOnly, limit, offset, zaloAccountId, accessibleZaloAccountIds }
+   *   `accessibleZaloAccountIds`: null = chủ / super admin (không lọc), mảng = nhân viên (chỉ tài khoản được giao); thiếu = [].
    *
    * H-06: bản cũ tính 4–5 subquery tương quan (tin cuối, số chưa đọc, giờ tin cuối, tên nhóm, LATERAL zalo_groups)
    * cho MỌI hội thoại rồi mới `ORDER BY ... LIMIT 20` — user 90 (672 hội thoại) mất 2,5 giây. Nay chọn TRANG trước:
@@ -616,7 +627,17 @@ class UnifiedInboxRepository {
    * Facebook không có trong danh sách: kết nối Facebook đã chốt không làm (21/09).
    * @returns {Promise<string[]>} theo thứ tự hiển thị: web, zalo_personal, zalo_oa, whatsapp_baileys, telegram
    */
-  async getAvailableChannels(userId) {
+  async getAvailableChannels(userId, { accessibleZaloAccountIds } = {}) {
+    // Nhân viên chỉ có tab Zalo cá nhân khi được giao ít nhất một tài khoản (G2); chủ / super admin (null) thấy như cũ.
+    const params = [userId];
+    const zaloScope = normalizeZaloAccessScope(accessibleZaloAccountIds);
+    let zaloAccountGate = '';
+    let zaloConversationGate = '';
+    if (zaloScope !== null) {
+      params.push(zaloScope);
+      zaloAccountGate = 'AND id = ANY($2::bigint[])';
+      zaloConversationGate = 'AND id_zalo_setting = ANY($2::bigint[])';
+    }
     const { rows } = await db.query(
       `SELECT channel FROM (
          SELECT 'web' AS channel
@@ -624,8 +645,8 @@ class UnifiedInboxRepository {
             OR EXISTS (SELECT 1 FROM webchat_conversations WHERE id_user = $1)
          UNION
          SELECT 'zalo_personal'
-         WHERE EXISTS (SELECT 1 FROM zalo_settings WHERE id_user = $1 AND is_active = true)
-            OR EXISTS (SELECT 1 FROM zalo_personal_conversations WHERE id_user = $1)
+         WHERE EXISTS (SELECT 1 FROM zalo_settings WHERE id_user = $1 AND is_active = true ${zaloAccountGate})
+            OR EXISTS (SELECT 1 FROM zalo_personal_conversations WHERE id_user = $1 ${zaloConversationGate})
          UNION
          SELECT ch.channel FROM channel_connections ch
          WHERE ch.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram')
@@ -634,7 +655,7 @@ class UnifiedInboxRepository {
          JOIN channel_connections ch ON ch.id = cc.id_channel
          WHERE cc.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram')
        ) found`,
-      [userId]
+      params
     );
     const found = new Set(rows.map((r) => r.channel));
     return INBOX_CHANNEL_ORDER.filter((channel) => found.has(channel));
@@ -830,10 +851,10 @@ class UnifiedInboxRepository {
    *  - KHÔNG tính hội thoại của tài khoản Zalo đã hết phiên (status <> 'connected') hoặc kết nối kênh đã tắt;
    *  - theo đúng phạm vi tab/tài khoản đang chọn (`channel`, `zaloAccountId`) như danh sách.
    * @param {number} userId
-   * @param {{ channel?: string, zaloAccountId?: string|number }} [scope]
+   * @param {{ channel?: string, zaloAccountId?: string|number, accessibleZaloAccountIds?: number[]|null }} [scope]
    * @returns {Promise<number>}
    */
-  async getUnreadConversationCount(userId, { channel, zaloAccountId } = {}) {
+  async getUnreadConversationCount(userId, { channel, zaloAccountId, accessibleZaloAccountIds } = {}) {
     const params = [userId];
     let paramIndex = 2;
 
@@ -848,6 +869,13 @@ class UnifiedInboxRepository {
     if (Number.isInteger(accountId)) {
       zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
       params.push(accountId);
+      paramIndex++;
+    }
+    // G2: nhân viên chỉ đếm hội thoại của tài khoản Zalo được giao (null = chủ / super admin, không lọc; thiếu = []).
+    const zaloScope = normalizeZaloAccessScope(accessibleZaloAccountIds);
+    if (zaloScope !== null) {
+      zaloAccountIdFilter += ` AND zp.id_zalo_setting = ANY($${paramIndex}::bigint[])`;
+      params.push(zaloScope);
       paramIndex++;
     }
 
@@ -1100,7 +1128,7 @@ class UnifiedInboxRepository {
   /**
    * Get all sent messages (outbox) for a user
    * @param {number} userId
-   * @param {object} filters - { channel, search, startDate, endDate, limit, offset }
+   * @param {object} filters - { channel, search, startDate, endDate, limit, offset, accessibleZaloAccountIds }
    */
   async getOutboxMessages(userId, filters = {}) {
     const { channel, search, startDate, endDate, limit = 20, offset = 0 } = filters;
@@ -1128,6 +1156,8 @@ class UnifiedInboxRepository {
     const channelSearch = withOutboxAliases(searchBuilt.sql, 'cc', 'cm');
     const zaloSearch = withOutboxAliases(searchBuilt.sql, 'zpc', 'zpm');
     const webSearch = withOutboxAliases(searchBuilt.sql, 'wc', 'wm');
+    // G2: nhân viên chỉ thấy tin gửi đi của tài khoản Zalo được giao.
+    const zaloAccess = pushZaloAccessFilter(filters.accessibleZaloAccountIds, 'zpc.id_zalo_setting', params);
 
     const query = `
       WITH outbox_messages AS (
@@ -1183,7 +1213,7 @@ class UnifiedInboxRepository {
         FROM zalo_personal_messages zpm
         JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
         LEFT JOIN zalo_settings zs ON zs.id = zpc.id_zalo_setting
-        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate}
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate} ${zaloAccess}
 
         UNION ALL
 
@@ -1250,6 +1280,7 @@ class UnifiedInboxRepository {
     const channelSearch = withOutboxAliases(searchBuilt.sql, 'cc', 'cm');
     const zaloSearch = withOutboxAliases(searchBuilt.sql, 'zpc', 'zpm');
     const webSearch = withOutboxAliases(searchBuilt.sql, 'wc', 'wm');
+    const zaloAccess = pushZaloAccessFilter(filters.accessibleZaloAccountIds, 'zpc.id_zalo_setting', params);
 
     const query = `
       SELECT COUNT(*) as total FROM (
@@ -1262,7 +1293,7 @@ class UnifiedInboxRepository {
 
         SELECT zpm.id FROM zalo_personal_messages zpm
         JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate}
+        WHERE zpm.id_user = $1 AND zpm.role = 'agent' ${dateBuilt.zaloDate} ${zaloSearch} ${zaloChannelGate} ${zaloAccess}
 
         UNION ALL
 
@@ -1279,7 +1310,9 @@ class UnifiedInboxRepository {
   /**
    * Get outbox statistics by channel
    */
-  async getOutboxStatsByChannel(userId) {
+  async getOutboxStatsByChannel(userId, { accessibleZaloAccountIds } = {}) {
+    const params = [userId];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'zpc.id_zalo_setting', params);
     const { rows } = await db.query(
       `SELECT
         'web' as channel,
@@ -1299,12 +1332,12 @@ class UnifiedInboxRepository {
         (
           SELECT COUNT(*) FROM zalo_personal_messages zpm
           JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-          WHERE zpc.id_user = $1 AND zpm.role = 'agent'
+          WHERE zpc.id_user = $1 AND zpm.role = 'agent' ${zaloAccess}
         ) as total_sent,
         (
           SELECT COUNT(*) FROM zalo_personal_messages zpm
           JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
-          WHERE zpc.id_user = $1 AND zpm.role = 'agent' AND zpm.is_read = true
+          WHERE zpc.id_user = $1 AND zpm.role = 'agent' AND zpm.is_read = true ${zaloAccess}
         ) as total_read
       UNION ALL
       SELECT
@@ -1321,7 +1354,7 @@ class UnifiedInboxRepository {
         ) as total_read
       FROM channel_connections cc
       WHERE cc.id_user = $1`,
-      [userId]
+      params
     );
     return rows;
   }
@@ -1329,7 +1362,7 @@ class UnifiedInboxRepository {
   /**
    * Get a single sent message by ID
    */
-  async getOutboxMessageById(userId, messageId) {
+  async getOutboxMessageById(userId, messageId, { accessibleZaloAccountIds } = {}) {
     // Try channel_messages first
     let { rows } = await db.query(
       `SELECT cm.*, cc.visitor_name, cc.visitor_info, cc.external_id, cc.status as conversation_status,
@@ -1348,7 +1381,10 @@ class UnifiedInboxRepository {
 
     if (rows.length > 0) return rows[0];
 
-    // Try zalo_personal_messages
+    // Try zalo_personal_messages — nhân viên chỉ mở được tin của tài khoản Zalo được giao (G2); id tin của tài khoản khác
+    // không khớp dòng nào và rơi xuống "không tìm thấy" như id không tồn tại.
+    const zaloParams = [messageId, userId];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'zpc.id_zalo_setting', zaloParams);
     ({ rows } = await db.query(
       `SELECT zpm.*, zpc.visitor_name, zpc.visitor_info, zpc.external_id, zpc.status as conversation_status,
               'zalo_personal' as conversation_type, 'zalo_personal' as channel, 
@@ -1361,8 +1397,8 @@ class UnifiedInboxRepository {
        FROM zalo_personal_messages zpm
        JOIN zalo_personal_conversations zpc ON zpc.id = zpm.id_conversation
        LEFT JOIN zalo_settings zs ON zs.id = zpc.id_zalo_setting
-       WHERE zpm.id = $1 AND zpm.id_user = $2 AND zpm.role = 'agent'`,
-      [messageId, userId]
+       WHERE zpm.id = $1 AND zpm.id_user = $2 AND zpm.role = 'agent' ${zaloAccess}`,
+      zaloParams
     ));
 
     if (rows.length > 0) return rows[0];
@@ -1535,6 +1571,7 @@ class UnifiedInboxRepository {
         `SELECT zpm.id, zpm.id_conversation, zpm.id_user, zpm.id_zalo_setting, zpm.role,
                 zpm.content, zpm.attachments, zpm.metadata, zpm.quota_reservation_id,
                 zp.external_id, zp.visitor_info, zp.id_user AS conversation_user_id,
+                zp.id_zalo_setting AS conversation_id_zalo_setting,
                 'zalo_personal' AS channel
          FROM zalo_personal_messages zpm
          JOIN zalo_personal_conversations zp ON zp.id = zpm.id_conversation

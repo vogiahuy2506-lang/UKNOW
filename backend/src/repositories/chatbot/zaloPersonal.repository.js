@@ -4,6 +4,7 @@ import {
   buildZaloGroupExternalIdCandidates,
   normalizeZaloGroupId,
 } from '../../utils/zaloGroupName.util.js';
+import { pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
 
 class ZaloPersonalRepository {
   /**
@@ -208,26 +209,50 @@ class ZaloPersonalRepository {
 
   /**
    * Delete a conversation and its messages.
+   *
+   * Kiểm quyền TRƯỚC khi xoá (G2): bản cũ xoá hết tin theo id hội thoại rồi mới kiểm chủ ở câu xoá hội thoại, nên ai gọi
+   * với id hội thoại của người khác thì tin vẫn mất còn hội thoại thì còn. Nay một giao dịch: khoá dòng hội thoại với
+   * điều kiện chủ (và tài khoản Zalo được giao khi người thao tác là nhân viên) — không khớp thì không xoá gì.
+   *
    * @param {number} conversationId
-   * @param {number} userId
-   * @returns {Promise<boolean>}
+   * @param {number} userId chủ không gian làm việc
+   * @param {{ accessibleZaloAccountIds?: number[]|null }} [scope] null = chủ / super admin (không lọc); mảng = nhân viên; thiếu = chặn
+   * @returns {Promise<boolean>} true nếu đã xoá; false nếu không có / không thuộc chủ / tài khoản chưa được giao
    */
-  async deleteConversation(conversationId, userId) {
+  async deleteConversation(conversationId, userId, { accessibleZaloAccountIds } = {}) {
+    const client = await db.getClient();
     try {
-      // Delete messages first
-      await db.query(
+      await client.query('BEGIN');
+      const params = [conversationId, userId];
+      const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'id_zalo_setting', params);
+      const owned = await client.query(
+        `SELECT id FROM zalo_personal_conversations WHERE id = $1 AND id_user = $2 ${zaloAccess} FOR UPDATE`,
+        params
+      );
+      if (owned.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return false;
+      }
+      await client.query(
         `DELETE FROM zalo_personal_messages WHERE id_conversation = $1`,
         [conversationId]
       );
-      // Delete conversation (verify ownership)
-      const result = await db.query(
-        `DELETE FROM zalo_personal_conversations WHERE id = $1 AND id_user = $2 RETURNING id`,
+      await client.query(
+        `DELETE FROM zalo_personal_conversations WHERE id = $1 AND id_user = $2`,
         [conversationId, userId]
       );
-      return result.rowCount > 0;
+      await client.query('COMMIT');
+      return true;
     } catch (err) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {
+        // ignore rollback errors
+      }
       console.error('[ZaloPersonalRepository] deleteConversation error:', err);
       throw err;
+    } finally {
+      client.release();
     }
   }
 

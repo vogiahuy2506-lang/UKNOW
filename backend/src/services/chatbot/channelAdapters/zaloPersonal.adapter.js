@@ -802,15 +802,16 @@ class ZaloPersonalAdapter {
    * Delete a conversation and its messages.
    * @param {number} userId
    * @param {number|string} conversationId
+   * @param {{ accessibleZaloAccountIds?: number[]|null }} [scope] null = chủ / super admin; mảng = nhân viên; thiếu = chặn
    * @returns {Promise<boolean>}
    */
-  async deleteConversation(userId, conversationId) {
+  async deleteConversation(userId, conversationId, scope = {}) {
     try {
       const convId = parseInt(conversationId);
       if (isNaN(convId)) {
         throw new Error('Invalid conversation ID');
       }
-      return await zaloPersonalRepository.deleteConversation(convId, userId);
+      return await zaloPersonalRepository.deleteConversation(convId, userId, scope);
     } catch (err) {
       console.error('[ZaloPersonalAdapter] deleteConversation error:', err);
       throw err;
