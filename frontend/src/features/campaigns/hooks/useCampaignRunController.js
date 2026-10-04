@@ -1,5 +1,11 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import campaignRunApiService from '../services/campaignRunApi.service';
+import useCampaignEstimate from './useCampaignEstimate';
+import {
+  describeOverlapSuggestions,
+  extractScheduleOverlapError,
+  resolveScheduleEstimateStartAt,
+} from '../utils/campaignEstimate.helpers';
 import {
   fetchCampaignRunDetailAllExecutionLogs,
   getMaxExecutionLogUpdatedAt,
@@ -19,6 +25,7 @@ import {
   isCompletedOnceSchedule,
   isReadonlyOnceSchedule,
   isStoppedOnceSchedule,
+  resolveScheduleNextRunAt,
   scheduleCreationWillActivateCampaign,
 } from '../utils/campaignRunSchedule.helpers';
 
@@ -86,6 +93,8 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
   // vào toast dễ trôi mất — PLAN_DAT_LICH_CHIEN_DICH_NHAP_2026-09-23 mục 6.4. Reset mỗi lần mở/đóng
   // modal hoặc bấm nộp lại để không hiện lỗi cũ đè lên lần thử mới.
   const [scheduleFormError, setScheduleFormError] = useState(null);
+  // Gợi ý (chữ) kèm 409 SCHEDULE_OVERLAP — hiện dưới câu báo lỗi của server trong modal đặt lịch.
+  const [scheduleOverlapSuggestions, setScheduleOverlapSuggestions] = useState([]);
   const [selectedSchedule, setSelectedSchedule] = useState(null);
   const [scheduleRuns, setScheduleRuns] = useState([]);
   const [scheduleForm, setScheduleForm] = useState({
@@ -138,6 +147,42 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
   const isCampaignRunningById = (campaignId) => runningCampaigns.has(getCampaignKey(campaignId));
   const isZaloGroupCampaign = (campaign) =>
     String(campaign?.campaignType || campaign?.campaign_type || '').trim().toLowerCase() === ZALO_GROUP_CAMPAIGN_TYPE;
+
+  // Ước tính thời gian gửi (PLAN_UOC_TINH_THOI_GIAN_CHIEN_DICH_2026-10-04, PR-3). Lỗi tải chỉ hiện câu nhẹ,
+  // không bao giờ chặn nút Chạy / Đặt lịch.
+  const runEstimate = useCampaignEstimate({
+    campaignId: runConfirmCampaign?.id,
+    enabled: showRunConfirmModal && Boolean(runConfirmCampaign?.id),
+    continuous: Boolean(runContinuousMode) && !isZaloGroupCampaign(runConfirmCampaign),
+    debounceMs: 150,
+  });
+  const scheduleEstimateStartAt = useMemo(
+    () => (showScheduleModal
+      ? resolveScheduleEstimateStartAt(scheduleForm, {
+        buildCron: buildCronExpression,
+        resolveNextRunAt: resolveScheduleNextRunAt,
+        buildDelayedRunDate,
+      })
+      : null),
+    // `scheduleForm` đổi mỗi lần gõ; chỉ các trường quyết định giờ nổ mới tính lại.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      showScheduleModal,
+      scheduleForm.scheduleType,
+      scheduleForm.scheduleDate,
+      scheduleForm.scheduleTime,
+      scheduleForm.weeklyDay,
+      scheduleForm.customIntervalDays,
+      scheduleForm.delayValue,
+      scheduleForm.delayUnit,
+    ],
+  );
+  const scheduleEstimate = useCampaignEstimate({
+    campaignId: selectedCampaign?.id,
+    enabled: showScheduleModal && Boolean(selectedCampaign?.id) && Boolean(scheduleEstimateStartAt),
+    startAt: scheduleEstimateStartAt,
+    debounceMs: 500,
+  });
 
   /**
    * Load campaign flow and build node order map from graph connections.
@@ -604,6 +649,7 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
       enabled: true,
     });
     setScheduleFormError(null);
+    setScheduleOverlapSuggestions([]);
     setShowScheduleModal(true);
   };
 
@@ -611,10 +657,12 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
     setShowScheduleModal(false);
     setSelectedCampaign(null);
     setScheduleFormError(null);
+    setScheduleOverlapSuggestions([]);
   };
 
   const handleSaveSchedule = async () => {
     setScheduleFormError(null);
+    setScheduleOverlapSuggestions([]);
     if (selectedCampaign?.id && isCampaignRunningById(selectedCampaign.id)) {
       toast.error(t('campaigns.runningBlockSchedule'));
       return;
@@ -699,7 +747,10 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
       // Ưu tiên câu của server (vd 409 CAMPAIGN_NOT_ACTIVE / CANNOT_ACTIVATE_EMPTY_CAMPAIGN nói đúng
       // việc phải làm) — trước đây bị nuốt. Hiện cả toast lẫn NGAY TRONG modal (đừng đóng modal mất
       // dữ liệu đã nhập — plan mục 6.4), vì toast có thể trôi mất trước khi người dùng đọc kịp.
+      // 409 SCHEDULE_OVERLAP: câu của server (đã nêu giờ chạy / giờ xong dự kiến / giờ lịch kế tiếp) + 3 gợi ý bằng chữ.
+      const overlap = extractScheduleOverlapError(error);
       const message = error?.response?.data?.message || t('campaigns.createScheduleFailed');
+      setScheduleOverlapSuggestions(overlap ? describeOverlapSuggestions(overlap.suggestions, t) : []);
       setScheduleFormError(message);
       toast.error(message, { duration: 6000 });
     }
@@ -857,6 +908,9 @@ export default function useCampaignRunController({ onCampaignsChanged, onCampaig
     scheduleForm,
     setScheduleForm,
     scheduleFormError,
+    scheduleOverlapSuggestions,
+    runEstimate,
+    scheduleEstimate,
     showScheduleModal,
     showScheduleDetailModal,
     selectedRunDetail,

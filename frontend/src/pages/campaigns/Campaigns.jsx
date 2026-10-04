@@ -1437,6 +1437,9 @@ const Campaigns = () => {
         scheduleForm={runController.scheduleForm}
         setScheduleForm={runController.setScheduleForm}
         scheduleFormError={runController.scheduleFormError}
+        scheduleOverlapSuggestions={runController.scheduleOverlapSuggestions}
+        runEstimate={runController.runEstimate}
+        scheduleEstimate={runController.scheduleEstimate}
         handleSaveSchedule={runController.handleSaveSchedule}
         showScheduleDetailModal={runController.showScheduleDetailModal}
         selectedSchedule={runController.selectedSchedule}

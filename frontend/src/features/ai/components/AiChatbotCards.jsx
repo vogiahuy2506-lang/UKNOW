@@ -12,6 +12,7 @@ import templateLabelApiService from '../../templates/services/templateLabelApi.s
 import { getSafeLinkUrl } from '../../../utils/safeUrl.util';
 import { foldDiacritics } from '../utils/foldDiacritics.js';
 import { describeAudienceFilter } from '../utils/audienceFilter.js';
+import CampaignEstimatePanel from '../../campaigns/components/CampaignEstimatePanel';
 import { isValidGoogleSheetUrl } from '../utils/googleSheetUrl.js';
 import {
   isOtherProductDescriptionValid,
@@ -2149,6 +2150,10 @@ export const ConfirmCreateCard = ({ confirmationView, onConfirm, onConfirmAndRun
               return <div key={step.key} className="rounded-lg border border-emerald-100 bg-white/75 p-3"><div className="flex items-start gap-2"><div className="w-5 h-5 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-[10px] font-bold shrink-0">{index + 1}</div><div className="min-w-0 flex-1"><p className="text-xs font-bold text-slate-800 break-words">{step.title}</p><p className="text-[10px] text-slate-500">{previewChannelLabel(step.channel, locale)} · {formatPreviewTiming(step.timing, locale)}</p>{step.sender?.label && <p className="text-[10px] text-slate-500">{locale === 'en' ? 'Sender' : 'Tài khoản gửi'}: {step.sender.label}</p>}{step.recipients?.sourceLabel && <p className="text-[10px] text-slate-500">{locale === 'en' ? 'Recipients' : 'Người nhận'}: {step.recipients.sourceLabel}</p>}{step.recipients?.filters && describeAudienceFilter(step.recipients.filters, t) && <p className="text-[10px] font-semibold text-amber-700 break-words">{t('aiChatbot.confirmation.audienceFilterLabel')}: {describeAudienceFilter(step.recipients.filters, t)}</p>}{step.content?.subject && <p className="mt-2 text-xs font-semibold text-slate-700 break-words">{step.content.subject}</p>}<p className={`mt-1 whitespace-pre-wrap break-words text-xs text-slate-600 ${expanded ? '' : 'line-clamp-3'}`}>{step.content?.bodyText || (locale === 'en' ? 'No message body' : 'Chưa có nội dung tin')}</p>{step.content?.bodyText && <button onClick={() => toggleStep(step.key)} className="mt-1 text-[10px] font-bold text-emerald-700">{expanded ? (locale === 'en' ? 'Collapse' : 'Thu gọn') : (locale === 'en' ? 'Show more' : 'Xem thêm')}</button>}{step.content?.attachments?.length > 0 && <p className="mt-1 text-[10px] text-slate-500">{locale === 'en' ? 'Attachments' : 'Tệp đính kèm'}: {step.content.attachments.map((file) => file.name || file.contentType).filter(Boolean).join(', ')}</p>}</div></div></div>;
             })}
           </div>
+          {/* Ước tính thời gian gửi do server tính (PR-2); thiếu / null / lỗi → không hiện gì, thẻ không vỡ. */}
+          {confirmationView.estimate && typeof confirmationView.estimate === 'object' && (
+            <CampaignEstimatePanel status="ready" estimate={confirmationView.estimate} t={t} />
+          )}
         </>}
         {!isActive && <p className="text-xs text-slate-500">{locale === 'en' ? 'This is an earlier confirmation and is read-only.' : 'Đây là bản xác nhận cũ, chỉ để xem.'}</p>}
       </div>

@@ -5,6 +5,7 @@ import {
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import FullScreenOverlay from '../../../components/FullScreenOverlay';
+import CampaignEstimatePanel from './CampaignEstimatePanel';
 import {
   formatCampaignDateTime,
   getTodayDateInHanoiForInput,
@@ -74,6 +75,9 @@ const CampaignRunModals = ({
   scheduleForm,
   setScheduleForm,
   scheduleFormError = null,
+  scheduleOverlapSuggestions = [],
+  runEstimate = null,
+  scheduleEstimate = null,
   handleSaveSchedule,
   showScheduleDetailModal,
   selectedSchedule,
@@ -96,14 +100,14 @@ const CampaignRunModals = ({
     <>
     {showRunConfirmModal && (
       <FullScreenOverlay isOpen={showRunConfirmModal}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 max-h-[90vh] flex flex-col">
           <div className="flex items-center justify-between p-6 border-b">
             <h3 className="text-lg font-semibold text-gray-900">{t('campaignRunModals.confirmRunCampaign')}</h3>
             <button onClick={closeRunConfirmModal} className="p-1 hover:bg-gray-100 rounded-lg">
               <HiOutlineX className="w-5 h-5" />
             </button>
           </div>
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-4 min-h-0 flex-1 overflow-y-auto">
             <p className="text-sm text-gray-600">
               {t('campaignRunModals.aboutToRunCampaign')} <span className="font-semibold text-gray-900">{runConfirmCampaign?.campaignName}</span>.
             </p>
@@ -201,6 +205,7 @@ const CampaignRunModals = ({
                 )}
               </div>
             )}
+            {runEstimate && <CampaignEstimatePanel status={runEstimate.status} estimate={runEstimate.estimate} t={t} />}
           </div>
           <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
             <button onClick={closeRunConfirmModal} className="btn btn-secondary" disabled={isSubmittingRun}>
@@ -265,7 +270,7 @@ const CampaignRunModals = ({
 
     {showScheduleModal && (
       <FullScreenOverlay isOpen={showScheduleModal}>
-        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4">
+        <div className="bg-white rounded-xl shadow-xl w-full max-w-2xl mx-4 max-h-[90vh] flex flex-col">
           <div className="flex items-center justify-between p-6 border-b">
             <h3 className="text-lg font-semibold text-gray-900">
               {t('campaignRunModals.setupSchedule')} - {selectedCampaign?.campaignName}
@@ -275,7 +280,7 @@ const CampaignRunModals = ({
             </button>
           </div>
 
-          <div className="p-6 space-y-4">
+          <div className="p-6 space-y-4 min-h-0 flex-1 overflow-y-auto">
             {scheduleCreationWillActivateCampaign(selectedCampaign?.status, scheduleForm.enabled) && (
               <div className="rounded-lg bg-blue-50 border border-blue-200 text-blue-800 text-sm px-4 py-3">
                 {buildScheduleActivateCampaignNotice(selectedCampaign?.status, t)}
@@ -283,7 +288,14 @@ const CampaignRunModals = ({
             )}
             {scheduleFormError && (
               <div className="rounded-lg bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3">
-                {scheduleFormError}
+                <p>{scheduleFormError}</p>
+                {scheduleOverlapSuggestions.length > 0 && (
+                  <ul className="mt-2 list-disc pl-5 space-y-0.5" data-testid="schedule-overlap-suggestions">
+                    {scheduleOverlapSuggestions.map((suggestion) => (
+                      <li key={suggestion}>{suggestion}</li>
+                    ))}
+                  </ul>
+                )}
               </div>
             )}
             <div>
@@ -439,6 +451,7 @@ const CampaignRunModals = ({
                 {t('campaignRunModals.enableSchedule')}
               </label>
             </div>
+            {scheduleEstimate && <CampaignEstimatePanel status={scheduleEstimate.status} estimate={scheduleEstimate.estimate} t={t} />}
           </div>
 
           <div className="flex justify-end gap-3 p-6 border-t bg-gray-50 rounded-b-xl">
