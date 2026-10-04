@@ -26,8 +26,14 @@ const getRequestKey = (config) => {
   return `${config.method || 'GET'}:${config.url}:${JSON.stringify(config.params || {})}`;
 };
 
-const cleanupRequest = (key) => {
-  pendingRequests.delete(key);
+// Chỉ xoá khoá khi nó CÒN trỏ tới đúng lượt đang dọn. Lượt cũ bị lượt mới huỷ cũng đi qua đây (response
+// interceptor nhận CanceledError): lúc đó khoá đã trỏ sang controller của lượt MỚI — xoá luôn thì lượt thứ ba
+// cùng khoá không còn thấy lượt thứ hai để huỷ.
+const cleanupRequest = (config) => {
+  const key = getRequestKey(config);
+  if (pendingRequests.get(key)?.signal === config.signal) {
+    pendingRequests.delete(key);
+  }
 };
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -39,6 +45,14 @@ const UPLOAD_TIMEOUT_MS = 5 * 60 * 1000;
 // lên server, giao diện báo "Tải tệp lên thất bại" (sếp đính kèm ảnh + PDF + DOCX 14/09).
 const isUploadRequest = (config) =>
   typeof FormData !== 'undefined' && config?.data instanceof FormData;
+
+// Chỉ lệnh ĐỌC (GET) mới khử trùng: bỏ lượt cũ vì lượt mới sẽ trả kết quả mới hơn. Lệnh GHI (POST/PUT/PATCH/
+// DELETE) khoá cũng không có body, nên hai lệnh cùng URL khác nội dung (Promise.all lưu nhiều mục, hai thao tác
+// liền nhau) bị lượt sau huỷ lượt trước — người gọi nhận CanceledError dù server có thể đã xử lý. Huỷ phía
+// client cũng không chống được bấm-đúp, nên với lệnh ghi nó chỉ có hại. axios hạ method về chữ thường;
+// thiếu method = get.
+const isDedupableRequest = (config) =>
+  String(config?.method || 'get').toLowerCase() === 'get';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -140,6 +154,8 @@ api.interceptors.request.use(
   (config) => {
     if (isUploadRequest(config)) {
       if (config.timeout === DEFAULT_TIMEOUT_MS) config.timeout = UPLOAD_TIMEOUT_MS;
+    } else if (!isDedupableRequest(config)) {
+      // Lệnh ghi đi thẳng: không đăng ký vào pendingRequests, không gắn signal của interceptor.
     } else if (config.signal && !dedupeOwnedSignals.has(config.signal)) {
       // (Signal do CHÍNH interceptor tạo — config được thử lại sau 401 — không tính: vẫn khử trùng như thường.)
       // Người gọi tự quản việc huỷ (vd modal huỷ khi đóng). Trước đây dòng `config.signal = controller.signal`
@@ -189,14 +205,14 @@ api.interceptors.response.use(
   (response) => {
     // Clean up pending request on success (upload không đăng ký nên không xoá nhầm lượt khác cùng khoá)
     if (dedupeOwnedSignals.has(response.config?.signal)) {
-      cleanupRequest(getRequestKey(response.config));
+      cleanupRequest(response.config);
     }
     return response;
   },
   async (error) => {
     // Clean up pending request on error
     if (error.config && dedupeOwnedSignals.has(error.config.signal)) {
-      cleanupRequest(getRequestKey(error.config));
+      cleanupRequest(error.config);
     }
 
     // Map server message và storage error codes vào Error.message để toast/UI hiện câu tiếng Việt rõ nghĩa
