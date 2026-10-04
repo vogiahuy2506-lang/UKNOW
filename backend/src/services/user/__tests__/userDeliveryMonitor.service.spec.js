@@ -305,6 +305,30 @@ describe('getUserDeliveryMonitorOverview — waiting / running / signals', () =>
     expect(signals[0]).toMatchObject({ code: 'zalo_silent_drop_high', accountId: 11, level: 'critical', value: 50 });
   });
 
+  // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ thấy tín hiệu của tài khoản Zalo được giao.
+  describe('lọc tín hiệu theo tài khoản được giao (G3)', () => {
+    it('nhân viên: truy vấn mang accountScoped + tham số $2 = danh sách được giao; chủ tài khoản vẫn là $1', async () => {
+      await service.getUserDeliveryMonitorOverview({ userId: 39, accessibleZaloAccountIds: [11, 13] });
+      expect(safeQuery.mock.calls[0][1]).toEqual([39, [11, 13]]);
+      expect(safeQuery.mock.calls[0][0]).toContain('c.id_user = $1');
+      expect(safeQuery.mock.calls[0][0]).toContain('zm.account_id = ANY($2::bigint[])');
+    });
+
+    it('nhân viên chưa được giao gì: truy vấn vẫn có lọc với mảng RỖNG (không phải bản không lọc)', async () => {
+      await service.getUserDeliveryMonitorOverview({ userId: 39, accessibleZaloAccountIds: [] });
+      expect(safeQuery.mock.calls[0][1]).toEqual([39, []]);
+      expect(safeQuery.mock.calls[0][0]).toContain('zm.account_id = ANY($2::bigint[])');
+    });
+
+    it('CHỦ (null) và người gọi cũ (bỏ trống): không lọc tài khoản, tham số chỉ [chủ]', async () => {
+      await service.getUserDeliveryMonitorOverview({ userId: 39, accessibleZaloAccountIds: null });
+      expect(safeQuery.mock.calls[0][1]).toEqual([39]);
+      expect(safeQuery.mock.calls[0][0]).not.toContain('ANY($2');
+      await service.getUserDeliveryMonitorOverview({ userId: 39 });
+      expect(safeQuery.mock.calls[1][1]).toEqual([39]);
+    });
+  });
+
   it('generatedAt là giờ của phản hồi (ISO)', async () => {
     const data = await service.getUserDeliveryMonitorOverview({ userId: 39 });
     expect(data.generatedAt).toBe(NOW.toISOString());

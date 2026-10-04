@@ -153,7 +153,7 @@ describe('S-12 — 1 tài khoản Zalo = 1 chatbot (chặn ở đường bật)'
     await chatbotController.toggleZaloAccountChatbot(toggleReq({ enabled: true, id_chatbot: 12 }), res);
 
     expect(res.statusCode).toBe(200);
-    expect(mockSetEnabled).toHaveBeenCalledWith(7, 34, 12, true);
+    expect(mockSetEnabled).toHaveBeenCalledWith(7, 34, 12, true, { accessibleZaloIds: null });
     expect(mockInvalidateAccountCache).toHaveBeenCalled();
   });
 
@@ -165,7 +165,7 @@ describe('S-12 — 1 tài khoản Zalo = 1 chatbot (chặn ở đường bật)'
 
     expect(res.statusCode).toBe(200);
     expect(mockFindOtherEnabledChatbot).not.toHaveBeenCalled();
-    expect(mockSetEnabled).toHaveBeenCalledWith(7, 34, 12, false);
+    expect(mockSetEnabled).toHaveBeenCalledWith(7, 34, 12, false, { accessibleZaloIds: null });
   });
 
   it('dòng mặc định (id_chatbot rỗng) không phải một chatbot → không tra bot đang giữ', async () => {
@@ -174,6 +174,6 @@ describe('S-12 — 1 tài khoản Zalo = 1 chatbot (chặn ở đường bật)'
 
     expect(res.statusCode).toBe(200);
     expect(mockFindOtherEnabledChatbot).not.toHaveBeenCalled();
-    expect(mockSetEnabled).toHaveBeenCalledWith(7, 34, null, true);
+    expect(mockSetEnabled).toHaveBeenCalledWith(7, 34, null, true, { accessibleZaloIds: null });
   });
 });

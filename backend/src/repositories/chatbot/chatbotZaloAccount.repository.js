@@ -1,11 +1,19 @@
 import db from '../../config/database.js';
 
 class ChatbotZaloAccountRepository {
+  /**
+   * @param {number} userId chủ không gian
+   * @param {number} zaloSettingId
+   * @param {{ id_chatbot?: number|null, id_sub_assistant?: number|null, accessibleZaloIds?: number[]|null }} [data]
+   *   `accessibleZaloIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): null / bỏ trống = chủ (không lọc); mảng = chỉ các tài
+   *   khoản nhân viên ĐƯỢC GIAO (rỗng = không tài khoản nào) — tài khoản ngoài danh sách báo 404 như tài khoản không có thật.
+   */
   async assertOwnedConfiguration(userId, zaloSettingId, data = {}) {
     const { rows } = await db.query(
       `SELECT 1
        FROM zalo_settings zs
        WHERE zs.id = $1 AND zs.id_user = $2 AND zs.is_active = true
+         AND ($5::bigint[] IS NULL OR zs.id = ANY($5::bigint[]))
          AND ($3::bigint IS NULL OR EXISTS (
            SELECT 1 FROM custom_chatbots cb
            WHERE cb.id = $3 AND cb.id_user = $2 AND cb.is_active = true
@@ -14,7 +22,7 @@ class ChatbotZaloAccountRepository {
            SELECT 1 FROM sub_assistants sa
            WHERE sa.id = $4 AND sa.id_user = $2 AND sa.is_active = true
          ))`,
-      [zaloSettingId, userId, data.id_chatbot || null, data.id_sub_assistant || null]
+      [zaloSettingId, userId, data.id_chatbot || null, data.id_sub_assistant || null, data.accessibleZaloIds ?? null]
     );
     if (!rows[0]) {
       const error = new Error('Không tìm thấy tài khoản Zalo hoặc cấu hình chatbot trong không gian làm việc');
@@ -99,8 +107,10 @@ class ChatbotZaloAccountRepository {
    * @param {number|null} [chatbotId] - If provided, the chatbot_enabled flag reflects
    *   the row matching this chatbot. If omitted/null, the flag reflects the most
    *   recently updated row for that (user, zalo) pair (legacy behavior).
+   * @param {number[]|null} [accessibleZaloIds] - PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3: null = chủ (mọi tài khoản);
+   *   mảng = chỉ các tài khoản nhân viên ĐƯỢC GIAO (rỗng = danh sách trống).
    */
-  async listAccountsForUser(userId, chatbotId = null) {
+  async listAccountsForUser(userId, chatbotId = null, accessibleZaloIds = null) {
     // When chatbotId is given, only LEFT JOIN the matching row for that chatbot.
     // Otherwise use a subquery to pick the most recent row per (user, zalo), so
     // a zalo linked to multiple chatbots shows ONE consistent state.
@@ -154,8 +164,9 @@ class ChatbotZaloAccountRepository {
               ON cb.id = czs.id_chatbot AND cb.id_user = zs.id_user AND cb.is_active = true
        ${otherChatbotJoin}
        WHERE zs.id_user = $1 AND zs.is_active = true
+         AND ($${chatbotId == null ? 2 : 3}::bigint[] IS NULL OR zs.id = ANY($${chatbotId == null ? 2 : 3}::bigint[]))
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
-      chatbotId == null ? [userId] : [userId, chatbotId]
+      chatbotId == null ? [userId, accessibleZaloIds] : [userId, chatbotId, accessibleZaloIds]
     );
     return rows;
   }
@@ -177,10 +188,11 @@ class ChatbotZaloAccountRepository {
    * @param {number|null} idChatbot - chatbot the row belongs to. Pass null for the
    *   "default" row that is not yet linked to any specific chatbot.
    * @param {boolean} enabled
+   * @param {{ accessibleZaloIds?: number[]|null }} [options] PR-G3: tài khoản nhân viên được giao (xem assertOwnedConfiguration)
    * @returns {Promise<object>}
    */
-  async setEnabled(userId, zaloSettingId, idChatbot, enabled) {
-    await this.assertOwnedConfiguration(userId, zaloSettingId, { id_chatbot: idChatbot });
+  async setEnabled(userId, zaloSettingId, idChatbot, enabled, { accessibleZaloIds = null } = {}) {
+    await this.assertOwnedConfiguration(userId, zaloSettingId, { id_chatbot: idChatbot, accessibleZaloIds });
     const { rows } = await db.query(
       `INSERT INTO chatbot_zalo_account_settings
          (id_user, id_zalo_setting, id_chatbot, is_enabled)

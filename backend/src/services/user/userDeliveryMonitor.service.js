@@ -82,13 +82,18 @@ async function loadRecentRuns(scope, ownerId) {
  *   running: number,
  *   signals: Array<object>
  * }>}
+ *
+ * `accessibleZaloAccountIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): null / bỏ trống = chủ (mọi tài khoản); mảng = nhân
+ * viên — tín hiệu "Zalo gửi mà không tới" (gộp theo tài khoản, kèm tên) chỉ gồm tài khoản ĐƯỢC GIAO; mảng rỗng = không tín hiệu
+ * nào. Các con số theo kênh / theo lượt chạy là của CHIẾN DỊCH (không mang danh tính tài khoản) nên giữ nguyên.
  */
-export async function getUserDeliveryMonitorOverview({ userId } = {}) {
+export async function getUserDeliveryMonitorOverview({ userId, accessibleZaloAccountIds = null } = {}) {
   const ownerId = toPositiveInt(userId);
   if (ownerId == null) {
     throw new TypeError('userDeliveryMonitor: userId phải là số nguyên dương (chủ tài khoản)');
   }
   const scope = { ownerId };
+  const accountScoped = Array.isArray(accessibleZaloAccountIds);
   const now = new Date();
   const nowMs = now.getTime();
   const today = getVnToday(now);
@@ -99,7 +104,11 @@ export async function getUserDeliveryMonitorOverview({ userId } = {}) {
     loadRecentRuns(scope, ownerId),
     userDeliveryMonitorRepository.listRunningRuns({ ownerId }),
     // Tín hiệu "Zalo gửi mà không tới" giữ nguyên như trước (một truy vấn 1 giờ gần nhất theo tài khoản Zalo).
-    deliveryMonitorRepository.safeQuery(buildZaloSilentDropHourlySql({ userScoped: true }), [ownerId], []),
+    deliveryMonitorRepository.safeQuery(
+      buildZaloSilentDropHourlySql({ userScoped: true, accountScoped }),
+      accountScoped ? [ownerId, accessibleZaloAccountIds] : [ownerId],
+      []
+    ),
   ]);
 
   const totalsByRun = new Map();

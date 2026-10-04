@@ -121,7 +121,7 @@ describe('chatbotZaloAccount.repository.listAccountsForUser', () => {
 
     const [sql, params] = query.mock.calls[0];
     expect(String(sql)).toMatch(/FROM\s+zalo_settings\s+zs/i);
-    expect(params).toEqual([1]);
+    expect(params).toEqual([1, null]); // PR-G3: tham số 2 = tài khoản được giao (null = chủ)
   });
 
   it('when chatbotId is passed, scopes LEFT JOIN to that chatbot', async () => {
@@ -142,7 +142,7 @@ describe('chatbotZaloAccount.repository.listAccountsForUser', () => {
     expect(String(sql)).toMatch(/LEFT JOIN chatbot_zalo_account_settings\s+czs/i);
     expect(String(sql)).toMatch(/czs\.id_chatbot\s*=\s*\$2/i);
     expect(String(sql)).not.toMatch(/LEFT JOIN LATERAL/i);
-    expect(params).toEqual([1, 5]);
+    expect(params).toEqual([1, 5, null]);
   });
 
   it('when chatbotId is omitted, falls back to LATERAL most-recent-row (legacy behavior)', async () => {
@@ -152,7 +152,7 @@ describe('chatbotZaloAccount.repository.listAccountsForUser', () => {
 
     const [sql, params] = query.mock.calls[0];
     expect(String(sql)).toMatch(/LEFT JOIN LATERAL/i);
-    expect(params).toEqual([1]);
+    expect(params).toEqual([1, null]);
   });
 });
 
@@ -299,7 +299,7 @@ describe('chatbotZaloAccount.repository.listAccountsForUser — chatbot khác đ
     expect(String(sql)).toMatch(/other_chatbot_name/);
     expect(String(sql)).toMatch(/o\.is_enabled\s*=\s*true/i);
     expect(String(sql)).toMatch(/o\.id_chatbot\s*<>\s*\$2/i);
-    expect(params).toEqual([1, 12]);
+    expect(params).toEqual([1, 12, null]);
   });
 
   it('không có chatbotId (tra cũ) → KHÔNG thêm cột other_* và không đổi tham số', async () => {
@@ -309,6 +309,63 @@ describe('chatbotZaloAccount.repository.listAccountsForUser — chatbot khác đ
 
     const [sql, params] = query.mock.calls[0];
     expect(String(sql)).not.toMatch(/other_chatbot/);
-    expect(params).toEqual([1]);
+    expect(params).toEqual([1, null]);
+  });
+});
+
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — Studio: tài khoản Zalo cá nhân chỉ trong phạm vi được giao cho nhân viên.
+describe('chatbotZaloAccount.repository — tài khoản được giao (G3)', () => {
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  it('assertOwnedConfiguration: tham số 5 = danh sách được giao, điều kiện zs.id = ANY nằm trong truy vấn kiểm sở hữu', async () => {
+    query.mockResolvedValueOnce({ rows: [{ '?column?': 1 }] });
+    await repository.assertOwnedConfiguration(1, 10, { id_chatbot: 5, accessibleZaloIds: [10, 11] });
+    const [sql, params] = query.mock.calls[0];
+    expect(String(sql)).toMatch(/\$5::bigint\[\] IS NULL OR zs\.id = ANY\(\$5::bigint\[\]\)/);
+    expect(params).toEqual([10, 1, 5, null, [10, 11]]);
+  });
+
+  it('assertOwnedConfiguration: tài khoản NGOÀI danh sách được giao → 404 (như tài khoản không có thật), DB trả rỗng', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    await expect(repository.assertOwnedConfiguration(1, 12, { accessibleZaloIds: [10] }))
+      .rejects.toMatchObject({ status: 404 });
+  });
+
+  it('assertOwnedConfiguration: CHỦ (bỏ trống / null) → tham số 5 là null = không lọc; mảng rỗng KHÔNG bị đổi thành null', async () => {
+    query.mockResolvedValue({ rows: [{ '?column?': 1 }] });
+    await repository.assertOwnedConfiguration(1, 10, {});
+    expect(query.mock.calls[0][1][4]).toBeNull();
+    await repository.assertOwnedConfiguration(1, 10, { accessibleZaloIds: null });
+    expect(query.mock.calls[1][1][4]).toBeNull();
+    await repository.assertOwnedConfiguration(1, 10, { accessibleZaloIds: [] });
+    expect(query.mock.calls[2][1][4]).toEqual([]);
+  });
+
+  it('setEnabled chuyển accessibleZaloIds xuống kiểm sở hữu; bỏ trống = chủ', async () => {
+    query.mockResolvedValue({ rows: [{ id: 1 }] });
+    await repository.setEnabled(1, 10, 5, true, { accessibleZaloIds: [10] });
+    expect(query.mock.calls[0][1]).toEqual([10, 1, 5, null, [10]]);
+    query.mockClear();
+    await repository.setEnabled(1, 10, 5, true);
+    expect(query.mock.calls[0][1]).toEqual([10, 1, 5, null, null]);
+  });
+
+  it('listAccountsForUser: có chatbotId → tham số 3 là danh sách được giao; không có → tham số 2; điều kiện lọc nằm trong WHERE', async () => {
+    query.mockResolvedValue({ rows: [] });
+    await repository.listAccountsForUser(1, 5, [10, 11]);
+    expect(query.mock.calls[0][1]).toEqual([1, 5, [10, 11]]);
+    expect(String(query.mock.calls[0][0])).toMatch(/\$3::bigint\[\] IS NULL OR zs\.id = ANY\(\$3::bigint\[\]\)/);
+
+    await repository.listAccountsForUser(1, null, []);
+    expect(query.mock.calls[1][1]).toEqual([1, []]);
+    expect(String(query.mock.calls[1][0])).toMatch(/\$2::bigint\[\] IS NULL OR zs\.id = ANY\(\$2::bigint\[\]\)/);
+  });
+
+  it('listAccountsForUser: CHỦ → null (không lọc)', async () => {
+    query.mockResolvedValue({ rows: [] });
+    await repository.listAccountsForUser(1, null, null);
+    expect(query.mock.calls[0][1]).toEqual([1, null]);
   });
 });

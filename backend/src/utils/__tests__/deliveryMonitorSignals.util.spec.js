@@ -62,6 +62,17 @@ describe('buildZaloSilentDropHourlySql', () => {
     const userSql = buildZaloSilentDropHourlySql({ userScoped: true });
     expect(userSql).toMatch(/c\.id_user = \$1/);
     expect(userSql).toMatch(/JOIN campaigns/);
+    // Chủ: không lọc tài khoản.
+    expect(userSql).not.toMatch(/ANY\(\$2/);
+  });
+
+  // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ thấy tín hiệu của tài khoản được giao.
+  it('accountScoped (nhân viên): thêm zm.account_id = ANY($2) cạnh lọc chủ; chỉ có nghĩa khi userScoped', () => {
+    const scoped = buildZaloSilentDropHourlySql({ userScoped: true, accountScoped: true });
+    expect(scoped).toMatch(/c\.id_user = \$1/);
+    expect(scoped).toMatch(/AND zm\.account_id = ANY\(\$2::bigint\[\]\)/);
+    // Bản admin (không userScoped) không có $2 — cờ accountScoped bị bỏ qua để không sinh SQL thiếu tham số.
+    expect(buildZaloSilentDropHourlySql({ accountScoped: true })).not.toMatch(/\$2/);
   });
 });
 

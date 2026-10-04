@@ -38,6 +38,13 @@ import { normalizeChatbotActiveHours } from '../utils/chatbotActiveHours.util.js
 import chatbotActiveHoursService from '../services/chatbot/chatbotActiveHours.service.js';
 import { consumeWidgetUploadBytes } from '../services/storage/widgetUploadCap.service.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import {
+  getAccessibleZaloAccountIds,
+  isZaloAccountAccessible,
+  ZALO_ACCOUNT_NOT_ASSIGNED_CODE,
+  ZALO_ACCOUNT_NOT_ASSIGNED_MESSAGE,
+} from '../services/user/memberChannelAccess.service.js';
 import {
   AUDIT_ACTIONS,
   AUDIT_ENTITY_TYPES,
@@ -648,6 +655,17 @@ class ChatbotController {
         return res.status(400).json({ success: false, message: 'enabled must be a boolean' });
       }
       const ownerUserId = resolveWorkspaceOwnerId(req.user);
+      // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ bật / tắt chatbot cho tài khoản Zalo ĐƯỢC GIAO. Kiểm TRƯỚC
+      // mọi truy vấn (kể cả `findOtherEnabledChatbot` — câu 409 nêu tên chatbot đang giữ tài khoản, không được lộ cho người chưa
+      // được giao). Chủ / super admin → null = qua; lỗi đọc việc giao → [] = chặn. Tài khoản không tồn tại cũng cùng một 403.
+      const accessibleZaloIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+      if (!isZaloAccountAccessible(zaloSettingId, accessibleZaloIds)) {
+        return res.status(403).json({
+          success: false,
+          code: ZALO_ACCOUNT_NOT_ASSIGNED_CODE,
+          message: ZALO_ACCOUNT_NOT_ASSIGNED_MESSAGE,
+        });
+      }
       // id_chatbot may be null/undefined — fall back to NULL row.
       const normalizedChatbotId = id_chatbot == null || id_chatbot === ''
         ? null
@@ -672,7 +690,7 @@ class ChatbotController {
         }
       }
       const settings = await chatbotZaloAccountRepository.setEnabled(
-        ownerUserId, zaloSettingId, normalizedChatbotId, enabled
+        ownerUserId, zaloSettingId, normalizedChatbotId, enabled, { accessibleZaloIds }
       );
 
       // Invalidate cache to apply toggle immediately
@@ -702,7 +720,9 @@ class ChatbotController {
       if (chatbotId != null && !Number.isFinite(chatbotId)) {
         return res.status(400).json({ success: false, message: 'chatbot_id must be a number or empty' });
       }
-      const accounts = await chatbotZaloAccountRepository.listAccountsForUser(resolveWorkspaceOwnerId(req.user), chatbotId);
+      // PR-G3: nhân viên chỉ thấy tài khoản Zalo được giao (chủ / super admin: null = tất cả; lỗi đọc việc giao → [] = trống).
+      const accessibleZaloIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+      const accounts = await chatbotZaloAccountRepository.listAccountsForUser(resolveWorkspaceOwnerId(req.user), chatbotId, accessibleZaloIds);
       return res.json({ success: true, data: accounts });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });

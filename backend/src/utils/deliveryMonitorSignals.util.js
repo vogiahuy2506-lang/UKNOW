@@ -85,12 +85,15 @@ export function classifyDeliveryMonitorFailure(message = '') {
  * Dùng qua safeQuery: migration 135 + bootstrap bảo đảm cột; 42703 vẫn
  * được nuốt để overview không 500 nếu môi trường chưa kịp migrate.
  *
- * @param {{ userScoped?: boolean }} [options]
+ * @param {{ userScoped?: boolean, accountScoped?: boolean }} [options] `accountScoped` (chỉ có nghĩa khi `userScoped`; PLAN_GIAO_TAI_
+ *   KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): thêm `zm.account_id = ANY($2)` — tham số $2 là mảng id tài khoản Zalo nhân viên ĐƯỢC GIAO,
+ *   để tín hiệu theo tài khoản (tên + id) không lộ tài khoản chưa giao.
  * @returns {string}
  */
-export function buildZaloSilentDropHourlySql({ userScoped = false } = {}) {
+export function buildZaloSilentDropHourlySql({ userScoped = false, accountScoped = false } = {}) {
   const userJoin = userScoped ? 'JOIN campaigns c ON c.id = zm.id_campaign' : '';
   const userWhere = userScoped ? 'AND c.id_user = $1' : '';
+  const accountWhere = userScoped && accountScoped ? 'AND zm.account_id = ANY($2::bigint[])' : '';
   return `
     SELECT
       zm.account_id,
@@ -105,6 +108,7 @@ export function buildZaloSilentDropHourlySql({ userScoped = false } = {}) {
       AND zm.account_id IS NOT NULL
       AND NOT zm.is_preview
       ${userWhere}
+      ${accountWhere}
       AND (
         LOWER(COALESCE(zm.tracking_metadata->>'status', zm.status::text, ''))
           IN (${TERMINAL_ZALO_STATUSES})
