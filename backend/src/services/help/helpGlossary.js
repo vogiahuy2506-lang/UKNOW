@@ -31,7 +31,7 @@ export const HELP_UI_GLOSSARY = [
   ['Đăng bán trên Marketplace', 'Sell on Marketplace'],
   ['Cuộc trò chuyện mới', 'New conversation'],
   ['Lịch sử trò chuyện', 'Conversation History'],
-  ['Thư viện media', 'Media library'],
+  ['Tệp & dung lượng', 'Files & storage'],
   ['Tổng quan', 'Dashboard'],
   ['Báo cáo', 'Reports'],
   ['Cài đặt', 'Settings'],

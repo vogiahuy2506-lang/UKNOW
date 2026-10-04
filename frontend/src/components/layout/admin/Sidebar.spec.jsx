@@ -142,14 +142,14 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     // Nhãn lấy nguyên văn từ vi.js (nav.*) — đừng gõ tay, sai chính tả là đỏ giả.
     const expected = {
-      'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện', 'Thư viện media'],
+      'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện'],
       'Chiến dịch': [
         'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
         'Giám sát gửi tin', 'Khách hàng từ chiến dịch',
       ],
       'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
       'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
-      'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Nhật ký hoạt động'],
+      'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Tệp & dung lượng', 'Nhật ký hoạt động'],
     };
 
     for (const [groupTitle, children] of Object.entries(expected)) {
@@ -220,9 +220,11 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       expect(openGroupLinks('AI Chatbot')).toEqual(['Chatbot của tôi']);
     });
 
-    it('media_library_view → chỉ "Thư viện media"', () => {
-      employeeTitles({ media_library_view: true });
-      expect(openGroupLinks('AI Chatbot')).toEqual(['Thư viện media']);
+    // 04/10/2026: "Thư viện media" đổi tên "Tệp & dung lượng" và chuyển từ nhóm AI Chatbot sang Cài đặt — nhưng vẫn gắn đúng
+    // quyền media_library_view (nhân viên có quyền này thấy nhóm Cài đặt với ĐÚNG một mục, không thấy Hồ sơ/Nhân viên/Nhật ký).
+    it('media_library_view → nhóm Cài đặt chỉ có "Tệp & dung lượng"', () => {
+      expect(employeeTitles({ media_library_view: true })).toEqual(['Trợ lý AI', 'Cài đặt']);
+      expect(openGroupLinks('Cài đặt')).toEqual(['Tệp & dung lượng']);
     });
 
     it('quyền sai chỗ không mở nhầm mục: inbox_reply đơn lẻ (không có inbox_view) không hiện "Lịch sử trò chuyện"', () => {

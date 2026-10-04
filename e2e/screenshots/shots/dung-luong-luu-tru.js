@@ -7,7 +7,7 @@
  * đường mà bộ kiểm phía trình duyệt (`validateFilesBeforeUpload`) sinh ra thông báo.
  * Không tệp nào được tải lên. Chỉ chạy ở máy mình.
  *
- * Ảnh Thư viện media (04/10/2026: trang chỉ còn MỘT danh sách, tab "Tệp khách gửi" đã gỡ). Tài khoản mẫu chưa có tệp nào
+ * Ảnh trang Tệp & dung lượng (trước 04/10/2026 gọi là Thư viện media; 04/10/2026: trang chỉ còn MỘT danh sách, tab "Tệp khách gửi" đã gỡ). Tài khoản mẫu chưa có tệp nào
  * trong sổ lưu trữ, nên chặn lời gọi `GET /api/media-library/objects` ngay trong trình duyệt và trả dữ liệu mẫu ĐÚNG
  * HÌNH DẠNG backend (xem `mediaLibrary.repository.js`) — trang vẫn dựng bằng mã thật, chỉ nguồn dữ liệu là mẫu.
  * Không ghi gì vào DB.
@@ -181,7 +181,7 @@ export default {
     },
     {
       name: 'thu-vien-media-tat-ca-tep',
-      caption: 'Thư viện media, khoanh đỏ thanh dung lượng và hàng thẻ Theo loại tệp',
+      caption: 'Tệp & dung lượng, khoanh đỏ thanh dung lượng và hàng thẻ Theo loại tệp',
       localOnly: true,
       async take(page) {
         // Thanh dung lượng ở đầu trang: tài khoản mẫu chưa tải tệp nào nên thanh luôn 0% — cho trang thấy 38%.

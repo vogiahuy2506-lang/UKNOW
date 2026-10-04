@@ -431,7 +431,7 @@ export default {
     siteGuide: 'User Guide',
     businessProfile: 'Business Profile',
     inbox: 'Conversation History',
-    mediaLibrary: 'Media library',
+    mediaLibrary: 'Files & storage',
     chatHistory: 'Conversation History',
     activityLog: 'Activity Log',
     auditLogs: 'Activity Logs',

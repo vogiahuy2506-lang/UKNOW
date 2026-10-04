@@ -87,7 +87,6 @@ export const userMenuItems = (t) => [
   { key: 'products', name: t('nav.products'), defaultCategory: 'main', path: '/app/products', icon: HiOutlineCube, permission: ['courses'] },
   { key: 'chatbot_studio', name: t('nav.chatbotStudio'), defaultCategory: 'ai_chatbot', path: '/app/chatbot-studio', icon: HiOutlineChatAlt2, permission: ['chatbots_manage'] },
   { key: 'inbox', name: t('nav.inbox'), defaultCategory: 'ai_chatbot', path: '/app/settings/inbox', icon: HiOutlineInbox, permission: ['inbox_view'] },
-  { key: 'media_library', name: t('nav.mediaLibrary'), defaultCategory: 'ai_chatbot', path: '/app/settings/media-library', icon: HiOutlinePhotograph, permission: ['media_library_view'] },
   { key: 'quick_send', name: t('nav.quickSend'), defaultCategory: 'campaigns', path: '/app/quick-send', icon: HiOutlineMail, permission: ['campaigns_create'] },
   { key: 'channel_management', name: t('nav.channelManagement'), defaultCategory: 'campaigns', path: '/app/settings/channels', icon: HiOutlineMail, permission: ['email_settings', 'zalo_settings'] },
   { key: 'message_templates', name: t('nav.messageTemplates'), defaultCategory: 'campaigns', path: '/app/settings/templates', icon: HiOutlineTemplate, permission: ['email_templates', 'zalo_templates'] },
@@ -102,6 +101,7 @@ export const userMenuItems = (t) => [
   { key: 'affiliate_program', name: t('nav.affiliateProgram'), defaultCategory: 'main', path: '/app/affiliate', icon: HiOutlineCurrencyDollar, ownerOnly: true },
   { key: 'business_profile', name: t('nav.businessProfile'), defaultCategory: 'settings', path: '/app/settings/ai-profile', icon: HiOutlineOfficeBuilding, ownerOnly: true },
   { key: 'employees', name: t('nav.employees'), defaultCategory: 'settings', path: '/app/settings/employees', icon: HiOutlineUserGroup, ownerOnly: true },
+  { key: 'media_library', name: t('nav.mediaLibrary'), defaultCategory: 'settings', path: '/app/settings/media-library', icon: HiOutlinePhotograph, permission: ['media_library_view'] },
   { key: 'audit_logs', name: t('nav.auditLogs'), defaultCategory: 'settings', path: '/app/settings/audit-logs', icon: HiOutlineClipboard, ownerOnly: true },
 ];
 

@@ -50,12 +50,12 @@ export default {
       },
     },
     {
-      name: 'menu-thu-vien-media',
-      caption: 'khoanh đỏ mục "Thư viện media" ở cuối nhóm',
+      name: 'menu-tep-va-dung-luong',
+      caption: 'nhóm Cài đặt đang mở, khoanh đỏ mục "Tệp & dung lượng"',
       async take(page, { baseURL }) {
         return sidebarShot(page, {
-          groupName: 'AI Chatbot',
-          itemName: 'Thư viện media',
+          groupName: 'Cài đặt',
+          itemName: 'Tệp & dung lượng',
           baseURL,
         });
       },

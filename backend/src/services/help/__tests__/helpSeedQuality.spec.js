@@ -23,7 +23,7 @@ import { CHANNEL_ATTACHMENT_LIMITS } from '../../../../../frontend/src/features/
  * Đổi menu bên frontend thì cập nhật bảng này, test sẽ chỉ ra bài nào phải sửa theo.
  */
 const REAL_MENU = {
-  'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện', 'Thư viện media'],
+  'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện'],
   'Chiến dịch': [
     'Gửi nhanh',
     'Quản lý kênh gửi',
@@ -34,7 +34,7 @@ const REAL_MENU = {
   ],
   'Landing page': ['Khách hàng từ Landing page', 'Tạo Landing page', 'Biểu mẫu'],
   'Gói & Thanh toán': ['Tổng quan gói', 'Mua thêm hạn mức'],
-  'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Nhật ký hoạt động'],
+  'Cài đặt': ['Hồ sơ doanh nghiệp', 'Nhân viên', 'Tệp & dung lượng', 'Nhật ký hoạt động'],
 };
 
 /**
@@ -176,7 +176,8 @@ const UI_LABELS_IN_ARTICLES = [
   ['campaign-create', 'channelAttachments.templateLabel', 'Mẫu tin nhắn (dùng chung Zalo, Telegram, WhatsApp)'],
   ['nhan-vien', 'employee.permissions.messageTemplates', 'Mẫu tin nhắn'],
   // Thư viện media (một danh sách, tên nhóm tệp). Tab "Tệp khách gửi" đã gỡ 04/10/2026.
-  ['dung-luong-luu-tru', 'nav.mediaLibrary', 'Thư viện media'],
+  ['dung-luong-luu-tru', 'nav.mediaLibrary', 'Tệp & dung lượng'],
+  ['dung-luong-luu-tru', 'mediaLibrary.title', 'Tệp & dung lượng'],
   ['dung-luong-luu-tru', 'mediaLibrary.categorySummary', 'Theo loại tệp'],
   ['dung-luong-luu-tru', 'mediaLibrary.allFiles', 'Tất cả'],
   ['dung-luong-luu-tru', 'mediaLibrary.sortSize', 'Tệp nặng trước'],
@@ -433,6 +434,8 @@ describe('chất lượng bài trợ giúp seed', () => {
       'Tất cả danh mục',
       'Tin nhắn chat',
       'Phiên bản Landing',
+      // 04/10/2026: mục menu "Thư viện media" đổi tên "Tệp & dung lượng" và chuyển sang nhóm Cài đặt.
+      'Thư viện media',
       'Template Zalo',
       'template Zalo',
       'Mẫu Zalo',

@@ -432,7 +432,7 @@ export default {
     businessProfile: 'Hồ sơ doanh nghiệp',
     chatbotStudio: 'Chatbot của tôi',
     inbox: 'Lịch sử trò chuyện',
-    mediaLibrary: 'Thư viện media',
+    mediaLibrary: 'Tệp & dung lượng',
     chatHistory: 'Lịch sử trò chuyện',
     activityLog: 'Nhật ký hoạt động',
     auditLogs: 'Nhật ký hoạt động',
