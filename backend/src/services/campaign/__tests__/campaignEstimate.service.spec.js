@@ -157,6 +157,28 @@ describe('estimateForCampaign — chiến dịch kiểu 438 (1 nick, 2 node, 798
   });
 });
 
+describe('estimateForCampaign — tra theo CHỦ chiến dịch, không theo người xem', () => {
+  it('super admin (workspace 1) xem chiến dịch của user 39 → nick và người nhận tra theo 39', async () => {
+    // Review PR-1 (04/10): bản đầu truyền thẳng workspace người xem → admin xem chiến dịch khách ra nick sai.
+    const { deps } = makeDeps({
+      state: {
+        campaign: { id: 438, id_user: 39, flow_json: null },
+        nodes: campaign438Nodes(),
+        connections: campaign438Connections(),
+        dataItems: { 2: phones(10) },
+      },
+    });
+    await estimateForCampaign({ campaignId: 438, ownerUserId: 1, startAt: NOW, deps });
+
+    const zaloOwners = deps.zaloRepo.findCampaignZaloAccount.mock.calls.map((call) => call[1]);
+    expect(zaloOwners.length).toBeGreaterThan(0);
+    expect(new Set(zaloOwners)).toEqual(new Set([39]));
+    const dataOwners = deps.nodeData.getCustomersFromDataNode.mock.calls.map((call) => call[1]);
+    expect(dataOwners.length).toBeGreaterThan(0);
+    expect(new Set(dataOwners)).toEqual(new Set([39]));
+  });
+});
+
 describe('estimateForCampaign — nick', () => {
   it('KHÔNG có node chọn tài khoản: node Zalo thứ hai dùng lại nick của node đầu (engine selectedZaloAccount), bỏ qua id riêng', async () => {
     const nodes = [

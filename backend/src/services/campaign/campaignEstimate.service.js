@@ -650,12 +650,15 @@ export async function estimateForCampaign({ campaignId, ownerUserId, startAt = n
     campaignId, isAdmin: true, userId: null,
   });
   if (!campaign) return null;
+  // Tra nick / tài khoản email / người nhận theo CHỦ chiến dịch (engine chạy theo `campaign.id_user`), không theo
+  // người đang xem: super admin mở chiến dịch của khách thì `ownerUserId` (workspace của admin) cho ra nick sai.
+  const campaignOwnerId = Number.parseInt(campaign.id_user, 10) || ownerUserId;
   const [rawNodes, rawConnections] = await Promise.all([
     resolvedDeps.crud.findNodesByCampaignId(campaignId),
     resolvedDeps.crud.findConnectionsByCampaignId(campaignId),
   ]);
   return estimateFromNodes({
-    rawNodes, rawConnections, flowJson: campaign.flow_json, ownerUserId, startAt, continuous,
+    rawNodes, rawConnections, flowJson: campaign.flow_json, ownerUserId: campaignOwnerId, startAt, continuous,
     excludeCampaignId: Number(campaignId), deps: resolvedDeps,
   });
 }
