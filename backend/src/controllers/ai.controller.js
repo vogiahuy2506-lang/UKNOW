@@ -43,6 +43,7 @@ import { getWorkspaceScope } from '../utils/workspaceContext.util.js';
 import { generateSystemInstruction as generateChatbotSystemInstruction } from '../services/ai/chatbotInstructionWriter.service.js';
 import {
   AUTO_LAYOUT_FIX_MAX_ROUNDS,
+  MAX_AUTO_LAYOUT_FIX_HTML_CHARS,
   normalizeLayoutFindings,
   buildAutoLayoutFixInstruction,
   buildLayoutFindingsContext,
@@ -1920,6 +1921,8 @@ class AiController {
       }
 
       let autoFixUsed = 0;
+      // B-3: HTML mà lượt tự sửa miễn phí đưa cho AI = HTML server ĐANG LƯU của tin, không bao giờ là chuỗi client gửi.
+      let autoFixBaseHtml = null;
       if (isAutoFix) {
         if (!hasSession) {
           return res.status(400).json({
@@ -1950,6 +1953,33 @@ class AiController {
             message: 'Trang này đã dùng hết lượt sửa hiển thị tự động',
           });
         }
+        // B-3: lượt này KHÔNG trừ credit nên đầu vào AI phải là thứ khách đã trả tiền để có (trang server lưu), không phải
+        // chuỗi client tuỳ ý (trước đây tới 500.000 ký tự, mỗi lượt ~170k token đầu vào). Client vẫn gửi `currentHtml` — chỉ
+        // để ĐỐI CHIẾU: số đo (findings) đo trên trang client đang hiện, nên chỉ sửa khi trang server lưu giống hệt; lệch
+        // (tin cũ hơn, lưu lượt trước hỏng, tin khác) thì dừng, không đoán.
+        const storedHtml = typeof landingMessage.data?.html === 'string' ? landingMessage.data.html.trim() : '';
+        if (!storedHtml) {
+          return res.status(409).json({
+            success: false,
+            code: 'AUTO_LAYOUT_FIX_HTML_MISSING',
+            message: 'Tin landing_page này chưa có bản HTML đã lưu để sửa tự động',
+          });
+        }
+        if (storedHtml.length > MAX_AUTO_LAYOUT_FIX_HTML_CHARS) {
+          return res.status(400).json({
+            success: false,
+            code: 'AUTO_LAYOUT_FIX_HTML_TOO_LARGE',
+            message: `Trang quá dài (${storedHtml.length.toLocaleString('vi-VN')} ký tự, giới hạn ${MAX_AUTO_LAYOUT_FIX_HTML_CHARS.toLocaleString('vi-VN')}) để sửa hiển thị tự động`,
+          });
+        }
+        if (String(currentHtml).trim() !== storedHtml) {
+          return res.status(409).json({
+            success: false,
+            code: 'AUTO_LAYOUT_FIX_HTML_MISMATCH',
+            message: 'Trang đang hiển thị khác bản đã lưu trong phiên, không sửa tự động',
+          });
+        }
+        autoFixBaseHtml = storedHtml;
         autoLayoutFixInFlight.add(lockKey);
         autoFixLockKey = lockKey;
       }
@@ -2008,7 +2038,7 @@ class AiController {
       const data = await aiLandingPageService.editHtml({
         userId: ownerUserId,
         actorUserId: req.user.id,
-        currentHtml: String(currentHtml),
+        currentHtml: isAutoFix ? autoFixBaseHtml : String(currentHtml),
         instruction: effectiveInstruction,
         contentLocale,
         assets,
@@ -2030,7 +2060,7 @@ class AiController {
         const saved = await aiSessionRepo.updateLandingPageMessage(sid, req.user.id, {
           title: data.title,
           html: data.html,
-          previousHtml: String(currentHtml),
+          previousHtml: isAutoFix ? autoFixBaseHtml : String(currentHtml),
           ...(landingMessage?.data?.title ? { previousTitle: String(landingMessage.data.title) } : {}),
           autoLayoutFixCount: isAutoFix ? autoFixUsed + 1 : 0,
         }, landingMessage?.id ?? messageId).catch((err) => {

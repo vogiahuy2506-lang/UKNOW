@@ -31,7 +31,7 @@ import {
 } from '../../utils/landingHtmlSafety.util.js';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
 import { countFormSlots, hasMalformedFormSlot } from '../../utils/landingHtmlInjection.util.js';
-import { normalizeChangeSummary } from '../../utils/landingLayoutFindings.util.js';
+import { normalizeChangeSummary, MAX_AUTO_LAYOUT_FIX_HTML_CHARS } from '../../utils/landingLayoutFindings.util.js';
 
 /**
  * Phòng bệnh từ gốc (PLAN_LANDING_TU_KIEM_HIEN_THI_TU_SUA mục 10.5): sự cố 20/09 do AI đặt cột ngày
@@ -899,8 +899,12 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
 
     // Chốt chặn kích thước input — cách tính con số ở MAX_EDIT_HTML_INPUT_CHARS (chế độ vá) và
     // MAX_FULL_REWRITE_HTML_CHARS (viết lại cả trang), landingEditGuard.util.js.
-    const patchMode = isAiLandingPatchMode();
-    const cap = patchMode ? MAX_EDIT_HTML_INPUT_CHARS : MAX_FULL_REWRITE_HTML_CHARS;
+    // B-3: lượt tự sửa hiển thị là MIỄN PHÍ → luôn đi đường vá (đầu ra nhỏ, kể cả khi công tắc đặt `full`), trần đầu vào
+    // riêng, và KHÔNG có dự phòng viết-lại-cả-trang / sinh lại (xem `attempt` và nhánh bắt lỗi bên dưới).
+    const patchMode = isAiLandingPatchMode() || autoLayoutFix;
+    const cap = autoLayoutFix
+      ? MAX_AUTO_LAYOUT_FIX_HTML_CHARS
+      : (patchMode ? MAX_EDIT_HTML_INPUT_CHARS : MAX_FULL_REWRITE_HTML_CHARS);
     if (rawCurrent.length > cap) {
       const err = new Error(
         `Landing page hiện tại quá dài (${rawCurrent.length.toLocaleString('vi-VN')} ký tự, giới hạn ${cap.toLocaleString('vi-VN')} ký tự) để chỉnh sửa an toàn bằng AI. Vui lòng chỉnh sửa trực tiếp trong trình soạn thảo.`
@@ -1229,8 +1233,9 @@ ${exampleLine}`;
 
         const elapsed = Date.now() - telemetry.startedAt;
         const estFullMs = rawCurrent.length * EDIT_FULL_REWRITE_MS_PER_CHAR;
-        const canFallback =
-          rawCurrent.length <= MAX_FULL_REWRITE_HTML_CHARS && elapsed + estFullMs <= EDIT_TIME_BUDGET_MS;
+        // B-3: lượt tự sửa miễn phí KHÔNG rơi xuống viết-lại-cả-trang (đắt gấp nhiều lần lượt vá, mà khách không trả credit).
+        const canFallback = !autoLayoutFix
+          && rawCurrent.length <= MAX_FULL_REWRITE_HTML_CHARS && elapsed + estFullMs <= EDIT_TIME_BUDGET_MS;
         if (canFallback) {
           telemetry.strategy = 'patch_fallback_full';
           return runFullRewrite(extraRule);
@@ -1276,7 +1281,8 @@ ${exampleLine}`;
           // Lượt sinh lại tốn xấp xỉ lượt đầu; hai lượt không vừa trần Cloudflare thì gỡ ảnh bịa
           // ngay — thử lại chỉ đổi kết quả tốt thành 524 trong khi backend vẫn sửa xong.
           const firstRunMs = Date.now() - telemetry.startedAt;
-          if (firstRunMs * 2 > EDIT_TIME_BUDGET_MS) {
+          // B-3: lượt tự sửa miễn phí chỉ gọi model MỘT lần mỗi vòng — ảnh bịa thì gỡ luôn thay vì sinh lại.
+          if (autoLayoutFix || firstRunMs * 2 > EDIT_TIME_BUDGET_MS) {
             telemetry.fakeImageRetry = 0;
             editResult = stripFakeImages(firstErr);
           } else {
@@ -1298,7 +1304,8 @@ ${exampleLine}`;
           // trần Cloudflare thì báo lỗi luôn (khác ảnh bịa, không có cách "gỡ" an toàn để cứu kết quả).
           const unsafeFindings = firstErr.details?.findings || [];
           telemetry.unsafeKinds = describeUnsafeKinds(unsafeFindings);
-          if ((Date.now() - telemetry.startedAt) * 2 > EDIT_TIME_BUDGET_MS) throw firstErr;
+          // B-3: lượt tự sửa miễn phí cũng không sinh lại khi trượt chốt an toàn — báo lỗi (FE im lặng).
+          if (autoLayoutFix || (Date.now() - telemetry.startedAt) * 2 > EDIT_TIME_BUDGET_MS) throw firstErr;
           telemetry.unsafeRetry = 1;
           const extraRule = buildUnsafeRetryRule(unsafeFindings, {
             regenerateWhat: patchMode ? 'Sinh lại kết quả sửa' : 'Sinh lại toàn bộ trang',

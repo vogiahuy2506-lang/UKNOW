@@ -1116,7 +1116,7 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       await aiController.editLandingHtml(autoReq(), blocked);
       expect(blocked.status).toHaveBeenCalledWith(429);
 
-      getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'T', autoLayoutFixCount: 1 } });
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'T', html: '<div>Trang hiện tại</div>', autoLayoutFixCount: 1 } });
       const ok = makeRes();
       await aiController.editLandingHtml(autoReq(), ok);
       expect(ok.status).not.toHaveBeenCalled();
@@ -1182,7 +1182,7 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
     it('lưu hỏng thì KHÔNG báo canRevert; không có title cũ thì không ghi previousTitle', async () => {
       updateLandingPageMessage.mockResolvedValue(false);
       // Không có title cũ, nhưng vẫn còn ngân sách tự sửa (tin thiếu bộ đếm bị chặn 429 — ca riêng ở trên).
-      getLandingPageMessage.mockResolvedValue({ id: 900, data: { autoLayoutFixCount: 0 } });
+      getLandingPageMessage.mockResolvedValue({ id: 900, data: { html: '<div>Trang hiện tại</div>', autoLayoutFixCount: 0 } });
       const res = makeRes();
       await aiController.editLandingHtml(autoReq(), res);
       const { data } = res.json.mock.calls[0][0];
@@ -1233,6 +1233,87 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       const thirdRes = makeRes();
       await aiController.editLandingHtml(autoReq(), thirdRes);
       expect(thirdRes.status).not.toHaveBeenCalled();
+    });
+
+    // B-3 (rà soát AI 03/10): lượt tự sửa MIỄN PHÍ từng lấy HTML do CLIENT gửi (tới 500.000 ký tự) làm đầu vào AI. Giờ đầu vào
+    // là HTML server đang lưu; chuỗi client chỉ để đối chiếu (số đo findings đo trên đúng trang đó).
+    describe('B-3 — đầu vào AI của lượt miễn phí là HTML server đang lưu', () => {
+      const STORED = '<div>Trang hiện tại</div>';
+
+      it('HTML gửi tới AI = bản server lưu (đã trim); previousHtml cũng là bản server lưu', async () => {
+        getLandingPageMessage.mockResolvedValue({ id: 900, data: { title: 'Trang cũ', html: `\n  ${STORED}  \n`, autoLayoutFixCount: 0 } });
+        const res = makeRes();
+        await aiController.editLandingHtml(autoReq({ currentHtml: `  ${STORED}\n` }), res);
+        expect(res.status).not.toHaveBeenCalled();
+        expect(editHtml.mock.calls[0][0].currentHtml).toBe(STORED);
+        expect(updateLandingPageMessage.mock.calls[0][2].previousHtml).toBe(STORED);
+        expect(chargeAiCredit).not.toHaveBeenCalled();
+      });
+
+      it('client gửi HTML KHỔNG LỒ (500.000 ký tự) mà bản server lưu nhỏ → 409 MISMATCH, KHÔNG gọi AI, không ghi gì', async () => {
+        const res = makeRes();
+        await aiController.editLandingHtml(autoReq({ currentHtml: `<div>${'x'.repeat(500000)}</div>` }), res);
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTO_LAYOUT_FIX_HTML_MISMATCH' }));
+        expect(editHtml).not.toHaveBeenCalled();
+        expect(updateLandingPageMessage).not.toHaveBeenCalled();
+        expect(chargeAiCredit).not.toHaveBeenCalled();
+      });
+
+      it('trang client đang hiện KHÁC bản server lưu (tin cũ hơn / lưu lượt trước hỏng) → 409, KHÔNG gọi AI', async () => {
+        const res = makeRes();
+        await aiController.editLandingHtml(autoReq({ currentHtml: '<div>Bản mới hơn chưa lưu được</div>' }), res);
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTO_LAYOUT_FIX_HTML_MISMATCH' }));
+        expect(editHtml).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ['không có html', { title: 'T', autoLayoutFixCount: 0 }],
+        ['html rỗng', { title: 'T', html: '   ', autoLayoutFixCount: 0 }],
+        ['html không phải chuỗi', { title: 'T', html: { x: 1 }, autoLayoutFixCount: 0 }],
+      ])('bản server lưu %s → 409 HTML_MISSING, KHÔNG gọi AI', async (_label, data) => {
+        getLandingPageMessage.mockResolvedValue({ id: 900, data });
+        const res = makeRes();
+        await aiController.editLandingHtml(autoReq(), res);
+        expect(res.status).toHaveBeenCalledWith(409);
+        expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTO_LAYOUT_FIX_HTML_MISSING' }));
+        expect(editHtml).not.toHaveBeenCalled();
+      });
+
+      it('trần riêng 150.000 ký tự: đúng 150.000 → chạy; 150.001 → 400 TOO_LARGE, KHÔNG gọi AI', async () => {
+        const make = (n) => `<div>${'x'.repeat(n - 11)}</div>`;
+        getLandingPageMessage.mockResolvedValue({ id: 900, data: { html: make(150000), autoLayoutFixCount: 0 } });
+        const ok = makeRes();
+        await aiController.editLandingHtml(autoReq({ currentHtml: make(150000) }), ok);
+        expect(ok.status).not.toHaveBeenCalled();
+        expect(editHtml).toHaveBeenCalledTimes(1);
+
+        editHtml.mockClear();
+        getLandingPageMessage.mockResolvedValue({ id: 900, data: { html: make(150001), autoLayoutFixCount: 0 } });
+        const big = makeRes();
+        await aiController.editLandingHtml(autoReq({ currentHtml: make(150001) }), big);
+        expect(big.status).toHaveBeenCalledWith(400);
+        expect(big.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTO_LAYOUT_FIX_HTML_TOO_LARGE' }));
+        expect(editHtml).not.toHaveBeenCalled();
+        expect(chargeAiCredit).not.toHaveBeenCalled();
+      });
+
+      it('chặn ở bước đối chiếu thì khoá "đang chạy" không bị giữ: lượt đúng ngay sau đó vẫn chạy', async () => {
+        await aiController.editLandingHtml(autoReq({ currentHtml: '<div>khác</div>' }), makeRes());
+        const res = makeRes();
+        await aiController.editLandingHtml(autoReq(), res);
+        expect(res.status).not.toHaveBeenCalled();
+        expect(editHtml).toHaveBeenCalledTimes(1);
+      });
+
+      it('lượt sửa THƯỜNG (trả phí) vẫn dùng HTML client gửi — không đòi khớp bản lưu, vẫn trừ credit', async () => {
+        const res = makeRes();
+        await aiController.editLandingHtml(manualReq({ currentHtml: '<div>Khách đã sửa tay trên canvas</div>' }), res);
+        expect(res.status).not.toHaveBeenCalled();
+        expect(editHtml.mock.calls[0][0].currentHtml).toBe('<div>Khách đã sửa tay trên canvas</div>');
+        expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+      });
     });
 
     it('AI lỗi giữa chừng vẫn nhả khoá — lượt sau không bị kẹt 429', async () => {
