@@ -16,7 +16,11 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignEmailSender.rep
 jest.unstable_mockModule('../../../repositories/campaign/campaignZaloSender.repository.js', () => ({ default: { findCampaignZaloAccount: jest.fn() } }));
 jest.unstable_mockModule('../../../repositories/chatbot/chatbotTelegram.repository.js', () => ({ default: telegramRepo }));
 jest.unstable_mockModule('../../chatbot/whatsappBaileys.service.js', () => whatsappService);
-jest.unstable_mockModule('../../../repositories/chatbot/whatsappCampaignConversation.repository.js', () => ({ default: whatsappConversationRepo }));
+// whatsapp.campaignChannel.js cũng import `extractPhoneFromExternalId` từ module này — mock phải giữ đủ export.
+jest.unstable_mockModule('../../../repositories/chatbot/whatsappCampaignConversation.repository.js', () => ({
+  default: whatsappConversationRepo,
+  extractPhoneFromExternalId: (externalId) => String(externalId ?? '').split(':').pop().trim(),
+}));
 
 const registry = (await import('../../campaign/campaignNodeRegistry.service.js')).default;
 const channelFlags = await import('../../campaign/campaignChannelFlags.util.js');
@@ -348,12 +352,64 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       expect(gate.response.content).toContain('Telegram');
     });
 
-    it('nhiều tài khoản + chưa chọn → nhả cho LLM hỏi (null), KHÔNG dùng thẻ chọn tài khoản của Zalo', () => {
+    // Rà soát C P3-6 — trước đây cổng trả null ("nhả cho LLM hỏi"): "hỏi lại, không tự chọn" chỉ là luật prompt, model có thể tự chọn tài khoản đầu.
+    it('nhiều tài khoản + chưa chọn → THẺ chọn tài khoản tất định (ask_sender_account), không còn nhả cho LLM', () => {
       setFlags({ telegram: true });
       const gate = wizard.evaluateNextGate(baseState('telegram'), {
+        telegramAccounts: [{ id: 1, name: 'shop_a', usable: true }, { id: 2, name: 'shop_b', usable: true }, { id: 3, name: 'cu', usable: false }],
+      }, 'vi');
+
+      expect(gate.gate).toBe('senderAccount');
+      expect(gate.response.type).toBe('ask_sender_account');
+      expect(gate.response.content).toContain('Telegram');
+      // Chỉ liệt kê tài khoản DÙNG ĐƯỢC; id Telegram giữ kiểu số.
+      expect(gate.response.data.accounts.map((a) => [a.id, a.name, a.usable])).toEqual([[1, 'shop_a', true], [2, 'shop_b', true]]);
+      // Nút "Khác" của thẻ Email/Zalo dẫn tới QR Zalo — vô nghĩa ở đây nên backend tắt.
+      expect(gate.response.data).toMatchObject({ channel: 'telegram', allowOther: false, noUsableAccount: false });
+    });
+
+    it('WhatsApp: id là MÃ PHIÊN chuỗi, giữ nguyên kiểu chuỗi trên thẻ; tiếng Anh có bản tiếng Anh', () => {
+      setFlags({ whatsapp: true });
+      const gate = wizard.evaluateNextGate(baseState('whatsapp'), {
+        whatsappAccounts: [{ id: WA_KEY, name: 'Shop A', usable: true }, { id: '7-shopb', name: 'Shop B', usable: true }],
+      }, 'en');
+
+      expect(gate.response.data.accounts.map((a) => a.id)).toEqual([WA_KEY, '7-shopb']);
+      expect(gate.response.content).toBe('Choose the WhatsApp account to send this campaign from.');
+    });
+
+    it('đã chọn một tài khoản dùng được → cổng thông qua (không hỏi lại), đi tiếp brief', () => {
+      setFlags({ telegram: true });
+      const gate = wizard.evaluateNextGate({ ...baseState('telegram'), senderAccountId: 2 }, {
+        telegramAccounts: [{ id: 1, name: 'a', usable: true }, { id: 2, name: 'b', usable: true }], courses: [],
+      }, 'vi');
+      expect(gate?.gate).toBe('campaignBrief');
+    });
+
+    it('tài khoản đã chọn không còn trong danh sách dùng được (ngắt kết nối) mà còn ≥ 2 tài khoản khác → hỏi lại bằng thẻ', () => {
+      setFlags({ telegram: true });
+      const gate = wizard.evaluateNextGate({ ...baseState('telegram'), senderAccountId: 9 }, {
         telegramAccounts: [{ id: 1, name: 'a', usable: true }, { id: 2, name: 'b', usable: true }],
       }, 'vi');
-      expect(gate).toBeNull();
+      expect(gate.gate).toBe('senderAccount');
+      expect(gate.response.type).toBe('ask_sender_account');
+    });
+
+    it('marker senderAccount của thẻ → state.senderAccountId đúng kiểu (số cho Telegram, chuỗi cho WhatsApp) và cổng thông qua', () => {
+      setFlags({ telegram: true, whatsapp: true });
+      const tg = wizard.extractWizardState([
+        { role: 'user', content: 'Gửi Telegram cho khách chiến dịch tháng 10' },
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"telegram"}\nTelegram' },
+        { role: 'user', content: '[wizard]{"gate":"senderAccount","channel":"telegram","accountId":2,"accountName":"shop_b"}\nChọn' },
+      ]);
+      expect(tg.channel).toBe('telegram');
+      expect(tg.senderAccountId).toBe(2);
+      const wa = wizard.extractWizardState([
+        { role: 'user', content: 'Gửi WhatsApp cho khách chiến dịch tháng 10' },
+        { role: 'user', content: '[wizard]{"gate":"channel","channel":"whatsapp"}\nWA' },
+        { role: 'user', content: `[wizard]{"gate":"senderAccount","channel":"whatsapp","accountId":"${WA_KEY}","accountName":"Shop"}\nChọn` },
+      ]);
+      expect(wa.senderAccountId).toBe(WA_KEY);
     });
 
     it('đúng 1 tài khoản → KHÔNG hỏi tài khoản/nguồn người nhận, đi thẳng tới cổng chung (brief)', () => {

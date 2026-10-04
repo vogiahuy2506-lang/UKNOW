@@ -91,19 +91,22 @@ export const AskSenderAccountCard = ({ data, onSelect, onOther, onDismiss, isAct
         )}
       </div>
 
-      <button
-        type="button"
-        onClick={onOther}
-        className={`mt-3 w-full rounded-xl border px-3 py-2 text-xs font-black transition-all ${
-          !isEmail && noUsableAccount
-            ? 'border-blue-300 bg-blue-600 text-white hover:bg-blue-700'
-            : 'border-orange-200 bg-white text-orange-700 hover:bg-orange-100'
-        }`}
-      >
-        {!isEmail && noUsableAccount
-          ? (t('aiChatbot.wizardZaloReconnectQr') || 'Kết nối lại bằng QR')
-          : (t('aiChatbot.wizardOtherAccount') || 'Khác')}
-      </button>
+      {/* Telegram/WhatsApp (rà soát C P3-6): backend gửi allowOther:false — nút "Khác" của thẻ này dẫn tới QR Zalo, vô nghĩa với hai kênh đó. */}
+      {data?.allowOther !== false && (
+        <button
+          type="button"
+          onClick={onOther}
+          className={`mt-3 w-full rounded-xl border px-3 py-2 text-xs font-black transition-all ${
+            !isEmail && noUsableAccount
+              ? 'border-blue-300 bg-blue-600 text-white hover:bg-blue-700'
+              : 'border-orange-200 bg-white text-orange-700 hover:bg-orange-100'
+          }`}
+        >
+          {!isEmail && noUsableAccount
+            ? (t('aiChatbot.wizardZaloReconnectQr') || 'Kết nối lại bằng QR')
+            : (t('aiChatbot.wizardOtherAccount') || 'Khác')}
+        </button>
+      )}
 
       {onDismiss && (
         <button

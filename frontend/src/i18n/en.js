@@ -5178,6 +5178,8 @@ export default {
     wizardLandingSelectAllHint: 'Sends to every lead of every landing page in your account — choose only if that is what you mean.',
     wizardDisplayPickedLandings: 'Selected {count} landing pages: {names}.',
     wizardDisplayPickedAllLandings: 'Selected all landing pages.',
+    wizardDisplayPickedTelegramAccount: 'Selected Telegram account "{name}".',
+    wizardDisplayPickedWhatsAppAccount: 'Selected WhatsApp account "{name}".',
     landingSelectionMissing: 'No landing page has been chosen for the "Landing page sign-ups" source. Pick a landing page (or "All landing pages") and create again so nothing goes to the wrong people.',
     generateTemplate: 'Generate template',
     generatingTemplate: 'Generating...',

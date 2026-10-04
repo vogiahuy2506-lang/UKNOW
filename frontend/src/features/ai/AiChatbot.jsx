@@ -181,6 +181,9 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
           return t('aiChatbot.wizardDisplayPickedEmailSender', { name })
             || `Đã chọn email sender «${name}».`;
         }
+        if (marker.channel === 'telegram' || marker.channel === 'whatsapp') {
+          return t(marker.channel === 'telegram' ? 'aiChatbot.wizardDisplayPickedTelegramAccount' : 'aiChatbot.wizardDisplayPickedWhatsAppAccount', { name });
+        }
         return t('aiChatbot.wizardDisplayPickedZaloAccount', { name })
           || `Đã chọn tài khoản Zalo «${name}».`;
       }
@@ -1767,7 +1770,9 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       },
       selectedChannel === 'email'
         ? `Tôi chọn email sender "${account.name || account.email || account.id}".`
-        : `Tôi chọn tài khoản Zalo "${account.name || account.displayName || account.id}".`
+        : selectedChannel === 'telegram' || selectedChannel === 'whatsapp'
+          ? `Tôi chọn tài khoản ${selectedChannel === 'telegram' ? 'Telegram' : 'WhatsApp'} "${account.name || account.id}".`
+          : `Tôi chọn tài khoản Zalo "${account.name || account.displayName || account.id}".`
     );
   };
 

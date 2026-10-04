@@ -1288,11 +1288,43 @@ function evaluateLandingLeadsGate(state, resources, locale) {
 }
 
 /**
+ * Rà soát C P3-6 — thẻ CHỌN TÀI KHOẢN cho kênh Telegram/WhatsApp khi có ≥ 2 tài khoản dùng được mà người dùng chưa chọn. Trước đây cổng trả `null`
+ * ("nhả cho LLM hỏi") nên việc "hỏi lại, không tự chọn" chỉ là một dòng trong prompt — model hoàn toàn có thể tự chọn tài khoản đầu tiên và
+ * tin đi từ nhầm tài khoản. Dùng cùng loại thẻ `ask_sender_account` nhưng `allowOther: false` (nút "Khác" của thẻ Email/Zalo dẫn tới QR Zalo — vô nghĩa với
+ * Telegram/WhatsApp; kết nối thêm tài khoản làm ở Cài đặt → Kênh gửi). `id` Telegram là số, `id` WhatsApp là mã phiên chuỗi.
+ */
+export function buildAdapterSenderQuestion(channel, accounts = [], locale = 'vi') {
+  const isEnglish = locale === 'en';
+  const name = channel === 'telegram' ? 'Telegram' : 'WhatsApp';
+  const list = (Array.isArray(accounts) ? accounts : []).map((account) => ({
+    id: account.id,
+    name: account.name || `${name} #${account.id}`,
+    email: null,
+    status: account.usable === false ? 'disconnected' : 'active',
+    isDefault: false,
+    isActive: true,
+    usable: account.usable !== false,
+  }));
+  return {
+    type: 'ask_sender_account',
+    content: isEnglish
+      ? `Choose the ${name} account to send this campaign from.`
+      : `Bạn chọn tài khoản ${name} sẽ dùng để gửi chiến dịch này nhé.`,
+    missing_fields: [],
+    data: {
+      channel,
+      accounts: list,
+      allowOther: false,
+      noUsableAccount: false,
+    },
+  };
+}
+
+/**
  * P8a — cổng tài khoản cho kênh adapter. Trả:
- * - `{ gate, response }` : hướng dẫn kết nối khi chưa có tài khoản dùng được (chặn, như Zalo/Email);
- * - `null`               : nhiều tài khoản + chưa rõ dùng cái nào → nhả cho LLM hỏi (prompt có danh sách tài khoản).
- *                          Không dùng thẻ chọn tài khoản của Email/Zalo vì nút "Khác" của thẻ đó dẫn tới QR Zalo;
- * - `undefined`          : đủ điều kiện, đi tiếp các cổng chung (tệp, brief, lịch).
+ * - `{ gate, response }` : hướng dẫn kết nối khi chưa có tài khoản dùng được (chặn, như Zalo/Email); hoặc (C P3-6) thẻ chọn tài khoản
+ *                          khi có NHIỀU tài khoản dùng được mà chưa chọn / tài khoản đã chọn không còn dùng được;
+ * - `undefined`          : đủ điều kiện (đã chọn, hoặc chỉ có đúng một tài khoản), đi tiếp các cổng chung (tệp, brief, lịch).
  */
 function evaluateAdapterSenderGate(state, resources, locale) {
   const raw = state.channel === 'telegram' ? resources.telegramAccounts : resources.whatsappAccounts;
@@ -1305,7 +1337,7 @@ function evaluateAdapterSenderGate(state, resources, locale) {
     ? usable.find((account) => String(account.id) === String(state.senderAccountId))
     : null;
   if (chosen || usable.length === 1) return undefined;
-  return null;
+  return { gate: 'senderAccount', response: buildAdapterSenderQuestion(state.channel, usable, locale) };
 }
 
 export function buildAdapterChannelSetupGuide(channel, locale = 'vi') {
