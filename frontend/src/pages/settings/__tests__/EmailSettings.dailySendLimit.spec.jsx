@@ -124,7 +124,7 @@ describe('EmailSettings — ô Giới hạn gửi/ngày (PR-4)', () => {
   it('nhập 1.500 (dưới mức gói Pro) → KHÔNG hiện cảnh báo', async () => {
     await selectAccount();
     fireEvent.change(screen.getByDisplayValue('50'), { target: { value: '1500' } });
-    await waitFor(() => expect(screen.getByDisplayValue('1500')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByDisplayValue('1.500')).toBeInTheDocument());
     expect(screen.queryByText('emailSettings.dailySendLimitHighWarning')).not.toBeInTheDocument();
   });
 
@@ -136,11 +136,10 @@ describe('EmailSettings — ô Giới hạn gửi/ngày (PR-4)', () => {
     await waitFor(() => expect(screen.getByText('emailSettings.dailySendLimitHighWarning')).toBeInTheDocument());
   });
 
-  // 'abc' không nằm trong danh sách: ô là <input type="number"> nên trình duyệt (và jsdom) đã chặn
-  // ký tự chữ ngay từ lúc gõ, không bao giờ tới được state — chặn "ở tầng trình duyệt" còn chắc hơn
-  // chặn bằng JS. Ba giá trị dưới đây là số hợp lệ về mặt cú pháp nhưng sai nghiệp vụ (0, âm, thập
-  // phân) nên phải tới được validateForm() để chặn đúng chỗ.
-  it.each(['0', '-5', '1.5'])('nhập %p → chặn ở form, KHÔNG gọi API', async (badValue) => {
+  // Ô là NumberInput: ký tự chữ bị bỏ ngay lúc gõ, không bao giờ tới được state. Các giá trị dưới đây là
+  // số hợp lệ về cú pháp nhưng sai nghiệp vụ nên phải tới được validateForm() để chặn đúng chỗ.
+  // NumberInput chỉ nhận chữ số: '-5' và '1.5' không còn gõ được (thành '5' / '15'), nên các ca sai nghiệp vụ còn lại là 0 và vượt trần 100000.
+  it.each(['0', '100001'])('nhập %p → chặn ở form, KHÔNG gọi API', async (badValue) => {
     await selectAccount();
 
     fireEvent.change(screen.getByDisplayValue('50'), { target: { value: badValue } });

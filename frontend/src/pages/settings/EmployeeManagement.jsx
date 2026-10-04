@@ -691,12 +691,9 @@ const EmployeeManagement = () => {
           </div>
           <form onSubmit={handleSaveThreshold} className="flex items-center gap-3 shrink-0">
             <div className="relative">
-              <input
-                type="number"
-                min="0"
-                step="1"
+              <NumberInput
                 value={approvalThreshold}
-                onChange={(e) => setApprovalThreshold(e.target.value)}
+                onChange={(v) => setApprovalThreshold(String(v))}
                 placeholder={t('employee.approvalThreshold.inputPlaceholder')}
                 disabled={thresholdLoading || isSavingThreshold}
                 className="input w-40 text-sm font-medium"

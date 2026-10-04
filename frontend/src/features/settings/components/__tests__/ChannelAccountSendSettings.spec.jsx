@@ -102,12 +102,12 @@ describe('ChannelAccountSendSettings', () => {
     await waitFor(() => expect(channelSendSettingsApiService.update).toHaveBeenLastCalledWith('telegram', 12, { userDailySendLimit: null }));
   });
 
-  it('trần không hợp lệ (0, số lẻ) -> báo lỗi, KHÔNG gọi API', async () => {
+  it('trần không hợp lệ (0, vượt trần) -> báo lỗi, KHÔNG gọi API', async () => {
     await renderBlock(view());
     const input = screen.getByLabelText(/channelSendSettings.dailyLimit/);
     fireEvent.change(input, { target: { value: '0' } });
     fireEvent.click(screen.getAllByText('common.save')[0]);
-    fireEvent.change(input, { target: { value: '2.5' } });
+    fireEvent.change(input, { target: { value: '100001' } }); // vượt dailyLimitMax (ô chỉ nhận chữ số nên không còn gõ '2.5')
     fireEvent.click(screen.getAllByText('common.save')[0]);
     expect(channelSendSettingsApiService.update).not.toHaveBeenCalled();
     expect(toast.error).toHaveBeenCalled();

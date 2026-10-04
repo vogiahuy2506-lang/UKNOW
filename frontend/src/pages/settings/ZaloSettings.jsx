@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import PageHeader from '../../components/common/PageHeader';
+import NumberInput from '../../components/common/NumberInput';
 import {
   HiOutlineChatAlt2,
   HiOutlineCheckCircle,
@@ -576,14 +577,12 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                             trực tiếp trên ô. w-28 (112px) làm placeholder "Để trống = không giới hạn"
                             bị cắt còn "Để trống = kh". */}
                         <div className="w-44">
-                          <input
+                          <NumberInput
                             id={`send-limit-${account.id}`}
-                            type="number"
                             min={1}
                             max={100000}
-                            step={1}
                             value={getSendLimitDraft(account)}
-                            onChange={(e) => setSendLimitDrafts((prev) => ({ ...prev, [account.id]: e.target.value }))}
+                            onChange={(v) => setSendLimitDrafts((prev) => ({ ...prev, [account.id]: String(v) }))}
                             className="input py-1 text-sm"
                             placeholder={t('zaloSettings.dailySendLimitPlaceholder')}
                           />

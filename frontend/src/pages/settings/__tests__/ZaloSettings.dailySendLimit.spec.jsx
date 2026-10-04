@@ -83,6 +83,17 @@ describe('ZaloSettings — ô Giới hạn gửi/ngày tại chỗ trên từng 
     await waitFor(() => expect(zaloSettingsApiService.updateSendLimit).toHaveBeenCalledWith('7', 80));
   });
 
+  it('gõ 15000 → ô hiện 15.000, Lưu gửi đúng số 15000 (không phải chuỗi có dấu chấm)', async () => {
+    zaloSettingsApiService.updateSendLimit.mockResolvedValueOnce({ data: { success: true } });
+    await renderAndWait();
+
+    fireEvent.change(screen.getByDisplayValue('60'), { target: { value: '15000' } });
+    expect(screen.getByDisplayValue('15.000')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByText('common.save')[0]);
+
+    await waitFor(() => expect(zaloSettingsApiService.updateSendLimit).toHaveBeenCalledWith('7', 15000));
+  });
+
   it('xoá trắng ô rồi Lưu → gọi updateSendLimit(accountId, null) tường minh (KHÔNG bỏ field)', async () => {
     zaloSettingsApiService.updateSendLimit.mockResolvedValueOnce({ data: { success: true } });
     await renderAndWait();
@@ -93,7 +104,8 @@ describe('ZaloSettings — ô Giới hạn gửi/ngày tại chỗ trên từng 
     await waitFor(() => expect(zaloSettingsApiService.updateSendLimit).toHaveBeenCalledWith('7', null));
   });
 
-  it.each(['0', '-5', '1.5'])('nhập %p → chặn ở form, KHÔNG gọi API', async (badValue) => {
+  // NumberInput chỉ nhận chữ số: '-5' và '1.5' không còn gõ được (thành '5' / '15'), nên các ca sai nghiệp vụ còn lại là 0 và vượt trần 100000.
+  it.each(['0', '100001'])('nhập %p → chặn ở form, KHÔNG gọi API', async (badValue) => {
     await renderAndWait();
 
     fireEvent.change(screen.getByDisplayValue('60'), { target: { value: badValue } });

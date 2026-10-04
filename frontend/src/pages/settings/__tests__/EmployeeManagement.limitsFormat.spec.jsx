@@ -4,7 +4,7 @@
  * Khuôn mocks theo EmployeeManagement.permissionsFooter.spec.jsx.
  */
 import { describe, it, expect, vi, beforeAll, afterAll, beforeEach } from 'vitest';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -18,6 +18,7 @@ vi.mock('../../../features/users/services/userManagementApi.service', () => ({
     getEmployees: vi.fn(),
     getTeamOverview: vi.fn(),
     getCampaignApprovalThreshold: vi.fn(),
+    updateCampaignApprovalThreshold: vi.fn(),
     updateSendLimits: vi.fn(),
   },
 }));
@@ -70,6 +71,23 @@ beforeEach(() => {
   vi.clearAllMocks();
   api.getTeamOverview.mockResolvedValue({ data: { data: [] } });
   api.getCampaignApprovalThreshold.mockResolvedValue({ data: { data: { threshold: null } } });
+});
+
+describe('Ngưỡng duyệt chiến dịch — dấu chấm hàng nghìn', () => {
+  it('gõ 25000 -> hiện 25.000, Lưu gửi SỐ 25000; để trống hoặc 0 -> gửi null', async () => {
+    api.updateCampaignApprovalThreshold.mockResolvedValue({ data: { data: { threshold: 25000 } } });
+    const user = await renderPage(makeEmployee());
+    const box = await screen.findByPlaceholderText('Ví dụ: 1000');
+    await user.type(box, '25000');
+    expect(box).toHaveValue('25.000');
+    fireEvent.submit(box.closest('form'));
+    await waitFor(() => expect(api.updateCampaignApprovalThreshold).toHaveBeenCalledWith(25000));
+    api.updateCampaignApprovalThreshold.mockClear();
+    api.updateCampaignApprovalThreshold.mockResolvedValue({ data: { data: { threshold: null } } });
+    await user.clear(box);
+    fireEvent.submit(box.closest('form'));
+    await waitFor(() => expect(api.updateCampaignApprovalThreshold).toHaveBeenCalledWith(null));
+  });
 });
 
 describe('Tab Giới hạn — dấu chấm hàng nghìn', () => {

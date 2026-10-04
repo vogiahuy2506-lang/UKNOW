@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { HiOutlineChatAlt2 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
+import NumberInput from '../../../components/common/NumberInput';
 
 const WINDOWS = [
   { id: 'minute', labelKey: 'chatbot.studio.replyLimitMinute' },
@@ -118,13 +119,11 @@ export default function ChatbotReplyLimitsCard({ value, onChange }) {
                   />
                   {label}
                 </label>
-                <input
-                  type="number"
+                <NumberInput
                   min={1}
-                  step={1}
                   disabled={!enabled}
                   value={rule.limit}
-                  onChange={(event) => updateRule(id, { limit: event.target.value })}
+                  onChange={(v) => updateRule(id, { limit: String(v) })}
                   aria-label={t('chatbot.studio.replyLimitCountAria', { period: label.toLowerCase() })}
                   className="h-9 w-28 rounded-md border border-slate-200 bg-white px-3 text-sm disabled:bg-slate-100 disabled:text-slate-400"
                 />

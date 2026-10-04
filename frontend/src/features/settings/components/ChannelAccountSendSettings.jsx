@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import channelSendSettingsApiService from '../services/channelSendSettingsApi.service';
 import { useI18n } from '../../../i18n';
+import NumberInput from '../../../components/common/NumberInput';
 
 /**
  * PLAN_TG_WA_DAY_DU_2026-09-29 P4 — khối "Giới hạn gửi/ngày + Tốc độ gửi" cho MỘT tài khoản Telegram/WhatsApp
@@ -104,14 +105,12 @@ export default function ChannelAccountSendSettings({ channel, accountRef }) {
         </label>
         {/* Bề rộng đặt ở div bọc: lớp `.input` dùng `@apply w-full` nên thắng mọi utility w-* đặt trên chính ô. */}
         <div className="w-44">
-          <input
+          <NumberInput
             id={`${idPrefix}-limit`}
-            type="number"
             min={1}
             max={data.dailyLimitMax}
-            step={1}
             value={limitValue}
-            onChange={(e) => setLimitDraft(e.target.value)}
+            onChange={(v) => setLimitDraft(String(v))}
             className="input py-1 text-sm"
             placeholder={t('channelSendSettings.dailyLimitPlaceholder')}
           />
