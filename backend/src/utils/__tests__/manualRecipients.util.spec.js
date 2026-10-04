@@ -1,5 +1,5 @@
 import { describe, expect, it } from '@jest/globals';
-import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../manualRecipients.util.js';
+import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients, validateTelegramChatIds } from '../manualRecipients.util.js';
 
 describe('manualRecipients', () => {
   it('normalizes and deduplicates emails, phones, and uids', () => {
@@ -43,5 +43,28 @@ describe('manualRecipients', () => {
     expect(() => validateManualRecipients({ emails: 'not-an-email' })).toThrow('email không hợp lệ');
     expect(() => validateManualRecipients({ emails: Array.from({ length: MAX_AI_MANUAL_RECIPIENTS + 1 }, (_, i) => `u${i}@example.test`) }))
       .toThrow('tối đa');
+  });
+});
+
+describe('validateTelegramChatIds — C P2-9', () => {
+  it('nhận chat id số (người dương, nhóm/kênh âm), tách bằng dấu phẩy/xuống dòng, bỏ trùng', () => {
+    expect(validateTelegramChatIds('123456789, -1001234567890\n123456789')).toEqual(['123456789', '-1001234567890']);
+    expect(validateTelegramChatIds(['111111', ' 222222 '])).toEqual(['111111', '222222']);
+  });
+
+  it('rỗng/thiếu → mảng rỗng (nơi gọi tự quyết có bắt buộc)', () => {
+    expect(validateTelegramChatIds(undefined)).toEqual([]);
+    expect(validateTelegramChatIds('')).toEqual([]);
+  });
+
+  it('username/chữ/số quá dài → INVALID_MANUAL_RECIPIENTS; vượt trần → MANUAL_RECIPIENTS_LIMIT', () => {
+    expect(() => validateTelegramChatIds('@ten')).toThrow(expect.objectContaining({ code: 'INVALID_MANUAL_RECIPIENTS', statusCode: 400 }));
+    expect(() => validateTelegramChatIds('1'.repeat(21))).toThrow(expect.objectContaining({ code: 'INVALID_MANUAL_RECIPIENTS' }));
+    expect(() => validateTelegramChatIds(Array.from({ length: MAX_AI_MANUAL_RECIPIENTS + 1 }, (_, i) => String(100000 + i))))
+      .toThrow(expect.objectContaining({ code: 'MANUAL_RECIPIENTS_LIMIT' }));
+  });
+
+  it('validateManualRecipients giữ nguyên hình dạng { emails, phones, uids } (không có chatIds)', () => {
+    expect(Object.keys(validateManualRecipients({ emails: 'a@example.com' })).sort()).toEqual(['emails', 'phones', 'uids']);
   });
 });

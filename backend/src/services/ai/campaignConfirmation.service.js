@@ -252,6 +252,33 @@ class CampaignConfirmationService {
       return view;
     };
 
+    // Rà soát C P2-9 — kênh Telegram/WhatsApp nguồn "hội thoại": người nhận là MỌI người đã từng nhắn tới tài khoản (không có danh sách nào để
+    // nhìn), nên thẻ phải nói rõ "N người đã từng nhắn với tài khoản X". Đếm lỗi → count null (thẻ ghi "tất cả người đã từng nhắn", không bịa số).
+    const conversationAudienceCache = new Map();
+    const resolveConversationAudience = async (channel, config, sender) => {
+      const isTelegram = channel === 'telegram' && config?.recipientSource === 'telegram_conversations';
+      const isWhatsApp = channel === 'whatsapp' && config?.recipientSource === 'whatsapp_conversations';
+      if ((!isTelegram && !isWhatsApp) || sender?.id == null) return null;
+      const cacheKey = `${channel}:${sender.id}`;
+      if (conversationAudienceCache.has(cacheKey)) return conversationAudienceCache.get(cacheKey);
+      let count = null;
+      try {
+        if (isTelegram) {
+          const counts = await chatbotTelegramRepository.countOpenConversationsByAccountIds([sender.id]);
+          count = counts.get(Number(sender.id)) ?? 0;
+        } else {
+          const { default: whatsappConversationRepository } = await import('../../repositories/chatbot/whatsappCampaignConversation.repository.js');
+          const counts = await whatsappConversationRepository.countOpenConversationsBySessionKeys(channelOwnerId, [String(sender.id)]);
+          count = counts.get(String(sender.id)) ?? 0;
+        }
+      } catch (error) {
+        console.warn('[CampaignConfirmation] Không đếm được hội thoại của tài khoản kênh gửi:', error?.message || error);
+      }
+      const view = { count, accountLabel: sender.label || null };
+      conversationAudienceCache.set(cacheKey, view);
+      return view;
+    };
+
     const resolveSender = async (channel, config, issueNodeId) => {
       if (channel === 'email') {
         const id = asNumber(config?.fromEmailId) || await aiCampaignDraftRepository.findDefaultEmailSettingId(channelOwnerId);
@@ -426,6 +453,7 @@ class CampaignConfirmationService {
           : findSourceNode(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo');
         const audienceFilters = manual ? null : await resolveAudienceFilter(recipientSourceNode);
         const landingAudience = recipientSourceNode ? await resolveLandingAudience(recipientSourceNode, currentNodeId) : null;
+        const conversationAudience = isAdapterChannel && !manual ? await resolveConversationAudience(channel, config, sender) : null;
         steps.push({
           key: `${currentNodeId}:${stepIndex}`,
           nodeId: currentNodeId,
@@ -446,6 +474,7 @@ class CampaignConfirmationService {
             sourceLabel: manual ? null : sourceLabel(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo'),
             ...(audienceFilters ? { filters: audienceFilters } : {}),
             ...(landingAudience ? { landing: landingAudience } : {}),
+            ...(conversationAudience ? { conversations: conversationAudience } : {}),
           },
         });
       }

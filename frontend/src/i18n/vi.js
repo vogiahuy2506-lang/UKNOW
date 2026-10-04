@@ -5308,6 +5308,8 @@ export default {
       landingAudienceAll: 'TẤT CẢ landing ({count} lead)',
       landingAudienceAllUnknown: 'TẤT CẢ landing',
       landingAudiencePage: '{name} ({count} người)',
+      conversationsAudience: '{count} người đã từng nhắn tới tài khoản {account}',
+      conversationsAudienceUnknown: 'Tất cả người đã từng nhắn tới tài khoản {account}',
     },
     // Auto creating card
     creatingCampaign: 'Đang tạo và chạy chiến dịch...',

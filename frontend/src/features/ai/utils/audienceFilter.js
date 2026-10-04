@@ -54,3 +54,19 @@ export function describeLandingAudience(landing, t) {
     .filter(Boolean)
     .join(', ');
 }
+
+/**
+ * Nguồn "hội thoại" của kênh Telegram/WhatsApp (`step.recipients.conversations`, rà soát C P2-9): người nhận là MỌI người đã từng nhắn tới
+ * tài khoản gửi — không có danh sách nào để nhìn, nên thẻ phải nói rõ bao nhiêu người. Chưa đếm được → "Tất cả người đã từng nhắn…", không bịa số.
+ *
+ * @param {{ count?: number|null, accountLabel?: string|null }|null} conversations
+ * @param {(key: string, params?: object) => string} t
+ * @returns {string}
+ */
+export function describeConversationAudience(conversations, t) {
+  if (!conversations || typeof conversations !== 'object') return '';
+  const account = conversations.accountLabel || '';
+  return conversations.count != null && Number.isFinite(Number(conversations.count))
+    ? t('aiChatbot.confirmation.conversationsAudience', { count: Number(conversations.count), account })
+    : t('aiChatbot.confirmation.conversationsAudienceUnknown', { account });
+}

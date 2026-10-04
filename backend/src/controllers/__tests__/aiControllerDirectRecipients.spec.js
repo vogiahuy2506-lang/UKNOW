@@ -368,3 +368,50 @@ describe('aiController directRecipients with Zalo contacts UIDs (P0)', () => {
     );
   });
 });
+
+describe('C P2-9 — Telegram/WhatsApp nguồn nhập tay: danh sách do model chép không được tin', () => {
+  const modelCopiedTelegram = () => ({
+    campaignName: 'TG',
+    connections: [],
+    nodes: [{
+      id: 'tg-1', node_type: 'action', node_subtype: 'send_telegram',
+      config: { telegramAccountId: 5, recipientSource: 'manual', recipientKeys: ['999999999', '888888888'], steps: [{ message: 'Chào' }] },
+    }],
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockBuildConfirmationView.mockResolvedValue({ readyToCreate: true });
+  });
+
+  it('prepareCampaign KHÔNG có lớp phủ: recipientKeys do model chép bị xoá trước khi dựng thẻ → thẻ báo thiếu người nhận', async () => {
+    mockPrepareScript.mockResolvedValue(modelCopiedTelegram());
+    const res = makeRes();
+
+    await aiController.prepareCampaign({ body: { script: modelCopiedTelegram() }, user: { id: 1 } }, res);
+
+    const scriptForCard = mockBuildConfirmationView.mock.calls[0][0].script;
+    expect(scriptForCard.nodes[0].config.recipientSource).toBe('manual');
+    expect(scriptForCard.nodes[0].config.recipientKeys).toEqual([]);
+  });
+
+  it('prepareCampaign CÓ lớp phủ chat id: dùng đúng danh sách riêng tư, không dùng danh sách model chép', async () => {
+    mockPrepareScript.mockResolvedValue(modelCopiedTelegram());
+    const res = makeRes();
+
+    await aiController.prepareCampaign({ body: { script: modelCopiedTelegram(), directRecipients: { chatIds: ['123456789'] } }, user: { id: 1 } }, res);
+
+    expect(mockBuildConfirmationView.mock.calls[0][0].script.nodes[0].config.recipientKeys).toEqual(['123456789']);
+  });
+
+  it('createCampaignFromDraft KHÔNG có lớp phủ → 400 MANUAL_RECIPIENTS_REQUIRED, không tạo chiến dịch', async () => {
+    mockPrepareScript.mockResolvedValue(modelCopiedTelegram());
+    const res = makeRes();
+
+    await aiController.createCampaignFromDraft({ body: { script: modelCopiedTelegram() }, user: { id: 1 } }, res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, code: 'MANUAL_RECIPIENTS_REQUIRED' }));
+    expect(mockCreateCampaign).not.toHaveBeenCalled();
+  });
+});

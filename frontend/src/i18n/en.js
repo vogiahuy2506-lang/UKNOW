@@ -5293,6 +5293,8 @@ export default {
       landingAudienceAll: 'ALL landing pages ({count} leads)',
       landingAudienceAllUnknown: 'ALL landing pages',
       landingAudiencePage: '{name} ({count} people)',
+      conversationsAudience: '{count} people who have messaged account {account}',
+      conversationsAudienceUnknown: 'Everyone who has messaged account {account}',
     },
     // Auto creating card
     creatingCampaign: 'Creating and running campaign...',

@@ -6,7 +6,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import { ConfirmCreateCard } from '../AiChatbotCards';
-import { describeLandingAudience } from '../../utils/audienceFilter';
+import { describeLandingAudience, describeConversationAudience } from '../../utils/audienceFilter';
 import viDict from '../../../../i18n/vi';
 import enDict from '../../../../i18n/en';
 
@@ -110,5 +110,54 @@ describe('describeLandingAudience', () => {
 
   it('số 0 là số thật: "0 người" vẫn hiện (không bị coi là thiếu)', () => {
     expect(describeLandingAudience({ all: false, pages: [{ slug: 'a', title: 'Trang A', recipientCount: 0 }] }, t)).toBe('Trang A (0 người)');
+  });
+});
+
+/**
+ * Rà soát C P2-9 — Telegram/WhatsApp nguồn "hội thoại": người nhận là MỌI người đã từng nhắn tới tài khoản (không có danh sách để nhìn) nên thẻ
+ * phải nói rõ "N người đã từng nhắn tới tài khoản X". Server trả `recipients.conversations`.
+ */
+describe('ConfirmCreateCard — dòng người nhận từ hội thoại (Telegram/WhatsApp)', () => {
+  const viewWithConversations = (conversations) => {
+    const view = viewWith(null);
+    view.steps[0] = {
+      ...view.steps[0],
+      channel: 'telegram',
+      sender: { id: 12, label: 'shop_bot' },
+      recipients: { mode: 'source', type: null, count: null, sourceLabel: '', ...(conversations ? { conversations } : {}) },
+    };
+    return view;
+  };
+
+  it('"37 người đã từng nhắn tới tài khoản shop_bot"', () => {
+    renderCard(viewWithConversations({ count: 37, accountLabel: 'shop_bot' }));
+
+    expect(screen.getByText(/Người nhận:/).textContent).toBe('Người nhận: 37 người đã từng nhắn tới tài khoản shop_bot');
+  });
+
+  it('0 là số thật (chưa ai nhắn) — vẫn hiện "0 người", không bị coi là thiếu', () => {
+    renderCard(viewWithConversations({ count: 0, accountLabel: 'shop_bot' }));
+
+    expect(screen.getByText(/Người nhận:/).textContent).toBe('Người nhận: 0 người đã từng nhắn tới tài khoản shop_bot');
+  });
+
+  it('chưa đếm được → "Tất cả người đã từng nhắn…", KHÔNG bịa số', () => {
+    renderCard(viewWithConversations({ count: null, accountLabel: 'shop_bot' }));
+
+    expect(screen.getByText(/Người nhận:/).textContent).toBe('Người nhận: Tất cả người đã từng nhắn tới tài khoản shop_bot');
+  });
+
+  it('tiếng Anh dùng bản dịch tiếng Anh; không có recipients.conversations → không có dòng', () => {
+    renderCard(viewWithConversations({ count: 3, accountLabel: 'WA Shop' }), enDict, 'en');
+    expect(screen.getByText(/Recipients:/).textContent).toBe('Recipients: 3 people who have messaged account WA Shop');
+  });
+
+  it('không có recipients.conversations → không có dòng người nhận', () => {
+    renderCard(viewWithConversations(null));
+    expect(screen.queryByText(/đã từng nhắn/)).not.toBeInTheDocument();
+  });
+
+  it('describeConversationAudience: null → chuỗi rỗng', () => {
+    expect(describeConversationAudience(null, makeT(viDict))).toBe('');
   });
 });

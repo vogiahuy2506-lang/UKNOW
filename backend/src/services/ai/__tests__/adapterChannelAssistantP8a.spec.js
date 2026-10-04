@@ -5,7 +5,8 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const draftRepo = { findDefaultEmailSettingId: jest.fn(), findDefaultZaloSettingId: jest.fn() };
-const telegramRepo = { getAccountById: jest.fn(), listAccountsByUser: jest.fn() };
+const telegramRepo = { getAccountById: jest.fn(), listAccountsByUser: jest.fn(), countOpenConversationsByAccountIds: jest.fn() };
+const whatsappConversationRepo = { countOpenConversationsBySessionKeys: jest.fn() };
 const whatsappService = { getSession: jest.fn(), listSessions: jest.fn() };
 
 jest.unstable_mockModule('../../../repositories/ai/aiCampaignDraft.repository.js', () => ({ default: draftRepo }));
@@ -15,6 +16,7 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignEmailSender.rep
 jest.unstable_mockModule('../../../repositories/campaign/campaignZaloSender.repository.js', () => ({ default: { findCampaignZaloAccount: jest.fn() } }));
 jest.unstable_mockModule('../../../repositories/chatbot/chatbotTelegram.repository.js', () => ({ default: telegramRepo }));
 jest.unstable_mockModule('../../chatbot/whatsappBaileys.service.js', () => whatsappService);
+jest.unstable_mockModule('../../../repositories/chatbot/whatsappCampaignConversation.repository.js', () => ({ default: whatsappConversationRepo }));
 
 const registry = (await import('../../campaign/campaignNodeRegistry.service.js')).default;
 const channelFlags = await import('../../campaign/campaignChannelFlags.util.js');
@@ -406,6 +408,61 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       expect(wa.blockingIssues.map((i) => i.code)).toContain('missing_sender');
     });
 
+    // Rà soát C P2-9 — nguồn "hội thoại": thẻ phải nói rõ bao nhiêu người đã từng nhắn tới tài khoản nào (trước đây không có dòng người nhận nào).
+    // Mock giữ ĐÚNG hình dạng repo thật: Telegram trả Map<số, số> theo id tài khoản; WhatsApp trả Map<chuỗi, số> theo mã phiên.
+    it('Telegram nguồn hội thoại → recipients.conversations = số hội thoại đang mở của ĐÚNG tài khoản + nhãn tài khoản', async () => {
+      setFlags({ telegram: true });
+      telegramRepo.getAccountById.mockResolvedValue({ id: 12, username: 'shop_bot', is_active: true });
+      telegramRepo.countOpenConversationsByAccountIds.mockResolvedValue(new Map([[12, 37]]));
+      const view = await confirmation.buildConfirmationView({
+        userId: 7,
+        script: script({ telegramAccountId: 12, recipientSource: 'telegram_conversations', steps: [{ message: 'Xin chào' }] }),
+      });
+
+      expect(telegramRepo.countOpenConversationsByAccountIds).toHaveBeenCalledWith([12]);
+      expect(view.steps[0].recipients.conversations).toEqual({ count: 37, accountLabel: 'shop_bot' });
+      expect(view.steps[0].recipients.mode).toBe('source');
+    });
+
+    it('WhatsApp nguồn hội thoại → đếm theo mã phiên của CHỦ; phiên chưa có hội thoại → count 0 (không phải null)', async () => {
+      setFlags({ whatsapp: true });
+      whatsappService.getSession.mockReturnValue({ userName: 'Shop WA' });
+      whatsappConversationRepo.countOpenConversationsBySessionKeys.mockResolvedValue(new Map());
+      const view = await confirmation.buildConfirmationView({
+        userId: 7,
+        script: { nodes: [{ tempId: 'wa-1', nodeSubtype: 'send_whatsapp', config: { whatsappSessionKey: WA_KEY, recipientSource: 'whatsapp_conversations', steps: [{ message: 'Hi' }] } }] },
+      });
+
+      expect(whatsappConversationRepo.countOpenConversationsBySessionKeys).toHaveBeenCalledWith(7, [WA_KEY]);
+      expect(view.steps[0].recipients.conversations).toEqual({ count: 0, accountLabel: 'Shop WA' });
+    });
+
+    it('đếm hội thoại lỗi → thẻ KHÔNG vỡ, count null (thẻ ghi "tất cả người đã từng nhắn", không bịa số)', async () => {
+      setFlags({ telegram: true });
+      telegramRepo.getAccountById.mockResolvedValue({ id: 12, username: 'shop_bot', is_active: true });
+      telegramRepo.countOpenConversationsByAccountIds.mockRejectedValue(new Error('db down'));
+      const view = await confirmation.buildConfirmationView({
+        userId: 7,
+        script: script({ telegramAccountId: 12, recipientSource: 'telegram_conversations', steps: [{ message: 'Xin chào' }] }),
+      });
+
+      expect(view.readyToCreate).toBe(true);
+      expect(view.steps[0].recipients.conversations).toEqual({ count: null, accountLabel: 'shop_bot' });
+    });
+
+    it('nguồn nhập tay / nguồn node WhatsApp → KHÔNG có recipients.conversations và không đếm hội thoại', async () => {
+      setFlags({ telegram: true, whatsapp: true });
+      telegramRepo.getAccountById.mockResolvedValue({ id: 12, username: 'shop_bot', is_active: true });
+      telegramRepo.countOpenConversationsByAccountIds.mockClear();
+      const manual = await confirmation.buildConfirmationView({
+        userId: 7,
+        script: script({ telegramAccountId: 12, recipientSource: 'manual', recipientKeys: ['123456789'], steps: [{ message: 'x' }] }),
+      });
+
+      expect(manual.steps[0].recipients).not.toHaveProperty('conversations');
+      expect(telegramRepo.countOpenConversationsByAccountIds).not.toHaveBeenCalled();
+    });
+
     it('WhatsApp nhập tay: đếm SĐT, thiếu thì chặn manual_recipients_required', async () => {
       setFlags({ whatsapp: true });
       whatsappService.getSession.mockReturnValue({ userName: 'Shop WA' });
@@ -430,6 +487,20 @@ describe('P8a — assistant Telegram/WhatsApp', () => {
       expect(aiPromptResources.getAdapterNodeTypesPromptLines()).toBe('');
       expect(telegramRepo.listAccountsByUser).not.toHaveBeenCalled();
       expect(whatsappService.listSessions).not.toHaveBeenCalled();
+    });
+
+    // Rà soát C P2-9 — prompt không còn DẠY model chép danh sách người nhận vào node (`recipientKeys`/nguồn "manual"): danh sách riêng tư đi qua lớp phủ.
+    it('cờ BẬT: dòng node Telegram/WhatsApp KHÔNG dạy recipientKeys, dặn dùng nguồn hội thoại và cấm chép chat id/SĐT', () => {
+      setFlags({ telegram: true, whatsapp: true });
+      const lines = aiPromptResources.getAdapterNodeTypesPromptLines();
+
+      expect(lines).toContain('send_telegram');
+      expect(lines).toContain('send_whatsapp');
+      expect(lines).not.toContain('recipientKeys');
+      expect(lines).toContain('"telegram_conversations"');
+      expect(lines).toContain('"whatsapp_conversations"');
+      expect(lines).toContain('KHÔNG chép chat id/SĐT');
+      expect(lines).toContain('KHÔNG chép SĐT');
     });
 
     it('cờ BẬT: liệt kê tài khoản Telegram + phiên WhatsApp CỦA CHỦ (lọc theo tiền tố), usable đúng', async () => {

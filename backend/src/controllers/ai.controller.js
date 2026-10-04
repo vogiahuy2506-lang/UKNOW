@@ -20,7 +20,7 @@ import { applyWizardStateAction, normalizeWizardState, isWizardAnswerTurn, isWiz
 import auditService, { AUDIT_ACTIONS, AUDIT_ENTITY_TYPES } from '../services/audit.service.js';
 import uploadController from './upload.controller.js';
 import recipientExtractorService from '../services/ai/recipientExtractor.service.js';
-import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients } from '../utils/manualRecipients.util.js';
+import { MAX_AI_MANUAL_RECIPIENTS, validateManualRecipients, validateTelegramChatIds } from '../utils/manualRecipients.util.js';
 import {
   resolveLandingBrief,
   buildLandingBriefContext,
@@ -164,7 +164,11 @@ class AiController {
         ownerUserId: resolveOwnerUserId(req.user),
       });
       if (directRecipients) this.applyDirectRecipients(preparedScript, directRecipients);
-      else if (preparedScript.wizardDataSource === 'manual' || preparedScript.wizardDataSource === 'zalo_contacts') this.markManualRecipientsRequired(preparedScript);
+      else {
+        if (preparedScript.wizardDataSource === 'manual' || preparedScript.wizardDataSource === 'zalo_contacts') this.markManualRecipientsRequired(preparedScript);
+        // Telegram/WhatsApp nguồn nhập tay mà không có lớp phủ riêng tư: bỏ danh sách do model chép, thẻ báo thiếu người nhận (C P2-9).
+        if (this.hasAdapterManualRecipientSource(preparedScript)) this.clearModelCopiedAdapterRecipients(preparedScript);
+      }
       const confirmationView = await campaignConfirmationService.buildConfirmationView({
         script: preparedScript,
         userId: req.user.id,
@@ -1041,7 +1045,7 @@ class AiController {
         ownerUserId: resolveOwnerUserId(req.user),
       });
       if (directRecipients) this.applyDirectRecipients(preparedScript, directRecipients);
-      else if (preparedScript.wizardDataSource === 'manual') {
+      else if (preparedScript.wizardDataSource === 'manual' || this.hasAdapterManualRecipientSource(preparedScript)) {
         const error = new Error('Danh sách người nhận trực tiếp đã hết phiên. Vui lòng nhập lại.');
         error.code = 'MANUAL_RECIPIENTS_REQUIRED';
         error.statusCode = 400;
@@ -1134,9 +1138,22 @@ class AiController {
   }
 
   applyDirectRecipients(script, directRecipients) {
-    const recipients = validateManualRecipients(directRecipients);
+    // `chatIds` (Telegram) đi riêng: validateManualRecipients giữ hình dạng cũ { emails, phones, uids } cho các nơi khác (rà soát C P2-9).
+    const { chatIds: rawChatIds, ...otherRecipients } = directRecipients && typeof directRecipients === 'object' ? directRecipients : {};
+    const chatIds = validateTelegramChatIds(rawChatIds);
+    const hasOtherRecipients = ['emails', 'phones', 'uids'].some((key) => {
+      const value = otherRecipients[key];
+      return (Array.isArray(value) ? value : String(value || '').split(/[\s,;\n]+/)).some((item) => String(item || '').trim());
+    });
+    // Chỉ chat id → bỏ qua kiểm "ít nhất một người nhận" của validateManualRecipients (nó đòi email/SĐT/UID); không có gì → lỗi chuẩn như cũ.
+    const recipients = chatIds.length > 0 && !hasOtherRecipients
+      ? { emails: [], phones: [], uids: [] }
+      : validateManualRecipients(otherRecipients);
     const hasEmailAction = (script.nodes || []).some((node) => getNodeSubtype(node) === 'send_email');
     const hasZaloPersonalAction = (script.nodes || []).some((node) => getNodeSubtype(node) === 'send_zalo_personal');
+    // Kênh adapter (rà soát C P2-9): người nhận nhập tay đi qua CHÍNH lớp phủ riêng tư này — không để model chép chat id/SĐT vào node.
+    const hasTelegramAction = (script.nodes || []).some((node) => getNodeSubtype(node) === 'send_telegram');
+    const hasWhatsAppAction = (script.nodes || []).some((node) => getNodeSubtype(node) === 'send_whatsapp');
 
     if (hasZaloPersonalAction && (!recipients.phones || recipients.phones.length === 0) && (!recipients.uids || recipients.uids.length === 0)) {
       const error = new Error('Danh sách người nhận cho chiến dịch Zalo không có số điện thoại hoặc UID nào hợp lệ.');
@@ -1152,8 +1169,28 @@ class AiController {
       throw error;
     }
 
-    if ((recipients.emails.length && !hasEmailAction) || ((recipients.phones.length || recipients.uids.length) && !hasZaloPersonalAction)) {
-      const error = new Error('Email chỉ dùng cho chiến dịch Email; số điện thoại hoặc bạn bè Zalo chỉ dùng cho Zalo cá nhân.');
+    if (hasTelegramAction && chatIds.length === 0) {
+      const error = new Error('Danh sách người nhận cho chiến dịch Telegram không có chat id nào hợp lệ.');
+      error.code = 'TELEGRAM_RECIPIENTS_EMPTY';
+      error.statusCode = 400;
+      throw error;
+    }
+
+    if (hasWhatsAppAction && (!recipients.phones || recipients.phones.length === 0)) {
+      const error = new Error('Danh sách người nhận cho chiến dịch WhatsApp không có số điện thoại nào hợp lệ.');
+      error.code = 'WHATSAPP_RECIPIENTS_EMPTY';
+      error.statusCode = 400;
+      throw error;
+    }
+
+    const phonesHaveTarget = hasZaloPersonalAction || hasWhatsAppAction;
+    if (
+      (recipients.emails.length && !hasEmailAction)
+      || (recipients.phones.length && !phonesHaveTarget)
+      || (recipients.uids.length && !hasZaloPersonalAction)
+      || (chatIds.length && !hasTelegramAction)
+    ) {
+      const error = new Error('Email chỉ dùng cho chiến dịch Email; số điện thoại cho Zalo cá nhân hoặc WhatsApp; bạn bè Zalo chỉ dùng cho Zalo cá nhân; chat id chỉ dùng cho Telegram.');
       error.code = 'MANUAL_RECIPIENT_CHANNEL_MISMATCH';
       error.statusCode = 400;
       throw error;
@@ -1178,13 +1215,45 @@ class AiController {
           config.zaloRecipientPhones = recipients.phones;
         }
         matched = true;
+      } else if (subtype === 'send_telegram' && chatIds.length) {
+        config.recipientSource = 'manual';
+        config.recipientKeys = chatIds;
+        matched = true;
+      } else if (subtype === 'send_whatsapp' && recipients.phones.length) {
+        config.recipientSource = 'manual';
+        config.recipientKeys = recipients.phones;
+        delete config.recipientNodeId;
+        delete config.recipientColumn;
+        matched = true;
       }
     }
     if (!matched) {
-      const error = new Error('Danh sách nhập trực tiếp chỉ hỗ trợ Email hoặc Zalo cá nhân đúng với kênh gửi.');
+      const error = new Error('Danh sách nhập trực tiếp chỉ hỗ trợ Email, Zalo cá nhân, Telegram hoặc WhatsApp đúng với kênh gửi.');
       error.code = 'MANUAL_RECIPIENT_CHANNEL_MISMATCH';
       error.statusCode = 400;
       throw error;
+    }
+  }
+
+  /**
+   * Rà soát C P2-9 — kịch bản Telegram/WhatsApp có node nguồn NHẬP TAY (`recipientSource: 'manual'`). Danh sách chat id / SĐT trong node là do MODEL
+   * chép từ câu người dùng (trái nguyên tắc M2: danh sách người nhận đi qua lớp phủ `directRecipients` riêng tư, không qua model). Model chép sai một
+   * chữ số là tin tới một người lạ. Không có lớp phủ → xoá danh sách model chép và đòi nhập lại (thẻ xác nhận báo `manual_recipients_required`).
+   */
+  hasAdapterManualRecipientSource(script) {
+    return (script?.nodes || []).some((node) => {
+      const subtype = getNodeSubtype(node);
+      return (subtype === 'send_telegram' || subtype === 'send_whatsapp')
+        && (node.config || {}).recipientSource === 'manual';
+    });
+  }
+
+  clearModelCopiedAdapterRecipients(script) {
+    for (const node of script?.nodes || []) {
+      const subtype = getNodeSubtype(node);
+      if (subtype !== 'send_telegram' && subtype !== 'send_whatsapp') continue;
+      const config = node.config || (node.config = {});
+      if (config.recipientSource === 'manual') config.recipientKeys = [];
     }
   }
 

@@ -76,3 +76,29 @@ export function validateManualRecipients({ emails, phones, uids } = {}) {
   }
   return { emails: emailItems, phones: phoneItems, uids: uidItems };
 }
+
+/**
+ * Rà soát C P2-9 — người nhận nhập tay cho kênh TELEGRAM: chat id SỐ (người: dương; nhóm/kênh: âm, vd -1001234567890), cùng quy tắc
+ * `TELEGRAM_CHAT_ID_PATTERN` của kênh gửi (`telegram.campaignChannel.js`). Tách khỏi `validateManualRecipients` để KHÔNG đổi hình dạng kết
+ * quả (`{ emails, phones, uids }`) mà các nơi khác đang dùng. Rỗng → `[]` (nơi gọi tự quyết có bắt buộc hay không).
+ *
+ * @param {string|string[]|undefined|null} raw
+ * @returns {string[]}
+ */
+export function validateTelegramChatIds(raw) {
+  const items = [...new Set(splitRecipients(raw))];
+  const invalid = items.find((item) => !/^-?\d{1,20}$/.test(item));
+  if (invalid !== undefined) {
+    const error = new Error('Có chat id Telegram không hợp lệ trong danh sách (chỉ nhận số, ví dụ 123456789 hoặc -1001234567890).');
+    error.code = 'INVALID_MANUAL_RECIPIENTS';
+    error.statusCode = 400;
+    throw error;
+  }
+  if (items.length > MAX_AI_MANUAL_RECIPIENTS) {
+    const error = new Error(`Chỉ được nhập tối đa ${MAX_AI_MANUAL_RECIPIENTS} người nhận mỗi lần.`);
+    error.code = 'MANUAL_RECIPIENTS_LIMIT';
+    error.statusCode = 400;
+    throw error;
+  }
+  return items;
+}

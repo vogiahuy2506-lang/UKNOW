@@ -60,10 +60,10 @@ class AiPromptResourcesService {
     const enabled = getEnabledAdapterCampaignChannels();
     const lines = [];
     if (enabled.includes('telegram')) {
-      lines.push('• action/send_telegram — gửi Telegram, MỘT tin gửi ngay (telegramAccountId, recipientSource: "telegram_conversations"|"manual", recipientKeys: chat id số khi manual, steps: [{ message }] đúng 1 phần tử). KHÔNG cần select_zalo_account; KHÔNG có delay/nhiều bước');
+      lines.push('• action/send_telegram — gửi Telegram, MỘT tin gửi ngay (telegramAccountId, recipientSource: "telegram_conversations" = những người đã từng nhắn tới tài khoản này — LUÔN dùng giá trị này, steps: [{ message }] đúng 1 phần tử). KHÔNG cần select_zalo_account; KHÔNG có delay/nhiều bước. KHÔNG dùng recipientSource "manual" và KHÔNG chép chat id/SĐT người dùng gõ vào node (danh sách người nhận riêng do hệ thống nhận ở bước chuẩn bị gửi, không qua bạn)');
     }
     if (enabled.includes('whatsapp')) {
-      lines.push('• action/send_whatsapp — gửi WhatsApp, MỘT tin gửi ngay (whatsappSessionKey, recipientSource: "whatsapp_conversations"|"node"|"manual", recipientNodeId + recipientColumn khi node, recipientKeys: SĐT khi manual, steps: [{ message }] đúng 1 phần tử). KHÔNG cần select_zalo_account; KHÔNG có delay/nhiều bước');
+      lines.push('• action/send_whatsapp — gửi WhatsApp, MỘT tin gửi ngay (whatsappSessionKey, recipientSource: "whatsapp_conversations" = những người đã từng nhắn tới số này (mặc định) | "node" kèm recipientNodeId + recipientColumn khi người dùng đã chọn nguồn Sheet/landing/DB, steps: [{ message }] đúng 1 phần tử). KHÔNG cần select_zalo_account; KHÔNG có delay/nhiều bước. KHÔNG dùng recipientSource "manual" và KHÔNG chép SĐT người dùng gõ vào node (danh sách người nhận riêng do hệ thống nhận ở bước chuẩn bị gửi, không qua bạn)');
     }
     return lines.length > 0 ? `\n${lines.join('\n')}` : '';
   }
