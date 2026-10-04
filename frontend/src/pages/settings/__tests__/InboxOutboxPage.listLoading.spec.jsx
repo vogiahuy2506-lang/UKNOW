@@ -108,6 +108,37 @@ describe('InboxOutboxPage — tải danh sách (H-07, H-20)', () => {
     expect(chatbotApi.getConversations.mock.calls[0][0].zaloAccountId).toBeUndefined();
   });
 
+  // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN G2: danh sách tài khoản từ server đã lọc theo tài khoản được giao.
+  it('G2: tài khoản đã nhớ không còn trong danh sách được phép → bỏ khỏi bộ nhớ (localStorage về "all"), không gửi lại id đó', async () => {
+    localStorage.setItem('uknow.inbox.zaloAccountId.1', '999');
+
+    renderPage();
+
+    await waitFor(() => expect(chatbotApi.getConversations).toHaveBeenCalledTimes(1));
+    expect(chatbotApi.getConversations.mock.calls[0][0].zaloAccountId).toBeUndefined();
+    expect(localStorage.getItem('uknow.inbox.zaloAccountId.1')).toBe('all');
+  });
+
+  it('G2: nhân viên chưa được giao tài khoản nào (danh sách rỗng) + id đã nhớ từ trước → bỏ id, danh sách tải không kèm zaloAccountId', async () => {
+    localStorage.setItem('uknow.inbox.zaloAccountId.1', '103');
+    chatbotApi.getZaloSyncStatus.mockResolvedValue({ data: { success: true, data: { connected: false, accounts: [] } } });
+
+    renderPage();
+
+    await waitFor(() => expect(chatbotApi.getConversations).toHaveBeenCalledTimes(1));
+    expect(chatbotApi.getConversations.mock.calls[0][0].zaloAccountId).toBeUndefined();
+    expect(localStorage.getItem('uknow.inbox.zaloAccountId.1')).toBe('all');
+  });
+
+  it('G2: tài khoản đã nhớ vẫn được phép → giữ nguyên trong bộ nhớ', async () => {
+    localStorage.setItem('uknow.inbox.zaloAccountId.1', '103');
+
+    renderPage();
+
+    await waitFor(() => expect(chatbotApi.getConversations).toHaveBeenCalledTimes(1));
+    expect(localStorage.getItem('uknow.inbox.zaloAccountId.1')).toBe('103');
+  });
+
   it('API trạng thái lỗi vẫn tải danh sách (không kẹt ở màn tải)', async () => {
     chatbotApi.getZaloSyncStatus.mockRejectedValue(new Error('500'));
     vi.spyOn(console, 'error').mockImplementation(() => {});

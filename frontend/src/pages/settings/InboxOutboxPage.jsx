@@ -319,6 +319,13 @@ const InboxPage = () => {
           const wanted = prev ?? readSavedAccountId(currentUserId);
           return wanted != null && accounts.some((a) => String(a.id) === String(wanted)) ? wanted : null;
         });
+        // Giao tài khoản Zalo cho nhân viên: danh sách này đã được server lọc theo tài khoản được giao. Tài khoản đã nhớ mà không
+        // còn trong danh sách (chủ vừa gỡ giao, hoặc đổi sang không gian làm việc khác) thì bỏ hẳn khỏi bộ nhớ, không để lần
+        // sau lại gửi một id mà người này không còn được dùng.
+        const savedAccountId = readSavedAccountId(currentUserId);
+        if (savedAccountId != null && !accounts.some((a) => String(a.id) === String(savedAccountId))) {
+          saveAccountPreference(currentUserId, null);
+        }
       }
     } catch (err) {
       console.error('Failed to fetch session status:', err);
