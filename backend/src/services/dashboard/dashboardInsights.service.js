@@ -476,6 +476,84 @@ function summarizeTimelines(dailySent = [], ordersTimeline = []) {
 }
 
 /**
+ * Tỉ lệ chuyển đổi do SERVER tự tính từ số đếm của snapshot (D-20) — trước đây prompt bắt model tự chia
+ * ("đơn đã mua so với số tin đã gửi / lượt nhấp") nên con số hiện như phân tích mà không có cơ sở.
+ *
+ * Đây là tỉ lệ giữa hai số đếm CÙNG KỲ (đơn đã mua / tin đã gửi; đơn đã mua / tin có người bấm), KHÔNG theo dõi từng khách:
+ * đơn có thể đến từ khách không bấm link, nên tỉ lệ theo lượt bấm chỉ có nghĩa khi đơn ≤ lượt bấm — vượt thì bỏ (không in "400%").
+ *
+ * @param {object|null|undefined} overview `snapshot.overview` (`sent.total`, `clicks.total`, `orders.completed`)
+ * @returns {{ completedOrders: number, sentTotal: number, clickedTotal: number, perSentPct: number|null, perClickPct: number|null }}
+ */
+function computeConversionMetrics(overview) {
+  const num = (n) => {
+    const v = Number(n);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+  };
+  const completedOrders = num(overview?.orders?.completed);
+  const sentTotal = num(overview?.sent?.total);
+  const clickedTotal = num(overview?.clicks?.total);
+  const pct = (part, whole) => Math.round((part / whole) * 1000) / 10;
+  return {
+    completedOrders,
+    sentTotal,
+    clickedTotal,
+    perSentPct: sentTotal > 0 ? pct(completedOrders, sentTotal) : null,
+    perClickPct: clickedTotal > 0 && completedOrders <= clickedTotal ? pct(completedOrders, clickedTotal) : null,
+  };
+}
+
+/**
+ * Chuỗi hiển thị cho `key_metrics_analysis.conversion_rate.value` (FE `MetricCard` in nguyên chuỗi này).
+ *
+ * @param {ReturnType<typeof computeConversionMetrics>} metrics
+ * @param {string} [locale='vi']
+ * @returns {string} '—' khi không có mẫu số nào
+ */
+function formatConversionValue(metrics, locale = 'vi') {
+  const en = locale === 'en';
+  const parts = [];
+  // Thẻ trên UI tên "Chuyển đổi (click → mua)" nên tỉ lệ theo lượt bấm đứng trước; mỗi tỉ lệ ghi rõ mẫu số.
+  if (metrics.perClickPct != null) {
+    parts.push(en
+      ? `${metrics.completedOrders} completed orders / ${metrics.clickedTotal} clicked messages = ${metrics.perClickPct}%`
+      : `${metrics.completedOrders} đơn đã mua / ${metrics.clickedTotal} tin có người bấm = ${metrics.perClickPct}%`);
+  }
+  if (metrics.perSentPct != null) {
+    parts.push(en
+      ? `${metrics.completedOrders} completed orders / ${metrics.sentTotal} messages sent = ${metrics.perSentPct}%`
+      : `${metrics.completedOrders} đơn đã mua / ${metrics.sentTotal} tin đã gửi = ${metrics.perSentPct}%`);
+  }
+  return parts.length ? parts.join('; ') : '—';
+}
+
+/**
+ * Ghi đè `key_metrics_analysis.conversion_rate.value` bằng số SERVER đã tính; model chỉ còn viết `comment`.
+ * Chỉ chạm khi model đã trả `key_metrics_analysis` dạng object — không tự dựng khối này (FE chọn nhánh hiển thị
+ * "có cấu trúc" theo sự hiện diện của nó).
+ *
+ * @param {object} payload payload đã parse từ model
+ * @param {object|null|undefined} overview `snapshot.overview`
+ * @param {string} locale
+ * @returns {object}
+ */
+function applyServerComputedMetrics(payload, overview, locale) {
+  const km = payload?.key_metrics_analysis;
+  if (!km || typeof km !== 'object' || Array.isArray(km)) return payload;
+  const prev = km.conversion_rate;
+  const prevObject = prev && typeof prev === 'object' && !Array.isArray(prev)
+    ? prev
+    : (typeof prev === 'string' && prev.trim() ? { comment: prev } : {});
+  return {
+    ...payload,
+    key_metrics_analysis: {
+      ...km,
+      conversion_rate: { ...prevObject, value: formatConversionValue(computeConversionMetrics(overview), locale) },
+    },
+  };
+}
+
+/**
  * Gom payload an toàn gửi Gemini từ snapshot do SERVER tính (dashboardAnalyticsService.getInsightSnapshot). Chuỗi theo
  * ngày được rút gọn để tránh MAX_TOKENS / JSON cắt đứt, còn phần tóm tắt tính trên chuỗi đầy đủ.
  *
@@ -552,6 +630,7 @@ function buildDataMarkdownSection(safePayload) {
     emailLine,
     `- Lượt nhấp link ở mọi kênh (số tin có người bấm): ${fmt(clicks.total)} — theo kênh: ${channelList(clicks.byChannel, 'clicked')}`,
     `- Khách để lại thông tin (đơn chờ): ${fmt(orders.pending)}; Đã mua: ${fmt(orders.completed)} — theo kênh: ${orderChannelList}`,
+    `- Tỉ lệ chuyển đổi (SERVER ĐÃ TÍNH — dùng nguyên văn, KHÔNG tự tính lại; là tỉ lệ giữa hai số đếm CÙNG KỲ, không theo dõi từng khách): ${formatConversionValue(computeConversionMetrics(ov), 'vi')}`,
     '',
     '## CHIẾN DỊCH TRONG KỲ (tối đa 10, sắp theo số đã gửi)',
     campaignLines,
@@ -603,9 +682,9 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
       '{',
       '  "overview": "Overall summary of campaign performance in 1-3 sentences",',
       '  "key_metrics_analysis": {',
-      '    "open_rate": { "value": "share of emails opened or —", "benchmark": "Compare with industry benchmark (~20-25%)", "assessment": "good|average|poor", "comment": "brief comment" },',
-      '    "click_rate": { "value": "share of emails with a clicked link or —", "benchmark": "Brief benchmark comparison", "assessment": "good|average|poor", "comment": "brief comment" },',
-      '    "conversion_rate": { "value": "completed orders vs messages sent / clicks (or —)", "comment": "comment on bottom of the funnel" }',
+      '    "open_rate": { "value": "share of emails opened or —", "benchmark": "General industry reference level, labelled as a REFERENCE only (not a measurement of this account), or —", "assessment": "good|average|poor", "comment": "brief comment" },',
+      '    "click_rate": { "value": "share of emails with a clicked link or —", "benchmark": "General industry reference level, labelled as a REFERENCE only, or —", "assessment": "good|average|poor", "comment": "brief comment" },',
+      '    "conversion_rate": { "comment": "comment on the bottom of the funnel, based on the ratio the SERVER already computed in the data section; do NOT recompute it and do not add new numbers" }',
       '  },',
       '  "insights": [',
       '    { "title": "...", "type": "opportunity|problem|warning|trend", "priority": "high|medium|low", "detail": "...", "impact": "..." }',
@@ -621,7 +700,7 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
       '    "suggestion": "..."',
       '  },',
       '  "action_plan": [',
-      '    { "priority": 1, "action": "...", "expected_result": "...", "timeline": "..." }',
+      '    { "priority": 1, "action": "...", "expected_result": "qualitative signal to watch that shows the action works (NO forecast numbers or percentages)", "timeline": "..." }',
       '  ],',
       '  "risk_warning": "Risk warning if metrics are not improved (1-2 sentences)",',
       '  "charts": {',
@@ -647,6 +726,8 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
       '- For channel_analysis: only discuss channels that appear in the data (do not invent channels with no messages), and say plainly when a channel is unused.',
       '- Prioritize actionable insights that can be executed within 7-30 days.',
       '- Keep benchmark comparisons qualitative and balanced when data is sparse.',
+      '- Industry benchmarks, if mentioned, are general references only: label them "reference", never present them as a measured result of this account, and do NOT forecast numeric outcomes.',
+      '- conversion_rate.value is filled in by the server from the data section: write only its comment, never recompute or invent ratios.',
       '- If completed orders are disproportionately low compared to clicks/sends, diagnose funnel bottleneck with testable hypothesis.',
     ].join('\n');
   }
@@ -673,9 +754,9 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
     '{',
     '  "overview": "Tóm tắt tổng thể hiệu suất chiến dịch trong 1-3 câu",',
     '  "key_metrics_analysis": {',
-    '    "open_rate": { "value": "% thư đã mở hoặc —", "benchmark": "So sánh với chuẩn ngành (email ~20-25%)", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
-    '    "click_rate": { "value": "% thư có người bấm link hoặc —", "benchmark": "Chuẩn tham chiếu ngắn", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
-    '    "conversion_rate": { "value": "đơn đã mua so với số tin đã gửi / lượt nhấp (hoặc —)", "comment": "nhận xét về phễu cuối" }',
+    '    "open_rate": { "value": "% thư đã mở hoặc —", "benchmark": "Mức tham chiếu chung của ngành, ghi rõ là THAM KHẢO (không phải số đo của tài khoản này) hoặc —", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
+    '    "click_rate": { "value": "% thư có người bấm link hoặc —", "benchmark": "Mức tham chiếu chung của ngành, ghi rõ là THAM KHẢO hoặc —", "assessment": "tốt|trung bình|kém", "comment": "nhận xét ngắn" },',
+    '    "conversion_rate": { "comment": "nhận xét về phễu cuối, dựa trên tỉ lệ SERVER ĐÃ TÍNH ở mục dữ liệu; KHÔNG tự tính lại, không thêm số mới" }',
     '  },',
     '  "insights": [',
     '    { "title": "...", "type": "opportunity|problem|warning|trend", "priority": "high|medium|low", "detail": "...", "impact": "..." }',
@@ -691,7 +772,7 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
     '    "suggestion": "..."',
     '  },',
     '  "action_plan": [',
-    '    { "priority": 1, "action": "...", "expected_result": "...", "timeline": "..." }',
+    '    { "priority": 1, "action": "...", "expected_result": "dấu hiệu định tính cần theo dõi để biết hành động có tác dụng (KHÔNG ghi con số / phần trăm dự báo)", "timeline": "..." }',
     '  ],',
     '  "risk_warning": "Cảnh báo rủi ro nếu không cải thiện (1-2 câu)",',
     '  "charts": {',
@@ -717,6 +798,8 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
     '- Với channel_analysis: chỉ bàn các kênh có trong dữ liệu (không bịa kênh không có tin), nói thẳng khi một kênh chưa được dùng.',
     '- Ưu tiên insight hành động được (actionable), có thể làm trong 7-30 ngày.',
     '- So sánh benchmark ở mức định tính, không cứng nhắc nếu dữ liệu thiếu.',
+    '- Mốc chuẩn ngành (nếu nêu) chỉ là THAM KHẢO chung: ghi rõ chữ "tham khảo", không trình bày như số đo của tài khoản này; KHÔNG dự báo con số kết quả.',
+    '- conversion_rate.value do server điền từ mục dữ liệu: chỉ viết comment, không tự tính lại hay bịa tỉ lệ.',
     '- Nếu đơn đã mua rất thấp so với nhấp/gửi, nêu nút thắt phễu và giả thuyết kiểm chứng được.',
   ].join('\n');
 }
@@ -832,7 +915,7 @@ class DashboardInsightsService {
       }
       return {
         success: true,
-        data: normalizeInsightPayload({ ...parsed, notes }),
+        data: normalizeInsightPayload(applyServerComputedMetrics({ ...parsed, notes }, snapshot?.overview, locale)),
       };
     }
 
@@ -910,6 +993,6 @@ class DashboardInsightsService {
   }
 }
 
-export { buildInsightSafePayload, buildDataMarkdownSection };
+export { buildInsightSafePayload, buildDataMarkdownSection, computeConversionMetrics, formatConversionValue };
 
 export default new DashboardInsightsService();
