@@ -14,6 +14,7 @@ import {
   HiOutlineTrendingUp,
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
+import NumberInput from '../../components/common/NumberInput';
 
 const ListingSettings = ({ id: propId, onClose: propOnClose, onBack: propOnBack }) => {
   const paramsId = useParams().id;
@@ -246,12 +247,10 @@ const ListingSettings = ({ id: propId, onClose: propOnClose, onBack: propOnBack 
               >
                 −
               </button>
-              <input
-                type="number"
+              <NumberInput
                 value={form.priceCredits}
-                onChange={(e) => setForm((prev) => ({ ...prev, priceCredits: parseInt(e.target.value, 10) || 0 }))}
+                onChange={(v) => setForm((prev) => ({ ...prev, priceCredits: parseInt(v, 10) || 0 }))}
                 className="w-24 px-4 py-2.5 rounded-lg border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all text-center text-gray-900 font-medium"
-                min="0"
               />
               <button
                 type="button"

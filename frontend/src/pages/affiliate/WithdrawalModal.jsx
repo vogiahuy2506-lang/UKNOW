@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
 import affiliateService from '../../services/affiliate.service';
 import Notice from '../../components/common/Notice';
+import NumberInput from '../../components/common/NumberInput';
 
 const MIN_AMOUNT = 1_000_000;
 
@@ -191,12 +192,10 @@ export default function WithdrawalModal({ isOpen, onClose, currentBalance, onSuc
               </button>
             </div>
             <div className="relative">
-              <input
-                type="number"
-                step="10000"
-                min="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
+              {/* Làm tròn khi hiển thị: số dư có thể lẻ thập phân, NumberInput chỉ đọc chữ số (đọc "1.5" thành 15). */}
+              <NumberInput
+                value={amount === '' ? '' : Math.round(Number(amount) || 0)}
+                onChange={setAmount}
                 placeholder={t('affiliate.withdrawalAmountPlaceholder')}
                 className={`input font-semibold text-base pr-14 ${validationError ? 'input-error' : ''}`}
               />

@@ -8,6 +8,7 @@ import {
 } from 'react-icons/hi';
 import marketplaceService from '../../services/marketplace.service';
 import { useI18n } from '../../i18n';
+import NumberInput from '../common/NumberInput';
 
 
 const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
@@ -259,11 +260,9 @@ const MarketplaceListingModal = ({ open, chatbot, onClose, onSuccess }) => {
               >
                 -
               </button>
-              <input
-                type="number"
+              <NumberInput
                 value={form.priceCredits}
-                onChange={(e) => setForm(prev => ({ ...prev, priceCredits: Math.max(0, parseInt(e.target.value, 10) || 0) }))}
-                min="0"
+                onChange={(v) => setForm(prev => ({ ...prev, priceCredits: Math.max(0, parseInt(v, 10) || 0) }))}
                 className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-center font-semibold"
               />
               <button

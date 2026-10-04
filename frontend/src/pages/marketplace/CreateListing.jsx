@@ -14,6 +14,7 @@ import campaignApiService from '../../features/campaigns/services/campaignApi.se
 import ChatbotSelectCard from '../../components/marketplace/ChatbotSelectCard';
 import { FormField, TagInput } from '../../components/common/FormComponents';
 import { useI18n } from '../../i18n';
+import NumberInput from '../../components/common/NumberInput';
 
 const CAMPAIGN_TYPE_FILTERS = [
   { value: '', label: 'Tất cả' },
@@ -788,11 +789,9 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     >
                       −
                     </button>
-                    <input
-                      type="number"
+                    <NumberInput
                       value={form.priceCredits}
-                      onChange={(e) => updateForm('priceCredits', Math.max(0, parseInt(e.target.value, 10) || 0))}
-                      min={0}
+                      onChange={(v) => updateForm('priceCredits', Math.max(0, parseInt(v, 10) || 0))}
                       className="input flex-1 text-center text-base font-semibold"
                       placeholder="0"
                     />
@@ -943,11 +942,9 @@ const CreateListing = ({ open, chatbot, onClose, onSuccess }) => {
                     >
                       −
                     </button>
-                    <input
-                      type="number"
+                    <NumberInput
                       value={form.priceCredits}
-                      onChange={(e) => updateForm('priceCredits', Math.max(0, parseInt(e.target.value, 10) || 0))}
-                      min={0}
+                      onChange={(v) => updateForm('priceCredits', Math.max(0, parseInt(v, 10) || 0))}
                       className="input w-32 text-center text-lg font-semibold"
                     />
                     <button

@@ -10,6 +10,7 @@ import {
 import marketplaceService from '../../services/marketplace.service';
 import { TagInput } from '../../components/common/FormComponents';
 import { useI18n } from '../../i18n';
+import NumberInput from '../common/NumberInput';
 
 const CAMPAIGN_TYPE_LABELS = {
   email: 'Email',
@@ -253,11 +254,9 @@ const CampaignMarketplaceModal = ({ open, campaign, onClose, onSuccess }) => {
               >
                 −
               </button>
-              <input
-                type="number"
+              <NumberInput
                 value={form.priceCredits}
-                onChange={(e) => updateForm('priceCredits', Math.max(0, parseInt(e.target.value, 10) || 0))}
-                min="0"
+                onChange={(v) => updateForm('priceCredits', Math.max(0, parseInt(v, 10) || 0))}
                 className="flex-1 px-3.5 py-2.5 text-sm rounded-xl border border-gray-200 bg-white focus:outline-none focus:ring-2 focus:ring-orange-200 focus:border-orange-400 transition-all text-center font-semibold"
               />
               <button
