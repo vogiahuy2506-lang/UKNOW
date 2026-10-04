@@ -98,27 +98,27 @@ describe('H-03 — số chưa đọc = số hội thoại 1-1 có tin chưa đ�
   it('đếm HỘI THOẠI (không đếm tin), bỏ nhóm và tài khoản hết phiên: 2 Zalo 1-1 + 1 Web chat = 3', async () => {
     const { user } = await setup();
 
-    expect(await repo.getUnreadConversationCount(user.id)).toBe(3);
+    expect(await repo.getUnreadConversationCount(user.id, { accessibleZaloAccountIds: null })).toBe(3);
   });
 
   it('theo phạm vi: tab Zalo / tab Web / một tài khoản cụ thể', async () => {
     const { user, connected, expired } = await setup();
 
-    expect(await repo.getUnreadConversationCount(user.id, { channel: 'zalo_personal' })).toBe(2);
-    expect(await repo.getUnreadConversationCount(user.id, { channel: 'web' })).toBe(1);
-    expect(await repo.getUnreadConversationCount(user.id, { channel: 'zalo_personal', zaloAccountId: connected })).toBe(2);
+    expect(await repo.getUnreadConversationCount(user.id, { accessibleZaloAccountIds: null, channel: 'zalo_personal' })).toBe(2);
+    expect(await repo.getUnreadConversationCount(user.id, { accessibleZaloAccountIds: null, channel: 'web' })).toBe(1);
+    expect(await repo.getUnreadConversationCount(user.id, { accessibleZaloAccountIds: null, channel: 'zalo_personal', zaloAccountId: connected })).toBe(2);
     // tài khoản hết phiên: Zalo = 0
-    expect(await repo.getUnreadConversationCount(user.id, { channel: 'zalo_personal', zaloAccountId: expired })).toBe(0);
+    expect(await repo.getUnreadConversationCount(user.id, { accessibleZaloAccountIds: null, channel: 'zalo_personal', zaloAccountId: expired })).toBe(0);
     // "Tất cả" + tài khoản hết phiên: chỉ còn Web chat
-    expect(await repo.getUnreadConversationCount(user.id, { zaloAccountId: expired })).toBe(1);
+    expect(await repo.getUnreadConversationCount(user.id, { accessibleZaloAccountIds: null, zaloAccountId: expired })).toBe(1);
   });
 
   it('không rò sang user khác', async () => {
     const { user } = await setup();
     const other = await createUser({ username: `other${Date.now()}` });
 
-    expect(await repo.getUnreadConversationCount(other.id)).toBe(0);
-    expect(await repo.getUnreadConversationCount(user.id)).toBe(3);
+    expect(await repo.getUnreadConversationCount(other.id, { accessibleZaloAccountIds: null })).toBe(0);
+    expect(await repo.getUnreadConversationCount(user.id, { accessibleZaloAccountIds: null })).toBe(3);
   });
 
   it('API: GET /inbox/unread-count trả { total, unit } theo phạm vi query', async () => {
@@ -244,8 +244,8 @@ describe('H-14 — lọc "Hôm nay" theo ngày lịch Việt Nam', () => {
       externalId: 'yesterday', name: 'Hôm qua', lastMessageAt: new Date(startVn - 60_000).toISOString(),
     });
 
-    const list = await repo.getConversations(user.id, { date: 'today', limit: 20, offset: 0 });
-    const total = await repo.getConversationsCount(user.id, { date: 'today' });
+    const list = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, date: 'today', limit: 20, offset: 0 });
+    const total = await repo.getConversationsCount(user.id, { accessibleZaloAccountIds: null, date: 'today' });
 
     expect(list.map((c) => Number(c.id))).toEqual([todayConv]);
     expect(total).toBe(1);
@@ -294,20 +294,20 @@ describe('H-06 / H-13 / H-33 — danh sách: chọn trang trước, chip lọc p
       `webchat:${ids.web2}`, `zalo_personal:${ids.zaloB}`,
     ];
 
-    const all = await repo.getConversations(user.id, { limit: 20, offset: 0 });
-    const p1 = await repo.getConversations(user.id, { limit: 2, offset: 0 });
-    const p2 = await repo.getConversations(user.id, { limit: 2, offset: 2 });
-    const p3 = await repo.getConversations(user.id, { limit: 2, offset: 4 });
+    const all = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, limit: 20, offset: 0 });
+    const p1 = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, limit: 2, offset: 0 });
+    const p2 = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, limit: 2, offset: 2 });
+    const p3 = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, limit: 2, offset: 4 });
 
     expect(idsOf(all)).toEqual(expected);
     expect([...idsOf(p1), ...idsOf(p2), ...idsOf(p3)]).toEqual(expected);
-    expect(await repo.getConversationsCount(user.id, {})).toBe(5);
+    expect(await repo.getConversationsCount(user.id, { accessibleZaloAccountIds: null,})).toBe(5);
   });
 
   it('tin cuối trả mã loại + người gửi + số chưa đọc đúng cho từng dòng của trang', async () => {
     const { user, ids } = await seedMixed();
 
-    const rows = await repo.getConversations(user.id, { limit: 20, offset: 0 });
+    const rows = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, limit: 20, offset: 0 });
     const byId = new Map(rows.map((r) => [`${r.type}:${Number(r.id)}`, r]));
 
     const photo = byId.get(`zalo_personal:${ids.zaloA}`);
@@ -327,20 +327,20 @@ describe('H-06 / H-13 / H-33 — danh sách: chọn trang trước, chip lọc p
   it('chip lọc phía server: Cá nhân / Nhóm / Chưa đọc, tổng khớp danh sách', async () => {
     const { user, ids } = await seedMixed();
 
-    const group = await repo.getConversations(user.id, { kind: 'group', limit: 20, offset: 0 });
+    const group = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, kind: 'group', limit: 20, offset: 0 });
     expect(idsOf(group)).toEqual([`zalo_personal:${ids.group}`]);
-    expect(await repo.getConversationsCount(user.id, { kind: 'group' })).toBe(1);
+    expect(await repo.getConversationsCount(user.id, { accessibleZaloAccountIds: null, kind: 'group' })).toBe(1);
 
-    const personal = await repo.getConversations(user.id, { kind: 'personal', limit: 20, offset: 0 });
+    const personal = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, kind: 'personal', limit: 20, offset: 0 });
     expect(idsOf(personal)).toEqual([
       `webchat:${ids.web1}`, `zalo_personal:${ids.zaloA}`, `webchat:${ids.web2}`, `zalo_personal:${ids.zaloB}`,
     ]);
 
-    const unread = await repo.getConversations(user.id, { unreadOnly: true, limit: 20, offset: 0 });
+    const unread = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, unreadOnly: true, limit: 20, offset: 0 });
     expect(idsOf(unread)).toEqual([`zalo_personal:${ids.zaloA}`, `zalo_personal:${ids.group}`, `webchat:${ids.web2}`]);
-    expect(await repo.getConversationsCount(user.id, { unreadOnly: true })).toBe(3);
+    expect(await repo.getConversationsCount(user.id, { accessibleZaloAccountIds: null, unreadOnly: true })).toBe(3);
 
-    const personalUnread = await repo.getConversations(user.id, { kind: 'personal', unreadOnly: true, limit: 20, offset: 0 });
+    const personalUnread = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, kind: 'personal', unreadOnly: true, limit: 20, offset: 0 });
     expect(idsOf(personalUnread)).toEqual([`zalo_personal:${ids.zaloA}`, `webchat:${ids.web2}`]);
   });
 
@@ -348,13 +348,13 @@ describe('H-06 / H-13 / H-33 — danh sách: chọn trang trước, chip lọc p
     const { user, ids } = await seedMixed();
 
     for (const term of ['nguyen', 'NGUYỄN', 'Nguyễn Văn', 'duc']) {
-      const rows = await repo.getConversations(user.id, { search: term, limit: 20, offset: 0 });
+      const rows = await repo.getConversations(user.id, { accessibleZaloAccountIds: null, search: term, limit: 20, offset: 0 });
       expect(idsOf(rows)).toEqual([`zalo_personal:${ids.zaloA}`]);
-      expect(await repo.getConversationsCount(user.id, { search: term })).toBe(1);
+      expect(await repo.getConversationsCount(user.id, { accessibleZaloAccountIds: null, search: term })).toBe(1);
     }
-    expect(idsOf(await repo.getConversations(user.id, { search: 'phong rd', limit: 20, offset: 0 })))
+    expect(idsOf(await repo.getConversations(user.id, { accessibleZaloAccountIds: null, search: 'phong rd', limit: 20, offset: 0 })))
       .toEqual([`zalo_personal:${ids.group}`]);
-    expect(await repo.getConversationsCount(user.id, { search: 'khong co ten nay' })).toBe(0);
+    expect(await repo.getConversationsCount(user.id, { accessibleZaloAccountIds: null, search: 'khong co ten nay' })).toBe(0);
   });
 
   it('API: GET /inbox/conversations nhận kind + unreadOnly và trả các trường xem trước mới', async () => {
@@ -456,7 +456,7 @@ describe('H-12 — tab kênh chỉ hiện kênh user có; C5 — Đánh dấu t�
     const c2 = await seedZaloConversation(user.id, zs2, { externalId: 'x', name: 'Khác TK' });
     await seedZaloMessage(user.id, zs2, c2);
 
-    const result = await repo.markAllAsRead(user.id, { zaloAccountId: zs2, channel: 'zalo_personal' });
+    const result = await repo.markAllAsRead(user.id, { accessibleZaloAccountIds: null, zaloAccountId: zs2, channel: 'zalo_personal' });
 
     expect(result.updatedMessages).toBe(1);
     expect(await unreadOf('zalo_personal_messages', c2)).toBe(0);

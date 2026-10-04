@@ -1236,6 +1236,7 @@ describe('Integration — Synchronous Send Atomic Quota Reservation Protocol', (
           actorUserId: user.id,
           roleCode: 'user',
           ownerContextId: user.id,
+          accessibleZaloAccountIds: null, // G2: chủ thấy hết
         }
       );
 
@@ -1323,6 +1324,7 @@ describe('Integration — Synchronous Send Atomic Quota Reservation Protocol', (
           actorUserId: user.id,
           roleCode: 'user',
           ownerContextId: user.id,
+          accessibleZaloAccountIds: null, // G2: chủ thấy hết
         }
       );
 
