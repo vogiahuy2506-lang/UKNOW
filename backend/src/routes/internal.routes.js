@@ -832,6 +832,16 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
     { conversationId: conversation?.id, peer }
   );
   if (replyText) {
+    // A P2-3: AI mất vài giây để soạn — kiểm lại tạm dừng NGAY TRƯỚC KHI ghi + gửi, không chỉ ở đầu đợt (:635). Chủ nhảy
+    // vào chat đúng lúc AI đang soạn thì bot không được chen câu cũ vào; không lưu câu bot (khuôn Zalo cá nhân
+    // `paused_after_ai`). Credit của lượt gọi AI này đã tính — chấp nhận, không hoàn.
+    if (await isTelegramAiPaused(conversation)) {
+      console.log('[Telegram] batch skip: AI paused by owner while composing — reply dropped', {
+        conversationId: conversation?.id,
+        accountId: account.id,
+      });
+      return;
+    }
     const botRowId = await recordTelegramMessage(conversation, 'bot', replyText, {
       model:
         mergedSettings.ai_model || 'gemini-2.5-flash',

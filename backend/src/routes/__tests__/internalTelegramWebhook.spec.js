@@ -129,6 +129,8 @@ beforeEach(async () => {
     _scenarioAccountSettings: fakeAccountSettings,
     _scenarioConversationOverride: null,
     _scenarioAiPaused: false,
+    _pauseReads: 0, // số lần route hỏi trạng thái tạm dừng AI của Hộp thư
+    _onRoute: null, // móc chạy NGAY TRONG lúc AI đang soạn (vd chủ tạm dừng giữa chừng)
     // Default pick-enabled candidates = 55 enabled. Test có thể
     // override khi cần giả lập user đổi chatbot.
     _scenarioEnabledChatbots: [{ id_chatbot: 55 }],
@@ -322,6 +324,7 @@ beforeEach(async () => {
       default: {
         routeMessageWithSettings: jest.fn(async (payload) => {
           mocks._lastRouterCall = payload;
+          if (mocks._onRoute) mocks._onRoute();
           return mocks._routerResult || { type: 'text', content: 'fake-bot-reply' };
         }),
       },
@@ -452,7 +455,7 @@ beforeEach(async () => {
     () => ({
       default: {
         // Nguồn sự thật tạm dừng AI = channel_conversations (Hộp thư), không còn cột của bảng Telegram cũ.
-        isAiPaused: jest.fn(async () => mocks._scenarioAiPaused),
+        isAiPaused: jest.fn(async () => { mocks._pauseReads += 1; return mocks._scenarioAiPaused; }),
         setAiPaused: jest.fn(async (...args) => {
           mocks._setAiPausedCalls.push(args);
           return { aiPaused: true, aiPausedAt: '2026-09-29T10:00:00.000Z' };
@@ -1165,6 +1168,29 @@ describe('P1 — tin khách luôn vào Hộp thư (channel_messages) + SSE, kể
     expect(sseFor('visitor')).toHaveLength(1);
     expect(mocks.chatRouterCall()).toBeNull();
     expect(mocks.sendReplyCalls()).toHaveLength(0);
+  });
+
+  // PLAN_SUA_AI_DOT4 PR-7 (A P2-3): cổng tạm dừng ở đầu đợt chỉ kiểm MỘT lần; AI soạn mất vài giây, chủ nhảy vào đúng lúc đó
+  // thì bot vẫn chen câu cũ vào. Kiểm lại ngay trước khi ghi + gửi (khuôn Zalo cá nhân `paused_after_ai`).
+  it('A P2-3 — chủ tạm dừng AI đúng lúc AI đang soạn → AI đã gọi nhưng KHÔNG ghi dòng bot, KHÔNG gửi Telegram', async () => {
+    mocks._onRoute = () => { mocks._scenarioAiPaused = true; };
+    const res = await postWebhook(inboundPayload);
+    expect(res.status).toBe(204);
+    expect(mocks.chatRouterCall()).not.toBeNull(); // lúc đầu đợt chưa tạm dừng → AI đã được gọi
+    expect(mocks.sendReplyCalls()).toHaveLength(0);
+    expect(channelRows('bot')).toHaveLength(0);
+    expect(sseFor('agent')).toHaveLength(0);
+    const botLegacy = (mocks._callsSoFar || []).find(
+      ({ sql, params }) => /INSERT INTO telegram_personal_messages/i.test(sql) && Array.isArray(params) && params[3] === 'bot'
+    );
+    expect(botLegacy).toBeUndefined();
+  });
+
+  it('A P2-3 — không tạm dừng: hỏi trạng thái đúng 2 lần (đầu đợt + ngay trước khi gửi), vẫn gửi + ghi như cũ', async () => {
+    await postWebhook(inboundPayload);
+    expect(mocks._pauseReads).toBe(2);
+    expect(mocks.sendReplyCalls()).toHaveLength(1);
+    expect(channelRows('bot')).toHaveLength(1);
   });
 
   it('AI chạy bình thường → tin khách + tin AI cùng vào Hộp thư, AI báo SSE role agent/AI', async () => {

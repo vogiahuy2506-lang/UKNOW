@@ -63,6 +63,7 @@ beforeEach(async () => {
     repliesEnabled: undefined,
     paused: false,
     pausedAt: null,
+    pauseReads: 0,
     autoResume: null,
     ownerConvs: [{ id: 101, id_channel: 9, visitor_name: 'Alice' }],
     recent: {},
@@ -119,6 +120,7 @@ beforeEach(async () => {
         if (/FROM channel_conversations/i.test(s) && /starts_with/i.test(s)) return { rows: m.ownerConvs };
         if (/FROM channel_messages/i.test(s) && /role IN/i.test(s)) return { rows: m.recent[params[0]] || [] };
         if (/FROM channel_conversations/i.test(s) && /ai_paused/i.test(s)) {
+          m.pauseReads += 1;
           return { rows: [{ ai_paused: m.paused, ai_paused_at: m.pausedAt, id_user: 42 }] };
         }
         if (/FROM channel_conversations/i.test(s)) return { rows: [{ id: 101 }] };
@@ -420,6 +422,33 @@ describe('WhatsApp Baileys — hội thoại đang tạm dừng AI', () => {
   it('ai_paused=false: tin khách lưu đúng 1 lần (không lưu đôi sau khi dời lên trước kiểm tạm dừng)', async () => {
     await sendTexts(['Cho mình hỏi giá áo thun size L']);
     expect(m.visitorInserts).toEqual(['Cho mình hỏi giá áo thun size L']);
+  });
+
+  // PLAN_SUA_AI_DOT4 PR-7 (A P2-3): cổng ở processIncomingMessage chỉ kiểm lúc tin TỚI (trước khoảng gom + trước khi gọi AI).
+  // Chủ nhảy vào chat đúng lúc AI đang soạn thì bot vẫn chen câu cũ vào — kiểm lại NGAY TRƯỚC KHI lưu + gửi (khuôn Zalo cá nhân).
+  it('chủ tạm dừng AI đúng lúc AI đang soạn → AI đã gọi nhưng KHÔNG lưu câu bot, KHÔNG gửi WhatsApp, log paused_after_ai', async () => {
+    const logSpy = console.log;
+    m.callAi = jest.fn(async () => {
+      m.paused = true; // chủ gõ từ điện thoại trong lúc Gemini soạn
+      return { text: 'Giá áo thun size L là 199.000đ ạ' };
+    });
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    expect(m.buckets.size).toBe(1); // lúc tin tới chưa tạm dừng → vẫn vào hàng đợi gom
+    await flush();
+    expect(m.callAi).toHaveBeenCalledTimes(1);
+    expect(m.sendReply).not.toHaveBeenCalled();
+    expect(m.botInserts).toEqual([]);
+    expect(m.bindUpdates).toEqual([]);
+    expect(logSpy.mock.calls.some(([, line]) => String(line).includes('result=paused_after_ai'))).toBe(true);
+  });
+
+  it('không tạm dừng: kiểm tạm dừng đúng 2 lần (lúc tin tới + ngay trước khi gửi), vẫn gửi + lưu câu bot như cũ', async () => {
+    await sendTexts(['Cho mình hỏi giá áo thun size L']);
+    expect(m.pauseReads).toBe(1);
+    await flush();
+    expect(m.pauseReads).toBe(2);
+    expect(m.sendReply).toHaveBeenCalledTimes(1);
+    expect(m.botInserts).toEqual(['Giá áo thun size L là 199.000đ ạ']);
   });
 });
 

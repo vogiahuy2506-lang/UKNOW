@@ -996,6 +996,14 @@ async function _processWhatsAppBaileysBatch({ batch }) {
       cleanReply = `${cleanReply.trim()}\n\n${contactAck.footer}`;
     }
 
+    // A P2-3: AI mất vài giây để soạn — kiểm lại tạm dừng NGAY TRƯỚC KHI lưu + gửi (cổng ở processIncomingMessage chỉ kiểm lúc
+    // tin tới, trước khoảng gom + gọi AI). Chủ nhảy vào chat đúng lúc AI đang soạn thì bot không chen câu cũ vào; không lưu
+    // câu bot (khuôn Zalo cá nhân `paused_after_ai`). Credit của lượt gọi AI này đã tính — chấp nhận, không hoàn.
+    if (await isConversationAiPaused(conversationId)) {
+      log(`[ChatbotDebounce] channel=whatsapp_baileys session=${sessionKey} conversation=${conversationId} batch_size=${batch.messages.length} wait_ms=${batch.waitMs} reason=${batch.reason} result=paused_after_ai`);
+      return;
+    }
+
     // Persist bot reply
     const botRow = await persistMessage({
       conversationId,
