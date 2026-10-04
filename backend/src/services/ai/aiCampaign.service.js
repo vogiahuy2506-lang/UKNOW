@@ -1413,7 +1413,7 @@ QUY TẮC THEO DANH SÁCH TRÊN:
   "Tôi có thể tạo chiến dịch cho bạn ngay. Để hẹn giờ chạy tự động, sau khi chiến dịch được tạo bạn vào mục Lên lịch trong trang chi tiết chiến dịch để đặt thời gian cụ thể nhé."
 
 YÊU CẦU NGOÀI PHẠM VI HOÀN TOÀN:
-- Xóa/sửa/dừng chiến dịch cũ, quản lý tài khoản, thanh toán → type: "text", hướng dẫn user vào đúng mục trong menu
+- Xóa/sửa/dừng chiến dịch cũ, quản lý tài khoản, thanh toán → type: "text". Bạn KHÔNG có danh sách menu của ứng dụng nên TUYỆT ĐỐI KHÔNG tự nêu đường đi/tên mục trong menu (dễ bịa sai). Nói ngắn gọn đây là thao tác nằm ngoài phần soạn chiến dịch, mời user mở mục Hướng dẫn để xem từng bước, và kèm ĐÚNG MỘT link [Hướng dẫn](/huong-dan) — đường dẫn tương đối, KHÔNG kèm tên miền hay "https://" (nhãn link theo ngôn ngữ đang trả lời, vd "Hướng dẫn" / "Help center")
 - Câu hỏi không liên quan đến marketing/chiến dịch → type: "text", trả lời ngắn gọn và gợi ý những việc AI có thể giúp
 
 ### Khi user prompt "tao chien dich [san pham]":

@@ -1282,6 +1282,38 @@ describe('aiCampaign.service', () => {
       expect(systemPrompt).toContain('### Khi user prompt "tạo landing page / trang web / website [...]":');
     });
 
+    // C P2-8 — não chiến dịch từng được dặn "hướng dẫn user vào đúng mục trong menu" mà KHÔNG có danh sách menu nào trong prompt
+    // → câu hỏi xoá/sửa chiến dịch cũ, tài khoản, thanh toán lọt vào đây thì model bịa đường đi. Nay chỉ được mời mở mục Hướng dẫn.
+    it('C P2-8: yêu cầu ngoài phạm vi (xoá chiến dịch cũ, tài khoản, thanh toán) → dặn mời mở mục Hướng dẫn kèm link /huong-dan, KHÔNG dặn tự nêu đường đi menu', async () => {
+      axiosPost.mockResolvedValueOnce({
+        data: {
+          candidates: [
+            {
+              finishReason: 'STOP',
+              content: {
+                parts: [{ text: JSON.stringify({ type: 'text', content: 'Chào bạn', missing_fields: [], data: null }) }],
+              },
+            },
+          ],
+        },
+      });
+
+      await aiCampaignService.processSmartChat({
+        history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+        userId: 1,
+      });
+
+      const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
+      const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
+      const outOfScopeRule = systemPrompt.split('\n').find((line) => line.includes('Xóa/sửa/dừng chiến dịch cũ, quản lý tài khoản, thanh toán'));
+      expect(outOfScopeRule).toBeTruthy();
+      expect(outOfScopeRule).toContain('[Hướng dẫn](/huong-dan)');
+      expect(outOfScopeRule).toContain('mục Hướng dẫn');
+      expect(outOfScopeRule).toContain('KHÔNG kèm tên miền');
+      // Luật cũ bảo model "vào đúng mục trong menu" — phải biến mất khỏi toàn bộ prompt.
+      expect(systemPrompt).not.toContain('hướng dẫn user vào đúng mục trong menu');
+    });
+
     it('khi model trả type landing_page: gọi aiLandingPageService.generate và trả title + html', async () => {
       axiosPost.mockResolvedValueOnce({
         data: {
