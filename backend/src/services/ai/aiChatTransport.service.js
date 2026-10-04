@@ -28,6 +28,20 @@ const isWizardMarkerContent = (content) => WIZARD_MARKER_FIRST_LINE_RE.test(Stri
 // Không import extractGoogleUrls từ googleUrlFetch.util.js: nhiều spec mock util đó chỉ với `attachGoogleUrlParts`.
 const GOOGLE_DOC_OR_SHEET_URL_RE = /https:\/\/docs\.google\.com\/(?:spreadsheets|document)\/d\//;
 const isImageFile = (file) => String(file?.contentType || '').toLowerCase().startsWith('image/');
+// Cùng khuôn `isSpreadsheetFile` ở aiCampaignWizard.service.js (không import vì lý do như trên): tệp bảng tính Excel/CSV.
+const isSpreadsheetFile = (file) => {
+  const name = String(file?.originalName || file?.name || '').toLowerCase();
+  const mime = String(file?.contentType || '').toLowerCase();
+  return name.endsWith('.xlsx') || name.endsWith('.xls') || name.endsWith('.csv')
+    || mime.includes('spreadsheet') || mime.includes('excel') || mime.includes('csv');
+};
+// Nạp LƯỜI (chỉ khi `summarizeRecipientLists`): bộ tóm tắt kéo theo bộ đọc người nhận (exceljs, papaparse, bộ đọc .xls) — các nơi
+// gọi `runChat` khác (chat thường, trợ lý admin, viết chỉ dẫn) và nhiều spec không cần và không nên bị nạp theo.
+let recipientListSummaryModule = null;
+const loadRecipientListSummary = async () => {
+  recipientListSummaryModule ||= await import('./recipientListSummary.service.js');
+  return recipientListSummaryModule;
+};
 
 const droppedFilesNote = (names) => ({
   text: `[Tệp đính kèm ở tin này (${names.map((n) => `"${n}"`).join(', ')}) đã được xử lý ở lượt trước và KHÔNG được gửi lại nội dung — có thể chứa dữ liệu cá nhân của khách. Chỉ dựa vào thông tin đã có trong hội thoại và khối CAMPAIGN_BRIEF; không đoán nội dung tệp. Cần xem lại thì đề nghị người dùng đính kèm lại ở tin mới]`,
@@ -67,6 +81,11 @@ const droppedGoogleUrlNote = () => ({
  *   `'all'`: hành vi cũ (đính lại tất cả) — chỉ trợ lý super admin dùng, vì hỏi-đáp nhiều lượt trên một tài liệu cần lại tệp cũ
  *   mà nhánh đó không có brief để lưu bản trích.
  * @param {string[]} [params.excludeGoogleUrls] — URL Google Sheet ĐÃ chọn làm nguồn người nhận: không bao giờ tải nội dung vào prompt.
+ * @param {boolean} [params.summarizeRecipientLists] — (C P1-6 (d), 04/10/2026) wizard đang ở bước nguồn người nhận (Sheet/tệp): tệp
+ *   Excel/CSV và link Google Sheet ở TIN HIỆN TẠI mà bộ đọc người nhận tất định nhận ra là DANH SÁCH NGƯỜI NHẬN thì KHÔNG đính
+ *   nguyên văn (tới 300 dòng Sheet / cả tệp không trần — tên/SĐT/email khách cuối) mà chỉ đính bản tóm tắt: số email/SĐT hợp lệ, số
+ *   dòng bị loại, tên cột, vài dòng mẫu đã che. Bảng không nhận ra là danh sách người nhận (bảng giá, sản phẩm) vẫn đính nguyên văn.
+ *   Mặc định false: chat thường / trợ lý admin hỏi-đáp tài liệu cần nội dung thật.
  */
 export async function runChat({
   systemPrompt,
@@ -77,6 +96,7 @@ export async function runChat({
   requestedModel = null,
   historyAttachments = 'current',
   excludeGoogleUrls = [],
+  summarizeRecipientLists = false,
 } = {}) {
   const fileOwnerId = ownerUserId ?? userId;
   const googleUrlCache = new Map();
@@ -102,6 +122,14 @@ export async function runChat({
       if (mimeType.startsWith('image/')) {
         parts.push({ inlineData: { mimeType: file.contentType, data: buffer.toString('base64') } });
       } else {
+        if (summarizeRecipientLists && isSpreadsheetFile(file)) {
+          const { summarizeRecipientListBuffer } = await loadRecipientListSummary();
+          const summary = await summarizeRecipientListBuffer(buffer, file.originalName, file.contentType, { sourceLabel: `tệp ${JSON.stringify(fileName)}` });
+          if (summary) {
+            parts.push({ text: summary });
+            return;
+          }
+        }
         const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
         if (extractedText.trim()) {
           // C P1-4 (d): chữ trong tệp là DỮ LIỆU người dùng đưa vào, không phải mệnh lệnh cho trợ lý — gắn rào quanh khối.
@@ -152,6 +180,14 @@ export async function runChat({
     }
   }
 
+  const googleUrlOptions = { excludeUrls: excludeGoogleUrls };
+  if (summarizeRecipientLists) {
+    googleUrlOptions.summarizeSheetCsv = async (csvText, info) => {
+      const { summarizeRecipientListCsv } = await loadRecipientListSummary();
+      return summarizeRecipientListCsv(csvText, { sourceLabel: `Google Sheet "${info.url}"` });
+    };
+  }
+
   // Build Gemini history
   const geminiHistory = await Promise.all(history.map(async (msg, idx) => {
     const parts = [{ text: msg.content || '(no text)' }];
@@ -166,7 +202,7 @@ export async function runChat({
           await attachFileToParts(parts, file);
         }
         if (!isMarker) {
-          await attachGoogleUrlParts(parts, msg.content, googleUrlCache, { excludeUrls: excludeGoogleUrls });
+          await attachGoogleUrlParts(parts, msg.content, googleUrlCache, googleUrlOptions);
         }
       } else {
         const droppedNames = [];

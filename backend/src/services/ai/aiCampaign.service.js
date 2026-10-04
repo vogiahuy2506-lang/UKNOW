@@ -1328,7 +1328,7 @@ Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_custom
 - Gặp ý định gửi tin/tạo chiến dịch khi chưa qua wizard, hãy mời người dùng vào luồng hoặc hướng dẫn chọn kênh/tạo chiến dịch bằng câu ngắn, KHÔNG tự dựng quy trình bằng văn xuôi hay bịa tên tài khoản cụ thể (ví dụ: "thông qua tài khoản X có sẵn").
 - Nếu có khối CAMPAIGN_BRIEF DATA: đó là nguồn sự thật về sản phẩm/chủ đề đã chọn. Ưu tiên (1) CAMPAIGN_BRIEF DATA → (2) prompt nguyên bản + file đính kèm → (3) hồ sơ doanh nghiệp chỉ cho brand/tone/context, KHÔNG thay selected product/topic.
 - QUAN TRỌNG: LUÔN ƯU TIÊN lấy thông tin từ tệp đính kèm (như file danh sách sản phẩm, báo giá...) hoặc nội dung tin nhắn do người dùng gửi. Hồ sơ doanh nghiệp chỉ dùng để tham khảo thêm, tuyệt đối KHÔNG ĐƯỢC lấy sản phẩm từ hồ sơ doanh nghiệp đè lên hoặc thay thế thông tin sản phẩm người dùng vừa cung cấp.
-- Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp ở TIN HIỆN TẠI, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng. Từ các lượt SAU hệ thống KHÔNG gửi lại nội dung tệp hay liên kết Google cũ (có thể chứa dữ liệu cá nhân của khách): chỉ dựa vào những gì đã nêu trong hội thoại và khối CAMPAIGN_BRIEF; không đoán nội dung, cần xem lại thì đề nghị người dùng đính kèm lại ở tin mới. Nếu tệp đính kèm có thông tin không rõ ràng, thiếu thông tin quan trọng, hoặc bạn không đọc được nội dung (do lỗi font, sai định dạng...), BẠN BẮT BUỘC PHẢI nói rõ lỗi nằm ở đâu và hướng dẫn người dùng cách chỉnh sửa lại file cho đúng chuẩn.
+- Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp ở TIN HIỆN TẠI, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng. NGOẠI LỆ: DANH SÁCH NGƯỜI NHẬN (bảng tính có email/SĐT khách, khi nguồn người nhận là Excel/Google Sheet) — hệ thống KHÔNG gắn nội dung bảng mà chỉ gắn khối tóm tắt "[Danh sách người nhận — …]" (số email/SĐT hợp lệ, tên cột, vài dòng ĐÃ CHE); đó là toàn bộ thông tin bạn có về danh sách, đừng đòi xem thêm dòng dữ liệu. Từ các lượt SAU hệ thống KHÔNG gửi lại nội dung tệp hay liên kết Google cũ (có thể chứa dữ liệu cá nhân của khách): chỉ dựa vào những gì đã nêu trong hội thoại và khối CAMPAIGN_BRIEF; không đoán nội dung, cần xem lại thì đề nghị người dùng đính kèm lại ở tin mới. Nếu tệp đính kèm có thông tin không rõ ràng, thiếu thông tin quan trọng, hoặc bạn không đọc được nội dung (do lỗi font, sai định dạng...), BẠN BẮT BUỘC PHẢI nói rõ lỗi nằm ở đâu và hướng dẫn người dùng cách chỉnh sửa lại file cho đúng chuẩn.
 ${UNTRUSTED_CONTENT_RULE}
 - Nếu người dùng yêu cầu phân tích/tổng hợp thông tin chung hoặc thảo luận không liên quan trực tiếp đến việc tạo chiến dịch/template, hãy trả lời với type: "text" và đưa ra nội dung phân tích/tổng hợp đầy đủ, chi tiết và chuyên nghiệp trong trường "content".
 - Nếu thiếu thông tin cần thiết để tạo template/chiến dịch/landing page → type: "ask_more", hỏi cụ thể những gì còn thiếu.
@@ -1515,7 +1515,7 @@ QUAN TRỌNG: Chỉ bỏ câu hỏi khi user đã nói RÕ RÀNG và CHẮC CH�
 - Đã đề cập "landing page", "đăng ký", "form" → bỏ "dataSource", tự chọn landing
 - Đã đề cập "sheet", "excel", "file" VÀ đã có URL Google Sheet hợp lệ (bắt đầu bằng https://docs.google.com/spreadsheets/...) → bỏ "dataSource", bỏ luôn bước hỏi URL, dùng URL đó trực tiếp cho read_sheet
 - Đã đề cập "sheet", "excel", "file" NHƯNG chưa có URL → bỏ "dataSource", tự chọn sheet — SAU ĐÓ hỏi URL qua ask_more
-- User upload file CSV/Excel (nội dung file chỉ được trích xuất thành text trong TIN HIỆN TẠI lúc đính kèm) → bỏ "dataSource", xem đây là dataSource="sheet_uploaded" — xử lý theo hướng dẫn UPLOADED FILE bên dưới
+- User upload file CSV/Excel (nội dung file chỉ được trích xuất trong TIN HIỆN TẠI lúc đính kèm; với danh sách người nhận đó chỉ là khối tóm tắt) → bỏ "dataSource", xem đây là dataSource="sheet_uploaded" — xử lý theo hướng dẫn UPLOADED FILE bên dưới
 - Đã đề cập "khách hàng", "database", "hệ thống" → bỏ "dataSource", tự chọn db
 - Đã đề cập "nhập trực tiếp", "manual", "dán email", "dán SĐT" → bỏ "dataSource", tự chọn manual
 - KHÔNG hỏi productCount / sendingStyle / campaignBrief / schedule — các cổng này do wizard deterministic xử lý. Nếu thiếu sản phẩm/chủ đề hoặc lịch gửi, đừng tự hỏi lại các field đó trong ask_campaign_details.
@@ -1722,8 +1722,8 @@ GOOGLE SHEET / FILE EXCEL — CHƯA có URL và CHƯA có File:
 
 UPLOADED FILE / GOOGLE SHEET (CSV / Excel) CHO DANH SÁCH NGƯỜI NHẬN (dataSource = sheet):
 - Danh sách người nhận là dữ liệu cá nhân của khách hàng cuối. Việc đọc cột, đếm email/SĐT hợp lệ và kiểm giới hạn 1000 người/chiến dịch do HỆ THỐNG làm tất định (thẻ chọn nguồn + bước chuẩn bị gửi) — KHÔNG phải việc của bạn.
-- Nội dung tệp / Google Sheet chỉ được gắn vào TIN HIỆN TẠI lúc người dùng đính kèm hoặc dán link lần đầu; các lượt sau hệ thống KHÔNG gửi lại. Từ lượt sau, số người nhận và tên cột CHỈ lấy từ dòng "sheetRecipients" trong khối WIZARD ĐÃ CHỐT hoặc từ recipientCount trong marker [wizard] — KHÔNG tự đếm, KHÔNG đoán, KHÔNG chép tên/SĐT/email người nhận vào câu trả lời hay vào node.
-- Chỉ ở lượt nội dung đang nằm ngay trong tin: nói ngắn cột nào có vẻ là email (hoặc số điện thoại cho Zalo); nếu thấy file > 1000 dòng thì báo vượt hạn mức (không tự ý cắt bớt); nếu có dòng không hợp lệ chỉ nêu SỐ THỨ TỰ dòng, không nhắc lại nội dung dòng.
+- Khi người dùng đính kèm tệp danh sách / dán link Google Sheet ở TIN HIỆN TẠI, hệ thống KHÔNG gắn nội dung bảng mà chỉ gắn khối tóm tắt "[Danh sách người nhận — …]" (số email/SĐT hợp lệ, số dòng bị loại, tên cột, vài dòng ĐÃ CHE); các lượt sau hệ thống không gắn gì thêm. Từ lượt sau, số người nhận và tên cột CHỈ lấy từ dòng "sheetRecipients" trong khối WIZARD ĐÃ CHỐT hoặc từ recipientCount trong marker [wizard] — KHÔNG tự đếm, KHÔNG đoán, KHÔNG chép tên/SĐT/email người nhận vào câu trả lời hay vào node.
+- Ở lượt có khối tóm tắt: nói ngắn cột nào có vẻ là email (hoặc số điện thoại cho Zalo) dựa vào TÊN CỘT; nếu số người nhận trong khối tóm tắt > 1000 thì báo vượt hạn mức (không tự ý cắt bớt); nếu khối tóm tắt báo có dòng bị loại thì chỉ nêu SỐ dòng bị loại — bạn không có dòng dữ liệu nào để chỉ ra số thứ tự dòng hay nhắc lại nội dung dòng.
 - Khi đã có tệp / nguồn người nhận hợp lệ, KHÔNG đòi link Google Sheet nữa, tiếp tục hoàn thiện chiến dịch.
 
 UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
@@ -1831,6 +1831,12 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       ...history.map((m) => (m?.role === 'user' ? parseWizardMarker(m.content)?.sheetUrl : null)),
     ].filter((u) => typeof u === 'string' && u.trim()))];
     const keepHistoryImages = briefForState?.contentMode === 'attached_file' && briefForState?.attachedFile?.isImage === true;
+    // C P1-6 (d) — wizard đang ở nguồn người nhận = Excel/Google Sheet: tệp bảng tính / link Sheet ở TIN HIỆN TẠI mà bộ đọc tất định
+    // nhận ra là danh sách người nhận thì model chỉ nhận bản tóm tắt (số email/SĐT hợp lệ, tên cột, vài dòng đã che), không phải
+    // 300 dòng / cả tệp tên-SĐT-email khách cuối. Lượt landing và nguồn khác (DB, landing, form, nhập tay…) giữ hành vi cũ.
+    const summarizeRecipientLists = gatesForPersist.isCampaignFlow === true
+      && gatesForPersist.dataSource === 'sheet'
+      && !isLandingOrientedTurn(history);
     const response = await runChat({
       systemPrompt,
       history,
@@ -1840,6 +1846,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       requestedModel: model,
       historyAttachments: keepHistoryImages ? 'images' : 'current',
       excludeGoogleUrls: recipientSheetUrls,
+      summarizeRecipientLists,
     });
     const guarded = this._guardWizardGates(
       this._guardManualRecipientsNoAutoRun(
