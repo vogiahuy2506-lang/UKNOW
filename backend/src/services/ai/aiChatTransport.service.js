@@ -289,7 +289,9 @@ export async function runChat({
     const text = result.text;
     if (!text) throw new Error('AI trả về kết quả rỗng.');
 
-    console.log(`[AI Chat] Gemini response (first 500 chars, finishReason=${result.finishReason || 'STOP'}):`, text.substring(0, 500));
+    // D-28: KHÔNG in nội dung câu trả lời — nó có thể mang tên/SĐT/email khách (danh sách người nhận, tệp đính kèm) hoặc chỉ dẫn
+    // viết hộ của khách. Chỉ ghi độ dài + mã kết thúc + model thật (đủ để dò sự cố cắt cụt / model dự phòng).
+    console.log(`[AI Chat] Gemini response (${text.length} chars, finishReason=${result.finishReason || 'STOP'}, model=${result.modelUsed || modelName})`);
     return parseAiJson(text);
   } catch (err) {
     if (err.geminiStatus != null) {

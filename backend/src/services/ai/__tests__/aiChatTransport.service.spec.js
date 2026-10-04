@@ -125,6 +125,31 @@ describe('aiChatTransport.service', () => {
     expect(record).toHaveBeenCalledWith(101, expect.objectContaining({ totalTokens: 8202 }), expect.objectContaining({ feature: 'smart_chat' }));
   });
 
+  it('D-28: log câu trả lời chỉ ghi độ dài + finishReason + model, KHÔNG in nội dung (tên/SĐT/email khách trong câu trả lời không vào log)', async () => {
+    const reply = JSON.stringify({
+      type: 'text',
+      content: 'Danh sách: Nguyễn Văn Bí Mật, 0912345678, bi.mat.khach@example.test — đã xếp lịch gửi.',
+      missing_fields: [],
+      data: null,
+    });
+    global.fetch.mockResolvedValueOnce(googleOk(reply));
+
+    await runChat({
+      systemPrompt: 'sys prompt',
+      history: [{ role: 'user', content: 'Tóm tắt danh sách khách' }],
+      userId: 101,
+    });
+
+    // Mọi dòng log (log/warn/error, mọi đối số) gộp lại.
+    const logged = consoleSpies.flatMap((spy) => spy.mock.calls).map((args) => args.map((a) => String(a)).join(' ')).join('\n');
+    expect(logged).not.toContain('Nguyễn Văn Bí Mật');
+    expect(logged).not.toContain('0912345678');
+    expect(logged).not.toContain('bi.mat.khach@example.test');
+    expect(logged).not.toContain('first 500 chars');
+    // Vẫn đủ để dò sự cố: độ dài thật + mã kết thúc + model.
+    expect(logged).toContain(`[AI Chat] Gemini response (${reply.length} chars, finishReason=STOP, model=gemini-2.5-flash)`);
+  });
+
   it('khi response bình thường: gọi parseAiJson và ghi nhận usage', async () => {
     global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"Chào bạn"}'));
 
