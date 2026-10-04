@@ -181,6 +181,7 @@ jest.unstable_mockModule('../../controllers/scheduledPlanChange.controller.js', 
 jest.unstable_mockModule('../../controllers/userDeliveryMonitor.controller.js', () => ({
   overview: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'overview' }),
   runFailures: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'runFailures' }),
+  runEstimate: (req, res) => res.json({ success: true, controller: 'userDeliveryMonitor', method: 'runEstimate' }),
 }));
 
 // Import routes after mocking
@@ -722,9 +723,13 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   // navConfig `delivery_monitor`) đòi `campaigns_view`, nên BE phải đòi ĐÚNG khoá đó. Trước đây BE đòi
   // `reports_view`: nhân viên chỉ có `campaigns_view` thấy menu nhưng mọi API trả 403.
   describe('15. Delivery monitor (/api/delivery-monitor)', () => {
-    const endpoints = ['/api/delivery-monitor/overview', '/api/delivery-monitor/runs/7/failures'];
+    const endpoints = [
+      '/api/delivery-monitor/overview',
+      '/api/delivery-monitor/runs/7/failures',
+      '/api/delivery-monitor/runs/7/estimate',
+    ];
 
-    it('allows employee with campaigns_view permission (200) on both endpoints — cùng khoá với menu FE', async () => {
+    it('allows employee with campaigns_view permission (200) on every endpoint — cùng khoá với menu FE', async () => {
       currentTestUser = createEmployee({ campaigns_view: true });
       for (const url of endpoints) {
         const res = await request(app).get(url);
