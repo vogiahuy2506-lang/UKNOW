@@ -123,6 +123,15 @@ jest.unstable_mockModule('../campaign.controller.js', () => ({
   },
 }));
 jest.unstable_mockModule('../../services/campaign/campaignCrud.service.js', () => ({ default: {} }));
+// C P3-3: ai.controller kiểm hạn mức tài nguyên (campaigns / landingPages) ở lượt mở luồng — mock đủ export để module khác nạp được.
+const ALLOWED_SLOT = { allowed: true, limit: null, currentCount: 0, message: null };
+const checkUserResourceLimit = jest.fn(async () => ALLOWED_SLOT);
+jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({
+  checkUserResourceLimit,
+  enforceResourceLimitTx: jest.fn(),
+  createResourceLimitExceededError: jest.fn(),
+  getResourceUsageSnapshot: jest.fn(),
+}));
 const getLandingPageMessage = jest.fn();
 const updateLandingPageMessage = jest.fn();
 const saveMessagesReturningIds = jest.fn();
@@ -782,6 +791,29 @@ describe('ai.controller', () => {
 
     await aiController.chatV2({ body: { history, locale: 'vi' }, user: owner }, makeRes());
     expect(processSmartChatV2).toHaveBeenCalledWith(expect.objectContaining({ employeePermissions: null }));
+  });
+
+  // C P3-3: controller KHÔNG tự kiểm hạn mức ở mọi lượt chat — chỉ đưa cho service một hàm kiểm (service gọi ở lượt mở luồng tạo
+  // chiến dịch). Hàm kiểm tài nguyên `campaigns` theo CHỦ workspace + role; lỗi hạ tầng thì fail-open.
+  it('C P3-3: chat() truyền campaignSlotCheck cho processSmartChat; hàm đó kiểm `campaigns` theo chủ workspace và fail-open khi lỗi', async () => {
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'ok', missing_fields: [], data: null });
+    checkUserResourceLimit.mockClear();
+    const employee = { id: 9, role: 'user', activeContext: { type: 'employee', ownerId: 3, permissions: {} } };
+    await aiController.chat({ body: { history: [{ role: 'user', content: 'tạo chiến dịch email' }], locale: 'vi' }, user: employee }, makeRes());
+
+    const { campaignSlotCheck } = processSmartChat.mock.calls[0][0];
+    expect(typeof campaignSlotCheck).toBe('function');
+    expect(checkUserResourceLimit).not.toHaveBeenCalled(); // chưa gọi: service mới quyết định có kiểm hay không
+
+    const full = { allowed: false, limit: 5, currentCount: 5, message: 'đã đạt giới hạn' };
+    checkUserResourceLimit.mockResolvedValueOnce(full);
+    await expect(campaignSlotCheck()).resolves.toBe(full);
+    expect(checkUserResourceLimit).toHaveBeenLastCalledWith({ userId: 3, roleCode: 'user', resourceKey: 'campaigns' });
+
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    checkUserResourceLimit.mockRejectedValueOnce(new Error('db down'));
+    await expect(campaignSlotCheck()).resolves.toBeNull();
+    warn.mockRestore();
   });
 
   it('plan-advice help response still meta-only persists locale without touching gates/brief', async () => {
@@ -1632,6 +1664,106 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
       expect(res.status).not.toHaveBeenCalled();
       expect(editHtml).toHaveBeenCalledTimes(1);
       expect(editHtml.mock.calls[0][0].instruction).not.toContain('aaaa');
+    });
+  });
+
+  // C P3-3 (rà soát AI 03/10): hết suất landing phải báo NGAY ở lượt sinh — trước đây sinh xong (đã tốn Gemini + credit) rồi mới
+  // bị 400 limitReached ở nút Lưu.
+  describe('C P3-3 — hạn mức landing ở lượt sinh trang (trước Gemini, trước credit)', () => {
+    const genReq = (body = {}, user = { id: 1, role: 'user' }) => ({ user, body: { prompt: 'Landing khoá học', sessionId: 55, ...body } });
+    const FULL = {
+      allowed: false,
+      limit: 5,
+      currentCount: 5,
+      message: 'Tài khoản đã đạt giới hạn số landing page (5). Vui lòng liên hệ admin để nâng giới hạn.',
+    };
+
+    beforeEach(() => {
+      generateLanding.mockResolvedValue({ title: 'Trang khoá học', html: '<div>Nội dung</div>' });
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 1, assistantMessageId: 2 });
+      checkUserResourceLimit.mockReset();
+      checkUserResourceLimit.mockResolvedValue(ALLOWED_SLOT);
+    });
+
+    it('hết suất → 400 + limitReached + resource, KHÔNG đọc tệp / gọi Gemini / lưu phiên / trừ credit', async () => {
+      checkUserResourceLimit.mockResolvedValue(FULL);
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith({ success: false, message: FULL.message, limitReached: true, resource: 'landingPages' });
+      expect(ingestLandingAttachments).not.toHaveBeenCalled();
+      expect(generateLanding).not.toHaveBeenCalled();
+      expect(saveMessagesReturningIds).not.toHaveBeenCalled();
+      expect(chargeAiCredit).not.toHaveBeenCalled();
+    });
+
+    it('KHÔNG đặt code RESOURCE_LIMIT_EXCEEDED (frontend getAiQuotaErrorMessage coi mã đó là hết token AI)', async () => {
+      checkUserResourceLimit.mockResolvedValue(FULL);
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(), res);
+      expect(res.json.mock.calls[0][0]).not.toHaveProperty('code');
+    });
+
+    it('kiểm đúng tài nguyên `landingPages` theo CHỦ workspace (nhân viên) và role của người gọi', async () => {
+      const employee = { id: 9, role: 'user', activeContext: { type: 'employee', ownerId: 3 } };
+      await aiController.generateLandingHtml(genReq({}, employee), makeRes());
+      expect(checkUserResourceLimit).toHaveBeenCalledTimes(1);
+      expect(checkUserResourceLimit).toHaveBeenCalledWith({ userId: 3, roleCode: 'user', resourceKey: 'landingPages' });
+    });
+
+    it('còn suất → sinh bình thường, trừ credit đúng 1 lần', async () => {
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(), res);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(generateLanding).toHaveBeenCalledTimes(1);
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+    });
+
+    it('gói không có landing (limit 0) → cũng chặn ngay, dùng câu của cổng tạo', async () => {
+      const none = { allowed: false, limit: 0, currentCount: 0, message: 'Tính năng số landing page không được hỗ trợ trong gói dịch vụ hiện tại.' };
+      checkUserResourceLimit.mockResolvedValue(none);
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].message).toBe(none.message);
+      expect(generateLanding).not.toHaveBeenCalled();
+    });
+
+    it('sinh lại cho trang ĐÃ CÓ (landingPageId hợp lệ) không chiếm suất mới → KHÔNG kiểm, kể cả khi đã hết suất', async () => {
+      findLandingByIdInScope.mockResolvedValue({ id: 123 });
+      checkUserResourceLimit.mockResolvedValue(FULL);
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq({ landingPageId: 123 }), res);
+      expect(checkUserResourceLimit).not.toHaveBeenCalled();
+      expect(res.status).not.toHaveBeenCalled();
+      expect(generateLanding).toHaveBeenCalledTimes(1);
+    });
+
+    it('landingPageId không thuộc phạm vi của người gọi (không tìm thấy) → vẫn coi là trang MỚI: kiểm và chặn', async () => {
+      findLandingByIdInScope.mockResolvedValue(null);
+      checkUserResourceLimit.mockResolvedValue(FULL);
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq({ landingPageId: 999 }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(generateLanding).not.toHaveBeenCalled();
+    });
+
+    it('không kiểm được (lỗi hạ tầng) → FAIL-OPEN: vẫn sinh; cổng Lưu vẫn là chốt thật', async () => {
+      const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      checkUserResourceLimit.mockRejectedValue(new Error('db down'));
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(), res);
+      warn.mockRestore();
+      expect(res.status).not.toHaveBeenCalled();
+      expect(generateLanding).toHaveBeenCalledTimes(1);
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+    });
+
+    it('độ dài prompt vượt trần (B-2) chặn TRƯỚC khi kiểm hạn mức: không tốn cả truy vấn đếm', async () => {
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq({ prompt: 'a'.repeat(8001) }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(checkUserResourceLimit).not.toHaveBeenCalled();
     });
   });
 

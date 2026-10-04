@@ -661,6 +661,9 @@ D. ZALO NHÓM:
     // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — null = chủ/self (không chặn gì);
     // object = nhân viên, thiếu quyền khi permissions[key] !== true.
     employeePermissions = null,
+    // C P3-3 — hàm async do controller truyền (trả kết quả checkUserResourceLimit cho tài nguyên `campaigns` hoặc null); không
+    // truyền = không kiểm (spec, đường gọi khác). Service không tự chạm DB để cổng này không kéo theo hạ tầng vào mọi test.
+    campaignSlotCheck = null,
   }) {
     let contextBlock = '';
     // Tenant resources (courses, templates, profile) belong to workspace owner;
@@ -821,6 +824,48 @@ QUY TẮC:
           _wizard: {
             gates: empty.gates,
             brief: deniedBrief,
+            gateAsked: null,
+            meta: computeWizardMeta(persistedState.meta, null),
+            planChanged: true,
+            planReset: true,
+          },
+        };
+      }
+    }
+
+    // C P3-3 — cổng hết suất chiến dịch, cùng khuôn cổng quyền ngay trên: tất định, TRƯỚC khi gọi model, không trừ credit
+    // (wizardShortCircuit:true). Chỉ ở lượt MỞ luồng = lượt mà tin của người dùng chính là câu yêu cầu tạo chiến dịch (không phải
+    // bấm thẻ wizard, không phải prompt máy của kế hoạch nhiều ngày, không phải câu về landing) — đi tiếp tới nút Tạo mới biết
+    // hết suất là đường cụt tốn nhiều lượt AI. Mốc `latestCampaignMessageIndex === tin cuối` đúng cả khi router báo `làm_giúp`.
+    if (
+      typeof campaignSlotCheck === 'function'
+      && derivedState.isCampaignFlow
+      && derivedState.latestCampaignMessageIndex === history.length - 1
+      && !planSlotKey
+      && intent !== 'content_plan_request'
+      && !isLandingOrientedTurn(history)
+    ) {
+      const slot = await campaignSlotCheck();
+      if (slot && slot.allowed === false) {
+        const limit = Number.isFinite(slot.limit) ? slot.limit : 0;
+        const isEn = uiLocale === 'en';
+        const content = limit === 0
+          ? (isEn
+            ? `Your current plan doesn't include campaigns, so I can't build one for you. You can upgrade your plan at [Billing](/app/billing) and ask me again. In the meantime, I can still answer questions and draft content for you to review.`
+            : `Gói hiện tại của bạn chưa có tính năng tạo chiến dịch nên mình chưa thể dựng chiến dịch giúp bạn. Bạn nâng gói tại [Thanh toán](/app/billing) rồi nhờ mình lại nhé. Trong lúc chờ, mình vẫn trả lời câu hỏi và soạn nội dung thử được.`)
+          : (isEn
+            ? `You've used all ${limit}/${limit} campaign slots on your current plan, so I can't build a new campaign for you yet (you'd answer all my questions and only then be blocked at the Create button). Delete a campaign you no longer need, or upgrade your plan at [Billing](/app/billing), then ask me again. In the meantime, I can still answer questions and draft content for you to review.`
+            : `Bạn đã dùng hết ${limit}/${limit} suất chiến dịch của gói hiện tại nên mình chưa thể dựng chiến dịch mới giúp bạn (nếu cứ đi tiếp, tới nút Tạo mới bị chặn và các lượt AI đã dùng là uổng). Bạn xoá bớt chiến dịch cũ không dùng nữa, hoặc nâng gói tại [Thanh toán](/app/billing), rồi nhờ mình lại nhé. Trong lúc chờ, mình vẫn trả lời câu hỏi và soạn nội dung thử được.`);
+        const empty = createEmptyWizardState();
+        return {
+          type: 'text',
+          content,
+          missing_fields: [],
+          data: { limitReached: 'campaigns', limit },
+          wizardShortCircuit: true,
+          _wizard: {
+            gates: empty.gates,
+            brief: createEmptyCampaignBrief(defaultContentLocale),
             gateAsked: null,
             meta: computeWizardMeta(persistedState.meta, null),
             planChanged: true,

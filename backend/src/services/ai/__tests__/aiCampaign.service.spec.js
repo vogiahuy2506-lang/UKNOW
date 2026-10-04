@@ -929,6 +929,145 @@ describe('aiCampaign.service', () => {
     });
   });
 
+  // C P3-3 (rà soát AI 03/10): hết suất chiến dịch phải báo NGAY ở lượt mở luồng, cùng khuôn cổng quyền PR-3 ngay trên — trước đây
+  // khách đi hết wizard (nhiều lượt AI) rồi mới bị 400 `limitReached` ở nút Tạo. Service không tự chạm DB: controller truyền
+  // `campaignSlotCheck` (trả kết quả checkUserResourceLimit hoặc null).
+  describe('C P3-3 — hết suất chiến dịch ở lượt mở luồng', () => {
+    const OPEN = 'tạo chiến dịch email giới thiệu khoá học cho khách cũ';
+    const FULL = { allowed: false, limit: 5, currentCount: 5, message: 'Tài khoản đã đạt giới hạn số chiến dịch (5).' };
+    const OK = { allowed: true, limit: 5, currentCount: 2, message: null };
+    const run = (over = {}) => aiCampaignService.processSmartChat({
+      userId: 1,
+      history: [{ role: 'user', content: OPEN }],
+      locale: 'vi',
+      ...over,
+    });
+    const mockModelOk = () => {
+      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+      axiosPost.mockResolvedValue({
+        data: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"type":"text","content":"ok","missing_fields":[],"data":null}' }] } }] },
+      });
+    };
+
+    it('hết suất → câu báo cố định có số suất + link nâng gói, wizardShortCircuit (KHÔNG trừ credit), KHÔNG gọi model, reset wizard', async () => {
+      const campaignSlotCheck = jest.fn(async () => FULL);
+      const result = await run({ campaignSlotCheck });
+
+      expect(campaignSlotCheck).toHaveBeenCalledTimes(1);
+      expect(result.type).toBe('text');
+      expect(result.wizardShortCircuit).toBe(true);
+      expect(result.data).toEqual({ limitReached: 'campaigns', limit: 5 });
+      expect(result.content).toContain('5/5');
+      expect(result.content).toContain('](/app/billing)');
+      expect(result._wizard).toMatchObject({ gateAsked: null, planChanged: true, planReset: true });
+      expect(axiosPost).not.toHaveBeenCalled();
+    });
+
+    it('gói không có chiến dịch (limit 0) → câu riêng "chưa có tính năng tạo chiến dịch", không in 0/0', async () => {
+      const result = await run({ campaignSlotCheck: async () => ({ allowed: false, limit: 0, currentCount: 0, message: 'x' }) });
+      expect(result.wizardShortCircuit).toBe(true);
+      expect(result.content).toContain('chưa có tính năng tạo chiến dịch');
+      expect(result.content).not.toContain('0/0');
+    });
+
+    it('locale en → câu báo tiếng Anh', async () => {
+      const result = await run({ locale: 'en', campaignSlotCheck: async () => FULL });
+      expect(result.content).toContain("You've used all 5/5 campaign slots");
+      expect(result.content).toContain('](/app/billing)');
+    });
+
+    it('còn suất → KHÔNG chặn (đi tiếp như cũ, không có data.limitReached); hàm kiểm được gọi đúng 1 lần', async () => {
+      const campaignSlotCheck = jest.fn(async () => OK);
+      const result = await run({ campaignSlotCheck });
+      expect(campaignSlotCheck).toHaveBeenCalledTimes(1);
+      expect(result.data?.limitReached).toBeUndefined();
+    });
+
+    it('không kiểm được (hàm trả null — controller đã fail-open) → đi tiếp như cũ', async () => {
+      const result = await run({ campaignSlotCheck: async () => null });
+      expect(result.data?.limitReached).toBeUndefined();
+    });
+
+    it('không truyền campaignSlotCheck (đường gọi khác / spec cũ) → không kiểm gì, hành vi cũ', async () => {
+      const result = await run();
+      expect(result.data?.limitReached).toBeUndefined();
+    });
+
+    it('cổng QUYỀN nhân viên đứng trước: thiếu campaigns_create thì báo thiếu quyền và KHÔNG tốn truy vấn hạn mức', async () => {
+      const campaignSlotCheck = jest.fn(async () => FULL);
+      const result = await run({ employeePermissions: { campaigns_create: false }, campaignSlotCheck });
+      expect(result.data).toMatchObject({ permissionDenied: 'campaigns_create' });
+      expect(campaignSlotCheck).not.toHaveBeenCalled();
+    });
+
+    describe('chỉ ở lượt MỞ luồng — các lượt khác KHÔNG kiểm (không chặn nhầm người đang hỏi / đang đi dở wizard)', () => {
+      it('tin không phải yêu cầu chiến dịch ("Xin chào trợ lý") → không kiểm, đi tới model', async () => {
+        mockModelOk();
+        const campaignSlotCheck = jest.fn(async () => FULL);
+        const result = await run({ history: [{ role: 'user', content: 'Xin chào trợ lý' }], campaignSlotCheck });
+        expect(campaignSlotCheck).not.toHaveBeenCalled();
+        expect(axiosPost).toHaveBeenCalled();
+        expect(result.data?.limitReached).toBeUndefined();
+      });
+
+      it('luồng chiến dịch đã mở từ trước, tin cuối chỉ là câu trả lời thường → không kiểm lại', async () => {
+        mockModelOk();
+        const campaignSlotCheck = jest.fn(async () => FULL);
+        await run({
+          history: [
+            { role: 'user', content: OPEN },
+            { role: 'assistant', type: 'text', content: 'Bạn muốn gửi cho nhóm khách nào?' },
+            { role: 'user', content: 'khách đã mua khoá IELTS' },
+          ],
+          campaignSlotCheck,
+        });
+        expect(campaignSlotCheck).not.toHaveBeenCalled();
+      });
+
+      it('lượt về LANDING ("tạo landing page…", dù router báo làm_giúp) → không chặn bằng hết suất chiến dịch', async () => {
+        mockModelOk();
+        const campaignSlotCheck = jest.fn(async () => FULL);
+        const result = await run({
+          history: [{ role: 'user', content: 'tạo landing page bán khoá học tiếng Anh' }],
+          routeSaysActionRequest: true,
+          campaignSlotCheck,
+        });
+        expect(campaignSlotCheck).not.toHaveBeenCalled();
+        expect(result.data?.limitReached).toBeUndefined();
+      });
+
+      it('prompt MÁY của kế hoạch nhiều ngày (planSlotKey / intent content_plan_request) → không kiểm', async () => {
+        mockModelOk();
+        const campaignSlotCheck = jest.fn(async () => FULL);
+        await run({
+          history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 1, slot 1 (Email)' }],
+          planSlotKey: 'day1-slot1',
+          routeSaysActionRequest: true,
+          campaignSlotCheck,
+        });
+        await run({
+          history: [{ role: 'user', content: 'Hãy trả về content_plan JSON cho chiến dịch 3 ngày' }],
+          intent: 'content_plan_request',
+          routeSaysActionRequest: true,
+          campaignSlotCheck,
+        });
+        expect(campaignSlotCheck).not.toHaveBeenCalled();
+      });
+
+      it('router báo làm_giúp cho một câu chưa có từ khoá chiến dịch ("gửi giúp mình tin cho khách") → vẫn là lượt mở luồng, có kiểm', async () => {
+        const campaignSlotCheck = jest.fn(async () => FULL);
+        const result = await run({
+          history: [{ role: 'user', content: 'gửi giúp mình tin cho khách cũ' }],
+          routeSaysActionRequest: true,
+          campaignSlotCheck,
+        });
+        expect(campaignSlotCheck).toHaveBeenCalledTimes(1);
+        expect(result.data).toEqual({ limitReached: 'campaigns', limit: 5 });
+      });
+    });
+  });
+
   it('PR-5b-2b: prompt chat (V1) ghi rõ landing đã gắn Biểu mẫu (formId cạnh slug), landing khác vẫn ghi bình thường', async () => {
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });

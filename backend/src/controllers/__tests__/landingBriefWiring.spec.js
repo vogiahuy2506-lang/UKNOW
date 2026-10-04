@@ -71,6 +71,13 @@ jest.unstable_mockModule('../../services/help/helpAssistant.service.js', () => (
   },
 }));
 jest.unstable_mockModule('../campaign.controller.js', () => ({ default: {} }));
+// C P3-3: generateLandingHtml kiểm hạn mức landing trước khi sinh — mock để spec không chạm DB.
+jest.unstable_mockModule('../../utils/userResourceLimit.util.js', () => ({
+  checkUserResourceLimit: jest.fn(async () => ({ allowed: true, limit: null, currentCount: 0, message: null })),
+  enforceResourceLimitTx: jest.fn(),
+  createResourceLimitExceededError: jest.fn(),
+  getResourceUsageSnapshot: jest.fn(),
+}));
 jest.unstable_mockModule('../../services/campaign/campaignCrud.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/campaign/campaignNodeRegistry.service.js', () => ({ default: {} }));
 jest.unstable_mockModule('../../services/audit.service.js', () => ({

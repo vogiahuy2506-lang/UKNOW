@@ -50,6 +50,7 @@ import {
 } from '../utils/landingLayoutFindings.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
 import { findLandingAiInputTooLong } from '../utils/landingAiInputLimits.util.js';
+import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import {
   EXTRA_CONTEXT_TOO_LONG_CODE,
   buildExtraContextTooLongMessage,
@@ -71,6 +72,25 @@ const LANDING_MESSAGE_PATCH_KEYS = ['landingPageId', 'slug', 'isPublished'];
 // ở DB chỉ tăng SAU khi AI trả kết quả → bắn song song N request cùng lúc đều thấy count cũ và đều
 // được sửa miễn phí. Backend production chạy đúng 1 replica (CLAUDE.md) nên khoá trong bộ nhớ đủ.
 const autoLayoutFixInFlight = new Set();
+
+/**
+ * C P3-3 — kiểm hạn mức tài nguyên (cùng `checkUserResourceLimit` mà các cổng TẠO dùng: `campaign.controller.create`,
+ * `landingPageAdmin.create`) Ở LƯỢT MỞ LUỒNG của trợ lý, TRƯỚC khi tốn credit / gọi Gemini. Trước đây khách đi hết wizard (nhiều
+ * lượt AI) hoặc sinh xong trang landing rồi mới bị 400 `limitReached` ở nút Tạo/Lưu — credit đã tiêu cho đường cụt.
+ *
+ * Chỉ là kiểm TRƯỚC (không khoá, không atomic): cổng tạo vẫn là chốt thật (`enforceResourceLimitTx`). Vì vậy FAIL-OPEN: lỗi hạ
+ * tầng (DB…) thì ghi log và coi như còn suất — không để một lần kiểm hỏng chặn cả trợ lý.
+ *
+ * @returns {Promise<{allowed: boolean, limit: number|null, currentCount: number, message: string|null}|null>} null = không kiểm được
+ */
+async function peekResourceLimit({ userId, roleCode, resourceKey }) {
+  try {
+    return await checkUserResourceLimit({ userId, roleCode, resourceKey });
+  } catch (error) {
+    console.warn(`[AI] Không kiểm được hạn mức ${resourceKey} ở lượt mở luồng (bỏ qua, cổng tạo vẫn chặn):`, error.message);
+    return null;
+  }
+}
 
 // Chuyển sang utils/aiErrorPayload.util.js (G2.4) để Dashboard / Tóm tắt Hộp thư dùng chung; re-export giữ import cũ.
 export { buildAiErrorPayload };
@@ -410,6 +430,12 @@ class AiController {
           employeePermissions: req.user?.activeContext?.type === 'employee'
             ? (req.user.activeContext.permissions || {})
             : null,
+          // C P3-3: kiểm suất chiến dịch ở lượt MỞ luồng (service chỉ gọi khi lượt này thật sự là yêu cầu tạo chiến dịch mới).
+          campaignSlotCheck: () => peekResourceLimit({
+            userId: resourceOwnerUserId,
+            roleCode: req.user?.role,
+            resourceKey: 'campaigns',
+          }),
         });
         ({ wizardShortCircuit, _wizard, parseFailed = false, ...publicResponse } = response || {});
       }
@@ -1698,6 +1724,26 @@ class AiController {
         const lp = await landingPageRepository.findByIdInScope(landingPageId, scope).catch(() => null);
         if (lp) {
           resolvedLandingPageId = lp.id;
+        }
+      }
+
+      // C P3-3: hết suất landing → báo NGAY, trước khi đọc tệp / gọi Gemini / trừ credit (trước đây sinh xong, tốn credit rồi mới
+      // bị 400 limitReached ở nút Lưu). Sinh lại cho trang ĐÃ CÓ (landingPageId hợp lệ) không chiếm suất mới nên không kiểm. Khuôn
+      // trả lời y hệt campaign.controller.create: 400 + limitReached (KHÔNG đặt `code: RESOURCE_LIMIT_EXCEEDED` — FE
+      // getAiQuotaErrorMessage coi mã đó là hết token AI).
+      if (!resolvedLandingPageId) {
+        const landingSlot = await peekResourceLimit({
+          userId: ownerUserId,
+          roleCode: req.user?.role,
+          resourceKey: 'landingPages',
+        });
+        if (landingSlot && !landingSlot.allowed) {
+          return res.status(400).json({
+            success: false,
+            message: landingSlot.message,
+            limitReached: true,
+            resource: 'landingPages',
+          });
         }
       }
 
