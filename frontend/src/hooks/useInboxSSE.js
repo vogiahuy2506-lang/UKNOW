@@ -25,8 +25,17 @@ export const buildInboxSseUrl = (ticket) => {
 /**
  * @returns {{ status: 'connecting'|'connected'|'disconnected', retry: Function, reconnect: Function, disconnect: Function }}
  */
-export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
+export const useInboxSSE = (onNewMessage, onUnreadCountChange, onReconnected) => {
   const { user, activeContext } = useAuthStore();
+  // H-26: callback đi qua ref để `connect` không đổi danh tính mỗi khi trang đổi hội thoại đang mở — trước đây mỗi
+  // lần bấm một hội thoại là đóng rồi mở lại EventSource (log: một user mở 3 kết nối trong 4 giây).
+  const onNewMessageRef = useRef(onNewMessage);
+  const onUnreadCountChangeRef = useRef(onUnreadCountChange);
+  const onReconnectedRef = useRef(onReconnected);
+  const hasConnectedBeforeRef = useRef(false);
+  onNewMessageRef.current = onNewMessage;
+  onUnreadCountChangeRef.current = onUnreadCountChange;
+  onReconnectedRef.current = onReconnected;
   const contextType = activeContext?.type;
   const contextOwnerId = activeContext?.ownerId;
   const eventSourceRef = useRef(null);
@@ -159,7 +168,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         try {
           const data = JSON.parse(event.data);
           resetHeartbeat();
-          if (onNewMessage) onNewMessage(data);
+          if (onNewMessageRef.current) onNewMessageRef.current(data);
         } catch (e) {
           console.error('[SSE] Failed to parse message:', e);
         }
@@ -169,10 +178,15 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         try {
           const data = JSON.parse(event.data);
           resetHeartbeat();
-          if (onUnreadCountChange) onUnreadCountChange(data);
+          if (onUnreadCountChangeRef.current) onUnreadCountChangeRef.current(data);
         } catch (e) {
           console.error('[SSE] Failed to parse unread change:', e);
         }
+      });
+
+      // Nhịp sống của server (mỗi 30 giây) — có nó thì bộ đếm 60 giây không cắt kết nối đang khoẻ.
+      eventSource.addEventListener('ping', () => {
+        resetHeartbeat();
       });
 
       eventSource.addEventListener('connected', () => {
@@ -180,6 +194,9 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         failureCountRef.current = 0;
         setStatus('connected');
         resetHeartbeat();
+        // Nối LẠI sau khi rớt: tin đến trong khe hở không được phát lại → để trang tải lại danh sách (H-26).
+        if (hasConnectedBeforeRef.current) onReconnectedRef.current?.();
+        hasConnectedBeforeRef.current = true;
       });
 
       eventSourceRef.current = eventSource;
@@ -187,7 +204,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
       console.error('[SSE] Failed to create EventSource:', error);
       scheduleReconnect(connectionKey);
     }
-  }, [cleanup, resetHeartbeat, scheduleReconnect, user?.id, contextType, contextOwnerId, onNewMessage, onUnreadCountChange]);
+  }, [cleanup, resetHeartbeat, scheduleReconnect, user?.id, contextType, contextOwnerId]);
 
   connectRef.current = connect;
 

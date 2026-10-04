@@ -374,3 +374,93 @@ describe('H-06 / H-13 / H-33 — danh sách: chọn trang trước, chip lọc p
     expect(res.body.data.unreadByChannel).toBeUndefined();
   });
 });
+
+describe('H-12 — tab kênh chỉ hiện kênh user có; C5 — Đánh dấu tất cả đã đọc theo bộ lọc', () => {
+  it('GET /inbox/channels: chỉ kênh có kết nối/tài khoản/hội thoại, đúng thứ tự, KHÔNG có Facebook', async () => {
+    const user = await createUser({ username: `own${Date.now()}` });
+    const token = await loginAs(user);
+    const get = async () => (await request(app).get('/api/ai/chatbot/inbox/channels').set('Authorization', `Bearer ${token}`)).body.data.channels;
+
+    expect(await get()).toEqual([]);
+
+    await seedZaloAccount(user.id, { status: 'needs_reauth' });
+    await seedWebchatConversation(user.id, { unread: 0 });
+    await db.query(
+      `INSERT INTO channel_connections (id_user, channel, external_channel_id, display_name) VALUES ($1, 'facebook', 'fb1', 'FB')`,
+      [user.id]
+    );
+    expect(await get()).toEqual(['web', 'zalo_personal']);
+
+    await db.query(
+      `INSERT INTO channel_connections (id_user, channel, external_channel_id, display_name) VALUES ($1, 'telegram', 'tg1', 'TG')`,
+      [user.id]
+    );
+    expect(await get()).toEqual(['web', 'zalo_personal', 'telegram']);
+  });
+
+  async function seedScope() {
+    const user = await createUser({ username: `own${Date.now()}` });
+    const zs = await seedZaloAccount(user.id);
+    const personal = await seedZaloConversation(user.id, zs, { externalId: 'u1', name: 'Hải' });
+    const group = await seedZaloConversation(user.id, zs, { externalId: 'group_1', name: 'Nhóm', isGroup: true });
+    for (let i = 0; i < 3; i += 1) await seedZaloMessage(user.id, zs, personal);
+    for (let i = 0; i < 5; i += 1) await seedZaloMessage(user.id, zs, group);
+    const web = await seedWebchatConversation(user.id, { unread: 2 });
+    const other = await createUser({ username: `other${Date.now()}` });
+    const ozs = await seedZaloAccount(other.id);
+    const oconv = await seedZaloConversation(other.id, ozs, { externalId: 'o1', name: 'Của người khác' });
+    await seedZaloMessage(other.id, ozs, oconv);
+    return { user, zs, personal, group, web, other };
+  }
+
+  const unreadOf = async (table, convId) => Number((await db.query(
+    `SELECT COUNT(*) AS n FROM ${table} WHERE id_conversation = $1 AND role = 'visitor' AND is_read = false`, [convId]
+  )).rows[0].n);
+
+  it('không bộ lọc: đánh dấu mọi hội thoại của user (cả nhóm), không đụng user khác', async () => {
+    const { user, personal, group, web, other } = await seedScope();
+    const token = await loginAs(user);
+
+    const res = await request(app).post('/api/ai/chatbot/inbox/read-all').set('Authorization', `Bearer ${token}`).send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.data.updatedMessages).toBe(3 + 5 + 2);
+    expect(await unreadOf('zalo_personal_messages', personal)).toBe(0);
+    expect(await unreadOf('zalo_personal_messages', group)).toBe(0);
+    expect(await unreadOf('webchat_messages', web)).toBe(0);
+    const otherUnread = Number((await db.query(
+      `SELECT COUNT(*) AS n FROM zalo_personal_messages WHERE id_user = $1 AND is_read = false`, [other.id]
+    )).rows[0].n);
+    expect(otherUnread).toBe(1);
+  });
+
+  it('theo bộ lọc đang xem: kind=group chỉ đánh dấu nhóm; channel=web chỉ đánh dấu Web chat', async () => {
+    const { user, personal, group, web } = await seedScope();
+    const token = await loginAs(user);
+
+    const g = await request(app).post('/api/ai/chatbot/inbox/read-all').set('Authorization', `Bearer ${token}`).send({ kind: 'group' });
+    expect(g.body.data.updatedMessages).toBe(5);
+    expect(await unreadOf('zalo_personal_messages', group)).toBe(0);
+    expect(await unreadOf('zalo_personal_messages', personal)).toBe(3);
+    expect(await unreadOf('webchat_messages', web)).toBe(2);
+
+    const w = await request(app).post('/api/ai/chatbot/inbox/read-all').set('Authorization', `Bearer ${token}`).send({ channel: 'web' });
+    expect(w.body.data.updatedMessages).toBe(2);
+    expect(await unreadOf('webchat_messages', web)).toBe(0);
+    expect(await unreadOf('zalo_personal_messages', personal)).toBe(3);
+  });
+
+  it('tài khoản Zalo cụ thể: chỉ hội thoại của tài khoản đó', async () => {
+    const { user, zs, personal } = await seedScope();
+    const zs2 = await seedZaloAccount(user.id, { name: 'TK2' });
+    const c2 = await seedZaloConversation(user.id, zs2, { externalId: 'x', name: 'Khác TK' });
+    await seedZaloMessage(user.id, zs2, c2);
+
+    const result = await repo.markAllAsRead(user.id, { zaloAccountId: zs2, channel: 'zalo_personal' });
+
+    expect(result.updatedMessages).toBe(1);
+    expect(await unreadOf('zalo_personal_messages', c2)).toBe(0);
+    expect(await unreadOf('zalo_personal_messages', personal)).toBe(3);
+    expect(zs).toBeGreaterThan(0);
+  });
+});

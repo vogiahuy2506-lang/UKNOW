@@ -250,9 +250,9 @@ const chatbotApi = {
 
   // ── Unified Inbox ────────────────────────────────────────────────
 
-  getConversations: async ({ channel, status, date, search, limit = 20, offset = 0, zaloAccountId } = {}) => {
+  getConversations: async ({ channel, status, date, search, limit = 20, offset = 0, zaloAccountId, kind, unreadOnly } = {}) => {
     const response = await api.get('/ai/chatbot/inbox/conversations', {
-      params: { channel, status, date, search, limit, offset, zaloAccountId },
+      params: { channel, status, date, search, limit, offset, zaloAccountId, kind, unreadOnly },
     });
     return response.data;
   },
@@ -282,6 +282,18 @@ const chatbotApi = {
 
   setConversationAiPaused: async (id, type, paused) => {
     const response = await api.post(`/ai/chatbot/inbox/conversations/${id}/ai-pause`, { type, paused });
+    return response.data;
+  },
+
+  /** Kênh user có trong Hộp thư — để chỉ hiện tab của kênh đó (H-12). Trả `{ data: { channels: [...] } }`. */
+  getInboxChannels: async () => {
+    const response = await api.get('/ai/chatbot/inbox/channels');
+    return response.data;
+  },
+
+  /** "Đánh dấu tất cả đã đọc" theo bộ lọc đang xem. Trả `{ data: { updatedMessages } }`. */
+  markAllAsRead: async ({ channel, zaloAccountId, search, date, kind } = {}) => {
+    const response = await api.post('/ai/chatbot/inbox/read-all', { channel, zaloAccountId, search, date, kind });
     return response.data;
   },
 

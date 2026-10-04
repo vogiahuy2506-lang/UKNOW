@@ -176,6 +176,16 @@ class UnifiedInboxService {
     };
   }
 
+  /** "Đánh dấu tất cả đã đọc" theo bộ lọc đang xem. */
+  async markAllAsRead(userId, filters = {}) {
+    return unifiedInboxRepository.markAllAsRead(userId, filters);
+  }
+
+  /** Kênh user có trong Hộp thư (cho tab kênh phía FE). */
+  async getAvailableChannels(userId) {
+    return unifiedInboxRepository.getAvailableChannels(userId);
+  }
+
   /**
    * Get single conversation details
    */

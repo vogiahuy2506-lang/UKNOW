@@ -59,11 +59,13 @@ jest.unstable_mockModule('../../services/chatbot/inProcChannelGateway/index.js',
 }));
 
 let app;
+let router;
 let ticketService;
 
 beforeAll(async () => {
   ticketService = await import('../../services/sseTicket.service.js');
   const { default: chatbotRoutes } = await import('../../routes/chatbot.routes.js');
+  router = chatbotRoutes;
   app = express();
   app.use(express.json());
   app.use('/api/ai/chatbot', chatbotRoutes);
@@ -170,5 +172,41 @@ describe('GET /inbox/stream?ticket=', () => {
 
     expect(res.status).toBe(401);
     expect(mockResolveUserContext).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /inbox/stream — nhịp sống (H-26)', () => {
+  it('heartbeat 30 giây là sự kiện `ping` thật, không phải dòng chú thích `: heartbeat`', async () => {
+    jest.useFakeTimers();
+    try {
+      mockResolveUserContext.mockResolvedValue({ id: 7, activeContext: { type: 'self', ownerId: 7 } });
+      const { ticket } = ticketService.issueSseTicket({ userId: 7 });
+      const layer = router.stack.find((l) => l.route?.path === '/inbox/stream');
+      const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+
+      const closeHandlers = [];
+      const req = { query: { ticket }, on: (event, fn) => { if (event === 'close') closeHandlers.push(fn); } };
+      const res = {
+        headersSent: false,
+        setHeader: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn(),
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+      };
+
+      await handler(req, res);
+      expect(res.write).toHaveBeenCalledWith(expect.stringContaining('event: connected'));
+      res.write.mockClear();
+
+      jest.advanceTimersByTime(30_000);
+
+      expect(res.write).toHaveBeenCalledWith('event: ping\ndata: {}\n\n');
+      expect(res.write).not.toHaveBeenCalledWith(expect.stringContaining(': heartbeat'));
+      closeHandlers.forEach((fn) => fn());
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });

@@ -75,6 +75,20 @@ class UnifiedInboxController {
   }
 
   /**
+   * Kênh user có trong Hộp thư (có kết nối/tài khoản hoặc đã có hội thoại)
+   * GET /api/ai/chatbot/inbox/channels
+   */
+  async getAvailableChannels(req, res) {
+    try {
+      const channels = await unifiedInboxService.getAvailableChannels(resolveWorkspaceOwnerId(req.user));
+      return res.json({ success: true, data: { channels } });
+    } catch (err) {
+      console.error('[UnifiedInbox] Get available channels error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
    * Get single conversation
    * GET /api/ai/chatbot/inbox/conversations/:id
    */
@@ -174,6 +188,29 @@ class UnifiedInboxController {
       if (err.message === 'Conversation not found') {
         return res.status(404).json({ success: false, message: err.message });
       }
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Đánh dấu tất cả đã đọc theo bộ lọc đang xem (kênh, tài khoản Zalo, tìm kiếm, ngày, Cá nhân/Nhóm).
+   * POST /api/ai/chatbot/inbox/read-all
+   */
+  async markAllAsRead(req, res) {
+    try {
+      // Cùng chuẩn hoá với danh sách để "đang xem" và "đánh dấu" là MỘT tập; bộ lọc đọc từ body.
+      const filters = normalizeInboxQueryFilters(req.body || {});
+      const result = await unifiedInboxService.markAllAsRead(resolveWorkspaceOwnerId(req.user), {
+        channel: filters.channel,
+        zaloAccountId: filters.zaloAccountId,
+        search: filters.search,
+        status: filters.status,
+        date: filters.date,
+        kind: filters.kind,
+      });
+      return res.json({ success: true, data: { updatedMessages: result.updatedMessages } });
+    } catch (err) {
+      console.error('[UnifiedInbox] Mark all as read error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }

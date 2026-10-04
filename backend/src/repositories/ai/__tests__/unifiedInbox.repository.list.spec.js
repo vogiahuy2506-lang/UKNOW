@@ -136,3 +136,67 @@ describe('getConversations — tìm không phân biệt dấu (H-33)', () => {
     expect(params[3]).toBe('%100\\%\\_x%');
   });
 });
+
+describe('getAvailableChannels (H-12)', () => {
+  it('trả kênh theo thứ tự hiển thị cố định, bỏ kênh lạ và Facebook', async () => {
+    db.query.mockResolvedValue({
+      rows: [{ channel: 'telegram' }, { channel: 'facebook' }, { channel: 'zalo_personal' }, { channel: 'web' }, { channel: 'x' }],
+    });
+
+    const channels = await repo.getAvailableChannels(1);
+
+    expect(channels).toEqual(['web', 'zalo_personal', 'telegram']);
+    const [sql, params] = db.query.mock.calls[0];
+    expect(params).toEqual([1]);
+    expect(sql).not.toMatch(/'facebook'/);
+  });
+});
+
+describe('markAllAsRead — mỗi câu UPDATE chỉ nhận đúng tham số nó dùng', () => {
+  const maxPlaceholder = (sql) => Math.max(0, ...[...sql.matchAll(/\$(\d+)/g)].map((m) => Number(m[1])));
+
+  it('số tham số khớp số placeholder ở cả 3 câu (Postgres báo lỗi nếu thừa/thiếu)', async () => {
+    db.query.mockResolvedValue({ rowCount: 1 });
+
+    const result = await repo.markAllAsRead(1, { zaloAccountId: '7', search: 'Nguyễn', date: 'week', kind: 'personal' });
+
+    expect(result.updatedMessages).toBe(3);
+    expect(db.query).toHaveBeenCalledTimes(3);
+    for (const [sql, params] of db.query.mock.calls) {
+      expect(params).toHaveLength(maxPlaceholder(sql));
+    }
+    // chỉ câu của Zalo mang tham số tài khoản
+    const zalo = db.query.mock.calls.find(([sql]) => sql.includes('UPDATE zalo_personal_messages'));
+    expect(zalo[0]).toMatch(/zp\.id_zalo_setting = \$3/);
+    const web = db.query.mock.calls.find(([sql]) => sql.includes('UPDATE webchat_messages'));
+    expect(web[0]).not.toMatch(/id_zalo_setting/);
+  });
+
+  it('tab kênh khoá nhánh nào thì KHÔNG chạy UPDATE của nhánh đó', async () => {
+    db.query.mockResolvedValue({ rowCount: 2 });
+
+    const result = await repo.markAllAsRead(1, { channel: 'web' });
+
+    expect(result.updatedMessages).toBe(2);
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0][0]).toMatch(/UPDATE webchat_messages/);
+
+    db.query.mockClear();
+    await repo.markAllAsRead(1, { channel: 'telegram' });
+    expect(db.query).toHaveBeenCalledTimes(1);
+    expect(db.query.mock.calls[0][0]).toMatch(/UPDATE channel_messages/);
+    expect(db.query.mock.calls[0][0]).toMatch(/ch\.channel = \$3/);
+  });
+
+  it('chỉ đánh dấu tin KHÁCH chưa đọc, luôn gắn user', async () => {
+    db.query.mockResolvedValue({ rowCount: 0 });
+
+    await repo.markAllAsRead(5, {});
+
+    for (const [sql, params] of db.query.mock.calls) {
+      expect(sql).toMatch(/role = 'visitor' AND [a-z]+\.is_read = false/);
+      expect(sql).toMatch(/id_user = \$1/);
+      expect(params[0]).toBe(5);
+    }
+  });
+});

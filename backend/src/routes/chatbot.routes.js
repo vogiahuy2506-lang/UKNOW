@@ -131,7 +131,9 @@ router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req,
 
   const heartbeat = setInterval(() => {
     try {
-      res.write(`: heartbeat\n\n`);
+      // Sự kiện `ping` THẬT (không phải dòng chú thích): EventSource không phát gì cho dòng `: ...`, nên client
+      // không biết kết nối còn sống và tự cắt sau 60 giây yên lặng (H-26). Client cũ không có listener thì bỏ qua.
+      res.write('event: ping\ndata: {}\n\n');
     } catch {
       clearInterval(heartbeat);
       res.__sseHeartbeat = null;
@@ -232,6 +234,7 @@ router.delete('/widgets/:id', requirePermission('chatbots_manage'), chatbotContr
 // ── Unified Inbox ────────────────────────────────────────────────
 
 router.get('/inbox/conversations', requirePermission('inbox_view'), unifiedInboxController.getConversations.bind(unifiedInboxController));
+router.get('/inbox/channels', requirePermission('inbox_view'), unifiedInboxController.getAvailableChannels.bind(unifiedInboxController));
 router.get('/inbox/conversations/:id', requirePermission('inbox_view'), unifiedInboxController.getConversation.bind(unifiedInboxController));
 router.get('/inbox/conversations/:id/messages', requirePermission('inbox_view'), unifiedInboxController.getMessages.bind(unifiedInboxController));
 router.post(
@@ -244,6 +247,7 @@ router.post(
 router.post('/inbox/conversations/:id/messages', requirePermission('inbox_reply'), unifiedInboxController.sendMessage.bind(unifiedInboxController));
 router.post('/inbox/messages/:messageId/retry', requirePermission('inbox_manage'), unifiedInboxController.retryMessage.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/read', requirePermission('inbox_view'), unifiedInboxController.markAsRead.bind(unifiedInboxController));
+router.post('/inbox/read-all', requirePermission('inbox_view'), unifiedInboxController.markAllAsRead.bind(unifiedInboxController));
 router.delete('/inbox/conversations/:id', requirePermission('inbox_manage'), unifiedInboxController.deleteConversation.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/ai-pause', requirePermission('inbox_manage'), unifiedInboxController.setAiPaused.bind(unifiedInboxController));
 router.get('/inbox/unread-count', requirePermission('inbox_view'), unifiedInboxController.getUnreadCount.bind(unifiedInboxController));

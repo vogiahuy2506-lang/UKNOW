@@ -44,6 +44,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
   localStorage.clear();
@@ -87,5 +88,69 @@ describe('useInboxSSE — vé SSE', () => {
     });
 
     expect(FakeEventSource.instances).toHaveLength(0);
+  });
+});
+
+describe('useInboxSSE — nhịp sống và callback (H-26)', () => {
+  const connectOne = async (handlers = {}) => {
+    createInboxStreamTicket.mockResolvedValue({ success: true, data: { ticket: 'vé-1' } });
+    const utils = renderHook((props) => useInboxSSE(props.onNew, props.onUnread, props.onReconnected), {
+      initialProps: { onNew: handlers.onNew || vi.fn(), onUnread: vi.fn(), onReconnected: handlers.onReconnected },
+    });
+    await waitFor(() => expect(FakeEventSource.instances).toHaveLength(1));
+    return utils;
+  };
+
+  it('sự kiện ping của server reset bộ đếm 60 giây: kết nối khoẻ không bị cắt', async () => {
+    await connectOne();
+    const source = FakeEventSource.instances[0];
+    vi.useFakeTimers();
+    act(() => { source.listeners.connected(); });
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(59_000); });
+    act(() => { source.listeners.ping(); });
+    await act(async () => { await vi.advanceTimersByTimeAsync(59_000); });
+
+    expect(source.closed).toBe(false);
+    expect(createInboxStreamTicket).toHaveBeenCalledTimes(1);
+  });
+
+  it('im lặng hoàn toàn 60 giây (không ping) → client tự đóng để nối lại', async () => {
+    await connectOne();
+    const source = FakeEventSource.instances[0];
+    vi.useFakeTimers();
+    act(() => { source.listeners.connected(); });
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(61_000); });
+
+    expect(source.closed).toBe(true);
+  });
+
+  it('đổi callback giữa các lần render KHÔNG đóng/mở lại EventSource, và tin đến gọi callback MỚI nhất', async () => {
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = await connectOne({ onNew: first });
+    const source = FakeEventSource.instances[0];
+
+    rerender({ onNew: second, onUnread: vi.fn() });
+    act(() => { source.listeners['inbox:new_message']({ data: JSON.stringify({ conversationId: 1 }) }); });
+
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(source.closed).toBe(false);
+    expect(createInboxStreamTicket).toHaveBeenCalledTimes(1);
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledWith({ conversationId: 1 });
+  });
+
+  it('lần "connected" đầu không gọi onReconnected; lần nối lại sau đó thì có', async () => {
+    const onReconnected = vi.fn();
+    await connectOne({ onReconnected });
+    const source = FakeEventSource.instances[0];
+
+    act(() => { source.listeners.connected(); });
+    expect(onReconnected).not.toHaveBeenCalled();
+
+    act(() => { source.listeners.connected(); });
+    expect(onReconnected).toHaveBeenCalledTimes(1);
   });
 });

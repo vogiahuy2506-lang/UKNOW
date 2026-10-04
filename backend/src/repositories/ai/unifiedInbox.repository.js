@@ -159,6 +159,9 @@ function buildOutboxChannelGates(channel) {
   };
 }
 
+/** Thứ tự tab kênh trong Hộp thư. */
+const INBOX_CHANNEL_ORDER = ['web', 'zalo_personal', 'zalo_oa', 'whatsapp_baileys', 'telegram'];
+
 const CHANNEL_CONNECTION_TYPES = new Set(['zalo_oa', 'facebook', 'whatsapp_baileys', 'telegram']);
 
 /**
@@ -218,6 +221,65 @@ function messageTableFor(conversationType) {
   return MESSAGE_TABLES[conversationType] || MESSAGE_TABLES.webchat;
 }
 
+/**
+ * Gom mọi điều kiện lọc hội thoại (kênh, tài khoản Zalo, tìm kiếm, trạng thái/ngày, Cá nhân/Nhóm, Chưa đọc) thành các
+ * đoạn SQL theo alias từng nhánh — dùng chung cho danh sách, đếm tổng và "Đánh dấu tất cả đã đọc" để ba chỗ không lệch
+ * nhau. `params` là mảng tham số ĐÃ có sẵn (vd [userId, limit, offset]); hàm đẩy thêm vào đó và đánh số tiếp.
+ */
+function buildConversationFilterParts(filters, params, { branch = 'all' } = {}) {
+  const { channel, status, date, search, zaloAccountId } = filters;
+  // `branch`: các câu UPDATE riêng từng bảng chỉ được truyền ĐÚNG tham số mà câu đó dùng (Postgres báo lỗi nếu thừa).
+  const useChannelParam = branch === 'all' || branch === 'channel';
+  const useAccountParam = branch === 'all' || branch === 'zalo';
+  const kind = CONVERSATION_KINDS.has(filters.kind) ? filters.kind : null;
+  const unreadOnly = filters.unreadOnly === true;
+  let paramIndex = params.length + 1;
+
+  // Zalo OA / Facebook / Telegram / WhatsApp chỉ nằm ở nhánh channel_connections
+  let channelFilter = '';
+  if (useChannelParam && channel && CHANNEL_CONNECTION_TYPES.has(channel)) {
+    channelFilter = `AND ch.channel = $${paramIndex}`;
+    params.push(channel);
+    paramIndex++;
+  }
+
+  const gates = buildConversationChannelGates(channel);
+
+  // Lọc theo tài khoản Zalo cụ thể (chỉ nhánh zalo_personal)
+  let zaloAccountIdFilter = '';
+  if (useAccountParam && zaloAccountId) {
+    zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
+    params.push(parseInt(zaloAccountId, 10));
+    paramIndex++;
+  }
+
+  const searchBuilt = buildSearchFilter(search, paramIndex);
+  if (searchBuilt.params.length) {
+    params.push(...searchBuilt.params);
+    paramIndex = searchBuilt.nextIndex;
+  }
+
+  const sharedFilters = buildStatusDateFilters({ status, date, params, startIndex: paramIndex });
+  const statusDate = `${sharedFilters.statusSql} ${sharedFilters.dateSql}`;
+
+  return {
+    channelFilter,
+    zaloAccountIdFilter,
+    channelGate: gates.channelGate,
+    zaloGate: gates.zaloGate,
+    webGate: gates.webGate,
+    ccSearch: withTableAlias(searchBuilt.sql, 'cc'),
+    zpSearch: withTableAlias(searchBuilt.sql, 'zp'),
+    wcSearch: withTableAlias(searchBuilt.sql, 'wc'),
+    ccStatusDate: withTableAlias(statusDate, 'cc'),
+    zpStatusDate: withTableAlias(statusDate, 'zp'),
+    wcStatusDate: withTableAlias(statusDate, 'wc'),
+    ccKindUnread: buildKindUnreadFilters({ kind, unreadOnly }, 'cc', 'channel_messages'),
+    zpKindUnread: buildKindUnreadFilters({ kind, unreadOnly }, 'zp', 'zalo_personal_messages'),
+    wcKindUnread: buildKindUnreadFilters({ kind, unreadOnly }, 'wc', 'webchat_messages'),
+  };
+}
+
 class UnifiedInboxRepository {
   /**
    * Get all conversations across all channels for a user
@@ -230,50 +292,13 @@ class UnifiedInboxRepository {
    * `q14.sql`), gộp lại cắt đúng trang, rồi mới tính phần xem trước / số chưa đọc / tên nhóm cho ~20 dòng đó.
    */
   async getConversations(userId, filters = {}) {
-    const { channel, status, date, search, limit = 20, offset = 0, zaloAccountId } = filters;
-    const kind = CONVERSATION_KINDS.has(filters.kind) ? filters.kind : null;
-    const unreadOnly = filters.unreadOnly === true;
-
-    // Build channel filter (Zalo OA / Facebook live in channel_connections branch only)
-    let channelFilter = '';
+    const { limit = 20, offset = 0 } = filters;
     const params = [userId, limit, offset];
-    let paramIndex = 4;
-
-    if (channel && CHANNEL_CONNECTION_TYPES.has(channel)) {
-      channelFilter = `AND ch.channel = $${paramIndex}`;
-      params.push(channel);
-      paramIndex++;
-    }
-
-    const { channelGate, zaloGate, webGate } = buildConversationChannelGates(channel);
-
-    // Build zaloAccountId filter (for zalo_personal channel filtering by specific account)
-    let zaloAccountIdFilter = '';
-    if (zaloAccountId) {
-      zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
-      params.push(parseInt(zaloAccountId, 10));
-      paramIndex++;
-    }
-
-    // Build search filter
-    const searchBuilt = buildSearchFilter(search, paramIndex);
-    if (searchBuilt.params.length) {
-      params.push(...searchBuilt.params);
-      paramIndex = searchBuilt.nextIndex;
-    }
-    const ccSearch = withTableAlias(searchBuilt.sql, 'cc');
-    const zpSearch = withTableAlias(searchBuilt.sql, 'zp');
-    const wcSearch = withTableAlias(searchBuilt.sql, 'wc');
-
-    const sharedFilters = buildStatusDateFilters({ status, date, params, startIndex: paramIndex });
-    paramIndex = sharedFilters.nextIndex;
-    const ccStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'cc');
-    const zpStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'zp');
-    const wcStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'wc');
-
-    const ccKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'cc', 'channel_messages');
-    const zpKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'zp', 'zalo_personal_messages');
-    const wcKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'wc', 'webchat_messages');
+    const {
+      channelFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
+      ccSearch, zpSearch, wcSearch, ccStatusDate, zpStatusDate, wcStatusDate,
+      ccKindUnread, zpKindUnread, wcKindUnread,
+    } = buildConversationFilterParts(filters, params);
 
     // Tin cuối: nội dung thô + loại đính kèm + loại tin gốc của Zalo + người gửi (nhóm). FE tự đặt nhãn "[Hình ảnh]"…
     // (trước đây backend viết cứng tiếng Việt và bỏ sót ảnh Zalo lưu dạng JSON trong `content` — H-08, H-30).
@@ -557,46 +582,12 @@ class UnifiedInboxRepository {
    * Get total count of conversations
    */
   async getConversationsCount(userId, filters = {}) {
-    const { channel, status, date, search, zaloAccountId } = filters;
-    const kind = CONVERSATION_KINDS.has(filters.kind) ? filters.kind : null;
-    const unreadOnly = filters.unreadOnly === true;
-
-    let channelFilter = '';
     const params = [userId];
-    let paramIndex = 2;
-
-    if (channel && CHANNEL_CONNECTION_TYPES.has(channel)) {
-      channelFilter = `AND ch.channel = $${paramIndex}`;
-      params.push(channel);
-      paramIndex++;
-    }
-
-    const { channelGate, zaloGate, webGate } = buildConversationChannelGates(channel);
-
-    const searchBuilt = buildSearchFilter(search, paramIndex);
-    if (searchBuilt.params.length) {
-      params.push(...searchBuilt.params);
-      paramIndex = searchBuilt.nextIndex;
-    }
-    const ccSearch = withTableAlias(searchBuilt.sql, 'cc');
-    const zpSearch = withTableAlias(searchBuilt.sql, 'zp');
-    const wcSearch = withTableAlias(searchBuilt.sql, 'wc');
-
-    let zaloAccountIdFilter = '';
-    if (zaloAccountId) {
-      zaloAccountIdFilter = `AND zp.id_zalo_setting = $${paramIndex}`;
-      params.push(parseInt(zaloAccountId, 10));
-      paramIndex++;
-    }
-
-    const sharedFilters = buildStatusDateFilters({ status, date, params, startIndex: paramIndex });
-    const ccStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'cc');
-    const zpStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'zp');
-    const wcStatusDate = withTableAlias(`${sharedFilters.statusSql} ${sharedFilters.dateSql}`, 'wc');
-
-    const ccKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'cc', 'channel_messages');
-    const zpKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'zp', 'zalo_personal_messages');
-    const wcKindUnread = buildKindUnreadFilters({ kind, unreadOnly }, 'wc', 'webchat_messages');
+    const {
+      channelFilter, zaloAccountIdFilter, channelGate, zaloGate, webGate,
+      ccSearch, zpSearch, wcSearch, ccStatusDate, zpStatusDate, wcStatusDate,
+      ccKindUnread, zpKindUnread, wcKindUnread,
+    } = buildConversationFilterParts(filters, params);
 
     const query = `
       SELECT COUNT(*) as total FROM (
@@ -618,6 +609,35 @@ class UnifiedInboxRepository {
 
     const { rows } = await db.query(query, params);
     return parseInt(rows[0]?.total || 0);
+  }
+
+  /**
+   * Các kênh user CÓ trong Hộp thư (có kết nối/tài khoản hoặc đã có hội thoại) — để FE chỉ hiện tab của kênh đó (H-12).
+   * Facebook không có trong danh sách: kết nối Facebook đã chốt không làm (21/09).
+   * @returns {Promise<string[]>} theo thứ tự hiển thị: web, zalo_personal, zalo_oa, whatsapp_baileys, telegram
+   */
+  async getAvailableChannels(userId) {
+    const { rows } = await db.query(
+      `SELECT channel FROM (
+         SELECT 'web' AS channel
+         WHERE EXISTS (SELECT 1 FROM web_widget_configs WHERE id_user = $1)
+            OR EXISTS (SELECT 1 FROM webchat_conversations WHERE id_user = $1)
+         UNION
+         SELECT 'zalo_personal'
+         WHERE EXISTS (SELECT 1 FROM zalo_settings WHERE id_user = $1 AND is_active = true)
+            OR EXISTS (SELECT 1 FROM zalo_personal_conversations WHERE id_user = $1)
+         UNION
+         SELECT ch.channel FROM channel_connections ch
+         WHERE ch.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram')
+         UNION
+         SELECT ch.channel FROM channel_conversations cc
+         JOIN channel_connections ch ON ch.id = cc.id_channel
+         WHERE cc.id_user = $1 AND ch.channel IN ('zalo_oa', 'whatsapp_baileys', 'telegram')
+       ) found`,
+      [userId]
+    );
+    const found = new Set(rows.map((r) => r.channel));
+    return INBOX_CHANNEL_ORDER.filter((channel) => found.has(channel));
   }
 
   /**
@@ -743,6 +763,60 @@ class UnifiedInboxRepository {
       [conversationId]
     );
     return { remainingUnread: rows[0]?.remaining || 0 };
+  }
+
+  /**
+   * "Đánh dấu tất cả đã đọc" theo đúng bộ lọc đang xem (C5): kênh, tài khoản Zalo, tìm kiếm, ngày, Cá nhân/Nhóm.
+   * Chủ ý KHÔNG tự đánh dấu tin cũ — chỉ chạy khi người dùng bấm nút.
+   * @returns {Promise<{ updatedMessages: number }>}
+   */
+  async markAllAsRead(userId, filters = {}) {
+    const now = new Date().toISOString();
+    const base = { ...filters, unreadOnly: false };
+    let updatedMessages = 0;
+
+    // Mỗi bảng một câu UPDATE với bộ tham số riêng; nhánh bị khoá bởi tab kênh (AND 1=0) thì bỏ qua luôn.
+    const channelParams = [userId, now];
+    const ch = buildConversationFilterParts(base, channelParams, { branch: 'channel' });
+    if (!ch.channelGate) {
+      const r = await db.query(
+        `UPDATE channel_messages cm SET is_read = true, read_at = $2
+         FROM channel_conversations cc
+         JOIN channel_connections ch ON ch.id = cc.id_channel
+         WHERE cm.id_conversation = cc.id AND cc.id_user = $1 AND cm.role = 'visitor' AND cm.is_read = false
+           ${ch.channelFilter} ${ch.ccSearch} ${ch.ccStatusDate} ${ch.ccKindUnread}`,
+        channelParams
+      );
+      updatedMessages += r.rowCount || 0;
+    }
+
+    const zaloParams = [userId, now];
+    const zl = buildConversationFilterParts(base, zaloParams, { branch: 'zalo' });
+    if (!zl.zaloGate) {
+      const r = await db.query(
+        `UPDATE zalo_personal_messages zpm SET is_read = true, read_at = $2
+         FROM zalo_personal_conversations zp
+         WHERE zpm.id_conversation = zp.id AND zp.id_user = $1 AND zpm.role = 'visitor' AND zpm.is_read = false
+           ${zl.zaloAccountIdFilter} ${zl.zpSearch} ${zl.zpStatusDate} ${zl.zpKindUnread}`,
+        zaloParams
+      );
+      updatedMessages += r.rowCount || 0;
+    }
+
+    const webParams = [userId, now];
+    const wb = buildConversationFilterParts(base, webParams, { branch: 'web' });
+    if (!wb.webGate) {
+      const r = await db.query(
+        `UPDATE webchat_messages wm SET is_read = true, read_at = $2
+         FROM webchat_conversations wc
+         WHERE wm.id_conversation = wc.id AND wc.id_user = $1 AND wm.role = 'visitor' AND wm.is_read = false
+           ${wb.wcSearch} ${wb.wcStatusDate} ${wb.wcKindUnread}`,
+        webParams
+      );
+      updatedMessages += r.rowCount || 0;
+    }
+
+    return { updatedMessages };
   }
 
   /**
