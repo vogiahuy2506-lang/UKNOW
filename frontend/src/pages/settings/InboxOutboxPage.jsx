@@ -160,6 +160,7 @@ const InboxPage = () => {
     accounts: [],
     message: '',
   });
+  const [sessionLoaded, setSessionLoaded] = useState(false);
   
   const [replyingTo, setReplyingTo] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
@@ -238,6 +239,8 @@ const InboxPage = () => {
       }
     } catch (err) {
       console.error('Failed to fetch session status:', err);
+    } finally {
+      setSessionLoaded(true);
     }
   }, []);
 
@@ -727,10 +730,15 @@ const InboxPage = () => {
     fetchContactAlertsCount();
   }, [fetchContactAlertsCount]);
 
+  // H-05: trạng thái tài khoản Zalo chỉ nạp MỘT lần khi mở trang (và sau khi bấm Đồng bộ) — không chạy lại theo
+  // từng bộ lọc / phím gõ. Ô chọn tài khoản nhận dữ liệu này qua props, không tự gọi API nữa.
+  useEffect(() => {
+    fetchSessionStatus();
+  }, [fetchSessionStatus]);
+
   useEffect(() => {
     fetchConversations(true);
     fetchUnreadCount();
-    fetchSessionStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filters.channel, filters.search, filters.status, filters.date, selectedAccountId]);
 
@@ -916,7 +924,8 @@ const InboxPage = () => {
               <ZaloAccountSelector
                 selectedAccountId={selectedAccountId}
                 onAccountChange={setSelectedAccountId}
-                refreshTrigger={sessionStatus.connected}
+                statusAccounts={sessionStatus.accounts}
+                isLoading={!sessionLoaded}
                 canSync={canManage}
                 canManageChannels={canManageChannels}
                 onSyncComplete={() => {

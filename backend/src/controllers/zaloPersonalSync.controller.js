@@ -6,7 +6,6 @@
 import zaloPersonalSyncService from '../services/chatbot/zaloPersonalSync.service.js';
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import zaloSettingRepository from '../repositories/zalo/zaloSetting.repository.js';
-import campaignZaloSenderRepository from '../repositories/campaign/campaignZaloSender.repository.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
 
 class ZaloPersonalSyncController {
@@ -163,8 +162,14 @@ class ZaloPersonalSyncController {
 
   /**
    * GET /api/chatbot/zalo-personal/sync/status
-   * Kiểm tra trạng sync + thử restore session nếu chưa active
-   * Returns ALL connected accounts (not just one)
+   * CHỈ ĐỌC: trạng thái trong DB (`zalo_settings.status`) + việc RAM có giữ phiên hay không.
+   * Returns ALL active accounts (connected + cần đăng nhập lại), mỗi tài khoản kèm `status`.
+   *
+   * RA_SOAT_3_MAN H-05: bản cũ với MỌI tài khoản `is_active` mà RAM chưa giữ phiên thì gọi
+   * `restoreZaloSessionFromCookie` rồi `recordRestoreFailure` (UPDATE `zalo_settings`) — một GET có tác dụng
+   * phụ, chạy 3 lần mỗi lần mở Hộp thư và lại chạy ở mỗi phím gõ tìm kiếm; nhân viên chỉ có quyền xem cũng
+   * làm tăng `restore_fail_count` của tài khoản chủ. Khôi phục phiên là việc của keep-alive
+   * (`zaloSessionKeepAlive.service.js`) và nút "Kết nối lại", không phải của endpoint đọc trạng thái.
    */
   async getSyncStatus(req, res) {
     try {
@@ -179,43 +184,31 @@ class ZaloPersonalSyncController {
         });
       }
 
-      // Thử restore session cho từng account nếu chưa có API active (sau restart server)
-      const { restoreZaloSessionFromCookie } = await import('../utils/zaloSessionRestore.util.js');
-      
-      const accountsWithSession = await Promise.all(accounts.map(async (account) => {
-        let api = zaloAccountSessionService.getAccountApi(account.id);
-        if (!api) {
-          console.log(`[ZaloSyncStatus] Session not in memory for account ${account.id}, attempting restore...`);
-          api = await restoreZaloSessionFromCookie(account.cookie_text || account.cookieText);
-          if (api) {
-            zaloAccountSessionService.setAccountApi(account.id, api);
-            console.log(`[ZaloSyncStatus] ✅ Session restored for account ${account.id}`);
-          } else {
-            // Session restore failed - record failure (follows ≥5 fails / 60 mins policy to needs_reauth)
-            console.log(`[ZaloSyncStatus] ❌ Session restore failed for account ${account.id}, recording restore failure...`);
-            await campaignZaloSenderRepository.recordRestoreFailure(account.id);
-            zaloAccountSessionService.clearAccountApi(account.id);
-          }
-        }
+      const accountsWithStatus = accounts.map((account) => {
+        const isConnected = account.status === 'connected';
         return {
           id: account.id,
           displayName: account.display_name,
-          conversationCount: parseInt(account.conversation_count),
-          hasActiveSession: !!api,
+          conversationCount: parseInt(account.conversation_count, 10) || 0,
+          status: account.status,
+          isConnected,
+          needsReauth: !isConnected,
+          // Chỉ báo RAM có giữ phiên không — thông tin tham khảo, KHÔNG thử khôi phục ở đây.
+          hasActiveSession: !!zaloAccountSessionService.getAccountApi(account.id),
         };
-      }));
+      });
 
-      const failedCount = accountsWithSession.filter(a => !a.hasActiveSession).length;
-      const successCount = accountsWithSession.filter(a => a.hasActiveSession).length;
+      const connectedCount = accountsWithStatus.filter((a) => a.isConnected).length;
+      const needsReauthCount = accountsWithStatus.length - connectedCount;
 
       res.json({
         success: true,
         data: {
-          connected: successCount > 0,
-          accounts: accountsWithSession,
-          message: failedCount > 0
-            ? `${successCount}/${accountsWithSession.length} tài khoản kết nối (${failedCount} đã hết hạn)`
-            : `Có ${successCount} tài khoản được kết nối`,
+          connected: connectedCount > 0,
+          accounts: accountsWithStatus,
+          message: needsReauthCount > 0
+            ? `${connectedCount}/${accountsWithStatus.length} tài khoản kết nối (${needsReauthCount} cần đăng nhập lại)`
+            : `Có ${connectedCount} tài khoản được kết nối`,
         },
       });
     } catch (error) {

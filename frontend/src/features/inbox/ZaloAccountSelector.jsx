@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { HiChevronDown, HiRefresh, HiCheck, HiExclamationCircle, HiUser, HiExternalLink, HiInformationCircle } from 'react-icons/hi';
 import { useNavigate } from 'react-router-dom';
 import { useI18n } from '../../i18n';
@@ -17,68 +17,54 @@ function pickDefaultAccount(accounts, savedId) {
   return accounts[0]?.id ?? null;
 }
 
+/**
+ * `statusAccounts` do trang Hộp thư nạp MỘT lần từ `GET /zalo-personal/sync/status` (chỉ đọc, H-05) rồi truyền
+ * xuống — ô này không tự gọi API nữa, nên mở trang không còn bắn 3 lần cùng một yêu cầu.
+ */
 const ZaloAccountSelector = ({
   selectedAccountId,
   onAccountChange,
   onSyncComplete,
-  refreshTrigger,
+  statusAccounts = [],
+  isLoading = false,
   canSync = true,
   canManageChannels = true,
 }) => {
   const navigate = useNavigate();
   const { t } = useI18n();
   const userId = useAuthStore((s) => s.user?.id);
-  const [accounts, setAccounts] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isOpen, setIsOpen] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showSyncTip, setShowSyncTip] = useState(false);
   const dropdownRef = useRef(null);
 
-  const fetchAccounts = async () => {
-    setIsLoading(true);
-    try {
-      const response = await chatbotApi.getZaloSyncStatus();
-      const payload = response.data || response;
-      if (payload?.success && payload?.data?.accounts?.length > 0) {
-        const mapped = payload.data.accounts.map((account) => ({
-          id: account.id,
-          displayName: account.displayName || account.display_name || t('inbox.zaloPersonal') || 'Zalo Cá nhân',
-          isActive: account.hasActiveSession,
-          hasSession: account.hasActiveSession,
-          conversationCount: account.conversationCount,
-        }));
-        setAccounts(mapped);
-
-        let savedId = null;
-        try {
-          savedId = localStorage.getItem(storageKey(userId));
-        } catch {
-          savedId = null;
-        }
-
-        if (!selectedAccountId) {
-          const nextId = pickDefaultAccount(mapped, savedId);
-          if (nextId != null) onAccountChange?.(nextId);
-        } else if (!mapped.some((a) => String(a.id) === String(selectedAccountId))) {
-          const nextId = pickDefaultAccount(mapped, savedId);
-          if (nextId != null) onAccountChange?.(nextId);
-        }
-      } else {
-        setAccounts([]);
-      }
-    } catch (err) {
-      console.error('Failed to fetch Zalo accounts:', err);
-      setAccounts([]);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const accounts = useMemo(() => (statusAccounts || []).map((account) => {
+    // `isConnected` = trạng thái trong DB (server chỉ đọc, không khôi phục phiên); bản server cũ chỉ có hasActiveSession.
+    const connected = account.isConnected ?? account.hasActiveSession;
+    return {
+      id: account.id,
+      displayName: account.displayName || account.display_name || t('inbox.zaloPersonal') || 'Zalo Cá nhân',
+      isActive: connected,
+      hasSession: connected,
+      conversationCount: account.conversationCount,
+    };
+  }), [statusAccounts, t]);
 
   useEffect(() => {
-    fetchAccounts();
+    if (accounts.length === 0) return;
+    let savedId = null;
+    try {
+      savedId = localStorage.getItem(storageKey(userId));
+    } catch {
+      savedId = null;
+    }
+
+    if (!selectedAccountId || !accounts.some((a) => String(a.id) === String(selectedAccountId))) {
+      const nextId = pickDefaultAccount(accounts, savedId);
+      if (nextId != null) onAccountChange?.(nextId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, refreshTrigger]);
+  }, [accounts, userId]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -126,7 +112,6 @@ const ZaloAccountSelector = ({
         } else {
           toast.success(t('inbox.syncSuccess') || 'Đồng bộ thành công');
         }
-        await fetchAccounts();
         onSyncComplete?.();
       } else {
         const errorMsg = payload?.message || t('inbox.syncFailed');
@@ -136,7 +121,6 @@ const ZaloAccountSelector = ({
             : errorMsg
         );
         if (String(errorMsg).includes('hết hạn') || String(errorMsg).includes('Session')) {
-          await fetchAccounts();
           onSyncComplete?.();
         }
       }
