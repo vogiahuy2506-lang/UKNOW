@@ -2705,6 +2705,7 @@ export default {
     close: 'Đóng',
     lastSync: 'Cập nhật lần cuối',
     createdBy: 'Người tạo',
+    assignedEmployees: 'Nhân viên được giao: {count}',
     notes: 'Ghi chú',
     zaloId: 'Zalo ID',
     zaloName: 'Tên Zalo',

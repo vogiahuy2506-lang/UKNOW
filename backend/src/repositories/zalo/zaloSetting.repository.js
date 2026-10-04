@@ -243,7 +243,25 @@ class ZaloSettingRepository {
     return rows[0] || null;
   }
 
-  async findAccountsList(isAdmin, userId) {
+  /**
+   * Danh sách tài khoản Zalo của không gian (hoặc của mọi chủ khi super admin).
+   *
+   * `accessibleIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G1): `null` = không lọc (chủ / super admin);
+   * mảng = nhân viên, chỉ trả các tài khoản được giao (mảng rỗng = không trả gì). Mặc định `null` là để
+   * chủ gọi gọn — chỗ nào phục vụ nhân viên PHẢI truyền kết quả `getAccessibleZaloAccountIds`.
+   *
+   * @param {boolean} isAdmin
+   * @param {number} userId chủ không gian
+   * @param {number[]|null} [accessibleIds]
+   */
+  async findAccountsList(isAdmin, userId, accessibleIds = null) {
+    const scoped = Array.isArray(accessibleIds);
+    const params = isAdmin ? [] : [userId];
+    let accessClause = '';
+    if (scoped) {
+      params.push(accessibleIds);
+      accessClause = `AND zs.id = ANY($${params.length}::bigint[])`;
+    }
     const { rows } = await db.query(
       `SELECT zs.id_user, zs.id, zs.display_name, zs.zalo_user_id, zs.zalo_name, zs.zalo_phone,
               zs.login_method, zs.status, zs.is_active, zs.is_default, zs.notes,
@@ -263,8 +281,9 @@ class ZaloSettingRepository {
        LEFT JOIN users u ON zs.id_user = u.id
        WHERE 1 = 1
          ${isAdmin ? '' : 'AND zs.id_user = $1'}
+         ${accessClause}
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
-      isAdmin ? [] : [userId]
+      params
     );
     return rows.map((r) => ({ ...r, is_locked: Boolean(r.is_locked) }));
   }
@@ -369,11 +388,19 @@ class ZaloSettingRepository {
   }
 
   async deleteAccount(accountId, isAdmin, userId) {
+    // `member_channel_accounts.account_ref` là TEXT (không FK được) nên xoá việc giao đi cùng một câu lệnh.
     const { rows } = await db.query(
-      `DELETE FROM zalo_settings
-       WHERE id = $1
-         ${isAdmin ? '' : 'AND id_user = $2'}
-       RETURNING id, id_user, is_default`,
+      `WITH deleted AS (
+         DELETE FROM zalo_settings
+         WHERE id = $1
+           ${isAdmin ? '' : 'AND id_user = $2'}
+         RETURNING id, id_user, is_default
+       ), cleanup AS (
+         DELETE FROM member_channel_accounts
+         WHERE channel = 'zalo_personal'
+           AND account_ref IN (SELECT id::text FROM deleted)
+       )
+       SELECT id, id_user, is_default FROM deleted`,
       isAdmin ? [accountId] : [accountId, userId]
     );
     return rows[0] || null;

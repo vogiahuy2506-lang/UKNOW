@@ -2702,6 +2702,7 @@ export default {
     close: 'Close',
     lastSync: 'Last updated',
     createdBy: 'Created by',
+    assignedEmployees: 'Assigned employees: {count}',
     notes: 'Notes',
     zaloId: 'Zalo ID',
     zaloName: 'Zalo Name',

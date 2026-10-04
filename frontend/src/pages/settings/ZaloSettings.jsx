@@ -18,6 +18,7 @@ import {
 } from 'react-icons/hi';
 import { formatCampaignDateTime } from '../../features/campaigns/utils/campaignDateTime.helpers';
 import zaloSettingsApiService from '../../features/settings/services/zaloSettingsApi.service';
+import { useAuthStore } from '../../stores/authStore';
 
 /**
  * Chuẩn hóa dữ liệu tài khoản Zalo trả về từ API
@@ -37,6 +38,7 @@ import zaloSettingsApiService from '../../features/settings/services/zaloSetting
  *  notes: string;
  *  creatorName: string;
  *  createdBy: { name: string } | null;
+ *  assignedEmployeeCount: number | null;
  *  updatedAt: string | null;
  * }}
  */
@@ -58,6 +60,10 @@ function normalizeAccount(account = {}) {
     createdBy: account?.createdBy?.name
       ? { name: String(account.createdBy.name) }
       : (account.creatorName ? { name: String(account.creatorName) } : null),
+    // Số nhân viên được giao tài khoản này: chỉ chủ nhận số (nhân viên nhận null và không thấy dòng này).
+    assignedEmployeeCount: Number.isFinite(Number(account.assignedEmployeeCount)) && account.assignedEmployeeCount !== null
+      ? Number(account.assignedEmployeeCount)
+      : null,
     updatedAt: account.updatedAt || account.lastSyncAt || null,
     userDailySendLimit: account.userDailySendLimit ?? account.user_daily_send_limit ?? null,
     sendSpeed: account.sendSpeed || 'safe',
@@ -67,6 +73,9 @@ function normalizeAccount(account = {}) {
 // P12 — `readOnly`: gói không có kênh Zalo -> chỉ xem/đặt mặc định/xoá tài khoản cũ, KHÔNG có nút tạo QR/quét lại/khôi phục phiên.
 const ZaloSettings = ({ readOnly = false } = {}) => {
   const { t } = useI18n();
+  // Nhân viên không đổi được tài khoản mặc định (là của cả không gian — backend trả 403 WORKSPACE_OWNER_ONLY).
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const isEmployeeContext = activeContext?.type === 'employee';
   const [accounts, setAccounts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -562,9 +571,13 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                       <p className="text-sm text-gray-600 mt-1">
                         {t('zaloSettings.phone')}: {account.zaloPhone || t('zaloSettings.unknown')}
                       </p>
-                      <p className="text-sm text-gray-600 mt-1">
-                        {t('zaloSettings.createdBy')}: {account?.createdBy?.name || account?.creatorName || t('zaloSettings.unknown')}
-                      </p>
+                      {/* Trước đây dòng này là "Người tạo" nhưng luôn ra tên CHỦ (JOIN users theo id_user) dù nhân viên
+                          mới là người quét QR — sai nghĩa nên thay bằng số nhân viên được giao (chỉ chủ thấy). */}
+                      {account.assignedEmployeeCount !== null && (
+                        <p className="text-sm text-gray-600 mt-1">
+                          {t('zaloSettings.assignedEmployees', { count: account.assignedEmployeeCount })}
+                        </p>
+                      )}
                       <p className="text-xs text-gray-500 mt-1">
                         {t('zaloSettings.lastSync')}: {account.updatedAt ? formatCampaignDateTime(account.updatedAt) : 'N/A'}
                       </p>
@@ -698,7 +711,7 @@ const ZaloSettings = ({ readOnly = false } = {}) => {
                           </button>
                         </>
                       )}
-                      {!account.isDefault && (
+                      {!account.isDefault && !isEmployeeContext && (
                         <button
                           type="button"
                           className="btn btn-secondary text-xs"

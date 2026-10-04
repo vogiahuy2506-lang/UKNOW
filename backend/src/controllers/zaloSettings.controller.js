@@ -31,6 +31,17 @@ import zaloOneWorkspaceService from '../services/zalo/zaloOneWorkspace.service.j
 import { ZALO_LIVE_ELSEWHERE_CODE } from '../utils/zaloOneWorkspace.util.js';
 import { checkSendQuota, recordDirectSendUsage } from '../utils/userSendLimit.util.js';
 import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import {
+  assertZaloAccountAccess,
+  getAccessibleZaloAccountIds,
+  isAssignmentScopedContext,
+  isZaloAccountNotAssignedError,
+  OWNER_ONLY_CODE,
+} from '../services/user/memberChannelAccess.service.js';
+import {
+  countAssignedEmployeesByZaloAccount,
+  insertSelfLoginZaloAssignment,
+} from '../repositories/user/memberChannelAccount.repository.js';
 import { assertChannelEntitled } from '../services/campaign/channelEntitlement.service.js';
 import zaloMessageRepository from '../repositories/campaign/zaloMessage.repository.js';
 import { resolveSendSpeedFromRow, ZALO_SEND_SPEED_PRESETS } from '../utils/zaloSendSpeed.util.js';
@@ -194,6 +205,27 @@ class ZaloSettingsController {
     });
   }
 
+  /**
+   * Chặn nhân viên đụng vào tài khoản Zalo chưa được giao: trả 403 `ZALO_ACCOUNT_NOT_ASSIGNED` và báo đã trả lời.
+   * Chủ / super admin luôn qua. Gọi TRƯỚC mọi truy vấn theo `accountId` (không phân biệt tài khoản không tồn
+   * tại với tài khoản chưa giao — cùng một 403, không lộ id nào có thật).
+   *
+   * @param {import('express').Response} res
+   * @param {ReturnType<typeof getWorkspaceContext>} ctx
+   * @param {number|string} accountId
+   * @returns {Promise<boolean>} true = đã trả 403, handler phải dừng
+   */
+  async rejectIfAccountNotAssigned(res, ctx, accountId) {
+    try {
+      await assertZaloAccountAccess(ctx, accountId);
+      return false;
+    } catch (error) {
+      if (!isZaloAccountNotAssignedError(error)) throw error;
+      res.status(403).json({ success: false, message: error.message, code: error.code });
+      return true;
+    }
+  }
+
   mapRow(item) {
     return {
       id: item.id,
@@ -209,6 +241,8 @@ class ZaloSettingsController {
       notes: item.notes || '',
       creatorName: item.creator_name || '',
       createdBy: item.creator_name ? { name: item.creator_name } : null,
+      // Số nhân viên được giao tài khoản này — chỉ chủ / super admin thấy (getAccounts đặt null cho nhân viên).
+      assignedEmployeeCount: item.assigned_employee_count == null ? null : Number(item.assigned_employee_count),
       updatedAt: item.updated_at,
       lastConnectedAt: item.last_connected_at,
       lastRestoreAttemptAt: item.last_restore_attempt_at || null,
@@ -560,11 +594,20 @@ class ZaloSettingsController {
    * - Nếu đã có tài khoản cùng user + zalo_user_id thì cập nhật trạng thái kết nối.
    * - Nếu chưa có thì tạo mới bằng phương thức `qr`.
    *
+   * Người quét là NHÂN VIÊN (`options.employeeActorUserId`, PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G1):
+   * - KHÔNG khớp theo tên hiển thị (tên mặc định "Tài khoản Zalo" sẽ khiến nhân viên ghi đè hàng của chủ), chỉ
+   *   khớp theo `zalo_user_id`;
+   * - quét lại tài khoản ĐÃ CÓ thì không tự cấp quyền;
+   * - tạo hàng MỚI thì tự được giao (`self_login`), cùng giao dịch với việc chèn hàng.
+   *
    * @param {number} userId
    * @param {{ zaloUserId: string; displayName: string; zaloName: string; zaloPhone: string; cookieText: string }} accountIdentity
+   * @param {string} [roleCode]
+   * @param {{ employeeActorUserId?: number|null }} [options]
    * @returns {Promise<Record<string, any>>}
    */
-  async upsertQrLoggedInAccount(userId, accountIdentity, roleCode = 'employee') {
+  async upsertQrLoggedInAccount(userId, accountIdentity, roleCode = 'employee', options = {}) {
+    const employeeActorUserId = Number.parseInt(options?.employeeActorUserId, 10) || null;
     const now = new Date();
     const zaloUserId = String(accountIdentity?.zaloUserId || '').trim();
     const displayName = String(accountIdentity?.displayName || '').trim() || 'Tài khoản Zalo';
@@ -593,7 +636,9 @@ class ZaloSettingsController {
     // Cửa 2 + 4: gán zalo_user_id mới / tạo dòng → phải chặn nếu đang sống ở workspace khác
     await zaloOneWorkspaceService.assertZaloNotLiveElsewhere(userId, zaloUserId, { revealOwner });
 
-    const existedByName = await zaloSettingRepository.findByDisplayName(userId, displayName);
+    const existedByName = employeeActorUserId
+      ? null
+      : await zaloSettingRepository.findByDisplayName(userId, displayName);
 
     if (existedByName) {
       const updated = await zaloOneWorkspaceService.withUniqueMapped(
@@ -618,6 +663,12 @@ class ZaloSettingsController {
         ),
         { revealOwner }
       );
+      if (employeeActorUserId && inserted?.id) {
+        await insertSelfLoginZaloAssignment(
+          { ownerId: userId, employeeId: employeeActorUserId, accountId: inserted.id },
+          client
+        );
+      }
       await client.query('COMMIT');
       return this.mapRow(inserted);
     } catch (error) {
@@ -649,7 +700,9 @@ class ZaloSettingsController {
     // Upsert trước — nếu số Zalo đang sống ở workspace khác thì ném 409,
     // không đánh dấu session connected giả.
     const accountIdentity = await this.extractAccountIdentityFromApi(api, loginMeta);
-    const account = await this.upsertQrLoggedInAccount(userId, accountIdentity, input?.roleCode);
+    const account = await this.upsertQrLoggedInAccount(userId, accountIdentity, input?.roleCode, {
+      employeeActorUserId: input?.scopedToAssignments ? Number.parseInt(input?.actorUserId, 10) || null : null,
+    });
 
     this.patchLoginSession(sessionKey, {
       status: 'connected',
@@ -1513,13 +1566,15 @@ class ZaloSettingsController {
   /**
    * Tạo key phiên QR và đăng ký metadata vào bộ nhớ.
    *
-   * @param {number} userId
+   * @param {number} userId chủ không gian
+   * @param {number} [actorUserId] người bấm tạo QR — chỉ người này đọc được trạng thái phiên
    * @returns {string}
    */
-  createLoginSession(userId) {
+  createLoginSession(userId, actorUserId = null) {
     const sessionKey = `${userId}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     this.loginSessions.set(sessionKey, {
       userId,
+      actorUserId: actorUserId == null ? null : Number(actorUserId),
       status: 'waiting_scan',
       message: 'Đã tạo QR, chờ quét bằng ứng dụng Zalo.',
       createdAt: Date.now(),
@@ -1657,10 +1712,13 @@ class ZaloSettingsController {
    */
   async getAccounts(req, res) {
     try {
-      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const ctx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = ctx;
       const isAdmin = isAdminRole(req.user?.role);
+      // Nhân viên chỉ thấy tài khoản được giao (lỗi đọc bảng giao → [] = không thấy gì); chủ / super admin → null = hết.
+      const accessibleIds = await getAccessibleZaloAccountIds(ctx);
       // Ép timestamptz để đồng bộ instant với session Asia/Ho_Chi_Minh (tránh +7h khi Node chạy TZ=UTC).
-      const rows = await zaloSettingRepository.findAccountsList(isAdmin, userId);
+      const rows = await zaloSettingRepository.findAccountsList(isAdmin, userId, accessibleIds);
 
       const disconnectedIds = new Set();
       if (isAdmin) {
@@ -1687,10 +1745,22 @@ class ZaloSettingsController {
         ownerDisconnectedIds.forEach((id) => disconnectedIds.add(id));
       }
 
+      // Số nhân viên được giao là thông tin quản trị của chủ — nhân viên không cần biết ai khác được giao gì.
+      // Đọc riêng và nuốt lỗi: bảng giao trục trặc chỉ làm mất con số này, không làm hỏng danh sách của chủ.
+      let assignedCounts = null;
+      if (accessibleIds === null) {
+        try {
+          assignedCounts = await countAssignedEmployeesByZaloAccount(rows.map((row) => row.id));
+        } catch (countError) {
+          console.error('[ZaloSettings] Không đếm được nhân viên được giao:', countError?.message || countError);
+        }
+      }
+
       const normalizedRows = rows.map((row) => {
-        if (!disconnectedIds.has(String(row.id))) return row;
+        const base = { ...row, assigned_employee_count: assignedCounts ? (assignedCounts.get(Number(row.id)) || 0) : null };
+        if (!disconnectedIds.has(String(row.id))) return base;
         return {
-          ...row,
+          ...base,
           status: 'disconnected',
         };
       });
@@ -1720,9 +1790,11 @@ class ZaloSettingsController {
    */
   async deleteAccount(req, res) {
     try {
-      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const ctx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = ctx;
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = parseInt(req.params.id, 10);
+      if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
 
       const deleted = await zaloSettingRepository.deleteAccount(accountId, isAdmin, userId);
 
@@ -1773,9 +1845,19 @@ class ZaloSettingsController {
    * @param {import('express').Response} res
    */
   async setDefaultAccount(req, res) {
+    // Tài khoản mặc định là của CẢ không gian (chiến dịch, trợ lý AI tự điền theo nó) — chỉ chủ đổi được,
+    // nhân viên có quyền zalo_settings cũng không (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN quyết định 7).
+    const callerCtx = getWorkspaceContext(req.user);
+    if (isAssignmentScopedContext(callerCtx)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Chỉ chủ tài khoản mới đổi được tài khoản Zalo mặc định.',
+        code: OWNER_ONLY_CODE,
+      });
+    }
     const client = await db.getClient();
     try {
-      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = callerCtx;
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = parseInt(req.params.id, 10);
 
@@ -1825,9 +1907,11 @@ class ZaloSettingsController {
    */
   async updateSendLimit(req, res) {
     try {
-      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const ctx = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId: userId } = ctx;
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = Number.parseInt(req.params.id, 10);
+      if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
       const rawValue = req.body?.userDailySendLimit;
       const newValue = rawValue === null || rawValue === undefined ? null : Number.parseInt(rawValue, 10);
 
@@ -1879,9 +1963,11 @@ class ZaloSettingsController {
    */
   async updateSendSpeed(req, res) {
     try {
-      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const ctx = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId: userId } = ctx;
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = Number.parseInt(req.params.id, 10);
+      if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
       const { sendSpeed } = req.body || {};
 
       const preset = ZALO_SEND_SPEED_PRESETS[sendSpeed];
@@ -1947,12 +2033,14 @@ class ZaloSettingsController {
    */
   async retryRestore(req, res) {
     try {
-      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const ctx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = ctx;
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = Number.parseInt(req.params.id, 10);
       if (!Number.isFinite(accountId)) {
         return res.status(400).json({ success: false, message: 'ID tài khoản không hợp lệ' });
       }
+      if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
 
       const accountRow = await zaloSettingRepository.findAccountForRestore(accountId, isAdmin, userId);
       if (!accountRow) {
@@ -2036,9 +2124,11 @@ class ZaloSettingsController {
    */
   async restoreAccountSessionByCookie(req, res) {
     try {
-      const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const ctx = getWorkspaceContext(req.user);
+      const { workspaceOwnerId: userId } = ctx;
       const isAdmin = isAdminRole(req.user?.role);
       const accountId = Number.parseInt(req.params.id, 10);
+      if (await this.rejectIfAccountNotAssigned(res, ctx, accountId)) return;
       const accountRow = await zaloSettingRepository.findAccountForRestore(accountId, isAdmin, userId);
       if (!accountRow) {
         return res.status(404).json({
@@ -2161,9 +2251,12 @@ class ZaloSettingsController {
    */
   async loginQr(req, res) {
     try {
-      const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+      const loginCtx = getWorkspaceContext(req.user);
+      const { actorUserId, workspaceOwnerId: userId } = loginCtx;
+      // Nhân viên (không phải super admin) quét QR: tài khoản MỚI tự được giao cho họ, tài khoản có sẵn thì không.
+      const scopedToAssignments = isAssignmentScopedContext(loginCtx);
       this.pruneExpiredLoginSessions();
-      const sessionKey = this.createLoginSession(userId);
+      const sessionKey = this.createLoginSession(userId, actorUserId);
       const loginTraceId = `session-${sessionKey}`;
       const qrPayload = await new Promise((resolve, reject) => {
         let isSettled = false;
@@ -2246,6 +2339,7 @@ class ZaloSettingsController {
               sessionKey,
               userId,
               actorUserId,
+              scopedToAssignments,
               roleCode: req.user?.role,
               api,
               loginMeta,
@@ -2281,6 +2375,7 @@ class ZaloSettingsController {
                     sessionKey,
                     userId,
                     actorUserId,
+                    scopedToAssignments,
                     roleCode: req.user?.role,
                     api: fallbackApi,
                     loginMeta,
@@ -2371,11 +2466,13 @@ class ZaloSettingsController {
    */
   async getQrLoginStatus(req, res) {
     this.pruneExpiredLoginSessions();
-    const { workspaceOwnerId: userId } = getWorkspaceContext(req.user);
+    const { actorUserId, workspaceOwnerId: userId } = getWorkspaceContext(req.user);
     const sessionKey = String(req.params.sessionKey || '');
     const session = this.loginSessions.get(sessionKey);
 
-    if (!session || session.userId !== userId) {
+    // Chỉ NGƯỜI TẠO phiên đọc được trạng thái (kèm thông tin tài khoản vừa quét): trước đây mọi nhân viên cùng
+    // không gian đọc được phiên của nhau. Phiên thiếu actorUserId (không có từ code hiện tại) coi như không khớp.
+    if (!session || session.userId !== userId || session.actorUserId !== Number(actorUserId)) {
       return res.status(404).json({
         success: false,
         message: 'Phiên đăng nhập QR không tồn tại hoặc đã hết hạn.',

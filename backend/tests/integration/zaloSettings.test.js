@@ -94,13 +94,21 @@ describe('Authorization — /api/zalo/accounts', () => {
 });
 
 describe('GET /api/zalo/accounts — list', () => {
-  it('employee chỉ thấy account của workspace owner đang chọn', async () => {
+  // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G1: nhân viên chỉ thấy tài khoản của chủ ĐANG CHỌN mà chủ ĐÃ GIAO cho
+  // mình (trước đây thấy hết tài khoản của chủ). Ca "chưa được giao gì" và "chủ thấy hết" ở zaloAccountAssignment.test.js.
+  it('employee chỉ thấy account của workspace owner đang chọn VÀ được giao', async () => {
     const ownerA = await createUser({ role: 'user', username: 'zalo_workspace_a' });
     const ownerB = await createUser({ role: 'user', username: 'zalo_workspace_b' });
     const employee = await createUser({ role: 'user', username: 'zalo_workspace_employee' });
     await addZaloSettingsMembership(ownerA.id, employee.id);
-    await createZaloAccount({ ownerId: ownerA.id, displayName: 'Owner A Zalo' });
+    const assigned = await createZaloAccount({ ownerId: ownerA.id, displayName: 'Owner A Zalo' });
+    await createZaloAccount({ ownerId: ownerA.id, displayName: 'Owner A Zalo chua giao' });
     await createZaloAccount({ ownerId: ownerB.id, displayName: 'Owner B Zalo' });
+    await db.query(
+      `INSERT INTO member_channel_accounts (owner_id, employee_id, channel, account_ref, source)
+       VALUES ($1, $2, 'zalo_personal', $3, 'assigned')`,
+      [ownerA.id, employee.id, String(assigned.id)]
+    );
 
     const token = await loginAs(employee);
     const res = await request(app)
