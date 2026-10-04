@@ -166,6 +166,30 @@ describe('ChatComposer (PR-3)', () => {
       expect(toast.error).toHaveBeenCalledWith('landingCanvas.chat.uploadError');
     });
   });
+
+  // B-2: server chặn prompt > 8.000 / instruction > 4.000 ký tự; ô nhập chặn sớm để khách không gõ rồi mới bị báo.
+  describe('trần ký tự (B-2)', () => {
+    it('mặc định = trần lượt SỬA trang (4.000): textarea có maxLength=4000', () => {
+      render(<ChatComposer onSend={vi.fn()} />);
+      expect(screen.getByRole('textbox').getAttribute('maxlength')).toBe('4000');
+    });
+
+    it('truyền maxLength (ô tạo trang mới: 8.000) → textarea dùng đúng số đó', () => {
+      render(<ChatComposer onSend={vi.fn()} isCentered maxLength={8000} />);
+      expect(screen.getByRole('textbox').getAttribute('maxlength')).toBe('8000');
+    });
+
+    it('chưa tới 90% trần → không hiện câu nhắc; từ 90% trở lên → hiện câu nhắc', () => {
+      render(<ChatComposer onSend={vi.fn()} maxLength={100} />);
+      const box = screen.getByRole('textbox');
+
+      fireEvent.change(box, { target: { value: 'a'.repeat(89) } });
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+
+      fireEvent.change(box, { target: { value: 'a'.repeat(90) } });
+      expect(screen.getByRole('status')).toHaveTextContent('landingCanvas.chat.charLimitHint');
+    });
+  });
 });
 
 describe('ChatMessage (PR-3)', () => {

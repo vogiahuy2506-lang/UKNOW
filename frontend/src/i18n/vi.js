@@ -779,6 +779,7 @@ export default {
       uploading: 'Đang tải lên...',
       removeFile: 'Bỏ tệp',
       filesOnlyPrompt: 'Dùng các tệp đính kèm cho trang này',
+      charLimitHint: 'Đã dùng {used}/{max} ký tự. Quá giới hạn thì AI không nhận được — nội dung dài hãy lưu thành tệp rồi đính kèm.',
       uploadError: 'Tải tệp lên thất bại, hãy thử lại.',
       quickPicksTitle: 'Mẫu nhanh',
       quickPicksCount: '{n} mẫu',

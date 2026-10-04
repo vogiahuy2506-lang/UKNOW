@@ -48,6 +48,7 @@ import {
   buildLayoutFindingsContext,
 } from '../utils/landingLayoutFindings.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
+import { findLandingAiInputTooLong } from '../utils/landingAiInputLimits.util.js';
 import {
   EXTRA_CONTEXT_TOO_LONG_CODE,
   buildExtraContextTooLongMessage,
@@ -1658,6 +1659,17 @@ class AiController {
           message: 'Vui lòng nhập mô tả trang landing cho AI',
         });
       }
+      // B-2: trần độ dài chữ khách gõ — chặn TRƯỚC khi đọc tệp / gọi Gemini / trừ credit (chưa tốn gì).
+      const tooLong = findLandingAiInputTooLong({ prompt, title, userSummary }, locale);
+      if (tooLong) {
+        return res.status(400).json({
+          success: false,
+          code: tooLong.code,
+          message: tooLong.message,
+          limit: tooLong.limit,
+          length: tooLong.length,
+        });
+      }
 
       const resolvedBrief = await resolveLandingBrief({ landingBrief, user: req.user });
       const ownerUserId = resolvedBrief?.ownerUserId
@@ -1877,6 +1889,19 @@ class AiController {
           success: false,
           message: 'Vui lòng nhập mô tả yêu cầu chỉnh sửa cho AI',
         });
+      }
+      // B-2: trần độ dài yêu cầu sửa. Lượt tự sửa bỏ qua `instruction` của client (server tự viết lệnh) nên không kiểm.
+      if (!isAutoFix) {
+        const tooLong = findLandingAiInputTooLong({ instruction }, locale);
+        if (tooLong) {
+          return res.status(400).json({
+            success: false,
+            code: tooLong.code,
+            message: tooLong.message,
+            limit: tooLong.limit,
+            length: tooLong.length,
+          });
+        }
       }
 
       const sid = Number(sessionId);

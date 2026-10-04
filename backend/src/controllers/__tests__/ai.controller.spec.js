@@ -1451,6 +1451,84 @@ describe('ai.controller — sửa landing tự động / hoàn tác (PR-2 landin
     });
   });
 
+  // B-2 (rà soát AI 03/10): prompt/instruction dán nguyên văn vào prompt Gemini mà không có trần nào ngoài thân request
+  // 5 MB → 1 credit có thể đốt ~1 triệu token. Chặn ở controller TRƯỚC mọi việc tốn tiền.
+  describe('B-2 — trần độ dài chữ khách gõ (chặn trước Gemini và credit)', () => {
+    const genReq = (body = {}) => ({ user: { id: 1, role: 'user' }, body: { prompt: 'Landing khoá học', sessionId: 55, ...body } });
+
+    beforeEach(() => {
+      generateLanding.mockResolvedValue({ title: 'Trang khoá học', html: '<div>Nội dung</div>' });
+      saveMessagesReturningIds.mockResolvedValue({ userMessageId: 1, assistantMessageId: 2 });
+    });
+
+    it.each([
+      ['prompt', { prompt: 'a'.repeat(8001) }, 'LANDING_PROMPT_TOO_LONG', 8000, 8001],
+      ['title', { title: 'a'.repeat(201) }, 'LANDING_TITLE_TOO_LONG', 200, 201],
+      ['userSummary', { userSummary: 'a'.repeat(4001) }, 'LANDING_SUMMARY_TOO_LONG', 4000, 4001],
+    ])('sinh: %s vượt trần → 400 + mã máy, KHÔNG đọc tệp / gọi Gemini / lưu phiên / trừ credit', async (_field, body, code, limit, length) => {
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq(body), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0]).toMatchObject({ success: false, code, limit, length });
+      expect(res.json.mock.calls[0][0].message).toMatch(/quá dài/);
+      expect(ingestLandingAttachments).not.toHaveBeenCalled();
+      expect(generateLanding).not.toHaveBeenCalled();
+      expect(saveMessagesReturningIds).not.toHaveBeenCalled();
+      expect(chargeAiCredit).not.toHaveBeenCalled();
+    });
+
+    it('sinh: đúng trần (prompt 8.000, title 200, userSummary 4.000) → qua, gọi Gemini và trừ credit', async () => {
+      const res = makeRes();
+      await aiController.generateLandingHtml(
+        genReq({ prompt: 'a'.repeat(8000), title: 'b'.repeat(200), userSummary: 'c'.repeat(4000) }),
+        res,
+      );
+      expect(res.status).not.toHaveBeenCalled();
+      expect(generateLanding).toHaveBeenCalledTimes(1);
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+    });
+
+    it('sinh: độ dài tính trên chuỗi đã trim (khoảng trắng thừa hai đầu không tính)', async () => {
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq({ prompt: `   ${'a'.repeat(8000)}   ` }), res);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(generateLanding).toHaveBeenCalledTimes(1);
+    });
+
+    it('sinh: locale en → câu báo tiếng Anh', async () => {
+      const res = makeRes();
+      await aiController.generateLandingHtml(genReq({ prompt: 'a'.repeat(8001), locale: 'en' }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0].message).toMatch(/too long/);
+    });
+
+    it('sửa: instruction 4.001 ký tự → 400, KHÔNG đọc phiên / gọi Gemini / trừ credit', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(manualReq({ instruction: 'a'.repeat(4001) }), res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json.mock.calls[0][0]).toMatchObject({ success: false, code: 'LANDING_INSTRUCTION_TOO_LONG', limit: 4000, length: 4001 });
+      expect(getLandingPageMessage).not.toHaveBeenCalled();
+      expect(editHtml).not.toHaveBeenCalled();
+      expect(chargeAiCredit).not.toHaveBeenCalled();
+    });
+
+    it('sửa: đúng 4.000 ký tự → qua, gọi Gemini và trừ credit', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(manualReq({ instruction: 'a'.repeat(4000) }), res);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(editHtml).toHaveBeenCalledTimes(1);
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+    });
+
+    it('sửa tự động: `instruction` client bị bỏ qua nên KHÔNG bị chặn vì độ dài (lệnh do server dựng)', async () => {
+      const res = makeRes();
+      await aiController.editLandingHtml(autoReq({ instruction: 'a'.repeat(50000) }), res);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(editHtml).toHaveBeenCalledTimes(1);
+      expect(editHtml.mock.calls[0][0].instruction).not.toContain('aaaa');
+    });
+  });
+
   describe('chat sinh landing page trả messageId và cấp ngân sách tự sửa (lệnh giao 25/09)', () => {
     const chatReq = (body = {}) => ({
       user: { id: 1, role: 'user' },

@@ -777,6 +777,7 @@ export default {
       uploading: 'Uploading…',
       removeFile: 'Remove file',
       filesOnlyPrompt: 'Use the attached files for this page',
+      charLimitHint: 'Used {used}/{max} characters. Anything over the limit is not accepted — attach long content as a file instead.',
       uploadError: 'Upload failed, please try again.',
       quickPicksTitle: 'Quick picks',
       quickPicksCount: '{n} picks',

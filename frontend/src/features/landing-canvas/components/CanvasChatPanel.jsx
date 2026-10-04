@@ -13,6 +13,7 @@ import ChatMessage from './ChatMessage.jsx';
 import ChatComposer from './ChatComposer.jsx';
 import useCanvasConversation from '../hooks/useCanvasConversation.js';
 import { CHAT_QUICK_PICKS } from '../utils/chatPromptTemplates.js';
+import { LANDING_AI_PROMPT_MAX_CHARS } from '../utils/landingAiInputLimits.js';
 
 /**
  * Chat panel bên trái canvas / hoặc studio ở giữa trang.
@@ -172,6 +173,7 @@ function CenteredStudioView({
           onSend={handleSend}
           disabled={isStreaming}
           isCentered={true}
+          maxLength={LANDING_AI_PROMPT_MAX_CHARS}
         />
       </div>
 

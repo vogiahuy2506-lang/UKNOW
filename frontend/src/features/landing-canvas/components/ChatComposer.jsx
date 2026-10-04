@@ -6,6 +6,10 @@ import api from '../../../services/api';
 import useStorageQuota from '../../storage/useStorageQuota';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../storage/validateUpload';
 import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
+import {
+  LANDING_AI_HINT_RATIO,
+  LANDING_AI_INSTRUCTION_MAX_CHARS,
+} from '../utils/landingAiInputLimits.js';
 
 /**
  * Composer input cho chat panel:
@@ -14,8 +18,14 @@ import { notifyStorageQuotaRefresh } from '../../storage/storageEvents';
  * - Tải lên /uploads/temp với hạn mức lưu trữ
  * - Nếu chỉ có file mà không có prompt, tự điền filesOnlyPrompt
  * - Disabled khi isStreaming hoặc isUploading
+ * - `maxLength`: trần ký tự (B-2) — mặc định là trần của lượt SỬA trang; ô tạo trang mới truyền trần lớn hơn.
  */
-const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false, isCentered = false }, ref) {
+const ChatComposer = forwardRef(function ChatComposer({
+  onSend,
+  disabled = false,
+  isCentered = false,
+  maxLength = LANDING_AI_INSTRUCTION_MAX_CHARS,
+}, ref) {
   const tc = useI18n('landingCanvas.chat');
   const { t, locale } = useI18n();
   const { usage: storageQuota } = useStorageQuota();
@@ -95,6 +105,7 @@ const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false
   );
 
   const canSend = !disabled && !isUploading && (Boolean(value.trim()) || uploadedFiles.length > 0);
+  const showLimitHint = value.length >= maxLength * LANDING_AI_HINT_RATIO;
 
   return (
     <div className="border-t border-gray-200 p-4 shrink-0 bg-white">
@@ -131,6 +142,7 @@ const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          maxLength={maxLength}
           placeholder={isCentered ? (tc('placeholder') || 'Mô tả ý tưởng trang bạn muốn tạo (sản phẩm, đối tượng, phong cách thiết kế, các khối nội dung mong muốn...)') : tc('placeholder')}
           disabled={disabled || isUploading}
           className="flex-1 resize-none bg-gray-50/60 hover:bg-white focus:bg-white border border-gray-200 focus:border-orange-500 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-orange-500/15 disabled:bg-gray-50 disabled:cursor-not-allowed transition-all"
@@ -173,6 +185,12 @@ const ChatComposer = forwardRef(function ChatComposer({ onSend, disabled = false
           <HiOutlinePaperAirplane className="w-4.5 h-4.5 -rotate-45" />
         </button>
       </div>
+
+      {showLimitHint && (
+        <p role="status" className="mt-1.5 px-1 text-[11px] text-amber-600">
+          {tc('charLimitHint', { used: value.length, max: maxLength })}
+        </p>
+      )}
 
       {isCentered && (
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-[11px] text-gray-400 mt-2 px-1 select-none">

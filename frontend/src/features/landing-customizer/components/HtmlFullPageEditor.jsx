@@ -12,6 +12,7 @@ import {
 import landingCustomizerApiService from '../services/landingCustomizerApi.service';
 import { buildLandingHtmlSrcDoc } from '../utils/buildLandingHtmlSrcDoc.js';
 import { getAiQuotaErrorMessage } from '../../../utils/aiLimitError.util';
+import { LANDING_AI_PROMPT_MAX_CHARS } from '../../landing-canvas/utils/landingAiInputLimits.js';
 import { useI18n } from '../../../i18n';
 
 const PAGES = [
@@ -369,6 +370,7 @@ export default function HtmlFullPageEditor() {
                 className="w-full h-32 rounded-lg border border-slate-200 px-3 py-2 text-sm resize-none focus:border-orange-400 focus:ring-1 focus:ring-orange-300"
                 value={aiPrompt}
                 onChange={(e) => setAiPrompt(e.target.value)}
+                maxLength={LANDING_AI_PROMPT_MAX_CHARS}
                 placeholder={PAGE_AI_PLACEHOLDERS[selectedPage] || PAGE_AI_PLACEHOLDERS.hero}
                 disabled={aiBusy}
                 spellCheck={false}
