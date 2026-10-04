@@ -90,6 +90,18 @@ const chatbotApiService = {
   },
 
   /**
+   * Tin nhân viên trả lời tay mới của hội thoại web (khách đang mở trang /chat/:id).
+   * GET /chatbot-public/custom-chatbot/id/:chatbotId/messages?sessionId&afterId — xem usePublicAgentMessages.
+   * Người gọi truyền `signal` để api.js không khử trùng/huỷ ngầm lượt hỏi.
+   */
+  getPublicAgentMessages(chatbotId, { sessionId, afterId } = {}, { signal } = {}) {
+    return api.get(`/chatbot-public/custom-chatbot/id/${encodeURIComponent(chatbotId)}/messages`, {
+      params: { sessionId, afterId },
+      signal,
+    });
+  },
+
+  /**
    * Initiate Facebook OAuth for ChannelSettings (per-user pages).
    * GET /api/webhooks/oauth/facebook/init?redirect_to=settings
    */

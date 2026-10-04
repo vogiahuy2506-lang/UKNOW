@@ -8,6 +8,8 @@ import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import MessageAttachments, { formatFileSize } from '../../components/MessageAttachments';
 import { validateFilesBeforeUpload, getUploadValidationErrorMessage } from '../../features/storage/validateUpload';
 import { formatMessageSegments } from '../../utils/formatMessage.util';
+import { AGENT_LABEL, generateChatSessionId } from '../../utils/publicChatSession.util';
+import usePublicAgentMessages from '../../hooks/usePublicAgentMessages';
 
 const ACCEPTED = '.pdf,.docx,.pptx,.xlsx,.txt,.csv,.png,.jpg,.jpeg,.webp';
 const MAX_ATTACH = 3;
@@ -58,11 +60,33 @@ export default function PublicChatbotPage() {
   const inputRef = useRef(null);
   const fileInputRef = useRef(null);
 
-  const sessionId = useRef(localStorage.getItem(`uknow_session_${chatbotId}`) || `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
+  // Phiên MỚI sinh bằng crypto (sessionId là thứ duy nhất chứng minh "hội thoại này của tôi" khi hỏi tin nhân viên trả lời tay).
+  const sessionId = useRef(null);
+  if (sessionId.current === null) {
+    sessionId.current = localStorage.getItem(`uknow_session_${chatbotId}`) || generateChatSessionId();
+  }
 
   useEffect(() => {
     localStorage.setItem(`uknow_session_${chatbotId}`, sessionId.current);
   }, [chatbotId]);
+
+  // Đã nhắn ít nhất một tin trong phiên này (nhớ qua tải lại trang: lịch sử hiển thị không còn, nhưng hội thoại ở server thì còn).
+  // Chưa nhắn thì chưa có hội thoại nào để nhận tin nhân viên → không hỏi.
+  const chattedKey = `uknow_chatted_${chatbotId}_${sessionId.current}`;
+  const [chatted, setChatted] = useState(() => {
+    try { return localStorage.getItem(chattedKey) === '1'; } catch { return false; }
+  });
+
+  // Tin nhân viên trả lời tay từ Hộp thư (không có kênh ngoài để đẩy tới khách) → khách tự hỏi mỗi 8 giây khi đang xem trang.
+  usePublicAgentMessages({
+    chatbotId,
+    sessionId: sessionId.current,
+    enabled: Boolean(chatbot) && chatted,
+    onMessages: (fresh) => setMessages((prev) => [
+      ...prev,
+      ...fresh.map((m) => ({ role: 'agent', content: m.content, attachments: m.attachments, agentMessageId: m.id })),
+    ]),
+  });
 
   const primaryColor = chatbot?.primary_color || chatbot?.theme_color || '#6366f1';
   const backgroundColor = chatbot?.background_color || '#ffffff';
@@ -188,10 +212,13 @@ export default function PublicChatbotPage() {
     setInputText('');
     setPendingAttachments([]);
     setIsTyping(true);
+    try { localStorage.setItem(chattedKey, '1'); } catch { /* bộ nhớ bị chặn: vẫn hỏi trong phiên này nhờ state */ }
+    setChatted(true);
 
     try {
+      // Câu của nhân viên là một phần hội thoại: gửi cho AI như lượt 'assistant' (server chỉ nhận user/assistant).
       const history = messages.slice(-10).map((m) => ({
-        role: m.role,
+        role: m.role === 'agent' ? 'assistant' : m.role,
         content: m.content,
         attachments: m.attachments || [],
       }));
@@ -387,6 +414,11 @@ export default function PublicChatbotPage() {
                     : { backgroundColor: '#fff', color: textColor, boxShadow: '0 2px 8px rgba(0,0,0,0.08)' }
                 }
               >
+                {msg.role === 'agent' && (
+                  <div data-testid="agent-label" className="text-[11px] font-semibold mb-1" style={{ color: textColor, opacity: 0.65 }}>
+                    {AGENT_LABEL}
+                  </div>
+                )}
                 {msg.content ? (
                   <FormattedMessage text={msg.content} textColor={textColor} />
                 ) : null}
