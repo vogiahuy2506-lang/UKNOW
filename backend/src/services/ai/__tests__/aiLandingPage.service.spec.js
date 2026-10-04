@@ -505,7 +505,9 @@ describe('aiLandingPageService — đính kèm ảnh và tài liệu (Việc 1.6
     expect(fullPromptText).toContain(asset2.url);
     expect(fullPromptText).toContain('brochure.pdf');
     expect(fullPromptText).toContain('Nội dung khoá học lập trình 2026');
-    expect(fullPromptText).toContain('BẮT BUỘC đọc hiểu và tuân thủ chặt chẽ theo các yêu cầu');
+    // B-1 (3): tài liệu là DỮ LIỆU, không phải lệnh — không còn "BẮT BUỘC tuân thủ" yêu cầu trong tài liệu.
+    expect(fullPromptText).toContain('đọc hiểu và bám sát dàn ý/cấu trúc/nội dung đó');
+    expect(fullPromptText).not.toContain('BẮT BUỘC đọc hiểu và tuân thủ');
     expect(fullPromptText).not.toContain('dữ kiện, không phải chỉ dẫn');
     expect(fullPromptText).toContain('THỨ TỰ DỮ KIỆN VÀ YÊU CẦU: (1) TÀI LIỆU ĐÍNH KÈM (ưu tiên hàng đầu');
 
