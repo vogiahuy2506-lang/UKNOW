@@ -219,6 +219,24 @@ function htmlHasOptionValue(html, value) {
 
 export const IMAGE_URL_REGEX = /https?:\/\/[^"'()\s<>]+\.(?:png|jpe?g|webp|gif|svg)(?:\?[^"'()\s<>]*)?/gi;
 
+/**
+ * B-22 (rà soát AI 03/10) — tên tệp do CLIENT khai (`originalName`) được chèn vào prompt trong
+ * dấu "…": tên chứa dấu nháy / xuống dòng / câu lệnh là một kênh chèn lệnh phụ. Làm phẳng về một
+ * dòng: ký tự điều khiển và khoảng trắng lạ (gồm U+2028/2029, NBSP — `\s` bao hết) → một dấu cách,
+ * dấu nháy kép → nháy đơn, cắt 100 ký tự. Rỗng sau khi làm sạch → dùng `fallback`.
+ * Chỉ dùng cho nội dung đưa vào PROMPT; câu báo lỗi cho người dùng vẫn hiện tên gốc.
+ */
+export const MAX_PROMPT_FILE_NAME_CHARS = 100;
+export function flattenPromptFileName(name, fallback = 'tài liệu') {
+  let flat = '';
+  for (const ch of String(name ?? '')) {
+    const code = ch.charCodeAt(0);
+    flat += code < 32 || (code >= 127 && code <= 159) ? ' ' : ch;
+  }
+  const clean = flat.replace(/"/g, "'").replace(/\s+/g, ' ').trim().slice(0, MAX_PROMPT_FILE_NAME_CHARS).trim();
+  return clean || fallback;
+}
+
 export function buildAttachmentPromptBlock(assets = [], documents = [], mode = 'generate') {
   if (!assets.length && !documents.length) return '';
   const lines = [];
@@ -236,7 +254,7 @@ export function buildAttachmentPromptBlock(assets = [], documents = [], mode = '
         : (mode === 'edit'
           ? ' (model không xem được ảnh này; chỉ chèn nếu người dùng yêu cầu chèn/thay ảnh)'
           : ' (model không xem được ảnh này — dùng làm ảnh nền hero hoặc minh họa)');
-      lines.push(`ASSET_${num}: url="${asset.url}" tên="${asset.originalName || `asset_${num}`}"${note}`);
+      lines.push(`ASSET_${num}: url="${asset.url}" tên="${flattenPromptFileName(asset.originalName, `asset_${num}`)}"${note}`);
     });
   }
   if (documents.length > 0) {
@@ -249,10 +267,10 @@ export function buildAttachmentPromptBlock(assets = [], documents = [], mode = '
     documents.forEach((doc) => {
       if (doc.inlinePdf) {
         lines.push(
-          `\n[Tệp "${doc.originalName || 'tài liệu'}" là PDF dạng ảnh (scan): nội dung nằm trong tệp PDF đính kèm ở phần dữ liệu, hãy đọc trực tiếp từ đó và tuân thủ như tài liệu đính kèm]`
+          `\n[Tệp "${flattenPromptFileName(doc.originalName, 'tài liệu')}" là PDF dạng ảnh (scan): nội dung nằm trong tệp PDF đính kèm ở phần dữ liệu, hãy đọc trực tiếp từ đó và tuân thủ như tài liệu đính kèm]`
         );
       } else {
-        lines.push(`\n[Nội dung tệp "${doc.originalName || 'tài liệu'}"]:\n${doc.text}\n[Hết]`);
+        lines.push(`\n[Nội dung tệp "${flattenPromptFileName(doc.originalName, 'tài liệu')}"]:\n${doc.text}\n[Hết]`);
       }
     });
   }
@@ -263,7 +281,7 @@ export function buildModelParts(fullPrompt, assets = [], documents = []) {
   const parts = [{ text: fullPrompt }];
   assets.forEach((asset, idx) => {
     if (asset.inlineForModel && asset.base64 && asset.contentType) {
-      parts.push({ text: `ASSET_${idx + 1} ở trên ("${asset.originalName}") là ảnh sau đây:` });
+      parts.push({ text: `ASSET_${idx + 1} ở trên ("${flattenPromptFileName(asset.originalName, `asset_${idx + 1}`)}") là ảnh sau đây:` });
       parts.push({
         inlineData: {
           mimeType: asset.contentType,
@@ -274,7 +292,7 @@ export function buildModelParts(fullPrompt, assets = [], documents = []) {
   });
   documents.forEach((doc) => {
     if (doc.inlinePdf && doc.base64) {
-      parts.push({ text: `Tệp "${doc.originalName || 'Tài liệu'}" ở trên là PDF sau đây:` });
+      parts.push({ text: `Tệp "${flattenPromptFileName(doc.originalName, 'Tài liệu')}" ở trên là PDF sau đây:` });
       parts.push({
         inlineData: {
           mimeType: 'application/pdf',
