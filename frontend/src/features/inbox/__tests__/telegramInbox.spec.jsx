@@ -18,12 +18,13 @@ vi.mock('../../storage/useStorageQuota', () => ({
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
 
 describe('Hộp thư — kênh Telegram (P1 PLAN_TG_WA_DAY_DU)', () => {
-  it('có tab Telegram (TG) trong bộ lọc kênh và bấm vào lọc đúng kênh telegram', () => {
+  it('có tab Telegram (TG) khi user CÓ kênh Telegram và bấm vào lọc đúng kênh telegram', () => {
     expect(CHANNEL_OPTIONS((k) => k).map((c) => c.value)).toContain('telegram');
     const onChange = vi.fn();
     render(
       <ConversationFilters
-        filters={{ channel: '', sort: 'latest', status: 'all', date: 'all' }}
+        filters={{ channel: '', date: 'all', kind: '', unreadOnly: false }}
+        availableChannels={['web', 'zalo_personal', 'telegram']}
         onChange={onChange}
       />
     );

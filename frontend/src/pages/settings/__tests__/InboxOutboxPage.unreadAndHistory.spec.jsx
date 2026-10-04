@@ -8,7 +8,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import InboxOutboxPage from '../InboxOutboxPage';
 import chatbotApi from '../../../features/chatbot/services/chatbotApi.service';
 
-const sse = { onNewMessage: null };
+const sse = { onNewMessage: null, onReconnected: null };
 
 // `t` PHẢI ổn định giữa các lần render như bản thật (useCallback) — nếu mỗi lần một hàm mới thì
 // effect phụ thuộc `t` (fetchMessages) chạy vô hạn khi tải tin thành công.
@@ -28,7 +28,7 @@ vi.mock('../../../features/inbox/ConversationList', () => ({
   default: ({ conversations, onSelect }) => (
     <div>
       {conversations.map((c) => (
-        <button key={`${c.type}-${c.id}`} type="button" data-testid={`conv-${c.type}-${c.id}`} onClick={() => onSelect(c)}>
+        <button key={`${c.type}-${c.id}`} type="button" data-testid={`conv-${c.type}-${c.id}`} data-status={c.status} onClick={() => onSelect(c)}>
           {c.visitorName}:{c.unreadCount}
         </button>
       ))}
@@ -66,8 +66,9 @@ vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
 }));
 
 vi.mock('../../../hooks/useInboxSSE', () => ({
-  default: (onNewMessage) => {
+  default: (onNewMessage, _onUnread, onReconnected) => {
     sse.onNewMessage = onNewMessage;
+    sse.onReconnected = onReconnected;
     return { status: 'connected', retry: vi.fn() };
   },
 }));
@@ -241,5 +242,33 @@ describe('InboxOutboxPage — tin đến qua SSE (H-25, H-27)', () => {
     // Hàng Zalo id 41 được cập nhật (+1), hàng Web chat id 41 giữ nguyên.
     expect(screen.getByTestId('conv-zalo_personal-41').textContent).toBe('Hải:4');
     expect(screen.getByTestId('conv-webchat-41').textContent).toBe('Khách web:0');
+  });
+
+  it('hội thoại MỚI đến qua SSE mang status "active" (không bị hiện huy hiệu "Đóng") và tính 1 chưa đọc', async () => {
+    renderPage();
+    await screen.findByTestId('conv-zalo_personal-41');
+
+    act(() => {
+      sse.onNewMessage({
+        conversationId: 99, type: 'zalo_personal', channel: 'zalo_personal', senderName: 'Lan', messageType: 'image',
+        message: JSON.stringify({ title: '', href: 'https://photo.zdn.vn/x.jpg' }), timestamp: '2026-10-04T02:00:00.000Z',
+      });
+    });
+
+    const row = screen.getByTestId('conv-zalo_personal-99');
+    expect(row.dataset.status).toBe('active');
+    expect(row.textContent).toBe('Lan:1');
+  });
+
+  it('nối lại SSE sau khi rớt → tải lại danh sách và số chưa đọc (tin trong khe hở không được phát lại)', async () => {
+    renderPage();
+    await screen.findByTestId('conv-zalo_personal-41');
+    chatbotApi.getConversations.mockClear();
+    chatbotApi.getUnreadCount.mockClear();
+
+    act(() => { sse.onReconnected(); });
+
+    await waitFor(() => expect(chatbotApi.getConversations).toHaveBeenCalledTimes(1));
+    expect(chatbotApi.getUnreadCount).toHaveBeenCalledTimes(1);
   });
 });

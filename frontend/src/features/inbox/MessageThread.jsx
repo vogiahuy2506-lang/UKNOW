@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import { HiCheck, HiReply, HiX, HiSearch, HiExclamationCircle } from 'react-icons/hi';
+import { HiX, HiSearch, HiExclamationCircle, HiOutlinePaperClip } from 'react-icons/hi';
 import { useI18n } from '../../i18n';
 import MessageAttachments from '../../components/MessageAttachments';
 import {
@@ -7,15 +7,16 @@ import {
   getNormalizedMessageText,
   normalizeMessageContent,
 } from './utils/normalizeMessageContent';
+import { resolveMediaKind } from './utils/conversationPreview';
 import RenderTextWithLinks from '../../utils/renderTextWithLinks';
 import { getSafeImageUrl, getSafeLinkUrl } from '../../utils/safeUrl.util';
 
 const RETRYING_STALE_MS = 2 * 60 * 1000;
 
-const formatMessageTime = (dateString) => {
+const formatMessageTime = (dateString, locale = 'vi') => {
   if (!dateString) return '';
   const date = new Date(dateString);
-  return date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+  return date.toLocaleTimeString(locale === 'en' ? 'en-US' : 'vi-VN', { hour: '2-digit', minute: '2-digit' });
 };
 
 function parseMessageMetadata(message) {
@@ -72,11 +73,10 @@ const MessageBubble = ({
   showDate,
   isGroupConversation,
   isGroupChannel, 
-  onReply,
   onRetry,
   retryingMessageId,
-  replyingTo,
   messageLabels,
+  currentUserId,
 }) => {
   const { t, locale } = useI18n();
   // Web chat (trang công khai + widget nhúng) ghi tin bot với role 'assistant'
@@ -116,14 +116,24 @@ const MessageBubble = ({
     }
   }
 
-  const isReplyingToThis = replyingTo && replyingTo.id === message.id;
   const isAgentMessage = isOwn || isAgent || isBot;
+  // Nhân viên trả lời cũng là role 'agent'; `metadata.actor_user_id` cho biết ai gửi: không phải người đang xem thì ghi
+  // "Nhân viên" thay vì "Bạn" (H-29).
+  const actorId = metadata.actor_user_id;
+  const sentByOther = isAgent && actorId != null && currentUserId != null && String(actorId) !== String(currentUserId);
+  // Ảnh/tệp/video Zalo lưu dạng thẻ JSON trong content: nhận ra qua msg_type_raw và hiện ảnh/tên tệp, KHÔNG in URL (H-08).
+  const mediaKind = resolveMediaKind({ rawType: metadata.msg_type_raw });
   const normalizedContent = normalizeMessageContent(message.content, messageLabels);
   const normalizedText = getNormalizedMessageText(normalizedContent);
   // Nội dung thẻ link đến từ tin nhắn của bên thứ ba: chỉ dựng <a>/<img> khi scheme an toàn
   // (http/https/mailto/tel; ảnh: http/https/data:image). Còn lại hiện chữ thường.
   const linkHref = normalizedContent.type === 'link' ? getSafeLinkUrl(normalizedContent.href) : '';
   const linkThumbUrl = linkHref ? getSafeImageUrl(normalizedContent.thumbUrl) : '';
+  const isMediaCard = Boolean(linkHref) && ['image', 'gif', 'video', 'file', 'voice'].includes(mediaKind);
+  const mediaImageUrl = isMediaCard && (mediaKind === 'image' || mediaKind === 'gif')
+    ? (linkThumbUrl || getSafeImageUrl(linkHref))
+    : '';
+  const mediaCaption = normalizedContent.title || '';
 
   const renderTextWithLinks = (text) => (
     <p
@@ -161,12 +171,12 @@ const MessageBubble = ({
             )}
             {isBot && (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full">
-                🤖 Bot
+                🤖 {t('inbox.bot')}
               </span>
             )}
             {isAgent && (
               <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-primary-600 bg-primary-50 px-2.5 py-1 rounded-full">
-                ✨ {t('inbox.you') || 'Bạn'}
+                ✨ {sentByOther ? t('inbox.agent') : t('inbox.you')}
               </span>
             )}
           </div>
@@ -181,7 +191,7 @@ const MessageBubble = ({
                 : isAgentMessage
                 ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white rounded-3xl rounded-br-sm shadow-lg shadow-primary-500/20'
                 : 'bg-white text-gray-800 rounded-3xl rounded-bl-sm border border-gray-100 shadow-sm'
-            } ${isReplyingToThis ? 'ring-2 ring-primary-300 ring-offset-2' : ''}`}
+            }`}
           >
             {/* Tail */}
             <div className={`absolute top-3 w-3 h-3 ${
@@ -195,7 +205,42 @@ const MessageBubble = ({
             }`} />
             
             <div className="px-4 py-3 min-w-0">
-              {normalizedText && linkHref && (
+              {isMediaCard && (
+                <div className="space-y-1.5">
+                  {mediaImageUrl ? (
+                    <a href={linkHref} target="_blank" rel="noopener noreferrer" className="block">
+                      <img
+                        src={mediaImageUrl}
+                        alt={mediaCaption || messageLabels[mediaKind]}
+                        loading="lazy"
+                        className="max-h-64 max-w-full rounded-2xl object-cover"
+                      />
+                    </a>
+                  ) : (
+                    <a
+                      href={linkHref}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`flex items-center gap-2 text-sm font-medium underline hover:opacity-80 ${
+                        sendFailed || sendRetrying ? 'text-red-700' : isAgentMessage ? 'text-white/90' : 'text-primary-600'
+                      }`}
+                    >
+                      <HiOutlinePaperClip className="w-4 h-4 shrink-0" />
+                      <span className="break-words" style={{ overflowWrap: 'anywhere' }}>
+                        {mediaKind === 'file' && mediaCaption ? mediaCaption : messageLabels[mediaKind]}
+                      </span>
+                      <span className="shrink-0 text-xs font-normal">
+                        ({mediaKind === 'file' ? t('inbox.download') : t('inbox.openMedia')})
+                      </span>
+                    </a>
+                  )}
+                  {mediaImageUrl && mediaCaption && (
+                    <p className="text-sm leading-snug break-words" style={{ overflowWrap: 'anywhere' }}>{mediaCaption}</p>
+                  )}
+                </div>
+              )}
+
+              {!isMediaCard && normalizedText && linkHref && (
                 <div className="space-y-1.5">
                   {linkThumbUrl && (
                     <img
@@ -229,7 +274,7 @@ const MessageBubble = ({
                 </div>
               )}
 
-              {normalizedText && !linkHref && (
+              {!isMediaCard && normalizedText && !linkHref && (
                 renderTextWithLinks(normalizedText)
               )}
               
@@ -241,7 +286,7 @@ const MessageBubble = ({
               <span className={`text-[11px] ${
                 sendFailed || sendRetrying ? 'text-red-500' : isAgentMessage ? 'text-white/70' : 'text-gray-400'
               }`}>
-                {formatMessageTime(message.createdAt)}
+                {formatMessageTime(message.createdAt, locale)}
               </span>
               {isAgent && sendFailed && (
                 <span title={sendState.error || t('inbox.sendFailed')} className="text-red-600">
@@ -252,19 +297,6 @@ const MessageBubble = ({
                 <span title={t('inbox.sendRetrying')} className="text-amber-600 text-[11px] font-medium">
                   {t('inbox.sendRetrying')}
                 </span>
-              )}
-              {isAgentMessage && !sendFailed && !sendRetrying && (
-                message.isRead ? (
-                  <span className="text-white/80">
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-                    </svg>
-                  </span>
-                ) : (
-                  <span className="text-white/60">
-                    <HiCheck className="w-4 h-4" />
-                  </span>
-                )
               )}
             </div>
 
@@ -281,17 +313,6 @@ const MessageBubble = ({
               </div>
             )}
 
-            {/* Reply button */}
-            {isVisitor && onReply && (
-              <button
-                onClick={() => onReply(message)}
-                className={`absolute top-1/2 -translate-y-1/2 p-2 rounded-full transition-all opacity-0 group-hover:opacity-100 ${
-                  isAgentMessage ? 'left-3 hover:bg-white/20 text-white/70 hover:text-white' : 'right-3 hover:bg-gray-100 text-gray-400 hover:text-gray-600'
-                }`}
-              >
-                <HiReply className="w-4 h-4" />
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -303,10 +324,9 @@ const MessageThread = ({
   messages,
   isLoading,
   conversation,
-  onReply,
   onRetry,
   retryingMessageId,
-  replyingTo,
+  currentUserId,
   hasMoreOlder = false,
   isLoadingOlder = false,
   onLoadOlder,
@@ -324,6 +344,12 @@ const MessageThread = ({
     link: t('inbox.messageLink'),
     call: t('inbox.messageCall'),
     zaloEvent: t('inbox.messageZaloEvent'),
+    image: t('inbox.previewImage'),
+    gif: t('inbox.previewGif'),
+    video: t('inbox.previewVideo'),
+    file: t('inbox.previewFile'),
+    voice: t('inbox.previewVoice'),
+    location: t('inbox.previewLocation'),
   }), [t]);
 
   const rawVisitorInfo = conversation?.visitor_info || conversation?.visitorInfo || {};
@@ -391,8 +417,6 @@ const MessageThread = ({
     if (showSearch) {
       setSearchQuery('');
       setSearchResults([]);
-    } else {
-      searchInputRef.current?.focus();
     }
   };
 
@@ -401,7 +425,7 @@ const MessageThread = ({
       <div className="h-full min-h-0 flex items-center justify-center">
         <div className="text-center">
           <div className="w-14 h-14 border-3 border-primary-500 border-t-transparent rounded-full mx-auto mb-4 animate-spin"></div>
-          <p className="text-gray-500 font-medium">{t('inbox.loadingMessages') || t('common.loading') || 'Đang tải tin nhắn...'}</p>
+          <p className="text-gray-500 font-medium">{t('inbox.loadingMessages')}</p>
         </div>
       </div>
     );
@@ -414,8 +438,8 @@ const MessageThread = ({
           <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 flex items-center justify-center">
             <span className="text-4xl">💬</span>
           </div>
-          <p className="text-lg font-semibold text-gray-700">{t('inbox.noMessages') || 'Chưa có tin nhắn'}</p>
-          <p className="text-sm text-gray-400 mt-2">{t('inbox.startConversation') || 'Bắt đầu cuộc trò chuyện ngay'}</p>
+          <p className="text-lg font-semibold text-gray-700">{t('inbox.noMessages')}</p>
+          <p className="text-sm text-gray-400 mt-2">{t('inbox.startConversation')}</p>
         </div>
       </div>
     );
@@ -423,35 +447,44 @@ const MessageThread = ({
 
   return (
     <div className="grid h-full min-h-0 min-w-0 grid-rows-[auto,minmax(0,1fr)] overflow-hidden">
-      {/* Search bar */}
-      <div className="px-5 py-3 bg-white border-b border-gray-100 flex-shrink-0">
+      {/* Search bar — ẩn mặc định, nút kính lúp ở góc mở/đóng (H-29) */}
+      <div className={`bg-white border-b border-gray-100 flex-shrink-0 ${showSearch ? 'px-5 py-3' : 'px-5 py-1.5'}`}>
         <div className="flex items-center gap-3">
-          <div className="relative flex-1">
-            <HiSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={t('inbox.searchMessages') || 'Tìm kiếm trong cuộc trò chuyện...'}
-              className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
-              >
-                <HiX className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-          {searchResults.length > 0 && (
-            <span className="text-xs font-semibold text-primary-600 bg-primary-50 px-3.5 py-2 rounded-xl">
-              {searchResults.length} {t('inbox.results') || 'kết quả'}
-            </span>
+          {showSearch ? (
+            <>
+              <div className="relative flex-1">
+                <HiSearch className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  ref={searchInputRef}
+                  autoFocus
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder={t('inbox.searchMessages')}
+                  className="w-full pl-10 pr-10 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:outline-none focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 transition-all"
+                />
+                {searchQuery && (
+                  <button
+                    onClick={() => setSearchQuery('')}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-all"
+                  >
+                    <HiX className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              {searchResults.length > 0 && (
+                <span className="text-xs font-semibold text-primary-600 bg-primary-50 px-3.5 py-2 rounded-xl">
+                  {searchResults.length} {t('inbox.results')}
+                </span>
+              )}
+            </>
+          ) : (
+            <div className="flex-1" />
           )}
           <button
             onClick={toggleSearch}
+            aria-label={t('inbox.searchMessages')}
+            title={t('inbox.searchMessages')}
             className={`p-2.5 rounded-xl transition-all ${
               showSearch ? 'text-primary-600 bg-primary-50 shadow-sm' : 'text-gray-400 hover:bg-gray-100'
             }`}
@@ -490,11 +523,10 @@ const MessageThread = ({
                 isGroupConversation={isGroupConversation}
                 isGroupChannel={isGroupChannel}
                 conversation={conversation}
-                onReply={onReply}
                 onRetry={onRetry}
                 retryingMessageId={retryingMessageId}
-                replyingTo={replyingTo}
                 messageLabels={messageLabels}
+                currentUserId={currentUserId}
               />
             </div>
           );

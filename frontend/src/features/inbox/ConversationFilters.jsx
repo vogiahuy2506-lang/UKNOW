@@ -7,23 +7,9 @@ import {
   HiGlobeAlt,
   HiUser,
   HiX,
-  HiOutlineDeviceMobile,
-  HiOutlinePaperAirplane,
 } from 'react-icons/hi';
+import { FaTelegramPlane, FaWhatsapp } from 'react-icons/fa';
 import { useI18n } from '../../i18n';
-
-const SORT_OPTIONS = (t) => [
-  { value: 'latest', label: t('inbox.sortLatest') },
-  { value: 'unread', label: t('inbox.sortUnread') },
-  { value: 'name_asc', label: t('inbox.sortNameAsc') },
-  { value: 'name_desc', label: t('inbox.sortNameDesc') },
-];
-
-const STATUS_OPTIONS = (t) => [
-  { value: 'all', label: t('inbox.statusAll') },
-  { value: 'active', label: t('inbox.statusActive') },
-  { value: 'closed', label: t('inbox.statusClosed') },
-];
 
 const DATE_OPTIONS = (t) => [
   { value: 'all', label: t('inbox.dateAnytime') },
@@ -32,18 +18,25 @@ const DATE_OPTIONS = (t) => [
   { value: 'month', label: t('inbox.dateMonth') },
 ];
 
+/**
+ * Mọi tab kênh có thể có. Facebook không còn (kết nối Facebook đã chốt không làm, 21/09). Hộp thư chỉ hiện tab của
+ * kênh user THỰC SỰ có (`availableChannels` từ server) — trước đây cố định 7 tab cho mọi người, tràn ngang ở 360 px (H-12).
+ * Icon Telegram dùng logo máy bay giấy, không dùng tam giác có vạch của heroicons (giống biển cảnh báo).
+ */
 const CHANNEL_OPTIONS = (t) => [
   { value: '', label: t('inbox.allChannels'), Icon: HiGlobeAlt, short: t('inbox.channelAllShort') },
   { value: 'web', label: t('inbox.webChat'), Icon: HiChatAlt2, short: t('inbox.webChatShort') },
-  { value: 'zalo_oa', label: t('inbox.zaloOA'), Icon: HiDeviceMobile, short: 'OA' },
-  { value: 'facebook', label: t('inbox.facebook'), Icon: HiChatAlt2, short: 'FB' },
   { value: 'zalo_personal', label: t('inbox.zaloPersonal'), Icon: HiUser, short: t('inbox.zaloPersonalShort') },
-  { value: 'whatsapp_baileys', label: 'WhatsApp', Icon: HiOutlineDeviceMobile, short: 'WA' },
-  { value: 'telegram', label: 'Telegram', Icon: HiOutlinePaperAirplane, short: 'TG' },
+  { value: 'zalo_oa', label: t('inbox.zaloOA'), Icon: HiDeviceMobile, short: 'OA' },
+  { value: 'whatsapp_baileys', label: 'WhatsApp', Icon: FaWhatsapp, short: 'WA' },
+  { value: 'telegram', label: 'Telegram', Icon: FaTelegramPlane, short: 'TG' },
 ];
 
+/** Từ 5 kênh trở lên (cộng "Tất cả" là 6 nút) thì gom thành một ô chọn "Kênh" thay vì hàng tab tràn ngang. */
+const MAX_TABS = 4;
+
 const ChannelTabs = ({ channels, value, onChange }) => (
-  <div className="flex gap-1 overflow-x-auto rounded-xl bg-gray-100 p-1">
+  <div className="flex gap-1 rounded-xl bg-gray-100 p-1">
     {channels.map((channel) => {
       const active = value === channel.value;
       const Icon = channel.Icon;
@@ -53,14 +46,14 @@ const ChannelTabs = ({ channels, value, onChange }) => (
           type="button"
           onClick={() => onChange(channel.value)}
           title={channel.label}
-          className={`flex items-center gap-1.5 px-2.5 py-1.5 text-[11px] font-semibold rounded-lg whitespace-nowrap transition-all ${
+          className={`flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold rounded-lg whitespace-nowrap transition-all ${
             active
               ? 'bg-white text-primary-600 shadow-sm ring-1 ring-black/5'
               : 'text-gray-500 hover:bg-white/70 hover:text-gray-700'
           }`}
         >
           {Icon && <Icon className="w-3.5 h-3.5 shrink-0" />}
-          <span>{channel.short || channel.label}</span>
+          <span className="truncate">{channel.short || channel.label}</span>
         </button>
       );
     })}
@@ -82,7 +75,7 @@ const FilterDropdown = ({ options, value, onChange, label }) => {
   }, []);
 
   const selectedOption = options.find((opt) => opt.value === value);
-  const hasValue = value !== 'all' && value !== 'latest';
+  const hasValue = value !== 'all' && value !== '';
 
   return (
     <div ref={dropdownRef} className="relative">
@@ -126,51 +119,78 @@ const FilterDropdown = ({ options, value, onChange, label }) => {
   );
 };
 
-const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
+const Chip = ({ active, onClick, children }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    aria-pressed={active}
+    className={`px-2.5 py-1.5 text-[11px] font-semibold rounded-lg border transition-colors ${
+      active
+        ? 'bg-primary-50 text-primary-700 border-primary-200'
+        : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+    }`}
+  >
+    {children}
+  </button>
+);
+
+/**
+ * Bộ lọc danh sách (H-12, H-13): hàng tab kênh (chỉ kênh user có), rồi MỘT hàng chip [Chưa đọc] [Cá nhân] [Nhóm] +
+ * "Thời gian". Bỏ "Trạng thái" (100% hội thoại đang hoạt động) và "Sắp xếp" (chỉ sắp trong 20 dòng đã tải, server luôn
+ * trả mới nhất trước) — "Chưa đọc" giờ lọc phía server nên áp lên cả danh sách.
+ *
+ * @param {{ filters: object, onChange: Function, availableChannels?: string[] }} props
+ */
+const ConversationFilters = ({ filters, onChange, availableChannels = [] }) => {
   const { t } = useI18n();
-  const sortOptions = SORT_OPTIONS(t);
-  const statusOptions = STATUS_OPTIONS(t);
   const dateOptions = DATE_OPTIONS(t);
-  const channelOptions = CHANNEL_OPTIONS(t);
 
   const handleChange = (key, value) => {
     onChange({ ...filters, [key]: value });
   };
 
   const handleClearAdvanced = () => {
-    onChange({
-      ...filters,
-      sort: 'latest',
-      status: 'all',
-      date: 'all',
-    });
+    onChange({ ...filters, date: 'all', kind: '', unreadOnly: false });
   };
 
-  const hasAdvancedFilters = filters.sort !== 'latest' || filters.status !== 'all' || filters.date !== 'all';
+  const allOptions = CHANNEL_OPTIONS(t);
+  const channelOptions = [
+    allOptions[0],
+    ...allOptions.slice(1).filter((option) => availableChannels.includes(option.value)),
+  ];
+  // Một kênh duy nhất thì "Tất cả" và kênh đó là một — không cần hàng tab.
+  const showChannels = channelOptions.length >= 3;
+  const useDropdown = channelOptions.length - 1 > MAX_TABS;
+
+  const hasAdvancedFilters = filters.date !== 'all' || !!filters.kind || filters.unreadOnly === true;
 
   return (
     <div className="space-y-2">
-      {showChannelTabs && (
+      {showChannels && (useDropdown ? (
+        <FilterDropdown
+          options={channelOptions.map((c) => ({ value: c.value, label: c.label }))}
+          value={filters.channel}
+          onChange={(val) => handleChange('channel', val)}
+          label={t('inbox.channelFilterLabel')}
+        />
+      ) : (
         <ChannelTabs
           channels={channelOptions}
           value={filters.channel}
           onChange={(val) => handleChange('channel', val)}
         />
-      )}
+      ))}
 
-      <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-gray-100 bg-gray-50/80 p-1.5">
-        <FilterDropdown
-          options={sortOptions}
-          value={filters.sort}
-          onChange={(val) => handleChange('sort', val)}
-          label={t('inbox.sort')}
-        />
-        <FilterDropdown
-          options={statusOptions}
-          value={filters.status}
-          onChange={(val) => handleChange('status', val)}
-          label={t('inbox.status')}
-        />
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Chip active={filters.unreadOnly === true} onClick={() => handleChange('unreadOnly', !filters.unreadOnly)}>
+          {t('inbox.chipUnread')}
+        </Chip>
+        <Chip active={filters.kind === 'personal'} onClick={() => handleChange('kind', filters.kind === 'personal' ? '' : 'personal')}>
+          {t('inbox.chipPersonal')}
+        </Chip>
+        <Chip active={filters.kind === 'group'} onClick={() => handleChange('kind', filters.kind === 'group' ? '' : 'group')}>
+          {t('inbox.chipGroup')}
+        </Chip>
         <FilterDropdown
           options={dateOptions}
           value={filters.date}
@@ -192,5 +212,5 @@ const ConversationFilters = ({ filters, onChange, showChannelTabs = true }) => {
   );
 };
 
-export { ConversationFilters, ChannelTabs, SORT_OPTIONS, STATUS_OPTIONS, DATE_OPTIONS, CHANNEL_OPTIONS };
+export { ConversationFilters, ChannelTabs, DATE_OPTIONS, CHANNEL_OPTIONS };
 export default ConversationFilters;

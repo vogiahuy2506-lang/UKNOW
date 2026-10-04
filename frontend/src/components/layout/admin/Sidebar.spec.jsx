@@ -142,7 +142,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
 
     // Nhãn lấy nguyên văn từ vi.js (nav.*) — đừng gõ tay, sai chính tả là đỏ giả.
     const expected = {
-      'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện'],
+      'AI Chatbot': ['Chatbot của tôi', 'Hộp thư'],
       'Chiến dịch': [
         'Gửi nhanh', 'Quản lý kênh gửi', 'Thư viện nội dung', 'Quản lý chiến dịch',
         'Giám sát gửi tin', 'Khách hàng từ chiến dịch',
@@ -210,9 +210,9 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       expect(employeeTitles({ reports_view: true })).toEqual(['Trợ lý AI', 'Báo cáo']);
     });
 
-    it('inbox_view → nhóm AI Chatbot chỉ có "Lịch sử trò chuyện"', () => {
+    it('inbox_view → nhóm AI Chatbot chỉ có "Hộp thư"', () => {
       expect(employeeTitles({ inbox_view: true })).toEqual(['Trợ lý AI', 'AI Chatbot']);
-      expect(openGroupLinks('AI Chatbot')).toEqual(['Lịch sử trò chuyện']);
+      expect(openGroupLinks('AI Chatbot')).toEqual(['Hộp thư']);
     });
 
     it('chatbots_manage → chỉ "Chatbot của tôi"', () => {
@@ -227,7 +227,7 @@ describe('Sidebar — menu khách /app (PR-1 làm phẳng + groupAppMenuItems)',
       expect(openGroupLinks('Cài đặt')).toEqual(['Tệp & dung lượng']);
     });
 
-    it('quyền sai chỗ không mở nhầm mục: inbox_reply đơn lẻ (không có inbox_view) không hiện "Lịch sử trò chuyện"', () => {
+    it('quyền sai chỗ không mở nhầm mục: inbox_reply đơn lẻ (không có inbox_view) không hiện "Hộp thư"', () => {
       expect(employeeTitles({ inbox_reply: true })).toEqual(['Trợ lý AI']);
     });
 

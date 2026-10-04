@@ -1,7 +1,7 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useI18n } from '../../i18n';
 import ConfirmModal from './ConfirmModal';
-import { getMessagePreviewText } from './utils/normalizeMessageContent';
+import { getConversationPreview } from './utils/conversationPreview';
 
 const isPlaceholderGroupName = (name) => {
   const value = String(name || '').trim();
@@ -33,8 +33,8 @@ const parseVisitorInfo = (visitorInfo) => {
 };
 
 const getDisplayName = (conv, t) => {
-  const defaultCustomer = t ? (t('inbox.customer') || 'Khách hàng') : 'Khách hàng';
-  const defaultGroup = t ? (t('inbox.group') || 'Nhóm') : 'Nhóm';
+  const defaultCustomer = t('inbox.customer');
+  const defaultGroup = t('inbox.group');
   if (!conv) return defaultCustomer;
   const visitorInfo = parseVisitorInfo(conv.visitor_info || conv.visitorInfo);
   
@@ -76,15 +76,32 @@ const formatTime = (dateString, t, locale) => {
   const diffHours = Math.floor(diffMs / 3600000);
   const diffDays = Math.floor(diffMs / 86400000);
 
-  if (diffMins < 1) return t ? (t('inbox.justNow') || 'Vừa xong') : 'Vừa xong';
-  if (diffMins < 60) return `${diffMins}${t ? (t('inbox.minsShort') || 'p') : 'p'}`;
-  if (diffHours < 24) return `${diffHours}${t ? (t('inbox.hoursShort') || 'giờ') : 'giờ'}`;
-  if (diffDays < 7) return `${diffDays}${t ? (t('inbox.daysShort') || 'ngày') : 'ngày'}`;
+  if (diffMins < 1) return t('inbox.justNow');
+  // H-22: có dấu cách giữa số và đơn vị ("6 giờ", "45 phút", "3 ngày"); tiếng Anh giữ "6h".
+  if (diffMins < 60) return t('inbox.timeMinutes', { n: diffMins });
+  if (diffHours < 24) return t('inbox.timeHours', { n: diffHours });
+  if (diffDays < 7) return t('inbox.timeDays', { n: diffDays });
   return date.toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN', { day: 'numeric', month: 'short' });
 };
 
-const truncateMessage = (message, maxLength = 45, labels) => {
-  const preview = getMessagePreviewText(message, labels);
+/**
+ * Huy hiệu AI của một hội thoại (H-09). Chỉ hiện khi nó có nghĩa:
+ *  - chatbot phải ĐANG BẬT cho tài khoản đó và hội thoại không phải nhóm (AI không bao giờ trả lời nhóm);
+ *  - tắt tay (không có mốc tự bật lại) → "AI tắt";
+ *  - bạn vừa trả lời và AI đang nghỉ (còn trong thời gian chờ, hoặc tự bật lại đang tắt) → "Bạn đang trả lời";
+ *  - quá mốc tự bật lại rồi thì không hiện gì: cờ ở DB còn đó nhưng AI sẽ tự trả lời ở tin khách kế tiếp.
+ * Bản cũ hiện "Tạm dừng" cho cả cờ đã quá hạn, cho nhóm, và cho tài khoản chưa từng bật chatbot (10/11 hội thoại của
+ * admin đều dính).
+ */
+const getAiBadge = (conv, isGroup, now = Date.now()) => {
+  if (!conv.aiPaused || conv.chatbotEnabled === false || isGroup) return null;
+  if (!conv.aiPausedAt) return 'off';
+  if (conv.aiResumeAt === null) return 'replying';
+  if (typeof conv.aiResumeAt === 'string' && new Date(conv.aiResumeAt).getTime() > now) return 'replying';
+  return null;
+};
+
+const truncateMessage = (preview, maxLength = 45) => {
   if (!preview) return '';
   if (preview.length <= maxLength) return preview;
   return preview.slice(0, maxLength) + '...';
@@ -102,15 +119,30 @@ const ConversationItem = ({
   const displayName = getDisplayName(conv, t);
   const isGroup = isGroupConversation(conv);
   const messageLabels = {
-    sticker: t('inbox.messageSticker'),
+    sticker: t('inbox.previewSticker'),
     groupEvent: t('inbox.messageGroupEvent'),
     link: t('inbox.messageLink'),
-    call: t('inbox.messageCall'),
+    call: t('inbox.previewCall'),
     zaloEvent: t('inbox.messageZaloEvent'),
+    image: t('inbox.previewImage'),
+    file: t('inbox.previewFile'),
+    video: t('inbox.previewVideo'),
+    gif: t('inbox.previewGif'),
+    location: t('inbox.previewLocation'),
+    voice: t('inbox.previewVoice'),
   };
-  
+  const preview = getConversationPreview({
+    content: conv.lastMessage,
+    rawType: conv.lastMessageRawType,
+    attachmentType: conv.lastMessageAttachmentType,
+    messageType: conv.lastMessageType,
+    sender: conv.lastMessageSender,
+    isGroup,
+    role: conv.lastMessageRole,
+  }, messageLabels);
+  const aiBadge = getAiBadge(conv, isGroup);
+
   const hasUnread = conv.unreadCount > 0;
-  const isActive = conv.status === 'active';
   const lastMessageTime = formatTime(getLastMessageAt(conv), t, locale);
   const selectedConversation = isGroup
     ? {
@@ -174,21 +206,16 @@ const ConversationItem = ({
               <span className={`font-semibold text-sm truncate ${
                 isSelected ? 'text-primary-700' : 'text-gray-900'
               }`}>
-                {displayName || (t ? (t('inbox.customer') || 'Khách hàng') : 'Khách hàng')}
+                {displayName || t('inbox.customer')}
               </span>
-              {!isActive && (
-                <span className="shrink-0 text-[9px] px-1 py-px rounded bg-gray-100 text-gray-500">
-                  {t('common.close') || 'Đóng'}
-                </span>
-              )}
-              {conv.aiPaused && !conv.aiPausedAt && (
+              {aiBadge === 'off' && (
                 <span className="shrink-0 text-[9px] px-1 py-px rounded bg-amber-50 text-amber-700 border border-amber-200">
-                  {t('inbox.manualBadge')}
+                  {t('inbox.badgeAiOff')}
                 </span>
               )}
-              {conv.aiPaused && !!conv.aiPausedAt && (
+              {aiBadge === 'replying' && (
                 <span className="shrink-0 text-[9px] px-1 py-px rounded bg-slate-50 text-slate-600 border border-slate-200">
-                  {t('inbox.handoffBadge')}
+                  {t('inbox.badgeYouReplying')}
                 </span>
               )}
             </div>
@@ -199,14 +226,14 @@ const ConversationItem = ({
               {onDelete && (
                 <button
                   type="button"
-                  aria-label={t('inbox.confirmDeleteTitle') || 'Xóa cuộc trò chuyện'}
+                  aria-label={t('inbox.confirmDeleteTitle')}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     onDelete(conv, e);
                   }}
                   className="absolute right-2 top-2 hidden p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all group-hover:flex focus:outline-none focus:ring-2 focus:ring-red-300"
-                  title={t('inbox.confirmDeleteTitle') || 'Xóa cuộc trò chuyện'}
+                  title={t('inbox.confirmDeleteTitle')}
                 >
                   <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -216,11 +243,11 @@ const ConversationItem = ({
             </div>
           </div>
 
-          {conv.lastMessage && (
+          {preview && (
             <p className={`text-xs truncate ${
               hasUnread ? 'text-gray-800 font-medium' : 'text-gray-500'
             }`}>
-              {truncateMessage(conv.lastMessage, 52, messageLabels)}
+              {truncateMessage(preview, 52)}
             </p>
           )}
         </div>
@@ -229,14 +256,14 @@ const ConversationItem = ({
   );
 };
 
-const EmptyState = ({ message, t }) => (
+const EmptyState = ({ title, hint }) => (
   <div className="flex-1 flex items-center justify-center text-gray-500">
     <div className="text-center p-8">
       <div className="w-20 h-20 mx-auto mb-4 rounded-3xl bg-gray-100 flex items-center justify-center">
         <span className="text-4xl">💬</span>
       </div>
-      <p className="text-base font-semibold text-gray-600">{message}</p>
-      <p className="text-sm text-gray-400 mt-2">{t ? (t('inbox.selectConversation') || 'Chọn một cuộc trò chuyện để bắt đầu') : 'Chọn một cuộc trò chuyện để bắt đầu'}</p>
+      <p className="text-base font-semibold text-gray-600">{title}</p>
+      <p className="text-sm text-gray-400 mt-2">{hint}</p>
     </div>
   </div>
 );
@@ -258,47 +285,23 @@ const LoadingSkeleton = () => (
   </div>
 );
 
-const ConversationList = ({ 
-  conversations, 
-  isLoading, 
-  selectedId, 
-  onSelect, 
-  onLoadMore, 
-  hasMore, 
+const ConversationList = ({
+  conversations,
+  isLoading,
+  selectedId,
+  onSelect,
+  onLoadMore,
+  hasMore,
   onDelete,
-  sortBy = 'latest',
+  /** Đang có bộ lọc / từ khoá tìm kiếm: danh sách rỗng nghĩa là "không khớp" chứ không phải "chưa có gì". */
+  hasActiveFilters = false,
 }) => {
   const { t, locale } = useI18n();
   const [deleteTarget, setDeleteTarget] = useState(null);
 
-  const filteredConversations = useMemo(() => {
-    const result = [...conversations];
-
-    switch (sortBy) {
-      case 'latest':
-        result.sort((a, b) => new Date(getLastMessageAt(b)) - new Date(getLastMessageAt(a)));
-        break;
-      case 'unread':
-        result.sort((a, b) => (b.unreadCount || 0) - (a.unreadCount || 0));
-        break;
-      case 'name_asc':
-        result.sort((a, b) => getDisplayName(a, t).localeCompare(getDisplayName(b, t), locale === 'en' ? 'en' : 'vi'));
-        break;
-      case 'name_desc':
-        result.sort((a, b) => getDisplayName(b, t).localeCompare(getDisplayName(a, t), locale === 'en' ? 'en' : 'vi'));
-        break;
-      default:
-        break;
-    }
-
-    if (sortBy !== 'unread') {
-      return result;
-    }
-
-    const unread = result.filter((c) => c.unreadCount > 0);
-    const read = result.filter((c) => !c.unreadCount || c.unreadCount === 0);
-    return [...unread, ...read];
-  }, [conversations, sortBy, t, locale]);
+  // Thứ tự do server quyết định (mới nhất trước, trên TOÀN bộ danh sách) — không sắp lại phía FE: bản cũ chỉ sắp trong
+  // 20–40 hội thoại đã tải nên "Chưa đọc"/"Tên A-Z" ở trang 2 không bao giờ được đưa lên (H-13).
+  const filteredConversations = conversations;
 
   const handleDeleteClick = (conv) => {
     setDeleteTarget(conv);
@@ -316,7 +319,10 @@ const ConversationList = ({
       {isLoading && conversations.length === 0 && <LoadingSkeleton />}
 
       {!isLoading && filteredConversations.length === 0 && (
-        <EmptyState message={t('inbox.noMessages')} t={t} />
+        <EmptyState
+          title={hasActiveFilters ? t('inbox.emptyFilteredTitle') : t('inbox.emptyListTitle')}
+          hint={hasActiveFilters ? t('inbox.emptyFilteredHint') : t('inbox.emptyListHint')}
+        />
       )}
 
       {filteredConversations.length > 0 && (
@@ -327,7 +333,7 @@ const ConversationList = ({
               conv={conv}
               isSelected={selectedId === `${conv.type}-${conv.id}`}
               onSelect={onSelect}
-              onDelete={handleDeleteClick}
+              onDelete={onDelete ? handleDeleteClick : undefined}
               t={t}
               locale={locale}
             />
@@ -342,10 +348,10 @@ const ConversationList = ({
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">
                   <span className="animate-spin w-4 h-4 border-2 border-primary-500 border-t-transparent rounded-full"></span>
-                  {t('common.loading') || 'Đang tải...'}
+                  {t('common.loading')}
                 </span>
               ) : (
-                t('inbox.loadMoreConversations') || 'Tải thêm cuộc trò chuyện'
+                t('inbox.loadMoreConversations')
               )}
             </button>
           )}
@@ -354,12 +360,12 @@ const ConversationList = ({
 
       <ConfirmModal
         isOpen={deleteTarget !== null}
-        title={t('inbox.confirmDeleteTitle') || 'Xóa cuộc trò chuyện'}
-        message={t('inbox.confirmDelete') || 'Bạn có chắc muốn xóa cuộc trò chuyện này?'}
+        title={t('inbox.confirmDeleteTitle')}
+        message={t('inbox.confirmDelete')}
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
-        confirmText={t('common.delete') || 'Xóa'}
-        cancelText={t('common.cancel') || 'Hủy'}
+        confirmText={t('common.delete')}
+        cancelText={t('common.cancel')}
         danger
       />
     </div>

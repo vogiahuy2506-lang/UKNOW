@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   HiArrowLeft, HiOutlineSearch, HiOutlineBell,
   HiOutlineInformationCircle, HiOutlineRefresh, HiOutlineExclamation,
@@ -16,13 +16,14 @@ import TypingIndicator from '../../features/inbox/TypingIndicator';
 import ConversationDetails from '../../features/inbox/ConversationDetails';
 import AiActivityReport from '../../features/inbox/AiActivityReport';
 import ContactAlertsPanel from '../../features/inbox/ContactAlertsPanel';
+import ConfirmModal from '../../features/inbox/ConfirmModal';
 import { useI18n } from '../../i18n';
 import toast from 'react-hot-toast';
 import useInboxSSE from '../../hooks/useInboxSSE';
 import useDesktopNotifications from '../../hooks/useDesktopNotifications';
 import useIsMobile from '../../hooks/useIsMobile';
 import { useLocalStorageState } from '../../hooks/useLocalStorageState';
-import { getMessagePreviewText } from '../../features/inbox/utils/normalizeMessageContent';
+import { getConversationPreview } from '../../features/inbox/utils/conversationPreview';
 import { useAuthStore } from '../../stores/authStore';
 
 const getConversationKey = (conv) => (conv ? `${conv.type || ''}:${conv.id}` : '');
@@ -168,6 +169,7 @@ const mergeUniqueMessages = (baseMessages, nextMessages, markAsRead = false) => 
 
 const InboxPage = () => {
   const { t } = useI18n();
+  const navigate = useNavigate();
   const activeContext = useAuthStore((state) => state.activeContext);
   const currentUserId = useAuthStore((state) => state.user?.id);
   const isEmployeeContext = activeContext?.type === 'employee';
@@ -203,8 +205,10 @@ const InboxPage = () => {
   });
   const [sessionLoaded, setSessionLoaded] = useState(false);
   
-  const [replyingTo, setReplyingTo] = useState(null);
   const [showDetails, setShowDetails] = useState(false);
+  // Kênh user có trong Hộp thư (từ server) — chỉ hiện tab của các kênh đó (H-12).
+  const [availableChannels, setAvailableChannels] = useState([]);
+  const [confirmMarkAllRead, setConfirmMarkAllRead] = useState(false);
   const searchInputRef = useRef(null);
   
   const [pendingMessages, setPendingMessages] = useState({});
@@ -220,12 +224,11 @@ const InboxPage = () => {
   const markReadAfterLoadRef = useRef(null);
   const markOpenReadTimerRef = useRef(null);
   const unreadRefreshTimerRef = useRef(null);
+  const loadAvailableChannelsRef = useRef(null);
 
   const [filters, setFilters] = useState({
     channel: '',
     search: '',
-    sort: 'latest',
-    status: 'all',
     date: 'all',
     kind: '',
     unreadOnly: false,
@@ -239,20 +242,30 @@ const InboxPage = () => {
   const dragStartXRef = useRef(0);
   const dragStartWidthRef = useRef(360);
   const messagePreviewLabels = useMemo(() => ({
-    sticker: t('inbox.messageSticker'),
+    sticker: t('inbox.previewSticker'),
     groupEvent: t('inbox.messageGroupEvent'),
     link: t('inbox.messageLink'),
-    call: t('inbox.messageCall'),
+    call: t('inbox.previewCall'),
     zaloEvent: t('inbox.messageZaloEvent'),
+    image: t('inbox.previewImage'),
+    file: t('inbox.previewFile'),
+    video: t('inbox.previewVideo'),
+    gif: t('inbox.previewGif'),
+    location: t('inbox.previewLocation'),
+    voice: t('inbox.previewVoice'),
   }), [t]);
 
-  const getDisplayMessage = useCallback((message, messageType) => {
-    if (message) return getMessagePreviewText(message, messagePreviewLabels);
-    if (messageType === 'image' || messageType === 'photo') return t('inbox.messageImage');
-    if (messageType === 'sticker') return t('inbox.messageSticker');
-    if (messageType === 'file' || messageType === 'doc') return t('inbox.messageFile');
-    return '';
-  }, [messagePreviewLabels, t]);
+  // Dòng xem trước cho tin đến qua SSE — cùng quy tắc với danh sách (ảnh → "[Hình ảnh]", không in URL thô).
+  const getDisplayMessage = useCallback((message, messageType, extra = {}) => (
+    getConversationPreview({
+      content: message,
+      messageType,
+      rawType: extra.rawType,
+      sender: extra.sender,
+      isGroup: extra.isGroup,
+      role: extra.role,
+    }, messagePreviewLabels)
+  ), [messagePreviewLabels]);
 
   useEffect(() => {
     selectedConversationRef.current = selectedConversation;
@@ -333,7 +346,6 @@ const InboxPage = () => {
       const requestParams = {
         channel: filters.channel || undefined,
         search: filters.search || undefined,
-        status: filters.status === 'all' ? undefined : filters.status,
         date: filters.date === 'all' ? undefined : filters.date,
         kind: filters.kind || undefined,
         unreadOnly: filters.unreadOnly ? true : undefined,
@@ -376,6 +388,31 @@ const InboxPage = () => {
     }
   }, [filters, page, conversations, selectedAccountId, t]);
 
+  // C5: "Đánh dấu tất cả đã đọc" — theo đúng bộ lọc đang xem; chỉ chạy khi người dùng bấm, không tự đánh dấu tin cũ.
+  const handleMarkAllRead = useCallback(async () => {
+    setConfirmMarkAllRead(false);
+    try {
+      await chatbotApi.markAllAsRead({
+        channel: filters.channel || undefined,
+        zaloAccountId: selectedAccountId || undefined,
+        search: filters.search || undefined,
+        date: filters.date === 'all' ? undefined : filters.date,
+        kind: filters.kind || undefined,
+      });
+      toast.success(t('inbox.markAllReadDone'));
+      setSelectedConversation((prev) => (prev ? { ...prev, unreadCount: 0 } : prev));
+      await fetchConversations(true);
+      fetchUnreadCountRef.current();
+    } catch (err) {
+      console.error('Failed to mark all as read:', err);
+      toast.error(err?.response?.data?.message || t('errors.loadFailed'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, selectedAccountId, t]);
+
+  const fetchConversationsRef = useRef(null);
+  fetchConversationsRef.current = fetchConversations;
+
   const handleFilterChange = useCallback((nextFilters) => {
     setFilters(nextFilters);
     setPage(0);
@@ -386,18 +423,18 @@ const InboxPage = () => {
       const response = await chatbotApi.deleteConversation(conv.id, conv.type);
       const success = response?.success || response?.data?.success;
       if (success) {
-        toast.success(t('common.deleted') || 'Đã xóa');
+        toast.success(t('common.deleted'));
         await fetchConversations(true);
         if (selectedConversation?.id === conv.id) {
           setSelectedConversation(null);
           setMessages([]);
         }
       } else {
-        toast.error(t('errors.deleteFailed') || 'Xóa thất bại');
+        toast.error(t('errors.deleteFailed'));
       }
     } catch (err) {
       console.error('Failed to delete conversation:', err);
-      toast.error(t('errors.deleteFailed') || 'Xóa thất bại');
+      toast.error(t('errors.deleteFailed'));
     }
   };
 
@@ -428,6 +465,17 @@ const InboxPage = () => {
       fetchUnreadCount();
     }, 1000);
   }, [fetchUnreadCount]);
+
+  const loadAvailableChannels = useCallback(async () => {
+    try {
+      const response = await chatbotApi.getInboxChannels();
+      const channels = response?.data?.channels;
+      if (response?.success && Array.isArray(channels)) setAvailableChannels(channels);
+    } catch {
+      // Lỗi tải danh sách kênh chỉ làm hàng tab kênh ẩn đi, không chặn Hộp thư.
+    }
+  }, []);
+  loadAvailableChannelsRef.current = loadAvailableChannels;
 
   const fetchContactAlertsCount = useCallback(async () => {
     try {
@@ -537,7 +585,12 @@ const InboxPage = () => {
 
   const handleNewMessage = useCallback((data) => {
     fetchContactAlertsCount();
-    const displayMessage = getDisplayMessage(data.message, data.messageType);
+    const displayMessage = getDisplayMessage(data.message, data.messageType, {
+      rawType: data.rawType || data.metadata?.msg_type_raw,
+      sender: data.senderName,
+      isGroup: data.isGroup,
+      role: data.role,
+    });
     // H-25: khớp hội thoại theo CẢ loại lẫn id — id của 3 bảng hội thoại là ba dãy số riêng.
     const eventKey = getSseConversationKey(data);
     const selected = selectedConversationRef.current;
@@ -565,6 +618,13 @@ const InboxPage = () => {
         const newList = [updated, ...prev.slice(0, existingIndex), ...prev.slice(existingIndex + 1)];
         return newList;
       } else {
+        // Hội thoại của một kênh chưa có tab (vd vừa nối WhatsApp) → nạp lại danh sách kênh.
+        if (data.channel && data.channel !== 'facebook') {
+          setAvailableChannels((known) => {
+            if (!known.includes(data.channel)) loadAvailableChannelsRef.current?.();
+            return known;
+          });
+        }
         const newConv = {
           id: data.conversationId,
           type: getSseConversationType(data),
@@ -690,9 +750,15 @@ const InboxPage = () => {
     fetchUnreadCount();
   }, [fetchUnreadCount]);
 
-  const { status: sseStatus, retry: retrySse } = useInboxSSE(handleNewMessage, handleUnreadChange);
+  // H-26: sau khi nối lại luồng thời gian thực, tin đến trong khe hở không được phát lại → tải lại danh sách + số chưa đọc.
+  const handleSseReconnected = useCallback(() => {
+    fetchConversationsRef.current?.(true);
+    fetchUnreadCountRef.current();
+  }, []);
 
-  const handleSendMessage = useCallback(async (content, replyTo, files = []) => {
+  const { status: sseStatus, retry: retrySse } = useInboxSSE(handleNewMessage, handleUnreadChange, handleSseReconnected);
+
+  const handleSendMessage = useCallback(async (content, _unusedReplyTo, files = []) => {
     if (!selectedConversation || isSending) return;
     setIsSending(true);
     try {
@@ -713,11 +779,6 @@ const InboxPage = () => {
         type: selectedConversation.type,
         content,
         attachments,
-        replyTo: replyTo ? {
-          id: replyTo.id,
-          content: replyTo.content,
-          role: replyTo.role,
-        } : undefined,
       });
 
       if (response.success) {
@@ -729,7 +790,6 @@ const InboxPage = () => {
           attachments,
           createdAt: new Date().toISOString(),
           isRead: true,
-          replyTo,
           metadata: {
             source: 'manual_inbox',
             send: sendStatus === 'failed'
@@ -743,7 +803,6 @@ const InboxPage = () => {
           },
         };
         setMessages(prev => [...prev, newMessage]);
-        setReplyingTo(null);
         // Apply pause state from sendMessage response (PR1 returns aiPausedAt/aiResumeAt).
         const pauseState = extractPauseState(response);
         setSelectedConversation((prev) => (prev ? { ...prev, ...pauseState } : prev));
@@ -752,7 +811,7 @@ const InboxPage = () => {
         // tin BẠN gửi không hiện ở preview và hội thoại không nhảy lên đầu.
         const sentPreview = content?.trim()
           ? content.trim()
-          : (attachments?.length ? t('inbox.messageFile') : '');
+          : (attachments?.length ? t('inbox.previewFile') : '');
         const sentAt = newMessage.createdAt;
         setConversations((prev) => {
           const idx = prev.findIndex((c) => (
@@ -770,13 +829,28 @@ const InboxPage = () => {
         if (sendStatus === 'failed') {
           toast.error(response.error || t('inbox.sendFailed'));
         } else {
-          toast.success(t('inbox.sentAiPausedHint') || t('common.success'));
+          // H-29: chỉ nói chuyện AI khi chatbot ĐANG BẬT cho hội thoại này (không phải nhóm, không phải chưa bật).
+          const aiRelevant = selectedConversation.chatbotEnabled !== false
+            && !isGroupConversation(selectedConversation)
+            && pauseState.aiPaused === true
+            && typeof pauseState.aiResumeAt === 'string'
+            && !!pauseState.aiPausedAt;
+          if (aiRelevant) {
+            const minutes = Math.max(1, Math.round(
+              (new Date(pauseState.aiResumeAt).getTime() - new Date(pauseState.aiPausedAt).getTime()) / 60000
+            ));
+            toast.success(t('inbox.sentWithAiPause', { n: minutes }));
+          } else {
+            toast.success(t('inbox.sentToast'));
+          }
         }
       }
     } catch (err) {
       console.error('Failed to send message:', err);
       const serverMessage = err.response?.data?.message;
       toast.error(serverMessage || t('errors.sendFailed'));
+      // H-16: ném lại để ReplyInput GIỮ nội dung đang gõ (hết hạn mức gửi / rớt mạng không được làm mất đoạn đã gõ).
+      throw err;
     } finally {
       setIsSending(false);
     }
@@ -820,14 +894,6 @@ const InboxPage = () => {
       setRetryingMessageId(null);
     }
   }, [selectedConversation, retryingMessageId, t]);
-
-  const handleReply = useCallback((message) => {
-    setReplyingTo(message);
-  }, []);
-
-  const handleCancelReply = useCallback(() => {
-    setReplyingTo(null);
-  }, []);
 
   const handleLoadMore = useCallback(() => {
     if (!isLoadingConversations && hasMore) {
@@ -877,7 +943,7 @@ const InboxPage = () => {
     setHasMoreOlderMessages(false);
   }, [pendingMessages]);
 
-  const handleOpenConversationByRef = useCallback(({ id, type, visitorName = 'Khách hàng' }) => {
+  const handleOpenConversationByRef = useCallback(({ id, type, visitorName = t('inbox.customer') }) => {
     setActiveView('chat');
     const convId = Number(id);
     const found = conversations.find((c) => Number(c.id) === convId && (!type || c.type === type));
@@ -891,7 +957,7 @@ const InboxPage = () => {
         unreadCount: 0,
       });
     }
-  }, [conversations, handleSelectConversation]);
+  }, [conversations, handleSelectConversation, t]);
 
   const handleOpenConversationFromReport = useCallback((convId) => {
     handleOpenConversationByRef({ id: convId, type: 'zalo_personal' });
@@ -914,6 +980,10 @@ const InboxPage = () => {
     fetchContactAlertsCount();
   }, [fetchContactAlertsCount]);
 
+  useEffect(() => {
+    loadAvailableChannels();
+  }, [loadAvailableChannels]);
+
   // H-05: trạng thái tài khoản Zalo chỉ nạp MỘT lần khi mở trang (và sau khi bấm Đồng bộ) — không chạy lại theo
   // từng bộ lọc / phím gõ. Ô chọn tài khoản nhận dữ liệu này qua props, không tự gọi API nữa.
   useEffect(() => {
@@ -926,7 +996,7 @@ const InboxPage = () => {
     fetchConversations(true);
     fetchUnreadCount();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionLoaded, filters.channel, filters.search, filters.status, filters.date, filters.kind, filters.unreadOnly, selectedAccountId]);
+  }, [sessionLoaded, filters.channel, filters.search, filters.date, filters.kind, filters.unreadOnly, selectedAccountId]);
 
   useEffect(() => {
     if (selectedConversation) {
@@ -946,14 +1016,14 @@ const InboxPage = () => {
 
   const getChannelLabel = (channel, conversation = null) => {
     if (isGroupConversation(conversation)) {
-      return t('inbox.zaloGroup') || 'Zalo Nhóm';
+      return t('inbox.zaloGroup');
     }
 
     const channelMap = {
-      web: 'Web Chat',
+      web: t('inbox.webChat'),
       zalo_oa: 'Zalo OA',
       facebook: 'Facebook',
-      zalo_personal: t('inbox.zaloPersonal') || 'Zalo Cá nhân',
+      zalo_personal: t('inbox.zaloPersonal'),
       whatsapp_baileys: 'WhatsApp',
       telegram: 'Telegram',
     };
@@ -966,44 +1036,17 @@ const InboxPage = () => {
       <div
         className={`h-full min-h-0 bg-white flex flex-col flex-shrink-0 overflow-hidden border-r border-gray-200 ${
           !isResizing && 'transition-all duration-200'
-        } ${(selectedConversation || activeView === 'ai_report') ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
-        style={{ width: isMobile && !selectedConversation && activeView !== 'ai_report' ? '100%' : `${sidebarWidth}px` }}
+        } ${(selectedConversation || activeView !== 'chat') ? 'hidden lg:flex' : 'flex w-full lg:w-auto'}`}
+        style={{ width: isMobile && !selectedConversation && activeView === 'chat' ? '100%' : `${sidebarWidth}px` }}
       >
         {/* Sidebar toolbar — compact so list gets most of the height */}
         <div className="shrink-0 border-b border-gray-100">
-          <div className="flex items-center gap-2 px-3 py-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary-500 to-primary-600 flex items-center justify-center shadow-sm">
-              <HiOutlineInbox className="w-4 h-4 text-white" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-sm font-bold text-gray-900 truncate">{t('inbox.title')}</h1>
-                {unreadCount > 0 && (
-                  <span className="shrink-0 text-[10px] font-semibold text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded-full">
-                    {unreadCount} {t('inbox.unread')}
-                  </span>
-                )}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={toggleNotifications}
-              className={`p-1.5 rounded-lg transition-colors ${
-                notificationsEnabled
-                  ? 'text-primary-600 bg-primary-50'
-                  : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-              }`}
-              title={notificationsEnabled ? (t('inbox.notificationsOff') || 'Tắt thông báo') : (t('inbox.notificationsOn') || 'Bật thông báo')}
-            >
-              <HiOutlineBell className="w-4 h-4" />
-            </button>
-          </div>
-
           {/* View Toggle Tabs: Chat vs AI Report vs Contact Alerts */}
-          <div className="flex items-center gap-1 p-1 bg-gray-100/90 rounded-xl mx-3 mb-2 text-xs font-semibold">
+          <div className="flex items-center gap-1 p-1 bg-gray-100/90 rounded-xl mx-3 my-2 text-xs font-semibold">
             <button
               type="button"
               onClick={() => setActiveView('chat')}
+              title={unreadCount > 0 ? t('inbox.unreadConversationsTooltip', { n: unreadCount }) : undefined}
               className={`flex-1 py-1.5 px-2 rounded-lg flex items-center justify-center gap-1 transition-all ${
                 activeView === 'chat'
                   ? 'bg-white text-primary-600 shadow-sm'
@@ -1011,10 +1054,10 @@ const InboxPage = () => {
               }`}
             >
               <HiOutlineInbox className="w-4 h-4 shrink-0" />
-              <span className="truncate">{t('inbox.title') || 'Hộp thư'}</span>
+              <span className="truncate">{t('inbox.title')}</span>
               {unreadCount > 0 && (
                 <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold shrink-0">
-                  {unreadCount}
+                  {unreadCount > 99 ? '99+' : unreadCount}
                 </span>
               )}
             </button>
@@ -1028,7 +1071,7 @@ const InboxPage = () => {
               }`}
             >
               <HiOutlineSparkles className="w-4 h-4 text-indigo-500 shrink-0" />
-              <span className="truncate">{t('inbox.aiReportTab') || 'Báo cáo AI'}</span>
+              <span className="truncate">{t('inbox.aiReportTab')}</span>
             </button>
             <button
               type="button"
@@ -1040,26 +1083,45 @@ const InboxPage = () => {
               }`}
             >
               <HiOutlinePhone className="w-4 h-4 text-rose-500 shrink-0" />
-              <span className="truncate">{t('inbox.contactAlertsTab') || 'Liên hệ để lại'}</span>
+              <span className="truncate">{t('inbox.contactAlertsTab')}</span>
               {contactAlertsOpenCount > 0 && (
                 <span className="text-[10px] bg-rose-500 text-white px-1.5 py-0.2 rounded-full font-bold shrink-0">
                   {contactAlertsOpenCount}
                 </span>
               )}
             </button>
+            <button
+              type="button"
+              onClick={toggleNotifications}
+              className={`shrink-0 p-1.5 rounded-lg transition-colors ${
+                notificationsEnabled
+                  ? 'text-primary-600 bg-white shadow-sm'
+                  : 'text-gray-400 hover:text-gray-600 hover:bg-white/70'
+              }`}
+              title={notificationsEnabled ? t('inbox.notificationsOff') : t('inbox.notificationsOn')}
+              aria-label={notificationsEnabled ? t('inbox.notificationsOff') : t('inbox.notificationsOn')}
+            >
+              <HiOutlineBell className="w-4 h-4" />
+            </button>
           </div>
 
           {!sessionStatus.connected && sessionStatus.accounts?.length > 0 && (
-            <div className="mx-3 mb-2 p-2.5 bg-rose-50 border border-rose-200 rounded-xl flex items-start gap-2 shadow-sm">
-              <HiOutlineExclamation className="w-4 h-4 text-rose-500 shrink-0 mt-0.5" />
-              <div className="flex-1 min-w-0">
-                <p className="text-[11px] font-bold text-rose-800 leading-tight">
-                  {t('inbox.zaloDisconnectedBanner') || 'Tài khoản Zalo mất kết nối — Bot tạm dừng nhận tin!'}
-                </p>
-                <p className="text-[10px] text-rose-600 mt-0.5 leading-tight">
-                  {t('inbox.sessionExpired')} — {t('inbox.rescanQRAtChannels') || 'Vui lòng quét lại mã QR tại Cài đặt kênh.'}
-                </p>
-              </div>
+            <div className="mx-3 mb-2 px-2.5 py-1.5 bg-gray-50 border border-gray-200 rounded-lg flex items-center gap-2">
+              <HiOutlineInformationCircle className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+              <p className="text-[11px] text-gray-600 leading-snug flex-1 min-w-0">
+                {sessionStatus.accounts.length === 1
+                  ? t('inbox.zaloReloginBanner', { name: sessionStatus.accounts[0].displayName || t('inbox.zaloPersonalShort') })
+                  : t('inbox.zaloReloginBannerMany', { n: sessionStatus.accounts.length })}
+              </p>
+              {canManageChannels && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/app/settings/channels')}
+                  className="shrink-0 text-[11px] font-semibold text-primary-600 hover:underline"
+                >
+                  {t('inbox.openChannelSettings')}
+                </button>
+              )}
             </div>
           )}
 
@@ -1106,6 +1168,7 @@ const InboxPage = () => {
             <ConversationFilters
               filters={filters}
               onChange={handleFilterChange}
+              availableChannels={availableChannels}
             />
 
             {(!filters.channel || filters.channel === 'zalo_personal') && (
@@ -1129,6 +1192,18 @@ const InboxPage = () => {
           </div>
         </div>
 
+        {conversations.some((c) => c.unreadCount > 0) && (
+          <div className="shrink-0 border-b border-gray-100 px-3 py-1 flex justify-end bg-white">
+            <button
+              type="button"
+              onClick={() => setConfirmMarkAllRead(true)}
+              className="text-[11px] font-semibold text-primary-600 hover:underline"
+            >
+              {t('inbox.markAllRead')}
+            </button>
+          </div>
+        )}
+
         {/* Conversation list */}
         <div className="flex-1 min-h-0 overflow-hidden bg-white">
           <ConversationList
@@ -1139,7 +1214,7 @@ const InboxPage = () => {
             onLoadMore={handleLoadMore}
             hasMore={hasMore}
             onDelete={canManage ? handleDeleteConversation : undefined}
-            sortBy={filters.sort}
+            hasActiveFilters={Boolean(filters.search || filters.channel || filters.kind || filters.unreadOnly || filters.date !== 'all')}
           />
         </div>
       </div>
@@ -1162,6 +1237,18 @@ const InboxPage = () => {
             : 'hidden lg:flex lg:flex-col'
         }`}
       >
+        {activeView !== 'chat' && isMobile && (
+          <div className="shrink-0 px-3 py-2 bg-white border-b border-gray-200">
+            <button
+              type="button"
+              onClick={() => setActiveView('chat')}
+              className="flex items-center gap-1.5 text-sm font-semibold text-primary-600"
+            >
+              <HiArrowLeft className="w-4 h-4" />
+              {t('inbox.backToInbox')}
+            </button>
+          </div>
+        )}
         {activeView === 'ai_report' ? (
           <AiActivityReport
             selectedAccountId={selectedAccountId}
@@ -1298,7 +1385,7 @@ const InboxPage = () => {
                   ) : null}
               </div>
 
-              {canManage && <button
+              {canManage && selectedConversation.channel === 'zalo_personal' && isGroupConversation(selectedConversation) && <button
                 type="button"
                 disabled={isSyncingThread}
                 onClick={async () => {
@@ -1327,18 +1414,15 @@ const InboxPage = () => {
                         toast.error(payload?.message || t('inbox.syncFailed'));
                       } else if (!isGroup) {
                         toast(
-                          payload?.data?.message
-                            || t('inbox.syncPersonalNoHistory')
-                            || t('inbox.syncPersonal1on1Notice')
-                            || 'Chat 1-1 không kéo lịch sử được. Đã làm mới kết nối — nhờ đối phương nhắn tin mới.',
+                          payload?.data?.message || t('inbox.syncPersonalNoHistory'),
                           { icon: 'ℹ️', duration: 6000 }
                         );
                       } else {
                         const synced = Number(payload?.data?.synced || 0);
                         toast.success(
                           synced > 0
-                            ? (t('inbox.syncThreadPulled', { count: synced }) || `Đã kéo ${synced} tin từ Zalo`)
-                            : (t('inbox.syncThreadEmpty') || 'Không có tin mới từ Zalo')
+                            ? t('inbox.syncThreadPulled', { count: synced })
+                            : t('inbox.syncThreadEmpty')
                         );
                       }
                     } catch (err) {
@@ -1352,7 +1436,7 @@ const InboxPage = () => {
                   fetchConversations(true);
                 }}
                 className="p-2.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-xl transition-all disabled:opacity-50"
-                title={t('inbox.syncNow') || 'Đồng bộ'}
+                title={t('inbox.syncNow')}
               >
                 <HiOutlineRefresh className={`w-5 h-5 ${isSyncingThread ? 'animate-spin' : ''}`} />
               </button>}
@@ -1364,7 +1448,7 @@ const InboxPage = () => {
                     ? 'text-primary-600 bg-primary-50 shadow-sm' 
                     : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'
                 }`}
-                title={t('common.details') || 'Chi tiết'}
+                title={t('common.details')}
               >
                 <HiOutlineInformationCircle className="w-5 h-5" />
               </button>
@@ -1376,10 +1460,9 @@ const InboxPage = () => {
                 messages={messages} 
                 isLoading={isLoadingMessages}
                 conversation={selectedConversation}
-                onReply={canReply ? handleReply : undefined}
                 onRetry={canManage ? handleRetryMessage : undefined}
                 retryingMessageId={retryingMessageId}
-                replyingTo={replyingTo}
+                currentUserId={currentUserId}
                 hasMoreOlder={hasMoreOlderMessages}
                 isLoadingOlder={isLoadingOlderMessages}
                 onLoadOlder={handleLoadOlderMessages}
@@ -1398,8 +1481,6 @@ const InboxPage = () => {
                 onSend={handleSendMessage}
                 disabled={isSending}
                 placeholder={t('inbox.typeMessage')}
-                replyingTo={replyingTo}
-                onCancelReply={handleCancelReply}
                 allowAttachments={channelSupportsInboxAttachments(selectedConversation?.channel)}
               />
             )}
@@ -1414,9 +1495,7 @@ const InboxPage = () => {
                 {t('inbox.selectConversation')}
               </h2>
               <p className="text-gray-500 leading-relaxed">
-                {conversations.length === 0
-                  ? (t('inbox.emptyInboxHint') || t('inbox.noConversations'))
-                  : t('inbox.noConversations')}
+                {t('inbox.selectConversationHint')}
               </p>
               {filters.channel === 'zalo_personal' && !sessionStatus.connected && (
                 <div className="mt-6 p-4 bg-amber-50 rounded-2xl border border-amber-200">
@@ -1433,6 +1512,16 @@ const InboxPage = () => {
           </div>
         )}
       </div>
+
+      <ConfirmModal
+        isOpen={confirmMarkAllRead}
+        title={t('inbox.markAllRead')}
+        message={t('inbox.markAllReadConfirm')}
+        onConfirm={handleMarkAllRead}
+        onCancel={() => setConfirmMarkAllRead(false)}
+        confirmText={t('inbox.markAllReadConfirmBtn')}
+        cancelText={t('common.cancel')}
+      />
 
       {/* Conversation Details Panel */}
       {showDetails && selectedConversation && (
