@@ -691,10 +691,11 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         err.status = 422;
         throw err;
       }
-      // B-1 (2) — chốt an toàn: trang AI sinh MỚI không được chứa script ngoài Tailwind CDN, thuộc tính
-      // on*=, javascript:, form action ra ngoài. ĐỨNG TRƯỚC chốt ảnh: HTML nào tới được nhánh "gỡ ảnh bịa"
-      // thì đã qua chốt này (nhánh đó không kiểm lại).
-      assertLandingHtmlSafe(html);
+      // B-1 (2) — chốt an toàn: chặn đường lấy trộm dữ liệu / chạy mã từ nguồn ngoài (gọi mạng, đọc cookie/
+      // storage, thực thi chuỗi, chuyển đi địa chỉ lạ, script src ngoài, javascript:, form action ngoài, iframe
+      // lạ, meta refresh, base) — KHÔNG chặn mã giao diện (tailwind.config, onclick đóng/mở popup…).
+      // ĐỨNG TRƯỚC chốt ảnh: HTML nào tới được nhánh "gỡ ảnh bịa" thì đã qua chốt này (nhánh đó không kiểm lại).
+      assertLandingHtmlSafe(html, { allowedSourceText: imageSourceText });
 
       if (formMode) {
         // PR-5b-2a — AI KHÔNG còn tự sinh form: đòi đúng MỘT chỗ trống, và cấm tuyệt đối
@@ -1033,9 +1034,10 @@ ${exampleLine}`;
         strategy: telemetry.strategy,
       });
 
-      // B-1 (2) — chốt an toàn: so với bản hiện tại, AI không được THÊM script/on*=/javascript:/form action ra
-      // ngoài (phần đã có sẵn ở bản cũ được giữ nguyên). ĐỨNG TRƯỚC chốt ảnh vì `stripFakeImages` không kiểm lại.
-      assertLandingHtmlSafe(html, { baselineHtml: rawCurrent });
+      // B-1 (2) — chốt an toàn: so với bản hiện tại, AI không được THÊM đường lấy trộm dữ liệu / chạy mã từ nguồn
+      // ngoài (xem landingHtmlSafety.util.js); phần đã có sẵn ở bản cũ được giữ nguyên, mã giao diện thì qua.
+      // ĐỨNG TRƯỚC chốt ảnh vì `stripFakeImages` không kiểm lại.
+      assertLandingHtmlSafe(html, { baselineHtml: rawCurrent, allowedSourceText: imageSourceText });
 
       let valRes;
       try {
