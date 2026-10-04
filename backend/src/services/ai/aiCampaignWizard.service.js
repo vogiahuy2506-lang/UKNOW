@@ -31,6 +31,28 @@ const WIZARD_MARKER_RE = /^\[wizard\](\{.*\})/;
 
 export const GOOGLE_SHEET_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/\S+/i;
 
+// Rà soát C P2-7 — số landing tối đa một chiến dịch được chọn ở cổng `landingLeads` (chặn marker phình / bị giả mạo).
+export const MAX_LANDING_SLUGS_PER_CAMPAIGN = 50;
+
+/**
+ * Chuẩn hoá danh sách slug landing từ marker/state: chuỗi, bỏ `/` đầu cuối, thường hoá, bỏ trùng, ≤ MAX_LANDING_SLUGS_PER_CAMPAIGN.
+ * Cùng quy tắc `canonicalLandingPageSlug` (lead.service lọc theo đúng dạng này).
+ */
+export const normalizeLandingSlugs = (raw) => {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  for (const item of raw) {
+    const slug = String(item ?? '').trim().toLowerCase().replace(/^\/+|\/+$/g, '').slice(0, 100);
+    if (slug && !out.includes(slug)) out.push(slug);
+    if (out.length >= MAX_LANDING_SLUGS_PER_CAMPAIGN) break;
+  }
+  return out;
+};
+
+/** Người dùng đã CHỌN nguồn lead landing chưa: ≥ 1 landing, hoặc lựa chọn TƯỜNG MINH "Tất cả landing". */
+export const hasLandingLeadsSelection = (state) => Boolean(state?.landingLeadsAll)
+  || (Array.isArray(state?.landingLeadsSlugs) && state.landingLeadsSlugs.length > 0);
+
 const CAMPAIGN_RESPONSE_TYPES = new Set([
   'ask_campaign_details',
   'ask_campaign_type',
@@ -306,6 +328,9 @@ export function extractWizardState(history = [], options = {}) {
     hasAttachedSpreadsheet: false,
     zaloGroupIds: [],
     zaloFriendIds: [],
+    // Rà soát C P2-7 — lựa chọn landing của nguồn "Đăng ký từ Landing Page" (cổng `landingLeads`).
+    landingLeadsSlugs: [],
+    landingLeadsAll: false,
     schedule: null,
     planApproved: false,
     senderOtherRequested: false,
@@ -355,6 +380,8 @@ export function extractWizardState(history = [], options = {}) {
       state.fileUsage = null;
       state.zaloGroupIds = [];
       state.zaloFriendIds = [];
+      state.landingLeadsSlugs = [];
+      state.landingLeadsAll = false;
       state.schedule = null;
       state.planApproved = false;
       state.hasContentPlan = false;
@@ -486,6 +513,8 @@ export function extractWizardState(history = [], options = {}) {
       state.dataSource = null;
       state.zaloGroupIds = [];
       state.zaloFriendIds = [];
+      state.landingLeadsSlugs = [];
+      state.landingLeadsAll = false;
       state.schedule = null;
       state.planApproved = false;
       state.senderOtherRequested = false;
@@ -511,12 +540,20 @@ export function extractWizardState(history = [], options = {}) {
     } else if (marker.gate === 'dataSource') {
       recordMarkerGate('dataSource');
       state.dataSource = marker.value || marker.dataSource || null;
+      // Chọn lại nguồn người nhận = làm lại từ đầu: lựa chọn landing của lần trước không được sống sót.
+      state.landingLeadsSlugs = [];
+      state.landingLeadsAll = false;
       if (marker.sheetUrl && GOOGLE_SHEET_URL_RE.test(marker.sheetUrl)) {
         state.sheetUrl = marker.sheetUrl.trim();
       }
       if (Array.isArray(marker.friendUids)) {
         state.zaloFriendIds = marker.friendUids;
       }
+    } else if (marker.gate === 'landingLeads') {
+      recordMarkerGate('landingLeads');
+      // `all: true` là lựa chọn TƯỜNG MINH "Tất cả landing"; còn lại phải có ≥ 1 slug hợp lệ. Marker rỗng không được coi là "tất cả".
+      state.landingLeadsAll = marker.all === true;
+      state.landingLeadsSlugs = state.landingLeadsAll ? [] : normalizeLandingSlugs(marker.slugs);
     } else if (marker.gate === 'zaloGroups') {
       recordMarkerGate('zaloGroups');
       state.senderAccountId = marker.accountId ?? state.senderAccountId;
@@ -879,6 +916,8 @@ export const GATE_PROPAGATION = {
   sheetCheck: 'internal',
   zaloGroupIds: 'prompt+patch',
   zaloFriendIds: 'direct_recipients',
+  landingLeadsSlugs: 'prompt+patch',
+  landingLeadsAll: 'prompt+patch',
   schedule: 'prompt+patch',
   isCampaignFlow: 'internal',
   planApproved: 'internal',
@@ -899,6 +938,7 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
     state?.senderAccountId ||
     state?.dataSource ||
     state?.sheetUrl ||
+    hasLandingLeadsSelection(state) ||
     (Array.isArray(state?.zaloGroupIds) && state.zaloGroupIds.length > 0)
   ) {
     const lines = [];
@@ -929,6 +969,11 @@ export function buildCampaignPromptWithWizardState(state, basePrompt = '', local
     }
     if (state.sheetUrl) {
       lines.push(`- sheetUrl: "${state.sheetUrl}"`);
+    }
+    if (Array.isArray(state.landingLeadsSlugs) && state.landingLeadsSlugs.length > 0) {
+      lines.push(`- landingLeadsSlugs: [${state.landingLeadsSlugs.map((slug) => `"${slug}"`).join(', ')}] (BẮT BUỘC dùng ĐÚNG mảng này cho config.landingLeadsSlugs của read_landing_leads)`);
+    } else if (state.landingLeadsAll) {
+      lines.push('- landingLeadsAll: true (người dùng đã CHỌN TẤT CẢ landing → read_landing_leads với landingLeadsSlugs: [])');
     }
     if (Array.isArray(state.zaloGroupIds) && state.zaloGroupIds.length > 0) {
       lines.push(`- zaloGroupIds: [${state.zaloGroupIds.map((id) => `"${id}"`).join(', ')}]`);
@@ -1050,6 +1095,37 @@ export function buildFriendPickerCard(accountId, locale = 'vi') {
   };
 }
 
+/**
+ * Rà soát C P2-7 — thẻ CHỌN LANDING của nguồn "Đăng ký từ Landing Page". Trước đây wizard không có cổng này: model tự chọn (hoặc
+ * không chọn) slug, và FE vá node khách DB thành `read_landing_leads` với `landingLeadsSlugs: []` = MỌI lead của MỌI landing → tin
+ * gửi nhầm người, không thu hồi được. Nay người dùng phải chọn ≥ 1 landing, hoặc bấm TƯỜNG MINH "Tất cả landing (N lead)".
+ *
+ * @param {{ landings: Array<object>, totalLeads: number }} picker kết quả `aiPromptResources.getLandingPickerOptions`
+ */
+export function buildLandingLeadsQuestion(picker, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  const landings = Array.isArray(picker?.landings) ? picker.landings : [];
+  return {
+    type: 'landing_picker',
+    content: isEnglish
+      ? 'Which landing page(s) should this campaign go to? Pick one or more pages, or choose all landing pages explicitly.'
+      : 'Bạn muốn gửi cho người đăng ký từ landing page nào? Chọn một hoặc nhiều trang, hoặc chọn tất cả landing một cách rõ ràng.',
+    missing_fields: [],
+    data: {
+      landings: landings.map((landing) => ({
+        slug: landing.slug,
+        title: landing.title,
+        isPublished: Boolean(landing.isPublished),
+        formId: landing.formId ?? null,
+        leadCount: Number(landing.leadCount) || 0,
+        formConsentedCount: Number(landing.formConsentedCount) || 0,
+      })),
+      totalLeads: Number(picker?.totalLeads) || 0,
+      maxSelect: MAX_LANDING_SLUGS_PER_CAMPAIGN,
+    },
+  };
+}
+
 export function buildSheetProblemMessage(state, locale = 'vi') {
   const isEnglish = locale === 'en';
   const check = state?.sheetCheck || {};
@@ -1162,6 +1238,56 @@ function evaluateEmailZaloSenderAndSourceGates(state, resources, locale) {
 }
 
 /**
+ * Rà soát C P2-7 — câu trả lời của cổng chọn landing, theo kết quả tải danh sách landing:
+ *  - chưa biết (`picker` null/thiếu: tra DB lỗi hoặc nơi gọi quên tải) → chặn bằng câu nhắn thử lại, KHÔNG đi tiếp với danh sách rỗng;
+ *  - workspace chưa có landing nào → quay về thẻ chọn nguồn người nhận kèm lời giải thích (gate `dataSource`);
+ *  - còn lại → thẻ chọn landing (gate `landingLeads`).
+ * Dùng cho cả cổng thường (`evaluateNextGate`) lẫn lưới cuối ở `processSmartChat` (model dựng node lead landing mà chưa có lựa chọn).
+ *
+ * @param {{ landings: Array<object>, totalLeads: number }|null|undefined} picker
+ */
+export function buildLandingLeadsGate(picker, state, locale = 'vi') {
+  const isEnglish = locale === 'en';
+  if (!picker || !Array.isArray(picker.landings)) {
+    return {
+      gate: 'landingLeads',
+      response: {
+        type: 'text',
+        content: isEnglish
+          ? 'I could not load your landing pages right now. Please send any message to try again, or type **cancel** to stop.'
+          : 'Mình chưa tải được danh sách landing page của bạn. Bạn gửi một tin bất kỳ để thử lại, hoặc gõ **huỷ** để dừng nhé.',
+        missing_fields: [],
+        data: null,
+      },
+    };
+  }
+  if (picker.landings.length === 0) {
+    const question = buildDataSourceQuestion(locale, state);
+    return {
+      gate: 'dataSource',
+      response: {
+        ...question,
+        content: isEnglish
+          ? 'Your account has no landing page yet, so there are no sign-ups to send to. Create a landing page first, or pick another recipient source:'
+          : 'Tài khoản chưa có landing page nào nên chưa có người đăng ký để gửi. Bạn tạo landing page trước, hoặc chọn nguồn người nhận khác nhé:',
+      },
+    };
+  }
+  return { gate: 'landingLeads', response: buildLandingLeadsQuestion(picker, locale) };
+}
+
+/**
+ * Cổng chọn landing. Chỉ áp cho nguồn "Đăng ký từ Landing Page" của Email / Zalo cá nhân (Zalo nhóm không có nguồn người nhận; kênh
+ * adapter dùng hội thoại). `resources.landingPicker`: `{ landings, totalLeads }` do nơi gọi tải trước.
+ */
+function evaluateLandingLeadsGate(state, resources, locale) {
+  if (state.dataSource !== 'landing') return null;
+  if (state.channel !== 'email' && state.channel !== 'zalo') return null;
+  if (hasLandingLeadsSelection(state)) return null;
+  return buildLandingLeadsGate(resources?.landingPicker, state, locale);
+}
+
+/**
  * P8a — cổng tài khoản cho kênh adapter. Trả:
  * - `{ gate, response }` : hướng dẫn kết nối khi chưa có tài khoản dùng được (chặn, như Zalo/Email);
  * - `null`               : nhiều tài khoản + chưa rõ dùng cái nào → nhả cho LLM hỏi (prompt có danh sách tài khoản).
@@ -1206,6 +1332,8 @@ export function evaluateNextGate(state, resources = {}, locale = 'vi') {
   } else {
     const senderAndSourceGate = evaluateEmailZaloSenderAndSourceGates(state, resources, locale);
     if (senderAndSourceGate) return senderAndSourceGate;
+    const landingLeadsGate = evaluateLandingLeadsGate(state, resources, locale);
+    if (landingLeadsGate) return landingLeadsGate;
   }
 
   const hasSpreadsheetSource = Boolean(
@@ -1337,6 +1465,11 @@ export const GATE_MERGE_POLICIES = {
   zaloGroupIds: { policy: 'marker-pick-array', gateName: 'zaloGroups' },
   zaloFriendIds: { policy: 'marker-pick-array', gateName: 'zaloFriends' },
 
+  // Rà soát C P2-7: lựa chọn landing. 'custom' vì phải reset khi marker `landingLeads` HOẶC `dataSource` xuất hiện (chọn lại nguồn
+  // người nhận thì lựa chọn landing cũ không được sống sót) — một gateName của marker-pick không biểu diễn được hai marker.
+  landingLeadsSlugs: { policy: 'custom' },
+  landingLeadsAll: { policy: 'custom' },
+
   // derived-first: (channelSwitched || hasAbandonMark) ? (d[field] ?? null) : (d[field] ?? p[field] ?? null)
   sheetUrl: { policy: 'derived-first' },
 
@@ -1368,6 +1501,8 @@ export function createEmptyWizardState() {
       sheetCheck: null,
       zaloGroupIds: [],
       zaloFriendIds: [],
+      landingLeadsSlugs: [],
+      landingLeadsAll: false,
       schedule: null,
       planApproved: false,
       senderOtherRequested: false,
@@ -1512,6 +1647,20 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
           : ((d.sheetUrl ?? p.sheetUrl) && p.sheetCheck?.url === (d.sheetUrl ?? p.sheetUrl) ? p.sheetCheck : null);
       } else if (field === 'abandonedAtMessageCount') {
         merged.abandonedAtMessageCount = (hasAbandonMark && !isReactivated) ? abandonedMark : null;
+      } else if (field === 'landingLeadsSlugs' || field === 'landingLeadsAll') {
+        const resetLanding = markerGates.includes('landingLeads')
+          || markerGates.includes('dataSource')
+          || channelSwitched
+          || hasAbandonMark;
+        if (field === 'landingLeadsSlugs') {
+          const derivedSlugs = Array.isArray(d.landingLeadsSlugs) ? d.landingLeadsSlugs : [];
+          const persistedSlugs = Array.isArray(p.landingLeadsSlugs) ? p.landingLeadsSlugs : [];
+          merged.landingLeadsSlugs = resetLanding || persistedSlugs.length === 0 ? derivedSlugs : persistedSlugs;
+        } else {
+          merged.landingLeadsAll = resetLanding
+            ? Boolean(d.landingLeadsAll)
+            : Boolean(d.landingLeadsAll || p.landingLeadsAll);
+        }
       }
     }
   }
@@ -1730,6 +1879,7 @@ export const GATE_PROMPT_TYPES = new Set([
   'zalo_qr_login',
   'zalo_group_picker',
   'zalo_friend_picker',
+  'landing_picker',
   'confirm_create',
   'content_plan_actions',
 ]);

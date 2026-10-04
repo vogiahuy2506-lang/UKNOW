@@ -53,6 +53,17 @@ export const parseWizardMarker = (content = '') => {
 
 export const GOOGLE_SHEET_URL_RE = /https?:\/\/docs\.google\.com\/spreadsheets\/\S+/i;
 
+// Khai lại chuẩn hoá slug landing của backend (aiCampaignWizard.service.js normalizeLandingSlugs): chuỗi, thường hoá, bỏ "/" đầu cuối, bỏ trùng.
+const normalizeLandingSlugList = (raw) => {
+  if (!Array.isArray(raw)) return [];
+  const out = [];
+  raw.forEach((item) => {
+    const slug = String(item ?? '').trim().toLowerCase().replace(/^\/+|\/+$/g, '').slice(0, 100);
+    if (slug && !out.includes(slug)) out.push(slug);
+  });
+  return out;
+};
+
 export const deriveWizardContext = (items = []) => {
   const context = {
     channel: null,
@@ -62,6 +73,9 @@ export const deriveWizardContext = (items = []) => {
     sheetUrl: null,
     zaloGroupIds: [],
     zaloFriendIds: [],
+    // Rà soát C P2-7 — lựa chọn landing của nguồn "Đăng ký từ Landing Page" (cổng landingLeads của backend).
+    landingLeadsSlugs: [],
+    landingLeadsAll: false,
     schedule: null,
     planApproved: false,
   };
@@ -76,6 +90,8 @@ export const deriveWizardContext = (items = []) => {
       context.sheetUrl = null;
       context.zaloGroupIds = [];
       context.zaloFriendIds = [];
+      context.landingLeadsSlugs = [];
+      context.landingLeadsAll = false;
       context.schedule = null;
       context.planApproved = false;
       return;
@@ -95,6 +111,8 @@ export const deriveWizardContext = (items = []) => {
       context.dataSource = null;
       context.zaloGroupIds = [];
       context.zaloFriendIds = [];
+      context.landingLeadsSlugs = [];
+      context.landingLeadsAll = false;
       context.schedule = null;
       context.planApproved = false;
     } else if (marker.gate === 'senderAccount') {
@@ -103,12 +121,19 @@ export const deriveWizardContext = (items = []) => {
       context.senderAccountName = marker.accountName || null;
     } else if (marker.gate === 'dataSource') {
       context.dataSource = marker.value || marker.dataSource || null;
+      // Chọn lại nguồn người nhận = làm lại từ đầu (backend cũng reset ở marker dataSource).
+      context.landingLeadsSlugs = [];
+      context.landingLeadsAll = false;
       if (marker.sheetUrl) {
         context.sheetUrl = marker.sheetUrl;
       }
       if (Array.isArray(marker.friendUids)) {
         context.zaloFriendIds = marker.friendUids;
       }
+    } else if (marker.gate === 'landingLeads') {
+      // `all: true` = "Tất cả landing" TƯỜNG MINH; marker rỗng không bao giờ được hiểu là "tất cả".
+      context.landingLeadsAll = marker.all === true;
+      context.landingLeadsSlugs = context.landingLeadsAll ? [] : normalizeLandingSlugList(marker.slugs);
     } else if (marker.gate === 'zaloGroups') {
       context.senderAccountId = marker.accountId ?? context.senderAccountId;
       context.zaloGroupIds = Array.isArray(marker.groupIds) ? marker.groupIds : [];
@@ -140,6 +165,10 @@ export const mergeClientWizardContext = (derived, gates) => ({
   zaloGroupIds: derived.zaloGroupIds?.length
     ? derived.zaloGroupIds
     : (Array.isArray(gates.zaloGroupIds) ? gates.zaloGroupIds : []),
+  landingLeadsSlugs: derived.landingLeadsSlugs?.length
+    ? derived.landingLeadsSlugs
+    : normalizeLandingSlugList(gates.landingLeadsSlugs),
+  landingLeadsAll: Boolean(derived.landingLeadsAll || gates.landingLeadsAll),
   schedule: derived.schedule ?? gates.schedule ?? null,
   planApproved: Boolean(derived.planApproved || gates.planApproved),
 });
@@ -150,6 +179,13 @@ export const applyWizardSelectionsToScript = (script, context = {}) => {
   const groupIds = Array.isArray(context.zaloGroupIds) ? context.zaloGroupIds : [];
   const sheetUrl = context.sheetUrl || '';
   if (!senderId && groupIds.length === 0 && !context.dataSource && !sheetUrl) return script;
+
+  // Rà soát C P2-7 — nguồn landing chỉ được vá thành node lead landing theo lựa chọn người dùng ĐÃ làm ở cổng landingLeads. Trước đây
+  // vá cứng `landingLeadsSlugs: []` = MỌI lead của MỌI landing → gửi nhầm người. Chưa có lựa chọn → KHÔNG vá và đánh dấu
+  // `landingSelectionMissing` để nơi tạo chiến dịch từ chối (không để node khách DB lặng lẽ thay vào chỗ nguồn landing).
+  const landingSlugs = normalizeLandingSlugList(context.landingLeadsSlugs);
+  const landingAll = context.landingLeadsAll === true;
+  let landingSelectionMissing = false;
 
   const next = {
     ...script,
@@ -182,12 +218,16 @@ export const applyWizardSelectionsToScript = (script, context = {}) => {
           };
         }
         if (context.dataSource === 'landing' && node.nodeSubtype === 'interested_customers') {
+          if (!landingAll && landingSlugs.length === 0) {
+            landingSelectionMissing = true;
+            return { ...node, config };
+          }
           return {
             ...node,
             nodeSubtype: 'read_landing_leads',
             nodeName: 'Lead từ Landing Page',
             nodeDescription: 'Danh sách đăng ký từ Landing Page.',
-            config: { landingLeadsSlugs: [] },
+            config: { landingLeadsSlugs: landingAll ? [] : landingSlugs },
           };
         }
         if (context.dataSource === 'form' && node.nodeSubtype === 'interested_customers') {
@@ -207,5 +247,8 @@ export const applyWizardSelectionsToScript = (script, context = {}) => {
   if (context.dataSource && Array.isArray(next.nodes) && context.channel !== 'zalo_group') {
     next.wizardDataSource = context.dataSource;
   }
+  if (landingSelectionMissing) next.landingSelectionMissing = true;
+  // Dấu "đã chọn TƯỜNG MINH Tất cả landing" — thẻ xác nhận ở backend chỉ chấp nhận node lead landing slug rỗng khi có dấu này.
+  if (context.dataSource === 'landing' && landingAll) next.landingLeadsAll = true;
   return next;
 };

@@ -8,7 +8,7 @@ const emailTemplates = { findById: jest.fn() };
 const zaloTemplates = { findById: jest.fn() };
 const emailSenders = { findEmailSettingsById: jest.fn() };
 const zaloSenders = { findCampaignZaloAccount: jest.fn() };
-const aiResources = { getCourses: jest.fn() };
+const aiResources = { getCourses: jest.fn(), getLandingPickerOptions: jest.fn() };
 const estimateForScript = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/ai/aiCampaignDraft.repository.js', () => ({ default: draftRepo }));
@@ -309,6 +309,118 @@ describe('campaignConfirmation.service', () => {
       expect(result.steps[0].recipients).toMatchObject({ mode: 'manual' });
       expect(result.steps[0].recipients).not.toHaveProperty('filters');
     });
+  });
+});
+
+/**
+ * Rà soát C P2-7 — nguồn người nhận là node `read_landing_leads`: thẻ ghi TRANG NÀO + bao nhiêu lead; node slug rỗng (= mọi lead của
+ * mọi landing) chỉ hợp lệ khi người dùng đã chọn tường minh "Tất cả landing" (`script.landingLeadsAll`).
+ * Mock `getLandingPickerOptions` giữ ĐÚNG hình dạng thật của service (`{ landings: [{ slug, title, formId, leadCount, formConsentedCount }], totalLeads }`).
+ */
+describe('C P2-7 — recipients.landing: thẻ xác nhận nói rõ landing nào + số lead', () => {
+  const PICKER = {
+    totalLeads: 205,
+    landings: [
+      { slug: 'khoa-ielts', title: 'Khoá IELTS', isPublished: true, formId: null, leadCount: 120, formConsentedCount: 0 },
+      { slug: 'khoa-toeic', title: 'Khoá TOEIC', isPublished: true, formId: null, leadCount: 80, formConsentedCount: 0 },
+      { slug: 'dat-lich', title: 'Đặt lịch', isPublished: true, formId: 3, leadCount: 0, formConsentedCount: 15 },
+    ],
+  };
+  const emailScript = (slugs, extra = {}) => ({
+    campaignName: 'Email người đăng ký',
+    ...extra,
+    nodes: [
+      { tempId: 'aud-1', nodeType: 'data', nodeSubtype: 'read_landing_leads', nodeName: 'Lead từ Landing Page', config: { landingLeadsSlugs: slugs } },
+      {
+        tempId: 'email-1', nodeType: 'action', nodeSubtype: 'send_email', nodeName: 'Gửi email',
+        config: {
+          recipientSource: 'node', recipientNodeId: 'aud-1', recipientField: 'email',
+          emailSteps: [{ emailSubject: 'Mời', emailBody: '<p>Xin chào</p>' }],
+        },
+      },
+    ],
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    draftRepo.findDefaultEmailSettingId.mockResolvedValue(7);
+    emailSenders.findEmailSettingsById.mockResolvedValue({ id: 7, email: 'sender@example.test' });
+    aiResources.getLandingPickerOptions.mockResolvedValue(PICKER);
+  });
+
+  it('chọn 2 landing → ghi tên + số lead từng trang; không có cờ "all"; thẻ sẵn sàng tạo', async () => {
+    const result = await service.default.buildConfirmationView({ userId: 1, ownerUserId: 1, script: emailScript(['khoa-ielts', 'khoa-toeic']) });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(result.steps[0].recipients.landing).toEqual({
+      all: false,
+      totalLeads: 205,
+      pages: [
+        { slug: 'khoa-ielts', title: 'Khoá IELTS', recipientCount: 120 },
+        { slug: 'khoa-toeic', title: 'Khoá TOEIC', recipientCount: 80 },
+      ],
+    });
+    expect(aiResources.getLandingPickerOptions).toHaveBeenCalledWith(1);
+  });
+
+  it('landing thu bằng Biểu mẫu → recipientCount là số bài nộp đã đồng ý của form, không phải bảng leads', async () => {
+    const result = await service.default.buildConfirmationView({ userId: 1, script: emailScript(['dat-lich']) });
+
+    expect(result.steps[0].recipients.landing.pages).toEqual([{ slug: 'dat-lich', title: 'Đặt lịch', recipientCount: 15 }]);
+  });
+
+  it('slug không có trong danh sách (landing đã xoá) → vẫn hiện slug, title/recipientCount = null (không ẩn)', async () => {
+    const result = await service.default.buildConfirmationView({ userId: 1, script: emailScript(['da-xoa']) });
+
+    expect(result.steps[0].recipients.landing.pages).toEqual([{ slug: 'da-xoa', title: null, recipientCount: null }]);
+  });
+
+  it('slug rỗng + người dùng ĐÃ chọn tường minh "Tất cả" (landingLeadsAll) → hợp lệ, hiện tổng lead', async () => {
+    const result = await service.default.buildConfirmationView({ userId: 1, script: emailScript([], { landingLeadsAll: true }) });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(result.blockingIssues).toEqual([]);
+    expect(result.steps[0].recipients.landing).toEqual({ all: true, totalLeads: 205, pages: [] });
+  });
+
+  it('slug rỗng mà KHÔNG có dấu "Tất cả" (= mọi lead của mọi landing, người dùng chưa chọn) → CHẶN tạo: landing_audience_unchosen', async () => {
+    const result = await service.default.buildConfirmationView({ userId: 1, script: emailScript([]) });
+
+    expect(result.readyToCreate).toBe(false);
+    expect(result.blockingIssues).toEqual([
+      { code: 'landing_audience_unchosen', nodeId: 'email-1', stepIndex: null, messageKey: 'aiChatbot.confirmation.landing_audience_unchosen' },
+    ]);
+  });
+
+  it('chuỗi nhiều bước cùng một node nguồn → chỉ MỘT lỗi chặn và chỉ tra danh sách landing MỘT lần', async () => {
+    const script = emailScript([]);
+    script.nodes[1].config.emailSteps.push({ emailSubject: 'Nhắc', emailBody: '<p>Nhắc</p>', delayValue: 2, delayUnit: 'days' });
+    const result = await service.default.buildConfirmationView({ userId: 1, script });
+
+    expect(result.steps).toHaveLength(2);
+    expect(result.blockingIssues.filter((i) => i.code === 'landing_audience_unchosen')).toHaveLength(1);
+    expect(aiResources.getLandingPickerOptions).toHaveBeenCalledTimes(1);
+  });
+
+  it('tra tên landing lỗi → thẻ KHÔNG vỡ; vẫn hiện slug và không bịa số lead', async () => {
+    aiResources.getLandingPickerOptions.mockRejectedValue(new Error('db down'));
+    const result = await service.default.buildConfirmationView({ userId: 1, script: emailScript(['khoa-ielts']) });
+
+    expect(result.readyToCreate).toBe(true);
+    expect(result.steps[0].recipients.landing).toEqual({
+      all: false,
+      totalLeads: null,
+      pages: [{ slug: 'khoa-ielts', title: null, recipientCount: null }],
+    });
+  });
+
+  it('nguồn khách DB / nhập tay → không có recipients.landing và không tra danh sách landing', async () => {
+    const script = emailScript([]);
+    script.nodes[0] = { tempId: 'aud-1', nodeType: 'data', nodeSubtype: 'interested_customers', nodeName: 'Khách', config: {} };
+    const result = await service.default.buildConfirmationView({ userId: 1, script });
+
+    expect(result.steps[0].recipients).not.toHaveProperty('landing');
+    expect(aiResources.getLandingPickerOptions).not.toHaveBeenCalled();
   });
 });
 

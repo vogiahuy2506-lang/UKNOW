@@ -117,6 +117,40 @@ describe('PR-1: CampaignIntentV1 schema & deriveIntent', () => {
       expect(zaloGroup.intent.audience.recipientKind).toBe('phone');
     });
 
+    // Rà soát C P2-7 / C-NO-COMPILER-LANDING-FORM — trước đây deriveIntent KHÔNG đưa slug landing vào audience nên intent landing luôn "khuyết".
+    describe('nguồn landing: audience.slugs / allLandings từ cổng landingLeads', () => {
+      const landingGates = (extra) => ({
+        channel: 'email', senderAccountId: 1, dataSource: 'landing', schedule: { mode: 'once' }, ...extra,
+      });
+
+      it('đã chọn landing → audience.slugs mang đúng các slug đã chọn và intent biên dịch được', () => {
+        const { intent } = deriveIntent(landingGates({ landingLeadsSlugs: ['khoa-ielts', 'khoa-toeic'], landingLeadsAll: false }));
+
+        expect(intent.audience).toMatchObject({ type: 'landing', recipientKind: 'email', slugs: ['khoa-ielts', 'khoa-toeic'] });
+        expect(intent.audience).not.toHaveProperty('allLandings');
+        expect(isCompilableIntent(intent).ok).toBe(true);
+      });
+
+      it('"Tất cả landing" tường minh → slugs rỗng có chủ ý + allLandings:true, vẫn biên dịch được', () => {
+        const { intent } = deriveIntent(landingGates({ landingLeadsSlugs: [], landingLeadsAll: true }));
+
+        expect(intent.audience).toMatchObject({ type: 'landing', slugs: [], allLandings: true });
+        expect(isCompilableIntent(intent).ok).toBe(true);
+      });
+
+      it('CHƯA chọn gì → audience.slugs vẫn khuyết: KHÔNG biên dịch thành "mọi lead của mọi landing"', () => {
+        const { intent } = deriveIntent(landingGates({ landingLeadsSlugs: [], landingLeadsAll: false }));
+
+        expect(intent.audience).not.toHaveProperty('slugs');
+        expect(isCompilableIntent(intent)).toMatchObject({ ok: false, missing: ['audience.slugs'] });
+      });
+
+      it('slug chỉ đi vào intent khi nguồn là landing (nguồn khác không mang slug)', () => {
+        const { intent } = deriveIntent(landingGates({ dataSource: 'db', landingLeadsSlugs: ['khoa-ielts'] }));
+        expect(intent.audience).not.toHaveProperty('slugs');
+      });
+    });
+
     it('schedule drip có days/slotsPerDay, once không có', () => {
       const drip = deriveIntent({ channel: 'email', schedule: { mode: 'drip', days: 5, slotsPerDay: 2 } });
       expect(drip.intent.schedule).toEqual({ type: 'drip', days: 5, slotsPerDay: 2 });

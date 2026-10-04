@@ -201,6 +201,57 @@ class CampaignConfirmationService {
       return view;
     };
 
+    // Rà soát C P2-7 — nguồn người nhận là node `read_landing_leads`: thẻ phải nói TRANG NÀO + bao nhiêu lead (trước đây chỉ ghi tên node
+    // "Lead từ Landing Page"). Node slug rỗng = MỌI lead của MỌI landing: chỉ hợp lệ khi người dùng đã chọn tường minh "Tất cả landing"
+    // (`script.landingLeadsAll`, do lưới ở processSmartChat đặt) — còn lại chặn tạo, không để tin đi tới người chưa được chọn.
+    let landingPickerPromise = null;
+    const landingAudienceCache = new Map();
+    const unchosenLandingNodeIds = new Set();
+    const resolveLandingAudience = async (sourceNode, issueNodeId) => {
+      const subtype = String(sourceNode?.nodeSubtype || sourceNode?.node_subtype || sourceNode?.subtype || '').toLowerCase();
+      if (subtype !== 'read_landing_leads') return null;
+      const sourceConfig = sourceNode?.config || sourceNode?.nodeConfig || {};
+      const slugs = [...new Set((Array.isArray(sourceConfig.landingLeadsSlugs) ? sourceConfig.landingLeadsSlugs : [])
+        .map((slug) => String(slug ?? '').trim().toLowerCase().replace(/^\/+|\/+$/g, ''))
+        .filter(Boolean))];
+      const all = slugs.length === 0;
+      if (all && script?.landingLeadsAll !== true) {
+        const key = String(sourceNode?.id || sourceNode?.tempId || issueNodeId);
+        if (!unchosenLandingNodeIds.has(key)) {
+          unchosenLandingNodeIds.add(key);
+          addIssue({ code: 'landing_audience_unchosen', nodeId: issueNodeId });
+        }
+      }
+      const cacheKey = JSON.stringify(slugs);
+      if (landingAudienceCache.has(cacheKey)) return landingAudienceCache.get(cacheKey);
+      let picker = null;
+      try {
+        if (!landingPickerPromise) {
+          landingPickerPromise = import('./aiPromptResources.service.js')
+            .then(({ default: aiPromptResources }) => aiPromptResources.getLandingPickerOptions(channelOwnerId));
+        }
+        picker = await landingPickerPromise;
+      } catch (error) {
+        console.warn('[CampaignConfirmation] Không tra được tên landing của nguồn người nhận:', error?.message || error);
+      }
+      const bySlug = new Map((picker?.landings || []).map((landing) => [landing.slug, landing]));
+      const view = {
+        all,
+        totalLeads: picker ? picker.totalLeads : null,
+        pages: slugs.map((slug) => {
+          const info = bySlug.get(slug);
+          return {
+            slug,
+            title: info?.title || null,
+            // Landing thu người đăng ký bằng Biểu mẫu: người nhận là bài nộp đã đồng ý của form, không phải bảng leads.
+            recipientCount: info ? (info.formId != null ? info.formConsentedCount : info.leadCount) : null,
+          };
+        }),
+      };
+      landingAudienceCache.set(cacheKey, view);
+      return view;
+    };
+
     const resolveSender = async (channel, config, issueNodeId) => {
       if (channel === 'email') {
         const id = asNumber(config?.fromEmailId) || await aiCampaignDraftRepository.findDefaultEmailSettingId(channelOwnerId);
@@ -370,9 +421,11 @@ class CampaignConfirmationService {
           addIssue({ code: 'manual_recipients_required', nodeId: currentNodeId, stepIndex });
         }
         // Bộ lọc người nhận của node nguồn "khách trong DB" (không có khi nhập tay / không có bộ lọc).
-        const audienceFilters = manual
+        const recipientSourceNode = manual
           ? null
-          : await resolveAudienceFilter(findSourceNode(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo'));
+          : findSourceNode(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo');
+        const audienceFilters = manual ? null : await resolveAudienceFilter(recipientSourceNode);
+        const landingAudience = recipientSourceNode ? await resolveLandingAudience(recipientSourceNode, currentNodeId) : null;
         steps.push({
           key: `${currentNodeId}:${stepIndex}`,
           nodeId: currentNodeId,
@@ -392,6 +445,7 @@ class CampaignConfirmationService {
             count: manual ? manualRecipientCount(recipientList) : null,
             sourceLabel: manual ? null : sourceLabel(config, nodes, channel === 'email' || isAdapterChannel ? 'email' : 'zalo'),
             ...(audienceFilters ? { filters: audienceFilters } : {}),
+            ...(landingAudience ? { landing: landingAudience } : {}),
           },
         });
       }

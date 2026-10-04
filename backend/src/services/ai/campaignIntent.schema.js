@@ -232,6 +232,16 @@ export function deriveIntent(gates = {}, brief = null, options = {}) {
       ...(Array.isArray(gates?.zaloFriendIds) && gates.zaloFriendIds.length > 0
         ? { friendIds: gates.zaloFriendIds }
         : {}),
+      // Rà soát C P2-7 — landing người dùng ĐÃ CHỌN ở cổng `landingLeads`. `allLandings: true` là lựa chọn TƯỜNG MINH "Tất cả landing"
+      // (slugs rỗng có chủ ý) — khác với slugs rỗng vì chưa chọn, vốn là khuyết (isCompilableIntent đòi một trong hai).
+      ...(audType === 'landing' && Array.isArray(gates?.landingLeadsSlugs) && gates.landingLeadsSlugs.length > 0
+        ? { slugs: [...gates.landingLeadsSlugs] }
+        : {}),
+      ...(audType === 'landing'
+        && gates?.landingLeadsAll === true
+        && !(Array.isArray(gates?.landingLeadsSlugs) && gates.landingLeadsSlugs.length > 0)
+        ? { slugs: [], allLandings: true }
+        : {}),
     };
   }
 
@@ -417,7 +427,11 @@ export function isCompilableIntent(intent) {
       if (intent.audience.type === 'sheet' && (!intent.audience.url || !String(intent.audience.url).trim())) {
         missing.push('audience.url');
       }
-      if (intent.audience.type === 'landing' && (!Array.isArray(intent.audience.slugs) || intent.audience.slugs.length === 0)) {
+      if (
+        intent.audience.type === 'landing'
+        && intent.audience.allLandings !== true
+        && (!Array.isArray(intent.audience.slugs) || intent.audience.slugs.length === 0)
+      ) {
         missing.push('audience.slugs');
       }
       if (intent.audience.type === 'form' && (intent.audience.formId == null || !Number.isInteger(Number(intent.audience.formId)))) {

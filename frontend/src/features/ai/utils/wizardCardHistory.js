@@ -22,6 +22,7 @@ export const WIZARD_ASSISTANT_TYPES = new Set([
   'zalo_qr_login',
   'zalo_group_picker',
   'zalo_friend_picker',
+  'landing_picker',
   'suggest_content_plan',
 ]);
 

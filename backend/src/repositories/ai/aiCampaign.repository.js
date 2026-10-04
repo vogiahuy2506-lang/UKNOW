@@ -153,6 +153,57 @@ class AiCampaignRepository {
   }
 
   /**
+   * Rà soát C P2-7 — danh sách landing cho THẺ CHỌN NGUỒN "Đăng ký từ Landing Page" của wizard. Khác `getLandingPages` (LIMIT 20, phục
+   * vụ gợi ý trong prompt): thẻ chọn phải cho người dùng thấy MỌI landing của workspace (trần 100) kèm số người có thể nhận tin.
+   *
+   * `form_consented_count`: landing thu người đăng ký bằng Biểu mẫu (PR-5b-2a) thì "người nhận" là bài nộp ĐÃ ĐỒNG Ý của form đó
+   * (đúng điều kiện `listConsentedSubmissionsForCampaign`), không phải bảng `leads`.
+   *
+   * @param {number} ownerId workspace owner id
+   * @returns {Promise<Array<{ slug: string, title: string, is_published: boolean, form_id: number|null, form_consented_count: number }>>}
+   */
+  async getLandingPickerPages(ownerId) {
+    const result = await db.query(
+      `SELECT
+         lp.slug,
+         COALESCE(lp.title, lp.slug) AS title,
+         lp.is_published,
+         f.id AS form_id,
+         CASE WHEN f.id IS NULL THEN 0 ELSE (
+           SELECT COUNT(*)::int FROM form_submissions s
+           WHERE s.form_id = f.id AND s.marketing_consent IS TRUE AND s.status <> 'cancelled'
+         ) END AS form_consented_count
+       FROM landing_pages lp
+       LEFT JOIN forms f ON f.landing_page_id = lp.id AND f.admin_disabled_at IS NULL
+       WHERE COALESCE(lp.workspace_owner_id, lp.id_user) = $1
+       ORDER BY lp.updated_at DESC
+       LIMIT 100`,
+      [ownerId]
+    );
+    return result.rows;
+  }
+
+  /**
+   * Rà soát C P2-7 — số lead theo từng `landing_page_slug` của workspace, ĐÚNG điều kiện node `read_landing_leads` dùng khi đọc
+   * (`marketing_consent IS NOT FALSE` — khách đã từ chối bị loại, nhóm "chưa hỏi" vẫn nhận). `slug` NULL = lead không gắn landing
+   * (vẫn nằm trong "mọi lead" khi node không lọc slug). Slug lưu thô (có thể có `/` đầu); nơi gọi tự chuẩn hoá.
+   *
+   * @param {number} ownerId workspace owner id
+   * @returns {Promise<Array<{ slug: string|null, lead_count: number }>>}
+   */
+  async getLeadCountsBySlug(ownerId) {
+    const result = await db.query(
+      `SELECT landing_page_slug AS slug, COUNT(*)::int AS lead_count
+       FROM leads
+       WHERE COALESCE(workspace_owner_id, id_user) = $1
+         AND marketing_consent IS NOT FALSE
+       GROUP BY landing_page_slug`,
+      [ownerId]
+    );
+    return result.rows;
+  }
+
+  /**
    * PR-5b-2b — formId của Biểu mẫu gắn landing có slug này (chưa bị super admin tắt), thuộc ĐÚNG
    * `ownerId`. `null` nếu landing không tồn tại/không thuộc `ownerId`/chưa có form gắn/form đã bị
    * tắt. Tách khỏi `getLandingPages` (LIMIT 20 — landing cũ hơn 20 trang gần nhất sẽ tra hụt).

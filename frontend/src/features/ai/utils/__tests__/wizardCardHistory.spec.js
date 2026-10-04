@@ -95,8 +95,8 @@ describe('wizardCardHistory — chỉ giữ thẻ cổng cuối cùng', () => {
     expect(shouldKeepWizardCard({ role: 'user', content: 'x' }, 0, 99)).toBe(true);
   });
 
-  it('mọi loại thẻ cổng đều nằm trong luật, kể cả picker Zalo', () => {
-    ['zalo_group_picker', 'zalo_friend_picker', 'email_setup_guide', 'zalo_qr_login'].forEach((type) => {
+  it('mọi loại thẻ cổng đều nằm trong luật, kể cả picker Zalo và picker landing', () => {
+    ['zalo_group_picker', 'zalo_friend_picker', 'landing_picker', 'email_setup_guide', 'zalo_qr_login'].forEach((type) => {
       expect(shouldKeepWizardCard(gate(type, 'x'), 1, 5)).toBe(false);
     });
   });

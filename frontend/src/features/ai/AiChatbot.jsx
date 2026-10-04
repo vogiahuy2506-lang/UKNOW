@@ -26,6 +26,7 @@ import {
   EmailSetupGuideCard,
   ZaloGroupPickerCard,
   ZaloFriendPickerCard,
+  LandingLeadsPickerCard,
   ZaloQrLoginCard,
 } from './components/AiChatbotWizardCards';
 import ConfirmModal from '../inbox/ConfirmModal';
@@ -207,6 +208,14 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
     case 'zaloGroups':
       return t('aiChatbot.wizardDisplayPickedGroups', { count: marker.groupIds?.length || 0 })
         || `Đã chọn ${marker.groupIds?.length || 0} nhóm Zalo.`;
+    case 'landingLeads': {
+      if (marker.all === true) {
+        return t('aiChatbot.wizardDisplayPickedAllLandings') || 'Đã chọn tất cả landing.';
+      }
+      const slugs = Array.isArray(marker.slugs) ? marker.slugs : [];
+      return t('aiChatbot.wizardDisplayPickedLandings', { count: slugs.length, names: slugs.join(', ') })
+        || `Đã chọn ${slugs.length} landing: ${slugs.join(', ')}.`;
+    }
     case 'zaloFriends':
       return t('aiChatbot.wizardDisplayPickedFriends', { count: marker.friendIds?.length || marker.friendUids?.length || 0 })
         || `Đã chọn ${marker.friendIds?.length || marker.friendUids?.length || 0} bạn bè từ danh bạ Zalo.`;
@@ -598,6 +607,12 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     if (appendMessage && update) update((previous) => [...previous, message]);
     setCurrentScript(rawScript);
     setIsEditingDraft(false);
+    // Rà soát C P2-7 — nguồn landing mà người dùng chưa chọn landing nào: KHÔNG chuẩn bị/tạo (tránh gửi nhầm người). Bình thường backend đã
+    // chặn bằng thẻ chọn landing trước khi tới đây; đây là lưới cuối cho phiên cũ / trạng thái lệch.
+    if (rawScript?.landingSelectionMissing) {
+      setCampaignConfirmation({ confirmationId, rawScript, status: 'error', confirmationView: null, error: t('aiChatbot.landingSelectionMissing'), runAfterCreate });
+      return;
+    }
     setCampaignConfirmation({ confirmationId, rawScript, status: 'loading', confirmationView: null, error: null, runAfterCreate });
     try {
       const response = await aiApi.prepareCampaign(rawScript, recipients);
@@ -741,7 +756,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'suggest_content_plan', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'landing_picker', 'suggest_content_plan', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
 
       // Chỉ cổng CUỐI CÙNG còn hiện. Cổng đã trả lời bị BỎ HẲN — cả câu hỏi lẫn thẻ — đúng như
       // stripWizardCards làm lúc chạy live (`next.pop()` bỏ nguyên tin nhắn). Giữ lại câu chữ là
@@ -1437,6 +1452,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       toast.error('Chưa có template đã lưu để tạo chiến dịch.');
       return;
     }
+    // Rà soát C P2-7 — nguồn landing chưa chọn landing nào: không tạo (đừng để người nhận lặng lẽ thành khách DB / mọi lead).
+    if (script.landingSelectionMissing) {
+      toast.error(t('aiChatbot.landingSelectionMissing'));
+      return;
+    }
 
     setContentPlanWorkflow((prev) => (prev ? { ...prev, isCreatingCampaign: true } : prev));
     const loadingToast = toast.loading('Đang tạo campaign draft từ các template đã lưu...');
@@ -1826,6 +1846,22 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     );
   };
 
+  // Rà soát C P2-7 — cổng chọn landing: marker mang slug (hoặc all:true tường minh). Tên landing đi kèm dòng chữ cho dễ đọc; slug mới là
+  // nguồn sự thật (backend đọc từ marker, không đọc từ chữ).
+  const handleWizardLandingSubmit = async ({ slugs = [], all = false, landings = [] } = {}) => {
+    if (all) {
+      await emitWizardAnswer({ gate: 'landingLeads', all: true }, 'Tôi chọn tất cả landing.');
+      return;
+    }
+    const names = landings
+      .filter((landing) => slugs.includes(landing.slug))
+      .map((landing) => landing.title || landing.slug);
+    await emitWizardAnswer(
+      { gate: 'landingLeads', slugs },
+      `Tôi chọn ${slugs.length} landing${names.length ? `: ${names.join(', ')}` : ''}.`
+    );
+  };
+
   const handleWizardFriendsSubmit = async (friendIds, friends = []) => {
     const labels = friends
       .map((friend) => friend.display_name || friend.displayName || friend.name)
@@ -1947,6 +1983,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         'zalo_qr_login',
         'zalo_group_picker',
         'zalo_friend_picker',
+        'landing_picker',
         'suggest_content_plan',
         'content_plan_actions',
       ].includes(lastAssistantMessage.type)
@@ -3527,7 +3564,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
   const INTERACTIVE_TYPES = [
     'ask_campaign_details', 'ask_sender_account', 'ask_audience',
-    'ask_campaign_type', 'zalo_group_picker', 'zalo_friend_picker',
+    'ask_campaign_type', 'zalo_group_picker', 'zalo_friend_picker', 'landing_picker',
     'confirm_create', 'email_setup_guide', 'zalo_qr_login'
   ];
 
@@ -3985,6 +4022,16 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <ZaloFriendPickerCard
                   data={msg.data}
                   onSubmit={handleWizardFriendsSubmit}
+                  onDismiss={handleDismissWizardCard}
+                  isActive={idx === latestInteractiveIndex}
+                  t={t}
+                />
+              )}
+
+              {msg.type === 'landing_picker' && msg.data && (
+                <LandingLeadsPickerCard
+                  data={msg.data}
+                  onSubmit={handleWizardLandingSubmit}
                   onDismiss={handleDismissWizardCard}
                   isActive={idx === latestInteractiveIndex}
                   t={t}

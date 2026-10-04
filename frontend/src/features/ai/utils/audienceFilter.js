@@ -26,3 +26,31 @@ export function describeAudienceFilter(filters, t) {
   }
   return parts.join(' · ');
 }
+
+/**
+ * Một dòng mô tả nguồn "lead của landing" do server dựng (`step.recipients.landing`): TRANG NÀO + bao nhiêu người (rà soát C P2-7).
+ * Trước đây thẻ xác nhận chỉ ghi tên node "Lead từ Landing Page" nên không thể thấy tin sắp tới ai. Landing đã xoá / chưa tra được
+ * tên thì hiện slug; chưa tra được số thì chỉ ghi tên — không bao giờ bịa số.
+ *
+ * @param {{ all?: boolean, totalLeads?: number|null, pages?: Array<{ slug: string, title: string|null, recipientCount: number|null }> }|null} landing
+ * @param {(key: string, params?: object) => string} t
+ * @returns {string}
+ */
+export function describeLandingAudience(landing, t) {
+  if (!landing || typeof landing !== 'object') return '';
+  if (landing.all) {
+    return landing.totalLeads != null && Number.isFinite(Number(landing.totalLeads))
+      ? t('aiChatbot.confirmation.landingAudienceAll', { count: Number(landing.totalLeads) })
+      : t('aiChatbot.confirmation.landingAudienceAllUnknown');
+  }
+  const pages = Array.isArray(landing.pages) ? landing.pages : [];
+  return pages
+    .map((page) => {
+      const name = page?.title || page?.slug || '';
+      return page?.recipientCount != null
+        ? t('aiChatbot.confirmation.landingAudiencePage', { name, count: Number(page.recipientCount) })
+        : name;
+    })
+    .filter(Boolean)
+    .join(', ');
+}

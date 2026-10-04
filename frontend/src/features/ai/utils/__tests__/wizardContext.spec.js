@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   FLOW_BOUNDARY_TYPES,
   deriveWizardContext,
+  mergeClientWizardContext,
   applyWizardSelectionsToScript,
   findLatestInteractiveIndex,
 } from '../wizardContext.js';
@@ -180,5 +181,87 @@ describe('PR-6c: applyWizardSelectionsToScript — dataSource "form" đổi node
     const next = applyWizardSelectionsToScript(script, { dataSource: 'form', senderAccountId: 7 });
     expect(next.nodes[0].nodeSubtype).toBe('read_form_submissions');
     expect(next.nodes[0].config.formId).toBe('');
+  });
+});
+
+/**
+ * Rà soát C P2-7 — nguồn "Đăng ký từ Landing Page". Trước đây FE vá cứng node khách DB thành `read_landing_leads` với
+ * `landingLeadsSlugs: []` = MỌI lead của MỌI landing → gửi nhầm người. Nay chỉ vá theo lựa chọn người dùng ĐÃ làm ở cổng landingLeads;
+ * chưa chọn thì KHÔNG vá và đánh dấu để nơi tạo chiến dịch từ chối.
+ */
+describe('C P2-7: nguồn landing — deriveWizardContext + applyWizardSelectionsToScript', () => {
+  const landingHistory = (...extra) => [
+    { role: 'user', content: marker({ gate: 'channel', channel: 'email' }) },
+    { role: 'user', content: marker({ gate: 'dataSource', value: 'landing' }) },
+    ...extra,
+  ];
+  const scriptWithDbNode = () => ({
+    campaignType: 'email',
+    nodes: [{ tempId: 'n2', nodeType: 'data', nodeSubtype: 'interested_customers', config: { interestedCustomerType: 'both' } }],
+  });
+
+  it('deriveWizardContext đọc marker landingLeads: slug chuẩn hoá hoặc all:true tường minh', () => {
+    const picked = deriveWizardContext(landingHistory({ role: 'user', content: marker({ gate: 'landingLeads', slugs: [' /Khoa-IELTS/ ', 'khoa-toeic', 'khoa-ielts'] }) }));
+    expect(picked.landingLeadsSlugs).toEqual(['khoa-ielts', 'khoa-toeic']);
+    expect(picked.landingLeadsAll).toBe(false);
+
+    const all = deriveWizardContext(landingHistory({ role: 'user', content: marker({ gate: 'landingLeads', all: true }) }));
+    expect(all.landingLeadsAll).toBe(true);
+    expect(all.landingLeadsSlugs).toEqual([]);
+  });
+
+  it('marker rỗng / all không phải boolean true KHÔNG được hiểu là "tất cả"', () => {
+    expect(deriveWizardContext(landingHistory({ role: 'user', content: marker({ gate: 'landingLeads', slugs: [] }) })).landingLeadsAll).toBe(false);
+    expect(deriveWizardContext(landingHistory({ role: 'user', content: marker({ gate: 'landingLeads', all: 'true' }) })).landingLeadsAll).toBe(false);
+  });
+
+  it('chọn lại nguồn (marker dataSource) / đổi kênh / ranh giới chiến dịch → xoá lựa chọn landing cũ', () => {
+    const pick = { role: 'user', content: marker({ gate: 'landingLeads', slugs: ['khoa-ielts'] }) };
+    expect(deriveWizardContext([...landingHistory(pick), { role: 'user', content: marker({ gate: 'dataSource', value: 'landing' }) }]).landingLeadsSlugs).toEqual([]);
+    expect(deriveWizardContext([...landingHistory(pick), { role: 'user', content: marker({ gate: 'channel', channel: 'zalo' }) }]).landingLeadsSlugs).toEqual([]);
+    expect(deriveWizardContext([...landingHistory(pick), { role: 'assistant', type: 'campaign_created', content: 'xong' }]).landingLeadsSlugs).toEqual([]);
+  });
+
+  it('mergeClientWizardContext: marker còn mất khỏi history (F5) → lấy lựa chọn đã lưu ở server; marker trong history thắng', () => {
+    const fromServer = mergeClientWizardContext(deriveWizardContext([]), { landingLeadsSlugs: ['khoa-ielts'], landingLeadsAll: false });
+    expect(fromServer.landingLeadsSlugs).toEqual(['khoa-ielts']);
+    expect(mergeClientWizardContext(deriveWizardContext([]), { landingLeadsAll: true }).landingLeadsAll).toBe(true);
+
+    const derived = deriveWizardContext(landingHistory({ role: 'user', content: marker({ gate: 'landingLeads', slugs: ['khoa-toeic'] }) }));
+    expect(mergeClientWizardContext(derived, { landingLeadsSlugs: ['khoa-ielts'] }).landingLeadsSlugs).toEqual(['khoa-toeic']);
+  });
+
+  it('đã chọn landing → node khách DB thành read_landing_leads với ĐÚNG slug đã chọn (không phải [])', () => {
+    const context = deriveWizardContext(landingHistory({ role: 'user', content: marker({ gate: 'landingLeads', slugs: ['khoa-ielts'] }) }));
+    const next = applyWizardSelectionsToScript(scriptWithDbNode(), context);
+
+    expect(next.nodes[0].nodeSubtype).toBe('read_landing_leads');
+    expect(next.nodes[0].config).toEqual({ landingLeadsSlugs: ['khoa-ielts'] });
+    expect(next.landingSelectionMissing).toBeUndefined();
+    expect(next.landingLeadsAll).toBeUndefined();
+  });
+
+  it('"Tất cả landing" tường minh → slug rỗng được phép, script mang dấu landingLeadsAll', () => {
+    const context = deriveWizardContext(landingHistory({ role: 'user', content: marker({ gate: 'landingLeads', all: true }) }));
+    const next = applyWizardSelectionsToScript(scriptWithDbNode(), context);
+
+    expect(next.nodes[0].nodeSubtype).toBe('read_landing_leads');
+    expect(next.nodes[0].config.landingLeadsSlugs).toEqual([]);
+    expect(next.landingLeadsAll).toBe(true);
+  });
+
+  it('CHƯA chọn landing (ca lỗi gốc) → KHÔNG vá thành read_landing_leads slug rỗng; node giữ nguyên, script bị đánh dấu landingSelectionMissing', () => {
+    const context = deriveWizardContext(landingHistory());
+    const next = applyWizardSelectionsToScript(scriptWithDbNode(), context);
+
+    expect(next.nodes[0].nodeSubtype).toBe('interested_customers');
+    expect(JSON.stringify(next.nodes)).not.toContain('landingLeadsSlugs');
+    expect(next.landingSelectionMissing).toBe(true);
+  });
+
+  it('nguồn khác landing không bị đụng tới và không có dấu landing nào', () => {
+    const next = applyWizardSelectionsToScript(scriptWithDbNode(), { dataSource: 'db', senderAccountId: 7 });
+    expect(next.nodes[0].nodeSubtype).toBe('interested_customers');
+    expect(next.landingSelectionMissing).toBeUndefined();
   });
 });

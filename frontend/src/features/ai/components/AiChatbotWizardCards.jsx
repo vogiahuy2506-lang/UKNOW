@@ -897,3 +897,112 @@ export const ZaloFriendPickerCard = ({ data, onSubmit, onDismiss, isActive = tru
   );
 };
 
+/**
+ * Rà soát C P2-7 — thẻ CHỌN LANDING của nguồn "Đăng ký từ Landing Page". Server đã gửi sẵn danh sách (tên + slug + số lead) trong `data`,
+ * nên thẻ không gọi API. Hai đường trả lời RÕ RÀNG, không có mặc định ngầm:
+ *  - chọn ≥ 1 landing rồi bấm "Dùng N landing đã chọn" → `onSubmit({ slugs, landings })`;
+ *  - nút riêng "Gửi cho TẤT CẢ landing (N lead)" → `onSubmit({ all: true })`. Không có lựa chọn nào mà không bấm gì cả.
+ */
+export const LandingLeadsPickerCard = ({ data, onSubmit, onDismiss, isActive = true, t }) => {
+  const landings = useMemo(() => (Array.isArray(data?.landings) ? data.landings : []), [data]);
+  const maxSelect = Number(data?.maxSelect) > 0 ? Number(data.maxSelect) : 50;
+  const totalLeads = Number(data?.totalLeads) || 0;
+  const [selected, setSelected] = useState([]);
+  const [search, setSearch] = useState('');
+
+  const filteredLandings = useMemo(() => {
+    const query = foldDiacritics(search.trim());
+    if (!query) return landings;
+    return landings.filter((landing) => foldDiacritics(`${landing.title || ''} ${landing.slug || ''}`).includes(query));
+  }, [landings, search]);
+
+  const toggle = (slug) => setSelected((prev) => {
+    if (prev.includes(slug)) return prev.filter((item) => item !== slug);
+    if (prev.length >= maxSelect) {
+      toast.error(t('aiChatbot.wizardLandingMaxReached', { max: maxSelect }));
+      return prev;
+    }
+    return [...prev, slug];
+  });
+
+  return (
+    <div className={`mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
+      <div className="mb-3 flex items-center gap-2">
+        <HiOutlineExternalLink className="h-5 w-5 text-emerald-600" />
+        <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-700">
+          {t('aiChatbot.wizardLandingTitle')}
+        </span>
+      </div>
+
+      {landings.length > 6 && (
+        <div className="relative mb-2">
+          <HiOutlineSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('aiChatbot.wizardLandingSearchPlaceholder')}
+            className="w-full rounded-xl border border-emerald-200 bg-white py-2 pl-9 pr-3 text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-300"
+          />
+        </div>
+      )}
+
+      {filteredLandings.length === 0 ? (
+        <p className="rounded-xl bg-white px-3 py-2 text-xs text-slate-500">{t('aiChatbot.wizardLandingSearchEmpty')}</p>
+      ) : (
+        <div className="max-h-56 space-y-2 overflow-y-auto">
+          {filteredLandings.map((landing) => {
+            const countLabel = landing.formId != null
+              ? t('aiChatbot.wizardLandingFormCount', { count: Number(landing.formConsentedCount) || 0 })
+              : t('aiChatbot.wizardLandingLeadCount', { count: Number(landing.leadCount) || 0 });
+            return (
+              <label key={landing.slug} className="flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 text-sm text-slate-700">
+                <input type="checkbox" checked={selected.includes(landing.slug)} onChange={() => toggle(landing.slug)} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-slate-800 text-xs">{landing.title || landing.slug}</span>
+                  <span className="block truncate text-[11px] text-slate-400">
+                    {landing.slug}{landing.isPublished === false ? ` · ${t('aiChatbot.wizardLandingUnpublished')}` : ''}
+                  </span>
+                </span>
+                <span className="shrink-0 text-xs text-slate-500">{countLabel}</span>
+              </label>
+            );
+          })}
+        </div>
+      )}
+
+      <p className="mt-2 text-right text-xs font-bold text-slate-600">
+        {t('aiChatbot.wizardLandingSelectedCount', { count: selected.length, max: maxSelect })}
+      </p>
+      <button
+        type="button"
+        disabled={selected.length === 0}
+        onClick={() => onSubmit({ slugs: selected, landings })}
+        className="mt-2 w-full rounded-xl bg-emerald-600 px-3 py-2.5 text-xs font-black text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+      >
+        {t('aiChatbot.wizardLandingUseSelected', { count: selected.length })}
+      </button>
+
+      <div className="mt-3 border-t border-emerald-200 pt-3">
+        <button
+          type="button"
+          onClick={() => onSubmit({ all: true })}
+          className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-xs font-black text-amber-800 hover:bg-amber-50 transition-colors"
+        >
+          {t('aiChatbot.wizardLandingSelectAll', { count: totalLeads })}
+        </button>
+        <p className="mt-1 text-[11px] text-slate-500">{t('aiChatbot.wizardLandingSelectAllHint')}</p>
+      </div>
+
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={onDismiss}
+          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
+        >
+          {t('aiChatbot.wizardDismiss')}
+        </button>
+      )}
+    </div>
+  );
+};

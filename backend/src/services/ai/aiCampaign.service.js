@@ -32,7 +32,9 @@ import {
   findOriginalCampaignPrompt,
   buildCampaignPromptWithWizardState,
   buildDataSourceQuestion,
+  buildLandingLeadsGate,
   computeWizardMeta,
+  hasLandingLeadsSelection,
   isContentPlanRevisionText,
   mergeWizardState,
   normalizeWizardState,
@@ -72,6 +74,7 @@ import { fillContentSlots } from './campaignSlotFiller.service.js';
 import campaignNodeRegistryService, { isZaloPlanNodeSubtype } from '../campaign/campaignNodeRegistry.service.js';
 import { isAdapterCampaignChannel, isChannelBlockedByPlan, buildChannelNotInPlanMessage } from '../campaign/campaignChannelFlags.util.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
+import { resolveLandingAudienceChoice } from '../../utils/campaignLandingAudience.util.js';
 
 export const USER_CONFIRMS_FILE_RE = /vẫn\s*dùng|van\s*dung|cứ\s*tiếp\s*tục|cu\s*tiep\s*tuc|dùng\s*(?:file|tệp|này|luôn|đi)|tiếp\s*tục|tiep\s*tuc|làm\s*tiếp|lam\s*tiep|cứ\s*làm|cu\s*lam|proceed|continue/i;
 
@@ -1065,6 +1068,16 @@ QUY TẮC:
       hasAttachedFile: hasEffectiveAttachedFile,
       hasAttachedSpreadsheet: hasAnyAttachedSpreadsheet,
     };
+    // Rà soát C P2-7 — cổng chọn landing cần danh sách landing + số lead: chỉ tải khi cổng thực sự có thể hỏi (nguồn landing, Email/
+    // Zalo cá nhân, chưa có lựa chọn). `null` (tra lỗi) được cổng coi là "chưa biết" và chặn, không phải "không có landing nào".
+    if (
+      gatesForPersist.isCampaignFlow
+      && gatesForPersist.dataSource === 'landing'
+      && (gatesForPersist.channel === 'email' || gatesForPersist.channel === 'zalo')
+      && !hasLandingLeadsSelection(gatesForPersist)
+    ) {
+      gateResources.landingPicker = await aiPromptResources.getLandingPickerOptions(ownerId);
+    }
 
     // Free-text cancel must beat deterministic re-ask (dead-end nudge says "gõ huỷ").
     if (
@@ -1253,6 +1266,12 @@ Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_custom
           const friendCount = Array.isArray(mergedGates.zaloFriendIds) ? mergedGates.zaloFriendIds.length : 0;
           lines.push(`- zaloFriendCount: ${friendCount}`);
         }
+      }
+      // Rà soát C P2-7: landing người dùng ĐÃ CHỌN ở cổng `landingLeads` — slug do hệ thống ghi, model không được tự chọn/để trống.
+      if (Array.isArray(mergedGates.landingLeadsSlugs) && mergedGates.landingLeadsSlugs.length > 0) {
+        lines.push(`- landingLeadsSlugs: [${mergedGates.landingLeadsSlugs.map((slug) => JSON.stringify(slug)).join(', ')}] (BẮT BUỘC dùng ĐÚNG mảng này cho config.landingLeadsSlugs của read_landing_leads; KHÔNG để trống, KHÔNG thêm slug khác)`);
+      } else if (mergedGates.landingLeadsAll) {
+        lines.push('- landingLeadsAll: true (người dùng đã CHỌN TẤT CẢ landing → read_landing_leads với config.landingLeadsSlugs: [])');
       }
       // C P1-6: thông tin về Google Sheet người nhận do HỆ THỐNG đọc tất định (checkSheetForChannel ở trên) — thay cho việc đính
       // 300 dòng tên/SĐT/email khách cuối vào prompt rồi bắt model tự đọc cột / đếm. Chỉ tên cột + số liệu, không có dòng dữ liệu.
@@ -1726,6 +1745,7 @@ UPLOADED FILE CHO NỘI DUNG (contentMode = attached_file):
 - sheetUrl có giá trị → dùng ĐÚNG URL đó làm config.sheetUrl cho node read_sheet (KHÔNG để trống).
 - zaloGroupIds có giá trị → dùng ĐÚNG danh sách này cho config.zaloGroupIds và config.zaloSelectedGroupIds trong send_zalo_group và get_all_groups.
 - landingLeadsSlugs có giá trị → dùng ĐÚNG mảng slug này cho config.landingLeadsSlugs trong read_landing_leads.
+- landingLeadsAll = true → người dùng đã chọn TẤT CẢ landing: read_landing_leads với config.landingLeadsSlugs: []. KHÔNG BAO GIỜ để landingLeadsSlugs rỗng khi người dùng chưa chọn (rỗng = mọi lead của mọi landing) — hệ thống hỏi lại bằng thẻ chọn landing.
 - formId có giá trị → dùng ĐÚNG id đó làm config.formId trong read_form_submissions.
 - sendMode / zaloPersonalSendMode / zaloGroupSendMode:
   • Khi lịch gửi là chuỗi nhiều ngày (schedule.mode === 'drip' hoặc có delayValue > 0 giữa các tin/bước): BẮT BUỘC đặt config.sendMode = "schedule" (cho send_email), config.zaloPersonalSendMode = "schedule" (cho send_zalo_personal), config.zaloGroupSendMode = "schedule" (cho send_zalo_group).
@@ -1762,7 +1782,7 @@ Ví dụ lấy từ sheet (dataSource=sheet):
 nodes: trigger → read_sheet(sheetUrl="https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit") → action_wave1(delay=0) → end
 
 Ví dụ lấy từ landing page (dataSource=landing):
-nodes: trigger → read_landing_leads → action_wave1(delay=0) → end
+nodes: trigger → read_landing_leads(landingLeadsSlugs=["<slug trong WIZARD ĐÃ CHỐT>"]) → action_wave1(delay=0) → end
 
 Ví dụ lấy từ biểu mẫu (dataSource=form):
 nodes: trigger → read_form_submissions(formId=12) → action_wave1(delay=0) → end
@@ -1906,6 +1926,26 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       };
     }
 
+    // Rà soát C P2-7 — lưới CUỐI cho nguồn "lead của landing" (cổng `landingLeads` đã chặn ở trên nếu nguồn là landing mà chưa chọn; đây là
+    // lớp thứ hai cho ca model tự dựng node `read_landing_leads` ngoài wizard). Đã chọn → ghi đúng lựa chọn lên mọi node lead landing
+    // (đè slug model tự điền, đổi nguồn "khách DB" thành lead landing nếu model bỏ qua dataSource). CHƯA chọn mà node có slug rỗng
+    // (= mọi lead của mọi landing) → KHÔNG xác nhận, hỏi lại thẻ chọn landing.
+    let gateAskedFinal = guarded.gateAsked;
+    if ((finalResponse?.type === 'confirm_create' || finalResponse?.type === 'create_and_run') && finalResponse.data) {
+      const landingScript = finalResponse.data.script && Array.isArray(finalResponse.data.script.nodes)
+        ? finalResponse.data.script
+        : finalResponse.data;
+      const landingChoice = resolveLandingAudienceChoice(landingScript, gateState);
+      if (landingChoice.status === 'needs_choice') {
+        const landingPicker = await aiPromptResources.getLandingPickerOptions(ownerId);
+        const landingGate = buildLandingLeadsGate(landingPicker, gateState, locale);
+        finalResponse = landingGate.response;
+        gateAskedFinal = landingGate.gate;
+      } else if (landingChoice.status === 'applied') {
+        console.log(`[AI] Landing: ghi lựa chọn của người dùng lên ${landingChoice.updatedNodes} node read_landing_leads, đổi ${landingChoice.convertedNodes} node khách DB`);
+      }
+    }
+
     if ((finalResponse?.type === 'confirm_create' || finalResponse?.type === 'create_and_run') && finalResponse.data) {
       const targetScript = finalResponse.data.script || finalResponse.data;
       if (targetScript && Array.isArray(targetScript.nodes) && Array.isArray(targetScript.connections)) {
@@ -1931,7 +1971,9 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
             sheetUrl: gateState?.sheetUrl,
             zaloGroupIds: gateState?.zaloGroupIds,
             zaloFriendIds: gateState?.zaloFriendIds,
-            landingPageSlug: gateState?.landingPageSlug || gateState?.landingLeadsSlugs,
+            // Chỉ truyền khi CÓ slug đã chọn: mảng rỗng là truthy trong bản vá (`if (effectiveLandingSlug)`) và sẽ xoá slug model điền.
+            landingPageSlug: gateState?.landingPageSlug
+              || (Array.isArray(gateState?.landingLeadsSlugs) && gateState.landingLeadsSlugs.length > 0 ? gateState.landingLeadsSlugs : undefined),
             defaultZaloAccountId: firstZaloAccountId,
             channel: gateState?.channel,
             schedule: gateState?.schedule,
@@ -2157,9 +2199,9 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
       };
     }
 
-    const _wizard = buildWizard(guarded.gateAsked, planChange);
+    const _wizard = buildWizard(gateAskedFinal, planChange);
     return {
-      ...withDeadEndNudge(finalResponse, _wizard.meta, guarded.gateAsked, locale),
+      ...withDeadEndNudge(finalResponse, _wizard.meta, gateAskedFinal, locale),
       _wizard,
     };
   }

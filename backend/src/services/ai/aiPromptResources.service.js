@@ -2,6 +2,7 @@ import businessProfileService, { serializeProductList } from './businessProfile.
 import productRepository from '../../repositories/products/product.repository.js';
 import aiCampaignRepository from '../../repositories/ai/aiCampaign.repository.js';
 import { getEnabledAdapterCampaignChannels, isChannelBlockedByPlan } from '../campaign/campaignChannelFlags.util.js';
+import { canonicalLandingPageSlug } from '../../utils/landingPageSlugCanonical.util.js';
 
 /**
  * Format user resources for AI campaign prompts.
@@ -265,6 +266,58 @@ class AiPromptResourcesService {
     } catch (e) {
       console.warn('[AI] Không lấy được landing pages:', e.message);
       return [];
+    }
+  }
+
+  /**
+   * Rà soát C P2-7 — dữ liệu cho THẺ CHỌN LANDING của wizard (nguồn người nhận "Đăng ký từ Landing Page") và cho dòng "landing nào + bao
+   * nhiêu lead" trên thẻ xác nhận. Trả `{ landings, totalLeads }`, hoặc `null` khi tra DB lỗi — nơi gọi PHẢI coi `null` là "chưa biết"
+   * (không được suy ra "không có landing nào").
+   *
+   *  - `leadCount`: số lead (bảng `leads`, `marketing_consent IS NOT FALSE`) gắn landing đó — đúng điều kiện node `read_landing_leads`.
+   *  - `formConsentedCount`: landing thu người đăng ký bằng Biểu mẫu thì người nhận là bài nộp đã đồng ý của form (PR-5b-2).
+   *  - `totalLeads`: mọi lead của workspace (kể cả lead không gắn landing) — chính là số người node đọc khi KHÔNG lọc slug.
+   *
+   * @param {number} ownerId workspace owner id
+   * @returns {Promise<{ landings: Array<{ slug: string, title: string, isPublished: boolean, formId: number|null, leadCount: number, formConsentedCount: number }>, totalLeads: number }|null>}
+   */
+  async getLandingPickerOptions(ownerId) {
+    if (!ownerId) return { landings: [], totalLeads: 0 };
+    try {
+      const [pages, leadRows] = await Promise.all([
+        aiCampaignRepository.getLandingPickerPages(ownerId),
+        aiCampaignRepository.getLeadCountsBySlug(ownerId),
+      ]);
+      // Slug lead lưu thô (dữ liệu cũ có `/l`, `/`) — gộp về slug chuẩn như bộ lọc `expandLandingSlugsForSqlFilter` đang khớp.
+      const countBySlug = new Map();
+      let totalLeads = 0;
+      for (const row of leadRows || []) {
+        const n = Number(row.lead_count) || 0;
+        totalLeads += n;
+        const raw = row.slug == null ? '' : String(row.slug).trim().toLowerCase();
+        if (!raw) continue;
+        const key = canonicalLandingPageSlug(raw) ?? (/^\/+$/.test(raw) ? 'l' : null);
+        if (key) countBySlug.set(key, (countBySlug.get(key) || 0) + n);
+      }
+      const seen = new Set();
+      const landings = [];
+      for (const row of pages || []) {
+        const slug = canonicalLandingPageSlug(row.slug);
+        if (!slug || seen.has(slug)) continue;
+        seen.add(slug);
+        landings.push({
+          slug,
+          title: String(row.title || slug),
+          isPublished: Boolean(row.is_published),
+          formId: row.form_id != null ? Number(row.form_id) : null,
+          leadCount: countBySlug.get(slug) || 0,
+          formConsentedCount: Number(row.form_consented_count) || 0,
+        });
+      }
+      return { landings, totalLeads };
+    } catch (e) {
+      console.warn('[AI] Không lấy được danh sách landing cho thẻ chọn nguồn:', e.message);
+      return null;
     }
   }
 
