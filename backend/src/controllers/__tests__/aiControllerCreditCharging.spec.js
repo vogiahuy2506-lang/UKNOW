@@ -304,4 +304,72 @@ describe('chat() — chính sách credit của câu cố định / lượt hỏn
       expect(chargeAiCredit).not.toHaveBeenCalled();
     });
   });
+
+  describe('C P3-5 — lưới an toàn RAG không động vào câu server tự soạn', () => {
+    it('câu từ chối quyền (permissionDenied) cho câu hỏi dạng "…được không?" → KHÔNG chạy lưới (không embedding, không answerWithDocs), giữ câu từ chối, không trừ', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue(PERMISSION_DENIED);
+      // Nếu lưới chạy nhầm thì nó sẽ tìm thấy đoạn khớp và thay câu — ép điều đó có thể xảy ra để phép thử có ý nghĩa.
+      searchHelpChunks.mockResolvedValue({ chunks: [{ slug: 'nhan-vien', title: 'Nhân viên', content_text: 'x' }], topSimilarity: 0.9 });
+      answerWithDocs.mockResolvedValue(DOCS_ANSWER);
+      const res = makeRes();
+
+      await aiController.chat(reqFor('tạo chiến dịch được không?'), res);
+
+      expect(searchHelpChunks).not.toHaveBeenCalled();
+      expect(answerWithDocs).not.toHaveBeenCalled();
+      expect(sentData(res).content).toBe(PERMISSION_DENIED.content);
+      expect(sentData(res).data).toEqual({ permissionDenied: 'campaigns_create' });
+      expect(chargeAiCredit).not.toHaveBeenCalled();
+    });
+
+    // Hai điều kiện bảo vệ độc lập: hôm nay câu từ chối luôn kèm wizardShortCircuit, nhưng nếu về sau cờ đó bị mất khi refactor thì
+    // dấu `data.permissionDenied` vẫn phải giữ câu từ chối (ghim riêng để điều kiện thứ hai không thành mã chết im lặng).
+    it('câu mang data.permissionDenied dù THIẾU wizardShortCircuit → vẫn không chạy lưới', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue({ ...PERMISSION_DENIED, wizardShortCircuit: undefined });
+      searchHelpChunks.mockResolvedValue({ chunks: [{ slug: 'nhan-vien', title: 'Nhân viên', content_text: 'x' }], topSimilarity: 0.9 });
+      const res = makeRes();
+
+      await aiController.chat(reqFor('tạo chiến dịch được không?'), res);
+
+      expect(searchHelpChunks).not.toHaveBeenCalled();
+      expect(sentData(res).content).toBe(PERMISSION_DENIED.content);
+    });
+
+    it('mọi câu text của wizardShortCircuit (vd "Đã dừng…") cho câu hỏi dạng câu hỏi → cũng không chạy lưới', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue({
+        type: 'text',
+        content: 'Đã dừng. Wizard chiến dịch đã được xoá. Bạn muốn bắt đầu chiến dịch mới thì cứ nói nhé.',
+        missing_fields: [],
+        data: null,
+        wizardShortCircuit: true,
+        _wizard: { gates: {}, brief: {}, gateAsked: null, meta: {}, planChanged: true, planReset: true },
+      });
+      searchHelpChunks.mockResolvedValue({ chunks: [{ slug: 'x', title: 'X', content_text: 'x' }], topSimilarity: 0.9 });
+      const res = makeRes();
+
+      await aiController.chat(reqFor('thôi dừng lại được không?'), res);
+
+      expect(searchHelpChunks).not.toHaveBeenCalled();
+      expect(sentData(res).content).toMatch(/^Đã dừng/);
+      expect(chargeAiCredit).not.toHaveBeenCalled();
+    });
+
+    it('câu text THƯỜNG của não chiến dịch (không short-circuit, không permissionDenied) vẫn được lưới thay như cũ và trừ 1 lần — không chặn nhầm', async () => {
+      tryHandleHelpChat.mockResolvedValue({ handled: false, route: 'làm_giúp' });
+      processSmartChat.mockResolvedValue({ type: 'text', content: 'Bạn vào Cài đặt để kết nối Zalo (kiến thức ngoài).', missing_fields: [], data: null });
+      searchHelpChunks.mockResolvedValue({ chunks: [{ slug: 'ket-noi-zalo', title: 'Kết nối Zalo', content_text: 'bước 1' }], topSimilarity: 0.8 });
+      answerWithDocs.mockResolvedValue(DOCS_ANSWER);
+      const res = makeRes();
+
+      await aiController.chat(reqFor('làm sao kết nối zalo'), res);
+
+      expect(searchHelpChunks).toHaveBeenCalledTimes(1);
+      expect(answerWithDocs).toHaveBeenCalledTimes(1);
+      expect(sentData(res).content).toBe(DOCS_ANSWER.content);
+      expect(chargeAiCredit).toHaveBeenCalledTimes(1);
+    });
+  });
 });

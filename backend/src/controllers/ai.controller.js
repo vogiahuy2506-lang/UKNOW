@@ -414,6 +414,10 @@ class AiController {
         && publicResponse?.type === 'text'
         && !inWizard
         && !hasFiles
+        // C P3-5: câu server tự soạn (từ chối quyền, "Đã dừng…" — `wizardShortCircuit`) KHÔNG được thay bằng bài hướng dẫn: lưới
+        // sẽ gọi embedding + Gemini mà lượt vốn đã được coi là không trừ, và khách mất câu giải thích đúng ngữ cảnh.
+        && !wizardShortCircuit
+        && !publicResponse?.data?.permissionDenied
         && QUESTION_SHAPE_RE.test(lastUserContentForRouting)
       ) {
         try {
