@@ -741,3 +741,44 @@ describe('B-15 — log `[LandingAI] done`: promptChars thật, patchFail không 
     expect(resolveLandingErrorCode({ code: 'x'.repeat(200) })).toHaveLength(60);
   });
 });
+
+describe('B-14 — sửa theo đoạn: xoá mục dài theo yêu cầu không bị 422 "AI đã viết lại toàn bộ trang"', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    console.log.mockRestore();
+    console.warn.mockRestore();
+  });
+
+  const section = (name, n) => `<section id="${name}"><h2>${name}</h2><p>${'nội dung '.repeat(n)}</p></section>`;
+  const LONG = GOOD_PAGE.replace('<h1>Khoá học</h1>', `<h1>Khoá học</h1>${section('gia', 400)}${section('faq', 400)}${section('danhgia', 400)}`);
+
+  it('bản vá xoá 3 mục lớn (trang ngắn đi > 40%) → thành công, 1 lần gọi, không dự phòng viết lại', async () => {
+    const edits = ['gia', 'faq', 'danhgia'].map((name) => ({ find: section(name, 400), replace: '' }));
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', edits, changeSummary: 'Đã xoá các phần Giá, Hỏi đáp và Đánh giá' }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    const res = await aiLandingPageService.editHtml({ userId: 1, currentHtml: LONG, instruction: 'xoá phần Giá, FAQ và Đánh giá' });
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(res.html.length).toBeLessThan(0.6 * LONG.length);
+    expect(res.html).not.toContain('id="gia"');
+    expect(res.html).toContain('data-founderai-capture'); // các chốt khác vẫn chạy (form còn)
+  });
+
+  it('model trả CẢ TRANG ngắn đi quá 40% (patch_full_html) → vẫn 422 "viết lại toàn bộ trang"', async () => {
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: GOOD_PAGE, changeSummary: 'x' }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await expect(
+      aiLandingPageService.editHtml({ userId: 1, currentHtml: LONG, instruction: 'đổi tiêu đề' })
+    ).rejects.toMatchObject({ status: 422, message: expect.stringMatching(/viết lại toàn bộ trang/) });
+  });
+});

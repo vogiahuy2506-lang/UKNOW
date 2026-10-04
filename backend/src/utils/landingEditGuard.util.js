@@ -212,11 +212,13 @@ export function extractHtmlFromModelText(text) {
  * Ngăn chặn các lỗi: AI cắt ngang do quá token, AI viết lại từ đầu làm mất layout/nội dung,
  * AI làm mất form đăng ký sẵn có, hoặc AI lạm dụng inline style.
  *
- * @param {{ currentHtml: string, newHtml: string, finishReason?: string }} params
+ * @param {{ currentHtml: string, newHtml: string, finishReason?: string, strategy?: string }} params
+ *   `strategy` = chiến lược đã tạo `newHtml` (aiLandingPage.service.js: 'patch' | 'patch_full_html' | 'patch_fallback_full' |
+ *   'full'). 'patch' bỏ qua chốt "teo dưới 60%" (B-14).
  * @returns {boolean}
  * @throws {Error & { status: number }}
  */
-export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
+export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason, strategy }) {
   const current = String(currentHtml || '').trim();
   const next = String(newHtml || '').trim();
 
@@ -249,8 +251,12 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason }) {
     throw err;
   }
 
-  // Chốt chặn 1: Tránh AI viết lại toàn bộ trang làm teo tóp nội dung
-  if (current.length > 0 && next.length < 0.6 * current.length) {
+  // Chốt chặn 1: Tránh AI viết lại toàn bộ trang làm teo tóp nội dung.
+  // B-14 — CHỈ áp khi AI viết lại cả trang. Bản vá (`strategy === 'patch'`) là ghép tất định từ bản cũ + các
+  // đoạn thay thế: trang ngắn đi chỉ vì chính yêu cầu ("xoá phần Giá, Đánh giá, FAQ" trên trang dài) thì không
+  // phải "viết lại làm teo" — trước đây bị 422 với câu "AI đã viết lại toàn bộ trang" dù AI không hề viết lại.
+  // Không truyền `strategy` (đường gọi cũ/test cũ) hoặc chiến lược nào khác 'patch' → áp như trước.
+  if (strategy !== 'patch' && current.length > 0 && next.length < 0.6 * current.length) {
     const err = new Error('AI đã viết lại toàn bộ trang thay vì chỉnh sửa. Vui lòng mô tả cụ thể hơn phần cần sửa.');
     err.status = 422;
     throw err;

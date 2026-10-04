@@ -1029,6 +1029,8 @@ ${exampleLine}`;
         currentHtml: rawCurrent,
         newHtml: html,
         finishReason,
+        // B-14: bản vá (ghép tất định) không bị chốt "teo dưới 60%" — xoá mục theo yêu cầu là hợp lệ.
+        strategy: telemetry.strategy,
       });
 
       // B-1 (2) — chốt an toàn: so với bản hiện tại, AI không được THÊM script/on*=/javascript:/form action ra
