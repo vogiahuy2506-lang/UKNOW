@@ -26,6 +26,8 @@ import {
   countGrantedPermissions,
   findEmployeeAfterAdd,
   getEmployeeErrorInfo,
+  sameIdSet,
+  toggleIdInList,
   toPermissionState,
 } from './employeeManagement.helpers';
 
@@ -150,6 +152,13 @@ const EmployeeManagement = () => {
     dailyZaloLimit:  null, monthlyZaloLimit:  null,
   });
   const [isSavingLimits, setIsSavingLimits] = useState(false);
+  // Tab "Tài khoản Zalo" (giao từng tài khoản Zalo cá nhân cho nhân viên). `channelAccounts` null = chưa tải.
+  const [channelAccounts, setChannelAccounts]   = useState(null);
+  const [channelSelected, setChannelSelected]   = useState([]);
+  const [channelSaved, setChannelSaved]         = useState([]);
+  const [channelLoading, setChannelLoading]     = useState(false);
+  const [channelLoadFailed, setChannelLoadFailed] = useState(false);
+  const [isSavingChannels, setIsSavingChannels] = useState(false);
   const [planLimits, setPlanLimits] = useState({
     dailyEmail: null, monthlyEmail: null,
     dailyZalo:  null, monthlyZalo:  null,
@@ -300,6 +309,10 @@ const EmployeeManagement = () => {
     setSelectedEmployee(emp);
     setActiveTab(tab);
     setShowUnsavedConfirm(false);
+    setChannelAccounts(null);
+    setChannelSelected([]);
+    setChannelSaved([]);
+    setChannelLoadFailed(false);
     editForm.reset({ fullName: emp.fullName || '', email: emp.email || '' });
     // Nhân viên mới có permissions = [] (mảng rỗng) — nạp thành {} để không gửi lại `[]` khi lưu.
     setPermState(toPermissionState(emp.permissions));
@@ -366,6 +379,57 @@ const EmployeeManagement = () => {
       return false;
     } finally {
       setIsSavingLimits(false);
+    }
+  };
+
+  // ── Tab Tài khoản Zalo ────────────────────────────────────────────────────
+  const loadChannelAccounts = async (employeeId) => {
+    setChannelLoading(true);
+    setChannelLoadFailed(false);
+    try {
+      const res = await userManagementApiService.getEmployeeChannelAccounts(employeeId);
+      const list = res?.data?.data?.zaloAccounts;
+      const accounts = Array.isArray(list) ? list : [];
+      const assignedIds = accounts.filter((a) => a.assigned).map((a) => a.id);
+      setChannelAccounts(accounts);
+      setChannelSelected(assignedIds);
+      setChannelSaved(assignedIds);
+    } catch {
+      setChannelLoadFailed(true);
+    } finally {
+      setChannelLoading(false);
+    }
+  };
+
+  // Tải danh sách khi mở tab lần đầu cho nhân viên đang chọn (không tải sớm: chủ mở modal để sửa tên/quyền thì khỏi tốn một request).
+  useEffect(() => {
+    if (!selectedEmployee || activeTab !== 'channels') return;
+    if (channelAccounts !== null || channelLoading || channelLoadFailed) return;
+    loadChannelAccounts(selectedEmployee.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- chỉ phản ứng theo nhân viên + tab đang mở
+  }, [selectedEmployee?.id, activeTab, channelAccounts, channelLoadFailed]);
+
+  const handleSaveChannels = async () => {
+    try {
+      setIsSavingChannels(true);
+      const res = await userManagementApiService.updateEmployeeChannelAccounts(selectedEmployee.id, channelSelected);
+      toast.success(t('employee.updateZaloAccountsSuccess'));
+      // Phản chiếu lại đúng thứ backend đã lưu (id của chủ khác bị loại, hàng giữ nguyên nguồn).
+      const list = res?.data?.data?.zaloAccounts;
+      if (Array.isArray(list)) {
+        const assignedIds = list.filter((a) => a.assigned).map((a) => a.id);
+        setChannelAccounts(list);
+        setChannelSelected(assignedIds);
+        setChannelSaved(assignedIds);
+      } else {
+        setChannelSaved(channelSelected);
+      }
+      return true;
+    } catch (err) {
+      toast.error(err?.response?.data?.message || t('employee.updateZaloAccountsFailed'));
+      return false;
+    } finally {
+      setIsSavingChannels(false);
     }
   };
 
@@ -512,6 +576,7 @@ const EmployeeManagement = () => {
     { key: 'info',        label: t('employee.infoTab') },
     { key: 'permissions', label: t('employee.permissionsTab') },
     { key: 'limits',      label: t('employee.limitsTab') },
+    { key: 'channels',    label: t('employee.zaloAccountsTab') },
   ];
 
   // PLAN_SUA_SAU_NGHIEM_THU_2026-09-29 PR-A — so từng khoá (KHÔNG JSON.stringify: thứ tự khoá trả
@@ -526,8 +591,10 @@ const EmployeeManagement = () => {
   const isLimitsDirty = Boolean(selectedEmployee) && LIMIT_STATE_FIELDS.some(
     (k) => (limitsState[k] ?? null) !== (selectedEmployee?.[k] ?? null)
   );
-  // Review PR-A: tính trên CẢ HAI tab — tick quyền rồi sang tab Giới hạn mà bấm Đóng từng mất im lặng.
-  const isModalDirty = isPermDirty || isLimitsDirty;
+  // Tab Tài khoản Zalo chỉ có thể "bẩn" sau khi đã tải xong danh sách (channelAccounts !== null).
+  const isChannelsDirty = Boolean(selectedEmployee) && channelAccounts !== null && !sameIdSet(channelSelected, channelSaved);
+  // Review PR-A: tính trên MỌI tab — tick quyền rồi sang tab Giới hạn mà bấm Đóng từng mất im lặng.
+  const isModalDirty = isPermDirty || isLimitsDirty || isChannelsDirty;
 
   const requestCloseEmployeeModal = () => {
     if (isModalDirty) {
@@ -982,6 +1049,98 @@ const EmployeeManagement = () => {
                 </div>
               </div>
             )}
+
+            {/* ── Tab Tài khoản Zalo ── */}
+            {activeTab === 'channels' && (
+              <div className="space-y-4">
+                <p className="text-sm text-gray-600">{t('employee.zaloAccountsHint')}</p>
+                {channelLoading && <p className="text-sm text-gray-500">{t('employee.zaloAccountsLoading')}</p>}
+                {channelLoadFailed && (
+                  <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 flex items-center justify-between gap-3">
+                    <span>{t('employee.zaloAccountsLoadFailed')}</span>
+                    <button
+                      type="button"
+                      className="btn btn-secondary text-sm"
+                      onClick={() => { setChannelLoadFailed(false); }}
+                    >
+                      {t('employee.zaloAccountsRetry')}
+                    </button>
+                  </div>
+                )}
+                {channelAccounts !== null && channelAccounts.length === 0 && (
+                  <p className="text-sm text-gray-500">{t('employee.zaloAccountsEmpty')}</p>
+                )}
+                {channelAccounts !== null && channelAccounts.length > 0 && (
+                  <>
+                    {channelSaved.length === 0 && (
+                      <div role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        {t('employee.zaloAccountsNoneAssignedBanner')}
+                      </div>
+                    )}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="btn btn-secondary text-sm"
+                        onClick={() => setChannelSelected(channelAccounts.map((a) => a.id))}
+                      >
+                        {t('employee.zaloAccountsSelectAll')}
+                      </button>
+                      <button type="button" className="btn btn-secondary text-sm" onClick={() => setChannelSelected([])}>
+                        {t('employee.zaloAccountsSelectNone')}
+                      </button>
+                      <span className="text-sm text-gray-500 ml-auto">
+                        {t('employee.zaloAccountsSelectedCount', { selected: channelSelected.length, total: channelAccounts.length })}
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {channelAccounts.map((account) => {
+                        const isChecked = channelSelected.some((id) => String(id) === String(account.id));
+                        const isConnected = account.status === 'connected' && account.isActive;
+                        const title = account.displayName || account.zaloName || `#${account.id}`;
+                        return (
+                          <label
+                            key={account.id}
+                            className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 hover:bg-gray-50 cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              className="w-4 h-4 mt-1 text-primary-600 rounded"
+                              checked={isChecked}
+                              onChange={(e) => setChannelSelected((prev) => toggleIdInList(prev, account.id, e.target.checked))}
+                            />
+                            <span className="min-w-0 flex-1">
+                              <span className="flex flex-wrap items-center gap-2">
+                                <span className="text-sm font-medium text-gray-800 break-all">{title}</span>
+                                {account.isDefault && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-primary-100 text-primary-700">{t('employee.zaloAccountDefault')}</span>
+                                )}
+                                <span className={`text-xs px-2 py-0.5 rounded-full ${isConnected ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                                  {isConnected ? t('employee.zaloAccountConnected') : t('employee.zaloAccountDisconnected')}
+                                </span>
+                                {account.source === 'legacy' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">{t('employee.zaloAccountSourceLegacy')}</span>
+                                )}
+                                {account.source === 'self_login' && (
+                                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">{t('employee.zaloAccountSourceSelfLogin')}</span>
+                                )}
+                              </span>
+                              {(account.zaloPhone || account.zaloName) && (
+                                <span className="block text-xs text-gray-500 mt-0.5">
+                                  {[account.zaloName, account.zaloPhone].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                    {channelAccounts.some((a) => a.source === 'legacy') && (
+                      <p className="text-xs text-gray-500">{t('employee.zaloAccountsLegacyHint')}</p>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
           </div>
           {activeTab !== 'info' && (
             <div className="border-t border-gray-100 px-6 py-3 flex items-center justify-end gap-3">
@@ -991,6 +1150,16 @@ const EmployeeManagement = () => {
               {activeTab === 'permissions' && (
                 <button type="button" className="btn btn-primary" onClick={handleSavePermissions} disabled={isSavingPerm}>
                   {isSavingPerm ? t('employee.saving') : t('employee.savePerm')}
+                </button>
+              )}
+              {activeTab === 'channels' && (
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleSaveChannels}
+                  disabled={isSavingChannels || channelAccounts === null}
+                >
+                  {isSavingChannels ? t('employee.saving') : t('employee.saveZaloAccounts')}
                 </button>
               )}
               {activeTab === 'limits' && (
@@ -1041,6 +1210,7 @@ const EmployeeManagement = () => {
                 let ok = true;
                 if (isPermDirty) ok = await handleSavePermissions();
                 if (ok && isLimitsDirty) ok = await handleSaveLimits();
+                if (ok && isChannelsDirty) ok = await handleSaveChannels();
                 setShowUnsavedConfirm(false);
                 if (ok) setSelectedEmployee(null);
               }}

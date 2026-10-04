@@ -70,3 +70,21 @@ export function getEmployeeErrorInfo(err) {
     canBuySlot: Boolean(data?.canBuySlot),
   };
 }
+
+/**
+ * Hai danh sách id có cùng tập phần tử không (không phân biệt thứ tự, không phân biệt số/chuỗi). Dùng để biết tab
+ * "Tài khoản Zalo" có thay đổi chưa lưu hay không.
+ */
+export function sameIdSet(a, b) {
+  const left = new Set((Array.isArray(a) ? a : []).map(String));
+  const right = new Set((Array.isArray(b) ? b : []).map(String));
+  if (left.size !== right.size) return false;
+  for (const id of left) if (!right.has(id)) return false;
+  return true;
+}
+
+/** Thêm / bớt một id khỏi danh sách đã chọn, giữ kiểu số của id; không nhân đôi. */
+export function toggleIdInList(list, id, checked) {
+  const rest = (Array.isArray(list) ? list : []).filter((x) => String(x) !== String(id));
+  return checked ? [...rest, id] : rest;
+}

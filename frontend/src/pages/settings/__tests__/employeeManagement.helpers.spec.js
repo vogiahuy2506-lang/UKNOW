@@ -5,6 +5,8 @@ import {
   countGrantedPermissions,
   findEmployeeAfterAdd,
   getEmployeeErrorInfo,
+  sameIdSet,
+  toggleIdInList,
   toPermissionState,
 } from '../employeeManagement.helpers';
 
@@ -111,5 +113,35 @@ describe('getEmployeeErrorInfo', () => {
   it('EMPLOYEE_LIMIT_REACHED kèm canBuySlot=true → đọc đúng, không mặc định false', () => {
     const err = { response: { data: { code: 'EMPLOYEE_LIMIT_REACHED', message: 'Mua thêm slot...', canBuySlot: true } } };
     expect(getEmployeeErrorInfo(err)).toEqual({ code: 'EMPLOYEE_LIMIT_REACHED', message: 'Mua thêm slot...', canBuySlot: true });
+  });
+});
+
+describe('sameIdSet — tab Tài khoản Zalo có thay đổi chưa lưu không', () => {
+  it('cùng tập id, khác thứ tự, lẫn số/chuỗi → giống', () => {
+    expect(sameIdSet([5, 6], ['6', '5'])).toBe(true);
+    expect(sameIdSet([], [])).toBe(true);
+  });
+  it('khác phần tử hoặc khác số lượng → khác', () => {
+    expect(sameIdSet([5], [5, 6])).toBe(false);
+    expect(sameIdSet([5, 6], [5, 7])).toBe(false);
+    expect(sameIdSet([], [5])).toBe(false);
+  });
+  it('giá trị hỏng coi như rỗng (không ném lỗi)', () => {
+    expect(sameIdSet(null, undefined)).toBe(true);
+    expect(sameIdSet(null, [5])).toBe(false);
+  });
+});
+
+describe('toggleIdInList', () => {
+  it('thêm id mới, không nhân đôi khi tick lặp', () => {
+    expect(toggleIdInList([5], 6, true)).toEqual([5, 6]);
+    expect(toggleIdInList([5, 6], 6, true)).toEqual([5, 6]);
+  });
+  it('bỏ id (so bằng String, nên số/chuỗi đều khớp); id không có thì giữ nguyên', () => {
+    expect(toggleIdInList([5, 6], '6', false)).toEqual([5]);
+    expect(toggleIdInList([5], 9, false)).toEqual([5]);
+  });
+  it('danh sách hỏng → coi như rỗng', () => {
+    expect(toggleIdInList(null, 5, true)).toEqual([5]);
   });
 });

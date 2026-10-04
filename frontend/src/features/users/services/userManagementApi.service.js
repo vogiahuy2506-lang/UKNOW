@@ -44,6 +44,16 @@ export const userManagementApiService = {
     return api.patch(`/employees/${employeeId}/limits`, limits);
   },
 
+  /** Tài khoản Zalo cá nhân của chủ + cờ đã giao cho nhân viên này (chỉ chủ gọi được). */
+  getEmployeeChannelAccounts(employeeId) {
+    return api.get(`/employees/${employeeId}/channel-accounts`);
+  },
+
+  /** Thay TOÀN BỘ danh sách tài khoản Zalo được giao cho nhân viên (id không thuộc chủ bị backend loại). */
+  updateEmployeeChannelAccounts(employeeId, zaloAccountIds) {
+    return api.put(`/employees/${employeeId}/channel-accounts`, { zaloAccountIds });
+  },
+
   deleteEmployee(employeeId) {
     return api.delete(`/employees/${employeeId}`);
   },
