@@ -641,7 +641,59 @@ async function emailRateLimitWarnings({ ownerUserId, accountRefs, deps }) {
   }
 }
 
-async function estimateFromNodes({ rawNodes, rawConnections, flowJson, ownerUserId, startAt, continuous, excludeCampaignId, deps: injected }) {
+/**
+ * Đổi khối lượng của từng nhóm thành phần CÒN LẠI theo sổ tiến độ của một lượt đang chạy (PR-5).
+ *
+ * `remaining` = Map/đối tượng `nodeId -> { doneCount, partial: [{ stepsDone, dueAtMs, count }] }` (xem
+ * `summarizeLedgerForRemaining`). Với mỗi nhóm: người đã xong (`doneCount`) bị loại; người xong dở vào `partial`
+ * (còn các bước sau); người CHƯA có dòng sổ = `recipients - doneCount - tổng partial` (không âm) bắt đầu từ bước 1.
+ * Xấp xỉ có chủ ý: (a) danh sách người nhận đếm LẠI từ nguồn hiện tại (Sheet có thể đổi giữa chừng); (b) người nhận
+ * của chuỗi nhiều bước dùng hạn `meta.nextDueAt` trong sổ nếu còn ở tương lai, còn lại coi là đến hạn ngay;
+ * (c) mốc "bước 1 gửi lúc nào" (cho `delayFrom 'start'`) không có trong sổ → lấy lúc bắt đầu ước tính.
+ * Node không có dòng sổ nào = chưa tới lượt → khối lượng đầy đủ (giữ nguyên).
+ */
+function applyRemainingProgress(groups, remaining) {
+  const lookup = remaining instanceof Map ? remaining : new Map(Object.entries(remaining));
+  groups.forEach((group) => {
+    const entry = lookup.get(String(group.nodeId));
+    if (!entry) return;
+    const partial = Array.isArray(entry.partial) ? entry.partial : [];
+    const inLedger = Number(entry.doneCount || 0) + partial.reduce((sum, p) => sum + Number(p.count || 0), 0);
+    group.initialProgress = {
+      partial,
+      untouched: Math.max(0, Number(group.recipients || 0) - inLedger),
+    };
+  });
+}
+
+/**
+ * Gom kết quả `recipientLedger.summarizeRunProgress` thành đầu vào của `applyRemainingProgress`.
+ *
+ * @param {Array<{ id_node: string|number, done: boolean, last_completed_step: number, next_due_at: Date|string|null, total: number }>} rows
+ * @returns {Map<string, { doneCount: number, partial: Array<{ stepsDone: number, dueAtMs: number|null, count: number }> }>}
+ */
+export function summarizeLedgerForRemaining(rows) {
+  const byNode = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const key = String(row.id_node);
+    if (!byNode.has(key)) byNode.set(key, { doneCount: 0, partial: [] });
+    const entry = byNode.get(key);
+    const total = Number(row.total) || 0;
+    if (row.done) {
+      entry.doneCount += total;
+      return;
+    }
+    const due = row.next_due_at ? new Date(row.next_due_at).getTime() : null;
+    entry.partial.push({
+      stepsDone: Number(row.last_completed_step) || 0,
+      dueAtMs: Number.isFinite(due) ? due : null,
+      count: total,
+    });
+  });
+  return byNode;
+}
+
+async function estimateFromNodes({ rawNodes, rawConnections, flowJson, ownerUserId, startAt, continuous, excludeCampaignId, remaining = null, deps: injected }) {
   const deps = injected || await loadDefaultDeps();
   const { nodes, connections } = normalizeEstimateNodes(rawNodes, rawConnections);
   const nowDate = deps.now();
@@ -653,6 +705,8 @@ async function estimateFromNodes({ rawNodes, rawConnections, flowJson, ownerUser
   if (vnDayKey(effectiveStart.getTime()) !== vnDayKey(nowDate.getTime())) {
     built.groups.forEach((group) => group.accounts.forEach((acc) => { acc.sentToday = 0; }));
   }
+
+  if (remaining) applyRemainingProgress(built.groups, remaining);
 
   const simulation = estimateCampaignSend({
     startAt: effectiveStart,
@@ -681,10 +735,11 @@ async function estimateFromNodes({ rawNodes, rawConnections, flowJson, ownerUser
 /**
  * Ước tính cho chiến dịch ĐÃ LƯU. Quyền xem chiến dịch do tầng controller kiểm; ở đây chỉ đọc theo `campaignId`.
  *
- * @param {{ campaignId: number|string, ownerUserId: number, startAt?: Date|string, continuous?: boolean, deps?: object }} input
+ * @param {{ campaignId: number|string, ownerUserId: number, startAt?: Date|string, continuous?: boolean, remaining?: Map<string, object>|null, deps?: object }} input
+ *   `remaining`: chỉ phần CÒN LẠI của một lượt đang chạy (xem `applyRemainingProgress`).
  * @returns {Promise<object|null>} null nếu chiến dịch không tồn tại
  */
-export async function estimateForCampaign({ campaignId, ownerUserId, startAt = null, continuous = false, deps = null }) {
+export async function estimateForCampaign({ campaignId, ownerUserId, startAt = null, continuous = false, remaining = null, deps = null }) {
   const resolvedDeps = deps || await loadDefaultDeps();
   const campaign = await resolvedDeps.crud.findCampaignById({
     campaignId, isAdmin: true, userId: null,
@@ -699,7 +754,7 @@ export async function estimateForCampaign({ campaignId, ownerUserId, startAt = n
   ]);
   return estimateFromNodes({
     rawNodes, rawConnections, flowJson: campaign.flow_json, ownerUserId: campaignOwnerId, startAt, continuous,
-    excludeCampaignId: Number(campaignId), deps: resolvedDeps,
+    excludeCampaignId: Number(campaignId), remaining, deps: resolvedDeps,
   });
 }
 

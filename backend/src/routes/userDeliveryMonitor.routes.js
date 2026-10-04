@@ -13,5 +13,6 @@ router.use(requirePermission('campaigns_view'));
 
 router.get('/overview', ctrl.overview);
 router.get('/runs/:runId/failures', ctrl.runFailures);
+router.get('/runs/:runId/estimate', ctrl.runEstimate);
 
 export default router;

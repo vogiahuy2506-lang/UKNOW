@@ -1,6 +1,8 @@
 import sendStats from '../stats/sendStats.service.js';
 import userDeliveryMonitorRepository from '../../repositories/user/userDeliveryMonitor.repository.js';
 import deliveryMonitorRepository from '../../repositories/admin/deliveryMonitor.repository.js';
+import recipientLedgerRepository from '../../repositories/campaign/recipientLedger.repository.js';
+import { estimateForCampaign, summarizeLedgerForRemaining } from '../campaign/campaignEstimate.service.js';
 import {
   buildZaloSilentDropHourlySql,
   buildZaloSilentDropSignals,
@@ -195,4 +197,71 @@ export async function getRunFailures({ userId, runId }) {
       lastAt: failure.at,
     })),
   };
+}
+
+/** Bộ nhớ đệm ước tính theo lượt (RAM đủ vì production chạy MỘT replica). */
+const RUN_ESTIMATE_CACHE_TTL_MS = 5 * 60 * 1000;
+const RUN_ESTIMATE_CACHE_MAX = 200;
+const runEstimateCache = new Map();
+
+/** Chỉ cho spec: xoá bộ nhớ đệm giữa các ca. */
+export function clearRunEstimateCache() {
+  runEstimateCache.clear();
+}
+
+/**
+ * Ước tính THỜI GIAN CÒN LẠI của một lượt đang chạy (trang Giám sát gửi tin, PLAN_UOC_TINH 5c / PR-5). Gọi lười theo
+ * từng lượt — KHÔNG nằm trong overview vì ước tính có thể đọc Google Sheet.
+ *
+ * - Lượt của người khác / không có → 404 (kiểm TRƯỚC khi đụng bộ nhớ đệm: id lạ không đọc được kết quả của người khác).
+ * - Lượt không còn `running` → `estimate: null`; lượt chạy liên tục → `continuous: true` (không ước tính).
+ * - "Còn lại" = khối lượng của chiến dịch trừ phần sổ `campaign_run_recipient_steps` của lượt đã xong; lượt đang chờ
+ *   (quota ngày / giờ nghỉ / SMTP tạm dừng) mô phỏng từ `max(bây giờ, mốc chờ)`.
+ * - Mọi lỗi ước tính → `estimate: null` (200), không 500.
+ *
+ * @param {{ userId: number, runId: number|string, now?: Date }} input
+ * @returns {Promise<{ runId: number, continuous: boolean, estimate: object|null }>}
+ */
+export async function getRunEstimate({ userId, runId, now = new Date() }) {
+  const ownerId = toPositiveInt(userId);
+  const safeRunId = toPositiveInt(runId);
+  if (ownerId == null || safeRunId == null) {
+    throw httpError(400, 'Tham số không hợp lệ');
+  }
+  const run = await userDeliveryMonitorRepository.findOwnedRunForEstimate({ ownerId, runId: safeRunId });
+  if (!run) {
+    throw httpError(404, 'Không tìm thấy lượt chạy');
+  }
+  if (run.status !== 'running') {
+    return { runId: safeRunId, continuous: false, estimate: null };
+  }
+  if (run.is_continuous === true) {
+    return { runId: safeRunId, continuous: true, estimate: null };
+  }
+
+  const nowMs = now.getTime();
+  const cached = runEstimateCache.get(safeRunId);
+  if (cached && cached.expiresAt > nowMs) return cached.value;
+
+  let value;
+  try {
+    const waiting = resolveWaiting(run, nowMs);
+    const ledger = await recipientLedgerRepository.summarizeRunProgress(safeRunId);
+    const estimate = await estimateForCampaign({
+      campaignId: Number(run.id_campaign),
+      ownerUserId: ownerId,
+      startAt: waiting ? new Date(waiting.until) : now,
+      remaining: summarizeLedgerForRemaining(ledger),
+    });
+    value = { runId: safeRunId, continuous: false, estimate: estimate || null };
+  } catch (error) {
+    console.warn(`[UserDeliveryMonitor] Ước tính lượt ${safeRunId} lỗi:`, error?.message || error);
+    value = { runId: safeRunId, continuous: false, estimate: null };
+  }
+
+  if (runEstimateCache.size >= RUN_ESTIMATE_CACHE_MAX) {
+    runEstimateCache.delete(runEstimateCache.keys().next().value);
+  }
+  runEstimateCache.set(safeRunId, { value, expiresAt: nowMs + RUN_ESTIMATE_CACHE_TTL_MS });
+  return value;
 }

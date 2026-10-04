@@ -29,3 +29,15 @@ export async function runFailures(req, res) {
   }
 }
 
+
+export async function runEstimate(req, res) {
+  try {
+    const data = await userDeliveryMonitorService.getRunEstimate({
+      userId: resolveWorkspaceOwnerId(req.user),
+      runId: req.params.runId,
+    });
+    res.json({ success: true, data });
+  } catch (err) {
+    handleError(res, err);
+  }
+}

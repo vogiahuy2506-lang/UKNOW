@@ -78,6 +78,31 @@ class UserDeliveryMonitorRepository {
   }
 
   /**
+   * Lượt chạy CỦA chủ này kèm dữ kiện để ước tính thời gian còn lại: trạng thái, chế độ liên tục, mốc chờ.
+   *
+   * @param {{ ownerId: number, runId: number }} input
+   * @returns {Promise<{ id: string, id_campaign: string, status: string, is_continuous: boolean,
+   *   deferred_until: string|null, deferred_reason: string|null, email_rate_limit_at: string|null }|null>}
+   */
+  async findOwnedRunForEstimate({ ownerId, runId }) {
+    const { rows } = await db.query(
+      `SELECT cr.id,
+              cr.id_campaign,
+              cr.status,
+              (cr.run_metadata->>'continuousMode') = 'true' AS is_continuous,
+              ${runDeferredUntilSql('cr')} AS deferred_until,
+              ${runDeferredReasonSql('cr')} AS deferred_reason,
+              cr.run_metadata->>'emailRateLimitAt' AS email_rate_limit_at
+       FROM campaign_runs cr
+       JOIN campaigns c ON c.id = cr.id_campaign
+       WHERE cr.id = $1
+         AND COALESCE(c.workspace_owner_id, c.id_user) = $2`,
+      [runId, ownerId]
+    );
+    return rows[0] || null;
+  }
+
+  /**
    * Lượt chạy CỦA chủ này (null nếu không có hoặc của người khác) + bản kiểm toán người nhận của lượt.
    *
    * @param {{ ownerId: number, runId: number }} input

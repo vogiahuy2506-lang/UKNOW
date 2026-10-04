@@ -1,7 +1,7 @@
 import { describe, it, expect, jest, beforeEach } from '@jest/globals';
 import ZaloRateLimiter from '../zaloRateLimiter.js';
 import campaignFlowService from '../campaignFlow.service.js';
-import { estimateForCampaign, estimateForScript } from '../campaignEstimate.service.js';
+import { estimateForCampaign, estimateForScript, summarizeLedgerForRemaining } from '../campaignEstimate.service.js';
 
 /**
  * Mock ở RANH GIỚI (repository / service ngoài) với đúng hình dạng thật:
@@ -437,5 +437,64 @@ describe('estimateForScript — chiến dịch chưa lưu (camelCase)', () => {
     expect(result.perNode[0]).toMatchObject({ nodeId: 'mail', channel: 'email', recipients: 3 });
     expect(deps.crud.findCampaignById).not.toHaveBeenCalled();
     expect(deps.estimateRepo.findOtherCampaignsInUse).not.toHaveBeenCalled(); // chưa lưu → chưa có "chiến dịch khác" cần loại trừ
+  });
+});
+
+describe('estimateForCampaign — remaining (phần CÒN LẠI của lượt đang chạy, PR-5)', () => {
+  const ledgerRows = () => ([
+    // Sổ của lượt: node 3 (kết bạn) xong cả 799 người; node 4 (nhắn) xong 300 người.
+    { id_node: '3', done: true, last_completed_step: 1, next_due_at: null, total: 799 },
+    { id_node: '4', done: true, last_completed_step: 1, next_due_at: null, total: 300 },
+  ]);
+
+  it('799 SĐT, 2 node, node 1 xong + node 2 xong 300 → còn 499 thao tác; xong 05/10 17:04:00 / 21:54:30 / 06/10 09:45:00', async () => {
+    // Bắt đầu 05/10 06:00; node 3: 799 − 799 = 0 người; node 4: 799 − 300 = 499 người. Tin đầu của node 4 không ngủ.
+    // 80s: k = 0..498 → tin cuối 06:00 + 498×80s = 39.840s = 11h04m00s → 17:04:00 (trước 23:00, một ngày).
+    // 115s: 498×115 = 57.270s = 15h54m30s → 21:54:30 (< 61.200s nên chưa tới giờ nghỉ).
+    // 150s: ngày 1 → k×150 < 61.200 → k = 0..407 → 408 tin; còn 91 tin sang 06/10 06:00 (không ngủ thêm sau giờ nghỉ),
+    //   k = 0..90 → cuối 06:00 + 90×150s = 13.500s = 3h45m00s → 09:45:00 (06/10).
+    const { deps } = makeDeps({ state: { nodes: campaign438Nodes(), connections: campaign438Connections(), dataItems: { 2: phones(799) } } });
+    const result = await estimateForCampaign({
+      campaignId: 438, ownerUserId: 39, startAt: NOW, remaining: summarizeLedgerForRemaining(ledgerRows()), deps,
+    });
+    expect(result.totalActions).toBe(499);
+    expect(result.perNode.map((n) => [n.nodeId, n.recipients, n.actions])).toEqual([['3', 0, 0], ['4', 499, 499]]);
+    expect(result.finishAtEarliest).toBe(vn('2026-10-05T17:04:00').toISOString());
+    expect(result.finishAtTypical).toBe(vn('2026-10-05T21:54:30').toISOString());
+    expect(result.finishAtLatest).toBe(vn('2026-10-06T09:45:00').toISOString());
+  });
+
+  it('không truyền remaining → khối lượng đầy đủ (không đổi hành vi PR-1)', async () => {
+    const { deps } = makeDeps({ state: { nodes: campaign438Nodes(), connections: campaign438Connections(), dataItems: { 2: phones(799) } } });
+    const result = await estimateForCampaign({ campaignId: 438, ownerUserId: 39, startAt: NOW, deps });
+    expect(result.totalActions).toBe(1598);
+  });
+
+  it('node chưa có dòng sổ nào (chưa tới lượt) → giữ đủ 799 người', async () => {
+    const { deps } = makeDeps({ state: { nodes: campaign438Nodes(), connections: campaign438Connections(), dataItems: { 2: phones(799) } } });
+    const remaining = summarizeLedgerForRemaining([{ id_node: '3', done: true, last_completed_step: 1, next_due_at: null, total: 799 }]);
+    const result = await estimateForCampaign({ campaignId: 438, ownerUserId: 39, startAt: NOW, remaining, deps });
+    expect(result.perNode.map((n) => [n.nodeId, n.recipients])).toEqual([['3', 0], ['4', 799]]);
+    expect(result.totalActions).toBe(799);
+  });
+});
+
+describe('summarizeLedgerForRemaining', () => {
+  it('gom theo node: người xong cộng vào doneCount, người chưa xong thành từng nhóm (bước đã xong, hạn, số người)', () => {
+    const due = new Date('2026-10-06T00:00:00.000Z');
+    const map = summarizeLedgerForRemaining([
+      { id_node: 5, done: true, last_completed_step: 2, next_due_at: null, total: 10 },
+      { id_node: 5, done: true, last_completed_step: 1, next_due_at: null, total: 2 },
+      { id_node: 5, done: false, last_completed_step: 1, next_due_at: due, total: 4 },
+      { id_node: 5, done: false, last_completed_step: 0, next_due_at: null, total: 1 },
+    ]);
+    expect(map.get('5')).toEqual({
+      doneCount: 12, // 10 + 2
+      partial: [
+        { stepsDone: 1, dueAtMs: due.getTime(), count: 4 },
+        { stepsDone: 0, dueAtMs: null, count: 1 },
+      ],
+    });
+    expect(summarizeLedgerForRemaining(null).size).toBe(0);
   });
 });

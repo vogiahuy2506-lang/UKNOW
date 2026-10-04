@@ -286,6 +286,18 @@ function runScenario({ startAtMs, groups, continuous, scenario }) {
 
   // Mọi người nhận bắt đầu ở bước 0, đến hạn ngay.
   books.forEach((book) => book.dueAt.fill(startAtMs));
+  // Ước tính "còn lại" của lượt đang chạy (PR-5): người xong dở bắt đầu ở bước đã xong, hạn bước kế theo sổ (nếu
+  // còn ở tương lai). `firstSentAt` không có trong sổ → lấy startAt (xấp xỉ cho `delayFrom 'start'`).
+  groups.forEach((group, idx) => {
+    if (!group.initial) return;
+    const book = books[idx];
+    group.initial.stepsDone.forEach((done, i) => {
+      book.stepsDone[i] = done;
+      if (done > 0) book.firstSentAt[i] = startAtMs;
+      const due = group.initial.dueAtMs[i];
+      if (due !== null && due > startAtMs) book.dueAt[i] = due;
+    });
+  });
 
   let clock = startAtMs;
   for (let pass = 0; pass < MAX_PASSES && !aborted; pass += 1) {
@@ -348,12 +360,34 @@ const normalizeGroups = (rawGroups) => (Array.isArray(rawGroups) ? rawGroups : [
       delayMs: Math.max(0, int(step?.delayMs, 0)),
       delayFrom: step?.delayFrom === 'start' ? 'start' : 'prev',
     }));
+  // `initialProgress` (tuỳ chọn, PR-5 — ước tính phần CÒN LẠI của lượt đang chạy): `{ untouched, partial:[{ stepsDone,
+  // dueAtMs, count }] }`. Có thì `recipients` bị thay bằng số người CHƯA xong: `partial` (đã xong `stepsDone` bước, chưa
+  // hết) rồi `untouched` (chưa gửi gì). Người đã xong hết bước không có mặt. Bước >= số bước của node (cấu hình đổi) bỏ.
+  let initial = null;
+  if (raw?.initialProgress && typeof raw.initialProgress === 'object') {
+    initial = { stepsDone: [], dueAtMs: [] };
+    (Array.isArray(raw.initialProgress.partial) ? raw.initialProgress.partial : []).forEach((entry) => {
+      const done = Math.max(0, int(entry?.stepsDone, 0));
+      if (done >= steps.length) return;
+      const dueRaw = entry?.dueAtMs;
+      const due = dueRaw == null || !Number.isFinite(Number(dueRaw)) ? null : Number(dueRaw);
+      for (let k = 0; k < Math.max(0, int(entry?.count, 0)); k += 1) {
+        initial.stepsDone.push(done);
+        initial.dueAtMs.push(due);
+      }
+    });
+    for (let k = 0; k < Math.max(0, int(raw.initialProgress.untouched, 0)); k += 1) {
+      initial.stepsDone.push(0);
+      initial.dueAtMs.push(null);
+    }
+  }
   return {
     nodeId: String(raw?.nodeId ?? `node_${index}`),
     label: String(raw?.label ?? raw?.nodeId ?? `node_${index}`),
     channel: String(raw?.channel ?? 'email'),
     order: raw?.order === 'recipient_major' ? 'recipient_major' : 'step_major',
-    recipients: Math.max(0, int(raw?.recipients, 0)),
+    recipients: initial ? initial.stepsDone.length : Math.max(0, int(raw?.recipients, 0)),
+    initial,
     steps,
     sendMode: raw?.sendMode === 'schedule' ? 'schedule' : 'all',
     accounts,

@@ -182,6 +182,33 @@ class RecipientLedgerRepository {
       next_due_at: null,
     };
   }
+
+  /**
+   * Tóm tắt sổ tiến độ của MỘT lượt chạy theo (node, bước đã xong, hạn bước kế) — nguồn cho ước tính thời gian CÒN LẠI
+   * (trang Giám sát gửi tin). `done` = đã xong hết bước HOẶC bị chốt bỏ (`zaloAbandonReason` / `emailAbandonReason`,
+   * quá giới hạn lỗi): cả hai không còn việc phải làm. `next_due_at` đọc từ `meta.nextDueAt` (cột `next_due_at` chỉ có
+   * trong bootstrap test, production không có), chỉ giữ cho người chưa xong.
+   *
+   * @param {number} runId
+   * @returns {Promise<Array<{ id_node: string, done: boolean, last_completed_step: number, next_due_at: Date|null, total: number }>>}
+   */
+  async summarizeRunProgress(runId) {
+    const { rows } = await db.query(
+      `SELECT id_node,
+              (COALESCE(is_fully_completed, FALSE)
+                 OR (meta ? 'zaloAbandonReason') OR (meta ? 'emailAbandonReason')) AS done,
+              COALESCE(last_completed_step, 0)::int AS last_completed_step,
+              CASE WHEN COALESCE(is_fully_completed, FALSE)
+                     OR (meta ? 'zaloAbandonReason') OR (meta ? 'emailAbandonReason')
+                   THEN NULL ELSE ${SAFE_NEXT_DUE_AT_SQL} END AS next_due_at,
+              COUNT(*)::int AS total
+       FROM campaign_run_recipient_steps
+       WHERE id_run = $1
+       GROUP BY 1, 2, 3, 4`,
+      [runId]
+    );
+    return rows;
+  }
 }
 
 export default new RecipientLedgerRepository();

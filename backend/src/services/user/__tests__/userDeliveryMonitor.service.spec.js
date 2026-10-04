@@ -16,12 +16,22 @@ const userRepository = {
   listRecentRuns: jest.fn(),
   listRunningRuns: jest.fn(),
   findOwnedRun: jest.fn(),
+  findOwnedRunForEstimate: jest.fn(),
 };
+const ledgerRepository = { summarizeRunProgress: jest.fn() };
+const estimateForCampaign = jest.fn();
 const safeQuery = jest.fn();
 
 jest.unstable_mockModule('../../stats/sendStats.service.js', () => ({ default: sendStats }));
 jest.unstable_mockModule('../../../repositories/user/userDeliveryMonitor.repository.js', () => ({ default: userRepository }));
 jest.unstable_mockModule('../../../repositories/admin/deliveryMonitor.repository.js', () => ({ default: { safeQuery } }));
+jest.unstable_mockModule('../../../repositories/campaign/recipientLedger.repository.js', () => ({ default: ledgerRepository }));
+// Ranh giới ước tính: giữ NGUYÊN `summarizeLedgerForRemaining` thật (hàm thuần), chỉ giả `estimateForCampaign`.
+const realEstimate = await import('../../campaign/campaignEstimate.service.js');
+jest.unstable_mockModule('../../campaign/campaignEstimate.service.js', () => ({
+  ...realEstimate,
+  estimateForCampaign,
+}));
 
 const service = await import('../userDeliveryMonitor.service.js');
 
@@ -343,5 +353,119 @@ describe('getRunFailures', () => {
     userRepository.findOwnedRun.mockResolvedValue({ id: '406', recipient_audit: null });
     sendStats.listFinalFailures.mockResolvedValue([]);
     expect(await service.getRunFailures({ userId: 39, runId: 406 })).toEqual({ runId: 406, recipientAudit: null, failures: [] });
+  });
+});
+
+
+describe('getRunEstimate — thời gian CÒN LẠI của lượt đang chạy (PR-5)', () => {
+  const ownedRun = (overrides = {}) => ({
+    id: '9', id_campaign: '438', status: 'running', is_continuous: false,
+    deferred_until: null, deferred_reason: null, email_rate_limit_at: null, ...overrides,
+  });
+  const ESTIMATE = { finishAtLatest: '2026-10-06T02:45:00.000Z', totalActions: 499, warnings: [] };
+
+  beforeEach(() => {
+    service.clearRunEstimateCache();
+    userRepository.findOwnedRunForEstimate.mockReset();
+    ledgerRepository.summarizeRunProgress.mockReset().mockResolvedValue([]);
+    estimateForCampaign.mockReset().mockResolvedValue(ESTIMATE);
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  it('lượt của người khác / không có → 404, KHÔNG đụng sổ hay ước tính', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(null);
+    await expect(service.getRunEstimate({ userId: 5, runId: '9', now: NOW })).rejects.toMatchObject({ status: 404 });
+    expect(userRepository.findOwnedRunForEstimate).toHaveBeenCalledWith({ ownerId: 5, runId: 9 });
+    expect(ledgerRepository.summarizeRunProgress).not.toHaveBeenCalled();
+    expect(estimateForCampaign).not.toHaveBeenCalled();
+  });
+
+  it('lượt người khác không đọc được kết quả đã đệm của chủ: kiểm quyền chạy TRƯỚC bộ nhớ đệm', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValueOnce(ownedRun());
+    await service.getRunEstimate({ userId: 5, runId: 9, now: NOW });
+    userRepository.findOwnedRunForEstimate.mockResolvedValueOnce(null);
+    await expect(service.getRunEstimate({ userId: 6, runId: 9, now: NOW })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it('runId rác → 400', async () => {
+    await expect(service.getRunEstimate({ userId: 5, runId: 'abc', now: NOW })).rejects.toMatchObject({ status: 400 });
+  });
+
+  it('lượt đã hoàn tất → estimate null, không tính', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun({ status: 'completed' }));
+    await expect(service.getRunEstimate({ userId: 5, runId: 9, now: NOW })).resolves.toEqual({ runId: 9, continuous: false, estimate: null });
+    expect(estimateForCampaign).not.toHaveBeenCalled();
+  });
+
+  it('lượt chạy liên tục → { continuous: true }, không tính', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun({ is_continuous: true }));
+    await expect(service.getRunEstimate({ userId: 5, runId: 9, now: NOW })).resolves.toEqual({ runId: 9, continuous: true, estimate: null });
+    expect(estimateForCampaign).not.toHaveBeenCalled();
+  });
+
+  it('lượt đang chạy: gọi ước tính với chiến dịch + chủ + startAt = bây giờ + sổ đổi thành "còn lại" (done/partial theo node)', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun());
+    const due = new Date('2026-10-06T00:00:00.000Z');
+    ledgerRepository.summarizeRunProgress.mockResolvedValue([
+      { id_node: '3', done: true, last_completed_step: 1, next_due_at: null, total: 799 },
+      { id_node: '4', done: true, last_completed_step: 1, next_due_at: null, total: 300 },
+      { id_node: '4', done: false, last_completed_step: 1, next_due_at: due, total: 2 },
+    ]);
+    const result = await service.getRunEstimate({ userId: 5, runId: 9, now: NOW });
+    expect(result).toEqual({ runId: 9, continuous: false, estimate: ESTIMATE });
+    expect(ledgerRepository.summarizeRunProgress).toHaveBeenCalledWith(9);
+    const args = estimateForCampaign.mock.calls[0][0];
+    expect(args.campaignId).toBe(438);
+    expect(args.ownerUserId).toBe(5);
+    expect(args.startAt).toEqual(NOW);
+    expect([...args.remaining.entries()]).toEqual([
+      ['3', { doneCount: 799, partial: [] }],
+      ['4', { doneCount: 300, partial: [{ stepsDone: 1, dueAtMs: due.getTime(), count: 2 }] }],
+    ]);
+  });
+
+  it('lượt đang CHỜ (quota ngày / SMTP tạm dừng…) → mô phỏng bắt đầu từ mốc chờ, không phải bây giờ', async () => {
+    const until = minutesFromNow(90);
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun({ deferred_until: until, deferred_reason: 'plan_quota_daily' }));
+    await service.getRunEstimate({ userId: 5, runId: 9, now: NOW });
+    expect(estimateForCampaign.mock.calls[0][0].startAt).toEqual(new Date(until));
+  });
+
+  it('mốc chờ đã qua (dấu vết chưa dọn) → coi như không chờ, bắt đầu từ bây giờ', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun({ deferred_until: minutesFromNow(-10), deferred_reason: 'quiet_hours' }));
+    await service.getRunEstimate({ userId: 5, runId: 9, now: NOW });
+    expect(estimateForCampaign.mock.calls[0][0].startAt).toEqual(NOW);
+  });
+
+  it('bộ nhớ đệm 5 phút theo lượt: lần 2 trong 5 phút không tính lại; sau 5 phút tính lại; lượt khác không dùng chung', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun());
+    await service.getRunEstimate({ userId: 5, runId: 9, now: NOW });
+    await service.getRunEstimate({ userId: 5, runId: 9, now: new Date(NOW.getTime() + 4 * 60_000 + 59_000) });
+    expect(estimateForCampaign).toHaveBeenCalledTimes(1);
+    await service.getRunEstimate({ userId: 5, runId: 9, now: new Date(NOW.getTime() + 5 * 60_000 + 1_000) });
+    expect(estimateForCampaign).toHaveBeenCalledTimes(2);
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun({ id: '10' }));
+    await service.getRunEstimate({ userId: 5, runId: 10, now: NOW });
+    expect(estimateForCampaign).toHaveBeenCalledTimes(3);
+  });
+
+  it('ước tính ném lỗi → 200 với estimate null (không ném), và kết quả lỗi cũng được đệm', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun());
+    estimateForCampaign.mockRejectedValue(new Error('Sheet 504'));
+    await expect(service.getRunEstimate({ userId: 5, runId: 9, now: NOW })).resolves.toEqual({ runId: 9, continuous: false, estimate: null });
+    await service.getRunEstimate({ userId: 5, runId: 9, now: NOW });
+    expect(estimateForCampaign).toHaveBeenCalledTimes(1);
+  });
+
+  it('đọc sổ lỗi → estimate null, không ném', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun());
+    ledgerRepository.summarizeRunProgress.mockRejectedValue(new Error('db'));
+    await expect(service.getRunEstimate({ userId: 5, runId: 9, now: NOW })).resolves.toMatchObject({ estimate: null });
+  });
+
+  it('chiến dịch đã bị xoá (estimateForCampaign trả null) → estimate null', async () => {
+    userRepository.findOwnedRunForEstimate.mockResolvedValue(ownedRun());
+    estimateForCampaign.mockResolvedValue(null);
+    await expect(service.getRunEstimate({ userId: 5, runId: 9, now: NOW })).resolves.toMatchObject({ estimate: null });
   });
 });

@@ -327,3 +327,58 @@ describe('estimateCampaignSend — biên', () => {
     expect(vnDayKey(Date.parse('2026-10-05T16:59:59Z'))).toBe('2026-10-05');
   });
 });
+
+describe('estimateCampaignSend — initialProgress (phần CÒN LẠI của lượt đang chạy, PR-5)', () => {
+  it('799 người x 2 node, node 1 xong hết + node 2 xong 300 → chỉ còn 499 tin ở node 2, xong 05/10 19:50:00', () => {
+    // Node 1 (kết bạn): không còn việc → untouched 0. Node 2: untouched = 799 − 300 = 499.
+    // Bắt đầu 05/10 06:00, 1 nick, 100 s/tin: tin k gửi lúc 06:00 + k×100 s, k = 0..498 (tin đầu không ngủ).
+    // 498 × 100 = 49.800 s = 13h50m00s → tin cuối 19:50:00 (< 23:00 nên không đụng giờ nghỉ). Tổng 499 tin.
+    const result = estimateCampaignSend({
+      startAt: vn('2026-10-05T06:00:00'),
+      groups: [
+        group({ nodeId: 'A', channel: 'zalo_friend_request', recipients: 799, initialProgress: { untouched: 0, partial: [] } }),
+        group({ nodeId: 'B', channel: 'zalo_personal', recipients: 799, initialProgress: { untouched: 799 - 300, partial: [] } }),
+      ],
+    });
+    expect(result.totalActions).toBe(499);
+    expect(result.finishAtLatest).toBe(vn('2026-10-05T19:50:00').toISOString());
+    expect(result.perNode.find((n) => n.nodeId === 'B').recipients).toBe(499);
+    expect(warningCodes(result)).not.toContain('multi_day');
+  });
+
+  it('chuỗi 2 bước cách 1 ngày: người xong bước 1 chờ tới hạn trong sổ (12:00), người mới đi cả hai bước → xong 06/10 06:01:40', () => {
+    // Bắt đầu 05/10 06:00; 100 s/tin; sendMode schedule, bước 2 sau 1 ngày kể từ bước trước.
+    // Người B (chưa gửi gì): bước 1 lúc 06:00 (tin đầu không ngủ) → hạn bước 2 = 06/10 06:00.
+    // Người A (đã xong bước 1, sổ ghi hạn 05/10 12:00): chưa đến hạn lúc 06:00 → bỏ qua lượt đầu; lượt sau bắt đầu 12:00,
+    //   tin này phải ngủ 100 s (đã có tin trước) → gửi 12:01:40.
+    // Lượt sau nữa bắt đầu 06/10 06:00: bước 2 của B, ngủ 100 s → 06:01:40 (kịch bản nhanh nhất, độ trễ đánh thức 0).
+    // Tổng 3 tin; người nhận còn lại = 2.
+    const result = estimateCampaignSend({
+      startAt: vn('2026-10-05T06:00:00'),
+      groups: [
+        group({
+          nodeId: 'A',
+          sendMode: 'schedule',
+          recipients: 99, // bị thay bằng initialProgress
+          steps: [{ delayMs: 0, delayFrom: 'prev' }, { delayMs: DAY, delayFrom: 'prev' }],
+          initialProgress: {
+            untouched: 1,
+            partial: [{ stepsDone: 1, dueAtMs: vn('2026-10-05T12:00:00').getTime(), count: 1 }],
+          },
+        }),
+      ],
+    });
+    expect(result.finishAtEarliest).toBe(vn('2026-10-06T06:01:40').toISOString());
+    expect(result.totalActions).toBe(3);
+    expect(result.perNode[0].recipients).toBe(2);
+  });
+
+  it('người đã xong đủ bước (stepsDone >= số bước) bị bỏ; không còn ai → xong ngay, 0 tin', () => {
+    const result = estimateCampaignSend({
+      startAt: vn('2026-10-05T06:00:00'),
+      groups: [group({ initialProgress: { untouched: 0, partial: [{ stepsDone: 1, dueAtMs: null, count: 5 }] } })],
+    });
+    expect(result.totalActions).toBe(0);
+    expect(result.finishAtLatest).toBe(vn('2026-10-05T06:00:00').toISOString());
+  });
+});
