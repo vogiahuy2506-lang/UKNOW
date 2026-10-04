@@ -61,6 +61,14 @@ async function seedOwnerResources(ownerId) {
   return { emailId: email.id, zaloId: zalo.id, emailTemplateId: emailTemplate.id, zaloTemplateId: zaloTemplate.id };
 }
 
+async function assignZalo(owner, employee, zaloId) {
+  await db.query(
+    `INSERT INTO member_channel_accounts (owner_id, employee_id, channel, account_ref, source)
+     VALUES ($1, $2, 'zalo_personal', $3, 'assigned')`,
+    [owner.id, employee.id, String(zaloId)]
+  );
+}
+
 const emailScript = ({ fromEmailId, templateId }) => ({
   campaignName: 'Email của nhân viên',
   nodes: [
@@ -130,11 +138,13 @@ describe('POST /api/ai/prepare-campaign — nhân viên dùng tài khoản + m�
     expect(Number(sendNode.config.fromEmailId)).toBe(Number(r.emailId));
   });
 
-  it('Zalo cá nhân: tài khoản + mẫu của chủ chọn được (explicit), và mặc định của chủ được điền khi để trống', async () => {
+  it('Zalo cá nhân: tài khoản + mẫu của chủ chọn được (explicit), và mặc định của chủ được điền khi để trống — khi nhân viên ĐƯỢC GIAO tài khoản', async () => {
     const owner = await createUser({ email: 'g3a-conf-owner3@test.com', username: 'g3a_conf_owner3' });
     const employee = await createUser({ email: 'g3a-conf-emp3@test.com', username: 'g3a_conf_emp3', role: 'employee' });
     await addEmployee(owner, employee);
     const r = await seedOwnerResources(owner.id);
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3: nhân viên chỉ dùng tài khoản Zalo được giao.
+    await assignZalo(owner, employee, r.zaloId);
 
     const explicit = await prepareAsEmployee(employee, owner, zaloScript({ zaloAccountId: r.zaloId, templateId: r.zaloTemplateId }), zaloRecipients());
     expect(explicit.status).toBe(200);
@@ -149,6 +159,30 @@ describe('POST /api/ai/prepare-campaign — nhân viên dùng tài khoản + m�
     // Node select_zalo_account do patchDeterministicCampaignScript chèn cũng mang tài khoản mặc định của CHỦ.
     const selectNode = findNode(byDefault.body.data.preparedScript, 'select_zalo_account');
     expect(Number(selectNode.config.zaloAccountId)).toBe(Number(r.zaloId));
+  });
+
+  it('PR-G3 Zalo: nhân viên CHƯA được giao tài khoản của chủ → explicit và mặc định đều bị chặn missing_sender; bản nháp không mang tài khoản', async () => {
+    const owner = await createUser({ email: 'g3a-conf-owner5@test.com', username: 'g3a_conf_owner5' });
+    const employee = await createUser({ email: 'g3a-conf-emp5@test.com', username: 'g3a_conf_emp5', role: 'employee' });
+    await addEmployee(owner, employee);
+    const r = await seedOwnerResources(owner.id);
+
+    const explicit = await prepareAsEmployee(employee, owner, zaloScript({ zaloAccountId: r.zaloId, templateId: r.zaloTemplateId }), zaloRecipients());
+    expect(explicit.status).toBe(200);
+    expect(explicit.body.data.confirmationView.readyToCreate).toBe(false);
+    expect(explicit.body.data.confirmationView.blockingIssues.map((i) => i.code)).toContain('missing_sender');
+    expect(findNode(explicit.body.data.preparedScript, 'send_zalo_personal').config.zaloAccountId).toBeUndefined();
+
+    const byDefault = await prepareAsEmployee(employee, owner, zaloScript({ zaloAccountId: null, templateId: r.zaloTemplateId }), zaloRecipients());
+    expect(byDefault.body.data.confirmationView.readyToCreate).toBe(false);
+    expect(findNode(byDefault.body.data.preparedScript, 'send_zalo_personal').config.zaloAccountId).toBeUndefined();
+
+    // CHỦ: cùng bản nháp vẫn sẵn sàng (không bị lọc).
+    const ownerRes = await request(app)
+      .post('/api/ai/prepare-campaign')
+      .set('Authorization', `Bearer ${tokenOf(owner)}`)
+      .send({ script: zaloScript({ zaloAccountId: r.zaloId, templateId: r.zaloTemplateId }), directRecipients: zaloRecipients() });
+    expect(ownerRes.body.data.confirmationView.readyToCreate).toBe(true);
   });
 
   it('fail-closed: người ngoài (workspace khác) dùng id tài khoản + mẫu của chủ → bị chặn missing_sender + template_not_found', async () => {
