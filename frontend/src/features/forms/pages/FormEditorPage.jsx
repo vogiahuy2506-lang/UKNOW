@@ -33,6 +33,12 @@ import { useAuthStore } from '../../../stores/authStore';
 import productApiService from '../../products/services/productApi.service';
 import { PAYOS_BANK_BIN_MAP } from '../../../utils/payosBankBinMap';
 import {
+  PAYMENT_PURPOSES,
+  DEFAULT_PAYMENT_PURPOSE,
+  resolvePaymentPurpose,
+  editorPaymentPurposeKeys,
+} from '../utils/paymentPurpose.util';
+import {
   fetchFormById,
   createForm,
   updateForm,
@@ -224,6 +230,7 @@ const DEFAULT_PAYMENT = {
   momoQrAccount: '',
   momoQrRefLabel: '',
   holdMinutes: DEFAULT_HOLD_MINUTES,
+  purpose: DEFAULT_PAYMENT_PURPOSE,
 };
 
 const STORAGE_PAYMENT_PRESET_KEY = 'uknow_form_payment_preset';
@@ -569,6 +576,7 @@ export default function FormEditorPage() {
             momoQrAccount: data.paymentConfig.momoQrAccount || '',
             momoQrRefLabel: data.paymentConfig.momoQrRefLabel || '',
             holdMinutes: data.paymentConfig.holdMinutes ?? DEFAULT_HOLD_MINUTES,
+            purpose: resolvePaymentPurpose(data.paymentConfig.purpose),
           });
         } else {
           setPayment(DEFAULT_PAYMENT);
@@ -1230,6 +1238,7 @@ export default function FormEditorPage() {
             method: primaryMethod,
             amount: Number(payment.amount),
             holdMinutes: Number(payment.holdMinutes),
+            purpose: resolvePaymentPurpose(payment.purpose),
           };
           if (activeMethods.includes('bank')) {
             payload.paymentConfig.bankBin = payment.bankBin;
@@ -2293,6 +2302,26 @@ export default function FormEditorPage() {
                 )}
               </div>
 
+              <div>
+                <label htmlFor="form-payment-purpose" className="block text-xs font-medium text-gray-700 mb-1">
+                  {t('forms.editorPage.payment.purposeLabel')}
+                </label>
+                <select
+                  id="form-payment-purpose"
+                  disabled={isEmployee}
+                  value={resolvePaymentPurpose(payment.purpose)}
+                  onChange={(e) => setPayment((prev) => ({ ...prev, purpose: e.target.value }))}
+                  className="w-full px-3 py-2 bg-white rounded-xl border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:border-primary-500 focus:ring-primary-100 disabled:bg-gray-50 disabled:text-gray-500"
+                >
+                  {PAYMENT_PURPOSES.map((p) => (
+                    <option key={p} value={p}>
+                      {t(editorPaymentPurposeKeys(p).option)}
+                    </option>
+                  ))}
+                </select>
+                <p className="text-xs text-gray-500 mt-1">{t('forms.editorPage.payment.purposeHelp')}</p>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2320,7 +2349,7 @@ export default function FormEditorPage() {
 
                 <div>
                   <label className="block text-xs font-medium text-gray-700 mb-1">
-                    {t('forms.editorPage.payment.holdMinutesLabel')}
+                    {t(editorPaymentPurposeKeys(payment.purpose).holdMinutesLabel)}
                   </label>
                   <input
                     type="number"

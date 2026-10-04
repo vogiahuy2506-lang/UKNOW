@@ -156,6 +156,40 @@ describe('FormSubmissionStatusPage component', () => {
     expect(backLink).toHaveAttribute('href', '/f/pub_expired');
   });
 
+  it('purpose=order: đồng hồ dùng chữ thanh toán (paymentPurpose từ snapshot)', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue({
+      ...pendingPayment,
+      paymentPurpose: 'order',
+      payment: { ...pendingPayment.payment, purpose: 'order' },
+    });
+    renderStatusPage('/f/pub_order/s/tok_order');
+    await waitFor(() => expect(screen.getByTestId('hold-countdown')).toBeInTheDocument());
+    expect(screen.getByTestId('hold-countdown').textContent).toMatch(/^Vui lòng thanh toán trong:/);
+  });
+
+  it('purpose=order + hết hạn (payment=null) -> "Hết thời gian thanh toán"; deposit -> "Hết thời gian đặt cọc"', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue({
+      ...pendingPayment, holdExpired: true, payment: null, paymentPurpose: 'order',
+    });
+    const { unmount } = renderStatusPage('/f/pub_order/s/tok_order');
+    await waitFor(() => expect(screen.getByText('Hết thời gian thanh toán')).toBeInTheDocument());
+    expect(screen.queryByText(/Hết thời gian giữ chỗ|Lượt giữ chỗ/i)).not.toBeInTheDocument();
+    unmount();
+
+    fetchPublicSubmissionStatus.mockResolvedValue({
+      ...pendingPayment, holdExpired: true, payment: null, paymentPurpose: 'deposit',
+    });
+    renderStatusPage('/f/pub_dep/s/tok_dep');
+    await waitFor(() => expect(screen.getByText('Hết thời gian đặt cọc')).toBeInTheDocument());
+  });
+
+  it('bài nộp cũ không có paymentPurpose -> đồng hồ vẫn "Giữ chỗ trong"', async () => {
+    fetchPublicSubmissionStatus.mockResolvedValue(pendingPayment);
+    renderStatusPage('/f/pub_old/s/tok_old');
+    await waitFor(() => expect(screen.getByTestId('hold-countdown')).toBeInTheDocument());
+    expect(screen.getByTestId('hold-countdown').textContent).toMatch(/^Giữ chỗ trong:/);
+  });
+
   it('confirmed -> hiện "Đã xác nhận", KHÔNG hiện QR', async () => {
     fetchPublicSubmissionStatus.mockResolvedValue({
       status: 'confirmed',

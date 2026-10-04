@@ -441,9 +441,79 @@ describe('FormEditorPage component', () => {
         accountNumber: '0123456789',
         accountName: 'Nguyen Van A',
         holdMinutes: 30,
+        purpose: 'hold',
       });
       expect(typeof payload.paymentConfig.amount).toBe('number');
       expect(typeof payload.paymentConfig.holdMinutes).toBe('number');
+    });
+
+    it('chọn "Thanh toán đơn hàng": payload.paymentConfig.purpose = order và nhãn thời hạn đổi theo', async () => {
+      formAdminApi.createForm.mockResolvedValue({ id: 'new-form-payment-order' });
+
+      const { container } = render(
+        <MemoryRouter initialEntries={['/app/forms/new']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/new" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      startBlankForm();
+      fireEvent.change(screen.getByPlaceholderText(/Ví dụ: Đăng ký tư vấn lộ trình 1-1/i), {
+        target: { value: 'Form bán khoá học' },
+      });
+      openPaymentBlock();
+      fireEvent.click(screen.getByRole('checkbox', { name: /Bật thanh toán/i }));
+      fillPaymentFields(container);
+
+      expect(screen.getByText('Giữ chỗ trong (phút)')).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText('Khách thấy khoản tiền này là'), { target: { value: 'order' } });
+      expect(screen.getByText('Thời hạn thanh toán (phút)')).toBeInTheDocument();
+      expect(screen.queryByText('Giữ chỗ trong (phút)')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+
+      await waitFor(() => expect(formAdminApi.createForm).toHaveBeenCalledTimes(1));
+      const [payload] = formAdminApi.createForm.mock.calls[0];
+      expect(payload.paymentConfig.purpose).toBe('order');
+    });
+
+    it('mở biểu mẫu cũ không có purpose -> ô chọn hiện "Giữ chỗ" và lưu lại purpose hold', async () => {
+      const oldForm = {
+        ...existingForm,
+        paymentConfig: {
+          enabled: true,
+          methods: ['bank'],
+          method: 'bank',
+          amount: 200000,
+          bankBin: '970415',
+          accountNumber: '9999999999',
+          accountName: 'NGUYEN VAN B',
+          holdMinutes: 45,
+        },
+      };
+      formAdminApi.fetchFormById.mockResolvedValue(oldForm);
+      formAdminApi.updateForm.mockResolvedValue(oldForm);
+
+      render(
+        <MemoryRouter initialEntries={['/app/forms/form-existing-456/edit']}>
+          <I18nProvider>
+            <Routes>
+              <Route path="/app/forms/:id/edit" element={<FormEditorPage />} />
+            </Routes>
+          </I18nProvider>
+        </MemoryRouter>
+      );
+
+      await waitFor(() => expect(screen.getByDisplayValue('Biểu mẫu khảo sát')).toBeInTheDocument());
+      expect(screen.getByLabelText('Khách thấy khoản tiền này là')).toHaveValue('hold');
+
+      fireEvent.click(screen.getByRole('button', { name: /Lưu biểu mẫu/i }));
+      await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
+      const [, payload] = formAdminApi.updateForm.mock.calls[0];
+      expect(payload.paymentConfig.purpose).toBe('hold');
     });
 
     it('chủ tài khoản KHÔNG bật thanh toán: payload.paymentConfig: null (khoá vẫn có mặt)', async () => {
@@ -639,6 +709,7 @@ describe('FormEditorPage component', () => {
         momoPhone: '0912345678',
         momoName: 'Nguyen Van MoMo',
         holdMinutes: 30,
+        purpose: 'hold',
         momoQrMode: 'phone',
         momoQrBin: '971025',
         momoQrAccount: '0912345678',
@@ -771,6 +842,7 @@ describe('FormEditorPage component', () => {
         momoPhone: '0988888888',
         momoName: 'NGUYEN VAN MOMO',
         holdMinutes: 30,
+        purpose: 'hold',
         momoQrMode: 'phone',
         momoQrBin: '971025',
         momoQrAccount: '0988888888',
@@ -1182,6 +1254,7 @@ describe('FormEditorPage component', () => {
         accountNumber: '0123456789',
         accountName: 'Nguyen Van A',
         holdMinutes: 30,
+        purpose: 'hold',
       });
       expect(payload.bookingConfig).toBeNull();
       expect(payload.settings.sendConfirmation).toBe(true);

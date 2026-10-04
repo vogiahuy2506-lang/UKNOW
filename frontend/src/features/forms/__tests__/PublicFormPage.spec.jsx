@@ -329,6 +329,20 @@ describe('PublicFormPage — PR-3b thanh toán giữ chỗ', () => {
     expect(screen.getByText((text) => text.includes('150.000') && text.includes('đ'))).toBeInTheDocument();
   });
 
+  it.each([
+    [undefined, 'Cần chuyển khoản 150.000 đ để giữ chỗ.'],
+    ['hold', 'Cần chuyển khoản 150.000 đ để giữ chỗ.'],
+    ['order', 'Cần chuyển khoản 150.000 đ để hoàn tất đơn hàng.'],
+    ['deposit', 'Cần chuyển khoản 150.000 đ để đặt cọc.'],
+  ])('payment.purpose=%s -> dòng nhắc đúng chữ (thiếu purpose = giữ chỗ như cũ)', async (purpose, expected) => {
+    fetchPublicForm.mockResolvedValue({ ...baseForm, payment: { enabled: true, amount: 150000, purpose } });
+
+    renderPagePr3b('/f/pub_pay');
+
+    await waitFor(() => expect(screen.getByText('Form PR-5')).toBeInTheDocument());
+    expect(screen.getByText(expected)).toBeInTheDocument();
+  });
+
   it('form KHÔNG bật payment -> không hiện dòng thông báo giữ chỗ', async () => {
     fetchPublicForm.mockResolvedValue(baseForm);
 

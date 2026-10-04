@@ -9,6 +9,7 @@ import {
 import FormRenderer from '../components/FormRenderer';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
 import { formatVnd } from '../../../utils/vietqrParser';
+import { publicPaymentKeys } from '../utils/paymentPurpose.util';
 
 // PR-7a — biểu mẫu biết mình đến từ landing nào + UTM (PLAN_FORM_DAT_LICH_THANH_TOAN_2026-09-13.md
 // mục PR-7): ánh xạ tên tham số URL (snake_case, chuẩn UTM) sang khoá payload (camelCase, khớp
@@ -114,7 +115,7 @@ export default function PublicFormPage() {
       const status = err.response?.status;
       const code = err.response?.data?.code;
       if (code === 'FORM_TOO_MANY_PENDING_HOLDS') {
-        setSubmitError(t('publicForm.payment.tooManyPendingHolds'));
+        setSubmitError(t(publicPaymentKeys(form?.payment?.purpose).tooManyPendingHolds));
       } else if (status === 429) {
         setSubmitError(t('publicForm.rateLimitError'));
       } else {
@@ -214,7 +215,7 @@ export default function PublicFormPage() {
     <div ref={embedRootRef} className={formWrapperClass} style={pageBackgroundStyle}>
       {form?.payment?.enabled && (
         <div className="w-full max-w-xl mx-auto mb-3 px-4 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-xs sm:text-sm font-medium text-center">
-          {t('publicForm.payment.requiredNotice', { amount: formatVnd(form.payment.amount) })}
+          {t(publicPaymentKeys(form.payment.purpose).requiredNotice, { amount: formatVnd(form.payment.amount) })}
         </div>
       )}
       <FormRenderer

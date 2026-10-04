@@ -15,6 +15,7 @@ import { useI18n } from '../../../i18n';
 import { fetchPublicSubmissionStatus, reportSubmissionPaid, uploadSubmissionReceipt } from '../services/formPublicApi.service';
 import { compressReceiptImage } from '../../../utils/receiptCompressor';
 import { formatAppointmentAtVn } from '../utils/bookingFormat.util';
+import { publicPaymentKeys } from '../utils/paymentPurpose.util';
 import { formatVnd, formatCountdown } from '../../../utils/vietqrParser';
 import { useFormEmbedResize } from '../hooks/useFormEmbedResize';
 import { useFormFont } from '../utils/useFormFont';
@@ -340,6 +341,8 @@ export default function FormSubmissionStatusPage() {
   }
 
   const { status, formTitle, appointmentAt, payment, holdExpired } = statusData;
+  // Chữ theo cách chủ biểu mẫu gọi khoản tiền LÚC NỘP (server trả từ snapshot; bài cũ -> hold).
+  const paymentKeys = publicPaymentKeys(statusData.paymentPurpose ?? payment?.purpose);
 
   return (
     <div ref={embedRootRef} className={wrapperClass} style={themeRootStyle}>
@@ -367,7 +370,7 @@ export default function FormSubmissionStatusPage() {
             <div className="flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-sm font-semibold">
               {countdownSeconds !== null && (
                 <span data-testid="hold-countdown">
-                  {t('publicForm.payment.holdCountdown', { time: formatCountdown(countdownSeconds) })}
+                  {t(paymentKeys.holdCountdown, { time: formatCountdown(countdownSeconds) })}
                 </span>
               )}
             </div>
@@ -706,8 +709,8 @@ export default function FormSubmissionStatusPage() {
             <div className="w-14 h-14 mx-auto mb-3 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center">
               <HiOutlineExclamationCircle className="w-7 h-7" />
             </div>
-            <h2 className="text-base font-semibold text-gray-900 mb-2">{t('publicForm.payment.holdExpiredTitle')}</h2>
-            <p className="text-sm text-gray-500 mb-4">{t('publicForm.payment.holdExpiredDesc')}</p>
+            <h2 className="text-base font-semibold text-gray-900 mb-2">{t(paymentKeys.holdExpiredTitle)}</h2>
+            <p className="text-sm text-gray-500 mb-4">{t(paymentKeys.holdExpiredDesc)}</p>
             <Link
               to={`/f/${encodeURIComponent(publicKey)}${embedMode ? '?embed=1' : ''}`}
               className="inline-flex items-center px-4 py-2 rounded-xl bg-[color:var(--form-primary,#df5c0e)] hover:brightness-95 text-[color:var(--form-primary-text,#ffffff)] text-sm font-medium transition-colors"
