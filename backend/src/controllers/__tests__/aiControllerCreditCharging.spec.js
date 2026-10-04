@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const processSmartChat = jest.fn();
-const processSmartChatV2 = jest.fn();
 const chargeAiCredit = jest.fn();
 const createSession = jest.fn();
 const saveMessages = jest.fn();
@@ -24,18 +23,9 @@ const validateNodeConfig = jest.fn(() => ({ valid: true, errors: [] }));
 const campaignControllerCreate = jest.fn();
 const fillReadSheetFirstTabNames = jest.fn(async () => {});
 
-// G3a: hai endpoint sinh kịch bản đọc tệp theo storage_key — controller phải truyền id CHỦ để dịch vụ kiểm chủ tệp.
-const generateCampaignScript = jest.fn();
-const generateCampaignWithRegistry = jest.fn();
-const validateCampaignScript = jest.fn(() => ({ valid: true, errors: [], warnings: [] }));
-
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
   default: {
     processSmartChat,
-    processSmartChatV2,
-    generateCampaignScript,
-    generateCampaignWithRegistry,
-    validateCampaignScript,
   },
 }));
 

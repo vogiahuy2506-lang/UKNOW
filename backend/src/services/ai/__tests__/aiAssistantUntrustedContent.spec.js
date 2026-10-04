@@ -213,18 +213,5 @@ describe('C P1-4 (d) — tài liệu chứa lệnh giả: prompt gửi Gemini c�
       // Lệnh giả KHÔNG được lọt vào system prompt (nơi model tin nhất): chỉ nằm trong lượt user, sau rào.
       expect(system).not.toContain(FAKE_ORDER);
     });
-
-    it('processSmartChatV2 (cùng transport, prompt riêng) cũng mang luật', async () => {
-      await aiCampaignService.processSmartChatV2({
-        userId: 7,
-        history: [{ role: 'user', content: 'Xin chào trợ lý' }],
-        files: [{ tempId: 't-1', originalName: 'bang_gia.docx', contentType: DOCX }],
-        locale: 'vi',
-      });
-
-      const req = lastRequest();
-      expect(systemText(req)).toContain(UNTRUSTED_CONTENT_RULE);
-      expectFenced(blockWithFakeOrder(req), '[Nội dung tệp đính kèm: "bang_gia.docx"]:', '[Hết nội dung tệp: "bang_gia.docx"]');
-    });
   });
 });

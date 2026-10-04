@@ -4,11 +4,10 @@ import { beforeEach, describe, expect, it, jest } from '@jest/globals';
  * G3a.1 (C P1-1) — trợ lý AI đọc tệp theo `storage_key` do CLIENT gửi (`history[].files[].storage_key`, `files[]`).
  *
  * Trước đây `readFileBufferByKey` chỉ chuẩn hoá khoá (tiền tố `uploads/`, không `..`), KHÔNG kiểm chủ: user A gửi
- * `uploads/<B>/chat/…` thì nội dung tệp của B đi thẳng vào Gemini rồi model chép lại cho A. Bốn chỗ đọc:
+ * `uploads/<B>/chat/…` thì nội dung tệp của B đi thẳng vào Gemini rồi model chép lại cho A. Hai chỗ đọc còn lại
+ * (hai route sinh kịch bản cũ + chat-v2 đã xoá ở PR-13 `chore/ai-don-rac`):
  *   1. aiChatTransport.runChat (mọi lượt chat của trợ lý)
  *   2. aiCampaign.processSmartChat — trích brief từ tệp (khối "extractedAttachedFile")
- *   3. aiCampaign.generateCampaignScript (POST /ai/generate-campaign)
- *   4. aiCampaign.generateCampaignWithRegistry (POST /ai/generate-campaign-v2)
  * Mỗi chỗ phải kiểm khoá nằm dưới `uploads/<CHỦ workspace>/` — chủ chứ không phải người thao tác (nhân viên tải tệp
  * thì tệp nằm dưới id chủ: uploadController.promoteTemp / chatAttachment.persistChatBlob đều dùng ownerUserId).
  *
@@ -21,7 +20,6 @@ const extractTextFromBuffer = jest.fn();
 const generateGeminiContent = jest.fn();
 const reserve = jest.fn();
 const record = jest.fn();
-const generateWithBudget = jest.fn();
 
 jest.unstable_mockModule('../../../controllers/upload.controller.js', () => ({
   default: { readTempFileBuffer, readFileBufferByKey },
@@ -39,7 +37,6 @@ jest.unstable_mockModule('../aiUsageMeter.service.js', () => ({
     reserve,
     record,
     resolveFallbackModel: jest.fn(async () => null),
-    generateWithBudget,
   },
 }));
 jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
@@ -126,7 +123,6 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
     generateGeminiContent.mockReset();
     reserve.mockReset();
     record.mockReset();
-    generateWithBudget.mockReset();
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     record.mockResolvedValue(undefined);
     generateGeminiContent.mockResolvedValue({
@@ -136,7 +132,6 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
       modelUsed: 'gemini-2.5-flash',
       raw: { candidates: [{ content: { parts: [{ text: 'ok' }] } }] },
     });
-    generateWithBudget.mockResolvedValue({ text: '{"campaignName":"Chien dich thu","nodes":[],"connections":[]}' });
     wireFiles();
     jest.spyOn(console, 'log').mockImplementation(() => {});
     warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -285,82 +280,6 @@ describe('G3a.1 — trợ lý AI chỉ đọc tệp theo storage_key của CHỦ
       expect(readFileBufferByKey).toHaveBeenCalledWith(OWN_KEY);
       expect(geminiTexts()).toContain('noi dung tep cua minh');
       expect(geminiTexts()).not.toContain(SECRET);
-    });
-  });
-
-  describe('2b. processSmartChatV2', () => {
-    it('tệp workspace khác không được đọc; nhân viên đọc được tệp dưới id chủ', async () => {
-      await aiCampaignService.processSmartChatV2({
-        history: [{ role: 'user', content: 'Xin chào trợ lý' }],
-        files: [fileOf(FOREIGN_KEY), fileOf(OWN_KEY)],
-        userId: EMPLOYEE,
-        resourceOwnerUserId: OWNER,
-        locale: 'vi',
-      });
-
-      expect(readFileBufferByKey).toHaveBeenCalledTimes(1);
-      expect(readFileBufferByKey).toHaveBeenCalledWith(OWN_KEY);
-      expect(geminiTexts()).not.toContain(SECRET);
-    });
-  });
-
-  describe('3. generateCampaignScript (POST /ai/generate-campaign)', () => {
-    const partsSentToGemini = () => generateWithBudget.mock.calls.flatMap(([, args]) => args.parts.map((p) => p.text || '')).join('\n');
-
-    it('generateCampaignScript — tệp của workspace khác: không đọc, vẫn sinh kịch bản', async () => {
-      const script = await aiCampaignService.generateCampaignScript({
-        prompt: 'tạo chiến dịch',
-        files: [fileOf(FOREIGN_KEY)],
-        userId: OWNER,
-      });
-
-      expect(readFileBufferByKey).not.toHaveBeenCalled();
-      expect(script).toMatchObject({ data: { campaignName: 'Chien dich thu' } });
-      expect(partsSentToGemini()).not.toContain(SECRET);
-    });
-
-    it('generateCampaignScript — nhân viên (ownerUserId=chủ) đọc được tệp dưới id chủ, không đọc tệp workspace khác', async () => {
-      await aiCampaignService.generateCampaignScript({
-        prompt: 'tạo chiến dịch',
-        files: [fileOf(FOREIGN_KEY), fileOf(OWN_KEY)],
-        userId: EMPLOYEE,
-        ownerUserId: OWNER,
-      });
-
-      expect(readFileBufferByKey).toHaveBeenCalledTimes(1);
-      expect(readFileBufferByKey).toHaveBeenCalledWith(OWN_KEY);
-      expect(partsSentToGemini()).toContain('noi dung tep cua minh');
-      expect(partsSentToGemini()).not.toContain(SECRET);
-    });
-  });
-
-  describe('4. generateCampaignWithRegistry (POST /ai/generate-campaign-v2)', () => {
-    const partsSentToGemini = () => generateWithBudget.mock.calls.flatMap(([, args]) => args.parts.map((p) => p.text || '')).join('\n');
-
-    it('generateCampaignWithRegistry — tệp của workspace khác: không đọc, vẫn sinh kịch bản', async () => {
-      const script = await aiCampaignService.generateCampaignWithRegistry({
-        prompt: 'tạo chiến dịch',
-        files: [fileOf(FOREIGN_KEY)],
-        userId: OWNER,
-      });
-
-      expect(readFileBufferByKey).not.toHaveBeenCalled();
-      expect(script).toMatchObject({ data: { campaignName: 'Chien dich thu' } });
-      expect(partsSentToGemini()).not.toContain(SECRET);
-    });
-
-    it('generateCampaignWithRegistry — nhân viên (ownerUserId=chủ) đọc được tệp dưới id chủ, không đọc tệp workspace khác', async () => {
-      await aiCampaignService.generateCampaignWithRegistry({
-        prompt: 'tạo chiến dịch',
-        files: [fileOf(FOREIGN_KEY), fileOf(OWN_KEY)],
-        userId: EMPLOYEE,
-        ownerUserId: OWNER,
-      });
-
-      expect(readFileBufferByKey).toHaveBeenCalledTimes(1);
-      expect(readFileBufferByKey).toHaveBeenCalledWith(OWN_KEY);
-      expect(partsSentToGemini()).toContain('noi dung tep cua minh');
-      expect(partsSentToGemini()).not.toContain(SECRET);
     });
   });
 });

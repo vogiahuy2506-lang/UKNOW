@@ -81,8 +81,7 @@ describe('assertAiCreditAvailable — lượt sửa tự động (plan landing t
   // MỌI feature hễ body có autoLayoutFix:true, và chargeAiCredit bỏ trừ theo cùng cờ → gửi thêm một
   // trường vào /ai/chat là dùng AI miễn phí không giới hạn. Chỉ feature sửa landing mới được miễn.
   it.each([
-    'ai_assistant_chat', 'ai_assistant_chat_v2', 'ai_generate_campaign', 'ai_generate_campaign_v2',
-    'ai_generate_landing_html', 'ai_generate_system_instruction', 'ai_custom_chat',
+    'ai_assistant_chat', 'ai_generate_landing_html', 'ai_generate_system_instruction', 'ai_custom_chat',
     'dashboard_insights', 'inbox_ai_summary',
   ])('feature KHÁC (%s) + autoLayoutFix:true → VẪN kiểm credit và VẪN bị trừ', async (feature) => {
     const req = makeReq({ autoLayoutFix: true });

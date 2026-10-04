@@ -626,17 +626,7 @@ describe('aiCampaign.service', () => {
       expect((await aiCampaignService._getWizardResources(3)).zaloAccessRestricted).toBe(false);
     });
 
-    it('generateCampaignScript (nhân viên): tài khoản Zalo tra theo CHỦ, lọc theo việc giao', async () => {
-      reserve.mockResolvedValue({ maxOutputTokens: 1024 });
-      extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
-      axiosPost.mockResolvedValue({
-        data: { candidates: [{ content: { parts: [{ text: '{"campaignName":"c","nodes":[],"connections":[]}' }] } }] },
-      });
-      await aiCampaignService.generateCampaignScript({ prompt: 'gửi tin', userId: 9, ownerUserId: 3 }).catch(() => {});
-      expect(getZaloAccounts).toHaveBeenCalledWith(3, [5]);
-      expect(getZaloGroups).toHaveBeenCalledWith(3, [5]);
-      expect(getZaloAccounts).not.toHaveBeenCalledWith(9, expect.anything());
-    });
+    // (Ca `generateCampaignScript (nhân viên)` của G3 đã gỡ cùng hàm — PR-13 C P3-2 xoá route /generate-campaign không ai gọi.)
   });
 
   // C P3-1 (PLAN_SUA_AI_DOT4 PR-3): lượt mà JSON của model hỏng không được tính credit. Cờ `parseFailed` (do parseAiJson gắn) phải
@@ -1095,74 +1085,6 @@ describe('aiCampaign.service', () => {
     // Landing không có form gắn: dòng của nó KHÔNG chứa "formId=" (đứng riêng, không lẫn số của landing kia).
     const landingThuongLine = systemPrompt.split('\n').find((line) => line.includes('landing-thuong'));
     expect(landingThuongLine).not.toContain('formId=');
-  });
-
-  // PR-5b-2c mục 4 — review PR-5b-2b (16/09) tìm thấy code ĐÃ đúng (formId có mặt ở prompt V2
-  // từ trước) nhưng KHÔNG có test nào canh riêng đường V2 (chỉ V1 có test ở trên) — đột biến xoá
-  // formId khỏi khối "📄 Landing Pages" của processSmartChatV2 không có ca nào bắt được ("xanh"
-  // không phải vì đúng có kiểm chứng, mà vì chưa ai viết test). Bịt lỗ coverage này.
-  it('PR-5b-2c: prompt chat (V2, đường sống ai.controller.js:504) cũng ghi rõ formId cạnh slug landing đã gắn Biểu mẫu', async () => {
-    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
-    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
-    getLandingPages.mockResolvedValueOnce([
-      { slug: 'khoa-hoc-ielts', title: 'Khoá IELTS', isPublished: true, formId: 7 },
-      { slug: 'landing-thuong', title: 'Landing thường', isPublished: true, formId: null },
-    ]);
-    axiosPost.mockResolvedValue({
-      data: {
-        candidates: [
-          {
-            content: { parts: [{ text: '{"type":"text","content":"ok v2","missing_fields":[],"data":null}' }] },
-          },
-        ],
-      },
-    });
-
-    await aiCampaignService.processSmartChatV2({
-      userId: 9,
-      resourceOwnerUserId: 3,
-      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
-      locale: 'vi',
-    });
-
-    expect(getLandingPages).toHaveBeenCalledWith(3);
-    const lastCall = axiosPost.mock.calls[axiosPost.mock.calls.length - 1];
-    const systemPrompt = lastCall[1].systemInstruction.parts[0].text;
-    expect(systemPrompt).toContain('slug: "khoa-hoc-ielts"');
-    expect(systemPrompt).toContain('formId=7');
-    const landingThuongLine = systemPrompt.split('\n').find((line) => line.includes('landing-thuong'));
-    expect(landingThuongLine).not.toContain('formId=');
-  });
-
-  it('employee chat V2: loads tenant resources by owner, meters Gemini by actor', async () => {
-    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
-    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
-    axiosPost.mockResolvedValue({
-      data: {
-        candidates: [
-          {
-            content: {
-              parts: [{ text: '{"type":"text","content":"ok v2","missing_fields":[],"data":null}' }],
-            },
-          },
-        ],
-      },
-    });
-
-    await aiCampaignService.processSmartChatV2({
-      userId: 9,
-      resourceOwnerUserId: 3,
-      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
-      locale: 'vi',
-    });
-
-    expect(getEmailTemplates).toHaveBeenCalledWith(3);
-    expect(getZaloAccounts).toHaveBeenCalledWith(3, [5]); // PR-G3: chỉ tài khoản được giao cho nhân viên
-    expect(getCustomerStats).toHaveBeenCalledWith(3);
-    expect(getContextForPrompt).toHaveBeenCalledWith(3, 'Xin chào trợ lý');
-    expect(getEmailTemplates).not.toHaveBeenCalledWith(9);
-    expect(reserve).toHaveBeenCalledWith(9, expect.any(Object));
-    expect(record).toHaveBeenCalledWith(9, expect.any(Object), expect.objectContaining({ feature: 'smart_chat' }));
   });
 
   it('PR-B: trims content_plan days when model returns more days than user schedule', async () => {

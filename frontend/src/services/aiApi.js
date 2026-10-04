@@ -19,40 +19,6 @@ function formatLandingFiles(files) {
 
 const aiApi = {
   /**
-   * Generate campaign script from AI (V2 - Registry-based, multi-step support).
-   * @param {string} prompt
-   * @param {Array} files Array of { tempId, originalName, ... }
-   */
-  generateCampaignV2: async (prompt, files = []) => {
-    const response = await api.post('/ai/generate-campaign-v2', { prompt, files }, {
-      timeout: 120000
-    });
-    return response.data;
-  },
-
-  /**
-   * Generate campaign script from AI (Legacy).
-   * @param {string} prompt
-   * @param {Array} files Array of { tempId, originalName, ... }
-   */
-  generateCampaign: async (prompt, files = []) => {
-    const response = await api.post('/ai/generate-campaign', { prompt, files }, {
-      timeout: 120000 // 2 minutes for thinking models
-    });
-    return response.data;
-  },
-
-  /**
-   * Execute (Create & Run) the generated campaign.
-   * @param {object} script The campaign script from generateCampaign
-   * @param {boolean} autoRun Whether to run the campaign immediately
-   */
-  executeCampaign: async (script, autoRun = true) => {
-    const response = await api.post('/ai/execute-campaign', { ...script, autoRun });
-    return response.data;
-  },
-
-  /**
    * Create campaign from AI draft (NO auto-run).
    * User will review and run manually.
    * @param {object} script The campaign script from AI
@@ -64,17 +30,6 @@ const aiApi = {
 
   prepareCampaign: async (script, directRecipients = null) => {
     const response = await api.post('/ai/prepare-campaign', { script, ...(directRecipients ? { directRecipients } : {}) });
-    return response.data;
-  },
-
-  /**
-   * Push AI script to an existing campaign.
-   * @param {number} campaignId Target campaign ID
-   * @param {object} script The campaign script
-   * @param {boolean} autoRun Whether to run the campaign immediately
-   */
-  pushToCampaign: async (campaignId, script, autoRun = false) => {
-    const response = await api.post(`/ai/push-to-campaign/${campaignId}`, { script, autoRun });
     return response.data;
   },
 
@@ -112,18 +67,6 @@ const aiApi = {
     if (intent) payload.intent = intent;
     if (planSlotKey) payload.planSlotKey = planSlotKey;
     const response = await api.post('/ai/chat', payload, {
-      timeout: 120000
-    });
-    return response.data;
-  },
-
-  /**
-   * Smart interactive chat V2 - multi-step support.
-   * @param {Array} history Array of { role, content }
-   * @param {Array} files Array of current attached files
-   */
-  chatV2: async (history, files = [], locale = 'vi') => {
-    const response = await api.post('/ai/chat-v2', { history, files, locale }, {
       timeout: 120000
     });
     return response.data;

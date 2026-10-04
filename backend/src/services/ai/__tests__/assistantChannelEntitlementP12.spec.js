@@ -17,7 +17,6 @@ const { default: registry } = await import('../../campaign/campaignNodeRegistry.
 const { normalizeChannel, buildChannelQuestion } = await import('../aiCampaignWizard.service.js');
 const { isCompilableIntent } = await import('../campaignIntent.schema.js');
 const { default: aiPromptResources } = await import('../aiPromptResources.service.js');
-const { default: aiCampaignService } = await import('../aiCampaign.service.js');
 const { channelEntitlementContext } = await import('../../../middleware/channelEntitlement.middleware.js');
 
 const ZALO_NODES = ['send_zalo_personal', 'send_zalo_group', 'send_zalo_friend_request', 'select_zalo_account', 'get_all_friends', 'get_all_groups'];
@@ -75,25 +74,6 @@ describe('trợ lý AI — quyền kênh Zalo theo gói (P12)', () => {
       expect(blocked).not.toContain('"nodeSubtype": "send_zalo_personal"');
       expect(aiPromptResources.getBlockedZaloPromptNotice()).toContain('KÊNH ZALO KHÔNG KHẢ DỤNG');
     });
-  });
-
-  it('validateCampaignScript: node Zalo khi gói không có Zalo là LỖI CỨNG (errors), không chỉ warning', () => {
-    const script = {
-      nodes: [
-        { tempId: 'n1', nodeType: 'action', nodeSubtype: 'send_email', nodeName: 'Gửi email', config: {} },
-        { tempId: 'n2', nodeType: 'action', nodeSubtype: 'send_zalo_personal', nodeName: 'Gửi Zalo', config: {} },
-      ],
-      connections: [],
-    };
-    flags.runWithChannelEntitlements(NO_ZALO, () => {
-      const result = aiCampaignService.validateCampaignScript(script);
-      expect(result.valid).toBe(false);
-      expect(result.errors.join(' ')).toMatch(/Gói của bạn không có kênh Zalo/);
-    });
-    flags.runWithChannelEntitlements(HAS_ZALO, () => {
-      expect(aiCampaignService.validateCampaignScript(script).errors).toEqual([]);
-    });
-    expect(aiCampaignService.validateCampaignScript(script).errors).toEqual([]);
   });
 
   it('wizard: không Zalo -> normalizeChannel bỏ zalo/zalo_group (email giữ), thẻ chọn kênh không có 2 lựa chọn Zalo', () => {

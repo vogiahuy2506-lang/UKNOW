@@ -10,7 +10,6 @@ const mockAutoFillZaloAccounts = jest.fn();
 const mockCleanupAutoCreatedTemplates = jest.fn();
 const mockAssertResourceVersionsCurrent = jest.fn();
 const mockCreateCampaign = jest.fn();
-const mockUpdateCampaign = jest.fn();
 const mockRunCampaign = jest.fn();
 const mockPublishCampaign = jest.fn();
 
@@ -36,7 +35,6 @@ jest.unstable_mockModule('../../services/ai/campaignConfirmation.service.js', ()
 jest.unstable_mockModule('../campaign.controller.js', () => ({
   default: {
     create: mockCreateCampaign,
-    update: mockUpdateCampaign,
     run: mockRunCampaign,
   },
 }));
@@ -489,99 +487,7 @@ describe('aiController Node Validation Enforcement (PR-A1)', () => {
     });
   });
 
-  describe('pushToCampaign', () => {
-    it('blocks push when autoRun=true and node config fails validation', async () => {
-      const invalidScript = {
-        campaignName: 'Invalid Push Campaign',
-        connections: [],
-        nodes: [
-          {
-            id: 'node-1',
-            node_type: 'action',
-            node_subtype: 'send_zalo',
-            config: {}, // missing zaloAccountId and message
-          },
-        ],
-      };
-
-      const req = {
-        params: { id: '10' },
-        body: { script: invalidScript, autoRun: true },
-        user: { id: 1, role: 'user_admin' },
-      };
-      const res = makeRes();
-
-      await aiController.pushToCampaign(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: false,
-          code: 'INVALID_NODE_CONFIG',
-        })
-      );
-      // Ensure update is never called so existing campaign is not overwritten with invalid script
-      expect(mockUpdateCampaign).not.toHaveBeenCalled();
-      expect(mockRunCampaign).not.toHaveBeenCalled();
-    });
-
-    it('blocks push when nodes is empty array -> 400 EMPTY_CAMPAIGN_SCRIPT', async () => {
-      const emptyScript = {
-        campaignName: 'Empty Push Campaign',
-        connections: [],
-        nodes: [],
-      };
-
-      const req = {
-        params: { id: '10' },
-        body: { script: emptyScript, autoRun: false },
-        user: { id: 1, role: 'user_admin' },
-      };
-      const res = makeRes();
-
-      await aiController.pushToCampaign(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: false,
-          code: 'EMPTY_CAMPAIGN_SCRIPT',
-        })
-      );
-      expect(mockUpdateCampaign).not.toHaveBeenCalled();
-    });
-
-    it('returns a run preflight error after updating instead of reporting auto-run success', async () => {
-      mockUpdateCampaign.mockImplementation(async (_req, res) => res.json({ success: true, data: { id: 10 } }));
-      mockRunCampaign.mockImplementation(async (_req, res) => res.status(400).json({
-        success: false,
-        code: 'NO_SEND_NODE',
-        message: 'Campaign has no sender',
-      }));
-      const req = {
-        params: { id: '10' },
-        body: {
-          autoRun: true,
-          script: {
-            campaignName: 'Updated Campaign',
-            connections: [],
-            nodes: [{ node_type: 'action', node_subtype: 'send_email', config: { fromEmailId: 1, emailSubject: 'Hello', emailBody: 'Body' } }],
-          },
-        },
-        user: { id: 1, role: 'user_admin' },
-      };
-      const res = makeRes();
-
-      await aiController.pushToCampaign(req, res);
-
-      expect(res.status).toHaveBeenCalledWith(400);
-      expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
-        success: false,
-        code: 'NO_SEND_NODE',
-        data: expect.objectContaining({ campaignId: '10', campaignUpdated: true }),
-      }));
-    });
-
+  describe('createAndRunCampaign — kịch bản rỗng', () => {
     it('blocks createAndRunCampaign when nodes is empty array -> 400 EMPTY_CAMPAIGN_SCRIPT', async () => {
       const emptyScript = {
         campaignName: 'Empty Create Campaign',

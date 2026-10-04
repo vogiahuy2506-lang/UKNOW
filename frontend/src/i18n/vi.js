@@ -5175,7 +5175,6 @@ export default {
     unansweredHelpLink: 'Xem mục Hướng dẫn',
     unansweredContactLink: 'Liên hệ hỗ trợ',
     dropFilePlaceholder: 'Thả file vào đây...',
-    searchCampaignPlaceholder: 'Tìm kiếm chiến dịch...',
     enterToSend: 'Enter để gửi',
     processingPrevious: 'Đang xử lý…',
     processingPreviousTitle: 'Đang xử lý câu trước…',
@@ -5462,8 +5461,6 @@ export default {
     runId: 'Run ID',
     sendingMessages: 'Đang chạy và gửi tin nhắn',
     // Campaign picker modal
-    selectCampaign: 'Chọn chiến dịch',
-    noCampaigns: 'Không có chiến dịch nào',
     // Campaign script card
     campaignScriptDraft: 'Kịch bản chiến dịch (Draft)',
     pushToExisting: 'Đẩy vào campaign có sẵn',

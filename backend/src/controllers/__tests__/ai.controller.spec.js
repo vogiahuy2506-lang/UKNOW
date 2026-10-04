@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const processSmartChat = jest.fn();
-const processSmartChatV2 = jest.fn();
 const chargeAiCredit = jest.fn();
 const createSession = jest.fn();
 const saveMessages = jest.fn();
@@ -24,18 +23,9 @@ const validateNodeConfig = jest.fn(() => ({ valid: true, errors: [] }));
 const campaignControllerCreate = jest.fn();
 const fillReadSheetFirstTabNames = jest.fn(async () => {});
 
-// G3a: hai endpoint sinh kịch bản đọc tệp theo storage_key — controller phải truyền id CHỦ để dịch vụ kiểm chủ tệp.
-const generateCampaignScript = jest.fn();
-const generateCampaignWithRegistry = jest.fn();
-const validateCampaignScript = jest.fn(() => ({ valid: true, errors: [], warnings: [] }));
-
 jest.unstable_mockModule('../../services/ai/aiCampaign.service.js', () => ({
   default: {
     processSmartChat,
-    processSmartChatV2,
-    generateCampaignScript,
-    generateCampaignWithRegistry,
-    validateCampaignScript,
   },
 }));
 
@@ -171,7 +161,6 @@ const makeRes = () => {
 describe('ai.controller', () => {
   beforeEach(() => {
     processSmartChat.mockReset();
-    processSmartChatV2.mockReset();
     chargeAiCredit.mockReset();
     createSession.mockReset();
     saveMessages.mockReset();
@@ -720,9 +709,8 @@ describe('ai.controller', () => {
     });
   });
 
-  it('employee chat V1/V2: truyền resourceOwnerUserId (owner) và userId (actor)', async () => {
+  it('employee chat: truyền resourceOwnerUserId (owner) và userId (actor)', async () => {
     processSmartChat.mockResolvedValue({ type: 'text', content: 'ok' });
-    processSmartChatV2.mockResolvedValue({ type: 'text', content: 'ok v2' });
 
     const employee = {
       id: 9,
@@ -744,23 +732,12 @@ describe('ai.controller', () => {
       userId: 9,
       resourceOwnerUserId: 3,
     }));
-
-    await aiController.chatV2({
-      body: { history, locale: 'vi' },
-      user: employee,
-    }, makeRes());
-
-    expect(processSmartChatV2).toHaveBeenCalledWith(expect.objectContaining({
-      userId: 9,
-      resourceOwnerUserId: 3,
-    }));
   });
 
-  // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — processSmartChat/processSmartChatV2
+  // PR-3 (LENH_GIAO_TRO_LY_AI_PR3_2026-09-28) Việc 2a — processSmartChat
   // nhận employeePermissions = activeContext.permissions cho nhân viên; chủ → null.
-  it('nhân viên: processSmartChat/processSmartChatV2 nhận employeePermissions = activeContext.permissions; chủ → null', async () => {
+  it('nhân viên: processSmartChat nhận employeePermissions = activeContext.permissions; chủ → null', async () => {
     processSmartChat.mockResolvedValue({ type: 'text', content: 'ok' });
-    processSmartChatV2.mockResolvedValue({ type: 'text', content: 'ok v2' });
 
     const employee = {
       id: 9,
@@ -778,19 +755,10 @@ describe('ai.controller', () => {
       employeePermissions: { campaigns_create: true, landing_pages: false },
     }));
 
-    await aiController.chatV2({ body: { history, locale: 'vi' }, user: employee }, makeRes());
-    expect(processSmartChatV2).toHaveBeenCalledWith(expect.objectContaining({
-      employeePermissions: { campaigns_create: true, landing_pages: false },
-    }));
-
     processSmartChat.mockClear();
-    processSmartChatV2.mockClear();
     const owner = { id: 5, role: 'user', activeContext: { type: 'self' } };
     await aiController.chat({ body: { history, locale: 'vi' }, user: owner }, makeRes());
     expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({ employeePermissions: null }));
-
-    await aiController.chatV2({ body: { history, locale: 'vi' }, user: owner }, makeRes());
-    expect(processSmartChatV2).toHaveBeenCalledWith(expect.objectContaining({ employeePermissions: null }));
   });
 
   // C P3-3: controller KHÔNG tự kiểm hạn mức ở mọi lượt chat — chỉ đưa cho service một hàm kiểm (service gọi ở lượt mở luồng tạo
@@ -1907,10 +1875,6 @@ describe('ai.controller — nhân viên (G3a)', () => {
     processSmartChat.mockReset();
     tryHandleHelpChat.mockReset();
     tryHandleHelpChat.mockResolvedValue(null);
-    generateCampaignScript.mockReset();
-    generateCampaignWithRegistry.mockReset();
-    validateCampaignScript.mockReset();
-    validateCampaignScript.mockReturnValue({ valid: true, errors: [], warnings: [] });
     chargeAiCredit.mockReset();
   });
 
@@ -2059,39 +2023,6 @@ describe('ai.controller — nhân viên (G3a)', () => {
       }, makeRes());
 
       expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, resourceOwnerUserId: OWNER }));
-    });
-
-    it('POST /ai/generate-campaign: generateCampaignScript nhận ownerUserId = chủ', async () => {
-      generateCampaignScript.mockResolvedValue({ campaignName: 'x' });
-
-      await aiController.generateCampaign({
-        body: { prompt: 'tạo chiến dịch', files: [{ storage_key: `uploads/${OWNER}/chat/a.pdf` }] },
-        user: employeeUser(),
-      }, makeRes());
-
-      expect(generateCampaignScript).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
-    });
-
-    it('POST /ai/generate-campaign-v2: generateCampaignWithRegistry nhận ownerUserId = chủ', async () => {
-      generateCampaignWithRegistry.mockResolvedValue({ campaignName: 'x' });
-
-      await aiController.generateCampaignV2({
-        body: { prompt: 'tạo chiến dịch', files: [{ storage_key: `uploads/${OWNER}/chat/a.pdf` }] },
-        user: employeeUser(),
-      }, makeRes());
-
-      expect(generateCampaignWithRegistry).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, ownerUserId: OWNER }));
-    });
-
-    it('chủ (không phải nhân viên): ownerUserId = chính id mình', async () => {
-      generateCampaignScript.mockResolvedValue({ campaignName: 'x' });
-
-      await aiController.generateCampaign({
-        body: { prompt: 'tạo chiến dịch', files: [] },
-        user: { id: OWNER, role: 'user' },
-      }, makeRes());
-
-      expect(generateCampaignScript).toHaveBeenCalledWith(expect.objectContaining({ userId: OWNER, ownerUserId: OWNER }));
     });
   });
 });

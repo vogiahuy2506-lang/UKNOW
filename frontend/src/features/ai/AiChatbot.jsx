@@ -19,7 +19,7 @@ import LandingPageCard from './components/LandingPageCard';
 import {
   AiContent, TemplateDraftCard, ContentPlanCard, ContentPlanActionsCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
   AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
-  AutoCreatingCard, AutoCreatedSuccessCard, CampaignPickerModal, TemplatePickerModal,
+  AutoCreatingCard, AutoCreatedSuccessCard, TemplatePickerModal,
 } from './components/AiChatbotCards';
 import {
   AskSenderAccountCard,
@@ -391,9 +391,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [directRecipients, setDirectRecipients] = useState(null);
   const [campaignConfirmation, setCampaignConfirmation] = useState(null);
   const [hasProfile, setHasProfile] = useState(true);
-  const [showCampaignPicker, setShowCampaignPicker] = useState(false);
   const [templatePickerContext, setTemplatePickerContext] = useState(null);
-  const [selectedScriptForPush, setSelectedScriptForPush] = useState(null);
   const [pendingLandingPrompt, setPendingLandingPrompt] = useState(null);
   const [pendingLandingData, setPendingLandingData] = useState(null);
   const [editingLandingPageIndex, setEditingLandingPageIndex] = useState(null);
@@ -3227,31 +3225,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   };
 
-  const _handlePushToExisting = (script) => {
-    setSelectedScriptForPush(script);
-    setShowCampaignPicker(true);
-  };
-
-  const handleSelectCampaign = async (campaign) => {
-    if (!selectedScriptForPush) return;
-    setShowCampaignPicker(false);
-    const t = toast.loading('Đang đẩy kịch bản vào chiến dịch...');
-    try {
-      const res = await aiApi.pushToCampaign(campaign.id, selectedScriptForPush, true);
-      if (res.success) {
-        toast.success(`Đã đẩy kịch bản vào "${campaign.campaignName}" và kích hoạt!`, { id: t });
-        setCurrentScript(null);
-        setSelectedScriptForPush(null);
-        closeWizardAfterCreate({
-          campaignId: campaign.id,
-          content: `🎉 Kịch bản đã được đẩy vào chiến dịch "${campaign.campaignName}" và đang chạy! Theo dõi tại mục Quản lý chiến dịch nhé.`,
-        });
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Không thể đẩy kịch bản.', { id: t });
-    }
-  };
-
   const handleGenerateNewLandingPage = () => {
     setPendingLandingPrompt(null);
     setPendingLandingData(null);
@@ -4320,17 +4293,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
 
       <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden"
         accept=".pdf,.doc,.docx,.pptx,.png,.jpg,.jpeg,.webp,.xlsx,.xls,.csv" />
-
-      {/* Campaign Picker Modal */}
-      <CampaignPickerModal
-        isOpen={showCampaignPicker}
-        onClose={() => {
-          setShowCampaignPicker(false);
-          setSelectedScriptForPush(null);
-        }}
-        onSelect={handleSelectCampaign}
-        t={t}
-      />
 
       <TemplatePickerModal
         isOpen={Boolean(templatePickerContext)}

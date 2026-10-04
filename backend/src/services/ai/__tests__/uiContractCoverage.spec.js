@@ -126,11 +126,13 @@ describe('giao kèo UI ↔ nửa sau — mọi lựa chọn phải có nơi xử
 
     const visionExtensions = new Set(['.png', '.jpg', '.jpeg', '.webp']);
     const parser = readSource('backend/src/utils/fileParser.util.js');
-    const aiCampaign = readSource('backend/src/services/ai/aiCampaign.service.js');
+    // Đường vision của trợ lý nằm ở aiChatTransport.runChat (mọi lượt chat đi qua đó). Trước PR-13 (chore/ai-don-rac) test
+    // này đọc aiCampaign.service.js — nơi `generateCampaignScript` (route /ai/generate-campaign đã xoá) tự gắn inlineData.
+    const transport = readSource('backend/src/services/ai/aiChatTransport.service.js');
 
-    // Khẳng định aiCampaign.service.js có xử lý đường vision inlineData cho image/
-    expect(aiCampaign.includes("mimeType.startsWith('image/')")).toBe(true);
-    expect(aiCampaign.includes('inlineData')).toBe(true);
+    // Khẳng định bộ truyền chat có xử lý đường vision inlineData cho image/
+    expect(transport.includes("mimeType.startsWith('image/')")).toBe(true);
+    expect(transport.includes('inlineData')).toBe(true);
 
     const missing = accepted.filter((ext) => {
       if (visionExtensions.has(ext)) return false; // Được xử lý bằng đường vision

@@ -5160,7 +5160,6 @@ export default {
     unansweredHelpLink: 'View the Help section',
     unansweredContactLink: 'Contact support',
     dropFilePlaceholder: 'Drop file here...',
-    searchCampaignPlaceholder: 'Search campaigns...',
     enterToSend: 'Enter to send',
     processingPrevious: 'Processing…',
     processingPreviousTitle: 'Processing the previous request…',
@@ -5447,8 +5446,6 @@ export default {
     runId: 'Run ID',
     sendingMessages: 'Running and sending messages',
     // Campaign picker modal
-    selectCampaign: 'Select campaign',
-    noCampaigns: 'No campaigns found',
     // Campaign script card
     campaignScriptDraft: 'Campaign Script (Draft)',
     pushToExisting: 'Push to existing campaign',

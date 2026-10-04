@@ -343,10 +343,23 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
   });
 
   describe('6. AI Campaign & Landing Bypass Guards (/api/ai)', () => {
-    it('blocks /generate-campaign without campaigns_create', async () => {
-      currentTestUser = createEmployee({ campaigns_create: false, campaigns_view: true });
-      const res = await request(app).post('/api/ai/generate-campaign').send({});
-      expect(res.status).toBe(403);
+    // PR-13 (C P3-2) — 5 route cũ không FE nào gọi đã bị XOÁ (execute-campaign tạo + chạy không validator/xác nhận;
+    // push-to-campaign đẩy kịch bản lên chiến dịch có sẵn; chat-v2 + hai generate-campaign là bản sinh kịch bản đời đầu).
+    // Khoá bằng 404 cho cả chủ lẫn nhân viên đủ quyền: ai thêm lại một route cùng đường dẫn là ca này đỏ.
+    it.each([
+      ['POST', '/api/ai/chat-v2'],
+      ['POST', '/api/ai/generate-campaign'],
+      ['POST', '/api/ai/generate-campaign-v2'],
+      ['POST', '/api/ai/execute-campaign'],
+      ['POST', '/api/ai/push-to-campaign/10'],
+    ])('route cũ đã xoá %s %s → 404 (kể cả người đủ mọi quyền)', async (_method, path) => {
+      currentTestUser = createEmployee({ ai_assistant_use: true, campaigns_create: true, campaigns_run: true, campaigns_view: true });
+      const asEmployee = await request(app).post(path).send({ prompt: 'x', script: { nodes: [] } });
+      expect(asEmployee.status).toBe(404);
+
+      currentTestUser = selfUser;
+      const asOwner = await request(app).post(path).send({ prompt: 'x', script: { nodes: [] } });
+      expect(asOwner.status).toBe(404);
     });
 
     it('blocks /create-from-draft without campaigns_create', async () => {
@@ -549,7 +562,6 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
     it('blocks AI chat and sessions when ai_assistant_use permission is missing (403)', async () => {
       currentTestUser = createEmployee({ ai_assistant_use: false });
       const chat = await request(app).post('/api/ai/chat').send({ message: 'hi' });
-      const chatV2 = await request(app).post('/api/ai/chat-v2').send({ message: 'hi' });
       const sessions = await request(app).get('/api/ai/sessions');
       const sessionMsg = await request(app).get('/api/ai/sessions/1/messages');
       const delSession = await request(app).delete('/api/ai/sessions/1');
@@ -557,7 +569,6 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
 
       expect(chat.status).toBe(403);
       expect(chat.body.code).toBe('PERMISSION_DENIED');
-      expect(chatV2.status).toBe(403);
       expect(sessions.status).toBe(403);
       expect(sessionMsg.status).toBe(403);
       expect(delSession.status).toBe(403);
@@ -567,14 +578,12 @@ describe('Employee Route Policy & RBAC Enforcement Matrix', () => {
     it('allows AI chat and sessions when ai_assistant_use permission is true (200)', async () => {
       currentTestUser = createEmployee({ ai_assistant_use: true });
       const chat = await request(app).post('/api/ai/chat').send({ message: 'hi' });
-      const chatV2 = await request(app).post('/api/ai/chat-v2').send({ message: 'hi' });
       const sessions = await request(app).get('/api/ai/sessions');
       const sessionMsg = await request(app).get('/api/ai/sessions/1/messages');
       const delSession = await request(app).delete('/api/ai/sessions/1');
       const patchState = await request(app).patch('/api/ai/sessions/1/wizard-state').send({});
 
       expect(chat.status).toBe(200);
-      expect(chatV2.status).toBe(200);
       expect(sessions.status).toBe(200);
       expect(sessionMsg.status).toBe(200);
       expect(delSession.status).toBe(200);
