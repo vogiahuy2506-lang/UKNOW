@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 import { formatIntVi } from '../../utils/formatNumber.util';
 
 const MAX_DIGITS = 15; // dưới Number.MAX_SAFE_INTEGER (16 chữ số)
@@ -12,11 +12,25 @@ const toDigits = (raw) => {
 /**
  * Ô nhập số nguyên không âm, hiển thị dấu chấm hàng nghìn ngay khi gõ.
  * `value` là số hoặc chuỗi chữ số; `onChange` nhận SỐ NGUYÊN (hoặc '' khi rỗng) — không bao giờ nhận chuỗi có dấu chấm.
+ * `min` / `max` (tuỳ chọn): ô kiểu text không có kiểm tra gốc của trình duyệt, nên ở đây đặt `setCustomValidity`
+ * để biểu mẫu vẫn bị chặn khi gửi nếu giá trị đã nhập nằm ngoài khoảng (giống `type="number"` trước đây).
+ * Ô rỗng không bị chặn bởi min/max (dùng `required` nếu bắt buộc).
  */
-const NumberInput = ({ value, onChange, className = 'input w-full', ...rest }) => {
+const NumberInput = ({ value, onChange, className = 'input w-full', min, max, ...rest }) => {
   const inputRef = useRef(null);
   const digitsBeforeCaret = useRef(null);
-  const display = formatIntVi(toDigits(value));
+  const digits = toDigits(value);
+  const display = formatIntVi(digits);
+
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const n = digits === '' ? null : parseInt(digits, 10);
+    let msg = '';
+    if (n !== null && min !== undefined && min !== null && n < Number(min)) msg = `≥ ${formatIntVi(Number(min))}`;
+    else if (n !== null && max !== undefined && max !== null && n > Number(max)) msg = `≤ ${formatIntVi(Number(max))}`;
+    el.setCustomValidity(msg);
+  }, [digits, min, max]);
 
   // Sau khi React vẽ lại chuỗi đã định dạng, đặt con trỏ sau đúng số chữ số người dùng vừa gõ tới.
   useLayoutEffect(() => {

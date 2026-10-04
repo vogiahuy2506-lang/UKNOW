@@ -83,4 +83,18 @@ describe('NumberInput', () => {
     expect(input).toHaveAttribute('inputmode', 'numeric');
     expect(input).toHaveAttribute('placeholder', 'Nhập');
   });
+  it('min / max: ngoài khoảng thì ô không hợp lệ (chặn gửi biểu mẫu), rỗng thì không chặn', async () => {
+    const user = userEvent.setup();
+    render(<Harness min={1} max={36} />);
+    const input = screen.getByLabelText('so');
+    expect(input.checkValidity()).toBe(true); // rỗng
+    await user.type(input, '0');
+    expect(input.checkValidity()).toBe(false);
+    await user.clear(input);
+    await user.type(input, '40');
+    expect(input.checkValidity()).toBe(false);
+    await user.clear(input);
+    await user.type(input, '36');
+    expect(input.checkValidity()).toBe(true);
+  });
 });

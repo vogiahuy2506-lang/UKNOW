@@ -6,6 +6,7 @@ import { PriceInput, EmailAutocomplete, SendLimitsFields, EmployeeInput, Resourc
 import { Field, FormSection, ModalShell, normalizePlanPayload } from './PlanModalsShared.jsx';
 import { PaymentResultModal } from './PaymentResultModal.jsx';
 import { useI18n } from '../../../i18n';
+import NumberInput from '../../../components/common/NumberInput';
 
 // ── CustomPlanModal — tạo gói riêng + gán ngay hoặc tạo link PayOS ───────────
 export const CustomPlanModal = ({ onClose, onSaved }) => {
@@ -109,8 +110,8 @@ export const CustomPlanModal = ({ onClose, onSaved }) => {
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
           </Field>
           <Field label="Dung lượng lưu trữ (MB)">
-            <input type="number" min="1" className="input h-11 w-full" value={Math.max(1, Math.round(Number(form.storageLimitBytes || 0) / 1048576))}
-              onChange={(e) => set('storageLimitBytes', Number(e.target.value || 0) * 1048576)} />
+            <NumberInput className="input h-11 w-full" value={Math.max(1, Math.round(Number(form.storageLimitBytes || 0) / 1048576))}
+              onChange={(v) => set('storageLimitBytes', Number(v || 0) * 1048576)} />
           </Field>
           <Field label={t('planInputs.durationLabel')}>
             <DurationInput value={form.durationDays} onChange={(v) => set('durationDays', v)} />

@@ -5,6 +5,7 @@ import { renderModal, emptyForm, fmtVnd, MODAL_FORM } from './planUtils.jsx';
 import { PriceInput, FeatureEditor, SendLimitsFields, EmployeeInput, ResourceLimitsFields, DurationInput, PeriodMessagesField, GraceDaysInput } from './PlanInputs';
 import { Field, FormSection, ModalShell, normalizePlanPayload, PLAN_PRESETS } from './PlanModalsShared.jsx';
 import { useI18n } from '../../../i18n';
+import NumberInput from '../../../components/common/NumberInput';
 
 // ── PlanFormModal — tạo mới + chỉnh sửa gói đại trà ─────────────────────────
 export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }) => {
@@ -180,8 +181,8 @@ export const PlanFormModal = ({ plan, onClose, onSaved, existingPlanCodes = [] }
             <EmployeeInput value={form.maxEmployees} onChange={(v) => set('maxEmployees', v)} className="input h-11 w-full" />
           </Field>
           <Field label="Dung lượng lưu trữ (MB)">
-            <input type="number" min="1" className="input h-11 w-full" value={Math.max(1, Math.round(Number(form.storageLimitBytes || 0) / 1048576))}
-              onChange={(e) => set('storageLimitBytes', Number(e.target.value || 0) * 1048576)} />
+            <NumberInput className="input h-11 w-full" value={Math.max(1, Math.round(Number(form.storageLimitBytes || 0) / 1048576))}
+              onChange={(v) => set('storageLimitBytes', Number(v || 0) * 1048576)} />
           </Field>
           <div className="flex items-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
             <input type="checkbox" id="isActive" className="h-4 w-4 rounded text-primary-600"

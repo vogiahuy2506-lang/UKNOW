@@ -3,6 +3,7 @@ import toast from 'react-hot-toast';
 import { useI18n } from '../../../i18n';
 import adminPlansApiService from '../services/adminPlansApi.service';
 import { PriceInput } from './PlanInputs.jsx';
+import NumberInput from '../../../components/common/NumberInput';
 
 const CONFIG_KEYS = new Set([
   'yearly_discount_percent',
@@ -139,11 +140,10 @@ export default function CustomPricingPanel() {
                 </td>
                 <td className="px-4 py-3">
                   {isConfig ? (
-                    <input
-                      type="number"
+                    <NumberInput
                       className="input w-28"
                       value={draft.unitPrice}
-                      onChange={(e) => updateDraft(row.itemKey, 'unitPrice', e.target.value)}
+                      onChange={(v) => updateDraft(row.itemKey, 'unitPrice', v)}
                     />
                   ) : (
                     <PriceInput
@@ -155,49 +155,44 @@ export default function CustomPricingPanel() {
                   )}
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="number"
+                  <NumberInput
                     className="input w-20"
                     disabled={isConfig}
                     value={draft.unitSize}
-                    onChange={(e) => updateDraft(row.itemKey, 'unitSize', e.target.value)}
+                    onChange={(v) => updateDraft(row.itemKey, 'unitSize', v)}
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="number"
+                  <NumberInput
                     className="input w-20"
                     disabled={isConfig || row.itemKey === 'base_fee'}
                     value={draft.includedQty}
-                    onChange={(e) => updateDraft(row.itemKey, 'includedQty', e.target.value)}
+                    onChange={(v) => updateDraft(row.itemKey, 'includedQty', v)}
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="number"
+                  <NumberInput
                     className="input w-20"
                     disabled={isConfig}
                     value={draft.minQty}
-                    onChange={(e) => updateDraft(row.itemKey, 'minQty', e.target.value)}
+                    onChange={(v) => updateDraft(row.itemKey, 'minQty', v)}
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="number"
+                  <NumberInput
                     className="input w-20"
                     disabled={isConfig}
                     value={draft.maxQty}
                     placeholder="∞"
-                    onChange={(e) => updateDraft(row.itemKey, 'maxQty', e.target.value)}
+                    onChange={(v) => updateDraft(row.itemKey, 'maxQty', v)}
                   />
                 </td>
                 <td className="px-4 py-3">
-                  <input
-                    type="number"
+                  <NumberInput
                     className="input w-20"
                     disabled={isConfig}
                     value={draft.stepQty}
-                    onChange={(e) => updateDraft(row.itemKey, 'stepQty', e.target.value)}
+                    onChange={(v) => updateDraft(row.itemKey, 'stepQty', v)}
                   />
                 </td>
                 <td className="px-4 py-3">

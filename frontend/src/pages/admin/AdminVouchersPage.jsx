@@ -20,6 +20,7 @@ import adminPlansApiService from '../../features/admin/services/adminPlansApi.se
 import { useI18n } from '../../i18n';
 import { getVoucherLifecycleStatus } from './voucherStatus.util.js';
 import { toInputDate } from '../../utils/voucherDate.util.js';
+import NumberInput from '../../components/common/NumberInput';
 
 const fmtVnd = (n) => Number(n || 0).toLocaleString('vi-VN') + ' đ';
 const fmtDate = (d, locale = 'vi') => d ? new Date(d).toLocaleDateString(locale === 'en' ? 'en-US' : 'vi-VN') : '—';
@@ -437,10 +438,10 @@ const VoucherForm = ({ editing, form, setForm, onCancel, onSubmit, saving, plans
             />
           </Field>
           <Field label={t('voucherAdmin.usageLimit')} note={t('voucherAdmin.unlimitedHint')}>
-            <input type="number" min="1" className="input w-full" value={form.usageLimit} onChange={(e) => setForm((p) => ({ ...p, usageLimit: e.target.value }))} placeholder={t('voucherAdmin.unlimited')} />
+            <NumberInput min={1} className="input w-full" value={form.usageLimit} onChange={(v) => setForm((p) => ({ ...p, usageLimit: v }))} placeholder={t('voucherAdmin.unlimited')} />
           </Field>
           <Field label={t('voucherAdmin.usagePerUser')} note={t('voucherAdmin.usagePerUserHint')}>
-            <input type="number" min="1" className="input w-full" value={form.usageLimitPerUser} onChange={(e) => setForm((p) => ({ ...p, usageLimitPerUser: e.target.value }))} placeholder={t('voucherAdmin.unlimited')} />
+            <NumberInput min={1} className="input w-full" value={form.usageLimitPerUser} onChange={(v) => setForm((p) => ({ ...p, usageLimitPerUser: v }))} placeholder={t('voucherAdmin.unlimited')} />
           </Field>
         </div>
       </FormSection>
