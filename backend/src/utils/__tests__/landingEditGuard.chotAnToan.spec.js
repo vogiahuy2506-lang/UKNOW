@@ -4,7 +4,7 @@ import { ensureLandingDocumentShell, inspectCaptureForm, validateEditHtmlOutput 
 /**
  * PR-8 (rà soát AI 03/10, plan đợt 4) — chốt thêm ở landingEditGuard.util.js:
  *   B-12: ô đồng ý marketingConsent (và name/email/phone) của form bắt lead;
- *   B-14: chốt "teo dưới 60%" không áp cho bản vá (xoá mục hợp lệ trên trang dài);
+ *   B-14: chốt "teo dưới 60%" không áp cho bản vá (xoá mục hợp lệ trên trang dài), bản vá có sàn riêng 25%;
  *   B-16: trang AI sinh có viewport và </html>;
  * Tách khỏi landingEditGuard.util.spec.js để file đó không đụng độ với PR khác.
  */
@@ -170,27 +170,49 @@ describe('B-16 — ensureLandingDocumentShell: viewport + </html> cho trang AI s
   });
 });
 
-describe('B-14 — chốt "teo dưới 60%": áp cho viết lại cả trang, KHÔNG áp cho bản vá', () => {
+describe('B-14 — chốt "teo dưới 60%": áp cho viết lại cả trang; bản vá có sàn riêng 25%', () => {
   // Trang dài: phần "Giá" + "FAQ" chiếm quá 40% độ dài.
   const long = (n) => `<section><h2>Mục</h2><p>${'nội dung '.repeat(n)}</p></section>`;
   const current = page(FORM(), long(10) + long(300) + long(300));
-  const shrunk = page(FORM(), long(10));
-  const run = (strategy) =>
-    validateEditHtmlOutput({ currentHtml: current, newHtml: shrunk, finishReason: 'STOP', ...(strategy ? { strategy } : {}) });
+  const shrunk = page(FORM(), long(10) + long(300)); // còn ~54%: < 60% nhưng > 25%
+  const nearlyEmpty = page(FORM(), long(10)); // còn ~9%
+  const run = (newHtml, strategy) =>
+    validateEditHtmlOutput({ currentHtml: current, newHtml, finishReason: 'STOP', ...(strategy ? { strategy } : {}) });
 
   it('mặc định (không biết chiến lược) và mọi chiến lược viết lại cả trang → vẫn 422 khi teo dưới 60%', () => {
     expect(shrunk.length).toBeLessThan(0.6 * current.length);
+    expect(shrunk.length).toBeGreaterThan(0.25 * current.length);
     for (const strategy of [undefined, 'full', 'patch_fallback_full', 'patch_full_html']) {
-      expect(() => run(strategy)).toThrow(expect.objectContaining({ status: 422, message: expect.stringMatching(/viết lại toàn bộ trang/) }));
+      expect(() => run(shrunk, strategy)).toThrow(expect.objectContaining({ status: 422, message: expect.stringMatching(/viết lại toàn bộ trang/) }));
     }
   });
 
   it('chiến lược patch (bản vá xoá mục theo yêu cầu) → hợp lệ dù trang ngắn đi quá 40%', () => {
-    expect(run('patch')).toBe(true);
+    expect(run(shrunk, 'patch')).toBe(true);
+  });
+
+  it('chiến lược patch mất > 75% độ dài → 422 LANDING_PATCH_DELETES_TOO_MUCH (sàn riêng của bản vá)', () => {
+    expect(nearlyEmpty.length).toBeLessThan(0.25 * current.length);
+    expect(() => run(nearlyEmpty, 'patch')).toThrow(
+      expect.objectContaining({ status: 422, code: 'LANDING_PATCH_DELETES_TOO_MUCH', message: expect.stringMatching(/xoá gần hết nội dung/) })
+    );
+  });
+
+  it('ranh giới sàn: còn ĐÚNG 25% → qua; thiếu 1 ký tự → 422', () => {
+    const sized = (len) => {
+      const base = page(FORM(), '<p></p>');
+      return base.replace('<p></p>', `<p>${'a'.repeat(len - base.length)}</p>`);
+    };
+    const cur = sized(4000);
+    expect(cur).toHaveLength(4000);
+    const check = (next) => validateEditHtmlOutput({ currentHtml: cur, newHtml: next, finishReason: 'STOP', strategy: 'patch' });
+    expect(sized(1000)).toHaveLength(1000);
+    expect(check(sized(1000))).toBe(true);
+    expect(() => check(sized(999))).toThrow(expect.objectContaining({ code: 'LANDING_PATCH_DELETES_TOO_MUCH' }));
   });
 
   it('các chốt khác vẫn chạy ở chiến lược patch (mất form → 422)', () => {
-    const noForm = page('', long(10));
+    const noForm = page('', long(10) + long(300));
     expect(() =>
       validateEditHtmlOutput({ currentHtml: current, newHtml: noForm, finishReason: 'STOP', strategy: 'patch' })
     ).toThrow(expect.objectContaining({ status: 422 }));

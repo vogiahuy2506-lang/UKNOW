@@ -134,6 +134,12 @@ export const MAX_EDIT_HTML_INPUT_CHARS = 500000;
 export const MAX_FULL_REWRITE_HTML_CHARS = 80000;
 
 /**
+ * Sàn của BẢN VÁ (B-14): trang sau khi vá phải còn ít nhất 25% độ dài trang cũ (mất > 75% → 422). Chốt "teo
+ * dưới 60%" chỉ dành cho đường viết lại cả trang; bản vá được xoá mục theo yêu cầu nhưng không được xoá gần sạch.
+ */
+export const PATCH_MIN_KEEP_RATIO = 0.25;
+
+/**
  * Vớt HTML từ phản hồi model khi JSON.parse thất bại (model kèm lời dẫn,
  * bọc code fence, hoặc trả thẳng HTML).
  *
@@ -214,7 +220,7 @@ export function extractHtmlFromModelText(text) {
  *
  * @param {{ currentHtml: string, newHtml: string, finishReason?: string, strategy?: string }} params
  *   `strategy` = chiến lược đã tạo `newHtml` (aiLandingPage.service.js: 'patch' | 'patch_full_html' | 'patch_fallback_full' |
- *   'full'). 'patch' bỏ qua chốt "teo dưới 60%" (B-14).
+ *   'full'). 'patch' bỏ qua chốt "teo dưới 60%" nhưng có sàn riêng 25% (B-14, PATCH_MIN_KEEP_RATIO).
  * @returns {boolean}
  * @throws {Error & { status: number }}
  */
@@ -256,7 +262,18 @@ export function validateEditHtmlOutput({ currentHtml, newHtml, finishReason, str
   // đoạn thay thế: trang ngắn đi chỉ vì chính yêu cầu ("xoá phần Giá, Đánh giá, FAQ" trên trang dài) thì không
   // phải "viết lại làm teo" — trước đây bị 422 với câu "AI đã viết lại toàn bộ trang" dù AI không hề viết lại.
   // Không truyền `strategy` (đường gọi cũ/test cũ) hoặc chiến lược nào khác 'patch' → áp như trước.
-  if (strategy !== 'patch' && current.length > 0 && next.length < 0.6 * current.length) {
+  // Riêng bản vá có SÀN riêng (25%): bản vá làm trang mất hơn 75% độ dài gần như chắc chắn là `find` quá rộng
+  // ghép nhầm chứ không phải yêu cầu "xoá vài mục" — chặn để khách không nhận một trang gần như trống.
+  if (strategy === 'patch') {
+    if (current.length > 0 && next.length < PATCH_MIN_KEEP_RATIO * current.length) {
+      const err = new Error(
+        'Bản chỉnh sửa này sẽ xoá gần hết nội dung của trang (mất hơn 75%). Để tránh làm hỏng trang, hệ thống đã dừng. Vui lòng mô tả cụ thể hơn phần cần xoá hoặc chia nhỏ yêu cầu.'
+      );
+      err.status = 422;
+      err.code = 'LANDING_PATCH_DELETES_TOO_MUCH';
+      throw err;
+    }
+  } else if (current.length > 0 && next.length < 0.6 * current.length) {
     const err = new Error('AI đã viết lại toàn bộ trang thay vì chỉnh sửa. Vui lòng mô tả cụ thể hơn phần cần sửa.');
     err.status = 422;
     throw err;
