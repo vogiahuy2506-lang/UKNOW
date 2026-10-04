@@ -145,6 +145,8 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     await waitFor(() => expect(screen.getByTestId('funnel-registered')).toHaveTextContent('2'));
     expect(screen.queryByText('Cập nhật lần cuối')).toBeNull();
     expect(screen.getByText('Đang bán')).toBeInTheDocument();
+    // Mã sản phẩm không còn là cột riêng — nằm ở dòng nhỏ dưới tên.
+    expect(screen.queryByText('Mã sản phẩm')).toBeNull();
   });
 
   it('không có cột phễu (nhân viên không có reports_view) thì vẫn có cột "Cập nhật lần cuối"', async () => {

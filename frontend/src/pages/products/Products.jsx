@@ -83,13 +83,13 @@ const FunnelCells = ({ funnel }) => {
     formIds.length === 1 ? `/app/forms/${formIds[0]}/submissions` : formIds.length > 1 ? '/app/forms' : null;
   return (
     <>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-interested">
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-interested">
         {funnel?.interested ?? 0}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-left-contact">
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-left-contact">
         {funnel?.leftContact ?? 0}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-registered">
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-registered">
         {target ? (
           <Link to={target} className="text-primary-600 hover:underline">
             {registered}
@@ -99,7 +99,7 @@ const FunnelCells = ({ funnel }) => {
         )}
       </td>
       <td
-        className={`px-6 py-4 whitespace-nowrap text-sm text-right ${awaiting > 0 ? 'font-semibold text-amber-600' : 'text-gray-900'}`}
+        className={`px-3 py-4 whitespace-nowrap text-sm text-right ${awaiting > 0 ? 'font-semibold text-amber-600' : 'text-gray-900'}`}
         data-testid="funnel-awaiting"
         title={awaiting > 0 ? t('products.funnel.awaitingConfirmTooltip', { amount: formatMoney(funnel?.awaitingAmount) }) : undefined}
       >
@@ -113,10 +113,10 @@ const FunnelCells = ({ funnel }) => {
           awaiting
         )}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-paid">
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-paid">
         {noMoney ? '—' : funnel?.paid ?? 0}
       </td>
-      <td className="px-6 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900" data-testid="funnel-revenue">
+      <td className="px-3 py-4 whitespace-nowrap text-sm text-right font-medium text-gray-900" data-testid="funnel-revenue">
         {noMoney ? '—' : formatMoney(funnel?.revenue)}
       </td>
     </>
@@ -377,9 +377,12 @@ const Products = () => {
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                      {t('products.productCode')}
-                    </th>
+                    {/* Có cột phễu: mã sản phẩm chuyển xuống dòng nhỏ dưới tên — bảng vừa màn hình laptop, cột Hành động không bị đẩy ra ngoài. */}
+                    {!canViewFunnel && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        {t('products.productCode')}
+                      </th>
+                    )}
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                       {t('products.productName')}
                     </th>
@@ -388,22 +391,22 @@ const Products = () => {
                     </th>
                     {canViewFunnel && (
                       <>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.interestedHint')}>
+                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.interestedHint')}>
                           {t('products.funnel.interested')}
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
+                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.leftContactHint')}>
                           {t('products.funnel.leftContact')}
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
+                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.registeredHint')}>
                           {t('products.funnel.registered')}
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
+                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider" title={t('products.funnel.awaitingConfirmHint')}>
                           {t('products.funnel.awaitingConfirm')}
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           {t('products.funnel.paid')}
                         </th>
-                        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
+                        <th className="px-3 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
                           {t('products.funnel.revenue')}
                         </th>
                       </>
@@ -425,9 +428,11 @@ const Products = () => {
                 <tbody className="bg-white divide-y divide-gray-200">
                   {products.map((product) => (
                     <tr key={product.id} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {product.productCode || '—'}
-                      </td>
+                      {!canViewFunnel && (
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {product.productCode || '—'}
+                        </td>
+                      )}
                       <td className="px-6 py-4">
                         <div className="flex items-center">
                           <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary-50 shrink-0 mr-3">
@@ -445,8 +450,10 @@ const Products = () => {
                                 </span>
                               )}
                             </div>
-                            {product.category && (
-                              <div className="text-xs text-gray-500 mt-1">{product.category}</div>
+                            {(canViewFunnel ? [product.productCode, product.category] : [product.category]).some(Boolean) && (
+                              <div className="text-xs text-gray-500 mt-1" data-testid="product-subline">
+                                {(canViewFunnel ? [product.productCode, product.category] : [product.category]).filter(Boolean).join(' · ')}
+                              </div>
                             )}
                           </div>
                         </div>
