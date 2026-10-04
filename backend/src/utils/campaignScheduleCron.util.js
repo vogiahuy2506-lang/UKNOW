@@ -147,3 +147,50 @@ export const computeScheduleNextRunAt = (schedule, now = new Date()) => {
   }
   return null;
 };
+
+/** Trần số lần nổ liệt kê cho MỘT lịch (cron mỗi phút trong 60 ngày = 86.400 lần — không cần đếm hết để biết là chồng). */
+const DEFAULT_MAX_FIRE_TIMES = 120;
+
+/**
+ * Liệt kê các lần lịch NỔ từ `now` tới `until` (cùng luật `computeScheduleNextRunAt`: cron theo giờ Hà Nội,
+ * `custom` chỉ nhận ngày chia hết cho N kể từ `last_run_at`/`created_at`). Dùng để kiểm "lượt sau tới trước khi
+ * lượt trước xong" (PLAN_UOC_TINH 4.1).
+ *
+ * @param {object} schedule dòng `campaign_schedules` snake_case
+ * @param {{ now?: Date, until: Date, maxCount?: number }} options
+ * @returns {Date[]} tăng dần; rỗng nếu lịch tắt / cron hỏng
+ */
+export const listScheduleFireTimes = (schedule, { now = new Date(), until, maxCount = DEFAULT_MAX_FIRE_TIMES } = {}) => {
+  if (!schedule || schedule.enabled === false || !(until instanceof Date)) return [];
+  const runtimeCron = resolveRuntimeCronExpression(schedule);
+  if (!runtimeCron) return [];
+
+  let interval;
+  try {
+    interval = parser.parseExpression(runtimeCron, { currentDate: now, tz: HANOI_TIME_ZONE });
+  } catch {
+    return [];
+  }
+
+  const isCustom = String(schedule.schedule_type || '').toLowerCase() === 'custom';
+  const intervalDays = isCustom ? parseCustomIntervalDaysFromCron(schedule.cron_expression) : null;
+  const anchorKey = intervalDays ? toHanoiDateKey(schedule.last_run_at || schedule.created_at || now) : null;
+
+  const fires = [];
+  // Custom quét hằng ngày rồi lọc → trần quét theo ngày, không theo số lần nổ.
+  for (let scanned = 0; scanned < CUSTOM_SCAN_LIMIT * 4 && fires.length < maxCount; scanned += 1) {
+    let candidate;
+    try {
+      candidate = interval.next().toDate();
+    } catch {
+      break;
+    }
+    if (candidate.getTime() > until.getTime()) break;
+    if (intervalDays) {
+      const dayDiff = getDaysDiffFromDateKeys(anchorKey, toHanoiDateKey(candidate));
+      if (dayDiff != null && !(dayDiff >= 0 && dayDiff % intervalDays === 0)) continue;
+    }
+    fires.push(candidate);
+  }
+  return fires;
+};

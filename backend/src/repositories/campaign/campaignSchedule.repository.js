@@ -90,6 +90,7 @@ class CampaignScheduleRepository {
     const result = await db.query(
       `SELECT cs.id, cs.id_campaign, cs.schedule_type, cs.cron_expression,
               cs.enabled, cs.run_count, cs.last_run_at::timestamptz AS last_run_at,
+              cs.created_at,
               COALESCE(cs.workspace_owner_id, c.workspace_owner_id, c.id_user) AS workspace_owner_id,
               cs.created_by,
               c.status AS campaign_status
@@ -136,6 +137,21 @@ class CampaignScheduleRepository {
       [campaignId, scheduleType, cronExpression, excludeId]
     );
     return result.rows[0] || null;
+  }
+
+  /**
+   * Mọi lịch ĐANG BẬT của một chiến dịch (cột cần để tính các lần nổ — cùng luật scheduler). Dùng cho kiểm
+   * "lịch chồng nhau" (PLAN_UOC_TINH 4.1).
+   */
+  async findEnabledByCampaign(campaignId) {
+    const result = await db.query(
+      `SELECT id, id_campaign, schedule_name, schedule_type, cron_expression, enabled, last_run_at, created_at
+       FROM campaign_schedules
+       WHERE id_campaign = $1 AND enabled = TRUE
+       ORDER BY id`,
+      [campaignId]
+    );
+    return result.rows;
   }
 
   async checkCampaignExists(input) {

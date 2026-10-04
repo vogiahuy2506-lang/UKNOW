@@ -17,6 +17,12 @@ import {
   isCampaignActiveForSchedule,
 } from '../utils/campaignScheduleActivation.util.js';
 import { labelCampaignRunFailure } from '../utils/campaignRunFailureLabel.util.js';
+import {
+  checkScheduleOverlap,
+  buildScheduleOverlapMessage,
+  SCHEDULE_OVERLAP_CODE,
+  SCHEDULE_OVERLAP_SUGGESTIONS,
+} from '../services/campaign/campaignScheduleOverlap.service.js';
 
 /**
  * PR-8b (UI nói thật) Việc 2 — nhãn Việt hoá lỗi lượt gần nhất của lịch, dùng lại
@@ -53,6 +59,25 @@ function respondScheduleDuplicate(res) {
     code: SCHEDULE_DUPLICATE_CODE,
     message: SCHEDULE_DUPLICATE_MESSAGE,
   });
+}
+
+/**
+ * PLAN_UOC_TINH 4.1 — lịch bật làm lượt trước chạy chưa xong mà lượt sau đã nổ (scheduler sẽ bỏ qua lượt sau, và tắt
+ * lịch `once`) → 409 SCHEDULE_OVERLAP. Ước tính lỗi/không đếm được người nhận KHÔNG chặn (trả `warnings`).
+ *
+ * @returns {Promise<{ blocked: boolean, warnings: Array<object> }>} `blocked` true = đã gửi response 409
+ */
+async function respondScheduleOverlap(res, { campaignId, ownerUserId, candidate }) {
+  const { overlap, warnings } = await checkScheduleOverlap({ campaignId, ownerUserId, candidate });
+  if (!overlap) return { blocked: false, warnings: warnings || [] };
+  res.status(409).json({
+    success: false,
+    code: SCHEDULE_OVERLAP_CODE,
+    message: buildScheduleOverlapMessage(overlap),
+    overlap,
+    suggestions: SCHEDULE_OVERLAP_SUGGESTIONS,
+  });
+  return { blocked: true, warnings: [] };
 }
 
 /**
@@ -340,6 +365,18 @@ class CampaignScheduleController {
         if (duplicate) return respondScheduleDuplicate(res);
       }
 
+      // Lượt trước chưa xong mà lịch kế tiếp đã nổ → scheduler sẽ bỏ qua lượt sau. Chặn ngay lúc đặt lịch.
+      let overlapWarnings = [];
+      if (isEnabling) {
+        const overlapCheck = await respondScheduleOverlap(res, {
+          campaignId,
+          ownerUserId: campaign.workspace_owner_id,
+          candidate: { id: null, scheduleType, cronExpression },
+        });
+        if (overlapCheck.blocked) return res;
+        overlapWarnings = overlapCheck.warnings;
+      }
+
       let row;
       if (needsActivation) {
         const result = await activateCampaignAndWriteScheduleTx(req, campaignId, (client) =>
@@ -406,6 +443,7 @@ class CampaignScheduleController {
           ? 'Đã kích hoạt chiến dịch và tạo lịch chạy thành công'
           : 'Tạo lịch chạy thành công',
         data: schedule,
+        ...(overlapWarnings.length > 0 ? { warnings: overlapWarnings } : {}),
       });
     } catch (error) {
       if (isScheduleDuplicateViolation(error)) return respondScheduleDuplicate(res);
@@ -521,6 +559,25 @@ class CampaignScheduleController {
         if (duplicate) return respondScheduleDuplicate(res);
       }
 
+      // Cùng luật với lúc tạo: chỉ kiểm khi sau khi sửa lịch ĐANG BẬT và vừa bật / vừa đổi kiểu-giờ. Lịch cũ đã chồng
+      // nhau từ trước mà không liên quan lịch này thì không chặn (cặp liền kề phải có ít nhất một lần của lịch này).
+      let overlapWarnings = [];
+      if (willBeEnabled && (enabled === true || changesExecution)) {
+        const overlapCheck = await respondScheduleOverlap(res, {
+          campaignId: scheduleData.id_campaign,
+          ownerUserId: scheduleData.workspace_owner_id ?? context.workspaceOwnerId,
+          candidate: {
+            id: scheduleData.id,
+            scheduleType: scheduleType !== undefined ? scheduleType : scheduleData.schedule_type,
+            cronExpression: cronExpression !== undefined ? cronExpression : scheduleData.cron_expression,
+            lastRunAt: scheduleData.last_run_at,
+            createdAt: scheduleData.created_at,
+          },
+        });
+        if (overlapCheck.blocked) return res;
+        overlapWarnings = overlapCheck.warnings;
+      }
+
       let row;
       if (needsActivation) {
         const result = await activateCampaignAndWriteScheduleTx(req, scheduleData.id_campaign, (client) =>
@@ -600,6 +657,7 @@ class CampaignScheduleController {
           ? 'Đã kích hoạt chiến dịch và cập nhật lịch chạy thành công'
           : 'Cập nhật lịch chạy thành công',
         data: schedule,
+        ...(overlapWarnings.length > 0 ? { warnings: overlapWarnings } : {}),
       });
     } catch (error) {
       if (isScheduleDuplicateViolation(error)) return respondScheduleDuplicate(res);
