@@ -308,4 +308,112 @@ describe('media library API', () => {
       expect(await stateOf(saved._storageObjectId)).not.toBe('deleted');
     });
   });
+
+  describe('danh sách (M-02, M-05, M-07, M-08)', () => {
+    async function putStored(ownerUserId, { dir, name, category, referenceType = null, referenceId = null, state = 'active', actorUserId = ownerUserId }) {
+      const key = `uploads/${ownerUserId}/${dir}/${Date.now()}_${name}`;
+      await getStorageBackend().put(key, PNG, { contentType: 'image/png' });
+      const object = await registerWrittenStorageObject({
+        ownerUserId, actorUserId, storageKey: key, category, state, sizeBytes: PNG.length, referenceType, referenceId,
+      });
+      return { key, id: Number(object.id) };
+    }
+
+    it('mỗi tệp kèm nguồn (chat), "đang dùng ở" (mẫu tin) và tên không còn tiền tố số giờ', async () => {
+      const owner = await createUser({ email: 'owner-list-fields@test.local' });
+      const assistant = await saveChatFile(owner.id, { source: CHAT_ATTACHMENT_SOURCES.ASSISTANT, name: 'bao-cao.png' });
+      const { rows: [tpl] } = await db.query(
+        `INSERT INTO zalo_templates (id_user, template_name, template_code, body_html) VALUES ($1, 'Khuyến mãi T8', 'km-t8', '<p>x</p>') RETURNING id`,
+        [owner.id]
+      );
+      const stored = await putStored(owner.id, { dir: 'zalo', name: 'promo.png', category: 'zalo_template', referenceType: 'zalo_template', referenceId: String(tpl.id) });
+
+      const res = await request(app).get('/api/media-library/objects').set(authHeader(owner)).expect(200);
+
+      const byKey = Object.fromEntries(res.body.data.map((item) => [item.storageKey, item]));
+      expect(byKey[assistant._key]).toMatchObject({ category: 'chat', source: 'ai_assistant', inUse: false, usedBy: null, displayName: 'bao-cao.png' });
+      expect(byKey[stored.key]).toMatchObject({
+        category: 'zalo_template',
+        displayName: 'promo.png',
+        inUse: true,
+        usedBy: { referenceType: 'zalo_template', name: 'Khuyến mãi T8', url: '/app/settings/templates' },
+      });
+    });
+
+    it('bản lưu landing tự động ẩn khỏi lưới nhưng còn trong thẻ tổng; tìm theo tên và gõ "%" không khớp mọi tệp', async () => {
+      const owner = await createUser({ email: 'owner-list-filters@test.local' });
+      await putStored(owner.id, { dir: 'landing', name: 'ban-luu.html', category: 'landing_version' });
+      await putStored(owner.id, { dir: 'email', name: 'banner-khai-giang.png', category: 'email_template' });
+      await putStored(owner.id, { dir: 'email', name: 'logo.png', category: 'email_template' });
+
+      const all = await request(app).get('/api/media-library/objects').set(authHeader(owner)).expect(200);
+      expect(all.body.data.map((item) => item.displayName).sort()).toEqual(['banner-khai-giang.png', 'logo.png']);
+      expect(all.body.categorySummary.map((row) => row.category).sort()).toEqual(['email_template', 'landing_version']);
+
+      const versions = await request(app).get('/api/media-library/objects').query({ category: 'landing_version' }).set(authHeader(owner)).expect(200);
+      expect(versions.body.data).toHaveLength(1);
+
+      const byName = await request(app).get('/api/media-library/objects').query({ search: 'banner' }).set(authHeader(owner)).expect(200);
+      expect(byName.body.data.map((item) => item.displayName)).toEqual(['banner-khai-giang.png']);
+
+      const byPath = await request(app).get('/api/media-library/objects').query({ search: 'email' }).set(authHeader(owner)).expect(200);
+      expect(byPath.body.data).toHaveLength(0);
+
+      const percent = await request(app).get('/api/media-library/objects').query({ search: '%' }).set(authHeader(owner)).expect(200);
+      expect(percent.body.data).toHaveLength(0);
+    });
+
+    it('sort=newest xếp mới nhất trước, mặc định nặng nhất trước', async () => {
+      const owner = await createUser({ email: 'owner-list-sort@test.local' });
+      const first = await putStored(owner.id, { dir: 'email', name: 'a.png', category: 'email_template' });
+      const second = await putStored(owner.id, { dir: 'email', name: 'b.png', category: 'email_template' });
+
+      const newest = await request(app).get('/api/media-library/objects').query({ sort: 'newest' }).set(authHeader(owner)).expect(200);
+      expect(newest.body.data.map((item) => item.storageKey)).toEqual([second.key, first.key]);
+    });
+
+    it('Q3: nhân viên chỉ thấy tệp Trợ lý AI do CHÍNH MÌNH tải lên; chủ thấy hết; nhân viên không xoá được tệp trợ lý của chủ', async () => {
+      const owner = await createUser({ email: 'owner-assistant-privacy@test.local' });
+      const employee = await createUser({ email: 'employee-assistant-privacy@test.local' });
+      await addMediaMembership(owner.id, employee.id, { media_library_view: true, media_library_manage: true });
+
+      const ownerFile = await persistChatBlob({
+        buffer: PNG, originalName: 'cua-chu.png', mimetype: 'image/png', ownerUserId: owner.id, actorUserId: owner.id, source: CHAT_ATTACHMENT_SOURCES.ASSISTANT,
+      });
+      const employeeFile = await persistChatBlob({
+        buffer: PNG, originalName: 'cua-nhan-vien.png', mimetype: 'image/png', ownerUserId: owner.id, actorUserId: employee.id, source: CHAT_ATTACHMENT_SOURCES.ASSISTANT,
+      });
+      const inboxFile = await persistChatBlob({
+        buffer: PNG, originalName: 'hop-thu.png', mimetype: 'image/png', ownerUserId: owner.id, actorUserId: owner.id, source: CHAT_ATTACHMENT_SOURCES.INBOX_OUTBOUND,
+      });
+
+      const asOwner = await request(app).get('/api/media-library/objects').set(authHeader(owner)).expect(200);
+      expect(asOwner.body.data.map((item) => item.displayName).sort()).toEqual(['cua-chu.png', 'cua-nhan-vien.png', 'hop-thu.png']);
+
+      const asEmployee = await request(app).get('/api/media-library/objects').set(authHeader(employee, owner.id)).expect(200);
+      expect(asEmployee.body.data.map((item) => item.displayName).sort()).toEqual(['cua-nhan-vien.png', 'hop-thu.png']);
+      // thẻ tổng và số trang cũng loại tệp ẩn
+      expect(asEmployee.body.categorySummary).toEqual([expect.objectContaining({ category: 'chat', count: 2 })]);
+      expect(asEmployee.body.pagination.total).toBe(2);
+
+      await request(app).delete(`/api/media-library/objects/${ownerFile._storageObjectId}`).set(authHeader(employee, owner.id)).expect(404);
+      await request(app).delete(`/api/media-library/objects/${employeeFile._storageObjectId}`).set(authHeader(employee, owner.id)).expect(200);
+      await request(app).delete(`/api/media-library/objects/${inboxFile._storageObjectId}`).set(authHeader(employee, owner.id)).expect(200);
+      await request(app).delete(`/api/media-library/objects/${ownerFile._storageObjectId}`).set(authHeader(owner)).expect(200);
+    });
+
+    it('nhật ký xoá ghi tên và cỡ tệp', async () => {
+      const owner = await createUser({ email: 'owner-delete-audit@test.local' });
+      const saved = await saveChatFile(owner.id, { name: 'hoa-don.png' });
+
+      await request(app).delete(`/api/media-library/objects/${saved._storageObjectId}`).set(authHeader(owner)).expect(200);
+
+      const { rows } = await db.query(
+        `SELECT details FROM audit_logs WHERE action = 'MEDIA_DELETED' AND entity_id = $1`,
+        [String(saved._storageObjectId)]
+      );
+      expect(rows).toHaveLength(1);
+      expect(rows[0].details).toMatchObject({ displayName: 'hoa-don.png', sizeBytes: expect.any(Number) });
+    });
+  });
 });

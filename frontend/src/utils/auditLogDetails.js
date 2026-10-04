@@ -512,8 +512,13 @@ register(['MEDIA_UPLOADED'], (t, d, locale) => joinParts([
   typeof d.size === 'number' ? fmtBytes(d.size, locale) : '',
 ]));
 
-// mediaLibrary.controller.js:102 → { category, referenceType }; ai.controller.js:2368 → { source, chatbotId }
-register(['MEDIA_DELETED'], (t, d) => (isNil(d.category) ? '' : tr(t, 'media.category', { category: enumLabel(t, 'mediaCategory', d.category) })));
+// mediaLibrary.controller.js (deleteStorageObject) → { category, referenceType, displayName, sizeBytes }; ai.controller.js:2368 → { source, chatbotId }
+// Dòng cũ (trước 04/10/2026) chỉ có { category, referenceType } nên tên/cỡ là tuỳ chọn.
+register(['MEDIA_DELETED'], (t, d, locale) => joinParts([
+  quoted(t, 'media.file', d.displayName),
+  typeof d.sizeBytes === 'number' ? fmtBytes(d.sizeBytes, locale) : '',
+  isNil(d.category) ? '' : tr(t, 'media.category', { category: enumLabel(t, 'mediaCategory', d.category) }),
+]));
 
 // customer.controller.js:435 → kết quả bulkUpsert { inserted, updated, skipped, campaignLinked, total }
 register(['CUSTOMER_BULK_UPSERTED'], (t, d, locale) => joinParts([

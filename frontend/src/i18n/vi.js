@@ -1693,8 +1693,8 @@ export default {
       inboxView: 'Hộp thư — xem',
       inboxReply: 'Hộp thư — trả lời',
       inboxManage: 'Hộp thư — quản lý/xóa',
-      mediaLibraryView: 'Thư viện media — xem',
-      mediaLibraryManage: 'Thư viện media — tải lên/xóa',
+      mediaLibraryView: 'Tệp & dung lượng — xem',
+      mediaLibraryManage: 'Tệp & dung lượng — xoá tệp',
       reportsView: 'Báo cáo & Thống kê',
       aiAssistantUse: 'Sử dụng Trợ lý AI',
       marketplaceManage: 'Quản lý Marketplace',
@@ -3604,6 +3604,7 @@ export default {
         resumed: 'Bật lại AI',
       },
       media: {
+        file: '"{name}"',
         category: 'Nhóm: {category}',
       },
       customer: {

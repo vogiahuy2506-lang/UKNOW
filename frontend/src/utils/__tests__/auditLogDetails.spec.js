@@ -111,6 +111,8 @@ const REAL_ROWS = [
   ['INBOX_CONVERSATION_DELETED', { conversationType: 'channel' }, 'Hội thoại kênh nhắn tin'],
   ['MEDIA_UPLOADED', { source: 'inbox_outbound', size: 1536, mime: 'image/png' }, 'image/png · 1,5 KB'],
   ['MEDIA_DELETED', { category: 'chat_attachment', referenceType: 'inbox_message' }, 'Nhóm: Tệp đính kèm hội thoại'],
+  // 04/10/2026: nhật ký xoá ghi tên + cỡ tệp để chủ biết tệp nào đã bị xoá
+  ['MEDIA_DELETED', { category: 'chat_attachment', referenceType: 'chat_attachment', displayName: 'BaoCao.docx', sizeBytes: 32600000 }, '"BaoCao.docx" · 31,1 MB · Nhóm: Tệp đính kèm hội thoại'],
   ['CUSTOMER_BULK_UPSERTED', { inserted: 10, updated: 2, skipped: 0, campaignLinked: 0, total: 12 }, 'Thêm mới 10 · Cập nhật 2'],
   ['PLAN_CREATED', { code: 'pro', name: 'Pro' }, '"Pro" · Mã pro'],
   ['PLAN_UPDATED', { name: 'Pro' }, '"Pro"'],

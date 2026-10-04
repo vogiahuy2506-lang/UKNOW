@@ -1690,8 +1690,8 @@ export default {
       inboxView: 'Inbox — view',
       inboxReply: 'Inbox — reply',
       inboxManage: 'Inbox — manage/delete',
-      mediaLibraryView: 'Media Library — view',
-      mediaLibraryManage: 'Media Library — upload/delete',
+      mediaLibraryView: 'Files & storage — view',
+      mediaLibraryManage: 'Files & storage — delete files',
       reportsView: 'Reports & Analytics',
       aiAssistantUse: 'Use AI Assistant',
       marketplaceManage: 'Manage Marketplace',
@@ -3593,6 +3593,7 @@ export default {
         resumed: 'AI turned back on',
       },
       media: {
+        file: '"{name}"',
         category: 'Category: {category}',
       },
       customer: {
