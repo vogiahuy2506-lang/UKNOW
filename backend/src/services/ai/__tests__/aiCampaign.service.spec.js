@@ -566,6 +566,44 @@ describe('aiCampaign.service', () => {
     expect(record).toHaveBeenCalledWith(9, expect.any(Object), expect.objectContaining({ feature: 'smart_chat' }));
   });
 
+  // C P3-1 (PLAN_SUA_AI_DOT4 PR-3): lượt mà JSON của model hỏng không được tính credit. Cờ `parseFailed` (do parseAiJson gắn) phải
+  // ĐI KÈM kết quả cuối của processSmartChat — đi qua các lớp guard bằng cách chúng giữ nguyên khoá lạ khi dựng lại object; guard nào
+  // bắt đầu bỏ khoá này thì ca dưới đỏ (khi đó lượt hỏng bị trừ credit trở lại, hướng an toàn nhưng sai chính sách).
+  it('C P3-1: model trả JSON hỏng → processSmartChat mang cờ parseFailed cùng lời xin lỗi soạn sẵn', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+    axiosPost.mockResolvedValue({
+      data: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"type":"text","content":"xin chào' }] } }] },
+    });
+
+    const response = await aiCampaignService.processSmartChat({
+      userId: 9,
+      history: [{ role: 'user', content: 'Xin chào trợ lý' }],
+      locale: 'vi',
+    });
+
+    expect(response.parseFailed).toBe(true);
+    expect(response.content).toMatch(/lỗi định dạng/);
+  });
+
+  it('C P3-1: model trả JSON hợp lệ, hoặc văn xuôi thuần (câu trả lời thật) → KHÔNG có cờ parseFailed', async () => {
+    reserve.mockResolvedValue({ maxOutputTokens: 1024 });
+    extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });
+
+    axiosPost.mockResolvedValueOnce({
+      data: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: '{"type":"text","content":"xin chào","missing_fields":[],"data":null}' }] } }] },
+    });
+    const valid = await aiCampaignService.processSmartChat({ userId: 9, history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi' });
+    expect(valid.parseFailed).toBeUndefined();
+
+    axiosPost.mockResolvedValueOnce({
+      data: { candidates: [{ finishReason: 'STOP', content: { parts: [{ text: 'Chào bạn, mình có thể giúp gì?' }] } }] },
+    });
+    const prose = await aiCampaignService.processSmartChat({ userId: 9, history: [{ role: 'user', content: 'Xin chào trợ lý' }], locale: 'vi' });
+    expect(prose.content).toBe('Chào bạn, mình có thể giúp gì?');
+    expect(prose.parseFailed).toBeUndefined();
+  });
+
   it('PR-6c: prompt chat (V1) liệt kê danh sách Biểu mẫu (formId + title) và node read_form_submissions khi có 2 form', async () => {
     reserve.mockResolvedValue({ maxOutputTokens: 1024 });
     extractGeminiUsage.mockReturnValue({ promptTokens: 2, outputTokens: 1, totalTokens: 3 });

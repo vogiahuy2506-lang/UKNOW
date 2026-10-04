@@ -133,6 +133,9 @@ export function parseAiJson(text) {
           : text,
         data: null,
         missing_fields: [],
+        // C P3-1: JSON hỏng = AI KHÔNG tạo ra câu trả lời dùng được (câu trên là lời xin lỗi soạn sẵn) → controller không trừ credit.
+        // CHỈ gắn khi trông giống JSON: model trả văn xuôi thuần (nhánh `: text`) vẫn là câu trả lời thật và vẫn được trừ.
+        ...(looksLikeJson ? { parseFailed: true } : {}),
       };
     }
     return normalizeParsedShape(parsed);

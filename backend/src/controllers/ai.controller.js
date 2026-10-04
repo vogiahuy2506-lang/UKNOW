@@ -363,13 +363,19 @@ class AiController {
 
       let response;
       let wizardShortCircuit;
+      let parseFailed = false;
+      // Lưới an toàn RAG thay lời xin lỗi (parseFailed) bằng câu trả lời bám tài liệu do Gemini TẠO RA → lượt đó được trừ.
+      let answeredByDocsNet = false;
       let _wizard;
       let publicResponse;
 
       const isHelpHandled = Boolean(helpResponse && helpResponse.handled !== false && helpResponse.type);
       if (isHelpHandled) {
         publicResponse = helpResponse;
-        wizardShortCircuit = false;
+        // C P3-1: câu CỐ ĐỊNH của nhánh help (hỏi năng lực / gửi qua kênh chưa hỗ trợ — `fixedCapabilityReply`, đánh dấu
+        // `data.capabilityProbe`) không gọi Gemini để tạo câu trả lời → không trừ credit, như các câu cố định của wizard. Các
+        // nhánh help còn lại (trả lời theo tài liệu, tư vấn gói) do AI tạo ra nên vẫn trừ.
+        wizardShortCircuit = helpResponse?.data?.capabilityProbe === true;
         _wizard = null;
       } else {
         const helpRoute = helpResponse?.route || null;
@@ -394,7 +400,7 @@ class AiController {
             ? (req.user.activeContext.permissions || {})
             : null,
         });
-        ({ wizardShortCircuit, _wizard, ...publicResponse } = response || {});
+        ({ wizardShortCircuit, _wizard, parseFailed = false, ...publicResponse } = response || {});
       }
 
       // PR-2 mục 2 (PLAN_VA_TRO_LY_AI_2026-09-28) — lưới an toàn: processSmartChat (não chiến
@@ -426,6 +432,7 @@ class AiController {
               req.user.id,
               localeContext.conversationLocale
             );
+            answeredByDocsNet = true;
           } else {
             await helpRepo.insertUnanswered({
               question: lastUserContentForRouting,
@@ -597,7 +604,9 @@ class AiController {
         console.warn('[AI] Không lưu được session:', dbErr.message);
       }
 
-      if (!wizardShortCircuit) {
+      // Trừ 1 credit khi AI TẠO RA câu trả lời. Không trừ: câu server soạn sẵn (wizardShortCircuit — gồm câu cố định của nhánh
+      // help, C P3-1) và lượt JSON hỏng (parseFailed, C P3-1) — trừ khi lưới RAG đã thay lời xin lỗi bằng câu trả lời thật.
+      if (!wizardShortCircuit && (!parseFailed || answeredByDocsNet)) {
         await chargeAiCredit(req);
       }
 

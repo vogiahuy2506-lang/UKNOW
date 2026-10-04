@@ -44,6 +44,23 @@ describe('parseAiJson', () => {
     expect(out).toMatchObject({ type: 'text', content: 'xin chào bạn' });
   });
 
+  // C P3-1 (PLAN_SUA_AI_DOT4 PR-3): cờ `parseFailed` chỉ gắn khi AI KHÔNG tạo được câu trả lời dùng được (lời xin lỗi soạn sẵn).
+  describe('cờ parseFailed (controller dựa vào đây để không trừ credit)', () => {
+    it('JSON hỏng (trông giống JSON) → parseFailed: true', () => {
+      expect(parseAiJson('{not-json').parseFailed).toBe(true);
+      expect(parseAiJson('```json\n{"type":"text","content":"cắt giữa').parseFailed).toBe(true);
+    });
+
+    it('văn xuôi thuần là câu trả lời THẬT → KHÔNG có cờ (vẫn được trừ credit)', () => {
+      expect(parseAiJson('xin chào bạn')).not.toHaveProperty('parseFailed');
+    });
+
+    it('JSON hợp lệ (kể cả cứu được từ rác phía sau) → KHÔNG có cờ', () => {
+      expect(parseAiJson('{"type":"text","content":"ok"}')).not.toHaveProperty('parseFailed');
+      expect(parseAiJson('{"type":"text","content":"ok"} trailing junk')).not.toHaveProperty('parseFailed');
+    });
+  });
+
   it('maps text/response fields onto content', () => {
     expect(parseAiJson('{"type":"text","text":"a"}').content).toBe('a');
     expect(parseAiJson('{"type":"text","response":"b"}').content).toBe('b');
