@@ -49,7 +49,11 @@ import {
   notifyCampaignRunFailed,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
-import { assertRunZaloAccountsAssigned, collectEffectiveZaloAccountIds } from './campaignZaloAccess.service.js';
+import {
+  assertRunZaloAccountsAssigned,
+  collectEffectiveZaloAccountIds,
+  resolveRunTriggerUserId,
+} from './campaignZaloAccess.service.js';
 import {
   deriveVariablesForText,
   renderTemplateText,
@@ -873,12 +877,13 @@ class CampaignRunService {
       }
 
       // Preflight validation: kiểm tra node gửi, tài khoản, sheet trước khi tạo run record
-      // `actorUserIds` = người bấm chạy / người tạo lịch + người TẠO chiến dịch (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3):
-      // có nhân viên trong đó thì tài khoản Zalo của chiến dịch phải được giao cho nhân viên đó. Chủ tạo + chủ chạy → không lọc.
+      // `actorUserIds` = NGƯỜI KÍCH HOẠT lượt chạy (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): người bấm chạy, người duyệt, hoặc
+      // — lượt từ lịch — người tạo lịch (scheduler truyền `created_by` của lịch làm `actorUserId`). Là nhân viên thì tài khoản Zalo
+      // của chiến dịch phải được giao cho CHÍNH người đó; là chủ thì không lọc, kể cả chiến dịch do nhân viên tạo.
       await validateCampaignPreflight({
         campaignId,
         workspaceOwnerId: campaignData.workspace_owner_id || workspaceOwnerId,
-        actorUserIds: [actorUserId, campaignData.created_by],
+        actorUserIds: [actorUserId],
       });
 
       if (shouldActivatePendingApproval) {
@@ -1086,8 +1091,8 @@ class CampaignRunService {
       await validateCampaignPreflight({
         campaignId,
         workspaceOwnerId: currentRun.workspace_owner_id || workspaceOwnerId,
-        // Người bấm "chạy tiếp" + người tạo chiến dịch (xem createCampaignRunRecord).
-        actorUserIds: [actorUserId, currentRun.campaign_created_by],
+        // Người bấm "chạy tiếp" — người kích hoạt (xem createCampaignRunRecord).
+        actorUserIds: [actorUserId],
       });
 
       const rawAdjacentDelay = Number.parseInt(runOptions?.adjacentZaloNodeDelayMs, 10);
@@ -3077,11 +3082,13 @@ class CampaignRunService {
 
       if (nodes.length === 0) throw new Error('Chiến dịch không có node nào');
 
-      // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ gửi bằng tài khoản Zalo ĐƯỢC GIAO. Người liên quan tới lượt
-      // chạy: người TẠO chiến dịch, người BẤM CHẠY (`run_metadata.triggeredBy` — lượt lịch ghi người tạo lịch vào đây —
-      // và cột `triggered_by`), người TẠO LỊCH. Chủ tạo + chủ chạy → không lọc (`zaloAccessibleIds = null`). Có nhân viên →
-      // MỌI tài khoản Zalo của chiến dịch phải thuộc danh sách được giao của từng nhân viên đó TẠI THỜI ĐIỂM CHẠY, không
-      // thì đóng sổ run 'failed' kèm lý do rõ ("Tài khoản Zalo "X" chưa được giao cho nhân viên "Y"") và KHÔNG gửi tin.
+      // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ gửi bằng tài khoản Zalo ĐƯỢC GIAO. Chỉ kiểm theo NGƯỜI KÍCH
+      // HOẠT lượt chạy (`resolveRunTriggerUserId`: người bấm chạy / người tạo-bật lịch / người chạy tiếp / người duyệt), KHÔNG
+      // theo người tạo chiến dịch: việc giao bảo vệ tài khoản của chủ khỏi nhân viên, chủ tự chạy thì luôn được — kể cả chiến
+      // dịch do nhân viên tạo. Người kích hoạt là chủ / super admin → không lọc (`zaloAccessibleIds = null`). Là nhân viên →
+      // MỌI tài khoản Zalo của chiến dịch phải thuộc danh sách được giao của CHÍNH người đó TẠI THỜI ĐIỂM CHẠY (không giao nhau
+      // với người tạo), không thì đóng sổ run 'failed' kèm lý do rõ ("Tài khoản Zalo "X" chưa được giao cho nhân viên "Y"") và
+      // KHÔNG gửi tin. Chỉ khi không xác định được người kích hoạt (run cũ thiếu dữ liệu) mới rơi về `campaigns.created_by`.
       // Đi qua MỌI đường chạy nền (chạy tay, lịch, chạy liên tục, phục hồi sau deploy) vì cùng vào hàm này.
       // Mặc định [] (hỏng thì chặn): chưa tính xong thì mọi lần lấy tài khoản đều bị chặn.
       let zaloAccessibleIds = [];
@@ -3092,10 +3099,12 @@ class CampaignRunService {
           const scope = await assertRunZaloAccountsAssigned({
             ownerId: userId,
             actorUserIds: [
-              campaign?.created_by,
-              runRow?.run_metadata?.triggeredBy,
-              runRow?.triggered_by,
-              runRow?.schedule_created_by,
+              resolveRunTriggerUserId({
+                metadataTriggeredBy: runRow?.run_metadata?.triggeredBy,
+                triggeredBy: runRow?.triggered_by,
+                scheduleCreatedBy: runRow?.schedule_created_by,
+                campaignCreatedBy: campaign?.created_by,
+              }),
             ],
             accountIds: collectEffectiveZaloAccountIds(nodes),
           });

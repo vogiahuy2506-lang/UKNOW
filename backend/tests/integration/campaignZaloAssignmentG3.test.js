@@ -281,15 +281,41 @@ describe('chạy chiến dịch (HTTP) — preflight theo người bấm chạy 
     expect(res.status).toBe(200);
   });
 
-  it('CHỦ bấm chạy chiến dịch do NHÂN VIÊN tạo mà nhân viên đã bị gỡ tài khoản → 403 (kiểm theo người tạo)', async () => {
+  it('CHỦ bấm chạy chiến dịch do NHÂN VIÊN tạo (nhân viên đã bị gỡ tài khoản) → QUA: chỉ kiểm theo người kích hoạt, chủ tự chạy thì luôn được', async () => {
     const { owner, employee, a, ownerToken } = await setup();
     const campaignId = await insertCampaign({ ownerId: owner.id, createdBy: employee.id });
     await insertNode(campaignId, 'send_zalo_personal', { zaloAccountId: a });
     await db.query('DELETE FROM member_channel_accounts WHERE employee_id = $1', [employee.id]);
 
     const res = await asOwner(request(app).post(`/api/campaigns/${campaignId}/run`).send({ source: 'campaign_run' }), ownerToken);
-    expect(res.status).toBe(403);
-    expect(res.body.code).toBe('ZALO_ACCOUNT_NOT_ASSIGNED');
+    expect(res.status).toBe(200);
+    const { rows } = await db.query('SELECT triggered_by FROM campaign_runs WHERE id_campaign = $1', [campaignId]);
+    expect(Number(rows[0].triggered_by)).toBe(Number(owner.id));
+  });
+
+  it('nhân viên B chạy chiến dịch do nhân viên A tạo: kiểm theo B (không theo A) — B chưa được giao → 403; được giao → chạy', async () => {
+    const { owner, employee, a, b } = await setup(); // employee = A, được giao `a`
+    const employeeB = await createUser({ username: 'nv_g3_b', role: 'user' });
+    await addMembership(owner.id, employeeB.id);
+    await assign(owner.id, employeeB.id, b); // B chỉ được giao `b`
+    const tokenB = await loginAs(employeeB);
+    const campaignId = await insertCampaign({ ownerId: owner.id, createdBy: employee.id });
+    await insertNode(campaignId, 'send_zalo_personal', { zaloAccountId: a }); // A tạo, dùng nick của A
+
+    const denied = await asEmployee(request(app).post(`/api/campaigns/${campaignId}/run`).send({ source: 'campaign_run' }), tokenB, owner.id);
+    expect(denied.status).toBe(403);
+    expect(denied.body.code).toBe('ZALO_ACCOUNT_NOT_ASSIGNED');
+    expect(denied.body.message).toContain('Tài khoản Zalo "Nick A" chưa được giao cho nhân viên "Test nv_g3_b"');
+    const { rows: none } = await db.query('SELECT id FROM campaign_runs WHERE id_campaign = $1', [campaignId]);
+    expect(none).toHaveLength(0);
+
+    // Giao thêm `a` cho B (A vẫn được giao `a`): chạy được. Ngược lại, gỡ `a` khỏi A không ảnh hưởng B.
+    await assign(owner.id, employeeB.id, a);
+    await db.query('DELETE FROM member_channel_accounts WHERE employee_id = $1', [employee.id]);
+    const allowed = await asEmployee(request(app).post(`/api/campaigns/${campaignId}/run`).send({ source: 'campaign_run' }), tokenB, owner.id);
+    expect(allowed.status).toBe(200);
+    const { rows } = await db.query('SELECT triggered_by FROM campaign_runs WHERE id_campaign = $1', [campaignId]);
+    expect(Number(rows[0].triggered_by)).toBe(Number(employeeB.id));
   });
 
   it('bật lịch (POST /api/campaign-schedules): nhân viên + tài khoản chưa giao → 403, không tạo lịch', async () => {
@@ -317,19 +343,34 @@ describe('engine chạy nền (CSDL thật) — dừng ngay đầu lượt, khô
     return Number(rows[0].id);
   }
 
-  it('chiến dịch do NHÂN VIÊN tạo, tài khoản chưa giao (chủ bấm chạy) → run failed kèm lý do rõ, không có tin nào', async () => {
+  it('nhân viên B bấm chạy chiến dịch do nhân viên A tạo, B chưa được giao → run failed theo B, kèm lý do rõ, không có tin nào', async () => {
+    const { owner, employee, a } = await setup(); // A (employee) được giao `a`
+    const employeeB = await createUser({ username: 'nv_g3_engine_b', role: 'user' });
+    await addMembership(owner.id, employeeB.id); // B chưa được giao gì
+    const campaignId = await insertCampaign({ ownerId: owner.id, createdBy: employee.id });
+    await insertNode(campaignId, 'send_zalo_personal', { zaloAccountId: a });
+    const runId = await createRun({ campaignId, ownerId: owner.id, triggeredBy: employeeB.id });
+
+    await realExecuteCampaign(campaignId, runId, owner.id);
+
+    const { rows } = await db.query('SELECT status, error_message FROM campaign_runs WHERE id = $1', [runId]);
+    expect(rows[0].status).toBe('failed');
+    expect(rows[0].error_message).toMatch(/Tài khoản Zalo "Nick A" chưa được giao cho nhân viên "Test nv_g3_engine_b"/);
+    const { rows: messages } = await db.query('SELECT id FROM zalo_messages');
+    expect(messages).toHaveLength(0);
+  });
+
+  it('run cũ thiếu người kích hoạt (không triggered_by, không metadata) → rơi về NGƯỜI TẠO chiến dịch, chưa được giao → failed', async () => {
     const { owner, employee, b } = await setup();
     const campaignId = await insertCampaign({ ownerId: owner.id, createdBy: employee.id });
     await insertNode(campaignId, 'send_zalo_personal', { zaloAccountId: b });
-    const runId = await createRun({ campaignId, ownerId: owner.id, triggeredBy: owner.id });
+    const runId = await createRun({ campaignId, ownerId: owner.id });
 
     await realExecuteCampaign(campaignId, runId, owner.id);
 
     const { rows } = await db.query('SELECT status, error_message FROM campaign_runs WHERE id = $1', [runId]);
     expect(rows[0].status).toBe('failed');
     expect(rows[0].error_message).toMatch(/Tài khoản Zalo "Nick B" chưa được giao cho nhân viên/);
-    const { rows: messages } = await db.query('SELECT id FROM zalo_messages');
-    expect(messages).toHaveLength(0);
   });
 
   it('chiến dịch của CHỦ nhưng NHÂN VIÊN bấm chạy và chưa được giao → run failed', async () => {

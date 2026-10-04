@@ -430,8 +430,8 @@ class CampaignRunRepository {
    */
   async getRunForExecution(runId) {
     const result = await db.query(
-      // `triggered_by` + `schedule_created_by`: ai bấm chạy / ai tạo lịch (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3) — engine
-      // kiểm tài khoản Zalo theo các nhân viên liên quan tới lượt chạy. `run_metadata.triggeredBy` cũng có (lượt lịch ghi người
+      // `triggered_by` + `schedule_created_by`: NGƯỜI KÍCH HOẠT lượt chạy (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3) — engine
+      // kiểm tài khoản Zalo được giao theo người này (bấm chạy / tạo lịch). `run_metadata.triggeredBy` cũng có (lượt lịch ghi người
       // tạo lịch vào đó, cột `triggered_by` thì NULL).
       `SELECT cr.run_metadata, cr.successful_sends, cr.failed_sends, cr.total_recipients, cr.skipped_sends,
               cr.triggered_by,
@@ -559,7 +559,6 @@ class CampaignRunRepository {
     const campaignParams = [campaignId];
     let campaignQuery = `SELECT id, id_user,
          COALESCE(workspace_owner_id, id_user) AS workspace_owner_id,
-         created_by,
          status, campaign_name
        FROM campaigns
        WHERE id = $1`;
@@ -705,7 +704,7 @@ class CampaignRunRepository {
     workspaceOwnerId = userId,
   }) {
     const result = await client.query(
-      `SELECT cr.*, c.id_user, c.created_by AS campaign_created_by,
+      `SELECT cr.*, c.id_user,
               COALESCE(cr.workspace_owner_id, c.workspace_owner_id, c.id_user) AS effective_workspace_owner_id
          FROM campaign_runs cr
          JOIN campaigns c ON c.id = cr.id_campaign

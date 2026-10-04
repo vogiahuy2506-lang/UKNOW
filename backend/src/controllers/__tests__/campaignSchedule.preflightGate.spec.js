@@ -80,11 +80,11 @@ describe('CampaignScheduleController.create — preflight khi bật lịch', () 
     expect(mockRepository.create).not.toHaveBeenCalled();
   });
 
-  it('PR-G3: preflight nhận người tạo lịch + người tạo chiến dịch (kiểm tài khoản Zalo được giao)', async () => {
+  it('PR-G3: preflight nhận người tạo lịch (người kích hoạt các lượt chạy), không kèm người tạo chiến dịch', async () => {
     mockRepository.findCampaignForSchedule.mockResolvedValue({ id: 395, status: 'active', workspace_owner_id: 39, created_by: 55 });
     const employeeReq = { ...createReq(), user: { id: 20, role: 'user', activeContext: { type: 'employee', ownerId: 39, membershipId: 3, permissions: { campaigns_run: true } } } };
     await new CampaignScheduleController().create(employeeReq, makeRes());
-    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39, actorUserIds: [20, 55] });
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39, actorUserIds: [20] });
   });
 
   it('PR-G3: preflight ném 403 ZALO_ACCOUNT_NOT_ASSIGNED → trả 403 đúng code, KHÔNG tạo lịch', async () => {
@@ -141,10 +141,10 @@ describe('CampaignScheduleController.update — preflight khi bật lại lịch
     expect(mockRepository.update).not.toHaveBeenCalled();
   });
 
-  it('PR-G3: bật lại lịch → preflight kiểm theo NGƯỜI TẠO LỊCH + người tạo chiến dịch (không theo người đang bấm bật)', async () => {
+  it('PR-G3: bật lại lịch → preflight kiểm theo NGƯỜI TẠO LỊCH (scheduler chạy dưới tên người này), không theo người đang bấm bật hay người tạo chiến dịch', async () => {
     mockRepository.findMutableById.mockResolvedValue(mutableSchedule({ created_by: 20, campaign_created_by: 55 }));
     await new CampaignScheduleController().update(updateReq({ enabled: true }), makeRes());
-    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39, actorUserIds: [20, 55] });
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39, actorUserIds: [20] });
   });
 
   it('bật lại lịch đang tắt, preflight qua → cập nhật được', async () => {

@@ -113,9 +113,9 @@ function employeeCanRunCampaign(req) {
  */
 async function respondPreflightFailure(res, campaignId, workspaceOwnerId, actorUserIds = []) {
   try {
-    // `actorUserIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): những người mà lượt chạy từ lịch sẽ mang danh nghĩa —
-    // người tạo lịch (scheduler đặt `triggeredBy` = created_by của lịch) và người tạo chiến dịch. Có nhân viên thì tài
-    // khoản Zalo của chiến dịch phải được giao cho nhân viên đó, không thì 403 ngay lúc bật lịch thay vì nổ hỏng lúc chạy.
+    // `actorUserIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): NGƯỜI KÍCH HOẠT các lượt chạy của lịch = người tạo lịch
+    // (scheduler đặt `triggeredBy` = created_by của lịch). Là nhân viên thì tài khoản Zalo của chiến dịch phải được giao cho
+    // người đó, không thì 403 ngay lúc bật lịch thay vì nổ hỏng lúc chạy; là chủ thì không lọc (kể cả chiến dịch do nhân viên tạo).
     await validateCampaignPreflight({ campaignId, workspaceOwnerId, actorUserIds });
     return null;
   } catch (preflightError) {
@@ -358,7 +358,7 @@ class CampaignScheduleController {
           res,
           campaignId,
           campaign.workspace_owner_id,
-          [context.actorUserId, campaign.created_by]
+          [context.actorUserId]
         );
         if (preflightFailure) return preflightFailure;
       }
@@ -529,8 +529,8 @@ class CampaignScheduleController {
           res,
           scheduleData.id_campaign,
           scheduleData.workspace_owner_id ?? context.workspaceOwnerId,
-          // Lượt chạy từ lịch mang danh nghĩa NGƯỜI TẠO LỊCH (không phải người đang bấm bật) + người tạo chiến dịch.
-          [scheduleData.created_by, scheduleData.campaign_created_by]
+          // Lượt chạy từ lịch mang danh nghĩa NGƯỜI TẠO LỊCH (không phải người đang bấm bật): scheduler dùng created_by của lịch.
+          [scheduleData.created_by]
         );
         if (preflightFailure) return preflightFailure;
       }

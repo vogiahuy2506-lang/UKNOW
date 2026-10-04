@@ -335,6 +335,33 @@ describe('resolveActorZaloAccessibleIds (trợ lý AI)', () => {
   });
 });
 
+describe('resolveRunTriggerUserId — NGƯỜI KÍCH HOẠT lượt chạy (không phải người tạo chiến dịch)', () => {
+  it('ưu tiên run_metadata.triggeredBy (người bấm chạy / người tạo lịch / người chạy tiếp / người duyệt)', () => {
+    expect(access.resolveRunTriggerUserId({
+      metadataTriggeredBy: 20, triggeredBy: 21, scheduleCreatedBy: 22, campaignCreatedBy: 23,
+    })).toBe(20);
+  });
+
+  it('thiếu metadata → cột triggered_by; thiếu nữa → người tạo lịch', () => {
+    expect(access.resolveRunTriggerUserId({ triggeredBy: '21', scheduleCreatedBy: 22, campaignCreatedBy: 23 })).toBe(21);
+    expect(access.resolveRunTriggerUserId({ scheduleCreatedBy: 22, campaignCreatedBy: 23 })).toBe(22);
+  });
+
+  it('CHỈ khi cả ba đều thiếu mới rơi về người tạo chiến dịch', () => {
+    expect(access.resolveRunTriggerUserId({ campaignCreatedBy: 23 })).toBe(23);
+  });
+
+  it('giá trị rác / rỗng / 0 được bỏ qua; không có ai → null (không lọc)', () => {
+    expect(access.resolveRunTriggerUserId({ metadataTriggeredBy: 'abc', triggeredBy: 0, scheduleCreatedBy: '', campaignCreatedBy: 23 })).toBe(23);
+    expect(access.resolveRunTriggerUserId({})).toBeNull();
+    expect(access.resolveRunTriggerUserId()).toBeNull();
+  });
+
+  it('người tạo chiến dịch KHÔNG được xét khi đã biết người kích hoạt (chủ chạy chiến dịch của nhân viên → chủ)', () => {
+    expect(access.resolveRunTriggerUserId({ metadataTriggeredBy: OWNER, campaignCreatedBy: EMP_A })).toBe(OWNER);
+  });
+});
+
 describe('collectEffectiveZaloAccountIds', () => {
   it('mô phỏng engine: id sót lại khi pool bật không được tính; mọi id trong pool được tính', () => {
     const ids = access.collectEffectiveZaloAccountIds([

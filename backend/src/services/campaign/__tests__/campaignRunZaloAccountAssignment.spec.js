@@ -9,10 +9,12 @@ import { fileURLToPath } from 'node:url';
 
 const OWNER = 10;
 const EMP = 20;
+const EMP_B = 30;
 
 const mockFailRun = jest.fn().mockResolvedValue(null);
 const mockPatchRunMetadata = jest.fn().mockResolvedValue(null);
 const mockGetRunForExecution = jest.fn();
+const mockGetRunStatus = jest.fn();
 const mockFindCampaignById = jest.fn();
 const mockFindAssigned = jest.fn();
 const mockGetCampaignZaloAccount = jest.fn();
@@ -29,7 +31,7 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignRun.repository.
   default: {
     getRunMetadata: jest.fn().mockResolvedValue({}),
     getRunForExecution: mockGetRunForExecution,
-    getRunStatus: jest.fn().mockResolvedValue('running'),
+    getRunStatus: mockGetRunStatus,
     patchRunMetadata: mockPatchRunMetadata,
     clearDeferMetadataKeys: jest.fn().mockResolvedValue(null),
     updateRunProgress: jest.fn().mockResolvedValue(null),
@@ -142,10 +144,13 @@ describe('engine chạy chiến dịch — tài khoản Zalo được giao (G3)'
       const text = String(sql);
       if (/SELECT role FROM users/.test(text)) return { rows: [{ role: 'user' }] };
       if (/FROM zalo_settings WHERE id = ANY/.test(text)) return { rows: [{ id: 99, display_name: 'Nick công ty', zalo_name: null }] };
-      if (/FROM users WHERE id = ANY/.test(text)) return { rows: [{ id: EMP, full_name: 'Lan', username: 'lan' }] };
+      if (/FROM users WHERE id = ANY/.test(text)) {
+        return { rows: [{ id: EMP, full_name: 'Lan', username: 'lan' }, { id: EMP_B, full_name: 'Bình', username: 'binh' }] };
+      }
       return { rows: [] };
     });
     mockFindAssigned.mockResolvedValue([99]);
+    mockGetRunStatus.mockResolvedValue('running');
     mockGetRunForExecution.mockResolvedValue(runRow());
     mockFindCampaignById.mockResolvedValue(campaignRow());
     mockGetCampaignZaloAccount.mockResolvedValue({ id: 99, userId: OWNER, displayName: 'Nick công ty' });
@@ -164,11 +169,11 @@ describe('engine chạy chiến dịch — tài khoản Zalo được giao (G3)'
     campaignRunService.continuousRunIds.clear();
   });
 
-  const expectBlocked = () => {
+  const expectBlocked = (employeeName = 'Lan') => {
     expect(mockFailRun).toHaveBeenCalledTimes(1);
     const [runId, message] = mockFailRun.mock.calls[0];
     expect(runId).toBe(200);
-    expect(message).toContain('Tài khoản Zalo "Nick công ty" chưa được giao cho nhân viên "Lan"');
+    expect(message).toContain(`Tài khoản Zalo "Nick công ty" chưa được giao cho nhân viên "${employeeName}"`);
     // Chủ chiến dịch được báo (cùng khuôn mọi nhánh dừng-vì-lỗi khác).
     expect(mockNotifyRunFailed).toHaveBeenCalledWith(expect.objectContaining({
       runId: 200, campaignId: 100, source: 'zalo_account_not_assigned',
@@ -179,6 +184,8 @@ describe('engine chạy chiến dịch — tài khoản Zalo được giao (G3)'
     expect(mockInsertCampaignZaloMessage).not.toHaveBeenCalled();
   };
 
+  // Quy tắc: CHỈ kiểm theo NGƯỜI KÍCH HOẠT lượt chạy (bấm chạy / tạo-bật lịch / chạy tiếp / duyệt), không theo người tạo chiến dịch.
+
   it('CHỦ tạo + CHỦ chạy: không lọc — không đọc bảng giao, tài khoản lấy với accessibleAccountIds = null', async () => {
     mockFindAssigned.mockResolvedValue([]);
     await campaignRunService.executeCampaign(100, 200, OWNER);
@@ -188,8 +195,19 @@ describe('engine chạy chiến dịch — tài khoản Zalo được giao (G3)'
     expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 99, accessibleAccountIds: null }));
   });
 
-  it('chiến dịch do NHÂN VIÊN tạo, tài khoản ĐƯỢC giao → chạy, mọi lần lấy tài khoản mang danh sách được giao', async () => {
+  it('CHỦ bấm chạy chiến dịch do NHÂN VIÊN tạo (nhân viên đã bị gỡ tài khoản) → QUA: không lọc, không đọc bảng giao', async () => {
     mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: OWNER, run_metadata: { source: 'campaign_run', triggeredBy: OWNER } }));
+    mockFindAssigned.mockResolvedValue([]);
+    await campaignRunService.executeCampaign(100, 200, OWNER);
+
+    expect(mockFailRun).not.toHaveBeenCalled();
+    expect(mockFindAssigned).not.toHaveBeenCalled();
+    expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 99, accessibleAccountIds: null }));
+  });
+
+  it('NHÂN VIÊN bấm chạy, tài khoản ĐƯỢC giao → chạy, mọi lần lấy tài khoản mang danh sách được giao của người bấm', async () => {
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP, run_metadata: { source: 'campaign_run', triggeredBy: EMP } }));
     await campaignRunService.executeCampaign(100, 200, OWNER);
 
     expect(mockFindAssigned).toHaveBeenCalledWith(OWNER, EMP);
@@ -197,28 +215,42 @@ describe('engine chạy chiến dịch — tài khoản Zalo được giao (G3)'
     expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 99, accessibleAccountIds: [99] }));
   });
 
-  it('chiến dịch do NHÂN VIÊN tạo, tài khoản CHƯA giao → run failed kèm lý do rõ, KHÔNG gửi tin', async () => {
-    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
-    mockFindAssigned.mockResolvedValue([]);
-    await campaignRunService.executeCampaign(100, 200, OWNER);
-    expectBlocked();
-  });
-
-  it('chiến dịch do CHỦ tạo nhưng NHÂN VIÊN bấm chạy (run_metadata.triggeredBy) và chưa được giao → chặn', async () => {
+  it('NHÂN VIÊN bấm chạy chiến dịch của CHỦ (run_metadata.triggeredBy) và chưa được giao → run failed kèm lý do rõ, KHÔNG gửi tin', async () => {
     mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP, run_metadata: { source: 'campaign_run', triggeredBy: EMP } }));
     mockFindAssigned.mockResolvedValue([]);
     await campaignRunService.executeCampaign(100, 200, OWNER);
     expectBlocked();
   });
 
-  it('chỉ có cột triggered_by (metadata thiếu) → vẫn chặn', async () => {
+  it('chỉ có cột triggered_by (metadata thiếu) → vẫn kiểm theo người bấm', async () => {
     mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP, run_metadata: { source: 'campaign_run' } }));
     mockFindAssigned.mockResolvedValue([]);
     await campaignRunService.executeCampaign(100, 200, OWNER);
     expectBlocked();
   });
 
-  it('LỊCH do nhân viên tạo (schedule_created_by) và chưa được giao → chặn; chạy nền không có người bấm', async () => {
+  it('nhân viên B chạy chiến dịch do nhân viên A tạo: kiểm theo B (không theo A, không giao nhau) — B chưa được giao → chặn dù A được giao', async () => {
+    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP_B, run_metadata: { source: 'campaign_run', triggeredBy: EMP_B } }));
+    mockFindAssigned.mockImplementation(async (_owner, employeeId) => (employeeId === EMP ? [99] : []));
+    await campaignRunService.executeCampaign(100, 200, OWNER);
+
+    expect(mockFindAssigned).toHaveBeenCalledWith(OWNER, EMP_B);
+    expect(mockFindAssigned).not.toHaveBeenCalledWith(OWNER, EMP);
+    expectBlocked('Bình');
+  });
+
+  it('nhân viên B chạy chiến dịch do nhân viên A tạo: B được giao còn A không → QUA (không lấy giao nhau với người tạo)', async () => {
+    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP_B, run_metadata: { source: 'campaign_run', triggeredBy: EMP_B } }));
+    mockFindAssigned.mockImplementation(async (_owner, employeeId) => (employeeId === EMP_B ? [99] : []));
+    await campaignRunService.executeCampaign(100, 200, OWNER);
+
+    expect(mockFailRun).not.toHaveBeenCalled();
+    expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accountId: 99, accessibleAccountIds: [99] }));
+  });
+
+  it('LỊCH do nhân viên tạo (schedule_created_by, run lịch không có người bấm) và chưa được giao → chặn', async () => {
     mockGetRunForExecution.mockResolvedValue(runRow({
       triggered_by: null,
       schedule_created_by: EMP,
@@ -229,23 +261,54 @@ describe('engine chạy chiến dịch — tài khoản Zalo được giao (G3)'
     expectBlocked();
   });
 
-  it('CHỦ bấm chạy chiến dịch do nhân viên tạo mà nhân viên đã bị gỡ tài khoản → chặn (kiểm theo người tạo)', async () => {
+  it('LỊCH do CHỦ tạo trên chiến dịch do nhân viên tạo → QUA (người kích hoạt là chủ)', async () => {
     mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
-    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: OWNER, run_metadata: { source: 'campaign_run', triggeredBy: OWNER } }));
+    mockGetRunForExecution.mockResolvedValue(runRow({
+      triggered_by: null,
+      schedule_created_by: OWNER,
+      run_metadata: { source: 'schedule', triggeredBy: OWNER },
+    }));
+    mockFindAssigned.mockResolvedValue([]);
+    await campaignRunService.executeCampaign(100, 200, OWNER, null, { isResume: true, resumedBy: 'per_minute' });
+    expect(mockFailRun).not.toHaveBeenCalled();
+    expect(mockFindAssigned).not.toHaveBeenCalled();
+  });
+
+  it('chạy tiếp / phục hồi sau deploy: người kích hoạt gốc là nhân viên (đọc lại từ run_metadata) và chưa được giao → chặn', async () => {
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP, run_metadata: { source: 'campaign_run', continuousMode: true, triggeredBy: EMP } }));
+    mockFindAssigned.mockResolvedValue([]);
+    // Lưới an toàn: nếu cổng bị gỡ, vòng lặp continuous (while(true)) sẽ dừng ở lần kiểm trạng thái đầu tiên và ca ĐỎ, thay vì treo cả bộ test.
+    mockGetRunStatus.mockResolvedValue('stopped');
+    await campaignRunService.executeCampaign(100, 200, OWNER, null, { isResume: true, resumedBy: 'scheduler_continuous' });
+    expectBlocked();
+  });
+
+  it('CHỈ khi không xác định được người kích hoạt (run cũ thiếu dữ liệu) mới rơi về người TẠO chiến dịch', async () => {
+    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: null, schedule_created_by: null, run_metadata: { source: 'campaign_run' } }));
+    mockFindAssigned.mockResolvedValue([]);
+    await campaignRunService.executeCampaign(100, 200, OWNER);
+    expect(mockFindAssigned).toHaveBeenCalledWith(OWNER, EMP);
+    expectBlocked();
+  });
+
+  it('không có ai (run cũ + chiến dịch cũ không có người tạo) → không lọc như trước', async () => {
+    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: null }));
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: null, schedule_created_by: null, run_metadata: { source: 'campaign_run' } }));
+    await campaignRunService.executeCampaign(100, 200, OWNER);
+    expect(mockFailRun).not.toHaveBeenCalled();
+    expect(mockGetCampaignZaloAccount).toHaveBeenCalledWith(expect.objectContaining({ accessibleAccountIds: null }));
+  });
+
+  it('nhân viên bấm chạy ĐÃ BỊ XOÁ (không còn hàng giao) → coi như không có tài khoản nào → chặn', async () => {
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP, run_metadata: { source: 'campaign_run', triggeredBy: EMP } }));
     mockFindAssigned.mockResolvedValue([]);
     await campaignRunService.executeCampaign(100, 200, OWNER);
     expectBlocked();
   });
 
-  it('nhân viên ĐÃ BỊ XOÁ (không còn hàng giao) → coi như không có tài khoản nào → chặn', async () => {
-    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
-    mockFindAssigned.mockResolvedValue([]);
-    await campaignRunService.executeCampaign(100, 200, OWNER);
-    expectBlocked();
-  });
-
-  it('FAIL-CLOSED: đọc bảng giao lỗi → chặn (không cho gửi)', async () => {
-    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
+  it('FAIL-CLOSED: đọc bảng giao lỗi (người kích hoạt là nhân viên) → chặn (không cho gửi)', async () => {
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP, run_metadata: { source: 'campaign_run', triggeredBy: EMP } }));
     mockFindAssigned.mockRejectedValue(new Error('db down'));
     await campaignRunService.executeCampaign(100, 200, OWNER);
     expectBlocked();
@@ -260,7 +323,7 @@ describe('engine chạy chiến dịch — tài khoản Zalo được giao (G3)'
   });
 
   it('run bị chặn KHÔNG ném ra ngoài (executeCampaign resolve) và slot được nhả — không kẹt run khác', async () => {
-    mockFindCampaignById.mockResolvedValue(campaignRow({ created_by: EMP }));
+    mockGetRunForExecution.mockResolvedValue(runRow({ triggered_by: EMP, run_metadata: { source: 'campaign_run', triggeredBy: EMP } }));
     mockFindAssigned.mockResolvedValue([]);
     await expect(campaignRunService.executeCampaign(100, 200, OWNER)).resolves.toBeUndefined();
     expect(campaignRunService.activeRunIds.has('200')).toBe(false);

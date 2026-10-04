@@ -16,10 +16,12 @@ import {
  *
  *  1. Có ngữ cảnh HTTP (`getWorkspaceContext(req.user)`): lưu / nhân bản chiến dịch, gửi thử, preview →
  *     `getAccessibleZaloAccountIds(ctx)` của G1 (null = chủ / super admin; mảng = nhân viên; lỗi → []).
- *  2. KHÔNG có ngữ cảnh HTTP — chạy nền, lịch, chạy liên tục, duyệt: chỉ có id người liên quan tới lượt chạy (người tạo
- *     chiến dịch, người bấm chạy, người tạo lịch) → `resolveZaloAccessScope`. Chiến dịch do CHỦ tạo và chạy → không lọc;
- *     có NHÂN VIÊN dính vào (tạo hoặc bấm chạy) → mọi tài khoản Zalo của chiến dịch phải thuộc danh sách được giao của
- *     từng nhân viên đó TẠI THỜI ĐIỂM CHẠY. Nhân viên đã bị xoá → không còn hàng giao → coi như không có tài khoản nào.
+ *  2. KHÔNG có ngữ cảnh HTTP — chạy nền, lịch, chạy liên tục, duyệt: chỉ kiểm theo NGƯỜI KÍCH HOẠT lượt chạy
+ *     (`resolveRunTriggerUserId`: người bấm chạy / người tạo-bật lịch / người chạy tiếp / người duyệt), KHÔNG theo người tạo
+ *     chiến dịch — việc giao tài khoản bảo vệ tài khoản của chủ khỏi nhân viên, chủ tự chạy thì luôn được, kể cả chiến dịch do
+ *     nhân viên tạo. Người kích hoạt là chủ / super admin → không lọc; là nhân viên → mọi tài khoản Zalo của chiến dịch phải
+ *     thuộc danh sách được giao của CHÍNH người đó TẠI THỜI ĐIỂM CHẠY (không lấy giao nhau với người tạo). Nhân viên đã bị
+ *     xoá → không còn hàng giao → coi như không có tài khoản nào.
  *
  * Hỏng thì chặn: mọi lỗi đọc việc giao đều ra mảng rỗng (không bao giờ `null` = thấy hết).
  */
@@ -76,7 +78,33 @@ export async function getAccessibleZaloAccountIdsForUser({ ownerId, userId }) {
 }
 
 /**
- * Phạm vi tài khoản Zalo của một lượt chạy: giao của mọi NGƯỜI LIÊN QUAN không phải chủ.
+ * NGƯỜI KÍCH HOẠT lượt chạy — người mà việc giao tài khoản được kiểm theo. Thứ tự:
+ *  1. `run_metadata.triggeredBy`: người bấm chạy; lượt từ lịch ghi người TẠO LỊCH vào đây; chạy tiếp (continuous) ghi người bấm
+ *     chạy tiếp; duyệt ghi người duyệt; phục hồi sau deploy đọc lại đúng giá trị đã ghi lúc tạo run;
+ *  2. cột `campaign_runs.triggered_by` (người bấm chạy; lượt lịch thì NULL);
+ *  3. `campaign_schedules.created_by` của lịch sinh ra lượt chạy;
+ *  4. CHỈ khi cả ba đều thiếu (run cũ thiếu dữ liệu) mới rơi về `campaigns.created_by`.
+ * Không có ai → null (không xác định, không lọc — chiến dịch cũ của chủ không có người tạo).
+ *
+ * @param {{ metadataTriggeredBy?: any, triggeredBy?: any, scheduleCreatedBy?: any, campaignCreatedBy?: any }} input
+ * @returns {number|null}
+ */
+export function resolveRunTriggerUserId({
+  metadataTriggeredBy = null,
+  triggeredBy = null,
+  scheduleCreatedBy = null,
+  campaignCreatedBy = null,
+} = {}) {
+  for (const candidate of [metadataTriggeredBy, triggeredBy, scheduleCreatedBy, campaignCreatedBy]) {
+    const id = toPositiveInt(candidate);
+    if (id) return id;
+  }
+  return null;
+}
+
+/**
+ * Phạm vi tài khoản Zalo của một lượt chạy: giao của các NGƯỜI được truyền (engine / preflight chỉ truyền NGƯỜI KÍCH HOẠT)
+ * không phải chủ.
  *
  * @param {{ ownerId: number|string, actorUserIds?: Array<number|string|null|undefined> }} input
  * @returns {Promise<{
@@ -263,6 +291,7 @@ export default {
   createZaloNotAssignedError,
   getAccessibleZaloAccountIdsForUser,
   resolveZaloAccessScope,
+  resolveRunTriggerUserId,
   collectEffectiveZaloAccountIds,
   findUnassignedPairs,
   assertRunZaloAccountsAssigned,

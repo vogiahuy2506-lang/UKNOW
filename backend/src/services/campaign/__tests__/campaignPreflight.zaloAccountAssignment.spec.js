@@ -75,11 +75,22 @@ describe('validateCampaignPreflight — tài khoản Zalo được giao (G3)', (
     expect(mockFindAssigned).not.toHaveBeenCalled();
   });
 
-  it('CHỦ bấm chạy chiến dịch do NHÂN VIÊN tạo: kiểm theo người tạo (đã bị gỡ tài khoản → 403)', async () => {
+  it('CHỦ bấm chạy chiến dịch do NHÂN VIÊN tạo (nhân viên đã bị gỡ tài khoản): người kích hoạt là chủ → QUA, không đọc bảng giao', async () => {
+    // Callers chỉ truyền NGƯỜI KÍCH HOẠT ([chủ]); người tạo chiến dịch không còn nằm trong danh sách kiểm.
     mockFindAssigned.mockResolvedValue([]);
-    await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: OWNER, actorUserIds: [OWNER, CREATOR] }))
+    await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: OWNER, actorUserIds: [OWNER] }))
+      .resolves.toMatchObject({ valid: true });
+    expect(mockFindAssigned).not.toHaveBeenCalled();
+  });
+
+  it('nhân viên B kích hoạt chiến dịch của nhân viên A: kiểm theo B', async () => {
+    mockFindAssigned.mockImplementation(async (_o, employeeId) => (employeeId === CREATOR ? [5] : []));
+    await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: OWNER, actorUserIds: [EMP] }))
       .rejects.toMatchObject({ code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
-    expect(mockFindAssigned).toHaveBeenCalledWith(OWNER, CREATOR);
+    expect(mockFindAssigned).toHaveBeenCalledWith(OWNER, EMP);
+    expect(mockFindAssigned).not.toHaveBeenCalledWith(OWNER, CREATOR);
+    await expect(validateCampaignPreflight({ campaignId: 10, workspaceOwnerId: OWNER, actorUserIds: [CREATOR] }))
+      .resolves.toMatchObject({ valid: true });
   });
 
   it('nhân viên bấm chạy chiến dịch của CHỦ dùng tài khoản nhân viên chưa có → 403 (nhân viên có campaigns_run không lách được)', async () => {
