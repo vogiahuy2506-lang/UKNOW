@@ -1,6 +1,7 @@
 import businessProfileRepository from '../../repositories/ai/businessProfile.repository.js';
 import productRepository from '../../repositories/products/product.repository.js';
 import { embedText, embedTexts } from '../../utils/embeddingClient.util.js';
+import { clipExtraContextForPrompt } from '../../utils/businessProfileLimits.util.js';
 
 /** Parse JSON array field — fallback về text nếu không phải JSON. */
 function parseArrayField(value) {
@@ -116,7 +117,8 @@ async function buildChunksFromProfile(profile, userId) {
     chunks.push({ text: `Nhận diện thương hiệu — ${brandParts.join(', ')}`, metadata: { field: 'brand' } });
   }
   if (safeProfile.extra_context) {
-    const paragraphs = safeProfile.extra_context.split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
+    // Cùng trần với prompt (D-13): dữ liệu cũ quá dài không sinh hàng trăm chunk embedding. DB không đổi.
+    const paragraphs = clipExtraContextForPrompt(safeProfile.extra_context).split(/\n{2,}/).map(s => s.trim()).filter(Boolean);
     paragraphs.forEach((para, i) => {
       chunks.push({ text: para, metadata: { field: 'extra_context', index: i } });
     });
@@ -243,7 +245,8 @@ class BusinessProfileService {
       if (profile?.logo_url) lines.push(`Logo URL: ${profile.logo_url}`);
       else if (profile) lines.push(`Logo URL: (chưa có — dùng text header thay thế)`);
     }
-    if (profile?.extra_context) lines.push(`Bổ sung: ${profile.extra_context}`);
+    // Cắt ≤ 20.000 ký tự khi đưa vào prompt (D-13) — dữ liệu đã lưu quá dài không còn phình mọi câu trả lời. DB không đổi.
+    if (profile?.extra_context) lines.push(`Bổ sung: ${clipExtraContextForPrompt(profile.extra_context)}`);
     if (!lines.length) return '';
     return [
       '=== HỒ SƠ DOANH NGHIỆP (đầy đủ) ===',

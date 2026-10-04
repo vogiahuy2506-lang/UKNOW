@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { createExtraContextTooLongError, isExtraContextTooLong } from '../../utils/businessProfileLimits.util.js';
 
 class BusinessProfileRepository {
   /**
@@ -21,8 +22,11 @@ class BusinessProfileRepository {
    * @param {number} userId
    * @param {object} data
    * @returns {Promise<object>}
+   * @throws {Error} status 400, code EXTRA_CONTEXT_TOO_LONG — `extra_context` > MAX_EXTRA_CONTEXT_CHARS (D-13).
+   *   Controller đã chặn trước; chốt ở đây để mọi đường ghi khác (script, trợ lý…) không lách được trần.
    */
   async upsert(userId, { company_name, industry, products, target_audience, tone, brand_color, logo_url, extra_context }) {
+    if (isExtraContextTooLong(extra_context)) throw createExtraContextTooLongError(extra_context.length);
     const { rows } = await db.query(
       `INSERT INTO business_profiles
          (user_id, company_name, industry, products, target_audience, tone, brand_color, logo_url, extra_context, updated_at)

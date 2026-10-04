@@ -48,6 +48,11 @@ import {
   buildLayoutFindingsContext,
 } from '../utils/landingLayoutFindings.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
+import {
+  EXTRA_CONTEXT_TOO_LONG_CODE,
+  buildExtraContextTooLongMessage,
+  isExtraContextTooLong,
+} from '../utils/businessProfileLimits.util.js';
 
 const SUPPORTED_SYSTEM_INSTRUCTION_LANGUAGES = ['vi', 'en'];
 
@@ -2077,6 +2082,14 @@ class AiController {
   async saveBusinessProfile(req, res) {
     try {
       const { company_name, industry, products, target_audience, tone, brand_color, logo_url, extra_context } = req.body;
+      // D-13: "Thông tin bổ sung" đi nguyên văn vào mọi prompt chatbot → chặn khi LƯU MỚI quá dài (dữ liệu cũ không bị đổi).
+      if (isExtraContextTooLong(extra_context)) {
+        return res.status(400).json({
+          success: false,
+          code: EXTRA_CONTEXT_TOO_LONG_CODE,
+          message: buildExtraContextTooLongMessage(extra_context.length),
+        });
+      }
       const profile = await businessProfileService.saveProfile(req.user.id, {
         company_name,
         industry,
@@ -2090,7 +2103,12 @@ class AiController {
       return res.json({ success: true, data: profile, message: 'Đã lưu và cập nhật hồ sơ doanh nghiệp' });
     } catch (error) {
       console.error('Save business profile error:', error);
-      return res.status(error.status || 500).json({ success: false, message: error.message });
+      return res.status(error.status || 500).json({
+        success: false,
+        // Chỉ chuyển mã của lỗi do ta ném (repository chốt trần) — không để lộ mã lỗi của pg/Node ra client.
+        ...(error.code === EXTRA_CONTEXT_TOO_LONG_CODE ? { code: error.code } : {}),
+        message: error.message,
+      });
     }
   }
 
