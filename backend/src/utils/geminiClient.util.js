@@ -91,6 +91,11 @@ export function setGeminiFallbackModelResolver(resolver) {
   fallbackModelResolver = typeof resolver === 'function' ? resolver : null;
 }
 
+/** Đã có ai gắn hàm tra dự phòng hệ thống vào lõi chưa (spec ghim việc gắn xảy ra khi nạp app thật). */
+export function hasGeminiFallbackModelResolver() {
+  return fallbackModelResolver !== null;
+}
+
 /** Tra danh mục model là việc phụ: treo quá mốc này thì coi như không có dự phòng, không kéo dài lỗi của khách. */
 const FALLBACK_LOOKUP_TIMEOUT_MS = 3000;
 
