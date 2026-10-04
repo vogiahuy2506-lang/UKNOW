@@ -191,10 +191,13 @@ class BusinessProfileService {
     const profile = await businessProfileRepository.findByUserId(userId);
     if (!profile) return '';
 
-    // Embed query của user
+    // Embed query của user. Đây là CÂU HỎI/yêu cầu đi tìm đoạn hồ sơ → RETRIEVAL_QUERY (đoạn hồ sơ lưu bằng RETRIEVAL_DOCUMENT;
+    // Google tối ưu hai phía theo cặp). Bản cũ để mặc định DOCUMENT (D-24 / EXTRA-A3). Điểm tương đồng tụt ~0,08–0,12 so với
+    // kiểu cũ nên ngưỡng `> 0.5` bên dưới (hiệu chỉnh theo kiểu cũ) chưa được đo lại — xem scripts/measureQueryEmbeddingThresholds.js.
     const queryEmbedding = await embedText(userPrompt, {
       userId,
       feature: 'embedding_rag_query',
+      taskType: 'RETRIEVAL_QUERY',
     });
 
     // Tìm top-5 chunks liên quan nhất
