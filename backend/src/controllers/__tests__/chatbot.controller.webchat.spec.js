@@ -99,6 +99,8 @@ const chatbot = {
   id_user: 7,
   name: 'Bot',
   widget_key: 'wk_abc',
+  // Bot CŨ: id số còn chat công khai được (migration 284). Ca bot MỚI (false) ở describe "A P1-5" bên dưới.
+  allow_public_numeric_id: true,
   // custom_chatbots has no id_sub_assistant — undefined forever
 };
 
@@ -214,6 +216,122 @@ describe('chatbot.controller public :chatbotId — widget_key bắt đầu bằn
 
     expect(findChatbotById).toHaveBeenCalledWith(5);
     expect(findChatbotByWidgetKey).toHaveBeenCalledWith('5');
+  });
+});
+
+// A P1-5 (04/10/2026): id số tuần tự dò được → chỉ chatbot ĐÃ CÓ lúc migrate 284 (cờ true) mới chat công khai theo id số.
+// Bot mới (cờ false) chỉ chạy qua widget_key; id số không khớp thì 404 y như "không tồn tại" (không phân biệt).
+describe('A P1-5 — id số chỉ khớp chatbot có allow_public_numeric_id = true', () => {
+  const oldBot = { id: 71, id_user: 7, name: 'Bot cũ', widget_key: 'wk_old', allow_public_numeric_id: true };
+  const newBot = { id: 72, id_user: 7, name: 'Bot mới', widget_key: 'wk_new', allow_public_numeric_id: false };
+  const sessionId = 'sess_numid_0123456789abcdef';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockImplementation(async (id) => ({ 71: oldBot, 72: newBot })[Number(id)] || null);
+    findChatbotByWidgetKey.mockImplementation(async (key) => ({ wk_old: oldBot, wk_new: newBot })[key] || null);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    isAiPaused.mockResolvedValue(false);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    getAgentWebChatMessagesForSession.mockResolvedValue({ messages: [], hasMore: false });
+    chat.mockResolvedValue({ content: 'xin chào' });
+    consume.mockResolvedValue(undefined);
+  });
+
+  const chatBody = { message: 'hi', sessionId, history: [] };
+
+  it('bot cũ (cờ true): GET /chatbot/71 → 200; chat theo id → gọi AI', async () => {
+    const getRes = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '71' } }, getRes);
+    expect(getRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: expect.objectContaining({ id: 71 }) })
+    );
+
+    const chatRes = makeRes();
+    await chatbotController.chatWithCustomChatbotById({ params: { chatbotId: '71' }, body: chatBody }, chatRes);
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(chatRes.status).not.toHaveBeenCalledWith(404);
+  });
+
+  it('bot mới (cờ false): GET /chatbot/72 → 404, "không tồn tại" và "bị cấm" cùng một câu', async () => {
+    const forbidden = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '72' } }, forbidden);
+    const missing = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '99999' } }, missing);
+
+    expect(forbidden.status).toHaveBeenCalledWith(404);
+    expect(missing.status).toHaveBeenCalledWith(404);
+    expect(forbidden.json.mock.calls[0][0]).toEqual(missing.json.mock.calls[0][0]);
+  });
+
+  it('bot mới (cờ false): chat theo id số → 404, KHÔNG gọi AI, KHÔNG kiểm/trừ credit, KHÔNG lưu tin', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById({ params: { chatbotId: '72' }, body: chatBody }, res);
+
+    expect(res.status).toHaveBeenCalledWith(404);
+    expect(chat).not.toHaveBeenCalled();
+    expect(assertAvailable).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+    expect(addWebChatMessage).not.toHaveBeenCalled();
+  });
+
+  it('bot mới (cờ false): tải tệp / xoá tệp / poll tin nhân viên theo id số → 404', async () => {
+    const upload = makeRes();
+    await chatbotController.uploadPublicChatAttachmentById({ params: { chatbotId: '72' }, body: {} }, upload);
+    expect(upload.status).toHaveBeenCalledWith(404);
+
+    const del = makeRes();
+    await chatbotController.deletePublicChatAttachmentById({ params: { chatbotId: '72' }, body: {}, query: {} }, del);
+    expect(del.status).toHaveBeenCalledWith(404);
+
+    const poll = makeRes();
+    poll.set = jest.fn();
+    await chatbotController.getPublicAgentMessagesById({ params: { chatbotId: '72' }, query: { sessionId } }, poll);
+    expect(poll.status).toHaveBeenCalledWith(404);
+    expect(getAgentWebChatMessagesForSession).not.toHaveBeenCalled();
+  });
+
+  it('bot mới (cờ false) VẪN chạy theo widget_key qua đường "by id" (trang /chat/<key>) và qua đường widget', async () => {
+    const getRes = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: 'wk_new' } }, getRes);
+    expect(findChatbotById).not.toHaveBeenCalled();
+    expect(getRes.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: expect.objectContaining({ id: 72 }) })
+    );
+
+    const pageChat = makeRes();
+    await chatbotController.chatWithCustomChatbotById({ params: { chatbotId: 'wk_new' }, body: chatBody }, pageChat);
+    expect(pageChat.status).not.toHaveBeenCalledWith(404);
+
+    const widgetChat = makeRes();
+    await chatbotController.chatWithCustomChatbot({ params: { widgetKey: 'wk_new' }, body: chatBody }, widgetChat);
+    expect(widgetChat.status).not.toHaveBeenCalledWith(404);
+    expect(chat).toHaveBeenCalledTimes(2);
+  });
+
+  it('id số của bot cờ false KHÔNG che widget_key toàn chữ số: "72" tra tiếp theo widget_key', async () => {
+    const numericKeyBot = { id: 500, id_user: 8, name: 'Bot key số', widget_key: '72', allow_public_numeric_id: false };
+    findChatbotByWidgetKey.mockImplementation(async (key) => (key === '72' ? numericKeyBot : null));
+    const res = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '72' } }, res);
+
+    expect(findChatbotById).toHaveBeenCalledWith(72);
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: expect.objectContaining({ id: 500 }) })
+    );
+  });
+
+  it('cờ thiếu/null (chatbot đọc từ nguồn không có cột) cũng bị coi là KHÔNG mở id số', async () => {
+    findChatbotById.mockResolvedValue({ id: 73, id_user: 7, name: 'Thiếu cờ', widget_key: 'wk_x' });
+    findChatbotByWidgetKey.mockResolvedValue(null);
+    const res = makeRes();
+    await chatbotController.getPublicChatbotById({ params: { chatbotId: '73' } }, res);
+    expect(res.status).toHaveBeenCalledWith(404);
   });
 });
 

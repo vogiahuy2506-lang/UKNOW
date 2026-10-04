@@ -37,7 +37,7 @@ beforeEach(async () => {
 async function seedChatbot({ name, sessionId = null }) {
   const widgetKey = `wk_${name}_${Date.now()}_${Math.floor(Math.random() * 1e6)}`;
   const { rows: bots } = await db.query(
-    `INSERT INTO custom_chatbots (id_user, name, widget_key) VALUES ($1, $2, $3) RETURNING id`,
+    `INSERT INTO custom_chatbots (id_user, name, widget_key, allow_public_numeric_id) VALUES ($1, $2, $3, true) RETURNING id`, // bot CŨ: poll theo id số còn khớp (migration 284)
     [owner.id, name, widgetKey]
   );
   const { rows: widgets } = await db.query(

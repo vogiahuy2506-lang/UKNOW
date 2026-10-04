@@ -47,8 +47,8 @@ beforeEach(async () => {
 
 async function createChatbot(userId, overrides = {}) {
   const { rows } = await db.query(
-    `INSERT INTO custom_chatbots (id_user, name, system_instruction, widget_key, is_active)
-     VALUES ($1, $2, $3, $4, true) RETURNING *`,
+    `INSERT INTO custom_chatbots (id_user, name, system_instruction, widget_key, is_active, allow_public_numeric_id)
+     VALUES ($1, $2, $3, $4, true, true) RETURNING *`, // bot CŨ: chat theo id số còn khớp (migration 284)
     [userId, overrides.name || 'Bot test', 'Bạn là trợ lý.', overrides.widgetKey ?? null]
   );
   return rows[0];

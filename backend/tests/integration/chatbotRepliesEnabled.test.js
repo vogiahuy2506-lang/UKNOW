@@ -40,8 +40,8 @@ beforeEach(async () => {
   user = await createUser({ username: `replies-${Date.now()}` });
   token = await loginAs(user);
   const { rows } = await db.query(
-    `INSERT INTO custom_chatbots (id_user, name, widget_key)
-     VALUES ($1, 'Bot cong tac tra loi', $2)
+    `INSERT INTO custom_chatbots (id_user, name, widget_key, allow_public_numeric_id)
+     VALUES ($1, 'Bot cong tac tra loi', $2, true) -- bot CŨ: chat theo id số còn khớp (migration 284)
      RETURNING *`,
     [user.id, `re_${Date.now()}`]
   );

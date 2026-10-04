@@ -88,3 +88,71 @@ describe('migration 284 — backfill + chạy lại không bật lại cho bot m
     for (const { id } of before) expect(await flagOf(id)).toBe(true);
   });
 });
+
+describe('đường theo id số — bot cũ (cờ true) chạy, bot mới (cờ false) 404', () => {
+  let oldBot;
+  let newBot;
+
+  beforeEach(async () => {
+    oldBot = await insertBot({ widgetKey: 'wk_old', allowNumericId: true });
+    newBot = await insertBot({ widgetKey: 'wk_new', allowNumericId: false });
+  });
+
+  const chatById = (idOrKey) => request(app).post(`/api/chatbot-public/custom-chatbot/id/${idOrKey}/chat`);
+
+  it('GET /chatbot-public/chatbot/:id — bot cũ 200; bot mới 404 CÙNG thân với id không tồn tại (không phân biệt "cấm" và "không có")', async () => {
+    const okRes = await request(app).get(`/api/chatbot-public/chatbot/${oldBot.id}`);
+    expect(okRes.status).toBe(200);
+    expect(okRes.body.data.id).toBe(oldBot.id);
+
+    const forbidden = await request(app).get(`/api/chatbot-public/chatbot/${newBot.id}`);
+    const missing = await request(app).get('/api/chatbot-public/chatbot/987654321');
+    expect(forbidden.status).toBe(404);
+    expect(missing.status).toBe(404);
+    expect(forbidden.body).toEqual(missing.body);
+  });
+
+  it('POST .../custom-chatbot/id/:id/chat — bot cũ chat được; bot mới 404, KHÔNG gọi AI, KHÔNG tạo hội thoại/tin', async () => {
+    const okRes = await chatById(oldBot.id).send({ message: 'xin chào', sessionId: nextSession(), history: [] });
+    expect(okRes.status).toBe(200);
+    expect(okRes.body.data.content).toBe('Chào bạn!');
+    expect(mockChat).toHaveBeenCalledTimes(1);
+
+    const { rows: before } = await db.query('SELECT count(*)::int AS n FROM webchat_messages');
+    const denied = await chatById(newBot.id).send({ message: 'xin chào', sessionId: nextSession(), history: [] });
+    expect(denied.status).toBe(404);
+    expect(mockChat).toHaveBeenCalledTimes(1);
+    const { rows: after } = await db.query('SELECT count(*)::int AS n FROM webchat_messages');
+    expect(after[0].n).toBe(before[0].n);
+  });
+
+  it('GET .../custom-chatbot/id/:id/messages (poll tin nhân viên) — bot mới theo id số 404, bot cũ 200', async () => {
+    const sessionId = nextSession();
+    const okRes = await request(app).get(`/api/chatbot-public/custom-chatbot/id/${oldBot.id}/messages`).query({ sessionId });
+    expect(okRes.status).toBe(200);
+    const denied = await request(app).get(`/api/chatbot-public/custom-chatbot/id/${newBot.id}/messages`).query({ sessionId });
+    expect(denied.status).toBe(404);
+  });
+
+  it('bot mới VẪN chat được theo widget_key: widget (/custom-chatbot/:key/chat), trang /chat/<key> (/id/<key>/chat), GET /chatbot/<key>', async () => {
+    const widget = await request(app)
+      .post('/api/chatbot-public/custom-chatbot/wk_new/chat')
+      .send({ message: 'xin chào', sessionId: nextSession(), history: [] });
+    expect(widget.status).toBe(200);
+
+    const page = await chatById('wk_new').send({ message: 'xin chào', sessionId: nextSession(), history: [] });
+    expect(page.status).toBe(200);
+
+    const config = await request(app).get('/api/chatbot-public/chatbot/wk_new');
+    expect(config.status).toBe(200);
+    expect(config.body.data.id).toBe(newBot.id);
+    expect(mockChat).toHaveBeenCalledTimes(2);
+  });
+
+  it('link ngắn /<widget_key> chuyển tới /chat/<widget_key>, KHÔNG phải /chat/<id số> (id số của bot mới sẽ 404)', async () => {
+    const res = await request(app).get('/wk_new').redirects(0);
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toMatch(/\/chat\/wk_new$/);
+    expect(res.headers.location).not.toContain(`/chat/${newBot.id}`);
+  });
+});

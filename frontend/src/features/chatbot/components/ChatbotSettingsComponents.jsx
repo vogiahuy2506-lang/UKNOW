@@ -1184,7 +1184,8 @@ export function PublicLinkCard({ chatbot, form }) {
 
   // Generate full link - use production founderai domain
   const APP_BASE_URL = 'https://founderai.biz';
-  const fullLink = `${APP_BASE_URL}/chat/${chatbot.id}`;
+  // widget_key, không phải id số: chatbot tạo từ migration 284 trở đi không chat công khai được theo id số (A P1-5).
+  const fullLink = `${APP_BASE_URL}/chat/${chatbot.widget_key || chatbot.id}`;
   const shareLink = fullLink;
   const qrLink = fullLink;
 
@@ -1643,7 +1644,7 @@ export function DeployIframeModal({ open, chatbot, onClose, onCopy }) {
 
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const code = `<iframe
-  src="${baseUrl}/chat/${chatbot.id}"
+  src="${baseUrl}/chat/${chatbot.widget_key || chatbot.id}"
   width="100%" height="600"
   style="border:none;border-radius:12px;"
   allow="microphone;camera"

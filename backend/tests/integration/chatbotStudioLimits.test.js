@@ -33,8 +33,8 @@ beforeEach(async () => {
   user = await createUser({ username: `studio-limits-${Date.now()}` });
   token = await loginAs(user);
   const { rows } = await db.query(
-    `INSERT INTO custom_chatbots (id_user, name, widget_key)
-     VALUES ($1, 'Bot quota', $2)
+    `INSERT INTO custom_chatbots (id_user, name, widget_key, allow_public_numeric_id)
+     VALUES ($1, 'Bot quota', $2, true) -- bot CŨ: GET /chatbot-public/chatbot/:id còn khớp id số (migration 284)
      RETURNING *`,
     [user.id, `quota_${Date.now()}`]
   );

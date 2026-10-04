@@ -654,6 +654,7 @@ class ChatbotRepository {
               suggested_questions, widget_key, allow_attachments, launcher_label,
               temperature, max_tokens, ai_model, response_style, origin,
               active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
+              allow_public_numeric_id,
               created_at, updated_at
        FROM custom_chatbots
        WHERE id = $1 AND is_active = true

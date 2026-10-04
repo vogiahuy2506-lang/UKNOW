@@ -38,9 +38,9 @@ beforeEach(async () => {
   mockChat.mockResolvedValue({ content: 'Chào bạn!' });
   const user = await createUser({ username: `limits${Date.now()}` });
   const { rows } = await db.query(
-    `INSERT INTO custom_chatbots (id_user, name, system_instruction, widget_key, is_active, temperature, max_tokens, ai_model)
-     VALUES ($1, 'Bot công khai', 'BÍ MẬT: giá sỉ 50%, STK 0123456789', 'wk_limits', true, 0.3, 512, 'gemini-2.5-pro')
-     RETURNING *`,
+    `INSERT INTO custom_chatbots (id_user, name, system_instruction, widget_key, is_active, temperature, max_tokens, ai_model, allow_public_numeric_id)
+     VALUES ($1, 'Bot công khai', 'BÍ MẬT: giá sỉ 50%, STK 0123456789', 'wk_limits', true, 0.3, 512, 'gemini-2.5-pro', true)
+     RETURNING *`, // allow_public_numeric_id = true: bot CŨ, đường theo id số còn khớp (migration 284)
     [user.id]
   );
   bot = rows[0];

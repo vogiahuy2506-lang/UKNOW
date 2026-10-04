@@ -306,7 +306,8 @@ export function createApp() {
     next();
   });
 
-  // Short link redirect: founderai.biz/{widgetKey} → frontend /chat/{chatbotId}
+  // Short link redirect: founderai.biz/{widgetKey} → frontend /chat/{widgetKey}
+  // (không chuyển sang /chat/<id số>: chatbot tạo từ migration 284 trở đi không chat công khai được theo id số — A P1-5)
   app.get('/:widgetKey', async (req, res, next) => {
     try {
       const { widgetKey } = req.params;
@@ -314,7 +315,7 @@ export function createApp() {
       const chatbot = await chatbotRepository.findChatbotByWidgetKey(widgetKey);
       if (chatbot) {
         const frontendUrl = process.env.FRONTEND_URL || 'https://app.uknow.vn';
-        return res.redirect(302, `${frontendUrl}/chat/${chatbot.id}`);
+        return res.redirect(302, `${frontendUrl}/chat/${encodeURIComponent(chatbot.widget_key)}`);
       }
     } catch (_err) {
       // non-critical, fall through to 404

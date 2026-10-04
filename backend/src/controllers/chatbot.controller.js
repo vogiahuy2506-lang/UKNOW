@@ -214,13 +214,18 @@ function extractTextFromHtml(html) {
  * Vì sao không dùng parseInt: `parseInt('5db50541')` trả về 5, nên link công khai
  * /chat/<widget_key> với key bắt đầu bằng chữ số từng mở nhầm chatbot số 5 của người khác
  * (14/09/2026) — tin nhắn, hội thoại và credit đều tính cho chủ chatbot đó.
+ *
+ * Id số chỉ khớp khi chatbot có `allow_public_numeric_id = true` (migration 284: mọi chatbot ĐANG CÓ lúc migrate, để iFrame /
+ * link /chat/<id> đã dán trên site khách vẫn chạy). Id tuần tự dò được — nếu mở cho mọi bot thì ai lặp 1..N cũng chat được
+ * với chatbot của người khác và đốt credit của chủ (A P1-5). Chatbot tạo sau migration chỉ chat công khai qua widget_key.
+ * Không khớp id → tra widget_key như cũ → không có thì null: gọi ra 404, KHÔNG phân biệt "tồn tại nhưng cấm" với "không có".
  */
 async function resolvePublicChatbotParam(chatbotId) {
   const raw = String(chatbotId ?? '').trim();
   if (!raw) return null;
   if (/^\d+$/.test(raw)) {
     const byId = await chatbotRepository.findChatbotById(Number(raw));
-    if (byId) return byId;
+    if (byId && byId.allow_public_numeric_id === true) return byId;
   }
   return chatbotRepository.findChatbotByWidgetKey(raw);
 }
