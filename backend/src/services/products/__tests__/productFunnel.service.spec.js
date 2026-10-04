@@ -5,6 +5,11 @@ const aggregateLandingFunnelByProduct = jest.fn();
 const listCampaignClicks = jest.fn();
 const listFormSubmissionsForPeople = jest.fn();
 const listLeadsForPeople = jest.fn();
+const aggregateChatMentionsByProduct = jest.fn();
+jest.unstable_mockModule('../../../repositories/products/productChatMention.repository.js', () => ({
+  default: { aggregateChatMentionsByProduct },
+  aggregateChatMentionsByProduct,
+}));
 jest.unstable_mockModule('../../../repositories/products/productFunnel.repository.js', () => ({
   default: {
     aggregateFormFunnelByProduct,
@@ -40,9 +45,27 @@ beforeEach(() => {
   listCampaignClicks.mockReset().mockResolvedValue([]);
   listFormSubmissionsForPeople.mockReset().mockResolvedValue([]);
   listLeadsForPeople.mockReset().mockResolvedValue([]);
+  aggregateChatMentionsByProduct.mockReset().mockResolvedValue([]);
 });
 
 describe('productFunnel.service getFunnel', () => {
+  it('Quan tâm cộng thêm số hội thoại hỏi chatbot về sản phẩm (cùng khoảng ngày), sản phẩm không có hội thoại = 0', async () => {
+    aggregateFormFunnelByProduct.mockResolvedValue([
+      { productId: 1, submitted: 0, registered: 0, paid: 0, revenue: 0, kind: 'sale', formIds: [] },
+      { productId: 2, submitted: 0, registered: 0, paid: 0, revenue: 0, kind: 'sale', formIds: [] },
+    ]);
+    aggregateLandingFunnelByProduct.mockResolvedValue([{ productId: 1, productUrl: null, landings: [], landingViews: 4, leads: 0 }]);
+    aggregateChatMentionsByProduct.mockResolvedValue([{ productId: 1, chatConversations: 3, chatMessages: 7 }]);
+
+    const out = await productFunnelService.getFunnel(owner, { period: 'all' });
+
+    expect(aggregateChatMentionsByProduct).toHaveBeenCalledWith({ workspaceOwnerId: 5, startAt: null, endExclusive: null });
+    const p1 = out.rows.find((r) => r.productId === 1);
+    const p2 = out.rows.find((r) => r.productId === 2);
+    expect(p1).toMatchObject({ landingViews: 4, campaignClicks: 0, chatConversations: 3, interested: 7 });
+    expect(p2).toMatchObject({ chatConversations: 0, interested: 0 });
+  });
+
   it('dùng đúng mốc ngày của parseDateRange (00:00 giờ VN, nửa mở) và truyền chủ workspace', async () => {
     const parsed = dashboardAnalyticsService.parseDateRange({ startDate: '2026-09-01', endDate: '2026-09-30' });
     const out = await productFunnelService.getFunnel(owner, { startDate: '2026-09-01', endDate: '2026-09-30' });

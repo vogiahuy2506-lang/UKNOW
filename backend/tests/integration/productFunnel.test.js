@@ -132,6 +132,7 @@ describe('GET /api/products/funnel (PR-1)', () => {
       landingViews: 0,
       leads: 0,
       campaignClicks: 0,
+      chatConversations: 0,
       interested: 0,
       leftContact: 0,
       leftContactRows: 0,

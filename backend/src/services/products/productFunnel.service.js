@@ -1,4 +1,5 @@
 import productFunnelRepository from '../../repositories/products/productFunnel.repository.js';
+import productChatMentionRepository from '../../repositories/products/productChatMention.repository.js';
 import dashboardAnalyticsService from '../dashboard/dashboardAnalytics.service.js';
 import { getWorkspaceScope } from '../../utils/workspaceContext.util.js';
 import { buildProductUrlKeys, normalizeUrlKey } from '../../utils/productLinkMatch.util.js';
@@ -15,8 +16,10 @@ class ProductFunnelService {
    * Đợt 3 — đếm NGƯỜI: `leftContact` / `registered` / `paid` là số NGƯỜI khác nhau (khoá `personKey`: SĐT chuẩn hoá > email >
    * dòng). Số lượt thô giữ ở `leftContactRows` / `registeredSubmissions` / `paidOrders` (cùng `submitted`, `leads`).
    * `revenue`, `awaitingConfirm`, `awaitingAmount` KHÔNG gộp người (tiền và việc chủ phải làm tính theo từng bài).
+   * `interested` = lượt xem landing + người bấm link chiến dịch + `chatConversations` (số hội thoại khách nhắc tên/mã sản
+   * phẩm với chatbot — job `product_chat_mention_scan`, trễ tối đa ~10 phút).
    *
-   * @returns {Promise<{ filters: object, rows: Array<{ productId: number, submitted: number, registered: number, registeredSubmissions: number, paid: number, paidOrders: number, revenue: number, awaitingConfirm: number, awaitingAmount: number, kind: string, hasPaidForm: boolean, landingViews: number, leads: number, campaignClicks: number, interested: number, leftContact: number, leftContactRows: number }> }>}
+   * @returns {Promise<{ filters: object, rows: Array<{ productId: number, submitted: number, registered: number, registeredSubmissions: number, paid: number, paidOrders: number, revenue: number, awaitingConfirm: number, awaitingAmount: number, kind: string, hasPaidForm: boolean, landingViews: number, leads: number, campaignClicks: number, chatConversations: number, interested: number, leftContact: number, leftContactRows: number }> }>}
    */
   async getFunnel(authUser, query = {}) {
     const scope = getWorkspaceScope(authUser);
@@ -41,12 +44,14 @@ class ProductFunnelService {
     }
 
     const range = { workspaceOwnerId: scope.workspaceOwnerId, startAt, endExclusive };
-    const [formRows, landingRows, clicks, submissionRows] = await Promise.all([
+    const [formRows, landingRows, clicks, submissionRows, chatRows] = await Promise.all([
       productFunnelRepository.aggregateFormFunnelByProduct(range),
       productFunnelRepository.aggregateLandingFunnelByProduct(range),
       productFunnelRepository.listCampaignClicks(range),
       productFunnelRepository.listFormSubmissionsForPeople(range),
+      productChatMentionRepository.aggregateChatMentionsByProduct(range),
     ]);
+    const chatByProduct = new Map(chatRows.map((r) => [r.productId, r.chatConversations]));
     const allSlugs = [...new Set(landingRows.flatMap((r) => (r.landings || []).map((l) => l.slug)).filter(Boolean))];
     const leadRows = await productFunnelRepository.listLeadsForPeople({ ...range, slugs: allSlugs });
     const submissionsByProduct = new Map();
@@ -77,6 +82,7 @@ class ProductFunnelService {
       const landingViews = landing?.landingViews || 0;
       const leads = landing?.leads || 0;
       const campaignClicks = people.size;
+      const chatConversations = chatByProduct.get(row.productId) || 0;
       const isEvent = row.kind === 'event';
 
       // Đếm NGƯỜI. Lead: mọi lead của landing gắn sản phẩm (landing có thể gắn nhiều biểu mẫu → khử trùng theo slug).
@@ -116,7 +122,8 @@ class ProductFunnelService {
         landingViews,
         leads,
         campaignClicks,
-        interested: landingViews + campaignClicks,
+        chatConversations,
+        interested: landingViews + campaignClicks + chatConversations,
         leftContact: leftContactPeople.size,
         // Số lượt thô (cũ): event chỉ lead landing; sale lead + bài nộp.
         leftContactRows: isEvent ? leads : leads + row.submitted,

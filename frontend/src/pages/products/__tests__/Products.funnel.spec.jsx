@@ -60,7 +60,8 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
               landingViews: 5,
               leads: 2,
               campaignClicks: 4,
-              interested: 9,
+              chatConversations: 2,
+              interested: 11,
               leftContact: 5,
             },
           ],
@@ -75,12 +76,17 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     await waitFor(() => expect(screen.getByTestId('funnel-registered')).toHaveTextContent('2'));
 
     expect(productApiService.getFunnel).toHaveBeenCalledWith({ period: '30d' });
-    expect(screen.getByTestId('funnel-interested')).toHaveTextContent('9');
+    expect(screen.getByTestId('funnel-interested')).toHaveTextContent('11');
+    expect(screen.getByTestId('funnel-interested')).toHaveAttribute(
+      'title',
+      '5 lượt xem landing · 4 người bấm link · 2 hội thoại hỏi chatbot'
+    );
     expect(screen.getByTestId('funnel-left-contact')).toHaveTextContent('5');
     expect(screen.getByRole('columnheader', { name: 'Quan tâm' })).toHaveAttribute(
       'title',
       expect.stringContaining('Telegram/WhatsApp')
     );
+    expect(screen.getByRole('columnheader', { name: 'Quan tâm' }).getAttribute('title')).toContain('hỏi chatbot');
     expect(screen.getByRole('columnheader', { name: /Để lại thông tin/ })).toBeInTheDocument();
     expect(screen.getByTestId('funnel-paid')).toHaveTextContent('1');
     expect(screen.getByTestId('funnel-revenue').textContent.replace(/\s/g, '')).toMatch(/^2\.000đ$/);

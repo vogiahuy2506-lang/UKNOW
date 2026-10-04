@@ -68,7 +68,8 @@ class ProductChatMentionRepository {
   }
 
   /**
-   * Số hội thoại / tin khách nhắc từng sản phẩm của một workspace trong [startAt, endExclusive).
+   * Số hội thoại / tin khách nhắc từng sản phẩm của một workspace trong [startAt, endExclusive) — mốc null = không chặn
+   * (phễu "Mọi lúc").
    * @returns {Promise<Array<{productId:number, chatConversations:number, chatMessages:number}>>}
    */
   async aggregateChatMentionsByProduct({ workspaceOwnerId, startAt, endExclusive }, queryable = db) {
@@ -77,7 +78,9 @@ class ProductChatMentionRepository {
               COUNT(DISTINCT conversation_key)::int AS chat_conversations,
               COUNT(*)::int AS chat_messages
        FROM product_chat_mentions
-       WHERE workspace_owner_id = $1 AND created_at >= $2 AND created_at < $3
+       WHERE workspace_owner_id = $1
+         AND ($2::timestamptz IS NULL OR created_at >= $2::timestamptz)
+         AND ($3::timestamptz IS NULL OR created_at < $3::timestamptz)
        GROUP BY product_id`,
       [workspaceOwnerId, startAt, endExclusive]
     );

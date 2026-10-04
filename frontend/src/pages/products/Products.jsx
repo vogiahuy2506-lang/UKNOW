@@ -88,7 +88,19 @@ const FunnelCells = ({ funnel }) => {
     formIds.length === 1 ? `/app/forms/${formIds[0]}/submissions` : formIds.length > 1 ? '/app/forms' : null;
   return (
     <>
-      <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-interested">
+      <td
+        className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900"
+        data-testid="funnel-interested"
+        title={
+          funnel?.interested
+            ? t('products.funnel.interestedBreakdown', {
+                views: funnel?.landingViews ?? 0,
+                clicks: funnel?.campaignClicks ?? 0,
+                chats: funnel?.chatConversations ?? 0,
+              })
+            : undefined
+        }
+      >
         {funnel?.interested ?? 0}
       </td>
       <td className="px-3 py-4 whitespace-nowrap text-sm text-right text-gray-900" data-testid="funnel-left-contact">

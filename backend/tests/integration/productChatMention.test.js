@@ -183,6 +183,14 @@ describe('Job đếm lượt hỏi chatbot về sản phẩm', () => {
     });
     expect(wide[0].chatConversations).toBe(3);
 
+    // Phễu "Mọi lúc" truyền mốc null = không chặn ngày (không phải "không có dòng nào").
+    const allTime = await productChatMentionRepo.aggregateChatMentionsByProduct({
+      workspaceOwnerId: owner.id,
+      startAt: null,
+      endExclusive: null,
+    });
+    expect(allTime).toEqual([{ productId, chatConversations: 3, chatMessages: 4 }]);
+
     const none = await productChatMentionRepo.aggregateChatMentionsByProduct({
       workspaceOwnerId: 999999,
       startAt,
