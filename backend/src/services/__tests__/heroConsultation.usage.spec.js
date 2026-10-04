@@ -65,7 +65,11 @@ describe('heroConsultation — ghi token của khách vãng lai', () => {
   });
 
   it('Gemini lỗi (không có phản hồi để tính tiền): không ghi', async () => {
-    global.fetch = jest.fn().mockResolvedValue({ ok: false, status: 500, json: async () => ({ error: { message: 'boom' } }) });
+    // Response THẬT (lõi đọc `response.text()` của lỗi). 400 để khỏi chờ nghỉ giữa các lượt thử lại của 5xx.
+    global.fetch = jest.fn().mockImplementation(async () => new Response(
+      JSON.stringify({ error: { code: 400, message: 'boom', status: 'INVALID_ARGUMENT' } }),
+      { status: 400, headers: { 'content-type': 'application/json' } },
+    ));
     jest.spyOn(console, 'error').mockImplementation(() => {});
 
     const res = await heroConsultationService.processChat({ visitorId: 'v_usage_4', message: 'Chào', ip: '10.1.0.4' });

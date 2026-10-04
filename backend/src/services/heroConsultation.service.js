@@ -16,7 +16,7 @@ import db from '../config/database.js';
 import { vnDayKey } from '../utils/vnTimeFormat.util.js';
 import { resolveAllowedModel } from './ai/aiModelPolicy.service.js';
 import aiUsageMeter from './ai/aiUsageMeter.service.js';
-import { extractGeminiUsage } from '../utils/geminiClient.util.js';
+import { generateGeminiContent } from '../utils/geminiClient.util.js';
 import { DEFAULT_AI_MODEL } from '../utils/aiModelTier.util.js';
 import { toPublicPlanAdviceDto } from './help/planAdvisor.service.js';
 import { isPlaceholderPlan } from '../utils/placeholderPlan.util.js';
@@ -309,8 +309,20 @@ export function formatCoursesForContext(courses) {
   }).join('\n');
 }
 
+/**
+ * Khoá Gemini của khung chat công khai (D-01). `GEMINI_API_KEY_PUBLIC` đặt thì chat tư vấn trang chủ dùng khoá RIÊNG — một đợt đốt
+ * tiền vào đường không cần đăng nhập này chỉ cạn hạn mức của khoá đó, không kéo theo chatbot trả lời khách của mọi doanh nghiệp.
+ * Để trống (mặc định) = dùng khoá chung `GEMINI_API_KEY`, hành vi như trước.
+ */
+export function resolveHeroApiKey() {
+  return String(process.env.GEMINI_API_KEY_PUBLIC || '').trim() || String(process.env.GEMINI_API_KEY || '').trim();
+}
+
+/** Trần tổng của MỘT lượt tư vấn (thử lại + dự phòng cộng lại) — dưới 100 giây của Cloudflare với dư rộng. */
+const HERO_GEMINI_TIMEOUT_MS = 30000;
+
 async function callGemini(prompt) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = resolveHeroApiKey();
   // Model do super admin chọn, như mọi tính năng AI khác. Bản cũ đọc thẳng GEMINI_MODEL trong .env
   // (không có thì 'gemini-2.5-flash') nên chat tư vấn trang chủ là đường duy nhất phía khách KHÔNG
   // theo lựa chọn của admin — đổi model ở trang quản trị không tác động tới nó.
@@ -327,47 +339,31 @@ async function callGemini(prompt) {
     throw new Error('GEMINI_API_KEY not configured');
   }
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-
-  const body = JSON.stringify({
-    contents: [{ parts: [{ text: prompt }] }],
-    generationConfig: {
-      temperature: 0.3, // Lower temperature for factual responses
-      maxOutputTokens: 2048,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
+  // Đi qua lõi dùng chung (D-05/D-08): thử lại 429/5xx/lỗi mạng, model dự phòng hệ thống khi model chính quá tải hoặc bị khai tử
+  // (404; lõi tự tra vì không truyền `fallbackModel`), khoá ở header `x-goog-api-key` thay vì `?key=` trong URL, và huỷ fetch THẬT khi
+  // hết 30 giây. Bản cũ gọi `fetch` thô: một lần 503 là khách nhận ngay câu lỗi, không thử lại, không dự phòng.
+  // topP null = giữ nguyên cấu hình cũ của đường này (chưa bao giờ gửi topP).
+  const result = await generateGeminiContent({
+    parts: [{ text: prompt }],
+    model,
+    apiKey,
+    temperature: 0.3, // Lower temperature for factual responses
+    topP: null,
+    maxOutputTokens: 2048,
+    thinkingBudget: 0,
+    timeoutMs: HERO_GEMINI_TIMEOUT_MS,
+    totalTimeoutMs: HERO_GEMINI_TIMEOUT_MS,
   });
 
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  // Khách vãng lai không có tài khoản → ghi token với id_user NULL (migration 273), feature `hero_consultation`. Google tính
+  // tiền các lượt này (≤ 30/ngày/IP) nhưng bản cũ không ghi gì. KHÔNG await: khung chat này cố ý sống sót khi CSDL lỗi
+  // (xem chú thích đầu hàm), mà chờ ghi sẽ kéo dài phản hồi tới connectionTimeoutMillis của pool. `record` không bao giờ
+  // ném lỗi (tự console.error nếu ghi hụt) nên bỏ mặc promise là an toàn. Ghi theo model THẬT đã trả lời (có thể là dự phòng).
+  Promise.resolve(
+    aiUsageMeter.record(null, result.usage, { feature: 'hero_consultation', model: result.modelUsed || model })
+  ).catch(() => {});
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body,
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData?.error?.message || `Gemini API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-
-    // Khách vãng lai không có tài khoản → ghi token với id_user NULL (migration 273), feature `hero_consultation`. Google tính
-    // tiền các lượt này (≤ 30/ngày/IP) nhưng bản cũ không ghi gì. KHÔNG await: khung chat này cố ý sống sót khi CSDL lỗi
-    // (xem chú thích đầu hàm), mà chờ ghi sẽ kéo dài phản hồi tới connectionTimeoutMillis của pool. `record` không bao giờ
-    // ném lỗi (tự console.error nếu ghi hụt) nên bỏ mặc promise là an toàn.
-    Promise.resolve(
-      aiUsageMeter.record(null, extractGeminiUsage(data), { feature: 'hero_consultation', model })
-    ).catch(() => {});
-
-    return data.candidates?.[0]?.content?.parts?.[0]?.text || '';
-  } finally {
-    clearTimeout(timeoutId);
-  }
+  return result.text || '';
 }
 
 /**
