@@ -156,7 +156,8 @@ export default function WidgetSettingsModal({ open, chatbot, embedKind, onClose,
         throw new Error(res.message || 'Save failed');
       }
     } catch (err) {
-      toast.error(err.message || 'Lưu thất bại');
+      // Ưu tiên câu tiếng Việt của máy chủ; err.message có thể là câu axios tiếng Anh ("Request failed with status code 400").
+      toast.error(err?.response?.data?.message || err?.message || 'Lưu thất bại');
     } finally {
       setSaving(false);
     }

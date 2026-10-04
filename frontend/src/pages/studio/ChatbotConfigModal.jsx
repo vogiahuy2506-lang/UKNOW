@@ -46,7 +46,6 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
   const [initialSnapshot, setInitialSnapshot] = useState(null);
   const [newQuestion, setNewQuestion] = useState('');
   const [profileData, setProfileData] = useState(null);
-  const [knowledgeDocs, setKnowledgeDocs] = useState([]);
   const contentRef = useRef(null);
 
   const [form, setForm] = useState({
@@ -106,31 +105,16 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
     setHydrated(true);
   }, [open, chatbot]);
 
-  // Load knowledge documents
-  useEffect(() => {
-    if (!open || !chatbot?.id) return;
-    setKnowledgeDocs([]); // Reset first
-    console.log('[ChatbotConfigModal] Loading documents for chatbot:', chatbot.id);
-    (async () => {
-      try {
-        const res = await chatbotApi.listCustomChatDocuments(chatbot.id);
-        console.log('[ChatbotConfigModal] API response:', res);
-        console.log('[ChatbotConfigModal] res.data:', res.data);
-        const list = res?.data?.documents || res?.documents || res?.data || [];
-        console.log('[ChatbotConfigModal] Parsed documents list:', list);
-        setKnowledgeDocs(Array.isArray(list) ? list : []);
-      } catch (err) {
-        console.error('[ChatbotConfigModal] Load docs error:', err);
-        setKnowledgeDocs([]);
-      }
-    })();
-  }, [open, chatbot?.id]);
-
   if (!open || !chatbot) return null;
 
   const update = (patch) => setForm((prev) => ({ ...prev, ...patch }));
 
   const handleSave = async () => {
+    // Bot lấy từ bản đệm offline (API danh sách lỗi) thiếu system_instruction: lưu sẽ ghi đè hướng dẫn thật bằng rỗng.
+    if (chatbot._offlineCache) {
+      toast.error(t('chatbot.studio.offlineCacheNoSave'));
+      return;
+    }
     if (!form.name.trim()) {
       toast.error('Vui lòng nhập tên chatbot');
       return;
@@ -383,18 +367,9 @@ export default function ChatbotConfigModal({ open, chatbot, onClose, onUpdate })
                   subtitle="Quản lý tài liệu và nguồn kiến thức cho AI"
                   accent="green"
                 >
-                  <KnowledgeTab
-                    chatbot={chatbot}
-                    initialDocuments={knowledgeDocs}
-                    onDocumentsChange={() => {
-                      chatbotApi.listCustomChatDocuments(chatbot.id)
-                        .then(res => {
-                          const list = res?.data?.documents || res?.documents || res?.data || [];
-                          setKnowledgeDocs(Array.isArray(list) ? list : []);
-                        })
-                        .catch(() => {});
-                    }}
-                  />
+                  {/* KnowledgeTab tự tải danh sách tài liệu — MỘT nguồn duy nhất (trước đây hộp này tải thêm một lần
+                      rồi truyền xuống, mỗi lần mở Cấu hình gọi API 2–3 lần: S-22). */}
+                  <KnowledgeTab chatbot={chatbot} />
                 </SectionCard>
               </section>
 

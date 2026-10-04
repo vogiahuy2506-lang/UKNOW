@@ -17,6 +17,8 @@ import { ChannelModal } from './ChannelModals';
 import ShareChatbotModal from '../../components/marketplace/ShareChatbotModal';
 import MarketplaceListingModal from '../../components/marketplace/MarketplaceListingModal';
 import { useChannelEntitlements } from '../../hooks/queries/useChannelEntitlements';
+import { useAuthStore } from '../../stores/authStore';
+import { useI18n } from '../../i18n';
 
 const EMBED_OPTIONS = [
   {
@@ -134,6 +136,17 @@ export default function DeployTab({
   const [shareModal, setShareModal] = useState(false);
   const [marketplaceModal, setMarketplaceModal] = useState(false);
 
+  // Nhân viên chỉ thấy phần mình đủ quyền dùng (S-15): Kênh cần `chatbot_channels_manage`, Marketplace cần
+  // `marketplace_manage`, "Chia sẻ thành viên" (gửi bản sao) chỉ chủ tài khoản (route requireSelfContext).
+  // Trước đây các ô vẫn hiện rồi báo lỗi chung chung khi bấm.
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const isEmployee = activeContext?.type === 'employee';
+  const hasPermission = (key) => !isEmployee || activeContext?.permissions?.[key] === true;
+  const canManageChannels = hasPermission('chatbot_channels_manage');
+  const visibleShareOptions = SHARE_OPTIONS.filter((opt) => (
+    opt.id === 'member' ? !isEmployee : hasPermission('marketplace_manage')
+  ));
+
   useEffect(() => {
     if (chatbot?.id) loadChannels();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -202,7 +215,7 @@ export default function DeployTab({
         </div>
 
         {/* Kênh hội thoại */}
-        <div>
+        {canManageChannels && <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
             Kênh hội thoại
           </p>
@@ -238,15 +251,15 @@ export default function DeployTab({
               );
             })}
           </div>
-        </div>
+        </div>}
 
         {/* Chia sẻ */}
-        <div>
+        {visibleShareOptions.length > 0 && <div>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400 px-1 mb-2">
             Chia sẻ
           </p>
           <div className="grid grid-cols-2 gap-2">
-            {SHARE_OPTIONS.map((opt) => {
+            {visibleShareOptions.map((opt) => {
               const Icon = opt.icon;
               const handleClick = () => {
                 if (opt.id === 'member') {
@@ -268,7 +281,7 @@ export default function DeployTab({
               );
             })}
           </div>
-        </div>
+        </div>}
       </div>
 
       {/* Embed modal */}
@@ -325,6 +338,7 @@ export default function DeployTab({
 const EMBED_HEIGHTS = { small: 480, medium: 600, large: 760 };
 
 function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
+  const { t } = useI18n();
   const [copied, setCopied] = useState(false);
   const baseUrl = typeof window !== 'undefined' ? window.location.origin : '';
   const widgetKey = chatbot.widget_key || chatbot.id;
@@ -361,8 +375,14 @@ function EmbedModal({ kind, chatbot, onClose, onOpenWidgetSettings }) {
   const codeMap = { script: scriptCode, iframe: iframeCode };
   const code = codeMap[kind];
 
-  const handleCopy = (text) => {
-    navigator.clipboard.writeText(text);
+  // Chờ clipboard thật sự ghi xong: trình duyệt chặn (http, iframe, quyền) thì báo lỗi chứ không nói "Đã copy" (S-23).
+  const handleCopy = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      toast.error(t('chatbot.studio.copyFailed'));
+      return;
+    }
     setCopied(true);
     toast.success('Đã copy');
     setTimeout(() => setCopied(false), 2000);

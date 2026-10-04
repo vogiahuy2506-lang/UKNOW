@@ -17,6 +17,7 @@ vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() 
 vi.mock('../ChannelModals', () => ({ ChannelModal: () => null }));
 vi.mock('../../../components/marketplace/ShareChatbotModal', () => ({ default: () => null }));
 vi.mock('../../../components/marketplace/MarketplaceListingModal', () => ({ default: () => null }));
+vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 
 const bot = { id: 9, name: 'Bot', widget_key: 'wk9', channels: [] };
 

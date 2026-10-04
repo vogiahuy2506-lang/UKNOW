@@ -11,6 +11,7 @@ import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import WhatsAppChannelModal from '../../features/chatbot/components/WhatsAppChannelModal';
 import TelegramChannelModal from '../../features/chatbot/components/TelegramChannelModal';
+import { useI18n } from '../../i18n';
 
 /* ─── ChannelModal — cấu hình từng kênh ─────────────────────────────── */
 
@@ -703,7 +704,9 @@ function Toggle({ checked, onChange, disabled }) {
 /* ─── Zalo Personal reload hook ──────────────────────────────────── */
 
 function ZaloPersonalReloadButton() {
-  const onReload = () => window.location.reload();
+  // Chỉ tải lại danh sách tài khoản của hộp này (ZaloPersonalForm lắng nghe sự kiện), không tải lại cả trang (S-25):
+  // F5 làm mất bot đang chọn và cả đoạn chat thử đang dở.
+  const onReload = () => window.dispatchEvent(new Event('zalo-personal:reload'));
   return (
     <button
       type="button"
@@ -719,6 +722,7 @@ function ZaloPersonalReloadButton() {
 /* ─── Zalo Personal (form bật/tắt chatbot cho từng account) ──────── */
 
 function ZaloPersonalForm({ chatbot }) {
+  const { t } = useI18n();
   const [accounts, setAccounts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [togglingId, setTogglingId] = useState(null);
@@ -757,6 +761,8 @@ function ZaloPersonalForm({ chatbot }) {
     } catch (err) {
       console.error('[ZaloPersonalForm] toggle failed:', err);
       toast.error(err?.response?.data?.message || 'Không thể cập nhật.');
+      // 409: tài khoản đã gắn chatbot khác (dữ liệu trên màn đã cũ) → tải lại để hiện huy hiệu "Đang bật cho: …".
+      if (err?.response?.status === 409) fetchAccounts();
     } finally {
       setTogglingId(null);
     }
@@ -766,7 +772,7 @@ function ZaloPersonalForm({ chatbot }) {
     <div className="space-y-4">
       <div className="bg-orange-50/50 border border-orange-100 rounded-lg p-3">
         <p className="text-xs text-slate-600">
-          Bật/tắt chatbot cho từng tài khoản Zalo cá nhân đã liên kết.
+          {t('chatbot.studio.zaloPersonalIntro')}
         </p>
       </div>
 
@@ -818,6 +824,9 @@ function ZaloPersonalForm({ chatbot }) {
                 ? acc.phone
                 : acc.zalo_user_id || `ID: ${acc.id}`;
             const avatarChar = (displayName || 'Z').charAt(0).toUpperCase();
+            // 1 tài khoản = 1 chatbot (S-12): bot KHÁC đang bật trên tài khoản này thì không bật thêm ở đây.
+            const otherBotName = acc.other_chatbot_name || '';
+            const blockedByOther = Boolean(otherBotName) && !isOn;
 
             return (
               <div
@@ -832,14 +841,24 @@ function ZaloPersonalForm({ chatbot }) {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 truncate">
-                    {displayName}
-                  </p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-sm font-medium text-slate-900 truncate">
+                      {displayName}
+                    </p>
+                    {otherBotName && (
+                      <span
+                        className="text-[10px] font-medium text-amber-700 bg-amber-50 border border-amber-100 px-1.5 py-0.5 rounded shrink-0 max-w-[140px] truncate"
+                        title={t(isOn ? 'chatbot.studio.zaloBoundBothTitle' : 'chatbot.studio.zaloBoundBlockedTitle', { name: otherBotName })}
+                      >
+                        {t('chatbot.studio.zaloBoundBadge', { name: otherBotName })}
+                      </span>
+                    )}
+                  </div>
                   <p className="text-[11px] text-slate-400 truncate">
                     {subtitle}
                   </p>
                 </div>
-                <Toggle checked={isOn} disabled={busy} onChange={(v) => handleToggle(acc, v)} />
+                <Toggle checked={isOn} disabled={busy || blockedByOther} onChange={(v) => handleToggle(acc, v)} />
               </div>
             );
           })

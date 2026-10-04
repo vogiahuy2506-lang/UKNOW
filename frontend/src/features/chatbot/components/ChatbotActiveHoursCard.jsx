@@ -105,7 +105,7 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
     if (state.slots.length === 1) {
       return `${state.slots[0].start} – ${state.slots[0].end}`;
     }
-    return `${state.slots.length} ${t('chatbot.studio.activeHoursAddSlot') ? 'khung giờ' : 'slots'}`;
+    return t('chatbot.studio.activeHoursSlotCount', { count: state.slots.length });
   }, [state.mode, state.slots, t]);
 
   const areDaysMatching = (targetList) => {
@@ -121,7 +121,7 @@ export default function ChatbotActiveHoursCard({ value, onChange, onValidityChan
     }
 
     if (!nextState.slots || nextState.slots.length === 0) {
-      return t('chatbot.studio.activeHoursSlotsLabel') || 'Vui lòng cấu hình ít nhất một khung giờ';
+      return t('chatbot.studio.activeHoursNoSlots');
     }
 
     for (const slot of nextState.slots) {

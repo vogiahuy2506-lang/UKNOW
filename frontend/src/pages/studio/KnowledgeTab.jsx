@@ -93,9 +93,14 @@ export default function KnowledgeTab({ chatbot, onDocumentsChange, initialDocume
       const list = res?.data?.documents || res?.documents || res?.data || [];
       if (Array.isArray(list)) {
         setDocuments(list);
-        // Bao cot trai cap nhat so tai lieu (chi sau khi tai xong tu API).
+        // Bao cot trai cap nhat so tai lieu (chi sau khi tai xong tu API). Chi dem tai lieu SAN SANG (cung nghia voi
+        // document_count cua API danh sach); tai lieu loi bao rieng de cot trai hien "· N loi" (S-17).
         document.dispatchEvent(new CustomEvent('studio:knowledge-changed', {
-          detail: { chatbotId: chatbot.id, count: list.length },
+          detail: {
+            chatbotId: chatbot.id,
+            count: list.filter((doc) => doc?.status === 'ready').length,
+            errorCount: list.filter((doc) => doc?.status === 'error').length,
+          },
         }));
       } else {
         setDocuments(chatbot.documents || []);

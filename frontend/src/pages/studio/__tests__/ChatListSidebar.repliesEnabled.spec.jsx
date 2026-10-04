@@ -8,7 +8,7 @@ vi.mock('../../../features/chatbot/services/chatbotApi.service', () => ({
 }));
 vi.mock('../../../services/marketplace.service', () => ({ default: {} }));
 vi.mock('react-hot-toast', () => ({ default: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('../../../i18n', () => ({ useI18n: () => ({ t: (k) => k }) }));
+vi.mock('../../../i18n', async () => (await import('./studioTestI18n.js')).i18nMock);
 
 describe('ChatListSidebar - chấm trạng thái theo replies_enabled', () => {
   beforeEach(() => {

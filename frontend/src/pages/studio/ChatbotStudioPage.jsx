@@ -276,23 +276,9 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
   const handleSend = async () => {
     if ((!input.trim() && pendingAttachments.length === 0) || sending || uploadingAttachment) return;
 
-    let conv = activeConversation;
-    if (!conv) {
-      try {
-        const res = await chatbotApi.createChatbotStudioConversation(chatbot.id);
-        if (res.data?.data) {
-          conv = res.data.data;
-          setConversations(prev => [conv, ...prev]);
-          setActiveConversation(conv);
-        }
-      } catch (err) {
-        toast.error('Không thể tạo cuộc trò chuyện');
-        return;
-      }
-    }
-
     const userText = input.trim();
     const attachmentsToSend = [...pendingAttachments];
+    const userContent = userText || (attachmentsToSend.length ? '[Đính kèm]' : '');
     const userMessage = {
       role: 'user',
       content: userText,
@@ -306,13 +292,6 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
     setSending(true);
 
     try {
-      await chatbotApi.addChatbotStudioMessage(conv.id, {
-        role: 'user',
-        content: userText || (attachmentsToSend.length ? '[Đính kèm]' : ''),
-        attachments: attachmentsToSend,
-        message_type: attachmentsToSend.length ? 'file' : 'text',
-      });
-
       const history = messages.slice(-20).map(m => ({
         role: m.role,
         content: m.content,
@@ -322,7 +301,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
       const res = await chatbotApi.sendCustomChat({
         history: [...history, {
           role: 'user',
-          content: userText || (attachmentsToSend.length ? '[Đính kèm]' : ''),
+          content: userContent,
           attachments: attachmentsToSend,
         }],
         chatbot_id: chatbot?.id,
@@ -332,31 +311,59 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
         attachments: attachmentsToSend,
       });
 
-      if (res.data?.content) {
-        await chatbotApi.addChatbotStudioMessage(conv.id, {
-          role: 'assistant',
-          content: res.data.content,
-        });
+      const reply = res.data?.content;
+      if (!reply) throw new Error(res.data?.message || t('chatbot.studio.sendFailed'));
 
-        shouldScrollToBottomRef.current = true;
-        setMessages(prev => [...prev, {
-          role: 'assistant',
-          content: res.data.content,
-          created_at: new Date().toISOString(),
-        }]);
+      // CHỈ lưu vào phiên SAU KHI AI đã trả lời (S-28). Bản cũ tạo phiên + lưu tin người dùng trước khi gọi AI: AI lỗi thì
+      // tin biến khỏi màn nhưng còn trong DB (F5 thấy tin không có trả lời), và phiên tạo xong mà lỗi nằm lại rỗng
+      // (production 04/10: 11/84 phiên chat thử rỗng).
+      let conv = activeConversation;
+      try {
+        if (!conv) {
+          const created = await chatbotApi.createChatbotStudioConversation(chatbot.id);
+          conv = created.data?.data || null;
+          if (conv) {
+            setConversations(prev => [conv, ...prev]);
+            setActiveConversation(conv);
+          }
+        }
+        if (conv) {
+          await chatbotApi.addChatbotStudioMessage(conv.id, {
+            role: 'user',
+            content: userContent,
+            attachments: attachmentsToSend,
+            message_type: attachmentsToSend.length ? 'file' : 'text',
+          });
+          await chatbotApi.addChatbotStudioMessage(conv.id, {
+            role: 'assistant',
+            content: reply,
+          });
+        }
+      } catch {
+        // Câu trả lời đã có (và đã tính credit): vẫn hiện trên màn, chỉ báo là chưa lưu được vào lịch sử.
+        toast.error(t('chatbot.studio.saveChatFailed'));
+      }
 
+      shouldScrollToBottomRef.current = true;
+      setMessages(prev => [...prev, {
+        role: 'assistant',
+        content: reply,
+        created_at: new Date().toISOString(),
+      }]);
+
+      if (conv) {
         setConversations(prev => prev.map(c =>
           c.id === conv.id
-            ? { ...c, last_message: res.data.content.substring(0, 100), last_message_at: new Date().toISOString() }
+            ? { ...c, last_message: reply.substring(0, 100), last_message_at: new Date().toISOString() }
             : c
         ));
-      } else if (res.data?.message) {
-        toast.error(res.data.message);
       }
     } catch (err) {
       const isTimeout = err.code === 'ECONNABORTED' || /timeout/i.test(String(err.message || ''));
       toast.error(isTimeout ? 'AI đang xử lý quá lâu, vui lòng thử lại' : (err.response?.data?.message || err.message || 'Gửi thất bại'));
-      setMessages(prev => prev.slice(0, -1));
+      // Trả lại đúng như trước khi bấm gửi: bỏ tin vừa hiện, khôi phục chữ và tệp đính kèm để bấm gửi lại.
+      setMessages(prev => prev.filter(m => m !== userMessage));
+      setInput(current => current || userText);
       setPendingAttachments(attachmentsToSend);
     } finally {
       setSending(false);
@@ -608,7 +615,7 @@ function ChatMessageArea({ chatbot, onUpdate: _onUpdate, canUseAi = true }) {
           </div>
           </> : (
             <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-600">
-              Chủ workspace chưa cấp quyền sử dụng AI cho nhân viên. Bạn vẫn có thể cấu hình chatbot và kho kiến thức.
+              {t('chatbot.studio.employeeNoTestChat')}
             </div>
           )}
         </div>
@@ -623,7 +630,6 @@ function ChatbotStudioPage() {
   const isEmployeeContext = activeContext?.type === 'employee';
   const [selectedBot, setSelectedBot] = useState(null);
   const [leftCollapsed, setLeftCollapsed] = useState(false);
-  const [rightCollapsed, _setRightCollapsed] = useState(false);
   const [activePanel, setActivePanel] = useState('list');
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [widgetModalKind, setWidgetModalKind] = useState(null);
@@ -705,7 +711,6 @@ function ChatbotStudioPage() {
                   <PlaygroundHeader
                     bot={selectedBot}
                     onConfig={() => setShowConfigModal(true)}
-                    onDelete={handleCreateNew}
                   />
                 </div>
                 <ChatMessageArea
@@ -721,7 +726,7 @@ function ChatbotStudioPage() {
           </div>
 
           {/* Right */}
-          <div className={`${rightCollapsed ? 'w-14' : 'w-[360px]'} shrink-0 transition-[width] duration-200 border-l border-slate-100`}>
+          <div className="w-[360px] shrink-0 border-l border-slate-100">
             <div className="h-full">
               <RightPanel
                 chatbot={selectedBot}

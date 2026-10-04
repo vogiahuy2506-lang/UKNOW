@@ -1,5 +1,5 @@
 /* eslint-disable no-unused-vars */
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
   HiOutlinePlus,
   HiOutlineTrash,
@@ -15,6 +15,12 @@ import toast from 'react-hot-toast';
 import chatbotApi from '../../features/chatbot/services/chatbotApi.service';
 import marketplaceService from '../../services/marketplace.service';
 import { useI18n } from '../../i18n';
+import { useAuthStore } from '../../stores/authStore';
+import {
+  chatbotListCacheKey,
+  loadCachedChatbots,
+  saveCachedChatbots,
+} from '../../features/chatbot/chatbotListCache';
 
 const ORIGIN_TABS = [
   { id: 'self_created', label: 'Tự tạo', icon: HiOutlineSparkles },
@@ -34,7 +40,13 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
   const [originTab, setOriginTab] = useState('self_created');
   const [contextMenu, setContextMenu] = useState(null);
 
-  const STORAGE_KEY = 'uknow_chatbots';
+  // Bộ nhớ đệm gắn id user + id chủ không gian, không lưu system_instruction, xoá khi đăng xuất (S-14).
+  const userId = useAuthStore((state) => state.user?.id);
+  const activeContext = useAuthStore((state) => state.activeContext);
+  const cacheKey = chatbotListCacheKey({
+    userId,
+    ownerId: activeContext?.type === 'employee' ? activeContext.ownerId : userId,
+  });
 
   useEffect(() => {
     setInternalSearch(searchQuery);
@@ -45,22 +57,9 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     onSearchChange?.(value);
   };
 
-  const loadFromStorage = () => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEY);
-      return saved ? JSON.parse(saved) : [];
-    } catch {
-      return [];
-    }
-  };
+  const loadFromStorage = () => loadCachedChatbots(cacheKey);
 
-  const saveToStorage = (bots) => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(bots));
-    } catch (e) {
-      console.error('Failed to save to localStorage', e);
-    }
-  };
+  const saveToStorage = useCallback((bots) => saveCachedChatbots(cacheKey, bots), [cacheKey]);
 
   useEffect(() => {
     const handler = () => setShowCreate(true);
@@ -71,11 +70,13 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
   // KnowledgeTab bao so tai lieu moi sau khi tai/them/xoa -> va vao dung bot, khong can F5.
   useEffect(() => {
     const handler = (e) => {
-      const { chatbotId, count } = e.detail || {};
+      const { chatbotId, count, errorCount } = e.detail || {};
       if (chatbotId == null || !Number.isFinite(Number(count))) return;
       setChatbots((prev) => {
         const next = prev.map((b) =>
-          String(b.id) === String(chatbotId) ? { ...b, document_count: Number(count) } : b
+          String(b.id) === String(chatbotId)
+            ? { ...b, document_count: Number(count), document_error_count: Number(errorCount) || 0 }
+            : b
         );
         saveToStorage(next);
         return next;
@@ -83,9 +84,9 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     };
     document.addEventListener('studio:knowledge-changed', handler);
     return () => document.removeEventListener('studio:knowledge-changed', handler);
-  }, []);
+  }, [saveToStorage]);
 
-  // Hộp Cấu hình / modal khác vừa lưu bot: gộp bản mới vào danh sách (giữ document_count đang có).
+  // Hộp Cấu hình / modal khác vừa lưu bot: gộp bản mới vào danh sách (giữ document_count / document_error_count đang có).
   useEffect(() => {
     const handler = (e) => {
       const detail = e.detail;
@@ -93,7 +94,12 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
       setChatbots((prev) => {
         const next = prev.map((b) => (
           String(b.id) === String(detail.id)
-            ? { ...b, ...detail, document_count: b.document_count ?? detail.document_count }
+            ? {
+              ...b,
+              ...detail,
+              document_count: b.document_count ?? detail.document_count,
+              document_error_count: b.document_error_count ?? detail.document_error_count,
+            }
             : b
         ));
         saveToStorage(next);
@@ -102,7 +108,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     };
     document.addEventListener('studio:bot-updated', handler);
     return () => document.removeEventListener('studio:bot-updated', handler);
-  }, []);
+  }, [saveToStorage]);
 
   useEffect(() => {
     const loadChatbots = async () => {
@@ -157,46 +163,17 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
     }
     setCreating(true);
     try {
-      let newBot;
-      try {
-        const res = await chatbotApi.createChatbot({
-          name: newName.trim(),
-          description: '',
-          greeting_msg: 'Xin chào! Tôi có thể giúp gì cho bạn?',
-        });
-        if (res.success && res.data) newBot = res.data;
-        else throw new Error(res.message);
-      } catch (apiError) {
-        console.warn('[ChatListSidebar] API create failed:', apiError.message);
-        newBot = {
-          id: Date.now(),
-          name: newName.trim(),
-          description: '',
-          avatar_url: '',
-          is_active: true,
-          documents: [],
-          channels: [],
-          widget_settings: {
-            theme_color: '#ee7518',
-            position: 'bottom-right',
-            welcome_message: '',
-            primary_color: '#ee7518',
-            background_color: '#FFFFFF',
-            text_color: '#1F2937',
-            accent_color: '#f19342',
-            logo_url: '',
-            show_avatar: true,
-            suggested_questions: [],
-          },
-          greeting_msg: '',
-          system_instruction: '',
-          temperature: 0.7,
-          max_tokens: 2048,
-          widget_key: Math.random().toString(36).substring(2, 15),
-          created_at: new Date().toISOString(),
-          message_count: 0,
-        };
+      // Tạo thất bại thì KHÔNG dựng bot giả (bản cũ: catch tự dựng bot id=Date.now(), báo "Đã tạo chatbot" dù API 403
+      // chạm trần gói — bot ma không chat/lưu được và biến mất khi F5). Lỗi → giữ hộp tạo mở, hiện câu của máy chủ.
+      const res = await chatbotApi.createChatbot({
+        name: newName.trim(),
+        description: '',
+        greeting_msg: 'Xin chào! Tôi có thể giúp gì cho bạn?',
+      });
+      if (!res?.success || !res?.data) {
+        throw new Error(res?.message || t('chatbot.studio.createFailed'));
       }
+      const newBot = res.data;
       const bots = [newBot, ...chatbots];
       setChatbots(bots);
       saveToStorage(bots);
@@ -204,8 +181,13 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
       setNewName('');
       onSelectBot(newBot);
       toast.success(t('chatbot.studio.createSuccess'));
-    } catch {
-      toast.error(t('errors.createFailed'));
+    } catch (err) {
+      // Chạm trần chatbot của gói: toast "nâng gói" toàn app (services/api.js) đã nói đủ — không hiện thêm câu thứ hai.
+      const data = err?.response?.data;
+      const isPlanLimit = Boolean(data?.upgradeRequired || data?.limitReached || data?.code === 'CHATBOT_LIMIT_EXCEEDED');
+      if (!isPlanLimit) {
+        toast.error(data?.message || err?.message || t('chatbot.studio.createFailed'));
+      }
     } finally {
       setCreating(false);
     }
@@ -223,18 +205,19 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
       if (selectedBot?.id === bot.id) onSelectBot(bots[0] || null);
       toast.success(t('common.success'));
     } catch (apiError) {
-      toast.error('Không thể xóa chatbot: ' + apiError.message);
+      toast.error(apiError?.response?.data?.message || apiError?.message || t('chatbot.studio.deleteFailed'));
     } finally {
       setDeletingId(null);
       setContextMenu(null);
     }
   };
 
+  // Lọc theo ô "Tìm chatbot..." (internalSearch; searchQuery từ cha chỉ là giá trị khởi tạo/đồng bộ — S-08).
   const filteredBots = chatbots
     .filter(b => {
-      if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        return b.name.toLowerCase().includes(q) || b.description?.toLowerCase().includes(q);
+      const q = internalSearch.trim().toLowerCase();
+      if (q) {
+        return (b.name || '').toLowerCase().includes(q) || (b.description || '').toLowerCase().includes(q);
       }
       return true;
     });
@@ -348,6 +331,7 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
         ) : filteredBots.length === 0 ? (
           <EmptyState
             originTab={originTab}
+            isSearch={chatbots.length > 0 && Boolean(internalSearch.trim())}
             onCreate={() => setShowCreate(true)}
           />
         ) : (
@@ -496,9 +480,16 @@ function ChatListSidebar({ selectedBot, onSelectBot, searchQuery = '', onSearchC
   );
 }
 
-function EmptyState({ originTab, onCreate }) {
-  const isSearch = false; // nếu muốn phân biệt search-empty vs list-empty có thể truyền prop riêng
+function EmptyState({ originTab, isSearch = false, onCreate }) {
+  const { t } = useI18n();
   const config = (() => {
+    if (isSearch) {
+      return {
+        icon: HiOutlineSparkles,
+        title: t('chatbot.studio.searchNotFoundTitle'),
+        desc: t('chatbot.studio.searchNotFoundDesc'),
+      };
+    }
     if (originTab === 'marketplace_purchased') {
       return {
         icon: HiOutlineShoppingCart,
@@ -515,8 +506,8 @@ function EmptyState({ originTab, onCreate }) {
     }
     return {
       icon: HiOutlineSparkles,
-      title: isSearch ? 'Không tìm thấy' : 'Chưa có chatbot',
-      desc: isSearch ? 'Thử bỏ bộ lọc' : 'Tạo chatbot đầu tiên của bạn',
+      title: 'Chưa có chatbot',
+      desc: 'Tạo chatbot đầu tiên của bạn',
     };
   })();
   const Icon = config.icon;
@@ -528,7 +519,7 @@ function EmptyState({ originTab, onCreate }) {
       </div>
       <p className="text-sm font-medium text-slate-700 mb-1">{config.title}</p>
       <p className="text-xs text-slate-400 mb-4">{config.desc}</p>
-      {originTab === 'self_created' && (
+      {originTab === 'self_created' && !isSearch && (
         <button
           onClick={onCreate}
           className="inline-flex items-center gap-1.5 text-xs font-semibold text-white bg-primary-500 hover:bg-primary-600 px-3.5 py-2 rounded-lg transition-colors"
@@ -542,8 +533,11 @@ function EmptyState({ originTab, onCreate }) {
 }
 
 function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu, deletingId }) {
+  const { t } = useI18n();
   const isMarketplaceBot = bot.widget_key?.startsWith('chatbot_');
+  // document_count = số tài liệu SẴN SÀNG; tài liệu lỗi đếm riêng (S-17).
   const docCount = Number(bot.document_count ?? bot.documents?.length ?? 0) || 0;
+  const docErrorCount = Number(bot.document_error_count ?? 0) || 0;
 
   return (
     <div
@@ -581,8 +575,13 @@ function BotCard({ bot, isSelected, onSelect, onDelete: _onDelete, onContextMenu
           <div className="flex items-center gap-1.5 mt-0.5">
             <span className={`w-1.5 h-1.5 rounded-full ${bot.replies_enabled !== false ? 'bg-emerald-500' : 'bg-slate-300'}`} />
             <span className="text-[11px] text-slate-400">
-              {docCount > 0 ? `${docCount} tài liệu` : 'Chưa có dữ liệu'}
+              {docCount > 0 ? t('chatbot.studio.docsReady', { count: docCount }) : t('chatbot.studio.docsNone')}
             </span>
+            {docErrorCount > 0 && (
+              <span className="text-[11px] font-medium text-red-500">
+                {t('chatbot.studio.docsErrors', { count: docErrorCount })}
+              </span>
+            )}
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import { buildBillingStatusFromProfile } from '../utils/billingProfile.util.js';
 import { notifyStorageQuotaClear, notifyStorageQuotaRefresh } from '../features/storage/storageEvents';
 import { clearQueryCache, queryClient } from '../lib/queryClient';
 import { clearAllDrafts as clearLandingCanvasDrafts } from '../features/landing-canvas/utils/landingCanvasDraft.js';
+import { clearChatbotListCache } from '../features/chatbot/chatbotListCache.js';
 
 const CONTEXT_STORAGE_KEY = 'founder_ai_active_context';
 
@@ -502,6 +503,8 @@ export const useAuthStore = create((set, get) => ({
       notifyStorageQuotaClear();
       // Máy dùng chung: nháp landing của người trước không được lộ cho người sau.
       clearLandingCanvasDrafts();
+      // Bộ nhớ đệm danh sách chatbot Studio (có hướng dẫn nội bộ của bot) cũng không được ở lại máy dùng chung.
+      clearChatbotListCache();
       await clearQueryCache();
       set({
         user: null,

@@ -35,7 +35,7 @@ describe('KnowledgeTab - phat studio:knowledge-changed', () => {
     chatbotApi.addCustomChatTextDocument.mockResolvedValue({ data: { success: true } });
 
     render(<KnowledgeTab chatbot={CHATBOT} initialDocuments={NO_DOCS} />);
-    await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 1 }));
+    await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 1, errorCount: 0 }));
 
     fireEvent.click(screen.getByText('Văn bản'));
     fireEvent.change(screen.getByPlaceholderText('Nhập nội dung kiến thức...'), {
@@ -43,7 +43,25 @@ describe('KnowledgeTab - phat studio:knowledge-changed', () => {
     });
     fireEvent.click(screen.getByText('Thêm'));
 
-    await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 2 }));
+    await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 2, errorCount: 0 }));
+  });
+
+  // S-17: chi dem tai lieu SAN SANG; tai lieu loi/dang xu ly khong tinh vao count, loi bao rieng.
+  it('chi dem tai lieu ready vao count; tai lieu error bao rieng o errorCount', async () => {
+    chatbotApi.listCustomChatDocuments.mockResolvedValue({
+      data: {
+        documents: [
+          doc(1),
+          { ...doc(2), status: 'error' },
+          { ...doc(3), status: 'processing' },
+          doc(4),
+        ],
+      },
+    });
+
+    render(<KnowledgeTab chatbot={CHATBOT} />);
+
+    await waitFor(() => expect(events).toContainEqual({ chatbotId: 7, count: 2, errorCount: 1 }));
   });
 
   it('khong truyen initialDocuments -> chi tai tai lieu MOT lan (mac dinh la mang co dinh)', async () => {
