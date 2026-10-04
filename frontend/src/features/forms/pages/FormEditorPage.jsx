@@ -413,6 +413,21 @@ export default function FormEditorPage() {
   const [initialProductId, setInitialProductId] = useState('');
   const [productOptions, setProductOptions] = useState([]);
   const selectedProduct = productOptions.find((p) => String(p.id) === productId) || null;
+  // Giá dạng SỐ của sản phẩm (products.price_amount) dùng để tự điền / gợi ý số tiền thanh toán; ngoài khoảng cho phép thì bỏ qua.
+  const productPriceAmount = (product) => {
+    const v = Number(product?.priceAmount);
+    return product?.priceAmount != null && Number.isInteger(v) && v >= MIN_PAYMENT_AMOUNT && v <= MAX_PAYMENT_AMOUNT ? v : null;
+  };
+  const selectedProductAmount = productPriceAmount(selectedProduct);
+  const handleProductChange = (e) => {
+    const nextId = e.target.value;
+    setProductId(nextId);
+    // Chọn sản phẩm có giá số, thanh toán đang bật mà ô số tiền trống → tự điền (không bao giờ đè số đã có).
+    const amount = productPriceAmount(productOptions.find((p) => String(p.id) === nextId));
+    if (!isEmployee && payment.enabled && amount !== null) {
+      setPayment((prev) => (prev.amount ? prev : { ...prev, amount: String(amount) }));
+    }
+  };
   const { usage: storageQuota } = useStorageQuota();
   const bannerInputRef = useRef(null);
   const logoInputRef = useRef(null);
@@ -2167,7 +2182,7 @@ export default function FormEditorPage() {
             data-testid="form-product-select"
             aria-label={t('forms.editorPage.product.title')}
             value={productId}
-            onChange={(e) => setProductId(e.target.value)}
+            onChange={handleProductChange}
             className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm focus:outline-none focus:border-primary-500 focus:ring-1 focus:ring-primary-500"
           >
             <option value="">{t('forms.editorPage.product.none')}</option>
@@ -2180,7 +2195,21 @@ export default function FormEditorPage() {
               </option>
             ))}
           </select>
-          {payment.enabled && selectedProduct?.price ? (
+          {payment.enabled && selectedProductAmount !== null ? (
+            <p data-testid="form-product-price-hint" className="text-xs text-gray-600">
+              {t('forms.editorPage.product.priceHintAmount', { price: `${selectedProductAmount.toLocaleString('vi-VN')} đ` })}{' '}
+              {!isEmployee && payment.amount && Number(payment.amount) !== selectedProductAmount ? (
+                <button
+                  type="button"
+                  data-testid="form-product-use-price"
+                  className="text-primary-600 hover:underline"
+                  onClick={() => setPayment((prev) => ({ ...prev, amount: String(selectedProductAmount) }))}
+                >
+                  {t('forms.editorPage.product.usePrice', { price: `${selectedProductAmount.toLocaleString('vi-VN')} đ` })}
+                </button>
+              ) : null}
+            </p>
+          ) : payment.enabled && selectedProduct?.price ? (
             <p data-testid="form-product-price-hint" className="text-xs text-gray-600">
               {t('forms.editorPage.product.priceHint', { price: selectedProduct.price })}
             </p>
@@ -2207,7 +2236,15 @@ export default function FormEditorPage() {
                 type="checkbox"
                 checked={payment.enabled}
                 disabled={isEmployee}
-                onChange={(e) => setPayment((prev) => ({ ...prev, enabled: e.target.checked }))}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  // Bật thu tiền khi đã chọn sản phẩm có giá số và ô số tiền trống → tự điền.
+                  setPayment((prev) => ({
+                    ...prev,
+                    enabled,
+                    amount: enabled && !prev.amount && selectedProductAmount !== null ? String(selectedProductAmount) : prev.amount,
+                  }));
+                }}
                 className="h-4 w-4 rounded text-primary-600 focus:ring-primary-500 border-gray-300 disabled:opacity-50"
               />
             </label>

@@ -28,7 +28,13 @@ export function serializeProductList(products) {
     const isEvent = String(p.kind || '').toLowerCase() === 'event';
     const parts = [`${i + 1}. ${name}${isEvent ? ' (sự kiện)' : ''}`];
     // Sự kiện không ghi giá = miễn phí; sản phẩm bán không ghi giá thì để trống (không được nói "miễn phí" bừa).
-    const price = p.price || (isEvent ? 'Miễn phí' : p.price);
+    // Giá chữ ("500k", "Liên hệ") ưu tiên; trống mà có số (price_amount) thì in số định dạng VN ("500.000đ", 0 = Miễn phí).
+    const amountRaw = p.price_amount ?? p.priceAmount;
+    const amount = amountRaw === null || amountRaw === undefined || amountRaw === '' ? null : Number(amountRaw);
+    const amountText = Number.isFinite(amount) && amount >= 0
+      ? (amount === 0 ? 'Miễn phí' : `${String(Math.round(amount)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}đ`)
+      : '';
+    const price = p.price || amountText || (isEvent ? 'Miễn phí' : p.price);
     const originalPrice = p.original_price || p.originalPrice;
     const category = p.category;
     if (category) parts.push(`Danh mục: ${category}`);

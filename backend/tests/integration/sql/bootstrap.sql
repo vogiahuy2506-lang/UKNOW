@@ -1045,6 +1045,7 @@ CREATE TABLE products (
   target_audience TEXT,
   status          VARCHAR(50) DEFAULT 'active',
   kind            VARCHAR(20) NOT NULL DEFAULT 'sale' CONSTRAINT products_kind_check CHECK (kind IN ('sale', 'event')),
+  price_amount    BIGINT CONSTRAINT products_price_amount_check CHECK (price_amount IS NULL OR price_amount >= 0),
   created_at      TIMESTAMPTZ DEFAULT NOW(),
   updated_at      TIMESTAMPTZ DEFAULT NOW()
 );

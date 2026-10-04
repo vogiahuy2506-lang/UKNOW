@@ -195,6 +195,43 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     expect(productApiService.createProduct.mock.calls[0][0]).toMatchObject({ productName: 'Buổi tư vấn', kind: 'event' });
   });
 
+  it('modal thêm: ô Giá bán (số) — gõ giá "1,5tr" thì gợi ý 1.500.000 đ, bấm Dùng số này điền vào ô, gửi priceAmount là số; giá không đọc được thì không gợi ý', async () => {
+    productApiService.getCategories.mockResolvedValue({ data: { data: { categories: [] } } });
+    productApiService.createProduct.mockResolvedValue({});
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khoá AI thực chiến')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Thêm sản phẩm/ }));
+    const amountInput = await screen.findByTestId('product-price-amount');
+    expect(screen.queryByTestId('product-price-amount-suggest')).toBeNull();
+
+    fireEvent.change(screen.getByPlaceholderText('VD: 2.9tr/tháng'), { target: { value: '1,5tr' } });
+    expect(screen.getByTestId('product-price-amount-suggest')).toHaveTextContent('1.500.000');
+    fireEvent.click(screen.getByRole('button', { name: 'Dùng số này' }));
+    expect(amountInput.value).toBe('1.500.000');
+    expect(screen.queryByTestId('product-price-amount-suggest')).toBeNull();
+
+    const nameInput = document.querySelector('input[required]');
+    fireEvent.change(nameInput, { target: { value: 'Khoá A' } });
+    fireEvent.submit(nameInput.closest('form'));
+    await waitFor(() => expect(productApiService.createProduct).toHaveBeenCalledTimes(1));
+    expect(productApiService.createProduct.mock.calls[0][0]).toMatchObject({ price: '1,5tr', priceAmount: 1500000 });
+  });
+
+  it('modal: giá "Liên hệ" và ô số trống → không gợi ý, gửi priceAmount null (server không đoán)', async () => {
+    productApiService.getCategories.mockResolvedValue({ data: { data: { categories: [] } } });
+    productApiService.createProduct.mockResolvedValue({});
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khoá AI thực chiến')).toBeInTheDocument());
+    fireEvent.click(screen.getByRole('button', { name: /Thêm sản phẩm/ }));
+    fireEvent.change(await screen.findByPlaceholderText('VD: 2.9tr/tháng'), { target: { value: 'Liên hệ' } });
+    expect(screen.queryByTestId('product-price-amount-suggest')).toBeNull();
+    const nameInput = document.querySelector('input[required]');
+    fireEvent.change(nameInput, { target: { value: 'Khoá B' } });
+    fireEvent.submit(nameInput.closest('form'));
+    await waitFor(() => expect(productApiService.createProduct).toHaveBeenCalledTimes(1));
+    expect(productApiService.createProduct.mock.calls[0][0].priceAmount).toBeNull();
+  });
+
   it('nhân viên không có reports_view: không gọi API phễu, không có cột', async () => {
     mockAuthState = { activeContext: { type: 'employee', permissions: { courses: true } } };
     renderPage();

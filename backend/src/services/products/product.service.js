@@ -2,6 +2,7 @@ import { paginate } from '../../helpers.js';
 import productRepository from '../../repositories/products/product.repository.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
+import { parseVndPrice } from '../../utils/parseVndPrice.util.js';
 
 export const PRODUCT_KINDS = ['sale', 'event'];
 
@@ -10,6 +11,26 @@ class ProductService {
   normalizeKind(rawKind) {
     const kind = typeof rawKind === 'string' ? rawKind.trim().toLowerCase() : '';
     return PRODUCT_KINDS.includes(kind) ? kind : 'sale';
+  }
+
+  /**
+   * `price_amount` (số đồng) từ payload.
+   * - Có `priceAmount` hợp lệ (số nguyên >= 0, hoặc chuỗi số) → dùng đúng số đó (người dùng đã nhập).
+   * - Không gửi / null / '' → TỰ ĐIỀN từ chuỗi giá hiển thị bằng `parseVndPrice` ("1,5tr" → 1500000; không đọc được → null,
+   *   không đoán). Đường tạo cũ (AI, import, client cũ không biết `priceAmount`) nhờ vậy vẫn có số khi giá đọc được.
+   * - Sai kiểu / âm / không nguyên → 400.
+   */
+  resolvePriceAmount(rawAmount, priceText) {
+    if (rawAmount === undefined || rawAmount === null || (typeof rawAmount === 'string' && rawAmount.trim() === '')) {
+      return parseVndPrice(priceText);
+    }
+    const n = typeof rawAmount === 'number' ? rawAmount : Number(String(rawAmount).trim());
+    if (!Number.isInteger(n) || n < 0 || n > 1e12) {
+      const error = new Error('Giá bán (số) phải là số nguyên không âm');
+      error.status = 400;
+      throw error;
+    }
+    return n;
   }
 
   normalizeStatus(rawStatus) {
@@ -23,6 +44,7 @@ class ProductService {
       productCode: row.product_code,
       productName: row.product_name,
       price: row.price || '',
+      priceAmount: row.price_amount === null || row.price_amount === undefined ? null : Number(row.price_amount),
       originalPrice: row.original_price || '',
       status: this.normalizeStatus(row.status),
       kind: this.normalizeKind(row.kind),
@@ -118,6 +140,7 @@ class ProductService {
       targetAudience: payload.targetAudience?.trim() || null,
       status: this.normalizeStatus(payload.status),
       kind: this.normalizeKind(payload.kind),
+      priceAmount: this.resolvePriceAmount(payload.priceAmount, payload.price),
     });
 
     await businessProfileService.reembedChunks(workspaceOwnerId).catch((e) => {
@@ -156,6 +179,7 @@ class ProductService {
       targetAudience: payload.targetAudience !== undefined ? (payload.targetAudience?.trim() || null) : row.target_audience,
       status: payload.status !== undefined ? this.normalizeStatus(payload.status) : this.normalizeStatus(row.status),
       kind: payload.kind !== undefined ? this.normalizeKind(payload.kind) : this.normalizeKind(row.kind),
+      priceAmount: this.resolveUpdatePriceAmount(payload, row),
     });
 
     await businessProfileService.reembedChunks(resourceOwnerId).catch((e) => {
@@ -163,6 +187,20 @@ class ProductService {
     });
 
     return this.getById({ productId, user });
+  }
+
+  /**
+   * Sửa sản phẩm: có `priceAmount` → dùng nó (xem `resolvePriceAmount`). Không gửi:
+   *  - đổi chữ giá (`price`) → số CŨ có thể sai nên đọc lại từ giá mới (đọc không được → null);
+   *  - không đụng tới giá → giữ số hiện có; chưa có số mà giá cũ đọc được → tự điền.
+   */
+  resolveUpdatePriceAmount(payload, row) {
+    const given = payload.priceAmount;
+    const hasGiven = !(given === undefined || given === null || (typeof given === 'string' && given.trim() === ''));
+    if (hasGiven) return this.resolvePriceAmount(given, null);
+    if (payload.price !== undefined) return parseVndPrice(payload.price?.trim() || null);
+    if (row.price_amount !== null && row.price_amount !== undefined) return Number(row.price_amount);
+    return parseVndPrice(row.price);
   }
 
   async remove({ productId, user }) {

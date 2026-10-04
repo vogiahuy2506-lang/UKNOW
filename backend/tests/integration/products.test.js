@@ -119,3 +119,41 @@ describe('Products employee workspace ownership', () => {
     expect(rows).toHaveLength(0);
   });
 });
+
+describe('Products — price_amount (giá dạng số)', () => {
+  it('tạo/sửa: tự điền từ giá chữ đọc được, nhận số gửi lên, 400 khi sai, giá mơ hồ để null; lưu đúng cột price_amount', async () => {
+    const owner = await createUser({ username: 'product_price_amount_owner' });
+    const token = await loginAs(owner);
+    const headers = { Authorization: `Bearer ${token}` };
+
+    const auto = await request(app).post('/api/products').set(headers).send({ productName: 'Khoá A', price: '1,5tr' });
+    expect(auto.status).toBe(201);
+    expect(auto.body.data.priceAmount).toBe(1500000);
+    const { rows } = await db.query('SELECT price_amount FROM products WHERE id = $1', [auto.body.data.id]);
+    expect(String(rows[0].price_amount)).toBe('1500000');
+
+    const explicit = await request(app).post('/api/products').set(headers).send({ productName: 'Khoá B', price: '1,5tr', priceAmount: 1400000 });
+    expect(explicit.body.data.priceAmount).toBe(1400000);
+
+    const vague = await request(app).post('/api/products').set(headers).send({ productName: 'Khoá C', price: 'Liên hệ' });
+    expect(vague.status).toBe(201);
+    expect(vague.body.data.priceAmount).toBeNull();
+
+    const bad = await request(app).post('/api/products').set(headers).send({ productName: 'Khoá D', priceAmount: -5 });
+    expect(bad.status).toBe(400);
+
+    // sửa: không đụng giá → giữ số; đổi chữ giá → đọc lại
+    const keep = await request(app).put(`/api/products/${auto.body.data.id}`).set(headers).send({ productName: 'Khoá A2' });
+    expect(keep.body.data.priceAmount).toBe(1500000);
+    const reprice = await request(app).put(`/api/products/${auto.body.data.id}`).set(headers).send({ price: '2tr' });
+    expect(reprice.body.data.priceAmount).toBe(2000000);
+
+    // danh sách trả priceAmount
+    const list = await request(app).get('/api/products').set(headers);
+    const byName = Object.fromEntries(list.body.data.products.map((p) => [p.productName, p.priceAmount]));
+    expect(byName['Khoá A2']).toBe(2000000);
+    expect(byName['Khoá B']).toBe(1400000);
+    expect(byName['Khoá C']).toBeNull();
+  });
+});
+

@@ -43,6 +43,7 @@ router.post(
     body('targetAudience').optional({ nullable: true }).trim(),
     body('status').optional({ nullable: true }).trim(),
     body('kind').optional().isIn(['sale', 'event']).withMessage('Loại sản phẩm không hợp lệ'),
+    body('priceAmount').optional({ nullable: true, checkFalsy: true }).isInt({ min: 0, max: 1000000000000 }).withMessage('Giá bán (số) phải là số nguyên không âm'),
   ],
   handleValidationErrors,
   productsController.create.bind(productsController)
@@ -65,6 +66,7 @@ router.put(
     body('targetAudience').optional({ nullable: true }).trim(),
     body('status').optional({ nullable: true }).trim(),
     body('kind').optional().isIn(['sale', 'event']).withMessage('Loại sản phẩm không hợp lệ'),
+    body('priceAmount').optional({ nullable: true, checkFalsy: true }).isInt({ min: 0, max: 1000000000000 }).withMessage('Giá bán (số) phải là số nguyên không âm'),
   ],
   handleValidationErrors,
   productsController.update.bind(productsController)

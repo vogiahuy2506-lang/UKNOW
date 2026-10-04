@@ -39,9 +39,19 @@ const existingForm = {
 };
 
 const PRODUCTS = [
-  { id: 11, productName: 'Khoá AI thực chiến', price: '500k' },
-  { id: 12, productName: 'Khoá Marketing', price: '1tr' },
+  { id: 11, productName: 'Khoá AI thực chiến', price: '500k', priceAmount: 500000 },
+  { id: 12, productName: 'Khoá Marketing', price: '1tr', priceAmount: null },
 ];
+
+const PAID_CONFIG = {
+  enabled: true,
+  methods: ['bank'],
+  method: 'bank',
+  bankBin: '970436',
+  accountNumber: '123456789',
+  accountName: 'NGUYEN VAN A',
+  holdMinutes: 30,
+};
 
 const renderEditor = () =>
   render(
@@ -114,5 +124,34 @@ describe('FormEditorPage — ô chọn sản phẩm', () => {
 
     await waitFor(() => expect(formAdminApi.updateForm).toHaveBeenCalledTimes(1));
     expect(formAdminApi.updateForm.mock.calls[0][1].productId).toBe(12);
+  });
+
+  it('chọn sản phẩm có priceAmount khi thanh toán bật mà ô số tiền trống → tự điền 500.000; sản phẩm không có số thì không điền', async () => {
+    formAdminApi.fetchFormById.mockResolvedValue({ ...existingForm, paymentConfig: PAID_CONFIG });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Khoá AI thực chiến' })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '12' } });
+    expect(screen.queryByDisplayValue('500.000')).toBeNull();
+
+    fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '11' } });
+    expect(screen.getByDisplayValue('500.000')).toBeInTheDocument();
+    expect(screen.getByTestId('form-product-price-hint')).toHaveTextContent('500.000 đ');
+    // đã khớp giá sản phẩm → không có nút "Dùng giá sản phẩm"
+    expect(screen.queryByTestId('form-product-use-price')).toBeNull();
+  });
+
+  it('ô số tiền đã có số khác → KHÔNG đè; hiện nút "Dùng giá sản phẩm (500.000 đ)", bấm thì đổi', async () => {
+    formAdminApi.fetchFormById.mockResolvedValue({ ...existingForm, paymentConfig: { ...PAID_CONFIG, amount: 300000 } });
+    renderEditor();
+    await waitFor(() => expect(screen.getByRole('option', { name: 'Khoá AI thực chiến' })).toBeInTheDocument());
+
+    fireEvent.change(screen.getByTestId('form-product-select'), { target: { value: '11' } });
+    expect(screen.getByDisplayValue('300.000')).toBeInTheDocument();
+    const useBtn = screen.getByTestId('form-product-use-price');
+    expect(useBtn).toHaveTextContent('Dùng giá sản phẩm (500.000 đ)');
+    fireEvent.click(useBtn);
+    expect(screen.getByDisplayValue('500.000')).toBeInTheDocument();
+    expect(screen.queryByTestId('form-product-use-price')).toBeNull();
   });
 });

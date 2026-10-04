@@ -86,4 +86,20 @@ describe('serializeProductList', () => {
     expect(b).toContain('d'.repeat(300));
     expect(b).not.toContain('…');
   });
+
+  it('giá chữ trống mà có price_amount: in số định dạng VN; giá chữ vẫn thắng; 0 = Miễn phí; không số thì không ghi giá', () => {
+    const [fromAmount, textWins, zero, none, camel] = serializeProductList([
+      { product_name: 'A', price: '', price_amount: '500000' }, // pg trả BIGINT dạng chuỗi
+      { product_name: 'B', price: 'Liên hệ', price_amount: 500000 },
+      { product_name: 'C', price: null, price_amount: 0 },
+      { product_name: 'D', price: null, price_amount: null },
+      { product_name: 'E', priceAmount: 1500000 },
+    ]).split('\n');
+    expect(fromAmount).toContain('Giá: 500.000đ');
+    expect(textWins).toContain('Giá: Liên hệ');
+    expect(textWins).not.toContain('500.000đ');
+    expect(zero).toContain('Giá: Miễn phí');
+    expect(none).not.toContain('Giá:');
+    expect(camel).toContain('Giá: 1.500.000đ');
+  });
 });

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { useI18n } from '../../i18n';
+import { parseVndPrice } from '../../utils/parseVndPrice';
 import { useAuthStore } from '../../stores/authStore';
 import productApiService from '../../features/products/services/productApi.service';
 import PageHeader from '../../components/common/PageHeader';
@@ -29,6 +30,7 @@ const EMPTY_FORM = {
   productCode: '',
   productName: '',
   price: '',
+  priceAmount: '',
   originalPrice: '',
   description: '',
   usp: '',
@@ -233,6 +235,7 @@ const Products = () => {
       productCode: product.productCode || '',
       productName: product.productName || '',
       price: product.price || '',
+      priceAmount: product.priceAmount === null || product.priceAmount === undefined ? '' : String(product.priceAmount),
       originalPrice: product.originalPrice || '',
       description: product.description || '',
       usp: product.usp || '',
@@ -260,11 +263,14 @@ const Products = () => {
     }
     setIsSaving(true);
     try {
+      // priceAmount: ô trống -> null (server tự điền từ giá hiển thị nếu đọc được); có số -> số nguyên.
+      const digits = String(formData.priceAmount ?? '').replace(/\D/g, '');
+      const payload = { ...formData, priceAmount: digits === '' ? null : Number(digits) };
       if (formModal?.mode === 'edit') {
-        await productApiService.updateProduct(formModal.id, formData);
+        await productApiService.updateProduct(formModal.id, payload);
         toast.success(t('products.updateSuccess'));
       } else {
-        await productApiService.createProduct(formData);
+        await productApiService.createProduct(payload);
         toast.success(t('products.createSuccess'));
       }
       setFormModal(null);
@@ -601,6 +607,35 @@ const Products = () => {
                   placeholder={formData.kind === 'event' ? t('products.priceFreePlaceholder') : t('products.pricePlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.priceAmount')}</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  data-testid="product-price-amount"
+                  value={formData.priceAmount === '' ? '' : Number(formData.priceAmount).toLocaleString('vi-VN')}
+                  onChange={(e) => setField('priceAmount', e.target.value.replace(/\D/g, ''))}
+                  placeholder={t('products.priceAmountPlaceholder')}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                />
+                {(() => {
+                  const suggested = formData.priceAmount === '' ? parseVndPrice(formData.price) : null;
+                  return suggested !== null ? (
+                    <p className="mt-1 text-xs text-gray-500" data-testid="product-price-amount-suggest">
+                      {t('products.priceAmountSuggest', { amount: formatMoney(suggested) })}{' '}
+                      <button
+                        type="button"
+                        className="text-primary-600 hover:underline"
+                        onClick={() => setField('priceAmount', String(suggested))}
+                      >
+                        {t('products.priceAmountUse')}
+                      </button>
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs text-gray-500">{t('products.priceAmountHint')}</p>
+                  );
+                })()}
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.category')}</label>
