@@ -208,7 +208,7 @@ describe('useCampaignRunController', () => {
       });
     };
 
-    it('tạo lịch bị 409 → toast hiện ĐÚNG câu của server, không phải "createScheduleFailed"', async () => {
+    it('tạo lịch bị 409 → khối lỗi trong modal hiện ĐÚNG câu của server (không toast lặp lại), không phải "createScheduleFailed"', async () => {
       campaignRunApiService.createCampaignSchedule.mockRejectedValueOnce(serverError(NOT_ACTIVE_MESSAGE));
       const { result } = renderHook(() => useCampaignRunController());
       await waitFor(() => expect(campaignRunApiService.getCampaignSchedules).toHaveBeenCalled());
@@ -219,8 +219,9 @@ describe('useCampaignRunController', () => {
       });
 
       expect(campaignRunApiService.createCampaignSchedule).toHaveBeenCalledTimes(1);
-      expect(toast.error).toHaveBeenCalledWith(NOT_ACTIVE_MESSAGE, expect.objectContaining({ duration: expect.any(Number) }));
-      expect(toast.error).not.toHaveBeenCalledWith('campaigns.createScheduleFailed', expect.anything());
+      // PR-6: modal vẫn mở và hiện khối lỗi → không toast thêm (trước đây câu hiện hai lần).
+      expect(result.current.scheduleFormError).toBe(NOT_ACTIVE_MESSAGE);
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('tạo lịch lỗi mạng (không có phản hồi server) → rơi về chuỗi mặc định', async () => {
@@ -233,7 +234,8 @@ describe('useCampaignRunController', () => {
         await result.current.handleSaveSchedule();
       });
 
-      expect(toast.error).toHaveBeenCalledWith('campaigns.createScheduleFailed', expect.anything());
+      expect(result.current.scheduleFormError).toBe('campaigns.createScheduleFailed');
+      expect(toast.error).not.toHaveBeenCalled();
     });
 
     it('bật lại lịch bị 409 CAMPAIGN_NOT_ACTIVE → toast hiện câu của server', async () => {
