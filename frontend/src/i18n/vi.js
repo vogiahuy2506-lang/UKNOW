@@ -5447,8 +5447,6 @@ export default {
       conversationsAudienceUnknown: 'Tất cả người đã từng nhắn tới tài khoản {account}',
     },
     // Auto creating card
-    creatingCampaign: 'Đang tạo và chạy chiến dịch...',
-    autoCreateNotice: '✨ Chiến dịch sẽ được tạo tự động và bắt đầu chạy ngay!',
     viewCampaign: 'Xem chiến dịch',
     // Auto created success card
     campaignRunning: 'Chiến dịch đang chạy!',
@@ -5519,7 +5517,6 @@ export default {
     createLandingFromScratch: 'Tôi muốn tạo landing page từ đầu.',
     campaignReady: 'Chiến dịch đã sẵn sàng!',
     campaignCreated: 'Chiến dịch đã được tạo!',
-    autoCreatingCampaign: 'Đang tạo và chạy chiến dịch cho bạn...',
     processingRequest: 'Tôi đang xử lý yêu cầu của bạn...',
     campaignCreateError: '⚠️ Lỗi: {message}',
   },

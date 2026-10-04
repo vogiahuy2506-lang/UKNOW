@@ -5432,8 +5432,6 @@ export default {
       conversationsAudienceUnknown: 'Everyone who has messaged account {account}',
     },
     // Auto creating card
-    creatingCampaign: 'Creating and running campaign...',
-    autoCreateNotice: '✨ Campaign will be created automatically and start running right away!',
     viewCampaign: 'View campaign',
     // Auto created success card
     campaignRunning: 'Campaign is running!',
@@ -5504,7 +5502,6 @@ export default {
     createLandingFromScratch: 'I want to create a landing page from scratch.',
     campaignReady: 'Campaign is ready!',
     campaignCreated: 'Campaign has been created!',
-    autoCreatingCampaign: 'Creating and running campaign for you...',
     processingRequest: 'I am processing your request...',
     campaignCreateError: '⚠️ Error: {message}',
   },

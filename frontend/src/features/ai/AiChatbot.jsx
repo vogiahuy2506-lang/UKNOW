@@ -19,7 +19,7 @@ import LandingPageCard from './components/LandingPageCard';
 import {
   AiContent, TemplateDraftCard, ContentPlanCard, ContentPlanActionsCard, AskMoreCard, AskCampaignDetailsCard,
   AskLandingDetailsCard, CampaignDraftEditor, ConfirmCreateCard,
-  AutoCreatingCard, AutoCreatedSuccessCard, TemplatePickerModal,
+  AutoCreatedSuccessCard, TemplatePickerModal,
 } from './components/AiChatbotCards';
 import {
   AskSenderAccountCard,
@@ -396,7 +396,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [pendingLandingData, setPendingLandingData] = useState(null);
   const [editingLandingPageIndex, setEditingLandingPageIndex] = useState(null);
   const [_creatingCampaign, setCreatingCampaign] = useState(false);
-  const [autoCreatedCampaign, setAutoCreatedCampaign] = useState(null);
   const createAndRunInFlightRef = useRef(false);
   const [generatingDay, setGeneratingDay] = useState(null);
   const [contentPlanWorkflow, setContentPlanWorkflow] = useState(null);
@@ -3018,7 +3017,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setCurrentScript(null);
         directRecipientsRef.current = null;
         setDirectRecipients(null);
-        setAutoCreatedCampaign(createResult.data);
         closeWizardAfterCreate({
           campaignId: createResult.data.campaignId,
           content: t('aiChatbot.createAndRunSuccess', {
@@ -4096,15 +4094,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                   onEditWithAi={handleEditLandingPageWithAi}
                   onRevert={handleRevertLandingPage}
                   isEditing={editingLandingPageIndex === idx}
-                />
-              )}
-
-              {/* Auto creating campaign */}
-              {msg.type === 'auto_creating' && (
-                <AutoCreatingCard
-                  campaignName={msg.data?.campaignName}
-                  onView={autoCreatedCampaign ? () => navigate(`/app/campaigns/${autoCreatedCampaign.campaignId}/builder`) : null}
-                  t={t}
                 />
               )}
 
