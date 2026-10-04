@@ -9,6 +9,12 @@ import {
   MAX_FULL_REWRITE_HTML_CHARS,
 } from '../../utils/landingEditGuard.util.js';
 import { applyHtmlEdits } from '../../utils/landingHtmlPatch.util.js';
+import {
+  assertLandingHtmlSafe,
+  buildUnsafeRetryRule,
+  describeUnsafeKinds,
+  LANDING_UNSAFE_OUTPUT_CODE,
+} from '../../utils/landingHtmlSafety.util.js';
 import { OCCUPATION_VALUES, INTEREST_AREA_VALUES } from '../../utils/landingLeadFormConfig.util.js';
 import { countFormSlots, hasMalformedFormSlot } from '../../utils/landingHtmlInjection.util.js';
 import { normalizeChangeSummary } from '../../utils/landingLayoutFindings.util.js';
@@ -90,6 +96,8 @@ function logLandingAiLifecycle({
   fakeImageUrls = null,
   fakeImageRetry = null,
   strippedImages = null,
+  unsafeRetry = null,
+  unsafeKinds = null,
   autoLayoutFix = null,
   findings = null,
 }) {
@@ -111,6 +119,10 @@ function logLandingAiLifecycle({
   if (patchFail != null) fields.push(`patchFail=${patchFail}`);
   if (fakeImageRetry != null) fields.push(`fakeImageRetry=${fakeImageRetry}`);
   if (strippedImages != null) fields.push(`strippedImages=${strippedImages}`);
+  // B-1 (2): đo tần suất chốt an toàn đầu ra bắt được gì (script/event/jsurl/action…) và có phải sinh lại không —
+  // đây là số để biết chốt có chặn nhầm trang hợp lệ nhiều không.
+  if (unsafeRetry != null) fields.push(`unsafeRetry=${unsafeRetry}`);
+  if (unsafeKinds) fields.push(`unsafeKinds=${unsafeKinds}`);
   if (Array.isArray(fakeImageUrls) && fakeImageUrls.length > 0) {
     const formatted = fakeImageUrls.map((u) => String(u).slice(0, 120)).join(',');
     fields.push(`fakeImageUrls=${fakeImageUrls.length}:${formatted}`);
@@ -593,6 +605,10 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         err.status = 422;
         throw err;
       }
+      // B-1 (2) — chốt an toàn: trang AI sinh MỚI không được chứa script ngoài Tailwind CDN, thuộc tính
+      // on*=, javascript:, form action ra ngoài. ĐỨNG TRƯỚC chốt ảnh: HTML nào tới được nhánh "gỡ ảnh bịa"
+      // thì đã qua chốt này (nhánh đó không kiểm lại).
+      assertLandingHtmlSafe(html);
 
       if (formMode) {
         // PR-5b-2a — AI KHÔNG còn tự sinh form: đòi đúng MỘT chỗ trống, và cấm tuyệt đối
@@ -700,10 +716,19 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       try {
         generationResult = await runOnce('');
       } catch (firstErr) {
+        // Hai loại lỗi được sinh lại ĐÚNG MỘT lần: URL ảnh bịa, và HTML trượt chốt an toàn (B-1 (2)).
+        let extraRule = null;
         if (firstErr.code === 'LANDING_FAKE_IMAGE_URL') {
           telemetry.fakeImageRetry = 1;
           telemetry.fakeImageUrls = firstErr.details?.fakeImageUrls || [];
-          const extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. Sinh lại toàn bộ trang, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
+          extraRule = `LƯU Ý ĐẶC BIỆT: LẦN SINH TRƯỚC BẠN ĐÃ DÙNG URL ẢNH KHÔNG ĐƯỢC PHÉP: ${telemetry.fakeImageUrls.join(', ')}. Sinh lại toàn bộ trang, TUYỆT ĐỐI không dùng bất kỳ <img>/URL ảnh nào ngoài ẢNH ĐÃ TẢI LÊN (và URL đã có sẵn trong HTML hiện tại nếu là sửa trang). Không có ảnh hợp lệ thì bỏ hẳn thẻ <img>, dùng gradient/icon Unicode.`;
+        } else if (firstErr.code === LANDING_UNSAFE_OUTPUT_CODE) {
+          const unsafeFindings = firstErr.details?.findings || [];
+          telemetry.unsafeRetry = 1;
+          telemetry.unsafeKinds = describeUnsafeKinds(unsafeFindings);
+          extraRule = buildUnsafeRetryRule(unsafeFindings, { regenerateWhat: 'Sinh lại toàn bộ trang' });
+        }
+        if (extraRule) {
           try {
             generationResult = await runOnce(extraRule);
           } catch (secondErr) {
@@ -730,6 +755,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
       logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
       return generationResult;
     } catch (error) {
+      if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
       logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
       throw error;
     }
@@ -894,6 +920,10 @@ ${exampleLine}`;
         newHtml: html,
         finishReason,
       });
+
+      // B-1 (2) — chốt an toàn: so với bản hiện tại, AI không được THÊM script/on*=/javascript:/form action ra
+      // ngoài (phần đã có sẵn ở bản cũ được giữ nguyên). ĐỨNG TRƯỚC chốt ảnh vì `stripFakeImages` không kiểm lại.
+      assertLandingHtmlSafe(html, { baselineHtml: rawCurrent });
 
       let valRes;
       try {
@@ -1145,6 +1175,26 @@ ${exampleLine}`;
               }
             }
           }
+        } else if (firstErr.code === LANDING_UNSAFE_OUTPUT_CODE) {
+          // B-1 (2): trượt chốt an toàn → sinh lại ĐÚNG MỘT lần kèm câu dặn; không đủ giờ cho lượt hai trong
+          // trần Cloudflare thì báo lỗi luôn (khác ảnh bịa, không có cách "gỡ" an toàn để cứu kết quả).
+          const unsafeFindings = firstErr.details?.findings || [];
+          telemetry.unsafeKinds = describeUnsafeKinds(unsafeFindings);
+          if ((Date.now() - telemetry.startedAt) * 2 > EDIT_TIME_BUDGET_MS) throw firstErr;
+          telemetry.unsafeRetry = 1;
+          const extraRule = buildUnsafeRetryRule(unsafeFindings, {
+            regenerateWhat: patchMode ? 'Sinh lại kết quả sửa' : 'Sinh lại toàn bộ trang',
+            hasExistingHtml: true,
+          });
+          try {
+            editResult = await attempt(extraRule);
+          } catch (secondErr) {
+            if (secondErr.code === 'LANDING_FAKE_IMAGE_URL') {
+              editResult = stripFakeImages(secondErr);
+            } else {
+              throw secondErr;
+            }
+          }
         } else {
           throw firstErr;
         }
@@ -1153,6 +1203,7 @@ ${exampleLine}`;
       logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry });
       return editResult;
     } catch (error) {
+      if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
       logLandingAiLifecycle({ event: 'done', outcome: 'error', ...telemetry });
       throw error;
     }
