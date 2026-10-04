@@ -37,6 +37,9 @@ export function parseVndPrice(text) {
 
   const unit = /^(\d+(?:[.,]\d+)?)(k|nghin|ngan|tr|trieu|m)$/.exec(s);
   if (unit) {
+    // "1.500k" / "2,500k": người Việt dùng dấu chấm ngăn hàng nghìn (= 1.500.000đ) nhưng cũng có người viết 1.5k = 1.500đ
+    // — đúng 3 chữ số sau dấu thì không biết là phần nghìn hay phần lẻ → không đoán.
+    if (/[.,]\d{3}$/.test(unit[1])) return null;
     const factor = unit[2] === 'k' || unit[2] === 'nghin' || unit[2] === 'ngan' ? 1000 : 1000000;
     const n = Number(unit[1].replace(',', '.'));
     if (!Number.isFinite(n)) return null;

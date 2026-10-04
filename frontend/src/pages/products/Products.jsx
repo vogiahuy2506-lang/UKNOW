@@ -298,6 +298,15 @@ const Products = () => {
   };
 
   const setField = (field, value) => setFormData((prev) => ({ ...prev, [field]: value }));
+  // Đổi giá chữ: nếu ô Giá bán (số) đang là số đọc từ giá chữ CŨ ("500k" → 500.000) thì đọc lại theo giá mới ("700k" →
+  // 700.000; đọc không được → trống). Số người dùng tự nhập khác giá chữ thì giữ nguyên.
+  const handlePriceTextChange = (value) =>
+    setFormData((prev) => {
+      const derivedFromOld = prev.priceAmount !== '' && Number(prev.priceAmount) === parseVndPrice(prev.price);
+      if (!derivedFromOld) return { ...prev, price: value };
+      const next = parseVndPrice(value);
+      return { ...prev, price: value, priceAmount: next === null ? '' : String(next) };
+    });
 
   const handleThumbnailUpload = async (e) => {
     const file = e.target.files?.[0];
@@ -603,7 +612,7 @@ const Products = () => {
                 <input
                   type="text"
                   value={formData.price}
-                  onChange={(e) => setField('price', e.target.value)}
+                  onChange={(e) => handlePriceTextChange(e.target.value)}
                   placeholder={formData.kind === 'event' ? t('products.priceFreePlaceholder') : t('products.pricePlaceholder')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />

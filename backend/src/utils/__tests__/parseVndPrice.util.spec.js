@@ -19,6 +19,7 @@ describe('parseVndPrice', () => {
     ['1.500.000 đồng', 1500000],
     ['  500k  ', 500000],
     ['1,5k', 1500],
+    ['2.25tr', 2250000],
     ['Miễn phí', 0],
     ['MIỄN PHÍ', 0],
     ['mien phi', 0],
@@ -48,6 +49,9 @@ describe('parseVndPrice', () => {
     '   ',
     '12.34',
     '1.200.00',
+    '1.500k', // 1.500.000đ (dấu chấm ngăn nghìn) hay 1,5k? -> không đoán
+    '2,500k',
+    '1.200tr',
   ])('KHÔNG đoán: "%s" -> null', (text) => {
     expect(parseVndPrice(text)).toBeNull();
   });

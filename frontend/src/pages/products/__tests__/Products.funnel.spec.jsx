@@ -232,6 +232,34 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     expect(productApiService.createProduct.mock.calls[0][0].priceAmount).toBeNull();
   });
 
+  it('modal sửa: đổi giá chữ "500k" → "700k" thì ô số (đang = 500.000 đọc từ giá cũ) đổi theo 700.000; số tự nhập khác giá chữ thì giữ', async () => {
+    productApiService.getCategories.mockResolvedValue({ data: { data: { categories: [] } } });
+    productApiService.getProducts.mockResolvedValue({
+      data: {
+        data: {
+          products: [
+            { id: 11, productName: 'Khoá AI thực chiến', price: '500k', priceAmount: 500000, status: 'active' },
+            { id: 13, productName: 'Khoá tự đặt giá', price: '500k', priceAmount: 450000, status: 'active' },
+          ],
+          pagination: { total: 2, totalPages: 1 },
+        },
+      },
+    });
+    renderPage();
+    await waitFor(() => expect(screen.getByText('Khoá tự đặt giá')).toBeInTheDocument());
+
+    fireEvent.click(screen.getAllByTitle('Sửa')[0]);
+    fireEvent.change(await screen.findByDisplayValue('500k'), { target: { value: '700k' } });
+    expect(screen.getByTestId('product-price-amount').value).toBe('700.000');
+    fireEvent.change(screen.getByDisplayValue('700k'), { target: { value: 'Liên hệ' } });
+    expect(screen.getByTestId('product-price-amount').value).toBe('');
+    fireEvent.click(screen.getByRole('button', { name: 'Đóng' }));
+
+    fireEvent.click(screen.getAllByTitle('Sửa')[1]);
+    fireEvent.change(await screen.findByDisplayValue('500k'), { target: { value: '700k' } });
+    expect(screen.getByTestId('product-price-amount').value).toBe('450.000');
+  });
+
   it('nhân viên không có reports_view: không gọi API phễu, không có cột', async () => {
     mockAuthState = { activeContext: { type: 'employee', permissions: { courses: true } } };
     renderPage();

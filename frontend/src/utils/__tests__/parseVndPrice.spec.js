@@ -17,7 +17,7 @@ describe('parseVndPrice (FE)', () => {
     expect(parseVndPrice(text)).toBe(expected);
   });
 
-  it.each(['liên hệ', 'từ 500k', '500k-1tr', '1.5', '500', '', 'abc'])('không đoán "%s" -> null', (text) => {
+  it.each(['liên hệ', 'từ 500k', '500k-1tr', '1.5', '500', '', 'abc', '1.500k', '2,500k'])('không đoán "%s" -> null', (text) => {
     expect(parseVndPrice(text)).toBeNull();
   });
 });
