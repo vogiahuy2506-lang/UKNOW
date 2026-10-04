@@ -59,6 +59,16 @@ export function labelCampaignRunFailure(message) {
     };
   }
 
+  // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên (người tạo chiến dịch / bấm chạy / tạo lịch) chưa được giao tài
+  // khoản Zalo của chiến dịch (campaignZaloAccess.service.js: 'Tài khoản Zalo "X" chưa được giao cho nhân viên "Y". Chủ tài
+  // khoản vào Cài đặt › …'). Câu đầu đã nêu đủ tên tài khoản + nhân viên; phần "cần làm gì" chuyển sang actionHint.
+  if (msg.includes('chưa được giao cho nhân viên')) {
+    return {
+      message: raw.split(' Chủ tài khoản vào Cài đặt')[0],
+      actionHint: 'Chủ tài khoản vào Cài đặt › Nhân viên › Tài khoản Zalo để giao tài khoản này, hoặc sửa chiến dịch để dùng tài khoản khác.',
+    };
+  }
+
   if (msg.includes('chỉ có thể chạy chiến dịch đang hoạt động')) {
     return {
       message: 'Chiến dịch chưa ở trạng thái hoạt động nên không thể chạy.',

@@ -70,13 +70,33 @@ describe('CampaignScheduleController.create — preflight khi bật lịch', () 
     const res = makeRes();
     await new CampaignScheduleController().create(createReq(), res);
 
-    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39 });
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith(expect.objectContaining({ campaignId: 395, workspaceOwnerId: 39 }));
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith({
       success: false,
       code: 'SENDER_DISCONNECTED',
       message: senderDisconnectedError.message,
     });
+    expect(mockRepository.create).not.toHaveBeenCalled();
+  });
+
+  it('PR-G3: preflight nhận người tạo lịch + người tạo chiến dịch (kiểm tài khoản Zalo được giao)', async () => {
+    mockRepository.findCampaignForSchedule.mockResolvedValue({ id: 395, status: 'active', workspace_owner_id: 39, created_by: 55 });
+    const employeeReq = { ...createReq(), user: { id: 20, role: 'user', activeContext: { type: 'employee', ownerId: 39, membershipId: 3, permissions: { campaigns_run: true } } } };
+    await new CampaignScheduleController().create(employeeReq, makeRes());
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39, actorUserIds: [20, 55] });
+  });
+
+  it('PR-G3: preflight ném 403 ZALO_ACCOUNT_NOT_ASSIGNED → trả 403 đúng code, KHÔNG tạo lịch', async () => {
+    const notAssigned = Object.assign(new Error('Tài khoản Zalo "Nick A" chưa được giao cho nhân viên "Lan".'), {
+      code: 'ZALO_ACCOUNT_NOT_ASSIGNED',
+      statusCode: 403,
+    });
+    mockValidateCampaignPreflight.mockRejectedValue(notAssigned);
+    const res = makeRes();
+    await new CampaignScheduleController().create(createReq(), res);
+    expect(res.status).toHaveBeenCalledWith(403);
+    expect(res.json).toHaveBeenCalledWith({ success: false, code: 'ZALO_ACCOUNT_NOT_ASSIGNED', message: notAssigned.message });
     expect(mockRepository.create).not.toHaveBeenCalled();
   });
 
@@ -115,10 +135,16 @@ describe('CampaignScheduleController.update — preflight khi bật lại lịch
     const res = makeRes();
     await new CampaignScheduleController().update(updateReq({ enabled: true }), res);
 
-    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39 });
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith(expect.objectContaining({ campaignId: 395, workspaceOwnerId: 39 }));
     expect(res.status).toHaveBeenCalledWith(400);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'SENDER_DISCONNECTED' }));
     expect(mockRepository.update).not.toHaveBeenCalled();
+  });
+
+  it('PR-G3: bật lại lịch → preflight kiểm theo NGƯỜI TẠO LỊCH + người tạo chiến dịch (không theo người đang bấm bật)', async () => {
+    mockRepository.findMutableById.mockResolvedValue(mutableSchedule({ created_by: 20, campaign_created_by: 55 }));
+    await new CampaignScheduleController().update(updateReq({ enabled: true }), makeRes());
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 39, actorUserIds: [20, 55] });
   });
 
   it('bật lại lịch đang tắt, preflight qua → cập nhật được', async () => {
@@ -142,7 +168,7 @@ describe('CampaignScheduleController.update — preflight khi bật lại lịch
     const res = makeRes();
     const adminReq = { user: { id: 1, role: 'admin', activeContext: { type: 'self' } }, params: { id: '177' }, body: { enabled: true } };
     await new CampaignScheduleController().update(adminReq, res);
-    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({ campaignId: 395, workspaceOwnerId: 42 });
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith(expect.objectContaining({ campaignId: 395, workspaceOwnerId: 42 }));
     expect(mockRepository.update).toHaveBeenCalledTimes(1);
   });
 

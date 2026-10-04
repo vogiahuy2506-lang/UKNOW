@@ -111,9 +111,12 @@ function employeeCanRunCampaign(req) {
  * rồi mới phát hiện thiếu tài khoản là muộn.
  * @returns {Promise<object|null>} response lỗi đã gửi (đã res.status().json()...) hoặc null nếu qua
  */
-async function respondPreflightFailure(res, campaignId, workspaceOwnerId) {
+async function respondPreflightFailure(res, campaignId, workspaceOwnerId, actorUserIds = []) {
   try {
-    await validateCampaignPreflight({ campaignId, workspaceOwnerId });
+    // `actorUserIds` (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3): những người mà lượt chạy từ lịch sẽ mang danh nghĩa —
+    // người tạo lịch (scheduler đặt `triggeredBy` = created_by của lịch) và người tạo chiến dịch. Có nhân viên thì tài
+    // khoản Zalo của chiến dịch phải được giao cho nhân viên đó, không thì 403 ngay lúc bật lịch thay vì nổ hỏng lúc chạy.
+    await validateCampaignPreflight({ campaignId, workspaceOwnerId, actorUserIds });
     return null;
   } catch (preflightError) {
     return res.status(preflightError.statusCode || 400).json({
@@ -351,7 +354,12 @@ class CampaignScheduleController {
       const needsActivation = campaignNotActiveYet && activateCampaign;
 
       if (isEnabling) {
-        const preflightFailure = await respondPreflightFailure(res, campaignId, campaign.workspace_owner_id);
+        const preflightFailure = await respondPreflightFailure(
+          res,
+          campaignId,
+          campaign.workspace_owner_id,
+          [context.actorUserId, campaign.created_by]
+        );
         if (preflightFailure) return preflightFailure;
       }
 
@@ -520,7 +528,9 @@ class CampaignScheduleController {
         const preflightFailure = await respondPreflightFailure(
           res,
           scheduleData.id_campaign,
-          scheduleData.workspace_owner_id ?? context.workspaceOwnerId
+          scheduleData.workspace_owner_id ?? context.workspaceOwnerId,
+          // Lượt chạy từ lịch mang danh nghĩa NGƯỜI TẠO LỊCH (không phải người đang bấm bật) + người tạo chiến dịch.
+          [scheduleData.created_by, scheduleData.campaign_created_by]
         );
         if (preflightFailure) return preflightFailure;
       }

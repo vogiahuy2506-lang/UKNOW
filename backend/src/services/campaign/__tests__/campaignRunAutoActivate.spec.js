@@ -249,3 +249,57 @@ describe('campaignRunService.createCampaignRunRecord — autoActivate (PR-3)', (
     expect(mockActivateDraftOrPausedCampaignTx).not.toHaveBeenCalled();
   });
 });
+
+// PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — preflight lúc tạo lượt chạy nhận người liên quan: người bấm chạy (hoặc người
+// tạo lịch với lượt từ lịch) + NGƯỜI TẠO chiến dịch, để chặn nhân viên dùng tài khoản Zalo chưa được giao.
+describe('campaignRunService.createCampaignRunRecord — người liên quan cho kiểm tài khoản Zalo (G3)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGetClient.mockResolvedValue(buildStubClient());
+    mockHasActiveRunForCampaignTx.mockResolvedValue(false);
+    mockValidateCampaignPreflight.mockResolvedValue({ valid: true });
+    mockInsertRunTx.mockResolvedValue({ id: 555, status: 'running' });
+    mockUpdateRunName.mockResolvedValue(undefined);
+  });
+
+  it('preflight nhận [người bấm chạy, người tạo chiến dịch] và id chủ của chiến dịch', async () => {
+    mockFindCampaignForRunTx.mockResolvedValue({
+      id: 60, status: 'active', workspace_owner_id: 1, created_by: 77, campaign_name: 'C',
+    });
+    await campaignRunService.createCampaignRunRecord({
+      campaignId: 60, workspaceOwnerId: 1, actorUserId: 20, isAdmin: false, source: 'campaign_run',
+    });
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith({
+      campaignId: 60,
+      workspaceOwnerId: 1,
+      actorUserIds: [20, 77],
+    });
+  });
+
+  it('lượt từ LỊCH: actorUserId là người tạo lịch (scheduler truyền created_by của lịch) + người tạo chiến dịch', async () => {
+    mockFindCampaignForRunTx.mockResolvedValue({
+      id: 61, status: 'active', workspace_owner_id: 1, created_by: 1, campaign_name: 'C',
+    });
+    await campaignRunService.createCampaignRunRecord({
+      campaignId: 61, workspaceOwnerId: 1, actorUserId: 20, isAdmin: false, source: 'schedule', scheduleId: 9,
+    });
+    expect(mockValidateCampaignPreflight).toHaveBeenCalledWith(expect.objectContaining({ actorUserIds: [20, 1] }));
+  });
+
+  it('preflight ném 403 ZALO_ACCOUNT_NOT_ASSIGNED → không tạo run, ROLLBACK, lỗi giữ nguyên code + statusCode', async () => {
+    mockFindCampaignForRunTx.mockResolvedValue({
+      id: 62, status: 'active', workspace_owner_id: 1, created_by: 20, campaign_name: 'C',
+    });
+    mockValidateCampaignPreflight.mockRejectedValue(Object.assign(new Error('Tài khoản Zalo "A" chưa được giao cho nhân viên "B".'), {
+      statusCode: 403,
+      code: 'ZALO_ACCOUNT_NOT_ASSIGNED',
+    }));
+    const client = buildStubClient();
+    mockGetClient.mockResolvedValue(client);
+    await expect(campaignRunService.createCampaignRunRecord({
+      campaignId: 62, workspaceOwnerId: 1, actorUserId: 1, isAdmin: false, source: 'campaign_run',
+    })).rejects.toMatchObject({ statusCode: 403, code: 'ZALO_ACCOUNT_NOT_ASSIGNED' });
+    expect(mockInsertRunTx).not.toHaveBeenCalled();
+    expect(client.query).toHaveBeenCalledWith('ROLLBACK');
+  });
+});

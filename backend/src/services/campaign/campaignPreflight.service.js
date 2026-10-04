@@ -14,6 +14,7 @@ import campaignChannelRegistry from './campaignChannelRegistry.service.js';
 import { validateChannelSteps } from '../../utils/channelSteps.util.js';
 import { assertChannelEntitled } from './channelEntitlement.service.js';
 import { resolveZaloAccountEntries } from '../../utils/campaignZaloAccountResolve.util.js';
+import { assertRunZaloAccountsAssigned } from './campaignZaloAccess.service.js';
 
 // PR-1 (tách tầng kênh gửi) — nguồn kênh gửi đọc từ registry thay vì ghi cứng. `send_zalo` (chuỗi
 // cũ) đã BỎ: 0 node trên production, engine không còn xử lý (xem fallback bên dưới ~dòng 177 và
@@ -29,14 +30,21 @@ export const SEND_NODE_SUBTYPES = new Set(campaignChannelRegistry.getSendNodeSub
  * @param {Function} [params.sheetCheckFn] - Optional override for unit tests
  * @param {Function} [params.resourceIsLockedFn] - Optional override for unit tests
  * @param {Function} [params.assertChannelEntitledFn] - Optional override for unit tests
+ * @param {Array<number|string|null>} [params.actorUserIds] - Người liên quan tới lượt chạy (người tạo chiến dịch, người bấm
+ *   chạy / tạo lịch). Có nhân viên trong đó thì MỌI tài khoản Zalo của chiến dịch phải được giao cho nhân viên đó, không thì
+ *   ném 403 ZALO_ACCOUNT_NOT_ASSIGNED (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3). Chủ tạo + chủ chạy → không lọc.
+ *   Engine kiểm lại ở đầu mỗi chu kỳ chạy nên bỏ trống ở đây không mở lối gửi — chỉ mất lời báo sớm.
+ * @param {Function} [params.assertZaloAccountsAssignedFn] - Optional override for unit tests
  * @returns {Promise<{ valid: true, nodes: Array }>}
  */
 export async function validateCampaignPreflight({
   campaignId,
   workspaceOwnerId = null,
+  actorUserIds = [],
   sheetCheckFn = checkSheetForChannel,
   resourceIsLockedFn = resourceIsLocked,
   assertChannelEntitledFn = assertChannelEntitled,
+  assertZaloAccountsAssignedFn = assertRunZaloAccountsAssigned,
 }) {
   const parsedCampaignId = parseInt(campaignId, 10);
   if (!Number.isFinite(parsedCampaignId)) {
@@ -184,6 +192,17 @@ export async function validateCampaignPreflight({
       error.code = 'WORKSPACE_CONTEXT_REQUIRED';
       error.statusCode = 500;
       throw error;
+    }
+
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — TRƯỚC kiểm kết nối: nhân viên chưa được giao tài khoản thì lời báo
+    // đúng là "chưa được giao", không phải "mất kết nối". Mọi id (kể cả từng id trong pool) đều phải được giao — pool không
+    // âm thầm co lại còn các tài khoản được giao.
+    if (Array.isArray(actorUserIds) && actorUserIds.length > 0) {
+      await assertZaloAccountsAssignedFn({
+        ownerId: parsedWorkspaceOwnerId,
+        actorUserIds,
+        accountIds: [...zaloAccountIds, ...allGroupIds],
+      });
     }
 
     const ids = Array.from(zaloAccountIds);

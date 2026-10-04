@@ -100,6 +100,15 @@ describe('campaignRunFailureLabel.util — labelCampaignRunFailure', () => {
     expect(actionHint).toContain(channelName);
   });
 
+  it('PR-G3 — tài khoản Zalo chưa giao cho nhân viên → nêu đúng tên tài khoản + nhân viên, hint nói chủ giao lại; không phải "Lỗi hệ thống"', () => {
+    const raw = 'Tài khoản Zalo "Nick công ty" chưa được giao cho nhân viên "Lan" (và 1 trường hợp khác). '
+      + 'Chủ tài khoản vào Cài đặt › Nhân viên › Tài khoản Zalo để giao, hoặc chọn tài khoản khác cho chiến dịch.';
+    const { message, actionHint } = labelCampaignRunFailure(raw);
+    expect(message).toBe('Tài khoản Zalo "Nick công ty" chưa được giao cho nhân viên "Lan" (và 1 trường hợp khác).');
+    expect(message).not.toContain('Lỗi hệ thống');
+    expect(actionHint).toContain('Tài khoản Zalo');
+  });
+
   it('message lạ (không khớp mục nào) → câu mặc định có message gốc', () => {
     const { message, actionHint } = labelCampaignRunFailure('Một lỗi hoàn toàn mới chưa từng thấy XYZ');
     expect(message).toBe('Lỗi hệ thống khi chạy chiến dịch (Một lỗi hoàn toàn mới chưa từng thấy XYZ).');

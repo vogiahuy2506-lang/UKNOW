@@ -49,6 +49,7 @@ import {
   notifyCampaignRunFailed,
 } from '../../utils/campaignQuotaPauseNotify.util.js';
 import { validateCampaignPreflight } from './campaignPreflight.service.js';
+import { assertRunZaloAccountsAssigned, collectEffectiveZaloAccountIds } from './campaignZaloAccess.service.js';
 import {
   deriveVariablesForText,
   renderTemplateText,
@@ -266,9 +267,12 @@ class CampaignRunService {
    * @param {Array<string|number>} params.ids danh sách id theo đúng thứ tự ưu tiên
    * @param {number|string} params.userId
    * @param {string} params.roleCode
+   * @param {number[]|null} [params.accessibleAccountIds] tài khoản người chạy được giao (xem getCampaignZaloAccount); id ngoài
+   *   danh sách bị chặn như id không dùng được, và nếu KHÔNG id nào qua thì ném lỗi của id đầu tiên (lỗi 403 chưa giao, không
+   *   phải "chưa sẵn sàng")
    * @returns {Promise<{account: object, id: string}>} tài khoản dùng được đầu tiên + id đã chọn
    */
-  async pickFirstUsableZaloAccount({ ids, userId, roleCode }) {
+  async pickFirstUsableZaloAccount({ ids, userId, roleCode, accessibleAccountIds }) {
     const candidateIds = (Array.isArray(ids) ? ids : [])
       .map((id) => String(id || '').trim())
       .filter(Boolean);
@@ -286,7 +290,12 @@ class CampaignRunService {
       }
       try {
         // eslint-disable-next-line no-await-in-loop
-        const account = await campaignZaloSenderService.getCampaignZaloAccount({ userId, accountId: candidateId, roleCode });
+        const account = await campaignZaloSenderService.getCampaignZaloAccount({
+          userId,
+          accountId: candidateId,
+          roleCode,
+          accessibleAccountIds,
+        });
         return { account, id: candidateId };
       } catch (err) {
         if (!firstError) firstError = err;
@@ -864,9 +873,12 @@ class CampaignRunService {
       }
 
       // Preflight validation: kiểm tra node gửi, tài khoản, sheet trước khi tạo run record
+      // `actorUserIds` = người bấm chạy / người tạo lịch + người TẠO chiến dịch (PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3):
+      // có nhân viên trong đó thì tài khoản Zalo của chiến dịch phải được giao cho nhân viên đó. Chủ tạo + chủ chạy → không lọc.
       await validateCampaignPreflight({
         campaignId,
         workspaceOwnerId: campaignData.workspace_owner_id || workspaceOwnerId,
+        actorUserIds: [actorUserId, campaignData.created_by],
       });
 
       if (shouldActivatePendingApproval) {
@@ -1074,6 +1086,8 @@ class CampaignRunService {
       await validateCampaignPreflight({
         campaignId,
         workspaceOwnerId: currentRun.workspace_owner_id || workspaceOwnerId,
+        // Người bấm "chạy tiếp" + người tạo chiến dịch (xem createCampaignRunRecord).
+        actorUserIds: [actorUserId, currentRun.campaign_created_by],
       });
 
       const rawAdjacentDelay = Number.parseInt(runOptions?.adjacentZaloNodeDelayMs, 10);
@@ -3063,6 +3077,48 @@ class CampaignRunService {
 
       if (nodes.length === 0) throw new Error('Chiến dịch không có node nào');
 
+      // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — nhân viên chỉ gửi bằng tài khoản Zalo ĐƯỢC GIAO. Người liên quan tới lượt
+      // chạy: người TẠO chiến dịch, người BẤM CHẠY (`run_metadata.triggeredBy` — lượt lịch ghi người tạo lịch vào đây —
+      // và cột `triggered_by`), người TẠO LỊCH. Chủ tạo + chủ chạy → không lọc (`zaloAccessibleIds = null`). Có nhân viên →
+      // MỌI tài khoản Zalo của chiến dịch phải thuộc danh sách được giao của từng nhân viên đó TẠI THỜI ĐIỂM CHẠY, không
+      // thì đóng sổ run 'failed' kèm lý do rõ ("Tài khoản Zalo "X" chưa được giao cho nhân viên "Y"") và KHÔNG gửi tin.
+      // Đi qua MỌI đường chạy nền (chạy tay, lịch, chạy liên tục, phục hồi sau deploy) vì cùng vào hàm này.
+      // Mặc định [] (hỏng thì chặn): chưa tính xong thì mọi lần lấy tài khoản đều bị chặn.
+      let zaloAccessibleIds = [];
+      let zaloAccessCheckedAtMs = 0;
+      const ZALO_ACCESS_RECHECK_MS = 5 * 60 * 1000;
+      const enforceZaloAccessForRun = async () => {
+        try {
+          const scope = await assertRunZaloAccountsAssigned({
+            ownerId: userId,
+            actorUserIds: [
+              campaign?.created_by,
+              runRow?.run_metadata?.triggeredBy,
+              runRow?.triggered_by,
+              runRow?.schedule_created_by,
+            ],
+            accountIds: collectEffectiveZaloAccountIds(nodes),
+          });
+          zaloAccessibleIds = scope.accessibleIds;
+          zaloAccessCheckedAtMs = Date.now();
+        } catch (accessError) {
+          if (accessError?.code !== 'ZALO_ACCOUNT_NOT_ASSIGNED') throw accessError;
+          zaloAccessibleIds = [];
+          // Đóng sổ TRƯỚC khi ném (cùng khuôn hạn mức gói): nhánh RUN_STOPPED ở catch tổng chỉ log + return.
+          await this._failRunAndNotify(runId, campaignId, accessError.message, 'zalo_account_not_assigned');
+          const stopError = new Error(accessError.message);
+          stopError.code = 'RUN_STOPPED';
+          stopError.zaloAccessBlocked = true;
+          throw stopError;
+        }
+      };
+      // Mọi lần lấy tài khoản Zalo lúc chạy đi qua đây: chủ gỡ giao giữa chừng thì tối đa ZALO_ACCESS_RECHECK_MS sau lượt chạy
+      // dừng (kiểm lại cả lúc bắt đầu mỗi chu kỳ chạy liên tục).
+      const getZaloAccountForRun = async (args) => {
+        if (Date.now() - zaloAccessCheckedAtMs > ZALO_ACCESS_RECHECK_MS) await enforceZaloAccessForRun();
+        return campaignZaloSenderService.getCampaignZaloAccount({ ...args, accessibleAccountIds: zaloAccessibleIds });
+      };
+
       const orderMap = campaignFlowService.buildExecutionOrderMap(nodes, connections, {
         nodeIdKey: 'id',
         sourceKey: 'source_node_id',
@@ -3411,6 +3467,8 @@ class CampaignRunService {
         }
       };
       while (true) {
+        // PR-G3 — kiểm tài khoản Zalo được giao trước MỖI chu kỳ (lần đầu = kiểm lúc bắt đầu, trước khi gửi bất kỳ tin nào).
+        await enforceZaloAccessForRun();
         nextContinuousWakeAtMs = null;
         let shouldPauseUntilNextContinuousCycle = false;
         const isEmailRateLimitCooldownActive = (
@@ -3638,7 +3696,7 @@ class CampaignRunService {
           let account;
           if (poolEnabled && poolIds.length > 0) {
             // PR-9 Việc 1 — thử từng id trong pool theo thứ tự, không cứng lấy phần tử đầu.
-            const picked = await this.pickFirstUsableZaloAccount({ ids: poolIds, userId, roleCode });
+            const picked = await this.pickFirstUsableZaloAccount({ ids: poolIds, userId, roleCode, accessibleAccountIds: zaloAccessibleIds });
             account = picked.account;
             selectedAccountId = picked.id;
           } else {
@@ -3646,7 +3704,7 @@ class CampaignRunService {
             if (!selectedAccountId) {
               throw new Error('Node chọn tài khoản Zalo chưa có dữ liệu tài khoản (hoặc pool rỗng)');
             }
-            account = await campaignZaloSenderService.getCampaignZaloAccount({
+            account = await getZaloAccountForRun({
               userId,
               accountId: selectedAccountId,
               roleCode,
@@ -3677,7 +3735,7 @@ class CampaignRunService {
                   };
                 }
                 try {
-                  const poolAccount = await campaignZaloSenderService.getCampaignZaloAccount({
+                  const poolAccount = await getZaloAccountForRun({
                     userId,
                     accountId: normalizedPoolId,
                     roleCode,
@@ -4793,7 +4851,7 @@ class CampaignRunService {
           const sourceNodeItems = accountSourceNodeId ? pickNodeItems(accountSourceNodeId) : [];
           const sourceNodeAccount = sourceNodeItems[0] || null;
           const accountFromSourceNode = sourceNodeAccount?.id
-            ? await campaignZaloSenderService.getCampaignZaloAccount({
+            ? await getZaloAccountForRun({
               userId,
               accountId: sourceNodeAccount.id,
               roleCode,
@@ -4801,7 +4859,7 @@ class CampaignRunService {
             : null;
           const account = accountFromSourceNode
             || selectedZaloAccount
-            || await campaignZaloSenderService.getCampaignZaloAccount({
+            || await getZaloAccountForRun({
               userId,
               accountId: config.zaloAccountId,
               roleCode,
@@ -4891,7 +4949,7 @@ class CampaignRunService {
           const sourceNodeItems = accountSourceNodeId ? pickNodeItems(accountSourceNodeId) : [];
           const sourceNodeAccount = sourceNodeItems[0] || null;
           const accountFromSourceNode = sourceNodeAccount?.id
-            ? await campaignZaloSenderService.getCampaignZaloAccount({
+            ? await getZaloAccountForRun({
               userId,
               accountId: sourceNodeAccount.id,
               roleCode,
@@ -4899,7 +4957,7 @@ class CampaignRunService {
             : null;
           const account = accountFromSourceNode
             || selectedZaloAccount
-            || await campaignZaloSenderService.getCampaignZaloAccount({
+            || await getZaloAccountForRun({
               userId,
               accountId: config.zaloAccountId,
               roleCode,
@@ -4970,8 +5028,8 @@ class CampaignRunService {
           // trong danh sách vẫn dùng được).
           const account = selectedZaloAccount
             || (multiEnabled
-              ? (await this.pickFirstUsableZaloAccount({ ids: multiAccountIds, userId, roleCode })).account
-              : await campaignZaloSenderService.getCampaignZaloAccount({
+              ? (await this.pickFirstUsableZaloAccount({ ids: multiAccountIds, userId, roleCode, accessibleAccountIds: zaloAccessibleIds })).account
+              : await getZaloAccountForRun({
                 userId,
                 accountId: config.zaloAccountId,
                 roleCode,
@@ -5199,7 +5257,7 @@ class CampaignRunService {
             for (const accountId of pendingRecoverIds) {
               try {
                 // eslint-disable-next-line no-await-in-loop
-                const recoveredAccount = await campaignZaloSenderService.getCampaignZaloAccount({
+                const recoveredAccount = await getZaloAccountForRun({
                   userId,
                   accountId,
                   roleCode,
@@ -5275,7 +5333,7 @@ class CampaignRunService {
               && poolSet.has(pinnedAccountId)
               && !unavailableMultiAccountIds.has(pinnedAccountId)
             ) {
-              return campaignZaloSenderService.getCampaignZaloAccount({
+              return getZaloAccountForRun({
                 userId,
                 accountId: pinnedAccountId,
                 roleCode,
@@ -5298,7 +5356,7 @@ class CampaignRunService {
                   if (bindingKey) {
                     recipientBindingMap.set(bindingKey, String(bound));
                   }
-                  return campaignZaloSenderService.getCampaignZaloAccount({
+                  return getZaloAccountForRun({
                     userId,
                     accountId: bound,
                     roleCode,
@@ -5343,7 +5401,7 @@ class CampaignRunService {
               if (bindingKey) {
                 recipientBindingMap.set(bindingKey, String(pickedId));
               }
-              return campaignZaloSenderService.getCampaignZaloAccount({
+              return getZaloAccountForRun({
                 userId,
                 accountId: pickedId,
                 roleCode,
@@ -5354,7 +5412,7 @@ class CampaignRunService {
             if (bindingKey && pickedUidAccountId) {
               recipientBindingMap.set(bindingKey, pickedUidAccountId);
             }
-            return campaignZaloSenderService.getCampaignZaloAccount({
+            return getZaloAccountForRun({
               userId,
               accountId: pickedUidAccountId,
               roleCode,
@@ -6946,8 +7004,8 @@ class CampaignRunService {
           // lấy phần tử đầu.
           const account = selectedZaloAccount
             || (friendMultiEnabled
-              ? (await this.pickFirstUsableZaloAccount({ ids: friendMultiAccountIds, userId, roleCode })).account
-              : await campaignZaloSenderService.getCampaignZaloAccount({
+              ? (await this.pickFirstUsableZaloAccount({ ids: friendMultiAccountIds, userId, roleCode, accessibleAccountIds: zaloAccessibleIds })).account
+              : await getZaloAccountForRun({
                 userId,
                 accountId: config.zaloAccountId,
                 roleCode,
@@ -7070,7 +7128,7 @@ class CampaignRunService {
                 runId
               );
               if (bound && poolSet.has(String(bound))) {
-                return campaignZaloSenderService.getCampaignZaloAccount({
+                return getZaloAccountForRun({
                   userId,
                   accountId: bound,
                   roleCode,
@@ -7110,7 +7168,7 @@ class CampaignRunService {
             if (normalized) {
               await zaloCampaignRecipientService.bindSenderAccount(userId, normalized, pickedId, runId);
             }
-            return campaignZaloSenderService.getCampaignZaloAccount({
+            return getZaloAccountForRun({
               userId,
               accountId: pickedId,
               roleCode,
@@ -7849,7 +7907,7 @@ class CampaignRunService {
         if (nodeSubtype === 'send_zalo_group') {
           const config = campaignFlowService.normalizeNodeReferenceConfig(node.config || {}, resolveNodeId);
           const account = selectedZaloAccount
-            || await campaignZaloSenderService.getCampaignZaloAccount({
+            || await getZaloAccountForRun({
               userId,
               accountId: config.zaloAccountId,
               roleCode,
@@ -9176,7 +9234,9 @@ class CampaignRunService {
       if (error?.code === 'RUN_STOPPED') {
         console.log(error?.quotaBlocked
           ? `[Campaign ${campaignId}] Run ${runId} dừng do hết hạn mức gói: ${error.message}`
-          : `[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
+          : error?.zaloAccessBlocked
+            ? `[Campaign ${campaignId}] Run ${runId} dừng vì tài khoản Zalo chưa được giao: ${error.message}`
+            : `[Campaign ${campaignId}] Lượt chạy ${runId} đã được dừng bởi người dùng`);
         return;
       }
       if (error?.code === 'RUN_YIELD_SLOT') {

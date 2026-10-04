@@ -49,12 +49,14 @@ describe('campaignScheduleRepository — trả thêm trạng thái chiến dịc
 
   it('findCampaignForSchedule SELECT status', async () => {
     await scheduleRepo.findCampaignForSchedule({ campaignId: 1, userId: 2, isAdmin: false });
-    expect(mockQuery.mock.calls[0][0]).toMatch(/SELECT id, status, COALESCE\(workspace_owner_id, id_user\)/);
+    // PR-G3: thêm created_by (người tạo chiến dịch) để preflight lúc đặt lịch kiểm tài khoản Zalo được giao.
+    expect(mockQuery.mock.calls[0][0]).toMatch(/SELECT id, status, created_by, COALESCE\(workspace_owner_id, id_user\)/);
   });
 
   it('findMutableById SELECT c.status AS campaign_status', async () => {
     await scheduleRepo.findMutableById({ id: 1, userId: 2, isAdmin: false });
     expect(mockQuery.mock.calls[0][0]).toMatch(/c\.status AS campaign_status/);
+    expect(mockQuery.mock.calls[0][0]).toMatch(/c\.created_by AS campaign_created_by/);
   });
 });
 

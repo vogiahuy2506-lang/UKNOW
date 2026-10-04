@@ -82,4 +82,16 @@ describe('CampaignRunRepository getRunForExecution', () => {
     expect(sql).toContain('total_recipients');
     expect(sql).toContain('skipped_sends');
   });
+
+  // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN PR-G3 — engine kiểm tài khoản Zalo được giao theo người bấm chạy / người tạo lịch.
+  it('SELECT kèm triggered_by và schedule_created_by (người tạo lịch của lượt) cho kiểm tài khoản được giao', async () => {
+    mockQuery.mockResolvedValueOnce({ rows: [{ id: 200 }] });
+
+    await campaignRunRepository.getRunForExecution(200);
+
+    const [sql] = mockQuery.mock.calls[0];
+    expect(sql).toContain('cr.triggered_by');
+    expect(sql).toMatch(/campaign_schedules cs WHERE cs\.id = cr\.id_schedule\) AS schedule_created_by/);
+    expect(sql).toContain('cr.run_metadata');
+  });
 });
