@@ -426,7 +426,7 @@ GIẢI PHÁP TỔNG HỢP - 7 TÍNH NĂNG CHÍNH (chỉ gồm tính năng đang 
 
 3. ZALO - Gửi tin và trả lời khách trên Zalo:
    - Chiến dịch Zalo: gửi tin qua Zalo cá nhân, gửi vào nhóm Zalo và gửi lời mời kết bạn
-   - Chatbot AI tự trả lời tin nhắn của khách trên Zalo (Zalo OA và Zalo cá nhân)
+   - Chatbot AI tự trả lời tin nhắn của khách trên Zalo cá nhân
    - Hộp thư gom hội thoại các kênh để chủ theo dõi, tạm dừng AI và tự trả lời khi cần
    - Số tin Zalo gửi mỗi tháng tùy gói (xem phần CÁC GÓI DỊCH VỤ)
 

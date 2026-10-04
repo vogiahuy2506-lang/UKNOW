@@ -49,6 +49,7 @@ const FORBIDDEN_IN_FEATURES = [
   [/Facebook/i, 'thống kê lead theo nguồn Facebook'],
   [/500\s*-\s*5000/, '500-5000 email/tháng ghi cứng'],
   [/24\/7/, 'cam kết 24/7'],
+  [/Zalo OA|\bOA\b/, 'Zalo OA (UI cài chatbot ghi "chưa khả dụng")'],
 ];
 
 const featureBlockOf = (prompt) => {
@@ -77,6 +78,12 @@ describe('buildHeroSystemPrompt — khối tính năng CHỈ gồm thứ có th�
     expect(p).not.toMatch(/chấm điểm/i);
     expect(p).not.toMatch(/kịch bản/i);
     expect(p).not.toMatch(/\bCRM\b/);
+  });
+
+  it('chatbot Zalo chỉ nói Zalo cá nhân — cả prompt không còn chữ "Zalo OA" (kênh OA hiện chưa khả dụng, UI cài chatbot đã ghi vậy)', () => {
+    const p = prompt();
+    expect(p).not.toMatch(/Zalo OA|\bOA\b/);
+    expect(featureBlockOf(p)).toContain('tự trả lời tin nhắn của khách trên Zalo cá nhân');
   });
 
   it('vẫn nêu đủ 7 nhóm tính năng có thật (landing, email, Zalo, khách hàng/lead, chiến dịch, chatbot, báo cáo)', () => {
