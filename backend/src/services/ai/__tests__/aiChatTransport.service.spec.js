@@ -45,7 +45,7 @@ jest.unstable_mockModule('../aiModelPolicy.service.js', () => ({
 }));
 
 // geminiClient.util.js KHÔNG mock: lõi thật chạy, chỉ `fetch` (ranh giới với Google) được giả bằng `Response` thật.
-const { runChat } = await import('../aiChatTransport.service.js');
+const { runChat, ASSISTANT_TIMEOUT_MS } = await import('../aiChatTransport.service.js');
 
 /** Phản hồi HTTP THẬT như Google trả (status, header, thân JSON). */
 const googleReply = (status, body) => new Response(JSON.stringify(body), {
@@ -275,7 +275,7 @@ describe('aiChatTransport.service', () => {
       expect(err.message).not.toContain('Gemini API Error (');
     });
 
-    it('Google treo 120 giây → huỷ fetch THẬT, câu tiếng Việt (không còn "timeout of 120000ms exceeded"), không lộ khoá API', async () => {
+    it('Google treo → huỷ fetch THẬT, câu tiếng Việt (không còn "timeout of 120000ms exceeded"), không lộ khoá API', async () => {
       global.fetch = hangingFetch();
 
       const err = await settle(runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 }).catch((e) => e));
@@ -286,6 +286,33 @@ describe('aiChatTransport.service', () => {
       // Bản axios cũ ném nguyên AxiosError (config.url có `?key=<khoá>`) rồi controller console.error ra log.
       expect(err.config).toBeUndefined();
       expect(JSON.stringify(err, Object.getOwnPropertyNames(err))).not.toContain(API_KEY);
+    });
+
+    // D-09: trợ lý chat là MỘT request đồng bộ; Cloudflare cắt /api ở 100 giây (524) trong khi server chạy tiếp và trừ credit. Trần tổng 85 giây.
+    it('D-09: hằng trần tổng của lượt trợ lý là 85 giây (không phải 120 — Cloudflare cắt ở 100)', () => {
+      expect(ASSISTANT_TIMEOUT_MS).toBe(85000);
+      expect(ASSISTANT_TIMEOUT_MS).toBeLessThan(100000);
+    });
+
+    it('D-09: Google treo → bị huỷ ĐÚNG ở giây thứ 85 (84 giây vẫn đang chờ), lỗi AI_TIMEOUT tiếng Việt TRƯỚC mốc 100 giây của Cloudflare', async () => {
+      global.fetch = hangingFetch();
+      let settled = false;
+      const pending = runChat({ systemPrompt: 's', history: [{ role: 'user', content: 'hi' }], userId: 101 })
+        .catch((e) => e)
+        .then((value) => { settled = true; return value; });
+
+      await jest.advanceTimersByTimeAsync(84_000);
+      expect(settled).toBe(false);
+      expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(false);
+
+      await jest.advanceTimersByTimeAsync(2_000); // tổng 86 giây > 85
+      const err = await pending;
+      expect(settled).toBe(true);
+      expect(global.fetch.mock.calls[0][1].signal.aborted).toBe(true);
+      expect(global.fetch).toHaveBeenCalledTimes(1); // hết ngân sách tổng → không thử lại, không chuyển dự phòng
+      expect(err.code).toBe('AI_TIMEOUT');
+      expect(err.message).toBe('AI phản hồi quá lâu. Bạn vui lòng thử lại sau ít phút.');
+      expect(record).not.toHaveBeenCalled();
     });
 
     it('tra model dự phòng lỗi → vẫn trả lời bằng model chính (resolveFallbackModel không bao giờ làm hỏng lượt)', async () => {

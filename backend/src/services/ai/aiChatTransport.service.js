@@ -15,10 +15,14 @@ import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 
 /**
- * Một lượt trợ lý được chờ tối đa bằng đúng timeout axios cũ (120 giây) — GỒM cả thử lại và model dự phòng.
- * Số này vẫn vượt trần 100 giây của Cloudflare (báo cáo D mục 1c); G2 không đổi nó, chỉ thêm thử lại + dự phòng.
+ * Một lượt trợ lý được chờ TỐI ĐA 85 giây — GỒM cả thử lại và model dự phòng (`totalTimeoutMs` của lõi Gemini huỷ fetch đúng hạn).
+ *
+ * Trợ lý chat vẫn là MỘT request đồng bộ (không đọc luồng như sinh/sửa landing), mà /api đi thẳng Cloudflare → backend và Cloudflare cắt ở
+ * 100 giây. Bản G2 giữ 120 giây (đúng timeout axios cũ) nên một lượt Google chậm vẫn bị Cloudflare cắt (524) trong khi server chạy tiếp,
+ * ghi phiên và TRỪ credit; khách bấm lại bị trừ lần hai (D-09). 85 giây chừa ~15 giây cho đọc tệp đính kèm, ghi phiên, mạng. Quá hạn → lõi ném
+ * AI_TIMEOUT (câu tiếng Việt "AI phản hồi quá lâu, thử lại", qua `buildAiErrorPayload`) → controller trả lỗi TRƯỚC khi trừ credit.
  */
-const ASSISTANT_TIMEOUT_MS = 120000;
+export const ASSISTANT_TIMEOUT_MS = 85000;
 
 // Tin "marker" của wizard: `[wizard]{"gate":"dataSource","value":"sheet","sheetUrl":"…"}\n<câu đọc được>`. Cùng khuôn
 // WIZARD_MARKER_RE ở aiCampaignWizard.service.js (không import: kéo cả module wizard vào transport, và nhiều spec mock từng phần).
