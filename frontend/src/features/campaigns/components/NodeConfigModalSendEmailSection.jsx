@@ -11,6 +11,7 @@ import {
 import NodeConfigTemplatePreviewModal from './NodeConfigTemplatePreviewModal';
 import TemplateSearchSelect from './TemplateSearchSelect';
 import { useI18n } from '../../../i18n';
+import NumberInput from '../../../components/common/NumberInput';
 
 /**
  * Section UI for send-email node configuration.
@@ -781,11 +782,10 @@ export const NodeConfigSendEmailSection = ({
             {formData.maxSendEnabled ? (
               <div>
                 <label className="block text-xs text-gray-500 mb-1">{t('campaignNodeConfig.emailSend.maxMessagesPerRun')}</label>
-                <input
-                  type="number"
+                <NumberInput
                   min={1}
                   value={formData.maxSendCount}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, maxSendCount: parseInt(e.target.value, 10) || 1 }))}
+                  onChange={(v) => setFormData((prev) => ({ ...prev, maxSendCount: parseInt(v, 10) || 1 }))}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
                 />
                 <p className="text-xs text-gray-500 mt-2">

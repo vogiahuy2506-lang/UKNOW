@@ -10,6 +10,7 @@ import {
 import { FORM_SUBMISSION_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions.js';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
+import NumberInput from '../../../components/common/NumberInput';
 
 /** Khoá cố định của item chiến dịch (khớp RESERVED_CAMPAIGN_ITEM_FIELD_KEYS phía backend). */
 const FIXED_VARIABLE_ROWS = [
@@ -308,15 +309,14 @@ export function NodeConfigReadFormSubmissionsSection({ formData, setFormData }) 
         <label className="mb-1 block text-sm font-medium text-gray-700">
           {t('nodeConfigFormSubmissions.maxRecords', { max: FORM_SUBMISSIONS_MAX_RECORDS.toLocaleString('vi-VN') })}
         </label>
-        <input
-          type="number"
+        <NumberInput
           min={1}
           max={FORM_SUBMISSIONS_MAX_RECORDS}
           value={formData.formSubmissionsLimit || 1000}
-          onChange={(e) =>
+          onChange={(v) =>
             setFormData((prev) => ({
               ...prev,
-              formSubmissionsLimit: clampFormSubmissionsLimitUi(e.target.value, 1000),
+              formSubmissionsLimit: clampFormSubmissionsLimitUi(v, 1000),
             }))
           }
           className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm"

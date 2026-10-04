@@ -11,6 +11,7 @@ import {
 import { fetchInterestedCustomerCoursesLocal } from '../utils/nodeConfigModal.helpers';
 import { INTERESTED_CUSTOMER_COLUMN_OPTIONS } from '../constants/dataNodeColumnOptions';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
+import NumberInput from '../../../components/common/NumberInput';
 
 const INTERESTED_COURSE_STATUS_OPTIONS = ['publish', 'draft', 'pending', 'private'];
 
@@ -322,12 +323,11 @@ export const NodeConfigReadInterestedCustomersSection = ({
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('nodeConfig.maxRecords')}</label>
-              <input
-                type="number"
+              <NumberInput
                 min={1}
                 max={5000}
                 value={formData.interestedLimit || 1000}
-                onChange={(e) => setFormData((prev) => ({ ...prev, interestedLimit: parseInt(e.target.value, 10) || 1000 }))}
+                onChange={(v) => setFormData((prev) => ({ ...prev, interestedLimit: parseInt(v, 10) || 1000 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
               <p className="text-xs text-gray-500 mt-1">

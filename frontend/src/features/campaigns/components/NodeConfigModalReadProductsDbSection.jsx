@@ -6,6 +6,7 @@ import {
 } from 'react-icons/hi';
 import { useI18n } from '../../../i18n';
 import { NodeConfigDataColumnPicker } from './NodeConfigDataColumnPicker';
+import NumberInput from '../../../components/common/NumberInput';
 
 const PRODUCT_STATUS_OPTIONS = ['active', 'inactive'];
 
@@ -128,12 +129,11 @@ export const NodeConfigReadProductsDbSection = ({
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">{t('readProductsDb.maxRecords')}</label>
-              <input
-                type="number"
+              <NumberInput
                 min={1}
                 max={5000}
                 value={formData.productsDbLimit || 1000}
-                onChange={(e) => setFormData((prev) => ({ ...prev, productsDbLimit: parseInt(e.target.value, 10) || 1000 }))}
+                onChange={(v) => setFormData((prev) => ({ ...prev, productsDbLimit: parseInt(v, 10) || 1000 }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
               />
               <p className="text-xs text-gray-500 mt-1">{t('readProductsDb.maxRecordsHint')}</p>

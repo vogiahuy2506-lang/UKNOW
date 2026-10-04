@@ -8,6 +8,7 @@ import { fetchLandingLeadsSlugFilterOptions } from '../../landing/utils/landingL
 import api from '../../../services/api.js';
 import { HiOutlineExclamation } from 'react-icons/hi';
 import campaignBuilderApiService from '../services/campaignBuilderApi.service.js';
+import NumberInput from '../../../components/common/NumberInput';
 
 /**
  * Một dòng checkbox trong danh sách lọc — tách riêng để React bỏ qua re-render khi prop ổn định.
@@ -339,15 +340,14 @@ export function NodeConfigReadLandingLeadsSection({ formData, setFormData }) {
         <label className="mb-1 block text-sm font-medium text-gray-700">
           {t('nodeConfigLanding.maxRecords', { max: LANDING_LEADS_MAX_RECORDS.toLocaleString('vi-VN') })}
         </label>
-        <input
-          type="number"
+        <NumberInput
           min={1}
           max={LANDING_LEADS_MAX_RECORDS}
           value={formData.landingLeadsLimit || 1000}
-          onChange={(e) =>
+          onChange={(v) =>
             setFormData((prev) => ({
               ...prev,
-              landingLeadsLimit: clampLandingLeadsLimitUi(e.target.value, 1000),
+              landingLeadsLimit: clampLandingLeadsLimitUi(v, 1000),
             }))
           }
           className="w-full max-w-xs rounded-lg border border-gray-300 px-3 py-2 text-sm"

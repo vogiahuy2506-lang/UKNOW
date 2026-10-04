@@ -7,6 +7,7 @@ import {
 } from 'react-icons/hi';
 import campaignBuilderApiService from '../services/campaignBuilderApi.service';
 import { useI18n } from '../../../i18n';
+import NumberInput from '../../../components/common/NumberInput';
 
 /**
  * Section UI cho node lấy danh sách bạn bè Zalo.
@@ -287,12 +288,11 @@ export const NodeConfigGetAllFriendsSection = ({
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">{t('zaloGetLists.pageSize')}</label>
-          <input
-            type="number"
+          <NumberInput
             min={1}
             max={20000}
             value={formData.zaloFriendsCount || 200}
-            onChange={(e) => setFormData((prev) => ({ ...prev, zaloFriendsCount: e.target.value }))}
+            onChange={(v) => setFormData((prev) => ({ ...prev, zaloFriendsCount: String(v) }))}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
           />
         </div>
