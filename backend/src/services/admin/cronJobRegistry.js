@@ -245,6 +245,14 @@ export const CRON_JOBS = [
     tracked: true,
   },
   {
+    code: 'product_chat_mention_scan',
+    label: 'Đếm lượt khách hỏi chatbot về từng sản phẩm',
+    schedule: 'Mỗi 10 phút',
+    description: 'Quét tin nhắn mới của khách (web, kênh, Zalo cá nhân), khớp tên hoặc mã sản phẩm đang bán của chủ chatbot và ghi nhận lượt hỏi để tính cột Quan tâm của phễu sản phẩm.',
+    impact: 'Phễu sản phẩm không đếm được số hội thoại khách hỏi chatbot về từng sản phẩm; số Quan tâm thiếu phần này.',
+    tracked: true,
+  },
+  {
     code: 'channel_disconnect_alert',
     label: 'Báo chủ khi kênh Zalo/Telegram/WhatsApp mất kết nối',
     schedule: 'Mỗi 10 phút',

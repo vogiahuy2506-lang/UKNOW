@@ -1340,6 +1340,22 @@ export const initScheduler = () => {
 
   console.log('[Scheduler] Đã khởi tạo Chatbot contact alert: mỗi 5 phút');
 
+  // ── Đếm lượt khách hỏi chatbot về từng sản phẩm (PLAN_PHEU_NGUOI_GIA_SO_HOI_CHATBOT PR-D) ──
+  cron.schedule('*/10 * * * *', async () => {
+    if (process.env.NODE_ENV === 'test') return;
+    try {
+      const cronJobRunRepository = await import('../repositories/admin/cronJobRun.repository.js');
+      await cronJobRunRepository.recordRun('product_chat_mention_scan', async () => {
+        const { scanProductMentions } = await import('../services/products/productMentionScan.service.js');
+        return scanProductMentions();
+      });
+    } catch (error) {
+      console.error('[Scheduler] Lỗi quét lượt hỏi chatbot về sản phẩm:', error.message);
+    }
+  }, { timezone: HANOI_TIME_ZONE });
+
+  console.log('[Scheduler] Đã khởi tạo Product chat mention scan: mỗi 10 phút');
+
   // ── Báo chủ tài khoản khi kênh Zalo/Telegram/WhatsApp mất kết nối (P3 PLAN_TG_WA_DAY_DU) ──
   cron.schedule('*/10 * * * *', async () => {
     if (process.env.NODE_ENV === 'test') return;

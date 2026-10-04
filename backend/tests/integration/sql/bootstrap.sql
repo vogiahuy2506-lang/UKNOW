@@ -1770,6 +1770,26 @@ CREATE TABLE IF NOT EXISTS chatbot_contact_scan_cursors (
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- ─── Đếm lượt hỏi chatbot về sản phẩm (migration 281) ───────────────────
+CREATE TABLE IF NOT EXISTS product_chat_mentions (
+  id                 BIGSERIAL PRIMARY KEY,
+  workspace_owner_id BIGINT      NOT NULL,
+  product_id         INTEGER     NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  source             VARCHAR(20) NOT NULL,
+  message_id         BIGINT      NOT NULL,
+  conversation_key   TEXT        NOT NULL,
+  created_at         TIMESTAMPTZ NOT NULL,
+  CONSTRAINT uq_product_chat_mention UNIQUE (source, message_id, product_id)
+);
+CREATE INDEX IF NOT EXISTS idx_product_chat_mentions_ws_product_time
+  ON product_chat_mentions (workspace_owner_id, product_id, created_at);
+
+CREATE TABLE IF NOT EXISTS product_mention_scan_cursors (
+  source           VARCHAR(20) PRIMARY KEY,
+  last_message_id  BIGINT      NOT NULL DEFAULT 0,
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ─── Chatbot digest log (migration 221) ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS chatbot_digest_log (
   id            BIGSERIAL PRIMARY KEY,

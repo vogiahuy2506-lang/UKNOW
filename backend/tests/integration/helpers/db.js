@@ -48,6 +48,8 @@ async function retryOnCleanupContention(operation, maxRetries = 10) {
 
 const TRUNCATE_ALL_SQL = `
     TRUNCATE TABLE
+      product_chat_mentions,
+      product_mention_scan_cursors,
       user_two_factor,
       send_quota_shadow_daily,
       send_quota_shadow_mismatches,

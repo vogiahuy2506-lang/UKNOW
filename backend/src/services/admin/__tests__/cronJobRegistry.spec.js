@@ -93,8 +93,9 @@ describe('cronJobRegistry ↔ scheduler recordRun', () => {
     // PLAN_VA_LOI_LUONG_TIEN_2026-09-26 PR-6 Việc 6.3 — 2 job affiliate đã gọi recordRun từ trước
     // nhưng chưa có trong CRON_JOBS nên không được cronJobRegistry giám sát/cảnh báo).
     // 33 → 34: thêm channel_disconnect_alert (P3 PLAN_TG_WA_DAY_DU_2026-09-29 — báo chủ khi kênh mất kết nối).
-    expect(CRON_JOBS).toHaveLength(34);
+    // 34 → 35: thêm product_chat_mention_scan (PLAN_PHEU_NGUOI_GIA_SO_HOI_CHATBOT PR-D — đếm lượt hỏi chatbot về sản phẩm).
+    expect(CRON_JOBS).toHaveLength(35);
     const codes = CRON_JOBS.map((j) => j.code);
-    expect(new Set(codes).size).toBe(34);
+    expect(new Set(codes).size).toBe(35);
   });
 });
