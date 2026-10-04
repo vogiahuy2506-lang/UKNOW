@@ -9,6 +9,7 @@ const zaloTemplates = { findById: jest.fn() };
 const emailSenders = { findEmailSettingsById: jest.fn() };
 const zaloSenders = { findCampaignZaloAccount: jest.fn() };
 const aiResources = { getCourses: jest.fn() };
+const estimateForScript = jest.fn();
 
 jest.unstable_mockModule('../../../repositories/ai/aiCampaignDraft.repository.js', () => ({ default: draftRepo }));
 jest.unstable_mockModule('../../../repositories/email/emailTemplate.repository.js', () => ({ default: emailTemplates }));
@@ -17,6 +18,8 @@ jest.unstable_mockModule('../../../repositories/campaign/campaignEmailSender.rep
 jest.unstable_mockModule('../../../repositories/campaign/campaignZaloSender.repository.js', () => ({ default: zaloSenders }));
 // Tra TÊN khoá học của bộ lọc người nhận (F2.2): service import động aiPromptResources — mock đúng ranh giới DB.
 jest.unstable_mockModule('../aiPromptResources.service.js', () => ({ default: aiResources }));
+// Ước tính thời gian gửi (PLAN_UOC_TINH 4.2): mock đúng ranh giới — service ước tính, hình dạng đầu ra theo hợp đồng PR-1.
+jest.unstable_mockModule('../../campaign/campaignEstimate.service.js', () => ({ estimateForScript }));
 
 const service = await import('../campaignConfirmation.service.js');
 
@@ -454,5 +457,85 @@ describe('G3a.3 — nhân viên: tài khoản gửi + mẫu tin tra theo CHỦ w
         resourceVersions: [{ kind: 'email_template', id: 11, updatedAt: UPDATED_AT }],
       })).resolves.toBeUndefined();
     });
+  });
+});
+
+describe('estimate — ước tính thời gian gửi trên thẻ xác nhận (PLAN_UOC_TINH 4.2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    draftRepo.findDefaultEmailSettingId.mockResolvedValue(7);
+    emailSenders.findEmailSettingsById.mockResolvedValue({ id: 7, email: 'sender@example.test' });
+    estimateForScript.mockReset();
+  });
+
+  const OWNER = 39;
+  const ESTIMATE = {
+    startAt: '2026-10-05T00:00:00.000Z', finishAtEarliest: '2026-10-07T00:25:00.000Z', finishAtTypical: '2026-10-08T15:52:00.000Z',
+    finishAtLatest: '2026-10-08T14:25:00.000Z', totalActions: 1596, perNode: [], perDay: [], accounts: [],
+    warnings: [{ code: 'multi_day', params: { days: 4 } }],
+  };
+  const emailScript = () => ({
+    campaignName: 'Mail',
+    nodes: [{
+      tempId: 'email-1', nodeType: 'action', nodeSubtype: 'send_email', nodeName: 'Email',
+      config: { recipientSource: 'node', recipientNodeId: 'sheet-1', emailSteps: [{ emailSubject: 'Hi', emailBody: 'Xin chào' }] },
+    }, { tempId: 'sheet-1', nodeType: 'data', nodeSubtype: 'read_sheet', config: {} }],
+    connections: [{ sourceNodeId: 'sheet-1', targetNodeId: 'email-1' }],
+  });
+
+  it('không xin includeEstimate → KHÔNG có trường estimate và KHÔNG gọi bộ ước tính (nơi dựng thẻ chỉ để kiểm quyền không tốn đếm người nhận)', async () => {
+    const result = await service.default.buildConfirmationView({ userId: OWNER, script: emailScript() });
+    expect(result).not.toHaveProperty('estimate');
+    expect(estimateForScript).not.toHaveBeenCalled();
+  });
+
+  it('includeEstimate + thẻ hợp lệ → estimate = đầu ra estimateForScript; gọi với nodes/connections của kịch bản, chủ workspace, bắt đầu = bây giờ; readyToCreate không đổi vì cảnh báo', async () => {
+    estimateForScript.mockResolvedValue(ESTIMATE);
+    const script = emailScript();
+    const result = await service.default.buildConfirmationView({ userId: 7, ownerUserId: OWNER, script, includeEstimate: true });
+
+    expect(result.estimate).toEqual(ESTIMATE);
+    expect(result.readyToCreate).toBe(true);
+    const arg = estimateForScript.mock.calls[0][0];
+    expect(arg.script.nodes).toBe(script.nodes);
+    expect(arg.script.connections).toBe(script.connections);
+    expect(arg.ownerUserId).toBe(OWNER);
+    expect(arg.startAt).toBeInstanceOf(Date);
+    expect(Math.abs(arg.startAt.getTime() - Date.now())).toBeLessThan(5000);
+  });
+
+  it('ước tính NÉM lỗi → estimate: null, thẻ không vỡ, vẫn readyToCreate', async () => {
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      estimateForScript.mockRejectedValue(new Error('sheet down'));
+      const result = await service.default.buildConfirmationView({ userId: OWNER, script: emailScript(), includeEstimate: true });
+      expect(result.estimate).toBeNull();
+      expect(result.readyToCreate).toBe(true);
+      expect(result.steps).toHaveLength(1);
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
+  it('ước tính treo quá hạn (Sheet chậm) → estimate: null thay vì treo thẻ', async () => {
+    jest.useFakeTimers();
+    try {
+      estimateForScript.mockReturnValue(new Promise(() => {}));
+      const pending = service.default.buildConfirmationView({ userId: OWNER, script: emailScript(), includeEstimate: true });
+      await jest.advanceTimersByTimeAsync(30_000);
+      const result = await pending;
+      expect(result.estimate).toBeNull();
+      expect(result.readyToCreate).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('thẻ còn lỗi chặn (thiếu tài khoản gửi) → estimate: null và không gọi bộ ước tính (số liệu chưa đủ để ước tính)', async () => {
+    emailSenders.findEmailSettingsById.mockResolvedValue(null);
+    const result = await service.default.buildConfirmationView({ userId: OWNER, script: emailScript(), includeEstimate: true });
+    expect(result.readyToCreate).toBe(false);
+    expect(result.estimate).toBeNull();
+    expect(estimateForScript).not.toHaveBeenCalled();
   });
 });

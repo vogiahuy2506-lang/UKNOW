@@ -196,6 +196,21 @@ describe('aiController directRecipients with Zalo contacts UIDs (P0)', () => {
     );
   });
 
+  // PLAN_UOC_TINH 4.2: thẻ người dùng thấy (prepare) phải xin ước tính; các nơi dựng thẻ chỉ để kiểm quyền thì không.
+  it('prepareCampaign: buildConfirmationView được gọi với includeEstimate:true và ownerUserId = chủ', async () => {
+    const rawScript = { nodes: [{ id: 'n1', node_type: 'data', node_subtype: 'read_form_submissions', config: { formId: 12 } }] };
+    mockPrepareScript.mockResolvedValue({ ...rawScript });
+    mockBuildConfirmationView.mockClear();
+
+    await aiController.prepareCampaign(
+      { body: { script: rawScript }, user: { id: 9, role: 'employee', activeContext: { type: 'employee', ownerId: 3 } } },
+      makeRes()
+    );
+
+    expect(mockBuildConfirmationView).toHaveBeenCalledTimes(1);
+    expect(mockBuildConfirmationView).toHaveBeenCalledWith(expect.objectContaining({ ownerUserId: 3, includeEstimate: true }));
+  });
+
   it('executeCampaign: rejects employee autoRun before campaign creation without campaigns_run', async () => {
     const req = {
       body: { autoRun: true },

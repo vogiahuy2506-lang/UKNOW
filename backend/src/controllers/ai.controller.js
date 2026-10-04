@@ -169,6 +169,8 @@ class AiController {
         script: preparedScript,
         userId: req.user.id,
         ownerUserId: resolveOwnerUserId(req.user),
+        // Thẻ xác nhận người dùng thấy: kèm ước tính thời gian gửi (cảnh báo, không chặn).
+        includeEstimate: true,
       });
       return res.json({ success: true, data: { preparedScript, confirmationView, maxRecipients: MAX_AI_MANUAL_RECIPIENTS } });
     } catch (error) {

@@ -14,6 +14,8 @@ const TELEGRAM_TYPES = new Set(['send_telegram']);
 const WHATSAPP_TYPES = new Set(['send_whatsapp']);
 const ADAPTER_CHANNEL_TITLES = { telegram: 'Telegram', whatsapp: 'WhatsApp' };
 const WHATSAPP_SESSION_KEY_PATTERN = /^\d+-[A-Za-z0-9_-]{1,128}$/;
+// Trần chờ ước tính cho thẻ xác nhận: quá hạn → `estimate: null` (thẻ vẫn hiện, không treo chờ Sheet).
+const ESTIMATE_VIEW_TIMEOUT_MS = 25_000;
 
 const asNumber = (value) => {
   const parsed = Number.parseInt(value, 10);
@@ -146,7 +148,7 @@ class CampaignConfirmationService {
     }
   }
 
-  async buildConfirmationView({ script, userId, ownerUserId = null }) {
+  async buildConfirmationView({ script, userId, ownerUserId = null, includeEstimate = false }) {
     // MỌI tài khoản gửi (Email, Zalo, Telegram, WhatsApp) và mẫu tin (Email/Zalo) thuộc CHỦ workspace — nhân viên dùng chung,
     // khác userId thao tác. Bằng chứng quy ước: các endpoint thường của nhân viên đều tra theo `workspaceOwnerId`
     // (emailSettings/emailTemplate/zaloSettings/zaloTemplate.controller: `getWorkspaceContext(req.user).workspaceOwnerId`),
@@ -404,7 +406,7 @@ class CampaignConfirmationService {
       return true;
     });
 
-    return {
+    const view = {
       version: 1,
       campaign: {
         name: extractText(script?.campaignName || script?.name || ''),
@@ -417,6 +419,42 @@ class CampaignConfirmationService {
       resourceVersions: uniqueVersions,
       steps,
     };
+    // Ước tính chỉ để HIỆN trên thẻ (cảnh báo, KHÔNG đổi readyToCreate) — các nơi dựng thẻ chỉ để kiểm quyền sở hữu
+    // (tạo/ghi nháp) không cần và không nên tốn đếm người nhận, nên phải xin rõ bằng `includeEstimate`.
+    if (includeEstimate) {
+      view.estimate = issues.length === 0 ? await this.estimateForView({ script, ownerUserId: channelOwnerId }) : null;
+    }
+    return view;
+  }
+
+  /**
+   * Ước tính thời gian gửi của kịch bản CHƯA lưu (bắt đầu = bây giờ). Mọi lỗi / quá hạn → null: thẻ xác nhận không được
+   * vỡ vì một lần ước tính. Có lỗi dữ kiện (chưa đủ người nhận, thiếu tài khoản) thì thẻ đã có `blockingIssues`, không ước tính.
+   *
+   * Người nhận từ Google Sheet: endpoint prepare chỉ nhận `script` (số người nhận trong `sheetCheck` của lượt chat không đi theo
+   * request) nên đếm bằng đường sẵn có của bộ ước tính — đọc Sheet MỘT lần (cache trong lần ước tính), có timeout.
+   */
+  async estimateForView({ script, ownerUserId }) {
+    try {
+      const { estimateForScript } = await import('../campaign/campaignEstimate.service.js');
+      let timer;
+      const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(null), ESTIMATE_VIEW_TIMEOUT_MS); });
+      try {
+        return await Promise.race([
+          estimateForScript({
+            script: { nodes: script?.nodes, connections: script?.connections, flowJson: script?.flowJson ?? null },
+            ownerUserId,
+            startAt: new Date(),
+          }),
+          timeout,
+        ]);
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch (error) {
+      console.warn('[CampaignConfirmation] Không ước tính được thời gian gửi:', error?.message || error);
+      return null;
+    }
   }
 }
 
