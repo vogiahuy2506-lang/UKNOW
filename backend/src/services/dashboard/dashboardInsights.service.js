@@ -1,4 +1,4 @@
-import { generateGeminiText } from '../../utils/geminiClient.util.js';
+import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import { resolveAllowedModel } from '../ai/aiModelPolicy.service.js';
 import aiUsageMeter from '../ai/aiUsageMeter.service.js';
 import { isInsightPayloadUsable } from '../../utils/dashboardInsightPayload.util.js';
@@ -722,6 +722,16 @@ function buildAnalysisPrompt(dataMarkdown, locale = 'vi') {
 }
 
 /**
+ * Trần thời gian TỔNG cho cả lượt "Phân tích bằng AI" (D-09). Cloudflare cắt request /api sau 100 s nhưng server vẫn chạy
+ * tiếp, ghi kết quả và tốn tiền Gemini — khách thấy lỗi rồi bấm lại. Trước đây mỗi lời gọi 120 s × tối đa 2 lượt (lượt thứ hai là
+ * bản rút gọn khi lượt đầu không đọc được JSON) nên một lượt có thể chạy tới 240 s. 85 s chừa ~15 s cho truy vấn số liệu + trả lời.
+ */
+export const INSIGHT_TOTAL_BUDGET_MS = 85000;
+
+/** Còn dưới mức này thì KHÔNG chạy lượt rút gọn: một lượt Gemini sinh JSON dài hiếm khi xong trong < 40 s. */
+export const INSIGHT_RETRY_MIN_REMAINING_MS = 40000;
+
+/**
  * Mốc đổi cách tính của trang Báo cáo (PR-5 `31608616`, 30/09/2026 19:21 giờ VN = 12:21 UTC).
  * Bản phân tích lưu TRƯỚC mốc này dựng từ số liệu và prompt cũ (có thể chứa câu cảnh báo "không nhất quán" đã sai
  * thời đó) nên không trả cho UI nữa — người dùng bấm "Phân tích bằng AI" để có bản mới. Mọi client dùng chung luật này.
@@ -735,8 +745,8 @@ class DashboardInsightsService {
    * Luồng hoạt động:
    * 1. Nhận `snapshot` (dashboardAnalyticsService.getInsightSnapshot — cùng nguồn với các thẻ trên trang Báo cáo).
    * 2. Rút gọn chuỗi theo ngày, dựng mô tả markdown số liệu.
-   * 3. Gọi Gemini với JSON mode + token đủ lớn.
-   * 4. Parse + chuẩn hóa schema; nếu lỗi thì trả fallback có `notes`.
+   * 3. Gọi Gemini với JSON mode + token đủ lớn, trong MỘT ngân sách thời gian tổng `INSIGHT_TOTAL_BUDGET_MS` (cả lượt rút gọn).
+   * 4. Parse + chuẩn hóa schema; nếu lỗi thì trả fallback có `notes` và cờ `parseFailed`.
    *
    * @param {object} input
    * @param {number} [input.userId] chủ workspace (chọn model + ghi token)
@@ -749,6 +759,8 @@ class DashboardInsightsService {
     let lastFinish = '';
     let lastBlock = '';
     let usedCompactRetry = false;
+    const deadline = Date.now() + INSIGHT_TOTAL_BUDGET_MS;
+    const msLeft = () => deadline - Date.now();
     const insightModel = userId
       ? await resolveAllowedModel(userId, process.env.GEMINI_MODEL || 'gemini-2.5-flash')
       : (process.env.GEMINI_MODEL || 'gemini-2.5-flash');
@@ -756,10 +768,14 @@ class DashboardInsightsService {
     const runOnce = async (safePayload) => {
       const dataMarkdown = buildDataMarkdownSection(safePayload);
       const prompt = buildAnalysisPrompt(dataMarkdown, locale);
-      const result = await generateGeminiText({
-        prompt,
+      // Phần ngân sách còn lại của CẢ lượt (không phải 120 s mới cho mỗi lời gọi): lõi huỷ fetch đang chạy đúng hạn và ném
+      // AI_TIMEOUT tiếng Việt, nên request không còn sống tiếp sau khi Cloudflare đã cắt.
+      const budgetMs = Math.max(1, msLeft());
+      const result = await generateGeminiContent({
+        parts: [{ text: prompt }],
         model: insightModel,
-        timeoutMs: 120000,
+        timeoutMs: budgetMs,
+        totalTimeoutMs: budgetMs,
         jsonMode: true,
         maxOutputTokens: resolveInsightMaxOutputTokens(insightModel),
       });
@@ -785,7 +801,9 @@ class DashboardInsightsService {
     if (
       !parsed &&
       !blockReason &&
-      (finishReason === 'MAX_TOKENS' || (typeof text === 'string' && text.length > 0))
+      (finishReason === 'MAX_TOKENS' || (typeof text === 'string' && text.length > 0)) &&
+      // D-09: lượt đầu đã ngốn gần hết ngân sách thì bỏ lượt rút gọn — chạy tiếp chỉ để bị Cloudflare cắt giữa chừng.
+      msLeft() >= INSIGHT_RETRY_MIN_REMAINING_MS
     ) {
       usedCompactRetry = true;
       safePayload = buildInsightSafePayload(snapshot, { timelineHead: 5, timelineTail: 5 });
