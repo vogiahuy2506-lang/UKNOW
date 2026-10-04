@@ -24,6 +24,7 @@ jest.unstable_mockModule('../../../utils/puppeteerScraper.util.js', () => ({ scr
 
 const { default: customChatService } = await import('../customChat.service.js');
 const { SsrfBlockedError, SSRF_BLOCKED_CODE } = await import('../../../utils/ssrfGuard.util.js');
+const { MAX_SCRAPED_TEXT_CHARS } = await import('../../../utils/scrapeLimits.util.js');
 
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 const ORIGINAL_ALLOW_LOOPBACK = process.env.SSRF_ALLOW_LOOPBACK;
@@ -125,5 +126,29 @@ describe('customChatService.scrapeUrl — chống SSRF', () => {
       .rejects.toMatchObject({ code: SSRF_BLOCKED_CODE, status: 400 });
     expect(hits).toEqual(['/to-metadata']);
     expect(replaceSpy).not.toHaveBeenCalled();
+  });
+
+  it('D-18: trang render trả chữ vượt trần → chỉ ≤ MAX_SCRAPED_TEXT_CHARS ký tự được chia đoạn/embed/lưu', async () => {
+    process.env.SSRF_ALLOW_LOOPBACK = 'true';
+    const huge = 'Bảng giá chi tiết. '.repeat(30000);
+    scrapeUrlWithJs.mockResolvedValue({ title: 'Bảng giá', content: huge });
+    expect(huge.length).toBeGreaterThan(MAX_SCRAPED_TEXT_CHARS);
+
+    await customChatService.scrapeUrl({ chatbotId: 1, userId: 2, url: `${base}/dai` });
+
+    const saved = replaceSpy.mock.calls[0][0].text;
+    expect(saved.length).toBeLessThanOrEqual(MAX_SCRAPED_TEXT_CHARS);
+    expect(saved.length).toBeGreaterThan(MAX_SCRAPED_TEXT_CHARS - 100);
+  });
+
+  it('D-18: hàng đợi Chrome đầy (ScrapeBusyError) → rơi sang tải HTML thường như mọi lỗi Puppeteer, không báo lỗi cho khách', async () => {
+    process.env.SSRF_ALLOW_LOOPBACK = 'true';
+    scrapeUrlWithJs.mockRejectedValue(Object.assign(new Error('Hệ thống đang cào nhiều trang cùng lúc.'), { code: 'SCRAPE_QUEUE_BUSY', status: 503 }));
+
+    const result = await customChatService.scrapeUrl({ chatbotId: 1, userId: 2, url: `${base}/page` });
+
+    expect(result.chunks).toBe(1);
+    expect(hits).toEqual(['/page']);
+    expect(replaceSpy).toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining('nội dung trang') }));
   });
 });

@@ -4,6 +4,7 @@ import { stripMarkdown } from '../../utils/aiResponseFormatter.util.js';
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import { CHAT_REPLY_BUDGET } from '../../utils/aiReplyBudget.util.js';
 import { scrapeUrlWithJs } from '../../utils/puppeteerScraper.util.js';
+import { clipScrapedText } from '../../utils/scrapeLimits.util.js';
 import { assertPublicUrl, isSsrfBlockedError, safeFetch } from '../../utils/ssrfGuard.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
@@ -590,6 +591,9 @@ class CustomChatService {
         throw error;
       }
     }
+
+    // Trần chữ cho MỌI đường cào (trang render lẫn HTML tải về): không để một trang vài MB chữ thành hàng nghìn đoạn cần embed (D-18).
+    text = clipScrapedText(text);
 
     if (!text || text.trim().length < 50) {
       const err = new Error('Không tìm thấy nội dung văn bản trong URL này');

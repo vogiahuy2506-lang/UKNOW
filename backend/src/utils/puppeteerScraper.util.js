@@ -1,13 +1,93 @@
 /* eslint-env browser, node */
 import puppeteer from 'puppeteer';
 import { assertPublicHost, assertPublicUrl, isSsrfBlockedError, SsrfBlockedError } from './ssrfGuard.util.js';
+import { MAX_SCRAPED_TEXT_CHARS, clipScrapedText } from './scrapeLimits.util.js';
 
 /**
  * Singleton browser instance
  */
 let browserInstance = null;
+/** Lời hứa của lượt khởi động Chrome đang chạy — hai lượt cào đầu tiên cùng lúc không được mỗi bên mở một Chrome. */
+let browserLaunching = null;
 
 const PUPPETEER_TIMEOUT = 20000; // 20 seconds
+
+/**
+ * Hàng đợi tab (D-18): bản cũ mỗi lượt cào `browser.newPage()` không giới hạn — vài chục lượt cào cùng lúc là vài chục tab Chrome
+ * (mỗi tab trang nặng ~100–300 MB) trong tiến trình backend DUY NHẤT (xem CLAUDE.md "single process only").
+ *  - tối đa `PUPPETEER_MAX_CONCURRENT_PAGES` (2) tab cùng lúc; lượt tới sau xếp hàng;
+ *  - hàng chờ tối đa `PUPPETEER_MAX_QUEUED` (8) lượt, chờ tối đa `PUPPETEER_QUEUE_WAIT_MS` (30 s): đầy/quá hạn thì ném
+ *    `ScrapeBusyError` ngay (nơi gọi `customChat.scrapeUrl` rơi sang tải HTML thường — nhẹ, đã có trần 10 MB) thay vì để request
+ *    treo tới trần 100 giây của Cloudflare.
+ */
+export const PUPPETEER_MAX_CONCURRENT_PAGES = 2;
+export const PUPPETEER_MAX_QUEUED = 8;
+export const PUPPETEER_QUEUE_WAIT_MS = 30000;
+
+export class ScrapeBusyError extends Error {
+  constructor() {
+    super('Hệ thống đang cào nhiều trang cùng lúc. Vui lòng thử lại sau ít phút.');
+    this.name = 'ScrapeBusyError';
+    this.code = 'SCRAPE_QUEUE_BUSY';
+    this.status = 503;
+  }
+}
+
+/**
+ * Bộ giới hạn số việc chạy cùng lúc, hàng chờ có trần. `run(task)` chờ có chỗ rồi chạy `task`, LUÔN trả chỗ (kể cả khi task ném lỗi).
+ *
+ * @param {{ maxConcurrent?: number, maxQueued?: number, waitTimeoutMs?: number }} [options]
+ */
+export function createSlotQueue({
+  maxConcurrent = PUPPETEER_MAX_CONCURRENT_PAGES,
+  maxQueued = PUPPETEER_MAX_QUEUED,
+  waitTimeoutMs = PUPPETEER_QUEUE_WAIT_MS,
+} = {}) {
+  let active = 0;
+  const waiting = [];
+
+  const release = () => {
+    const next = waiting.shift();
+    if (next) {
+      // Chuyển thẳng chỗ cho người chờ lâu nhất (active giữ nguyên).
+      clearTimeout(next.timer);
+      next.resolve();
+    } else {
+      active -= 1;
+    }
+  };
+
+  const acquire = () => {
+    if (active < maxConcurrent) {
+      active += 1;
+      return Promise.resolve();
+    }
+    if (waiting.length >= maxQueued) return Promise.reject(new ScrapeBusyError());
+    return new Promise((resolve, reject) => {
+      const entry = { resolve, timer: null };
+      entry.timer = setTimeout(() => {
+        const index = waiting.indexOf(entry);
+        if (index >= 0) waiting.splice(index, 1);
+        reject(new ScrapeBusyError());
+      }, waitTimeoutMs);
+      waiting.push(entry);
+    });
+  };
+
+  return {
+    async run(task) {
+      await acquire();
+      try {
+        return await task();
+      } finally {
+        release();
+      }
+    },
+    stats: () => ({ active, waiting: waiting.length }),
+  };
+}
+
+const scrapeSlots = createSlotQueue();
 
 /** Loại tài nguyên nặng không cần cho việc trích văn bản. */
 const HEAVY_RESOURCE_TYPES = new Set(['font', 'media', 'websocket']);
@@ -18,8 +98,9 @@ const LOCAL_SUBRESOURCE_PROTOCOLS = new Set(['data:', 'blob:']);
  * Get or create browser instance
  */
 async function getBrowser() {
-  if (!browserInstance || !browserInstance.connected) {
-    browserInstance = await puppeteer.launch({
+  if (browserInstance && browserInstance.connected) return browserInstance;
+  if (!browserLaunching) {
+    browserLaunching = puppeteer.launch({
       headless: 'new',
       args: [
         '--no-sandbox',
@@ -33,9 +114,14 @@ async function getBrowser() {
       // request interception của trang đang cào).
       ignoreDefaultArgs: ['--disable-popup-blocking'],
       ignoreHTTPSErrors: true,
+    }).then((browser) => {
+      browserInstance = browser;
+      return browser;
+    }).finally(() => {
+      browserLaunching = null;
     });
   }
-  return browserInstance;
+  return browserLaunching;
 }
 
 /**
@@ -130,14 +216,18 @@ function isMainFrameRequest(request) {
  * interception (WebSocket, WebRTC, request từ worker) không kiểm được ở tầng này.
  */
 export async function scrapeUrlWithJs(url, options = {}) {
+  // Kiểm trước khi xếp hàng/mở trình duyệt — URL nội bộ bị từ chối ngay, không chiếm chỗ của ai.
+  await assertPublicUrl(url);
+
+  return scrapeSlots.run(() => scrapeInTab(url, options));
+}
+
+async function scrapeInTab(url, options) {
   const {
     waitForSelector = null,
     waitForTimeout = 3000,
     extractLinks = false,
   } = options;
-
-  // Kiểm trước khi mở trình duyệt — URL nội bộ bị từ chối ngay.
-  await assertPublicUrl(url);
 
   const browser = await getBrowser();
   const page = await browser.newPage();
@@ -202,7 +292,9 @@ export async function scrapeUrlWithJs(url, options = {}) {
     }
 
     // Extract content
-    const result = await page.evaluate(() => {
+    // Tham số truyền QUA đối số: hàm này chạy TRONG trình duyệt nên không thấy biến của Node (bản cũ đọc thẳng `extractLinks` →
+    // ReferenceError trong trang). Cắt chữ ngay trong trang để không chuyển cả MB chữ về Node rồi mới bỏ.
+    const result = await page.evaluate((maxChars, wantLinks) => {
       // Get document title
       const title = document.title || '';
 
@@ -239,7 +331,7 @@ export async function scrapeUrlWithJs(url, options = {}) {
 
       // Extract links if requested
       let links = [];
-      if (extractLinks) {
+      if (wantLinks) {
         const allLinks = Array.from(document.querySelectorAll('a[href]'));
         const baseUrl = new URL(window.location.href).origin;
         links = allLinks
@@ -259,17 +351,19 @@ export async function scrapeUrlWithJs(url, options = {}) {
       return {
         title,
         metaDesc,
-        content: content.trim(),
+        content: content.trim().slice(0, maxChars),
         links,
         url: window.location.href,
       };
-    });
+    }, MAX_SCRAPED_TEXT_CHARS, extractLinks);
 
     // Close page
     await page.close();
 
     return {
       ...result,
+      // Lưới thứ hai ở phía Node: cắt trong trang có thể bỏ lại nửa cặp surrogate ở cuối.
+      content: clipScrapedText(result.content),
       url,
       success: true,
     };
