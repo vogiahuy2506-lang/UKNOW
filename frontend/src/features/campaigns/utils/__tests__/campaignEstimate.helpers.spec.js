@@ -35,6 +35,7 @@ const WARNING_SAMPLES = {
   plan_quota_insufficient: { channel: 'zalo', required: 1596, limit: 1000, currentCount: 900, limitType: 'monthly', resetAt: null },
   shared_account: { accountKey: 'zalo:101', label: 'Nick Minh Zalo', campaigns: [{ id: 440, name: 'Chăm khách cũ', reason: 'running' }] },
   zalo_phone_lookup_unmodeled: { nodes: ['n1'] },
+  email_provider_rate_limited: { accountKey: 'email:22', events30d: 3, lastAt: '2026-10-03T03:30:00.000Z' },
 };
 
 describe('formatEstimateDateTime — giờ Việt Nam dạng dd/MM HH:mm', () => {
@@ -133,6 +134,16 @@ describe('describeEstimateWarning — i18n vi + en cho TỪNG mã trong hợp đ
     const t = makeT(viDict);
     const out = describeEstimateWarning({ code: 'shared_account', params: WARNING_SAMPLES.shared_account }, t).text;
     expect(out).toContain('#440 Chăm khách cũ');
+  });
+
+  it('email_provider_rate_limited nêu nhãn tài khoản, số lần trong 30 ngày, lần gần nhất theo giờ VN và việc tạm dừng 12 giờ', () => {
+    const t = makeT(viDict);
+    const out = describeEstimateWarning({ code: 'email_provider_rate_limited', params: WARNING_SAMPLES.email_provider_rate_limited }, t, () => 'chu@shop.vn');
+    expect(out.tone).toBe('warn');
+    expect(out.text).toContain('chu@shop.vn');
+    expect(out.text).toContain('3 lần trong 30 ngày');
+    expect(out.text).toContain('03/10 10:30');
+    expect(out.text).toContain('12 giờ');
   });
 
   it('mã LẠ (backend thêm sau) → câu chung, không vỡ, không lộ khoá trần', () => {

@@ -23,6 +23,7 @@ export const KNOWN_ESTIMATE_WARNING_CODES = Object.freeze([
   'plan_quota_insufficient',
   'shared_account',
   'zalo_phone_lookup_unmodeled',
+  'email_provider_rate_limited',
 ]);
 
 /** Cảnh báo chỉ để biết (không đáng lo) → hiện tông xám thay vì vàng. */
@@ -175,6 +176,16 @@ export const describeEstimateWarning = (warning, t, accountLabel = (key) => key)
       };
     case 'account_unavailable':
       return { code, tone, text: t(key, { account: accountLabel(p.accountKey) }) };
+    case 'email_provider_rate_limited':
+      return {
+        code,
+        tone,
+        text: t(key, {
+          account: accountLabel(p.accountKey),
+          events30d: p.events30d ?? '',
+          lastAt: formatEstimateDateTime(p.lastAt),
+        }),
+      };
     case 'plan_quota_insufficient':
       return { code, tone, text: t(key, { required: p.required ?? '' }) };
     case 'shared_account': {

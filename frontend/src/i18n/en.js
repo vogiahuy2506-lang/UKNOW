@@ -7705,6 +7705,7 @@ export default {
       no_send_node: 'This campaign has no send step yet.',
       plan_quota_insufficient: 'Your plan has too little sending quota left for {required} actions — upgrade your plan or wait for the next quota period.',
       shared_account: 'Account {account} is also used by other campaigns ({campaigns}). Sharing an account splits its sending capacity, so this may finish later.',
+      email_provider_rate_limited: 'The email server rejected account {account} for sending too much {events30d} time(s) in the last 30 days (most recent {lastAt}). Each time, the system pauses for 12 hours and then resumes, so the real duration may be much longer.',
       zalo_phone_lookup_unmodeled: 'A Zalo step sends by phone number. Zalo may limit phone lookups per day; the estimate does not include that.',
     },
     suggestion: {

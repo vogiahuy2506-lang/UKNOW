@@ -7712,6 +7712,7 @@ export default {
       no_send_node: 'Chiến dịch chưa có bước gửi tin nào.',
       plan_quota_insufficient: 'Hạn mức gửi còn lại của gói không đủ cho {required} thao tác — hãy nâng gói hoặc chờ kỳ hạn mức mới.',
       shared_account: 'Tài khoản {account} đang được chiến dịch khác dùng ({campaigns}). Hai chiến dịch dùng chung tài khoản sẽ chia sức gửi nên có thể xong chậm hơn.',
+      email_provider_rate_limited: 'Tài khoản email {account} đã bị máy chủ email từ chối vì gửi quá nhiều {events30d} lần trong 30 ngày (gần nhất {lastAt}). Mỗi lần như vậy hệ thống tạm dừng 12 giờ rồi gửi tiếp, nên thời gian thực tế có thể lâu hơn nhiều.',
       zalo_phone_lookup_unmodeled: 'Có bước gửi Zalo theo số điện thoại. Zalo có thể giới hạn tra số theo ngày, ước tính chưa tính phần này.',
     },
     suggestion: {
