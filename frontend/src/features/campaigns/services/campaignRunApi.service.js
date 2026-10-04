@@ -40,6 +40,21 @@ const campaignRunApiService = {
     return api.get(`/campaign-runs/${runId}${qs ? `?${qs}` : ''}`, options);
   },
 
+  /**
+   * Ước tính thời gian gửi của chiến dịch đã lưu (`GET /campaigns/:id/estimate`).
+   *
+   * @param {number|string} campaignId id chiến dịch
+   * @param {{ startAt?: string|null, continuous?: boolean }} [query={}] `startAt` ISO; thiếu = bây giờ
+   * @param {object} [options={}] tùy chọn axios (truyền `signal` để huỷ khi đổi giờ / đóng hộp)
+   * @returns {Promise<object>} `{ data: { success, data } }`
+   */
+  getCampaignEstimate(campaignId, query = {}, options = {}) {
+    const params = {};
+    if (query.startAt) params.startAt = query.startAt;
+    if (query.continuous === true) params.continuous = 'true';
+    return api.get(`/campaigns/${campaignId}/estimate`, { ...options, params });
+  },
+
   runCampaign(campaignId, payload = {}, options = {}) {
     return api.post(`/campaigns/${campaignId}/run`, payload, options);
   },
