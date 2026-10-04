@@ -17,6 +17,15 @@ const MIN_NAME_CHARS = 6;
 const MIN_NAME_WORDS = 2;
 const MIN_CODE_CHARS = 3;
 
+/**
+ * Mã chỉ dùng để khớp khi đủ "lạ": ≥ 3 ký tự và có CẢ chữ lẫn số ("AIX-01", "SP001").
+ * Mã toàn số ("001") hay toàn chữ ("meo" — trùng chữ "mèo" sau khi bỏ dấu) khớp nhầm tin thường.
+ */
+export function isMatchableCode(normalizedCode) {
+  const compact = String(normalizedCode || '').replace(/ /g, '');
+  return compact.length >= MIN_CODE_CHARS && /[a-z]/.test(compact) && /[0-9]/.test(compact);
+}
+
 /** Tên đủ dài để khớp trọn cụm (≥ 2 từ hoặc ≥ 6 ký tự); tên quá ngắn như "AI", "khoá" thì bỏ. */
 export function isMatchableName(normalizedName) {
   if (!normalizedName) return false;
@@ -38,7 +47,7 @@ export function findMentionedProductIds(content, products) {
     const name = normalizeMentionText(product.product_name);
     const code = normalizeMentionText(product.product_code);
     const byName = isMatchableName(name) && padded.includes(` ${name} `);
-    const byCode = code.length >= MIN_CODE_CHARS && padded.includes(` ${code} `);
+    const byCode = isMatchableCode(code) && padded.includes(` ${code} `);
     if (byName || byCode) ids.push(product.id);
   }
   return ids;

@@ -2,6 +2,7 @@ import { describe, it, expect } from '@jest/globals';
 import {
   normalizeMentionText,
   isMatchableName,
+  isMatchableCode,
   findMentionedProductIds,
 } from '../productMentionMatch.util.js';
 
@@ -29,6 +30,17 @@ describe('isMatchableName', () => {
   });
 });
 
+describe('isMatchableCode', () => {
+  it('cần >= 3 ký tự và có cả chữ lẫn số', () => {
+    expect(isMatchableCode('aix 01')).toBe(true);
+    expect(isMatchableCode('sp001')).toBe(true);
+    expect(isMatchableCode('001')).toBe(false);
+    expect(isMatchableCode('meo')).toBe(false);
+    expect(isMatchableCode('a1')).toBe(false);
+    expect(isMatchableCode('')).toBe(false);
+  });
+});
+
 describe('findMentionedProductIds', () => {
   it('khóa/khoá, có/không dấu, hoa/thường đều khớp', () => {
     expect(findMentionedProductIds('khoá học ai thực chiến giá bao nhiêu', products)).toEqual([1]);
@@ -47,6 +59,16 @@ describe('findMentionedProductIds', () => {
 
   it('tên quá ngắn không khớp (AI, khoá) và mã dưới 3 ký tự không khớp', () => {
     expect(findMentionedProductIds('AI là gì? khoá nào hay? KH', products)).toEqual([]);
+  });
+
+  it('mã toàn số hoặc toàn chữ không khớp — dễ trùng tin thường (production 04/10 có mã "001", "meo")', () => {
+    const generic = [
+      { id: 6, product_name: 'Mèo', product_code: 'meo' },
+      { id: 8, product_name: 'Trà Thanh Nhiệt Vương Lão Cát', product_code: '001' },
+    ];
+    expect(findMentionedProductIds('con mèo nhà mình', generic)).toEqual([]);
+    expect(findMentionedProductIds('đơn số 001 của mình đâu', generic)).toEqual([]);
+    expect(findMentionedProductIds('trà thanh nhiệt vương lão cát còn hàng không', generic)).toEqual([8]);
   });
 
   it('tên chỉ khớp trọn cụm, không khớp một phần từ', () => {
