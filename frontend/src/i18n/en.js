@@ -5165,6 +5165,7 @@ export default {
     wizardZaloSyncSuccess: 'Contacts synced successfully.',
     wizardZaloSyncFailed: 'Failed to sync contacts.',
     wizardDisplayPickedFriends: 'Selected {count} friends from Zalo contacts.',
+    wizardFriendsSaveFailed: 'Could not save the selected friends. Please try again.',
     wizardLandingTitle: 'Choose landing pages',
     wizardLandingSearchPlaceholder: 'Search landing pages...',
     wizardLandingSearchEmpty: 'No matching landing pages found.',

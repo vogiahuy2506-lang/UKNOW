@@ -220,8 +220,8 @@ const formatUserMessageForDisplay = (content = '', t, locale = 'vi') => {
         || `Đã chọn ${slugs.length} landing: ${slugs.join(', ')}.`;
     }
     case 'zaloFriends':
-      return t('aiChatbot.wizardDisplayPickedFriends', { count: marker.friendIds?.length || marker.friendUids?.length || 0 })
-        || `Đã chọn ${marker.friendIds?.length || marker.friendUids?.length || 0} bạn bè từ danh bạ Zalo.`;
+      return t('aiChatbot.wizardDisplayPickedFriends', { count: marker.friendCount || marker.friendIds?.length || marker.friendUids?.length || 0 })
+        || `Đã chọn ${marker.friendCount || marker.friendIds?.length || marker.friendUids?.length || 0} bạn bè từ danh bạ Zalo.`;
     case 'planApproved':
       return t('aiChatbot.wizardDisplayPlanApproved') || 'Đã đồng ý với kế hoạch này.';
     case 'campaignBrief': {
@@ -1867,15 +1867,26 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     );
   };
 
+  // Rà soát C P3-4 — marker chỉ mang SỐ LƯỢNG (và câu chữ không còn tên bạn bè): danh sách UID đi vào prompt Gemini MỌI lượt sau đó (tới 50.000 UID
+  // + ≤5 tên). UID nằm ở `wizard_state` trên server: ghi bằng action `set_zalo_friends` và CHỜ xong rồi mới gửi marker — nếu ghi lỗi thì dừng
+  // (không quay lại nhét UID vào marker, không để backend nhận marker mà thiếu danh sách rồi hỏi lại im lặng).
   const handleWizardFriendsSubmit = async (friendIds, friends = []) => {
-    const labels = friends
-      .map((friend) => friend.display_name || friend.displayName || friend.name)
-      .filter(Boolean);
+    const sessionId = currentSessionIdRef.current;
+    if (!sessionId) {
+      toast.error(t('aiChatbot.wizardFriendsSaveFailed'));
+      return;
+    }
+    try {
+      await aiApi.patchWizardState(sessionId, 'set_zalo_friends', { friendIds });
+    } catch (error) {
+      toast.error(error?.response?.data?.message || t('aiChatbot.wizardFriendsSaveFailed'));
+      return;
+    }
     directRecipientsRef.current = { uids: friendIds, friends };
     setDirectRecipients({ uids: friendIds, friends });
     await emitWizardAnswer(
-      { gate: 'zaloFriends', accountId: wizardContext.senderAccountId, friendIds },
-      `Tôi chọn ${friendIds.length} bạn bè từ danh bạ Zalo${labels.length <= 5 && labels.length > 0 ? `: ${labels.join(', ')}` : ''}.`
+      { gate: 'zaloFriends', accountId: wizardContext.senderAccountId, friendCount: friendIds.length },
+      `Tôi chọn ${friendIds.length} bạn bè từ danh bạ Zalo.`
     );
   };
 

@@ -5180,6 +5180,7 @@ export default {
     wizardZaloSyncSuccess: 'Đồng bộ danh bạ thành công.',
     wizardZaloSyncFailed: 'Đồng bộ danh bạ thất bại.',
     wizardDisplayPickedFriends: 'Đã chọn {count} bạn bè từ danh bạ Zalo.',
+    wizardFriendsSaveFailed: 'Không lưu được danh sách bạn bè đã chọn. Bạn thử lại nhé.',
     wizardLandingTitle: 'Chọn landing page',
     wizardLandingSearchPlaceholder: 'Tìm landing...',
     wizardLandingSearchEmpty: 'Không tìm thấy landing phù hợp.',

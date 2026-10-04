@@ -328,6 +328,9 @@ export function extractWizardState(history = [], options = {}) {
     hasAttachedSpreadsheet: false,
     zaloGroupIds: [],
     zaloFriendIds: [],
+    // Rà soát C P3-4 — marker bạn bè Zalo chỉ mang SỐ LƯỢNG; danh sách UID nằm ở `wizard_state` trên server (action `set_zalo_friends`).
+    // Số lượng này chỉ để mergeWizardState đối chiếu với danh sách đã lưu — không phải gate, không lưu lại.
+    zaloFriendCount: null,
     // Rà soát C P2-7 — lựa chọn landing của nguồn "Đăng ký từ Landing Page" (cổng `landingLeads`).
     landingLeadsSlugs: [],
     landingLeadsAll: false,
@@ -380,6 +383,7 @@ export function extractWizardState(history = [], options = {}) {
       state.fileUsage = null;
       state.zaloGroupIds = [];
       state.zaloFriendIds = [];
+      state.zaloFriendCount = null;
       state.landingLeadsSlugs = [];
       state.landingLeadsAll = false;
       state.schedule = null;
@@ -513,6 +517,7 @@ export function extractWizardState(history = [], options = {}) {
       state.dataSource = null;
       state.zaloGroupIds = [];
       state.zaloFriendIds = [];
+      state.zaloFriendCount = null;
       state.landingLeadsSlugs = [];
       state.landingLeadsAll = false;
       state.schedule = null;
@@ -561,9 +566,12 @@ export function extractWizardState(history = [], options = {}) {
     } else if (marker.gate === 'zaloFriends') {
       recordMarkerGate('zaloFriends');
       state.senderAccountId = marker.accountId ?? state.senderAccountId;
+      // Marker mới chỉ mang `friendCount` (UID ở server — C P3-4); marker kiểu cũ còn mang `friendIds`/`friendUids` thì vẫn đọc được.
       state.zaloFriendIds = Array.isArray(marker.friendIds || marker.friendUids)
         ? (marker.friendIds || marker.friendUids)
         : [];
+      const friendCount = Number(marker.friendCount);
+      state.zaloFriendCount = Number.isInteger(friendCount) && friendCount > 0 ? friendCount : null;
     } else if (marker.gate === 'schedule') {
       recordMarkerGate('schedule');
       const mode = marker.mode || marker.value || 'once';
@@ -1495,7 +1503,8 @@ export const GATE_MERGE_POLICIES = {
 
   // marker-pick-array: như marker-pick nhưng usable là mảng không rỗng
   zaloGroupIds: { policy: 'marker-pick-array', gateName: 'zaloGroups' },
-  zaloFriendIds: { policy: 'marker-pick-array', gateName: 'zaloFriends' },
+  // Rà soát C P3-4: 'custom' — marker `zaloFriends` mới chỉ mang SỐ LƯỢNG nên derived rỗng; danh sách UID lấy từ bản đã lưu khi số lượng KHỚP.
+  zaloFriendIds: { policy: 'custom' },
 
   // Rà soát C P2-7: lựa chọn landing. 'custom' vì phải reset khi marker `landingLeads` HOẶC `dataSource` xuất hiện (chọn lại nguồn
   // người nhận thì lựa chọn landing cũ không được sống sót) — một gateName của marker-pick không biểu diễn được hai marker.
@@ -1679,6 +1688,20 @@ export function mergeWizardState(persistedGates, derived, { lastUserText = '' } 
           : ((d.sheetUrl ?? p.sheetUrl) && p.sheetCheck?.url === (d.sheetUrl ?? p.sheetUrl) ? p.sheetCheck : null);
       } else if (field === 'abandonedAtMessageCount') {
         merged.abandonedAtMessageCount = (hasAbandonMark && !isReactivated) ? abandonedMark : null;
+      } else if (field === 'zaloFriendIds') {
+        const derivedIds = Array.isArray(d.zaloFriendIds) ? d.zaloFriendIds : [];
+        const persistedIds = Array.isArray(p.zaloFriendIds) ? p.zaloFriendIds : [];
+        if (channelSwitched || hasAbandonMark) {
+          merged.zaloFriendIds = derivedIds;
+        } else if (markerGates.includes('zaloFriends')) {
+          // Marker kiểu cũ còn mang UID → derived. Marker mới (chỉ số lượng) → UID đã lưu bằng `set_zalo_friends`, và CHỈ nhận khi số lượng khớp
+          // marker: lệch nghĩa là danh sách đã lưu không thuộc lần chọn này → coi như chưa chọn (cổng hỏi lại) thay vì gửi nhầm danh sách cũ.
+          merged.zaloFriendIds = derivedIds.length > 0
+            ? derivedIds
+            : (Number.isInteger(d.zaloFriendCount) && persistedIds.length === d.zaloFriendCount ? persistedIds : []);
+        } else {
+          merged.zaloFriendIds = persistedIds.length > 0 ? persistedIds : derivedIds;
+        }
       } else if (field === 'landingLeadsSlugs' || field === 'landingLeadsAll') {
         const resetLanding = markerGates.includes('landingLeads')
           || markerGates.includes('dataSource')
@@ -1738,6 +1761,7 @@ export function computeWizardMeta(prevMeta = {}, gateAsked = null) {
 export const WIZARD_STATE_ACTIONS = [
   'approve_plan',
   'set_sheet_url',
+  'set_zalo_friends',
   'record_template_saved',
   'reset_plan',
   'mark_campaign_created',
@@ -1806,6 +1830,17 @@ export function applyWizardStateAction(state, action, payload = {}) {
       next.gates.sheetUrl = sheetUrl;
       next.gates.sheetCheck = null;
       if (!next.gates.dataSource) next.gates.dataSource = 'sheet';
+      return { state: next, changed: true };
+    }
+    case 'set_zalo_friends': {
+      // Rà soát C P3-4 — UID bạn bè Zalo đã chọn nằm ở `wizard_state` (server), KHÔNG đi trong marker/lịch sử chat vào prompt Gemini mọi lượt.
+      // FE gọi action này (chờ xong) TRƯỚC khi gửi marker `{ gate:'zaloFriends', friendCount }`. Ghi lại cùng danh sách vẫn là một lần ghi hợp lệ.
+      const raw = Array.isArray(payload?.friendIds) ? payload.friendIds : [];
+      const friendIds = [...new Set(raw.map((id) => String(id ?? '').trim()).filter(Boolean))];
+      if (friendIds.length === 0) throw invalidAction('friendIds không được để trống');
+      if (friendIds.some((id) => !/^\d{6,32}$/.test(id))) throw invalidAction('friendIds chứa UID Zalo không hợp lệ');
+      if (friendIds.length > MAX_AI_MANUAL_RECIPIENTS) throw invalidAction(`Chỉ được chọn tối đa ${MAX_AI_MANUAL_RECIPIENTS} người nhận`);
+      next.gates.zaloFriendIds = friendIds;
       return { state: next, changed: true };
     }
     case 'record_template_saved': {
