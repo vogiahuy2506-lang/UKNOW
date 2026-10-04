@@ -5,7 +5,10 @@
  * tài liệu ở các trạng thái xử lý khác nhau.
  *
  * Giao diện Studio (từ 28/09/2026): cột trái danh sách chatbot, giữa khung chat thử có nút
- * "Cấu hình" mở hộp năm phần (Kiến thức là MỘT PHẦN trong hộp đó), cột phải "Triển khai".
+ * "Cấu hình" mở hộp năm phần (Kiến thức là MỘT PHẦN trong hộp đó), cột phải "Đưa chatbot tới khách".
+ * 04/10/2026 (PLAN_SUA_3_MAN, Studio gọn): mục menu "Chatbot của tôi"; cột phải đổi tên + ba nhóm "Trên website" / "Trên ứng dụng
+ * nhắn tin" / "Sao chép & bán"; Facebook và Zalo OA đã gỡ. Các ca dưới đây ĐÃ đổi chữ theo nhưng CHƯA chạy lại Playwright —
+ * chạy một lượt trên máy local trước khi chèn ảnh vào bài.
  * Chỉ mở xem, KHÔNG bấm "Lưu cấu hình".
  */
 import {
@@ -74,18 +77,18 @@ export default {
     },
     {
       name: 'menu-tao-ai-chatbot',
-      caption: 'menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục "Tạo AI Chatbot"',
+      caption: 'menu bên trái đang mở nhóm AI Chatbot, khoanh đỏ mục "Chatbot của tôi"',
       async take(page, { baseURL }) {
         return sidebarShot(page, {
           groupName: 'AI Chatbot',
-          itemName: 'Tạo AI Chatbot',
+          itemName: 'Chatbot của tôi',
           baseURL,
         });
       },
     },
     {
       name: 'toan-trang-studio',
-      caption: 'trang Tạo AI Chatbot gồm ba phần',
+      caption: 'trang Chatbot của tôi gồm ba phần',
       async take(page) {
         await openStudio(page);
         return contentShot(page, page.locator('main').first());
@@ -137,15 +140,14 @@ export default {
     },
     {
       name: 'tab-trien-khai',
-      // 28/09/2026: giao diện thêm Zalo cá nhân/WhatsApp/Telegram — "bốn lựa chọn" thành cả lưới
-      // "Kênh hội thoại"; chú thích seed đổi theo.
-      caption: 'tab Triển khai, khoanh đỏ các ô chọn kênh',
+      // 04/10/2026: nhóm "Kênh hội thoại" đổi tên "Trên ứng dụng nhắn tin" (còn Zalo cá nhân/WhatsApp/Telegram).
+      caption: 'cột Đưa chatbot tới khách, khoanh đỏ các ô chọn kênh',
       async take(page) {
         await openStudio(page);
-        const grid = page.getByText('Kênh hội thoại', { exact: true }).first()
+        const grid = page.getByText('Trên ứng dụng nhắn tin', { exact: true }).first()
           .locator('xpath=following-sibling::div[1]');
         if (!(await grid.isVisible({ timeout: 10_000 }).catch(() => false))) {
-          throw new Error('Không thấy lưới "Kênh hội thoại" ở cột Triển khai');
+          throw new Error('Không thấy lưới "Trên ứng dụng nhắn tin" ở cột Đưa chatbot tới khách');
         }
         await highlight(grid);
         await page.waitForTimeout(400);
@@ -157,7 +159,8 @@ export default {
       caption: 'hộp Giao diện Widget, khoanh đỏ phần Nhãn nút mở chat',
       async take(page) {
         await openStudio(page);
-        await page.getByTitle('Tuỳ chỉnh giao diện widget', { exact: true }).first().click();
+        // Biểu tượng bảng màu đã bỏ (04/10/2026): nay là dòng chữ ngay dưới ba ô "Trên website".
+        await page.getByText('Đổi màu, vị trí, lời mời mở chat', { exact: true }).first().click();
         const card = dialogCard(page, 'Nhãn nút mở chat');
         await card.waitFor({ state: 'visible', timeout: 15_000 });
         const heading = card.getByText('Nhãn nút mở chat', { exact: true }).first();
@@ -171,19 +174,20 @@ export default {
       },
     },
     {
-      name: 'hop-zalo-oa',
-      caption: 'hộp Cấu hình Zalo OA, khoanh đỏ các ô App ID, App Secret và Webhook URL',
+      // Zalo OA đã gỡ khỏi Studio (04/10/2026): thay bằng hộp Zalo cá nhân.
+      name: 'hop-zalo-ca-nhan',
+      caption: 'hộp Cấu hình Zalo cá nhân, khoanh đỏ công tắc bật chatbot cho một tài khoản',
       async take(page) {
         await openStudio(page);
-        await page.getByTitle('Zalo OA — Tự động hồi đáp', { exact: true }).first().click();
-        const card = dialogCard(page, 'Cấu hình Zalo OA');
+        await page.getByTitle('Zalo cá nhân — Bật chatbot cho từng tài khoản', { exact: true }).first().click();
+        const card = dialogCard(page, 'Cấu hình Zalo cá nhân');
         await card.waitFor({ state: 'visible', timeout: 15_000 });
-        await card.getByText('App ID (Zalo App ID)', { exact: true }).first()
-          .waitFor({ state: 'visible', timeout: 15_000 });
         await hideVolatileChrome(page);
-        for (const label of ['App ID (Zalo App ID)', 'App Secret (Secret Key)', 'Webhook URL']) {
-          await highlight(card.getByText(label, { exact: true }).first().locator('xpath=..'));
-        }
+        const toggle = card.getByRole('switch').first();
+        const target = (await toggle.isVisible({ timeout: 5_000 }).catch(() => false))
+          ? toggle.locator('xpath=..')
+          : card.getByText(/Mỗi tài khoản chỉ gắn một chatbot/).first();
+        await highlight(target);
         await page.waitForTimeout(200);
         return card;
       },

@@ -42,7 +42,7 @@ export default {
   shots: [
     {
       name: 'nut-cau-hinh-chatbot',
-      caption: 'trang Tạo AI Chatbot, đã chọn một chatbot, khoanh đỏ chỗ mở phần Cấu hình',
+      caption: 'trang Chatbot của tôi, đã chọn một chatbot, khoanh đỏ chỗ mở phần Cấu hình',
       localOnly: true,
       async take(page) {
         const { configButton } = await openStudio(page);

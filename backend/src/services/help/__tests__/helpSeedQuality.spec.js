@@ -7,7 +7,7 @@
  * 2. Dán URL trần (`/app/settings/inbox`) thay vì chỉ đường trên giao diện.
  *    Người dùng không biết `/app/...` là gì.
  * 3. Gọi sai tên mục menu. Bài từng ghi "Chatbot Studio" và "Hộp thư" trong khi
- *    giao diện ghi "Tạo AI Chatbot" và "Lịch sử trò chuyện" — người dùng đi tìm
+ *    giao diện ghi "Chatbot của tôi" và "Lịch sử trò chuyện" — người dùng đi tìm
  *    thứ không tồn tại.
  */
 import { readFileSync } from 'node:fs';
@@ -23,7 +23,7 @@ import { CHANNEL_ATTACHMENT_LIMITS } from '../../../../../frontend/src/features/
  * Đổi menu bên frontend thì cập nhật bảng này, test sẽ chỉ ra bài nào phải sửa theo.
  */
 const REAL_MENU = {
-  'AI Chatbot': ['Tạo AI Chatbot', 'Lịch sử trò chuyện', 'Thư viện media'],
+  'AI Chatbot': ['Chatbot của tôi', 'Lịch sử trò chuyện', 'Thư viện media'],
   'Chiến dịch': [
     'Gửi nhanh',
     'Quản lý kênh gửi',
@@ -115,6 +115,29 @@ const UI_LABELS_IN_ARTICLES = [
   ['campaign-theo-doi', 'ordersTable.title', 'Bảng đơn hàng'],
   ['campaign-theo-doi', 'employee.permissions.reportsView', 'Báo cáo & Thống kê'],
   ['campaign-theo-doi', 'employee.permissions.campaignView', 'Chiến dịch — xem'],
+  // Studio chatbot gọn (04/10/2026, PLAN_SUA_3_MAN): đổi tên mục menu, cột "Triển khai" thành "Đưa chatbot tới khách" với ba
+  // nhóm mới, hai ô nhúng/kênh đổi tên, "Chia sẻ thành viên" thành "Gửi bản sao". Bài `chatbot` tả đúng các nhãn đó.
+  ['chatbot', 'nav.chatbotStudio', 'Chatbot của tôi'],
+  ['chatbot', 'chatbot.studio.deployTitle', 'Đưa chatbot tới khách'],
+  ['chatbot', 'chatbot.studio.deployWebTitle', 'Trên website'],
+  ['chatbot', 'chatbot.studio.embedScriptTitle', 'Nút chat nổi'],
+  ['chatbot', 'chatbot.studio.embedIframeTitle', 'Khung chat trong trang'],
+  ['chatbot', 'chatbot.studio.embedLinkTitle', 'Link chat riêng'],
+  ['chatbot', 'chatbot.studio.deployMessengerTitle', 'Trên ứng dụng nhắn tin'],
+  ['chatbot', 'chatbot.studio.deployCopySellTitle', 'Sao chép & bán'],
+  ['chatbot', 'chatbot.studio.shareCopyTitle', 'Gửi bản sao'],
+  ['chatbot', 'chatbot.studio.marketplaceSellTitle', 'Đăng bán trên Marketplace'],
+  ['chatbot', 'chatbot.studio.marketplaceSoldTitle', 'Đã đăng bán'],
+  ['chatbot', 'chatbot.studio.deployAppearanceLink', 'Đổi màu, vị trí, lời mời mở chat'],
+  ['chatbot', 'chatbot.studio.newChat', 'Cuộc trò chuyện mới'],
+  ['chatbot', 'chatbot.studio.addDocuments', 'Thêm tài liệu'],
+  ['chatbot', 'chatbot.studio.statusOn', 'Đang bật trả lời'],
+  ['chatbot', 'chatbot.studio.statusOff', 'Đã tắt trả lời'],
+  ['chatbot', 'chatbot.studio.channelsNone', 'Chưa gắn kênh nào'],
+  ['chatbot', 'chatbot.studio.originShared', 'Bản sao'],
+  ['chatbot', 'chatbot.studio.originPurchased', 'Đã mua'],
+  ['chatbot', 'chatbot.studio.tileOff', 'Chưa bật'],
+  ['chatbot', 'chatbot.studio.tabDeploy', 'Triển khai'],
   ['nhan-vien', 'employee.teamActivity', 'Hoạt động nhóm'],
   ['nhan-vien', 'employee.teamColEmployee', 'Nhân viên'],
   ['nhan-vien', 'employee.teamColRunning', 'Chiến dịch đang chạy'],
@@ -342,6 +365,19 @@ describe('chất lượng bài trợ giúp seed', () => {
     const bannedMenuLabels = [
       // PLAN_SO_LIEU_DUNG_GON_KHOP PR-4b: mục menu đổi "Hiệu quả chiến dịch" → "Giám sát gửi tin" (menu = tiêu đề trang).
       'Hiệu quả chiến dịch',
+      // Studio chatbot gọn (04/10/2026): mục menu "Tạo AI Chatbot" đổi thành "Chatbot của tôi"; cột "Triển khai" thành "Đưa
+      // chatbot tới khách" với ba ô nhúng tên mới; Facebook và Zalo OA đã gỡ khỏi Studio; "Chat mới" thành "Cuộc trò chuyện mới".
+      'Tạo AI Chatbot',
+      'Nhúng lên website',
+      'Kênh hội thoại',
+      '**Chat Widget**',
+      '**iFrame**',
+      '**Public Link**',
+      '**Chia sẻ thành viên**',
+      '**Đăng Marketplace**',
+      'Test webhook',
+      'chấm cam',
+      'nút **Chat mới**',
       'Menu **Chatbot Studio**',
       'Menu **Hộp thư**',
       'Menu **Nhân viên**',

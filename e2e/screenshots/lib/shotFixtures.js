@@ -493,7 +493,7 @@ export async function ensureChatbotHoursDemo() {
       [people[OWNER_USERNAME]],
     );
     if (!rows[0]) throw new Error('Chưa có chatbot mẫu. Nạp lại DB với E2E_SEED_CHATBOT=1 (hoặc E2E_SEED_ALL=1).');
-    // Chỉnh MỌI chatbot của chủ tài khoản: trang Tạo AI Chatbot tự chọn chatbot theo thứ tự riêng của
+    // Chỉnh MỌI chatbot của chủ tài khoản: trang Chatbot của tôi tự chọn chatbot theo thứ tự riêng của
     // nó (không phải id nhỏ nhất), chỉnh một con thì dễ chụp trúng con chưa chỉnh.
     await db.query(
       `UPDATE custom_chatbots

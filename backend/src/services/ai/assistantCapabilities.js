@@ -141,8 +141,9 @@ function buildUnsupportedChannelCapability() {
   const joinEn = (items) => `${items.slice(0, -1).join(', ')}, or ${items[items.length - 1]}`;
   return {
     id: 'unsupported_channel',
-    // Mục này nói về kênh GỬI CHIẾN DỊCH (Email, Zalo, và Telegram/WhatsApp khi cờ bật). Messenger thì chatbot VẪN
-    // nối được (tab Triển khai của Tạo AI Chatbot) — trước 21/09/2026 regex khớp trần tên kênh, nên hỏi "chatbot
+    // Mục này nói về kênh GỬI CHIẾN DỊCH (Email, Zalo, và Telegram/WhatsApp khi cờ bật). Telegram/WhatsApp/Zalo thì
+    // chatbot nối được (cột "Đưa chatbot tới khách" của mục Chatbot của tôi; Messenger/Zalo OA đã gỡ khỏi Studio
+    // 04/10/2026) — trước 21/09/2026 regex khớp trần tên kênh, nên hỏi "chatbot
     // có nối Telegram được không" bị trả câu cố định "chưa hỗ trợ". Các kênh chatbot-nối-được chỉ tính là không
     // hỗ trợ khi câu hỏi nói về GỬI/chiến dịch và KHÔNG nói về chatbot; còn lại để bộ định tuyến + bài hướng dẫn
     // trả lời. SMS và push không có ở đâu cả.
