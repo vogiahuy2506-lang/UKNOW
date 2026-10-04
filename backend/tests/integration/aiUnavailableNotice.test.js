@@ -246,6 +246,29 @@ describe('bản tin tuần — câu xin lỗi KHÔNG phải "AI trả lời" (SQ
     expect(st.aiReplies).toBe(3);
   });
 
+  // EXTRA-A5/A6: câu TĨNH ngoài giờ / chạm trần lượt cũng không phải AI trả lời — web ghi nhãn qua metadata, Telegram/WhatsApp qua
+  // channel_messages.metadata. Zalo cá nhân chỉ đếm source='ai_auto_reply' nên nhãn ở đây là đối chứng (vốn không dính).
+  it('câu tĩnh ngoài giờ / chạm trần lượt (ai_outside_hours, ai_rate_limited) không được đếm — web + kênh; câu AI thật vẫn đếm', async () => {
+    const s = await seed();
+    await web(s, 'visitor', 'Chào shop');
+    await web(s, 'assistant', 'Hiện ngoài giờ hỗ trợ ạ', { source: 'ai_outside_hours' });
+    await web(s, 'assistant', 'Dạ có ạ'); // web: câu AI thật không có nhãn
+    await zalo(s, 'agent', 'Hiện ngoài giờ hỗ trợ ạ', { source: 'ai_outside_hours' });
+    await zalo(s, 'agent', 'Trợ lý đang bận', { source: 'ai_rate_limited' });
+    await zalo(s, 'agent', 'Dạ giá 100k ạ', { source: 'ai_auto_reply' });
+    await channel(s, 'visitor', 'Chào shop');
+    await channel(s, 'bot', 'Hiện ngoài giờ hỗ trợ ạ', { source: 'ai_outside_hours' });
+    await channel(s, 'bot', 'Trợ lý đang bận, bạn thử lại sau', { source: 'ai_rate_limited' });
+    await channel(s, 'bot', 'Dạ còn hàng ạ'); // kênh: câu AI thật không có nhãn
+
+    const st = await stats(s);
+
+    expect(aiOf(st, 'web')).toBe(1);
+    expect(aiOf(st, 'zalo_personal')).toBe(1);
+    expect(aiOf(st, 'telegram')).toBe(1);
+    expect(st.aiReplies).toBe(3);
+  });
+
   it('tin xin lỗi CŨ (ghi trước khi có nhãn: nhãn ai_auto_reply / role bot, không metadata) cũng bị loại theo đầu câu cố định', async () => {
     const s = await seed();
     await web(s, 'assistant', VISITOR_CHAT_ERROR_MESSAGE);

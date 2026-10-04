@@ -46,7 +46,7 @@ import { buildContactAck } from '../utils/contactAck.util.js';
 import chatbotContactAlertRepository from '../repositories/chatbot/chatbotContactAlert.repository.js';
 import { sanitizePublicChatHistory, validatePublicChatMessage } from '../utils/publicChatInput.util.js';
 import { handleAiUnavailable } from '../services/chatbot/aiUnavailableNotice.service.js';
-import { AI_UNAVAILABLE_SOURCE, AI_UNAVAILABLE_REASON, classifyAiFailure } from '../utils/aiUnavailable.util.js';
+import { AI_UNAVAILABLE_SOURCE, AI_UNAVAILABLE_REASON, AI_OUTSIDE_HOURS_SOURCE, classifyAiFailure } from '../utils/aiUnavailable.util.js';
 
 const ZALO_OA_API_BASE = 'https://openapi.zalo.me/v3.0';
 const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.';
@@ -1797,7 +1797,8 @@ class ChatbotController {
             await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
               role: 'assistant',
               content,
-              replySource: 'ai_outside_hours',
+              // `addWebChatMessage` nhận `metadata` (không có tham số replySource) — nhãn để bản tin tuần không đếm câu tĩnh này là "AI trả lời" (EXTRA-A5).
+              metadata: { source: AI_OUTSIDE_HOURS_SOURCE },
             });
           }
         }
@@ -2063,7 +2064,8 @@ class ChatbotController {
             await chatbotRepository.addWebChatMessage(conversation.id, chatbot.id_user, {
               role: 'assistant',
               content,
-              replySource: 'ai_outside_hours',
+              // `addWebChatMessage` nhận `metadata` (không có tham số replySource) — nhãn để bản tin tuần không đếm câu tĩnh này là "AI trả lời" (EXTRA-A5).
+              metadata: { source: AI_OUTSIDE_HOURS_SOURCE },
             });
           }
         }

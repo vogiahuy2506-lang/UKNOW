@@ -1,8 +1,11 @@
 import { describe, expect, it } from '@jest/globals';
 import {
+  AI_OUTSIDE_HOURS_SOURCE,
+  AI_RATE_LIMITED_SOURCE,
   AI_UNAVAILABLE_REASON,
   AI_UNAVAILABLE_SOURCE,
   LEGACY_APOLOGY_PREFIX,
+  NOT_AI_REPLY_SOURCES,
   classifyAiFailure,
   unavailableMetadata,
 } from '../aiUnavailable.util.js';
@@ -48,5 +51,15 @@ describe('LEGACY_APOLOGY_PREFIX — lọc tin xin lỗi CŨ (chưa có nhãn) kh
   it('cả hai câu xin lỗi cố định của aiCreditMeter vẫn bắt đầu bằng đúng chuỗi này (đổi câu mà quên chuỗi → bản tin lại đếm nhầm)', () => {
     expect(VISITOR_CHAT_UNAVAILABLE_MESSAGE.startsWith(LEGACY_APOLOGY_PREFIX)).toBe(true);
     expect(VISITOR_CHAT_ERROR_MESSAGE.startsWith(LEGACY_APOLOGY_PREFIX)).toBe(true);
+  });
+});
+
+// EXTRA-A5/A6: bộ lọc SQL của bản tin tuần đọc mảng này — ghim TỪNG phần tử (thiếu một nhãn là câu tĩnh đó lại bị đếm là "AI trả lời").
+describe('NOT_AI_REPLY_SOURCES — mọi nhãn bản tin tuần KHÔNG đếm là "AI trả lời"', () => {
+  it('đúng 3 nhãn, giá trị khớp với nơi ghi ở các kênh', () => {
+    expect(AI_OUTSIDE_HOURS_SOURCE).toBe('ai_outside_hours');
+    expect(AI_RATE_LIMITED_SOURCE).toBe('ai_rate_limited');
+    expect(NOT_AI_REPLY_SOURCES).toEqual(['ai_unavailable', 'ai_outside_hours', 'ai_rate_limited']);
+    expect(Object.isFrozen(NOT_AI_REPLY_SOURCES)).toBe(true);
   });
 });

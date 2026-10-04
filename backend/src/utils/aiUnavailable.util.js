@@ -7,6 +7,17 @@
 export const AI_UNAVAILABLE_SOURCE = 'ai_unavailable';
 
 /**
+ * Gia tri `metadata.source` cua cau TINH khi chatbot ngoai gio hoat dong / khach cham tran luot (staticReply cua
+ * chatbotActiveHours / chatbotRateLimit) - cung KHONG phai cau tra loi do AI tao. Ghi o MOI kenh (web, Zalo ca nhan, Telegram,
+ * WhatsApp) de ban tin tuan khong dem la "AI tra loi" (EXTRA-A5 / EXTRA-A6).
+ */
+export const AI_OUTSIDE_HOURS_SOURCE = 'ai_outside_hours';
+export const AI_RATE_LIMITED_SOURCE = 'ai_rate_limited';
+
+/** Moi nhan `metadata.source` ma ban tin tuan KHONG dem la "AI tra loi" (bo loc SQL chatbotDigest.repository doc mang nay). */
+export const NOT_AI_REPLY_SOURCES = Object.freeze([AI_UNAVAILABLE_SOURCE, AI_OUTSIDE_HOURS_SOURCE, AI_RATE_LIMITED_SOURCE]);
+
+/**
  * Đầu chung của HAI câu xin lỗi cố định (VISITOR_CHAT_UNAVAILABLE_MESSAGE / VISITOR_CHAT_ERROR_MESSAGE ở aiCreditMeter.service.js).
  * Chỉ để lọc dữ liệu CŨ: tin xin lỗi ghi TRƯỚC khi có nhãn `ai_unavailable` mang nhãn 'ai_auto_reply' / role 'bot' và vẫn
  * nằm trong khoảng 7 ngày của bản tin tuần đầu tiên sau triển khai. Spec ghim hai câu đó vẫn bắt đầu bằng chuỗi này.

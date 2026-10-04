@@ -52,7 +52,8 @@ jest.unstable_mockModule('../../services/chatbot/aiUnavailableNotice.service.js'
   default: { handleAiUnavailable },
 }));
 jest.unstable_mockModule('../../services/chatbot/chatbotRateLimit.service.js', () => ({
-  default: { checkBeforeAi, markRateLimitNotified: jest.fn() },
+  // hasKey/setKeyWithTtl: kho khoá có TTL mà chatbotActiveHours.service (thật) dùng để nhớ "đã gửi câu ngoài giờ".
+  default: { checkBeforeAi, markRateLimitNotified: jest.fn(), hasKey: jest.fn(async () => false), setKeyWithTtl: jest.fn(async () => {}) },
 }));
 jest.unstable_mockModule('../../repositories/ai/unifiedInbox.repository.js', () => ({
   default: { isAiPaused },
@@ -989,5 +990,71 @@ describe('G3b — chủ hết credit / chạm hạn mức AI ở widget công kh
       data: expect.objectContaining({ content: 'Xin lỗi, hiện chưa thể trả lời. Vui lòng thử lại sau.' }),
     }));
     expect(handleAiUnavailable).toHaveBeenCalledWith({ ownerUserId: 7, reason: 'ai_token_limit' });
+  });
+});
+
+// PLAN_SUA_AI_DOT4 PR-7 (EXTRA-A5): `addWebChatMessage(conversationId, userId, { role, content, attachments, metadata })` KHÔNG có
+// tham số `replySource` — nơi gọi từng truyền `replySource: 'ai_outside_hours'` nên nhãn rơi mất, bản tin tuần đếm câu tĩnh ngoài
+// giờ là "AI trả lời". Phải truyền đúng tên tham số `metadata`.
+describe('EXTRA-A5 — câu tĩnh ngoài giờ ở widget web mang nhãn metadata.source = ai_outside_hours', () => {
+  // start === end: không khớp nhánh nào của isWithinActiveHours → LUÔN ngoài giờ (xác định, không phụ thuộc đồng hồ).
+  const alwaysOutside = {
+    days: [0, 1, 2, 3, 4, 5, 6],
+    slots: [{ start: '08:00', end: '08:00' }],
+    outsideAction: 'message',
+    outsideMessage: 'Hiện ngoài giờ hỗ trợ ạ',
+  };
+  const outsideBot = { ...chatbot, active_hours: alwaysOutside };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(outsideBot);
+    findChatbotByWidgetKey.mockResolvedValue(outsideBot);
+    checkBeforeAi.mockResolvedValue({ allowed: true });
+    assertAvailable.mockResolvedValue({ ok: true });
+    isLimitError.mockReturnValue(false);
+    maybeSetWebChatVisitorNameFromMessage.mockResolvedValue(undefined);
+    addWebChatMessage.mockResolvedValue({ id: 1 });
+    chat.mockResolvedValue({ content: 'KHÔNG ĐƯỢC GỌI AI' });
+    consume.mockResolvedValue(undefined);
+    broadcast.mockReturnValue(undefined);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getOrCreateWebChatConversation.mockResolvedValue({ id: 200 });
+    isAiPaused.mockResolvedValue(false);
+  });
+
+  const assistantRows = () => addWebChatMessage.mock.calls.map((c) => c[2]).filter((m) => m.role === 'assistant');
+
+  const expectLabelled = (res) => {
+    expect(chat).not.toHaveBeenCalled();
+    expect(consume).not.toHaveBeenCalled();
+    expect(assistantRows()).toHaveLength(1);
+    expect(assistantRows()[0]).toEqual({
+      role: 'assistant',
+      content: 'Hiện ngoài giờ hỗ trợ ạ',
+      metadata: { source: 'ai_outside_hours' },
+    });
+    expect(assistantRows()[0]).not.toHaveProperty('replySource');
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ content: 'Hiện ngoài giờ hỗ trợ ạ', reason: 'outside_active_hours' }) })
+    );
+  };
+
+  it('chatWithCustomChatbot (widget theo key): dòng assistant ghi metadata.source = ai_outside_hours', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbot(
+      { params: { widgetKey: 'wk_abc' }, body: { message: 'xin chào', sessionId: 'sess_oh_1', history: [] } },
+      res
+    );
+    expectLabelled(res);
+  });
+
+  it('chatWithCustomChatbotById (widget theo id): dòng assistant ghi metadata.source = ai_outside_hours', async () => {
+    const res = makeRes();
+    await chatbotController.chatWithCustomChatbotById(
+      { params: { chatbotId: '12' }, body: { message: 'xin chào', sessionId: 'sess_oh_2', history: [] } },
+      res
+    );
+    expectLabelled(res);
   });
 });
