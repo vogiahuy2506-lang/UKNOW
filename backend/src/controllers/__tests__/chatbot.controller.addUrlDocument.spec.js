@@ -5,6 +5,7 @@
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, jest } from '@jest/globals';
 import dns from 'node:dns';
 import http from 'node:http';
+import net from 'node:net';
 
 const knowledgeBaseService = {
   getKBById: jest.fn(),
@@ -66,6 +67,11 @@ describe('chatbotController.addUrlDocument — chống SSRF', () => {
       if (req.url === '/to-private') {
         res.writeHead(301, { location: 'http://10.20.30.40/secret' });
         res.end();
+        return;
+      }
+      if (req.url === '/loi-500') {
+        res.writeHead(500, { 'content-type': 'text/plain' });
+        res.end('Internal error');
         return;
       }
       res.writeHead(200, { 'content-type': 'text/html' });
@@ -135,5 +141,38 @@ describe('chatbotController.addUrlDocument — chống SSRF', () => {
       source_url: `${base}/guide`,
       content_text: expect.stringContaining('Nội dung hướng dẫn'),
     }));
+  });
+
+  it('D-04: host công khai trả HTTP 500 → tài liệu vẫn lưu nhưng KHÔNG chứa câu lỗi thô; câu thô chỉ ở log máy chủ', async () => {
+    process.env.SSRF_ALLOW_LOOPBACK = 'true';
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const res = mockRes();
+
+    await chatbotController.addUrlDocument(makeReq(`${base}/loi-500`), res);
+
+    expect(res.statusCode).toBe(201);
+    const saved = knowledgeBaseService.addDocument.mock.calls[0][2].content_text;
+    expect(saved).toMatch(/^⚠️ Không đọc được nội dung từ /);
+    expect(saved).not.toMatch(/Request failed|status code|Failed to extract|Status:/);
+    expect(JSON.stringify(res.body)).not.toMatch(/Request failed|status code/);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Failed to scrape URL'), expect.stringContaining('status code 500'));
+  });
+
+  it('D-04: kết nối bị từ chối (cổng đóng) → tài liệu không lộ lỗi mạng thô (ECONNREFUSED…), log máy chủ vẫn có', async () => {
+    process.env.SSRF_ALLOW_LOOPBACK = 'true';
+    const warn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const closed = net.createServer();
+    await new Promise((resolve) => closed.listen(0, '127.0.0.1', resolve));
+    const closedPort = closed.address().port;
+    await new Promise((resolve) => closed.close(resolve));
+    const res = mockRes();
+
+    await chatbotController.addUrlDocument(makeReq(`http://127.0.0.1:${closedPort}/trang`), res);
+
+    expect(res.statusCode).toBe(201);
+    const saved = knowledgeBaseService.addDocument.mock.calls[0][2].content_text;
+    expect(saved).toMatch(/^⚠️ Không đọc được nội dung từ /);
+    expect(saved).not.toMatch(/ECONNREFUSED|connect |Failed to extract|Status:/);
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('Failed to scrape URL'), expect.any(String));
   });
 });
