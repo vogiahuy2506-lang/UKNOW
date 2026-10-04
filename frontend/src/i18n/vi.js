@@ -5125,7 +5125,7 @@ export default {
     recipientColumnMismatchTitle: 'Thiếu cột dữ liệu cần thiết cho kênh gửi',
     // Welcome messages
     welcomeAdmin: 'Xin chào Admin! 📊 Tôi có thể giúp bạn phân tích dữ liệu nền tảng Founder AI theo thời gian thực.\n\nBạn có thể hỏi tôi về:\n- Doanh thu, đơn hàng tháng này\n- Số lượng thành viên, ai sắp hết hạn\n- Phân bố gói dịch vụ\n- Tình trạng chiến dịch toàn nền tảng\n\nHãy hỏi tôi!',
-    welcomeUser: 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Tạo và chạy chiến dịch tự động\n🌐 Thiết kế Landing Page\n\nChỉ cần mô tả yêu cầu, tôi sẽ tự tạo và chạy chiến dịch cho bạn!',
+    welcomeUser: 'Chào bạn! 👋 Tôi có thể giúp bạn:\n\n📧 Viết template Email / Zalo\n🚀 Soạn sẵn chiến dịch gửi tin\n🌐 Thiết kế Landing Page\n\nChỉ cần mô tả yêu cầu, tôi soạn sẵn chiến dịch để bạn xem lại và xác nhận!',
     // Câu hỏi tự động khi mở panel từ nút "Hỏi trợ lý về mục này" ở trang hướng dẫn
     askAboutArticle: 'Làm sao dùng {title}?',
     askAboutSlug: 'Hướng dẫn tôi về bài /huong-dan/{slug}',

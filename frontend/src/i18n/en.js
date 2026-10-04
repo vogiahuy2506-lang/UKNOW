@@ -5110,7 +5110,7 @@ export default {
     recipientColumnMismatchTitle: 'Missing the column this channel needs',
     // Welcome messages
     welcomeAdmin: 'Hello Admin! 📊 I can help you analyze Founder AI platform data in real-time.\n\nYou can ask me about:\n- Revenue, orders this month\n- Member count, who\'s expiring soon\n\n- Service package distribution\n- Platform-wide campaign status\n\nFeel free to ask me!',
-    welcomeUser: 'Hello! 👋 I can help you:\n\n📧 Write Email / Zalo templates\n🚀 Create and run automatic campaigns\n🌐 Design Landing Pages\n\nJust describe your needs, and I\'ll create and run campaigns for you!',
+    welcomeUser: 'Hello! 👋 I can help you:\n\n📧 Write Email / Zalo templates\n🚀 Draft ready-to-send campaigns\n🌐 Design Landing Pages\n\nJust describe your needs, and I\'ll draft the campaign for you to review and confirm!',
     // Auto-filled question when the panel opens from the "Ask assistant about this" button on a docs page
     askAboutArticle: 'How do I use {title}?',
     askAboutSlug: 'Guide me about /huong-dan/{slug}',
