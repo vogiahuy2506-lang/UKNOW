@@ -1,6 +1,7 @@
 import axios from 'axios';
 import Papa from 'papaparse';
 import { getReadSheetFetchTimeoutMs } from './readSheetConfig.util.js';
+import { fenceUntrustedContent } from './untrustedContent.util.js';
 
 const SHEET_URL_RE = /https:\/\/docs\.google\.com\/spreadsheets\/d\/[a-zA-Z0-9-_]+(?:\/[^\s)"'\]]*)?/g;
 const DOC_URL_RE   = /https:\/\/docs\.google\.com\/document\/d\/[a-zA-Z0-9-_]+(?:\/[^\s)"'\]]*)?/g;
@@ -99,8 +100,9 @@ export async function attachGoogleUrlParts(parts, content, cache, { excludeUrls 
     const fetched = cache.get(info.id);
     if (fetched) {
       const label = info.type === 'sheet' ? 'Google Sheet' : 'Google Docs';
+      // C P1-4 (d): chữ trong Docs/Sheet là DỮ LIỆU người dùng đưa vào, không phải mệnh lệnh cho trợ lý — gắn rào quanh khối.
       parts.push({
-        text: `[Nội dung ${label}: "${info.url}"]:\n${fetched}\n[Hết nội dung ${label}]`,
+        text: fenceUntrustedContent(`Nội dung ${label}: "${info.url}"`, fetched, `Hết nội dung ${label}`),
       });
     }
   }

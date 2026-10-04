@@ -75,6 +75,7 @@ import campaignNodeRegistryService, { isZaloPlanNodeSubtype } from '../campaign/
 import { isAdapterCampaignChannel, isChannelBlockedByPlan, buildChannelNotInPlanMessage } from '../campaign/campaignChannelFlags.util.js';
 import aiCampaignDraftService from './aiCampaignDraft.service.js';
 import { resolveLandingAudienceChoice } from '../../utils/campaignLandingAudience.util.js';
+import { UNTRUSTED_CONTENT_RULE } from '../../utils/untrustedContent.util.js';
 
 export const USER_CONFIRMS_FILE_RE = /vẫn\s*dùng|van\s*dung|cứ\s*tiếp\s*tục|cu\s*tiep\s*tuc|dùng\s*(?:file|tệp|này|luôn|đi)|tiếp\s*tục|tiep\s*tuc|làm\s*tiếp|lam\s*tiep|cứ\s*làm|cu\s*lam|proceed|continue/i;
 
@@ -1328,6 +1329,7 @@ Luồng Zalo cá nhân ĐÚNG: trigger→select_zalo_account→interested_custom
 - Nếu có khối CAMPAIGN_BRIEF DATA: đó là nguồn sự thật về sản phẩm/chủ đề đã chọn. Ưu tiên (1) CAMPAIGN_BRIEF DATA → (2) prompt nguyên bản + file đính kèm → (3) hồ sơ doanh nghiệp chỉ cho brand/tone/context, KHÔNG thay selected product/topic.
 - QUAN TRỌNG: LUÔN ƯU TIÊN lấy thông tin từ tệp đính kèm (như file danh sách sản phẩm, báo giá...) hoặc nội dung tin nhắn do người dùng gửi. Hồ sơ doanh nghiệp chỉ dùng để tham khảo thêm, tuyệt đối KHÔNG ĐƯỢC lấy sản phẩm từ hồ sơ doanh nghiệp đè lên hoặc thay thế thông tin sản phẩm người dùng vừa cung cấp.
 - Bạn hoàn toàn CÓ KHẢ NĂNG đọc, hiểu, phân tích, và tổng hợp thông tin từ bất kỳ tệp đính kèm nào (Word, Excel, PDF, CSV, hình ảnh, văn bản) mà người dùng gửi lên. Khi người dùng đính kèm tệp ở TIN HIỆN TẠI, nội dung của tệp đó đã được hệ thống trích xuất tự động và gắn kèm dưới dạng văn bản trực tiếp trong phần tin nhắn. Bạn hãy trả lời, phân tích, hoặc tổng hợp nội dung tệp theo đúng yêu cầu của người dùng. Từ các lượt SAU hệ thống KHÔNG gửi lại nội dung tệp hay liên kết Google cũ (có thể chứa dữ liệu cá nhân của khách): chỉ dựa vào những gì đã nêu trong hội thoại và khối CAMPAIGN_BRIEF; không đoán nội dung, cần xem lại thì đề nghị người dùng đính kèm lại ở tin mới. Nếu tệp đính kèm có thông tin không rõ ràng, thiếu thông tin quan trọng, hoặc bạn không đọc được nội dung (do lỗi font, sai định dạng...), BẠN BẮT BUỘC PHẢI nói rõ lỗi nằm ở đâu và hướng dẫn người dùng cách chỉnh sửa lại file cho đúng chuẩn.
+${UNTRUSTED_CONTENT_RULE}
 - Nếu người dùng yêu cầu phân tích/tổng hợp thông tin chung hoặc thảo luận không liên quan trực tiếp đến việc tạo chiến dịch/template, hãy trả lời với type: "text" và đưa ra nội dung phân tích/tổng hợp đầy đủ, chi tiết và chuyên nghiệp trong trường "content".
 - Nếu thiếu thông tin cần thiết để tạo template/chiến dịch/landing page → type: "ask_more", hỏi cụ thể những gì còn thiếu.
 - Chỉ tạo nội dung template/chiến dịch/landing page khi đã có đủ thông tin từ người dùng.
@@ -2331,6 +2333,7 @@ ${forms.length > 0 ? forms.map(f => `  - id: ${f.id} | "${f.title}"${f.consentEn
 - Luôn ưu tiên dùng template có sẵn nếu phù hợp.
 - Nếu KHÔNG có template phù hợp → tự soạn nội dung inline.
 - MỘT NODE CÓ THỂ GỬI NHIỀU EMAIL/ZALO cách nhau thời gian (multi-step trong 1 node).
+${UNTRUSTED_CONTENT_RULE}
 
 ${contextBlock ? contextBlock + '\n\n' : ''}${existingResources ? existingResources + '\n\n' : ''}${nodeContext}
 

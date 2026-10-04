@@ -10,6 +10,7 @@ import {
 } from '../../utils/pdfInline.util.js';
 import { attachGoogleUrlParts } from '../../utils/googleUrlFetch.util.js';
 import { assertOwnedStorageKey } from '../../utils/storageKey.util.js';
+import { fenceUntrustedContent, UNTRUSTED_CONTENT_NOTICE } from '../../utils/untrustedContent.util.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
 import { resolveAllowedModel } from './aiModelPolicy.service.js';
 
@@ -103,13 +104,14 @@ export async function runChat({
       } else {
         const extractedText = await extractTextFromBuffer(buffer, file.originalName, file.contentType);
         if (extractedText.trim()) {
+          // C P1-4 (d): chữ trong tệp là DỮ LIỆU người dùng đưa vào, không phải mệnh lệnh cho trợ lý — gắn rào quanh khối.
           parts.push({
-            text: `[Nội dung tệp đính kèm: "${fileName}"]:\n${extractedText}\n[Hết nội dung tệp: "${fileName}"]`,
+            text: fenceUntrustedContent(`Nội dung tệp đính kèm: "${fileName}"`, extractedText, `Hết nội dung tệp: "${fileName}"`),
           });
         } else if (isPdfFile(file.originalName, mimeType)) {
           if (buffer.length <= PDF_INLINE_MAX_BYTES && buffer.length <= inlinePdfBudget) {
             parts.push({
-              text: `[Tệp đính kèm "${fileName}" là PDF dạng ảnh (scan) — nội dung nằm trong tệp PDF ngay sau đây, hãy đọc trực tiếp]`,
+              text: `[Tệp đính kèm "${fileName}" là PDF dạng ảnh (scan) — nội dung nằm trong tệp PDF ngay sau đây, hãy đọc trực tiếp. ${UNTRUSTED_CONTENT_NOTICE}]`,
             });
             parts.push({
               inlineData: {
