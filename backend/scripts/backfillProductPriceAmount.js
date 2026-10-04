@@ -13,6 +13,8 @@
  *   docker exec uknow-campaign-backend node scripts/backfillProductPriceAmount.js
  *   docker exec uknow-campaign-backend node scripts/backfillProductPriceAmount.js --apply
  */
+// Nạp backend/.env (DB_HOST…) như migrate.js — thiếu dòng này thì `docker exec … node scripts/…` nối nhầm 127.0.0.1:5432.
+import 'dotenv/config';
 import db from '../src/config/database.js';
 import { parseVndPrice } from '../src/utils/parseVndPrice.util.js';
 
