@@ -56,6 +56,12 @@ const PUBLIC_CHATBOT_FALLBACK_CONTENT = 'Xin lỗi, hiện chưa thể trả l�
 const HANDOFF_VISITOR_ACK =
   'Cảm ơn bạn. Tin nhắn đã được chuyển tới nhân viên hỗ trợ.';
 
+// Poll tin nhân viên trả lời tay (GET .../messages) — xem _getPublicAgentMessagesCore.
+const PUBLIC_POLL_PAGE_SIZE = 20;
+const PUBLIC_POLL_AFTER_ID_PATTERN = /^\d{1,18}$/;
+const PUBLIC_POLL_MIN_SESSION_ID_LENGTH = 16;
+const PUBLIC_POLL_MAX_SESSION_ID_LENGTH = 100; // = webchat_conversations.session_id VARCHAR(100)
+
 function isAiTokenLimitError(error) {
   return error?.code === 'RESOURCE_LIMIT_EXCEEDED' && error?.resource === 'ai_token';
 }
@@ -2223,58 +2229,101 @@ class ChatbotController {
     }
   }
 
-  // Get messages for a session (for polling new agent replies)
-  async getChatMessages(req, res) {
+  /**
+   * Khách web (widget nhúng + trang /chat/:id) hỏi tin NHÂN VIÊN TRẢ LỜI TAY mới.
+   *
+   * Hộp thư gửi tay vào hội thoại web chỉ INSERT dòng role='agent' vào webchat_messages (unifiedInbox.service không có adapter
+   * `web` — cố ý: không có "kênh ngoài" để đẩy tới), nên đây là ĐƯỜNG DUY NHẤT tin đó tới khách. Widget hỏi 8 giây/lần khi khung
+   * chat mở. Đừng thêm adapter `web` vào Hộp thư rồi bỏ endpoint này.
+   *
+   * Bảo mật: `sessionId` do client tự sinh và là thứ DUY NHẤT chứng minh "hội thoại này của tôi" — nên
+   *  - phiên mới sinh bằng crypto (widget.js / PublicChatbotPage), phiên cũ dạng `sess_<ms>_<9 ký tự>` vẫn dùng được;
+   *  - sessionId ngắn hơn PUBLIC_POLL_MIN_SESSION_ID_LENGTH (id kiểu "1", "test" của người tự tích hợp) KHÔNG được đọc → trả rỗng;
+   *  - không có hội thoại / sai chatbot / sai phiên đều trả CÙNG một thân `{ messages: [] }` — không phân biệt được để dò phiên;
+   *  - chỉ role 'agent' (xem getAgentWebChatMessagesForSession), chỉ trường hiển thị, tối đa PUBLIC_POLL_PAGE_SIZE tin/lượt.
+   * Query:  sessionId (bắt buộc), afterId (id tin 'agent' cuối khách đã thấy; bỏ trống = từ đầu).
+   * Trả:    { success, data: { messages: [{ id, role:'agent', content, attachments, createdAt }], hasMore } }
+   */
+  async _getPublicAgentMessagesCore(req, res, chatbot) {
     try {
-      const { chatbotId } = req.params;
-      const { sessionId, lastMessageId } = req.query;
-      const chatbot = await resolvePublicChatbotParam(chatbotId);
-
+      const sessionId = typeof req.query?.sessionId === 'string' ? req.query.sessionId.trim() : '';
       if (!sessionId) {
         return res.status(400).json({ success: false, message: 'sessionId is required' });
       }
+      const rawAfterId = req.query?.afterId;
+      let afterId = '0';
+      if (rawAfterId !== undefined && rawAfterId !== null && rawAfterId !== '') {
+        if (typeof rawAfterId !== 'string' || !PUBLIC_POLL_AFTER_ID_PATTERN.test(rawAfterId)) {
+          return res.status(400).json({ success: false, message: 'afterId không hợp lệ' });
+        }
+        afterId = rawAfterId;
+      }
 
       if (!chatbot) {
-        return res.status(404).json({ success: false, message: 'Chatbot not found' });
+        return res.status(404).json({ success: false, message: 'Không tìm thấy chatbot' });
       }
 
-      // Same deterministic widget lookup as chatWithCustomChatbotById (do not create)
+      const emptyBody = { success: true, data: { messages: [], hasMore: false } };
+      if (sessionId.length < PUBLIC_POLL_MIN_SESSION_ID_LENGTH || sessionId.length > PUBLIC_POLL_MAX_SESSION_ID_LENGTH) {
+        return res.json(emptyBody);
+      }
+
+      // Không tạo widget khi chỉ đọc: chatbot chưa từng có khách chat thì chưa có hội thoại nào để trả.
       const widgetConfig = await chatbotRepository.resolveWidgetForChatbot(chatbot, { create: false });
-
       if (!widgetConfig) {
-        return res.json({ success: true, data: { messages: [], sessionId } });
+        return res.json(emptyBody);
       }
 
-      // Find conversation
-      const conversationId = await chatbotRepository.findActiveWebChatConversationId({
+      const { rows, hasMore } = await chatbotRepository.getAgentWebChatMessagesForSession({
         widgetConfigId: widgetConfig.id,
         sessionId,
-      });
-
-      if (!conversationId) {
-        return res.json({ success: true, data: { messages: [], sessionId } });
-      }
-
-      const messages = await chatbotRepository.getAgentWebChatMessagesAfter({
-        conversationId,
-        lastMessageId,
+        afterId,
+        limit: PUBLIC_POLL_PAGE_SIZE,
       });
 
       return res.json({
         success: true,
         data: {
-          messages: messages.map(m => ({
-            id: m.id,
-            role: 'assistant',
-            content: m.content,
+          messages: rows.map((m) => ({
+            id: String(m.id),
+            role: 'agent',
+            content: m.content || '',
+            attachments: chatAttachmentService.presentAttachmentsForClient(
+              Array.isArray(m.attachments) ? m.attachments : [],
+              { includeRef: false }
+            ),
             createdAt: m.created_at,
           })),
-          sessionId,
+          hasMore,
         },
       });
     } catch (err) {
-      console.error('[CustomChatbot] Get messages error:', err);
-      return res.status(500).json({ success: false, message: err.message });
+      console.error('[CustomChatbot] Get public agent messages error:', err);
+      return res.status(500).json({ success: false, message: 'Không tải được tin nhắn' });
+    }
+  }
+
+  // GET /custom-chatbot/:widgetKey/messages — widget nhúng (widget.js)
+  async getPublicAgentMessages(req, res) {
+    res.set('Cache-Control', 'no-store'); // poll: không để trình duyệt/CDN giữ lại bản cũ
+    try {
+      const chatbot = await chatbotRepository.findChatbotByWidgetKey(req.params.widgetKey);
+      return await this._getPublicAgentMessagesCore(req, res, chatbot);
+    } catch (err) {
+      console.error('[CustomChatbot] Get public agent messages (key) error:', err);
+      return res.status(500).json({ success: false, message: 'Không tải được tin nhắn' });
+    }
+  }
+
+  // GET /custom-chatbot/id/:chatbotId/messages — trang /chat/:id (PublicChatbotPage)
+  async getPublicAgentMessagesById(req, res) {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const chatbot = await resolvePublicChatbotParam(req.params.chatbotId);
+      return await this._getPublicAgentMessagesCore(req, res, chatbot);
+    } catch (err) {
+      console.error('[CustomChatbot] Get public agent messages (id) error:', err);
+      return res.status(500).json({ success: false, message: 'Không tải được tin nhắn' });
     }
   }
 

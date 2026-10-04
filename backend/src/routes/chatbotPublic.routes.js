@@ -2,7 +2,12 @@ import express from 'express';
 import multer from 'multer';
 import { allowAllCorsMiddleware } from '../middleware/dynamicCors.middleware.js';
 import chatbotController from '../controllers/chatbot.controller.js';
-import { publicChatLimiter, publicUploadLimiter } from '../middleware/rateLimiter.middleware.js';
+import {
+  publicChatLimiter,
+  publicUploadLimiter,
+  publicChatPollIpLimiter,
+  publicChatPollSessionLimiter,
+} from '../middleware/rateLimiter.middleware.js';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
 import { getStoragePaths } from '../utils/storageCapacity.util.js';
@@ -35,6 +40,21 @@ router.post('/custom-chatbot/:widgetKey/chat', publicChatLimiter, chatbotControl
 
 // Alternative: chat by ID (not widgetKey) - for PublicChatbotPage
 router.post('/custom-chatbot/id/:chatbotId/chat', publicChatLimiter, chatbotController.chatWithCustomChatbotById.bind(chatbotController));
+
+// Tin nhân viên trả lời tay mới cho khách (widget poll 8 giây/lần khi khung chat mở). Phạm vi theo sessionId + chatbot, chỉ role
+// 'agent'. Đi qua bộ giới hạn RIÊNG (globalLimiter bỏ qua đường này — xem isPublicChatPollPath).
+router.get(
+  '/custom-chatbot/:widgetKey/messages',
+  publicChatPollIpLimiter,
+  publicChatPollSessionLimiter,
+  chatbotController.getPublicAgentMessages.bind(chatbotController)
+);
+router.get(
+  '/custom-chatbot/id/:chatbotId/messages',
+  publicChatPollIpLimiter,
+  publicChatPollSessionLimiter,
+  chatbotController.getPublicAgentMessagesById.bind(chatbotController)
+);
 
 // Chat attachment upload (visitor) — rate limit before multer; gates inside controller
 router.post(

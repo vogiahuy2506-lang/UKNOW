@@ -6,8 +6,7 @@ const resolveWidgetForChatbot = jest.fn();
 const getOrCreateWebChatConversation = jest.fn();
 const addWebChatMessage = jest.fn();
 const maybeSetWebChatVisitorNameFromMessage = jest.fn();
-const findActiveWebChatConversationId = jest.fn();
-const getAgentWebChatMessagesAfter = jest.fn();
+const getAgentWebChatMessagesForSession = jest.fn();
 
 const checkBeforeAi = jest.fn();
 const isAiPaused = jest.fn();
@@ -25,8 +24,7 @@ jest.unstable_mockModule('../../repositories/ai/chatbot.repository.js', () => ({
     getOrCreateWebChatConversation,
     addWebChatMessage,
     maybeSetWebChatVisitorNameFromMessage,
-    findActiveWebChatConversationId,
-    getAgentWebChatMessagesAfter,
+    getAgentWebChatMessagesForSession,
   },
 }));
 
@@ -1056,5 +1054,144 @@ describe('EXTRA-A5 — câu tĩnh ngoài giờ ở widget web mang nhãn metadat
       res
     );
     expectLabelled(res);
+  });
+});
+
+// H-02 (PLAN_WEBCHAT_NHAN_TIN_TRA_LOI_TAY_2026-10-04): khách web nhận tin nhân viên trả lời tay qua poll. Chốt phạm vi đọc ở
+// controller (đủ phiên, đúng chatbot, afterId hợp lệ, không dò được phiên); lọc SQL thật nằm ở integration webchatAgentPoll.test.js.
+describe('H-02 — GET .../messages: tin nhân viên trả lời tay cho khách web', () => {
+  const SESSION = 'sess_0123456789abcdef0123456789abcdef';
+  const makePollRes = () => {
+    const res = {
+      status: jest.fn(() => res),
+      json: jest.fn(() => res),
+      set: jest.fn(() => res),
+    };
+    return res;
+  };
+  const agentRow = (id, content = `tin ${id}`) => ({
+    id: String(id), role: 'agent', content, attachments: [], created_at: new Date('2026-10-04T03:00:00Z'),
+  });
+  const byKey = (query) => ({ params: { widgetKey: 'wk_abc' }, query });
+  const byId = (query) => ({ params: { chatbotId: '12' }, query });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    findChatbotById.mockResolvedValue(chatbot);
+    findChatbotByWidgetKey.mockResolvedValue(chatbot);
+    resolveWidgetForChatbot.mockResolvedValue({ id: 100, widget_key: 'wk_abc' });
+    getAgentWebChatMessagesForSession.mockResolvedValue({ rows: [], hasMore: false });
+  });
+
+  it('đúng phiên: trả tin agent kèm id/role/content/createdAt; truy vấn khoá theo widget + sessionId + afterId, trần 20 tin', async () => {
+    getAgentWebChatMessagesForSession.mockResolvedValue({ rows: [agentRow(41, 'Dạ em chào anh'), agentRow(42)], hasMore: false });
+    const res = makePollRes();
+
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: SESSION, afterId: '40' }), res);
+
+    expect(getAgentWebChatMessagesForSession).toHaveBeenCalledWith({
+      widgetConfigId: 100, sessionId: SESSION, afterId: '40', limit: 20,
+    });
+    const body = res.json.mock.calls[0][0];
+    expect(body.success).toBe(true);
+    expect(body.data.hasMore).toBe(false);
+    expect(body.data.messages).toEqual([
+      expect.objectContaining({ id: '41', role: 'agent', content: 'Dạ em chào anh', createdAt: expect.any(Date), attachments: [] }),
+      expect.objectContaining({ id: '42', role: 'agent' }),
+    ]);
+    // Chỉ trường hiển thị: không lộ id_user / id_conversation / metadata / is_read.
+    expect(Object.keys(body.data.messages[0]).sort()).toEqual(['attachments', 'content', 'createdAt', 'id', 'role']);
+    expect(res.set).toHaveBeenCalledWith('Cache-Control', 'no-store');
+  });
+
+  it('không có afterId → đọc từ đầu (afterId "0")', async () => {
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: SESSION }), makePollRes());
+    expect(getAgentWebChatMessagesForSession.mock.calls[0][0].afterId).toBe('0');
+  });
+
+  it('đường theo id (/chat/:id): cùng hành vi, tra chatbot bằng resolvePublicChatbotParam', async () => {
+    getAgentWebChatMessagesForSession.mockResolvedValue({ rows: [agentRow(7)], hasMore: true });
+    const res = makePollRes();
+
+    await chatbotController.getPublicAgentMessagesById(byId({ sessionId: SESSION, afterId: '0' }), res);
+
+    expect(findChatbotById).toHaveBeenCalledWith(12);
+    expect(getAgentWebChatMessagesForSession).toHaveBeenCalledWith(expect.objectContaining({ widgetConfigId: 100, sessionId: SESSION }));
+    expect(res.json.mock.calls[0][0].data).toEqual(expect.objectContaining({ hasMore: true }));
+  });
+
+  it('chatbot chưa có widget (chưa khách nào chat): [] và KHÔNG tạo widget khi chỉ đọc', async () => {
+    resolveWidgetForChatbot.mockResolvedValue(null);
+    const res = makePollRes();
+
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: SESSION }), res);
+
+    expect(resolveWidgetForChatbot).toHaveBeenCalledWith(chatbot, { create: false });
+    expect(getAgentWebChatMessagesForSession).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { messages: [], hasMore: false } });
+  });
+
+  it('phiên không có hội thoại → thân RỖNG GIỐNG HỆT ca có phiên nhưng hết tin (không dò được phiên)', async () => {
+    const res = makePollRes();
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: SESSION }), res);
+    expect(res.status).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { messages: [], hasMore: false } });
+  });
+
+  it.each([
+    ['ngắn hơn 16 ký tự (id kiểu "test")', 'sess_short'],
+    ['dài hơn 100 ký tự', `sess_${'a'.repeat(100)}`],
+  ])('sessionId %s → [] và KHÔNG chạm DB (id đoán được không được đọc)', async (_label, badSession) => {
+    const res = makePollRes();
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: badSession }), res);
+
+    expect(resolveWidgetForChatbot).not.toHaveBeenCalled();
+    expect(getAgentWebChatMessagesForSession).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith({ success: true, data: { messages: [], hasMore: false } });
+  });
+
+  it('phiên cũ của widget (sess_<ms>_<9 ký tự>) vẫn đủ dài để nhận tin', async () => {
+    const legacy = 'sess_1790000000000_k3j9x0q2a';
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: legacy }), makePollRes());
+    expect(getAgentWebChatMessagesForSession).toHaveBeenCalledWith(expect.objectContaining({ sessionId: legacy }));
+  });
+
+  it.each([
+    ['thiếu sessionId', {}],
+    ['sessionId rỗng', { sessionId: '   ' }],
+    ['sessionId là mảng (?sessionId=a&sessionId=b)', { sessionId: ['a', 'b'] }],
+  ])('%s → 400, không tra chatbot', async (_label, query) => {
+    const res = makePollRes();
+    await chatbotController.getPublicAgentMessages(byKey(query), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(getAgentWebChatMessagesForSession).not.toHaveBeenCalled();
+  });
+
+  it.each(['abc', '-1', '1.5', '9'.repeat(19), '1; DROP TABLE x'])('afterId %p không phải số nguyên → 400, không chạy truy vấn', async (afterId) => {
+    const res = makePollRes();
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: SESSION, afterId }), res);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(getAgentWebChatMessagesForSession).not.toHaveBeenCalled();
+  });
+
+  it('chatbot không tồn tại → 404 (khoá widget không phải bí mật; không liên quan đến phiên)', async () => {
+    findChatbotByWidgetKey.mockResolvedValue(null);
+    const res = makePollRes();
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: SESSION }), res);
+    expect(res.status).toHaveBeenCalledWith(404);
+  });
+
+  it('lỗi DB → 500 câu chung, KHÔNG lộ err.message', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    getAgentWebChatMessagesForSession.mockRejectedValue(new Error('relation "webchat_messages" does not exist'));
+    const res = makePollRes();
+
+    await chatbotController.getPublicAgentMessages(byKey({ sessionId: SESSION }), res);
+
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(JSON.stringify(res.json.mock.calls[0][0])).not.toMatch(/relation|does not exist/);
+    errorSpy.mockRestore();
   });
 });

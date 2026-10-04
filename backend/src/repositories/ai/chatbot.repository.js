@@ -338,30 +338,29 @@ class ChatbotRepository {
     return rows.reverse();
   }
 
-  async findActiveWebChatConversationId({ widgetConfigId, sessionId }) {
+  /**
+   * Tin nhân viên trả lời tay (role 'agent') mới hơn `afterId` trong hội thoại web đang mở của đúng (widget, sessionId).
+   * Một truy vấn duy nhất: hội thoại được khoá bằng CẢ id_widget_config LẪN session_id nên sessionId trùng ở chatbot khác
+   * không đọc được tin của nhau. Chỉ role 'agent': câu AI (assistant) widget đã nhận ngay trong phản hồi /chat — trả lại ở đây
+   * sẽ hiện đúp (phản hồi /chat không kèm id tin để khử trùng) — còn tin khách (visitor) không bao giờ trả ra ngoài.
+   *
+   * @returns {Promise<{ rows: Array<{id: string, role: string, content: string, attachments: any, created_at: Date}>, hasMore: boolean }>}
+   */
+  async getAgentWebChatMessagesForSession({ widgetConfigId, sessionId, afterId = 0, limit = 20 }) {
     const { rows } = await db.query(
-      `SELECT id FROM webchat_conversations
-       WHERE id_widget_config = $1 AND session_id = $2 AND status = 'active'
-       ORDER BY created_at ASC LIMIT 1`,
-      [widgetConfigId, sessionId]
+      `SELECT m.id, m.role, m.content, m.attachments, m.created_at
+         FROM webchat_conversations c
+         JOIN webchat_messages m ON m.id_conversation = c.id
+        WHERE c.id_widget_config = $1
+          AND c.session_id = $2
+          AND c.status = 'active'
+          AND m.role = 'agent'
+          AND m.id > $3::bigint
+        ORDER BY m.id ASC
+        LIMIT $4`,
+      [widgetConfigId, sessionId, afterId, limit + 1]
     );
-    return rows[0]?.id || null;
-  }
-
-  async getAgentWebChatMessagesAfter({ conversationId, lastMessageId = null }) {
-    let query = `SELECT id, role, content, created_at FROM webchat_messages
-                 WHERE id_conversation = $1 AND role = 'agent'`;
-    const params = [conversationId];
-
-    if (lastMessageId) {
-      query += ` AND id > $2`;
-      params.push(lastMessageId);
-    }
-
-    query += ` ORDER BY created_at ASC`;
-
-    const { rows } = await db.query(query, params);
-    return rows;
+    return { rows: rows.slice(0, limit), hasMore: rows.length > limit };
   }
 
   async addWebChatMessage(conversationId, userId, { role, content, attachments, metadata }) {

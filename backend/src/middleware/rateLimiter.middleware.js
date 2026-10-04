@@ -14,6 +14,23 @@ function isInboxStreamPath(req) {
 }
 
 /**
+ * GET /api/chatbot-public/custom-chatbot/:widgetKey/messages và /custom-chatbot/id/:chatbotId/messages — widget web hỏi tin
+ * nhân viên trả lời tay 8 giây/lần khi khung chat đang mở. globalLimiter (300 lượt / 15 phút / IP, tức 20 lượt/phút) KHÔNG đo nổi
+ * loại lưu lượng này: 3 khách cùng một IP văn phòng mở widget là đã vượt trần và chặn cả /chat, /config của họ. Đường này đi qua
+ * bộ giới hạn riêng (publicChatPollIpLimiter + publicChatPollSessionLimiter) gắn ở route.
+ */
+export function isPublicChatPollPath(req) {
+  if (req.method !== 'GET') return false;
+  const url = req.originalUrl || req.url || '';
+  return /^\/api\/chatbot-public\/custom-chatbot\/(?:id\/)?[^/?]+\/messages(?:\?|$)/.test(url);
+}
+
+/** Đường có bộ giới hạn riêng (hoặc cố ý không đếm) nên globalLimiter bỏ qua. Export để test ghim danh sách. */
+export function shouldSkipGlobalLimiter(req) {
+  return isInboxStreamPath(req) || isPublicChatPollPath(req);
+}
+
+/**
  * express-rate-limit v8: ipKeyGenerator(ip: string), NOT the request object.
  * Export — PR-3a (form.service.js/formIpHash.util.js) băm CHÍNH giá trị này cho
  * `submitter_ip_hash`, để "cùng IP" ở chốt chống giữ chỗ hàng loạt khớp đúng cách limiter
@@ -40,7 +57,7 @@ export function rateLimitKeyForRequest(req, prefix = '') {
 
 // Global rate limiter — per user when rateLimitUserId attached, else per IP (lower budget)
 export const globalLimiter = rateLimit({
-  skip: (req) => skipInTest() || isInboxStreamPath(req),
+  skip: (req) => skipInTest() || shouldSkipGlobalLimiter(req),
   windowMs: 15 * 60 * 1000,
   max: (req) => (req.rateLimitUserId != null ? GLOBAL_USER_MAX : GLOBAL_IP_MAX),
   message: {
@@ -304,6 +321,59 @@ export const publicUploadLimiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req) => `pubupload:${clientIpKey(req)}`,
 });
+
+// Poll tin nhân viên trả lời tay cho khách widget / trang /chat/:id (GET .../messages).
+// Khách mở khung chat → hỏi 8 giây/lần (≈ 7,5 lượt/phút/khách). Hai tầng:
+//  - theo IP + sessionId: 30 lượt/phút — dư cho 2–3 tab cùng phiên và các lượt hỏi lại sau lỗi, chặn vòng lặp hỏng;
+//  - theo IP: 240 lượt/phút (≈ 30 khách cùng IP văn phòng/trường học) — chặn kẻ đổi sessionId liên tục để né tầng trên.
+// Hai bộ này THAY cho globalLimiter ở đường poll (xem isPublicChatPollPath).
+export const PUBLIC_CHAT_POLL_CONFIG = Object.freeze({
+  windowMs: 60 * 1000,
+  perSessionMax: 30,
+  perIpMax: 240,
+  code: 'CHAT_POLL_RATE_LIMIT_EXCEEDED',
+  message: 'Yêu cầu quá nhanh. Vui lòng thử lại sau ít phút.',
+});
+
+function normalizePollSessionKey(rawSessionId) {
+  const raw = Array.isArray(rawSessionId) ? rawSessionId[0] : rawSessionId;
+  return String(raw ?? '').trim().slice(0, 100) || '-';
+}
+
+export function createPublicChatPollSessionLimiter({ skip = skipInTest } = {}) {
+  return rateLimit({
+    skip,
+    windowMs: PUBLIC_CHAT_POLL_CONFIG.windowMs,
+    max: PUBLIC_CHAT_POLL_CONFIG.perSessionMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `pubpoll:${clientIpKey(req)}:${normalizePollSessionKey(req.query?.sessionId)}`,
+    message: {
+      success: false,
+      message: PUBLIC_CHAT_POLL_CONFIG.message,
+      code: PUBLIC_CHAT_POLL_CONFIG.code,
+    },
+  });
+}
+
+export function createPublicChatPollIpLimiter({ skip = skipInTest } = {}) {
+  return rateLimit({
+    skip,
+    windowMs: PUBLIC_CHAT_POLL_CONFIG.windowMs,
+    max: PUBLIC_CHAT_POLL_CONFIG.perIpMax,
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `pubpoll-ip:${clientIpKey(req)}`,
+    message: {
+      success: false,
+      message: PUBLIC_CHAT_POLL_CONFIG.message,
+      code: PUBLIC_CHAT_POLL_CONFIG.code,
+    },
+  });
+}
+
+export const publicChatPollSessionLimiter = createPublicChatPollSessionLimiter();
+export const publicChatPollIpLimiter = createPublicChatPollIpLimiter();
 
 // Campaign run limiter — số lần /run mỗi giờ (không phải concurrent; concurrent = MAX_CONCURRENT_CAMPAIGNS)
 const CAMPAIGN_RUN_LIMIT_PER_HOUR = Math.max(
