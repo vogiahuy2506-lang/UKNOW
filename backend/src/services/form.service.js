@@ -11,9 +11,11 @@ import {
   normalizePaymentConfig,
   normalizeFormTheme,
   normalizeProductId,
+  resolvePaymentPurpose,
   MAX_TITLE_LENGTH,
   MAX_DESCRIPTION_LENGTH,
 } from '../utils/formDefinition.util.js';
+import { getPaymentWording } from '../utils/formPaymentWording.util.js';
 import { validateFormSubmission } from '../utils/formSubmission.util.js';
 import {
   todayVn,
@@ -852,6 +854,7 @@ class FormService {
         ? {
             enabled: true,
             amount: form.paymentConfig.amount,
+            purpose: resolvePaymentPurpose(form.paymentConfig.purpose),
             method: form.paymentConfig.method || (form.paymentConfig.methods ? form.paymentConfig.methods[0] : 'bank'),
             methods: form.paymentConfig.methods || (form.paymentConfig.method ? [form.paymentConfig.method] : ['bank']),
           }
@@ -1023,6 +1026,8 @@ class FormService {
         methods,
         method: primaryMethod,
         amount: paymentConfig.amount,
+        // Chữ người mua thấy theo cấu hình LÚC NỘP — đổi purpose sau không đổi chữ của bài cũ.
+        purpose: resolvePaymentPurpose(paymentConfig.purpose),
       };
 
       if (methods.includes('bank')) {
@@ -1051,7 +1056,7 @@ class FormService {
         const pendingCount = await formRepository.countPendingHoldsForIpAndForm(form.id, submitterIpHash);
         if (pendingCount >= MAX_PENDING_HOLDS_PER_IP_PER_FORM) {
           throw createHttpError(
-            'Bạn đang có quá nhiều lượt giữ chỗ chưa thanh toán cho biểu mẫu này. Vui lòng hoàn tất hoặc chờ hết hạn giữ chỗ trước khi thử lại.',
+            getPaymentWording(paymentSnapshot.purpose).tooManyPending,
             429,
             'FORM_TOO_MANY_PENDING_HOLDS'
           );
@@ -1102,7 +1107,7 @@ class FormService {
           const pendingCount = await formRepository.countPendingHoldsForIpAndForm(form.id, submitterIpHash, client);
           if (pendingCount >= MAX_PENDING_HOLDS_PER_IP_PER_FORM) {
             throw createHttpError(
-              'Bạn đang có quá nhiều lượt giữ chỗ chưa thanh toán cho biểu mẫu này. Vui lòng hoàn tất hoặc chờ hết hạn giữ chỗ trước khi thử lại.',
+              getPaymentWording(paymentSnapshot.purpose).tooManyPending,
               429,
               'FORM_TOO_MANY_PENDING_HOLDS'
             );
@@ -1181,6 +1186,7 @@ class FormService {
     if (paymentEnabled && validated.respondentEmail && form.settings?.sendConfirmation) {
       const statusUrl = `${FRONTEND_URL}/f/${encodeURIComponent(key)}/s/${encodeURIComponent(accessToken)}`;
       const holdMinutesText = escapeHtml(String(paymentConfig.holdMinutes));
+      const wording = getPaymentWording(paymentSnapshot.purpose);
       const methodsList = paymentSnapshot.methods || [paymentSnapshot.method];
       const hasBothMethods = methodsList.includes('bank') && methodsList.includes('momo');
 
@@ -1219,13 +1225,13 @@ class FormService {
         toEmail: validated.respondentEmail,
         subject: `[${SENDER_NAME}] Hướng dẫn chuyển khoản - ${form.title}`,
         html: `
-          <h2>Vui lòng chuyển khoản để giữ chỗ</h2>
+          <h2>${escapeHtml(wording.emailHeading)}</h2>
           <p>Biểu mẫu: <strong>${escapeHtml(form.title)}</strong></p>
           ${appointmentAt ? `<p>Giờ hẹn: <strong>${escapeHtml(formatAppointmentVn(appointmentAt))}</strong></p>` : ''}
           ${methodsDetailHtml}
           <p>Số tiền: <strong>${escapeHtml(paymentConfig.amount.toLocaleString('vi-VN'))}đ</strong></p>
           <p>Nội dung chuyển khoản (bắt buộc ghi đúng): <strong>${escapeHtml(submission.paymentCode)}</strong></p>
-          <p>Hạn giữ chỗ: <strong>${holdMinutesText} phút</strong> kể từ lúc đặt.</p>
+          <p>${escapeHtml(wording.emailDeadlineLabel)}: <strong>${holdMinutesText} phút</strong> kể từ lúc đặt.</p>
           <p>Theo dõi trạng thái tại: <a href="${escapeHtml(statusUrl)}">${escapeHtml(statusUrl)}</a></p>
           ${buildFormUnsubscribeFooterHtml({ marketingConsent: validated.marketingConsent, unsubscribeToken: submission.unsubscribeToken })}
         `,
@@ -1241,6 +1247,7 @@ class FormService {
             ...(paymentSnapshot.method === 'momo'
               ? {
                   method: 'momo',
+                  purpose: paymentSnapshot.purpose,
                   amount: paymentConfig.amount,
                   code: submission.paymentCode,
                   momoPhone: paymentSnapshot.momoPhone,
@@ -1250,6 +1257,7 @@ class FormService {
                 }
               : {
                   method: 'bank',
+                  purpose: paymentSnapshot.purpose,
                   amount: paymentConfig.amount,
                   code: submission.paymentCode,
                   bankBin: paymentSnapshot.bankBin,
@@ -1401,6 +1409,9 @@ class FormService {
     const holdExpiresAt = submission.holdExpiresAt ? new Date(submission.holdExpiresAt) : null;
     const holdExpired = submission.status === 'pending_payment' && (!holdExpiresAt || holdExpiresAt.getTime() <= Date.now());
 
+    // Bài nộp cũ không có purpose trong snapshot -> 'hold' (chữ giữ chỗ như trước).
+    const paymentPurpose = resolvePaymentPurpose(submission.paymentSnapshot?.purpose);
+
     let payment = null;
     if (submission.status === 'pending_payment' && !holdExpired && submission.paymentSnapshot) {
       const snap = submission.paymentSnapshot;
@@ -1414,6 +1425,7 @@ class FormService {
       if (primaryMethod === 'momo') {
         payment = {
           method: 'momo',
+          purpose: paymentPurpose,
           amount: submission.paymentAmount,
           code: submission.paymentCode,
           momoPhone: snap.momoPhone,
@@ -1425,6 +1437,7 @@ class FormService {
       } else {
         payment = {
           method: 'bank',
+          purpose: paymentPurpose,
           amount: submission.paymentAmount,
           code: submission.paymentCode,
           bankBin: snap.bankBin,
@@ -1447,6 +1460,8 @@ class FormService {
       appointmentAt: submission.appointmentAt,
       holdExpiresAt: submission.holdExpiresAt,
       holdExpired,
+      // Ở cấp trên để trang "hết hạn" (payment=null) vẫn biết dùng chữ nào.
+      paymentPurpose,
       payment,
       payerReportedPaidAt: submission.payerReportedPaidAt || null,
       receiptRequired: isPaymentReceiptEnabled(),

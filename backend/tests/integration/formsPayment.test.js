@@ -155,6 +155,7 @@ describe('PR-3a — paymentConfig: chỉ chủ workspace, chốt method, audit l
       accountNumber: '0123456789',
       accountName: 'NGUYEN VAN A',
       holdMinutes: 30,
+      purpose: 'hold',
     });
 
     const auditRows = await db.query(
@@ -201,6 +202,7 @@ describe('PR-3a — paymentConfig: chỉ chủ workspace, chốt method, audit l
       momoPhone: '0912345678',
       momoName: 'NGUYEN VAN MOMO',
       holdMinutes: 30,
+      purpose: 'hold',
       // PR-4 (lệnh giao 25/09): normalizePaymentConfig luôn ghi rõ cách tạo QR MoMo; payload không có
       // khoá QR nào (như client trước PR-3) → 'none', không suy ra QR.
       momoQrMode: 'none',
@@ -284,6 +286,7 @@ describe('PR-3a — nộp bài form thu tiền', () => {
       accountNumber: '0123456789',
       accountName: 'NGUYEN VAN A',
       amount: 150000,
+      purpose: 'hold',
     });
     expect(row.hold_expires_at).not.toBeNull();
     expect(row.submitter_ip_hash).not.toBeNull();
@@ -330,7 +333,7 @@ describe('PR-3a — nộp bài form thu tiền', () => {
 
     const res = await request(app).get(`/api/public/forms/${form.publicKey}`);
     expect(res.status).toBe(200);
-    expect(res.body.data.payment).toEqual({ enabled: true, amount: 150000, method: 'bank', methods: ['bank'] });
+    expect(res.body.data.payment).toEqual({ enabled: true, amount: 150000, purpose: 'hold', method: 'bank', methods: ['bank'] });
     const raw = JSON.stringify(res.body.data);
     expect(raw).not.toContain('0123456789');
     expect(raw).not.toContain('NGUYEN VAN A');
@@ -372,6 +375,7 @@ describe('PR-3a — nộp bài form thu tiền', () => {
       momoName: 'NGUYEN VAN MOMO',
       momoQrMode: 'none',
       amount: 150000,
+      purpose: 'hold',
     });
   });
 });

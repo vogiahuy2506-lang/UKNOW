@@ -430,6 +430,15 @@ export function normalizeBookingConfig(raw) {
 
 export const MIN_PAYMENT_AMOUNT = 1000;
 export const MAX_PAYMENT_AMOUNT = 100000000;
+// Cách người mua thấy khoản tiền: giữ chỗ (lịch hẹn) / thanh toán đơn hàng / đặt cọc.
+// Thiếu hoặc không hợp lệ = 'hold' (biểu mẫu cũ giữ nguyên chữ). Chỉ đổi CHỮ hiển thị, không đổi logic tiền.
+export const PAYMENT_PURPOSES = Object.freeze(['hold', 'order', 'deposit']);
+export const DEFAULT_PAYMENT_PURPOSE = 'hold';
+
+export function resolvePaymentPurpose(value) {
+  const s = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return PAYMENT_PURPOSES.includes(s) ? s : DEFAULT_PAYMENT_PURPOSE;
+}
 export const MIN_ACCOUNT_NUMBER_LENGTH = 6;
 export const MAX_ACCOUNT_NUMBER_LENGTH = 19;
 export const MAX_ACCOUNT_NAME_LENGTH = 50;
@@ -670,6 +679,7 @@ export function normalizePaymentConfig(raw) {
     method: primaryMethod,
     amount,
     holdMinutes,
+    purpose: resolvePaymentPurpose(raw.purpose),
   };
 
   if (methods.includes('bank')) {

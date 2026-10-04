@@ -332,7 +332,18 @@ describe('normalizePaymentConfig', () => {
       accountNumber: '0123456789',
       accountName: 'NGUYEN VAN A',
       holdMinutes: 45,
+      purpose: 'hold',
     });
+  });
+
+  it('purpose: nhận hold/order/deposit; thiếu hoặc sai -> hold (biểu mẫu cũ vẫn giữ chỗ)', () => {
+    expect(normalizePaymentConfig({ ...validRaw, purpose: 'order' }).purpose).toBe('order');
+    expect(normalizePaymentConfig({ ...validRaw, purpose: 'deposit' }).purpose).toBe('deposit');
+    expect(normalizePaymentConfig({ ...validRaw, purpose: 'hold' }).purpose).toBe('hold');
+    expect(normalizePaymentConfig({ ...validRaw, purpose: ' ORDER ' }).purpose).toBe('order');
+    expect(normalizePaymentConfig({ ...validRaw }).purpose).toBe('hold');
+    expect(normalizePaymentConfig({ ...validRaw, purpose: 'abc' }).purpose).toBe('hold');
+    expect(normalizePaymentConfig({ ...validRaw, purpose: 5 }).purpose).toBe('hold');
   });
 
   it('accountName "  Trịnh   Đức   Phúc  " -> "TRINH DUC PHUC" (Đ/đ không tự decompose qua NFD)', () => {
@@ -396,6 +407,7 @@ describe('normalizePaymentConfig', () => {
       momoPhone: '0912345678',
       momoName: 'NGUYEN VAN A',
       holdMinutes: 30,
+      purpose: 'hold',
       momoQrMode: 'account',
       momoQrBin: '971025',
       momoQrAccount: 'PSP2604014200000493',
@@ -429,6 +441,7 @@ describe('normalizePaymentConfig', () => {
       momoQrBin: '971025',
       momoQrAccount: '0988888888',
       holdMinutes: 30,
+      purpose: 'hold',
     });
   });
 
