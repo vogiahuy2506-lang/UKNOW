@@ -232,6 +232,8 @@ router.post('/inbox/ai-activity/resume-all', requirePermission('inbox_manage'), 
 router.post(
   '/inbox/ai-activity/summarize',
   requireSelfContext,
+  // D-21: đọc cache TRƯỚC cổng credit — hết credit vẫn xem lại được bản đã trả tiền.
+  aiActivityController.serveCachedSummary.bind(aiActivityController),
   assertAiCreditAvailable('inbox_ai_summary'),
   aiActivityController.summarizeActivity.bind(aiActivityController)
 );

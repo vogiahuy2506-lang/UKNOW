@@ -57,6 +57,30 @@ class AiActivityController {
   }
 
   /**
+   * Middleware đứng TRƯỚC cổng credit của POST /api/chatbot/inbox/ai-activity/summarize (D-21).
+   *
+   * Bản tóm tắt đã lưu còn tươi (không có tin mới hơn mốc lưu) được trả thẳng, không qua cổng credit: người dùng đã trả tiền
+   * cho bản đó, hết credit vẫn phải xem lại được. Không có cache tươi (hoặc đọc cache lỗi) → `next()` đi tiếp cổng credit rồi
+   * sinh mới như cũ — lỗi đọc cache không bao giờ chặn tính năng.
+   */
+  async serveCachedSummary(req, res, next) {
+    try {
+      const userId = resolveWorkspaceOwnerId(req.user);
+      const date = req.body?.date || req.query?.date || null;
+      const cached = await aiActivityService.findFreshCachedSummary({
+        userId,
+        date: date ? String(date).trim() : null,
+      });
+      if (cached) {
+        return res.json({ success: true, data: cached });
+      }
+    } catch (err) {
+      console.warn('[AiActivityController] Đọc cache tóm tắt trước cổng credit lỗi, đi tiếp luồng sinh mới:', err?.message);
+    }
+    return next();
+  }
+
+  /**
    * POST /api/chatbot/inbox/ai-activity/summarize
    */
   async summarizeActivity(req, res) {

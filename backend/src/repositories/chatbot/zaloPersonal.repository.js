@@ -399,18 +399,48 @@ class ZaloPersonalRepository {
   }
 
   /**
-   * Lấy tin nhắn trong ngày của các hội thoại phục vụ tóm tắt AI
+   * Lấy tin nhắn trong ngày của các hội thoại phục vụ tóm tắt AI.
+   *
+   * Giới hạn NGAY trong SQL (D-21): chỉ `limitPerConversation` tin GẦN NHẤT của mỗi hội thoại, mỗi tin cắt ở
+   * `maxContentChars` ký tự — trước đây kéo mọi tin của cả ngày (tin dài nguyên văn) về Node rồi mới `slice(-15)`.
+   * Kết quả sắp theo hội thoại, tin CŨ trước (đúng thứ tự đọc).
+   *
+   * @param {object} params
+   * @param {Array<number|string>} params.conversationIds
+   * @param {number} params.userId
+   * @param {string} params.startIso
+   * @param {string} params.endIso
+   * @param {number} [params.limitPerConversation=15]
+   * @param {number} [params.maxContentChars=1000]
    */
-  async getMessagesForSummary({ conversationIds = [], userId, startIso, endIso }) {
+  async getMessagesForSummary({
+    conversationIds = [],
+    userId,
+    startIso,
+    endIso,
+    limitPerConversation = 15,
+    maxContentChars = 1000,
+  }) {
     if (!Array.isArray(conversationIds) || conversationIds.length === 0) return [];
+    const perConversation = Math.max(1, Math.floor(Number(limitPerConversation)) || 15);
+    const maxChars = Math.max(1, Math.floor(Number(maxContentChars)) || 1000);
     const { rows } = await db.query(
-      `SELECT id_conversation, role, content, metadata->>'source' as source, created_at
-       FROM zalo_personal_messages
-       WHERE id_user = $1
-         AND id_conversation = ANY($2::bigint[])
-         AND created_at >= $3 AND created_at < $4
-       ORDER BY id_conversation, created_at ASC`,
-      [userId, conversationIds, startIso, endIso]
+      `SELECT id_conversation, role, content, source, created_at
+       FROM (
+         SELECT id_conversation,
+                role,
+                LEFT(content, $5::int) AS content,
+                metadata->>'source' AS source,
+                created_at,
+                ROW_NUMBER() OVER (PARTITION BY id_conversation ORDER BY created_at DESC, id DESC) AS rn
+         FROM zalo_personal_messages
+         WHERE id_user = $1
+           AND id_conversation = ANY($2::bigint[])
+           AND created_at >= $3 AND created_at < $4
+       ) recent
+       WHERE rn <= $6::int
+       ORDER BY id_conversation, rn DESC`,
+      [userId, conversationIds, startIso, endIso, maxChars, perConversation]
     );
     return rows;
   }

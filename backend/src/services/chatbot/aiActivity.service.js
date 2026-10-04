@@ -19,6 +19,43 @@ function stripCodeFences(text) {
   return t;
 }
 
+// Giới hạn trần tối đa 30 hội thoại có hoạt động gần nhất để tránh tràn output token (maxOutputTokens: 8192)
+const MAX_CONVERSATIONS_FOR_SUMMARY = 30;
+/** Mỗi hội thoại chỉ đưa 15 tin gần nhất vào prompt — cắt NGAY trong SQL (D-21), không kéo cả ngày rồi cắt bằng JS. */
+const MAX_MESSAGES_PER_CONVERSATION = 15;
+/** Mỗi tin cắt ở 1.000 ký tự (cũng cắt ngay trong SQL): một tin dán cả bài/log dài không được phình prompt và phí token. */
+const MAX_MESSAGE_CHARS = 1000;
+
+/**
+ * Lượt tóm tắt ĐANG chạy theo `userId:dayKey` (D-21): bấm đôi / hai tab / hai thiết bị cùng lúc = MỘT lượt Gemini; lượt đến sau
+ * chờ chung kết quả thay vì gọi Gemini lần nữa (trước đây 2 cú bấm = 2 lượt Gemini + 2 credit). Một tiến trình duy nhất
+ * (production chạy 1 replica) nên bản đồ trong RAM đủ; xem CLAUDE.md "Campaign runtime — single process only".
+ *
+ * @type {Map<string, Promise<object>>}
+ */
+const summarizeInFlight = new Map();
+
+/** Mốc tin nhắn mới nhất trong các hội thoại sẽ đưa vào tóm tắt (null nếu không có). */
+function latestMessageAt(targetRows) {
+  let maxTinCuoi = null;
+  for (const r of targetRows) {
+    if (r.tin_cuoi) {
+      const d = new Date(r.tin_cuoi);
+      if (!maxTinCuoi || d > maxTinCuoi) maxTinCuoi = d;
+    }
+  }
+  return maxTinCuoi;
+}
+
+/** Cache còn "tươi": có nội dung và mốc tin cuối của cache không cũ hơn tin mới nhất hiện có. */
+function isFreshCache(existingCache, maxTinCuoi) {
+  if (!existingCache || !existingCache.last_message_at || !maxTinCuoi) return false;
+  const cachedLastAt = new Date(existingCache.last_message_at);
+  return cachedLastAt >= maxTinCuoi
+    && Array.isArray(existingCache.payload)
+    && existingCache.payload.length > 0;
+}
+
 class AiActivityService {
   /**
    * Lấy báo cáo hoạt động AI trong ngày (không dùng LLM)
@@ -116,13 +153,62 @@ class AiActivityService {
   }
 
   /**
+   * Chỉ ĐỌC bản tóm tắt đã lưu của ngày nếu còn tươi (không có tin mới hơn mốc lưu) — KHÔNG gọi Gemini, KHÔNG trừ credit.
+   * Route gọi hàm này TRƯỚC cổng credit (D-21): hết credit vẫn xem lại bản đã trả tiền.
+   *
+   * @param {object} params
+   * @param {number} params.userId
+   * @param {string} [params.date]
+   * @returns {Promise<{ date: string, dayKey: string, summaries: object[], cached: true, updatedAt: any } | null>}
+   */
+  async findFreshCachedSummary({ userId, date = null }) {
+    const { dayKey, dateStr, startIso, endIso } = getVietnamDayRange(date);
+    const rows = await zaloPersonalRepository.getAiActivityReport({ userId, startIso, endIso });
+    if (!rows || rows.length === 0) return null;
+    const maxTinCuoi = latestMessageAt(rows.slice(0, MAX_CONVERSATIONS_FOR_SUMMARY));
+    const existingCache = await aiActivitySummaryRepository.findByUserAndDay(userId, dayKey);
+    if (!isFreshCache(existingCache, maxTinCuoi)) return null;
+    return {
+      date: dateStr,
+      dayKey,
+      summaries: existingCache.payload,
+      cached: true,
+      updatedAt: existingCache.updated_at,
+    };
+  }
+
+  /**
    * Tóm tắt ý chính các hội thoại trong ngày bằng Gemini (có cache & credit gate)
+   *
+   * Khoá "đang chạy" theo `userId:dayKey` (D-21): lượt đến khi đã có lượt cùng khoá đang chạy KHÔNG gọi Gemini nữa mà chờ chung
+   * kết quả, và trả về `cached: true` (controller chỉ trừ credit khi `cached === false`) — bấm đôi = 1 lượt Gemini, 1 credit.
+   * Lượt đầu lỗi thì lượt chờ nhận cùng lỗi; khoá luôn được dọn (`finally`) nên lần bấm sau chạy lại bình thường.
+   *
    * @param {object} params
    * @param {number} params.userId
    * @param {string} [params.date]
    * @param {number|null} [params.actorUserId]
    */
   async summarizeDailyActivity({ userId, date = null, actorUserId = null }) {
+    const { dayKey } = getVietnamDayRange(date);
+    const key = `${userId}:${dayKey}`;
+
+    const running = summarizeInFlight.get(key);
+    if (running) {
+      const shared = await running;
+      return { ...shared, cached: true, deduped: true };
+    }
+
+    const promise = this._summarizeFresh({ userId, date, actorUserId });
+    summarizeInFlight.set(key, promise);
+    try {
+      return await promise;
+    } finally {
+      if (summarizeInFlight.get(key) === promise) summarizeInFlight.delete(key);
+    }
+  }
+
+  async _summarizeFresh({ userId, date = null, actorUserId = null }) {
     const { dayKey, dateStr, startIso, endIso } = getVietnamDayRange(date);
 
     const rows = await zaloPersonalRepository.getAiActivityReport({
@@ -141,44 +227,32 @@ class AiActivityService {
       };
     }
 
-    // Giới hạn trần tối đa 30 hội thoại có hoạt động gần nhất để tránh tràn output token (maxOutputTokens: 8192)
-    const MAX_CONVERSATIONS_FOR_SUMMARY = 30;
     const targetRows = rows.slice(0, MAX_CONVERSATIONS_FOR_SUMMARY);
 
     // Tìm mốc tin nhắn mới nhất trong ngày
-    let maxTinCuoi = null;
-    const conversationIds = [];
-    for (const r of targetRows) {
-      conversationIds.push(r.id);
-      if (r.tin_cuoi) {
-        const d = new Date(r.tin_cuoi);
-        if (!maxTinCuoi || d > maxTinCuoi) {
-          maxTinCuoi = d;
-        }
-      }
-    }
+    const maxTinCuoi = latestMessageAt(targetRows);
+    const conversationIds = targetRows.map((r) => r.id);
 
-    // Kiểm tra cache
+    // Kiểm tra cache (chốt chặn thứ hai: route đã thử đọc cache trước cổng credit, nhưng lượt khác có thể vừa ghi xong)
     const existingCache = await aiActivitySummaryRepository.findByUserAndDay(userId, dayKey);
-    if (existingCache && existingCache.last_message_at && maxTinCuoi) {
-      const cachedLastAt = new Date(existingCache.last_message_at);
-      if (cachedLastAt >= maxTinCuoi && Array.isArray(existingCache.payload) && existingCache.payload.length > 0) {
-        return {
-          date: dateStr,
-          dayKey,
-          summaries: existingCache.payload,
-          cached: true,
-          updatedAt: existingCache.updated_at,
-        };
-      }
+    if (isFreshCache(existingCache, maxTinCuoi)) {
+      return {
+        date: dateStr,
+        dayKey,
+        summaries: existingCache.payload,
+        cached: true,
+        updatedAt: existingCache.updated_at,
+      };
     }
 
-    // Lấy chi tiết tin nhắn để tóm tắt
+    // Lấy chi tiết tin nhắn để tóm tắt — SQL đã giới hạn số tin mỗi hội thoại và độ dài mỗi tin (D-21)
     const rawMessages = await zaloPersonalRepository.getMessagesForSummary({
       conversationIds,
       userId,
       startIso,
       endIso,
+      limitPerConversation: MAX_MESSAGES_PER_CONVERSATION,
+      maxContentChars: MAX_MESSAGE_CHARS,
     });
 
     const messagesByConv = new Map();
@@ -193,8 +267,8 @@ class AiActivityService {
       const msgs = messagesByConv.get(Number(r.id)) || [];
       if (msgs.length === 0) continue;
 
-      // Giới hạn 15 tin nhắn gần nhất mỗi hội thoại
-      const recentMsgs = msgs.slice(-15);
+      // SQL đã giới hạn; cắt lại ở đây để mock/đường gọi khác không vượt trần
+      const recentMsgs = msgs.slice(-MAX_MESSAGES_PER_CONVERSATION);
 
       const formattedMsgs = recentMsgs.map((m) => {
         let senderLabel = 'Khách';
@@ -204,7 +278,7 @@ class AiActivityService {
           if (m.source === AI_UNAVAILABLE_SOURCE) senderLabel = 'Hệ thống (xin lỗi tự động, AI chưa trả lời được)';
           else senderLabel = m.source === 'ai_auto_reply' ? 'AI' : 'Người trực chat';
         }
-        return `[${senderLabel}]: ${String(m.content || '').trim()}`;
+        return `[${senderLabel}]: ${String(m.content || '').trim().slice(0, MAX_MESSAGE_CHARS)}`;
       }).join('\n');
 
       conversationContexts.push(
@@ -267,7 +341,13 @@ ${conversationContexts.join('\n\n')}
       const parsed = JSON.parse(stripCodeFences(result.text));
       summaries = Array.isArray(parsed) ? parsed : (parsed?.summaries || []);
     } catch (err) {
-      console.error('[AiActivityService] JSON parse failed from Gemini summary:', err.message, result.text);
+      // KHÔNG in `result.text` và cũng KHÔNG in `err.message`: V8 chèn đoạn đầu của chuỗi vừa parse vào câu lỗi
+      // (`Unexpected token 'K', "Khách Nguy"... is not valid JSON`) — đó là nội dung hội thoại của khách (PII).
+      // Chỉ ghi loại lỗi + độ dài + mã kết thúc (D-21/D-28).
+      console.error(
+        '[AiActivityService] JSON parse failed from Gemini summary:',
+        `(${err.name}, độ dài ${String(result.text || '').length} ký tự, finishReason=${result.finishReason || 'n/a'})`
+      );
       const parseErr = new Error('AI tóm tắt trả về định dạng không hợp lệ hoặc bị cắt ngắn. Vui lòng thử lại.');
       parseErr.status = 422;
       throw parseErr;
