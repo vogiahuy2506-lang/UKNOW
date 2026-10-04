@@ -81,6 +81,26 @@ describe('aiModelCatalog.service', () => {
     }));
   });
 
+  it('ListModels gửi khoá bằng header x-goog-api-key, KHÔNG có `key=` trong URL (D-08), kể cả trang kế tiếp', async () => {
+    process.env.GEMINI_API_KEY = 'AIza-khoa-bi-mat-catalog';
+    global.fetch = jest.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [], nextPageToken: 'trang-2' }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) });
+
+    await catalogService.syncModelsFromGoogle();
+
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+    const [firstUrl, firstInit] = global.fetch.mock.calls[0];
+    const [secondUrl, secondInit] = global.fetch.mock.calls[1];
+    for (const url of [firstUrl, secondUrl]) {
+      expect(String(url)).not.toMatch(/[?&]key=/);
+      expect(String(url)).not.toContain('AIza-khoa-bi-mat-catalog');
+    }
+    expect(String(secondUrl)).toContain('pageToken=trang-2');
+    expect(firstInit.headers['x-goog-api-key']).toBe('AIza-khoa-bi-mat-catalog');
+    expect(secondInit.headers['x-goog-api-key']).toBe('AIza-khoa-bi-mat-catalog');
+  });
+
   it('deletes stale preview/deprecated rows left in DB, keeps real chat models', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,

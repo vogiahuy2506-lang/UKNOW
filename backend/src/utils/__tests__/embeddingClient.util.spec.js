@@ -78,6 +78,18 @@ describe('embedText / embedTexts - ghi usage embedding, ke ca khi KHONG co userI
     );
   });
 
+  it('khoa API di bang header x-goog-api-key, KHONG nam trong URL (D-08 / EXTRA-A2)', async () => {
+    process.env.GEMINI_API_KEY = 'AIza-khoa-bi-mat-embed';
+
+    await embedText(uniqueText('khoa o header'), { feature: 'embedding_help' });
+
+    const [url, init] = global.fetch.mock.calls[0];
+    expect(String(url)).not.toMatch(/[?&]key=/);
+    expect(String(url)).not.toContain('AIza-khoa-bi-mat-embed');
+    expect(String(url)).toContain(':embedContent');
+    expect(init.headers['x-goog-api-key']).toBe('AIza-khoa-bi-mat-embed');
+  });
+
   it('userId = null (nhu searchHelpChunks truyen xuong) cung ghi voi chu = null', async () => {
     await embedText(uniqueText('gia goi'), { userId: null, feature: 'embedding_help' });
     expect(mockRecord).toHaveBeenCalledTimes(1);

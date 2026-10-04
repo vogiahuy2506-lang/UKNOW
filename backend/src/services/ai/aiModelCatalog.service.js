@@ -193,10 +193,10 @@ export async function syncModelsFromGoogle() {
 
   do {
     const url = new URL('https://generativelanguage.googleapis.com/v1beta/models');
-    url.searchParams.set('key', apiKey);
     if (pageToken) url.searchParams.set('pageToken', pageToken);
 
-    const response = await fetch(url);
+    // Khoá gửi bằng header, KHÔNG đặt `?key=` (D-08): URL hay bị in ra log / lỗi mạng / proxy.
+    const response = await fetch(url, { headers: { 'x-goog-api-key': apiKey } });
     if (!response.ok) {
       const body = await response.text().catch(() => '');
       const err = new Error(`Google ListModels failed (${response.status}): ${body || response.statusText}`);

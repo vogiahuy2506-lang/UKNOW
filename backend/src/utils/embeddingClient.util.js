@@ -147,7 +147,8 @@ async function embedTextRaw(text, options = {}) {
   const outputDim = parseInt(process.env.EMBEDDING_OUTPUT_DIM || DEFAULT_EMBEDDING_DIM, 10);
   const input = clampEmbeddingInput(text);
 
-  const url = `https://generativelanguage.googleapis.com/v1/models/${model}:embedContent?key=${encodeURIComponent(apiKey)}`;
+  // Khoá gửi bằng header, KHÔNG nằm trong URL (D-08 / EXTRA-A2): URL hay bị in ra log, lỗi mạng và proxy — cùng khuôn lõi geminiClient.util.js.
+  const url = `https://generativelanguage.googleapis.com/v1/models/${model}:embedContent`;
 
   const requestBody = {
     model: `models/${model}`,
@@ -167,7 +168,7 @@ async function embedTextRaw(text, options = {}) {
     try {
       response = await fetch(url, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
         body: JSON.stringify(requestBody),
         signal: AbortSignal.timeout(EMBEDDING_REQUEST_TIMEOUT_MS),
       });
