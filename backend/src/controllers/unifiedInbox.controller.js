@@ -12,6 +12,7 @@ import {
 } from '../services/audit.service.js';
 import { getWorkspaceAuditContext } from '../utils/auditContext.util.js';
 import { resolveRequestIdempotencyKey } from '../services/quota/sendQuotaKey.service.js';
+import { issueSseTicket } from '../services/sseTicket.service.js';
 
 /**
  * `type` của hội thoại quyết định BẢNG nào được kiểm quyền và bảng nào được ghi. Các hàm repository không
@@ -177,6 +178,29 @@ class UnifiedInboxController {
       });
     } catch (err) {
       console.error('[UnifiedInbox] Get unread count error:', err);
+      return res.status(500).json({ success: false, message: err.message });
+    }
+  }
+
+  /**
+   * Cấp vé SSE ngắn hạn, dùng một lần (H-04).
+   * POST /api/ai/chatbot/inbox/stream-ticket — Bearer + X-Owner-Context như mọi API; quyền inbox_view.
+   * Vé ghi nhận chủ không gian làm việc ở phía server: nhân viên chỉ nhận luồng của chủ mà mình đang ở
+   * ngữ cảnh (resolveUserContext vẫn kiểm lại thành viên còn hoạt động lúc nối).
+   */
+  async createStreamTicket(req, res) {
+    try {
+      const ownerContextId = req.user.activeContext?.type === 'employee'
+        ? req.user.activeContext.ownerId
+        : null;
+      const { ticket, expiresInMs } = issueSseTicket({ userId: req.user.id, ownerContextId });
+      res.set('Cache-Control', 'no-store');
+      return res.json({
+        success: true,
+        data: { ticket, expiresInSeconds: Math.round(expiresInMs / 1000) },
+      });
+    } catch (err) {
+      console.error('[UnifiedInbox] Create stream ticket error:', err);
       return res.status(500).json({ success: false, message: err.message });
     }
   }

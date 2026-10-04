@@ -286,6 +286,15 @@ const chatbotApi = {
     return response.data;
   },
 
+  /**
+   * Vé SSE ngắn hạn, dùng một lần (H-04): EventSource không gửi được header nên trước đây JWT nằm trên URL.
+   * Gọi qua axios nên mang Bearer + X-Owner-Context như mọi API; trả `{ success, data: { ticket, expiresInSeconds } }`.
+   */
+  createInboxStreamTicket: async () => {
+    const response = await api.post('/ai/chatbot/inbox/stream-ticket');
+    return response.data;
+  },
+
   sendMessage: async (id, { type = 'channel', content, attachments, replyTo } = {}, options = {}) => {
     const key = options.idempotencyKey || generateIdempotencyKey();
     const response = await api.post(`/ai/chatbot/inbox/conversations/${id}/messages`, {

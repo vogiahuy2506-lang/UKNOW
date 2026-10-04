@@ -19,6 +19,7 @@ import {
 import { assertAiCreditAvailable } from '../middleware/aiCredit.middleware.js';
 import { sseLimiter } from '../middleware/rateLimiter.middleware.js';
 import sseService from '../services/sse.service.js';
+import { consumeSseTicket } from '../services/sseTicket.service.js';
 import multer from 'multer';
 import { MAX_UPLOAD_FILE_BYTES } from '../utils/uploadLimits.util.js';
 import { storageCapacityGuard } from '../middleware/storageCapacity.middleware.js';
@@ -45,38 +46,59 @@ function runGate(middleware, req, res) {
 }
 
 // ── SSE Stream — MUST stay above router.use(authMiddleware).
-// EventSource can only send JWT via ?token=; Bearer auth would always 401.
+// EventSource không gửi được header Authorization nên không đi qua authMiddleware. FE xin một VÉ ngắn hạn
+// dùng một lần ở POST /inbox/stream-ticket (đi qua authMiddleware, mang X-Owner-Context như mọi API) rồi nối
+// `GET /inbox/stream?ticket=...` (H-04: JWT không còn nằm trên URL). `?token=` (JWT) chỉ còn để bản FE cũ đang
+// mở trong tab không vỡ — log truy cập đã che cả hai tham số (utils/accessLog.util.js).
+let legacySseTokenWarned = false;
+
 router.get('/inbox/stream', attachSseUserIdForRateLimit, sseLimiter, async (req, res) => {
-  const token = req.query.token;
-  if (!token) {
-    return res.status(401).json({ success: false, message: 'Unauthorized' });
+  let userId;
+  let ownerContextId = null;
+
+  const ticket = req.query.ticket;
+  if (ticket) {
+    const claim = consumeSseTicket(String(ticket));
+    if (!claim) {
+      return res.status(401).json({ success: false, message: 'Invalid ticket', code: 'SSE_TICKET_INVALID' });
+    }
+    userId = claim.userId;
+    ownerContextId = claim.ownerContextId;
+  } else {
+    const token = req.query.token;
+    if (!token) {
+      return res.status(401).json({ success: false, message: 'Unauthorized' });
+    }
+
+    let decoded;
+    try {
+      decoded = jwt.verify(String(token), process.env.JWT_SECRET, { algorithms: ['HS256'] });
+    } catch (err) {
+      console.error('[SSE] JWT verify failed:', err.message);
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+
+    // Token có `purpose` (challenge 2FA...) không phải access token — cùng luật với authMiddleware.
+    if (decoded?.purpose) {
+      return res.status(401).json({ success: false, message: 'Invalid token' });
+    }
+
+    const userIdentifierClaim = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier';
+    userId = decoded.userId || decoded.userIdentifier || decoded.nameidentifier || decoded[userIdentifierClaim];
+    if (!userId) {
+      return res.status(401).json({ success: false, message: 'Invalid token - no userId' });
+    }
+    ownerContextId = req.query.ownerContext || null;
+    if (!legacySseTokenWarned) {
+      legacySseTokenWarned = true;
+      console.warn('[SSE] Có client còn nối bằng ?token= (bản FE cũ) — vé SSE là đường mới; gỡ nhánh token khi không còn ai dùng.');
+    }
   }
 
-  let decoded;
   try {
-    decoded = jwt.verify(String(token), process.env.JWT_SECRET, { algorithms: ['HS256'] });
-  } catch (err) {
-    console.error('[SSE] JWT verify failed:', err.message);
-    return res.status(401).json({ success: false, message: 'Invalid token' });
-  }
-
-  // Token có `purpose` (challenge 2FA...) không phải access token — cùng luật với authMiddleware.
-  if (decoded?.purpose) {
-    return res.status(401).json({ success: false, message: 'Invalid token' });
-  }
-
-  const userIdentifierClaim = 'http://schemas.xmlsoap.org/ws/2005/05/identity/claims/nameidentifier';
-  const userId = decoded.userId || decoded.userIdentifier || decoded.nameidentifier || decoded[userIdentifierClaim];
-  if (!userId) {
-    return res.status(401).json({ success: false, message: 'Invalid token - no userId' });
-  }
-
-  try {
-    // EventSource cannot send custom headers. The requested owner is still
-    // validated against an active membership by resolveUserContext.
-    req.user = await resolveUserContext(userId, {
-      ownerContextId: req.query.ownerContext || null,
-    });
+    // The requested owner is still validated against an active membership by resolveUserContext
+    // (vé: ownerContextId do server ghi lúc xin vé; token cũ: lấy từ query như trước).
+    req.user = await resolveUserContext(userId, { ownerContextId });
   } catch (err) {
     if (err.status && err.body) {
       return res.status(err.status).json(err.body);
@@ -225,6 +247,9 @@ router.post('/inbox/conversations/:id/read', requirePermission('inbox_view'), un
 router.delete('/inbox/conversations/:id', requirePermission('inbox_manage'), unifiedInboxController.deleteConversation.bind(unifiedInboxController));
 router.post('/inbox/conversations/:id/ai-pause', requirePermission('inbox_manage'), unifiedInboxController.setAiPaused.bind(unifiedInboxController));
 router.get('/inbox/unread-count', requirePermission('inbox_view'), unifiedInboxController.getUnreadCount.bind(unifiedInboxController));
+// Vé SSE: đứng SAU authMiddleware (cần Bearer + X-Owner-Context) và đúng quyền xem hộp thư. Dùng chung sseLimiter
+// với luồng nối (khoá theo user vì authMiddleware đã gắn req.user).
+router.post('/inbox/stream-ticket', requirePermission('inbox_view'), sseLimiter, unifiedInboxController.createStreamTicket.bind(unifiedInboxController));
 
 // ── AI Activity Report & Summaries ──────────────────────────────────
 router.get('/inbox/ai-activity', requirePermission('inbox_view'), aiActivityController.getActivityReport.bind(aiActivityController));

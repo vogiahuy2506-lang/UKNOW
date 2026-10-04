@@ -1,19 +1,25 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { useAuthStore } from '../stores/authStore';
+import chatbotApi from '../services/chatbotApi';
 import {
   SSE_HEARTBEAT_TIMEOUT,
   SSE_MAX_FAILURES,
   nextSseBackoffMs,
 } from './sseBackoff.util';
 
-export const buildInboxSseConnection = (token, activeContext) => {
+/** Khoá nhận diện kết nối: đổi token hoặc ngữ cảnh làm việc thì phải nối lại. KHÔNG đưa vào URL. */
+export const buildInboxSseConnectionKey = (token, activeContext) => {
   const ownerContext = activeContext?.type === 'employee' ? activeContext.ownerId : null;
-  const params = new URLSearchParams({ token });
-  if (ownerContext) params.set('ownerContext', String(ownerContext));
-  return {
-    connectionKey: `${token}:${ownerContext || 'self'}`,
-    url: `/api/ai/chatbot/inbox/stream?${params.toString()}`,
-  };
+  return `${token}:${ownerContext || 'self'}`;
+};
+
+/**
+ * URL luồng SSE từ một vé ngắn hạn dùng một lần (H-04). JWT không còn nằm trên URL: ngữ cảnh nhân viên
+ * (X-Owner-Context) được gửi lúc xin vé và server ghi vào vé, nên URL chỉ mang `ticket`.
+ */
+export const buildInboxSseUrl = (ticket) => {
+  const params = new URLSearchParams({ ticket });
+  return `/api/ai/chatbot/inbox/stream?${params.toString()}`;
 };
 
 /**
@@ -30,9 +36,14 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
   const tokenRef = useRef(null);
   const connectionKeyRef = useRef(null);
   const failureCountRef = useRef(0);
+  // Mỗi lần nối/cleanup tăng số này: yêu cầu xin vé đang bay mà số đã đổi thì bỏ, không mở EventSource cũ.
+  const connectSeqRef = useRef(0);
+  const pendingConnectKeyRef = useRef(null);
   const [status, setStatus] = useState('connecting');
 
   const cleanup = useCallback(() => {
+    connectSeqRef.current += 1;
+    pendingConnectKeyRef.current = null;
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
@@ -74,7 +85,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
     }, SSE_HEARTBEAT_TIMEOUT);
   }, [cleanup, scheduleReconnect]);
 
-  const connect = useCallback(() => {
+  const connect = useCallback(async () => {
     if (!user?.id) return;
 
     const newToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
@@ -84,7 +95,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
       return;
     }
 
-    const { connectionKey, url } = buildInboxSseConnection(newToken, {
+    const connectionKey = buildInboxSseConnectionKey(newToken, {
       type: contextType,
       ownerId: contextOwnerId,
     });
@@ -100,13 +111,34 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
         return;
       }
     }
+    // Đang xin vé cho đúng kết nối này rồi → đừng xin thêm vé thứ hai.
+    if (pendingConnectKeyRef.current === connectionKey) return;
 
     tokenRef.current = newToken;
     connectionKeyRef.current = connectionKey;
+    pendingConnectKeyRef.current = connectionKey;
+    connectSeqRef.current += 1;
+    const seq = connectSeqRef.current;
     setStatus('connecting');
 
+    let ticket;
     try {
-      const eventSource = new EventSource(url);
+      const res = await chatbotApi.createInboxStreamTicket();
+      ticket = res?.data?.ticket;
+      if (!ticket) throw new Error('Missing SSE ticket');
+    } catch (error) {
+      if (seq !== connectSeqRef.current) return;
+      pendingConnectKeyRef.current = null;
+      console.error('[SSE] Failed to get stream ticket:', error);
+      scheduleReconnect(connectionKey);
+      return;
+    }
+    // Trong lúc chờ vé, cleanup / đổi ngữ cảnh / nối lại đã xảy ra → vé này bỏ (hết hạn sau 60 giây).
+    if (seq !== connectSeqRef.current || connectionKeyRef.current !== connectionKey) return;
+    pendingConnectKeyRef.current = null;
+
+    try {
+      const eventSource = new EventSource(buildInboxSseUrl(ticket));
 
       eventSource.onopen = () => {
         console.log('[SSE] Connected to inbox stream');
@@ -168,7 +200,7 @@ export const useInboxSSE = (onNewMessage, onUnreadCountChange) => {
   useEffect(() => {
     if (user?.id) {
       const currentToken = localStorage.getItem('accessToken') || sessionStorage.getItem('accessToken');
-      const { connectionKey: currentConnectionKey } = buildInboxSseConnection(currentToken, {
+      const currentConnectionKey = buildInboxSseConnectionKey(currentToken, {
         type: contextType,
         ownerId: contextOwnerId,
       });

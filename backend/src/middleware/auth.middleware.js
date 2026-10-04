@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import db from '../config/database.js';
+import { peekSseTicket } from '../services/sseTicket.service.js';
 
 /** Access token do auth.controller ký HS256 — verify chỉ nhận đúng thuật toán này. */
 const JWT_VERIFY_OPTIONS = { algorithms: ['HS256'] };
@@ -253,10 +254,16 @@ export function attachUserIdForRateLimit(req, _res, next) {
 }
 
 /**
- * Soft-attach user id from SSE query token for sseLimiter. Never returns 401.
+ * Soft-attach user id from SSE query ticket (hoặc token cũ) for sseLimiter. Never returns 401.
+ * Vé chỉ được XEM ở đây, không tiêu thụ — handler SSE mới là nơi đổi vé.
  */
 export function attachSseUserIdForRateLimit(req, _res, next) {
   try {
+    const ticketClaim = peekSseTicket(req.query?.ticket);
+    if (ticketClaim?.userId != null) {
+      req.rateLimitUserId = ticketClaim.userId;
+      return next();
+    }
     const token = req.query?.token;
     if (token) {
       const decoded = jwt.verify(String(token), process.env.JWT_SECRET, JWT_VERIFY_OPTIONS);

@@ -5,6 +5,7 @@
 import express from 'express';
 import helmet from 'helmet';
 import morgan from 'morgan';
+import { createAccessLogMiddleware, redactUrlSecrets } from './utils/accessLog.util.js';
 import cookieParser from 'cookie-parser';
 import { globalLimiter, webhookLimiter } from './middleware/rateLimiter.middleware.js';
 import { attachUserIdForRateLimit } from './middleware/auth.middleware.js';
@@ -136,7 +137,8 @@ export function createApp() {
   // CORS handled by dynamicCors middleware above
   // Tắt morgan trong môi trường test để output Jest sạch.
   if (process.env.NODE_ENV !== 'test') {
-    app.use(morgan('dev'));
+    // H-04: che ?token= / ?ticket= trên URL trước khi ghi log truy cập.
+    app.use(createAccessLogMiddleware(morgan));
   }
   // Chat CÔNG KHAI (widget, trang chatbot công khai, tư vấn trang chủ): không đăng nhập, ai cũng gọi được →
   // body tối đa 64kb. Parser này PHẢI đứng TRƯỚC parser 5mb bên dưới: body-parser đánh dấu `req._body` khi đã
@@ -385,7 +387,7 @@ export function globalErrorHandler(err, req, res, next) {
   const rawStatus = Number(err?.status ?? err?.statusCode);
   const status = Number.isInteger(rawStatus) && rawStatus >= 400 && rawStatus <= 599 ? rawStatus : 500;
   if (status >= 500) {
-    console.error(`[ErrorHandler] ${req?.method} ${req?.originalUrl || req?.url} → ${status}:`, err?.stack || err);
+    console.error(`[ErrorHandler] ${req?.method} ${redactUrlSecrets(req?.originalUrl || req?.url)} → ${status}:`, err?.stack || err);
   } else {
     console.error(err?.stack || err);
   }
