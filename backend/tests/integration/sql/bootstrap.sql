@@ -1638,6 +1638,9 @@ CREATE TABLE IF NOT EXISTS custom_chatbots (
   embed_show_header   BOOLEAN NOT NULL DEFAULT true,
   embed_size          VARCHAR(10) NOT NULL DEFAULT 'medium'
     CHECK (embed_size IN ('small', 'medium', 'large')),
+  -- Migration 284: id so chi chat cong khai duoc voi chatbot DA CO luc migrate (production backfill true);
+  -- chatbot tao sau mac dinh false -> chi chat cong khai qua widget_key
+  allow_public_numeric_id BOOLEAN NOT NULL DEFAULT false,
   created_at          TIMESTAMPTZ DEFAULT NOW(),
   updated_at          TIMESTAMPTZ DEFAULT NOW()
 );
