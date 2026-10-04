@@ -115,6 +115,24 @@ class ChatbotZaloAccountRepository {
       : `LEFT JOIN chatbot_zalo_account_settings czs
            ON czs.id_zalo_setting = zs.id AND czs.id_user = zs.id_user
               AND czs.id_chatbot = $2`;
+    // S-12: 1 tài khoản Zalo = 1 chatbot. Khi biết đang xem chatbot nào, trả thêm chatbot KHÁC đang bật trên tài khoản
+    // này để hộp Zalo cá nhân hiện "Đang bật cho: <tên>" (và backend chặn bật bot thứ hai, xem findOtherEnabledChatbot).
+    const otherChatbotColumns = chatbotId == null
+      ? ''
+      : `,
+              oth.id_chatbot AS other_chatbot_id,
+              oth.name AS other_chatbot_name`;
+    const otherChatbotJoin = chatbotId == null
+      ? ''
+      : `LEFT JOIN (
+           SELECT DISTINCT ON (o.id_zalo_setting) o.id_zalo_setting, o.id_chatbot, ocb.name
+           FROM chatbot_zalo_account_settings o
+           JOIN custom_chatbots ocb
+             ON ocb.id = o.id_chatbot AND ocb.id_user = o.id_user AND ocb.is_active = true
+           WHERE o.id_user = $1
+             AND o.is_enabled = true AND o.id_chatbot IS NOT NULL AND o.id_chatbot <> $2
+           ORDER BY o.id_zalo_setting, o.updated_at DESC NULLS LAST, o.id DESC
+         ) oth ON oth.id_zalo_setting = zs.id`;
 
     const { rows } = await db.query(
       `SELECT zs.id,
@@ -129,11 +147,12 @@ class ChatbotZaloAccountRepository {
               zs.created_at,
               czs.is_enabled AS chatbot_enabled,
               czs.id_chatbot,
-              cb.name AS chatbot_name
+              cb.name AS chatbot_name${otherChatbotColumns}
        FROM zalo_settings zs
        ${chatbotJoinClause}
        LEFT JOIN custom_chatbots cb
               ON cb.id = czs.id_chatbot AND cb.id_user = zs.id_user AND cb.is_active = true
+       ${otherChatbotJoin}
        WHERE zs.id_user = $1 AND zs.is_active = true
        ORDER BY zs.is_default DESC, zs.created_at DESC`,
       chatbotId == null ? [userId] : [userId, chatbotId]
@@ -173,6 +192,29 @@ class ChatbotZaloAccountRepository {
       [userId, zaloSettingId, idChatbot, enabled]
     );
     return rows[0];
+  }
+
+  /**
+   * S-12 — chatbot KHÁC (còn hoạt động) đang bật trên tài khoản Zalo này. Quy tắc "1 tài khoản = 1 chatbot": nếu có
+   * thì không cho bật thêm bot thứ hai (backend chọn bot theo vòng tròn, khách mới bị chia ngầm giữa các bot).
+   * Chỉ tính dòng có id_chatbot (dòng mặc định id_chatbot NULL là cấu hình mức kênh, không phải một chatbot) và chỉ
+   * dòng đang bật; dòng cũ đã trùng (user 39) không bị đụng — chỉ chặn lúc bật thêm.
+   * @returns {Promise<{ id: number, name: string }|null>}
+   */
+  async findOtherEnabledChatbot(userId, zaloSettingId, chatbotId) {
+    const { rows } = await db.query(
+      `SELECT cb.id, cb.name
+       FROM chatbot_zalo_account_settings czs
+       JOIN custom_chatbots cb
+         ON cb.id = czs.id_chatbot AND cb.id_user = czs.id_user AND cb.is_active = true
+       WHERE czs.id_user = $1 AND czs.id_zalo_setting = $2
+         AND czs.is_enabled = true AND czs.id_chatbot IS NOT NULL
+         AND czs.id_chatbot <> $3::bigint
+       ORDER BY czs.updated_at DESC NULLS LAST, czs.id DESC
+       LIMIT 1`,
+      [userId, zaloSettingId, chatbotId]
+    );
+    return rows[0] || null;
   }
 
   /**

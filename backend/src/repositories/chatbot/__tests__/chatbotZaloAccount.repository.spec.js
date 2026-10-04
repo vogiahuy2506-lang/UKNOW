@@ -257,3 +257,58 @@ describe('chatbotZaloAccount.repository.pickEnabledChatbotForZalo', () => {
     expect(String(sql)).toMatch(/cb\.id_user\s*=\s*czs\.id_user/i);
   });
 });
+// S-12 (04/10/2026) — 1 tài khoản Zalo = 1 chatbot: tra chatbot KHÁC đang bật trên tài khoản.
+describe('chatbotZaloAccount.repository.findOtherEnabledChatbot', () => {
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  it('trả chatbot khác đang bật; SQL chỉ tính dòng đang bật, có id_chatbot, khác bot hiện tại, bot còn hoạt động của cùng chủ', async () => {
+    query.mockResolvedValueOnce({ rows: [{ id: 11, name: 'Bot Tư vấn' }] });
+
+    const holder = await repository.findOtherEnabledChatbot(1, 34, 12);
+
+    expect(holder).toEqual({ id: 11, name: 'Bot Tư vấn' });
+    const [sql, params] = query.mock.calls[0];
+    expect(String(sql)).toMatch(/czs\.is_enabled\s*=\s*true/i);
+    expect(String(sql)).toMatch(/czs\.id_chatbot\s+IS NOT NULL/i);
+    expect(String(sql)).toMatch(/czs\.id_chatbot\s*<>\s*\$3::bigint/i);
+    expect(String(sql)).toMatch(/cb\.is_active\s*=\s*true/i);
+    expect(String(sql)).toMatch(/cb\.id_user\s*=\s*czs\.id_user/i);
+    expect(params).toEqual([1, 34, 12]);
+  });
+
+  it('không có bot khác → null', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+    expect(await repository.findOtherEnabledChatbot(1, 34, 12)).toBeNull();
+  });
+});
+
+describe('chatbotZaloAccount.repository.listAccountsForUser — chatbot khác đang bật (S-12)', () => {
+  beforeEach(() => {
+    query.mockReset();
+  });
+
+  it('có chatbotId → trả thêm other_chatbot_id/other_chatbot_name từ dòng đang bật của bot KHÁC', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await repository.listAccountsForUser(1, 12);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(String(sql)).toMatch(/other_chatbot_id/);
+    expect(String(sql)).toMatch(/other_chatbot_name/);
+    expect(String(sql)).toMatch(/o\.is_enabled\s*=\s*true/i);
+    expect(String(sql)).toMatch(/o\.id_chatbot\s*<>\s*\$2/i);
+    expect(params).toEqual([1, 12]);
+  });
+
+  it('không có chatbotId (tra cũ) → KHÔNG thêm cột other_* và không đổi tham số', async () => {
+    query.mockResolvedValueOnce({ rows: [] });
+
+    await repository.listAccountsForUser(1);
+
+    const [sql, params] = query.mock.calls[0];
+    expect(String(sql)).not.toMatch(/other_chatbot/);
+    expect(params).toEqual([1]);
+  });
+});

@@ -20,6 +20,9 @@ import {
 } from '../services/chatbot/inProcChannelGateway/index.js';
 
 const isTelegramStubOnly = () => isStubOnly({ channel: 'telegram' });
+
+/** Mã lỗi 409 khi bật chatbot thứ hai trên một tài khoản Zalo cá nhân (S-12). */
+const ZALO_ACCOUNT_BOUND_TO_OTHER_CHATBOT_CODE ='ZALO_ACCOUNT_BOUND_TO_OTHER_CHATBOT';
 import customChatService from '../services/ai/customChat.service.js';
 import aiCreditMeter, { VISITOR_CHAT_UNAVAILABLE_MESSAGE } from '../services/ai/aiCreditMeter.service.js';
 import zaloInboxService from '../services/chatbot/zaloInbox.service.js';
@@ -214,6 +217,24 @@ async function resolvePublicChatbotParam(chatbotId) {
     if (byId) return byId;
   }
   return chatbotRepository.findChatbotByWidgetKey(raw);
+}
+
+/**
+ * Bot cũ thiếu `widget_key` (bản sao "Gửi bản sao" trước 04/10/2026, S-03) được sinh key khi chủ đọc thông tin nhúng.
+ * Thất bại thì giữ nguyên danh sách (key vẫn thiếu): đây là bước chữa dữ liệu, không được làm hỏng việc đọc.
+ */
+async function withWidgetKeys(chatbots) {
+  const list = Array.isArray(chatbots) ? chatbots : [];
+  for (const bot of list) {
+    if (!bot || String(bot.widget_key || '').trim()) continue;
+    try {
+      const key = await chatbotRepository.ensureWidgetKey(bot.id);
+      if (key) bot.widget_key = key;
+    } catch (err) {
+      console.warn(`[CustomChatbot] ensureWidgetKey failed (#${bot.id}):`, err.message);
+    }
+  }
+  return chatbots;
 }
 
 /**
@@ -601,6 +622,22 @@ class ChatbotController {
         : parseInt(id_chatbot, 10);
       if (normalizedChatbotId != null && !Number.isFinite(normalizedChatbotId)) {
         return res.status(400).json({ success: false, message: 'id_chatbot must be a number or null' });
+      }
+      // S-12: 1 tài khoản Zalo = 1 chatbot. Bật bot thứ hai khi bot khác đang bật thì chặn và nói rõ bot nào đang giữ
+      // tài khoản (trước đây bật được, khách mới bị chia vòng tròn ngầm). Tắt thì luôn cho.
+      if (enabled && normalizedChatbotId != null) {
+        const holder = await chatbotZaloAccountRepository.findOtherEnabledChatbot(
+          ownerUserId, zaloSettingId, normalizedChatbotId
+        );
+        if (holder) {
+          return res.status(409).json({
+            success: false,
+            code: ZALO_ACCOUNT_BOUND_TO_OTHER_CHATBOT_CODE,
+            message: `Tài khoản Zalo này đang bật cho chatbot "${holder.name}". Mỗi tài khoản chỉ gắn một chatbot — hãy tắt bên đó trước khi bật ở đây.`,
+            chatbotId: holder.id,
+            chatbotName: holder.name,
+          });
+        }
       }
       const settings = await chatbotZaloAccountRepository.setEnabled(
         ownerUserId, zaloSettingId, normalizedChatbotId, enabled
@@ -1376,6 +1413,7 @@ class ChatbotController {
         return res.status(404).json({ success: false, message: 'Chatbot not found' });
       }
 
+      await withWidgetKeys([chatbot]);
       return res.json({ success: true, data: chatbot });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
@@ -1390,24 +1428,24 @@ class ChatbotController {
       if (origin === 'shared' || origin === 'shared_with_me') {
         // Get chatbots received from others (origin = 'shared')
         const chatbots = await chatbotRepository.listChatbotsByUser(userId, 'shared');
-        return res.json({ success: true, data: chatbots });
+        return res.json({ success: true, data: await withWidgetKeys(chatbots) });
       }
 
       if (origin === 'marketplace_purchased') {
         // Get chatbots purchased from marketplace (origin = 'marketplace_purchased')
         const chatbots = await chatbotRepository.listChatbotsByUser(userId, 'marketplace_purchased');
-        return res.json({ success: true, data: chatbots });
+        return res.json({ success: true, data: await withWidgetKeys(chatbots) });
       }
 
       if (origin === 'self_created') {
         // Get self-created chatbots (origin = 'self_created')
         const chatbots = await chatbotRepository.listChatbotsByUser(userId, 'self_created');
-        return res.json({ success: true, data: chatbots });
+        return res.json({ success: true, data: await withWidgetKeys(chatbots) });
       }
 
       // Default: return all chatbots
       const chatbots = await chatbotRepository.listChatbotsByUser(userId);
-      return res.json({ success: true, data: chatbots });
+      return res.json({ success: true, data: await withWidgetKeys(chatbots) });
     } catch (err) {
       return res.status(500).json({ success: false, message: err.message });
     }

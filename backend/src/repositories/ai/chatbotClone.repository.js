@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import db from '../../config/database.js';
 
 /**
@@ -5,7 +6,7 @@ import db from '../../config/database.js';
  *
  * Hỗ trợ 2 nguồn dữ liệu:
  * - `cloneFromSource`: copy từ 1 chatbot đang tồn tại trong DB (share giữa user).
- *   Copy toàn bộ row custom_chatbots (trừ id/widget_key) + toàn bộ chunks + embedding JSONB.
+ *   Copy toàn bộ row custom_chatbots (trừ id; widget_key sinh mới) + toàn bộ chunks + embedding JSONB.
  * - `cloneFromSnapshot`: copy từ snapshot JSON (marketplace purchase).
  *   Snapshot không có embedding nên chỉ copy chunk_text/source/chunk_index.
  */
@@ -41,7 +42,10 @@ class ChatbotCloneRepository {
   }
 
   /**
-   * Insert 1 row custom_chatbots mới (không có widget_key) trong transaction hiện tại.
+   * Insert 1 row custom_chatbots mới trong transaction hiện tại. Bản sao có `widget_key` ngay từ lúc tạo
+   * (cùng cách sinh với `createCustomChatbot`): mã script nhúng của widget gọi `/custom-chatbot/:widgetKey/*`
+   * và chỉ tra theo cột này, nên bản sao thiếu key thì mọi tin khách gửi đều nhận 404 (S-03).
+   * Mua Marketplace sau đó ghi đè bằng `chatbot_<id>` trong cùng transaction (marketplacePurchase.service.js).
    * @param {import('pg').PoolClient} client
    * @param {number} targetUserId
    * @param {object} payload
@@ -76,7 +80,7 @@ class ChatbotCloneRepository {
         payload.border_radius ?? 16,
         payload.chat_height ?? '600px',
         payload.suggested_questions ?? [],
-        null, // widget_key luôn null cho bản clone; route sẽ generate khi publish
+        randomUUID().split('-')[0], // widget_key sinh sẵn như chatbot tự tạo (trước đây NULL → widget 404)
         payload.allow_attachments ?? false,
         payload.temperature ?? 0.7,
         payload.max_tokens ?? 2048,

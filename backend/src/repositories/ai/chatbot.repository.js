@@ -1,3 +1,4 @@
+import { randomUUID } from 'crypto';
 import db from '../../config/database.js';
 
 class ChatbotRepository {
@@ -500,7 +501,12 @@ class ChatbotRepository {
               COALESCE(origin, 'self_created') as origin, reply_limit_config,
               active_hours, replies_enabled, widget_auto_open, embed_show_header, embed_size,
               created_at, updated_at,
-              (SELECT COUNT(*)::int FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_count
+              -- Chỉ đếm tài liệu SẴN SÀNG: tài liệu lỗi/đang xử lý không dùng được để trả lời (S-17). Tài liệu lỗi đếm riêng
+              -- để cột trái hiện "· 1 lỗi" thay vì để chủ tin là đã nạp đủ.
+              (SELECT COUNT(*) FILTER (WHERE d.status = 'ready')::int
+                 FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_count,
+              (SELECT COUNT(*) FILTER (WHERE d.status = 'error')::int
+                 FROM custom_chatbot_documents d WHERE d.chatbot_id = custom_chatbots.id) AS document_error_count
        FROM custom_chatbots
        WHERE id_user = $1 AND is_active = true`;
     const params = [userId];
@@ -549,6 +555,36 @@ class ChatbotRepository {
       [userId]
     );
     return rows[0] || null;
+  }
+
+  /**
+   * Bảo đảm chatbot có `widget_key` (S-03). Bản sao tạo qua "Gửi bản sao" trước 04/10/2026 có widget_key NULL nên
+   * mã script nhúng của widget luôn 404. Không viết migration ghi dữ liệu: bot cũ được sinh key khi chủ mở danh sách
+   * (nguồn dữ liệu của tab Triển khai). Chỉ ghi khi key còn trống (`widget_key IS NULL OR ''`), nên chạy lại hay
+   * chạy song song đều không ghi đè key đã có. UNIQUE đụng (hiếm) → thử key khác.
+   * @param {number|string} chatbotId
+   * @returns {Promise<string|null>} key đang có sau khi gọi
+   */
+  async ensureWidgetKey(chatbotId) {
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const { rows } = await db.query(
+          `UPDATE custom_chatbots SET widget_key = $2
+           WHERE id = $1 AND (widget_key IS NULL OR btrim(widget_key) = '')
+           RETURNING widget_key`,
+          [chatbotId, randomUUID().split('-')[0]]
+        );
+        if (rows[0]) return rows[0].widget_key;
+        const { rows: current } = await db.query(
+          `SELECT widget_key FROM custom_chatbots WHERE id = $1`,
+          [chatbotId]
+        );
+        return current[0]?.widget_key || null;
+      } catch (err) {
+        if (err?.code !== '23505') throw err;
+      }
+    }
+    return null;
   }
 
   async createChatbot(userId, data) {

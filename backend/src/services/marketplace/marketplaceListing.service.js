@@ -170,8 +170,10 @@ class MarketplaceListingService {
       throw error;
     }
 
-    // Verify ownership
-    if (chatbot.id_user !== userId) {
+    // Verify ownership. So bằng Number: `chatbot.id_user` là BIGINT nên pg trả CHUỖI ("146"), còn id chủ không gian của
+    // nhân viên (auth.middleware activeContext.ownerId) là Number — `!==` thẳng thì nhân viên có quyền Marketplace luôn
+    // nhận 403 dù bot đúng của công ty mình (S-15).
+    if (Number(chatbot.id_user) !== Number(userId)) {
       const error = new Error('Bạn không có quyền tạo listing từ chatbot này');
       error.status = 403;
       throw error;
@@ -468,7 +470,7 @@ class MarketplaceListingService {
       throw error;
     }
 
-    if (listing.id_user !== userId) {
+    if (Number(listing.id_user) !== Number(userId)) {
       const error = new Error('Bạn không có quyền chỉnh sửa listing này');
       error.status = 403;
       throw error;
@@ -490,7 +492,7 @@ class MarketplaceListingService {
       error.status = 404;
       throw error;
     }
-    if (listing.id_user !== userId) {
+    if (Number(listing.id_user) !== Number(userId)) {
       const error = new Error('Bạn không có quyền chỉnh sửa listing này');
       error.status = 403;
       throw error;

@@ -41,20 +41,26 @@ describe('listChatbotsByUser document_count', () => {
     await insertDoc(b1, userB.id, 'e2', 'ready');
   });
 
-  it('dem moi trang thai theo tung chatbot, khong lan sang bot khac/nguoi khac', async () => {
+  // S-17 (04/10/2026): chi dem tai lieu SAN SANG; tai lieu loi dem rieng; dang xu ly khong tinh vao ca hai.
+  it('chi dem tai lieu ready, tai lieu error dem rieng, khong lan sang bot khac/nguoi khac', async () => {
     const rows = await chatbotRepository.listChatbotsByUser(userA.id);
     const byId = Object.fromEntries(rows.map((r) => [String(r.id), r]));
     expect(rows).toHaveLength(2);
     expect(byId[String(b1)]).toBeUndefined();
-    expect(byId[String(a1)].document_count).toBe(3);
+    // a1: 1 ready + 1 processing + 1 error -> 1 san sang, 1 loi (processing khong tinh)
+    expect(byId[String(a1)].document_count).toBe(1);
+    expect(byId[String(a1)].document_error_count).toBe(1);
     expect(byId[String(a2)].document_count).toBe(0);
+    expect(byId[String(a2)].document_error_count).toBe(0);
     expect(typeof byId[String(a1)].document_count).toBe('number');
+    expect(typeof byId[String(a1)].document_error_count).toBe('number');
   });
 
   it('loc origin=self_created van co document_count dung', async () => {
     const rows = await chatbotRepository.listChatbotsByUser(userA.id, 'self_created');
     const byId = Object.fromEntries(rows.map((r) => [String(r.id), r]));
-    expect(byId[String(a1)].document_count).toBe(3);
+    expect(byId[String(a1)].document_count).toBe(1);
+    expect(byId[String(a1)].document_error_count).toBe(1);
     expect(byId[String(a2)].document_count).toBe(0);
   });
 });
