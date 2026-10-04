@@ -5334,8 +5334,6 @@ export default {
     // Ask more card
     needMoreInfo: 'Need more information:',
     // Campaign type card
-    selectCampaignChannel: 'Select campaign channel',
-    whichChannel: 'Which channel do you want to send to?',
     // Campaign details card
     designCampaign: 'Design campaign',
     createCampaignWithOptions: 'Create campaign with these options',
@@ -5389,9 +5387,6 @@ export default {
     // Category names
     notificationCategory: '🔔 Notification',
     // Audience card
-    selectAudience: 'Select target audience',
-    sendToAudience: 'Who do you want to send to?',
-    zaloGroupNote: '💡 **Note:** With **Zalo group**, messages will be sent to the connected Zalo group instead of individually.',
     // Draft editor
     editDraft: 'Edit Draft',
     basic: 'Basic',
@@ -5503,9 +5498,6 @@ export default {
     quickActionLanding: 'Create landing page to collect leads for product [product name]',
     quickActionEmail: 'Write welcome email template for new customers',
     // Internal chat messages
-    askDetailsForCampaign: 'Let me ask a few questions to design the right campaign for you.',
-    askChannelFirst: "I'll ask you to select a channel first.",
-    userSelectChannel: 'I want to send via {channel}',
     askAudience: 'Who do you want to send to?',
     userSelectAudience: 'Send to {audience}',
     useTemplate: 'I want to base on template "{name}" ({category}).',

@@ -17,8 +17,8 @@ import aiApi from '../../services/aiApi';
 import api from '../../services/api';
 import LandingPageCard from './components/LandingPageCard';
 import {
-  AiContent, TemplateDraftCard, ContentPlanCard, ContentPlanActionsCard, AskMoreCard, AskCampaignTypeCard, AskCampaignDetailsCard,
-  AskLandingDetailsCard, AskAudienceCard, CampaignDraftEditor, ConfirmCreateCard,
+  AiContent, TemplateDraftCard, ContentPlanCard, ContentPlanActionsCard, AskMoreCard, AskCampaignDetailsCard,
+  AskLandingDetailsCard, CampaignDraftEditor, ConfirmCreateCard,
   AutoCreatingCard, AutoCreatedSuccessCard, TemplatePickerModal,
 } from './components/AiChatbotCards';
 import {
@@ -402,13 +402,11 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   const [contentPlanWorkflow, setContentPlanWorkflow] = useState(null);
   const [wizardContext, setWizardContext] = useState(() => deriveWizardContext([]));
 
-  // Trạng thái cho flow campaign mới: hỏi chọn type → hỏi audience → confirm → tạo
+  // Trạng thái cho thẻ ask_campaign_details (không qua cổng wizard): prompt gốc + dữ liệu thẻ → confirm → tạo
   const [quickActionsOpen, setQuickActionsOpen] = useState(false);
   const [pendingCampaignPrompt, setPendingCampaignPrompt] = useState(null); // Prompt gốc của user
   const [pendingCampaignData, setPendingCampaignData] = useState(null); // Data từ AI khi hỏi campaign type
   const [isEditingDraft, setIsEditingDraft] = useState(false); // Đang chỉnh sửa draft trong chatbot
-  const [_selectedCampaignType, setSelectedCampaignType] = useState(null); // Type đã chọn (email/zalo/zalo_group)
-  const [_selectedAudience, setSelectedAudience] = useState(null); // Audience đã chọn (interested/cart_abandoned/all)
 
   const [sessions, setSessions] = useState([]);
   const [currentSessionId, setCurrentSessionId] = useState(null);
@@ -757,7 +755,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         if (dbMessages[i].role === 'assistant') { lastAssistantIdx = i; break; }
       }
       const lastAssistant = lastAssistantIdx >= 0 ? dbMessages[lastAssistantIdx] : null;
-      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_campaign_type', 'ask_audience', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'landing_picker', 'suggest_content_plan', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
+      const interactiveTypes = ['ask_landing_details', 'ask_campaign_details', 'ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker', 'zalo_friend_picker', 'landing_picker', 'suggest_content_plan', 'confirm_create', 'landing_page', 'template_draft', 'content_plan', 'content_plan_actions', 'auto_created_success'];
 
       // Chỉ cổng CUỐI CÙNG còn hiện. Cổng đã trả lời bị BỎ HẲN — cả câu hỏi lẫn thẻ — đúng như
       // stripWizardCards làm lúc chạy live (`next.pop()` bỏ nguyên tin nhắn). Giữ lại câu chữ là
@@ -815,7 +813,7 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         setPendingLandingPrompt(lastUserMsg?.content || '');
         setPendingLandingData(lastAssistant.data);
         setPendingCampaignPrompt(null); setPendingCampaignData(null); setCurrentScript(null);
-      } else if (['ask_campaign_details', 'ask_campaign_type'].includes(lastAssistant?.type)) {
+      } else if (lastAssistant?.type === 'ask_campaign_details') {
         setPendingCampaignPrompt(lastUserMsg?.content || '');
         setPendingCampaignData(lastAssistant.data);
         setPendingLandingPrompt(null); setPendingLandingData(null); setCurrentScript(null);
@@ -1610,19 +1608,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
           return;
         }
 
-        if (type === 'ask_campaign_type' && data) {
-          setPendingCampaignPrompt(trimmedInput);
-          setPendingCampaignData(data);
-          update(prev => [...prev, { role: 'assistant', content, type, data }]);
-          return;
-        }
-
-        if (type === 'ask_audience' && data) {
-          setPendingCampaignData(prev => prev ? { ...prev, ...data } : data);
-          update(prev => [...prev, { role: 'assistant', content, type, data }]);
-          return;
-        }
-
         if (['ask_sender_account', 'email_setup_guide', 'zalo_qr_login', 'zalo_group_picker'].includes(type)) {
           setPendingCampaignPrompt(null);
           setPendingCampaignData(null);
@@ -1990,8 +1975,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
       lastAssistantMessage && [
         'ask_landing_details',
         'ask_campaign_details',
-        'ask_campaign_type',
-        'ask_audience',
         'ask_sender_account',
         'email_setup_guide',
         'zalo_qr_login',
@@ -2749,9 +2732,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   };
 
   /**
-   * Xử lý khi user chọn campaign type (email/zalo/zalo_group)
-   */
-  /**
    * Xử lý khi user submit câu trả lời từ AskCampaignDetailsCard
    * summaryText: chuỗi mô tả lựa chọn, answers: { channel, productCount, sendingStyle, audienceCount }
    */
@@ -2911,7 +2891,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
         { role: 'assistant', content: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.' },
         { role: 'user', content: summaryText + emailTemplateContext },
       ];
-      const response = await aiApi.chat(enrichedHistory, filesToSend, null, locale);
+      // C P2-4: gửi KÈM phiên đang mở — trước đây `null` làm mỗi lần bấm tạo một phiên mới, thẻ xác nhận nằm ở phiên khác.
+      const response = await aiApi.chat(enrichedHistory, filesToSend, mySessionId, locale);
       if (response.success) {
         refreshAiCredits();
         const { type, content, data } = response.data;
@@ -3000,118 +2981,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     }
   };
 
-  const handleSelectCampaignType = async (campaignType) => {
-    if (!pendingCampaignPrompt || !pendingCampaignData) return;
-
-    setIsTyping(true);
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: `Tôi đã chọn kênh ${campaignType === 'email' ? '📧 Email' : campaignType === 'zalo' ? '💬 Zalo cá nhân' : '👥 Zalo nhóm'}. Đang thiết kế chiến dịch...`,
-    }]);
-
-    try {
-      // Gửi lại prompt với campaign type đã chọn
-      const enrichedHistory = [
-        ...messages,
-        { role: 'user', content: pendingCampaignPrompt },
-        { role: 'assistant', content: 'Tôi sẽ hỏi bạn chọn kênh trước.' },
-        { role: 'user', content: `Tôi muốn gửi qua ${campaignType}` }
-      ];
-
-      const response = await aiApi.chat(enrichedHistory, [], null, locale);
-
-      if (response.success) {
-        refreshAiCredits();
-        const { type, content, data } = response.data;
-
-        // Nếu AI trả về confirm_create
-        if (type === 'confirm_create' && data) {
-          await prepareAndShowCampaignConfirmation({
-            ...data,
-            campaignType: campaignType, // Override với type user đã chọn
-          }, { sessionId: currentSessionIdRef.current, update: setMessages, content: content || 'Chiến dịch đã sẵn sàng!' });
-        } else {
-          // AI trả lời khác, hiển thị như bình thường
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: content || 'Tôi đang xử lý yêu cầu của bạn...',
-            type,
-            data,
-          }]);
-        }
-
-        // Clear pending state
-        setPendingCampaignPrompt(null);
-        setPendingCampaignData(null);
-        setSelectedCampaignType(campaignType);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi khi tạo chiến dịch');
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
-  /**
-   * Xử lý khi user chọn đối tượng khách hàng (all/has_email/has_zalo_phone)
-   */
-  const handleSelectAudience = async (audience) => {
-    if (!pendingCampaignPrompt || !pendingCampaignData) return;
-
-    setIsTyping(true);
-    const audienceLabel = audience === 'all' ? 'tất cả khách hàng' : audience === 'has_email' ? 'khách hàng có email' : 'khách hàng có Zalo/phone';
-    setMessages(prev => [...prev, {
-      role: 'assistant',
-      content: `Tôi sẽ gửi cho đối tượng ${audienceLabel}. Đang thiết kế chiến dịch hoàn chỉnh...`,
-    }]);
-
-    try {
-      // Gửi lại prompt với audience đã chọn
-      const enrichedHistory = [
-        ...messages,
-        { role: 'user', content: pendingCampaignPrompt },
-        { role: 'assistant', content: 'Tôi sẽ hỏi bạn chọn kênh trước.' },
-        { role: 'user', content: `Tôi muốn gửi qua ${pendingCampaignData?.campaignType || 'đa kênh'}` },
-        { role: 'assistant', content: 'Bạn muốn gửi cho đối tượng nào?' },
-        { role: 'user', content: `Gửi cho ${audienceLabel}` }
-      ];
-
-      const response = await aiApi.chat(enrichedHistory, [], null, locale);
-
-      if (response.success) {
-        refreshAiCredits();
-        const { type, content, data } = response.data;
-
-        // Nếu AI trả về confirm_create
-        if (type === 'confirm_create' && data) {
-          await prepareAndShowCampaignConfirmation({
-            ...data,
-            campaignType: pendingCampaignData?.campaignType,
-            audience: audience,
-          }, { sessionId: currentSessionIdRef.current, update: setMessages, content: content || 'Chiến dịch đã sẵn sàng!' });
-        } else {
-          // AI trả lời khác, hiển thị như bình thường
-          setMessages(prev => [...prev, {
-            role: 'assistant',
-            content: content || 'Tôi đang xử lý yêu cầu của bạn...',
-            type,
-            data,
-          }]);
-        }
-
-        // Clear pending state
-        setPendingCampaignPrompt(null);
-        setPendingCampaignData(null);
-        setSelectedCampaignType(pendingCampaignData?.campaignType);
-        setSelectedAudience(audience);
-      }
-    } catch (err) {
-      toast.error(err.response?.data?.message || 'Lỗi khi tạo chiến dịch');
-    } finally {
-      setIsTyping(false);
-    }
-  };
-
   /**
    * Xử lý khi user xác nhận tạo chiến dịch
    */
@@ -3181,8 +3050,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
     setCampaignConfirmation(null);
     setPendingCampaignPrompt(null);
     setPendingCampaignData(null);
-    setSelectedCampaignType(null);
-    setSelectedAudience(null);
     setIsEditingDraft(false);
     setMessages(prev => [...prev, {
       role: 'assistant',
@@ -3559,8 +3426,8 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
   );
 
   const INTERACTIVE_TYPES = [
-    'ask_campaign_details', 'ask_sender_account', 'ask_audience',
-    'ask_campaign_type', 'zalo_group_picker', 'zalo_friend_picker', 'landing_picker',
+    'ask_campaign_details', 'ask_sender_account',
+    'zalo_group_picker', 'zalo_friend_picker', 'landing_picker',
     'confirm_create', 'email_setup_guide', 'zalo_qr_login'
   ];
 
@@ -4038,26 +3905,6 @@ const AiChatbot = ({ isOpen, onToggle, panelWidth = 420, onWidthChange, onResize
                 <AskLandingDetailsCard
                   data={msg.data}
                   onSubmit={handleLandingDetailsSubmit}
-                  t={t}
-                />
-              )}
-
-              {msg.type === 'ask_campaign_type' && msg.data && (
-                <AskCampaignTypeCard
-                  data={msg.data}
-                  onSelect={handleSelectCampaignType}
-                  onDismiss={handleDismissWizardCard}
-                  isActive={idx === latestInteractiveIndex}
-                  t={t}
-                />
-              )}
-
-              {/* Ask audience - hỏi user chọn đối tượng khách hàng */}
-              {msg.type === 'ask_audience' && msg.data && (
-                <AskAudienceCard
-                  data={msg.data}
-                  onSelect={handleSelectAudience}
-                  isActive={idx === latestInteractiveIndex}
                   t={t}
                 />
               )}

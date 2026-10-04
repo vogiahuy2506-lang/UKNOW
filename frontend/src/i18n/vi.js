@@ -5349,8 +5349,6 @@ export default {
     // Ask more card
     needMoreInfo: 'Cần thêm thông tin:',
     // Campaign type card
-    selectCampaignChannel: 'Chọn kênh chiến dịch',
-    whichChannel: 'Bạn muốn gửi qua kênh nào?',
     // Campaign details card
     designCampaign: 'Thiết kế chiến dịch',
     createCampaignWithOptions: 'Tạo chiến dịch theo lựa chọn này',
@@ -5404,9 +5402,6 @@ export default {
     // Category names
     notificationCategory: '🔔 Thông báo',
     // Audience card
-    selectAudience: 'Chọn đối tượng khách hàng',
-    sendToAudience: 'Bạn muốn gửi cho đối tượng nào?',
-    zaloGroupNote: '💡 **Lưu ý:** Với **Zalo nhóm**, tin nhắn sẽ gửi vào nhóm Zalo đã kết nối thay vì gửi riêng từng người.',
     // Draft editor
     editDraft: 'Chỉnh sửa Draft',
     basic: 'Cơ bản',
@@ -5518,9 +5513,6 @@ export default {
     quickActionLanding: 'Tạo landing page thu thập lead cho sản phẩm [tên sản phẩm]',
     quickActionEmail: 'Viết template email chào mừng khách hàng mới',
     // Internal chat messages
-    askDetailsForCampaign: 'Cho tôi hỏi vài điều để thiết kế chiến dịch phù hợp.',
-    askChannelFirst: 'Tôi sẽ hỏi bạn chọn kênh trước.',
-    userSelectChannel: 'Tôi muốn gửi qua {channel}',
     askAudience: 'Bạn muốn gửi cho đối tượng nào?',
     userSelectAudience: 'Gửi cho {audience}',
     useTemplate: 'Tôi muốn dựa trên template "{name}" ({category}).',

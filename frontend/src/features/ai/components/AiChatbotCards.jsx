@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import {
-  HiOutlineSparkles, HiOutlineX, HiOutlineChevronRight, HiOutlinePlay,
+  HiOutlineSparkles, HiOutlineX, HiOutlinePlay,
   HiOutlineTerminal, HiOutlinePencilAlt, HiOutlineCheck, HiOutlineQuestionMarkCircle,
   HiOutlineMail, HiOutlineChat, HiOutlineFolderOpen, HiOutlineGlobeAlt, HiOutlinePaperClip,
   HiOutlineDocumentText, HiOutlineSearch, HiOutlineExclamationCircle, HiOutlineLightningBolt,
@@ -687,58 +687,6 @@ export const AskMoreCard = ({ missingFields, t }) => (
     </div>
   </div>
 );
-
-// Ask campaign type card - hỏi user chọn kênh
-export const AskCampaignTypeCard = ({ data, onSelect, onDismiss, isActive = true, t }) => {
-  if (!data?.campaignOptions) return null;
-
-  return (
-    <div className={`mt-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl p-4 ${isActive ? '' : 'opacity-60 pointer-events-none'}`}>
-      <div className="flex items-center gap-2 mb-3">
-        <HiOutlineSparkles className="w-5 h-5 text-blue-500" />
-        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-blue-600">{t('aiChatbot.selectCampaignChannel')}</span>
-      </div>
-      {data.campaignName && (
-        <h4 className="font-bold text-slate-900 text-sm mb-1">{data.campaignName}</h4>
-      )}
-      {data.description && (
-        <p className="text-xs text-slate-500 mb-4 leading-relaxed">{data.description}</p>
-      )}
-      <p className="text-xs text-slate-600 mb-3">{t('aiChatbot.whichChannel')}</p>
-      <div className="space-y-2">
-        {data.campaignOptions.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => onSelect(option.value)}
-            className="w-full flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:bg-blue-50 transition-all text-left group"
-          >
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-              style={{
-                backgroundColor: option.value === 'email' ? '#fff7ed' : option.value === 'zalo' ? '#eff6ff' : '#faf5ff'
-              }}
-            >
-              {option.value === 'email' ? '📧' : option.value === 'zalo' ? '💬' : '👥'}
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-slate-800 group-hover:text-blue-700">{option.label}</p>
-              <p className="text-[10px] text-slate-500">{option.description}</p>
-            </div>
-            <HiOutlineChevronRight className="w-4 h-4 text-slate-300 group-hover:text-blue-500" />
-          </button>
-        ))}
-      </div>
-      {onDismiss && (
-        <button
-          type="button"
-          onClick={onDismiss}
-          className="mt-2 w-full text-center text-xs text-slate-500 hover:text-slate-700 py-1 transition-colors"
-        >
-          {t('aiChatbot.wizardDismiss') || 'Không phải, tôi chỉ hỏi thôi'}
-        </button>
-      )}
-    </div>
-  );
-};
 
 // Ask campaign details - hỏi gộp tất cả câu hỏi cần thiết trong 1 lần
 export const AskCampaignDetailsCard = ({
@@ -1783,52 +1731,6 @@ export const AskLandingDetailsCard = ({ data, onSubmit, isActive = true, t }) =>
           📎 {t('aiChatbot.landingAttachHint')}
         </p>
       )}
-    </div>
-  );
-};
-
-// Ask audience card - hỏi user chọn đối tượng khách hàng
-export const AskAudienceCard = ({ data, onSelect, t }) => {
-  if (!data?.campaignOptions) return null;
-
-  return (
-    <div className="mt-4 bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-2xl p-4">
-      <div className="flex items-center gap-2 mb-3">
-        <HiOutlineSparkles className="w-5 h-5 text-purple-500" />
-        <span className="font-black text-[10px] uppercase tracking-[0.2em] text-purple-600">{t('aiChatbot.selectAudience')}</span>
-      </div>
-      {data.campaignName && (
-        <h4 className="font-bold text-slate-900 text-sm mb-1">{data.campaignName}</h4>
-      )}
-      {data.description && (
-        <p className="text-xs text-slate-500 mb-4 leading-relaxed">{data.description}</p>
-      )}
-      <p className="text-xs text-slate-600 mb-3">{t('aiChatbot.sendToAudience')}</p>
-      <div className="space-y-2">
-        {data.campaignOptions.map((option) => (
-          <button
-            key={option.value}
-            onClick={() => onSelect(option.value)}
-            className="w-full flex items-center gap-3 p-3 bg-white border border-slate-200 rounded-xl hover:border-purple-400 hover:bg-purple-50 transition-all text-left group"
-          >
-            <div className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-              style={{
-                backgroundColor: option.value === 'all' ? '#e0e7ff' : option.value === 'has_email' ? '#fff7ed' : '#eff6ff'
-              }}
-            >
-              {option.value === 'all' ? '👥' : option.value === 'has_email' ? '📧' : '💬'}
-            </div>
-            <div className="flex-1">
-              <p className="text-sm font-bold text-slate-800 group-hover:text-purple-700">{option.label}</p>
-              <p className="text-[10px] text-slate-500">{option.description}</p>
-            </div>
-            <HiOutlineChevronRight className="w-4 h-4 text-slate-300 group-hover:text-purple-500" />
-          </button>
-        ))}
-      </div>
-      <p className="text-[10px] text-slate-400 mt-3">
-        {t('aiChatbot.zaloGroupNote').replace(/\*\*/g, '')}
-      </p>
     </div>
   );
 };
