@@ -1,5 +1,6 @@
 import db from '../../config/database.js';
 import { decryptZaloCookieRow, encryptZaloCookie } from '../../utils/zaloCookieCrypto.util.js';
+import { pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
 
 class ZaloSettingRepository {
   async findActiveConnectedAccountByUser(userId) {
@@ -29,35 +30,62 @@ class ZaloSettingRepository {
   /**
    * Resolve account for sync: prefer explicit accountId (must belong to user),
    * else fall back to deterministic active connected account.
+   *
+   * G2 (`accessibleZaloAccountIds`): nhân viên chỉ đồng bộ được tài khoản được giao — id tường minh ngoài phạm vi không khớp
+   * dòng nào; THIẾU accountId thì chỉ "tự lấy tài khoản đang kết nối đầu tiên" TRONG các tài khoản được giao (không còn lấy
+   * tài khoản bất kỳ của chủ). null = chủ / super admin (như cũ); thiếu / sai kiểu = [] (không khớp gì).
    */
-  async findConnectedAccountForSync(userId, accountId = null) {
+  async findConnectedAccountForSync(userId, accountId = null, accessibleZaloAccountIds) {
     const parsed = Number.parseInt(accountId, 10);
+    const params = [userId];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'zs.id', params);
     if (Number.isFinite(parsed) && parsed > 0) {
+      params.push(parsed);
       const result = await db.query(
         `SELECT zs.*, zs.id as zalo_setting_id
          FROM zalo_settings zs
-         WHERE zs.id = $1 AND zs.id_user = $2
-           AND zs.is_active = true AND zs.status = 'connected'`,
-        [parsed, userId]
+         WHERE zs.id = $${params.length} AND zs.id_user = $1
+           AND zs.is_active = true AND zs.status = 'connected' ${zaloAccess}`,
+        params
       );
       return decryptZaloCookieRow(result.rows[0] || null);
     }
-    return this.findActiveConnectedAccountByUser(userId);
+    const result = await db.query(
+      `SELECT zs.*, zs.id as zalo_setting_id
+       FROM zalo_settings zs
+       WHERE zs.id_user = $1 AND zs.is_active = true AND zs.status = 'connected' ${zaloAccess}
+       ORDER BY zs.id ASC
+       LIMIT 1`,
+      params
+    );
+    return decryptZaloCookieRow(result.rows[0] || null);
   }
 
-  async findConnectedAccountSummaryForSync(userId, accountId = null) {
+  /** Như `findConnectedAccountForSync` nhưng chỉ lấy id (không đọc / giải mã cookie). Cùng quy tắc phạm vi G2. */
+  async findConnectedAccountSummaryForSync(userId, accountId = null, accessibleZaloAccountIds) {
     const parsed = Number.parseInt(accountId, 10);
+    const params = [userId];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'zs.id', params);
     if (Number.isFinite(parsed) && parsed > 0) {
+      params.push(parsed);
       const result = await db.query(
         `SELECT zs.id, zs.id as zalo_setting_id
          FROM zalo_settings zs
-         WHERE zs.id = $1 AND zs.id_user = $2
-           AND zs.is_active = true AND zs.status = 'connected'`,
-        [parsed, userId]
+         WHERE zs.id = $${params.length} AND zs.id_user = $1
+           AND zs.is_active = true AND zs.status = 'connected' ${zaloAccess}`,
+        params
       );
       return result.rows[0] || null;
     }
-    return this.findActiveConnectedAccountSummaryByUser(userId);
+    const result = await db.query(
+      `SELECT zs.id, zs.id as zalo_setting_id
+       FROM zalo_settings zs
+       WHERE zs.id_user = $1 AND zs.is_active = true AND zs.status = 'connected' ${zaloAccess}
+       ORDER BY zs.id ASC
+       LIMIT 1`,
+      params
+    );
+    return result.rows[0] || null;
   }
 
   async findActiveConnectedAccountStatusByUser(userId) {
@@ -75,15 +103,18 @@ class ZaloSettingRepository {
   /**
    * Find ALL active accounts for a user (both connected and disconnected).
    * Used by inbox to show all accounts with their session status.
+   * G2: nhân viên chỉ thấy tài khoản được giao (null = chủ / super admin; thiếu / sai kiểu = không thấy gì).
    */
-  async findActiveConnectedAccountsByUser(userId) {
+  async findActiveConnectedAccountsByUser(userId, accessibleZaloAccountIds) {
+    const params = [userId];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'zs.id', params);
     const result = await db.query(
       `SELECT zs.id, zs.display_name, zs.status, zs.is_active,
               (SELECT COUNT(*) FROM zalo_personal_conversations WHERE id_zalo_setting = zs.id) as conversation_count
        FROM zalo_settings zs
-       WHERE zs.id_user = $1 AND zs.is_active = true
+       WHERE zs.id_user = $1 AND zs.is_active = true ${zaloAccess}
        ORDER BY zs.is_default DESC, zs.last_connected_at DESC`,
-      [userId]
+      params
     );
     return result.rows;
   }

@@ -16,6 +16,7 @@ import {
   isPlaceholderGroupName,
   normalizeZaloGroupId,
 } from '../../utils/zaloGroupName.util.js';
+import { pushZaloAccessFilter } from '../../utils/zaloAccessScope.util.js';
 
 
 /** Log từng nhóm chỉ khi bật cờ — cron 10 phút/lần sẽ ngập log nếu để mặc định. */
@@ -220,16 +221,19 @@ class ZaloPersonalSyncService {
    * @param {number} [params.page] - trang (1-based)
    * @param {number} [params.limit] - số lượng mỗi trang
    */
-  async listFriends({ accountId, userId, search = '', page = 1, limit = 50 }) {
+  async listFriends({ accountId, userId, search = '', page = 1, limit = 50, accessibleZaloAccountIds }) {
     // Chỉ cần biết tài khoản có tồn tại và thuộc về user — không đọc cột nào khác.
     // Bản đầu (13240a2d, 17/08) SELECT `name` và `phone_number`; zalo_settings không có
     // hai cột đó (thật ra là `display_name` và `zalo_phone`), nên câu lệnh ném lỗi ngay
     // và danh bạ Zalo chưa bao giờ tải được. Chỉ lấy `id` để không tái diễn.
+    // G2: nhân viên chỉ xem được danh bạ của tài khoản được giao (null = chủ / super admin; thiếu / sai kiểu = chặn).
+    const settingParams = [accountId, userId];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'id', settingParams);
     const settingRes = await db.query(
       `SELECT id
        FROM zalo_settings
-       WHERE id = $1 AND id_user = $2`,
-      [accountId, userId]
+       WHERE id = $1 AND id_user = $2 ${zaloAccess}`,
+      settingParams
     );
     if (!settingRes.rows.length) {
       const error = new Error('Không tìm thấy tài khoản Zalo hoặc không có quyền truy cập');

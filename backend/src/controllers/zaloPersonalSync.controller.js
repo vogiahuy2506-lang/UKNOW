@@ -7,10 +7,39 @@ import zaloPersonalSyncService from '../services/chatbot/zaloPersonalSync.servic
 import zaloAccountSessionService from '../services/zalo/zaloAccountSession.service.js';
 import zaloSettingRepository from '../repositories/zalo/zaloSetting.repository.js';
 import { resolveWorkspaceOwnerId } from '../services/storage/storageQuota.service.js';
+import { getWorkspaceContext } from '../utils/workspaceContext.util.js';
+import {
+  assertZaloAccountInScope,
+  getAccessibleZaloAccountIds,
+  isZaloAccountNotAssignedError,
+} from '../services/user/memberChannelAccess.service.js';
 
 class ZaloPersonalSyncController {
   _requestedAccountId(req) {
     return req.query?.accountId || req.body?.accountId || null;
+  }
+
+  /**
+   * Phạm vi tài khoản Zalo cá nhân của người thao tác (PLAN_GIAO_TAI_KHOAN_ZALO G2): null = chủ / super admin; mảng = nhân viên
+   * (chỉ tài khoản được giao); lỗi đọc bảng giao → [] (chặn). Mọi đường đồng bộ / danh bạ / trạng thái đều dùng.
+   */
+  async _resolveScope(req) {
+    return getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+  }
+
+  /**
+   * Nhân viên gửi `accountId` của tài khoản chưa được giao → 403 ZALO_ACCOUNT_NOT_ASSIGNED (chủ / super admin luôn qua).
+   * @returns {boolean} true = đã trả 403, handler phải dừng
+   */
+  _rejectIfAccountNotAssigned(res, accountId, accessibleZaloAccountIds) {
+    try {
+      assertZaloAccountInScope(accountId, accessibleZaloAccountIds);
+      return false;
+    } catch (error) {
+      if (!isZaloAccountNotAssignedError(error)) throw error;
+      res.status(403).json({ success: false, message: error.message, code: error.code });
+      return true;
+    }
   }
 
   /**
@@ -24,8 +53,11 @@ class ZaloPersonalSyncController {
       const requestedAccountId = this._requestedAccountId(req);
       console.log('[ZaloPersonalSync] sync called for userId:', userId, 'accountId:', requestedAccountId);
 
+      const accessibleZaloAccountIds = await this._resolveScope(req);
+      if (requestedAccountId && this._rejectIfAccountNotAssigned(res, requestedAccountId, accessibleZaloAccountIds)) return;
+
       const account = await zaloSettingRepository
-        .findConnectedAccountForSync(userId, requestedAccountId)
+        .findConnectedAccountForSync(userId, requestedAccountId, accessibleZaloAccountIds)
         .catch((e) => {
           console.error('[ZaloPersonalSync] DB query error:', e.message);
           e.isDatabaseError = true;
@@ -94,10 +126,15 @@ class ZaloPersonalSyncController {
   async syncContacts(req, res) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
+      const requestedAccountId = this._requestedAccountId(req);
+
+      const accessibleZaloAccountIds = await this._resolveScope(req);
+      if (requestedAccountId && this._rejectIfAccountNotAssigned(res, requestedAccountId, accessibleZaloAccountIds)) return;
 
       const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
         userId,
-        this._requestedAccountId(req)
+        requestedAccountId,
+        accessibleZaloAccountIds
       );
 
       if (!account) {
@@ -137,6 +174,9 @@ class ZaloPersonalSyncController {
         });
       }
 
+      const accessibleZaloAccountIds = await this._resolveScope(req);
+      if (this._rejectIfAccountNotAssigned(res, accountId, accessibleZaloAccountIds)) return;
+
       const { search, page, limit } = req.query;
       const result = await zaloPersonalSyncService.listFriends({
         accountId,
@@ -144,6 +184,7 @@ class ZaloPersonalSyncController {
         search,
         page,
         limit,
+        accessibleZaloAccountIds,
       });
 
       res.json({
@@ -175,7 +216,9 @@ class ZaloPersonalSyncController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
 
-      const accounts = await zaloSettingRepository.findActiveConnectedAccountsByUser(userId);
+      // G2: nhân viên chỉ thấy tài khoản được giao trong ô chọn tài khoản của Hộp thư (null = chủ / super admin).
+      const accessibleZaloAccountIds = await this._resolveScope(req);
+      const accounts = await zaloSettingRepository.findActiveConnectedAccountsByUser(userId, accessibleZaloAccountIds);
 
       if (!accounts.length) {
         return res.json({
@@ -236,9 +279,14 @@ class ZaloPersonalSyncController {
         });
       }
 
+      const requestedAccountId = this._requestedAccountId(req);
+      const accessibleZaloAccountIds = await this._resolveScope(req);
+      if (requestedAccountId && this._rejectIfAccountNotAssigned(res, requestedAccountId, accessibleZaloAccountIds)) return;
+
       const account = await zaloSettingRepository.findConnectedAccountSummaryForSync(
         userId,
-        this._requestedAccountId(req)
+        requestedAccountId,
+        accessibleZaloAccountIds
       );
 
       if (!account) {

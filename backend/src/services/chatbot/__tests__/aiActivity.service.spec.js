@@ -121,9 +121,63 @@ describe('aiActivity.service', () => {
   describe('resumeAllAi', () => {
     it('gọi bulkResumeAiPaused và trả về số lượng bật lại', async () => {
       mockZaloPersonalRepository.bulkResumeAiPaused.mockResolvedValue(3);
-      const res = await aiActivityService.resumeAllAi({ userId: 100 });
+      const res = await aiActivityService.resumeAllAi({ userId: 100, accessibleZaloAccountIds: null });
       expect(res.resumedCount).toBe(3);
-      expect(mockZaloPersonalRepository.bulkResumeAiPaused).toHaveBeenCalledWith(100);
+      expect(mockZaloPersonalRepository.bulkResumeAiPaused).toHaveBeenCalledWith(100, { accessibleZaloAccountIds: null });
+    });
+
+    // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN G2
+    it('G2: nhân viên → phạm vi tài khoản được giao đi xuống repository (bật lại hàng loạt không chạm tài khoản chưa giao)', async () => {
+      mockZaloPersonalRepository.bulkResumeAiPaused.mockResolvedValue(1);
+      await aiActivityService.resumeAllAi({ userId: 100, accessibleZaloAccountIds: [5] });
+      expect(mockZaloPersonalRepository.bulkResumeAiPaused).toHaveBeenCalledWith(100, { accessibleZaloAccountIds: [5] });
+    });
+  });
+
+  describe('G2 — báo cáo hoạt động AI theo tài khoản được giao', () => {
+    it('getActivityReport truyền phạm vi cho cả truy vấn báo cáo lẫn đếm hội thoại tạm dừng quá hạn', async () => {
+      mockZaloPersonalRepository.getAiActivityReport.mockResolvedValue([]);
+      mockZaloPersonalRepository.countStaleAiPausedConversations.mockResolvedValue(0);
+      mockAiActivitySummaryRepository.findByUserAndDay.mockResolvedValue(null);
+
+      await aiActivityService.getActivityReport({ userId: 100, date: '2026-08-19', accountId: 7, accessibleZaloAccountIds: [5, 7] });
+
+      expect(mockZaloPersonalRepository.getAiActivityReport).toHaveBeenCalledWith(expect.objectContaining({
+        userId: 100,
+        accountId: 7,
+        accessibleZaloAccountIds: [5, 7],
+      }));
+      expect(mockZaloPersonalRepository.countStaleAiPausedConversations).toHaveBeenCalledWith(100, 24, { accessibleZaloAccountIds: [5, 7] });
+    });
+
+    it('chủ (null) → báo cáo không lọc; bản tóm tắt AI đã lưu chỉ ghép vào hội thoại nằm trong phạm vi (không lộ tóm tắt hội thoại khác)', async () => {
+      mockZaloPersonalRepository.getAiActivityReport.mockResolvedValue([
+        { id: 1, visitor_name: 'A', external_id: 'u1', id_zalo_setting: 5, khach_nhan: '1', ai_tra_loi: '0', nguoi_tra_loi: '0', chua_doc: '0', tin_dau: null, tin_cuoi: null, ai_paused: false, ai_paused_at: null },
+      ]);
+      mockZaloPersonalRepository.countStaleAiPausedConversations.mockResolvedValue(0);
+      mockAiActivitySummaryRepository.findByUserAndDay.mockResolvedValue({
+        payload: [{ conversationId: 1, y_chinh: 'của tài khoản được giao' }, { conversationId: 2, y_chinh: 'của tài khoản gia đình' }],
+        updated_at: '2026-08-19T10:00:00.000Z',
+      });
+
+      const res = await aiActivityService.getActivityReport({ userId: 100, accessibleZaloAccountIds: [5] });
+
+      expect(res.conversations).toHaveLength(1);
+      expect(res.conversations[0].summary).toMatchObject({ y_chinh: 'của tài khoản được giao' });
+      expect(JSON.stringify(res)).not.toContain('gia đình');
+    });
+
+    it('đường tóm tắt (CHỈ-CHỦ, route requireSelfContext) truyền null rõ ràng — không bị chặn nhầm bởi mặc định "thiếu phạm vi = chặn"', async () => {
+      mockZaloPersonalRepository.getAiActivityReport.mockResolvedValue([]);
+      mockAiActivitySummaryRepository.findByUserAndDay.mockResolvedValue(null);
+
+      await aiActivityService.findFreshCachedSummary({ userId: 100, date: '2026-08-19' });
+      await aiActivityService.summarizeDailyActivity({ userId: 100, date: '2026-08-19', actorUserId: 100 });
+
+      for (const [args] of mockZaloPersonalRepository.getAiActivityReport.mock.calls) {
+        expect(args.accessibleZaloAccountIds).toBeNull();
+      }
+      expect(mockZaloPersonalRepository.getAiActivityReport).toHaveBeenCalledTimes(2);
     });
   });
 

@@ -1,6 +1,8 @@
 import aiActivityService from '../../services/chatbot/aiActivity.service.js';
 import { chargeAiCredit } from '../../middleware/aiCredit.middleware.js';
 import { resolveWorkspaceOwnerId } from '../../services/storage/storageQuota.service.js';
+import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
+import { getAccessibleZaloAccountIds } from '../../services/user/memberChannelAccess.service.js';
 import {
   AUDIT_ACTIONS,
   AUDIT_ENTITY_TYPES,
@@ -17,10 +19,13 @@ class AiActivityController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const { date, accountId } = req.query;
+      // G2: nhân viên chỉ thấy hội thoại của tài khoản Zalo được giao (null = chủ / super admin).
+      const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
       const data = await aiActivityService.getActivityReport({
         userId,
         date: date ? String(date).trim() : null,
         accountId: accountId ? Number(accountId) : null,
+        accessibleZaloAccountIds,
       });
       return res.json({ success: true, data });
     } catch (err) {
@@ -38,13 +43,15 @@ class AiActivityController {
   async resumeAllAi(req, res) {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
-      const data = await aiActivityService.resumeAllAi({ userId });
+      // G2: nhân viên chỉ bật lại AI cho hội thoại của tài khoản Zalo được giao (null = chủ / super admin).
+      const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+      const data = await aiActivityService.resumeAllAi({ userId, accessibleZaloAccountIds });
       await logWorkspace(
         getWorkspaceAuditContext(req),
         AUDIT_ACTIONS.INBOX_AI_PAUSE_UPDATED,
         AUDIT_ENTITY_TYPES.INBOX_CONVERSATION,
         null,
-        { paused: false, scope: 'all', resumedCount: data.resumedCount }
+        { paused: false, scope: accessibleZaloAccountIds === null ? 'all' : 'assigned_accounts', resumedCount: data.resumedCount }
       );
       return res.json({ success: true, data });
     } catch (err) {

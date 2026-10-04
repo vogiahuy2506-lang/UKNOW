@@ -63,8 +63,9 @@ class AiActivityService {
    * @param {number} params.userId
    * @param {string} [params.date] YYYY-MM-DD
    * @param {number|null} [params.accountId]
+   * @param {number[]|null} [params.accessibleZaloAccountIds] G2: null = chủ / super admin; mảng = nhân viên; thiếu = không thấy gì
    */
-  async getActivityReport({ userId, date = null, accountId = null }) {
+  async getActivityReport({ userId, date = null, accountId = null, accessibleZaloAccountIds }) {
     const { dayKey, dateStr, startIso, endIso } = getVietnamDayRange(date);
 
     const [rows, summaryCache, stalePausedCount] = await Promise.all([
@@ -73,9 +74,10 @@ class AiActivityService {
         startIso,
         endIso,
         accountId: accountId ? Number(accountId) : null,
+        accessibleZaloAccountIds,
       }),
       aiActivitySummaryRepository.findByUserAndDay(userId, dayKey),
-      zaloPersonalRepository.countStaleAiPausedConversations(userId, 24),
+      zaloPersonalRepository.countStaleAiPausedConversations(userId, 24, { accessibleZaloAccountIds }),
     ]);
 
     let totalKhachNhan = 0;
@@ -145,10 +147,11 @@ class AiActivityService {
 
   /**
    * Bật lại tất cả AI đang bị tạm dừng cho user
-   * @param {{ userId: number }} params
+   * @param {{ userId: number, accessibleZaloAccountIds?: number[]|null }} params G2: nhân viên chỉ bật lại hội thoại của tài
+   *   khoản Zalo được giao (null = chủ / super admin; thiếu = không bật gì)
    */
-  async resumeAllAi({ userId }) {
-    const count = await zaloPersonalRepository.bulkResumeAiPaused(userId);
+  async resumeAllAi({ userId, accessibleZaloAccountIds }) {
+    const count = await zaloPersonalRepository.bulkResumeAiPaused(userId, { accessibleZaloAccountIds });
     return { resumedCount: count };
   }
 
@@ -163,7 +166,8 @@ class AiActivityService {
    */
   async findFreshCachedSummary({ userId, date = null }) {
     const { dayKey, dateStr, startIso, endIso } = getVietnamDayRange(date);
-    const rows = await zaloPersonalRepository.getAiActivityReport({ userId, startIso, endIso });
+    // Đường CHỈ-CHỦ (route /ai-activity/summarize đứng sau requireSelfContext): null = không lọc theo việc giao tài khoản.
+    const rows = await zaloPersonalRepository.getAiActivityReport({ userId, startIso, endIso, accessibleZaloAccountIds: null });
     if (!rows || rows.length === 0) return null;
     const maxTinCuoi = latestMessageAt(rows.slice(0, MAX_CONVERSATIONS_FOR_SUMMARY));
     const existingCache = await aiActivitySummaryRepository.findByUserAndDay(userId, dayKey);
@@ -211,10 +215,12 @@ class AiActivityService {
   async _summarizeFresh({ userId, date = null, actorUserId = null }) {
     const { dayKey, dateStr, startIso, endIso } = getVietnamDayRange(date);
 
+    // Đường CHỈ-CHỦ (route /ai-activity/summarize đứng sau requireSelfContext): null = không lọc theo việc giao tài khoản.
     const rows = await zaloPersonalRepository.getAiActivityReport({
       userId,
       startIso,
       endIso,
+      accessibleZaloAccountIds: null,
     });
 
     if (!rows || rows.length === 0) {

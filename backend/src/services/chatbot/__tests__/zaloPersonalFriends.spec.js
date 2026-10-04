@@ -79,6 +79,7 @@ describe('zaloPersonalSync.service friends sync and query (PR-B)', () => {
       search: 'Nguyen',
       page: 1,
       limit: 20,
+      accessibleZaloAccountIds: null,
     });
 
     expect(result.total).toBe(1);
@@ -91,7 +92,48 @@ describe('zaloPersonalSync.service friends sync and query (PR-B)', () => {
     jest.spyOn(db, 'query').mockResolvedValue({ rows: [] });
 
     await expect(
-      zaloPersonalSyncService.listFriends({ accountId: 999, userId: 1 })
+      zaloPersonalSyncService.listFriends({ accountId: 999, userId: 1, accessibleZaloAccountIds: null })
     ).rejects.toThrow('Không tìm thấy tài khoản Zalo hoặc không có quyền truy cập');
+  });
+
+  // PLAN_GIAO_TAI_KHOAN_ZALO_CHO_NHAN_VIEN G2: nhân viên chỉ xem được danh bạ của tài khoản được giao.
+  describe('G2 — phạm vi tài khoản được giao', () => {
+    const accountLookup = () => db.query.mock.calls.find(([sql]) => /FROM zalo_settings/.test(sql));
+
+    it('nhân viên: câu kiểm tài khoản có ANY(phạm vi); tài khoản ngoài phạm vi không khớp → 404, KHÔNG đọc danh bạ', async () => {
+      jest.spyOn(db, 'query').mockResolvedValue({ rows: [] });
+
+      await expect(
+        zaloPersonalSyncService.listFriends({ accountId: 10, userId: 1, accessibleZaloAccountIds: [5, 6] })
+      ).rejects.toThrow('Không tìm thấy tài khoản Zalo hoặc không có quyền truy cập');
+
+      const [sql, params] = accountLookup();
+      expect(sql).toMatch(/id = ANY\(\$3::bigint\[\]\)/);
+      expect(params).toEqual([10, 1, [5, 6]]);
+      expect(db.query).toHaveBeenCalledTimes(1);
+      expect(db.query.mock.calls.some(([q]) => /zalo_friends/.test(q))).toBe(false);
+    });
+
+    it('CHỦ (null): câu kiểm tài khoản y như cũ, không có ANY', async () => {
+      jest.spyOn(db, 'query').mockResolvedValue({ rows: [] });
+
+      await expect(
+        zaloPersonalSyncService.listFriends({ accountId: 10, userId: 1, accessibleZaloAccountIds: null })
+      ).rejects.toThrow();
+
+      const [sql, params] = accountLookup();
+      expect(sql).not.toMatch(/ANY\(/);
+      expect(params).toEqual([10, 1]);
+    });
+
+    it('HỎNG THÌ CHẶN: thiếu phạm vi → ANY với mảng rỗng', async () => {
+      jest.spyOn(db, 'query').mockResolvedValue({ rows: [] });
+
+      await expect(zaloPersonalSyncService.listFriends({ accountId: 10, userId: 1 })).rejects.toThrow();
+
+      const [sql, params] = accountLookup();
+      expect(sql).toMatch(/id = ANY\(\$3::bigint\[\]\)/);
+      expect(params).toEqual([10, 1, []]);
+    });
   });
 });

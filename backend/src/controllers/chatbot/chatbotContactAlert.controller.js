@@ -1,6 +1,8 @@
 import chatbotContactAlertRepository from '../../repositories/chatbot/chatbotContactAlert.repository.js';
 import chatbotDigestRepository from '../../repositories/chatbot/chatbotDigest.repository.js';
 import { resolveWorkspaceOwnerId } from '../../services/storage/storageQuota.service.js';
+import { getWorkspaceContext } from '../../utils/workspaceContext.util.js';
+import { getAccessibleZaloAccountIds } from '../../services/user/memberChannelAccess.service.js';
 
 class ChatbotContactAlertController {
   /**
@@ -10,6 +12,8 @@ class ChatbotContactAlertController {
     try {
       const userId = resolveWorkspaceOwnerId(req.user);
       const { status = 'open', limit = 50, offset = 0, channel, accountId, contactType } = req.query;
+      // G2: nhân viên chỉ thấy liên hệ khách để lại của tài khoản Zalo cá nhân được giao (null = chủ / super admin).
+      const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
       const data = await chatbotContactAlertRepository.listForOwner(userId, {
         status: String(status).trim(),
         channel: channel ? String(channel).trim() : null,
@@ -17,6 +21,7 @@ class ChatbotContactAlertController {
         contactType: contactType ? String(contactType).trim() : null,
         limit: Number(limit) || 50,
         offset: Number(offset) || 0,
+        accessibleZaloAccountIds,
       });
       return res.json({ success: true, data });
     } catch (err) {
@@ -39,7 +44,8 @@ class ChatbotContactAlertController {
         return res.status(400).json({ success: false, message: 'ID không hợp lệ' });
       }
       const handledBy = req.user?.id || null;
-      const alert = await chatbotContactAlertRepository.markHandled(id, userId, handledBy);
+      const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+      const alert = await chatbotContactAlertRepository.markHandled(id, userId, handledBy, undefined, { accessibleZaloAccountIds });
       if (!alert) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy liên hệ hoặc không có quyền' });
       }
@@ -63,7 +69,8 @@ class ChatbotContactAlertController {
       if (!id || Number.isNaN(id)) {
         return res.status(400).json({ success: false, message: 'ID không hợp lệ' });
       }
-      const alert = await chatbotContactAlertRepository.unmarkHandled(id, userId);
+      const accessibleZaloAccountIds = await getAccessibleZaloAccountIds(getWorkspaceContext(req.user));
+      const alert = await chatbotContactAlertRepository.unmarkHandled(id, userId, undefined, { accessibleZaloAccountIds });
       if (!alert) {
         return res.status(404).json({ success: false, message: 'Không tìm thấy liên hệ hoặc không có quyền' });
       }

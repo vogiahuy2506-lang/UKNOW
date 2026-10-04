@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { normalizeZaloAccessScope } from '../../utils/zaloAccessScope.util.js';
 
 class ChatbotContactAlertRepository {
   /**
@@ -317,10 +318,12 @@ class ChatbotContactAlertRepository {
    * @param {'phone'|'email'|null} [options.contactType=null]
    * @param {number} [options.limit=50]
    * @param {number} [options.offset=0]
+   * @param {number[]|null} [options.accessibleZaloAccountIds] G2: null = chủ / super admin (không lọc); mảng = nhân viên (chỉ liên
+   *   hệ khách để lại qua tài khoản Zalo cá nhân được giao; liên hệ Telegram / web / kênh khác giữ nguyên); thiếu / sai kiểu = []
    * @param {object} [queryable=db]
    * @returns {Promise<{ items: Array<object>, total: number, openCount: number }>}
    */
-  async listForOwner(idUser, { status = 'open', channel = null, accountId = null, contactType = null, limit = 50, offset = 0 } = {}, queryable = db) {
+  async listForOwner(idUser, { status = 'open', channel = null, accountId = null, contactType = null, limit = 50, offset = 0, accessibleZaloAccountIds } = {}, queryable = db) {
     const safeLimit = Math.max(1, Math.min(Number(limit) || 50, 100));
     const safeOffset = Math.max(0, Number(offset) || 0);
 
@@ -359,6 +362,15 @@ class ChatbotContactAlertRepository {
     if (accountId) {
       conditions.push(`(zc.id_zalo_setting::text = $${pIndex} OR zs.display_name = $${pIndex} OR zs.zalo_phone = $${pIndex} OR conn.id::text = $${pIndex} OR conn.display_name = $${pIndex})`);
       params.push(accountId);
+      pIndex += 1;
+    }
+
+    // G2: liên hệ khách để lại qua Zalo cá nhân chỉ hiện cho nhân viên được giao đúng tài khoản đó. Hội thoại đã bị xoá
+    // (zc NULL) cũng không hiện cho nhân viên — không còn biết nó thuộc tài khoản nào. AND với bộ lọc `accountId` ở trên.
+    const zaloScope = normalizeZaloAccessScope(accessibleZaloAccountIds);
+    if (zaloScope !== null) {
+      conditions.push(`(a.last_source <> 'zalo_personal' OR zc.id_zalo_setting = ANY($${pIndex}::bigint[]))`);
+      params.push(zaloScope);
       pIndex += 1;
     }
 
@@ -430,19 +442,41 @@ class ChatbotContactAlertRepository {
    * @param {number} idUser
    * @param {number|null} [handledBy=null]
    * @param {object} [queryable=db]
+   * @param {{ accessibleZaloAccountIds?: number[]|null }} [scope] G2: nhân viên chỉ đánh dấu được liên hệ của tài khoản Zalo
+   *   được giao (null = chủ / super admin; thiếu = chặn liên hệ Zalo cá nhân)
    * @returns {Promise<object|null>}
    */
-  async markHandled(id, idUser, handledBy = null, queryable = db) {
+  async markHandled(id, idUser, handledBy = null, queryable = db, { accessibleZaloAccountIds } = {}) {
+    const params = [id, idUser, handledBy];
+    const scopeSql = this._zaloAlertScopeSql(accessibleZaloAccountIds, params);
     const { rows } = await queryable.query(
       `UPDATE chatbot_contact_alerts
        SET handled_at = NOW(),
            handled_by = $3,
            updated_at = NOW()
-       WHERE id = $1 AND id_user = $2
+       WHERE id = $1 AND id_user = $2 ${scopeSql}
        RETURNING *`,
-      [id, idUser, handledBy]
+      params
     );
     return rows[0] || null;
+  }
+
+  /**
+   * Điều kiện nhân viên chỉ chạm được liên hệ khách để lại của tài khoản Zalo cá nhân được giao (G2), cho câu UPDATE theo id
+   * (id liên hệ tuần tự — không có điều kiện này thì đoán id là đánh dấu được liên hệ của tài khoản chưa giao). Chủ → ''.
+   * @param {number[]|null|undefined} accessibleZaloAccountIds
+   * @param {unknown[]} params mảng tham số đang dựng (đẩy thêm mảng id vào cuối)
+   * @returns {string}
+   */
+  _zaloAlertScopeSql(accessibleZaloAccountIds, params) {
+    const scope = normalizeZaloAccessScope(accessibleZaloAccountIds);
+    if (scope === null) return '';
+    params.push(scope);
+    return `AND (last_source <> 'zalo_personal' OR EXISTS (
+        SELECT 1 FROM zalo_personal_conversations zc
+        WHERE zc.id = chatbot_contact_alerts.last_conversation_id
+          AND zc.id_zalo_setting = ANY($${params.length}::bigint[])
+      ))`;
   }
 
   /**
@@ -450,17 +484,20 @@ class ChatbotContactAlertRepository {
    * @param {number} id
    * @param {number} idUser
    * @param {object} [queryable=db]
+   * @param {{ accessibleZaloAccountIds?: number[]|null }} [scope] xem markHandled
    * @returns {Promise<object|null>}
    */
-  async unmarkHandled(id, idUser, queryable = db) {
+  async unmarkHandled(id, idUser, queryable = db, { accessibleZaloAccountIds } = {}) {
+    const params = [id, idUser];
+    const scopeSql = this._zaloAlertScopeSql(accessibleZaloAccountIds, params);
     const { rows } = await queryable.query(
       `UPDATE chatbot_contact_alerts
        SET handled_at = NULL,
            handled_by = NULL,
            updated_at = NOW()
-       WHERE id = $1 AND id_user = $2
+       WHERE id = $1 AND id_user = $2 ${scopeSql}
        RETURNING *`,
-      [id, idUser]
+      params
     );
     return rows[0] || null;
   }

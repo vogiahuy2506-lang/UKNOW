@@ -388,15 +388,18 @@ class ZaloPersonalRepository {
    * @param {string} params.startIso
    * @param {string} params.endIso
    * @param {number|null} [params.accountId]
+   * @param {number[]|null} [params.accessibleZaloAccountIds] G2: null = chủ / super admin (không lọc); mảng = nhân viên (chỉ hội
+   *   thoại của tài khoản được giao); thiếu / sai kiểu = [] — chỗ gọi PHẢI truyền (đường chỉ-chủ truyền null rõ ràng)
    * @returns {Promise<Array<object>>}
    */
-  async getAiActivityReport({ userId, startIso, endIso, accountId = null }) {
+  async getAiActivityReport({ userId, startIso, endIso, accountId = null, accessibleZaloAccountIds }) {
     const params = [userId, startIso, endIso];
     let accountFilter = '';
     if (accountId != null) {
       params.push(Number(accountId));
       accountFilter = `AND c.id_zalo_setting = $${params.length}`;
     }
+    accountFilter = `${accountFilter} ${pushZaloAccessFilter(accessibleZaloAccountIds, 'c.id_zalo_setting', params)}`;
 
     const { rows } = await db.query(
       `SELECT c.id,
@@ -471,31 +474,38 @@ class ZaloPersonalRepository {
   }
 
   /**
-   * Bật lại tất cả AI đang bị tạm dừng do handoff (không bật những hội thoại cố ý tắt manual)
+   * Bật lại tất cả AI đang bị tạm dừng do handoff (không bật những hội thoại cố ý tắt manual).
+   * G2: nhân viên chỉ bật lại hội thoại của tài khoản Zalo được giao (null = chủ / super admin; thiếu = không bật gì).
    */
-  async bulkResumeAiPaused(userId) {
+  async bulkResumeAiPaused(userId, { accessibleZaloAccountIds } = {}) {
+    const params = [userId];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'id_zalo_setting', params);
     const result = await db.query(
       `UPDATE zalo_personal_conversations
        SET ai_paused = false, ai_paused_at = NULL
-       WHERE id_user = $1 AND ai_paused = true AND ai_paused_at IS NOT NULL
+       WHERE id_user = $1 AND ai_paused = true AND ai_paused_at IS NOT NULL ${zaloAccess}
        RETURNING id`,
-      [userId]
+      params
     );
     return result.rowCount;
   }
 
   /**
-   * Đếm số hội thoại bị AI tạm dừng do handoff quá số giờ quy định (mặc định 24h)
+   * Đếm số hội thoại bị AI tạm dừng do handoff quá số giờ quy định (mặc định 24h).
+   * G2: nhân viên chỉ đếm hội thoại của tài khoản Zalo được giao (null = chủ / super admin; thiếu = 0).
    */
-  async countStaleAiPausedConversations(userId, hoursThreshold = 24) {
+  async countStaleAiPausedConversations(userId, hoursThreshold = 24, { accessibleZaloAccountIds } = {}) {
+    const params = [userId, String(hoursThreshold)];
+    const zaloAccess = pushZaloAccessFilter(accessibleZaloAccountIds, 'id_zalo_setting', params);
     const { rows } = await db.query(
       `SELECT COUNT(*)::int AS count
        FROM zalo_personal_conversations
        WHERE id_user = $1
          AND ai_paused = true
          AND ai_paused_at IS NOT NULL
-         AND ai_paused_at <= NOW() - ($2::text || ' hours')::interval`,
-      [userId, String(hoursThreshold)]
+         AND ai_paused_at <= NOW() - ($2::text || ' hours')::interval
+         ${zaloAccess}`,
+      params
     );
     return rows[0]?.count || 0;
   }
