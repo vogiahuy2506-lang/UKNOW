@@ -108,6 +108,28 @@ describe('aiUsageMeter.service', () => {
     }));
   });
 
+  describe('record — thinkingTokens (D-OLD-C6)', () => {
+    it('total > prompt + output: ghi thinkingTokens = total − prompt − output vào metadata', async () => {
+      await aiUsageMeter.record(7, { promptTokens: 100, outputTokens: 40, totalTokens: 500 }, { feature: 'smart_chat' });
+
+      expect(trackUsage).toHaveBeenLastCalledWith(7, 'ai_token', 500, expect.objectContaining({
+        promptTokens: 100, outputTokens: 40, totalTokens: 500, thinkingTokens: 360,
+      }));
+    });
+
+    it('model không suy nghĩ (total = prompt + output): KHÔNG thêm trường thinkingTokens', async () => {
+      await aiUsageMeter.record(7, { promptTokens: 100, outputTokens: 40, totalTokens: 140 }, { feature: 'smart_chat' });
+
+      expect(trackUsage.mock.calls.at(-1)[3]).not.toHaveProperty('thinkingTokens');
+    });
+
+    it('total < prompt + output (số liệu lệch) → không bao giờ âm, không thêm trường', async () => {
+      await aiUsageMeter.record(7, { promptTokens: 100, outputTokens: 40, totalTokens: 120 }, { feature: 'smart_chat' });
+
+      expect(trackUsage.mock.calls.at(-1)[3]).not.toHaveProperty('thinkingTokens');
+    });
+  });
+
   it('generateWithBudget ghi fallbackUsed=true vào metadata CHỈ khi dự phòng thật đã trả lời (lọc được "bao nhiêu lượt phải nhờ dự phòng")', async () => {
     resolveAllowedModel.mockResolvedValue('gemini-chinh');
     getFallbackModel.mockResolvedValue('gemini-du-phong');

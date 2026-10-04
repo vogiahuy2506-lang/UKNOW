@@ -76,6 +76,12 @@ class AiUsageMeterService {
       outputTokens: Number(usage?.outputTokens) || 0,
       totalTokens,
     };
+    // Token "suy nghĩ" của model = total − prompt − output (Google tính theo giá đầu ra, không nằm trong candidatesTokenCount;
+    // estimateCost đã tính đúng qua total − prompt). Ghi riêng để phân tích chi phí không phải tự trừ ngược (D-OLD-C6). Tính ở ĐÂY
+    // (cổng ghi duy nhất của `ai_token`) chứ không nhét vào `usage` của lõi: mọi nơi gọi đều hưởng, và đối tượng usage giữ nguyên
+    // hình dạng. Chỉ ghi khi > 0 — model không suy nghĩ (thinkingBudget 0) thì metadata không có thêm trường nào; không bao giờ âm.
+    const thinkingTokens = totalTokens - usageMetadata.promptTokens - usageMetadata.outputTokens;
+    if (thinkingTokens > 0) usageMetadata.thinkingTokens = thinkingTokens;
 
     try {
       await usageTrackingService.trackUsage(ownerId, AI_TOKEN_RESOURCE, totalTokens, usageMetadata);
