@@ -25,7 +25,7 @@ import ragEngineService from './ragEngine.service.js';
 import businessProfileService from '../ai/businessProfile.service.js';
 import chatRouterService from './chatRouter.service.js';
 import { handleAiUnavailable } from './aiUnavailableNotice.service.js';
-import { classifyAiFailure } from '../../utils/aiUnavailable.util.js';
+import { classifyAiFailure, AI_OUTSIDE_HOURS_SOURCE, AI_RATE_LIMITED_SOURCE } from '../../utils/aiUnavailable.util.js';
 import { detectOffTopicReply, buildOffTopicFallback } from '../../utils/aiOffTopicReply.util.js';
 import inboundReplyDebounceService from './inboundReplyDebounce.service.js';
 import { formatBatchedContent } from '../../utils/chatbotReplyBatch.util.js';
@@ -752,6 +752,8 @@ async function processIncomingMessage({ sessionKey, msg, type }) {
               role: 'bot',
               content: activeCheck.staticReply,
               externalId: sent?.messageId,
+              // Nhãn để bản tin tuần không đếm câu tĩnh này là "AI trả lời" (EXTRA-A6).
+              metadata: { source: AI_OUTSIDE_HOURS_SOURCE },
             });
             await chatbotActiveHoursService.markNotified({
               channel: 'whatsapp_baileys',
@@ -863,6 +865,8 @@ async function _processWhatsAppBaileysBatch({ batch }) {
             role: 'bot',
             content: rate.staticReply,
             externalId: sent?.messageId,
+            // Nhãn để bản tin tuần không đếm câu tĩnh này là "AI trả lời" (EXTRA-A6).
+            metadata: { source: AI_RATE_LIMITED_SOURCE },
           });
           await chatbotRateLimitService.markRateLimitNotified({
             channel: 'whatsapp_baileys',

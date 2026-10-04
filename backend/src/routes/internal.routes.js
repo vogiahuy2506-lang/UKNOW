@@ -30,7 +30,7 @@ import {
 } from '../services/chatbot/telegramInbox.service.js';
 import { buildAiPausePayload } from '../utils/aiHandoffResume.util.js';
 import { isOwnerOutgoingEcho } from '../utils/ownerOutgoingEcho.util.js';
-import { unavailableMetadata } from '../utils/aiUnavailable.util.js';
+import { unavailableMetadata, AI_OUTSIDE_HOURS_SOURCE, AI_RATE_LIMITED_SOURCE } from '../utils/aiUnavailable.util.js';
 import {
   isStubOnly,
 } from '../services/chatbot/inProcChannelGateway/index.js';
@@ -715,9 +715,12 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   });
   if (!activeCheck.allowed) {
     if (activeCheck.shouldNotify) {
+      // `recordTelegramMessage` chỉ chép `metadata.source` sang channel_messages — thiếu `source` thì nhãn mất và bản tin tuần
+      // đếm câu tĩnh này là "AI trả lời" (EXTRA-A6).
       const staticRowId = await recordTelegramMessage(conversation, 'bot', activeCheck.staticReply, {
-        model: 'ai_outside_hours',
-        replySource: 'ai_outside_hours',
+        model: AI_OUTSIDE_HOURS_SOURCE,
+        replySource: AI_OUTSIDE_HOURS_SOURCE,
+        source: AI_OUTSIDE_HOURS_SOURCE,
       });
       try {
         const sentStatic = await telegramAdapter.sendReply({
@@ -755,8 +758,9 @@ async function processTelegramPersonalBatch({ account, parsed, batch }) {
   if (!rate.allowed) {
     if (rate.shouldNotify) {
       const rateRowId = await recordTelegramMessage(conversation, 'bot', rate.staticReply, {
-        model: 'ai_rate_limited',
-        replySource: 'ai_rate_limited',
+        model: AI_RATE_LIMITED_SOURCE,
+        replySource: AI_RATE_LIMITED_SOURCE,
+        source: AI_RATE_LIMITED_SOURCE,
       });
       try {
         const sentRate = await telegramAdapter.sendReply({

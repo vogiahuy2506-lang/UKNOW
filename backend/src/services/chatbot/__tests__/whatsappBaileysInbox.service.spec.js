@@ -64,6 +64,7 @@ beforeEach(async () => {
     paused: false,
     pausedAt: null,
     pauseReads: 0,
+    activeCheck: null, // ghi đè kết quả checkBeforeAi của khung giờ (vd ngoài giờ + câu tĩnh)
     autoResume: null,
     ownerConvs: [{ id: 101, id_channel: 9, visitor_name: 'Alice' }],
     recent: {},
@@ -186,9 +187,9 @@ beforeEach(async () => {
   jest.unstable_mockModule(resolveUrl('services/chatbot/chatbotActiveHours.service.js'), () => ({
     default: {
       // Phản chiếu cổng thật: repliesEnabled===false → chặn (bỏ tham số ở nơi gọi thì ca replies_enabled đỏ).
-      checkBeforeAi: async (p) => (p?.repliesEnabled === false
+      checkBeforeAi: async (p) => (m.activeCheck || (p?.repliesEnabled === false
         ? { allowed: false, reason: 'replies_disabled', shouldNotify: false, staticReply: null }
-        : { allowed: true, shouldNotify: false }),
+        : { allowed: true, shouldNotify: false })),
       markNotified: async () => {},
     },
   }));
@@ -242,6 +243,29 @@ describe('WhatsApp Baileys — cổng khoá + trần lượt tại điểm xả 
     expect(m.markRateLimitNotified).toHaveBeenCalledWith(
       expect.objectContaining({ channel: 'whatsapp_baileys', ownerUserId: 42, chatbotId: CHATBOT_ID, reason: 'per_hour' })
     );
+  });
+
+  // PLAN_SUA_AI_DOT4 PR-7 (EXTRA-A6): hai câu TĨNH này từng lưu role='bot' KHÔNG metadata → bản tin tuần đếm là "AI trả lời".
+  it('EXTRA-A6 — câu tĩnh CHẠM TRẦN LƯỢT: dòng bot ghi metadata.source = ai_rate_limited', async () => {
+    m.rate = { allowed: false, shouldNotify: true, staticReply: 'het-luot', reason: 'per_hour' };
+    await sendTexts(['xin chào']);
+    await flush();
+    const rows = m.inserts.filter((p) => p[3] === 'bot');
+    expect(rows).toHaveLength(1);
+    expect(JSON.parse(rows[0][6])).toEqual({ source: 'ai_rate_limited' });
+  });
+
+  it('EXTRA-A6 — câu tĩnh NGOÀI GIỜ: dòng bot ghi metadata.source = ai_outside_hours, gửi 1 lần, không vào hàng đợi AI', async () => {
+    m.activeCheck = { allowed: false, reason: 'outside_active_hours', shouldNotify: true, staticReply: 'ngoai-gio' };
+    await sendTexts(['xin chào']);
+    expect(m.sendReply).toHaveBeenCalledTimes(1);
+    expect(m.sendReply).toHaveBeenCalledWith({ channelId: SESSION_KEY, externalId: '84901234567', message: 'ngoai-gio' });
+    expect(m.buckets.size).toBe(0);
+    expect(m.callAi).not.toHaveBeenCalled();
+    const rows = m.inserts.filter((p) => p[3] === 'bot');
+    expect(rows).toHaveLength(1);
+    expect(rows[0][4]).toBe('ngoai-gio');
+    expect(JSON.parse(rows[0][6])).toEqual({ source: 'ai_outside_hours' });
   });
 
   it('trần lượt: allowed=false + shouldNotify=false → không gửi gì, không gọi AI', async () => {

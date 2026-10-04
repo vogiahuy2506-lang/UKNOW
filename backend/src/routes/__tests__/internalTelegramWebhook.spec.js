@@ -131,6 +131,7 @@ beforeEach(async () => {
     _scenarioAiPaused: false,
     _pauseReads: 0, // số lần route hỏi trạng thái tạm dừng AI của Hộp thư
     _onRoute: null, // móc chạy NGAY TRONG lúc AI đang soạn (vd chủ tạm dừng giữa chừng)
+    _activeCheck: null, // ghi đè kết quả checkBeforeAi của khung giờ (vd ngoài giờ + câu tĩnh)
     // Default pick-enabled candidates = 55 enabled. Test có thể
     // override khi cần giả lập user đổi chatbot.
     _scenarioEnabledChatbots: [{ id_chatbot: 55 }],
@@ -413,9 +414,11 @@ beforeEach(async () => {
       default: {
         // Phản chiếu cổng thật: repliesEnabled===false → chặn (bỏ tham số ở nơi gọi thì ca replies_enabled đỏ).
         checkBeforeAi: async (p) =>
-          p?.repliesEnabled === false
-            ? { allowed: false, reason: 'replies_disabled', shouldNotify: false, staticReply: null }
-            : { allowed: true, shouldNotify: false },
+          mocks._activeCheck
+            ? mocks._activeCheck
+            : p?.repliesEnabled === false
+              ? { allowed: false, reason: 'replies_disabled', shouldNotify: false, staticReply: null }
+              : { allowed: true, shouldNotify: false },
         markNotified: async () => {},
       },
     })
@@ -1172,6 +1175,31 @@ describe('P1 — tin khách luôn vào Hộp thư (channel_messages) + SSE, kể
 
   // PLAN_SUA_AI_DOT4 PR-7 (A P2-3): cổng tạm dừng ở đầu đợt chỉ kiểm MỘT lần; AI soạn mất vài giây, chủ nhảy vào đúng lúc đó
   // thì bot vẫn chen câu cũ vào. Kiểm lại ngay trước khi ghi + gửi (khuôn Zalo cá nhân `paused_after_ai`).
+  // PLAN_SUA_AI_DOT4 PR-7 (EXTRA-A6): `recordTelegramMessage` chỉ chép `metadata.source` sang channel_messages. Hai câu TĨNH
+  // (ngoài giờ / chạm trần lượt) từng truyền `{ model, replySource }` không có `source` → nhãn mất → bản tin tuần (đếm role='bot'
+  // trừ nhãn) tính là "AI trả lời".
+  it('EXTRA-A6 — câu tĩnh NGOÀI GIỜ: dòng Hộp thư mang metadata.source = ai_outside_hours, vẫn gửi 1 lần, không gọi AI', async () => {
+    mocks._activeCheck = { allowed: false, reason: 'outside_active_hours', shouldNotify: true, staticReply: 'ngoai-gio' };
+    await postWebhook(inboundPayload);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls().map((c) => c.message)).toEqual(['ngoai-gio']);
+    const bot = channelRows('bot');
+    expect(bot).toHaveLength(1);
+    expect(bot[0].content).toBe('ngoai-gio');
+    expect(JSON.parse(bot[0].metadata).source).toBe('ai_outside_hours');
+  });
+
+  it('EXTRA-A6 — câu tĩnh CHẠM TRẦN LƯỢT: dòng Hộp thư mang metadata.source = ai_rate_limited, vẫn gửi 1 lần, không gọi AI', async () => {
+    mocks._rate = { allowed: false, shouldNotify: true, staticReply: 'het-luot', reason: 'per_hour' };
+    await postWebhook(inboundPayload);
+    expect(mocks.chatRouterCall()).toBeNull();
+    expect(mocks.sendReplyCalls().map((c) => c.message)).toEqual(['het-luot']);
+    const bot = channelRows('bot');
+    expect(bot).toHaveLength(1);
+    expect(bot[0].content).toBe('het-luot');
+    expect(JSON.parse(bot[0].metadata).source).toBe('ai_rate_limited');
+  });
+
   it('A P2-3 — chủ tạm dừng AI đúng lúc AI đang soạn → AI đã gọi nhưng KHÔNG ghi dòng bot, KHÔNG gửi Telegram', async () => {
     mocks._onRoute = () => { mocks._scenarioAiPaused = true; };
     const res = await postWebhook(inboundPayload);
