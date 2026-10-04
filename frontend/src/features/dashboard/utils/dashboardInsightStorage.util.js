@@ -413,6 +413,8 @@ export function normalizeDashboardInsightForUi(raw) {
  */
 function isFallbackParseFailurePayload(payload) {
   if (!payload || typeof payload !== 'object') return true;
+  // Cờ tường minh do backend gắn (D-10) — phủ cả bản tiếng Anh; dò chuỗi bên dưới giữ cho bản lưu cũ.
+  if (payload.parseFailed === true) return true;
   const ov = payload.overview;
   if (typeof ov === 'string' && ov.includes('Không parse được JSON từ Gemini')) {
     return true;

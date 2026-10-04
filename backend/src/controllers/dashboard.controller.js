@@ -3,6 +3,7 @@ import dashboardInsightsService from '../services/dashboard/dashboardInsights.se
 import { chargeAiCredit } from '../middleware/aiCredit.middleware.js';
 import { resolveWorkspaceOwnerId } from '../utils/workspaceContext.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
+import { isInsightPayloadUsable } from '../utils/dashboardInsightPayload.util.js';
 
 const INSIGHTS_INVALID_FILTERS_MESSAGE = 'Bộ lọc phân tích không hợp lệ (filters phải là đối tượng)';
 
@@ -250,13 +251,19 @@ class DashboardController {
         locale,
       });
 
+      // D-10 — chính sách credit: trừ 1 credit khi AI TẠO RA bản phân tích dùng được, KHÔNG trừ khi Gemini trả JSON hỏng / rỗng
+      // (service vẫn trả `success: true` kèm khung lỗi `parseFailed` để UI báo). Quyết định theo CHÍNH payload chứ không theo
+      // kết quả ghi DB: ghi DB lỗi (đứt kết nối…) không được biến một lượt AI thành công, khách đã nhận kết quả, thành lượt miễn phí.
+      const usable = isInsightPayloadUsable(result?.data);
       try {
         await dashboardInsightsService.persistInsightIfUsable(ownerUserId, result.data, snapshot.filters);
       } catch (persistErr) {
         console.error('Persist dashboard insight error:', persistErr);
       }
 
-      await chargeAiCredit(req);
+      if (usable) {
+        await chargeAiCredit(req);
+      }
 
       this.setNoCacheHeaders(res);
       return res.json(result);

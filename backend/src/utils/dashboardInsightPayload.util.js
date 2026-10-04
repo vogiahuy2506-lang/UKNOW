@@ -11,6 +11,9 @@
  */
 function isFallbackParseFailurePayload(payload) {
   if (!payload || typeof payload !== 'object') return true;
+  // Cờ tường minh do `dashboardInsights.service.generateInsights` gắn (D-10). Dò chuỗi bên dưới chỉ còn cho bản lưu cũ
+  // và KHÔNG phủ bản tiếng Anh ("Failed to parse JSON…") — bản en từng lọt qua và vừa bị lưu DB vừa bị trừ credit.
+  if (payload.parseFailed === true) return true;
   const ov = payload.overview;
   if (typeof ov === 'string' && ov.includes('Không parse được JSON từ Gemini')) {
     return true;

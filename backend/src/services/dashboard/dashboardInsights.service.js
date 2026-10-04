@@ -818,9 +818,13 @@ class DashboardInsightsService {
       };
     }
 
+    // Không đọc được kết quả của AI. Vẫn trả khung lỗi (`success: true`) để UI báo cho người dùng, nhưng gắn `parseFailed` —
+    // tín hiệu để controller KHÔNG trừ credit và `persistInsightIfUsable` KHÔNG lưu DB (D-10). Câu chữ dành cho KHÁCH:
+    // không nhắc tên biến môi trường (trước đây ghi "Kiểm tra GEMINI_MODEL … GEMINI_API_KEY" — lộ cấu hình máy chủ).
     return {
       success: true,
       data: normalizeInsightPayload({
+        parseFailed: true,
         overview:
           typeof lastText === 'string' && lastText.length > 0
             ? (locale === 'en'
@@ -832,8 +836,8 @@ class DashboardInsightsService {
         charts: defaultCharts(),
         notes: [
           locale === 'en'
-            ? 'Could not parse complete JSON. Check GEMINI_MODEL (recommended: gemini-2.5-flash) and GEMINI_API_KEY.'
-            : 'Không parse được JSON đầy đủ. Kiểm tra GEMINI_MODEL (khuyến nghị: gemini-2.5-flash) và GEMINI_API_KEY.',
+            ? 'Could not parse the complete JSON from the AI. Please run the analysis again; this attempt is not charged.'
+            : 'Không parse được JSON đầy đủ từ AI. Bạn vui lòng bấm phân tích lại; lượt này không bị tính credit.',
           lastFinish ? `Gemini finishReason: ${lastFinish}` : '',
           lastBlock ? (locale === 'en' ? `Prompt blocked: ${lastBlock}` : `Chặn prompt: ${lastBlock}`) : '',
           usedCompactRetry
