@@ -14,6 +14,8 @@ const {
   recordAiCallEvent,
   normalizeAiCallEvent,
   sanitizeMeta,
+  outcomeFromError,
+  errorCodeOf,
   isAiCallEventsEnabled,
   getAiCallEventStats,
   resetAiCallEventStatsForTest,
@@ -147,6 +149,25 @@ describe('aiCallEvents.service', () => {
         .toMatchObject({ httpStatus: null, durationMs: null, ownerUserId: null, actorUserId: null });
       expect(normalizeAiCallEvent({ outcome: 'error', httpStatus: 429, durationMs: 0 }))
         .toMatchObject({ httpStatus: 429, durationMs: 0 });
+    });
+  });
+
+  describe('phân loại lỗi của lượt (dùng chung cho sự kiện tầng app)', () => {
+    it('outcomeFromError theo MÃ lỗi của lõi, không dò câu chữ', () => {
+      expect(outcomeFromError({ code: 'AI_CLIENT_ABORTED' })).toBe('client_closed');
+      expect(outcomeFromError({ code: 'AI_TIMEOUT' })).toBe('timeout');
+      expect(outcomeFromError({ code: 'AI_PROVIDER_BUSY' })).toBe('busy');
+      expect(outcomeFromError({ message: 'timeout busy aborted' })).toBe('error');
+      expect(outcomeFromError(null)).toBe('error');
+    });
+
+    it('errorCodeOf: error.code → GEMINI_<status> → HTTP_<status> → tên lỗi → UNKNOWN; không bao giờ mang câu chữ', () => {
+      expect(errorCodeOf({ code: 'AI_TIMEOUT', message: 'Nguyễn Văn A' })).toBe('AI_TIMEOUT');
+      expect(errorCodeOf({ geminiStatus: 404, message: 'x' })).toBe('GEMINI_404');
+      expect(errorCodeOf({ status: 422 })).toBe('HTTP_422');
+      expect(errorCodeOf({ name: 'TypeError' })).toBe('TypeError');
+      expect(errorCodeOf(null)).toBe('UNKNOWN');
+      expect(errorCodeOf({ code: 'có dấu cách/và ký tự lạ' })).toMatch(/^[A-Za-z0-9_.:-]+$/);
     });
   });
 

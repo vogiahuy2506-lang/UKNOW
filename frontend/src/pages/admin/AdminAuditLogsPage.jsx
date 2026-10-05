@@ -18,6 +18,7 @@ const ACTION_LABELS = {
   USER_ROLE_CHANGED: 'Thay đổi vai trò người dùng',
   WIZARD_DEAD_END: 'AI wizard kẹt vòng lặp',
   WIZARD_STATE_NOOP: 'AI wizard: nút không có tác dụng',
+  AI_TURN_FAILED: 'Lượt trợ lý AI bị lỗi',
 };
 
 const ENTITY_LABELS = {

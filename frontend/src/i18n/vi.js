@@ -3408,6 +3408,7 @@ export default {
       MEDIA_DELETED: 'Xóa tệp khỏi thư viện media',
       WIZARD_DEAD_END: 'AI wizard kẹt vòng lặp',
       WIZARD_STATE_NOOP: 'AI wizard: nút không có tác dụng',
+      AI_TURN_FAILED: 'Lượt trợ lý AI bị lỗi',
       EMAIL_ACCOUNT_CONNECTED: 'Kết nối tài khoản email',
       ZALO_ACCOUNT_CONNECTED: 'Kết nối tài khoản Zalo',
       WHATSAPP_ACCOUNT_CONNECT_STARTED: 'Bắt đầu kết nối WhatsApp',
@@ -3715,6 +3716,10 @@ export default {
         gate: 'Bước: {gate}',
         channel: 'Kênh {channel}',
         noop: 'Nút bấm không có tác dụng: {action}',
+      },
+      aiTurn: {
+        stage: 'Bước: {stage}',
+        code: 'Mã lỗi: {code}',
       },
     },
     entities: {

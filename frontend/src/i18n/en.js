@@ -3397,6 +3397,7 @@ export default {
       MEDIA_DELETED: 'Media File Deleted',
       WIZARD_DEAD_END: 'AI Wizard Stuck In A Loop',
       WIZARD_STATE_NOOP: 'AI Wizard: Button Had No Effect',
+      AI_TURN_FAILED: 'AI Assistant Turn Failed',
       EMAIL_ACCOUNT_CONNECTED: 'Email Account Connected',
       ZALO_ACCOUNT_CONNECTED: 'Zalo Account Connected',
       WHATSAPP_ACCOUNT_CONNECT_STARTED: 'WhatsApp Connection Started',
@@ -3704,6 +3705,10 @@ export default {
         gate: 'Step: {gate}',
         channel: '{channel} channel',
         noop: 'Button had no effect: {action}',
+      },
+      aiTurn: {
+        stage: 'Stage: {stage}',
+        code: 'Error code: {code}',
       },
     },
     entities: {

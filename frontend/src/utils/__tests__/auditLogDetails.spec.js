@@ -140,6 +140,7 @@ const REAL_ROWS = [
     'Trợ lý AI hỏi lặp lại cùng một bước tới lần thứ 3 · Bước: Audience · Kênh Email',
   ],
   ['WIZARD_STATE_NOOP', { sessionId: 'abc', action: 'select_channel', payloadKeys: ['x'] }, 'Nút bấm không có tác dụng: Select channel'],
+  ['AI_TURN_FAILED', { sessionId: 12, stage: 'smart_chat', code: 'AI_TIMEOUT', feature: 'smart_chat' }, 'Bước: Smart chat · Mã lỗi: AI_TIMEOUT'],
 ];
 
 /** Hành động chỉ mang id nội bộ hoặc không có khoá nào → không có gì đáng hiện. */

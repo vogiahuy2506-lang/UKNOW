@@ -50,6 +50,7 @@ import {
 } from '../utils/landingLayoutFindings.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
 import { runLandingAiTurn } from '../services/ai/aiLandingTurn.service.js';
+import { recordAssistantTurnFailure, recordPlanSlotOutcome } from '../services/ai/assistantTurnFailure.service.js';
 import { findLandingAiInputTooLong } from '../utils/landingAiInputLimits.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import {
@@ -230,6 +231,9 @@ class AiController {
    * @param {import('express').Response} res
    */
   async chat(req, res) {
+    // PR-10 (C P2-2): giai đoạn đang chạy + lượt đã được lưu vào phiên chưa — để nhánh lỗi ghi đúng dấu vết (AI_TURN_FAILED) và không lưu lặp tin.
+    let stage = 'prepare';
+    let turnPersisted = false;
     try {
       const { history, files, sessionId, locale, model, intent, planSlotKey } = req.body;
       // PR-9 (B-4 / B-5): client mới tự gọi route sinh landing → lượt chat chỉ trả ý định `landing_page`, không sinh trang trong request.
@@ -317,6 +321,7 @@ class AiController {
         && (QUESTION_SHAPE_RE.test(lastUserContentForRouting)
           || Boolean(classifyUnsupportedSendRequest(lastUserContentForRouting)));
       const skipHelpRouter = hasFiles || isMachinePrompt || (inWizard && !wizardTypedQuestion);
+      stage = 'help_router';
       const helpResponse = skipHelpRouter
         ? null
         : await tryHandleHelpChat({
@@ -345,6 +350,7 @@ class AiController {
       } else {
         const helpRoute = helpResponse?.route || null;
         const routeSaysActionRequest = helpRoute === HELP_ROUTE_LABELS?.làm_giúp || helpRoute === 'làm_giúp';
+        stage = 'smart_chat';
         response = await aiCampaignService.processSmartChat({
           history,
           files: files || [],
@@ -373,6 +379,11 @@ class AiController {
           deferLandingGeneration,
         });
         ({ wizardShortCircuit, _wizard, parseFailed = false, ...publicResponse } = response || {});
+        // C-NO-P1-25-08: lượt xin template của một slot kế hoạch phải ra `template_draft`; không ra thì frontend báo "Tạo template Ngày N bị lỗi" mà
+        // phía server không có số đếm nào. Ghi cả lượt đạt (ok) lẫn không đạt (error) để có tỉ lệ.
+        if (sanitizedPlanSlotKey) {
+          recordPlanSlotOutcome({ req, ownerUserId: resourceOwnerUserId, responseType: publicResponse?.type });
+        }
       }
 
       // PR-2 mục 2 (PLAN_VA_TRO_LY_AI_2026-09-28) — lưới an toàn: processSmartChat (não chiến
@@ -523,6 +534,7 @@ class AiController {
           if (saved?.assistantMessageId) {
             savedAssistantMessageId = saved.assistantMessageId;
           }
+          if (saved) turnPersisted = true;
           // Repo trả null khi phiên không thuộc người này (INSERT gác bằng WHERE EXISTS) — trước đây không ai kiểm nên tin mất
           // im lặng mà credit vẫn bị trừ (C P1-7). Phiên của actor thì không thể mất ở đây; nếu vẫn xảy ra (client gửi sessionId
           // của người khác/đã xoá) thì ít nhất log để thấy được.
@@ -539,6 +551,8 @@ class AiController {
           );
           if (savedOk === false) {
             console.warn(`[AI] Không lưu được tin vào phiên ${finalSessionId}: phiên không tồn tại hoặc không thuộc user ${req.user.id}`);
+          } else {
+            turnPersisted = true;
           }
         }
 
@@ -607,6 +621,7 @@ class AiController {
       // credit khi khách nhận được trang. Trước PR-9 cả lượt (chat + sinh trang cùng request) cũng chỉ tốn 1 credit; trừ ở cả hai
       // nơi sẽ thành 2 credit cho cùng một trang.
       if (!wizardShortCircuit && !isLandingIntent && (!parseFailed || answeredByDocsNet)) {
+        stage = 'charge';
         await chargeAiCredit(req);
       }
 
@@ -621,7 +636,19 @@ class AiController {
       });
     } catch (error) {
       console.error('AI chat error:', error);
-      return res.status(error.status || 500).json(buildAiErrorPayload(error, 'Lỗi khi xử lý trò chuyện AI'));
+      const errorPayload = buildAiErrorPayload(error, 'Lỗi khi xử lý trò chuyện AI');
+      // C P2-2: lượt hỏng để lại dấu vết bền (audit AI_TURN_FAILED + sự kiện) và tin của người dùng + tin lỗi được lưu vào phiên — trước đây
+      // chúng mất sạch sau F5. Best-effort, có trần thời gian: không bao giờ làm đổi hay trì hoãn câu trả lời lỗi.
+      await recordAssistantTurnFailure({
+        req,
+        stage,
+        error,
+        errorMessage: errorPayload.message,
+        ownerUserId: resolveOwnerUserId(req.user),
+        turnPersisted,
+        planSlotKey: req.body?.planSlotKey,
+      });
+      return res.status(error.status || 500).json(errorPayload);
     }
   }
 

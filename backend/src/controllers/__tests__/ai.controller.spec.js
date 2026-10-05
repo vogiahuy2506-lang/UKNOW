@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
 
 const processSmartChat = jest.fn();
 const chargeAiCredit = jest.fn();
@@ -147,7 +147,15 @@ jest.unstable_mockModule('../../repositories/aiSession.repository.js', () => ({
   listUserFilesSinceLastLanding: jest.fn(async () => []),
 }));
 
+// PR-10 (C P2-2): sổ bền lượt trợ lý hỏng — ranh giới CSDL của `ai_call_events` (service ghi sự kiện chạy thật, chỉ repository bị giả).
+const insertCallEvent = jest.fn(async () => {});
+jest.unstable_mockModule('../../repositories/ai/aiCallEvent.repository.js', () => ({
+  insertEvent: insertCallEvent,
+  deleteOlderThanDays: jest.fn(),
+}));
+
 const { default: aiController } = await import('../ai.controller.js');
+const { default: auditServiceInstance } = await import('../../services/audit.service.js');
 const { buildAutoLayoutFixInstruction, normalizeLayoutFindings } = await import('../../utils/landingLayoutFindings.util.js');
 
 const makeRes = () => {
@@ -2023,6 +2031,164 @@ describe('ai.controller — nhân viên (G3a)', () => {
       }, makeRes());
 
       expect(processSmartChat).toHaveBeenCalledWith(expect.objectContaining({ userId: EMPLOYEE, resourceOwnerUserId: OWNER }));
+    });
+  });
+});
+
+describe('ai.controller — lượt trợ lý hỏng để lại dấu vết bền (PR-10, C P2-2)', () => {
+  const originalFlag = process.env.AI_CALL_EVENTS_ENABLED;
+  let auditSpy;
+  const TIMEOUT = Object.assign(new Error('AI phản hồi quá lâu. Bạn vui lòng thử lại sau ít phút.'), { code: 'AI_TIMEOUT', status: 503, name: 'AbortError' });
+  const chatReq = (extraBody = {}, user = { id: 42, role: 'user' }) => ({
+    body: { history: [{ role: 'user', content: 'Tạo chiến dịch gửi email cho khách cũ' }], locale: 'vi', ...extraBody },
+    user,
+  });
+  const callEvents = () => insertCallEvent.mock.calls.map(([row]) => row);
+  /** Cho các lệnh `void recordAiCallEvent(...)` (không await) kịp chạm repository giả. */
+  const flush = () => new Promise((resolve) => { setImmediate(resolve); });
+
+  beforeEach(() => {
+    process.env.AI_CALL_EVENTS_ENABLED = 'true';
+    insertCallEvent.mockClear();
+    processSmartChat.mockReset();
+    chargeAiCredit.mockReset();
+    createSession.mockReset();
+    createSession.mockResolvedValue({ id: 123, title: 'Chat' });
+    saveMessages.mockReset();
+    saveMessages.mockResolvedValue(true);
+    tryHandleHelpChat.mockReset();
+    tryHandleHelpChat.mockResolvedValue(null);
+    getSessionWizardState.mockReset();
+    getSessionWizardState.mockResolvedValue(null);
+    updateWizardStateSections.mockReset();
+    updateWizardStateSections.mockResolvedValue(undefined);
+    auditSpy = jest.spyOn(auditServiceInstance, 'log').mockResolvedValue(undefined);
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    if (originalFlag === undefined) delete process.env.AI_CALL_EVENTS_ENABLED;
+    else process.env.AI_CALL_EVENTS_ENABLED = originalFlag;
+  });
+
+  it('Gemini hết giờ giữa lượt: câu lỗi trả cho người dùng KHÔNG đổi; audit AI_TURN_FAILED + sự kiện assistant_turn; tin người dùng + tin lỗi được LƯU vào phiên (F5 không mất)', async () => {
+    processSmartChat.mockRejectedValue(TIMEOUT);
+    const res = makeRes();
+
+    await aiController.chat(chatReq({ sessionId: 33 }), res);
+    await flush();
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: false, message: TIMEOUT.message, code: 'AI_TIMEOUT' }));
+    expect(chargeAiCredit).not.toHaveBeenCalled(); // lượt hỏng không trừ credit (như trước)
+
+    expect(auditSpy).toHaveBeenCalledWith(expect.objectContaining({
+      userId: 42,
+      category: 'system',
+      action: 'AI_TURN_FAILED',
+      entityType: 'ai_session',
+      entityId: 33,
+      details: { sessionId: 33, stage: 'smart_chat', code: 'AI_TIMEOUT', feature: 'smart_chat' },
+    }));
+    expect(saveMessages).toHaveBeenCalledTimes(1);
+    expect(saveMessages).toHaveBeenCalledWith(
+      33,
+      42,
+      'Tạo chiến dịch gửi email cho khách cũ',
+      expect.objectContaining({ type: 'text', content: `⚠️ ${TIMEOUT.message}`, data: { turnFailed: true, code: 'AI_TIMEOUT', stage: 'smart_chat' } }),
+      [],
+    );
+    expect(callEvents()).toHaveLength(1);
+    const row = callEvents()[0];
+    expect(row).toMatchObject({ layer: 'app', feature: 'assistant_turn', outcome: 'timeout', errorCode: 'AI_TIMEOUT', ownerUserId: 42, actorUserId: 42 });
+    expect(row.meta).toMatchObject({ stage: 'smart_chat', hasSession: true });
+  });
+
+  it('lỗi ở help-router → stage help_router (feature help_assistant)', async () => {
+    tryHandleHelpChat.mockRejectedValue(new Error('router sập'));
+    const res = makeRes();
+    await aiController.chat(chatReq({ sessionId: 33 }), res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(auditSpy.mock.calls[0][0].details).toMatchObject({ stage: 'help_router', feature: 'help_assistant' });
+  });
+
+  it('lượt ĐẦU (chưa có phiên): có audit + sự kiện nhưng KHÔNG tạo phiên mồ côi', async () => {
+    processSmartChat.mockRejectedValue(TIMEOUT);
+    await aiController.chat(chatReq(), makeRes());
+    await flush();
+    expect(auditSpy).toHaveBeenCalledTimes(1);
+    expect(callEvents()).toHaveLength(1);
+    expect(createSession).not.toHaveBeenCalled();
+    expect(saveMessages).not.toHaveBeenCalled();
+  });
+
+  it('lỗi SAU khi lượt đã lưu vào phiên (trừ credit ném): audit stage=charge và KHÔNG lưu lần hai (không nhân đôi tin người dùng)', async () => {
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'Đây là câu trả lời', data: null });
+    chargeAiCredit.mockRejectedValue(Object.assign(new Error('hết lượt'), { status: 402 }));
+    const res = makeRes();
+
+    await aiController.chat(chatReq({ sessionId: 33 }), res);
+
+    expect(res.status).toHaveBeenCalledWith(402);
+    expect(saveMessages).toHaveBeenCalledTimes(1); // chỉ lần lưu bình thường của nhánh thành công
+    expect(saveMessages.mock.calls[0][3]).toMatchObject({ content: 'Đây là câu trả lời' });
+    expect(auditSpy.mock.calls[0][0].details).toMatchObject({ stage: 'charge', feature: 'ai_credit' });
+  });
+
+  it('dấu vết hỏng (lưu phiên ném) KHÔNG đổi câu lỗi trả cho người dùng', async () => {
+    processSmartChat.mockRejectedValue(TIMEOUT);
+    saveMessages.mockRejectedValue(new Error('DB sập'));
+    auditSpy.mockRejectedValue(new Error('audit sập'));
+    const res = makeRes();
+    await aiController.chat(chatReq({ sessionId: 33 }), res);
+    expect(res.status).toHaveBeenCalledWith(503);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: TIMEOUT.message }));
+  });
+
+  it('lượt thành công KHÔNG ghi AI_TURN_FAILED / assistant_turn', async () => {
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'ok', data: null });
+    await aiController.chat(chatReq({ sessionId: 33 }), makeRes());
+    await flush();
+    expect(auditSpy.mock.calls.filter(([entry]) => entry.action === 'AI_TURN_FAILED')).toEqual([]);
+    expect(callEvents()).toEqual([]);
+  });
+
+  describe('C-NO-P1-25-08 — đếm lượt xin template slot kế hoạch', () => {
+    const slotBody = (extra = {}) => ({
+      history: [{ role: 'user', content: 'Tạo chi tiết template cho ngày 2, slot 1 (Email). Mục tiêu ngày: nhắc lại ưu đãi.' }],
+      planSlotKey: 'd2-s1',
+      ...extra,
+    });
+
+    it('ra template_draft → assistant_plan_slot / ok', async () => {
+      processSmartChat.mockResolvedValue({ type: 'template_draft', content: 'Nội dung', data: { channel: 'email' } });
+      await aiController.chat({ body: slotBody(), user: { id: 42, role: 'user' } }, makeRes());
+      await flush();
+      expect(callEvents()).toEqual([expect.objectContaining({ feature: 'assistant_plan_slot', outcome: 'ok', layer: 'app', ownerUserId: 42 })]);
+    });
+
+    it('ra kiểu khác (vd câu chữ) → assistant_plan_slot / error NO_TEMPLATE_DRAFT kèm kiểu thật', async () => {
+      processSmartChat.mockResolvedValue({ type: 'text', content: 'Có, mình làm được', data: null });
+      await aiController.chat({ body: slotBody(), user: { id: 42, role: 'user' } }, makeRes());
+      await flush();
+      expect(callEvents()).toEqual([expect.objectContaining({
+        feature: 'assistant_plan_slot', outcome: 'error', errorCode: 'NO_TEMPLATE_DRAFT', meta: { responseType: 'text' },
+      })]);
+    });
+
+    it('lượt slot hỏng vì LỖI → cả assistant_turn lẫn assistant_plan_slot / error mang mã lỗi', async () => {
+      processSmartChat.mockRejectedValue(TIMEOUT);
+      await aiController.chat({ body: slotBody({ sessionId: 33 }), user: { id: 42, role: 'user' } }, makeRes());
+      await flush();
+      expect(callEvents().map((row) => `${row.feature}/${row.outcome}`).sort()).toEqual(['assistant_plan_slot/error', 'assistant_turn/timeout']);
+    });
+
+    it('lượt chat thường (không planSlotKey) KHÔNG đếm slot', async () => {
+      processSmartChat.mockResolvedValue({ type: 'text', content: 'ok', data: null });
+      await aiController.chat(chatReq(), makeRes());
+      await flush();
+      expect(callEvents()).toEqual([]);
     });
   });
 });

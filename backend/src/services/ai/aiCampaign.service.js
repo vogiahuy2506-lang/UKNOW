@@ -1739,6 +1739,11 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
           brief: briefForState || null,
         });
 
+        // PR-10 (C P2-2): quyết định của compiler ở lượt này, đặt vào `data.compiler = { applied, reason }` sau khối try/catch dưới — để biết (bằng
+        // SQL trên ai_chat_messages.data) compiler có thật sự dựng graph không và vì sao không, thay vì chỉ có dòng console.log mất mỗi lần deploy.
+        // reason: intent_incomplete | flow_disabled | audience_filters | slot_filling | slot_filling_failed | merge | merge_failed | empty_content | merge_error
+        let compilerDecision = null;
+
         // Giai đoạn 4 & PLAN_BAT_CO_ZALO_GROUP: Bật cờ compiler theo từng luồng
         try {
           const enabledFlows = (process.env.COMPILER_ENABLED_FLOWS || '')
@@ -1775,9 +1780,12 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
 
           if (!compilableCheck.ok) {
             console.log(`[CampaignCompiler] Giữ script LLM cũ — intent khuyết trường: ${compilableCheck.missing.join(', ')}`);
+            compilerDecision = { applied: false, reason: 'intent_incomplete' };
           } else if (!isCompilerActive) {
             // Luồng chưa bật cờ
+            compilerDecision = { applied: false, reason: 'flow_disabled' };
           } else if (legacyAudienceFilters.hasFilters) {
+            compilerDecision = { applied: false, reason: 'audience_filters' };
             // Giữ script LLM (rà soát C P1-3): đây là đường an toàn như trước khi có compiler.
             console.log(
               `[CampaignCompiler] Giữ script LLM cũ — script có bộ lọc người nhận compiler chưa biểu diễn được (audience.filters): ${legacyAudienceFilters.reasons.join(', ')}`
@@ -1845,6 +1853,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
                   targetScript._via = 'ai_compiler_slot_filling';
 
                   slotFillingSucceeded = true;
+                  compilerDecision = { applied: true, reason: 'slot_filling' };
                   console.log(
                     `[CampaignCompiler] ✅ Đã áp dụng Slot Filling cho luồng ${campaignIntent.channel} (via: ai_compiler_slot_filling)`
                   );
@@ -1860,11 +1869,17 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
               }
             }
 
+            if (!slotFillingSucceeded && !enabledFlows.includes(campaignIntent.channel)) {
+              // Luồng chỉ bật Slot Filling (không bật merge) mà Slot Filling không thành công → giữ script LLM.
+              compilerDecision = { applied: false, reason: 'slot_filling_failed' };
+            }
+
             if (!slotFillingSucceeded && enabledFlows.includes(campaignIntent.channel)) {
               const { script: mergedScript, unmatchedSlots } = mergeCompiledWithContent(compiledGraph, targetScript);
 
               if (unmatchedSlots.length > 0) {
                 console.warn(`[CampaignCompiler] Giữ script LLM cũ — merge_failed có ${unmatchedSlots.length} slot chưa khớp`);
+                compilerDecision = { applied: false, reason: 'merge_failed' };
               } else {
                 assertNoEmptyContent(mergedScript);
 
@@ -1884,6 +1899,7 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
                 targetScript.connections = mergedScript.connections;
                 targetScript.compilerApplied = true;
                 targetScript._via = 'ai_compiler';
+                compilerDecision = { applied: true, reason: 'merge' };
 
                 console.log(`[CampaignCompiler] ✅ Đã áp dụng graph Compiler cho luồng ${campaignIntent.channel} (via: ai_compiler)`);
               }
@@ -1892,6 +1908,10 @@ nodes: trigger → data_node → action_sp1(delay=0) → action_sp2(delay=2 days
         } catch (compilerApplyErr) {
           const reason = compilerApplyErr.code === 'EMPTY_CONTENT' ? 'empty_content' : 'merge_error';
           console.warn(`[CampaignCompiler] Giữ script LLM cũ — lỗi ${reason}: ${compilerApplyErr.message}`);
+          compilerDecision = { applied: false, reason };
+        }
+        if (compilerDecision && finalResponse.data && typeof finalResponse.data === 'object') {
+          finalResponse.data.compiler = compilerDecision;
         }
       }
 

@@ -188,6 +188,9 @@ export const AUDIT_ACTIONS = {
   // System — AI wizard telemetry (dead-end detection)
   WIZARD_DEAD_END: 'WIZARD_DEAD_END',
   WIZARD_STATE_NOOP: 'WIZARD_STATE_NOOP',
+  // Lượt trợ lý AI hỏng (PLAN_SUA_AI_DOT4_PR10 mục 3d). details gồm sessionId, stage, code, feature — chỉ mã, không câu chữ. Không dùng dấu ngoặc nhọn
+  // trong chú thích của khối này: auditLogLabels.spec.js đọc khối AUDIT_ACTIONS dạng văn bản tới dấu ngoặc nhọn đóng đầu tiên.
+  AI_TURN_FAILED: 'AI_TURN_FAILED',
 
   // Workspace — channel connection (activation funnel)
   EMAIL_ACCOUNT_CONNECTED: 'EMAIL_ACCOUNT_CONNECTED',

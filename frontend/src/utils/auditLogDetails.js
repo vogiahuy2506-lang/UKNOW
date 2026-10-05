@@ -574,6 +574,12 @@ register(['WIZARD_DEAD_END'], (t, d, locale) => joinParts([
 // ai.controller.js:738 → { sessionId, action, payloadKeys }: nút bấm của trợ lý AI không làm đổi trạng thái
 register(['WIZARD_STATE_NOOP'], (t, d) => (isNil(d.action) ? '' : tr(t, 'wizard.noop', { action: clip(humanize(d.action), 60) })));
 
+// assistantTurnFailure.service.js → { sessionId, stage, code, feature }: một lượt trợ lý AI hỏng (chỉ mã, không câu chữ)
+register(['AI_TURN_FAILED'], (t, d) => joinParts([
+  isNil(d.stage) ? '' : tr(t, 'aiTurn.stage', { stage: clip(humanize(d.stage), 60) }),
+  isNil(d.code) ? '' : tr(t, 'aiTurn.code', { code: clip(String(d.code), 60) }),
+]));
+
 /* ───────────────────────── điểm vào ───────────────────────── */
 
 /**

@@ -162,6 +162,28 @@ export function normalizeAiCallEvent(input) {
   };
 }
 
+/**
+ * Phân loại một LỖI của lượt AI theo mã lỗi của lõi (không dò câu chữ): người dùng đóng kết nối → client_closed, hết giờ → timeout, quá tải
+ * (hết lượt thử lại + dự phòng) → busy, còn lại → error. Dùng chung cho các sự kiện tầng 'app' của trợ lý / chatbot.
+ */
+export function outcomeFromError(error) {
+  const code = error?.code;
+  if (code === 'AI_CLIENT_ABORTED') return AI_CALL_OUTCOME.CLIENT_CLOSED;
+  if (code === 'AI_TIMEOUT') return AI_CALL_OUTCOME.TIMEOUT;
+  if (code === 'AI_PROVIDER_BUSY') return AI_CALL_OUTCOME.BUSY;
+  return AI_CALL_OUTCOME.ERROR;
+}
+
+/** Mã lỗi ngắn, an toàn để ghi sổ: `error.code`, không thì `GEMINI_<status>` (lỗi từ Google), `HTTP_<status>`, tên lỗi. Không bao giờ chứa câu chữ của lỗi. */
+export function errorCodeOf(error) {
+  const raw = error?.code
+    ?? (error?.geminiStatus != null ? `GEMINI_${error.geminiStatus}` : null)
+    ?? (error?.status != null ? `HTTP_${error.status}` : null)
+    ?? error?.name
+    ?? 'UNKNOWN';
+  return toSafeCode(raw) || 'UNKNOWN';
+}
+
 function logWriteFailure(error) {
   const now = Date.now();
   if (now - lastErrorLogAt < LOG_THROTTLE_MS) return;
@@ -233,4 +255,4 @@ export function handleAiCallObserved(event) {
 // Gắn vào lõi KHI ĐƯỢC NẠP (app.js nạp module này lúc khởi động; spec `aiCallEvents.appLoad.spec.js` ghim việc đó).
 setAiCallObserver(handleAiCallObserved);
 
-export default { recordAiCallEvent, handleAiCallObserved, getAiCallEventStats };
+export default { recordAiCallEvent, handleAiCallObserved, getAiCallEventStats, outcomeFromError, errorCodeOf };
