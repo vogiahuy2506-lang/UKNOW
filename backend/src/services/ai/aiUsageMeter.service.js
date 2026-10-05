@@ -2,6 +2,12 @@ import usageTrackingService from '../payment/usageTracking.service.js';
 import { generateGeminiContent } from '../../utils/geminiClient.util.js';
 import * as policyService from './aiModelPolicy.service.js';
 import { normalizeModelId } from '../../utils/aiModelTier.util.js';
+import {
+  recordAiCallEvent,
+  AI_CALL_LAYER,
+  AI_CALL_OUTCOME,
+  USAGE_WRITE_FAILED_CODE,
+} from './aiCallEvents.service.js';
 
 export const AI_TOKEN_RESOURCE = 'ai_token';
 
@@ -91,6 +97,23 @@ class AiUsageMeterService {
         `[aiUsageMeter] ghi usage thất bại feature=${baseMeta.feature ?? 'null'} model=${baseMeta.model ?? 'null'} `
         + `user=${ownerId ?? 'null'} tokens=${totalTokens}: ${error?.message || 'Unknown error'}`
       );
+      // Thành SỔ BỀN (D-OLD-C4 / D-22): trước đây ghi hụt chỉ ở docker log (mất mỗi lần deploy) nên không ai đếm được "bao nhiêu lượt Google đã tính
+      // tiền mà sổ token không có" — cảnh báo `ai_usage_write_failed` đọc đúng mã này. Không `await` và không bao giờ ném (recordAiCallEvent tự nuốt).
+      // Chỉ số đếm + mã, KHÔNG câu lỗi của CSDL (có thể mang tên bảng/giá trị).
+      try {
+        void recordAiCallEvent({
+          layer: AI_CALL_LAYER.APP,
+          feature: baseMeta.feature,
+          model: baseMeta.model,
+          outcome: AI_CALL_OUTCOME.ERROR,
+          errorCode: USAGE_WRITE_FAILED_CODE,
+          ownerUserId: ownerId,
+          actorUserId,
+          meta: { totalTokens, pgCode: error?.code },
+        });
+      } catch {
+        // `record` không bao giờ ném lỗi — kể cả khi chính sổ bền hỏng.
+      }
     }
   }
 
