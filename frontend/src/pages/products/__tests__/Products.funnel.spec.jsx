@@ -22,11 +22,11 @@ vi.mock('../../../stores/authStore', () => ({
   useAuthStore: (selector) => selector(mockAuthState),
 }));
 
-const renderPage = () =>
+const renderPage = (props = { defaultViewMode: 'full' }) =>
   render(
     <MemoryRouter>
       <I18nProvider>
-        <Products />
+        <Products {...props} />
       </I18nProvider>
     </MemoryRouter>
   );
@@ -283,5 +283,78 @@ describe('Products — cột phễu Đăng ký / Đã trả / Doanh thu', () => 
     renderPage();
     await waitFor(() => expect(screen.getByTestId('funnel-registered')).toBeInTheDocument());
     expect(productApiService.getFunnel).toHaveBeenCalledTimes(1);
+  });
+
+  it('mặc định là Bảng gọn: hiện cột Doanh thu & Chuyển đổi tóm tắt, nhấn tên sản phẩm mở modal chi tiết', async () => {
+    productApiService.getProducts.mockResolvedValue({
+      data: {
+        data: {
+          products: [
+            {
+              id: 11,
+              productName: 'Khoá AI thực chiến',
+              price: '500k',
+              status: 'active',
+              thumbnailUrl: 'https://example.com/thumb.jpg',
+              productUrl: 'https://example.com/course',
+              description: 'Khóa học chất lượng cao',
+            },
+          ],
+          pagination: { total: 1, totalPages: 1 },
+        },
+      },
+    });
+
+    // Render với defaultViewMode mặc định ('compact')
+    render(
+      <MemoryRouter>
+        <I18nProvider>
+          <Products />
+        </I18nProvider>
+      </MemoryRouter>
+    );
+
+    await waitFor(() => expect(screen.getByText('Khoá AI thực chiến')).toBeInTheDocument());
+
+    // Cột Doanh thu & Chuyển đổi tóm tắt hiện diện, các cột phễu chi tiết (Quan tâm, Để lại thông tin) không tràn trên bảng
+    expect(screen.getByText(/Doanh thu & Chuyển đổi/)).toBeInTheDocument();
+    expect(screen.queryByRole('columnheader', { name: 'Quan tâm' })).toBeNull();
+    expect(screen.getByTestId('funnel-revenue')).toHaveTextContent('2.000 đ');
+    expect(screen.getByTestId('funnel-registered')).toHaveTextContent('2');
+    expect(screen.getByTestId('funnel-paid')).toHaveTextContent('1');
+    expect(screen.getByTestId('funnel-awaiting')).toHaveTextContent('2 chờ duyệt');
+
+    // Nhấn vào tên sản phẩm -> mở Modal Chi tiết
+    fireEvent.click(screen.getByRole('button', { name: /Khoá AI thực chiến/ }));
+    await waitFor(() => expect(screen.getByTestId('product-detail-modal')).toBeInTheDocument());
+
+    // Trong modal chi tiết: có ảnh, có link URL, có cả 6 bước phễu
+    const modal = screen.getByTestId('product-detail-modal');
+    expect(within(modal).getAllByAltText('Khoá AI thực chiến')[0]).toHaveAttribute('src', 'https://example.com/thumb.jpg');
+    expect(within(modal).getByRole('link', { name: 'https://example.com/course' })).toHaveAttribute('href', 'https://example.com/course');
+    expect(screen.getByTestId('funnel-detail-interested')).toHaveTextContent('11');
+    expect(screen.getByTestId('funnel-detail-left-contact')).toHaveTextContent('5');
+    expect(screen.getByTestId('funnel-detail-registered')).toHaveTextContent('2');
+    expect(screen.getByTestId('funnel-detail-awaiting')).toHaveTextContent('2');
+    expect(screen.getByTestId('funnel-detail-paid')).toHaveTextContent('1');
+    expect(screen.getByTestId('funnel-detail-revenue')).toHaveTextContent('2.000 đ');
+    expect(screen.getByText('Khóa học chất lượng cao')).toBeInTheDocument();
+
+    // Nút đóng modal chi tiết
+    fireEvent.click(screen.getAllByRole('button', { name: 'Đóng' })[0]);
+    await waitFor(() => expect(screen.queryByTestId('product-detail-modal')).toBeNull());
+
+    // Nút Xem chi tiết (icon mắt) cũng mở modal chi tiết
+    fireEvent.click(screen.getByRole('button', { name: 'Xem chi tiết' }));
+    expect(screen.getByTestId('product-detail-modal')).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole('button', { name: 'Đóng' })[0]);
+
+    // Bấm nút chuyển sang "Đầy đủ phễu" -> hiện lại cột "Quan tâm"
+    fireEvent.click(screen.getByTestId('view-mode-full'));
+    expect(screen.getByRole('columnheader', { name: 'Quan tâm' })).toBeInTheDocument();
+
+    // Bấm lại "Bảng gọn" -> ẩn cột "Quan tâm"
+    fireEvent.click(screen.getByTestId('view-mode-compact'));
+    expect(screen.queryByRole('columnheader', { name: 'Quan tâm' })).toBeNull();
   });
 });
