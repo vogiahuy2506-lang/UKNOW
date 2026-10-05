@@ -118,6 +118,24 @@ describe('aiController.generateSystemInstruction — soi đầu vào (mục 3.3)
 
     expect(mockGenerateSystemInstruction).toHaveBeenCalledWith({
       userId: 9,
+      actorUserId: 9,
+      hint: 'Trợ lý bán hàng',
+      language: 'vi',
+    });
+  });
+
+  it('D-23: nhân viên bấm → userId là CHỦ workspace (chi phí + hồ sơ theo chủ), actorUserId là nhân viên', async () => {
+    const req = {
+      body: { hint: 'Trợ lý bán hàng' },
+      user: { id: 11, activeContext: { type: 'employee', ownerId: 4 } },
+    };
+    const res = makeRes();
+
+    await aiController.generateSystemInstruction(req, res);
+
+    expect(mockGenerateSystemInstruction).toHaveBeenCalledWith({
+      userId: 4,
+      actorUserId: 11,
       hint: 'Trợ lý bán hàng',
       language: 'vi',
     });

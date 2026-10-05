@@ -129,13 +129,20 @@ export function buildSystemInstructionPrompt({ language, userHint, businessConte
   return `${filled}\n${JSON_ENVELOPE_INSTRUCTION}`;
 }
 
+/** Tên tính năng ghi vào sổ token (`usage_logs`) và sổ lỗi bền (`ai_call_events`) — tách khỏi `smart_chat` của trợ lý chiến dịch (D-23). */
+export const INSTRUCTION_WRITER_FEATURE = 'ai_generate_system_instruction';
+
 /**
  * "AI viết hộ" chỉ dẫn hệ thống cho chatbot.
  *
- * @param {{userId: number, hint: string, language?: 'vi'|'en'}} params
+ * D-23 (05/10/2026): `userId` là CHỦ workspace (hồ sơ doanh nghiệp, token và chi phí đều tính cho chủ — trước đây tính theo người bấm nên nhân
+ * viên bấm thì chi phí rơi vào nhân viên và hồ sơ nạp là hồ sơ của nhân viên, thường rỗng); `actorUserId` là người bấm thật, đi vào metadata sổ
+ * token. Tính năng ghi riêng `ai_generate_system_instruction` thay vì dùng chung `smart_chat` với trợ lý chiến dịch.
+ *
+ * @param {{userId: number, actorUserId?: number|null, hint: string, language?: 'vi'|'en'}} params
  * @returns {Promise<{instruction: string, businessContextUsed: boolean}>}
  */
-export async function generateSystemInstruction({ userId, hint, language = 'vi' }) {
+export async function generateSystemInstruction({ userId, actorUserId = null, hint, language = 'vi' }) {
   // Bẫy 5 — hồ sơ doanh nghiệp hỏng/rỗng không được chặn tính năng. getFormattedProfileForPrompt
   // (businessProfile.service.js:192) đã tự catch lỗi đọc profile/sản phẩm bên trong, nhưng vẫn
   // .catch() thêm ở đây — cùng khuôn chatRouter.service.js:78/172 đang làm cho chính hàm này.
@@ -152,6 +159,8 @@ export async function generateSystemInstruction({ userId, hint, language = 'vi' 
     // user tối thiểu để Gemini có nội dung `contents` không rỗng.
     history: [{ role: 'user', content: 'Viết chỉ dẫn theo yêu cầu ở trên.' }],
     userId,
+    actorUserId,
+    feature: INSTRUCTION_WRITER_FEATURE,
   });
 
   const rawText = result?.content ?? result?.instruction ?? '';

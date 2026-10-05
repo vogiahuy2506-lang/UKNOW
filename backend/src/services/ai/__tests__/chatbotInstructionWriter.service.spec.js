@@ -121,6 +121,14 @@ describe('chatbotInstructionWriter.service', () => {
       expect(result.businessContextUsed).toBe(true);
     });
 
+    it('D-23: runChat nhận feature riêng ai_generate_system_instruction, userId = CHỦ (hồ sơ nạp theo chủ), actorUserId = người bấm', async () => {
+      await generateSystemInstruction({ userId: 4, actorUserId: 11, hint: 'Trợ lý bán hàng', language: 'vi' });
+
+      expect(mockGetFormattedProfileForPrompt).toHaveBeenCalledWith(4);
+      const [callArgs] = mockRunChat.mock.calls[0];
+      expect(callArgs).toMatchObject({ userId: 4, actorUserId: 11, feature: 'ai_generate_system_instruction' });
+    });
+
     it('hồ sơ doanh nghiệp rỗng/lỗi (đã .catch ở service) → vẫn viết được, businessContextUsed=false', async () => {
       mockGetFormattedProfileForPrompt.mockRejectedValue(new Error('DB tạm lỗi'));
 

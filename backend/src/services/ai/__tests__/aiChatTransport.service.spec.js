@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, jest } from '@jest/globals';
+import { setAiCallObserver } from '../../../utils/aiCallObserver.util.js';
 
 const originalFetch = global.fetch;
 const originalApiKey = process.env.GEMINI_API_KEY;
@@ -148,6 +149,43 @@ describe('aiChatTransport.service', () => {
     expect(logged).not.toContain('first 500 chars');
     // Vẫn đủ để dò sự cố: độ dài thật + mã kết thúc + model.
     expect(logged).toContain(`[AI Chat] Gemini response (${reply.length} chars, finishReason=STOP, model=gemini-2.5-flash)`);
+  });
+
+  describe('D-23 — feature + người bấm thật (viết chỉ dẫn chatbot không còn ghi chung smart_chat theo người bấm)', () => {
+    afterEach(() => setAiCallObserver(null));
+
+    it('runChat nhận feature + actorUserId: sổ token ghi đúng feature, actorUserId trong metadata, token tính cho userId (= CHỦ); sổ lỗi bền cũng nhận feature/chủ/actor', async () => {
+      const events = [];
+      setAiCallObserver((event) => { events.push(event); });
+      global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"Bạn là trợ lý."}'));
+
+      await runChat({
+        systemPrompt: 'sys prompt',
+        history: [{ role: 'user', content: 'Viết chỉ dẫn' }],
+        userId: 101, // CHỦ workspace
+        actorUserId: 55, // nhân viên bấm
+        feature: 'ai_generate_system_instruction',
+      });
+
+      expect(record).toHaveBeenCalledWith(
+        101,
+        expect.objectContaining({ totalTokens: 8202 }),
+        { feature: 'ai_generate_system_instruction', model: 'gemini-2.5-flash', actorUserId: 55 },
+      );
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({ feature: 'ai_generate_system_instruction', ownerUserId: 101, actorUserId: 55, outcome: 'ok' });
+    });
+
+    it('không truyền feature/actor (trợ lý chiến dịch) → vẫn smart_chat và KHÔNG thêm actorUserId (hình dạng cũ không đổi)', async () => {
+      const events = [];
+      setAiCallObserver((event) => { events.push(event); });
+      global.fetch.mockResolvedValueOnce(googleOk('{"type":"text","content":"Chào bạn"}'));
+
+      await runChat({ systemPrompt: 'sys', history: [{ role: 'user', content: 'Xin chào' }], userId: 101 });
+
+      expect(record).toHaveBeenCalledWith(101, expect.anything(), { feature: 'smart_chat', model: 'gemini-2.5-flash' });
+      expect(events[0]).toMatchObject({ feature: 'smart_chat', ownerUserId: 101, actorUserId: null });
+    });
   });
 
   it('khi response bình thường: gọi parseAiJson và ghi nhận usage', async () => {

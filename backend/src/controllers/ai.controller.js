@@ -1605,7 +1605,9 @@ class AiController {
       }
 
       const data = await generateChatbotSystemInstruction({
-        userId: req.user.id,
+        // D-23: chi phí + hồ sơ doanh nghiệp theo CHỦ workspace; người bấm (nhân viên) nằm ở actorUserId trong metadata sổ token.
+        userId: resolveWorkspaceOwnerId(req.user),
+        actorUserId: req.user.id,
         hint: trimmedHint,
         language,
       });

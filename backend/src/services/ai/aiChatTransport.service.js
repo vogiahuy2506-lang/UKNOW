@@ -279,8 +279,10 @@ export async function runChat({
     // không có (record tự bỏ qua khi Google không báo token). Ghi theo model THẬT đã trả lời (có thể là model dự phòng).
     try {
       await aiUsageMeter.record(userId, result.usage, {
-        feature: 'smart_chat',
+        feature,
         model: result.modelUsed || modelName,
+        // Nơi gọi truyền `userId` = CHỦ workspace thì người bấm thật nằm ở metadata (D-23); không truyền thì `record` tự đặt actor = userId.
+        ...(actorUserId != null ? { actorUserId } : {}),
       });
     } catch {
       // record() thật tự nuốt lỗi ghi sổ; chặn thêm ở đây để một lần ghi hụt không bao giờ làm hỏng câu trả lời của trợ lý.
