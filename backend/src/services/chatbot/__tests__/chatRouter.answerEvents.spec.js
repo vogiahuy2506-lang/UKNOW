@@ -72,6 +72,10 @@ describe('chatbot trả lời khách → sự kiện chatbot_answer (A P2-10)', 
     getFormattedProfileForPrompt.mockReset().mockResolvedValue('');
     assertAvailable.mockReset().mockResolvedValue({ skip: false });
     consume.mockReset().mockResolvedValue(undefined);
+    // Lịch sử hội thoại của kênh Zalo/Telegram cá nhân đọc THẲNG CSDL (repository zaloPersonal/telegram — spec này không giả chúng). Không chặn ở đây thì
+    // ca nào đi qua `routeMessageWithSettings` với kênh đó sẽ chờ kết nối CSDL thật: máy có Postgres chạy thì lỗi nhanh, máy/CI không có thì treo tới hết
+    // 5 giây của jest (5 ca treo đúng 5000 ms khi chạy riêng, chỉ lộ khi CSDL không với tới được). Lịch sử không phải thứ spec này kiểm.
+    jest.spyOn(chatRouterService, '_getHistory').mockResolvedValue([]);
     callAI = jest.spyOn(chatRouterService, '_callAI').mockResolvedValue({ text: 'Khoá Python giá 2.9tr nhé', usage: { totalTokens: 1234 }, modelUsed: 'gemini-x' });
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
