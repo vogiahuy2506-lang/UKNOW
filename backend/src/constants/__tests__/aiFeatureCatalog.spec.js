@@ -23,18 +23,21 @@ describe('aiFeatureCatalog - ma tinh nang -> nhom (PR-8)', () => {
     campaign_slots: 'campaign', // dien noi dung chien dich bang LLM (slot filler)
     kb_ocr: 'embedding', // doc chu trong anh / PDF quet khi nap tai lieu: "Nap tai lieu (khong tinh luot)"
     hero_consultation: 'hero', // chat tu van trang chu cho khach vang lai (id_user NULL)
+    // PR-10 (D-22, D-23): hai ma moi
+    ai_generate_system_instruction: 'assistant', // "AI viet ho" chi dan chatbot - truoc day ghi chung smart_chat
+    admin_plan_translate: 'help', // dich tinh nang goi (cong cu admin) - nhom help de khong tinh la "khach dang dung AI"
   };
 
   it.each(Object.entries(EXPECTED))('%s -> %s', (code, group) => {
     expect(resolveAiFeatureGroup(code)).toBe(group);
   });
 
-  it('bang chi co dung 12 ma da biet (them ma moi phai cap nhat ca test nay)', () => {
+  it('bang chi co dung 14 ma da biet (them ma moi phai cap nhat ca test nay)', () => {
     expect(AI_FEATURE_GROUP_BY_CODE).toEqual(EXPECTED);
   });
 
   it('nhom tro giup: moi ma help_* (route/answer/answer_soft/plan_advice/translate)', () => {
-    for (const code of ['help_route', 'help_answer', 'help_answer_soft', 'help_plan_advice', 'help_translate']) {
+    for (const code of ['help_route', 'help_answer', 'help_answer_soft', 'help_plan_advice', 'help_translate', 'help_translate_caption']) {
       expect(resolveAiFeatureGroup(code)).toBe('help');
     }
   });
@@ -76,5 +79,11 @@ describe('aiFeatureCatalog - ma tinh nang -> nhom (PR-8)', () => {
     const group = resolveAiFeatureGroup('hero_consultation');
     expect(groupCountsAsCall(group)).toBe(true);
     expect(groupCountsAsCustomerUse(group)).toBe(false);
+  });
+
+  it('PR-10: dich tinh nang goi cua admin la luot goi nhung KHONG tinh la khach dang dung AI; AI viet ho chi dan tinh la khach dung AI', () => {
+    expect(groupCountsAsCall(resolveAiFeatureGroup('admin_plan_translate'))).toBe(true);
+    expect(groupCountsAsCustomerUse(resolveAiFeatureGroup('admin_plan_translate'))).toBe(false);
+    expect(groupCountsAsCustomerUse(resolveAiFeatureGroup('ai_generate_system_instruction'))).toBe(true);
   });
 });

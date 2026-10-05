@@ -31,6 +31,11 @@ export const AI_FEATURE_GROUP_BY_CODE = Object.freeze({
   chatbot_reply: AI_FEATURE_GROUPS.CHATBOT,
   kb_chat: AI_FEATURE_GROUPS.CHATBOT,
   smart_chat: AI_FEATURE_GROUPS.ASSISTANT,
+  // "AI viết hộ" chỉ dẫn cho chatbot (D-23, PR-10): trước đây ghi chung `smart_chat` — giữ nhóm "Trợ lý AI" để báo cáo không đứt mạch.
+  ai_generate_system_instruction: AI_FEATURE_GROUPS.ASSISTANT,
+  // Dịch dòng tính năng gói (công cụ ADMIN, D-22): nhóm trợ giúp/tư vấn gói — nhóm này không tính là "khách đang dùng AI" nên một admin bấm
+  // dịch không làm số khách dùng AI nhích lên (rơi về `other` thì CÓ tính).
+  admin_plan_translate: AI_FEATURE_GROUPS.HELP,
   landing_page: AI_FEATURE_GROUPS.LANDING,
   landing_template: AI_FEATURE_GROUPS.LANDING,
   campaign_script: AI_FEATURE_GROUPS.CAMPAIGN,
@@ -47,7 +52,7 @@ export const AI_FEATURE_GROUP_BY_CODE = Object.freeze({
 /**
  * Nhóm của một dòng usage. Embedding nhận diện theo `kind = 'embedding'` HOẶC tiền tố `embedding` của mã
  * (`embedding_rag_query`, `embedding_kb_ingest`, …; mã mặc định khi người gọi không đặt là `embedding`).
- * Trợ giúp: tiền tố `help_` (`help_route`, `help_answer`, `help_answer_soft`, `help_plan_advice`, `help_translate`).
+ * Trợ giúp: tiền tố `help_` (`help_route`, `help_answer`, `help_answer_soft`, `help_plan_advice`, `help_translate`, `help_translate_caption`).
  *
  * @param {string|null|undefined} feature `metadata.feature`
  * @param {string|null|undefined} [kind] `metadata.kind`
