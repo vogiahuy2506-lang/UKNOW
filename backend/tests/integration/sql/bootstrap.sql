@@ -4041,3 +4041,21 @@ CREATE TABLE IF NOT EXISTS member_channel_accounts (
 );
 CREATE INDEX IF NOT EXISTS idx_member_channel_accounts_employee ON member_channel_accounts (owner_id, employee_id, channel);
 CREATE INDEX IF NOT EXISTS idx_member_channel_accounts_ref ON member_channel_accounts (channel, account_ref);
+
+-- --- Migration 285: ai_call_events (PLAN_SUA_AI_DOT4_PR10 D-15: so ghi ben cac lan goi AI thanh/bai) ---
+CREATE TABLE IF NOT EXISTS ai_call_events (
+  id            BIGSERIAL    PRIMARY KEY,
+  created_at    TIMESTAMPTZ  NOT NULL DEFAULT NOW(),
+  owner_user_id BIGINT       NULL,
+  actor_user_id BIGINT       NULL,
+  layer         VARCHAR(10)  NOT NULL DEFAULT 'gemini',
+  feature       VARCHAR(60)  NOT NULL,
+  model         VARCHAR(80)  NULL,
+  outcome       VARCHAR(20)  NOT NULL,
+  http_status   INTEGER      NULL,
+  error_code    VARCHAR(60)  NULL,
+  duration_ms   INTEGER      NULL,
+  meta          JSONB        NOT NULL DEFAULT '{}'::jsonb
+);
+CREATE INDEX IF NOT EXISTS idx_ai_call_events_created ON ai_call_events (created_at);
+CREATE INDEX IF NOT EXISTS idx_ai_call_events_feature_created ON ai_call_events (feature, created_at);
