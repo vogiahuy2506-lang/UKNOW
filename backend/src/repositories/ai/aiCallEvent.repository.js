@@ -1,4 +1,5 @@
 import db from '../../config/database.js';
+import { AI_CALL_COUNTED_OUTCOMES_SQL, AI_CALL_FAILED_OUTCOMES_SQL } from '../../utils/aiCallOutcomes.util.js';
 
 /**
  * Ghi MỘT sự kiện vào `ai_call_events` (migration 285). Đầu vào đã được service chuẩn hoá/ép kiểu — repository không tự sửa.
@@ -53,4 +54,27 @@ export async function deleteOlderThanDays(days, batchSize = 1000) {
     if (deleted < limit) break;
   }
   return total;
+}
+
+/**
+ * Tóm tắt `hours` giờ gần nhất cho ô "Lỗi AI" ở trang admin: số lần gọi Gemini thật, số lỗi, số lần phải dùng model dự phòng, số lần ghi usage hỏng.
+ */
+export async function getErrorSummarySince(hours = 24) {
+  const { rows } = await db.query(
+    `SELECT
+       COUNT(*) FILTER (WHERE layer = 'gemini' AND outcome IN (${AI_CALL_COUNTED_OUTCOMES_SQL}))::int AS total,
+       COUNT(*) FILTER (WHERE layer = 'gemini' AND outcome IN (${AI_CALL_FAILED_OUTCOMES_SQL}))::int AS failed,
+       COUNT(*) FILTER (WHERE layer = 'gemini' AND outcome = 'fallback_ok')::int AS fallback,
+       COUNT(*) FILTER (WHERE error_code = 'USAGE_WRITE_FAILED')::int AS usage_write_failed
+     FROM ai_call_events
+     WHERE created_at >= NOW() - ($1 || ' hours')::interval`,
+    [String(hours)],
+  );
+  const row = rows[0] || {};
+  return {
+    total: Number(row.total || 0),
+    failed: Number(row.failed || 0),
+    fallback: Number(row.fallback || 0),
+    usageWriteFailed: Number(row.usage_write_failed || 0),
+  };
 }

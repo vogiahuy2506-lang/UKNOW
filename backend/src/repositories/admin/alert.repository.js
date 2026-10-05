@@ -1,6 +1,7 @@
 import db from '../../config/database.js';
 import { stuckEinvoiceKindSql } from '../payment/einvoice.repository.js';
 import { safeMetadataTimestampSql } from '../../utils/metadataTimestampSql.util.js';
+import { AI_CALL_COUNTED_OUTCOMES_SQL, AI_CALL_FAILED_OUTCOMES_SQL } from '../../utils/aiCallOutcomes.util.js';
 
 const SAFE_STALLED_QUOTA_DEFER_UNTIL_SQL = safeMetadataTimestampSql(
   "cr.run_metadata->>'quotaDeferredUntil'"
@@ -532,8 +533,8 @@ export async function metricAiTokenSpike() {
 export async function metricAiErrorRate(windowMinutes) {
   const { rows } = await db.query(
     `SELECT
-       COUNT(*) FILTER (WHERE outcome IN ('ok', 'fallback_ok', 'error', 'busy', 'timeout'))::int AS total,
-       COUNT(*) FILTER (WHERE outcome IN ('error', 'busy', 'timeout'))::int AS failed
+       COUNT(*) FILTER (WHERE outcome IN (${AI_CALL_COUNTED_OUTCOMES_SQL}))::int AS total,
+       COUNT(*) FILTER (WHERE outcome IN (${AI_CALL_FAILED_OUTCOMES_SQL}))::int AS failed
      FROM ai_call_events
      WHERE layer = 'gemini'
        AND created_at >= NOW() - ($1 || ' minutes')::interval`,
@@ -554,7 +555,7 @@ export async function metricAiErrorBreakdown(windowMinutes) {
     db.query(
       `SELECT feature, COUNT(*)::int AS failed
        FROM ai_call_events
-       WHERE layer = 'gemini' AND outcome IN ('error', 'busy', 'timeout')
+       WHERE layer = 'gemini' AND outcome IN (${AI_CALL_FAILED_OUTCOMES_SQL})
          AND created_at >= NOW() - ($1 || ' minutes')::interval
        GROUP BY feature ORDER BY failed DESC, feature ASC LIMIT 3`,
       [window]
@@ -562,7 +563,7 @@ export async function metricAiErrorBreakdown(windowMinutes) {
     db.query(
       `SELECT COALESCE(error_code, outcome) AS code, COUNT(*)::int AS failed
        FROM ai_call_events
-       WHERE layer = 'gemini' AND outcome IN ('error', 'busy', 'timeout')
+       WHERE layer = 'gemini' AND outcome IN (${AI_CALL_FAILED_OUTCOMES_SQL})
          AND created_at >= NOW() - ($1 || ' minutes')::interval
        GROUP BY 1 ORDER BY failed DESC, code ASC LIMIT 3`,
       [window]

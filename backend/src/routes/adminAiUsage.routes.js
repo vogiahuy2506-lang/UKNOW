@@ -9,5 +9,6 @@ router.use(authMiddleware);
 router.use(requireRole('admin'));
 
 router.get('/overview', ctrl.overview);
+router.get('/errors', ctrl.errors);
 
 export default router;

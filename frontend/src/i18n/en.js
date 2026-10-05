@@ -9273,6 +9273,8 @@ Feel free to ask me anything!`,
       costPerCallSub: 'AI cost ÷ AI calls',
       customers: 'Customers using AI',
       customersSub: 'At least 1 call (excluding document ingestion and help)',
+      errors: 'AI errors, last 24 hours',
+      errorsSub: 'Failed / total real Gemini calls (customer tab closes excluded). Fallback model used: {fallback} · token log write failures: {writeFailed}',
     },
   },
 

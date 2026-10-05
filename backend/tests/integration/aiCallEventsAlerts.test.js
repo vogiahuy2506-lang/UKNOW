@@ -19,6 +19,7 @@ import {
 import { evaluateRuleForTests, AI_ALERT_DEFAULTS } from '../../src/services/admin/alertEvaluator.service.js';
 import { recordAiCallEvent } from '../../src/services/ai/aiCallEvents.service.js';
 import { deleteOlderThanDays } from '../../src/repositories/ai/aiCallEvent.repository.js';
+import { getAiErrorSummary } from '../../src/services/ai/aiCallEvents.service.js';
 import { cleanupAiCallEvents } from '../../src/services/admin/dataRetentionCleanup.service.js';
 
 const originalFlag = process.env.AI_CALL_EVENTS_ENABLED;
@@ -183,6 +184,36 @@ describe('metricAiUsageWriteFailed — SQL thật', () => {
     expect(await evaluateRuleForTests(rule)).toBeNull();
     await seed([{ layer: 'app', outcome: 'error', errorCode: 'USAGE_WRITE_FAILED', meta: { totalTokens: 7 } }]);
     expect((await evaluateRuleForTests(rule)).measuredValue).toBe(1);
+  });
+});
+
+describe('ô "Lỗi AI 24 giờ" của trang admin (getAiErrorSummary) — SQL thật, cùng định nghĩa với luật cảnh báo', () => {
+  it('đếm 24 giờ: lỗi / tổng lần gọi Gemini thật, dự phòng, ghi usage hỏng; loại client_closed/blocked/tầng app/dòng cũ hơn 24 giờ; khớp metricAiErrorRate', async () => {
+    await seed([
+      ...many(30, { outcome: 'ok', agoMinutes: 200 }),
+      ...many(3, { outcome: 'fallback_ok', agoMinutes: 300 }),
+      ...many(4, { outcome: 'error', agoMinutes: 400 }),
+      { outcome: 'busy', agoMinutes: 500 },
+      { outcome: 'timeout', agoMinutes: 600 },
+      ...many(5, { outcome: 'client_closed', agoMinutes: 100 }),
+      { outcome: 'blocked', agoMinutes: 100 },
+      ...many(8, { layer: 'app', outcome: 'error', agoMinutes: 100 }),
+      ...many(9, { outcome: 'error', agoMinutes: 60 * 30 }), // 30 giờ trước: ngoài cửa sổ 24 giờ
+      { layer: 'app', outcome: 'error', errorCode: 'USAGE_WRITE_FAILED', agoMinutes: 50, meta: { totalTokens: 5 } },
+    ]);
+
+    const summary = await getAiErrorSummary({ hours: 24 });
+
+    expect(summary).toMatchObject({ windowHours: 24, total: 39, failed: 6, fallback: 3, usageWriteFailed: 1 });
+    expect(summary.rate).toBeCloseTo(6 / 39, 6);
+    // CÙNG số với luật cảnh báo cho cùng cửa sổ: ô admin và email cảnh báo không được lệch nhau.
+    const alertView = await metricAiErrorRate(24 * 60);
+    expect({ total: alertView.total, failed: alertView.failed }).toEqual({ total: summary.total, failed: summary.failed });
+    expect(summary.writer).toEqual(expect.objectContaining({ written: expect.any(Number), writeFailed: expect.any(Number), dropped: expect.any(Number) }));
+  });
+
+  it('chưa có dữ liệu → 0 lượt, tỉ lệ null (không chia cho 0)', async () => {
+    expect(await getAiErrorSummary({ hours: 24 })).toMatchObject({ total: 0, failed: 0, fallback: 0, usageWriteFailed: 0, rate: null });
   });
 });
 

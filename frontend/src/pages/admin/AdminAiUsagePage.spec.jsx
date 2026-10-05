@@ -3,10 +3,10 @@ import { describe, it, expect, vi } from 'vitest';
 import { I18nProvider } from '../../i18n';
 import AdminAiUsagePage from './AdminAiUsagePage';
 
-const { mockGetOverview } = vi.hoisted(() => ({ mockGetOverview: vi.fn() }));
+const { mockGetOverview, mockGetErrors24h } = vi.hoisted(() => ({ mockGetOverview: vi.fn(), mockGetErrors24h: vi.fn() }));
 
 vi.mock('../../features/admin/services/adminAiUsageApi.service', () => ({
-  default: { getOverview: mockGetOverview },
+  default: { getOverview: mockGetOverview, getErrors24h: mockGetErrors24h },
 }));
 
 const plan = (over) => ({
@@ -350,5 +350,39 @@ describe('AdminAiUsagePage - Chi tiet ky thuat gap mac dinh', () => {
     fireEvent.click(toggle);
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(screen.queryByText('Theo model')).toBeNull();
+  });
+});
+
+// PR-10 (PLAN_SUA_AI_DOT4_PR10 muc 8): o "Loi AI 24 gio" doc tu so loi AI ben (ai_call_events), khong lam trang moi.
+describe('AdminAiUsagePage - o "Loi AI 24 gio"', () => {
+  const renderWithErrors = () => {
+    mockGetOverview.mockResolvedValue({ data: { data: { windowDays: 30, summary: {}, timeline: [], byPlan: [], byFeature: [], byModel: [], topUsers: [] } } });
+    return render(
+      <I18nProvider defaultLocale="vi">
+        <AdminAiUsagePage />
+      </I18nProvider>
+    );
+  };
+
+  it('hien "N / tong M (x%)" kem so lan dung model du phong va ghi token hong', async () => {
+    mockGetErrors24h.mockResolvedValue({ data: { data: { windowHours: 24, total: 200, failed: 30, rate: 0.15, fallback: 4, usageWriteFailed: 2 } } });
+    renderWithErrors();
+    expect(await screen.findByText('Lỗi AI 24 giờ')).toBeTruthy();
+    expect(screen.getByText('30 / 200 (15.0%)')).toBeTruthy();
+    expect(screen.getByText(/Dùng model dự phòng: 4 · ghi token hỏng: 2/)).toBeTruthy();
+  });
+
+  it('chua co lan goi nao (rate null) hien "0 / 0 (—)", khong phai 0%', async () => {
+    mockGetErrors24h.mockResolvedValue({ data: { data: { windowHours: 24, total: 0, failed: 0, rate: null, fallback: 0, usageWriteFailed: 0 } } });
+    renderWithErrors();
+    expect(await screen.findByText('0 / 0 (—)')).toBeTruthy();
+  });
+
+  it('tai o loi that bai -> an o, trang chi phi van hien binh thuong', async () => {
+    mockGetErrors24h.mockRejectedValue(new Error('500'));
+    renderWithErrors();
+    await waitFor(() => expect(mockGetErrors24h).toHaveBeenCalled());
+    await screen.findByText('Chi phí AI');
+    expect(screen.queryByText('Lỗi AI 24 giờ')).toBeNull();
   });
 });

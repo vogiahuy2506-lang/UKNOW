@@ -72,6 +72,23 @@ export function getAiCallEventStats() {
   return { ...stats, inFlight };
 }
 
+/**
+ * Dữ liệu cho ô "Lỗi AI 24 giờ" ở trang admin (đọc từ bảng `ai_call_events`, không làm trang mới): số lần gọi Gemini thật, số lỗi (error + busy + timeout),
+ * tỉ lệ, số lần phải dùng model dự phòng, số lần ghi usage hỏng — kèm bộ đếm RAM của chính việc ghi sổ (ghi hỏng / bỏ vì quá tải từ lúc khởi động).
+ * Cùng định nghĩa "lần gọi tính vào tỉ lệ lỗi" với luật cảnh báo (repository dùng chung hằng outcome).
+ *
+ * @param {{ hours?: number }} [options]
+ */
+export async function getAiErrorSummary({ hours = 24 } = {}) {
+  const summary = await aiCallEventRepo.getErrorSummarySince(hours);
+  return {
+    windowHours: hours,
+    ...summary,
+    rate: summary.total > 0 ? summary.failed / summary.total : null,
+    writer: getAiCallEventStats(),
+  };
+}
+
 /** Chỉ cho test. */
 export function resetAiCallEventStatsForTest() {
   stats.written = 0;

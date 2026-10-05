@@ -9285,6 +9285,8 @@ export default {
       costPerCallSub: 'Chi phí AI ÷ lượt gọi AI',
       customers: 'Khách đang dùng AI',
       customersSub: 'Có ≥ 1 lượt gọi (không kể nạp tài liệu, trợ giúp)',
+      errors: 'Lỗi AI 24 giờ',
+      errorsSub: 'Lỗi / tổng lần gọi Gemini thật (không kể khách đóng tab). Dùng model dự phòng: {fallback} · ghi token hỏng: {writeFailed}',
     },
   },
 

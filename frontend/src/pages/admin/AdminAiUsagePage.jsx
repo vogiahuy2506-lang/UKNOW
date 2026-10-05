@@ -38,6 +38,7 @@ const KpiCard = ({ icon: Icon, label, value, sub, tone = 'orange' }) => {
     green: 'bg-emerald-50 text-emerald-600',
     blue: 'bg-blue-50 text-blue-600',
     purple: 'bg-violet-50 text-violet-600',
+    red: 'bg-red-50 text-red-600',
   };
   return (
     <div className="card p-5">
@@ -89,10 +90,22 @@ export default function AdminAiUsagePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [showTechnical, setShowTechnical] = useState(false);
+  // Ô "Lỗi AI 24 giờ" (sổ lỗi AI bền ai_call_events). Tải riêng, lỗi thì chỉ ẩn ô — không làm hỏng trang chi phí.
+  const [errors24h, setErrors24h] = useState(null);
+
+  const fetchErrors = useCallback(async () => {
+    try {
+      const res = await adminAiUsageApiService.getErrors24h?.();
+      setErrors24h(res?.data?.data || null);
+    } catch {
+      setErrors24h(null);
+    }
+  }, []);
 
   const fetchData = useCallback(async () => {
     setError('');
     setLoading(true);
+    fetchErrors();
     try {
       const res = await adminAiUsageApiService.getOverview(range);
       setData(res.data.data);
@@ -101,7 +114,7 @@ export default function AdminAiUsagePage() {
     } finally {
       setLoading(false);
     }
-  }, [t, range]);
+  }, [t, range, fetchErrors]);
 
   useEffect(() => {
     fetchData();
@@ -183,7 +196,7 @@ export default function AdminAiUsagePage() {
         </p>
       )}
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3 xl:grid-cols-5">
         <KpiCard
           icon={HiOutlineCash}
           label={t('adminAiUsage.kpi.cost')}
@@ -212,6 +225,15 @@ export default function AdminAiUsagePage() {
           sub={t('adminAiUsage.kpi.customersSub')}
           tone="blue"
         />
+        {errors24h && (
+          <KpiCard
+            icon={HiOutlineExclamation}
+            label={t('adminAiUsage.kpi.errors')}
+            value={`${fmt(errors24h.failed)} / ${fmt(errors24h.total)} (${errors24h.rate === null || errors24h.rate === undefined ? '—' : fmtPct(errors24h.rate * 100)})`}
+            sub={t('adminAiUsage.kpi.errorsSub', { fallback: fmt(errors24h.fallback), writeFailed: fmt(errors24h.usageWriteFailed) })}
+            tone={errors24h.failed > 0 ? 'red' : 'green'}
+          />
+        )}
       </div>
 
       <div className="card p-5">
