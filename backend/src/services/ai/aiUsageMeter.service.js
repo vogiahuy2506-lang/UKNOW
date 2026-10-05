@@ -116,6 +116,10 @@ class AiUsageMeterService {
       fallbackModel,
       systemInstruction,
       maxOutputTokens: reserved.maxOutputTokens,
+      // Chỉ để GHI SỔ BỀN `ai_call_events` (PR-10): tên tính năng + chủ/người thao tác của lượt gọi.
+      feature: feature ?? undefined,
+      ownerUserId: userId ?? null,
+      actorUserId: metadata?.actorUserId ?? null,
       ...options,
     });
     await this.record(userId, result.usage, {

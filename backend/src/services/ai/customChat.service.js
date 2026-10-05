@@ -98,6 +98,8 @@ class CustomChatService {
         ...CHAT_REPLY_BUDGET,
         timeoutMs: budgetLeftMs,
         totalTimeoutMs: budgetLeftMs,
+        feature: 'kb_chat',
+        ownerUserId: userId ?? null,
       });
       return { text: result.text, usage: result.usage, modelUsed: result.modelUsed };
     };

@@ -55,6 +55,7 @@ ${glossaryPromptBlock()}
     systemPrompt,
     userPrompt,
     temperature: 0.2,
+    feature: 'help_translate',
   };
 
   let text;
@@ -117,6 +118,7 @@ async function translateCaption(caption, userId) {
       temperature: 0.2,
       maxOutputTokens: 256,
       thinkingBudget: 0,
+      feature: 'help_translate_caption',
     });
     return String(text || caption).trim() || caption;
   } catch {

@@ -2,7 +2,8 @@
  * Gemini client util (Google Generative Language API).
  */
 
-import { createClientAbortError } from './aiAbort.util.js';
+import { createClientAbortError, isClientAbortError, AI_CLIENT_ABORTED_CODE } from './aiAbort.util.js';
+import { notifyAiCallFinished } from './aiCallObserver.util.js';
 
 const DEFAULT_MODEL = 'gemini-2.5-flash';
 
@@ -144,12 +145,14 @@ function redactSecret(text, secret) {
  * Hết lượt thử mà vẫn quá tải: đổi câu lỗi sang tiếng Việt cho khách, giữ câu gốc của Google ở
  * `providerMessage` để log máy chủ vẫn đọc được. Sửa tại chỗ (không tạo Error mới) để giữ stack.
  */
-function toProviderBusyError(err, attempts) {
+function toProviderBusyError(err, attempts, { fallbackTried = false } = {}) {
   err.providerMessage = err.message;
   err.message = AI_PROVIDER_BUSY_MESSAGE;
   err.code = AI_PROVIDER_BUSY_CODE;
   err.status = 503;
   err.attempts = attempts;
+  // Đã thử cả model dự phòng mà vẫn hỏng (sổ bền ai_call_events ghi cờ này: phân biệt "chính quá tải" với "cả hai đều quá tải").
+  if (fallbackTried) err.fallbackTried = true;
   return err;
 }
 
@@ -179,6 +182,84 @@ function shouldAttachThinkingBudget(thinkingBudget) {
   return Number.isFinite(thinkingBudget) && thinkingBudget >= 0;
 }
 
+function resolveModelName(model) {
+  return String(model || process.env.GEMINI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
+}
+
+/**
+ * Dựng sự kiện sổ bền (`ai_call_events`, tầng 'gemini') cho một lần gọi THÀNH CÔNG. Một lần gọi = đúng một sự kiện, kể cả khi lõi đã thử lại
+ * hoặc chuyển model dự phòng bên trong (đó là chi tiết của cùng một lần gọi, ghi ở `meta`).
+ *  - Google chặn nội dung (`blockReason`) → 'blocked' (có phản hồi nhưng rỗng; không tính là lỗi hệ thống);
+ *  - model dự phòng đã trả lời → 'fallback_ok' (model chính có vấn đề — cảnh báo `ai_fallback_spike` đếm loại này);
+ *  - còn lại → 'ok'.
+ */
+function describeCallResult(input, result, startedAt) {
+  const primaryModel = resolveModelName(input?.model);
+  const outcome = result?.blockReason ? 'blocked' : (result?.fallbackUsed ? 'fallback_ok' : 'ok');
+  return {
+    source: 'generate',
+    feature: input?.feature,
+    model: result?.modelUsed || primaryModel,
+    outcome,
+    httpStatus: null,
+    errorCode: result?.blockReason ? String(result.blockReason) : null,
+    durationMs: Date.now() - startedAt,
+    ownerUserId: input?.ownerUserId ?? null,
+    actorUserId: input?.actorUserId ?? null,
+    meta: {
+      finishReason: result?.finishReason,
+      fallbackUsed: Boolean(result?.fallbackUsed),
+      ...(result?.fallbackUsed ? { primaryModel } : {}),
+    },
+  };
+}
+
+/**
+ * Dựng sự kiện cho một lần gọi LỖI. Phân loại theo mã lỗi CỦA LÕI (không dò câu chữ):
+ *  - người dùng đóng kết nối → 'client_closed'; hết giờ → 'timeout'; hết lượt thử lại (kể cả dự phòng) còn quá tải → 'busy';
+ *  - còn lại → 'error' (404 model không còn → mã MODEL_NOT_FOUND để dò "model bị khai tử" bằng SQL).
+ * `httpStatus` là mã THẬT của Google (`geminiStatus`), không phải `status` tổng hợp 503 của lõi.
+ */
+function describeCallError(input, error, startedAt) {
+  const primaryModel = resolveModelName(input?.model);
+  let outcome = 'error';
+  let errorCode;
+  if (isClientAbortError(error)) {
+    outcome = 'client_closed';
+    errorCode = AI_CLIENT_ABORTED_CODE;
+  } else if (error?.code === AI_TIMEOUT_CODE) {
+    outcome = 'timeout';
+    errorCode = AI_TIMEOUT_CODE;
+  } else if (error?.code === AI_PROVIDER_BUSY_CODE) {
+    outcome = 'busy';
+    errorCode = AI_PROVIDER_BUSY_CODE;
+  } else if (isModelUnavailableError(error)) {
+    errorCode = 'MODEL_NOT_FOUND';
+  } else if (error?.code) {
+    errorCode = error.code;
+  } else if (error?.geminiStatus != null) {
+    errorCode = `GEMINI_${error.geminiStatus}`;
+  } else {
+    errorCode = 'UNKNOWN';
+  }
+  const attempts = Number(error?.attempts);
+  return {
+    source: 'generate',
+    feature: input?.feature,
+    model: primaryModel,
+    outcome,
+    httpStatus: error?.geminiStatus ?? null,
+    errorCode,
+    durationMs: Date.now() - startedAt,
+    ownerUserId: input?.ownerUserId ?? null,
+    actorUserId: input?.actorUserId ?? null,
+    meta: {
+      fallbackTried: Boolean(error?.fallbackTried || error?.fallbackError),
+      ...(Number.isFinite(attempts) ? { attempts } : {}),
+    },
+  };
+}
+
 /**
  * Gọi Gemini để sinh nội dung từ danh sách các parts (hỗ trợ multimodal).
  *
@@ -202,9 +283,27 @@ function shouldAttachThinkingBudget(thinkingBudget) {
  * @param {number|null} [input.thinkingBudget=0] — 0 tắt thinking; null/âm = để model tự quyết
  * @param {number[]} [input.retryDelaysMs] — nghỉ trước mỗi lần thử lại khi Google quá tải
  * @param {number} [input.retryBudgetMs] — quá mốc này (tính từ lượt đầu) thì thôi thử lại
+ * @param {string} [input.feature] — tên tính năng nơi gọi (vd 'chatbot_reply', 'landing_page'): chỉ để GHI SỔ BỀN `ai_call_events`
+ *   (PR-10); không ảnh hưởng cách gọi. Thiếu = 'unknown'.
+ * @param {number|null} [input.ownerUserId] — chủ workspace của lượt gọi (chỉ để ghi sổ; null = lượt không có chủ, vd khách vãng lai)
+ * @param {number|null} [input.actorUserId] — người thao tác thật (chỉ để ghi sổ)
  * @returns {Promise<{ text: string, finishReason: string, blockReason: string, usage: object, modelUsed: string, fallbackUsed: boolean, raw: object }>}
  */
-export async function generateGeminiContent({
+export async function generateGeminiContent(input = {}) {
+  const startedAt = Date.now();
+  let result;
+  try {
+    result = await runGeminiGeneration(input);
+  } catch (error) {
+    notifyAiCallFinished(() => describeCallError(input, error, startedAt));
+    throw error;
+  }
+  // Ngoài `try`: nếu dựng/gửi sự kiện hỏng thì cũng không được thành "lỗi Gemini" (`notifyAiCallFinished` tự nuốt mọi lỗi).
+  notifyAiCallFinished(() => describeCallResult(input, result, startedAt));
+  return result;
+}
+
+async function runGeminiGeneration({
   parts,
   contents = null,
   timeoutMs = 180000,
@@ -230,7 +329,7 @@ export async function generateGeminiContent({
     throw err;
   }
 
-  const modelName = String(model || process.env.GEMINI_MODEL || DEFAULT_MODEL).trim() || DEFAULT_MODEL;
+  const modelName = resolveModelName(model);
 
   const startedAt = Date.now();
   const deadline = Number.isFinite(totalTimeoutMs) && totalTimeoutMs > 0 ? startedAt + totalTimeoutMs : Infinity;
@@ -374,7 +473,7 @@ export async function generateGeminiContent({
         try {
           return await callFallback(cleanFallback);
         } catch (fallbackError) {
-          if (isRetryableGeminiError(fallbackError)) throw toProviderBusyError(fallbackError, 2);
+          if (isRetryableGeminiError(fallbackError)) throw toProviderBusyError(fallbackError, 2, { fallbackTried: true });
           error.fallbackError = fallbackError;
           throw error;
         }
@@ -396,9 +495,9 @@ export async function generateGeminiContent({
             return await callFallback(cleanFallback);
           } catch (fallbackError) {
             if (isRetryableGeminiError(fallbackError)) {
-              throw toProviderBusyError(fallbackError, attempt + 2);
+              throw toProviderBusyError(fallbackError, attempt + 2, { fallbackTried: true });
             }
-            const primaryBusyError = toProviderBusyError(error, attempt + 1);
+            const primaryBusyError = toProviderBusyError(error, attempt + 1, { fallbackTried: true });
             primaryBusyError.fallbackError = fallbackError;
             throw primaryBusyError;
           }
@@ -427,6 +526,7 @@ export async function generateGeminiContent({
  * @param {string} [input.model]
  * @param {string|null} [input.fallbackModel] — như `generateGeminiContent`: không truyền = lõi tự tra dự phòng hệ thống
  * @param {number|null} [input.thinkingBudget=0]
+ * @param {string} [input.feature] / `ownerUserId` / `actorUserId` — chỉ để ghi sổ bền (xem `generateGeminiContent`)
  */
 export async function generateGeminiText({
   prompt,
@@ -437,6 +537,9 @@ export async function generateGeminiText({
   model,
   fallbackModel,
   thinkingBudget = 0,
+  feature,
+  ownerUserId = null,
+  actorUserId = null,
 } = {}) {
   return generateGeminiContent({
     parts: [{ text: prompt }],
@@ -447,6 +550,9 @@ export async function generateGeminiText({
     model,
     fallbackModel,
     thinkingBudget,
+    feature,
+    ownerUserId,
+    actorUserId,
   });
 }
 

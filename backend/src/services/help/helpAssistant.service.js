@@ -265,6 +265,7 @@ Ví dụ (cả hai chiều):
     userPrompt: question,
     temperature: 0,
     timeoutMs: ROUTER_TIMEOUT_MS,
+    feature: 'help_route',
   };
 
   let text;
@@ -378,6 +379,7 @@ ${capabilityRulesForLocale(lang)}
       systemPrompt: softSystemPrompt,
       userPrompt: question,
       temperature: 0.3,
+      feature: 'help_answer_soft',
     };
     let softText;
     let softModel;
@@ -438,6 +440,7 @@ ${chunkBlock}`;
     systemPrompt,
     userPrompt: question,
     temperature: 0.3,
+    feature: 'help_answer',
   };
 
   let text;

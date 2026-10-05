@@ -100,6 +100,8 @@ async function runGeminiOcr(parts, { userId = null } = {}) {
       // Đồng hồ MỖI lượt và ngân sách TỔNG (kể cả thử lại + model dự phòng) cùng là 75 giây: lõi huỷ fetch đang chạy ĐÚNG hạn.
       timeoutMs: OCR_TOTAL_TIMEOUT_MS,
       totalTimeoutMs: OCR_TOTAL_TIMEOUT_MS,
+      feature: 'kb_ocr',
+      ownerUserId: userId,
     });
   } catch (err) {
     console.error('[FileExtractor] OCR Gemini lỗi:', err?.message || err);

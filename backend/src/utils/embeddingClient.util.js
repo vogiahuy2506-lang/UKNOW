@@ -6,6 +6,7 @@
 
 import aiUsageMeter from '../services/ai/aiUsageMeter.service.js';
 import { getFromCache, setToCache, getCacheKey, getCacheStats } from './embeddingCache.util.js';
+import { notifyAiCallFinished } from './aiCallObserver.util.js';
 
 const DEFAULT_EMBEDDING_MODEL = 'gemini-embedding-001';
 const DEFAULT_EMBEDDING_DIM = 768;
@@ -134,12 +135,57 @@ export async function embedText(text, options = {}) {
 }
 
 /**
- * Embed text trực tiếp (không cache).
+ * Dựng sự kiện sổ bền (`ai_call_events`, PR-10) cho MỘT lần gọi embedding thật tới Google (kết quả lấy từ cache KHÔNG qua đây nên không
+ * thành sự kiện). Phân loại theo trạng thái Google đã trả: 429/5xx sau hết lần thử lại → 'busy'; không có phản hồi (đứt mạng/hết giờ 20 giây)
+ * → 'timeout' nếu là hết giờ, còn lại 'error'. Không ghi nội dung văn bản — chỉ model, mã, thời gian.
+ */
+function describeEmbeddingCall(options, error, startedAt) {
+  const model = options.model || process.env.EMBEDDING_MODEL || DEFAULT_EMBEDDING_MODEL;
+  const base = {
+    source: 'embedding',
+    feature: options.feature || 'embedding',
+    model,
+    httpStatus: null,
+    errorCode: null,
+    durationMs: Date.now() - startedAt,
+    ownerUserId: options.userId ?? null,
+    actorUserId: null,
+    meta: {},
+  };
+  if (!error) return { ...base, outcome: 'ok' };
+  const upstream = Number(error.upstreamStatus);
+  if (Number.isFinite(upstream)) {
+    return {
+      ...base,
+      outcome: isRetryableStatus(upstream) ? 'busy' : 'error',
+      httpStatus: upstream,
+      errorCode: `EMBEDDING_${upstream}`,
+    };
+  }
+  if (error.timedOut) return { ...base, outcome: 'timeout', errorCode: 'EMBEDDING_TIMEOUT' };
+  return { ...base, outcome: 'error', errorCode: error.code || 'EMBEDDING_ERROR' };
+}
+
+/**
+ * Embed text trực tiếp (không cache). Mỗi lần gọi thật tới Google (xong hoặc lỗi) báo MỘT sự kiện cho sổ bền.
  * @param {string} text
  * @param {object} options
  * @returns {Promise<number[]>}
  */
 async function embedTextRaw(text, options = {}) {
+  const startedAt = Date.now();
+  let result;
+  try {
+    result = await embedTextRawUncounted(text, options);
+  } catch (error) {
+    notifyAiCallFinished(() => describeEmbeddingCall(options, error, startedAt));
+    throw error;
+  }
+  notifyAiCallFinished(() => describeEmbeddingCall(options, null, startedAt));
+  return result;
+}
+
+async function embedTextRawUncounted(text, options = {}) {
   const apiKey = String(process.env.GEMINI_API_KEY || '').trim();
   if (!apiKey) throw Object.assign(new Error('Thiếu GEMINI_API_KEY'), { status: 500 });
 
@@ -189,7 +235,7 @@ async function embedTextRaw(text, options = {}) {
   if (!response) {
     throw Object.assign(
       new Error(`Embedding API không phản hồi: ${lastNetworkError?.message || 'lỗi mạng'}`),
-      { status: 503 }
+      { status: 503, timedOut: lastNetworkError?.name === 'TimeoutError' }
     );
   }
 

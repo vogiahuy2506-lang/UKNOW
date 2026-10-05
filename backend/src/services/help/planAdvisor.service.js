@@ -348,6 +348,7 @@ export async function answerPlanAdvice({
     systemPrompt,
     userPrompt: String(question || '').trim(),
     temperature: 0.3,
+    feature: 'help_plan_advice',
   };
 
   let text = '';

@@ -227,7 +227,7 @@ export async function translateFeatures(req, res) {
     const prompt = `Translate the following Vietnamese SaaS plan feature strings into concise English. Return ONLY a JSON array of strings in the same order, no explanation.\n\n${list}`;
     // Không truyền model thì lớp gọi rơi về GEMINI_MODEL trong .env — tức bỏ qua model admin chọn.
     const model = await resolveAllowedModel(req.user?.id);
-    const { text } = await generateGeminiText({ prompt, model, maxOutputTokens: 1024, temperature: 0.1, jsonMode: true });
+    const { text } = await generateGeminiText({ prompt, model, maxOutputTokens: 1024, temperature: 0.1, jsonMode: true, feature: 'admin_plan_translate', ownerUserId: req.user?.id ?? null });
     const translations = JSON.parse(text);
     if (!Array.isArray(translations) || translations.length !== texts.length) {
       throw new Error('Gemini trả về kết quả không hợp lệ');

@@ -465,6 +465,8 @@ export async function fillContentSlots({
       temperature: 0.7,
       timeoutMs: 30000,
       model: modelName,
+      feature: 'campaign_slots',
+      ownerUserId: userId ?? null,
     });
 
     // Ghi token `campaign_slots` NGAY sau lời gọi, trước mọi nhánh trả về lỗi bên dưới (rỗng / JSON hỏng / không đạt chất

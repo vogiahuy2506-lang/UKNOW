@@ -332,6 +332,9 @@ ${conversationContexts.join('\n\n')}
       jsonMode: true,
       maxOutputTokens: 8192,
       temperature: 0.2,
+      feature: 'inbox_ai_summary',
+      ownerUserId: userId ?? null,
+      actorUserId: actorUserId ?? null,
     });
 
     if (userId) {

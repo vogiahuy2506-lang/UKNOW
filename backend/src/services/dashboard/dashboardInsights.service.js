@@ -861,6 +861,8 @@ class DashboardInsightsService {
         totalTimeoutMs: budgetMs,
         jsonMode: true,
         maxOutputTokens: resolveInsightMaxOutputTokens(insightModel),
+        feature: 'dashboard_insights',
+        ownerUserId: userId || null,
       });
       // Ghi token cho dashboard admin (credit user đã trừ ở route /dashboard/insights).
       // record() tự nuốt lỗi nên không ảnh hưởng luồng insight.

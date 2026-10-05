@@ -292,6 +292,8 @@ class ChatRouterService {
       maxOutputTokens,
       thinkingBudget: 0,
       ...CHAT_REPLY_BUDGET,
+      feature: 'chatbot_reply',
+      ownerUserId: userId,
     });
     const textResponse = result.text;
     console.log(`[ChatRouter] _callAI: response after ${Date.now() - t0}ms (model=${result.modelUsed}), candidates=${result.raw?.candidates?.length || 0}, text-len=${textResponse.length}`);

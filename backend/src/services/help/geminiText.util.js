@@ -26,6 +26,7 @@ export async function generateGeminiText({
   maxOutputTokens = 1024,
   thinkingBudget = null,
   timeoutMs = DEFAULT_TIMEOUT_MS,
+  feature = 'help',
 } = {}) {
   const modelName = await resolveAllowedModel(userId, null);
   const fallbackModel = await aiUsageMeter.resolveFallbackModel();
@@ -41,6 +42,8 @@ export async function generateGeminiText({
     thinkingBudget, // null (mặc định) = không gửi thinkingConfig; số ≥ 0 thì lõi tự gỡ khi model từ chối
     timeoutMs,
     totalTimeoutMs: timeoutMs,
+    feature, // chỉ để ghi sổ bền `ai_call_events` (PR-10); nơi gọi nào không truyền thì là 'help'
+    ownerUserId: userId ?? null,
   });
 
   return {

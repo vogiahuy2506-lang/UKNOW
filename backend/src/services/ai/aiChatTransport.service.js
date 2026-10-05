@@ -85,6 +85,9 @@ const droppedGoogleUrlNote = () => ({
  *   `'all'`: hành vi cũ (đính lại tất cả) — chỉ trợ lý super admin dùng, vì hỏi-đáp nhiều lượt trên một tài liệu cần lại tệp cũ
  *   mà nhánh đó không có brief để lưu bản trích.
  * @param {string[]} [params.excludeGoogleUrls] — URL Google Sheet ĐÃ chọn làm nguồn người nhận: không bao giờ tải nội dung vào prompt.
+ * @param {string} [params.feature='smart_chat'] — tên tính năng ghi vào sổ token (`usage_logs`) VÀ sổ lỗi bền (`ai_call_events`). Mặc định 'smart_chat'
+ *   (trợ lý chiến dịch); các nơi gọi khác (vd viết chỉ dẫn chatbot) truyền tên riêng để chi phí/lỗi không lẫn với trợ lý (D-23).
+ * @param {number|null} [params.actorUserId] — người bấm thật khi `userId` là CHỦ workspace (ghi vào metadata sổ token). Thiếu = không ghi.
  * @param {boolean} [params.summarizeRecipientLists] — (C P1-6 (d), 04/10/2026) wizard đang ở bước nguồn người nhận (Sheet/tệp): tệp
  *   Excel/CSV và link Google Sheet ở TIN HIỆN TẠI mà bộ đọc người nhận tất định nhận ra là DANH SÁCH NGƯỜI NHẬN thì KHÔNG đính
  *   nguyên văn (tới 300 dòng Sheet / cả tệp không trần — tên/SĐT/email khách cuối) mà chỉ đính bản tóm tắt: số email/SĐT hợp lệ, số
@@ -101,6 +104,8 @@ export async function runChat({
   historyAttachments = 'current',
   excludeGoogleUrls = [],
   summarizeRecipientLists = false,
+  feature = 'smart_chat',
+  actorUserId = null,
 } = {}) {
   const fileOwnerId = ownerUserId ?? userId;
   const googleUrlCache = new Map();
@@ -264,6 +269,9 @@ export async function runChat({
       thinkingBudget: null,
       timeoutMs: ASSISTANT_TIMEOUT_MS,
       totalTimeoutMs: ASSISTANT_TIMEOUT_MS,
+      feature,
+      ownerUserId: userId,
+      actorUserId,
     });
 
     // Ghi token NGAY sau khi Google trả lời, TRƯỚC mọi kiểm tra kết quả (D-07): Google tính tiền cả lượt bị cắt

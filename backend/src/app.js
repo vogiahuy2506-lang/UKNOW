@@ -9,6 +9,9 @@ import { createAccessLogMiddleware, redactUrlSecrets } from './utils/accessLog.u
 import cookieParser from 'cookie-parser';
 import { globalLimiter, webhookLimiter } from './middleware/rateLimiter.middleware.js';
 import { attachUserIdForRateLimit } from './middleware/auth.middleware.js';
+// Gắn sổ bền các lần gọi AI (bảng ai_call_events) vào lõi Gemini/embedding KHI NẠP. Import tường minh (không trông vào chuỗi import gián tiếp):
+// thiếu dòng này thì mọi lần gọi AI âm thầm không còn được ghi sổ — spec `aiCallEvents.appLoad.spec.js` ghim việc gắn.
+import './services/ai/aiCallEvents.service.js';
 
 import authRoutes from './routes/auth.routes.js';
 import userRoutes from './routes/user.routes.js';

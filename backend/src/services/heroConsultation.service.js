@@ -368,6 +368,7 @@ async function callGemini(prompt) {
     thinkingBudget: 0,
     timeoutMs: HERO_GEMINI_TIMEOUT_MS,
     totalTimeoutMs: HERO_GEMINI_TIMEOUT_MS,
+    feature: 'hero_consultation',
   });
 
   // Khách vãng lai không có tài khoản → ghi token với id_user NULL (migration 273), feature `hero_consultation`. Google tính
