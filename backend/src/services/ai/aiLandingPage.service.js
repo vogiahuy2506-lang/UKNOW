@@ -1,5 +1,6 @@
 import businessProfileService from './businessProfile.service.js';
 import aiUsageMeter from './aiUsageMeter.service.js';
+import { recordAiCallEvent, AI_CALL_LAYER, AI_CALL_OUTCOME } from './aiCallEvents.service.js';
 import { normalizeAssistantLocale } from '../../utils/assistantLocale.util.js';
 import {
   extractHtmlFromModelText,
@@ -134,6 +135,8 @@ function logLandingAiLifecycle({
   streamed = null,
   clientClosed = null,
   dedup = null,
+  userId = null,
+  actorUserId = null,
 }) {
   const fields = [
     `[LandingAI] ${event}`,
@@ -172,6 +175,63 @@ function logLandingAiLifecycle({
   // Đứng CUỐI dòng: chuỗi fakeImageUrls có độ dài tuỳ ý, các trường có định dạng cố định đứng trước.
   if (errorCode) fields.push(`errorCode=${errorCode}`);
   console.log(fields.join(' '));
+
+  // B-8 (PR-10 mục 3c): dòng `done` thành BẢN GHI BỀN (docker log mất mỗi lần deploy). Một dòng mỗi lượt sinh/sửa, tầng 'app' (chi tiết từng lần gọi
+  // Gemini nằm ở tầng 'gemini' — hai tầng không lẫn vào tỉ lệ lỗi của nhau). Chỉ số đếm + mã, KHÔNG nội dung trang/prompt. Không await, không ném.
+  if (event === 'done') {
+    try {
+      void recordAiCallEvent({
+        layer: AI_CALL_LAYER.APP,
+        feature: `landing_${mode}`,
+        outcome: classifyLandingDoneOutcome({ outcome, clientClosed, errorCode }),
+        errorCode: outcome === 'error' ? errorCode : null,
+        durationMs: Date.now() - startedAt,
+        ownerUserId: userId,
+        actorUserId,
+        meta: {
+          mode,
+          finishReason,
+          promptChars,
+          htmlChars,
+          outputTokens,
+          strategy,
+          patchEdits,
+          patchFail,
+          fakeImageRetry,
+          strippedImages,
+          unsafeRetry,
+          unsafeKinds,
+          shellFixed,
+          autoLayoutFix,
+          findings,
+          streamed,
+          clientClosed,
+        },
+      });
+    } catch {
+      // sổ bền không bao giờ được làm hỏng lượt sinh/sửa
+    }
+  }
+}
+
+/**
+ * Dòng `done` của lượt landing → `outcome` của sổ bền (B-8):
+ *  - thành công → ok;  khách đóng kết nối → client_closed;  AI_TIMEOUT → timeout;  AI_PROVIDER_BUSY → busy;
+ *  - chốt của ta chặn đầu ra của AI (mã LANDING_* như LANDING_UNSAFE_OUTPUT, LANDING_FAKE_IMAGE_URL, LANDING_FORM_PLACEHOLDER…) → blocked;
+ *  - AI trả về thứ không dùng được (bản vá hỏng LANDING_PATCH_*, hoặc 422 không mã: không phải HTML, thiếu DOCTYPE/Tailwind…) → parse_failed;
+ *  - còn lại → error.
+ * Hàm thuần — spec ghim từng nhánh.
+ */
+export function classifyLandingDoneOutcome({ outcome, clientClosed = null, errorCode = null } = {}) {
+  if (outcome !== 'error') return AI_CALL_OUTCOME.OK;
+  if (clientClosed === 1) return AI_CALL_OUTCOME.CLIENT_CLOSED;
+  const code = String(errorCode || '');
+  if (code === 'AI_CLIENT_ABORTED') return AI_CALL_OUTCOME.CLIENT_CLOSED;
+  if (code === 'AI_TIMEOUT') return AI_CALL_OUTCOME.TIMEOUT;
+  if (code === 'AI_PROVIDER_BUSY') return AI_CALL_OUTCOME.BUSY;
+  if (/^LANDING_PATCH_(INVALID|EMPTY|NOT_FOUND|AMBIGUOUS)$/.test(code) || code === 'HTTP_422') return AI_CALL_OUTCOME.PARSE_FAILED;
+  if (code.startsWith('LANDING_')) return AI_CALL_OUTCOME.BLOCKED;
+  return AI_CALL_OUTCOME.ERROR;
 }
 
 /**
@@ -905,7 +965,7 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         }
       }
 
-      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, clientClosed: clientClosedField({ streamed, signal }) });
+      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, userId, actorUserId, clientClosed: clientClosedField({ streamed, signal }) });
       return generationResult;
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
@@ -913,6 +973,8 @@ Ví dụ cấu trúc JSON (minh họa — không copy nội dung):
         event: 'done',
         outcome: 'error',
         ...telemetry,
+        userId,
+        actorUserId,
         clientClosed: clientClosedField({ streamed, signal, error }),
         errorCode: resolveLandingErrorCode(error),
       });
@@ -1411,7 +1473,7 @@ ${exampleLine}`;
         }
       }
 
-      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, clientClosed: clientClosedField({ streamed, signal }) });
+      logLandingAiLifecycle({ event: 'done', outcome: 'success', ...telemetry, userId, actorUserId, clientClosed: clientClosedField({ streamed, signal }) });
       return editResult;
     } catch (error) {
       if (error?.code === LANDING_UNSAFE_OUTPUT_CODE) telemetry.unsafeKinds = describeUnsafeKinds(error.details?.findings || []);
@@ -1419,6 +1481,8 @@ ${exampleLine}`;
         event: 'done',
         outcome: 'error',
         ...telemetry,
+        userId,
+        actorUserId,
         clientClosed: clientClosedField({ streamed, signal, error }),
         errorCode: resolveLandingErrorCode(error),
       });

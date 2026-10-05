@@ -32,6 +32,7 @@ import {
   LANDING_TURN_REGISTRY_MAX,
 } from '../../utils/landingTurnBudget.util.js';
 import { isClientAbortError } from '../../utils/aiAbort.util.js';
+import { recordAiCallEvent, AI_CALL_LAYER, AI_CALL_OUTCOME } from './aiCallEvents.service.js';
 
 export const NDJSON_CONTENT_TYPE = 'application/x-ndjson';
 
@@ -77,6 +78,27 @@ function sweepTurns(now = Date.now()) {
 }
 
 const ndjsonLine = (obj) => `${JSON.stringify(obj)}\n`;
+
+/**
+ * Sổ bền của LƯỢT (B-8, PR-10 mục 3c) — tầng 'app', feature `landing_<kind>_turn`. Chỉ ghi những gì tầng gọi Gemini và dòng `done` của
+ * aiLandingPage.service.js KHÔNG thấy được: khách đóng kết nối GIỮA các bước (kể cả sau khi AI đã chạy xong → ta đã trả tiền Google mà không
+ * trừ credit khách) và các lần bám vào lượt có sẵn theo `requestId` (dedup). Không bao giờ ném, không chờ.
+ */
+function recordTurnEvent({ kind, req, ownerUserId = null, outcome, ms, meta }) {
+  try {
+    void recordAiCallEvent({
+      layer: AI_CALL_LAYER.APP,
+      feature: `landing_${kind}_turn`,
+      outcome,
+      durationMs: ms,
+      ownerUserId,
+      actorUserId: req?.user?.id ?? null,
+      meta,
+    });
+  } catch {
+    // sổ bền không bao giờ được làm hỏng lượt
+  }
+}
 
 function writeSafe(res, text) {
   try {
@@ -192,10 +214,12 @@ function attachToExistingTurn(turn, req, res, { kind, pingMs }) {
     attachSubscriber(tmp, res, { stream: true, pingMs });
     deliver(tmp, turn.outcome);
     console.log(`[LandingAI] turn kind=${kind} user=${userId} streamed=1 dedup=1 state=cached charged=0`);
+    recordTurnEvent({ kind, req, outcome: AI_CALL_OUTCOME.OK, meta: { dedup: 1, state: 'cached', charged: 0 } });
     return true;
   }
   attachSubscriber(turn, res, { stream: true, pingMs });
   console.log(`[LandingAI] turn kind=${kind} user=${userId} streamed=1 dedup=1 state=attached charged=0`);
+  recordTurnEvent({ kind, req, outcome: AI_CALL_OUTCOME.OK, meta: { dedup: 1, state: 'attached', charged: 0 } });
   return true;
 }
 
@@ -239,8 +263,9 @@ export function attachToExistingLandingTurn(kind, { pingMs = LANDING_TURN_PING_M
  * @param {(error: Error) => { status: number, body: object }} opts.mapError  lỗi → mã HTTP + thân lỗi (như catch của route cũ)
  * @param {() => Promise<void>} opts.charge  trừ credit (chỉ gọi khi giao được kết quả và lượt không `free`)
  * @param {number} [opts.pingMs]
+ * @param {number|null} [opts.ownerUserId] chủ workspace của lượt — chỉ để ghi sổ bền (ai_call_events); thiếu thì sự kiện không có chủ
  */
-export async function runLandingAiTurn({ req, res, kind, work, mapError, charge, pingMs = LANDING_TURN_PING_MS }) {
+export async function runLandingAiTurn({ req, res, kind, work, mapError, charge, pingMs = LANDING_TURN_PING_MS, ownerUserId = null }) {
   const stream = wantsNdjson(req);
   const key = turnKeyFor(req, kind);
   sweepTurns();
@@ -281,8 +306,10 @@ export async function runLandingAiTurn({ req, res, kind, work, mapError, charge,
   let outcome = null;
   let charged = false;
   let ended = 'closed';
+  let workDone = false;
   try {
     const result = await work(ctx);
+    workDone = true;
 
     // Chốt 1 — người dùng đã đi rồi: không lưu phiên, không trừ credit.
     if (!hasOpenSubscriber(turn)) throw clientGone();
@@ -318,6 +345,17 @@ export async function runLandingAiTurn({ req, res, kind, work, mapError, charge,
     `[LandingAI] turn kind=${kind} user=${req?.user?.id} streamed=${stream ? 1 : 0} clientClosed=${turn.clientClosed || ended === 'closed' ? 1 : 0} dedup=0 `
     + `outcome=${ended} charged=${charged ? 1 : 0} ms=${Date.now() - startedAt}`,
   );
+  // Khách đóng kết nối: ghi BỀN (B-8). `workDone=true` = AI đã chạy xong (Google đã tính tiền) rồi khách mới đi → chi phí không có credit đối ứng.
+  if (ended === 'closed') {
+    recordTurnEvent({
+      kind,
+      req,
+      ownerUserId,
+      outcome: AI_CALL_OUTCOME.CLIENT_CLOSED,
+      ms: Date.now() - startedAt,
+      meta: { streamed: stream ? 1 : 0, workDone, charged: 0 },
+    });
+  }
 }
 
 function clientGone() {

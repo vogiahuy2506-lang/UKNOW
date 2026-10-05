@@ -1458,6 +1458,7 @@ class AiController {
         req,
         res,
         kind: 'generate',
+        ownerUserId,
         mapError,
         charge: () => chargeAiCredit(req),
         work: async (turn) => {
@@ -1795,6 +1796,7 @@ class AiController {
         req,
         res,
         kind: 'edit',
+        ownerUserId,
         mapError,
         charge: () => chargeAiCredit(req),
         work: async (turn) => {
