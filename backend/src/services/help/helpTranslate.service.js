@@ -29,6 +29,15 @@ function extractJsonObject(text) {
   }
 }
 
+/** Token từ thân phản hồi Google (`raw.usageMetadata`) → dạng `aiUsageMeter.record` nhận. */
+function usageFromRaw(raw) {
+  return {
+    promptTokens: Number(raw?.usageMetadata?.promptTokenCount) || 0,
+    outputTokens: Number(raw?.usageMetadata?.candidatesTokenCount) || 0,
+    totalTokens: Number(raw?.usageMetadata?.totalTokenCount) || 0,
+  };
+}
+
 async function translateFields(source, targetLocale, userId) {
   const useHtml = Boolean(String(source.body_html || '').trim());
   const bodyField = useHtml ? 'body_html' : 'body_md';
@@ -76,11 +85,7 @@ ${glossaryPromptBlock()}
   }
 
   try {
-    await aiUsageMeter.record(userId, {
-      promptTokens: Number(raw?.usageMetadata?.promptTokenCount) || 0,
-      outputTokens: Number(raw?.usageMetadata?.candidatesTokenCount) || 0,
-      totalTokens: Number(raw?.usageMetadata?.totalTokenCount) || 0,
-    }, { feature: 'help_translate', model: modelName, kind: 'generate' });
+    await aiUsageMeter.record(userId, usageFromRaw(raw), { feature: 'help_translate', model: modelName, kind: 'generate' });
   } catch {
     // best-effort
   }
@@ -111,7 +116,7 @@ ${glossaryPromptBlock()}
 async function translateCaption(caption, userId) {
   if (!caption || !String(caption).trim()) return caption || null;
   try {
-    const { text } = await generateGeminiText({
+    const { text, modelName, raw } = await generateGeminiText({
       userId,
       systemPrompt: 'Translate this short image/video caption to English. Return only the translated caption.',
       userPrompt: String(caption),
@@ -120,6 +125,13 @@ async function translateCaption(caption, userId) {
       thinkingBudget: 0,
       feature: 'help_translate_caption',
     });
+    // D-22: lượt dịch chú thích Google đã tính tiền nhưng bản cũ không ghi token (trang Chi phí AI thấp hơn hoá đơn). Chỉ ghi token cho admin,
+    // KHÔNG trừ credit; ghi hỏng không được làm mất bản dịch (`record` tự nuốt lỗi, bọc thêm cho chắc).
+    try {
+      await aiUsageMeter.record(userId, usageFromRaw(raw), { feature: 'help_translate_caption', model: modelName, kind: 'generate' });
+    } catch {
+      // best-effort
+    }
     return String(text || caption).trim() || caption;
   } catch {
     return caption;
