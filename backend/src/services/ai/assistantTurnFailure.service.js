@@ -31,6 +31,29 @@ const FAILURE_TRACE_CAP_MS = 3000;
 /** Khuôn slot kế hoạch: d<ngày>-s<slot> (controller đã lọc đúng khuôn này). */
 const PLAN_SLOT_KEY_RE = /^d\d+-s\d+$/i;
 
+/** Mã `error_code` của lượt trợ lý mà Gemini trả JSON không đọc được (khách nhận câu xin lỗi soạn sẵn, KHÔNG trừ credit). */
+export const ASSISTANT_PARSE_FAILED_CODE = 'AI_JSON_PARSE_FAILED';
+
+/**
+ * Lượt trợ lý KHÔNG ném lỗi nhưng Gemini trả JSON hỏng (`parseFailed` của processSmartChat): khách nhận câu xin lỗi, lượt không trừ credit. Trước đây vô hình
+ * ngoài một dòng log; nay là một sự kiện `assistant_turn` / `parse_failed` để đếm được. Không audit AI_TURN_FAILED (không có ngoại lệ, phiên vẫn lưu bình thường).
+ */
+export function recordAssistantParseFailure({ req, ownerUserId = null }) {
+  try {
+    void recordAiCallEvent({
+      layer: AI_CALL_LAYER.APP,
+      feature: ASSISTANT_TURN_EVENT_FEATURE,
+      outcome: AI_CALL_OUTCOME.PARSE_FAILED,
+      errorCode: ASSISTANT_PARSE_FAILED_CODE,
+      ownerUserId,
+      actorUserId: req?.user?.id ?? null,
+      meta: { stage: 'smart_chat', feature: 'smart_chat' },
+    });
+  } catch {
+    // sổ bền không bao giờ được làm hỏng lượt
+  }
+}
+
 /**
  * Một lượt xin template cho slot kế hoạch vừa có kết quả: ok nếu ra `template_draft`, ngược lại error (NO_TEMPLATE_DRAFT, kèm kiểu phản hồi
  * thật). Không bao giờ ném, không chờ.

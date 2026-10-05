@@ -19,10 +19,10 @@ jest.unstable_mockModule('../aiCallEvents.service.js', () => ({
   outcomeFromError: (error) => ({ AI_CLIENT_ABORTED: 'client_closed', AI_TIMEOUT: 'timeout', AI_PROVIDER_BUSY: 'busy' }[error?.code] || 'error'),
   errorCodeOf: (error) => String(error?.code ?? (error?.geminiStatus != null ? `GEMINI_${error.geminiStatus}` : 'UNKNOWN')),
   AI_CALL_LAYER: { GEMINI: 'gemini', APP: 'app' },
-  AI_CALL_OUTCOME: { OK: 'ok', ERROR: 'error' },
+  AI_CALL_OUTCOME: { OK: 'ok', ERROR: 'error', PARSE_FAILED: 'parse_failed' },
 }));
 
-const { recordAssistantTurnFailure, recordPlanSlotOutcome } = await import('../assistantTurnFailure.service.js');
+const { recordAssistantTurnFailure, recordPlanSlotOutcome, recordAssistantParseFailure } = await import('../assistantTurnFailure.service.js');
 
 const reqOf = (body, userId = 5) => ({ user: { id: userId }, body });
 const history = [{ role: 'assistant', content: 'Chào' }, { role: 'user', content: 'Tạo chiến dịch gửi email cho khách' }];
@@ -175,6 +175,24 @@ describe('recordAssistantTurnFailure', () => {
     it('recordPlanSlotOutcome: sổ bền ném đồng bộ → không ném', () => {
       recordAiCallEvent.mockImplementationOnce(() => { throw new Error('sổ bền hỏng'); });
       expect(() => recordPlanSlotOutcome({ req: reqOf({}), responseType: 'text' })).not.toThrow();
+    });
+  });
+
+  describe('Gemini trả JSON hỏng (parseFailed) — không ném lỗi nhưng vẫn đếm', () => {
+    it('một sự kiện assistant_turn / parse_failed mang mã AI_JSON_PARSE_FAILED, chủ + người thao tác; KHÔNG audit AI_TURN_FAILED, KHÔNG lưu phiên', () => {
+      recordAssistantParseFailure({ req: reqOf({ history, sessionId: 12 }), ownerUserId: 4 });
+      expect(recordAiCallEvent).toHaveBeenCalledTimes(1);
+      expect(recordAiCallEvent).toHaveBeenCalledWith({
+        layer: 'app', feature: 'assistant_turn', outcome: 'parse_failed', errorCode: 'AI_JSON_PARSE_FAILED',
+        ownerUserId: 4, actorUserId: 5, meta: { stage: 'smart_chat', feature: 'smart_chat' },
+      });
+      expect(auditLog).not.toHaveBeenCalled();
+      expect(saveMessages).not.toHaveBeenCalled();
+    });
+
+    it('sổ bền ném đồng bộ → không ném', () => {
+      recordAiCallEvent.mockImplementationOnce(() => { throw new Error('sổ bền hỏng'); });
+      expect(() => recordAssistantParseFailure({ req: reqOf({}) })).not.toThrow();
     });
   });
 });

@@ -2146,6 +2146,21 @@ describe('ai.controller — lượt trợ lý hỏng để lại dấu vết b�
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ message: TIMEOUT.message }));
   });
 
+  it('Gemini trả JSON hỏng (parseFailed): khách nhận câu xin lỗi, KHÔNG trừ credit, và có MỘT sự kiện assistant_turn / parse_failed (không audit AI_TURN_FAILED)', async () => {
+    processSmartChat.mockResolvedValue({ type: 'text', content: 'Xin lỗi, tôi gặp lỗi định dạng khi tạo câu trả lời.', data: null, parseFailed: true });
+    const res = makeRes();
+
+    await aiController.chat(chatReq({ sessionId: 33 }), res);
+    await flush();
+
+    expect(chargeAiCredit).not.toHaveBeenCalled();
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+    expect(callEvents()).toEqual([expect.objectContaining({
+      layer: 'app', feature: 'assistant_turn', outcome: 'parse_failed', errorCode: 'AI_JSON_PARSE_FAILED', ownerUserId: 42,
+    })]);
+    expect(auditSpy.mock.calls.filter(([entry]) => entry.action === 'AI_TURN_FAILED')).toEqual([]);
+  });
+
   it('lượt thành công KHÔNG ghi AI_TURN_FAILED / assistant_turn', async () => {
     processSmartChat.mockResolvedValue({ type: 'text', content: 'ok', data: null });
     await aiController.chat(chatReq({ sessionId: 33 }), makeRes());

@@ -50,7 +50,7 @@ import {
 } from '../utils/landingLayoutFindings.util.js';
 import { buildAiErrorPayload } from '../utils/aiErrorPayload.util.js';
 import { runLandingAiTurn } from '../services/ai/aiLandingTurn.service.js';
-import { recordAssistantTurnFailure, recordPlanSlotOutcome } from '../services/ai/assistantTurnFailure.service.js';
+import { recordAssistantTurnFailure, recordPlanSlotOutcome, recordAssistantParseFailure } from '../services/ai/assistantTurnFailure.service.js';
 import { findLandingAiInputTooLong } from '../utils/landingAiInputLimits.util.js';
 import { checkUserResourceLimit } from '../utils/userResourceLimit.util.js';
 import {
@@ -379,6 +379,8 @@ class AiController {
           deferLandingGeneration,
         });
         ({ wizardShortCircuit, _wizard, parseFailed = false, ...publicResponse } = response || {});
+        // Gemini trả JSON hỏng (khách nhận câu xin lỗi soạn sẵn, không trừ credit): không ném lỗi nên không qua nhánh catch — đếm riêng.
+        if (parseFailed) recordAssistantParseFailure({ req, ownerUserId: resourceOwnerUserId });
         // C-NO-P1-25-08: lượt xin template của một slot kế hoạch phải ra `template_draft`; không ra thì frontend báo "Tạo template Ngày N bị lỗi" mà
         // phía server không có số đếm nào. Ghi cả lượt đạt (ok) lẫn không đạt (error) để có tỉ lệ.
         if (sanitizedPlanSlotKey) {
